@@ -3803,9 +3803,9 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_prelude_output: prelude_output
     lm_trans_current_source_path: source_path
     lm_trans_next_array_value_helper_id: 0U
-    lm_trans_emitted_l5_runtime_prelude: 0
-    lm_trans_emitted_l5_main_helper: 0
-    lm_trans_emitted_l5_assert_helper: 0
+    lm_trans_emitted_message_thread_runtime_prelude: 0
+    lm_trans_emitted_message_thread_main_helper: 0
+    lm_trans_emitted_message_thread_assert_helper: 0
     lm_trans_l2_table_materialization_suppression_depth: 0
     lm_trans_l2_conditional_import_depth: 0
     lm_trans_l2_executable_statement_depth: 0

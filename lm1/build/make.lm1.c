@@ -51,13 +51,27 @@ static void lm_make_print_usage(void);
 int main(int argc, char **argv);
 
 struct LmOwnArena;
-struct LmOwnArena *lm_own_arena_new(void);
-void lm_own_arena_delete(struct LmOwnArena *arena);
+struct LmMessageThread;
+struct LmMessageThread *lm_message_thread_current(void);
+struct LmMessageThread *lm_message_thread_new(void);
+void lm_message_thread_delete(struct LmMessageThread *thread);
+struct LmMessageThread *lm_message_thread_set_current(struct LmMessageThread *thread);
+struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);
+void *lm_message_thread_execution_context(struct LmMessageThread *thread);
+void *lm_message_thread_set_execution_context(struct LmMessageThread *thread, void *context);
+int lm_message_thread_begin_turn(struct LmMessageThread *thread);
+int lm_message_thread_end_turn(struct LmMessageThread *thread);
+void lm_message_thread_request_stop(struct LmMessageThread *thread, int status);
+void lm_message_thread_request_failure(struct LmMessageThread *thread, int status);
+int lm_message_thread_status(const struct LmMessageThread *thread);
+int lm_message_thread_is_running(const struct LmMessageThread *thread);
+size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);
+size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);
+void lm_own_arena_freeze(struct LmOwnArena *arena);
 void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);
 void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
-typedef struct LmL5ExecutionContext LmL5ExecutionContext;
-typedef struct LmL5Thread LmL5Thread;
-struct LmL5ExecutionContext {
+typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;
+struct LmMessageThreadExecutionContext {
     jmp_buf diagnostic_root;
     int diagnostic_code;
     const char *diagnostic_label;
@@ -65,41 +79,12 @@ struct LmL5ExecutionContext {
     int diagnostic_line;
     const char *diagnostic_expr;
 };
-struct LmL5Thread {
-    LmL5ExecutionContext main_context;
-    LmL5ExecutionContext *current;
-    struct LmOwnArena *root_owner;
-};
-static LmL5Thread lm_l5_main_thread_storage;
-static int lm_l5_main_thread_owner_cleanup_registered;
-static void lm_l5_main_thread_owner_destroy(void) {
-    if (lm_l5_main_thread_storage.root_owner != 0) {
-        lm_own_arena_delete(lm_l5_main_thread_storage.root_owner);
-        lm_l5_main_thread_storage.root_owner = 0;
-    }
-}
-static inline LmL5Thread *lm_l5_main_thread(void) {
-    LmL5Thread *thread = &lm_l5_main_thread_storage;
-    if (thread->root_owner == 0) {
-        thread->root_owner = lm_own_arena_new();
-        if (thread->root_owner == 0) {
-            abort();
-        }
-        if (!lm_l5_main_thread_owner_cleanup_registered) {
-            if (atexit(lm_l5_main_thread_owner_destroy) != 0) {
-                lm_l5_main_thread_owner_destroy();
-                abort();
-            }
-            lm_l5_main_thread_owner_cleanup_registered = 1;
-        }
-    }
-    return thread;
-}
-static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
-    if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {
+static LmMessageThreadExecutionContext lm_message_thread_main_context_storage;
+static inline int lm_message_thread_diagnostic_status(const LmMessageThreadExecutionContext *context) {
+    if (context == 0 || context->diagnostic_code == 0) {
         return 1;
     }
-    return thread->current->diagnostic_code;
+    return context->diagnostic_code;
 }
 
 static char * lm_make_env_or_default(char *name, char *fallback) {
@@ -216,66 +201,125 @@ static void lm_make_print_usage(void) {
 }
 
 int main(int argc, char **argv) {
-    LmL5Thread *lm_l5_thread = lm_l5_main_thread();
-    lm_l5_thread->current = &lm_l5_thread->main_context;
-    lm_l5_thread->main_context.diagnostic_code = 0;
-    if (setjmp(lm_l5_thread->main_context.diagnostic_root) != 0) {
-        return lm_l5_thread_diagnostic_exit_code(lm_l5_thread);
-    }
-    char *cmake;
-    char *cc;
-    char *ar;
-    char *ranlib;
-    if (argc < 2) {
-        lm_make_print_usage();
+    struct LmMessageThread *lm_message_thread = lm_message_thread_current();
+    void *lm_message_thread_previous_context;
+    if (lm_message_thread == 0) {
         return 1;
     }
-    cmake = lm_make_env_or_default("LM_CMAKE", "cmake");
-    cc = lm_make_env_or_default("LM_CC", "gcc");
-    ar = lm_make_env_or_default("LM_AR", "ar");
-    ranlib = lm_make_env_or_default("LM_RANLIB", "ranlib");
-    if (strcmp(argv[1], "mkdir") == 0) {
-        char command[8192];
-        size_t used = 0U;
-        int index = 2;
-        if (argc < 3) {
-            lm_make_print_usage();
-            return 1;
-        }
-        command[0] = '\0';
-        used = lm_make_append(command, sizeof(command), used, cmake);
-        if (used == sizeof(command)) {
-            return 1;
-        }
-        used = lm_make_append(command, sizeof(command), used, " -E make_directory");
-        if (used == sizeof(command)) {
-            return 1;
-        }
-        while (index < argc) {
-            used = lm_make_append_arg(command, sizeof(command), used, argv[index]);
-            if (used == sizeof(command)) {
-                return 1;
+    lm_message_thread_previous_context = lm_message_thread_set_execution_context(lm_message_thread, &lm_message_thread_main_context_storage);
+    while (lm_message_thread_begin_turn(lm_message_thread)) {
+        lm_message_thread_main_context_storage.diagnostic_code = 0;
+        if (setjmp(lm_message_thread_main_context_storage.diagnostic_root) == 0) {
+            char *cmake;
+            char *cc;
+            char *ar;
+            char *ranlib;
+            if (argc < 2) {
+                lm_make_print_usage();
+                {
+                    int lm_return_0 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_0);
+                    goto lm_message_thread_turn_end;
+                }
             }
-            index = index + 1;
-        }
-        return lm_make_run_command(command);
-    }
-    if (strcmp(argv[1], "cc") == 0 || strcmp(argv[1], "link") == 0) {
-        return lm_make_run_tool(cc, argc, argv, 2);
-    }
-    if (strcmp(argv[1], "ar") == 0) {
-        return lm_make_run_tool(ar, argc, argv, 2);
-    }
-    if (strcmp(argv[1], "ranlib") == 0) {
-        return lm_make_run_tool(ranlib, argc, argv, 2);
-    }
-    if (strcmp(argv[1], "copy") == 0) {
-        if (argc != 4) {
+            cmake = lm_make_env_or_default("LM_CMAKE", "cmake");
+            cc = lm_make_env_or_default("LM_CC", "gcc");
+            ar = lm_make_env_or_default("LM_AR", "ar");
+            ranlib = lm_make_env_or_default("LM_RANLIB", "ranlib");
+            if (strcmp(argv[1], "mkdir") == 0) {
+                char command[8192];
+                size_t used = 0U;
+                int index = 2;
+                if (argc < 3) {
+                    lm_make_print_usage();
+                    {
+                        int lm_return_1 = 1;
+                        lm_message_thread_request_stop(lm_message_thread, lm_return_1);
+                        goto lm_message_thread_turn_end;
+                    }
+                }
+                command[0] = '\0';
+                used = lm_make_append(command, sizeof(command), used, cmake);
+                if (used == sizeof(command)) {
+                    {
+                        int lm_return_2 = 1;
+                        lm_message_thread_request_stop(lm_message_thread, lm_return_2);
+                        goto lm_message_thread_turn_end;
+                    }
+                }
+                used = lm_make_append(command, sizeof(command), used, " -E make_directory");
+                if (used == sizeof(command)) {
+                    {
+                        int lm_return_3 = 1;
+                        lm_message_thread_request_stop(lm_message_thread, lm_return_3);
+                        goto lm_message_thread_turn_end;
+                    }
+                }
+                while (index < argc) {
+                    used = lm_make_append_arg(command, sizeof(command), used, argv[index]);
+                    if (used == sizeof(command)) {
+                        {
+                            int lm_return_4 = 1;
+                            lm_message_thread_request_stop(lm_message_thread, lm_return_4);
+                            goto lm_message_thread_turn_end;
+                        }
+                    }
+                    index = index + 1;
+                }
+                {
+                    int lm_return_5 = lm_make_run_command(command);
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_5);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (strcmp(argv[1], "cc") == 0 || strcmp(argv[1], "link") == 0) {
+                {
+                    int lm_return_6 = lm_make_run_tool(cc, argc, argv, 2);
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_6);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (strcmp(argv[1], "ar") == 0) {
+                {
+                    int lm_return_7 = lm_make_run_tool(ar, argc, argv, 2);
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_7);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (strcmp(argv[1], "ranlib") == 0) {
+                {
+                    int lm_return_8 = lm_make_run_tool(ranlib, argc, argv, 2);
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_8);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (strcmp(argv[1], "copy") == 0) {
+                if (argc != 4) {
+                    lm_make_print_usage();
+                    {
+                        int lm_return_9 = 1;
+                        lm_message_thread_request_stop(lm_message_thread, lm_return_9);
+                        goto lm_message_thread_turn_end;
+                    }
+                }
+                {
+                    int lm_return_10 = lm_make_copy_file(argv[2], argv[3]);
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_10);
+                    goto lm_message_thread_turn_end;
+                }
+            }
             lm_make_print_usage();
-            return 1;
+            {
+                int lm_return_11 = 1;
+                lm_message_thread_request_stop(lm_message_thread, lm_return_11);
+                goto lm_message_thread_turn_end;
+            }
+        } else {
+            lm_message_thread_request_failure(lm_message_thread, lm_message_thread_diagnostic_status(&lm_message_thread_main_context_storage));
         }
-        return lm_make_copy_file(argv[2], argv[3]);
+    lm_message_thread_turn_end:
+        (void)lm_message_thread_end_turn(lm_message_thread);
     }
-    lm_make_print_usage();
-    return 1;
+    lm_message_thread_set_execution_context(lm_message_thread, lm_message_thread_previous_context);
+    return lm_message_thread_status(lm_message_thread);
 }

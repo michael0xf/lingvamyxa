@@ -156,13 +156,27 @@ static int lm_finalize_defer(void);
 int main(int argc, char **argv);
 
 struct LmOwnArena;
-struct LmOwnArena *lm_own_arena_new(void);
-void lm_own_arena_delete(struct LmOwnArena *arena);
+struct LmMessageThread;
+struct LmMessageThread *lm_message_thread_current(void);
+struct LmMessageThread *lm_message_thread_new(void);
+void lm_message_thread_delete(struct LmMessageThread *thread);
+struct LmMessageThread *lm_message_thread_set_current(struct LmMessageThread *thread);
+struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);
+void *lm_message_thread_execution_context(struct LmMessageThread *thread);
+void *lm_message_thread_set_execution_context(struct LmMessageThread *thread, void *context);
+int lm_message_thread_begin_turn(struct LmMessageThread *thread);
+int lm_message_thread_end_turn(struct LmMessageThread *thread);
+void lm_message_thread_request_stop(struct LmMessageThread *thread, int status);
+void lm_message_thread_request_failure(struct LmMessageThread *thread, int status);
+int lm_message_thread_status(const struct LmMessageThread *thread);
+int lm_message_thread_is_running(const struct LmMessageThread *thread);
+size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);
+size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);
+void lm_own_arena_freeze(struct LmOwnArena *arena);
 void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);
 void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
-typedef struct LmL5ExecutionContext LmL5ExecutionContext;
-typedef struct LmL5Thread LmL5Thread;
-struct LmL5ExecutionContext {
+typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;
+struct LmMessageThreadExecutionContext {
     jmp_buf diagnostic_root;
     int diagnostic_code;
     const char *diagnostic_label;
@@ -170,41 +184,12 @@ struct LmL5ExecutionContext {
     int diagnostic_line;
     const char *diagnostic_expr;
 };
-struct LmL5Thread {
-    LmL5ExecutionContext main_context;
-    LmL5ExecutionContext *current;
-    struct LmOwnArena *root_owner;
-};
-static LmL5Thread lm_l5_main_thread_storage;
-static int lm_l5_main_thread_owner_cleanup_registered;
-static void lm_l5_main_thread_owner_destroy(void) {
-    if (lm_l5_main_thread_storage.root_owner != 0) {
-        lm_own_arena_delete(lm_l5_main_thread_storage.root_owner);
-        lm_l5_main_thread_storage.root_owner = 0;
-    }
-}
-static inline LmL5Thread *lm_l5_main_thread(void) {
-    LmL5Thread *thread = &lm_l5_main_thread_storage;
-    if (thread->root_owner == 0) {
-        thread->root_owner = lm_own_arena_new();
-        if (thread->root_owner == 0) {
-            abort();
-        }
-        if (!lm_l5_main_thread_owner_cleanup_registered) {
-            if (atexit(lm_l5_main_thread_owner_destroy) != 0) {
-                lm_l5_main_thread_owner_destroy();
-                abort();
-            }
-            lm_l5_main_thread_owner_cleanup_registered = 1;
-        }
-    }
-    return thread;
-}
-static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
-    if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {
+static LmMessageThreadExecutionContext lm_message_thread_main_context_storage;
+static inline int lm_message_thread_diagnostic_status(const LmMessageThreadExecutionContext *context) {
+    if (context == 0 || context->diagnostic_code == 0) {
         return 1;
     }
-    return thread->current->diagnostic_code;
+    return context->diagnostic_code;
 }
 
 static int lm_finalize_is_path_separator(char value) {
@@ -496,59 +481,130 @@ static int lm_finalize_defer(void) {
 }
 
 int main(int argc, char **argv) {
-    LmL5Thread *lm_l5_thread = lm_l5_main_thread();
-    lm_l5_thread->current = &lm_l5_thread->main_context;
-    lm_l5_thread->main_context.diagnostic_code = 0;
-    if (setjmp(lm_l5_thread->main_context.diagnostic_root) != 0) {
-        return lm_l5_thread_diagnostic_exit_code(lm_l5_thread);
-    }
-    char staged_build_core_path[256];
-    if (lm_finalize_enter_project_root(argv[0]) != 0) {
+    struct LmMessageThread *lm_message_thread = lm_message_thread_current();
+    void *lm_message_thread_previous_context;
+    if (lm_message_thread == 0) {
         return 1;
     }
-    if (argc == 2 && strcmp(argv[1], "--defer") == 0) {
-        return lm_finalize_defer();
-    }
-    if (argc != 1 && (argc != 2 || strcmp(argv[1], "--copy") != 0)) {
-        fprintf(stderr, "usage: finalize.lm0[.exe] [--defer|--copy]\n");
-        return 1;
-    }
-    lm_finalize_log("copy started");
-    lm_finalize_next_tool_path(staged_build_core_path, sizeof(staged_build_core_path), "buildCore");
-    if (lm_finalize_file_exists(staged_build_core_path) == 0) {
-        if (lm_finalize_install_legacy_next_tool("make") != 0) {
-            return 1;
+    lm_message_thread_previous_context = lm_message_thread_set_execution_context(lm_message_thread, &lm_message_thread_main_context_storage);
+    while (lm_message_thread_begin_turn(lm_message_thread)) {
+        lm_message_thread_main_context_storage.diagnostic_code = 0;
+        if (setjmp(lm_message_thread_main_context_storage.diagnostic_root) == 0) {
+            char staged_build_core_path[256];
+            if (lm_finalize_enter_project_root(argv[0]) != 0) {
+                {
+                    int lm_return_0 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_0);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (argc == 2 && strcmp(argv[1], "--defer") == 0) {
+                {
+                    int lm_return_1 = lm_finalize_defer();
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_1);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (argc != 1 && (argc != 2 || strcmp(argv[1], "--copy") != 0)) {
+                fprintf(stderr, "usage: finalize.lm0[.exe] [--defer|--copy]\n");
+                {
+                    int lm_return_2 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_2);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            lm_finalize_log("copy started");
+            lm_finalize_next_tool_path(staged_build_core_path, sizeof(staged_build_core_path), "buildCore");
+            if (lm_finalize_file_exists(staged_build_core_path) == 0) {
+                if (lm_finalize_install_legacy_next_tool("make") != 0) {
+                    {
+                        int lm_return_3 = 1;
+                        lm_message_thread_request_stop(lm_message_thread, lm_return_3);
+                        goto lm_message_thread_turn_end;
+                    }
+                }
+                if (lm_finalize_install_legacy_next_tool("buildCore") != 0) {
+                    {
+                        int lm_return_4 = 1;
+                        lm_message_thread_request_stop(lm_message_thread, lm_return_4);
+                        goto lm_message_thread_turn_end;
+                    }
+                }
+                lm_finalize_log("legacy copy completed");
+                {
+                    int lm_return_5 = 0;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_5);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (lm_finalize_install_next_artifact("libparser.lm0.a") != 0) {
+                {
+                    int lm_return_6 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_6);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (lm_finalize_install_next_artifact("libown.lm0.a") != 0) {
+                {
+                    int lm_return_7 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_7);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (lm_finalize_install_next_tool("make") != 0) {
+                {
+                    int lm_return_8 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_8);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (lm_finalize_install_next_tool("trans") != 0) {
+                {
+                    int lm_return_9 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_9);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (lm_finalize_install_next_tool("vcpkgFetch") != 0) {
+                {
+                    int lm_return_10 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_10);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (lm_finalize_install_next_tool("printTree") != 0) {
+                {
+                    int lm_return_11 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_11);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (lm_finalize_install_next_tool("finalize") != 0) {
+                {
+                    int lm_return_12 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_12);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (lm_finalize_install_next_tool("buildCore") != 0) {
+                {
+                    int lm_return_13 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_13);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            lm_finalize_log("copy completed");
+            {
+                int lm_return_14 = 0;
+                lm_message_thread_request_stop(lm_message_thread, lm_return_14);
+                goto lm_message_thread_turn_end;
+            }
+        } else {
+            lm_message_thread_request_failure(lm_message_thread, lm_message_thread_diagnostic_status(&lm_message_thread_main_context_storage));
         }
-        if (lm_finalize_install_legacy_next_tool("buildCore") != 0) {
-            return 1;
-        }
-        lm_finalize_log("legacy copy completed");
-        return 0;
+    lm_message_thread_turn_end:
+        (void)lm_message_thread_end_turn(lm_message_thread);
     }
-    if (lm_finalize_install_next_artifact("libparser.lm0.a") != 0) {
-        return 1;
-    }
-    if (lm_finalize_install_next_artifact("libown.lm0.a") != 0) {
-        return 1;
-    }
-    if (lm_finalize_install_next_tool("make") != 0) {
-        return 1;
-    }
-    if (lm_finalize_install_next_tool("trans") != 0) {
-        return 1;
-    }
-    if (lm_finalize_install_next_tool("vcpkgFetch") != 0) {
-        return 1;
-    }
-    if (lm_finalize_install_next_tool("printTree") != 0) {
-        return 1;
-    }
-    if (lm_finalize_install_next_tool("finalize") != 0) {
-        return 1;
-    }
-    if (lm_finalize_install_next_tool("buildCore") != 0) {
-        return 1;
-    }
-    lm_finalize_log("copy completed");
-    return 0;
+    lm_message_thread_set_execution_context(lm_message_thread, lm_message_thread_previous_context);
+    return lm_message_thread_status(lm_message_thread);
 }

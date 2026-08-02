@@ -1055,6 +1055,7 @@ sub: lm_trans_namespace_destroy (LmTransNamespace: namespace_)
         lm_trans_text_ref_destroy(@ namespace_\return_type_name)
         namespace_\next_return_id: 0U
         namespace_\hoisted_functions: 0
+        namespace_\message_thread_entry: 0
 end: lm_trans_namespace_destroy
 
 sub: lm_trans_namespace_destroy_any (@: void object)

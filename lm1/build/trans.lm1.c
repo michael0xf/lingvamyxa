@@ -136,6 +136,7 @@ struct LmMessageThread {
     size_t turn_count;
     size_t collection_count;
     int collector_failed;
+    void *execution_context;
 };
 typedef struct LmP0Text {
     const char *data;
@@ -503,6 +504,7 @@ typedef struct LmTransFunctionState {
     LmOwnPtrStack * previous_cleanups;
     LmOwnPtrStack * previous_loops;
     int has_previous_control_stacks;
+    int previous_message_thread_entry;
 } LmTransFunctionState;
 struct LmTransFunctionHeader {
     const LmP0Frame * frame;
@@ -605,6 +607,7 @@ struct LmTransNamespace {
     unsigned next_return_id;
     const LmOwnPtrStack * hoisted_functions;
     const LmRegistryView * registry_view;
+    int message_thread_entry;
 };
 
 
@@ -734,6 +737,8 @@ int (lm_own_tree_cut)(LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
+LmMessageThread * (lm_message_thread_new)(void);
+void (lm_message_thread_delete)(LmMessageThread *thread);
 LmMessageThread * (lm_message_thread_root)(void);
 LmMessageThread * (lm_message_thread_current)(void);
 LmMessageThread * (lm_message_thread_set_current)(LmMessageThread *thread);
@@ -741,8 +746,14 @@ int (lm_message_thread_begin_turn)(LmMessageThread *thread);
 int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
 void (lm_message_thread_request_stop)(LmMessageThread *thread, int status);
+void (lm_message_thread_request_failure)(LmMessageThread *thread, int status);
 int (lm_message_thread_is_running)(const LmMessageThread *thread);
 int (lm_message_thread_status)(const LmMessageThread *thread);
+LmOwnArena * (lm_message_thread_owner)(LmMessageThread *thread);
+void * (lm_message_thread_execution_context)(LmMessageThread *thread);
+void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *context);
+size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
+size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
 int (lm_p0_parse_string)(const char *source, LmP0Document **out_document);
 int (lm_p0_parse_bytes)(const char *source, size_t source_length, LmP0Document **out_document);
 int (lm_p0_parse_file)(const char *path, LmP0Document **out_document);
@@ -970,6 +981,14 @@ static int lm_trans_declare_registry_fn_descriptors(LmTransNamespace *namespace_
 static int lm_trans_emit_root_sequence(FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_l4_payload_pointer_bindings_init(void);
 static void lm_trans_l4_payload_pointer_bindings_destroy(void);
+
+
+
+
+
+
+
+
 
 
 
@@ -1656,11 +1675,11 @@ static LmOwnPtrStack * lm_trans_emitted_array_value_helpers;
 
 static LmOwnPtrStack * lm_trans_emitted_function_return_structs;
 
-static int lm_trans_emitted_l5_runtime_prelude;
+static int lm_trans_emitted_message_thread_runtime_prelude;
 
-static int lm_trans_emitted_l5_main_helper;
+static int lm_trans_emitted_message_thread_main_helper;
 
-static int lm_trans_emitted_l5_assert_helper;
+static int lm_trans_emitted_message_thread_assert_helper;
 
 static unsigned lm_trans_next_callable_adapter_id;
 
@@ -2118,10 +2137,11 @@ static int lm_trans_validate_end_trailer(const LmP0Frame *frame);
 static int lm_trans_emit_cleanup(FILE *file, unsigned indent, const LmTransNamespace *namespace_, const LmTransCleanup *cleanup);
 static int lm_trans_emit_cleanups_until(FILE *file, unsigned indent, const LmTransNamespace *namespace_, size_t cleanup_base);
 static int lm_trans_emit_scope_cleanups(FILE *file, unsigned indent, LmTransNamespace *namespace_);
-static int lm_trans_emit_l5_runtime_prelude(FILE *file);
-static int lm_trans_emit_l5_main_helper(FILE *file);
-static int lm_trans_emit_l5_assert_helper(FILE *file);
-static int lm_trans_emit_l5_main_root(FILE *file, unsigned indent);
+static int lm_trans_emit_message_thread_runtime_prelude(FILE *file);
+static int lm_trans_emit_message_thread_main_helper(FILE *file);
+static int lm_trans_emit_message_thread_assert_helper(FILE *file);
+static int lm_trans_emit_message_thread_main_root(FILE *file, unsigned indent);
+static int lm_trans_emit_message_thread_main_end(FILE *file, unsigned indent);
 static int lm_trans_return_fields_single_atom(const LmP0Field *return_fields, LmP0Text *out_atom);
 static const LmP0Structure * lm_trans_fields_single_structure_value(const LmP0Field *fields);
 static size_t lm_trans_structure_field_count(const LmP0Structure *structure);
@@ -2156,6 +2176,7 @@ static int lm_trans_emit_struct_value_return_statement(FILE *file, const LmP0Fie
 static int lm_trans_current_return_is_callable_descriptor(const LmTransNamespace *namespace_, LmP0Text *out_type);
 static int lm_trans_emit_raw_callable_return_statement(FILE *file, const LmP0Field *return_fields, unsigned indent, LmTransNamespace *namespace_, int *out_consumed);
 static int lm_trans_emit_closure_return_statement(FILE *file, const LmP0Field *return_fields, unsigned indent, LmTransNamespace *namespace_, int *out_consumed);
+static int lm_trans_emit_message_thread_entry_return(FILE *file, const LmP0Field *return_fields, unsigned indent, LmTransNamespace *namespace_, int *out_consumed);
 static int lm_trans_emit_return_statement(FILE *file, const LmP0Field *return_fields, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_emit_trailer_statement(FILE *file, const LmP0Trailer *trailer, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_emit_declaration_with_qualifier(FILE *file, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_, const char *qualifier);
@@ -2304,6 +2325,7 @@ static int lm_trans_statement_stack_schedule_else(FILE *file, LmTransStatementSt
 static int lm_trans_statement_stack_schedule_named_structure(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_stack_schedule_merge_named_structure(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_return(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
+static int lm_trans_statement_emit_stop(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_if(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_while(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_else(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
@@ -2842,13 +2864,27 @@ static int lm_trans_callable_projection_cache_view_mode;
 #define LM_UNUSED(value) ((void)(value))
 #endif
 struct LmOwnArena;
-struct LmOwnArena *lm_own_arena_new(void);
-void lm_own_arena_delete(struct LmOwnArena *arena);
+struct LmMessageThread;
+struct LmMessageThread *lm_message_thread_current(void);
+struct LmMessageThread *lm_message_thread_new(void);
+void lm_message_thread_delete(struct LmMessageThread *thread);
+struct LmMessageThread *lm_message_thread_set_current(struct LmMessageThread *thread);
+struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);
+void *lm_message_thread_execution_context(struct LmMessageThread *thread);
+void *lm_message_thread_set_execution_context(struct LmMessageThread *thread, void *context);
+int lm_message_thread_begin_turn(struct LmMessageThread *thread);
+int lm_message_thread_end_turn(struct LmMessageThread *thread);
+void lm_message_thread_request_stop(struct LmMessageThread *thread, int status);
+void lm_message_thread_request_failure(struct LmMessageThread *thread, int status);
+int lm_message_thread_status(const struct LmMessageThread *thread);
+int lm_message_thread_is_running(const struct LmMessageThread *thread);
+size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);
+size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);
+void lm_own_arena_freeze(struct LmOwnArena *arena);
 void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);
 void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
-typedef struct LmL5ExecutionContext LmL5ExecutionContext;
-typedef struct LmL5Thread LmL5Thread;
-struct LmL5ExecutionContext {
+typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;
+struct LmMessageThreadExecutionContext {
     jmp_buf diagnostic_root;
     int diagnostic_code;
     const char *diagnostic_label;
@@ -2856,41 +2892,12 @@ struct LmL5ExecutionContext {
     int diagnostic_line;
     const char *diagnostic_expr;
 };
-struct LmL5Thread {
-    LmL5ExecutionContext main_context;
-    LmL5ExecutionContext *current;
-    struct LmOwnArena *root_owner;
-};
-static LmL5Thread lm_l5_main_thread_storage;
-static int lm_l5_main_thread_owner_cleanup_registered;
-static void lm_l5_main_thread_owner_destroy(void) {
-    if (lm_l5_main_thread_storage.root_owner != 0) {
-        lm_own_arena_delete(lm_l5_main_thread_storage.root_owner);
-        lm_l5_main_thread_storage.root_owner = 0;
-    }
-}
-static inline LmL5Thread *lm_l5_main_thread(void) {
-    LmL5Thread *thread = &lm_l5_main_thread_storage;
-    if (thread->root_owner == 0) {
-        thread->root_owner = lm_own_arena_new();
-        if (thread->root_owner == 0) {
-            abort();
-        }
-        if (!lm_l5_main_thread_owner_cleanup_registered) {
-            if (atexit(lm_l5_main_thread_owner_destroy) != 0) {
-                lm_l5_main_thread_owner_destroy();
-                abort();
-            }
-            lm_l5_main_thread_owner_cleanup_registered = 1;
-        }
-    }
-    return thread;
-}
-static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
-    if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {
+static LmMessageThreadExecutionContext lm_message_thread_main_context_storage;
+static inline int lm_message_thread_diagnostic_status(const LmMessageThreadExecutionContext *context) {
+    if (context == 0 || context->diagnostic_code == 0) {
         return 1;
     }
-    return thread->current->diagnostic_code;
+    return context->diagnostic_code;
 }
 
 
@@ -9051,6 +9058,7 @@ static void lm_trans_namespace_destroy(LmTransNamespace *namespace_) {
         lm_trans_text_ref_destroy(&namespace_ -> return_type_name);
         namespace_->next_return_id = 0U;
         namespace_->hoisted_functions = 0;
+        namespace_->message_thread_entry = 0;
     }
 }
 
@@ -16730,21 +16738,66 @@ static int lm_trans_emit_scope_cleanups(FILE *file, unsigned indent, LmTransName
     return 0;
 }
 
-static int lm_trans_emit_l5_runtime_prelude(FILE *file) {
+static int lm_trans_emit_message_thread_runtime_prelude(FILE *file) {
     if (file == 0) {
         return 1;
     }
-    if (lm_trans_emitted_l5_runtime_prelude) {
+    if (lm_trans_emitted_message_thread_runtime_prelude) {
         return 0;
     }
-    lm_trans_emitted_l5_runtime_prelude = 1;
+    lm_trans_emitted_message_thread_runtime_prelude = 1;
     if (lm_trans_put(file, "struct LmOwnArena;\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "struct LmOwnArena *lm_own_arena_new(void);\n") != 0) {
+    if (lm_trans_put(file, "struct LmMessageThread;\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "void lm_own_arena_delete(struct LmOwnArena *arena);\n") != 0) {
+    if (lm_trans_put(file, "struct LmMessageThread *lm_message_thread_current(void);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "struct LmMessageThread *lm_message_thread_new(void);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "void lm_message_thread_delete(struct LmMessageThread *thread);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "struct LmMessageThread *lm_message_thread_set_current(struct LmMessageThread *thread);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "void *lm_message_thread_execution_context(struct LmMessageThread *thread);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "void *lm_message_thread_set_execution_context(struct LmMessageThread *thread, void *context);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "int lm_message_thread_begin_turn(struct LmMessageThread *thread);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "int lm_message_thread_end_turn(struct LmMessageThread *thread);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "void lm_message_thread_request_stop(struct LmMessageThread *thread, int status);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "void lm_message_thread_request_failure(struct LmMessageThread *thread, int status);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "int lm_message_thread_status(const struct LmMessageThread *thread);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "int lm_message_thread_is_running(const struct LmMessageThread *thread);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "void lm_own_arena_freeze(struct LmOwnArena *arena);\n") != 0) {
         return 1;
     }
     if (lm_trans_put(file, "void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);\n") != 0) {
@@ -16753,13 +16806,10 @@ static int lm_trans_emit_l5_runtime_prelude(FILE *file) {
     if (lm_trans_put(file, "void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "typedef struct LmL5ExecutionContext LmL5ExecutionContext;\n") != 0) {
+    if (lm_trans_put(file, "typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "typedef struct LmL5Thread LmL5Thread;\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "struct LmL5ExecutionContext {\n") != 0) {
+    if (lm_trans_put(file, "struct LmMessageThreadExecutionContext {\n") != 0) {
         return 1;
     }
     if (lm_trans_put(file, "    jmp_buf diagnostic_root;\n") != 0) {
@@ -16783,111 +16833,24 @@ static int lm_trans_emit_l5_runtime_prelude(FILE *file) {
     if (lm_trans_put(file, "};\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "struct LmL5Thread {\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "    LmL5ExecutionContext main_context;\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "    LmL5ExecutionContext *current;\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "    struct LmOwnArena *root_owner;\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "};\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "static LmL5Thread lm_l5_main_thread_storage;\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "static int lm_l5_main_thread_owner_cleanup_registered;\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "static void lm_l5_main_thread_owner_destroy(void) {\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "    if (lm_l5_main_thread_storage.root_owner != 0) {\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "        lm_own_arena_delete(lm_l5_main_thread_storage.root_owner);\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "        lm_l5_main_thread_storage.root_owner = 0;\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "    }\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "}\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "static inline LmL5Thread *lm_l5_main_thread(void) {\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "    LmL5Thread *thread = &lm_l5_main_thread_storage;\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "    if (thread->root_owner == 0) {\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "        thread->root_owner = lm_own_arena_new();\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "        if (thread->root_owner == 0) {\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "            abort();\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "        }\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "        if (!lm_l5_main_thread_owner_cleanup_registered) {\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "            if (atexit(lm_l5_main_thread_owner_destroy) != 0) {\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "                lm_l5_main_thread_owner_destroy();\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "                abort();\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "            }\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "            lm_l5_main_thread_owner_cleanup_registered = 1;\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "        }\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "    }\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "    return thread;\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_put(file, "}\n") != 0) {
-        return 1;
-    }
     return 0;
 }
 
-static int lm_trans_emit_l5_main_helper(FILE *file) {
-    if (lm_trans_emit_l5_runtime_prelude(file) != 0) {
+static int lm_trans_emit_message_thread_main_helper(FILE *file) {
+    if (lm_trans_emit_message_thread_runtime_prelude(file) != 0) {
         return 1;
     }
-    if (lm_trans_emitted_l5_main_helper) {
+    if (lm_trans_emitted_message_thread_main_helper) {
         return 0;
     }
-    lm_trans_emitted_l5_main_helper = 1;
-    if (lm_trans_put(file, "static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {\n") != 0) {
+    lm_trans_emitted_message_thread_main_helper = 1;
+    if (lm_trans_put(file, "static LmMessageThreadExecutionContext lm_message_thread_main_context_storage;\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "    if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {\n") != 0) {
+    if (lm_trans_put(file, "static inline int lm_message_thread_diagnostic_status(const LmMessageThreadExecutionContext *context) {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "    if (context == 0 || context->diagnostic_code == 0) {\n") != 0) {
         return 1;
     }
     if (lm_trans_put(file, "        return 1;\n") != 0) {
@@ -16896,7 +16859,7 @@ static int lm_trans_emit_l5_main_helper(FILE *file) {
     if (lm_trans_put(file, "    }\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "    return thread->current->diagnostic_code;\n") != 0) {
+    if (lm_trans_put(file, "    return context->diagnostic_code;\n") != 0) {
         return 1;
     }
     if (lm_trans_put(file, "}\n") != 0) {
@@ -16905,18 +16868,24 @@ static int lm_trans_emit_l5_main_helper(FILE *file) {
     return 0;
 }
 
-static int lm_trans_emit_l5_assert_helper(FILE *file) {
-    if (lm_trans_emit_l5_runtime_prelude(file) != 0) {
+static int lm_trans_emit_message_thread_assert_helper(FILE *file) {
+    if (lm_trans_emit_message_thread_runtime_prelude(file) != 0) {
         return 1;
     }
-    if (lm_trans_emitted_l5_assert_helper) {
+    if (lm_trans_emitted_message_thread_assert_helper) {
         return 0;
     }
-    lm_trans_emitted_l5_assert_helper = 1;
-    if (lm_trans_put(file, "static inline void lm_l5_assert_violation(LmL5Thread *thread, const char *file, int line, const char *expr) {\n") != 0) {
+    lm_trans_emitted_message_thread_assert_helper = 1;
+    if (lm_trans_put(file, "static inline void lm_message_thread_assert_violation(const char *file, int line, const char *expr) {\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "    if (thread == 0 || thread->current == 0) {\n") != 0) {
+    if (lm_trans_put(file, "    struct LmMessageThread *thread = lm_message_thread_current();\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "    LmMessageThreadExecutionContext *context = (LmMessageThreadExecutionContext *)lm_message_thread_execution_context(thread);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(file, "    if (thread == 0 || context == 0) {\n") != 0) {
         return 1;
     }
     if (lm_trans_put(file, "        abort();\n") != 0) {
@@ -16925,22 +16894,22 @@ static int lm_trans_emit_l5_assert_helper(FILE *file) {
     if (lm_trans_put(file, "    }\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "    thread->current->diagnostic_code = 1;\n") != 0) {
+    if (lm_trans_put(file, "    context->diagnostic_code = 1;\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "    thread->current->diagnostic_label = \"AssertionViolation\";\n") != 0) {
+    if (lm_trans_put(file, "    context->diagnostic_label = \"AssertionViolation\";\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "    thread->current->diagnostic_file = file;\n") != 0) {
+    if (lm_trans_put(file, "    context->diagnostic_file = file;\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "    thread->current->diagnostic_line = line;\n") != 0) {
+    if (lm_trans_put(file, "    context->diagnostic_line = line;\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "    thread->current->diagnostic_expr = expr;\n") != 0) {
+    if (lm_trans_put(file, "    context->diagnostic_expr = expr;\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(file, "    longjmp(thread->current->diagnostic_root, 1);\n") != 0) {
+    if (lm_trans_put(file, "    longjmp(context->diagnostic_root, 1);\n") != 0) {
         return 1;
     }
     if (lm_trans_put(file, "}\n\n") != 0) {
@@ -16949,26 +16918,63 @@ static int lm_trans_emit_l5_assert_helper(FILE *file) {
     return 0;
 }
 
-static int lm_trans_emit_l5_main_root(FILE *file, unsigned indent) {
-    if (lm_trans_emit_l5_main_helper(lm_trans_prelude_file(file)) != 0) {
+static int lm_trans_emit_message_thread_main_root(FILE *file, unsigned indent) {
+    if (lm_trans_emit_message_thread_main_helper(lm_trans_prelude_file(file)) != 0) {
         return 1;
     }
-    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "LmL5Thread *lm_l5_thread = lm_l5_main_thread();\n") != 0) {
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "struct LmMessageThread *lm_message_thread = lm_message_thread_current();\n") != 0) {
         return 1;
     }
-    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_l5_thread->current = &lm_l5_thread->main_context;\n") != 0) {
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "void *lm_message_thread_previous_context;\n") != 0) {
         return 1;
     }
-    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_l5_thread->main_context.diagnostic_code = 0;\n") != 0) {
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_message_thread == 0) {\n") != 0) {
         return 1;
     }
-    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (setjmp(lm_l5_thread->main_context.diagnostic_root) != 0) {\n") != 0) {
-        return 1;
-    }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return lm_l5_thread_diagnostic_exit_code(lm_l5_thread);\n") != 0) {
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return 1;\n") != 0) {
         return 1;
     }
     if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_previous_context = lm_message_thread_set_execution_context(lm_message_thread, &lm_message_thread_main_context_storage);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "while (lm_message_thread_begin_turn(lm_message_thread)) {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_message_thread_main_context_storage.diagnostic_code = 0;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (setjmp(lm_message_thread_main_context_storage.diagnostic_root) == 0) {\n") != 0) {
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_trans_emit_message_thread_main_end(FILE *file, unsigned indent) {
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "} else {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent + 2U) != 0 || lm_trans_put(file, "lm_message_thread_request_failure(lm_message_thread, lm_message_thread_diagnostic_status(&lm_message_thread_main_context_storage));\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "}\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_turn_end:\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "(void)lm_message_thread_end_turn(lm_message_thread);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_set_execution_context(lm_message_thread, lm_message_thread_previous_context);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "return lm_message_thread_status(lm_message_thread);\n") != 0) {
         return 1;
     }
     return 0;
@@ -17059,7 +17065,7 @@ static int lm_trans_emit_array_target_path(FILE *file, const LmP0Text *target_na
 }
 
 static int lm_trans_emit_array_structure_value_alloc_assignment(FILE *file, unsigned indent, const LmP0Text *target_name, const size_t *indices, size_t depth, const LmP0Node *element_type, size_t pointer_depth, size_t rank, size_t count) {
-    if (lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
+    if (lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
         return 1;
     }
     if (lm_trans_emit_indent(file, indent) != 0) {
@@ -17077,7 +17083,7 @@ static int lm_trans_emit_array_structure_value_alloc_assignment(FILE *file, unsi
     if (lm_trans_emit_array_pointer_type(file, element_type, pointer_depth) != 0) {
         return 1;
     }
-    if (lm_trans_put(file, ")lm_own_arena_array_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0) {
+    if (lm_trans_put(file, ")lm_own_arena_array_new_zero(lm_message_thread_owner(0), sizeof(*") != 0) {
         return 1;
     }
     if (lm_trans_emit_array_target_path(file, target_name, indices, depth) != 0) {
@@ -17343,7 +17349,7 @@ static int lm_trans_type_receiver_array_structure_value_alloc(FILE *file, unsign
             }
         }
     }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, " = (LmSlice *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, "));\n") != 0) {
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, " = (LmSlice *)lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*") != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, "));\n") != 0) {
         {
             int lm_return_6 = 1;
             lm_trans_text_ref_destroy(&items_name);
@@ -17682,7 +17688,7 @@ static int lm_trans_emit_array_value_helper(FILE *file, const LmTransFormalParam
     }
     prelude_file = lm_trans_prelude_file(file);
     count = lm_trans_structure_field_count(value);
-    if (lm_trans_emit_l5_runtime_prelude(prelude_file) != 0) {
+    if (lm_trans_emit_message_thread_runtime_prelude(prelude_file) != 0) {
         {
             int lm_return_1 = 1;
             lm_trans_text_ref_destroy(&helper_name_text);
@@ -17732,7 +17738,7 @@ static int lm_trans_emit_array_value_helper(FILE *file, const LmTransFormalParam
             return lm_return_5;
         }
     }
-    if (lm_trans_put(prelude_file, "    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " = (LmSlice *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "));\n    if (") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " == 0) {\n        return 0;\n    }\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->ptr = (void *)") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->length = ") != 0 || lm_trans_emit_size_literal(prelude_file, count) != 0 || lm_trans_put(prelude_file, ";\n    return ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n}\n\n") != 0) {
+    if (lm_trans_put(prelude_file, "    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " = (LmSlice *)lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "));\n    if (") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " == 0) {\n        return 0;\n    }\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->ptr = (void *)") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->length = ") != 0 || lm_trans_emit_size_literal(prelude_file, count) != 0 || lm_trans_put(prelude_file, ";\n    return ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n}\n\n") != 0) {
         {
             int lm_return_6 = 1;
             lm_trans_text_ref_destroy(&helper_name_text);
@@ -17887,10 +17893,10 @@ static int lm_trans_emit_fm_result_prologue(FILE *file, const LmP0Text *function
     if (file == 0 || function_name == 0) {
         return 1;
     }
-    if (lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
+    if (lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
         return 1;
     }
-    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *lm_fm_result = (") != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*lm_fm_result));\n") != 0) {
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *lm_fm_result = (") != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*lm_fm_result));\n") != 0) {
         return 1;
     }
     if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_fm_result == 0) {\n") != 0) {
@@ -18621,9 +18627,60 @@ static int lm_trans_emit_closure_return_statement(FILE *file, const LmP0Field *r
     }
 }
 
+static int lm_trans_emit_message_thread_entry_return(FILE *file, const LmP0Field *return_fields, unsigned indent, LmTransNamespace *namespace_, int *out_consumed) {
+    unsigned return_id;
+    if (out_consumed != 0) {
+        out_consumed[0] = 0;
+    }
+    if (out_consumed == 0 || namespace_ == 0 || namespace_ -> message_thread_entry == 0) {
+        return 0;
+    }
+    return_id = namespace_ -> next_return_id;
+    namespace_->next_return_id = namespace_ -> next_return_id + 1U;
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "{\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "int ") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, " = ") != 0) {
+        return 1;
+    }
+    if (return_fields == 0) {
+        if (lm_trans_put(file, "0") != 0) {
+            return 1;
+        }
+    }
+    if (return_fields != 0) {
+        if (lm_trans_emit_expr_fields(file, return_fields, namespace_) != 0) {
+            return 1;
+        }
+    }
+    if (lm_trans_put(file, ";\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_message_thread_request_stop(lm_message_thread, ") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ");\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "goto lm_message_thread_turn_end;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
+        return 1;
+    }
+    out_consumed[0] = 1;
+    return 0;
+}
+
 static int lm_trans_emit_return_statement(FILE *file, const LmP0Field *return_fields, unsigned indent, LmTransNamespace *namespace_) {
     unsigned return_id;
     int consumed;
+    if (lm_trans_emit_message_thread_entry_return(file, return_fields, indent, namespace_, &consumed) != 0) {
+        return 1;
+    }
+    if (consumed) {
+        return 0;
+    }
     if (return_fields == 0) {
         if (lm_trans_emit_cleanups_until(file, indent, namespace_, 0U) != 0) {
             return 1;
@@ -20456,7 +20513,7 @@ static int lm_trans_emit_named_structure_storage(FILE *file, const LmP0Frame *fr
         }
     }
     if (qualifier == 0 || qualifier[0] == '\0') {
-        if (lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
+        if (lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
             {
                 int lm_return_1 = 1;
                 lm_own_delete(pointer_name, 0);
@@ -20464,7 +20521,7 @@ static int lm_trans_emit_named_structure_storage(FILE *file, const LmP0Frame *fr
                 return lm_return_1;
             }
         }
-        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, frame -> head) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, frame -> head) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, "));\n") != 0) {
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, frame -> head) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, frame -> head) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, "));\n") != 0) {
             {
                 int lm_return_2 = 1;
                 lm_own_delete(pointer_name, 0);
@@ -22868,7 +22925,7 @@ static int lm_trans_emit_merge_named_structure_storage(FILE *file, const LmP0Fra
         }
     }
     if (qualifier == 0 || qualifier[0] == '\0') {
-        if (lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
+        if (lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
             {
                 int lm_return_1 = 1;
                 lm_own_delete(pointer_name, 0);
@@ -22876,7 +22933,7 @@ static int lm_trans_emit_merge_named_structure_storage(FILE *file, const LmP0Fra
                 return lm_return_1;
             }
         }
-        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, target) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, target) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, "));\n") != 0) {
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, target) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, target) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, "));\n") != 0) {
             {
                 int lm_return_2 = 1;
                 lm_own_delete(pointer_name, 0);
@@ -23614,6 +23671,39 @@ static int lm_trans_statement_emit_return(FILE *file, LmTransStatementStack *sta
     return lm_trans_emit_return_statement(file, frame -> body -> first_field, indent, namespace_);
 }
 
+static int lm_trans_statement_emit_stop(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_) {
+    const LmP0Field * status_field;
+    LM_UNUSED(stack);
+    if (frame == 0) {
+        return 1;
+    }
+    if (lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
+        return 1;
+    }
+    status_field = frame -> body -> first_field;
+    if (status_field != 0 && lm_trans_expr_segment_end(status_field) != 0) {
+        fprintf(stderr, "trans L2 error: stop receiver expects zero or one status expression\n");
+        return 1;
+    }
+    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_request_stop(0, ") != 0) {
+        return 1;
+    }
+    if (status_field == 0) {
+        if (lm_trans_put(file, "0") != 0) {
+            return 1;
+        }
+    }
+    if (status_field != 0) {
+        if (lm_trans_put(file, "(int)(") != 0 || lm_trans_emit_expr_fields(file, status_field, namespace_) != 0 || lm_trans_put(file, ")") != 0) {
+            return 1;
+        }
+    }
+    if (lm_trans_put(file, ");\n") != 0) {
+        return 1;
+    }
+    return 0;
+}
+
 static int lm_trans_statement_emit_if(FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_) {
     return lm_trans_statement_stack_schedule_control(file, stack, frame, indent, namespace_, "if");
 }
@@ -23646,7 +23736,7 @@ static int lm_trans_statement_emit_assert(FILE *file, LmTransStatementStack *sta
         fprintf(stderr, "trans L2 error: assert receiver expects condition expression\n");
         return 1;
     }
-    if (lm_trans_emit_l5_assert_helper(lm_trans_prelude_file(file)) != 0) {
+    if (lm_trans_emit_message_thread_assert_helper(lm_trans_prelude_file(file)) != 0) {
         return 1;
     }
     if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (!(") != 0) {
@@ -23661,7 +23751,7 @@ static int lm_trans_statement_emit_assert(FILE *file, LmTransStatementStack *sta
     if (lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0) {
         return 1;
     }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_l5_assert_violation(lm_l5_main_thread(), __FILE__, __LINE__, \"assert\");\n") != 0) {
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_message_thread_assert_violation(__FILE__, __LINE__, \"assert\");\n") != 0) {
         return 1;
     }
     if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
@@ -24626,7 +24716,7 @@ static int lm_trans_statement_emit_nested_function(FILE *file, LmTransStatementS
         }
     }
     if (hoisted -> function -> has_env) {
-        if (lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
+        if (lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
             {
                 int lm_return_3 = 1;
                 lm_own_delete(closure_value_name, 0);
@@ -24644,7 +24734,7 @@ static int lm_trans_statement_emit_nested_function(FILE *file, LmTransStatementS
                 return lm_return_4;
             }
         }
-        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted -> env_var_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, hoisted -> function -> env_type_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_write_text(file, hoisted -> env_var_name) != 0 || lm_trans_put(file, "));\n") != 0) {
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted -> env_var_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, hoisted -> function -> env_type_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*") != 0 || lm_trans_write_text(file, hoisted -> env_var_name) != 0 || lm_trans_put(file, "));\n") != 0) {
             {
                 int lm_return_5 = 1;
                 lm_own_delete(closure_value_name, 0);
@@ -24747,7 +24837,7 @@ static int lm_trans_statement_emit_nested_function(FILE *file, LmTransStatementS
                 return lm_return_14;
             }
         }
-        if (lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
+        if (lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
             {
                 int lm_return_15 = 1;
                 lm_own_delete(closure_value_name, 0);
@@ -24765,7 +24855,7 @@ static int lm_trans_statement_emit_nested_function(FILE *file, LmTransStatementS
                 return lm_return_16;
             }
         }
-        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, descriptor_type) != 0 || lm_trans_put(file, ")lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "));\n") != 0) {
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, descriptor_type) != 0 || lm_trans_put(file, ")lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "));\n") != 0) {
             {
                 int lm_return_17 = 1;
                 lm_own_delete(closure_value_name, 0);
@@ -25954,7 +26044,7 @@ static int lm_trans_pointer_bindings_init(void) {
     if (status == 0 && (lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_operator", &lm_trans_expr_emit_raw, &lm_trans_expr_state_operator) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_deref", &lm_trans_expr_emit_raw, &lm_trans_expr_state_deref) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_pointer_follow", &lm_trans_expr_emit_raw, &lm_trans_expr_state_pointer_follow) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_c_dot", &lm_trans_expr_emit_raw, &lm_trans_expr_state_c_dot) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_cast_frame", &lm_trans_expr_emit_cast_frame) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_implements_frame", &lm_trans_expr_emit_implements_frame) != 0)) {
         status = 1;
     }
-    if (status == 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_return", &lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_if", &lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_while", &lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_else", &lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", &lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_finally", &lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_assert", &lm_trans_statement_emit_assert) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", &lm_trans_statement_emit_loop_jump) != 0)) {
+    if (status == 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_return", &lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_stop", &lm_trans_statement_emit_stop) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_if", &lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_while", &lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_else", &lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", &lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_finally", &lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_assert", &lm_trans_statement_emit_assert) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", &lm_trans_statement_emit_loop_jump) != 0)) {
         status = 1;
     }
     if (status == 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_include_prelude", &lm_trans_statement_emit_include_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_define_prelude", &lm_trans_statement_emit_define_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifndef_default_prelude", &lm_trans_statement_emit_ifndef_default_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_os_prelude", &lm_trans_statement_emit_os_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifdef_prelude", &lm_trans_statement_emit_ifdef_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_guard_prelude", &lm_trans_statement_emit_guard_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_extern_c_prelude", &lm_trans_statement_emit_extern_c_prelude) != 0)) {
@@ -28352,6 +28442,8 @@ static int lm_trans_emit_function_with_hoisted(FILE *file, const LmTransFunction
     const LmTransCapture * capture;
     char *capture_expr;
     LmP0Text * capture_text;
+    unsigned body_indent;
+    int is_message_thread_entry;
     if (function == 0 || function -> frame == 0 || hoisted_functions == 0) {
         lm_trans_ptr_stack_delete(&hoisted_functions);
         return 1;
@@ -28360,6 +28452,8 @@ static int lm_trans_emit_function_with_hoisted(FILE *file, const LmTransFunction
     state = 0;
     raw_return = 0;
     raw_return_descriptor_name = 0;
+    body_indent = 1U;
+    is_message_thread_entry = function -> is_external && lm_trans_text_equals(function -> c_name, "main");
     if (function -> is_descriptor_only) {
         fprintf(stderr, "trans L2 error: descriptor-only fn does not have an executable body\n");
         lm_trans_ptr_stack_delete(&hoisted_functions);
@@ -28549,6 +28643,7 @@ static int lm_trans_emit_function_with_hoisted(FILE *file, const LmTransFunction
     state->previous_hoisted_functions = namespace_ -> hoisted_functions;
     state->previous_cleanups = namespace_ -> cleanups;
     state->previous_loops = namespace_ -> loops;
+    state->previous_message_thread_entry = namespace_ -> message_thread_entry;
     state->has_previous_control_stacks = 1;
     if (function -> is_sub) {
         namespace_->return_type_node = 0;
@@ -28565,6 +28660,7 @@ static int lm_trans_emit_function_with_hoisted(FILE *file, const LmTransFunction
     }
     namespace_->next_return_id = 0U;
     namespace_->hoisted_functions = hoisted_functions;
+    namespace_->message_thread_entry = is_message_thread_entry;
     namespace_->cleanups = lm_trans_ptr_stack_new(&lm_trans_cleanup_delete_any);
     namespace_->loops = lm_trans_ptr_stack_new(&lm_trans_loop_delete_any);
     if (namespace_ -> cleanups == 0 || namespace_ -> loops == 0) {
@@ -28572,6 +28668,7 @@ static int lm_trans_emit_function_with_hoisted(FILE *file, const LmTransFunction
         lm_trans_ptr_stack_delete(&namespace_ -> loops);
         namespace_->cleanups = state -> previous_cleanups;
         namespace_->loops = state -> previous_loops;
+        namespace_->message_thread_entry = state -> previous_message_thread_entry;
         state->previous_cleanups = 0;
         state->previous_loops = 0;
         state->has_previous_control_stacks = 0;
@@ -28581,26 +28678,30 @@ static int lm_trans_emit_function_with_hoisted(FILE *file, const LmTransFunction
         return 1;
     }
     status = 0;
-    if (status == 0) {
-        status = lm_trans_emit_array_param_aliases(file, function, 1U);
+    if (is_message_thread_entry) {
+        status = lm_trans_emit_message_thread_main_root(file, 1U);
+        body_indent = 3U;
     }
-    if (function -> is_external && lm_trans_text_equals(function -> c_name, "main")) {
-        status = lm_trans_emit_l5_main_root(file, 1U);
+    if (status == 0) {
+        status = lm_trans_emit_array_param_aliases(file, function, body_indent);
     }
     if (status == 0 && function -> is_struct_return) {
-        status = lm_trans_emit_fm_result_prologue(file, function -> c_name, 1U);
+        status = lm_trans_emit_fm_result_prologue(file, function -> c_name, body_indent);
     }
     if (status == 0) {
-        status = lm_trans_emit_statement_list(file, function -> body_start, 1U, namespace_);
+        status = lm_trans_emit_statement_list(file, function -> body_start, body_indent, namespace_);
     }
     if (status == 0) {
         status = lm_trans_validate_end_trailer(frame);
     }
     if (status == 0 && (frame -> trailer == 0 || lm_trans_text_equals(frame -> trailer -> spelling, "return") == 0)) {
-        status = lm_trans_emit_cleanups_until(file, 1U, namespace_, 0U);
+        status = lm_trans_emit_cleanups_until(file, body_indent, namespace_, 0U);
     }
     if (status == 0) {
-        status = lm_trans_emit_trailer_statement(file, frame -> trailer, 1U, namespace_);
+        status = lm_trans_emit_trailer_statement(file, frame -> trailer, body_indent, namespace_);
+    }
+    if (status == 0 && is_message_thread_entry) {
+        status = lm_trans_emit_message_thread_main_end(file, 1U);
     }
     if (status == 0) {
         status = lm_trans_put(file, "}\n");
@@ -28610,6 +28711,7 @@ static int lm_trans_emit_function_with_hoisted(FILE *file, const LmTransFunction
     namespace_->return_type_name = state -> previous_return_type_name;
     namespace_->next_return_id = state -> previous_next_return_id;
     namespace_->hoisted_functions = state -> previous_hoisted_functions;
+    namespace_->message_thread_entry = state -> previous_message_thread_entry;
     lm_trans_ptr_stack_delete(&namespace_ -> cleanups);
     lm_trans_ptr_stack_delete(&namespace_ -> loops);
     namespace_->cleanups = state -> previous_cleanups;
@@ -36086,9 +36188,9 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
     lm_trans_prelude_output = prelude_output;
     lm_trans_current_source_path = source_path;
     lm_trans_next_array_value_helper_id = 0U;
-    lm_trans_emitted_l5_runtime_prelude = 0;
-    lm_trans_emitted_l5_main_helper = 0;
-    lm_trans_emitted_l5_assert_helper = 0;
+    lm_trans_emitted_message_thread_runtime_prelude = 0;
+    lm_trans_emitted_message_thread_main_helper = 0;
+    lm_trans_emitted_message_thread_assert_helper = 0;
     lm_trans_l2_table_materialization_suppression_depth = 0;
     lm_trans_l2_conditional_import_depth = 0;
     lm_trans_l2_executable_statement_depth = 0;
@@ -36168,24 +36270,47 @@ static int lm_trans_emit_document(const char *source_path, const char *output_pa
 }
 
 int main(int argc, char **argv) {
-    LmL5Thread *lm_l5_thread = lm_l5_main_thread();
-    lm_l5_thread->current = &lm_l5_thread->main_context;
-    lm_l5_thread->main_context.diagnostic_code = 0;
-    if (setjmp(lm_l5_thread->main_context.diagnostic_root) != 0) {
-        return lm_l5_thread_diagnostic_exit_code(lm_l5_thread);
-    }
-    setvbuf(stdout, 0, _IONBF, 0);
-    setvbuf(stderr, 0, _IONBF, 0);
-    if (argc < 0) {
-        LM_UNUSED(lm_registry_view_append_materialized_rows);
-        LM_UNUSED(lm_trans_registry_join_table);
-        return 0;
-    }
-    if (argc != 3) {
-        fprintf(stderr, "usage: trans.lm0[.exe] <source.lm2> <output.lm1.c>\n");
+    struct LmMessageThread *lm_message_thread = lm_message_thread_current();
+    void *lm_message_thread_previous_context;
+    if (lm_message_thread == 0) {
         return 1;
     }
-    return lm_trans_emit_document(argv[1], argv[2]);
+    lm_message_thread_previous_context = lm_message_thread_set_execution_context(lm_message_thread, &lm_message_thread_main_context_storage);
+    while (lm_message_thread_begin_turn(lm_message_thread)) {
+        lm_message_thread_main_context_storage.diagnostic_code = 0;
+        if (setjmp(lm_message_thread_main_context_storage.diagnostic_root) == 0) {
+            setvbuf(stdout, 0, _IONBF, 0);
+            setvbuf(stderr, 0, _IONBF, 0);
+            if (argc < 0) {
+                LM_UNUSED(lm_registry_view_append_materialized_rows);
+                LM_UNUSED(lm_trans_registry_join_table);
+                {
+                    int lm_return_0 = 0;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_0);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (argc != 3) {
+                fprintf(stderr, "usage: trans.lm0[.exe] <source.lm2> <output.lm1.c>\n");
+                {
+                    int lm_return_1 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_1);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            {
+                int lm_return_2 = lm_trans_emit_document(argv[1], argv[2]);
+                lm_message_thread_request_stop(lm_message_thread, lm_return_2);
+                goto lm_message_thread_turn_end;
+            }
+        } else {
+            lm_message_thread_request_failure(lm_message_thread, lm_message_thread_diagnostic_status(&lm_message_thread_main_context_storage));
+        }
+    lm_message_thread_turn_end:
+        (void)lm_message_thread_end_turn(lm_message_thread);
+    }
+    lm_message_thread_set_execution_context(lm_message_thread, lm_message_thread_previous_context);
+    return lm_message_thread_status(lm_message_thread);
 }
 
 

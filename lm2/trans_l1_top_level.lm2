@@ -1263,6 +1263,8 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
     const: LmTransCapture: capture
     @: char capture_expr
     LmP0Text: capture_text
+    unsigned: body_indent
+    int: is_message_thread_entry
 
     if: function = 0 || function\frame = 0 || hoisted_functions = 0
         lm_trans_ptr_stack_delete(@ hoisted_functions)
@@ -1272,6 +1274,8 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
     state: 0
     raw_return: 0
     raw_return_descriptor_name: 0
+    body_indent: 1U
+    is_message_thread_entry: function\is_external && lm_trans_text_equals(function\c_name, "main")
 
     if: function\is_descriptor_only
         c.fprintf(c.stderr, "trans L2 error: descriptor-only fn does not have an executable body\n")
@@ -1437,6 +1441,7 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
     state\previous_hoisted_functions: namespace_\hoisted_functions
     state\previous_cleanups: namespace_\cleanups
     state\previous_loops: namespace_\loops
+    state\previous_message_thread_entry: namespace_\message_thread_entry
     state\has_previous_control_stacks: 1
     if: function\is_sub
         namespace_\return_type_node: 0
@@ -1449,6 +1454,7 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
         namespace_\return_type_name: state\previous_return_type_name
     namespace_\next_return_id: 0U
     namespace_\hoisted_functions: hoisted_functions
+    namespace_\message_thread_entry: is_message_thread_entry
     namespace_\cleanups: lm_trans_ptr_stack_new(@lm_trans_cleanup_delete_any)
     namespace_\loops: lm_trans_ptr_stack_new(@lm_trans_loop_delete_any)
     if: namespace_\cleanups = 0 || namespace_\loops = 0
@@ -1456,6 +1462,7 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
         lm_trans_ptr_stack_delete(@ namespace_\loops)
         namespace_\cleanups: state\previous_cleanups
         namespace_\loops: state\previous_loops
+        namespace_\message_thread_entry: state\previous_message_thread_entry
         state\previous_cleanups: 0
         state\previous_loops: 0
         state\has_previous_control_stacks: 0
@@ -1465,20 +1472,23 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
         return: 1
 
     status: 0
+    if: is_message_thread_entry
+        status: lm_trans_emit_message_thread_main_root(file, 1U)
+        body_indent: 3U
     if: status = 0
-        status: lm_trans_emit_array_param_aliases(file, function, 1U)
-    if: function\is_external && lm_trans_text_equals(function\c_name, "main")
-        status: lm_trans_emit_l5_main_root(file, 1U)
+        status: lm_trans_emit_array_param_aliases(file, function, body_indent)
     if: status = 0 && function\is_struct_return
-        status: lm_trans_emit_fm_result_prologue(file, function\c_name, 1U)
+        status: lm_trans_emit_fm_result_prologue(file, function\c_name, body_indent)
     if: status = 0
-        status: lm_trans_emit_statement_list(file, function\body_start, 1U, namespace_)
+        status: lm_trans_emit_statement_list(file, function\body_start, body_indent, namespace_)
     if: status = 0
         status: lm_trans_validate_end_trailer(frame)
     if: status = 0 && (frame\trailer = 0 || lm_trans_text_equals(frame\trailer\spelling, "return") = 0)
-        status: lm_trans_emit_cleanups_until(file, 1U, namespace_, 0U)
+        status: lm_trans_emit_cleanups_until(file, body_indent, namespace_, 0U)
     if: status = 0
-        status: lm_trans_emit_trailer_statement(file, frame\trailer, 1U, namespace_)
+        status: lm_trans_emit_trailer_statement(file, frame\trailer, body_indent, namespace_)
+    if: status = 0 && is_message_thread_entry
+        status: lm_trans_emit_message_thread_main_end(file, 1U)
     if: status = 0
         status: lm_trans_put(file, "}\n")
 
@@ -1487,6 +1497,7 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
     namespace_\return_type_name: state\previous_return_type_name
     namespace_\next_return_id: state\previous_next_return_id
     namespace_\hoisted_functions: state\previous_hoisted_functions
+    namespace_\message_thread_entry: state\previous_message_thread_entry
     lm_trans_ptr_stack_delete(@ namespace_\cleanups)
     lm_trans_ptr_stack_delete(@ namespace_\loops)
     namespace_\cleanups: state\previous_cleanups

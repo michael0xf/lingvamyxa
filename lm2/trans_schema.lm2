@@ -830,6 +830,7 @@ table:
              previous_cleanups           LmOwnPtrStack          6                       0                                0
              previous_loops              LmOwnPtrStack          7                       0                                0
              has_previous_control_stacks int                    8                       0                                0
+             previous_message_thread_entry int                  9                       0                                0
 end: LmTransFunctionState
 
 table:
@@ -968,4 +969,5 @@ table:
              next_return_id       unsigned               10                      0                                0
              hoisted_functions    LmOwnPtrStack          11                      0                                1
              registry_view        LmRegistryView         12                      0                                1
+             message_thread_entry int                    13                      0                                0
 end: LmTransNamespace

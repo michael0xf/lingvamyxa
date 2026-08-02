@@ -80,6 +80,7 @@ struct LmMessageThread {
     size_t turn_count;
     size_t collection_count;
     int collector_failed;
+    void *execution_context;
 };
 
 
@@ -133,6 +134,8 @@ int (lm_own_tree_cut)(LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
+LmMessageThread * (lm_message_thread_new)(void);
+void (lm_message_thread_delete)(LmMessageThread *thread);
 LmMessageThread * (lm_message_thread_root)(void);
 LmMessageThread * (lm_message_thread_current)(void);
 LmMessageThread * (lm_message_thread_set_current)(LmMessageThread *thread);
@@ -140,8 +143,22 @@ int (lm_message_thread_begin_turn)(LmMessageThread *thread);
 int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
 void (lm_message_thread_request_stop)(LmMessageThread *thread, int status);
+void (lm_message_thread_request_failure)(LmMessageThread *thread, int status);
 int (lm_message_thread_is_running)(const LmMessageThread *thread);
 int (lm_message_thread_status)(const LmMessageThread *thread);
+LmOwnArena * (lm_message_thread_owner)(LmMessageThread *thread);
+void * (lm_message_thread_execution_context)(LmMessageThread *thread);
+void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *context);
+size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
+size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
+
+
+
+
+
+
+
+
 
 
 
@@ -275,13 +292,21 @@ int lm_own_arena_promote_lazy_edges(LmOwnArena *arena);
 int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source);
 int lm_message_thread_init(LmMessageThread *thread);
 void lm_message_thread_destroy(LmMessageThread *thread);
+LmMessageThread * lm_message_thread_new(void);
+void lm_message_thread_delete(LmMessageThread *thread);
 static void lm_message_thread_root_cleanup(void);
 LmMessageThread * lm_message_thread_root(void);
 LmMessageThread * lm_message_thread_current(void);
 LmMessageThread * lm_message_thread_set_current(LmMessageThread *thread);
 int lm_message_thread_is_running(const LmMessageThread *thread);
 int lm_message_thread_status(const LmMessageThread *thread);
+LmOwnArena * lm_message_thread_owner(LmMessageThread *thread);
+void * lm_message_thread_execution_context(LmMessageThread *thread);
+void * lm_message_thread_set_execution_context(LmMessageThread *thread, void *context);
+size_t lm_message_thread_turn_count(const LmMessageThread *thread);
+size_t lm_message_thread_collection_count(const LmMessageThread *thread);
 void lm_message_thread_request_stop(LmMessageThread *thread, int status);
+void lm_message_thread_request_failure(LmMessageThread *thread, int status);
 int lm_message_thread_collect(LmMessageThread *thread);
 int lm_message_thread_begin_turn(LmMessageThread *thread);
 int lm_message_thread_end_turn(LmMessageThread *thread);
@@ -1002,6 +1027,26 @@ void lm_message_thread_destroy(LmMessageThread *thread) {
     }
 }
 
+LmMessageThread * lm_message_thread_new(void) {
+    LmMessageThread * thread;
+    thread = lm_own_new_zero(sizeof(LmMessageThread));
+    if (thread == 0) {
+        return 0;
+    }
+    if (lm_message_thread_init(thread) != 0) {
+        lm_own_delete(thread, 0);
+        return 0;
+    }
+    return thread;
+}
+
+void lm_message_thread_delete(LmMessageThread *thread) {
+    if (thread != 0) {
+        lm_message_thread_destroy(thread);
+        lm_own_delete(thread, 0);
+    }
+}
+
 static void lm_message_thread_root_cleanup(void) {
     if (lm_message_thread_root_ready) {
         lm_message_thread_destroy(lm_message_thread_root_storage);
@@ -1062,6 +1107,53 @@ int lm_message_thread_status(const LmMessageThread *thread) {
     return thread -> stop_status;
 }
 
+LmOwnArena * lm_message_thread_owner(LmMessageThread *thread) {
+    if (thread == 0) {
+        thread = lm_message_thread_current();
+    }
+    if (thread == 0) {
+        return 0;
+    }
+    return thread -> root_owner;
+}
+
+void * lm_message_thread_execution_context(LmMessageThread *thread) {
+    if (thread == 0) {
+        thread = lm_message_thread_current();
+    }
+    if (thread == 0) {
+        return 0;
+    }
+    return thread -> execution_context;
+}
+
+void * lm_message_thread_set_execution_context(LmMessageThread *thread, void *context) {
+    void *previous;
+    if (thread == 0) {
+        thread = lm_message_thread_current();
+    }
+    if (thread == 0) {
+        return 0;
+    }
+    previous = thread -> execution_context;
+    thread->execution_context = context;
+    return previous;
+}
+
+size_t lm_message_thread_turn_count(const LmMessageThread *thread) {
+    if (thread == 0) {
+        return 0U;
+    }
+    return thread -> turn_count;
+}
+
+size_t lm_message_thread_collection_count(const LmMessageThread *thread) {
+    if (thread == 0) {
+        return 0U;
+    }
+    return thread -> collection_count;
+}
+
 void lm_message_thread_request_stop(LmMessageThread *thread, int status) {
     if (thread == 0) {
         thread = lm_message_thread_current();
@@ -1072,14 +1164,32 @@ void lm_message_thread_request_stop(LmMessageThread *thread, int status) {
     }
 }
 
+void lm_message_thread_request_failure(LmMessageThread *thread, int status) {
+    if (thread == 0) {
+        thread = lm_message_thread_current();
+    }
+    if (status == 0) {
+        status = 1;
+    }
+    if (thread != 0 && (thread -> state == LM_MESSAGE_THREAD_RUNNING || thread -> state == LM_MESSAGE_THREAD_STOPPING)) {
+        thread->stop_status = status;
+        thread->state = LM_MESSAGE_THREAD_STOPPING;
+    }
+}
+
 int lm_message_thread_collect(LmMessageThread *thread) {
-    if (thread == 0 || thread -> root_owner == 0) {
+    if (thread == 0) {
         return 1;
     }
     thread->collection_count = thread -> collection_count + 1U;
+    if (thread -> root_owner == 0) {
+        thread->collector_failed = 1;
+        lm_message_thread_request_failure(thread, 1);
+        return 1;
+    }
     if (lm_own_tree_cut(thread -> root_owner) != 0) {
         thread->collector_failed = 1;
-        lm_message_thread_request_stop(thread, 1);
+        lm_message_thread_request_failure(thread, 1);
         return 1;
     }
     return 0;

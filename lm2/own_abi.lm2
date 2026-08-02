@@ -297,6 +297,7 @@ table:
              turn_count        size_t
              collection_count  size_t
              collector_failed  int
+             execution_context void
 end: `LmMessageThread.field.class`
 
 table:
@@ -309,13 +310,15 @@ table:
              turn_count        3
              collection_count  4
              collector_failed  5
+             execution_context 6
 end: `LmMessageThread.field.index`
 
 table:
     name: `LmMessageThread.field.address-depth`
     columns((class: class) (size_t: depth))
     rows:
-             root_owner  0
+             root_owner        0
+             execution_context 1
 end: `LmMessageThread.field.address-depth`
 
 table:
@@ -362,6 +365,8 @@ table:
              lm_own_tree_cut_promote_lazy_edges 1
              lm_message_thread_init          1
              lm_message_thread_destroy       1
+             lm_message_thread_new           1
+             lm_message_thread_delete        1
              lm_message_thread_root          1
              lm_message_thread_current       1
              lm_message_thread_set_current   1
@@ -369,8 +374,14 @@ table:
              lm_message_thread_end_turn      1
              lm_message_thread_collect       1
              lm_message_thread_request_stop  1
+             lm_message_thread_request_failure 1
              lm_message_thread_is_running    1
              lm_message_thread_status        1
+             lm_message_thread_owner         1
+             lm_message_thread_execution_context 1
+             lm_message_thread_set_execution_context 1
+             lm_message_thread_turn_count        1
+             lm_message_thread_collection_count  1
 end: `fn.external`
 
 fn: lm_own_new_zero (size_t: size) @: void
@@ -413,6 +424,8 @@ fn: lm_own_tree_cut (LmOwnArena: arena) int
 fn: lm_own_tree_cut_promote_lazy_edges (LmOwnArena: arena) int
 fn: lm_message_thread_init (LmMessageThread: thread) int
 fn: lm_message_thread_destroy (LmMessageThread: thread) void
+fn: lm_message_thread_new () LmMessageThread
+fn: lm_message_thread_delete (LmMessageThread: thread) void
 fn: lm_message_thread_root () LmMessageThread
 fn: lm_message_thread_current () LmMessageThread
 fn: lm_message_thread_set_current (LmMessageThread: thread) LmMessageThread
@@ -420,5 +433,11 @@ fn: lm_message_thread_begin_turn (LmMessageThread: thread) int
 fn: lm_message_thread_end_turn (LmMessageThread: thread) int
 fn: lm_message_thread_collect (LmMessageThread: thread) int
 fn: lm_message_thread_request_stop (LmMessageThread: thread; int: status) void
+fn: lm_message_thread_request_failure (LmMessageThread: thread; int: status) void
 fn: lm_message_thread_is_running (const: (LmMessageThread: thread)) int
 fn: lm_message_thread_status (const: (LmMessageThread: thread)) int
+fn: lm_message_thread_owner (LmMessageThread: thread) LmOwnArena
+fn: lm_message_thread_execution_context (LmMessageThread: thread) @: void
+fn: lm_message_thread_set_execution_context (LmMessageThread: thread; @: void context) @: void
+fn: lm_message_thread_turn_count (const: (LmMessageThread: thread)) size_t
+fn: lm_message_thread_collection_count (const: (LmMessageThread: thread)) size_t

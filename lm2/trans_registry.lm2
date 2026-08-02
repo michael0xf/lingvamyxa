@@ -571,6 +571,7 @@ table:
              else          `receiver.statement`
              while         `receiver.statement`
              `return`      `receiver.statement`
+             stop          `receiver.statement`
              break         `receiver.statement`
              continue      `receiver.statement`
              synchronized  `receiver.statement`
@@ -638,6 +639,7 @@ table:
              else          lm_trans_statement_emit_else
              while         lm_trans_statement_emit_while
              `return`      lm_trans_statement_emit_return
+             stop          lm_trans_statement_emit_stop
              break         lm_trans_statement_emit_loop_jump
              continue      lm_trans_statement_emit_loop_jump
              synchronized  lm_trans_statement_emit_synchronized

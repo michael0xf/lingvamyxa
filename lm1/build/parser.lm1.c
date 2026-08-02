@@ -151,6 +151,7 @@ struct LmMessageThread {
     size_t turn_count;
     size_t collection_count;
     int collector_failed;
+    void *execution_context;
 };
 typedef struct LmP0Text {
     const char *data;
@@ -429,6 +430,8 @@ int (lm_own_tree_cut)(LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
+LmMessageThread * (lm_message_thread_new)(void);
+void (lm_message_thread_delete)(LmMessageThread *thread);
 LmMessageThread * (lm_message_thread_root)(void);
 LmMessageThread * (lm_message_thread_current)(void);
 LmMessageThread * (lm_message_thread_set_current)(LmMessageThread *thread);
@@ -436,8 +439,14 @@ int (lm_message_thread_begin_turn)(LmMessageThread *thread);
 int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
 void (lm_message_thread_request_stop)(LmMessageThread *thread, int status);
+void (lm_message_thread_request_failure)(LmMessageThread *thread, int status);
 int (lm_message_thread_is_running)(const LmMessageThread *thread);
 int (lm_message_thread_status)(const LmMessageThread *thread);
+LmOwnArena * (lm_message_thread_owner)(LmMessageThread *thread);
+void * (lm_message_thread_execution_context)(LmMessageThread *thread);
+void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *context);
+size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
+size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
 int (lm_p0_parse_string)(const char *source, LmP0Document **out_document);
 int (lm_p0_parse_bytes)(const char *source, size_t source_length, LmP0Document **out_document);
 int (lm_p0_parse_file)(const char *path, LmP0Document **out_document);
@@ -458,6 +467,14 @@ const char * (lm_p0_node_kind_class_name)(LmP0NodeKind kind);
 char * (lm_p0_dump_alloc)(const LmP0Document *document);
 void (lm_p0_free)(void *ptr);
 static int lm_registry_source_load_root(const LmRegistrySourceLoader *loader, void *context, const LmP0Node *root);
+
+
+
+
+
+
+
+
 
 
 

@@ -1,0 +1,90 @@
+L2:
+    predef: "lm2/own_abi.lm2"
+
+    sub: lm_test_request_current_thread_stop (@: int continued)
+        stop: 23
+        continued[0]: continued[0] + 1
+        stop: 41
+    end: lm_test_request_current_thread_stop
+
+    fn: lm_test_local_message_thread_loop () int
+        @: void thread
+        @: void previous
+        int: continued 0
+        int: status 0
+
+        thread: lm_message_thread_new()
+        if: thread = 0
+            return: 1
+
+        previous: lm_message_thread_set_current(thread)
+        while: lm_message_thread_begin_turn(thread)
+            if: lm_message_thread_turn_count(thread) = 5U
+                lm_test_request_current_thread_stop(@ continued)
+            if: lm_message_thread_end_turn(thread) != 0
+                status: 2
+                break
+        ---
+        lm_message_thread_set_current(previous)
+
+        if: status = 0 && continued != 1
+            status: 3
+        if: status = 0 && lm_message_thread_turn_count(thread) != 5U
+            status: 4
+        if: status = 0 && lm_message_thread_collection_count(thread) != 5U
+            status: 5
+        if: status = 0 && lm_message_thread_is_running(thread)
+            status: 6
+        if: status = 0 && lm_message_thread_status(thread) != 23
+            status: 7
+
+        lm_message_thread_delete(thread)
+        return: status
+    end: lm_test_local_message_thread_loop
+
+    fn: lm_test_collection_failure_status () int
+        @: void thread
+        @: void owner
+        int: status 0
+
+        thread: lm_message_thread_new()
+        if: thread = 0
+            return: 10
+        owner: lm_message_thread_owner(thread)
+        if: lm_message_thread_begin_turn(thread) = 0
+            status: 11
+        if: status = 0
+            lm_message_thread_request_stop(thread, 0)
+            lm_own_arena_freeze(owner)
+            if: lm_message_thread_end_turn(thread) = 0
+                status: 12
+            if: status = 0 && lm_message_thread_status(thread) != 1
+                status: 13
+            if: status = 0 && lm_message_thread_collection_count(thread) != 1U
+                status: 14
+        ---
+
+        lm_message_thread_delete(thread)
+        return: status
+    end: lm_test_collection_failure_status
+
+    external:
+        fn: main () int
+            int: status
+
+            status: lm_test_local_message_thread_loop()
+            if: status != 0
+                return: status
+            status: lm_test_collection_failure_status()
+            if: status != 0
+                return: status
+            if: lm_message_thread_is_running(lm_message_thread_current()) = 0
+                return: 8
+
+            stop: 0
+            if: lm_message_thread_is_running(lm_message_thread_current())
+                return: 9
+            return: 0
+        end: main
+    end: external
+end: L2

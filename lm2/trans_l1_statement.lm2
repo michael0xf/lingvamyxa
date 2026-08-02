@@ -520,28 +520,56 @@ fn: lm_trans_emit_scope_cleanups (
 
 return: 0
 
-fn: lm_trans_emit_l5_runtime_prelude (FILE: file) int
+fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
     if: file = 0
         return: 1
-    if: lm_trans_emitted_l5_runtime_prelude
+    if: lm_trans_emitted_message_thread_runtime_prelude
         return: 0
 
-    lm_trans_emitted_l5_runtime_prelude: 1
+    lm_trans_emitted_message_thread_runtime_prelude: 1
     if: lm_trans_put(file, "struct LmOwnArena;\n") != 0
         return: 1
-    if: lm_trans_put(file, "struct LmOwnArena *lm_own_arena_new(void);\n") != 0
+    if: lm_trans_put(file, "struct LmMessageThread;\n") != 0
         return: 1
-    if: lm_trans_put(file, "void lm_own_arena_delete(struct LmOwnArena *arena);\n") != 0
+    if: lm_trans_put(file, "struct LmMessageThread *lm_message_thread_current(void);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "struct LmMessageThread *lm_message_thread_new(void);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "void lm_message_thread_delete(struct LmMessageThread *thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "struct LmMessageThread *lm_message_thread_set_current(struct LmMessageThread *thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "void *lm_message_thread_execution_context(struct LmMessageThread *thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "void *lm_message_thread_set_execution_context(struct LmMessageThread *thread, void *context);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "int lm_message_thread_begin_turn(struct LmMessageThread *thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "int lm_message_thread_end_turn(struct LmMessageThread *thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "void lm_message_thread_request_stop(struct LmMessageThread *thread, int status);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "void lm_message_thread_request_failure(struct LmMessageThread *thread, int status);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "int lm_message_thread_status(const struct LmMessageThread *thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "int lm_message_thread_is_running(const struct LmMessageThread *thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "void lm_own_arena_freeze(struct LmOwnArena *arena);\n") != 0
         return: 1
     if: lm_trans_put(file, "void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);\n") != 0
         return: 1
     if: lm_trans_put(file, "void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);\n") != 0
         return: 1
-    if: lm_trans_put(file, "typedef struct LmL5ExecutionContext LmL5ExecutionContext;\n") != 0
+    if: lm_trans_put(file, "typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;\n") != 0
         return: 1
-    if: lm_trans_put(file, "typedef struct LmL5Thread LmL5Thread;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "struct LmL5ExecutionContext {\n") != 0
+    if: lm_trans_put(file, "struct LmMessageThreadExecutionContext {\n") != 0
         return: 1
     if: lm_trans_put(file, "    jmp_buf diagnostic_root;\n") != 0
         return: 1
@@ -557,134 +585,105 @@ fn: lm_trans_emit_l5_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "};\n") != 0
         return: 1
-    if: lm_trans_put(file, "struct LmL5Thread {\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    LmL5ExecutionContext main_context;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    LmL5ExecutionContext *current;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    struct LmOwnArena *root_owner;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "};\n") != 0
-        return: 1
-    if: lm_trans_put(file, "static LmL5Thread lm_l5_main_thread_storage;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "static int lm_l5_main_thread_owner_cleanup_registered;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "static void lm_l5_main_thread_owner_destroy(void) {\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    if (lm_l5_main_thread_storage.root_owner != 0) {\n") != 0
-        return: 1
-    if: lm_trans_put(file, "        lm_own_arena_delete(lm_l5_main_thread_storage.root_owner);\n") != 0
-        return: 1
-    if: lm_trans_put(file, "        lm_l5_main_thread_storage.root_owner = 0;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    }\n") != 0
-        return: 1
-    if: lm_trans_put(file, "}\n") != 0
-        return: 1
-    if: lm_trans_put(file, "static inline LmL5Thread *lm_l5_main_thread(void) {\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    LmL5Thread *thread = &lm_l5_main_thread_storage;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    if (thread->root_owner == 0) {\n") != 0
-        return: 1
-    if: lm_trans_put(file, "        thread->root_owner = lm_own_arena_new();\n") != 0
-        return: 1
-    if: lm_trans_put(file, "        if (thread->root_owner == 0) {\n") != 0
-        return: 1
-    if: lm_trans_put(file, "            abort();\n") != 0
-        return: 1
-    if: lm_trans_put(file, "        }\n") != 0
-        return: 1
-    if: lm_trans_put(file, "        if (!lm_l5_main_thread_owner_cleanup_registered) {\n") != 0
-        return: 1
-    if: lm_trans_put(file, "            if (atexit(lm_l5_main_thread_owner_destroy) != 0) {\n") != 0
-        return: 1
-    if: lm_trans_put(file, "                lm_l5_main_thread_owner_destroy();\n") != 0
-        return: 1
-    if: lm_trans_put(file, "                abort();\n") != 0
-        return: 1
-    if: lm_trans_put(file, "            }\n") != 0
-        return: 1
-    if: lm_trans_put(file, "            lm_l5_main_thread_owner_cleanup_registered = 1;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "        }\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    }\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    return thread;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "}\n") != 0
-        return: 1
 return: 0
 
-fn: lm_trans_emit_l5_main_helper (FILE: file) int
-    if: lm_trans_emit_l5_runtime_prelude(file) != 0
+fn: lm_trans_emit_message_thread_main_helper (FILE: file) int
+    if: lm_trans_emit_message_thread_runtime_prelude(file) != 0
         return: 1
-    if: lm_trans_emitted_l5_main_helper
+    if: lm_trans_emitted_message_thread_main_helper
         return: 0
 
-    lm_trans_emitted_l5_main_helper: 1
-    if: lm_trans_put(file, "static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {\n") != 0
+    lm_trans_emitted_message_thread_main_helper: 1
+    if: lm_trans_put(file, "static LmMessageThreadExecutionContext lm_message_thread_main_context_storage;\n") != 0
         return: 1
-    if: lm_trans_put(file, "    if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {\n") != 0
+    if: lm_trans_put(file, "static inline int lm_message_thread_diagnostic_status(const LmMessageThreadExecutionContext *context) {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (context == 0 || context->diagnostic_code == 0) {\n") != 0
         return: 1
     if: lm_trans_put(file, "        return 1;\n") != 0
         return: 1
     if: lm_trans_put(file, "    }\n") != 0
         return: 1
-    if: lm_trans_put(file, "    return thread->current->diagnostic_code;\n") != 0
+    if: lm_trans_put(file, "    return context->diagnostic_code;\n") != 0
         return: 1
     if: lm_trans_put(file, "}\n") != 0
         return: 1
 return: 0
 
-fn: lm_trans_emit_l5_assert_helper (FILE: file) int
-    if: lm_trans_emit_l5_runtime_prelude(file) != 0
+fn: lm_trans_emit_message_thread_assert_helper (FILE: file) int
+    if: lm_trans_emit_message_thread_runtime_prelude(file) != 0
         return: 1
-    if: lm_trans_emitted_l5_assert_helper
+    if: lm_trans_emitted_message_thread_assert_helper
         return: 0
 
-    lm_trans_emitted_l5_assert_helper: 1
-    if: lm_trans_put(file, "static inline void lm_l5_assert_violation(LmL5Thread *thread, const char *file, int line, const char *expr) {\n") != 0
+    lm_trans_emitted_message_thread_assert_helper: 1
+    if: lm_trans_put(file, "static inline void lm_message_thread_assert_violation(const char *file, int line, const char *expr) {\n") != 0
         return: 1
-    if: lm_trans_put(file, "    if (thread == 0 || thread->current == 0) {\n") != 0
+    if: lm_trans_put(file, "    struct LmMessageThread *thread = lm_message_thread_current();\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    LmMessageThreadExecutionContext *context = (LmMessageThreadExecutionContext *)lm_message_thread_execution_context(thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (thread == 0 || context == 0) {\n") != 0
         return: 1
     if: lm_trans_put(file, "        abort();\n") != 0
         return: 1
     if: lm_trans_put(file, "    }\n") != 0
         return: 1
-    if: lm_trans_put(file, "    thread->current->diagnostic_code = 1;\n") != 0
+    if: lm_trans_put(file, "    context->diagnostic_code = 1;\n") != 0
         return: 1
-    if: lm_trans_put(file, "    thread->current->diagnostic_label = \"AssertionViolation\";\n") != 0
+    if: lm_trans_put(file, "    context->diagnostic_label = \"AssertionViolation\";\n") != 0
         return: 1
-    if: lm_trans_put(file, "    thread->current->diagnostic_file = file;\n") != 0
+    if: lm_trans_put(file, "    context->diagnostic_file = file;\n") != 0
         return: 1
-    if: lm_trans_put(file, "    thread->current->diagnostic_line = line;\n") != 0
+    if: lm_trans_put(file, "    context->diagnostic_line = line;\n") != 0
         return: 1
-    if: lm_trans_put(file, "    thread->current->diagnostic_expr = expr;\n") != 0
+    if: lm_trans_put(file, "    context->diagnostic_expr = expr;\n") != 0
         return: 1
-    if: lm_trans_put(file, "    longjmp(thread->current->diagnostic_root, 1);\n") != 0
+    if: lm_trans_put(file, "    longjmp(context->diagnostic_root, 1);\n") != 0
         return: 1
     if: lm_trans_put(file, "}\n\n") != 0
         return: 1
 return: 0
 
-fn: lm_trans_emit_l5_main_root (FILE: file; unsigned: indent) int
-    if: lm_trans_emit_l5_main_helper(lm_trans_prelude_file(file)) != 0
+fn: lm_trans_emit_message_thread_main_root (FILE: file; unsigned: indent) int
+    if: lm_trans_emit_message_thread_main_helper(lm_trans_prelude_file(file)) != 0
         return: 1
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "LmL5Thread *lm_l5_thread = lm_l5_main_thread();\n") != 0
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "struct LmMessageThread *lm_message_thread = lm_message_thread_current();\n") != 0
         return: 1
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_l5_thread->current = &lm_l5_thread->main_context;\n") != 0
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "void *lm_message_thread_previous_context;\n") != 0
         return: 1
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_l5_thread->main_context.diagnostic_code = 0;\n") != 0
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_message_thread == 0) {\n") != 0
         return: 1
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (setjmp(lm_l5_thread->main_context.diagnostic_root) != 0) {\n") != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return lm_l5_thread_diagnostic_exit_code(lm_l5_thread);\n") != 0
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return 1;\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_previous_context = lm_message_thread_set_execution_context(lm_message_thread, &lm_message_thread_main_context_storage);\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "while (lm_message_thread_begin_turn(lm_message_thread)) {\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_message_thread_main_context_storage.diagnostic_code = 0;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (setjmp(lm_message_thread_main_context_storage.diagnostic_root) == 0) {\n") != 0
+        return: 1
+return: 0
+
+fn: lm_trans_emit_message_thread_main_end (FILE: file; unsigned: indent) int
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "} else {\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 2U) != 0 || lm_trans_put(file, "lm_message_thread_request_failure(lm_message_thread, lm_message_thread_diagnostic_status(&lm_message_thread_main_context_storage));\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_turn_end:\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "(void)lm_message_thread_end_turn(lm_message_thread);\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_set_execution_context(lm_message_thread, lm_message_thread_previous_context);\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "return lm_message_thread_status(lm_message_thread);\n") != 0
         return: 1
 return: 0
 
@@ -781,7 +780,7 @@ fn: lm_trans_emit_array_structure_value_alloc_assignment (
     size_t: rank
     size_t: count
 ) int
-    if: lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0
+    if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
@@ -794,7 +793,7 @@ fn: lm_trans_emit_array_structure_value_alloc_assignment (
         return: 1
     if: lm_trans_emit_array_pointer_type(file, element_type, pointer_depth) != 0
         return: 1
-    if: lm_trans_put(file, ")lm_own_arena_array_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0
+    if: lm_trans_put(file, ")lm_own_arena_array_new_zero(lm_message_thread_owner(0), sizeof(*") != 0
         return: 1
     if: lm_trans_emit_array_target_path(file, target_name, indices, depth) != 0
         return: 1
@@ -1021,7 +1020,7 @@ fn: lm_trans_type_receiver_array_structure_value_alloc (
         if: lm_trans_put(file, "if (1) {\n") != 0
             return: 1
         ---
-    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, " = (LmSlice *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, "));\n") != 0
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, " = (LmSlice *)lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*") != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, "));\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, " != 0) {\n") != 0
         return: 1
@@ -1286,7 +1285,7 @@ fn: lm_trans_emit_array_value_helper (
     prelude_file: lm_trans_prelude_file(file)
     count: lm_trans_structure_field_count(value)
 
-    if: lm_trans_emit_l5_runtime_prelude(prelude_file) != 0
+    if: lm_trans_emit_message_thread_runtime_prelude(prelude_file) != 0
         return: 1
     if: lm_trans_put(prelude_file, "static LmSlice *") != 0 || lm_trans_emit_identifier(prelude_file, helper_name_text) != 0 || lm_trans_put(prelude_file, "(void) {\n    ") != 0 || lm_trans_emit_array_pointer_type(prelude_file, element_type, pointer_depth + rank) != 0 || lm_trans_put(prelude_file, " ") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    LmSlice *") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n") != 0
         return: 1
@@ -1299,7 +1298,7 @@ fn: lm_trans_emit_array_value_helper (
     if: count != 0U && lm_trans_emit_array_structure_value_fill(prelude_file, 1U, target_name, element_type, rank, value, namespace_) != 0
         return: 1
 
-    if: lm_trans_put(prelude_file, "    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " = (LmSlice *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "));\n    if (") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " == 0) {\n        return 0;\n    }\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->ptr = (void *)") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->length = ") != 0 || lm_trans_emit_size_literal(prelude_file, count) != 0 || lm_trans_put(prelude_file, ";\n    return ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n}\n\n") != 0
+    if: lm_trans_put(prelude_file, "    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " = (LmSlice *)lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "));\n    if (") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " == 0) {\n        return 0;\n    }\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->ptr = (void *)") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->length = ") != 0 || lm_trans_emit_size_literal(prelude_file, count) != 0 || lm_trans_put(prelude_file, ";\n    return ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n}\n\n") != 0
         return: 1
 
     if: lm_own_ptr_stack_push(lm_trans_emitted_array_value_helpers, helper_name) != 0
@@ -1390,10 +1389,10 @@ fn: lm_trans_emit_fm_result_prologue (
 ) int
     if: file = 0 || function_name = 0
         return: 1
-    if: lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0
+    if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
         return: 1
 
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *lm_fm_result = (") != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*lm_fm_result));\n") != 0
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *lm_fm_result = (") != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*lm_fm_result));\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_fm_result == 0) {\n") != 0
         return: 1
@@ -1872,6 +1871,48 @@ fn: lm_trans_emit_closure_return_statement (
         return: 1
 return: 0
 
+fn: lm_trans_emit_message_thread_entry_return (
+    FILE: file
+    const: LmP0Field: return_fields
+    unsigned: indent
+    LmTransNamespace: namespace_
+    @: int out_consumed
+) int
+    unsigned: return_id
+
+    if: out_consumed != 0
+        out_consumed[0]: 0
+    if: out_consumed = 0 || namespace_ = 0 || namespace_\message_thread_entry = 0
+        return: 0
+
+    return_id: namespace_\next_return_id
+    namespace_\next_return_id: namespace_\next_return_id + 1U
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "{\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "int ") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, " = ") != 0
+        return: 1
+    if: return_fields = 0
+        if: lm_trans_put(file, "0") != 0
+            return: 1
+    ---
+    if: return_fields != 0
+        if: lm_trans_emit_expr_fields(file, return_fields, namespace_) != 0
+            return: 1
+    ---
+    if: lm_trans_put(file, ";\n") != 0
+        return: 1
+    if: lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_message_thread_request_stop(lm_message_thread, ") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ");\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "goto lm_message_thread_turn_end;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+
+    out_consumed[0]: 1
+return: 0
+
 fn: lm_trans_emit_return_statement (
     FILE: file
     const: LmP0Field: return_fields
@@ -1880,6 +1921,11 @@ fn: lm_trans_emit_return_statement (
 ) int
     unsigned: return_id
     int: consumed
+
+    if: lm_trans_emit_message_thread_entry_return(file, return_fields, indent, namespace_, @ consumed) != 0
+        return: 1
+    if: consumed
+        return: 0
 
     if: return_fields = 0
         if: lm_trans_emit_cleanups_until(file, indent, namespace_, 0U) != 0
@@ -3371,9 +3417,9 @@ fn: lm_trans_emit_named_structure_storage (
     finally: lm_own_delete(pointer_name, 0)
 
     if: qualifier = 0 || qualifier[0] = '\0'
-        if: lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
             return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, "));\n") != 0
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, "));\n") != 0
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "abort();\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
             return: 1
@@ -5327,9 +5373,9 @@ fn: lm_trans_emit_merge_named_structure_storage (
     finally: lm_own_delete(pointer_name, 0)
 
     if: qualifier = 0 || qualifier[0] = '\0'
-        if: lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
             return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, target) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, target) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, "));\n") != 0
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, target) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, target) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, "));\n") != 0
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "abort();\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
             return: 1
@@ -5963,6 +6009,40 @@ fn: lm_trans_statement_emit_return (
     c.LM_UNUSED(stack)
 return: lm_trans_emit_return_statement(file, frame\body\first_field, indent, namespace_)
 
+fn: lm_trans_statement_emit_stop (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    const: LmP0Field: status_field
+
+    c.LM_UNUSED(stack)
+    if: frame = 0
+        return: 1
+    if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
+
+    status_field: frame\body\first_field
+    if: status_field != 0 && lm_trans_expr_segment_end(status_field) != 0
+        c.fprintf(c.stderr, "trans L2 error: stop receiver expects zero or one status expression\n")
+        return: 1
+
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_request_stop(0, ") != 0
+        return: 1
+    if: status_field = 0
+        if: lm_trans_put(file, "0") != 0
+            return: 1
+    ---
+    if: status_field != 0
+        if: lm_trans_put(file, "(int)(") != 0 || lm_trans_emit_expr_fields(file, status_field, namespace_) != 0 || lm_trans_put(file, ")") != 0
+            return: 1
+    ---
+    if: lm_trans_put(file, ");\n") != 0
+        return: 1
+return: 0
+
 fn: lm_trans_statement_emit_if (
     FILE: file
     LmTransStatementStack: stack
@@ -6024,7 +6104,7 @@ fn: lm_trans_statement_emit_assert (
     if: frame = 0 || frame\body = 0 || frame\body\first_field = 0
         c.fprintf(c.stderr, "trans L2 error: assert receiver expects condition expression\n")
         return: 1
-    if: lm_trans_emit_l5_assert_helper(lm_trans_prelude_file(file)) != 0
+    if: lm_trans_emit_message_thread_assert_helper(lm_trans_prelude_file(file)) != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (!(") != 0
         return: 1
@@ -6034,7 +6114,7 @@ fn: lm_trans_statement_emit_assert (
         return: 1
     if: lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0
         return: 1
-    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_l5_assert_violation(lm_l5_main_thread(), __FILE__, __LINE__, \"assert\");\n") != 0
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_message_thread_assert_violation(__FILE__, __LINE__, \"assert\");\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
         return: 1
@@ -7023,11 +7103,11 @@ fn: lm_trans_statement_emit_nested_function (
         return: 1
 
     if: hoisted\function\has_env
-        if: lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted\function\env_type_name) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, ";\n") != 0
             return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, hoisted\function\env_type_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, "));\n") != 0
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, hoisted\function\env_type_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*") != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, "));\n") != 0
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0
             return: 1
@@ -7062,11 +7142,11 @@ fn: lm_trans_statement_emit_nested_function (
         closure_value_name: lm_trans_hoisted_suffix_name_new(hoisted\function\c_name, "_closure_value")
         if: closure_value_name = 0
             return: 1
-        if: lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, descriptor_type) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, ";\n") != 0
             return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, descriptor_type) != 0 || lm_trans_put(file, ")lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "));\n") != 0
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, descriptor_type) != 0 || lm_trans_put(file, ")lm_own_arena_new_zero(lm_message_thread_owner(0), sizeof(*") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "));\n") != 0
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0
             return: 1
@@ -8161,7 +8241,7 @@ fn: lm_trans_pointer_bindings_init () int
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_operator", @lm_trans_expr_emit_raw, @lm_trans_expr_state_operator) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_deref", @lm_trans_expr_emit_raw, @lm_trans_expr_state_deref) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_pointer_follow", @lm_trans_expr_emit_raw, @lm_trans_expr_state_pointer_follow) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_c_dot", @lm_trans_expr_emit_raw, @lm_trans_expr_state_c_dot) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_cast_frame", @lm_trans_expr_emit_cast_frame) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_implements_frame", @lm_trans_expr_emit_implements_frame) != 0)
         status: 1
-    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_return", @lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_if", @lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_while", @lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_else", @lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", @lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_finally", @lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_assert", @lm_trans_statement_emit_assert) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", @lm_trans_statement_emit_loop_jump) != 0)
+    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_return", @lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_stop", @lm_trans_statement_emit_stop) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_if", @lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_while", @lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_else", @lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", @lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_finally", @lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_assert", @lm_trans_statement_emit_assert) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", @lm_trans_statement_emit_loop_jump) != 0)
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_include_prelude", @lm_trans_statement_emit_include_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_define_prelude", @lm_trans_statement_emit_define_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifndef_default_prelude", @lm_trans_statement_emit_ifndef_default_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_os_prelude", @lm_trans_statement_emit_os_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifdef_prelude", @lm_trans_statement_emit_ifdef_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_guard_prelude", @lm_trans_statement_emit_guard_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_extern_c_prelude", @lm_trans_statement_emit_extern_c_prelude) != 0)
         status: 1

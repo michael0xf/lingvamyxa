@@ -83,6 +83,7 @@ struct LmMessageThread {
     size_t turn_count;
     size_t collection_count;
     int collector_failed;
+    void *execution_context;
 };
 typedef struct LmBuildOptions {
     int full_build;
@@ -140,6 +141,8 @@ int (lm_own_tree_cut)(LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
+LmMessageThread * (lm_message_thread_new)(void);
+void (lm_message_thread_delete)(LmMessageThread *thread);
 LmMessageThread * (lm_message_thread_root)(void);
 LmMessageThread * (lm_message_thread_current)(void);
 LmMessageThread * (lm_message_thread_set_current)(LmMessageThread *thread);
@@ -147,8 +150,22 @@ int (lm_message_thread_begin_turn)(LmMessageThread *thread);
 int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
 void (lm_message_thread_request_stop)(LmMessageThread *thread, int status);
+void (lm_message_thread_request_failure)(LmMessageThread *thread, int status);
 int (lm_message_thread_is_running)(const LmMessageThread *thread);
 int (lm_message_thread_status)(const LmMessageThread *thread);
+LmOwnArena * (lm_message_thread_owner)(LmMessageThread *thread);
+void * (lm_message_thread_execution_context)(LmMessageThread *thread);
+void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *context);
+size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
+size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
+
+
+
+
+
+
+
+
 
 
 
@@ -692,13 +709,27 @@ int main(int argc, char **argv);
 
 
 struct LmOwnArena;
-struct LmOwnArena *lm_own_arena_new(void);
-void lm_own_arena_delete(struct LmOwnArena *arena);
+struct LmMessageThread;
+struct LmMessageThread *lm_message_thread_current(void);
+struct LmMessageThread *lm_message_thread_new(void);
+void lm_message_thread_delete(struct LmMessageThread *thread);
+struct LmMessageThread *lm_message_thread_set_current(struct LmMessageThread *thread);
+struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);
+void *lm_message_thread_execution_context(struct LmMessageThread *thread);
+void *lm_message_thread_set_execution_context(struct LmMessageThread *thread, void *context);
+int lm_message_thread_begin_turn(struct LmMessageThread *thread);
+int lm_message_thread_end_turn(struct LmMessageThread *thread);
+void lm_message_thread_request_stop(struct LmMessageThread *thread, int status);
+void lm_message_thread_request_failure(struct LmMessageThread *thread, int status);
+int lm_message_thread_status(const struct LmMessageThread *thread);
+int lm_message_thread_is_running(const struct LmMessageThread *thread);
+size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);
+size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);
+void lm_own_arena_freeze(struct LmOwnArena *arena);
 void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);
 void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
-typedef struct LmL5ExecutionContext LmL5ExecutionContext;
-typedef struct LmL5Thread LmL5Thread;
-struct LmL5ExecutionContext {
+typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;
+struct LmMessageThreadExecutionContext {
     jmp_buf diagnostic_root;
     int diagnostic_code;
     const char *diagnostic_label;
@@ -706,41 +737,12 @@ struct LmL5ExecutionContext {
     int diagnostic_line;
     const char *diagnostic_expr;
 };
-struct LmL5Thread {
-    LmL5ExecutionContext main_context;
-    LmL5ExecutionContext *current;
-    struct LmOwnArena *root_owner;
-};
-static LmL5Thread lm_l5_main_thread_storage;
-static int lm_l5_main_thread_owner_cleanup_registered;
-static void lm_l5_main_thread_owner_destroy(void) {
-    if (lm_l5_main_thread_storage.root_owner != 0) {
-        lm_own_arena_delete(lm_l5_main_thread_storage.root_owner);
-        lm_l5_main_thread_storage.root_owner = 0;
-    }
-}
-static inline LmL5Thread *lm_l5_main_thread(void) {
-    LmL5Thread *thread = &lm_l5_main_thread_storage;
-    if (thread->root_owner == 0) {
-        thread->root_owner = lm_own_arena_new();
-        if (thread->root_owner == 0) {
-            abort();
-        }
-        if (!lm_l5_main_thread_owner_cleanup_registered) {
-            if (atexit(lm_l5_main_thread_owner_destroy) != 0) {
-                lm_l5_main_thread_owner_destroy();
-                abort();
-            }
-            lm_l5_main_thread_owner_cleanup_registered = 1;
-        }
-    }
-    return thread;
-}
-static inline int lm_l5_thread_diagnostic_exit_code(const LmL5Thread *thread) {
-    if (thread == 0 || thread->current == 0 || thread->current->diagnostic_code == 0) {
+static LmMessageThreadExecutionContext lm_message_thread_main_context_storage;
+static inline int lm_message_thread_diagnostic_status(const LmMessageThreadExecutionContext *context) {
+    if (context == 0 || context->diagnostic_code == 0) {
         return 1;
     }
-    return thread->current->diagnostic_code;
+    return context->diagnostic_code;
 }
 
 static LmBuildOptions * lm_build_options_new(void) {
@@ -1471,43 +1473,74 @@ static int lm_build_run_bootstrap(LmBuildOptions *options, char *trusted_make, c
 }
 
 int main(int argc, char **argv) {
-    LmL5Thread *lm_l5_thread = lm_l5_main_thread();
-    lm_l5_thread->current = &lm_l5_thread->main_context;
-    lm_l5_thread->main_context.diagnostic_code = 0;
-    if (setjmp(lm_l5_thread->main_context.diagnostic_root) != 0) {
-        return lm_l5_thread_diagnostic_exit_code(lm_l5_thread);
-    }
-    char *trusted_make;
-    char trusted_make_buffer[128];
-    char built_trans_buffer[128];
-    LmBuildOptions * options;
-    int parse_status;
-    int result;
-    options = lm_build_options_new();
-    if (options == 0) {
+    struct LmMessageThread *lm_message_thread = lm_message_thread_current();
+    void *lm_message_thread_previous_context;
+    if (lm_message_thread == 0) {
         return 1;
     }
-    parse_status = lm_build_parse_options(argc, argv, options);
-    if (parse_status == 2) {
-        lm_build_options_delete(options);
-        return 0;
+    lm_message_thread_previous_context = lm_message_thread_set_execution_context(lm_message_thread, &lm_message_thread_main_context_storage);
+    while (lm_message_thread_begin_turn(lm_message_thread)) {
+        lm_message_thread_main_context_storage.diagnostic_code = 0;
+        if (setjmp(lm_message_thread_main_context_storage.diagnostic_root) == 0) {
+            char *trusted_make;
+            char trusted_make_buffer[128];
+            char built_trans_buffer[128];
+            LmBuildOptions * options;
+            int parse_status;
+            int result;
+            options = lm_build_options_new();
+            if (options == 0) {
+                {
+                    int lm_return_0 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_0);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            parse_status = lm_build_parse_options(argc, argv, options);
+            if (parse_status == 2) {
+                lm_build_options_delete(options);
+                {
+                    int lm_return_1 = 0;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_1);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (parse_status != 0) {
+                lm_build_options_delete(options);
+                {
+                    int lm_return_2 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_2);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            if (lm_build_enter_project_root(argv[0]) != 0) {
+                lm_build_options_delete(options);
+                {
+                    int lm_return_3 = 1;
+                    lm_message_thread_request_stop(lm_message_thread, lm_return_3);
+                    goto lm_message_thread_turn_end;
+                }
+            }
+            snprintf(trusted_make_buffer, sizeof(trusted_make_buffer), "build%slm0%smake.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
+            snprintf(built_trans_buffer, sizeof(built_trans_buffer), "build%slm0%strans.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
+            if (options -> next_build) {
+                snprintf(trusted_make_buffer, sizeof(trusted_make_buffer), "build%slm0%snext%smake.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
+                snprintf(built_trans_buffer, sizeof(built_trans_buffer), "build%slm0%snext%strans.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
+            }
+            trusted_make = lm_build_env_or_default("LM_MAKE", trusted_make_buffer);
+            result = lm_build_run_bootstrap(options, trusted_make, built_trans_buffer);
+            lm_build_options_delete(options);
+            {
+                int lm_return_4 = result;
+                lm_message_thread_request_stop(lm_message_thread, lm_return_4);
+                goto lm_message_thread_turn_end;
+            }
+        } else {
+            lm_message_thread_request_failure(lm_message_thread, lm_message_thread_diagnostic_status(&lm_message_thread_main_context_storage));
+        }
+    lm_message_thread_turn_end:
+        (void)lm_message_thread_end_turn(lm_message_thread);
     }
-    if (parse_status != 0) {
-        lm_build_options_delete(options);
-        return 1;
-    }
-    if (lm_build_enter_project_root(argv[0]) != 0) {
-        lm_build_options_delete(options);
-        return 1;
-    }
-    snprintf(trusted_make_buffer, sizeof(trusted_make_buffer), "build%slm0%smake.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
-    snprintf(built_trans_buffer, sizeof(built_trans_buffer), "build%slm0%strans.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
-    if (options -> next_build) {
-        snprintf(trusted_make_buffer, sizeof(trusted_make_buffer), "build%slm0%snext%smake.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
-        snprintf(built_trans_buffer, sizeof(built_trans_buffer), "build%slm0%snext%strans.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix());
-    }
-    trusted_make = lm_build_env_or_default("LM_MAKE", trusted_make_buffer);
-    result = lm_build_run_bootstrap(options, trusted_make, built_trans_buffer);
-    lm_build_options_delete(options);
-    return result;
+    lm_message_thread_set_execution_context(lm_message_thread, lm_message_thread_previous_context);
+    return lm_message_thread_status(lm_message_thread);
 }
