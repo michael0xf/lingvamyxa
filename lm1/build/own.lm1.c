@@ -7,10 +7,8 @@
 
 struct LmOwnArena;
 struct LmMessageThread;
-struct LmMessageThread *lm_message_thread_current(void);
 struct LmMessageThread *lm_message_thread_new(void);
 void lm_message_thread_delete(struct LmMessageThread *thread);
-struct LmMessageThread *lm_message_thread_set_current(struct LmMessageThread *thread);
 struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);
 void *lm_message_thread_execution_context(struct LmMessageThread *thread);
 void *lm_message_thread_set_execution_context(struct LmMessageThread *thread, void *context);
@@ -42,9 +40,7 @@ typedef int (*LmLmxMessageThreadEntry)(struct LmMessageThread *thread);
 #endif
 static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmLmxMessageThreadEntry entry) {
     struct LmMessageThread *thread;
-    struct LmMessageThread *previous;
     LmMessageThreadExecutionContext context = {0};
-    void *previous_context;
     int status;
     if (entry == 0) {
         return 1;
@@ -53,8 +49,7 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
     if (thread == 0) {
         return 1;
     }
-    previous = lm_message_thread_set_current(thread);
-    previous_context = lm_message_thread_set_execution_context(thread, &context);
+    (void)lm_message_thread_set_execution_context(thread, &context);
     while (lm_message_thread_begin_turn(thread)) {
         context.diagnostic_code = 0;
         if (setjmp(context.diagnostic_root) == 0) {
@@ -64,9 +59,7 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
         }
         (void)lm_message_thread_end_turn(thread);
     }
-    lm_message_thread_set_execution_context(thread, previous_context);
     status = lm_message_thread_status(thread);
-    lm_message_thread_set_current(previous);
     lm_message_thread_delete(thread);
     return status;
 }
@@ -202,9 +195,6 @@ int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
 LmMessageThread * (lm_message_thread_new)(void);
 void (lm_message_thread_delete)(LmMessageThread *thread);
-LmMessageThread * (lm_message_thread_root)(void);
-LmMessageThread * (lm_message_thread_current)(void);
-LmMessageThread * (lm_message_thread_set_current)(LmMessageThread *thread);
 int (lm_message_thread_begin_turn)(LmMessageThread *thread);
 int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
@@ -217,9 +207,6 @@ void * (lm_message_thread_execution_context)(LmMessageThread *thread);
 void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *context);
 size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
-
-
-
 
 
 
@@ -360,10 +347,6 @@ int lm_message_thread_init(LmMessageThread *thread);
 void lm_message_thread_destroy(LmMessageThread *thread);
 LmMessageThread * lm_message_thread_new(void);
 void lm_message_thread_delete(LmMessageThread *thread);
-static void lm_message_thread_root_cleanup(void);
-LmMessageThread * lm_message_thread_root(void);
-LmMessageThread * lm_message_thread_current(void);
-LmMessageThread * lm_message_thread_set_current(LmMessageThread *thread);
 int lm_message_thread_is_running(const LmMessageThread *thread);
 int lm_message_thread_status(const LmMessageThread *thread);
 LmOwnArena * lm_message_thread_owner(LmMessageThread *thread);
@@ -377,18 +360,9 @@ int lm_message_thread_collect(LmMessageThread *thread);
 int lm_message_thread_begin_turn(LmMessageThread *thread);
 int lm_message_thread_end_turn(LmMessageThread *thread);
 
-
 static LmOwnPtrStack * lm_own_global_allocation_descriptors;
 
 static int lm_own_global_allocation_descriptors_ready;
-
-static LmMessageThread * lm_message_thread_current_value;
-
-static LmMessageThread * lm_message_thread_root_storage;
-
-static int lm_message_thread_root_ready;
-
-static int lm_message_thread_root_cleanup_registered;
 
 void * lm_own_new_zero(size_t size) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
@@ -1169,9 +1143,6 @@ void lm_message_thread_destroy(LmMessageThread *thread) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     if (thread != 0) {
-        if (lm_message_thread_current_value == thread) {
-            lm_message_thread_current_value = 0;
-        }
         lm_own_arena_delete(thread -> root_owner);
         thread->root_owner = 0;
         thread->state = LM_MESSAGE_THREAD_STOPPED;
@@ -1202,63 +1173,6 @@ void lm_message_thread_delete(LmMessageThread *thread) {
     }
 }
 
-static void lm_message_thread_root_cleanup(void) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
-    (void)lm_lmx_message_thread;
-    if (lm_message_thread_root_ready) {
-        lm_message_thread_destroy(lm_message_thread_root_storage);
-        lm_own_delete(lm_message_thread_root_storage, 0);
-        lm_message_thread_root_storage = 0;
-        lm_message_thread_root_ready = 0;
-    }
-}
-
-LmMessageThread * lm_message_thread_root(void) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
-    (void)lm_lmx_message_thread;
-    if (lm_message_thread_root_ready == 0) {
-        lm_message_thread_root_storage = lm_own_new_zero(sizeof(LmMessageThread));
-        if (lm_message_thread_root_storage == 0) {
-            return 0;
-        }
-        if (lm_message_thread_init(lm_message_thread_root_storage) != 0) {
-            lm_own_delete(lm_message_thread_root_storage, 0);
-            lm_message_thread_root_storage = 0;
-            return 0;
-        }
-        lm_message_thread_root_ready = 1;
-        if (lm_message_thread_root_cleanup_registered == 0) {
-            if (atexit(lm_message_thread_root_cleanup) != 0) {
-                lm_message_thread_root_cleanup();
-                return 0;
-            }
-            lm_message_thread_root_cleanup_registered = 1;
-        }
-    }
-    if (lm_message_thread_current_value == 0) {
-        lm_message_thread_current_value = lm_message_thread_root_storage;
-    }
-    return lm_message_thread_root_storage;
-}
-
-LmMessageThread * lm_message_thread_current(void) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
-    (void)lm_lmx_message_thread;
-    if (lm_message_thread_current_value == 0) {
-        return lm_message_thread_root();
-    }
-    return lm_message_thread_current_value;
-}
-
-LmMessageThread * lm_message_thread_set_current(LmMessageThread *thread) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
-    (void)lm_lmx_message_thread;
-    LmMessageThread * previous;
-    previous = lm_message_thread_current_value;
-    lm_message_thread_current_value = thread;
-    return previous;
-}
-
 int lm_message_thread_is_running(const LmMessageThread *thread) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
@@ -1278,9 +1192,6 @@ LmOwnArena * lm_message_thread_owner(LmMessageThread *thread) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     if (thread == 0) {
-        thread = lm_message_thread_current();
-    }
-    if (thread == 0) {
         return 0;
     }
     return thread -> root_owner;
@@ -1289,9 +1200,6 @@ LmOwnArena * lm_message_thread_owner(LmMessageThread *thread) {
 void * lm_message_thread_execution_context(LmMessageThread *thread) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
-    if (thread == 0) {
-        thread = lm_message_thread_current();
-    }
     if (thread == 0) {
         return 0;
     }
@@ -1302,9 +1210,6 @@ void * lm_message_thread_set_execution_context(LmMessageThread *thread, void *co
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     void *previous;
-    if (thread == 0) {
-        thread = lm_message_thread_current();
-    }
     if (thread == 0) {
         return 0;
     }
@@ -1334,9 +1239,6 @@ size_t lm_message_thread_collection_count(const LmMessageThread *thread) {
 void lm_message_thread_request_stop(LmMessageThread *thread, int status) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
-    if (thread == 0) {
-        thread = lm_message_thread_current();
-    }
     if (thread != 0 && thread -> state == LM_MESSAGE_THREAD_RUNNING) {
         thread->stop_status = status;
         thread->state = LM_MESSAGE_THREAD_STOPPING;
@@ -1346,9 +1248,6 @@ void lm_message_thread_request_stop(LmMessageThread *thread, int status) {
 void lm_message_thread_request_failure(LmMessageThread *thread, int status) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
-    if (thread == 0) {
-        thread = lm_message_thread_current();
-    }
     if (status == 0) {
         status = 1;
     }

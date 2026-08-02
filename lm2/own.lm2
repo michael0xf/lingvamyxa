@@ -12,14 +12,6 @@ unit
 
 predef: "lm2/own_abi.lm2"
 
-table:
-    source
-    name: `fn.thread-context.none`
-    columns((class: class) (int: value))
-    rows:
-             lm_message_thread_root_cleanup 1
-end: `fn.thread-context.none`
-
 include: "<stdlib.h>" "<string.h>"
 
 external:
@@ -697,11 +689,6 @@ external:
     return: 0
 end: external
 
-LmMessageThread: lm_message_thread_current_value
-LmMessageThread: lm_message_thread_root_storage
-int: lm_message_thread_root_ready
-int: lm_message_thread_root_cleanup_registered
-
 external:
     fn: lm_message_thread_init (LmMessageThread: thread) int
         if: thread = 0
@@ -722,8 +709,6 @@ end: external
 external:
     sub: lm_message_thread_destroy (LmMessageThread: thread)
         if: thread != 0
-            if: lm_message_thread_current_value = thread
-                lm_message_thread_current_value: 0
             lm_own_arena_delete(thread\root_owner)
             thread\root_owner: 0
             thread\state: c.LM_MESSAGE_THREAD_STOPPED
@@ -751,53 +736,6 @@ external:
     end: lm_message_thread_delete
 end: external
 
-sub: lm_message_thread_root_cleanup ()
-    if: lm_message_thread_root_ready
-        lm_message_thread_destroy(lm_message_thread_root_storage)
-        lm_own_delete(lm_message_thread_root_storage, 0)
-        lm_message_thread_root_storage: 0
-        lm_message_thread_root_ready: 0
-end: lm_message_thread_root_cleanup
-
-external:
-    fn: lm_message_thread_root () LmMessageThread
-        if: lm_message_thread_root_ready = 0
-            lm_message_thread_root_storage: lm_own_new_zero(c.sizeof(c.LmMessageThread))
-            if: lm_message_thread_root_storage = 0
-                return: 0
-            if: lm_message_thread_init(lm_message_thread_root_storage) != 0
-                lm_own_delete(lm_message_thread_root_storage, 0)
-                lm_message_thread_root_storage: 0
-                return: 0
-            lm_message_thread_root_ready: 1
-            if: lm_message_thread_root_cleanup_registered = 0
-                if: c.atexit(c.lm_message_thread_root_cleanup) != 0
-                    lm_message_thread_root_cleanup()
-                    return: 0
-                lm_message_thread_root_cleanup_registered: 1
-        ---
-
-        if: lm_message_thread_current_value = 0
-            lm_message_thread_current_value: lm_message_thread_root_storage
-    return: lm_message_thread_root_storage
-end: external
-
-external:
-    fn: lm_message_thread_current () LmMessageThread
-        if: lm_message_thread_current_value = 0
-            return: lm_message_thread_root()
-    return: lm_message_thread_current_value
-end: external
-
-external:
-    fn: lm_message_thread_set_current (LmMessageThread: thread) LmMessageThread
-        LmMessageThread: previous
-
-        previous: lm_message_thread_current_value
-        lm_message_thread_current_value: thread
-    return: previous
-end: external
-
 external:
     fn: lm_message_thread_is_running (const: (LmMessageThread: thread)) int
     return: thread != 0 && thread\state = c.LM_MESSAGE_THREAD_RUNNING
@@ -813,16 +751,12 @@ end: external
 external:
     fn: lm_message_thread_owner (LmMessageThread: thread) LmOwnArena
         if: thread = 0
-            thread: lm_message_thread_current()
-        if: thread = 0
             return: 0
     return: thread\root_owner
 end: external
 
 external:
     fn: lm_message_thread_execution_context (LmMessageThread: thread) @: void
-        if: thread = 0
-            thread: lm_message_thread_current()
         if: thread = 0
             return: 0
     return: thread\execution_context
@@ -832,8 +766,6 @@ external:
     fn: lm_message_thread_set_execution_context (LmMessageThread: thread; @: void context) @: void
         @: void previous
 
-        if: thread = 0
-            thread: lm_message_thread_current()
         if: thread = 0
             return: 0
         previous: thread\execution_context
@@ -857,8 +789,6 @@ end: external
 
 external:
     sub: lm_message_thread_request_stop (LmMessageThread: thread; int: status)
-        if: thread = 0
-            thread: lm_message_thread_current()
         if: thread != 0 && thread\state = c.LM_MESSAGE_THREAD_RUNNING
             thread\stop_status: status
             thread\state: c.LM_MESSAGE_THREAD_STOPPING
@@ -867,8 +797,6 @@ end: external
 
 external:
     sub: lm_message_thread_request_failure (LmMessageThread: thread; int: status)
-        if: thread = 0
-            thread: lm_message_thread_current()
         if: status = 0
             status: 1
         if: thread != 0 && (thread\state = c.LM_MESSAGE_THREAD_RUNNING || thread\state = c.LM_MESSAGE_THREAD_STOPPING)

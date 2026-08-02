@@ -7,10 +7,8 @@
 
 struct LmOwnArena;
 struct LmMessageThread;
-struct LmMessageThread *lm_message_thread_current(void);
 struct LmMessageThread *lm_message_thread_new(void);
 void lm_message_thread_delete(struct LmMessageThread *thread);
-struct LmMessageThread *lm_message_thread_set_current(struct LmMessageThread *thread);
 struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);
 void *lm_message_thread_execution_context(struct LmMessageThread *thread);
 void *lm_message_thread_set_execution_context(struct LmMessageThread *thread, void *context);
@@ -42,9 +40,7 @@ typedef int (*LmLmxMessageThreadEntry)(struct LmMessageThread *thread);
 #endif
 static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmLmxMessageThreadEntry entry) {
     struct LmMessageThread *thread;
-    struct LmMessageThread *previous;
     LmMessageThreadExecutionContext context = {0};
-    void *previous_context;
     int status;
     if (entry == 0) {
         return 1;
@@ -53,8 +49,7 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
     if (thread == 0) {
         return 1;
     }
-    previous = lm_message_thread_set_current(thread);
-    previous_context = lm_message_thread_set_execution_context(thread, &context);
+    (void)lm_message_thread_set_execution_context(thread, &context);
     while (lm_message_thread_begin_turn(thread)) {
         context.diagnostic_code = 0;
         if (setjmp(context.diagnostic_root) == 0) {
@@ -64,9 +59,7 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
         }
         (void)lm_message_thread_end_turn(thread);
     }
-    lm_message_thread_set_execution_context(thread, previous_context);
     status = lm_message_thread_status(thread);
-    lm_message_thread_set_current(previous);
     lm_message_thread_delete(thread);
     return status;
 }
@@ -498,9 +491,6 @@ int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
 LmMessageThread * (lm_message_thread_new)(void);
 void (lm_message_thread_delete)(LmMessageThread *thread);
-LmMessageThread * (lm_message_thread_root)(void);
-LmMessageThread * (lm_message_thread_current)(void);
-LmMessageThread * (lm_message_thread_set_current)(LmMessageThread *thread);
 int (lm_message_thread_begin_turn)(LmMessageThread *thread);
 int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
@@ -533,9 +523,6 @@ const char * (lm_p0_node_kind_class_name)(LmP0NodeKind kind);
 char * (lm_p0_dump_alloc)(const LmP0Document *document);
 void (lm_p0_free)(void *ptr);
 static int lm_registry_source_load_root(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Node *root);
-
-
-
 
 
 
@@ -2159,19 +2146,16 @@ static int lm_p0_registry_source_tables_selftest(struct LmMessageThread *lm_lmx_
 static int lm_p0_registry_source_tables_selftest(struct LmMessageThread *lm_lmx_message_thread);
 int main(void) {
     struct LmMessageThread *thread = lm_message_thread_new();
-    struct LmMessageThread *previous;
     int status = 1;
     if (thread == 0) {
         return 1;
     }
-    previous = lm_message_thread_set_current(thread);
     while (lm_message_thread_begin_turn(thread)) {
         status = lm_p0_registry_source_tables_selftest(thread);
         lm_message_thread_request_stop(thread, status);
         lm_message_thread_end_turn(thread);
     }
     status = lm_message_thread_status(thread);
-    lm_message_thread_set_current(previous);
     lm_message_thread_delete(thread);
     return status;
 }

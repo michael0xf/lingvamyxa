@@ -531,13 +531,9 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "struct LmMessageThread;\n") != 0
         return: 1
-    if: lm_trans_put(file, "struct LmMessageThread *lm_message_thread_current(void);\n") != 0
-        return: 1
     if: lm_trans_put(file, "struct LmMessageThread *lm_message_thread_new(void);\n") != 0
         return: 1
     if: lm_trans_put(file, "void lm_message_thread_delete(struct LmMessageThread *thread);\n") != 0
-        return: 1
-    if: lm_trans_put(file, "struct LmMessageThread *lm_message_thread_set_current(struct LmMessageThread *thread);\n") != 0
         return: 1
     if: lm_trans_put(file, "struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);\n") != 0
         return: 1
@@ -601,11 +597,7 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "    struct LmMessageThread *thread;\n") != 0
         return: 1
-    if: lm_trans_put(file, "    struct LmMessageThread *previous;\n") != 0
-        return: 1
     if: lm_trans_put(file, "    LmMessageThreadExecutionContext context = {0};\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    void *previous_context;\n") != 0
         return: 1
     if: lm_trans_put(file, "    int status;\n") != 0
         return: 1
@@ -623,9 +615,7 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "    }\n") != 0
         return: 1
-    if: lm_trans_put(file, "    previous = lm_message_thread_set_current(thread);\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    previous_context = lm_message_thread_set_execution_context(thread, &context);\n") != 0
+    if: lm_trans_put(file, "    (void)lm_message_thread_set_execution_context(thread, &context);\n") != 0
         return: 1
     if: lm_trans_put(file, "    while (lm_message_thread_begin_turn(thread)) {\n") != 0
         return: 1
@@ -645,11 +635,7 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "    }\n") != 0
         return: 1
-    if: lm_trans_put(file, "    lm_message_thread_set_execution_context(thread, previous_context);\n") != 0
-        return: 1
     if: lm_trans_put(file, "    status = lm_message_thread_status(thread);\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    lm_message_thread_set_current(previous);\n") != 0
         return: 1
     if: lm_trans_put(file, "    lm_message_thread_delete(thread);\n") != 0
         return: 1
@@ -722,10 +708,6 @@ fn: lm_trans_emit_message_thread_main_root (FILE: file; unsigned: indent) int
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "LmMessageThreadExecutionContext lm_message_thread_main_context = {0};\n") != 0
         return: 1
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "struct LmMessageThread *lm_message_thread_previous;\n") != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "void *lm_message_thread_previous_context;\n") != 0
-        return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "int lm_message_thread_exit_status;\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_lmx_message_thread = lm_message_thread_new();\n") != 0
@@ -736,9 +718,7 @@ fn: lm_trans_emit_message_thread_main_root (FILE: file; unsigned: indent) int
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
         return: 1
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_previous = lm_message_thread_set_current(lm_lmx_message_thread);\n") != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_previous_context = lm_message_thread_set_execution_context(lm_lmx_message_thread, &lm_message_thread_main_context);\n") != 0
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "(void)lm_message_thread_set_execution_context(lm_lmx_message_thread, &lm_message_thread_main_context);\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "while (lm_message_thread_begin_turn(lm_lmx_message_thread)) {\n") != 0
         return: 1
@@ -761,11 +741,7 @@ fn: lm_trans_emit_message_thread_main_end (FILE: file; unsigned: indent) int
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
         return: 1
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_set_execution_context(lm_lmx_message_thread, lm_message_thread_previous_context);\n") != 0
-        return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_exit_status = lm_message_thread_status(lm_lmx_message_thread);\n") != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_set_current(lm_message_thread_previous);\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_delete(lm_lmx_message_thread);\n") != 0
         return: 1

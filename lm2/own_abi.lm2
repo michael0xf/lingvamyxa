@@ -367,9 +367,6 @@ table:
              lm_message_thread_destroy       1
              lm_message_thread_new           1
              lm_message_thread_delete        1
-             lm_message_thread_root          1
-             lm_message_thread_current       1
-             lm_message_thread_set_current   1
              lm_message_thread_begin_turn    1
              lm_message_thread_end_turn      1
              lm_message_thread_collect       1
@@ -426,9 +423,6 @@ fn: lm_message_thread_init (LmMessageThread: thread) int
 fn: lm_message_thread_destroy (LmMessageThread: thread) void
 fn: lm_message_thread_new () LmMessageThread
 fn: lm_message_thread_delete (LmMessageThread: thread) void
-fn: lm_message_thread_root () LmMessageThread
-fn: lm_message_thread_current () LmMessageThread
-fn: lm_message_thread_set_current (LmMessageThread: thread) LmMessageThread
 fn: lm_message_thread_begin_turn (LmMessageThread: thread) int
 fn: lm_message_thread_end_turn (LmMessageThread: thread) int
 fn: lm_message_thread_collect (LmMessageThread: thread) int
