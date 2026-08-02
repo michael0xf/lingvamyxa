@@ -26,7 +26,7 @@ lingvamyxa/
     finalize.lm2
     own_abi.lm2
     parser_abi.lm2
-    l4_loader_abi.lm2
+    registry_source_loader_abi.lm2
     core.lm2
     buildCore.lmx
   qt_app/

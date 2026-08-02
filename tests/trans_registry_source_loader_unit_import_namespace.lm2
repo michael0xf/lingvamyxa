@@ -19,13 +19,13 @@ unit
 
 predef: "lm2/own_abi.lm2"
 predef: "lm2/parser_abi.lm2"
-predef: "lm2/l4_loader_abi.lm2"
+predef: "lm2/registry_source_loader_abi.lm2"
 
 external:
     fn: main () int
-        c.LM_UNUSED(c.lm_l4_load_table_join_root)
-        c.LM_UNUSED(c.lm_l4_receiver_table)
-        c.LM_UNUSED(c.lm_l4_receiver_join)
+        c.LM_UNUSED(c.lm_registry_source_load_root)
+        c.LM_UNUSED(c.lm_registry_source_receiver_table)
+        c.LM_UNUSED(c.lm_registry_source_receiver_join)
         return: 0
     end: main
 end: external

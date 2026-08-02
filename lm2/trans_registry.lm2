@@ -816,8 +816,8 @@ table:
              LmOwnLazyEdge            1
              LmOwnPtrStack            1
              LmOwnValueStack          1
-             LmL4Column               1
-             LmL4Loader               1
+             LmRegistrySourceColumn               1
+             LmRegistrySourceLoader               1
              LmP0DashFenceStatus      1
              LmP0Diagnostic           1
              LmP0DisabledState        1

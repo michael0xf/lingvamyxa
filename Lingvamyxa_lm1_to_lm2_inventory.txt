@@ -31,7 +31,7 @@ Their ABI role is now represented by registry source modules and receiver output
 
     lm2/own_abi.lm2
     lm2/parser_abi.lm2
-    lm2/l4_loader_abi.lm2
+    lm2/registry_source_loader_abi.lm2
     lm2/core.lm2
     lm2/trans_registry.lm2
     lm2/parser_registry.lm2

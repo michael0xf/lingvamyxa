@@ -8790,10 +8790,10 @@ class data to `struct LmP0Document { ... }` is an ANSI C projection. The two
 layers may be implemented in one bootstrap executable, but the language model
 keeps them separate.
 
-Within one L4 schema/root, two tables with the same normalized name are an
-error. Merging tables from different schema sources is a later explicit
+Within one registry source module, two tables with the same normalized name are
+an error. Merging tables from different source modules is a later explicit
 import/overlay operation; it is not the same as writing the same table twice in
-one source schema.
+one source module.
 
 20.2.2. L1 and L2 Translator Receivers
 

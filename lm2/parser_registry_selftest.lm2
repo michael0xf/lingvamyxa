@@ -106,7 +106,7 @@ fn: lm_p0_registry_source_tables_selftest () int
     incompatible_source: lm_p0_text_from_cstr("alpha")
     incompatible_target: lm_p0_text_from_cstr("synthetic")
     synthetic_row_count: lm_table_descriptor_materialized_row_count(synthetic)
-    if: status = 0 && (incompatible_source = 0 || incompatible_target = 0 || lm_p0_registry_l4_join_table(0, incompatible_source, incompatible_target) = 0 || lm_table_descriptor_materialized_row_count(synthetic) != synthetic_row_count)
+    if: status = 0 && (incompatible_source = 0 || incompatible_target = 0 || lm_p0_registry_source_join_table(0, incompatible_source, incompatible_target) = 0 || lm_table_descriptor_materialized_row_count(synthetic) != synthetic_row_count)
         status: 1
     lm_p0_text_view_delete(incompatible_source)
     lm_p0_text_view_delete(incompatible_target)

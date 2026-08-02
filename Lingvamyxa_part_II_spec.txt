@@ -214,10 +214,10 @@ The canonical source form for a relation table is a table Structure with an
 explicit name, column list and dense rows. `columns` is not a registry namespace
 item by itself. It is a field consumed by `table`.
 
-Within one L4 schema/root, two `table` declarations with the same normalized
-name are an error. Later registry merge may combine different schemas through
-explicit import/overlay/conflict rules, but a single schema must not contain two
-independent descriptor tables with the same name.
+Within one registry source module, two `table` declarations with the same
+normalized name are an error. Later registry merge may combine different source
+modules through explicit import/overlay/conflict rules, but a single module must
+not contain two independent descriptor tables with the same name.
 
 Column syntax is generic:
 
