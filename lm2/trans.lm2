@@ -19,7 +19,6 @@ unit
 
 predef: "lm2/own_abi.lm2"
 predef: "lm2/parser_abi.lm2"
-predef: "lm2/l4_loader_abi.lm2"
 predef: "lm2/trans_internal_abi.lm2"
 import: "lm2/table_descriptor.lm2"
 

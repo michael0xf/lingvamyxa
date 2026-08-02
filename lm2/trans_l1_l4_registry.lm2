@@ -3886,7 +3886,6 @@ external:
         c.setvbuf(c.stderr, 0, c._IONBF, 0)
 
         if: argc < 0
-            c.LM_UNUSED(c.lm_l4_load_table_join_root)
             c.LM_UNUSED(c.lm_registry_view_append_materialized_rows)
             c.LM_UNUSED(c.lm_trans_registry_join_table)
             return: 0

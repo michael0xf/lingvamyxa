@@ -893,7 +893,6 @@ table:
              LmTransPointerBinding    1
              LmTransRegistry          1
              LmTransRegistryCloneFrame 1
-             LmTransRegistryColumn    1
              LmTransRegistryFact      1
              LmTransRegistryImportFrame 1
              LmTransStatementFrameHandler 1

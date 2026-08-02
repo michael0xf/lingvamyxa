@@ -30,20 +30,6 @@ table:
 end: `forward.backend`
 
 table:
-    name: `alias.backend`
-    columns((class: class) (class: backend))
-    rows:
-             LmTransRegistryColumn  c.typedef
-end: `alias.backend`
-
-table:
-    name: `alias.target`
-    columns((class: class) (class: target))
-    rows:
-             LmTransRegistryColumn  LmL4Column
-end: `alias.target`
-
-table:
     name: functionPointerType
     columns((class: class) (int: value))
     rows:
