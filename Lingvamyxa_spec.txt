@@ -10908,12 +10908,14 @@ materialized and destroys that arena when the program/thread terminates.
 The initial C99 implementation may allocate every ordinary local named,
 merge-produced or `fm` result Structure directly in this root arena. Dynamic
 array storage and its `LmSlice` descriptor are allocated in the same owner arena.
-An `fm` result is allocated once in the function prologue, before the body,
-rather than by a return operation. Therefore a function may return the exact
-pointer to a locally created Structure or array descriptor, and multiple
-returned references remain valid until root-arena destruction. Top-level static
-storage may remain module-owned, but it is still observed through Structure
-references.
+A capturing callable's environment and closure descriptor are likewise allocated
+there; the descriptor is materialized when the nested callable declaration is
+executed, before any return of that callable. An `fm` result is allocated once in
+the function prologue, before the body, rather than by a return operation.
+Therefore a function may return the exact pointer to a locally created Structure,
+array descriptor or closure descriptor, and multiple returned references remain
+valid until root-arena destruction. Top-level static storage may remain
+module-owned, but it is still observed through Structure references.
 
 Consequently, a generated bootstrap executable that contains the Message Thread
 runtime depends on the owner runtime (`libown` in the current C99 build). This is

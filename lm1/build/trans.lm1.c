@@ -18457,7 +18457,7 @@ static int lm_trans_emit_closure_return_statement(FILE *file, const LmP0Field *r
     LmP0Text * descriptor_type;
     const LmTransSymbol * symbol;
     LmTransCallableValue * value;
-    unsigned return_id;
+    char *closure_value_name;
     if (out_consumed != 0) {
         out_consumed[0] = 0;
     }
@@ -18485,9 +18485,11 @@ static int lm_trans_emit_closure_return_statement(FILE *file, const LmP0Field *r
             return lm_return_1;
         }
     }
+    closure_value_name = 0;
     if (lm_trans_return_fields_single_atom(return_fields, atom) == 0 || lm_trans_current_return_is_callable_descriptor(namespace_, descriptor_type) == 0) {
         {
             int lm_return_2 = 0;
+            lm_own_delete(closure_value_name, 0);
             lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
@@ -18498,6 +18500,7 @@ static int lm_trans_emit_closure_return_statement(FILE *file, const LmP0Field *r
     if (symbol == 0 || lm_trans_symbol_is(symbol, "function") == 0) {
         {
             int lm_return_3 = 0;
+            lm_own_delete(closure_value_name, 0);
             lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
@@ -18507,6 +18510,7 @@ static int lm_trans_emit_closure_return_statement(FILE *file, const LmP0Field *r
     if (value -> has_closure_call == 0) {
         {
             int lm_return_4 = 0;
+            lm_own_delete(closure_value_name, 0);
             lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
@@ -18517,6 +18521,7 @@ static int lm_trans_emit_closure_return_statement(FILE *file, const LmP0Field *r
         fprintf(stderr, "trans L2 error: callable descriptor %.*s does not admit callable.capture for returned closure %.*s\n", (((int)descriptor_type -> length)), descriptor_type -> data, (((int)atom -> length)), atom -> data);
         {
             int lm_return_5 = 1;
+            lm_own_delete(closure_value_name, 0);
             lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
@@ -18527,228 +18532,53 @@ static int lm_trans_emit_closure_return_statement(FILE *file, const LmP0Field *r
         fprintf(stderr, "trans L2 error: callable descriptor %.*s admits callable.capture but callable.projection is not c.closure-struct\n", (((int)descriptor_type -> length)), descriptor_type -> data);
         {
             int lm_return_6 = 1;
+            lm_own_delete(closure_value_name, 0);
             lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_6;
         }
     }
-    out_consumed[0] = 1;
-    return_id = namespace_ -> next_return_id;
-    namespace_->next_return_id = namespace_ -> next_return_id + 1U;
-    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "{\n") != 0) {
+    if (lm_trans_callable_signature_matches_descriptor_name(descriptor_type, symbol, namespace_) == 0) {
+        fprintf(stderr, "trans L2 error: returned closure %.*s is incompatible with callable descriptor %.*s\n", (((int)atom -> length)), atom -> data, (((int)descriptor_type -> length)), descriptor_type -> data);
         {
             int lm_return_7 = 1;
+            lm_own_delete(closure_value_name, 0);
             lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_7;
         }
     }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, descriptor_type) != 0) {
+    closure_value_name = lm_trans_hoisted_suffix_name_new(value -> code_name, "_closure_value");
+    if (closure_value_name == 0) {
         {
             int lm_return_8 = 1;
+            lm_own_delete(closure_value_name, 0);
             lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_8;
         }
     }
-    if (lm_trans_put(file, " ") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ";\n") != 0) {
+    out_consumed[0] = 1;
+    if (lm_trans_emit_cleanups_until(file, indent, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "return ") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, ";\n") != 0) {
         {
             int lm_return_9 = 1;
+            lm_own_delete(closure_value_name, 0);
             lm_trans_callable_value_delete(value);
             lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_text_ref_destroy(&atom);
             return lm_return_9;
         }
     }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0) {
-        {
-            int lm_return_10 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_10;
-        }
-    }
-    if (lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, descriptor_type) != 0) {
-        {
-            int lm_return_11 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_11;
-        }
-    }
-    if (lm_trans_put(file, ")lm_own_new_zero(sizeof(*") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, "));\n") != 0) {
-        {
-            int lm_return_12 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_12;
-        }
-    }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (") != 0) {
-        {
-            int lm_return_13 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_13;
-        }
-    }
-    if (lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, " == 0) {\n") != 0) {
-        {
-            int lm_return_14 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_14;
-        }
-    }
-    if (lm_trans_emit_cleanups_until(file, indent + 2U, namespace_, 0U) != 0) {
-        {
-            int lm_return_15 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_15;
-        }
-    }
-    if (lm_trans_emit_indent(file, indent + 2U) != 0 || lm_trans_put(file, "return 0;\n") != 0) {
-        {
-            int lm_return_16 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_16;
-        }
-    }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "}\n") != 0) {
-        {
-            int lm_return_17 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_17;
-        }
-    }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0) {
-        {
-            int lm_return_18 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_18;
-        }
-    }
-    if (lm_trans_put(file, "->call = ") != 0 || lm_trans_write_text(file, value -> closure_call_name) != 0 || lm_trans_put(file, ";\n") != 0) {
-        {
-            int lm_return_19 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_19;
-        }
-    }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, "->env = ") != 0) {
-        {
-            int lm_return_20 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_20;
-        }
-    }
-    if (value -> has_env_arg && lm_trans_write_text(file, value -> env_arg) != 0) {
-        {
-            int lm_return_21 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_21;
-        }
-    }
-    if (value -> has_env_arg == 0 && lm_trans_put(file, "0") != 0) {
-        {
-            int lm_return_22 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_22;
-        }
-    }
-    if (lm_trans_put(file, ";\n") != 0) {
-        {
-            int lm_return_23 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_23;
-        }
-    }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0) {
-        {
-            int lm_return_24 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_24;
-        }
-    }
-    if (lm_trans_put(file, "->destroy = 0;\n") != 0) {
-        {
-            int lm_return_25 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_25;
-        }
-    }
-    if (lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0) {
-        {
-            int lm_return_26 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_26;
-        }
-    }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return ") != 0) {
-        {
-            int lm_return_27 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_27;
-        }
-    }
-    if (lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ";\n") != 0) {
-        {
-            int lm_return_28 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_28;
-        }
-    }
-    if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
-        {
-            int lm_return_29 = 1;
-            lm_trans_callable_value_delete(value);
-            lm_trans_text_ref_destroy(&descriptor_type);
-            lm_trans_text_ref_destroy(&atom);
-            return lm_return_29;
-        }
-    }
     {
-        int lm_return_30 = 0;
+        int lm_return_10 = 0;
+        lm_own_delete(closure_value_name, 0);
         lm_trans_callable_value_delete(value);
         lm_trans_text_ref_destroy(&descriptor_type);
         lm_trans_text_ref_destroy(&atom);
-        return lm_return_30;
+        return lm_return_10;
     }
 }
 
@@ -24718,73 +24548,119 @@ static int lm_trans_statement_emit_nested_function(FILE *file, LmTransStatementS
     LmTransFunctionHeader * function;
     const LmTransHoistedFunction * hoisted;
     const LmTransCapture * capture;
+    const LmTransSymbol * symbol;
+    LmP0Text * descriptor_type;
+    char *closure_value_name;
     size_t capture_index;
     LM_UNUSED(stack);
     function = lm_trans_statement_function_header_new();
     if (function == 0) {
         return 1;
     }
-    if (lm_trans_function_header_from_frame(frame, 0, function) <= 0) {
+    descriptor_type = lm_trans_statement_text_new();
+    if (descriptor_type == 0) {
         {
             int lm_return_0 = 1;
             lm_trans_function_header_destroy(function);
             return lm_return_0;
         }
     }
-    hoisted = lm_trans_namespace_find_hoisted_function(namespace_, frame);
-    if (hoisted == 0) {
-        fprintf(stderr, "trans L2 internal error: nested function has no hoisted C binding\n");
+    closure_value_name = 0;
+    if (lm_trans_function_header_from_frame(frame, 0, function) <= 0) {
         {
             int lm_return_1 = 1;
+            lm_own_delete(closure_value_name, 0);
+            lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_function_header_destroy(function);
             return lm_return_1;
         }
     }
-    if (hoisted -> function -> has_env) {
-        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted -> function -> env_type_name) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_write_text(file, hoisted -> env_var_name) != 0 || lm_trans_put(file, ";\n") != 0) {
-            {
-                int lm_return_2 = 1;
-                lm_trans_function_header_destroy(function);
-                return lm_return_2;
-            }
+    hoisted = lm_trans_namespace_find_hoisted_function(namespace_, frame);
+    if (hoisted == 0) {
+        fprintf(stderr, "trans L2 internal error: nested function has no hoisted C binding\n");
+        {
+            int lm_return_2 = 1;
+            lm_own_delete(closure_value_name, 0);
+            lm_trans_text_ref_destroy(&descriptor_type);
+            lm_trans_function_header_destroy(function);
+            return lm_return_2;
         }
-        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted -> env_var_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, hoisted -> function -> env_type_name) != 0 || lm_trans_put(file, " *)lm_own_new_zero(sizeof(*") != 0 || lm_trans_write_text(file, hoisted -> env_var_name) != 0 || lm_trans_put(file, "));\n") != 0) {
+    }
+    if (hoisted -> function -> has_env) {
+        if (lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
             {
                 int lm_return_3 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
                 lm_trans_function_header_destroy(function);
                 return lm_return_3;
             }
         }
-        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_write_text(file, hoisted -> env_var_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0) {
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted -> function -> env_type_name) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_write_text(file, hoisted -> env_var_name) != 0 || lm_trans_put(file, ";\n") != 0) {
             {
                 int lm_return_4 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
                 lm_trans_function_header_destroy(function);
                 return lm_return_4;
+            }
+        }
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted -> env_var_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, hoisted -> function -> env_type_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_write_text(file, hoisted -> env_var_name) != 0 || lm_trans_put(file, "));\n") != 0) {
+            {
+                int lm_return_5 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_5;
+            }
+        }
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_write_text(file, hoisted -> env_var_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0) {
+            {
+                int lm_return_6 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_6;
+            }
+        }
+        if (lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0) {
+            {
+                int lm_return_7 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_7;
             }
         }
         if (namespace_ != 0 && namespace_ -> return_type_node != 0) {
             if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return 0;\n") != 0) {
                 {
-                    int lm_return_5 = 1;
+                    int lm_return_8 = 1;
+                    lm_own_delete(closure_value_name, 0);
+                    lm_trans_text_ref_destroy(&descriptor_type);
                     lm_trans_function_header_destroy(function);
-                    return lm_return_5;
+                    return lm_return_8;
                 }
             }
         }
         else {
             if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return;\n") != 0) {
                 {
-                    int lm_return_6 = 1;
+                    int lm_return_9 = 1;
+                    lm_own_delete(closure_value_name, 0);
+                    lm_trans_text_ref_destroy(&descriptor_type);
                     lm_trans_function_header_destroy(function);
-                    return lm_return_6;
+                    return lm_return_9;
                 }
             }
         }
         if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
             {
-                int lm_return_7 = 1;
+                int lm_return_10 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
                 lm_trans_function_header_destroy(function);
-                return lm_return_7;
+                return lm_return_10;
             }
         }
         capture_index = 0U;
@@ -24792,16 +24668,20 @@ static int lm_trans_statement_emit_nested_function(FILE *file, LmTransStatementS
             capture = (((const LmTransCapture *)lm_own_ptr_stack_at(hoisted -> captures, capture_index)));
             if (capture == 0) {
                 {
-                    int lm_return_8 = 1;
+                    int lm_return_11 = 1;
+                    lm_own_delete(closure_value_name, 0);
+                    lm_trans_text_ref_destroy(&descriptor_type);
                     lm_trans_function_header_destroy(function);
-                    return lm_return_8;
+                    return lm_return_11;
                 }
             }
             if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted -> env_var_name) != 0 || lm_trans_put(file, "->") != 0 || lm_trans_emit_identifier(file, capture -> name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_identifier(file, capture -> name) != 0 || lm_trans_put(file, ";\n") != 0) {
                 {
-                    int lm_return_9 = 1;
+                    int lm_return_12 = 1;
+                    lm_own_delete(closure_value_name, 0);
+                    lm_trans_text_ref_destroy(&descriptor_type);
                     lm_trans_function_header_destroy(function);
-                    return lm_return_9;
+                    return lm_return_12;
                 }
             }
             capture_index = capture_index + 1U;
@@ -24809,24 +24689,142 @@ static int lm_trans_statement_emit_nested_function(FILE *file, LmTransStatementS
     }
     if (lm_trans_namespace_publish_hoisted_callable(namespace_, function, hoisted) != 0) {
         {
-            int lm_return_10 = 1;
+            int lm_return_13 = 1;
+            lm_own_delete(closure_value_name, 0);
+            lm_trans_text_ref_destroy(&descriptor_type);
             lm_trans_function_header_destroy(function);
-            return lm_return_10;
+            return lm_return_13;
+        }
+    }
+    symbol = lm_trans_namespace_find(namespace_, function -> name);
+    if (lm_trans_current_return_is_callable_descriptor(namespace_, descriptor_type) && lm_trans_callable_descriptor_allows_capture(namespace_, descriptor_type) && lm_trans_callable_descriptor_uses_closure_struct(namespace_, descriptor_type) && lm_trans_callable_signature_matches_descriptor_name(descriptor_type, symbol, namespace_)) {
+        closure_value_name = lm_trans_hoisted_suffix_name_new(hoisted -> function -> c_name, "_closure_value");
+        if (closure_value_name == 0) {
+            {
+                int lm_return_14 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_14;
+            }
+        }
+        if (lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
+            {
+                int lm_return_15 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_15;
+            }
+        }
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, descriptor_type) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, ";\n") != 0) {
+            {
+                int lm_return_16 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_16;
+            }
+        }
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, descriptor_type) != 0 || lm_trans_put(file, ")lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "));\n") != 0) {
+            {
+                int lm_return_17 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_17;
+            }
+        }
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0) {
+            {
+                int lm_return_18 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_18;
+            }
+        }
+        if (lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0) {
+            {
+                int lm_return_19 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_19;
+            }
+        }
+        if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return 0;\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0) {
+            {
+                int lm_return_20 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_20;
+            }
+        }
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "->call = ") != 0 || lm_trans_write_text(file, hoisted -> closure_call_name) != 0 || lm_trans_put(file, ";\n") != 0) {
+            {
+                int lm_return_21 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_21;
+            }
+        }
+        if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "->env = ") != 0) {
+            {
+                int lm_return_22 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_22;
+            }
+        }
+        if (hoisted -> function -> has_env && lm_trans_write_text(file, hoisted -> env_var_name) != 0) {
+            {
+                int lm_return_23 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_23;
+            }
+        }
+        if (hoisted -> function -> has_env == 0 && lm_trans_put(file, "0") != 0) {
+            {
+                int lm_return_24 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_24;
+            }
+        }
+        if (lm_trans_put(file, ";\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "->destroy = 0;\n") != 0) {
+            {
+                int lm_return_25 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
+                lm_trans_function_header_destroy(function);
+                return lm_return_25;
+            }
         }
     }
     if (hoisted -> function -> is_sub == 0 && hoisted -> function -> is_struct_return == 0 && hoisted -> function -> return_node != 0) {
         if (lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "(void)") != 0 || lm_trans_write_text(file, hoisted -> closure_call_name) != 0 || lm_trans_put(file, ";\n") != 0) {
             {
-                int lm_return_11 = 1;
+                int lm_return_26 = 1;
+                lm_own_delete(closure_value_name, 0);
+                lm_trans_text_ref_destroy(&descriptor_type);
                 lm_trans_function_header_destroy(function);
-                return lm_return_11;
+                return lm_return_26;
             }
         }
     }
     {
-        int lm_return_12 = 0;
+        int lm_return_27 = 0;
+        lm_own_delete(closure_value_name, 0);
+        lm_trans_text_ref_destroy(&descriptor_type);
         lm_trans_function_header_destroy(function);
-        return lm_return_12;
+        return lm_return_27;
     }
 }
 

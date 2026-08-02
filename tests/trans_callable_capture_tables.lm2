@@ -1,3 +1,19 @@
+L1:
+===
+static const void *lm_test_declared_closure;
+
+static void lm_test_remember_declared_closure(const void *value) {
+    lm_test_declared_closure = value;
+}
+
+static int lm_test_is_declared_closure(const void *value) {
+    return value == lm_test_declared_closure;
+}
+
+#define LM_TEST_ROOT_OWNER() (lm_l5_main_thread()->root_owner)
+#define LM_TEST_CLOSURE_ENV(value) ((value)->env)
+===
+
 import: "lm2/own.lm2"
 
 table:
@@ -22,8 +38,16 @@ fn: makeAdder (int: base) AddX
     fn: addX (int: value) int
         return: base + value
     ---
+    c.lm_test_remember_declared_closure(c.lm_lmx_nested_l1_parent_makeAdder_child_addX_i0_closure_value)
     return: addX
 end: makeAdder
+
+fn: makeIncrementer () AddX
+    fn: increment (int: value) int
+        return: value + 1
+    ---
+    return: increment
+end: makeIncrementer
 
 fn: callAdd (AddX: add) int
     return: add(3)
@@ -31,6 +55,25 @@ end: callAdd
 
 external:
     fn: main () int
-        return: callAdd(makeAdder(4)) != 7
+        AddX: first makeAdder(4)
+        if: first = 0 || c.lm_test_is_declared_closure(first) = 0
+            return: 1
+        if: c.lm_own_arena_allocation_descriptor(c.LM_TEST_ROOT_OWNER(), first) = 0 || c.lm_own_arena_allocation_descriptor(c.LM_TEST_ROOT_OWNER(), c.LM_TEST_CLOSURE_ENV(first)) = 0
+            return: 2
+
+        AddX: second makeAdder(8)
+        if: second = 0 || c.lm_test_is_declared_closure(second) = 0
+            return: 3
+        if: c.lm_own_arena_allocation_descriptor(c.LM_TEST_ROOT_OWNER(), second) = 0 || c.lm_own_arena_allocation_descriptor(c.LM_TEST_ROOT_OWNER(), c.LM_TEST_CLOSURE_ENV(second)) = 0
+            return: 4
+        if: first = second
+            return: 5
+
+        AddX: captureless makeIncrementer()
+        if: captureless = 0 || c.LM_TEST_CLOSURE_ENV(captureless) != 0
+            return: 6
+        if: c.lm_own_arena_allocation_descriptor(c.LM_TEST_ROOT_OWNER(), captureless) = 0
+            return: 7
+        return: callAdd(first) != 7 || callAdd(second) != 11 || callAdd(captureless) != 4
     end: main
 end: external

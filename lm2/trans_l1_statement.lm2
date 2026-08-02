@@ -1802,7 +1802,7 @@ fn: lm_trans_emit_closure_return_statement (
     LmP0Text: descriptor_type
     const: LmTransSymbol: symbol
     LmTransCallableValue: value
-    unsigned: return_id
+    @: char closure_value_name
 
     if: out_consumed != 0
         out_consumed[0]: 0
@@ -1823,6 +1823,9 @@ fn: lm_trans_emit_closure_return_statement (
     if: value = 0
         return: 1
     finally: lm_trans_callable_value_delete(value)
+
+    closure_value_name: 0
+    finally: lm_own_delete(closure_value_name, 0)
 
     if: lm_trans_return_fields_single_atom(return_fields, atom) = 0 || lm_trans_current_return_is_callable_descriptor(namespace_, descriptor_type) = 0
         return: 0
@@ -1849,56 +1852,23 @@ fn: lm_trans_emit_closure_return_statement (
             descriptor_type\data
         )
         return: 1
+    if: lm_trans_callable_signature_matches_descriptor_name(descriptor_type, symbol, namespace_) = 0
+        c.fprintf(
+            c.stderr,
+            "trans L2 error: returned closure %.*s is incompatible with callable descriptor %.*s\n",
+            (cast: int atom\length),
+            atom\data,
+            (cast: int descriptor_type\length),
+            descriptor_type\data
+        )
+        return: 1
+
+    closure_value_name: lm_trans_hoisted_suffix_name_new(value\code_name, "_closure_value")
+    if: closure_value_name = 0
+        return: 1
 
     out_consumed[0]: 1
-    return_id: namespace_\next_return_id
-    namespace_\next_return_id: namespace_\next_return_id + 1U
-
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "{\n") != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, descriptor_type) != 0
-        return: 1
-    if: lm_trans_put(file, " ") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ";\n") != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0
-        return: 1
-    if: lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, descriptor_type) != 0
-        return: 1
-    if: lm_trans_put(file, ")lm_own_new_zero(sizeof(*") != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, "));\n") != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (") != 0
-        return: 1
-    if: lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, " == 0) {\n") != 0
-        return: 1
-    if: lm_trans_emit_cleanups_until(file, indent + 2U, namespace_, 0U) != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent + 2U) != 0 || lm_trans_put(file, "return 0;\n") != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "}\n") != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0
-        return: 1
-    if: lm_trans_put(file, "->call = ") != 0 || lm_trans_write_text(file, value\closure_call_name) != 0 || lm_trans_put(file, ";\n") != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, "->env = ") != 0
-        return: 1
-    if: value\has_env_arg && lm_trans_write_text(file, value\env_arg) != 0
-        return: 1
-    if: value\has_env_arg = 0 && lm_trans_put(file, "0") != 0
-        return: 1
-    if: lm_trans_put(file, ";\n") != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_return_name(file, return_id) != 0
-        return: 1
-    if: lm_trans_put(file, "->destroy = 0;\n") != 0
-        return: 1
-    if: lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return ") != 0
-        return: 1
-    if: lm_trans_emit_return_name(file, return_id) != 0 || lm_trans_put(file, ";\n") != 0
-        return: 1
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+    if: lm_trans_emit_cleanups_until(file, indent, namespace_, 0U) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "return ") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, ";\n") != 0
         return: 1
 return: 0
 
@@ -7024,6 +6994,9 @@ fn: lm_trans_statement_emit_nested_function (
     LmTransFunctionHeader: function
     const: LmTransHoistedFunction: hoisted
     const: LmTransCapture: capture
+    const: LmTransSymbol: symbol
+    LmP0Text: descriptor_type
+    @: char closure_value_name
     size_t: capture_index
 
     c.LM_UNUSED(stack)
@@ -7032,6 +7005,14 @@ fn: lm_trans_statement_emit_nested_function (
     if: function = 0
         return: 1
     finally: lm_trans_function_header_destroy(function)
+
+    descriptor_type: lm_trans_statement_text_new()
+    if: descriptor_type = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ descriptor_type)
+
+    closure_value_name: 0
+    finally: lm_own_delete(closure_value_name, 0)
 
     if: lm_trans_function_header_from_frame(frame, 0, function) <= 0
         return: 1
@@ -7042,11 +7023,15 @@ fn: lm_trans_statement_emit_nested_function (
         return: 1
 
     if: hoisted\function\has_env
+        if: lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0
+            return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted\function\env_type_name) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, ";\n") != 0
             return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, hoisted\function\env_type_name) != 0 || lm_trans_put(file, " *)lm_own_new_zero(sizeof(*") != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, "));\n") != 0
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, hoisted\function\env_type_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, "));\n") != 0
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0
+            return: 1
+        if: lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0
             return: 1
         if: namespace_ != 0 && namespace_\return_type_node != 0
             if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return 0;\n") != 0
@@ -7071,6 +7056,36 @@ fn: lm_trans_statement_emit_nested_function (
     ---
     if: lm_trans_namespace_publish_hoisted_callable(namespace_, function, hoisted) != 0
         return: 1
+
+    symbol: lm_trans_namespace_find(namespace_, function\name)
+    if: lm_trans_current_return_is_callable_descriptor(namespace_, descriptor_type) && lm_trans_callable_descriptor_allows_capture(namespace_, descriptor_type) && lm_trans_callable_descriptor_uses_closure_struct(namespace_, descriptor_type) && lm_trans_callable_signature_matches_descriptor_name(descriptor_type, symbol, namespace_)
+        closure_value_name: lm_trans_hoisted_suffix_name_new(hoisted\function\c_name, "_closure_value")
+        if: closure_value_name = 0
+            return: 1
+        if: lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, descriptor_type) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, ";\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, descriptor_type) != 0 || lm_trans_put(file, ")lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "));\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0
+            return: 1
+        if: lm_trans_emit_cleanups_until(file, indent + 1U, namespace_, 0U) != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return 0;\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "->call = ") != 0 || lm_trans_write_text(file, hoisted\closure_call_name) != 0 || lm_trans_put(file, ";\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "->env = ") != 0
+            return: 1
+        if: hoisted\function\has_env && lm_trans_write_text(file, hoisted\env_var_name) != 0
+            return: 1
+        if: hoisted\function\has_env = 0 && lm_trans_put(file, "0") != 0
+            return: 1
+        if: lm_trans_put(file, ";\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "->destroy = 0;\n") != 0
+            return: 1
+
+    ---
 
     if: hoisted\function\is_sub = 0 && hoisted\function\is_struct_return = 0 && hoisted\function\return_node != 0
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "(void)") != 0 || lm_trans_write_text(file, hoisted\closure_call_name) != 0 || lm_trans_put(file, ";\n") != 0
