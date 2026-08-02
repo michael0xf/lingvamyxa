@@ -159,6 +159,7 @@ struct LmOwnArena;
 struct LmOwnArena *lm_own_arena_new(void);
 void lm_own_arena_delete(struct LmOwnArena *arena);
 void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);
+void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
 typedef struct LmL5ExecutionContext LmL5ExecutionContext;
 typedef struct LmL5Thread LmL5Thread;
 struct LmL5ExecutionContext {

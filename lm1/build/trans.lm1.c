@@ -2806,6 +2806,7 @@ struct LmOwnArena;
 struct LmOwnArena *lm_own_arena_new(void);
 void lm_own_arena_delete(struct LmOwnArena *arena);
 void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);
+void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
 typedef struct LmL5ExecutionContext LmL5ExecutionContext;
 typedef struct LmL5Thread LmL5Thread;
 struct LmL5ExecutionContext {
@@ -16710,6 +16711,9 @@ static int lm_trans_emit_l5_runtime_prelude(FILE *file) {
     if (lm_trans_put(file, "void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);\n") != 0) {
         return 1;
     }
+    if (lm_trans_put(file, "void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);\n") != 0) {
+        return 1;
+    }
     if (lm_trans_put(file, "typedef struct LmL5ExecutionContext LmL5ExecutionContext;\n") != 0) {
         return 1;
     }
@@ -17016,6 +17020,9 @@ static int lm_trans_emit_array_target_path(FILE *file, const LmP0Text *target_na
 }
 
 static int lm_trans_emit_array_structure_value_alloc_assignment(FILE *file, unsigned indent, const LmP0Text *target_name, const size_t *indices, size_t depth, const LmP0Node *element_type, size_t pointer_depth, size_t rank, size_t count) {
+    if (lm_trans_emit_l5_runtime_prelude(lm_trans_prelude_file(file)) != 0) {
+        return 1;
+    }
     if (lm_trans_emit_indent(file, indent) != 0) {
         return 1;
     }
@@ -17031,7 +17038,7 @@ static int lm_trans_emit_array_structure_value_alloc_assignment(FILE *file, unsi
     if (lm_trans_emit_array_pointer_type(file, element_type, pointer_depth) != 0) {
         return 1;
     }
-    if (lm_trans_put(file, ")lm_own_array_new_zero(sizeof(*") != 0) {
+    if (lm_trans_put(file, ")lm_own_arena_array_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0) {
         return 1;
     }
     if (lm_trans_emit_array_target_path(file, target_name, indices, depth) != 0) {
@@ -17297,7 +17304,7 @@ static int lm_trans_type_receiver_array_structure_value_alloc(FILE *file, unsign
             }
         }
     }
-    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, " = (LmSlice *)lm_own_new_zero(sizeof(*") != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, "));\n") != 0) {
+    if (lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, " = (LmSlice *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, "));\n") != 0) {
         {
             int lm_return_6 = 1;
             lm_trans_text_ref_destroy(&items_name);
@@ -17636,7 +17643,7 @@ static int lm_trans_emit_array_value_helper(FILE *file, const LmTransFormalParam
     }
     prelude_file = lm_trans_prelude_file(file);
     count = lm_trans_structure_field_count(value);
-    if (lm_trans_put(prelude_file, "static LmSlice *") != 0 || lm_trans_emit_identifier(prelude_file, helper_name_text) != 0 || lm_trans_put(prelude_file, "(void) {\n    ") != 0 || lm_trans_emit_array_pointer_type(prelude_file, element_type, pointer_depth + rank) != 0 || lm_trans_put(prelude_file, " ") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    LmSlice *") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n") != 0) {
+    if (lm_trans_emit_l5_runtime_prelude(prelude_file) != 0) {
         {
             int lm_return_1 = 1;
             lm_trans_text_ref_destroy(&helper_name_text);
@@ -17646,7 +17653,7 @@ static int lm_trans_emit_array_value_helper(FILE *file, const LmTransFormalParam
             return lm_return_1;
         }
     }
-    if (lm_trans_emit_array_structure_value_alloc_assignment(prelude_file, 1U, target_name, 0, 0U, element_type, pointer_depth + rank, rank, count) != 0) {
+    if (lm_trans_put(prelude_file, "static LmSlice *") != 0 || lm_trans_emit_identifier(prelude_file, helper_name_text) != 0 || lm_trans_put(prelude_file, "(void) {\n    ") != 0 || lm_trans_emit_array_pointer_type(prelude_file, element_type, pointer_depth + rank) != 0 || lm_trans_put(prelude_file, " ") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    LmSlice *") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n") != 0) {
         {
             int lm_return_2 = 1;
             lm_trans_text_ref_destroy(&helper_name_text);
@@ -17656,7 +17663,7 @@ static int lm_trans_emit_array_value_helper(FILE *file, const LmTransFormalParam
             return lm_return_2;
         }
     }
-    if (count != 0U && (lm_trans_put(prelude_file, "    if (") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, " == 0) {\n        return 0;\n    }\n") != 0)) {
+    if (lm_trans_emit_array_structure_value_alloc_assignment(prelude_file, 1U, target_name, 0, 0U, element_type, pointer_depth + rank, rank, count) != 0) {
         {
             int lm_return_3 = 1;
             lm_trans_text_ref_destroy(&helper_name_text);
@@ -17666,7 +17673,7 @@ static int lm_trans_emit_array_value_helper(FILE *file, const LmTransFormalParam
             return lm_return_3;
         }
     }
-    if (count != 0U && lm_trans_emit_array_structure_value_fill(prelude_file, 1U, target_name, element_type, rank, value, namespace_) != 0) {
+    if (count != 0U && (lm_trans_put(prelude_file, "    if (") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, " == 0) {\n        return 0;\n    }\n") != 0)) {
         {
             int lm_return_4 = 1;
             lm_trans_text_ref_destroy(&helper_name_text);
@@ -17676,7 +17683,7 @@ static int lm_trans_emit_array_value_helper(FILE *file, const LmTransFormalParam
             return lm_return_4;
         }
     }
-    if (lm_trans_put(prelude_file, "    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " = (LmSlice *)lm_own_new_zero(sizeof(*") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "));\n    if (") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " == 0) {\n        return 0;\n    }\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->ptr = (void *)") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->length = ") != 0 || lm_trans_emit_size_literal(prelude_file, count) != 0 || lm_trans_put(prelude_file, ";\n    return ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n}\n\n") != 0) {
+    if (count != 0U && lm_trans_emit_array_structure_value_fill(prelude_file, 1U, target_name, element_type, rank, value, namespace_) != 0) {
         {
             int lm_return_5 = 1;
             lm_trans_text_ref_destroy(&helper_name_text);
@@ -17686,7 +17693,7 @@ static int lm_trans_emit_array_value_helper(FILE *file, const LmTransFormalParam
             return lm_return_5;
         }
     }
-    if (lm_own_ptr_stack_push(lm_trans_emitted_array_value_helpers, helper_name) != 0) {
+    if (lm_trans_put(prelude_file, "    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " = (LmSlice *)lm_own_arena_new_zero(lm_l5_main_thread()->root_owner, sizeof(*") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "));\n    if (") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " == 0) {\n        return 0;\n    }\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->ptr = (void *)") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->length = ") != 0 || lm_trans_emit_size_literal(prelude_file, count) != 0 || lm_trans_put(prelude_file, ";\n    return ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n}\n\n") != 0) {
         {
             int lm_return_6 = 1;
             lm_trans_text_ref_destroy(&helper_name_text);
@@ -17696,15 +17703,25 @@ static int lm_trans_emit_array_value_helper(FILE *file, const LmTransFormalParam
             return lm_return_6;
         }
     }
+    if (lm_own_ptr_stack_push(lm_trans_emitted_array_value_helpers, helper_name) != 0) {
+        {
+            int lm_return_7 = 1;
+            lm_trans_text_ref_destroy(&helper_name_text);
+            lm_trans_text_ref_destroy(&target_name);
+            lm_trans_text_ref_destroy(&slice_name);
+            lm_own_delete(helper_name, 0);
+            return lm_return_7;
+        }
+    }
     out_name[0] = helper_name_text[0];
     helper_name = 0;
     {
-        int lm_return_7 = 0;
+        int lm_return_8 = 0;
         lm_trans_text_ref_destroy(&helper_name_text);
         lm_trans_text_ref_destroy(&target_name);
         lm_trans_text_ref_destroy(&slice_name);
         lm_own_delete(helper_name, 0);
-        return lm_return_7;
+        return lm_return_8;
     }
 }
 
