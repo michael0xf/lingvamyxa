@@ -539,7 +539,7 @@ fn: lm_trans_callable_descriptor_is_raw_function_reference (
     const: LmP0Text: name
 ) int
 
-fn: lm_trans_instanceof (
+fn: lm_trans_implements (
     const: LmTransNamespace: namespace_
     const: LmP0Text: class_name
     const: LmP0Text: protocol_name

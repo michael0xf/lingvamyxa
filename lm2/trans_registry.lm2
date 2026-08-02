@@ -671,7 +671,7 @@ table:
     columns((class: class) (binding: receiver))
     rows:
              cast   lm_trans_expr_emit_cast_frame
-             implements lm_trans_expr_emit_instanceof_frame
+             implements lm_trans_expr_emit_implements_frame
 end: `receiver.expr`
 
 table:

@@ -3713,7 +3713,7 @@ fn: lm_trans_cast_type_is_allowed (const: (LmP0Node: type_node); const: (LmTrans
     return: 0
 end: lm_trans_cast_type_is_allowed
 
-fn: lm_trans_instanceof_has_method (const: (LmTransNamespace: namespace_); const: (LmP0Text: class_name); const: (LmP0Text: method_name)) int
+fn: lm_trans_implements_has_method (const: (LmTransNamespace: namespace_); const: (LmP0Text: class_name); const: (LmP0Text: method_name)) int
     LmP0Text: class_payload
     @: char class_table
 
@@ -3743,7 +3743,7 @@ fn: lm_trans_instanceof_has_method (const: (LmTransNamespace: namespace_); const
         return: 1
 return: lm_trans_namespace_registry_source_relation_has_key(namespace_, method_name, "default", "row")
 
-fn: lm_trans_instanceof_requirement_keys_new (const: (LmTransNamespace: namespace_); const: (LmP0Text: protocol_name)) LmOwnPtrStack
+fn: lm_trans_implements_requirement_keys_new (const: (LmTransNamespace: namespace_); const: (LmP0Text: protocol_name)) LmOwnPtrStack
     const: LmOwnPtrStack: facade_requirements
     LmOwnPtrStack: keys
 
@@ -3757,7 +3757,7 @@ fn: lm_trans_instanceof_requirement_keys_new (const: (LmTransNamespace: namespac
     lm_trans_ptr_stack_delete(@ keys)
 return: lm_trans_namespace_registry_source_relation_keys_new(namespace_, protocol_name, "row")
 
-fn: lm_trans_instanceof (const: (LmTransNamespace: namespace_); const: (LmP0Text: class_name); const: (LmP0Text: protocol_name)) int
+fn: lm_trans_implements (const: (LmTransNamespace: namespace_); const: (LmP0Text: class_name); const: (LmP0Text: protocol_name)) int
     LmOwnPtrStack: requirements
     const: @: char requirement
     LmP0Text: method_key
@@ -3769,7 +3769,7 @@ fn: lm_trans_instanceof (const: (LmTransNamespace: namespace_); const: (LmP0Text
     if: lm_trans_text_same(class_name, protocol_name) != 0
         return: 1
 
-    requirements: lm_trans_instanceof_requirement_keys_new(namespace_, protocol_name)
+    requirements: lm_trans_implements_requirement_keys_new(namespace_, protocol_name)
     if: requirements = 0 || requirements\count = 0U
         lm_trans_ptr_stack_delete(@ requirements)
         return: 0
@@ -3789,7 +3789,7 @@ fn: lm_trans_instanceof (const: (LmTransNamespace: namespace_); const: (LmP0Text
 
         method_key\data: requirement
         method_key\length: c.strlen(requirement)
-        if: lm_trans_instanceof_has_method(namespace_, class_name, method_key) = 0
+        if: lm_trans_implements_has_method(namespace_, class_name, method_key) = 0
             lm_trans_text_ref_destroy(@ method_key)
             lm_trans_ptr_stack_delete(@ requirements)
             return: 0
@@ -3800,7 +3800,7 @@ fn: lm_trans_instanceof (const: (LmTransNamespace: namespace_); const: (LmP0Text
     lm_trans_ptr_stack_delete(@ requirements)
 return: 1
 
-fn: lm_trans_instanceof_arg_key (const: (LmP0Field: first); const: (LmP0Field: stop); LmP0Text: out_key) int
+fn: lm_trans_implements_arg_key (const: (LmP0Field: first); const: (LmP0Field: stop); LmP0Text: out_key) int
     const: LmP0Node: node
 
     if: out_key != 0
@@ -3814,7 +3814,7 @@ fn: lm_trans_instanceof_arg_key (const: (LmP0Field: first); const: (LmP0Field: s
         return: 0
 return: lm_trans_cast_type_base_key(node, out_key)
 
-fn: lm_trans_expr_emit_instanceof_frame (FILE: file; LmTransExprStack: stack; const: (LmP0Frame: frame); const: (LmTransNamespace: namespace_)) int
+fn: lm_trans_expr_emit_implements_frame (FILE: file; LmTransExprStack: stack; const: (LmP0Frame: frame); const: (LmTransNamespace: namespace_)) int
     const: LmP0Field: class_first
     const: LmP0Field: class_stop
     const: LmP0Field: protocol_first
@@ -3830,11 +3830,11 @@ fn: lm_trans_expr_emit_instanceof_frame (FILE: file; LmTransExprStack: stack; co
         return: 0
 
     if: stack = 0
-        c.fprintf(c.stderr, "trans internal error: instanceof receiver requires an expression stack\n")
+        c.fprintf(c.stderr, "trans internal error: implements receiver requires an expression stack\n")
         return: 1
 
     if: lm_trans_c_call_arg_segment_at(frame\body, 0U, @ class_first, @ class_stop) = 0 || lm_trans_c_call_arg_segment_at(frame\body, 1U, @ protocol_first, @ protocol_stop) = 0 || lm_trans_c_call_arg_segment_at(frame\body, 2U, @ extra_first, @ extra_stop) != 0
-        c.fprintf(c.stderr, "trans L2 error: instanceof expects exactly two class arguments\n")
+        c.fprintf(c.stderr, "trans L2 error: implements expects exactly two class arguments\n")
         return: 1
 
     class_key: lm_trans_text_ref_new_cstr("")
@@ -3845,11 +3845,11 @@ fn: lm_trans_expr_emit_instanceof_frame (FILE: file; LmTransExprStack: stack; co
         return: 1
 
     status: 0
-    if: lm_trans_instanceof_arg_key(class_first, class_stop, class_key) = 0 || lm_trans_instanceof_arg_key(protocol_first, protocol_stop, protocol_key) = 0
-        c.fprintf(c.stderr, "trans L2 error: instanceof expects class-like atoms\n")
+    if: lm_trans_implements_arg_key(class_first, class_stop, class_key) = 0 || lm_trans_implements_arg_key(protocol_first, protocol_stop, protocol_key) = 0
+        c.fprintf(c.stderr, "trans L2 error: implements expects class-like atoms\n")
         status: 1
     else:
-        result: lm_trans_instanceof(namespace_, class_key, protocol_key)
+        result: lm_trans_implements(namespace_, class_key, protocol_key)
         if: result != 0
             status: lm_trans_put(file, "1") != 0
         else:

@@ -834,7 +834,7 @@ static int lm_trans_callable_descriptor_allows_partial(const LmTransNamespace *n
 static int lm_trans_callable_descriptor_allows_capture(const LmTransNamespace *namespace_, const LmP0Text *name);
 static int lm_trans_callable_descriptor_uses_closure_struct(const LmTransNamespace *namespace_, const LmP0Text *name);
 static int lm_trans_callable_descriptor_is_raw_function_reference(const LmTransNamespace *namespace_, const LmP0Text *name);
-static int lm_trans_instanceof(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *protocol_name);
+static int lm_trans_implements(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *protocol_name);
 static int lm_trans_node_callable_descriptor_name(const LmP0Node *node, const LmTransNamespace *namespace_, LmP0Text *out_name);
 static int lm_trans_formal_param_list_has_any(const LmTransFormalParamList *params);
 static void lm_trans_formal_param_list_delete(LmTransFormalParamList *list);
@@ -1950,11 +1950,11 @@ static int lm_trans_validate_profile_c_printf_call(const LmP0Frame *frame, const
 static const char * lm_trans_class_range_value(const LmTransNamespace *namespace_, const LmP0Text *key);
 static const char * lm_trans_cast_target_value(const LmTransNamespace *namespace_, const LmP0Text *key);
 static int lm_trans_cast_type_is_allowed(const LmP0Node *type_node, const LmTransNamespace *namespace_);
-static int lm_trans_instanceof_has_method(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *method_name);
-static LmOwnPtrStack * lm_trans_instanceof_requirement_keys_new(const LmTransNamespace *namespace_, const LmP0Text *protocol_name);
-static int lm_trans_instanceof(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *protocol_name);
-static int lm_trans_instanceof_arg_key(const LmP0Field *first, const LmP0Field *stop, LmP0Text *out_key);
-static int lm_trans_expr_emit_instanceof_frame(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
+static int lm_trans_implements_has_method(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *method_name);
+static LmOwnPtrStack * lm_trans_implements_requirement_keys_new(const LmTransNamespace *namespace_, const LmP0Text *protocol_name);
+static int lm_trans_implements(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *protocol_name);
+static int lm_trans_implements_arg_key(const LmP0Field *first, const LmP0Field *stop, LmP0Text *out_key);
+static int lm_trans_expr_emit_implements_frame(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_expr_emit_cast_frame(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static const char * lm_trans_expr_frame_receiver_binding_from_head(const LmTransNamespace *namespace_, const LmP0Text *head);
 static int lm_trans_lookup_expr_frame_receiver_binding(const LmTransNamespace *namespace_, const LmP0Text *head, LmTransBinding *out);
@@ -14182,7 +14182,7 @@ static int lm_trans_cast_type_is_allowed(const LmP0Node *type_node, const LmTran
     return 0;
 }
 
-static int lm_trans_instanceof_has_method(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *method_name) {
+static int lm_trans_implements_has_method(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *method_name) {
     LmP0Text * class_payload;
     char *class_table;
     if (class_name == 0 || method_name == 0) {
@@ -14241,7 +14241,7 @@ static int lm_trans_instanceof_has_method(const LmTransNamespace *namespace_, co
     }
 }
 
-static LmOwnPtrStack * lm_trans_instanceof_requirement_keys_new(const LmTransNamespace *namespace_, const LmP0Text *protocol_name) {
+static LmOwnPtrStack * lm_trans_implements_requirement_keys_new(const LmTransNamespace *namespace_, const LmP0Text *protocol_name) {
     const LmOwnPtrStack * facade_requirements;
     LmOwnPtrStack * keys;
     if (protocol_name == 0) {
@@ -14256,7 +14256,7 @@ static LmOwnPtrStack * lm_trans_instanceof_requirement_keys_new(const LmTransNam
     return lm_trans_namespace_registry_source_relation_keys_new(namespace_, protocol_name, "row");
 }
 
-static int lm_trans_instanceof(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *protocol_name) {
+static int lm_trans_implements(const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmP0Text *protocol_name) {
     LmOwnPtrStack * requirements;
     const char *requirement;
     LmP0Text * method_key;
@@ -14267,7 +14267,7 @@ static int lm_trans_instanceof(const LmTransNamespace *namespace_, const LmP0Tex
     if (lm_trans_text_same(class_name, protocol_name) != 0) {
         return 1;
     }
-    requirements = lm_trans_instanceof_requirement_keys_new(namespace_, protocol_name);
+    requirements = lm_trans_implements_requirement_keys_new(namespace_, protocol_name);
     if (requirements == 0 || requirements -> count == 0U) {
         lm_trans_ptr_stack_delete(&requirements);
         return 0;
@@ -14287,7 +14287,7 @@ static int lm_trans_instanceof(const LmTransNamespace *namespace_, const LmP0Tex
         }
         method_key->data = requirement;
         method_key->length = strlen(requirement);
-        if (lm_trans_instanceof_has_method(namespace_, class_name, method_key) == 0) {
+        if (lm_trans_implements_has_method(namespace_, class_name, method_key) == 0) {
             lm_trans_text_ref_destroy(&method_key);
             lm_trans_ptr_stack_delete(&requirements);
             return 0;
@@ -14299,7 +14299,7 @@ static int lm_trans_instanceof(const LmTransNamespace *namespace_, const LmP0Tex
     return 1;
 }
 
-static int lm_trans_instanceof_arg_key(const LmP0Field *first, const LmP0Field *stop, LmP0Text *out_key) {
+static int lm_trans_implements_arg_key(const LmP0Field *first, const LmP0Field *stop, LmP0Text *out_key) {
     const LmP0Node * node;
     if (out_key != 0) {
         out_key->data = "";
@@ -14315,7 +14315,7 @@ static int lm_trans_instanceof_arg_key(const LmP0Field *first, const LmP0Field *
     return lm_trans_cast_type_base_key(node, out_key);
 }
 
-static int lm_trans_expr_emit_instanceof_frame(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_) {
+static int lm_trans_expr_emit_implements_frame(FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_) {
     const LmP0Field * class_first;
     const LmP0Field * class_stop;
     const LmP0Field * protocol_first;
@@ -14330,11 +14330,11 @@ static int lm_trans_expr_emit_instanceof_frame(FILE *file, LmTransExprStack *sta
         return 0;
     }
     if (stack == 0) {
-        fprintf(stderr, "trans internal error: instanceof receiver requires an expression stack\n");
+        fprintf(stderr, "trans internal error: implements receiver requires an expression stack\n");
         return 1;
     }
     if (lm_trans_c_call_arg_segment_at(frame -> body, 0U, &class_first, &class_stop) == 0 || lm_trans_c_call_arg_segment_at(frame -> body, 1U, &protocol_first, &protocol_stop) == 0 || lm_trans_c_call_arg_segment_at(frame -> body, 2U, &extra_first, &extra_stop) != 0) {
-        fprintf(stderr, "trans L2 error: instanceof expects exactly two class arguments\n");
+        fprintf(stderr, "trans L2 error: implements expects exactly two class arguments\n");
         return 1;
     }
     class_key = lm_trans_text_ref_new_cstr("");
@@ -14345,12 +14345,12 @@ static int lm_trans_expr_emit_instanceof_frame(FILE *file, LmTransExprStack *sta
         return 1;
     }
     status = 0;
-    if (lm_trans_instanceof_arg_key(class_first, class_stop, class_key) == 0 || lm_trans_instanceof_arg_key(protocol_first, protocol_stop, protocol_key) == 0) {
-        fprintf(stderr, "trans L2 error: instanceof expects class-like atoms\n");
+    if (lm_trans_implements_arg_key(class_first, class_stop, class_key) == 0 || lm_trans_implements_arg_key(protocol_first, protocol_stop, protocol_key) == 0) {
+        fprintf(stderr, "trans L2 error: implements expects class-like atoms\n");
         status = 1;
     }
     else {
-        result = lm_trans_instanceof(namespace_, class_key, protocol_key);
+        result = lm_trans_implements(namespace_, class_key, protocol_key);
         if (result != 0) {
             status = lm_trans_put(file, "1") != 0;
         }
@@ -25825,7 +25825,7 @@ static int lm_trans_pointer_bindings_init(void) {
     if (status == 0 && lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_contextual_literal", &lm_trans_expr_emit_contextual_literal, &lm_trans_expr_state_value) != 0) {
         status = 1;
     }
-    if (status == 0 && (lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_operator", &lm_trans_expr_emit_raw, &lm_trans_expr_state_operator) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_deref", &lm_trans_expr_emit_raw, &lm_trans_expr_state_deref) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_pointer_follow", &lm_trans_expr_emit_raw, &lm_trans_expr_state_pointer_follow) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_c_dot", &lm_trans_expr_emit_raw, &lm_trans_expr_state_c_dot) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_cast_frame", &lm_trans_expr_emit_cast_frame) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_instanceof_frame", &lm_trans_expr_emit_instanceof_frame) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_implements_frame", &lm_trans_expr_emit_instanceof_frame) != 0)) {
+    if (status == 0 && (lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_operator", &lm_trans_expr_emit_raw, &lm_trans_expr_state_operator) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_deref", &lm_trans_expr_emit_raw, &lm_trans_expr_state_deref) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_pointer_follow", &lm_trans_expr_emit_raw, &lm_trans_expr_state_pointer_follow) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_c_dot", &lm_trans_expr_emit_raw, &lm_trans_expr_state_c_dot) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_cast_frame", &lm_trans_expr_emit_cast_frame) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_implements_frame", &lm_trans_expr_emit_implements_frame) != 0)) {
         status = 1;
     }
     if (status == 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_return", &lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_if", &lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_while", &lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_else", &lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", &lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_finally", &lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_assert", &lm_trans_statement_emit_assert) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", &lm_trans_statement_emit_loop_jump) != 0)) {

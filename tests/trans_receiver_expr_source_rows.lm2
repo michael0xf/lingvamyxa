@@ -3,7 +3,7 @@ table:
     name: `receiver.expr`
     columns((class: class) (binding: receiver))
     rows:
-             directCast  lm_trans_expr_emit_instanceof_frame
+             directCast  lm_trans_expr_emit_implements_frame
              directCast  lm_trans_expr_emit_cast_frame
              directCast  None
 end: `receiver.expr`
