@@ -30,6 +30,10 @@ set(LM_REST_LMX_CLIENT_PROVIDER "auto" CACHE STRING
     "REST/LMX client provider: auto, none, libcurl, or winhttp"
 )
 set_property(CACHE LM_REST_LMX_CLIENT_PROVIDER PROPERTY STRINGS auto none libcurl winhttp)
+set(LM_REST_LMX_SERVER_PROVIDER "auto" CACHE STRING
+    "REST/LMX server provider: auto, none, or civetweb"
+)
+set_property(CACHE LM_REST_LMX_SERVER_PROVIDER PROPERTY STRINGS auto none civetweb)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(LingvamyxaThirdParty)
 
@@ -131,6 +135,73 @@ if (LINGVAMYXA_ENABLE_BUNDLED_THIRD_PARTY)
     lm_register_bundled_third_party(LM_BUNDLED_THIRD_PARTY_TARGETS)
     list(APPEND LM_THIRD_PARTY_TARGETS ${LM_BUNDLED_THIRD_PARTY_TARGETS})
 endif()
+
+# ---- REST/LMX server provider ----
+
+string(TOLOWER "${LM_REST_LMX_SERVER_PROVIDER}" LM_REST_LMX_SERVER_PROVIDER_REQUESTED)
+set(LM_REST_LMX_SERVER_PROVIDER_VALUES auto none civetweb)
+if (NOT LM_REST_LMX_SERVER_PROVIDER_REQUESTED IN_LIST LM_REST_LMX_SERVER_PROVIDER_VALUES)
+    message(FATAL_ERROR
+        "Unsupported LM_REST_LMX_SERVER_PROVIDER='${LM_REST_LMX_SERVER_PROVIDER}'. "
+        "Expected one of: auto, none, civetweb."
+    )
+endif()
+
+if (LM_THREAD_PROVIDER_RESOLVED STREQUAL "single")
+    if (LM_REST_LMX_SERVER_PROVIDER_REQUESTED STREQUAL "civetweb")
+        message(FATAL_ERROR
+            "LM_REST_LMX_SERVER_PROVIDER=civetweb cannot be used with "
+            "LM_THREAD_PROVIDER=single because CivetWeb dispatches requests "
+            "from worker threads while the single provider's mutexes are no-ops"
+        )
+    endif()
+    set(LM_REST_LMX_SERVER_PROVIDER_RESOLVED none)
+elseif (LM_REST_LMX_SERVER_PROVIDER_REQUESTED STREQUAL "none")
+    set(LM_REST_LMX_SERVER_PROVIDER_RESOLVED none)
+else()
+    if (NOT TARGET civetweb_bundled AND NOT TARGET civetweb::civetweb)
+        find_package(civetweb CONFIG QUIET)
+    endif()
+
+    if (TARGET civetweb_bundled)
+        set(LM_REST_LMX_SERVER_PROVIDER_TARGET civetweb_bundled)
+    elseif (TARGET civetweb::civetweb)
+        set(LM_REST_LMX_SERVER_PROVIDER_TARGET civetweb::civetweb)
+    endif()
+
+    if (LM_REST_LMX_SERVER_PROVIDER_TARGET)
+        set(LM_REST_LMX_SERVER_PROVIDER_RESOLVED civetweb)
+    elseif (LM_REST_LMX_SERVER_PROVIDER_REQUESTED STREQUAL "civetweb")
+        message(FATAL_ERROR
+            "LM_REST_LMX_SERVER_PROVIDER=civetweb requires either the "
+            "civetweb_bundled or civetweb::civetweb target"
+        )
+    else()
+        set(LM_REST_LMX_SERVER_PROVIDER_RESOLVED none)
+        message(STATUS
+            "CivetWeb was not found; automatic REST/LMX server provider is none"
+        )
+    endif()
+endif()
+
+string(TOUPPER
+    "${LM_REST_LMX_SERVER_PROVIDER_RESOLVED}"
+    LM_REST_LMX_SERVER_PROVIDER_DEFINE_SUFFIX
+)
+add_library(lm_rest_lmx_server_provider INTERFACE)
+target_compile_definitions(lm_rest_lmx_server_provider INTERFACE
+    "LM_REST_LMX_SERVER_PROVIDER=LM_REST_LMX_SERVER_PROVIDER_${LM_REST_LMX_SERVER_PROVIDER_DEFINE_SUFFIX}"
+)
+if (LM_REST_LMX_SERVER_PROVIDER_RESOLVED STREQUAL "civetweb")
+    target_link_libraries(lm_rest_lmx_server_provider INTERFACE
+        ${LM_REST_LMX_SERVER_PROVIDER_TARGET}
+    )
+endif()
+
+message(STATUS
+    "Lingvamyxa REST/LMX server provider: "
+    "${LM_REST_LMX_SERVER_PROVIDER_REQUESTED} -> ${LM_REST_LMX_SERVER_PROVIDER_RESOLVED}"
+)
 
 # ---- REST/LMX client provider ----
 
@@ -266,6 +337,9 @@ set(LM1_GENERATED_BUILD_CORE_C "${LM1_GENERATED_DIR}/buildCore.lm1.c")
 set(LM1_GENERATED_REST_LMX_HTTP_CLIENT_C
     "${LM1_GENERATED_DIR}/rest_lmx_http_client.lm1.c"
 )
+set(LM1_GENERATED_REST_LMX_HTTP_SERVER_C
+    "${LM1_GENERATED_DIR}/rest_lmx_http_server.lm1.c"
+)
 set(LM2_CORE_REGISTRY "${CMAKE_CURRENT_SOURCE_DIR}/lm2/core.lm2")
 set(LM2_TRANS_REGISTRY "${CMAKE_CURRENT_SOURCE_DIR}/lm2/trans_registry.lm2")
 set(LM2_PARSER_REGISTRY "${CMAKE_CURRENT_SOURCE_DIR}/lm2/parser_registry.lm2")
@@ -285,6 +359,12 @@ set(LM2_REST_LMX_HTTP_CLIENT
 set(LM2_REST_LMX_HTTP_CLIENT_ABI
     "${CMAKE_CURRENT_SOURCE_DIR}/lm2/rest_lmx_http_client_abi.lm2"
 )
+set(LM2_REST_LMX_HTTP_SERVER
+    "${CMAKE_CURRENT_SOURCE_DIR}/lm2/rest_lmx_http_server.lm2"
+)
+set(LM2_REST_LMX_HTTP_SERVER_ABI
+    "${CMAKE_CURRENT_SOURCE_DIR}/lm2/rest_lmx_http_server_abi.lm2"
+)
 set(LM2_TO_LM1_REGISTRY_DEPS
     "${LM2_CORE_REGISTRY}"
     "${LM2_TRANS_REGISTRY}"
@@ -300,6 +380,7 @@ set(LM2_TO_LM1_REGISTRY_DEPS
     "${LM2_TABLE_DESCRIPTOR}"
     "${LM2_TABLE_DESCRIPTOR_MODEL}"
     "${LM2_REST_LMX_HTTP_CLIENT_ABI}"
+    "${LM2_REST_LMX_HTTP_SERVER_ABI}"
 )
 
 # ---- Generated L1 ownership helper ----
@@ -326,6 +407,41 @@ if (BUILD_TRANS_LM0 OR BUILD_PRINT_TREE_LM0 OR BUILD_VCPKG_FETCH_LM0 OR BUILD_BU
     else()
         target_compile_options(own.lm1 PRIVATE -Wall -Wextra -Wpedantic)
     endif()
+endif()
+
+# ---- Optional generated REST/LMX HTTP server adapter ----
+
+if (TARGET own.lm1)
+    set_source_files_properties(
+        "${LM1_GENERATED_REST_LMX_HTTP_SERVER_C}"
+        PROPERTIES GENERATED TRUE
+    )
+    add_library(rest_lmx_http_server.lm1 STATIC EXCLUDE_FROM_ALL
+        "${LM1_GENERATED_REST_LMX_HTTP_SERVER_C}"
+    )
+
+    target_include_directories(rest_lmx_http_server.lm1 PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/lm1
+    )
+
+    target_link_libraries(rest_lmx_http_server.lm1 PUBLIC
+        own.lm1
+        lm_rest_lmx_server_provider
+    )
+
+    if (MSVC)
+        target_compile_options(rest_lmx_http_server.lm1 PRIVATE /W4)
+    else()
+        target_compile_options(rest_lmx_http_server.lm1 PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    add_library(lm_rest_lmx_default_server INTERFACE)
+    target_link_libraries(lm_rest_lmx_default_server INTERFACE
+        rest_lmx_http_server.lm1
+    )
+    target_compile_definitions(lm_rest_lmx_default_server INTERFACE
+        LM_REST_LMX_INSTALL_DEFAULT_SERVER=1
+    )
 endif()
 
 # ---- Optional generated REST/LMX HTTP client adapter ----
@@ -463,6 +579,25 @@ if (BUILD_TRANS_LM0)
         )
     endif()
 
+    add_custom_target(refresh_rest_lmx_http_server_lm1
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}"
+        COMMAND $<TARGET_FILE:trans.lm0>
+            "${LM2_REST_LMX_HTTP_SERVER}"
+            "${LM1_GENERATED_REST_LMX_HTTP_SERVER_C}"
+        DEPENDS
+            trans.lm0
+            "${LM2_REST_LMX_HTTP_SERVER}"
+            ${LM2_TO_LM1_REGISTRY_DEPS}
+        COMMENT "Refreshing lm1/build/rest_lmx_http_server.lm1.c from lm2/rest_lmx_http_server.lm2"
+        VERBATIM
+    )
+    if (TARGET rest_lmx_http_server.lm1)
+        add_dependencies(
+            rest_lmx_http_server.lm1
+            refresh_rest_lmx_http_server_lm1
+        )
+    endif()
+
     add_custom_command(
         OUTPUT "${LM1_GENERATED_PRINT_TREE_C}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}"
@@ -525,6 +660,7 @@ if (BUILD_TRANS_LM0)
             refresh_trans_lm1
             refresh_parser_lm1
             refresh_rest_lmx_http_client_lm1
+            refresh_rest_lmx_http_server_lm1
             "${LM1_GENERATED_PRINT_TREE_C}"
             "${LM1_GENERATED_MAKE_C}"
             "${LM1_GENERATED_VCPKG_FETCH_C}"

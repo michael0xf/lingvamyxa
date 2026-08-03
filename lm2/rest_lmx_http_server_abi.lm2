@@ -1,0 +1,72 @@
+predef: "lm2/own_abi.lm2"
+
+table:
+    name: `forward.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmRestLmxHttpServer  c.struct
+end: `forward.backend`
+
+table:
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmRestLmxHttpServer           c.named-struct
+             LmRestLmxHttpServerOptionsV1  c.struct
+end: `layout.backend`
+
+table:
+    name: `class.reference-base`
+    columns((class: class) (int: value))
+    rows:
+             LmRestLmxHttpServer           1
+             LmRestLmxHttpServerOptionsV1  1
+end: `class.reference-base`
+
+table:
+    name: `LmRestLmxHttpServerOptionsV1.field.class`
+    columns((class: class) (class: field))
+    rows:
+             abi_size            size_t
+             bind_address        char
+             port                unsigned
+             base_path           char
+             max_body_bytes      size_t
+             worker_count        unsigned
+             request_timeout_ms  unsigned
+end: `LmRestLmxHttpServerOptionsV1.field.class`
+
+table:
+    name: `LmRestLmxHttpServerOptionsV1.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             abi_size            0
+             bind_address        1
+             port                2
+             base_path           3
+             max_body_bytes      4
+             worker_count        5
+             request_timeout_ms  6
+end: `LmRestLmxHttpServerOptionsV1.field.index`
+
+table:
+    name: `LmRestLmxHttpServerOptionsV1.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             bind_address  1
+             base_path     1
+end: `LmRestLmxHttpServerOptionsV1.field.address-depth`
+
+table:
+    name: `LmRestLmxHttpServerOptionsV1.field.const`
+    columns((class: class) (int: value))
+    rows:
+             bind_address  1
+             base_path     1
+end: `LmRestLmxHttpServerOptionsV1.field.const`
+
+fn: lm_rest_lmx_http_server_provider_name () const: @: char
+fn: lm_rest_lmx_http_server_start (LmMessageThreadRuntime: runtime; const: (LmRestLmxHttpServerOptionsV1: options); @: LmRestLmxHttpServer out_server) int
+fn: lm_rest_lmx_http_server_start_default (LmMessageThreadRuntime: runtime; @: LmRestLmxHttpServer out_server) int
+fn: lm_rest_lmx_http_server_stop (@: LmRestLmxHttpServer server) int
+fn: lm_rest_lmx_http_server_port (const: (LmRestLmxHttpServer: server); @: unsigned out_port) int

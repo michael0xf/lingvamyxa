@@ -23,6 +23,11 @@ struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
 #ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT
 int lm_rest_lmx_http_client_install_default(struct LmMessageThreadRuntime *runtime);
 #endif
+#ifdef LM_REST_LMX_INSTALL_DEFAULT_SERVER
+typedef struct LmRestLmxHttpServer LmRestLmxHttpServer;
+int lm_rest_lmx_http_server_start_default(struct LmMessageThreadRuntime *runtime, LmRestLmxHttpServer **out_server);
+int lm_rest_lmx_http_server_stop(LmRestLmxHttpServer **server);
+#endif
 int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_exit_state(struct LmMessageThreadRuntime *runtime, int *requested, int *ready, int *status);

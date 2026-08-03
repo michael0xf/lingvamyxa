@@ -1,0 +1,13 @@
+thread: lm_test_rest_lmx_http_server_none_target (IncomingMessage: message)
+    route: "/rest-lmx-http-server-none"
+    if: message\lmx = 0
+        stop: 11
+        return:
+    ---
+end: lm_test_rest_lmx_http_server_none_target
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

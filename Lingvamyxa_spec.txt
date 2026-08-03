@@ -11132,6 +11132,94 @@ maps to `LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR`. The HTTP response body is
 not an implicit semantic reply: replies remain complete LMX Messages addressed
 through `replyTo` and correlated with `id`.
 
+The inbound side uses the same endpoint-plus-route model. A listener is mounted
+at one endpoint base path and removes that prefix byte-for-byte from the raw
+HTTP request path; the remaining absolute path is the local MessageThread
+route. Neither the provider nor the runtime URL-decodes or canonicalizes the
+route. For example, endpoint `http://127.0.0.1:8080/lmx` and route
+`/worker/%2Fraw` correspond to request path `/lmx/worker/%2Fraw`, and `%2F`
+remains three literal bytes while routes are matched. A query component is not
+part of an address and is rejected. The complete envelope inside the LMX body
+still contains `to`, `replyTo`, `id` and `correlation`; checking it against the
+transport address belongs to the later validation pipeline.
+
+The hosted server ABI is:
+
+    typedef struct LmRestLmxHttpServerOptionsV1 {
+        size_t abi_size;
+        const char *bind_address;
+        unsigned port;
+        const char *base_path;
+        size_t max_body_bytes;
+        unsigned worker_count;
+        unsigned request_timeout_ms;
+    } LmRestLmxHttpServerOptionsV1;
+
+    int lm_rest_lmx_http_server_start(
+        LmMessageThreadRuntime *runtime,
+        const LmRestLmxHttpServerOptionsV1 *options,
+        LmRestLmxHttpServer **out_server
+    );
+
+    int lm_rest_lmx_http_server_start_default(
+        LmMessageThreadRuntime *runtime,
+        LmRestLmxHttpServer **out_server
+    );
+
+    int lm_rest_lmx_http_server_stop(LmRestLmxHttpServer **server);
+
+`start` exposes the listener only after the caller has bound its routes.
+The server pointer is an output parameter: `start` initializes it to NULL
+before attempting startup, so callers do not have to initialize the slot.
+`stop` is blocking, consumes the handle and returns only after listener and
+request callbacks have stopped; it is therefore called before route, pool or
+runtime destruction. Generated applications start the default server after the
+last successful source `thread:` binding and stop it before destructive
+teardown. A provider may intentionally be `none`: successful start then returns
+a NULL handle and generated startup continues without a listener. Manual users
+must preserve the same lifetime order.
+Calls which start or stop hosted server instances are serialized by the
+application controller; CivetWeb library initialization is process-global and
+is not itself a concurrent-start primitive.
+
+The current REST/LMX request profile is deliberately narrow:
+
+    method                 POST
+    Content-Type           application/lmx
+    body framing           exactly one decimal Content-Length
+    successful admission   HTTP 202 with an empty response body
+
+Transfer-Encoding/chunked requests and missing lengths return 411. Malformed
+paths, lengths or incomplete bodies return 400; an unbound route returns 404;
+other methods return 405 with `Allow: POST`; a body above the configured limit
+returns 413; another media type returns 415; application/route shutdown returns
+503. An unexpected internal admission failure returns 500. HTTP 202 confirms
+only that exact LMX bytes were copied into the route-selected FIFO inbox. It is
+not an execution result or a semantic reply.
+
+The hosted inbound adapter is selected at build time by:
+
+    LM_REST_LMX_SERVER_PROVIDER = auto | none | civetweb
+
+`auto` selects an available bundled or package CivetWeb target for a native
+pthread or Win32 runtime and otherwise resolves to `none`. CivetWeb is rejected
+with the `single` host-thread provider because its callbacks run concurrently
+while `single` mutex operations are intentionally no-ops. The CMake interface
+target `lm_rest_lmx_default_server` links the selected adapter and enables the
+generated lifecycle hooks without adding CivetWeb to bootstrap utilities.
+
+The initial CivetWeb profile is an HTTP listener. HTTPS endpoint identity is
+preserved by placing it behind a TLS reverse proxy; enabling direct server-side
+TLS later does not change endpoint-plus-route addressing. Files, CGI and cache
+serving are disabled, URL decoding and keep-alive are disabled, and every
+request is handled by the admission callback. Default runtime settings are
+loopback address `127.0.0.1`, port `8080`, empty base path, a 1 MiB body limit,
+four HTTP workers and a 10-second request timeout. They may be overridden by
+`LM_REST_LMX_LISTEN_ADDRESS`, `LM_REST_LMX_LISTEN_PORT`,
+`LM_REST_LMX_BASE_PATH`, `LM_REST_LMX_MAX_BODY_BYTES`,
+`LM_REST_LMX_WORKER_COUNT` and `LM_REST_LMX_REQUEST_TIMEOUT_MS`; explicit C API
+options may use port zero to request an ephemeral test port.
+
 Dispatch is a registry query, not object magic.
 
 The execution step may produce result values, diagnostics, state updates and
@@ -13695,6 +13783,10 @@ Current hosted-bootstrap implementation:
     the transport-neutral inbound admission ABI copies complete binary LMX
         bodies into route-selected FIFO inboxes, wakes idle actors and rejects
         new external work once application exit or route shutdown begins;
+    the hosted inbound REST/LMX adapter implements byte-exact endpoint-base and
+        route mapping with CivetWeb, or an explicit `none` provider; generated
+        startup opens it after source routes and blocks in server stop before
+        route, pool and runtime destruction;
     source `thread:` declarations create one route-bound mailbox actor and lower
         one dequeued LMX document to one `IncomingMessage` handler turn;
     source `send:` is implemented for local and explicitly addressed HTTP(S)
@@ -13707,9 +13799,9 @@ Current hosted-bootstrap implementation:
         controller stops and joins the application pool, completes the root
         boundary and releases runtime resources before host return;
     the neutral remote-provider hook, delivery-result mapping, outbound HTTP
-        client adapter and transport-neutral inbound admission are implemented;
-        an inbound HTTP server adapter,
-        message parsing/validation, reply routing and envelope/address
+        client adapter, transport-neutral inbound admission and inbound HTTP
+        server adapter are implemented; message parsing/validation, direct
+        inbound TLS, reply routing and envelope/address
         consistency checking remain separate work;
     `reply`, `await` and `schedule` are not yet implemented as generic source
         operations; shutdown across several manually constructed runtimes or

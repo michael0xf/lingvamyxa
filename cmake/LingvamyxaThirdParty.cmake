@@ -198,6 +198,9 @@ function(lm_register_bundled_third_party out_var)
     target_compile_definitions(civetweb_bundled
         PRIVATE
             NO_SSL
+            NO_FILES
+            NO_CGI
+            NO_CACHING
             USE_STACK_SIZE=0
     )
     if (WIN32)

@@ -74,6 +74,8 @@ lm1/build/*
 !lm1/build/make.lm1.c
 !lm1/build/own.lm1.c
 !lm1/build/parser.lm1.c
+!lm1/build/rest_lmx_http_client.lm1.c
+!lm1/build/rest_lmx_http_server.lm1.c
 !lm1/build/trans.lm1.c
 
 # vcpkg source-catalog local state.

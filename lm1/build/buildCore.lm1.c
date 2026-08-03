@@ -26,6 +26,11 @@ struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
 #ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT
 int lm_rest_lmx_http_client_install_default(struct LmMessageThreadRuntime *runtime);
 #endif
+#ifdef LM_REST_LMX_INSTALL_DEFAULT_SERVER
+typedef struct LmRestLmxHttpServer LmRestLmxHttpServer;
+int lm_rest_lmx_http_server_start_default(struct LmMessageThreadRuntime *runtime, LmRestLmxHttpServer **out_server);
+int lm_rest_lmx_http_server_stop(LmRestLmxHttpServer **server);
+#endif
 int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_exit_state(struct LmMessageThreadRuntime *runtime, int *requested, int *ready, int *status);
@@ -913,6 +918,33 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_CLIENT_PROVIDER=0' '-Ilm1' 'lm1/build/rest_lmx_http_client.lm1.c' 'tests/rest_lmx_http_client_none.c' $ownLib '-o' $restLmxNoneTest\n", file);
     fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX none-client test link failed' }\n", file);
     fputs("Invoke-LmTestWithTimeout $restLmxNoneTest 'REST/LMX none-client test'\n", file);
+    fputs("$restLmxServerNoneTest = Join-Path 'build/obj/tests' 'rest_lmx_http_server_none.exe'\n", file);
+    fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_SERVER_PROVIDER=0' '-Ilm1' 'lm1/build/rest_lmx_http_server.lm1.c' 'tests/rest_lmx_http_server_none.c' $ownLib '-o' $restLmxServerNoneTest\n", file);
+    fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX none-server test link failed' }\n", file);
+    fputs("Invoke-LmTestWithTimeout $restLmxServerNoneTest 'REST/LMX none-server test'\n", file);
+    fputs("$httpServerDefaultC = Join-Path 'build/obj/tests' 'rest_lmx_http_server_default_source.c'\n", file);
+    fputs("$httpServerDefaultTest = Join-Path 'build/obj/tests' 'rest_lmx_http_server_default.exe'\n", file);
+    fputs("& $trans 'tests/rest_lmx_http_server_default_source.lm2' $httpServerDefaultC\n", file);
+    fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX default-server lowering test translation failed' }\n", file);
+    fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_INSTALL_DEFAULT_SERVER=1' '-Ilm1' $httpServerDefaultC 'tests/trans_rest_lmx_http_server_default_stub.c' $parserLib $ownLib '-o' $httpServerDefaultTest\n", file);
+    fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX default-server lowering test link failed' }\n", file);
+    fputs("Invoke-LmTestWithTimeout $httpServerDefaultTest 'REST/LMX default-server lowering test'\n", file);
+    fputs("$previousServerStartFailure = $env:LM_TEST_REST_LMX_SERVER_START_FAIL\n", file);
+    fputs("try {\n", file);
+    fputs("    $env:LM_TEST_REST_LMX_SERVER_START_FAIL = '1'\n", file);
+    fputs("    & (Resolve-Path -LiteralPath $httpServerDefaultTest).Path\n", file);
+    fputs("    if ($LASTEXITCODE -ne 1) { throw ('REST/LMX server start failure returned ' + $LASTEXITCODE + ', expected 1') }\n", file);
+    fputs("}\n", file);
+    fputs("finally {\n", file);
+    fputs("    if ($null -eq $previousServerStartFailure) { Remove-Item Env:LM_TEST_REST_LMX_SERVER_START_FAIL -ErrorAction SilentlyContinue } else { $env:LM_TEST_REST_LMX_SERVER_START_FAIL = $previousServerStartFailure }\n", file);
+    fputs("}\n", file);
+    fputs("$httpServerNoneC = Join-Path 'build/obj/tests' 'rest_lmx_http_server_none_source.c'\n", file);
+    fputs("$httpServerNoneLifecycleTest = Join-Path 'build/obj/tests' 'rest_lmx_http_server_none_lifecycle.exe'\n", file);
+    fputs("& $trans 'tests/rest_lmx_http_server_none_source.lm2' $httpServerNoneC\n", file);
+    fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX none-server lifecycle translation failed' }\n", file);
+    fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_INSTALL_DEFAULT_SERVER=1' '-Ilm1' $httpServerNoneC 'tests/trans_rest_lmx_http_server_none_stub.c' $parserLib $ownLib '-o' $httpServerNoneLifecycleTest\n", file);
+    fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX none-server lifecycle test link failed' }\n", file);
+    fputs("Invoke-LmTestWithTimeout $httpServerNoneLifecycleTest 'REST/LMX none-server lifecycle test'\n", file);
     fputs("$previousThreadProvider = $env:LM_THREAD_PROVIDER\n", file);
     fputs("try {\n", file);
     fputs("    $singlePoolTest = Join-Path 'build/obj/tests' 'trans_message_thread_pool_single.exe'\n", file);
@@ -1188,6 +1220,26 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("rest_lmx_none_test='build/obj/tests/rest_lmx_http_client_none'\n", file);
     fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_CLIENT_PROVIDER=0 -Ilm1 lm1/build/rest_lmx_http_client.lm1.c tests/rest_lmx_http_client_none.c \"$ownLib\" -o \"$rest_lmx_none_test\"\n", file);
     fputs("lm_run_with_watchdog \"$rest_lmx_none_test\"\n", file);
+    fputs("rest_lmx_server_none_test='build/obj/tests/rest_lmx_http_server_none'\n", file);
+    fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_SERVER_PROVIDER=0 -Ilm1 lm1/build/rest_lmx_http_server.lm1.c tests/rest_lmx_http_server_none.c \"$ownLib\" -o \"$rest_lmx_server_none_test\"\n", file);
+    fputs("lm_run_with_watchdog \"$rest_lmx_server_none_test\"\n", file);
+    fputs("http_server_default_c='build/obj/tests/rest_lmx_http_server_default_source.c'\n", file);
+    fputs("http_server_default_test='build/obj/tests/rest_lmx_http_server_default'\n", file);
+    fputs("\"$trans\" tests/rest_lmx_http_server_default_source.lm2 \"$http_server_default_c\"\n", file);
+    fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_INSTALL_DEFAULT_SERVER=1 -Ilm1 \"$http_server_default_c\" tests/trans_rest_lmx_http_server_default_stub.c \"$parserLib\" \"$ownLib\" -o \"$http_server_default_test\"\n", file);
+    fputs("lm_run_with_watchdog \"$http_server_default_test\"\n", file);
+    fputs("if LM_TEST_REST_LMX_SERVER_START_FAIL=1 lm_run_with_watchdog \"$http_server_default_test\"; then\n", file);
+    fputs("    echo 'REST/LMX server start failure unexpectedly succeeded' >&2\n", file);
+    fputs("    exit 1\n", file);
+    fputs("else\n", file);
+    fputs("    server_start_failure_status=$?\n", file);
+    fputs("    if [ \"$server_start_failure_status\" -ne 1 ]; then echo \"REST/LMX server start failure returned $server_start_failure_status, expected 1\" >&2; exit 1; fi\n", file);
+    fputs("fi\n", file);
+    fputs("http_server_none_c='build/obj/tests/rest_lmx_http_server_none_source.c'\n", file);
+    fputs("http_server_none_lifecycle_test='build/obj/tests/rest_lmx_http_server_none_lifecycle'\n", file);
+    fputs("\"$trans\" tests/rest_lmx_http_server_none_source.lm2 \"$http_server_none_c\"\n", file);
+    fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_INSTALL_DEFAULT_SERVER=1 -Ilm1 \"$http_server_none_c\" tests/trans_rest_lmx_http_server_none_stub.c \"$parserLib\" \"$ownLib\" -o \"$http_server_none_lifecycle_test\"\n", file);
+    fputs("lm_run_with_watchdog \"$http_server_none_lifecycle_test\"\n", file);
     fputs("single_pool_test='build/obj/tests/trans_message_thread_pool_single'\n", file);
     fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c build/obj/tests/trans_message_thread_pool_single.c -o \"$single_pool_test\"\n", file);
     fputs("lm_run_with_watchdog \"$single_pool_test\"\n", file);
@@ -1617,6 +1669,9 @@ static int lm_build_generate_all(struct LmMessageThread *lm_lmx_message_thread, 
         return 1;
     }
     if (lm_build_trans(lm_lmx_message_thread, trans_tool, "lm2/rest_lmx_http_client.lm2", "lm1/build/rest_lmx_http_client.lm1.c") != 0) {
+        return 1;
+    }
+    if (lm_build_trans(lm_lmx_message_thread, trans_tool, "lm2/rest_lmx_http_server.lm2", "lm1/build/rest_lmx_http_server.lm1.c") != 0) {
         return 1;
     }
     if (lm_build_trans(lm_lmx_message_thread, trans_tool, "lm2/trans.lm2", "lm1/build/trans.lm1.c") != 0) {

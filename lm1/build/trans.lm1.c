@@ -23,6 +23,11 @@ struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
 #ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT
 int lm_rest_lmx_http_client_install_default(struct LmMessageThreadRuntime *runtime);
 #endif
+#ifdef LM_REST_LMX_INSTALL_DEFAULT_SERVER
+typedef struct LmRestLmxHttpServer LmRestLmxHttpServer;
+int lm_rest_lmx_http_server_start_default(struct LmMessageThreadRuntime *runtime, LmRestLmxHttpServer **out_server);
+int lm_rest_lmx_http_server_stop(LmRestLmxHttpServer **server);
+#endif
 int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_exit_state(struct LmMessageThreadRuntime *runtime, int *requested, int *ready, int *status);
@@ -18116,6 +18121,9 @@ static int lm_trans_emit_message_thread_runtime_prelude(struct LmMessageThread *
     if (lm_trans_put(lm_lmx_message_thread, file, "#ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT\nint lm_rest_lmx_http_client_install_default(struct LmMessageThreadRuntime *runtime);\n#endif\n") != 0) {
         return 1;
     }
+    if (lm_trans_put(lm_lmx_message_thread, file, "#ifdef LM_REST_LMX_INSTALL_DEFAULT_SERVER\ntypedef struct LmRestLmxHttpServer LmRestLmxHttpServer;\nint lm_rest_lmx_http_server_start_default(struct LmMessageThreadRuntime *runtime, LmRestLmxHttpServer **out_server);\nint lm_rest_lmx_http_server_stop(LmRestLmxHttpServer **server);\n#endif\n") != 0) {
+        return 1;
+    }
     if (lm_trans_put(lm_lmx_message_thread, file, "int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);\n") != 0) {
         return 1;
     }
@@ -18537,7 +18545,19 @@ static int lm_trans_emit_message_thread_main_exit_query(struct LmMessageThread *
 static int lm_trans_emit_message_thread_main_exit_stop_if_ready(struct LmMessageThread *lm_lmx_message_thread, FILE *file, unsigned indent, int has_pool) {
     (void)lm_lmx_message_thread;
     if (has_pool) {
+        if (lm_trans_put(lm_lmx_message_thread, file, "#ifdef LM_REST_LMX_INSTALL_DEFAULT_SERVER\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_lmx_application_exit_ready && lm_lmx_application_pool != 0 && lm_lmx_rest_lmx_http_server == 0) lm_message_thread_pool_request_stop(lm_lmx_application_pool);\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_put(lm_lmx_message_thread, file, "#else\n") != 0) {
+            return 1;
+        }
         if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_lmx_application_exit_ready && lm_lmx_application_pool != 0) lm_message_thread_pool_request_stop(lm_lmx_application_pool);\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_put(lm_lmx_message_thread, file, "#endif\n") != 0) {
             return 1;
         }
     }
@@ -18622,6 +18642,15 @@ static int lm_trans_emit_message_thread_main_root(struct LmMessageThread *lm_lmx
     }
     if (thread_count != 0U) {
         if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "struct LmMessageThreadPool *lm_lmx_application_pool = 0;\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_put(lm_lmx_message_thread, file, "#ifdef LM_REST_LMX_INSTALL_DEFAULT_SERVER\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "LmRestLmxHttpServer *lm_lmx_rest_lmx_http_server = 0;\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_put(lm_lmx_message_thread, file, "#endif\n") != 0) {
             return 1;
         }
         if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "int lm_lmx_declared_thread_status = 0;\n") != 0) {
@@ -18725,6 +18754,15 @@ static int lm_trans_emit_message_thread_main_root(struct LmMessageThread *lm_lmx
             }
             index = index + 1U;
         }
+        if (lm_trans_put(lm_lmx_message_thread, file, "#ifdef LM_REST_LMX_INSTALL_DEFAULT_SERVER\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (!lm_lmx_thread_startup_failed && lm_rest_lmx_http_server_start_default(lm_lmx_application_runtime, &lm_lmx_rest_lmx_http_server) != 0) lm_lmx_thread_startup_failed = 1;\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_put(lm_lmx_message_thread, file, "#endif\n") != 0) {
+            return 1;
+        }
     }
     if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_lmx_thread_startup_failed) lm_message_thread_request_failure(lm_lmx_message_thread, 1);\n") != 0) {
         return 1;
@@ -18796,6 +18834,17 @@ static int lm_trans_emit_message_thread_main_end(struct LmMessageThread *lm_lmx_
     }
     if (lm_trans_emit_message_thread_main_exit_query(lm_lmx_message_thread, file, indent, 1) != 0) {
         return 1;
+    }
+    if (thread_count != 0U) {
+        if (lm_trans_put(lm_lmx_message_thread, file, "#ifdef LM_REST_LMX_INSTALL_DEFAULT_SERVER\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_lmx_rest_lmx_http_server != 0 && (lm_rest_lmx_http_server_stop(&lm_lmx_rest_lmx_http_server) != 0 || lm_lmx_rest_lmx_http_server != 0)) lm_lmx_thread_cleanup_failed = 1;\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_put(lm_lmx_message_thread, file, "#endif\n") != 0) {
+            return 1;
+        }
     }
     if (lm_trans_emit_message_thread_main_exit_stop_if_ready(lm_lmx_message_thread, file, indent, thread_count != 0U) != 0) {
         return 1;

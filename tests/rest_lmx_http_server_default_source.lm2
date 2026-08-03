@@ -1,0 +1,16 @@
+thread: lm_test_rest_lmx_http_server_target (IncomingMessage: message)
+    route: "/rest-lmx-http-server"
+    if: message\lmx = 0 || message\length != 3U
+        stop: 11
+        return:
+    ---
+    exit:
+end: lm_test_rest_lmx_http_server_target
+
+external:
+    fn: main () int
+        int: keep_running 1
+
+        assert: keep_running = 1
+    end: main
+end: external
