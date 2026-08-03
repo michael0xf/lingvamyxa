@@ -2540,7 +2540,8 @@ static const LmP0Frame * lm_trans_top_level_item_frame(struct LmMessageThread *l
 static int lm_trans_top_level_declare_generated_return_class(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransFunctionHeader *function);
 static int lm_trans_top_level_declare_function_params(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransFunctionHeader *function);
 static int lm_trans_top_level_declare_function_body_named_structures(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransFunctionHeader *function);
-static void lm_trans_function_apply_thread_context_profile(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, LmTransFunctionHeader *function);
+static int lm_trans_function_thread_context_profile(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *name, int is_external, int *out_has_thread_context);
+static int lm_trans_function_apply_thread_context_profile(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, LmTransFunctionHeader *function);
 static int lm_trans_top_level_declare_function(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_is_predefined_function_descriptor(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_declare_function_compatible(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
@@ -28514,19 +28515,48 @@ static int lm_trans_top_level_declare_function_body_named_structures(struct LmMe
     return status;
 }
 
-static void lm_trans_function_apply_thread_context_profile(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, LmTransFunctionHeader *function) {
+static int lm_trans_function_thread_context_profile(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *name, int is_external, int *out_has_thread_context) {
     (void)lm_lmx_message_thread;
-    if (function == 0) {
-        return;
+    int managed_context;
+    int no_context;
+    if (name == 0 || out_has_thread_context == 0) {
+        return 1;
     }
-    if (lm_trans_namespace_registry_source_path_n2_named_typed_value(lm_lmx_message_thread, namespace_, function -> name, "fn.thread-context.none", "class", "class", "value", "int") != 0) {
-        function->has_thread_context = 0;
+    managed_context = lm_trans_namespace_registry_source_path_n2_named_typed_value(lm_lmx_message_thread, namespace_, name, "fn.thread-context.managed", "class", "class", "value", "int") != 0;
+    no_context = lm_trans_namespace_registry_source_path_n2_named_typed_value(lm_lmx_message_thread, namespace_, name, "fn.thread-context.none", "class", "class", "value", "int") != 0;
+    if (managed_context && no_context) {
+        fprintf(stderr, "trans L2 error: function \"%.*s\" has conflicting thread-context profiles\n", (((int)name -> length)), name -> data);
+        return 1;
+    }
+    if (is_external && managed_context && lm_trans_text_equals(lm_lmx_message_thread, name, "main")) {
+        fprintf(stderr, "trans L2 error: external main cannot declare a managed thread-context ABI\n");
+        return 1;
+    }
+    if (no_context) {
+        out_has_thread_context[0] = 0;
     }
     else {
-        if (lm_trans_registry_is_function_pointer_type_name(lm_lmx_message_thread, namespace_, function -> name)) {
-            function->has_thread_context = lm_trans_function_pointer_type_has_managed_thread_context(lm_lmx_message_thread, namespace_, function -> name);
+        if (lm_trans_registry_is_function_pointer_type_name(lm_lmx_message_thread, namespace_, name)) {
+            out_has_thread_context[0] = managed_context;
+        }
+        else {
+            if (is_external) {
+                out_has_thread_context[0] = managed_context;
+            }
+            else {
+                out_has_thread_context[0] = 1;
+            }
         }
     }
+    return 0;
+}
+
+static int lm_trans_function_apply_thread_context_profile(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, LmTransFunctionHeader *function) {
+    (void)lm_lmx_message_thread;
+    if (function == 0) {
+        return 1;
+    }
+    return lm_trans_function_thread_context_profile(lm_lmx_message_thread, namespace_, function -> name, function -> is_external, &function -> has_thread_context);
 }
 
 static int lm_trans_top_level_declare_function(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
@@ -28535,7 +28565,9 @@ static int lm_trans_top_level_declare_function(struct LmMessageThread *lm_lmx_me
     if (item == 0 || item -> function == 0) {
         return 1;
     }
-    lm_trans_function_apply_thread_context_profile(lm_lmx_message_thread, namespace_, item -> function);
+    if (lm_trans_function_apply_thread_context_profile(lm_lmx_message_thread, namespace_, item -> function) != 0) {
+        return 1;
+    }
     if (lm_trans_registry_note_class_kind(lm_lmx_message_thread, item -> function -> name, item -> function -> symbol_class) != 0) {
         return 1;
     }
@@ -28581,21 +28613,20 @@ static int lm_trans_top_level_declare_function_compatible(struct LmMessageThread
     if (item == 0 || item -> function == 0) {
         return 1;
     }
-    lm_trans_function_apply_thread_context_profile(lm_lmx_message_thread, namespace_, item -> function);
     predefined_function = lm_trans_top_level_is_predefined_function_descriptor(lm_lmx_message_thread, namespace_, item);
     if (predefined_function) {
         if (item -> function -> is_sub == 0) {
             item->function->symbol_class = "function";
         }
         item->function->is_external = lm_trans_namespace_registry_source_path_n2_named_typed_value(lm_lmx_message_thread, namespace_, item -> function -> name, "fn.external", "class", "class", "value", "int") != 0;
-        if (item -> function -> is_external) {
-            item->function->has_thread_context = 0;
-        }
     }
     else {
         if (lm_trans_registry_note_class_kind(lm_lmx_message_thread, item -> function -> name, item -> function -> symbol_class) != 0) {
             return 1;
         }
+    }
+    if (lm_trans_function_apply_thread_context_profile(lm_lmx_message_thread, namespace_, item -> function) != 0) {
+        return 1;
     }
     if (lm_trans_namespace_declare_compatible(lm_lmx_message_thread, namespace_, item -> function -> name, item -> function -> symbol_class) != 0) {
         return 1;
@@ -29524,7 +29555,9 @@ static int lm_trans_top_level_emit_function_prototype(struct LmMessageThread *lm
     if (item == 0 || item -> function == 0) {
         return 1;
     }
-    lm_trans_function_apply_thread_context_profile(lm_lmx_message_thread, namespace_, item -> function);
+    if (lm_trans_function_apply_thread_context_profile(lm_lmx_message_thread, namespace_, item -> function) != 0) {
+        return 1;
+    }
     return lm_trans_emit_function_prototype(lm_lmx_message_thread, file, item -> function, namespace_);
 }
 
@@ -29534,7 +29567,9 @@ static int lm_trans_top_level_emit_function(struct LmMessageThread *lm_lmx_messa
     if (item == 0 || item -> function == 0) {
         return 1;
     }
-    lm_trans_function_apply_thread_context_profile(lm_lmx_message_thread, namespace_, item -> function);
+    if (lm_trans_function_apply_thread_context_profile(lm_lmx_message_thread, namespace_, item -> function) != 0) {
+        return 1;
+    }
     status = lm_trans_emit_function(lm_lmx_message_thread, file, item -> function, namespace_);
     if (status != 0) {
         return 1;
@@ -35483,7 +35518,9 @@ static int lm_trans_emit_l4_prototype_name(struct LmMessageThread *lm_lmx_messag
     class_kind = lm_trans_namespace_class_kind_value(lm_lmx_message_thread, namespace_, lm_trans_text_from_cstr(lm_lmx_message_thread, name));
     is_sub = class_kind != 0 && strcmp(class_kind, "procedure") == 0;
     is_external = lm_trans_fn_is_external(lm_lmx_message_thread, namespace_, lm_trans_text_from_cstr(lm_lmx_message_thread, name));
-    has_thread_context = is_external == 0 && lm_trans_namespace_registry_source_path_n2_named_typed_value(lm_lmx_message_thread, namespace_, lm_trans_text_from_cstr(lm_lmx_message_thread, name), "fn.thread-context.none", "class", "class", "value", "int") == 0;
+    if (lm_trans_function_thread_context_profile(lm_lmx_message_thread, namespace_, lm_trans_text_from_cstr(lm_lmx_message_thread, name), is_external, &has_thread_context) != 0) {
+        return 1;
+    }
     if (has_thread_context && lm_trans_emit_message_thread_runtime_prelude(lm_lmx_message_thread, lm_trans_prelude_file(lm_lmx_message_thread, file)) != 0) {
         return 1;
     }
@@ -35868,6 +35905,11 @@ static int lm_trans_declare_registry_sub_descriptor(struct LmMessageThread *lm_l
     function->is_sub = 1;
     function->is_descriptor_only = 1;
     function->is_external = lm_trans_fn_is_external(lm_lmx_message_thread, namespace_, name_text);
+    if (lm_trans_function_thread_context_profile(lm_lmx_message_thread, namespace_, name_text, function -> is_external, &function -> has_thread_context) != 0) {
+        lm_trans_function_header_destroy(lm_lmx_message_thread, function);
+        lm_trans_l4_text_view_delete(lm_lmx_message_thread, &name_text);
+        return 1;
+    }
     function->params = lm_trans_formal_param_list_from_node(lm_lmx_message_thread, function -> params_node, 1, "function parameters");
     if (function -> params == 0) {
         lm_trans_function_header_destroy(lm_lmx_message_thread, function);
@@ -35887,17 +35929,23 @@ static int lm_trans_declare_registry_fn_descriptor(struct LmMessageThread *lm_lm
     LmP0Node * frame_node;
     LmTransFunctionHeader * function;
     LmP0Text * name_text;
+    int has_thread_context;
     const char *receiver_name;
     int status;
     if (namespace_ == 0 || name == 0) {
         return 1;
     }
+    name_text = lm_trans_l4_text_view_new(lm_lmx_message_thread, name);
+    if (name_text == 0) {
+        return 1;
+    }
     if (lm_trans_l4_is_function_pointer_type(lm_lmx_message_thread, namespace_, name)) {
-        return 0;
+        status = lm_trans_function_thread_context_profile(lm_lmx_message_thread, namespace_, name_text, 0, &has_thread_context);
+        lm_trans_l4_text_view_delete(lm_lmx_message_thread, &name_text);
+        return status;
     }
     function = lm_trans_function_header_new(lm_lmx_message_thread);
-    name_text = lm_trans_l4_text_view_new(lm_lmx_message_thread, name);
-    if (function == 0 || name_text == 0) {
+    if (function == 0) {
         lm_trans_function_header_destroy(lm_lmx_message_thread, function);
         lm_trans_l4_text_view_delete(lm_lmx_message_thread, &name_text);
         return 1;
@@ -35928,6 +35976,11 @@ static int lm_trans_declare_registry_fn_descriptor(struct LmMessageThread *lm_lm
     function->return_node = return_node;
     function->symbol_class = "function";
     function->is_external = lm_trans_fn_is_external(lm_lmx_message_thread, namespace_, name_text);
+    if (lm_trans_function_thread_context_profile(lm_lmx_message_thread, namespace_, name_text, function -> is_external, &function -> has_thread_context) != 0) {
+        lm_trans_function_header_destroy(lm_lmx_message_thread, function);
+        lm_trans_l4_text_view_delete(lm_lmx_message_thread, &name_text);
+        return 1;
+    }
     function->params = lm_trans_formal_param_list_from_node(lm_lmx_message_thread, function -> params_node, 1, "function parameters");
     if (function -> params == 0) {
         lm_trans_function_header_destroy(lm_lmx_message_thread, function);

@@ -1,0 +1,13 @@
+table:
+    source
+    name: `fn.thread-context.managed`
+    columns((class: class) (int: value))
+    rows:
+             main  1
+end: `fn.thread-context.managed`
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

@@ -1,0 +1,74 @@
+predef: "fixtures/managed_external_abi.lm2"
+
+table:
+    source
+    name: `fn.thread-context.managed`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_defined_managed_external  1
+             lm_test_registry_managed_external 1
+end: `fn.thread-context.managed`
+
+table:
+    source
+    name: fn
+    columns((class: class) (class: descriptor) (class: receiver))
+    rows:
+             lm_test_registry_managed_external  function  fn
+end: fn
+
+table:
+    source
+    name: `fn.external`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_registry_managed_external  1
+end: `fn.external`
+
+table:
+    source
+    name: lm_test_registry_managed_external
+    columns((class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (class: `return.class`))
+    rows:
+             expected_thread  void  0     1     None
+             return           None  None  None  int
+end: lm_test_registry_managed_external
+
+prototype
+
+L1:
+===
+int lm_test_imported_managed_external(
+    struct LmMessageThread *lm_lmx_message_thread,
+    void *expected_thread
+) {
+    return lm_lmx_message_thread != 0 &&
+        lm_lmx_message_thread == expected_thread;
+}
+
+int lm_test_registry_managed_external(
+    struct LmMessageThread *lm_lmx_message_thread,
+    void *expected_thread
+) {
+    return lm_lmx_message_thread != 0 &&
+        lm_lmx_message_thread == expected_thread;
+}
+===
+
+external:
+    fn: lm_test_defined_managed_external (@: void expected_thread) int
+        return: c.lm_lmx_message_thread != 0 && c.lm_lmx_message_thread = expected_thread
+    end: lm_test_defined_managed_external
+end: external
+
+external:
+    fn: main () int
+        if: lm_test_imported_managed_external(c.lm_lmx_message_thread) = 0
+            return: 1
+        if: lm_test_defined_managed_external(c.lm_lmx_message_thread) = 0
+            return: 2
+        if: lm_test_registry_managed_external(c.lm_lmx_message_thread) = 0
+            return: 3
+        return: 0
+    end: main
+end: external

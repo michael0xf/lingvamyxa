@@ -1,0 +1,25 @@
+table:
+    source
+    name: `fn.thread-context.managed`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_conflicting_thread_context  1
+end: `fn.thread-context.managed`
+
+table:
+    source
+    name: `fn.thread-context.none`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_conflicting_thread_context  1
+end: `fn.thread-context.none`
+
+fn: lm_test_conflicting_thread_context () int
+    return: 0
+end: lm_test_conflicting_thread_context
+
+external:
+    fn: main () int
+        return: lm_test_conflicting_thread_context()
+    end: main
+end: external

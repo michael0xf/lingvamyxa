@@ -1627,7 +1627,8 @@ fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: names
     class_kind: lm_trans_namespace_class_kind_value(namespace_, lm_trans_text_from_cstr(name))
     is_sub: class_kind != 0 && c.strcmp(class_kind, "procedure") = 0
     is_external: lm_trans_fn_is_external(namespace_, lm_trans_text_from_cstr(name))
-    has_thread_context: is_external = 0 && lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, lm_trans_text_from_cstr(name), "fn.thread-context.none", "class", "class", "value", "int") = 0
+    if: lm_trans_function_thread_context_profile(namespace_, lm_trans_text_from_cstr(name), is_external, @ has_thread_context) != 0
+        return: 1
     if: has_thread_context && lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
         return: 1
 
@@ -1950,6 +1951,10 @@ fn: lm_trans_declare_registry_sub_descriptor (LmTransNamespace: namespace_; cons
     function\is_sub: 1
     function\is_descriptor_only: 1
     function\is_external: lm_trans_fn_is_external(namespace_, name_text)
+    if: lm_trans_function_thread_context_profile(namespace_, name_text, function\is_external, @ function\has_thread_context) != 0
+        lm_trans_function_header_destroy(function)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: 1
 
     function\params: lm_trans_formal_param_list_from_node(function\params_node, 1, "function parameters")
     if: function\params = 0
@@ -1969,17 +1974,22 @@ fn: lm_trans_declare_registry_fn_descriptor (LmTransNamespace: namespace_; const
     LmP0Node: frame_node
     LmTransFunctionHeader: function
     LmP0Text: name_text
+    int: has_thread_context
     const: @: char receiver_name
     int: status
 
     if: namespace_ = 0 || name = 0
         return: 1
+    name_text: lm_trans_l4_text_view_new(name)
+    if: name_text = 0
+        return: 1
     if: lm_trans_l4_is_function_pointer_type(namespace_, name)
-        return: 0
+        status: lm_trans_function_thread_context_profile(namespace_, name_text, 0, @ has_thread_context)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: status
 
     function: lm_trans_function_header_new()
-    name_text: lm_trans_l4_text_view_new(name)
-    if: function = 0 || name_text = 0
+    if: function = 0
         lm_trans_function_header_destroy(function)
         lm_trans_l4_text_view_delete(@ name_text)
         return: 1
@@ -2009,6 +2019,10 @@ fn: lm_trans_declare_registry_fn_descriptor (LmTransNamespace: namespace_; const
     function\return_node: return_node
     function\symbol_class: "function"
     function\is_external: lm_trans_fn_is_external(namespace_, name_text)
+    if: lm_trans_function_thread_context_profile(namespace_, name_text, function\is_external, @ function\has_thread_context) != 0
+        lm_trans_function_header_destroy(function)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: 1
 
     function\params: lm_trans_formal_param_list_from_node(function\params_node, 1, "function parameters")
     if: function\params = 0

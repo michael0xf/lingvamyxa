@@ -1,0 +1,17 @@
+table:
+    source
+    name: `fn.thread-context.managed`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_imported_managed_external  1
+end: `fn.thread-context.managed`
+
+table:
+    source
+    name: `fn.external`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_imported_managed_external  1
+end: `fn.external`
+
+fn: lm_test_imported_managed_external (@: void expected_thread) int

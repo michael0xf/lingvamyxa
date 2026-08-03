@@ -103,20 +103,49 @@ fn: lm_trans_top_level_declare_function_body_named_structures (
     lm_trans_namespace_leave_scope(namespace_)
 return: status
 
-sub: lm_trans_function_apply_thread_context_profile (
+fn: lm_trans_function_thread_context_profile (
     const: LmTransNamespace: namespace_
-    LmTransFunctionHeader: function
-)
-    if: function = 0
-        return
-    if: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, function\name, "fn.thread-context.none", "class", "class", "value", "int") != 0
-        function\has_thread_context: 0
+    const: LmP0Text: name
+    int: is_external
+    @: int out_has_thread_context
+) int
+    int: managed_context
+    int: no_context
+
+    if: name = 0 || out_has_thread_context = 0
+        return: 1
+
+    managed_context: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "fn.thread-context.managed", "class", "class", "value", "int") != 0
+    no_context: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "fn.thread-context.none", "class", "class", "value", "int") != 0
+    if: managed_context && no_context
+        c.fprintf(c.stderr, "trans L2 error: function \"%.*s\" has conflicting thread-context profiles\n", (cast: int name\length), name\data)
+        return: 1
+    if: is_external && managed_context && lm_trans_text_equals(name, "main")
+        c.fprintf(c.stderr, "trans L2 error: external main cannot declare a managed thread-context ABI\n")
+        return: 1
+
+    if: no_context
+        out_has_thread_context[0]: 0
     else:
-        if: lm_trans_registry_is_function_pointer_type_name(namespace_, function\name)
-            function\has_thread_context: lm_trans_function_pointer_type_has_managed_thread_context(namespace_, function\name)
+        if: lm_trans_registry_is_function_pointer_type_name(namespace_, name)
+            out_has_thread_context[0]: managed_context
+        else:
+            if: is_external
+                out_has_thread_context[0]: managed_context
+            else:
+                out_has_thread_context[0]: 1
+            ---
         ---
     ---
-end: lm_trans_function_apply_thread_context_profile
+return: 0
+
+fn: lm_trans_function_apply_thread_context_profile (
+    const: LmTransNamespace: namespace_
+    LmTransFunctionHeader: function
+) int
+    if: function = 0
+        return: 1
+return: lm_trans_function_thread_context_profile(namespace_, function\name, function\is_external, @ function\has_thread_context)
 
 fn: lm_trans_top_level_declare_function (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     int: status
@@ -124,7 +153,8 @@ fn: lm_trans_top_level_declare_function (LmTransNamespace: namespace_; const: (L
     if: item = 0 || item\function = 0
         return: 1
 
-    lm_trans_function_apply_thread_context_profile(namespace_, item\function)
+    if: lm_trans_function_apply_thread_context_profile(namespace_, item\function) != 0
+        return: 1
     if: lm_trans_registry_note_class_kind(item\function\name, item\function\symbol_class) != 0
         return: 1
     if: lm_trans_namespace_declare(namespace_, item\function\name, item\function\symbol_class) != 0
@@ -162,19 +192,17 @@ fn: lm_trans_top_level_declare_function_compatible (LmTransNamespace: namespace_
     if: item = 0 || item\function = 0
         return: 1
 
-    lm_trans_function_apply_thread_context_profile(namespace_, item\function)
     predefined_function: lm_trans_top_level_is_predefined_function_descriptor(namespace_, item)
     if: predefined_function
         if: item\function\is_sub = 0
             item\function\symbol_class: "function"
         item\function\is_external: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, item\function\name, "fn.external", "class", "class", "value", "int") != 0
-        if: item\function\is_external
-            item\function\has_thread_context: 0
-        ---
     else:
         if: lm_trans_registry_note_class_kind(item\function\name, item\function\symbol_class) != 0
             return: 1
     ---
+    if: lm_trans_function_apply_thread_context_profile(namespace_, item\function) != 0
+        return: 1
     if: lm_trans_namespace_declare_compatible(namespace_, item\function\name, item\function\symbol_class) != 0
         return: 1
     if: lm_trans_namespace_set_callable_shape(namespace_, item\function) != 0
@@ -904,7 +932,8 @@ return: lm_trans_put(file, ");\n")
 fn: lm_trans_top_level_emit_function_prototype (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\function = 0
         return: 1
-    lm_trans_function_apply_thread_context_profile(namespace_, item\function)
+    if: lm_trans_function_apply_thread_context_profile(namespace_, item\function) != 0
+        return: 1
 return: lm_trans_emit_function_prototype(file, item\function, namespace_)
 
 fn: lm_trans_top_level_emit_function (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
@@ -913,7 +942,8 @@ fn: lm_trans_top_level_emit_function (FILE: file; LmTransNamespace: namespace_; 
     if: item = 0 || item\function = 0
         return: 1
 
-    lm_trans_function_apply_thread_context_profile(namespace_, item\function)
+    if: lm_trans_function_apply_thread_context_profile(namespace_, item\function) != 0
+        return: 1
     status: lm_trans_emit_function(file, item\function, namespace_)
     if: status != 0
         return: 1
