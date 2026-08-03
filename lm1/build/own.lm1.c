@@ -74,6 +74,7 @@ typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
 typedef struct LmOwnLazyEdge LmOwnLazyEdge;
 typedef struct LmOwnArena LmOwnArena;
+typedef struct LmMessageThreadComponent LmMessageThreadComponent;
 typedef struct LmMessageThread LmMessageThread;
 
 
@@ -136,6 +137,12 @@ struct LmOwnArena {
     LmOwnArena * registry_next;
     int runtime_owned_shell;
 };
+struct LmMessageThreadComponent {
+    LmMessageThread * owner_thread;
+    void *value;
+    void (*destroy)(struct LmMessageThread *lm_lmx_message_thread, void *component);
+    LmMessageThreadComponent * next;
+};
 struct LmMessageThread {
     LmOwnArena * root_owner;
     LmMessageThreadState state;
@@ -148,6 +155,9 @@ struct LmMessageThread {
     LmOwnArena * arena_tail;
     size_t arena_count;
     int arena_destroying;
+    LmMessageThreadComponent * component_head;
+    size_t component_count;
+    int component_destroying;
 };
 
 
@@ -158,6 +168,10 @@ typedef void (*LmOwnDestroyFields)(void *object);
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDelete
 #define LM_LMX_TYPEDEF_DEFINED_LmOwnDelete 1
 typedef void (*LmOwnDelete)(void *object);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy
+#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy 1
+typedef void (*LmMessageThreadComponentDestroy)(struct LmMessageThread *lm_lmx_message_thread, void *component);
 #endif
 
 
@@ -215,6 +229,18 @@ void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *
 size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_arena_count)(const LmMessageThread *thread);
+int (lm_message_thread_component_attach)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy, void *component);
+void * (lm_message_thread_component_get)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
+int (lm_message_thread_component_remove)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
+size_t (lm_message_thread_component_count)(const LmMessageThread *thread);
+
+
+
+
+
+
+
+
 
 
 
@@ -326,6 +352,13 @@ void lm_own_ptr_stack_truncate(LmOwnPtrStack *stack, size_t count);
 void lm_own_value_stack_init(LmOwnValueStack *stack, size_t item_size);
 void lm_own_value_stack_destroy(LmOwnValueStack *stack);
 void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count);
+static LmMessageThreadComponent * lm_message_thread_component_find(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmMessageThreadComponentDestroy destroy, int *out_valid);
+static int lm_message_thread_component_detach(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmMessageThreadComponent *component);
+static int lm_message_thread_component_release(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmMessageThreadComponent *component);
+int lm_message_thread_component_attach(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy, void *component);
+void * lm_message_thread_component_get(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
+int lm_message_thread_component_remove(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
+size_t lm_message_thread_component_count(const LmMessageThread *thread);
 static int lm_own_arena_shell_is_zero(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena);
 static int lm_own_arena_register(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmOwnArena *arena);
 static int lm_own_arena_detach(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmOwnArena *arena);
@@ -569,6 +602,174 @@ void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count) {
     if (stack != 0 && count < stack -> count) {
         stack->count = count;
     }
+}
+
+static LmMessageThreadComponent * lm_message_thread_component_find(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmMessageThreadComponentDestroy destroy, int *out_valid) {
+    (void)lm_lmx_message_thread;
+    LmMessageThreadComponent * component;
+    LmMessageThreadComponent * match;
+    size_t visited;
+    if (out_valid != 0) {
+        out_valid[0] = 0;
+    }
+    if (owner_thread == 0 || destroy == 0 || out_valid == 0 || lm_lmx_message_thread == 0 || owner_thread != lm_lmx_message_thread) {
+        return 0;
+    }
+    if (owner_thread -> component_count == 0U) {
+        if (owner_thread -> component_head != 0) {
+            return 0;
+        }
+        out_valid[0] = 1;
+        return 0;
+    }
+    if (owner_thread -> component_head == 0) {
+        return 0;
+    }
+    component = owner_thread -> component_head;
+    match = 0;
+    visited = 0U;
+    while (component != 0) {
+        if (visited >= owner_thread -> component_count || component -> owner_thread != owner_thread || component -> destroy == 0) {
+            return 0;
+        }
+        if (component -> destroy == destroy) {
+            if (match != 0) {
+                return 0;
+            }
+            match = component;
+        }
+        component = component -> next;
+        visited = visited + 1U;
+    }
+    if (visited != owner_thread -> component_count) {
+        return 0;
+    }
+    out_valid[0] = 1;
+    return match;
+}
+
+static int lm_message_thread_component_detach(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmMessageThreadComponent *component) {
+    (void)lm_lmx_message_thread;
+    LmMessageThreadComponent * current;
+    LmMessageThreadComponent * previous;
+    LmMessageThreadComponent * found_previous;
+    size_t visited;
+    if (owner_thread == 0 || component == 0 || lm_lmx_message_thread == 0 || owner_thread != lm_lmx_message_thread || component -> owner_thread != owner_thread || owner_thread -> component_count == 0U) {
+        return 1;
+    }
+    current = owner_thread -> component_head;
+    previous = 0;
+    found_previous = 0;
+    visited = 0U;
+    while (current != 0) {
+        if (visited >= owner_thread -> component_count || current -> owner_thread != owner_thread || current -> destroy == 0) {
+            return 1;
+        }
+        if (current == component) {
+            found_previous = previous;
+        }
+        previous = current;
+        current = current -> next;
+        visited = visited + 1U;
+    }
+    if (visited != owner_thread -> component_count || (component != owner_thread -> component_head && found_previous == 0)) {
+        return 1;
+    }
+    if (found_previous != 0) {
+        found_previous->next = component -> next;
+    }
+    else {
+        owner_thread->component_head = component -> next;
+    }
+    owner_thread->component_count = owner_thread -> component_count - 1U;
+    component->owner_thread = 0;
+    component->next = 0;
+    return 0;
+}
+
+static int lm_message_thread_component_release(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmMessageThreadComponent *component) {
+    (void)lm_lmx_message_thread;
+    void *value;
+    if (owner_thread == 0 || component == 0 || lm_lmx_message_thread == 0 || owner_thread != lm_lmx_message_thread || component -> owner_thread != owner_thread || component -> destroy == 0) {
+        return 1;
+    }
+    value = component -> value;
+    if (lm_message_thread_component_detach(lm_lmx_message_thread, owner_thread, component) != 0) {
+        return 1;
+    }
+    component->value = 0;
+    if (component -> destroy != 0) {
+        component->destroy(owner_thread, value);
+    }
+    component->destroy = 0;
+    lm_own_delete(component, 0);
+    return 0;
+}
+
+int lm_message_thread_component_attach(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy, void *component) {
+    (void)lm_lmx_message_thread;
+    LmMessageThreadComponent * entry;
+    LmMessageThread * thread;
+    int valid;
+    thread = lm_lmx_message_thread;
+    if (thread == 0 || destroy == 0 || component == 0 || thread -> state != LM_MESSAGE_THREAD_RUNNING || thread -> component_destroying || thread -> component_count == (((size_t)-1))) {
+        return 1;
+    }
+    valid = 0;
+    if (lm_message_thread_component_find(lm_lmx_message_thread, thread, destroy, &valid) != 0 || valid == 0) {
+        return 1;
+    }
+    entry = lm_own_new_zero(sizeof(entry[0]));
+    if (entry == 0) {
+        return 1;
+    }
+    entry->owner_thread = thread;
+    entry->value = component;
+    entry->destroy = destroy;
+    entry->next = thread -> component_head;
+    thread->component_head = entry;
+    thread->component_count = thread -> component_count + 1U;
+    return 0;
+}
+
+void * lm_message_thread_component_get(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy) {
+    (void)lm_lmx_message_thread;
+    LmMessageThreadComponent * component;
+    LmMessageThread * thread;
+    int valid;
+    thread = lm_lmx_message_thread;
+    valid = 0;
+    component = lm_message_thread_component_find(lm_lmx_message_thread, thread, destroy, &valid);
+    if (valid == 0 || component == 0) {
+        return 0;
+    }
+    return component -> value;
+}
+
+int lm_message_thread_component_remove(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy) {
+    (void)lm_lmx_message_thread;
+    LmMessageThreadComponent * component;
+    LmMessageThread * thread;
+    int valid;
+    thread = lm_lmx_message_thread;
+    if (thread == 0 || destroy == 0 || thread -> component_destroying) {
+        return 1;
+    }
+    valid = 0;
+    component = lm_message_thread_component_find(lm_lmx_message_thread, thread, destroy, &valid);
+    if (valid == 0 || component == 0) {
+        return 1;
+    }
+    return lm_message_thread_component_release(lm_lmx_message_thread, thread, component);
+}
+
+size_t lm_message_thread_component_count(const LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    if (thread == 0) {
+        return 0U;
+    }
+    return thread -> component_count;
 }
 
 static int lm_own_arena_shell_is_zero(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena) {
@@ -1228,7 +1429,7 @@ int lm_message_thread_init(LmMessageThread *thread) {
     if (thread == 0) {
         return 1;
     }
-    if (thread -> state == LM_MESSAGE_THREAD_RUNNING || thread -> state == LM_MESSAGE_THREAD_STOPPING || thread -> root_owner != 0 || thread -> arena_head != 0 || thread -> arena_tail != 0 || thread -> arena_count != 0U || thread -> arena_destroying) {
+    if (thread -> state == LM_MESSAGE_THREAD_RUNNING || thread -> state == LM_MESSAGE_THREAD_STOPPING || thread -> root_owner != 0 || thread -> arena_head != 0 || thread -> arena_tail != 0 || thread -> arena_count != 0U || thread -> arena_destroying || thread -> component_head != 0 || thread -> component_count != 0U || thread -> component_destroying) {
         return 1;
     }
     memset(thread, 0, sizeof(thread[0]));
@@ -1247,24 +1448,45 @@ void lm_message_thread_destroy(LmMessageThread *thread) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     LmOwnArena * arena;
+    LmMessageThreadComponent * component;
+    int components_released;
     if (thread != 0) {
-        thread->arena_destroying = 1;
-        while (thread -> arena_tail != 0) {
-            arena = thread -> arena_tail;
-            if (lm_own_arena_release(thread, thread, arena, arena -> runtime_owned_shell, 1) != 0) {
+        components_released = 1;
+        thread->component_destroying = 1;
+        while (thread -> component_head != 0) {
+            component = thread -> component_head;
+            if (lm_message_thread_component_release(thread, thread, component) != 0) {
                 thread->collector_failed = 1;
                 if (thread -> stop_status == 0) {
                     thread->stop_status = 1;
                 }
+                components_released = 0;
                 break;
             }
         }
-        if (thread -> arena_count == 0U) {
-            thread->root_owner = 0;
-            thread->arena_head = 0;
-            thread->arena_tail = 0;
+        if (thread -> component_count == 0U) {
+            thread->component_head = 0;
         }
-        thread->arena_destroying = 0;
+        thread->component_destroying = 0;
+        if (components_released) {
+            thread->arena_destroying = 1;
+            while (thread -> arena_tail != 0) {
+                arena = thread -> arena_tail;
+                if (lm_own_arena_release(thread, thread, arena, arena -> runtime_owned_shell, 1) != 0) {
+                    thread->collector_failed = 1;
+                    if (thread -> stop_status == 0) {
+                        thread->stop_status = 1;
+                    }
+                    break;
+                }
+            }
+            if (thread -> arena_count == 0U) {
+                thread->root_owner = 0;
+                thread->arena_head = 0;
+                thread->arena_tail = 0;
+            }
+            thread->arena_destroying = 0;
+        }
         thread->execution_context = 0;
         thread->state = LM_MESSAGE_THREAD_STOPPED;
     }
@@ -1290,7 +1512,7 @@ void lm_message_thread_delete(LmMessageThread *thread) {
     (void)lm_lmx_message_thread;
     if (thread != 0) {
         lm_message_thread_destroy(thread);
-        if (thread -> arena_count == 0U && thread -> arena_head == 0 && thread -> arena_tail == 0) {
+        if (thread -> arena_count == 0U && thread -> arena_head == 0 && thread -> arena_tail == 0 && thread -> component_count == 0U && thread -> component_head == 0) {
             lm_own_delete(thread, 0);
         }
     }

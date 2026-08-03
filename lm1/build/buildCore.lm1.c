@@ -77,6 +77,7 @@ typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
 typedef struct LmOwnLazyEdge LmOwnLazyEdge;
 typedef struct LmOwnArena LmOwnArena;
+typedef struct LmMessageThreadComponent LmMessageThreadComponent;
 typedef struct LmMessageThread LmMessageThread;
 
 
@@ -139,6 +140,12 @@ struct LmOwnArena {
     LmOwnArena * registry_next;
     int runtime_owned_shell;
 };
+struct LmMessageThreadComponent {
+    LmMessageThread * owner_thread;
+    void *value;
+    void (*destroy)(struct LmMessageThread *lm_lmx_message_thread, void *component);
+    LmMessageThreadComponent * next;
+};
 struct LmMessageThread {
     LmOwnArena * root_owner;
     LmMessageThreadState state;
@@ -151,6 +158,9 @@ struct LmMessageThread {
     LmOwnArena * arena_tail;
     size_t arena_count;
     int arena_destroying;
+    LmMessageThreadComponent * component_head;
+    size_t component_count;
+    int component_destroying;
 };
 typedef struct LmBuildOptions {
     int full_build;
@@ -165,6 +175,10 @@ typedef void (*LmOwnDestroyFields)(void *object);
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDelete
 #define LM_LMX_TYPEDEF_DEFINED_LmOwnDelete 1
 typedef void (*LmOwnDelete)(void *object);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy
+#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy 1
+typedef void (*LmMessageThreadComponentDestroy)(struct LmMessageThread *lm_lmx_message_thread, void *component);
 #endif
 
 
@@ -222,6 +236,18 @@ void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *
 size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_arena_count)(const LmMessageThread *thread);
+int (lm_message_thread_component_attach)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy, void *component);
+void * (lm_message_thread_component_get)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
+int (lm_message_thread_component_remove)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
+size_t (lm_message_thread_component_count)(const LmMessageThread *thread);
+
+
+
+
+
+
+
+
 
 
 

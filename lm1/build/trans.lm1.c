@@ -79,6 +79,7 @@ typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
 typedef struct LmOwnLazyEdge LmOwnLazyEdge;
 typedef struct LmOwnArena LmOwnArena;
+typedef struct LmMessageThreadComponent LmMessageThreadComponent;
 typedef struct LmMessageThread LmMessageThread;
 typedef struct LmP0Node LmP0Node;
 typedef struct LmP0Field LmP0Field;
@@ -192,6 +193,12 @@ struct LmOwnArena {
     LmOwnArena * registry_next;
     int runtime_owned_shell;
 };
+struct LmMessageThreadComponent {
+    LmMessageThread * owner_thread;
+    void *value;
+    void (*destroy)(struct LmMessageThread *lm_lmx_message_thread, void *component);
+    LmMessageThreadComponent * next;
+};
 struct LmMessageThread {
     LmOwnArena * root_owner;
     LmMessageThreadState state;
@@ -204,6 +211,9 @@ struct LmMessageThread {
     LmOwnArena * arena_tail;
     size_t arena_count;
     int arena_destroying;
+    LmMessageThreadComponent * component_head;
+    size_t component_count;
+    int component_destroying;
 };
 typedef struct LmP0Text {
     const char *data;
@@ -688,6 +698,10 @@ typedef void (*LmOwnDestroyFields)(void *object);
 #define LM_LMX_TYPEDEF_DEFINED_LmOwnDelete 1
 typedef void (*LmOwnDelete)(void *object);
 #endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy
+#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy 1
+typedef void (*LmMessageThreadComponentDestroy)(struct LmMessageThread *lm_lmx_message_thread, void *component);
+#endif
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprSegmentMaterializer
 #define LM_LMX_TYPEDEF_DEFINED_LmTransExprSegmentMaterializer 1
 typedef int (*LmTransExprSegmentMaterializer)(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed);
@@ -820,6 +834,10 @@ void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *
 size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_arena_count)(const LmMessageThread *thread);
+int (lm_message_thread_component_attach)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy, void *component);
+void * (lm_message_thread_component_get)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
+int (lm_message_thread_component_remove)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
+size_t (lm_message_thread_component_count)(const LmMessageThread *thread);
 int (lm_p0_parse_string)(struct LmMessageThread *lm_lmx_message_thread, const char *source, LmP0Document **out_document);
 int (lm_p0_parse_bytes)(struct LmMessageThread *lm_lmx_message_thread, const char *source, size_t source_length, LmP0Document **out_document);
 int (lm_p0_parse_file)(struct LmMessageThread *lm_lmx_message_thread, const char *path, LmP0Document **out_document);
@@ -1047,6 +1065,14 @@ static int lm_trans_declare_registry_fn_descriptors(struct LmMessageThread *lm_l
 static int lm_trans_emit_root_sequence(struct LmMessageThread *lm_lmx_message_thread, FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_l4_payload_pointer_bindings_init(struct LmMessageThread *lm_lmx_message_thread);
 static void lm_trans_l4_payload_pointer_bindings_destroy(struct LmMessageThread *lm_lmx_message_thread);
+
+
+
+
+
+
+
+
 
 
 

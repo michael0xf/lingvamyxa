@@ -192,6 +192,152 @@ external:
     end: lm_own_value_stack_truncate
 end: external
 
+fn: lm_message_thread_component_find (LmMessageThread: owner_thread; LmMessageThreadComponentDestroy: destroy; @: int out_valid) LmMessageThreadComponent
+    LmMessageThreadComponent: component
+    LmMessageThreadComponent: match
+    size_t: visited
+
+    if: out_valid != 0
+        out_valid[0]: 0
+    if: owner_thread = 0 || destroy = 0 || out_valid = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread
+        return: 0
+    if: owner_thread\component_count = 0U
+        if: owner_thread\component_head != 0
+            return: 0
+        out_valid[0]: 1
+        return: 0
+    if: owner_thread\component_head = 0
+        return: 0
+
+    component: owner_thread\component_head
+    match: 0
+    visited: 0U
+    while: component != 0
+        if: visited >= owner_thread\component_count || component\owner_thread != owner_thread || component\destroy = 0
+            return: 0
+        if: component\destroy = destroy
+            if: match != 0
+                return: 0
+            match: component
+        component: component\next
+        visited: visited + 1U
+    ---
+    if: visited != owner_thread\component_count
+        return: 0
+    out_valid[0]: 1
+return: match
+
+fn: lm_message_thread_component_detach (LmMessageThread: owner_thread; LmMessageThreadComponent: component) int
+    LmMessageThreadComponent: current
+    LmMessageThreadComponent: previous
+    LmMessageThreadComponent: found_previous
+    size_t: visited
+
+    if: owner_thread = 0 || component = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread || component\owner_thread != owner_thread || owner_thread\component_count = 0U
+        return: 1
+    current: owner_thread\component_head
+    previous: 0
+    found_previous: 0
+    visited: 0U
+    while: current != 0
+        if: visited >= owner_thread\component_count || current\owner_thread != owner_thread || current\destroy = 0
+            return: 1
+        if: current = component
+            found_previous: previous
+        previous: current
+        current: current\next
+        visited: visited + 1U
+    ---
+    if: visited != owner_thread\component_count || (component != owner_thread\component_head && found_previous = 0)
+        return: 1
+
+    if: found_previous != 0
+        found_previous\next: component\next
+    else:
+        owner_thread\component_head: component\next
+    ---
+    owner_thread\component_count: owner_thread\component_count - 1U
+    component\owner_thread: 0
+    component\next: 0
+return: 0
+
+fn: lm_message_thread_component_release (LmMessageThread: owner_thread; LmMessageThreadComponent: component) int
+    @: void value
+
+    if: owner_thread = 0 || component = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread || component\owner_thread != owner_thread || component\destroy = 0
+        return: 1
+    value: component\value
+    if: lm_message_thread_component_detach(owner_thread, component) != 0
+        return: 1
+    component\value: 0
+    if: component\destroy != 0
+        c.component->destroy(owner_thread, value)
+    component\destroy: 0
+    lm_own_delete(component, 0)
+return: 0
+
+external:
+    fn: lm_message_thread_component_attach (LmMessageThreadComponentDestroy: destroy; @: void component) int
+        LmMessageThreadComponent: entry
+        LmMessageThread: thread
+        int: valid
+
+        thread: c.lm_lmx_message_thread
+        if: thread = 0 || destroy = 0 || component = 0 || thread\state != c.LM_MESSAGE_THREAD_RUNNING || thread\component_destroying || thread\component_count = (cast: size_t -1)
+            return: 1
+        valid: 0
+        if: lm_message_thread_component_find(thread, destroy, @ valid) != 0 || valid = 0
+            return: 1
+
+        entry: lm_own_new_zero(c.sizeof(entry[0]))
+        if: entry = 0
+            return: 1
+        entry\owner_thread: thread
+        entry\value: component
+        entry\destroy: destroy
+        entry\next: thread\component_head
+        thread\component_head: entry
+        thread\component_count: thread\component_count + 1U
+    return: 0
+end: external
+
+external:
+    fn: lm_message_thread_component_get (LmMessageThreadComponentDestroy: destroy) @: void
+        LmMessageThreadComponent: component
+        LmMessageThread: thread
+        int: valid
+
+        thread: c.lm_lmx_message_thread
+        valid: 0
+        component: lm_message_thread_component_find(thread, destroy, @ valid)
+        if: valid = 0 || component = 0
+            return: 0
+    return: component\value
+end: external
+
+external:
+    fn: lm_message_thread_component_remove (LmMessageThreadComponentDestroy: destroy) int
+        LmMessageThreadComponent: component
+        LmMessageThread: thread
+        int: valid
+
+        thread: c.lm_lmx_message_thread
+        if: thread = 0 || destroy = 0 || thread\component_destroying
+            return: 1
+        valid: 0
+        component: lm_message_thread_component_find(thread, destroy, @ valid)
+        if: valid = 0 || component = 0
+            return: 1
+    return: lm_message_thread_component_release(thread, component)
+end: external
+
+external:
+    fn: lm_message_thread_component_count (const: (LmMessageThread: thread)) size_t
+        if: thread = 0
+            return: 0U
+    return: thread\component_count
+end: external
+
 fn: lm_own_arena_shell_is_zero (const: (LmOwnArena: arena)) int
     if: arena = 0
         return: 0
@@ -779,7 +925,7 @@ external:
     fn: lm_message_thread_init (LmMessageThread: thread) int
         if: thread = 0
             return: 1
-        if: thread\state = c.LM_MESSAGE_THREAD_RUNNING || thread\state = c.LM_MESSAGE_THREAD_STOPPING || thread\root_owner != 0 || thread\arena_head != 0 || thread\arena_tail != 0 || thread\arena_count != 0U || thread\arena_destroying
+        if: thread\state = c.LM_MESSAGE_THREAD_RUNNING || thread\state = c.LM_MESSAGE_THREAD_STOPPING || thread\root_owner != 0 || thread\arena_head != 0 || thread\arena_tail != 0 || thread\arena_count != 0U || thread\arena_destroying || thread\component_head != 0 || thread\component_count != 0U || thread\component_destroying
             return: 1
 
         c.memset(thread, 0, c.sizeof(thread[0]))
@@ -797,23 +943,42 @@ end: external
 external:
     sub: lm_message_thread_destroy (LmMessageThread: thread)
         LmOwnArena: arena
+        LmMessageThreadComponent: component
+        int: components_released
 
         if: thread != 0
-            thread\arena_destroying: 1
-            while: thread\arena_tail != 0
-                arena: thread\arena_tail
-                if: c.lm_own_arena_release(thread, thread, arena, arena\runtime_owned_shell, 1) != 0
+            components_released: 1
+            thread\component_destroying: 1
+            while: thread\component_head != 0
+                component: thread\component_head
+                if: c.lm_message_thread_component_release(thread, thread, component) != 0
                     thread\collector_failed: 1
                     if: thread\stop_status = 0
                         thread\stop_status: 1
+                    components_released: 0
                     break
             ---
-            if: thread\arena_count = 0U
-                thread\root_owner: 0
-                thread\arena_head: 0
-                thread\arena_tail: 0
+            if: thread\component_count = 0U
+                thread\component_head: 0
             ---
-            thread\arena_destroying: 0
+            thread\component_destroying: 0
+            if: components_released
+                thread\arena_destroying: 1
+                while: thread\arena_tail != 0
+                    arena: thread\arena_tail
+                    if: c.lm_own_arena_release(thread, thread, arena, arena\runtime_owned_shell, 1) != 0
+                        thread\collector_failed: 1
+                        if: thread\stop_status = 0
+                            thread\stop_status: 1
+                        break
+                ---
+                if: thread\arena_count = 0U
+                    thread\root_owner: 0
+                    thread\arena_head: 0
+                    thread\arena_tail: 0
+                ---
+                thread\arena_destroying: 0
+            ---
             thread\execution_context: 0
             thread\state: c.LM_MESSAGE_THREAD_STOPPED
     end: lm_message_thread_destroy
@@ -836,7 +1001,7 @@ external:
     sub: lm_message_thread_delete (LmMessageThread: thread)
         if: thread != 0
             lm_message_thread_destroy(thread)
-            if: thread\arena_count = 0U && thread\arena_head = 0 && thread\arena_tail = 0
+            if: thread\arena_count = 0U && thread\arena_head = 0 && thread\arena_tail = 0 && thread\component_count = 0U && thread\component_head = 0
                 lm_own_delete(thread, 0)
     end: lm_message_thread_delete
 end: external
