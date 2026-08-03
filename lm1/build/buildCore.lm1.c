@@ -80,6 +80,8 @@ typedef struct LmOwnArena LmOwnArena;
 typedef struct LmHostThread LmHostThread;
 typedef struct LmMutex LmMutex;
 typedef struct LmCondition LmCondition;
+typedef struct LmMessageThreadRuntime LmMessageThreadRuntime;
+typedef struct LmMessageThreadPool LmMessageThreadPool;
 typedef struct LmMessageThreadComponent LmMessageThreadComponent;
 typedef struct LmMessageThread LmMessageThread;
 
@@ -147,12 +149,36 @@ struct LmHostThread {
     void *implementation;
     int started;
     int joined;
+    void *controller_identity;
+    int starting;
 };
 struct LmMutex {
     void *implementation;
 };
 struct LmCondition {
     void *implementation;
+};
+struct LmMessageThreadRuntime {
+    void *identity;
+    size_t pool_count;
+    size_t single_execution_depth;
+    LmMessageThread * single_active_thread;
+};
+struct LmMessageThreadPool {
+    LmHostThread * *workers;
+    size_t worker_count;
+    size_t started_worker_count;
+    LmMutex * mutex;
+    LmCondition * work_ready;
+    LmMessageThread * ready_head;
+    LmMessageThread * ready_tail;
+    LmMessageThread * member_head;
+    LmMessageThread * member_tail;
+    size_t member_count;
+    int stop_requested;
+    int deleting;
+    int single_mode;
+    LmMessageThreadRuntime * runtime;
 };
 struct LmMessageThreadComponent {
     LmMessageThread * owner_thread;
@@ -175,6 +201,20 @@ struct LmMessageThread {
     LmMessageThreadComponent * component_head;
     size_t component_count;
     int component_destroying;
+    LmMessageThreadPool * pool;
+    void (*entry)(struct LmMessageThread *lm_lmx_message_thread, void *argument);
+    void *entry_argument;
+    LmMutex * state_mutex;
+    LmCondition * stopped_condition;
+    int started;
+    int joining;
+    int joined;
+    int scheduled;
+    int executing;
+    void *execution_identity;
+    LmMessageThread * ready_next;
+    LmMessageThread * pool_previous;
+    LmMessageThread * pool_next;
 };
 typedef struct LmBuildOptions {
     int full_build;
@@ -193,6 +233,10 @@ typedef void (*LmOwnDelete)(void *object);
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmHostThreadEntry
 #define LM_LMX_TYPEDEF_DEFINED_LmHostThreadEntry 1
 typedef void * (*LmHostThreadEntry)(void *argument);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadEntry
+#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadEntry 1
+typedef void (*LmMessageThreadEntry)(struct LmMessageThread *lm_lmx_message_thread, void *argument);
 #endif
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy
 #define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy 1
@@ -251,10 +295,18 @@ void (lm_condition_delete)(LmCondition *condition);
 int (lm_condition_wait)(LmCondition *condition, LmMutex *mutex);
 int (lm_condition_signal)(LmCondition *condition);
 int (lm_condition_broadcast)(LmCondition *condition);
+LmMessageThreadRuntime * (lm_message_thread_runtime_new)(void);
+int (lm_message_thread_runtime_delete)(LmMessageThreadRuntime *runtime);
+LmMessageThreadPool * (lm_message_thread_pool_new)(LmMessageThreadRuntime *runtime, size_t worker_count);
+void (lm_message_thread_pool_request_stop)(LmMessageThreadPool *pool);
+int (lm_message_thread_pool_delete)(LmMessageThreadPool *pool);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
 LmMessageThread * (lm_message_thread_new)(void);
+LmMessageThread * (lm_message_thread_new_in)(LmMessageThreadPool *pool);
 void (lm_message_thread_delete)(LmMessageThread *thread);
+int (lm_message_thread_start)(LmMessageThread *thread, LmMessageThreadEntry entry, void *argument);
+int (lm_message_thread_join)(LmMessageThread *thread, int *result);
 int (lm_message_thread_begin_turn)(LmMessageThread *thread);
 int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
@@ -272,6 +324,21 @@ int (lm_message_thread_component_attach)(struct LmMessageThread *lm_lmx_message_
 void * (lm_message_thread_component_get)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 int (lm_message_thread_component_remove)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 size_t (lm_message_thread_component_count)(const LmMessageThread *thread);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -525,6 +592,11 @@ static char * lm_build_platform_tests_command_format(struct LmMessageThread *lm_
 static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_message_thread, FILE *file, char *output_dir, char *parser_library, char *own_library) {
     (void)lm_lmx_message_thread;
     fputs("$ErrorActionPreference = 'Continue'\n", file);
+    fputs("function Invoke-LmTestWithTimeout([string]$Path, [string]$Name) {\n", file);
+    fputs("    $process = Start-Process -FilePath (Resolve-Path -LiteralPath $Path).Path -WorkingDirectory (Get-Location).Path -PassThru\n", file);
+    fputs("    if (-not $process.WaitForExit(30000)) { $process.Kill(); throw ($Name + ' timed out') }\n", file);
+    fputs("    if ($process.ExitCode -ne 0) { throw ($Name + ' failed with exit ' + $process.ExitCode) }\n", file);
+    fputs("}\n", file);
     fputs("$env:LM_P0_REGISTRY = 'lm2/parser_registry.lm2'\n", file);
     fprintf(file, "$printTree = '%s/printTree.lm0%s'\n", output_dir, lm_build_exe_suffix(lm_lmx_message_thread));
     fprintf(file, "$trans = '%s/trans.lm0%s'\n", output_dir, lm_build_exe_suffix(lm_lmx_message_thread));
@@ -595,7 +667,7 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("}\n", file);
     fputs("$parserSkip = @()\n", file);
     fputs("$transSkip = @()\n", file);
-    fputs("$transTranslationOnly = @('trans_l4_abi_receivers.lm2')\n", file);
+    fputs("$transTranslationOnly = @('trans_l4_abi_receivers.lm2', 'trans_message_thread_pool_single.lm2')\n", file);
     fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File -Filter '*.lmx' | Sort-Object Name) {\n", file);
     fputs("    if ($testFile.Name -like 'trans_*') { continue }\n", file);
     fputs("    if ($parserSkip -contains $testFile.Name) { continue }\n", file);
@@ -655,6 +727,22 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke link failed: ' + $testFile.Name) }\n", file);
     fputs("    & (Resolve-Path -LiteralPath $exePath).Path\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke run failed: ' + $testFile.Name) }\n", file);
+    fputs("}\n", file);
+    fputs("$previousThreadProvider = $env:LM_THREAD_PROVIDER\n", file);
+    fputs("try {\n", file);
+    fputs("    $singlePoolTest = Join-Path 'build/obj/tests' 'trans_message_thread_pool_single.exe'\n", file);
+    fputs("    $env:LM_THREAD_PROVIDER = 'single'\n", file);
+    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'build/obj/tests/trans_message_thread_pool_single.c' '-o' $singlePoolTest\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw 'single MessageThread pool test link failed' }\n", file);
+    fputs("    Invoke-LmTestWithTimeout $singlePoolTest 'single MessageThread pool test'\n", file);
+    fputs("    $nativePoolTest = Join-Path 'build/obj/tests' 'message_thread_pool_native.exe'\n", file);
+    fputs("    $env:LM_THREAD_PROVIDER = 'win32'\n", file);
+    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_pool_native.c' '-o' $nativePoolTest\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw 'Win32 MessageThread pool test link failed' }\n", file);
+    fputs("    Invoke-LmTestWithTimeout $nativePoolTest 'Win32 MessageThread pool test'\n", file);
+    fputs("}\n", file);
+    fputs("finally {\n", file);
+    fputs("    if ($null -eq $previousThreadProvider) { Remove-Item Env:LM_THREAD_PROVIDER -ErrorAction SilentlyContinue } else { $env:LM_THREAD_PROVIDER = $previousThreadProvider }\n", file);
     fputs("}\n", file);
     fputs("Write-Host 'lm0 staged tests passed'\n", file);
     return 0;
@@ -763,6 +851,30 @@ static char * lm_build_platform_tests_command_format(struct LmMessageThread *lm_
 static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_message_thread, FILE *file, char *output_dir, char *parser_library, char *own_library) {
     (void)lm_lmx_message_thread;
     fputs("set -eu\n", file);
+    fputs("lm_run_with_watchdog() {\n", file);
+    fputs("    if command -v timeout >/dev/null 2>&1; then\n", file);
+    fputs("        if timeout 30s \"$@\"; then return 0; else lm_watchdog_status=$?; return \"$lm_watchdog_status\"; fi\n", file);
+    fputs("    fi\n", file);
+    fputs("    if command -v gtimeout >/dev/null 2>&1; then\n", file);
+    fputs("        if gtimeout 30s \"$@\"; then return 0; else lm_watchdog_status=$?; return \"$lm_watchdog_status\"; fi\n", file);
+    fputs("    fi\n", file);
+    fputs("    \"$@\" &\n", file);
+    fputs("    lm_watchdog_test_pid=$!\n", file);
+    fputs("    (\n", file);
+    fputs("        sleep 30\n", file);
+    fputs("        if kill -0 \"$lm_watchdog_test_pid\" 2>/dev/null; then\n", file);
+    fputs("            echo 'message-thread pool test timed out' >&2\n", file);
+    fputs("            kill -TERM \"$lm_watchdog_test_pid\" 2>/dev/null || true\n", file);
+    fputs("            sleep 2\n", file);
+    fputs("            kill -KILL \"$lm_watchdog_test_pid\" 2>/dev/null || true\n", file);
+    fputs("        fi\n", file);
+    fputs("    ) &\n", file);
+    fputs("    lm_watchdog_pid=$!\n", file);
+    fputs("    if wait \"$lm_watchdog_test_pid\"; then lm_watchdog_status=0; else lm_watchdog_status=$?; fi\n", file);
+    fputs("    kill \"$lm_watchdog_pid\" 2>/dev/null || true\n", file);
+    fputs("    wait \"$lm_watchdog_pid\" 2>/dev/null || true\n", file);
+    fputs("    return \"$lm_watchdog_status\"\n", file);
+    fputs("}\n", file);
     fprintf(file, "printTree='%s/printTree.lm0%s'\n", output_dir, lm_build_exe_suffix(lm_lmx_message_thread));
     fprintf(file, "trans='%s/trans.lm0%s'\n", output_dir, lm_build_exe_suffix(lm_lmx_message_thread));
     fprintf(file, "make_tool='%s/make.lm0%s'\n", output_dir, lm_build_exe_suffix(lm_lmx_message_thread));
@@ -833,10 +945,16 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("            ;;\n", file);
     fputs("        *) LM_TRANS_REGISTRY_VIEW=view \"$trans\" \"$src\" \"$c_path\" ;;\n", file);
     fputs("    esac\n", file);
-    fputs("    case \"$name\" in trans_l4_abi_receivers.lm2) continue ;; esac\n", file);
+    fputs("    case \"$name\" in trans_l4_abi_receivers.lm2|trans_message_thread_pool_single.lm2) continue ;; esac\n", file);
     fputs("    \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Ilm1 \"$c_path\" \"$parserLib\" \"$ownLib\" -o \"$exe_path\"\n", file);
     fputs("    \"$exe_path\"\n", file);
     fputs("done\n", file);
+    fputs("single_pool_test='build/obj/tests/trans_message_thread_pool_single'\n", file);
+    fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c build/obj/tests/trans_message_thread_pool_single.c -o \"$single_pool_test\"\n", file);
+    fputs("lm_run_with_watchdog \"$single_pool_test\"\n", file);
+    fputs("native_pool_test='build/obj/tests/message_thread_pool_native'\n", file);
+    fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_pool_native.c -o \"$native_pool_test\"\n", file);
+    fputs("lm_run_with_watchdog \"$native_pool_test\"\n", file);
     fputs("echo 'lm0 staged tests passed'\n", file);
     return 0;
 }

@@ -1,0 +1,304 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+layout
+fn
+prototype
+include: "<string.h>"
+
+table:
+    source
+    name: `fn.thread-context.managed`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_pool_actor_entry 1
+             lm_test_pool_assert_entry 1
+             lm_test_pool_delete_entry 1
+end: `fn.thread-context.managed`
+
+table:
+    name: `forward.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestPoolActor c.struct
+end: `forward.backend`
+
+table:
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestPoolActor c.struct
+end: `layout.backend`
+
+table:
+    name: `class.reference-base`
+    columns((class: class) (int: value))
+    rows:
+             LmTestPoolActor 1
+end: `class.reference-base`
+
+table:
+    name: `LmTestPoolActor.field.class`
+    columns((class: class) (class: field))
+    rows:
+             actor           LmMessageThread
+             turns          size_t
+             target_turns   size_t
+             stop_status    int
+             identity_error int
+             pool            LmMessageThreadPool
+             foreign_pool    LmMessageThreadPool
+             runtime      LmMessageThreadRuntime
+             foreign_actor   LmMessageThread
+             delete_result   int
+             runtime_delete_result int
+             foreign_join_result int
+end: `LmTestPoolActor.field.class`
+
+table:
+    name: `LmTestPoolActor.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             actor           0
+             turns          1
+             target_turns   2
+             stop_status    3
+             identity_error 4
+             pool            5
+             foreign_pool    6
+             runtime      7
+             foreign_actor   8
+             delete_result   9
+             runtime_delete_result 10
+             foreign_join_result 11
+end: `LmTestPoolActor.field.index`
+
+table:
+    name: `LmTestPoolActor.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             actor 0
+             pool  0
+             foreign_pool 0
+             runtime 0
+             foreign_actor 0
+end: `LmTestPoolActor.field.address-depth`
+
+sub: lm_test_pool_actor_entry (@: void argument)
+    LmTestPoolActor: context
+
+    context: argument
+    if: context = 0
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 90)
+        return
+    ---
+
+    if: c.lm_lmx_message_thread != context\actor
+        context\identity_error: 1
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 91)
+        return
+    ---
+
+    context\turns: context\turns + 1U
+    if: context\turns = context\target_turns
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, context\stop_status)
+    ---
+end: lm_test_pool_actor_entry
+
+sub: lm_test_pool_assert_entry (@: void argument)
+    if: argument != 0
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 92)
+        return
+    assert: 0
+end: lm_test_pool_assert_entry
+
+sub: lm_test_pool_delete_entry (@: void argument)
+    LmTestPoolActor: context
+    int: foreign_status 0
+
+    context: argument
+    if: context = 0 || context\pool = 0 || context\foreign_pool = 0 || context\runtime = 0 || context\foreign_actor = 0
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 93)
+        return
+    context\delete_result: lm_message_thread_pool_delete(context\pool)
+    context\runtime_delete_result: lm_message_thread_runtime_delete(context\runtime)
+    context\foreign_join_result: lm_message_thread_join(context\foreign_actor, @ foreign_status)
+    lm_message_thread_request_stop(context\foreign_actor, 88)
+    lm_message_thread_pool_request_stop(context\foreign_pool)
+    lm_message_thread_request_stop(c.lm_lmx_message_thread, 0)
+end: lm_test_pool_delete_entry
+
+external:
+    fn: main () int
+        LmMessageThreadRuntime: runtime 0
+        LmMessageThreadPool: pool 0
+        LmMessageThreadPool: foreign_pool 0
+        LmMessageThread: first_thread 0
+        LmMessageThread: queued_thread 0
+        LmMessageThread: diagnostic_thread 0
+        LmMessageThread: cancelled_thread 0
+        LmMessageThread: deleting_thread 0
+        LmMessageThread: rejected_thread 0
+        LmMessageThread: foreign_thread 0
+        LmTestPoolActor: first 0
+        LmTestPoolActor: queued 0
+        LmTestPoolActor: deleting 0
+        LmTestPoolActor: foreign 0
+        int: first_status 0
+        int: queued_status 0
+        int: diagnostic_status 0
+        int: deleting_status 0
+        int: foreign_status 0
+        int: status 0
+
+        if: c.strcmp(lm_thread_provider_name(), "single") != 0
+            return: 1
+
+        runtime: lm_message_thread_runtime_new()
+        pool: lm_message_thread_pool_new(runtime, 3U)
+        foreign_pool: lm_message_thread_pool_new(runtime, 1U)
+        first: lm_own_new_zero(c.sizeof(first[0]))
+        queued: lm_own_new_zero(c.sizeof(queued[0]))
+        deleting: lm_own_new_zero(c.sizeof(deleting[0]))
+        foreign: lm_own_new_zero(c.sizeof(foreign[0]))
+        if: runtime = 0 || pool = 0 || foreign_pool = 0 || first = 0 || queued = 0 || deleting = 0 || foreign = 0
+            status: 2
+
+        if: status = 0
+            foreign_thread: lm_message_thread_new_in(foreign_pool)
+            foreign\actor: foreign_thread
+            foreign\target_turns: 1U
+            foreign\stop_status: 61
+            if: foreign_thread = 0 || lm_message_thread_start(foreign_thread, @ lm_test_pool_actor_entry, foreign) != 0
+                status: 29
+        ---
+
+        if: status = 0
+            first_thread: lm_message_thread_new_in(pool)
+            queued_thread: lm_message_thread_new_in(pool)
+            if: first_thread = 0 || queued_thread = 0
+                status: 3
+        ---
+
+        if: status = 0
+            first\actor: first_thread
+            first\target_turns: 4U
+            first\stop_status: 31
+            queued\actor: queued_thread
+            queued\target_turns: 2U
+            queued\stop_status: 47
+        ---
+
+        if: status = 0 && (lm_message_thread_begin_turn(first_thread) != 0 || lm_message_thread_collect(first_thread) = 0 || lm_message_thread_end_turn(first_thread) = 0)
+            status: 26
+        if: status = 0
+            lm_message_thread_destroy(first_thread)
+        ---
+
+        if: status = 0 && lm_message_thread_start(first_thread, @ lm_test_pool_actor_entry, first) != 0
+            status: 4
+        if: status = 0 && first\turns != 0U
+            status: 5
+        if: status = 0 && lm_message_thread_start(first_thread, @ lm_test_pool_actor_entry, first) = 0
+            status: 6
+
+        if: status = 0 && lm_message_thread_start(queued_thread, @ lm_test_pool_actor_entry, queued) != 0
+            status: 7
+        if: status = 0 && queued\turns != 0U
+            status: 8
+
+        if: status = 0
+            lm_message_thread_request_stop(queued_thread, 47)
+            if: lm_message_thread_join(queued_thread, @ queued_status) != 0
+                status: 9
+        ---
+        if: status = 0 && queued_status != 47
+            status: 10
+        if: status = 0 && (queued\turns != 0U || queued\identity_error != 0)
+            status: 11
+        if: status = 0 && (lm_message_thread_turn_count(queued_thread) != 0U || lm_message_thread_collection_count(queued_thread) != 1U)
+            status: 12
+        if: status = 0 && lm_message_thread_join(queued_thread, @ queued_status) = 0
+            status: 13
+
+        if: status = 0 && lm_message_thread_join(first_thread, @ first_status) != 0
+            status: 14
+        if: status = 0 && first_status != 31
+            status: 15
+        if: status = 0 && (first\turns != 4U || first\identity_error != 0)
+            status: 16
+        if: status = 0 && (lm_message_thread_turn_count(first_thread) != 4U || lm_message_thread_collection_count(first_thread) != 4U)
+            status: 17
+        if: status = 0 && lm_message_thread_join(first_thread, @ first_status) = 0
+            status: 18
+        if: status = 0 && lm_message_thread_start(first_thread, @ lm_test_pool_actor_entry, first) = 0
+            status: 19
+
+        if: status = 0
+            diagnostic_thread: lm_message_thread_new_in(pool)
+            if: diagnostic_thread = 0 || lm_message_thread_start(diagnostic_thread, @ lm_test_pool_assert_entry, 0) != 0 || lm_message_thread_join(diagnostic_thread, @ diagnostic_status) != 0
+                status: 21
+        ---
+        if: status = 0 && (diagnostic_status != 1 || lm_message_thread_turn_count(diagnostic_thread) != 1U || lm_message_thread_collection_count(diagnostic_thread) != 1U)
+            status: 22
+
+        if: status = 0
+            cancelled_thread: lm_message_thread_new_in(pool)
+            if: cancelled_thread = 0
+                status: 23
+        ---
+        if: status = 0
+            lm_message_thread_request_stop(cancelled_thread, 59)
+            if: lm_message_thread_status(cancelled_thread) != 59 || lm_message_thread_is_running(cancelled_thread) || lm_message_thread_start(cancelled_thread, @ lm_test_pool_actor_entry, first) = 0 || lm_message_thread_turn_count(cancelled_thread) != 0U || lm_message_thread_collection_count(cancelled_thread) != 0U
+                status: 24
+        ---
+
+        if: status = 0
+            deleting_thread: lm_message_thread_new_in(pool)
+            deleting\actor: deleting_thread
+            deleting\pool: pool
+            deleting\foreign_pool: foreign_pool
+            deleting\runtime: runtime
+            deleting\foreign_actor: foreign_thread
+            if: deleting_thread = 0 || lm_message_thread_start(deleting_thread, @ lm_test_pool_delete_entry, deleting) != 0 || lm_message_thread_join(deleting_thread, @ deleting_status) != 0
+                status: 27
+        ---
+        if: status = 0 && (deleting\delete_result != 1 || deleting\runtime_delete_result != 1 || deleting\foreign_join_result != 1 || deleting_status != 0)
+            status: 28
+
+        if: status = 0 && lm_message_thread_join(foreign_thread, @ foreign_status) != 0
+            status: 30
+        if: status = 0 && foreign_status != 61
+            status: 31
+
+        if: status = 0 && lm_message_thread_runtime_delete(runtime) = 0
+            status: 32
+
+        if: pool != 0
+            lm_message_thread_pool_request_stop(pool)
+            rejected_thread: lm_message_thread_new_in(pool)
+            if: status = 0 && rejected_thread != 0
+                status: 20
+            if: lm_message_thread_pool_delete(pool) != 0 && status = 0
+                status: 25
+        ---
+
+        if: foreign_pool != 0
+            lm_message_thread_pool_request_stop(foreign_pool)
+            if: lm_message_thread_pool_delete(foreign_pool) != 0 && status = 0
+                status: 33
+        ---
+
+        if: runtime != 0 && lm_message_thread_runtime_delete(runtime) != 0 && status = 0
+            status: 34
+        ---
+
+        lm_own_delete(deleting, 0)
+        lm_own_delete(queued, 0)
+        lm_own_delete(first, 0)
+        lm_own_delete(foreign, 0)
+        return: status
+    end: main
+end: external

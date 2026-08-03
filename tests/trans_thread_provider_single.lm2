@@ -16,12 +16,61 @@ table:
              lm_test_single_host_entry 1
 end: `fn.thread-context.none`
 
-fn: lm_test_single_host_entry (@: void argument) @: void
-    @: int value
+table:
+    name: `forward.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestHostContext c.struct
+end: `forward.backend`
 
-    value: argument
-    if: value != 0
-        value[0]: value[0] + 1
+table:
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestHostContext c.struct
+end: `layout.backend`
+
+table:
+    name: `class.reference-base`
+    columns((class: class) (int: value))
+    rows:
+             LmTestHostContext 1
+end: `class.reference-base`
+
+table:
+    name: `LmTestHostContext.field.class`
+    columns((class: class) (class: field))
+    rows:
+             thread             LmHostThread
+             counter            int
+             nested_join_status int
+end: `LmTestHostContext.field.class`
+
+table:
+    name: `LmTestHostContext.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             thread             0
+             counter            1
+             nested_join_status 2
+end: `LmTestHostContext.field.index`
+
+table:
+    name: `LmTestHostContext.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             thread 0
+end: `LmTestHostContext.field.address-depth`
+
+fn: lm_test_single_host_entry (@: void argument) @: void
+    LmTestHostContext: context
+    @: void ignored_result
+
+    context: argument
+    if: context != 0
+        context\counter: context\counter + 1
+        lm_host_thread_delete(context\thread)
+        context\nested_join_status: lm_host_thread_join(context\thread, @ ignored_result)
     return: argument
 end: lm_test_single_host_entry
 
@@ -30,8 +79,8 @@ external:
         LmHostThread: thread 0
         LmMutex: mutex 0
         LmCondition: condition 0
+        LmTestHostContext: context 0
         @: void result 0
-        int: value 41
         int: status 0
         int: is_single 0
 
@@ -42,12 +91,17 @@ external:
         thread: lm_host_thread_new()
         mutex: lm_mutex_new()
         condition: lm_condition_new()
-        if: thread = 0 || mutex = 0 || condition = 0
+        context: lm_own_new_zero(c.sizeof(context[0]))
+        if: thread = 0 || mutex = 0 || condition = 0 || context = 0
             status: 2
+
+        if: status = 0
+            context\thread: thread
+            context\counter: 41
 
         if: status = 0 && lm_mutex_lock(mutex) != 0
             status: 3
-        if: status = 0 && is_single && lm_condition_wait(condition, mutex) != 0
+        if: status = 0 && is_single && lm_condition_wait(condition, mutex) = 0
             status: 4
         if: status = 0 && lm_condition_signal(condition) != 0
             status: 5
@@ -56,15 +110,15 @@ external:
         if: status = 0 && lm_mutex_unlock(mutex) != 0
             status: 7
 
-        if: status = 0 && lm_host_thread_start(thread, @ lm_test_single_host_entry, @ value) != 0
+        if: status = 0 && lm_host_thread_start(thread, @ lm_test_single_host_entry, context) != 0
             status: 8
-        if: status = 0 && lm_host_thread_start(thread, @ lm_test_single_host_entry, @ value) = 0
+        if: status = 0 && lm_host_thread_start(thread, @ lm_test_single_host_entry, context) = 0
             status: 10
         if: status = 0 && lm_host_thread_join(thread, @ result) != 0
             status: 11
-        if: status = 0 && result != @ value
+        if: status = 0 && result != context
             status: 12
-        if: status = 0 && value != 42
+        if: status = 0 && (context\counter != 42 || context\nested_join_status != 1)
             status: 9
         if: status = 0 && lm_host_thread_join(thread, @ result) = 0
             status: 13
@@ -72,6 +126,7 @@ external:
         lm_condition_delete(condition)
         lm_mutex_delete(mutex)
         lm_host_thread_delete(thread)
+        lm_own_delete(context, 0)
         return: status
     end: main
 end: external

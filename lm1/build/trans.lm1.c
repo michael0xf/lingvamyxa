@@ -82,6 +82,8 @@ typedef struct LmOwnArena LmOwnArena;
 typedef struct LmHostThread LmHostThread;
 typedef struct LmMutex LmMutex;
 typedef struct LmCondition LmCondition;
+typedef struct LmMessageThreadRuntime LmMessageThreadRuntime;
+typedef struct LmMessageThreadPool LmMessageThreadPool;
 typedef struct LmMessageThreadComponent LmMessageThreadComponent;
 typedef struct LmMessageThread LmMessageThread;
 typedef struct LmP0Node LmP0Node;
@@ -200,12 +202,36 @@ struct LmHostThread {
     void *implementation;
     int started;
     int joined;
+    void *controller_identity;
+    int starting;
 };
 struct LmMutex {
     void *implementation;
 };
 struct LmCondition {
     void *implementation;
+};
+struct LmMessageThreadRuntime {
+    void *identity;
+    size_t pool_count;
+    size_t single_execution_depth;
+    LmMessageThread * single_active_thread;
+};
+struct LmMessageThreadPool {
+    LmHostThread * *workers;
+    size_t worker_count;
+    size_t started_worker_count;
+    LmMutex * mutex;
+    LmCondition * work_ready;
+    LmMessageThread * ready_head;
+    LmMessageThread * ready_tail;
+    LmMessageThread * member_head;
+    LmMessageThread * member_tail;
+    size_t member_count;
+    int stop_requested;
+    int deleting;
+    int single_mode;
+    LmMessageThreadRuntime * runtime;
 };
 struct LmMessageThreadComponent {
     LmMessageThread * owner_thread;
@@ -228,6 +254,20 @@ struct LmMessageThread {
     LmMessageThreadComponent * component_head;
     size_t component_count;
     int component_destroying;
+    LmMessageThreadPool * pool;
+    void (*entry)(struct LmMessageThread *lm_lmx_message_thread, void *argument);
+    void *entry_argument;
+    LmMutex * state_mutex;
+    LmCondition * stopped_condition;
+    int started;
+    int joining;
+    int joined;
+    int scheduled;
+    int executing;
+    void *execution_identity;
+    LmMessageThread * ready_next;
+    LmMessageThread * pool_previous;
+    LmMessageThread * pool_next;
 };
 typedef struct LmP0Text {
     const char *data;
@@ -716,6 +756,10 @@ typedef void (*LmOwnDelete)(void *object);
 #define LM_LMX_TYPEDEF_DEFINED_LmHostThreadEntry 1
 typedef void * (*LmHostThreadEntry)(void *argument);
 #endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadEntry
+#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadEntry 1
+typedef void (*LmMessageThreadEntry)(struct LmMessageThread *lm_lmx_message_thread, void *argument);
+#endif
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy
 #define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy 1
 typedef void (*LmMessageThreadComponentDestroy)(struct LmMessageThread *lm_lmx_message_thread, void *component);
@@ -849,10 +893,18 @@ void (lm_condition_delete)(LmCondition *condition);
 int (lm_condition_wait)(LmCondition *condition, LmMutex *mutex);
 int (lm_condition_signal)(LmCondition *condition);
 int (lm_condition_broadcast)(LmCondition *condition);
+LmMessageThreadRuntime * (lm_message_thread_runtime_new)(void);
+int (lm_message_thread_runtime_delete)(LmMessageThreadRuntime *runtime);
+LmMessageThreadPool * (lm_message_thread_pool_new)(LmMessageThreadRuntime *runtime, size_t worker_count);
+void (lm_message_thread_pool_request_stop)(LmMessageThreadPool *pool);
+int (lm_message_thread_pool_delete)(LmMessageThreadPool *pool);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
 LmMessageThread * (lm_message_thread_new)(void);
+LmMessageThread * (lm_message_thread_new_in)(LmMessageThreadPool *pool);
 void (lm_message_thread_delete)(LmMessageThread *thread);
+int (lm_message_thread_start)(LmMessageThread *thread, LmMessageThreadEntry entry, void *argument);
+int (lm_message_thread_join)(LmMessageThread *thread, int *result);
 int (lm_message_thread_begin_turn)(LmMessageThread *thread);
 int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
@@ -1097,6 +1149,21 @@ static int lm_trans_declare_registry_fn_descriptors(struct LmMessageThread *lm_l
 static int lm_trans_emit_root_sequence(struct LmMessageThread *lm_lmx_message_thread, FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_l4_payload_pointer_bindings_init(struct LmMessageThread *lm_lmx_message_thread);
 static void lm_trans_l4_payload_pointer_bindings_destroy(struct LmMessageThread *lm_lmx_message_thread);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
