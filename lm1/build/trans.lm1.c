@@ -20,9 +20,9 @@ int lm_message_thread_status(const struct LmMessageThread *thread);
 int lm_message_thread_is_running(const struct LmMessageThread *thread);
 size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);
 size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);
-void lm_own_arena_freeze(struct LmOwnArena *arena);
-void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);
-void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
+void lm_own_arena_freeze(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena);
+void *lm_own_arena_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t size);
+void *lm_own_arena_array_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
 typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;
 struct LmMessageThreadExecutionContext {
     jmp_buf diagnostic_root;
@@ -780,22 +780,22 @@ int (lm_own_value_stack_pop)(LmOwnValueStack *stack, void *out_item);
 void * (lm_own_value_stack_at)(const LmOwnValueStack *stack, size_t index);
 void * (lm_own_value_stack_top)(const LmOwnValueStack *stack);
 void (lm_own_value_stack_truncate)(LmOwnValueStack *stack, size_t count);
-LmOwnArena * (lm_own_arena_new)(LmMessageThread *owner_thread);
-void (lm_own_arena_delete)(LmOwnArena *arena);
-int (lm_own_arena_init)(LmOwnArena *arena, LmMessageThread *owner_thread);
-void (lm_own_arena_destroy)(LmOwnArena *arena);
-void * (lm_own_arena_new_zero)(LmOwnArena *arena, size_t size);
-void * (lm_own_arena_array_new_zero)(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
-const LmOwnAllocationDescriptor * (lm_own_arena_allocation_descriptor)(const LmOwnArena *arena, const void *address);
-char * (lm_own_arena_copy_bytes)(LmOwnArena *arena, const char *source, size_t length);
-int (lm_own_arena_add_lazy_edge)(LmOwnArena *target, LmOwnArena *source, const void *source_ptr, size_t size, const void **patch_slot);
-int (lm_own_arena_promote_lazy_edges)(LmOwnArena *arena);
-int (lm_own_arena_absorb)(LmOwnArena *target, LmOwnArena *source);
-void (lm_own_arena_freeze)(LmOwnArena *arena);
-int (lm_own_arena_is_frozen)(const LmOwnArena *arena);
-LmMessageThread * (lm_own_arena_owner_thread)(const LmOwnArena *arena);
-int (lm_own_tree_cut)(LmOwnArena *arena);
-int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
+LmOwnArena * (lm_own_arena_new)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread);
+void (lm_own_arena_delete)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_arena_init)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, LmMessageThread *owner_thread);
+void (lm_own_arena_destroy)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+void * (lm_own_arena_new_zero)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, size_t size);
+void * (lm_own_arena_array_new_zero)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
+const LmOwnAllocationDescriptor * (lm_own_arena_allocation_descriptor)(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena, const void *address);
+char * (lm_own_arena_copy_bytes)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, const char *source, size_t length);
+int (lm_own_arena_add_lazy_edge)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *target, LmOwnArena *source, const void *source_ptr, size_t size, const void **patch_slot);
+int (lm_own_arena_promote_lazy_edges)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_arena_absorb)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *target, LmOwnArena *source);
+void (lm_own_arena_freeze)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_arena_is_frozen)(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena);
+LmMessageThread * (lm_own_arena_owner_thread)(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena);
+int (lm_own_tree_cut)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_tree_cut_promote_lazy_edges)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
 LmMessageThread * (lm_message_thread_new)(void);
@@ -1039,6 +1039,7 @@ static int lm_trans_declare_registry_fn_descriptors(struct LmMessageThread *lm_l
 static int lm_trans_emit_root_sequence(struct LmMessageThread *lm_lmx_message_thread, FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_l4_payload_pointer_bindings_init(struct LmMessageThread *lm_lmx_message_thread);
 static void lm_trans_l4_payload_pointer_bindings_destroy(struct LmMessageThread *lm_lmx_message_thread);
+
 
 
 
@@ -4487,7 +4488,7 @@ static void lm_trans_import_documents_drain(struct LmMessageThread *lm_lmx_messa
 static LmP0Text * lm_trans_registry_new_text(struct LmMessageThread *lm_lmx_message_thread) {
     (void)lm_lmx_message_thread;
     LmP0Text * text;
-    text = lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(text[0]));
+    text = lm_own_arena_new_zero(lm_lmx_message_thread, lm_trans_registry->value_arena, sizeof(text[0]));
     if (text != 0) {
         text->data = "";
         text->length = 0U;
@@ -4497,13 +4498,13 @@ static LmP0Text * lm_trans_registry_new_text(struct LmMessageThread *lm_lmx_mess
 
 static LmP0Structure * lm_trans_registry_new_structure(struct LmMessageThread *lm_lmx_message_thread) {
     (void)lm_lmx_message_thread;
-    return lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(LmP0Structure));
+    return lm_own_arena_new_zero(lm_lmx_message_thread, lm_trans_registry->value_arena, sizeof(LmP0Structure));
 }
 
 static LmP0Frame * lm_trans_registry_new_frame(struct LmMessageThread *lm_lmx_message_thread) {
     (void)lm_lmx_message_thread;
     LmP0Frame * frame;
-    frame = lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(frame[0]));
+    frame = lm_own_arena_new_zero(lm_lmx_message_thread, lm_trans_registry->value_arena, sizeof(frame[0]));
     if (frame == 0) {
         return 0;
     }
@@ -4518,7 +4519,7 @@ static LmP0Frame * lm_trans_registry_new_frame(struct LmMessageThread *lm_lmx_me
 static LmP0Trailer * lm_trans_registry_new_trailer(struct LmMessageThread *lm_lmx_message_thread) {
     (void)lm_lmx_message_thread;
     LmP0Trailer * trailer;
-    trailer = lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(trailer[0]));
+    trailer = lm_own_arena_new_zero(lm_lmx_message_thread, lm_trans_registry->value_arena, sizeof(trailer[0]));
     if (trailer == 0) {
         return 0;
     }
@@ -4601,7 +4602,7 @@ static int lm_trans_registry_clone_process_structure(struct LmMessageThread *lm_
     previous_field = 0;
     source_field = source -> first_field;
     while (source_field != 0) {
-        copy_field = lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(copy_field[0]));
+        copy_field = lm_own_arena_new_zero(lm_lmx_message_thread, lm_trans_registry->value_arena, sizeof(copy_field[0]));
         if (copy_field == 0) {
             return 1;
         }
@@ -4654,20 +4655,20 @@ static LmP0Node * lm_trans_registry_clone_node_shallow(struct LmMessageThread *l
     if (source == 0) {
         return 0;
     }
-    copy = lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(copy[0]));
+    copy = lm_own_arena_new_zero(lm_lmx_message_thread, lm_trans_registry->value_arena, sizeof(copy[0]));
     if (copy == 0) {
         return 0;
     }
     copy->kind = source -> kind;
     copy->flags = source -> flags;
-    copy->span = lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(copy -> span[0]));
+    copy->span = lm_own_arena_new_zero(lm_lmx_message_thread, lm_trans_registry->value_arena, sizeof(copy -> span[0]));
     if (copy -> span == 0) {
         return 0;
     }
     if (source -> span != 0) {
         memcpy(copy -> span, source -> span, sizeof(copy -> span[0]));
     }
-    copy->as = lm_own_arena_new_zero(lm_trans_registry->value_arena, sizeof(copy -> as[0]));
+    copy->as = lm_own_arena_new_zero(lm_lmx_message_thread, lm_trans_registry->value_arena, sizeof(copy -> as[0]));
     if (copy -> as == 0) {
         return 0;
     }
@@ -4913,7 +4914,7 @@ static int lm_trans_registry_push_row_values_from(struct LmMessageThread *lm_lmx
         return -1;
     }
     registry = lm_trans_registry;
-    row = lm_own_arena_new_zero(registry -> value_arena, sizeof(row[0]));
+    row = lm_own_arena_new_zero(lm_lmx_message_thread, registry -> value_arena, sizeof(row[0]));
     if (row == 0) {
         return -1;
     }
@@ -4951,7 +4952,7 @@ static int lm_trans_registry_push_row_node_values_from(struct LmMessageThread *l
         return -1;
     }
     registry = lm_trans_registry;
-    row = lm_own_arena_new_zero(registry -> value_arena, sizeof(row[0]));
+    row = lm_own_arena_new_zero(lm_lmx_message_thread, registry -> value_arena, sizeof(row[0]));
     if (row == 0) {
         return -1;
     }
@@ -17704,13 +17705,13 @@ static int lm_trans_emit_message_thread_runtime_prelude(struct LmMessageThread *
     if (lm_trans_put(lm_lmx_message_thread, file, "size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(lm_lmx_message_thread, file, "void lm_own_arena_freeze(struct LmOwnArena *arena);\n") != 0) {
+    if (lm_trans_put(lm_lmx_message_thread, file, "void lm_own_arena_freeze(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena);\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(lm_lmx_message_thread, file, "void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);\n") != 0) {
+    if (lm_trans_put(lm_lmx_message_thread, file, "void *lm_own_arena_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t size);\n") != 0) {
         return 1;
     }
-    if (lm_trans_put(lm_lmx_message_thread, file, "void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);\n") != 0) {
+    if (lm_trans_put(lm_lmx_message_thread, file, "void *lm_own_arena_array_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);\n") != 0) {
         return 1;
     }
     if (lm_trans_put(lm_lmx_message_thread, file, "typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;\n") != 0) {
@@ -18100,7 +18101,7 @@ static int lm_trans_emit_array_structure_value_alloc_assignment(struct LmMessage
     if (lm_trans_emit_array_pointer_type(lm_lmx_message_thread, file, element_type, pointer_depth) != 0) {
         return 1;
     }
-    if (lm_trans_put(lm_lmx_message_thread, file, ")lm_own_arena_array_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0) {
+    if (lm_trans_put(lm_lmx_message_thread, file, ")lm_own_arena_array_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0) {
         return 1;
     }
     if (lm_trans_emit_array_target_path(lm_lmx_message_thread, file, target_name, indices, depth) != 0) {
@@ -18371,7 +18372,7 @@ static int lm_trans_type_receiver_array_structure_value_alloc(struct LmMessageTh
             }
         }
     }
-    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_write_text(lm_lmx_message_thread, file, target_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = (LmSlice *)lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_write_text(lm_lmx_message_thread, file, target_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "));\n") != 0) {
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_write_text(lm_lmx_message_thread, file, target_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = (LmSlice *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_write_text(lm_lmx_message_thread, file, target_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "));\n") != 0) {
         {
             int lm_return_6 = 1;
             lm_trans_text_ref_destroy(&items_name);
@@ -18769,7 +18770,7 @@ static int lm_trans_emit_array_value_helper(struct LmMessageThread *lm_lmx_messa
             return lm_return_5;
         }
     }
-    if (lm_trans_put(lm_lmx_message_thread, prelude_file, "    ") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, slice_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, " = (LmSlice *)lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, slice_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, "));\n    if (") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, slice_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, " == 0) {\n        return 0;\n    }\n    ") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, slice_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, "->ptr = (void *)") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, target_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, ";\n    ") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, slice_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, "->length = ") != 0 || lm_trans_emit_size_literal(lm_lmx_message_thread, prelude_file, count) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, ";\n    return ") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, slice_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, ";\n}\n\n") != 0) {
+    if (lm_trans_put(lm_lmx_message_thread, prelude_file, "    ") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, slice_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, " = (LmSlice *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, slice_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, "));\n    if (") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, slice_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, " == 0) {\n        return 0;\n    }\n    ") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, slice_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, "->ptr = (void *)") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, target_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, ";\n    ") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, slice_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, "->length = ") != 0 || lm_trans_emit_size_literal(lm_lmx_message_thread, prelude_file, count) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, ";\n    return ") != 0 || lm_trans_write_text(lm_lmx_message_thread, prelude_file, slice_name) != 0 || lm_trans_put(lm_lmx_message_thread, prelude_file, ";\n}\n\n") != 0) {
         {
             int lm_return_6 = 1;
             lm_trans_text_ref_destroy(&helper_name_text);
@@ -18930,7 +18931,7 @@ static int lm_trans_emit_fm_result_prologue(struct LmMessageThread *lm_lmx_messa
     if (lm_trans_emit_message_thread_runtime_prelude(lm_lmx_message_thread, lm_trans_prelude_file(lm_lmx_message_thread, file)) != 0) {
         return 1;
     }
-    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_emit_function_return_struct_type_name(lm_lmx_message_thread, file, function_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *lm_fm_result = (") != 0 || lm_trans_emit_function_return_struct_type_name(lm_lmx_message_thread, file, function_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *)lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*lm_fm_result));\n") != 0) {
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_emit_function_return_struct_type_name(lm_lmx_message_thread, file, function_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *lm_fm_result = (") != 0 || lm_trans_emit_function_return_struct_type_name(lm_lmx_message_thread, file, function_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*lm_fm_result));\n") != 0) {
         return 1;
     }
     if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_fm_result == 0) {\n") != 0) {
@@ -21621,7 +21622,7 @@ static int lm_trans_emit_named_structure_storage(struct LmMessageThread *lm_lmx_
                 return lm_return_1;
             }
         }
-        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, frame -> head) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *") != 0 || lm_trans_put(lm_lmx_message_thread, file, pointer_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = (") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, frame -> head) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *)lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_put(lm_lmx_message_thread, file, pointer_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "));\n") != 0) {
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, frame -> head) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *") != 0 || lm_trans_put(lm_lmx_message_thread, file, pointer_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = (") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, frame -> head) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_put(lm_lmx_message_thread, file, pointer_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "));\n") != 0) {
             {
                 int lm_return_2 = 1;
                 lm_own_delete(pointer_name, 0);
@@ -24101,7 +24102,7 @@ static int lm_trans_emit_merge_named_structure_storage(struct LmMessageThread *l
                 return lm_return_1;
             }
         }
-        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, target) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *") != 0 || lm_trans_put(lm_lmx_message_thread, file, pointer_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = (") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, target) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *)lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_put(lm_lmx_message_thread, file, pointer_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "));\n") != 0) {
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, target) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *") != 0 || lm_trans_put(lm_lmx_message_thread, file, pointer_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = (") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, target) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_put(lm_lmx_message_thread, file, pointer_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "));\n") != 0) {
             {
                 int lm_return_2 = 1;
                 lm_own_delete(pointer_name, 0);
@@ -26048,7 +26049,7 @@ static int lm_trans_statement_emit_nested_function(struct LmMessageThread *lm_lm
                 return lm_return_4;
             }
         }
-        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_write_text(lm_lmx_message_thread, file, hoisted -> env_var_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = (") != 0 || lm_trans_write_text(lm_lmx_message_thread, file, hoisted -> function -> env_type_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *)lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_write_text(lm_lmx_message_thread, file, hoisted -> env_var_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "));\n") != 0) {
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_write_text(lm_lmx_message_thread, file, hoisted -> env_var_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = (") != 0 || lm_trans_write_text(lm_lmx_message_thread, file, hoisted -> function -> env_type_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_write_text(lm_lmx_message_thread, file, hoisted -> env_var_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "));\n") != 0) {
             {
                 int lm_return_5 = 1;
                 lm_own_delete(closure_value_name, 0);
@@ -26169,7 +26170,7 @@ static int lm_trans_statement_emit_nested_function(struct LmMessageThread *lm_lm
                 return lm_return_16;
             }
         }
-        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, closure_value_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = (") != 0 || lm_trans_write_text(lm_lmx_message_thread, file, descriptor_type) != 0 || lm_trans_put(lm_lmx_message_thread, file, ")lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_put(lm_lmx_message_thread, file, closure_value_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "));\n") != 0) {
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, closure_value_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = (") != 0 || lm_trans_write_text(lm_lmx_message_thread, file, descriptor_type) != 0 || lm_trans_put(lm_lmx_message_thread, file, ")lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_put(lm_lmx_message_thread, file, closure_value_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "));\n") != 0) {
             {
                 int lm_return_17 = 1;
                 lm_own_delete(closure_value_name, 0);
@@ -35622,11 +35623,11 @@ static int lm_trans_emit_l4_prototypes(struct LmMessageThread *lm_lmx_message_th
 static LmP0Node * lm_trans_registry_synthetic_node(struct LmMessageThread *lm_lmx_message_thread, LmP0NodeKind kind) {
     (void)lm_lmx_message_thread;
     LmP0Node * node;
-    node = lm_own_arena_new_zero(lm_trans_registry -> value_arena, sizeof(node[0]));
+    node = lm_own_arena_new_zero(lm_lmx_message_thread, lm_trans_registry -> value_arena, sizeof(node[0]));
     if (node == 0) {
         return 0;
     }
-    node->as = lm_own_arena_new_zero(lm_trans_registry -> value_arena, sizeof(node -> as[0]));
+    node->as = lm_own_arena_new_zero(lm_lmx_message_thread, lm_trans_registry -> value_arena, sizeof(node -> as[0]));
     if (node -> as == 0) {
         return 0;
     }
@@ -35676,7 +35677,7 @@ static LmP0Field * lm_trans_registry_synthetic_append_node(struct LmMessageThrea
     if (structure == 0 || value == 0) {
         return 0;
     }
-    field = lm_own_arena_new_zero(lm_trans_registry -> value_arena, sizeof(field[0]));
+    field = lm_own_arena_new_zero(lm_lmx_message_thread, lm_trans_registry -> value_arena, sizeof(field[0]));
     if (field == 0) {
         return 0;
     }
@@ -35721,7 +35722,7 @@ static char * lm_trans_registry_synthetic_at_head(struct LmMessageThread *lm_lmx
     if (address_depth == 0U) {
         return 0;
     }
-    head = lm_own_arena_new_zero(lm_trans_registry -> value_arena, address_depth + 1U);
+    head = lm_own_arena_new_zero(lm_lmx_message_thread, lm_trans_registry -> value_arena, address_depth + 1U);
     if (head == 0) {
         return 0;
     }
@@ -36388,7 +36389,7 @@ static void lm_trans_registry_destroy(struct LmMessageThread *lm_lmx_message_thr
     lm_trans_registry->view = 0;
     if (lm_trans_registry -> loaded) {
         lm_trans_identifier_table_delete(lm_lmx_message_thread, &lm_trans_registry -> identifiers);
-        lm_own_arena_destroy(lm_trans_registry -> value_arena);
+        lm_own_arena_destroy(lm_lmx_message_thread, lm_trans_registry -> value_arena);
         lm_own_delete(lm_trans_registry -> value_arena, 0);
         lm_trans_ptr_stack_delete(&lm_trans_registry -> early_l2_source_sites);
         lm_trans_ptr_stack_delete(&lm_trans_registry -> predefined_descriptor_sites);
@@ -37873,7 +37874,7 @@ static int lm_trans_registry_load_for_source(struct LmMessageThread *lm_lmx_mess
     lm_trans_registry->predefined_paths = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_own_delete_plain);
     lm_trans_registry->predefined_descriptor_sites = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_own_delete_plain);
     lm_trans_registry->early_l2_source_sites = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_own_delete_plain);
-    if (lm_trans_registry -> identifiers == 0 || lm_trans_registry -> value_arena == 0 || lm_own_arena_init(lm_trans_registry -> value_arena, lm_lmx_message_thread) != 0 || lm_trans_registry -> loaded_paths == 0 || lm_trans_registry -> predefined_paths == 0 || lm_trans_registry -> predefined_descriptor_sites == 0 || lm_trans_registry -> early_l2_source_sites == 0) {
+    if (lm_trans_registry -> identifiers == 0 || lm_trans_registry -> value_arena == 0 || lm_own_arena_init(lm_lmx_message_thread, lm_trans_registry -> value_arena, lm_lmx_message_thread) != 0 || lm_trans_registry -> loaded_paths == 0 || lm_trans_registry -> predefined_paths == 0 || lm_trans_registry -> predefined_descriptor_sites == 0 || lm_trans_registry -> early_l2_source_sites == 0) {
         lm_trans_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
@@ -38351,7 +38352,7 @@ static char * lm_trans_registry_value_copy_cstr(struct LmMessageThread *lm_lmx_m
         return 0;
     }
     length = value -> length;
-    copy = lm_own_arena_new_zero(lm_trans_registry->value_arena, length + 1U);
+    copy = lm_own_arena_new_zero(lm_lmx_message_thread, lm_trans_registry->value_arena, length + 1U);
     if (copy == 0) {
         return 0;
     }
@@ -38379,7 +38380,7 @@ static int lm_trans_registry_clone_text(struct LmMessageThread *lm_lmx_message_t
     if (source -> data == 0) {
         return 1;
     }
-    copy = lm_own_arena_copy_bytes(lm_trans_registry->value_arena, source -> data, source -> length);
+    copy = lm_own_arena_copy_bytes(lm_lmx_message_thread, lm_trans_registry->value_arena, source -> data, source -> length);
     if (copy == 0) {
         return 1;
     }

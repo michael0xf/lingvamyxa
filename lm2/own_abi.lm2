@@ -383,6 +383,29 @@ table:
              lm_message_thread_collection_count  1
 end: `fn.external`
 
+table:
+    source
+    name: `fn.thread-context.managed`
+    columns((class: class) (int: value))
+    rows:
+             lm_own_arena_new          1
+             lm_own_arena_delete       1
+             lm_own_arena_init         1
+             lm_own_arena_destroy      1
+             lm_own_arena_new_zero     1
+             lm_own_arena_array_new_zero 1
+             lm_own_arena_allocation_descriptor 1
+             lm_own_arena_copy_bytes   1
+             lm_own_arena_add_lazy_edge 1
+             lm_own_arena_promote_lazy_edges 1
+             lm_own_arena_absorb       1
+             lm_own_arena_freeze       1
+             lm_own_arena_is_frozen    1
+             lm_own_arena_owner_thread 1
+             lm_own_tree_cut           1
+             lm_own_tree_cut_promote_lazy_edges 1
+end: `fn.thread-context.managed`
+
 fn: lm_own_new_zero (size_t: size) @: void
 fn: lm_own_resize (@: void object; size_t: size) @: void
 fn: lm_own_copy_bytes (const: @(char source); size_t: length) @: char

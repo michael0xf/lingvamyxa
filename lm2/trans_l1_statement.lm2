@@ -557,11 +557,11 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);\n") != 0
         return: 1
-    if: lm_trans_put(file, "void lm_own_arena_freeze(struct LmOwnArena *arena);\n") != 0
+    if: lm_trans_put(file, "void lm_own_arena_freeze(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena);\n") != 0
         return: 1
-    if: lm_trans_put(file, "void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);\n") != 0
+    if: lm_trans_put(file, "void *lm_own_arena_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t size);\n") != 0
         return: 1
-    if: lm_trans_put(file, "void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);\n") != 0
+    if: lm_trans_put(file, "void *lm_own_arena_array_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);\n") != 0
         return: 1
     if: lm_trans_put(file, "typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;\n") != 0
         return: 1
@@ -855,7 +855,7 @@ fn: lm_trans_emit_array_structure_value_alloc_assignment (
         return: 1
     if: lm_trans_emit_array_pointer_type(file, element_type, pointer_depth) != 0
         return: 1
-    if: lm_trans_put(file, ")lm_own_arena_array_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0
+    if: lm_trans_put(file, ")lm_own_arena_array_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0
         return: 1
     if: lm_trans_emit_array_target_path(file, target_name, indices, depth) != 0
         return: 1
@@ -1082,7 +1082,7 @@ fn: lm_trans_type_receiver_array_structure_value_alloc (
         if: lm_trans_put(file, "if (1) {\n") != 0
             return: 1
         ---
-    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, " = (LmSlice *)lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, "));\n") != 0
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, " = (LmSlice *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, "));\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_write_text(file, target_name) != 0 || lm_trans_put(file, " != 0) {\n") != 0
         return: 1
@@ -1360,7 +1360,7 @@ fn: lm_trans_emit_array_value_helper (
     if: count != 0U && lm_trans_emit_array_structure_value_fill(prelude_file, 1U, target_name, element_type, rank, value, namespace_) != 0
         return: 1
 
-    if: lm_trans_put(prelude_file, "    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " = (LmSlice *)lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "));\n    if (") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " == 0) {\n        return 0;\n    }\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->ptr = (void *)") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->length = ") != 0 || lm_trans_emit_size_literal(prelude_file, count) != 0 || lm_trans_put(prelude_file, ";\n    return ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n}\n\n") != 0
+    if: lm_trans_put(prelude_file, "    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " = (LmSlice *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "));\n    if (") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, " == 0) {\n        return 0;\n    }\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->ptr = (void *)") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, "->length = ") != 0 || lm_trans_emit_size_literal(prelude_file, count) != 0 || lm_trans_put(prelude_file, ";\n    return ") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n}\n\n") != 0
         return: 1
 
     if: lm_own_ptr_stack_push(lm_trans_emitted_array_value_helpers, helper_name) != 0
@@ -1454,7 +1454,7 @@ fn: lm_trans_emit_fm_result_prologue (
     if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
         return: 1
 
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *lm_fm_result = (") != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*lm_fm_result));\n") != 0
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *lm_fm_result = (") != 0 || lm_trans_emit_function_return_struct_type_name(file, function_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*lm_fm_result));\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_fm_result == 0) {\n") != 0
         return: 1
@@ -3481,7 +3481,7 @@ fn: lm_trans_emit_named_structure_storage (
     if: qualifier = 0 || qualifier[0] = '\0'
         if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
             return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, "));\n") != 0
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, "));\n") != 0
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "abort();\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
             return: 1
@@ -5437,7 +5437,7 @@ fn: lm_trans_emit_merge_named_structure_storage (
     if: qualifier = 0 || qualifier[0] = '\0'
         if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
             return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, target) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, target) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, "));\n") != 0
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, target) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, target) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, "));\n") != 0
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_put(file, pointer_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "abort();\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
             return: 1
@@ -7193,7 +7193,7 @@ fn: lm_trans_statement_emit_nested_function (
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted\function\env_type_name) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, ";\n") != 0
             return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, hoisted\function\env_type_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, "));\n") != 0
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, hoisted\function\env_type_name) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, "));\n") != 0
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_write_text(file, hoisted\env_var_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0
             return: 1
@@ -7232,7 +7232,7 @@ fn: lm_trans_statement_emit_nested_function (
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_write_text(file, descriptor_type) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, ";\n") != 0
             return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, descriptor_type) != 0 || lm_trans_put(file, ")lm_own_arena_new_zero(lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "));\n") != 0
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_write_text(file, descriptor_type) != 0 || lm_trans_put(file, ")lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, "));\n") != 0
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_put(file, closure_value_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0
             return: 1

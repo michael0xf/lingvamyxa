@@ -194,7 +194,7 @@ end: external
 
 external:
     fn: lm_own_arena_init (LmOwnArena: arena; LmMessageThread: owner_thread) int
-        if: arena = 0 || owner_thread = 0
+        if: arena = 0 || owner_thread = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread
             return: 1
 
         arena\allocations: 0
@@ -225,7 +225,7 @@ end: external
 
 external:
     sub: lm_own_arena_destroy (LmOwnArena: arena)
-        if: arena != 0
+        if: arena != 0 && c.lm_lmx_message_thread != 0 && arena\owner_thread = c.lm_lmx_message_thread
             lm_own_ptr_stack_destroy(arena\lazy_edges)
             lm_own_delete(arena\lazy_edges, 0)
             lm_own_ptr_stack_destroy(arena\allocation_descriptors)
@@ -244,7 +244,7 @@ external:
     fn: lm_own_arena_new (LmMessageThread: owner_thread) LmOwnArena
         LmOwnArena: arena
 
-        if: owner_thread = 0
+        if: owner_thread = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread
             return: 0
         arena: lm_own_new_zero(c.sizeof(arena[0]))
         if: arena = 0
@@ -257,7 +257,7 @@ end: external
 
 external:
     sub: lm_own_arena_delete (LmOwnArena: arena)
-        if: arena != 0
+        if: arena != 0 && c.lm_lmx_message_thread != 0 && arena\owner_thread = c.lm_lmx_message_thread
             lm_own_arena_destroy(arena)
             lm_own_delete(arena, 0)
     end: lm_own_arena_delete
@@ -265,30 +265,34 @@ end: external
 
 external:
     sub: lm_own_arena_freeze (LmOwnArena: arena)
-        if: arena != 0 && arena\owner_thread != 0
+        if: arena != 0 && c.lm_lmx_message_thread != 0 && arena\owner_thread = c.lm_lmx_message_thread
             arena\frozen: 1
     end: lm_own_arena_freeze
 end: external
 
 external:
     fn: lm_own_arena_is_frozen (const: (LmOwnArena: arena)) int
-    return: arena != 0 && arena\owner_thread != 0 && arena\frozen
+    return: arena != 0 && c.lm_lmx_message_thread != 0 && arena\owner_thread = c.lm_lmx_message_thread && arena\frozen
 end: external
 
 external:
     fn: lm_own_arena_owner_thread (const: (LmOwnArena: arena)) LmMessageThread
-        if: arena = 0
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread
             return: 0
     return: arena\owner_thread
 end: external
 
 external:
     fn: lm_own_tree_cut (LmOwnArena: arena) int
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread
+            return: 1
     return: lm_own_tree_cut_promote_lazy_edges(arena)
 end: external
 
 external:
     fn: lm_own_tree_cut_promote_lazy_edges (LmOwnArena: arena) int
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread
+            return: 1
     return: lm_own_arena_promote_lazy_edges(arena)
 end: external
 
@@ -439,7 +443,7 @@ external:
     fn: lm_own_arena_new_zero (LmOwnArena: arena; size_t: size) @: void
         @: void object
 
-        if: arena = 0 || arena\owner_thread = 0 || arena\frozen || arena\allocations = 0 || arena\allocation_descriptors = 0
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\frozen || arena\allocations = 0 || arena\allocation_descriptors = 0
             return: 0
 
         object: c.calloc(1U, size)
@@ -460,7 +464,7 @@ external:
         @: void object
         size_t: bytes
 
-        if: arena = 0 || arena\owner_thread = 0 || arena\frozen || arena\allocations = 0 || arena\allocation_descriptors = 0
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\frozen || arena\allocations = 0 || arena\allocation_descriptors = 0
             return: 0
         if: lm_own_size_multiply(element_size, count, @ bytes) != 0
             return: 0
@@ -483,7 +487,7 @@ end: external
 
 external:
     fn: lm_own_arena_allocation_descriptor (const: (LmOwnArena: arena); const: @(void address)) const: LmOwnAllocationDescriptor
-        if: arena = 0 || arena\owner_thread = 0 || arena\allocation_descriptors = 0
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\allocation_descriptors = 0
             return: 0
     return: lm_own_allocation_descriptor_find(arena\allocation_descriptors, address)
 end: external
@@ -492,6 +496,8 @@ external:
     fn: lm_own_arena_copy_bytes (LmOwnArena: arena; const: @(char source); size_t: length) @: char
         @: char copy
 
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread
+            return: 0
         copy: lm_own_arena_new_zero(arena, length + 1U)
         if: copy = 0
             return: 0
@@ -506,7 +512,7 @@ external:
         LmOwnLazyEdge: edge
         int: status
 
-        if: target = 0 || source = 0 || patch_slot = 0 || target\owner_thread = 0 || source\owner_thread = 0 || target\owner_thread != source\owner_thread || target\frozen || target\lazy_edges = 0
+        if: target = 0 || source = 0 || patch_slot = 0 || c.lm_lmx_message_thread = 0 || target\owner_thread != c.lm_lmx_message_thread || source\owner_thread != c.lm_lmx_message_thread || target\frozen || target\lazy_edges = 0
             return: 1
         if: size = 0U
             return: 0
@@ -534,7 +540,7 @@ external:
         @: void copy
         size_t: i
 
-        if: arena = 0 || arena\owner_thread = 0 || arena\frozen || arena\lazy_edges = 0
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\frozen || arena\lazy_edges = 0
             return: 1
 
         i: 0U
@@ -573,7 +579,7 @@ external:
         LmOwnAllocationDescriptor: descriptor
         LmOwnLazyEdge: edge
 
-        if: target = 0 || source = 0 || target\owner_thread = 0 || source\owner_thread = 0 || target\owner_thread != source\owner_thread || target\frozen
+        if: target = 0 || source = 0 || c.lm_lmx_message_thread = 0 || target\owner_thread != c.lm_lmx_message_thread || source\owner_thread != c.lm_lmx_message_thread || target\frozen
             return: 1
         if: target\allocations = 0 || target\allocation_descriptors = 0 || target\lazy_edges = 0
             return: 1
@@ -666,7 +672,7 @@ external:
             return: 1
 
         c.memset(thread, 0, c.sizeof(thread[0]))
-        thread\root_owner: lm_own_arena_new(thread)
+        thread\root_owner: c.lm_own_arena_new(thread, thread)
         if: thread\root_owner = 0
             thread\state: c.LM_MESSAGE_THREAD_STOPPED
             thread\collector_failed: 1
@@ -681,7 +687,7 @@ external:
     sub: lm_message_thread_destroy (LmMessageThread: thread)
         if: thread != 0
             if: thread\root_owner != 0 && thread\root_owner\owner_thread = thread
-                lm_own_arena_delete(thread\root_owner)
+                c.lm_own_arena_delete(thread, thread\root_owner)
             thread\root_owner: 0
             thread\state: c.LM_MESSAGE_THREAD_STOPPED
     end: lm_message_thread_destroy
@@ -787,7 +793,7 @@ external:
             thread\collector_failed: 1
             lm_message_thread_request_failure(thread, 1)
             return: 1
-        if: lm_own_tree_cut(thread\root_owner) != 0
+        if: c.lm_own_tree_cut(thread, thread\root_owner) != 0
             thread\collector_failed: 1
             lm_message_thread_request_failure(thread, 1)
             return: 1

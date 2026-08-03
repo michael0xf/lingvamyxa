@@ -42,27 +42,32 @@ external:
         arenaB: lm_message_thread_owner(threadB)
         if: arenaA = 0 || arenaB = 0 || arenaA = arenaB
             status: 3
-        if: status = 0 && (lm_own_arena_owner_thread(arenaA) != threadA || lm_own_arena_owner_thread(arenaB) != threadB)
+        if: status = 0 && (lm_own_arena_owner_thread(arenaA) != 0 || lm_own_arena_owner_thread(arenaB) != 0)
             status: 4
-        if: status = 0 && lm_own_arena_new(0) != 0
+        if: status = 0 && (c.lm_own_arena_owner_thread(threadA, arenaA) != threadA || c.lm_own_arena_owner_thread(threadB, arenaB) != threadB)
             status: 5
+        if: status = 0 && (lm_own_arena_new(threadA) != 0 || lm_own_arena_new(0) != 0)
+            status: 6
 
         if: status = 0
-            childA: lm_own_arena_new(threadA)
-            childB: lm_own_arena_new(threadB)
+            childA: c.lm_own_arena_new(threadA, threadA)
+            childB: c.lm_own_arena_new(threadB, threadB)
             if: childA = 0 || childB = 0
-                status: 6
+                status: 7
         ---
-        if: status = 0 && (lm_own_arena_owner_thread(childA) != threadA || lm_own_arena_owner_thread(childB) != threadB)
-            status: 7
+        if: status = 0 && (c.lm_own_arena_owner_thread(threadA, childA) != threadA || c.lm_own_arena_owner_thread(threadB, childB) != threadB)
+            status: 8
+
+        if: status = 0 && lm_own_arena_array_new_zero(arenaA, c.sizeof(valueA[0]), 1U, 1U, 0U) != 0
+            status: 9
 
         if: status = 0
-            valueA: (cast: (@: int) lm_own_arena_array_new_zero(arenaA, c.sizeof(valueA[0]), 1U, 1U, 0U))
-            valueB: (cast: (@: int) lm_own_arena_array_new_zero(arenaB, c.sizeof(valueB[0]), 1U, 1U, 0U))
-            sourceA: (cast: (@: int) lm_own_arena_array_new_zero(childA, c.sizeof(sourceA[0]), 1U, 1U, 0U))
-            sourceB: (cast: (@: int) lm_own_arena_array_new_zero(childB, c.sizeof(sourceB[0]), 1U, 1U, 0U))
+            valueA: (cast: (@: int) c.lm_own_arena_array_new_zero(threadA, arenaA, c.sizeof(valueA[0]), 1U, 1U, 0U))
+            valueB: (cast: (@: int) c.lm_own_arena_array_new_zero(threadB, arenaB, c.sizeof(valueB[0]), 1U, 1U, 0U))
+            sourceA: (cast: (@: int) c.lm_own_arena_array_new_zero(threadA, childA, c.sizeof(sourceA[0]), 1U, 1U, 0U))
+            sourceB: (cast: (@: int) c.lm_own_arena_array_new_zero(threadB, childB, c.sizeof(sourceB[0]), 1U, 1U, 0U))
             if: valueA = 0 || valueB = 0 || sourceA = 0 || sourceB = 0
-                status: 8
+                status: 10
         ---
 
         if: status = 0
@@ -70,101 +75,101 @@ external:
             valueB[0]: 22
             sourceA[0]: 41
             sourceB[0]: 42
-            descriptorA: lm_own_arena_allocation_descriptor(arenaA, valueA)
-            descriptorB: lm_own_arena_allocation_descriptor(arenaB, valueB)
+            descriptorA: c.lm_own_arena_allocation_descriptor(threadA, arenaA, valueA)
+            descriptorB: c.lm_own_arena_allocation_descriptor(threadB, arenaB, valueB)
             if: descriptorA = 0 || descriptorA\owner != arenaA
-                status: 9
-            if: status = 0 && (descriptorB = 0 || descriptorB\owner != arenaB)
-                status: 10
-            if: status = 0 && lm_own_arena_allocation_descriptor(arenaB, valueA) != 0
                 status: 11
-            if: status = 0 && lm_own_arena_allocation_descriptor(arenaA, valueB) != 0
+            if: status = 0 && (descriptorB = 0 || descriptorB\owner != arenaB)
                 status: 12
+            if: status = 0 && c.lm_own_arena_allocation_descriptor(threadB, arenaB, valueA) != 0
+                status: 13
+            if: status = 0 && c.lm_own_arena_allocation_descriptor(threadA, arenaA, valueB) != 0
+                status: 14
         ---
 
         if: status = 0
             patchA: cast: (@: void) sourceA
-            if: lm_own_arena_add_lazy_edge(arenaA, childA, sourceA, c.sizeof(sourceA[0]), (cast: (const: @@: void) @ patchA)) != 0
-                status: 13
+            if: c.lm_own_arena_add_lazy_edge(threadA, arenaA, childA, sourceA, c.sizeof(sourceA[0]), (cast: (const: @@: void) @ patchA)) != 0
+                status: 15
         ---
         if: status = 0 && lm_message_thread_collect(threadA) != 0
-            status: 14
+            status: 16
         if: status = 0 && lm_message_thread_collection_count(threadA) != 1U
-            status: 15
+            status: 17
         if: status = 0
             promotedA: cast: (@: int) patchA
             if: promotedA = 0 || promotedA = sourceA || promotedA[0] != 41
-                status: 16
+                status: 18
         ---
 
         if: status = 0
             patchB: cast: (@: void) sourceB
-            if: lm_own_arena_add_lazy_edge(arenaA, childB, sourceB, c.sizeof(sourceB[0]), (cast: (const: @@: void) @ patchB)) != 1
-                status: 17
+            if: c.lm_own_arena_add_lazy_edge(threadA, arenaA, childB, sourceB, c.sizeof(sourceB[0]), (cast: (const: @@: void) @ patchB)) != 1
+                status: 19
             if: status = 0 && (patchB != sourceB || sourceB[0] != 42)
-                status: 18
-        ---
-
-        if: status = 0 && lm_own_arena_absorb(arenaA, childA) != 0
-            status: 19
-        if: status = 0
-            descriptorA: lm_own_arena_allocation_descriptor(arenaA, sourceA)
-            if: descriptorA = 0 || descriptorA\owner != arenaA || sourceA[0] != 41
                 status: 20
         ---
-        if: status = 0 && lm_own_arena_absorb(arenaA, childB) != 1
+
+        if: status = 0 && c.lm_own_arena_absorb(threadA, arenaA, childA) != 0
             status: 21
         if: status = 0
-            descriptorB: lm_own_arena_allocation_descriptor(childB, sourceB)
-            if: descriptorB = 0 || descriptorB\owner != childB || sourceB[0] != 42
+            descriptorA: c.lm_own_arena_allocation_descriptor(threadA, arenaA, sourceA)
+            if: descriptorA = 0 || descriptorA\owner != arenaA || sourceA[0] != 41
                 status: 22
+        ---
+        if: status = 0 && c.lm_own_arena_absorb(threadA, arenaA, childB) != 1
+            status: 23
+        if: status = 0
+            descriptorB: c.lm_own_arena_allocation_descriptor(threadB, childB, sourceB)
+            if: descriptorB = 0 || descriptorB\owner != childB || sourceB[0] != 42
+                status: 24
         ---
 
         if: status = 0
             probe: lm_message_thread_new()
             if: probe = 0
-                status: 23
+                status: 25
         ---
         if: status = 0
             probeRoot: probe\root_owner
             probe\root_owner: arenaA
             if: lm_message_thread_owner(probe) != 0
-                status: 24
+                status: 26
             if: status = 0 && lm_message_thread_collect(probe) != 1
-                status: 25
+                status: 27
             probe\root_owner: probeRoot
             if: status = 0 && (lm_message_thread_collection_count(probe) != 1U || lm_message_thread_status(probe) != 1 || lm_message_thread_is_running(probe))
-                status: 26
+                status: 28
         ---
 
         lm_message_thread_delete(probe)
         probe: 0
         if: status = 0 && lm_message_thread_collection_count(threadB) != 0U
-            status: 27
+            status: 29
         if: status = 0 && valueB[0] != 22
-            status: 28
+            status: 30
 
-        lm_own_arena_delete(childA)
+        c.lm_own_arena_delete(threadA, childA)
         childA: 0
 
         lm_message_thread_delete(threadA)
         threadA: 0
 
         if: status = 0 && (valueB[0] != 22 || sourceB[0] != 42)
-            status: 29
+            status: 31
         if: status = 0
-            valueB2: (cast: (@: int) lm_own_arena_array_new_zero(arenaB, c.sizeof(valueB2[0]), 1U, 1U, 0U))
+            valueB2: (cast: (@: int) c.lm_own_arena_array_new_zero(threadB, arenaB, c.sizeof(valueB2[0]), 1U, 1U, 0U))
             if: valueB2 = 0
-                status: 30
+                status: 32
         ---
         if: status = 0
             valueB2[0]: 33
-            descriptorB2: lm_own_arena_allocation_descriptor(arenaB, valueB2)
+            descriptorB2: c.lm_own_arena_allocation_descriptor(threadB, arenaB, valueB2)
             if: descriptorB2 = 0 || descriptorB2\owner != arenaB || valueB2[0] != 33
-                status: 31
+                status: 33
         ---
 
-        lm_own_arena_delete(childB)
+        c.lm_own_arena_delete(threadB, childB)
         lm_message_thread_delete(threadB)
         return: status
     end: main

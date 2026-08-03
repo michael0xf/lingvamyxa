@@ -20,9 +20,9 @@ int lm_message_thread_status(const struct LmMessageThread *thread);
 int lm_message_thread_is_running(const struct LmMessageThread *thread);
 size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);
 size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);
-void lm_own_arena_freeze(struct LmOwnArena *arena);
-void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);
-void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
+void lm_own_arena_freeze(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena);
+void *lm_own_arena_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t size);
+void *lm_own_arena_array_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
 typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;
 struct LmMessageThreadExecutionContext {
     jmp_buf diagnostic_root;

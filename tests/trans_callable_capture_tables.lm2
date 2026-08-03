@@ -58,13 +58,13 @@ external:
         AddX: first makeAdder(4)
         if: first = 0 || c.lm_test_is_declared_closure(first) = 0
             return: 1
-        if: c.lm_own_arena_allocation_descriptor(c.LM_TEST_ROOT_OWNER(), first) = 0 || c.lm_own_arena_allocation_descriptor(c.LM_TEST_ROOT_OWNER(), c.LM_TEST_CLOSURE_ENV(first)) = 0
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, c.LM_TEST_ROOT_OWNER(), first) = 0 || c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, c.LM_TEST_ROOT_OWNER(), c.LM_TEST_CLOSURE_ENV(first)) = 0
             return: 2
 
         AddX: second makeAdder(8)
         if: second = 0 || c.lm_test_is_declared_closure(second) = 0
             return: 3
-        if: c.lm_own_arena_allocation_descriptor(c.LM_TEST_ROOT_OWNER(), second) = 0 || c.lm_own_arena_allocation_descriptor(c.LM_TEST_ROOT_OWNER(), c.LM_TEST_CLOSURE_ENV(second)) = 0
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, c.LM_TEST_ROOT_OWNER(), second) = 0 || c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, c.LM_TEST_ROOT_OWNER(), c.LM_TEST_CLOSURE_ENV(second)) = 0
             return: 4
         if: first = second
             return: 5
@@ -72,7 +72,7 @@ external:
         AddX: captureless makeIncrementer()
         if: captureless = 0 || c.LM_TEST_CLOSURE_ENV(captureless) != 0
             return: 6
-        if: c.lm_own_arena_allocation_descriptor(c.LM_TEST_ROOT_OWNER(), captureless) = 0
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, c.LM_TEST_ROOT_OWNER(), captureless) = 0
             return: 7
         return: callAdd(first) != 7 || callAdd(second) != 11 || callAdd(captureless) != 4
     end: main

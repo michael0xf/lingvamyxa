@@ -43,7 +43,7 @@ L2:
             status: 11
         if: status = 0
             lm_message_thread_request_stop(thread, 0)
-            lm_own_arena_freeze(owner)
+            c.lm_own_arena_freeze(thread, owner)
             if: lm_message_thread_end_turn(thread) = 0
                 status: 12
             if: status = 0 && lm_message_thread_status(thread) != 1

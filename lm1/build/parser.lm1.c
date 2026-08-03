@@ -20,9 +20,9 @@ int lm_message_thread_status(const struct LmMessageThread *thread);
 int lm_message_thread_is_running(const struct LmMessageThread *thread);
 size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);
 size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);
-void lm_own_arena_freeze(struct LmOwnArena *arena);
-void *lm_own_arena_new_zero(struct LmOwnArena *arena, size_t size);
-void *lm_own_arena_array_new_zero(struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
+void lm_own_arena_freeze(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena);
+void *lm_own_arena_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t size);
+void *lm_own_arena_array_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
 typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;
 struct LmMessageThreadExecutionContext {
     jmp_buf diagnostic_root;
@@ -471,22 +471,22 @@ int (lm_own_value_stack_pop)(LmOwnValueStack *stack, void *out_item);
 void * (lm_own_value_stack_at)(const LmOwnValueStack *stack, size_t index);
 void * (lm_own_value_stack_top)(const LmOwnValueStack *stack);
 void (lm_own_value_stack_truncate)(LmOwnValueStack *stack, size_t count);
-LmOwnArena * (lm_own_arena_new)(LmMessageThread *owner_thread);
-void (lm_own_arena_delete)(LmOwnArena *arena);
-int (lm_own_arena_init)(LmOwnArena *arena, LmMessageThread *owner_thread);
-void (lm_own_arena_destroy)(LmOwnArena *arena);
-void * (lm_own_arena_new_zero)(LmOwnArena *arena, size_t size);
-void * (lm_own_arena_array_new_zero)(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
-const LmOwnAllocationDescriptor * (lm_own_arena_allocation_descriptor)(const LmOwnArena *arena, const void *address);
-char * (lm_own_arena_copy_bytes)(LmOwnArena *arena, const char *source, size_t length);
-int (lm_own_arena_add_lazy_edge)(LmOwnArena *target, LmOwnArena *source, const void *source_ptr, size_t size, const void **patch_slot);
-int (lm_own_arena_promote_lazy_edges)(LmOwnArena *arena);
-int (lm_own_arena_absorb)(LmOwnArena *target, LmOwnArena *source);
-void (lm_own_arena_freeze)(LmOwnArena *arena);
-int (lm_own_arena_is_frozen)(const LmOwnArena *arena);
-LmMessageThread * (lm_own_arena_owner_thread)(const LmOwnArena *arena);
-int (lm_own_tree_cut)(LmOwnArena *arena);
-int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
+LmOwnArena * (lm_own_arena_new)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread);
+void (lm_own_arena_delete)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_arena_init)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, LmMessageThread *owner_thread);
+void (lm_own_arena_destroy)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+void * (lm_own_arena_new_zero)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, size_t size);
+void * (lm_own_arena_array_new_zero)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
+const LmOwnAllocationDescriptor * (lm_own_arena_allocation_descriptor)(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena, const void *address);
+char * (lm_own_arena_copy_bytes)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, const char *source, size_t length);
+int (lm_own_arena_add_lazy_edge)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *target, LmOwnArena *source, const void *source_ptr, size_t size, const void **patch_slot);
+int (lm_own_arena_promote_lazy_edges)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_arena_absorb)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *target, LmOwnArena *source);
+void (lm_own_arena_freeze)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_arena_is_frozen)(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena);
+LmMessageThread * (lm_own_arena_owner_thread)(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena);
+int (lm_own_tree_cut)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_tree_cut_promote_lazy_edges)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
 LmMessageThread * (lm_message_thread_new)(void);
@@ -523,6 +523,7 @@ const char * (lm_p0_node_kind_class_name)(struct LmMessageThread *lm_lmx_message
 char * (lm_p0_dump_alloc)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
 void (lm_p0_free)(struct LmMessageThread *lm_lmx_message_thread, void *ptr);
 static int lm_registry_source_load_root(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Node *root);
+
 
 
 
@@ -4186,11 +4187,11 @@ static int lm_p0_document_init_owners(struct LmMessageThread *lm_lmx_message_thr
         return 1;
     }
     document->owners_initialized = 1;
-    if (lm_own_arena_init(document -> source_owner, lm_lmx_message_thread) != 0 || lm_own_arena_init(document -> token_arena, lm_lmx_message_thread) != 0 || lm_own_arena_init(document -> tree_arena, lm_lmx_message_thread) != 0 || lm_own_arena_init(document -> diagnostic_arena, lm_lmx_message_thread) != 0) {
+    if (lm_own_arena_init(lm_lmx_message_thread, document -> source_owner, lm_lmx_message_thread) != 0 || lm_own_arena_init(lm_lmx_message_thread, document -> token_arena, lm_lmx_message_thread) != 0 || lm_own_arena_init(lm_lmx_message_thread, document -> tree_arena, lm_lmx_message_thread) != 0 || lm_own_arena_init(lm_lmx_message_thread, document -> diagnostic_arena, lm_lmx_message_thread) != 0) {
         lm_p0_document_destroy_owners(lm_lmx_message_thread, document);
         return 1;
     }
-    document->diagnostic = lm_own_arena_new_zero(document -> diagnostic_arena, sizeof(document -> diagnostic[0]));
+    document->diagnostic = lm_own_arena_new_zero(lm_lmx_message_thread, document -> diagnostic_arena, sizeof(document -> diagnostic[0]));
     if (document -> diagnostic == 0) {
         lm_p0_document_destroy_owners(lm_lmx_message_thread, document);
         return 1;
@@ -4201,13 +4202,13 @@ static int lm_p0_document_init_owners(struct LmMessageThread *lm_lmx_message_thr
 static void lm_p0_document_destroy_owners(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document) {
     (void)lm_lmx_message_thread;
     if (document != 0 && document -> owners_initialized != 0) {
-        lm_own_arena_destroy(document -> diagnostic_arena);
+        lm_own_arena_destroy(lm_lmx_message_thread, document -> diagnostic_arena);
         lm_own_delete(document -> diagnostic_arena, 0);
-        lm_own_arena_destroy(document -> tree_arena);
+        lm_own_arena_destroy(lm_lmx_message_thread, document -> tree_arena);
         lm_own_delete(document -> tree_arena, 0);
-        lm_own_arena_destroy(document -> token_arena);
+        lm_own_arena_destroy(lm_lmx_message_thread, document -> token_arena);
         lm_own_delete(document -> token_arena, 0);
-        lm_own_arena_destroy(document -> source_owner);
+        lm_own_arena_destroy(lm_lmx_message_thread, document -> source_owner);
         lm_own_delete(document -> source_owner, 0);
         document->diagnostic_arena = 0;
         document->tree_arena = 0;
@@ -4222,8 +4223,8 @@ static void lm_p0_document_destroy_owners(struct LmMessageThread *lm_lmx_message
 static void lm_p0_document_freeze_tree(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document) {
     (void)lm_lmx_message_thread;
     if (document != 0 && document -> owners_initialized != 0) {
-        lm_own_arena_freeze(document -> tree_arena);
-        lm_own_arena_freeze(document -> source_owner);
+        lm_own_arena_freeze(lm_lmx_message_thread, document -> tree_arena);
+        lm_own_arena_freeze(lm_lmx_message_thread, document -> source_owner);
         document->frozen = 1;
     }
 }
@@ -5039,7 +5040,7 @@ static int lm_p0_document_register_lazy_text(struct LmMessageThread *lm_lmx_mess
         patch_slot[0] = "";
         return 1;
     }
-    if (((document == 0) || (document -> owners_initialized == 0)) || (lm_own_arena_add_lazy_edge(document -> tree_arena, document -> source_owner, source, length, (((const void **)patch_slot))) != 0)) {
+    if (((document == 0) || (document -> owners_initialized == 0)) || (lm_own_arena_add_lazy_edge(lm_lmx_message_thread, document -> tree_arena, document -> source_owner, source, length, (((const void **)patch_slot))) != 0)) {
         if (document != 0) {
             lm_p0_set_diagnostic(document, 1, line, column, "out of memory while registering parser lazy text edge");
         }
@@ -5051,7 +5052,7 @@ static int lm_p0_document_register_lazy_text(struct LmMessageThread *lm_lmx_mess
 static LmP0Text * lm_p0_new_text(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document, const char *source, size_t length, size_t line, size_t column) {
     (void)lm_lmx_message_thread;
     LmP0Text * text;
-    text = (((LmP0Text *)lm_own_arena_new_zero(document -> tree_arena, sizeof(text[0]))));
+    text = (((LmP0Text *)lm_own_arena_new_zero(lm_lmx_message_thread, document -> tree_arena, sizeof(text[0]))));
     if (text == 0) {
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser text");
         return 0;
@@ -5077,7 +5078,7 @@ static LmP0Text * lm_p0_new_text(struct LmMessageThread *lm_lmx_message_thread, 
 static LmP0Structure * lm_p0_new_structure(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document, size_t line, size_t column) {
     (void)lm_lmx_message_thread;
     LmP0Structure * structure;
-    structure = (((LmP0Structure *)lm_own_arena_new_zero(document -> tree_arena, sizeof(structure[0]))));
+    structure = (((LmP0Structure *)lm_own_arena_new_zero(lm_lmx_message_thread, document -> tree_arena, sizeof(structure[0]))));
     if (structure == 0) {
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser structure");
         return 0;
@@ -5088,7 +5089,7 @@ static LmP0Structure * lm_p0_new_structure(struct LmMessageThread *lm_lmx_messag
 static LmP0Frame * lm_p0_new_frame(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document, size_t line, size_t column) {
     (void)lm_lmx_message_thread;
     LmP0Frame * frame;
-    frame = (((LmP0Frame *)lm_own_arena_new_zero(document -> tree_arena, sizeof(frame[0]))));
+    frame = (((LmP0Frame *)lm_own_arena_new_zero(lm_lmx_message_thread, document -> tree_arena, sizeof(frame[0]))));
     if (frame == 0) {
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser frame");
         return 0;
@@ -5107,7 +5108,7 @@ static LmP0Frame * lm_p0_new_frame(struct LmMessageThread *lm_lmx_message_thread
 static LmP0Trailer * lm_p0_new_trailer(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document, const char *spelling, size_t spelling_length, size_t line, size_t column) {
     (void)lm_lmx_message_thread;
     LmP0Trailer * trailer;
-    trailer = (((LmP0Trailer *)lm_own_arena_new_zero(document -> tree_arena, sizeof(trailer[0]))));
+    trailer = (((LmP0Trailer *)lm_own_arena_new_zero(lm_lmx_message_thread, document -> tree_arena, sizeof(trailer[0]))));
     if (trailer == 0) {
         lm_p0_set_diagnostic(document, 1, line, column, "out of memory while allocating parser trailer");
         return 0;
@@ -6108,17 +6109,17 @@ static int lm_p0_scan_block_string_event(struct LmMessageThread *lm_lmx_message_
 static LmP0Node * lm_p0_new_node(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document, LmP0NodeKind kind) {
     (void)lm_lmx_message_thread;
     LmP0Node * node;
-    node = (((LmP0Node *)lm_own_arena_new_zero(document -> tree_arena, sizeof(node[0]))));
+    node = (((LmP0Node *)lm_own_arena_new_zero(lm_lmx_message_thread, document -> tree_arena, sizeof(node[0]))));
     if (node == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node");
         return 0;
     }
-    node->span = (((LmP0Span *)lm_own_arena_new_zero(document -> tree_arena, sizeof(node -> span[0]))));
+    node->span = (((LmP0Span *)lm_own_arena_new_zero(lm_lmx_message_thread, document -> tree_arena, sizeof(node -> span[0]))));
     if (node -> span == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node span");
         return 0;
     }
-    node->as = (((LmP0NodeAs *)lm_own_arena_new_zero(document -> tree_arena, sizeof(node -> as[0]))));
+    node->as = (((LmP0NodeAs *)lm_own_arena_new_zero(lm_lmx_message_thread, document -> tree_arena, sizeof(node -> as[0]))));
     if (node -> as == 0) {
         lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while allocating parser node payload");
         return 0;
@@ -6152,7 +6153,7 @@ static LmP0Node * lm_p0_new_node(struct LmMessageThread *lm_lmx_message_thread, 
 static int lm_p0_append_field(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document, LmP0Structure *structure, LmP0Node *node) {
     (void)lm_lmx_message_thread;
     LmP0Field * field;
-    field = (((LmP0Field *)lm_own_arena_new_zero(document -> tree_arena, sizeof(field[0]))));
+    field = (((LmP0Field *)lm_own_arena_new_zero(lm_lmx_message_thread, document -> tree_arena, sizeof(field[0]))));
     if (field == 0) {
         size_t lm_p0_tmp_14;
         if (node != 0) {
@@ -6334,13 +6335,13 @@ static int lm_p0_record_mix_mark(struct LmMessageThread *lm_lmx_message_thread, 
                         lm_p0_copy_payload_diagnostic(lm_lmx_message_thread, document, payload_document, payload_offset);
                     }
                     else {
-                        if (lm_own_tree_cut(payload_document -> tree_arena) != 0) {
+                        if (lm_own_tree_cut(lm_lmx_message_thread, payload_document -> tree_arena) != 0) {
                             lm_p0_set_diagnostic(document, 1, span_line, span_column, "out of memory while promoting MIX lazy text edges");
                         }
                         else {
                             node->as->structure = payload_document -> root -> as -> structure;
                             payload_document->root->as->structure = 0;
-                            if (lm_own_arena_absorb(document -> tree_arena, payload_document -> tree_arena) != 0) {
+                            if (lm_own_arena_absorb(lm_lmx_message_thread, document -> tree_arena, payload_document -> tree_arena) != 0) {
                                 lm_p0_set_diagnostic(document, 1, span_line, span_column, "out of memory while moving MIX tree into parser arena");
                             }
                             else {
@@ -9895,7 +9896,7 @@ int lm_p0_parse_bytes(struct LmMessageThread *lm_lmx_message_thread, const char 
         return 1;
     }
     document->source_length = source_length;
-    document->source = lm_own_arena_copy_bytes(document -> source_owner, source, document -> source_length);
+    document->source = lm_own_arena_copy_bytes(lm_lmx_message_thread, document -> source_owner, source, document -> source_length);
     if (document -> source == 0) {
         lm_p0_document_destroy_owners(lm_lmx_message_thread, document);
         lm_own_delete(document, 0);
@@ -9907,7 +9908,7 @@ int lm_p0_parse_bytes(struct LmMessageThread *lm_lmx_message_thread, const char 
         }
     }
     if (document -> diagnostic -> code == 0) {
-        if (lm_own_tree_cut(document -> tree_arena) != 0) {
+        if (lm_own_tree_cut(lm_lmx_message_thread, document -> tree_arena) != 0) {
             lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while promoting parser lazy text edges");
         }
         else {
