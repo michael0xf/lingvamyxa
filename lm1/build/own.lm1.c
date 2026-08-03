@@ -127,6 +127,7 @@ typedef struct LmMessage LmMessage;
 typedef struct LmMessageOutboxEntry LmMessageOutboxEntry;
 typedef struct LmMessageRoute LmMessageRoute;
 typedef struct LmMessageThreadRuntime LmMessageThreadRuntime;
+typedef struct LmRestLmxProviderOpsV1 LmRestLmxProviderOpsV1;
 typedef struct LmMessageThreadPool LmMessageThreadPool;
 typedef struct LmMessageThreadComponent LmMessageThreadComponent;
 typedef struct LmMessageThread LmMessageThread;
@@ -147,6 +148,9 @@ typedef int LmMessageThreadState;
 #define LM_MESSAGE_STATUS_ROUTE_NOT_FOUND 64
 #define LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED 65
 #define LM_MESSAGE_STATUS_INVALID_ADDRESS 66
+#define LM_MESSAGE_STATUS_TRANSPORT_FAILED 67
+#define LM_MESSAGE_STATUS_HTTP_REJECTED 68
+#define LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR 69
 
 
 #include <stddef.h>
@@ -236,6 +240,17 @@ struct LmMessageThreadRuntime {
     int exit_requested;
     int exit_ready;
     int exit_status;
+    int (*rest_lmx_post)(void *context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
+    void (*rest_lmx_destroy)(void *context);
+    void *rest_lmx_context;
+    int rest_lmx_provider_sealed;
+    int rest_lmx_provider_transition;
+    int deleting;
+};
+struct LmRestLmxProviderOpsV1 {
+    size_t abi_size;
+    int (*post)(void *context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
+    void (*destroy)(void *context);
 };
 struct LmMessageThreadPool {
     LmHostThread * *workers;
@@ -323,6 +338,14 @@ typedef void (*LmMessageThreadEntry)(struct LmMessageThread *lm_lmx_message_thre
 #define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy 1
 typedef void (*LmMessageThreadComponentDestroy)(struct LmMessageThread *lm_lmx_message_thread, void *component);
 #endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxPost
+#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxPost 1
+typedef int (*LmRestLmxPost)(void *context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxDestroy
+#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxDestroy 1
+typedef void (*LmRestLmxDestroy)(void *context);
+#endif
 
 
 void * (lm_own_new_zero)(size_t size);
@@ -378,6 +401,7 @@ int (lm_condition_signal)(LmCondition *condition);
 int (lm_condition_broadcast)(LmCondition *condition);
 LmMessageThreadRuntime * (lm_message_thread_runtime_new)(void);
 int (lm_message_thread_runtime_delete)(LmMessageThreadRuntime *runtime);
+int (lm_message_thread_runtime_set_rest_lmx_provider)(LmMessageThreadRuntime *runtime, const LmRestLmxProviderOpsV1 *ops, void *context);
 int (lm_message_thread_runtime_attach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
 int (lm_message_thread_runtime_detach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
 int (lm_message_thread_runtime_exit_state)(LmMessageThreadRuntime *runtime, int *out_requested, int *out_ready, int *out_status);
@@ -417,6 +441,11 @@ int (lm_message_thread_component_attach)(struct LmMessageThread *lm_lmx_message_
 void * (lm_message_thread_component_get)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 int (lm_message_thread_component_remove)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 size_t (lm_message_thread_component_count)(const LmMessageThread *thread);
+
+
+
+
+
 
 
 
@@ -1227,39 +1256,487 @@ static char *lm_native_message_thread_copy_cstr(const char *source) {
     return copy;
 }
 
-static int lm_native_message_thread_route_is_valid(const char *route) {
-    const unsigned char *cursor = (const unsigned char *)route;
+static int lm_native_message_thread_ascii_equal_ignore_case(
+    unsigned char left,
+    unsigned char right
+) {
+    if (left >= (unsigned char)'A' && left <= (unsigned char)'Z') {
+        left = (unsigned char)(left + ((unsigned char)'a' -
+            (unsigned char)'A'));
+    }
+    if (right >= (unsigned char)'A' && right <= (unsigned char)'Z') {
+        right = (unsigned char)(right + ((unsigned char)'a' -
+            (unsigned char)'A'));
+    }
+    return left == right;
+}
 
-    if (cursor == 0 || cursor[0] != (unsigned char)'/') {
+static int lm_native_message_thread_ascii_prefix_ignore_case(
+    const char *text,
+    const char *prefix,
+    size_t length
+) {
+    size_t index;
+
+    if (text == 0 || prefix == 0) {
         return 0;
     }
-    while (*cursor != 0U) {
-        if (*cursor < 0x20U || *cursor > 0x7eU ||
-            *cursor == (unsigned char)'\\' ||
-            *cursor == (unsigned char)'?' ||
-            *cursor == (unsigned char)'#') {
+    for (index = 0U; index < length; index += 1U) {
+        if (text[index] == '\0' ||
+            !lm_native_message_thread_ascii_equal_ignore_case(
+                (unsigned char)text[index],
+                (unsigned char)prefix[index]
+            )) {
             return 0;
         }
-        cursor += 1;
     }
     return 1;
 }
 
+static int lm_native_message_thread_ascii_is_hex(unsigned char value) {
+    return (value >= (unsigned char)'0' && value <= (unsigned char)'9') ||
+        (value >= (unsigned char)'a' && value <= (unsigned char)'f') ||
+        (value >= (unsigned char)'A' && value <= (unsigned char)'F');
+}
+
+static int lm_native_message_thread_ascii_is_unreserved(
+    unsigned char value
+) {
+    return (value >= (unsigned char)'a' && value <= (unsigned char)'z') ||
+        (value >= (unsigned char)'A' && value <= (unsigned char)'Z') ||
+        (value >= (unsigned char)'0' && value <= (unsigned char)'9') ||
+        value == (unsigned char)'-' || value == (unsigned char)'.' ||
+        value == (unsigned char)'_' || value == (unsigned char)'~';
+}
+
+static int lm_native_message_thread_ascii_is_sub_delim(
+    unsigned char value
+) {
+    return value == (unsigned char)'!' || value == (unsigned char)'$' ||
+        value == (unsigned char)'&' || value == (unsigned char)'\'' ||
+        value == (unsigned char)'(' || value == (unsigned char)')' ||
+        value == (unsigned char)'*' || value == (unsigned char)'+' ||
+        value == (unsigned char)',' || value == (unsigned char)';' ||
+        value == (unsigned char)'=';
+}
+
+static int lm_native_message_thread_percent_encoded_is_valid(
+    const unsigned char *text,
+    size_t length,
+    size_t *index
+) {
+    size_t current = *index;
+
+    if (current + 2U >= length ||
+        !lm_native_message_thread_ascii_is_hex(text[current + 1U]) ||
+        !lm_native_message_thread_ascii_is_hex(text[current + 2U])) {
+        return 0;
+    }
+    *index = current + 2U;
+    return 1;
+}
+
+static int lm_native_message_thread_path_is_valid(
+    const char *path,
+    int require_leading_slash
+) {
+    const unsigned char *text = (const unsigned char *)path;
+    size_t length;
+    size_t index;
+    size_t segment_start;
+
+    if (text == 0) {
+        return 0;
+    }
+    length = strlen(path);
+    if ((require_leading_slash &&
+         (length == 0U || text[0] != (unsigned char)'/')) ||
+        (!require_leading_slash && length != 0U &&
+         text[0] != (unsigned char)'/')) {
+        return 0;
+    }
+    segment_start = 0U;
+    for (index = 0U; index < length; index += 1U) {
+        unsigned char value = text[index];
+
+        if (value <= 0x20U || value > 0x7eU ||
+            value == (unsigned char)'\\' ||
+            value == (unsigned char)'?' ||
+            value == (unsigned char)'#') {
+            return 0;
+        }
+        if (value == (unsigned char)'/') {
+            size_t segment_length = index - segment_start;
+
+            if (index != 0U && text[index - 1U] == (unsigned char)'/') {
+                return 0;
+            }
+            if ((segment_length == 1U &&
+                 text[segment_start] == (unsigned char)'.') ||
+                (segment_length == 2U &&
+                 text[segment_start] == (unsigned char)'.' &&
+                 text[segment_start + 1U] == (unsigned char)'.')) {
+                return 0;
+            }
+            segment_start = index + 1U;
+        } else if (value == (unsigned char)'%') {
+            if (!lm_native_message_thread_percent_encoded_is_valid(
+                    text,
+                    length,
+                    &index
+                )) {
+                return 0;
+            }
+        } else if (!lm_native_message_thread_ascii_is_unreserved(value) &&
+                   !lm_native_message_thread_ascii_is_sub_delim(value) &&
+                   value != (unsigned char)':' &&
+                   value != (unsigned char)'@') {
+            return 0;
+        }
+    }
+    if (segment_start < length) {
+        size_t segment_length = length - segment_start;
+
+        if ((segment_length == 1U &&
+             text[segment_start] == (unsigned char)'.') ||
+            (segment_length == 2U &&
+             text[segment_start] == (unsigned char)'.' &&
+             text[segment_start + 1U] == (unsigned char)'.')) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int lm_native_message_thread_ipv4_is_valid(
+    const unsigned char *text,
+    size_t length
+) {
+    size_t index = 0U;
+    size_t component = 0U;
+
+    while (index < length && component < 4U) {
+        size_t digits = 0U;
+        unsigned value = 0U;
+
+        while (index < length && text[index] != (unsigned char)'.') {
+            if (text[index] < (unsigned char)'0' ||
+                text[index] > (unsigned char)'9' || digits == 3U) {
+                return 0;
+            }
+            value = value * 10U +
+                (unsigned)(text[index] - (unsigned char)'0');
+            digits += 1U;
+            index += 1U;
+        }
+        if (digits == 0U || value > 255U ||
+            (digits > 1U && text[index - digits] == (unsigned char)'0')) {
+            return 0;
+        }
+        component += 1U;
+        if (index < length) {
+            index += 1U;
+            if (index == length) {
+                return 0;
+            }
+        }
+    }
+    return index == length && component == 4U;
+}
+
+static int lm_native_message_thread_ipv6_is_valid(
+    const unsigned char *text,
+    size_t length
+) {
+    size_t index = 0U;
+    size_t groups = 0U;
+    int compressed = 0;
+
+    if (length == 0U) {
+        return 0;
+    }
+    if (text[0] == (unsigned char)'v' ||
+        text[0] == (unsigned char)'V') {
+        index = 1U;
+        while (index < length &&
+               lm_native_message_thread_ascii_is_hex(text[index])) {
+            index += 1U;
+        }
+        if (index == 1U || index >= length ||
+            text[index] != (unsigned char)'.') {
+            return 0;
+        }
+        index += 1U;
+        if (index == length) {
+            return 0;
+        }
+        while (index < length) {
+            if (!lm_native_message_thread_ascii_is_unreserved(text[index]) &&
+                !lm_native_message_thread_ascii_is_sub_delim(text[index]) &&
+                text[index] != (unsigned char)':') {
+                return 0;
+            }
+            index += 1U;
+        }
+        return 1;
+    }
+    if (text[0] == (unsigned char)':') {
+        if (length < 2U || text[1] != (unsigned char)':') {
+            return 0;
+        }
+        compressed = 1;
+        index = 2U;
+        if (index == length) {
+            return 1;
+        }
+    }
+    while (index < length) {
+        size_t segment_start = index;
+        size_t segment_length;
+        size_t scan;
+        int contains_dot = 0;
+
+        while (index < length && text[index] != (unsigned char)':') {
+            if (text[index] == (unsigned char)'.') {
+                contains_dot = 1;
+            }
+            index += 1U;
+        }
+        segment_length = index - segment_start;
+        if (segment_length == 0U) {
+            return 0;
+        }
+        if (contains_dot) {
+            if (index != length || groups > 6U ||
+                !lm_native_message_thread_ipv4_is_valid(
+                    text + segment_start,
+                    segment_length
+                )) {
+                return 0;
+            }
+            groups += 2U;
+        } else {
+            if (segment_length > 4U) {
+                return 0;
+            }
+            for (scan = segment_start; scan < index; scan += 1U) {
+                if (!lm_native_message_thread_ascii_is_hex(text[scan])) {
+                    return 0;
+                }
+            }
+            groups += 1U;
+        }
+        if (groups > 8U || index == length) {
+            break;
+        }
+        if (index + 1U < length &&
+            text[index + 1U] == (unsigned char)':') {
+            if (compressed) {
+                return 0;
+            }
+            compressed = 1;
+            index += 2U;
+            if (index == length) {
+                break;
+            }
+        } else {
+            index += 1U;
+            if (index == length) {
+                return 0;
+            }
+        }
+    }
+    return compressed ? groups < 8U : groups == 8U;
+}
+
+static int lm_native_message_thread_reg_name_is_valid(
+    const unsigned char *text,
+    size_t length
+) {
+    size_t index;
+
+    if (length == 0U) {
+        return 0;
+    }
+    for (index = 0U; index < length; index += 1U) {
+        unsigned char value = text[index];
+
+        if (value == (unsigned char)'%') {
+            if (!lm_native_message_thread_percent_encoded_is_valid(
+                    text,
+                    length,
+                    &index
+                )) {
+                return 0;
+            }
+        } else if (!lm_native_message_thread_ascii_is_unreserved(value) &&
+                   !lm_native_message_thread_ascii_is_sub_delim(value)) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int lm_native_message_thread_port_is_valid(
+    const unsigned char *text,
+    size_t length
+) {
+    size_t index;
+    unsigned value = 0U;
+
+    if (length == 0U) {
+        return 0;
+    }
+    for (index = 0U; index < length; index += 1U) {
+        if (text[index] < (unsigned char)'0' ||
+            text[index] > (unsigned char)'9') {
+            return 0;
+        }
+        value = value * 10U +
+            (unsigned)(text[index] - (unsigned char)'0');
+        if (value > 65535U) {
+            return 0;
+        }
+    }
+    return value != 0U;
+}
+
+static int lm_native_message_thread_route_is_valid(const char *route) {
+    return lm_native_message_thread_path_is_valid(route, 1);
+}
+
 static int lm_native_message_thread_endpoint_is_http(const char *endpoint) {
-    const char *authority;
+    const unsigned char *text = (const unsigned char *)endpoint;
+    const unsigned char *authority;
+    const unsigned char *path;
+    const unsigned char *authority_end;
+    const unsigned char *host_end;
+    const unsigned char *port = 0;
+    size_t authority_length;
+    size_t host_length;
+    size_t port_length = 0U;
+    size_t index;
 
     if (endpoint == 0 || endpoint[0] == '\0') {
         return 0;
     }
-    if (strncmp(endpoint, "http://", 7U) == 0) {
-        authority = endpoint + 7;
-    } else if (strncmp(endpoint, "https://", 8U) == 0) {
-        authority = endpoint + 8;
+    if (lm_native_message_thread_ascii_prefix_ignore_case(
+            endpoint,
+            "http://",
+            7U
+        )) {
+        authority = text + 7U;
+    } else if (lm_native_message_thread_ascii_prefix_ignore_case(
+                   endpoint,
+                   "https://",
+                   8U
+               )) {
+        authority = text + 8U;
     } else {
         return 0;
     }
-    return authority[0] != '\0' && authority[0] != '/' &&
-        strchr(authority, '?') == 0 && strchr(authority, '#') == 0;
+    path = authority;
+    while (*path != 0U && *path != (unsigned char)'/') {
+        if (*path <= 0x20U || *path > 0x7eU ||
+            *path == (unsigned char)'\\' ||
+            *path == (unsigned char)'?' ||
+            *path == (unsigned char)'#' ||
+            *path == (unsigned char)'@') {
+            return 0;
+        }
+        path += 1;
+    }
+    authority_end = path;
+    authority_length = (size_t)(authority_end - authority);
+    if (authority_length == 0U) {
+        return 0;
+    }
+    if (authority[0] == (unsigned char)'[') {
+        host_end = authority + 1U;
+        while (host_end < authority_end &&
+               *host_end != (unsigned char)']') {
+            host_end += 1;
+        }
+        if (host_end == authority_end || host_end == authority + 1U ||
+            !lm_native_message_thread_ipv6_is_valid(
+                authority + 1U,
+                (size_t)(host_end - authority - 1U)
+            )) {
+            return 0;
+        }
+        host_end += 1U;
+        if (host_end < authority_end) {
+            if (*host_end != (unsigned char)':') {
+                return 0;
+            }
+            port = host_end + 1U;
+            port_length = (size_t)(authority_end - port);
+        }
+    } else {
+        host_end = authority_end;
+        for (index = 0U; index < authority_length; index += 1U) {
+            if (authority[index] == (unsigned char)'[' ||
+                authority[index] == (unsigned char)']') {
+                return 0;
+            }
+            if (authority[index] == (unsigned char)':') {
+                if (port != 0) {
+                    return 0;
+                }
+                host_end = authority + index;
+                port = host_end + 1U;
+                port_length = (size_t)(authority_end - port);
+            }
+        }
+        host_length = (size_t)(host_end - authority);
+        if (!lm_native_message_thread_reg_name_is_valid(
+                authority,
+                host_length
+            )) {
+            return 0;
+        }
+    }
+    if (port != 0 &&
+        !lm_native_message_thread_port_is_valid(port, port_length)) {
+        return 0;
+    }
+    return lm_native_message_thread_path_is_valid((const char *)path, 0);
+}
+
+static char *lm_native_message_thread_join_uri(
+    const char *endpoint,
+    const char *route
+) {
+    size_t endpoint_length;
+    size_t route_length;
+    size_t copied_endpoint_length;
+    char *uri;
+
+    if (endpoint == 0 || route == 0) {
+        return 0;
+    }
+    endpoint_length = strlen(endpoint);
+    route_length = strlen(route);
+    copied_endpoint_length = endpoint_length;
+    if (endpoint_length != 0U && route_length != 0U &&
+        endpoint[endpoint_length - 1U] == '/' && route[0] == '/') {
+        copied_endpoint_length -= 1U;
+    }
+    if (route_length > (size_t)-1 - copied_endpoint_length - 1U) {
+        return 0;
+    }
+    uri = (char *)malloc(copied_endpoint_length + route_length + 1U);
+    if (uri == 0) {
+        return 0;
+    }
+    if (copied_endpoint_length != 0U) {
+        memcpy(uri, endpoint, copied_endpoint_length);
+    }
+    if (route_length != 0U) {
+        memcpy(uri + copied_endpoint_length, route, route_length);
+    }
+    uri[copied_endpoint_length + route_length] = '\0';
+    return uri;
 }
 
 static LmMessage *lm_native_message_thread_message_new(
@@ -1620,20 +2097,58 @@ static int lm_native_message_thread_mark_exit_ready(
     return became_ready;
 }
 
-static int lm_native_message_thread_remote_delivery_status(
-    LmMessageThreadRuntime *runtime
+static int lm_native_message_thread_deliver_remote(
+    LmMessageThreadRuntime *runtime,
+    const char *endpoint,
+    const char *route,
+    const LmMessage *message
 ) {
-    int status;
+    LmRestLmxPost post;
+    void *context;
+    char *normalized_uri;
+    unsigned http_status = 0U;
+    int transport_status;
 
-    if (runtime == 0 || runtime->route_mutex == 0 ||
+    if (runtime == 0 || message == 0 || runtime->route_mutex == 0 ||
         lm_mutex_lock(runtime->route_mutex) != 0) {
         return 1;
     }
-    status = runtime->exit_ready
-        ? LM_MESSAGE_STATUS_EXIT_DISCARDED
-        : LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED;
+    if (runtime->exit_ready) {
+        (void)lm_mutex_unlock(runtime->route_mutex);
+        return LM_MESSAGE_STATUS_EXIT_DISCARDED;
+    }
+    post = runtime->rest_lmx_post;
+    context = runtime->rest_lmx_context;
     (void)lm_mutex_unlock(runtime->route_mutex);
-    return status;
+    if (post == 0) {
+        return LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED;
+    }
+
+    normalized_uri = lm_native_message_thread_join_uri(endpoint, route);
+    if (normalized_uri == 0) {
+        return 1;
+    }
+    transport_status = post(
+        context,
+        normalized_uri,
+        message->lmx,
+        message->length,
+        &http_status
+    );
+    free(normalized_uri);
+    if (transport_status != 0) {
+        return LM_MESSAGE_STATUS_TRANSPORT_FAILED;
+    }
+    if (http_status >= 200U && http_status <= 299U) {
+        return 0;
+    }
+    if (http_status == 404U) {
+        return LM_MESSAGE_STATUS_ROUTE_NOT_FOUND;
+    }
+    if (http_status >= 100U && http_status <= 599U) {
+        return LM_MESSAGE_STATUS_HTTP_REJECTED;
+    }
+    return LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR;
 }
 
 static int lm_native_message_thread_deliver_local(
@@ -1739,8 +2254,11 @@ static int lm_native_message_thread_outbox_finish(
                     entry->message = 0;
                 }
             } else {
-                status = lm_native_message_thread_remote_delivery_status(
-                    thread->runtime
+                status = lm_native_message_thread_deliver_remote(
+                    thread->runtime,
+                    entry->endpoint,
+                    entry->route,
+                    entry->message
                 );
             }
         }
@@ -1961,6 +2479,79 @@ LmMessageThreadRuntime *lm_message_thread_runtime_new(void) {
     return runtime;
 }
 
+int lm_message_thread_runtime_set_rest_lmx_provider(
+    LmMessageThreadRuntime *runtime,
+    const LmRestLmxProviderOpsV1 *ops,
+    void *context
+) {
+    LmRestLmxPost new_post = 0;
+    LmRestLmxDestroy new_destroy = 0;
+    LmRestLmxPost old_post;
+    LmRestLmxDestroy old_destroy;
+    void *old_context;
+    int destroy_old = 0;
+
+    if (runtime == 0 || runtime->route_mutex == 0 ||
+        !lm_native_thread_identity_is_current(runtime->identity)) {
+        return 1;
+    }
+    if (ops == 0) {
+        if (context != 0) {
+            return 1;
+        }
+    } else {
+        if (ops->abi_size != sizeof(*ops) || ops->post == 0) {
+            return 1;
+        }
+        new_post = ops->post;
+        new_destroy = ops->destroy;
+    }
+    if (lm_mutex_lock(runtime->route_mutex) != 0) {
+        return 1;
+    }
+    if (runtime->rest_lmx_provider_sealed ||
+        runtime->rest_lmx_provider_transition || runtime->deleting ||
+        runtime->pool_count != 0U ||
+        runtime->single_execution_depth != 0U ||
+        runtime->route_count != 0U || runtime->route_head != 0 ||
+        runtime->root_thread != 0 || runtime->exit_requester != 0 ||
+        runtime->exit_requested || runtime->exit_ready) {
+        (void)lm_mutex_unlock(runtime->route_mutex);
+        return 1;
+    }
+    old_post = runtime->rest_lmx_post;
+    old_destroy = runtime->rest_lmx_destroy;
+    old_context = runtime->rest_lmx_context;
+    if (old_post == new_post && old_destroy == new_destroy &&
+        old_context == context) {
+        (void)lm_mutex_unlock(runtime->route_mutex);
+        return 0;
+    }
+    if (old_post != 0 && old_context != 0 && old_context == context) {
+        (void)lm_mutex_unlock(runtime->route_mutex);
+        return 1;
+    }
+    destroy_old = old_post != 0 && old_destroy != 0;
+    runtime->rest_lmx_provider_transition = destroy_old;
+    runtime->rest_lmx_post = new_post;
+    runtime->rest_lmx_destroy = new_destroy;
+    runtime->rest_lmx_context = context;
+    (void)lm_mutex_unlock(runtime->route_mutex);
+
+    if (destroy_old) {
+        old_destroy(old_context);
+        if (lm_mutex_lock(runtime->route_mutex) != 0) {
+            abort();
+        }
+        if (!runtime->rest_lmx_provider_transition) {
+            abort();
+        }
+        runtime->rest_lmx_provider_transition = 0;
+        (void)lm_mutex_unlock(runtime->route_mutex);
+    }
+    return 0;
+}
+
 int lm_message_thread_request_exit(
     LmMessageThread *requester,
     int status
@@ -2030,12 +2621,17 @@ int lm_message_thread_runtime_attach_root(
         lm_mutex_lock(runtime->route_mutex) != 0) {
         return 1;
     }
+    if (runtime->deleting || runtime->rest_lmx_provider_transition) {
+        (void)lm_mutex_unlock(runtime->route_mutex);
+        return 1;
+    }
     if (lm_native_message_thread_state_lock(thread) == 0) {
         if (runtime->root_thread == 0 && thread->runtime == 0 &&
             thread->pool == 0 && !thread->started && !thread->turn_active &&
             !thread->executing && thread->state == LM_MESSAGE_THREAD_RUNNING &&
             thread->outbox_head == 0 && thread->current_message == 0) {
             runtime->root_thread = thread;
+            runtime->rest_lmx_provider_sealed = 1;
             thread->runtime = runtime;
             status = 0;
         }
@@ -2073,17 +2669,37 @@ int lm_message_thread_runtime_detach_root(
 int lm_message_thread_runtime_delete(
     LmMessageThreadRuntime *runtime
 ) {
+    LmRestLmxPost old_post;
+    LmRestLmxDestroy old_destroy;
+    void *old_context;
+
     if (runtime == 0) {
         return 0;
     }
-    if (!lm_native_thread_identity_is_current(runtime->identity)) {
+    if (!lm_native_thread_identity_is_current(runtime->identity) ||
+        runtime->route_mutex == 0 ||
+        lm_mutex_lock(runtime->route_mutex) != 0) {
         return 1;
     }
-    if (runtime->pool_count != 0U ||
+    if (runtime->deleting || runtime->rest_lmx_provider_transition ||
+        runtime->pool_count != 0U ||
         runtime->single_execution_depth != 0U ||
         runtime->route_count != 0U || runtime->route_head != 0 ||
         runtime->root_thread != 0) {
+        (void)lm_mutex_unlock(runtime->route_mutex);
         return 1;
+    }
+    old_post = runtime->rest_lmx_post;
+    old_destroy = runtime->rest_lmx_destroy;
+    old_context = runtime->rest_lmx_context;
+    runtime->rest_lmx_post = 0;
+    runtime->rest_lmx_destroy = 0;
+    runtime->rest_lmx_context = 0;
+    runtime->rest_lmx_provider_sealed = 1;
+    runtime->deleting = 1;
+    (void)lm_mutex_unlock(runtime->route_mutex);
+    if (old_post != 0 && old_destroy != 0) {
+        old_destroy(old_context);
     }
     lm_mutex_delete(runtime->route_mutex);
     runtime->route_mutex = 0;
@@ -2091,6 +2707,38 @@ int lm_message_thread_runtime_delete(
     runtime->identity = 0;
     free(runtime);
     return 0;
+}
+
+static int lm_native_message_thread_runtime_acquire_pool(
+    LmMessageThreadRuntime *runtime
+) {
+    if (runtime == 0 || runtime->route_mutex == 0 ||
+        lm_mutex_lock(runtime->route_mutex) != 0) {
+        return 1;
+    }
+    if (runtime->deleting || runtime->rest_lmx_provider_transition ||
+        runtime->pool_count == (size_t)-1) {
+        (void)lm_mutex_unlock(runtime->route_mutex);
+        return 1;
+    }
+    runtime->rest_lmx_provider_sealed = 1;
+    runtime->pool_count += 1U;
+    (void)lm_mutex_unlock(runtime->route_mutex);
+    return 0;
+}
+
+static void lm_native_message_thread_runtime_release_pool(
+    LmMessageThreadRuntime *runtime
+) {
+    if (runtime == 0 || runtime->route_mutex == 0 ||
+        lm_mutex_lock(runtime->route_mutex) != 0) {
+        abort();
+    }
+    if (runtime->pool_count == 0U) {
+        abort();
+    }
+    runtime->pool_count -= 1U;
+    (void)lm_mutex_unlock(runtime->route_mutex);
 }
 
 LmMessageThreadPool *lm_message_thread_pool_new(
@@ -2121,7 +2769,12 @@ LmMessageThreadPool *lm_message_thread_pool_new(
         free(pool);
         return 0;
     }
-    runtime->pool_count += 1U;
+    if (lm_native_message_thread_runtime_acquire_pool(runtime) != 0) {
+        lm_condition_delete(pool->work_ready);
+        lm_mutex_delete(pool->mutex);
+        free(pool);
+        return 0;
+    }
     if (pool->single_mode) {
         return pool;
     }
@@ -2134,7 +2787,7 @@ LmMessageThreadPool *lm_message_thread_pool_new(
     if (pool->workers == 0) {
         lm_condition_delete(pool->work_ready);
         lm_mutex_delete(pool->mutex);
-        runtime->pool_count -= 1U;
+        lm_native_message_thread_runtime_release_pool(runtime);
         free(pool);
         return 0;
     }
@@ -2177,7 +2830,7 @@ LmMessageThreadPool *lm_message_thread_pool_new(
             free(pool->workers);
             lm_condition_delete(pool->work_ready);
             lm_mutex_delete(pool->mutex);
-            runtime->pool_count -= 1U;
+            lm_native_message_thread_runtime_release_pool(runtime);
             free(pool);
             return 0;
         }
@@ -2698,7 +3351,7 @@ int lm_message_thread_pool_delete(LmMessageThreadPool *pool) {
 
     lm_condition_delete(pool->work_ready);
     lm_mutex_delete(pool->mutex);
-    runtime->pool_count -= 1U;
+    lm_native_message_thread_runtime_release_pool(runtime);
     pool->runtime = 0;
     free(pool);
     return 0;

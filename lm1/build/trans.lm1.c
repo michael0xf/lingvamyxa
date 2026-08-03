@@ -132,6 +132,7 @@ typedef struct LmMessage LmMessage;
 typedef struct LmMessageOutboxEntry LmMessageOutboxEntry;
 typedef struct LmMessageRoute LmMessageRoute;
 typedef struct LmMessageThreadRuntime LmMessageThreadRuntime;
+typedef struct LmRestLmxProviderOpsV1 LmRestLmxProviderOpsV1;
 typedef struct LmMessageThreadPool LmMessageThreadPool;
 typedef struct LmMessageThreadComponent LmMessageThreadComponent;
 typedef struct LmMessageThread LmMessageThread;
@@ -192,6 +193,9 @@ typedef unsigned LmP0TrailerFlags;
 #define LM_MESSAGE_STATUS_ROUTE_NOT_FOUND 64
 #define LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED 65
 #define LM_MESSAGE_STATUS_INVALID_ADDRESS 66
+#define LM_MESSAGE_STATUS_TRANSPORT_FAILED 67
+#define LM_MESSAGE_STATUS_HTTP_REJECTED 68
+#define LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR 69
 #define LM_P0_NODE_STRUCTURE 1
 #define LM_P0_NODE_FRAME 2
 #define LM_P0_NODE_ATOM 3
@@ -293,6 +297,17 @@ struct LmMessageThreadRuntime {
     int exit_requested;
     int exit_ready;
     int exit_status;
+    int (*rest_lmx_post)(void *context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
+    void (*rest_lmx_destroy)(void *context);
+    void *rest_lmx_context;
+    int rest_lmx_provider_sealed;
+    int rest_lmx_provider_transition;
+    int deleting;
+};
+struct LmRestLmxProviderOpsV1 {
+    size_t abi_size;
+    int (*post)(void *context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
+    void (*destroy)(void *context);
 };
 struct LmMessageThreadPool {
     LmHostThread * *workers;
@@ -864,6 +879,14 @@ typedef void (*LmMessageThreadEntry)(struct LmMessageThread *lm_lmx_message_thre
 #define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy 1
 typedef void (*LmMessageThreadComponentDestroy)(struct LmMessageThread *lm_lmx_message_thread, void *component);
 #endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxPost
+#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxPost 1
+typedef int (*LmRestLmxPost)(void *context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxDestroy
+#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxDestroy 1
+typedef void (*LmRestLmxDestroy)(void *context);
+#endif
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprSegmentMaterializer
 #define LM_LMX_TYPEDEF_DEFINED_LmTransExprSegmentMaterializer 1
 typedef int (*LmTransExprSegmentMaterializer)(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransExprStack *stack, const LmTransExprSegment *segment, const LmTransNamespace *namespace_, int *out_consumed);
@@ -995,6 +1018,7 @@ int (lm_condition_signal)(LmCondition *condition);
 int (lm_condition_broadcast)(LmCondition *condition);
 LmMessageThreadRuntime * (lm_message_thread_runtime_new)(void);
 int (lm_message_thread_runtime_delete)(LmMessageThreadRuntime *runtime);
+int (lm_message_thread_runtime_set_rest_lmx_provider)(LmMessageThreadRuntime *runtime, const LmRestLmxProviderOpsV1 *ops, void *context);
 int (lm_message_thread_runtime_attach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
 int (lm_message_thread_runtime_detach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
 int (lm_message_thread_runtime_exit_state)(LmMessageThreadRuntime *runtime, int *out_requested, int *out_ready, int *out_status);
@@ -1267,6 +1291,11 @@ static int lm_trans_declare_registry_fn_descriptors(struct LmMessageThread *lm_l
 static int lm_trans_emit_root_sequence(struct LmMessageThread *lm_lmx_message_thread, FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_l4_payload_pointer_bindings_init(struct LmMessageThread *lm_lmx_message_thread);
 static void lm_trans_l4_payload_pointer_bindings_destroy(struct LmMessageThread *lm_lmx_message_thread);
+
+
+
+
+
 
 
 

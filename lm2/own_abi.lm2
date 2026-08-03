@@ -14,6 +14,8 @@ table:
              LmHostThreadEntry   1
              LmMessageThreadEntry 1
              LmMessageThreadComponentDestroy 1
+             LmRestLmxPost          1
+             LmRestLmxDestroy       1
 end: functionPointerType
 
 fn: LmOwnDestroyFields (@: void object) void
@@ -21,6 +23,8 @@ fn: LmOwnDelete (@: void object) void
 fn: LmHostThreadEntry (@: void argument) @: void
 fn: LmMessageThreadEntry (@: void argument) void
 fn: LmMessageThreadComponentDestroy (@: void component) void
+fn: LmRestLmxPost (@: void context; const: @(char normalized_uri); const: @(char body); size_t: length; @: unsigned out_http_status) int
+fn: LmRestLmxDestroy (@: void context) void
 
 table:
     name: class
@@ -61,6 +65,7 @@ table:
              LmMessageOutboxEntry       c.struct
              LmMessageRoute             c.struct
              LmMessageThreadRuntime  c.struct
+             LmRestLmxProviderOpsV1  c.struct
              LmMessageThreadPool        c.struct
              LmMessageThreadComponent   c.struct
              LmMessageThread            c.struct
@@ -81,6 +86,9 @@ table:
              LM_MESSAGE_STATUS_ROUTE_NOT_FOUND c.define
              LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED c.define
              LM_MESSAGE_STATUS_INVALID_ADDRESS c.define
+             LM_MESSAGE_STATUS_TRANSPORT_FAILED c.define
+             LM_MESSAGE_STATUS_HTTP_REJECTED c.define
+             LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR c.define
 end: `constant.backend`
 
 table:
@@ -98,6 +106,9 @@ table:
              LM_MESSAGE_STATUS_ROUTE_NOT_FOUND 64
              LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED 65
              LM_MESSAGE_STATUS_INVALID_ADDRESS 66
+             LM_MESSAGE_STATUS_TRANSPORT_FAILED 67
+             LM_MESSAGE_STATUS_HTTP_REJECTED 68
+             LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR 69
 end: `constant.value`
 
 table:
@@ -117,6 +128,7 @@ table:
              LmMessageOutboxEntry       c.named-struct
              LmMessageRoute             c.named-struct
              LmMessageThreadRuntime  c.named-struct
+             LmRestLmxProviderOpsV1  c.named-struct
              LmMessageThreadPool        c.named-struct
              LmMessageThreadComponent   c.named-struct
              LmMessageThread            c.named-struct
@@ -140,6 +152,7 @@ table:
              LmMessageOutboxEntry       1
              LmMessageRoute             1
              LmMessageThreadRuntime  1
+             LmRestLmxProviderOpsV1  1
              LmMessageThreadPool        1
              LmMessageThreadComponent   1
              LmMessageThread            1
@@ -553,6 +566,24 @@ table:
 end: `LmMessageRoute.field.address-depth`
 
 table:
+    name: `LmRestLmxProviderOpsV1.field.class`
+    columns((class: class) (class: field))
+    rows:
+             abi_size  size_t
+             post      LmRestLmxPost
+             destroy   LmRestLmxDestroy
+end: `LmRestLmxProviderOpsV1.field.class`
+
+table:
+    name: `LmRestLmxProviderOpsV1.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             abi_size  0
+             post      1
+             destroy   2
+end: `LmRestLmxProviderOpsV1.field.index`
+
+table:
     name: `LmMessageThreadRuntime.field.class`
     columns((class: class) (class: field))
     rows:
@@ -568,6 +599,12 @@ table:
              exit_requested         int
              exit_ready             int
              exit_status            int
+             rest_lmx_post          LmRestLmxPost
+             rest_lmx_destroy       LmRestLmxDestroy
+             rest_lmx_context       void
+             rest_lmx_provider_sealed int
+             rest_lmx_provider_transition int
+             deleting               int
 end: `LmMessageThreadRuntime.field.class`
 
 table:
@@ -586,6 +623,12 @@ table:
              exit_requested         9
              exit_ready             10
              exit_status            11
+             rest_lmx_post          12
+             rest_lmx_destroy       13
+             rest_lmx_context       14
+             rest_lmx_provider_sealed 15
+             rest_lmx_provider_transition 16
+             deleting               17
 end: `LmMessageThreadRuntime.field.index`
 
 table:
@@ -598,6 +641,7 @@ table:
              route_head            0
              root_thread           0
              exit_requester        0
+             rest_lmx_context      1
 end: `LmMessageThreadRuntime.field.address-depth`
 
 table:
@@ -828,6 +872,7 @@ table:
              lm_condition_broadcast          1
              lm_message_thread_runtime_new 1
              lm_message_thread_runtime_delete 1
+             lm_message_thread_runtime_set_rest_lmx_provider 1
              lm_message_thread_runtime_attach_root 1
              lm_message_thread_runtime_detach_root 1
              lm_message_thread_runtime_exit_state 1
@@ -950,6 +995,7 @@ fn: lm_condition_signal (LmCondition: condition) int
 fn: lm_condition_broadcast (LmCondition: condition) int
 fn: lm_message_thread_runtime_new () LmMessageThreadRuntime
 fn: lm_message_thread_runtime_delete (LmMessageThreadRuntime: runtime) int
+fn: lm_message_thread_runtime_set_rest_lmx_provider (LmMessageThreadRuntime: runtime; const: (LmRestLmxProviderOpsV1: ops); @: void context) int
 fn: lm_message_thread_runtime_attach_root (LmMessageThreadRuntime: runtime; LmMessageThread: thread) int
 fn: lm_message_thread_runtime_detach_root (LmMessageThreadRuntime: runtime; LmMessageThread: thread) int
 fn: lm_message_thread_runtime_exit_state (LmMessageThreadRuntime: runtime; @: int out_requested; @: int out_ready; @: int out_status) int

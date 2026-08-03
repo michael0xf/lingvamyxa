@@ -130,6 +130,7 @@ typedef struct LmMessage LmMessage;
 typedef struct LmMessageOutboxEntry LmMessageOutboxEntry;
 typedef struct LmMessageRoute LmMessageRoute;
 typedef struct LmMessageThreadRuntime LmMessageThreadRuntime;
+typedef struct LmRestLmxProviderOpsV1 LmRestLmxProviderOpsV1;
 typedef struct LmMessageThreadPool LmMessageThreadPool;
 typedef struct LmMessageThreadComponent LmMessageThreadComponent;
 typedef struct LmMessageThread LmMessageThread;
@@ -150,6 +151,9 @@ typedef int LmMessageThreadState;
 #define LM_MESSAGE_STATUS_ROUTE_NOT_FOUND 64
 #define LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED 65
 #define LM_MESSAGE_STATUS_INVALID_ADDRESS 66
+#define LM_MESSAGE_STATUS_TRANSPORT_FAILED 67
+#define LM_MESSAGE_STATUS_HTTP_REJECTED 68
+#define LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR 69
 
 
 #include <stddef.h>
@@ -239,6 +243,17 @@ struct LmMessageThreadRuntime {
     int exit_requested;
     int exit_ready;
     int exit_status;
+    int (*rest_lmx_post)(void *context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
+    void (*rest_lmx_destroy)(void *context);
+    void *rest_lmx_context;
+    int rest_lmx_provider_sealed;
+    int rest_lmx_provider_transition;
+    int deleting;
+};
+struct LmRestLmxProviderOpsV1 {
+    size_t abi_size;
+    int (*post)(void *context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
+    void (*destroy)(void *context);
 };
 struct LmMessageThreadPool {
     LmHostThread * *workers;
@@ -330,6 +345,14 @@ typedef void (*LmMessageThreadEntry)(struct LmMessageThread *lm_lmx_message_thre
 #define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy 1
 typedef void (*LmMessageThreadComponentDestroy)(struct LmMessageThread *lm_lmx_message_thread, void *component);
 #endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxPost
+#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxPost 1
+typedef int (*LmRestLmxPost)(void *context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxDestroy
+#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxDestroy 1
+typedef void (*LmRestLmxDestroy)(void *context);
+#endif
 
 
 void * (lm_own_new_zero)(size_t size);
@@ -385,6 +408,7 @@ int (lm_condition_signal)(LmCondition *condition);
 int (lm_condition_broadcast)(LmCondition *condition);
 LmMessageThreadRuntime * (lm_message_thread_runtime_new)(void);
 int (lm_message_thread_runtime_delete)(LmMessageThreadRuntime *runtime);
+int (lm_message_thread_runtime_set_rest_lmx_provider)(LmMessageThreadRuntime *runtime, const LmRestLmxProviderOpsV1 *ops, void *context);
 int (lm_message_thread_runtime_attach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
 int (lm_message_thread_runtime_detach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
 int (lm_message_thread_runtime_exit_state)(LmMessageThreadRuntime *runtime, int *out_requested, int *out_ready, int *out_status);
@@ -424,6 +448,11 @@ int (lm_message_thread_component_attach)(struct LmMessageThread *lm_lmx_message_
 void * (lm_message_thread_component_get)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 int (lm_message_thread_component_remove)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 size_t (lm_message_thread_component_count)(const LmMessageThread *thread);
+
+
+
+
+
 
 
 
@@ -872,6 +901,10 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_application_exit.c' '-o' $singleApplicationExitTest\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw 'single MessageThread application exit test link failed' }\n", file);
     fputs("    Invoke-LmTestWithTimeout $singleApplicationExitTest 'single MessageThread application exit test'\n", file);
+    fputs("    $singleRestLmxProviderTest = Join-Path 'build/obj/tests' 'message_thread_rest_lmx_provider_single.exe'\n", file);
+    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_rest_lmx_provider.c' '-o' $singleRestLmxProviderTest\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw 'single REST/LMX provider test link failed' }\n", file);
+    fputs("    Invoke-LmTestWithTimeout $singleRestLmxProviderTest 'single REST/LMX provider test'\n", file);
     fputs("    $nativePoolTest = Join-Path 'build/obj/tests' 'message_thread_pool_native.exe'\n", file);
     fputs("    $env:LM_THREAD_PROVIDER = 'win32'\n", file);
     fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_pool_native.c' '-o' $nativePoolTest\n", file);
@@ -889,6 +922,10 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_application_exit.c' '-o' $nativeApplicationExitTest\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw 'Win32 MessageThread application exit test link failed' }\n", file);
     fputs("    Invoke-LmTestWithTimeout $nativeApplicationExitTest 'Win32 MessageThread application exit test'\n", file);
+    fputs("    $nativeRestLmxProviderTest = Join-Path 'build/obj/tests' 'message_thread_rest_lmx_provider_native.exe'\n", file);
+    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_rest_lmx_provider.c' '-o' $nativeRestLmxProviderTest\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw 'Win32 REST/LMX provider test link failed' }\n", file);
+    fputs("    Invoke-LmTestWithTimeout $nativeRestLmxProviderTest 'Win32 REST/LMX provider test'\n", file);
     fputs("}\n", file);
     fputs("finally {\n", file);
     fputs("    if ($null -eq $previousThreadProvider) { Remove-Item Env:LM_THREAD_PROVIDER -ErrorAction SilentlyContinue } else { $env:LM_THREAD_PROVIDER = $previousThreadProvider }\n", file);
@@ -1110,6 +1147,9 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("single_application_exit_test='build/obj/tests/message_thread_application_exit_single'\n", file);
     fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_application_exit.c -o \"$single_application_exit_test\"\n", file);
     fputs("lm_run_with_watchdog \"$single_application_exit_test\"\n", file);
+    fputs("single_rest_lmx_provider_test='build/obj/tests/message_thread_rest_lmx_provider_single'\n", file);
+    fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_rest_lmx_provider.c -o \"$single_rest_lmx_provider_test\"\n", file);
+    fputs("lm_run_with_watchdog \"$single_rest_lmx_provider_test\"\n", file);
     fputs("native_pool_test='build/obj/tests/message_thread_pool_native'\n", file);
     fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_pool_native.c -o \"$native_pool_test\"\n", file);
     fputs("lm_run_with_watchdog \"$native_pool_test\"\n", file);
@@ -1122,6 +1162,9 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("native_application_exit_test='build/obj/tests/message_thread_application_exit_native'\n", file);
     fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_application_exit.c -o \"$native_application_exit_test\"\n", file);
     fputs("lm_run_with_watchdog \"$native_application_exit_test\"\n", file);
+    fputs("native_rest_lmx_provider_test='build/obj/tests/message_thread_rest_lmx_provider_native'\n", file);
+    fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_rest_lmx_provider.c -o \"$native_rest_lmx_provider_test\"\n", file);
+    fputs("lm_run_with_watchdog \"$native_rest_lmx_provider_test\"\n", file);
     fputs("echo 'lm0 staged tests passed'\n", file);
     return 0;
 }

@@ -7681,6 +7681,14 @@ explicitly below.
         configured, fails with
         `LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED` (65). Invalid
         address syntax fails with `LM_MESSAGE_STATUS_INVALID_ADDRESS` (66).
+        A configured provider reports a native transport failure as
+        `LM_MESSAGE_STATUS_TRANSPORT_FAILED` (67), a syntactically valid HTTP
+        response which does not admit the message as
+        `LM_MESSAGE_STATUS_HTTP_REJECTED` (68), and an invalid provider result
+        as `LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR` (69). HTTP 2xx admits
+        the transport delivery; HTTP 404 maps to the same route-not-found
+        status 64 as local lookup. Raw HTTP status numbers never become actor or
+        process exit statuses.
 
         `exit:` is an IMPLEMENTED L2/L3 application receiver:
 
@@ -9811,6 +9819,19 @@ An application hosted below a URI prefix includes that prefix in its endpoint.
 Normalization removes only the joining slash; it does not reinterpret or
 decode route segments.
 
+The hosted profile validates the two coordinates before staging a send.
+`endpoint` has a case-insensitive `http://` or `https://` scheme, a nonempty
+reg-name or bracketed IPv6/IPvFuture host, an optional
+decimal port in 1 through 65535, and an optional absolute base path. User-info,
+query and fragment components are not MessageAddress coordinates and are
+rejected. The endpoint base path and `route` use printable ASCII RFC 3986
+`pchar` bytes and valid `%HH` escapes; raw spaces, control/non-ASCII bytes,
+backslashes, adjacent path separators and literal `.` or `..` segments are
+rejected. Non-ASCII path data is percent-encoded by the producer. The runtime
+preserves accepted bytes and escape spelling exactly. If the endpoint ends in
+`/` and the route begins in `/`, URI construction removes exactly the endpoint's
+final joining slash.
+
 A local address omits endpoint:
 
     to:
@@ -10944,8 +10965,9 @@ second process-lifetime mechanism.
 The pool ready queue is not a Message Thread inbox or outbox. It
 contains runnable `LmMessageThread` references and schedules actor turns only.
 It does not carry message payloads. The separate implemented mailbox queues
-carry owned LMX bytes and perform local route delivery, but do not yet perform
-validation, reply routing or remote/inter-runtime delivery.
+carry owned LMX bytes and perform local route delivery. Remote outbox entries
+cross the per-runtime REST/LMX provider ABI; parsing, validation and semantic
+reply routing are later pipeline stages.
 
 Each queue-enabled MessageThread has a FIFO inbox and FIFO outbox. A local route
 row maps one route path to one inbox. Receiving appends an owned LMX message to
@@ -10994,6 +11016,62 @@ treat the URI as a local route or discard the message. A missing local route
 similarly ends the sending actor with `LM_MESSAGE_STATUS_ROUTE_NOT_FOUND`.
 Malformed address syntax is rejected before staging with
 `LM_MESSAGE_STATUS_INVALID_ADDRESS`.
+
+The hosted transport ABI is installed on one `LmMessageThreadRuntime`, never in
+a process-global or thread-local current-runtime variable. Version 1 is:
+
+    typedef int (*LmRestLmxPost)(
+        void *context,
+        const char *normalized_uri,
+        const char *body,
+        size_t length,
+        unsigned *out_http_status
+    );
+
+    typedef void (*LmRestLmxDestroy)(void *context);
+
+    typedef struct LmRestLmxProviderOpsV1 {
+        size_t abi_size;
+        LmRestLmxPost post;
+        LmRestLmxDestroy destroy;
+    } LmRestLmxProviderOpsV1;
+
+    int lm_message_thread_runtime_set_rest_lmx_provider(
+        LmMessageThreadRuntime *runtime,
+        const LmRestLmxProviderOpsV1 *ops,
+        void *context
+    );
+
+The controller installs, replaces or clears this binding before attaching the
+root, constructing a pool, binding routes or requesting exit. The runtime
+copies the operation table. On successful installation it owns `context` until
+replacement, clearing or runtime deletion and calls `destroy(context)` exactly
+once when a non-NULL destroy operation was supplied. Failed installation does
+not take ownership. Replacement and destruction occur while no Message Thread
+can execute the provider. Reinstalling the exact same operation/context binding
+is a no-op; reusing one non-NULL owned context with different operations is
+rejected so replacement cannot publish an object which its old destructor then
+releases. During a destructor callback, provider mutation, root/pool creation
+and recursive runtime deletion are rejected, while read-only runtime status
+queries remain available.
+
+At remote outbox commit, the runtime linearizes the operation with the
+application-exit cut and snapshots `post` plus `context`. It then releases the
+route, pool and actor-state mutexes before invoking `post`. A provider callback
+may therefore query the runtime without deadlock. Calls for different actors
+may overlap; provider context must be safe for those concurrent calls. URI and
+body arguments are borrowed only for the callback. `body` contains exactly
+`length` bytes and need not be NUL-terminated or free of embedded NUL bytes.
+
+Provider callback result zero means that a syntactically valid HTTP response
+was received and `out_http_status` is defined. Status 200 through 299 admits the
+transport delivery. Status 404 maps to
+`LM_MESSAGE_STATUS_ROUTE_NOT_FOUND`; every other status in 100 through 599 maps
+to `LM_MESSAGE_STATUS_HTTP_REJECTED`. A nonzero callback result maps to
+`LM_MESSAGE_STATUS_TRANSPORT_FAILED`; a zero result with an invalid HTTP status
+maps to `LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR`. The HTTP response body is
+not an implicit semantic reply: replies remain complete LMX Messages addressed
+through `replyTo` and correlated with `id`.
 
 Dispatch is a registry query, not object magic.
 
@@ -13550,8 +13628,9 @@ Current hosted-bootstrap implementation:
         in either case;
     pooled mailbox actors, owned-LMX FIFO inbox/outbox queues and exact local
         route-to-MessageThread delivery are implemented;
-    empty/NULL endpoint selects local delivery; absolute HTTP(S) addresses
-        currently fail explicitly because no transport provider is configured;
+    empty/NULL endpoint selects local delivery; a per-runtime REST/LMX provider
+        ABI accepts normalized absolute HTTP(S) targets and complete binary LMX
+        bodies, while an unconfigured runtime fails remote sends explicitly;
     source `thread:` declarations create one route-bound mailbox actor and lower
         one dequeued LMX document to one `IncomingMessage` handler turn;
     source `send:` is implemented for local and explicitly addressed HTTP(S)
@@ -13563,9 +13642,10 @@ Current hosted-bootstrap implementation:
         application shutdown; the requester completes its turn, the generated
         controller stops and joins the application pool, completes the root
         boundary and releases runtime resources before host return;
-    message parsing/validation, reply routing, configured remote/inter-runtime
-        delivery and envelope/address consistency checking are not yet
-        implemented;
+    the neutral remote-provider hook and delivery-result mapping are
+        implemented; a concrete network adapter, inbound HTTP admission,
+        message parsing/validation, reply routing and envelope/address
+        consistency checking remain separate work;
     `reply`, `await` and `schedule` are not yet implemented as generic source
         operations; shutdown across several manually constructed runtimes or
         pools is not coordinated by the current source profile;
@@ -13585,7 +13665,6 @@ Proposed but NOT IMPLEMENTED as generic source operations:
     reply;
     await;
     schedule;
-    exit;
     general low-level freemem/thread/shared-block profile.
 
 Conceptual future runtime material in this section describes required semantics
@@ -13649,6 +13728,13 @@ MessageAddress.route`. A remote sender posts the complete LMX Message document
 as the request body. The receiving application resolves only the route part in
 its local route table. An HTTP route never names an OS worker or exposes a raw
 MessageThread handle.
+
+The core runtime does not own an HTTP client singleton. Its per-runtime
+REST/LMX provider receives the already normalized request URI and an exact
+borrowed byte span, performs one POST with media type `application/lmx`, and
+returns either an HTTP admission status or a native transport failure. This
+keeps the message address, outbox and shutdown semantics identical for a test
+provider, libcurl, WinHTTP or a later transport implementation.
 
 19.31.4. Serialization, Client/Server and Service Boundaries
 
