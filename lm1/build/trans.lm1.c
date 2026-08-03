@@ -188,6 +188,9 @@ struct LmOwnArena {
     LmOwnPtrStack * lazy_edges;
     int frozen;
     LmMessageThread * owner_thread;
+    LmOwnArena * registry_previous;
+    LmOwnArena * registry_next;
+    int runtime_owned_shell;
 };
 struct LmMessageThread {
     LmOwnArena * root_owner;
@@ -197,6 +200,10 @@ struct LmMessageThread {
     size_t collection_count;
     int collector_failed;
     void *execution_context;
+    LmOwnArena * arena_head;
+    LmOwnArena * arena_tail;
+    size_t arena_count;
+    int arena_destroying;
 };
 typedef struct LmP0Text {
     const char *data;
@@ -812,6 +819,7 @@ void * (lm_message_thread_execution_context)(LmMessageThread *thread);
 void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *context);
 size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
+size_t (lm_message_thread_arena_count)(const LmMessageThread *thread);
 int (lm_p0_parse_string)(struct LmMessageThread *lm_lmx_message_thread, const char *source, LmP0Document **out_document);
 int (lm_p0_parse_bytes)(struct LmMessageThread *lm_lmx_message_thread, const char *source, size_t source_length, LmP0Document **out_document);
 int (lm_p0_parse_file)(struct LmMessageThread *lm_lmx_message_thread, const char *path, LmP0Document **out_document);
@@ -1039,6 +1047,7 @@ static int lm_trans_declare_registry_fn_descriptors(struct LmMessageThread *lm_l
 static int lm_trans_emit_root_sequence(struct LmMessageThread *lm_lmx_message_thread, FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_l4_payload_pointer_bindings_init(struct LmMessageThread *lm_lmx_message_thread);
 static void lm_trans_l4_payload_pointer_bindings_destroy(struct LmMessageThread *lm_lmx_message_thread);
+
 
 
 
@@ -36377,6 +36386,9 @@ static int lm_trans_registry_init(struct LmMessageThread *lm_lmx_message_thread)
 
 static void lm_trans_registry_destroy(struct LmMessageThread *lm_lmx_message_thread) {
     (void)lm_lmx_message_thread;
+    if (lm_trans_registry != 0 && lm_trans_registry -> value_arena != 0 && lm_trans_registry -> value_arena -> owner_thread != 0 && lm_trans_registry -> value_arena -> owner_thread != lm_lmx_message_thread) {
+        return;
+    }
     lm_trans_expr_binding_view_cache_reset(lm_lmx_message_thread);
     lm_trans_callable_projection_cache_reset(lm_lmx_message_thread);
     lm_trans_registry_source_path_cache_reset(lm_lmx_message_thread);

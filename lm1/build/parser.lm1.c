@@ -203,6 +203,9 @@ struct LmOwnArena {
     LmOwnPtrStack * lazy_edges;
     int frozen;
     LmMessageThread * owner_thread;
+    LmOwnArena * registry_previous;
+    LmOwnArena * registry_next;
+    int runtime_owned_shell;
 };
 struct LmMessageThread {
     LmOwnArena * root_owner;
@@ -212,6 +215,10 @@ struct LmMessageThread {
     size_t collection_count;
     int collector_failed;
     void *execution_context;
+    LmOwnArena * arena_head;
+    LmOwnArena * arena_tail;
+    size_t arena_count;
+    int arena_destroying;
 };
 typedef struct LmP0Text {
     const char *data;
@@ -503,6 +510,7 @@ void * (lm_message_thread_execution_context)(LmMessageThread *thread);
 void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *context);
 size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
+size_t (lm_message_thread_arena_count)(const LmMessageThread *thread);
 int (lm_p0_parse_string)(struct LmMessageThread *lm_lmx_message_thread, const char *source, LmP0Document **out_document);
 int (lm_p0_parse_bytes)(struct LmMessageThread *lm_lmx_message_thread, const char *source, size_t source_length, LmP0Document **out_document);
 int (lm_p0_parse_file)(struct LmMessageThread *lm_lmx_message_thread, const char *path, LmP0Document **out_document);
@@ -523,6 +531,7 @@ const char * (lm_p0_node_kind_class_name)(struct LmMessageThread *lm_lmx_message
 char * (lm_p0_dump_alloc)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
 void (lm_p0_free)(struct LmMessageThread *lm_lmx_message_thread, void *ptr);
 static int lm_registry_source_load_root(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Node *root);
+
 
 
 
@@ -2163,6 +2172,7 @@ int main(void) {
 }
 #endif
 static int lm_p0_document_init_owners(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document);
+static int lm_p0_document_owners_belong_to_actor(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
 static void lm_p0_document_destroy_owners(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document);
 static void lm_p0_document_freeze_tree(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document);
 static void lm_p0_indent_stack_free(struct LmMessageThread *lm_lmx_message_thread, LmP0IndentStack *stack);
@@ -4199,9 +4209,23 @@ static int lm_p0_document_init_owners(struct LmMessageThread *lm_lmx_message_thr
     return 0;
 }
 
+static int lm_p0_document_owners_belong_to_actor(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document) {
+    (void)lm_lmx_message_thread;
+    if (document == 0 || document -> owners_initialized == 0) {
+        return 1;
+    }
+    if ((document -> diagnostic_arena != 0 && document -> diagnostic_arena -> owner_thread != 0 && document -> diagnostic_arena -> owner_thread != lm_lmx_message_thread) || (document -> tree_arena != 0 && document -> tree_arena -> owner_thread != 0 && document -> tree_arena -> owner_thread != lm_lmx_message_thread) || (document -> token_arena != 0 && document -> token_arena -> owner_thread != 0 && document -> token_arena -> owner_thread != lm_lmx_message_thread) || (document -> source_owner != 0 && document -> source_owner -> owner_thread != 0 && document -> source_owner -> owner_thread != lm_lmx_message_thread)) {
+        return 0;
+    }
+    return 1;
+}
+
 static void lm_p0_document_destroy_owners(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document) {
     (void)lm_lmx_message_thread;
     if (document != 0 && document -> owners_initialized != 0) {
+        if (lm_p0_document_owners_belong_to_actor(lm_lmx_message_thread, document) == 0) {
+            return;
+        }
         lm_own_arena_destroy(lm_lmx_message_thread, document -> diagnostic_arena);
         lm_own_delete(document -> diagnostic_arena, 0);
         lm_own_arena_destroy(lm_lmx_message_thread, document -> tree_arena);
@@ -10545,6 +10569,9 @@ static int lm_p0_registry_source_tables_selftest(struct LmMessageThread *lm_lmx_
 void lm_p0_document_destroy(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document) {
     (void)lm_lmx_message_thread;
     if (document == 0) {
+        return;
+    }
+    if (lm_p0_document_owners_belong_to_actor(lm_lmx_message_thread, document) == 0) {
         return;
     }
     lm_p0_document_destroy_owners(lm_lmx_message_thread, document);

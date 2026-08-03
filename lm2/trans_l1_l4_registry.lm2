@@ -2305,6 +2305,8 @@ fn: lm_trans_registry_init () int
 return: 0
 
 sub: lm_trans_registry_destroy ()
+    if: lm_trans_registry != 0 && lm_trans_registry\value_arena != 0 && lm_trans_registry\value_arena\owner_thread != 0 && lm_trans_registry\value_arena\owner_thread != c.lm_lmx_message_thread
+        return
     lm_trans_expr_binding_view_cache_reset()
     lm_trans_callable_projection_cache_reset()
     lm_trans_registry_source_path_cache_reset()

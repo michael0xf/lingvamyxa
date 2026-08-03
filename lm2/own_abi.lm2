@@ -267,6 +267,9 @@ table:
              lazy_edges              LmOwnPtrStack
              frozen                  int
              owner_thread            LmMessageThread
+             registry_previous       LmOwnArena
+             registry_next           LmOwnArena
+             runtime_owned_shell     int
 end: `LmOwnArena.field.class`
 
 table:
@@ -278,6 +281,9 @@ table:
              lazy_edges              2
              frozen                  3
              owner_thread            4
+             registry_previous       5
+             registry_next           6
+             runtime_owned_shell     7
 end: `LmOwnArena.field.index`
 
 table:
@@ -288,6 +294,8 @@ table:
              allocation_descriptors  0
              lazy_edges              0
              owner_thread            0
+             registry_previous       0
+             registry_next           0
 end: `LmOwnArena.field.address-depth`
 
 table:
@@ -301,6 +309,10 @@ table:
              collection_count  size_t
              collector_failed  int
              execution_context void
+             arena_head         LmOwnArena
+             arena_tail         LmOwnArena
+             arena_count        size_t
+             arena_destroying   int
 end: `LmMessageThread.field.class`
 
 table:
@@ -314,6 +326,10 @@ table:
              collection_count  4
              collector_failed  5
              execution_context 6
+             arena_head         7
+             arena_tail         8
+             arena_count        9
+             arena_destroying   10
 end: `LmMessageThread.field.index`
 
 table:
@@ -322,6 +338,8 @@ table:
     rows:
              root_owner        0
              execution_context 1
+             arena_head         0
+             arena_tail         0
 end: `LmMessageThread.field.address-depth`
 
 table:
@@ -381,6 +399,7 @@ table:
              lm_message_thread_set_execution_context 1
              lm_message_thread_turn_count        1
              lm_message_thread_collection_count  1
+             lm_message_thread_arena_count       1
 end: `fn.external`
 
 table:
@@ -459,3 +478,4 @@ fn: lm_message_thread_execution_context (LmMessageThread: thread) @: void
 fn: lm_message_thread_set_execution_context (LmMessageThread: thread; @: void context) @: void
 fn: lm_message_thread_turn_count (const: (LmMessageThread: thread)) size_t
 fn: lm_message_thread_collection_count (const: (LmMessageThread: thread)) size_t
+fn: lm_message_thread_arena_count (const: (LmMessageThread: thread)) size_t

@@ -1,0 +1,170 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+external:
+    fn: main () int
+        LmMessageThread: threadA 0
+        LmMessageThread: threadB 0
+        LmMessageThread: probe 0
+        @: void reusable 0
+        LmOwnArena: autoA1 0
+        LmOwnArena: autoA2 0
+        LmOwnArena: manualA 0
+        LmOwnArena: externalArena 0
+        LmOwnArena: probeRoot 0
+        LmOwnArena: probeChild 0
+        @: int valueA1 0
+        @: int valueA2 0
+        @: int valueManual 0
+        @: int valueExternal 0
+        @: int valueExternalB 0
+        @: int valueB 0
+        @: int probeValue 0
+        const: LmOwnAllocationDescriptor: descriptor 0
+        int: status 0
+
+        threadA: lm_message_thread_new()
+        threadB: lm_message_thread_new()
+        if: threadA = 0 || threadB = 0
+            status: 1
+        if: status = 0 && (lm_message_thread_arena_count(threadA) != 1U || lm_message_thread_arena_count(threadB) != 1U)
+            status: 2
+        if: status = 0 && lm_message_thread_init(threadA) != 1
+            status: 3
+        if: status = 0 && lm_message_thread_arena_count(threadA) != 1U
+            status: 4
+
+        if: status = 0
+            autoA1: c.lm_own_arena_new(threadA, threadA)
+            autoA2: c.lm_own_arena_new(threadA, threadA)
+            manualA: c.lm_own_arena_new(threadA, threadA)
+            externalArena: cast: (LmOwnArena) lm_own_new_zero(c.sizeof(c.LmOwnArena))
+            if: autoA1 = 0 || autoA2 = 0 || manualA = 0 || externalArena = 0 || c.lm_own_arena_init(threadA, externalArena, threadA) != 0
+                status: 5
+        ---
+        if: status = 0 && (lm_message_thread_arena_count(threadA) != 5U || autoA1\runtime_owned_shell != 1 || autoA2\runtime_owned_shell != 1 || manualA\runtime_owned_shell != 1 || externalArena\runtime_owned_shell != 0)
+            status: 6
+
+        if: status = 0
+            valueA1: cast: (@: int) c.lm_own_arena_array_new_zero(threadA, autoA1, c.sizeof(valueA1[0]), 1U, 1U, 0U)
+            valueA2: cast: (@: int) c.lm_own_arena_array_new_zero(threadA, autoA2, c.sizeof(valueA2[0]), 1U, 1U, 0U)
+            valueManual: cast: (@: int) c.lm_own_arena_array_new_zero(threadA, manualA, c.sizeof(valueManual[0]), 1U, 1U, 0U)
+            valueExternal: cast: (@: int) c.lm_own_arena_array_new_zero(threadA, externalArena, c.sizeof(valueExternal[0]), 1U, 1U, 0U)
+            valueB: cast: (@: int) c.lm_own_arena_array_new_zero(threadB, lm_message_thread_owner(threadB), c.sizeof(valueB[0]), 1U, 1U, 0U)
+            if: valueA1 = 0 || valueA2 = 0 || valueManual = 0 || valueExternal = 0 || valueB = 0
+                status: 7
+        ---
+        if: status = 0
+            valueA1[0]: 11
+            valueA2[0]: 12
+            valueManual[0]: 13
+            valueExternal[0]: 14
+            valueB[0]: 21
+        ---
+
+        if: status = 0 && c.lm_own_arena_init(threadA, externalArena, threadA) != 1
+            status: 8
+        if: status = 0 && c.lm_own_arena_init(threadB, externalArena, threadB) != 1
+            status: 9
+        if: status = 0
+            descriptor: c.lm_own_arena_allocation_descriptor(threadA, externalArena, valueExternal)
+            if: descriptor = 0 || descriptor\owner != externalArena || valueExternal[0] != 14 || externalArena\owner_thread != threadA || lm_message_thread_arena_count(threadA) != 5U
+                status: 10
+        ---
+
+        if: status = 0
+            c.lm_own_arena_destroy(threadB, autoA1)
+            c.lm_own_arena_delete(threadB, externalArena)
+            c.lm_own_arena_destroy(threadA, autoA1)
+            c.lm_own_arena_delete(threadA, externalArena)
+            descriptor: c.lm_own_arena_allocation_descriptor(threadA, autoA1, valueA1)
+            if: descriptor = 0 || valueA1[0] != 11 || externalArena\owner_thread != threadA || lm_message_thread_arena_count(threadA) != 5U
+                status: 11
+        ---
+
+        if: status = 0
+            c.lm_own_arena_delete(threadA, manualA)
+            manualA: 0
+            if: lm_message_thread_arena_count(threadA) != 4U
+                status: 12
+        ---
+        if: status = 0
+            c.lm_own_arena_destroy(threadA, externalArena)
+            if: lm_message_thread_arena_count(threadA) != 3U || externalArena\owner_thread != 0 || externalArena\allocations != 0 || externalArena\allocation_descriptors != 0 || externalArena\lazy_edges != 0 || externalArena\registry_previous != 0 || externalArena\registry_next != 0 || externalArena\runtime_owned_shell != 0
+                status: 13
+        ---
+        if: status = 0 && c.lm_own_arena_init(threadB, externalArena, threadB) != 0
+            status: 14
+        if: status = 0 && lm_message_thread_arena_count(threadB) != 2U
+            status: 15
+        if: status = 0
+            valueExternalB: cast: (@: int) c.lm_own_arena_array_new_zero(threadB, externalArena, c.sizeof(valueExternalB[0]), 1U, 1U, 0U)
+            if: valueExternalB = 0
+                status: 16
+            else:
+                valueExternalB[0]: 22
+            ---
+        ---
+
+        if: threadA != 0
+            lm_message_thread_delete(threadA)
+            threadA: 0
+            autoA1: 0
+            autoA2: 0
+            manualA: 0
+        if: status = 0 && (valueB[0] != 21 || valueExternalB[0] != 22 || externalArena\owner_thread != threadB || lm_message_thread_arena_count(threadB) != 2U)
+            status: 17
+
+        if: status = 0
+            probe: lm_message_thread_new()
+            if: probe = 0
+                status: 18
+        ---
+        if: status = 0
+            probeRoot: lm_message_thread_owner(probe)
+            probeChild: c.lm_own_arena_new(probe, probe)
+            probeValue: cast: (@: int) c.lm_own_arena_array_new_zero(probe, probeRoot, c.sizeof(probeValue[0]), 1U, 1U, 0U)
+            if: probeRoot = 0 || probeChild = 0 || probeValue = 0 || lm_message_thread_arena_count(probe) != 2U
+                status: 19
+        ---
+        if: status = 0
+            probeValue[0]: 31
+            c.lm_own_arena_delete(probe, probeRoot)
+            descriptor: c.lm_own_arena_allocation_descriptor(probe, probeRoot, probeValue)
+            if: lm_message_thread_owner(probe) != probeRoot || lm_message_thread_arena_count(probe) != 2U || descriptor = 0 || probeValue[0] != 31 || lm_message_thread_status(probe) != 1
+                status: 20
+        ---
+        lm_message_thread_delete(probe)
+        probe: 0
+
+        if: status = 0
+            reusable: lm_own_new_zero(c.sizeof(c.LmMessageThread))
+            if: reusable = 0 || lm_message_thread_init(reusable) != 0 || lm_message_thread_arena_count(reusable) != 1U || lm_message_thread_init(reusable) != 1
+                status: 21
+        ---
+        if: reusable != 0
+            lm_message_thread_destroy(reusable)
+            if: status = 0 && (lm_message_thread_owner(reusable) != 0 || lm_message_thread_arena_count(reusable) != 0U)
+                status: 22
+            if: status = 0 && lm_message_thread_init(reusable) != 0
+                status: 23
+            lm_message_thread_destroy(reusable)
+            lm_own_delete(reusable, 0)
+            reusable: 0
+        ---
+
+        if: threadB != 0
+            lm_message_thread_delete(threadB)
+            threadB: 0
+        if: status = 0 && (externalArena\owner_thread != 0 || externalArena\allocations != 0 || externalArena\allocation_descriptors != 0 || externalArena\lazy_edges != 0 || externalArena\registry_previous != 0 || externalArena\registry_next != 0 || externalArena\runtime_owned_shell != 0)
+            status: 24
+        lm_own_delete(externalArena, 0)
+        return: status
+    end: main
+end: external

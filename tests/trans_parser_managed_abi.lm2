@@ -10,6 +10,7 @@ fn
 prototype
 unit
 
+predef: "lm2/own_abi.lm2"
 predef: "lm2/parser_abi.lm2"
 
 external:
@@ -21,9 +22,28 @@ external:
         const: LmP0Frame: frame 0
         const: LmP0Trailer: trailer 0
         @: char dump
+        size_t: arena_count
+        LmMessageThread: foreign_thread 0
+
+        arena_count: lm_message_thread_arena_count(c.lm_lmx_message_thread)
 
         if: lm_p0_parse_string("value\n", @ document) != 0 || document = 0
             return: 1
+        if: lm_message_thread_arena_count(c.lm_lmx_message_thread) != arena_count + 4U
+            lm_p0_document_destroy(document)
+            return: 11
+
+        foreign_thread: lm_message_thread_new()
+        if: foreign_thread = 0
+            lm_p0_document_destroy(document)
+            return: 17
+        c.lm_p0_document_destroy(foreign_thread, document)
+        if: lm_message_thread_arena_count(c.lm_lmx_message_thread) != arena_count + 4U || lm_p0_document_root(document) = 0
+            lm_message_thread_delete(foreign_thread)
+            lm_p0_document_destroy(document)
+            return: 18
+        lm_message_thread_delete(foreign_thread)
+        foreign_thread: 0
 
         root: lm_p0_document_root(document)
         mutable_root: lm_p0_document_mutable_root(document)
@@ -59,15 +79,27 @@ external:
         lm_p0_free(dump)
         lm_p0_document_destroy(document)
         document: 0
+        if: lm_message_thread_arena_count(c.lm_lmx_message_thread) != arena_count
+            return: 12
 
         if: lm_p0_parse_bytes("value\n", 6U, @ document) != 0 || document = 0
             return: 9
+        if: lm_message_thread_arena_count(c.lm_lmx_message_thread) != arena_count + 4U
+            lm_p0_document_destroy(document)
+            return: 13
         lm_p0_document_destroy(document)
         document: 0
+        if: lm_message_thread_arena_count(c.lm_lmx_message_thread) != arena_count
+            return: 14
 
         if: lm_p0_parse_file("tests/test.lmx", @ document) != 0 || document = 0
             return: 10
+        if: lm_message_thread_arena_count(c.lm_lmx_message_thread) != arena_count + 4U
+            lm_p0_document_destroy(document)
+            return: 15
         lm_p0_document_destroy(document)
+        if: lm_message_thread_arena_count(c.lm_lmx_message_thread) != arena_count
+            return: 16
         return: 0
     end: main
 end: external

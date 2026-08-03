@@ -132,6 +132,9 @@ struct LmOwnArena {
     LmOwnPtrStack * lazy_edges;
     int frozen;
     LmMessageThread * owner_thread;
+    LmOwnArena * registry_previous;
+    LmOwnArena * registry_next;
+    int runtime_owned_shell;
 };
 struct LmMessageThread {
     LmOwnArena * root_owner;
@@ -141,6 +144,10 @@ struct LmMessageThread {
     size_t collection_count;
     int collector_failed;
     void *execution_context;
+    LmOwnArena * arena_head;
+    LmOwnArena * arena_tail;
+    size_t arena_count;
+    int arena_destroying;
 };
 
 
@@ -207,6 +214,8 @@ void * (lm_message_thread_execution_context)(LmMessageThread *thread);
 void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *context);
 size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
+size_t (lm_message_thread_arena_count)(const LmMessageThread *thread);
+
 
 
 
@@ -317,6 +326,11 @@ void lm_own_ptr_stack_truncate(LmOwnPtrStack *stack, size_t count);
 void lm_own_value_stack_init(LmOwnValueStack *stack, size_t item_size);
 void lm_own_value_stack_destroy(LmOwnValueStack *stack);
 void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count);
+static int lm_own_arena_shell_is_zero(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena);
+static int lm_own_arena_register(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmOwnArena *arena);
+static int lm_own_arena_detach(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmOwnArena *arena);
+static int lm_own_arena_init_registered(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, LmMessageThread *owner_thread, int runtime_owned_shell);
+static int lm_own_arena_release(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmOwnArena *arena, int delete_shell, int teardown_mode);
 int lm_own_arena_init(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, LmMessageThread *owner_thread);
 void lm_own_arena_destroy(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
 LmOwnArena * lm_own_arena_new(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread);
@@ -352,6 +366,7 @@ void * lm_message_thread_execution_context(LmMessageThread *thread);
 void * lm_message_thread_set_execution_context(LmMessageThread *thread, void *context);
 size_t lm_message_thread_turn_count(const LmMessageThread *thread);
 size_t lm_message_thread_collection_count(const LmMessageThread *thread);
+size_t lm_message_thread_arena_count(const LmMessageThread *thread);
 void lm_message_thread_request_stop(LmMessageThread *thread, int status);
 void lm_message_thread_request_failure(LmMessageThread *thread, int status);
 int lm_message_thread_collect(LmMessageThread *thread);
@@ -556,50 +571,181 @@ void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count) {
     }
 }
 
-int lm_own_arena_init(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, LmMessageThread *owner_thread) {
+static int lm_own_arena_shell_is_zero(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena) {
     (void)lm_lmx_message_thread;
-    if (arena == 0 || owner_thread == 0 || lm_lmx_message_thread == 0 || owner_thread != lm_lmx_message_thread) {
+    if (arena == 0) {
+        return 0;
+    }
+    return arena -> allocations == 0 && arena -> allocation_descriptors == 0 && arena -> lazy_edges == 0 && arena -> frozen == 0 && arena -> owner_thread == 0 && arena -> registry_previous == 0 && arena -> registry_next == 0 && arena -> runtime_owned_shell == 0;
+}
+
+static int lm_own_arena_register(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmOwnArena *arena) {
+    (void)lm_lmx_message_thread;
+    LmOwnArena * tail;
+    if (owner_thread == 0 || arena == 0 || lm_lmx_message_thread == 0 || owner_thread != lm_lmx_message_thread || owner_thread -> arena_destroying) {
         return 1;
     }
-    arena->allocations = 0;
-    arena->allocation_descriptors = 0;
-    arena->lazy_edges = 0;
-    arena->frozen = 1;
+    if (arena -> owner_thread != 0 || arena -> registry_previous != 0 || arena -> registry_next != 0) {
+        return 1;
+    }
+    if (owner_thread -> arena_count == (((size_t)-1))) {
+        return 1;
+    }
+    tail = owner_thread -> arena_tail;
+    if (owner_thread -> arena_count == 0U) {
+        if (owner_thread -> arena_head != 0 || tail != 0) {
+            return 1;
+        }
+    }
+    else {
+        if (owner_thread -> arena_head == 0 || tail == 0 || owner_thread -> arena_head -> registry_previous != 0 || tail -> registry_next != 0 || owner_thread -> arena_head -> owner_thread != owner_thread || tail -> owner_thread != owner_thread) {
+            return 1;
+        }
+    }
     arena->owner_thread = owner_thread;
-    arena->allocations = lm_own_new_zero(sizeof(LmOwnPtrStack));
-    arena->allocation_descriptors = lm_own_new_zero(sizeof(LmOwnPtrStack));
-    arena->lazy_edges = lm_own_new_zero(sizeof(LmOwnPtrStack));
-    if (arena -> allocations == 0 || arena -> allocation_descriptors == 0 || arena -> lazy_edges == 0) {
-        lm_own_delete(arena -> lazy_edges, 0);
-        lm_own_delete(arena -> allocation_descriptors, 0);
-        lm_own_delete(arena -> allocations, 0);
-        arena->allocations = 0;
-        arena->allocation_descriptors = 0;
-        arena->lazy_edges = 0;
-        arena->owner_thread = 0;
-        return 1;
+    arena->registry_previous = tail;
+    arena->registry_next = 0;
+    if (tail != 0) {
+        tail->registry_next = arena;
     }
-    lm_own_ptr_stack_init(arena -> allocations, free);
-    lm_own_ptr_stack_init(arena -> allocation_descriptors, lm_own_delete_plain);
-    lm_own_ptr_stack_init(arena -> lazy_edges, lm_own_delete_plain);
-    arena->frozen = 0;
+    else {
+        owner_thread->arena_head = arena;
+    }
+    owner_thread->arena_tail = arena;
+    owner_thread->arena_count = owner_thread -> arena_count + 1U;
     return 0;
 }
 
-void lm_own_arena_destroy(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena) {
+static int lm_own_arena_detach(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmOwnArena *arena) {
     (void)lm_lmx_message_thread;
-    if (arena != 0 && lm_lmx_message_thread != 0 && arena -> owner_thread == lm_lmx_message_thread) {
+    LmOwnArena * previous;
+    LmOwnArena * next;
+    if (owner_thread == 0 || arena == 0 || lm_lmx_message_thread == 0 || owner_thread != lm_lmx_message_thread || arena -> owner_thread != owner_thread || owner_thread -> arena_count == 0U) {
+        return 1;
+    }
+    previous = arena -> registry_previous;
+    next = arena -> registry_next;
+    if (previous == 0) {
+        if (owner_thread -> arena_head != arena) {
+            return 1;
+        }
+    }
+    else {
+        if (previous -> owner_thread != owner_thread || previous -> registry_next != arena) {
+            return 1;
+        }
+    }
+    if (next == 0) {
+        if (owner_thread -> arena_tail != arena) {
+            return 1;
+        }
+    }
+    else {
+        if (next -> owner_thread != owner_thread || next -> registry_previous != arena) {
+            return 1;
+        }
+    }
+    if (previous != 0) {
+        previous->registry_next = next;
+    }
+    else {
+        owner_thread->arena_head = next;
+    }
+    if (next != 0) {
+        next->registry_previous = previous;
+    }
+    else {
+        owner_thread->arena_tail = previous;
+    }
+    owner_thread->arena_count = owner_thread -> arena_count - 1U;
+    if (owner_thread -> root_owner == arena) {
+        owner_thread->root_owner = 0;
+    }
+    arena->registry_previous = 0;
+    arena->registry_next = 0;
+    arena->owner_thread = 0;
+    return 0;
+}
+
+static int lm_own_arena_init_registered(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, LmMessageThread *owner_thread, int runtime_owned_shell) {
+    (void)lm_lmx_message_thread;
+    LmOwnPtrStack * allocations;
+    LmOwnPtrStack * allocation_descriptors;
+    LmOwnPtrStack * lazy_edges;
+    if (arena == 0 || owner_thread == 0 || lm_lmx_message_thread == 0 || owner_thread != lm_lmx_message_thread || lm_own_arena_shell_is_zero(lm_lmx_message_thread, arena) == 0) {
+        return 1;
+    }
+    allocations = lm_own_new_zero(sizeof(allocations[0]));
+    allocation_descriptors = lm_own_new_zero(sizeof(allocation_descriptors[0]));
+    lazy_edges = lm_own_new_zero(sizeof(lazy_edges[0]));
+    if (allocations == 0 || allocation_descriptors == 0 || lazy_edges == 0) {
+        lm_own_delete(lazy_edges, 0);
+        lm_own_delete(allocation_descriptors, 0);
+        lm_own_delete(allocations, 0);
+        return 1;
+    }
+    lm_own_ptr_stack_init(allocations, free);
+    lm_own_ptr_stack_init(allocation_descriptors, lm_own_delete_plain);
+    lm_own_ptr_stack_init(lazy_edges, lm_own_delete_plain);
+    arena->allocations = allocations;
+    arena->allocation_descriptors = allocation_descriptors;
+    arena->lazy_edges = lazy_edges;
+    arena->frozen = 0;
+    arena->runtime_owned_shell = runtime_owned_shell != 0;
+    if (lm_own_arena_register(lm_lmx_message_thread, owner_thread, arena) != 0) {
         lm_own_ptr_stack_destroy(arena -> lazy_edges);
         lm_own_delete(arena -> lazy_edges, 0);
         lm_own_ptr_stack_destroy(arena -> allocation_descriptors);
         lm_own_delete(arena -> allocation_descriptors, 0);
         lm_own_ptr_stack_destroy(arena -> allocations);
         lm_own_delete(arena -> allocations, 0);
-        arena->lazy_edges = 0;
-        arena->allocation_descriptors = 0;
-        arena->allocations = 0;
-        arena->frozen = 0;
-        arena->owner_thread = 0;
+        memset(arena, 0, sizeof(arena[0]));
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_own_arena_release(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread, LmOwnArena *arena, int delete_shell, int teardown_mode) {
+    (void)lm_lmx_message_thread;
+    int runtime_owned_shell;
+    if (owner_thread == 0 || arena == 0 || lm_lmx_message_thread == 0 || owner_thread != lm_lmx_message_thread || arena -> owner_thread != owner_thread) {
+        return 1;
+    }
+    if (teardown_mode == 0) {
+        if (arena == owner_thread -> root_owner) {
+            lm_message_thread_request_failure(owner_thread, 1);
+            return 1;
+        }
+        if ((delete_shell != 0) != (arena -> runtime_owned_shell != 0)) {
+            return 1;
+        }
+    }
+    runtime_owned_shell = arena -> runtime_owned_shell;
+    if (lm_own_arena_detach(lm_lmx_message_thread, owner_thread, arena) != 0) {
+        return 1;
+    }
+    lm_own_ptr_stack_destroy(arena -> lazy_edges);
+    lm_own_delete(arena -> lazy_edges, 0);
+    lm_own_ptr_stack_destroy(arena -> allocation_descriptors);
+    lm_own_delete(arena -> allocation_descriptors, 0);
+    lm_own_ptr_stack_destroy(arena -> allocations);
+    lm_own_delete(arena -> allocations, 0);
+    memset(arena, 0, sizeof(arena[0]));
+    if (runtime_owned_shell) {
+        lm_own_delete(arena, 0);
+    }
+    return 0;
+}
+
+int lm_own_arena_init(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, LmMessageThread *owner_thread) {
+    (void)lm_lmx_message_thread;
+    return lm_own_arena_init_registered(lm_lmx_message_thread, arena, owner_thread, 0);
+}
+
+void lm_own_arena_destroy(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena) {
+    (void)lm_lmx_message_thread;
+    if (arena != 0 && lm_lmx_message_thread != 0) {
+        lm_own_arena_release(lm_lmx_message_thread, lm_lmx_message_thread, arena, 0, 0);
     }
 }
 
@@ -613,7 +759,7 @@ LmOwnArena * lm_own_arena_new(struct LmMessageThread *lm_lmx_message_thread, LmM
     if (arena == 0) {
         return 0;
     }
-    if (lm_own_arena_init(lm_lmx_message_thread, arena, owner_thread) != 0) {
+    if (lm_own_arena_init_registered(lm_lmx_message_thread, arena, owner_thread, 1) != 0) {
         lm_own_delete(arena, 0);
         return 0;
     }
@@ -622,9 +768,8 @@ LmOwnArena * lm_own_arena_new(struct LmMessageThread *lm_lmx_message_thread, LmM
 
 void lm_own_arena_delete(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena) {
     (void)lm_lmx_message_thread;
-    if (arena != 0 && lm_lmx_message_thread != 0 && arena -> owner_thread == lm_lmx_message_thread) {
-        lm_own_arena_destroy(lm_lmx_message_thread, arena);
-        lm_own_delete(arena, 0);
+    if (arena != 0 && lm_lmx_message_thread != 0) {
+        lm_own_arena_release(lm_lmx_message_thread, lm_lmx_message_thread, arena, 1, 0);
     }
 }
 
@@ -1083,6 +1228,9 @@ int lm_message_thread_init(LmMessageThread *thread) {
     if (thread == 0) {
         return 1;
     }
+    if (thread -> state == LM_MESSAGE_THREAD_RUNNING || thread -> state == LM_MESSAGE_THREAD_STOPPING || thread -> root_owner != 0 || thread -> arena_head != 0 || thread -> arena_tail != 0 || thread -> arena_count != 0U || thread -> arena_destroying) {
+        return 1;
+    }
     memset(thread, 0, sizeof(thread[0]));
     thread->root_owner = lm_own_arena_new(thread, thread);
     if (thread -> root_owner == 0) {
@@ -1098,11 +1246,26 @@ int lm_message_thread_init(LmMessageThread *thread) {
 void lm_message_thread_destroy(LmMessageThread *thread) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
+    LmOwnArena * arena;
     if (thread != 0) {
-        if (thread -> root_owner != 0 && thread -> root_owner -> owner_thread == thread) {
-            lm_own_arena_delete(thread, thread -> root_owner);
+        thread->arena_destroying = 1;
+        while (thread -> arena_tail != 0) {
+            arena = thread -> arena_tail;
+            if (lm_own_arena_release(thread, thread, arena, arena -> runtime_owned_shell, 1) != 0) {
+                thread->collector_failed = 1;
+                if (thread -> stop_status == 0) {
+                    thread->stop_status = 1;
+                }
+                break;
+            }
         }
-        thread->root_owner = 0;
+        if (thread -> arena_count == 0U) {
+            thread->root_owner = 0;
+            thread->arena_head = 0;
+            thread->arena_tail = 0;
+        }
+        thread->arena_destroying = 0;
+        thread->execution_context = 0;
         thread->state = LM_MESSAGE_THREAD_STOPPED;
     }
 }
@@ -1127,7 +1290,9 @@ void lm_message_thread_delete(LmMessageThread *thread) {
     (void)lm_lmx_message_thread;
     if (thread != 0) {
         lm_message_thread_destroy(thread);
-        lm_own_delete(thread, 0);
+        if (thread -> arena_count == 0U && thread -> arena_head == 0 && thread -> arena_tail == 0) {
+            lm_own_delete(thread, 0);
+        }
     }
 }
 
@@ -1149,7 +1314,7 @@ int lm_message_thread_status(const LmMessageThread *thread) {
 LmOwnArena * lm_message_thread_owner(LmMessageThread *thread) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
-    if (thread == 0 || thread -> root_owner == 0 || thread -> root_owner -> owner_thread != thread) {
+    if (thread == 0 || thread -> root_owner == 0 || thread -> root_owner -> owner_thread != thread || thread -> arena_head != thread -> root_owner || thread -> root_owner -> registry_previous != 0 || thread -> arena_count == 0U) {
         return 0;
     }
     return thread -> root_owner;
@@ -1194,6 +1359,15 @@ size_t lm_message_thread_collection_count(const LmMessageThread *thread) {
     return thread -> collection_count;
 }
 
+size_t lm_message_thread_arena_count(const LmMessageThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    if (thread == 0) {
+        return 0U;
+    }
+    return thread -> arena_count;
+}
+
 void lm_message_thread_request_stop(LmMessageThread *thread, int status) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
@@ -1222,7 +1396,7 @@ int lm_message_thread_collect(LmMessageThread *thread) {
         return 1;
     }
     thread->collection_count = thread -> collection_count + 1U;
-    if (thread -> root_owner == 0 || thread -> root_owner -> owner_thread != thread) {
+    if (thread -> root_owner == 0 || thread -> root_owner -> owner_thread != thread || thread -> arena_head != thread -> root_owner || thread -> root_owner -> registry_previous != 0 || thread -> arena_tail == 0 || thread -> arena_tail -> registry_next != 0 || thread -> arena_count == 0U) {
         thread->collector_failed = 1;
         lm_message_thread_request_failure(thread, 1);
         return 1;

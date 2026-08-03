@@ -135,6 +135,9 @@ struct LmOwnArena {
     LmOwnPtrStack * lazy_edges;
     int frozen;
     LmMessageThread * owner_thread;
+    LmOwnArena * registry_previous;
+    LmOwnArena * registry_next;
+    int runtime_owned_shell;
 };
 struct LmMessageThread {
     LmOwnArena * root_owner;
@@ -144,6 +147,10 @@ struct LmMessageThread {
     size_t collection_count;
     int collector_failed;
     void *execution_context;
+    LmOwnArena * arena_head;
+    LmOwnArena * arena_tail;
+    size_t arena_count;
+    int arena_destroying;
 };
 typedef struct LmBuildOptions {
     int full_build;
@@ -214,6 +221,8 @@ void * (lm_message_thread_execution_context)(LmMessageThread *thread);
 void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *context);
 size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
+size_t (lm_message_thread_arena_count)(const LmMessageThread *thread);
+
 
 
 

@@ -628,8 +628,17 @@ fn: lm_p0_document_init_owners (LmP0Document: document) int
         return: 1
 return: 0
 
+fn: lm_p0_document_owners_belong_to_actor (const: (LmP0Document: document)) int
+    if: document = 0 || document\owners_initialized = 0
+        return: 1
+    if: (document\diagnostic_arena != 0 && document\diagnostic_arena\owner_thread != 0 && document\diagnostic_arena\owner_thread != c.lm_lmx_message_thread) || (document\tree_arena != 0 && document\tree_arena\owner_thread != 0 && document\tree_arena\owner_thread != c.lm_lmx_message_thread) || (document\token_arena != 0 && document\token_arena\owner_thread != 0 && document\token_arena\owner_thread != c.lm_lmx_message_thread) || (document\source_owner != 0 && document\source_owner\owner_thread != 0 && document\source_owner\owner_thread != c.lm_lmx_message_thread)
+        return: 0
+return: 1
+
 sub: lm_p0_document_destroy_owners (LmP0Document: document)
     if: document != 0 && document\owners_initialized != 0
+        if: lm_p0_document_owners_belong_to_actor(document) = 0
+            return
         lm_own_arena_destroy(document\diagnostic_arena)
         lm_own_delete(document\diagnostic_arena, 0)
         lm_own_arena_destroy(document\tree_arena)
@@ -5684,6 +5693,8 @@ import: "lm2/parser_registry_selftest.lm2"
 external:
     sub: lm_p0_document_destroy (LmP0Document: document)
         if: (document = 0)
+            return
+        if: lm_p0_document_owners_belong_to_actor(document) = 0
             return
         lm_p0_document_destroy_owners(document)
         lm_own_delete(document, 0)
