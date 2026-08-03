@@ -18,6 +18,16 @@ table:
              LmRegistrySourceFrameIndexRule     1
 end: functionPointerType
 
+table:
+    name: `fn.thread-context.managed`
+    columns((class: class) (int: value))
+    rows:
+             LmRegistrySourcePushTableRow       1
+             LmRegistrySourcePushColumnMetadata 1
+             LmRegistrySourceJoinTable          1
+             LmRegistrySourceFrameIndexRule     1
+end: `fn.thread-context.managed`
+
 fn: LmRegistrySourceFrameIndexRule (
     const: LmRegistrySourceLoader: loader
     @: void context

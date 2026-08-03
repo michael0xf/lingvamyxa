@@ -271,11 +271,11 @@ struct LmRegistrySourceColumn {
 };
 struct LmRegistrySourceLoader {
     const char *error_prefix;
-    int (*push_column_metadata)(void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count);
-    int (*push_table_row)(void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells);
-    int (*join_table)(void *context, const LmP0Text *source_table, const LmP0Text *target_table);
-    int (*formal_param_unwrap_index)(const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
-    int (*positional_name_index)(const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
+    int (*push_column_metadata)(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count);
+    int (*push_table_row)(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells);
+    int (*join_table)(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *source_table, const LmP0Text *target_table);
+    int (*formal_param_unwrap_index)(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
+    int (*positional_name_index)(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
 };
 struct LmTableColumnDescriptor {
     char *name;
@@ -433,19 +433,19 @@ typedef void (*LmOwnDelete)(void *object);
 #endif
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmRegistrySourcePushTableRow
 #define LM_LMX_TYPEDEF_DEFINED_LmRegistrySourcePushTableRow 1
-typedef int (*LmRegistrySourcePushTableRow)(void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells);
+typedef int (*LmRegistrySourcePushTableRow)(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells);
 #endif
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmRegistrySourcePushColumnMetadata
 #define LM_LMX_TYPEDEF_DEFINED_LmRegistrySourcePushColumnMetadata 1
-typedef int (*LmRegistrySourcePushColumnMetadata)(void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count);
+typedef int (*LmRegistrySourcePushColumnMetadata)(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count);
 #endif
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmRegistrySourceJoinTable
 #define LM_LMX_TYPEDEF_DEFINED_LmRegistrySourceJoinTable 1
-typedef int (*LmRegistrySourceJoinTable)(void *context, const LmP0Text *source_table, const LmP0Text *target_table);
+typedef int (*LmRegistrySourceJoinTable)(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *source_table, const LmP0Text *target_table);
 #endif
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmRegistrySourceFrameIndexRule
 #define LM_LMX_TYPEDEF_DEFINED_LmRegistrySourceFrameIndexRule 1
-typedef int (*LmRegistrySourceFrameIndexRule)(const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
+typedef int (*LmRegistrySourceFrameIndexRule)(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
 #endif
 
 
@@ -919,7 +919,7 @@ static int lm_registry_source_frame_formal_param_unwrap_index(struct LmMessageTh
     if (frame == 0 || out_index == 0) {
         return 0;
     }
-    if (loader != 0 && loader -> formal_param_unwrap_index != 0 && loader->formal_param_unwrap_index(loader, context, frame, out_index) != 0) {
+    if (loader != 0 && loader -> formal_param_unwrap_index != 0 && loader->formal_param_unwrap_index(lm_lmx_message_thread, loader, context, frame, out_index) != 0) {
         return 1;
     }
     if (lm_registry_source_text_equals(lm_lmx_message_thread, lm_registry_source_frame_head(lm_lmx_message_thread, frame), "const")) {
@@ -934,7 +934,7 @@ static int lm_registry_source_frame_positional_name_index(struct LmMessageThread
     if (frame == 0 || out_index == 0) {
         return 0;
     }
-    if (loader != 0 && loader -> positional_name_index != 0 && loader->positional_name_index(loader, context, frame, out_index) != 0) {
+    if (loader != 0 && loader -> positional_name_index != 0 && loader->positional_name_index(lm_lmx_message_thread, loader, context, frame, out_index) != 0) {
         return 1;
     }
     if (lm_registry_source_text_all_char(lm_lmx_message_thread, lm_registry_source_frame_head(lm_lmx_message_thread, frame), '@') != 0 || lm_registry_source_text_is_array_receiver_head(lm_lmx_message_thread, lm_registry_source_frame_head(lm_lmx_message_thread, frame)) != 0) {
@@ -1392,7 +1392,7 @@ static int lm_registry_source_rows_from_frame(struct LmMessageThread *lm_lmx_mes
                     return -1;
                 }
             }
-            if (column_index + 1U == column_count && loader->push_table_row(context, table_name, columns, column_count, row_cells) != 0) {
+            if (column_index + 1U == column_count && loader->push_table_row(lm_lmx_message_thread, context, table_name, columns, column_count, row_cells) != 0) {
                 lm_own_delete(row_cells, 0);
                 return -1;
             }
@@ -1466,7 +1466,7 @@ static int lm_registry_source_table_from_frame(struct LmMessageThread *lm_lmx_me
                     lm_registry_source_columns_destroy(lm_lmx_message_thread, columns, column_count);
                     return -1;
                 }
-                if (loader != 0 && loader -> push_column_metadata != 0 && loader->push_column_metadata(context, table_name, columns, column_count) != 0) {
+                if (loader != 0 && loader -> push_column_metadata != 0 && loader->push_column_metadata(lm_lmx_message_thread, context, table_name, columns, column_count) != 0) {
                     lm_registry_source_error(lm_lmx_message_thread, loader, "cannot store table column metadata");
                     lm_registry_source_columns_destroy(lm_lmx_message_thread, columns, column_count);
                     return -1;
@@ -1666,7 +1666,7 @@ static int lm_registry_source_join_sources_into_target(struct LmMessageThread *l
                 return -1;
             }
             source_name = lm_registry_source_node_atom(lm_lmx_message_thread, node);
-            if (source_name == 0 || loader->join_table(context, source_name, target_name) != 0) {
+            if (source_name == 0 || loader->join_table(lm_lmx_message_thread, context, source_name, target_name) != 0) {
                 return -1;
             }
         }
@@ -1734,7 +1734,7 @@ static int lm_registry_source_join_from_frame(struct LmMessageThread *lm_lmx_mes
                     lm_registry_source_columns_destroy(lm_lmx_message_thread, columns, column_count);
                     return -1;
                 }
-                if (loader != 0 && loader -> push_column_metadata != 0 && loader->push_column_metadata(context, target_name, columns, column_count) != 0) {
+                if (loader != 0 && loader -> push_column_metadata != 0 && loader->push_column_metadata(lm_lmx_message_thread, context, target_name, columns, column_count) != 0) {
                     lm_registry_source_error(lm_lmx_message_thread, loader, "cannot store join target column metadata");
                     lm_registry_source_columns_destroy(lm_lmx_message_thread, columns, column_count);
                     return -1;
@@ -1907,6 +1907,7 @@ static int lm_registry_source_load_root(struct LmMessageThread *lm_lmx_message_t
     lm_own_delete(seen, 0);
     return status;
 }
+
 
 
 
@@ -2358,15 +2359,15 @@ static int lm_p0_validate_nonempty_colon_frames_in_structure(struct LmMessageThr
 int lm_p0_parse_bytes(const char *source, size_t source_length, LmP0Document **out_document);
 int lm_p0_parse_string(const char *source, LmP0Document **out_document);
 int lm_p0_parse_file(const char *path, LmP0Document **out_document);
-static int lm_p0_registry_source_push_column_metadata(void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count);
-static int lm_p0_registry_source_push_table_row(void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells);
-static int lm_p0_registry_source_join_table(void *context, const LmP0Text *source_table, const LmP0Text *target_table);
+static int lm_p0_registry_source_push_column_metadata(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count);
+static int lm_p0_registry_source_push_table_row(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells);
+static int lm_p0_registry_source_join_table(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *source_table, const LmP0Text *target_table);
 static int lm_p0_registry_source_text_all_char(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *text, char ch);
 static int lm_p0_registry_source_text_is_array_receiver_head(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *head);
 static const LmP0Text * lm_p0_registry_source_frame_receiver_key(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
 static int lm_p0_registry_source_parse_size_payload(struct LmMessageThread *lm_lmx_message_thread, const char *payload, size_t *out_value);
-static int lm_p0_registry_source_formal_param_unwrap_index(const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
-static int lm_p0_registry_source_positional_name_index(const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
+static int lm_p0_registry_source_formal_param_unwrap_index(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
+static int lm_p0_registry_source_positional_name_index(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
 static LmRegistrySourceLoader * lm_p0_registry_source_loader_new(struct LmMessageThread *lm_lmx_message_thread);
 static int lm_p0_path_has_extension(struct LmMessageThread *lm_lmx_message_thread, const char *path, const char *extension);
 static int lm_p0_registry_require_source_only(struct LmMessageThread *lm_lmx_message_thread, const char *phase);
@@ -2403,6 +2404,7 @@ char * lm_p0_dump_alloc(const LmP0Document *document);
 #ifndef LM_UNUSED
 #define LM_UNUSED(value) ((void)(value))
 #endif
+
 
 
 
@@ -9980,8 +9982,7 @@ int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
     return status;
 }
 
-static int lm_p0_registry_source_push_column_metadata(void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+static int lm_p0_registry_source_push_column_metadata(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count) {
     (void)lm_lmx_message_thread;
     LmTableDescriptor * descriptor;
     LM_UNUSED(context);
@@ -9999,15 +10000,13 @@ static int lm_p0_registry_source_push_column_metadata(void *context, const LmP0T
     return 0;
 }
 
-static int lm_p0_registry_source_push_table_row(void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+static int lm_p0_registry_source_push_table_row(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells) {
     (void)lm_lmx_message_thread;
     LM_UNUSED(context);
     return lm_p0_registry_materialize_source_row(lm_lmx_message_thread, table_name, columns, column_count, cells);
 }
 
-static int lm_p0_registry_source_join_table(void *context, const LmP0Text *source_table, const LmP0Text *target_table) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+static int lm_p0_registry_source_join_table(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *source_table, const LmP0Text *target_table) {
     (void)lm_lmx_message_thread;
     LmP0Text * source_name;
     LmP0Text * target_name;
@@ -10111,8 +10110,7 @@ static int lm_p0_registry_source_parse_size_payload(struct LmMessageThread *lm_l
     return 1;
 }
 
-static int lm_p0_registry_source_formal_param_unwrap_index(const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+static int lm_p0_registry_source_formal_param_unwrap_index(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index) {
     (void)lm_lmx_message_thread;
     const char *payload;
     const LmP0Text * key;
@@ -10126,8 +10124,7 @@ static int lm_p0_registry_source_formal_param_unwrap_index(const LmRegistrySourc
     return lm_p0_registry_source_parse_size_payload(lm_lmx_message_thread, payload, out_index);
 }
 
-static int lm_p0_registry_source_positional_name_index(const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+static int lm_p0_registry_source_positional_name_index(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index) {
     (void)lm_lmx_message_thread;
     const char *payload;
     const LmP0Text * key;
@@ -10520,7 +10517,7 @@ static int lm_p0_registry_source_tables_selftest(struct LmMessageThread *lm_lmx_
     incompatible_source = lm_p0_text_from_cstr(lm_lmx_message_thread, "alpha");
     incompatible_target = lm_p0_text_from_cstr(lm_lmx_message_thread, "synthetic");
     synthetic_row_count = lm_table_descriptor_materialized_row_count(lm_lmx_message_thread, synthetic);
-    if (status == 0 && (incompatible_source == 0 || incompatible_target == 0 || lm_p0_registry_source_join_table(0, incompatible_source, incompatible_target) == 0 || lm_table_descriptor_materialized_row_count(lm_lmx_message_thread, synthetic) != synthetic_row_count)) {
+    if (status == 0 && (incompatible_source == 0 || incompatible_target == 0 || lm_p0_registry_source_join_table(lm_lmx_message_thread, 0, incompatible_source, incompatible_target) == 0 || lm_table_descriptor_materialized_row_count(lm_lmx_message_thread, synthetic) != synthetic_row_count)) {
         status = 1;
     }
     lm_p0_text_view_delete(lm_lmx_message_thread, incompatible_source);

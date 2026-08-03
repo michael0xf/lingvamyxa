@@ -1,0 +1,41 @@
+L1:
+===
+#ifndef LM_UNUSED
+#define LM_UNUSED(value) ((void)(value))
+#endif
+===
+
+include
+define
+os
+ifdef
+forward
+alias
+constant
+layout
+fn
+prototype
+unit
+
+predef: "lm2/own_abi.lm2"
+predef: "lm2/parser_abi.lm2"
+predef: "lm2/registry_source_loader_abi.lm2"
+
+fn: lm_test_registry_source_push_column_metadata (
+    @: void expected_thread
+    const: LmP0Text: table_name
+    @: LmRegistrySourceColumn columns
+    size_t: column_count
+) int
+    return: c.lm_lmx_message_thread != 0 && c.lm_lmx_message_thread = expected_thread && table_name = 0 && columns = 0 && column_count = 0U
+end: lm_test_registry_source_push_column_metadata
+
+external:
+    fn: main () int
+        LmRegistrySourcePushColumnMetadata: callback @ lm_test_registry_source_push_column_metadata
+        c.LM_UNUSED(c.lm_registry_source_load_root)
+        if: callback(c.lm_lmx_message_thread, 0, 0, 0U) = 0
+            return: 1
+        return: 0
+    end: main
+end: external
