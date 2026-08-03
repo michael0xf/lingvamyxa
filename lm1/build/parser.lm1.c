@@ -202,6 +202,7 @@ struct LmOwnArena {
     LmOwnPtrStack * allocation_descriptors;
     LmOwnPtrStack * lazy_edges;
     int frozen;
+    LmMessageThread * owner_thread;
 };
 struct LmMessageThread {
     LmOwnArena * root_owner;
@@ -470,9 +471,9 @@ int (lm_own_value_stack_pop)(LmOwnValueStack *stack, void *out_item);
 void * (lm_own_value_stack_at)(const LmOwnValueStack *stack, size_t index);
 void * (lm_own_value_stack_top)(const LmOwnValueStack *stack);
 void (lm_own_value_stack_truncate)(LmOwnValueStack *stack, size_t count);
-LmOwnArena * (lm_own_arena_new)(void);
+LmOwnArena * (lm_own_arena_new)(LmMessageThread *owner_thread);
 void (lm_own_arena_delete)(LmOwnArena *arena);
-int (lm_own_arena_init)(LmOwnArena *arena);
+int (lm_own_arena_init)(LmOwnArena *arena, LmMessageThread *owner_thread);
 void (lm_own_arena_destroy)(LmOwnArena *arena);
 void * (lm_own_arena_new_zero)(LmOwnArena *arena, size_t size);
 void * (lm_own_arena_array_new_zero)(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
@@ -483,6 +484,7 @@ int (lm_own_arena_promote_lazy_edges)(LmOwnArena *arena);
 int (lm_own_arena_absorb)(LmOwnArena *target, LmOwnArena *source);
 void (lm_own_arena_freeze)(LmOwnArena *arena);
 int (lm_own_arena_is_frozen)(const LmOwnArena *arena);
+LmMessageThread * (lm_own_arena_owner_thread)(const LmOwnArena *arena);
 int (lm_own_tree_cut)(LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
 int (lm_message_thread_init)(LmMessageThread *thread);
@@ -521,6 +523,7 @@ const char * (lm_p0_node_kind_class_name)(struct LmMessageThread *lm_lmx_message
 char * (lm_p0_dump_alloc)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
 void (lm_p0_free)(struct LmMessageThread *lm_lmx_message_thread, void *ptr);
 static int lm_registry_source_load_root(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Node *root);
+
 
 
 
@@ -4183,7 +4186,7 @@ static int lm_p0_document_init_owners(struct LmMessageThread *lm_lmx_message_thr
         return 1;
     }
     document->owners_initialized = 1;
-    if (lm_own_arena_init(document -> source_owner) != 0 || lm_own_arena_init(document -> token_arena) != 0 || lm_own_arena_init(document -> tree_arena) != 0 || lm_own_arena_init(document -> diagnostic_arena) != 0) {
+    if (lm_own_arena_init(document -> source_owner, lm_lmx_message_thread) != 0 || lm_own_arena_init(document -> token_arena, lm_lmx_message_thread) != 0 || lm_own_arena_init(document -> tree_arena, lm_lmx_message_thread) != 0 || lm_own_arena_init(document -> diagnostic_arena, lm_lmx_message_thread) != 0) {
         lm_p0_document_destroy_owners(lm_lmx_message_thread, document);
         return 1;
     }

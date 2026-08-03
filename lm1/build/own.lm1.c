@@ -131,6 +131,7 @@ struct LmOwnArena {
     LmOwnPtrStack * allocation_descriptors;
     LmOwnPtrStack * lazy_edges;
     int frozen;
+    LmMessageThread * owner_thread;
 };
 struct LmMessageThread {
     LmOwnArena * root_owner;
@@ -174,9 +175,9 @@ int (lm_own_value_stack_pop)(LmOwnValueStack *stack, void *out_item);
 void * (lm_own_value_stack_at)(const LmOwnValueStack *stack, size_t index);
 void * (lm_own_value_stack_top)(const LmOwnValueStack *stack);
 void (lm_own_value_stack_truncate)(LmOwnValueStack *stack, size_t count);
-LmOwnArena * (lm_own_arena_new)(void);
+LmOwnArena * (lm_own_arena_new)(LmMessageThread *owner_thread);
 void (lm_own_arena_delete)(LmOwnArena *arena);
-int (lm_own_arena_init)(LmOwnArena *arena);
+int (lm_own_arena_init)(LmOwnArena *arena, LmMessageThread *owner_thread);
 void (lm_own_arena_destroy)(LmOwnArena *arena);
 void * (lm_own_arena_new_zero)(LmOwnArena *arena, size_t size);
 void * (lm_own_arena_array_new_zero)(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
@@ -187,6 +188,7 @@ int (lm_own_arena_promote_lazy_edges)(LmOwnArena *arena);
 int (lm_own_arena_absorb)(LmOwnArena *target, LmOwnArena *source);
 void (lm_own_arena_freeze)(LmOwnArena *arena);
 int (lm_own_arena_is_frozen)(const LmOwnArena *arena);
+LmMessageThread * (lm_own_arena_owner_thread)(const LmOwnArena *arena);
 int (lm_own_tree_cut)(LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(LmOwnArena *arena);
 int (lm_message_thread_init)(LmMessageThread *thread);
@@ -295,6 +297,7 @@ size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
 
 
 
+
 #include <stdlib.h>
 #include <string.h>
 void * lm_own_new_zero(size_t size);
@@ -313,12 +316,13 @@ void lm_own_ptr_stack_truncate(LmOwnPtrStack *stack, size_t count);
 void lm_own_value_stack_init(LmOwnValueStack *stack, size_t item_size);
 void lm_own_value_stack_destroy(LmOwnValueStack *stack);
 void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count);
-int lm_own_arena_init(LmOwnArena *arena);
+int lm_own_arena_init(LmOwnArena *arena, LmMessageThread *owner_thread);
 void lm_own_arena_destroy(LmOwnArena *arena);
-LmOwnArena * lm_own_arena_new(void);
+LmOwnArena * lm_own_arena_new(LmMessageThread *owner_thread);
 void lm_own_arena_delete(LmOwnArena *arena);
 void lm_own_arena_freeze(LmOwnArena *arena);
 int lm_own_arena_is_frozen(const LmOwnArena *arena);
+LmMessageThread * lm_own_arena_owner_thread(const LmOwnArena *arena);
 int lm_own_tree_cut(LmOwnArena *arena);
 int lm_own_tree_cut_promote_lazy_edges(LmOwnArena *arena);
 int lm_own_value_stack_push(LmOwnValueStack *stack, const void *item);
@@ -551,16 +555,17 @@ void lm_own_value_stack_truncate(LmOwnValueStack *stack, size_t count) {
     }
 }
 
-int lm_own_arena_init(LmOwnArena *arena) {
+int lm_own_arena_init(LmOwnArena *arena, LmMessageThread *owner_thread) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
-    if (arena == 0) {
+    if (arena == 0 || owner_thread == 0) {
         return 1;
     }
     arena->allocations = 0;
     arena->allocation_descriptors = 0;
     arena->lazy_edges = 0;
     arena->frozen = 1;
+    arena->owner_thread = owner_thread;
     arena->allocations = lm_own_new_zero(sizeof(LmOwnPtrStack));
     arena->allocation_descriptors = lm_own_new_zero(sizeof(LmOwnPtrStack));
     arena->lazy_edges = lm_own_new_zero(sizeof(LmOwnPtrStack));
@@ -571,6 +576,7 @@ int lm_own_arena_init(LmOwnArena *arena) {
         arena->allocations = 0;
         arena->allocation_descriptors = 0;
         arena->lazy_edges = 0;
+        arena->owner_thread = 0;
         return 1;
     }
     lm_own_ptr_stack_init(arena -> allocations, free);
@@ -594,18 +600,22 @@ void lm_own_arena_destroy(LmOwnArena *arena) {
         arena->allocation_descriptors = 0;
         arena->allocations = 0;
         arena->frozen = 0;
+        arena->owner_thread = 0;
     }
 }
 
-LmOwnArena * lm_own_arena_new(void) {
+LmOwnArena * lm_own_arena_new(LmMessageThread *owner_thread) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     LmOwnArena * arena;
+    if (owner_thread == 0) {
+        return 0;
+    }
     arena = lm_own_new_zero(sizeof(arena[0]));
     if (arena == 0) {
         return 0;
     }
-    if (lm_own_arena_init(arena) != 0) {
+    if (lm_own_arena_init(arena, owner_thread) != 0) {
         lm_own_delete(arena, 0);
         return 0;
     }
@@ -624,7 +634,7 @@ void lm_own_arena_delete(LmOwnArena *arena) {
 void lm_own_arena_freeze(LmOwnArena *arena) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
-    if (arena != 0) {
+    if (arena != 0 && arena -> owner_thread != 0) {
         arena->frozen = 1;
     }
 }
@@ -632,7 +642,16 @@ void lm_own_arena_freeze(LmOwnArena *arena) {
 int lm_own_arena_is_frozen(const LmOwnArena *arena) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
-    return arena != 0 && arena -> frozen;
+    return arena != 0 && arena -> owner_thread != 0 && arena -> frozen;
+}
+
+LmMessageThread * lm_own_arena_owner_thread(const LmOwnArena *arena) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    if (arena == 0) {
+        return 0;
+    }
+    return arena -> owner_thread;
 }
 
 int lm_own_tree_cut(LmOwnArena *arena) {
@@ -808,7 +827,7 @@ void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     void *object;
-    if (arena == 0 || arena -> frozen || arena -> allocations == 0 || arena -> allocation_descriptors == 0) {
+    if (arena == 0 || arena -> owner_thread == 0 || arena -> frozen || arena -> allocations == 0 || arena -> allocation_descriptors == 0) {
         return 0;
     }
     object = calloc(1U, size);
@@ -832,7 +851,7 @@ void * lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_
     (void)lm_lmx_message_thread;
     void *object;
     size_t bytes;
-    if (arena == 0 || arena -> frozen || arena -> allocations == 0 || arena -> allocation_descriptors == 0) {
+    if (arena == 0 || arena -> owner_thread == 0 || arena -> frozen || arena -> allocations == 0 || arena -> allocation_descriptors == 0) {
         return 0;
     }
     if (lm_own_size_multiply(lm_lmx_message_thread, element_size, count, &bytes) != 0) {
@@ -860,7 +879,7 @@ void * lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_
 const LmOwnAllocationDescriptor * lm_own_arena_allocation_descriptor(const LmOwnArena *arena, const void *address) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
-    if (arena == 0 || arena -> allocation_descriptors == 0) {
+    if (arena == 0 || arena -> owner_thread == 0 || arena -> allocation_descriptors == 0) {
         return 0;
     }
     return lm_own_allocation_descriptor_find(lm_lmx_message_thread, arena -> allocation_descriptors, address);
@@ -886,7 +905,7 @@ int lm_own_arena_add_lazy_edge(LmOwnArena *target, LmOwnArena *source, const voi
     (void)lm_lmx_message_thread;
     LmOwnLazyEdge * edge;
     int status;
-    if (target == 0 || source == 0 || patch_slot == 0 || target -> frozen || target -> lazy_edges == 0) {
+    if (target == 0 || source == 0 || patch_slot == 0 || target -> owner_thread == 0 || source -> owner_thread == 0 || target -> owner_thread != source -> owner_thread || target -> frozen || target -> lazy_edges == 0) {
         return 1;
     }
     if (size == 0U) {
@@ -918,7 +937,7 @@ int lm_own_arena_promote_lazy_edges(LmOwnArena *arena) {
     LmOwnLazyEdge * edge;
     void *copy;
     size_t i;
-    if (arena == 0 || arena -> frozen || arena -> lazy_edges == 0) {
+    if (arena == 0 || arena -> owner_thread == 0 || arena -> frozen || arena -> lazy_edges == 0) {
         return 1;
     }
     i = 0U;
@@ -959,7 +978,7 @@ int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source) {
     size_t i;
     LmOwnAllocationDescriptor * descriptor;
     LmOwnLazyEdge * edge;
-    if (target == 0 || source == 0 || target -> frozen) {
+    if (target == 0 || source == 0 || target -> owner_thread == 0 || source -> owner_thread == 0 || target -> owner_thread != source -> owner_thread || target -> frozen) {
         return 1;
     }
     if (target -> allocations == 0 || target -> allocation_descriptors == 0 || target -> lazy_edges == 0) {
@@ -1071,7 +1090,7 @@ int lm_message_thread_init(LmMessageThread *thread) {
         return 1;
     }
     memset(thread, 0, sizeof(thread[0]));
-    thread->root_owner = lm_own_arena_new();
+    thread->root_owner = lm_own_arena_new(thread);
     if (thread -> root_owner == 0) {
         thread->state = LM_MESSAGE_THREAD_STOPPED;
         thread->collector_failed = 1;
@@ -1086,7 +1105,9 @@ void lm_message_thread_destroy(LmMessageThread *thread) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     if (thread != 0) {
-        lm_own_arena_delete(thread -> root_owner);
+        if (thread -> root_owner != 0 && thread -> root_owner -> owner_thread == thread) {
+            lm_own_arena_delete(thread -> root_owner);
+        }
         thread->root_owner = 0;
         thread->state = LM_MESSAGE_THREAD_STOPPED;
     }
@@ -1134,7 +1155,7 @@ int lm_message_thread_status(const LmMessageThread *thread) {
 LmOwnArena * lm_message_thread_owner(LmMessageThread *thread) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
-    if (thread == 0) {
+    if (thread == 0 || thread -> root_owner == 0 || thread -> root_owner -> owner_thread != thread) {
         return 0;
     }
     return thread -> root_owner;
@@ -1207,7 +1228,7 @@ int lm_message_thread_collect(LmMessageThread *thread) {
         return 1;
     }
     thread->collection_count = thread -> collection_count + 1U;
-    if (thread -> root_owner == 0) {
+    if (thread -> root_owner == 0 || thread -> root_owner -> owner_thread != thread) {
         thread->collector_failed = 1;
         lm_message_thread_request_failure(thread, 1);
         return 1;

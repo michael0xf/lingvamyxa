@@ -45,7 +45,7 @@ fn: lm_test_generated_prelude_source_rows_core () int
         return: 1
     lm_trans_registry\identifiers: lm_trans_identifier_table_new()
     lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
-    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena, c.lm_lmx_message_thread) != 0
         lm_trans_registry_destroy()
         return: 1
     lm_trans_registry\loaded: 1

@@ -266,6 +266,7 @@ table:
              allocation_descriptors  LmOwnPtrStack
              lazy_edges              LmOwnPtrStack
              frozen                  int
+             owner_thread            LmMessageThread
 end: `LmOwnArena.field.class`
 
 table:
@@ -276,6 +277,7 @@ table:
              allocation_descriptors  1
              lazy_edges              2
              frozen                  3
+             owner_thread            4
 end: `LmOwnArena.field.index`
 
 table:
@@ -285,6 +287,7 @@ table:
              allocations             0
              allocation_descriptors  0
              lazy_edges              0
+             owner_thread            0
 end: `LmOwnArena.field.address-depth`
 
 table:
@@ -359,6 +362,7 @@ table:
              lm_own_arena_absorb       1
              lm_own_arena_freeze       1
              lm_own_arena_is_frozen    1
+             lm_own_arena_owner_thread 1
              lm_own_tree_cut           1
              lm_own_tree_cut_promote_lazy_edges 1
              lm_message_thread_init          1
@@ -400,9 +404,9 @@ fn: lm_own_value_stack_pop (LmOwnValueStack: stack; @: void out_item) int
 fn: lm_own_value_stack_at (const: (LmOwnValueStack: stack); size_t: index) @: void
 fn: lm_own_value_stack_top (const: (LmOwnValueStack: stack)) @: void
 fn: lm_own_value_stack_truncate (LmOwnValueStack: stack; size_t: count) void
-fn: lm_own_arena_new () LmOwnArena
+fn: lm_own_arena_new (LmMessageThread: owner_thread) LmOwnArena
 fn: lm_own_arena_delete (LmOwnArena: arena) void
-fn: lm_own_arena_init (LmOwnArena: arena) int
+fn: lm_own_arena_init (LmOwnArena: arena; LmMessageThread: owner_thread) int
 fn: lm_own_arena_destroy (LmOwnArena: arena) void
 fn: lm_own_arena_new_zero (LmOwnArena: arena; size_t: size) @: void
 fn: lm_own_arena_array_new_zero (LmOwnArena: arena; size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
@@ -413,6 +417,7 @@ fn: lm_own_arena_promote_lazy_edges (LmOwnArena: arena) int
 fn: lm_own_arena_absorb (LmOwnArena: target; LmOwnArena: source) int
 fn: lm_own_arena_freeze (LmOwnArena: arena) void
 fn: lm_own_arena_is_frozen (const: (LmOwnArena: arena)) int
+fn: lm_own_arena_owner_thread (const: (LmOwnArena: arena)) LmMessageThread
 fn: lm_own_tree_cut (LmOwnArena: arena) int
 fn: lm_own_tree_cut_promote_lazy_edges (LmOwnArena: arena) int
 fn: lm_message_thread_init (LmMessageThread: thread) int

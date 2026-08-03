@@ -619,7 +619,7 @@ fn: lm_p0_document_init_owners (LmP0Document: document) int
         return: 1
 
     document\owners_initialized: 1
-    if: lm_own_arena_init(document\source_owner) != 0 || lm_own_arena_init(document\token_arena) != 0 || lm_own_arena_init(document\tree_arena) != 0 || lm_own_arena_init(document\diagnostic_arena) != 0
+    if: lm_own_arena_init(document\source_owner, c.lm_lmx_message_thread) != 0 || lm_own_arena_init(document\token_arena, c.lm_lmx_message_thread) != 0 || lm_own_arena_init(document\tree_arena, c.lm_lmx_message_thread) != 0 || lm_own_arena_init(document\diagnostic_arena, c.lm_lmx_message_thread) != 0
         lm_p0_document_destroy_owners(document)
         return: 1
     document\diagnostic: lm_own_arena_new_zero(document\diagnostic_arena, c.sizeof(document\diagnostic[0]))

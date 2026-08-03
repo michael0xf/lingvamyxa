@@ -3670,7 +3670,7 @@ fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
     lm_trans_registry\predefined_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_registry\predefined_descriptor_sites: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_registry\early_l2_source_sites: lm_trans_ptr_stack_new(lm_own_delete_plain)
-    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena) != 0 || lm_trans_registry\loaded_paths = 0 || lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_descriptor_sites = 0 || lm_trans_registry\early_l2_source_sites = 0
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena, c.lm_lmx_message_thread) != 0 || lm_trans_registry\loaded_paths = 0 || lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_descriptor_sites = 0 || lm_trans_registry\early_l2_source_sites = 0
         lm_trans_registry_destroy()
         return: 1
     lm_trans_registry\source_path: lm_trans_text_copy_cstr_from_cstr(source_path)
