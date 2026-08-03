@@ -2217,6 +2217,8 @@ static const LmTableCell * lm_p0_registry_source_path_cell_at(struct LmMessageTh
 static const LmTableCell * lm_p0_registry_source_path_lookup_cell_slice(struct LmMessageThread *lm_lmx_message_thread, const LmRegistryView *view, const char *path, size_t path_length, const char *key, size_t key_length, const LmTableCell **out_key_cell);
 static const char * lm_p0_registry_lookup_in(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const LmP0Text *key, const char *table);
 static const char * lm_p0_registry_lookup(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *key, const char *table);
+static const char * lm_p0_registry_lookup_cstr_in(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const char *key, const char *table);
+static const char * lm_p0_registry_lookup_cstr(struct LmMessageThread *lm_lmx_message_thread, const char *key, const char *table);
 static int lm_p0_registry_source_path_has_rows(struct LmMessageThread *lm_lmx_message_thread, const char *table);
 static int lm_p0_registry_table_has_rows(struct LmMessageThread *lm_lmx_message_thread, const char *table);
 static int lm_p0_registry_table_has_rows_loaded_or_loading(struct LmMessageThread *lm_lmx_message_thread, const char *table);
@@ -2408,7 +2410,7 @@ static int lm_p0_registry_source_push_table_row(struct LmMessageThread *lm_lmx_m
 static int lm_p0_registry_source_join_table(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *source_table, const LmP0Text *target_table);
 static int lm_p0_registry_source_text_all_char(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *text, char ch);
 static int lm_p0_registry_source_text_is_array_receiver_head(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *head);
-static const LmP0Text * lm_p0_registry_source_frame_receiver_key(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
+static const char * lm_p0_registry_source_frame_receiver_lookup(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const LmP0Frame *frame, const char *table);
 static int lm_p0_registry_source_parse_size_payload(struct LmMessageThread *lm_lmx_message_thread, const char *payload, size_t *out_value);
 static int lm_p0_registry_source_formal_param_unwrap_index(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
 static int lm_p0_registry_source_positional_name_index(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
@@ -4534,6 +4536,24 @@ static const char * lm_p0_registry_lookup(struct LmMessageThread *lm_lmx_message
     return lm_p0_registry_lookup_in(lm_lmx_message_thread, lm_p0_registry_current(lm_lmx_message_thread), key, table);
 }
 
+static const char * lm_p0_registry_lookup_cstr_in(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const char *key, const char *table) {
+    (void)lm_lmx_message_thread;
+    LmP0Text * key_text;
+    const char *payload;
+    key_text = lm_p0_text_from_cstr(lm_lmx_message_thread, key);
+    if (key_text == 0) {
+        return 0;
+    }
+    payload = lm_p0_registry_lookup_in(lm_lmx_message_thread, registry, key_text, table);
+    lm_p0_text_view_delete(lm_lmx_message_thread, key_text);
+    return payload;
+}
+
+static const char * lm_p0_registry_lookup_cstr(struct LmMessageThread *lm_lmx_message_thread, const char *key, const char *table) {
+    (void)lm_lmx_message_thread;
+    return lm_p0_registry_lookup_cstr_in(lm_lmx_message_thread, lm_p0_registry_current(lm_lmx_message_thread), key, table);
+}
+
 static int lm_p0_registry_source_path_has_rows(struct LmMessageThread *lm_lmx_message_thread, const char *table) {
     (void)lm_lmx_message_thread;
     LmP0Registry * registry;
@@ -4727,7 +4747,7 @@ static const char * lm_p0_trailer_role_payload(struct LmMessageThread *lm_lmx_me
 static int lm_p0_registry_trailer_allows_bare(struct LmMessageThread *lm_lmx_message_thread, const char *class_name) {
     (void)lm_lmx_message_thread;
     const char *payload;
-    payload = lm_p0_registry_lookup(lm_lmx_message_thread, lm_p0_text_from_cstr(lm_lmx_message_thread, class_name), "trailer.allow-bare");
+    payload = lm_p0_registry_lookup_cstr(lm_lmx_message_thread, class_name, "trailer.allow-bare");
     return payload != 0 && (strcmp(payload, "1") == 0 || strcmp(payload, "true") == 0);
 }
 
@@ -4753,7 +4773,7 @@ static int lm_p0_trailer_role_accepts_target(struct LmMessageThread *lm_lmx_mess
     role_payload = lm_p0_trailer_role_payload(lm_lmx_message_thread, role);
     target_head = 0;
     if (role_payload != 0) {
-        target_head = lm_p0_registry_lookup(lm_lmx_message_thread, lm_p0_text_from_cstr(lm_lmx_message_thread, role_payload), "trailer.target");
+        target_head = lm_p0_registry_lookup_cstr(lm_lmx_message_thread, role_payload, "trailer.target");
     }
     if (target_head != 0) {
         return lm_p0_node_head_is(lm_lmx_message_thread, target, target_head);
@@ -8242,7 +8262,7 @@ static LmP0TrailerRole lm_p0_registry_trailer_role(struct LmMessageThread *lm_lm
     payload_cell = lm_p0_registry_source_path_cell_at(lm_lmx_message_thread, "namespace", i, &key_cell);
     while (payload_cell != 0) {
         if (key_cell != 0 && key_cell -> value != 0 && payload_cell -> value != 0) {
-            role_payload = lm_p0_registry_lookup(lm_lmx_message_thread, lm_p0_text_from_cstr(lm_lmx_message_thread, payload_cell -> value), "trailer.role");
+            role_payload = lm_p0_registry_lookup_cstr(lm_lmx_message_thread, payload_cell -> value, "trailer.role");
             if (role_payload != 0 && lm_p0_text_has_prefix_name(lm_lmx_message_thread, text, length, key_cell -> value, lm_p0_registry_trailer_allows_bare(lm_lmx_message_thread, payload_cell -> value))) {
                 result = lm_p0_trailer_role_from_payload(lm_lmx_message_thread, role_payload);
             }
@@ -10159,18 +10179,18 @@ static int lm_p0_registry_source_text_is_array_receiver_head(struct LmMessageThr
     return count > 0U;
 }
 
-static const LmP0Text * lm_p0_registry_source_frame_receiver_key(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame) {
+static const char * lm_p0_registry_source_frame_receiver_lookup(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const LmP0Frame *frame, const char *table) {
     (void)lm_lmx_message_thread;
     if (frame == 0) {
         return 0;
     }
     if (lm_p0_registry_source_text_all_char(lm_lmx_message_thread, frame -> head, '@') != 0) {
-        return lm_p0_text_from_cstr(lm_lmx_message_thread, "@");
+        return lm_p0_registry_lookup_cstr_in(lm_lmx_message_thread, registry, "@", table);
     }
     if (lm_p0_registry_source_text_is_array_receiver_head(lm_lmx_message_thread, frame -> head) != 0) {
-        return lm_p0_text_from_cstr(lm_lmx_message_thread, "[]");
+        return lm_p0_registry_lookup_cstr_in(lm_lmx_message_thread, registry, "[]", table);
     }
-    return frame -> head;
+    return lm_p0_registry_lookup_in(lm_lmx_message_thread, registry, frame -> head, table);
 }
 
 static int lm_p0_registry_source_parse_size_payload(struct LmMessageThread *lm_lmx_message_thread, const char *payload, size_t *out_value) {
@@ -10193,14 +10213,12 @@ static int lm_p0_registry_source_formal_param_unwrap_index(struct LmMessageThrea
     (void)lm_lmx_message_thread;
     LmP0Registry * registry;
     const char *payload;
-    const LmP0Text * key;
     LM_UNUSED(loader);
     registry = (((LmP0Registry *)context));
     if (registry == 0 || registry != lm_p0_registry_current(lm_lmx_message_thread)) {
         return 0;
     }
-    key = lm_p0_registry_source_frame_receiver_key(lm_lmx_message_thread, frame);
-    payload = lm_p0_registry_lookup_in(lm_lmx_message_thread, registry, key, "receiver.formal-param.unwrap");
+    payload = lm_p0_registry_source_frame_receiver_lookup(lm_lmx_message_thread, registry, frame, "receiver.formal-param.unwrap");
     if (payload == 0) {
         return 0;
     }
@@ -10211,16 +10229,14 @@ static int lm_p0_registry_source_positional_name_index(struct LmMessageThread *l
     (void)lm_lmx_message_thread;
     LmP0Registry * registry;
     const char *payload;
-    const LmP0Text * key;
     LM_UNUSED(loader);
     registry = (((LmP0Registry *)context));
     if (registry == 0 || registry != lm_p0_registry_current(lm_lmx_message_thread)) {
         return 0;
     }
-    key = lm_p0_registry_source_frame_receiver_key(lm_lmx_message_thread, frame);
-    payload = lm_p0_registry_lookup_in(lm_lmx_message_thread, registry, key, "receiver.positional-name.index");
+    payload = lm_p0_registry_source_frame_receiver_lookup(lm_lmx_message_thread, registry, frame, "receiver.positional-name.index");
     if (payload == 0) {
-        payload = lm_p0_registry_lookup_in(lm_lmx_message_thread, registry, key, "receiver.positional-name.argument");
+        payload = lm_p0_registry_source_frame_receiver_lookup(lm_lmx_message_thread, registry, frame, "receiver.positional-name.argument");
         if (payload == 0) {
             return 0;
         }
@@ -10343,7 +10359,7 @@ static int lm_p0_registry_validate_abi_constant(struct LmMessageThread *lm_lmx_m
     if (lm_p0_registry_table_has_rows(lm_lmx_message_thread, table) == 0) {
         return 0;
     }
-    payload = lm_p0_registry_lookup(lm_lmx_message_thread, lm_p0_text_from_cstr(lm_lmx_message_thread, key), table);
+    payload = lm_p0_registry_lookup_cstr(lm_lmx_message_thread, key, table);
     if (payload == 0) {
         fprintf(stderr, "parser registry error: missing ABI constant %s[%s]\n", table, key);
         return 1;

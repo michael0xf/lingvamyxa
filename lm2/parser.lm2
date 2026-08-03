@@ -883,6 +883,20 @@ return: payload_cell\value
 fn: lm_p0_registry_lookup (const: (LmP0Text: key); const: @(char table)) const: @: char
 return: lm_p0_registry_lookup_in(lm_p0_registry_current(), key, table)
 
+fn: lm_p0_registry_lookup_cstr_in (LmP0Registry: registry; const: @(char key); const: @(char table)) const: @: char
+    LmP0Text: key_text
+    const: @: char payload
+
+    key_text: lm_p0_text_from_cstr(key)
+    if: key_text = 0
+        return: 0
+    payload: lm_p0_registry_lookup_in(registry, key_text, table)
+    lm_p0_text_view_delete(key_text)
+return: payload
+
+fn: lm_p0_registry_lookup_cstr (const: @(char key); const: @(char table)) const: @: char
+return: lm_p0_registry_lookup_cstr_in(lm_p0_registry_current(), key, table)
+
 fn: lm_p0_registry_source_path_has_rows (const: @(char table)) int
     LmP0Registry: registry
     int: covered
@@ -1040,7 +1054,7 @@ return: 0
 fn: lm_p0_registry_trailer_allows_bare (const: @(char class_name)) int
     const: @: char payload
 
-    payload: lm_p0_registry_lookup(lm_p0_text_from_cstr(class_name), "trailer.allow-bare")
+    payload: lm_p0_registry_lookup_cstr(class_name, "trailer.allow-bare")
 return: payload != 0 && (c.strcmp(payload, "1") = 0 || c.strcmp(payload, "true") = 0)
 
 fn: lm_p0_trailer_role_is_tail_cutter (LmP0TrailerRole: role) int
@@ -1062,7 +1076,7 @@ fn: lm_p0_trailer_role_accepts_target (LmP0TrailerRole: role; const: (LmP0Node: 
     role_payload: lm_p0_trailer_role_payload(role)
     target_head: 0
     if: role_payload != 0
-        target_head: lm_p0_registry_lookup(lm_p0_text_from_cstr(role_payload), "trailer.target")
+        target_head: lm_p0_registry_lookup_cstr(role_payload, "trailer.target")
 
     if: target_head != 0
         return: lm_p0_node_head_is(target, target_head)
@@ -3904,7 +3918,7 @@ fn: lm_p0_registry_trailer_role (const: @(char text); size_t: length) LmP0Traile
     payload_cell: lm_p0_registry_source_path_cell_at("namespace", i, @ key_cell)
     while: payload_cell != 0
         if: key_cell != 0 && key_cell\value != 0 && payload_cell\value != 0
-            role_payload: lm_p0_registry_lookup(lm_p0_text_from_cstr(payload_cell\value), "trailer.role")
+            role_payload: lm_p0_registry_lookup_cstr(payload_cell\value, "trailer.role")
             if: role_payload != 0 && lm_p0_text_has_prefix_name(text, length, key_cell\value, lm_p0_registry_trailer_allows_bare(payload_cell\value))
                 result: lm_p0_trailer_role_from_payload(role_payload)
             ---
@@ -5455,14 +5469,14 @@ fn: lm_p0_registry_source_text_is_array_receiver_head (const: (LmP0Text: head)) 
         count: count + 1U
 return: count > 0U
 
-fn: lm_p0_registry_source_frame_receiver_key (const: (LmP0Frame: frame)) const: LmP0Text
+fn: lm_p0_registry_source_frame_receiver_lookup (LmP0Registry: registry; const: (LmP0Frame: frame); const: @(char table)) const: @: char
     if: frame = 0
         return: 0
     if: lm_p0_registry_source_text_all_char(frame\head, '@') != 0
-        return: lm_p0_text_from_cstr("@")
+        return: lm_p0_registry_lookup_cstr_in(registry, "@", table)
     if: lm_p0_registry_source_text_is_array_receiver_head(frame\head) != 0
-        return: lm_p0_text_from_cstr("[]")
-return: frame\head
+        return: lm_p0_registry_lookup_cstr_in(registry, "[]", table)
+return: lm_p0_registry_lookup_in(registry, frame\head, table)
 
 fn: lm_p0_registry_source_parse_size_payload (const: @(char payload); @: size_t out_value) int
     @: char end_index
@@ -5480,14 +5494,12 @@ return: 1
 fn: lm_p0_registry_source_formal_param_unwrap_index (const: (LmRegistrySourceLoader: loader); @: void context; const: (LmP0Frame: frame); @: size_t out_index) int
     LmP0Registry: registry
     const: @: char payload
-    const: LmP0Text: key
 
     c.LM_UNUSED(loader)
     registry: (cast: (LmP0Registry) context)
     if: registry = 0 || registry != lm_p0_registry_current()
         return: 0
-    key: lm_p0_registry_source_frame_receiver_key(frame)
-    payload: lm_p0_registry_lookup_in(registry, key, "receiver.formal-param.unwrap")
+    payload: lm_p0_registry_source_frame_receiver_lookup(registry, frame, "receiver.formal-param.unwrap")
     if: payload = 0
         return: 0
 return: lm_p0_registry_source_parse_size_payload(payload, out_index)
@@ -5495,16 +5507,14 @@ return: lm_p0_registry_source_parse_size_payload(payload, out_index)
 fn: lm_p0_registry_source_positional_name_index (const: (LmRegistrySourceLoader: loader); @: void context; const: (LmP0Frame: frame); @: size_t out_index) int
     LmP0Registry: registry
     const: @: char payload
-    const: LmP0Text: key
 
     c.LM_UNUSED(loader)
     registry: (cast: (LmP0Registry) context)
     if: registry = 0 || registry != lm_p0_registry_current()
         return: 0
-    key: lm_p0_registry_source_frame_receiver_key(frame)
-    payload: lm_p0_registry_lookup_in(registry, key, "receiver.positional-name.index")
+    payload: lm_p0_registry_source_frame_receiver_lookup(registry, frame, "receiver.positional-name.index")
     if: payload = 0
-        payload: lm_p0_registry_lookup_in(registry, key, "receiver.positional-name.argument")
+        payload: lm_p0_registry_source_frame_receiver_lookup(registry, frame, "receiver.positional-name.argument")
         if: payload = 0
             return: 0
         out_index[0]: 0U
@@ -5601,7 +5611,7 @@ fn: lm_p0_registry_validate_abi_constant (const: @(char table); const: @(char ke
     unsigned: actual
     if: (lm_p0_registry_table_has_rows(table) = 0)
         return: 0
-    payload: lm_p0_registry_lookup(lm_p0_text_from_cstr(key), table)
+    payload: lm_p0_registry_lookup_cstr(key, table)
     if: (payload = 0)
         c.fprintf(c.stderr, "parser registry error: missing ABI constant %s[%s]\n", table, key)
         return: 1
