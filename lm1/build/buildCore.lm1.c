@@ -77,6 +77,9 @@ typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
 typedef struct LmOwnLazyEdge LmOwnLazyEdge;
 typedef struct LmOwnArena LmOwnArena;
+typedef struct LmHostThread LmHostThread;
+typedef struct LmMutex LmMutex;
+typedef struct LmCondition LmCondition;
 typedef struct LmMessageThreadComponent LmMessageThreadComponent;
 typedef struct LmMessageThread LmMessageThread;
 
@@ -140,6 +143,17 @@ struct LmOwnArena {
     LmOwnArena * registry_next;
     int runtime_owned_shell;
 };
+struct LmHostThread {
+    void *implementation;
+    int started;
+    int joined;
+};
+struct LmMutex {
+    void *implementation;
+};
+struct LmCondition {
+    void *implementation;
+};
 struct LmMessageThreadComponent {
     LmMessageThread * owner_thread;
     void *value;
@@ -175,6 +189,10 @@ typedef void (*LmOwnDestroyFields)(void *object);
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDelete
 #define LM_LMX_TYPEDEF_DEFINED_LmOwnDelete 1
 typedef void (*LmOwnDelete)(void *object);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmHostThreadEntry
+#define LM_LMX_TYPEDEF_DEFINED_LmHostThreadEntry 1
+typedef void * (*LmHostThreadEntry)(void *argument);
 #endif
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy
 #define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy 1
@@ -219,6 +237,20 @@ int (lm_own_arena_is_frozen)(struct LmMessageThread *lm_lmx_message_thread, cons
 LmMessageThread * (lm_own_arena_owner_thread)(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena);
 int (lm_own_tree_cut)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+const char * (lm_thread_provider_name)(void);
+LmHostThread * (lm_host_thread_new)(void);
+void (lm_host_thread_delete)(LmHostThread *thread);
+int (lm_host_thread_start)(LmHostThread *thread, LmHostThreadEntry entry, void *argument);
+int (lm_host_thread_join)(LmHostThread *thread, void **result);
+LmMutex * (lm_mutex_new)(void);
+void (lm_mutex_delete)(LmMutex *mutex);
+int (lm_mutex_lock)(LmMutex *mutex);
+int (lm_mutex_unlock)(LmMutex *mutex);
+LmCondition * (lm_condition_new)(void);
+void (lm_condition_delete)(LmCondition *condition);
+int (lm_condition_wait)(LmCondition *condition, LmMutex *mutex);
+int (lm_condition_signal)(LmCondition *condition);
+int (lm_condition_broadcast)(LmCondition *condition);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
 LmMessageThread * (lm_message_thread_new)(void);
@@ -240,6 +272,30 @@ int (lm_message_thread_component_attach)(struct LmMessageThread *lm_lmx_message_
 void * (lm_message_thread_component_get)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 int (lm_message_thread_component_remove)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 size_t (lm_message_thread_component_count)(const LmMessageThread *thread);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

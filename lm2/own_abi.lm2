@@ -11,11 +11,13 @@ table:
     rows:
              LmOwnDestroyFields  1
              LmOwnDelete         1
+             LmHostThreadEntry   1
              LmMessageThreadComponentDestroy 1
 end: functionPointerType
 
 fn: LmOwnDestroyFields (@: void object) void
 fn: LmOwnDelete (@: void object) void
+fn: LmHostThreadEntry (@: void argument) @: void
 fn: LmMessageThreadComponentDestroy (@: void component) void
 
 table:
@@ -50,6 +52,9 @@ table:
              LmOwnAllocationDescriptor  c.struct
              LmOwnLazyEdge              c.struct
              LmOwnArena                 c.struct
+             LmHostThread               c.struct
+             LmMutex                    c.struct
+             LmCondition                c.struct
              LmMessageThreadComponent   c.struct
              LmMessageThread            c.struct
 end: `forward.backend`
@@ -92,6 +97,9 @@ table:
              LmOwnAllocationDescriptor  c.struct
              LmOwnLazyEdge              c.struct
              LmOwnArena                 c.named-struct
+             LmHostThread               c.named-struct
+             LmMutex                    c.named-struct
+             LmCondition                c.named-struct
              LmMessageThreadComponent   c.named-struct
              LmMessageThread            c.named-struct
 end: `layout.backend`
@@ -106,6 +114,9 @@ table:
              LmOwnAllocationDescriptor  1
              LmOwnLazyEdge              1
              LmOwnArena                 1
+             LmHostThread               1
+             LmMutex                    1
+             LmCondition                1
              LmMessageThreadComponent   1
              LmMessageThread            1
 end: `class.reference-base`
@@ -304,6 +315,73 @@ table:
 end: `LmOwnArena.field.address-depth`
 
 table:
+    name: `LmHostThread.field.class`
+    columns((class: class) (class: field))
+    rows:
+             implementation  void
+             started         int
+             joined          int
+end: `LmHostThread.field.class`
+
+table:
+    name: `LmHostThread.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             implementation  0
+             started         1
+             joined          2
+end: `LmHostThread.field.index`
+
+table:
+    name: `LmHostThread.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             implementation  1
+end: `LmHostThread.field.address-depth`
+
+table:
+    name: `LmMutex.field.class`
+    columns((class: class) (class: field))
+    rows:
+             implementation  void
+end: `LmMutex.field.class`
+
+table:
+    name: `LmMutex.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             implementation  0
+end: `LmMutex.field.index`
+
+table:
+    name: `LmMutex.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             implementation  1
+end: `LmMutex.field.address-depth`
+
+table:
+    name: `LmCondition.field.class`
+    columns((class: class) (class: field))
+    rows:
+             implementation  void
+end: `LmCondition.field.class`
+
+table:
+    name: `LmCondition.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             implementation  0
+end: `LmCondition.field.index`
+
+table:
+    name: `LmCondition.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             implementation  1
+end: `LmCondition.field.address-depth`
+
+table:
     name: `LmMessageThreadComponent.field.class`
     columns((class: class) (class: field))
     rows:
@@ -424,6 +502,20 @@ table:
              lm_own_arena_owner_thread 1
              lm_own_tree_cut           1
              lm_own_tree_cut_promote_lazy_edges 1
+             lm_thread_provider_name         1
+             lm_host_thread_new              1
+             lm_host_thread_delete           1
+             lm_host_thread_start            1
+             lm_host_thread_join             1
+             lm_mutex_new                    1
+             lm_mutex_delete                 1
+             lm_mutex_lock                   1
+             lm_mutex_unlock                 1
+             lm_condition_new                1
+             lm_condition_delete             1
+             lm_condition_wait               1
+             lm_condition_signal             1
+             lm_condition_broadcast          1
              lm_message_thread_init          1
              lm_message_thread_destroy       1
              lm_message_thread_new           1
@@ -511,6 +603,20 @@ fn: lm_own_arena_is_frozen (const: (LmOwnArena: arena)) int
 fn: lm_own_arena_owner_thread (const: (LmOwnArena: arena)) LmMessageThread
 fn: lm_own_tree_cut (LmOwnArena: arena) int
 fn: lm_own_tree_cut_promote_lazy_edges (LmOwnArena: arena) int
+fn: lm_thread_provider_name () const: @: char
+fn: lm_host_thread_new () LmHostThread
+fn: lm_host_thread_delete (LmHostThread: thread) void
+fn: lm_host_thread_start (LmHostThread: thread; LmHostThreadEntry: entry; @: void argument) int
+fn: lm_host_thread_join (LmHostThread: thread; @@: void result) int
+fn: lm_mutex_new () LmMutex
+fn: lm_mutex_delete (LmMutex: mutex) void
+fn: lm_mutex_lock (LmMutex: mutex) int
+fn: lm_mutex_unlock (LmMutex: mutex) int
+fn: lm_condition_new () LmCondition
+fn: lm_condition_delete (LmCondition: condition) void
+fn: lm_condition_wait (LmCondition: condition; LmMutex: mutex) int
+fn: lm_condition_signal (LmCondition: condition) int
+fn: lm_condition_broadcast (LmCondition: condition) int
 fn: lm_message_thread_init (LmMessageThread: thread) int
 fn: lm_message_thread_destroy (LmMessageThread: thread) void
 fn: lm_message_thread_new () LmMessageThread

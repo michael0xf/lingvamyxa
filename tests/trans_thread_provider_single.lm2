@@ -1,0 +1,75 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+layout
+fn
+prototype
+include: "<string.h>"
+
+table:
+    source
+    name: `fn.thread-context.none`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_single_host_entry 1
+end: `fn.thread-context.none`
+
+fn: lm_test_single_host_entry (@: void argument) @: void
+    @: int value
+
+    value: argument
+    if: value != 0
+        value[0]: value[0] + 1
+    return: argument
+end: lm_test_single_host_entry
+
+external:
+    fn: main () int
+        LmHostThread: thread 0
+        LmMutex: mutex 0
+        LmCondition: condition 0
+        @: void result 0
+        int: value 41
+        int: status 0
+
+        if: c.strcmp(lm_thread_provider_name(), "single") != 0
+            return: 1
+
+        thread: lm_host_thread_new()
+        mutex: lm_mutex_new()
+        condition: lm_condition_new()
+        if: thread = 0 || mutex = 0 || condition = 0
+            status: 2
+
+        if: status = 0 && lm_mutex_lock(mutex) != 0
+            status: 3
+        if: status = 0 && lm_condition_wait(condition, mutex) != 0
+            status: 4
+        if: status = 0 && lm_condition_signal(condition) != 0
+            status: 5
+        if: status = 0 && lm_condition_broadcast(condition) != 0
+            status: 6
+        if: status = 0 && lm_mutex_unlock(mutex) != 0
+            status: 7
+
+        if: status = 0 && lm_host_thread_start(thread, @ lm_test_single_host_entry, @ value) != 0
+            status: 8
+        if: status = 0 && value != 42
+            status: 9
+        if: status = 0 && lm_host_thread_start(thread, @ lm_test_single_host_entry, @ value) = 0
+            status: 10
+        if: status = 0 && lm_host_thread_join(thread, @ result) != 0
+            status: 11
+        if: status = 0 && result != @ value
+            status: 12
+        if: status = 0 && lm_host_thread_join(thread, @ result) = 0
+            status: 13
+
+        lm_condition_delete(condition)
+        lm_mutex_delete(mutex)
+        lm_host_thread_delete(thread)
+        return: status
+    end: main
+end: external

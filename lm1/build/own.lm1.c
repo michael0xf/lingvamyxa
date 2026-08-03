@@ -74,6 +74,9 @@ typedef struct LmOwnValueStack LmOwnValueStack;
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
 typedef struct LmOwnLazyEdge LmOwnLazyEdge;
 typedef struct LmOwnArena LmOwnArena;
+typedef struct LmHostThread LmHostThread;
+typedef struct LmMutex LmMutex;
+typedef struct LmCondition LmCondition;
 typedef struct LmMessageThreadComponent LmMessageThreadComponent;
 typedef struct LmMessageThread LmMessageThread;
 
@@ -137,6 +140,17 @@ struct LmOwnArena {
     LmOwnArena * registry_next;
     int runtime_owned_shell;
 };
+struct LmHostThread {
+    void *implementation;
+    int started;
+    int joined;
+};
+struct LmMutex {
+    void *implementation;
+};
+struct LmCondition {
+    void *implementation;
+};
 struct LmMessageThreadComponent {
     LmMessageThread * owner_thread;
     void *value;
@@ -168,6 +182,10 @@ typedef void (*LmOwnDestroyFields)(void *object);
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDelete
 #define LM_LMX_TYPEDEF_DEFINED_LmOwnDelete 1
 typedef void (*LmOwnDelete)(void *object);
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmHostThreadEntry
+#define LM_LMX_TYPEDEF_DEFINED_LmHostThreadEntry 1
+typedef void * (*LmHostThreadEntry)(void *argument);
 #endif
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy
 #define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy 1
@@ -212,6 +230,20 @@ int (lm_own_arena_is_frozen)(struct LmMessageThread *lm_lmx_message_thread, cons
 LmMessageThread * (lm_own_arena_owner_thread)(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena);
 int (lm_own_tree_cut)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+const char * (lm_thread_provider_name)(void);
+LmHostThread * (lm_host_thread_new)(void);
+void (lm_host_thread_delete)(LmHostThread *thread);
+int (lm_host_thread_start)(LmHostThread *thread, LmHostThreadEntry entry, void *argument);
+int (lm_host_thread_join)(LmHostThread *thread, void **result);
+LmMutex * (lm_mutex_new)(void);
+void (lm_mutex_delete)(LmMutex *mutex);
+int (lm_mutex_lock)(LmMutex *mutex);
+int (lm_mutex_unlock)(LmMutex *mutex);
+LmCondition * (lm_condition_new)(void);
+void (lm_condition_delete)(LmCondition *condition);
+int (lm_condition_wait)(LmCondition *condition, LmMutex *mutex);
+int (lm_condition_signal)(LmCondition *condition);
+int (lm_condition_broadcast)(LmCondition *condition);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
 LmMessageThread * (lm_message_thread_new)(void);
@@ -233,6 +265,30 @@ int (lm_message_thread_component_attach)(struct LmMessageThread *lm_lmx_message_
 void * (lm_message_thread_component_get)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 int (lm_message_thread_component_remove)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 size_t (lm_message_thread_component_count)(const LmMessageThread *thread);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -373,6 +429,20 @@ int lm_own_arena_is_frozen(struct LmMessageThread *lm_lmx_message_thread, const 
 LmMessageThread * lm_own_arena_owner_thread(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena);
 int lm_own_tree_cut(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
 int lm_own_tree_cut_promote_lazy_edges(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+const char * lm_thread_provider_name(void);
+LmHostThread * lm_host_thread_new(void);
+void lm_host_thread_delete(LmHostThread *thread);
+int lm_host_thread_start(LmHostThread *thread, LmHostThreadEntry entry, void *argument);
+int lm_host_thread_join(LmHostThread *thread, void **result);
+LmMutex * lm_mutex_new(void);
+void lm_mutex_delete(LmMutex *mutex);
+int lm_mutex_lock(LmMutex *mutex);
+int lm_mutex_unlock(LmMutex *mutex);
+LmCondition * lm_condition_new(void);
+void lm_condition_delete(LmCondition *condition);
+int lm_condition_wait(LmCondition *condition, LmMutex *mutex);
+int lm_condition_signal(LmCondition *condition);
+int lm_condition_broadcast(LmCondition *condition);
 int lm_own_value_stack_push(LmOwnValueStack *stack, const void *item);
 int lm_own_value_stack_resize_zero(LmOwnValueStack *stack, size_t count);
 int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item);
@@ -406,6 +476,103 @@ int lm_message_thread_collect(LmMessageThread *thread);
 int lm_message_thread_begin_turn(LmMessageThread *thread);
 int lm_message_thread_end_turn(LmMessageThread *thread);
 
+#include <stdlib.h>
+
+#define LM_THREAD_PROVIDER_AUTO 0
+#define LM_THREAD_PROVIDER_PTHREAD 1
+#define LM_THREAD_PROVIDER_WIN32 2
+#define LM_THREAD_PROVIDER_SINGLE 3
+
+#ifndef LM_THREAD_PROVIDER
+#define LM_THREAD_PROVIDER LM_THREAD_PROVIDER_SINGLE
+#endif
+
+#if LM_THREAD_PROVIDER != LM_THREAD_PROVIDER_SINGLE
+#error "this bootstrap stage supports only LM_THREAD_PROVIDER_SINGLE"
+#endif
+
+typedef void *(*LmNativeHostThreadEntry)(void *argument);
+
+typedef struct LmNativeHostThread {
+    void *result;
+} LmNativeHostThread;
+
+static const char *lm_native_thread_provider_name(void) {
+    return "single";
+}
+
+static void *lm_native_host_thread_start(
+    LmNativeHostThreadEntry entry,
+    void *argument,
+    int *status
+) {
+    LmNativeHostThread *thread;
+
+    if (status == 0) {
+        return 0;
+    }
+    *status = 1;
+    if (entry == 0) {
+        return 0;
+    }
+
+    thread = (LmNativeHostThread *)calloc(1U, sizeof(*thread));
+    if (thread == 0) {
+        return 0;
+    }
+    thread->result = entry(argument);
+    *status = 0;
+    return thread;
+}
+
+static int lm_native_host_thread_join(void *implementation, void **result) {
+    LmNativeHostThread *thread = (LmNativeHostThread *)implementation;
+
+    if (thread == 0) {
+        return 1;
+    }
+    if (result != 0) {
+        *result = thread->result;
+    }
+    free(thread);
+    return 0;
+}
+
+static void *lm_native_mutex_new(void) {
+    return calloc(1U, 1U);
+}
+
+static void lm_native_mutex_delete(void *implementation) {
+    free(implementation);
+}
+
+static int lm_native_mutex_lock(void *implementation) {
+    return implementation == 0;
+}
+
+static int lm_native_mutex_unlock(void *implementation) {
+    return implementation == 0;
+}
+
+static void *lm_native_condition_new(void) {
+    return calloc(1U, 1U);
+}
+
+static void lm_native_condition_delete(void *implementation) {
+    free(implementation);
+}
+
+static int lm_native_condition_wait(void *condition, void *mutex) {
+    return condition == 0 || mutex == 0;
+}
+
+static int lm_native_condition_signal(void *implementation) {
+    return implementation == 0;
+}
+
+static int lm_native_condition_broadcast(void *implementation) {
+    return implementation == 0;
+}
 
 void * lm_own_new_zero(size_t size) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
@@ -1008,6 +1175,166 @@ int lm_own_tree_cut_promote_lazy_edges(struct LmMessageThread *lm_lmx_message_th
         return 1;
     }
     return lm_own_arena_promote_lazy_edges(lm_lmx_message_thread, arena);
+}
+
+const char * lm_thread_provider_name(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    return lm_native_thread_provider_name();
+}
+
+LmHostThread * lm_host_thread_new(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    return lm_own_new_zero(sizeof(LmHostThread));
+}
+
+void lm_host_thread_delete(LmHostThread *thread) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    void *ignored_result;
+    if (thread != 0) {
+        if (thread -> started && thread -> joined == 0 && thread -> implementation != 0) {
+            if (lm_native_host_thread_join(thread -> implementation, &ignored_result) == 0) {
+                thread->implementation = 0;
+                thread->joined = 1;
+            }
+        }
+        if (thread -> implementation == 0) {
+            lm_own_delete(thread, 0);
+        }
+    }
+}
+
+int lm_host_thread_start(LmHostThread *thread, LmHostThreadEntry entry, void *argument) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    int status;
+    if (thread == 0 || entry == 0 || thread -> started || thread -> implementation != 0) {
+        return 1;
+    }
+    status = 1;
+    thread->implementation = lm_native_host_thread_start(entry, argument, &status);
+    if (status != 0 || thread -> implementation == 0) {
+        thread->implementation = 0;
+        return 1;
+    }
+    thread->started = 1;
+    thread->joined = 0;
+    return 0;
+}
+
+int lm_host_thread_join(LmHostThread *thread, void **result) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    int status;
+    if (thread == 0 || thread -> started == 0 || thread -> joined || thread -> implementation == 0) {
+        return 1;
+    }
+    status = lm_native_host_thread_join(thread -> implementation, result);
+    if (status != 0) {
+        return status;
+    }
+    thread->implementation = 0;
+    thread->joined = 1;
+    return 0;
+}
+
+LmMutex * lm_mutex_new(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    LmMutex * mutex;
+    mutex = lm_own_new_zero(sizeof(LmMutex));
+    if (mutex == 0) {
+        return 0;
+    }
+    mutex->implementation = lm_native_mutex_new();
+    if (mutex -> implementation == 0) {
+        lm_own_delete(mutex, 0);
+        return 0;
+    }
+    return mutex;
+}
+
+void lm_mutex_delete(LmMutex *mutex) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    if (mutex != 0) {
+        lm_native_mutex_delete(mutex -> implementation);
+        mutex->implementation = 0;
+        lm_own_delete(mutex, 0);
+    }
+}
+
+int lm_mutex_lock(LmMutex *mutex) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    if (mutex == 0) {
+        return 1;
+    }
+    return lm_native_mutex_lock(mutex -> implementation);
+}
+
+int lm_mutex_unlock(LmMutex *mutex) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    if (mutex == 0) {
+        return 1;
+    }
+    return lm_native_mutex_unlock(mutex -> implementation);
+}
+
+LmCondition * lm_condition_new(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    LmCondition * condition;
+    condition = lm_own_new_zero(sizeof(LmCondition));
+    if (condition == 0) {
+        return 0;
+    }
+    condition->implementation = lm_native_condition_new();
+    if (condition -> implementation == 0) {
+        lm_own_delete(condition, 0);
+        return 0;
+    }
+    return condition;
+}
+
+void lm_condition_delete(LmCondition *condition) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    if (condition != 0) {
+        lm_native_condition_delete(condition -> implementation);
+        condition->implementation = 0;
+        lm_own_delete(condition, 0);
+    }
+}
+
+int lm_condition_wait(LmCondition *condition, LmMutex *mutex) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    if (condition == 0 || mutex == 0) {
+        return 1;
+    }
+    return lm_native_condition_wait(condition -> implementation, mutex -> implementation);
+}
+
+int lm_condition_signal(LmCondition *condition) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    if (condition == 0) {
+        return 1;
+    }
+    return lm_native_condition_signal(condition -> implementation);
+}
+
+int lm_condition_broadcast(LmCondition *condition) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    if (condition == 0) {
+        return 1;
+    }
+    return lm_native_condition_broadcast(condition -> implementation);
 }
 
 int lm_own_value_stack_push(LmOwnValueStack *stack, const void *item) {
