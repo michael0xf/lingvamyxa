@@ -973,7 +973,7 @@ fn: lm_registry_control_document_to_lmx_alloc (const: (LmP0Document: document); 
         return: 0
     finally: lm_registry_control_buffer_delete(output)
     emitted: 0
-    root: c.lm_p0_document_root(document)
+    root: lm_p0_document_root(document)
     if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
         lm_registry_control_error_set(error, "document root must be a Structure")
         return: 0
@@ -1193,7 +1193,7 @@ fn: lm_registry_control_rename_document_column_descriptor (LmP0Document: documen
     rename\old_name: old_name
     rename\new_name: new_name
 
-    root: c.lm_p0_document_mutable_root(document)
+    root: lm_p0_document_mutable_root(document)
     if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
         lm_registry_control_rename_delete(rename)
         return: 1
@@ -1214,9 +1214,9 @@ fn: lm_registry_control_parse_file (const: @(char path); @: LmP0Document out_doc
 
     out_document[0]: 0
     document: 0
-    status: c.lm_p0_parse_file(path, @ document)
+    status: lm_p0_parse_file(path, @ document)
     if: status != 0
-        diagnostic: c.lm_p0_document_diagnostic(document)
+        diagnostic: lm_p0_document_diagnostic(document)
         if: diagnostic != 0
             c.fprintf:
                 c.stderr
@@ -1228,7 +1228,7 @@ fn: lm_registry_control_parse_file (const: @(char path); @: LmP0Document out_doc
                 diagnostic\message
             ---
         lm_registry_control_error_set(error, "cannot parse registry file")
-        c.lm_p0_document_destroy(document)
+        lm_p0_document_destroy(document)
         return: 1
 
     out_document[0]: document
@@ -1259,7 +1259,7 @@ fn: lm_registry_control_mutable_document_load_file (const: @(char path); @: LmP0
 return: lm_registry_control_parse_file(path, out_document, error)
 
 sub: lm_registry_control_mutable_document_destroy (LmP0Document: document)
-    c.lm_p0_document_destroy(document)
+    lm_p0_document_destroy(document)
 end: lm_registry_control_mutable_document_destroy
 
 fn: lm_registry_control_mutable_document_save_file (const: @(char path); LmP0Document: document; LmRegistryControlError: error) int

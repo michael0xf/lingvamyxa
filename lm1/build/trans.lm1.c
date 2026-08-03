@@ -810,25 +810,25 @@ void * (lm_message_thread_execution_context)(LmMessageThread *thread);
 void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *context);
 size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
-int (lm_p0_parse_string)(const char *source, LmP0Document **out_document);
-int (lm_p0_parse_bytes)(const char *source, size_t source_length, LmP0Document **out_document);
-int (lm_p0_parse_file)(const char *path, LmP0Document **out_document);
-void (lm_p0_document_destroy)(LmP0Document *document);
-const LmP0Node * (lm_p0_document_root)(const LmP0Document *document);
-LmP0Node * (lm_p0_document_mutable_root)(LmP0Document *document);
-const LmP0Diagnostic * (lm_p0_document_diagnostic)(const LmP0Document *document);
-const LmP0Structure * (lm_p0_node_structure)(const LmP0Node *node);
-const LmP0Frame * (lm_p0_node_frame)(const LmP0Node *node);
-const LmP0Text * (lm_p0_node_atom)(const LmP0Node *node);
-const LmP0Trailer * (lm_p0_structure_trailer)(const LmP0Structure *structure);
-const LmP0Text * (lm_p0_frame_head)(const LmP0Frame *frame);
-const LmP0Structure * (lm_p0_frame_body)(const LmP0Frame *frame);
-const LmP0Trailer * (lm_p0_frame_trailer)(const LmP0Frame *frame);
-const LmP0Text * (lm_p0_trailer_spelling)(const LmP0Trailer *trailer);
-const LmP0Structure * (lm_p0_trailer_body)(const LmP0Trailer *trailer);
-const char * (lm_p0_node_kind_class_name)(LmP0NodeKind kind);
-char * (lm_p0_dump_alloc)(const LmP0Document *document);
-void (lm_p0_free)(void *ptr);
+int (lm_p0_parse_string)(struct LmMessageThread *lm_lmx_message_thread, const char *source, LmP0Document **out_document);
+int (lm_p0_parse_bytes)(struct LmMessageThread *lm_lmx_message_thread, const char *source, size_t source_length, LmP0Document **out_document);
+int (lm_p0_parse_file)(struct LmMessageThread *lm_lmx_message_thread, const char *path, LmP0Document **out_document);
+void (lm_p0_document_destroy)(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document);
+const LmP0Node * (lm_p0_document_root)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
+LmP0Node * (lm_p0_document_mutable_root)(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document);
+const LmP0Diagnostic * (lm_p0_document_diagnostic)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
+const LmP0Structure * (lm_p0_node_structure)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node);
+const LmP0Frame * (lm_p0_node_frame)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node);
+const LmP0Text * (lm_p0_node_atom)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node);
+const LmP0Trailer * (lm_p0_structure_trailer)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Structure *structure);
+const LmP0Text * (lm_p0_frame_head)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
+const LmP0Structure * (lm_p0_frame_body)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
+const LmP0Trailer * (lm_p0_frame_trailer)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
+const LmP0Text * (lm_p0_trailer_spelling)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Trailer *trailer);
+const LmP0Structure * (lm_p0_trailer_body)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Trailer *trailer);
+const char * (lm_p0_node_kind_class_name)(struct LmMessageThread *lm_lmx_message_thread, LmP0NodeKind kind);
+char * (lm_p0_dump_alloc)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
+void (lm_p0_free)(struct LmMessageThread *lm_lmx_message_thread, void *ptr);
 static LmTransIdentifierCard * lm_trans_identifier_table_find_card(struct LmMessageThread *lm_lmx_message_thread, const LmTransIdentifierTable *table, const LmP0Text *name);
 static LmTransIdentifierCard * lm_trans_identifier_table_get_card(struct LmMessageThread *lm_lmx_message_thread, LmTransIdentifierTable *table, const LmP0Text *name);
 static LmTransIdentifierRelation * lm_trans_identifier_card_find_relation(struct LmMessageThread *lm_lmx_message_thread, const LmTransIdentifierCard *card, const char *relation_name);
@@ -1037,6 +1037,7 @@ static int lm_trans_declare_registry_fn_descriptors(struct LmMessageThread *lm_l
 static int lm_trans_emit_root_sequence(struct LmMessageThread *lm_lmx_message_thread, FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_l4_payload_pointer_bindings_init(struct LmMessageThread *lm_lmx_message_thread);
 static void lm_trans_l4_payload_pointer_bindings_destroy(struct LmMessageThread *lm_lmx_message_thread);
+
 
 
 
@@ -4475,7 +4476,7 @@ static void lm_trans_import_documents_drain(struct LmMessageThread *lm_lmx_messa
     while (documents -> count > 0U) {
         document = ((LmP0Document *)lm_own_ptr_stack_pop(documents));
         if (document != 0) {
-            lm_p0_document_destroy(document);
+            lm_p0_document_destroy(lm_lmx_message_thread, document);
         }
     }
 }
@@ -16783,10 +16784,10 @@ static int lm_trans_emit_c_dimension_text(struct LmMessageThread *lm_lmx_message
     if (error_name != 0) {
         effective_error_name = error_name;
     }
-    parse_status = lm_p0_parse_bytes(dimension -> data, dimension -> length, &dimension_document);
+    parse_status = lm_p0_parse_bytes(lm_lmx_message_thread, dimension -> data, dimension -> length, &dimension_document);
     if (parse_status != 0) {
         if (dimension_document != 0) {
-            diagnostic = lm_p0_document_diagnostic(dimension_document);
+            diagnostic = lm_p0_document_diagnostic(lm_lmx_message_thread, dimension_document);
         }
         else {
             diagnostic = 0;
@@ -16798,21 +16799,21 @@ static int lm_trans_emit_c_dimension_text(struct LmMessageThread *lm_lmx_message
             fprintf(stderr, "trans L2 error: %s parse failed\n", effective_error_name);
         }
         if (dimension_document != 0) {
-            lm_p0_document_destroy(dimension_document);
+            lm_p0_document_destroy(lm_lmx_message_thread, dimension_document);
         }
         return 1;
     }
-    dimension_root = lm_p0_document_root(dimension_document);
+    dimension_root = lm_p0_document_root(lm_lmx_message_thread, dimension_document);
     if (((dimension_root == 0) || (dimension_root -> kind != LM_P0_NODE_STRUCTURE)) || (dimension_root -> as -> structure -> first_field == 0)) {
         fprintf(stderr, "trans L2 error: %s must not be empty\n", effective_error_name);
-        lm_p0_document_destroy(dimension_document);
+        lm_p0_document_destroy(lm_lmx_message_thread, dimension_document);
         return 1;
     }
     if (lm_trans_emit_expr_fields(lm_lmx_message_thread, file, dimension_root -> as -> structure -> first_field, namespace_) != 0) {
-        lm_p0_document_destroy(dimension_document);
+        lm_p0_document_destroy(lm_lmx_message_thread, dimension_document);
         return 1;
     }
-    lm_p0_document_destroy(dimension_document);
+    lm_p0_document_destroy(lm_lmx_message_thread, dimension_document);
     return 0;
 }
 
@@ -30805,11 +30806,11 @@ static int lm_trans_import_parse_document(struct LmMessageThread *lm_lmx_message
         return 1;
     }
     out_document[0] = 0;
-    status = lm_p0_parse_file(path, out_document);
+    status = lm_p0_parse_file(lm_lmx_message_thread, path, out_document);
     if (status == 0) {
         return 0;
     }
-    diagnostic = lm_p0_document_diagnostic(out_document[0]);
+    diagnostic = lm_p0_document_diagnostic(lm_lmx_message_thread, out_document[0]);
     if (diagnostic != 0) {
         phase_name = phase;
         if (phase_name == 0) {
@@ -30820,7 +30821,7 @@ static int lm_trans_import_parse_document(struct LmMessageThread *lm_lmx_message
     else {
         fprintf(stderr, "trans L2 import error: cannot read %s\n", path);
     }
-    lm_p0_document_destroy(out_document[0]);
+    lm_p0_document_destroy(lm_lmx_message_thread, out_document[0]);
     out_document[0] = 0;
     return 1;
 }
@@ -31145,14 +31146,14 @@ static int lm_trans_declare_l2_import_path(struct LmMessageThread *lm_lmx_messag
     }
     previous_source_path = lm_trans_current_source_path;
     lm_trans_current_source_path = path;
-    status = lm_trans_declare_l2_import_root(lm_lmx_message_thread, namespace_, lm_p0_document_root(document), lm_trans_path_has_extension(lm_lmx_message_thread, path, ".lm2"));
+    status = lm_trans_declare_l2_import_root(lm_lmx_message_thread, namespace_, lm_p0_document_root(lm_lmx_message_thread, document), lm_trans_path_has_extension(lm_lmx_message_thread, path, ".lm2"));
     lm_trans_current_source_path = previous_source_path;
     if (status != 0) {
-        lm_p0_document_destroy(document);
+        lm_p0_document_destroy(lm_lmx_message_thread, document);
         return status;
     }
     if (lm_own_ptr_stack_push(lm_trans_declared_import_documents, document) != 0) {
-        lm_p0_document_destroy(document);
+        lm_p0_document_destroy(lm_lmx_message_thread, document);
         return 1;
     }
     return 0;
@@ -31182,15 +31183,15 @@ static int lm_trans_emit_l2_import_path_prelude(struct LmMessageThread *lm_lmx_m
     }
     previous_source_path = lm_trans_current_source_path;
     lm_trans_current_source_path = path;
-    status = lm_trans_emit_l2_import_root_prelude(lm_lmx_message_thread, file, lm_p0_document_root(document), lm_trans_path_has_extension(lm_lmx_message_thread, path, ".lm2"), namespace_);
+    status = lm_trans_emit_l2_import_root_prelude(lm_lmx_message_thread, file, lm_p0_document_root(lm_lmx_message_thread, document), lm_trans_path_has_extension(lm_lmx_message_thread, path, ".lm2"), namespace_);
     if (status == 0) {
-        status = lm_trans_emit_l2_import_root_prototypes(lm_lmx_message_thread, file, lm_p0_document_root(document), lm_trans_path_has_extension(lm_lmx_message_thread, path, ".lm2"), namespace_);
+        status = lm_trans_emit_l2_import_root_prototypes(lm_lmx_message_thread, file, lm_p0_document_root(lm_lmx_message_thread, document), lm_trans_path_has_extension(lm_lmx_message_thread, path, ".lm2"), namespace_);
     }
     if (status == 0) {
-        status = lm_trans_emit_l2_import_root_after_prototypes(lm_lmx_message_thread, file, lm_p0_document_root(document), lm_trans_path_has_extension(lm_lmx_message_thread, path, ".lm2"), namespace_);
+        status = lm_trans_emit_l2_import_root_after_prototypes(lm_lmx_message_thread, file, lm_p0_document_root(lm_lmx_message_thread, document), lm_trans_path_has_extension(lm_lmx_message_thread, path, ".lm2"), namespace_);
     }
     lm_trans_current_source_path = previous_source_path;
-    lm_p0_document_destroy(document);
+    lm_p0_document_destroy(lm_lmx_message_thread, document);
     return status;
 }
 
@@ -31218,9 +31219,9 @@ static int lm_trans_emit_l2_import_path_functions(struct LmMessageThread *lm_lmx
     }
     previous_source_path = lm_trans_current_source_path;
     lm_trans_current_source_path = path;
-    status = lm_trans_emit_l2_import_root_functions(lm_lmx_message_thread, file, lm_p0_document_root(document), lm_trans_path_has_extension(lm_lmx_message_thread, path, ".lm2"), namespace_);
+    status = lm_trans_emit_l2_import_root_functions(lm_lmx_message_thread, file, lm_p0_document_root(lm_lmx_message_thread, document), lm_trans_path_has_extension(lm_lmx_message_thread, path, ".lm2"), namespace_);
     lm_trans_current_source_path = previous_source_path;
-    lm_p0_document_destroy(document);
+    lm_p0_document_destroy(lm_lmx_message_thread, document);
     return status;
 }
 
@@ -32548,25 +32549,25 @@ static int lm_trans_emit_l4_payload_import_frame(struct LmMessageThread *lm_lmx_
                 return 1;
             }
             document = 0;
-            status = lm_p0_parse_file(payload_path, &document);
+            status = lm_p0_parse_file(lm_lmx_message_thread, payload_path, &document);
             if (status != 0) {
-                diagnostic = lm_p0_document_diagnostic(document);
+                diagnostic = lm_p0_document_diagnostic(lm_lmx_message_thread, document);
                 if (diagnostic != 0) {
                     fprintf(stderr, "trans L4 unit import parse error %d at %zu:%zu in %s: %s\n", diagnostic -> code, diagnostic -> line, diagnostic -> column, payload_path, diagnostic -> message);
                 }
                 if (diagnostic == 0) {
                     fprintf(stderr, "trans L4 unit error: cannot read unit.payload import %s\n", payload_path);
                 }
-                lm_p0_document_destroy(document);
+                lm_p0_document_destroy(lm_lmx_message_thread, document);
                 lm_trans_text_ref_destroy(&path_value);
                 return 1;
             }
-            if (lm_trans_emit_l4_payload_import_document(lm_lmx_message_thread, output, payload_path, lm_p0_document_root(document), namespace_) != 0) {
-                lm_p0_document_destroy(document);
+            if (lm_trans_emit_l4_payload_import_document(lm_lmx_message_thread, output, payload_path, lm_p0_document_root(lm_lmx_message_thread, document), namespace_) != 0) {
+                lm_p0_document_destroy(lm_lmx_message_thread, document);
                 lm_trans_text_ref_destroy(&path_value);
                 return 1;
             }
-            lm_p0_document_destroy(document);
+            lm_p0_document_destroy(lm_lmx_message_thread, document);
             emitted = 1;
         }
         field = field -> next;
@@ -37430,20 +37431,20 @@ static int lm_trans_registry_materialize_predef_path(struct LmMessageThread *lm_
         return 1;
     }
     document = 0;
-    status = lm_p0_parse_file(registry_path, &document);
+    status = lm_p0_parse_file(lm_lmx_message_thread, registry_path, &document);
     if (status != 0) {
-        diagnostic = lm_p0_document_diagnostic(document);
+        diagnostic = lm_p0_document_diagnostic(lm_lmx_message_thread, document);
         if (diagnostic != 0) {
             fprintf(stderr, "trans registry predef parse error %d at %zu:%zu in %s: %s\n", diagnostic -> code, diagnostic -> line, diagnostic -> column, registry_path, diagnostic -> message);
         }
         else {
             fprintf(stderr, "trans registry predef error: cannot read %s\n", registry_path);
         }
-        lm_p0_document_destroy(document);
+        lm_p0_document_destroy(lm_lmx_message_thread, document);
         return 1;
     }
-    status = lm_trans_materialize_l2_predef_root(lm_lmx_message_thread, lm_p0_document_root(document), registry_path);
-    lm_p0_document_destroy(document);
+    status = lm_trans_materialize_l2_predef_root(lm_lmx_message_thread, lm_p0_document_root(lm_lmx_message_thread, document), registry_path);
+    lm_p0_document_destroy(lm_lmx_message_thread, document);
     return status;
 }
 
@@ -37754,15 +37755,15 @@ static int lm_trans_registry_load_file_path_mode(struct LmMessageThread *lm_lmx_
         return 0;
     }
     document = 0;
-    status = lm_p0_parse_file(registry_path, &document);
+    status = lm_p0_parse_file(lm_lmx_message_thread, registry_path, &document);
     if (status != 0) {
-        diagnostic = lm_p0_document_diagnostic(document);
+        diagnostic = lm_p0_document_diagnostic(lm_lmx_message_thread, document);
         if (diagnostic != 0) {
             fprintf(stderr, "trans registry parse error %d at %zu:%zu in %s: %s\n", diagnostic -> code, diagnostic -> line, diagnostic -> column, registry_path, diagnostic -> message);
-            lm_p0_document_destroy(document);
+            lm_p0_document_destroy(lm_lmx_message_thread, document);
             return 1;
         }
-        lm_p0_document_destroy(document);
+        lm_p0_document_destroy(lm_lmx_message_thread, document);
         if (required != 0) {
             fprintf(stderr, "trans registry error: cannot read %s\n", registry_path);
             return 1;
@@ -37770,16 +37771,16 @@ static int lm_trans_registry_load_file_path_mode(struct LmMessageThread *lm_lmx_
         return 0;
     }
     if (bootstrap_l2 != 0 && lm_trans_path_has_extension(lm_lmx_message_thread, registry_path, ".lm2") != 0) {
-        status = lm_trans_materialize_l2_bootstrap_root(lm_lmx_message_thread, lm_p0_document_root(document), registry_path);
+        status = lm_trans_materialize_l2_bootstrap_root(lm_lmx_message_thread, lm_p0_document_root(lm_lmx_message_thread, document), registry_path);
     }
     else {
-        status = lm_trans_registry_load_inline_root(lm_lmx_message_thread, lm_p0_document_root(document), registry_path);
+        status = lm_trans_registry_load_inline_root(lm_lmx_message_thread, lm_p0_document_root(lm_lmx_message_thread, document), registry_path);
     }
     if (status != 0) {
-        lm_p0_document_destroy(document);
+        lm_p0_document_destroy(lm_lmx_message_thread, document);
         return 1;
     }
-    lm_p0_document_destroy(document);
+    lm_p0_document_destroy(lm_lmx_message_thread, document);
     if (lm_trans_registry_note_loaded_path(lm_lmx_message_thread, registry_path) != 0) {
         return 1;
     }
@@ -38002,22 +38003,22 @@ static int lm_trans_emit_document(struct LmMessageThread *lm_lmx_message_thread,
     if (lm_trans_registry_load_for_source(lm_lmx_message_thread, source_path) != 0) {
         return 1;
     }
-    status = lm_p0_parse_file(source_path, &document);
+    status = lm_p0_parse_file(lm_lmx_message_thread, source_path, &document);
     if (status != 0) {
-        diagnostic = lm_p0_document_diagnostic(document);
+        diagnostic = lm_p0_document_diagnostic(lm_lmx_message_thread, document);
         if (diagnostic != 0) {
             fprintf(stderr, "trans parse error %d at %zu:%zu: %s\n", diagnostic -> code, diagnostic -> line, diagnostic -> column, diagnostic -> message);
         }
         else {
             fprintf(stderr, "trans parse error while reading %s\n", source_path);
         }
-        lm_p0_document_destroy(document);
+        lm_p0_document_destroy(lm_lmx_message_thread, document);
         lm_trans_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
-    root = lm_p0_document_root(document);
+    root = lm_p0_document_root(lm_lmx_message_thread, document);
     if (lm_trans_registry_load_inline_root(lm_lmx_message_thread, root, source_path) != 0 || lm_trans_materialize_local_l2_source_root(lm_lmx_message_thread, root, source_path, lm_trans_path_has_extension(lm_lmx_message_thread, source_path, ".lm2")) != 0 || lm_trans_registry_assert_view_parity(lm_lmx_message_thread) != 0) {
-        lm_p0_document_destroy(document);
+        lm_p0_document_destroy(lm_lmx_message_thread, document);
         lm_trans_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
@@ -38027,7 +38028,7 @@ static int lm_trans_emit_document(struct LmMessageThread *lm_lmx_message_thread,
         fprintf(stderr, "trans error: cannot allocate temporary output paths\n");
         lm_own_delete(prelude_path, 0);
         lm_own_delete(body_path, 0);
-        lm_p0_document_destroy(document);
+        lm_p0_document_destroy(lm_lmx_message_thread, document);
         lm_trans_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
@@ -38045,7 +38046,7 @@ static int lm_trans_emit_document(struct LmMessageThread *lm_lmx_message_thread,
         remove(body_path);
         lm_own_delete(prelude_path, 0);
         lm_own_delete(body_path, 0);
-        lm_p0_document_destroy(document);
+        lm_p0_document_destroy(lm_lmx_message_thread, document);
         lm_trans_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
@@ -38119,17 +38120,17 @@ static int lm_trans_emit_document(struct LmMessageThread *lm_lmx_message_thread,
     lm_own_delete(prelude_path, 0);
     lm_own_delete(body_path, 0);
     if (status != 0) {
-        lm_p0_document_destroy(document);
+        lm_p0_document_destroy(lm_lmx_message_thread, document);
         lm_trans_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
     if (close_status != 0) {
         fprintf(stderr, "trans error: cannot write output file %s\n", output_path);
-        lm_p0_document_destroy(document);
+        lm_p0_document_destroy(lm_lmx_message_thread, document);
         lm_trans_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
-    lm_p0_document_destroy(document);
+    lm_p0_document_destroy(lm_lmx_message_thread, document);
     lm_trans_registry_destroy(lm_lmx_message_thread);
     return 0;
 }

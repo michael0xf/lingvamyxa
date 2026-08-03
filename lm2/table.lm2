@@ -886,7 +886,7 @@ fn: lm_table_document_tables_to_lmx_alloc (const: (LmP0Document: document); LmTa
         return: 0
     finally: lm_table_buffer_delete(output)
     emitted: 0
-    root: c.lm_p0_document_root(document)
+    root: lm_p0_document_root(document)
 
     if: lm_table_emit_tables_from_node(output, root, @ emitted, error) = 0
         return: 0
@@ -916,9 +916,9 @@ external:
             c.fprintf: c.stderr "table toLmx error: out of memory while creating error state\n"
             return: 1
 
-        status: c.lm_p0_parse_file(argv[1], @ document)
+        status: lm_p0_parse_file(argv[1], @ document)
         if: status != 0
-            diagnostic: c.lm_p0_document_diagnostic(document)
+            diagnostic: lm_p0_document_diagnostic(document)
             if: diagnostic != 0
                 c.fprintf:
                     c.stderr
@@ -928,7 +928,7 @@ external:
             if: diagnostic = 0
                 c.fprintf: c.stderr "P0 parse error while reading %s\n" argv[1]
             ---
-            c.lm_p0_document_destroy(document)
+            lm_p0_document_destroy(document)
             lm_table_error_delete(error)
             return: 1
 
@@ -939,13 +939,13 @@ external:
             if: error\message = 0
                 c.fprintf: c.stderr "table toLmx error: %s\n" "unknown error"
             ---
-            c.lm_p0_document_destroy(document)
+            lm_p0_document_destroy(document)
             lm_table_error_delete(error)
             return: 1
 
         c.fputs: text c.stdout
         lm_own_delete(text, 0)
-        c.lm_p0_document_destroy(document)
+        lm_p0_document_destroy(document)
         lm_table_error_delete(error)
     return: 0
 end: external

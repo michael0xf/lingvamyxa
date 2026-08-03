@@ -1,0 +1,73 @@
+include
+define
+os
+ifdef
+forward
+alias
+constant
+layout
+fn
+prototype
+unit
+
+predef: "lm2/parser_abi.lm2"
+
+external:
+    fn: main () int
+        LmP0Document: document 0
+        const: LmP0Node: root
+        LmP0Node: mutable_root
+        const: LmP0Structure: structure
+        const: LmP0Frame: frame 0
+        const: LmP0Trailer: trailer 0
+        @: char dump
+
+        if: lm_p0_parse_string("value\n", @ document) != 0 || document = 0
+            return: 1
+
+        root: lm_p0_document_root(document)
+        mutable_root: lm_p0_document_mutable_root(document)
+        if: root = 0 || mutable_root != root
+            lm_p0_document_destroy(document)
+            return: 2
+
+        if: lm_p0_document_diagnostic(document) != 0
+            lm_p0_document_destroy(document)
+            return: 3
+
+        structure: lm_p0_node_structure(root)
+        if: structure = 0 || lm_p0_node_frame(root) != 0 || lm_p0_node_atom(root) != 0
+            lm_p0_document_destroy(document)
+            return: 4
+
+        trailer: lm_p0_structure_trailer(structure)
+        if: lm_p0_frame_head(frame) != 0 || lm_p0_frame_body(frame) != 0 || lm_p0_frame_trailer(frame) != 0
+            lm_p0_document_destroy(document)
+            return: 5
+        if: lm_p0_trailer_spelling(trailer) != 0 || lm_p0_trailer_body(trailer) != 0
+            lm_p0_document_destroy(document)
+            return: 6
+
+        if: lm_p0_node_kind_class_name(c.LM_P0_NODE_STRUCTURE) = 0
+            lm_p0_document_destroy(document)
+            return: 7
+
+        dump: lm_p0_dump_alloc(document)
+        if: dump = 0
+            lm_p0_document_destroy(document)
+            return: 8
+        lm_p0_free(dump)
+        lm_p0_document_destroy(document)
+        document: 0
+
+        if: lm_p0_parse_bytes("value\n", 6U, @ document) != 0 || document = 0
+            return: 9
+        lm_p0_document_destroy(document)
+        document: 0
+
+        if: lm_p0_parse_file("tests/test.lmx", @ document) != 0 || document = 0
+            return: 10
+        lm_p0_document_destroy(document)
+        return: 0
+    end: main
+end: external

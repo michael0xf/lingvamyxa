@@ -501,25 +501,25 @@ void * (lm_message_thread_execution_context)(LmMessageThread *thread);
 void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *context);
 size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
-int (lm_p0_parse_string)(const char *source, LmP0Document **out_document);
-int (lm_p0_parse_bytes)(const char *source, size_t source_length, LmP0Document **out_document);
-int (lm_p0_parse_file)(const char *path, LmP0Document **out_document);
-void (lm_p0_document_destroy)(LmP0Document *document);
-const LmP0Node * (lm_p0_document_root)(const LmP0Document *document);
-LmP0Node * (lm_p0_document_mutable_root)(LmP0Document *document);
-const LmP0Diagnostic * (lm_p0_document_diagnostic)(const LmP0Document *document);
-const LmP0Structure * (lm_p0_node_structure)(const LmP0Node *node);
-const LmP0Frame * (lm_p0_node_frame)(const LmP0Node *node);
-const LmP0Text * (lm_p0_node_atom)(const LmP0Node *node);
-const LmP0Trailer * (lm_p0_structure_trailer)(const LmP0Structure *structure);
-const LmP0Text * (lm_p0_frame_head)(const LmP0Frame *frame);
-const LmP0Structure * (lm_p0_frame_body)(const LmP0Frame *frame);
-const LmP0Trailer * (lm_p0_frame_trailer)(const LmP0Frame *frame);
-const LmP0Text * (lm_p0_trailer_spelling)(const LmP0Trailer *trailer);
-const LmP0Structure * (lm_p0_trailer_body)(const LmP0Trailer *trailer);
-const char * (lm_p0_node_kind_class_name)(LmP0NodeKind kind);
-char * (lm_p0_dump_alloc)(const LmP0Document *document);
-void (lm_p0_free)(void *ptr);
+int (lm_p0_parse_string)(struct LmMessageThread *lm_lmx_message_thread, const char *source, LmP0Document **out_document);
+int (lm_p0_parse_bytes)(struct LmMessageThread *lm_lmx_message_thread, const char *source, size_t source_length, LmP0Document **out_document);
+int (lm_p0_parse_file)(struct LmMessageThread *lm_lmx_message_thread, const char *path, LmP0Document **out_document);
+void (lm_p0_document_destroy)(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document);
+const LmP0Node * (lm_p0_document_root)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
+LmP0Node * (lm_p0_document_mutable_root)(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document);
+const LmP0Diagnostic * (lm_p0_document_diagnostic)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
+const LmP0Structure * (lm_p0_node_structure)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node);
+const LmP0Frame * (lm_p0_node_frame)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node);
+const LmP0Text * (lm_p0_node_atom)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node);
+const LmP0Trailer * (lm_p0_structure_trailer)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Structure *structure);
+const LmP0Text * (lm_p0_frame_head)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
+const LmP0Structure * (lm_p0_frame_body)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
+const LmP0Trailer * (lm_p0_frame_trailer)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
+const LmP0Text * (lm_p0_trailer_spelling)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Trailer *trailer);
+const LmP0Structure * (lm_p0_trailer_body)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Trailer *trailer);
+const char * (lm_p0_node_kind_class_name)(struct LmMessageThread *lm_lmx_message_thread, LmP0NodeKind kind);
+char * (lm_p0_dump_alloc)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
+void (lm_p0_free)(struct LmMessageThread *lm_lmx_message_thread, void *ptr);
 static int lm_registry_source_load_root(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Node *root);
 
 
@@ -2012,6 +2012,7 @@ static int lm_registry_source_load_root(struct LmMessageThread *lm_lmx_message_t
 
 
 
+
 #include <string.h>
 static char * lm_table_descriptor_copy_slice(struct LmMessageThread *lm_lmx_message_thread, const char *data, size_t length);
 static char * lm_table_descriptor_copy_cstr(struct LmMessageThread *lm_lmx_message_thread, const char *value);
@@ -2192,15 +2193,15 @@ static int lm_p0_registry_trailer_allows_bare(struct LmMessageThread *lm_lmx_mes
 static int lm_p0_trailer_role_is_tail_cutter(struct LmMessageThread *lm_lmx_message_thread, LmP0TrailerRole role);
 static int lm_p0_node_head_is(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node, const char *name);
 static int lm_p0_trailer_role_accepts_target(struct LmMessageThread *lm_lmx_message_thread, LmP0TrailerRole role, const LmP0Node *target);
-const LmP0Structure * lm_p0_node_structure(const LmP0Node *node);
-const LmP0Frame * lm_p0_node_frame(const LmP0Node *node);
-const LmP0Text * lm_p0_node_atom(const LmP0Node *node);
-const LmP0Trailer * lm_p0_structure_trailer(const LmP0Structure *structure);
-const LmP0Text * lm_p0_frame_head(const LmP0Frame *frame);
-const LmP0Structure * lm_p0_frame_body(const LmP0Frame *frame);
-const LmP0Trailer * lm_p0_frame_trailer(const LmP0Frame *frame);
-const LmP0Text * lm_p0_trailer_spelling(const LmP0Trailer *trailer);
-const LmP0Structure * lm_p0_trailer_body(const LmP0Trailer *trailer);
+const LmP0Structure * lm_p0_node_structure(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node);
+const LmP0Frame * lm_p0_node_frame(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node);
+const LmP0Text * lm_p0_node_atom(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node);
+const LmP0Trailer * lm_p0_structure_trailer(struct LmMessageThread *lm_lmx_message_thread, const LmP0Structure *structure);
+const LmP0Text * lm_p0_frame_head(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
+const LmP0Structure * lm_p0_frame_body(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
+const LmP0Trailer * lm_p0_frame_trailer(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
+const LmP0Text * lm_p0_trailer_spelling(struct LmMessageThread *lm_lmx_message_thread, const LmP0Trailer *trailer);
+const LmP0Structure * lm_p0_trailer_body(struct LmMessageThread *lm_lmx_message_thread, const LmP0Trailer *trailer);
 static int lm_p0_stream_event_is_tail_cutter(struct LmMessageThread *lm_lmx_message_thread, const LmP0StreamEvent *event);
 static int lm_p0_find_python_string_end(struct LmMessageThread *lm_lmx_message_thread, const char *text, size_t length, size_t start, size_t *out_end);
 static size_t lm_p0_skip_python_string_unchecked(struct LmMessageThread *lm_lmx_message_thread, const char *text, size_t length, size_t start);
@@ -2356,9 +2357,9 @@ static int lm_p0_wrap_fields_from_line(struct LmMessageThread *lm_lmx_message_th
 static int lm_p0_validate_nonempty_colon_frames_in_trailer(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document, const LmP0Trailer *trailer);
 static int lm_p0_validate_nonempty_colon_frames_in_node(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document, const LmP0Node *node);
 static int lm_p0_validate_nonempty_colon_frames_in_structure(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document, const LmP0Structure *structure);
-int lm_p0_parse_bytes(const char *source, size_t source_length, LmP0Document **out_document);
-int lm_p0_parse_string(const char *source, LmP0Document **out_document);
-int lm_p0_parse_file(const char *path, LmP0Document **out_document);
+int lm_p0_parse_bytes(struct LmMessageThread *lm_lmx_message_thread, const char *source, size_t source_length, LmP0Document **out_document);
+int lm_p0_parse_string(struct LmMessageThread *lm_lmx_message_thread, const char *source, LmP0Document **out_document);
+int lm_p0_parse_file(struct LmMessageThread *lm_lmx_message_thread, const char *path, LmP0Document **out_document);
 static int lm_p0_registry_source_push_column_metadata(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count);
 static int lm_p0_registry_source_push_table_row(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells);
 static int lm_p0_registry_source_join_table(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *source_table, const LmP0Text *target_table);
@@ -2375,13 +2376,13 @@ static int lm_p0_registry_parse_unsigned_payload(struct LmMessageThread *lm_lmx_
 static const char * lm_p0_registry_lookup_key_by_unsigned_payload(struct LmMessageThread *lm_lmx_message_thread, const char *table, unsigned value);
 static int lm_p0_registry_validate_abi_constant(struct LmMessageThread *lm_lmx_message_thread, const char *table, const char *key, unsigned expected);
 static int lm_p0_registry_validate_abi_constants(struct LmMessageThread *lm_lmx_message_thread);
-const char * lm_p0_node_kind_class_name(LmP0NodeKind kind);
+const char * lm_p0_node_kind_class_name(struct LmMessageThread *lm_lmx_message_thread, LmP0NodeKind kind);
 static int lm_p0_registry_load_default(struct LmMessageThread *lm_lmx_message_thread);
-void lm_p0_document_destroy(LmP0Document *document);
-const LmP0Node * lm_p0_document_root(const LmP0Document *document);
-LmP0Node * lm_p0_document_mutable_root(LmP0Document *document);
-const LmP0Diagnostic * lm_p0_document_diagnostic(const LmP0Document *document);
-void lm_p0_free(void *ptr);
+void lm_p0_document_destroy(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document);
+const LmP0Node * lm_p0_document_root(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
+LmP0Node * lm_p0_document_mutable_root(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document);
+const LmP0Diagnostic * lm_p0_document_diagnostic(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
+void lm_p0_free(struct LmMessageThread *lm_lmx_message_thread, void *ptr);
 static int lm_p0_dump_reserve(struct LmMessageThread *lm_lmx_message_thread, LmP0Dump *dump, size_t extra);
 static void lm_p0_dump_append(LmP0Dump *dump, const char *text, size_t length);
 static void lm_p0_dump_append_cstr(LmP0Dump *dump, const char *text);
@@ -2399,7 +2400,7 @@ static void lm_p0_dump_node(struct LmMessageThread *lm_lmx_message_thread, LmP0D
 static LmP0Dump * lm_p0_dump_new(struct LmMessageThread *lm_lmx_message_thread);
 static char * lm_p0_dump_take_data(struct LmMessageThread *lm_lmx_message_thread, LmP0Dump *dump);
 static void lm_p0_dump_delete(struct LmMessageThread *lm_lmx_message_thread, LmP0Dump *dump);
-char * lm_p0_dump_alloc(const LmP0Document *document);
+char * lm_p0_dump_alloc(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
 
 #ifndef LM_UNUSED
 #define LM_UNUSED(value) ((void)(value))
@@ -4697,8 +4698,7 @@ static int lm_p0_trailer_role_accepts_target(struct LmMessageThread *lm_lmx_mess
     return lm_p0_trailer_role_is_tail_cutter(lm_lmx_message_thread, role);
 }
 
-const LmP0Structure * lm_p0_node_structure(const LmP0Node *node) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+const LmP0Structure * lm_p0_node_structure(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node) {
     (void)lm_lmx_message_thread;
     if (node == 0 || node -> kind != LM_P0_NODE_STRUCTURE) {
         return 0;
@@ -4706,8 +4706,7 @@ const LmP0Structure * lm_p0_node_structure(const LmP0Node *node) {
     return node -> as -> structure;
 }
 
-const LmP0Frame * lm_p0_node_frame(const LmP0Node *node) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+const LmP0Frame * lm_p0_node_frame(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node) {
     (void)lm_lmx_message_thread;
     if (node == 0 || node -> kind != LM_P0_NODE_FRAME) {
         return 0;
@@ -4715,8 +4714,7 @@ const LmP0Frame * lm_p0_node_frame(const LmP0Node *node) {
     return node -> as -> frame;
 }
 
-const LmP0Text * lm_p0_node_atom(const LmP0Node *node) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+const LmP0Text * lm_p0_node_atom(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node) {
     (void)lm_lmx_message_thread;
     if (node == 0 || (node -> kind != LM_P0_NODE_ATOM && node -> kind != LM_P0_NODE_DISABLED)) {
         return 0;
@@ -4724,8 +4722,7 @@ const LmP0Text * lm_p0_node_atom(const LmP0Node *node) {
     return node -> as -> atom;
 }
 
-const LmP0Trailer * lm_p0_structure_trailer(const LmP0Structure *structure) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+const LmP0Trailer * lm_p0_structure_trailer(struct LmMessageThread *lm_lmx_message_thread, const LmP0Structure *structure) {
     (void)lm_lmx_message_thread;
     if (structure == 0) {
         return 0;
@@ -4733,8 +4730,7 @@ const LmP0Trailer * lm_p0_structure_trailer(const LmP0Structure *structure) {
     return structure -> trailer;
 }
 
-const LmP0Text * lm_p0_frame_head(const LmP0Frame *frame) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+const LmP0Text * lm_p0_frame_head(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame) {
     (void)lm_lmx_message_thread;
     if (frame == 0) {
         return 0;
@@ -4742,8 +4738,7 @@ const LmP0Text * lm_p0_frame_head(const LmP0Frame *frame) {
     return frame -> head;
 }
 
-const LmP0Structure * lm_p0_frame_body(const LmP0Frame *frame) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+const LmP0Structure * lm_p0_frame_body(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame) {
     (void)lm_lmx_message_thread;
     if (frame == 0) {
         return 0;
@@ -4751,8 +4746,7 @@ const LmP0Structure * lm_p0_frame_body(const LmP0Frame *frame) {
     return frame -> body;
 }
 
-const LmP0Trailer * lm_p0_frame_trailer(const LmP0Frame *frame) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+const LmP0Trailer * lm_p0_frame_trailer(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame) {
     (void)lm_lmx_message_thread;
     if (frame == 0) {
         return 0;
@@ -4760,8 +4754,7 @@ const LmP0Trailer * lm_p0_frame_trailer(const LmP0Frame *frame) {
     return frame -> trailer;
 }
 
-const LmP0Text * lm_p0_trailer_spelling(const LmP0Trailer *trailer) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+const LmP0Text * lm_p0_trailer_spelling(struct LmMessageThread *lm_lmx_message_thread, const LmP0Trailer *trailer) {
     (void)lm_lmx_message_thread;
     if (trailer == 0) {
         return 0;
@@ -4769,8 +4762,7 @@ const LmP0Text * lm_p0_trailer_spelling(const LmP0Trailer *trailer) {
     return trailer -> spelling;
 }
 
-const LmP0Structure * lm_p0_trailer_body(const LmP0Trailer *trailer) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+const LmP0Structure * lm_p0_trailer_body(struct LmMessageThread *lm_lmx_message_thread, const LmP0Trailer *trailer) {
     (void)lm_lmx_message_thread;
     if (trailer == 0) {
         return 0;
@@ -9875,8 +9867,7 @@ static int lm_p0_validate_nonempty_colon_frames_in_structure(struct LmMessageThr
     return 1;
 }
 
-int lm_p0_parse_bytes(const char *source, size_t source_length, LmP0Document **out_document) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+int lm_p0_parse_bytes(struct LmMessageThread *lm_lmx_message_thread, const char *source, size_t source_length, LmP0Document **out_document) {
     (void)lm_lmx_message_thread;
     LmP0Document * document;
     if (out_document == 0) {
@@ -9927,17 +9918,15 @@ int lm_p0_parse_bytes(const char *source, size_t source_length, LmP0Document **o
     return document -> diagnostic -> code;
 }
 
-int lm_p0_parse_string(const char *source, LmP0Document **out_document) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+int lm_p0_parse_string(struct LmMessageThread *lm_lmx_message_thread, const char *source, LmP0Document **out_document) {
     (void)lm_lmx_message_thread;
     if (source == 0) {
         source = "";
     }
-    return lm_p0_parse_bytes(source, strlen(source), out_document);
+    return lm_p0_parse_bytes(lm_lmx_message_thread, source, strlen(source), out_document);
 }
 
-int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+int lm_p0_parse_file(struct LmMessageThread *lm_lmx_message_thread, const char *path, LmP0Document **out_document) {
     (void)lm_lmx_message_thread;
     FILE * file;
     long size;
@@ -9977,7 +9966,7 @@ int lm_p0_parse_file(const char *path, LmP0Document **out_document) {
         return 1;
     }
     buffer[read_size] = '\0';
-    status = lm_p0_parse_bytes(buffer, read_size, out_document);
+    status = lm_p0_parse_bytes(lm_lmx_message_thread, buffer, read_size, out_document);
     lm_own_delete(buffer, 0);
     return status;
 }
@@ -10275,8 +10264,7 @@ static int lm_p0_registry_validate_abi_constants(struct LmMessageThread *lm_lmx_
     return (((((((((((lm_p0_registry_validate_abi_constant(lm_lmx_message_thread, "node.kind", "structure", LM_P0_NODE_STRUCTURE) || lm_p0_registry_validate_abi_constant(lm_lmx_message_thread, "node.kind", "frame", LM_P0_NODE_FRAME)) || lm_p0_registry_validate_abi_constant(lm_lmx_message_thread, "node.kind", "atom", LM_P0_NODE_ATOM)) || lm_p0_registry_validate_abi_constant(lm_lmx_message_thread, "node.kind", "disabled", LM_P0_NODE_DISABLED)) || lm_p0_registry_validate_abi_constant(lm_lmx_message_thread, "frame.flag", "colon", LM_P0_FRAME_COLON)) || lm_p0_registry_validate_abi_constant(lm_lmx_message_thread, "frame.flag", "compact", LM_P0_FRAME_COMPACT)) || lm_p0_registry_validate_abi_constant(lm_lmx_message_thread, "frame.flag", "inline-body", LM_P0_FRAME_INLINE_BODY)) || lm_p0_registry_validate_abi_constant(lm_lmx_message_thread, "frame.flag", "separator-closed", LM_P0_FRAME_SEPARATOR_CLOSED)) || lm_p0_registry_validate_abi_constant(lm_lmx_message_thread, "node.flag", "inactive", LM_P0_NODE_INACTIVE)) || lm_p0_registry_validate_abi_constant(lm_lmx_message_thread, "node.flag", "mix", LM_P0_NODE_MIX)) || lm_p0_registry_validate_abi_constant(lm_lmx_message_thread, "node.flag", "positional-skip", LM_P0_NODE_POSITIONAL_SKIP)) || lm_p0_registry_validate_abi_constant(lm_lmx_message_thread, "trailer.flag", "tail-cutter", LM_P0_TRAILER_TAIL_CUTTER));
 }
 
-const char * lm_p0_node_kind_class_name(LmP0NodeKind kind) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+const char * lm_p0_node_kind_class_name(struct LmMessageThread *lm_lmx_message_thread, LmP0NodeKind kind) {
     (void)lm_lmx_message_thread;
     const char *registry_name;
     registry_name = 0;
@@ -10348,18 +10336,18 @@ static int lm_p0_registry_load_default(struct LmMessageThread *lm_lmx_message_th
     i = 0U;
     while (candidates[i] != 0) {
         registry_path = candidates[i];
-        status = lm_p0_parse_file(registry_path, &document);
+        status = lm_p0_parse_file(lm_lmx_message_thread, registry_path, &document);
         if (status == 0) {
             break;
         }
-        diagnostic = lm_p0_document_diagnostic(document);
+        diagnostic = lm_p0_document_diagnostic(lm_lmx_message_thread, document);
         if (diagnostic != 0) {
             fprintf(stderr, "parser registry parse error %d at %zu:%zu in %s: %s\n", diagnostic -> code, diagnostic -> line, diagnostic -> column, registry_path, diagnostic -> message);
-            lm_p0_document_destroy(document);
+            lm_p0_document_destroy(lm_lmx_message_thread, document);
             lm_p0_registry_destroy(lm_lmx_message_thread);
             return 1;
         }
-        lm_p0_document_destroy(document);
+        lm_p0_document_destroy(lm_lmx_message_thread, document);
         document = 0;
         if (override_enabled) {
             fprintf(stderr, "parser registry error: cannot read %s\n", registry_path);
@@ -10379,13 +10367,13 @@ static int lm_p0_registry_load_default(struct LmMessageThread *lm_lmx_message_th
     }
     loader = lm_p0_registry_source_loader_new(lm_lmx_message_thread);
     if (loader == 0) {
-        lm_p0_document_destroy(document);
+        lm_p0_document_destroy(lm_lmx_message_thread, document);
         lm_p0_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
-    status = lm_registry_source_load_root(lm_lmx_message_thread, loader, 0, lm_p0_document_root(document));
+    status = lm_registry_source_load_root(lm_lmx_message_thread, loader, 0, lm_p0_document_root(lm_lmx_message_thread, document));
     lm_own_delete(loader, 0);
-    lm_p0_document_destroy(document);
+    lm_p0_document_destroy(lm_lmx_message_thread, document);
     if (status != 0) {
         lm_p0_registry_destroy(lm_lmx_message_thread);
         return 1;
@@ -10550,8 +10538,7 @@ static int lm_p0_registry_source_tables_selftest(struct LmMessageThread *lm_lmx_
     return status;
 }
 
-void lm_p0_document_destroy(LmP0Document *document) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+void lm_p0_document_destroy(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document) {
     (void)lm_lmx_message_thread;
     if (document == 0) {
         return;
@@ -10560,8 +10547,7 @@ void lm_p0_document_destroy(LmP0Document *document) {
     lm_own_delete(document, 0);
 }
 
-const LmP0Node * lm_p0_document_root(const LmP0Document *document) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+const LmP0Node * lm_p0_document_root(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document) {
     (void)lm_lmx_message_thread;
     if (document != 0) {
         return document -> root;
@@ -10569,8 +10555,7 @@ const LmP0Node * lm_p0_document_root(const LmP0Document *document) {
     return 0;
 }
 
-LmP0Node * lm_p0_document_mutable_root(LmP0Document *document) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+LmP0Node * lm_p0_document_mutable_root(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document) {
     (void)lm_lmx_message_thread;
     if (document != 0) {
         return document -> root;
@@ -10578,8 +10563,7 @@ LmP0Node * lm_p0_document_mutable_root(LmP0Document *document) {
     return 0;
 }
 
-const LmP0Diagnostic * lm_p0_document_diagnostic(const LmP0Document *document) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+const LmP0Diagnostic * lm_p0_document_diagnostic(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document) {
     (void)lm_lmx_message_thread;
     if (((document == 0) || (document -> diagnostic == 0)) || (document -> diagnostic -> code == 0)) {
         return 0;
@@ -10587,8 +10571,7 @@ const LmP0Diagnostic * lm_p0_document_diagnostic(const LmP0Document *document) {
     return document -> diagnostic;
 }
 
-void lm_p0_free(void *ptr) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+void lm_p0_free(struct LmMessageThread *lm_lmx_message_thread, void *ptr) {
     (void)lm_lmx_message_thread;
     lm_own_delete(ptr, 0);
 }
@@ -10762,7 +10745,7 @@ static void lm_p0_dump_run(struct LmMessageThread *lm_lmx_message_thread, LmP0Du
             if (node == 0) {
                 continue;
             }
-            structure_name = lm_p0_node_kind_class_name(LM_P0_NODE_STRUCTURE);
+            structure_name = lm_p0_node_kind_class_name(lm_lmx_message_thread, LM_P0_NODE_STRUCTURE);
             lm_p0_dump_indent(lm_lmx_message_thread, dump, indent);
             if ((node -> flags & LM_P0_NODE_INACTIVE) != 0U) {
                 lm_p0_dump_append_cstr(dump, "Inactive ");
@@ -10774,7 +10757,7 @@ static void lm_p0_dump_run(struct LmMessageThread *lm_lmx_message_thread, LmP0Du
                 lm_p0_dump_append_cstr(dump, "PositionalSkip ");
             }
             if (node -> kind == LM_P0_NODE_STRUCTURE) {
-                lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node -> kind));
+                lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(lm_lmx_message_thread, node -> kind));
                 lm_p0_dump_append_field_count_line(lm_lmx_message_thread, dump, node -> as -> structure -> field_count);
                 if ((lm_p0_dump_push_trailer(lm_lmx_message_thread, stack, node -> as -> structure -> trailer, (indent + 1U)) != 0) || (lm_p0_dump_push_structure(lm_lmx_message_thread, stack, node -> as -> structure, (indent + 1U)) != 0)) {
                     dump->failed = 1;
@@ -10782,7 +10765,7 @@ static void lm_p0_dump_run(struct LmMessageThread *lm_lmx_message_thread, LmP0Du
             }
             else {
                 if (node -> kind == LM_P0_NODE_FRAME) {
-                    lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node -> kind));
+                    lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(lm_lmx_message_thread, node -> kind));
                     lm_p0_dump_append_cstr(dump, " head=");
                     lm_p0_dump_text(lm_lmx_message_thread, dump, node -> as -> frame -> head);
                     lm_p0_dump_append_cstr(dump, " body=");
@@ -10794,20 +10777,20 @@ static void lm_p0_dump_run(struct LmMessageThread *lm_lmx_message_thread, LmP0Du
                 }
                 else {
                     if (node -> kind == LM_P0_NODE_ATOM) {
-                        lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node -> kind));
+                        lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(lm_lmx_message_thread, node -> kind));
                         lm_p0_dump_append_cstr(dump, " ");
                         lm_p0_dump_text(lm_lmx_message_thread, dump, node -> as -> atom);
                         lm_p0_dump_append_cstr(dump, "\n");
                     }
                     else {
                         if (node -> kind == LM_P0_NODE_DISABLED) {
-                            lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node -> kind));
+                            lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(lm_lmx_message_thread, node -> kind));
                             lm_p0_dump_append_cstr(dump, " ");
                             lm_p0_dump_text(lm_lmx_message_thread, dump, node -> as -> atom);
                             lm_p0_dump_append_cstr(dump, "\n");
                         }
                         else {
-                            lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(node -> kind));
+                            lm_p0_dump_append_cstr(dump, lm_p0_node_kind_class_name(lm_lmx_message_thread, node -> kind));
                             lm_p0_dump_append_cstr(dump, " kind=");
                             lm_p0_dump_append_size(lm_lmx_message_thread, dump, (((size_t)node -> kind)));
                             lm_p0_dump_append_cstr(dump, "\n");
@@ -10909,8 +10892,7 @@ static void lm_p0_dump_delete(struct LmMessageThread *lm_lmx_message_thread, LmP
     }
 }
 
-char * lm_p0_dump_alloc(const LmP0Document *document) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+char * lm_p0_dump_alloc(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document) {
     (void)lm_lmx_message_thread;
     LmP0Dump * dump;
     char *data;
