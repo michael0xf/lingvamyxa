@@ -452,8 +452,6 @@ typedef int (*LmRegistrySourceFrameIndexRule)(const LmRegistrySourceLoader *load
 void * (lm_own_new_zero)(size_t size);
 void * (lm_own_resize)(void *object, size_t size);
 char * (lm_own_copy_bytes)(const char *source, size_t length);
-void * (lm_own_array_new_zero)(size_t element_size, size_t count, size_t rank, size_t level);
-const LmOwnAllocationDescriptor * (lm_own_allocation_descriptor)(const void *address);
 void (lm_own_delete)(void *object, LmOwnDestroyFields destroy_fields);
 void (lm_own_delete_plain)(void *object);
 void (lm_own_pointer_array_delete)(void **items, size_t count, LmOwnDelete delete_item);
@@ -523,8 +521,6 @@ const char * (lm_p0_node_kind_class_name)(LmP0NodeKind kind);
 char * (lm_p0_dump_alloc)(const LmP0Document *document);
 void (lm_p0_free)(void *ptr);
 static int lm_registry_source_load_root(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Node *root);
-
-
 
 
 

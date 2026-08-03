@@ -376,24 +376,12 @@ external:
     return: item
 end: external
 
-LmOwnPtrStack: lm_own_global_allocation_descriptors
-int: lm_own_global_allocation_descriptors_ready
-
 fn: lm_own_size_multiply (size_t: left; size_t: right; @: size_t out) int
     if: out = 0
         return: 1
     if: left != 0U && right > (cast: size_t -1) / left
         return: 1
     out[0]: left * right
-return: 0
-
-fn: lm_own_global_allocation_descriptors_init () int
-    if: lm_own_global_allocation_descriptors_ready = 0
-        lm_own_global_allocation_descriptors: lm_own_new_zero(c.sizeof(c.LmOwnPtrStack))
-        if: lm_own_global_allocation_descriptors = 0
-            return: 1
-        lm_own_ptr_stack_init(lm_own_global_allocation_descriptors, c.lm_own_delete_plain)
-        lm_own_global_allocation_descriptors_ready: 1
 return: 0
 
 fn: lm_own_allocation_descriptor_find (const: (LmOwnPtrStack: descriptors); const: @(void address)) const: LmOwnAllocationDescriptor
@@ -434,35 +422,6 @@ fn: lm_own_allocation_descriptor_push (LmOwnPtrStack: descriptors; @: void addre
     if: status != 0
         lm_own_delete(descriptor, 0)
 return: status
-
-external:
-    fn: lm_own_array_new_zero (size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
-        @: void object
-        size_t: bytes
-
-        if: lm_own_size_multiply(element_size, count, @ bytes) != 0
-            return: 0
-        if: bytes = 0U
-            return: 0
-        if: lm_own_global_allocation_descriptors_init() != 0
-            return: 0
-
-        object: c.calloc(1U, bytes)
-        if: object = 0
-            return: 0
-        if: lm_own_allocation_descriptor_push(lm_own_global_allocation_descriptors, object, 0, bytes, element_size, count, rank, level) != 0
-            c.free(object)
-            return: 0
-
-    return: object
-end: external
-
-external:
-    fn: lm_own_allocation_descriptor (const: @(void address)) const: LmOwnAllocationDescriptor
-        if: lm_own_global_allocation_descriptors_ready = 0
-            return: 0
-    return: lm_own_allocation_descriptor_find(lm_own_global_allocation_descriptors, address)
-end: external
 
 external:
     fn: lm_own_arena_new_zero (LmOwnArena: arena; size_t: size) @: void

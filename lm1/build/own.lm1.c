@@ -156,8 +156,6 @@ typedef void (*LmOwnDelete)(void *object);
 void * (lm_own_new_zero)(size_t size);
 void * (lm_own_resize)(void *object, size_t size);
 char * (lm_own_copy_bytes)(const char *source, size_t length);
-void * (lm_own_array_new_zero)(size_t element_size, size_t count, size_t rank, size_t level);
-const LmOwnAllocationDescriptor * (lm_own_allocation_descriptor)(const void *address);
 void (lm_own_delete)(void *object, LmOwnDestroyFields destroy_fields);
 void (lm_own_delete_plain)(void *object);
 void (lm_own_pointer_array_delete)(void **items, size_t count, LmOwnDelete delete_item);
@@ -297,8 +295,6 @@ size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
 
 
 
-
-
 #include <stdlib.h>
 #include <string.h>
 void * lm_own_new_zero(size_t size);
@@ -331,11 +327,8 @@ int lm_own_value_stack_pop(LmOwnValueStack *stack, void *out_item);
 void * lm_own_value_stack_at(const LmOwnValueStack *stack, size_t index);
 void * lm_own_value_stack_top(const LmOwnValueStack *stack);
 static int lm_own_size_multiply(struct LmMessageThread *lm_lmx_message_thread, size_t left, size_t right, size_t *out);
-static int lm_own_global_allocation_descriptors_init(struct LmMessageThread *lm_lmx_message_thread);
 static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(struct LmMessageThread *lm_lmx_message_thread, const LmOwnPtrStack *descriptors, const void *address);
 static int lm_own_allocation_descriptor_push(struct LmMessageThread *lm_lmx_message_thread, LmOwnPtrStack *descriptors, void *address, LmOwnArena *owner, size_t bytes, size_t element_size, size_t count, size_t rank, size_t level);
-void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level);
-const LmOwnAllocationDescriptor * lm_own_allocation_descriptor(const void *address);
 void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size);
 void * lm_own_arena_array_new_zero(LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
 const LmOwnAllocationDescriptor * lm_own_arena_allocation_descriptor(const LmOwnArena *arena, const void *address);
@@ -360,9 +353,6 @@ int lm_message_thread_collect(LmMessageThread *thread);
 int lm_message_thread_begin_turn(LmMessageThread *thread);
 int lm_message_thread_end_turn(LmMessageThread *thread);
 
-static LmOwnPtrStack * lm_own_global_allocation_descriptors;
-
-static int lm_own_global_allocation_descriptors_ready;
 
 void * lm_own_new_zero(size_t size) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
@@ -771,19 +761,6 @@ static int lm_own_size_multiply(struct LmMessageThread *lm_lmx_message_thread, s
     return 0;
 }
 
-static int lm_own_global_allocation_descriptors_init(struct LmMessageThread *lm_lmx_message_thread) {
-    (void)lm_lmx_message_thread;
-    if (lm_own_global_allocation_descriptors_ready == 0) {
-        lm_own_global_allocation_descriptors = lm_own_new_zero(sizeof(LmOwnPtrStack));
-        if (lm_own_global_allocation_descriptors == 0) {
-            return 1;
-        }
-        lm_own_ptr_stack_init(lm_own_global_allocation_descriptors, lm_own_delete_plain);
-        lm_own_global_allocation_descriptors_ready = 1;
-    }
-    return 0;
-}
-
 static const LmOwnAllocationDescriptor * lm_own_allocation_descriptor_find(struct LmMessageThread *lm_lmx_message_thread, const LmOwnPtrStack *descriptors, const void *address) {
     (void)lm_lmx_message_thread;
     const LmOwnAllocationDescriptor * descriptor;
@@ -825,40 +802,6 @@ static int lm_own_allocation_descriptor_push(struct LmMessageThread *lm_lmx_mess
         lm_own_delete(descriptor, 0);
     }
     return status;
-}
-
-void * lm_own_array_new_zero(size_t element_size, size_t count, size_t rank, size_t level) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
-    (void)lm_lmx_message_thread;
-    void *object;
-    size_t bytes;
-    if (lm_own_size_multiply(lm_lmx_message_thread, element_size, count, &bytes) != 0) {
-        return 0;
-    }
-    if (bytes == 0U) {
-        return 0;
-    }
-    if (lm_own_global_allocation_descriptors_init(lm_lmx_message_thread) != 0) {
-        return 0;
-    }
-    object = calloc(1U, bytes);
-    if (object == 0) {
-        return 0;
-    }
-    if (lm_own_allocation_descriptor_push(lm_lmx_message_thread, lm_own_global_allocation_descriptors, object, 0, bytes, element_size, count, rank, level) != 0) {
-        free(object);
-        return 0;
-    }
-    return object;
-}
-
-const LmOwnAllocationDescriptor * lm_own_allocation_descriptor(const void *address) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
-    (void)lm_lmx_message_thread;
-    if (lm_own_global_allocation_descriptors_ready == 0) {
-        return 0;
-    }
-    return lm_own_allocation_descriptor_find(lm_lmx_message_thread, lm_own_global_allocation_descriptors, address);
 }
 
 void * lm_own_arena_new_zero(LmOwnArena *arena, size_t size) {

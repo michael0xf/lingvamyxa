@@ -761,8 +761,6 @@ typedef int (*LmTransL4PayloadFrameHandler)(struct LmMessageThread *lm_lmx_messa
 void * (lm_own_new_zero)(size_t size);
 void * (lm_own_resize)(void *object, size_t size);
 char * (lm_own_copy_bytes)(const char *source, size_t length);
-void * (lm_own_array_new_zero)(size_t element_size, size_t count, size_t rank, size_t level);
-const LmOwnAllocationDescriptor * (lm_own_allocation_descriptor)(const void *address);
 void (lm_own_delete)(void *object, LmOwnDestroyFields destroy_fields);
 void (lm_own_delete_plain)(void *object);
 void (lm_own_pointer_array_delete)(void **items, size_t count, LmOwnDelete delete_item);
@@ -1039,8 +1037,6 @@ static int lm_trans_declare_registry_fn_descriptors(struct LmMessageThread *lm_l
 static int lm_trans_emit_root_sequence(struct LmMessageThread *lm_lmx_message_thread, FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_l4_payload_pointer_bindings_init(struct LmMessageThread *lm_lmx_message_thread);
 static void lm_trans_l4_payload_pointer_bindings_destroy(struct LmMessageThread *lm_lmx_message_thread);
-
-
 
 
 

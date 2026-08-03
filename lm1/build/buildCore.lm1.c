@@ -163,8 +163,6 @@ typedef void (*LmOwnDelete)(void *object);
 void * (lm_own_new_zero)(size_t size);
 void * (lm_own_resize)(void *object, size_t size);
 char * (lm_own_copy_bytes)(const char *source, size_t length);
-void * (lm_own_array_new_zero)(size_t element_size, size_t count, size_t rank, size_t level);
-const LmOwnAllocationDescriptor * (lm_own_allocation_descriptor)(const void *address);
 void (lm_own_delete)(void *object, LmOwnDestroyFields destroy_fields);
 void (lm_own_delete_plain)(void *object);
 void (lm_own_pointer_array_delete)(void **items, size_t count, LmOwnDelete delete_item);
@@ -214,8 +212,6 @@ void * (lm_message_thread_execution_context)(LmMessageThread *thread);
 void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *context);
 size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
 size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
-
-
 
 
 
