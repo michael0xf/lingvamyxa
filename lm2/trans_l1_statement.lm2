@@ -543,11 +543,17 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);\n") != 0
         return: 1
+    if: lm_trans_put(file, "int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);\n") != 0
+        return: 1
     if: lm_trans_put(file, "int lm_message_thread_runtime_delete(struct LmMessageThreadRuntime *runtime);\n") != 0
         return: 1
     if: lm_trans_put(file, "struct LmMessageThreadPool *lm_message_thread_pool_new(struct LmMessageThreadRuntime *runtime, size_t worker_count);\n") != 0
         return: 1
     if: lm_trans_put(file, "void lm_message_thread_pool_request_stop(struct LmMessageThreadPool *pool);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "void lm_message_thread_pool_request_stop_when_idle(struct LmMessageThreadPool *pool);\n") != 0
         return: 1
     if: lm_trans_put(file, "int lm_message_thread_pool_delete(struct LmMessageThreadPool *pool);\n") != 0
         return: 1
@@ -560,6 +566,8 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
     if: lm_trans_put(file, "int lm_message_thread_bind_route(struct LmMessageThread *thread, const char *route);\n") != 0
         return: 1
     if: lm_trans_put(file, "int lm_message_thread_current_lmx(struct LmMessageThread *thread, const char **out_lmx, size_t *out_length);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "int lm_message_thread_send_lmx(struct LmMessageThread *thread, const char *endpoint, const char *route, const char *lmx, size_t length);\n") != 0
         return: 1
     if: lm_trans_put(file, "struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);\n") != 0
         return: 1
@@ -623,9 +631,13 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "    struct LmMessageThread *thread;\n") != 0
         return: 1
+    if: lm_trans_put(file, "    struct LmMessageThreadRuntime *runtime;\n") != 0
+        return: 1
     if: lm_trans_put(file, "    LmMessageThreadExecutionContext context = {0};\n") != 0
         return: 1
     if: lm_trans_put(file, "    int status;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    int attached = 0;\n") != 0
         return: 1
     if: lm_trans_put(file, "    if (entry == 0) {\n") != 0
         return: 1
@@ -640,6 +652,28 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
     if: lm_trans_put(file, "        return 1;\n") != 0
         return: 1
     if: lm_trans_put(file, "    }\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    runtime = lm_message_thread_runtime_new();\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (runtime == 0) {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        lm_message_thread_delete(thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        return 1;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    }\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (lm_message_thread_runtime_attach_root(runtime, thread) != 0) {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        (void)lm_message_thread_runtime_delete(runtime);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        lm_message_thread_delete(thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        return 1;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    }\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    attached = 1;\n") != 0
         return: 1
     if: lm_trans_put(file, "    (void)lm_message_thread_set_execution_context(thread, &context);\n") != 0
         return: 1
@@ -663,7 +697,19 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "    status = lm_message_thread_status(thread);\n") != 0
         return: 1
-    if: lm_trans_put(file, "    lm_message_thread_delete(thread);\n") != 0
+    if: lm_trans_put(file, "    if (lm_message_thread_runtime_detach_root(runtime, thread) != 0) {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        if (status == 0) status = 1;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    } else {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        attached = 0;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    }\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (!attached && lm_message_thread_runtime_delete(runtime) != 0 && status == 0) status = 1;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (!attached) lm_message_thread_delete(thread);\n") != 0
         return: 1
     if: lm_trans_put(file, "    return status;\n") != 0
         return: 1
@@ -748,14 +794,16 @@ fn: lm_trans_emit_message_thread_main_root (
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "int lm_message_thread_exit_status;\n") != 0
         return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "struct LmMessageThreadRuntime *lm_lmx_application_runtime = 0;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "int lm_lmx_application_root_attached = 0;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "int lm_lmx_thread_startup_failed = 0;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "int lm_lmx_thread_cleanup_failed = 0;\n") != 0
+        return: 1
     if: thread_count != 0U
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "struct LmMessageThreadRuntime *lm_lmx_application_runtime = 0;\n") != 0
-            return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "struct LmMessageThreadPool *lm_lmx_application_pool = 0;\n") != 0
-            return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "int lm_lmx_thread_startup_failed = 0;\n") != 0
-            return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "int lm_lmx_thread_cleanup_failed = 0;\n") != 0
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "int lm_lmx_declared_thread_status = 0;\n") != 0
             return: 1
@@ -779,11 +827,13 @@ fn: lm_trans_emit_message_thread_main_root (
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "(void)lm_message_thread_set_execution_context(lm_lmx_message_thread, &lm_message_thread_main_context);\n") != 0
         return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_lmx_application_runtime = lm_message_thread_runtime_new();\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_application_runtime == 0) lm_lmx_thread_startup_failed = 1;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (!lm_lmx_thread_startup_failed && lm_message_thread_runtime_attach_root(lm_lmx_application_runtime, lm_lmx_message_thread) != 0) lm_lmx_thread_startup_failed = 1; else if (!lm_lmx_thread_startup_failed) lm_lmx_application_root_attached = 1;\n") != 0
+        return: 1
     if: thread_count != 0U
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_lmx_application_runtime = lm_message_thread_runtime_new();\n") != 0
-            return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_application_runtime == 0) lm_lmx_thread_startup_failed = 1;\n") != 0
-            return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (!lm_lmx_thread_startup_failed) {\n") != 0
             return: 1
         if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_lmx_application_pool = lm_message_thread_pool_new(lm_lmx_application_runtime, 1U);\n") != 0
@@ -809,10 +859,9 @@ fn: lm_trans_emit_message_thread_main_root (
             if: lm_trans_emit_indent(file, indent) != 0 || c.fprintf(file, "if (!lm_lmx_thread_startup_failed && lm_message_thread_bind_route(lm_lmx_declared_thread_%zu, ", index) < 0 || lm_trans_write_text(file, declaration\route_literal) != 0 || lm_trans_put(file, ") != 0) lm_lmx_thread_startup_failed = 1;\n") != 0
                 return: 1
             index: index + 1U
-
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_thread_startup_failed) lm_message_thread_request_failure(lm_lmx_message_thread, 1);\n") != 0
-            return: 1
     ---
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_thread_startup_failed) lm_message_thread_request_failure(lm_lmx_message_thread, 1);\n") != 0
+        return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "while (lm_message_thread_begin_turn(lm_lmx_message_thread)) {\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_message_thread_main_context.diagnostic_code = 0;\n") != 0
@@ -845,12 +894,34 @@ fn: lm_trans_emit_message_thread_main_end (
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
         return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_exit_status = lm_message_thread_status(lm_lmx_message_thread);\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_application_runtime != 0 && lm_lmx_application_root_attached) {\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (lm_message_thread_runtime_detach_root(lm_lmx_application_runtime, lm_lmx_message_thread) != 0) lm_lmx_thread_cleanup_failed = 1; else lm_lmx_application_root_attached = 0;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
     if: thread_count != 0U
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_application_pool != 0) {\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (lm_lmx_thread_startup_failed || lm_lmx_application_root_attached) {\n") != 0
+            return: 1
         index: 0U
         while: index < thread_count
-            if: lm_trans_emit_indent(file, indent) != 0 || c.fprintf(file, "if (lm_lmx_declared_thread_%zu_started) lm_message_thread_request_stop(lm_lmx_declared_thread_%zu, 0);\n", index, index) < 0
+            if: lm_trans_emit_indent(file, indent + 2U) != 0 || c.fprintf(file, "if (lm_lmx_declared_thread_%zu_started) lm_message_thread_request_stop(lm_lmx_declared_thread_%zu, 0);\n", index, index) < 0
                 return: 1
             index: index + 1U
+        if: lm_trans_emit_indent(file, indent + 2U) != 0 || lm_trans_put(file, "lm_message_thread_pool_request_stop(lm_lmx_application_pool);\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "} else {\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent + 2U) != 0 || lm_trans_put(file, "lm_message_thread_pool_request_stop_when_idle(lm_lmx_application_pool);\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "}\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+            return: 1
         index: 0U
         while: index < thread_count
             if: lm_trans_emit_indent(file, indent) != 0 || c.fprintf(file, "if (lm_lmx_declared_thread_%zu_started) { if (lm_message_thread_join(lm_lmx_declared_thread_%zu, &lm_lmx_declared_thread_status) != 0) lm_lmx_thread_cleanup_failed = 1; else if (lm_lmx_declared_thread_status != 0 && lm_lmx_declared_thread_failure_status == 0) lm_lmx_declared_thread_failure_status = lm_lmx_declared_thread_status; }\n", index, index) < 0
@@ -858,28 +929,28 @@ fn: lm_trans_emit_message_thread_main_end (
             index: index + 1U
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_application_pool != 0) {\n") != 0
             return: 1
-        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_message_thread_pool_request_stop(lm_lmx_application_pool);\n") != 0
-            return: 1
         if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (lm_message_thread_pool_delete(lm_lmx_application_pool) != 0) lm_lmx_thread_cleanup_failed = 1; else lm_lmx_application_pool = 0;\n") != 0
             return: 1
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
             return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_application_runtime != 0 && lm_lmx_application_pool == 0) {\n") != 0
-            return: 1
-        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (lm_message_thread_runtime_delete(lm_lmx_application_runtime) != 0) lm_lmx_thread_cleanup_failed = 1; else lm_lmx_application_runtime = 0;\n") != 0
-            return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
-            return: 1
     ---
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_exit_status = lm_message_thread_status(lm_lmx_message_thread);\n") != 0
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_application_runtime != 0 && !lm_lmx_application_root_attached") != 0
+        return: 1
+    if: thread_count != 0U && lm_trans_put(file, " && lm_lmx_application_pool == 0") != 0
+        return: 1
+    if: lm_trans_put(file, ") {\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (lm_message_thread_runtime_delete(lm_lmx_application_runtime) != 0) lm_lmx_thread_cleanup_failed = 1; else lm_lmx_application_runtime = 0;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
         return: 1
     if: thread_count != 0U
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_message_thread_exit_status == 0 && lm_lmx_declared_thread_failure_status != 0) lm_message_thread_exit_status = lm_lmx_declared_thread_failure_status;\n") != 0
             return: 1
-        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_message_thread_exit_status == 0 && lm_lmx_thread_cleanup_failed) lm_message_thread_exit_status = 1;\n") != 0
-            return: 1
     ---
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_delete(lm_lmx_message_thread);\n") != 0
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_message_thread_exit_status == 0 && lm_lmx_thread_cleanup_failed) lm_message_thread_exit_status = 1;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (!lm_lmx_application_root_attached) lm_message_thread_delete(lm_lmx_message_thread);\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "return lm_message_thread_exit_status;\n") != 0
         return: 1
@@ -6265,6 +6336,105 @@ fn: lm_trans_statement_emit_stop (
         return: 1
 return: 0
 
+fn: lm_trans_statement_emit_send (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    const: LmP0Field: first
+    const: LmP0Field: second
+    const: LmP0Field: third
+    const: LmP0Field: fourth
+    const: LmP0Field: field
+    size_t: argument_count
+
+    c.LM_UNUSED(stack)
+    if: frame = 0 || frame\body = 0
+        return: 1
+    if: namespace_ = 0 || namespace_\managed_message_thread_context = 0
+        c.fprintf(c.stderr, "trans L2 error: send receiver requires a managed MessageThread or application root context\n")
+        return: 1
+
+    argument_count: 0U
+    field: frame\body\first_field
+    while: field != 0
+        argument_count: argument_count + 1U
+        field: lm_trans_expr_segment_end(field)
+    if: argument_count != 3U && argument_count != 4U
+        c.fprintf(c.stderr, "trans L2 error: send receiver expects route, LMX, length or endpoint, route, LMX, length\n")
+        return: 1
+
+    first: frame\body\first_field
+    second: lm_trans_expr_segment_end(first)
+    third: lm_trans_expr_segment_end(second)
+    fourth: lm_trans_expr_segment_end(third)
+
+    if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "{\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "const char *lm_lmx_send_endpoint = ") != 0
+        return: 1
+    if: argument_count = 4U
+        if: lm_trans_put(file, "(const char *)(") != 0 || lm_trans_emit_expr_range(file, first, second, namespace_) != 0 || lm_trans_put(file, ")") != 0
+            return: 1
+        ---
+    else:
+        if: lm_trans_put(file, "0") != 0
+            return: 1
+        ---
+    if: lm_trans_put(file, ";\n") != 0
+        return: 1
+
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "const char *lm_lmx_send_route = (const char *)(") != 0
+        return: 1
+    if: argument_count = 4U
+        if: lm_trans_emit_expr_range(file, second, third, namespace_) != 0
+            return: 1
+        ---
+    else:
+        if: lm_trans_emit_expr_range(file, first, second, namespace_) != 0
+            return: 1
+        ---
+    if: lm_trans_put(file, ");\n") != 0
+        return: 1
+
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "const char *lm_lmx_send_lmx = (const char *)(") != 0
+        return: 1
+    if: argument_count = 4U
+        if: lm_trans_emit_expr_range(file, third, fourth, namespace_) != 0
+            return: 1
+        ---
+    else:
+        if: lm_trans_emit_expr_range(file, second, third, namespace_) != 0
+            return: 1
+        ---
+    if: lm_trans_put(file, ");\n") != 0
+        return: 1
+
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "size_t lm_lmx_send_length = (size_t)(") != 0
+        return: 1
+    if: argument_count = 4U
+        if: lm_trans_emit_expr_range(file, fourth, 0, namespace_) != 0
+            return: 1
+        ---
+    else:
+        if: lm_trans_emit_expr_range(file, third, 0, namespace_) != 0
+            return: 1
+        ---
+    if: lm_trans_put(file, ");\n") != 0
+        return: 1
+
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "int lm_lmx_send_status = lm_message_thread_send_lmx(lm_lmx_message_thread, lm_lmx_send_endpoint, lm_lmx_send_route, lm_lmx_send_lmx, lm_lmx_send_length);\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (lm_lmx_send_status != 0) lm_message_thread_request_failure(lm_lmx_message_thread, lm_lmx_send_status);\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+return: 0
+
 fn: lm_trans_statement_emit_if (
     FILE: file
     LmTransStatementStack: stack
@@ -8597,7 +8767,7 @@ fn: lm_trans_pointer_bindings_init () int
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_operator", @lm_trans_expr_emit_raw, @lm_trans_expr_state_operator) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_deref", @lm_trans_expr_emit_raw, @lm_trans_expr_state_deref) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_pointer_follow", @lm_trans_expr_emit_raw, @lm_trans_expr_state_pointer_follow) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_c_dot", @lm_trans_expr_emit_raw, @lm_trans_expr_state_c_dot) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_cast_frame", @lm_trans_expr_emit_cast_frame) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_implements_frame", @lm_trans_expr_emit_implements_frame) != 0)
         status: 1
-    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_return", @lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_stop", @lm_trans_statement_emit_stop) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_if", @lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_while", @lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_else", @lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", @lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_finally", @lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_assert", @lm_trans_statement_emit_assert) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", @lm_trans_statement_emit_loop_jump) != 0)
+    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_return", @lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_stop", @lm_trans_statement_emit_stop) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_send", @lm_trans_statement_emit_send) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_if", @lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_while", @lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_else", @lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", @lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_finally", @lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_assert", @lm_trans_statement_emit_assert) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", @lm_trans_statement_emit_loop_jump) != 0)
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_include_prelude", @lm_trans_statement_emit_include_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_define_prelude", @lm_trans_statement_emit_define_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifndef_default_prelude", @lm_trans_statement_emit_ifndef_default_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_os_prelude", @lm_trans_statement_emit_os_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifdef_prelude", @lm_trans_statement_emit_ifdef_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_guard_prelude", @lm_trans_statement_emit_guard_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_extern_c_prelude", @lm_trans_statement_emit_extern_c_prelude) != 0)
         status: 1

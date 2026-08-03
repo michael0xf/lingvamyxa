@@ -1,0 +1,14 @@
+L3:
+    sub: lm_test_remote_send_shape ()
+        send: "https://example.invalid" "/remote" "{}" 2U
+    end: lm_test_remote_send_shape
+
+    external:
+        fn: main () int
+            if: 0
+                lm_test_remote_send_shape()
+            ---
+            return: 0
+        end: main
+    end: external
+end: L3

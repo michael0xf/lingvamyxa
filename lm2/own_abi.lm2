@@ -563,6 +563,7 @@ table:
              route_mutex            LmMutex
              route_head             LmMessageRoute
              route_count            size_t
+             root_thread            LmMessageThread
 end: `LmMessageThreadRuntime.field.class`
 
 table:
@@ -576,6 +577,7 @@ table:
              route_mutex            4
              route_head             5
              route_count            6
+             root_thread            7
 end: `LmMessageThreadRuntime.field.index`
 
 table:
@@ -586,6 +588,7 @@ table:
              single_active_thread  0
              route_mutex           0
              route_head            0
+             root_thread           0
 end: `LmMessageThreadRuntime.field.address-depth`
 
 table:
@@ -603,6 +606,7 @@ table:
              member_tail           LmMessageThread
              member_count          size_t
              stop_requested        int
+             drain_requested       int
              deleting              int
              single_mode           int
              runtime               LmMessageThreadRuntime
@@ -623,9 +627,10 @@ table:
              member_tail           8
              member_count          9
              stop_requested        10
-             deleting              11
-             single_mode           12
-             runtime               13
+             drain_requested       11
+             deleting              12
+             single_mode           13
+             runtime               14
 end: `LmMessageThreadPool.field.index`
 
 table:
@@ -661,6 +666,7 @@ table:
              component_count      size_t
              component_destroying int
              pool                 LmMessageThreadPool
+             runtime              LmMessageThreadRuntime
              entry                LmMessageThreadEntry
              entry_argument       void
              state_mutex          LmMutex
@@ -682,6 +688,8 @@ table:
              outbox_tail          LmMessageOutboxEntry
              outbox_count         size_t
              current_message      LmMessage
+             turn_active          int
+             turn_failed          int
 end: `LmMessageThread.field.class`
 
 table:
@@ -703,27 +711,30 @@ table:
              component_count      12
              component_destroying 13
              pool                 14
-             entry                15
-             entry_argument       16
-             state_mutex          17
-             stopped_condition    18
-             started              19
-             joining              20
-             joined               21
-             scheduled            22
-             executing            23
-             execution_identity   24
-             ready_next           25
-             pool_previous        26
-             pool_next            27
-             mailbox_mode         28
-             inbox_head           29
-             inbox_tail           30
-             inbox_count          31
-             outbox_head          32
-             outbox_tail          33
-             outbox_count         34
-             current_message      35
+             runtime              15
+             entry                16
+             entry_argument       17
+             state_mutex          18
+             stopped_condition    19
+             started              20
+             joining              21
+             joined               22
+             scheduled            23
+             executing            24
+             execution_identity   25
+             ready_next           26
+             pool_previous        27
+             pool_next            28
+             mailbox_mode         29
+             inbox_head           30
+             inbox_tail           31
+             inbox_count          32
+             outbox_head          33
+             outbox_tail          34
+             outbox_count         35
+             current_message      36
+             turn_active          37
+             turn_failed          38
 end: `LmMessageThread.field.index`
 
 table:
@@ -736,6 +747,7 @@ table:
              arena_tail         0
              component_head     0
              pool               0
+             runtime            0
              entry_argument     1
              state_mutex        0
              stopped_condition  0
@@ -807,8 +819,11 @@ table:
              lm_condition_broadcast          1
              lm_message_thread_runtime_new 1
              lm_message_thread_runtime_delete 1
+             lm_message_thread_runtime_attach_root 1
+             lm_message_thread_runtime_detach_root 1
              lm_message_thread_pool_new       1
              lm_message_thread_pool_request_stop 1
+             lm_message_thread_pool_request_stop_when_idle 1
              lm_message_thread_pool_delete    1
              lm_message_thread_init          1
              lm_message_thread_destroy       1
@@ -923,8 +938,11 @@ fn: lm_condition_signal (LmCondition: condition) int
 fn: lm_condition_broadcast (LmCondition: condition) int
 fn: lm_message_thread_runtime_new () LmMessageThreadRuntime
 fn: lm_message_thread_runtime_delete (LmMessageThreadRuntime: runtime) int
+fn: lm_message_thread_runtime_attach_root (LmMessageThreadRuntime: runtime; LmMessageThread: thread) int
+fn: lm_message_thread_runtime_detach_root (LmMessageThreadRuntime: runtime; LmMessageThread: thread) int
 fn: lm_message_thread_pool_new (LmMessageThreadRuntime: runtime; size_t: worker_count) LmMessageThreadPool
 fn: lm_message_thread_pool_request_stop (LmMessageThreadPool: pool) void
+fn: lm_message_thread_pool_request_stop_when_idle (LmMessageThreadPool: pool) void
 fn: lm_message_thread_pool_delete (LmMessageThreadPool: pool) int
 fn: lm_message_thread_init (LmMessageThread: thread) int
 fn: lm_message_thread_destroy (LmMessageThread: thread) void

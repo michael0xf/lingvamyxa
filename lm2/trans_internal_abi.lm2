@@ -780,6 +780,14 @@ fn: lm_trans_statement_emit_predef (
     LmTransNamespace: namespace_
 ) int
 
+fn: lm_trans_statement_emit_send (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
 fn: lm_trans_registry_path_is_predefined (
     const: @: char registry_path
 ) int

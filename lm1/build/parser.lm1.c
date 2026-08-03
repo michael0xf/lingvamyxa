@@ -20,15 +20,19 @@ struct IncomingMessage {
 struct LmMessageThread *lm_message_thread_new(void);
 void lm_message_thread_delete(struct LmMessageThread *thread);
 struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
+int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
+int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_delete(struct LmMessageThreadRuntime *runtime);
 struct LmMessageThreadPool *lm_message_thread_pool_new(struct LmMessageThreadRuntime *runtime, size_t worker_count);
 void lm_message_thread_pool_request_stop(struct LmMessageThreadPool *pool);
+void lm_message_thread_pool_request_stop_when_idle(struct LmMessageThreadPool *pool);
 int lm_message_thread_pool_delete(struct LmMessageThreadPool *pool);
 struct LmMessageThread *lm_message_thread_new_in(struct LmMessageThreadPool *pool);
 int lm_message_thread_start_mailbox(struct LmMessageThread *thread, void (*entry)(struct LmMessageThread *, void *), void *argument);
 int lm_message_thread_join(struct LmMessageThread *thread, int *result);
 int lm_message_thread_bind_route(struct LmMessageThread *thread, const char *route);
 int lm_message_thread_current_lmx(struct LmMessageThread *thread, const char **out_lmx, size_t *out_length);
+int lm_message_thread_send_lmx(struct LmMessageThread *thread, const char *endpoint, const char *route, const char *lmx, size_t length);
 struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);
 void *lm_message_thread_execution_context(struct LmMessageThread *thread);
 void *lm_message_thread_set_execution_context(struct LmMessageThread *thread, void *context);
@@ -60,8 +64,10 @@ typedef int (*LmLmxMessageThreadEntry)(struct LmMessageThread *thread);
 #endif
 static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmLmxMessageThreadEntry entry) {
     struct LmMessageThread *thread;
+    struct LmMessageThreadRuntime *runtime;
     LmMessageThreadExecutionContext context = {0};
     int status;
+    int attached = 0;
     if (entry == 0) {
         return 1;
     }
@@ -69,6 +75,17 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
     if (thread == 0) {
         return 1;
     }
+    runtime = lm_message_thread_runtime_new();
+    if (runtime == 0) {
+        lm_message_thread_delete(thread);
+        return 1;
+    }
+    if (lm_message_thread_runtime_attach_root(runtime, thread) != 0) {
+        (void)lm_message_thread_runtime_delete(runtime);
+        lm_message_thread_delete(thread);
+        return 1;
+    }
+    attached = 1;
     (void)lm_message_thread_set_execution_context(thread, &context);
     while (lm_message_thread_begin_turn(thread)) {
         context.diagnostic_code = 0;
@@ -80,7 +97,13 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
         (void)lm_message_thread_end_turn(thread);
     }
     status = lm_message_thread_status(thread);
-    lm_message_thread_delete(thread);
+    if (lm_message_thread_runtime_detach_root(runtime, thread) != 0) {
+        if (status == 0) status = 1;
+    } else {
+        attached = 0;
+    }
+    if (!attached && lm_message_thread_runtime_delete(runtime) != 0 && status == 0) status = 1;
+    if (!attached) lm_message_thread_delete(thread);
     return status;
 }
 #undef LM_LMX_UNUSED_ENTRY_HELPER
@@ -276,6 +299,7 @@ struct LmMessageThreadRuntime {
     LmMutex * route_mutex;
     LmMessageRoute * route_head;
     size_t route_count;
+    LmMessageThread * root_thread;
 };
 struct LmMessageThreadPool {
     LmHostThread * *workers;
@@ -289,6 +313,7 @@ struct LmMessageThreadPool {
     LmMessageThread * member_tail;
     size_t member_count;
     int stop_requested;
+    int drain_requested;
     int deleting;
     int single_mode;
     LmMessageThreadRuntime * runtime;
@@ -315,6 +340,7 @@ struct LmMessageThread {
     size_t component_count;
     int component_destroying;
     LmMessageThreadPool * pool;
+    LmMessageThreadRuntime * runtime;
     void (*entry)(struct LmMessageThread *lm_lmx_message_thread, void *argument);
     void *entry_argument;
     LmMutex * state_mutex;
@@ -336,6 +362,8 @@ struct LmMessageThread {
     LmMessageOutboxEntry * outbox_tail;
     size_t outbox_count;
     LmMessage * current_message;
+    int turn_active;
+    int turn_failed;
 };
 typedef struct LmP0Text {
     const char *data;
@@ -639,8 +667,11 @@ int (lm_condition_signal)(LmCondition *condition);
 int (lm_condition_broadcast)(LmCondition *condition);
 LmMessageThreadRuntime * (lm_message_thread_runtime_new)(void);
 int (lm_message_thread_runtime_delete)(LmMessageThreadRuntime *runtime);
+int (lm_message_thread_runtime_attach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
+int (lm_message_thread_runtime_detach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
 LmMessageThreadPool * (lm_message_thread_pool_new)(LmMessageThreadRuntime *runtime, size_t worker_count);
 void (lm_message_thread_pool_request_stop)(LmMessageThreadPool *pool);
+void (lm_message_thread_pool_request_stop_when_idle)(LmMessageThreadPool *pool);
 int (lm_message_thread_pool_delete)(LmMessageThreadPool *pool);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
@@ -692,6 +723,9 @@ const char * (lm_p0_node_kind_class_name)(struct LmMessageThread *lm_lmx_message
 char * (lm_p0_dump_alloc)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
 void (lm_p0_free)(struct LmMessageThread *lm_lmx_message_thread, void *ptr);
 static int lm_registry_source_load_root(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Node *root);
+
+
+
 
 
 

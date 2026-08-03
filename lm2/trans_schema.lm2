@@ -898,6 +898,7 @@ table:
              previous_loops              LmOwnPtrStack          7                       0                                0
              has_previous_control_stacks int                    8                       0                                0
              previous_message_thread_entry int                  9                       0                                0
+             previous_managed_message_thread_context int        10                      0                                0
 end: LmTransFunctionState
 
 table:
@@ -1050,4 +1051,5 @@ table:
              registry_view        LmRegistryView         12                      0                                1
              message_thread_entry int                    13                      0                                0
              thread_declarations  LmOwnPtrStack          14                      0                                0
+             managed_message_thread_context int          15                      0                                0
 end: LmTransNamespace

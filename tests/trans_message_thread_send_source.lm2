@@ -1,0 +1,14 @@
+thread: lm_test_send_target (IncomingMessage: message)
+    route: "/send-target"
+    if: message\lmx = 0 || message\length != 2U
+        stop: 11
+        return:
+    ---
+end: lm_test_send_target
+
+external:
+    fn: main () int
+        send: "/send-target" "{}" 2U
+        return: 0
+    end: main
+end: external

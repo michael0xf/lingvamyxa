@@ -1,0 +1,12 @@
+L2:
+    external:
+        fn: lm_test_unmanaged_send () int
+            send: "/route" "{}" 2U
+            return: 0
+        end: lm_test_unmanaged_send
+
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2
