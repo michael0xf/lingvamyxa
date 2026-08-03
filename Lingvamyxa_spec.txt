@@ -7606,12 +7606,12 @@ explicitly below.
         `stop:` is an IMPLEMENTED L2/L3 statement receiver. Its admitted forms
         are `stop:` and `stop: Status`; the optional expression is evaluated at
         the call site and converted to `int`, with omitted status meaning zero.
-        It requests cooperative termination of the current Message Thread only:
-        RUNNING becomes STOPPING, but `stop:` does not itself leave the current
-        fn/sub/block or skip its cleanup. The first accepted ordinary stop
-        request retains its status; a later fatal diagnostic/runtime failure may
-        override that ordinary stop status. The final turn runs local collection
-        and then becomes STOPPED.
+        It requests cooperative termination of the explicitly executing Message
+        Thread only: RUNNING becomes STOPPING, but `stop:` does not itself leave
+        the current fn/sub/block or skip its cleanup. The first accepted ordinary
+        stop request retains its status; a later fatal diagnostic/runtime failure
+        may override that ordinary stop status. The final turn runs local
+        collection and then becomes STOPPED.
 
         `exit:` is NOT IMPLEMENTED. Proposed application-level contract: request
         stop on every application Message Thread, wait until all of them are
@@ -7621,6 +7621,10 @@ explicitly below.
         `send(Message) -> Future`; `reply(Value | Failure)`;
         `await(Future) -> Value | Failure`; `schedule(Message, Time)`; and
         `thread:` descriptor/body -> MessageThread.
+
+        The explicit host runtime, worker-pool and actor start/join ABI is
+        IMPLEMENTED, but it is an implementation API and is not yet exposed as
+        the generic source receiver `thread:`.
 
     28. copy / move / borrow / own
         NOT IMPLEMENTED as source operators; only lower-level ownership/runtime
@@ -8316,9 +8320,11 @@ Default L3 runtime semantics in the Message Thread profile defined in section
 19.28:
 
     record AssertionViolation diagnostic;
-    execute all active `finally` cleanups in the current thread ExecutionContext;
+    execute all active `finally` cleanups in the executing Message Thread's
+        ExecutionContext;
     transfer control to the thread diagnostic root;
-    terminate the current thread/task by default after reporting the diagnostic.
+    terminate the executing Message Thread/task by default after reporting the
+        diagnostic.
 
 Default L2 registry/model-loading use, if exposed by a receiver profile:
 
@@ -10471,14 +10477,22 @@ A Message Thread owns:
 
     root state;
     local arenas/owner tree;
-    current ExecutionContext;
-    inbox/outbox queues;
+    current-turn ExecutionContext association;
+    inbox/outbox queues in a queue-enabled profile;
     registry view;
     validator and executor policy;
     diagnostics/failure state.
 
 No raw mutable reference owned by one Message Thread may point directly into another
 Message Thread in the default profile.
+
+In this section, "current" or "executing" Message Thread means the explicit
+`LmMessageThread` reference carried into the executing body. The hosted C
+lowering passes it as the first Message Thread entry parameter and propagates
+it to managed functions as the hidden `lm_lmx_message_thread` parameter. It is
+not looked up in process-global state or TLS. Successive turns of one Message
+Thread may execute on different host workers without changing the actor
+reference or its owner graph.
 
 19.28.2.1. Message Thread Registry View and Cache
 
@@ -10492,7 +10506,7 @@ The RegistryView is an overlay/import/cache view over registry sources such as:
     service tables;
     device/profile tables;
     imported base registry tables;
-    thread-local rows;
+    Message-Thread-local (actor-local) rows;
     runtime evidence rows.
 
 Lookup, validation and execution-plan construction are performed against the
@@ -10539,14 +10553,35 @@ The process entry runs in an unbounded turn loop. Its abstract shape is:
 The loop has no predetermined iteration count. It ends only after a cooperative
 stop request or a fatal diagnostic/runtime condition is converted into a
 failure-dominant stop request and the common end-turn boundary is completed.
-The current bootstrap uses the generated external `main` body as its root-body
-step. Inbox/outbox dispatch and source message operators are future runtime
-work; their absence does not replace the loop with a one-shot lifetime model.
-Until an inbox wait/scheduler is added, a root body which neither requests stop
-nor reaches a process-entry return begins another turn immediately and may
-therefore busy-loop by design.
 
-`stop:` requests termination of the current Message Thread:
+The hosted profile currently has two explicit execution paths. A generated
+standalone `main` creates one unpooled `LmMessageThread`, installs its
+ExecutionContext through that explicit reference, and drives `begin_turn` /
+body / `end_turn` directly on the invoking host thread.
+
+The pool ABI creates an explicit `LmMessageThreadRuntime`, one or more
+`LmMessageThreadPool` objects and pool-owned Message Threads. For a pooled
+Message Thread, one invocation of its entry callback is one actor turn.
+`end_turn` runs local collection. If the actor remains RUNNING, it is appended
+to the pool's FIFO ready queue for another turn. STOPPING becomes STOPPED at
+the same boundary.
+
+A pool never executes two turns of the same Message Thread concurrently.
+Different Message Threads may execute concurrently up to the pool's worker
+count, and one Message Thread may migrate between host workers from turn to
+turn. Its arena and durable state belong to the Message Thread, not to a host
+worker. During a callback, the actor temporarily records a pointer to the
+turn-local ExecutionContext on the executing host stack; the runtime restores
+the previous association before that turn leaves the worker.
+
+The native providers wait on the pool condition when no actor is ready. The
+`single` provider advances the same FIFO cooperatively while the controller
+joins or deletes pool work. Inbox/outbox dispatch and source message operators
+are future runtime work. Because inbox waiting is not implemented yet, a
+RUNNING actor whose callback does not request stop remains immediately
+runnable.
+
+`stop:` requests termination of the explicitly executing Message Thread:
 
     stop:
     stop: statusExpression
@@ -10562,10 +10597,10 @@ was already nonzero.
 Stopping is cooperative. `stop:` does not perform a hidden return, long jump or
 scope exit. The current fn/sub/block continues normally and its explicit
 control flow and generated cleanup remain visible. A `stop:` executed by a
-nested function still targets the current Message Thread rather than merely
-that function, but the nested function continues until its own ordinary control
-flow leaves it. At end-turn, collection runs once, then STOPPING becomes
-STOPPED and the loop condition rejects another turn.
+nested function still targets the explicitly carried Message Thread rather
+than merely that function, but the nested function continues until its own
+ordinary control flow leaves it. At end-turn, collection runs once, then
+STOPPING becomes STOPPED and the loop condition rejects another turn.
 
 For compatibility with existing standalone programs, a `return` in the
 generated external process entry is lowered as described in section 19.7:
@@ -10573,15 +10608,13 @@ evaluate the status once, run active generated cleanup, request stop, and reach
 the common end-turn boundary. Returns in all other functions remain ordinary
 function returns.
 
-Application-wide `exit:` is deliberately separate and is NOT IMPLEMENTED. Its
-future coordinator must request stop on every application Message Thread,
-allow or drive each active turn to its stopping boundary, wait for every thread
-to reach STOPPED, release application roots, and only then return control to the
-host process. This is the point at which orderly shutdown of future N-thread
-message runtimes will be defined. Because the current state machine performs
-STOPPING -> STOPPED in `end_turn`, that coordinator/scheduler must also define
-how an idle externally stopped thread executes or synthesizes its final
-end-turn boundary before it is joined.
+Application-wide `exit:` remains deliberately separate and is NOT IMPLEMENTED.
+The runtime already provides pool stop and actor join primitives, including the
+final end-turn transition of a scheduled actor. What is still missing is the
+source-level application coordinator: it must enumerate the application's
+runtimes, pools and roots, request their orderly stop, join all actors and host
+workers, select the process result, release application roots and only then
+return to the host process.
 
 19.28.3. Root State and Handler Frame
 
@@ -10647,6 +10680,12 @@ one turn consists of the root-body step followed by the same end-turn
 collection boundary. Queue dequeue, validation dispatch and outbox flushing
 will be inserted into this loop when the corresponding runtime/operators are
 implemented; they do not require a second process-lifetime mechanism.
+
+The implemented pool ready queue is not a Message Thread inbox or outbox. It
+contains runnable `LmMessageThread` references and schedules actor turns only.
+It does not carry message payloads, perform ownership transfer, validation,
+reply routing or inter-runtime delivery. Inbox/outbox queues and their source
+operators remain future work.
 
 Dispatch is a registry query, not object magic.
 
@@ -10850,34 +10889,127 @@ ordinary messages.
 
 19.28.10. ANSI C Lowering and Boundaries
 
-A C99 runtime may represent a Message Thread as a structure containing:
+19.28.10.1. Explicit Runtime and Worker Pool
 
-    root state pointer;
-    queue;
-    registry view pointer;
-    current execution context;
-    owner/arena graph;
-    scheduler fields.
+The hosted runtime distinguishes three objects:
 
-The source-level rule remains message isolation, even if the runtime maps many
-Message Threads onto fewer OS threads.
+    LmMessageThreadRuntime
+        explicit controller context for one or more pools;
 
-The current `libown` bootstrap can allocate several independent
-`LmMessageThread` instances and drive them sequentially by rebinding the
-current instance. Each instance already has its own owner arena, state, status,
-execution-context pointer and turn/collection counters. This is the structural
-base for later N-thread execution and message exchange.
+    LmMessageThreadPool
+        host workers, synchronization, FIFO ready queue and pool-owned actors;
 
-It is not yet a concurrent OS-thread implementation. The current-instance
-binding and root initialization state are process-global rather than
-thread-local or scheduler-local, and the runtime frame/cleanup stack, queues,
-scheduler synchronization, host-thread mapping and inter-thread message
-transfer are not implemented.
-Before several Message Threads execute concurrently, current-instance lookup
-must become TLS- or scheduler-local, root initialization must be synchronized,
-and cross-thread stop/message delivery must use the selected queue and
-publication rules. These additions extend the per-instance model; they do not
-replace it.
+    LmMessageThread
+        actor state, root arena/owner graph, current-turn ExecutionContext
+        association, entry callback, status and turn/collection counters.
+
+There is no process-global root/current Message Thread and no TLS scheduler
+binding. The entry ABI is conceptually:
+
+    typedef void (*LmMessageThreadEntry)(
+        LmMessageThread *thread,
+        void *argument);
+
+`lm_message_thread_start` appends a NEW actor to its pool's ready queue. A
+worker removes one actor, marks it executing, runs begin-turn, invokes the entry
+with the explicit actor reference, runs collection/end-turn and either stops or
+requeues the actor. The scheduled/executing state guarantees at most one active
+callback per actor.
+
+Every actor owns its own root arena and arena registry. The arena follows the
+actor if later turns run on another worker; it is never worker-owned or shared
+between actors. The actor-local collector runs once at every pool end-turn and
+calls the local tree-cut machinery. A distinct disposable per-turn arena is not
+yet implemented.
+
+The source-level rule remains message isolation, even when a pool maps many
+Message Threads onto fewer host threads.
+
+19.28.10.2. Host Thread Provider
+
+The build setting is:
+
+    LM_THREAD_PROVIDER = auto | pthread | win32 | single
+
+`auto` selects `win32` on Windows, `pthread` on Unix-like systems including
+macOS and Linux, and `single` where no native backend is selected.
+
+The common implementation ABI includes:
+
+    lm_host_thread_start / lm_host_thread_join;
+    lm_mutex_lock / lm_mutex_unlock;
+    lm_condition_wait / lm_condition_signal / lm_condition_broadcast;
+
+together with their constructors and deletion operations.
+
+The `pthread` backend uses `pthread_create`, `pthread_join`,
+`pthread_mutex_*` and `pthread_cond_*`. The Win32 backend uses
+`_beginthreadex`, `WaitForSingleObject`, `CRITICAL_SECTION` and
+`CONDITION_VARIABLE`.
+
+The `single` backend creates no OS worker. Host-thread entry runs synchronously;
+pool join/delete cooperatively pumps the FIFO ready queue. Mutex operations are
+non-blocking compatibility operations, signal/broadcast are successful no-ops,
+and `lm_condition_wait` reports failure because a blocking wait cannot make
+progress in this provider.
+
+CMake exposes `LM_THREAD_PROVIDER` as a cache setting, defaults it to `auto`,
+and links the pthread backend through `Threads::Threads`. Bootstrap/self-build
+drivers default to `single` unless the environment selects another provider;
+their pthread path adds `-pthread`.
+
+These provider operations are L2/runtime implementation facilities. Selecting
+a provider does not expose raw host-thread synchronization as an L3 operation.
+
+19.28.10.3. Lifecycle and Control
+
+For native providers, the host thread which creates an
+`LmMessageThreadRuntime` is its controller. For `single`, the outer cooperative
+caller is the controller and runtime-local execution depth prevents lifecycle
+operations from a callback of that runtime.
+
+One `LmMessageThreadRuntime` defines one connected low-level lifecycle domain.
+Pools, actors and raw ABI handles which directly refer to one another must
+belong to that same runtime. A raw actor, pool or owner pointer from one runtime
+domain into another is invalid; cross-runtime interaction belongs to the
+message boundary described below.
+
+Runtime creation/deletion, pool creation/deletion, actor creation/start/join and
+pool-wide stop are controller operations. An executing actor callback may
+request stop or failure only for that same actor. It may not join itself, join
+another actor, stop a peer actor, or create, delete or control its pool or
+runtime.
+
+A pool owns every actor created by `lm_message_thread_new_in`. A pooled actor
+cannot be individually destroyed and its manual begin-turn/end-turn/collect
+operations are rejected; the pool owns those boundaries. Pool deletion requests
+stop, joins its workers and destroys its member actors and their arenas. A
+deletion attempted while an actor or join lifecycle is active fails and may be
+retried after quiescence.
+
+Handles and raw actor pointers are valid only while their owning runtime/pool
+lifecycle remains active. Accessors, owner lookup, component operations and
+other uses of an actor handle must not execute concurrently with pool/runtime
+teardown. The controller must quiesce all such users before deletion; calling
+an accessor after successful pool deletion is outside the ABI contract.
+Mutexes and conditions may likewise be deleted only after their users have
+quiesced.
+
+The host-thread wrapper is likewise controlled by its creator. Its entry
+callback cannot join or delete the wrapper which is currently starting it.
+
+19.28.10.4. Message Boundary Status
+
+The controller ABI is infrastructure, not a substitute for Message Thread
+communication. Source-level code must not exchange raw foreign actor, pool or
+runtime pointers. Cross-actor and cross-runtime communication will use
+inbox/outbox messages with the copy, serialization, immutable-sharing or
+whole-branch-transfer rules of section 19.29.
+
+The current `void *argument` entry parameter is a low-level hosted ABI facility;
+it does not weaken the source ownership boundary. Inbox/outbox delivery,
+`send`, `reply`, `await`, `schedule`, `thread:` and application-wide `exit:`
+remain NOT IMPLEMENTED as generic source operations.
 
 
 19.29. Ownership and Memory Operators
@@ -11338,6 +11470,10 @@ receivers and registry rows. The current source operators `send`, `reply`,
 `await`, `schedule` and `thread` remain proposed and NOT IMPLEMENTED unless a
 runtime profile explicitly registers them.
 
+The hosted pool scheduler fields are now implemented, but the incoming-message
+queue shown above remains conceptual. The implemented ready queue schedules
+actors, not messages.
+
 Raw references inside one Message Thread may point only into regions owned by
 that Message Thread or into explicitly shared immutable/external storage
 admitted by the active profile. A raw reference from one Message Thread into
@@ -11654,21 +11790,27 @@ generated root runtime state owns a root arena before an ordinary dynamically
 materialized Structure is created, and destroys that arena when the program or
 root Message Thread terminates.
 
-The shared runtime type is `LmMessageThread`; no separate generated
-per-translation-unit thread helper remains. The current runtime Structure records:
+The shared actor type is `LmMessageThread`; no separate generated
+per-translation-unit thread helper remains. The current actor Structure records:
 
     root owner arena;
     RUNNING / STOPPING / STOPPED state;
     retained stop status;
     turn and collection counters;
     collector-failure state;
-    opaque current ExecutionContext pointer.
+    opaque current-turn ExecutionContext pointer.
 
-The generated external `main` acquires the current/root instance, installs its
-diagnostic ExecutionContext, executes the unbounded turn loop described in
-section 19.28.2.2, restores the previous context, and returns the retained
-thread status. The root is the first ordinary Message Thread instance, not a
-second memory mechanism and not a source level.
+The generated external `main` creates an explicit unpooled root
+`LmMessageThread`, installs its diagnostic ExecutionContext through that
+reference, drives the turn loop described in section 19.28.2.2, reads its
+retained status and deletes it. It does not acquire a singleton root/current
+object. The root is the first ordinary Message Thread instance, not a second
+memory mechanism and not a source level.
+
+The worker-pool ABI is implemented in the same runtime library, but generated
+standalone `main` functions have not yet been changed to construct an
+`LmMessageThreadRuntime` and pool. The direct root loop and the pool scheduler
+share the same actor state, arena and end-turn collection semantics.
 
 This rule applies to ordinary applications and to bootstrap tools alike:
 
@@ -11685,18 +11827,34 @@ requirements as another generated executable. The build system must order its
 stages so that the owner runtime exists before tools linked against it are
 built or run.
 
-The essential current arena API includes:
+The essential current arena API includes the explicit executing actor as its
+first parameter. In an LMX managed function that argument is supplied by the
+hidden `lm_lmx_message_thread` lowering parameter; it is still an ordinary C
+parameter and never a global/TLS lookup. `owner_thread` names the actor whose
+owner graph contains the arena and is normally the same explicit actor in the
+current profile.
 
-    LmOwnArena *lm_own_arena_new(void);
-    void lm_own_arena_delete(LmOwnArena *arena);
-    int lm_own_arena_init(LmOwnArena *arena);
-    void lm_own_arena_destroy(LmOwnArena *arena);
+    LmOwnArena *lm_own_arena_new(
+        LmMessageThread *thread,
+        LmMessageThread *owner_thread);
+    void lm_own_arena_delete(
+        LmMessageThread *thread,
+        LmOwnArena *arena);
+    int lm_own_arena_init(
+        LmMessageThread *thread,
+        LmOwnArena *arena,
+        LmMessageThread *owner_thread);
+    void lm_own_arena_destroy(
+        LmMessageThread *thread,
+        LmOwnArena *arena);
 
     void *lm_own_arena_new_zero(
+        LmMessageThread *thread,
         LmOwnArena *arena,
         size_t size);
 
     void *lm_own_arena_array_new_zero(
+        LmMessageThread *thread,
         LmOwnArena *arena,
         size_t element_size,
         size_t count,
@@ -11704,35 +11862,71 @@ The essential current arena API includes:
         size_t level);
 
     const LmOwnAllocationDescriptor *lm_own_arena_allocation_descriptor(
+        LmMessageThread *thread,
         const LmOwnArena *arena,
         const void *address);
 
     char *lm_own_arena_copy_bytes(
+        LmMessageThread *thread,
         LmOwnArena *arena,
         const char *source,
         size_t length);
 
     int lm_own_arena_add_lazy_edge(
+        LmMessageThread *thread,
         LmOwnArena *target,
         LmOwnArena *source,
         const void *source_ptr,
         size_t size,
         const void **patch_slot);
 
-    int lm_own_arena_promote_lazy_edges(LmOwnArena *arena);
-    int lm_own_arena_absorb(LmOwnArena *target, LmOwnArena *source);
-    void lm_own_arena_freeze(LmOwnArena *arena);
-    int lm_own_arena_is_frozen(const LmOwnArena *arena);
-    int lm_own_tree_cut(LmOwnArena *arena);
-    int lm_own_tree_cut_promote_lazy_edges(LmOwnArena *arena);
+    int lm_own_arena_promote_lazy_edges(
+        LmMessageThread *thread,
+        LmOwnArena *arena);
+    int lm_own_arena_absorb(
+        LmMessageThread *thread,
+        LmOwnArena *target,
+        LmOwnArena *source);
+    void lm_own_arena_freeze(
+        LmMessageThread *thread,
+        LmOwnArena *arena);
+    int lm_own_arena_is_frozen(
+        LmMessageThread *thread,
+        const LmOwnArena *arena);
+    LmMessageThread *lm_own_arena_owner_thread(
+        LmMessageThread *thread,
+        const LmOwnArena *arena);
+    int lm_own_tree_cut(
+        LmMessageThread *thread,
+        LmOwnArena *arena);
+    int lm_own_tree_cut_promote_lazy_edges(
+        LmMessageThread *thread,
+        LmOwnArena *arena);
 
 The essential current Message Thread ABI includes:
 
-    LmMessageThread *lm_message_thread_root(void);
-    LmMessageThread *lm_message_thread_current(void);
-    LmMessageThread *lm_message_thread_set_current(LmMessageThread *thread);
+    typedef void (*LmMessageThreadEntry)(
+        LmMessageThread *thread,
+        void *argument);
+
+    LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
+    int lm_message_thread_runtime_delete(LmMessageThreadRuntime *runtime);
+
+    LmMessageThreadPool *lm_message_thread_pool_new(
+        LmMessageThreadRuntime *runtime,
+        size_t worker_count);
+    void lm_message_thread_pool_request_stop(LmMessageThreadPool *pool);
+    int lm_message_thread_pool_delete(LmMessageThreadPool *pool);
+
     LmMessageThread *lm_message_thread_new(void);
+    LmMessageThread *lm_message_thread_new_in(LmMessageThreadPool *pool);
     void lm_message_thread_delete(LmMessageThread *thread);
+
+    int lm_message_thread_start(
+        LmMessageThread *thread,
+        LmMessageThreadEntry entry,
+        void *argument);
+    int lm_message_thread_join(LmMessageThread *thread, int *result);
 
     int lm_message_thread_begin_turn(LmMessageThread *thread);
     int lm_message_thread_end_turn(LmMessageThread *thread);
@@ -11751,6 +11945,10 @@ failure-dominant diagnostic/runtime channel and may replace an ordinary stop
 status while the thread is RUNNING or STOPPING. `end_turn` always reaches local
 collection and converts STOPPING to STOPPED. Status, owner, ExecutionContext
 and counter accessors are also exported by the bootstrap ABI.
+
+The ABI has no `lm_message_thread_root`, `lm_message_thread_current` or
+`lm_message_thread_set_current` lookup. Managed entry and arena operations
+receive the executing actor explicitly as described in section 19.28.10.
 
 This is an implementation API, not source syntax. It may evolve without
 changing the source rules, provided ordinary Structure identity, lifetime and
@@ -11844,7 +12042,7 @@ owner is released.
 A C99 lowering may direct all exits through one cleanup label:
 
     int lm_generated_handler(
-        LmMessageThreadRuntime *thread,
+        LmMessageThread *thread,
         const LmMessage *message)
     {
         int status = 0;
@@ -11896,7 +12094,7 @@ current ABI and not source syntax:
 
     typedef struct LmOwnerArena LmOwnerArena;
     typedef struct LmOwnerBranch LmOwnerBranch;
-    typedef struct LmMessageThreadRuntime LmMessageThreadRuntime;
+    typedef struct LmMessageThread LmMessageThread;
 
     typedef enum LmOwnerEdgeKind {
         LM_OWNER_EDGE_OWNED,
@@ -11930,7 +12128,7 @@ current ABI and not source syntax:
         LmOwnerArena *arena;
         const LmOwnerTypeOps *type_ops;
         void *root_reference;
-        LmMessageThreadRuntime *owner_thread;
+        LmMessageThread *owner_thread;
         unsigned flags;
     };
 
@@ -11954,7 +12152,7 @@ Possible precise arena operations are:
 
     int lm_owner_branch_transfer(
         LmOwnerBranch *branch,
-        LmMessageThreadRuntime *receiver);
+        LmMessageThread *receiver);
 
 Generated operations may be selected from registry/source-table descriptors:
 
@@ -12765,14 +12963,18 @@ root termination. That is a valid initial implementation. It must still
 preserve boundary ownership semantics when actual inter-Message-Thread
 transport is introduced.
 
-Concretely, the generated end-turn path calls `lm_message_thread_collect` once
-for every completed hosted-bootstrap turn, including the final stopping turn.
-That scheduled call increments the Message Thread's collection counter and
-invokes `lm_own_tree_cut(root_owner)`. At present `lm_own_tree_cut` performs
-lazy-owned-edge promotion. It does not yet discover and reclaim arbitrary
-unreachable objects or precise frame, handler, attempt and branch regions.
-Consequently this pass is normally a collection safe point/no-op for ordinary
-root-owned Structures, which remain allocated until Message Thread destruction.
+Concretely, both the generated direct-root `end_turn` path and every
+pool-scheduled end-turn path run actor-local collection. A normal callback turn
+increments both turn and collection counters. An actor stopped after it was
+queued may skip entry execution but still crosses the final
+collection/end-turn boundary before becoming STOPPED.
+
+The collection call invokes `lm_own_tree_cut(root_owner)`. At present
+`lm_own_tree_cut` performs lazy-owned-edge promotion. It does not yet discover
+and reclaim arbitrary unreachable objects or precise frame, handler, attempt
+and branch regions. Consequently this pass is normally a collection safe
+point/no-op for ordinary root-owned Structures, which remain allocated until
+Message Thread destruction.
 
 The next precise reclamation step is a turn/handler owner beneath the Message
 Thread root. Turn-local materialization may use that owner; references which
@@ -12856,6 +13058,11 @@ This structural memory model does not yet define the complete source API for:
     explicit `freemem`-style release;
     low-level cancellation and join;
     complete atomic/memory-order operations.
+
+Portable host-thread, mutex and condition operations now exist as an
+implementation/runtime ABI. This subsection remains future work for a generic
+source-facing L2 machine-thread and shared-memory API. The host ABI is not
+currently a `machine.thread:` or another public source receiver.
 
 These are future L2 operations because their source semantics expose machine
 storage, addresses, synchronization or allocator lifetime. L1 remains the
@@ -12992,17 +13199,24 @@ The normative memory rules are:
 
 Current hosted-bootstrap implementation:
 
-    `libown` and `LmOwnArena` exist;
-    shared `LmMessageThread` runtime state and RUNNING / STOPPING / STOPPED
-        transitions exist;
-    generated standalone programs have a root Message Thread arena and execute
-        their external process entry in an unbounded turn loop;
-    `stop:` is an implemented L2/L3 cooperative current-thread receiver;
+    `libown`, `LmOwnArena` and actor-local owner graphs exist;
+    `LmMessageThread` state and RUNNING / STOPPING / STOPPED transitions exist;
+    generated standalone programs create an explicit unpooled root actor and
+        drive its external process-entry turn loop directly;
+    no process-global current/root Message Thread or TLS scheduler binding exists;
+    portable pthread, Win32 and `single` host providers exist;
+    `LmMessageThreadRuntime`, N-worker pools and FIFO actor scheduling exist;
+    native pools execute different actors concurrently while serializing turns
+        of each individual actor;
+    an actor may migrate between host workers without moving or sharing its arena;
+    `single` performs the same actor scheduling cooperatively without OS workers;
+    pool-owned actor start, self-stop/failure, controller join, pool stop and
+        lifecycle destruction exist;
+    every scheduled end-turn performs actor-local collection;
+    `stop:` is an implemented L2/L3 cooperative actor receiver;
     process-entry `return` requests root-loop stop after generated cleanup;
-    every completed turn, including the stopping turn, calls local collection;
     ordinary stop is first-request-wins, while diagnostic/runtime collection
         failures use a failure-dominant status channel;
-    multiple Message Thread instances can be allocated and driven sequentially;
     named and merge-produced Structures, `fm` result Structures, dynamic array
         storage/descriptors and closure environments/descriptors are
         root-arena managed;
@@ -13011,11 +13225,14 @@ Current hosted-bootstrap implementation:
     root-arena destruction releases ordinary generated Structure storage;
     partial-callable binder ownership and other remaining unscoped allocation
         paths still require separate owner integration;
-    current-instance binding is process-global rather than TLS/scheduler-local;
-    inbox/outbox queues, inter-thread messages, concurrent N-thread scheduling
-        and application-wide stop-and-wait `exit:` are not yet implemented;
+    generated standalone programs do not yet construct or use the pool runtime;
+    the pool ready queue is implemented, but inbox/outbox message queues,
+        payload transfer and inter-runtime message delivery are not;
+    `send`, `reply`, `await`, `schedule`, `thread:` and application-wide
+        stop-and-wait `exit:` are not yet implemented as generic source operations;
     a runtime frame/cleanup stack for unwinding through nested Message Thread
         calls is not yet implemented;
+    a distinct disposable per-turn/handler arena is not yet implemented;
     current tree cutting promotes lazy-owned edges but does not reclaim general
         unreachable root-arena objects;
     precise frame/handler/branch collection is not yet complete.
@@ -13235,13 +13452,16 @@ This integrated model reduces to these rules:
     L2/L3 Structure return = executable-body control exit that forwards the exact
                 existing reference without allocation, copy or promotion;
     message-boundary reply = boundary wrapper from result/failure to ordinary message record;
-    Message Thread = minimal isolated LMX machine with an unbounded turn loop,
-                local owner graph and registry view; queue-enabled profiles receive,
-                validate, execute and send messages;
-    stop = implemented cooperative request to finish the current Message Thread
-                after its current turn boundary;
-    exit = proposed application coordinator which stops and joins all Message
-                Threads before host-process return;
+    Message Thread = isolated actor with its own state, owner graph and registry
+                view; its turns are serialized even when pools execute different
+                actors concurrently;
+    Message Thread pool = explicit FIFO scheduler which maps actor turns onto
+                zero cooperative or N native host workers;
+    host thread provider = compile-time backend `auto | pthread | win32 | single`;
+    stop = implemented cooperative request to finish the explicitly executing
+                actor after its current/final turn boundary;
+    exit = proposed application coordinator which stops and joins all runtimes,
+                pools and Message Threads before host-process return;
     local RegistryView = overlay/import/cache over persistent registry sources,
                       not a full per-thread registry copy;
     memory/auth/service rules = table/evidence policies over the same pipeline.
