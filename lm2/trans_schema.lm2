@@ -76,6 +76,7 @@ table:
              LmTransTopLevelDeclareHandler        1
              LmTransTopLevelEmitHandler           1
              LmTransL4PayloadFrameHandler         1
+             lm_trans_import_documents_drain      1
 end: `fn.thread-context.managed`
 
 table:
@@ -131,7 +132,6 @@ table:
              lm_trans_function_state_destroy_any 1
              lm_trans_free_any 1
              lm_trans_hoisted_function_delete_any 1
-             lm_trans_import_document_delete 1
              lm_trans_loop_delete_any 1
              lm_trans_namespace_destroy_any 1
              lm_trans_pointer_binding_delete 1

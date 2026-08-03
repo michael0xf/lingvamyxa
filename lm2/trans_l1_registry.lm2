@@ -21,9 +21,17 @@ int: lm_trans_l2_conditional_emission_depth
 
 LmTransRegistry: lm_trans_registry
 
-sub: lm_trans_import_document_delete (@: void document)
-    lm_p0_document_destroy(cast: (LmP0Document) document)
-end: lm_trans_import_document_delete
+sub: lm_trans_import_documents_drain (LmOwnPtrStack: documents)
+    LmP0Document: document
+
+    if: documents = 0
+        return
+    while: documents\count > 0U
+        document: cast: (LmP0Document) lm_own_ptr_stack_pop(documents)
+        if: document != 0
+            lm_p0_document_destroy(document)
+        ---
+end: lm_trans_import_documents_drain
 
 fn: lm_trans_registry_new_text () LmP0Text
     LmP0Text: text

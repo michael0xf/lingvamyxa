@@ -2243,6 +2243,7 @@ fn: lm_trans_emit_l4_units (FILE: file; const: (LmTransNamespace: namespace_)) i
         lm_trans_declared_import_paths: previous_declared_import_paths
         lm_trans_declared_import_documents: previous_declared_import_documents
         lm_trans_namespace_delete(payload_namespace)
+        lm_trans_import_documents_drain(payload_declared_import_documents)
         lm_trans_ptr_stack_delete(@ payload_declared_import_documents)
         lm_trans_ptr_stack_delete(@ payload_declared_import_paths)
 
@@ -2266,7 +2267,7 @@ fn: lm_trans_emit_l4_units (FILE: file; const: (LmTransNamespace: namespace_)) i
             if: payload_namespace = 0
                 payload_namespace: lm_trans_namespace_new()
                 payload_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
-                payload_declared_import_documents: lm_trans_ptr_stack_new(lm_trans_import_document_delete)
+                payload_declared_import_documents: lm_trans_ptr_stack_new(0)
                 if: payload_namespace = 0 || payload_declared_import_paths = 0 || payload_declared_import_documents = 0 || lm_trans_namespace_attach_registry(payload_namespace) != 0
                     lm_trans_ptr_stack_delete(@ names)
                     return: 1
@@ -3846,7 +3847,7 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_l2_conditional_emission_depth: 0
     emitted: 0
     lm_trans_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
-    lm_trans_declared_import_documents: lm_trans_ptr_stack_new(lm_trans_import_document_delete)
+    lm_trans_declared_import_documents: lm_trans_ptr_stack_new(0)
     lm_trans_emitted_import_prelude_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_emitted_import_function_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_emitted_callable_adapters: lm_trans_ptr_stack_new(lm_own_delete_plain)
@@ -3868,6 +3869,7 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_ptr_stack_delete(@ lm_trans_emitted_callable_adapters)
     lm_trans_ptr_stack_delete(@ lm_trans_emitted_import_function_paths)
     lm_trans_ptr_stack_delete(@ lm_trans_emitted_import_prelude_paths)
+    lm_trans_import_documents_drain(lm_trans_declared_import_documents)
     lm_trans_ptr_stack_delete(@ lm_trans_declared_import_documents)
     lm_trans_ptr_stack_delete(@ lm_trans_declared_import_paths)
     lm_trans_l2_table_materialization_suppression_depth: 0

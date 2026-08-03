@@ -1579,7 +1579,7 @@ static int lm_registry_view_table_has_rows(struct LmMessageThread *lm_lmx_messag
 
 
 
-static void lm_trans_import_document_delete(void *document);
+static void lm_trans_import_documents_drain(struct LmMessageThread *lm_lmx_message_thread, LmOwnPtrStack *documents);
 static LmP0Text * lm_trans_registry_new_text(struct LmMessageThread *lm_lmx_message_thread);
 static LmP0Structure * lm_trans_registry_new_structure(struct LmMessageThread *lm_lmx_message_thread);
 static LmP0Frame * lm_trans_registry_new_frame(struct LmMessageThread *lm_lmx_message_thread);
@@ -4466,10 +4466,18 @@ static int lm_registry_view_table_has_rows(struct LmMessageThread *lm_lmx_messag
 }
 
 
-static void lm_trans_import_document_delete(void *document) {
-    struct LmMessageThread *lm_lmx_message_thread = 0;
+static void lm_trans_import_documents_drain(struct LmMessageThread *lm_lmx_message_thread, LmOwnPtrStack *documents) {
     (void)lm_lmx_message_thread;
-    lm_p0_document_destroy(((LmP0Document *)document));
+    LmP0Document * document;
+    if (documents == 0) {
+        return;
+    }
+    while (documents -> count > 0U) {
+        document = ((LmP0Document *)lm_own_ptr_stack_pop(documents));
+        if (document != 0) {
+            lm_p0_document_destroy(document);
+        }
+    }
 }
 
 static LmP0Text * lm_trans_registry_new_text(struct LmMessageThread *lm_lmx_message_thread) {
@@ -36228,6 +36236,7 @@ static int lm_trans_emit_l4_units(struct LmMessageThread *lm_lmx_message_thread,
             lm_trans_declared_import_paths = previous_declared_import_paths;
             lm_trans_declared_import_documents = previous_declared_import_documents;
             lm_trans_namespace_delete(lm_lmx_message_thread, payload_namespace);
+            lm_trans_import_documents_drain(lm_lmx_message_thread, payload_declared_import_documents);
             lm_trans_ptr_stack_delete(&payload_declared_import_documents);
             lm_trans_ptr_stack_delete(&payload_declared_import_paths);
             return lm_return_0;
@@ -36240,6 +36249,7 @@ static int lm_trans_emit_l4_units(struct LmMessageThread *lm_lmx_message_thread,
             lm_trans_declared_import_paths = previous_declared_import_paths;
             lm_trans_declared_import_documents = previous_declared_import_documents;
             lm_trans_namespace_delete(lm_lmx_message_thread, payload_namespace);
+            lm_trans_import_documents_drain(lm_lmx_message_thread, payload_declared_import_documents);
             lm_trans_ptr_stack_delete(&payload_declared_import_documents);
             lm_trans_ptr_stack_delete(&payload_declared_import_paths);
             return lm_return_1;
@@ -36258,6 +36268,7 @@ static int lm_trans_emit_l4_units(struct LmMessageThread *lm_lmx_message_thread,
                 lm_trans_declared_import_paths = previous_declared_import_paths;
                 lm_trans_declared_import_documents = previous_declared_import_documents;
                 lm_trans_namespace_delete(lm_lmx_message_thread, payload_namespace);
+                lm_trans_import_documents_drain(lm_lmx_message_thread, payload_declared_import_documents);
                 lm_trans_ptr_stack_delete(&payload_declared_import_documents);
                 lm_trans_ptr_stack_delete(&payload_declared_import_paths);
                 return lm_return_2;
@@ -36267,7 +36278,7 @@ static int lm_trans_emit_l4_units(struct LmMessageThread *lm_lmx_message_thread,
             if (payload_namespace == 0) {
                 payload_namespace = lm_trans_namespace_new(lm_lmx_message_thread);
                 payload_declared_import_paths = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_own_delete_plain);
-                payload_declared_import_documents = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_trans_import_document_delete);
+                payload_declared_import_documents = lm_trans_ptr_stack_new(lm_lmx_message_thread, 0);
                 if (payload_namespace == 0 || payload_declared_import_paths == 0 || payload_declared_import_documents == 0 || lm_trans_namespace_attach_registry(lm_lmx_message_thread, payload_namespace) != 0) {
                     lm_trans_ptr_stack_delete(&names);
                     {
@@ -36275,6 +36286,7 @@ static int lm_trans_emit_l4_units(struct LmMessageThread *lm_lmx_message_thread,
                         lm_trans_declared_import_paths = previous_declared_import_paths;
                         lm_trans_declared_import_documents = previous_declared_import_documents;
                         lm_trans_namespace_delete(lm_lmx_message_thread, payload_namespace);
+                        lm_trans_import_documents_drain(lm_lmx_message_thread, payload_declared_import_documents);
                         lm_trans_ptr_stack_delete(&payload_declared_import_documents);
                         lm_trans_ptr_stack_delete(&payload_declared_import_paths);
                         return lm_return_3;
@@ -36290,6 +36302,7 @@ static int lm_trans_emit_l4_units(struct LmMessageThread *lm_lmx_message_thread,
                     lm_trans_declared_import_paths = previous_declared_import_paths;
                     lm_trans_declared_import_documents = previous_declared_import_documents;
                     lm_trans_namespace_delete(lm_lmx_message_thread, payload_namespace);
+                    lm_trans_import_documents_drain(lm_lmx_message_thread, payload_declared_import_documents);
                     lm_trans_ptr_stack_delete(&payload_declared_import_documents);
                     lm_trans_ptr_stack_delete(&payload_declared_import_paths);
                     return lm_return_4;
@@ -36304,6 +36317,7 @@ static int lm_trans_emit_l4_units(struct LmMessageThread *lm_lmx_message_thread,
                     lm_trans_declared_import_paths = previous_declared_import_paths;
                     lm_trans_declared_import_documents = previous_declared_import_documents;
                     lm_trans_namespace_delete(lm_lmx_message_thread, payload_namespace);
+                    lm_trans_import_documents_drain(lm_lmx_message_thread, payload_declared_import_documents);
                     lm_trans_ptr_stack_delete(&payload_declared_import_documents);
                     lm_trans_ptr_stack_delete(&payload_declared_import_paths);
                     return lm_return_5;
@@ -36319,6 +36333,7 @@ static int lm_trans_emit_l4_units(struct LmMessageThread *lm_lmx_message_thread,
             lm_trans_declared_import_paths = previous_declared_import_paths;
             lm_trans_declared_import_documents = previous_declared_import_documents;
             lm_trans_namespace_delete(lm_lmx_message_thread, payload_namespace);
+            lm_trans_import_documents_drain(lm_lmx_message_thread, payload_declared_import_documents);
             lm_trans_ptr_stack_delete(&payload_declared_import_documents);
             lm_trans_ptr_stack_delete(&payload_declared_import_paths);
             return lm_return_6;
@@ -36330,6 +36345,7 @@ static int lm_trans_emit_l4_units(struct LmMessageThread *lm_lmx_message_thread,
         lm_trans_declared_import_paths = previous_declared_import_paths;
         lm_trans_declared_import_documents = previous_declared_import_documents;
         lm_trans_namespace_delete(lm_lmx_message_thread, payload_namespace);
+        lm_trans_import_documents_drain(lm_lmx_message_thread, payload_declared_import_documents);
         lm_trans_ptr_stack_delete(&payload_declared_import_documents);
         lm_trans_ptr_stack_delete(&payload_declared_import_paths);
         return lm_return_7;
@@ -38045,7 +38061,7 @@ static int lm_trans_emit_document(struct LmMessageThread *lm_lmx_message_thread,
     lm_trans_l2_conditional_emission_depth = 0;
     emitted = 0;
     lm_trans_declared_import_paths = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_own_delete_plain);
-    lm_trans_declared_import_documents = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_trans_import_document_delete);
+    lm_trans_declared_import_documents = lm_trans_ptr_stack_new(lm_lmx_message_thread, 0);
     lm_trans_emitted_import_prelude_paths = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_own_delete_plain);
     lm_trans_emitted_import_function_paths = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_own_delete_plain);
     lm_trans_emitted_callable_adapters = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_own_delete_plain);
@@ -38068,6 +38084,7 @@ static int lm_trans_emit_document(struct LmMessageThread *lm_lmx_message_thread,
     lm_trans_ptr_stack_delete(&lm_trans_emitted_callable_adapters);
     lm_trans_ptr_stack_delete(&lm_trans_emitted_import_function_paths);
     lm_trans_ptr_stack_delete(&lm_trans_emitted_import_prelude_paths);
+    lm_trans_import_documents_drain(lm_lmx_message_thread, lm_trans_declared_import_documents);
     lm_trans_ptr_stack_delete(&lm_trans_declared_import_documents);
     lm_trans_ptr_stack_delete(&lm_trans_declared_import_paths);
     lm_trans_l2_table_materialization_suppression_depth = 0;

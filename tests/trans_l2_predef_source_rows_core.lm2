@@ -279,7 +279,7 @@ fn: lm_test_l2_predef_source_rows_core () int
         status: 1
 
     lm_trans_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
-    lm_trans_declared_import_documents: lm_trans_ptr_stack_new(lm_trans_import_document_delete)
+    lm_trans_declared_import_documents: lm_trans_ptr_stack_new(0)
     namespace_: lm_trans_namespace_new()
     lm_trans_current_source_path: source_path
     lm_trans_l2_table_materialization_suppression_depth: 0
@@ -347,6 +347,7 @@ fn: lm_test_l2_predef_source_rows_core () int
         c.fclose(prelude_file)
     lm_trans_ptr_stack_delete(@ lm_trans_emitted_import_prelude_paths)
     lm_trans_namespace_delete(namespace_)
+    lm_trans_import_documents_drain(lm_trans_declared_import_documents)
     lm_trans_ptr_stack_delete(@ lm_trans_declared_import_documents)
     lm_trans_ptr_stack_delete(@ lm_trans_declared_import_paths)
     lm_p0_document_destroy(document)
