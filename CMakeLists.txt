@@ -24,6 +24,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${LM0_OUTPUT_DIR}")
 set(LM0_TRUSTED_DIR "${LM0_OUTPUT_DIR}")
 set(LM_LIBS_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/libs")
 set(LM_AUTOTOOLS_JOBS "2" CACHE STRING "Parallel jobs used when building bundled autotools libraries")
+set(LM_THREAD_PROVIDER "auto" CACHE STRING "Host thread provider: auto, pthread, win32, or single")
+set_property(CACHE LM_THREAD_PROVIDER PROPERTY STRINGS auto pthread win32 single)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(LingvamyxaThirdParty)
 
@@ -47,6 +49,51 @@ option(BUILD_LINGVAMYXA_QT_APP "Build the optional Qt Widgets shell" ON)
 option(LINGVAMYXA_ENABLE_EXTERNAL_DEPS "Enable optional runtime/backend dependencies" OFF)
 option(LINGVAMYXA_ENABLE_BUNDLED_THIRD_PARTY "Register bundled third_party projects in the full build profile" OFF)
 set(LINGVAMYXA_BUILDCORE_ARGS "" CACHE STRING "Arguments passed to build/lm0/buildCore.lm0 by the runBuildCore.lm0 target")
+
+# ---- Host thread provider ----
+
+string(TOLOWER "${LM_THREAD_PROVIDER}" LM_THREAD_PROVIDER_REQUESTED)
+set(LM_THREAD_PROVIDER_VALUES auto pthread win32 single)
+if (NOT LM_THREAD_PROVIDER_REQUESTED IN_LIST LM_THREAD_PROVIDER_VALUES)
+    message(FATAL_ERROR
+        "Unsupported LM_THREAD_PROVIDER='${LM_THREAD_PROVIDER}'. "
+        "Expected one of: auto, pthread, win32, single."
+    )
+endif()
+
+if (LM_THREAD_PROVIDER_REQUESTED STREQUAL "auto")
+    if (WIN32)
+        set(LM_THREAD_PROVIDER_RESOLVED win32)
+    elseif (UNIX)
+        set(LM_THREAD_PROVIDER_RESOLVED pthread)
+    else()
+        set(LM_THREAD_PROVIDER_RESOLVED single)
+    endif()
+else()
+    set(LM_THREAD_PROVIDER_RESOLVED "${LM_THREAD_PROVIDER_REQUESTED}")
+endif()
+
+if (LM_THREAD_PROVIDER_RESOLVED STREQUAL "pthread" AND NOT UNIX)
+    message(FATAL_ERROR "LM_THREAD_PROVIDER=pthread requires a Unix-like target")
+elseif (LM_THREAD_PROVIDER_RESOLVED STREQUAL "win32" AND NOT WIN32)
+    message(FATAL_ERROR "LM_THREAD_PROVIDER=win32 requires a Windows target")
+endif()
+
+string(TOUPPER "${LM_THREAD_PROVIDER_RESOLVED}" LM_THREAD_PROVIDER_DEFINE_SUFFIX)
+add_library(lm_thread_provider INTERFACE)
+target_compile_definitions(lm_thread_provider INTERFACE
+    "LM_THREAD_PROVIDER=LM_THREAD_PROVIDER_${LM_THREAD_PROVIDER_DEFINE_SUFFIX}"
+)
+
+if (LM_THREAD_PROVIDER_RESOLVED STREQUAL "pthread")
+    set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+    find_package(Threads REQUIRED)
+    target_link_libraries(lm_thread_provider INTERFACE Threads::Threads)
+endif()
+
+message(STATUS
+    "Lingvamyxa thread provider: ${LM_THREAD_PROVIDER_REQUESTED} -> ${LM_THREAD_PROVIDER_RESOLVED}"
+)
 
 # ---- External language/runtime dependencies ----
 
@@ -136,6 +183,10 @@ if (BUILD_TRANS_LM0 OR BUILD_PRINT_TREE_LM0 OR BUILD_VCPKG_FETCH_LM0 OR BUILD_BU
 
     target_include_directories(own.lm1 PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/lm1
+    )
+
+    target_link_libraries(own.lm1 PUBLIC
+        lm_thread_provider
     )
 
     if (MSVC)
@@ -357,6 +408,7 @@ if (BUILD_BUILD_CORE_LM0)
             "LM_CXX=${CMAKE_CXX_COMPILER}"
             "LM_AR=${CMAKE_AR}"
             "LM_RANLIB=${CMAKE_RANLIB}"
+            "LM_THREAD_PROVIDER=${LM_THREAD_PROVIDER_RESOLVED}"
             "${LM0_TRUSTED_DIR}/buildCore.lm0${CMAKE_EXECUTABLE_SUFFIX}"
             ${LINGVAMYXA_BUILDCORE_ARGS}
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"

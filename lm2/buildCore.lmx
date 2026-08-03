@@ -602,6 +602,17 @@ L2:
     
         return: value
     end: lm_build_env_or_default
+
+    fn: lm_build_thread_provider () @: char
+        @: char value
+
+        value: lm_build_env_or_default("LM_THREAD_PROVIDER", "single")
+        if: c.strcmp(value, "auto") = 0 || c.strcmp(value, "pthread") = 0 || c.strcmp(value, "win32") = 0 || c.strcmp(value, "single") = 0
+            return: value
+
+        c.fprintf: c.stderr "buildCore.lm0: unsupported LM_THREAD_PROVIDER '%s' (expected auto, pthread, win32 or single)\n" value
+        return: 0
+    end: lm_build_thread_provider
     
     fn: lm_build_default_cmake () @: char
         if: lm_build_has_qt_cmake()
@@ -1041,6 +1052,7 @@ L2:
         @: char make_program
         @: char cc
         @: char cxx
+        @: char thread_provider
         [8192]: char command
         size_t: used
     
@@ -1051,6 +1063,9 @@ L2:
         make_program: lm_build_env_or_default("LM_CMAKE_MAKE_PROGRAM", lm_build_default_make_program())
         cc: lm_build_env_or_default("LM_CC", lm_build_default_cc())
         cxx: lm_build_env_or_default("LM_CXX", lm_build_default_cxx())
+        thread_provider: lm_build_thread_provider()
+        if: thread_provider = 0
+            return: 1
     
         if: lm_build_clear_full_cmake_cache(cmake_tool, build_dir) != 0
             return: 1
@@ -1084,6 +1099,10 @@ L2:
         ---
     
         used: lm_build_append_prefixed_arg(command, c.sizeof(command), used, "-DCMAKE_BUILD_TYPE=", build_type)
+        if: used = c.sizeof(command)
+            return: 1
+
+        used: lm_build_append_prefixed_arg(command, c.sizeof(command), used, "-DLM_THREAD_PROVIDER=", thread_provider)
         if: used = c.sizeof(command)
             return: 1
     
@@ -1246,6 +1265,10 @@ L2:
                 return: 1
     
             if: lm_build_enter_project_root(argv[0]) != 0
+                lm_build_options_delete(options)
+                return: 1
+
+            if: lm_build_thread_provider() = 0
                 lm_build_options_delete(options)
                 return: 1
     

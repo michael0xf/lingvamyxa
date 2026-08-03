@@ -3,12 +3,41 @@ predef: "libc_abi.lm2"
 include
 prototype
 
+os:
+    win:
+        fn: lm_make_auto_thread_provider () @: char
+        return: "win32"
+    default:
+        fn: lm_make_auto_thread_provider () @: char
+        return: "pthread"
+end: os
+
 fn: lm_make_env_or_default (@: char name; @: char fallback) @: char
     @: char value
     value: getenv(name)
     if: value = 0 || value[0] = '\0'
         return: fallback
 return: value
+
+fn: lm_make_resolve_thread_provider (@: char requested) @: char
+    if: strcmp(requested, "auto") = 0
+        return: lm_make_auto_thread_provider()
+    if: strcmp(requested, "pthread") = 0
+        return: "pthread"
+    if: strcmp(requested, "win32") = 0
+        return: "win32"
+    if: strcmp(requested, "single") = 0
+        return: "single"
+
+    c.fprintf: c.stderr "make.lm0: unsupported LM_THREAD_PROVIDER '%s' (expected auto, pthread, win32 or single)\n" requested
+return: 0
+
+fn: lm_make_thread_provider_define (@: char provider) @: char
+    if: strcmp(provider, "pthread") = 0
+        return: "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_PTHREAD"
+    if: strcmp(provider, "win32") = 0
+        return: "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_WIN32"
+return: "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE"
 
 fn: lm_make_append (@: char buffer; size_t: size; size_t: used; @: char text) size_t
     size_t: length
@@ -48,6 +77,34 @@ fn: lm_make_run_tool (@: char tool; int: argc; @@: char argv; int: start) int
     used: lm_make_append(command, c.sizeof(command), used, tool)
     if: used = c.sizeof(command)
         return: 1
+
+    while: index < argc
+        used: lm_make_append_arg(command, c.sizeof(command), used, argv[index])
+        if: used = c.sizeof(command)
+            return: 1
+        index: index + 1
+
+return: lm_make_run_command(command)
+
+fn: lm_make_run_c_tool (@: char tool; @: char provider; int: argc; @@: char argv; int: start) int
+    []: char command 8192
+    size_t: used 0U
+    int: index
+
+    index: start
+    command[0]: '\0'
+
+    used: lm_make_append(command, c.sizeof(command), used, tool)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_make_append_arg(command, c.sizeof(command), used, lm_make_thread_provider_define(provider))
+    if: used = c.sizeof(command)
+        return: 1
+    if: strcmp(provider, "pthread") = 0
+        used: lm_make_append_arg(command, c.sizeof(command), used, "-pthread")
+        if: used = c.sizeof(command)
+            return: 1
+        ---
 
     while: index < argc
         used: lm_make_append_arg(command, c.sizeof(command), used, argv[index])
@@ -111,6 +168,7 @@ external:
         @: char cc
         @: char ar
         @: char ranlib
+        @: char thread_provider
 
         if: argc < 2
             lm_make_print_usage()
@@ -120,6 +178,9 @@ external:
         cc: lm_make_env_or_default("LM_CC", "gcc")
         ar: lm_make_env_or_default("LM_AR", "ar")
         ranlib: lm_make_env_or_default("LM_RANLIB", "ranlib")
+        thread_provider: lm_make_resolve_thread_provider(lm_make_env_or_default("LM_THREAD_PROVIDER", "single"))
+        if: thread_provider = 0
+            return: 1
 
         if: strcmp(argv[1], "mkdir") = 0
             []: char command 8192
@@ -147,7 +208,7 @@ external:
             return: lm_make_run_command(command)
 
         if: strcmp(argv[1], "cc") = 0 || strcmp(argv[1], "link") = 0
-            return: lm_make_run_tool(cc, argc, argv, 2)
+            return: lm_make_run_c_tool(cc, thread_provider, argc, argv, 2)
 
         if: strcmp(argv[1], "ar") = 0
             return: lm_make_run_tool(ar, argc, argv, 2)

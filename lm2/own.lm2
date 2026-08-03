@@ -23,11 +23,316 @@ L1:
 #define LM_THREAD_PROVIDER LM_THREAD_PROVIDER_SINGLE
 #endif
 
-#if LM_THREAD_PROVIDER != LM_THREAD_PROVIDER_SINGLE
-#error "this bootstrap stage supports only LM_THREAD_PROVIDER_SINGLE"
+#if LM_THREAD_PROVIDER == LM_THREAD_PROVIDER_AUTO
+#if defined(_WIN32)
+#define LM_THREAD_PROVIDER_SELECTED LM_THREAD_PROVIDER_WIN32
+#elif defined(__APPLE__) || defined(__unix__)
+#define LM_THREAD_PROVIDER_SELECTED LM_THREAD_PROVIDER_PTHREAD
+#else
+#define LM_THREAD_PROVIDER_SELECTED LM_THREAD_PROVIDER_SINGLE
+#endif
+#else
+#define LM_THREAD_PROVIDER_SELECTED LM_THREAD_PROVIDER
 #endif
 
 typedef void *(*LmNativeHostThreadEntry)(void *argument);
+
+#if LM_THREAD_PROVIDER_SELECTED == LM_THREAD_PROVIDER_PTHREAD
+
+#if defined(_WIN32)
+#error "LM_THREAD_PROVIDER_PTHREAD is not supported by the Windows backend"
+#endif
+
+#include <pthread.h>
+
+typedef struct LmNativeHostThread {
+    pthread_t handle;
+} LmNativeHostThread;
+
+static const char *lm_native_thread_provider_name(void) {
+    return "pthread";
+}
+
+static void *lm_native_host_thread_start(
+    LmNativeHostThreadEntry entry,
+    void *argument,
+    int *status
+) {
+    LmNativeHostThread *thread;
+
+    if (status == 0) {
+        return 0;
+    }
+    *status = 1;
+    if (entry == 0) {
+        return 0;
+    }
+
+    thread = (LmNativeHostThread *)calloc(1U, sizeof(*thread));
+    if (thread == 0) {
+        return 0;
+    }
+    if (pthread_create(&thread->handle, 0, entry, argument) != 0) {
+        free(thread);
+        return 0;
+    }
+    *status = 0;
+    return thread;
+}
+
+static int lm_native_host_thread_join(void *implementation, void **result) {
+    LmNativeHostThread *thread = (LmNativeHostThread *)implementation;
+
+    if (thread == 0) {
+        return 1;
+    }
+    if (pthread_join(thread->handle, result) != 0) {
+        return 1;
+    }
+    free(thread);
+    return 0;
+}
+
+static void *lm_native_mutex_new(void) {
+    pthread_mutex_t *mutex = (pthread_mutex_t *)calloc(1U, sizeof(*mutex));
+
+    if (mutex == 0) {
+        return 0;
+    }
+    if (pthread_mutex_init(mutex, 0) != 0) {
+        free(mutex);
+        return 0;
+    }
+    return mutex;
+}
+
+static void lm_native_mutex_delete(void *implementation) {
+    pthread_mutex_t *mutex = (pthread_mutex_t *)implementation;
+
+    if (mutex == 0) {
+        return;
+    }
+    (void)pthread_mutex_destroy(mutex);
+    free(implementation);
+}
+
+static int lm_native_mutex_lock(void *implementation) {
+    if (implementation == 0) {
+        return 1;
+    }
+    return pthread_mutex_lock((pthread_mutex_t *)implementation);
+}
+
+static int lm_native_mutex_unlock(void *implementation) {
+    if (implementation == 0) {
+        return 1;
+    }
+    return pthread_mutex_unlock((pthread_mutex_t *)implementation);
+}
+
+static void *lm_native_condition_new(void) {
+    pthread_cond_t *condition = (pthread_cond_t *)calloc(1U, sizeof(*condition));
+
+    if (condition == 0) {
+        return 0;
+    }
+    if (pthread_cond_init(condition, 0) != 0) {
+        free(condition);
+        return 0;
+    }
+    return condition;
+}
+
+static void lm_native_condition_delete(void *implementation) {
+    pthread_cond_t *condition = (pthread_cond_t *)implementation;
+
+    if (condition == 0) {
+        return;
+    }
+    (void)pthread_cond_destroy(condition);
+    free(implementation);
+}
+
+static int lm_native_condition_wait(void *condition, void *mutex) {
+    if (condition == 0 || mutex == 0) {
+        return 1;
+    }
+    return pthread_cond_wait(
+        (pthread_cond_t *)condition,
+        (pthread_mutex_t *)mutex
+    );
+}
+
+static int lm_native_condition_signal(void *implementation) {
+    if (implementation == 0) {
+        return 1;
+    }
+    return pthread_cond_signal((pthread_cond_t *)implementation);
+}
+
+static int lm_native_condition_broadcast(void *implementation) {
+    if (implementation == 0) {
+        return 1;
+    }
+    return pthread_cond_broadcast((pthread_cond_t *)implementation);
+}
+
+#elif LM_THREAD_PROVIDER_SELECTED == LM_THREAD_PROVIDER_WIN32
+
+#if !defined(_WIN32)
+#error "LM_THREAD_PROVIDER_WIN32 requires a Windows target"
+#endif
+
+#include <process.h>
+#include <stdint.h>
+#include <windows.h>
+
+typedef struct LmNativeHostThread {
+    HANDLE handle;
+    LmNativeHostThreadEntry entry;
+    void *argument;
+    void *result;
+} LmNativeHostThread;
+
+static unsigned __stdcall lm_native_host_thread_entry(void *argument) {
+    LmNativeHostThread *thread = (LmNativeHostThread *)argument;
+
+    thread->result = thread->entry(thread->argument);
+    return 0U;
+}
+
+static const char *lm_native_thread_provider_name(void) {
+    return "win32";
+}
+
+static void *lm_native_host_thread_start(
+    LmNativeHostThreadEntry entry,
+    void *argument,
+    int *status
+) {
+    LmNativeHostThread *thread;
+    uintptr_t handle;
+
+    if (status == 0) {
+        return 0;
+    }
+    *status = 1;
+    if (entry == 0) {
+        return 0;
+    }
+
+    thread = (LmNativeHostThread *)calloc(1U, sizeof(*thread));
+    if (thread == 0) {
+        return 0;
+    }
+    thread->entry = entry;
+    thread->argument = argument;
+    handle = _beginthreadex(0, 0U, lm_native_host_thread_entry, thread, 0U, 0);
+    if (handle == 0U) {
+        free(thread);
+        return 0;
+    }
+    thread->handle = (HANDLE)handle;
+    *status = 0;
+    return thread;
+}
+
+static int lm_native_host_thread_join(void *implementation, void **result) {
+    LmNativeHostThread *thread = (LmNativeHostThread *)implementation;
+
+    if (thread == 0) {
+        return 1;
+    }
+    if (WaitForSingleObject(thread->handle, INFINITE) != WAIT_OBJECT_0) {
+        return 1;
+    }
+    if (result != 0) {
+        *result = thread->result;
+    }
+    (void)CloseHandle(thread->handle);
+    free(thread);
+    return 0;
+}
+
+static void *lm_native_mutex_new(void) {
+    CRITICAL_SECTION *mutex = (CRITICAL_SECTION *)calloc(1U, sizeof(*mutex));
+
+    if (mutex == 0) {
+        return 0;
+    }
+    InitializeCriticalSection(mutex);
+    return mutex;
+}
+
+static void lm_native_mutex_delete(void *implementation) {
+    CRITICAL_SECTION *mutex = (CRITICAL_SECTION *)implementation;
+
+    if (mutex == 0) {
+        return;
+    }
+    DeleteCriticalSection(mutex);
+    free(mutex);
+}
+
+static int lm_native_mutex_lock(void *implementation) {
+    if (implementation == 0) {
+        return 1;
+    }
+    EnterCriticalSection((CRITICAL_SECTION *)implementation);
+    return 0;
+}
+
+static int lm_native_mutex_unlock(void *implementation) {
+    if (implementation == 0) {
+        return 1;
+    }
+    LeaveCriticalSection((CRITICAL_SECTION *)implementation);
+    return 0;
+}
+
+static void *lm_native_condition_new(void) {
+    CONDITION_VARIABLE *condition =
+        (CONDITION_VARIABLE *)calloc(1U, sizeof(*condition));
+
+    if (condition == 0) {
+        return 0;
+    }
+    InitializeConditionVariable(condition);
+    return condition;
+}
+
+static void lm_native_condition_delete(void *implementation) {
+    free(implementation);
+}
+
+static int lm_native_condition_wait(void *condition, void *mutex) {
+    if (condition == 0 || mutex == 0) {
+        return 1;
+    }
+    return SleepConditionVariableCS(
+        (CONDITION_VARIABLE *)condition,
+        (CRITICAL_SECTION *)mutex,
+        INFINITE
+    ) ? 0 : 1;
+}
+
+static int lm_native_condition_signal(void *implementation) {
+    if (implementation == 0) {
+        return 1;
+    }
+    WakeConditionVariable((CONDITION_VARIABLE *)implementation);
+    return 0;
+}
+
+static int lm_native_condition_broadcast(void *implementation) {
+    if (implementation == 0) {
+        return 1;
+    }
+    WakeAllConditionVariable((CONDITION_VARIABLE *)implementation);
+    return 0;
+}
+
+#elif LM_THREAD_PROVIDER_SELECTED == LM_THREAD_PROVIDER_SINGLE
 
 typedef struct LmNativeHostThread {
     void *result;
@@ -109,6 +414,10 @@ static int lm_native_condition_signal(void *implementation) {
 static int lm_native_condition_broadcast(void *implementation) {
     return implementation == 0;
 }
+
+#else
+#error "unknown LM_THREAD_PROVIDER value"
+#endif
 ===
 
 predef: "lm2/own_abi.lm2"

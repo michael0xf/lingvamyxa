@@ -851,6 +851,7 @@ static int lm_build_trim_last_path_part(struct LmMessageThread *lm_lmx_message_t
 static int lm_build_has_project_marker(struct LmMessageThread *lm_lmx_message_thread, char *path);
 static int lm_build_enter_project_root(struct LmMessageThread *lm_lmx_message_thread, char *program_path);
 static char * lm_build_env_or_default(struct LmMessageThread *lm_lmx_message_thread, char *name, char *fallback);
+static char * lm_build_thread_provider(struct LmMessageThread *lm_lmx_message_thread);
 static char * lm_build_default_cmake(struct LmMessageThread *lm_lmx_message_thread);
 static char * lm_build_default_generator(struct LmMessageThread *lm_lmx_message_thread);
 static char * lm_build_default_make_program(struct LmMessageThread *lm_lmx_message_thread);
@@ -1028,6 +1029,17 @@ static char * lm_build_env_or_default(struct LmMessageThread *lm_lmx_message_thr
         return fallback;
     }
     return value;
+}
+
+static char * lm_build_thread_provider(struct LmMessageThread *lm_lmx_message_thread) {
+    (void)lm_lmx_message_thread;
+    char *value;
+    value = lm_build_env_or_default(lm_lmx_message_thread, "LM_THREAD_PROVIDER", "single");
+    if (strcmp(value, "auto") == 0 || strcmp(value, "pthread") == 0 || strcmp(value, "win32") == 0 || strcmp(value, "single") == 0) {
+        return value;
+    }
+    fprintf(stderr, "buildCore.lm0: unsupported LM_THREAD_PROVIDER '%s' (expected auto, pthread, win32 or single)\n", value);
+    return 0;
 }
 
 static char * lm_build_default_cmake(struct LmMessageThread *lm_lmx_message_thread) {
@@ -1463,6 +1475,7 @@ static int lm_build_full_configure(struct LmMessageThread *lm_lmx_message_thread
     char *make_program;
     char *cc;
     char *cxx;
+    char *thread_provider;
     char command[8192];
     size_t used;
     cmake_tool = lm_build_env_or_default(lm_lmx_message_thread, "LM_CMAKE", lm_build_default_cmake(lm_lmx_message_thread));
@@ -1472,6 +1485,10 @@ static int lm_build_full_configure(struct LmMessageThread *lm_lmx_message_thread
     make_program = lm_build_env_or_default(lm_lmx_message_thread, "LM_CMAKE_MAKE_PROGRAM", lm_build_default_make_program(lm_lmx_message_thread));
     cc = lm_build_env_or_default(lm_lmx_message_thread, "LM_CC", lm_build_default_cc(lm_lmx_message_thread));
     cxx = lm_build_env_or_default(lm_lmx_message_thread, "LM_CXX", lm_build_default_cxx(lm_lmx_message_thread));
+    thread_provider = lm_build_thread_provider(lm_lmx_message_thread);
+    if (thread_provider == 0) {
+        return 1;
+    }
     if (lm_build_clear_full_cmake_cache(lm_lmx_message_thread, cmake_tool, build_dir) != 0) {
         return 1;
     }
@@ -1508,6 +1525,10 @@ static int lm_build_full_configure(struct LmMessageThread *lm_lmx_message_thread
         }
     }
     used = lm_build_append_prefixed_arg(lm_lmx_message_thread, command, sizeof(command), used, "-DCMAKE_BUILD_TYPE=", build_type);
+    if (used == sizeof(command)) {
+        return 1;
+    }
+    used = lm_build_append_prefixed_arg(lm_lmx_message_thread, command, sizeof(command), used, "-DLM_THREAD_PROVIDER=", thread_provider);
     if (used == sizeof(command)) {
         return 1;
     }
@@ -1709,6 +1730,14 @@ int main(int argc, char **argv) {
                     goto lm_message_thread_turn_end;
                 }
             }
+            if (lm_build_thread_provider(lm_lmx_message_thread) == 0) {
+                lm_build_options_delete(lm_lmx_message_thread, options);
+                {
+                    int lm_return_4 = 1;
+                    lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_4);
+                    goto lm_message_thread_turn_end;
+                }
+            }
             snprintf(trusted_make_buffer, sizeof(trusted_make_buffer), "build%slm0%smake.lm0%s", lm_build_path_sep(lm_lmx_message_thread), lm_build_path_sep(lm_lmx_message_thread), lm_build_exe_suffix(lm_lmx_message_thread));
             snprintf(built_trans_buffer, sizeof(built_trans_buffer), "build%slm0%strans.lm0%s", lm_build_path_sep(lm_lmx_message_thread), lm_build_path_sep(lm_lmx_message_thread), lm_build_exe_suffix(lm_lmx_message_thread));
             if (options -> next_build) {
@@ -1719,8 +1748,8 @@ int main(int argc, char **argv) {
             result = lm_build_run_bootstrap(lm_lmx_message_thread, options, trusted_make, built_trans_buffer);
             lm_build_options_delete(lm_lmx_message_thread, options);
             {
-                int lm_return_4 = result;
-                lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_4);
+                int lm_return_5 = result;
+                lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_5);
                 goto lm_message_thread_turn_end;
             }
         } else {

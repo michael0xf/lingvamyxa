@@ -100,11 +100,30 @@ size_t (fwrite)(const void *buffer, size_t item_size, size_t item_count, FILE *f
 int (ferror)(FILE *file);
 int (strcmp)(const char *left, const char *right);
 
+
+#if defined(_WIN32)
+static char * lm_make_auto_thread_provider(struct LmMessageThread *lm_lmx_message_thread);
+
+static char * lm_make_auto_thread_provider(struct LmMessageThread *lm_lmx_message_thread) {
+    (void)lm_lmx_message_thread;
+    return "win32";
+}
+#else
+static char * lm_make_auto_thread_provider(struct LmMessageThread *lm_lmx_message_thread);
+
+static char * lm_make_auto_thread_provider(struct LmMessageThread *lm_lmx_message_thread) {
+    (void)lm_lmx_message_thread;
+    return "pthread";
+}
+#endif
 static char * lm_make_env_or_default(struct LmMessageThread *lm_lmx_message_thread, char *name, char *fallback);
+static char * lm_make_resolve_thread_provider(struct LmMessageThread *lm_lmx_message_thread, char *requested);
+static char * lm_make_thread_provider_define(struct LmMessageThread *lm_lmx_message_thread, char *provider);
 static size_t lm_make_append(struct LmMessageThread *lm_lmx_message_thread, char *buffer, size_t size, size_t used, char *text);
 static size_t lm_make_append_arg(struct LmMessageThread *lm_lmx_message_thread, char *buffer, size_t size, size_t used, char *arg);
 static int lm_make_run_command(struct LmMessageThread *lm_lmx_message_thread, char *command);
 static int lm_make_run_tool(struct LmMessageThread *lm_lmx_message_thread, char *tool, int argc, char **argv, int start);
+static int lm_make_run_c_tool(struct LmMessageThread *lm_lmx_message_thread, char *tool, char *provider, int argc, char **argv, int start);
 static int lm_make_copy_file(struct LmMessageThread *lm_lmx_message_thread, char *source_path, char *output_path);
 static void lm_make_print_usage(struct LmMessageThread *lm_lmx_message_thread);
 int main(int argc, char **argv);
@@ -124,6 +143,35 @@ static char * lm_make_env_or_default(struct LmMessageThread *lm_lmx_message_thre
         return fallback;
     }
     return value;
+}
+
+static char * lm_make_resolve_thread_provider(struct LmMessageThread *lm_lmx_message_thread, char *requested) {
+    (void)lm_lmx_message_thread;
+    if (strcmp(requested, "auto") == 0) {
+        return lm_make_auto_thread_provider(lm_lmx_message_thread);
+    }
+    if (strcmp(requested, "pthread") == 0) {
+        return "pthread";
+    }
+    if (strcmp(requested, "win32") == 0) {
+        return "win32";
+    }
+    if (strcmp(requested, "single") == 0) {
+        return "single";
+    }
+    fprintf(stderr, "make.lm0: unsupported LM_THREAD_PROVIDER '%s' (expected auto, pthread, win32 or single)\n", requested);
+    return 0;
+}
+
+static char * lm_make_thread_provider_define(struct LmMessageThread *lm_lmx_message_thread, char *provider) {
+    (void)lm_lmx_message_thread;
+    if (strcmp(provider, "pthread") == 0) {
+        return "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_PTHREAD";
+    }
+    if (strcmp(provider, "win32") == 0) {
+        return "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_WIN32";
+    }
+    return "-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE";
 }
 
 static size_t lm_make_append(struct LmMessageThread *lm_lmx_message_thread, char *buffer, size_t size, size_t used, char *text) {
@@ -173,6 +221,37 @@ static int lm_make_run_tool(struct LmMessageThread *lm_lmx_message_thread, char 
     used = lm_make_append(lm_lmx_message_thread, command, sizeof(command), used, tool);
     if (used == sizeof(command)) {
         return 1;
+    }
+    while (index < argc) {
+        used = lm_make_append_arg(lm_lmx_message_thread, command, sizeof(command), used, argv[index]);
+        if (used == sizeof(command)) {
+            return 1;
+        }
+        index = index + 1;
+    }
+    return lm_make_run_command(lm_lmx_message_thread, command);
+}
+
+static int lm_make_run_c_tool(struct LmMessageThread *lm_lmx_message_thread, char *tool, char *provider, int argc, char **argv, int start) {
+    (void)lm_lmx_message_thread;
+    char command[8192];
+    size_t used = 0U;
+    int index;
+    index = start;
+    command[0] = '\0';
+    used = lm_make_append(lm_lmx_message_thread, command, sizeof(command), used, tool);
+    if (used == sizeof(command)) {
+        return 1;
+    }
+    used = lm_make_append_arg(lm_lmx_message_thread, command, sizeof(command), used, lm_make_thread_provider_define(lm_lmx_message_thread, provider));
+    if (used == sizeof(command)) {
+        return 1;
+    }
+    if (strcmp(provider, "pthread") == 0) {
+        used = lm_make_append_arg(lm_lmx_message_thread, command, sizeof(command), used, "-pthread");
+        if (used == sizeof(command)) {
+            return 1;
+        }
     }
     while (index < argc) {
         used = lm_make_append_arg(lm_lmx_message_thread, command, sizeof(command), used, argv[index]);
@@ -252,6 +331,7 @@ int main(int argc, char **argv) {
             char *cc;
             char *ar;
             char *ranlib;
+            char *thread_provider;
             if (argc < 2) {
                 lm_make_print_usage(lm_lmx_message_thread);
                 {
@@ -264,6 +344,14 @@ int main(int argc, char **argv) {
             cc = lm_make_env_or_default(lm_lmx_message_thread, "LM_CC", "gcc");
             ar = lm_make_env_or_default(lm_lmx_message_thread, "LM_AR", "ar");
             ranlib = lm_make_env_or_default(lm_lmx_message_thread, "LM_RANLIB", "ranlib");
+            thread_provider = lm_make_resolve_thread_provider(lm_lmx_message_thread, lm_make_env_or_default(lm_lmx_message_thread, "LM_THREAD_PROVIDER", "single"));
+            if (thread_provider == 0) {
+                {
+                    int lm_return_1 = 1;
+                    lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_1);
+                    goto lm_message_thread_turn_end;
+                }
+            }
             if (strcmp(argv[1], "mkdir") == 0) {
                 char command[8192];
                 size_t used = 0U;
@@ -271,8 +359,8 @@ int main(int argc, char **argv) {
                 if (argc < 3) {
                     lm_make_print_usage(lm_lmx_message_thread);
                     {
-                        int lm_return_1 = 1;
-                        lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_1);
+                        int lm_return_2 = 1;
+                        lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_2);
                         goto lm_message_thread_turn_end;
                     }
                 }
@@ -280,16 +368,16 @@ int main(int argc, char **argv) {
                 used = lm_make_append(lm_lmx_message_thread, command, sizeof(command), used, cmake);
                 if (used == sizeof(command)) {
                     {
-                        int lm_return_2 = 1;
-                        lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_2);
+                        int lm_return_3 = 1;
+                        lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_3);
                         goto lm_message_thread_turn_end;
                     }
                 }
                 used = lm_make_append(lm_lmx_message_thread, command, sizeof(command), used, " -E make_directory");
                 if (used == sizeof(command)) {
                     {
-                        int lm_return_3 = 1;
-                        lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_3);
+                        int lm_return_4 = 1;
+                        lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_4);
                         goto lm_message_thread_turn_end;
                     }
                 }
@@ -297,37 +385,37 @@ int main(int argc, char **argv) {
                     used = lm_make_append_arg(lm_lmx_message_thread, command, sizeof(command), used, argv[index]);
                     if (used == sizeof(command)) {
                         {
-                            int lm_return_4 = 1;
-                            lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_4);
+                            int lm_return_5 = 1;
+                            lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_5);
                             goto lm_message_thread_turn_end;
                         }
                     }
                     index = index + 1;
                 }
                 {
-                    int lm_return_5 = lm_make_run_command(lm_lmx_message_thread, command);
-                    lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_5);
+                    int lm_return_6 = lm_make_run_command(lm_lmx_message_thread, command);
+                    lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_6);
                     goto lm_message_thread_turn_end;
                 }
             }
             if (strcmp(argv[1], "cc") == 0 || strcmp(argv[1], "link") == 0) {
                 {
-                    int lm_return_6 = lm_make_run_tool(lm_lmx_message_thread, cc, argc, argv, 2);
-                    lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_6);
+                    int lm_return_7 = lm_make_run_c_tool(lm_lmx_message_thread, cc, thread_provider, argc, argv, 2);
+                    lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_7);
                     goto lm_message_thread_turn_end;
                 }
             }
             if (strcmp(argv[1], "ar") == 0) {
                 {
-                    int lm_return_7 = lm_make_run_tool(lm_lmx_message_thread, ar, argc, argv, 2);
-                    lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_7);
+                    int lm_return_8 = lm_make_run_tool(lm_lmx_message_thread, ar, argc, argv, 2);
+                    lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_8);
                     goto lm_message_thread_turn_end;
                 }
             }
             if (strcmp(argv[1], "ranlib") == 0) {
                 {
-                    int lm_return_8 = lm_make_run_tool(lm_lmx_message_thread, ranlib, argc, argv, 2);
-                    lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_8);
+                    int lm_return_9 = lm_make_run_tool(lm_lmx_message_thread, ranlib, argc, argv, 2);
+                    lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_9);
                     goto lm_message_thread_turn_end;
                 }
             }
@@ -335,21 +423,21 @@ int main(int argc, char **argv) {
                 if (argc != 4) {
                     lm_make_print_usage(lm_lmx_message_thread);
                     {
-                        int lm_return_9 = 1;
-                        lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_9);
+                        int lm_return_10 = 1;
+                        lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_10);
                         goto lm_message_thread_turn_end;
                     }
                 }
                 {
-                    int lm_return_10 = lm_make_copy_file(lm_lmx_message_thread, argv[2], argv[3]);
-                    lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_10);
+                    int lm_return_11 = lm_make_copy_file(lm_lmx_message_thread, argv[2], argv[3]);
+                    lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_11);
                     goto lm_message_thread_turn_end;
                 }
             }
             lm_make_print_usage(lm_lmx_message_thread);
             {
-                int lm_return_11 = 1;
-                lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_11);
+                int lm_return_12 = 1;
+                lm_message_thread_request_stop(lm_lmx_message_thread, lm_return_12);
                 goto lm_message_thread_turn_end;
             }
         } else {

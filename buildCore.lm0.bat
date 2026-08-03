@@ -8,6 +8,30 @@ if not defined LM_CMAKE set "LM_CMAKE=C:\Qt\Tools\CMake_64\bin\cmake.exe"
 if not defined LM_CC set "LM_CC=C:\Qt\Tools\mingw1310_64\bin\gcc.exe"
 if not defined LM_AR set "LM_AR=C:\Qt\Tools\mingw1310_64\bin\ar.exe"
 if not defined LM_RANLIB set "LM_RANLIB=C:\Qt\Tools\mingw1310_64\bin\ranlib.exe"
+if not defined LM_THREAD_PROVIDER set "LM_THREAD_PROVIDER=single"
+
+set "THREAD_PROVIDER="
+if /I "%LM_THREAD_PROVIDER%"=="auto" set "THREAD_PROVIDER=win32"
+if /I "%LM_THREAD_PROVIDER%"=="pthread" set "THREAD_PROVIDER=pthread"
+if /I "%LM_THREAD_PROVIDER%"=="win32" set "THREAD_PROVIDER=win32"
+if /I "%LM_THREAD_PROVIDER%"=="single" set "THREAD_PROVIDER=single"
+
+if not defined THREAD_PROVIDER (
+    echo buildCore.lm0.bat: unsupported LM_THREAD_PROVIDER: %LM_THREAD_PROVIDER% 1>&2
+    echo Expected one of: auto, pthread, win32, single. 1>&2
+    exit /b 1
+)
+
+if "%THREAD_PROVIDER%"=="pthread" (
+    set "THREAD_COMPILE_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_PTHREAD -pthread"
+    set "THREAD_LINK_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_PTHREAD -pthread"
+) else if "%THREAD_PROVIDER%"=="win32" (
+    set "THREAD_COMPILE_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_WIN32"
+    set "THREAD_LINK_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_WIN32"
+) else (
+    set "THREAD_COMPILE_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE"
+    set "THREAD_LINK_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE"
+)
 
 set "PARSER_SOURCE=lm1\build\parser.lm1.c"
 set "OWN_SOURCE=lm1\build\own.lm1.c"
@@ -73,19 +97,19 @@ if not exist "%LM_RANLIB%" (
 "%LM_CMAKE%" -E make_directory build\lm0 || exit /b 1
 "%LM_CMAKE%" -E make_directory build\obj || exit /b 1
 
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 -c "%PARSER_SOURCE%" -o build\obj\parser.lm1.o || exit /b 1
+"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_COMPILE_FLAGS% -Ilm1 -c "%PARSER_SOURCE%" -o build\obj\parser.lm1.o || exit /b 1
 if exist build\lm0\libparser.lm0.a del /f /q build\lm0\libparser.lm0.a || exit /b 1
 "%LM_AR%" rcs build\lm0\libparser.lm0.a build\obj\parser.lm1.o || exit /b 1
 "%LM_RANLIB%" build\lm0\libparser.lm0.a || exit /b 1
 
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 -c "%OWN_SOURCE%" -o build\obj\own.lm1.o || exit /b 1
+"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_COMPILE_FLAGS% -Ilm1 -c "%OWN_SOURCE%" -o build\obj\own.lm1.o || exit /b 1
 if exist build\lm0\libown.lm0.a del /f /q build\lm0\libown.lm0.a || exit /b 1
 "%LM_AR%" rcs build\lm0\libown.lm0.a build\obj\own.lm1.o || exit /b 1
 "%LM_RANLIB%" build\lm0\libown.lm0.a || exit /b 1
 
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 "%TRANS_SOURCE%" build\lm0\libparser.lm0.a build\lm0\libown.lm0.a -o build\lm0\trans.lm0.exe || exit /b 1
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic "%MAKE_SOURCE%" build\lm0\libown.lm0.a -o build\lm0\make.lm0.exe || exit /b 1
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic "%FINALIZE_SOURCE%" build\lm0\libown.lm0.a -o build\lm0\finalize.lm0.exe || exit /b 1
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic -Ilm1 "%BUILD_CORE_SOURCE%" build\lm0\libown.lm0.a -o build\lm0\buildCore.lm0.exe || exit /b 1
+"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% -Ilm1 "%TRANS_SOURCE%" build\lm0\libparser.lm0.a build\lm0\libown.lm0.a -o build\lm0\trans.lm0.exe || exit /b 1
+"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% "%MAKE_SOURCE%" build\lm0\libown.lm0.a -o build\lm0\make.lm0.exe || exit /b 1
+"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% "%FINALIZE_SOURCE%" build\lm0\libown.lm0.a -o build\lm0\finalize.lm0.exe || exit /b 1
+"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% -Ilm1 "%BUILD_CORE_SOURCE%" build\lm0\libown.lm0.a -o build\lm0\buildCore.lm0.exe || exit /b 1
 
 echo built build\lm0 bootstrap tools

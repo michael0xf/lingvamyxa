@@ -33,8 +33,10 @@ external:
         @: void result 0
         int: value 41
         int: status 0
+        int: is_single 0
 
-        if: c.strcmp(lm_thread_provider_name(), "single") != 0
+        is_single: c.strcmp(lm_thread_provider_name(), "single") = 0
+        if: is_single = 0 && c.strcmp(lm_thread_provider_name(), "pthread") != 0 && c.strcmp(lm_thread_provider_name(), "win32") != 0
             return: 1
 
         thread: lm_host_thread_new()
@@ -45,7 +47,7 @@ external:
 
         if: status = 0 && lm_mutex_lock(mutex) != 0
             status: 3
-        if: status = 0 && lm_condition_wait(condition, mutex) != 0
+        if: status = 0 && is_single && lm_condition_wait(condition, mutex) != 0
             status: 4
         if: status = 0 && lm_condition_signal(condition) != 0
             status: 5
@@ -56,14 +58,14 @@ external:
 
         if: status = 0 && lm_host_thread_start(thread, @ lm_test_single_host_entry, @ value) != 0
             status: 8
-        if: status = 0 && value != 42
-            status: 9
         if: status = 0 && lm_host_thread_start(thread, @ lm_test_single_host_entry, @ value) = 0
             status: 10
         if: status = 0 && lm_host_thread_join(thread, @ result) != 0
             status: 11
         if: status = 0 && result != @ value
             status: 12
+        if: status = 0 && value != 42
+            status: 9
         if: status = 0 && lm_host_thread_join(thread, @ result) = 0
             status: 13
 
