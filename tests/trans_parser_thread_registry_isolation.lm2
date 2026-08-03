@@ -1,0 +1,146 @@
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+predef: "lm2/own_abi.lm2"
+predef: "lm2/parser_abi.lm2"
+
+external:
+    fn: main () int
+        LmMessageThread: threadA 0
+        LmMessageThread: threadB 0
+        @: void reusable 0
+        LmP0Document: documentA 0
+        LmP0Document: documentB 0
+        LmP0Document: reusableDocument 0
+        @: void registryA 0
+        @: void registryB 0
+        @: char dumpB 0
+        const: @: char kindName 0
+        size_t: arenaA 0U
+        size_t: arenaB 0U
+        int: status 0
+
+        threadA: lm_message_thread_new()
+        threadB: lm_message_thread_new()
+        if: threadA = 0 || threadB = 0
+            status: 1
+
+        if: status = 0
+            arenaA: lm_message_thread_arena_count(threadA)
+            arenaB: lm_message_thread_arena_count(threadB)
+            if: arenaA != 1U || arenaB != 1U || lm_message_thread_component_count(threadA) != 0U || lm_message_thread_component_count(threadB) != 0U
+                status: 2
+        ---
+
+        if: status = 0 && (c.lm_p0_parse_string(threadA, "value\n", @ documentA) != 0 || documentA = 0)
+            status: 3
+        if: status = 0 && (lm_message_thread_component_count(threadA) != 1U || lm_message_thread_component_count(threadB) != 0U || lm_message_thread_arena_count(threadA) != arenaA + 4U || lm_message_thread_arena_count(threadB) != arenaB)
+            status: 4
+
+        if: status = 0 && (c.lm_p0_parse_string(threadB, "other\n", @ documentB) != 0 || documentB = 0)
+            status: 5
+        if: status = 0 && (lm_message_thread_component_count(threadA) != 1U || lm_message_thread_component_count(threadB) != 1U || lm_message_thread_arena_count(threadB) != arenaB + 4U)
+            status: 6
+
+        if: status = 0
+            if: threadA\component_head = 0 || threadB\component_head = 0
+                status: 7
+            else:
+                registryA: threadA\component_head\value
+                registryB: threadB\component_head\value
+                if: registryA = 0 || registryB = 0 || registryA = registryB || threadA\component_head = threadB\component_head || threadA\component_head\owner_thread != threadA || threadB\component_head\owner_thread != threadB
+                    status: 8
+                ---
+            ---
+        ---
+
+        if: status = 0
+            c.lm_p0_document_destroy(threadB, documentA)
+            if: lm_message_thread_arena_count(threadA) != arenaA + 4U || c.lm_p0_document_root(threadA, documentA) = 0
+                status: 9
+            ---
+        ---
+
+        if: documentA != 0 && threadA != 0
+            c.lm_p0_document_destroy(threadA, documentA)
+            documentA: 0
+        if: status = 0 && (lm_message_thread_arena_count(threadA) != arenaA || lm_message_thread_component_count(threadA) != 1U || threadA\component_head\value != registryA)
+            status: 10
+
+        if: threadA != 0
+            lm_message_thread_delete(threadA)
+            threadA: 0
+
+        if: status = 0 && (lm_message_thread_component_count(threadB) != 1U || threadB\component_head = 0 || threadB\component_head\value != registryB || lm_message_thread_arena_count(threadB) != arenaB + 4U || c.lm_p0_document_root(threadB, documentB) = 0)
+            status: 11
+
+        if: status = 0
+            kindName: c.lm_p0_node_kind_class_name(threadB, c.LM_P0_NODE_STRUCTURE)
+            dumpB: c.lm_p0_dump_alloc(threadB, documentB)
+            if: kindName = 0 || dumpB = 0
+                status: 12
+            ---
+        ---
+        if: dumpB != 0
+            c.lm_p0_free(threadB, dumpB)
+            dumpB: 0
+
+        if: documentB != 0 && threadB != 0
+            c.lm_p0_document_destroy(threadB, documentB)
+            documentB: 0
+        if: status = 0 && (lm_message_thread_arena_count(threadB) != arenaB || lm_message_thread_component_count(threadB) != 1U)
+            status: 13
+
+        if: threadB != 0
+            lm_message_thread_delete(threadB)
+            threadB: 0
+
+        if: status = 0
+            reusable: lm_own_new_zero(c.sizeof(c.LmMessageThread))
+            if: reusable = 0 || lm_message_thread_init(reusable) != 0
+                status: 14
+            ---
+        ---
+        if: status = 0 && (c.lm_p0_parse_string(reusable, "again\n", @ reusableDocument) != 0 || reusableDocument = 0)
+            status: 15
+        if: status = 0 && (lm_message_thread_component_count(reusable) != 1U || lm_message_thread_arena_count(reusable) != 5U)
+            status: 16
+
+        if: reusableDocument != 0 && reusable != 0
+            c.lm_p0_document_destroy(reusable, reusableDocument)
+            reusableDocument: 0
+
+        if: reusable != 0
+            lm_message_thread_destroy(reusable)
+            if: status = 0 && (lm_message_thread_component_count(reusable) != 0U || lm_message_thread_arena_count(reusable) != 0U)
+                status: 17
+            if: status = 0 && lm_message_thread_init(reusable) != 0
+                status: 18
+            if: status = 0
+                kindName: c.lm_p0_node_kind_class_name(reusable, c.LM_P0_NODE_STRUCTURE)
+                if: kindName = 0 || lm_message_thread_component_count(reusable) != 1U || lm_message_thread_arena_count(reusable) != 1U
+                    status: 19
+                ---
+            ---
+            lm_message_thread_destroy(reusable)
+            lm_own_delete(reusable, 0)
+            reusable: 0
+        ---
+
+        if: documentA != 0 && threadA != 0
+            c.lm_p0_document_destroy(threadA, documentA)
+        if: documentB != 0 && threadB != 0
+            c.lm_p0_document_destroy(threadB, documentB)
+        if: threadA != 0
+            lm_message_thread_delete(threadA)
+        if: threadB != 0
+            lm_message_thread_delete(threadB)
+
+        return: status
+    end: main
+end: external

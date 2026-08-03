@@ -2215,6 +2215,7 @@ static void lm_p0_scan_indent_column(struct LmMessageThread *lm_lmx_message_thre
 static size_t lm_p0_visual_column_between(struct LmMessageThread *lm_lmx_message_thread, const char *source, size_t start, size_t end);
 static const LmTableCell * lm_p0_registry_source_path_cell_at(struct LmMessageThread *lm_lmx_message_thread, const char *path, size_t index, const LmTableCell **out_key_cell);
 static const LmTableCell * lm_p0_registry_source_path_lookup_cell_slice(struct LmMessageThread *lm_lmx_message_thread, const LmRegistryView *view, const char *path, size_t path_length, const char *key, size_t key_length, const LmTableCell **out_key_cell);
+static const char * lm_p0_registry_lookup_in(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const LmP0Text *key, const char *table);
 static const char * lm_p0_registry_lookup(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *key, const char *table);
 static int lm_p0_registry_source_path_has_rows(struct LmMessageThread *lm_lmx_message_thread, const char *table);
 static int lm_p0_registry_table_has_rows(struct LmMessageThread *lm_lmx_message_thread, const char *table);
@@ -2254,6 +2255,8 @@ static int lm_p0_match_raw_comment_fence_line(struct LmMessageThread *lm_lmx_mes
 static void lm_p0_dump_append_size(struct LmMessageThread *lm_lmx_message_thread, LmP0Dump *dump, size_t value);
 static void lm_p0_dump_append_field_count_line(struct LmMessageThread *lm_lmx_message_thread, LmP0Dump *dump, size_t field_count);
 static void lm_p0_registry_private_api_anchor(struct LmMessageThread *lm_lmx_message_thread);
+static void lm_p0_registry_component_destroy(struct LmMessageThread *lm_lmx_message_thread, void *component);
+static LmP0Registry * lm_p0_registry_current(struct LmMessageThread *lm_lmx_message_thread);
 static int lm_p0_registry_init(struct LmMessageThread *lm_lmx_message_thread);
 static void lm_p0_registry_destroy(struct LmMessageThread *lm_lmx_message_thread);
 static LmP0Text * lm_p0_text_ref_new_empty(struct LmMessageThread *lm_lmx_message_thread);
@@ -2265,11 +2268,11 @@ static LmP0Frame * lm_p0_new_frame(struct LmMessageThread *lm_lmx_message_thread
 static LmP0Trailer * lm_p0_new_trailer(struct LmMessageThread *lm_lmx_message_thread, LmP0Document *document, const char *spelling, size_t spelling_length, size_t line, size_t column);
 static void lm_p0_set_diagnostic(LmP0Document *document, int code, size_t line, size_t column, const char *message);
 static int lm_p0_registry_column_has_descriptor(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceColumn *column, const char *descriptor);
-static int lm_p0_registry_cell_none_cell_matches(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *payload, const LmP0Text *class_atom);
-static int lm_p0_registry_cell_is_null(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *atom, const LmRegistrySourceColumn *column);
-static int lm_p0_registry_cell_value(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *atom, const LmRegistrySourceColumn *column, LmP0Text *out_value);
+static int lm_p0_registry_cell_none_cell_matches(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const LmP0Text *payload, const LmP0Text *class_atom);
+static int lm_p0_registry_cell_is_null(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const LmP0Text *atom, const LmRegistrySourceColumn *column);
+static int lm_p0_registry_cell_value(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const LmP0Text *atom, const LmRegistrySourceColumn *column, LmP0Text *out_value);
 static LmTableDescriptor * lm_p0_registry_source_descriptor_new(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count);
-static int lm_p0_registry_materialize_source_row(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells);
+static int lm_p0_registry_materialize_source_row(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells);
 static int lm_p0_registry_compare_enabled(struct LmMessageThread *lm_lmx_message_thread);
 static void lm_p0_registry_compare_fail(struct LmMessageThread *lm_lmx_message_thread, const char *table, const char *key, const char *registry_payload, const char *legacy_payload);
 static void lm_p0_trim_right(struct LmMessageThread *lm_lmx_message_thread, const char **text, size_t *length);
@@ -2411,7 +2414,7 @@ static int lm_p0_registry_source_formal_param_unwrap_index(struct LmMessageThrea
 static int lm_p0_registry_source_positional_name_index(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index);
 static LmRegistrySourceLoader * lm_p0_registry_source_loader_new(struct LmMessageThread *lm_lmx_message_thread);
 static int lm_p0_path_has_extension(struct LmMessageThread *lm_lmx_message_thread, const char *path, const char *extension);
-static int lm_p0_registry_require_source_only(struct LmMessageThread *lm_lmx_message_thread, const char *phase);
+static int lm_p0_registry_require_source_only(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const char *phase);
 static int lm_p0_registry_parse_unsigned_payload(struct LmMessageThread *lm_lmx_message_thread, const char *payload, unsigned *out_value);
 static const char * lm_p0_registry_lookup_key_by_unsigned_payload(struct LmMessageThread *lm_lmx_message_thread, const char *table, unsigned value);
 static int lm_p0_registry_validate_abi_constant(struct LmMessageThread *lm_lmx_message_thread, const char *table, const char *key, unsigned expected);
@@ -2491,8 +2494,6 @@ char * lm_p0_dump_alloc(struct LmMessageThread *lm_lmx_message_thread, const LmP
 
 
 
-
-static LmP0Registry * lm_p0_registry;
 
 
 
@@ -4446,15 +4447,17 @@ static size_t lm_p0_visual_column_between(struct LmMessageThread *lm_lmx_message
 
 static const LmTableCell * lm_p0_registry_source_path_cell_at(struct LmMessageThread *lm_lmx_message_thread, const char *path, size_t index, const LmTableCell **out_key_cell) {
     (void)lm_lmx_message_thread;
+    LmP0Registry * registry;
     int covered;
     if (out_key_cell != 0) {
         out_key_cell[0] = 0;
     }
-    if (path == 0 || lm_p0_registry == 0 || lm_p0_registry->view == 0) {
+    registry = lm_p0_registry_current(lm_lmx_message_thread);
+    if (path == 0 || registry == 0 || registry -> view == 0) {
         return 0;
     }
     covered = 0;
-    return lm_registry_view_source_path_cell_at_slice(lm_lmx_message_thread, lm_p0_registry->view, path, strlen(path), index, 0, 0, out_key_cell, &covered);
+    return lm_registry_view_source_path_cell_at_slice(lm_lmx_message_thread, registry -> view, path, strlen(path), index, 0, 0, out_key_cell, &covered);
 }
 
 static const LmTableCell * lm_p0_registry_source_path_lookup_cell_slice(struct LmMessageThread *lm_lmx_message_thread, const LmRegistryView *view, const char *path, size_t path_length, const char *key, size_t key_length, const LmTableCell **out_key_cell) {
@@ -4503,11 +4506,11 @@ static const LmTableCell * lm_p0_registry_source_path_lookup_cell_slice(struct L
     return 0;
 }
 
-static const char * lm_p0_registry_lookup(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *key, const char *table) {
+static const char * lm_p0_registry_lookup_in(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const LmP0Text *key, const char *table) {
     (void)lm_lmx_message_thread;
     LmP0Text * key_payload;
     const LmTableCell * payload_cell;
-    if (table == 0 || lm_p0_registry == 0 || lm_p0_registry->view == 0 || (lm_p0_registry->loaded == 0 && lm_p0_registry->loading == 0)) {
+    if (table == 0 || registry == 0 || registry -> view == 0 || (registry -> loaded == 0 && registry -> loading == 0)) {
         return 0;
     }
     key_payload = lm_p0_text_from_cstr(lm_lmx_message_thread, "");
@@ -4518,7 +4521,7 @@ static const char * lm_p0_registry_lookup(struct LmMessageThread *lm_lmx_message
         lm_p0_text_view_delete(lm_lmx_message_thread, key_payload);
         return 0;
     }
-    payload_cell = lm_p0_registry_source_path_lookup_cell_slice(lm_lmx_message_thread, lm_p0_registry->view, table, strlen(table), key_payload -> data, key_payload -> length, 0);
+    payload_cell = lm_p0_registry_source_path_lookup_cell_slice(lm_lmx_message_thread, registry -> view, table, strlen(table), key_payload -> data, key_payload -> length, 0);
     lm_p0_text_view_delete(lm_lmx_message_thread, key_payload);
     if (payload_cell == 0) {
         return 0;
@@ -4526,19 +4529,28 @@ static const char * lm_p0_registry_lookup(struct LmMessageThread *lm_lmx_message
     return payload_cell -> value;
 }
 
+static const char * lm_p0_registry_lookup(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *key, const char *table) {
+    (void)lm_lmx_message_thread;
+    return lm_p0_registry_lookup_in(lm_lmx_message_thread, lm_p0_registry_current(lm_lmx_message_thread), key, table);
+}
+
 static int lm_p0_registry_source_path_has_rows(struct LmMessageThread *lm_lmx_message_thread, const char *table) {
     (void)lm_lmx_message_thread;
+    LmP0Registry * registry;
     int covered;
-    if (table == 0 || lm_p0_registry == 0 || lm_p0_registry->view == 0) {
+    registry = lm_p0_registry_current(lm_lmx_message_thread);
+    if (table == 0 || registry == 0 || registry -> view == 0) {
         return 0;
     }
     covered = 0;
-    return lm_registry_view_source_path_has_rows(lm_lmx_message_thread, lm_p0_registry->view, table, &covered);
+    return lm_registry_view_source_path_has_rows(lm_lmx_message_thread, registry -> view, table, &covered);
 }
 
 static int lm_p0_registry_table_has_rows(struct LmMessageThread *lm_lmx_message_thread, const char *table) {
     (void)lm_lmx_message_thread;
-    if (lm_p0_registry == 0 || lm_p0_registry->loaded == 0) {
+    LmP0Registry * registry;
+    registry = lm_p0_registry_current(lm_lmx_message_thread);
+    if (registry == 0 || registry -> loaded == 0) {
         return 0;
     }
     return lm_p0_registry_source_path_has_rows(lm_lmx_message_thread, table);
@@ -5038,21 +5050,44 @@ static void lm_p0_registry_private_api_anchor(struct LmMessageThread *lm_lmx_mes
     LM_UNUSED(&lm_p0_registry_source_tables_selftest);
 }
 
+static void lm_p0_registry_component_destroy(struct LmMessageThread *lm_lmx_message_thread, void *component) {
+    (void)lm_lmx_message_thread;
+    LmP0Registry * registry;
+    registry = (((LmP0Registry *)component));
+    if (registry == 0) {
+        return;
+    }
+    lm_registry_view_delete(lm_lmx_message_thread, registry -> view);
+    registry->view = 0;
+    registry->loaded = 0;
+    registry->loading = 0;
+    lm_own_delete(registry, 0);
+}
+
+static LmP0Registry * lm_p0_registry_current(struct LmMessageThread *lm_lmx_message_thread) {
+    (void)lm_lmx_message_thread;
+    return (((LmP0Registry *)lm_message_thread_component_get(lm_lmx_message_thread, &lm_p0_registry_component_destroy)));
+}
+
 static int lm_p0_registry_init(struct LmMessageThread *lm_lmx_message_thread) {
     (void)lm_lmx_message_thread;
+    LmP0Registry * registry;
     lm_p0_registry_private_api_anchor(lm_lmx_message_thread);
-    if (lm_p0_registry != 0) {
+    registry = lm_p0_registry_current(lm_lmx_message_thread);
+    if (registry != 0) {
         return 0;
     }
-    lm_p0_registry = (((LmP0Registry *)lm_own_new_zero(sizeof(lm_p0_registry[0]))));
-    if (lm_p0_registry == 0) {
+    registry = (((LmP0Registry *)lm_own_new_zero(sizeof(registry[0]))));
+    if (registry == 0) {
         return 1;
     }
-    lm_p0_registry->view = lm_registry_view_new(lm_lmx_message_thread, 0);
-    if (lm_p0_registry -> view == 0) {
-        lm_registry_view_delete(lm_lmx_message_thread, lm_p0_registry -> view);
-        lm_own_delete(lm_p0_registry, 0);
-        lm_p0_registry = 0;
+    registry->view = lm_registry_view_new(lm_lmx_message_thread, 0);
+    if (registry -> view == 0) {
+        lm_p0_registry_component_destroy(lm_lmx_message_thread, registry);
+        return 1;
+    }
+    if (lm_message_thread_component_attach(lm_lmx_message_thread, &lm_p0_registry_component_destroy, registry) != 0) {
+        lm_p0_registry_component_destroy(lm_lmx_message_thread, registry);
         return 1;
     }
     return 0;
@@ -5060,15 +5095,10 @@ static int lm_p0_registry_init(struct LmMessageThread *lm_lmx_message_thread) {
 
 static void lm_p0_registry_destroy(struct LmMessageThread *lm_lmx_message_thread) {
     (void)lm_lmx_message_thread;
-    if (lm_p0_registry == 0) {
+    if (lm_p0_registry_current(lm_lmx_message_thread) == 0) {
         return;
     }
-    lm_registry_view_delete(lm_lmx_message_thread, lm_p0_registry -> view);
-    lm_p0_registry->view = 0;
-    lm_p0_registry->loaded = 0;
-    lm_p0_registry->loading = 0;
-    lm_own_delete(lm_p0_registry, 0);
-    lm_p0_registry = 0;
+    LM_UNUSED(lm_message_thread_component_remove(lm_lmx_message_thread, &lm_p0_registry_component_destroy));
 }
 
 static LmP0Text * lm_p0_text_ref_new_empty(struct LmMessageThread *lm_lmx_message_thread) {
@@ -5214,7 +5244,7 @@ static int lm_p0_registry_column_has_descriptor(struct LmMessageThread *lm_lmx_m
     return result;
 }
 
-static int lm_p0_registry_cell_none_cell_matches(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *payload, const LmP0Text *class_atom) {
+static int lm_p0_registry_cell_none_cell_matches(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const LmP0Text *payload, const LmP0Text *class_atom) {
     (void)lm_lmx_message_thread;
     LmP0Text * class_name;
     const char *none_value;
@@ -5228,7 +5258,7 @@ static int lm_p0_registry_cell_none_cell_matches(struct LmMessageThread *lm_lmx_
     }
     result = 0;
     if (lm_p0_registry_identifier_value(lm_lmx_message_thread, class_atom, class_name) != 0) {
-        none_value = lm_p0_registry_lookup(lm_lmx_message_thread, class_name, "None.cell");
+        none_value = lm_p0_registry_lookup_in(lm_lmx_message_thread, registry, class_name, "None.cell");
         if (none_value != 0 && lm_p0_text_equals(lm_lmx_message_thread, payload, none_value)) {
             result = 1;
         }
@@ -5237,7 +5267,7 @@ static int lm_p0_registry_cell_none_cell_matches(struct LmMessageThread *lm_lmx_
     return result;
 }
 
-static int lm_p0_registry_cell_is_null(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *atom, const LmRegistrySourceColumn *column) {
+static int lm_p0_registry_cell_is_null(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const LmP0Text *atom, const LmRegistrySourceColumn *column) {
     (void)lm_lmx_message_thread;
     LmP0Text * payload;
     size_t i;
@@ -5257,12 +5287,12 @@ static int lm_p0_registry_cell_is_null(struct LmMessageThread *lm_lmx_message_th
         return 0;
     }
     result = 0;
-    if (column -> name != 0 && lm_p0_registry_cell_none_cell_matches(lm_lmx_message_thread, payload, column -> name)) {
+    if (column -> name != 0 && lm_p0_registry_cell_none_cell_matches(lm_lmx_message_thread, registry, payload, column -> name)) {
         result = 1;
     }
     i = 0U;
     while (result == 0 && i < column -> descriptor_count) {
-        if (column -> descriptors[i] != 0 && lm_p0_registry_cell_none_cell_matches(lm_lmx_message_thread, payload, column -> descriptors[i])) {
+        if (column -> descriptors[i] != 0 && lm_p0_registry_cell_none_cell_matches(lm_lmx_message_thread, registry, payload, column -> descriptors[i])) {
             result = 1;
         }
         i = i + 1U;
@@ -5271,9 +5301,9 @@ static int lm_p0_registry_cell_is_null(struct LmMessageThread *lm_lmx_message_th
     return result;
 }
 
-static int lm_p0_registry_cell_value(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *atom, const LmRegistrySourceColumn *column, LmP0Text *out_value) {
+static int lm_p0_registry_cell_value(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const LmP0Text *atom, const LmRegistrySourceColumn *column, LmP0Text *out_value) {
     (void)lm_lmx_message_thread;
-    if (lm_p0_registry_cell_is_null(lm_lmx_message_thread, atom, column)) {
+    if (lm_p0_registry_cell_is_null(lm_lmx_message_thread, registry, atom, column)) {
         return 0;
     }
     if (lm_p0_registry_column_has_descriptor(lm_lmx_message_thread, column, "char")) {
@@ -5368,7 +5398,7 @@ static LmTableDescriptor * lm_p0_registry_source_descriptor_new(struct LmMessage
     return descriptor;
 }
 
-static int lm_p0_registry_materialize_source_row(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells) {
+static int lm_p0_registry_materialize_source_row(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells) {
     (void)lm_lmx_message_thread;
     LmP0Text * table_value;
     LmP0Text * decoded;
@@ -5379,7 +5409,7 @@ static int lm_p0_registry_materialize_source_row(struct LmMessageThread *lm_lmx_
     size_t column_index;
     int cell_status;
     int status;
-    if (table_name == 0 || columns == 0 || column_count == 0U || cells == 0 || lm_p0_registry == 0 || lm_p0_registry -> view == 0) {
+    if (registry == 0 || registry -> view == 0 || table_name == 0 || columns == 0 || column_count == 0U || cells == 0) {
         return -1;
     }
     table_value = lm_p0_text_ref_new_empty(lm_lmx_message_thread);
@@ -5389,7 +5419,7 @@ static int lm_p0_registry_materialize_source_row(struct LmMessageThread *lm_lmx_
         lm_p0_text_ref_delete(lm_lmx_message_thread, decoded);
         return -1;
     }
-    descriptor = lm_registry_view_find_local_source_table_slice(lm_lmx_message_thread, lm_p0_registry -> view, table_value -> data, table_value -> length);
+    descriptor = lm_registry_view_find_local_source_table_slice(lm_lmx_message_thread, registry -> view, table_value -> data, table_value -> length);
     if (descriptor == 0 || lm_table_descriptor_column_count(lm_lmx_message_thread, descriptor) != column_count) {
         lm_p0_text_ref_delete(lm_lmx_message_thread, table_value);
         lm_p0_text_ref_delete(lm_lmx_message_thread, decoded);
@@ -5413,7 +5443,7 @@ static int lm_p0_registry_materialize_source_row(struct LmMessageThread *lm_lmx_
                     cell_status = lm_p0_registry_identifier_value(lm_lmx_message_thread, atom, decoded);
                 }
                 else {
-                    cell_status = lm_p0_registry_cell_value(lm_lmx_message_thread, atom, columns[column_index], decoded);
+                    cell_status = lm_p0_registry_cell_value(lm_lmx_message_thread, registry, atom, columns[column_index], decoded);
                 }
                 if (cell_status < 0 || (column_index == 0U && cell_status == 0)) {
                     status = -1;
@@ -5444,7 +5474,7 @@ static int lm_p0_registry_materialize_source_row(struct LmMessageThread *lm_lmx_
         lm_table_row_delete_any(row);
         return -1;
     }
-    lm_registry_view_note_mutation(lm_lmx_message_thread, lm_p0_registry -> view);
+    lm_registry_view_note_mutation(lm_lmx_message_thread, registry -> view);
     return 0;
 }
 
@@ -10027,16 +10057,17 @@ int lm_p0_parse_file(struct LmMessageThread *lm_lmx_message_thread, const char *
 
 static int lm_p0_registry_source_push_column_metadata(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count) {
     (void)lm_lmx_message_thread;
+    LmP0Registry * registry;
     LmTableDescriptor * descriptor;
-    LM_UNUSED(context);
-    if (table_name == 0 || lm_p0_registry == 0 || lm_p0_registry -> view == 0) {
+    registry = (((LmP0Registry *)context));
+    if (registry == 0 || registry != lm_p0_registry_current(lm_lmx_message_thread) || registry -> view == 0 || table_name == 0) {
         return -1;
     }
     descriptor = lm_p0_registry_source_descriptor_new(lm_lmx_message_thread, table_name, columns, column_count);
     if (descriptor == 0) {
         return -1;
     }
-    if (lm_registry_view_take_local_source_table(lm_lmx_message_thread, lm_p0_registry -> view, descriptor) != 0) {
+    if (lm_registry_view_take_local_source_table(lm_lmx_message_thread, registry -> view, descriptor) != 0) {
         lm_table_descriptor_delete_any(descriptor);
         return -1;
     }
@@ -10045,18 +10076,23 @@ static int lm_p0_registry_source_push_column_metadata(struct LmMessageThread *lm
 
 static int lm_p0_registry_source_push_table_row(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count, const LmP0Node **cells) {
     (void)lm_lmx_message_thread;
-    LM_UNUSED(context);
-    return lm_p0_registry_materialize_source_row(lm_lmx_message_thread, table_name, columns, column_count, cells);
+    LmP0Registry * registry;
+    registry = (((LmP0Registry *)context));
+    if (registry == 0 || registry != lm_p0_registry_current(lm_lmx_message_thread)) {
+        return -1;
+    }
+    return lm_p0_registry_materialize_source_row(lm_lmx_message_thread, registry, table_name, columns, column_count, cells);
 }
 
 static int lm_p0_registry_source_join_table(struct LmMessageThread *lm_lmx_message_thread, void *context, const LmP0Text *source_table, const LmP0Text *target_table) {
     (void)lm_lmx_message_thread;
+    LmP0Registry * registry;
     LmP0Text * source_name;
     LmP0Text * target_name;
     LmTableDescriptor * target;
     int status;
-    LM_UNUSED(context);
-    if (lm_p0_registry == 0 || lm_p0_registry -> view == 0 || source_table == 0 || target_table == 0) {
+    registry = (((LmP0Registry *)context));
+    if (registry == 0 || registry != lm_p0_registry_current(lm_lmx_message_thread) || registry -> view == 0 || source_table == 0 || target_table == 0) {
         return -1;
     }
     source_name = lm_p0_text_ref_new_empty(lm_lmx_message_thread);
@@ -10071,10 +10107,10 @@ static int lm_p0_registry_source_join_table(struct LmMessageThread *lm_lmx_messa
         lm_p0_text_ref_delete(lm_lmx_message_thread, target_name);
         return -1;
     }
-    target = lm_registry_view_find_local_source_table_slice(lm_lmx_message_thread, lm_p0_registry -> view, target_name -> data, target_name -> length);
+    target = lm_registry_view_find_local_source_table_slice(lm_lmx_message_thread, registry -> view, target_name -> data, target_name -> length);
     status = -1;
     if (target != 0) {
-        status = lm_registry_view_append_materialized_rows_mode(lm_lmx_message_thread, lm_p0_registry -> view, target, source_name -> data, source_name -> length, 1, 1, 0U, 0);
+        status = lm_registry_view_append_materialized_rows_mode(lm_lmx_message_thread, registry -> view, target, source_name -> data, source_name -> length, 1, 1, 0U, 0);
     }
     lm_p0_text_ref_delete(lm_lmx_message_thread, source_name);
     lm_p0_text_ref_delete(lm_lmx_message_thread, target_name);
@@ -10155,12 +10191,16 @@ static int lm_p0_registry_source_parse_size_payload(struct LmMessageThread *lm_l
 
 static int lm_p0_registry_source_formal_param_unwrap_index(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index) {
     (void)lm_lmx_message_thread;
+    LmP0Registry * registry;
     const char *payload;
     const LmP0Text * key;
     LM_UNUSED(loader);
-    LM_UNUSED(context);
+    registry = (((LmP0Registry *)context));
+    if (registry == 0 || registry != lm_p0_registry_current(lm_lmx_message_thread)) {
+        return 0;
+    }
     key = lm_p0_registry_source_frame_receiver_key(lm_lmx_message_thread, frame);
-    payload = lm_p0_registry_lookup(lm_lmx_message_thread, key, "receiver.formal-param.unwrap");
+    payload = lm_p0_registry_lookup_in(lm_lmx_message_thread, registry, key, "receiver.formal-param.unwrap");
     if (payload == 0) {
         return 0;
     }
@@ -10169,14 +10209,18 @@ static int lm_p0_registry_source_formal_param_unwrap_index(struct LmMessageThrea
 
 static int lm_p0_registry_source_positional_name_index(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, size_t *out_index) {
     (void)lm_lmx_message_thread;
+    LmP0Registry * registry;
     const char *payload;
     const LmP0Text * key;
     LM_UNUSED(loader);
-    LM_UNUSED(context);
+    registry = (((LmP0Registry *)context));
+    if (registry == 0 || registry != lm_p0_registry_current(lm_lmx_message_thread)) {
+        return 0;
+    }
     key = lm_p0_registry_source_frame_receiver_key(lm_lmx_message_thread, frame);
-    payload = lm_p0_registry_lookup(lm_lmx_message_thread, key, "receiver.positional-name.index");
+    payload = lm_p0_registry_lookup_in(lm_lmx_message_thread, registry, key, "receiver.positional-name.index");
     if (payload == 0) {
-        payload = lm_p0_registry_lookup(lm_lmx_message_thread, key, "receiver.positional-name.argument");
+        payload = lm_p0_registry_lookup_in(lm_lmx_message_thread, registry, key, "receiver.positional-name.argument");
         if (payload == 0) {
             return 0;
         }
@@ -10235,16 +10279,16 @@ static int lm_p0_path_has_extension(struct LmMessageThread *lm_lmx_message_threa
     return 1;
 }
 
-static int lm_p0_registry_require_source_only(struct LmMessageThread *lm_lmx_message_thread, const char *phase) {
+static int lm_p0_registry_require_source_only(struct LmMessageThread *lm_lmx_message_thread, LmP0Registry *registry, const char *phase) {
     (void)lm_lmx_message_thread;
-    if (lm_p0_registry == 0 || lm_p0_registry -> view == 0) {
+    if (registry == 0 || registry -> view == 0) {
         return 1;
     }
-    if (lm_p0_registry -> view -> parent != 0) {
+    if (registry -> view -> parent != 0) {
         fprintf(stderr, "parser registry error: parser view is not isolated %s source-table load\n", phase);
         return 1;
     }
-    if (lm_registry_view_fact_count(lm_lmx_message_thread, lm_p0_registry -> view) != 0U) {
+    if (lm_registry_view_fact_count(lm_lmx_message_thread, registry -> view) != 0U) {
         fprintf(stderr, "parser registry error: legacy facts appeared %s source-table load\n", phase);
         return 1;
     }
@@ -10269,12 +10313,14 @@ static int lm_p0_registry_parse_unsigned_payload(struct LmMessageThread *lm_lmx_
 
 static const char * lm_p0_registry_lookup_key_by_unsigned_payload(struct LmMessageThread *lm_lmx_message_thread, const char *table, unsigned value) {
     (void)lm_lmx_message_thread;
+    LmP0Registry * registry;
     size_t i;
     const LmTableCell * key_cell;
     const LmTableCell * payload_cell;
     const char *result;
     unsigned actual;
-    if (((table == 0) || (lm_p0_registry == 0)) || (lm_p0_registry -> loaded == 0)) {
+    registry = lm_p0_registry_current(lm_lmx_message_thread);
+    if (table == 0 || registry == 0 || registry -> loaded == 0) {
         return 0;
     }
     result = 0;
@@ -10345,6 +10391,7 @@ const char * lm_p0_node_kind_class_name(struct LmMessageThread *lm_lmx_message_t
 
 static int lm_p0_registry_load_default(struct LmMessageThread *lm_lmx_message_thread) {
     (void)lm_lmx_message_thread;
+    LmP0Registry * registry;
     const char *override_path;
     const char *candidates[4];
     const char *registry_path;
@@ -10354,18 +10401,20 @@ static int lm_p0_registry_load_default(struct LmMessageThread *lm_lmx_message_th
     int override_enabled;
     int status;
     size_t i;
-    if ((lm_p0_registry != 0) && (lm_p0_registry -> loaded || lm_p0_registry -> loading)) {
+    registry = lm_p0_registry_current(lm_lmx_message_thread);
+    if (registry != 0 && (registry -> loaded || registry -> loading)) {
         return 0;
     }
     if (lm_p0_registry_init(lm_lmx_message_thread) != 0) {
         return 1;
     }
-    if (lm_p0_registry_require_source_only(lm_lmx_message_thread, "before") != 0) {
+    registry = lm_p0_registry_current(lm_lmx_message_thread);
+    if (registry == 0 || lm_p0_registry_require_source_only(lm_lmx_message_thread, registry, "before") != 0) {
         lm_p0_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
-    lm_p0_registry->loading = 1;
-    if (lm_p0_registry_require_source_only(lm_lmx_message_thread, "during") != 0) {
+    registry->loading = 1;
+    if (lm_p0_registry_require_source_only(lm_lmx_message_thread, registry, "during") != 0) {
         lm_p0_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
@@ -10411,12 +10460,12 @@ static int lm_p0_registry_load_default(struct LmMessageThread *lm_lmx_message_th
         i = i + 1U;
     }
     if (document == 0) {
-        if (lm_p0_registry_require_source_only(lm_lmx_message_thread, "after") != 0) {
+        if (lm_p0_registry_require_source_only(lm_lmx_message_thread, registry, "after") != 0) {
             lm_p0_registry_destroy(lm_lmx_message_thread);
             return 1;
         }
-        lm_p0_registry->loaded = 1;
-        lm_p0_registry->loading = 0;
+        registry->loaded = 1;
+        registry->loading = 0;
         return 0;
     }
     loader = lm_p0_registry_source_loader_new(lm_lmx_message_thread);
@@ -10425,24 +10474,24 @@ static int lm_p0_registry_load_default(struct LmMessageThread *lm_lmx_message_th
         lm_p0_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
-    status = lm_registry_source_load_root(lm_lmx_message_thread, loader, 0, lm_p0_document_root(lm_lmx_message_thread, document));
+    status = lm_registry_source_load_root(lm_lmx_message_thread, loader, registry, lm_p0_document_root(lm_lmx_message_thread, document));
     lm_own_delete(loader, 0);
     lm_p0_document_destroy(lm_lmx_message_thread, document);
     if (status != 0) {
         lm_p0_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
-    if (lm_p0_registry_require_source_only(lm_lmx_message_thread, "after") != 0) {
+    if (lm_p0_registry_require_source_only(lm_lmx_message_thread, registry, "after") != 0) {
         lm_p0_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
-    lm_p0_registry->loaded = 1;
-    lm_p0_registry->loading = 0;
+    registry->loaded = 1;
+    registry->loading = 0;
     if (lm_p0_registry_validate_abi_constants(lm_lmx_message_thread) != 0) {
         lm_p0_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
-    if (lm_p0_registry_require_source_only(lm_lmx_message_thread, "after validation") != 0) {
+    if (lm_p0_registry_require_source_only(lm_lmx_message_thread, registry, "after validation") != 0) {
         lm_p0_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
@@ -10480,6 +10529,7 @@ static int lm_p0_registry_selftest_expect_lookup(struct LmMessageThread *lm_lmx_
 
 static int lm_p0_registry_source_tables_selftest(struct LmMessageThread *lm_lmx_message_thread) {
     (void)lm_lmx_message_thread;
+    LmP0Registry * registry;
     const LmTableDescriptor * alpha;
     const LmTableDescriptor * gamma;
     const LmTableDescriptor * synthetic;
@@ -10500,17 +10550,22 @@ static int lm_p0_registry_source_tables_selftest(struct LmMessageThread *lm_lmx_
     int covered;
     int status;
     lm_p0_registry_destroy(lm_lmx_message_thread);
-    if (lm_p0_registry_load_default(lm_lmx_message_thread) != 0 || lm_p0_registry == 0 || lm_p0_registry -> view == 0) {
+    if (lm_p0_registry_load_default(lm_lmx_message_thread) != 0) {
+        lm_p0_registry_destroy(lm_lmx_message_thread);
+        return 1;
+    }
+    registry = lm_p0_registry_current(lm_lmx_message_thread);
+    if (registry == 0 || registry -> view == 0) {
         lm_p0_registry_destroy(lm_lmx_message_thread);
         return 1;
     }
     status = 0;
-    if (lm_registry_view_fact_count(lm_lmx_message_thread, lm_p0_registry -> view) != 0U || lm_registry_view_source_table_count(lm_lmx_message_thread, lm_p0_registry -> view) != 5U) {
+    if (lm_registry_view_fact_count(lm_lmx_message_thread, registry -> view) != 0U || lm_registry_view_source_table_count(lm_lmx_message_thread, registry -> view) != 5U) {
         status = 1;
     }
-    alpha = lm_registry_view_find_local_source_table_slice(lm_lmx_message_thread, lm_p0_registry -> view, "alpha", 5U);
-    gamma = lm_registry_view_find_local_source_table_slice(lm_lmx_message_thread, lm_p0_registry -> view, "gamma", 5U);
-    synthetic = lm_registry_view_find_local_source_table_slice(lm_lmx_message_thread, lm_p0_registry -> view, "synthetic", 9U);
+    alpha = lm_registry_view_find_local_source_table_slice(lm_lmx_message_thread, registry -> view, "alpha", 5U);
+    gamma = lm_registry_view_find_local_source_table_slice(lm_lmx_message_thread, registry -> view, "gamma", 5U);
+    synthetic = lm_registry_view_find_local_source_table_slice(lm_lmx_message_thread, registry -> view, "synthetic", 9U);
     if (status == 0 && (alpha == 0 || gamma == 0 || synthetic == 0 || lm_table_descriptor_column_count(lm_lmx_message_thread, alpha) != 4U || lm_table_descriptor_materialized_row_count(lm_lmx_message_thread, alpha) != 4U || lm_table_descriptor_column_count(lm_lmx_message_thread, gamma) != 4U || lm_table_descriptor_materialized_row_count(lm_lmx_message_thread, gamma) != 6U || lm_table_descriptor_column_count(lm_lmx_message_thread, synthetic) != 2U || lm_table_descriptor_materialized_row_count(lm_lmx_message_thread, synthetic) != 1U)) {
         status = 1;
     }
@@ -10531,15 +10586,15 @@ static int lm_p0_registry_source_tables_selftest(struct LmMessageThread *lm_lmx_
         status = 1;
     }
     covered = 1;
-    if (status == 0 && (lm_registry_view_source_path_has_rows(lm_lmx_message_thread, lm_p0_registry -> view, "alpha", &covered) != 0 || covered != 0)) {
+    if (status == 0 && (lm_registry_view_source_path_has_rows(lm_lmx_message_thread, registry -> view, "alpha", &covered) != 0 || covered != 0)) {
         status = 1;
     }
     covered = 0;
-    if (status == 0 && (lm_registry_view_source_path_has_rows(lm_lmx_message_thread, lm_p0_registry -> view, "alpha.left", &covered) == 0 || covered == 0)) {
+    if (status == 0 && (lm_registry_view_source_path_has_rows(lm_lmx_message_thread, registry -> view, "alpha.left", &covered) == 0 || covered == 0)) {
         status = 1;
     }
     covered = 0;
-    if (status == 0 && (lm_registry_view_source_path_has_key_slice(lm_lmx_message_thread, lm_p0_registry -> view, "alpha.left", 10U, "noneKey", 7U, &covered) != 0 || covered == 0)) {
+    if (status == 0 && (lm_registry_view_source_path_has_key_slice(lm_lmx_message_thread, registry -> view, "alpha.left", 10U, "noneKey", 7U, &covered) != 0 || covered == 0)) {
         status = 1;
     }
     if (status == 0 && (lm_p0_registry_selftest_expect_path(lm_lmx_message_thread, "alpha.left", 0U, "first", "left-old") != 0 || lm_p0_registry_selftest_expect_path(lm_lmx_message_thread, "alpha.left", 1U, "duplicate", "left-first") != 0 || lm_p0_registry_selftest_expect_path(lm_lmx_message_thread, "alpha.left", 2U, "duplicate", "left-last") != 0 || lm_p0_registry_source_path_cell_at(lm_lmx_message_thread, "alpha.left", 3U, &key_cell) != 0)) {
@@ -10559,7 +10614,7 @@ static int lm_p0_registry_source_tables_selftest(struct LmMessageThread *lm_lmx_
     incompatible_source = lm_p0_text_from_cstr(lm_lmx_message_thread, "alpha");
     incompatible_target = lm_p0_text_from_cstr(lm_lmx_message_thread, "synthetic");
     synthetic_row_count = lm_table_descriptor_materialized_row_count(lm_lmx_message_thread, synthetic);
-    if (status == 0 && (incompatible_source == 0 || incompatible_target == 0 || lm_p0_registry_source_join_table(lm_lmx_message_thread, 0, incompatible_source, incompatible_target) == 0 || lm_table_descriptor_materialized_row_count(lm_lmx_message_thread, synthetic) != synthetic_row_count)) {
+    if (status == 0 && (incompatible_source == 0 || incompatible_target == 0 || lm_p0_registry_source_join_table(lm_lmx_message_thread, registry, incompatible_source, incompatible_target) == 0 || lm_table_descriptor_materialized_row_count(lm_lmx_message_thread, synthetic) != synthetic_row_count)) {
         status = 1;
     }
     lm_p0_text_view_delete(lm_lmx_message_thread, incompatible_source);
@@ -10585,7 +10640,7 @@ static int lm_p0_registry_source_tables_selftest(struct LmMessageThread *lm_lmx_
     if (status == 0 && (alpha_row == 0 || gamma_row == 0 || gamma_row == alpha_row || gamma_row -> source != alpha_row || alpha_cell == 0 || gamma_cell == 0 || alpha_cell -> atom == 0 || gamma_cell -> atom == 0 || alpha_cell -> value == 0 || gamma_cell -> value == 0 || gamma_cell == alpha_cell || alpha_cell -> atom == gamma_cell -> atom || alpha_cell -> value == gamma_cell -> value || gamma_cell -> source != 0 || strcmp(alpha_cell -> value, gamma_cell -> value) != 0)) {
         status = 1;
     }
-    if (lm_registry_view_fact_count(lm_lmx_message_thread, lm_p0_registry -> view) != 0U || lm_p0_registry_require_source_only(lm_lmx_message_thread, "after selftest lookups") != 0) {
+    if (lm_registry_view_fact_count(lm_lmx_message_thread, registry -> view) != 0U || lm_p0_registry_require_source_only(lm_lmx_message_thread, registry, "after selftest lookups") != 0) {
         status = 1;
     }
     lm_p0_registry_destroy(lm_lmx_message_thread);

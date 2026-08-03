@@ -45,6 +45,7 @@ fn: lm_p0_registry_selftest_expect_lookup (const: @(char path); const: @(char ke
 return: status
 
 fn: lm_p0_registry_source_tables_selftest () int
+    LmP0Registry: registry
     const: LmTableDescriptor: alpha
     const: LmTableDescriptor: gamma
     const: LmTableDescriptor: synthetic
@@ -66,17 +67,21 @@ fn: lm_p0_registry_source_tables_selftest () int
     int: status
 
     lm_p0_registry_destroy()
-    if: lm_p0_registry_load_default() != 0 || lm_p0_registry = 0 || lm_p0_registry\view = 0
+    if: lm_p0_registry_load_default() != 0
+        lm_p0_registry_destroy()
+        return: 1
+    registry: lm_p0_registry_current()
+    if: registry = 0 || registry\view = 0
         lm_p0_registry_destroy()
         return: 1
 
     status: 0
-    if: lm_registry_view_fact_count(lm_p0_registry\view) != 0U || lm_registry_view_source_table_count(lm_p0_registry\view) != 5U
+    if: lm_registry_view_fact_count(registry\view) != 0U || lm_registry_view_source_table_count(registry\view) != 5U
         status: 1
 
-    alpha: lm_registry_view_find_local_source_table_slice(lm_p0_registry\view, "alpha", 5U)
-    gamma: lm_registry_view_find_local_source_table_slice(lm_p0_registry\view, "gamma", 5U)
-    synthetic: lm_registry_view_find_local_source_table_slice(lm_p0_registry\view, "synthetic", 9U)
+    alpha: lm_registry_view_find_local_source_table_slice(registry\view, "alpha", 5U)
+    gamma: lm_registry_view_find_local_source_table_slice(registry\view, "gamma", 5U)
+    synthetic: lm_registry_view_find_local_source_table_slice(registry\view, "synthetic", 9U)
     if: status = 0 && (alpha = 0 || gamma = 0 || synthetic = 0 || lm_table_descriptor_column_count(alpha) != 4U || lm_table_descriptor_materialized_row_count(alpha) != 4U || lm_table_descriptor_column_count(gamma) != 4U || lm_table_descriptor_materialized_row_count(gamma) != 6U || lm_table_descriptor_column_count(synthetic) != 2U || lm_table_descriptor_materialized_row_count(synthetic) != 1U)
         status: 1
 
@@ -94,13 +99,13 @@ fn: lm_p0_registry_source_tables_selftest () int
         status: 1
 
     covered: 1
-    if: status = 0 && (lm_registry_view_source_path_has_rows(lm_p0_registry\view, "alpha", @ covered) != 0 || covered != 0)
+    if: status = 0 && (lm_registry_view_source_path_has_rows(registry\view, "alpha", @ covered) != 0 || covered != 0)
         status: 1
     covered: 0
-    if: status = 0 && (lm_registry_view_source_path_has_rows(lm_p0_registry\view, "alpha.left", @ covered) = 0 || covered = 0)
+    if: status = 0 && (lm_registry_view_source_path_has_rows(registry\view, "alpha.left", @ covered) = 0 || covered = 0)
         status: 1
     covered: 0
-    if: status = 0 && (lm_registry_view_source_path_has_key_slice(lm_p0_registry\view, "alpha.left", 10U, "noneKey", 7U, @ covered) != 0 || covered = 0)
+    if: status = 0 && (lm_registry_view_source_path_has_key_slice(registry\view, "alpha.left", 10U, "noneKey", 7U, @ covered) != 0 || covered = 0)
         status: 1
 
     if: status = 0 && (lm_p0_registry_selftest_expect_path("alpha.left", 0U, "first", "left-old") != 0 || lm_p0_registry_selftest_expect_path("alpha.left", 1U, "duplicate", "left-first") != 0 || lm_p0_registry_selftest_expect_path("alpha.left", 2U, "duplicate", "left-last") != 0 || lm_p0_registry_source_path_cell_at("alpha.left", 3U, @ key_cell) != 0)
@@ -118,7 +123,7 @@ fn: lm_p0_registry_source_tables_selftest () int
     incompatible_source: lm_p0_text_from_cstr("alpha")
     incompatible_target: lm_p0_text_from_cstr("synthetic")
     synthetic_row_count: lm_table_descriptor_materialized_row_count(synthetic)
-    if: status = 0 && (incompatible_source = 0 || incompatible_target = 0 || lm_p0_registry_source_join_table(0, incompatible_source, incompatible_target) = 0 || lm_table_descriptor_materialized_row_count(synthetic) != synthetic_row_count)
+    if: status = 0 && (incompatible_source = 0 || incompatible_target = 0 || lm_p0_registry_source_join_table(registry, incompatible_source, incompatible_target) = 0 || lm_table_descriptor_materialized_row_count(synthetic) != synthetic_row_count)
         status: 1
     lm_p0_text_view_delete(incompatible_source)
     lm_p0_text_view_delete(incompatible_target)
@@ -142,7 +147,7 @@ fn: lm_p0_registry_source_tables_selftest () int
     if: status = 0 && (alpha_row = 0 || gamma_row = 0 || gamma_row = alpha_row || gamma_row\source != alpha_row || alpha_cell = 0 || gamma_cell = 0 || alpha_cell\atom = 0 || gamma_cell\atom = 0 || alpha_cell\value = 0 || gamma_cell\value = 0 || gamma_cell = alpha_cell || alpha_cell\atom = gamma_cell\atom || alpha_cell\value = gamma_cell\value || gamma_cell\source != 0 || c.strcmp(alpha_cell\value, gamma_cell\value) != 0)
         status: 1
 
-    if: lm_registry_view_fact_count(lm_p0_registry\view) != 0U || lm_p0_registry_require_source_only("after selftest lookups") != 0
+    if: lm_registry_view_fact_count(registry\view) != 0U || lm_p0_registry_require_source_only(registry, "after selftest lookups") != 0
         status: 1
     lm_p0_registry_destroy()
 return: status
