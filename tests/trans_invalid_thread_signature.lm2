@@ -1,0 +1,6 @@
+L2:
+    thread: lm_test_invalid_signature (int: message)
+        route: "/invalid-signature"
+        return:
+    end: lm_test_invalid_signature
+end: L2

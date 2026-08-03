@@ -531,9 +531,35 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "struct LmMessageThread;\n") != 0
         return: 1
+    if: lm_trans_put(file, "struct LmMessageThreadRuntime;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "struct LmMessageThreadPool;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "#ifndef LM_LMX_LAYOUT_DEFINED_IncomingMessage\n#define LM_LMX_LAYOUT_DEFINED_IncomingMessage 1\ntypedef struct IncomingMessage IncomingMessage;\nstruct IncomingMessage {\n    const char *lmx;\n    size_t length;\n};\n#endif\n") != 0
+        return: 1
     if: lm_trans_put(file, "struct LmMessageThread *lm_message_thread_new(void);\n") != 0
         return: 1
     if: lm_trans_put(file, "void lm_message_thread_delete(struct LmMessageThread *thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "int lm_message_thread_runtime_delete(struct LmMessageThreadRuntime *runtime);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "struct LmMessageThreadPool *lm_message_thread_pool_new(struct LmMessageThreadRuntime *runtime, size_t worker_count);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "void lm_message_thread_pool_request_stop(struct LmMessageThreadPool *pool);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "int lm_message_thread_pool_delete(struct LmMessageThreadPool *pool);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "struct LmMessageThread *lm_message_thread_new_in(struct LmMessageThreadPool *pool);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "int lm_message_thread_start_mailbox(struct LmMessageThread *thread, void (*entry)(struct LmMessageThread *, void *), void *argument);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "int lm_message_thread_join(struct LmMessageThread *thread, int *result);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "int lm_message_thread_bind_route(struct LmMessageThread *thread, const char *route);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "int lm_message_thread_current_lmx(struct LmMessageThread *thread, const char **out_lmx, size_t *out_length);\n") != 0
         return: 1
     if: lm_trans_put(file, "struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);\n") != 0
         return: 1
@@ -701,7 +727,19 @@ fn: lm_trans_emit_message_thread_assert_helper (FILE: file) int
         return: 1
 return: 0
 
-fn: lm_trans_emit_message_thread_main_root (FILE: file; unsigned: indent) int
+fn: lm_trans_emit_message_thread_main_root (
+    FILE: file
+    unsigned: indent
+    const: (LmTransNamespace: namespace_)
+) int
+    size_t: thread_count
+    size_t: index
+    const: LmTransThreadDeclaration: declaration
+
+    thread_count: 0U
+    if: namespace_ != 0 && namespace_\thread_declarations != 0
+        thread_count: namespace_\thread_declarations\count
+
     if: lm_trans_emit_message_thread_main_helper(lm_trans_prelude_file(file)) != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "struct LmMessageThread *lm_lmx_message_thread;\n") != 0
@@ -710,6 +748,27 @@ fn: lm_trans_emit_message_thread_main_root (FILE: file; unsigned: indent) int
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "int lm_message_thread_exit_status;\n") != 0
         return: 1
+    if: thread_count != 0U
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "struct LmMessageThreadRuntime *lm_lmx_application_runtime = 0;\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "struct LmMessageThreadPool *lm_lmx_application_pool = 0;\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "int lm_lmx_thread_startup_failed = 0;\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "int lm_lmx_thread_cleanup_failed = 0;\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "int lm_lmx_declared_thread_status = 0;\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "int lm_lmx_declared_thread_failure_status = 0;\n") != 0
+            return: 1
+        index: 0U
+        while: index < thread_count
+            if: lm_trans_emit_indent(file, indent) != 0 || c.fprintf(file, "struct LmMessageThread *lm_lmx_declared_thread_%zu = 0;\n", index) < 0
+                return: 1
+            if: lm_trans_emit_indent(file, indent) != 0 || c.fprintf(file, "int lm_lmx_declared_thread_%zu_started = 0;\n", index) < 0
+                return: 1
+            index: index + 1U
+    ---
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_lmx_message_thread = lm_message_thread_new();\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_message_thread == 0) {\n") != 0
@@ -720,6 +779,40 @@ fn: lm_trans_emit_message_thread_main_root (FILE: file; unsigned: indent) int
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "(void)lm_message_thread_set_execution_context(lm_lmx_message_thread, &lm_message_thread_main_context);\n") != 0
         return: 1
+    if: thread_count != 0U
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_lmx_application_runtime = lm_message_thread_runtime_new();\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_application_runtime == 0) lm_lmx_thread_startup_failed = 1;\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (!lm_lmx_thread_startup_failed) {\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_lmx_application_pool = lm_message_thread_pool_new(lm_lmx_application_runtime, 1U);\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (lm_lmx_application_pool == 0) lm_lmx_thread_startup_failed = 1;\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+            return: 1
+
+        index: 0U
+        while: index < thread_count
+            declaration: (cast: (const: LmTransThreadDeclaration) lm_own_ptr_stack_at(namespace_\thread_declarations, index))
+            if: declaration = 0
+                return: 1
+            if: lm_trans_emit_indent(file, indent) != 0 || c.fprintf(file, "if (!lm_lmx_thread_startup_failed) lm_lmx_declared_thread_%zu = lm_message_thread_new_in(lm_lmx_application_pool);\n", index) < 0
+                return: 1
+            if: lm_trans_emit_indent(file, indent) != 0 || c.fprintf(file, "if (!lm_lmx_thread_startup_failed && lm_lmx_declared_thread_%zu == 0) lm_lmx_thread_startup_failed = 1;\n", index) < 0
+                return: 1
+            if: lm_trans_emit_indent(file, indent) != 0 || c.fprintf(file, "if (!lm_lmx_thread_startup_failed && lm_message_thread_start_mailbox(lm_lmx_declared_thread_%zu, ", index) < 0 || lm_trans_write_text(file, declaration\c_name) != 0 || lm_trans_put(file, ", 0) != 0) lm_lmx_thread_startup_failed = 1;\n") != 0
+                return: 1
+            if: lm_trans_emit_indent(file, indent) != 0 || c.fprintf(file, "if (!lm_lmx_thread_startup_failed) lm_lmx_declared_thread_%zu_started = 1;\n", index) < 0
+                return: 1
+            if: lm_trans_emit_indent(file, indent) != 0 || c.fprintf(file, "if (!lm_lmx_thread_startup_failed && lm_message_thread_bind_route(lm_lmx_declared_thread_%zu, ", index) < 0 || lm_trans_write_text(file, declaration\route_literal) != 0 || lm_trans_put(file, ") != 0) lm_lmx_thread_startup_failed = 1;\n") != 0
+                return: 1
+            index: index + 1U
+
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_thread_startup_failed) lm_message_thread_request_failure(lm_lmx_message_thread, 1);\n") != 0
+            return: 1
+    ---
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "while (lm_message_thread_begin_turn(lm_lmx_message_thread)) {\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_message_thread_main_context.diagnostic_code = 0;\n") != 0
@@ -728,7 +821,18 @@ fn: lm_trans_emit_message_thread_main_root (FILE: file; unsigned: indent) int
         return: 1
 return: 0
 
-fn: lm_trans_emit_message_thread_main_end (FILE: file; unsigned: indent) int
+fn: lm_trans_emit_message_thread_main_end (
+    FILE: file
+    unsigned: indent
+    const: (LmTransNamespace: namespace_)
+) int
+    size_t: thread_count
+    size_t: index
+
+    thread_count: 0U
+    if: namespace_ != 0 && namespace_\thread_declarations != 0
+        thread_count: namespace_\thread_declarations\count
+
     if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "} else {\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent + 2U) != 0 || lm_trans_put(file, "lm_message_thread_request_failure(lm_lmx_message_thread, lm_message_thread_diagnostic_status(&lm_message_thread_main_context));\n") != 0
@@ -741,8 +845,40 @@ fn: lm_trans_emit_message_thread_main_end (FILE: file; unsigned: indent) int
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
         return: 1
+    if: thread_count != 0U
+        index: 0U
+        while: index < thread_count
+            if: lm_trans_emit_indent(file, indent) != 0 || c.fprintf(file, "if (lm_lmx_declared_thread_%zu_started) lm_message_thread_request_stop(lm_lmx_declared_thread_%zu, 0);\n", index, index) < 0
+                return: 1
+            index: index + 1U
+        index: 0U
+        while: index < thread_count
+            if: lm_trans_emit_indent(file, indent) != 0 || c.fprintf(file, "if (lm_lmx_declared_thread_%zu_started) { if (lm_message_thread_join(lm_lmx_declared_thread_%zu, &lm_lmx_declared_thread_status) != 0) lm_lmx_thread_cleanup_failed = 1; else if (lm_lmx_declared_thread_status != 0 && lm_lmx_declared_thread_failure_status == 0) lm_lmx_declared_thread_failure_status = lm_lmx_declared_thread_status; }\n", index, index) < 0
+                return: 1
+            index: index + 1U
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_application_pool != 0) {\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_message_thread_pool_request_stop(lm_lmx_application_pool);\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (lm_message_thread_pool_delete(lm_lmx_application_pool) != 0) lm_lmx_thread_cleanup_failed = 1; else lm_lmx_application_pool = 0;\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_application_runtime != 0 && lm_lmx_application_pool == 0) {\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "if (lm_message_thread_runtime_delete(lm_lmx_application_runtime) != 0) lm_lmx_thread_cleanup_failed = 1; else lm_lmx_application_runtime = 0;\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+            return: 1
+    ---
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_exit_status = lm_message_thread_status(lm_lmx_message_thread);\n") != 0
         return: 1
+    if: thread_count != 0U
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_message_thread_exit_status == 0 && lm_lmx_declared_thread_failure_status != 0) lm_message_thread_exit_status = lm_lmx_declared_thread_failure_status;\n") != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_message_thread_exit_status == 0 && lm_lmx_thread_cleanup_failed) lm_message_thread_exit_status = 1;\n") != 0
+            return: 1
+    ---
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_message_thread_delete(lm_lmx_message_thread);\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "return lm_message_thread_exit_status;\n") != 0
@@ -6549,6 +6685,9 @@ fn: lm_trans_lower_statement_frame (
         return: 1
 
     if: symbol != 0
+        if: symbol\callable_is_thread_handler
+            c.fprintf(c.stderr, "trans L2 error: thread handler \"%.*s\" cannot be called directly; send a message to its route\n", (cast: int frame\head\length), frame\head\data)
+            return: 1
         if: lm_trans_symbol_is(symbol, "receiver.statement")
             if: lm_trans_text_equals(dispatch_head, "@")
                 out\emit: @lm_trans_statement_emit_pointer_declaration
@@ -7505,9 +7644,25 @@ fn: lm_trans_emit_function_params (
 ) int
     int: has_user_params
     int: wrote_param
+    int: status
+    LmP0Text: source_c_name
 
     if: function = 0
         return: 1
+
+    if: function\is_thread_handler
+        if: function\params = 0 || function\params\count != 1U || function\params\params[0] = 0
+            return: 1
+        if: lm_trans_put(file, "struct LmMessageThread *lm_lmx_message_thread, void *lm_lmx_actor_context") != 0
+            return: 1
+        source_c_name: lm_trans_text_ref_new_cstr("lm_lmx_incoming_message")
+        if: source_c_name = 0
+            return: 1
+        status: lm_trans_namespace_declare_c_name(namespace_, function\params\params[0]\name, "variable", source_c_name)
+        if: status = 0
+            status: lm_trans_namespace_declare_relation_text(namespace_, function\params\params[0]\name, "variable.type", function\params\params[0]\type\class_name)
+        lm_trans_text_ref_destroy(@ source_c_name)
+        return: status
 
     has_user_params: lm_trans_formal_param_list_has_any(function\params)
     wrote_param: 0
@@ -7529,6 +7684,38 @@ fn: lm_trans_emit_function_params (
         return: lm_trans_emit_params_body(file, function\params, namespace_, 0)
     if: wrote_param = 0
         return: lm_trans_put(file, "void")
+return: 0
+
+fn: lm_trans_emit_thread_handler_prologue (
+    FILE: file
+    const: LmTransFunctionHeader: function
+    unsigned: indent
+) int
+    if: function = 0 || function\is_thread_handler = 0
+        return: 0
+
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "const char *lm_lmx_incoming_lmx = 0;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "size_t lm_lmx_incoming_length = 0U;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "IncomingMessage *lm_lmx_incoming_message;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "(void)lm_lmx_actor_context;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_lmx_incoming_message = (IncomingMessage *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*lm_lmx_incoming_message));\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_incoming_message == 0 || lm_message_thread_current_lmx(lm_lmx_message_thread, &lm_lmx_incoming_lmx, &lm_lmx_incoming_length) != 0) {\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_message_thread_request_failure(lm_lmx_message_thread, 1);\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_lmx_incoming_message->lmx = lm_lmx_incoming_lmx;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_lmx_incoming_message->length = lm_lmx_incoming_length;\n") != 0
+        return: 1
 return: 0
 
 fn: lm_trans_emit_param_name_list (
@@ -8034,6 +8221,7 @@ fn: lm_trans_namespace_set_callable_shape (
     symbol\callable_is_struct_return: function\is_struct_return
     symbol\callable_is_external: function\is_external
     symbol\callable_has_thread_context: function\has_thread_context
+    symbol\callable_is_thread_handler: function\is_thread_handler
 return: 0
 
 fn: lm_trans_function_header_read_params (LmTransFunctionHeader: function) int
@@ -8163,6 +8351,64 @@ fn: lm_trans_receiver_sub (
     LmTransFunctionHeader: out
 ) int
 return: lm_trans_function_header_common(frame, is_external, out, 1, 0, 0)
+
+fn: lm_trans_thread_route_literal_valid (const: (LmP0Text: literal)) int
+    size_t: index
+    uchar: ch
+
+    if: literal = 0 || literal\length < 3U || literal\data[0] != '"' || literal\data[literal\length - 1U] != '"' || literal\data[1] != '/'
+        return: 0
+
+    index: 1U
+    while: index + 1U < literal\length
+        ch: (cast: uchar literal\data[index])
+        if: ch < 32U || ch > 126U || ch = '\\' || ch = '?' || ch = '#' || ch = '"'
+            return: 0
+        index: index + 1U
+return: 1
+
+fn: lm_trans_receiver_thread (
+    const: LmP0Frame: frame
+    int: is_external
+    LmTransFunctionHeader: out
+) int
+    int: status
+    const: LmTransFormalParam: param
+    const: LmP0Field: route_field
+    const: LmP0Frame: route_frame
+    const: LmP0Field: route_value
+
+    status: lm_trans_function_header_common(frame, is_external, out, 1, 0, 0)
+    if: status <= 0
+        return: status
+    if: is_external
+        c.fprintf(c.stderr, "trans L2 error: thread declaration cannot be external\n")
+        return: -1
+    if: out\is_descriptor_only
+        c.fprintf(c.stderr, "trans L2 error: thread declaration requires route metadata and an executable body\n")
+        return: -1
+    if: out\params = 0 || out\params\count != 1U
+        c.fprintf(c.stderr, "trans L2 error: thread declaration expects exactly one named IncomingMessage parameter\n")
+        return: -1
+    param: out\params\params[0]
+    if: param = 0 || param\has_name = 0 || param\is_array || param\type = 0 || param\type\class_name = 0 || lm_trans_text_equals(param\type\class_name, "IncomingMessage") = 0 || param\type\address_depth != 0U || param\type\array_rank != 0U || param\type\is_const
+        c.fprintf(c.stderr, "trans L2 error: thread declaration expects exactly one named parameter of exact class IncomingMessage\n")
+        return: -1
+
+    route_field: out\body_start
+    if: route_field = 0 || route_field\value = 0 || route_field\value\kind != c.LM_P0_NODE_FRAME
+        c.fprintf(c.stderr, "trans L2 error: first thread body frame must be route: \"/absolute/path\"\n")
+        return: -1
+    route_frame: route_field\value\as\frame
+    route_value: route_frame\body\first_field
+    if: lm_trans_text_equals(route_frame\head, "route") = 0 || route_value = 0 || route_value\next != 0 || route_value\value = 0 || route_value\value\kind != c.LM_P0_NODE_ATOM || route_frame\trailer != 0 || lm_trans_thread_route_literal_valid(route_value\value\as\atom) = 0
+        c.fprintf(c.stderr, "trans L2 error: thread route must be one double-quoted ASCII absolute path without controls, backslash, ?, or #\n")
+        return: -1
+
+    out\is_thread_handler: 1
+    out\thread_route_literal: route_value\value\as\atom
+    out\body_start: route_field\next
+return: 1
 
 sub: lm_trans_pointer_binding_delete (@: void object)
     LmTransPointerBinding: binding
@@ -8359,7 +8605,7 @@ fn: lm_trans_pointer_bindings_init () int
         status: 1
     if: status = 0 && lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_contextual_literal_assignment", @lm_trans_statement_emit_contextual_literal_assignment) != 0
         status: 1
-    if: status = 0 && (lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_fn", @lm_trans_receiver_fn) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_callable", @lm_trans_receiver_callable) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_fm", @lm_trans_receiver_fm) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_sub", @lm_trans_receiver_sub) != 0)
+    if: status = 0 && (lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_fn", @lm_trans_receiver_fn) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_callable", @lm_trans_receiver_callable) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_fm", @lm_trans_receiver_fm) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_sub", @lm_trans_receiver_sub) != 0 || lm_trans_pointer_binding_push_function_receiver("lm_trans_receiver_thread", @lm_trans_receiver_thread) != 0)
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_type_emit("lm_trans_type_receiver_array_emit", @lm_trans_type_receiver_array_emit) != 0 || lm_trans_pointer_binding_push_type_alloc("lm_trans_type_receiver_array_structure_value_alloc", @lm_trans_type_receiver_array_structure_value_alloc) != 0 || lm_trans_pointer_binding_push_type_fill("lm_trans_type_receiver_array_structure_value_fill", @lm_trans_type_receiver_array_structure_value_fill) != 0)
         status: 1
@@ -9055,6 +9301,9 @@ fn: lm_trans_collect_hoisted_function (
     LmTransHoistedFunction: hoisted
     size_t: index
 
+    if: function != 0 && function\is_thread_handler
+        c.fprintf(c.stderr, "trans L2 error: thread declarations are top-level only\n")
+        return: 1
     if: function = 0 || function\is_descriptor_only
         c.fprintf(c.stderr, "trans L2 error: nested descriptor-only fn is not supported yet\n")
         return: 1

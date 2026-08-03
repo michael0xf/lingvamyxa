@@ -171,6 +171,19 @@ fn: lm_trans_receiver_sub (
     LmTransFunctionHeader: out
 ) int
 
+fn: lm_trans_receiver_thread (
+    const: LmP0Frame: frame
+    int: is_external
+    LmTransFunctionHeader: out
+) int
+
+fn: lm_trans_namespace_add_thread_declaration (
+    LmTransNamespace: namespace_
+    const: LmTransFunctionHeader: function
+) int
+
+sub: lm_trans_thread_declaration_delete_any (@: void object)
+
 fn: lm_trans_top_level_function_header (
     const: LmP0Frame: frame
     LmTransFunctionHeader: out
@@ -587,6 +600,12 @@ fn: lm_trans_emit_function_params (
     FILE: file
     const: LmTransFunctionHeader: function
     LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_thread_handler_prologue (
+    FILE: file
+    const: LmTransFunctionHeader: function
+    unsigned: indent
 ) int
 
 fn: lm_trans_emit_function (

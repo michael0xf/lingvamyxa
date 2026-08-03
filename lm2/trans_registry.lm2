@@ -553,6 +553,7 @@ table:
              callable lm_trans_receiver_callable
              fm     lm_trans_receiver_fm
              sub    lm_trans_receiver_sub
+             thread lm_trans_receiver_thread
 end: `receiver.function`
 
 table:
@@ -566,6 +567,7 @@ table:
              callable      `receiver.function`
              fm            `receiver.function`
              sub           `receiver.function`
+             thread        `receiver.function`
              table         `receiver.statement`
              if            `receiver.statement`
              else          `receiver.statement`
@@ -728,6 +730,7 @@ table:
              fn            name              0
              fm            name              0
              sub           name              0
+             thread        name              0
              synchronized  name              0
              `()`          name              0
              `@`           name              1
@@ -879,6 +882,7 @@ table:
              LmTransFormalParamList   1
              LmTransFunctionEmitFrame 1
              LmTransFunctionHeader    1
+             LmTransThreadDeclaration 1
              LmTransFunctionHeaderReceiver 1
              LmTransFunctionState     1
              LmTransHeadBinding       1

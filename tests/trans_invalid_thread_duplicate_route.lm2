@@ -1,0 +1,11 @@
+L2:
+    thread: lm_test_first_route (IncomingMessage: message)
+        route: "/same"
+        return:
+    end: lm_test_first_route
+
+    thread: lm_test_second_route (IncomingMessage: message)
+        route: "/same"
+        return:
+    end: lm_test_second_route
+end: L2

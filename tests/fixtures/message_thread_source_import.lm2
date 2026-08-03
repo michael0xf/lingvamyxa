@@ -1,0 +1,7 @@
+thread: lm_test_imported_thread (IncomingMessage: message)
+    route: "/imported"
+    if: message\lmx = 0 || message\length = 0U
+        stop: 11
+        return:
+    ---
+end: lm_test_imported_thread

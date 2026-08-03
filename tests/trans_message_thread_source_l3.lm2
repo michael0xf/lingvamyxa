@@ -1,0 +1,15 @@
+L3:
+    thread: lm_test_echo_l3 (IncomingMessage: message)
+        route: "/echo-l3"
+        if: message\lmx = 0 || message\length = 0U
+            stop: 11
+            return:
+        ---
+    end: lm_test_echo_l3
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L3

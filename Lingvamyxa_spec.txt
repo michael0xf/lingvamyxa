@@ -7622,23 +7622,48 @@ explicitly below.
         may override that ordinary stop status. The final turn runs local
         collection and then becomes STOPPED.
 
+        `thread:` is an IMPLEMENTED top-level L2/L3 source receiver. Its current
+        form is:
+
+            thread: HandlerName (IncomingMessage: message)
+                route: "/absolute/local/route"
+                handler statements
+            end: HandlerName
+
+        The handler has exactly one named parameter of exact class
+        `IncomingMessage`; direct source calls of the handler are rejected.
+        `route:` is required compile-time metadata, not an executable statement.
+        The route is a double-quoted printable-ASCII absolute path beginning
+        with `/` and containing no backslash, query or fragment. Duplicate
+        routes in one application translation are rejected. A handler may be
+        declared directly or supplied by ordinary `import:`. Executable thread
+        declarations in `predef:` modules and conditional `os`/`ifdef`/`guard`
+        branches are rejected by the current startup profile.
+
+        Each declared handler is materialized as one mailbox Message Thread.
+        One invocation handles the one LMX document dequeued for that turn.
+        `IncomingMessage.lmx` is a borrowed `const char *` view and
+        `IncomingMessage.length` is its byte length; both remain valid only for
+        the handler turn. The generated application entry constructs a runtime
+        and pool when at least one handler is declared, starts every handler,
+        binds its route and cooperatively stops and joins it during teardown.
+
         `exit:` is NOT IMPLEMENTED. Proposed application-level contract: request
         stop on every application Message Thread, wait until all of them are
         STOPPED, then release application roots and return the selected process
-        status. `send`, `reply`, `await`, `schedule` and `thread:` are also NOT
-        IMPLEMENTED as source receivers. Proposed contracts:
-        `send(Message) -> Future`; `reply(Value | Failure)`;
-        `await(Future) -> Value | Failure`; `schedule(Message, Time)`; and
-        `thread:` route/handler descriptor -> MessageThread inbox. `send` uses
-        the message's `to.endpoint + to.route`; a local route stays inside the
-        application and an absolute HTTP(S) endpoint selects the REST/LMX
-        transport provider.
+        status. `send`, `reply`, `await` and `schedule` are also NOT IMPLEMENTED
+        as source receivers. Proposed contracts: `send(Message) -> Future`;
+        `reply(Value | Failure)`; `await(Future) -> Value | Failure`; and
+        `schedule(Message, Time)`. `send` uses the message's
+        `to.endpoint + to.route`; a local route stays inside the application and
+        an absolute HTTP(S) endpoint selects the REST/LMX transport provider.
 
         The explicit host runtime, worker-pool and actor start/join ABI is
         IMPLEMENTED. Its mailbox subset includes mailbox actor start, local
         route binding, owned-LMX FIFO inbox/outbox delivery and current-message
-        access during a handler turn. It is an implementation API and is not
-        yet exposed as the generic source receivers `send` or `thread:`.
+        access during a handler turn. `thread:` now exposes actor construction,
+        binding and one-message-per-turn dispatch; generic source `send` remains
+        to be lowered over the same ABI.
 
     28. copy / move / borrow / own
         NOT IMPLEMENTED as source operators; only lower-level ownership/runtime
@@ -10661,10 +10686,14 @@ The loop has no predetermined iteration count. It ends only after a cooperative
 stop request or a fatal diagnostic/runtime condition is converted into a
 failure-dominant stop request and the common end-turn boundary is completed.
 
-The hosted profile currently has two explicit execution paths. A generated
-standalone `main` creates one unpooled `LmMessageThread`, installs its
+The hosted profile currently has two explicit execution paths. Every generated
+standalone `main` creates one unpooled root `LmMessageThread`, installs its
 ExecutionContext through that explicit reference, and drives `begin_turn` /
-body / `end_turn` directly on the invoking host thread.
+body / `end_turn` directly on the invoking host thread. If the translation
+declares or ordinarily imports any `thread:` handlers, the same generated entry
+also constructs an application `LmMessageThreadRuntime` and pool, creates one
+mailbox actor per declaration, starts it and binds its exact route. A translation
+without `thread:` declarations retains the root-only path.
 
 The pool ABI creates an explicit `LmMessageThreadRuntime`, one or more
 `LmMessageThreadPool` objects and pool-owned Message Threads. For a pooled
@@ -10684,9 +10713,9 @@ the previous association before that turn leaves the worker.
 
 The native providers wait on the pool condition when no actor is ready. The
 `single` provider advances the same FIFO cooperatively while the controller
-joins or deletes pool work. Runtime mailbox actors and local inbox/outbox
-dispatch are implemented. Source message operators, message validation and
-remote transport remain future work. A non-mailbox RUNNING actor whose callback
+joins or deletes pool work. Runtime mailbox actors, local inbox/outbox dispatch
+and the source `thread:` receiver are implemented. Source send/reply operations,
+message validation and remote transport remain future work. A non-mailbox RUNNING actor whose callback
 does not request stop remains immediately runnable. An idle mailbox that is
 stopped individually or by pool stop is scheduled for a final stop-only
 boundary so join cannot wait forever.
@@ -10788,7 +10817,8 @@ A Message Thread processes messages through the standard pipeline:
 This is the full queue-enabled turn profile. In the current hosted bootstrap,
 one turn consists of the root-body step followed by the same end-turn
 collection boundary. For a pooled mailbox actor, queue dequeue and outbox
-flushing are now part of this loop. Validation/execute dispatch and the source
+flushing are now part of this loop. The source `thread:` receiver supplies the
+callback and route binding. Validation/execute dispatch and source send/reply
 operators are not yet inserted; they do not require a second process-lifetime
 mechanism.
 
@@ -11147,9 +11177,10 @@ inbox/outbox messages with the copy, serialization, immutable-sharing or
 whole-branch-transfer rules of section 19.29.
 
 The current `void *argument` entry parameter is a low-level hosted ABI facility;
-it does not weaken the source ownership boundary. Inbox/outbox delivery,
-`send`, `reply`, `await`, `schedule`, `thread:` and application-wide `exit:`
-remain NOT IMPLEMENTED as generic source operations.
+it does not weaken the source ownership boundary. `send`, `reply`, `await`,
+`schedule` and application-wide `exit:` remain NOT IMPLEMENTED as generic
+source operations. `thread:` is implemented by the top-level declaration and
+generated startup contract in section 19.27.
 
 
 19.29. Ownership and Memory Operators
@@ -11606,13 +11637,14 @@ Conceptual components of one Message Thread include:
 
 This is a runtime Structure family, not a removed `L5:` source block. Message
 Thread descriptors and operations may be defined by ordinary L2/L3 Structures,
-receivers and registry rows. The current source operators `send`, `reply`,
-`await`, `schedule` and `thread` remain proposed and NOT IMPLEMENTED unless a
-runtime profile explicitly registers them.
+receivers and registry rows. The top-level `thread:` declaration is implemented
+by the current profile. `send`, `reply`, `await` and `schedule` remain proposed
+until their source receivers are registered and lowered.
 
-The hosted pool scheduler fields are now implemented, but the incoming-message
-queue shown above remains conceptual. The implemented ready queue schedules
-actors, not messages.
+The hosted pool scheduler and owned-LMX FIFO inbox/outbox queues are
+implemented. The pool ready queue still schedules actors rather than carrying
+messages; the source `thread:` handler consumes the separate inbox one message
+per turn.
 
 Raw references inside one Message Thread may point only into regions owned by
 that Message Thread or into explicitly shared immutable/external storage
@@ -11943,14 +11975,18 @@ per-translation-unit thread helper remains. The current actor Structure records:
 The generated external `main` creates an explicit unpooled root
 `LmMessageThread`, installs its diagnostic ExecutionContext through that
 reference, drives the turn loop described in section 19.28.2.2, reads its
-retained status and deletes it. It does not acquire a singleton root/current
-object. The root is the first ordinary Message Thread instance, not a second
-memory mechanism and not a source level.
+retained status and deletes it. When source `thread:` declarations exist, it
+also constructs the application runtime and pool, starts and route-binds those
+mailbox actors, then requests their stop, joins them and releases the pool and
+runtime before returning. It does not acquire a singleton root/current object.
+The root is the first ordinary Message Thread instance, not a second memory
+mechanism and not a source level.
 
-The worker-pool ABI is implemented in the same runtime library, but generated
-standalone `main` functions have not yet been changed to construct an
-`LmMessageThreadRuntime` and pool. The direct root loop and the pool scheduler
-share the same actor state, arena and end-turn collection semantics.
+The worker-pool ABI is implemented in the same runtime library. Generated
+standalone `main` functions construct an `LmMessageThreadRuntime` and pool only
+when they own local/imported `thread:` handlers. The direct root loop and the
+pool scheduler share the same actor state, arena and end-turn collection
+semantics.
 
 This rule applies to ordinary applications and to bootstrap tools alike:
 
@@ -13365,15 +13401,18 @@ Current hosted-bootstrap implementation:
     root-arena destruction releases ordinary generated Structure storage;
     partial-callable binder ownership and other remaining unscoped allocation
         paths still require separate owner integration;
-    generated standalone programs do not yet construct or use the pool runtime;
+    generated standalone programs construct a pool runtime when `thread:`
+        handlers are present and retain the root-only path otherwise;
     pooled mailbox actors, owned-LMX FIFO inbox/outbox queues and exact local
         route-to-MessageThread delivery are implemented;
     empty/NULL endpoint selects local delivery; absolute HTTP(S) addresses
         currently fail explicitly because no transport provider is configured;
+    source `thread:` declarations create one route-bound mailbox actor and lower
+        one dequeued LMX document to one `IncomingMessage` handler turn;
     message parsing/validation, reply routing, remote/inter-runtime delivery and
-        source lowering over the mailbox ABI are not yet implemented;
-    `send`, `reply`, `await`, `schedule`, `thread:` and application-wide
-        stop-and-wait `exit:` are not yet implemented as generic source operations;
+        source `send` lowering over the mailbox ABI are not yet implemented;
+    `send`, `reply`, `await`, `schedule` and application-wide stop-and-wait
+        `exit:` are not yet implemented as generic source operations;
     a runtime frame/cleanup stack for unwinding through nested Message Thread
         calls is not yet implemented;
     a distinct disposable per-turn/handler arena is not yet implemented;
@@ -13391,7 +13430,6 @@ Proposed but NOT IMPLEMENTED as generic source operations:
     reply;
     await;
     schedule;
-    thread;
     exit;
     general low-level freemem/thread/shared-block profile.
 

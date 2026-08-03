@@ -1,0 +1,9 @@
+L2:
+    fn: lm_test_thread_outer () int
+        thread: lm_test_nested_thread (IncomingMessage: message)
+            route: "/nested"
+            return:
+        end: lm_test_nested_thread
+        return: 0
+    end: lm_test_thread_outer
+end: L2

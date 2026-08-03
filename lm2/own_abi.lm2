@@ -135,6 +135,7 @@ table:
              LmHostThread               1
              LmMutex                    1
              LmCondition                1
+             IncomingMessage            1
              LmMessage                  1
              LmMessageOutboxEntry       1
              LmMessageRoute             1
@@ -437,6 +438,36 @@ table:
              value         1
              next          0
 end: `LmMessageThreadComponent.field.address-depth`
+
+table:
+    name: `IncomingMessage.field.class`
+    columns((class: class) (class: field))
+    rows:
+             lmx     char
+             length  size_t
+end: `IncomingMessage.field.class`
+
+table:
+    name: `IncomingMessage.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             lmx     0
+             length  1
+end: `IncomingMessage.field.index`
+
+table:
+    name: `IncomingMessage.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             lmx  1
+end: `IncomingMessage.field.address-depth`
+
+table:
+    name: `IncomingMessage.field.const`
+    columns((class: class) (int: value))
+    rows:
+             lmx  1
+end: `IncomingMessage.field.const`
 
 table:
     name: `LmMessage.field.class`

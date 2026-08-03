@@ -161,6 +161,17 @@ fn: lm_trans_top_level_declare_function (LmTransNamespace: namespace_; const: (L
         return: 1
     if: lm_trans_namespace_set_callable_shape(namespace_, item\function) != 0
         return: 1
+    if: item\function\is_thread_handler
+        if: lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path)
+            c.fprintf(c.stderr, "trans L2 error: executable thread declarations are not allowed in predef modules; use import\n")
+            return: 1
+        if: lm_trans_l2_conditional_import_depth > 0
+            c.fprintf(c.stderr, "trans L2 error: thread declarations are not supported inside os/ifdef/guard\n")
+            return: 1
+        if: lm_trans_namespace_add_thread_declaration(namespace_, item\function) != 0
+            return: 1
+        ---
+    ---
     status: lm_trans_top_level_declare_generated_return_class(namespace_, item\function)
     if: status = 0
         status: lm_trans_top_level_declare_function_body_named_structures(namespace_, item\function)
@@ -207,6 +218,17 @@ fn: lm_trans_top_level_declare_function_compatible (LmTransNamespace: namespace_
         return: 1
     if: lm_trans_namespace_set_callable_shape(namespace_, item\function) != 0
         return: 1
+    if: item\function\is_thread_handler
+        if: lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path)
+            c.fprintf(c.stderr, "trans L2 error: executable thread declarations are not allowed in predef modules; use import\n")
+            return: 1
+        if: lm_trans_l2_conditional_import_depth > 0
+            c.fprintf(c.stderr, "trans L2 error: thread declarations are not supported inside os/ifdef/guard\n")
+            return: 1
+        if: lm_trans_namespace_add_thread_declaration(namespace_, item\function) != 0
+            return: 1
+        ---
+    ---
     status: lm_trans_top_level_declare_generated_return_class(namespace_, item\function)
     if: status = 0
         status: lm_trans_top_level_declare_function_body_named_structures(namespace_, item\function)
@@ -1531,15 +1553,21 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
 
     status: 0
     if: is_message_thread_entry = 0
-        if: function\has_thread_context
-            status: lm_trans_emit_indent(file, body_indent) != 0 || lm_trans_put(file, "(void)lm_lmx_message_thread;\n") != 0
+        if: function\is_thread_handler
+            status: 0
         else:
-            status: lm_trans_emit_indent(file, body_indent) != 0 || lm_trans_put(file, "struct LmMessageThread *lm_lmx_message_thread = 0;\n") != 0 || lm_trans_emit_indent(file, body_indent) != 0 || lm_trans_put(file, "(void)lm_lmx_message_thread;\n") != 0
+            if: function\has_thread_context
+                status: lm_trans_emit_indent(file, body_indent) != 0 || lm_trans_put(file, "(void)lm_lmx_message_thread;\n") != 0
+            else:
+                status: lm_trans_emit_indent(file, body_indent) != 0 || lm_trans_put(file, "struct LmMessageThread *lm_lmx_message_thread = 0;\n") != 0 || lm_trans_emit_indent(file, body_indent) != 0 || lm_trans_put(file, "(void)lm_lmx_message_thread;\n") != 0
+            ---
         ---
     ---
     if: is_message_thread_entry
-        status: lm_trans_emit_message_thread_main_root(file, 1U)
+        status: lm_trans_emit_message_thread_main_root(file, 1U, namespace_)
         body_indent: 3U
+    if: status = 0
+        status: lm_trans_emit_thread_handler_prologue(file, function, body_indent)
     if: status = 0
         status: lm_trans_emit_array_param_aliases(file, function, body_indent)
     if: status = 0 && function\is_struct_return
@@ -1553,7 +1581,7 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
     if: status = 0
         status: lm_trans_emit_trailer_statement(file, frame\trailer, body_indent, namespace_)
     if: status = 0 && is_message_thread_entry
-        status: lm_trans_emit_message_thread_main_end(file, 1U)
+        status: lm_trans_emit_message_thread_main_end(file, 1U, namespace_)
     if: status = 0
         status: lm_trans_put(file, "}\n")
 

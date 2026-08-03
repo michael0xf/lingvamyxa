@@ -1,0 +1,4 @@
+thread: lm_test_predefined_thread (IncomingMessage: message)
+    route: "/predefined"
+    return:
+end: lm_test_predefined_thread

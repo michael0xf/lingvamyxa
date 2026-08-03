@@ -1,0 +1,9 @@
+L2:
+    ifdef:
+        LM_TEST_CONDITIONAL_THREAD:
+            thread: lm_test_conditional_thread (IncomingMessage: message)
+                route: "/conditional"
+                return:
+            end: lm_test_conditional_thread
+    end: ifdef
+end: L2

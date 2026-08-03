@@ -119,6 +119,64 @@ fn: lm_trans_function_header_copy (LmTransFunctionHeader: target; const: (LmTran
         target\env_type_name\length: 0U
 return: 0
 
+fn: lm_trans_thread_declaration_new (const: (LmTransFunctionHeader: function)) LmTransThreadDeclaration
+    LmTransThreadDeclaration: declaration
+
+    if: function = 0 || function\name = 0 || function\c_name = 0 || function\thread_route_literal = 0
+        return: 0
+
+    declaration: lm_own_new_zero(c.sizeof(declaration[0]))
+    if: declaration = 0
+        return: 0
+    declaration\name: lm_trans_text_ref_new(function\name)
+    declaration\c_name: lm_trans_text_ref_new(function\c_name)
+    declaration\route_literal: lm_trans_text_ref_new(function\thread_route_literal)
+    if: declaration\name = 0 || declaration\c_name = 0 || declaration\route_literal = 0
+        lm_trans_text_ref_destroy(@ declaration\name)
+        lm_trans_text_ref_destroy(@ declaration\c_name)
+        lm_trans_text_ref_destroy(@ declaration\route_literal)
+        lm_own_delete(declaration, 0)
+        return: 0
+return: declaration
+
+sub: lm_trans_thread_declaration_delete_any (@: void object)
+    LmTransThreadDeclaration: declaration
+
+    declaration: cast: (LmTransThreadDeclaration) object
+    if: declaration != 0
+        lm_trans_text_ref_destroy(@ declaration\name)
+        lm_trans_text_ref_destroy(@ declaration\c_name)
+        lm_trans_text_ref_destroy(@ declaration\route_literal)
+    lm_own_delete(declaration, 0)
+end: lm_trans_thread_declaration_delete_any
+
+fn: lm_trans_namespace_add_thread_declaration (
+    LmTransNamespace: namespace_
+    const: LmTransFunctionHeader: function
+) int
+    LmTransThreadDeclaration: declaration
+    const: LmTransThreadDeclaration: existing
+    size_t: index
+
+    if: namespace_ = 0 || namespace_\thread_declarations = 0 || function = 0 || function\is_thread_handler = 0
+        return: 1
+
+    index: 0U
+    while: index < namespace_\thread_declarations\count
+        existing: (cast: (const: LmTransThreadDeclaration) lm_own_ptr_stack_at(namespace_\thread_declarations, index))
+        if: existing != 0 && lm_trans_text_same(existing\route_literal, function\thread_route_literal)
+            c.fprintf(c.stderr, "trans L2 error: duplicate local thread route %.*s\n", (cast: int function\thread_route_literal\length), function\thread_route_literal\data)
+            return: 1
+        index: index + 1U
+
+    declaration: lm_trans_thread_declaration_new(function)
+    if: declaration = 0
+        return: 1
+    if: lm_own_ptr_stack_push(namespace_\thread_declarations, declaration) != 0
+        lm_trans_thread_declaration_delete_any(declaration)
+        return: 1
+return: 0
+
 fn: lm_trans_ptr_stack_new (LmOwnDelete: delete_item) LmOwnPtrStack
     LmOwnPtrStack: stack
 
@@ -1031,11 +1089,13 @@ fn: lm_trans_namespace_new () LmTransNamespace
             namespace_\registry_view: lm_trans_registry\view
         namespace_\cleanups: lm_trans_ptr_stack_new(lm_trans_cleanup_delete_any)
         namespace_\loops: lm_trans_ptr_stack_new(lm_trans_loop_delete_any)
-        if: namespace_\items = 0 || namespace_\identifiers = 0 || namespace_\cleanups = 0 || namespace_\loops = 0
+        namespace_\thread_declarations: lm_trans_ptr_stack_new(lm_trans_thread_declaration_delete_any)
+        if: namespace_\items = 0 || namespace_\identifiers = 0 || namespace_\cleanups = 0 || namespace_\loops = 0 || namespace_\thread_declarations = 0
             lm_trans_identifier_table_delete(@ namespace_\identifiers)
             lm_trans_ptr_stack_delete(@ namespace_\items)
             lm_trans_ptr_stack_delete(@ namespace_\cleanups)
             lm_trans_ptr_stack_delete(@ namespace_\loops)
+            lm_trans_ptr_stack_delete(@ namespace_\thread_declarations)
             lm_own_delete(namespace_, 0)
             return: 0
 return: namespace_
@@ -1048,6 +1108,7 @@ sub: lm_trans_namespace_destroy (LmTransNamespace: namespace_)
         lm_trans_ptr_stack_delete(@ namespace_\items)
         lm_trans_ptr_stack_delete(@ namespace_\cleanups)
         lm_trans_ptr_stack_delete(@ namespace_\loops)
+        lm_trans_ptr_stack_delete(@ namespace_\thread_declarations)
         namespace_\depth: 0U
         namespace_\next_cleanup_id: 0U
         namespace_\return_type_node: 0
@@ -1599,6 +1660,7 @@ fn: lm_trans_symbol_copy_signature (LmTransSymbol: target; const: (LmTransSymbol
     target\callable_is_struct_return: source\callable_is_struct_return
     target\callable_is_external: source\callable_is_external
     target\callable_has_thread_context: source\callable_has_thread_context
+    target\callable_is_thread_handler: source\callable_is_thread_handler
 return: 0
 
 fn: lm_trans_namespace_declare_compatible (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind)) int

@@ -10,8 +10,28 @@
 #endif
 struct LmOwnArena;
 struct LmMessageThread;
+struct LmMessageThreadRuntime;
+struct LmMessageThreadPool;
+#ifndef LM_LMX_LAYOUT_DEFINED_IncomingMessage
+#define LM_LMX_LAYOUT_DEFINED_IncomingMessage 1
+typedef struct IncomingMessage IncomingMessage;
+struct IncomingMessage {
+    const char *lmx;
+    size_t length;
+};
+#endif
 struct LmMessageThread *lm_message_thread_new(void);
 void lm_message_thread_delete(struct LmMessageThread *thread);
+struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
+int lm_message_thread_runtime_delete(struct LmMessageThreadRuntime *runtime);
+struct LmMessageThreadPool *lm_message_thread_pool_new(struct LmMessageThreadRuntime *runtime, size_t worker_count);
+void lm_message_thread_pool_request_stop(struct LmMessageThreadPool *pool);
+int lm_message_thread_pool_delete(struct LmMessageThreadPool *pool);
+struct LmMessageThread *lm_message_thread_new_in(struct LmMessageThreadPool *pool);
+int lm_message_thread_start_mailbox(struct LmMessageThread *thread, void (*entry)(struct LmMessageThread *, void *), void *argument);
+int lm_message_thread_join(struct LmMessageThread *thread, int *result);
+int lm_message_thread_bind_route(struct LmMessageThread *thread, const char *route);
+int lm_message_thread_current_lmx(struct LmMessageThread *thread, const char **out_lmx, size_t *out_length);
 struct LmOwnArena *lm_message_thread_owner(struct LmMessageThread *thread);
 void *lm_message_thread_execution_context(struct LmMessageThread *thread);
 void *lm_message_thread_set_execution_context(struct LmMessageThread *thread, void *context);
@@ -363,6 +383,10 @@ int (lm_message_thread_component_attach)(struct LmMessageThread *lm_lmx_message_
 void * (lm_message_thread_component_get)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 int (lm_message_thread_component_remove)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 size_t (lm_message_thread_component_count)(const LmMessageThread *thread);
+
+
+
+
 
 
 

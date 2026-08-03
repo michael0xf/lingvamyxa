@@ -154,7 +154,7 @@ fn: lm_trans_symbol_has_callable_projection (const: (LmTransSymbol: symbol); con
 return: actual != 0 && projection != 0 && c.strcmp(actual, projection) = 0
 
 fn: lm_trans_symbol_is_executable_callable (const: (LmTransSymbol: symbol)) int
-return: symbol != 0 && symbol\has_callable_shape != 0 && lm_trans_callable_projection_is_executable(lm_trans_symbol_callable_projection(symbol)) != 0
+return: symbol != 0 && symbol\callable_is_thread_handler = 0 && symbol\has_callable_shape != 0 && lm_trans_callable_projection_is_executable(lm_trans_symbol_callable_projection(symbol)) != 0
 
 fn: lm_trans_symbol_is_value_callable (const: (LmTransSymbol: symbol)) int
 return: lm_trans_symbol_is_executable_callable(symbol) != 0 && symbol\callable_returns_value != 0

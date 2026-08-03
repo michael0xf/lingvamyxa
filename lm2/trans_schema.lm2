@@ -21,6 +21,7 @@ table:
              LmTransStatementStack       c.struct
              LmTransStatementJob         c.struct
              LmTransFunctionHeader       c.struct
+             LmTransThreadDeclaration    c.struct
              LmTransFormalParam          c.struct
              LmTransFormalParamList      c.struct
              LmTransL4PayloadPointerBinding c.struct
@@ -132,6 +133,7 @@ table:
              lm_trans_function_state_destroy_any 1
              lm_trans_free_any 1
              lm_trans_hoisted_function_delete_any 1
+             lm_trans_thread_declaration_delete_any 1
              lm_trans_loop_delete_any 1
              lm_trans_namespace_destroy_any 1
              lm_trans_pointer_binding_delete 1
@@ -396,6 +398,7 @@ table:
              LmTransStatementLowering       c.struct
              LmTransFunctionState           c.struct
              LmTransFunctionHeader          c.struct
+             LmTransThreadDeclaration       c.struct
              LmTransCapture                 c.struct
              LmTransHoistedFunction         c.struct
              LmTransBinding                 c.struct
@@ -450,6 +453,7 @@ table:
              LmTransStatementLowering       1
              LmTransFunctionState           1
              LmTransFunctionHeader          1
+             LmTransThreadDeclaration       1
              LmTransCapture                 1
              LmTransHoistedFunction         1
              LmTransBinding                 1
@@ -650,6 +654,7 @@ table:
              callable_is_struct_return int                   19                      0                                0
              callable_is_external     int                    20                      0                                0
              callable_has_thread_context int                 21                      0                                0
+             callable_is_thread_handler int                  22                      0                                0
 end: LmTransSymbol
 
 table:
@@ -917,7 +922,18 @@ table:
              is_callable_descriptor int                   15                      0                                0
              params                LmTransFormalParamList 16                      0                                0
              has_thread_context    int                    17                      0                                0
+             is_thread_handler     int                    18                      0                                0
+             thread_route_literal  LmP0Text               19                      0                                1
 end: LmTransFunctionHeader
+
+table:
+    name: LmTransThreadDeclaration
+    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+    rows:
+             name                  LmP0Text               0                       0                                0
+             c_name                LmP0Text               1                       0                                0
+             route_literal         LmP0Text               2                       0                                0
+end: LmTransThreadDeclaration
 
 table:
     name: LmTransCapture
@@ -1033,4 +1049,5 @@ table:
              hoisted_functions    LmOwnPtrStack          11                      0                                1
              registry_view        LmRegistryView         12                      0                                1
              message_thread_entry int                    13                      0                                0
+             thread_declarations  LmOwnPtrStack          14                      0                                0
 end: LmTransNamespace
