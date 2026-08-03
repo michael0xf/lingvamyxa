@@ -22,10 +22,12 @@ void lm_message_thread_delete(struct LmMessageThread *thread);
 struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
 int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
+int lm_message_thread_runtime_exit_state(struct LmMessageThreadRuntime *runtime, int *requested, int *ready, int *status);
 int lm_message_thread_runtime_delete(struct LmMessageThreadRuntime *runtime);
 struct LmMessageThreadPool *lm_message_thread_pool_new(struct LmMessageThreadRuntime *runtime, size_t worker_count);
 void lm_message_thread_pool_request_stop(struct LmMessageThreadPool *pool);
 void lm_message_thread_pool_request_stop_when_idle(struct LmMessageThreadPool *pool);
+size_t lm_message_thread_pool_pump(struct LmMessageThreadPool *pool, size_t max_turns);
 int lm_message_thread_pool_delete(struct LmMessageThreadPool *pool);
 struct LmMessageThread *lm_message_thread_new_in(struct LmMessageThreadPool *pool);
 int lm_message_thread_start_mailbox(struct LmMessageThread *thread, void (*entry)(struct LmMessageThread *, void *), void *argument);
@@ -40,6 +42,7 @@ int lm_message_thread_begin_turn(struct LmMessageThread *thread);
 int lm_message_thread_end_turn(struct LmMessageThread *thread);
 void lm_message_thread_request_stop(struct LmMessageThread *thread, int status);
 void lm_message_thread_request_failure(struct LmMessageThread *thread, int status);
+int lm_message_thread_request_exit(struct LmMessageThread *thread, int status);
 int lm_message_thread_status(const struct LmMessageThread *thread);
 int lm_message_thread_is_running(const struct LmMessageThread *thread);
 size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);
@@ -229,6 +232,10 @@ struct LmMessageThreadRuntime {
     LmMessageRoute * route_head;
     size_t route_count;
     LmMessageThread * root_thread;
+    LmMessageThread * exit_requester;
+    int exit_requested;
+    int exit_ready;
+    int exit_status;
 };
 struct LmMessageThreadPool {
     LmHostThread * *workers;
@@ -373,9 +380,11 @@ LmMessageThreadRuntime * (lm_message_thread_runtime_new)(void);
 int (lm_message_thread_runtime_delete)(LmMessageThreadRuntime *runtime);
 int (lm_message_thread_runtime_attach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
 int (lm_message_thread_runtime_detach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
+int (lm_message_thread_runtime_exit_state)(LmMessageThreadRuntime *runtime, int *out_requested, int *out_ready, int *out_status);
 LmMessageThreadPool * (lm_message_thread_pool_new)(LmMessageThreadRuntime *runtime, size_t worker_count);
 void (lm_message_thread_pool_request_stop)(LmMessageThreadPool *pool);
 void (lm_message_thread_pool_request_stop_when_idle)(LmMessageThreadPool *pool);
+size_t (lm_message_thread_pool_pump)(LmMessageThreadPool *pool, size_t max_turns);
 int (lm_message_thread_pool_delete)(LmMessageThreadPool *pool);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
@@ -395,6 +404,7 @@ int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
 void (lm_message_thread_request_stop)(LmMessageThread *thread, int status);
 void (lm_message_thread_request_failure)(LmMessageThread *thread, int status);
+int (lm_message_thread_request_exit)(LmMessageThread *requester, int status);
 int (lm_message_thread_is_running)(const LmMessageThread *thread);
 int (lm_message_thread_status)(const LmMessageThread *thread);
 LmOwnArena * (lm_message_thread_owner)(LmMessageThread *thread);
@@ -407,6 +417,9 @@ int (lm_message_thread_component_attach)(struct LmMessageThread *lm_lmx_message_
 void * (lm_message_thread_component_get)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 int (lm_message_thread_component_remove)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 size_t (lm_message_thread_component_count)(const LmMessageThread *thread);
+
+
+
 
 
 
@@ -661,6 +674,8 @@ int lm_message_thread_end_turn(LmMessageThread *thread);
 #define LM_THREAD_PROVIDER_PTHREAD 1
 #define LM_THREAD_PROVIDER_WIN32 2
 #define LM_THREAD_PROVIDER_SINGLE 3
+
+#define LM_MESSAGE_STATUS_EXIT_DISCARDED (-1)
 
 #ifndef LM_THREAD_PROVIDER
 #define LM_THREAD_PROVIDER LM_THREAD_PROVIDER_SINGLE
@@ -1567,6 +1582,60 @@ static int lm_native_message_thread_pool_end_turn(
     return status;
 }
 
+static int lm_native_message_thread_mark_exit_ready(
+    LmMessageThread *thread
+) {
+    LmMessageThreadRuntime *runtime;
+    int effective_status;
+    int turn_failed;
+    int became_ready = 0;
+
+    if (thread == 0) {
+        return 0;
+    }
+    if (lm_native_message_thread_state_lock(thread) != 0) {
+        return 0;
+    }
+    runtime = thread->runtime;
+    effective_status = thread->stop_status;
+    turn_failed = thread->turn_failed;
+    (void)lm_native_message_thread_state_unlock(thread);
+    if (runtime == 0) {
+        return 0;
+    }
+    if (runtime->route_mutex == 0 ||
+        lm_mutex_lock(runtime->route_mutex) != 0) {
+        return 0;
+    }
+    if (runtime->exit_requested && !runtime->exit_ready &&
+        runtime->exit_requester == thread) {
+        if (turn_failed) {
+            runtime->exit_status = effective_status;
+        }
+        runtime->exit_ready = 1;
+        runtime->exit_requester = 0;
+        became_ready = 1;
+    }
+    (void)lm_mutex_unlock(runtime->route_mutex);
+    return became_ready;
+}
+
+static int lm_native_message_thread_remote_delivery_status(
+    LmMessageThreadRuntime *runtime
+) {
+    int status;
+
+    if (runtime == 0 || runtime->route_mutex == 0 ||
+        lm_mutex_lock(runtime->route_mutex) != 0) {
+        return 1;
+    }
+    status = runtime->exit_ready
+        ? LM_MESSAGE_STATUS_EXIT_DISCARDED
+        : LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED;
+    (void)lm_mutex_unlock(runtime->route_mutex);
+    return status;
+}
+
 static int lm_native_message_thread_deliver_local(
     LmMessageThreadRuntime *runtime,
     const char *route,
@@ -1580,6 +1649,10 @@ static int lm_native_message_thread_deliver_local(
     if (runtime == 0 || runtime->route_mutex == 0 ||
         lm_mutex_lock(runtime->route_mutex) != 0) {
         return 1;
+    }
+    if (runtime->exit_ready) {
+        (void)lm_mutex_unlock(runtime->route_mutex);
+        return LM_MESSAGE_STATUS_EXIT_DISCARDED;
     }
     binding = runtime->route_head;
     while (binding != 0 && strcmp(binding->route, route) != 0) {
@@ -1666,11 +1739,13 @@ static int lm_native_message_thread_outbox_finish(
                     entry->message = 0;
                 }
             } else {
-                status =
-                    LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED;
+                status = lm_native_message_thread_remote_delivery_status(
+                    thread->runtime
+                );
             }
         }
-        if (first_status == 0 && status != 0) {
+        if (first_status == 0 && status != 0 &&
+            status != LM_MESSAGE_STATUS_EXIT_DISCARDED) {
             first_status = status;
         }
         lm_native_message_thread_outbox_entry_delete(entry);
@@ -1705,6 +1780,7 @@ static void lm_native_message_thread_execute(
     int run_entry;
     int invoke_status = 0;
     int commit_allowed = 0;
+    int exit_became_ready = 0;
 
     if (pool->single_mode) {
         runtime = pool->runtime;
@@ -1734,6 +1810,7 @@ static void lm_native_message_thread_execute(
     (void)lm_native_message_thread_outbox_finish(thread, commit_allowed);
     lm_native_message_thread_current_message_finish(thread);
     (void)lm_native_message_thread_pool_end_turn(thread);
+    exit_became_ready = lm_native_message_thread_mark_exit_ready(thread);
     if (runtime != 0) {
         runtime->single_execution_depth -= 1U;
         runtime->single_active_thread = previous_active_thread;
@@ -1748,10 +1825,21 @@ static void lm_native_message_thread_execute(
 
     thread->execution_identity = 0;
     thread->executing = 0;
+    (void)lm_native_message_thread_state_unlock(thread);
+    if (exit_became_ready) {
+        lm_native_message_thread_pool_stop_locked(pool);
+    }
+    if (lm_native_message_thread_state_lock(thread) != 0) {
+        abort();
+    }
     if (pool->stop_requested &&
         thread->state == LM_MESSAGE_THREAD_RUNNING) {
         thread->stop_status = 0;
         thread->state = LM_MESSAGE_THREAD_STOPPING;
+    }
+    if (thread->state == LM_MESSAGE_THREAD_STOPPING &&
+        !thread->scheduled) {
+        lm_native_message_thread_schedule_stop_locked(pool, thread);
     }
     if (thread->state == LM_MESSAGE_THREAD_RUNNING &&
         ((thread->mailbox_mode && thread->inbox_head != 0) ||
@@ -1837,6 +1925,24 @@ static int lm_native_message_thread_pool_pump_one(
     return 1;
 }
 
+size_t lm_message_thread_pool_pump(
+    LmMessageThreadPool *pool,
+    size_t max_turns
+) {
+    size_t completed = 0U;
+
+    if (pool == 0 || max_turns == 0U || !pool->single_mode ||
+        pool->deleting ||
+        !lm_native_message_thread_pool_lifecycle_allowed(pool)) {
+        return 0U;
+    }
+    while (completed < max_turns &&
+           lm_native_message_thread_pool_pump_one(pool) > 0) {
+        completed += 1U;
+    }
+    return completed;
+}
+
 LmMessageThreadRuntime *lm_message_thread_runtime_new(void) {
     LmMessageThreadRuntime *runtime =
         (LmMessageThreadRuntime *)calloc(1U, sizeof(*runtime));
@@ -1853,6 +1959,64 @@ LmMessageThreadRuntime *lm_message_thread_runtime_new(void) {
         return 0;
     }
     return runtime;
+}
+
+int lm_message_thread_request_exit(
+    LmMessageThread *requester,
+    int status
+) {
+    LmMessageThreadRuntime *runtime;
+    int valid = 0;
+    int selected_status;
+
+    if (requester == 0 ||
+        lm_native_message_thread_state_lock(requester) != 0) {
+        return 1;
+    }
+    runtime = requester->runtime;
+    if (runtime != 0 && lm_native_message_thread_is_current(requester) &&
+        ((requester->pool == 0 && runtime->root_thread == requester) ||
+         (requester->pool != 0 && requester->pool->runtime == runtime))) {
+        valid = 1;
+    }
+    (void)lm_native_message_thread_state_unlock(requester);
+    if (!valid || runtime->route_mutex == 0 ||
+        lm_mutex_lock(runtime->route_mutex) != 0) {
+        return 1;
+    }
+    if (!runtime->exit_requested) {
+        runtime->exit_requester = requester;
+        runtime->exit_requested = 1;
+        runtime->exit_ready = 0;
+        runtime->exit_status = status;
+    }
+    selected_status = runtime->exit_status;
+    (void)lm_mutex_unlock(runtime->route_mutex);
+    lm_message_thread_request_stop(requester, selected_status);
+    return 0;
+}
+
+int lm_message_thread_runtime_exit_state(
+    LmMessageThreadRuntime *runtime,
+    int *out_requested,
+    int *out_ready,
+    int *out_status
+) {
+    if (out_requested == 0 || out_ready == 0 || out_status == 0) {
+        return 1;
+    }
+    *out_requested = 0;
+    *out_ready = 0;
+    *out_status = 0;
+    if (runtime == 0 || runtime->route_mutex == 0 ||
+        lm_mutex_lock(runtime->route_mutex) != 0) {
+        return 1;
+    }
+    *out_requested = runtime->exit_requested;
+    *out_ready = runtime->exit_ready;
+    *out_status = runtime->exit_status;
+    (void)lm_mutex_unlock(runtime->route_mutex);
+    return 0;
 }
 
 int lm_message_thread_runtime_attach_root(
@@ -4124,5 +4288,6 @@ int lm_message_thread_end_turn(LmMessageThread *thread) {
         lm_condition_broadcast(thread -> stopped_condition);
     }
     lm_native_message_thread_state_unlock(thread);
+    lm_native_message_thread_mark_exit_ready(thread);
     return status;
 }

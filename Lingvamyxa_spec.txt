@@ -7682,11 +7682,50 @@ explicitly below.
         `LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED` (65). Invalid
         address syntax fails with `LM_MESSAGE_STATUS_INVALID_ADDRESS` (66).
 
-        `exit:` is NOT IMPLEMENTED. Proposed application-level contract: request
-        stop on every application Message Thread, wait until all of them are
-        STOPPED, then release application roots and return the selected process
-        status. `reply`, `await` and `schedule` are NOT IMPLEMENTED as source
-        receivers. Proposed contracts: `reply(Value | Failure)`;
+        `exit:` is an IMPLEMENTED L2/L3 application receiver:
+
+            exit:
+            exit: StatusExpression
+
+        The omitted status is zero; the optional expression is evaluated
+        exactly once and converted to `int`. The first accepted application
+        exit request selects the ordinary exit-request status. `exit:` is
+        cooperative and does not perform a hidden return, jump or lexical unwind: the
+        current fn/sub/handler continues through its visible source control flow
+        to the common turn boundary. It is available wherever the current
+        MessageThread context is explicitly propagated, including managed
+        nested functions, but is rejected in an unmanaged external function.
+
+        Request and shutdown are separate phases so an actor never joins
+        itself. The requesting Message Thread becomes STOPPING, finishes its
+        current outbox and collection boundary, and only then publishes the
+        application exit as ready. A delivery or collector failure in that
+        requester replaces the requested ordinary status with the requester's
+        effective failure status. Once ready, the application controller stops
+        the pool and root, waits for declared actors/workers, releases the pool,
+        detaches/releases the root and deletes the runtime before returning to
+        the host. An actor callback only requests this sequence; it never runs
+        join/delete itself.
+
+        Host-process status keeps the existing failure-preserving priority:
+        a nonzero effective root status wins; otherwise a nonzero selected
+        application exit status wins; otherwise the first nonzero declared
+        actor status wins; cleanup failure supplies `1` only if all earlier
+        choices were zero. Thus `stop: 3` followed in the same root turn by the
+        first `exit: 5` records exit status `5` without rewriting the root's
+        already selected status `3`, and the host returns `3`.
+
+        The requester outbox is committed before the shutdown cut. Deliveries
+        from other turns are linearized by the runtime mutex: entries admitted
+        before the cut follow normal FIFO delivery, while entries that reach
+        transport after the cut are cancelled as shutdown work without creating
+        a spurious route/transport failure. The current generated application
+        has one runtime and at most one application pool. Coordination of
+        several independently constructed low-level runtimes/pools remains the
+        responsibility of their explicit host controller.
+
+        `reply`, `await` and `schedule` are NOT IMPLEMENTED as source receivers.
+        Proposed contracts: `reply(Value | Failure)`;
         `await(Future) -> Value | Failure`; and `schedule(Message, Time)`.
 
         The explicit host runtime, worker-pool and actor start/join ABI is
@@ -10764,9 +10803,11 @@ Generated teardown then joins the declared actors, deletes the pool and runtime,
 and releases the root. A startup or lifecycle failure that prevents orderly
 detach uses hard stop instead. A nonzero root result by itself is not such a
 failure: messages committed by earlier successful turns are still drained.
-The current drain primitive is pool-local; generated applications currently use
-one application pool. Coordinating quiescence across several pools in one
-runtime belongs to the application-wide `exit:` step.
+The current drain primitive is pool-local. A generated source application has
+one runtime and at most one application pool, so its application-wide `exit:`
+coordinates that root and pool. Several pools in one low-level runtime, or
+several independently constructed runtimes, require an explicit host
+controller and are outside the current generated source profile.
 
 `stop:` requests termination of the explicitly executing Message Thread:
 
@@ -10795,13 +10836,43 @@ evaluate the status once, run active generated cleanup, request stop, and reach
 the common end-turn boundary. Returns in all other functions remain ordinary
 function returns.
 
-Application-wide `exit:` remains deliberately separate and is NOT IMPLEMENTED.
-The runtime already provides pool stop and actor join primitives, including the
-final end-turn transition of a scheduled actor. What is still missing is the
-source-level application coordinator: it must enumerate the application's
-runtimes, pools and roots, request their orderly stop, join all actors and host
-workers, select the process result, release application roots and only then
-return to the host process.
+`exit:` requests termination of the generated application:
+
+    exit:
+    exit: statusExpression
+
+The omitted status is zero and the optional expression is evaluated once and
+converted to `int`. The first accepted request selects the ordinary application
+exit-request status. Like `stop:`, `exit:` is cooperative: it performs no
+hidden return, jump or lexical unwind. The requesting Message Thread continues
+along visible source control flow to its common end-turn boundary.
+
+Shutdown has a request phase and a ready phase. The requester becomes STOPPING,
+commits its current outbox, finishes current-message cleanup and collection,
+and then publishes the exit as ready. A delivery, diagnostic or collector
+failure in that final requester turn replaces the ordinary requested status
+with the effective failure status. Deliveries from other turns which reach the
+runtime only after ready are cancelled as shutdown work rather than reported as
+new route or transport failures.
+
+The generated root observes exit state only at turn boundaries. With the
+`single` provider it pumps at most one actor turn at each such safe point, then
+reads the state again; native providers advance actors on their workers. Once
+ready is observed, the controller stops the pool. If the root was not itself
+the requester, it enters one synthetic final root turn, requests root stop and
+reaches the ordinary common end-turn boundary without executing user body.
+Teardown joins declared actors and workers, deletes the pool, detaches and
+releases the root, deletes the runtime, and only then returns the selected
+status to the host. Actor code requests this sequence but never joins itself.
+Final status preserves an existing nonzero effective root status first, then a
+nonzero selected application exit status, then the first nonzero declared actor
+status, and finally cleanup failure. This distinguishes the application exit
+request from an earlier independently selected root failure/status.
+
+The current generated profile deliberately has one runtime and at most one
+pool. Application-wide coordination across several manually constructed
+low-level runtimes or pools remains the responsibility of their host
+controller.
 
 19.28.3. Root State and Handler Frame
 
@@ -11248,8 +11319,10 @@ whole-branch-transfer rules of section 19.29.
 The current `void *argument` entry parameter is a low-level hosted ABI facility;
 it does not weaken the source ownership boundary. `send:` and `thread:` are
 implemented by the source and runtime contracts in sections 19.27 and 19.28.7.
-`reply`, `await`, `schedule` and application-wide `exit:` remain NOT IMPLEMENTED
-as generic source operations.
+`exit:` is implemented for the generated one-runtime, zero-or-one-pool
+application profile. `reply`, `await` and `schedule` remain NOT IMPLEMENTED as
+generic source operations; multi-runtime shutdown remains an explicit host
+controller responsibility.
 
 
 19.29. Ownership and Memory Operators
@@ -13486,11 +13559,16 @@ Current hosted-bootstrap implementation:
         transactional per-turn outbox ABI;
     root and actor outboxes roll back a failed turn; successful entries publish
         FIFO, and teardown drains cascaded local messages to pool quiescence;
+    source `exit:` is implemented as a first-request-wins cooperative
+        application shutdown; the requester completes its turn, the generated
+        controller stops and joins the application pool, completes the root
+        boundary and releases runtime resources before host return;
     message parsing/validation, reply routing, configured remote/inter-runtime
         delivery and envelope/address consistency checking are not yet
         implemented;
-    `reply`, `await`, `schedule` and application-wide stop-and-wait `exit:` are
-        not yet implemented as generic source operations;
+    `reply`, `await` and `schedule` are not yet implemented as generic source
+        operations; shutdown across several manually constructed runtimes or
+        pools is not coordinated by the current source profile;
     a runtime frame/cleanup stack for unwinding through nested Message Thread
         calls is not yet implemented;
     a distinct disposable per-turn/handler arena is not yet implemented;
@@ -13736,8 +13814,9 @@ This integrated model reduces to these rules:
     host thread provider = compile-time backend `auto | pthread | win32 | single`;
     stop = implemented cooperative request to finish the explicitly executing
                 actor after its current/final turn boundary;
-    exit = proposed application coordinator which stops and joins all runtimes,
-                pools and Message Threads before host-process return;
+    exit = implemented cooperative coordinator for the generated application
+                runtime/root and optional pool; it stops and joins declared
+                Message Threads before host-process return;
     local RegistryView = overlay/import/cache over persistent registry sources,
                       not a full per-thread registry copy;
     memory/auth/service rules = table/evidence policies over the same pipeline.

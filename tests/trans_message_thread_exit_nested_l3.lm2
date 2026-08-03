@@ -1,0 +1,21 @@
+L3:
+    fn: lm_test_exit_status_once (@: int calls) int
+        calls[0]: calls[0] + 1
+        return: 0
+    end: lm_test_exit_status_once
+
+    sub: lm_test_request_exit (@: int calls)
+        exit: lm_test_exit_status_once(calls)
+        assert: calls[0] = 1
+        calls[0]: calls[0] + 1
+    end: lm_test_request_exit
+
+    external:
+        fn: main () int
+            int: calls 0
+            lm_test_request_exit(@ calls)
+            assert: calls = 2
+            return: 0
+        end: main
+    end: external
+end: L3

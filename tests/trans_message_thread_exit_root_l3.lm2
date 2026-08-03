@@ -1,0 +1,10 @@
+L3:
+    external:
+        fn: main () int
+            exit: 0
+            int: continued 1
+            assert: continued = 1
+            return: 0
+        end: main
+    end: external
+end: L3

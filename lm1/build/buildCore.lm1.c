@@ -25,10 +25,12 @@ void lm_message_thread_delete(struct LmMessageThread *thread);
 struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
 int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
+int lm_message_thread_runtime_exit_state(struct LmMessageThreadRuntime *runtime, int *requested, int *ready, int *status);
 int lm_message_thread_runtime_delete(struct LmMessageThreadRuntime *runtime);
 struct LmMessageThreadPool *lm_message_thread_pool_new(struct LmMessageThreadRuntime *runtime, size_t worker_count);
 void lm_message_thread_pool_request_stop(struct LmMessageThreadPool *pool);
 void lm_message_thread_pool_request_stop_when_idle(struct LmMessageThreadPool *pool);
+size_t lm_message_thread_pool_pump(struct LmMessageThreadPool *pool, size_t max_turns);
 int lm_message_thread_pool_delete(struct LmMessageThreadPool *pool);
 struct LmMessageThread *lm_message_thread_new_in(struct LmMessageThreadPool *pool);
 int lm_message_thread_start_mailbox(struct LmMessageThread *thread, void (*entry)(struct LmMessageThread *, void *), void *argument);
@@ -43,6 +45,7 @@ int lm_message_thread_begin_turn(struct LmMessageThread *thread);
 int lm_message_thread_end_turn(struct LmMessageThread *thread);
 void lm_message_thread_request_stop(struct LmMessageThread *thread, int status);
 void lm_message_thread_request_failure(struct LmMessageThread *thread, int status);
+int lm_message_thread_request_exit(struct LmMessageThread *thread, int status);
 int lm_message_thread_status(const struct LmMessageThread *thread);
 int lm_message_thread_is_running(const struct LmMessageThread *thread);
 size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);
@@ -232,6 +235,10 @@ struct LmMessageThreadRuntime {
     LmMessageRoute * route_head;
     size_t route_count;
     LmMessageThread * root_thread;
+    LmMessageThread * exit_requester;
+    int exit_requested;
+    int exit_ready;
+    int exit_status;
 };
 struct LmMessageThreadPool {
     LmHostThread * *workers;
@@ -380,9 +387,11 @@ LmMessageThreadRuntime * (lm_message_thread_runtime_new)(void);
 int (lm_message_thread_runtime_delete)(LmMessageThreadRuntime *runtime);
 int (lm_message_thread_runtime_attach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
 int (lm_message_thread_runtime_detach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
+int (lm_message_thread_runtime_exit_state)(LmMessageThreadRuntime *runtime, int *out_requested, int *out_ready, int *out_status);
 LmMessageThreadPool * (lm_message_thread_pool_new)(LmMessageThreadRuntime *runtime, size_t worker_count);
 void (lm_message_thread_pool_request_stop)(LmMessageThreadPool *pool);
 void (lm_message_thread_pool_request_stop_when_idle)(LmMessageThreadPool *pool);
+size_t (lm_message_thread_pool_pump)(LmMessageThreadPool *pool, size_t max_turns);
 int (lm_message_thread_pool_delete)(LmMessageThreadPool *pool);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
@@ -402,6 +411,7 @@ int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
 void (lm_message_thread_request_stop)(LmMessageThread *thread, int status);
 void (lm_message_thread_request_failure)(LmMessageThread *thread, int status);
+int (lm_message_thread_request_exit)(LmMessageThread *requester, int status);
 int (lm_message_thread_is_running)(const LmMessageThread *thread);
 int (lm_message_thread_status)(const LmMessageThread *thread);
 LmOwnArena * (lm_message_thread_owner)(LmMessageThread *thread);
@@ -414,6 +424,9 @@ int (lm_message_thread_component_attach)(struct LmMessageThread *lm_lmx_message_
 void * (lm_message_thread_component_get)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 int (lm_message_thread_component_remove)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 size_t (lm_message_thread_component_count)(const LmMessageThread *thread);
+
+
+
 
 
 
@@ -855,6 +868,10 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_root_drain.c' '-o' $singleRootDrainTest\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw 'single MessageThread root/drain test link failed' }\n", file);
     fputs("    Invoke-LmTestWithTimeout $singleRootDrainTest 'single MessageThread root/drain test'\n", file);
+    fputs("    $singleApplicationExitTest = Join-Path 'build/obj/tests' 'message_thread_application_exit_single.exe'\n", file);
+    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_application_exit.c' '-o' $singleApplicationExitTest\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw 'single MessageThread application exit test link failed' }\n", file);
+    fputs("    Invoke-LmTestWithTimeout $singleApplicationExitTest 'single MessageThread application exit test'\n", file);
     fputs("    $nativePoolTest = Join-Path 'build/obj/tests' 'message_thread_pool_native.exe'\n", file);
     fputs("    $env:LM_THREAD_PROVIDER = 'win32'\n", file);
     fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_pool_native.c' '-o' $nativePoolTest\n", file);
@@ -868,6 +885,10 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_root_drain.c' '-o' $nativeRootDrainTest\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw 'Win32 MessageThread root/drain test link failed' }\n", file);
     fputs("    Invoke-LmTestWithTimeout $nativeRootDrainTest 'Win32 MessageThread root/drain test'\n", file);
+    fputs("    $nativeApplicationExitTest = Join-Path 'build/obj/tests' 'message_thread_application_exit_native.exe'\n", file);
+    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_application_exit.c' '-o' $nativeApplicationExitTest\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw 'Win32 MessageThread application exit test link failed' }\n", file);
+    fputs("    Invoke-LmTestWithTimeout $nativeApplicationExitTest 'Win32 MessageThread application exit test'\n", file);
     fputs("}\n", file);
     fputs("finally {\n", file);
     fputs("    if ($null -eq $previousThreadProvider) { Remove-Item Env:LM_THREAD_PROVIDER -ErrorAction SilentlyContinue } else { $env:LM_THREAD_PROVIDER = $previousThreadProvider }\n", file);
@@ -1086,6 +1107,9 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("single_root_drain_test='build/obj/tests/message_thread_root_drain_single'\n", file);
     fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_root_drain.c -o \"$single_root_drain_test\"\n", file);
     fputs("lm_run_with_watchdog \"$single_root_drain_test\"\n", file);
+    fputs("single_application_exit_test='build/obj/tests/message_thread_application_exit_single'\n", file);
+    fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_application_exit.c -o \"$single_application_exit_test\"\n", file);
+    fputs("lm_run_with_watchdog \"$single_application_exit_test\"\n", file);
     fputs("native_pool_test='build/obj/tests/message_thread_pool_native'\n", file);
     fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_pool_native.c -o \"$native_pool_test\"\n", file);
     fputs("lm_run_with_watchdog \"$native_pool_test\"\n", file);
@@ -1095,6 +1119,9 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("native_root_drain_test='build/obj/tests/message_thread_root_drain_native'\n", file);
     fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_root_drain.c -o \"$native_root_drain_test\"\n", file);
     fputs("lm_run_with_watchdog \"$native_root_drain_test\"\n", file);
+    fputs("native_application_exit_test='build/obj/tests/message_thread_application_exit_native'\n", file);
+    fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_application_exit.c -o \"$native_application_exit_test\"\n", file);
+    fputs("lm_run_with_watchdog \"$native_application_exit_test\"\n", file);
     fputs("echo 'lm0 staged tests passed'\n", file);
     return 0;
 }
@@ -1945,6 +1972,13 @@ int main(int argc, char **argv) {
     int lm_lmx_application_root_attached = 0;
     int lm_lmx_thread_startup_failed = 0;
     int lm_lmx_thread_cleanup_failed = 0;
+    int lm_lmx_application_controller_failure = 0;
+    int lm_lmx_application_exit_requested = 0;
+    int lm_lmx_application_exit_ready = 0;
+    int lm_lmx_application_exit_status = 0;
+    int lm_lmx_application_exit_snapshot_requested = 0;
+    int lm_lmx_application_exit_snapshot_ready = 0;
+    int lm_lmx_application_exit_snapshot_status = 0;
     lm_lmx_message_thread = lm_message_thread_new();
     if (lm_lmx_message_thread == 0) {
         return 1;
@@ -1955,6 +1989,14 @@ int main(int argc, char **argv) {
     if (!lm_lmx_thread_startup_failed && lm_message_thread_runtime_attach_root(lm_lmx_application_runtime, lm_lmx_message_thread) != 0) lm_lmx_thread_startup_failed = 1; else if (!lm_lmx_thread_startup_failed) lm_lmx_application_root_attached = 1;
     if (lm_lmx_thread_startup_failed) lm_message_thread_request_failure(lm_lmx_message_thread, 1);
     while (lm_message_thread_begin_turn(lm_lmx_message_thread)) {
+        if (lm_lmx_application_controller_failure) {
+            lm_message_thread_request_failure(lm_lmx_message_thread, 1);
+            goto lm_message_thread_turn_end;
+        }
+        if (lm_lmx_application_exit_ready) {
+            lm_message_thread_request_stop(lm_lmx_message_thread, lm_lmx_application_exit_status);
+            goto lm_message_thread_turn_end;
+        }
         lm_message_thread_main_context.diagnostic_code = 0;
         if (setjmp(lm_message_thread_main_context.diagnostic_root) == 0) {
             char *trusted_make;
@@ -2023,6 +2065,32 @@ int main(int argc, char **argv) {
         }
     lm_message_thread_turn_end:
         (void)lm_message_thread_end_turn(lm_lmx_message_thread);
+        lm_lmx_application_exit_snapshot_requested = 0;
+        lm_lmx_application_exit_snapshot_ready = 0;
+        lm_lmx_application_exit_snapshot_status = 0;
+        if (lm_lmx_application_runtime != 0) {
+            if (lm_message_thread_runtime_exit_state(lm_lmx_application_runtime, &lm_lmx_application_exit_snapshot_requested, &lm_lmx_application_exit_snapshot_ready, &lm_lmx_application_exit_snapshot_status) != 0) {
+                lm_lmx_thread_cleanup_failed = 1;
+                lm_lmx_application_controller_failure = 1;
+            } else {
+                lm_lmx_application_exit_requested = lm_lmx_application_exit_snapshot_requested;
+                lm_lmx_application_exit_ready = lm_lmx_application_exit_snapshot_ready;
+                lm_lmx_application_exit_status = lm_lmx_application_exit_snapshot_status;
+            }
+        }
+    }
+    lm_lmx_application_exit_snapshot_requested = 0;
+    lm_lmx_application_exit_snapshot_ready = 0;
+    lm_lmx_application_exit_snapshot_status = 0;
+    if (lm_lmx_application_runtime != 0) {
+        if (lm_message_thread_runtime_exit_state(lm_lmx_application_runtime, &lm_lmx_application_exit_snapshot_requested, &lm_lmx_application_exit_snapshot_ready, &lm_lmx_application_exit_snapshot_status) != 0) {
+            lm_lmx_thread_cleanup_failed = 1;
+            lm_lmx_application_controller_failure = 1;
+        } else {
+            lm_lmx_application_exit_requested = lm_lmx_application_exit_snapshot_requested;
+            lm_lmx_application_exit_ready = lm_lmx_application_exit_snapshot_ready;
+            lm_lmx_application_exit_status = lm_lmx_application_exit_snapshot_status;
+        }
     }
     lm_message_thread_exit_status = lm_message_thread_status(lm_lmx_message_thread);
     if (lm_lmx_application_runtime != 0 && lm_lmx_application_root_attached) {
@@ -2031,6 +2099,7 @@ int main(int argc, char **argv) {
     if (lm_lmx_application_runtime != 0 && !lm_lmx_application_root_attached) {
         if (lm_message_thread_runtime_delete(lm_lmx_application_runtime) != 0) lm_lmx_thread_cleanup_failed = 1; else lm_lmx_application_runtime = 0;
     }
+    if (lm_message_thread_exit_status == 0 && lm_lmx_application_exit_requested && lm_lmx_application_exit_status != 0) lm_message_thread_exit_status = lm_lmx_application_exit_status;
     if (lm_message_thread_exit_status == 0 && lm_lmx_thread_cleanup_failed) lm_message_thread_exit_status = 1;
     if (!lm_lmx_application_root_attached) lm_message_thread_delete(lm_lmx_message_thread);
     return lm_message_thread_exit_status;

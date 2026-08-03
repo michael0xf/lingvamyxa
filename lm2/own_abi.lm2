@@ -564,6 +564,10 @@ table:
              route_head             LmMessageRoute
              route_count            size_t
              root_thread            LmMessageThread
+             exit_requester         LmMessageThread
+             exit_requested         int
+             exit_ready             int
+             exit_status            int
 end: `LmMessageThreadRuntime.field.class`
 
 table:
@@ -578,6 +582,10 @@ table:
              route_head             5
              route_count            6
              root_thread            7
+             exit_requester         8
+             exit_requested         9
+             exit_ready             10
+             exit_status            11
 end: `LmMessageThreadRuntime.field.index`
 
 table:
@@ -589,6 +597,7 @@ table:
              route_mutex           0
              route_head            0
              root_thread           0
+             exit_requester        0
 end: `LmMessageThreadRuntime.field.address-depth`
 
 table:
@@ -821,9 +830,11 @@ table:
              lm_message_thread_runtime_delete 1
              lm_message_thread_runtime_attach_root 1
              lm_message_thread_runtime_detach_root 1
+             lm_message_thread_runtime_exit_state 1
              lm_message_thread_pool_new       1
              lm_message_thread_pool_request_stop 1
              lm_message_thread_pool_request_stop_when_idle 1
+             lm_message_thread_pool_pump       1
              lm_message_thread_pool_delete    1
              lm_message_thread_init          1
              lm_message_thread_destroy       1
@@ -843,6 +854,7 @@ table:
              lm_message_thread_collect       1
              lm_message_thread_request_stop  1
              lm_message_thread_request_failure 1
+             lm_message_thread_request_exit  1
              lm_message_thread_is_running    1
              lm_message_thread_status        1
              lm_message_thread_owner         1
@@ -940,9 +952,11 @@ fn: lm_message_thread_runtime_new () LmMessageThreadRuntime
 fn: lm_message_thread_runtime_delete (LmMessageThreadRuntime: runtime) int
 fn: lm_message_thread_runtime_attach_root (LmMessageThreadRuntime: runtime; LmMessageThread: thread) int
 fn: lm_message_thread_runtime_detach_root (LmMessageThreadRuntime: runtime; LmMessageThread: thread) int
+fn: lm_message_thread_runtime_exit_state (LmMessageThreadRuntime: runtime; @: int out_requested; @: int out_ready; @: int out_status) int
 fn: lm_message_thread_pool_new (LmMessageThreadRuntime: runtime; size_t: worker_count) LmMessageThreadPool
 fn: lm_message_thread_pool_request_stop (LmMessageThreadPool: pool) void
 fn: lm_message_thread_pool_request_stop_when_idle (LmMessageThreadPool: pool) void
+fn: lm_message_thread_pool_pump (LmMessageThreadPool: pool; size_t: max_turns) size_t
 fn: lm_message_thread_pool_delete (LmMessageThreadPool: pool) int
 fn: lm_message_thread_init (LmMessageThread: thread) int
 fn: lm_message_thread_destroy (LmMessageThread: thread) void
@@ -962,6 +976,7 @@ fn: lm_message_thread_end_turn (LmMessageThread: thread) int
 fn: lm_message_thread_collect (LmMessageThread: thread) int
 fn: lm_message_thread_request_stop (LmMessageThread: thread; int: status) void
 fn: lm_message_thread_request_failure (LmMessageThread: thread; int: status) void
+fn: lm_message_thread_request_exit (LmMessageThread: requester; int: status) int
 fn: lm_message_thread_is_running (const: (LmMessageThread: thread)) int
 fn: lm_message_thread_status (const: (LmMessageThread: thread)) int
 fn: lm_message_thread_owner (LmMessageThread: thread) LmOwnArena

@@ -1,0 +1,8 @@
+L2:
+    external:
+        fn: lm_test_unmanaged_exit () int
+            exit: 0
+            return: 0
+        end: lm_test_unmanaged_exit
+    end: external
+end: L2

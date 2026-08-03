@@ -22,10 +22,12 @@ void lm_message_thread_delete(struct LmMessageThread *thread);
 struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
 int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
+int lm_message_thread_runtime_exit_state(struct LmMessageThreadRuntime *runtime, int *requested, int *ready, int *status);
 int lm_message_thread_runtime_delete(struct LmMessageThreadRuntime *runtime);
 struct LmMessageThreadPool *lm_message_thread_pool_new(struct LmMessageThreadRuntime *runtime, size_t worker_count);
 void lm_message_thread_pool_request_stop(struct LmMessageThreadPool *pool);
 void lm_message_thread_pool_request_stop_when_idle(struct LmMessageThreadPool *pool);
+size_t lm_message_thread_pool_pump(struct LmMessageThreadPool *pool, size_t max_turns);
 int lm_message_thread_pool_delete(struct LmMessageThreadPool *pool);
 struct LmMessageThread *lm_message_thread_new_in(struct LmMessageThreadPool *pool);
 int lm_message_thread_start_mailbox(struct LmMessageThread *thread, void (*entry)(struct LmMessageThread *, void *), void *argument);
@@ -40,6 +42,7 @@ int lm_message_thread_begin_turn(struct LmMessageThread *thread);
 int lm_message_thread_end_turn(struct LmMessageThread *thread);
 void lm_message_thread_request_stop(struct LmMessageThread *thread, int status);
 void lm_message_thread_request_failure(struct LmMessageThread *thread, int status);
+int lm_message_thread_request_exit(struct LmMessageThread *thread, int status);
 int lm_message_thread_status(const struct LmMessageThread *thread);
 int lm_message_thread_is_running(const struct LmMessageThread *thread);
 size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);
@@ -300,6 +303,10 @@ struct LmMessageThreadRuntime {
     LmMessageRoute * route_head;
     size_t route_count;
     LmMessageThread * root_thread;
+    LmMessageThread * exit_requester;
+    int exit_requested;
+    int exit_ready;
+    int exit_status;
 };
 struct LmMessageThreadPool {
     LmHostThread * *workers;
@@ -669,9 +676,11 @@ LmMessageThreadRuntime * (lm_message_thread_runtime_new)(void);
 int (lm_message_thread_runtime_delete)(LmMessageThreadRuntime *runtime);
 int (lm_message_thread_runtime_attach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
 int (lm_message_thread_runtime_detach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
+int (lm_message_thread_runtime_exit_state)(LmMessageThreadRuntime *runtime, int *out_requested, int *out_ready, int *out_status);
 LmMessageThreadPool * (lm_message_thread_pool_new)(LmMessageThreadRuntime *runtime, size_t worker_count);
 void (lm_message_thread_pool_request_stop)(LmMessageThreadPool *pool);
 void (lm_message_thread_pool_request_stop_when_idle)(LmMessageThreadPool *pool);
+size_t (lm_message_thread_pool_pump)(LmMessageThreadPool *pool, size_t max_turns);
 int (lm_message_thread_pool_delete)(LmMessageThreadPool *pool);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
@@ -691,6 +700,7 @@ int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
 void (lm_message_thread_request_stop)(LmMessageThread *thread, int status);
 void (lm_message_thread_request_failure)(LmMessageThread *thread, int status);
+int (lm_message_thread_request_exit)(LmMessageThread *requester, int status);
 int (lm_message_thread_is_running)(const LmMessageThread *thread);
 int (lm_message_thread_status)(const LmMessageThread *thread);
 LmOwnArena * (lm_message_thread_owner)(LmMessageThread *thread);
@@ -723,6 +733,9 @@ const char * (lm_p0_node_kind_class_name)(struct LmMessageThread *lm_lmx_message
 char * (lm_p0_dump_alloc)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
 void (lm_p0_free)(struct LmMessageThread *lm_lmx_message_thread, void *ptr);
 static int lm_registry_source_load_root(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Node *root);
+
+
+
 
 
 

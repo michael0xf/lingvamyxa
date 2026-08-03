@@ -22,10 +22,12 @@ void lm_message_thread_delete(struct LmMessageThread *thread);
 struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
 int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
+int lm_message_thread_runtime_exit_state(struct LmMessageThreadRuntime *runtime, int *requested, int *ready, int *status);
 int lm_message_thread_runtime_delete(struct LmMessageThreadRuntime *runtime);
 struct LmMessageThreadPool *lm_message_thread_pool_new(struct LmMessageThreadRuntime *runtime, size_t worker_count);
 void lm_message_thread_pool_request_stop(struct LmMessageThreadPool *pool);
 void lm_message_thread_pool_request_stop_when_idle(struct LmMessageThreadPool *pool);
+size_t lm_message_thread_pool_pump(struct LmMessageThreadPool *pool, size_t max_turns);
 int lm_message_thread_pool_delete(struct LmMessageThreadPool *pool);
 struct LmMessageThread *lm_message_thread_new_in(struct LmMessageThreadPool *pool);
 int lm_message_thread_start_mailbox(struct LmMessageThread *thread, void (*entry)(struct LmMessageThread *, void *), void *argument);
@@ -40,6 +42,7 @@ int lm_message_thread_begin_turn(struct LmMessageThread *thread);
 int lm_message_thread_end_turn(struct LmMessageThread *thread);
 void lm_message_thread_request_stop(struct LmMessageThread *thread, int status);
 void lm_message_thread_request_failure(struct LmMessageThread *thread, int status);
+int lm_message_thread_request_exit(struct LmMessageThread *thread, int status);
 int lm_message_thread_status(const struct LmMessageThread *thread);
 int lm_message_thread_is_running(const struct LmMessageThread *thread);
 size_t lm_message_thread_turn_count(const struct LmMessageThread *thread);
@@ -286,6 +289,10 @@ struct LmMessageThreadRuntime {
     LmMessageRoute * route_head;
     size_t route_count;
     LmMessageThread * root_thread;
+    LmMessageThread * exit_requester;
+    int exit_requested;
+    int exit_ready;
+    int exit_status;
 };
 struct LmMessageThreadPool {
     LmHostThread * *workers;
@@ -990,9 +997,11 @@ LmMessageThreadRuntime * (lm_message_thread_runtime_new)(void);
 int (lm_message_thread_runtime_delete)(LmMessageThreadRuntime *runtime);
 int (lm_message_thread_runtime_attach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
 int (lm_message_thread_runtime_detach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
+int (lm_message_thread_runtime_exit_state)(LmMessageThreadRuntime *runtime, int *out_requested, int *out_ready, int *out_status);
 LmMessageThreadPool * (lm_message_thread_pool_new)(LmMessageThreadRuntime *runtime, size_t worker_count);
 void (lm_message_thread_pool_request_stop)(LmMessageThreadPool *pool);
 void (lm_message_thread_pool_request_stop_when_idle)(LmMessageThreadPool *pool);
+size_t (lm_message_thread_pool_pump)(LmMessageThreadPool *pool, size_t max_turns);
 int (lm_message_thread_pool_delete)(LmMessageThreadPool *pool);
 int (lm_message_thread_init)(LmMessageThread *thread);
 void (lm_message_thread_destroy)(LmMessageThread *thread);
@@ -1012,6 +1021,7 @@ int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
 void (lm_message_thread_request_stop)(LmMessageThread *thread, int status);
 void (lm_message_thread_request_failure)(LmMessageThread *thread, int status);
+int (lm_message_thread_request_exit)(LmMessageThread *requester, int status);
 int (lm_message_thread_is_running)(const LmMessageThread *thread);
 int (lm_message_thread_status)(const LmMessageThread *thread);
 LmOwnArena * (lm_message_thread_owner)(LmMessageThread *thread);
@@ -1185,6 +1195,7 @@ static int lm_trans_emit_l4_payload_node(struct LmMessageThread *lm_lmx_message_
 static int lm_trans_statement_emit_import(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_predef(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_send(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
+static int lm_trans_statement_emit_exit(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_registry_path_is_predefined(struct LmMessageThread *lm_lmx_message_thread, const char *registry_path);
 static int lm_trans_materialize_l2_table_source(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmP0Frame *frame, int require_facade);
 static int lm_trans_materialize_l2_join_source(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmP0Frame *frame);
@@ -1256,6 +1267,10 @@ static int lm_trans_declare_registry_fn_descriptors(struct LmMessageThread *lm_l
 static int lm_trans_emit_root_sequence(struct LmMessageThread *lm_lmx_message_thread, FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_l4_payload_pointer_bindings_init(struct LmMessageThread *lm_lmx_message_thread);
 static void lm_trans_l4_payload_pointer_bindings_destroy(struct LmMessageThread *lm_lmx_message_thread);
+
+
+
+
 
 
 
@@ -2498,6 +2513,9 @@ static int lm_trans_emit_scope_cleanups(struct LmMessageThread *lm_lmx_message_t
 static int lm_trans_emit_message_thread_runtime_prelude(struct LmMessageThread *lm_lmx_message_thread, FILE *file);
 static int lm_trans_emit_message_thread_main_helper(struct LmMessageThread *lm_lmx_message_thread, FILE *file);
 static int lm_trans_emit_message_thread_assert_helper(struct LmMessageThread *lm_lmx_message_thread, FILE *file);
+static int lm_trans_emit_message_thread_main_exit_query(struct LmMessageThread *lm_lmx_message_thread, FILE *file, unsigned indent, int report_failure_to_root);
+static int lm_trans_emit_message_thread_main_exit_stop_if_ready(struct LmMessageThread *lm_lmx_message_thread, FILE *file, unsigned indent, int has_pool);
+static int lm_trans_emit_message_thread_main_exit_safe_point(struct LmMessageThread *lm_lmx_message_thread, FILE *file, unsigned indent, int has_pool);
 static int lm_trans_emit_message_thread_main_root(struct LmMessageThread *lm_lmx_message_thread, FILE *file, unsigned indent, const LmTransNamespace *namespace_);
 static int lm_trans_emit_message_thread_main_end(struct LmMessageThread *lm_lmx_message_thread, FILE *file, unsigned indent, const LmTransNamespace *namespace_);
 static int lm_trans_return_fields_single_atom(struct LmMessageThread *lm_lmx_message_thread, const LmP0Field *return_fields, LmP0Text *out_atom);
@@ -2684,6 +2702,7 @@ static int lm_trans_statement_stack_schedule_named_structure(struct LmMessageThr
 static int lm_trans_statement_stack_schedule_merge_named_structure(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_return(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_stop(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
+static int lm_trans_statement_emit_exit(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_send(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_if(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_while(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
@@ -18058,6 +18077,9 @@ static int lm_trans_emit_message_thread_runtime_prelude(struct LmMessageThread *
     if (lm_trans_put(lm_lmx_message_thread, file, "int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);\n") != 0) {
         return 1;
     }
+    if (lm_trans_put(lm_lmx_message_thread, file, "int lm_message_thread_runtime_exit_state(struct LmMessageThreadRuntime *runtime, int *requested, int *ready, int *status);\n") != 0) {
+        return 1;
+    }
     if (lm_trans_put(lm_lmx_message_thread, file, "int lm_message_thread_runtime_delete(struct LmMessageThreadRuntime *runtime);\n") != 0) {
         return 1;
     }
@@ -18068,6 +18090,9 @@ static int lm_trans_emit_message_thread_runtime_prelude(struct LmMessageThread *
         return 1;
     }
     if (lm_trans_put(lm_lmx_message_thread, file, "void lm_message_thread_pool_request_stop_when_idle(struct LmMessageThreadPool *pool);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "size_t lm_message_thread_pool_pump(struct LmMessageThreadPool *pool, size_t max_turns);\n") != 0) {
         return 1;
     }
     if (lm_trans_put(lm_lmx_message_thread, file, "int lm_message_thread_pool_delete(struct LmMessageThreadPool *pool);\n") != 0) {
@@ -18110,6 +18135,9 @@ static int lm_trans_emit_message_thread_runtime_prelude(struct LmMessageThread *
         return 1;
     }
     if (lm_trans_put(lm_lmx_message_thread, file, "void lm_message_thread_request_failure(struct LmMessageThread *thread, int status);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "int lm_message_thread_request_exit(struct LmMessageThread *thread, int status);\n") != 0) {
         return 1;
     }
     if (lm_trans_put(lm_lmx_message_thread, file, "int lm_message_thread_status(const struct LmMessageThread *thread);\n") != 0) {
@@ -18394,6 +18422,84 @@ static int lm_trans_emit_message_thread_assert_helper(struct LmMessageThread *lm
     return 0;
 }
 
+static int lm_trans_emit_message_thread_main_exit_query(struct LmMessageThread *lm_lmx_message_thread, FILE *file, unsigned indent, int report_failure_to_root) {
+    (void)lm_lmx_message_thread;
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "lm_lmx_application_exit_snapshot_requested = 0;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "lm_lmx_application_exit_snapshot_ready = 0;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "lm_lmx_application_exit_snapshot_status = 0;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_lmx_application_runtime != 0) {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_message_thread_runtime_exit_state(lm_lmx_application_runtime, &lm_lmx_application_exit_snapshot_requested, &lm_lmx_application_exit_snapshot_ready, &lm_lmx_application_exit_snapshot_status) != 0) {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 2U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "lm_lmx_thread_cleanup_failed = 1;\n") != 0) {
+        return 1;
+    }
+    if (report_failure_to_root) {
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 2U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "lm_lmx_application_controller_failure = 1;\n") != 0) {
+            return 1;
+        }
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "} else {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 2U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "lm_lmx_application_exit_requested = lm_lmx_application_exit_snapshot_requested;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 2U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "lm_lmx_application_exit_ready = lm_lmx_application_exit_snapshot_ready;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 2U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "lm_lmx_application_exit_status = lm_lmx_application_exit_snapshot_status;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "}\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "}\n") != 0) {
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_trans_emit_message_thread_main_exit_stop_if_ready(struct LmMessageThread *lm_lmx_message_thread, FILE *file, unsigned indent, int has_pool) {
+    (void)lm_lmx_message_thread;
+    if (has_pool) {
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_lmx_application_exit_ready && lm_lmx_application_pool != 0) lm_message_thread_pool_request_stop(lm_lmx_application_pool);\n") != 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int lm_trans_emit_message_thread_main_exit_safe_point(struct LmMessageThread *lm_lmx_message_thread, FILE *file, unsigned indent, int has_pool) {
+    (void)lm_lmx_message_thread;
+    if (lm_trans_emit_message_thread_main_exit_query(lm_lmx_message_thread, file, indent, 1) != 0) {
+        return 1;
+    }
+    if (has_pool) {
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (!lm_lmx_application_exit_ready && lm_lmx_application_pool != 0) {\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "(void)lm_message_thread_pool_pump(lm_lmx_application_pool, 1U);\n") != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_message_thread_main_exit_query(lm_lmx_message_thread, file, indent + 1U, 1) != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "}\n") != 0) {
+            return 1;
+        }
+    }
+    return lm_trans_emit_message_thread_main_exit_stop_if_ready(lm_lmx_message_thread, file, indent, has_pool);
+}
+
 static int lm_trans_emit_message_thread_main_root(struct LmMessageThread *lm_lmx_message_thread, FILE *file, unsigned indent, const LmTransNamespace *namespace_) {
     (void)lm_lmx_message_thread;
     size_t thread_count;
@@ -18425,6 +18531,27 @@ static int lm_trans_emit_message_thread_main_root(struct LmMessageThread *lm_lmx
         return 1;
     }
     if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "int lm_lmx_thread_cleanup_failed = 0;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "int lm_lmx_application_controller_failure = 0;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "int lm_lmx_application_exit_requested = 0;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "int lm_lmx_application_exit_ready = 0;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "int lm_lmx_application_exit_status = 0;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "int lm_lmx_application_exit_snapshot_requested = 0;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "int lm_lmx_application_exit_snapshot_ready = 0;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "int lm_lmx_application_exit_snapshot_status = 0;\n") != 0) {
         return 1;
     }
     if (thread_count != 0U) {
@@ -18515,6 +18642,30 @@ static int lm_trans_emit_message_thread_main_root(struct LmMessageThread *lm_lmx
     if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "while (lm_message_thread_begin_turn(lm_lmx_message_thread)) {\n") != 0) {
         return 1;
     }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_lmx_application_controller_failure) {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 2U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "lm_message_thread_request_failure(lm_lmx_message_thread, 1);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 2U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "goto lm_message_thread_turn_end;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "}\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_lmx_application_exit_ready) {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 2U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "lm_message_thread_request_stop(lm_lmx_message_thread, lm_lmx_application_exit_status);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 2U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "goto lm_message_thread_turn_end;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "}\n") != 0) {
+        return 1;
+    }
     if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "lm_message_thread_main_context.diagnostic_code = 0;\n") != 0) {
         return 1;
     }
@@ -18547,7 +18698,16 @@ static int lm_trans_emit_message_thread_main_end(struct LmMessageThread *lm_lmx_
     if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "(void)lm_message_thread_end_turn(lm_lmx_message_thread);\n") != 0) {
         return 1;
     }
+    if (lm_trans_emit_message_thread_main_exit_safe_point(lm_lmx_message_thread, file, indent + 1U, thread_count != 0U) != 0) {
+        return 1;
+    }
     if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "}\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_message_thread_main_exit_query(lm_lmx_message_thread, file, indent, 1) != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_message_thread_main_exit_stop_if_ready(lm_lmx_message_thread, file, indent, thread_count != 0U) != 0) {
         return 1;
     }
     if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "lm_message_thread_exit_status = lm_message_thread_status(lm_lmx_message_thread);\n") != 0) {
@@ -18566,7 +18726,7 @@ static int lm_trans_emit_message_thread_main_end(struct LmMessageThread *lm_lmx_
         if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_lmx_application_pool != 0) {\n") != 0) {
             return 1;
         }
-        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_lmx_thread_startup_failed || lm_lmx_application_root_attached) {\n") != 0) {
+        if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_lmx_thread_startup_failed || lm_lmx_application_root_attached || lm_lmx_application_exit_ready) {\n") != 0) {
             return 1;
         }
         index = 0U;
@@ -18598,6 +18758,12 @@ static int lm_trans_emit_message_thread_main_end(struct LmMessageThread *lm_lmx_
             }
             index = index + 1U;
         }
+        if (lm_trans_emit_message_thread_main_exit_query(lm_lmx_message_thread, file, indent, 0) != 0) {
+            return 1;
+        }
+        if (lm_trans_emit_message_thread_main_exit_stop_if_ready(lm_lmx_message_thread, file, indent, 1) != 0) {
+            return 1;
+        }
         if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_lmx_application_pool != 0) {\n") != 0) {
             return 1;
         }
@@ -18621,6 +18787,9 @@ static int lm_trans_emit_message_thread_main_end(struct LmMessageThread *lm_lmx_
         return 1;
     }
     if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "}\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_message_thread_exit_status == 0 && lm_lmx_application_exit_requested && lm_lmx_application_exit_status != 0) lm_message_thread_exit_status = lm_lmx_application_exit_status;\n") != 0) {
         return 1;
     }
     if (thread_count != 0U) {
@@ -25603,6 +25772,53 @@ static int lm_trans_statement_emit_stop(struct LmMessageThread *lm_lmx_message_t
     return 0;
 }
 
+static int lm_trans_statement_emit_exit(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_) {
+    (void)lm_lmx_message_thread;
+    const LmP0Field * status_field;
+    LM_UNUSED(stack);
+    if (frame == 0 || frame -> body == 0) {
+        return 1;
+    }
+    if (namespace_ == 0 || namespace_ -> managed_message_thread_context == 0) {
+        fprintf(stderr, "trans L2 error: exit receiver requires a managed MessageThread or application root context\n");
+        return 1;
+    }
+    status_field = frame -> body -> first_field;
+    if (status_field != 0 && lm_trans_expr_segment_end(lm_lmx_message_thread, status_field) != 0) {
+        fprintf(stderr, "trans L2 error: exit receiver expects zero or one status expression\n");
+        return 1;
+    }
+    if (lm_trans_emit_message_thread_runtime_prelude(lm_lmx_message_thread, lm_trans_prelude_file(lm_lmx_message_thread, file)) != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "{\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "int lm_lmx_exit_status = ") != 0) {
+        return 1;
+    }
+    if (status_field == 0) {
+        if (lm_trans_put(lm_lmx_message_thread, file, "0") != 0) {
+            return 1;
+        }
+    }
+    else {
+        if (lm_trans_put(lm_lmx_message_thread, file, "(int)(") != 0 || lm_trans_emit_expr_fields(lm_lmx_message_thread, file, status_field, namespace_) != 0 || lm_trans_put(lm_lmx_message_thread, file, ")") != 0) {
+            return 1;
+        }
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, ";\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (lm_message_thread_request_exit(lm_lmx_message_thread, lm_lmx_exit_status) != 0) lm_message_thread_request_failure(lm_lmx_message_thread, 1);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "}\n") != 0) {
+        return 1;
+    }
+    return 0;
+}
+
 static int lm_trans_statement_emit_send(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_) {
     (void)lm_lmx_message_thread;
     const LmP0Field * first;
@@ -28332,7 +28548,7 @@ static int lm_trans_pointer_bindings_init(struct LmMessageThread *lm_lmx_message
     if (status == 0 && (lm_trans_pointer_binding_push_expr_emit(lm_lmx_message_thread, "lm_trans_expr_emit_operator", &lm_trans_expr_emit_raw, &lm_trans_expr_state_operator) != 0 || lm_trans_pointer_binding_push_expr_emit(lm_lmx_message_thread, "lm_trans_expr_emit_deref", &lm_trans_expr_emit_raw, &lm_trans_expr_state_deref) != 0 || lm_trans_pointer_binding_push_expr_emit(lm_lmx_message_thread, "lm_trans_expr_emit_pointer_follow", &lm_trans_expr_emit_raw, &lm_trans_expr_state_pointer_follow) != 0 || lm_trans_pointer_binding_push_expr_emit(lm_lmx_message_thread, "lm_trans_expr_emit_c_dot", &lm_trans_expr_emit_raw, &lm_trans_expr_state_c_dot) != 0 || lm_trans_pointer_binding_push_expr_frame(lm_lmx_message_thread, "lm_trans_expr_emit_cast_frame", &lm_trans_expr_emit_cast_frame) != 0 || lm_trans_pointer_binding_push_expr_frame(lm_lmx_message_thread, "lm_trans_expr_emit_implements_frame", &lm_trans_expr_emit_implements_frame) != 0)) {
         status = 1;
     }
-    if (status == 0 && (lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_return", &lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_stop", &lm_trans_statement_emit_stop) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_send", &lm_trans_statement_emit_send) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_if", &lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_while", &lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_else", &lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_synchronized", &lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_finally", &lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_assert", &lm_trans_statement_emit_assert) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_loop_jump", &lm_trans_statement_emit_loop_jump) != 0)) {
+    if (status == 0 && (lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_return", &lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_stop", &lm_trans_statement_emit_stop) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_exit", &lm_trans_statement_emit_exit) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_send", &lm_trans_statement_emit_send) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_if", &lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_while", &lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_else", &lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_synchronized", &lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_finally", &lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_assert", &lm_trans_statement_emit_assert) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_loop_jump", &lm_trans_statement_emit_loop_jump) != 0)) {
         status = 1;
     }
     if (status == 0 && (lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_include_prelude", &lm_trans_statement_emit_include_prelude) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_define_prelude", &lm_trans_statement_emit_define_prelude) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_ifndef_default_prelude", &lm_trans_statement_emit_ifndef_default_prelude) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_os_prelude", &lm_trans_statement_emit_os_prelude) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_ifdef_prelude", &lm_trans_statement_emit_ifdef_prelude) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_guard_prelude", &lm_trans_statement_emit_guard_prelude) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_extern_c_prelude", &lm_trans_statement_emit_extern_c_prelude) != 0)) {
@@ -39086,6 +39302,13 @@ int main(int argc, char **argv) {
     int lm_lmx_application_root_attached = 0;
     int lm_lmx_thread_startup_failed = 0;
     int lm_lmx_thread_cleanup_failed = 0;
+    int lm_lmx_application_controller_failure = 0;
+    int lm_lmx_application_exit_requested = 0;
+    int lm_lmx_application_exit_ready = 0;
+    int lm_lmx_application_exit_status = 0;
+    int lm_lmx_application_exit_snapshot_requested = 0;
+    int lm_lmx_application_exit_snapshot_ready = 0;
+    int lm_lmx_application_exit_snapshot_status = 0;
     lm_lmx_message_thread = lm_message_thread_new();
     if (lm_lmx_message_thread == 0) {
         return 1;
@@ -39096,6 +39319,14 @@ int main(int argc, char **argv) {
     if (!lm_lmx_thread_startup_failed && lm_message_thread_runtime_attach_root(lm_lmx_application_runtime, lm_lmx_message_thread) != 0) lm_lmx_thread_startup_failed = 1; else if (!lm_lmx_thread_startup_failed) lm_lmx_application_root_attached = 1;
     if (lm_lmx_thread_startup_failed) lm_message_thread_request_failure(lm_lmx_message_thread, 1);
     while (lm_message_thread_begin_turn(lm_lmx_message_thread)) {
+        if (lm_lmx_application_controller_failure) {
+            lm_message_thread_request_failure(lm_lmx_message_thread, 1);
+            goto lm_message_thread_turn_end;
+        }
+        if (lm_lmx_application_exit_ready) {
+            lm_message_thread_request_stop(lm_lmx_message_thread, lm_lmx_application_exit_status);
+            goto lm_message_thread_turn_end;
+        }
         lm_message_thread_main_context.diagnostic_code = 0;
         if (setjmp(lm_message_thread_main_context.diagnostic_root) == 0) {
             setvbuf(stdout, 0, _IONBF, 0);
@@ -39127,6 +39358,32 @@ int main(int argc, char **argv) {
         }
     lm_message_thread_turn_end:
         (void)lm_message_thread_end_turn(lm_lmx_message_thread);
+        lm_lmx_application_exit_snapshot_requested = 0;
+        lm_lmx_application_exit_snapshot_ready = 0;
+        lm_lmx_application_exit_snapshot_status = 0;
+        if (lm_lmx_application_runtime != 0) {
+            if (lm_message_thread_runtime_exit_state(lm_lmx_application_runtime, &lm_lmx_application_exit_snapshot_requested, &lm_lmx_application_exit_snapshot_ready, &lm_lmx_application_exit_snapshot_status) != 0) {
+                lm_lmx_thread_cleanup_failed = 1;
+                lm_lmx_application_controller_failure = 1;
+            } else {
+                lm_lmx_application_exit_requested = lm_lmx_application_exit_snapshot_requested;
+                lm_lmx_application_exit_ready = lm_lmx_application_exit_snapshot_ready;
+                lm_lmx_application_exit_status = lm_lmx_application_exit_snapshot_status;
+            }
+        }
+    }
+    lm_lmx_application_exit_snapshot_requested = 0;
+    lm_lmx_application_exit_snapshot_ready = 0;
+    lm_lmx_application_exit_snapshot_status = 0;
+    if (lm_lmx_application_runtime != 0) {
+        if (lm_message_thread_runtime_exit_state(lm_lmx_application_runtime, &lm_lmx_application_exit_snapshot_requested, &lm_lmx_application_exit_snapshot_ready, &lm_lmx_application_exit_snapshot_status) != 0) {
+            lm_lmx_thread_cleanup_failed = 1;
+            lm_lmx_application_controller_failure = 1;
+        } else {
+            lm_lmx_application_exit_requested = lm_lmx_application_exit_snapshot_requested;
+            lm_lmx_application_exit_ready = lm_lmx_application_exit_snapshot_ready;
+            lm_lmx_application_exit_status = lm_lmx_application_exit_snapshot_status;
+        }
     }
     lm_message_thread_exit_status = lm_message_thread_status(lm_lmx_message_thread);
     if (lm_lmx_application_runtime != 0 && lm_lmx_application_root_attached) {
@@ -39135,6 +39392,7 @@ int main(int argc, char **argv) {
     if (lm_lmx_application_runtime != 0 && !lm_lmx_application_root_attached) {
         if (lm_message_thread_runtime_delete(lm_lmx_application_runtime) != 0) lm_lmx_thread_cleanup_failed = 1; else lm_lmx_application_runtime = 0;
     }
+    if (lm_message_thread_exit_status == 0 && lm_lmx_application_exit_requested && lm_lmx_application_exit_status != 0) lm_message_thread_exit_status = lm_lmx_application_exit_status;
     if (lm_message_thread_exit_status == 0 && lm_lmx_thread_cleanup_failed) lm_message_thread_exit_status = 1;
     if (!lm_lmx_application_root_attached) lm_message_thread_delete(lm_lmx_message_thread);
     return lm_message_thread_exit_status;
