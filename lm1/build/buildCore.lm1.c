@@ -80,6 +80,9 @@ typedef struct LmOwnArena LmOwnArena;
 typedef struct LmHostThread LmHostThread;
 typedef struct LmMutex LmMutex;
 typedef struct LmCondition LmCondition;
+typedef struct LmMessage LmMessage;
+typedef struct LmMessageOutboxEntry LmMessageOutboxEntry;
+typedef struct LmMessageRoute LmMessageRoute;
 typedef struct LmMessageThreadRuntime LmMessageThreadRuntime;
 typedef struct LmMessageThreadPool LmMessageThreadPool;
 typedef struct LmMessageThreadComponent LmMessageThreadComponent;
@@ -98,6 +101,9 @@ typedef int LmMessageThreadState;
 #define LM_MESSAGE_THREAD_RUNNING 1
 #define LM_MESSAGE_THREAD_STOPPING 2
 #define LM_MESSAGE_THREAD_STOPPED 3
+#define LM_MESSAGE_STATUS_ROUTE_NOT_FOUND 64
+#define LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED 65
+#define LM_MESSAGE_STATUS_INVALID_ADDRESS 66
 
 
 #include <stddef.h>
@@ -158,11 +164,30 @@ struct LmMutex {
 struct LmCondition {
     void *implementation;
 };
+struct LmMessage {
+    char *lmx;
+    size_t length;
+    LmMessage * next;
+};
+struct LmMessageOutboxEntry {
+    char *endpoint;
+    char *route;
+    LmMessage * message;
+    LmMessageOutboxEntry * next;
+};
+struct LmMessageRoute {
+    char *route;
+    LmMessageThread * target;
+    LmMessageRoute * next;
+};
 struct LmMessageThreadRuntime {
     void *identity;
     size_t pool_count;
     size_t single_execution_depth;
     LmMessageThread * single_active_thread;
+    LmMutex * route_mutex;
+    LmMessageRoute * route_head;
+    size_t route_count;
 };
 struct LmMessageThreadPool {
     LmHostThread * *workers;
@@ -215,6 +240,14 @@ struct LmMessageThread {
     LmMessageThread * ready_next;
     LmMessageThread * pool_previous;
     LmMessageThread * pool_next;
+    int mailbox_mode;
+    LmMessage * inbox_head;
+    LmMessage * inbox_tail;
+    size_t inbox_count;
+    LmMessageOutboxEntry * outbox_head;
+    LmMessageOutboxEntry * outbox_tail;
+    size_t outbox_count;
+    LmMessage * current_message;
 };
 typedef struct LmBuildOptions {
     int full_build;
@@ -306,7 +339,13 @@ LmMessageThread * (lm_message_thread_new)(void);
 LmMessageThread * (lm_message_thread_new_in)(LmMessageThreadPool *pool);
 void (lm_message_thread_delete)(LmMessageThread *thread);
 int (lm_message_thread_start)(LmMessageThread *thread, LmMessageThreadEntry entry, void *argument);
+int (lm_message_thread_start_mailbox)(LmMessageThread *thread, LmMessageThreadEntry entry, void *argument);
 int (lm_message_thread_join)(LmMessageThread *thread, int *result);
+int (lm_message_thread_bind_route)(LmMessageThread *thread, const char *route);
+int (lm_message_thread_send_lmx)(LmMessageThread *sender, const char *endpoint, const char *route, const char *lmx, size_t length);
+int (lm_message_thread_current_lmx)(LmMessageThread *thread, const char **out_lmx, size_t *out_length);
+size_t (lm_message_thread_inbox_count)(const LmMessageThread *thread);
+size_t (lm_message_thread_outbox_count)(const LmMessageThread *thread);
 int (lm_message_thread_begin_turn)(LmMessageThread *thread);
 int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
@@ -324,6 +363,21 @@ int (lm_message_thread_component_attach)(struct LmMessageThread *lm_lmx_message_
 void * (lm_message_thread_component_get)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 int (lm_message_thread_component_remove)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
 size_t (lm_message_thread_component_count)(const LmMessageThread *thread);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -667,7 +721,7 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("}\n", file);
     fputs("$parserSkip = @()\n", file);
     fputs("$transSkip = @()\n", file);
-    fputs("$transTranslationOnly = @('trans_l4_abi_receivers.lm2', 'trans_message_thread_pool_single.lm2')\n", file);
+    fputs("$transTranslationOnly = @('trans_l4_abi_receivers.lm2', 'trans_message_thread_pool_single.lm2', 'trans_message_thread_mailbox_single.lm2')\n", file);
     fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File -Filter '*.lmx' | Sort-Object Name) {\n", file);
     fputs("    if ($testFile.Name -like 'trans_*') { continue }\n", file);
     fputs("    if ($parserSkip -contains $testFile.Name) { continue }\n", file);
@@ -735,11 +789,19 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'build/obj/tests/trans_message_thread_pool_single.c' '-o' $singlePoolTest\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw 'single MessageThread pool test link failed' }\n", file);
     fputs("    Invoke-LmTestWithTimeout $singlePoolTest 'single MessageThread pool test'\n", file);
+    fputs("    $singleMailboxTest = Join-Path 'build/obj/tests' 'trans_message_thread_mailbox_single.exe'\n", file);
+    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'build/obj/tests/trans_message_thread_mailbox_single.c' '-o' $singleMailboxTest\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw 'single MessageThread mailbox test link failed' }\n", file);
+    fputs("    Invoke-LmTestWithTimeout $singleMailboxTest 'single MessageThread mailbox test'\n", file);
     fputs("    $nativePoolTest = Join-Path 'build/obj/tests' 'message_thread_pool_native.exe'\n", file);
     fputs("    $env:LM_THREAD_PROVIDER = 'win32'\n", file);
     fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_pool_native.c' '-o' $nativePoolTest\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw 'Win32 MessageThread pool test link failed' }\n", file);
     fputs("    Invoke-LmTestWithTimeout $nativePoolTest 'Win32 MessageThread pool test'\n", file);
+    fputs("    $nativeMailboxTest = Join-Path 'build/obj/tests' 'message_thread_mailbox_native.exe'\n", file);
+    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_mailbox_native.c' '-o' $nativeMailboxTest\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw 'Win32 MessageThread mailbox test link failed' }\n", file);
+    fputs("    Invoke-LmTestWithTimeout $nativeMailboxTest 'Win32 MessageThread mailbox test'\n", file);
     fputs("}\n", file);
     fputs("finally {\n", file);
     fputs("    if ($null -eq $previousThreadProvider) { Remove-Item Env:LM_THREAD_PROVIDER -ErrorAction SilentlyContinue } else { $env:LM_THREAD_PROVIDER = $previousThreadProvider }\n", file);
@@ -945,16 +1007,22 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("            ;;\n", file);
     fputs("        *) LM_TRANS_REGISTRY_VIEW=view \"$trans\" \"$src\" \"$c_path\" ;;\n", file);
     fputs("    esac\n", file);
-    fputs("    case \"$name\" in trans_l4_abi_receivers.lm2|trans_message_thread_pool_single.lm2) continue ;; esac\n", file);
+    fputs("    case \"$name\" in trans_l4_abi_receivers.lm2|trans_message_thread_pool_single.lm2|trans_message_thread_mailbox_single.lm2) continue ;; esac\n", file);
     fputs("    \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Ilm1 \"$c_path\" \"$parserLib\" \"$ownLib\" -o \"$exe_path\"\n", file);
     fputs("    \"$exe_path\"\n", file);
     fputs("done\n", file);
     fputs("single_pool_test='build/obj/tests/trans_message_thread_pool_single'\n", file);
     fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c build/obj/tests/trans_message_thread_pool_single.c -o \"$single_pool_test\"\n", file);
     fputs("lm_run_with_watchdog \"$single_pool_test\"\n", file);
+    fputs("single_mailbox_test='build/obj/tests/trans_message_thread_mailbox_single'\n", file);
+    fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c build/obj/tests/trans_message_thread_mailbox_single.c -o \"$single_mailbox_test\"\n", file);
+    fputs("lm_run_with_watchdog \"$single_mailbox_test\"\n", file);
     fputs("native_pool_test='build/obj/tests/message_thread_pool_native'\n", file);
     fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_pool_native.c -o \"$native_pool_test\"\n", file);
     fputs("lm_run_with_watchdog \"$native_pool_test\"\n", file);
+    fputs("native_mailbox_test='build/obj/tests/message_thread_mailbox_native'\n", file);
+    fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_mailbox_native.c -o \"$native_mailbox_test\"\n", file);
+    fputs("lm_run_with_watchdog \"$native_mailbox_test\"\n", file);
     fputs("echo 'lm0 staged tests passed'\n", file);
     return 0;
 }

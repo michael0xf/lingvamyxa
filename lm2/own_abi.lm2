@@ -57,6 +57,9 @@ table:
              LmHostThread               c.struct
              LmMutex                    c.struct
              LmCondition                c.struct
+             LmMessage                  c.struct
+             LmMessageOutboxEntry       c.struct
+             LmMessageRoute             c.struct
              LmMessageThreadRuntime  c.struct
              LmMessageThreadPool        c.struct
              LmMessageThreadComponent   c.struct
@@ -75,6 +78,9 @@ table:
              LM_MESSAGE_THREAD_RUNNING   c.define
              LM_MESSAGE_THREAD_STOPPING  c.define
              LM_MESSAGE_THREAD_STOPPED   c.define
+             LM_MESSAGE_STATUS_ROUTE_NOT_FOUND c.define
+             LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED c.define
+             LM_MESSAGE_STATUS_INVALID_ADDRESS c.define
 end: `constant.backend`
 
 table:
@@ -89,6 +95,9 @@ table:
              LM_MESSAGE_THREAD_RUNNING   1
              LM_MESSAGE_THREAD_STOPPING  2
              LM_MESSAGE_THREAD_STOPPED   3
+             LM_MESSAGE_STATUS_ROUTE_NOT_FOUND 64
+             LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED 65
+             LM_MESSAGE_STATUS_INVALID_ADDRESS 66
 end: `constant.value`
 
 table:
@@ -104,6 +113,9 @@ table:
              LmHostThread               c.named-struct
              LmMutex                    c.named-struct
              LmCondition                c.named-struct
+             LmMessage                  c.named-struct
+             LmMessageOutboxEntry       c.named-struct
+             LmMessageRoute             c.named-struct
              LmMessageThreadRuntime  c.named-struct
              LmMessageThreadPool        c.named-struct
              LmMessageThreadComponent   c.named-struct
@@ -123,6 +135,9 @@ table:
              LmHostThread               1
              LmMutex                    1
              LmCondition                1
+             LmMessage                  1
+             LmMessageOutboxEntry       1
+             LmMessageRoute             1
              LmMessageThreadRuntime  1
              LmMessageThreadPool        1
              LmMessageThreadComponent   1
@@ -424,6 +439,89 @@ table:
 end: `LmMessageThreadComponent.field.address-depth`
 
 table:
+    name: `LmMessage.field.class`
+    columns((class: class) (class: field))
+    rows:
+             lmx     char
+             length  size_t
+             next    LmMessage
+end: `LmMessage.field.class`
+
+table:
+    name: `LmMessage.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             lmx     0
+             length  1
+             next    2
+end: `LmMessage.field.index`
+
+table:
+    name: `LmMessage.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             lmx   1
+             next  0
+end: `LmMessage.field.address-depth`
+
+table:
+    name: `LmMessageOutboxEntry.field.class`
+    columns((class: class) (class: field))
+    rows:
+             endpoint  char
+             route     char
+             message   LmMessage
+             next      LmMessageOutboxEntry
+end: `LmMessageOutboxEntry.field.class`
+
+table:
+    name: `LmMessageOutboxEntry.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             endpoint  0
+             route     1
+             message   2
+             next      3
+end: `LmMessageOutboxEntry.field.index`
+
+table:
+    name: `LmMessageOutboxEntry.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             endpoint  1
+             route     1
+             message   0
+             next      0
+end: `LmMessageOutboxEntry.field.address-depth`
+
+table:
+    name: `LmMessageRoute.field.class`
+    columns((class: class) (class: field))
+    rows:
+             route   char
+             target  LmMessageThread
+             next    LmMessageRoute
+end: `LmMessageRoute.field.class`
+
+table:
+    name: `LmMessageRoute.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             route   0
+             target  1
+             next    2
+end: `LmMessageRoute.field.index`
+
+table:
+    name: `LmMessageRoute.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             route   1
+             target  0
+             next    0
+end: `LmMessageRoute.field.address-depth`
+
+table:
     name: `LmMessageThreadRuntime.field.class`
     columns((class: class) (class: field))
     rows:
@@ -431,6 +529,9 @@ table:
              pool_count             size_t
              single_execution_depth size_t
              single_active_thread   LmMessageThread
+             route_mutex            LmMutex
+             route_head             LmMessageRoute
+             route_count            size_t
 end: `LmMessageThreadRuntime.field.class`
 
 table:
@@ -441,6 +542,9 @@ table:
              pool_count             1
              single_execution_depth 2
              single_active_thread   3
+             route_mutex            4
+             route_head             5
+             route_count            6
 end: `LmMessageThreadRuntime.field.index`
 
 table:
@@ -449,6 +553,8 @@ table:
     rows:
              identity              1
              single_active_thread  0
+             route_mutex           0
+             route_head            0
 end: `LmMessageThreadRuntime.field.address-depth`
 
 table:
@@ -537,6 +643,14 @@ table:
              ready_next           LmMessageThread
              pool_previous        LmMessageThread
              pool_next            LmMessageThread
+             mailbox_mode         int
+             inbox_head           LmMessage
+             inbox_tail           LmMessage
+             inbox_count          size_t
+             outbox_head          LmMessageOutboxEntry
+             outbox_tail          LmMessageOutboxEntry
+             outbox_count         size_t
+             current_message      LmMessage
 end: `LmMessageThread.field.class`
 
 table:
@@ -571,6 +685,14 @@ table:
              ready_next           25
              pool_previous        26
              pool_next            27
+             mailbox_mode         28
+             inbox_head           29
+             inbox_tail           30
+             inbox_count          31
+             outbox_head          32
+             outbox_tail          33
+             outbox_count         34
+             current_message      35
 end: `LmMessageThread.field.index`
 
 table:
@@ -590,6 +712,11 @@ table:
              ready_next         0
              pool_previous      0
              pool_next          0
+             inbox_head         0
+             inbox_tail         0
+             outbox_head        0
+             outbox_tail        0
+             current_message    0
 end: `LmMessageThread.field.address-depth`
 
 table:
@@ -658,7 +785,13 @@ table:
              lm_message_thread_new_in        1
              lm_message_thread_delete        1
              lm_message_thread_start         1
+             lm_message_thread_start_mailbox 1
              lm_message_thread_join          1
+             lm_message_thread_bind_route    1
+             lm_message_thread_send_lmx      1
+             lm_message_thread_current_lmx   1
+             lm_message_thread_inbox_count   1
+             lm_message_thread_outbox_count  1
              lm_message_thread_begin_turn    1
              lm_message_thread_end_turn      1
              lm_message_thread_collect       1
@@ -768,7 +901,13 @@ fn: lm_message_thread_new () LmMessageThread
 fn: lm_message_thread_new_in (LmMessageThreadPool: pool) LmMessageThread
 fn: lm_message_thread_delete (LmMessageThread: thread) void
 fn: lm_message_thread_start (LmMessageThread: thread; LmMessageThreadEntry: entry; @: void argument) int
+fn: lm_message_thread_start_mailbox (LmMessageThread: thread; LmMessageThreadEntry: entry; @: void argument) int
 fn: lm_message_thread_join (LmMessageThread: thread; @: int result) int
+fn: lm_message_thread_bind_route (LmMessageThread: thread; const: @(char route)) int
+fn: lm_message_thread_send_lmx (LmMessageThread: sender; const: @(char endpoint); const: @(char route); const: @(char lmx); size_t: length) int
+fn: lm_message_thread_current_lmx (LmMessageThread: thread; const: @@(char out_lmx); @: size_t out_length) int
+fn: lm_message_thread_inbox_count (const: (LmMessageThread: thread)) size_t
+fn: lm_message_thread_outbox_count (const: (LmMessageThread: thread)) size_t
 fn: lm_message_thread_begin_turn (LmMessageThread: thread) int
 fn: lm_message_thread_end_turn (LmMessageThread: thread) int
 fn: lm_message_thread_collect (LmMessageThread: thread) int

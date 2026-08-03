@@ -1,0 +1,305 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+layout
+fn
+prototype
+include: "<string.h>"
+
+table:
+    source
+    name: `fn.thread-context.managed`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_mailbox_receive_entry 1
+             lm_test_mailbox_send_entry    1
+             lm_test_mailbox_missing_entry 1
+             lm_test_mailbox_remote_entry  1
+             lm_test_mailbox_idle_entry    1
+end: `fn.thread-context.managed`
+
+table:
+    name: `forward.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestMailboxContext c.struct
+end: `forward.backend`
+
+table:
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestMailboxContext c.struct
+end: `layout.backend`
+
+table:
+    name: `class.reference-base`
+    columns((class: class) (int: value))
+    rows:
+             LmTestMailboxContext 1
+end: `class.reference-base`
+
+table:
+    name: `LmTestMailboxContext.field.class`
+    columns((class: class) (class: field))
+    rows:
+             receiver       LmMessageThread
+             sender         LmMessageThread
+             first          char
+             second         char
+             third          char
+             received       size_t
+             idle_callbacks size_t
+             error          int
+end: `LmTestMailboxContext.field.class`
+
+table:
+    name: `LmTestMailboxContext.field.index`
+    columns((class: class) (size_t: index))
+    rows:
+             receiver       0
+             sender         1
+             first          2
+             second         3
+             third          4
+             received       5
+             idle_callbacks 6
+             error          7
+end: `LmTestMailboxContext.field.index`
+
+table:
+    name: `LmTestMailboxContext.field.address-depth`
+    columns((class: class) (size_t: depth))
+    rows:
+             receiver 0
+             sender   0
+             first    1
+             second   1
+             third    1
+end: `LmTestMailboxContext.field.address-depth`
+
+sub: lm_test_mailbox_receive_entry (@: void argument)
+    LmTestMailboxContext: context
+    const: @: char lmx 0
+    size_t: length 0U
+    const: @: char expected 0
+
+    context: argument
+    if: context = 0 || c.lm_lmx_message_thread != context\receiver
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 90)
+        return
+    if: lm_message_thread_current_lmx(c.lm_lmx_message_thread, @ lmx, @ length) != 0
+        context\error: 1
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 91)
+        return
+    ---
+
+    if: context\received = 0U
+        expected: "A"
+    if: context\received = 1U
+        expected: "B"
+    if: context\received = 2U
+        expected: "C"
+    if: context\received = 3U
+        expected: "D"
+    ---
+    if: expected = 0 || length != 1U || c.memcmp(lmx, expected, 1U) != 0
+        context\error: 2
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 92)
+        return
+    ---
+
+    context\received: context\received + 1U
+    if: context\received = 3U
+        if: lm_message_thread_send_lmx(c.lm_lmx_message_thread, 0, "/mailbox", "D", 1U) != 0 || lm_message_thread_outbox_count(c.lm_lmx_message_thread) != 1U
+            context\error: 3
+            lm_message_thread_request_stop(c.lm_lmx_message_thread, 93)
+            return
+        ---
+    if: context\received = 4U
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 23)
+    ---
+end: lm_test_mailbox_receive_entry
+
+sub: lm_test_mailbox_send_entry (@: void argument)
+    LmTestMailboxContext: context
+    const: @: char unexpected 0
+    size_t: unexpected_length 0U
+
+    context: argument
+    if: context = 0 || c.lm_lmx_message_thread != context\sender
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 94)
+        return
+    if: lm_message_thread_current_lmx(c.lm_lmx_message_thread, @ unexpected, @ unexpected_length) = 0
+        context\error: 4
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 95)
+        return
+    ---
+    if: lm_message_thread_send_lmx(c.lm_lmx_message_thread, "", "/mailbox", context\first, 1U) != 0 || lm_message_thread_send_lmx(c.lm_lmx_message_thread, 0, "/mailbox", context\second, 1U) != 0 || lm_message_thread_send_lmx(c.lm_lmx_message_thread, 0, "/mailbox", context\third, 1U) != 0
+        context\error: 5
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 96)
+        return
+    ---
+    if: lm_message_thread_outbox_count(c.lm_lmx_message_thread) != 3U
+        context\error: 6
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 97)
+        return
+    ---
+    c.memset(context\first, 'x', 1U)
+    c.memset(context\second, 'x', 1U)
+    c.memset(context\third, 'x', 1U)
+    lm_message_thread_request_stop(c.lm_lmx_message_thread, 11)
+end: lm_test_mailbox_send_entry
+
+sub: lm_test_mailbox_missing_entry (@: void argument)
+    if: argument != 0
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 98)
+        return
+    if: lm_message_thread_send_lmx(c.lm_lmx_message_thread, 0, "/missing", "missing", 7U) != 0
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 99)
+        return
+    lm_message_thread_request_stop(c.lm_lmx_message_thread, 0)
+end: lm_test_mailbox_missing_entry
+
+sub: lm_test_mailbox_remote_entry (@: void argument)
+    if: argument != 0
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 100)
+        return
+    if: lm_message_thread_send_lmx(c.lm_lmx_message_thread, "https://example.invalid", "/mailbox", "remote", 6U) != 0
+        lm_message_thread_request_stop(c.lm_lmx_message_thread, 101)
+        return
+    lm_message_thread_request_stop(c.lm_lmx_message_thread, 0)
+end: lm_test_mailbox_remote_entry
+
+sub: lm_test_mailbox_idle_entry (@: void argument)
+    LmTestMailboxContext: context
+
+    context: argument
+    if: context != 0
+        context\idle_callbacks: context\idle_callbacks + 1U
+    lm_message_thread_request_stop(c.lm_lmx_message_thread, 102)
+end: lm_test_mailbox_idle_entry
+
+external:
+    fn: main () int
+        LmMessageThreadRuntime: runtime 0
+        LmMessageThreadPool: pool 0
+        LmTestMailboxContext: context 0
+        LmMessageThread: missing 0
+        LmMessageThread: remote 0
+        LmMessageThread: idle 0
+        LmMessageThread: pool_idle 0
+        const: @: char outside_lmx 0
+        size_t: outside_length 0U
+        int: actor_status 0
+        int: status 0
+
+        if: c.strcmp(lm_thread_provider_name(), "single") != 0
+            return: 1
+
+        runtime: lm_message_thread_runtime_new()
+        pool: lm_message_thread_pool_new(runtime, 3U)
+        context: lm_own_new_zero(c.sizeof(context[0]))
+        if: runtime = 0 || pool = 0 || context = 0
+            status: 2
+        if: status = 0
+            context\first: lm_own_copy_bytes("A", 1U)
+            context\second: lm_own_copy_bytes("B", 1U)
+            context\third: lm_own_copy_bytes("C", 1U)
+            context\receiver: lm_message_thread_new_in(pool)
+            context\sender: lm_message_thread_new_in(pool)
+            if: context\first = 0 || context\second = 0 || context\third = 0 || context\receiver = 0 || context\sender = 0
+                status: 3
+        ---
+
+        if: status = 0 && lm_message_thread_start_mailbox(context\receiver, @ lm_test_mailbox_receive_entry, context) != 0
+            status: 4
+        if: status = 0 && lm_message_thread_bind_route(context\receiver, "/mailbox") != 0
+            status: 5
+        if: status = 0 && lm_message_thread_bind_route(context\receiver, "/mailbox") = 0
+            status: 6
+        if: status = 0 && lm_message_thread_bind_route(context\receiver, "relative") != c.LM_MESSAGE_STATUS_INVALID_ADDRESS
+            status: 7
+        if: status = 0 && lm_message_thread_current_lmx(context\receiver, @ outside_lmx, @ outside_length) = 0
+            status: 8
+
+        if: status = 0 && lm_message_thread_start(context\sender, @ lm_test_mailbox_send_entry, context) != 0
+            status: 9
+        if: status = 0 && lm_message_thread_join(context\sender, @ actor_status) != 0
+            status: 10
+        if: status = 0 && actor_status != 11
+            status: 11
+        if: status = 0 && (context\first[0] != 'x' || context\second[0] != 'x' || context\third[0] != 'x')
+            status: 12
+        if: status = 0 && (lm_message_thread_outbox_count(context\sender) != 0U || lm_message_thread_inbox_count(context\receiver) != 3U)
+            status: 13
+
+        if: status = 0 && lm_message_thread_join(context\receiver, @ actor_status) != 0
+            status: 14
+        if: status = 0 && actor_status != 23
+            status: 15
+        if: status = 0 && (context\error != 0 || context\received != 4U || lm_message_thread_turn_count(context\receiver) != 4U || lm_message_thread_collection_count(context\receiver) != 4U || lm_message_thread_inbox_count(context\receiver) != 0U || lm_message_thread_outbox_count(context\receiver) != 0U)
+            status: 16
+
+        if: status = 0
+            missing: lm_message_thread_new_in(pool)
+            if: missing = 0 || lm_message_thread_start(missing, @ lm_test_mailbox_missing_entry, 0) != 0 || lm_message_thread_join(missing, @ actor_status) != 0
+                status: 17
+        ---
+        if: status = 0 && actor_status != c.LM_MESSAGE_STATUS_ROUTE_NOT_FOUND
+            status: 18
+
+        if: status = 0
+            remote: lm_message_thread_new_in(pool)
+            if: remote = 0 || lm_message_thread_start(remote, @ lm_test_mailbox_remote_entry, 0) != 0 || lm_message_thread_join(remote, @ actor_status) != 0
+                status: 19
+        ---
+        if: status = 0 && actor_status != c.LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED
+            status: 20
+        if: status = 0 && context\received != 4U
+            status: 21
+
+        if: status = 0
+            idle: lm_message_thread_new_in(pool)
+            if: idle = 0 || lm_message_thread_start_mailbox(idle, @ lm_test_mailbox_idle_entry, context) != 0
+                status: 22
+        ---
+        if: status = 0
+            lm_message_thread_request_stop(idle, 37)
+            if: lm_message_thread_join(idle, @ actor_status) != 0 || actor_status != 37 || context\idle_callbacks != 0U || lm_message_thread_turn_count(idle) != 0U || lm_message_thread_collection_count(idle) != 1U
+                status: 23
+        ---
+
+        if: status = 0
+            pool_idle: lm_message_thread_new_in(pool)
+            if: pool_idle = 0 || lm_message_thread_start_mailbox(pool_idle, @ lm_test_mailbox_idle_entry, context) != 0
+                status: 24
+        ---
+        if: status = 0
+            lm_message_thread_pool_request_stop(pool)
+            if: lm_message_thread_join(pool_idle, @ actor_status) != 0 || actor_status != 0 || context\idle_callbacks != 0U || lm_message_thread_collection_count(pool_idle) != 1U
+                status: 25
+        ---
+
+        if: pool != 0
+            if: status != 0
+                lm_message_thread_pool_request_stop(pool)
+            if: lm_message_thread_pool_delete(pool) != 0 && status = 0
+                status: 26
+            pool: 0
+        ---
+        if: runtime != 0
+            if: lm_message_thread_runtime_delete(runtime) != 0 && status = 0
+                status: 27
+            runtime: 0
+        ---
+        if: context != 0
+            lm_own_delete(context\first, 0)
+            lm_own_delete(context\second, 0)
+            lm_own_delete(context\third, 0)
+            lm_own_delete(context, 0)
+        ---
+    return: status
+end: external

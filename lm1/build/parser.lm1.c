@@ -83,6 +83,9 @@ typedef struct LmOwnArena LmOwnArena;
 typedef struct LmHostThread LmHostThread;
 typedef struct LmMutex LmMutex;
 typedef struct LmCondition LmCondition;
+typedef struct LmMessage LmMessage;
+typedef struct LmMessageOutboxEntry LmMessageOutboxEntry;
+typedef struct LmMessageRoute LmMessageRoute;
 typedef struct LmMessageThreadRuntime LmMessageThreadRuntime;
 typedef struct LmMessageThreadPool LmMessageThreadPool;
 typedef struct LmMessageThreadComponent LmMessageThreadComponent;
@@ -122,6 +125,9 @@ typedef int LmP0FieldParseLoopContinuation;
 #define LM_MESSAGE_THREAD_RUNNING 1
 #define LM_MESSAGE_THREAD_STOPPING 2
 #define LM_MESSAGE_THREAD_STOPPED 3
+#define LM_MESSAGE_STATUS_ROUTE_NOT_FOUND 64
+#define LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED 65
+#define LM_MESSAGE_STATUS_INVALID_ADDRESS 66
 #define LM_P0_NODE_STRUCTURE 1
 #define LM_P0_NODE_FRAME 2
 #define LM_P0_NODE_ATOM 3
@@ -226,11 +232,30 @@ struct LmMutex {
 struct LmCondition {
     void *implementation;
 };
+struct LmMessage {
+    char *lmx;
+    size_t length;
+    LmMessage * next;
+};
+struct LmMessageOutboxEntry {
+    char *endpoint;
+    char *route;
+    LmMessage * message;
+    LmMessageOutboxEntry * next;
+};
+struct LmMessageRoute {
+    char *route;
+    LmMessageThread * target;
+    LmMessageRoute * next;
+};
 struct LmMessageThreadRuntime {
     void *identity;
     size_t pool_count;
     size_t single_execution_depth;
     LmMessageThread * single_active_thread;
+    LmMutex * route_mutex;
+    LmMessageRoute * route_head;
+    size_t route_count;
 };
 struct LmMessageThreadPool {
     LmHostThread * *workers;
@@ -283,6 +308,14 @@ struct LmMessageThread {
     LmMessageThread * ready_next;
     LmMessageThread * pool_previous;
     LmMessageThread * pool_next;
+    int mailbox_mode;
+    LmMessage * inbox_head;
+    LmMessage * inbox_tail;
+    size_t inbox_count;
+    LmMessageOutboxEntry * outbox_head;
+    LmMessageOutboxEntry * outbox_tail;
+    size_t outbox_count;
+    LmMessage * current_message;
 };
 typedef struct LmP0Text {
     const char *data;
@@ -595,7 +628,13 @@ LmMessageThread * (lm_message_thread_new)(void);
 LmMessageThread * (lm_message_thread_new_in)(LmMessageThreadPool *pool);
 void (lm_message_thread_delete)(LmMessageThread *thread);
 int (lm_message_thread_start)(LmMessageThread *thread, LmMessageThreadEntry entry, void *argument);
+int (lm_message_thread_start_mailbox)(LmMessageThread *thread, LmMessageThreadEntry entry, void *argument);
 int (lm_message_thread_join)(LmMessageThread *thread, int *result);
+int (lm_message_thread_bind_route)(LmMessageThread *thread, const char *route);
+int (lm_message_thread_send_lmx)(LmMessageThread *sender, const char *endpoint, const char *route, const char *lmx, size_t length);
+int (lm_message_thread_current_lmx)(LmMessageThread *thread, const char **out_lmx, size_t *out_length);
+size_t (lm_message_thread_inbox_count)(const LmMessageThread *thread);
+size_t (lm_message_thread_outbox_count)(const LmMessageThread *thread);
 int (lm_message_thread_begin_turn)(LmMessageThread *thread);
 int (lm_message_thread_end_turn)(LmMessageThread *thread);
 int (lm_message_thread_collect)(LmMessageThread *thread);
@@ -633,6 +672,21 @@ const char * (lm_p0_node_kind_class_name)(struct LmMessageThread *lm_lmx_message
 char * (lm_p0_dump_alloc)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
 void (lm_p0_free)(struct LmMessageThread *lm_lmx_message_thread, void *ptr);
 static int lm_registry_source_load_root(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Node *root);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

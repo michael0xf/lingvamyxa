@@ -7555,7 +7555,10 @@ explicitly below.
         `validate(Message, RegistryView) -> ExecutionPlan | Failure` and
         `execute(ExecutionPlan) -> Result | Failure`, plus an `emit:` statement
         receiver that appends a proposed message to the current Message Thread
-        outbox. These operations belong to L2/L3.
+        outbox. These operations belong to L2/L3. The lower-level hosted runtime
+        now has FIFO inbox/outbox byte queues and local route delivery, but that
+        ABI does not itself parse, validate or execute the LMX document and does
+        not make these source operators implemented.
 
     21. model / descriptor / union / c.union
         `model` and `descriptor` are TABLE/DATA; there are no generic declaration
@@ -7632,8 +7635,10 @@ explicitly below.
         transport provider.
 
         The explicit host runtime, worker-pool and actor start/join ABI is
-        IMPLEMENTED, but it is an implementation API and is not yet exposed as
-        the generic source receiver `thread:`.
+        IMPLEMENTED. Its mailbox subset includes mailbox actor start, local
+        route binding, owned-LMX FIFO inbox/outbox delivery and current-message
+        access during a handler turn. It is an implementation API and is not
+        yet exposed as the generic source receivers `send` or `thread:`.
 
     28. copy / move / borrow / own
         NOT IMPLEMENTED as source operators; only lower-level ownership/runtime
@@ -10664,9 +10669,10 @@ body / `end_turn` directly on the invoking host thread.
 The pool ABI creates an explicit `LmMessageThreadRuntime`, one or more
 `LmMessageThreadPool` objects and pool-owned Message Threads. For a pooled
 Message Thread, one invocation of its entry callback is one actor turn.
-`end_turn` runs local collection. If the actor remains RUNNING, it is appended
-to the pool's FIFO ready queue for another turn. STOPPING becomes STOPPED at
-the same boundary.
+`end_turn` runs local collection. A step actor that remains RUNNING is appended
+to the pool's FIFO ready queue for another turn. A mailbox actor is appended
+only while its FIFO inbox is non-empty; an empty mailbox is idle rather than
+busy-spinning. STOPPING becomes STOPPED at the same boundary.
 
 A pool never executes two turns of the same Message Thread concurrently.
 Different Message Threads may execute concurrently up to the pool's worker
@@ -10678,10 +10684,12 @@ the previous association before that turn leaves the worker.
 
 The native providers wait on the pool condition when no actor is ready. The
 `single` provider advances the same FIFO cooperatively while the controller
-joins or deletes pool work. Inbox/outbox dispatch and source message operators
-are future runtime work. Because inbox waiting is not implemented yet, a
-RUNNING actor whose callback does not request stop remains immediately
-runnable.
+joins or deletes pool work. Runtime mailbox actors and local inbox/outbox
+dispatch are implemented. Source message operators, message validation and
+remote transport remain future work. A non-mailbox RUNNING actor whose callback
+does not request stop remains immediately runnable. An idle mailbox that is
+stopped individually or by pool stop is scheduled for a final stop-only
+boundary so join cannot wait forever.
 
 `stop:` requests termination of the explicitly executing Message Thread:
 
@@ -10779,15 +10787,17 @@ A Message Thread processes messages through the standard pipeline:
 
 This is the full queue-enabled turn profile. In the current hosted bootstrap,
 one turn consists of the root-body step followed by the same end-turn
-collection boundary. Queue dequeue, validation dispatch and outbox flushing
-will be inserted into this loop when the corresponding runtime/operators are
-implemented; they do not require a second process-lifetime mechanism.
+collection boundary. For a pooled mailbox actor, queue dequeue and outbox
+flushing are now part of this loop. Validation/execute dispatch and the source
+operators are not yet inserted; they do not require a second process-lifetime
+mechanism.
 
-The implemented pool ready queue is not a Message Thread inbox or outbox. It
+The pool ready queue is not a Message Thread inbox or outbox. It
 contains runnable `LmMessageThread` references and schedules actor turns only.
-It does not carry message payloads, perform ownership transfer, validation,
-reply routing or inter-runtime delivery. Inbox/outbox queues and their source
-operators remain future work.
+It does not carry message payloads. The separate implemented mailbox queues
+carry owned LMX bytes and perform local route delivery, but do not yet perform
+validation, reply routing, remote/inter-runtime delivery or source-operator
+lowering.
 
 Each queue-enabled MessageThread has a FIFO inbox and FIFO outbox. A local route
 row maps one route path to one inbox. Receiving appends an owned LMX message to
@@ -10797,11 +10807,23 @@ the actor's outbox; the common end-turn boundary resolves and commits them in
 FIFO order before turn-local collection can reclaim their source representation.
 No user-visible mutable queue is shared between actors.
 
+The hosted ABI currently exposes this subset as
+`lm_message_thread_start_mailbox`, `lm_message_thread_bind_route`,
+`lm_message_thread_send_lmx`, `lm_message_thread_current_lmx` and queue-count
+inspection functions. The send ABI receives
+`(sender, endpoint, route, lmx, length)`. NULL or empty endpoint means local;
+route is required. Send copies exactly `length` bytes into runtime-owned
+storage. The current-message view is borrowed only during the receiving
+callback, after which the runtime releases those bytes. The first runtime
+profile trusts the caller to supply an LMX document: parsing and validation are
+separate future pipeline stages.
+
 For an address without endpoint, outbox commit performs local route lookup. For
 an absolute HTTP(S) endpoint it invokes the configured REST/LMX transport
 provider. Until that provider is present, delivery fails explicitly with
-`transport provider not configured`; it must not silently treat the URI as a
-local route or discard the message.
+`LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED`; it must not silently
+treat the URI as a local route or discard the message. A missing local route
+similarly ends the sending actor with `LM_MESSAGE_STATUS_ROUTE_NOT_FOUND`.
 
 Dispatch is a registry query, not object magic.
 
@@ -13344,8 +13366,12 @@ Current hosted-bootstrap implementation:
     partial-callable binder ownership and other remaining unscoped allocation
         paths still require separate owner integration;
     generated standalone programs do not yet construct or use the pool runtime;
-    the pool ready queue is implemented, but inbox/outbox message queues,
-        payload transfer and inter-runtime message delivery are not;
+    pooled mailbox actors, owned-LMX FIFO inbox/outbox queues and exact local
+        route-to-MessageThread delivery are implemented;
+    empty/NULL endpoint selects local delivery; absolute HTTP(S) addresses
+        currently fail explicitly because no transport provider is configured;
+    message parsing/validation, reply routing, remote/inter-runtime delivery and
+        source lowering over the mailbox ABI are not yet implemented;
     `send`, `reply`, `await`, `schedule`, `thread:` and application-wide
         stop-and-wait `exit:` are not yet implemented as generic source operations;
     a runtime frame/cleanup stack for unwinding through nested Message Thread
