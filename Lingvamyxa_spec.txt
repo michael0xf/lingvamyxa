@@ -396,10 +396,12 @@ narrow sense. A complete implementation may also act as a runtime, build system,
 registry host and service framework for small and large services.
 
 The built-in HTTP Lingvamyxa REST profile provides a standard HTTP transport
-for Lingvamyxa messages between service instances, service thread groups
-and external HTTP clients. HTTP is the transport envelope. REST routes are
-service/route descriptors stored as registry table rows. Lingvamyxa messages
-and serialized Lingvamyxa Structures remain the semantic payload.
+for Lingvamyxa messages between applications and external HTTP clients. Every
+hosted application may expose a REST/LMX endpoint. A message address combines
+that application endpoint with a REST route; an omitted endpoint means the
+current application. HTTP is the transport envelope. Routes are descriptors
+stored as registry table rows and map to Message Thread inboxes. Lingvamyxa
+messages and serialized Lingvamyxa Structures remain the semantic payload.
 
 JSON may be supported as a legacy or interoperability adapter, but JSON is not
 the default payload model of the HTTP Lingvamyxa REST profile and does not
@@ -4843,8 +4845,9 @@ Keep this distinct from the two other deferred/result mechanisms:
 
     message-boundary reply wrapping
         wraps any produced result, including a callable/residual Structure, as a
-        reply ProposedMessage only when the message boundary supplies a reply
-        target, future, continuation or correlation id.
+        reply ProposedMessage only when the message boundary supplies a
+        `replyTo` address or a local future/continuation that resolves to one.
+        A correlation identifier relates records but does not supply an address.
 
 7.2.3. Callable Descriptor Argument Consumption and Partial Binding
 
@@ -7544,12 +7547,15 @@ explicitly below.
         explicit ambiguity result.
 
     20. message / validate / execute / emit
-        NOT IMPLEMENTED as source operators. A message is currently TABLE/DATA,
-        an ordinary ProposedMessage Structure. Proposed: register expression
-        receivers `validate(Message, RegistryView) -> ExecutionPlan | Failure`
-        and `execute(ExecutionPlan) -> Result | Failure`, plus an `emit:`
-        statement receiver that appends a proposed message to the current
-        Message Thread output. These operations belong to L2/L3.
+        NOT IMPLEMENTED as source operators. A message is TABLE/DATA: one LMX
+        document whose root is the standard message envelope and whose
+        `expression` is ordinary LMX. Its address is `endpoint + route`; the
+        envelope fields are defined in section 19.19.1. Proposed: register
+        expression receivers
+        `validate(Message, RegistryView) -> ExecutionPlan | Failure` and
+        `execute(ExecutionPlan) -> Result | Failure`, plus an `emit:` statement
+        receiver that appends a proposed message to the current Message Thread
+        outbox. These operations belong to L2/L3.
 
     21. model / descriptor / union / c.union
         `model` and `descriptor` are TABLE/DATA; there are no generic declaration
@@ -7620,7 +7626,10 @@ explicitly below.
         IMPLEMENTED as source receivers. Proposed contracts:
         `send(Message) -> Future`; `reply(Value | Failure)`;
         `await(Future) -> Value | Failure`; `schedule(Message, Time)`; and
-        `thread:` descriptor/body -> MessageThread.
+        `thread:` route/handler descriptor -> MessageThread inbox. `send` uses
+        the message's `to.endpoint + to.route`; a local route stays inside the
+        application and an absolute HTTP(S) endpoint selects the REST/LMX
+        transport provider.
 
         The explicit host runtime, worker-pool and actor start/join ABI is
         IMPLEMENTED, but it is an implementation API and is not yet exposed as
@@ -9594,10 +9603,12 @@ yet been moved into registry tables.
 
 19.19.1. Message
 
-A message is a proposed, possibly effectful/action-capable LMX expression
-candidate addressed to a receiver. It may become an action after validation,
-but it is not concrete before validation, is not a transport packet and is not
-executed on arrival.
+A message is one LMX document. Its root is a standard message envelope and its
+`expression` field is a proposed, possibly effectful/action-capable LMX
+expression candidate. The whole envelope, including its address and metadata,
+is LMX; there is no second message language or mandatory JSON wrapper. A
+message may become an action after validation, but it is not concrete before
+validation, is not a transport packet and is not executed merely on arrival.
 
 It may be a full LMX subtree or a very small LMX subset. The language does not
 bake in a fixed restriction such as "one command only" or "no explicit classes".
@@ -9625,12 +9636,21 @@ validation and execution-plan construction.
 Example:
 
     message:
-        from: user42
-        to: ArchiveService
+        id: "request-123"
+        to:
+            endpoint: "https://archive.example.org"
+            route: "/inbox/save"
+        end: to
+        replyTo:
+            route: "/inbox/replies"
+        end: replyTo
+        correlation: None
         expression:
             save:
                 file: "report.lmx"
                 mode: overwrite
+            end: save
+        end: expression
     end: message
 
 The message is proposed source data. It may carry a local mini-model, expected
@@ -9639,7 +9659,81 @@ implementation references. These are claims, not authority and not executable
 code. HTTP, queues, sockets and files are only transport/storage envelopes for
 such proposed expressions.
 
-19.19.1.1. Message Body, External Structures and MIX Cursors
+19.19.1.1. Message Envelope and Address
+
+The standard envelope has these coordinates:
+
+    id
+        Opaque identifier of this message. It is unique within the sending
+        application for the period in which replies, retries or duplicate
+        detection may refer to it. A runtime may generate it when source does
+        not provide one.
+
+    to
+        Required MessageAddress Structure containing `endpoint` and `route`.
+
+    replyTo
+        Optional MessageAddress to which a semantic result or failure message
+        is sent. It is independent of the transport-level HTTP response.
+
+    correlation
+        Optional opaque identifier relating this message to an earlier
+        message. A normal reply sets `correlation` to the request's `id`.
+        Correlation is not an address and cannot replace `replyTo`.
+
+    expression
+        Required ordinary LMX expression candidate admitted and interpreted by
+        the receiving route's validation profile.
+
+A MessageAddress consists of:
+
+    endpoint
+        Optional absolute base URI of the destination REST/LMX application.
+        The initial network profile admits `http` and `https`. If `endpoint` is
+        omitted, the current application is selected. An endpoint identifies
+        the application server, not an OS thread, worker, process pointer or
+        MessageThread object.
+
+    route
+        Required absolute-path reference beginning with `/`. It names an inbox
+        route in the destination application's route table. A route row maps
+        the path to a MessageThread inbox and declares whether the route is
+        local-only or exposed by a transport adapter.
+
+The effective remote request URI is the normalized concatenation of endpoint
+and route. For example:
+
+    endpoint = "https://archive.example.org"
+    route    = "/inbox/save"
+    URI      = "https://archive.example.org/inbox/save"
+
+An application hosted below a URI prefix includes that prefix in its endpoint.
+Normalization removes only the joining slash; it does not reinterpret or
+decode route segments.
+
+A local address omits endpoint:
+
+    to:
+        route: "/inbox/save"
+    end: to
+
+The runtime resolves that route directly and appends the message to the target
+inbox without an HTTP loopback. This is an optimization only: local and remote
+delivery use the same Message envelope, route contract, validation pipeline and
+reply rules.
+
+Multiple application instances may be placed behind one endpoint. Instance
+selection, load balancing and failover are properties of the endpoint/provider,
+not additional MessageAddress coordinates. A deployment that needs to target a
+particular instance gives that instance its own endpoint or route.
+
+The message envelope does not contain a trusted `from` field. Source may carry
+an identity claim inside ordinary LMX data, but authenticated origin and
+authority evidence are supplied by the local runtime or transport ingress and
+validated separately. Likewise, knowing an endpoint and route does not itself
+grant authority to execute the contained expression.
+
+19.19.1.2. Message Body, External Structures and MIX Cursors
 
 A message expression may contain its body inline, but it is not required to do
 so. A message may also carry references, cursors, ranges or capabilities that
@@ -9671,13 +9765,19 @@ chunked writing, range queries, lazy body loading or stream-like traversal.
 Example of a short semantic record that names a larger body:
 
     message:
-        to: ReportService
+        id: "report-42"
+        to:
+            route: "/reports/process"
+        end: to
         expression:
             process:
                 body:
                     cursor: reportStore\flightLog\segment42
                     range: current
                     mode: readStream
+                end: body
+            end: process
+        end: expression
     end: message
 
 MIX-aware storage may support multiple cursors over the same document/body.
@@ -9695,7 +9795,7 @@ profile-defined source. On slow links, the message frame can remain short while
 the semantic operation stays full LMX: the receiver reads the body only as
 needed and only through validated cursor operations.
 
-The core message model does not define a separate canonical wire-schema layer
+The core message model does not define a second canonical wire-schema layer
 with built-in binary/text negotiation, schema-version migration, unknown-field
 compatibility, backward/forward/full compatibility modes, compression or
 encryption semantics. A message is already an LMX expression candidate. If a
@@ -9742,8 +9842,10 @@ implementation may fuse them, but the semantic outputs are distinct:
         IncomingMessageStructure.
 
     receiver registry selection
-        The target receiver, service, thread or object selects the applicable
-        receiver-local registry tables and produces a ReceiverRegistryView.
+        The resolved endpoint/route selects a MessageThread inbox and its
+        applicable receiver-local registry tables, producing a
+        ReceiverRegistryView. An endpoint/route is a delivery address; it does
+        not bypass receiver or operation resolution inside the expression.
 
     name resolution
         Names, selectors, operation heads and referenced registry keys are
@@ -9824,14 +9926,14 @@ that result is defined by the surrounding context:
 
     local expression context        -> value consumed by the caller/expression;
     local rule/generator context    -> value consumed by generation rules;
-    message request with reply target    -> value wrapped as a reply ProposedMessage;
-    message request with no reply target -> value may be discarded, logged or consumed
+    message request with `replyTo`    -> value wrapped as a reply ProposedMessage;
+    message request without `replyTo` -> value may be discarded, logged or consumed
                                       by profile-defined local rules.
 
 Therefore the message-boundary reply mechanism does not require a separate source-level
 `return`. The ordinary L3 `return` receiver exits the current executable body
 and produces the declared result value. If that executable body was run as the
-implementation of a message request with a reply target, the message boundary
+implementation of a message request with `replyTo`, the message boundary
 wrapper
 turns the produced result into a reply message automatically.
 
@@ -10687,6 +10789,20 @@ It does not carry message payloads, perform ownership transfer, validation,
 reply routing or inter-runtime delivery. Inbox/outbox queues and their source
 operators remain future work.
 
+Each queue-enabled MessageThread has a FIFO inbox and FIFO outbox. A local route
+row maps one route path to one inbox. Receiving appends an owned LMX message to
+the target inbox and makes an idle mailbox actor runnable. One mailbox turn
+dequeues at most one message. Messages emitted during that turn are appended to
+the actor's outbox; the common end-turn boundary resolves and commits them in
+FIFO order before turn-local collection can reclaim their source representation.
+No user-visible mutable queue is shared between actors.
+
+For an address without endpoint, outbox commit performs local route lookup. For
+an absolute HTTP(S) endpoint it invokes the configured REST/LMX transport
+provider. Until that provider is present, delivery fails explicitly with
+`transport provider not configured`; it must not silently treat the URI as a
+local route or discard the message.
+
 Dispatch is a registry query, not object magic.
 
 The execution step may produce result values, diagnostics, state updates and
@@ -10698,7 +10814,7 @@ Core message semantics are intentionally smaller than broker/runtime policy:
     message = proposed, potentially executable/action-capable expression;
     validation/merge -> ExecutionPlan;
     execution -> result / failure;
-    boundary -> reply/failure message to caller, reply target or continuation.
+    boundary -> reply/failure message to `replyTo` or a local continuation.
 
 The core language does not require a broker-style acknowledgement, dead-letter
 queue, topic partition, consumer group, transport retry scheduler or supervision
@@ -10720,8 +10836,8 @@ runtime/profile/library concerns around accepted message execution. Examples:
 
 Such policies may be described by registry tables and may themselves emit
 diagnostics or messages, but they are not the meaning of a source message. In
-particular, a semantic failure is normally returned to the sender, reply target
-or continuation as a failure message. If that target is absent, expired or
+particular, a semantic failure is normally returned to `replyTo` or a local
+continuation as a failure message. If that target is absent, expired or
 unreachable, the situation belongs to runtime/delivery policy, not to the core
 message expression semantics.
 
@@ -10829,11 +10945,13 @@ Replies and futures are message records. Failures crossing a Message Thread
 boundary are data messages, not hidden exceptions.
 
 A result crossing a Message Thread or service boundary is represented as a message.
-If a request contains a reply target, future, continuation or correlation id,
-the value returned by the executed expression is wrapped into a reply message
-addressed to that target. A failure is wrapped into a failure message. Reply
-and failure messages are ordinary message records and must pass the normal
-validation rules of the receiving side.
+If a request contains `replyTo`, or a local future/continuation that resolves to
+a MessageAddress, the value returned by the executed expression is wrapped into
+a reply message addressed to that target. The reply has its own `id` and sets
+`correlation` to the request's `id`. A failure is wrapped in the same way.
+Reply and failure messages are ordinary LMX message records and must pass the
+normal routing and validation rules of the receiving side. `correlation` alone
+never selects a destination.
 
 This wrapping is automatic at the message boundary. It is not a second
 source-level `return` form. Keep the following meanings separate:
@@ -10849,10 +10967,10 @@ source-level `return` form. Keep the following meanings separate:
 
     message-boundary reply wrapping
         a produced result is wrapped as a reply ProposedMessage only when the
-        executing message boundary supplies a reply target, future,
-        continuation or correlation id.
+        executing message boundary supplies `replyTo` or a local
+        future/continuation that resolves to a MessageAddress.
 
-If a message has no reply target and no profile rule consumes the result, the
+If a message has no `replyTo` and no profile rule consumes the result, the
 result is not forced into a hidden reply. The profile may discard it, log it,
 use it for local generation rules, or report that the message kind must declare
 a result destination. The important rule is that crossing the boundary uses an
@@ -13307,12 +13425,25 @@ HTTP request handling is:
 Routes are registry rows. External HTTP data becomes an LMX message before
 service dispatch.
 
+The standard request target is the normalized `MessageAddress.endpoint +
+MessageAddress.route`. A remote sender posts the complete LMX Message document
+as the request body. The receiving application resolves only the route part in
+its local route table. An HTTP route never names an OS worker or exposes a raw
+MessageThread handle.
+
 19.31.4. Serialization, Client/Server and Service Boundaries
 
 Serialization adapters are codec operation tables. HTTP client/server adapters
 are services or hosted native adapters that inject messages into Message Threads.
 Service boundaries obey the same memory and authority rules as Message Thread
 boundaries, with stronger default isolation for remote input.
+
+The initial REST/LMX media type is `application/lmx`. HTTP status and response
+mapping describe transport admission and, in a request/response profile, may
+carry the resulting LMX reply. An asynchronous profile may acknowledge inbox
+admission first and later deliver the semantic reply to `replyTo`; in both cases
+the semantic result/failure is an ordinary LMX Message with `correlation` equal
+to the request `id`.
 
 
 19.32. Authentication and Authorization Operators
@@ -13437,7 +13568,11 @@ This integrated model reduces to these rules:
     type/class resolution = logical query over the active registry view;
     in-memory registry rows/indexes/caches/SQLite = materialized views, not semantics;
     expression = Structure requiring table cells;
-    message = proposed possibly effectful/action-capable LMX expression candidate;
+    message = one LMX document with a standard envelope and ordinary LMX expression;
+    message address = optional REST/LMX application endpoint plus required inbox route;
+    message id = opaque identity of one message;
+    replyTo = optional result/failure MessageAddress;
+    correlation = relationship to another message id, never a destination;
     message expression = ordinary LMX admitted by receiver policy;
     validation = staged merge from IncomingMessageStructure to ExecutionPlan;
     executor = run only ExecutionPlans produced by validation/merge;
