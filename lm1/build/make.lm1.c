@@ -20,6 +20,9 @@ struct IncomingMessage {
 struct LmMessageThread *lm_message_thread_new(void);
 void lm_message_thread_delete(struct LmMessageThread *thread);
 struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
+#ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT
+int lm_rest_lmx_http_client_install_default(struct LmMessageThreadRuntime *runtime);
+#endif
 int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_exit_state(struct LmMessageThreadRuntime *runtime, int *requested, int *ready, int *status);
@@ -83,6 +86,13 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
         lm_message_thread_delete(thread);
         return 1;
     }
+#ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT
+    if (lm_rest_lmx_http_client_install_default(runtime) != 0) {
+        (void)lm_message_thread_runtime_delete(runtime);
+        lm_message_thread_delete(thread);
+        return 1;
+    }
+#endif
     if (lm_message_thread_runtime_attach_root(runtime, thread) != 0) {
         (void)lm_message_thread_runtime_delete(runtime);
         lm_message_thread_delete(thread);
@@ -383,6 +393,14 @@ int main(int argc, char **argv) {
     (void)lm_message_thread_set_execution_context(lm_lmx_message_thread, &lm_message_thread_main_context);
     lm_lmx_application_runtime = lm_message_thread_runtime_new();
     if (lm_lmx_application_runtime == 0) lm_lmx_thread_startup_failed = 1;
+#ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT
+    if (!lm_lmx_thread_startup_failed && lm_rest_lmx_http_client_install_default(lm_lmx_application_runtime) != 0) {
+        (void)lm_message_thread_runtime_delete(lm_lmx_application_runtime);
+        lm_lmx_application_runtime = 0;
+        lm_message_thread_delete(lm_lmx_message_thread);
+        return 1;
+    }
+#endif
     if (!lm_lmx_thread_startup_failed && lm_message_thread_runtime_attach_root(lm_lmx_application_runtime, lm_lmx_message_thread) != 0) lm_lmx_thread_startup_failed = 1; else if (!lm_lmx_thread_startup_failed) lm_lmx_application_root_attached = 1;
     if (lm_lmx_thread_startup_failed) lm_message_thread_request_failure(lm_lmx_message_thread, 1);
     while (lm_message_thread_begin_turn(lm_lmx_message_thread)) {

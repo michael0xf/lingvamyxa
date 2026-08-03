@@ -20,6 +20,9 @@ struct IncomingMessage {
 struct LmMessageThread *lm_message_thread_new(void);
 void lm_message_thread_delete(struct LmMessageThread *thread);
 struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
+#ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT
+int lm_rest_lmx_http_client_install_default(struct LmMessageThreadRuntime *runtime);
+#endif
 int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_exit_state(struct LmMessageThreadRuntime *runtime, int *requested, int *ready, int *status);
@@ -83,6 +86,13 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
         lm_message_thread_delete(thread);
         return 1;
     }
+#ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT
+    if (lm_rest_lmx_http_client_install_default(runtime) != 0) {
+        (void)lm_message_thread_runtime_delete(runtime);
+        lm_message_thread_delete(thread);
+        return 1;
+    }
+#endif
     if (lm_message_thread_runtime_attach_root(runtime, thread) != 0) {
         (void)lm_message_thread_runtime_delete(runtime);
         lm_message_thread_delete(thread);

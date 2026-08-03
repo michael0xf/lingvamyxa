@@ -1,0 +1,4 @@
+predef: "lm2/own_abi.lm2"
+
+fn: lm_rest_lmx_http_client_provider_name () const: @: char
+fn: lm_rest_lmx_http_client_install_default (LmMessageThreadRuntime: runtime) int

@@ -26,6 +26,10 @@ set(LM_LIBS_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/libs")
 set(LM_AUTOTOOLS_JOBS "2" CACHE STRING "Parallel jobs used when building bundled autotools libraries")
 set(LM_THREAD_PROVIDER "auto" CACHE STRING "Host thread provider: auto, pthread, win32, or single")
 set_property(CACHE LM_THREAD_PROVIDER PROPERTY STRINGS auto pthread win32 single)
+set(LM_REST_LMX_CLIENT_PROVIDER "auto" CACHE STRING
+    "REST/LMX client provider: auto, none, libcurl, or winhttp"
+)
+set_property(CACHE LM_REST_LMX_CLIENT_PROVIDER PROPERTY STRINGS auto none libcurl winhttp)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(LingvamyxaThirdParty)
 
@@ -98,13 +102,14 @@ message(STATUS
 # ---- External language/runtime dependencies ----
 
 set(LM_THIRD_PARTY_TARGETS "")
+set(LM_EXTERNAL_DEPS_REQUIRE_CURL FALSE)
 
 if (LINGVAMYXA_ENABLE_EXTERNAL_DEPS)
     find_package(unofficial-sqlite3 CONFIG REQUIRED)
     find_package(pcre2 CONFIG REQUIRED)
     find_package(civetweb CONFIG REQUIRED)
-    find_package(CURL CONFIG REQUIRED)
     find_package(yyjson CONFIG REQUIRED)
+    set(LM_EXTERNAL_DEPS_REQUIRE_CURL TRUE)
 
     find_package(PkgConfig REQUIRED)
 
@@ -127,6 +132,123 @@ if (LINGVAMYXA_ENABLE_BUNDLED_THIRD_PARTY)
     list(APPEND LM_THIRD_PARTY_TARGETS ${LM_BUNDLED_THIRD_PARTY_TARGETS})
 endif()
 
+# ---- REST/LMX client provider ----
+
+string(TOLOWER "${LM_REST_LMX_CLIENT_PROVIDER}" LM_REST_LMX_CLIENT_PROVIDER_REQUESTED)
+set(LM_REST_LMX_CLIENT_PROVIDER_VALUES auto none libcurl winhttp)
+if (NOT LM_REST_LMX_CLIENT_PROVIDER_REQUESTED IN_LIST LM_REST_LMX_CLIENT_PROVIDER_VALUES)
+    message(FATAL_ERROR
+        "Unsupported LM_REST_LMX_CLIENT_PROVIDER='${LM_REST_LMX_CLIENT_PROVIDER}'. "
+        "Expected one of: auto, none, libcurl, winhttp."
+    )
+endif()
+
+if (LM_REST_LMX_CLIENT_PROVIDER_REQUESTED STREQUAL "auto")
+    if (WIN32)
+        set(LM_REST_LMX_CLIENT_PROVIDER_RESOLVED winhttp)
+    elseif (UNIX)
+        set(LM_REST_LMX_CLIENT_PROVIDER_RESOLVED libcurl)
+    else()
+        set(LM_REST_LMX_CLIENT_PROVIDER_RESOLVED none)
+        message(STATUS
+            "No automatic REST/LMX client provider is known for this platform; using none"
+        )
+    endif()
+else()
+    set(LM_REST_LMX_CLIENT_PROVIDER_RESOLVED
+        "${LM_REST_LMX_CLIENT_PROVIDER_REQUESTED}"
+    )
+endif()
+
+if (LM_REST_LMX_CLIENT_PROVIDER_RESOLVED STREQUAL "winhttp" AND NOT WIN32)
+    message(FATAL_ERROR
+        "LM_REST_LMX_CLIENT_PROVIDER=winhttp requires a Windows target"
+    )
+endif()
+
+set(LM_REST_LMX_CURL_REQUIRED FALSE)
+if (LM_EXTERNAL_DEPS_REQUIRE_CURL OR
+    LM_REST_LMX_CLIENT_PROVIDER_REQUESTED STREQUAL "libcurl")
+    set(LM_REST_LMX_CURL_REQUIRED TRUE)
+endif()
+
+if (LM_EXTERNAL_DEPS_REQUIRE_CURL OR
+    LM_REST_LMX_CLIENT_PROVIDER_RESOLVED STREQUAL "libcurl")
+    if (LM_REST_LMX_CURL_REQUIRED)
+        find_package(CURL REQUIRED)
+    else()
+        find_package(CURL QUIET)
+    endif()
+endif()
+
+set(LM_REST_LMX_BUNDLED_CURL_SELECTED FALSE)
+if (LINGVAMYXA_ENABLE_BUNDLED_THIRD_PARTY AND NOT WIN32 AND
+    TARGET CURL::libcurl)
+    get_target_property(
+        LM_REST_LMX_CURL_ALIASED_TARGET
+        CURL::libcurl
+        ALIASED_TARGET
+    )
+    if (LM_REST_LMX_CURL_ALIASED_TARGET STREQUAL "libcurl_static" OR
+        LM_REST_LMX_CURL_ALIASED_TARGET STREQUAL "libcurl")
+        set(LM_REST_LMX_BUNDLED_CURL_SELECTED TRUE)
+    endif()
+endif()
+
+if (LM_REST_LMX_CLIENT_PROVIDER_RESOLVED STREQUAL "libcurl" AND
+    LM_REST_LMX_BUNDLED_CURL_SELECTED)
+    if (LM_REST_LMX_CLIENT_PROVIDER_REQUESTED STREQUAL "auto")
+        set(LM_REST_LMX_CLIENT_PROVIDER_RESOLVED none)
+        message(STATUS
+            "Bundled CURL has no TLS backend on this platform; "
+            "automatic REST/LMX client provider is none"
+        )
+    else()
+        message(FATAL_ERROR
+            "LM_REST_LMX_CLIENT_PROVIDER=libcurl cannot use bundled CURL "
+            "without a TLS backend on this platform"
+        )
+    endif()
+endif()
+
+if (LM_REST_LMX_CLIENT_PROVIDER_RESOLVED STREQUAL "libcurl" AND
+    NOT TARGET CURL::libcurl)
+    if (LM_REST_LMX_CLIENT_PROVIDER_REQUESTED STREQUAL "auto")
+        set(LM_REST_LMX_CLIENT_PROVIDER_RESOLVED none)
+        message(STATUS "CURL was not found; automatic REST/LMX client provider is none")
+    else()
+        message(FATAL_ERROR
+            "LM_REST_LMX_CLIENT_PROVIDER=libcurl requires the CURL::libcurl target"
+        )
+    endif()
+endif()
+
+if (LM_EXTERNAL_DEPS_REQUIRE_CURL AND NOT TARGET CURL::libcurl)
+    message(FATAL_ERROR
+        "LINGVAMYXA_ENABLE_EXTERNAL_DEPS requires the CURL::libcurl target"
+    )
+endif()
+
+string(TOUPPER
+    "${LM_REST_LMX_CLIENT_PROVIDER_RESOLVED}"
+    LM_REST_LMX_CLIENT_PROVIDER_DEFINE_SUFFIX
+)
+add_library(lm_rest_lmx_client_provider INTERFACE)
+target_compile_definitions(lm_rest_lmx_client_provider INTERFACE
+    "LM_REST_LMX_CLIENT_PROVIDER=LM_REST_LMX_CLIENT_PROVIDER_${LM_REST_LMX_CLIENT_PROVIDER_DEFINE_SUFFIX}"
+)
+
+if (LM_REST_LMX_CLIENT_PROVIDER_RESOLVED STREQUAL "libcurl")
+    target_link_libraries(lm_rest_lmx_client_provider INTERFACE CURL::libcurl)
+elseif (LM_REST_LMX_CLIENT_PROVIDER_RESOLVED STREQUAL "winhttp")
+    target_link_libraries(lm_rest_lmx_client_provider INTERFACE winhttp)
+endif()
+
+message(STATUS
+    "Lingvamyxa REST/LMX client provider: "
+    "${LM_REST_LMX_CLIENT_PROVIDER_REQUESTED} -> ${LM_REST_LMX_CLIENT_PROVIDER_RESOLVED}"
+)
+
 if (LM_THIRD_PARTY_TARGETS)
     add_custom_target(third_party.lm0 ALL
         DEPENDS ${LM_THIRD_PARTY_TARGETS}
@@ -141,6 +263,9 @@ set(LM1_GENERATED_PRINT_TREE_C "${LM1_GENERATED_DIR}/printTree.lm1.c")
 set(LM1_GENERATED_MAKE_C "${LM1_GENERATED_DIR}/make.lm1.c")
 set(LM1_GENERATED_VCPKG_FETCH_C "${LM1_GENERATED_DIR}/vcpkgFetch.lm1.c")
 set(LM1_GENERATED_BUILD_CORE_C "${LM1_GENERATED_DIR}/buildCore.lm1.c")
+set(LM1_GENERATED_REST_LMX_HTTP_CLIENT_C
+    "${LM1_GENERATED_DIR}/rest_lmx_http_client.lm1.c"
+)
 set(LM2_CORE_REGISTRY "${CMAKE_CURRENT_SOURCE_DIR}/lm2/core.lm2")
 set(LM2_TRANS_REGISTRY "${CMAKE_CURRENT_SOURCE_DIR}/lm2/trans_registry.lm2")
 set(LM2_PARSER_REGISTRY "${CMAKE_CURRENT_SOURCE_DIR}/lm2/parser_registry.lm2")
@@ -154,6 +279,12 @@ set(LM2_LIBC_ABI "${CMAKE_CURRENT_SOURCE_DIR}/lm2/libc_abi.lm2")
 set(LM2_REGISTRY_SOURCE_LOADER_UNIT_PAYLOAD "${CMAKE_CURRENT_SOURCE_DIR}/lm2/registry_source_loader_unit_payload.lm2")
 set(LM2_TABLE_DESCRIPTOR "${CMAKE_CURRENT_SOURCE_DIR}/lm2/table_descriptor.lm2")
 set(LM2_TABLE_DESCRIPTOR_MODEL "${CMAKE_CURRENT_SOURCE_DIR}/lm2/table_descriptor_model.lm2")
+set(LM2_REST_LMX_HTTP_CLIENT
+    "${CMAKE_CURRENT_SOURCE_DIR}/lm2/rest_lmx_http_client.lm2"
+)
+set(LM2_REST_LMX_HTTP_CLIENT_ABI
+    "${CMAKE_CURRENT_SOURCE_DIR}/lm2/rest_lmx_http_client_abi.lm2"
+)
 set(LM2_TO_LM1_REGISTRY_DEPS
     "${LM2_CORE_REGISTRY}"
     "${LM2_TRANS_REGISTRY}"
@@ -168,6 +299,7 @@ set(LM2_TO_LM1_REGISTRY_DEPS
     "${LM2_REGISTRY_SOURCE_LOADER_UNIT_PAYLOAD}"
     "${LM2_TABLE_DESCRIPTOR}"
     "${LM2_TABLE_DESCRIPTOR_MODEL}"
+    "${LM2_REST_LMX_HTTP_CLIENT_ABI}"
 )
 
 # ---- Generated L1 ownership helper ----
@@ -194,6 +326,41 @@ if (BUILD_TRANS_LM0 OR BUILD_PRINT_TREE_LM0 OR BUILD_VCPKG_FETCH_LM0 OR BUILD_BU
     else()
         target_compile_options(own.lm1 PRIVATE -Wall -Wextra -Wpedantic)
     endif()
+endif()
+
+# ---- Optional generated REST/LMX HTTP client adapter ----
+
+if (TARGET own.lm1)
+    set_source_files_properties(
+        "${LM1_GENERATED_REST_LMX_HTTP_CLIENT_C}"
+        PROPERTIES GENERATED TRUE
+    )
+    add_library(rest_lmx_http_client.lm1 STATIC EXCLUDE_FROM_ALL
+        "${LM1_GENERATED_REST_LMX_HTTP_CLIENT_C}"
+    )
+
+    target_include_directories(rest_lmx_http_client.lm1 PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/lm1
+    )
+
+    target_link_libraries(rest_lmx_http_client.lm1 PUBLIC
+        own.lm1
+        lm_rest_lmx_client_provider
+    )
+
+    if (MSVC)
+        target_compile_options(rest_lmx_http_client.lm1 PRIVATE /W4)
+    else()
+        target_compile_options(rest_lmx_http_client.lm1 PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    add_library(lm_rest_lmx_default_client INTERFACE)
+    target_link_libraries(lm_rest_lmx_default_client INTERFACE
+        rest_lmx_http_client.lm1
+    )
+    target_compile_definitions(lm_rest_lmx_default_client INTERFACE
+        LM_REST_LMX_INSTALL_DEFAULT_CLIENT=1
+    )
 endif()
 
 # ---- Generated L1 parser snapshot ----
@@ -277,6 +444,25 @@ if (BUILD_TRANS_LM0)
         VERBATIM
     )
 
+    add_custom_target(refresh_rest_lmx_http_client_lm1
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}"
+        COMMAND $<TARGET_FILE:trans.lm0>
+            "${LM2_REST_LMX_HTTP_CLIENT}"
+            "${LM1_GENERATED_REST_LMX_HTTP_CLIENT_C}"
+        DEPENDS
+            trans.lm0
+            "${LM2_REST_LMX_HTTP_CLIENT}"
+            ${LM2_TO_LM1_REGISTRY_DEPS}
+        COMMENT "Refreshing lm1/build/rest_lmx_http_client.lm1.c from lm2/rest_lmx_http_client.lm2"
+        VERBATIM
+    )
+    if (TARGET rest_lmx_http_client.lm1)
+        add_dependencies(
+            rest_lmx_http_client.lm1
+            refresh_rest_lmx_http_client_lm1
+        )
+    endif()
+
     add_custom_command(
         OUTPUT "${LM1_GENERATED_PRINT_TREE_C}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${LM1_GENERATED_DIR}"
@@ -338,6 +524,7 @@ if (BUILD_TRANS_LM0)
             refresh_own_lm1
             refresh_trans_lm1
             refresh_parser_lm1
+            refresh_rest_lmx_http_client_lm1
             "${LM1_GENERATED_PRINT_TREE_C}"
             "${LM1_GENERATED_MAKE_C}"
             "${LM1_GENERATED_VCPKG_FETCH_C}"

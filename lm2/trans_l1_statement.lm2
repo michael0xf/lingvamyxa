@@ -543,6 +543,8 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);\n") != 0
         return: 1
+    if: lm_trans_put(file, "#ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT\nint lm_rest_lmx_http_client_install_default(struct LmMessageThreadRuntime *runtime);\n#endif\n") != 0
+        return: 1
     if: lm_trans_put(file, "int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);\n") != 0
         return: 1
     if: lm_trans_put(file, "int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);\n") != 0
@@ -668,6 +670,20 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
     if: lm_trans_put(file, "        return 1;\n") != 0
         return: 1
     if: lm_trans_put(file, "    }\n") != 0
+        return: 1
+    if: lm_trans_put(file, "#ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (lm_rest_lmx_http_client_install_default(runtime) != 0) {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        (void)lm_message_thread_runtime_delete(runtime);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        lm_message_thread_delete(thread);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        return 1;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    }\n") != 0
+        return: 1
+    if: lm_trans_put(file, "#endif\n") != 0
         return: 1
     if: lm_trans_put(file, "    if (lm_message_thread_runtime_attach_root(runtime, thread) != 0) {\n") != 0
         return: 1
@@ -915,6 +931,22 @@ fn: lm_trans_emit_message_thread_main_root (
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "lm_lmx_application_runtime = lm_message_thread_runtime_new();\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (lm_lmx_application_runtime == 0) lm_lmx_thread_startup_failed = 1;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "#ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (!lm_lmx_thread_startup_failed && lm_rest_lmx_http_client_install_default(lm_lmx_application_runtime) != 0) {\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "(void)lm_message_thread_runtime_delete(lm_lmx_application_runtime);\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_lmx_application_runtime = 0;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "lm_message_thread_delete(lm_lmx_message_thread);\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "return 1;\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+    if: lm_trans_put(file, "#endif\n") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (!lm_lmx_thread_startup_failed && lm_message_thread_runtime_attach_root(lm_lmx_application_runtime, lm_lmx_message_thread) != 0) lm_lmx_thread_startup_failed = 1; else if (!lm_lmx_thread_startup_failed) lm_lmx_application_root_attached = 1;\n") != 0
         return: 1

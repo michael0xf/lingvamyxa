@@ -11063,6 +11063,37 @@ may overlap; provider context must be safe for those concurrent calls. URI and
 body arguments are borrowed only for the callback. `body` contains exactly
 `length` bytes and need not be NUL-terminated or free of embedded NUL bytes.
 
+The hosted outbound adapter is selected at build time by:
+
+    LM_REST_LMX_CLIENT_PROVIDER = auto | none | libcurl | winhttp
+
+`auto` selects WinHTTP on Windows. On a Unix-like host it selects a discovered
+system/package libcurl target; if no such target is available it resolves to
+`none`. A deployment which uses HTTPS must provide a TLS-enabled libcurl. The
+known bundled non-Windows libcurl profile currently has no TLS backend, so
+`auto` does not select it and an explicit request for that combination is a
+configuration error. `none` deliberately leaves the runtime provider empty,
+preserving the explicit `TRANSPORT_PROVIDER_NOT_CONFIGURED` result.
+
+The CMake interface target `lm_rest_lmx_default_client` links the selected
+adapter and defines `LM_REST_LMX_INSTALL_DEFAULT_CLIENT`. With that definition,
+generated application startup installs the adapter immediately after creating
+the application runtime and before attaching the root or exposing routes. An
+installation failure releases the still-empty runtime and root and returns a
+nonzero host status. Bootstrap translator/build utilities do not link this
+target and therefore do not acquire a network-library dependency merely by
+using the MessageThread runtime.
+
+Both concrete client backends send one HTTP POST to the already normalized URI,
+preserve its accepted path bytes, disable redirects, restrict the request to
+HTTP(S), send exactly `length` body bytes, and set `Content-Type` and `Accept`
+to `application/lmx`. HTTPS uses the platform/backend certificate and host-name
+verification defaults with verification explicitly enabled by the libcurl
+adapter. The initial libcurl policy allows 10 seconds for connection setup and
+30 seconds for the complete operation. WinHTTP uses 10-second resolve/connect
+and 30-second send/receive phase timeouts. A response body is discarded: it is
+not a semantic `reply` message.
+
 Provider callback result zero means that a syntactically valid HTTP response
 was received and `out_http_status` is defined. Status 200 through 299 admits the
 transport delivery. Status 404 maps to
@@ -13631,6 +13662,8 @@ Current hosted-bootstrap implementation:
     empty/NULL endpoint selects local delivery; a per-runtime REST/LMX provider
         ABI accepts normalized absolute HTTP(S) targets and complete binary LMX
         bodies, while an unconfigured runtime fails remote sends explicitly;
+    the hosted outbound adapter implements that ABI with libcurl on supported
+        Unix-like builds, WinHTTP on Windows, or an explicit `none` provider;
     source `thread:` declarations create one route-bound mailbox actor and lower
         one dequeued LMX document to one `IncomingMessage` handler turn;
     source `send:` is implemented for local and explicitly addressed HTTP(S)
@@ -13642,8 +13675,8 @@ Current hosted-bootstrap implementation:
         application shutdown; the requester completes its turn, the generated
         controller stops and joins the application pool, completes the root
         boundary and releases runtime resources before host return;
-    the neutral remote-provider hook and delivery-result mapping are
-        implemented; a concrete network adapter, inbound HTTP admission,
+    the neutral remote-provider hook, delivery-result mapping and outbound HTTP
+        client adapter are implemented; inbound HTTP admission,
         message parsing/validation, reply routing and envelope/address
         consistency checking remain separate work;
     `reply`, `await` and `schedule` are not yet implemented as generic source

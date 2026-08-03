@@ -318,6 +318,24 @@ L2:
                 c.fputs("    & (Resolve-Path -LiteralPath $exePath).Path\n", file)
                 c.fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke run failed: ' + $testFile.Name) }\n", file)
                 c.fputs("}\n", file)
+                c.fputs("$httpClientDefaultC = Join-Path 'build/obj/tests' 'trans_rest_lmx_http_client_default.c'\n", file)
+                c.fputs("$httpClientDefaultTest = Join-Path 'build/obj/tests' 'trans_rest_lmx_http_client_default.exe'\n", file)
+                c.fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_INSTALL_DEFAULT_CLIENT=1' '-Ilm1' $httpClientDefaultC 'tests/trans_rest_lmx_http_client_default_stub.c' $parserLib $ownLib '-o' $httpClientDefaultTest\n", file)
+                c.fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX default-client lowering test link failed' }\n", file)
+                c.fputs("Invoke-LmTestWithTimeout $httpClientDefaultTest 'REST/LMX default-client lowering test'\n", file)
+                c.fputs("$previousInstallFailure = $env:LM_TEST_REST_LMX_INSTALL_FAIL\n", file)
+                c.fputs("try {\n", file)
+                c.fputs("    $env:LM_TEST_REST_LMX_INSTALL_FAIL = '1'\n", file)
+                c.fputs("    & (Resolve-Path -LiteralPath $httpClientDefaultTest).Path\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 1) { throw ('REST/LMX installer failure returned ' + $LASTEXITCODE + ', expected 1') }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("finally {\n", file)
+                c.fputs("    if ($null -eq $previousInstallFailure) { Remove-Item Env:LM_TEST_REST_LMX_INSTALL_FAIL -ErrorAction SilentlyContinue } else { $env:LM_TEST_REST_LMX_INSTALL_FAIL = $previousInstallFailure }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("$restLmxNoneTest = Join-Path 'build/obj/tests' 'rest_lmx_http_client_none.exe'\n", file)
+                c.fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_CLIENT_PROVIDER=0' '-Ilm1' 'lm1/build/rest_lmx_http_client.lm1.c' 'tests/rest_lmx_http_client_none.c' $ownLib '-o' $restLmxNoneTest\n", file)
+                c.fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX none-client test link failed' }\n", file)
+                c.fputs("Invoke-LmTestWithTimeout $restLmxNoneTest 'REST/LMX none-client test'\n", file)
                 c.fputs("$previousThreadProvider = $env:LM_THREAD_PROVIDER\n", file)
                 c.fputs("try {\n", file)
                 c.fputs("    $singlePoolTest = Join-Path 'build/obj/tests' 'trans_message_thread_pool_single.exe'\n", file)
@@ -549,6 +567,20 @@ L2:
                 c.fputs("    \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Ilm1 \"$c_path\" \"$parserLib\" \"$ownLib\" -o \"$exe_path\"\n", file)
                 c.fputs("    \"$exe_path\"\n", file)
                 c.fputs("done\n", file)
+                c.fputs("http_client_default_c='build/obj/tests/trans_rest_lmx_http_client_default.c'\n", file)
+                c.fputs("http_client_default_test='build/obj/tests/trans_rest_lmx_http_client_default'\n", file)
+                c.fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_INSTALL_DEFAULT_CLIENT=1 -Ilm1 \"$http_client_default_c\" tests/trans_rest_lmx_http_client_default_stub.c \"$parserLib\" \"$ownLib\" -o \"$http_client_default_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$http_client_default_test\"\n", file)
+                c.fputs("if LM_TEST_REST_LMX_INSTALL_FAIL=1 lm_run_with_watchdog \"$http_client_default_test\"; then\n", file)
+                c.fputs("    echo 'REST/LMX installer failure unexpectedly succeeded' >&2\n", file)
+                c.fputs("    exit 1\n", file)
+                c.fputs("else\n", file)
+                c.fputs("    install_failure_status=$?\n", file)
+                c.fputs("    if [ \"$install_failure_status\" -ne 1 ]; then echo \"REST/LMX installer failure returned $install_failure_status, expected 1\" >&2; exit 1; fi\n", file)
+                c.fputs("fi\n", file)
+                c.fputs("rest_lmx_none_test='build/obj/tests/rest_lmx_http_client_none'\n", file)
+                c.fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_CLIENT_PROVIDER=0 -Ilm1 lm1/build/rest_lmx_http_client.lm1.c tests/rest_lmx_http_client_none.c \"$ownLib\" -o \"$rest_lmx_none_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$rest_lmx_none_test\"\n", file)
                 c.fputs("single_pool_test='build/obj/tests/trans_message_thread_pool_single'\n", file)
                 c.fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c build/obj/tests/trans_message_thread_pool_single.c -o \"$single_pool_test\"\n", file)
                 c.fputs("lm_run_with_watchdog \"$single_pool_test\"\n", file)
@@ -885,6 +917,8 @@ L2:
     
     fn: lm_build_generate_all (@: char trans_tool) int
         if: lm_build_trans(trans_tool, "lm2/own.lm2", "lm1/build/own.lm1.c") != 0
+            return: 1
+        if: lm_build_trans(trans_tool, "lm2/rest_lmx_http_client.lm2", "lm1/build/rest_lmx_http_client.lm1.c") != 0
             return: 1
         if: lm_build_trans(trans_tool, "lm2/trans.lm2", "lm1/build/trans.lm1.c") != 0
             return: 1

@@ -23,6 +23,9 @@ struct IncomingMessage {
 struct LmMessageThread *lm_message_thread_new(void);
 void lm_message_thread_delete(struct LmMessageThread *thread);
 struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
+#ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT
+int lm_rest_lmx_http_client_install_default(struct LmMessageThreadRuntime *runtime);
+#endif
 int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_detach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);
 int lm_message_thread_runtime_exit_state(struct LmMessageThreadRuntime *runtime, int *requested, int *ready, int *status);
@@ -86,6 +89,13 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
         lm_message_thread_delete(thread);
         return 1;
     }
+#ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT
+    if (lm_rest_lmx_http_client_install_default(runtime) != 0) {
+        (void)lm_message_thread_runtime_delete(runtime);
+        lm_message_thread_delete(thread);
+        return 1;
+    }
+#endif
     if (lm_message_thread_runtime_attach_root(runtime, thread) != 0) {
         (void)lm_message_thread_runtime_delete(runtime);
         lm_message_thread_delete(thread);
@@ -882,6 +892,24 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("    & (Resolve-Path -LiteralPath $exePath).Path\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke run failed: ' + $testFile.Name) }\n", file);
     fputs("}\n", file);
+    fputs("$httpClientDefaultC = Join-Path 'build/obj/tests' 'trans_rest_lmx_http_client_default.c'\n", file);
+    fputs("$httpClientDefaultTest = Join-Path 'build/obj/tests' 'trans_rest_lmx_http_client_default.exe'\n", file);
+    fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_INSTALL_DEFAULT_CLIENT=1' '-Ilm1' $httpClientDefaultC 'tests/trans_rest_lmx_http_client_default_stub.c' $parserLib $ownLib '-o' $httpClientDefaultTest\n", file);
+    fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX default-client lowering test link failed' }\n", file);
+    fputs("Invoke-LmTestWithTimeout $httpClientDefaultTest 'REST/LMX default-client lowering test'\n", file);
+    fputs("$previousInstallFailure = $env:LM_TEST_REST_LMX_INSTALL_FAIL\n", file);
+    fputs("try {\n", file);
+    fputs("    $env:LM_TEST_REST_LMX_INSTALL_FAIL = '1'\n", file);
+    fputs("    & (Resolve-Path -LiteralPath $httpClientDefaultTest).Path\n", file);
+    fputs("    if ($LASTEXITCODE -ne 1) { throw ('REST/LMX installer failure returned ' + $LASTEXITCODE + ', expected 1') }\n", file);
+    fputs("}\n", file);
+    fputs("finally {\n", file);
+    fputs("    if ($null -eq $previousInstallFailure) { Remove-Item Env:LM_TEST_REST_LMX_INSTALL_FAIL -ErrorAction SilentlyContinue } else { $env:LM_TEST_REST_LMX_INSTALL_FAIL = $previousInstallFailure }\n", file);
+    fputs("}\n", file);
+    fputs("$restLmxNoneTest = Join-Path 'build/obj/tests' 'rest_lmx_http_client_none.exe'\n", file);
+    fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_CLIENT_PROVIDER=0' '-Ilm1' 'lm1/build/rest_lmx_http_client.lm1.c' 'tests/rest_lmx_http_client_none.c' $ownLib '-o' $restLmxNoneTest\n", file);
+    fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX none-client test link failed' }\n", file);
+    fputs("Invoke-LmTestWithTimeout $restLmxNoneTest 'REST/LMX none-client test'\n", file);
     fputs("$previousThreadProvider = $env:LM_THREAD_PROVIDER\n", file);
     fputs("try {\n", file);
     fputs("    $singlePoolTest = Join-Path 'build/obj/tests' 'trans_message_thread_pool_single.exe'\n", file);
@@ -1135,6 +1163,20 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("    \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Ilm1 \"$c_path\" \"$parserLib\" \"$ownLib\" -o \"$exe_path\"\n", file);
     fputs("    \"$exe_path\"\n", file);
     fputs("done\n", file);
+    fputs("http_client_default_c='build/obj/tests/trans_rest_lmx_http_client_default.c'\n", file);
+    fputs("http_client_default_test='build/obj/tests/trans_rest_lmx_http_client_default'\n", file);
+    fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_INSTALL_DEFAULT_CLIENT=1 -Ilm1 \"$http_client_default_c\" tests/trans_rest_lmx_http_client_default_stub.c \"$parserLib\" \"$ownLib\" -o \"$http_client_default_test\"\n", file);
+    fputs("lm_run_with_watchdog \"$http_client_default_test\"\n", file);
+    fputs("if LM_TEST_REST_LMX_INSTALL_FAIL=1 lm_run_with_watchdog \"$http_client_default_test\"; then\n", file);
+    fputs("    echo 'REST/LMX installer failure unexpectedly succeeded' >&2\n", file);
+    fputs("    exit 1\n", file);
+    fputs("else\n", file);
+    fputs("    install_failure_status=$?\n", file);
+    fputs("    if [ \"$install_failure_status\" -ne 1 ]; then echo \"REST/LMX installer failure returned $install_failure_status, expected 1\" >&2; exit 1; fi\n", file);
+    fputs("fi\n", file);
+    fputs("rest_lmx_none_test='build/obj/tests/rest_lmx_http_client_none'\n", file);
+    fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_CLIENT_PROVIDER=0 -Ilm1 lm1/build/rest_lmx_http_client.lm1.c tests/rest_lmx_http_client_none.c \"$ownLib\" -o \"$rest_lmx_none_test\"\n", file);
+    fputs("lm_run_with_watchdog \"$rest_lmx_none_test\"\n", file);
     fputs("single_pool_test='build/obj/tests/trans_message_thread_pool_single'\n", file);
     fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c build/obj/tests/trans_message_thread_pool_single.c -o \"$single_pool_test\"\n", file);
     fputs("lm_run_with_watchdog \"$single_pool_test\"\n", file);
@@ -1555,6 +1597,9 @@ static int lm_build_trans(struct LmMessageThread *lm_lmx_message_thread, char *t
 static int lm_build_generate_all(struct LmMessageThread *lm_lmx_message_thread, char *trans_tool) {
     (void)lm_lmx_message_thread;
     if (lm_build_trans(lm_lmx_message_thread, trans_tool, "lm2/own.lm2", "lm1/build/own.lm1.c") != 0) {
+        return 1;
+    }
+    if (lm_build_trans(lm_lmx_message_thread, trans_tool, "lm2/rest_lmx_http_client.lm2", "lm1/build/rest_lmx_http_client.lm1.c") != 0) {
         return 1;
     }
     if (lm_build_trans(lm_lmx_message_thread, trans_tool, "lm2/trans.lm2", "lm1/build/trans.lm1.c") != 0) {
@@ -2029,6 +2074,14 @@ int main(int argc, char **argv) {
     (void)lm_message_thread_set_execution_context(lm_lmx_message_thread, &lm_message_thread_main_context);
     lm_lmx_application_runtime = lm_message_thread_runtime_new();
     if (lm_lmx_application_runtime == 0) lm_lmx_thread_startup_failed = 1;
+#ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT
+    if (!lm_lmx_thread_startup_failed && lm_rest_lmx_http_client_install_default(lm_lmx_application_runtime) != 0) {
+        (void)lm_message_thread_runtime_delete(lm_lmx_application_runtime);
+        lm_lmx_application_runtime = 0;
+        lm_message_thread_delete(lm_lmx_message_thread);
+        return 1;
+    }
+#endif
     if (!lm_lmx_thread_startup_failed && lm_message_thread_runtime_attach_root(lm_lmx_application_runtime, lm_lmx_message_thread) != 0) lm_lmx_thread_startup_failed = 1; else if (!lm_lmx_thread_startup_failed) lm_lmx_application_root_attached = 1;
     if (lm_lmx_thread_startup_failed) lm_message_thread_request_failure(lm_lmx_message_thread, 1);
     while (lm_message_thread_begin_turn(lm_lmx_message_thread)) {

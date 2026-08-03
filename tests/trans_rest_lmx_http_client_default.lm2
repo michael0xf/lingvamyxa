@@ -1,0 +1,13 @@
+thread: lm_test_rest_lmx_http_client_target (IncomingMessage: message)
+    route: "/rest-lmx-http-client"
+    if: message\lmx = 0 || message\length = 0U
+        stop: 11
+        return:
+    ---
+end: lm_test_rest_lmx_http_client_target
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external
