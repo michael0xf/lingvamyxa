@@ -10988,6 +10988,34 @@ callback, after which the runtime releases those bytes. The first runtime
 profile trusts the caller to supply an LMX document: parsing and validation are
 separate future pipeline stages.
 
+An external transport admits a complete LMX body through the transport-neutral
+runtime operation:
+
+    int lm_message_thread_runtime_admit_lmx(
+        LmMessageThreadRuntime *runtime,
+        const char *route,
+        const char *lmx,
+        size_t length
+    );
+
+Admission copies exactly `length` bytes, including embedded NUL bytes, into an
+owned message and appends it to the FIFO inbox selected by `route`. A successful
+call makes an idle mailbox actor runnable; it does not wait for that actor to
+execute the message. The caller may release or modify its source buffer after
+the call returns. Calls from concurrent host threads are supported, and their
+route lookup, enqueue and application-exit test form one synchronized runtime
+operation. The controller must stop and join every transport callback before it
+removes routes or deletes the runtime.
+
+A malformed route returns `LM_MESSAGE_STATUS_INVALID_ADDRESS`; a route which is
+not bound in a running runtime returns `LM_MESSAGE_STATUS_ROUTE_NOT_FOUND`.
+After application exit has been requested, every otherwise valid external
+admission returns `LM_MESSAGE_STATUS_APPLICATION_STOPPING`. The same status is
+returned when a known route's actor or pool is already stopping or draining.
+This admission cut does not change the local outbox rule: messages staged by the
+turn which requested exit may still be committed before the runtime reaches its
+existing exit-ready cut.
+
 The registered source receiver is:
 
     send: Route LmxBytes Length
@@ -13664,6 +13692,9 @@ Current hosted-bootstrap implementation:
         bodies, while an unconfigured runtime fails remote sends explicitly;
     the hosted outbound adapter implements that ABI with libcurl on supported
         Unix-like builds, WinHTTP on Windows, or an explicit `none` provider;
+    the transport-neutral inbound admission ABI copies complete binary LMX
+        bodies into route-selected FIFO inboxes, wakes idle actors and rejects
+        new external work once application exit or route shutdown begins;
     source `thread:` declarations create one route-bound mailbox actor and lower
         one dequeued LMX document to one `IncomingMessage` handler turn;
     source `send:` is implemented for local and explicitly addressed HTTP(S)
@@ -13675,8 +13706,9 @@ Current hosted-bootstrap implementation:
         application shutdown; the requester completes its turn, the generated
         controller stops and joins the application pool, completes the root
         boundary and releases runtime resources before host return;
-    the neutral remote-provider hook, delivery-result mapping and outbound HTTP
-        client adapter are implemented; inbound HTTP admission,
+    the neutral remote-provider hook, delivery-result mapping, outbound HTTP
+        client adapter and transport-neutral inbound admission are implemented;
+        an inbound HTTP server adapter,
         message parsing/validation, reply routing and envelope/address
         consistency checking remain separate work;
     `reply`, `await` and `schedule` are not yet implemented as generic source

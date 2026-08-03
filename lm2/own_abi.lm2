@@ -89,6 +89,7 @@ table:
              LM_MESSAGE_STATUS_TRANSPORT_FAILED c.define
              LM_MESSAGE_STATUS_HTTP_REJECTED c.define
              LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR c.define
+             LM_MESSAGE_STATUS_APPLICATION_STOPPING c.define
 end: `constant.backend`
 
 table:
@@ -109,6 +110,7 @@ table:
              LM_MESSAGE_STATUS_TRANSPORT_FAILED 67
              LM_MESSAGE_STATUS_HTTP_REJECTED 68
              LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR 69
+             LM_MESSAGE_STATUS_APPLICATION_STOPPING 70
 end: `constant.value`
 
 table:
@@ -873,6 +875,7 @@ table:
              lm_message_thread_runtime_new 1
              lm_message_thread_runtime_delete 1
              lm_message_thread_runtime_set_rest_lmx_provider 1
+             lm_message_thread_runtime_admit_lmx 1
              lm_message_thread_runtime_attach_root 1
              lm_message_thread_runtime_detach_root 1
              lm_message_thread_runtime_exit_state 1
@@ -996,6 +999,7 @@ fn: lm_condition_broadcast (LmCondition: condition) int
 fn: lm_message_thread_runtime_new () LmMessageThreadRuntime
 fn: lm_message_thread_runtime_delete (LmMessageThreadRuntime: runtime) int
 fn: lm_message_thread_runtime_set_rest_lmx_provider (LmMessageThreadRuntime: runtime; const: (LmRestLmxProviderOpsV1: ops); @: void context) int
+fn: lm_message_thread_runtime_admit_lmx (LmMessageThreadRuntime: runtime; const: @(char route); const: @(char lmx); size_t: length) int
 fn: lm_message_thread_runtime_attach_root (LmMessageThreadRuntime: runtime; LmMessageThread: thread) int
 fn: lm_message_thread_runtime_detach_root (LmMessageThreadRuntime: runtime; LmMessageThread: thread) int
 fn: lm_message_thread_runtime_exit_state (LmMessageThreadRuntime: runtime; @: int out_requested; @: int out_ready; @: int out_status) int

@@ -188,6 +188,7 @@ typedef int LmP0FieldParseLoopContinuation;
 #define LM_MESSAGE_STATUS_TRANSPORT_FAILED 67
 #define LM_MESSAGE_STATUS_HTTP_REJECTED 68
 #define LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR 69
+#define LM_MESSAGE_STATUS_APPLICATION_STOPPING 70
 #define LM_P0_NODE_STRUCTURE 1
 #define LM_P0_NODE_FRAME 2
 #define LM_P0_NODE_ATOM 3
@@ -708,6 +709,7 @@ int (lm_condition_broadcast)(LmCondition *condition);
 LmMessageThreadRuntime * (lm_message_thread_runtime_new)(void);
 int (lm_message_thread_runtime_delete)(LmMessageThreadRuntime *runtime);
 int (lm_message_thread_runtime_set_rest_lmx_provider)(LmMessageThreadRuntime *runtime, const LmRestLmxProviderOpsV1 *ops, void *context);
+int (lm_message_thread_runtime_admit_lmx)(LmMessageThreadRuntime *runtime, const char *route, const char *lmx, size_t length);
 int (lm_message_thread_runtime_attach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
 int (lm_message_thread_runtime_detach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
 int (lm_message_thread_runtime_exit_state)(LmMessageThreadRuntime *runtime, int *out_requested, int *out_ready, int *out_status);
@@ -767,6 +769,7 @@ const char * (lm_p0_node_kind_class_name)(struct LmMessageThread *lm_lmx_message
 char * (lm_p0_dump_alloc)(struct LmMessageThread *lm_lmx_message_thread, const LmP0Document *document);
 void (lm_p0_free)(struct LmMessageThread *lm_lmx_message_thread, void *ptr);
 static int lm_registry_source_load_root(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Node *root);
+
 
 
 
