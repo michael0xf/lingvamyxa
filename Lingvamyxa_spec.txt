@@ -253,7 +253,7 @@ selected profile. Unclosed entries are not silently forgotten; they remain
 tracked as still-open entries and may become diagnostics, document-wide
 intervals or profile-specific state.
 
-Explicit close forms operate over the active mark stack:
+Explicit close forms operate over the active stack of marks:
 
     {color: red}
     {color: green}
@@ -1072,11 +1072,11 @@ An explicit copy/serialization receiver may construct another owner-managed
 Structure, but this is an operation with its own ownership contract, not
 pass-by-value.
 
-At L2, explicit aggregate layouts such as `c.struct` and explicit
-`stack`/`heap`/`static` storage are machine layouts and typed address values. They
-are not ordinary Structure values. A backend may project an ordinary Structure
-layout to C storage internally, but every source-level ordinary Structure
-expression still produces only its reference/handle.
+At L2, explicit aggregate layouts such as `c.struct` / `c.union`, raw array
+storage and typed address slots are machine layouts or typed address values.
+They are not ordinary Structure values. A backend may project an ordinary
+Structure layout to C storage internally, but every source-level ordinary
+Structure expression still produces only its reference/handle.
 
 There is no fundamental keyword `Struct` in the minimal source syntax.
 
@@ -1257,7 +1257,7 @@ normalizes as:
 
 Therefore:
 
-    stack: PlantBed `2 dim`
+    head: PlantBed `2 dim`
 
 has two fields:
 
@@ -1602,7 +1602,6 @@ Therefore:
     if: ...
     return: ...
     int: ...
-    stack: ...
     []: ...
     model: ...
     operator: ...
@@ -1809,11 +1808,11 @@ normalizes as:
 
 Multi-word names are exact quoted identifiers. Therefore:
 
-    stack: PlantBed `2 dim`
+    head: PlantBed `2 dim`
 
 normalizes as:
 
-    stack(PlantBed, `2 dim`)
+    head(PlantBed, `2 dim`)
 
 where `2 dim` is one exact identifier field.
 
@@ -5929,11 +5928,13 @@ At L3, explicit address syntax is unavailable. Structures, arrays, text, objects
 
 At L3, ordinary names denote primitives, symbols, handles or Structures according to the active semantic environment. They are not raw L2 addresses to executable code.
 
-11.2. L2 Address Values and Storage Allocation
+11.2. L2 Address Values and Storage/Reference Declarations
 
-At L2, the source model uses primitive values and typed address values. Aggregate model names such as `PlantBed` denote storage layouts, not ordinary source-level aggregate values.
-
-Allocation and storage receivers create storage and bind the requested name to the address of that storage.
+At L2, primitive values and typed address values coexist with references to
+owner-managed Structures. A layout/reference class such as `PlantBed` describes
+the fields and projection of an ordinary Structure; consuming that class as a
+constructor binds a Structure reference. Raw arrays, explicit address slots and
+registered low-level layout forms separately expose machine storage.
 
 Bare L2 value reading is intentionally narrow. A primitive/scalar storage slot
 such as `u32`, `int`, `size_t`, an enum-like scalar or an address slot may
@@ -5947,9 +5948,9 @@ embedded struct field while keeping L2 source semantics address-oriented.
 
 Examples:
 
-stack: PlantBed branch
-heap: PlantBed tree
-static: PlantBed root
+PlantBed: branch
+PlantBed: tree
+PlantBed: root
 int: count 5
 []: leafs count
 
@@ -5964,9 +5965,9 @@ ppp: @pp
 
 Meanings:
 
-    branch  address of stack storage with layout `PlantBed`
-    tree    address of heap storage with layout `PlantBed`
-    root    address of static storage with layout `PlantBed`
+    branch  owner-managed `PlantBed` Structure reference
+    tree    owner-managed `PlantBed` Structure reference
+    root    owner-managed `PlantBed` Structure reference
     count   primitive value/storage initialized to `5`
     leafs   address of array/byte storage sized by `count`, according to the active `[]` receiver/profile
     x       primitive storage/value initialized to `5`
@@ -5977,11 +5978,17 @@ Meanings:
     pp: @p  stores the address of storage location `p` into `pp`
     ppp: @pp stores the address of storage location `pp` into `ppp`
 
-The receivers `stack`, `heap`, `static`, primitive constructors such as `int`, and allocation constructors such as `[]` are parser/bootstrap constructors in the same broad sense as type constructors: they consume layout/type information and a raw binding name, then introduce that binding with type metadata.
+Layout/reference classes such as `PlantBed`, primitive constructors such as
+`int`, and allocation constructors such as `[]` are parser/bootstrap
+constructors in the same broad sense: they consume type information and a raw
+binding name, then introduce that binding with type metadata.
 
 An L2 address value is not necessarily a source-level integer. It may carry, or be statically associated with, layout/type metadata. Receivers and L1 lowering may use that metadata to treat an address as a typed reference rather than as a printable numeric address.
 
-The core L2 syntax does not use a separate `*` or `^` marker for address types. Address-ness is introduced by storage/allocation forms, by the reserved address-depth operator family `@ⁿ`, by address-producing expressions, and by typed field or index operations.
+The core L2 syntax does not use a separate `*` or `^` marker for address types.
+Address-ness is introduced by array/address-slot declarations, by the reserved
+address-depth operator family `@ⁿ`, by address-producing expressions, and by
+typed field or index operations.
 
 Minimal L2 field-follow is address-oriented. If the binding is a typed address,
 `value\field` is the direct Lingvamyxa field-follow form. A direct ANSI C
@@ -6159,10 +6166,6 @@ following field-follow/index target and writes through the addressed cell:
     \\slot: value
         Store `value` through two address levels; C-profile role `**(slot) = value`.
 
-    \tree\branch: value
-        Follow `tree\branch` first, then store through the resulting address;
-        C-profile role `*(tree->branch) = value`.
-
 This is still receiver/update semantics, not C assignment syntax. The colon
 continues to introduce the Structure consumed by the update target. The active
 L2 profile is responsible for type/address-depth validation.
@@ -6197,13 +6200,15 @@ Meanings under the declarations in section 11.2:
         Compute address `leafs + 3`, raw-load the primitive cell/element at that address, then print it.
 
     tree\branch: branch
-        Store the typed address value `branch` into the field slot `branch` inside the storage addressed by `tree`.
+        Store the `PlantBed` Structure reference `branch` in field `branch` of
+        the Structure referenced by `tree`.
 
     root\branch: tree
-        Store the typed address value `tree` into the field slot `branch` inside the storage addressed by `root`.
+        Store the `PlantBed` Structure reference `tree` in field `branch` of
+        the Structure referenced by `root`.
 
     print: tree\branch
-        Read the field `branch` through typed address `tree`.
+        Read the field `branch` through Structure reference `tree`.
         If that field contains a typed `PlantBed` address, `print` may render the whole object/tree addressed by that field.
 
     print: @tree\branch
@@ -6255,10 +6260,10 @@ At L3, calls are expressed as receiver Frames and resolved by the active receive
 The exact L2 memory profile must define primitive cell size, address arithmetic,
 alignment, raw storage duration, allocation failure, callable-address
 representation and which bindings are addressable through `@`. These choices
-apply to explicit L2 machine storage such as `stack:`, `c.struct:` and raw
-addresses. Ordinary Lingvamyxa Structures are reference-only owner-managed
-objects governed by section 19.29, even when their layout is projected to an
-ANSI C struct behind the L1/L2 boundary.
+apply to explicit L2 machine storage such as `c.struct:`, indexed raw storage
+and raw addresses. Ordinary Lingvamyxa Structures are reference-only
+owner-managed objects governed by section 19.29, even when their layout is
+projected to an ANSI C struct behind the L1/L2 boundary.
 
 variant 1:
 Treat `@ⁿ`, prefix `@`, prefix `\`, field-follow `\field` and `[]` as built-in L2 parser forms.
@@ -11652,9 +11657,9 @@ The following rules are normative for the structural memory model:
 
    15. Primitive values may use direct value representations. Explicit L2
        machine storage profiles, including registered `c.struct:` / `c.union:`
-       forms, raw buffers and typed addresses or future stack-storage forms, are
-       a different facility. Such storage does not turn an ordinary Structure
-       into a valued local aggregate.
+       forms, raw buffers and typed addresses, are a different facility. Such
+       storage does not turn an ordinary Structure into a valued local
+       aggregate.
 
 These are the source-semantic rules. A lowering profile may use direct C
 storage for an explicitly declared L2 machine object, but it may not silently
@@ -11911,9 +11916,9 @@ retainable, detachable or reparentable without copying the Structure. The
 `return` operation itself may not repair the situation by allocating or
 copying.
 
-A raw address into explicit L2 stack storage is not an ordinary Structure
+A raw address into explicit L2 machine storage is not an ordinary Structure
 reference. Its escape rules belong to the selected low-level L2 machine/ABI
-profile. The ordinary Structure return rule does not turn a raw stack address
+profile. The ordinary Structure return rule does not turn such a raw address
 into an ordinary owner-managed Structure reference.
 
 
@@ -12243,23 +12248,9 @@ Current registered low-level forms include:
     c.struct:
     c.union:
 
-Historical or proposed L2 storage/allocation forms include:
+An L2 implementation profile may admit policy arguments on registered
+allocation operations:
 
-    stack: T name
-    heap: T name
-    static: T name
-
-These are low-level L2 forms when they expose physical storage or addresses.
-They are not ordinary Structure constructors. In the current bootstrap, array
-and pointer forms are available through their registered receivers; generic
-`stack:`, `heap:` and `static:` allocation receivers are NOT IMPLEMENTED unless
-an explicit profile registers them.
-
-An L2 implementation profile may admit proposed policy arguments on such
-operations:
-
-    heap: Buffer data owner(frame)
-    heap: Buffer data external(release freeBuffer)
     []: u8 bytes n owner(branch)
 
 The exact spellings are profile-defined and the examples are not declarations
@@ -12802,16 +12793,10 @@ such as:
 the raw resource belongs to an explicit low-level L2 or external-provider
 profile.
 
-Conceptual L2 forms are:
-
-    static: BigArray table shared(readonly)
-
-    static: BigArray table shared(readonly) externalLifetime
-
-These examples indicate semantics, not guaranteed current receiver syntax. The
-resource is not an ordinary mutable Message Thread branch. It is explicitly
-immutable/shared or externally managed, with a declared lifetime and
-publication contract.
+No generic source storage receiver is defined here. A registry descriptor and
+an external provider may expose such a resource. The resource is not an
+ordinary mutable Message Thread branch: it is explicitly immutable/shared or
+externally managed, with a declared lifetime and publication contract.
 
 Registry/source-table descriptors may record facts such as:
 
@@ -14118,11 +14103,8 @@ The C-profile mnemonic table in section 11.3 shows how the L2 forms cover the C 
 
 20.2. Storage, Address and Indexed Forms
 
-Minimal L2 storage/allocation and address-slot forms:
+Minimal L2 primitive/indexed-storage and address-slot forms:
 
-    stack: Layout name
-    heap: Layout name
-    static: Layout name
     Primitive: name [initialValue]
     []: ElementType name size [initialValue...]
     []...[]: ElementType name size1 ... sizeN [initialValue...]
@@ -14131,9 +14113,6 @@ Minimal L2 storage/allocation and address-slot forms:
 
 Examples:
 
-stack: PlantBed branch
-heap: PlantBed tree
-static: PlantBed root
 int: count 5
 []: int leafs count
 @: int p
@@ -14142,19 +14121,15 @@ int: count 5
 
 Meanings:
 
-    branch  typed address of stack storage with layout `PlantBed`
-    tree    typed address of heap storage with layout `PlantBed`
-    root    typed address of static storage with layout `PlantBed`
     count   primitive storage/value initialized to `5`
     leafs   indexed storage/container descriptor for `count` primitive cells, according to the active L2 profile
     p       address-depth-1 slot to base type `int`
     pp      address-depth-2 slot to base type `int`
     ppp     address-depth-3 slot to base type `int`
 
-These `stack`/`heap`/`static` forms are explicit L2 machine-storage operations,
-not ordinary Structure constructors. They receive no implicit owner promotion or
-copy when returned. Ordinary Structure construction instead follows the
-Message Thread owner/arena rules in section 19.29.
+Primitive, indexed-storage and address-slot forms are explicit L2 machine
+operations. Ordinary Structure construction separately follows the Message
+Thread owner/arena rules in section 19.29.
 
 The first ANSI C bootstrap projection accepts an explicit element type:
 
@@ -14189,9 +14164,10 @@ translator/profile error.
 
 Names that contain spaces use exact quoted identifiers as ordinary fields:
 
-stack: PlantBed `second branch`
+@: int `second slot`
 
-This allocates stack storage with layout `PlantBed` and introduces the exact quoted name `second branch`.
+This declares an address-depth-1 slot with base type `int` and introduces the
+exact quoted name `second slot`.
 
 The same short-tail whitespace rule applies to address-depth declarations:
 
@@ -14214,8 +14190,8 @@ relations described in section 19.20.1 and the hosted C projection emits the
 corresponding `typedef struct` layout. Ordinary instance construction separately
 allocates in the current Message Thread owner arena and binds a pointer/reference;
 top-level module instances may use module-owned static backing. Local ordinary
-Structures never receive automatic C aggregate backing. Raw `stack:`, `static:`
-or direct `c.struct:` backing requires an explicit L2 machine-storage form. A named frame that does not satisfy
+Structures never receive automatic C aggregate backing. Direct `c.struct:`
+backing requires an explicit L2 machine-storage form. A named frame that does not satisfy
 that layout declaration shape is not converted merely because its name or
 indentation resembles C.
 
