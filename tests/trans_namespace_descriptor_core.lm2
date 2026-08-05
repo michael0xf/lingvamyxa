@@ -1,0 +1,81 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_lmx_message_thread_run_entry(lm_test_namespace_descriptor_core);
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_namespace_descriptor_core () int
+    LmTransNamespace: namespace_
+    LmTransDescriptor: descriptor
+    const: LmTransDescriptor: outer
+    const: LmTransDescriptor: inner
+    const: LmTransSymbol: symbol
+    LmP0Text: name
+    LmP0Text: operation
+    LmP0Text: requirement
+    LmP0Text: missing
+    @: char operation_storage
+    int: status
+
+    namespace_: lm_trans_namespace_new()
+    descriptor: lm_trans_descriptor_new()
+    name: lm_trans_text_from_cstr("Widget")
+    requirement: lm_trans_text_from_cstr("hash")
+    missing: lm_trans_text_from_cstr("Missing")
+    operation_storage: lm_trans_text_copy_cstr_from_cstr("equals")
+    operation: lm_trans_text_from_cstr(operation_storage)
+    status: 0
+
+    if: namespace_ = 0 || descriptor = 0 || name = 0 || operation = 0 || requirement = 0 || missing = 0 || operation_storage = 0
+        status: 1
+
+    if: status = 0 && (lm_trans_descriptor_add_operation(descriptor, operation) != 0 || lm_trans_descriptor_add_operation(descriptor, operation) != 0 || lm_trans_descriptor_add_required_operation(descriptor, requirement) != 0)
+        status: 1
+
+    if: operation_storage != 0
+        operation_storage[0]: 'X'
+
+    outer: descriptor
+    if: status = 0 && lm_trans_namespace_declare_descriptor(namespace_, name, descriptor) != 0
+        status: 1
+    if: status = 0
+        descriptor: 0
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    outer: lm_trans_namespace_descriptor(namespace_, name)
+    if: status = 0 && (symbol = 0 || lm_trans_symbol_is(symbol, "descriptor") = 0 || outer = 0 || outer\has_operations = 0 || outer\has_required_operations = 0 || outer\has_structural_fields != 0 || outer\operations = 0 || outer\operations\count != 1U || outer\required_operations = 0 || outer\required_operations\count != 1U || outer\structural_fields = 0 || outer\structural_fields\count != 0U)
+        status: 1
+    if: status = 0 && (lm_trans_descriptor_has_operation(outer, "equals") = 0 || lm_trans_descriptor_has_operation(outer, "missing") != 0 || c.strcmp(lm_own_ptr_stack_at(outer\operations, 0U), "equals") != 0 || c.strcmp(lm_own_ptr_stack_at(outer\required_operations, 0U), "hash") != 0)
+        status: 1
+
+    if: status = 0 && lm_trans_namespace_descriptor(namespace_, missing) != 0
+        status: 1
+
+    lm_trans_namespace_enter_scope(namespace_)
+    descriptor: lm_trans_descriptor_new()
+    if: descriptor = 0 || lm_trans_descriptor_mark_operations(descriptor) != 0 || lm_trans_descriptor_mark_required_operations(descriptor) != 0 || lm_trans_namespace_declare_descriptor(namespace_, name, descriptor) != 0
+        status: 1
+    else:
+        descriptor: 0
+    inner: lm_trans_namespace_descriptor(namespace_, name)
+    if: status = 0 && (inner = 0 || inner = outer || inner\has_structural_fields != 0 || inner\structural_fields\count != 0U || inner\has_operations = 0 || inner\operations\count != 0U || inner\has_required_operations = 0 || inner\required_operations\count != 0U)
+        status: 1
+    lm_trans_namespace_leave_scope(namespace_)
+    if: status = 0 && lm_trans_namespace_descriptor(namespace_, name) != outer
+        status: 1
+
+    lm_trans_descriptor_delete(descriptor)
+    lm_trans_namespace_delete(namespace_)
+    lm_trans_text_ref_destroy(@ name)
+    lm_trans_text_ref_destroy(@ operation)
+    lm_trans_text_ref_destroy(@ requirement)
+    lm_trans_text_ref_destroy(@ missing)
+    lm_own_delete(operation_storage, 0)
+return: status

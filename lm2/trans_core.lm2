@@ -242,6 +242,8 @@ sub: lm_trans_symbol_destroy_fields (LmTransSymbol: symbol)
         symbol\has_callable_shape: 0
         symbol\callable_returns_value: 0
         symbol\callable_is_struct_return: 0
+        lm_trans_descriptor_delete_any(symbol\descriptor)
+        symbol\descriptor: 0
 end: lm_trans_symbol_destroy_fields
 
 sub: lm_trans_symbol_destroy_fields_any (@: void object)

@@ -192,6 +192,112 @@ sub: lm_trans_ptr_stack_delete (@(LmOwnPtrStack stack))
         stack[0]: 0
 end: lm_trans_ptr_stack_delete
 
+fn: lm_trans_descriptor_name_copy (const: (LmP0Text: name)) @: char
+    LmP0Text: payload
+    @: char copy
+
+    if: name = 0 || name\data = 0 || name\length = 0U || name\data[0] = '"' || name\data[0] = '\''
+        return: 0
+
+    payload: lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 0
+    if: lm_trans_identifier_payload(name, payload) = 0 || payload\length = 0U
+        lm_trans_text_ref_destroy(@ payload)
+        return: 0
+    copy: lm_trans_text_copy_cstr(payload)
+    lm_trans_text_ref_destroy(@ payload)
+return: copy
+
+sub: lm_trans_descriptor_field_delete_any (@: void object)
+    LmTransDescriptorField: field
+
+    field: object
+    if: field != 0
+        lm_own_delete(field\name, 0)
+        field\name: 0
+        lm_own_delete(field\descriptor_name, 0)
+        field\descriptor_name: 0
+    lm_own_delete(field, 0)
+end: lm_trans_descriptor_field_delete_any
+
+sub: lm_trans_descriptor_delete (LmTransDescriptor: descriptor)
+    if: descriptor != 0
+        lm_trans_ptr_stack_delete(@ descriptor\structural_fields)
+        lm_trans_ptr_stack_delete(@ descriptor\operations)
+        lm_trans_ptr_stack_delete(@ descriptor\required_operations)
+        descriptor\has_structural_fields: 0
+        descriptor\has_operations: 0
+        descriptor\has_required_operations: 0
+    lm_own_delete(descriptor, 0)
+end: lm_trans_descriptor_delete
+
+sub: lm_trans_descriptor_delete_any (@: void object)
+    LmTransDescriptor: descriptor
+
+    descriptor: object
+    lm_trans_descriptor_delete(descriptor)
+end: lm_trans_descriptor_delete_any
+
+fn: lm_trans_descriptor_new () LmTransDescriptor
+    LmTransDescriptor: descriptor
+
+    descriptor: lm_own_new_zero(c.sizeof(descriptor[0]))
+    if: descriptor = 0
+        return: 0
+    descriptor\structural_fields: lm_trans_ptr_stack_new(lm_trans_descriptor_field_delete_any)
+    descriptor\operations: lm_trans_ptr_stack_new(lm_trans_free_any)
+    descriptor\required_operations: lm_trans_ptr_stack_new(lm_trans_free_any)
+    if: descriptor\structural_fields = 0 || descriptor\operations = 0 || descriptor\required_operations = 0
+        lm_trans_descriptor_delete(descriptor)
+        return: 0
+return: descriptor
+
+fn: lm_trans_descriptor_mark_operations (LmTransDescriptor: descriptor) int
+    if: descriptor = 0 || descriptor\operations = 0
+        return: 1
+    descriptor\has_operations: 1
+return: 0
+
+fn: lm_trans_descriptor_mark_required_operations (LmTransDescriptor: descriptor) int
+    if: descriptor = 0 || descriptor\required_operations = 0
+        return: 1
+    descriptor\has_required_operations: 1
+return: 0
+
+fn: lm_trans_descriptor_push_name (LmOwnPtrStack: names; const: (LmP0Text: name)) int
+    @: char copy
+
+    if: names = 0
+        return: 1
+    copy: lm_trans_descriptor_name_copy(name)
+    if: copy = 0
+        return: 1
+    if: lm_trans_string_stack_has(names, copy)
+        lm_own_delete(copy, 0)
+        return: 0
+    if: lm_own_ptr_stack_push(names, copy) != 0
+        lm_own_delete(copy, 0)
+        return: 1
+return: 0
+
+fn: lm_trans_descriptor_add_operation (LmTransDescriptor: descriptor; const: (LmP0Text: name)) int
+    if: descriptor = 0 || lm_trans_descriptor_push_name(descriptor\operations, name) != 0
+        return: 1
+    descriptor\has_operations: 1
+return: 0
+
+fn: lm_trans_descriptor_add_required_operation (LmTransDescriptor: descriptor; const: (LmP0Text: name)) int
+    if: descriptor = 0 || lm_trans_descriptor_push_name(descriptor\required_operations, name) != 0
+        return: 1
+    descriptor\has_required_operations: 1
+return: 0
+
+fn: lm_trans_descriptor_has_operation (const: (LmTransDescriptor: descriptor); const: @(char name)) int
+    if: descriptor = 0 || descriptor\has_operations = 0
+        return: 0
+return: lm_trans_string_stack_has(descriptor\operations, name)
+
 fn: lm_trans_function_state_new () LmTransFunctionState
     return: lm_own_new_zero(c.sizeof(c.LmTransFunctionState))
 
@@ -1244,6 +1350,14 @@ fn: lm_trans_namespace_find_mutable (LmTransNamespace: namespace_; const: (LmP0T
         return: 0
 return: lm_trans_identifier_table_find_latest_symbol(namespace_\identifiers, name)
 
+fn: lm_trans_namespace_descriptor (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: LmTransDescriptor
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: symbol = 0
+        return: 0
+return: symbol\descriptor
+
 fn: lm_trans_namespace_relation_symbol_latest (const: (LmTransNamespace: namespace_); const: (LmP0Text: name); const: @(char relation_name)) const: LmTransSymbol
     LmTransIdentifierCard: card
     LmTransIdentifierRelation: relation
@@ -1354,6 +1468,22 @@ return: 0
 
 fn: lm_trans_namespace_declare (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind)) int
 return: lm_trans_namespace_declare_with_c_name(namespace_, name, kind, 0)
+
+fn: lm_trans_namespace_declare_descriptor (LmTransNamespace: namespace_; const: (LmP0Text: name); LmTransDescriptor: descriptor) int
+    LmTransSymbol: symbol
+
+    if: namespace_ = 0 || name = 0 || descriptor = 0
+        return: 1
+    if: lm_trans_namespace_declare(namespace_, name, "descriptor") != 0
+        return: 1
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0
+        return: 1
+    symbol\descriptor: descriptor
+    if: lm_trans_namespace_descriptor(namespace_, name) != descriptor
+        symbol\descriptor: 0
+        return: 1
+return: 0
 
 fn: lm_trans_namespace_declare_generated (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind)) int
     const: LmTransSymbol: existing

@@ -267,6 +267,9 @@ return: lm_trans_emit_l2_extern_c_frame(file, item\frame, namespace_)
 fn: lm_trans_top_level_declare_import (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_declare_l2_import_frame(namespace_, lm_trans_top_level_item_frame(item))
 
+fn: lm_trans_top_level_declare_descriptor (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+return: lm_trans_statement_emit_descriptor(0, 0, lm_trans_top_level_item_frame(item), 0U, namespace_)
+
 fn: lm_trans_top_level_emit_table (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_statement_emit_table(file, 0, lm_trans_top_level_item_frame(item), 0U, namespace_)
 
@@ -555,6 +558,9 @@ fn: lm_trans_top_level_statement_binding (const: (LmTransHeadBinding: binding); 
     if: c.strcmp(receiver, "lm_trans_statement_emit_predef") = 0
         out\emit_before_functions: @lm_trans_top_level_emit_predef_prelude
         out\emit_function: @lm_trans_top_level_emit_predef_functions
+        return: 1
+    if: c.strcmp(receiver, "lm_trans_statement_emit_descriptor") = 0
+        out\declare: @lm_trans_top_level_declare_descriptor
         return: 1
     if: c.strcmp(receiver, "lm_trans_statement_emit_table") = 0
         out\declare: @lm_trans_top_level_declare_table

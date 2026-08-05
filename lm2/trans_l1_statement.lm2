@@ -6850,6 +6850,120 @@ fn: lm_trans_statement_emit_predef (
     c.fprintf(c.stderr, "trans L2 error: predef receiver is top-level only\n")
 return: 1
 
+fn: lm_trans_descriptor_add_operation_frame (
+    LmTransDescriptor: descriptor
+    const: LmP0Frame: section
+    int: required
+) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    @: char operation_name
+
+    if: descriptor = 0 || section = 0
+        return: 1
+    if: required
+        if: descriptor\has_required_operations || lm_trans_descriptor_mark_required_operations(descriptor) != 0
+            c.fprintf(c.stderr, "trans L2 descriptor error: duplicate requiredOperations section\n")
+            return: 1
+        ---
+    else:
+        if: descriptor\has_operations || lm_trans_descriptor_mark_operations(descriptor) != 0
+            c.fprintf(c.stderr, "trans L2 descriptor error: duplicate operations section\n")
+            return: 1
+    ---
+
+    field: lm_trans_l2_structure_first_present_field(section\body)
+    while: field != 0
+        node: field\value
+        if: node = 0 || node\kind != c.LM_P0_NODE_ATOM
+            c.fprintf(c.stderr, "trans L2 descriptor error: operation names must be atoms\n")
+            return: 1
+        if: required
+            if: lm_trans_descriptor_add_required_operation(descriptor, node\as\atom) != 0
+                c.fprintf(c.stderr, "trans L2 descriptor error: invalid required operation name\n")
+                return: 1
+            ---
+        else:
+            operation_name: lm_trans_descriptor_name_copy(node\as\atom)
+            if: operation_name = 0
+                c.fprintf(c.stderr, "trans L2 descriptor error: invalid operation name\n")
+                return: 1
+            if: lm_trans_descriptor_has_operation(descriptor, operation_name)
+                c.fprintf(c.stderr, "trans L2 descriptor error: duplicate operation %s\n", operation_name)
+                lm_own_delete(operation_name, 0)
+                return: 1
+            lm_own_delete(operation_name, 0)
+            if: lm_trans_descriptor_add_operation(descriptor, node\as\atom) != 0
+                c.fprintf(c.stderr, "trans L2 descriptor error: invalid operation name\n")
+                return: 1
+        ---
+        field: lm_trans_l2_structure_next_present_field(field)
+return: 0
+
+fn: lm_trans_statement_emit_descriptor (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: LmP0Frame: section
+    const: LmP0Text: name
+    LmTransDescriptor: descriptor
+    int: status
+
+    c.LM_UNUSED(file)
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(indent)
+    if: frame = 0 || namespace_ = 0
+        return: 1
+
+    field: lm_trans_l2_structure_first_present_field(frame\body)
+    if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM
+        c.fprintf(c.stderr, "trans L2 descriptor error: descriptor expects a positional name\n")
+        return: 1
+    name: field\value\as\atom
+    if: lm_trans_atom_can_be_new_binding_name(name) = 0 || lm_trans_is_c_reference_name(name)
+        c.fprintf(c.stderr, "trans L2 descriptor error: invalid descriptor name\n")
+        return: 1
+
+    descriptor: lm_trans_descriptor_new()
+    if: descriptor = 0
+        return: 1
+    status: 0
+    field: lm_trans_l2_structure_next_present_field(field)
+    while: status = 0 && field != 0
+        node: field\value
+        if: node = 0 || node\kind != c.LM_P0_NODE_FRAME
+            c.fprintf(c.stderr, "trans L2 descriptor error: expected operations(...) or requiredOperations(...)\n")
+            status: 1
+        else:
+            section: node\as\frame
+            if: lm_trans_text_equals(section\head, "operations")
+                status: lm_trans_descriptor_add_operation_frame(descriptor, section, 0)
+            else:
+                if: lm_trans_text_equals(section\head, "requiredOperations")
+                    status: lm_trans_descriptor_add_operation_frame(descriptor, section, 1)
+                else:
+                    c.fprintf(c.stderr, "trans L2 descriptor error: unknown descriptor section \"%.*s\"\n", (cast: int section\head\length), section\head\data)
+                    status: 1
+                ---
+            ---
+        ---
+        field: lm_trans_l2_structure_next_present_field(field)
+
+    if: status = 0
+        status: lm_trans_validate_end_trailer(frame)
+    if: status = 0
+        status: lm_trans_namespace_declare_descriptor(namespace_, name, descriptor)
+        if: status = 0
+            descriptor: 0
+        ---
+    lm_trans_descriptor_delete(descriptor)
+return: status
+
 fn: lm_trans_statement_emit_table (
     FILE: file
     LmTransStatementStack: stack
@@ -8989,7 +9103,7 @@ fn: lm_trans_pointer_bindings_init () int
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_include_prelude", @lm_trans_statement_emit_include_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_define_prelude", @lm_trans_statement_emit_define_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifndef_default_prelude", @lm_trans_statement_emit_ifndef_default_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_os_prelude", @lm_trans_statement_emit_os_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifdef_prelude", @lm_trans_statement_emit_ifdef_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_guard_prelude", @lm_trans_statement_emit_guard_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_extern_c_prelude", @lm_trans_statement_emit_extern_c_prelude) != 0)
         status: 1
-    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_import", @lm_trans_statement_emit_import) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_predef", @lm_trans_statement_emit_predef) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_table", @lm_trans_statement_emit_table) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_join", @lm_trans_statement_emit_join) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_merge_named_structure", @lm_trans_statement_emit_merge_named_structure) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_const_declaration", @lm_trans_statement_emit_const_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_array_declaration", @lm_trans_statement_emit_array_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_structure_declaration", @lm_trans_statement_emit_structure_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_c_tagged_declaration", @lm_trans_statement_emit_c_tagged_declaration) != 0)
+    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_import", @lm_trans_statement_emit_import) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_predef", @lm_trans_statement_emit_predef) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_descriptor", @lm_trans_statement_emit_descriptor) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_table", @lm_trans_statement_emit_table) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_join", @lm_trans_statement_emit_join) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_merge_named_structure", @lm_trans_statement_emit_merge_named_structure) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_const_declaration", @lm_trans_statement_emit_const_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_array_declaration", @lm_trans_statement_emit_array_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_structure_declaration", @lm_trans_statement_emit_structure_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_c_tagged_declaration", @lm_trans_statement_emit_c_tagged_declaration) != 0)
         status: 1
     if: status = 0 && lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_contextual_literal_assignment", @lm_trans_statement_emit_contextual_literal_assignment) != 0
         status: 1
