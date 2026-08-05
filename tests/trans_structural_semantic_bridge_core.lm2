@@ -30,6 +30,113 @@ fn: lm_test_attach_empty_structural_descriptor (
     lm_trans_text_ref_destroy(@ name_text)
 return: status != 0
 
+fn: lm_test_structural_owner_fact_count (
+    const: @(char owner_name)
+    const: @(char table_name)
+) size_t
+    const: LmRegistryViewRow: view_row
+    const: LmTransRegistryFact: fact
+    size_t: i
+    size_t: count
+
+    if: owner_name = 0 || table_name = 0 || lm_trans_registry = 0 || lm_trans_registry\view = 0
+        return: 0U
+
+    count: 0U
+    i: 0U
+    while: i < lm_registry_view_fact_count(lm_trans_registry\view)
+        view_row: lm_registry_view_fact_at(lm_trans_registry\view, i)
+        fact: 0
+        if: view_row != 0
+            fact: cast: (const: LmTransRegistryFact) view_row\source
+        if: fact != 0 && fact\table != 0 && fact\key != 0 && c.strcmp(fact\table, table_name) = 0 && c.strcmp(fact\key, owner_name) = 0
+            count: count + 1U
+        i: i + 1U
+return: count
+
+fn: lm_test_structural_owner_source_row_count (
+    const: @(char owner_name)
+    const: @(char table_name)
+) size_t
+    const: LmTableDescriptor: table
+    const: LmTableRow: row
+    const: LmTableCell: key_cell
+    size_t: table_index
+    size_t: row_index
+    size_t: count
+
+    if: owner_name = 0 || table_name = 0 || lm_trans_registry = 0 || lm_trans_registry\view = 0
+        return: 0U
+
+    count: 0U
+    table_index: 0U
+    while: table_index < lm_registry_view_source_table_count(lm_trans_registry\view)
+        table: lm_registry_view_source_table_at(lm_trans_registry\view, table_index)
+        if: table != 0 && table\name != 0 && c.strcmp(table\name, table_name) = 0
+            row_index: 0U
+            while: row_index < lm_table_descriptor_materialized_row_count(table)
+                row: lm_table_descriptor_materialized_row_at(table, row_index)
+                key_cell: lm_table_row_cell_at(row, 0U)
+                if: key_cell != 0 && key_cell\value != 0 && c.strcmp(key_cell\value, owner_name) = 0
+                    count: count + 1U
+                row_index: row_index + 1U
+            ---
+        ---
+        table_index: table_index + 1U
+return: count
+
+fn: lm_test_structural_owner_has_no_registry_metadata (
+    const: LmTransNamespace: namespace_
+    const: @(char owner_name)
+) int
+    const: [4]: @: char table_names
+    LmP0Text: owner
+    size_t: i
+
+    owner: lm_trans_text_from_cstr(owner_name)
+    if: owner = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ owner)
+
+    table_names[0]: "class.present"
+    table_names[1]: "class.kind"
+    table_names[2]: "class.reference-base"
+    table_names[3]: "layout.backend"
+
+    if: lm_trans_namespace_class_has(namespace_, owner) != 0 || lm_trans_namespace_class_kind_value(namespace_, owner) != 0 || lm_trans_namespace_class_is_reference_base(namespace_, owner) != 0 || lm_trans_layout_backend_value(namespace_, owner) != 0
+        return: 1
+
+    i: 0U
+    while: i < 4U
+        if: lm_test_structural_owner_fact_count(owner_name, table_names[i]) != 0U || lm_test_structural_owner_source_row_count(owner_name, table_names[i]) != 0U
+            return: 1
+        i: i + 1U
+return: 0
+
+fn: lm_test_structural_owner_has_namespace_bindings (
+    const: LmTransNamespace: namespace_
+    const: @(char owner_name)
+    const: @(char expected_c_name)
+) int
+    LmP0Text: owner
+    LmP0Text: relation_type
+    const: LmTransSymbol: symbol
+    int: status
+
+    owner: lm_trans_text_from_cstr(owner_name)
+    relation_type: lm_trans_text_ref_new_cstr("")
+    if: owner = 0 || relation_type = 0
+        lm_trans_text_ref_destroy(@ relation_type)
+        lm_trans_text_ref_destroy(@ owner)
+        return: 1
+
+    symbol: lm_trans_namespace_find(namespace_, owner)
+    status: symbol = 0 || lm_trans_symbol_is(symbol, "variable") = 0 || symbol\has_c_name = 0 || symbol\c_name = 0 || lm_trans_text_equals(symbol\c_name, expected_c_name) = 0 || lm_trans_namespace_relation_text_latest(namespace_, owner, "variable.type", relation_type) = 0 || lm_trans_text_equals(relation_type, owner_name) = 0
+
+    lm_trans_text_ref_destroy(@ relation_type)
+    lm_trans_text_ref_destroy(@ owner)
+return: status != 0
+
 fn: lm_test_note_class_c_projection (
     const: LmP0Text: name
     const: @(char projection)
@@ -107,6 +214,9 @@ fn: lm_test_structural_semantic_bridge_core () int
     LmP0Text: function_name
     const: LmTransDescriptor: descriptor
     const: LmTransDescriptorField: descriptor_field
+    const: LmTransDescriptor: scope_descriptor
+    const: LmTransSymbol: scope_symbol
+    const: LmTransSymbol: inner_scope_symbol
     LmTransDescriptor: explicit_descriptor
     LmTransDescriptor: projection_descriptor
     LmTransLayoutField: layout_field
@@ -133,6 +243,11 @@ fn: lm_test_structural_semantic_bridge_core () int
     @: char merge_name
     const: @: char backend
     size_t: baseline_fact_count
+    size_t: baseline_view_fact_count
+    size_t: baseline_source_table_count
+    size_t: owner_fact_checkpoint
+    size_t: owner_view_fact_checkpoint
+    size_t: owner_source_table_checkpoint
     int: status
 
     source: "ManualStructural:\n    int: value\nend: ManualStructural\n"
@@ -173,6 +288,15 @@ fn: lm_test_structural_semantic_bridge_core () int
     merge_name: 0
     explicit_descriptor: 0
     projection_descriptor: 0
+    scope_descriptor: 0
+    scope_symbol: 0
+    inner_scope_symbol: 0
+    baseline_fact_count: 0U
+    baseline_view_fact_count: 0U
+    baseline_source_table_count: 0U
+    owner_fact_checkpoint: 0U
+    owner_view_fact_checkpoint: 0U
+    owner_source_table_checkpoint: 0U
     status: 0
 
     lm_trans_registry_destroy()
@@ -197,9 +321,10 @@ fn: lm_test_structural_semantic_bridge_core () int
     if: namespace_ = 0 || structural_name = 0 || scope_name = 0 || conflict_name = 0 || explicit_name = 0 || projection_name = 0 || builtin_name = 0 || unsupported_name = 0 || bridge_name = 0 || callable_name = 0 || capture_name = 0 || function_name = 0 || layout_field = 0 || expected_type = 0 || lm_trans_namespace_attach_registry(namespace_) != 0
         status: 1
 
-    baseline_fact_count: 0U
     if: lm_trans_registry != 0
         baseline_fact_count: lm_trans_registry\loaded_fact_count
+        baseline_view_fact_count: lm_registry_view_fact_count(lm_trans_registry\view)
+        baseline_source_table_count: lm_registry_view_source_table_count(lm_trans_registry\view)
 
     if: status = 0 && (lm_test_attach_empty_structural_descriptor(namespace_, "ManualStructural") != 0 || lm_test_attach_empty_structural_descriptor(namespace_, "ScopedStructural") != 0 || lm_test_attach_empty_structural_descriptor(namespace_, "ConflictingStructural") != 0)
         status: 1
@@ -215,7 +340,7 @@ fn: lm_test_structural_semantic_bridge_core () int
     if: status = 0 && lm_trans_layout_field_effective_address_depth(layout_field, namespace_) != 1U
         status: 1
 
-    if: status = 0 && lm_trans_registry\loaded_fact_count != baseline_fact_count
+    if: status = 0 && (lm_trans_registry\loaded_fact_count != baseline_fact_count || lm_registry_view_fact_count(lm_trans_registry\view) != baseline_view_fact_count || lm_registry_view_source_table_count(lm_trans_registry\view) != baseline_source_table_count || lm_test_structural_owner_has_no_registry_metadata(namespace_, "ManualStructural") != 0 || lm_test_structural_owner_has_no_registry_metadata(namespace_, "ScopedStructural") != 0 || lm_test_structural_owner_has_no_registry_metadata(namespace_, "ConflictingStructural") != 0)
         status: 1
 
     if: status = 0 && lm_p0_parse_string(source, @ document) != 0
@@ -256,19 +381,27 @@ fn: lm_test_structural_semantic_bridge_core () int
         status: 1
     if: status = 0
         top_level_item: lm_trans_top_level_item_lowered_new(lm_test_root_first_node(top_level_document), namespace_)
+        owner_fact_checkpoint: lm_trans_registry\loaded_fact_count
+        owner_view_fact_checkpoint: lm_registry_view_fact_count(lm_trans_registry\view)
+        owner_source_table_checkpoint: lm_registry_view_source_table_count(lm_trans_registry\view)
     if: status = 0 && (top_level_item = 0 || top_level_item\declare = 0 || top_level_item\declare(namespace_, top_level_item) != 0 || lm_trans_namespace_class_has(namespace_, structural_name) != 0)
         status: 1
     descriptor: lm_trans_namespace_descriptor(namespace_, bridge_name)
     descriptor_field: lm_trans_descriptor_structural_field(descriptor, "child")
-    if: status = 0 && (descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 1U || descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "ManualStructural") != 0 || descriptor_field\address_depth != 0U)
+    if: status = 0 && (descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 1U || descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "ManualStructural") != 0 || descriptor_field\address_depth != 0U || lm_trans_registry\loaded_fact_count != owner_fact_checkpoint || lm_registry_view_fact_count(lm_trans_registry\view) != owner_view_fact_checkpoint || lm_registry_view_source_table_count(lm_trans_registry\view) != owner_source_table_checkpoint || lm_test_structural_owner_has_no_registry_metadata(namespace_, "BridgeB") != 0 || lm_test_structural_owner_has_namespace_bindings(namespace_, "BridgeB", "lm_BridgeB") != 0 || lm_trans_namespace_type_is_structural(namespace_, bridge_name) = 0 || lm_trans_head_can_declare_storage(bridge_name, namespace_) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, bridge_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "BridgeB") = 0)
         status: 1
 
+    scope_descriptor: lm_trans_namespace_descriptor(namespace_, scope_name)
+    scope_symbol: lm_trans_namespace_find(namespace_, scope_name)
     if: status = 0
         lm_trans_namespace_enter_scope(namespace_)
         if: lm_trans_namespace_declare(namespace_, scope_name, "variable") != 0 || lm_trans_namespace_type_is_structural(namespace_, scope_name) != 0 || lm_trans_head_can_declare_storage(scope_name, namespace_) != 0
             status: 1
+        inner_scope_symbol: lm_trans_namespace_find(namespace_, scope_name)
+        if: inner_scope_symbol = 0 || inner_scope_symbol = scope_symbol || lm_test_structural_owner_has_no_registry_metadata(namespace_, "ScopedStructural") != 0 || lm_trans_registry\loaded_fact_count != owner_fact_checkpoint || lm_registry_view_fact_count(lm_trans_registry\view) != owner_view_fact_checkpoint || lm_registry_view_source_table_count(lm_trans_registry\view) != owner_source_table_checkpoint
+            status: 1
         lm_trans_namespace_leave_scope(namespace_)
-    if: status = 0 && (lm_trans_namespace_type_is_structural(namespace_, scope_name) = 0 || lm_trans_head_can_declare_storage(scope_name, namespace_) = 0)
+    if: status = 0 && (scope_descriptor = 0 || scope_symbol = 0 || lm_trans_namespace_descriptor(namespace_, scope_name) != scope_descriptor || lm_trans_namespace_find(namespace_, scope_name) != scope_symbol || lm_trans_namespace_type_is_structural(namespace_, scope_name) = 0 || lm_trans_head_can_declare_storage(scope_name, namespace_) = 0 || lm_test_structural_owner_has_no_registry_metadata(namespace_, "ScopedStructural") != 0 || lm_trans_registry\loaded_fact_count != owner_fact_checkpoint || lm_registry_view_fact_count(lm_trans_registry\view) != owner_view_fact_checkpoint || lm_registry_view_source_table_count(lm_trans_registry\view) != owner_source_table_checkpoint)
         status: 1
 
     if: status = 0 && lm_trans_registry_note_layout_backend(conflict_name, "c.unsupported") != 0

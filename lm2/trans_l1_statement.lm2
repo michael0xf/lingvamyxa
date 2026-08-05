@@ -2477,6 +2477,7 @@ fn: lm_trans_emit_declaration_with_qualifier (
     const: LmP0Node: name_node
     LmTransL4CallableType: expected_type
     int: is_raw_callable
+    int: is_structural_default
 
     body: lm_trans_unwrap_single_anonymous_structure(frame\body)
     name_field: lm_trans_nth_field(body, 0U)
@@ -2487,6 +2488,10 @@ fn: lm_trans_emit_declaration_with_qualifier (
     name_node: name_field\value
     expected_type: 0
     finally: lm_trans_expr_callable_type_delete(expected_type)
+
+    is_structural_default: (qualifier = 0 || qualifier[0] = '\0') && name_field\next = 0 && lm_trans_namespace_type_is_structural(namespace_, frame\head)
+    if: is_structural_default && lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
 
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
@@ -2503,18 +2508,29 @@ fn: lm_trans_emit_declaration_with_qualifier (
     if: is_raw_callable = 0 && lm_trans_emit_identifier(file, name_node\as\atom) != 0
         return: 1
 
-    if: name_field\next != 0
-        expected_type: lm_trans_expr_callable_type_new()
-        if: expected_type = 0
+    if: is_structural_default
+        if: lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_emit_identifier(file, name_node\as\atom) != 0 || lm_trans_put(file, "))") != 0
             return: 1
-        expected_type\class_name[0]: frame\head[0]
-        if: lm_trans_put(file, " = ") != 0
-            return: 1
-        if: lm_trans_emit_expr_range_with_expected_type(file, name_field\next, 0, namespace_, expected_type) != 0
-            return: 1
+        ---
+    else:
+        if: name_field\next != 0
+            expected_type: lm_trans_expr_callable_type_new()
+            if: expected_type = 0
+                return: 1
+            expected_type\class_name[0]: frame\head[0]
+            if: lm_trans_put(file, " = ") != 0
+                return: 1
+            if: lm_trans_emit_expr_range_with_expected_type(file, name_field\next, 0, namespace_, expected_type) != 0
+                return: 1
+        ---
     ---
     if: lm_trans_put(file, ";\n") != 0
         return: 1
+
+    if: is_structural_default
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_emit_identifier(file, name_node\as\atom) != 0 || lm_trans_put(file, " == 0) {\n") != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "abort();\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+            return: 1
+    ---
 return: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, frame\head)
 
 fn: lm_trans_namespace_declare_storage_binding (
@@ -3623,7 +3639,7 @@ fn: lm_trans_declare_named_structure_owner (
         return: 1
     finally: lm_trans_text_ref_destroy(@ storage_name)
 
-    status: lm_trans_registry_note_class_present(owner) != 0 || lm_trans_registry_note_class_kind(owner, "layout") != 0 || lm_trans_registry_note_class_reference_base(owner) != 0 || lm_trans_registry_note_layout_backend(owner, "c.struct") != 0 || lm_trans_namespace_declare_c_name(namespace_, owner, "variable", storage_name) != 0 || lm_trans_namespace_declare_relation_text(namespace_, owner, "variable.type", owner) != 0
+    status: lm_trans_namespace_declare_c_name(namespace_, owner, "variable", storage_name) != 0 || lm_trans_namespace_declare_relation_text(namespace_, owner, "variable.type", owner) != 0
 return: status != 0
 
 fn: lm_trans_named_structure_push_field_relations (
@@ -7204,6 +7220,10 @@ fn: lm_trans_lower_statement_frame (
     if: symbol != 0 && lm_trans_l3_receiver_is_excluded(namespace_, dispatch_head)
         c.fprintf(c.stderr, "trans L3 error: receiver \"%.*s\" is not available in L3\n", (cast: int dispatch_head\length), dispatch_head\data)
         return: 1
+
+    if: lm_trans_namespace_type_is_structural(namespace_, frame\head) && lm_trans_frame_looks_storage_declaration(frame, namespace_)
+        out\emit: @lm_trans_statement_emit_storage_declaration
+        return: 0
 
     if: symbol != 0
         if: symbol\callable_is_thread_handler

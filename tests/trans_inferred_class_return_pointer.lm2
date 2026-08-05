@@ -36,12 +36,16 @@ fn
 layout
 prototype
 
+User:
+    int: age
+end: User
+
 fn: make_user (int: age) User
-    User:
-        age: age
-    c.lm_test_remember_return_source(User)
+    User: user
+    user\age: age
+    c.lm_test_remember_return_source(user)
     c.lm_test_reset_direct_allocations()
-return: User
+return: user
 
 fn: identity (User: user) User
     c.lm_test_reset_direct_allocations()
@@ -49,11 +53,13 @@ return: user
 
 external:
     fn: main () int
+        if: User = 0
+            return: 5
         User: first make_user(41)
-        if: first = 0 || c.lm_test_is_return_source(first) = 0 || c.lm_test_direct_allocations() != 0U
+        if: first = 0 || c.lm_test_is_return_source(first) = 0 || c.lm_test_direct_allocations() != 0U || c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), first) = 0
             return: 1
         User: second make_user(42)
-        if: second = 0 || c.lm_test_is_return_source(second) = 0 || c.lm_test_direct_allocations() != 0U
+        if: second = 0 || c.lm_test_is_return_source(second) = 0 || c.lm_test_direct_allocations() != 0U || c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), second) = 0
             return: 2
         if: first = second || first\age != 41 || second\age != 42
             return: 3
