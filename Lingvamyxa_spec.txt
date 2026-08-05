@@ -6162,6 +6162,10 @@ In those cases the translator consults only the bindings and descriptors visible
 in the namespace. The lookup does not authorize a return-time copy: the same
 reference is returned.
 
+The temporary hosted fallback for bindings that do not yet expose a
+structural-field view is documented in section 19.20.4. It is a bootstrap
+migration mechanism, not an additional source-semantic lookup environment.
+
 11.3. Address-of, Raw Load and Callable References
 
 The prefix form:
@@ -8944,13 +8948,14 @@ preprocessor include and not runtime mutation of its source operands. The parser
 builds an ordinary `merge:` Frame; the active receiver/operator namespace gives
 that Frame structural-merge semantics.
 
-This is the target contract. The current registered handler instead performs a
-physical named-layout projection and materializes a Structure instance. Its
-local arena path and remaining legacy top-level backing are implementation
-details; normatively every result is an arena-owned StructureReference.
-Implementing the generic high-level
-field-stream merge and separating it from the L2 physical projection remain
-work.
+This is the target contract. The current registered handler still performs a
+physical named-layout projection and materializes a Structure instance. During
+migration its declaration phase dual-writes a normalized `structuralFields`
+view onto the existing namespace binding and the corresponding legacy Registry
+field relations. Its local arena path and remaining legacy top-level backing
+are implementation details; normatively every result is an arena-owned
+StructureReference. This does not yet implement the generic ordered high-level
+Structure merge.
 
 Semantic form:
 
@@ -10231,10 +10236,13 @@ The minimal hosted declaration profile admits the explicit form:
         requiredOperations()
     end: User
 
-The two views are independent and either may be absent. A present empty view,
-such as `requiredOperations()`, is distinct from an absent view. The declaration
-binds `User` at that source point; it does not emit target-language storage or
-insert rows into any Table or Registry.
+Normalized descriptor views are independent, and view presence is distinct
+from cardinality. A present empty view is authoritative and is not equivalent
+to an absent view. In the hosted profile this rule also applies to the
+normalized `structuralFields` view: present empty means that the descriptor
+exposes no structural fields. The explicit declaration above binds `User` at
+that source point; it does not emit target-language storage or insert rows into
+any Table or Registry.
 
 A table may be used to author descriptor data only through an explicit
 conversion followed by an explicit namespace declaration/import. Naming a
@@ -10255,15 +10263,28 @@ table rows.
 19.20.4. Current Bootstrap Divergence
 
 The hosted bootstrap implements the minimal explicit `descriptor:` receiver
-shown above. It currently normalizes only operation names and the presence of
-the `operations` and `requiredOperations` views; richer descriptor fields remain
-profile work.
+shown above. That receiver still normalizes only operation names and the
+presence of the `operations` and `requiredOperations` views.
 
-The hosted bootstrap currently contains a named-structure fallback that
-combines declaration, generated registry rows, C-layout selection and, in some
-cases, top-level static backing. That behavior is implementation debt retained
-only while the translator is migrated. It is not normative and must not be used
-to infer the meaning of a Lingvamyxa Structure declaration or construction.
+As an intermediate migration step, named-structure declarations and the
+current physical `merge:` path attach an owned normalized `structuralFields`
+view to the descriptor slot of the namespace symbol that the path already
+declared. They do not create a second descriptor symbol.
+
+Both paths still simultaneously emit the legacy class/layout/field Registry
+relations and the hosted C layout/storage projection. This is deliberate
+dual-write during migration: none of those implicit Registry rows has yet been
+removed.
+
+Layout collection, typed field-chain class resolution and L2 inline-Table
+field-type resolution consult the namespace descriptor first. When its
+`structuralFields` view is present, that view is authoritative, including when
+it is empty. A missing or malformed field in a present view does not fall
+through to Registry data. Legacy Registry relations are consulted only when the
+namespace descriptor has no structural-field view.
+
+The dual-write, Registry fallback and remaining top-level backing are
+implementation debt. They do not define source semantics.
 
 
 19.21. Operations, Operators and Receivers

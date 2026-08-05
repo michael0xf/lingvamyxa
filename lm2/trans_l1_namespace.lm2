@@ -259,6 +259,12 @@ fn: lm_trans_descriptor_mark_operations (LmTransDescriptor: descriptor) int
     descriptor\has_operations: 1
 return: 0
 
+fn: lm_trans_descriptor_mark_structural_fields (LmTransDescriptor: descriptor) int
+    if: descriptor = 0 || descriptor\structural_fields = 0
+        return: 1
+    descriptor\has_structural_fields: 1
+return: 0
+
 fn: lm_trans_descriptor_mark_required_operations (LmTransDescriptor: descriptor) int
     if: descriptor = 0 || descriptor\required_operations = 0
         return: 1
@@ -291,6 +297,62 @@ fn: lm_trans_descriptor_add_required_operation (LmTransDescriptor: descriptor; c
     if: descriptor = 0 || lm_trans_descriptor_push_name(descriptor\required_operations, name) != 0
         return: 1
     descriptor\has_required_operations: 1
+return: 0
+
+fn: lm_trans_descriptor_add_structural_field (
+    LmTransDescriptor: descriptor
+    const: LmP0Text: name
+    const: LmP0Text: descriptor_name
+    size_t: index
+    size_t: address_depth
+    size_t: array_count
+    int: has_array_count
+    int: is_const
+    int: is_union
+) int
+    LmTransDescriptorField: field
+
+    if: descriptor = 0 || descriptor\structural_fields = 0 || name = 0 || descriptor_name = 0
+        return: 1
+
+    field: lm_own_new_zero(c.sizeof(field[0]))
+    if: field = 0
+        return: 1
+    field\name: lm_trans_descriptor_name_copy(name)
+    field\descriptor_name: lm_trans_descriptor_name_copy(descriptor_name)
+    if: field\name = 0 || field\descriptor_name = 0
+        lm_trans_descriptor_field_delete_any(field)
+        return: 1
+
+    field\index: index
+    field\address_depth: address_depth
+    field\array_count: array_count
+    field\has_array_count: has_array_count != 0
+    field\is_const: is_const != 0
+    field\is_union: is_union != 0
+    if: lm_own_ptr_stack_push(descriptor\structural_fields, field) != 0
+        lm_trans_descriptor_field_delete_any(field)
+        return: 1
+    descriptor\has_structural_fields: 1
+return: 0
+
+fn: lm_trans_descriptor_structural_field (
+    const: LmTransDescriptor: descriptor
+    const: @: char name
+) const: LmTransDescriptorField
+    size_t: i
+    const: LmTransDescriptorField: field
+
+    if: descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0 || name = 0
+        return: 0
+
+    i: descriptor\structural_fields\count
+    while: i != 0U
+        i: i - 1U
+        field: lm_own_ptr_stack_at(descriptor\structural_fields, i)
+        if: field != 0 && field\name != 0 && c.strcmp(field\name, name) = 0
+            return: field
+        ---
 return: 0
 
 fn: lm_trans_descriptor_has_operation (const: (LmTransDescriptor: descriptor); const: @(char name)) int
@@ -1478,6 +1540,20 @@ fn: lm_trans_namespace_declare_descriptor (LmTransNamespace: namespace_; const: 
         return: 1
     symbol: lm_trans_namespace_find_mutable(namespace_, name)
     if: symbol = 0
+        return: 1
+    symbol\descriptor: descriptor
+    if: lm_trans_namespace_descriptor(namespace_, name) != descriptor
+        symbol\descriptor: 0
+        return: 1
+return: 0
+
+fn: lm_trans_namespace_attach_descriptor (LmTransNamespace: namespace_; const: (LmP0Text: name); LmTransDescriptor: descriptor) int
+    LmTransSymbol: symbol
+
+    if: namespace_ = 0 || name = 0 || descriptor = 0
+        return: 1
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0 || symbol\descriptor != 0
         return: 1
     symbol\descriptor: descriptor
     if: lm_trans_namespace_descriptor(namespace_, name) != descriptor

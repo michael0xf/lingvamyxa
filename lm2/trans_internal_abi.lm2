@@ -486,6 +486,10 @@ fn: lm_trans_descriptor_mark_operations (
     LmTransDescriptor: descriptor
 ) int
 
+fn: lm_trans_descriptor_mark_structural_fields (
+    LmTransDescriptor: descriptor
+) int
+
 fn: lm_trans_descriptor_mark_required_operations (
     LmTransDescriptor: descriptor
 ) int
@@ -500,12 +504,35 @@ fn: lm_trans_descriptor_add_required_operation (
     const: LmP0Text: name
 ) int
 
+fn: lm_trans_descriptor_add_structural_field (
+    LmTransDescriptor: descriptor
+    const: LmP0Text: name
+    const: LmP0Text: descriptor_name
+    size_t: index
+    size_t: address_depth
+    size_t: array_count
+    int: has_array_count
+    int: is_const
+    int: is_union
+) int
+
+fn: lm_trans_descriptor_structural_field (
+    const: LmTransDescriptor: descriptor
+    const: @: char name
+) const: LmTransDescriptorField
+
 fn: lm_trans_descriptor_has_operation (
     const: LmTransDescriptor: descriptor
     const: @: char name
 ) int
 
 fn: lm_trans_namespace_declare_descriptor (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    LmTransDescriptor: descriptor
+) int
+
+fn: lm_trans_namespace_attach_descriptor (
     LmTransNamespace: namespace_
     const: LmP0Text: name
     LmTransDescriptor: descriptor

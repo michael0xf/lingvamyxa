@@ -1,0 +1,235 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_lmx_message_thread_run_entry(lm_test_structural_descriptor_dual_write_core);
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_structural_descriptor_frame_at (const: (LmP0Document: document); size_t: index) const: LmP0Frame
+    const: LmP0Node: root
+    const: LmP0Field: field
+    size_t: current
+
+    root: lm_p0_document_root(document)
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        return: 0
+    current: 0U
+    field: lm_trans_l2_structure_first_present_field(root\as\structure)
+    while: field != 0
+        if: field\value != 0 && field\value\kind = c.LM_P0_NODE_FRAME
+            if: current = index
+                return: field\value\as\frame
+            current: current + 1U
+        ---
+        field: lm_trans_l2_structure_next_present_field(field)
+return: 0
+
+fn: lm_test_structural_descriptor_push_relation (
+    const: @(char owner_name)
+    const: @(char suffix)
+    const: @(char field_name)
+    const: @(char payload_value)
+) int
+    LmP0Text: owner
+    LmP0Text: field
+    LmP0Text: payload
+    int: status
+
+    owner: lm_trans_text_from_cstr(owner_name)
+    field: lm_trans_text_from_cstr(field_name)
+    payload: lm_trans_text_from_cstr(payload_value)
+    status: owner = 0 || field = 0 || payload = 0
+    if: status = 0
+        status: lm_trans_named_structure_push_relation(owner, suffix, field, payload)
+    lm_trans_text_ref_destroy(@ payload)
+    lm_trans_text_ref_destroy(@ field)
+    lm_trans_text_ref_destroy(@ owner)
+return: status != 0
+
+fn: lm_test_structural_descriptor_note_layout (const: @(char owner_name)) int
+    LmP0Text: owner
+    int: status
+
+    owner: lm_trans_text_from_cstr(owner_name)
+    if: owner = 0
+        return: 1
+    status: lm_trans_registry_note_class_present(owner) != 0 || lm_trans_registry_note_class_kind(owner, "layout") != 0 || lm_trans_registry_note_class_reference_base(owner) != 0 || lm_trans_registry_note_layout_backend(owner, "c.struct") != 0
+    lm_trans_text_ref_destroy(@ owner)
+return: status != 0
+
+fn: lm_test_structural_descriptor_registry_field (
+    const: @(char owner)
+    const: @(char field)
+    const: @(char class_name)
+    const: @(char index)
+    const: @(char depth)
+    const: @(char const_value)
+    const: @(char array_count)
+    int: is_union
+) int
+    const: @: char relation
+
+    relation: ".field.class"
+    if: is_union
+        relation: ".field.union"
+    if: lm_test_structural_descriptor_push_relation(owner, relation, field, class_name) != 0 || lm_test_structural_descriptor_push_relation(owner, ".field.index", field, index) != 0 || lm_test_structural_descriptor_push_relation(owner, ".field.address-depth", field, depth) != 0
+        return: 1
+    if: const_value != 0 && lm_test_structural_descriptor_push_relation(owner, ".field.const", field, const_value) != 0
+        return: 1
+    if: array_count != 0 && lm_test_structural_descriptor_push_relation(owner, ".field.array-count", field, array_count) != 0
+        return: 1
+return: 0
+
+fn: lm_test_structural_descriptor_dual_write_core () int
+    const: @(char named_source)
+    const: @(char merge_source)
+    LmP0Document: named_document
+    LmP0Document: merge_document
+    const: LmP0Frame: named_frame
+    const: LmP0Frame: merge_frame
+    LmTransNamespace: namespace_
+    LmP0Text: name
+    LmP0Text: field_name
+    LmP0Text: type_name
+    const: LmTransSymbol: symbol_before
+    const: LmTransSymbol: symbol_after
+    LmTransDescriptor: owned_descriptor
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptorField: descriptor_field
+    @: LmTransLayoutField fields
+    LmTransL4CallableType: field_type
+    const: @: char resolved_class
+    size_t: field_count
+    int: status
+
+    named_source: "NamedValue:\n    answer: 7\n"
+    merge_source: "merge: (NamedValue UnionSource ArraySource) CombinedValue\n    int: local_value 9\nend: CombinedValue\n"
+    named_document: 0
+    merge_document: 0
+    namespace_: 0
+    name: 0
+    field_name: 0
+    type_name: 0
+    owned_descriptor: 0
+    fields: 0
+    field_type: 0
+    status: 0
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_load_for_source("tests/trans_structural_descriptor_dual_write_core.lm2") != 0
+        return: 1
+    lm_trans_registry\view_mode: 2
+    if: lm_p0_parse_string(named_source, @ named_document) != 0 || named_document = 0 || lm_p0_parse_string(merge_source, @ merge_document) != 0 || merge_document = 0
+        status: 1
+
+    named_frame: lm_test_structural_descriptor_frame_at(named_document, 0U)
+    merge_frame: lm_test_structural_descriptor_frame_at(merge_document, 0U)
+    namespace_: lm_trans_namespace_new()
+    if: status = 0 && (named_frame = 0 || merge_frame = 0 || namespace_ = 0 || lm_trans_namespace_attach_registry(namespace_) != 0)
+        status: 1
+
+    name: lm_trans_text_from_cstr("AttachedValue")
+    field_name: lm_trans_text_from_cstr("field_value")
+    type_name: lm_trans_text_from_cstr("int")
+    if: status = 0 && (name = 0 || field_name = 0 || type_name = 0 || lm_trans_namespace_declare(namespace_, name, "variable") != 0)
+        status: 1
+    symbol_before: lm_trans_namespace_find(namespace_, name)
+    owned_descriptor: lm_trans_descriptor_new()
+    if: status = 0 && (symbol_before = 0 || owned_descriptor = 0 || lm_trans_descriptor_mark_structural_fields(owned_descriptor) != 0 || lm_trans_descriptor_add_structural_field(owned_descriptor, field_name, type_name, 0U, 0U, 0U, 0, 0, 0) != 0 || lm_trans_namespace_attach_descriptor(namespace_, name, owned_descriptor) != 0)
+        status: 1
+    if: status = 0
+        owned_descriptor: 0
+    symbol_after: lm_trans_namespace_find(namespace_, name)
+    if: status = 0 && (symbol_after != symbol_before || lm_trans_symbol_is(symbol_after, "variable") = 0 || symbol_after\descriptor = 0 || symbol_after\descriptor\structural_fields\count != 1U)
+        status: 1
+    lm_trans_text_ref_destroy(@ type_name)
+    lm_trans_text_ref_destroy(@ field_name)
+    lm_trans_text_ref_destroy(@ name)
+
+    if: status = 0 && lm_trans_declare_named_structure_layout(namespace_, named_frame) != 0
+        status: 1
+    name: lm_trans_text_from_cstr("NamedValue")
+    symbol_after: lm_trans_namespace_find(namespace_, name)
+    descriptor: lm_trans_namespace_descriptor(namespace_, name)
+    descriptor_field: lm_trans_descriptor_structural_field(descriptor, "answer")
+    if: status = 0 && (symbol_after = 0 || lm_trans_symbol_is(symbol_after, "variable") = 0 || descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 1U || descriptor_field = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 0U || descriptor_field\address_depth != 0U || descriptor_field\is_union || descriptor_field\has_array_count)
+        status: 1
+    lm_trans_text_ref_destroy(@ name)
+
+    if: status = 0 && (lm_test_structural_descriptor_note_layout("UnionSource") != 0 || lm_test_structural_descriptor_registry_field("UnionSource", "union_value", "UnionPayload", "0", "0", 0, 0, 1) != 0 || lm_test_structural_descriptor_note_layout("ArraySource") != 0 || lm_test_structural_descriptor_registry_field("ArraySource", "array_value", "short", "0", "0", 0, "4", 0) != 0)
+        status: 1
+    if: status = 0 && lm_trans_declare_merge_named_structure_layout(namespace_, merge_frame) != 0
+        status: 1
+
+    name: lm_trans_text_from_cstr("CombinedValue")
+    descriptor: lm_trans_namespace_descriptor(namespace_, name)
+    if: status = 0 && (descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 4U)
+        status: 1
+    descriptor_field: lm_trans_descriptor_structural_field(descriptor, "answer")
+    if: status = 0 && (descriptor_field = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 0U)
+        status: 1
+    descriptor_field: lm_trans_descriptor_structural_field(descriptor, "union_value")
+    if: status = 0 && (descriptor_field = 0 || c.strcmp(descriptor_field\descriptor_name, "UnionPayload") != 0 || descriptor_field\index != 1U || descriptor_field\is_union = 0)
+        status: 1
+    descriptor_field: lm_trans_descriptor_structural_field(descriptor, "array_value")
+    if: status = 0 && (descriptor_field = 0 || c.strcmp(descriptor_field\descriptor_name, "short") != 0 || descriptor_field\index != 2U || descriptor_field\has_array_count = 0 || descriptor_field\array_count != 4U)
+        status: 1
+    descriptor_field: lm_trans_descriptor_structural_field(descriptor, "local_value")
+    if: status = 0 && (descriptor_field = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 3U)
+        status: 1
+
+    if: status = 0 && (lm_test_structural_descriptor_registry_field("CombinedValue", "answer", "long", "8", "2", "1", "7", 0) != 0 || lm_test_structural_descriptor_registry_field("NamedValue", "answer", "long", "9", "3", "1", "8", 0) != 0)
+        status: 1
+
+    fields: lm_trans_layout_fields_new(16U)
+    field_type: lm_trans_expr_callable_type_new()
+    field_name: lm_trans_text_from_cstr("answer")
+    if: status = 0 && (fields = 0 || field_type = 0 || field_name = 0 || lm_trans_collect_layout_fields("CombinedValue", namespace_, fields, 16U, @ field_count) != 0 || lm_trans_sort_layout_fields(fields, field_count) != 0 || field_count != 4U || c.strcmp(fields[0]\name, "answer") != 0 || c.strcmp(fields[0]\class_name, "int") != 0 || fields[0]\index != 0U || c.strcmp(fields[1]\union_layout_name, "UnionPayload") != 0 || fields[1]\is_union = 0 || c.strcmp(fields[2]\class_name, "short") != 0 || fields[2]\has_array_count = 0 || fields[2]\array_count != 4U)
+        status: 1
+    resolved_class: 0
+    if: status = 0 && (lm_trans_layout_field_class_resolve(name, field_name, namespace_, @ resolved_class) != 1 || resolved_class = 0 || c.strcmp(resolved_class, "int") != 0 || lm_trans_l2_table_layout_field_type(name, field_name, namespace_, field_type) = 0 || lm_trans_text_equals(field_type\class_name, "int") = 0 || field_type\address_depth != 0U || field_type\is_const)
+        status: 1
+    lm_trans_text_ref_destroy(@ field_name)
+    lm_trans_text_ref_destroy(@ name)
+
+    if: status = 0 && (lm_test_structural_descriptor_note_layout("RegistryOnly") != 0 || lm_test_structural_descriptor_registry_field("RegistryOnly", "fallback_value", "long", "0", "2", "1", 0, 0) != 0)
+        status: 1
+    name: lm_trans_text_from_cstr("RegistryOnly")
+    field_name: lm_trans_text_from_cstr("fallback_value")
+    resolved_class: 0
+    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, name) != 0 || lm_trans_collect_layout_fields("RegistryOnly", namespace_, fields, 16U, @ field_count) != 0 || field_count != 1U || c.strcmp(fields[0]\class_name, "long") != 0 || fields[0]\address_depth != 2U || fields[0]\is_const = 0 || lm_trans_layout_field_class_resolve(name, field_name, namespace_, @ resolved_class) != 1 || resolved_class = 0 || c.strcmp(resolved_class, "long") != 0 || lm_trans_l2_table_layout_field_type(name, field_name, namespace_, field_type) = 0 || lm_trans_text_equals(field_type\class_name, "long") = 0 || field_type\address_depth != 2U || field_type\is_const = 0)
+        status: 1
+    lm_trans_text_ref_destroy(@ field_name)
+    lm_trans_text_ref_destroy(@ name)
+
+    name: lm_trans_text_from_cstr("EmptyAuthoritative")
+    field_name: lm_trans_text_from_cstr("ghost")
+    owned_descriptor: lm_trans_descriptor_new()
+    if: status = 0 && (name = 0 || field_name = 0 || owned_descriptor = 0 || lm_trans_namespace_declare(namespace_, name, "variable") != 0 || lm_trans_descriptor_mark_structural_fields(owned_descriptor) != 0 || lm_trans_namespace_attach_descriptor(namespace_, name, owned_descriptor) != 0)
+        status: 1
+    if: status = 0
+        owned_descriptor: 0
+    if: status = 0 && lm_test_structural_descriptor_registry_field("EmptyAuthoritative", "ghost", "int", "0", "0", 0, 0, 0) != 0
+        status: 1
+    resolved_class: 0
+    if: status = 0 && (lm_trans_collect_layout_fields("EmptyAuthoritative", namespace_, fields, 16U, @ field_count) != 0 || field_count != 0U || lm_trans_layout_field_class_resolve(name, field_name, namespace_, @ resolved_class) != 0 || resolved_class != 0)
+        status: 1
+
+    lm_trans_descriptor_delete(owned_descriptor)
+    lm_trans_text_ref_destroy(@ field_name)
+    lm_trans_text_ref_destroy(@ name)
+    lm_trans_expr_callable_type_delete(field_type)
+    lm_trans_layout_fields_delete(fields, 16U)
+    lm_trans_namespace_delete(namespace_)
+    if: merge_document != 0
+        lm_p0_document_destroy(merge_document)
+    if: named_document != 0
+        lm_p0_document_destroy(named_document)
+    lm_trans_registry_destroy()
+return: status

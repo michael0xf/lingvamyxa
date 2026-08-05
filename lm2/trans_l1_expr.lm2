@@ -3019,12 +3019,28 @@ fn: lm_trans_layout_field_class_resolve (
     const: @@(char out_class)
 ) int
     @: char relation_name
+    @: char descriptor_field_name
     const: @: char field_class
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptorField: descriptor_field
 
     if: out_class != 0
         out_class[0]: 0
     if: owner = 0 || field_name = 0 || out_class = 0
         return: 0
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, owner)
+    if: descriptor != 0 && descriptor\has_structural_fields
+        descriptor_field_name: lm_trans_descriptor_name_copy(field_name)
+        if: descriptor_field_name = 0
+            return: -1
+        descriptor_field: lm_trans_descriptor_structural_field(descriptor, descriptor_field_name)
+        lm_own_delete(descriptor_field_name, 0)
+        if: descriptor_field = 0 || descriptor_field\is_union || descriptor_field\descriptor_name = 0
+            return: 0
+        out_class[0]: descriptor_field\descriptor_name
+        return: 1
+    ---
 
     relation_name: lm_trans_registry_relation_name_new(owner, ".field.class")
     if: relation_name = 0
