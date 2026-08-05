@@ -2578,6 +2578,8 @@ fn: lm_trans_head_can_declare_storage (
         return: 0
     if: lm_trans_is_reserved_head_name(head)
         return: 0
+    if: lm_trans_namespace_type_is_structural(namespace_, head)
+        return: 1
     if: lm_trans_namespace_class_has(namespace_, head)
         return: 1
 
@@ -5074,14 +5076,20 @@ fn: lm_trans_l2_table_cell_inline_layout_body (
     const: LmTransL4CallableType: expected_type
     const: LmTransNamespace: namespace_
 ) const: LmP0Structure
-    const: @: char backend
+    int: structural_type
 
     if: node = 0 || expected_type = 0 || expected_type\class_name = 0
         return: 0
-    if: lm_trans_effective_address_depth(expected_type\class_name, expected_type\address_depth) != 1U
-        return: 0
-    backend: lm_trans_layout_backend_value(namespace_, expected_type\class_name)
-    if: backend = 0 || lm_trans_layout_backend_is_supported(backend) = 0
+    structural_type: lm_trans_namespace_type_is_structural(namespace_, expected_type\class_name)
+    if: structural_type
+        if: expected_type\address_depth != 0U
+            return: 0
+        ---
+    else:
+        if: lm_trans_effective_address_depth(expected_type\class_name, expected_type\address_depth) != 1U
+            return: 0
+        ---
+    if: lm_trans_namespace_layout_source_is_supported(namespace_, expected_type\class_name) = 0
         return: 0
     if: node\kind = c.LM_P0_NODE_STRUCTURE
         return: node\as\structure
@@ -5562,7 +5570,6 @@ fn: lm_trans_merge_source_layout_name_from_atom_new (
     @@: char out_name
 ) int
     LmP0Text: payload
-    const: @: char backend
 
     if: out_name != 0
         out_name[0]: 0
@@ -5577,8 +5584,7 @@ fn: lm_trans_merge_source_layout_name_from_atom_new (
     if: lm_trans_identifier_payload(atom, payload) = 0
         return: 0
 
-    backend: lm_trans_layout_backend_value(namespace_, payload)
-    if: backend = 0 || lm_trans_layout_backend_is_supported(backend) = 0
+    if: lm_trans_namespace_layout_source_is_supported(namespace_, payload) = 0
         return: 0
 
     out_name[0]: lm_trans_text_copy_cstr(payload)
@@ -5592,7 +5598,6 @@ fn: lm_trans_merge_source_layout_name_from_call_new (
     @@: char out_name
 ) int
     LmTransL4CallableType: type
-    const: @: char backend
     int: status
 
     if: out_name != 0
@@ -5611,8 +5616,7 @@ fn: lm_trans_merge_source_layout_name_from_call_new (
     if: type\address_depth != 0U || type\is_const
         return: 0
 
-    backend: lm_trans_layout_backend_value(namespace_, type\class_name)
-    if: backend = 0 || lm_trans_layout_backend_is_supported(backend) = 0
+    if: lm_trans_namespace_layout_source_is_supported(namespace_, type\class_name) = 0
         return: 0
 
     out_name[0]: lm_trans_text_copy_cstr(type\class_name)

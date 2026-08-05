@@ -10297,11 +10297,20 @@ metadata `class.present`, `class.kind`, `class.reference-base` and
 use the Registry-backed `typedef.emitted` state. Therefore removal of generated
 field relations is not removal of every implicit Registry effect.
 
-Layout collection, typed field-chain class resolution and L2 inline-Table
-field-type resolution consult the namespace descriptor first. When its
-`structuralFields` view is present, that view is authoritative, including when
-it is empty. A missing or malformed field in a present view does not fall
-through to Registry data.
+Layout collection, declaration/type-head recognition, top-level lowering,
+typed field-chain class resolution, physical `merge:` source admission and L2
+inline-Table field-type resolution consult the descriptor visible in the active
+namespace first. When its normalized `structuralFields` view is present, that
+view is authoritative, including when it is empty. A named structure can
+therefore be used by later declarations and as a physical merge source without
+relying on `class.present` or `layout.backend`. A missing or malformed field in
+a present view does not fall through to Registry data.
+
+The hosted L4 layout-field projection also treats a descriptor with a present
+`structuralFields` view as reference-bearing. Some general hosted C type
+emitters still obtain implicit reference depth from legacy Registry
+classification; removal of generated `class.reference-base` is therefore
+deferred until those emitters receive the active namespace.
 
 Registry field relations are consulted only when the namespace binding has no
 structural-field view. This preserves explicitly authored or imported ABI

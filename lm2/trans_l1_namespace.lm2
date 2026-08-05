@@ -1420,6 +1420,15 @@ fn: lm_trans_namespace_descriptor (const: (LmTransNamespace: namespace_); const:
         return: 0
 return: symbol\descriptor
 
+fn: lm_trans_namespace_type_is_structural (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransDescriptor: descriptor
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, name)
+return: descriptor != 0 && descriptor\has_structural_fields
+
 fn: lm_trans_namespace_relation_symbol_latest (const: (LmTransNamespace: namespace_); const: (LmP0Text: name); const: @(char relation_name)) const: LmTransSymbol
     LmTransIdentifierCard: card
     LmTransIdentifierRelation: relation

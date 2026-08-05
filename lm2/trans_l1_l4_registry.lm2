@@ -13,6 +13,17 @@ fn: lm_trans_layout_backend_value (const: (LmTransNamespace: namespace_); const:
         return: lm_trans_registry_layout_view_backend(namespace_, view_row)
 return: lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_name, "layout.backend", "class", "class", "backend", "class")
 
+fn: lm_trans_namespace_layout_source_is_supported (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: class_name
+) int
+    const: @: char backend
+
+    if: lm_trans_namespace_type_is_structural(namespace_, class_name)
+        return: 1
+    backend: lm_trans_layout_backend_value(namespace_, class_name)
+return: lm_trans_layout_backend_is_supported(backend)
+
 fn: lm_trans_fn_external_value (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: @: char
     if: name = 0
         return: 0
@@ -45,7 +56,10 @@ fn: lm_trans_layout_class_requires_pointer_field (const: (LmTransNamespace: name
     class_text: lm_trans_l4_text_view_new(class_name)
     if: class_text = 0
         return: 0
-    result: lm_trans_namespace_class_is_reference_base(namespace_, class_text)
+    if: lm_trans_namespace_type_is_structural(namespace_, class_text)
+        result: 1
+    else:
+        result: lm_trans_namespace_class_is_reference_base(namespace_, class_text)
     lm_trans_l4_text_view_delete(@ class_text)
 return: result
 

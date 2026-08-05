@@ -385,7 +385,7 @@ fn: lm_trans_top_level_declare_atom_sequence (LmTransNamespace: namespace_; cons
                 status: 1
             if: status = 0
                 node_as\atom: item_name
-                child: lm_trans_top_level_item_lowered_new(node)
+                child: lm_trans_top_level_item_lowered_new(node, namespace_)
                 if: child = 0
                     status: 1
                     break
@@ -1236,7 +1236,11 @@ fn: lm_trans_top_level_emit_merge_named_structure_storage (FILE: file; LmTransNa
         return: 1
 return: lm_trans_emit_merge_named_structure_storage(file, item\frame, 0U, namespace_, "static ")
 
-fn: lm_trans_lower_top_level_item (const: (LmP0Node: node); LmTransTopLevelItem: out) int
+fn: lm_trans_lower_top_level_item (
+    const: LmP0Node: node
+    const: LmTransNamespace: namespace_
+    LmTransTopLevelItem: out
+) int
     LmTransHeadBinding: binding
     int: function_status
     int: statement_status
@@ -1295,7 +1299,7 @@ fn: lm_trans_lower_top_level_item (const: (LmP0Node: node); LmTransTopLevelItem:
     binding: lm_trans_head_binding_new()
     if: binding = 0
         return: 1
-    if: lm_trans_head_binding_resolve(0, out\frame\head, binding) != 0
+    if: lm_trans_head_binding_resolve(namespace_, out\frame\head, binding) != 0
         lm_own_delete(binding, 0)
         return: 1
     statement_status: lm_trans_top_level_statement_binding(binding, out)
@@ -1309,13 +1313,13 @@ fn: lm_trans_lower_top_level_item (const: (LmP0Node: node); LmTransTopLevelItem:
     if: statement_status != 0 || level_status != 0
         return: 0
 
-    if: lm_trans_frame_looks_top_level_storage_declaration(out\frame, 0)
+    if: lm_trans_frame_looks_top_level_storage_declaration(out\frame, namespace_)
         out\declare: @lm_trans_top_level_declare_storage_declaration
         out\emit_after_prototypes: @lm_trans_top_level_emit_static_declaration
         out\emits_top_level: 1
         return: 0
 
-    if: lm_trans_frame_looks_named_structure_layout_declaration(out\frame, 0)
+    if: lm_trans_frame_looks_named_structure_layout_declaration(out\frame, namespace_)
         out\declare: @lm_trans_top_level_declare_named_structure
         out\emit_before_functions: @lm_trans_top_level_emit_named_structure_typedef
         out\emit_after_prototypes: @lm_trans_top_level_emit_named_structure_storage
@@ -1325,13 +1329,16 @@ fn: lm_trans_lower_top_level_item (const: (LmP0Node: node); LmTransTopLevelItem:
     c.fprintf(c.stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, registered top-level statement frame, named structure, or registered level receiver\n")
 return: 1
 
-fn: lm_trans_top_level_item_lowered_new (const: (LmP0Node: node)) LmTransTopLevelItem
+fn: lm_trans_top_level_item_lowered_new (
+    const: LmP0Node: node
+    const: LmTransNamespace: namespace_
+) LmTransTopLevelItem
     LmTransTopLevelItem: item
 
     item: lm_trans_top_level_item_new()
     if: item = 0
         return: 0
-    if: lm_trans_lower_top_level_item(node, item) != 0
+    if: lm_trans_lower_top_level_item(node, namespace_, item) != 0
         lm_trans_top_level_item_delete(item)
         return: 0
 return: item
@@ -1746,7 +1753,7 @@ fn: lm_trans_emit_l2_structure_prelude (FILE: file; const: (LmP0Structure: body)
         field: body\first_field
     while: field != 0
         node: field\value
-        item: lm_trans_top_level_item_lowered_new(node)
+        item: lm_trans_top_level_item_lowered_new(node, namespace_)
         if: item = 0
             return: 1
 
@@ -1784,7 +1791,7 @@ fn: lm_trans_emit_l2_structure_prototypes (FILE: file; const: (LmP0Structure: bo
         field: body\first_field
     while: field != 0
         node: field\value
-        item: lm_trans_top_level_item_lowered_new(node)
+        item: lm_trans_top_level_item_lowered_new(node, namespace_)
         if: item = 0
             return: 1
 
@@ -1817,7 +1824,7 @@ fn: lm_trans_emit_l2_structure_after_prototypes (FILE: file; const: (LmP0Structu
         field: body\first_field
     while: field != 0
         node: field\value
-        item: lm_trans_top_level_item_lowered_new(node)
+        item: lm_trans_top_level_item_lowered_new(node, namespace_)
         if: item = 0
             return: 1
 
@@ -1855,7 +1862,7 @@ fn: lm_trans_emit_l2_structure_functions (FILE: file; const: (LmP0Structure: bod
         field: body\first_field
     while: field != 0
         node: field\value
-        item: lm_trans_top_level_item_lowered_new(node)
+        item: lm_trans_top_level_item_lowered_new(node, namespace_)
         if: item = 0
             return: 1
 
@@ -1932,7 +1939,7 @@ fn: lm_trans_emit_l2_structure_with_namespace (FILE: file; const: (LmP0Structure
             field: body\first_field
         while: field != 0
             node: field\value
-            item: lm_trans_top_level_item_lowered_new(node)
+            item: lm_trans_top_level_item_lowered_new(node, namespace_)
             if: item = 0
                 return: 1
 
@@ -2113,7 +2120,7 @@ fn: lm_trans_declare_l2_import_root (LmTransNamespace: namespace_; const: (LmP0N
                     return: 1
             ---
             else:
-                item: lm_trans_top_level_item_lowered_new(node)
+                item: lm_trans_top_level_item_lowered_new(node, namespace_)
                 if: item = 0
                     return: 1
                 if: item\declare != 0 && item\declare(namespace_, item) != 0
@@ -2149,7 +2156,7 @@ fn: lm_trans_emit_l2_import_root_prelude (FILE: file; const: (LmP0Node: root); i
                 status: lm_trans_emit_l2_structure_prelude(file, node\as\frame\body, namespace_)
                 lm_trans_l3_profile_restore(previous_depth)
             else:
-                item: lm_trans_top_level_item_lowered_new(node)
+                item: lm_trans_top_level_item_lowered_new(node, namespace_)
                 if: item = 0
                     return: 1
                 if: item\emit_before_functions != 0
@@ -2193,7 +2200,7 @@ fn: lm_trans_emit_l2_import_root_prototypes (FILE: file; const: (LmP0Node: root)
                 status: lm_trans_emit_l2_structure_prototypes(file, node\as\frame\body, namespace_)
                 lm_trans_l3_profile_restore(previous_depth)
             else:
-                item: lm_trans_top_level_item_lowered_new(node)
+                item: lm_trans_top_level_item_lowered_new(node, namespace_)
                 if: item = 0
                     return: 1
                 if: item\emit_prototype != 0
@@ -2232,7 +2239,7 @@ fn: lm_trans_emit_l2_import_root_after_prototypes (FILE: file; const: (LmP0Node:
                 status: lm_trans_emit_l2_structure_after_prototypes(file, node\as\frame\body, namespace_)
                 lm_trans_l3_profile_restore(previous_depth)
             else:
-                item: lm_trans_top_level_item_lowered_new(node)
+                item: lm_trans_top_level_item_lowered_new(node, namespace_)
                 if: item = 0
                     return: 1
                 if: item\emit_after_prototypes != 0
@@ -2283,7 +2290,7 @@ fn: lm_trans_emit_l2_import_root_functions (FILE: file; const: (LmP0Node: root);
                 emitted: 1
             ---
             else:
-                item: lm_trans_top_level_item_lowered_new(node)
+                item: lm_trans_top_level_item_lowered_new(node, namespace_)
                 if: item = 0
                     return: 1
                 if: item\emit_function != 0
@@ -2799,7 +2806,7 @@ fn: lm_trans_declare_l2_structure_import_core (LmTransNamespace: namespace_; con
         field: body\first_field
     while: field != 0
         node: field\value
-        item: lm_trans_top_level_item_lowered_new(node)
+        item: lm_trans_top_level_item_lowered_new(node, namespace_)
         if: item = 0
             return: 1
 

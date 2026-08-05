@@ -1,0 +1,217 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_lmx_message_thread_run_entry(lm_test_structural_semantic_bridge_core);
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_attach_empty_structural_descriptor (
+    LmTransNamespace: namespace_
+    const: @(char name)
+) int
+    LmP0Text: name_text
+    LmTransDescriptor: descriptor
+    int: status
+
+    name_text: lm_trans_text_from_cstr(name)
+    descriptor: lm_trans_descriptor_new()
+    status: name_text = 0 || descriptor = 0
+    if: status = 0
+        status: lm_trans_namespace_declare(namespace_, name_text, "variable") != 0 || lm_trans_descriptor_mark_structural_fields(descriptor) != 0 || lm_trans_namespace_attach_descriptor(namespace_, name_text, descriptor) != 0
+    if: status = 0
+        descriptor: 0
+    lm_trans_descriptor_delete(descriptor)
+    lm_trans_text_ref_destroy(@ name_text)
+return: status != 0
+
+fn: lm_test_root_first_node (const: (LmP0Document: document)) const: LmP0Node
+    const: LmP0Node: root
+    const: LmP0Field: field
+
+    root: lm_p0_document_root(document)
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        return: 0
+    field: lm_trans_l2_structure_first_present_field(root\as\structure)
+    if: field = 0
+        return: 0
+return: field\value
+
+fn: lm_test_structural_semantic_bridge_core () int
+    const: @(char source)
+    const: @(char function_source)
+    const: @(char call_source)
+    const: @(char top_level_source)
+    LmTransNamespace: namespace_
+    LmP0Text: structural_name
+    LmP0Text: scope_name
+    LmP0Text: conflict_name
+    LmP0Text: explicit_name
+    LmP0Text: unsupported_name
+    LmP0Text: bridge_name
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptorField: descriptor_field
+    LmTransLayoutField: layout_field
+    LmTransL4CallableType: expected_type
+    LmP0Document: document
+    LmP0Document: function_document
+    LmP0Document: call_document
+    LmP0Document: top_level_document
+    const: LmP0Node: inline_node
+    const: LmP0Node: call_node
+    const: LmP0Structure: inline_body
+    LmTransTopLevelItem: function_item
+    LmTransTopLevelItem: top_level_item
+    @: char merge_name
+    const: @: char backend
+    size_t: baseline_fact_count
+    int: status
+
+    source: "ManualStructural:\n    int: value\nend: ManualStructural\n"
+    function_source: "fn: makeManual () ManualStructural\n    return: 0\nend: makeManual\n"
+    call_source: "makeManual()\n"
+    top_level_source: "BridgeB:\n    ManualStructural: child\nend: BridgeB\n"
+    namespace_: 0
+    structural_name: 0
+    scope_name: 0
+    conflict_name: 0
+    explicit_name: 0
+    unsupported_name: 0
+    bridge_name: 0
+    layout_field: 0
+    expected_type: 0
+    document: 0
+    function_document: 0
+    call_document: 0
+    top_level_document: 0
+    function_item: 0
+    top_level_item: 0
+    merge_name: 0
+    status: 0
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_load_for_source("tests/trans_structural_semantic_bridge_core.lm2") != 0
+        return: 1
+    lm_trans_registry\view_mode: 2
+
+    namespace_: lm_trans_namespace_new()
+    structural_name: lm_trans_text_from_cstr("ManualStructural")
+    scope_name: lm_trans_text_from_cstr("ScopedStructural")
+    conflict_name: lm_trans_text_from_cstr("ConflictingStructural")
+    explicit_name: lm_trans_text_from_cstr("ExplicitAbiLayout")
+    unsupported_name: lm_trans_text_from_cstr("UnsupportedAbiLayout")
+    bridge_name: lm_trans_text_from_cstr("BridgeB")
+    layout_field: lm_own_new_zero(c.sizeof(layout_field[0]))
+    expected_type: lm_trans_expr_callable_type_new()
+    if: namespace_ = 0 || structural_name = 0 || scope_name = 0 || conflict_name = 0 || explicit_name = 0 || unsupported_name = 0 || bridge_name = 0 || layout_field = 0 || expected_type = 0 || lm_trans_namespace_attach_registry(namespace_) != 0
+        status: 1
+
+    baseline_fact_count: 0U
+    if: lm_trans_registry != 0
+        baseline_fact_count: lm_trans_registry\loaded_fact_count
+
+    if: status = 0 && (lm_test_attach_empty_structural_descriptor(namespace_, "ManualStructural") != 0 || lm_test_attach_empty_structural_descriptor(namespace_, "ScopedStructural") != 0 || lm_test_attach_empty_structural_descriptor(namespace_, "ConflictingStructural") != 0)
+        status: 1
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, structural_name)
+    if: status = 0 && (descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0 || descriptor\structural_fields\count != 0U || lm_trans_namespace_type_is_structural(namespace_, structural_name) = 0 || lm_trans_head_can_declare_storage(structural_name, namespace_) = 0 || lm_trans_namespace_class_has(namespace_, structural_name) != 0 || lm_trans_layout_backend_value(namespace_, structural_name) != 0 || lm_trans_namespace_layout_source_is_supported(namespace_, structural_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "ManualStructural") = 0)
+        status: 1
+
+    layout_field\class_name: "ManualStructural"
+    if: status = 0 && lm_trans_layout_field_effective_address_depth(layout_field, namespace_) != 1U
+        status: 1
+
+    if: status = 0 && lm_trans_registry\loaded_fact_count != baseline_fact_count
+        status: 1
+
+    if: status = 0 && lm_p0_parse_string(source, @ document) != 0
+        status: 1
+    if: status = 0
+        inline_node: lm_test_root_first_node(document)
+        if: inline_node = 0 || inline_node\kind != c.LM_P0_NODE_FRAME || lm_trans_text_assign_cstr(expected_type\class_name, "ManualStructural") = 0
+            status: 1
+        ---
+    if: status = 0
+        inline_body: lm_trans_l2_table_cell_inline_layout_body(inline_node, expected_type, namespace_)
+        if: inline_body = 0 || inline_body != inline_node\as\frame\body
+            status: 1
+        ---
+
+    if: status = 0 && lm_trans_merge_source_layout_name_from_atom_new(structural_name, namespace_, @ merge_name) != 1
+        status: 1
+    if: status = 0 && (merge_name = 0 || c.strcmp(merge_name, "ManualStructural") != 0)
+        status: 1
+    lm_own_delete(merge_name, 0)
+    merge_name: 0
+
+    if: status = 0 && (lm_p0_parse_string(function_source, @ function_document) != 0 || function_document = 0)
+        status: 1
+    if: status = 0
+        function_item: lm_trans_top_level_item_lowered_new(lm_test_root_first_node(function_document), namespace_)
+    if: status = 0 && (function_item = 0 || function_item\function = 0 || function_item\declare = 0 || function_item\declare(namespace_, function_item) != 0 || lm_trans_namespace_class_has(namespace_, structural_name) != 0)
+        status: 1
+    if: status = 0 && (lm_p0_parse_string(call_source, @ call_document) != 0 || call_document = 0)
+        status: 1
+    call_node: lm_test_root_first_node(call_document)
+    if: status = 0 && (call_node = 0 || call_node\kind != c.LM_P0_NODE_FRAME || lm_trans_merge_source_layout_name_from_call_new(call_node, namespace_, @ merge_name) != 1 || merge_name = 0 || c.strcmp(merge_name, "ManualStructural") != 0)
+        status: 1
+    lm_own_delete(merge_name, 0)
+    merge_name: 0
+
+    if: status = 0 && (lm_p0_parse_string(top_level_source, @ top_level_document) != 0 || top_level_document = 0)
+        status: 1
+    if: status = 0
+        top_level_item: lm_trans_top_level_item_lowered_new(lm_test_root_first_node(top_level_document), namespace_)
+    if: status = 0 && (top_level_item = 0 || top_level_item\declare = 0 || top_level_item\declare(namespace_, top_level_item) != 0 || lm_trans_namespace_class_has(namespace_, structural_name) != 0)
+        status: 1
+    descriptor: lm_trans_namespace_descriptor(namespace_, bridge_name)
+    descriptor_field: lm_trans_descriptor_structural_field(descriptor, "child")
+    if: status = 0 && (descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 1U || descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "ManualStructural") != 0 || descriptor_field\address_depth != 0U)
+        status: 1
+
+    if: status = 0
+        lm_trans_namespace_enter_scope(namespace_)
+        if: lm_trans_namespace_declare(namespace_, scope_name, "variable") != 0 || lm_trans_namespace_type_is_structural(namespace_, scope_name) != 0 || lm_trans_head_can_declare_storage(scope_name, namespace_) != 0
+            status: 1
+        lm_trans_namespace_leave_scope(namespace_)
+    if: status = 0 && (lm_trans_namespace_type_is_structural(namespace_, scope_name) = 0 || lm_trans_head_can_declare_storage(scope_name, namespace_) = 0)
+        status: 1
+
+    if: status = 0 && lm_trans_registry_note_layout_backend(conflict_name, "c.unsupported") != 0
+        status: 1
+    backend: lm_trans_layout_backend_value(namespace_, conflict_name)
+    if: status = 0 && (backend = 0 || c.strcmp(backend, "c.unsupported") != 0 || lm_trans_namespace_layout_source_is_supported(namespace_, conflict_name) = 0)
+        status: 1
+
+    if: status = 0 && (lm_trans_registry_note_class_present(explicit_name) != 0 || lm_trans_registry_note_class_reference_base(explicit_name) != 0 || lm_trans_registry_note_layout_backend(explicit_name, "c.struct") != 0 || lm_trans_registry_note_class_present(unsupported_name) != 0 || lm_trans_registry_note_layout_backend(unsupported_name, "c.unsupported") != 0)
+        status: 1
+    if: status = 0 && (lm_trans_namespace_type_is_structural(namespace_, explicit_name) != 0 || lm_trans_head_can_declare_storage(explicit_name, namespace_) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, explicit_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "ExplicitAbiLayout") = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, unsupported_name) != 0)
+        status: 1
+
+    lm_own_delete(merge_name, 0)
+    lm_trans_top_level_item_delete(top_level_item)
+    lm_trans_top_level_item_delete(function_item)
+    if: top_level_document != 0
+        lm_p0_document_destroy(top_level_document)
+    if: call_document != 0
+        lm_p0_document_destroy(call_document)
+    if: function_document != 0
+        lm_p0_document_destroy(function_document)
+    if: document != 0
+        lm_p0_document_destroy(document)
+    lm_trans_expr_callable_type_delete(expected_type)
+    lm_own_delete(layout_field, 0)
+    lm_trans_text_ref_destroy(@ unsupported_name)
+    lm_trans_text_ref_destroy(@ explicit_name)
+    lm_trans_text_ref_destroy(@ conflict_name)
+    lm_trans_text_ref_destroy(@ scope_name)
+    lm_trans_text_ref_destroy(@ structural_name)
+    lm_trans_text_ref_destroy(@ bridge_name)
+    lm_trans_namespace_delete(namespace_)
+    lm_trans_registry_destroy()
+return: status

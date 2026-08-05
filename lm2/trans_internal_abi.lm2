@@ -293,6 +293,11 @@ fn: lm_trans_frame_looks_storage_declaration (
     const: LmTransNamespace: namespace_
 ) int
 
+fn: lm_trans_namespace_layout_source_is_supported (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: class_name
+) int
+
 fn: lm_trans_namespace_declare_storage_binding (
     LmTransNamespace: namespace_
     const: LmP0Text: name
@@ -547,6 +552,11 @@ fn: lm_trans_namespace_descriptor (
     const: LmTransNamespace: namespace_
     const: LmP0Text: name
 ) const: LmTransDescriptor
+
+fn: lm_trans_namespace_type_is_structural (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
 
 fn: lm_trans_symbol_new (
     const: LmP0Text: name

@@ -11,7 +11,10 @@ int main(int argc, char **argv) {
 #define main lm_test_embedded_trans_main
 ===
 
-fn: lm_test_function_local_root_item (const: (LmP0Document: document)) LmTransTopLevelItem
+fn: lm_test_function_local_root_item (
+    const: LmP0Document: document
+    const: LmTransNamespace: namespace_
+) LmTransTopLevelItem
     const: LmP0Node: root
     const: LmP0Field: field
 
@@ -21,7 +24,7 @@ fn: lm_test_function_local_root_item (const: (LmP0Document: document)) LmTransTo
     field: lm_trans_l2_structure_first_present_field(root\as\structure)
     if: field = 0 || field\value = 0 || lm_trans_l2_structure_next_present_field(field) != 0
         return: 0
-return: lm_trans_top_level_item_lowered_new(field\value)
+return: lm_trans_top_level_item_lowered_new(field\value, namespace_)
 
 fn: lm_test_function_local_named_frame (
     const: LmTransFunctionHeader: function
@@ -102,9 +105,9 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     lm_trans_registry\view_mode: 2
     if: lm_p0_parse_string(source, @ document) != 0 || document = 0
         status: 1
-    if: status = 0
-        item: lm_test_function_local_root_item(document)
     namespace_: lm_trans_namespace_new()
+    if: status = 0
+        item: lm_test_function_local_root_item(document, namespace_)
     local_name: lm_trans_text_from_cstr("LocalRecord")
     output: c.tmpfile()
     if: status = 0 && (item = 0 || item\function = 0 || namespace_ = 0 || local_name = 0 || output = 0 || lm_trans_namespace_attach_registry(namespace_) != 0 || lm_trans_top_level_declare_function(namespace_, item) != 0)
