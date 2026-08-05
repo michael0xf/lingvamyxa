@@ -1,0 +1,10 @@
+descriptor: KnownCandidate
+    operations:
+    end: operations
+end: KnownCandidate
+
+external:
+    fn: main () int
+        return: implements(KnownCandidate, MissingProtocol)
+    end: main
+end: external

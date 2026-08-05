@@ -1,0 +1,17 @@
+descriptor: ImportedCandidate
+    operations:
+        importedOperation
+    end: operations
+end: ImportedCandidate
+
+descriptor: ImportedProtocol
+    requiredOperations:
+        importedOperation
+    end: requiredOperations
+end: ImportedProtocol
+
+descriptor: ShadowedCandidate
+    operations:
+        importedOperation
+    end: operations
+end: ShadowedCandidate

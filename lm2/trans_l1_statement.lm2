@@ -6898,7 +6898,7 @@ fn: lm_trans_descriptor_add_operation_frame (
                 return: 1
         ---
         field: lm_trans_l2_structure_next_present_field(field)
-return: 0
+return: lm_trans_validate_end_trailer(section)
 
 fn: lm_trans_statement_emit_descriptor (
     FILE: file
@@ -6910,6 +6910,7 @@ fn: lm_trans_statement_emit_descriptor (
     const: LmP0Field: field
     const: LmP0Node: node
     const: LmP0Frame: section
+    const: LmP0Structure: sections
     const: LmP0Text: name
     LmTransDescriptor: descriptor
     int: status
@@ -6934,6 +6935,15 @@ fn: lm_trans_statement_emit_descriptor (
         return: 1
     status: 0
     field: lm_trans_l2_structure_next_present_field(field)
+    if: field != 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_STRUCTURE
+        sections: field\value\as\structure
+        if: lm_trans_l2_structure_next_present_field(field) != 0
+            c.fprintf(c.stderr, "trans L2 descriptor error: unexpected values after descriptor body\n")
+            status: 1
+            field: 0
+        else:
+            field: lm_trans_l2_structure_first_present_field(sections)
+        ---
     while: status = 0 && field != 0
         node: field\value
         if: node = 0 || node\kind != c.LM_P0_NODE_FRAME

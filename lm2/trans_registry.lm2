@@ -569,6 +569,7 @@ table:
              sub           `receiver.function`
              thread        `receiver.function`
              table         `receiver.statement`
+             descriptor    `receiver.statement`
              if            `receiver.statement`
              else          `receiver.statement`
              while         `receiver.statement`
@@ -639,6 +640,7 @@ table:
     columns((class: class) (binding: receiver))
     rows:
              table         lm_trans_statement_emit_table
+             descriptor    lm_trans_statement_emit_descriptor
              if            lm_trans_statement_emit_if
              else          lm_trans_statement_emit_else
              while         lm_trans_statement_emit_while
@@ -736,6 +738,7 @@ table:
              sub           name              0
              thread        name              0
              synchronized  name              0
+             descriptor    name              0
              `()`          name              0
              `@`           name              1
              `[]`          name              1

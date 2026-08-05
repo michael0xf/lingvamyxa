@@ -7333,7 +7333,8 @@ Semantic outline:
     sub                        receiver that explicitly binds subroutine definitions in namespace
     fn                         receiver that explicitly binds function/callable descriptors in namespace
     return                     executable-body return receiver/operator; also terminal executable close at definition level
-    operator                   proposed explicit descriptor declaration; current bootstrap derives initial bindings from legacy Tables
+    descriptor                 implemented explicit namespace declaration with operations/requiredOperations views
+    operator                   proposed explicit operator-descriptor declaration; current bootstrap derives initial bindings from legacy Tables
     if                         registered receiver, semantics depend on level
     match                      proposed receiver; not registered by the current bootstrap; no built-in `case` syntax
     merge                      registered head; current handler performs legacy named-layout projection plus arena instance construction, not yet generic high-level Structure merge
@@ -7605,12 +7606,13 @@ explicitly below.
         Table rows/cells are never imported as names.
 
     18. cast / implements
-        `implements(CandidateName, RequiredName)` is REGISTERED ONLY relative to
-        the normative contract: the spelling exists, but the required L2/L3
-        semantics resolve both descriptor names only in the current namespace
-        and return boolean compatibility. The current bootstrap instead uses
-        legacy `requires.method`/`method` rows and checks method-name presence
-        only; see section 19.21.3.
+        `implements(CandidateName, RequiredName)` is IMPLEMENTED for the minimal
+        namespace-only compatibility profile. It resolves both descriptor names
+        in the namespace at the source point, compares the explicitly present
+        `requiredOperations` view with the candidate's explicitly present
+        `operations` view, diagnoses unresolved or malformed descriptors, and
+        does not read `requires.method`, `method`, ordinary rows or `default`.
+        See section 19.21.3.
         `cast:` is REGISTERED ONLY for high-level conversion semantics: its
         current emitter lowers directly to a target-language C cast. Proposed:
         add method/codec-selected high-level conversion for L2/L3 and restrict
@@ -7640,9 +7642,12 @@ explicitly below.
         not make these source operators implemented.
 
     21. model / descriptor / union / c.union
-        `model` and `descriptor` are ordinary Structure data. A selected profile
-        may provide explicit declaration receivers that bind them in the
-        namespace. High-level `union:` is NOT IMPLEMENTED. A future variant
+        `model` is ordinary Structure data. The minimal `descriptor:` declaration
+        receiver is IMPLEMENTED: it explicitly binds normalized `operations`
+        and/or `requiredOperations` views in the current lexical namespace and
+        emits no C storage or Registry rows. Broader descriptor content remains
+        ordinary Structure/Array data interpreted by selected profiles.
+        High-level `union:` is NOT IMPLEMENTED. A future variant
         declaration must create an explicit descriptor without choosing physical storage. The
         physical `c.union:` machine-layout receiver is IMPLEMENTED, but its
         required L3 exclusion is not yet enforced. `field.union` is a TABLE/DATA
@@ -7854,7 +7859,7 @@ profile family is already a core receiver.
     definition receivers:  fn, callable, fm, sub
     control statements:    if, else, while, return, stop, break, continue,
                            synchronized, finally, assert
-    declarations/values:   const, (), [], None, OK, false, true
+    declarations/values:   descriptor, const, (), [], None, OK, false, true
     module/source:         table, import, predef, join, merge
     machine/build receivers (intended L2-only; current L3 gates incomplete):
                            include, define, ifndef-default, os, ifdef, guard,
@@ -7896,8 +7901,8 @@ part of its initial namespace and backend configuration:
     class / class.kind / class.present
         legacy classification data; not core class semantics;
     method / requires.method
-        legacy method-presence relations still read by the current bootstrap's
-        non-conforming `implements` approximation;
+        legacy data relations; the current `implements` receiver does not read
+        them;
     namespace / receiver.*
         legacy input used to build explicit receiver bindings;
     operator.prefix / operator.postfix / operator.infix / operator.index
@@ -10218,6 +10223,19 @@ metadata. Those C artifacts are a projection and are not registry facts or
 language-visible values unless a program explicitly asks a backend operation to
 materialize them.
 
+The minimal hosted declaration profile admits the explicit form:
+
+    descriptor:
+        User
+        operations(equals hash)
+        requiredOperations()
+    end: User
+
+The two views are independent and either may be absent. A present empty view,
+such as `requiredOperations()`, is distinct from an absent view. The declaration
+binds `User` at that source point; it does not emit target-language storage or
+insert rows into any Table or Registry.
+
 A table may be used to author descriptor data only through an explicit
 conversion followed by an explicit namespace declaration/import. Naming a
 table `Circle`, `class`, `layout.backend` or `namespace` has no construction or
@@ -10235,6 +10253,11 @@ introduce a distinct core Value kind and must not be inferred from arbitrary
 table rows.
 
 19.20.4. Current Bootstrap Divergence
+
+The hosted bootstrap implements the minimal explicit `descriptor:` receiver
+shown above. It currently normalizes only operation names and the presence of
+the `operations` and `requiredOperations` views; richer descriptor fields remain
+profile work.
 
 The hosted bootstrap currently contains a named-structure fallback that
 combines declaration, generated registry rows, C-layout selection and, in some
@@ -10384,11 +10407,10 @@ Example normalized descriptor state:
 Then `implements(User, Equatable)` is true when both descriptors were
 explicitly declared or imported into the active namespace.
 
-The hosted bootstrap still implements a legacy approximation that reads
-`requires.method`, `method`, ordinary descriptor rows and a `default` table
-from a RegistryView. It checks method-name presence only. This must be replaced
-by the namespace-descriptor algorithm above; the legacy lookup is not
-normative.
+The hosted bootstrap implements this minimal namespace-descriptor algorithm.
+Its compatibility profile currently compares normalized operation names only.
+Legacy `requires.method`, `method`, ordinary descriptor rows and `default`
+tables are not consulted by `implements`.
 
 19.21.4. Generic Operations
 

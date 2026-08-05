@@ -1,0 +1,24 @@
+L2:
+    import: "fixtures/implements_namespace_descriptors.lm2"
+
+    descriptor: ShadowedCandidate
+        operations:
+            localOperation
+        end: operations
+    end: ShadowedCandidate
+
+    descriptor: LocalProtocol
+        requiredOperations:
+            localOperation
+        end: requiredOperations
+    end: LocalProtocol
+
+    external:
+        fn: main () int
+            assert: implements(ImportedCandidate, ImportedProtocol) = 1
+            assert: implements(ShadowedCandidate, LocalProtocol) = 1
+            assert: implements(ShadowedCandidate, ImportedProtocol) = 0
+            return: 0
+        end: main
+    end: external
+end: L2

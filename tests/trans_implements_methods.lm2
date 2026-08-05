@@ -1,316 +1,123 @@
 table:
     source
-    name: Equatable
-    columns((class: class) (class: `requires.method`))
-    rows:
-             equals 1
-end: Equatable
-
-table:
-    source
-    name: Hashable
-    columns((class: class) (class: `requires.method`))
-    rows:
-             hashCode 1
-end: Hashable
-
-table:
-    source
-    name: Serializable
-    columns((class: class) (class: `requires.method`))
-    rows:
-             serialize 1
-end: Serializable
-
-table:
-    source
-    name: FlatCallable
-    columns((class: class) (class: `requires.method`))
-    rows:
-             flatMethod 1
-end: FlatCallable
-
-table:
-    source
-    name: LegacyCallable
-    columns((class: class) (class: `requires.method`))
-    rows:
-             legacyMethod 1
-end: LegacyCallable
-
-table:
-    source
-    name: Stringable
-    columns((class: class) (class: `requires.method`))
-    rows:
-             toString 1
-end: Stringable
-
-table:
-    source
-    name: WideProtocol
-    columns((class: class) (class: `requires.method`) (int: marker))
-    rows:
-             wideDirect  1     1
-             wideDirect  1     2
-             wideDirect  None  3
-             ignoredWide None  4
-end: WideProtocol
-
-table:
-    source
-    name: `lm.test.implements.wide.requirement.seed`
-    columns((class: class) (class: `requires.method`) (int: marker))
-    rows:
-             wideJoined 1 5
-end: `lm.test.implements.wide.requirement.seed`
-
-join: (`lm.test.implements.wide.requirement.seed`) WideProtocol
-    columns((class: class) (class: `requires.method`) (int: marker))
-    rows:
-end: WideProtocol
-
-table:
-    source
-    name: NoneOnlyProtocol
-    columns((class: class) (class: `requires.method`) (int: marker))
-    rows:
-             absentRequirement None 1
-end: NoneOnlyProtocol
-
-table:
-    source
-    name: NoneFallbackProtocol
-    columns((class: class) (class: `requires.method`) (int: marker))
-    rows:
-             absentWideRequirement None 1
-end: NoneFallbackProtocol
-
-table:
-    source
-    name: NoneFallbackProtocol
-    columns((class: class) (class: requirement))
-    rows:
-             fallbackRequirement 1
-end: NoneFallbackProtocol
-
-table:
-    source
-    name: LegacyMultiProtocol
-    columns((class: class) (class: requirement))
-    rows:
-             legacyA 1
-             legacyB 1
-end: LegacyMultiProtocol
-
-table:
-    source
-    name: PriorityProtocol
-    columns((class: class) (class: requirement))
-    rows:
-             legacyPriorityMissing 1
-end: PriorityProtocol
-
-table:
-    source
-    name: PriorityProtocol
-    columns((class: class) (class: `requires.method`) (int: marker))
-    rows:
-             widePriority 1 1
-end: PriorityProtocol
-
-table:
-    source
-    name: `PhysicalProtocol.requires.method`
-    columns((class: class) (int: deliberatelyUntypedPayload))
-    rows:
-             physicalRequirement 7
-end: `PhysicalProtocol.requires.method`
-
-table:
-    source
-    name: MixedProtocol
-    columns((class: class) (class: `requires.method`) (int: marker))
-    rows:
-             mixedA 1 1
-end: MixedProtocol
-
-table:
-    source
-    name: `MixedProtocol.requires.method`
-    columns((class: class) (class: requirement))
-    rows:
-             mixedB 1
-end: `MixedProtocol.requires.method`
-
-table:
-    source
-    name: MixedProtocol
-    columns((class: class) (class: `requires.method`) (int: marker))
-    rows:
-             mixedC 1 2
-end: MixedProtocol
-
-table:
-    source
-    name: default
-    columns((class: class) (binding: method) (int: marker))
-    rows:
-             hashCode  lm_default_hash_code  1
-             hashCode  None                  2
-end: default
-
-table:
-    source
-    name: default
+    name: User
     columns((class: class) (binding: method))
     rows:
-             legacyMethod lm_default_legacy_method
-end: default
-
-table:
-    source
-    name: User
-    columns((class: class) (binding: method) (int: marker))
-    rows:
-             equals               lm_user_equals                3
-             equals               None                          4
-             wideDirect           lm_user_wide_direct           8
-             wideJoined           lm_user_wide_joined           9
-             legacyA              lm_user_legacy_a             10
-             legacyB              lm_user_legacy_b             11
-             widePriority         lm_user_wide_priority        12
-             physicalRequirement  lm_user_physical_requirement 13
-             mixedA               lm_user_mixed_a              14
-             mixedB               lm_user_mixed_b              15
-             mixedC               lm_user_mixed_c              16
-             fallbackRequirement  lm_user_fallback_requirement 17
+             serialize  lm_registry_poison_serialize
 end: User
 
 table:
     source
-    name: `lm.test.implements.user.seed`
-    columns((class: class) (binding: method) (int: marker))
+    name: CleanProtocol
+    columns((class: class) (class: `requires.method`))
     rows:
-             serialize  lm_user_serialize  5
-end: `lm.test.implements.user.seed`
+             registryOnly  1
+end: CleanProtocol
 
-join: (`lm.test.implements.user.seed`) User
-    columns((class: class) (binding: method) (int: marker))
-    rows:
+descriptor: User
+    operations:
+        equals
+    end: operations
 end: User
 
-table:
-    source
-    name: User
-    columns((class: class) (binding: method) (int: marker))
-    rows:
-             serialize  None  6
-end: User
-
-table:
-    source
-    name: `User.method`
-    columns((class: class) (binding: value))
-    rows:
-             flatMethod  lm_user_flat_method
-end: `User.method`
-
-table:
-    source
-    name: `QuotedUser`
-    columns((class: class) (binding: method) (int: marker))
-    rows:
-             equals  lm_quoted_user_equals  7
-end: `QuotedUser`
-
-table:
-    source
-    name: Plain
-    columns((class: class) (binding: method))
-    rows:
-             toString lm_plain_to_string
+descriptor: Plain
+    operations:
+        toString
+    end: operations
 end: Plain
 
-table:
-    source
-    name: NoWideJoin
-    columns((class: class) (binding: method))
-    rows:
-             wideDirect lm_no_wide_join_direct
-end: NoWideJoin
+descriptor: EmptyCandidate
+    operations:
+    end: operations
+end: EmptyCandidate
 
-table:
-    source
-    name: WideJoinedOnly
-    columns((class: class) (binding: method))
-    rows:
-             wideJoined lm_wide_joined_only
-end: WideJoinedOnly
+descriptor: Equatable
+    requiredOperations:
+        equals
+    end: requiredOperations
+end: Equatable
 
-table:
-    source
-    name: LegacyAOnly
-    columns((class: class) (binding: method))
-    rows:
-             legacyA lm_legacy_a_only
-end: LegacyAOnly
+descriptor: Serializable
+    requiredOperations:
+        serialize
+    end: requiredOperations
+end: Serializable
 
-table:
-    source
-    name: LegacyBOnly
-    columns((class: class) (binding: method))
-    rows:
-             legacyB lm_legacy_b_only
-end: LegacyBOnly
+descriptor: CleanProtocol
+    requiredOperations:
+        equals
+    end: requiredOperations
+end: CleanProtocol
 
-table:
-    source
-    name: MixedACOnly
-    columns((class: class) (binding: method))
-    rows:
-             mixedA lm_mixed_ac_only_a
-             mixedC lm_mixed_ac_only_c
-end: MixedACOnly
+descriptor: EmptyProtocol
+    requiredOperations:
+    end: requiredOperations
+end: EmptyProtocol
 
-table:
-    source
-    name: LegacyPriorityOnly
-    columns((class: class) (binding: method))
-    rows:
-             legacyPriorityMissing lm_legacy_priority_only
-end: LegacyPriorityOnly
+descriptor: MultiCandidate
+    operations:
+        first
+        second
+        extra
+    end: operations
+end: MultiCandidate
+
+descriptor: CompleteProtocol
+    requiredOperations:
+        first
+        second
+    end: requiredOperations
+end: CompleteProtocol
+
+descriptor: IncompleteProtocol
+    requiredOperations:
+        first
+        missing
+    end: requiredOperations
+end: IncompleteProtocol
+
+descriptor: `QuotedCandidate`
+    operations:
+        quotedOperation
+    end: operations
+end: `QuotedCandidate`
+
+descriptor: `QuotedProtocol`
+    requiredOperations:
+        quotedOperation
+    end: requiredOperations
+end: `QuotedProtocol`
+
+descriptor: SelfDescribing
+    operations:
+        inspect
+    end: operations
+    requiredOperations:
+        inspect
+    end: requiredOperations
+end: SelfDescribing
+
+descriptor: SameMismatch
+    operations:
+        present
+    end: operations
+    requiredOperations:
+        absent
+    end: requiredOperations
+end: SameMismatch
 
 external:
     fn: main () int
         assert: implements(User, Equatable) = 1
-        assert: implements(User, Serializable) = 1
-        assert: implements(User, FlatCallable) = 1
-        assert: implements(User, Hashable) = 1
         assert: implements(Plain, Equatable) = 0
-        assert: implements(Plain, Stringable) = 1
-        assert: implements(Plain, Hashable) = 1
-        assert: implements(Plain, LegacyCallable) = 1
-        assert: implements(Plain, Serializable) = 0
-        assert: implements(`QuotedUser`, Equatable) = 1
-        assert: implements(User, WideProtocol) = 1
-        assert: implements(User, `WideProtocol`) = 1
-        assert: implements(NoWideJoin, WideProtocol) = 0
-        assert: implements(WideJoinedOnly, WideProtocol) = 0
-        assert: implements(User, NoneOnlyProtocol) = 0
-        assert: implements(User, NoneFallbackProtocol) = 1
-        assert: implements(Plain, NoneFallbackProtocol) = 0
-        assert: implements(User, LegacyMultiProtocol) = 1
-        assert: implements(NoWideJoin, LegacyMultiProtocol) = 0
-        assert: implements(LegacyAOnly, LegacyMultiProtocol) = 0
-        assert: implements(LegacyBOnly, LegacyMultiProtocol) = 0
-        assert: implements(User, PriorityProtocol) = 1
-        assert: implements(LegacyPriorityOnly, PriorityProtocol) = 0
-        assert: implements(User, PhysicalProtocol) = 1
-        assert: implements(User, MixedProtocol) = 1
-        assert: implements(MixedACOnly, MixedProtocol) = 0
-        assert: implements(User, User) = 1
-        assert: implements(User, Missing) = 0
+        assert: implements(User, Serializable) = 0
+        assert: implements(User, CleanProtocol) = 1
+        assert: implements(EmptyCandidate, EmptyProtocol) = 1
+        assert: implements(MultiCandidate, CompleteProtocol) = 1
+        assert: implements(MultiCandidate, IncompleteProtocol) = 0
+        assert: implements(`QuotedCandidate`, `QuotedProtocol`) = 1
+        assert: implements(SelfDescribing, SelfDescribing) = 1
+        assert: implements(SameMismatch, SameMismatch) = 0
         return: 0
     end: main
 end: external

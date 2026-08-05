@@ -602,8 +602,9 @@ fn: lm_trans_callable_descriptor_is_raw_function_reference (
 
 fn: lm_trans_implements (
     const: LmTransNamespace: namespace_
-    const: LmP0Text: class_name
-    const: LmP0Text: protocol_name
+    const: LmP0Text: candidate_name
+    const: LmP0Text: required_name
+    @: int out_result
 ) int
 
 fn: lm_trans_node_callable_descriptor_name (

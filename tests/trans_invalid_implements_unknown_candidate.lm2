@@ -1,0 +1,5 @@
+external:
+    fn: main () int
+        return: implements(Missing, Missing)
+    end: main
+end: external
