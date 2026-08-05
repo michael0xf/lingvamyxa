@@ -6162,6 +6162,20 @@ In those cases the translator consults only the bindings and descriptors visible
 in the namespace. The lookup does not authorize a return-time copy: the same
 reference is returned.
 
+The namespace used to choose the hosted representation is the same namespace
+that resolved the source type. A visible descriptor with a present
+`structuralFields` view denotes a StructureReference and contributes one
+implicit reference layer before explicit `@ⁿ` depth is added. Only when that
+view is absent may the hosted compatibility profile consult explicitly imported
+ABI metadata for an opaque-reference or C-layout projection. A global Registry
+classification must not override a descriptor visible at the use site.
+
+During bootstrap that compatibility fallback may read explicitly authored
+`class.reference-base`, `class.kind = opaqueReference`,
+`class.semantic = opaqueHandle` or `class.c.projection` metadata. These are
+projection inputs for imported ABI names, not facts created by declaring or
+constructing a Lingvamyxa Structure.
+
 The temporary hosted fallback for bindings that do not yet expose a
 structural-field view is documented in section 19.20.4. It is a bootstrap
 migration mechanism, not an additional source-semantic lookup environment.
@@ -10306,11 +10320,13 @@ therefore be used by later declarations and as a physical merge source without
 relying on `class.present` or `layout.backend`. A missing or malformed field in
 a present view does not fall through to Registry data.
 
-The hosted L4 layout-field projection also treats a descriptor with a present
-`structuralFields` view as reference-bearing. Some general hosted C type
-emitters still obtain implicit reference depth from legacy Registry
-classification; removal of generated `class.reference-base` is therefore
-deferred until those emitters receive the active namespace.
+All hosted C declaration, signature, field, callable-adapter and ABI projection
+paths now receive the active namespace. A descriptor with a present
+`structuralFields` view supplies the implicit non-primitive reference layer;
+explicit `@ⁿ` depth is added on top. Explicitly authored ABI reference/layout
+metadata remains a compatibility fallback only when no such descriptor view is
+visible. The legacy owner metadata is still emitted at this migration stage,
+but named-structure and physical `merge:` semantics no longer depend on it.
 
 Registry field relations are consulted only when the namespace binding has no
 structural-field view. This preserves explicitly authored or imported ABI

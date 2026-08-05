@@ -312,8 +312,9 @@ table:
              type_node                    LmP0Node                           2   None 1    None None None
              target_name                  LmP0Text                           3   None 1    None None None
              value                        LmP0Structure                      4   None 1    None None None
-             out_consumed                 int                                5   1    None None None None
-             out_needs_null_check         int                                6   1    None None None None
+             namespace_                   LmTransNamespace                   5   None 1    None None None
+             out_consumed                 int                                6   1    None None None None
+             out_needs_null_check         int                                7   1    None None None None
              return                       None None                               None None int None None
 end: LmTransTypeStructureValueAllocReceiver
 

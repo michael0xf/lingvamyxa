@@ -114,6 +114,7 @@ fn: lm_trans_emit_capture_field (
     const: LmTransCapture: capture
     unsigned: indent
     size_t: extra_pointer_depth
+    const: LmTransNamespace: namespace_
 ) int
     size_t: i
 
@@ -123,16 +124,11 @@ fn: lm_trans_emit_capture_field (
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
     if: capture\type_is_head
-        if: lm_trans_builtin_c_type_name(capture\type_head)
-            if: lm_trans_emit_type_name(file, capture\type_head) != 0
-                return: 1
-        ---
-        if: lm_trans_builtin_c_type_name(capture\type_head) = 0
-            if: lm_trans_emit_name(file, capture\type_head) != 0
-                return: 1
+        if: lm_trans_emit_type_head_only(file, capture\type_head, namespace_) != 0
+            return: 1
     ---
     if: capture\type_is_head = 0
-        if: lm_trans_emit_type_node(file, capture\type_node) != 0
+        if: lm_trans_emit_type_node(file, capture\type_node, namespace_) != 0
             return: 1
     ---
     if: lm_trans_put(file, " ") != 0
@@ -175,11 +171,10 @@ fn: lm_trans_emit_env_type (
     i: 0U
     while: i < function\captures\count
         capture: (cast: (const: LmTransCapture) lm_own_ptr_stack_at(function\captures, i))
-        if: lm_trans_emit_capture_field(file, capture, 1U, 0U) != 0
+        if: lm_trans_emit_capture_field(file, capture, 1U, 0U, namespace_) != 0
             return: 1
         i: i + 1U
 
-    c.LM_UNUSED(namespace_)
 return: lm_trans_put(file, "};\n\n")
 
 fn: lm_trans_control_body_start (const: (LmP0Frame: frame)) const: LmP0Field
@@ -1172,10 +1167,11 @@ fn: lm_trans_emit_array_pointer_type (
     FILE: file
     const: LmP0Node: element_type
     size_t: pointer_depth
+    const: LmTransNamespace: namespace_
 ) int
     size_t: i
 
-    if: lm_trans_emit_type_node(file, element_type) != 0
+    if: lm_trans_emit_type_node(file, element_type, namespace_) != 0
         return: 1
     if: pointer_depth = 0U
         return: 0
@@ -1223,6 +1219,7 @@ fn: lm_trans_emit_array_structure_value_alloc_assignment (
     size_t: pointer_depth
     size_t: rank
     size_t: count
+    const: LmTransNamespace: namespace_
 ) int
     if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
         return: 1
@@ -1235,7 +1232,7 @@ fn: lm_trans_emit_array_structure_value_alloc_assignment (
 
     if: lm_trans_put(file, " = (") != 0
         return: 1
-    if: lm_trans_emit_array_pointer_type(file, element_type, pointer_depth) != 0
+    if: lm_trans_emit_array_pointer_type(file, element_type, pointer_depth, namespace_) != 0
         return: 1
     if: lm_trans_put(file, ")lm_own_arena_array_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0
         return: 1
@@ -1365,7 +1362,7 @@ fn: lm_trans_emit_array_structure_value_fill_iterative (
             break
         child: field\value\as\structure
         count: lm_trans_structure_field_count(child)
-        if: lm_trans_emit_array_structure_value_alloc_assignment(file, indent, target_name, indices, current_depth + 1U, element_type, rank - current_depth - 1U, rank, count) != 0
+        if: lm_trans_emit_array_structure_value_alloc_assignment(file, indent, target_name, indices, current_depth + 1U, element_type, rank - current_depth - 1U, rank, count, namespace_) != 0
             status: 1
             break
         if: count != 0U && lm_trans_emit_array_null_return_check(file, indent, target_name, indices, current_depth + 1U, namespace_) != 0
@@ -1413,6 +1410,7 @@ fn: lm_trans_type_receiver_array_structure_value_alloc (
     const: LmP0Node: type_node
     const: LmP0Text: target_name
     const: LmP0Structure: value
+    const: LmTransNamespace: namespace_
     @: int out_consumed
     @: int out_needs_null_check
 ) int
@@ -1450,9 +1448,9 @@ fn: lm_trans_type_receiver_array_structure_value_alloc (
         return: 1
     finally: lm_trans_text_ref_destroy(@ items_name)
 
-    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_array_pointer_type(file, element_type, rank) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_write_text(file, items_name) != 0 || lm_trans_put(file, ";\n") != 0
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_array_pointer_type(file, element_type, rank, namespace_) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_write_text(file, items_name) != 0 || lm_trans_put(file, ";\n") != 0
         return: 1
-    if: lm_trans_emit_array_structure_value_alloc_assignment(file, indent, items_name, 0, 0U, element_type, rank, rank, count) != 0
+    if: lm_trans_emit_array_structure_value_alloc_assignment(file, indent, items_name, 0, 0U, element_type, rank, rank, count, namespace_) != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
@@ -1555,6 +1553,7 @@ fn: lm_trans_emit_type_receiver_structure_value_alloc (
     const: LmP0Node: type_node
     const: LmP0Text: target_name
     const: LmP0Structure: value
+    const: LmTransNamespace: namespace_
     @: int out_consumed
     @: int out_needs_null_check
 ) int
@@ -1579,7 +1578,7 @@ fn: lm_trans_emit_type_receiver_structure_value_alloc (
     if: status = 0 || type_receiver\type_structure_value_alloc = 0
         return: 0
 
-return: type_receiver\type_structure_value_alloc(file, indent, type_node, target_name, value, out_consumed, out_needs_null_check)
+return: type_receiver\type_structure_value_alloc(file, indent, type_node, target_name, value, namespace_, out_consumed, out_needs_null_check)
 
 fn: lm_trans_emit_type_receiver_structure_value_fill (
     FILE: file
@@ -1731,9 +1730,9 @@ fn: lm_trans_emit_array_value_helper (
 
     if: lm_trans_emit_message_thread_runtime_prelude(prelude_file) != 0
         return: 1
-    if: lm_trans_put(prelude_file, "static LmSlice *") != 0 || lm_trans_emit_identifier(prelude_file, helper_name_text) != 0 || lm_trans_put(prelude_file, "(struct LmMessageThread *lm_lmx_message_thread) {\n    ") != 0 || lm_trans_emit_array_pointer_type(prelude_file, element_type, pointer_depth + rank) != 0 || lm_trans_put(prelude_file, " ") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    LmSlice *") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n") != 0
+    if: lm_trans_put(prelude_file, "static LmSlice *") != 0 || lm_trans_emit_identifier(prelude_file, helper_name_text) != 0 || lm_trans_put(prelude_file, "(struct LmMessageThread *lm_lmx_message_thread) {\n    ") != 0 || lm_trans_emit_array_pointer_type(prelude_file, element_type, pointer_depth + rank, namespace_) != 0 || lm_trans_put(prelude_file, " ") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, ";\n    LmSlice *") != 0 || lm_trans_write_text(prelude_file, slice_name) != 0 || lm_trans_put(prelude_file, ";\n") != 0
         return: 1
-    if: lm_trans_emit_array_structure_value_alloc_assignment(prelude_file, 1U, target_name, 0, 0U, element_type, pointer_depth + rank, rank, count) != 0
+    if: lm_trans_emit_array_structure_value_alloc_assignment(prelude_file, 1U, target_name, 0, 0U, element_type, pointer_depth + rank, rank, count, namespace_) != 0
         return: 1
 
     if: count != 0U && (lm_trans_put(prelude_file, "    if (") != 0 || lm_trans_write_text(prelude_file, target_name) != 0 || lm_trans_put(prelude_file, " == 0) {\n        return 0;\n    }\n") != 0)
@@ -1892,7 +1891,7 @@ fn: lm_trans_emit_typed_value_return_statement (
         return: 1
     if: lm_trans_put(file, " ") != 0 || lm_trans_write_text(file, return_name) != 0 || lm_trans_put(file, ";\n") != 0
         return: 1
-    if: lm_trans_emit_type_receiver_structure_value_alloc(file, indent + 1U, namespace_\return_type_node, return_name, structure_value, out_consumed, @ needs_null_check) != 0
+    if: lm_trans_emit_type_receiver_structure_value_alloc(file, indent + 1U, namespace_\return_type_node, return_name, structure_value, namespace_, out_consumed, @ needs_null_check) != 0
         return: 1
     if: out_consumed[0] = 0
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
@@ -2497,7 +2496,7 @@ fn: lm_trans_emit_declaration_with_qualifier (
     is_raw_callable: lm_trans_symbol_is(lm_trans_namespace_find(namespace_, frame\head), "callableDescriptor") && lm_trans_callable_descriptor_is_raw_function_reference(namespace_, frame\head)
     if: is_raw_callable && lm_trans_emit_raw_callable_declarator(file, namespace_, frame\head, name_node\as\atom, "callable descriptor") != 0
         return: 1
-    if: is_raw_callable = 0 && lm_trans_emit_type_head_only(file, frame\head) != 0
+    if: is_raw_callable = 0 && lm_trans_emit_type_head_only(file, frame\head, namespace_) != 0
         return: 1
     if: is_raw_callable = 0 && lm_trans_put(file, " ") != 0
         return: 1
@@ -3173,7 +3172,7 @@ fn: lm_trans_emit_c_tagged_declaration (
     name_node: name_field\value
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
-    if: lm_trans_emit_type_head_only(file, frame\head) != 0
+    if: lm_trans_emit_type_head_only(file, frame\head, namespace_) != 0
         return: 1
     if: lm_trans_put(file, " ") != 0
         return: 1
@@ -3731,7 +3730,7 @@ fn: lm_trans_emit_named_structure_field_declaration (
 
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
-    if: lm_trans_emit_callable_type_named(file, field_type, name) != 0
+    if: lm_trans_emit_callable_type_named(file, field_type, name, namespace_) != 0
         return: 1
 return: lm_trans_put(file, ";\n")
 
@@ -5057,6 +5056,7 @@ fn: lm_trans_emit_l2_table_row_type (
     @: LmP0Text column_names
     size_t: column_count
     unsigned: indent
+    const: LmTransNamespace: namespace_
 ) int
     size_t: index
 
@@ -5064,7 +5064,7 @@ fn: lm_trans_emit_l2_table_row_type (
         return: 1
     index: 0U
     while: index < column_count
-        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_callable_type_named(file, column_types[index], column_names[index]) != 0 || lm_trans_put(file, ";\n") != 0
+        if: lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_emit_callable_type_named(file, column_types[index], column_names[index], namespace_) != 0 || lm_trans_put(file, ";\n") != 0
             return: 1
         index: index + 1U
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "} ") != 0 || lm_trans_put(file, row_type_name) != 0 || lm_trans_put(file, ";\n") != 0
@@ -5076,19 +5076,10 @@ fn: lm_trans_l2_table_cell_inline_layout_body (
     const: LmTransL4CallableType: expected_type
     const: LmTransNamespace: namespace_
 ) const: LmP0Structure
-    int: structural_type
-
     if: node = 0 || expected_type = 0 || expected_type\class_name = 0
         return: 0
-    structural_type: lm_trans_namespace_type_is_structural(namespace_, expected_type\class_name)
-    if: structural_type
-        if: expected_type\address_depth != 0U
-            return: 0
-        ---
-    else:
-        if: lm_trans_effective_address_depth(expected_type\class_name, expected_type\address_depth) != 1U
-            return: 0
-        ---
+    if: lm_trans_effective_address_depth(expected_type\class_name, expected_type\address_depth, namespace_) != 1U
+        return: 0
     if: lm_trans_namespace_layout_source_is_supported(namespace_, expected_type\class_name) = 0
         return: 0
     if: node\kind = c.LM_P0_NODE_STRUCTURE
@@ -5457,7 +5448,7 @@ fn: lm_trans_emit_l2_table_storage_value (
 
     if: indent != 0U && lm_trans_declare_l2_table_binding(namespace_, frame) != 0
         return: 1
-    if: lm_trans_emit_l2_table_row_type(file, row_type_name, column_types, column_names, column_count, indent) != 0
+    if: lm_trans_emit_l2_table_row_type(file, row_type_name, column_types, column_names, column_count, indent, namespace_) != 0
         return: 1
     if: lm_trans_emit_l2_table_cell_backing_storages(file, rows_frame, object_name, column_types, column_count, row_count, indent, namespace_) != 0
         return: 1
@@ -6009,6 +6000,7 @@ fn: lm_trans_emit_struct_field_with_qualifier (
     const: LmP0Node: node
     unsigned: indent
     const: @(char qualifier)
+    const: LmTransNamespace: namespace_
 ) int
     const: LmP0Node: current
     const: LmP0Frame: frame
@@ -6048,7 +6040,7 @@ fn: lm_trans_emit_struct_field_with_qualifier (
             return: 1
         if: current_qualifier != 0 && lm_trans_put(file, current_qualifier) != 0
             return: 1
-        if: lm_trans_emit_type_and_name(file, type_field\value, name_node\as\atom, frame\head\length, 0) != 0
+        if: lm_trans_emit_type_and_name(file, type_field\value, name_node\as\atom, frame\head\length, namespace_) != 0
             return: 1
         return: lm_trans_put(file, ";\n")
 
@@ -6061,7 +6053,7 @@ fn: lm_trans_emit_struct_field_with_qualifier (
         return: 1
     if: current_qualifier != 0 && lm_trans_put(file, current_qualifier) != 0
         return: 1
-    if: lm_trans_emit_type_head_only(file, frame\head) != 0
+    if: lm_trans_emit_type_head_only(file, frame\head, namespace_) != 0
         return: 1
     if: lm_trans_put(file, " ") != 0
         return: 1
@@ -6073,13 +6065,15 @@ fn: lm_trans_emit_struct_field (
     FILE: file
     const: LmP0Node: node
     unsigned: indent
+    const: LmTransNamespace: namespace_
 ) int
-return: lm_trans_emit_struct_field_with_qualifier(file, node, indent, "")
+return: lm_trans_emit_struct_field_with_qualifier(file, node, indent, "", namespace_)
 
 fn: lm_trans_emit_function_return_structure (
     FILE: file
     const: LmP0Text: function_name
     const: LmP0Node: return_node
+    const: LmTransNamespace: namespace_
 ) int
     const: LmP0Field: field
 
@@ -6095,7 +6089,7 @@ fn: lm_trans_emit_function_return_structure (
         c.fprintf(c.stderr, "trans L2 error: fm return Structure must not be empty\n")
         return: 1
     while: field != 0
-        if: lm_trans_emit_struct_field(file, field\value, 1U) != 0
+        if: lm_trans_emit_struct_field(file, field\value, 1U, namespace_) != 0
             return: 1
         field: field\next
 return: lm_trans_put(file, "};\n\n")
@@ -6151,7 +6145,7 @@ fn: lm_trans_emit_function_return_structure_once (
         lm_own_delete(type_name, 0)
         return: 0
 
-    if: lm_trans_emit_function_return_structure(file, function_name, return_node) != 0
+    if: lm_trans_emit_function_return_structure(file, function_name, return_node, namespace_) != 0
         lm_own_delete(type_name, 0)
         return: 1
 
@@ -8298,7 +8292,7 @@ fn: lm_trans_emit_closure_call_wrapper (
     if: function\is_sub || function\is_struct_return || function\return_node = 0
         return: 0
 
-    if: lm_trans_put(file, "static ") != 0 || lm_trans_emit_type_node(file, function\return_node) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_write_text(file, hoisted\closure_call_name) != 0 || lm_trans_put(file, "(void *lm_env, struct LmMessageThread *lm_lmx_message_thread") != 0
+    if: lm_trans_put(file, "static ") != 0 || lm_trans_emit_type_node(file, function\return_node, namespace_) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_write_text(file, hoisted\closure_call_name) != 0 || lm_trans_put(file, "(void *lm_env, struct LmMessageThread *lm_lmx_message_thread") != 0
         return: 1
     has_params: lm_trans_formal_param_list_has_any(function\params)
     if: has_params && lm_trans_put(file, ", ") != 0

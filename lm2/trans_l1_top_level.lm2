@@ -710,7 +710,7 @@ fn: lm_trans_emit_callable_descriptor (FILE: file; const: (LmTransFunctionHeader
         return: 1
     if: lm_trans_put(file, "Closure {\n    ") != 0
         return: 1
-    if: lm_trans_emit_type_node(file, function\return_node) != 0
+    if: lm_trans_emit_type_node(file, function\return_node, namespace_) != 0
         return: 1
     if: lm_trans_put(file, " (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread") != 0
         return: 1
@@ -772,6 +772,7 @@ fn: lm_trans_emit_array_param_aliases (
     FILE: file
     const: LmTransFunctionHeader: function
     unsigned: indent
+    const: LmTransNamespace: namespace_
 ) int
     LmTransFormalParam: param
     const: LmP0Node: element_type
@@ -797,7 +798,7 @@ fn: lm_trans_emit_array_param_aliases (
             if: slice_name = 0
                 lm_own_delete(slice_name_storage, 0)
                 return: 1
-            if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_array_pointer_type(file, element_type, pointer_depth + rank) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_emit_identifier(file, param\name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_identifier(file, slice_name) != 0 || lm_trans_put(file, " == 0 ? 0 : (") != 0 || lm_trans_emit_array_pointer_type(file, element_type, pointer_depth + rank) != 0 || lm_trans_put(file, ")") != 0 || lm_trans_emit_identifier(file, slice_name) != 0 || lm_trans_put(file, "->ptr;\n") != 0
+            if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_array_pointer_type(file, element_type, pointer_depth + rank, namespace_) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_emit_identifier(file, param\name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_identifier(file, slice_name) != 0 || lm_trans_put(file, " == 0 ? 0 : (") != 0 || lm_trans_emit_array_pointer_type(file, element_type, pointer_depth + rank, namespace_) != 0 || lm_trans_put(file, ")") != 0 || lm_trans_emit_identifier(file, slice_name) != 0 || lm_trans_put(file, "->ptr;\n") != 0
                 lm_trans_text_ref_destroy(@ slice_name)
                 lm_own_delete(slice_name_storage, 0)
                 return: 1
@@ -900,7 +901,7 @@ fn: lm_trans_emit_function_prototype (FILE: file; const: (LmTransFunctionHeader:
                 if: function\return_node\kind = c.LM_P0_NODE_STRUCTURE
                     lm_trans_text_ref_destroy(@ raw_return_descriptor_name)
                     return: 0
-                if: lm_trans_emit_type_node(file, function\return_node) != 0 || lm_trans_put(file, " ") != 0
+                if: lm_trans_emit_type_node(file, function\return_node, namespace_) != 0 || lm_trans_put(file, " ") != 0
                     lm_trans_text_ref_destroy(@ raw_return_descriptor_name)
                     return: 1
     ---
@@ -1422,7 +1423,7 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
             if: raw_return
                 status: lm_trans_emit_raw_callable_return_prefix(file, namespace_, raw_return_descriptor_name)
             else:
-                status: lm_trans_emit_type_node(file, function\return_node)
+                status: lm_trans_emit_type_node(file, function\return_node, namespace_)
             lm_trans_text_ref_destroy(@ raw_return_descriptor_name)
             if: status != 0
                 lm_trans_ptr_stack_delete(@ hoisted_functions)
@@ -1587,7 +1588,7 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
     if: status = 0
         status: lm_trans_emit_thread_handler_prologue(file, function, body_indent)
     if: status = 0
-        status: lm_trans_emit_array_param_aliases(file, function, body_indent)
+        status: lm_trans_emit_array_param_aliases(file, function, body_indent, namespace_)
     if: status = 0 && function\is_struct_return
         status: lm_trans_emit_fm_result_prologue(file, function\c_name, body_indent)
     if: status = 0

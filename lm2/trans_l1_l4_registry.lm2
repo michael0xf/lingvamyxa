@@ -56,10 +56,7 @@ fn: lm_trans_layout_class_requires_pointer_field (const: (LmTransNamespace: name
     class_text: lm_trans_l4_text_view_new(class_name)
     if: class_text = 0
         return: 0
-    if: lm_trans_namespace_type_is_structural(namespace_, class_text)
-        result: 1
-    else:
-        result: lm_trans_namespace_class_is_reference_base(namespace_, class_text)
+    result: lm_trans_layout_type_implicit_address_depth(class_text, namespace_) != 0U
     lm_trans_l4_text_view_delete(@ class_text)
 return: result
 
@@ -1161,7 +1158,7 @@ fn: lm_trans_l4_is_function_pointer_type (const: (LmTransNamespace: namespace_);
     lm_trans_l4_text_view_delete(@ name_text)
 return: found
 
-fn: lm_trans_emit_abi_typed_name (FILE: file; const: @(char class_name); size_t: address_depth; int: is_const; const: @(char name)) int
+fn: lm_trans_emit_abi_typed_name (FILE: file; const: @(char class_name); size_t: address_depth; int: is_const; const: @(char name); const: (LmTransNamespace: namespace_)) int
     size_t: i
     size_t: effective_address_depth
     LmP0Text: class_text
@@ -1174,7 +1171,7 @@ fn: lm_trans_emit_abi_typed_name (FILE: file; const: @(char class_name); size_t:
     class_text: lm_trans_l4_text_view_new(class_name)
     if: class_text = 0
         return: 1
-    effective_address_depth: lm_trans_effective_address_depth(class_text, address_depth)
+    effective_address_depth: lm_trans_effective_address_depth(class_text, address_depth, namespace_)
     if: lm_trans_emit_type_name(file, class_text) != 0
         lm_trans_l4_text_view_delete(@ class_text)
         return: 1
@@ -1460,7 +1457,7 @@ fn: lm_trans_collect_abi_params (@: LmTransAbiParam params; size_t: capacity; @:
     lm_trans_l4_text_view_delete(@ param_text)
 return: status
 
-fn: lm_trans_emit_abi_params (FILE: file; @: LmTransAbiParam params; size_t: count) int
+fn: lm_trans_emit_abi_params (FILE: file; @: LmTransAbiParam params; size_t: count; const: (LmTransNamespace: namespace_)) int
     size_t: i
 
     if: file = 0 || (params = 0 && count != 0U)
@@ -1473,7 +1470,7 @@ fn: lm_trans_emit_abi_params (FILE: file; @: LmTransAbiParam params; size_t: cou
     while: i < count
         if: i != 0U && lm_trans_put(file, ", ") != 0
             return: 1
-        if: lm_trans_emit_abi_typed_name(file, params[i]\class_name, params[i]\address_depth, params[i]\is_const, params[i]\name) != 0
+        if: lm_trans_emit_abi_typed_name(file, params[i]\class_name, params[i]\address_depth, params[i]\is_const, params[i]\name, namespace_) != 0
             return: 1
         i: i + 1U
 return: 0
@@ -1557,7 +1554,7 @@ fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: (LmTransNamespace: names
             lm_trans_l4_text_view_delete(@ name_text)
             lm_trans_ptr_stack_delete(@ names)
             return: 1
-        if: lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_typed_name(file, target, address_depth, const_flag != 0U, name) != 0 || lm_trans_put(file, ";\n") != 0
+        if: lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_typed_name(file, target, address_depth, const_flag != 0U, name, namespace_) != 0 || lm_trans_put(file, ";\n") != 0
             lm_trans_l4_text_view_delete(@ name_text)
             lm_trans_ptr_stack_delete(@ names)
             return: 1
@@ -1683,7 +1680,7 @@ fn: lm_trans_emit_abi_return_type (FILE: file; const: (LmTransNamespace: namespa
     if: status != 0
         return: 1
 
-return: lm_trans_emit_abi_typed_name(file, class_name, address_depth, is_const, 0)
+return: lm_trans_emit_abi_typed_name(file, class_name, address_depth, is_const, 0, namespace_)
 
 fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: namespace_); const: @(char name); const: @(char error_name)) int
     @: LmTransAbiParam params
@@ -1736,7 +1733,7 @@ fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: names
         if: status = 0 && param_count != 0U && lm_trans_put(file, ", ") != 0
             status: 1
         ---
-    if: status = 0 && (has_thread_context = 0 || param_count != 0U) && lm_trans_emit_abi_params(file, params, param_count) != 0
+    if: status = 0 && (has_thread_context = 0 || param_count != 0U) && lm_trans_emit_abi_params(file, params, param_count, namespace_) != 0
         status: 1
     if: status = 0 && lm_trans_put(file, ");\n") != 0
         status: 1

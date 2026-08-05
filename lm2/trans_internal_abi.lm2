@@ -255,6 +255,7 @@ fn: lm_trans_emit_abi_params (
     FILE: file
     @: LmTransAbiParam params
     size_t: count
+    const: LmTransNamespace: namespace_
 ) int
 
 fn: lm_trans_emit_abi_return_type (
@@ -281,6 +282,7 @@ fn: lm_trans_emit_type_name (
 fn: lm_trans_emit_type_node (
     FILE: file
     const: LmP0Node: type_node
+    const: LmTransNamespace: namespace_
 ) int
 
 fn: lm_trans_head_can_declare_storage (
