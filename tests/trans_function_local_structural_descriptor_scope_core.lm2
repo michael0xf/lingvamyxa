@@ -87,6 +87,7 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     const: LmTransDescriptorField: descriptor_field
     FILE: output
     int: status
+    int: typedef_projection_entered
 
     source: "fn: inspectLocal (int: seed) int\n    LocalRecord:\n        answer: seed\n    return: LocalRecord\\answer\nend: inspectLocal\n"
     document: 0
@@ -98,11 +99,17 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     emitted_descriptor: 0
     output: 0
     status: 0
+    typedef_projection_entered: 0
 
     lm_trans_registry_destroy()
     if: lm_trans_registry_load_for_source("tests/trans_function_local_structural_descriptor_scope_core.lm2") != 0
         return: 1
     lm_trans_registry\view_mode: 2
+    if: lm_trans_typedef_projection_output_enter() != 0
+        status: 1
+    else:
+        typedef_projection_entered: 1
+    ---
     if: lm_p0_parse_string(source, @ document) != 0 || document = 0
         status: 1
     namespace_: lm_trans_namespace_new()
@@ -132,7 +139,7 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     if: namespace_ != 0
         lm_trans_namespace_leave_scope(namespace_)
 
-    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, local_name) != 0 || lm_trans_top_level_named_structure_typedef_emitted(namespace_, local_name) = 0)
+    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, local_name) != 0 || lm_trans_top_level_named_structure_typedef_emitted(namespace_, local_name) = 0 || lm_trans_namespace_registry_lookup(namespace_, local_name, "typedef.emitted") != 0)
         status: 1
 
     if: namespace_ != 0
@@ -156,5 +163,7 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     lm_trans_top_level_item_delete(item)
     if: document != 0
         lm_p0_document_destroy(document)
+    if: typedef_projection_entered && lm_trans_typedef_projection_output_leave() != 0
+        status: 1
     lm_trans_registry_destroy()
 return: status

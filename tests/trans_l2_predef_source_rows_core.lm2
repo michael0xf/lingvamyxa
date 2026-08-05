@@ -219,6 +219,7 @@ fn: lm_test_l2_predef_source_rows_core () int
     long: typedef_position
     int: bootstrap_loaded
     int: status
+    int: typedef_projection_entered
 
     source_path: "tests/trans_l2_predef_import.lm2"
     document: 0
@@ -234,6 +235,7 @@ fn: lm_test_l2_predef_source_rows_core () int
     prelude_file: 0
     bootstrap_loaded: 0
     status: 0
+    typedef_projection_entered: 0
 
     if: lm_trans_registry_load_for_source(source_path) != 0 || lm_p0_parse_file(source_path, @ document) != 0 || document = 0
         if: document != 0
@@ -285,6 +287,12 @@ fn: lm_test_l2_predef_source_rows_core () int
     lm_trans_l2_table_materialization_suppression_depth: 0
     lm_trans_l2_conditional_import_depth: 0
     lm_trans_l2_conditional_emission_depth: 0
+    if: status = 0
+        if: lm_trans_typedef_projection_output_enter() != 0
+            status: 1
+        else:
+            typedef_projection_entered: 1
+        ---
     if: status = 0 && (lm_trans_declared_import_paths = 0 || lm_trans_declared_import_documents = 0 || namespace_ = 0 || lm_trans_namespace_attach_registry(namespace_) != 0 || lm_trans_declare_l2_import_root(namespace_, root, 1) != 0)
         status: 1
 
@@ -333,7 +341,7 @@ fn: lm_test_l2_predef_source_rows_core () int
         status: 1
     if: status = 0
         typedef_position: c.ftell(prelude_file)
-        if: typedef_position < 0L || lm_trans_emit_l4_function_pointer_type_name(prelude_file, namespace_, "LmTestPredefEquals", "functionPointerType") != 0 || c.ftell(prelude_file) != typedef_position
+        if: typedef_position < 0L || lm_trans_typedef_projection_has_cstr("LmTestPredefEquals") = 0 || lm_trans_emit_l4_function_pointer_type_name(prelude_file, namespace_, "LmTestPredefEquals", "functionPointerType") != 0 || c.ftell(prelude_file) != typedef_position
             status: 1
     ---
     if: status = 0 && lm_test_l2_predef_metadata_is_exact() = 0
@@ -350,6 +358,8 @@ fn: lm_test_l2_predef_source_rows_core () int
     lm_trans_import_documents_drain(lm_trans_declared_import_documents)
     lm_trans_ptr_stack_delete(@ lm_trans_declared_import_documents)
     lm_trans_ptr_stack_delete(@ lm_trans_declared_import_paths)
+    if: typedef_projection_entered && lm_trans_typedef_projection_output_leave() != 0
+        status: 1
     lm_p0_document_destroy(document)
     lm_trans_registry_destroy()
 return: status

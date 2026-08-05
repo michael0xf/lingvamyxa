@@ -18,8 +18,197 @@ int: lm_trans_l2_table_materialization_suppression_depth
 int: lm_trans_l2_conditional_import_depth
 int: lm_trans_l2_executable_statement_depth
 int: lm_trans_l2_conditional_emission_depth
+LmOwnPtrStack: lm_trans_typedef_projection_outputs
 
 LmTransRegistry: lm_trans_registry
+
+sub: lm_trans_typedef_projection_output_delete (LmOwnPtrStack: output)
+    LmOwnPtrStack: scope
+
+    if: output = 0
+        return
+    while: output\count > 0U
+        scope: cast: (LmOwnPtrStack) lm_own_ptr_stack_pop(output)
+        lm_trans_ptr_stack_delete(@ scope)
+    lm_trans_ptr_stack_delete(@ output)
+end: lm_trans_typedef_projection_output_delete
+
+sub: lm_trans_typedef_projection_outputs_delete_if_empty ()
+    LmOwnPtrStack: output
+
+    if: lm_trans_typedef_projection_outputs = 0 || lm_trans_typedef_projection_outputs\count != 0U
+        return
+    output: lm_trans_typedef_projection_outputs
+    lm_trans_typedef_projection_outputs: 0
+    lm_trans_ptr_stack_delete(@ output)
+end: lm_trans_typedef_projection_outputs_delete_if_empty
+
+fn: lm_trans_typedef_projection_current_output () LmOwnPtrStack
+    if: lm_trans_typedef_projection_outputs = 0
+        return: 0
+return: cast: (LmOwnPtrStack) lm_own_ptr_stack_top(lm_trans_typedef_projection_outputs)
+
+fn: lm_trans_typedef_projection_has_slice (const: @(char name); size_t: length) int
+    LmOwnPtrStack: output
+    const: LmOwnPtrStack: scope
+    const: @: char item
+    size_t: scope_index
+    size_t: item_index
+
+    if: name = 0 || length = 0U
+        return: 0
+    output: lm_trans_typedef_projection_current_output()
+    if: output = 0
+        return: 0
+
+    scope_index: output\count
+    while: scope_index > 0U
+        scope_index: scope_index - 1U
+        scope: cast: (const: LmOwnPtrStack) lm_own_ptr_stack_at(output, scope_index)
+        item_index: 0U
+        if: scope != 0
+            while: item_index < scope\count
+                item: cast: (const: @: char) lm_own_ptr_stack_at(scope, item_index)
+                if: item != 0 && c.strlen(item) = length && c.memcmp(item, name, length) = 0
+                    return: 1
+                item_index: item_index + 1U
+        ---
+return: 0
+
+fn: lm_trans_typedef_projection_mark_slice (const: @(char name); size_t: length) int
+    LmOwnPtrStack: output
+    LmOwnPtrStack: scope
+    @: char copy
+
+    if: name = 0 || length = 0U
+        return: 1
+    output: lm_trans_typedef_projection_current_output()
+    if: output = 0
+        return: 1
+    scope: cast: (LmOwnPtrStack) lm_own_ptr_stack_top(output)
+    if: scope = 0
+        return: 1
+    if: lm_trans_typedef_projection_has_slice(name, length)
+        return: 0
+
+    copy: lm_own_copy_bytes(name, length)
+    if: copy = 0
+        return: 1
+    if: lm_own_ptr_stack_push(scope, copy) != 0
+        lm_own_delete(copy, 0)
+        return: 1
+return: 0
+
+fn: lm_trans_typedef_projection_output_enter () int
+    LmOwnPtrStack: output
+    LmOwnPtrStack: base_scope
+    int: created_outputs
+
+    output: lm_trans_ptr_stack_new(0)
+    base_scope: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    if: output = 0 || base_scope = 0
+        lm_trans_ptr_stack_delete(@ base_scope)
+        lm_trans_ptr_stack_delete(@ output)
+        return: 1
+    if: lm_own_ptr_stack_push(output, base_scope) != 0
+        lm_trans_ptr_stack_delete(@ base_scope)
+        lm_trans_ptr_stack_delete(@ output)
+        return: 1
+    base_scope: 0
+
+    created_outputs: 0
+    if: lm_trans_typedef_projection_outputs = 0
+        lm_trans_typedef_projection_outputs: lm_trans_ptr_stack_new(0)
+        created_outputs: 1
+    if: lm_trans_typedef_projection_outputs = 0 || lm_own_ptr_stack_push(lm_trans_typedef_projection_outputs, output) != 0
+        lm_trans_typedef_projection_output_delete(output)
+        if: created_outputs && lm_trans_typedef_projection_outputs != 0
+            lm_trans_typedef_projection_outputs_delete_if_empty()
+        ---
+        return: 1
+return: 0
+
+fn: lm_trans_typedef_projection_output_leave () int
+    LmOwnPtrStack: output
+    int: balanced
+
+    if: lm_trans_typedef_projection_outputs = 0 || lm_trans_typedef_projection_outputs\count = 0U
+        return: 1
+    output: cast: (LmOwnPtrStack) lm_own_ptr_stack_pop(lm_trans_typedef_projection_outputs)
+    balanced: output != 0 && output\count = 1U
+    lm_trans_typedef_projection_output_delete(output)
+    lm_trans_typedef_projection_outputs_delete_if_empty()
+    if: balanced = 0
+        return: 1
+return: 0
+
+fn: lm_trans_typedef_projection_conditional_enter () int
+    LmOwnPtrStack: output
+    LmOwnPtrStack: scope
+
+    output: lm_trans_typedef_projection_current_output()
+    if: output = 0
+        return: 1
+    scope: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    if: scope = 0
+        return: 1
+    if: lm_own_ptr_stack_push(output, scope) != 0
+        lm_trans_ptr_stack_delete(@ scope)
+        return: 1
+return: 0
+
+fn: lm_trans_typedef_projection_conditional_leave () int
+    LmOwnPtrStack: output
+    LmOwnPtrStack: scope
+
+    output: lm_trans_typedef_projection_current_output()
+    if: output = 0 || output\count <= 1U
+        return: 1
+    scope: cast: (LmOwnPtrStack) lm_own_ptr_stack_pop(output)
+    lm_trans_ptr_stack_delete(@ scope)
+return: 0
+
+fn: lm_trans_typedef_projection_has_text (const: (LmP0Text: name)) int
+    LmP0Text: payload
+    int: found
+
+    if: name = 0
+        return: 0
+    payload: lm_trans_text_from_cstr("")
+    if: payload = 0
+        return: 0
+    if: lm_trans_identifier_payload(name, payload) = 0
+        lm_trans_text_ref_destroy(@ payload)
+        return: 0
+    found: lm_trans_typedef_projection_has_slice(payload\data, payload\length)
+    lm_trans_text_ref_destroy(@ payload)
+return: found
+
+fn: lm_trans_typedef_projection_has_cstr (const: @(char name)) int
+    if: name = 0
+        return: 0
+return: lm_trans_typedef_projection_has_slice(name, c.strlen(name))
+
+fn: lm_trans_typedef_projection_mark_text (const: (LmP0Text: name)) int
+    LmP0Text: payload
+    int: status
+
+    if: name = 0
+        return: 1
+    payload: lm_trans_text_from_cstr("")
+    if: payload = 0
+        return: 1
+    if: lm_trans_identifier_payload(name, payload) = 0
+        lm_trans_text_ref_destroy(@ payload)
+        return: 1
+    status: lm_trans_typedef_projection_mark_slice(payload\data, payload\length)
+    lm_trans_text_ref_destroy(@ payload)
+return: status
+
+fn: lm_trans_typedef_projection_mark_cstr (const: @(char name)) int
+    if: name = 0
+        return: 1
+return: lm_trans_typedef_projection_mark_slice(name, c.strlen(name))
 
 sub: lm_trans_import_documents_drain (LmOwnPtrStack: documents)
     LmP0Document: document
@@ -634,30 +823,6 @@ fn: lm_trans_registry_join_table (const: (LmP0Text: source_table); const: (LmP0T
     ---
     lm_trans_text_ref_destroy(@ source_name)
     lm_trans_text_ref_destroy(@ target_name)
-return: status
-
-fn: lm_trans_registry_push_row_atoms (const: (LmP0Text: table_atom); const: (LmP0Text: key_atom); const: (LmP0Text: payload_atom)) int
-    LmP0Text: table_value
-    LmP0Text: key_value
-    LmP0Text: payload_value
-    int: status
-
-    if: lm_trans_registry_payload_is_null(payload_atom) != 0
-        return: 0
-    table_value: lm_trans_text_ref_new_cstr("")
-    key_value: lm_trans_text_ref_new_cstr("")
-    payload_value: lm_trans_text_ref_new_cstr("")
-    if: table_value = 0 || key_value = 0 || payload_value = 0
-        lm_trans_text_ref_destroy(@ table_value)
-        lm_trans_text_ref_destroy(@ key_value)
-        lm_trans_text_ref_destroy(@ payload_value)
-        return: -1
-    status: -1
-    if: lm_trans_registry_identifier_value(table_atom, table_value) != 0 && lm_trans_registry_identifier_value(key_atom, key_value) != 0 && lm_trans_registry_literal_value(payload_atom, payload_value) != 0
-        status: lm_trans_registry_push_row_values(table_value, key_value, payload_value)
-    lm_trans_text_ref_destroy(@ table_value)
-    lm_trans_text_ref_destroy(@ key_value)
-    lm_trans_text_ref_destroy(@ payload_value)
 return: status
 
 fn: lm_trans_registry_serialization_codec_value (const: (LmP0Text: key)) const: @: char

@@ -353,6 +353,27 @@ fn: lm_trans_emit_named_structure_typedef (
     const: LmTransNamespace: namespace_
 ) int
 
+fn: lm_trans_typedef_projection_output_enter () int
+fn: lm_trans_typedef_projection_output_leave () int
+fn: lm_trans_typedef_projection_conditional_enter () int
+fn: lm_trans_typedef_projection_conditional_leave () int
+
+fn: lm_trans_typedef_projection_has_text (
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_typedef_projection_has_cstr (
+    const: @: char name
+) int
+
+fn: lm_trans_typedef_projection_mark_text (
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_typedef_projection_mark_cstr (
+    const: @: char name
+) int
+
 fn: lm_trans_top_level_named_structure_typedef_emitted (
     const: LmTransNamespace: namespace_
     const: LmP0Text: name
