@@ -6487,13 +6487,13 @@ fn: lm_trans_statement_stack_schedule_named_structure (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    int: had_layout
+    int: typedef_emitted
 
     c.LM_UNUSED(stack)
-    had_layout: lm_trans_layout_backend_value(namespace_, frame\head) != 0
+    typedef_emitted: lm_trans_top_level_named_structure_typedef_emitted(namespace_, frame\head)
     if: lm_trans_declare_named_structure_layout(namespace_, frame) != 0
         return: 1
-    if: had_layout = 0 && lm_trans_emit_named_structure_typedef(file, frame, indent, namespace_) != 0
+    if: typedef_emitted = 0 && lm_trans_emit_named_structure_typedef(file, frame, indent, namespace_) != 0
         return: 1
 return: lm_trans_emit_named_structure_storage(file, frame, indent, namespace_, "")
 

@@ -10271,6 +10271,20 @@ current physical `merge:` path attach an owned normalized `structuralFields`
 view to the descriptor slot of the namespace symbol that the path already
 declared. They do not create a second descriptor symbol.
 
+Function-local named structures are no longer declared by a separate
+function-body prepass during the module declaration phase. When their hosted C
+typedefs must precede function bodies, the prelude emitter performs one bounded
+two-pass replay inside a temporary namespace scope: it first declares the
+function parameters and the directly contained named-structure declarations,
+then emits their typedefs, and finally leaves that scope. Descriptors created by
+this replay do not survive into the later function-body phase; the body creates
+its own lexical bindings when it is emitted.
+
+This change removes inter-phase descriptor lifetime only. At this migration
+stage the replay still invokes the legacy Registry dual-write and
+Registry-backed typedef-deduplication paths, whose state may outlive the
+temporary namespace scope.
+
 Both paths still simultaneously emit the legacy class/layout/field Registry
 relations and the hosted C layout/storage projection. This is deliberate
 dual-write during migration: none of those implicit Registry rows has yet been

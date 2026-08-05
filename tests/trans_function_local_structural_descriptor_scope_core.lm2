@@ -1,0 +1,157 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_lmx_message_thread_run_entry(lm_test_function_local_structural_descriptor_scope_core);
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_function_local_root_item (const: (LmP0Document: document)) LmTransTopLevelItem
+    const: LmP0Node: root
+    const: LmP0Field: field
+
+    root: lm_p0_document_root(document)
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        return: 0
+    field: lm_trans_l2_structure_first_present_field(root\as\structure)
+    if: field = 0 || field\value = 0 || lm_trans_l2_structure_next_present_field(field) != 0
+        return: 0
+return: lm_trans_top_level_item_lowered_new(field\value)
+
+fn: lm_test_function_local_named_frame (
+    const: LmTransFunctionHeader: function
+    const: LmTransNamespace: namespace_
+) const: LmP0Frame
+    const: LmP0Field: field
+    const: LmP0Node: node
+
+    if: function = 0
+        return: 0
+    field: function\body_start
+    while: field != 0
+        node: field\value
+        if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_looks_named_structure_layout_declaration(node\as\frame, namespace_)
+            return: node\as\frame
+        field: field\next
+return: 0
+
+fn: lm_test_file_substring_count (FILE: file; const: @(char needle)) size_t
+    @: char buffer
+    long: length
+    size_t: count
+    size_t: i
+    size_t: needle_length
+
+    if: file = 0 || needle = 0 || c.fflush(file) != 0 || c.fseek(file, 0L, c.SEEK_END) != 0
+        return: 0U
+    length: c.ftell(file)
+    if: length < 0L || c.fseek(file, 0L, c.SEEK_SET) != 0
+        return: 0U
+    buffer: lm_own_new_zero((cast: size_t length) + 1U)
+    if: buffer = 0
+        return: 0U
+    if: length != 0L && c.fread(buffer, 1U, (cast: size_t length), file) != (cast: size_t length)
+        lm_own_delete(buffer, 0)
+        return: 0U
+
+    needle_length: c.strlen(needle)
+    count: 0U
+    i: 0U
+    while: needle_length != 0U && i + needle_length <= (cast: size_t length)
+        if: c.memcmp(buffer + i, needle, needle_length) = 0
+            count: count + 1U
+            i: i + needle_length
+        else:
+            i: i + 1U
+        ---
+    lm_own_delete(buffer, 0)
+return: count
+
+fn: lm_test_function_local_structural_descriptor_scope_core () int
+    const: @(char source)
+    LmP0Document: document
+    LmTransTopLevelItem: item
+    LmTransNamespace: namespace_
+    LmP0Text: local_name
+    const: LmP0Frame: local_frame
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptor: emitted_descriptor
+    const: LmTransDescriptorField: descriptor_field
+    FILE: output
+    int: status
+
+    source: "fn: inspectLocal (int: seed) int\n    LocalRecord:\n        answer: seed\n    return: LocalRecord\\answer\nend: inspectLocal\n"
+    document: 0
+    item: 0
+    namespace_: 0
+    local_name: 0
+    local_frame: 0
+    descriptor: 0
+    emitted_descriptor: 0
+    output: 0
+    status: 0
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_load_for_source("tests/trans_function_local_structural_descriptor_scope_core.lm2") != 0
+        return: 1
+    lm_trans_registry\view_mode: 2
+    if: lm_p0_parse_string(source, @ document) != 0 || document = 0
+        status: 1
+    if: status = 0
+        item: lm_test_function_local_root_item(document)
+    namespace_: lm_trans_namespace_new()
+    local_name: lm_trans_text_from_cstr("LocalRecord")
+    output: c.tmpfile()
+    if: status = 0 && (item = 0 || item\function = 0 || namespace_ = 0 || local_name = 0 || output = 0 || lm_trans_namespace_attach_registry(namespace_) != 0 || lm_trans_top_level_declare_function(namespace_, item) != 0)
+        status: 1
+
+    if: status = 0 && lm_trans_namespace_descriptor(namespace_, local_name) != 0
+        status: 1
+
+    if: namespace_ != 0
+        lm_trans_namespace_enter_scope(namespace_)
+    if: status = 0 && (lm_trans_top_level_declare_function_params(namespace_, item\function) != 0 || lm_trans_top_level_declare_function_named_structures_in_scope(namespace_, item\function) != 0)
+        status: 1
+    descriptor: lm_trans_namespace_descriptor(namespace_, local_name)
+    descriptor_field: lm_trans_descriptor_structural_field(descriptor, "answer")
+    if: status = 0 && (descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 1U || descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0)
+        status: 1
+    if: status = 0 && lm_trans_top_level_emit_function_named_structure_typedefs_in_scope(output, namespace_, item\function) != 0
+        status: 1
+    emitted_descriptor: lm_trans_namespace_descriptor(namespace_, local_name)
+    if: status = 0 && emitted_descriptor != descriptor
+        status: 1
+    if: namespace_ != 0
+        lm_trans_namespace_leave_scope(namespace_)
+
+    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, local_name) != 0 || lm_trans_top_level_named_structure_typedef_emitted(namespace_, local_name) = 0)
+        status: 1
+
+    if: namespace_ != 0
+        lm_trans_namespace_enter_scope(namespace_)
+    if: status = 0 && lm_trans_top_level_declare_function_params(namespace_, item\function) != 0
+        status: 1
+    if: status = 0
+        local_frame: lm_test_function_local_named_frame(item\function, namespace_)
+    if: status = 0 && (local_frame = 0 || lm_trans_statement_stack_schedule_named_structure(output, 0, local_frame, 1U, namespace_) != 0 || lm_trans_namespace_descriptor(namespace_, local_name) = 0)
+        status: 1
+    if: namespace_ != 0
+        lm_trans_namespace_leave_scope(namespace_)
+
+    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, local_name) != 0 || lm_test_file_substring_count(output, "typedef struct LocalRecord") != 1U || lm_test_file_substring_count(output, "LocalRecord *lm_LocalRecord") != 1U)
+        status: 1
+
+    if: output != 0
+        c.fclose(output)
+    lm_trans_text_ref_destroy(@ local_name)
+    lm_trans_namespace_delete(namespace_)
+    lm_trans_top_level_item_delete(item)
+    if: document != 0
+        lm_p0_document_destroy(document)
+    lm_trans_registry_destroy()
+return: status

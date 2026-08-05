@@ -79,30 +79,6 @@ fn: lm_trans_top_level_declare_function_params (
         index: index + 1U
 return: status
 
-fn: lm_trans_top_level_declare_function_body_named_structures (
-    LmTransNamespace: namespace_
-    const: LmTransFunctionHeader: function
-) int
-    const: LmP0Field: field
-    const: LmP0Node: node
-    int: status
-
-    if: namespace_ = 0 || function = 0 || function\is_descriptor_only
-        return: 0
-
-    lm_trans_namespace_enter_scope(namespace_)
-    status: lm_trans_top_level_declare_function_params(namespace_, function)
-    field: function\body_start
-    while: status = 0 && field != 0
-        node: field\value
-        if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_looks_named_structure_layout_declaration(node\as\frame, namespace_)
-            if: lm_trans_declare_named_structure_layout(namespace_, node\as\frame) != 0
-                status: 1
-        ---
-        field: field\next
-    lm_trans_namespace_leave_scope(namespace_)
-return: status
-
 fn: lm_trans_function_thread_context_profile (
     const: LmTransNamespace: namespace_
     const: LmP0Text: name
@@ -148,8 +124,6 @@ fn: lm_trans_function_apply_thread_context_profile (
 return: lm_trans_function_thread_context_profile(namespace_, function\name, function\is_external, @ function\has_thread_context)
 
 fn: lm_trans_top_level_declare_function (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    int: status
-
     if: item = 0 || item\function = 0
         return: 1
 
@@ -172,10 +146,7 @@ fn: lm_trans_top_level_declare_function (LmTransNamespace: namespace_; const: (L
             return: 1
         ---
     ---
-    status: lm_trans_top_level_declare_generated_return_class(namespace_, item\function)
-    if: status = 0
-        status: lm_trans_top_level_declare_function_body_named_structures(namespace_, item\function)
-return: status
+return: lm_trans_top_level_declare_generated_return_class(namespace_, item\function)
 
 fn: lm_trans_top_level_is_predefined_function_descriptor (
     const: (LmTransNamespace: namespace_)
@@ -197,7 +168,6 @@ fn: lm_trans_top_level_is_predefined_function_descriptor (
 return: 1
 
 fn: lm_trans_top_level_declare_function_compatible (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    int: status
     int: predefined_function
 
     if: item = 0 || item\function = 0
@@ -229,10 +199,7 @@ fn: lm_trans_top_level_declare_function_compatible (LmTransNamespace: namespace_
             return: 1
         ---
     ---
-    status: lm_trans_top_level_declare_generated_return_class(namespace_, item\function)
-    if: status = 0
-        status: lm_trans_top_level_declare_function_body_named_structures(namespace_, item\function)
-return: status
+return: lm_trans_top_level_declare_generated_return_class(namespace_, item\function)
 
 fn: lm_trans_top_level_emit_l1 (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     c.LM_UNUSED(namespace_)
@@ -1164,35 +1131,70 @@ fn: lm_trans_top_level_emit_named_structure_typedef (FILE: file; LmTransNamespac
         return: 1
 return: lm_trans_top_level_emit_named_structure_typedef_once(file, namespace_, item\frame, 0)
 
+fn: lm_trans_top_level_declare_function_named_structures_in_scope (
+    LmTransNamespace: namespace_
+    const: LmTransFunctionHeader: function
+) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+
+    if: namespace_ = 0 || function = 0 || function\is_descriptor_only
+        return: 0
+
+    field: function\body_start
+    while: field != 0
+        node: field\value
+        if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_looks_named_structure_layout_declaration(node\as\frame, namespace_)
+            if: lm_trans_declare_named_structure_layout(namespace_, node\as\frame) != 0
+                return: 1
+        ---
+        field: field\next
+return: 0
+
+fn: lm_trans_top_level_emit_function_named_structure_typedefs_in_scope (
+    FILE: file
+    LmTransNamespace: namespace_
+    const: LmTransFunctionHeader: function
+) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    int: emitted
+    int: emitted_any
+
+    if: file = 0 || namespace_ = 0 || function = 0 || function\is_descriptor_only
+        return: 0
+
+    emitted_any: 0
+    field: function\body_start
+    while: field != 0
+        node: field\value
+        if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_looks_named_structure_layout_declaration(node\as\frame, namespace_)
+            if: emitted_any && lm_trans_put(file, "\n") != 0
+                return: 1
+            if: lm_trans_top_level_emit_named_structure_typedef_once(file, namespace_, node\as\frame, @ emitted) != 0
+                return: 1
+            if: emitted
+                emitted_any: 1
+        ---
+        field: field\next
+return: 0
+
 fn: lm_trans_top_level_emit_function_named_structure_typedefs (
     FILE: file
     LmTransNamespace: namespace_
     const: LmTransTopLevelItem: item
 ) int
-    const: LmP0Field: field
-    const: LmP0Node: node
     int: status
-    int: emitted
-    int: emitted_any
 
     if: file = 0 || namespace_ = 0 || item = 0 || item\function = 0 || item\function\is_descriptor_only
         return: 0
 
     lm_trans_namespace_enter_scope(namespace_)
     status: lm_trans_top_level_declare_function_params(namespace_, item\function)
-    emitted_any: 0
-    field: item\function\body_start
-    while: status = 0 && field != 0
-        node: field\value
-        if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_looks_named_structure_layout_declaration(node\as\frame, namespace_)
-            if: emitted_any && lm_trans_put(file, "\n") != 0
-                status: 1
-            if: status = 0 && lm_trans_top_level_emit_named_structure_typedef_once(file, namespace_, node\as\frame, @ emitted) != 0
-                status: 1
-            if: status = 0 && emitted
-                emitted_any: 1
-        ---
-        field: field\next
+    if: status = 0
+        status: lm_trans_top_level_declare_function_named_structures_in_scope(namespace_, item\function)
+    if: status = 0
+        status: lm_trans_top_level_emit_function_named_structure_typedefs_in_scope(file, namespace_, item\function)
     lm_trans_namespace_leave_scope(namespace_)
 return: status
 

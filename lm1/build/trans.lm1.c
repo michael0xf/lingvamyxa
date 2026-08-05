@@ -1175,6 +1175,7 @@ static int lm_trans_emit_array_declaration_with_qualifier(struct LmMessageThread
 static int lm_trans_frame_looks_named_structure_layout_declaration(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_declare_named_structure_layout(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmP0Frame *frame);
 static int lm_trans_emit_named_structure_typedef(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, unsigned indent, const LmTransNamespace *namespace_);
+static int lm_trans_top_level_named_structure_typedef_emitted(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *name);
 static int lm_trans_emit_named_structure_storage(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_, const char *qualifier);
 static int lm_trans_declare_merge_named_structure_layout(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmP0Frame *frame);
 static int lm_trans_emit_merge_named_structure_typedef(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, unsigned indent, const LmTransNamespace *namespace_);
@@ -1345,6 +1346,7 @@ static int lm_trans_declare_registry_fn_descriptors(struct LmMessageThread *lm_l
 static int lm_trans_emit_root_sequence(struct LmMessageThread *lm_lmx_message_thread, FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_l4_payload_pointer_bindings_init(struct LmMessageThread *lm_lmx_message_thread);
 static void lm_trans_l4_payload_pointer_bindings_destroy(struct LmMessageThread *lm_lmx_message_thread);
+
 
 
 
@@ -2978,7 +2980,6 @@ static LmP0Structure * lm_trans_p0_structure_view_new(struct LmMessageThread *lm
 static const LmP0Frame * lm_trans_top_level_item_frame(struct LmMessageThread *lm_lmx_message_thread, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_declare_generated_return_class(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransFunctionHeader *function);
 static int lm_trans_top_level_declare_function_params(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransFunctionHeader *function);
-static int lm_trans_top_level_declare_function_body_named_structures(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransFunctionHeader *function);
 static int lm_trans_function_thread_context_profile(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *name, int is_external, int *out_has_thread_context);
 static int lm_trans_function_apply_thread_context_profile(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, LmTransFunctionHeader *function);
 static int lm_trans_top_level_declare_function(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
@@ -3060,6 +3061,8 @@ static int lm_trans_top_level_named_structure_typedef_emitted(struct LmMessageTh
 static int lm_trans_top_level_mark_named_structure_typedef_emitted(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *name);
 static int lm_trans_top_level_emit_named_structure_typedef_once(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransNamespace *namespace_, const LmP0Frame *frame, int *out_emitted);
 static int lm_trans_top_level_emit_named_structure_typedef(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
+static int lm_trans_top_level_declare_function_named_structures_in_scope(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransFunctionHeader *function);
+static int lm_trans_top_level_emit_function_named_structure_typedefs_in_scope(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransNamespace *namespace_, const LmTransFunctionHeader *function);
 static int lm_trans_top_level_emit_function_named_structure_typedefs(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_function_body_has_named_structure_declaration(struct LmMessageThread *lm_lmx_message_thread, const LmTransFunctionHeader *function);
 static int lm_trans_top_level_emit_named_structure_storage(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
@@ -26216,13 +26219,13 @@ static int lm_trans_statement_stack_schedule_else(struct LmMessageThread *lm_lmx
 
 static int lm_trans_statement_stack_schedule_named_structure(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_) {
     (void)lm_lmx_message_thread;
-    int had_layout;
+    int typedef_emitted;
     LM_UNUSED(stack);
-    had_layout = lm_trans_layout_backend_value(lm_lmx_message_thread, namespace_, frame -> head) != 0;
+    typedef_emitted = lm_trans_top_level_named_structure_typedef_emitted(lm_lmx_message_thread, namespace_, frame -> head);
     if (lm_trans_declare_named_structure_layout(lm_lmx_message_thread, namespace_, frame) != 0) {
         return 1;
     }
-    if (had_layout == 0 && lm_trans_emit_named_structure_typedef(lm_lmx_message_thread, file, frame, indent, namespace_) != 0) {
+    if (typedef_emitted == 0 && lm_trans_emit_named_structure_typedef(lm_lmx_message_thread, file, frame, indent, namespace_) != 0) {
         return 1;
     }
     return lm_trans_emit_named_structure_storage(lm_lmx_message_thread, file, frame, indent, namespace_, "");
@@ -30259,30 +30262,6 @@ static int lm_trans_top_level_declare_function_params(struct LmMessageThread *lm
     return status;
 }
 
-static int lm_trans_top_level_declare_function_body_named_structures(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransFunctionHeader *function) {
-    (void)lm_lmx_message_thread;
-    const LmP0Field * field;
-    const LmP0Node * node;
-    int status;
-    if (namespace_ == 0 || function == 0 || function -> is_descriptor_only) {
-        return 0;
-    }
-    lm_trans_namespace_enter_scope(lm_lmx_message_thread, namespace_);
-    status = lm_trans_top_level_declare_function_params(lm_lmx_message_thread, namespace_, function);
-    field = function -> body_start;
-    while (status == 0 && field != 0) {
-        node = field -> value;
-        if (node != 0 && node -> kind == LM_P0_NODE_FRAME && lm_trans_frame_looks_named_structure_layout_declaration(lm_lmx_message_thread, node -> as -> frame, namespace_)) {
-            if (lm_trans_declare_named_structure_layout(lm_lmx_message_thread, namespace_, node -> as -> frame) != 0) {
-                status = 1;
-            }
-        }
-        field = field -> next;
-    }
-    lm_trans_namespace_leave_scope(lm_lmx_message_thread, namespace_);
-    return status;
-}
-
 static int lm_trans_function_thread_context_profile(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *name, int is_external, int *out_has_thread_context) {
     (void)lm_lmx_message_thread;
     int managed_context;
@@ -30329,7 +30308,6 @@ static int lm_trans_function_apply_thread_context_profile(struct LmMessageThread
 
 static int lm_trans_top_level_declare_function(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
     (void)lm_lmx_message_thread;
-    int status;
     if (item == 0 || item -> function == 0) {
         return 1;
     }
@@ -30358,11 +30336,7 @@ static int lm_trans_top_level_declare_function(struct LmMessageThread *lm_lmx_me
             return 1;
         }
     }
-    status = lm_trans_top_level_declare_generated_return_class(lm_lmx_message_thread, namespace_, item -> function);
-    if (status == 0) {
-        status = lm_trans_top_level_declare_function_body_named_structures(lm_lmx_message_thread, namespace_, item -> function);
-    }
-    return status;
+    return lm_trans_top_level_declare_generated_return_class(lm_lmx_message_thread, namespace_, item -> function);
 }
 
 static int lm_trans_top_level_is_predefined_function_descriptor(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
@@ -30389,7 +30363,6 @@ static int lm_trans_top_level_is_predefined_function_descriptor(struct LmMessage
 
 static int lm_trans_top_level_declare_function_compatible(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
     (void)lm_lmx_message_thread;
-    int status;
     int predefined_function;
     if (item == 0 || item -> function == 0) {
         return 1;
@@ -30428,11 +30401,7 @@ static int lm_trans_top_level_declare_function_compatible(struct LmMessageThread
             return 1;
         }
     }
-    status = lm_trans_top_level_declare_generated_return_class(lm_lmx_message_thread, namespace_, item -> function);
-    if (status == 0) {
-        status = lm_trans_top_level_declare_function_body_named_structures(lm_lmx_message_thread, namespace_, item -> function);
-    }
-    return status;
+    return lm_trans_top_level_declare_generated_return_class(lm_lmx_message_thread, namespace_, item -> function);
 }
 
 static int lm_trans_top_level_emit_l1(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
@@ -31603,34 +31572,68 @@ static int lm_trans_top_level_emit_named_structure_typedef(struct LmMessageThrea
     return lm_trans_top_level_emit_named_structure_typedef_once(lm_lmx_message_thread, file, namespace_, item -> frame, 0);
 }
 
-static int lm_trans_top_level_emit_function_named_structure_typedefs(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
+static int lm_trans_top_level_declare_function_named_structures_in_scope(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmTransFunctionHeader *function) {
     (void)lm_lmx_message_thread;
     const LmP0Field * field;
     const LmP0Node * node;
-    int status;
+    if (namespace_ == 0 || function == 0 || function -> is_descriptor_only) {
+        return 0;
+    }
+    field = function -> body_start;
+    while (field != 0) {
+        node = field -> value;
+        if (node != 0 && node -> kind == LM_P0_NODE_FRAME && lm_trans_frame_looks_named_structure_layout_declaration(lm_lmx_message_thread, node -> as -> frame, namespace_)) {
+            if (lm_trans_declare_named_structure_layout(lm_lmx_message_thread, namespace_, node -> as -> frame) != 0) {
+                return 1;
+            }
+        }
+        field = field -> next;
+    }
+    return 0;
+}
+
+static int lm_trans_top_level_emit_function_named_structure_typedefs_in_scope(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransNamespace *namespace_, const LmTransFunctionHeader *function) {
+    (void)lm_lmx_message_thread;
+    const LmP0Field * field;
+    const LmP0Node * node;
     int emitted;
     int emitted_any;
+    if (file == 0 || namespace_ == 0 || function == 0 || function -> is_descriptor_only) {
+        return 0;
+    }
+    emitted_any = 0;
+    field = function -> body_start;
+    while (field != 0) {
+        node = field -> value;
+        if (node != 0 && node -> kind == LM_P0_NODE_FRAME && lm_trans_frame_looks_named_structure_layout_declaration(lm_lmx_message_thread, node -> as -> frame, namespace_)) {
+            if (emitted_any && lm_trans_put(lm_lmx_message_thread, file, "\n") != 0) {
+                return 1;
+            }
+            if (lm_trans_top_level_emit_named_structure_typedef_once(lm_lmx_message_thread, file, namespace_, node -> as -> frame, &emitted) != 0) {
+                return 1;
+            }
+            if (emitted) {
+                emitted_any = 1;
+            }
+        }
+        field = field -> next;
+    }
+    return 0;
+}
+
+static int lm_trans_top_level_emit_function_named_structure_typedefs(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item) {
+    (void)lm_lmx_message_thread;
+    int status;
     if (file == 0 || namespace_ == 0 || item == 0 || item -> function == 0 || item -> function -> is_descriptor_only) {
         return 0;
     }
     lm_trans_namespace_enter_scope(lm_lmx_message_thread, namespace_);
     status = lm_trans_top_level_declare_function_params(lm_lmx_message_thread, namespace_, item -> function);
-    emitted_any = 0;
-    field = item -> function -> body_start;
-    while (status == 0 && field != 0) {
-        node = field -> value;
-        if (node != 0 && node -> kind == LM_P0_NODE_FRAME && lm_trans_frame_looks_named_structure_layout_declaration(lm_lmx_message_thread, node -> as -> frame, namespace_)) {
-            if (emitted_any && lm_trans_put(lm_lmx_message_thread, file, "\n") != 0) {
-                status = 1;
-            }
-            if (status == 0 && lm_trans_top_level_emit_named_structure_typedef_once(lm_lmx_message_thread, file, namespace_, node -> as -> frame, &emitted) != 0) {
-                status = 1;
-            }
-            if (status == 0 && emitted) {
-                emitted_any = 1;
-            }
-        }
-        field = field -> next;
+    if (status == 0) {
+        status = lm_trans_top_level_declare_function_named_structures_in_scope(lm_lmx_message_thread, namespace_, item -> function);
+    }
+    if (status == 0) {
+        status = lm_trans_top_level_emit_function_named_structure_typedefs_in_scope(lm_lmx_message_thread, file, namespace_, item -> function);
     }
     lm_trans_namespace_leave_scope(lm_lmx_message_thread, namespace_);
     return status;

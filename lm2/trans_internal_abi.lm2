@@ -346,6 +346,11 @@ fn: lm_trans_emit_named_structure_typedef (
     const: LmTransNamespace: namespace_
 ) int
 
+fn: lm_trans_top_level_named_structure_typedef_emitted (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
 fn: lm_trans_emit_named_structure_storage (
     FILE: file
     const: LmP0Frame: frame
