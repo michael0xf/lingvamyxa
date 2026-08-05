@@ -3672,6 +3672,7 @@ fn: lm_trans_declare_named_structure_layout (
     const: LmP0Text: name
     const: LmP0Field: initializer
     LmTransDescriptor: descriptor
+    LmTransDescriptor: structural_descriptor
     size_t: index
 
     if: namespace_ = 0 || frame = 0 || lm_trans_frame_looks_named_structure_layout_declaration(frame, namespace_) = 0
@@ -3683,6 +3684,10 @@ fn: lm_trans_declare_named_structure_layout (
     finally: lm_trans_descriptor_delete(descriptor)
     if: descriptor = 0 || lm_trans_descriptor_mark_structural_fields(descriptor) != 0
         return: 1
+    structural_descriptor: descriptor
+    if: lm_trans_namespace_attach_descriptor(namespace_, frame\head, descriptor) != 0
+        return: 1
+    descriptor: 0
 
     field_type: lm_trans_expr_callable_type_new()
     if: field_type = 0
@@ -3697,16 +3702,11 @@ fn: lm_trans_declare_named_structure_layout (
     while: field != 0
         if: lm_trans_node_is_ignored(field\value) = 0 && (field\value\kind != c.LM_P0_NODE_FRAME || lm_trans_named_structure_field_info(field\value\as\frame, namespace_, field_type, @ name, @ initializer) = 0)
             return: 1
-        if: lm_trans_node_is_ignored(field\value) = 0 && lm_trans_named_structure_push_field_relations(frame\head, name, field_type, index) != 0
-            return: 1
-        if: lm_trans_node_is_ignored(field\value) = 0 && lm_trans_descriptor_add_structural_field(descriptor, name, field_type\class_name, index, field_type\address_depth, 0U, 0, field_type\is_const, 0) != 0
+        if: lm_trans_node_is_ignored(field\value) = 0 && lm_trans_descriptor_add_structural_field(structural_descriptor, name, field_type\class_name, index, field_type\address_depth, 0U, 0, field_type\is_const, 0) != 0
             return: 1
         if: lm_trans_node_is_ignored(field\value) = 0
             index: index + 1U
         field: field\next
-    if: lm_trans_namespace_attach_descriptor(namespace_, frame\head, descriptor) != 0
-        return: 1
-    descriptor: 0
 return: 0
 
 fn: lm_trans_emit_named_structure_field_declaration (
@@ -5526,24 +5526,7 @@ fn: lm_trans_frame_looks_merge_named_structure_declaration (const: (LmP0Frame: f
     target: lm_trans_merge_target_name(frame)
 return: sources != 0 && target != 0 && sources\first_field != 0 && lm_trans_atom_can_be_new_binding_name(target)
 
-fn: lm_trans_merge_push_size_relation (
-    const: LmP0Text: owner
-    const: @(char suffix)
-    const: LmP0Text: name
-    size_t: value
-) int
-    LmP0Text: payload
-    [32]: char buffer
-
-    c.snprintf(buffer, c.sizeof(buffer), "%zu", value)
-    payload: lm_trans_text_from_cstr(buffer)
-    if: payload = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ payload)
-return: lm_trans_named_structure_push_relation(owner, suffix, name, payload)
-
-fn: lm_trans_merge_push_layout_field_relations (
-    const: LmP0Text: owner
+fn: lm_trans_merge_add_layout_descriptor_field (
     LmTransDescriptor: descriptor
     const: LmTransLayoutField: field
     size_t: index
@@ -5551,16 +5534,15 @@ fn: lm_trans_merge_push_layout_field_relations (
     LmP0Text: name
     LmP0Text: payload
     const: @: char payload_source
-    const: @: char relation_suffix
 
-    if: owner = 0 || descriptor = 0 || field = 0 || field\name = 0
+    if: descriptor = 0 || field = 0 || field\name = 0
         return: 1
 
     payload_source: field\class_name
-    relation_suffix: ".field.class"
     if: field\is_union
         payload_source: field\union_layout_name
-        relation_suffix: ".field.union"
+    if: payload_source = 0
+        return: 1
 
     name: lm_trans_text_from_cstr(field\name)
     if: name = 0
@@ -5572,16 +5554,6 @@ fn: lm_trans_merge_push_layout_field_relations (
         return: 1
     finally: lm_trans_text_ref_destroy(@ payload)
 
-    if: lm_trans_named_structure_push_relation(owner, relation_suffix, name, payload) != 0
-        return: 1
-    if: lm_trans_merge_push_size_relation(owner, ".field.index", name, index) != 0
-        return: 1
-    if: lm_trans_merge_push_size_relation(owner, ".field.address-depth", name, field\address_depth) != 0
-        return: 1
-    if: field\is_const && lm_trans_merge_push_size_relation(owner, ".field.const", name, 1U) != 0
-        return: 1
-    if: field\has_array_count && lm_trans_merge_push_size_relation(owner, ".field.array-count", name, field\array_count) != 0
-        return: 1
 return: lm_trans_descriptor_add_structural_field(descriptor, name, payload, index, field\address_depth, field\array_count, field\has_array_count, field\is_const, field\is_union)
 
 fn: lm_trans_merge_source_layout_name_from_atom_new (
@@ -5649,7 +5621,6 @@ fn: lm_trans_merge_source_layout_name_from_call_new (
 return: -1
 
 fn: lm_trans_merge_push_source_layout_fields (
-    const: LmP0Text: owner
     LmTransDescriptor: descriptor
     const: @(char layout_name)
     const: LmTransNamespace: namespace_
@@ -5660,7 +5631,7 @@ fn: lm_trans_merge_push_source_layout_fields (
     size_t: field_count
     size_t: i
 
-    if: owner = 0 || descriptor = 0 || layout_name = 0 || index = 0
+    if: descriptor = 0 || layout_name = 0 || index = 0
         return: 1
 
     field_capacity: 256U
@@ -5674,14 +5645,13 @@ fn: lm_trans_merge_push_source_layout_fields (
 
     i: 0U
     while: i < field_count
-        if: lm_trans_merge_push_layout_field_relations(owner, descriptor, fields[i], index[0]) != 0
+        if: lm_trans_merge_add_layout_descriptor_field(descriptor, fields[i], index[0]) != 0
             return: 1
         index[0]: index[0] + 1U
         i: i + 1U
 return: 0
 
 fn: lm_trans_merge_push_inline_source_fields (
-    const: LmP0Text: owner
     LmTransDescriptor: descriptor
     const: LmP0Frame: source
     const: LmTransNamespace: namespace_
@@ -5693,7 +5663,7 @@ fn: lm_trans_merge_push_inline_source_fields (
     const: LmP0Text: name
     const: LmP0Field: initializer
 
-    if: owner = 0 || descriptor = 0 || source = 0 || index = 0 || lm_trans_frame_looks_named_structure_layout_declaration(source, namespace_) = 0
+    if: descriptor = 0 || source = 0 || index = 0 || lm_trans_frame_looks_named_structure_layout_declaration(source, namespace_) = 0
         return: 1
 
     field_type: lm_trans_expr_callable_type_new()
@@ -5709,8 +5679,6 @@ fn: lm_trans_merge_push_inline_source_fields (
         if: lm_trans_node_is_ignored(field\value) = 0
             if: field\value\kind != c.LM_P0_NODE_FRAME || lm_trans_named_structure_field_info(field\value\as\frame, namespace_, field_type, @ name, @ initializer) = 0
                 return: 1
-            if: lm_trans_named_structure_push_field_relations(owner, name, field_type, index[0]) != 0
-                return: 1
             if: lm_trans_descriptor_add_structural_field(descriptor, name, field_type\class_name, index[0], field_type\address_depth, 0U, 0, field_type\is_const, 0) != 0
                 return: 1
             index[0]: index[0] + 1U
@@ -5718,7 +5686,6 @@ fn: lm_trans_merge_push_inline_source_fields (
 return: 0
 
 fn: lm_trans_merge_push_source_node_fields (
-    const: LmP0Text: owner
     LmTransDescriptor: descriptor
     const: LmP0Node: node
     const: LmTransNamespace: namespace_
@@ -5727,7 +5694,7 @@ fn: lm_trans_merge_push_source_node_fields (
     @: char layout_name
     int: status
 
-    if: owner = 0 || descriptor = 0 || node = 0 || index = 0
+    if: descriptor = 0 || node = 0 || index = 0
         return: 1
 
     layout_name: 0
@@ -5739,7 +5706,7 @@ fn: lm_trans_merge_push_source_node_fields (
     else:
         if: node\kind = c.LM_P0_NODE_FRAME
             if: lm_trans_frame_looks_named_structure_layout_declaration(node\as\frame, namespace_)
-                return: lm_trans_merge_push_inline_source_fields(owner, descriptor, node\as\frame, namespace_, index)
+                return: lm_trans_merge_push_inline_source_fields(descriptor, node\as\frame, namespace_, index)
             status: lm_trans_merge_source_layout_name_from_call_new(node, namespace_, @ layout_name)
         else:
             status: lm_trans_merge_source_layout_name_from_call_new(node, namespace_, @ layout_name)
@@ -5750,7 +5717,7 @@ fn: lm_trans_merge_push_source_node_fields (
     if: status = 0 || layout_name = 0
         c.fprintf(c.stderr, "trans L2 merge error: source must be a layout atom, inline named structure, or call returning a layout\n")
         return: 1
-return: lm_trans_merge_push_source_layout_fields(owner, descriptor, layout_name, namespace_, index)
+return: lm_trans_merge_push_source_layout_fields(descriptor, layout_name, namespace_, index)
 
 fn: lm_trans_declare_merge_named_structure_layout (
     LmTransNamespace: namespace_
@@ -5764,6 +5731,7 @@ fn: lm_trans_declare_merge_named_structure_layout (
     const: LmP0Text: name
     const: LmP0Field: initializer
     LmTransDescriptor: descriptor
+    LmTransDescriptor: structural_descriptor
     size_t: index
 
     if: namespace_ = 0 || frame = 0 || lm_trans_frame_looks_merge_named_structure_declaration(frame) = 0
@@ -5771,9 +5739,6 @@ fn: lm_trans_declare_merge_named_structure_layout (
         return: 1
 
     target: lm_trans_merge_target_name(frame)
-    if: lm_trans_declare_named_structure_owner(namespace_, target) != 0
-        return: 1
-
     descriptor: lm_trans_descriptor_new()
     finally: lm_trans_descriptor_delete(descriptor)
     if: descriptor = 0 || lm_trans_descriptor_mark_structural_fields(descriptor) != 0
@@ -5789,10 +5754,17 @@ fn: lm_trans_declare_merge_named_structure_layout (
     field: sources\first_field
     while: field != 0
         if: lm_trans_node_is_ignored(field\value) = 0
-            if: lm_trans_merge_push_source_node_fields(target, descriptor, field\value, namespace_, @ index) != 0
+            if: lm_trans_merge_push_source_node_fields(descriptor, field\value, namespace_, @ index) != 0
                 return: 1
         ---
         field: field\next
+
+    if: lm_trans_declare_named_structure_owner(namespace_, target) != 0
+        return: 1
+    structural_descriptor: descriptor
+    if: lm_trans_namespace_attach_descriptor(namespace_, target, descriptor) != 0
+        return: 1
+    descriptor: 0
 
     body: lm_trans_merge_local_body(frame)
     field: 0
@@ -5802,15 +5774,10 @@ fn: lm_trans_declare_merge_named_structure_layout (
         if: lm_trans_node_is_ignored(field\value) = 0
             if: field\value\kind != c.LM_P0_NODE_FRAME || lm_trans_named_structure_field_info(field\value\as\frame, namespace_, field_type, @ name, @ initializer) = 0
                 return: 1
-            if: lm_trans_named_structure_push_field_relations(target, name, field_type, index) != 0
-                return: 1
-            if: lm_trans_descriptor_add_structural_field(descriptor, name, field_type\class_name, index, field_type\address_depth, 0U, 0, field_type\is_const, 0) != 0
+            if: lm_trans_descriptor_add_structural_field(structural_descriptor, name, field_type\class_name, index, field_type\address_depth, 0U, 0, field_type\is_const, 0) != 0
                 return: 1
             index: index + 1U
         field: field\next
-    if: lm_trans_namespace_attach_descriptor(namespace_, target, descriptor) != 0
-        return: 1
-    descriptor: 0
 return: 0
 
 fn: lm_trans_emit_merge_named_structure_typedef (

@@ -1,0 +1,260 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_lmx_message_thread_run_entry(lm_test_structural_descriptor_no_implicit_field_rows_core);
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_no_implicit_field_rows_frame_at (
+    const: (LmP0Document: document)
+    size_t: index
+) const: LmP0Frame
+    const: LmP0Node: root
+    const: LmP0Field: field
+    size_t: current
+
+    root: lm_p0_document_root(document)
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        return: 0
+    current: 0U
+    field: lm_trans_l2_structure_first_present_field(root\as\structure)
+    while: field != 0
+        if: field\value != 0 && field\value\kind = c.LM_P0_NODE_FRAME
+            if: current = index
+                return: field\value\as\frame
+            current: current + 1U
+        ---
+        field: lm_trans_l2_structure_next_present_field(field)
+return: 0
+
+fn: lm_test_no_implicit_field_rows_source_row_count (const: @(char table_name)) size_t
+    const: LmTableDescriptor: table
+    size_t: table_index
+    size_t: row_count
+
+    if: table_name = 0 || lm_trans_registry = 0 || lm_trans_registry\view = 0
+        return: 0U
+    table_index: 0U
+    row_count: 0U
+    while: table_index < lm_registry_view_source_table_count(lm_trans_registry\view)
+        table: lm_registry_view_source_table_at(lm_trans_registry\view, table_index)
+        if: table != 0 && table\name != 0 && c.strcmp(table\name, table_name) = 0
+            row_count: row_count + lm_table_descriptor_materialized_row_count(table)
+        table_index: table_index + 1U
+return: row_count
+
+fn: lm_test_no_implicit_field_rows_for_suffix (
+    const: LmP0Text: owner
+    const: @(char suffix)
+) int
+    @: char table_name
+    const: LmOwnPtrStack: facts
+    size_t: fact_count
+    size_t: source_row_count
+
+    table_name: lm_trans_named_structure_relation_table_new(owner, suffix)
+    if: table_name = 0
+        return: 1
+    finally: lm_own_delete(table_name, 0)
+
+    facts: lm_trans_registry_relation_stack_for_table(table_name)
+    fact_count: 0U
+    if: facts != 0
+        fact_count: facts\count
+    source_row_count: lm_test_no_implicit_field_rows_source_row_count(table_name)
+return: fact_count != 0U || source_row_count != 0U
+
+fn: lm_test_no_implicit_field_rows_for_owner (const: @(char owner_name)) int
+    const: [6]: @: char suffixes
+    LmP0Text: owner
+    size_t: i
+    int: status
+
+    suffixes[0]: ".field.class"
+    suffixes[1]: ".field.union"
+    suffixes[2]: ".field.index"
+    suffixes[3]: ".field.address-depth"
+    suffixes[4]: ".field.const"
+    suffixes[5]: ".field.array-count"
+
+    owner: lm_trans_text_from_cstr(owner_name)
+    if: owner = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ owner)
+
+    status: 0
+    i: 0U
+    while: status = 0 && i < 6U
+        status: lm_test_no_implicit_field_rows_for_suffix(owner, suffixes[i])
+        i: i + 1U
+return: status != 0
+
+fn: lm_test_no_implicit_field_rows_owner_metadata (
+    const: (LmTransNamespace: namespace_)
+    const: @(char owner_name)
+) int
+    LmP0Text: owner
+    const: @: char kind
+    const: @: char backend
+    int: status
+
+    owner: lm_trans_text_from_cstr(owner_name)
+    if: owner = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ owner)
+
+    kind: lm_trans_namespace_class_kind_value(namespace_, owner)
+    backend: lm_trans_layout_backend_value(namespace_, owner)
+    status: lm_trans_namespace_class_has(namespace_, owner) = 0 || kind = 0 || c.strcmp(kind, "layout") != 0 || lm_trans_namespace_class_is_reference_base(namespace_, owner) = 0 || backend = 0 || c.strcmp(backend, "c.struct") != 0
+return: status != 0
+
+fn: lm_test_structural_descriptor_no_implicit_field_rows_core () int
+    const: @(char named_source)
+    const: @(char merge_source)
+    const: @(char shadow_source)
+    LmP0Document: named_document
+    LmP0Document: merge_document
+    LmP0Document: shadow_document
+    const: LmP0Frame: named_frame
+    const: LmP0Frame: merge_frame
+    const: LmP0Frame: shadow_frame
+    LmTransNamespace: namespace_
+    LmP0Text: owner_name
+    LmP0Text: field_name
+    LmP0Text: type_name
+    LmTransDescriptor: owned_descriptor
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptor: outer_shadow_descriptor
+    const: LmTransDescriptor: inner_shadow_descriptor
+    const: LmTransDescriptorField: descriptor_field
+    int: status
+
+    named_source: "PhysicalNamed:\n    answer: 7\n"
+    merge_source: "merge: (DescriptorSource) MergeTarget\n    int: local_value 9\nend: MergeTarget\n"
+    shadow_source: "merge: (ShadowTarget) ShadowTarget\n    ShadowTarget: self_ref\nend: ShadowTarget\n"
+    named_document: 0
+    merge_document: 0
+    shadow_document: 0
+    namespace_: 0
+    owner_name: 0
+    field_name: 0
+    type_name: 0
+    owned_descriptor: 0
+    outer_shadow_descriptor: 0
+    inner_shadow_descriptor: 0
+    status: 0
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_load_for_source("tests/trans_structural_descriptor_no_implicit_field_rows_core.lm2") != 0
+        return: 1
+    lm_trans_registry\view_mode: 2
+
+    if: lm_p0_parse_string(named_source, @ named_document) != 0 || named_document = 0 || lm_p0_parse_string(merge_source, @ merge_document) != 0 || merge_document = 0 || lm_p0_parse_string(shadow_source, @ shadow_document) != 0 || shadow_document = 0
+        status: 1
+    named_frame: lm_test_no_implicit_field_rows_frame_at(named_document, 0U)
+    merge_frame: lm_test_no_implicit_field_rows_frame_at(merge_document, 0U)
+    shadow_frame: lm_test_no_implicit_field_rows_frame_at(shadow_document, 0U)
+    namespace_: lm_trans_namespace_new()
+    if: status = 0 && (named_frame = 0 || merge_frame = 0 || shadow_frame = 0 || namespace_ = 0 || lm_trans_namespace_attach_registry(namespace_) != 0)
+        status: 1
+
+    if: status = 0 && lm_trans_declare_named_structure_layout(namespace_, named_frame) != 0
+        status: 1
+    owner_name: lm_trans_text_from_cstr("PhysicalNamed")
+    descriptor: lm_trans_namespace_descriptor(namespace_, owner_name)
+    descriptor_field: lm_trans_descriptor_structural_field(descriptor, "answer")
+    if: status = 0 && (owner_name = 0 || descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 1U || descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 0U || lm_test_no_implicit_field_rows_for_owner("PhysicalNamed") != 0 || lm_test_no_implicit_field_rows_owner_metadata(namespace_, "PhysicalNamed") != 0)
+        status: 1
+    lm_trans_text_ref_destroy(@ owner_name)
+
+    owner_name: lm_trans_text_from_cstr("DescriptorSource")
+    field_name: lm_trans_text_from_cstr("const_ptr")
+    type_name: lm_trans_text_from_cstr("int")
+    owned_descriptor: lm_trans_descriptor_new()
+    if: status = 0 && (owner_name = 0 || field_name = 0 || type_name = 0 || lm_trans_declare_named_structure_owner(namespace_, owner_name) != 0 || owned_descriptor = 0 || lm_trans_descriptor_mark_structural_fields(owned_descriptor) != 0 || lm_trans_descriptor_add_structural_field(owned_descriptor, field_name, type_name, 0U, 1U, 0U, 0, 1, 0) != 0)
+        status: 1
+    lm_trans_text_ref_destroy(@ field_name)
+    lm_trans_text_ref_destroy(@ type_name)
+
+    field_name: lm_trans_text_from_cstr("union_array")
+    type_name: lm_trans_text_from_cstr("UnionPayload")
+    if: status = 0 && (field_name = 0 || type_name = 0 || lm_trans_descriptor_add_structural_field(owned_descriptor, field_name, type_name, 1U, 0U, 3U, 1, 0, 1) != 0 || lm_trans_namespace_attach_descriptor(namespace_, owner_name, owned_descriptor) != 0)
+        status: 1
+    if: status = 0
+        owned_descriptor: 0
+    if: status = 0 && (lm_test_no_implicit_field_rows_for_owner("DescriptorSource") != 0 || lm_test_no_implicit_field_rows_owner_metadata(namespace_, "DescriptorSource") != 0)
+        status: 1
+    lm_trans_text_ref_destroy(@ field_name)
+    lm_trans_text_ref_destroy(@ type_name)
+    lm_trans_text_ref_destroy(@ owner_name)
+
+    if: status = 0 && lm_trans_declare_merge_named_structure_layout(namespace_, merge_frame) != 0
+        status: 1
+    owner_name: lm_trans_text_from_cstr("MergeTarget")
+    descriptor: lm_trans_namespace_descriptor(namespace_, owner_name)
+    if: status = 0 && (owner_name = 0 || descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 3U)
+        status: 1
+    descriptor_field: lm_trans_descriptor_structural_field(descriptor, "const_ptr")
+    if: status = 0 && (descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 0U || descriptor_field\address_depth != 1U || descriptor_field\is_const = 0 || descriptor_field\is_union || descriptor_field\has_array_count)
+        status: 1
+    descriptor_field: lm_trans_descriptor_structural_field(descriptor, "union_array")
+    if: status = 0 && (descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "UnionPayload") != 0 || descriptor_field\index != 1U || descriptor_field\is_union = 0 || descriptor_field\has_array_count = 0 || descriptor_field\array_count != 3U)
+        status: 1
+    descriptor_field: lm_trans_descriptor_structural_field(descriptor, "local_value")
+    if: status = 0 && (descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 2U || lm_test_no_implicit_field_rows_for_owner("MergeTarget") != 0 || lm_test_no_implicit_field_rows_owner_metadata(namespace_, "MergeTarget") != 0)
+        status: 1
+    lm_trans_text_ref_destroy(@ owner_name)
+
+    owner_name: lm_trans_text_from_cstr("ShadowTarget")
+    field_name: lm_trans_text_from_cstr("outer_field")
+    type_name: lm_trans_text_from_cstr("int")
+    owned_descriptor: lm_trans_descriptor_new()
+    if: status = 0 && (owner_name = 0 || field_name = 0 || type_name = 0 || lm_trans_declare_named_structure_owner(namespace_, owner_name) != 0 || owned_descriptor = 0 || lm_trans_descriptor_mark_structural_fields(owned_descriptor) != 0 || lm_trans_descriptor_add_structural_field(owned_descriptor, field_name, type_name, 0U, 0U, 0U, 0, 0, 0) != 0 || lm_trans_namespace_attach_descriptor(namespace_, owner_name, owned_descriptor) != 0)
+        status: 1
+    if: status = 0
+        owned_descriptor: 0
+    outer_shadow_descriptor: lm_trans_namespace_descriptor(namespace_, owner_name)
+    lm_trans_text_ref_destroy(@ field_name)
+    lm_trans_text_ref_destroy(@ type_name)
+
+    if: namespace_ != 0
+        lm_trans_namespace_enter_scope(namespace_)
+    if: status = 0 && lm_trans_declare_merge_named_structure_layout(namespace_, shadow_frame) != 0
+        status: 1
+    inner_shadow_descriptor: lm_trans_namespace_descriptor(namespace_, owner_name)
+    if: status = 0 && (outer_shadow_descriptor = 0 || inner_shadow_descriptor = 0 || inner_shadow_descriptor = outer_shadow_descriptor || inner_shadow_descriptor\has_structural_fields = 0 || inner_shadow_descriptor\structural_fields\count != 2U)
+        status: 1
+    descriptor_field: lm_trans_descriptor_structural_field(inner_shadow_descriptor, "outer_field")
+    if: status = 0 && (descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 0U)
+        status: 1
+    descriptor_field: lm_trans_descriptor_structural_field(inner_shadow_descriptor, "self_ref")
+    if: status = 0 && (descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "ShadowTarget") != 0 || descriptor_field\index != 1U || descriptor_field\address_depth != 0U || lm_test_no_implicit_field_rows_for_owner("ShadowTarget") != 0 || lm_test_no_implicit_field_rows_owner_metadata(namespace_, "ShadowTarget") != 0)
+        status: 1
+    if: namespace_ != 0
+        lm_trans_namespace_leave_scope(namespace_)
+    if: status = 0 && lm_trans_namespace_descriptor(namespace_, owner_name) != outer_shadow_descriptor
+        status: 1
+    lm_trans_text_ref_destroy(@ owner_name)
+
+    if: status = 0 && (lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
+        status: 1
+
+    lm_trans_descriptor_delete(owned_descriptor)
+    lm_trans_text_ref_destroy(@ type_name)
+    lm_trans_text_ref_destroy(@ field_name)
+    lm_trans_text_ref_destroy(@ owner_name)
+    lm_trans_namespace_delete(namespace_)
+    if: shadow_document != 0
+        lm_p0_document_destroy(shadow_document)
+    if: merge_document != 0
+        lm_p0_document_destroy(merge_document)
+    if: named_document != 0
+        lm_p0_document_destroy(named_document)
+    lm_trans_registry_destroy()
+return: status

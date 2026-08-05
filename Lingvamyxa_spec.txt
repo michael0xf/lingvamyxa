@@ -8950,12 +8950,16 @@ that Frame structural-merge semantics.
 
 This is the target contract. The current registered handler still performs a
 physical named-layout projection and materializes a Structure instance. During
-migration its declaration phase dual-writes a normalized `structuralFields`
-view onto the existing namespace binding and the corresponding legacy Registry
-field relations. Its local arena path and remaining legacy top-level backing
-are implementation details; normatively every result is an arena-owned
-StructureReference. This does not yet implement the generic ordered high-level
-Structure merge.
+migration its declaration phase attaches a normalized `structuralFields` view
+to the existing namespace binding. The physical merge path no longer emits
+implicit Registry field relations; layout collection reads that descriptor
+view. Registry field relations remain accepted as a compatibility fallback for
+an explicitly authored or imported ABI layout whose namespace binding has no
+structural-field view. The handler still emits hosted C layout/storage, and its
+owner declaration still publishes legacy class/layout Registry metadata. Its
+local arena path and remaining legacy top-level backing are implementation
+details; normatively every result is an arena-owned StructureReference. This
+does not yet implement the generic ordered high-level Structure merge.
 
 Semantic form:
 
@@ -10280,25 +10284,36 @@ then emits their typedefs, and finally leaves that scope. Descriptors created by
 this replay do not survive into the later function-body phase; the body creates
 its own lexical bindings when it is emitted.
 
-This change removes inter-phase descriptor lifetime only. At this migration
-stage the replay still invokes the legacy Registry dual-write and
-Registry-backed typedef-deduplication paths, whose state may outlive the
-temporary namespace scope.
+This change removes inter-phase descriptor lifetime only. The temporary replay
+still uses the remaining owner class/layout writes and Registry-backed
+typedef-deduplication state, but it no longer emits generated field relations.
 
-Both paths still simultaneously emit the legacy class/layout/field Registry
-relations and the hosted C layout/storage projection. This is deliberate
-dual-write during migration: none of those implicit Registry rows has yet been
-removed.
+The normalized `structuralFields` view is now the only field-shape state
+produced by named-structure and physical `merge:` declarations for
+namespace/compiler semantic lookup. These paths no longer insert implicit
+`owner.field.*` Registry relations. They still publish the legacy owner
+metadata `class.present`, `class.kind`, `class.reference-base` and
+`layout.backend`, still emit the hosted C layout/storage projection, and still
+use the Registry-backed `typedef.emitted` state. Therefore removal of generated
+field relations is not removal of every implicit Registry effect.
 
 Layout collection, typed field-chain class resolution and L2 inline-Table
 field-type resolution consult the namespace descriptor first. When its
 `structuralFields` view is present, that view is authoritative, including when
 it is empty. A missing or malformed field in a present view does not fall
-through to Registry data. Legacy Registry relations are consulted only when the
-namespace descriptor has no structural-field view.
+through to Registry data.
 
-The dual-write, Registry fallback and remaining top-level backing are
-implementation debt. They do not define source semantics.
+Registry field relations are consulted only when the namespace binding has no
+structural-field view. This preserves explicitly authored or imported ABI
+layouts and remaining legacy producers such as L2 Table row layouts and `fm`
+return layouts. The fallback does not publish those rows into the namespace
+descriptor and does not make Registry a second source-semantic lookup
+environment.
+
+The remaining implicit owner metadata, Registry-backed typedef state, hosted C
+layout/storage projection and legacy top-level backing are implementation debt.
+Explicit ABI Registry fallback remains supported during this migration and does
+not define source semantics.
 
 
 19.21. Operations, Operators and Receivers
@@ -14288,10 +14303,10 @@ source descriptor. A Table may be passed to an explicit descriptor-conversion
 operation as authoring data, but the table name, keys and cells declare nothing
 by themselves.
 
-The current named-structure fallback, generated Registry layout rows and
-top-level untracked static backing are legacy bootstrap behavior. They are not
-normative language semantics and must be removed or confined behind the backend
-projection boundary.
+The current named-structure fallback, generated Registry owner class/layout
+metadata, Registry-backed C typedef state and top-level untracked static backing
+are legacy bootstrap behavior. They are not normative language semantics and
+must be removed or confined behind the backend projection boundary.
 
 20.2.1.1. Source Descriptors and Target Projection Are Separate
 
