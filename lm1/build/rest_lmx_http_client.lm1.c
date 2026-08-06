@@ -136,6 +136,7 @@ typedef void (*LmOwnDestroyFields)(void *object);
 #error "Lingvamyxa conflicting typedef projection for LmOwnDestroyFields"
 #endif
 #endif
+
 #ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDelete
 #define LM_LMX_TYPEDEF_DEFINED_LmOwnDelete 1
 #define LM_LMX_TYPEDEF_ID_A_LmOwnDelete 0xe0a897d278d341eeULL
@@ -883,3 +884,4 @@ int lm_rest_lmx_http_client_install_default(
 }
 
 #endif
+
