@@ -5,9 +5,6 @@
 #include <stdlib.h>
 #include <setjmp.h>
 
-#ifndef LM_UNUSED
-#define LM_UNUSED(value) ((void)(value))
-#endif
 struct LmOwnArena;
 struct LmMessageThread;
 struct LmMessageThreadRuntime;
@@ -128,7 +125,10 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
     return status;
 }
 #undef LM_LMX_UNUSED_ENTRY_HELPER
+
 #include <stddef.h>
+
+#define LM_UNUSED (void)
 
 
 
@@ -1381,6 +1381,7 @@ static int lm_build_full_build(struct LmMessageThread *lm_lmx_message_thread);
 static int lm_build_full_project(struct LmMessageThread *lm_lmx_message_thread);
 static int lm_build_run_bootstrap(struct LmMessageThread *lm_lmx_message_thread, LmBuildOptions *options, char *trusted_make, char *built_trans);
 int main(int argc, char **argv);
+
 
 
 

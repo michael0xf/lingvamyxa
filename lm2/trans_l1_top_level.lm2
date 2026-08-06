@@ -1401,6 +1401,10 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
     body_indent: 1U
     is_message_thread_entry: function\is_external && lm_trans_text_equals(function\c_name, "main")
 
+    if: is_message_thread_entry && lm_trans_emit_message_thread_main_helper(lm_trans_prelude_file(file)) != 0
+        lm_trans_ptr_stack_delete(@ hoisted_functions)
+        return: 1
+
     if: function\is_descriptor_only
         c.fprintf(c.stderr, "trans L2 error: descriptor-only fn does not have an executable body\n")
         lm_trans_ptr_stack_delete(@ hoisted_functions)

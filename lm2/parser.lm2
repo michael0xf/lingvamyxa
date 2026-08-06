@@ -1,9 +1,10 @@
-L1:
-===
-#ifndef LM_UNUSED
-#define LM_UNUSED(value) ((void)(value))
-#endif
-===
+table:
+    source
+    name: `define.value`
+    columns((class: class) (@: char value))
+    rows:
+             LM_UNUSED  "(void)"
+end: `define.value`
 
 include
 define
@@ -6054,3 +6055,12 @@ external:
         return: data
     end: lm_p0_dump_alloc
 end: external
+
+ifdef:
+    LM_P0_REGISTRY_SELFTEST:
+        external:
+            fn: main () int
+                return: lm_p0_registry_source_tables_selftest()
+            end: main
+        end: external
+end: ifdef

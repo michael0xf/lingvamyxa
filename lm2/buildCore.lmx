@@ -1,11 +1,12 @@
-L1:
-===
-#ifndef LM_UNUSED
-#define LM_UNUSED(value) ((void)(value))
-#endif
-===
-
 L2:
+    table:
+        source
+        name: `define.value`
+        columns((class: class) (@: char value))
+        rows:
+                 LM_UNUSED  "(void)"
+    end: `define.value`
+
     include
     define
     os

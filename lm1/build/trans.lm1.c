@@ -129,6 +129,7 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
 #include <stddef.h>
 #include <stddef.h>
 
+#define LM_UNUSED (void)
 #define LM_TRANS_REGISTRY_CLONE_STRUCTURE 1
 #define LM_TRANS_REGISTRY_CLONE_TRAILER 2
 
@@ -3871,9 +3872,6 @@ static const LmRegistryView * lm_trans_callable_projection_cache_view;
 static size_t lm_trans_callable_projection_cache_generation;
 
 static int lm_trans_callable_projection_cache_view_mode;
-#ifndef LM_UNUSED
-#define LM_UNUSED(value) ((void)(value))
-#endif
 int main(int argc, char **argv);
 
 static inline int lm_message_thread_diagnostic_status(const LmMessageThreadExecutionContext *context) {
@@ -32897,6 +32895,10 @@ static int lm_trans_emit_function_with_hoisted(struct LmMessageThread *lm_lmx_me
     raw_return_descriptor_name = 0;
     body_indent = 1U;
     is_message_thread_entry = function -> is_external && lm_trans_text_equals(lm_lmx_message_thread, function -> c_name, "main");
+    if (is_message_thread_entry && lm_trans_emit_message_thread_main_helper(lm_lmx_message_thread, lm_trans_prelude_file(lm_lmx_message_thread, file)) != 0) {
+        lm_trans_ptr_stack_delete(&hoisted_functions);
+        return 1;
+    }
     if (function -> is_descriptor_only) {
         fprintf(stderr, "trans L2 error: descriptor-only fn does not have an executable body\n");
         lm_trans_ptr_stack_delete(&hoisted_functions);
