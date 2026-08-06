@@ -542,6 +542,7 @@ if (BUILD_TRANS_LM0)
         DEPENDS
             trans.lm0
             "${CMAKE_CURRENT_SOURCE_DIR}/lm2/trans.lm2"
+            "${CMAKE_CURRENT_SOURCE_DIR}/lm2/trans_library.lm2"
             ${LM2_TO_LM1_REGISTRY_DEPS}
         COMMENT "Refreshing lm1/build/trans.lm1.c from lm2/trans.lm2"
         VERBATIM

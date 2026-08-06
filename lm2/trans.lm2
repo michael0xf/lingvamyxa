@@ -1,37 +1,17 @@
-L1:
-===
-#ifndef LM_UNUSED
-#define LM_UNUSED(value) ((void)(value))
-#endif
-===
+import: "lm2/trans_library.lm2"
 
-include
-define
-os
-ifdef
-forward
-alias
-constant
-layout
-fn
-prototype
-unit
+external:
+    fn: main (int: argc; @@: char argv) int
+        c.setvbuf(c.stdout, 0, c._IONBF, 0)
+        c.setvbuf(c.stderr, 0, c._IONBF, 0)
 
-predef: "lm2/own_abi.lm2"
-predef: "lm2/parser_abi.lm2"
-predef: "lm2/trans_internal_abi.lm2"
-import: "lm2/table_descriptor.lm2"
+        if: argc < 0
+            c.LM_UNUSED(c.lm_registry_view_append_materialized_rows)
+            c.LM_UNUSED(c.lm_trans_registry_join_table)
+            return: 0
 
-include: "<stdio.h>" "<stdlib.h>" "<string.h>"
-
-import: "lm2/trans_schema.lm2"
-
-import: "lm2/trans_l1_registry.lm2"
-import: "lm2/trans_l1_namespace.lm2"
-import: "lm2/trans_l1_expr.lm2"
-import: "lm2/trans_l1_statement.lm2"
-import: "lm2/trans_l1_top_level.lm2"
-import: "lm2/trans_l1_l4_registry.lm2"
-
-import: "lm2/trans_text.lm2"
-import: "lm2/trans_core.lm2"
+        if: argc != 3
+            c.fprintf(c.stderr, "usage: trans.lm0[.exe] <source.lm2> <output.lm1.c>\n")
+            return: 1
+    return: lm_trans_emit_document(argv[1], argv[2])
+end: external

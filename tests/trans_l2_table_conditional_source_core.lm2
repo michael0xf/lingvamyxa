@@ -1,15 +1,10 @@
-import: "lm2/trans.lm2"
+import: "lm2/trans_library.lm2"
 
-L1:
-===
-int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-    return lm_lmx_message_thread_run_entry(lm_test_l2_table_conditional_source_core);
-}
-
-#define main lm_test_embedded_trans_main
-===
+external:
+    fn: main () int
+        return: lm_test_l2_table_conditional_source_core()
+    end: main
+end: external
 
 fn: lm_test_l2_table_conditional_registry_init () int
     if: lm_trans_registry_load_for_source("tests/trans_l2_table_conditional_source_core.lm2") != 0

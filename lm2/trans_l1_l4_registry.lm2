@@ -4016,19 +4016,3 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_p0_document_destroy(document)
     lm_trans_registry_destroy()
 return: 0
-
-external:
-    fn: main (int: argc; @@: char argv) int
-        c.setvbuf(c.stdout, 0, c._IONBF, 0)
-        c.setvbuf(c.stderr, 0, c._IONBF, 0)
-
-        if: argc < 0
-            c.LM_UNUSED(c.lm_registry_view_append_materialized_rows)
-            c.LM_UNUSED(c.lm_trans_registry_join_table)
-            return: 0
-
-        if: argc != 3
-            c.fprintf(c.stderr, "usage: trans.lm0[.exe] <source.lm2> <output.lm1.c>\n")
-            return: 1
-    return: lm_trans_emit_document(argv[1], argv[2])
-end: external

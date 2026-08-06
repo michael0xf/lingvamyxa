@@ -1,15 +1,10 @@
-import: "lm2/trans.lm2"
+import: "lm2/trans_library.lm2"
 
-L1:
-===
-int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-    return lm_lmx_message_thread_run_entry(lm_test_function_local_structural_descriptor_scope_core);
-}
-
-#define main lm_test_embedded_trans_main
-===
+external:
+    fn: main () int
+        return: lm_test_function_local_structural_descriptor_scope_core()
+    end: main
+end: external
 
 fn: lm_test_function_local_root_item (
     const: LmP0Document: document

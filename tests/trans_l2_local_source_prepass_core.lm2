@@ -1,15 +1,10 @@
-import: "lm2/trans.lm2"
+import: "lm2/trans_library.lm2"
 
-L1:
-===
-int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-    return lm_lmx_message_thread_run_entry(lm_test_l2_local_source_prepass_core);
-}
-
-#define main lm_test_embedded_trans_main
-===
+external:
+    fn: main () int
+        return: lm_test_l2_local_source_prepass_core()
+    end: main
+end: external
 
 fn: lm_test_local_prepass_table (const: @(char name)) const: LmTableDescriptor
 return: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, name, c.strlen(name))
