@@ -1086,35 +1086,62 @@ fn: lm_trans_top_level_declare_named_structure (LmTransNamespace: namespace_; co
         return: 1
 return: lm_trans_declare_named_structure_layout(namespace_, item\frame)
 
-fn: lm_trans_top_level_named_structure_typedef_emitted (
-    const: LmTransNamespace: namespace_
-    const: LmP0Text: name
-) int
-    c.LM_UNUSED(namespace_)
-return: lm_trans_typedef_projection_has_text(name)
-
 fn: lm_trans_top_level_emit_named_structure_typedef_once (
     FILE: file
     LmTransNamespace: namespace_
     const: LmP0Frame: frame
     @: int out_emitted
 ) int
+    FILE: declaration_file
+    int: emitted
+    int: status
+
     if: out_emitted != 0
         out_emitted[0]: 0
     if: file = 0 || namespace_ = 0 || frame = 0
         return: 1
-    if: lm_trans_top_level_named_structure_typedef_emitted(namespace_, frame\head)
-        return: 0
-    if: lm_trans_put(file, "#ifndef LM_LMX_TYPEDEF_DEFINED_") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, "\n#define LM_LMX_TYPEDEF_DEFINED_") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " 1\n") != 0
+
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
         return: 1
-    if: lm_trans_emit_named_structure_typedef(file, frame, 0U, namespace_) != 0
-        return: 1
-    if: lm_trans_put(file, "#endif\n") != 0
-        return: 1
-    if: lm_trans_typedef_projection_mark_text(frame\head) != 0
+    emitted: 0
+    status: lm_trans_emit_named_structure_typedef(declaration_file, frame, 0U, namespace_)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_text(file, frame\head, declaration_file, @ emitted)
+    c.fclose(declaration_file)
+    if: status != 0
         return: 1
     if: out_emitted != 0
-        out_emitted[0]: 1
+        out_emitted[0]: emitted
+return: 0
+
+fn: lm_trans_top_level_emit_local_named_structure_typedef_if_compatible (
+    FILE: file
+    LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+    @: int out_emitted
+) int
+    FILE: declaration_file
+    int: emitted
+    int: status
+
+    if: out_emitted != 0
+        out_emitted[0]: 0
+    if: file = 0 || namespace_ = 0 || frame = 0
+        return: 1
+
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
+        return: 1
+    emitted: 0
+    status: lm_trans_emit_named_structure_typedef(declaration_file, frame, 0U, namespace_)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_text_if_compatible(file, frame\head, declaration_file, @ emitted)
+    c.fclose(declaration_file)
+    if: status != 0
+        return: 1
+    if: out_emitted != 0
+        out_emitted[0]: emitted
 return: 0
 
 fn: lm_trans_top_level_emit_named_structure_typedef (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
@@ -1162,7 +1189,7 @@ fn: lm_trans_top_level_emit_function_named_structure_typedefs_in_scope (
         if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_looks_named_structure_layout_declaration(node\as\frame, namespace_)
             if: emitted_any && lm_trans_put(file, "\n") != 0
                 return: 1
-            if: lm_trans_top_level_emit_named_structure_typedef_once(file, namespace_, node\as\frame, @ emitted) != 0
+            if: lm_trans_top_level_emit_local_named_structure_typedef_if_compatible(file, namespace_, node\as\frame, @ emitted) != 0
                 return: 1
             if: emitted
                 emitted_any: 1
@@ -1218,9 +1245,20 @@ fn: lm_trans_top_level_declare_merge_named_structure (LmTransNamespace: namespac
 return: lm_trans_declare_merge_named_structure_layout(namespace_, item\frame)
 
 fn: lm_trans_top_level_emit_merge_named_structure_typedef (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    FILE: declaration_file
+    int: emitted
+    int: status
+
     if: item = 0 || item\frame = 0
         return: 1
-return: lm_trans_emit_merge_named_structure_typedef(file, item\frame, 0U, namespace_)
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
+        return: 1
+    status: lm_trans_emit_merge_named_structure_typedef(declaration_file, item\frame, 0U, namespace_)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_text(file, lm_trans_merge_target_name(item\frame), declaration_file, @ emitted)
+    c.fclose(declaration_file)
+return: status
 
 fn: lm_trans_top_level_emit_merge_named_structure_storage (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\frame = 0
@@ -2847,14 +2885,10 @@ fn: lm_trans_emit_l2_os_branch (FILE: output; const: (LmP0Frame: branch); LmTran
     int: status
 
     if: lm_trans_os_branch_looks_l2(branch\body)
-        if: lm_trans_typedef_projection_conditional_enter() != 0
-            return: 1
         previous_emission_depth: lm_trans_l2_conditional_emission_depth
         lm_trans_l2_conditional_emission_depth: previous_emission_depth + 1
         status: lm_trans_emit_l2_structure_with_namespace(output, branch\body, 0, namespace_, 0)
         lm_trans_l2_conditional_emission_depth: previous_emission_depth
-        if: lm_trans_typedef_projection_conditional_leave() != 0
-            status: 1
         return: status
 return: lm_trans_emit_l1_structure(output, branch\body)
 
@@ -2863,14 +2897,20 @@ fn: lm_trans_emit_l2_os_frame (FILE: output; const: (LmP0Frame: frame); LmTransN
     const: LmP0Node: node
     const: LmP0Frame: branch
     const: @: char condition
+    size_t: group_id
+    size_t: branch_id
     int: opened
     int: emitted_default
+    int: status
 
     if: frame = 0
         return: 1
 
     opened: 0
     emitted_default: 0
+    branch_id: 0U
+    if: lm_trans_typedef_projection_group_new(@ group_id) != 0
+        return: 1
     field: frame\body\first_field
     while: field != 0
         node: field\value
@@ -2905,7 +2945,13 @@ fn: lm_trans_emit_l2_os_frame (FILE: output; const: (LmP0Frame: frame); LmTransN
                 opened: 1
             ---
 
-            if: lm_trans_emit_l2_os_branch(output, branch, namespace_) != 0
+            branch_id: branch_id + 1U
+            if: opened && lm_trans_typedef_projection_branch_enter(group_id, branch_id) != 0
+                return: 1
+            status: lm_trans_emit_l2_os_branch(output, branch, namespace_)
+            if: opened && lm_trans_typedef_projection_conditional_leave() != 0
+                status: 1
+            if: status != 0
                 return: 1
             if: lm_trans_validate_end_trailer(branch) != 0
                 return: 1
@@ -2921,14 +2967,20 @@ fn: lm_trans_emit_l2_ifdef_frame (FILE: output; const: (LmP0Frame: frame); LmTra
     const: LmP0Node: node
     const: LmP0Frame: branch
     LmP0Text: condition
+    size_t: group_id
+    size_t: branch_id
     int: opened
     int: emitted_default
+    int: status
 
     if: frame = 0
         return: 1
 
     opened: 0
     emitted_default: 0
+    branch_id: 0U
+    if: lm_trans_typedef_projection_group_new(@ group_id) != 0
+        return: 1
     field: frame\body\first_field
     while: field != 0
         node: field\value
@@ -2969,7 +3021,13 @@ fn: lm_trans_emit_l2_ifdef_frame (FILE: output; const: (LmP0Frame: frame); LmTra
                 opened: 1
             ---
 
-            if: lm_trans_emit_l2_os_branch(output, branch, namespace_) != 0
+            branch_id: branch_id + 1U
+            if: opened && lm_trans_typedef_projection_branch_enter(group_id, branch_id) != 0
+                return: 1
+            status: lm_trans_emit_l2_os_branch(output, branch, namespace_)
+            if: opened && lm_trans_typedef_projection_conditional_leave() != 0
+                status: 1
+            if: status != 0
                 return: 1
             if: lm_trans_validate_end_trailer(branch) != 0
                 return: 1
@@ -3428,14 +3486,10 @@ fn: lm_trans_emit_l2_registry_conditional_node (FILE: output; const: (LmP0Node: 
     int: previous_emission_depth
     int: status
 
-    if: lm_trans_typedef_projection_conditional_enter() != 0
-        return: 1
     previous_emission_depth: lm_trans_l2_conditional_emission_depth
     lm_trans_l2_conditional_emission_depth: previous_emission_depth + 1
     status: lm_trans_emit_l2_registry_os_node(output, node, namespace_)
     lm_trans_l2_conditional_emission_depth: previous_emission_depth
-    if: lm_trans_typedef_projection_conditional_leave() != 0
-        status: 1
 return: status
 
 fn: lm_trans_l4_payload_structure_looks_bare_l2 (const: (LmP0Structure: body)) int
@@ -3697,6 +3751,7 @@ fn: lm_trans_emit_l2_registry_os_table (FILE: output; LmTransNamespace: namespac
     const: @: char row_name
     LmP0Text: branch_name
     const: @: char condition
+    size_t: group_id
     int: opened
     int: emitted_default
     int: emitted
@@ -3714,6 +3769,9 @@ fn: lm_trans_emit_l2_registry_os_table (FILE: output; LmTransNamespace: namespac
         return: 1
     branch_name: lm_trans_text_from_cstr("")
     if: branch_name = 0
+        return: 1
+    if: lm_trans_typedef_projection_group_new(@ group_id) != 0
+        lm_trans_text_ref_destroy(@ branch_name)
         return: 1
 
     i: 0U
@@ -3753,7 +3811,15 @@ fn: lm_trans_emit_l2_registry_os_table (FILE: output; LmTransNamespace: namespac
                 return: 1
             opened: 1
         ---
+        if: opened && lm_trans_typedef_projection_branch_enter(group_id, i + 1U) != 0
+            lm_trans_text_ref_destroy(@ branch_name)
+            return: 1
         if: lm_trans_emit_l2_registry_conditional_node(output, body, namespace_) != 0
+            if: opened
+                lm_trans_typedef_projection_conditional_leave()
+            lm_trans_text_ref_destroy(@ branch_name)
+            return: 1
+        if: opened && lm_trans_typedef_projection_conditional_leave() != 0
             lm_trans_text_ref_destroy(@ branch_name)
             return: 1
         emitted: 1
@@ -3776,6 +3842,7 @@ fn: lm_trans_emit_l2_registry_ifdef_table (FILE: output; LmTransNamespace: names
     const: @: char row_name
     LmP0Text: branch_name
     LmP0Text: condition
+    size_t: group_id
     int: opened
     int: emitted_default
     int: emitted
@@ -3793,6 +3860,9 @@ fn: lm_trans_emit_l2_registry_ifdef_table (FILE: output; LmTransNamespace: names
         return: 1
     branch_name: lm_trans_text_from_cstr("")
     if: branch_name = 0
+        return: 1
+    if: lm_trans_typedef_projection_group_new(@ group_id) != 0
+        lm_trans_text_ref_destroy(@ branch_name)
         return: 1
 
     i: 0U
@@ -3839,7 +3909,15 @@ fn: lm_trans_emit_l2_registry_ifdef_table (FILE: output; LmTransNamespace: names
             lm_trans_text_ref_destroy(@ condition)
             opened: 1
         ---
+        if: opened && lm_trans_typedef_projection_branch_enter(group_id, i + 1U) != 0
+            lm_trans_text_ref_destroy(@ branch_name)
+            return: 1
         if: lm_trans_emit_l2_registry_conditional_node(output, body, namespace_) != 0
+            if: opened
+                lm_trans_typedef_projection_conditional_leave()
+            lm_trans_text_ref_destroy(@ branch_name)
+            return: 1
+        if: opened && lm_trans_typedef_projection_conditional_leave() != 0
             lm_trans_text_ref_destroy(@ branch_name)
             return: 1
         emitted: 1

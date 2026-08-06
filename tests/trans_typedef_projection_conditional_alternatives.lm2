@@ -1,0 +1,29 @@
+L1:
+===
+#ifndef LM_TEST_TYPEDEF_PROJECTION_BRANCH
+#define LM_TEST_TYPEDEF_PROJECTION_BRANCH 0
+#endif
+===
+
+L2:
+    table:
+        name: functionPointerType
+        columns((class: class) (int: value))
+        rows:
+                 LmTypedefProjectionAlternative  1
+    end: functionPointerType
+
+    ifdef:
+        LM_TEST_TYPEDEF_PROJECTION_BRANCH:
+            fn: LmTypedefProjectionAlternative (int: value) int
+        default:
+            fn: LmTypedefProjectionAlternative (double: value) double
+    end: ifdef
+
+    external:
+        fn: main () int
+            LmTypedefProjectionAlternative: value 0
+            return: value != 0
+        end: main
+    end: external
+end: L2

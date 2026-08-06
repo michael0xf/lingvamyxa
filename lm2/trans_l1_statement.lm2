@@ -6468,13 +6468,23 @@ fn: lm_trans_statement_stack_schedule_named_structure (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
-    int: typedef_emitted
+    FILE: declaration_file
+    int: typedef_suppressed
+    int: status
 
     c.LM_UNUSED(stack)
-    typedef_emitted: lm_trans_top_level_named_structure_typedef_emitted(namespace_, frame\head)
     if: lm_trans_declare_named_structure_layout(namespace_, frame) != 0
         return: 1
-    if: typedef_emitted = 0 && lm_trans_emit_named_structure_typedef(file, frame, indent, namespace_) != 0
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
+        return: 1
+    status: lm_trans_emit_named_structure_typedef(declaration_file, frame, 0U, namespace_)
+    if: status = 0
+        status: lm_trans_typedef_projection_prepared_text_suppressed(frame\head, declaration_file, @ typedef_suppressed)
+    c.fclose(declaration_file)
+    if: status != 0
+        return: 1
+    if: typedef_suppressed = 0 && lm_trans_emit_named_structure_typedef(file, frame, indent, namespace_) != 0
         return: 1
 return: lm_trans_emit_named_structure_storage(file, frame, indent, namespace_, "")
 
@@ -6485,10 +6495,25 @@ fn: lm_trans_statement_stack_schedule_merge_named_structure (
     unsigned: indent
     LmTransNamespace: namespace_
 ) int
+    const: LmP0Text: target
+    FILE: declaration_file
+    int: typedef_suppressed
+    int: status
+
     c.LM_UNUSED(stack)
     if: lm_trans_declare_merge_named_structure_layout(namespace_, frame) != 0
         return: 1
-    if: lm_trans_emit_merge_named_structure_typedef(file, frame, indent, namespace_) != 0
+    target: lm_trans_merge_target_name(frame)
+    declaration_file: c.tmpfile()
+    if: target = 0 || declaration_file = 0
+        return: 1
+    status: lm_trans_emit_merge_named_structure_typedef(declaration_file, frame, 0U, namespace_)
+    if: status = 0
+        status: lm_trans_typedef_projection_prepared_text_suppressed(target, declaration_file, @ typedef_suppressed)
+    c.fclose(declaration_file)
+    if: status != 0
+        return: 1
+    if: typedef_suppressed = 0 && lm_trans_emit_merge_named_structure_typedef(file, frame, indent, namespace_) != 0
         return: 1
 return: lm_trans_emit_merge_named_structure_storage(file, frame, indent, namespace_, "")
 

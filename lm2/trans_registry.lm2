@@ -923,6 +923,9 @@ table:
              LmTransTopLevelDeclareHandler 1
              LmTransTopLevelEmitHandler 1
              LmTransTopLevelItem      1
+             LmTransTypedefProjectionEntry 1
+             LmTransTypedefProjectionOutput 1
+             LmTransTypedefProjectionPathStep 1
              LmTransTypeEmitReceiver  1
              LmTransTypePointerSuffix 1
              LmTransTypeStructureValueAllocReceiver 1

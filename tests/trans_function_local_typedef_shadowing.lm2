@@ -1,0 +1,19 @@
+L2:
+    fn: lm_test_local_typedef_left () int
+        LmTestLocalShadow:
+            int: left 1
+        return: LmTestLocalShadow\left
+    end: lm_test_local_typedef_left
+
+    fn: lm_test_local_typedef_right () int
+        LmTestLocalShadow:
+            int: right 2
+        return: LmTestLocalShadow\right
+    end: lm_test_local_typedef_right
+
+    external:
+        fn: main () int
+            return: lm_test_local_typedef_left() != 1 || lm_test_local_typedef_right() != 2
+        end: main
+    end: external
+end: L2

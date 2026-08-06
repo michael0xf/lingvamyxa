@@ -10300,17 +10300,26 @@ then emits their typedefs, and finally leaves that scope. Descriptors created by
 this replay do not survive into the later function-body phase; the body creates
 its own lexical bindings when it is emitted.
 
+The replay hoists a local typedef only while that declaration is compatible
+with the translation-unit projection already emitted at the same canonical C
+name. If another function has already hoisted a different local declaration,
+the later declaration remains a true block-local typedef and may shadow the
+outer C name. An incompatible outer declaration is not a source-language type
+conflict and is not diagnosed by the block-local dominance check.
+
 The temporary replay declares descriptor bindings only inside its bounded
-namespace scope. Target typedef deduplication remains Registry-backed at this
-stage and may outlive that scope, but declaration replay produces no owner or
-field Registry rows.
+namespace scope. Hosted C typedef deduplication is held in the current output's
+projection state, not in that lexical scope; it neither extends descriptor
+lifetime nor creates Registry data.
 
 The normalized `structuralFields` view is the only compiler-semantic shape state
 produced by named-structure and physical `merge:` declarations. These paths no
 longer publish implicit `owner.field.*`, `class.present`, `class.kind`,
 `class.reference-base` or `layout.backend` Registry rows. They still emit the
-hosted C layout/storage projection and still use Registry-backed
-`typedef.emitted` state solely to deduplicate backend output.
+hosted C layout/storage projection. Repeated target declarations are suppressed
+only when the implementation-private per-output projection state described in
+section 20.2.1.1 proves that the earlier target declaration is identical and is
+present wherever the later declaration would be present.
 
 Layout collection, declaration/type-head recognition, top-level lowering,
 typed field-chain class resolution, physical `merge:` source admission and L2
@@ -10337,10 +10346,9 @@ return layouts. The fallback does not publish those rows into the namespace
 descriptor and does not make Registry a second source-semantic lookup
 environment.
 
-Registry-backed typedef state, the current hosted C layout/storage path and
-legacy top-level backing remain implementation debt. Explicit ABI Registry
-fallback remains supported during this migration and does not define source
-semantics.
+The current hosted C named-layout/storage path and legacy top-level backing
+remain implementation debt. Explicit ABI Registry fallback remains supported
+during this migration and does not define source semantics.
 
 
 19.21. Operations, Operators and Receivers
@@ -14330,10 +14338,9 @@ source descriptor. A Table may be passed to an explicit descriptor-conversion
 operation as authoring data, but the table name, keys and cells declare nothing
 by themselves.
 
-The current named-structure fallback, Registry-backed C typedef state and
-top-level untracked static backing are legacy bootstrap behavior. They are not
-normative language semantics and must be removed or confined behind the backend
-projection boundary.
+The current named-structure fallback and top-level untracked static backing are
+legacy bootstrap behavior. They are not normative language semantics and must
+be removed or confined behind the backend projection boundary.
 
 20.2.1.1. Source Descriptors and Target Projection Are Separate
 
@@ -14365,6 +14372,55 @@ translator while remaining one-way dependencies:
                          -> selected backend representation
 
 The backend representation never creates the source descriptor retroactively.
+
+A backend may maintain implementation-private projection state to ensure that a
+target declaration is emitted once. The hosted C bootstrap scopes this state to
+one output translation and shares it across imported declarations, prelude,
+prototypes, bodies and bounded lexical-scope replays. It is reset before another
+output is translated. This state is not a namespace binding, descriptor,
+Registry or Table, and source code cannot observe or modify it. In particular,
+a Table or relation named `typedef.emitted` has no privileged effect on backend
+output.
+
+Projection-state identity is the identity of the target artifact, not evidence
+that a source descriptor exists. For a hosted C typedef managed by this shared
+projection state, the collision key is its target identifier namespace, C
+lexical scope and canonical emitted C identifier. Each declaration at that key
+also carries a normalized complete target-declaration fingerprint and a
+structural target-presence path. The fingerprint includes every token that
+changes the projected C type, including struct/union/function-pointer category,
+ordered fields, effective pointer depth, constness, array shape, return type and
+parameters. The current bootstrap uses the exact unguarded declaration bytes
+emitted at canonical indentation as this fingerprint, so comparison cannot
+drift from generated C.
+
+A prior declaration may suppress a later emission only when their fingerprints
+are equal and the prior presence path dominates the later path: whenever the
+later declaration is present, the prior one is also present. Equal declarations
+under independent guards therefore remain separately guarded emissions. A
+declaration emitted in one conditional branch is not recorded as unconditional.
+
+Different fingerprints at one collision key are an error whenever their
+presence paths may overlap. They may coexist only in branches that the emitted
+target structure proves mutually exclusive, such as siblings of the same
+`#if`/`#elif`/`#else` group. Independent guards are not assumed exclusive.
+Leaving a branch removes it from the active dominance path but does not erase
+its declaration from per-output conflict validation. A later unconditional
+declaration must consequently be compatible with every earlier conditional
+alternative that it can overlap.
+
+True block-local typedef fallback remains scoped to its C block and does not
+publish translation-unit projection state or a translation-unit target guard.
+It may be skipped only when an identical already-projected declaration dominates
+that block. The projection state and generated target guard must not introduce a
+source name, establish source compatibility, select a layout, or make a
+first-declaration-wins choice.
+
+The current shared state covers named structures, physical `merge:`, non-forward
+`c.struct`/`c.union` layouts and function-pointer typedefs. Unifying legacy L4
+alias/forward emission and private generated ABI typedefs with the same
+collision domain remains bootstrap debt; their present ordering and reserved
+names are backend constraints and do not define language semantics.
 
 20.2.2. L1 and L2 Translator Receivers
 

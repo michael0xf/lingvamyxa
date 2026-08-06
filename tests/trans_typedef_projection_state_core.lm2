@@ -1,0 +1,524 @@
+import: "lm2/trans.lm2"
+
+L1:
+===
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    return lm_lmx_message_thread_run_entry(lm_test_typedef_projection_state_core);
+}
+
+#define main lm_test_embedded_trans_main
+===
+
+fn: lm_test_typedef_projection_root_frame (const: LmP0Document: document) const: LmP0Frame
+    const: LmP0Node: root
+    const: LmP0Field: field
+
+    root: lm_p0_document_root(document)
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        return: 0
+    field: lm_trans_l2_structure_first_present_field(root\as\structure)
+    if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME || lm_trans_l2_structure_next_present_field(field) != 0
+        return: 0
+return: field\value\as\frame
+
+fn: lm_test_typedef_projection_file_substring_count (FILE: file; const: @(char needle)) size_t
+    @: char buffer
+    long: length
+    size_t: count
+    size_t: i
+    size_t: needle_length
+
+    if: file = 0 || needle = 0 || c.fflush(file) != 0 || c.fseek(file, 0L, c.SEEK_END) != 0
+        return: 0U
+    length: c.ftell(file)
+    if: length < 0L || c.fseek(file, 0L, c.SEEK_SET) != 0
+        return: 0U
+    buffer: lm_own_new_zero((cast: size_t length) + 1U)
+    if: buffer = 0
+        return: 0U
+    if: length != 0L && c.fread(buffer, 1U, (cast: size_t length), file) != (cast: size_t length)
+        lm_own_delete(buffer, 0)
+        return: 0U
+
+    needle_length: c.strlen(needle)
+    count: 0U
+    i: 0U
+    while: needle_length != 0U && i + needle_length <= (cast: size_t length)
+        if: c.memcmp(buffer + i, needle, needle_length) = 0
+            count: count + 1U
+            i: i + needle_length
+        else:
+            i: i + 1U
+        ---
+    lm_own_delete(buffer, 0)
+return: count
+
+fn: lm_test_typedef_projection_declaration_file (const: @(char declaration)) FILE
+    FILE: file
+
+    if: declaration = 0
+        return: 0
+    file: c.tmpfile()
+    if: file = 0
+        return: 0
+    if: lm_trans_put(file, declaration) != 0
+        c.fclose(file)
+        return: 0
+return: file
+
+fn: lm_test_typedef_projection_emit_cstr (
+    FILE: output
+    const: @(char name)
+    const: @(char declaration)
+    @: int out_emitted
+) int
+    FILE: declaration_file
+    int: status
+
+    declaration_file: lm_test_typedef_projection_declaration_file(declaration)
+    if: declaration_file = 0
+        return: 1
+    status: lm_trans_typedef_projection_emit_prepared_cstr(output, name, declaration_file, out_emitted)
+    c.fclose(declaration_file)
+return: status
+
+fn: lm_test_typedef_projection_emit_text (
+    FILE: output
+    const: LmP0Text: name
+    const: @(char declaration)
+    @: int out_emitted
+) int
+    FILE: declaration_file
+    int: status
+
+    declaration_file: lm_test_typedef_projection_declaration_file(declaration)
+    if: declaration_file = 0
+        return: 1
+    status: lm_trans_typedef_projection_emit_prepared_text(output, name, declaration_file, out_emitted)
+    c.fclose(declaration_file)
+return: status
+
+fn: lm_test_typedef_projection_base_rules () int
+    const: @(char declaration_a)
+    const: @(char declaration_b)
+    FILE: output
+    int: entered
+    int: emitted
+    int: status
+
+    declaration_a: "typedef struct Foo {\n    int value;\n} Foo;\n"
+    declaration_b: "typedef struct Foo {\n    double value;\n} Foo;\n"
+    output: c.tmpfile()
+    entered: 0
+    status: output = 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+        status: 1
+    else:
+        if: status = 0
+            entered: 1
+        ---
+
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(output, "Foo", declaration_a, @ emitted) != 0 || emitted != 1)
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(output, "Foo", declaration_a, @ emitted) != 0 || emitted != 0)
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(output, "Foo", declaration_b, @ emitted) = 0 || lm_test_typedef_projection_file_substring_count(output, "typedef struct Foo") != 1U)
+        status: 1
+
+    if: status = 0 && lm_trans_typedef_projection_conditional_enter() != 0
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(output, "Foo", declaration_a, @ emitted) != 0 || emitted != 0)
+        status: 1
+    if: status = 0 && lm_test_typedef_projection_emit_cstr(output, "Foo", declaration_b, @ emitted) = 0
+        status: 1
+    if: status = 0 && lm_trans_typedef_projection_conditional_leave() != 0
+        status: 1
+
+    if: entered
+        if: lm_trans_typedef_projection_output_leave() != 0
+            status: 1
+        entered: 0
+    ---
+    if: output != 0
+        c.fclose(output)
+return: status
+
+fn: lm_test_typedef_projection_presence_rules () int
+    const: @(char declaration_a)
+    const: @(char declaration_b)
+    FILE: output
+    size_t: group_id
+    size_t: nested_group_id
+    int: entered
+    int: emitted
+    int: status
+
+    declaration_a: "typedef struct Foo {\n    int value;\n} Foo;\n"
+    declaration_b: "typedef struct Foo {\n    double value;\n} Foo;\n"
+    output: c.tmpfile()
+    entered: 0
+    status: output = 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+        status: 1
+    else:
+        if: status = 0
+            entered: 1
+        ---
+
+    if: status = 0 && (lm_trans_typedef_projection_group_new(@ group_id) != 0 || lm_trans_typedef_projection_branch_enter(group_id, 1U) != 0)
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(output, "Foo", declaration_a, @ emitted) != 0 || emitted != 1)
+        status: 1
+    if: status = 0 && lm_trans_typedef_projection_conditional_leave() != 0
+        status: 1
+    if: status = 0 && lm_trans_typedef_projection_branch_enter(group_id, 2U) != 0
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(output, "Foo", declaration_b, @ emitted) != 0 || emitted != 1)
+        status: 1
+    if: status = 0 && lm_trans_typedef_projection_conditional_leave() != 0
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(output, "Foo", declaration_a, @ emitted) = 0 || lm_test_typedef_projection_file_substring_count(output, "typedef struct Foo") != 2U)
+        status: 1
+
+    if: entered
+        if: lm_trans_typedef_projection_output_leave() != 0
+            status: 1
+        entered: 0
+    ---
+    if: output != 0
+        c.fclose(output)
+
+    output: c.tmpfile()
+    status: status || output = 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+        status: 1
+    else:
+        if: status = 0
+            entered: 1
+        ---
+    if: status = 0 && lm_trans_typedef_projection_conditional_enter() != 0
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(output, "Foo", declaration_a, @ emitted) != 0 || emitted != 1)
+        status: 1
+    if: status = 0 && lm_trans_typedef_projection_conditional_leave() != 0
+        status: 1
+    if: status = 0 && lm_trans_typedef_projection_conditional_enter() != 0
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(output, "Foo", declaration_a, @ emitted) != 0 || emitted != 1)
+        status: 1
+    if: status = 0 && lm_test_typedef_projection_emit_cstr(output, "Foo", declaration_b, @ emitted) = 0
+        status: 1
+    if: status = 0 && lm_trans_typedef_projection_conditional_leave() != 0
+        status: 1
+    if: status = 0 && lm_test_typedef_projection_file_substring_count(output, "typedef struct Foo") != 2U
+        status: 1
+
+    if: entered
+        if: lm_trans_typedef_projection_output_leave() != 0
+            status: 1
+        entered: 0
+    ---
+    if: output != 0
+        c.fclose(output)
+
+    output: c.tmpfile()
+    status: status || output = 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+        status: 1
+    else:
+        if: status = 0
+            entered: 1
+        ---
+    if: status = 0 && (lm_trans_typedef_projection_group_new(@ group_id) != 0 || lm_trans_typedef_projection_branch_enter(group_id, 1U) != 0)
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(output, "Foo", declaration_a, @ emitted) != 0 || emitted != 1)
+        status: 1
+    if: status = 0 && (lm_trans_typedef_projection_group_new(@ nested_group_id) != 0 || lm_trans_typedef_projection_branch_enter(nested_group_id, 1U) != 0)
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(output, "Foo", declaration_a, @ emitted) != 0 || emitted != 0)
+        status: 1
+    if: status = 0 && lm_trans_typedef_projection_conditional_leave() != 0
+        status: 1
+    if: status = 0 && lm_trans_typedef_projection_conditional_leave() != 0
+        status: 1
+    if: entered
+        if: lm_trans_typedef_projection_output_leave() != 0
+            status: 1
+        entered: 0
+    ---
+    if: output != 0
+        c.fclose(output)
+return: status
+
+fn: lm_test_typedef_projection_canonical_and_nested_outputs () int
+    const: @(char declaration)
+    FILE: outer_output
+    FILE: inner_output
+    LmP0Text: name
+    LmP0Text: quoted_name
+    int: outer_entered
+    int: inner_entered
+    int: emitted
+    int: status
+
+    declaration: "typedef struct Foo {\n    int value;\n} Foo;\n"
+    outer_output: c.tmpfile()
+    inner_output: c.tmpfile()
+    name: lm_trans_text_from_cstr("Foo")
+    quoted_name: lm_trans_text_from_cstr("`Foo`")
+    outer_entered: 0
+    inner_entered: 0
+    status: outer_output = 0 || inner_output = 0 || name = 0 || quoted_name = 0
+
+    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+        status: 1
+    else:
+        if: status = 0
+            outer_entered: 1
+        ---
+    if: status = 0 && (lm_test_typedef_projection_emit_text(outer_output, quoted_name, declaration, @ emitted) != 0 || emitted != 1)
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(outer_output, "`Foo`", declaration, @ emitted) != 0 || emitted != 0)
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_text(outer_output, name, declaration, @ emitted) != 0 || emitted != 0)
+        status: 1
+
+    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+        status: 1
+    else:
+        if: status = 0
+            inner_entered: 1
+        ---
+    if: status = 0 && (lm_test_typedef_projection_emit_text(inner_output, name, declaration, @ emitted) != 0 || emitted != 1)
+        status: 1
+    if: inner_entered
+        if: lm_trans_typedef_projection_output_leave() != 0
+            status: 1
+        inner_entered: 0
+    ---
+    if: status = 0 && (lm_test_typedef_projection_emit_text(outer_output, name, declaration, @ emitted) != 0 || emitted != 0)
+        status: 1
+    if: outer_entered
+        if: lm_trans_typedef_projection_output_leave() != 0
+            status: 1
+        outer_entered: 0
+    ---
+
+    lm_trans_text_ref_destroy(@ quoted_name)
+    lm_trans_text_ref_destroy(@ name)
+    if: inner_output != 0
+        c.fclose(inner_output)
+    if: outer_output != 0
+        c.fclose(outer_output)
+return: status
+
+fn: lm_test_typedef_projection_error_lifecycle () int
+    const: @(char declaration)
+    FILE: output
+    int: entered
+    int: emitted
+    int: status
+
+    declaration: "typedef int Fresh;\n"
+    output: c.tmpfile()
+    entered: 0
+    status: output = 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+        status: 1
+    else:
+        if: status = 0
+            entered: 1
+        ---
+    if: status = 0 && lm_trans_typedef_projection_conditional_enter() != 0
+        status: 1
+    if: status = 0
+        if: lm_trans_typedef_projection_output_leave() = 0
+            status: 1
+        entered: 0
+    ---
+    if: status = 0 && lm_trans_typedef_projection_conditional_leave() = 0
+        status: 1
+    if: entered
+        lm_trans_typedef_projection_output_leave()
+        entered: 0
+    ---
+
+    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+        status: 1
+    else:
+        if: status = 0
+            entered: 1
+        ---
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(output, "Fresh", declaration, @ emitted) != 0 || emitted != 1)
+        status: 1
+    if: entered
+        if: lm_trans_typedef_projection_output_leave() != 0
+            status: 1
+        entered: 0
+    ---
+    if: output != 0
+        c.fclose(output)
+return: status
+
+fn: lm_test_typedef_projection_named_shape_conflict (
+    LmTransNamespace: namespace_
+    const: LmP0Frame: first
+    const: LmP0Frame: second
+) int
+    FILE: output
+    int: entered
+    int: emitted
+    int: status
+
+    output: c.tmpfile()
+    entered: 0
+    status: output = 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+        status: 1
+    else:
+        if: status = 0
+            entered: 1
+        ---
+    if: status = 0 && (lm_trans_top_level_emit_named_structure_typedef_once(output, namespace_, first, @ emitted) != 0 || emitted != 1)
+        status: 1
+    if: status = 0 && lm_trans_declare_named_structure_layout(namespace_, second) != 0
+        status: 1
+    if: status = 0 && lm_trans_top_level_emit_named_structure_typedef_once(output, namespace_, second, @ emitted) = 0
+        status: 1
+    if: entered
+        if: lm_trans_typedef_projection_output_leave() != 0
+            status: 1
+        entered: 0
+    ---
+    if: output != 0
+        c.fclose(output)
+return: status
+
+fn: lm_test_typedef_projection_registry_unchanged (
+    size_t: loaded_fact_count
+    size_t: view_fact_count
+    size_t: source_table_count
+    size_t: mutation_generation
+    const: LmTableDescriptor: authored_table
+) int
+    if: lm_trans_registry = 0 || lm_trans_registry\view = 0 || authored_table = 0
+        return: 1
+    if: lm_trans_registry\loaded_fact_count != loaded_fact_count || lm_registry_view_fact_count(lm_trans_registry\view) != view_fact_count || lm_registry_view_source_table_count(lm_trans_registry\view) != source_table_count || lm_trans_registry\view\mutation_generation != mutation_generation || lm_table_descriptor_materialized_row_count(authored_table) != 1U
+        return: 1
+return: 0
+
+fn: lm_test_typedef_projection_state_core () int
+    const: @(char registry_source)
+    const: @(char first_structure_source)
+    const: @(char second_structure_source)
+    const: @(char source_path)
+    LmP0Document: registry_document
+    LmP0Document: first_structure_document
+    LmP0Document: second_structure_document
+    const: LmP0Node: registry_root
+    const: LmP0Frame: first_structure_frame
+    const: LmP0Frame: second_structure_frame
+    LmTransNamespace: namespace_
+    LmP0Text: name
+    const: @: char authored_payload
+    const: LmTableDescriptor: authored_table
+    const: LmTableRow: authored_row
+    const: LmTableCell: authored_key
+    const: LmTableCell: authored_value
+    FILE: declaration_file
+    size_t: loaded_fact_count
+    size_t: view_fact_count
+    size_t: source_table_count
+    size_t: mutation_generation
+    size_t: group_id
+    int: emitted
+    int: status
+
+    registry_source: "table:\n    name: `typedef.emitted`\n    columns((class: class) (class: value))\n    rows:\n             Foo Foo\nend: `typedef.emitted`\n"
+    first_structure_source: "Foo:\n    int: value\nend: Foo\n"
+    second_structure_source: "Foo:\n    double: value\nend: Foo\n"
+    source_path: "tests/trans_typedef_projection_state_core.lm2"
+    registry_document: 0
+    first_structure_document: 0
+    second_structure_document: 0
+    namespace_: 0
+    name: 0
+    authored_table: 0
+    authored_row: 0
+    authored_key: 0
+    authored_value: 0
+    declaration_file: 0
+    loaded_fact_count: 0U
+    view_fact_count: 0U
+    source_table_count: 0U
+    mutation_generation: 0U
+    status: 0
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_load_for_source(source_path) != 0
+        return: 1
+    lm_trans_registry\view_mode: 2
+
+    if: lm_p0_parse_string(registry_source, @ registry_document) != 0 || registry_document = 0 || lm_p0_parse_string(first_structure_source, @ first_structure_document) != 0 || first_structure_document = 0 || lm_p0_parse_string(second_structure_source, @ second_structure_document) != 0 || second_structure_document = 0
+        status: 1
+    registry_root: lm_p0_document_root(registry_document)
+    first_structure_frame: lm_test_typedef_projection_root_frame(first_structure_document)
+    second_structure_frame: lm_test_typedef_projection_root_frame(second_structure_document)
+    if: status = 0 && (registry_root = 0 || lm_trans_registry_load_inline_root(registry_root, source_path) != 0 || lm_trans_materialize_local_l2_source_root(registry_root, source_path, 1) != 0)
+        status: 1
+
+    namespace_: lm_trans_namespace_new()
+    name: lm_trans_text_from_cstr("Foo")
+    if: status = 0 && (namespace_ = 0 || name = 0 || first_structure_frame = 0 || second_structure_frame = 0 || lm_trans_namespace_attach_registry(namespace_) != 0 || lm_trans_declare_named_structure_layout(namespace_, first_structure_frame) != 0)
+        status: 1
+
+    authored_table: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "typedef.emitted", 15U)
+    authored_row: lm_table_descriptor_materialized_row_at(authored_table, 0U)
+    authored_key: lm_table_row_cell_at(authored_row, 0U)
+    authored_value: lm_table_row_cell_at(authored_row, 1U)
+    authored_payload: lm_trans_namespace_registry_lookup(namespace_, name, "typedef.emitted")
+    if: status = 0 && (authored_table = 0 || lm_table_descriptor_materialized_row_count(authored_table) != 1U || authored_row = 0 || authored_key = 0 || authored_key\value = 0 || c.strcmp(authored_key\value, "Foo") != 0 || authored_value = 0 || authored_value\value = 0 || c.strcmp(authored_value\value, "Foo") != 0 || authored_payload = 0 || c.strcmp(authored_payload, "Foo") != 0)
+        status: 1
+
+    if: lm_trans_registry != 0 && lm_trans_registry\view != 0
+        loaded_fact_count: lm_trans_registry\loaded_fact_count
+        view_fact_count: lm_registry_view_fact_count(lm_trans_registry\view)
+        source_table_count: lm_registry_view_source_table_count(lm_trans_registry\view)
+        mutation_generation: lm_trans_registry\view\mutation_generation
+    ---
+
+    declaration_file: lm_test_typedef_projection_declaration_file("typedef int Foo;\n")
+    if: status = 0 && (declaration_file = 0 || lm_trans_typedef_projection_emit_prepared_cstr(c.stdout, "Foo", declaration_file, @ emitted) = 0 || lm_trans_typedef_projection_group_new(@ group_id) = 0 || lm_trans_typedef_projection_branch_enter(1U, 1U) = 0 || lm_trans_typedef_projection_conditional_leave() = 0 || lm_trans_typedef_projection_output_leave() = 0)
+        status: 1
+    if: declaration_file != 0
+        c.fclose(declaration_file)
+        declaration_file: 0
+
+    if: status = 0 && lm_test_typedef_projection_registry_unchanged(loaded_fact_count, view_fact_count, source_table_count, mutation_generation, authored_table) != 0
+        status: 1
+    if: status = 0 && lm_test_typedef_projection_base_rules() != 0
+        status: 1
+    if: status = 0 && lm_test_typedef_projection_presence_rules() != 0
+        status: 1
+    if: status = 0 && lm_test_typedef_projection_canonical_and_nested_outputs() != 0
+        status: 1
+    if: status = 0 && lm_test_typedef_projection_error_lifecycle() != 0
+        status: 1
+    if: status = 0 && lm_test_typedef_projection_named_shape_conflict(namespace_, first_structure_frame, second_structure_frame) != 0
+        status: 1
+
+    if: status = 0 && (lm_test_typedef_projection_registry_unchanged(loaded_fact_count, view_fact_count, source_table_count, mutation_generation, authored_table) != 0 || lm_trans_registry_assert_source_table_materialization() != 0 || lm_trans_registry_assert_view_parity() != 0)
+        status: 1
+
+    lm_trans_text_ref_destroy(@ name)
+    lm_trans_namespace_delete(namespace_)
+    if: second_structure_document != 0
+        lm_p0_document_destroy(second_structure_document)
+    if: first_structure_document != 0
+        lm_p0_document_destroy(first_structure_document)
+    if: registry_document != 0
+        lm_p0_document_destroy(registry_document)
+    lm_trans_registry_destroy()
+return: status

@@ -585,6 +585,9 @@ fn: lm_trans_emit_layout_definition (FILE: file; const: @(char layout_name); con
     int: has_forward
     int: emits_typedef
     LmP0Text: layout_text
+    FILE: declaration_file
+    FILE: target_file
+    int: emitted
     int: status
 
     if: file = 0 || layout_name = 0
@@ -639,42 +642,58 @@ fn: lm_trans_emit_layout_definition (FILE: file; const: @(char layout_name); con
         prefix: "union "
 
     emits_typedef: has_forward = 0 && (c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, "c.union") = 0)
-    if: emits_typedef && lm_trans_typedef_projection_has_cstr(layout_name)
-        lm_trans_l4_text_view_delete(@ layout_text)
-        return: 0
+    declaration_file: 0
+    target_file: file
+    if: emits_typedef
+        declaration_file: c.tmpfile()
+        target_file: declaration_file
     ---
-    if: emits_typedef && (lm_trans_put(file, "#ifndef LM_LMX_TYPEDEF_DEFINED_") != 0 || lm_trans_emit_identifier(file, layout_text) != 0 || lm_trans_put(file, "\n#define LM_LMX_TYPEDEF_DEFINED_") != 0 || lm_trans_emit_identifier(file, layout_text) != 0 || lm_trans_put(file, " 1\n") != 0)
+    if: target_file = 0
         lm_trans_l4_text_view_delete(@ layout_text)
         return: 1
     ---
-    if: prefix = 0 || lm_trans_put(file, prefix) != 0
+
+    if: prefix = 0 || lm_trans_put(target_file, prefix) != 0
+        if: declaration_file != 0
+            c.fclose(declaration_file)
+        ---
         lm_trans_l4_text_view_delete(@ layout_text)
         return: 1
 
-    if: lm_trans_emit_identifier(file, lm_trans_text_from_cstr(layout_name)) != 0 || lm_trans_put(file, " {\n") != 0
+    if: lm_trans_emit_identifier(target_file, layout_text) != 0 || lm_trans_put(target_file, " {\n") != 0
+        if: declaration_file != 0
+            c.fclose(declaration_file)
+        ---
         lm_trans_l4_text_view_delete(@ layout_text)
         return: 1
 
-    if: lm_trans_emit_layout_fields(file, layout_name, namespace_, 1U) != 0
+    if: lm_trans_emit_layout_fields(target_file, layout_name, namespace_, 1U) != 0
+        if: declaration_file != 0
+            c.fclose(declaration_file)
+        ---
         lm_trans_l4_text_view_delete(@ layout_text)
         return: 1
 
     if: has_forward && (c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, "c.union") = 0)
-        status: lm_trans_put(file, "};\n")
+        status: lm_trans_put(target_file, "};\n")
         lm_trans_l4_text_view_delete(@ layout_text)
         return: status
     if: c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, "c.union") = 0
-        if: lm_trans_put(file, "} ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(layout_name)) != 0 || lm_trans_put(file, ";\n") != 0
+        if: lm_trans_put(target_file, "} ") != 0 || lm_trans_emit_identifier(target_file, layout_text) != 0 || lm_trans_put(target_file, ";\n") != 0
             status: 1
         else:
             status: 0
-        if: status = 0 && lm_trans_put(file, "#endif\n") != 0
-            status: 1
-        if: status = 0 && lm_trans_typedef_projection_mark_cstr(layout_name) != 0
-            status: 1
+        if: status = 0 && emits_typedef
+            status: lm_trans_typedef_projection_emit_prepared_cstr(file, layout_name, declaration_file, @ emitted)
+        if: declaration_file != 0
+            c.fclose(declaration_file)
+        ---
         lm_trans_l4_text_view_delete(@ layout_text)
         return: status
-    status: lm_trans_put(file, "};\n")
+    status: lm_trans_put(target_file, "};\n")
+    if: declaration_file != 0
+        c.fclose(declaration_file)
+    ---
     lm_trans_l4_text_view_delete(@ layout_text)
 return: status
 
@@ -2128,8 +2147,10 @@ return: 0
 fn: lm_trans_emit_l4_function_pointer_type_name (FILE: file; const: (LmTransNamespace: namespace_); const: @(char name); const: @(char error_name)) int
     @: LmTransAbiParam params
     LmP0Text: name_text
+    FILE: declaration_file
     size_t: param_capacity
     size_t: param_count
+    int: emitted
     int: status
 
     if: name = 0 || error_name = 0
@@ -2138,25 +2159,23 @@ fn: lm_trans_emit_l4_function_pointer_type_name (FILE: file; const: (LmTransName
     name_text: lm_trans_text_from_cstr(name)
     if: name_text = 0
         return: 1
-    if: lm_trans_typedef_projection_has_cstr(name)
-        lm_trans_text_ref_destroy(@ name_text)
-        return: 0
-
-    if: lm_trans_put(file, "#ifndef LM_LMX_TYPEDEF_DEFINED_") != 0 || lm_trans_emit_identifier(file, name_text) != 0 || lm_trans_put(file, "\n#define LM_LMX_TYPEDEF_DEFINED_") != 0 || lm_trans_emit_identifier(file, name_text) != 0 || lm_trans_put(file, " 1\n") != 0
-        lm_trans_text_ref_destroy(@ name_text)
-        return: 1
 
     param_capacity: 256U
     params: lm_trans_l4_abi_params_new(param_capacity)
     if: params = 0
         lm_trans_text_ref_destroy(@ name_text)
         return: 1
-    status: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, name, error_name) != 0 || lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_return_type(file, namespace_, name, error_name) != 0 || lm_trans_put(file, " (*") != 0 || lm_trans_emit_identifier(file, name_text) != 0 || lm_trans_put(file, ")(") != 0 || lm_trans_emit_function_pointer_abi_params(file, namespace_, name_text, params, param_count) != 0 || lm_trans_put(file, ");\n") != 0
+
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
+        lm_trans_l4_abi_params_delete(params, param_capacity)
+        lm_trans_text_ref_destroy(@ name_text)
+        return: 1
+    status: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, name, error_name) != 0 || lm_trans_put(declaration_file, "typedef ") != 0 || lm_trans_emit_abi_return_type(declaration_file, namespace_, name, error_name) != 0 || lm_trans_put(declaration_file, " (*") != 0 || lm_trans_emit_identifier(declaration_file, name_text) != 0 || lm_trans_put(declaration_file, ")(") != 0 || lm_trans_emit_function_pointer_abi_params(declaration_file, namespace_, name_text, params, param_count) != 0 || lm_trans_put(declaration_file, ");\n") != 0
     lm_trans_l4_abi_params_delete(params, param_capacity)
-    if: status = 0 && lm_trans_put(file, "#endif\n") != 0
-        status: 1
-    if: status = 0 && lm_trans_typedef_projection_mark_cstr(name) != 0
-        status: 1
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_cstr(file, name, declaration_file, @ emitted)
+    c.fclose(declaration_file)
     lm_trans_text_ref_destroy(@ name_text)
 return: status
 

@@ -341,7 +341,7 @@ fn: lm_test_l2_predef_source_rows_core () int
         status: 1
     if: status = 0
         typedef_position: c.ftell(prelude_file)
-        if: typedef_position < 0L || lm_trans_typedef_projection_has_cstr("LmTestPredefEquals") = 0 || lm_trans_emit_l4_function_pointer_type_name(prelude_file, namespace_, "LmTestPredefEquals", "functionPointerType") != 0 || c.ftell(prelude_file) != typedef_position
+        if: typedef_position < 0L || lm_trans_emit_l4_function_pointer_type_name(prelude_file, namespace_, "LmTestPredefEquals", "functionPointerType") != 0 || c.ftell(prelude_file) != typedef_position
             status: 1
     ---
     if: status = 0 && lm_test_l2_predef_metadata_is_exact() = 0

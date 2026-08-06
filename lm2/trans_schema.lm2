@@ -13,6 +13,9 @@ table:
              LmTransCallLowering         c.struct
              LmTransRegistrySourcePathCacheEntry c.struct
              LmTransCallableProjectionCacheEntry c.struct
+             LmTransTypedefProjectionPathStep c.struct
+             LmTransTypedefProjectionEntry c.struct
+             LmTransTypedefProjectionOutput c.struct
              LmTransCallableValue        c.struct
              LmTransExprAtomLowering     c.struct
              LmTransExprLoweredRange     c.struct
@@ -121,6 +124,7 @@ table:
     columns((class: class) (int: value))
     rows:
              lm_trans_callable_projection_cache_entry_delete_any 1
+             lm_trans_typedef_projection_entry_delete_any 1
              lm_trans_capture_delete_any 1
              lm_trans_cleanup_delete_any 1
              lm_trans_descriptor_field_delete_any 1
@@ -387,6 +391,9 @@ table:
              LmTransCallLowering            c.struct
              LmTransRegistrySourcePathCacheEntry c.struct
              LmTransCallableProjectionCacheEntry c.struct
+             LmTransTypedefProjectionPathStep c.struct
+             LmTransTypedefProjectionEntry c.struct
+             LmTransTypedefProjectionOutput c.struct
              LmTransCallableValue           c.struct
              LmTransExprLoweredRange        c.named-struct
              LmTransExprStack               c.named-struct
@@ -444,6 +451,9 @@ table:
              LmTransCallLowering            1
              LmTransRegistrySourcePathCacheEntry 1
              LmTransCallableProjectionCacheEntry 1
+             LmTransTypedefProjectionPathStep 1
+             LmTransTypedefProjectionEntry 1
+             LmTransTypedefProjectionOutput 1
              LmTransCallableValue           1
              LmTransExprLoweredRange        1
              LmTransExprStack               1
@@ -761,6 +771,37 @@ table:
              class_name  char  0  1  0
              projection  char  1  1  1
 end: LmTransCallableProjectionCacheEntry
+
+table:
+    name: LmTransTypedefProjectionPathStep
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             group_id   size_t  0
+             branch_id  size_t  1
+end: LmTransTypedefProjectionPathStep
+
+table:
+    name: LmTransTypedefProjectionEntry
+    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`))
+    rows:
+             name                char    0  1
+             declaration         char    1  1
+             declaration_length  size_t  2  0
+             path_groups         size_t  3  1
+             path_branches       size_t  4  1
+             path_count          size_t  5  0
+             identity            size_t  6  0
+end: LmTransTypedefProjectionEntry
+
+table:
+    name: LmTransTypedefProjectionOutput
+    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`))
+    rows:
+             entries           LmOwnPtrStack  0  0
+             active_path       LmOwnPtrStack  1  0
+             next_group_id     size_t         2  0
+             next_identity     size_t         3  0
+end: LmTransTypedefProjectionOutput
 
 table:
     name: LmTransCallableValue

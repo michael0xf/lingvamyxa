@@ -139,7 +139,7 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     if: namespace_ != 0
         lm_trans_namespace_leave_scope(namespace_)
 
-    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, local_name) != 0 || lm_trans_top_level_named_structure_typedef_emitted(namespace_, local_name) = 0 || lm_trans_namespace_registry_lookup(namespace_, local_name, "typedef.emitted") != 0)
+    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, local_name) != 0 || lm_test_file_substring_count(output, "typedef struct LocalRecord") != 1U || lm_trans_namespace_registry_lookup(namespace_, local_name, "typedef.emitted") != 0)
         status: 1
 
     if: namespace_ != 0

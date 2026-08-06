@@ -357,26 +357,34 @@ fn: lm_trans_typedef_projection_output_enter () int
 fn: lm_trans_typedef_projection_output_leave () int
 fn: lm_trans_typedef_projection_conditional_enter () int
 fn: lm_trans_typedef_projection_conditional_leave () int
+fn: lm_trans_typedef_projection_group_new (@: size_t out_group_id) int
+fn: lm_trans_typedef_projection_branch_enter (size_t: group_id; size_t: branch_id) int
 
-fn: lm_trans_typedef_projection_has_text (
+fn: lm_trans_typedef_projection_emit_prepared_text (
+    FILE: file
     const: LmP0Text: name
+    FILE: declaration_file
+    @: int out_emitted
 ) int
 
-fn: lm_trans_typedef_projection_has_cstr (
+fn: lm_trans_typedef_projection_emit_prepared_text_if_compatible (
+    FILE: file
+    const: LmP0Text: name
+    FILE: declaration_file
+    @: int out_emitted
+) int
+
+fn: lm_trans_typedef_projection_emit_prepared_cstr (
+    FILE: file
     const: @: char name
+    FILE: declaration_file
+    @: int out_emitted
 ) int
 
-fn: lm_trans_typedef_projection_mark_text (
+fn: lm_trans_typedef_projection_prepared_text_suppressed (
     const: LmP0Text: name
-) int
-
-fn: lm_trans_typedef_projection_mark_cstr (
-    const: @: char name
-) int
-
-fn: lm_trans_top_level_named_structure_typedef_emitted (
-    const: LmTransNamespace: namespace_
-    const: LmP0Text: name
+    FILE: declaration_file
+    @: int out_suppress
 ) int
 
 fn: lm_trans_emit_named_structure_storage (
