@@ -1,758 +1,664 @@
 predef: "lm2/own_abi.lm2"
 predef: "lm2/rest_lmx_http_server_abi.lm2"
 
-L1:
-===
-#include <limits.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+include: "<limits.h>" "<stdint.h>" "<stdio.h>" "<stdlib.h>" "<string.h>"
 
-typedef struct LmRestLmxHttpServer LmRestLmxHttpServer;
-typedef struct LmRestLmxHttpServerOptionsV1 {
-    size_t abi_size;
-    const char *bind_address;
-    unsigned port;
-    const char *base_path;
-    size_t max_body_bytes;
-    unsigned worker_count;
-    unsigned request_timeout_ms;
-} LmRestLmxHttpServerOptionsV1;
+`ifndef-default`: LM_MESSAGE_STATUS_ROUTE_NOT_FOUND 64
+`ifndef-default`: LM_MESSAGE_STATUS_INVALID_ADDRESS 66
+`ifndef-default`: LM_MESSAGE_STATUS_APPLICATION_STOPPING 70
 
-extern int lm_message_thread_runtime_admit_lmx(
-    struct LmMessageThreadRuntime *runtime,
-    const char *route,
-    const char *lmx,
-    size_t length
-);
+`ifndef-default`: LM_REST_LMX_SERVER_PROVIDER_NONE 0
+`ifndef-default`: LM_REST_LMX_SERVER_PROVIDER_CIVETWEB 1
+`ifndef-default`: LM_REST_LMX_SERVER_PROVIDER LM_REST_LMX_SERVER_PROVIDER_NONE
+`ifndef-default`: LM_REST_LMX_SERVER_UNUSED `(void)`
 
-#ifndef LM_MESSAGE_STATUS_ROUTE_NOT_FOUND
-#define LM_MESSAGE_STATUS_ROUTE_NOT_FOUND 64
-#endif
-#ifndef LM_MESSAGE_STATUS_INVALID_ADDRESS
-#define LM_MESSAGE_STATUS_INVALID_ADDRESS 66
-#endif
-#ifndef LM_MESSAGE_STATUS_APPLICATION_STOPPING
-#define LM_MESSAGE_STATUS_APPLICATION_STOPPING 70
-#endif
+table:
+    source
+    name: `define.value`
+    columns((class: class) (@: char value))
+    rows:
+             LmCivetwebRequestInfo  "struct mg_request_info"
+end: `define.value`
 
-#ifndef LM_REST_LMX_SERVER_PROVIDER_NONE
-#define LM_REST_LMX_SERVER_PROVIDER_NONE 0
-#endif
-#ifndef LM_REST_LMX_SERVER_PROVIDER_CIVETWEB
-#define LM_REST_LMX_SERVER_PROVIDER_CIVETWEB 1
-#endif
+table:
+    source
+    name: `class.spelling`
+    columns((class: class) (@: char spelling))
+    rows:
+             LmCivetwebConnection   "struct mg_connection"
+             LmCivetwebRequestInfo  "struct mg_request_info"
+             LmCivetwebServerPort   "struct mg_server_port"
+end: `class.spelling`
 
-#ifndef LM_REST_LMX_SERVER_PROVIDER
-#define LM_REST_LMX_SERVER_PROVIDER LM_REST_LMX_SERVER_PROVIDER_NONE
-#endif
+table:
+    source
+    name: class
+    columns((class: class) (class: kind))
+    rows:
+             LmCivetwebConnection   opaqueReference
+             LmCivetwebRequestInfo  opaqueReference
+             LmCivetwebServerPort   primitive
+end: class
 
-#if LM_REST_LMX_SERVER_PROVIDER != LM_REST_LMX_SERVER_PROVIDER_NONE && \
-    LM_REST_LMX_SERVER_PROVIDER != LM_REST_LMX_SERVER_PROVIDER_CIVETWEB
-#error "Unknown LM_REST_LMX_SERVER_PROVIDER value"
-#endif
+table:
+    source
+    name: `class.c.projection`
+    columns((class: class) (@: char spelling))
+    rows:
+             LmCivetwebConnection   "struct mg_connection"
+             LmCivetwebRequestInfo  "struct mg_request_info"
+             LmCivetwebServerPort   "struct mg_server_port"
+end: `class.c.projection`
 
-#if LM_REST_LMX_SERVER_PROVIDER == LM_REST_LMX_SERVER_PROVIDER_CIVETWEB
+table:
+    source
+    name: `forward.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmRestLmxHttpServer  c.struct
+end: `forward.backend`
 
-#include <civetweb.h>
+table:
+    source
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmRestLmxHttpServer           c.named-struct
+             LmRestLmxHttpServerOptionsV1  c.struct
+end: `layout.backend`
 
-struct LmRestLmxHttpServer {
-    struct LmMessageThreadRuntime *runtime;
-    struct mg_context *context;
-    char *base_path;
-    size_t base_path_length;
-    size_t max_body_bytes;
-    unsigned listening_port;
-    int library_initialized;
-};
+table:
+    source
+    name: `class.reference-base`
+    columns((class: class) (int: value))
+    rows:
+             LmRestLmxHttpServer           1
+             LmRestLmxHttpServerOptionsV1  1
+             LmCivetwebConnection   1
+             LmCivetwebRequestInfo  1
+end: `class.reference-base`
 
-static int lm_rest_lmx_http_ascii_is_hex(unsigned char value) {
-    return (value >= (unsigned char)'0' && value <= (unsigned char)'9') ||
-        (value >= (unsigned char)'a' && value <= (unsigned char)'f') ||
-        (value >= (unsigned char)'A' && value <= (unsigned char)'F');
-}
+table:
+    source
+    name: `cast.target`
+    columns((class: class) (int: value))
+    rows:
+             LmRestLmxHttpServer           1
+             LmRestLmxHttpServerOptionsV1  1
+end: `cast.target`
 
-static unsigned char lm_rest_lmx_http_ascii_lower(unsigned char value) {
-    if (value >= (unsigned char)'A' && value <= (unsigned char)'Z') {
-        return (unsigned char)(value + ((unsigned char)'a' -
-            (unsigned char)'A'));
-    }
-    return value;
-}
+table:
+    source
+    name: LmRestLmxHttpServer
+    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`))
+    rows:
+             runtime              LmMessageThreadRuntime  0 0
+             context              void                    1 1
+             base_path            char                    2 1
+             base_path_length     size_t                  3 0
+             max_body_bytes       size_t                  4 0
+             listening_port       unsigned                5 0
+             library_initialized  int                     6 0
+end: LmRestLmxHttpServer
 
-static int lm_rest_lmx_http_ascii_equal(
-    const char *left,
-    const char *right
-) {
-    size_t index = 0U;
+table:
+    source
+    name: `fn.thread-context.none`
+    columns((class: class) (int: value))
+    rows:
+             lm_rest_lmx_http_ascii_is_hex              1
+             lm_rest_lmx_http_ascii_lower               1
+             lm_rest_lmx_http_ascii_equal               1
+             lm_rest_lmx_http_header_value_is           1
+             lm_rest_lmx_http_parse_size                1
+             lm_rest_lmx_http_parse_unsigned            1
+             lm_rest_lmx_http_bind_address_is_valid     1
+             lm_rest_lmx_http_base_path_is_valid        1
+             lm_rest_lmx_http_copy_text                 1
+             lm_rest_lmx_http_send_status               1
+             lm_rest_lmx_http_admission_status          1
+             lm_rest_lmx_http_route                     1
+             lm_rest_lmx_http_begin_request             1
+             lm_rest_lmx_http_server_options_are_valid  1
+             lm_rest_lmx_http_server_provider_name      1
+             lm_rest_lmx_http_server_start              1
+             lm_rest_lmx_http_server_start_default      1
+             lm_rest_lmx_http_server_stop               1
+             lm_rest_lmx_http_server_port               1
+end: `fn.thread-context.none`
 
-    if (left == 0 || right == 0) {
-        return 0;
-    }
-    while (left[index] != '\0' && right[index] != '\0') {
-        if (lm_rest_lmx_http_ascii_lower((unsigned char)left[index]) !=
-            lm_rest_lmx_http_ascii_lower((unsigned char)right[index])) {
-            return 0;
-        }
-        index += 1U;
-    }
-    return left[index] == '\0' && right[index] == '\0';
-}
+table:
+    source
+    name: `fn.external`
+    columns((class: class) (int: value))
+    rows:
+             lm_rest_lmx_http_server_provider_name  1
+             lm_rest_lmx_http_server_start          1
+             lm_rest_lmx_http_server_start_default  1
+             lm_rest_lmx_http_server_stop           1
+             lm_rest_lmx_http_server_port           1
+end: `fn.external`
 
-static int lm_rest_lmx_http_header_value_is(
-    const char *value,
-    const char *expected
-) {
-    const unsigned char *begin = (const unsigned char *)value;
-    const unsigned char *end;
-    size_t expected_length;
-    size_t index;
+include
+define
+alias
+forward
+constant
+layout
+fn
+prototype
 
-    if (value == 0 || expected == 0) {
-        return 0;
-    }
-    while (*begin == (unsigned char)' ' || *begin == (unsigned char)'\t') {
-        begin += 1;
-    }
-    end = begin + strlen((const char *)begin);
-    while (end > begin &&
-        (end[-1] == (unsigned char)' ' || end[-1] == (unsigned char)'\t')) {
-        end -= 1;
-    }
-    expected_length = strlen(expected);
-    if ((size_t)(end - begin) != expected_length) {
-        return 0;
-    }
-    for (index = 0U; index < expected_length; index += 1U) {
-        if (lm_rest_lmx_http_ascii_lower(begin[index]) !=
-            lm_rest_lmx_http_ascii_lower((unsigned char)expected[index])) {
-            return 0;
-        }
-    }
-    return 1;
-}
+ifdef:
+    `LM_REST_LMX_SERVER_PROVIDER != LM_REST_LMX_SERVER_PROVIDER_NONE && LM_REST_LMX_SERVER_PROVIDER != LM_REST_LMX_SERVER_PROVIDER_CIVETWEB`:
+        [-1]: char lm_rest_lmx_http_server_unknown_provider
+end: ifdef
 
-static int lm_rest_lmx_http_parse_size(
-    const char *text,
-    size_t *out_value
-) {
-    const unsigned char *begin = (const unsigned char *)text;
-    const unsigned char *end;
-    size_t value = 0U;
+ifdef:
+    `LM_REST_LMX_SERVER_PROVIDER == LM_REST_LMX_SERVER_PROVIDER_CIVETWEB`:
+        include: "<civetweb.h>"
 
-    if (text == 0 || out_value == 0) {
-        return 1;
-    }
-    while (*begin == (unsigned char)' ' || *begin == (unsigned char)'\t') {
-        begin += 1;
-    }
-    end = begin + strlen((const char *)begin);
-    while (end > begin &&
-        (end[-1] == (unsigned char)' ' || end[-1] == (unsigned char)'\t')) {
-        end -= 1;
-    }
-    if (begin == end) {
-        return 1;
-    }
-    while (begin < end) {
-        unsigned digit;
+        fn: lm_rest_lmx_http_ascii_is_hex (uchar: value) int
+            return: (value >= (cast: uchar '0') && value <= (cast: uchar '9')) || (value >= (cast: uchar 'a') && value <= (cast: uchar 'f')) || (value >= (cast: uchar 'A') && value <= (cast: uchar 'F'))
+        end: lm_rest_lmx_http_ascii_is_hex
 
-        if (*begin < (unsigned char)'0' || *begin > (unsigned char)'9') {
-            return 1;
-        }
-        digit = (unsigned)(*begin - (unsigned char)'0');
-        if (value > (SIZE_MAX - (size_t)digit) / 10U) {
-            return 2;
-        }
-        value = value * 10U + (size_t)digit;
-        begin += 1;
-    }
-    *out_value = value;
-    return 0;
-}
+        fn: lm_rest_lmx_http_ascii_lower (uchar: value) uchar
+            if: value >= (cast: uchar 'A') && value <= (cast: uchar 'Z')
+                return: (cast: uchar (value + ((cast: uchar 'a') - (cast: uchar 'A'))))
+            return: value
+        end: lm_rest_lmx_http_ascii_lower
 
-static int lm_rest_lmx_http_parse_unsigned(
-    const char *text,
-    unsigned *out_value
-) {
-    size_t value = 0U;
-    int status;
+        fn: lm_rest_lmx_http_ascii_equal (const: @(char left); const: @(char right)) int
+            size_t: index 0U
 
-    if (out_value == 0) {
-        return 1;
-    }
-    status = lm_rest_lmx_http_parse_size(text, &value);
-    if (status != 0 || value > (size_t)UINT_MAX) {
-        return 1;
-    }
-    *out_value = (unsigned)value;
-    return 0;
-}
+            if: left = 0 || right = 0
+                return: 0
+            while: left[index] != '\0' && right[index] != '\0'
+                if: lm_rest_lmx_http_ascii_lower((cast: uchar left[index])) != lm_rest_lmx_http_ascii_lower((cast: uchar right[index]))
+                    return: 0
+                index: index + 1U
+            ---
+            return: left[index] = '\0' && right[index] = '\0'
+        end: lm_rest_lmx_http_ascii_equal
 
-static int lm_rest_lmx_http_bind_address_is_valid(const char *address) {
-    const unsigned char *text = (const unsigned char *)address;
-    size_t index;
-    size_t length;
+        fn: lm_rest_lmx_http_header_value_is (const: @(char value); const: @(char expected)) int
+            const: @: uchar begin (cast: (const: @: uchar) value)
+            const: @: uchar end
+            size_t: expected_length
+            size_t: index
 
-    if (text == 0 || text[0] == 0U) {
-        return 0;
-    }
-    length = strlen(address);
-    if (length > 255U) {
-        return 0;
-    }
-    for (index = 0U; index < length; index += 1U) {
-        unsigned char value = text[index];
+            if: value = 0 || expected = 0
+                return: 0
+            while: begin[0] = (cast: uchar ' ') || begin[0] = (cast: uchar '\t')
+                begin: begin + 1
+            ---
+            end: begin + c.strlen((cast: (const: @: char) begin))
+            while: end > begin && (end[-1] = (cast: uchar ' ') || end[-1] = (cast: uchar '\t'))
+                end: end - 1
+            ---
+            expected_length: c.strlen(expected)
+            if: (cast: size_t (end - begin)) != expected_length
+                return: 0
+            index: 0U
+            while: index < expected_length
+                if: lm_rest_lmx_http_ascii_lower(begin[index]) != lm_rest_lmx_http_ascii_lower((cast: uchar expected[index]))
+                    return: 0
+                index: index + 1U
+            ---
+            return: 1
+        end: lm_rest_lmx_http_header_value_is
 
-        if (!((value >= (unsigned char)'a' && value <= (unsigned char)'z') ||
-              (value >= (unsigned char)'A' && value <= (unsigned char)'Z') ||
-              (value >= (unsigned char)'0' && value <= (unsigned char)'9') ||
-              value == (unsigned char)'.' || value == (unsigned char)'-' ||
-              value == (unsigned char)':' || value == (unsigned char)'[' ||
-              value == (unsigned char)']')) {
-            return 0;
-        }
-    }
-    return 1;
-}
+        fn: lm_rest_lmx_http_parse_size (const: @(char text); @: size_t out_value) int
+            const: @: uchar begin (cast: (const: @: uchar) text)
+            const: @: uchar end
+            size_t: value 0U
 
-static int lm_rest_lmx_http_base_path_is_valid(const char *path) {
-    const unsigned char *text = (const unsigned char *)path;
-    size_t length;
-    size_t index;
-    size_t segment_start;
+            if: text = 0 || out_value = 0
+                return: 1
+            while: begin[0] = (cast: uchar ' ') || begin[0] = (cast: uchar '\t')
+                begin: begin + 1
+            ---
+            end: begin + c.strlen((cast: (const: @: char) begin))
+            while: end > begin && (end[-1] = (cast: uchar ' ') || end[-1] = (cast: uchar '\t'))
+                end: end - 1
+            ---
+            if: begin = end
+                return: 1
+            while: begin < end
+                unsigned: digit
 
-    if (text == 0) {
-        return 0;
-    }
-    length = strlen(path);
-    if (length == 0U || (length == 1U && text[0] == (unsigned char)'/')) {
-        return 1;
-    }
-    if (text[0] != (unsigned char)'/' ||
-        text[length - 1U] == (unsigned char)'/') {
-        return 0;
-    }
-    segment_start = 1U;
-    for (index = 1U; index < length; index += 1U) {
-        unsigned char value = text[index];
+                if: begin[0] < (cast: uchar '0') || begin[0] > (cast: uchar '9')
+                    return: 1
+                digit: (cast: unsigned (begin[0] - (cast: uchar '0')))
+                if: value > (c.SIZE_MAX - (cast: size_t digit)) / 10U
+                    return: 2
+                value: value * 10U + (cast: size_t digit)
+                begin: begin + 1
+            ---
+            out_value[0]: value
+            return: 0
+        end: lm_rest_lmx_http_parse_size
 
-        if (value <= 0x20U || value > 0x7eU ||
-            value == (unsigned char)'\\' || value == (unsigned char)'?' ||
-            value == (unsigned char)'#') {
-            return 0;
-        }
-        if (value == (unsigned char)'/') {
-            size_t segment_length = index - segment_start;
+        fn: lm_rest_lmx_http_parse_unsigned (const: @(char text); @: unsigned out_value) int
+            size_t: value 0U
+            int: status
 
-            if (segment_length == 0U ||
-                (segment_length == 1U &&
-                 text[segment_start] == (unsigned char)'.') ||
-                (segment_length == 2U &&
-                 text[segment_start] == (unsigned char)'.' &&
-                 text[segment_start + 1U] == (unsigned char)'.')) {
-                return 0;
-            }
-            segment_start = index + 1U;
-        } else if (value == (unsigned char)'%') {
-            if (index + 2U >= length ||
-                !lm_rest_lmx_http_ascii_is_hex(text[index + 1U]) ||
-                !lm_rest_lmx_http_ascii_is_hex(text[index + 2U])) {
-                return 0;
-            }
-            index += 2U;
-        }
-    }
-    if ((length - segment_start == 1U &&
-         text[segment_start] == (unsigned char)'.') ||
-        (length - segment_start == 2U &&
-         text[segment_start] == (unsigned char)'.' &&
-         text[segment_start + 1U] == (unsigned char)'.')) {
-        return 0;
-    }
-    return 1;
-}
+            if: out_value = 0
+                return: 1
+            status: lm_rest_lmx_http_parse_size(text, @ value)
+            if: status != 0 || value > (cast: size_t c.UINT_MAX)
+                return: 1
+            out_value[0]: (cast: unsigned value)
+            return: 0
+        end: lm_rest_lmx_http_parse_unsigned
 
-static char *lm_rest_lmx_http_copy_text(const char *text) {
-    size_t length;
-    char *copy;
+        fn: lm_rest_lmx_http_bind_address_is_valid (const: @(char address)) int
+            const: @: uchar text (cast: (const: @: uchar) address)
+            size_t: index
+            size_t: length
 
-    if (text == 0) {
-        return 0;
-    }
-    length = strlen(text);
-    copy = (char *)malloc(length + 1U);
-    if (copy == 0) {
-        return 0;
-    }
-    memcpy(copy, text, length + 1U);
-    return copy;
-}
+            if: text = 0 || text[0] = 0U
+                return: 0
+            length: c.strlen(address)
+            if: length > 255U
+                return: 0
+            index: 0U
+            while: index < length
+                uchar: value text[index]
 
-static int lm_rest_lmx_http_send_status(
-    struct mg_connection *connection,
-    unsigned status
-) {
-    if (status == 202U) {
-        (void)mg_printf(
-            connection,
-            "HTTP/1.1 202 Accepted\r\n"
-            "Content-Length: 0\r\n"
-            "Connection: close\r\n\r\n"
-        );
-        return 202;
-    }
-    switch (status) {
-        case 400U:
-        case 404U:
-        case 405U:
-        case 411U:
-        case 413U:
-        case 415U:
-        case 503U:
-            break;
-        default:
-            status = 500U;
-            break;
-    }
-    (void)mg_send_http_error(connection, (int)status, "%s", "");
-    return (int)status;
-}
+                if: ((value >= (cast: uchar 'a') && value <= (cast: uchar 'z')) || (value >= (cast: uchar 'A') && value <= (cast: uchar 'Z')) || (value >= (cast: uchar '0') && value <= (cast: uchar '9')) || value = (cast: uchar '.') || value = (cast: uchar '-') || value = (cast: uchar ':') || value = (cast: uchar '[') || value = (cast: uchar ']')) = 0
+                    return: 0
+                index: index + 1U
+            ---
+            return: 1
+        end: lm_rest_lmx_http_bind_address_is_valid
 
-static unsigned lm_rest_lmx_http_admission_status(int status) {
-    if (status == 0) {
-        return 202U;
-    }
-    if (status == LM_MESSAGE_STATUS_ROUTE_NOT_FOUND) {
-        return 404U;
-    }
-    if (status == LM_MESSAGE_STATUS_INVALID_ADDRESS) {
-        return 400U;
-    }
-    if (status == LM_MESSAGE_STATUS_APPLICATION_STOPPING) {
-        return 503U;
-    }
-    return 500U;
-}
+        fn: lm_rest_lmx_http_base_path_is_valid (const: @(char path)) int
+            const: @: uchar text (cast: (const: @: uchar) path)
+            size_t: length
+            size_t: index
+            size_t: segment_start
 
-static const char *lm_rest_lmx_http_route(
-    const struct LmRestLmxHttpServer *server,
-    const char *raw_uri,
-    unsigned *out_status
-) {
-    size_t raw_length;
+            if: text = 0
+                return: 0
+            length: c.strlen(path)
+            if: length = 0U || (length = 1U && text[0] = (cast: uchar '/'))
+                return: 1
+            if: text[0] != (cast: uchar '/') || text[length - 1U] = (cast: uchar '/')
+                return: 0
+            segment_start: 1U
+            index: 1U
+            while: index < length
+                uchar: value text[index]
 
-    if (out_status != 0) {
-        *out_status = 400U;
-    }
-    if (server == 0 || raw_uri == 0 || out_status == 0) {
-        return 0;
-    }
-    if (server->base_path_length == 0U) {
-        return raw_uri;
-    }
-    raw_length = strlen(raw_uri);
-    if (raw_length <= server->base_path_length ||
-        memcmp(raw_uri, server->base_path, server->base_path_length) != 0 ||
-        raw_uri[server->base_path_length] != '/') {
-        *out_status = 404U;
-        return 0;
-    }
-    return raw_uri + server->base_path_length;
-}
+                if: value <= 0x20U || value > 0x7eU || value = (cast: uchar '\\') || value = (cast: uchar '?') || value = (cast: uchar '#')
+                    return: 0
+                if: value = (cast: uchar '/')
+                    size_t: segment_length index - segment_start
 
-static int lm_rest_lmx_http_begin_request(
-    struct mg_connection *connection
-) {
-    const struct mg_request_info *request;
-    struct LmRestLmxHttpServer *server;
-    const char *content_length_text = 0;
-    const char *content_type_text = 0;
-    const char *route;
-    char *body = 0;
-    size_t content_length = 0U;
-    size_t received = 0U;
-    unsigned route_status = 400U;
-    unsigned response_status;
-    int content_length_count = 0;
-    int transfer_encoding_count = 0;
-    int content_type_count = 0;
-    int index;
-    int parse_status;
-    int admission_status;
+                    if: segment_length = 0U || (segment_length = 1U && text[segment_start] = (cast: uchar '.')) || (segment_length = 2U && text[segment_start] = (cast: uchar '.') && text[segment_start + 1U] = (cast: uchar '.'))
+                        return: 0
+                    segment_start: index + 1U
+                else:
+                    if: value = (cast: uchar '%')
+                        if: index + 2U >= length || lm_rest_lmx_http_ascii_is_hex(text[index + 1U]) = 0 || lm_rest_lmx_http_ascii_is_hex(text[index + 2U]) = 0
+                            return: 0
+                        index: index + 2U
+                    ---
+                ---
+                index: index + 1U
+            ---
+            if: (length - segment_start = 1U && text[segment_start] = (cast: uchar '.')) || (length - segment_start = 2U && text[segment_start] = (cast: uchar '.') && text[segment_start + 1U] = (cast: uchar '.'))
+                return: 0
+            return: 1
+        end: lm_rest_lmx_http_base_path_is_valid
 
-    if (connection == 0) {
-        return 500;
-    }
-    request = mg_get_request_info(connection);
-    if (request == 0 || request->user_data == 0) {
-        return lm_rest_lmx_http_send_status(connection, 500U);
-    }
-    server = (struct LmRestLmxHttpServer *)request->user_data;
-    if (!lm_rest_lmx_http_ascii_equal(request->request_method, "POST")) {
-        return lm_rest_lmx_http_send_status(connection, 405U);
-    }
-    if (request->query_string != 0) {
-        return lm_rest_lmx_http_send_status(connection, 400U);
-    }
-    route = lm_rest_lmx_http_route(
-        server,
-        request->local_uri_raw,
-        &route_status
-    );
-    if (route == 0) {
-        return lm_rest_lmx_http_send_status(connection, route_status);
-    }
+        fn: lm_rest_lmx_http_copy_text (const: @(char text)) @: char
+            size_t: length
+            @: char copy
 
-    for (index = 0; index < request->num_headers; index += 1) {
-        const char *name = request->http_headers[index].name;
-        const char *value = request->http_headers[index].value;
+            if: text = 0
+                return: 0
+            length: c.strlen(text)
+            copy: (cast: (@: char) c.malloc(length + 1U))
+            if: copy = 0
+                return: 0
+            c.memcpy(copy, text, length + 1U)
+            return: copy
+        end: lm_rest_lmx_http_copy_text
 
-        if (lm_rest_lmx_http_ascii_equal(name, "Content-Length")) {
-            content_length_count += 1;
-            content_length_text = value;
-        } else if (lm_rest_lmx_http_ascii_equal(
-                name,
-                "Transfer-Encoding"
-            )) {
-            transfer_encoding_count += 1;
-        } else if (lm_rest_lmx_http_ascii_equal(name, "Content-Type")) {
-            content_type_count += 1;
-            content_type_text = value;
-        }
-    }
-    if (transfer_encoding_count != 0 || content_length_count == 0) {
-        return lm_rest_lmx_http_send_status(connection, 411U);
-    }
-    if (content_length_count != 1) {
-        return lm_rest_lmx_http_send_status(connection, 400U);
-    }
-    if (content_type_count != 1 ||
-        !lm_rest_lmx_http_header_value_is(
-            content_type_text,
-            "application/lmx"
-        )) {
-        return lm_rest_lmx_http_send_status(connection, 415U);
-    }
-    parse_status = lm_rest_lmx_http_parse_size(
-        content_length_text,
-        &content_length
-    );
-    if (parse_status == 2) {
-        return lm_rest_lmx_http_send_status(connection, 413U);
-    }
-    if (parse_status != 0) {
-        return lm_rest_lmx_http_send_status(connection, 400U);
-    }
-    if (content_length > server->max_body_bytes) {
-        return lm_rest_lmx_http_send_status(connection, 413U);
-    }
+        fn: lm_rest_lmx_http_send_status (LmCivetwebConnection: connection; unsigned: status) int
+            if: status = 202U
+                c.mg_printf(connection, "HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                return: 202
+            if: status != 400U && status != 404U && status != 405U && status != 411U && status != 413U && status != 415U && status != 503U
+                status: 500U
+            c.mg_send_http_error(connection, (cast: int status), "%s", "")
+            return: (cast: int status)
+        end: lm_rest_lmx_http_send_status
 
-    body = (char *)malloc(content_length == 0U ? 1U : content_length);
-    if (body == 0) {
-        return lm_rest_lmx_http_send_status(connection, 500U);
-    }
-    while (received < content_length) {
-        size_t remaining = content_length - received;
-        size_t chunk = remaining > (size_t)INT_MAX
-            ? (size_t)INT_MAX
-            : remaining;
-        int count = mg_read(connection, body + received, chunk);
+        fn: lm_rest_lmx_http_admission_status (int: status) unsigned
+            if: status = 0
+                return: 202U
+            if: status = c.LM_MESSAGE_STATUS_ROUTE_NOT_FOUND
+                return: 404U
+            if: status = c.LM_MESSAGE_STATUS_INVALID_ADDRESS
+                return: 400U
+            if: status = c.LM_MESSAGE_STATUS_APPLICATION_STOPPING
+                return: 503U
+            return: 500U
+        end: lm_rest_lmx_http_admission_status
 
-        if (count <= 0 || (size_t)count > remaining) {
-            free(body);
-            return lm_rest_lmx_http_send_status(connection, 400U);
-        }
-        received += (size_t)count;
-    }
-    admission_status = lm_message_thread_runtime_admit_lmx(
-        server->runtime,
-        route,
-        body,
-        content_length
-    );
-    free(body);
-    response_status = lm_rest_lmx_http_admission_status(admission_status);
-    return lm_rest_lmx_http_send_status(connection, response_status);
-}
+        fn: lm_rest_lmx_http_route (const: (LmRestLmxHttpServer: server); const: @(char raw_uri); @: unsigned out_status) const: @: char
+            size_t: raw_length
 
-static int lm_rest_lmx_http_server_options_are_valid(
-    const LmRestLmxHttpServerOptionsV1 *options
-) {
-    return options != 0 && options->abi_size >= sizeof(*options) &&
-        lm_rest_lmx_http_bind_address_is_valid(options->bind_address) &&
-        options->port <= 65535U &&
-        lm_rest_lmx_http_base_path_is_valid(options->base_path) &&
-        options->max_body_bytes != 0U && options->worker_count != 0U &&
-        options->worker_count <= 1024U &&
-        options->request_timeout_ms != 0U;
-}
+            if: out_status != 0
+                out_status[0]: 400U
+            if: server = 0 || raw_uri = 0 || out_status = 0
+                return: 0
+            if: server\base_path_length = 0U
+                return: raw_uri
+            raw_length: c.strlen(raw_uri)
+            if: raw_length <= server\base_path_length || c.memcmp(raw_uri, server\base_path, server\base_path_length) != 0 || raw_uri[server\base_path_length] != '/'
+                out_status[0]: 404U
+                return: 0
+            return: raw_uri + server\base_path_length
+        end: lm_rest_lmx_http_route
 
-const char *lm_rest_lmx_http_server_provider_name(void) {
-    return "civetweb";
-}
+        fn: lm_rest_lmx_http_begin_request (LmCivetwebConnection: connection) int
+            const: LmCivetwebRequestInfo: request 0
+            LmRestLmxHttpServer: server 0
+            const: @: char content_length_text 0
+            const: @: char content_type_text 0
+            const: @: char route 0
+            @: char body 0
+            size_t: content_length 0U
+            size_t: received 0U
+            unsigned: route_status 400U
+            unsigned: response_status
+            int: content_length_count 0
+            int: transfer_encoding_count 0
+            int: content_type_count 0
+            int: index
+            int: parse_status
+            int: admission_status
+            size_t: allocation_size
 
-int lm_rest_lmx_http_server_start(
-    struct LmMessageThreadRuntime *runtime,
-    const LmRestLmxHttpServerOptionsV1 *options,
-    struct LmRestLmxHttpServer **out_server
-) {
-    struct LmRestLmxHttpServer *server;
-    struct mg_callbacks callbacks;
-    struct mg_server_port ports[4];
-    char listening_ports[320];
-    char worker_count[32];
-    char request_timeout[32];
-    const char *configuration[13];
-    const char *base_path;
-    int configuration_index = 0;
-    int port_count;
-    int written;
+            if: connection = 0
+                return: 500
+            request: c.mg_get_request_info(connection)
+            if: request = 0 || c.request->user_data = 0
+                return: lm_rest_lmx_http_send_status(connection, 500U)
+            server: (cast: (LmRestLmxHttpServer) c.request->user_data)
+            if: lm_rest_lmx_http_ascii_equal(c.request->request_method, "POST") = 0
+                return: lm_rest_lmx_http_send_status(connection, 405U)
+            if: c.request->query_string != 0
+                return: lm_rest_lmx_http_send_status(connection, 400U)
+            route: lm_rest_lmx_http_route(server, c.request->local_uri_raw, @ route_status)
+            if: route = 0
+                return: lm_rest_lmx_http_send_status(connection, route_status)
 
-    if (out_server == 0) {
-        return 1;
-    }
-    *out_server = 0;
-    if (runtime == 0 ||
-        !lm_rest_lmx_http_server_options_are_valid(options)) {
-        return 1;
-    }
-    base_path = strcmp(options->base_path, "/") == 0
-        ? ""
-        : options->base_path;
-    server = (struct LmRestLmxHttpServer *)calloc(1U, sizeof(*server));
-    if (server == 0) {
-        return 1;
-    }
-    server->runtime = runtime;
-    server->base_path = lm_rest_lmx_http_copy_text(base_path);
-    if (server->base_path == 0) {
-        free(server);
-        return 1;
-    }
-    server->base_path_length = strlen(server->base_path);
-    server->max_body_bytes = options->max_body_bytes;
+            index: 0
+            while: index < c.request->num_headers
+                const: @: char name c.request->http_headers[index].name
+                const: @: char value c.request->http_headers[index].value
 
-    if (strchr(options->bind_address, ':') != 0 &&
-        options->bind_address[0] != '[') {
-        written = snprintf(
-            listening_ports,
-            sizeof(listening_ports),
-            "[%s]:%u",
-            options->bind_address,
-            options->port
-        );
-    } else {
-        written = snprintf(
-            listening_ports,
-            sizeof(listening_ports),
-            "%s:%u",
-            options->bind_address,
-            options->port
-        );
-    }
-    if (written < 0 || (size_t)written >= sizeof(listening_ports)) {
-        free(server->base_path);
-        free(server);
-        return 1;
-    }
-    written = snprintf(
-        worker_count,
-        sizeof(worker_count),
-        "%u",
-        options->worker_count
-    );
-    if (written < 0 || (size_t)written >= sizeof(worker_count)) {
-        free(server->base_path);
-        free(server);
-        return 1;
-    }
-    written = snprintf(
-        request_timeout,
-        sizeof(request_timeout),
-        "%u",
-        options->request_timeout_ms
-    );
-    if (written < 0 || (size_t)written >= sizeof(request_timeout)) {
-        free(server->base_path);
-        free(server);
-        return 1;
-    }
+                if: lm_rest_lmx_http_ascii_equal(name, "Content-Length")
+                    content_length_count: content_length_count + 1
+                    content_length_text: value
+                else:
+                    if: lm_rest_lmx_http_ascii_equal(name, "Transfer-Encoding")
+                        transfer_encoding_count: transfer_encoding_count + 1
+                    else:
+                        if: lm_rest_lmx_http_ascii_equal(name, "Content-Type")
+                            content_type_count: content_type_count + 1
+                            content_type_text: value
+                        ---
+                    ---
+                ---
+                index: index + 1
+            ---
+            if: transfer_encoding_count != 0 || content_length_count = 0
+                return: lm_rest_lmx_http_send_status(connection, 411U)
+            if: content_length_count != 1
+                return: lm_rest_lmx_http_send_status(connection, 400U)
+            if: content_type_count != 1 || lm_rest_lmx_http_header_value_is(content_type_text, "application/lmx") = 0
+                return: lm_rest_lmx_http_send_status(connection, 415U)
+            parse_status: lm_rest_lmx_http_parse_size(content_length_text, @ content_length)
+            if: parse_status = 2
+                return: lm_rest_lmx_http_send_status(connection, 413U)
+            if: parse_status != 0
+                return: lm_rest_lmx_http_send_status(connection, 400U)
+            if: content_length > server\max_body_bytes
+                return: lm_rest_lmx_http_send_status(connection, 413U)
 
-    configuration[configuration_index++] = "listening_ports";
-    configuration[configuration_index++] = listening_ports;
-    configuration[configuration_index++] = "num_threads";
-    configuration[configuration_index++] = worker_count;
-    configuration[configuration_index++] = "request_timeout_ms";
-    configuration[configuration_index++] = request_timeout;
-    configuration[configuration_index++] = "enable_keep_alive";
-    configuration[configuration_index++] = "no";
-    configuration[configuration_index++] = "decode_url";
-    configuration[configuration_index++] = "no";
-    configuration[configuration_index++] = "additional_header";
-    configuration[configuration_index++] = "Allow: POST";
-    configuration[configuration_index] = 0;
+            allocation_size: content_length
+            if: allocation_size = 0U
+                allocation_size: 1U
+            body: (cast: (@: char) c.malloc(allocation_size))
+            if: body = 0
+                return: lm_rest_lmx_http_send_status(connection, 500U)
+            while: received < content_length
+                size_t: remaining content_length - received
+                size_t: chunk remaining
+                int: count
 
-    memset(&callbacks, 0, sizeof(callbacks));
-    callbacks.begin_request = lm_rest_lmx_http_begin_request;
-    (void)mg_init_library(MG_FEATURES_DEFAULT);
-    server->library_initialized = 1;
-    server->context = mg_start(&callbacks, server, configuration);
-    if (server->context == 0) {
-        (void)mg_exit_library();
-        free(server->base_path);
-        free(server);
-        return 1;
-    }
-    memset(ports, 0, sizeof(ports));
-    port_count = mg_get_server_ports(
-        server->context,
-        (int)(sizeof(ports) / sizeof(ports[0])),
-        ports
-    );
-    if (port_count < 1 || ports[0].port <= 0 || ports[0].port > 65535 ||
-        ports[0].is_ssl) {
-        mg_stop(server->context);
-        server->context = 0;
-        (void)mg_exit_library();
-        free(server->base_path);
-        free(server);
-        return 1;
-    }
-    server->listening_port = (unsigned)ports[0].port;
-    *out_server = server;
-    return 0;
-}
+                if: chunk > (cast: size_t c.INT_MAX)
+                    chunk: (cast: size_t c.INT_MAX)
+                count: c.mg_read(connection, body + received, chunk)
+                if: count <= 0 || (cast: size_t count) > remaining
+                    c.free(body)
+                    return: lm_rest_lmx_http_send_status(connection, 400U)
+                received: received + (cast: size_t count)
+            ---
+            admission_status: lm_message_thread_runtime_admit_lmx(server\runtime, route, body, content_length)
+            c.free(body)
+            response_status: lm_rest_lmx_http_admission_status(admission_status)
+            return: lm_rest_lmx_http_send_status(connection, response_status)
+        end: lm_rest_lmx_http_begin_request
 
-int lm_rest_lmx_http_server_start_default(
-    struct LmMessageThreadRuntime *runtime,
-    struct LmRestLmxHttpServer **out_server
-) {
-    const char *bind_address = getenv("LM_REST_LMX_LISTEN_ADDRESS");
-    const char *port_text = getenv("LM_REST_LMX_LISTEN_PORT");
-    const char *base_path = getenv("LM_REST_LMX_BASE_PATH");
-    const char *max_body_text = getenv("LM_REST_LMX_MAX_BODY_BYTES");
-    const char *worker_count_text = getenv("LM_REST_LMX_WORKER_COUNT");
-    const char *timeout_text = getenv("LM_REST_LMX_REQUEST_TIMEOUT_MS");
-    LmRestLmxHttpServerOptionsV1 options;
+        fn: lm_rest_lmx_http_server_options_are_valid (const: (LmRestLmxHttpServerOptionsV1: options)) int
+            return: options != 0 && options\abi_size >= c.sizeof(options[0]) && lm_rest_lmx_http_bind_address_is_valid(options\bind_address) && options\port <= 65535U && lm_rest_lmx_http_base_path_is_valid(options\base_path) && options\max_body_bytes != 0U && options\worker_count != 0U && options\worker_count <= 1024U && options\request_timeout_ms != 0U
+        end: lm_rest_lmx_http_server_options_are_valid
 
-    memset(&options, 0, sizeof(options));
-    options.abi_size = sizeof(options);
-    options.bind_address = bind_address == 0 ? "127.0.0.1" : bind_address;
-    options.port = 8080U;
-    options.base_path = base_path == 0 ? "" : base_path;
-    options.max_body_bytes = 1024U * 1024U;
-    options.worker_count = 4U;
-    options.request_timeout_ms = 10000U;
-    if ((port_text != 0 &&
-         lm_rest_lmx_http_parse_unsigned(port_text, &options.port) != 0) ||
-        (max_body_text != 0 &&
-         lm_rest_lmx_http_parse_size(
-             max_body_text,
-             &options.max_body_bytes
-         ) != 0) ||
-        (worker_count_text != 0 &&
-         lm_rest_lmx_http_parse_unsigned(
-             worker_count_text,
-             &options.worker_count
-         ) != 0) ||
-        (timeout_text != 0 &&
-         lm_rest_lmx_http_parse_unsigned(
-             timeout_text,
-             &options.request_timeout_ms
-         ) != 0)) {
-        return 1;
-    }
-    return lm_rest_lmx_http_server_start(runtime, &options, out_server);
-}
+        external:
+            fn: lm_rest_lmx_http_server_provider_name () const: @: char
+                return: "civetweb"
+            end: lm_rest_lmx_http_server_provider_name
+        end: external
 
-int lm_rest_lmx_http_server_stop(
-    struct LmRestLmxHttpServer **server_slot
-) {
-    struct LmRestLmxHttpServer *server;
+        external:
+            fn: lm_rest_lmx_http_server_start (LmMessageThreadRuntime: runtime; const: (LmRestLmxHttpServerOptionsV1: options); @: LmRestLmxHttpServer out_server) int
+                LmRestLmxHttpServer: server 0
+                c.struct: c.mg_callbacks callbacks
+                [4]: LmCivetwebServerPort ports
+                [320]: char listening_ports
+                [32]: char worker_count
+                [32]: char request_timeout
+                const: [13]: @: char configuration
+                const: @: char base_path
+                int: port_count
+                int: written
 
-    if (server_slot == 0) {
-        return 1;
-    }
-    server = *server_slot;
-    if (server == 0) {
-        return 0;
-    }
-    if (server->context != 0) {
-        mg_stop(server->context);
-        server->context = 0;
-    }
-    if (server->library_initialized) {
-        (void)mg_exit_library();
-        server->library_initialized = 0;
-    }
-    free(server->base_path);
-    server->base_path = 0;
-    server->runtime = 0;
-    free(server);
-    *server_slot = 0;
-    return 0;
-}
+                if: out_server = 0
+                    return: 1
+                out_server[0]: 0
+                if: runtime = 0 || lm_rest_lmx_http_server_options_are_valid(options) = 0
+                    return: 1
+                base_path: options\base_path
+                if: c.strcmp(base_path, "/") = 0
+                    base_path: ""
+                server: (cast: (LmRestLmxHttpServer) c.calloc(1U, c.sizeof(server[0])))
+                if: server = 0
+                    return: 1
+                server\runtime: runtime
+                server\base_path: lm_rest_lmx_http_copy_text(base_path)
+                if: server\base_path = 0
+                    c.free(server)
+                    return: 1
+                server\base_path_length: c.strlen(server\base_path)
+                server\max_body_bytes: options\max_body_bytes
 
-int lm_rest_lmx_http_server_port(
-    const struct LmRestLmxHttpServer *server,
-    unsigned *out_port
-) {
-    if (server == 0 || out_port == 0 || server->context == 0 ||
-        server->listening_port == 0U) {
-        return 1;
-    }
-    *out_port = server->listening_port;
-    return 0;
-}
+                if: c.strchr(options\bind_address, ':') != 0 && options\bind_address[0] != '['
+                    written: c.snprintf(listening_ports, c.sizeof(listening_ports), "[%s]:%u", options\bind_address, options\port)
+                else:
+                    written: c.snprintf(listening_ports, c.sizeof(listening_ports), "%s:%u", options\bind_address, options\port)
+                ---
+                if: written < 0 || (cast: size_t written) >= c.sizeof(listening_ports)
+                    c.free(server\base_path)
+                    c.free(server)
+                    return: 1
+                written: c.snprintf(worker_count, c.sizeof(worker_count), "%u", options\worker_count)
+                if: written < 0 || (cast: size_t written) >= c.sizeof(worker_count)
+                    c.free(server\base_path)
+                    c.free(server)
+                    return: 1
+                written: c.snprintf(request_timeout, c.sizeof(request_timeout), "%u", options\request_timeout_ms)
+                if: written < 0 || (cast: size_t written) >= c.sizeof(request_timeout)
+                    c.free(server\base_path)
+                    c.free(server)
+                    return: 1
 
-#else
+                configuration[0]: "listening_ports"
+                configuration[1]: listening_ports
+                configuration[2]: "num_threads"
+                configuration[3]: worker_count
+                configuration[4]: "request_timeout_ms"
+                configuration[5]: request_timeout
+                configuration[6]: "enable_keep_alive"
+                configuration[7]: "no"
+                configuration[8]: "decode_url"
+                configuration[9]: "no"
+                configuration[10]: "additional_header"
+                configuration[11]: "Allow: POST"
+                configuration[12]: 0
 
-const char *lm_rest_lmx_http_server_provider_name(void) {
-    return "none";
-}
+                c.memset(@ callbacks, 0, c.sizeof(callbacks))
+                c.callbacks.begin_request: @lm_rest_lmx_http_begin_request
+                c.mg_init_library(c.MG_FEATURES_DEFAULT)
+                server\library_initialized: 1
+                server\context: c.mg_start(@ callbacks, server, configuration)
+                if: server\context = 0
+                    c.mg_exit_library()
+                    c.free(server\base_path)
+                    c.free(server)
+                    return: 1
+                c.memset(ports, 0, c.sizeof(ports))
+                port_count: c.mg_get_server_ports(server\context, (cast: int (c.sizeof(ports) / c.sizeof(ports[0]))), ports)
+                if: port_count < 1 || c.ports[0].port <= 0 || c.ports[0].port > 65535 || c.ports[0].is_ssl
+                    c.mg_stop(server\context)
+                    server\context: 0
+                    c.mg_exit_library()
+                    c.free(server\base_path)
+                    c.free(server)
+                    return: 1
+                server\listening_port: (cast: unsigned c.ports[0].port)
+                out_server[0]: server
+                return: 0
+            end: lm_rest_lmx_http_server_start
+        end: external
 
-int lm_rest_lmx_http_server_start(
-    struct LmMessageThreadRuntime *runtime,
-    const LmRestLmxHttpServerOptionsV1 *options,
-    struct LmRestLmxHttpServer **out_server
-) {
-    (void)options;
-    if (out_server == 0) {
-        return 1;
-    }
-    *out_server = 0;
-    if (runtime == 0) {
-        return 1;
-    }
-    return 0;
-}
+        external:
+            fn: lm_rest_lmx_http_server_start_default (LmMessageThreadRuntime: runtime; @: LmRestLmxHttpServer out_server) int
+                const: @: char bind_address c.getenv("LM_REST_LMX_LISTEN_ADDRESS")
+                const: @: char port_text c.getenv("LM_REST_LMX_LISTEN_PORT")
+                const: @: char base_path c.getenv("LM_REST_LMX_BASE_PATH")
+                const: @: char max_body_text c.getenv("LM_REST_LMX_MAX_BODY_BYTES")
+                const: @: char worker_count_text c.getenv("LM_REST_LMX_WORKER_COUNT")
+                const: @: char timeout_text c.getenv("LM_REST_LMX_REQUEST_TIMEOUT_MS")
+                c.struct: c.LmRestLmxHttpServerOptionsV1 options_storage
+                LmRestLmxHttpServerOptionsV1: options (cast: (LmRestLmxHttpServerOptionsV1) @ options_storage)
 
-int lm_rest_lmx_http_server_start_default(
-    struct LmMessageThreadRuntime *runtime,
-    struct LmRestLmxHttpServer **out_server
-) {
-    return lm_rest_lmx_http_server_start(runtime, 0, out_server);
-}
+                c.memset(options, 0, c.sizeof(options[0]))
+                options\abi_size: c.sizeof(options[0])
+                options\bind_address: bind_address
+                if: options\bind_address = 0
+                    options\bind_address: "127.0.0.1"
+                options\port: 8080U
+                options\base_path: base_path
+                if: options\base_path = 0
+                    options\base_path: ""
+                options\max_body_bytes: 1024U * 1024U
+                options\worker_count: 4U
+                options\request_timeout_ms: 10000U
+                if: (port_text != 0 && lm_rest_lmx_http_parse_unsigned(port_text, @ options\port) != 0) || (max_body_text != 0 && lm_rest_lmx_http_parse_size(max_body_text, @ options\max_body_bytes) != 0) || (worker_count_text != 0 && lm_rest_lmx_http_parse_unsigned(worker_count_text, @ options\worker_count) != 0) || (timeout_text != 0 && lm_rest_lmx_http_parse_unsigned(timeout_text, @ options\request_timeout_ms) != 0)
+                    return: 1
+                return: lm_rest_lmx_http_server_start(runtime, options, out_server)
+            end: lm_rest_lmx_http_server_start_default
+        end: external
 
-int lm_rest_lmx_http_server_stop(
-    struct LmRestLmxHttpServer **server_slot
-) {
-    if (server_slot == 0) {
-        return 1;
-    }
-    return *server_slot == 0 ? 0 : 1;
-}
+        external:
+            fn: lm_rest_lmx_http_server_stop (@: LmRestLmxHttpServer server) int
+                LmRestLmxHttpServer: instance 0
 
-int lm_rest_lmx_http_server_port(
-    const struct LmRestLmxHttpServer *server,
-    unsigned *out_port
-) {
-    (void)server;
-    (void)out_port;
-    return 1;
-}
+                if: server = 0
+                    return: 1
+                instance: server[0]
+                if: instance = 0
+                    return: 0
+                if: instance\context != 0
+                    c.mg_stop(instance\context)
+                    instance\context: 0
+                if: instance\library_initialized
+                    c.mg_exit_library()
+                    instance\library_initialized: 0
+                c.free(instance\base_path)
+                instance\base_path: 0
+                instance\runtime: 0
+                c.free(instance)
+                server[0]: 0
+                return: 0
+            end: lm_rest_lmx_http_server_stop
+        end: external
 
-#endif
-===
+        external:
+            fn: lm_rest_lmx_http_server_port (const: (LmRestLmxHttpServer: server); @: unsigned out_port) int
+                if: server = 0 || out_port = 0 || server\context = 0 || server\listening_port = 0U
+                    return: 1
+                out_port[0]: server\listening_port
+                return: 0
+            end: lm_rest_lmx_http_server_port
+        end: external
+
+    default:
+        external:
+            fn: lm_rest_lmx_http_server_provider_name () const: @: char
+                return: "none"
+            end: lm_rest_lmx_http_server_provider_name
+        end: external
+
+        external:
+            fn: lm_rest_lmx_http_server_start (LmMessageThreadRuntime: runtime; const: (LmRestLmxHttpServerOptionsV1: options); @: LmRestLmxHttpServer out_server) int
+                c.LM_REST_LMX_SERVER_UNUSED(options)
+                if: out_server = 0
+                    return: 1
+                out_server[0]: 0
+                if: runtime = 0
+                    return: 1
+                return: 0
+            end: lm_rest_lmx_http_server_start
+        end: external
+
+        external:
+            fn: lm_rest_lmx_http_server_start_default (LmMessageThreadRuntime: runtime; @: LmRestLmxHttpServer out_server) int
+                return: lm_rest_lmx_http_server_start(runtime, 0, out_server)
+            end: lm_rest_lmx_http_server_start_default
+        end: external
+
+        external:
+            fn: lm_rest_lmx_http_server_stop (@: LmRestLmxHttpServer server) int
+                if: server = 0
+                    return: 1
+                if: server[0] = 0
+                    return: 0
+                return: 1
+            end: lm_rest_lmx_http_server_stop
+        end: external
+
+        external:
+            fn: lm_rest_lmx_http_server_port (const: (LmRestLmxHttpServer: server); @: unsigned out_port) int
+                c.LM_REST_LMX_SERVER_UNUSED(server)
+                c.LM_REST_LMX_SERVER_UNUSED(out_port)
+                return: 1
+            end: lm_rest_lmx_http_server_port
+        end: external
+end: ifdef

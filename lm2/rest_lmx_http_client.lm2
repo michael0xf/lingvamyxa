@@ -1,527 +1,490 @@
 predef: "lm2/own_abi.lm2"
 predef: "lm2/rest_lmx_http_client_abi.lm2"
 
-L1:
-===
-#include <limits.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
+table:
+    source
+    name: `define.value`
+    columns((class: class) (@: char value))
+    rows:
+             LM_UNUSED                            "(void)"
+             LM_REST_LMX_CLIENT_PROVIDER_NONE     0
+             LM_REST_LMX_CLIENT_PROVIDER_LIBCURL  1
+             LM_REST_LMX_CLIENT_PROVIDER_WINHTTP  2
+             LM_REST_LMX_WINHTTP_USER_AGENT       'L"Lingvamyxa REST/LMX/1"'
+             LM_REST_LMX_WINHTTP_METHOD           'L"POST"'
+             LM_REST_LMX_WINHTTP_ROOT_PATH        'L"/"'
+             LM_REST_LMX_WINHTTP_HEADERS          'L"Content-Type: application/lmx\r\nAccept: application/lmx\r\n"'
+end: `define.value`
 
-struct LmRestLmxProviderOpsV1 {
-    size_t abi_size;
-    int (*post)(
-        void *context,
-        const char *normalized_uri,
-        const char *body,
-        size_t length,
-        unsigned *out_http_status
-    );
-    void (*destroy)(void *context);
-};
+table:
+    source
+    name: class
+    columns((class: class) (class: kind))
+    rows:
+             LmCurlEasy          opaqueReference
+             LmCurlSlist         opaqueReference
+             LmCurlCode          primitive
+             LmCurlOffset        primitive
+             LmWinDword          primitive
+             LmWinUrlComponents  primitive
+             LmWinWideChar       primitive
+end: class
 
-extern int lm_message_thread_runtime_set_rest_lmx_provider(
-    struct LmMessageThreadRuntime *runtime,
-    const struct LmRestLmxProviderOpsV1 *ops,
-    void *context
-);
+table:
+    source
+    name: `class.c.projection`
+    columns((class: class) (@: char spelling))
+    rows:
+             LmCurlEasy          "CURL"
+             LmCurlSlist         "struct curl_slist"
+             LmCurlCode          "CURLcode"
+             LmCurlOffset        "curl_off_t"
+             LmWinDword          "DWORD"
+             LmWinUrlComponents  "URL_COMPONENTS"
+             LmWinWideChar       "wchar_t"
+end: `class.c.projection`
 
-#ifndef LM_REST_LMX_CLIENT_PROVIDER_NONE
-#define LM_REST_LMX_CLIENT_PROVIDER_NONE 0
-#endif
-#ifndef LM_REST_LMX_CLIENT_PROVIDER_LIBCURL
-#define LM_REST_LMX_CLIENT_PROVIDER_LIBCURL 1
-#endif
-#ifndef LM_REST_LMX_CLIENT_PROVIDER_WINHTTP
-#define LM_REST_LMX_CLIENT_PROVIDER_WINHTTP 2
-#endif
+table:
+    source
+    name: `cast.target`
+    columns((class: class) (int: value))
+    rows:
+             LmCurlEasy                     1
+             LmCurlSlist                    1
+             LmCurlCode                     1
+             LmCurlOffset                   1
+             LmWinDword                     1
+             LmWinUrlComponents             1
+             LmWinWideChar                  1
+             LmRestLmxHttpClientContext     1
+             LmRestLmxProviderOpsV1         1
+end: `cast.target`
 
-#ifndef LM_REST_LMX_CLIENT_PROVIDER
-#define LM_REST_LMX_CLIENT_PROVIDER LM_REST_LMX_CLIENT_PROVIDER_NONE
-#endif
+table:
+    source
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmRestLmxHttpClientContext c.struct
+end: `layout.backend`
 
-#if LM_REST_LMX_CLIENT_PROVIDER != LM_REST_LMX_CLIENT_PROVIDER_NONE && \
-    LM_REST_LMX_CLIENT_PROVIDER != LM_REST_LMX_CLIENT_PROVIDER_LIBCURL && \
-    LM_REST_LMX_CLIENT_PROVIDER != LM_REST_LMX_CLIENT_PROVIDER_WINHTTP
-#error "Unknown LM_REST_LMX_CLIENT_PROVIDER value"
-#endif
+table:
+    source
+    name: `class.reference-base`
+    columns((class: class) (int: value))
+    rows:
+             LmRestLmxHttpClientContext 1
+end: `class.reference-base`
 
-#if LM_REST_LMX_CLIENT_PROVIDER == LM_REST_LMX_CLIENT_PROVIDER_LIBCURL
+table:
+    source
+    name: LmRestLmxHttpClientContext
+    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`))
+    rows:
+             curl_initialized int   0 0
+             session          void  1 1
+end: LmRestLmxHttpClientContext
 
-#include <curl/curl.h>
+table:
+    source
+    name: `fn.thread-context.none`
+    columns((class: class) (int: value))
+    rows:
+             lm_rest_lmx_http_client_invalid_provider_configuration 1
+             lm_rest_lmx_http_client_invalid_winhttp_target         1
+             lm_rest_lmx_http_ascii_prefix                          1
+             lm_rest_lmx_http_uri_is_supported                      1
+             lm_rest_lmx_http_discard_response                      1
+             lm_rest_lmx_http_configure_protocols                   1
+             lm_rest_lmx_http_wide_uri                              1
+             lm_rest_lmx_http_wide_slice                            1
+             lm_rest_lmx_http_client_destroy                        1
+             lm_rest_lmx_http_client_post                           1
+             lm_rest_lmx_http_client_provider_name                  1
+             lm_rest_lmx_http_client_install_default                1
+end: `fn.thread-context.none`
 
-typedef struct LmRestLmxHttpClientContext {
-    int curl_initialized;
-} LmRestLmxHttpClientContext;
+table:
+    source
+    name: `fn.external`
+    columns((class: class) (int: value))
+    rows:
+             lm_rest_lmx_http_client_provider_name    1
+             lm_rest_lmx_http_client_install_default  1
+end: `fn.external`
 
-static int lm_rest_lmx_http_ascii_prefix(
-    const char *text,
-    const char *prefix
-) {
-    size_t index = 0U;
+include
+define
+alias
+forward
+constant
+layout
+fn
+prototype
 
-    if (text == 0 || prefix == 0) {
-        return 0;
-    }
-    while (prefix[index] != '\0') {
-        unsigned char left = (unsigned char)text[index];
-        unsigned char right = (unsigned char)prefix[index];
+include: "<limits.h>" "<stdint.h>" "<stdlib.h>" "<string.h>"
 
-        if (left >= (unsigned char)'A' && left <= (unsigned char)'Z') {
-            left = (unsigned char)(left + ((unsigned char)'a' -
-                (unsigned char)'A'));
-        }
-        if (right >= (unsigned char)'A' && right <= (unsigned char)'Z') {
-            right = (unsigned char)(right + ((unsigned char)'a' -
-                (unsigned char)'A'));
-        }
-        if (left == (unsigned char)'\0' || left != right) {
-            return 0;
-        }
-        index += 1U;
-    }
-    return 1;
-}
+`ifndef-default`: LM_REST_LMX_CLIENT_PROVIDER LM_REST_LMX_CLIENT_PROVIDER_NONE
 
-static int lm_rest_lmx_http_uri_is_supported(const char *uri) {
-    return lm_rest_lmx_http_ascii_prefix(uri, "http://") ||
-        lm_rest_lmx_http_ascii_prefix(uri, "https://");
-}
+ifdef:
+    `LM_REST_LMX_CLIENT_PROVIDER != LM_REST_LMX_CLIENT_PROVIDER_NONE && LM_REST_LMX_CLIENT_PROVIDER != LM_REST_LMX_CLIENT_PROVIDER_LIBCURL && LM_REST_LMX_CLIENT_PROVIDER != LM_REST_LMX_CLIENT_PROVIDER_WINHTTP`:
+        fn: lm_rest_lmx_http_client_invalid_provider_configuration () int
+            return: c.LM_REST_LMX_CLIENT_PROVIDER_MUST_BE_NONE_LIBCURL_OR_WINHTTP
+        end: lm_rest_lmx_http_client_invalid_provider_configuration
 
-static size_t lm_rest_lmx_http_discard_response(
-    char *data,
-    size_t size,
-    size_t count,
-    void *context
-) {
-    (void)data;
-    (void)context;
-    if (size != 0U && count > SIZE_MAX / size) {
-        return 0U;
-    }
-    return size * count;
-}
+    `LM_REST_LMX_CLIENT_PROVIDER == LM_REST_LMX_CLIENT_PROVIDER_WINHTTP && !defined(_WIN32)`:
+        fn: lm_rest_lmx_http_client_invalid_winhttp_target () int
+            return: c.LM_REST_LMX_CLIENT_PROVIDER_WINHTTP_REQUIRES_WINDOWS
+        end: lm_rest_lmx_http_client_invalid_winhttp_target
 
-static void lm_rest_lmx_http_client_destroy(void *opaque_context) {
-    LmRestLmxHttpClientContext *context =
-        (LmRestLmxHttpClientContext *)opaque_context;
+    `LM_REST_LMX_CLIENT_PROVIDER == LM_REST_LMX_CLIENT_PROVIDER_LIBCURL`:
+        include: "<curl/curl.h>"
 
-    if (context == 0) {
-        return;
-    }
-    if (context->curl_initialized) {
-        curl_global_cleanup();
-        context->curl_initialized = 0;
-    }
-    free(context);
-}
+        fn: lm_rest_lmx_http_ascii_prefix (const: @(char text); const: @(char prefix)) int
+            size_t: index 0U
+            uchar: left
+            uchar: right
 
-static int lm_rest_lmx_http_client_post(
-    void *opaque_context,
-    const char *normalized_uri,
-    const char *body,
-    size_t length,
-    unsigned *out_http_status
-) {
-    LmRestLmxHttpClientContext *context =
-        (LmRestLmxHttpClientContext *)opaque_context;
-    CURL *easy = 0;
-    struct curl_slist *headers = 0;
-    struct curl_slist *updated_headers;
-    curl_off_t post_length;
-    CURLcode result;
-    long response_code = 0L;
-    int status = 1;
+            if: text = 0 || prefix = 0
+                return: 0
+            while: prefix[index] != '\0'
+                left: (cast: uchar text[index])
+                right: (cast: uchar prefix[index])
+                if: left >= (cast: uchar 'A') && left <= (cast: uchar 'Z')
+                    left: (cast: uchar (left + ((cast: uchar 'a') - (cast: uchar 'A'))))
+                if: right >= (cast: uchar 'A') && right <= (cast: uchar 'Z')
+                    right: (cast: uchar (right + ((cast: uchar 'a') - (cast: uchar 'A'))))
+                if: left = (cast: uchar '\0') || left != right
+                    return: 0
+                index: index + 1U
+            return: 1
+        end: lm_rest_lmx_http_ascii_prefix
 
-    if (out_http_status != 0) {
-        *out_http_status = 0U;
-    }
-    if (context == 0 || !context->curl_initialized ||
-        normalized_uri == 0 || out_http_status == 0 ||
-        (body == 0 && length != 0U) ||
-        !lm_rest_lmx_http_uri_is_supported(normalized_uri)) {
-        return 1;
-    }
+        fn: lm_rest_lmx_http_uri_is_supported (const: @(char uri)) int
+            return: lm_rest_lmx_http_ascii_prefix(uri, "http://") || lm_rest_lmx_http_ascii_prefix(uri, "https://")
+        end: lm_rest_lmx_http_uri_is_supported
 
-    post_length = (curl_off_t)length;
-    if (post_length < (curl_off_t)0 || (size_t)post_length != length) {
-        return 1;
-    }
+        fn: lm_rest_lmx_http_discard_response (@: char data; size_t: size; size_t: count; @: void context) size_t
+            c.LM_UNUSED(data)
+            c.LM_UNUSED(context)
+            if: size != 0U && count > c.SIZE_MAX / size
+                return: 0U
+            return: size * count
+        end: lm_rest_lmx_http_discard_response
 
-    easy = curl_easy_init();
-    if (easy == 0) {
-        return 1;
-    }
-    headers = curl_slist_append(0, "Content-Type: application/lmx");
-    if (headers == 0) {
-        goto cleanup;
-    }
-    updated_headers = curl_slist_append(headers, "Accept: application/lmx");
-    if (updated_headers == 0) {
-        goto cleanup;
-    }
-    headers = updated_headers;
+        ifdef:
+            `LIBCURL_VERSION_NUM >= 0x075500`:
+                fn: lm_rest_lmx_http_configure_protocols (LmCurlEasy: easy) int
+                    if: c.curl_easy_setopt(easy, c.CURLOPT_PROTOCOLS_STR, "http,https") != c.CURLE_OK
+                        return: 1
+                    return: 0
+                end: lm_rest_lmx_http_configure_protocols
+            default:
+                fn: lm_rest_lmx_http_configure_protocols (LmCurlEasy: easy) int
+                    if: c.curl_easy_setopt(easy, c.CURLOPT_PROTOCOLS, (cast: long (c.CURLPROTO_HTTP | c.CURLPROTO_HTTPS))) != c.CURLE_OK
+                        return: 1
+                    return: 0
+                end: lm_rest_lmx_http_configure_protocols
+        end: ifdef
 
-#define LM_REST_LMX_CURL_SETOPT(option, value) \
-    do { \
-        if (curl_easy_setopt(easy, (option), (value)) != CURLE_OK) { \
-            goto cleanup; \
-        } \
-    } while (0)
+        sub: lm_rest_lmx_http_client_destroy (@: void opaque_context)
+            LmRestLmxHttpClientContext: context 0
 
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_URL, normalized_uri);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_POST, 1L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_POSTFIELDS, body == 0 ? "" : body);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_POSTFIELDSIZE_LARGE, post_length);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_HTTPHEADER, headers);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_FOLLOWLOCATION, 0L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_MAXREDIRS, 0L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_PATH_AS_IS, 1L);
-#if LIBCURL_VERSION_NUM >= 0x075500
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_PROTOCOLS_STR, "http,https");
-#else
-    LM_REST_LMX_CURL_SETOPT(
-        CURLOPT_PROTOCOLS,
-        (long)(CURLPROTO_HTTP | CURLPROTO_HTTPS)
-    );
-#endif
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_NOSIGNAL, 1L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_CONNECTTIMEOUT_MS, 10000L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_TIMEOUT_MS, 30000L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_SSL_VERIFYPEER, 1L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_SSL_VERIFYHOST, 2L);
-    LM_REST_LMX_CURL_SETOPT(
-        CURLOPT_WRITEFUNCTION,
-        lm_rest_lmx_http_discard_response
-    );
+            context: (cast: LmRestLmxHttpClientContext opaque_context)
+            if: context = 0
+                return
+            if: context\curl_initialized
+                c.curl_global_cleanup()
+                context\curl_initialized: 0
+            c.free(context)
+        end: lm_rest_lmx_http_client_destroy
 
-#undef LM_REST_LMX_CURL_SETOPT
+        fn: lm_rest_lmx_http_client_post (@: void opaque_context; const: @(char normalized_uri); const: @(char body); size_t: length; @: unsigned out_http_status) int
+            LmRestLmxHttpClientContext: context 0
+            @: c.CURL easy 0
+            @: c.LmCurlSlist headers 0
+            @: c.LmCurlSlist updated_headers 0
+            LmCurlOffset: post_length
+            LmCurlCode: result
+            long: response_code 0L
+            const: @(char post_body)
 
-    result = curl_easy_perform(easy);
-    if (result != CURLE_OK ||
-        curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &response_code) !=
-            CURLE_OK ||
-        response_code < 0L ||
-        (unsigned long)response_code > (unsigned long)UINT_MAX) {
-        goto cleanup;
-    }
-    *out_http_status = (unsigned)response_code;
-    status = 0;
+            finally:
+                c.curl_slist_free_all(headers)
+                if: easy != 0
+                    c.curl_easy_cleanup(easy)
+                ---
 
-cleanup:
-    curl_slist_free_all(headers);
-    curl_easy_cleanup(easy);
-    return status;
-}
+            context: (cast: LmRestLmxHttpClientContext opaque_context)
+            if: out_http_status != 0
+                out_http_status[0]: 0U
+            if: context = 0 || context\curl_initialized = 0 || normalized_uri = 0 || out_http_status = 0 || (body = 0 && length != 0U) || lm_rest_lmx_http_uri_is_supported(normalized_uri) = 0
+                return: 1
 
-const char *lm_rest_lmx_http_client_provider_name(void) {
-    return "libcurl";
-}
+            post_length: (cast: LmCurlOffset length)
+            if: post_length < (cast: LmCurlOffset 0) || (cast: size_t post_length) != length
+                return: 1
 
-int lm_rest_lmx_http_client_install_default(
-    struct LmMessageThreadRuntime *runtime
-) {
-    LmRestLmxHttpClientContext *context;
-    struct LmRestLmxProviderOpsV1 ops;
+            easy: c.curl_easy_init()
+            if: easy = 0
+                return: 1
+            headers: c.curl_slist_append(0, "Content-Type: application/lmx")
+            if: headers = 0
+                return: 1
+            updated_headers: c.curl_slist_append(headers, "Accept: application/lmx")
+            if: updated_headers = 0
+                return: 1
+            headers: updated_headers
 
-    if (runtime == 0 || curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
-        return 1;
-    }
-    context = (LmRestLmxHttpClientContext *)calloc(1U, sizeof(*context));
-    if (context == 0) {
-        curl_global_cleanup();
-        return 1;
-    }
-    context->curl_initialized = 1;
-    ops.abi_size = sizeof(ops);
-    ops.post = lm_rest_lmx_http_client_post;
-    ops.destroy = lm_rest_lmx_http_client_destroy;
-    if (lm_message_thread_runtime_set_rest_lmx_provider(
-            runtime,
-            &ops,
-            context
-        ) != 0) {
-        lm_rest_lmx_http_client_destroy(context);
-        return 1;
-    }
-    return 0;
-}
+            post_body: body
+            if: post_body = 0
+                post_body: ""
 
-#elif LM_REST_LMX_CLIENT_PROVIDER == LM_REST_LMX_CLIENT_PROVIDER_WINHTTP
+            if: c.curl_easy_setopt(easy, c.CURLOPT_URL, normalized_uri) != c.CURLE_OK
+                return: 1
+            if: c.curl_easy_setopt(easy, c.CURLOPT_POST, 1L) != c.CURLE_OK
+                return: 1
+            if: c.curl_easy_setopt(easy, c.CURLOPT_POSTFIELDS, post_body) != c.CURLE_OK
+                return: 1
+            if: c.curl_easy_setopt(easy, c.CURLOPT_POSTFIELDSIZE_LARGE, post_length) != c.CURLE_OK
+                return: 1
+            if: c.curl_easy_setopt(easy, c.CURLOPT_HTTPHEADER, headers) != c.CURLE_OK
+                return: 1
+            if: c.curl_easy_setopt(easy, c.CURLOPT_FOLLOWLOCATION, 0L) != c.CURLE_OK
+                return: 1
+            if: c.curl_easy_setopt(easy, c.CURLOPT_MAXREDIRS, 0L) != c.CURLE_OK
+                return: 1
+            if: c.curl_easy_setopt(easy, c.CURLOPT_PATH_AS_IS, 1L) != c.CURLE_OK
+                return: 1
+            if: lm_rest_lmx_http_configure_protocols(easy) != 0
+                return: 1
+            if: c.curl_easy_setopt(easy, c.CURLOPT_NOSIGNAL, 1L) != c.CURLE_OK
+                return: 1
+            if: c.curl_easy_setopt(easy, c.CURLOPT_CONNECTTIMEOUT_MS, 10000L) != c.CURLE_OK
+                return: 1
+            if: c.curl_easy_setopt(easy, c.CURLOPT_TIMEOUT_MS, 30000L) != c.CURLE_OK
+                return: 1
+            if: c.curl_easy_setopt(easy, c.CURLOPT_SSL_VERIFYPEER, 1L) != c.CURLE_OK
+                return: 1
+            if: c.curl_easy_setopt(easy, c.CURLOPT_SSL_VERIFYHOST, 2L) != c.CURLE_OK
+                return: 1
+            if: c.curl_easy_setopt(easy, c.CURLOPT_WRITEFUNCTION, @lm_rest_lmx_http_discard_response) != c.CURLE_OK
+                return: 1
 
-#if !defined(_WIN32)
-#error "LM_REST_LMX_CLIENT_PROVIDER_WINHTTP requires a Windows target"
-#endif
+            result: c.curl_easy_perform(easy)
+            if: result != c.CURLE_OK || c.curl_easy_getinfo(easy, c.CURLINFO_RESPONSE_CODE, @response_code) != c.CURLE_OK || response_code < 0L || (cast: ulong response_code) > (cast: ulong c.UINT_MAX)
+                return: 1
+            out_http_status[0]: (cast: unsigned response_code)
+            return: 0
+        end: lm_rest_lmx_http_client_post
 
-#include <windows.h>
-#include <winhttp.h>
+        external:
+            fn: lm_rest_lmx_http_client_provider_name () const: @(char)
+                return: "libcurl"
+            end: lm_rest_lmx_http_client_provider_name
+        end: external
 
-typedef struct LmRestLmxHttpClientContext {
-    HINTERNET session;
-} LmRestLmxHttpClientContext;
+        external:
+            fn: lm_rest_lmx_http_client_install_default (LmMessageThreadRuntime: runtime) int
+                LmRestLmxHttpClientContext: context 0
+                LmRestLmxProviderOpsV1: ops 0
 
-static wchar_t *lm_rest_lmx_http_wide_uri(const char *uri) {
-    size_t length;
-    int wide_length;
-    wchar_t *wide_uri;
+                finally:
+                    c.free(ops)
+                    if: context != 0
+                        lm_rest_lmx_http_client_destroy(context)
+                    ---
 
-    if (uri == 0) {
-        return 0;
-    }
-    length = strlen(uri);
-    if (length > (size_t)INT_MAX - 1U) {
-        return 0;
-    }
-    wide_length = MultiByteToWideChar(
-        CP_UTF8,
-        MB_ERR_INVALID_CHARS,
-        uri,
-        -1,
-        0,
-        0
-    );
-    if (wide_length <= 0 ||
-        (size_t)wide_length > SIZE_MAX / sizeof(*wide_uri)) {
-        return 0;
-    }
-    wide_uri = (wchar_t *)calloc((size_t)wide_length, sizeof(*wide_uri));
-    if (wide_uri == 0 || MultiByteToWideChar(
-            CP_UTF8,
-            MB_ERR_INVALID_CHARS,
-            uri,
-            -1,
-            wide_uri,
-            wide_length
-        ) != wide_length) {
-        free(wide_uri);
-        return 0;
-    }
-    return wide_uri;
-}
+                if: runtime = 0
+                    return: 1
+                context: (cast: LmRestLmxHttpClientContext c.calloc(1U, c.sizeof(context[0])))
+                ops: (cast: LmRestLmxProviderOpsV1 c.calloc(1U, c.sizeof(ops[0])))
+                if: context = 0 || ops = 0
+                    return: 1
+                if: c.curl_global_init(c.CURL_GLOBAL_DEFAULT) != c.CURLE_OK
+                    return: 1
+                context\curl_initialized: 1
+                ops\abi_size: c.sizeof(ops[0])
+                ops\post: @lm_rest_lmx_http_client_post
+                ops\destroy: @lm_rest_lmx_http_client_destroy
+                if: lm_message_thread_runtime_set_rest_lmx_provider(runtime, ops, context) != 0
+                    return: 1
+                context: 0
+                return: 0
+            end: lm_rest_lmx_http_client_install_default
+        end: external
 
-static wchar_t *lm_rest_lmx_http_wide_slice(
-    const wchar_t *source,
-    DWORD length
-) {
-    wchar_t *copy;
+    `LM_REST_LMX_CLIENT_PROVIDER == LM_REST_LMX_CLIENT_PROVIDER_WINHTTP`:
+        include: "<windows.h>" "<winhttp.h>"
 
-    if (source == 0 ||
-        (size_t)length > SIZE_MAX / sizeof(*copy) - 1U) {
-        return 0;
-    }
-    copy = (wchar_t *)calloc((size_t)length + 1U, sizeof(*copy));
-    if (copy == 0) {
-        return 0;
-    }
-    if (length != 0U) {
-        memcpy(copy, source, (size_t)length * sizeof(*copy));
-    }
-    return copy;
-}
+        fn: lm_rest_lmx_http_wide_uri (const: @(char uri)) @: LmWinWideChar
+            size_t: length
+            int: wide_length
+            @: LmWinWideChar wide_uri 0
 
-static void lm_rest_lmx_http_client_destroy(void *opaque_context) {
-    LmRestLmxHttpClientContext *context =
-        (LmRestLmxHttpClientContext *)opaque_context;
+            if: uri = 0
+                return: 0
+            length: c.strlen(uri)
+            if: length > (cast: size_t c.INT_MAX) - 1U
+                return: 0
+            wide_length: c.MultiByteToWideChar(c.CP_UTF8, c.MB_ERR_INVALID_CHARS, uri, -1, 0, 0)
+            if: wide_length <= 0 || (cast: size_t wide_length) > c.SIZE_MAX / c.sizeof(wide_uri[0])
+                return: 0
+            wide_uri: (cast: (@: LmWinWideChar) c.calloc((cast: size_t wide_length), c.sizeof(wide_uri[0])))
+            if: wide_uri = 0 || c.MultiByteToWideChar(c.CP_UTF8, c.MB_ERR_INVALID_CHARS, uri, -1, wide_uri, wide_length) != wide_length
+                c.free(wide_uri)
+                return: 0
+            return: wide_uri
+        end: lm_rest_lmx_http_wide_uri
 
-    if (context == 0) {
-        return;
-    }
-    if (context->session != 0) {
-        (void)WinHttpCloseHandle(context->session);
-        context->session = 0;
-    }
-    free(context);
-}
+        fn: lm_rest_lmx_http_wide_slice (const: @(LmWinWideChar source); LmWinDword: length) @: LmWinWideChar
+            @: LmWinWideChar copy 0
 
-static int lm_rest_lmx_http_client_post(
-    void *opaque_context,
-    const char *normalized_uri,
-    const char *body,
-    size_t length,
-    unsigned *out_http_status
-) {
-    static const wchar_t headers[] =
-        L"Content-Type: application/lmx\r\nAccept: application/lmx\r\n";
-    LmRestLmxHttpClientContext *context =
-        (LmRestLmxHttpClientContext *)opaque_context;
-    wchar_t *wide_uri = 0;
-    wchar_t *host = 0;
-    wchar_t *path = 0;
-    URL_COMPONENTS components;
-    HINTERNET connection = 0;
-    HINTERNET request = 0;
-    DWORD request_flags = WINHTTP_FLAG_ESCAPE_DISABLE;
-    DWORD disabled_features = WINHTTP_DISABLE_REDIRECTS;
-    DWORD body_length = (DWORD)length;
-    DWORD response_status = 0U;
-    DWORD response_status_size = sizeof(response_status);
-    int status = 1;
+            if: source = 0 || (cast: size_t length) > c.SIZE_MAX / c.sizeof(copy[0]) - 1U
+                return: 0
+            copy: (cast: (@: LmWinWideChar) c.calloc((cast: size_t length) + 1U, c.sizeof(copy[0])))
+            if: copy = 0
+                return: 0
+            if: length != 0U
+                c.memcpy(copy, source, (cast: size_t length) * c.sizeof(copy[0]))
+            return: copy
+        end: lm_rest_lmx_http_wide_slice
 
-    if (out_http_status != 0) {
-        *out_http_status = 0U;
-    }
-    if (context == 0 || context->session == 0 || normalized_uri == 0 ||
-        out_http_status == 0 || (body == 0 && length != 0U) ||
-        (size_t)body_length != length) {
-        return 1;
-    }
-    wide_uri = lm_rest_lmx_http_wide_uri(normalized_uri);
-    if (wide_uri == 0) {
-        goto cleanup;
-    }
+        sub: lm_rest_lmx_http_client_destroy (@: void opaque_context)
+            LmRestLmxHttpClientContext: context 0
 
-    memset(&components, 0, sizeof(components));
-    components.dwStructSize = sizeof(components);
-    components.dwSchemeLength = (DWORD)-1;
-    components.dwHostNameLength = (DWORD)-1;
-    components.dwUrlPathLength = (DWORD)-1;
-    components.dwExtraInfoLength = (DWORD)-1;
-    if (!WinHttpCrackUrl(wide_uri, 0U, 0U, &components) ||
-        (components.nScheme != INTERNET_SCHEME_HTTP &&
-         components.nScheme != INTERNET_SCHEME_HTTPS) ||
-        components.lpszHostName == 0 || components.dwHostNameLength == 0U ||
-        components.dwExtraInfoLength != 0U) {
-        goto cleanup;
-    }
-    host = lm_rest_lmx_http_wide_slice(
-        components.lpszHostName,
-        components.dwHostNameLength
-    );
-    if (components.lpszUrlPath != 0 && components.dwUrlPathLength != 0U) {
-        path = lm_rest_lmx_http_wide_slice(
-            components.lpszUrlPath,
-            components.dwUrlPathLength
-        );
-    } else {
-        path = lm_rest_lmx_http_wide_slice(L"/", 1U);
-    }
-    if (host == 0 || path == 0) {
-        goto cleanup;
-    }
+            context: (cast: LmRestLmxHttpClientContext opaque_context)
+            if: context = 0
+                return
+            if: context\session != 0
+                c.WinHttpCloseHandle(context\session)
+                context\session: 0
+            c.free(context)
+        end: lm_rest_lmx_http_client_destroy
 
-    connection = WinHttpConnect(
-        context->session,
-        host,
-        components.nPort,
-        0U
-    );
-    if (connection == 0) {
-        goto cleanup;
-    }
-    if (components.nScheme == INTERNET_SCHEME_HTTPS) {
-        request_flags |= WINHTTP_FLAG_SECURE;
-    }
-    request = WinHttpOpenRequest(
-        connection,
-        L"POST",
-        path,
-        0,
-        WINHTTP_NO_REFERER,
-        WINHTTP_DEFAULT_ACCEPT_TYPES,
-        request_flags
-    );
-    if (request == 0 || !WinHttpSetOption(
-            request,
-            WINHTTP_OPTION_DISABLE_FEATURE,
-            &disabled_features,
-            sizeof(disabled_features)
-        ) || !WinHttpSetTimeouts(request, 10000, 10000, 30000, 30000) ||
-        !WinHttpAddRequestHeaders(
-            request,
-            headers,
-            (DWORD)-1,
-            WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE
-        ) || !WinHttpSendRequest(
-            request,
-            WINHTTP_NO_ADDITIONAL_HEADERS,
-            0U,
-            body_length == 0U ? WINHTTP_NO_REQUEST_DATA : (LPVOID)body,
-            body_length,
-            body_length,
-            0U
-        ) || !WinHttpReceiveResponse(request, 0) ||
-        !WinHttpQueryHeaders(
-            request,
-            WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-            WINHTTP_HEADER_NAME_BY_INDEX,
-            &response_status,
-            &response_status_size,
-            WINHTTP_NO_HEADER_INDEX
-        )) {
-        goto cleanup;
-    }
-    *out_http_status = (unsigned)response_status;
-    status = 0;
+        fn: lm_rest_lmx_http_client_post (@: void opaque_context; const: @(char normalized_uri); const: @(char body); size_t: length; @: unsigned out_http_status) int
+            LmRestLmxHttpClientContext: context 0
+            @: LmWinWideChar wide_uri 0
+            @: LmWinWideChar host 0
+            @: LmWinWideChar path 0
+            LmWinUrlComponents: components
+            @: void connection 0
+            @: void request 0
+            @: void request_body 0
+            LmWinDword: request_flags c.WINHTTP_FLAG_ESCAPE_DISABLE
+            LmWinDword: disabled_features c.WINHTTP_DISABLE_REDIRECTS
+            LmWinDword: body_length (cast: LmWinDword length)
+            LmWinDword: response_status 0U
+            LmWinDword: response_status_size (cast: LmWinDword c.sizeof(response_status))
 
-cleanup:
-    if (request != 0) {
-        (void)WinHttpCloseHandle(request);
-    }
-    if (connection != 0) {
-        (void)WinHttpCloseHandle(connection);
-    }
-    free(path);
-    free(host);
-    free(wide_uri);
-    return status;
-}
+            finally:
+                if: request != 0
+                    c.WinHttpCloseHandle(request)
+                if: connection != 0
+                    c.WinHttpCloseHandle(connection)
+                c.free(path)
+                c.free(host)
+                c.free(wide_uri)
 
-const char *lm_rest_lmx_http_client_provider_name(void) {
-    return "winhttp";
-}
+            context: (cast: LmRestLmxHttpClientContext opaque_context)
+            if: out_http_status != 0
+                out_http_status[0]: 0U
+            if: context = 0 || context\session = 0 || normalized_uri = 0 || out_http_status = 0 || (body = 0 && length != 0U) || (cast: size_t body_length) != length
+                return: 1
+            wide_uri: lm_rest_lmx_http_wide_uri(normalized_uri)
+            if: wide_uri = 0
+                return: 1
 
-int lm_rest_lmx_http_client_install_default(
-    struct LmMessageThreadRuntime *runtime
-) {
-    LmRestLmxHttpClientContext *context;
-    struct LmRestLmxProviderOpsV1 ops;
+            c.memset(@components, 0, c.sizeof(components))
+            c.components.dwStructSize: c.sizeof(components)
+            c.components.dwSchemeLength: (cast: LmWinDword -1)
+            c.components.dwHostNameLength: (cast: LmWinDword -1)
+            c.components.dwUrlPathLength: (cast: LmWinDword -1)
+            c.components.dwExtraInfoLength: (cast: LmWinDword -1)
+            if: c.WinHttpCrackUrl(wide_uri, 0U, 0U, @components) = 0 || (c.components.nScheme != c.INTERNET_SCHEME_HTTP && c.components.nScheme != c.INTERNET_SCHEME_HTTPS) || c.components.lpszHostName = 0 || c.components.dwHostNameLength = 0U || c.components.dwExtraInfoLength != 0U
+                return: 1
+            host: lm_rest_lmx_http_wide_slice(c.components.lpszHostName, c.components.dwHostNameLength)
+            if: c.components.lpszUrlPath != 0 && c.components.dwUrlPathLength != 0U
+                path: lm_rest_lmx_http_wide_slice(c.components.lpszUrlPath, c.components.dwUrlPathLength)
+            if: path = 0 && (c.components.lpszUrlPath = 0 || c.components.dwUrlPathLength = 0U)
+                path: lm_rest_lmx_http_wide_slice(c.LM_REST_LMX_WINHTTP_ROOT_PATH, 1U)
+            if: host = 0 || path = 0
+                return: 1
 
-    if (runtime == 0) {
-        return 1;
-    }
-    context = (LmRestLmxHttpClientContext *)calloc(1U, sizeof(*context));
-    if (context == 0) {
-        return 1;
-    }
-    context->session = WinHttpOpen(
-        L"Lingvamyxa REST/LMX/1",
-        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-        WINHTTP_NO_PROXY_NAME,
-        WINHTTP_NO_PROXY_BYPASS,
-        0U
-    );
-    if (context->session == 0) {
-        lm_rest_lmx_http_client_destroy(context);
-        return 1;
-    }
-    ops.abi_size = sizeof(ops);
-    ops.post = lm_rest_lmx_http_client_post;
-    ops.destroy = lm_rest_lmx_http_client_destroy;
-    if (lm_message_thread_runtime_set_rest_lmx_provider(
-            runtime,
-            &ops,
-            context
-        ) != 0) {
-        lm_rest_lmx_http_client_destroy(context);
-        return 1;
-    }
-    return 0;
-}
+            connection: c.WinHttpConnect(context\session, host, c.components.nPort, 0U)
+            if: connection = 0
+                return: 1
+            if: c.components.nScheme = c.INTERNET_SCHEME_HTTPS
+                request_flags: request_flags | c.WINHTTP_FLAG_SECURE
+            request: c.WinHttpOpenRequest(connection, c.LM_REST_LMX_WINHTTP_METHOD, path, 0, c.WINHTTP_NO_REFERER, c.WINHTTP_DEFAULT_ACCEPT_TYPES, request_flags)
+            if: request = 0
+                return: 1
+            if: body_length != 0U
+                request_body: (cast: (@: void) body)
+            if: c.WinHttpSetOption(request, c.WINHTTP_OPTION_DISABLE_FEATURE, @disabled_features, c.sizeof(disabled_features)) = 0
+                return: 1
+            if: c.WinHttpSetTimeouts(request, 10000, 10000, 30000, 30000) = 0
+                return: 1
+            if: c.WinHttpAddRequestHeaders(request, c.LM_REST_LMX_WINHTTP_HEADERS, (cast: LmWinDword -1), c.WINHTTP_ADDREQ_FLAG_ADD | c.WINHTTP_ADDREQ_FLAG_REPLACE) = 0
+                return: 1
+            if: c.WinHttpSendRequest(request, c.WINHTTP_NO_ADDITIONAL_HEADERS, 0U, request_body, body_length, body_length, 0U) = 0
+                return: 1
+            if: c.WinHttpReceiveResponse(request, 0) = 0
+                return: 1
+            if: c.WinHttpQueryHeaders(request, c.WINHTTP_QUERY_STATUS_CODE | c.WINHTTP_QUERY_FLAG_NUMBER, c.WINHTTP_HEADER_NAME_BY_INDEX, @response_status, @response_status_size, c.WINHTTP_NO_HEADER_INDEX) = 0
+                return: 1
+            out_http_status[0]: (cast: unsigned response_status)
+            return: 0
+        end: lm_rest_lmx_http_client_post
 
-#else
+        external:
+            fn: lm_rest_lmx_http_client_provider_name () const: @(char)
+                return: "winhttp"
+            end: lm_rest_lmx_http_client_provider_name
+        end: external
 
-const char *lm_rest_lmx_http_client_provider_name(void) {
-    return "none";
-}
+        external:
+            fn: lm_rest_lmx_http_client_install_default (LmMessageThreadRuntime: runtime) int
+                LmRestLmxHttpClientContext: context 0
+                LmRestLmxProviderOpsV1: ops 0
 
-int lm_rest_lmx_http_client_install_default(
-    struct LmMessageThreadRuntime *runtime
-) {
-    if (runtime == 0) {
-        return 1;
-    }
-    return lm_message_thread_runtime_set_rest_lmx_provider(runtime, 0, 0);
-}
+                finally:
+                    c.free(ops)
+                    if: context != 0
+                        lm_rest_lmx_http_client_destroy(context)
+                    ---
 
-#endif
-===
+                if: runtime = 0
+                    return: 1
+                context: (cast: LmRestLmxHttpClientContext c.calloc(1U, c.sizeof(context[0])))
+                ops: (cast: LmRestLmxProviderOpsV1 c.calloc(1U, c.sizeof(ops[0])))
+                if: context = 0 || ops = 0
+                    return: 1
+                context\session: c.WinHttpOpen(c.LM_REST_LMX_WINHTTP_USER_AGENT, c.WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, c.WINHTTP_NO_PROXY_NAME, c.WINHTTP_NO_PROXY_BYPASS, 0U)
+                if: context\session = 0
+                    return: 1
+                ops\abi_size: c.sizeof(ops[0])
+                ops\post: @lm_rest_lmx_http_client_post
+                ops\destroy: @lm_rest_lmx_http_client_destroy
+                if: lm_message_thread_runtime_set_rest_lmx_provider(runtime, ops, context) != 0
+                    return: 1
+                context: 0
+                return: 0
+            end: lm_rest_lmx_http_client_install_default
+        end: external
+
+    default:
+        external:
+            fn: lm_rest_lmx_http_client_provider_name () const: @(char)
+                return: "none"
+            end: lm_rest_lmx_http_client_provider_name
+        end: external
+
+        external:
+            fn: lm_rest_lmx_http_client_install_default (LmMessageThreadRuntime: runtime) int
+                if: runtime = 0
+                    return: 1
+                return: lm_message_thread_runtime_set_rest_lmx_provider(runtime, 0, 0)
+            end: lm_rest_lmx_http_client_install_default
+        end: external
+end: ifdef

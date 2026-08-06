@@ -363,99 +363,441 @@ typedef void (*LmRestLmxDestroy)(void *context);
 
 
 
+
+#include <stddef.h>
+
+#define LM_UNUSED (void)
+#define LM_REST_LMX_CLIENT_PROVIDER_NONE 0
+#define LM_REST_LMX_CLIENT_PROVIDER_LIBCURL 1
+#define LM_REST_LMX_CLIENT_PROVIDER_WINHTTP 2
+#define LM_REST_LMX_WINHTTP_USER_AGENT L"Lingvamyxa REST/LMX/1"
+#define LM_REST_LMX_WINHTTP_METHOD L"POST"
+#define LM_REST_LMX_WINHTTP_ROOT_PATH L"/"
+#define LM_REST_LMX_WINHTTP_HEADERS L"Content-Type: application/lmx\r\nAccept: application/lmx\r\n"
+
+
+typedef int LmOwnEdgeKind;
+typedef int LmMessageThreadState;
+
+
+typedef struct LmOwnPtrStack LmOwnPtrStack;
+typedef struct LmOwnValueStack LmOwnValueStack;
+typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
+typedef struct LmOwnLazyEdge LmOwnLazyEdge;
+typedef struct LmOwnArena LmOwnArena;
+typedef struct LmHostThread LmHostThread;
+typedef struct LmMutex LmMutex;
+typedef struct LmCondition LmCondition;
+typedef struct LmMessage LmMessage;
+typedef struct LmMessageOutboxEntry LmMessageOutboxEntry;
+typedef struct LmMessageRoute LmMessageRoute;
+typedef struct LmMessageThreadRuntime LmMessageThreadRuntime;
+typedef struct LmRestLmxProviderOpsV1 LmRestLmxProviderOpsV1;
+typedef struct LmMessageThreadPool LmMessageThreadPool;
+typedef struct LmMessageThreadComponent LmMessageThreadComponent;
+typedef struct LmMessageThread LmMessageThread;
+
+
+#define LM_OWN_EDGE_BORROWED 1
+#define LM_OWN_EDGE_OWNED 2
+#define LM_OWN_EDGE_LAZY_OWNED 3
+#define LM_OWN_EDGE_EXTERNAL 4
+#define LM_MESSAGE_THREAD_NEW 0
+#define LM_MESSAGE_THREAD_RUNNING 1
+#define LM_MESSAGE_THREAD_STOPPING 2
+#define LM_MESSAGE_THREAD_STOPPED 3
+#define LM_MESSAGE_STATUS_ROUTE_NOT_FOUND 64
+#define LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED 65
+#define LM_MESSAGE_STATUS_INVALID_ADDRESS 66
+#define LM_MESSAGE_STATUS_TRANSPORT_FAILED 67
+#define LM_MESSAGE_STATUS_HTTP_REJECTED 68
+#define LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR 69
+#define LM_MESSAGE_STATUS_APPLICATION_STOPPING 70
+
+
+#include <stddef.h>
+
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmSlice
+#define LM_LMX_TYPEDEF_DEFINED_LmSlice 1
+#define LM_LMX_TYPEDEF_ID_A_LmSlice 0xdd6442dffff43f92ULL
+#define LM_LMX_TYPEDEF_ID_B_LmSlice 0x21d9c62537977663ULL
+typedef struct LmSlice {
+    void *ptr;
+    size_t length;
+} LmSlice;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmSlice) || !defined(LM_LMX_TYPEDEF_ID_B_LmSlice) || LM_LMX_TYPEDEF_ID_A_LmSlice != 0xdd6442dffff43f92ULL || LM_LMX_TYPEDEF_ID_B_LmSlice != 0x21d9c62537977663ULL
+#error "Lingvamyxa conflicting typedef projection for LmSlice"
+#endif
+#endif
+struct LmOwnPtrStack {
+    void **items;
+    size_t count;
+    size_t capacity;
+    void (*delete_item)(void *object);
+};
+struct LmOwnValueStack {
+    void *items;
+    size_t count;
+    size_t capacity;
+    size_t item_size;
+};
+struct LmOwnAllocationDescriptor {
+    void *address;
+    LmOwnArena * owner;
+    size_t bytes;
+    size_t element_size;
+    size_t count;
+    size_t rank;
+    size_t level;
+};
+struct LmOwnLazyEdge {
+    LmOwnEdgeKind kind;
+    LmOwnArena * source_owner;
+    LmOwnArena * target_owner;
+    const void *source;
+    size_t size;
+    const void **patch_slot;
+};
+struct LmOwnArena {
+    LmOwnPtrStack * allocations;
+    LmOwnPtrStack * allocation_descriptors;
+    LmOwnPtrStack * lazy_edges;
+    int frozen;
+    LmMessageThread * owner_thread;
+    LmOwnArena * registry_previous;
+    LmOwnArena * registry_next;
+    int runtime_owned_shell;
+};
+struct LmHostThread {
+    void *implementation;
+    int started;
+    int joined;
+    void *controller_identity;
+    int starting;
+};
+struct LmMutex {
+    void *implementation;
+};
+struct LmCondition {
+    void *implementation;
+};
+struct LmMessage {
+    char *lmx;
+    size_t length;
+    LmMessage * next;
+};
+struct LmMessageOutboxEntry {
+    char *endpoint;
+    char *route;
+    LmMessage * message;
+    LmMessageOutboxEntry * next;
+};
+struct LmMessageRoute {
+    char *route;
+    LmMessageThread * target;
+    LmMessageRoute * next;
+};
+struct LmMessageThreadRuntime {
+    void *identity;
+    size_t pool_count;
+    size_t single_execution_depth;
+    LmMessageThread * single_active_thread;
+    LmMutex * route_mutex;
+    LmMessageRoute * route_head;
+    size_t route_count;
+    LmMessageThread * root_thread;
+    LmMessageThread * exit_requester;
+    int exit_requested;
+    int exit_ready;
+    int exit_status;
+    int (*rest_lmx_post)(void *context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
+    void (*rest_lmx_destroy)(void *context);
+    void *rest_lmx_context;
+    int rest_lmx_provider_sealed;
+    int rest_lmx_provider_transition;
+    int deleting;
+};
+struct LmRestLmxProviderOpsV1 {
+    size_t abi_size;
+    int (*post)(void *context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
+    void (*destroy)(void *context);
+};
+struct LmMessageThreadPool {
+    LmHostThread * *workers;
+    size_t worker_count;
+    size_t started_worker_count;
+    LmMutex * mutex;
+    LmCondition * work_ready;
+    LmMessageThread * ready_head;
+    LmMessageThread * ready_tail;
+    LmMessageThread * member_head;
+    LmMessageThread * member_tail;
+    size_t member_count;
+    int stop_requested;
+    int drain_requested;
+    int deleting;
+    int single_mode;
+    LmMessageThreadRuntime * runtime;
+};
+struct LmMessageThreadComponent {
+    LmMessageThread * owner_thread;
+    void *value;
+    void (*destroy)(struct LmMessageThread *lm_lmx_message_thread, void *component);
+    LmMessageThreadComponent * next;
+};
+struct LmMessageThread {
+    LmOwnArena * root_owner;
+    LmMessageThreadState state;
+    int stop_status;
+    size_t turn_count;
+    size_t collection_count;
+    int collector_failed;
+    void *execution_context;
+    LmOwnArena * arena_head;
+    LmOwnArena * arena_tail;
+    size_t arena_count;
+    int arena_destroying;
+    LmMessageThreadComponent * component_head;
+    size_t component_count;
+    int component_destroying;
+    LmMessageThreadPool * pool;
+    LmMessageThreadRuntime * runtime;
+    void (*entry)(struct LmMessageThread *lm_lmx_message_thread, void *argument);
+    void *entry_argument;
+    LmMutex * state_mutex;
+    LmCondition * stopped_condition;
+    int started;
+    int joining;
+    int joined;
+    int scheduled;
+    int executing;
+    void *execution_identity;
+    LmMessageThread * ready_next;
+    LmMessageThread * pool_previous;
+    LmMessageThread * pool_next;
+    int mailbox_mode;
+    LmMessage * inbox_head;
+    LmMessage * inbox_tail;
+    size_t inbox_count;
+    LmMessageOutboxEntry * outbox_head;
+    LmMessageOutboxEntry * outbox_tail;
+    size_t outbox_count;
+    LmMessage * current_message;
+    int turn_active;
+    int turn_failed;
+};
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxHttpClientContext
+#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxHttpClientContext 1
+#define LM_LMX_TYPEDEF_ID_A_LmRestLmxHttpClientContext 0x0c111efa18728812ULL
+#define LM_LMX_TYPEDEF_ID_B_LmRestLmxHttpClientContext 0xed23b3601acf4b23ULL
+typedef struct LmRestLmxHttpClientContext {
+    int curl_initialized;
+    void *session;
+} LmRestLmxHttpClientContext;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmRestLmxHttpClientContext) || !defined(LM_LMX_TYPEDEF_ID_B_LmRestLmxHttpClientContext) || LM_LMX_TYPEDEF_ID_A_LmRestLmxHttpClientContext != 0x0c111efa18728812ULL || LM_LMX_TYPEDEF_ID_B_LmRestLmxHttpClientContext != 0xed23b3601acf4b23ULL
+#error "Lingvamyxa conflicting typedef projection for LmRestLmxHttpClientContext"
+#endif
+#endif
+
+
+
+
+void * (lm_own_new_zero)(size_t size);
+void * (lm_own_resize)(void *object, size_t size);
+char * (lm_own_copy_bytes)(const char *source, size_t length);
+void (lm_own_delete)(void *object, LmOwnDestroyFields destroy_fields);
+void (lm_own_delete_plain)(void *object);
+void (lm_own_pointer_array_delete)(void **items, size_t count, LmOwnDelete delete_item);
+void (lm_own_ptr_stack_init)(LmOwnPtrStack *stack, LmOwnDelete delete_item);
+void (lm_own_ptr_stack_destroy)(LmOwnPtrStack *stack);
+int (lm_own_ptr_stack_push)(LmOwnPtrStack *stack, void *item);
+void * (lm_own_ptr_stack_pop)(LmOwnPtrStack *stack);
+void * (lm_own_ptr_stack_at)(const LmOwnPtrStack *stack, size_t index);
+void * (lm_own_ptr_stack_top)(const LmOwnPtrStack *stack);
+void (lm_own_ptr_stack_truncate)(LmOwnPtrStack *stack, size_t count);
+void (lm_own_value_stack_init)(LmOwnValueStack *stack, size_t item_size);
+void (lm_own_value_stack_destroy)(LmOwnValueStack *stack);
+int (lm_own_value_stack_push)(LmOwnValueStack *stack, const void *item);
+int (lm_own_value_stack_resize_zero)(LmOwnValueStack *stack, size_t count);
+int (lm_own_value_stack_pop)(LmOwnValueStack *stack, void *out_item);
+void * (lm_own_value_stack_at)(const LmOwnValueStack *stack, size_t index);
+void * (lm_own_value_stack_top)(const LmOwnValueStack *stack);
+void (lm_own_value_stack_truncate)(LmOwnValueStack *stack, size_t count);
+LmOwnArena * (lm_own_arena_new)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThread *owner_thread);
+void (lm_own_arena_delete)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_arena_init)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, LmMessageThread *owner_thread);
+void (lm_own_arena_destroy)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+void * (lm_own_arena_new_zero)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, size_t size);
+void * (lm_own_arena_array_new_zero)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
+const LmOwnAllocationDescriptor * (lm_own_arena_allocation_descriptor)(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena, const void *address);
+char * (lm_own_arena_copy_bytes)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, const char *source, size_t length);
+int (lm_own_arena_add_lazy_edge)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *target, LmOwnArena *source, const void *source_ptr, size_t size, const void **patch_slot);
+int (lm_own_arena_promote_lazy_edges)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_arena_absorb)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *target, LmOwnArena *source);
+void (lm_own_arena_freeze)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_arena_is_frozen)(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena);
+LmMessageThread * (lm_own_arena_owner_thread)(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena);
+int (lm_own_tree_cut)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_tree_cut_promote_lazy_edges)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+const char * (lm_thread_provider_name)(void);
+LmHostThread * (lm_host_thread_new)(void);
+void (lm_host_thread_delete)(LmHostThread *thread);
+int (lm_host_thread_start)(LmHostThread *thread, LmHostThreadEntry entry, void *argument);
+int (lm_host_thread_join)(LmHostThread *thread, void **result);
+LmMutex * (lm_mutex_new)(void);
+void (lm_mutex_delete)(LmMutex *mutex);
+int (lm_mutex_lock)(LmMutex *mutex);
+int (lm_mutex_unlock)(LmMutex *mutex);
+LmCondition * (lm_condition_new)(void);
+void (lm_condition_delete)(LmCondition *condition);
+int (lm_condition_wait)(LmCondition *condition, LmMutex *mutex);
+int (lm_condition_signal)(LmCondition *condition);
+int (lm_condition_broadcast)(LmCondition *condition);
+LmMessageThreadRuntime * (lm_message_thread_runtime_new)(void);
+int (lm_message_thread_runtime_delete)(LmMessageThreadRuntime *runtime);
+int (lm_message_thread_runtime_set_rest_lmx_provider)(LmMessageThreadRuntime *runtime, const LmRestLmxProviderOpsV1 *ops, void *context);
+int (lm_message_thread_runtime_admit_lmx)(LmMessageThreadRuntime *runtime, const char *route, const char *lmx, size_t length);
+int (lm_message_thread_runtime_attach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
+int (lm_message_thread_runtime_detach_root)(LmMessageThreadRuntime *runtime, LmMessageThread *thread);
+int (lm_message_thread_runtime_exit_state)(LmMessageThreadRuntime *runtime, int *out_requested, int *out_ready, int *out_status);
+LmMessageThreadPool * (lm_message_thread_pool_new)(LmMessageThreadRuntime *runtime, size_t worker_count);
+void (lm_message_thread_pool_request_stop)(LmMessageThreadPool *pool);
+void (lm_message_thread_pool_request_stop_when_idle)(LmMessageThreadPool *pool);
+size_t (lm_message_thread_pool_pump)(LmMessageThreadPool *pool, size_t max_turns);
+int (lm_message_thread_pool_delete)(LmMessageThreadPool *pool);
+int (lm_message_thread_init)(LmMessageThread *thread);
+void (lm_message_thread_destroy)(LmMessageThread *thread);
+LmMessageThread * (lm_message_thread_new)(void);
+LmMessageThread * (lm_message_thread_new_in)(LmMessageThreadPool *pool);
+void (lm_message_thread_delete)(LmMessageThread *thread);
+int (lm_message_thread_start)(LmMessageThread *thread, LmMessageThreadEntry entry, void *argument);
+int (lm_message_thread_start_mailbox)(LmMessageThread *thread, LmMessageThreadEntry entry, void *argument);
+int (lm_message_thread_join)(LmMessageThread *thread, int *result);
+int (lm_message_thread_bind_route)(LmMessageThread *thread, const char *route);
+int (lm_message_thread_send_lmx)(LmMessageThread *sender, const char *endpoint, const char *route, const char *lmx, size_t length);
+int (lm_message_thread_current_lmx)(LmMessageThread *thread, const char **out_lmx, size_t *out_length);
+size_t (lm_message_thread_inbox_count)(const LmMessageThread *thread);
+size_t (lm_message_thread_outbox_count)(const LmMessageThread *thread);
+int (lm_message_thread_begin_turn)(LmMessageThread *thread);
+int (lm_message_thread_end_turn)(LmMessageThread *thread);
+int (lm_message_thread_collect)(LmMessageThread *thread);
+void (lm_message_thread_request_stop)(LmMessageThread *thread, int status);
+void (lm_message_thread_request_failure)(LmMessageThread *thread, int status);
+int (lm_message_thread_request_exit)(LmMessageThread *requester, int status);
+int (lm_message_thread_is_running)(const LmMessageThread *thread);
+int (lm_message_thread_status)(const LmMessageThread *thread);
+LmOwnArena * (lm_message_thread_owner)(LmMessageThread *thread);
+void * (lm_message_thread_execution_context)(LmMessageThread *thread);
+void * (lm_message_thread_set_execution_context)(LmMessageThread *thread, void *context);
+size_t (lm_message_thread_turn_count)(const LmMessageThread *thread);
+size_t (lm_message_thread_collection_count)(const LmMessageThread *thread);
+size_t (lm_message_thread_arena_count)(const LmMessageThread *thread);
+int (lm_message_thread_component_attach)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy, void *component);
+void * (lm_message_thread_component_get)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
+int (lm_message_thread_component_remove)(struct LmMessageThread *lm_lmx_message_thread, LmMessageThreadComponentDestroy destroy);
+size_t (lm_message_thread_component_count)(const LmMessageThread *thread);
+const char * (lm_rest_lmx_http_client_provider_name)(void);
+int (lm_rest_lmx_http_client_install_default)(LmMessageThreadRuntime *runtime);
+
+
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-struct LmRestLmxProviderOpsV1 {
-    size_t abi_size;
-    int (*post)(
-        void *context,
-        const char *normalized_uri,
-        const char *body,
-        size_t length,
-        unsigned *out_http_status
-    );
-    void (*destroy)(void *context);
-};
-
-extern int lm_message_thread_runtime_set_rest_lmx_provider(
-    struct LmMessageThreadRuntime *runtime,
-    const struct LmRestLmxProviderOpsV1 *ops,
-    void *context
-);
-
-#ifndef LM_REST_LMX_CLIENT_PROVIDER_NONE
-#define LM_REST_LMX_CLIENT_PROVIDER_NONE 0
-#endif
-#ifndef LM_REST_LMX_CLIENT_PROVIDER_LIBCURL
-#define LM_REST_LMX_CLIENT_PROVIDER_LIBCURL 1
-#endif
-#ifndef LM_REST_LMX_CLIENT_PROVIDER_WINHTTP
-#define LM_REST_LMX_CLIENT_PROVIDER_WINHTTP 2
-#endif
-
 #ifndef LM_REST_LMX_CLIENT_PROVIDER
 #define LM_REST_LMX_CLIENT_PROVIDER LM_REST_LMX_CLIENT_PROVIDER_NONE
 #endif
 
-#if LM_REST_LMX_CLIENT_PROVIDER != LM_REST_LMX_CLIENT_PROVIDER_NONE && \
-    LM_REST_LMX_CLIENT_PROVIDER != LM_REST_LMX_CLIENT_PROVIDER_LIBCURL && \
-    LM_REST_LMX_CLIENT_PROVIDER != LM_REST_LMX_CLIENT_PROVIDER_WINHTTP
-#error "Unknown LM_REST_LMX_CLIENT_PROVIDER value"
-#endif
+#if LM_REST_LMX_CLIENT_PROVIDER != LM_REST_LMX_CLIENT_PROVIDER_NONE && LM_REST_LMX_CLIENT_PROVIDER != LM_REST_LMX_CLIENT_PROVIDER_LIBCURL && LM_REST_LMX_CLIENT_PROVIDER != LM_REST_LMX_CLIENT_PROVIDER_WINHTTP
+static int lm_rest_lmx_http_client_invalid_provider_configuration(void);
 
-#if LM_REST_LMX_CLIENT_PROVIDER == LM_REST_LMX_CLIENT_PROVIDER_LIBCURL
+static int lm_rest_lmx_http_client_invalid_provider_configuration(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    return LM_REST_LMX_CLIENT_PROVIDER_MUST_BE_NONE_LIBCURL_OR_WINHTTP;
+}
+#elif LM_REST_LMX_CLIENT_PROVIDER == LM_REST_LMX_CLIENT_PROVIDER_WINHTTP && !defined(_WIN32)
+static int lm_rest_lmx_http_client_invalid_winhttp_target(void);
 
+static int lm_rest_lmx_http_client_invalid_winhttp_target(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    return LM_REST_LMX_CLIENT_PROVIDER_WINHTTP_REQUIRES_WINDOWS;
+}
+#elif LM_REST_LMX_CLIENT_PROVIDER == LM_REST_LMX_CLIENT_PROVIDER_LIBCURL
 #include <curl/curl.h>
 
-typedef struct LmRestLmxHttpClientContext {
-    int curl_initialized;
-} LmRestLmxHttpClientContext;
+#if LIBCURL_VERSION_NUM >= 0x075500
+static int lm_rest_lmx_http_configure_protocols(CURL *easy);
 
-static int lm_rest_lmx_http_ascii_prefix(
-    const char *text,
-    const char *prefix
-) {
+static int lm_rest_lmx_http_configure_protocols(CURL *easy) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    if (curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, "http,https") != CURLE_OK) {
+        return 1;
+    }
+    return 0;
+}
+#else
+static int lm_rest_lmx_http_configure_protocols(CURL *easy);
+
+static int lm_rest_lmx_http_configure_protocols(CURL *easy) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    if (curl_easy_setopt(easy, CURLOPT_PROTOCOLS, (((long)(CURLPROTO_HTTP | CURLPROTO_HTTPS)))) != CURLE_OK) {
+        return 1;
+    }
+    return 0;
+}
+#endif
+static int lm_rest_lmx_http_ascii_prefix(const char *text, const char *prefix);
+static int lm_rest_lmx_http_uri_is_supported(const char *uri);
+static size_t lm_rest_lmx_http_discard_response(char *data, size_t size, size_t count, void *context);
+static void lm_rest_lmx_http_client_destroy(void *opaque_context);
+static int lm_rest_lmx_http_client_post(void *opaque_context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
+const char * lm_rest_lmx_http_client_provider_name(void);
+int lm_rest_lmx_http_client_install_default(LmMessageThreadRuntime *runtime);
+
+static int lm_rest_lmx_http_ascii_prefix(const char *text, const char *prefix) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     size_t index = 0U;
-
+    unsigned char left;
+    unsigned char right;
     if (text == 0 || prefix == 0) {
         return 0;
     }
     while (prefix[index] != '\0') {
-        unsigned char left = (unsigned char)text[index];
-        unsigned char right = (unsigned char)prefix[index];
-
-        if (left >= (unsigned char)'A' && left <= (unsigned char)'Z') {
-            left = (unsigned char)(left + ((unsigned char)'a' -
-                (unsigned char)'A'));
+        left = (((unsigned char)text[index]));
+        right = (((unsigned char)prefix[index]));
+        if (left >= (((unsigned char)'A')) && left <= (((unsigned char)'Z'))) {
+            left = (((unsigned char)(left + ((((unsigned char)'a')) - (((unsigned char)'A'))))));
         }
-        if (right >= (unsigned char)'A' && right <= (unsigned char)'Z') {
-            right = (unsigned char)(right + ((unsigned char)'a' -
-                (unsigned char)'A'));
+        if (right >= (((unsigned char)'A')) && right <= (((unsigned char)'Z'))) {
+            right = (((unsigned char)(right + ((((unsigned char)'a')) - (((unsigned char)'A'))))));
         }
-        if (left == (unsigned char)'\0' || left != right) {
+        if (left == (((unsigned char)'\0')) || left != right) {
             return 0;
         }
-        index += 1U;
+        index = index + 1U;
     }
     return 1;
 }
 
 static int lm_rest_lmx_http_uri_is_supported(const char *uri) {
-    return lm_rest_lmx_http_ascii_prefix(uri, "http://") ||
-        lm_rest_lmx_http_ascii_prefix(uri, "https://");
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    return lm_rest_lmx_http_ascii_prefix(uri, "http://") || lm_rest_lmx_http_ascii_prefix(uri, "https://");
 }
 
-static size_t lm_rest_lmx_http_discard_response(
-    char *data,
-    size_t size,
-    size_t count,
-    void *context
-) {
-    (void)data;
-    (void)context;
+static size_t lm_rest_lmx_http_discard_response(char *data, size_t size, size_t count, void *context) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    LM_UNUSED(data);
+    LM_UNUSED(context);
     if (size != 0U && count > SIZE_MAX / size) {
         return 0U;
     }
@@ -463,425 +805,751 @@ static size_t lm_rest_lmx_http_discard_response(
 }
 
 static void lm_rest_lmx_http_client_destroy(void *opaque_context) {
-    LmRestLmxHttpClientContext *context =
-        (LmRestLmxHttpClientContext *)opaque_context;
-
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    LmRestLmxHttpClientContext * context = 0;
+    context = (((LmRestLmxHttpClientContext *)opaque_context));
     if (context == 0) {
         return;
     }
-    if (context->curl_initialized) {
+    if (context -> curl_initialized) {
         curl_global_cleanup();
         context->curl_initialized = 0;
     }
     free(context);
 }
 
-static int lm_rest_lmx_http_client_post(
-    void *opaque_context,
-    const char *normalized_uri,
-    const char *body,
-    size_t length,
-    unsigned *out_http_status
-) {
-    LmRestLmxHttpClientContext *context =
-        (LmRestLmxHttpClientContext *)opaque_context;
+static int lm_rest_lmx_http_client_post(void *opaque_context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    LmRestLmxHttpClientContext * context = 0;
     CURL *easy = 0;
     struct curl_slist *headers = 0;
-    struct curl_slist *updated_headers;
+    struct curl_slist *updated_headers = 0;
     curl_off_t post_length;
     CURLcode result;
     long response_code = 0L;
-    int status = 1;
-
+    const char *post_body;
+    context = (((LmRestLmxHttpClientContext *)opaque_context));
     if (out_http_status != 0) {
-        *out_http_status = 0U;
+        out_http_status[0] = 0U;
     }
-    if (context == 0 || !context->curl_initialized ||
-        normalized_uri == 0 || out_http_status == 0 ||
-        (body == 0 && length != 0U) ||
-        !lm_rest_lmx_http_uri_is_supported(normalized_uri)) {
-        return 1;
+    if (context == 0 || context -> curl_initialized == 0 || normalized_uri == 0 || out_http_status == 0 || (body == 0 && length != 0U) || lm_rest_lmx_http_uri_is_supported(normalized_uri) == 0) {
+        {
+            int lm_return_0 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_0;
+        }
     }
-
-    post_length = (curl_off_t)length;
-    if (post_length < (curl_off_t)0 || (size_t)post_length != length) {
-        return 1;
+    post_length = (((curl_off_t)length));
+    if (post_length < (((curl_off_t)0)) || (((size_t)post_length)) != length) {
+        {
+            int lm_return_1 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_1;
+        }
     }
-
     easy = curl_easy_init();
     if (easy == 0) {
-        return 1;
+        {
+            int lm_return_2 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_2;
+        }
     }
     headers = curl_slist_append(0, "Content-Type: application/lmx");
     if (headers == 0) {
-        goto cleanup;
+        {
+            int lm_return_3 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_3;
+        }
     }
     updated_headers = curl_slist_append(headers, "Accept: application/lmx");
     if (updated_headers == 0) {
-        goto cleanup;
+        {
+            int lm_return_4 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_4;
+        }
     }
     headers = updated_headers;
-
-#define LM_REST_LMX_CURL_SETOPT(option, value) \
-    do { \
-        if (curl_easy_setopt(easy, (option), (value)) != CURLE_OK) { \
-            goto cleanup; \
-        } \
-    } while (0)
-
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_URL, normalized_uri);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_POST, 1L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_POSTFIELDS, body == 0 ? "" : body);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_POSTFIELDSIZE_LARGE, post_length);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_HTTPHEADER, headers);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_FOLLOWLOCATION, 0L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_MAXREDIRS, 0L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_PATH_AS_IS, 1L);
-#if LIBCURL_VERSION_NUM >= 0x075500
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_PROTOCOLS_STR, "http,https");
-#else
-    LM_REST_LMX_CURL_SETOPT(
-        CURLOPT_PROTOCOLS,
-        (long)(CURLPROTO_HTTP | CURLPROTO_HTTPS)
-    );
-#endif
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_NOSIGNAL, 1L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_CONNECTTIMEOUT_MS, 10000L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_TIMEOUT_MS, 30000L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_SSL_VERIFYPEER, 1L);
-    LM_REST_LMX_CURL_SETOPT(CURLOPT_SSL_VERIFYHOST, 2L);
-    LM_REST_LMX_CURL_SETOPT(
-        CURLOPT_WRITEFUNCTION,
-        lm_rest_lmx_http_discard_response
-    );
-
-#undef LM_REST_LMX_CURL_SETOPT
-
-    result = curl_easy_perform(easy);
-    if (result != CURLE_OK ||
-        curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &response_code) !=
-            CURLE_OK ||
-        response_code < 0L ||
-        (unsigned long)response_code > (unsigned long)UINT_MAX) {
-        goto cleanup;
+    post_body = body;
+    if (post_body == 0) {
+        post_body = "";
     }
-    *out_http_status = (unsigned)response_code;
-    status = 0;
-
-cleanup:
+    if (curl_easy_setopt(easy, CURLOPT_URL, normalized_uri) != CURLE_OK) {
+        {
+            int lm_return_5 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_5;
+        }
+    }
+    if (curl_easy_setopt(easy, CURLOPT_POST, 1L) != CURLE_OK) {
+        {
+            int lm_return_6 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_6;
+        }
+    }
+    if (curl_easy_setopt(easy, CURLOPT_POSTFIELDS, post_body) != CURLE_OK) {
+        {
+            int lm_return_7 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_7;
+        }
+    }
+    if (curl_easy_setopt(easy, CURLOPT_POSTFIELDSIZE_LARGE, post_length) != CURLE_OK) {
+        {
+            int lm_return_8 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_8;
+        }
+    }
+    if (curl_easy_setopt(easy, CURLOPT_HTTPHEADER, headers) != CURLE_OK) {
+        {
+            int lm_return_9 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_9;
+        }
+    }
+    if (curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 0L) != CURLE_OK) {
+        {
+            int lm_return_10 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_10;
+        }
+    }
+    if (curl_easy_setopt(easy, CURLOPT_MAXREDIRS, 0L) != CURLE_OK) {
+        {
+            int lm_return_11 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_11;
+        }
+    }
+    if (curl_easy_setopt(easy, CURLOPT_PATH_AS_IS, 1L) != CURLE_OK) {
+        {
+            int lm_return_12 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_12;
+        }
+    }
+    if (lm_rest_lmx_http_configure_protocols(easy) != 0) {
+        {
+            int lm_return_13 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_13;
+        }
+    }
+    if (curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L) != CURLE_OK) {
+        {
+            int lm_return_14 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_14;
+        }
+    }
+    if (curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, 10000L) != CURLE_OK) {
+        {
+            int lm_return_15 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_15;
+        }
+    }
+    if (curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, 30000L) != CURLE_OK) {
+        {
+            int lm_return_16 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_16;
+        }
+    }
+    if (curl_easy_setopt(easy, CURLOPT_SSL_VERIFYPEER, 1L) != CURLE_OK) {
+        {
+            int lm_return_17 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_17;
+        }
+    }
+    if (curl_easy_setopt(easy, CURLOPT_SSL_VERIFYHOST, 2L) != CURLE_OK) {
+        {
+            int lm_return_18 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_18;
+        }
+    }
+    if (curl_easy_setopt(easy, CURLOPT_WRITEFUNCTION, &lm_rest_lmx_http_discard_response) != CURLE_OK) {
+        {
+            int lm_return_19 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_19;
+        }
+    }
+    result = curl_easy_perform(easy);
+    if (result != CURLE_OK || curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &response_code) != CURLE_OK || response_code < 0L || (((unsigned long)response_code)) > (((unsigned long)UINT_MAX))) {
+        {
+            int lm_return_20 = 1;
+            curl_slist_free_all(headers);
+            if (easy != 0) {
+                curl_easy_cleanup(easy);
+            }
+            return lm_return_20;
+        }
+    }
+    out_http_status[0] = (((unsigned)response_code));
+    {
+        int lm_return_21 = 0;
+        curl_slist_free_all(headers);
+        if (easy != 0) {
+            curl_easy_cleanup(easy);
+        }
+        return lm_return_21;
+    }
     curl_slist_free_all(headers);
-    curl_easy_cleanup(easy);
-    return status;
+    if (easy != 0) {
+        curl_easy_cleanup(easy);
+    }
 }
 
-const char *lm_rest_lmx_http_client_provider_name(void) {
+const char * lm_rest_lmx_http_client_provider_name(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     return "libcurl";
 }
 
-int lm_rest_lmx_http_client_install_default(
-    struct LmMessageThreadRuntime *runtime
-) {
-    LmRestLmxHttpClientContext *context;
-    struct LmRestLmxProviderOpsV1 ops;
-
-    if (runtime == 0 || curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
-        return 1;
+int lm_rest_lmx_http_client_install_default(LmMessageThreadRuntime *runtime) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    LmRestLmxHttpClientContext * context = 0;
+    LmRestLmxProviderOpsV1 * ops = 0;
+    if (runtime == 0) {
+        {
+            int lm_return_0 = 1;
+            free(ops);
+            if (context != 0) {
+                lm_rest_lmx_http_client_destroy(context);
+            }
+            return lm_return_0;
+        }
     }
-    context = (LmRestLmxHttpClientContext *)calloc(1U, sizeof(*context));
-    if (context == 0) {
-        curl_global_cleanup();
-        return 1;
+    context = (((LmRestLmxHttpClientContext *)calloc(1U, sizeof(context[0]))));
+    ops = (((LmRestLmxProviderOpsV1 *)calloc(1U, sizeof(ops[0]))));
+    if (context == 0 || ops == 0) {
+        {
+            int lm_return_1 = 1;
+            free(ops);
+            if (context != 0) {
+                lm_rest_lmx_http_client_destroy(context);
+            }
+            return lm_return_1;
+        }
+    }
+    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
+        {
+            int lm_return_2 = 1;
+            free(ops);
+            if (context != 0) {
+                lm_rest_lmx_http_client_destroy(context);
+            }
+            return lm_return_2;
+        }
     }
     context->curl_initialized = 1;
-    ops.abi_size = sizeof(ops);
-    ops.post = lm_rest_lmx_http_client_post;
-    ops.destroy = lm_rest_lmx_http_client_destroy;
-    if (lm_message_thread_runtime_set_rest_lmx_provider(
-            runtime,
-            &ops,
-            context
-        ) != 0) {
-        lm_rest_lmx_http_client_destroy(context);
-        return 1;
+    ops->abi_size = sizeof(ops[0]);
+    ops->post = &lm_rest_lmx_http_client_post;
+    ops->destroy = &lm_rest_lmx_http_client_destroy;
+    if (lm_message_thread_runtime_set_rest_lmx_provider(runtime, ops, context) != 0) {
+        {
+            int lm_return_3 = 1;
+            free(ops);
+            if (context != 0) {
+                lm_rest_lmx_http_client_destroy(context);
+            }
+            return lm_return_3;
+        }
     }
-    return 0;
+    context = 0;
+    {
+        int lm_return_4 = 0;
+        free(ops);
+        if (context != 0) {
+            lm_rest_lmx_http_client_destroy(context);
+        }
+        return lm_return_4;
+    }
+    free(ops);
+    if (context != 0) {
+        lm_rest_lmx_http_client_destroy(context);
+    }
 }
-
 #elif LM_REST_LMX_CLIENT_PROVIDER == LM_REST_LMX_CLIENT_PROVIDER_WINHTTP
-
-#if !defined(_WIN32)
-#error "LM_REST_LMX_CLIENT_PROVIDER_WINHTTP requires a Windows target"
-#endif
-
 #include <windows.h>
 #include <winhttp.h>
+static wchar_t * lm_rest_lmx_http_wide_uri(const char *uri);
+static wchar_t * lm_rest_lmx_http_wide_slice(const wchar_t *source, DWORD length);
+static void lm_rest_lmx_http_client_destroy(void *opaque_context);
+static int lm_rest_lmx_http_client_post(void *opaque_context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
+const char * lm_rest_lmx_http_client_provider_name(void);
+int lm_rest_lmx_http_client_install_default(LmMessageThreadRuntime *runtime);
 
-typedef struct LmRestLmxHttpClientContext {
-    HINTERNET session;
-} LmRestLmxHttpClientContext;
-
-static wchar_t *lm_rest_lmx_http_wide_uri(const char *uri) {
+static wchar_t * lm_rest_lmx_http_wide_uri(const char *uri) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     size_t length;
     int wide_length;
-    wchar_t *wide_uri;
-
+    wchar_t *wide_uri = 0;
     if (uri == 0) {
         return 0;
     }
     length = strlen(uri);
-    if (length > (size_t)INT_MAX - 1U) {
+    if (length > (((size_t)INT_MAX)) - 1U) {
         return 0;
     }
-    wide_length = MultiByteToWideChar(
-        CP_UTF8,
-        MB_ERR_INVALID_CHARS,
-        uri,
-        -1,
-        0,
-        0
-    );
-    if (wide_length <= 0 ||
-        (size_t)wide_length > SIZE_MAX / sizeof(*wide_uri)) {
+    wide_length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, uri, -1, 0, 0);
+    if (wide_length <= 0 || (((size_t)wide_length)) > SIZE_MAX / sizeof(wide_uri[0])) {
         return 0;
     }
-    wide_uri = (wchar_t *)calloc((size_t)wide_length, sizeof(*wide_uri));
-    if (wide_uri == 0 || MultiByteToWideChar(
-            CP_UTF8,
-            MB_ERR_INVALID_CHARS,
-            uri,
-            -1,
-            wide_uri,
-            wide_length
-        ) != wide_length) {
+    wide_uri = (((wchar_t *)calloc((((size_t)wide_length)), sizeof(wide_uri[0]))));
+    if (wide_uri == 0 || MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, uri, -1, wide_uri, wide_length) != wide_length) {
         free(wide_uri);
         return 0;
     }
     return wide_uri;
 }
 
-static wchar_t *lm_rest_lmx_http_wide_slice(
-    const wchar_t *source,
-    DWORD length
-) {
-    wchar_t *copy;
-
-    if (source == 0 ||
-        (size_t)length > SIZE_MAX / sizeof(*copy) - 1U) {
+static wchar_t * lm_rest_lmx_http_wide_slice(const wchar_t *source, DWORD length) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    wchar_t *copy = 0;
+    if (source == 0 || (((size_t)length)) > SIZE_MAX / sizeof(copy[0]) - 1U) {
         return 0;
     }
-    copy = (wchar_t *)calloc((size_t)length + 1U, sizeof(*copy));
+    copy = (((wchar_t *)calloc((((size_t)length)) + 1U, sizeof(copy[0]))));
     if (copy == 0) {
         return 0;
     }
     if (length != 0U) {
-        memcpy(copy, source, (size_t)length * sizeof(*copy));
+        memcpy(copy, source, (((size_t)length)) * sizeof(copy[0]));
     }
     return copy;
 }
 
 static void lm_rest_lmx_http_client_destroy(void *opaque_context) {
-    LmRestLmxHttpClientContext *context =
-        (LmRestLmxHttpClientContext *)opaque_context;
-
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    LmRestLmxHttpClientContext * context = 0;
+    context = (((LmRestLmxHttpClientContext *)opaque_context));
     if (context == 0) {
         return;
     }
-    if (context->session != 0) {
-        (void)WinHttpCloseHandle(context->session);
+    if (context -> session != 0) {
+        WinHttpCloseHandle(context -> session);
         context->session = 0;
     }
     free(context);
 }
 
-static int lm_rest_lmx_http_client_post(
-    void *opaque_context,
-    const char *normalized_uri,
-    const char *body,
-    size_t length,
-    unsigned *out_http_status
-) {
-    static const wchar_t headers[] =
-        L"Content-Type: application/lmx\r\nAccept: application/lmx\r\n";
-    LmRestLmxHttpClientContext *context =
-        (LmRestLmxHttpClientContext *)opaque_context;
+static int lm_rest_lmx_http_client_post(void *opaque_context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    LmRestLmxHttpClientContext * context = 0;
     wchar_t *wide_uri = 0;
     wchar_t *host = 0;
     wchar_t *path = 0;
     URL_COMPONENTS components;
-    HINTERNET connection = 0;
-    HINTERNET request = 0;
+    void *connection = 0;
+    void *request = 0;
+    void *request_body = 0;
     DWORD request_flags = WINHTTP_FLAG_ESCAPE_DISABLE;
     DWORD disabled_features = WINHTTP_DISABLE_REDIRECTS;
-    DWORD body_length = (DWORD)length;
+    DWORD body_length = (((DWORD)length));
     DWORD response_status = 0U;
-    DWORD response_status_size = sizeof(response_status);
-    int status = 1;
-
+    DWORD response_status_size = (((DWORD)sizeof(response_status)));
+    context = (((LmRestLmxHttpClientContext *)opaque_context));
     if (out_http_status != 0) {
-        *out_http_status = 0U;
+        out_http_status[0] = 0U;
     }
-    if (context == 0 || context->session == 0 || normalized_uri == 0 ||
-        out_http_status == 0 || (body == 0 && length != 0U) ||
-        (size_t)body_length != length) {
-        return 1;
+    if (context == 0 || context -> session == 0 || normalized_uri == 0 || out_http_status == 0 || (body == 0 && length != 0U) || (((size_t)body_length)) != length) {
+        {
+            int lm_return_0 = 1;
+            if (request != 0) {
+                WinHttpCloseHandle(request);
+            }
+            if (connection != 0) {
+                WinHttpCloseHandle(connection);
+            }
+            free(path);
+            free(host);
+            free(wide_uri);
+            return lm_return_0;
+        }
     }
     wide_uri = lm_rest_lmx_http_wide_uri(normalized_uri);
     if (wide_uri == 0) {
-        goto cleanup;
+        {
+            int lm_return_1 = 1;
+            if (request != 0) {
+                WinHttpCloseHandle(request);
+            }
+            if (connection != 0) {
+                WinHttpCloseHandle(connection);
+            }
+            free(path);
+            free(host);
+            free(wide_uri);
+            return lm_return_1;
+        }
     }
-
     memset(&components, 0, sizeof(components));
     components.dwStructSize = sizeof(components);
-    components.dwSchemeLength = (DWORD)-1;
-    components.dwHostNameLength = (DWORD)-1;
-    components.dwUrlPathLength = (DWORD)-1;
-    components.dwExtraInfoLength = (DWORD)-1;
-    if (!WinHttpCrackUrl(wide_uri, 0U, 0U, &components) ||
-        (components.nScheme != INTERNET_SCHEME_HTTP &&
-         components.nScheme != INTERNET_SCHEME_HTTPS) ||
-        components.lpszHostName == 0 || components.dwHostNameLength == 0U ||
-        components.dwExtraInfoLength != 0U) {
-        goto cleanup;
+    components.dwSchemeLength = (((DWORD)-1));
+    components.dwHostNameLength = (((DWORD)-1));
+    components.dwUrlPathLength = (((DWORD)-1));
+    components.dwExtraInfoLength = (((DWORD)-1));
+    if (WinHttpCrackUrl(wide_uri, 0U, 0U, &components) == 0 || (components.nScheme != INTERNET_SCHEME_HTTP && components.nScheme != INTERNET_SCHEME_HTTPS) || components.lpszHostName == 0 || components.dwHostNameLength == 0U || components.dwExtraInfoLength != 0U) {
+        {
+            int lm_return_2 = 1;
+            if (request != 0) {
+                WinHttpCloseHandle(request);
+            }
+            if (connection != 0) {
+                WinHttpCloseHandle(connection);
+            }
+            free(path);
+            free(host);
+            free(wide_uri);
+            return lm_return_2;
+        }
     }
-    host = lm_rest_lmx_http_wide_slice(
-        components.lpszHostName,
-        components.dwHostNameLength
-    );
+    host = lm_rest_lmx_http_wide_slice(components.lpszHostName, components.dwHostNameLength);
     if (components.lpszUrlPath != 0 && components.dwUrlPathLength != 0U) {
-        path = lm_rest_lmx_http_wide_slice(
-            components.lpszUrlPath,
-            components.dwUrlPathLength
-        );
-    } else {
-        path = lm_rest_lmx_http_wide_slice(L"/", 1U);
+        path = lm_rest_lmx_http_wide_slice(components.lpszUrlPath, components.dwUrlPathLength);
+    }
+    if (path == 0 && (components.lpszUrlPath == 0 || components.dwUrlPathLength == 0U)) {
+        path = lm_rest_lmx_http_wide_slice(LM_REST_LMX_WINHTTP_ROOT_PATH, 1U);
     }
     if (host == 0 || path == 0) {
-        goto cleanup;
+        {
+            int lm_return_3 = 1;
+            if (request != 0) {
+                WinHttpCloseHandle(request);
+            }
+            if (connection != 0) {
+                WinHttpCloseHandle(connection);
+            }
+            free(path);
+            free(host);
+            free(wide_uri);
+            return lm_return_3;
+        }
     }
-
-    connection = WinHttpConnect(
-        context->session,
-        host,
-        components.nPort,
-        0U
-    );
+    connection = WinHttpConnect(context -> session, host, components.nPort, 0U);
     if (connection == 0) {
-        goto cleanup;
+        {
+            int lm_return_4 = 1;
+            if (request != 0) {
+                WinHttpCloseHandle(request);
+            }
+            if (connection != 0) {
+                WinHttpCloseHandle(connection);
+            }
+            free(path);
+            free(host);
+            free(wide_uri);
+            return lm_return_4;
+        }
     }
     if (components.nScheme == INTERNET_SCHEME_HTTPS) {
-        request_flags |= WINHTTP_FLAG_SECURE;
+        request_flags = request_flags | WINHTTP_FLAG_SECURE;
     }
-    request = WinHttpOpenRequest(
-        connection,
-        L"POST",
-        path,
-        0,
-        WINHTTP_NO_REFERER,
-        WINHTTP_DEFAULT_ACCEPT_TYPES,
-        request_flags
-    );
-    if (request == 0 || !WinHttpSetOption(
-            request,
-            WINHTTP_OPTION_DISABLE_FEATURE,
-            &disabled_features,
-            sizeof(disabled_features)
-        ) || !WinHttpSetTimeouts(request, 10000, 10000, 30000, 30000) ||
-        !WinHttpAddRequestHeaders(
-            request,
-            headers,
-            (DWORD)-1,
-            WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE
-        ) || !WinHttpSendRequest(
-            request,
-            WINHTTP_NO_ADDITIONAL_HEADERS,
-            0U,
-            body_length == 0U ? WINHTTP_NO_REQUEST_DATA : (LPVOID)body,
-            body_length,
-            body_length,
-            0U
-        ) || !WinHttpReceiveResponse(request, 0) ||
-        !WinHttpQueryHeaders(
-            request,
-            WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-            WINHTTP_HEADER_NAME_BY_INDEX,
-            &response_status,
-            &response_status_size,
-            WINHTTP_NO_HEADER_INDEX
-        )) {
-        goto cleanup;
+    request = WinHttpOpenRequest(connection, LM_REST_LMX_WINHTTP_METHOD, path, 0, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, request_flags);
+    if (request == 0) {
+        {
+            int lm_return_5 = 1;
+            if (request != 0) {
+                WinHttpCloseHandle(request);
+            }
+            if (connection != 0) {
+                WinHttpCloseHandle(connection);
+            }
+            free(path);
+            free(host);
+            free(wide_uri);
+            return lm_return_5;
+        }
     }
-    *out_http_status = (unsigned)response_status;
-    status = 0;
-
-cleanup:
+    if (body_length != 0U) {
+        request_body = (((void *)body));
+    }
+    if (WinHttpSetOption(request, WINHTTP_OPTION_DISABLE_FEATURE, &disabled_features, sizeof(disabled_features)) == 0) {
+        {
+            int lm_return_6 = 1;
+            if (request != 0) {
+                WinHttpCloseHandle(request);
+            }
+            if (connection != 0) {
+                WinHttpCloseHandle(connection);
+            }
+            free(path);
+            free(host);
+            free(wide_uri);
+            return lm_return_6;
+        }
+    }
+    if (WinHttpSetTimeouts(request, 10000, 10000, 30000, 30000) == 0) {
+        {
+            int lm_return_7 = 1;
+            if (request != 0) {
+                WinHttpCloseHandle(request);
+            }
+            if (connection != 0) {
+                WinHttpCloseHandle(connection);
+            }
+            free(path);
+            free(host);
+            free(wide_uri);
+            return lm_return_7;
+        }
+    }
+    if (WinHttpAddRequestHeaders(request, LM_REST_LMX_WINHTTP_HEADERS, (((DWORD)-1)), WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE) == 0) {
+        {
+            int lm_return_8 = 1;
+            if (request != 0) {
+                WinHttpCloseHandle(request);
+            }
+            if (connection != 0) {
+                WinHttpCloseHandle(connection);
+            }
+            free(path);
+            free(host);
+            free(wide_uri);
+            return lm_return_8;
+        }
+    }
+    if (WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0U, request_body, body_length, body_length, 0U) == 0) {
+        {
+            int lm_return_9 = 1;
+            if (request != 0) {
+                WinHttpCloseHandle(request);
+            }
+            if (connection != 0) {
+                WinHttpCloseHandle(connection);
+            }
+            free(path);
+            free(host);
+            free(wide_uri);
+            return lm_return_9;
+        }
+    }
+    if (WinHttpReceiveResponse(request, 0) == 0) {
+        {
+            int lm_return_10 = 1;
+            if (request != 0) {
+                WinHttpCloseHandle(request);
+            }
+            if (connection != 0) {
+                WinHttpCloseHandle(connection);
+            }
+            free(path);
+            free(host);
+            free(wide_uri);
+            return lm_return_10;
+        }
+    }
+    if (WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &response_status, &response_status_size, WINHTTP_NO_HEADER_INDEX) == 0) {
+        {
+            int lm_return_11 = 1;
+            if (request != 0) {
+                WinHttpCloseHandle(request);
+            }
+            if (connection != 0) {
+                WinHttpCloseHandle(connection);
+            }
+            free(path);
+            free(host);
+            free(wide_uri);
+            return lm_return_11;
+        }
+    }
+    out_http_status[0] = (((unsigned)response_status));
+    {
+        int lm_return_12 = 0;
+        if (request != 0) {
+            WinHttpCloseHandle(request);
+        }
+        if (connection != 0) {
+            WinHttpCloseHandle(connection);
+        }
+        free(path);
+        free(host);
+        free(wide_uri);
+        return lm_return_12;
+    }
     if (request != 0) {
-        (void)WinHttpCloseHandle(request);
+        WinHttpCloseHandle(request);
     }
     if (connection != 0) {
-        (void)WinHttpCloseHandle(connection);
+        WinHttpCloseHandle(connection);
     }
     free(path);
     free(host);
     free(wide_uri);
-    return status;
 }
 
-const char *lm_rest_lmx_http_client_provider_name(void) {
+const char * lm_rest_lmx_http_client_provider_name(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     return "winhttp";
 }
 
-int lm_rest_lmx_http_client_install_default(
-    struct LmMessageThreadRuntime *runtime
-) {
-    LmRestLmxHttpClientContext *context;
-    struct LmRestLmxProviderOpsV1 ops;
-
+int lm_rest_lmx_http_client_install_default(LmMessageThreadRuntime *runtime) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
+    LmRestLmxHttpClientContext * context = 0;
+    LmRestLmxProviderOpsV1 * ops = 0;
     if (runtime == 0) {
-        return 1;
+        {
+            int lm_return_0 = 1;
+            free(ops);
+            if (context != 0) {
+                lm_rest_lmx_http_client_destroy(context);
+            }
+            return lm_return_0;
+        }
     }
-    context = (LmRestLmxHttpClientContext *)calloc(1U, sizeof(*context));
-    if (context == 0) {
-        return 1;
+    context = (((LmRestLmxHttpClientContext *)calloc(1U, sizeof(context[0]))));
+    ops = (((LmRestLmxProviderOpsV1 *)calloc(1U, sizeof(ops[0]))));
+    if (context == 0 || ops == 0) {
+        {
+            int lm_return_1 = 1;
+            free(ops);
+            if (context != 0) {
+                lm_rest_lmx_http_client_destroy(context);
+            }
+            return lm_return_1;
+        }
     }
-    context->session = WinHttpOpen(
-        L"Lingvamyxa REST/LMX/1",
-        WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-        WINHTTP_NO_PROXY_NAME,
-        WINHTTP_NO_PROXY_BYPASS,
-        0U
-    );
-    if (context->session == 0) {
+    context->session = WinHttpOpen(LM_REST_LMX_WINHTTP_USER_AGENT, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0U);
+    if (context -> session == 0) {
+        {
+            int lm_return_2 = 1;
+            free(ops);
+            if (context != 0) {
+                lm_rest_lmx_http_client_destroy(context);
+            }
+            return lm_return_2;
+        }
+    }
+    ops->abi_size = sizeof(ops[0]);
+    ops->post = &lm_rest_lmx_http_client_post;
+    ops->destroy = &lm_rest_lmx_http_client_destroy;
+    if (lm_message_thread_runtime_set_rest_lmx_provider(runtime, ops, context) != 0) {
+        {
+            int lm_return_3 = 1;
+            free(ops);
+            if (context != 0) {
+                lm_rest_lmx_http_client_destroy(context);
+            }
+            return lm_return_3;
+        }
+    }
+    context = 0;
+    {
+        int lm_return_4 = 0;
+        free(ops);
+        if (context != 0) {
+            lm_rest_lmx_http_client_destroy(context);
+        }
+        return lm_return_4;
+    }
+    free(ops);
+    if (context != 0) {
         lm_rest_lmx_http_client_destroy(context);
-        return 1;
     }
-    ops.abi_size = sizeof(ops);
-    ops.post = lm_rest_lmx_http_client_post;
-    ops.destroy = lm_rest_lmx_http_client_destroy;
-    if (lm_message_thread_runtime_set_rest_lmx_provider(
-            runtime,
-            &ops,
-            context
-        ) != 0) {
-        lm_rest_lmx_http_client_destroy(context);
-        return 1;
-    }
-    return 0;
 }
-
 #else
+const char * lm_rest_lmx_http_client_provider_name(void);
+int lm_rest_lmx_http_client_install_default(LmMessageThreadRuntime *runtime);
 
-const char *lm_rest_lmx_http_client_provider_name(void) {
+const char * lm_rest_lmx_http_client_provider_name(void) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     return "none";
 }
 
-int lm_rest_lmx_http_client_install_default(
-    struct LmMessageThreadRuntime *runtime
-) {
+int lm_rest_lmx_http_client_install_default(LmMessageThreadRuntime *runtime) {
+    struct LmMessageThread *lm_lmx_message_thread = 0;
+    (void)lm_lmx_message_thread;
     if (runtime == 0) {
         return 1;
     }
     return lm_message_thread_runtime_set_rest_lmx_provider(runtime, 0, 0);
 }
-
 #endif
+
+
+
+
+
+
+
+
 
