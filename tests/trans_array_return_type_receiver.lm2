@@ -1,16 +1,4 @@
 predef: "lm2/own_abi.lm2"
-L1:
-===
-static const void *lm_test_array_source;
-
-static void lm_test_remember_array_source(const void *value) {
-    lm_test_array_source = value;
-}
-
-static int lm_test_is_array_source(const void *value) {
-    return value == lm_test_array_source;
-}
-===
 include
 alias
 forward
@@ -19,9 +7,9 @@ fn
 layout
 prototype
 
-fn: values () []: int
+fn: values (@: LmSlice return_source) []: int
     []: int result [1 2 3]
-    c.lm_test_remember_array_source(result)
+    return_source[0]: result
     return: result
 end: values
 
@@ -46,10 +34,11 @@ external:
         const: LmOwnAllocationDescriptor: pSliceDesc
         const: LmOwnAllocationDescriptor: rowDesc
         const: LmOwnAllocationDescriptor: cubeDesc
-        p: values()
-        if: c.lm_test_is_array_source(p) = 0
+        LmSlice: returnSource
+        p: values(@ returnSource)
+        if: p != returnSource
             return: 1
-        again: values()
+        again: values(@ returnSource)
         m: matrix()
         cube: cubeValues()
         pItems: cast: (@: int) p\ptr

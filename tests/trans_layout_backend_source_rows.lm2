@@ -122,48 +122,41 @@ table:
              value  int  0
 end: LmLayoutBackendWideReordered
 
+include: "<stddef.h>" "trans_layout_backend_source_rows.support.h"
 layout
 
-L1:
-===
-#include <stddef.h>
+fn: lm_test_layout_backend_source_rows () int
+    c.struct: c.LmLayoutBackendWideDirect direct
+    c.struct: c.LmLayoutBackendWideDuplicate duplicate
+    c.struct: c.LmLayoutBackendWideLateNone late_none
+    c.union: c.LmLayoutBackendWideOverlay overlay
+    c.struct: c.LmLayoutBackendWidePhysical physical
+    c.struct: c.LmLayoutBackendWideJoined joined
+    c.struct: c.LmLayoutBackendWideSchemaFallback schema_fallback
+    c.struct: c.LmLayoutBackendWideReordered reordered
+    LmLayoutBackendWideOtherOnly: other_only 20
+    LmLayoutBackendWideNone: none 21
 
-typedef int LmLayoutBackendWideOtherOnly;
-typedef int LmLayoutBackendWideNone;
-
-static int lm_test_layout_backend_source_rows(void) {
-    LmLayoutBackendWideDirect direct = { 11 };
-    LmLayoutBackendWideDuplicate duplicate = { 12, 13 };
-    LmLayoutBackendWideLateNone late_none = { 14 };
-    LmLayoutBackendWideOverlay overlay = { 0 };
-    LmLayoutBackendWidePhysical physical = { 16 };
-    LmLayoutBackendWideJoined joined = { 17 };
-    LmLayoutBackendWideSchemaFallback schema_fallback = { 18 };
-    LmLayoutBackendWideReordered reordered = { 19 };
-    LmLayoutBackendWideOtherOnly other_only = 20;
-    LmLayoutBackendWideNone none = 21;
-
-    overlay.right = 15;
-    if (direct.value != 11 || duplicate.first != 12 || duplicate.second != 13 ||
-        late_none.value != 14 || overlay.right != 15 || physical.value != 16 ||
-        joined.value != 17 || schema_fallback.value != 18 || reordered.value != 19 ||
-        other_only != 20 || none != 21) {
-        return 1;
-    }
-    if (offsetof(LmLayoutBackendWideDuplicate, second) <=
-        offsetof(LmLayoutBackendWideDuplicate, first)) {
-        return 2;
-    }
-    if (offsetof(LmLayoutBackendWideOverlay, left) != 0U ||
-        offsetof(LmLayoutBackendWideOverlay, right) != 0U) {
-        return 3;
-    }
-    return 0;
-}
-===
+    c.direct.value: 11
+    c.duplicate.first: 12
+    c.duplicate.second: 13
+    c.late_none.value: 14
+    c.overlay.right: 15
+    c.physical.value: 16
+    c.joined.value: 17
+    c.schema_fallback.value: 18
+    c.reordered.value: 19
+    if: c.direct.value != 11 || c.duplicate.first != 12 || c.duplicate.second != 13 || c.late_none.value != 14 || c.overlay.right != 15 || c.physical.value != 16 || c.joined.value != 17 || c.schema_fallback.value != 18 || c.reordered.value != 19 || other_only != 20 || none != 21
+        return: 1
+    if: c.offsetof(c.LmLayoutBackendWideDuplicate, c.second) <= c.offsetof(c.LmLayoutBackendWideDuplicate, c.first)
+        return: 2
+    if: c.offsetof(c.LmLayoutBackendWideOverlay, c.left) != 0U || c.offsetof(c.LmLayoutBackendWideOverlay, c.right) != 0U
+        return: 3
+    return: 0
+end: lm_test_layout_backend_source_rows
 
 external:
     fn: main () int
-        return: c.lm_test_layout_backend_source_rows()
+        return: lm_test_layout_backend_source_rows()
     end: main
 end: external

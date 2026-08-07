@@ -66,37 +66,24 @@ L2:
         rows:
                  callback  LmUnaryCall
     end: `LmWrongDescriptorCallHolder.field.class`
+
+    table:
+        source
+        name: `fn.thread-context.none`
+        columns((class: class) (int: value))
+        rows:
+                 lm_test_increment  1
+    end: `fn.thread-context.none`
+
 end: L2
 
-L1:
-===
-typedef struct LmFullCallHolder {
-    LmUnaryCall callback;
-} LmFullCallHolder;
-
-typedef struct LmOverlayCallHolder {
-    LmUnaryCall callback;
-} LmOverlayCallHolder;
-
-typedef struct LmSplitCallHolder {
-    LmUnaryCall callback;
-} LmSplitCallHolder;
-
-typedef struct LmWrongDescriptorCallHolder {
-    LmUnaryCall callback;
-} LmWrongDescriptorCallHolder;
-
-static int lm_test_increment(int value) {
-    return value + 1;
-}
-
-static LmFullCallHolder lm_test_full_call_holder = { lm_test_increment };
-static LmOverlayCallHolder lm_test_overlay_call_holder = { lm_test_increment };
-static LmSplitCallHolder lm_test_split_call_holder = { lm_test_increment };
-static LmWrongDescriptorCallHolder lm_test_wrong_descriptor_call_holder = { lm_test_increment };
-===
+include: "trans_callable_field_chain_source_rows.support.h"
 
 L2:
+    fn: lm_test_increment (int: value) int
+        return: value + 1
+    end: lm_test_increment
+
     fn: callFull (const: @: LmFullCallHolder holder) int
         return: holder\callback(40)
     end: callFull
@@ -115,13 +102,22 @@ L2:
 
     external:
         fn: main () int
-            if: callFull(@ c.lm_test_full_call_holder) != 41
+            c.struct: c.LmFullCallHolder full_holder
+            c.struct: c.LmOverlayCallHolder overlay_holder
+            c.struct: c.LmSplitCallHolder split_holder
+            c.struct: c.LmWrongDescriptorCallHolder wrong_descriptor_holder
+
+            c.full_holder.callback: @lm_test_increment
+            c.overlay_holder.callback: @lm_test_increment
+            c.split_holder.callback: @lm_test_increment
+            c.wrong_descriptor_holder.callback: @lm_test_increment
+            if: callFull(@ c.full_holder) != 41
                 return: 1
-            if: callOverlay(@ c.lm_test_overlay_call_holder) != 42
+            if: callOverlay(@ c.overlay_holder) != 42
                 return: 2
-            if: callSplit(@ c.lm_test_split_call_holder) != 43
+            if: callSplit(@ c.split_holder) != 43
                 return: 3
-            if: callWrongDescriptor(@ c.lm_test_wrong_descriptor_call_holder) != 44
+            if: callWrongDescriptor(@ c.wrong_descriptor_holder) != 44
                 return: 4
             return: 0
         end: main

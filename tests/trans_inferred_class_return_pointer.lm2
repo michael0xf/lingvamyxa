@@ -1,34 +1,23 @@
-L1:
-===
-static unsigned lm_test_direct_new_zero_calls;
-static const void *lm_test_return_source;
-
-void *lm_test_tracked_new_zero(size_t size) {
-    ++lm_test_direct_new_zero_calls;
-    return calloc(1U, size);
-}
-
-#define lm_own_new_zero(size) lm_test_tracked_new_zero(size)
-
-static void lm_test_reset_direct_allocations(void) {
-    lm_test_direct_new_zero_calls = 0U;
-}
-
-static unsigned lm_test_direct_allocations(void) {
-    return lm_test_direct_new_zero_calls;
-}
-
-static void lm_test_remember_return_source(const void *source) {
-    lm_test_return_source = source;
-}
-
-static int lm_test_is_return_source(const void *value) {
-    return value == lm_test_return_source;
-}
-===
-
 predef: "lm2/own_abi.lm2"
+
+table:
+    source
+    name: `define.value`
+    columns((class: class) (@: char value))
+    rows:
+             `lm_own_new_zero(size)`  "lm_test_tracked_new_zero(lm_test_direct_new_zero_calls, (size))"
+end: `define.value`
+
+table:
+    source
+    name: `fn.thread-context.none`
+    columns((class: class) (int: value))
+    rows:
+             lm_test_tracked_new_zero  1
+end: `fn.thread-context.none`
+
 include
+define
 alias
 forward
 constant
@@ -36,36 +25,45 @@ fn
 layout
 prototype
 
+external:
+    fn: lm_test_tracked_new_zero (@: unsigned direct_new_zero_calls; size_t: size) @: void
+        direct_new_zero_calls[0]: direct_new_zero_calls[0] + 1U
+        return: c.calloc(1U, size)
+    end: lm_test_tracked_new_zero
+end: external
+
 User:
     int: age
 end: User
 
-fn: make_user (int: age) User
+fn: make_user (@: unsigned lm_test_direct_new_zero_calls; @: User return_source; int: age) User
     User: user
     user\age: age
-    c.lm_test_remember_return_source(user)
-    c.lm_test_reset_direct_allocations()
+    return_source[0]: user
+    lm_test_direct_new_zero_calls[0]: 0U
 return: user
 
-fn: identity (User: user) User
-    c.lm_test_reset_direct_allocations()
+fn: identity (@: unsigned direct_new_zero_calls; User: user) User
+    direct_new_zero_calls[0]: 0U
 return: user
 
 external:
     fn: main () int
+        unsigned: directNewZeroCalls 0U
+        User: returnSource
         if: User = 0
             return: 5
-        User: first make_user(41)
-        if: first = 0 || c.lm_test_is_return_source(first) = 0 || c.lm_test_direct_allocations() != 0U || c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), first) = 0
+        User: first make_user(@ directNewZeroCalls, @ returnSource, 41)
+        if: first = 0 || first != returnSource || directNewZeroCalls != 0U || c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), first) = 0
             return: 1
-        User: second make_user(42)
-        if: second = 0 || c.lm_test_is_return_source(second) = 0 || c.lm_test_direct_allocations() != 0U || c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), second) = 0
+        User: second make_user(@ directNewZeroCalls, @ returnSource, 42)
+        if: second = 0 || second != returnSource || directNewZeroCalls != 0U || c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), second) = 0
             return: 2
         if: first = second || first\age != 41 || second\age != 42
             return: 3
 
-        User: same identity(first)
-        if: same != first || c.lm_test_direct_allocations() != 0U
+        User: same identity(@ directNewZeroCalls, first)
+        if: same != first || directNewZeroCalls != 0U
             return: 4
         return: 0
     end: main

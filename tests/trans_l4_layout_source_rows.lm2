@@ -126,54 +126,44 @@ table:
              items  2
 end: `LmTestSourceOuter.field.array-count`
 
+include: "<stddef.h>" "<string.h>"
 layout
 
-L1:
-===
-#include <stddef.h>
-#include <string.h>
+fn: lm_test_layout_source_rows () int
+    c.struct: c.LmTestSourceDepth depth
+    c.struct: c.LmTestSourceQualified qualified
+    c.struct: c.LmTestSourceJoined joined
+    c.struct: c.LmTestSourceOuter outer
+    c.struct: c.LmTestSourceWideArray wide_array
+    c.struct: c.LmTestSourceWideOuter wide_outer
 
-static int lm_test_layout_source_rows(void) {
-    LmTestSourceDepth depth = { 7, 0 };
-    LmTestSourceQualified qualified = { "ok", 11 };
-    LmTestSourceJoined joined = { "joined" };
-    LmTestSourceOuter outer = { 0 };
-    LmTestSourceWideArray wide_array = { 0 };
-    LmTestSourceWideOuter wide_outer = { 0 };
-
-    outer.items[1].value = 13;
-    wide_array.values[2] = 17;
-    wide_outer.items[1].value = 19;
-    if (offsetof(LmTestSourceOrdered, early) != 0U ||
-        offsetof(LmTestSourceOrdered, late) != 1U) {
-        return 1;
-    }
-    if (depth.value != 7 || depth.next != 0) {
-        return 2;
-    }
-    if (strcmp(qualified.text, "ok") != 0 || qualified.value != 11) {
-        return 3;
-    }
-    if (strcmp(joined.value, "joined") != 0) {
-        return 4;
-    }
-    if (offsetof(LmTestSourceOverlay, middle) != 0U ||
-        offsetof(LmTestSourceOverlay, tail) != 1U ||
-        offsetof(LmTestSourceOverlay, first) != 2U) {
-        return 5;
-    }
-    if (outer.items[1].value != 13) {
-        return 6;
-    }
-    if (wide_array.values[2] != 17 || wide_outer.items[1].value != 19) {
-        return 7;
-    }
-    return 0;
-}
-===
+    c.depth.value: 7
+    c.depth.next: 0
+    c.qualified.text: "ok"
+    c.qualified.value: 11
+    c.joined.value: "joined"
+    c.outer.items[1].value: 13
+    c.wide_array.values[2]: 17
+    c.wide_outer.items[1].value: 19
+    if: c.offsetof(c.LmTestSourceOrdered, c.early) != 0U || c.offsetof(c.LmTestSourceOrdered, c.late) != 1U
+        return: 1
+    if: c.depth.value != 7 || c.depth.next != 0
+        return: 2
+    if: c.strcmp(c.qualified.text, "ok") != 0 || c.qualified.value != 11
+        return: 3
+    if: c.strcmp(c.joined.value, "joined") != 0
+        return: 4
+    if: c.offsetof(c.LmTestSourceOverlay, c.middle) != 0U || c.offsetof(c.LmTestSourceOverlay, c.tail) != 1U || c.offsetof(c.LmTestSourceOverlay, c.first) != 2U
+        return: 5
+    if: c.outer.items[1].value != 13
+        return: 6
+    if: c.wide_array.values[2] != 17 || c.wide_outer.items[1].value != 19
+        return: 7
+    return: 0
+end: lm_test_layout_source_rows
 
 external:
     fn: main () int
-        return: c.lm_test_layout_source_rows()
+        return: lm_test_layout_source_rows()
     end: main
 end: external

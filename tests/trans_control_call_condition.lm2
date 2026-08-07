@@ -1,21 +1,25 @@
-L1:
-===
-#include <stdio.h>
-
-static int lm_test_counter = 3;
-
-static int lm_test_next(void) {
-    return lm_test_counter-- > 0;
-}
-===
-
 L2:
+. table:
+. . source
+. . name: `fn.thread-context.none`
+. . columns((class: class) (int: value))
+. . rows:
+. . . lm_test_next  1
+. end: `fn.thread-context.none`
+.
+. fn: lm_test_next (@: int counter) int
+. . int: result counter[0] > 0
+. . counter[0]: counter[0] - 1
+. . return: result
+. end: lm_test_next
+.
 . external:
 . . fn: main () int
 . . . int: iterations 0
+. . . int: counter 3
 . . . if: c.printf("control-call\n") < 0
 . . . . return: 1
-. . . while: c.lm_test_next() != 0
+. . . while: c.lm_test_next(@ counter) != 0
 . . . . iterations: iterations + 1
 . . . return: iterations != 3
 . . end: main

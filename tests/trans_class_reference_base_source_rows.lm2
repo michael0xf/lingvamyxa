@@ -60,19 +60,21 @@ table:
              joined    float  2
 end: LmTestClassReferenceBase
 
+include: "trans_class_reference_base_source_rows.support.h"
 layout
 
-L1:
-===
-static int lm_test_class_reference_base_source_rows(void) {
-    short direct = 7;
-    long fallback = 8;
-    float joined = 9.0f;
-    LmTestClassReferenceBase value = { &direct, &fallback, &joined };
+fn: lm_test_class_reference_base_source_rows () int
+    c.struct: c.LmTestClassReferenceBasePhysicalScalars scalars
+    c.struct: c.LmTestClassReferenceBase value
 
-    return *value.direct != 7 || *value.fallback != 8 || *value.joined != 9.0f;
-}
-===
+    c.scalars.direct: 7
+    c.scalars.fallback: 8
+    c.scalars.joined: 9.0f
+    c.value.direct: @ c.scalars.direct
+    c.value.fallback: @ c.scalars.fallback
+    c.value.joined: @ c.scalars.joined
+    return: c.value.direct[0] != 7 || c.value.fallback[0] != 8 || c.value.joined[0] != 9.0f
+end: lm_test_class_reference_base_source_rows
 
 fn: lm_test_reference_direct (short: value) int
     return: value != 0
@@ -88,6 +90,6 @@ end: lm_test_reference_joined
 
 external:
     fn: main () int
-        return: c.lm_test_class_reference_base_source_rows() || lm_test_reference_direct(0) || lm_test_reference_fallback(0) || lm_test_reference_joined(0)
+        return: lm_test_class_reference_base_source_rows() || lm_test_reference_direct(0) || lm_test_reference_fallback(0) || lm_test_reference_joined(0)
     end: main
 end: external

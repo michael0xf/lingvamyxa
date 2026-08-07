@@ -1,78 +1,84 @@
-L1:
-===
-static int trace_value = 0;
-
-static void reset_trace(void) {
-    trace_value = 0;
-}
-
-static void mark_trace(int value) {
-    trace_value = trace_value * 10 + value;
-}
-
-static int read_trace(void) {
-    return trace_value;
-}
-===
-
 L2:
-. fn: leaveNormally () int
-. . c.reset_trace()
+. table:
+. . source
+. . name: `fn.thread-context.none`
+. . columns((class: class) (int: value))
+. . rows:
+. . . reset_trace  1
+. . . mark_trace   1
+. . . read_trace   1
+. end: `fn.thread-context.none`
+.
+. sub: reset_trace (@: int trace_value)
+. . trace_value[0]: 0
+. end: reset_trace
+.
+. sub: mark_trace (@: int trace_value; int: value)
+. . trace_value[0]: trace_value[0] * 10 + value
+. end: mark_trace
+.
+. fn: read_trace (@: int trace_value) int
+. . return: trace_value[0]
+. end: read_trace
+.
+. fn: leaveNormally (@: int trace_value) int
+. . c.reset_trace(trace_value)
 . . if: 1
-. . . finally: c.mark_trace(1)
-. . . finally: c.mark_trace(2)
-. . . c.mark_trace(3)
-. . return: c.read_trace()
+. . . finally: c.mark_trace(trace_value, 1)
+. . . finally: c.mark_trace(trace_value, 2)
+. . . c.mark_trace(trace_value, 3)
+. . return: c.read_trace(trace_value)
 . end: leaveNormally
 
-. fn: leaveByReturn () int
-. . c.reset_trace()
-. . finally: c.mark_trace(1)
-. . c.mark_trace(3)
-. . return: c.read_trace()
+. fn: leaveByReturn (@: int trace_value) int
+. . c.reset_trace(trace_value)
+. . finally: c.mark_trace(trace_value, 1)
+. . c.mark_trace(trace_value, 3)
+. . return: c.read_trace(trace_value)
 . end: leaveByReturn
 
-. fn: leaveByTerminalReturn () int
-. . c.reset_trace()
-. . finally: c.mark_trace(1)
-. . c.mark_trace(3)
-. return: c.read_trace()
+. fn: leaveByTerminalReturn (@: int trace_value) int
+. . c.reset_trace(trace_value)
+. . finally: c.mark_trace(trace_value, 1)
+. . c.mark_trace(trace_value, 3)
+. return: c.read_trace(trace_value)
 
-. fn: leaveByBreak () int
+. fn: leaveByBreak (@: int trace_value) int
 . . int: index 0
-. . c.reset_trace()
+. . c.reset_trace(trace_value)
 . . while: index < 1
-. . . finally: c.mark_trace(1)
-. . . c.mark_trace(3)
+. . . finally: c.mark_trace(trace_value, 1)
+. . . c.mark_trace(trace_value, 3)
 . . . break
-. . return: c.read_trace()
+. . return: c.read_trace(trace_value)
 . end: leaveByBreak
 
-. fn: leaveByContinue () int
+. fn: leaveByContinue (@: int trace_value) int
 . . int: index 0
-. . c.reset_trace()
+. . c.reset_trace(trace_value)
 . . while: index < 1
 . . . index: index + 1
-. . . finally: c.mark_trace(1)
-. . . c.mark_trace(3)
+. . . finally: c.mark_trace(trace_value, 1)
+. . . c.mark_trace(trace_value, 3)
 . . . continue
-. . return: c.read_trace()
+. . return: c.read_trace(trace_value)
 . end: leaveByContinue
 
 . external:
 . . fn: main () int
 . . . int: returned 0
-. . . if: leaveNormally() != 321
+. . . int: traceValue 0
+. . . if: leaveNormally(@ traceValue) != 321
 . . . . return: 1
-. . . returned: leaveByReturn()
-. . . if: returned != 3 || c.read_trace() != 31
+. . . returned: leaveByReturn(@ traceValue)
+. . . if: returned != 3 || c.read_trace(@ traceValue) != 31
 . . . . return: 2
-. . . returned: leaveByTerminalReturn()
-. . . if: returned != 3 || c.read_trace() != 31
+. . . returned: leaveByTerminalReturn(@ traceValue)
+. . . if: returned != 3 || c.read_trace(@ traceValue) != 31
 . . . . return: 3
-. . . if: leaveByBreak() != 31
+. . . if: leaveByBreak(@ traceValue) != 31
 . . . . return: 4
-. . . if: leaveByContinue() != 31
+. . . if: leaveByContinue(@ traceValue) != 31
 . . . . return: 5
 . . . return: 0
 . . end: main

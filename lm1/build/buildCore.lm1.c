@@ -982,7 +982,7 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("        if ($viewCode -ne 0) { throw ('trans smoke translation failed: ' + $testFile.Name) }\n", file);
     fputs("    }\n", file);
     fputs("    if ($transTranslationOnly -contains $testFile.Name) { continue }\n", file);
-    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Ilm1' $cPath $parserLib $ownLib '-o' $exePath\n", file);
+    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Ilm1' '-Itests' $cPath $parserLib $ownLib '-o' $exePath\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke link failed: ' + $testFile.Name) }\n", file);
     fputs("    & (Resolve-Path -LiteralPath $exePath).Path\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke run failed: ' + $testFile.Name) }\n", file);
@@ -1290,7 +1290,7 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("        *) LM_TRANS_REGISTRY_VIEW=view \"$trans\" \"$src\" \"$c_path\" ;;\n", file);
     fputs("    esac\n", file);
     fputs("    case \"$name\" in trans_l4_abi_receivers.lm2|trans_message_thread_pool_single.lm2|trans_message_thread_mailbox_single.lm2) continue ;; esac\n", file);
-    fputs("    \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Ilm1 \"$c_path\" \"$parserLib\" \"$ownLib\" -o \"$exe_path\"\n", file);
+    fputs("    \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Ilm1 -Itests \"$c_path\" \"$parserLib\" \"$ownLib\" -o \"$exe_path\"\n", file);
     fputs("    \"$exe_path\"\n", file);
     fputs("done\n", file);
     fputs("http_client_default_c='build/obj/tests/trans_rest_lmx_http_client_default.c'\n", file);

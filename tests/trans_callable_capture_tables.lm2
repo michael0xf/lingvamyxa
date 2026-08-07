@@ -1,18 +1,13 @@
-L1:
-===
-static const void *lm_test_declared_closure;
+table:
+    source
+    name: `define.value`
+    columns((class: class) (@: char value))
+    rows:
+             `LM_TEST_ROOT_OWNER()`       "(lm_message_thread_owner(lm_lmx_message_thread))"
+             `LM_TEST_CLOSURE_ENV(value)` "((value)->env)"
+end: `define.value`
 
-static void lm_test_remember_declared_closure(const void *value) {
-    lm_test_declared_closure = value;
-}
-
-static int lm_test_is_declared_closure(const void *value) {
-    return value == lm_test_declared_closure;
-}
-
-#define LM_TEST_ROOT_OWNER() (lm_message_thread_owner(lm_lmx_message_thread))
-#define LM_TEST_CLOSURE_ENV(value) ((value)->env)
-===
+define
 
 import: "lm2/own.lm2"
 
@@ -34,11 +29,11 @@ end: `callable.projection`
 
 fn: AddX (int: value) int
 
-fn: makeAdder (int: base) AddX
+fn: makeAdder (@: AddX declared_closure; int: base) AddX
     fn: addX (int: value) int
         return: base + value
     ---
-    c.lm_test_remember_declared_closure(c.lm_lmx_nested_l1_parent_makeAdder_child_addX_i0_closure_value)
+    declared_closure[0]: c.lm_lmx_nested_l1_parent_makeAdder_child_addX_i0_closure_value
     return: addX
 end: makeAdder
 
@@ -55,14 +50,15 @@ end: callAdd
 
 external:
     fn: main () int
-        AddX: first makeAdder(4)
-        if: first = 0 || c.lm_test_is_declared_closure(first) = 0
+        AddX: declaredClosure
+        AddX: first makeAdder(@ declaredClosure, 4)
+        if: first = 0 || first != declaredClosure
             return: 1
         if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, c.LM_TEST_ROOT_OWNER(), first) = 0 || c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, c.LM_TEST_ROOT_OWNER(), c.LM_TEST_CLOSURE_ENV(first)) = 0
             return: 2
 
-        AddX: second makeAdder(8)
-        if: second = 0 || c.lm_test_is_declared_closure(second) = 0
+        AddX: second makeAdder(@ declaredClosure, 8)
+        if: second = 0 || second != declaredClosure
             return: 3
         if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, c.LM_TEST_ROOT_OWNER(), second) = 0 || c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, c.LM_TEST_ROOT_OWNER(), c.LM_TEST_CLOSURE_ENV(second)) = 0
             return: 4

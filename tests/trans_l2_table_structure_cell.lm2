@@ -31,13 +31,7 @@ table:
              Point  1
 end: `class.reference-base`
 
-L1:
-===
-typedef struct Point {
-    int x;
-    int y;
-} Point;
-===
+include: "trans_l2_table_structure_cell.support.h"
 
 table:
     name: pointTable

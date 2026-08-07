@@ -125,21 +125,11 @@ end: `class.reference-base`
 
 forward
 
-L1:
-===
-#include <stddef.h>
+include: "<stddef.h>" "trans_layout_backend_merge_consumers.support.h"
 
-struct LmMergeCall { short call_value; };
-
-static int lm_test_layout_backend_merge_consumers(void) {
-    return offsetof(LmMergeCombined, direct_value) != 0U ||
-           offsetof(LmMergeCombined, joined_value) <= offsetof(LmMergeCombined, direct_value) ||
-           offsetof(LmMergeCombined, wide_value) <= offsetof(LmMergeCombined, joined_value) ||
-           offsetof(LmMergeCombined, wide_joined_value) <= offsetof(LmMergeCombined, wide_value) ||
-           offsetof(LmMergeCombined, call_value) <= offsetof(LmMergeCombined, wide_joined_value) ||
-           offsetof(LmMergeCombined, local_value) <= offsetof(LmMergeCombined, call_value);
-}
-===
+fn: lm_test_layout_backend_merge_consumers () int
+    return: c.offsetof(c.LmMergeCombined, c.direct_value) != 0U || c.offsetof(c.LmMergeCombined, c.joined_value) <= c.offsetof(c.LmMergeCombined, c.direct_value) || c.offsetof(c.LmMergeCombined, c.wide_value) <= c.offsetof(c.LmMergeCombined, c.joined_value) || c.offsetof(c.LmMergeCombined, c.wide_joined_value) <= c.offsetof(c.LmMergeCombined, c.wide_value) || c.offsetof(c.LmMergeCombined, c.call_value) <= c.offsetof(c.LmMergeCombined, c.wide_joined_value) || c.offsetof(c.LmMergeCombined, c.local_value) <= c.offsetof(c.LmMergeCombined, c.call_value)
+end: lm_test_layout_backend_merge_consumers
 
 fn: lm_make_merge_call () LmMergeCall
     return: 0
@@ -151,6 +141,6 @@ end: LmMergeCombined
 
 external:
     fn: main () int
-        return: c.lm_test_layout_backend_merge_consumers() || lm_make_merge_call() != 0 || LmMergeCombined\local_value != 29
+        return: lm_test_layout_backend_merge_consumers() || lm_make_merge_call() != 0 || LmMergeCombined\local_value != 29
     end: main
 end: external

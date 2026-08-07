@@ -1,30 +1,39 @@
 L2:
 . table:
+. . source
+. . name: class
+. . columns((class: class) (class: kind))
+. . rows:
+. . . LmTestText  layout
+. end: class
+.
+. table:
+. . source
 . . name: LmTestText
 . . columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
 . . rows:
 . . . length  unsigned  0  0
 . end: LmTestText
-end: L2
-
-L1:
-===
-typedef struct LmTestText {
-    unsigned length;
-} LmTestText;
-
-static LmTestText c_value;
-===
-
-L2:
+.
+. table:
+. . source
+. . name: `layout.backend`
+. . columns((class: class) (class: backend))
+. . rows:
+. . . LmTestText  c.struct
+. end: `layout.backend`
+.
+. layout
+.
 . fn: direct (const: @: LmTestText text) unsigned
 . . return: text\length
 . end: direct
 .
 . external:
 . . fn: main () int
-. . . c.c_value.length: 9
-. . . return: direct(@ c.c_value) != 9 || c.c_value.length != 9
+. . . c.struct: c.LmTestText value
+. . . c.value.length: 9
+. . . return: direct(@ value) != 9 || c.value.length != 9
 . . end: main
 . end: external
 end: L2

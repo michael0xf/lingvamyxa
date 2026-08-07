@@ -32,20 +32,9 @@ L2:
 . . . Leaf    c.struct
 . . . Branch  c.struct
 . end: `layout.backend`
-end: L2
-
-L1:
-===
-typedef struct Leaf {
-    int value;
-} Leaf;
-
-typedef struct Branch {
-    Leaf *leaf;
-} Branch;
-===
-
-L2:
+.
+. layout
+.
 . fn: read (const: @: Branch branch) int
 . . return: branch\leaf\value
 . end: read

@@ -1,0 +1,8 @@
+#ifndef LM_TEST_TRANS_LAYOUT_BACKEND_MERGE_CONSUMERS_SUPPORT_H
+#define LM_TEST_TRANS_LAYOUT_BACKEND_MERGE_CONSUMERS_SUPPORT_H
+
+struct LmMergeCall {
+    short call_value;
+};
+
+#endif

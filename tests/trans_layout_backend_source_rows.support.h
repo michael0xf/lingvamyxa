@@ -1,0 +1,7 @@
+#ifndef LM_TEST_TRANS_LAYOUT_BACKEND_SOURCE_ROWS_SUPPORT_H
+#define LM_TEST_TRANS_LAYOUT_BACKEND_SOURCE_ROWS_SUPPORT_H
+
+typedef int LmLayoutBackendWideOtherOnly;
+typedef int LmLayoutBackendWideNone;
+
+#endif

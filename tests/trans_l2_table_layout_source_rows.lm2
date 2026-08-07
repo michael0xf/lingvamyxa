@@ -133,34 +133,7 @@ table:
              WrongSchema 1
 end: `class.reference-base`
 
-L1:
-===
-#include <string.h>
-
-typedef struct Plain {
-    int value;
-} Plain;
-
-typedef struct Qualified {
-    const char *text;
-} Qualified;
-
-typedef struct Partial {
-    int value;
-} Partial;
-
-typedef struct Overlay {
-    int value;
-} Overlay;
-
-typedef struct SplitOnly {
-    int flag;
-} SplitOnly;
-
-typedef struct WrongSchema {
-    int value;
-} WrongSchema;
-===
+include: "<string.h>" "trans_l2_table_layout_source_rows.support.h"
 
 table:
     name: layoutTable

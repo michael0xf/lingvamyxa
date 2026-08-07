@@ -1,30 +1,32 @@
-L1:
-===
-#include <stdio.h>
-
-static int depth = 0;
-
-static void lm_synchronized_enter(void *object) {
-    (void)object;
-    ++depth;
-}
-
-static void lm_synchronized_leave(void *object) {
-    (void)object;
-    --depth;
-}
-===
-
 L2:
+. table:
+. . source
+. . name: `fn.thread-context.none`
+. . columns((class: class) (int: value))
+. . rows:
+. . . lm_synchronized_enter  1
+. . . lm_synchronized_leave  1
+. end: `fn.thread-context.none`
+.
+. sub: lm_synchronized_enter (@: void object)
+. . @: int depth (cast: (@: int) object)
+. . depth[0]: depth[0] + 1
+. end: lm_synchronized_enter
+.
+. sub: lm_synchronized_leave (@: void object)
+. . @: int depth (cast: (@: int) object)
+. . depth[0]: depth[0] - 1
+. end: lm_synchronized_leave
+.
 . fn: leaveByReturn () int
 . . int: lock 0
 . . synchronized: @ lock
-. . . return: 10 + c.depth
+. . . return: 10 + lock
 . . return: -1
 . end: leaveByReturn
 . fn: leaveByWrappedReturn () int
 . . int: lock 0
-. . synchronized: @ lock (return: 10 + c.depth)
+. . synchronized: @ lock (return: 10 + lock)
 . . return: -1
 . end: leaveByWrappedReturn
 . fn: leaveByBreak () int
@@ -34,7 +36,7 @@ L2:
 . . . synchronized: @ lock
 . . . . break
 . . . i: i + 1
-. . return: c.depth
+. . return: lock
 . end: leaveByBreak
 . fn: leaveByContinue () int
 . . int: lock 0
@@ -44,7 +46,7 @@ L2:
 . . . synchronized: @ lock
 . . . . continue
 . . ---
-. . return: c.depth
+. . return: lock
 . end: leaveByContinue
 . external:
 . . fn: main () int
