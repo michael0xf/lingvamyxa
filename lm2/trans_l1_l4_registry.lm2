@@ -622,6 +622,10 @@ fn: lm_trans_emit_layout_definition (FILE: file; const: @(char layout_name); con
         forward_backend: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "forward.backend", "class", "class", "backend", "class", forward_row)
     ---
     has_forward: forward_backend != 0 && (c.strcmp(forward_backend, "c.struct") = 0 || c.strcmp(forward_backend, "c.union") = 0)
+    if: has_forward && ((c.strcmp(forward_backend, "c.struct") = 0 && (c.strcmp(backend, "c.union") = 0 || c.strcmp(backend, "c.named-union") = 0)) || (c.strcmp(forward_backend, "c.union") = 0 && (c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, "c.named-struct") = 0)))
+        c.fprintf(c.stderr, "trans L4 layout error: layout %s conflicts with its forward tag backend\n", layout_name)
+        lm_trans_l4_text_view_delete(@ layout_text)
+        return: 1
 
     prefix: 0
     if: c.strcmp(backend, "c.struct") = 0
@@ -1526,6 +1530,10 @@ fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: (LmTransNamespace: names
     size_t: i
     size_t: address_depth
     size_t: const_flag
+    FILE: declaration_file
+    int: emitted
+    int: emitted_any
+    int: status
 
     names: lm_trans_ptr_stack_new(lm_trans_free_any)
     if: names = 0
@@ -1543,6 +1551,7 @@ fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: (LmTransNamespace: names
     address_depth_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "target.address-depth")
     const_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "target.const")
 
+    emitted_any: 0
     i: 0U
     while: i < names\count
         name: lm_own_ptr_stack_at(names, i)
@@ -1565,13 +1574,25 @@ fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: (LmTransNamespace: names
             lm_trans_l4_text_view_delete(@ name_text)
             lm_trans_ptr_stack_delete(@ names)
             return: 1
-        if: lm_trans_put(file, "typedef ") != 0 || lm_trans_emit_abi_typed_name(file, target, address_depth, const_flag != 0U, name, namespace_) != 0 || lm_trans_put(file, ";\n") != 0
+        declaration_file: c.tmpfile()
+        if: declaration_file = 0
             lm_trans_l4_text_view_delete(@ name_text)
             lm_trans_ptr_stack_delete(@ names)
             return: 1
+        emitted: 0
+        status: lm_trans_put(declaration_file, "typedef ") != 0 || lm_trans_emit_abi_typed_name(declaration_file, target, address_depth, const_flag != 0U, name, namespace_) != 0 || lm_trans_put(declaration_file, ";\n") != 0
+        if: status = 0
+            status: lm_trans_typedef_projection_emit_prepared_cstr(file, name, declaration_file, @ emitted)
+        c.fclose(declaration_file)
+        if: status != 0
+            lm_trans_l4_text_view_delete(@ name_text)
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        if: emitted
+            emitted_any: 1
         i: i + 1U
 
-    if: names\count != 0U && lm_trans_put(file, "\n") != 0
+    if: emitted_any && lm_trans_put(file, "\n") != 0
         lm_trans_l4_text_view_delete(@ name_text)
         lm_trans_ptr_stack_delete(@ names)
         return: 1
@@ -1620,6 +1641,10 @@ fn: lm_trans_emit_l4_forward_typedefs (FILE: file; const: (LmTransNamespace: nam
     const: @: char backend
     const: @: char tag
     size_t: i
+    FILE: declaration_file
+    int: emitted
+    int: emitted_any
+    int: status
 
     names: lm_trans_ptr_stack_new(lm_trans_free_any)
     if: names = 0
@@ -1635,6 +1660,7 @@ fn: lm_trans_emit_l4_forward_typedefs (FILE: file; const: (LmTransNamespace: nam
     backend_rows: 0
     if: view = 0
         backend_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("forward"), "backend")
+    emitted_any: 0
     i: 0U
     while: i < names\count
         name: lm_own_ptr_stack_at(names, i)
@@ -1661,12 +1687,23 @@ fn: lm_trans_emit_l4_forward_typedefs (FILE: file; const: (LmTransNamespace: nam
                 lm_trans_ptr_stack_delete(@ names)
                 return: 1
         ---
-        if: lm_trans_put(file, "typedef ") != 0 || lm_trans_put(file, tag) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(file, ";\n") != 0
+        declaration_file: c.tmpfile()
+        if: declaration_file = 0
             lm_trans_ptr_stack_delete(@ names)
             return: 1
+        emitted: 0
+        status: lm_trans_put(declaration_file, "typedef ") != 0 || lm_trans_put(declaration_file, tag) != 0 || lm_trans_put(declaration_file, " ") != 0 || lm_trans_emit_identifier(declaration_file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(declaration_file, " ") != 0 || lm_trans_emit_identifier(declaration_file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(declaration_file, ";\n") != 0
+        if: status = 0
+            status: lm_trans_typedef_projection_emit_prepared_cstr(file, name, declaration_file, @ emitted)
+        c.fclose(declaration_file)
+        if: status != 0
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        if: emitted
+            emitted_any: 1
         i: i + 1U
 
-    if: names\count != 0U && lm_trans_put(file, "\n") != 0
+    if: emitted_any && lm_trans_put(file, "\n") != 0
         lm_trans_ptr_stack_delete(@ names)
         return: 1
     lm_trans_ptr_stack_delete(@ names)
@@ -3940,7 +3977,7 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_l2_executable_statement_depth: 0
     lm_trans_l2_conditional_emission_depth: 0
     emitted: 0
-    if: lm_trans_typedef_projection_output_enter() != 0
+    if: lm_trans_typedef_projection_output_enter(prelude_output, body_output) != 0
         c.fprintf(c.stderr, "trans error: out of memory while creating typedef projection state\n")
         status: 1
     else:

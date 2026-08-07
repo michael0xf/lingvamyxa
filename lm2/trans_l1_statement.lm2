@@ -6534,7 +6534,7 @@ fn: lm_trans_statement_stack_schedule_named_structure (
         return: 1
     status: lm_trans_emit_named_structure_typedef(declaration_file, frame, 0U, namespace_)
     if: status = 0
-        status: lm_trans_typedef_projection_prepared_text_suppressed(frame\head, declaration_file, @ typedef_suppressed)
+        status: lm_trans_typedef_projection_prepared_text_suppressed(file, frame\head, declaration_file, @ typedef_suppressed)
     c.fclose(declaration_file)
     if: status != 0
         return: 1
@@ -6563,7 +6563,7 @@ fn: lm_trans_statement_stack_schedule_merge_named_structure (
         return: 1
     status: lm_trans_emit_merge_named_structure_typedef(declaration_file, frame, 0U, namespace_)
     if: status = 0
-        status: lm_trans_typedef_projection_prepared_text_suppressed(target, declaration_file, @ typedef_suppressed)
+        status: lm_trans_typedef_projection_prepared_text_suppressed(file, target, declaration_file, @ typedef_suppressed)
     c.fclose(declaration_file)
     if: status != 0
         return: 1

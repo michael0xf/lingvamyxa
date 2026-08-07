@@ -163,71 +163,638 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
 
 
 
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnPtrStack
+#define LM_LMX_TYPEDEF_DEFINED_LmOwnPtrStack 1
+#define LM_LMX_TYPEDEF_ID_A_LmOwnPtrStack 0x9ae3c1a28ace4260ULL
+#define LM_LMX_TYPEDEF_ID_B_LmOwnPtrStack 0x2a7c240a466f8699ULL
 typedef struct LmOwnPtrStack LmOwnPtrStack;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnPtrStack) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnPtrStack) || LM_LMX_TYPEDEF_ID_A_LmOwnPtrStack != 0x9ae3c1a28ace4260ULL || LM_LMX_TYPEDEF_ID_B_LmOwnPtrStack != 0x2a7c240a466f8699ULL
+#error "Lingvamyxa conflicting typedef projection for LmOwnPtrStack"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnValueStack
+#define LM_LMX_TYPEDEF_DEFINED_LmOwnValueStack 1
+#define LM_LMX_TYPEDEF_ID_A_LmOwnValueStack 0xa909010bae94e210ULL
+#define LM_LMX_TYPEDEF_ID_B_LmOwnValueStack 0xa4cd51ea3c5f8959ULL
 typedef struct LmOwnValueStack LmOwnValueStack;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnValueStack) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnValueStack) || LM_LMX_TYPEDEF_ID_A_LmOwnValueStack != 0xa909010bae94e210ULL || LM_LMX_TYPEDEF_ID_B_LmOwnValueStack != 0xa4cd51ea3c5f8959ULL
+#error "Lingvamyxa conflicting typedef projection for LmOwnValueStack"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnAllocationDescriptor
+#define LM_LMX_TYPEDEF_DEFINED_LmOwnAllocationDescriptor 1
+#define LM_LMX_TYPEDEF_ID_A_LmOwnAllocationDescriptor 0x8af26fce7d92fafcULL
+#define LM_LMX_TYPEDEF_ID_B_LmOwnAllocationDescriptor 0xb93049b7294f551dULL
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnAllocationDescriptor) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnAllocationDescriptor) || LM_LMX_TYPEDEF_ID_A_LmOwnAllocationDescriptor != 0x8af26fce7d92fafcULL || LM_LMX_TYPEDEF_ID_B_LmOwnAllocationDescriptor != 0xb93049b7294f551dULL
+#error "Lingvamyxa conflicting typedef projection for LmOwnAllocationDescriptor"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnLazyEdge
+#define LM_LMX_TYPEDEF_DEFINED_LmOwnLazyEdge 1
+#define LM_LMX_TYPEDEF_ID_A_LmOwnLazyEdge 0xdcd1331c45e5a0b0ULL
+#define LM_LMX_TYPEDEF_ID_B_LmOwnLazyEdge 0xeb121590159143d9ULL
 typedef struct LmOwnLazyEdge LmOwnLazyEdge;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnLazyEdge) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnLazyEdge) || LM_LMX_TYPEDEF_ID_A_LmOwnLazyEdge != 0xdcd1331c45e5a0b0ULL || LM_LMX_TYPEDEF_ID_B_LmOwnLazyEdge != 0xeb121590159143d9ULL
+#error "Lingvamyxa conflicting typedef projection for LmOwnLazyEdge"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnArena
+#define LM_LMX_TYPEDEF_DEFINED_LmOwnArena 1
+#define LM_LMX_TYPEDEF_ID_A_LmOwnArena 0x7c55fcb0a940aa3cULL
+#define LM_LMX_TYPEDEF_ID_B_LmOwnArena 0xcdfc77b6ba3bf135ULL
 typedef struct LmOwnArena LmOwnArena;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnArena) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnArena) || LM_LMX_TYPEDEF_ID_A_LmOwnArena != 0x7c55fcb0a940aa3cULL || LM_LMX_TYPEDEF_ID_B_LmOwnArena != 0xcdfc77b6ba3bf135ULL
+#error "Lingvamyxa conflicting typedef projection for LmOwnArena"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmHostThread
+#define LM_LMX_TYPEDEF_DEFINED_LmHostThread 1
+#define LM_LMX_TYPEDEF_ID_A_LmHostThread 0x0ee0cef52f19074eULL
+#define LM_LMX_TYPEDEF_ID_B_LmHostThread 0x9f6403534e9de8efULL
 typedef struct LmHostThread LmHostThread;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmHostThread) || !defined(LM_LMX_TYPEDEF_ID_B_LmHostThread) || LM_LMX_TYPEDEF_ID_A_LmHostThread != 0x0ee0cef52f19074eULL || LM_LMX_TYPEDEF_ID_B_LmHostThread != 0x9f6403534e9de8efULL
+#error "Lingvamyxa conflicting typedef projection for LmHostThread"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMutex
+#define LM_LMX_TYPEDEF_DEFINED_LmMutex 1
+#define LM_LMX_TYPEDEF_ID_A_LmMutex 0x26d0d7b596af7a34ULL
+#define LM_LMX_TYPEDEF_ID_B_LmMutex 0xa8c35a70241bcbcdULL
 typedef struct LmMutex LmMutex;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmMutex) || !defined(LM_LMX_TYPEDEF_ID_B_LmMutex) || LM_LMX_TYPEDEF_ID_A_LmMutex != 0x26d0d7b596af7a34ULL || LM_LMX_TYPEDEF_ID_B_LmMutex != 0xa8c35a70241bcbcdULL
+#error "Lingvamyxa conflicting typedef projection for LmMutex"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmCondition
+#define LM_LMX_TYPEDEF_DEFINED_LmCondition 1
+#define LM_LMX_TYPEDEF_ID_A_LmCondition 0xb0d7d0c00a11e970ULL
+#define LM_LMX_TYPEDEF_ID_B_LmCondition 0x10616230e414eea1ULL
 typedef struct LmCondition LmCondition;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmCondition) || !defined(LM_LMX_TYPEDEF_ID_B_LmCondition) || LM_LMX_TYPEDEF_ID_A_LmCondition != 0xb0d7d0c00a11e970ULL || LM_LMX_TYPEDEF_ID_B_LmCondition != 0x10616230e414eea1ULL
+#error "Lingvamyxa conflicting typedef projection for LmCondition"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessage
+#define LM_LMX_TYPEDEF_DEFINED_LmMessage 1
+#define LM_LMX_TYPEDEF_ID_A_LmMessage 0x7b0d63fc6cdc6820ULL
+#define LM_LMX_TYPEDEF_ID_B_LmMessage 0xe461bdf9461df589ULL
 typedef struct LmMessage LmMessage;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessage) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessage) || LM_LMX_TYPEDEF_ID_A_LmMessage != 0x7b0d63fc6cdc6820ULL || LM_LMX_TYPEDEF_ID_B_LmMessage != 0xe461bdf9461df589ULL
+#error "Lingvamyxa conflicting typedef projection for LmMessage"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageOutboxEntry
+#define LM_LMX_TYPEDEF_DEFINED_LmMessageOutboxEntry 1
+#define LM_LMX_TYPEDEF_ID_A_LmMessageOutboxEntry 0xda71b412537e2bf6ULL
+#define LM_LMX_TYPEDEF_ID_B_LmMessageOutboxEntry 0x84fe1ad0603fee37ULL
 typedef struct LmMessageOutboxEntry LmMessageOutboxEntry;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageOutboxEntry) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageOutboxEntry) || LM_LMX_TYPEDEF_ID_A_LmMessageOutboxEntry != 0xda71b412537e2bf6ULL || LM_LMX_TYPEDEF_ID_B_LmMessageOutboxEntry != 0x84fe1ad0603fee37ULL
+#error "Lingvamyxa conflicting typedef projection for LmMessageOutboxEntry"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageRoute
+#define LM_LMX_TYPEDEF_DEFINED_LmMessageRoute 1
+#define LM_LMX_TYPEDEF_ID_A_LmMessageRoute 0x590ea0a7fef33476ULL
+#define LM_LMX_TYPEDEF_ID_B_LmMessageRoute 0x5917a7ba09ea1f87ULL
 typedef struct LmMessageRoute LmMessageRoute;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageRoute) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageRoute) || LM_LMX_TYPEDEF_ID_A_LmMessageRoute != 0x590ea0a7fef33476ULL || LM_LMX_TYPEDEF_ID_B_LmMessageRoute != 0x5917a7ba09ea1f87ULL
+#error "Lingvamyxa conflicting typedef projection for LmMessageRoute"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadRuntime
+#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadRuntime 1
+#define LM_LMX_TYPEDEF_ID_A_LmMessageThreadRuntime 0xbcdbce07d745c668ULL
+#define LM_LMX_TYPEDEF_ID_B_LmMessageThreadRuntime 0x5267d0b311015cb1ULL
 typedef struct LmMessageThreadRuntime LmMessageThreadRuntime;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThreadRuntime) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThreadRuntime) || LM_LMX_TYPEDEF_ID_A_LmMessageThreadRuntime != 0xbcdbce07d745c668ULL || LM_LMX_TYPEDEF_ID_B_LmMessageThreadRuntime != 0x5267d0b311015cb1ULL
+#error "Lingvamyxa conflicting typedef projection for LmMessageThreadRuntime"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxProviderOpsV1
+#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxProviderOpsV1 1
+#define LM_LMX_TYPEDEF_ID_A_LmRestLmxProviderOpsV1 0xaadc7c363d31231cULL
+#define LM_LMX_TYPEDEF_ID_B_LmRestLmxProviderOpsV1 0x0e805817ebcbb71dULL
 typedef struct LmRestLmxProviderOpsV1 LmRestLmxProviderOpsV1;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmRestLmxProviderOpsV1) || !defined(LM_LMX_TYPEDEF_ID_B_LmRestLmxProviderOpsV1) || LM_LMX_TYPEDEF_ID_A_LmRestLmxProviderOpsV1 != 0xaadc7c363d31231cULL || LM_LMX_TYPEDEF_ID_B_LmRestLmxProviderOpsV1 != 0x0e805817ebcbb71dULL
+#error "Lingvamyxa conflicting typedef projection for LmRestLmxProviderOpsV1"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadPool
+#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadPool 1
+#define LM_LMX_TYPEDEF_ID_A_LmMessageThreadPool 0xd41eb629c50c1a70ULL
+#define LM_LMX_TYPEDEF_ID_B_LmMessageThreadPool 0xe036b7fbdebf6a29ULL
 typedef struct LmMessageThreadPool LmMessageThreadPool;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThreadPool) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThreadPool) || LM_LMX_TYPEDEF_ID_A_LmMessageThreadPool != 0xd41eb629c50c1a70ULL || LM_LMX_TYPEDEF_ID_B_LmMessageThreadPool != 0xe036b7fbdebf6a29ULL
+#error "Lingvamyxa conflicting typedef projection for LmMessageThreadPool"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponent
+#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponent 1
+#define LM_LMX_TYPEDEF_ID_A_LmMessageThreadComponent 0x9adbfcfc5ede09deULL
+#define LM_LMX_TYPEDEF_ID_B_LmMessageThreadComponent 0x55c1ece857e1fb9fULL
 typedef struct LmMessageThreadComponent LmMessageThreadComponent;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThreadComponent) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThreadComponent) || LM_LMX_TYPEDEF_ID_A_LmMessageThreadComponent != 0x9adbfcfc5ede09deULL || LM_LMX_TYPEDEF_ID_B_LmMessageThreadComponent != 0x55c1ece857e1fb9fULL
+#error "Lingvamyxa conflicting typedef projection for LmMessageThreadComponent"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThread
+#define LM_LMX_TYPEDEF_DEFINED_LmMessageThread 1
+#define LM_LMX_TYPEDEF_ID_A_LmMessageThread 0xb24ebdc4cbfa0b14ULL
+#define LM_LMX_TYPEDEF_ID_B_LmMessageThread 0x198bda4c3705b0e5ULL
 typedef struct LmMessageThread LmMessageThread;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThread) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThread) || LM_LMX_TYPEDEF_ID_A_LmMessageThread != 0xb24ebdc4cbfa0b14ULL || LM_LMX_TYPEDEF_ID_B_LmMessageThread != 0x198bda4c3705b0e5ULL
+#error "Lingvamyxa conflicting typedef projection for LmMessageThread"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmP0Node
+#define LM_LMX_TYPEDEF_DEFINED_LmP0Node 1
+#define LM_LMX_TYPEDEF_ID_A_LmP0Node 0x65d13d8ed2a28e86ULL
+#define LM_LMX_TYPEDEF_ID_B_LmP0Node 0x38e3b62fc61a92a7ULL
 typedef struct LmP0Node LmP0Node;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmP0Node) || !defined(LM_LMX_TYPEDEF_ID_B_LmP0Node) || LM_LMX_TYPEDEF_ID_A_LmP0Node != 0x65d13d8ed2a28e86ULL || LM_LMX_TYPEDEF_ID_B_LmP0Node != 0x38e3b62fc61a92a7ULL
+#error "Lingvamyxa conflicting typedef projection for LmP0Node"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmP0Field
+#define LM_LMX_TYPEDEF_DEFINED_LmP0Field 1
+#define LM_LMX_TYPEDEF_ID_A_LmP0Field 0x3c706f0dce7650f0ULL
+#define LM_LMX_TYPEDEF_ID_B_LmP0Field 0x57dad0631f0f3e29ULL
 typedef struct LmP0Field LmP0Field;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmP0Field) || !defined(LM_LMX_TYPEDEF_ID_B_LmP0Field) || LM_LMX_TYPEDEF_ID_A_LmP0Field != 0x3c706f0dce7650f0ULL || LM_LMX_TYPEDEF_ID_B_LmP0Field != 0x57dad0631f0f3e29ULL
+#error "Lingvamyxa conflicting typedef projection for LmP0Field"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmP0Trailer
+#define LM_LMX_TYPEDEF_DEFINED_LmP0Trailer 1
+#define LM_LMX_TYPEDEF_ID_A_LmP0Trailer 0xec450340d436d084ULL
+#define LM_LMX_TYPEDEF_ID_B_LmP0Trailer 0x1afaddaf2279fc75ULL
 typedef struct LmP0Trailer LmP0Trailer;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmP0Trailer) || !defined(LM_LMX_TYPEDEF_ID_B_LmP0Trailer) || LM_LMX_TYPEDEF_ID_A_LmP0Trailer != 0xec450340d436d084ULL || LM_LMX_TYPEDEF_ID_B_LmP0Trailer != 0x1afaddaf2279fc75ULL
+#error "Lingvamyxa conflicting typedef projection for LmP0Trailer"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmP0Document
+#define LM_LMX_TYPEDEF_DEFINED_LmP0Document 1
+#define LM_LMX_TYPEDEF_ID_A_LmP0Document 0x938784e99c22e6f8ULL
+#define LM_LMX_TYPEDEF_ID_B_LmP0Document 0xbec33c28c32b4af1ULL
 typedef struct LmP0Document LmP0Document;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmP0Document) || !defined(LM_LMX_TYPEDEF_ID_B_LmP0Document) || LM_LMX_TYPEDEF_ID_A_LmP0Document != 0x938784e99c22e6f8ULL || LM_LMX_TYPEDEF_ID_B_LmP0Document != 0xbec33c28c32b4af1ULL
+#error "Lingvamyxa conflicting typedef projection for LmP0Document"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTableColumnDescriptor
+#define LM_LMX_TYPEDEF_DEFINED_LmTableColumnDescriptor 1
+#define LM_LMX_TYPEDEF_ID_A_LmTableColumnDescriptor 0x95116a69540c0a28ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTableColumnDescriptor 0x7b4e72dbee2794a1ULL
 typedef struct LmTableColumnDescriptor LmTableColumnDescriptor;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTableColumnDescriptor) || !defined(LM_LMX_TYPEDEF_ID_B_LmTableColumnDescriptor) || LM_LMX_TYPEDEF_ID_A_LmTableColumnDescriptor != 0x95116a69540c0a28ULL || LM_LMX_TYPEDEF_ID_B_LmTableColumnDescriptor != 0x7b4e72dbee2794a1ULL
+#error "Lingvamyxa conflicting typedef projection for LmTableColumnDescriptor"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTableCell
+#define LM_LMX_TYPEDEF_DEFINED_LmTableCell 1
+#define LM_LMX_TYPEDEF_ID_A_LmTableCell 0x835df3c36d9b469cULL
+#define LM_LMX_TYPEDEF_ID_B_LmTableCell 0x5011abfbe83c7e45ULL
 typedef struct LmTableCell LmTableCell;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTableCell) || !defined(LM_LMX_TYPEDEF_ID_B_LmTableCell) || LM_LMX_TYPEDEF_ID_A_LmTableCell != 0x835df3c36d9b469cULL || LM_LMX_TYPEDEF_ID_B_LmTableCell != 0x5011abfbe83c7e45ULL
+#error "Lingvamyxa conflicting typedef projection for LmTableCell"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTableRow
+#define LM_LMX_TYPEDEF_DEFINED_LmTableRow 1
+#define LM_LMX_TYPEDEF_ID_A_LmTableRow 0x2dff0d4404a01232ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTableRow 0x2d9ba751e8374c03ULL
 typedef struct LmTableRow LmTableRow;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTableRow) || !defined(LM_LMX_TYPEDEF_ID_B_LmTableRow) || LM_LMX_TYPEDEF_ID_A_LmTableRow != 0x2dff0d4404a01232ULL || LM_LMX_TYPEDEF_ID_B_LmTableRow != 0x2d9ba751e8374c03ULL
+#error "Lingvamyxa conflicting typedef projection for LmTableRow"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmRegistryViewRow
+#define LM_LMX_TYPEDEF_DEFINED_LmRegistryViewRow 1
+#define LM_LMX_TYPEDEF_ID_A_LmRegistryViewRow 0x19214f6b9cd5f7fcULL
+#define LM_LMX_TYPEDEF_ID_B_LmRegistryViewRow 0x2c08662d7dc05f05ULL
 typedef struct LmRegistryViewRow LmRegistryViewRow;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmRegistryViewRow) || !defined(LM_LMX_TYPEDEF_ID_B_LmRegistryViewRow) || LM_LMX_TYPEDEF_ID_A_LmRegistryViewRow != 0x19214f6b9cd5f7fcULL || LM_LMX_TYPEDEF_ID_B_LmRegistryViewRow != 0x2c08662d7dc05f05ULL
+#error "Lingvamyxa conflicting typedef projection for LmRegistryViewRow"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTableDescriptor
+#define LM_LMX_TYPEDEF_DEFINED_LmTableDescriptor 1
+#define LM_LMX_TYPEDEF_ID_A_LmTableDescriptor 0xddbe1d712abaae38ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTableDescriptor 0x00d2f0f0f077de01ULL
 typedef struct LmTableDescriptor LmTableDescriptor;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTableDescriptor) || !defined(LM_LMX_TYPEDEF_ID_B_LmTableDescriptor) || LM_LMX_TYPEDEF_ID_A_LmTableDescriptor != 0xddbe1d712abaae38ULL || LM_LMX_TYPEDEF_ID_B_LmTableDescriptor != 0x00d2f0f0f077de01ULL
+#error "Lingvamyxa conflicting typedef projection for LmTableDescriptor"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmRegistryView
+#define LM_LMX_TYPEDEF_DEFINED_LmRegistryView 1
+#define LM_LMX_TYPEDEF_ID_A_LmRegistryView 0x823913542ef61912ULL
+#define LM_LMX_TYPEDEF_ID_B_LmRegistryView 0xabec1d6f1a471913ULL
 typedef struct LmRegistryView LmRegistryView;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmRegistryView) || !defined(LM_LMX_TYPEDEF_ID_B_LmRegistryView) || LM_LMX_TYPEDEF_ID_A_LmRegistryView != 0x823913542ef61912ULL || LM_LMX_TYPEDEF_ID_B_LmRegistryView != 0xabec1d6f1a471913ULL
+#error "Lingvamyxa conflicting typedef projection for LmRegistryView"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransIdentifierRelation
+#define LM_LMX_TYPEDEF_DEFINED_LmTransIdentifierRelation 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransIdentifierRelation 0x1d81f0eefaa053a8ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransIdentifierRelation 0xf1175b6513c142d1ULL
 typedef struct LmTransIdentifierRelation LmTransIdentifierRelation;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransIdentifierRelation) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransIdentifierRelation) || LM_LMX_TYPEDEF_ID_A_LmTransIdentifierRelation != 0x1d81f0eefaa053a8ULL || LM_LMX_TYPEDEF_ID_B_LmTransIdentifierRelation != 0xf1175b6513c142d1ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransIdentifierRelation"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransIdentifierCard
+#define LM_LMX_TYPEDEF_DEFINED_LmTransIdentifierCard 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransIdentifierCard 0xe40c054393bd90dcULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransIdentifierCard 0x908f681978b854adULL
 typedef struct LmTransIdentifierCard LmTransIdentifierCard;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransIdentifierCard) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransIdentifierCard) || LM_LMX_TYPEDEF_ID_A_LmTransIdentifierCard != 0xe40c054393bd90dcULL || LM_LMX_TYPEDEF_ID_B_LmTransIdentifierCard != 0x908f681978b854adULL
+#error "Lingvamyxa conflicting typedef projection for LmTransIdentifierCard"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransDescriptorField
+#define LM_LMX_TYPEDEF_DEFINED_LmTransDescriptorField 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransDescriptorField 0x03c23316a7fcac98ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransDescriptorField 0xcba57708751cc841ULL
 typedef struct LmTransDescriptorField LmTransDescriptorField;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransDescriptorField) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransDescriptorField) || LM_LMX_TYPEDEF_ID_A_LmTransDescriptorField != 0x03c23316a7fcac98ULL || LM_LMX_TYPEDEF_ID_B_LmTransDescriptorField != 0xcba57708751cc841ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransDescriptorField"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransDescriptor
+#define LM_LMX_TYPEDEF_DEFINED_LmTransDescriptor 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransDescriptor 0x081a15ce6164c1ecULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransDescriptor 0xe18fb175a8ee9af5ULL
 typedef struct LmTransDescriptor LmTransDescriptor;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransDescriptor) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransDescriptor) || LM_LMX_TYPEDEF_ID_A_LmTransDescriptor != 0x081a15ce6164c1ecULL || LM_LMX_TYPEDEF_ID_B_LmTransDescriptor != 0xe18fb175a8ee9af5ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransDescriptor"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransNamespace
+#define LM_LMX_TYPEDEF_DEFINED_LmTransNamespace 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransNamespace 0xa67da0b6a4861318ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransNamespace 0x5e1e05ba6e1b5e11ULL
 typedef struct LmTransNamespace LmTransNamespace;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransNamespace) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransNamespace) || LM_LMX_TYPEDEF_ID_A_LmTransNamespace != 0xa67da0b6a4861318ULL || LM_LMX_TYPEDEF_ID_B_LmTransNamespace != 0x5e1e05ba6e1b5e11ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransNamespace"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransRegistryFact
+#define LM_LMX_TYPEDEF_DEFINED_LmTransRegistryFact 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransRegistryFact 0x7dc8dc31d1d674c8ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransRegistryFact 0xde4b6c3dcffbc211ULL
 typedef struct LmTransRegistryFact LmTransRegistryFact;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransRegistryFact) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransRegistryFact) || LM_LMX_TYPEDEF_ID_A_LmTransRegistryFact != 0x7dc8dc31d1d674c8ULL || LM_LMX_TYPEDEF_ID_B_LmTransRegistryFact != 0xde4b6c3dcffbc211ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransRegistryFact"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransRegistryCloneFrame
+#define LM_LMX_TYPEDEF_DEFINED_LmTransRegistryCloneFrame 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransRegistryCloneFrame 0x959fbde9e582fa64ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransRegistryCloneFrame 0x518b5b62678ad14dULL
 typedef struct LmTransRegistryCloneFrame LmTransRegistryCloneFrame;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransRegistryCloneFrame) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransRegistryCloneFrame) || LM_LMX_TYPEDEF_ID_A_LmTransRegistryCloneFrame != 0x959fbde9e582fa64ULL || LM_LMX_TYPEDEF_ID_B_LmTransRegistryCloneFrame != 0x518b5b62678ad14dULL
+#error "Lingvamyxa conflicting typedef projection for LmTransRegistryCloneFrame"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprSegment
+#define LM_LMX_TYPEDEF_DEFINED_LmTransExprSegment 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransExprSegment 0x1cba2d3181ff0c3aULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransExprSegment 0x97ff97dd52a9fcdbULL
 typedef struct LmTransExprSegment LmTransExprSegment;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransExprSegment) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransExprSegment) || LM_LMX_TYPEDEF_ID_A_LmTransExprSegment != 0x1cba2d3181ff0c3aULL || LM_LMX_TYPEDEF_ID_B_LmTransExprSegment != 0x97ff97dd52a9fcdbULL
+#error "Lingvamyxa conflicting typedef projection for LmTransExprSegment"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransCallLowering
+#define LM_LMX_TYPEDEF_DEFINED_LmTransCallLowering 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransCallLowering 0xb890fc72636acd50ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransCallLowering 0xcdd72f6664128dd1ULL
 typedef struct LmTransCallLowering LmTransCallLowering;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransCallLowering) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransCallLowering) || LM_LMX_TYPEDEF_ID_A_LmTransCallLowering != 0xb890fc72636acd50ULL || LM_LMX_TYPEDEF_ID_B_LmTransCallLowering != 0xcdd72f6664128dd1ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransCallLowering"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransRegistrySourcePathCacheEntry
+#define LM_LMX_TYPEDEF_DEFINED_LmTransRegistrySourcePathCacheEntry 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransRegistrySourcePathCacheEntry 0x511aa1392cb5c548ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransRegistrySourcePathCacheEntry 0x72ad15dd99e67f01ULL
 typedef struct LmTransRegistrySourcePathCacheEntry LmTransRegistrySourcePathCacheEntry;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransRegistrySourcePathCacheEntry) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransRegistrySourcePathCacheEntry) || LM_LMX_TYPEDEF_ID_A_LmTransRegistrySourcePathCacheEntry != 0x511aa1392cb5c548ULL || LM_LMX_TYPEDEF_ID_B_LmTransRegistrySourcePathCacheEntry != 0x72ad15dd99e67f01ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransRegistrySourcePathCacheEntry"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransCallableProjectionCacheEntry
+#define LM_LMX_TYPEDEF_DEFINED_LmTransCallableProjectionCacheEntry 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransCallableProjectionCacheEntry 0xcc4bf490e07af308ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransCallableProjectionCacheEntry 0xa190dca9b8a1e3b1ULL
 typedef struct LmTransCallableProjectionCacheEntry LmTransCallableProjectionCacheEntry;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransCallableProjectionCacheEntry) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransCallableProjectionCacheEntry) || LM_LMX_TYPEDEF_ID_A_LmTransCallableProjectionCacheEntry != 0xcc4bf490e07af308ULL || LM_LMX_TYPEDEF_ID_B_LmTransCallableProjectionCacheEntry != 0xa190dca9b8a1e3b1ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransCallableProjectionCacheEntry"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransTypedefProjectionPathStep
+#define LM_LMX_TYPEDEF_DEFINED_LmTransTypedefProjectionPathStep 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransTypedefProjectionPathStep 0x2eaf2eb8c0ae6a68ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransTypedefProjectionPathStep 0xec638e9119ea9171ULL
 typedef struct LmTransTypedefProjectionPathStep LmTransTypedefProjectionPathStep;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransTypedefProjectionPathStep) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransTypedefProjectionPathStep) || LM_LMX_TYPEDEF_ID_A_LmTransTypedefProjectionPathStep != 0x2eaf2eb8c0ae6a68ULL || LM_LMX_TYPEDEF_ID_B_LmTransTypedefProjectionPathStep != 0xec638e9119ea9171ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransTypedefProjectionPathStep"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransTypedefProjectionEntry
+#define LM_LMX_TYPEDEF_DEFINED_LmTransTypedefProjectionEntry 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransTypedefProjectionEntry 0x0c86edcb4d85a8e4ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransTypedefProjectionEntry 0x396efd468f3ad2e5ULL
 typedef struct LmTransTypedefProjectionEntry LmTransTypedefProjectionEntry;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransTypedefProjectionEntry) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransTypedefProjectionEntry) || LM_LMX_TYPEDEF_ID_A_LmTransTypedefProjectionEntry != 0x0c86edcb4d85a8e4ULL || LM_LMX_TYPEDEF_ID_B_LmTransTypedefProjectionEntry != 0x396efd468f3ad2e5ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransTypedefProjectionEntry"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransTypedefProjectionOutput
+#define LM_LMX_TYPEDEF_DEFINED_LmTransTypedefProjectionOutput 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransTypedefProjectionOutput 0x4ab122d0c2605648ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransTypedefProjectionOutput 0x945d0ab478ae4571ULL
 typedef struct LmTransTypedefProjectionOutput LmTransTypedefProjectionOutput;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransTypedefProjectionOutput) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransTypedefProjectionOutput) || LM_LMX_TYPEDEF_ID_A_LmTransTypedefProjectionOutput != 0x4ab122d0c2605648ULL || LM_LMX_TYPEDEF_ID_B_LmTransTypedefProjectionOutput != 0x945d0ab478ae4571ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransTypedefProjectionOutput"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransCallableValue
+#define LM_LMX_TYPEDEF_DEFINED_LmTransCallableValue 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransCallableValue 0xe00fcc6ffe77f8c0ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransCallableValue 0xc2ab79d0cd15f9b9ULL
 typedef struct LmTransCallableValue LmTransCallableValue;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransCallableValue) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransCallableValue) || LM_LMX_TYPEDEF_ID_A_LmTransCallableValue != 0xe00fcc6ffe77f8c0ULL || LM_LMX_TYPEDEF_ID_B_LmTransCallableValue != 0xc2ab79d0cd15f9b9ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransCallableValue"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprAtomLowering
+#define LM_LMX_TYPEDEF_DEFINED_LmTransExprAtomLowering 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransExprAtomLowering 0x77a76cbfc1e553bcULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransExprAtomLowering 0x9505cdc230dc9375ULL
 typedef struct LmTransExprAtomLowering LmTransExprAtomLowering;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransExprAtomLowering) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransExprAtomLowering) || LM_LMX_TYPEDEF_ID_A_LmTransExprAtomLowering != 0x77a76cbfc1e553bcULL || LM_LMX_TYPEDEF_ID_B_LmTransExprAtomLowering != 0x9505cdc230dc9375ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransExprAtomLowering"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprLoweredRange
+#define LM_LMX_TYPEDEF_DEFINED_LmTransExprLoweredRange 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransExprLoweredRange 0x40f023476c21038cULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransExprLoweredRange 0x0b7a0c6574cb7505ULL
 typedef struct LmTransExprLoweredRange LmTransExprLoweredRange;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransExprLoweredRange) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransExprLoweredRange) || LM_LMX_TYPEDEF_ID_A_LmTransExprLoweredRange != 0x40f023476c21038cULL || LM_LMX_TYPEDEF_ID_B_LmTransExprLoweredRange != 0x0b7a0c6574cb7505ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransExprLoweredRange"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprPiece
+#define LM_LMX_TYPEDEF_DEFINED_LmTransExprPiece 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransExprPiece 0x28054b4824aaf910ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransExprPiece 0x9d8c873de45af889ULL
 typedef struct LmTransExprPiece LmTransExprPiece;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransExprPiece) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransExprPiece) || LM_LMX_TYPEDEF_ID_A_LmTransExprPiece != 0x28054b4824aaf910ULL || LM_LMX_TYPEDEF_ID_B_LmTransExprPiece != 0x9d8c873de45af889ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransExprPiece"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprJob
+#define LM_LMX_TYPEDEF_DEFINED_LmTransExprJob 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransExprJob 0x6f67d9dd35e7caa2ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransExprJob 0x20ef25420b9b6d23ULL
 typedef struct LmTransExprJob LmTransExprJob;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransExprJob) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransExprJob) || LM_LMX_TYPEDEF_ID_A_LmTransExprJob != 0x6f67d9dd35e7caa2ULL || LM_LMX_TYPEDEF_ID_B_LmTransExprJob != 0x20ef25420b9b6d23ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransExprJob"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransExprStack
+#define LM_LMX_TYPEDEF_DEFINED_LmTransExprStack 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransExprStack 0x104c1b1c93aff444ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransExprStack 0x07b6c016001036a5ULL
 typedef struct LmTransExprStack LmTransExprStack;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransExprStack) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransExprStack) || LM_LMX_TYPEDEF_ID_A_LmTransExprStack != 0x104c1b1c93aff444ULL || LM_LMX_TYPEDEF_ID_B_LmTransExprStack != 0x07b6c016001036a5ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransExprStack"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransArrayStructureValueFillFrame
+#define LM_LMX_TYPEDEF_DEFINED_LmTransArrayStructureValueFillFrame 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransArrayStructureValueFillFrame 0xa0d3a8deab4b1c88ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransArrayStructureValueFillFrame 0x8a17b610a91de191ULL
 typedef struct LmTransArrayStructureValueFillFrame LmTransArrayStructureValueFillFrame;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransArrayStructureValueFillFrame) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransArrayStructureValueFillFrame) || LM_LMX_TYPEDEF_ID_A_LmTransArrayStructureValueFillFrame != 0xa0d3a8deab4b1c88ULL || LM_LMX_TYPEDEF_ID_B_LmTransArrayStructureValueFillFrame != 0x8a17b610a91de191ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransArrayStructureValueFillFrame"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransStatementStack
+#define LM_LMX_TYPEDEF_DEFINED_LmTransStatementStack 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransStatementStack 0x34c94e1344108470ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransStatementStack 0x16f26f2ce4feb199ULL
 typedef struct LmTransStatementStack LmTransStatementStack;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransStatementStack) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransStatementStack) || LM_LMX_TYPEDEF_ID_A_LmTransStatementStack != 0x34c94e1344108470ULL || LM_LMX_TYPEDEF_ID_B_LmTransStatementStack != 0x16f26f2ce4feb199ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransStatementStack"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransStatementJob
+#define LM_LMX_TYPEDEF_DEFINED_LmTransStatementJob 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransStatementJob 0xa885c22bc04ec150ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransStatementJob 0x72fe5a4b3d3d8ff9ULL
 typedef struct LmTransStatementJob LmTransStatementJob;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransStatementJob) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransStatementJob) || LM_LMX_TYPEDEF_ID_A_LmTransStatementJob != 0xa885c22bc04ec150ULL || LM_LMX_TYPEDEF_ID_B_LmTransStatementJob != 0x72fe5a4b3d3d8ff9ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransStatementJob"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransFunctionHeader
+#define LM_LMX_TYPEDEF_DEFINED_LmTransFunctionHeader 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransFunctionHeader 0x377d1210f9827e30ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransFunctionHeader 0xa697bc1329959e29ULL
 typedef struct LmTransFunctionHeader LmTransFunctionHeader;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransFunctionHeader) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransFunctionHeader) || LM_LMX_TYPEDEF_ID_A_LmTransFunctionHeader != 0x377d1210f9827e30ULL || LM_LMX_TYPEDEF_ID_B_LmTransFunctionHeader != 0xa697bc1329959e29ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransFunctionHeader"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransThreadDeclaration
+#define LM_LMX_TYPEDEF_DEFINED_LmTransThreadDeclaration 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransThreadDeclaration 0x90f94e69824c8602ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransThreadDeclaration 0x5f5e4e3dfbe64b83ULL
 typedef struct LmTransThreadDeclaration LmTransThreadDeclaration;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransThreadDeclaration) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransThreadDeclaration) || LM_LMX_TYPEDEF_ID_A_LmTransThreadDeclaration != 0x90f94e69824c8602ULL || LM_LMX_TYPEDEF_ID_B_LmTransThreadDeclaration != 0x5f5e4e3dfbe64b83ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransThreadDeclaration"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransFormalParam
+#define LM_LMX_TYPEDEF_DEFINED_LmTransFormalParam 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransFormalParam 0x96286a1663def6feULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransFormalParam 0xc4857c561077002fULL
 typedef struct LmTransFormalParam LmTransFormalParam;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransFormalParam) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransFormalParam) || LM_LMX_TYPEDEF_ID_A_LmTransFormalParam != 0x96286a1663def6feULL || LM_LMX_TYPEDEF_ID_B_LmTransFormalParam != 0xc4857c561077002fULL
+#error "Lingvamyxa conflicting typedef projection for LmTransFormalParam"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransFormalParamList
+#define LM_LMX_TYPEDEF_DEFINED_LmTransFormalParamList 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransFormalParamList 0xe94a690aed20cc22ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransFormalParamList 0x14ba7ac4cfcd4993ULL
 typedef struct LmTransFormalParamList LmTransFormalParamList;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransFormalParamList) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransFormalParamList) || LM_LMX_TYPEDEF_ID_A_LmTransFormalParamList != 0xe94a690aed20cc22ULL || LM_LMX_TYPEDEF_ID_B_LmTransFormalParamList != 0x14ba7ac4cfcd4993ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransFormalParamList"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransL4PayloadPointerBinding
+#define LM_LMX_TYPEDEF_DEFINED_LmTransL4PayloadPointerBinding 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransL4PayloadPointerBinding 0x82ea3107d902c812ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransL4PayloadPointerBinding 0xcb98b8cea2a46d13ULL
 typedef struct LmTransL4PayloadPointerBinding LmTransL4PayloadPointerBinding;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransL4PayloadPointerBinding) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransL4PayloadPointerBinding) || LM_LMX_TYPEDEF_ID_A_LmTransL4PayloadPointerBinding != 0x82ea3107d902c812ULL || LM_LMX_TYPEDEF_ID_B_LmTransL4PayloadPointerBinding != 0xcb98b8cea2a46d13ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransL4PayloadPointerBinding"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransTopLevelItem
+#define LM_LMX_TYPEDEF_DEFINED_LmTransTopLevelItem 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransTopLevelItem 0x66aa6b22a82b66dcULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransTopLevelItem 0x956c015a3aedc97dULL
 typedef struct LmTransTopLevelItem LmTransTopLevelItem;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransTopLevelItem) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransTopLevelItem) || LM_LMX_TYPEDEF_ID_A_LmTransTopLevelItem != 0x66aa6b22a82b66dcULL || LM_LMX_TYPEDEF_ID_B_LmTransTopLevelItem != 0x956c015a3aedc97dULL
+#error "Lingvamyxa conflicting typedef projection for LmTransTopLevelItem"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransFunctionEmitFrame
+#define LM_LMX_TYPEDEF_DEFINED_LmTransFunctionEmitFrame 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransFunctionEmitFrame 0x77887b3cddff8e26ULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransFunctionEmitFrame 0xe00da4290bcc2a37ULL
 typedef struct LmTransFunctionEmitFrame LmTransFunctionEmitFrame;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransFunctionEmitFrame) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransFunctionEmitFrame) || LM_LMX_TYPEDEF_ID_A_LmTransFunctionEmitFrame != 0x77887b3cddff8e26ULL || LM_LMX_TYPEDEF_ID_B_LmTransFunctionEmitFrame != 0xe00da4290bcc2a37ULL
+#error "Lingvamyxa conflicting typedef projection for LmTransFunctionEmitFrame"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmTransTypePointerSuffix
+#define LM_LMX_TYPEDEF_DEFINED_LmTransTypePointerSuffix 1
+#define LM_LMX_TYPEDEF_ID_A_LmTransTypePointerSuffix 0xe32587af673062aaULL
+#define LM_LMX_TYPEDEF_ID_B_LmTransTypePointerSuffix 0x75b0bb9ca3affd3bULL
 typedef struct LmTransTypePointerSuffix LmTransTypePointerSuffix;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmTransTypePointerSuffix) || !defined(LM_LMX_TYPEDEF_ID_B_LmTransTypePointerSuffix) || LM_LMX_TYPEDEF_ID_A_LmTransTypePointerSuffix != 0xe32587af673062aaULL || LM_LMX_TYPEDEF_ID_B_LmTransTypePointerSuffix != 0x75b0bb9ca3affd3bULL
+#error "Lingvamyxa conflicting typedef projection for LmTransTypePointerSuffix"
+#endif
+#endif
 
 
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnEdgeKind
+#define LM_LMX_TYPEDEF_DEFINED_LmOwnEdgeKind 1
+#define LM_LMX_TYPEDEF_ID_A_LmOwnEdgeKind 0x1b0ba13001d5c752ULL
+#define LM_LMX_TYPEDEF_ID_B_LmOwnEdgeKind 0x9d7b68ae3c8fab5bULL
 typedef int LmOwnEdgeKind;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnEdgeKind) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnEdgeKind) || LM_LMX_TYPEDEF_ID_A_LmOwnEdgeKind != 0x1b0ba13001d5c752ULL || LM_LMX_TYPEDEF_ID_B_LmOwnEdgeKind != 0x9d7b68ae3c8fab5bULL
+#error "Lingvamyxa conflicting typedef projection for LmOwnEdgeKind"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadState
+#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadState 1
+#define LM_LMX_TYPEDEF_ID_A_LmMessageThreadState 0x680d7f7cf5d18c05ULL
+#define LM_LMX_TYPEDEF_ID_B_LmMessageThreadState 0x4a157ef92e57affaULL
 typedef int LmMessageThreadState;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThreadState) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThreadState) || LM_LMX_TYPEDEF_ID_A_LmMessageThreadState != 0x680d7f7cf5d18c05ULL || LM_LMX_TYPEDEF_ID_B_LmMessageThreadState != 0x4a157ef92e57affaULL
+#error "Lingvamyxa conflicting typedef projection for LmMessageThreadState"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmP0NodeKind
+#define LM_LMX_TYPEDEF_DEFINED_LmP0NodeKind 1
+#define LM_LMX_TYPEDEF_ID_A_LmP0NodeKind 0x1d04aff0a5eb398bULL
+#define LM_LMX_TYPEDEF_ID_B_LmP0NodeKind 0x5e96f30ca10f9108ULL
 typedef int LmP0NodeKind;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmP0NodeKind) || !defined(LM_LMX_TYPEDEF_ID_B_LmP0NodeKind) || LM_LMX_TYPEDEF_ID_A_LmP0NodeKind != 0x1d04aff0a5eb398bULL || LM_LMX_TYPEDEF_ID_B_LmP0NodeKind != 0x5e96f30ca10f9108ULL
+#error "Lingvamyxa conflicting typedef projection for LmP0NodeKind"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmP0FrameFlags
+#define LM_LMX_TYPEDEF_DEFINED_LmP0FrameFlags 1
+#define LM_LMX_TYPEDEF_ID_A_LmP0FrameFlags 0xe175a4f4618db837ULL
+#define LM_LMX_TYPEDEF_ID_B_LmP0FrameFlags 0xe17661ffbedd718aULL
 typedef unsigned LmP0FrameFlags;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmP0FrameFlags) || !defined(LM_LMX_TYPEDEF_ID_B_LmP0FrameFlags) || LM_LMX_TYPEDEF_ID_A_LmP0FrameFlags != 0xe175a4f4618db837ULL || LM_LMX_TYPEDEF_ID_B_LmP0FrameFlags != 0xe17661ffbedd718aULL
+#error "Lingvamyxa conflicting typedef projection for LmP0FrameFlags"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmP0NodeFlags
+#define LM_LMX_TYPEDEF_DEFINED_LmP0NodeFlags 1
+#define LM_LMX_TYPEDEF_ID_A_LmP0NodeFlags 0xe03579aac09def90ULL
+#define LM_LMX_TYPEDEF_ID_B_LmP0NodeFlags 0xa4615392bb0d31d9ULL
 typedef unsigned LmP0NodeFlags;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmP0NodeFlags) || !defined(LM_LMX_TYPEDEF_ID_B_LmP0NodeFlags) || LM_LMX_TYPEDEF_ID_A_LmP0NodeFlags != 0xe03579aac09def90ULL || LM_LMX_TYPEDEF_ID_B_LmP0NodeFlags != 0xa4615392bb0d31d9ULL
+#error "Lingvamyxa conflicting typedef projection for LmP0NodeFlags"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmP0TrailerFlags
+#define LM_LMX_TYPEDEF_DEFINED_LmP0TrailerFlags 1
+#define LM_LMX_TYPEDEF_ID_A_LmP0TrailerFlags 0xe8790f378efe9145ULL
+#define LM_LMX_TYPEDEF_ID_B_LmP0TrailerFlags 0xc62eb19a69bf38a8ULL
 typedef unsigned LmP0TrailerFlags;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmP0TrailerFlags) || !defined(LM_LMX_TYPEDEF_ID_B_LmP0TrailerFlags) || LM_LMX_TYPEDEF_ID_A_LmP0TrailerFlags != 0xe8790f378efe9145ULL || LM_LMX_TYPEDEF_ID_B_LmP0TrailerFlags != 0xc62eb19a69bf38a8ULL
+#error "Lingvamyxa conflicting typedef projection for LmP0TrailerFlags"
+#endif
+#endif
 
 
 #define LM_OWN_EDGE_BORROWED 1
@@ -879,12 +1446,15 @@ struct LmTransTypedefProjectionEntry {
     size_t *path_branches;
     size_t path_count;
     size_t identity;
+    size_t target_region;
 };
 struct LmTransTypedefProjectionOutput {
     LmOwnPtrStack * entries;
     LmOwnPtrStack * active_path;
     size_t next_group_id;
     size_t next_identity;
+    FILE * prelude_file;
+    FILE * body_file;
 };
 struct LmTransCallableValue {
     const LmTransSymbol * symbol;
@@ -1661,7 +2231,7 @@ static int lm_trans_emit_array_declaration_with_qualifier(struct LmMessageThread
 static int lm_trans_frame_looks_named_structure_layout_declaration(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_declare_named_structure_layout(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmP0Frame *frame);
 static int lm_trans_emit_named_structure_typedef(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, unsigned indent, const LmTransNamespace *namespace_);
-static int lm_trans_typedef_projection_output_enter(struct LmMessageThread *lm_lmx_message_thread);
+static int lm_trans_typedef_projection_output_enter(struct LmMessageThread *lm_lmx_message_thread, FILE *prelude_file, FILE *body_file);
 static int lm_trans_typedef_projection_output_leave(struct LmMessageThread *lm_lmx_message_thread);
 static int lm_trans_typedef_projection_conditional_enter(struct LmMessageThread *lm_lmx_message_thread);
 static int lm_trans_typedef_projection_conditional_leave(struct LmMessageThread *lm_lmx_message_thread);
@@ -1670,7 +2240,7 @@ static int lm_trans_typedef_projection_branch_enter(struct LmMessageThread *lm_l
 static int lm_trans_typedef_projection_emit_prepared_text(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Text *name, FILE *declaration_file, int *out_emitted);
 static int lm_trans_typedef_projection_emit_prepared_text_if_compatible(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Text *name, FILE *declaration_file, int *out_emitted);
 static int lm_trans_typedef_projection_emit_prepared_cstr(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const char *name, FILE *declaration_file, int *out_emitted);
-static int lm_trans_typedef_projection_prepared_text_suppressed(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *name, FILE *declaration_file, int *out_suppress);
+static int lm_trans_typedef_projection_prepared_text_suppressed(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Text *name, FILE *declaration_file, int *out_suppress);
 static int lm_trans_emit_named_structure_storage(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_, const char *qualifier);
 static int lm_trans_declare_merge_named_structure_layout(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmP0Frame *frame);
 static int lm_trans_emit_merge_named_structure_typedef(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, unsigned indent, const LmTransNamespace *namespace_);
@@ -2506,7 +3076,8 @@ static void lm_trans_typedef_projection_entry_delete_any(void *object);
 static void lm_trans_typedef_projection_output_delete(struct LmMessageThread *lm_lmx_message_thread, LmTransTypedefProjectionOutput *output);
 static void lm_trans_typedef_projection_outputs_delete_if_empty(struct LmMessageThread *lm_lmx_message_thread);
 static LmTransTypedefProjectionOutput * lm_trans_typedef_projection_current_output(struct LmMessageThread *lm_lmx_message_thread);
-static int lm_trans_typedef_projection_output_enter(struct LmMessageThread *lm_lmx_message_thread);
+static int lm_trans_typedef_projection_target_region(struct LmMessageThread *lm_lmx_message_thread, FILE *file, size_t *out_target_region);
+static int lm_trans_typedef_projection_output_enter(struct LmMessageThread *lm_lmx_message_thread, FILE *prelude_file, FILE *body_file);
 static int lm_trans_typedef_projection_output_leave(struct LmMessageThread *lm_lmx_message_thread);
 static int lm_trans_typedef_projection_group_new(struct LmMessageThread *lm_lmx_message_thread, size_t *out_group_id);
 static int lm_trans_typedef_projection_branch_enter(struct LmMessageThread *lm_lmx_message_thread, size_t group_id, size_t branch_id);
@@ -2515,11 +3086,11 @@ static int lm_trans_typedef_projection_conditional_leave(struct LmMessageThread 
 static int lm_trans_typedef_projection_paths_disjoint(struct LmMessageThread *lm_lmx_message_thread, const LmTransTypedefProjectionEntry *entry, const LmTransTypedefProjectionOutput *output);
 static int lm_trans_typedef_projection_path_dominates(struct LmMessageThread *lm_lmx_message_thread, const LmTransTypedefProjectionEntry *entry, const LmTransTypedefProjectionOutput *output);
 static int lm_trans_typedef_projection_declaration_same(struct LmMessageThread *lm_lmx_message_thread, const LmTransTypedefProjectionEntry *entry, const char *declaration, size_t declaration_length);
-static int lm_trans_typedef_projection_classify_slice(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, int *out_suppress, size_t *out_identity);
+static int lm_trans_typedef_projection_classify_slice(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, size_t target_region, int *out_suppress, size_t *out_identity);
 static int lm_trans_typedef_projection_slice_compatible(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, int *out_compatible);
 static int lm_trans_typedef_projection_local_suppressed_slice(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, int *out_suppress);
-static LmTransTypedefProjectionEntry * lm_trans_typedef_projection_entry_new(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, size_t identity);
-static int lm_trans_typedef_projection_commit_slice(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, size_t identity);
+static LmTransTypedefProjectionEntry * lm_trans_typedef_projection_entry_new(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, size_t identity, size_t target_region);
+static int lm_trans_typedef_projection_commit_slice(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, size_t identity, size_t target_region);
 static uint64_t lm_trans_typedef_projection_guard_hash(struct LmMessageThread *lm_lmx_message_thread, const char *declaration, size_t declaration_length, uint64_t seed, int reverse);
 static int lm_trans_typedef_projection_emit_guard_hash(struct LmMessageThread *lm_lmx_message_thread, FILE *file, uint64_t hash);
 static int lm_trans_typedef_projection_emit_slice(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const char *name, size_t name_length, const char *declaration, size_t declaration_length, int *out_emitted);
@@ -2527,7 +3098,7 @@ static int lm_trans_typedef_projection_file_copy(struct LmMessageThread *lm_lmx_
 static int lm_trans_typedef_projection_emit_prepared_text(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Text *name, FILE *declaration_file, int *out_emitted);
 static int lm_trans_typedef_projection_emit_prepared_text_if_compatible(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Text *name, FILE *declaration_file, int *out_emitted);
 static int lm_trans_typedef_projection_emit_prepared_cstr(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const char *name, FILE *declaration_file, int *out_emitted);
-static int lm_trans_typedef_projection_prepared_text_suppressed(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *name, FILE *declaration_file, int *out_suppress);
+static int lm_trans_typedef_projection_prepared_text_suppressed(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Text *name, FILE *declaration_file, int *out_suppress);
 static void lm_trans_import_documents_drain(struct LmMessageThread *lm_lmx_message_thread, LmOwnPtrStack *documents);
 static LmP0Text * lm_trans_registry_new_text(struct LmMessageThread *lm_lmx_message_thread);
 static LmP0Structure * lm_trans_registry_new_structure(struct LmMessageThread *lm_lmx_message_thread);
@@ -5493,10 +6064,38 @@ static LmTransTypedefProjectionOutput * lm_trans_typedef_projection_current_outp
     return ((LmTransTypedefProjectionOutput *)lm_own_ptr_stack_top(lm_trans_typedef_projection_outputs));
 }
 
-static int lm_trans_typedef_projection_output_enter(struct LmMessageThread *lm_lmx_message_thread) {
+static int lm_trans_typedef_projection_target_region(struct LmMessageThread *lm_lmx_message_thread, FILE *file, size_t *out_target_region) {
+    (void)lm_lmx_message_thread;
+    LmTransTypedefProjectionOutput * output;
+    int is_prelude;
+    int is_body;
+    if (out_target_region != 0) {
+        out_target_region[0] = 0U;
+    }
+    output = lm_trans_typedef_projection_current_output(lm_lmx_message_thread);
+    if (file == 0 || out_target_region == 0 || output == 0) {
+        return 1;
+    }
+    is_prelude = output -> prelude_file != 0 && file == output -> prelude_file;
+    is_body = output -> body_file != 0 && file == output -> body_file;
+    if (is_prelude == is_body) {
+        fprintf(stderr, "trans typedef projection error: output sink is not registered or is ambiguous\n");
+        return 1;
+    }
+    if (is_body) {
+        out_target_region[0] = 1U;
+    }
+    return 0;
+}
+
+static int lm_trans_typedef_projection_output_enter(struct LmMessageThread *lm_lmx_message_thread, FILE *prelude_file, FILE *body_file) {
     (void)lm_lmx_message_thread;
     LmTransTypedefProjectionOutput * output;
     int created_outputs;
+    if ((prelude_file == 0 && body_file == 0) || (prelude_file != 0 && prelude_file == body_file)) {
+        fprintf(stderr, "trans typedef projection error: output plan requires distinct registered sinks\n");
+        return 1;
+    }
     output = lm_own_new_zero(sizeof(output[0]));
     if (output == 0) {
         return 1;
@@ -5505,6 +6104,8 @@ static int lm_trans_typedef_projection_output_enter(struct LmMessageThread *lm_l
     output->active_path = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_own_delete_plain);
     output->next_group_id = 1U;
     output->next_identity = 1U;
+    output->prelude_file = prelude_file;
+    output->body_file = body_file;
     if (output -> entries == 0 || output -> active_path == 0) {
         lm_trans_typedef_projection_output_delete(lm_lmx_message_thread, output);
         return 1;
@@ -5669,7 +6270,7 @@ static int lm_trans_typedef_projection_declaration_same(struct LmMessageThread *
     return declaration_length == 0U || memcmp(entry -> declaration, declaration, declaration_length) == 0;
 }
 
-static int lm_trans_typedef_projection_classify_slice(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, int *out_suppress, size_t *out_identity) {
+static int lm_trans_typedef_projection_classify_slice(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, size_t target_region, int *out_suppress, size_t *out_identity) {
     (void)lm_lmx_message_thread;
     const LmTransTypedefProjectionEntry * entry;
     LmTransTypedefProjectionOutput * output;
@@ -5701,7 +6302,7 @@ static int lm_trans_typedef_projection_classify_slice(struct LmMessageThread *lm
                 if (out_identity[0] == 0U) {
                     out_identity[0] = entry -> identity;
                 }
-                if (lm_trans_typedef_projection_path_dominates(lm_lmx_message_thread, entry, output)) {
+                if (lm_trans_typedef_projection_path_dominates(lm_lmx_message_thread, entry, output) && entry -> target_region <= target_region) {
                     out_suppress[0] = 1;
                 }
             }
@@ -5773,7 +6374,7 @@ static int lm_trans_typedef_projection_local_suppressed_slice(struct LmMessageTh
     return 0;
 }
 
-static LmTransTypedefProjectionEntry * lm_trans_typedef_projection_entry_new(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, size_t identity) {
+static LmTransTypedefProjectionEntry * lm_trans_typedef_projection_entry_new(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, size_t identity, size_t target_region) {
     (void)lm_lmx_message_thread;
     LmTransTypedefProjectionEntry * entry;
     const LmTransTypedefProjectionOutput * output;
@@ -5792,6 +6393,7 @@ static LmTransTypedefProjectionEntry * lm_trans_typedef_projection_entry_new(str
     entry->declaration_length = declaration_length;
     entry->path_count = output -> active_path -> count;
     entry->identity = identity;
+    entry->target_region = target_region;
     if (entry -> name == 0 || entry -> declaration == 0) {
         lm_trans_typedef_projection_entry_delete_any(entry);
         return 0;
@@ -5818,7 +6420,7 @@ static LmTransTypedefProjectionEntry * lm_trans_typedef_projection_entry_new(str
     return entry;
 }
 
-static int lm_trans_typedef_projection_commit_slice(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, size_t identity) {
+static int lm_trans_typedef_projection_commit_slice(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length, const char *declaration, size_t declaration_length, size_t identity, size_t target_region) {
     (void)lm_lmx_message_thread;
     LmTransTypedefProjectionOutput * output;
     LmTransTypedefProjectionEntry * entry;
@@ -5826,7 +6428,7 @@ static int lm_trans_typedef_projection_commit_slice(struct LmMessageThread *lm_l
     if (output == 0 || identity == 0U) {
         return 1;
     }
-    entry = lm_trans_typedef_projection_entry_new(lm_lmx_message_thread, name, name_length, declaration, declaration_length, identity);
+    entry = lm_trans_typedef_projection_entry_new(lm_lmx_message_thread, name, name_length, declaration, declaration_length, identity, target_region);
     if (entry == 0) {
         return 1;
     }
@@ -5876,12 +6478,13 @@ static int lm_trans_typedef_projection_emit_slice(struct LmMessageThread *lm_lmx
     (void)lm_lmx_message_thread;
     int suppress;
     size_t identity;
+    size_t target_region;
     uint64_t guard_hash_a;
     uint64_t guard_hash_b;
     if (out_emitted != 0) {
         out_emitted[0] = 0;
     }
-    if (file == 0 || out_emitted == 0 || lm_trans_typedef_projection_classify_slice(lm_lmx_message_thread, name, name_length, declaration, declaration_length, &suppress, &identity) != 0) {
+    if (file == 0 || out_emitted == 0 || lm_trans_typedef_projection_target_region(lm_lmx_message_thread, file, &target_region) != 0 || lm_trans_typedef_projection_classify_slice(lm_lmx_message_thread, name, name_length, declaration, declaration_length, target_region, &suppress, &identity) != 0) {
         return 1;
     }
     if (suppress) {
@@ -5895,7 +6498,7 @@ static int lm_trans_typedef_projection_emit_slice(struct LmMessageThread *lm_lmx
     if (lm_trans_put(lm_lmx_message_thread, file, "#else\n#if !defined(LM_LMX_TYPEDEF_ID_A_") != 0 || lm_trans_write_all(lm_lmx_message_thread, file, name, name_length) != 0 || lm_trans_put(lm_lmx_message_thread, file, ") || !defined(LM_LMX_TYPEDEF_ID_B_") != 0 || lm_trans_write_all(lm_lmx_message_thread, file, name, name_length) != 0 || lm_trans_put(lm_lmx_message_thread, file, ") || LM_LMX_TYPEDEF_ID_A_") != 0 || lm_trans_write_all(lm_lmx_message_thread, file, name, name_length) != 0 || lm_trans_put(lm_lmx_message_thread, file, " != ") != 0 || lm_trans_typedef_projection_emit_guard_hash(lm_lmx_message_thread, file, guard_hash_a) != 0 || lm_trans_put(lm_lmx_message_thread, file, " || LM_LMX_TYPEDEF_ID_B_") != 0 || lm_trans_write_all(lm_lmx_message_thread, file, name, name_length) != 0 || lm_trans_put(lm_lmx_message_thread, file, " != ") != 0 || lm_trans_typedef_projection_emit_guard_hash(lm_lmx_message_thread, file, guard_hash_b) != 0 || lm_trans_put(lm_lmx_message_thread, file, "\n#error \"Lingvamyxa conflicting typedef projection for ") != 0 || lm_trans_write_all(lm_lmx_message_thread, file, name, name_length) != 0 || lm_trans_put(lm_lmx_message_thread, file, "\"\n#endif\n#endif\n") != 0) {
         return 1;
     }
-    if (lm_trans_typedef_projection_commit_slice(lm_lmx_message_thread, name, name_length, declaration, declaration_length, identity) != 0) {
+    if (lm_trans_typedef_projection_commit_slice(lm_lmx_message_thread, name, name_length, declaration, declaration_length, identity, target_region) != 0) {
         return 1;
     }
     out_emitted[0] = 1;
@@ -5955,6 +6558,7 @@ static int lm_trans_typedef_projection_emit_prepared_text_if_compatible(struct L
     LmP0Text * payload;
     char *declaration;
     size_t declaration_length;
+    size_t target_region;
     int compatible;
     int status;
     if (out_emitted != 0) {
@@ -5962,7 +6566,7 @@ static int lm_trans_typedef_projection_emit_prepared_text_if_compatible(struct L
     }
     payload = lm_trans_text_from_cstr(lm_lmx_message_thread, "");
     declaration = 0;
-    if (file == 0 || out_emitted == 0 || payload == 0 || lm_trans_identifier_payload(lm_lmx_message_thread, name, payload) == 0 || lm_trans_typedef_projection_file_copy(lm_lmx_message_thread, declaration_file, &declaration, &declaration_length) != 0) {
+    if (file == 0 || out_emitted == 0 || payload == 0 || lm_trans_typedef_projection_target_region(lm_lmx_message_thread, file, &target_region) != 0 || lm_trans_identifier_payload(lm_lmx_message_thread, name, payload) == 0 || lm_trans_typedef_projection_file_copy(lm_lmx_message_thread, declaration_file, &declaration, &declaration_length) != 0) {
         lm_trans_text_ref_destroy(&payload);
         return 1;
     }
@@ -5997,15 +6601,19 @@ static int lm_trans_typedef_projection_emit_prepared_cstr(struct LmMessageThread
     return status;
 }
 
-static int lm_trans_typedef_projection_prepared_text_suppressed(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *name, FILE *declaration_file, int *out_suppress) {
+static int lm_trans_typedef_projection_prepared_text_suppressed(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Text *name, FILE *declaration_file, int *out_suppress) {
     (void)lm_lmx_message_thread;
     LmP0Text * payload;
     char *declaration;
     size_t declaration_length;
+    size_t target_region;
     int status;
+    if (out_suppress != 0) {
+        out_suppress[0] = 0;
+    }
     payload = lm_trans_text_from_cstr(lm_lmx_message_thread, "");
     declaration = 0;
-    if (payload == 0 || lm_trans_identifier_payload(lm_lmx_message_thread, name, payload) == 0 || lm_trans_typedef_projection_file_copy(lm_lmx_message_thread, declaration_file, &declaration, &declaration_length) != 0) {
+    if (payload == 0 || lm_trans_typedef_projection_target_region(lm_lmx_message_thread, file, &target_region) != 0 || target_region != 1U || lm_trans_identifier_payload(lm_lmx_message_thread, name, payload) == 0 || lm_trans_typedef_projection_file_copy(lm_lmx_message_thread, declaration_file, &declaration, &declaration_length) != 0) {
         lm_trans_text_ref_destroy(&payload);
         return 1;
     }
@@ -27345,7 +27953,7 @@ static int lm_trans_statement_stack_schedule_named_structure(struct LmMessageThr
     }
     status = lm_trans_emit_named_structure_typedef(lm_lmx_message_thread, declaration_file, frame, 0U, namespace_);
     if (status == 0) {
-        status = lm_trans_typedef_projection_prepared_text_suppressed(lm_lmx_message_thread, frame -> head, declaration_file, &typedef_suppressed);
+        status = lm_trans_typedef_projection_prepared_text_suppressed(lm_lmx_message_thread, file, frame -> head, declaration_file, &typedef_suppressed);
     }
     fclose(declaration_file);
     if (status != 0) {
@@ -27374,7 +27982,7 @@ static int lm_trans_statement_stack_schedule_merge_named_structure(struct LmMess
     }
     status = lm_trans_emit_merge_named_structure_typedef(lm_lmx_message_thread, declaration_file, frame, 0U, namespace_);
     if (status == 0) {
-        status = lm_trans_typedef_projection_prepared_text_suppressed(lm_lmx_message_thread, target, declaration_file, &typedef_suppressed);
+        status = lm_trans_typedef_projection_prepared_text_suppressed(lm_lmx_message_thread, file, target, declaration_file, &typedef_suppressed);
     }
     fclose(declaration_file);
     if (status != 0) {
@@ -37537,6 +38145,11 @@ static int lm_trans_emit_layout_definition(struct LmMessageThread *lm_lmx_messag
         forward_backend = lm_trans_registry_source_path_n2_named_typed_value(lm_lmx_message_thread, namespace_, "forward.backend", "class", "class", "backend", "class", forward_row);
     }
     has_forward = forward_backend != 0 && (strcmp(forward_backend, "c.struct") == 0 || strcmp(forward_backend, "c.union") == 0);
+    if (has_forward && ((strcmp(forward_backend, "c.struct") == 0 && (strcmp(backend, "c.union") == 0 || strcmp(backend, "c.named-union") == 0)) || (strcmp(forward_backend, "c.union") == 0 && (strcmp(backend, "c.struct") == 0 || strcmp(backend, "c.named-struct") == 0)))) {
+        fprintf(stderr, "trans L4 layout error: layout %s conflicts with its forward tag backend\n", layout_name);
+        lm_trans_l4_text_view_delete(lm_lmx_message_thread, &layout_text);
+        return 1;
+    }
     prefix = 0;
     if (strcmp(backend, "c.struct") == 0) {
         if (has_forward) {
@@ -38514,6 +39127,10 @@ static int lm_trans_emit_l4_alias_typedefs(struct LmMessageThread *lm_lmx_messag
     size_t i;
     size_t address_depth;
     size_t const_flag;
+    FILE * declaration_file;
+    int emitted;
+    int emitted_any;
+    int status;
     names = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_trans_free_any);
     if (names == 0) {
         return 1;
@@ -38531,6 +39148,7 @@ static int lm_trans_emit_l4_alias_typedefs(struct LmMessageThread *lm_lmx_messag
     target_rows = lm_trans_namespace_registry_relation_stack(lm_lmx_message_thread, namespace_, lm_trans_text_from_cstr(lm_lmx_message_thread, "alias"), "target");
     address_depth_rows = lm_trans_namespace_registry_relation_stack(lm_lmx_message_thread, namespace_, lm_trans_text_from_cstr(lm_lmx_message_thread, "alias"), "target.address-depth");
     const_rows = lm_trans_namespace_registry_relation_stack(lm_lmx_message_thread, namespace_, lm_trans_text_from_cstr(lm_lmx_message_thread, "alias"), "target.const");
+    emitted_any = 0;
     i = 0U;
     while (i < names -> count) {
         name = lm_own_ptr_stack_at(names, i);
@@ -38555,14 +39173,29 @@ static int lm_trans_emit_l4_alias_typedefs(struct LmMessageThread *lm_lmx_messag
             lm_trans_ptr_stack_delete(&names);
             return 1;
         }
-        if (lm_trans_put(lm_lmx_message_thread, file, "typedef ") != 0 || lm_trans_emit_abi_typed_name(lm_lmx_message_thread, file, target, address_depth, const_flag != 0U, name, namespace_) != 0 || lm_trans_put(lm_lmx_message_thread, file, ";\n") != 0) {
+        declaration_file = tmpfile();
+        if (declaration_file == 0) {
             lm_trans_l4_text_view_delete(lm_lmx_message_thread, &name_text);
             lm_trans_ptr_stack_delete(&names);
             return 1;
         }
+        emitted = 0;
+        status = lm_trans_put(lm_lmx_message_thread, declaration_file, "typedef ") != 0 || lm_trans_emit_abi_typed_name(lm_lmx_message_thread, declaration_file, target, address_depth, const_flag != 0U, name, namespace_) != 0 || lm_trans_put(lm_lmx_message_thread, declaration_file, ";\n") != 0;
+        if (status == 0) {
+            status = lm_trans_typedef_projection_emit_prepared_cstr(lm_lmx_message_thread, file, name, declaration_file, &emitted);
+        }
+        fclose(declaration_file);
+        if (status != 0) {
+            lm_trans_l4_text_view_delete(lm_lmx_message_thread, &name_text);
+            lm_trans_ptr_stack_delete(&names);
+            return 1;
+        }
+        if (emitted) {
+            emitted_any = 1;
+        }
         i = i + 1U;
     }
-    if (names -> count != 0U && lm_trans_put(lm_lmx_message_thread, file, "\n") != 0) {
+    if (emitted_any && lm_trans_put(lm_lmx_message_thread, file, "\n") != 0) {
         lm_trans_l4_text_view_delete(lm_lmx_message_thread, &name_text);
         lm_trans_ptr_stack_delete(&names);
         return 1;
@@ -38619,6 +39252,10 @@ static int lm_trans_emit_l4_forward_typedefs(struct LmMessageThread *lm_lmx_mess
     const char *backend;
     const char *tag;
     size_t i;
+    FILE * declaration_file;
+    int emitted;
+    int emitted_any;
+    int status;
     names = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_trans_free_any);
     if (names == 0) {
         return 1;
@@ -38636,6 +39273,7 @@ static int lm_trans_emit_l4_forward_typedefs(struct LmMessageThread *lm_lmx_mess
     if (view == 0) {
         backend_rows = lm_trans_namespace_registry_relation_stack(lm_lmx_message_thread, namespace_, lm_trans_text_from_cstr(lm_lmx_message_thread, "forward"), "backend");
     }
+    emitted_any = 0;
     i = 0U;
     while (i < names -> count) {
         name = lm_own_ptr_stack_at(names, i);
@@ -38668,13 +39306,27 @@ static int lm_trans_emit_l4_forward_typedefs(struct LmMessageThread *lm_lmx_mess
                 return 1;
             }
         }
-        if (lm_trans_put(lm_lmx_message_thread, file, "typedef ") != 0 || lm_trans_put(lm_lmx_message_thread, file, tag) != 0 || lm_trans_put(lm_lmx_message_thread, file, " ") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, lm_trans_text_from_cstr(lm_lmx_message_thread, name)) != 0 || lm_trans_put(lm_lmx_message_thread, file, " ") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, lm_trans_text_from_cstr(lm_lmx_message_thread, name)) != 0 || lm_trans_put(lm_lmx_message_thread, file, ";\n") != 0) {
+        declaration_file = tmpfile();
+        if (declaration_file == 0) {
             lm_trans_ptr_stack_delete(&names);
             return 1;
         }
+        emitted = 0;
+        status = lm_trans_put(lm_lmx_message_thread, declaration_file, "typedef ") != 0 || lm_trans_put(lm_lmx_message_thread, declaration_file, tag) != 0 || lm_trans_put(lm_lmx_message_thread, declaration_file, " ") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, declaration_file, lm_trans_text_from_cstr(lm_lmx_message_thread, name)) != 0 || lm_trans_put(lm_lmx_message_thread, declaration_file, " ") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, declaration_file, lm_trans_text_from_cstr(lm_lmx_message_thread, name)) != 0 || lm_trans_put(lm_lmx_message_thread, declaration_file, ";\n") != 0;
+        if (status == 0) {
+            status = lm_trans_typedef_projection_emit_prepared_cstr(lm_lmx_message_thread, file, name, declaration_file, &emitted);
+        }
+        fclose(declaration_file);
+        if (status != 0) {
+            lm_trans_ptr_stack_delete(&names);
+            return 1;
+        }
+        if (emitted) {
+            emitted_any = 1;
+        }
         i = i + 1U;
     }
-    if (names -> count != 0U && lm_trans_put(lm_lmx_message_thread, file, "\n") != 0) {
+    if (emitted_any && lm_trans_put(lm_lmx_message_thread, file, "\n") != 0) {
         lm_trans_ptr_stack_delete(&names);
         return 1;
     }
@@ -41269,7 +41921,7 @@ static int lm_trans_emit_document(struct LmMessageThread *lm_lmx_message_thread,
     lm_trans_l2_executable_statement_depth = 0;
     lm_trans_l2_conditional_emission_depth = 0;
     emitted = 0;
-    if (lm_trans_typedef_projection_output_enter(lm_lmx_message_thread) != 0) {
+    if (lm_trans_typedef_projection_output_enter(lm_lmx_message_thread, prelude_output, body_output) != 0) {
         fprintf(stderr, "trans error: out of memory while creating typedef projection state\n");
         status = 1;
     }

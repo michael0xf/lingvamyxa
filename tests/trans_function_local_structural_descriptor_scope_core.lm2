@@ -100,7 +100,8 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     if: lm_trans_registry_load_for_source("tests/trans_function_local_structural_descriptor_scope_core.lm2") != 0
         return: 1
     lm_trans_registry\view_mode: 2
-    if: lm_trans_typedef_projection_output_enter() != 0
+    output: c.tmpfile()
+    if: output = 0 || lm_trans_typedef_projection_output_enter(0, output) != 0
         status: 1
     else:
         typedef_projection_entered: 1
@@ -111,7 +112,6 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     if: status = 0
         item: lm_test_function_local_root_item(document, namespace_)
     local_name: lm_trans_text_from_cstr("LocalRecord")
-    output: c.tmpfile()
     if: status = 0 && (item = 0 || item\function = 0 || namespace_ = 0 || local_name = 0 || output = 0 || lm_trans_namespace_attach_registry(namespace_) != 0 || lm_trans_top_level_declare_function(namespace_, item) != 0)
         status: 1
 

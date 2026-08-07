@@ -287,8 +287,9 @@ fn: lm_test_l2_predef_source_rows_core () int
     lm_trans_l2_table_materialization_suppression_depth: 0
     lm_trans_l2_conditional_import_depth: 0
     lm_trans_l2_conditional_emission_depth: 0
+    prelude_file: c.tmpfile()
     if: status = 0
-        if: lm_trans_typedef_projection_output_enter() != 0
+        if: prelude_file = 0 || lm_trans_typedef_projection_output_enter(prelude_file, 0) != 0
             status: 1
         else:
             typedef_projection_entered: 1
@@ -336,7 +337,6 @@ fn: lm_test_l2_predef_source_rows_core () int
         status: 1
 
     lm_trans_emitted_import_prelude_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
-    prelude_file: c.tmpfile()
     if: status = 0 && (lm_trans_emitted_import_prelude_paths = 0 || prelude_file = 0 || lm_trans_emit_l2_import_root_prelude(prelude_file, root, 1, namespace_) != 0 || lm_test_l2_predef_metadata_is_exact() = 0)
         status: 1
     if: status = 0

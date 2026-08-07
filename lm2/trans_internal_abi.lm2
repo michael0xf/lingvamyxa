@@ -353,7 +353,7 @@ fn: lm_trans_emit_named_structure_typedef (
     const: LmTransNamespace: namespace_
 ) int
 
-fn: lm_trans_typedef_projection_output_enter () int
+fn: lm_trans_typedef_projection_output_enter (FILE: prelude_file; FILE: body_file) int
 fn: lm_trans_typedef_projection_output_leave () int
 fn: lm_trans_typedef_projection_conditional_enter () int
 fn: lm_trans_typedef_projection_conditional_leave () int
@@ -382,6 +382,7 @@ fn: lm_trans_typedef_projection_emit_prepared_cstr (
 ) int
 
 fn: lm_trans_typedef_projection_prepared_text_suppressed (
+    FILE: file
     const: LmP0Text: name
     FILE: declaration_file
     @: int out_suppress

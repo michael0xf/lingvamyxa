@@ -1,0 +1,17 @@
+table:
+    name: alias
+    columns((class: class) (class: backend) (class: target))
+    rows:
+             LmTestTypedefProjectionAliasFunctionPointer  c.typedef  int
+end: alias
+
+table:
+    name: functionPointerType
+    columns((class: class) (int: value))
+    rows:
+             LmTestTypedefProjectionAliasFunctionPointer  1
+end: functionPointerType
+
+alias
+
+fn: LmTestTypedefProjectionAliasFunctionPointer () int

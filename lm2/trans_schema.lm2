@@ -791,6 +791,7 @@ table:
              path_branches       size_t  4  1
              path_count          size_t  5  0
              identity            size_t  6  0
+             target_region       size_t  7  0
 end: LmTransTypedefProjectionEntry
 
 table:
@@ -801,6 +802,8 @@ table:
              active_path       LmOwnPtrStack  1  0
              next_group_id     size_t         2  0
              next_identity     size_t         3  0
+             prelude_file      FILE           4  0
+             body_file         FILE           5  0
 end: LmTransTypedefProjectionOutput
 
 table:

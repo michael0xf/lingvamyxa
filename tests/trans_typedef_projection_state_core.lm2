@@ -95,6 +95,28 @@ fn: lm_test_typedef_projection_emit_text (
     c.fclose(declaration_file)
 return: status
 
+fn: lm_test_typedef_projection_emit_text_if_compatible (
+    FILE: output
+    const: @(char name)
+    const: @(char declaration)
+    @: int out_emitted
+) int
+    FILE: declaration_file
+    LmP0Text: name_text
+    int: status
+
+    declaration_file: lm_test_typedef_projection_declaration_file(declaration)
+    name_text: lm_trans_text_from_cstr(name)
+    if: declaration_file = 0 || name_text = 0
+        if: declaration_file != 0
+            c.fclose(declaration_file)
+        lm_trans_text_ref_destroy(@ name_text)
+        return: 1
+    status: lm_trans_typedef_projection_emit_prepared_text_if_compatible(output, name_text, declaration_file, out_emitted)
+    lm_trans_text_ref_destroy(@ name_text)
+    c.fclose(declaration_file)
+return: status
+
 fn: lm_test_typedef_projection_base_rules () int
     const: @(char declaration_a)
     const: @(char declaration_b)
@@ -108,7 +130,7 @@ fn: lm_test_typedef_projection_base_rules () int
     output: c.tmpfile()
     entered: 0
     status: output = 0
-    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter(0, output) != 0
         status: 1
     else:
         if: status = 0
@@ -140,6 +162,61 @@ fn: lm_test_typedef_projection_base_rules () int
         c.fclose(output)
 return: status
 
+fn: lm_test_typedef_projection_target_region_order () int
+    const: @(char declaration_a)
+    const: @(char declaration_b)
+    FILE: prelude_output
+    FILE: body_output
+    FILE: unknown_output
+    int: entered
+    int: emitted
+    int: status
+
+    declaration_a: "typedef struct RegionFoo {\n    int value;\n} RegionFoo;\n"
+    declaration_b: "typedef struct RegionFoo {\n    double value;\n} RegionFoo;\n"
+    prelude_output: c.tmpfile()
+    body_output: c.tmpfile()
+    unknown_output: c.tmpfile()
+    entered: 0
+    status: prelude_output = 0 || body_output = 0 || unknown_output = 0
+
+    if: status = 0 && lm_trans_typedef_projection_output_enter(prelude_output, body_output) != 0
+        status: 1
+    else:
+        if: status = 0
+            entered: 1
+        ---
+
+    if: status = 0 && lm_test_typedef_projection_emit_cstr(unknown_output, "RegionFoo", declaration_a, @ emitted) = 0
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(body_output, "RegionFoo", declaration_a, @ emitted) != 0 || emitted != 1)
+        status: 1
+    if: status = 0 && lm_test_typedef_projection_emit_text_if_compatible(unknown_output, "RegionFoo", declaration_b, @ emitted) = 0
+        status: 1
+    if: status = 0 && lm_test_typedef_projection_emit_cstr(prelude_output, "RegionFoo", declaration_b, @ emitted) = 0
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(prelude_output, "RegionFoo", declaration_a, @ emitted) != 0 || emitted != 1)
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(body_output, "RegionFoo", declaration_a, @ emitted) != 0 || emitted != 0)
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_emit_cstr(prelude_output, "RegionFoo", declaration_a, @ emitted) != 0 || emitted != 0)
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_file_substring_count(prelude_output, "typedef struct RegionFoo") != 1U || lm_test_typedef_projection_file_substring_count(body_output, "typedef struct RegionFoo") != 1U)
+        status: 1
+
+    if: entered
+        if: lm_trans_typedef_projection_output_leave() != 0
+            status: 1
+        entered: 0
+    ---
+    if: body_output != 0
+        c.fclose(body_output)
+    if: prelude_output != 0
+        c.fclose(prelude_output)
+    if: unknown_output != 0
+        c.fclose(unknown_output)
+return: status
+
 fn: lm_test_typedef_projection_presence_rules () int
     const: @(char declaration_a)
     const: @(char declaration_b)
@@ -155,7 +232,7 @@ fn: lm_test_typedef_projection_presence_rules () int
     output: c.tmpfile()
     entered: 0
     status: output = 0
-    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter(0, output) != 0
         status: 1
     else:
         if: status = 0
@@ -187,7 +264,7 @@ fn: lm_test_typedef_projection_presence_rules () int
 
     output: c.tmpfile()
     status: status || output = 0
-    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter(0, output) != 0
         status: 1
     else:
         if: status = 0
@@ -220,7 +297,7 @@ fn: lm_test_typedef_projection_presence_rules () int
 
     output: c.tmpfile()
     status: status || output = 0
-    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter(0, output) != 0
         status: 1
     else:
         if: status = 0
@@ -267,7 +344,7 @@ fn: lm_test_typedef_projection_canonical_and_nested_outputs () int
     inner_entered: 0
     status: outer_output = 0 || inner_output = 0 || name = 0 || quoted_name = 0
 
-    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter(0, outer_output) != 0
         status: 1
     else:
         if: status = 0
@@ -280,7 +357,7 @@ fn: lm_test_typedef_projection_canonical_and_nested_outputs () int
     if: status = 0 && (lm_test_typedef_projection_emit_text(outer_output, name, declaration, @ emitted) != 0 || emitted != 0)
         status: 1
 
-    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter(0, inner_output) != 0
         status: 1
     else:
         if: status = 0
@@ -320,7 +397,11 @@ fn: lm_test_typedef_projection_error_lifecycle () int
     output: c.tmpfile()
     entered: 0
     status: output = 0
-    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter(0, 0) = 0
+        status: 1
+    if: status = 0 && lm_trans_typedef_projection_output_enter(output, output) = 0
+        status: 1
+    if: status = 0 && lm_trans_typedef_projection_output_enter(0, output) != 0
         status: 1
     else:
         if: status = 0
@@ -340,7 +421,7 @@ fn: lm_test_typedef_projection_error_lifecycle () int
         entered: 0
     ---
 
-    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter(0, output) != 0
         status: 1
     else:
         if: status = 0
@@ -370,7 +451,7 @@ fn: lm_test_typedef_projection_named_shape_conflict (
     output: c.tmpfile()
     entered: 0
     status: output = 0
-    if: status = 0 && lm_trans_typedef_projection_output_enter() != 0
+    if: status = 0 && lm_trans_typedef_projection_output_enter(0, output) != 0
         status: 1
     else:
         if: status = 0
@@ -494,6 +575,8 @@ fn: lm_test_typedef_projection_state_core () int
     if: status = 0 && lm_test_typedef_projection_registry_unchanged(loaded_fact_count, view_fact_count, source_table_count, mutation_generation, authored_table) != 0
         status: 1
     if: status = 0 && lm_test_typedef_projection_base_rules() != 0
+        status: 1
+    if: status = 0 && lm_test_typedef_projection_target_region_order() != 0
         status: 1
     if: status = 0 && lm_test_typedef_projection_presence_rules() != 0
         status: 1

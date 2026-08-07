@@ -1,0 +1,23 @@
+table:
+    name: `forward.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestTypedefProjectionForwardLayoutTag  c.struct
+end: `forward.backend`
+
+table:
+    name: `layout.backend`
+    columns((class: class) (class: backend))
+    rows:
+             LmTestTypedefProjectionForwardLayoutTag  c.union
+end: `layout.backend`
+
+table:
+    name: LmTestTypedefProjectionForwardLayoutTag
+    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    rows:
+             value  int  0
+end: LmTestTypedefProjectionForwardLayoutTag
+
+forward
+layout

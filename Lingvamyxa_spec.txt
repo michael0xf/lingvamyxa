@@ -14395,10 +14395,13 @@ emitted at canonical indentation as this fingerprint, so comparison cannot
 drift from generated C.
 
 A prior declaration may suppress a later emission only when their fingerprints
-are equal and the prior presence path dominates the later path: whenever the
-later declaration is present, the prior one is also present. Equal declarations
-under independent guards therefore remain separately guarded emissions. A
-declaration emitted in one conditional branch is not recorded as unconditional.
+are equal, the prior presence path dominates the later path and the prior
+declaration is not later in final target-output order. The hosted C bootstrap
+emits the prelude before the body, irrespective of the order in which translator
+operations happened to request those outputs. Thus a body claim made first
+cannot suppress a later prelude claim. Equal declarations under independent
+guards therefore remain separately guarded emissions. A declaration emitted in
+one conditional branch is not recorded as unconditional.
 
 Different fingerprints at one collision key are an error whenever their
 presence paths may overlap. They may coexist only in branches that the emitted
@@ -14416,11 +14419,16 @@ that block. The projection state and generated target guard must not introduce a
 source name, establish source compatibility, select a layout, or make a
 first-declaration-wins choice.
 
-The current shared state covers named structures, physical `merge:`, non-forward
-`c.struct`/`c.union` layouts and function-pointer typedefs. Unifying legacy L4
-alias/forward emission and private generated ABI typedefs with the same
-collision domain remains bootstrap debt; their present ordering and reserved
-names are backend constraints and do not define language semantics.
+For C tag-backed projections, a `c.struct` or `c.named-struct` layout is
+compatible only with a `c.struct` forward declaration, and a `c.union` or
+`c.named-union` layout only with a `c.union` forward declaration. Mixing the tag
+families at one projected name is a projection error.
+
+The current shared state covers named structures, physical `merge:`,
+non-forward `c.struct`/`c.union` layout typedefs, L4 alias/forward declarations
+and function-pointer typedefs. Unifying private generated ABI typedefs with the
+same collision domain remains bootstrap debt; their present ordering and
+reserved names are backend constraints and do not define language semantics.
 
 20.2.2. L1 and L2 Translator Receivers
 
