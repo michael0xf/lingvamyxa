@@ -1,10 +1,7 @@
 L2:
-    L1:
-===
-static int call_later(struct LmMessageThread *thread) {
-    return later(thread);
-}
-===
+    fn: call_later () int
+        return: later()
+    end: call_later
 
     fn: later () int
         return: 7
@@ -12,7 +9,7 @@ static int call_later(struct LmMessageThread *thread) {
 
     external:
         fn: main () int
-            return: c.call_later(c.lm_lmx_message_thread) != 7
+            return: call_later() != 7
         end: main
     end: external
 end: L2

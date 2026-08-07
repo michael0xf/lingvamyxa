@@ -1,19 +1,18 @@
 L2:
-    L1:
-===
-static const void *lm_test_fm_result_source;
+    FmResultProbe:
+        @: void source 0
+    end: FmResultProbe
 
-static void lm_test_remember_fm_result(const void *value) {
-    lm_test_fm_result_source = value;
-}
+    sub: lm_test_remember_fm_result (@: void value)
+        c.lm_FmResultProbe\source: value
+    end: lm_test_remember_fm_result
 
-static int lm_test_is_fm_result(const void *value) {
-    return value == lm_test_fm_result_source;
-}
-===
+    fn: lm_test_is_fm_result (@: void value) int
+        return: FmResultProbe\source = value
+    end: lm_test_is_fm_result
 
     fm: pair () (int: left; int: right)
-        c.lm_test_remember_fm_result(c.lm_fm_result)
+        lm_test_remember_fm_result(c.lm_fm_result)
         return: (1 2)
     end: pair
 
@@ -38,7 +37,7 @@ static int lm_test_is_fm_result(const void *value) {
             pairReturn: again
             boxedUserReturn: boxed
             first: pair()
-            if: c.lm_test_is_fm_result(first) = 0
+            if: lm_test_is_fm_result(cast: (@: void) first) = 0
                 return: 1
             second: namedPair()
             again: pair()

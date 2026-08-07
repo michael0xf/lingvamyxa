@@ -4,10 +4,10 @@ end: L2
 
 L3:
     L3PredefLevel:
-        L1:
-===
-int main(void) { return 0; }
-===
-        end: L1
+        external:
+            fn: main () int
+                return: 0
+            end: main
+        end: external
     end: L3PredefLevel
 end: L3

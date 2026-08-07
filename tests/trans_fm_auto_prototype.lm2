@@ -1,11 +1,8 @@
 L2:
-    L1:
-===
-static int call_pair_left(struct LmMessageThread *thread) {
-    pairReturn *value = pair(thread);
-    return value->left;
-}
-===
+    fn: call_pair_left () int
+        pairReturn: value pair()
+        return: value\left
+    end: call_pair_left
 
     fm: pair () (int: left; int: right)
         return: (3 4)
@@ -13,7 +10,7 @@ static int call_pair_left(struct LmMessageThread *thread) {
 
     external:
         fn: main () int
-            return: c.call_pair_left(c.lm_lmx_message_thread) != 3
+            return: call_pair_left() != 3
         end: main
     end: external
 end: L2
