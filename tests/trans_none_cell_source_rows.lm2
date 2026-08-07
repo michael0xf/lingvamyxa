@@ -88,31 +88,62 @@ end: `define.value`
 
 define
 
-L1:
-===
-#ifdef LM_TEST_NONE_DIRECT
-#error "direct None.cell source row did not suppress its cell"
-#endif
+ifdef:
+    `defined(LM_TEST_NONE_DIRECT)`:
+        fn: lm_test_none_direct_defined () int
+            return: 1
+        end: lm_test_none_direct_defined
+    default:
+        fn: lm_test_none_direct_defined () int
+            return: 0
+        end: lm_test_none_direct_defined
+end: ifdef
 
-#ifdef LM_TEST_NONE_FALLBACK
-#error "wrong-schema None.cell did not use the facade value"
-#endif
+ifdef:
+    `defined(LM_TEST_NONE_FALLBACK)`:
+        fn: lm_test_none_fallback_defined () int
+            return: 1
+        end: lm_test_none_fallback_defined
+    default:
+        fn: lm_test_none_fallback_defined () int
+            return: 0
+        end: lm_test_none_fallback_defined
+end: ifdef
 
-#ifdef LM_TEST_NONE_JOINED
-#error "wide joined None.cell source row did not suppress its cell"
-#endif
+ifdef:
+    `defined(LM_TEST_NONE_JOINED)`:
+        fn: lm_test_none_joined_defined () int
+            return: 1
+        end: lm_test_none_joined_defined
+    default:
+        fn: lm_test_none_joined_defined () int
+            return: 0
+        end: lm_test_none_joined_defined
+end: ifdef
 
-#ifdef LM_TEST_NONE_DEFAULT
-#error "wide default None.cell source row did not suppress its cell"
-#endif
-
-#if !defined(LM_TEST_NONE_SURVIVES) || LM_TEST_NONE_SURVIVES != 1
-#error "None.cell suppressed a non-matching cell"
-#endif
-===
+ifdef:
+    `defined(LM_TEST_NONE_DEFAULT)`:
+        fn: lm_test_none_default_defined () int
+            return: 1
+        end: lm_test_none_default_defined
+    default:
+        fn: lm_test_none_default_defined () int
+            return: 0
+        end: lm_test_none_default_defined
+end: ifdef
 
 external:
     fn: main () int
+        if: lm_test_none_direct_defined() != 0
+            return: 1
+        if: lm_test_none_fallback_defined() != 0
+            return: 2
+        if: lm_test_none_joined_defined() != 0
+            return: 3
+        if: lm_test_none_default_defined() != 0
+            return: 4
+        if: c.LM_TEST_NONE_SURVIVES != 1
+            return: 5
         return: 0
     end: main
 end: external

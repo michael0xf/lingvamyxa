@@ -83,71 +83,60 @@ end: constant
 
 constant
 
-L1:
-===
-#if LM_TEST_CONSTANT_SOURCE != 41
-#error "full source constant value differs"
-#endif
+ifdef:
+    `defined(LM_TEST_CONSTANT_NONE)`:
+        fn: lm_test_constant_none_defined () int
+            return: 1
+        end: lm_test_constant_none_defined
+    default:
+        fn: lm_test_constant_none_defined () int
+            return: 0
+        end: lm_test_constant_none_defined
+end: ifdef
 
-#if LM_TEST_CONSTANT_VALUE_OVERLAY != 6
-#error "split constant value overlay was ignored"
-#endif
-
-#if LM_TEST_CONSTANT_BACKEND_OVERLAY != 9
-#error "legacy any-c.define membership changed"
-#endif
-
-#if LM_TEST_CONSTANT_DUPLICATE != 8
-#error "latest duplicate constant row was ignored"
-#endif
-
-#if LM_TEST_CONSTANT_SPLIT != 17
-#error "split-only constant fallback was ignored"
-#endif
-
-#ifdef LM_TEST_CONSTANT_NONE
-#error "None source cells unexpectedly emitted a constant"
-#endif
-
-#if LM_TEST_CONSTANT_WIDE_SOURCE != 31
-#error "N-column constant source value differs"
-#endif
-
-#if LM_TEST_CONSTANT_WIDE_DUPLICATE != 39
-#error "latest duplicate N-column constant row was ignored"
-#endif
-
-#if LM_TEST_CONSTANT_WIDE_LATE_NONE != 41
-#error "N-column None cells unexpectedly removed an earlier constant"
-#endif
-
-#if LM_TEST_CONSTANT_WIDE_BACKEND_OVERLAY != 47
-#error "N-column any-c.define membership or split value overlay changed"
-#endif
-
-#if LM_TEST_CONSTANT_WIDE_PHYSICAL != 53
-#error "physical constant rows were not merged with N-column rows"
-#endif
-
-#if LM_TEST_CONSTANT_WIDE_JOINED != 59
-#error "joined N-column constant row was not emitted"
-#endif
-
-#if LM_TEST_CONSTANT_WIDE_BACKEND_SCHEMA_FALLBACK != 61
-#error "wrong-schema N-column backend did not fall back to the facade row"
-#endif
-
-#if LM_TEST_CONSTANT_WIDE_VALUE_SCHEMA_FALLBACK != 67
-#error "wrong-schema N-column value did not fall back to the facade row"
-#endif
-
-#ifdef LM_TEST_CONSTANT_WIDE_NONE
-#error "N-column None source cells unexpectedly emitted a constant"
-#endif
-===
+ifdef:
+    `defined(LM_TEST_CONSTANT_WIDE_NONE)`:
+        fn: lm_test_constant_wide_none_defined () int
+            return: 1
+        end: lm_test_constant_wide_none_defined
+    default:
+        fn: lm_test_constant_wide_none_defined () int
+            return: 0
+        end: lm_test_constant_wide_none_defined
+end: ifdef
 
 external:
     fn: main () int
+        if: c.LM_TEST_CONSTANT_SOURCE != 41
+            return: 1
+        if: c.LM_TEST_CONSTANT_VALUE_OVERLAY != 6
+            return: 2
+        if: c.LM_TEST_CONSTANT_BACKEND_OVERLAY != 9
+            return: 3
+        if: c.LM_TEST_CONSTANT_DUPLICATE != 8
+            return: 4
+        if: c.LM_TEST_CONSTANT_SPLIT != 17
+            return: 5
+        if: lm_test_constant_none_defined() != 0
+            return: 6
+        if: c.LM_TEST_CONSTANT_WIDE_SOURCE != 31
+            return: 7
+        if: c.LM_TEST_CONSTANT_WIDE_DUPLICATE != 39
+            return: 8
+        if: c.LM_TEST_CONSTANT_WIDE_LATE_NONE != 41
+            return: 9
+        if: c.LM_TEST_CONSTANT_WIDE_BACKEND_OVERLAY != 47
+            return: 10
+        if: c.LM_TEST_CONSTANT_WIDE_PHYSICAL != 53
+            return: 11
+        if: c.LM_TEST_CONSTANT_WIDE_JOINED != 59
+            return: 12
+        if: c.LM_TEST_CONSTANT_WIDE_BACKEND_SCHEMA_FALLBACK != 61
+            return: 13
+        if: c.LM_TEST_CONSTANT_WIDE_VALUE_SCHEMA_FALLBACK != 67
+            return: 14
+        if: lm_test_constant_wide_none_defined() != 0
+            return: 15
         return: 0
     end: main
 end: external

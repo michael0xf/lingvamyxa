@@ -60,17 +60,27 @@ end: ifdef
 
 ifdef
 
-L1:
-===
-int main(void) {
-#if defined(_WIN32)
-    return lm_lmx_message_thread_run_entry(lm_test_ifdef_wide_source_value) != 71;
-#elif defined(__APPLE__)
-    return lm_lmx_message_thread_run_entry(lm_test_ifdef_wide_source_value) != 72;
-#elif defined(__unix__)
-    return lm_lmx_message_thread_run_entry(lm_test_ifdef_wide_source_value) != 73;
-#else
-    return lm_lmx_message_thread_run_entry(lm_test_ifdef_wide_source_value) != 74;
-#endif
-}
-===
+ifdef:
+    _WIN32:
+        fn: lm_test_ifdef_wide_source_expected () int
+            return: 71
+        end: lm_test_ifdef_wide_source_expected
+    __APPLE__:
+        fn: lm_test_ifdef_wide_source_expected () int
+            return: 72
+        end: lm_test_ifdef_wide_source_expected
+    __unix__:
+        fn: lm_test_ifdef_wide_source_expected () int
+            return: 73
+        end: lm_test_ifdef_wide_source_expected
+    default:
+        fn: lm_test_ifdef_wide_source_expected () int
+            return: 74
+        end: lm_test_ifdef_wide_source_expected
+end: ifdef
+
+external:
+    fn: main () int
+        return: lm_test_ifdef_wide_source_value() != lm_test_ifdef_wide_source_expected()
+    end: main
+end: external

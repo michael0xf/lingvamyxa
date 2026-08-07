@@ -60,6 +60,14 @@ end: `serialization.codec`
 table:
     source
     name: `define.value`
+    columns((class: class) (@: char value))
+    rows:
+             lm_test_symbol_token  15
+end: `define.value`
+
+table:
+    source
+    name: `define.value`
     columns((class: class) (LmCodecDirect: value))
     rows:
              LM_TEST_CODEC_DIRECT  "11"
@@ -107,37 +115,20 @@ end: `define.value`
 
 define
 
-L1:
-===
-#define lm_test_symbol_token 15
-
-#if !defined(LM_TEST_CODEC_DIRECT) || LM_TEST_CODEC_DIRECT != 11
-#error "direct serialization codec source row differs"
-#endif
-
-#if !defined(LM_TEST_CODEC_FALLBACK) || LM_TEST_CODEC_FALLBACK != 12
-#error "wrong-schema serialization codec did not use the facade value"
-#endif
-
-#if !defined(LM_TEST_CODEC_JOINED) || LM_TEST_CODEC_JOINED != 13
-#error "wide joined serialization codec source row differs"
-#endif
-
-#if !defined(LM_TEST_CODEC_DEFAULT) || LM_TEST_CODEC_DEFAULT != 14
-#error "default serialization codec source row differs"
-#endif
-
-#if !defined(LM_TEST_CODEC_NUMERIC_FALLBACK) || LM_TEST_CODEC_NUMERIC_FALLBACK != 15
-#error "wrong-schema numeric codec did not use the facade value"
-#endif
-
-#if !defined(LM_TEST_CODEC_LEGACY) || LM_TEST_CODEC_LEGACY != 16
-#error "legacy N2 serialization codec source row differs"
-#endif
-===
-
 external:
     fn: main () int
+        if: c.LM_TEST_CODEC_DIRECT != 11
+            return: 1
+        if: c.LM_TEST_CODEC_FALLBACK != 12
+            return: 2
+        if: c.LM_TEST_CODEC_JOINED != 13
+            return: 3
+        if: c.LM_TEST_CODEC_DEFAULT != 14
+            return: 4
+        if: c.LM_TEST_CODEC_NUMERIC_FALLBACK != 15
+            return: 5
+        if: c.LM_TEST_CODEC_LEGACY != 16
+            return: 6
         return: 0
     end: main
 end: external

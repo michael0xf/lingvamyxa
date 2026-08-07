@@ -62,63 +62,38 @@ join: (`lm.test.core.include.wide.seed`) core
     rows:
 end: core
 
-L1:
-===
-#ifndef CHAR_BIT
-#error "full source core include was not emitted"
-#endif
-
-#ifndef FLT_RADIX
-#error "first duplicate core include target was not emitted"
-#endif
-
-#ifndef va_start
-#error "second duplicate core include target was not emitted"
-#endif
-
-#ifndef LC_ALL
-#error "unquoted core include target was not wrapped in quotes"
-#endif
-
-#ifndef errno
-#error "already-quoted core include target was not preserved"
-#endif
-
-#ifndef CLOCKS_PER_SEC
-#error "None source row unexpectedly removed an earlier core include"
-#endif
-
-#ifndef SIG_DFL
-#error "wrong-schema core include descriptor did not fall back to the facade row"
-#endif
-
-#ifndef assert
-#error "joined core include row did not fall back to its facade value"
-#endif
-
-#ifndef bool
-#error "N-column core.c.include source row was not emitted"
-#endif
-
-#ifndef HUGE_VAL
-#error "first N-column duplicate core include target was not emitted"
-#endif
-
-#ifndef WEOF
-#error "second N-column duplicate core include target was not emitted"
-#endif
-
-#ifndef offsetof
-#error "N-column core None row unexpectedly removed an earlier include"
-#endif
-
-#ifndef INT8_MAX
-#error "physical core.c.include row was not merged with the N-column source"
-#endif
-===
-
 external:
     fn: main () int
-        return: c.isalpha('A') = 0
+        int: saved_errno c.errno
+        size_t: incoming_message_length_offset c.offsetof(c.IncomingMessage, c.length)
+
+        if: c.sizeof(c.CHAR_BIT) = 0U
+            return: 1
+        if: c.FLT_RADIX < 2
+            return: 2
+        if: c.sizeof(c.va_list) = 0U
+            return: 3
+        if: c.LC_ALL < 0
+            return: 4
+        if: saved_errno != c.errno
+            return: 5
+        if: c.CLOCKS_PER_SEC <= 0
+            return: 6
+        if: c.sizeof(c.SIG_DFL) = 0U
+            return: 7
+        c.assert(c.CHAR_BIT > 0)
+        if: c.sizeof(c.bool) = 0U
+            return: 8
+        if: c.HUGE_VAL <= 0.0
+            return: 9
+        if: c.sizeof(c.WEOF) = 0U
+            return: 10
+        if: incoming_message_length_offset >= c.sizeof(c.IncomingMessage)
+            return: 11
+        if: c.INT8_MAX < 1
+            return: 12
+        if: c.isalpha('A') = 0
+            return: 13
+        return: 0
     end: main
 end: external

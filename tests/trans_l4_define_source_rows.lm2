@@ -83,75 +83,95 @@ end: define
 
 define
 
-L1:
-===
-#if LM_TEST_DEFINE_SOURCE != 11
-#error "full source define value differs"
-#endif
+ifdef:
+    `defined(LM_TEST_DEFINE_EMPTY)`:
+        fn: lm_test_define_empty_defined () int
+            return: 1
+        end: lm_test_define_empty_defined
+    default:
+        fn: lm_test_define_empty_defined () int
+            return: 0
+        end: lm_test_define_empty_defined
+end: ifdef
 
-#if LM_TEST_DEFINE_DUPLICATE != 13
-#error "duplicate define rows changed value"
-#endif
+ifdef:
+    `defined(LM_TEST_DEFINE_NODE_FALLBACK)`:
+        fn: lm_test_define_node_fallback_defined () int
+            return: 1
+        end: lm_test_define_node_fallback_defined
+    default:
+        fn: lm_test_define_node_fallback_defined () int
+            return: 0
+        end: lm_test_define_node_fallback_defined
+end: ifdef
 
-#ifndef LM_TEST_DEFINE_EMPTY
-#error "empty source define was not emitted"
-#endif
+ifdef:
+    `defined(LM_TEST_DEFINE_NONE)`:
+        fn: lm_test_define_none_defined () int
+            return: 1
+        end: lm_test_define_none_defined
+    default:
+        fn: lm_test_define_none_defined () int
+            return: 0
+        end: lm_test_define_none_defined
+end: ifdef
 
-#if LM_TEST_DEFINE_LATE_NONE != 17
-#error "None source row unexpectedly removed an earlier define"
-#endif
+ifdef:
+    `defined(LM_TEST_DEFINE_WIDE_EMPTY)`:
+        fn: lm_test_define_wide_empty_defined () int
+            return: 1
+        end: lm_test_define_wide_empty_defined
+    default:
+        fn: lm_test_define_wide_empty_defined () int
+            return: 0
+        end: lm_test_define_wide_empty_defined
+end: ifdef
 
-#if LM_TEST_DEFINE_SCHEMA_FALLBACK != 23
-#error "wrong-schema source descriptor did not fall back to the facade row"
-#endif
-
-#ifndef LM_TEST_DEFINE_NODE_FALLBACK
-#error "node-backed wrong-schema source row did not preserve an empty define"
-#endif
-
-#if LM_TEST_DEFINE_JOINED != 29
-#error "joined source row did not fall back to its facade value"
-#endif
-
-#ifdef LM_TEST_DEFINE_NONE
-#error "None source cell unexpectedly emitted a define"
-#endif
-
-#if LM_TEST_DEFINE_WIDE_SOURCE != 31
-#error "N-column define.value source row was not emitted"
-#endif
-
-#if LM_TEST_DEFINE_WIDE_DUPLICATE != 37
-#error "duplicate N-column define rows changed value"
-#endif
-
-#ifndef LM_TEST_DEFINE_WIDE_EMPTY
-#error "empty N-column source define was not emitted"
-#endif
-
-#if LM_TEST_DEFINE_WIDE_LATE_NONE != 41
-#error "N-column None row unexpectedly removed an earlier define"
-#endif
-
-#if LM_TEST_DEFINE_WIDE_PHYSICAL != 43
-#error "physical define.value row was not merged with the N-column source"
-#endif
-
-#if LM_TEST_DEFINE_WIDE_JOINED != 47
-#error "joined N-column define row was not emitted"
-#endif
-
-#if LM_TEST_DEFINE_WIDE_SCHEMA_FALLBACK != 53
-#error "wrong-schema N-column source descriptor did not fall back to the facade row"
-#endif
-
-#ifdef LM_TEST_DEFINE_WIDE_NONE
-#error "N-column None source cell unexpectedly emitted a define"
-#endif
-===
+ifdef:
+    `defined(LM_TEST_DEFINE_WIDE_NONE)`:
+        fn: lm_test_define_wide_none_defined () int
+            return: 1
+        end: lm_test_define_wide_none_defined
+    default:
+        fn: lm_test_define_wide_none_defined () int
+            return: 0
+        end: lm_test_define_wide_none_defined
+end: ifdef
 
 external:
     fn: main () int
+        if: c.LM_TEST_DEFINE_SOURCE != 11
+            return: 1
+        if: c.LM_TEST_DEFINE_DUPLICATE != 13
+            return: 2
+        if: lm_test_define_empty_defined() != 1
+            return: 3
+        if: c.LM_TEST_DEFINE_LATE_NONE != 17
+            return: 4
+        if: c.LM_TEST_DEFINE_SCHEMA_FALLBACK != 23
+            return: 5
+        if: lm_test_define_node_fallback_defined() != 1
+            return: 6
+        if: c.LM_TEST_DEFINE_JOINED != 29
+            return: 7
+        if: lm_test_define_none_defined() != 0
+            return: 8
+        if: c.LM_TEST_DEFINE_WIDE_SOURCE != 31
+            return: 9
+        if: c.LM_TEST_DEFINE_WIDE_DUPLICATE != 37
+            return: 10
+        if: lm_test_define_wide_empty_defined() != 1
+            return: 11
+        if: c.LM_TEST_DEFINE_WIDE_LATE_NONE != 41
+            return: 12
+        if: c.LM_TEST_DEFINE_WIDE_PHYSICAL != 43
+            return: 13
+        if: c.LM_TEST_DEFINE_WIDE_JOINED != 47
+            return: 14
+        if: c.LM_TEST_DEFINE_WIDE_SCHEMA_FALLBACK != 53
+            return: 15
+        if: lm_test_define_wide_none_defined() != 0
+            return: 16
         return: 0
     end: main
 end: external

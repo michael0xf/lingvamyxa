@@ -30,13 +30,19 @@ end: ifdef
 
 ifdef
 
-L1:
-===
-int main(void) {
-#if FEATURE_28
-    return lm_lmx_message_thread_run_entry(lm_test_ifdef_join_order_value) != 81;
-#else
-    return lm_lmx_message_thread_run_entry(lm_test_ifdef_join_order_value) != 84;
-#endif
-}
-===
+ifdef:
+    FEATURE_28:
+        fn: lm_test_ifdef_join_order_expected () int
+            return: 81
+        end: lm_test_ifdef_join_order_expected
+    default:
+        fn: lm_test_ifdef_join_order_expected () int
+            return: 84
+        end: lm_test_ifdef_join_order_expected
+end: ifdef
+
+external:
+    fn: main () int
+        return: lm_test_ifdef_join_order_value() != lm_test_ifdef_join_order_expected()
+    end: main
+end: external
