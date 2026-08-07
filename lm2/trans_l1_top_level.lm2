@@ -852,6 +852,49 @@ fn: lm_trans_emit_raw_callable_return_suffix (FILE: file; const: (LmTransNamespa
     lm_own_delete(descriptor_cstr, 0)
 return: status
 
+fn: lm_trans_function_c_calling_convention (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: function_name
+) const: @: char
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, function_name, "fn.c.calling-convention", "class", "class", "convention", "callingConvention")
+
+fn: lm_trans_prepare_function_c_calling_convention (
+    FILE: file
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: function_name
+    int: raw_return
+) int
+    const: @: char convention
+
+    if: file = 0 || function_name = 0
+        return: 1
+
+    convention: lm_trans_function_c_calling_convention(namespace_, function_name)
+    if: convention = 0
+        return: 0
+    if: c.strcmp(convention, "c.stdcall") != 0
+        c.fprintf(c.stderr, "trans L2 error: function \"%.*s\" has unsupported fn.c.calling-convention \"%s\"\n", (cast: int function_name\length), function_name\data, convention)
+        return: 1
+    if: raw_return
+        c.fprintf(c.stderr, "trans L2 error: function \"%.*s\" cannot combine fn.c.calling-convention with a raw callable return\n", (cast: int function_name\length), function_name\data)
+        return: 1
+    if: lm_trans_emitted_c_calling_convention_prelude
+        return: 0
+    if: lm_trans_put(lm_trans_prelude_file(file), "#ifndef LM_LMX_ABI_STDCALL\n#if defined(_WIN32)\n#define LM_LMX_ABI_STDCALL __stdcall\n#else\n#define LM_LMX_ABI_STDCALL\n#endif\n#endif\n") != 0
+        return: 1
+
+    lm_trans_emitted_c_calling_convention_prelude: 1
+return: 0
+
+fn: lm_trans_emit_function_c_calling_convention (
+    FILE: file
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: function_name
+) int
+    if: lm_trans_function_c_calling_convention(namespace_, function_name) = 0
+        return: 0
+return: lm_trans_put(file, "LM_LMX_ABI_STDCALL ")
+
 fn: lm_trans_emit_function_prototype (FILE: file; const: (LmTransFunctionHeader: function); LmTransNamespace: namespace_) int
     int: status
     int: raw_return
@@ -867,6 +910,9 @@ fn: lm_trans_emit_function_prototype (FILE: file; const: (LmTransFunctionHeader:
     if: raw_return_descriptor_name = 0
         return: 1
     raw_return: lm_trans_function_raw_return_descriptor_name(function, namespace_, raw_return_descriptor_name)
+    if: lm_trans_prepare_function_c_calling_convention(file, namespace_, function\name, raw_return) != 0
+        lm_trans_text_ref_destroy(@ raw_return_descriptor_name)
+        return: 1
 
     if: function\is_sub
         if: function\is_external = 0 && lm_trans_put(file, "static ") != 0
@@ -906,7 +952,7 @@ fn: lm_trans_emit_function_prototype (FILE: file; const: (LmTransFunctionHeader:
                     return: 1
     ---
 
-    if: lm_trans_write_text(file, function\c_name) != 0 || lm_trans_put(file, "(") != 0
+    if: lm_trans_emit_function_c_calling_convention(file, namespace_, function\name) != 0 || lm_trans_write_text(file, function\c_name) != 0 || lm_trans_put(file, "(") != 0
         lm_trans_text_ref_destroy(@ raw_return_descriptor_name)
         return: 1
 
@@ -1410,6 +1456,17 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
         lm_trans_ptr_stack_delete(@ hoisted_functions)
         return: 1
 
+    raw_return_descriptor_name: lm_trans_text_ref_new_cstr("")
+    if: raw_return_descriptor_name = 0
+        lm_trans_ptr_stack_delete(@ hoisted_functions)
+        return: 1
+    raw_return: lm_trans_function_raw_return_descriptor_name(function, namespace_, raw_return_descriptor_name)
+    lm_trans_text_ref_destroy(@ raw_return_descriptor_name)
+    raw_return_descriptor_name: 0
+    if: lm_trans_prepare_function_c_calling_convention(file, namespace_, function\name, raw_return) != 0
+        lm_trans_ptr_stack_delete(@ hoisted_functions)
+        return: 1
+
     if: lm_trans_emit_env_type(file, function, namespace_) != 0
         lm_trans_ptr_stack_delete(@ hoisted_functions)
         return: 1
@@ -1466,7 +1523,7 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
             return: 1
     ---
 
-    if: lm_trans_write_text(file, function\c_name) != 0
+    if: lm_trans_emit_function_c_calling_convention(file, namespace_, function\name) != 0 || lm_trans_write_text(file, function\c_name) != 0
         lm_trans_ptr_stack_delete(@ hoisted_functions)
         return: 1
     if: lm_trans_put(file, "(") != 0

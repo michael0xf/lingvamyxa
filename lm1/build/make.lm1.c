@@ -73,6 +73,33 @@ typedef int (*LmLmxMessageThreadEntry)(struct LmMessageThread *thread);
 #else
 #define LM_LMX_UNUSED_ENTRY_HELPER
 #endif
+static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_invoke_diagnostic(
+    struct LmMessageThread *thread,
+    void (*entry)(struct LmMessageThread *, void *),
+    void *argument
+) {
+    LmMessageThreadExecutionContext *context;
+    void *previous;
+    int status = 0;
+    if (thread == 0 || entry == 0) {
+        return 1;
+    }
+    context = (LmMessageThreadExecutionContext *)calloc(1U, sizeof(*context));
+    if (context == 0) {
+        lm_message_thread_request_failure(thread, 1);
+        return 1;
+    }
+    previous = lm_message_thread_set_execution_context(thread, context);
+    if (setjmp(context->diagnostic_root) == 0) {
+        entry(thread, argument);
+    } else {
+        status = context->diagnostic_code == 0 ? 1 : context->diagnostic_code;
+        lm_message_thread_request_failure(thread, status);
+    }
+    (void)lm_message_thread_set_execution_context(thread, previous);
+    free(context);
+    return status;
+}
 static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmLmxMessageThreadEntry entry) {
     struct LmMessageThread *thread;
     struct LmMessageThreadRuntime *runtime;

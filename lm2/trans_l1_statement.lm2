@@ -632,6 +632,60 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "#endif\n") != 0
         return: 1
+    if: lm_trans_put(file, "static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_invoke_diagnostic(\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    struct LmMessageThread *thread,\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    void (*entry)(struct LmMessageThread *, void *),\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    void *argument\n") != 0
+        return: 1
+    if: lm_trans_put(file, ") {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    LmMessageThreadExecutionContext *context;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    void *previous;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    int status = 0;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (thread == 0 || entry == 0) {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        return 1;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    }\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    context = (LmMessageThreadExecutionContext *)calloc(1U, sizeof(*context));\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (context == 0) {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        lm_message_thread_request_failure(thread, 1);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        return 1;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    }\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    previous = lm_message_thread_set_execution_context(thread, context);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (setjmp(context->diagnostic_root) == 0) {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        entry(thread, argument);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    } else {\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        status = context->diagnostic_code == 0 ? 1 : context->diagnostic_code;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "        lm_message_thread_request_failure(thread, status);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    }\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    (void)lm_message_thread_set_execution_context(thread, previous);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    free(context);\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    return status;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "}\n") != 0
+        return: 1
     if: lm_trans_put(file, "static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmLmxMessageThreadEntry entry) {\n") != 0
         return: 1
     if: lm_trans_put(file, "    struct LmMessageThread *thread;\n") != 0

@@ -73,6 +73,33 @@ typedef int (*LmLmxMessageThreadEntry)(struct LmMessageThread *thread);
 #else
 #define LM_LMX_UNUSED_ENTRY_HELPER
 #endif
+static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_invoke_diagnostic(
+    struct LmMessageThread *thread,
+    void (*entry)(struct LmMessageThread *, void *),
+    void *argument
+) {
+    LmMessageThreadExecutionContext *context;
+    void *previous;
+    int status = 0;
+    if (thread == 0 || entry == 0) {
+        return 1;
+    }
+    context = (LmMessageThreadExecutionContext *)calloc(1U, sizeof(*context));
+    if (context == 0) {
+        lm_message_thread_request_failure(thread, 1);
+        return 1;
+    }
+    previous = lm_message_thread_set_execution_context(thread, context);
+    if (setjmp(context->diagnostic_root) == 0) {
+        entry(thread, argument);
+    } else {
+        status = context->diagnostic_code == 0 ? 1 : context->diagnostic_code;
+        lm_message_thread_request_failure(thread, status);
+    }
+    (void)lm_message_thread_set_execution_context(thread, previous);
+    free(context);
+    return status;
+}
 static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmLmxMessageThreadEntry entry) {
     struct LmMessageThread *thread;
     struct LmMessageThreadRuntime *runtime;
@@ -2655,6 +2682,8 @@ static int lm_trans_emitted_message_thread_main_helper;
 
 static int lm_trans_emitted_message_thread_assert_helper;
 
+static int lm_trans_emitted_c_calling_convention_prelude;
+
 static unsigned lm_trans_next_callable_adapter_id;
 
 static unsigned lm_trans_next_array_value_helper_id;
@@ -3559,6 +3588,9 @@ static int lm_trans_function_raw_return_descriptor_name(struct LmMessageThread *
 static int lm_trans_emit_array_param_aliases(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransFunctionHeader *function, unsigned indent, const LmTransNamespace *namespace_);
 static int lm_trans_emit_raw_callable_return_prefix(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransNamespace *namespace_, const LmP0Text *descriptor_name);
 static int lm_trans_emit_raw_callable_return_suffix(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransNamespace *namespace_, const LmP0Text *descriptor_name);
+static const char * lm_trans_function_c_calling_convention(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *function_name);
+static int lm_trans_prepare_function_c_calling_convention(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransNamespace *namespace_, const LmP0Text *function_name, int raw_return);
+static int lm_trans_emit_function_c_calling_convention(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransNamespace *namespace_, const LmP0Text *function_name);
 static int lm_trans_emit_function_prototype(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransFunctionHeader *function, LmTransNamespace *namespace_);
 static int lm_trans_top_level_emit_function_prototype(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
 static int lm_trans_top_level_emit_function(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransNamespace *namespace_, const LmTransTopLevelItem *item);
@@ -19585,6 +19617,87 @@ static int lm_trans_emit_message_thread_runtime_prelude(struct LmMessageThread *
     if (lm_trans_put(lm_lmx_message_thread, file, "#endif\n") != 0) {
         return 1;
     }
+    if (lm_trans_put(lm_lmx_message_thread, file, "static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_invoke_diagnostic(\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    struct LmMessageThread *thread,\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    void (*entry)(struct LmMessageThread *, void *),\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    void *argument\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, ") {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    LmMessageThreadExecutionContext *context;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    void *previous;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    int status = 0;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    if (thread == 0 || entry == 0) {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "        return 1;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    }\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    context = (LmMessageThreadExecutionContext *)calloc(1U, sizeof(*context));\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    if (context == 0) {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "        lm_message_thread_request_failure(thread, 1);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "        return 1;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    }\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    previous = lm_message_thread_set_execution_context(thread, context);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    if (setjmp(context->diagnostic_root) == 0) {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "        entry(thread, argument);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    } else {\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "        status = context->diagnostic_code == 0 ? 1 : context->diagnostic_code;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "        lm_message_thread_request_failure(thread, status);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    }\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    (void)lm_message_thread_set_execution_context(thread, previous);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    free(context);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    return status;\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "}\n") != 0) {
+        return 1;
+    }
     if (lm_trans_put(lm_lmx_message_thread, file, "static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmLmxMessageThreadEntry entry) {\n") != 0) {
         return 1;
     }
@@ -32274,6 +32387,47 @@ static int lm_trans_emit_raw_callable_return_suffix(struct LmMessageThread *lm_l
     return status;
 }
 
+static const char * lm_trans_function_c_calling_convention(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *function_name) {
+    (void)lm_lmx_message_thread;
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(lm_lmx_message_thread, namespace_, function_name, "fn.c.calling-convention", "class", "class", "convention", "callingConvention");
+}
+
+static int lm_trans_prepare_function_c_calling_convention(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransNamespace *namespace_, const LmP0Text *function_name, int raw_return) {
+    (void)lm_lmx_message_thread;
+    const char *convention;
+    if (file == 0 || function_name == 0) {
+        return 1;
+    }
+    convention = lm_trans_function_c_calling_convention(lm_lmx_message_thread, namespace_, function_name);
+    if (convention == 0) {
+        return 0;
+    }
+    if (strcmp(convention, "c.stdcall") != 0) {
+        fprintf(stderr, "trans L2 error: function \"%.*s\" has unsupported fn.c.calling-convention \"%s\"\n", (((int)function_name -> length)), function_name -> data, convention);
+        return 1;
+    }
+    if (raw_return) {
+        fprintf(stderr, "trans L2 error: function \"%.*s\" cannot combine fn.c.calling-convention with a raw callable return\n", (((int)function_name -> length)), function_name -> data);
+        return 1;
+    }
+    if (lm_trans_emitted_c_calling_convention_prelude) {
+        return 0;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, lm_trans_prelude_file(lm_lmx_message_thread, file), "#ifndef LM_LMX_ABI_STDCALL\n#if defined(_WIN32)\n#define LM_LMX_ABI_STDCALL __stdcall\n#else\n#define LM_LMX_ABI_STDCALL\n#endif\n#endif\n") != 0) {
+        return 1;
+    }
+    lm_trans_emitted_c_calling_convention_prelude = 1;
+    return 0;
+}
+
+static int lm_trans_emit_function_c_calling_convention(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransNamespace *namespace_, const LmP0Text *function_name) {
+    (void)lm_lmx_message_thread;
+    if (lm_trans_function_c_calling_convention(lm_lmx_message_thread, namespace_, function_name) == 0) {
+        return 0;
+    }
+    return lm_trans_put(lm_lmx_message_thread, file, "LM_LMX_ABI_STDCALL ");
+}
+
 static int lm_trans_emit_function_prototype(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransFunctionHeader *function, LmTransNamespace *namespace_) {
     (void)lm_lmx_message_thread;
     int status;
@@ -32290,6 +32444,10 @@ static int lm_trans_emit_function_prototype(struct LmMessageThread *lm_lmx_messa
         return 1;
     }
     raw_return = lm_trans_function_raw_return_descriptor_name(lm_lmx_message_thread, function, namespace_, raw_return_descriptor_name);
+    if (lm_trans_prepare_function_c_calling_convention(lm_lmx_message_thread, file, namespace_, function -> name, raw_return) != 0) {
+        lm_trans_text_ref_destroy(&raw_return_descriptor_name);
+        return 1;
+    }
     if (function -> is_sub) {
         if (function -> is_external == 0 && lm_trans_put(lm_lmx_message_thread, file, "static ") != 0) {
             lm_trans_text_ref_destroy(&raw_return_descriptor_name);
@@ -32338,7 +32496,7 @@ static int lm_trans_emit_function_prototype(struct LmMessageThread *lm_lmx_messa
             }
         }
     }
-    if (lm_trans_write_text(lm_lmx_message_thread, file, function -> c_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "(") != 0) {
+    if (lm_trans_emit_function_c_calling_convention(lm_lmx_message_thread, file, namespace_, function -> name) != 0 || lm_trans_write_text(lm_lmx_message_thread, file, function -> c_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "(") != 0) {
         lm_trans_text_ref_destroy(&raw_return_descriptor_name);
         return 1;
     }
@@ -32904,6 +33062,18 @@ static int lm_trans_emit_function_with_hoisted(struct LmMessageThread *lm_lmx_me
         lm_trans_ptr_stack_delete(&hoisted_functions);
         return 1;
     }
+    raw_return_descriptor_name = lm_trans_text_ref_new_cstr("");
+    if (raw_return_descriptor_name == 0) {
+        lm_trans_ptr_stack_delete(&hoisted_functions);
+        return 1;
+    }
+    raw_return = lm_trans_function_raw_return_descriptor_name(lm_lmx_message_thread, function, namespace_, raw_return_descriptor_name);
+    lm_trans_text_ref_destroy(&raw_return_descriptor_name);
+    raw_return_descriptor_name = 0;
+    if (lm_trans_prepare_function_c_calling_convention(lm_lmx_message_thread, file, namespace_, function -> name, raw_return) != 0) {
+        lm_trans_ptr_stack_delete(&hoisted_functions);
+        return 1;
+    }
     if (lm_trans_emit_env_type(lm_lmx_message_thread, file, function, namespace_) != 0) {
         lm_trans_ptr_stack_delete(&hoisted_functions);
         return 1;
@@ -32970,7 +33140,7 @@ static int lm_trans_emit_function_with_hoisted(struct LmMessageThread *lm_lmx_me
             return 1;
         }
     }
-    if (lm_trans_write_text(lm_lmx_message_thread, file, function -> c_name) != 0) {
+    if (lm_trans_emit_function_c_calling_convention(lm_lmx_message_thread, file, namespace_, function -> name) != 0 || lm_trans_write_text(lm_lmx_message_thread, file, function -> c_name) != 0) {
         lm_trans_ptr_stack_delete(&hoisted_functions);
         return 1;
     }
@@ -38558,6 +38728,9 @@ static int lm_trans_emit_l4_prototype_name(struct LmMessageThread *lm_lmx_messag
     if (has_thread_context && lm_trans_emit_message_thread_runtime_prelude(lm_lmx_message_thread, lm_trans_prelude_file(lm_lmx_message_thread, file)) != 0) {
         return 1;
     }
+    if (lm_trans_prepare_function_c_calling_convention(lm_lmx_message_thread, file, namespace_, lm_trans_text_from_cstr(lm_lmx_message_thread, name), 0) != 0) {
+        return 1;
+    }
     param_capacity = 256U;
     params = lm_trans_l4_abi_params_new(lm_lmx_message_thread, param_capacity);
     if (params == 0) {
@@ -38577,6 +38750,9 @@ static int lm_trans_emit_l4_prototype_name(struct LmMessageThread *lm_lmx_messag
         status = 1;
     }
     if (status == 0 && lm_trans_put(lm_lmx_message_thread, file, " ") != 0) {
+        status = 1;
+    }
+    if (status == 0 && lm_trans_emit_function_c_calling_convention(lm_lmx_message_thread, file, namespace_, lm_trans_text_from_cstr(lm_lmx_message_thread, name)) != 0) {
         status = 1;
     }
     if (status == 0 && is_external && lm_trans_put(lm_lmx_message_thread, file, "(") != 0) {
@@ -41087,6 +41263,7 @@ static int lm_trans_emit_document(struct LmMessageThread *lm_lmx_message_thread,
     lm_trans_emitted_message_thread_runtime_prelude = 0;
     lm_trans_emitted_message_thread_main_helper = 0;
     lm_trans_emitted_message_thread_assert_helper = 0;
+    lm_trans_emitted_c_calling_convention_prelude = 0;
     lm_trans_l2_table_materialization_suppression_depth = 0;
     lm_trans_l2_conditional_import_depth = 0;
     lm_trans_l2_executable_statement_depth = 0;

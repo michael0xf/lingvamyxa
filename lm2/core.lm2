@@ -84,10 +84,13 @@ table:
              `class.present`            relation
              `class.reference-base`      relation
              `fn.descriptor`            relation
+             `fn.c.calling-convention`  relation
 
              ubPattern                  class
              validatorPolicy            class
              profileRule                class
+             callingConvention          class
+             `c.stdcall`                callingConvention
              diagnostic                 validatorPolicy
              checked                    validatorPolicy
              `profile-defined`          validatorPolicy

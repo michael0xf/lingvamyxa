@@ -1,0 +1,24 @@
+table:
+    name: class
+    columns((class: class) (class: kind))
+    rows:
+             c.fastcall  callingConvention
+end: class
+
+table:
+    source
+    name: `fn.c.calling-convention`
+    columns((class: class) (callingConvention: convention))
+    rows:
+             lm_test_unsupported_calling_convention  c.fastcall
+end: `fn.c.calling-convention`
+
+fn: lm_test_unsupported_calling_convention () int
+    return: 0
+end: lm_test_unsupported_calling_convention
+
+external:
+    fn: main () int
+        return: lm_test_unsupported_calling_convention()
+    end: main
+end: external

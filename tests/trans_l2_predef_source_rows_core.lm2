@@ -23,6 +23,10 @@ fn: lm_test_l2_default_core_is_source_table () int
     const: LmTableRow: row
     const: LmTableCell: key_cell
     const: LmTableCell: value_cell
+    const: @: char right_kind
+    const: @: char calling_relation_kind
+    const: @: char calling_domain_kind
+    const: @: char stdcall_kind
 
     descriptor: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "class", 5U)
     if: descriptor = 0 || lm_table_descriptor_column_count(descriptor) != 2U || lm_table_descriptor_materialized_row_count(descriptor) < 180U
@@ -39,10 +43,11 @@ fn: lm_test_l2_default_core_is_source_table () int
     if: key_cell = 0 || key_cell\value = 0 || c.strcmp(key_cell\value, "class") != 0 || value_cell = 0 || value_cell\value = 0 || c.strcmp(value_cell\value, "core") != 0
         return: 0
 
-    row: lm_table_descriptor_materialized_row_at(descriptor, 179U)
-    key_cell: lm_table_row_cell_at(row, 0U)
-    value_cell: lm_table_row_cell_at(row, 1U)
-return: key_cell != 0 && key_cell\value != 0 && c.strcmp(key_cell\value, "right") = 0 && value_cell != 0 && value_cell\value != 0 && c.strcmp(value_cell\value, "relation") = 0
+    right_kind: lm_trans_registry_lookup_exact(lm_trans_text_from_cstr("right"), "class")
+    calling_relation_kind: lm_trans_registry_lookup_exact(lm_trans_text_from_cstr("fn.c.calling-convention"), "class")
+    calling_domain_kind: lm_trans_registry_lookup_exact(lm_trans_text_from_cstr("callingConvention"), "class")
+    stdcall_kind: lm_trans_registry_lookup_exact(lm_trans_text_from_cstr("c.stdcall"), "class")
+return: right_kind != 0 && c.strcmp(right_kind, "relation") = 0 && calling_relation_kind != 0 && c.strcmp(calling_relation_kind, "relation") = 0 && calling_domain_kind != 0 && c.strcmp(calling_domain_kind, "class") = 0 && stdcall_kind != 0 && c.strcmp(stdcall_kind, "callingConvention") = 0
 
 fn: lm_test_l2_bootstrap_join_is_exact () int
     const: LmTableDescriptor: source

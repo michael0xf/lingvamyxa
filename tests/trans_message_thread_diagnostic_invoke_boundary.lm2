@@ -1,0 +1,69 @@
+L2:
+    predef: "lm2/own_abi.lm2"
+    include
+    alias
+    forward
+    constant
+    fn
+    layout
+    prototype
+
+    sub: lm_test_diagnostic_boundary_success (@: void argument)
+        @: int marker
+
+        marker: argument
+        if: marker = 0 || lm_message_thread_execution_context(c.lm_lmx_message_thread) = 0
+            return
+        marker[0]: 11
+    end: lm_test_diagnostic_boundary_success
+
+    sub: lm_test_diagnostic_boundary_failure (@: void argument)
+        @: int marker
+
+        marker: argument
+        if: marker = 0
+            return
+        marker[0]: 21
+        assert: 0
+        marker[0]: 22
+    end: lm_test_diagnostic_boundary_failure
+
+    external:
+        fn: main () int
+            LmMessageThread: thread 0
+            @: void previous 0
+            int: sentinel 0
+            int: marker 0
+            int: status 0
+
+            thread: lm_message_thread_new()
+            if: thread = 0
+                return: 1
+
+            previous: lm_message_thread_set_execution_context(thread, @ sentinel)
+            if: previous != 0 || lm_message_thread_execution_context(thread) != @ sentinel
+                lm_message_thread_delete(thread)
+                return: 2
+
+            status: c.lm_lmx_message_thread_invoke_diagnostic(thread, @ lm_test_diagnostic_boundary_success, @ marker)
+            if: status != 0 || marker != 11 || lm_message_thread_execution_context(thread) != @ sentinel || lm_message_thread_is_running(thread) = 0
+                lm_message_thread_delete(thread)
+                return: 3
+
+            status: c.lm_lmx_message_thread_invoke_diagnostic(thread, 0, @ marker)
+            if: status != 1 || lm_message_thread_execution_context(thread) != @ sentinel || lm_message_thread_is_running(thread) = 0
+                lm_message_thread_delete(thread)
+                return: 4
+
+            marker: 0
+            status: c.lm_lmx_message_thread_invoke_diagnostic(thread, @ lm_test_diagnostic_boundary_failure, @ marker)
+            if: status != 1 || marker != 21 || lm_message_thread_execution_context(thread) != @ sentinel || lm_message_thread_status(thread) != 1 || lm_message_thread_is_running(thread)
+                lm_message_thread_delete(thread)
+                return: 5
+
+            lm_message_thread_set_execution_context(thread, 0)
+            lm_message_thread_delete(thread)
+            return: 0
+        end: main
+    end: external
+end: L2
