@@ -662,11 +662,20 @@ table:
 end: LmTransDescriptorField
 
 table:
+    name: LmTransDescriptorRelation
+    columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
+    rows:
+             relation  char                   0                       1                                0
+             payload   char                   1                       1                                0
+end: LmTransDescriptorRelation
+
+table:
     name: LmTransDescriptor
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
              structural_fields       LmOwnPtrStack          0                       0                                0
              has_structural_fields   int                    1                       0                                0
+             class_relations         LmOwnPtrStack          2                       0                                0
 end: LmTransDescriptor
 
 table:

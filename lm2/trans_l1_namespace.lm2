@@ -209,6 +209,20 @@ fn: lm_trans_descriptor_name_copy (const: (LmP0Text: name)) @: char
     lm_trans_text_ref_destroy(@ payload)
 return: copy
 
+fn: lm_trans_descriptor_cstr_copy (const: @(char value)) @: char
+    @: char copy
+    size_t: value_length
+
+    if: value = 0 || value[0] = '\\0'
+        return: 0
+
+    value_length: c.strlen(value)
+    copy: lm_own_new_zero(value_length + 1U)
+    if: copy = 0
+        return: 0
+    c.memcpy(copy, value, value_length + 1U)
+return: copy
+
 sub: lm_trans_descriptor_field_delete_any (@: void object)
     LmTransDescriptorField: field
 
@@ -221,9 +235,22 @@ sub: lm_trans_descriptor_field_delete_any (@: void object)
     lm_own_delete(field, 0)
 end: lm_trans_descriptor_field_delete_any
 
+sub: lm_trans_descriptor_relation_delete_any (@: void object)
+    LmTransDescriptorRelation: relation
+
+    relation: object
+    if: relation != 0
+        lm_own_delete(relation\relation, 0)
+        relation\relation: 0
+        lm_own_delete(relation\payload, 0)
+        relation\payload: 0
+    lm_own_delete(relation, 0)
+end: lm_trans_descriptor_relation_delete_any
+
 sub: lm_trans_descriptor_delete (LmTransDescriptor: descriptor)
     if: descriptor != 0
         lm_trans_ptr_stack_delete(@ descriptor\structural_fields)
+        lm_trans_ptr_stack_delete(@ descriptor\class_relations)
         descriptor\has_structural_fields: 0
     lm_own_delete(descriptor, 0)
 end: lm_trans_descriptor_delete
@@ -243,6 +270,10 @@ fn: lm_trans_descriptor_new () LmTransDescriptor
         return: 0
     descriptor\structural_fields: lm_trans_ptr_stack_new(lm_trans_descriptor_field_delete_any)
     if: descriptor\structural_fields = 0
+        lm_trans_descriptor_delete(descriptor)
+        return: 0
+    descriptor\class_relations: lm_trans_ptr_stack_new(lm_trans_descriptor_relation_delete_any)
+    if: descriptor\class_relations = 0
         lm_trans_descriptor_delete(descriptor)
         return: 0
 return: descriptor
@@ -308,6 +339,76 @@ fn: lm_trans_descriptor_structural_field (
             return: field
         ---
 return: 0
+
+fn: lm_trans_descriptor_relation_find (
+    const: LmTransDescriptor: descriptor
+    const: @(char relation_name)
+) const: LmTransDescriptorRelation
+    size_t: i
+    const: LmTransDescriptorRelation: relation
+
+    if: descriptor = 0 || descriptor\class_relations = 0 || relation_name = 0 || relation_name[0] = '\\0'
+        return: 0
+
+    i: descriptor\class_relations\count
+    while: i != 0U
+        i: i - 1U
+        relation: lm_own_ptr_stack_at(descriptor\class_relations, i)
+        if: relation != 0 && relation\relation != 0 && c.strcmp(relation\relation, relation_name) = 0
+            return: relation
+        ---
+return: 0
+
+fn: lm_trans_descriptor_set_class_relation (
+    LmTransDescriptor: descriptor
+    const: @(char relation_name)
+    const: @(char payload)
+) int
+    LmTransDescriptorRelation: relation
+    @: char relation_copy
+    @: char payload_copy
+
+    if: descriptor = 0 || descriptor\class_relations = 0 || relation_name = 0 || relation_name[0] = '\\0' || payload = 0
+        return: 1
+
+    relation: lm_trans_descriptor_relation_find(descriptor, relation_name)
+    if: relation != 0
+        lm_own_delete(relation\payload, 0)
+        payload_copy: lm_trans_descriptor_cstr_copy(payload)
+        if: payload_copy = 0
+            return: 1
+        relation\payload: payload_copy
+        return: 0
+
+    relation: lm_own_new_zero(c.sizeof(relation[0]))
+    if: relation = 0
+        return: 1
+    relation_copy: lm_trans_descriptor_cstr_copy(relation_name)
+    payload_copy: lm_trans_descriptor_cstr_copy(payload)
+    if: relation_copy = 0 || payload_copy = 0
+        if: relation_copy != 0
+            lm_own_delete(relation_copy, 0)
+        if: payload_copy != 0
+            lm_own_delete(payload_copy, 0)
+        lm_trans_descriptor_relation_delete_any(cast: (@: void) relation)
+        return: 1
+    relation\relation: relation_copy
+    relation\payload: payload_copy
+    if: lm_own_ptr_stack_push(descriptor\class_relations, relation) != 0
+        lm_trans_descriptor_relation_delete_any(cast: (@: void) relation)
+        return: 1
+return: 0
+
+fn: lm_trans_descriptor_class_relation_value (
+    const: LmTransDescriptor: descriptor
+    const: @(char relation_name)
+) const: @: char
+    const: LmTransDescriptorRelation: relation
+
+    relation: lm_trans_descriptor_relation_find(descriptor, relation_name)
+    if: relation = 0 || relation\payload = 0
+        return: 0
+return: relation\payload
 
 fn: lm_trans_function_state_new () LmTransFunctionState
     return: lm_own_new_zero(c.sizeof(c.LmTransFunctionState))
@@ -1706,6 +1807,55 @@ fn: lm_trans_namespace_materialize_class_relation_stack (LmTransNamespace: names
     lm_own_delete(relation_path, 0)
 return: rows
 
+fn: lm_trans_namespace_relation_name_is_class_metadata (const: @(char relation_name)) int
+    if: relation_name = 0
+        return: 0
+return: c.strncmp(relation_name, "class.", 6) = 0
+
+fn: lm_trans_namespace_materialize_class_descriptor_relations (
+    const: LmTransNamespace: namespace_
+    const: (LmP0Text: class_name)
+    LmTransDescriptor: descriptor
+) int
+    LmTransIdentifierTable: identifiers
+    LmTransIdentifierCard: class_card
+    LmTransIdentifierRelation: relation
+    const: LmOwnPtrStack: rows
+    const: LmTransRegistryFact: latest_row
+    size_t: relation_bucket_index
+
+    if: namespace_ = 0 || class_name = 0 || class_name\data = 0 || descriptor = 0
+        return: 1
+    if: descriptor\class_relations = 0
+        descriptor\class_relations: lm_trans_ptr_stack_new(lm_trans_descriptor_relation_delete_any)
+        if: descriptor\class_relations = 0
+            return: 1
+
+    identifiers: namespace_\registry_identifiers
+    class_card: 0
+    if: identifiers != 0
+        class_card: lm_trans_identifier_table_find_card(identifiers, class_name)
+    if: class_card = 0 && c.lm_trans_registry != 0 && c.lm_trans_registry\identifiers != 0 && c.lm_trans_registry->identifiers != identifiers
+        class_card: lm_trans_identifier_table_find_card(c.lm_trans_registry->identifiers, class_name)
+
+    if: class_card = 0
+        return: 0
+
+    relation_bucket_index: 0U
+    while: relation_bucket_index < class_card\relation_bucket_count
+        relation: class_card\relation_buckets[relation_bucket_index]
+        while: relation != 0
+            if: lm_trans_namespace_relation_name_is_class_metadata(relation\name) != 0
+                rows: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, relation\name)
+                if: rows != 0
+                    latest_row: lm_trans_registry_relation_stack_latest_row(rows, class_name)
+                    if: latest_row != 0 && latest_row\payload != 0
+                        if: lm_trans_descriptor_set_class_relation(descriptor, relation\name, latest_row\payload) != 0
+                            return: 1
+            relation: relation\next
+        relation_bucket_index: relation_bucket_index + 1U
+    return: 0
+
 fn: lm_trans_namespace_materialize_class_typed_relation_value (
     const: (LmTransNamespace: namespace_)
     const: (LmP0Text: owner)
@@ -1836,6 +1986,7 @@ fn: lm_trans_namespace_materialize_class_descriptors (LmTransNamespace: namespac
     LmP0Text: class_name
     LmP0Text: field_name
     LmTransDescriptor: descriptor
+    int: descriptor_is_new
 
     class_present_table: "class.present"
     class_present_text: lm_trans_text_from_cstr(class_present_table)
@@ -1868,9 +2019,6 @@ fn: lm_trans_namespace_materialize_class_descriptors (LmTransNamespace: namespac
         if: lm_trans_is_c_reference_name(class_name) != 0
             class_index: class_index + 1U
             continue
-        if: lm_trans_namespace_descriptor(namespace_, class_name) != 0
-            class_index: class_index + 1U
-            continue
 
         seen_name: lm_trans_text_copy_cstr(class_name)
         if: seen_name = 0
@@ -1896,69 +2044,79 @@ fn: lm_trans_namespace_materialize_class_descriptors (LmTransNamespace: namespac
         const_rows: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, "field.const")
         array_count_rows: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, "field.array-count")
 
-        descriptor: lm_trans_descriptor_new()
-        finally: lm_trans_descriptor_delete(descriptor)
-        if: descriptor = 0 || lm_trans_descriptor_mark_structural_fields(descriptor) != 0
+        descriptor: lm_trans_namespace_descriptor(namespace_, class_name)
+        descriptor_is_new: 0
+        if: descriptor = 0
+            descriptor: lm_trans_descriptor_new()
+            if: descriptor = 0 || lm_trans_descriptor_mark_structural_fields(descriptor) != 0
+                return: 1
+            descriptor_is_new: 1
+            finally: if: descriptor_is_new != 0
+                        lm_trans_descriptor_delete(descriptor)
+
+        if: lm_trans_namespace_materialize_class_descriptor_relations(namespace_, class_name, descriptor) != 0
             return: 1
 
-        seen_fields: lm_trans_ptr_stack_new(c.lm_own_delete_plain)
-        if: seen_fields = 0
-            return: 1
-        finally: lm_trans_ptr_stack_delete(@ seen_fields)
+        if: descriptor\has_structural_fields != 0 && descriptor\structural_fields != 0
+            seen_fields: lm_trans_ptr_stack_new(c.lm_own_delete_plain)
+            if: seen_fields = 0
+                return: 1
+            finally: lm_trans_ptr_stack_delete(@ seen_fields)
 
-        if: class_rows_fields != 0
-            field_index: 0U
-            while: field_index < class_rows_fields\count
-                field_row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(class_rows_fields, field_index))
-                if: field_row != 0 && field_row\key != 0 && field_row\payload != 0
-                    field_name: lm_trans_text_from_cstr(field_row\key)
-                    if: field_name = 0
-                        return: 1
-                    finally: lm_trans_text_ref_destroy(@ field_name)
+            if: class_rows_fields != 0
+                field_index: 0U
+                while: field_index < class_rows_fields\count
+                    field_row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(class_rows_fields, field_index))
+                    if: field_row != 0 && field_row\key != 0 && field_row\payload != 0
+                        field_name: lm_trans_text_from_cstr(field_row\key)
+                        if: field_name = 0
+                            return: 1
+                        finally: lm_trans_text_ref_destroy(@ field_name)
 
-                    seen_name_owner: lm_trans_text_copy_cstr(field_name)
-                    if: seen_name_owner = 0
-                        return: 1
-                    if: lm_trans_string_stack_has(seen_fields, seen_name_owner) != 0
-                        lm_own_delete(seen_name_owner, 0)
-                    else:
-                        if: lm_own_ptr_stack_push(seen_fields, seen_name_owner) != 0
+                        seen_name_owner: lm_trans_text_copy_cstr(field_name)
+                        if: seen_name_owner = 0
+                            return: 1
+                        if: lm_trans_string_stack_has(seen_fields, seen_name_owner) != 0
                             lm_own_delete(seen_name_owner, 0)
+                        else:
+                            if: lm_own_ptr_stack_push(seen_fields, seen_name_owner) != 0
+                                lm_own_delete(seen_name_owner, 0)
+                                return: 1
+                            if: lm_trans_namespace_materialize_class_descriptor_add_field(namespace_, class_name, descriptor, field_name, field_row, index_rows, address_depth_rows, const_rows, array_count_rows, "field.class", "field", 0) != 0
+                                return: 1
+                    ---
+                    field_index: field_index + 1U
+                ---
+
+            if: union_rows_fields != 0
+                field_index: 0U
+                while: field_index < union_rows_fields\count
+                    field_row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(union_rows_fields, field_index))
+                    if: field_row != 0 && field_row\key != 0 && field_row\payload != 0
+                        field_name: lm_trans_text_from_cstr(field_row\key)
+                        if: field_name = 0
                             return: 1
-                        if: lm_trans_namespace_materialize_class_descriptor_add_field(namespace_, class_name, descriptor, field_name, field_row, index_rows, address_depth_rows, const_rows, array_count_rows, "field.class", "field", 0) != 0
+                        finally: lm_trans_text_ref_destroy(@ field_name)
+
+                        seen_name_owner: lm_trans_text_copy_cstr(field_name)
+                        if: seen_name_owner = 0
                             return: 1
+                        if: lm_trans_string_stack_has(seen_fields, seen_name_owner) != 0
+                            lm_own_delete(seen_name_owner, 0)
+                        else:
+                            if: lm_own_ptr_stack_push(seen_fields, seen_name_owner) != 0
+                                lm_own_delete(seen_name_owner, 0)
+                                return: 1
+                            if: lm_trans_namespace_materialize_class_descriptor_add_field(namespace_, class_name, descriptor, field_name, field_row, index_rows, address_depth_rows, const_rows, array_count_rows, "field.union", "union", 1) != 0
+                                return: 1
                 ---
                 field_index: field_index + 1U
             ---
 
-        if: union_rows_fields != 0
-            field_index: 0U
-            while: field_index < union_rows_fields\count
-                field_row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(union_rows_fields, field_index))
-                if: field_row != 0 && field_row\key != 0 && field_row\payload != 0
-                    field_name: lm_trans_text_from_cstr(field_row\key)
-                    if: field_name = 0
-                        return: 1
-                    finally: lm_trans_text_ref_destroy(@ field_name)
-
-                    seen_name_owner: lm_trans_text_copy_cstr(field_name)
-                    if: seen_name_owner = 0
-                        return: 1
-                    if: lm_trans_string_stack_has(seen_fields, seen_name_owner) != 0
-                        lm_own_delete(seen_name_owner, 0)
-                    else:
-                        if: lm_own_ptr_stack_push(seen_fields, seen_name_owner) != 0
-                            lm_own_delete(seen_name_owner, 0)
-                            return: 1
-                        if: lm_trans_namespace_materialize_class_descriptor_add_field(namespace_, class_name, descriptor, field_name, field_row, index_rows, address_depth_rows, const_rows, array_count_rows, "field.union", "union", 1) != 0
-                            return: 1
-                ---
-                field_index: field_index + 1U
-            ---
-
-        if: lm_trans_namespace_attach_descriptor(namespace_, class_name, descriptor) != 0
-            return: 1
-        descriptor: 0
+        if: descriptor_is_new != 0
+            if: lm_trans_namespace_attach_descriptor(namespace_, class_name, descriptor) != 0
+                return: 1
+            descriptor: 0
 
         class_index: class_index + 1U
     ---
