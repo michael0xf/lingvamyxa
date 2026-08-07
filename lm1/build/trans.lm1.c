@@ -3431,6 +3431,10 @@ static int lm_trans_registry_key_is_c_surface_name(struct LmMessageThread *lm_lm
 static int lm_trans_namespace_declare_registry_receiver(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const char *name, const char *receiver_type);
 static int lm_trans_namespace_materialize_registry_receiver_facade_rows(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmOwnPtrStack *rows, const char *source_path);
 static int lm_trans_namespace_materialize_registry_receiver_source_path(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmOwnPtrStack *facade_rows, const char *source_path, int materialize);
+static const LmOwnPtrStack * lm_trans_namespace_materialize_class_relation_stack(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmP0Text *owner, const char *relation_name);
+static const char * lm_trans_namespace_materialize_class_typed_relation_value(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *owner, const char *relation_name, const char *n2_value_column_name, const char *value_descriptor, const LmTransRegistryFact *facade_row);
+static int lm_trans_namespace_materialize_class_descriptor_add_field(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmTransDescriptor *descriptor, const LmP0Text *field_name, const LmTransRegistryFact *field_row, const LmOwnPtrStack *index_rows, const LmOwnPtrStack *address_depth_rows, const LmOwnPtrStack *const_rows, const LmOwnPtrStack *array_count_rows, const char *type_relation_name, const char *type_n2_column_name, int is_union);
+static int lm_trans_namespace_materialize_class_descriptors(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_);
 static int lm_trans_namespace_materialize_registry_receivers(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_);
 static int lm_trans_namespace_materialize_registry_heads(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_);
 static int lm_trans_namespace_attach_registry(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_);
@@ -12512,6 +12516,444 @@ static int lm_trans_namespace_materialize_registry_receiver_source_path(struct L
     }
 }
 
+static const LmOwnPtrStack * lm_trans_namespace_materialize_class_relation_stack(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmP0Text *owner, const char *relation_name) {
+    (void)lm_lmx_message_thread;
+    char *relation_path;
+    size_t relation_path_length;
+    const LmOwnPtrStack * rows;
+    if (owner == 0 || owner -> data == 0 || relation_name == 0) {
+        return 0;
+    }
+    rows = lm_trans_namespace_registry_relation_stack(lm_lmx_message_thread, namespace_, owner, relation_name);
+    if (rows != 0) {
+        return rows;
+    }
+    relation_path = lm_trans_registry_source_relation_path_new(lm_lmx_message_thread, owner -> data, relation_name, &relation_path_length);
+    if (relation_path == 0) {
+        return 0;
+    }
+    rows = lm_trans_registry_relation_stack_for_table(lm_lmx_message_thread, relation_path);
+    lm_own_delete(relation_path, 0);
+    return rows;
+}
+
+static const char * lm_trans_namespace_materialize_class_typed_relation_value(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *owner, const char *relation_name, const char *n2_value_column_name, const char *value_descriptor, const LmTransRegistryFact *facade_row) {
+    (void)lm_lmx_message_thread;
+    char *relation_path;
+    size_t relation_path_length;
+    char *value;
+    if (owner == 0 || owner -> data == 0 || relation_name == 0 || n2_value_column_name == 0 || value_descriptor == 0) {
+        return 0;
+    }
+    value = 0;
+    if (facade_row != 0 && facade_row -> payload != 0) {
+        value = facade_row -> payload;
+    }
+    relation_path = lm_trans_registry_source_relation_path_new(lm_lmx_message_thread, owner -> data, relation_name, &relation_path_length);
+    if (relation_path == 0) {
+        return value;
+    }
+    value = lm_trans_namespace_registry_source_path_n2_named_typed_value(lm_lmx_message_thread, namespace_, owner, relation_path, "class", "class", n2_value_column_name, value_descriptor);
+    lm_own_delete(relation_path, 0);
+    return value;
+}
+
+static int lm_trans_namespace_materialize_class_descriptor_add_field(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *class_name, const LmTransDescriptor *descriptor, const LmP0Text *field_name, const LmTransRegistryFact *field_row, const LmOwnPtrStack *index_rows, const LmOwnPtrStack *address_depth_rows, const LmOwnPtrStack *const_rows, const LmOwnPtrStack *array_count_rows, const char *type_relation_name, const char *type_n2_column_name, int is_union) {
+    (void)lm_lmx_message_thread;
+    const char *type_payload;
+    const char *index_payload;
+    const char *address_depth_payload;
+    const char *const_payload;
+    const char *array_count_payload;
+    LmP0Text * type_name;
+    LmTransRegistryFact * index_row;
+    LmTransRegistryFact * address_depth_row;
+    LmTransRegistryFact * const_row;
+    LmTransRegistryFact * array_count_row;
+    size_t field_index;
+    size_t field_address_depth;
+    size_t field_array_count;
+    int field_is_const;
+    int has_array_count;
+    if (class_name == 0 || descriptor == 0 || field_name == 0 || field_row == 0) {
+        return 1;
+    }
+    if (field_name -> length == 0U || field_row -> key == 0 || field_row -> payload == 0) {
+        return 1;
+    }
+    type_payload = lm_trans_namespace_materialize_class_typed_relation_value(lm_lmx_message_thread, namespace_, class_name, type_relation_name, type_n2_column_name, "class", field_row);
+    if (type_payload == 0) {
+        return 1;
+    }
+    type_name = lm_trans_text_from_cstr(lm_lmx_message_thread, type_payload);
+    if (type_name == 0) {
+        return 1;
+    }
+    index_row = lm_trans_registry_relation_stack_latest_row(lm_lmx_message_thread, index_rows, field_name);
+    address_depth_row = lm_trans_registry_relation_stack_latest_row(lm_lmx_message_thread, address_depth_rows, field_name);
+    const_row = lm_trans_registry_relation_stack_latest_row(lm_lmx_message_thread, const_rows, field_name);
+    array_count_row = lm_trans_registry_relation_stack_latest_row(lm_lmx_message_thread, array_count_rows, field_name);
+    index_payload = lm_trans_namespace_materialize_class_typed_relation_value(lm_lmx_message_thread, namespace_, class_name, "field.index", "index", "size_t", index_row);
+    if (index_payload == 0 || lm_trans_parse_size_payload(lm_lmx_message_thread, index_payload, &field_index) == 0) {
+        fprintf(stderr, "trans L2 struct descriptor error: class %.*s.%.*s requires field.index\n", (((int)class_name -> length)), class_name -> data, (((int)field_name -> length)), field_name -> data);
+        {
+            int lm_return_0 = 1;
+            lm_trans_text_ref_destroy(&type_name);
+            return lm_return_0;
+        }
+    }
+    field_address_depth = 0U;
+    field_array_count = 0U;
+    has_array_count = 0;
+    field_is_const = 0;
+    address_depth_payload = lm_trans_namespace_materialize_class_typed_relation_value(lm_lmx_message_thread, namespace_, class_name, "field.address-depth", "depth", "size_t", address_depth_row);
+    if (address_depth_payload != 0 && lm_trans_parse_size_payload(lm_lmx_message_thread, address_depth_payload, &field_address_depth) == 0) {
+        fprintf(stderr, "trans L2 struct descriptor error: class %.*s.%.*s has invalid field.address-depth\n", (((int)class_name -> length)), class_name -> data, (((int)field_name -> length)), field_name -> data);
+        {
+            int lm_return_1 = 1;
+            lm_trans_text_ref_destroy(&type_name);
+            return lm_return_1;
+        }
+    }
+    const_payload = lm_trans_namespace_materialize_class_typed_relation_value(lm_lmx_message_thread, namespace_, class_name, "field.const", "value", "int", const_row);
+    if (const_payload != 0) {
+        if (lm_trans_parse_size_payload(lm_lmx_message_thread, const_payload, &field_address_depth) == 0) {
+            fprintf(stderr, "trans L2 struct descriptor error: class %.*s.%.*s has invalid field.const\n", (((int)class_name -> length)), class_name -> data, (((int)field_name -> length)), field_name -> data);
+            {
+                int lm_return_2 = 1;
+                lm_trans_text_ref_destroy(&type_name);
+                return lm_return_2;
+            }
+        }
+        field_is_const = field_address_depth != 0U;
+    }
+    array_count_payload = lm_trans_namespace_materialize_class_typed_relation_value(lm_lmx_message_thread, namespace_, class_name, "field.array-count", "count", "size_t", array_count_row);
+    if (array_count_payload != 0) {
+        if (lm_trans_parse_size_payload(lm_lmx_message_thread, array_count_payload, &field_array_count) == 0) {
+            fprintf(stderr, "trans L2 struct descriptor error: class %.*s.%.*s has invalid field.array-count\n", (((int)class_name -> length)), class_name -> data, (((int)field_name -> length)), field_name -> data);
+            {
+                int lm_return_3 = 1;
+                lm_trans_text_ref_destroy(&type_name);
+                return lm_return_3;
+            }
+        }
+        has_array_count = 1;
+    }
+    if (lm_trans_descriptor_add_structural_field(lm_lmx_message_thread, descriptor, field_name, type_name, field_index, field_address_depth, field_array_count, has_array_count, field_is_const, is_union) != 0) {
+        {
+            int lm_return_4 = 1;
+            lm_trans_text_ref_destroy(&type_name);
+            return lm_return_4;
+        }
+    }
+    {
+        int lm_return_5 = 0;
+        lm_trans_text_ref_destroy(&type_name);
+        return lm_return_5;
+    }
+}
+
+static int lm_trans_namespace_materialize_class_descriptors(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_) {
+    (void)lm_lmx_message_thread;
+    const char *class_present_table;
+    const LmP0Text * class_present_text;
+    const LmOwnPtrStack * class_rows;
+    const LmOwnPtrStack * class_rows_fields;
+    const LmOwnPtrStack * union_rows_fields;
+    const LmOwnPtrStack * index_rows;
+    const LmOwnPtrStack * address_depth_rows;
+    const LmOwnPtrStack * const_rows;
+    const LmOwnPtrStack * array_count_rows;
+    const LmOwnPtrStack * processed_classes;
+    const LmOwnPtrStack * seen_fields;
+    size_t class_index;
+    size_t field_index;
+    LmTransRegistryFact * class_row;
+    LmTransRegistryFact * field_row;
+    const char *class_key;
+    const char *seen_name;
+    const char *seen_name_owner;
+    LmP0Text * class_name;
+    LmP0Text * field_name;
+    LmTransDescriptor * descriptor;
+    class_present_table = "class.present";
+    class_present_text = lm_trans_text_from_cstr(lm_lmx_message_thread, class_present_table);
+    if (class_present_text == 0) {
+        return 1;
+    }
+    class_rows = lm_trans_namespace_registry_relation_stack(lm_lmx_message_thread, namespace_, class_present_text, "row");
+    if (class_rows == 0) {
+        class_rows = lm_trans_registry_relation_stack_for_table(lm_lmx_message_thread, class_present_table);
+    }
+    if (class_rows == 0) {
+        {
+            int lm_return_0 = 0;
+            lm_trans_text_ref_destroy(&class_present_text);
+            return lm_return_0;
+        }
+    }
+    processed_classes = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_own_delete_plain);
+    if (processed_classes == 0) {
+        {
+            int lm_return_1 = 1;
+            lm_trans_text_ref_destroy(&class_present_text);
+            return lm_return_1;
+        }
+    }
+    class_index = 0U;
+    while (class_index < class_rows -> count) {
+        class_row = (((LmTransRegistryFact *)lm_own_ptr_stack_at(class_rows, class_index)));
+        if (class_row == 0 || class_row -> key == 0 || class_row -> payload == 0) {
+            class_index = class_index + 1U;
+            continue;
+        }
+        class_key = class_row -> key;
+        class_name = lm_trans_text_from_cstr(lm_lmx_message_thread, class_key);
+        if (class_name == 0) {
+            {
+                int lm_return_2 = 1;
+                lm_trans_ptr_stack_delete(&processed_classes);
+                lm_trans_text_ref_destroy(&class_present_text);
+                return lm_return_2;
+            }
+        }
+        if (lm_trans_namespace_descriptor(lm_lmx_message_thread, namespace_, class_name) != 0) {
+            class_index = class_index + 1U;
+            lm_trans_text_ref_destroy(&class_name);
+            continue;
+        }
+        seen_name = lm_trans_text_copy_cstr(lm_lmx_message_thread, class_name);
+        if (seen_name == 0) {
+            {
+                int lm_return_3 = 1;
+                lm_trans_text_ref_destroy(&class_name);
+                lm_trans_ptr_stack_delete(&processed_classes);
+                lm_trans_text_ref_destroy(&class_present_text);
+                return lm_return_3;
+            }
+        }
+        if (lm_trans_string_stack_has(lm_lmx_message_thread, processed_classes, seen_name) != 0) {
+            lm_own_delete(seen_name, 0);
+            class_index = class_index + 1U;
+            lm_trans_text_ref_destroy(&class_name);
+            continue;
+        }
+        if (lm_trans_is_c_reference_name(lm_lmx_message_thread, class_name) != 0) {
+            class_index = class_index + 1U;
+            lm_trans_text_ref_destroy(&class_name);
+            continue;
+        }
+        if (lm_own_ptr_stack_push(processed_classes, seen_name) != 0) {
+            lm_own_delete(seen_name, 0);
+            {
+                int lm_return_4 = 1;
+                lm_trans_text_ref_destroy(&class_name);
+                lm_trans_ptr_stack_delete(&processed_classes);
+                lm_trans_text_ref_destroy(&class_present_text);
+                return lm_return_4;
+            }
+        }
+        if (lm_trans_namespace_find(lm_lmx_message_thread, namespace_, class_name) == 0 && lm_trans_namespace_declare(lm_lmx_message_thread, namespace_, class_name, "class") != 0) {
+            {
+                int lm_return_5 = 1;
+                lm_trans_text_ref_destroy(&class_name);
+                lm_trans_ptr_stack_delete(&processed_classes);
+                lm_trans_text_ref_destroy(&class_present_text);
+                return lm_return_5;
+            }
+        }
+        if (lm_trans_namespace_find(lm_lmx_message_thread, namespace_, class_name) == 0) {
+            {
+                int lm_return_6 = 1;
+                lm_trans_text_ref_destroy(&class_name);
+                lm_trans_ptr_stack_delete(&processed_classes);
+                lm_trans_text_ref_destroy(&class_present_text);
+                return lm_return_6;
+            }
+        }
+        class_rows_fields = lm_trans_namespace_materialize_class_relation_stack(lm_lmx_message_thread, namespace_, class_name, "field.class");
+        union_rows_fields = lm_trans_namespace_materialize_class_relation_stack(lm_lmx_message_thread, namespace_, class_name, "field.union");
+        index_rows = lm_trans_namespace_materialize_class_relation_stack(lm_lmx_message_thread, namespace_, class_name, "field.index");
+        address_depth_rows = lm_trans_namespace_materialize_class_relation_stack(lm_lmx_message_thread, namespace_, class_name, "field.address-depth");
+        const_rows = lm_trans_namespace_materialize_class_relation_stack(lm_lmx_message_thread, namespace_, class_name, "field.const");
+        array_count_rows = lm_trans_namespace_materialize_class_relation_stack(lm_lmx_message_thread, namespace_, class_name, "field.array-count");
+        descriptor = lm_trans_descriptor_new(lm_lmx_message_thread);
+        if (descriptor == 0 || lm_trans_descriptor_mark_structural_fields(lm_lmx_message_thread, descriptor) != 0) {
+            {
+                int lm_return_7 = 1;
+                lm_trans_descriptor_delete(lm_lmx_message_thread, descriptor);
+                lm_trans_text_ref_destroy(&class_name);
+                lm_trans_ptr_stack_delete(&processed_classes);
+                lm_trans_text_ref_destroy(&class_present_text);
+                return lm_return_7;
+            }
+        }
+        seen_fields = lm_trans_ptr_stack_new(lm_lmx_message_thread, lm_own_delete_plain);
+        if (seen_fields == 0) {
+            {
+                int lm_return_8 = 1;
+                lm_trans_descriptor_delete(lm_lmx_message_thread, descriptor);
+                lm_trans_text_ref_destroy(&class_name);
+                lm_trans_ptr_stack_delete(&processed_classes);
+                lm_trans_text_ref_destroy(&class_present_text);
+                return lm_return_8;
+            }
+        }
+        if (class_rows_fields != 0) {
+            field_index = 0U;
+            while (field_index < class_rows_fields -> count) {
+                field_row = (((LmTransRegistryFact *)lm_own_ptr_stack_at(class_rows_fields, field_index)));
+                if (field_row != 0 && field_row -> key != 0 && field_row -> payload != 0) {
+                    field_name = lm_trans_text_from_cstr(lm_lmx_message_thread, field_row -> key);
+                    if (field_name == 0) {
+                        {
+                            int lm_return_9 = 1;
+                            lm_trans_ptr_stack_delete(&seen_fields);
+                            lm_trans_descriptor_delete(lm_lmx_message_thread, descriptor);
+                            lm_trans_text_ref_destroy(&class_name);
+                            lm_trans_ptr_stack_delete(&processed_classes);
+                            lm_trans_text_ref_destroy(&class_present_text);
+                            return lm_return_9;
+                        }
+                    }
+                    seen_name_owner = lm_trans_text_copy_cstr(lm_lmx_message_thread, field_name);
+                    if (seen_name_owner == 0) {
+                        {
+                            int lm_return_10 = 1;
+                            lm_trans_text_ref_destroy(&field_name);
+                            lm_trans_ptr_stack_delete(&seen_fields);
+                            lm_trans_descriptor_delete(lm_lmx_message_thread, descriptor);
+                            lm_trans_text_ref_destroy(&class_name);
+                            lm_trans_ptr_stack_delete(&processed_classes);
+                            lm_trans_text_ref_destroy(&class_present_text);
+                            return lm_return_10;
+                        }
+                    }
+                    if (lm_trans_string_stack_has(lm_lmx_message_thread, seen_fields, seen_name_owner) != 0) {
+                        lm_own_delete(seen_name_owner, 0);
+                    }
+                    else {
+                        if (lm_own_ptr_stack_push(seen_fields, seen_name_owner) != 0) {
+                            lm_own_delete(seen_name_owner, 0);
+                            {
+                                int lm_return_11 = 1;
+                                lm_trans_text_ref_destroy(&field_name);
+                                lm_trans_ptr_stack_delete(&seen_fields);
+                                lm_trans_descriptor_delete(lm_lmx_message_thread, descriptor);
+                                lm_trans_text_ref_destroy(&class_name);
+                                lm_trans_ptr_stack_delete(&processed_classes);
+                                lm_trans_text_ref_destroy(&class_present_text);
+                                return lm_return_11;
+                            }
+                        }
+                        if (lm_trans_namespace_materialize_class_descriptor_add_field(lm_lmx_message_thread, namespace_, class_name, descriptor, field_name, field_row, index_rows, address_depth_rows, const_rows, array_count_rows, "field.class", "field", 0) != 0) {
+                            {
+                                int lm_return_12 = 1;
+                                lm_trans_text_ref_destroy(&field_name);
+                                lm_trans_ptr_stack_delete(&seen_fields);
+                                lm_trans_descriptor_delete(lm_lmx_message_thread, descriptor);
+                                lm_trans_text_ref_destroy(&class_name);
+                                lm_trans_ptr_stack_delete(&processed_classes);
+                                lm_trans_text_ref_destroy(&class_present_text);
+                                return lm_return_12;
+                            }
+                        }
+                    }
+                    lm_trans_text_ref_destroy(&field_name);
+                }
+                field_index = field_index + 1U;
+            }
+        }
+        if (union_rows_fields != 0) {
+            field_index = 0U;
+            while (field_index < union_rows_fields -> count) {
+                field_row = (((LmTransRegistryFact *)lm_own_ptr_stack_at(union_rows_fields, field_index)));
+                if (field_row != 0 && field_row -> key != 0 && field_row -> payload != 0) {
+                    field_name = lm_trans_text_from_cstr(lm_lmx_message_thread, field_row -> key);
+                    if (field_name == 0) {
+                        {
+                            int lm_return_13 = 1;
+                            lm_trans_ptr_stack_delete(&seen_fields);
+                            lm_trans_descriptor_delete(lm_lmx_message_thread, descriptor);
+                            lm_trans_text_ref_destroy(&class_name);
+                            lm_trans_ptr_stack_delete(&processed_classes);
+                            lm_trans_text_ref_destroy(&class_present_text);
+                            return lm_return_13;
+                        }
+                    }
+                    seen_name_owner = lm_trans_text_copy_cstr(lm_lmx_message_thread, field_name);
+                    if (seen_name_owner == 0) {
+                        {
+                            int lm_return_14 = 1;
+                            lm_trans_text_ref_destroy(&field_name);
+                            lm_trans_ptr_stack_delete(&seen_fields);
+                            lm_trans_descriptor_delete(lm_lmx_message_thread, descriptor);
+                            lm_trans_text_ref_destroy(&class_name);
+                            lm_trans_ptr_stack_delete(&processed_classes);
+                            lm_trans_text_ref_destroy(&class_present_text);
+                            return lm_return_14;
+                        }
+                    }
+                    if (lm_trans_string_stack_has(lm_lmx_message_thread, seen_fields, seen_name_owner) != 0) {
+                        lm_own_delete(seen_name_owner, 0);
+                    }
+                    else {
+                        if (lm_own_ptr_stack_push(seen_fields, seen_name_owner) != 0) {
+                            lm_own_delete(seen_name_owner, 0);
+                            {
+                                int lm_return_15 = 1;
+                                lm_trans_text_ref_destroy(&field_name);
+                                lm_trans_ptr_stack_delete(&seen_fields);
+                                lm_trans_descriptor_delete(lm_lmx_message_thread, descriptor);
+                                lm_trans_text_ref_destroy(&class_name);
+                                lm_trans_ptr_stack_delete(&processed_classes);
+                                lm_trans_text_ref_destroy(&class_present_text);
+                                return lm_return_15;
+                            }
+                        }
+                        if (lm_trans_namespace_materialize_class_descriptor_add_field(lm_lmx_message_thread, namespace_, class_name, descriptor, field_name, field_row, index_rows, address_depth_rows, const_rows, array_count_rows, "field.union", "union", 1) != 0) {
+                            {
+                                int lm_return_16 = 1;
+                                lm_trans_text_ref_destroy(&field_name);
+                                lm_trans_ptr_stack_delete(&seen_fields);
+                                lm_trans_descriptor_delete(lm_lmx_message_thread, descriptor);
+                                lm_trans_text_ref_destroy(&class_name);
+                                lm_trans_ptr_stack_delete(&processed_classes);
+                                lm_trans_text_ref_destroy(&class_present_text);
+                                return lm_return_16;
+                            }
+                        }
+                    }
+                    lm_trans_text_ref_destroy(&field_name);
+                }
+                field_index = field_index + 1U;
+            }
+        }
+        if (lm_trans_namespace_attach_descriptor(lm_lmx_message_thread, namespace_, class_name, descriptor) != 0) {
+            {
+                int lm_return_17 = 1;
+                lm_trans_ptr_stack_delete(&seen_fields);
+                lm_trans_descriptor_delete(lm_lmx_message_thread, descriptor);
+                lm_trans_text_ref_destroy(&class_name);
+                lm_trans_ptr_stack_delete(&processed_classes);
+                lm_trans_text_ref_destroy(&class_present_text);
+                return lm_return_17;
+            }
+        }
+        descriptor = 0;
+        class_index = class_index + 1U;
+        lm_trans_ptr_stack_delete(&seen_fields);
+        lm_trans_descriptor_delete(lm_lmx_message_thread, descriptor);
+        lm_trans_text_ref_destroy(&class_name);
+    }
+    {
+        int lm_return_18 = 0;
+        lm_trans_ptr_stack_delete(&processed_classes);
+        lm_trans_text_ref_destroy(&class_present_text);
+        return lm_return_18;
+    }
+}
+
 static int lm_trans_namespace_materialize_registry_receivers(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_) {
     (void)lm_lmx_message_thread;
     LmP0Text * table_name;
@@ -12581,6 +13023,9 @@ static int lm_trans_namespace_materialize_registry_receivers(struct LmMessageThr
 
 static int lm_trans_namespace_materialize_registry_heads(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_) {
     (void)lm_lmx_message_thread;
+    if (lm_trans_namespace_materialize_class_descriptors(lm_lmx_message_thread, namespace_) != 0) {
+        return 1;
+    }
     return lm_trans_namespace_materialize_registry_receivers(lm_lmx_message_thread, namespace_);
 }
 
