@@ -152,65 +152,34 @@ end: LmTestForwardWideSchemaFallback
 forward
 layout
 
-L1:
-===
-extern LmTestForwardStruct *lm_test_forward_struct_type;
-extern struct LmTestForwardStruct *lm_test_forward_struct_type;
-extern LmTestForwardUnion *lm_test_forward_union_type;
-extern union LmTestForwardUnion *lm_test_forward_union_type;
-extern LmTestForwardDuplicate *lm_test_forward_duplicate_type;
-extern union LmTestForwardDuplicate *lm_test_forward_duplicate_type;
-extern LmTestForwardLateNone *lm_test_forward_late_none_type;
-extern struct LmTestForwardLateNone *lm_test_forward_late_none_type;
-extern LmTestForwardAfterOther *lm_test_forward_after_other_type;
-extern struct LmTestForwardAfterOther *lm_test_forward_after_other_type;
-extern LmTestForwardJoined *lm_test_forward_joined_type;
-extern struct LmTestForwardJoined *lm_test_forward_joined_type;
-extern LmTestForwardSchemaFallback *lm_test_forward_schema_fallback_type;
-extern struct LmTestForwardSchemaFallback *lm_test_forward_schema_fallback_type;
-typedef int LmTestForwardNone;
-extern LmTestForwardWideStruct *lm_test_forward_wide_struct_type;
-extern struct LmTestForwardWideStruct *lm_test_forward_wide_struct_type;
-extern LmTestForwardWideUnion *lm_test_forward_wide_union_type;
-extern union LmTestForwardWideUnion *lm_test_forward_wide_union_type;
-extern LmTestForwardWideDuplicate *lm_test_forward_wide_duplicate_type;
-extern union LmTestForwardWideDuplicate *lm_test_forward_wide_duplicate_type;
-extern LmTestForwardWideLateNone *lm_test_forward_wide_late_none_type;
-extern struct LmTestForwardWideLateNone *lm_test_forward_wide_late_none_type;
-extern LmTestForwardWideAfterOther *lm_test_forward_wide_after_other_type;
-extern struct LmTestForwardWideAfterOther *lm_test_forward_wide_after_other_type;
-extern LmTestForwardWideBackendOverlay *lm_test_forward_wide_backend_overlay_type;
-extern union LmTestForwardWideBackendOverlay *lm_test_forward_wide_backend_overlay_type;
-extern LmTestForwardWidePhysical *lm_test_forward_wide_physical_type;
-extern struct LmTestForwardWidePhysical *lm_test_forward_wide_physical_type;
-extern LmTestForwardWideJoined *lm_test_forward_wide_joined_type;
-extern struct LmTestForwardWideJoined *lm_test_forward_wide_joined_type;
-extern LmTestForwardWideSchemaFallback *lm_test_forward_wide_schema_fallback_type;
-extern struct LmTestForwardWideSchemaFallback *lm_test_forward_wide_schema_fallback_type;
-typedef int LmTestForwardWideOtherOnly;
-typedef int LmTestForwardWideNone;
+include: "trans_l4_forward_source_rows.support.h"
 
-static int lm_test_forward_source_rows(void) {
-    LmTestForwardLayout value = { 17 };
-    LmTestForwardJoined joined = { 19 };
-    LmTestForwardSchemaFallback fallback = { 21 };
-    LmTestForwardWideLayout wide = { 23 };
-    LmTestForwardWideBackendOverlay wide_overlay = { 25 };
-    LmTestForwardWidePhysical wide_physical = { 27 };
-    LmTestForwardWideJoined wide_joined = { 29 };
-    LmTestForwardWideSchemaFallback wide_fallback = { 31 };
-    LmTestForwardWideOtherOnly wide_other = 33;
-    LmTestForwardWideNone wide_none = 35;
-    LmTestForwardNone absent = 23;
-    return value.value != 17 || joined.value != 19 || fallback.value != 21 ||
-           wide.value != 23 || wide_overlay.value != 25 || wide_physical.value != 27 ||
-           wide_joined.value != 29 || wide_fallback.value != 31 || wide_other != 33 ||
-           wide_none != 35 || absent != 23;
-}
-===
+fn: lm_test_forward_source_rows () int
+    c.struct: c.LmTestForwardLayout value
+    c.struct: c.LmTestForwardJoined joined
+    c.struct: c.LmTestForwardSchemaFallback fallback
+    c.struct: c.LmTestForwardWideLayout wide
+    c.union: c.LmTestForwardWideBackendOverlay wide_overlay
+    c.struct: c.LmTestForwardWidePhysical wide_physical
+    c.struct: c.LmTestForwardWideJoined wide_joined
+    c.struct: c.LmTestForwardWideSchemaFallback wide_fallback
+    LmTestForwardWideOtherOnly: wide_other 33
+    LmTestForwardWideNone: wide_none 35
+    LmTestForwardNone: absent 23
+
+    c.value.value: 17
+    c.joined.value: 19
+    c.fallback.value: 21
+    c.wide.value: 23
+    c.wide_overlay.value: 25
+    c.wide_physical.value: 27
+    c.wide_joined.value: 29
+    c.wide_fallback.value: 31
+    return: c.value.value != 17 || c.joined.value != 19 || c.fallback.value != 21 || c.wide.value != 23 || c.wide_overlay.value != 25 || c.wide_physical.value != 27 || c.wide_joined.value != 29 || c.wide_fallback.value != 31 || wide_other != 33 || wide_none != 35 || absent != 23
+end: lm_test_forward_source_rows
 
 external:
     fn: main () int
-        return: c.lm_test_forward_source_rows()
+        return: lm_test_forward_source_rows()
     end: main
 end: external

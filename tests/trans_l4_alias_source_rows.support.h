@@ -1,0 +1,29 @@
+#ifndef LM_TEST_TRANS_L4_ALIAS_SOURCE_ROWS_SUPPORT_H
+#define LM_TEST_TRANS_L4_ALIAS_SOURCE_ROWS_SUPPORT_H
+
+extern LmTestAliasSource lm_test_alias_source_type;
+extern int lm_test_alias_source_type;
+extern LmTestAliasPointer lm_test_alias_pointer_type;
+extern const char *lm_test_alias_pointer_type;
+extern LmTestAliasValueOverlay lm_test_alias_value_overlay_type;
+extern unsigned lm_test_alias_value_overlay_type;
+extern LmTestAliasBackendOverlay lm_test_alias_backend_overlay_type;
+extern long lm_test_alias_backend_overlay_type;
+extern LmTestAliasDepthOverlay lm_test_alias_depth_overlay_type;
+extern char **lm_test_alias_depth_overlay_type;
+extern LmTestAliasConstOverlay lm_test_alias_const_overlay_type;
+extern const int lm_test_alias_const_overlay_type;
+extern LmTestAliasDuplicate lm_test_alias_duplicate_type;
+extern double lm_test_alias_duplicate_type;
+extern LmTestAliasLateNone lm_test_alias_late_none_type;
+extern const char *lm_test_alias_late_none_type;
+extern LmTestAliasSplit lm_test_alias_split_type;
+extern const short *lm_test_alias_split_type;
+extern LmTestAliasJoined lm_test_alias_joined_type;
+extern const char *lm_test_alias_joined_type;
+extern LmTestAliasReordered lm_test_alias_reordered_type;
+extern long lm_test_alias_reordered_type;
+extern LmTestAliasSchemaFallback lm_test_alias_schema_fallback_type;
+extern double lm_test_alias_schema_fallback_type;
+
+#endif

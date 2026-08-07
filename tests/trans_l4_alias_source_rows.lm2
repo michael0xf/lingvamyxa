@@ -103,65 +103,30 @@ end: alias
 
 alias
 
-L1:
-===
-#include <limits.h>
+include: "<limits.h>" "trans_l4_alias_source_rows.support.h"
 
-extern LmTestAliasSource lm_test_alias_source_type;
-extern int lm_test_alias_source_type;
-extern LmTestAliasPointer lm_test_alias_pointer_type;
-extern const char *lm_test_alias_pointer_type;
-extern LmTestAliasValueOverlay lm_test_alias_value_overlay_type;
-extern unsigned lm_test_alias_value_overlay_type;
-extern LmTestAliasBackendOverlay lm_test_alias_backend_overlay_type;
-extern long lm_test_alias_backend_overlay_type;
-extern LmTestAliasDepthOverlay lm_test_alias_depth_overlay_type;
-extern char **lm_test_alias_depth_overlay_type;
-extern LmTestAliasConstOverlay lm_test_alias_const_overlay_type;
-extern const int lm_test_alias_const_overlay_type;
-extern LmTestAliasDuplicate lm_test_alias_duplicate_type;
-extern double lm_test_alias_duplicate_type;
-extern LmTestAliasLateNone lm_test_alias_late_none_type;
-extern const char *lm_test_alias_late_none_type;
-extern LmTestAliasSplit lm_test_alias_split_type;
-extern const short *lm_test_alias_split_type;
-extern LmTestAliasJoined lm_test_alias_joined_type;
-extern const char *lm_test_alias_joined_type;
-extern LmTestAliasReordered lm_test_alias_reordered_type;
-extern long lm_test_alias_reordered_type;
-extern LmTestAliasSchemaFallback lm_test_alias_schema_fallback_type;
-extern double lm_test_alias_schema_fallback_type;
+fn: lm_test_alias_source_rows () int
+    LmTestAliasSource: source 3
+    LmTestAliasPointer: pointer "ok"
+    LmTestAliasValueOverlay: value_overlay c.UINT_MAX
+    LmTestAliasBackendOverlay: backend_overlay 5L
+    char: value 'x'
+    @: char one @ value
+    LmTestAliasDepthOverlay: depth_overlay @ one
+    LmTestAliasConstOverlay: const_overlay 6
+    LmTestAliasDuplicate: duplicate 1.5
+    LmTestAliasLateNone: late_none "none"
+    short: split_value 8
+    LmTestAliasSplit: split @ split_value
+    LmTestAliasJoined: joined "joined"
+    LmTestAliasReordered: reordered 9L
+    LmTestAliasSchemaFallback: schema_fallback 2.5
 
-static int lm_test_alias_source_rows(void) {
-    LmTestAliasSource source = 3;
-    LmTestAliasPointer pointer = "ok";
-    LmTestAliasValueOverlay value_overlay = UINT_MAX;
-    LmTestAliasBackendOverlay backend_overlay = 5L;
-    char value = 'x';
-    char *one = &value;
-    LmTestAliasDepthOverlay depth_overlay = &one;
-    LmTestAliasConstOverlay const_overlay = 6;
-    LmTestAliasDuplicate duplicate = 1.5;
-    LmTestAliasLateNone late_none = "none";
-    short split_value = 8;
-    LmTestAliasSplit split = &split_value;
-    LmTestAliasJoined joined = "joined";
-    LmTestAliasReordered reordered = 9L;
-    LmTestAliasSchemaFallback schema_fallback = 2.5;
-
-    if (source != 3 || pointer[0] != 'o' || value_overlay == 0U ||
-        backend_overlay != 5L || **depth_overlay != 'x' ||
-        const_overlay != 6 || duplicate <= 1.0 || duplicate >= 2.0 ||
-        late_none[0] != 'n' || *split != 8 || joined[0] != 'j' ||
-        reordered != 9L || schema_fallback <= 2.0 || schema_fallback >= 3.0) {
-        return 1;
-    }
-    return 0;
-}
-===
+    return: source != 3 || pointer[0] != 'o' || value_overlay = 0U || backend_overlay != 5L || depth_overlay[0][0] != 'x' || const_overlay != 6 || duplicate <= 1.0 || duplicate >= 2.0 || late_none[0] != 'n' || split[0] != 8 || joined[0] != 'j' || reordered != 9L || schema_fallback <= 2.0 || schema_fallback >= 3.0
+end: lm_test_alias_source_rows
 
 external:
     fn: main () int
-        return: c.lm_test_alias_source_rows()
+        return: lm_test_alias_source_rows()
     end: main
 end: external
