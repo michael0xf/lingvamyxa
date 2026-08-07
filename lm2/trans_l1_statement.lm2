@@ -5244,6 +5244,30 @@ fn: lm_trans_emit_l2_table_root_row_type (
     c.fclose(declaration_file)
 return: status
 
+fn: lm_trans_emit_l2_table_local_row_type (
+    FILE: file
+    const: @(char row_type_name)
+    @: LmTransL4CallableType column_types
+    @: LmP0Text column_names
+    size_t: column_count
+    unsigned: indent
+    const: LmTransNamespace: namespace_
+) int
+    FILE: declaration_file
+    int: suppressed
+    int: status
+
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
+        return: 1
+    status: lm_trans_emit_l2_table_row_type(declaration_file, row_type_name, column_types, column_names, column_count, 0U, namespace_)
+    if: status = 0
+        status: lm_trans_typedef_projection_claim_local_prepared_cstr(file, row_type_name, declaration_file, @ suppressed)
+    c.fclose(declaration_file)
+    if: status != 0 || suppressed
+        return: status
+return: lm_trans_emit_l2_table_row_type(file, row_type_name, column_types, column_names, column_count, indent, namespace_)
+
 fn: lm_trans_l2_table_cell_inline_layout_body (
     const: LmP0Node: node
     const: LmTransL4CallableType: expected_type
@@ -5620,7 +5644,7 @@ fn: lm_trans_emit_l2_table_storage_value (
         lm_own_delete(storage_name, 0)
 
     if: indent != 0U
-        if: lm_trans_declare_l2_table_binding(namespace_, frame) != 0 || lm_trans_emit_l2_table_row_type(file, row_type_name, column_types, column_names, column_count, indent, namespace_) != 0
+        if: lm_trans_declare_l2_table_binding(namespace_, frame) != 0 || lm_trans_emit_l2_table_local_row_type(file, row_type_name, column_types, column_names, column_count, indent, namespace_) != 0
             return: 1
         ---
     else:
@@ -6543,7 +6567,11 @@ fn: lm_trans_statement_stack_schedule_control (
         return: 1
 
     lm_trans_namespace_enter_scope(namespace_)
+    if: lm_trans_typedef_projection_scope_enter() != 0
+        lm_trans_namespace_leave_scope(namespace_)
+        return: 1
     if: is_loop && lm_trans_loop_push(namespace_) != 0
+        lm_trans_typedef_projection_scope_leave()
         lm_trans_namespace_leave_scope(namespace_)
         return: 1
 
@@ -6560,6 +6588,7 @@ fn: lm_trans_statement_stack_schedule_control (
     if: status != 0
         if: is_loop
             lm_trans_loop_pop(namespace_)
+        lm_trans_typedef_projection_scope_leave()
         lm_trans_namespace_leave_scope(namespace_)
         return: 1
 return: 0
@@ -6590,7 +6619,11 @@ fn: lm_trans_statement_stack_schedule_synchronized (
         return: 1
 
     lm_trans_namespace_enter_scope(namespace_)
+    if: lm_trans_typedef_projection_scope_enter() != 0
+        lm_trans_namespace_leave_scope(namespace_)
+        return: 1
     if: lm_trans_cleanup_push(namespace_, cleanup_id) != 0
+        lm_trans_typedef_projection_scope_leave()
         lm_trans_namespace_leave_scope(namespace_)
         return: 1
 
@@ -6604,6 +6637,7 @@ fn: lm_trans_statement_stack_schedule_synchronized (
 
     if: status != 0
         lm_trans_cleanup_pop(namespace_)
+        lm_trans_typedef_projection_scope_leave()
         lm_trans_namespace_leave_scope(namespace_)
         return: 1
 return: 0
@@ -6621,6 +6655,9 @@ fn: lm_trans_statement_stack_schedule_else (
         return: 1
 
     lm_trans_namespace_enter_scope(namespace_)
+    if: lm_trans_typedef_projection_scope_enter() != 0
+        lm_trans_namespace_leave_scope(namespace_)
+        return: 1
     status: lm_trans_statement_stack_push_indent_text(stack, indent, "}\n")
     if: status = 0
         status: lm_trans_statement_stack_push_simple(stack, @lm_trans_statement_job_leave_scope)
@@ -6629,6 +6666,7 @@ fn: lm_trans_statement_stack_schedule_else (
     if: status = 0
         status: lm_trans_statement_stack_push_list(stack, frame\body\first_field, indent + 1U, 1, 0)
     if: status != 0
+        lm_trans_typedef_projection_scope_leave()
         lm_trans_namespace_leave_scope(namespace_)
         return: 1
 return: 0
@@ -6652,7 +6690,7 @@ fn: lm_trans_statement_stack_schedule_named_structure (
         return: 1
     status: lm_trans_emit_named_structure_typedef(declaration_file, frame, 0U, namespace_)
     if: status = 0
-        status: lm_trans_typedef_projection_prepared_text_suppressed(file, frame\head, declaration_file, @ typedef_suppressed)
+        status: lm_trans_typedef_projection_claim_local_prepared_text(file, frame\head, declaration_file, @ typedef_suppressed)
     c.fclose(declaration_file)
     if: status != 0
         return: 1
@@ -6681,7 +6719,7 @@ fn: lm_trans_statement_stack_schedule_merge_named_structure (
         return: 1
     status: lm_trans_emit_merge_named_structure_typedef(declaration_file, frame, 0U, namespace_)
     if: status = 0
-        status: lm_trans_typedef_projection_prepared_text_suppressed(file, target, declaration_file, @ typedef_suppressed)
+        status: lm_trans_typedef_projection_claim_local_prepared_text(file, target, declaration_file, @ typedef_suppressed)
     c.fclose(declaration_file)
     if: status != 0
         return: 1
@@ -8269,11 +8307,14 @@ fn: lm_trans_statement_job_leave_scope (
     LmTransStatementJob: job
     LmTransNamespace: namespace_
 ) int
+    int: status
+
     c.LM_UNUSED(file)
     c.LM_UNUSED(stack)
     c.LM_UNUSED(job)
+    status: lm_trans_typedef_projection_scope_leave()
     lm_trans_namespace_leave_scope(namespace_)
-return: 0
+return: status
 
 fn: lm_trans_statement_job_loop_pop (
     FILE: file
@@ -8321,6 +8362,7 @@ fn: lm_trans_emit_statement_list (
     LmTransStatementStack: stack
     LmTransStatementJob: job
     int: previous_executable_depth
+    size_t: projection_scope_depth
     int: status
 
     stack: lm_trans_statement_stack_new()
@@ -8333,6 +8375,7 @@ fn: lm_trans_emit_statement_list (
         lm_own_delete(stack, 0)
         return: 1
 
+    projection_scope_depth: lm_trans_typedef_projection_scope_depth()
     previous_executable_depth: lm_trans_l2_executable_statement_depth
     lm_trans_l2_executable_statement_depth: previous_executable_depth + 1
     status: lm_trans_statement_stack_push_list(stack, first, indent, 1, 0)
@@ -8347,6 +8390,10 @@ fn: lm_trans_emit_statement_list (
             status: job\run(file, stack, job, namespace_)
         lm_trans_statement_job_delete(job)
 
+    if: lm_trans_typedef_projection_scope_depth() != projection_scope_depth
+        if: lm_trans_typedef_projection_scope_restore(projection_scope_depth) != 0 || status = 0
+            status: 1
+        ---
     lm_trans_l2_executable_statement_depth: previous_executable_depth
     lm_trans_statement_stack_destroy(stack)
     lm_own_delete(stack, 0)

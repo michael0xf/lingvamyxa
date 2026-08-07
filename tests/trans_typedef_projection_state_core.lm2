@@ -117,6 +117,22 @@ fn: lm_test_typedef_projection_emit_text_if_compatible (
     c.fclose(declaration_file)
 return: status
 
+fn: lm_test_typedef_projection_claim_local_cstr (
+    FILE: output
+    const: @(char name)
+    const: @(char declaration)
+    @: int out_suppress
+) int
+    FILE: declaration_file
+    int: status
+
+    declaration_file: lm_test_typedef_projection_declaration_file(declaration)
+    if: declaration_file = 0
+        return: 1
+    status: lm_trans_typedef_projection_claim_local_prepared_cstr(output, name, declaration_file, out_suppress)
+    c.fclose(declaration_file)
+return: status
+
 fn: lm_test_typedef_projection_base_rules () int
     const: @(char declaration_a)
     const: @(char declaration_b)
@@ -438,6 +454,76 @@ fn: lm_test_typedef_projection_error_lifecycle () int
         c.fclose(output)
 return: status
 
+fn: lm_test_typedef_projection_local_conditional_ancestor () int
+    const: @(char declaration_a)
+    const: @(char declaration_b)
+    FILE: output
+    size_t: group_id
+    int: entered
+    int: branch_entered
+    int: suppress
+    int: status
+
+    declaration_a: "typedef int ConditionalLocal;\n"
+    declaration_b: "typedef double ConditionalLocal;\n"
+    output: c.tmpfile()
+    entered: 0
+    branch_entered: 0
+    status: output = 0
+
+    if: status = 0 && lm_trans_typedef_projection_output_enter(0, output) != 0
+        status: 1
+    else:
+        if: status = 0
+            entered: 1
+        ---
+    if: status = 0 && lm_trans_typedef_projection_scope_enter() != 0
+        status: 1
+    if: status = 0 && lm_trans_typedef_projection_group_new(@ group_id) != 0
+        status: 1
+
+    if: status = 0 && lm_trans_typedef_projection_branch_enter(group_id, 1U) != 0
+        status: 1
+    else:
+        if: status = 0
+            branch_entered: 1
+        ---
+    if: status = 0 && (lm_test_typedef_projection_claim_local_cstr(output, "ConditionalLocal", declaration_a, @ suppress) != 0 || suppress != 0)
+        status: 1
+    if: branch_entered
+        if: lm_trans_typedef_projection_conditional_leave() != 0
+            status: 1
+        branch_entered: 0
+    ---
+
+    if: status = 0 && lm_trans_typedef_projection_branch_enter(group_id, 2U) != 0
+        status: 1
+    else:
+        if: status = 0
+            branch_entered: 1
+        ---
+    if: status = 0 && (lm_test_typedef_projection_claim_local_cstr(output, "ConditionalLocal", declaration_b, @ suppress) != 0 || suppress != 0)
+        status: 1
+    if: branch_entered
+        if: lm_trans_typedef_projection_conditional_leave() != 0
+            status: 1
+        branch_entered: 0
+    ---
+
+    if: status = 0 && lm_trans_typedef_projection_scope_enter() != 0
+        status: 1
+    if: status = 0 && (lm_test_typedef_projection_claim_local_cstr(output, "ConditionalLocal", declaration_a, @ suppress) != 0 || suppress != 0)
+        status: 1
+
+    if: entered
+        if: lm_trans_typedef_projection_scope_restore(0U) != 0 || lm_trans_typedef_projection_output_leave() != 0
+            status: 1
+        entered: 0
+    ---
+    if: output != 0
+        c.fclose(output)
+return: status
+
 fn: lm_test_typedef_projection_named_shape_conflict (
     LmTransNamespace: namespace_
     const: LmP0Frame: first
@@ -583,6 +669,8 @@ fn: lm_test_typedef_projection_state_core () int
     if: status = 0 && lm_test_typedef_projection_canonical_and_nested_outputs() != 0
         status: 1
     if: status = 0 && lm_test_typedef_projection_error_lifecycle() != 0
+        status: 1
+    if: status = 0 && lm_test_typedef_projection_local_conditional_ancestor() != 0
         status: 1
     if: status = 0 && lm_test_typedef_projection_named_shape_conflict(namespace_, first_structure_frame, second_structure_frame) != 0
         status: 1

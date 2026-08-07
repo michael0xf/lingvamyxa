@@ -1,0 +1,43 @@
+L2:
+    fn: lm_test_local_table_left () int
+        table:
+            name: sample
+            columns: (int: left)
+            rows:
+                     11
+        end: sample
+        return: sample\left
+    end: lm_test_local_table_left
+
+    fn: lm_test_local_table_right () int
+        table:
+            name: sample
+            columns: (int: right)
+            rows:
+                     22
+        end: sample
+        return: sample\right
+    end: lm_test_local_table_right
+
+    fn: lm_test_local_table_inner_shadow () int
+        lm_l2_table_innerSample_row:
+            int: outer 31
+        if: 1 = 1
+            table:
+                name: innerSample
+                columns: (int: inner)
+                rows:
+                         41
+            end: innerSample
+            if: innerSample\inner != 41
+                return: 1
+        end: if
+        return: lm_l2_table_innerSample_row\outer
+    end: lm_test_local_table_inner_shadow
+
+    external:
+        fn: main () int
+            return: lm_test_local_table_left() != 11 || lm_test_local_table_right() != 22 || lm_test_local_table_inner_shadow() != 31
+        end: main
+    end: external
+end: L2

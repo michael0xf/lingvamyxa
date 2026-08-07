@@ -1,0 +1,13 @@
+L2:
+    fn: lm_test_local_table_collision () int
+        lm_l2_table_sample_row:
+            int: incompatible
+        table:
+            name: sample
+            columns: (int: id)
+            rows:
+                     1
+        end: sample
+        return: sample\id
+    end: lm_test_local_table_collision
+end: L2

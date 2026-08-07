@@ -83,6 +83,7 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     FILE: output
     int: status
     int: typedef_projection_entered
+    int: local_projection_scope_entered
 
     source: "fn: inspectLocal (int: seed) int\n    LocalRecord:\n        answer: seed\n    return: LocalRecord\\answer\nend: inspectLocal\n"
     document: 0
@@ -95,6 +96,7 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     output: 0
     status: 0
     typedef_projection_entered: 0
+    local_projection_scope_entered: 0
 
     lm_trans_registry_destroy()
     if: lm_trans_registry_load_for_source("tests/trans_function_local_structural_descriptor_scope_core.lm2") != 0
@@ -139,12 +141,22 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
 
     if: namespace_ != 0
         lm_trans_namespace_enter_scope(namespace_)
+    if: status = 0 && lm_trans_typedef_projection_scope_enter() != 0
+        status: 1
+    else:
+        if: status = 0
+            local_projection_scope_entered: 1
+        ---
     if: status = 0 && lm_trans_top_level_declare_function_params(namespace_, item\function) != 0
         status: 1
     if: status = 0
         local_frame: lm_test_function_local_named_frame(item\function, namespace_)
     if: status = 0 && (local_frame = 0 || lm_trans_statement_stack_schedule_named_structure(output, 0, local_frame, 1U, namespace_) != 0 || lm_trans_namespace_descriptor(namespace_, local_name) = 0)
         status: 1
+    if: local_projection_scope_entered
+        if: lm_trans_typedef_projection_scope_leave() != 0
+            status: 1
+        local_projection_scope_entered: 0
     if: namespace_ != 0
         lm_trans_namespace_leave_scope(namespace_)
 
