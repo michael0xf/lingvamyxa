@@ -535,26 +535,8 @@ sub: lm_trans_descriptor_delete_any (
     @: void object
 )
 
-fn: lm_trans_descriptor_mark_operations (
-    LmTransDescriptor: descriptor
-) int
-
 fn: lm_trans_descriptor_mark_structural_fields (
     LmTransDescriptor: descriptor
-) int
-
-fn: lm_trans_descriptor_mark_required_operations (
-    LmTransDescriptor: descriptor
-) int
-
-fn: lm_trans_descriptor_add_operation (
-    LmTransDescriptor: descriptor
-    const: LmP0Text: name
-) int
-
-fn: lm_trans_descriptor_add_required_operation (
-    LmTransDescriptor: descriptor
-    const: LmP0Text: name
 ) int
 
 fn: lm_trans_descriptor_add_structural_field (
@@ -573,17 +555,6 @@ fn: lm_trans_descriptor_structural_field (
     const: LmTransDescriptor: descriptor
     const: @: char name
 ) const: LmTransDescriptorField
-
-fn: lm_trans_descriptor_has_operation (
-    const: LmTransDescriptor: descriptor
-    const: @: char name
-) int
-
-fn: lm_trans_namespace_declare_descriptor (
-    LmTransNamespace: namespace_
-    const: LmP0Text: name
-    LmTransDescriptor: descriptor
-) int
 
 fn: lm_trans_namespace_attach_descriptor (
     LmTransNamespace: namespace_
@@ -1080,14 +1051,6 @@ fn: lm_trans_emit_loop_jump_statement (
 ) int
 
 fn: lm_trans_statement_emit_table (
-    FILE: file
-    LmTransStatementStack: stack
-    const: LmP0Frame: frame
-    unsigned: indent
-    LmTransNamespace: namespace_
-) int
-
-fn: lm_trans_statement_emit_descriptor (
     FILE: file
     LmTransStatementStack: stack
     const: LmP0Frame: frame

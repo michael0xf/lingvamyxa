@@ -1,123 +1,57 @@
-table:
-    source
-    name: User
-    columns: (class: class) (binding: method)
-    rows:
-             serialize  lm_registry_poison_serialize
+User:
+    int: equals
+    int: extra
 end: User
 
-table:
-    source
-    name: CleanProtocol
-    columns: (class: class) (class: `requires.method`)
-    rows:
-             registryOnly  1
-end: CleanProtocol
-
-descriptor: User
-    operations:
-        equals
-    end: operations
-end: User
-
-descriptor: Plain
-    operations:
-        toString
-    end: operations
+Plain:
+    int: toString
 end: Plain
 
-descriptor: EmptyCandidate
-    operations:
-    end: operations
-end: EmptyCandidate
-
-descriptor: Equatable
-    requiredOperations:
-        equals
-    end: requiredOperations
+Equatable:
+    int: equals
 end: Equatable
 
-descriptor: Serializable
-    requiredOperations:
-        serialize
-    end: requiredOperations
+Serializable:
+    int: serialize
 end: Serializable
 
-descriptor: CleanProtocol
-    requiredOperations:
-        equals
-    end: requiredOperations
-end: CleanProtocol
-
-descriptor: EmptyProtocol
-    requiredOperations:
-    end: requiredOperations
-end: EmptyProtocol
-
-descriptor: MultiCandidate
-    operations:
-        first
-        second
-        extra
-    end: operations
+MultiCandidate:
+    int: first
+    int: second
+    int: extra
 end: MultiCandidate
 
-descriptor: CompleteProtocol
-    requiredOperations:
-        first
-        second
-    end: requiredOperations
-end: CompleteProtocol
+CompleteRequirement:
+    int: first
+    int: second
+end: CompleteRequirement
 
-descriptor: IncompleteProtocol
-    requiredOperations:
-        first
-        missing
-    end: requiredOperations
-end: IncompleteProtocol
+IncompleteRequirement:
+    int: first
+    int: missing
+end: IncompleteRequirement
 
-descriptor: `QuotedCandidate`
-    operations:
-        quotedOperation
-    end: operations
+`QuotedCandidate`:
+    int: quotedField
 end: `QuotedCandidate`
 
-descriptor: `QuotedProtocol`
-    requiredOperations:
-        quotedOperation
-    end: requiredOperations
-end: `QuotedProtocol`
+`QuotedRequirement`:
+    int: quotedField
+end: `QuotedRequirement`
 
-descriptor: SelfDescribing
-    operations:
-        inspect
-    end: operations
-    requiredOperations:
-        inspect
-    end: requiredOperations
+SelfDescribing:
+    int: inspect
 end: SelfDescribing
-
-descriptor: SameMismatch
-    operations:
-        present
-    end: operations
-    requiredOperations:
-        absent
-    end: requiredOperations
-end: SameMismatch
 
 external:
     fn: main () int
         assert: implements(User, Equatable) = 1
         assert: implements(Plain, Equatable) = 0
         assert: implements(User, Serializable) = 0
-        assert: implements(User, CleanProtocol) = 1
-        assert: implements(EmptyCandidate, EmptyProtocol) = 1
-        assert: implements(MultiCandidate, CompleteProtocol) = 1
-        assert: implements(MultiCandidate, IncompleteProtocol) = 0
-        assert: implements(`QuotedCandidate`, `QuotedProtocol`) = 1
+        assert: implements(MultiCandidate, CompleteRequirement) = 1
+        assert: implements(MultiCandidate, IncompleteRequirement) = 0
+        assert: implements(`QuotedCandidate`, `QuotedRequirement`) = 1
         assert: implements(SelfDescribing, SelfDescribing) = 1
-        assert: implements(SameMismatch, SameMismatch) = 0
         return: 0
     end: main
 end: external

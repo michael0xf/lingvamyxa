@@ -3933,7 +3933,7 @@ fn: lm_trans_implements (
     const: LmTransSymbol: required_symbol
     const: LmTransDescriptor: candidate
     const: LmTransDescriptor: required
-    const: @: char requirement
+    const: LmTransDescriptorField: requirement
     size_t: i
 
     if: out_result != 0
@@ -3959,23 +3959,20 @@ fn: lm_trans_implements (
         c.fprintf(c.stderr, "trans L2 implements error: required name \"%.*s\" is not a descriptor\n", (cast: int required_name\length), required_name\data)
         return: 1
 
-    if: candidate\has_operations = 0
-        c.fprintf(c.stderr, "trans L2 implements error: candidate descriptor \"%.*s\" has no operations section\n", (cast: int candidate_name\length), candidate_name\data)
+    if: candidate\has_structural_fields = 0 || candidate\structural_fields = 0
+        c.fprintf(c.stderr, "trans L2 implements error: candidate \"%.*s\" has no field descriptor\n", (cast: int candidate_name\length), candidate_name\data)
         return: 1
-    if: required\has_required_operations = 0
-        c.fprintf(c.stderr, "trans L2 implements error: required descriptor \"%.*s\" has no requiredOperations section\n", (cast: int required_name\length), required_name\data)
-        return: 1
-    if: candidate\operations = 0 || required\required_operations = 0
-        c.fprintf(c.stderr, "trans internal error: malformed namespace descriptor in implements\n")
+    if: required\has_structural_fields = 0 || required\structural_fields = 0
+        c.fprintf(c.stderr, "trans L2 implements error: required \"%.*s\" has no field descriptor\n", (cast: int required_name\length), required_name\data)
         return: 1
 
     i: 0U
-    while: i < required\required_operations\count
-        requirement: lm_own_ptr_stack_at(required\required_operations, i)
-        if: requirement = 0
-            c.fprintf(c.stderr, "trans internal error: malformed required operation in namespace descriptor\n")
+    while: i < required\structural_fields\count
+        requirement: lm_own_ptr_stack_at(required\structural_fields, i)
+        if: requirement = 0 || requirement\name = 0
+            c.fprintf(c.stderr, "trans internal error: malformed required field in namespace descriptor\n")
             return: 1
-        if: lm_trans_descriptor_has_operation(candidate, requirement) = 0
+        if: lm_trans_descriptor_structural_field(candidate, requirement\name) = 0
             return: 0
 
         i: i + 1U

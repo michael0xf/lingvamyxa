@@ -1,17 +1,8 @@
-descriptor: ImportedCandidate
-    operations:
-        importedOperation
-    end: operations
+ImportedCandidate:
+    int: importedField
+    int: extra
 end: ImportedCandidate
 
-descriptor: ImportedProtocol
-    requiredOperations:
-        importedOperation
-    end: requiredOperations
-end: ImportedProtocol
-
-descriptor: ShadowedCandidate
-    operations:
-        importedOperation
-    end: operations
-end: ShadowedCandidate
+ImportedRequirement:
+    int: importedField
+end: ImportedRequirement

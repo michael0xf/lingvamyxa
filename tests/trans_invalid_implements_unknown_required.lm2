@@ -1,6 +1,5 @@
-descriptor: KnownCandidate
-    operations:
-    end: operations
+KnownCandidate:
+    int: knownField
 end: KnownCandidate
 
 external:
