@@ -1,0 +1,19 @@
+L2:
+    ifdef:
+        LM_TEST_FM_CONDITIONAL_SAME:
+            fm: pair () (int: value)
+                return: (1)
+            end: pair
+        default:
+            fm: pair () (int: value)
+                return: (2)
+            end: pair
+    end: ifdef
+
+    external:
+        fn: main () int
+            pairReturn: result pair()
+            return: result = 0
+        end: main
+    end: external
+end: L2

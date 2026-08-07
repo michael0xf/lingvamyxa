@@ -1,0 +1,28 @@
+import: "lm2/own.lm2"
+
+callable: AddX (int: value) int
+
+fn: addBase (int: base; int: value) int
+    return: base + value
+end: addBase
+
+fn: callAdd (AddX: add) int
+    return: add(3)
+end: callAdd
+
+ifdef:
+    LM_TEST_BINDER_CONDITIONAL:
+        fn: choose () int
+            return: callAdd(addBase(4))
+        end: choose
+    default:
+        fn: choose () int
+            return: callAdd(addBase(8))
+        end: choose
+end: ifdef
+
+external:
+    fn: main () int
+        return: choose() != 11
+    end: main
+end: external

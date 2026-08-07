@@ -9,13 +9,19 @@ struct LmOwnArena;
 struct LmMessageThread;
 struct LmMessageThreadRuntime;
 struct LmMessageThreadPool;
-#ifndef LM_LMX_LAYOUT_DEFINED_IncomingMessage
-#define LM_LMX_LAYOUT_DEFINED_IncomingMessage 1
+#ifndef LM_LMX_TYPEDEF_DEFINED_IncomingMessage
+#define LM_LMX_TYPEDEF_DEFINED_IncomingMessage 1
+#define LM_LMX_TYPEDEF_ID_A_IncomingMessage 0x10eae12962f7f58fULL
+#define LM_LMX_TYPEDEF_ID_B_IncomingMessage 0xb2add056afdd41bcULL
 typedef struct IncomingMessage IncomingMessage;
 struct IncomingMessage {
     const char *lmx;
     size_t length;
 };
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_IncomingMessage) || !defined(LM_LMX_TYPEDEF_ID_B_IncomingMessage) || LM_LMX_TYPEDEF_ID_A_IncomingMessage != 0x10eae12962f7f58fULL || LM_LMX_TYPEDEF_ID_B_IncomingMessage != 0xb2add056afdd41bcULL
+#error "Lingvamyxa conflicting typedef projection for IncomingMessage"
+#endif
 #endif
 struct LmMessageThread *lm_message_thread_new(void);
 void lm_message_thread_delete(struct LmMessageThread *thread);
@@ -24,7 +30,16 @@ struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
 int lm_rest_lmx_http_client_install_default(struct LmMessageThreadRuntime *runtime);
 #endif
 #ifdef LM_REST_LMX_INSTALL_DEFAULT_SERVER
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxHttpServer
+#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxHttpServer 1
+#define LM_LMX_TYPEDEF_ID_A_LmRestLmxHttpServer 0xc93320eec144d348ULL
+#define LM_LMX_TYPEDEF_ID_B_LmRestLmxHttpServer 0x25d8028910651f29ULL
 typedef struct LmRestLmxHttpServer LmRestLmxHttpServer;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmRestLmxHttpServer) || !defined(LM_LMX_TYPEDEF_ID_B_LmRestLmxHttpServer) || LM_LMX_TYPEDEF_ID_A_LmRestLmxHttpServer != 0xc93320eec144d348ULL || LM_LMX_TYPEDEF_ID_B_LmRestLmxHttpServer != 0x25d8028910651f29ULL
+#error "Lingvamyxa conflicting typedef projection for LmRestLmxHttpServer"
+#endif
+#endif
 int lm_rest_lmx_http_server_start_default(struct LmMessageThreadRuntime *runtime, LmRestLmxHttpServer **out_server);
 int lm_rest_lmx_http_server_stop(LmRestLmxHttpServer **server);
 #endif
@@ -58,6 +73,10 @@ size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);
 void lm_own_arena_freeze(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena);
 void *lm_own_arena_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t size);
 void *lm_own_arena_array_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadExecutionContext
+#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadExecutionContext 1
+#define LM_LMX_TYPEDEF_ID_A_LmMessageThreadExecutionContext 0xa01e9b4b1dd2bdb5ULL
+#define LM_LMX_TYPEDEF_ID_B_LmMessageThreadExecutionContext 0x5b5c3f9ba71f9c50ULL
 typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;
 struct LmMessageThreadExecutionContext {
     jmp_buf diagnostic_root;
@@ -67,7 +86,21 @@ struct LmMessageThreadExecutionContext {
     int diagnostic_line;
     const char *diagnostic_expr;
 };
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThreadExecutionContext) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThreadExecutionContext) || LM_LMX_TYPEDEF_ID_A_LmMessageThreadExecutionContext != 0xa01e9b4b1dd2bdb5ULL || LM_LMX_TYPEDEF_ID_B_LmMessageThreadExecutionContext != 0x5b5c3f9ba71f9c50ULL
+#error "Lingvamyxa conflicting typedef projection for LmMessageThreadExecutionContext"
+#endif
+#endif
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmLmxMessageThreadEntry
+#define LM_LMX_TYPEDEF_DEFINED_LmLmxMessageThreadEntry 1
+#define LM_LMX_TYPEDEF_ID_A_LmLmxMessageThreadEntry 0x645bb4e15cf3f304ULL
+#define LM_LMX_TYPEDEF_ID_B_LmLmxMessageThreadEntry 0xb3dc5cc6edc7d305ULL
 typedef int (*LmLmxMessageThreadEntry)(struct LmMessageThread *thread);
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmLmxMessageThreadEntry) || !defined(LM_LMX_TYPEDEF_ID_B_LmLmxMessageThreadEntry) || LM_LMX_TYPEDEF_ID_A_LmLmxMessageThreadEntry != 0x645bb4e15cf3f304ULL || LM_LMX_TYPEDEF_ID_B_LmLmxMessageThreadEntry != 0xb3dc5cc6edc7d305ULL
+#error "Lingvamyxa conflicting typedef projection for LmLmxMessageThreadEntry"
+#endif
+#endif
 #if defined(__GNUC__) || defined(__clang__)
 #define LM_LMX_UNUSED_ENTRY_HELPER __attribute__((unused))
 #else

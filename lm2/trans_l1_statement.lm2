@@ -142,7 +142,7 @@ fn: lm_trans_emit_capture_field (
         return: 1
 return: lm_trans_put(file, ";\n")
 
-fn: lm_trans_emit_env_type (
+fn: lm_trans_emit_env_type_raw (
     FILE: file
     const: LmTransFunctionHeader: function
     const: LmTransNamespace: namespace_
@@ -176,6 +176,27 @@ fn: lm_trans_emit_env_type (
         i: i + 1U
 
 return: lm_trans_put(file, "};\n\n")
+
+fn: lm_trans_emit_env_type (
+    FILE: file
+    const: LmTransFunctionHeader: function
+    const: LmTransNamespace: namespace_
+) int
+    FILE: declaration_file
+    int: emitted
+    int: status
+
+    if: function = 0 || function\has_env = 0 || function\captures = 0
+        return: 0
+
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
+        return: 1
+    status: lm_trans_emit_env_type_raw(declaration_file, function, namespace_)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_text(file, function\env_type_name, declaration_file, @ emitted)
+    c.fclose(declaration_file)
+return: status
 
 fn: lm_trans_control_body_start (const: (LmP0Frame: frame)) const: LmP0Field
     const: LmP0Field: end_field
@@ -515,7 +536,77 @@ fn: lm_trans_emit_scope_cleanups (
 
 return: 0
 
+fn: lm_trans_emit_incoming_message_type_raw (FILE: file) int
+return: lm_trans_put(file, "typedef struct IncomingMessage IncomingMessage;\nstruct IncomingMessage {\n    const char *lmx;\n    size_t length;\n};\n")
+
+fn: lm_trans_emit_incoming_message_type (FILE: file) int
+    FILE: declaration_file
+    int: emitted
+    int: status
+
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
+        return: 1
+    status: lm_trans_emit_incoming_message_type_raw(declaration_file)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_cstr(file, "IncomingMessage", declaration_file, @ emitted)
+    c.fclose(declaration_file)
+return: status
+
+fn: lm_trans_emit_rest_lmx_http_server_type_raw (FILE: file) int
+return: lm_trans_put(file, "typedef struct LmRestLmxHttpServer LmRestLmxHttpServer;\n")
+
+fn: lm_trans_emit_rest_lmx_http_server_type (FILE: file) int
+    FILE: declaration_file
+    int: emitted
+    int: status
+
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
+        return: 1
+    status: lm_trans_emit_rest_lmx_http_server_type_raw(declaration_file)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_cstr(file, "LmRestLmxHttpServer", declaration_file, @ emitted)
+    c.fclose(declaration_file)
+return: status
+
+fn: lm_trans_emit_message_thread_execution_context_type_raw (FILE: file) int
+return: lm_trans_put(file, "typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;\nstruct LmMessageThreadExecutionContext {\n    jmp_buf diagnostic_root;\n    int diagnostic_code;\n    const char *diagnostic_label;\n    const char *diagnostic_file;\n    int diagnostic_line;\n    const char *diagnostic_expr;\n};\n")
+
+fn: lm_trans_emit_message_thread_execution_context_type (FILE: file) int
+    FILE: declaration_file
+    int: emitted
+    int: status
+
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
+        return: 1
+    status: lm_trans_emit_message_thread_execution_context_type_raw(declaration_file)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_cstr(file, "LmMessageThreadExecutionContext", declaration_file, @ emitted)
+    c.fclose(declaration_file)
+return: status
+
+fn: lm_trans_emit_lmx_message_thread_entry_type_raw (FILE: file) int
+return: lm_trans_put(file, "typedef int (*LmLmxMessageThreadEntry)(struct LmMessageThread *thread);\n")
+
+fn: lm_trans_emit_lmx_message_thread_entry_type (FILE: file) int
+    FILE: declaration_file
+    int: emitted
+    int: status
+
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
+        return: 1
+    status: lm_trans_emit_lmx_message_thread_entry_type_raw(declaration_file)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_cstr(file, "LmLmxMessageThreadEntry", declaration_file, @ emitted)
+    c.fclose(declaration_file)
+return: status
+
 fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
+    int: status
+
     if: file = 0
         return: 1
     if: lm_trans_emitted_message_thread_runtime_prelude
@@ -530,7 +621,7 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "struct LmMessageThreadPool;\n") != 0
         return: 1
-    if: lm_trans_put(file, "#ifndef LM_LMX_LAYOUT_DEFINED_IncomingMessage\n#define LM_LMX_LAYOUT_DEFINED_IncomingMessage 1\ntypedef struct IncomingMessage IncomingMessage;\nstruct IncomingMessage {\n    const char *lmx;\n    size_t length;\n};\n#endif\n") != 0
+    if: lm_trans_emit_incoming_message_type(file) != 0
         return: 1
     if: lm_trans_put(file, "struct LmMessageThread *lm_message_thread_new(void);\n") != 0
         return: 1
@@ -540,7 +631,14 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "#ifdef LM_REST_LMX_INSTALL_DEFAULT_CLIENT\nint lm_rest_lmx_http_client_install_default(struct LmMessageThreadRuntime *runtime);\n#endif\n") != 0
         return: 1
-    if: lm_trans_put(file, "#ifdef LM_REST_LMX_INSTALL_DEFAULT_SERVER\ntypedef struct LmRestLmxHttpServer LmRestLmxHttpServer;\nint lm_rest_lmx_http_server_start_default(struct LmMessageThreadRuntime *runtime, LmRestLmxHttpServer **out_server);\nint lm_rest_lmx_http_server_stop(LmRestLmxHttpServer **server);\n#endif\n") != 0
+    if: lm_trans_put(file, "#ifdef LM_REST_LMX_INSTALL_DEFAULT_SERVER\n") != 0 || lm_trans_typedef_projection_conditional_enter() != 0
+        return: 1
+    status: lm_trans_emit_rest_lmx_http_server_type(file)
+    if: lm_trans_typedef_projection_conditional_leave() != 0
+        status: 1
+    if: status != 0
+        return: 1
+    if: lm_trans_put(file, "int lm_rest_lmx_http_server_start_default(struct LmMessageThreadRuntime *runtime, LmRestLmxHttpServer **out_server);\nint lm_rest_lmx_http_server_stop(LmRestLmxHttpServer **server);\n#endif\n") != 0
         return: 1
     if: lm_trans_put(file, "int lm_message_thread_runtime_attach_root(struct LmMessageThreadRuntime *runtime, struct LmMessageThread *thread);\n") != 0
         return: 1
@@ -602,25 +700,9 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 1
     if: lm_trans_put(file, "void *lm_own_arena_array_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);\n") != 0
         return: 1
-    if: lm_trans_put(file, "typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;\n") != 0
+    if: lm_trans_emit_message_thread_execution_context_type(file) != 0
         return: 1
-    if: lm_trans_put(file, "struct LmMessageThreadExecutionContext {\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    jmp_buf diagnostic_root;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    int diagnostic_code;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    const char *diagnostic_label;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    const char *diagnostic_file;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    int diagnostic_line;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "    const char *diagnostic_expr;\n") != 0
-        return: 1
-    if: lm_trans_put(file, "};\n") != 0
-        return: 1
-    if: lm_trans_put(file, "typedef int (*LmLmxMessageThreadEntry)(struct LmMessageThread *thread);\n") != 0
+    if: lm_trans_emit_lmx_message_thread_entry_type(file) != 0
         return: 1
     if: lm_trans_put(file, "#if defined(__GNUC__) || defined(__clang__)\n") != 0
         return: 1
@@ -5141,6 +5223,27 @@ fn: lm_trans_emit_l2_table_row_type (
         return: 1
 return: 0
 
+fn: lm_trans_emit_l2_table_root_row_type (
+    FILE: file
+    const: @(char row_type_name)
+    @: LmTransL4CallableType column_types
+    @: LmP0Text column_names
+    size_t: column_count
+    const: LmTransNamespace: namespace_
+) int
+    FILE: declaration_file
+    int: emitted
+    int: status
+
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
+        return: 1
+    status: lm_trans_emit_l2_table_row_type(declaration_file, row_type_name, column_types, column_names, column_count, 0U, namespace_)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_cstr(file, row_type_name, declaration_file, @ emitted)
+    c.fclose(declaration_file)
+return: status
+
 fn: lm_trans_l2_table_cell_inline_layout_body (
     const: LmP0Node: node
     const: LmTransL4CallableType: expected_type
@@ -5516,10 +5619,14 @@ fn: lm_trans_emit_l2_table_storage_value (
         lm_own_delete(row_type_name, 0)
         lm_own_delete(storage_name, 0)
 
-    if: indent != 0U && lm_trans_declare_l2_table_binding(namespace_, frame) != 0
-        return: 1
-    if: lm_trans_emit_l2_table_row_type(file, row_type_name, column_types, column_names, column_count, indent, namespace_) != 0
-        return: 1
+    if: indent != 0U
+        if: lm_trans_declare_l2_table_binding(namespace_, frame) != 0 || lm_trans_emit_l2_table_row_type(file, row_type_name, column_types, column_names, column_count, indent, namespace_) != 0
+            return: 1
+        ---
+    else:
+        if: lm_trans_emit_l2_table_root_row_type(file, row_type_name, column_types, column_names, column_count, namespace_) != 0
+            return: 1
+        ---
     if: lm_trans_emit_l2_table_cell_backing_storages(file, rows_frame, object_name, column_types, column_count, row_count, indent, namespace_) != 0
         return: 1
     if: lm_trans_emit_l2_table_storage(file, rows_frame, object_name, row_type_name, storage_name, column_types, column_names, column_count, row_count, indent, namespace_) != 0
@@ -6205,19 +6312,30 @@ fn: lm_trans_emit_function_return_structure_once (
     @: char type_name
     LmP0Text: type_name_text
     const: @: char stored_name
+    FILE: declaration_file
+    int: emitted
+    int: status
 
     type_name: lm_trans_function_return_struct_type_name_new(function_name)
     if: type_name = 0
+        return: 1
+
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
+        lm_own_delete(type_name, 0)
+        return: 1
+    status: lm_trans_emit_function_return_structure(declaration_file, function_name, return_node, namespace_)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_cstr(file, type_name, declaration_file, @ emitted)
+    c.fclose(declaration_file)
+    if: status != 0
+        lm_own_delete(type_name, 0)
         return: 1
 
     stored_name: lm_trans_string_stack_find(lm_trans_emitted_function_return_structs, type_name)
     if: stored_name != 0
         lm_own_delete(type_name, 0)
         return: 0
-
-    if: lm_trans_emit_function_return_structure(file, function_name, return_node, namespace_) != 0
-        lm_own_delete(type_name, 0)
-        return: 1
 
     type_name_text: lm_trans_text_from_cstr(type_name)
     if: type_name_text = 0

@@ -1,0 +1,5 @@
+L2:
+    IncomingMessage:
+        int: incompatible
+    end: IncomingMessage
+end: L2

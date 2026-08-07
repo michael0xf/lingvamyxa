@@ -677,11 +677,8 @@ fn: lm_trans_emit_callable_descriptor_params_body (FILE: file; const: (LmTransFo
         return: lm_trans_put(file, "void")
 return: 0
 
-fn: lm_trans_emit_callable_descriptor (FILE: file; const: (LmTransFunctionHeader: function); const: (LmTransNamespace: namespace_)) int
+fn: lm_trans_emit_callable_descriptor_closure_layout (FILE: file; const: (LmTransFunctionHeader: function); const: (LmTransNamespace: namespace_)) int
     if: function = 0 || function\is_descriptor_only = 0
-        return: 1
-
-    if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
         return: 1
 
     if: function\return_node = 0 || function\return_node\kind = c.LM_P0_NODE_STRUCTURE
@@ -696,15 +693,7 @@ fn: lm_trans_emit_callable_descriptor (FILE: file; const: (LmTransFunctionHeader
         return: 1
     if: lm_trans_write_text(file, function\c_name) != 0
         return: 1
-    if: lm_trans_put(file, "Closure;\ntypedef ") != 0
-        return: 1
-    if: lm_trans_write_text(file, function\c_name) != 0
-        return: 1
-    if: lm_trans_put(file, "Closure *") != 0
-        return: 1
-    if: lm_trans_write_text(file, function\c_name) != 0
-        return: 1
-    if: lm_trans_put(file, ";\nstruct ") != 0
+    if: lm_trans_put(file, "Closure;\nstruct ") != 0
         return: 1
     if: lm_trans_write_text(file, function\c_name) != 0
         return: 1
@@ -719,6 +708,55 @@ fn: lm_trans_emit_callable_descriptor (FILE: file; const: (LmTransFunctionHeader
     if: lm_trans_emit_callable_descriptor_params_body(file, function\params, namespace_, 0) != 0
         return: 1
 return: lm_trans_put(file, ");\n    void *env;\n    void (*destroy)(void *env);\n};\n")
+
+fn: lm_trans_emit_callable_descriptor_pointer_alias (FILE: file; const: (LmTransFunctionHeader: function)) int
+    if: function = 0 || function\is_descriptor_only = 0
+        return: 1
+    if: lm_trans_put(file, "typedef struct ") != 0 || lm_trans_write_text(file, function\c_name) != 0 || lm_trans_put(file, "Closure *") != 0 || lm_trans_write_text(file, function\c_name) != 0
+        return: 1
+return: lm_trans_put(file, ";\n")
+
+fn: lm_trans_emit_callable_descriptor_claimed (FILE: file; const: (LmTransFunctionHeader: function); const: (LmTransNamespace: namespace_)) int
+    FILE: closure_declaration_file
+    FILE: pointer_declaration_file
+    @: char closure_name
+    size_t: closure_name_length
+    int: emitted
+    int: status
+
+    if: function = 0 || function\is_descriptor_only = 0 || function\c_name = 0
+        return: 1
+    if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
+
+    closure_declaration_file: c.tmpfile()
+    pointer_declaration_file: c.tmpfile()
+    closure_name_length: function\c_name\length + 7U
+    closure_name: lm_own_new_zero(closure_name_length + 1U)
+    if: closure_declaration_file = 0 || pointer_declaration_file = 0 || closure_name = 0
+        if: closure_declaration_file != 0
+            c.fclose(closure_declaration_file)
+        if: pointer_declaration_file != 0
+            c.fclose(pointer_declaration_file)
+        lm_own_delete(closure_name, 0)
+        return: 1
+    ---
+
+    c.memcpy(closure_name, function\c_name\data, function\c_name\length)
+    c.memcpy(closure_name + function\c_name\length, "Closure", 7U)
+    emitted: 0
+    status: lm_trans_emit_callable_descriptor_closure_layout(closure_declaration_file, function, namespace_)
+    if: status = 0
+        status: lm_trans_emit_callable_descriptor_pointer_alias(pointer_declaration_file, function)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_text(file, function\c_name, pointer_declaration_file, @ emitted)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_cstr(file, closure_name, closure_declaration_file, @ emitted)
+
+    c.fclose(pointer_declaration_file)
+    c.fclose(closure_declaration_file)
+    lm_own_delete(closure_name, 0)
+return: status
 
 fn: lm_trans_top_level_emit_callable_descriptor (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     int: status
@@ -747,7 +785,7 @@ fn: lm_trans_top_level_emit_callable_descriptor (FILE: file; LmTransNamespace: n
             c.fprintf(c.stderr, "trans L2 error: callable descriptor %.*s admits partial/capture but callable.projection is not c.closure-struct\n", (cast: int descriptor_name\length), descriptor_name\data)
             status: 1
         else:
-            status: lm_trans_emit_callable_descriptor(file, item\function, namespace_)
+            status: lm_trans_emit_callable_descriptor_claimed(file, item\function, namespace_)
         ---
     else:
         if: lm_trans_l4_is_function_pointer_type(namespace_, descriptor_name_storage)

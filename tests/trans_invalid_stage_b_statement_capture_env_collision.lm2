@@ -1,0 +1,12 @@
+L2:
+    lm_lmx_nested_l1_parent_outer_child_inner_i0Env:
+        int: incompatible
+    end: lm_lmx_nested_l1_parent_outer_child_inner_i0Env
+
+    fn: outer (int: captured) int
+        fn: inner () int
+            return: captured
+        ---
+        return: inner()
+    end: outer
+end: L2

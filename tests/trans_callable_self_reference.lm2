@@ -1,0 +1,23 @@
+table:
+    source
+    name: `callable.partial`
+    columns((class: class) (serial: value))
+    rows:
+             Recur 1
+end: `callable.partial`
+
+table:
+    source
+    name: `callable.projection`
+    columns((class: class) (projection: value))
+    rows:
+             Recur `c.closure-struct`
+end: `callable.projection`
+
+fn: Recur (Recur: next) int
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

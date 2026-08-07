@@ -14424,11 +14424,26 @@ compatible only with a `c.struct` forward declaration, and a `c.union` or
 `c.named-union` layout only with a `c.union` forward declaration. Mixing the tag
 families at one projected name is a projection error.
 
-The current shared state covers named structures, physical `merge:`,
-non-forward `c.struct`/`c.union` layout typedefs, L4 alias/forward declarations
-and function-pointer typedefs. Unifying private generated ABI typedefs with the
-same collision domain remains bootstrap debt; their present ordering and
-reserved names are backend constraints and do not define language semantics.
+The current shared translation-unit state covers named structures, physical
+`merge:`, non-forward `c.struct`/`c.union` layout typedefs, L4 alias/forward
+declarations, function-pointer typedefs and implementation-private generated
+ABI typedefs. The latter include callable closure layouts and aliases, capture
+and binder environments, `fm` return layouts, root Table row layouts and fixed
+Message-Thread/runtime prelude types. Their generated names and ordering are
+backend constraints and do not define language semantics.
+
+The current hosted bootstrap rejects creation of a lazy callable binder while
+emitting a structural conditional branch. Its helper functions cannot yet be
+hoisted safely when the source callable or prototype exists only in that
+branch. This is an explicit backend limitation, not a source-language
+restriction or a license to emit a branch-local typedef outside the shared
+collision domain.
+
+Giving true block-local fallback typedefs the same validation with an explicit
+C lexical-scope stack remains bootstrap debt. Until that stack is installed,
+local named/merged Structure and local Table-row fallbacks rely on their
+surrounding emitted C block, the shared translation-unit projection state and
+the bounded prelude replay described in 19.20.4.
 
 20.2.2. L1 and L2 Translator Receivers
 

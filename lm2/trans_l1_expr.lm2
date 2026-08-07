@@ -2134,6 +2134,36 @@ fn: lm_trans_emit_callable_binder_env_fields (FILE: file; const: (LmTransSymbol:
     return: 0
 end: lm_trans_emit_callable_binder_env_fields
 
+fn: lm_trans_emit_callable_binder_env_typedef (FILE: file; const: (LmTransSymbol: source_symbol); size_t: bound_count; const: (LmTransNamespace: namespace_); const: @(char env_type_name)) int
+    LmP0Text: env_type_text
+    int: status
+    if: (((file = 0) || (source_symbol = 0)) || (namespace_ = 0)) || (env_type_name = 0)
+        return: 1
+    env_type_text: lm_trans_text_from_cstr(env_type_name)
+    if: env_type_text = 0
+        return: 1
+    status: (((((((((lm_trans_put(file, "typedef struct ") != 0) || (lm_trans_emit_identifier(file, env_type_text) != 0)) || (lm_trans_put(file, " ") != 0)) || (lm_trans_emit_identifier(file, env_type_text) != 0)) || (lm_trans_put(file, ";\nstruct ") != 0)) || (lm_trans_emit_identifier(file, env_type_text) != 0)) || (lm_trans_put(file, " {\n") != 0)) || (lm_trans_emit_callable_binder_env_fields(file, source_symbol, bound_count, namespace_) != 0)) || (lm_trans_put(file, "};\n") != 0))
+    lm_trans_text_ref_destroy(@ env_type_text)
+    return: status
+end: lm_trans_emit_callable_binder_env_typedef
+
+fn: lm_trans_emit_callable_binder_env_typedef_once (FILE: file; const: (LmTransSymbol: source_symbol); size_t: bound_count; const: (LmTransNamespace: namespace_); const: @(char env_type_name)) int
+    FILE: declaration_file
+    int: emitted
+    int: status
+    if: (((file = 0) || (source_symbol = 0)) || (namespace_ = 0)) || (env_type_name = 0)
+        return: 1
+    declaration_file: c.tmpfile()
+    if: declaration_file = 0
+        return: 1
+    emitted: 0
+    status: lm_trans_emit_callable_binder_env_typedef(declaration_file, source_symbol, bound_count, namespace_, env_type_name)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_cstr(file, env_type_name, declaration_file, @ emitted)
+    c.fclose(declaration_file)
+    return: status
+end: lm_trans_emit_callable_binder_env_typedef_once
+
 fn: lm_trans_emit_callable_binder_env_assignments (FILE: file; const: (LmTransSymbol: source_symbol); size_t: bound_count; const: @(char env_name)) int
     size_t: index
     const: LmP0Text: param_name
@@ -2176,6 +2206,11 @@ fn: lm_trans_emit_callable_binder (FILE: file; const: (LmTransNamespace: namespa
         lm_trans_expr_abi_params_delete(descriptor_params, descriptor_params_capacity)
         lm_trans_expr_callable_type_delete(return_type)
         return: 0
+    if: lm_trans_l2_conditional_emission_depth > 0
+        c.fprintf(c.stderr, "trans L2 error: lazy callable binding is not supported inside conditional emission\n")
+        lm_trans_expr_abi_params_delete(descriptor_params, descriptor_params_capacity)
+        lm_trans_expr_callable_type_delete(return_type)
+        return: 1
     binder_name: lm_trans_callable_binder_name_new(source_name, descriptor_name, bound_count)
     if: (binder_name = 0)
         lm_trans_expr_abi_params_delete(descriptor_params, descriptor_params_capacity)
@@ -2211,7 +2246,7 @@ fn: lm_trans_emit_callable_binder (FILE: file; const: (LmTransNamespace: namespa
         lm_trans_expr_callable_type_delete(return_type)
         return: 1
     if: (bound_count != 0U)
-        if: (((((((((lm_trans_put(prelude_file, "typedef struct ") != 0) || (lm_trans_emit_identifier(prelude_file, lm_trans_text_from_cstr(env_type_name)) != 0)) || (lm_trans_put(prelude_file, " ") != 0)) || (lm_trans_emit_identifier(prelude_file, lm_trans_text_from_cstr(env_type_name)) != 0)) || (lm_trans_put(prelude_file, ";\nstruct ") != 0)) || (lm_trans_emit_identifier(prelude_file, lm_trans_text_from_cstr(env_type_name)) != 0)) || (lm_trans_put(prelude_file, " {\n") != 0)) || (lm_trans_emit_callable_binder_env_fields(prelude_file, source_symbol, bound_count, namespace_) != 0)) || (lm_trans_put(prelude_file, "};\n") != 0))
+        if: lm_trans_emit_callable_binder_env_typedef_once(prelude_file, source_symbol, bound_count, namespace_, env_type_name) != 0
             lm_own_delete(env_type_name, 0)
             lm_own_delete(call_name, 0)
             lm_own_delete(destroy_name, 0)

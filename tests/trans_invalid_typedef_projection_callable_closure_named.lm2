@@ -1,0 +1,21 @@
+table:
+    source
+    name: `callable.partial`
+    columns((class: class) (serial: value))
+    rows:
+             Foo 1
+end: `callable.partial`
+
+table:
+    source
+    name: `callable.projection`
+    columns((class: class) (projection: value))
+    rows:
+             Foo `c.closure-struct`
+end: `callable.projection`
+
+FooClosure:
+    int: value
+end: FooClosure
+
+fn: Foo (int: value) int
