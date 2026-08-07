@@ -1,17 +1,4 @@
-L1:
-===
-struct LmTagProbeStruct {
-    int value;
-};
-
-union LmTagProbeUnion {
-    int value;
-};
-
-enum LmTagProbeEnum {
-    LM_TAG_PROBE_OK = 7
-};
-===
+include: "trans_c_tagged_declaration.support.h"
 
 external:
     fn: main () int

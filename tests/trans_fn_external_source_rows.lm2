@@ -1,3 +1,5 @@
+include: "trans_fn_external_source_rows.support.h"
+
 predef: "fixtures/fn_external_source_rows.lm2"
 
 table:
@@ -57,33 +59,6 @@ end: class
 
 prototype
 
-L1:
-===
-int lm_test_external_direct(int value) {
-    return value + 10;
-}
-
-void lm_test_external_fallback(int *value) {
-    *value += 20;
-}
-
-static int lm_test_external_joined_called;
-static int lm_test_external_receiver_n2_called;
-static int lm_test_external_receiver_fallback_called;
-
-void lm_test_external_joined(void) {
-    lm_test_external_joined_called = 1;
-}
-
-void lm_test_external_receiver_n2(void) {
-    lm_test_external_receiver_n2_called = 1;
-}
-
-void lm_test_external_receiver_fallback(void) {
-    lm_test_external_receiver_fallback_called = 1;
-}
-===
-
 external:
     fn: main () int
         int: value 1
@@ -91,6 +66,6 @@ external:
         lm_test_external_joined()
         lm_test_external_receiver_n2()
         lm_test_external_receiver_fallback()
-        return: lm_test_external_direct(1) != 11 || value != 21 || c.lm_test_external_joined_called = 0 || c.lm_test_external_receiver_n2_called = 0 || c.lm_test_external_receiver_fallback_called = 0
+        return: lm_test_external_direct(1) != 11 || value != 21 || c.lm_test_external_calls_complete() = 0
     end: main
 end: external

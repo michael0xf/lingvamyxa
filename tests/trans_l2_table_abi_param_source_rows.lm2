@@ -1,3 +1,5 @@
+include: "trans_l2_table_abi_param_source_rows.support.h"
+
 table:
     source
     name: fn
@@ -27,17 +29,6 @@ table:
 end: LmAbiParamFallback
 
 fn
-
-L1:
-===
-static const char *LmWideAbiParams(const char *text, int count) {
-    return text[0] == 'o' && count == 7 ? text : 0;
-}
-
-static int LmAbiParamFallback(int value) {
-    return value + 1;
-}
-===
 
 external:
     fn: main () int

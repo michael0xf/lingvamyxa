@@ -1,3 +1,5 @@
+include: "trans_managed_external_thread_context.support.h"
+
 predef: "fixtures/managed_external_abi.lm2"
 
 table:
@@ -35,25 +37,6 @@ table:
 end: lm_test_registry_managed_external
 
 prototype
-
-L1:
-===
-int lm_test_imported_managed_external(
-    struct LmMessageThread *lm_lmx_message_thread,
-    void *expected_thread
-) {
-    return lm_lmx_message_thread != 0 &&
-        lm_lmx_message_thread == expected_thread;
-}
-
-int lm_test_registry_managed_external(
-    struct LmMessageThread *lm_lmx_message_thread,
-    void *expected_thread
-) {
-    return lm_lmx_message_thread != 0 &&
-        lm_lmx_message_thread == expected_thread;
-}
-===
 
 external:
     fn: lm_test_defined_managed_external (@: void expected_thread) int
