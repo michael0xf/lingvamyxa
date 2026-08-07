@@ -1,15 +1,33 @@
-L1:
-===
-typedef struct LmRawBox {
-    int value;
-} LmRawBox;
-
-static LmRawBox boxes[2];
-===
-
 L2:
+. table:
+. . source
+. . name: class
+. . columns((class: class) (class: kind))
+. . rows:
+. . . LmRawBox  layout
+. end: class
+.
+. table:
+. . source
+. . name: LmRawBox
+. . columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`))
+. . rows:
+. . . value  int  0  0
+. end: LmRawBox
+.
+. table:
+. . source
+. . name: `layout.backend`
+. . columns((class: class) (class: backend))
+. . rows:
+. . . LmRawBox  c.struct
+. end: `layout.backend`
+.
+. layout
+.
 . external:
 . . fn: main () int
+. . . [2]: LmRawBox boxes
 . . . c.boxes[1].value: 7
 . . . return: c.boxes[1].value != 7
 . . end: main

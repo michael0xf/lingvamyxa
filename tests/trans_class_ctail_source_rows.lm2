@@ -41,16 +41,19 @@ L2:
         rows:
                  LmCTailJoined  8  None
     end: class
-end: L2
 
-L1:
-===
-typedef int LmCTailDirect;
-typedef int LmCTailFallback;
-typedef int LmCTailJoined;
-===
+    table:
+        source
+        name: alias
+        columns((class: class) (class: backend) (class: target))
+        rows:
+                 LmCTailDirect    c.typedef  int
+                 LmCTailFallback  c.typedef  int
+                 LmCTailJoined    c.typedef  int
+    end: alias
 
-L2:
+    alias
+
     fn: lm_ctail_direct_probe (c.LmCTailDirect: value) int
         return: value
     end: lm_ctail_direct_probe

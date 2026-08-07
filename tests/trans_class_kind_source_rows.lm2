@@ -157,32 +157,34 @@ table:
              lm_test_class_kind_runtime_default  1
 end: `fn.thread-context.none`
 
+table:
+    source
+    name: alias
+    columns((class: class) (class: backend) (class: target))
+    rows:
+             LmClassKindSourceDirect          c.typedef  int
+             LmClassKindSourceSchemaFallback  c.typedef  int
+             LmClassKindSourceJoined          c.typedef  int
+             LmClassKindCompatDirect          c.typedef  int
+             LmClassKindCompatSchemaFallback  c.typedef  int
+             LmClassKindCompatJoined          c.typedef  int
+             LmClassKindWideDirect             c.typedef  int
+             LmClassKindWideLateNone           c.typedef  int
+             LmClassKindWideReordered          c.typedef  int
+             LmClassKindWidePhysicalOverlay    c.typedef  int
+             LmClassKindWidePhysical           c.typedef  int
+             LmClassKindWideJoined             c.typedef  int
+             LmClassKindWideSchemaFallback     c.typedef  int
+end: alias
+
+alias
+
 sub: lm_test_class_kind_runtime_default (int: value)
+    if: value != 0
+        return
+end: lm_test_class_kind_runtime_default
 
 prototype
-
-L1:
-===
-typedef int LmClassKindSourceDirect;
-typedef int LmClassKindSourceSchemaFallback;
-typedef int LmClassKindSourceJoined;
-typedef int LmClassKindCompatDirect;
-typedef int LmClassKindCompatSchemaFallback;
-typedef int LmClassKindCompatJoined;
-typedef int LmClassKindWideDirect;
-typedef int LmClassKindWideLateNone;
-typedef int LmClassKindWideReordered;
-typedef int LmClassKindWidePhysicalOverlay;
-typedef int LmClassKindWidePhysical;
-typedef int LmClassKindWideJoined;
-typedef int LmClassKindWideSchemaFallback;
-
-#define lm_test_require_pointer(value) ((void)sizeof(*(value)), 0)
-
-static void lm_test_class_kind_runtime_default(int value) {
-    (void)value;
-}
-===
 
 external:
     fn: main () int
@@ -201,6 +203,6 @@ external:
         LmClassKindWideSchemaFallback: wide_schema_fallback 0
 
         c.lm_test_class_kind_runtime_default(7)
-        return: c.lm_test_require_pointer(source_direct) || c.lm_test_require_pointer(source_schema_fallback) || c.lm_test_require_pointer(source_joined) || c.lm_test_require_pointer(compat_direct) || c.lm_test_require_pointer(compat_schema_fallback) || c.lm_test_require_pointer(compat_joined) || c.lm_test_require_pointer(wide_direct) || c.lm_test_require_pointer(wide_late_none) || c.lm_test_require_pointer(wide_reordered) || c.lm_test_require_pointer(wide_physical_overlay) || c.lm_test_require_pointer(wide_physical) || c.lm_test_require_pointer(wide_joined) || c.lm_test_require_pointer(wide_schema_fallback)
+        return: c.sizeof(source_direct[0]) = 0U || c.sizeof(source_schema_fallback[0]) = 0U || c.sizeof(source_joined[0]) = 0U || c.sizeof(compat_direct[0]) = 0U || c.sizeof(compat_schema_fallback[0]) = 0U || c.sizeof(compat_joined[0]) = 0U || c.sizeof(wide_direct[0]) = 0U || c.sizeof(wide_late_none[0]) = 0U || c.sizeof(wide_reordered[0]) = 0U || c.sizeof(wide_physical_overlay[0]) = 0U || c.sizeof(wide_physical[0]) = 0U || c.sizeof(wide_joined[0]) = 0U || c.sizeof(wide_schema_fallback[0]) = 0U
     end: main
 end: external

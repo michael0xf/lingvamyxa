@@ -1,26 +1,53 @@
-L1:
-===
-static int variable = 5;
-
-typedef struct LmBranch {
-    int value;
-} LmBranch;
-
-static LmBranch branch = { 23 };
-static LmBranch *node = &branch;
-
-static int add(int left, int right) {
-    return left + right;
-}
-
-static int wrap(int value) {
-    return value;
-}
-===
-
 L2:
+    table:
+        source
+        name: class
+        columns((class: class) (class: kind))
+        rows:
+                 LmBranch  layout
+    end: class
+
+    table:
+        source
+        name: LmBranch
+        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`))
+        rows:
+                 value  int  0  0
+    end: LmBranch
+
+    table:
+        source
+        name: `layout.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LmBranch  c.struct
+    end: `layout.backend`
+
+    table:
+        source
+        name: `fn.thread-context.none`
+        columns((class: class) (int: value))
+        rows:
+                 add   1
+                 wrap  1
+    end: `fn.thread-context.none`
+
+    layout
+
+    fn: add (int: left; int: right) int
+        return: left + right
+    end: add
+
+    fn: wrap (int: value) int
+        return: value
+    end: wrap
+
     external:
         fn: main () int
+            int: variable 5
+            c.struct: c.LmBranch branch
+            @: LmBranch node @ branch
+            c.branch.value: 23
             return: c.add(c.variable, c.wrap(c.add(2, c.node->value))) != 30
         end: main
     end: external

@@ -78,17 +78,44 @@ L2:
         rows:
                  LmProjectionSemanticReference  opaqueHandle
     end: `class.semantic`
-end: L2
 
-L1:
-===
-typedef struct LmProjectionRaw { int value; } LmProjectionRaw;
-typedef int LmProjectionReference;
-typedef short LmProjectionKindReference;
-typedef long LmProjectionSemanticReference;
-===
+    table:
+        source
+        name: class
+        columns((class: class) (class: kind))
+        rows:
+                 LmProjectionRaw  layout
+    end: class
 
-L2:
+    table:
+        source
+        name: LmProjectionRaw
+        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`))
+        rows:
+                 value  int  0  0
+    end: LmProjectionRaw
+
+    table:
+        source
+        name: `layout.backend`
+        columns((class: class) (class: backend))
+        rows:
+                 LmProjectionRaw  c.struct
+    end: `layout.backend`
+
+    table:
+        source
+        name: alias
+        columns((class: class) (class: backend) (class: target))
+        rows:
+                 LmProjectionReference          c.typedef  int
+                 LmProjectionKindReference      c.typedef  short
+                 LmProjectionSemanticReference  c.typedef  long
+    end: alias
+
+    layout
+    alias
+
     fn: lm_projection_raw_probe (c.LmProjectionRaw: value) int
         return: value != 0
     end: lm_projection_raw_probe
