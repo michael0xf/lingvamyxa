@@ -59,7 +59,7 @@ fn: lm_test_l2_join_missing_source (LmTransNamespace: namespace_) int
     size_t: class_count
     int: status
 
-    source: "join: (LmL2MissingJoinSource) LmL2MissingJoinTarget\n    columns((class: class) (char: value))\n    rows:\nend: LmL2MissingJoinTarget\n"
+    source: "join: (LmL2MissingJoinSource) LmL2MissingJoinTarget\n    columns: (class: class) (char: value)\n    rows:\nend: LmL2MissingJoinTarget\n"
     document: 0
     if: namespace_ = 0 || lm_p0_parse_string(source, @ document) != 0 || document = 0
         if: document != 0
@@ -95,7 +95,7 @@ fn: lm_test_l2_join_incompatible_schema (LmTransNamespace: namespace_) int
     size_t: class_count
     int: status
 
-    source: "table:\n    name: LmL2IncompatibleJoinSource\n    columns((class: class) (char: left) (char: right))\n    rows:\n             incompatibleKey  \"left\"  \"right\"\nend: LmL2IncompatibleJoinSource\njoin: (LmL2IncompatibleJoinSource) LmL2IncompatibleJoinTarget\n    columns((class: class) (char: left) (node: right))\n    rows:\nend: LmL2IncompatibleJoinTarget\n"
+    source: "table:\n    name: LmL2IncompatibleJoinSource\n    columns: (class: class) (char: left) (char: right)\n    rows:\n             incompatibleKey  \"left\"  \"right\"\nend: LmL2IncompatibleJoinSource\njoin: (LmL2IncompatibleJoinSource) LmL2IncompatibleJoinTarget\n    columns: (class: class) (char: left) (node: right)\n    rows:\nend: LmL2IncompatibleJoinTarget\n"
     document: 0
     if: namespace_ = 0 || lm_p0_parse_string(source, @ document) != 0 || document = 0
         if: document != 0
@@ -143,7 +143,7 @@ fn: lm_test_l2_join_facade_only_kind_conflict (LmTransNamespace: namespace_) int
     size_t: class_present_relation_count
     int: status
 
-    source: "table:\n    name: LmL2FacadeKindSource\n    columns((class: class) (class: kind))\n    rows:\n             LmL2FacadeOnlyConflict  opaqueReference\nend: LmL2FacadeKindSource\njoin: (LmL2FacadeKindSource) class\n    columns((class: class) (class: kind))\n    rows:\nend: class\n"
+    source: "table:\n    name: LmL2FacadeKindSource\n    columns: (class: class) (class: kind)\n    rows:\n             LmL2FacadeOnlyConflict  opaqueReference\nend: LmL2FacadeKindSource\njoin: (LmL2FacadeKindSource) class\n    columns: (class: class) (class: kind)\n    rows:\nend: class\n"
     document: 0
     table_text: 0
     key_text: 0
@@ -204,7 +204,7 @@ fn: lm_test_l2_join_emitter_is_source_only (LmTransNamespace: namespace_) int
     int: previous_depth
     int: status
 
-    source: "table:\n    name: LmL2RuntimeJoinSource\n    columns((int: key) (int: value))\n    rows:\n             1  2\nend: LmL2RuntimeJoinSource\njoin: (LmL2RuntimeJoinSource) LmL2RuntimeJoinTarget\n    columns((int: key) (int: value))\n    rows:\n             3  4\nend: LmL2RuntimeJoinTarget\n"
+    source: "table:\n    name: LmL2RuntimeJoinSource\n    columns: (int: key) (int: value)\n    rows:\n             1  2\nend: LmL2RuntimeJoinSource\njoin: (LmL2RuntimeJoinSource) LmL2RuntimeJoinTarget\n    columns: (int: key) (int: value)\n    rows:\n             3  4\nend: LmL2RuntimeJoinTarget\n"
     document: 0
     output: 0
     status: 0
@@ -262,7 +262,7 @@ fn: lm_test_l2_join_self_snapshot (LmTransNamespace: namespace_) int
     const: LmTransRegistryFact: direct_fact
     int: status
 
-    source: "table:\n    name: LmL2SelfJoin\n    columns((class: class) (char: value))\n    rows:\n             selfBase  \"base\"\nend: LmL2SelfJoin\njoin: (LmL2SelfJoin) LmL2SelfJoin\n    columns((class: class) (char: value))\n    rows:\n             selfDirect  \"direct\"\nend: LmL2SelfJoin\n"
+    source: "table:\n    name: LmL2SelfJoin\n    columns: (class: class) (char: value)\n    rows:\n             selfBase  \"base\"\nend: LmL2SelfJoin\njoin: (LmL2SelfJoin) LmL2SelfJoin\n    columns: (class: class) (char: value)\n    rows:\n             selfDirect  \"direct\"\nend: LmL2SelfJoin\n"
     document: 0
     if: namespace_ = 0 || lm_p0_parse_string(source, @ document) != 0 || document = 0
         if: document != 0
@@ -352,7 +352,7 @@ fn: lm_test_l2_join_source_rows_core () int
     int: projected_covered
     int: status
 
-    source: "table:\n    name: sourceA\n    columns((class: class) (char: label) (node: body))\n    rows:\n             alpha  \"a\"\n             bodyA:\n                 childA\n             end: bodyA\n             nativeKey\n             nativeLabel:\n                 nestedLabel\n             end: nativeLabel\n             nativeBody:\n                 nestedBody\n             end: nativeBody\nend: sourceA\n\ntable:\n    name: sourceB\n    columns((class: class) (char: label) (node: body))\n    rows:\n             beta  \"b\"\n             bodyB:\n                 childB\n             end: bodyB\nend: sourceB\n\njoin: (sourceA sourceB) middle\n    columns((class: class) (char: label) (node: body))\n    rows:\n             direct  \"d\"\n             directBody:\n                 childDirect\n             end: directBody\nend: middle\n\njoin: (middle) target\n    columns((class: class) (char: label) (node: body))\n    rows:\nend: target\n\ntable:\n    name: kindA\n    columns((class: class) (class: kind))\n    rows:\n             LmL2JoinKindConflict opaqueReference\nend: kindA\n\ntable:\n    name: kindB\n    columns((class: class) (class: kind))\n    rows:\n             LmL2JoinKindConflict function\nend: kindB\n\njoin: (kindA kindB) class\n    columns((class: class) (class: kind))\n    rows:\nend: class\n"
+    source: "table:\n    name: sourceA\n    columns: (class: class) (char: label) (node: body)\n    rows:\n             alpha  \"a\"\n             bodyA:\n                 childA\n             end: bodyA\n             nativeKey\n             nativeLabel:\n                 nestedLabel\n             end: nativeLabel\n             nativeBody:\n                 nestedBody\n             end: nativeBody\nend: sourceA\n\ntable:\n    name: sourceB\n    columns: (class: class) (char: label) (node: body)\n    rows:\n             beta  \"b\"\n             bodyB:\n                 childB\n             end: bodyB\nend: sourceB\n\njoin: (sourceA sourceB) middle\n    columns: (class: class) (char: label) (node: body)\n    rows:\n             direct  \"d\"\n             directBody:\n                 childDirect\n             end: directBody\nend: middle\n\njoin: (middle) target\n    columns: (class: class) (char: label) (node: body)\n    rows:\nend: target\n\ntable:\n    name: kindA\n    columns: (class: class) (class: kind)\n    rows:\n             LmL2JoinKindConflict opaqueReference\nend: kindA\n\ntable:\n    name: kindB\n    columns: (class: class) (class: kind)\n    rows:\n             LmL2JoinKindConflict function\nend: kindB\n\njoin: (kindA kindB) class\n    columns: (class: class) (class: kind)\n    rows:\nend: class\n"
 
     document: 0
     namespace_: 0

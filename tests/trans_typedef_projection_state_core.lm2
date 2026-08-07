@@ -512,7 +512,7 @@ fn: lm_test_typedef_projection_state_core () int
     int: emitted
     int: status
 
-    registry_source: "table:\n    name: `typedef.emitted`\n    columns((class: class) (class: value))\n    rows:\n             Foo Foo\nend: `typedef.emitted`\n"
+    registry_source: "table:\n    name: `typedef.emitted`\n    columns: (class: class) (class: value)\n    rows:\n             Foo Foo\nend: `typedef.emitted`\n"
     first_structure_source: "Foo:\n    int: value\nend: Foo\n"
     second_structure_source: "Foo:\n    double: value\nend: Foo\n"
     source_path: "tests/trans_typedef_projection_state_core.lm2"

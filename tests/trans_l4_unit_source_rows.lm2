@@ -1,6 +1,6 @@
 table:
     name: unit
-    columns((class: class) (int: marker) (node: payload) (int: extra) (class: backend))
+    columns: (class: class) (int: marker) (node: payload) (int: extra) (class: backend)
     rows:
              lm_test_unit_source           7
              L2:
@@ -80,7 +80,7 @@ end: unit
 
 table:
     name: unit
-    columns((class: class) (class: backend) (node: payload))
+    columns: (class: class) (class: backend) (node: payload)
     rows:
              lm_test_unit_duplicate  c.static-unit
              L2:
@@ -94,7 +94,7 @@ end: unit
 
 table:
     name: `unit.payload`
-    columns((class: class) (node: payload))
+    columns: (class: class) (node: payload)
     rows:
              lm_test_unit_payload_overlay
              L2:
@@ -116,21 +116,21 @@ end: `unit.payload`
 
 table:
     name: `unit.payload`
-    columns((class: class) (char: payload))
+    columns: (class: class) (char: payload)
     rows:
              lm_test_unit_text_overlay  "static int lm_test_unit_text_overlay(void) { return 24; }"
 end: `unit.payload`
 
 table:
     name: `unit.payload`
-    columns((class: class) (@: char payload))
+    columns: (class: class) (@: char payload)
     rows:
              lm_test_unit_text_schema_fallback  "static int lm_test_unit_text_schema_fallback(void) { return 26; }"
 end: `unit.payload`
 
 table:
     name: `unit.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              lm_test_unit_backend_overlay  c.other
              lm_test_unit_backend_join     c.static-unit
@@ -139,7 +139,7 @@ end: `unit.backend`
 
 table:
     name: `lm.test.unit.joined.seed`
-    columns((class: class) (class: backend) (node: payload))
+    columns: (class: class) (class: backend) (node: payload)
     rows:
              lm_test_unit_joined  c.static-unit
              L2:
@@ -152,12 +152,12 @@ table:
 end: `lm.test.unit.joined.seed`
 
 join: (`lm.test.unit.joined.seed`) `lm.test.unit.joined.middle`
-    columns((class: class) (class: backend) (node: payload))
+    columns: (class: class) (class: backend) (node: payload)
     rows:
 end: `lm.test.unit.joined.middle`
 
 join: (`lm.test.unit.joined.middle`) unit
-    columns((class: class) (class: backend) (node: payload))
+    columns: (class: class) (class: backend) (node: payload)
     rows:
 end: unit
 

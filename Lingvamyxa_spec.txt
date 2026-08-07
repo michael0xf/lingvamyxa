@@ -482,7 +482,7 @@ A `table:` may put the bare atom `source` first in its direct body:
     table:
         source
         name: `model.generic-key`
-        columns((@: char key) (@: char value))
+        columns: (@: char key) (@: char value)
         rows:
                  sample  ok
     end: `model.generic-key`

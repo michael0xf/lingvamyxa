@@ -1,7 +1,7 @@
 table:
     source
     name: class
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              default  function
 end: class
@@ -9,7 +9,7 @@ end: class
 table:
     source
     name: `layout.backend`
-    columns((char: key) (class: backend))
+    columns: (char: key) (class: backend)
     rows:
              LmUnknownWildcardClass  c.struct
 end: `layout.backend`
@@ -17,7 +17,7 @@ end: `layout.backend`
 table:
     source
     name: `LmUnknownWildcardClass.field.class`
-    columns((char: field) (class: class))
+    columns: (char: field) (class: class)
     rows:
              value  int
 end: `LmUnknownWildcardClass.field.class`
@@ -25,7 +25,7 @@ end: `LmUnknownWildcardClass.field.class`
 table:
     source
     name: `LmUnknownWildcardClass.field.index`
-    columns((char: field) (size_t: index))
+    columns: (char: field) (size_t: index)
     rows:
              value  0
 end: `LmUnknownWildcardClass.field.index`

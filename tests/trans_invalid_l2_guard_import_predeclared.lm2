@@ -2,7 +2,7 @@ L2:
     table:
         source
         name: `define.value`
-        columns((class: class) (@: char value))
+        columns: (class: class) (@: char value)
         rows:
                  LM_TEST_L2_GUARD_IMPORT_PREDECLARED  1
     end: `define.value`

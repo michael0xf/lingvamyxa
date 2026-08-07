@@ -1,7 +1,7 @@
 table:
     source
     name: `class.range`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              int  "test-int-wrong"
              int  "test-int"
@@ -11,7 +11,7 @@ end: `class.range`
 table:
     source
     name: `class.range`
-    columns((class: class) (class: value))
+    columns: (class: class) (class: value)
     rows:
              short  int
 end: `class.range`
@@ -19,25 +19,25 @@ end: `class.range`
 table:
     source
     name: `lm.test.class.range.seed`
-    columns((class: class) (int: marker) (@: char range))
+    columns: (class: class) (int: marker) (@: char range)
     rows:
              long  7  "test-long"
 end: `lm.test.class.range.seed`
 
 join: (`lm.test.class.range.seed`) `lm.test.class.range.middle`
-    columns((class: class) (int: marker) (@: char range))
+    columns: (class: class) (int: marker) (@: char range)
     rows:
 end: `lm.test.class.range.middle`
 
 join: (`lm.test.class.range.middle`) `class`
-    columns((class: class) (int: marker) (@: char range))
+    columns: (class: class) (int: marker) (@: char range)
     rows:
 end: `class`
 
 table:
     source
     name: `class`
-    columns((class: class) (int: marker) (@: char range))
+    columns: (class: class) (int: marker) (@: char range)
     rows:
              long  8  None
 end: `class`

@@ -1,6 +1,6 @@
 table:
     name: os
-    columns((class: class) (node: payload))
+    columns: (class: class) (node: payload)
     rows:
              mac
              L2:
@@ -12,7 +12,7 @@ end: os
 
 table:
     name: os
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
              win
              L2:
@@ -30,7 +30,7 @@ end: os
 
 table:
     name: `lm.test.os.seed`
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
              unix
              L2:
@@ -41,13 +41,13 @@ table:
 end: `lm.test.os.seed`
 
 join: (`lm.test.os.seed`) os
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
 end: os
 
 table:
     name: os
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
              mac
              L2:
@@ -60,7 +60,7 @@ end: os
 
 table:
     name: os
-    columns((class: class) (int: marker) (node: body))
+    columns: (class: class) (int: marker) (node: body)
     rows:
              win 2
              L2:
@@ -72,7 +72,7 @@ end: os
 
 table:
     name: `os.body`
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
              unix
              L2:
@@ -84,7 +84,7 @@ end: `os.body`
 
 table:
     name: `lm.test.os.wide.seed`
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
              mac
              L2:
@@ -96,18 +96,18 @@ table:
 end: `lm.test.os.wide.seed`
 
 join: (`lm.test.os.wide.seed`) `lm.test.os.wide.middle`
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
 end: `lm.test.os.wide.middle`
 
 join: (`lm.test.os.wide.middle`) os
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
 end: os
 
 table:
     name: os
-    columns((char: class) (node: body) (int: marker))
+    columns: (char: class) (node: body) (int: marker)
     rows:
              unix
              L2:
@@ -120,7 +120,7 @@ end: os
 
 table:
     name: os
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
              mac
              L2:

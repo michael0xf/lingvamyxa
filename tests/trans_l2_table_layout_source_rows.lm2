@@ -1,7 +1,7 @@
 table:
     source
     name: class
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              Plain      layout
              Qualified  layout
@@ -14,7 +14,7 @@ end: class
 table:
     source
     name: Plain
-    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
              value  int  0
 end: Plain
@@ -22,7 +22,7 @@ end: Plain
 table:
     source
     name: Qualified
-    columns((class: class) (int: marker) (int: `field.const`) (size_t: `field.index`) (int: extra) (class: `field.class`) (size_t: `field.address-depth`))
+    columns: (class: class) (int: marker) (int: `field.const`) (size_t: `field.index`) (int: extra) (class: `field.class`) (size_t: `field.address-depth`)
     rows:
              text  7  0  0  9  char  0
 end: Qualified
@@ -30,7 +30,7 @@ end: Qualified
 table:
     source
     name: `Qualified.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              text  1
 end: `Qualified.field.address-depth`
@@ -38,7 +38,7 @@ end: `Qualified.field.address-depth`
 table:
     source
     name: `Qualified.field.const`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              text  1
 end: `Qualified.field.const`
@@ -46,7 +46,7 @@ end: `Qualified.field.const`
 table:
     source
     name: Partial
-    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`)
     rows:
              value  int  0  None  None
 end: Partial
@@ -54,7 +54,7 @@ end: Partial
 table:
     source
     name: Overlay
-    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
              value  int  0
 end: Overlay
@@ -62,7 +62,7 @@ end: Overlay
 table:
     source
     name: `Overlay.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              value  Boolean
 end: `Overlay.field.class`
@@ -70,7 +70,7 @@ end: `Overlay.field.class`
 table:
     source
     name: `SplitOnly.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              flag  Boolean
 end: `SplitOnly.field.class`
@@ -78,7 +78,7 @@ end: `SplitOnly.field.class`
 table:
     source
     name: WrongSchema
-    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`))
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`)
     rows:
              value  int  0  0  0
 end: WrongSchema
@@ -86,7 +86,7 @@ end: WrongSchema
 table:
     source
     name: `WrongSchema.field.class`
-    columns((class: class) (char: field))
+    columns: (class: class) (char: field)
     rows:
              value  int
 end: `WrongSchema.field.class`
@@ -94,7 +94,7 @@ end: `WrongSchema.field.class`
 table:
     source
     name: `WrongSchema.field.address-depth`
-    columns((class: class) (int: depth))
+    columns: (class: class) (int: depth)
     rows:
              value  0
 end: `WrongSchema.field.address-depth`
@@ -102,7 +102,7 @@ end: `WrongSchema.field.address-depth`
 table:
     source
     name: `WrongSchema.field.const`
-    columns((class: class) (size_t: value))
+    columns: (class: class) (size_t: value)
     rows:
              value  0
 end: `WrongSchema.field.const`
@@ -110,7 +110,7 @@ end: `WrongSchema.field.const`
 table:
     source
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              Plain      c.struct
              Qualified  c.struct
@@ -123,7 +123,7 @@ end: `layout.backend`
 table:
     source
     name: `class.reference-base`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              Plain      1
              Qualified  1
@@ -137,7 +137,7 @@ include: "<string.h>" "trans_l2_table_layout_source_rows.support.h"
 
 table:
     name: layoutTable
-    columns((Plain: plain) (Qualified: qualified) (Partial: partial) (Overlay: overlay) (SplitOnly: split) (WrongSchema: wrong))
+    columns: (Plain: plain) (Qualified: qualified) (Partial: partial) (Overlay: overlay) (SplitOnly: split) (WrongSchema: wrong)
     rows:
              Plain:
                  value: 7

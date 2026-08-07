@@ -1,7 +1,7 @@
 L2:
     table:
         name: conditionalRegistryJoinSeed
-        columns((class: class) (int: value))
+        columns: (class: class) (int: value)
         rows:
                  conditionalSeedKey  1
     end: conditionalRegistryJoinSeed
@@ -9,7 +9,7 @@ L2:
     ifdef:
         LM_TEST_CONDITIONAL_REGISTRY_JOIN:
             join: (conditionalRegistryJoinSeed) conditionalRegistryJoin
-                columns((class: class) (int: value))
+                columns: (class: class) (int: value)
                 rows:
             end: conditionalRegistryJoin
     end: ifdef

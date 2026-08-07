@@ -1,7 +1,7 @@
 table:
     source
     name: `lm.test.l2.join.namespace.seed`
-    columns((class: class) (class: `receiver.type`))
+    columns: (class: class) (class: `receiver.type`)
     rows:
              l2JoinAssert  `receiver.statement`
 end: `lm.test.l2.join.namespace.seed`
@@ -9,19 +9,19 @@ end: `lm.test.l2.join.namespace.seed`
 table:
     source
     name: `lm.test.l2.join.statement.seed`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              l2JoinAssert  lm_trans_statement_emit_assert
 end: `lm.test.l2.join.statement.seed`
 
 join: (`lm.test.l2.join.namespace.seed`) namespace
-    columns((class: class) (class: `receiver.type`))
+    columns: (class: class) (class: `receiver.type`)
     rows:
              l2JoinDirect  `receiver.statement`
 end: namespace
 
 join: (`lm.test.l2.join.statement.seed`) `receiver.statement`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              l2JoinDirect  lm_trans_statement_emit_assert
 end: `receiver.statement`

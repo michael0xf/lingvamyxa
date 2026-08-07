@@ -5,7 +5,7 @@ L2:
     table:
         source
         name: functionPointerType
-        columns((class: class) (int: value))
+        columns: (class: class) (int: value)
         rows:
                  LmUnaryCall   1
                  LmBinaryCall  1
@@ -14,7 +14,7 @@ L2:
     table:
         source
         name: LmFullCallHolder
-        columns((class: class) (int: marker) (size_t: `field.index`) (int: extra) (class: `field.class`) (size_t: `field.address-depth`) (int: `field.const`))
+        columns: (class: class) (int: marker) (size_t: `field.index`) (int: extra) (class: `field.class`) (size_t: `field.address-depth`) (int: `field.const`)
         rows:
                  callback  7  0  9  LmUnaryCall  None  None
     end: LmFullCallHolder
@@ -22,7 +22,7 @@ L2:
     table:
         source
         name: LmOverlayCallHolder
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        columns: (class: class) (class: `field.class`) (size_t: `field.index`)
         rows:
                  callback  LmBinaryCall  0
     end: LmOverlayCallHolder
@@ -30,7 +30,7 @@ L2:
     table:
         source
         name: `LmOverlayCallHolder.field.class`
-        columns((class: class) (class: field))
+        columns: (class: class) (class: field)
         rows:
                  callback  LmUnaryCall
     end: `LmOverlayCallHolder.field.class`
@@ -38,7 +38,7 @@ L2:
     table:
         source
         name: `LmSplitCallHolder.field.class`
-        columns((class: class) (class: field))
+        columns: (class: class) (class: field)
         rows:
                  callback  LmUnaryCall
     end: `LmSplitCallHolder.field.class`
@@ -46,7 +46,7 @@ L2:
     table:
         source
         name: `LmSplitCallHolder.field.index`
-        columns((class: class) (size_t: index))
+        columns: (class: class) (size_t: index)
         rows:
                  callback  0
     end: `LmSplitCallHolder.field.index`
@@ -54,7 +54,7 @@ L2:
     table:
         source
         name: LmWrongDescriptorCallHolder
-        columns((class: class) (class: `field.class`) (size_t: `field.index`))
+        columns: (class: class) (class: `field.class`) (size_t: `field.index`)
         rows:
                  callback  LmUnaryCall  0
     end: LmWrongDescriptorCallHolder
@@ -62,7 +62,7 @@ L2:
     table:
         source
         name: `LmWrongDescriptorCallHolder.field.class`
-        columns((class: class) (char: field))
+        columns: (class: class) (char: field)
         rows:
                  callback  LmUnaryCall
     end: `LmWrongDescriptorCallHolder.field.class`
@@ -70,7 +70,7 @@ L2:
     table:
         source
         name: `fn.thread-context.none`
-        columns((class: class) (int: value))
+        columns: (class: class) (int: value)
         rows:
                  lm_test_increment  1
     end: `fn.thread-context.none`

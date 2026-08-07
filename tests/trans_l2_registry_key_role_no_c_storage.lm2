@@ -1,6 +1,6 @@
 table:
     name: define
-    columns((char: class) (@: char value) (int: marker))
+    columns: (char: class) (@: char value) (int: marker)
     rows:
              LM_TEST_L2_REGISTRY_KEY_ROLE  73  1
 end: define

@@ -1,7 +1,7 @@
 table:
     source
     name: class
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              LmClassKindSourceDirect  opaqueReference
              LmClassKindSourceDirect  None
@@ -11,7 +11,7 @@ end: class
 table:
     source
     name: class
-    columns((class: class) (@: char kind))
+    columns: (class: class) (@: char kind)
     rows:
              LmClassKindSourceSchemaFallback  opaqueReference
 end: class
@@ -19,7 +19,7 @@ end: class
 table:
     source
     name: class
-    columns((class: class) (class: kind) (int: marker))
+    columns: (class: class) (class: kind) (int: marker)
     rows:
              LmClassKindWideDirect           opaqueReference  1
              LmClassKindWideLateNone         opaqueReference  2
@@ -30,7 +30,7 @@ end: class
 table:
     source
     name: class
-    columns((class: class) (int: marker) (class: kind))
+    columns: (class: class) (int: marker) (class: kind)
     rows:
              LmClassKindWideReordered  5  opaqueReference
 end: class
@@ -38,7 +38,7 @@ end: class
 table:
     source
     name: `class.kind`
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              LmClassKindWidePhysicalOverlay  opaqueReference
              LmClassKindWidePhysical         opaqueReference
@@ -47,25 +47,25 @@ end: `class.kind`
 table:
     source
     name: `lm.test.class.kind.wide.seed`
-    columns((class: class) (class: kind) (int: marker))
+    columns: (class: class) (class: kind) (int: marker)
     rows:
              LmClassKindWideJoined  opaqueReference  6
 end: `lm.test.class.kind.wide.seed`
 
 join: (`lm.test.class.kind.wide.seed`) `lm.test.class.kind.wide.middle`
-    columns((class: class) (class: kind) (int: marker))
+    columns: (class: class) (class: kind) (int: marker)
     rows:
 end: `lm.test.class.kind.wide.middle`
 
 join: (`lm.test.class.kind.wide.middle`) class
-    columns((class: class) (class: kind) (int: marker))
+    columns: (class: class) (class: kind) (int: marker)
     rows:
 end: class
 
 table:
     source
     name: class
-    columns((class: class) (@: char kind) (int: marker))
+    columns: (class: class) (@: char kind) (int: marker)
     rows:
              LmClassKindWideSchemaFallback  opaqueReference  7
 end: class
@@ -73,20 +73,20 @@ end: class
 table:
     source
     name: `lm.test.class.kind.source.seed`
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              LmClassKindSourceJoined  opaqueReference
 end: `lm.test.class.kind.source.seed`
 
 join: (`lm.test.class.kind.source.seed`) class
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
 end: class
 
 table:
     source
     name: class
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              LmClassKindSourceJoined  None
 end: class
@@ -94,7 +94,7 @@ end: class
 table:
     source
     name: `class.kind`
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              LmClassKindCompatDirect  opaqueReference
              LmClassKindCompatDirect  None
@@ -103,7 +103,7 @@ end: `class.kind`
 table:
     source
     name: `class.kind`
-    columns((class: class) (@: char kind))
+    columns: (class: class) (@: char kind)
     rows:
              LmClassKindCompatSchemaFallback  opaqueReference
 end: `class.kind`
@@ -111,20 +111,20 @@ end: `class.kind`
 table:
     source
     name: `lm.test.class.kind.compat.seed`
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              LmClassKindCompatJoined  opaqueReference
 end: `lm.test.class.kind.compat.seed`
 
 join: (`lm.test.class.kind.compat.seed`) `class.kind`
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
 end: `class.kind`
 
 table:
     source
     name: `class.kind`
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              LmClassKindCompatJoined  None
 end: `class.kind`
@@ -132,7 +132,7 @@ end: `class.kind`
 table:
     source
     name: `class.c.projection`
-    columns((class: class) (@: char spelling))
+    columns: (class: class) (@: char spelling)
     rows:
              LmClassKindSourceDirect          int
              LmClassKindSourceSchemaFallback  int
@@ -152,7 +152,7 @@ end: `class.c.projection`
 table:
     source
     name: `fn.thread-context.none`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_test_class_kind_runtime_default  1
 end: `fn.thread-context.none`
@@ -160,7 +160,7 @@ end: `fn.thread-context.none`
 table:
     source
     name: alias
-    columns((class: class) (class: backend) (class: target))
+    columns: (class: class) (class: backend) (class: target)
     rows:
              LmClassKindSourceDirect          c.typedef  int
              LmClassKindSourceSchemaFallback  c.typedef  int

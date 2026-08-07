@@ -1,7 +1,7 @@
 table:
     source
     name: include
-    columns((class: class) (@: char target))
+    columns: (class: class) (@: char target)
     rows:
              stdio  "<stdio.h>"
 end: include
@@ -9,7 +9,7 @@ end: include
 table:
     source
     name: os
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
              win
              L2:

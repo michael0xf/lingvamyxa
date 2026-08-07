@@ -1,7 +1,7 @@
 L2:
     table:
         name: functionPointerType
-        columns((class: class) (int: value))
+        columns: (class: class) (int: value)
         rows:
                  LmL2DirectCall 1
     end: functionPointerType

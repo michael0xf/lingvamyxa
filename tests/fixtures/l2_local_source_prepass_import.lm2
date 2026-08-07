@@ -1,6 +1,6 @@
 table:
     name: LmLocalPrepassImportedSource
-    columns((class: class) (char: value))
+    columns: (class: class) (char: value)
     rows:
              LmLocalPrepassImportedKey  "imported"
 end: LmLocalPrepassImportedSource

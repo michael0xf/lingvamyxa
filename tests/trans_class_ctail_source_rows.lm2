@@ -2,7 +2,7 @@ L2:
     table:
         source
         name: `class.cTail`
-        columns((class: class) (@: char spelling))
+        columns: (class: class) (@: char spelling)
         rows:
                  LmCTailDirect  "membership-only"
                  LmCTailDirect  None
@@ -11,7 +11,7 @@ L2:
     table:
         source
         name: `class.cTail`
-        columns((class: class) (class: spelling))
+        columns: (class: class) (class: spelling)
         rows:
                  LmCTailFallback  membershipMarker
     end: `class.cTail`
@@ -19,25 +19,25 @@ L2:
     table:
         source
         name: `lm.test.class.ctail.seed`
-        columns((class: class) (int: marker) (@: char cTail))
+        columns: (class: class) (int: marker) (@: char cTail)
         rows:
                  LmCTailJoined  7  "membership-only"
     end: `lm.test.class.ctail.seed`
 
     join: (`lm.test.class.ctail.seed`) `lm.test.class.ctail.middle`
-        columns((class: class) (int: marker) (@: char cTail))
+        columns: (class: class) (int: marker) (@: char cTail)
         rows:
     end: `lm.test.class.ctail.middle`
 
     join: (`lm.test.class.ctail.middle`) class
-        columns((class: class) (int: marker) (@: char cTail))
+        columns: (class: class) (int: marker) (@: char cTail)
         rows:
     end: class
 
     table:
         source
         name: class
-        columns((class: class) (int: marker) (@: char cTail))
+        columns: (class: class) (int: marker) (@: char cTail)
         rows:
                  LmCTailJoined  8  None
     end: class
@@ -45,7 +45,7 @@ L2:
     table:
         source
         name: alias
-        columns((class: class) (class: backend) (class: target))
+        columns: (class: class) (class: backend) (class: target)
         rows:
                  LmCTailDirect    c.typedef  int
                  LmCTailFallback  c.typedef  int

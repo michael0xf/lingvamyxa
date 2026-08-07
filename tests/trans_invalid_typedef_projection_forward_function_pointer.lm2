@@ -1,13 +1,13 @@
 table:
     name: `forward.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmTestTypedefProjectionForwardFunctionPointer  c.struct
 end: `forward.backend`
 
 table:
     name: functionPointerType
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmTestTypedefProjectionForwardFunctionPointer  1
 end: functionPointerType

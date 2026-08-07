@@ -1,7 +1,7 @@
 table:
     source
     name: namespace
-    columns((class: class) (class: `receiver.type`) (int: marker))
+    columns: (class: class) (class: `receiver.type`) (int: marker)
     rows:
              default       `receiver.statement`  9
              LmWideDirect  `receiver.level`  10
@@ -12,7 +12,7 @@ end: namespace
 table:
     source
     name: namespace
-    columns((class: class) (class: `receiver.type`))
+    columns: (class: class) (class: `receiver.type`)
     rows:
              LmWideDirectWins  `receiver.level`
 end: namespace
@@ -20,7 +20,7 @@ end: namespace
 table:
     source
     name: `namespace.receiver.type`
-    columns((class: class) (class: value))
+    columns: (class: class) (class: value)
     rows:
              LmWideFlat  `receiver.level`
 end: `namespace.receiver.type`
@@ -28,7 +28,7 @@ end: `namespace.receiver.type`
 table:
     source
     name: namespace
-    columns((class: class) (relation: `receiver.type`) (int: marker))
+    columns: (class: class) (relation: `receiver.type`) (int: marker)
     rows:
              LmWideFallback  `receiver.level`  20
 end: namespace
@@ -36,7 +36,7 @@ end: namespace
 table:
     source
     name: `namespace.receiver`
-    columns((class: class) (class: type) (int: marker))
+    columns: (class: class) (class: type) (int: marker)
     rows:
              LmWideSplit  `receiver.level`  50
 end: `namespace.receiver`
@@ -44,7 +44,7 @@ end: `namespace.receiver`
 table:
     source
     name: `lm.test.namespace.ncolumn.seed`
-    columns((class: class) (class: `receiver.type`) (int: marker))
+    columns: (class: class) (class: `receiver.type`) (int: marker)
     rows:
              LmWideJoined0  `receiver.level`  30
              LmWideJoined0  `receiver.level`  31
@@ -52,14 +52,14 @@ table:
 end: `lm.test.namespace.ncolumn.seed`
 
 join: (`lm.test.namespace.ncolumn.seed`) namespace
-    columns((class: class) (class: `receiver.type`) (int: marker))
+    columns: (class: class) (class: `receiver.type`) (int: marker)
     rows:
 end: namespace
 
 table:
     source
     name: namespace
-    columns((class: class) (class: `receiver.type`) (int: marker))
+    columns: (class: class) (class: `receiver.type`) (int: marker)
     rows:
              LmWideJoined0  None  40
              LmWideJoined2  None  41
@@ -68,7 +68,7 @@ end: namespace
 table:
     source
     name: `receiver.level`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              LmWideDirect    lm_trans_emit_l1_frame
              LmWideFallback  lm_trans_emit_l1_frame
@@ -82,7 +82,7 @@ end: `receiver.level`
 table:
     source
     name: `receiver.statement`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              default  lm_trans_statement_emit_assert
 end: `receiver.statement`

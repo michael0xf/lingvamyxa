@@ -1,7 +1,7 @@
 table:
     source
     name: `unit.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              lm_test_unit_missing_payload  c.static-unit
 end: `unit.backend`

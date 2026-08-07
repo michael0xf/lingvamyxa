@@ -1,13 +1,13 @@
 table:
     name: namespace
-    columns((class: class) (class: `receiver.type`))
+    columns: (class: class) (class: `receiver.type`)
     rows:
              L3PredefLevel  `receiver.level`
 end: namespace
 
 table:
     name: `receiver.level`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              L3PredefLevel  lm_trans_emit_l2_frame
 end: `receiver.level`

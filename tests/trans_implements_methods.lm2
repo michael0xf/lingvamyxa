@@ -1,7 +1,7 @@
 table:
     source
     name: User
-    columns((class: class) (binding: method))
+    columns: (class: class) (binding: method)
     rows:
              serialize  lm_registry_poison_serialize
 end: User
@@ -9,7 +9,7 @@ end: User
 table:
     source
     name: CleanProtocol
-    columns((class: class) (class: `requires.method`))
+    columns: (class: class) (class: `requires.method`)
     rows:
              registryOnly  1
 end: CleanProtocol

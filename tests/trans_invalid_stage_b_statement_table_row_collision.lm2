@@ -5,7 +5,7 @@ L2:
 
     table:
         name: sample
-        columns((int: id))
+        columns: (int: id)
         rows:
                  1
     end: sample

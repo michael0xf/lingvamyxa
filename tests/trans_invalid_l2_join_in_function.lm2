@@ -1,7 +1,7 @@
 L2:
     table:
         name: runtimeJoinSeed
-        columns((int: key) (int: value))
+        columns: (int: key) (int: value)
         rows:
                  1  2
     end: runtimeJoinSeed
@@ -9,7 +9,7 @@ L2:
     external:
         fn: main () int
             join: (runtimeJoinSeed) localRuntimeJoin
-                columns((int: key) (int: value))
+                columns: (int: key) (int: value)
                 rows:
             end: localRuntimeJoin
             return: 0

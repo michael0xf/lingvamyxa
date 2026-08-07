@@ -1,7 +1,7 @@
 table:
     source
     name: `receiver.expr`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              directCast  lm_trans_expr_emit_implements_frame
              directCast  lm_trans_expr_emit_cast_frame
@@ -11,7 +11,7 @@ end: `receiver.expr`
 table:
     source
     name: `receiver.expr`
-    columns((class: class) (class: receiver))
+    columns: (class: class) (class: receiver)
     rows:
              fallbackCast  lm_trans_expr_emit_cast_frame
 end: `receiver.expr`
@@ -19,25 +19,25 @@ end: `receiver.expr`
 table:
     source
     name: `lm.test.receiver.expr.seed`
-    columns((class: class) (int: marker) (binding: expr))
+    columns: (class: class) (int: marker) (binding: expr)
     rows:
              joinedCast  1  lm_trans_expr_emit_cast_frame
 end: `lm.test.receiver.expr.seed`
 
 join: (`lm.test.receiver.expr.seed`) `lm.test.receiver.expr.middle`
-    columns((class: class) (int: marker) (binding: expr))
+    columns: (class: class) (int: marker) (binding: expr)
     rows:
 end: `lm.test.receiver.expr.middle`
 
 join: (`lm.test.receiver.expr.middle`) receiver
-    columns((class: class) (int: marker) (binding: expr))
+    columns: (class: class) (int: marker) (binding: expr)
     rows:
 end: receiver
 
 table:
     source
     name: receiver
-    columns((class: class) (int: marker) (binding: expr))
+    columns: (class: class) (int: marker) (binding: expr)
     rows:
              joinedCast  2  None
 end: receiver

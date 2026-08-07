@@ -12,7 +12,7 @@ unit
 
 table:
     name: LmVcpkgOptions
-    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
+    columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
              output_dir     char                   0                       1
              manifest_root  char                   1                       1
@@ -25,14 +25,14 @@ end: LmVcpkgOptions
 
 table:
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmVcpkgOptions c.struct
 end: `layout.backend`
 
 table:
     name: `class.reference-base`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmVcpkgOptions 1
 end: `class.reference-base`

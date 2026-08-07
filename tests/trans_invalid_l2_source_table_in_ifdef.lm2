@@ -2,7 +2,7 @@ L2:
     table:
         source
         name: `define.value`
-        columns((class: class) (@: char value))
+        columns: (class: class) (@: char value)
         rows:
                  LM_TEST_CONDITIONAL_SOURCE_TABLE  1
     end: `define.value`
@@ -14,7 +14,7 @@ L2:
             table:
                 source
                 name: conditionalSourceTable
-                columns((int: key) (int: value))
+                columns: (int: key) (int: value)
                 rows:
                          1  2
             end: conditionalSourceTable

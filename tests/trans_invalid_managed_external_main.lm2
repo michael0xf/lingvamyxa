@@ -1,7 +1,7 @@
 table:
     source
     name: `fn.thread-context.managed`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              main  1
 end: `fn.thread-context.managed`

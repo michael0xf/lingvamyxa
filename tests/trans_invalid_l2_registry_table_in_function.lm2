@@ -3,7 +3,7 @@ L2:
         fn: main () int
             table:
                 name: localRegistryTable
-                columns((class: class) (int: value))
+                columns: (class: class) (int: value)
                 rows:
                          localKey  1
             end: localRegistryTable

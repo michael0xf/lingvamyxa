@@ -2,7 +2,7 @@
     table:
         source
         name: HelloConfig
-        columns((class: class) (class: field_type) (class: owner) (char: default))
+        columns: (class: class) (class: field_type) (class: owner) (char: default)
         rows:
                  greeting  Text  owned  "Hello World"
                  maxI      int   value  3
@@ -12,7 +12,7 @@
     table:
         source
         name: HelloConfig_rules
-        columns((class: class) (char: condition))
+        columns: (class: class) (char: condition)
         rows:
                  positiveBounds  "maxI > 0 && maxJ > 0"
     end: HelloConfig_rules
@@ -20,7 +20,7 @@
     table:
         source
         name: entryPoint
-        columns((class: class) (Symbol: implementation))
+        columns: (class: class) (Symbol: implementation)
         rows:
                  app  helloMain
     end: entryPoint

@@ -1,6 +1,6 @@
 table:
     name: include
-    columns((class: class) (@: char target))
+    columns: (class: class) (@: char target)
     rows:
              registry_source_loader_stddef  "<stddef.h>"
              registry_source_loader_stdio   "<stdio.h>"
@@ -10,7 +10,7 @@ end: include
 
 table:
     name: functionPointerType
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmRegistrySourcePushTableRow       1
              LmRegistrySourcePushColumnMetadata 1
@@ -20,7 +20,7 @@ end: functionPointerType
 
 table:
     name: `fn.thread-context.managed`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmRegistrySourcePushTableRow       1
              LmRegistrySourcePushColumnMetadata 1
@@ -64,7 +64,7 @@ fn: lm_registry_source_load_root (
 
 table:
     name: `forward.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmRegistrySourceColumn  c.struct
              LmRegistrySourceLoader  c.struct
@@ -72,7 +72,7 @@ end: `forward.backend`
 
 table:
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmRegistrySourceColumn  c.struct
              LmRegistrySourceLoader  c.struct
@@ -80,7 +80,7 @@ end: `layout.backend`
 
 table:
     name: `class.reference-base`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmRegistrySourceColumn  1
              LmRegistrySourceLoader  1
@@ -88,7 +88,7 @@ end: `class.reference-base`
 
 table:
     name: `LmRegistrySourceColumn.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              name              LmP0Text
              descriptors       LmP0Text
@@ -101,7 +101,7 @@ end: `LmRegistrySourceColumn.field.class`
 
 table:
     name: `LmRegistrySourceColumn.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              name              0
              descriptors       1
@@ -114,14 +114,14 @@ end: `LmRegistrySourceColumn.field.index`
 
 table:
     name: `LmRegistrySourceColumn.field.array-count`
-    columns((class: class) (size_t: count))
+    columns: (class: class) (size_t: count)
     rows:
              descriptors  16
 end: `LmRegistrySourceColumn.field.array-count`
 
 table:
     name: `LmRegistrySourceColumn.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              name         0
              descriptors  0
@@ -131,7 +131,7 @@ end: `LmRegistrySourceColumn.field.address-depth`
 
 table:
     name: `LmRegistrySourceColumn.field.const`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              name         1
              descriptors  1
@@ -140,7 +140,7 @@ end: `LmRegistrySourceColumn.field.const`
 
 table:
     name: `LmRegistrySourceLoader.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              error_prefix          char
              push_column_metadata  LmRegistrySourcePushColumnMetadata
@@ -152,7 +152,7 @@ end: `LmRegistrySourceLoader.field.class`
 
 table:
     name: `LmRegistrySourceLoader.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              error_prefix          0
              push_column_metadata  1
@@ -164,28 +164,28 @@ end: `LmRegistrySourceLoader.field.index`
 
 table:
     name: `LmRegistrySourceLoader.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              error_prefix  1
 end: `LmRegistrySourceLoader.field.address-depth`
 
 table:
     name: `LmRegistrySourceLoader.field.const`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              error_prefix  1
 end: `LmRegistrySourceLoader.field.const`
 
 table:
     name: `unit.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              lm_registry_source_loader_static  c.static-unit
 end: `unit.backend`
 
 table:
     name: `unit.payload`
-    columns((class: class) (node: payload))
+    columns: (class: class) (node: payload)
     rows:
              lm_registry_source_loader_static
              import: "lm2/registry_source_loader_unit_payload.lm2"

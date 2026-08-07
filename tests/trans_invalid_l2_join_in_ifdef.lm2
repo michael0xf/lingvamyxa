@@ -1,7 +1,7 @@
 L2:
     table:
         name: conditionalRuntimeJoinSeed
-        columns((int: key) (int: value))
+        columns: (int: key) (int: value)
         rows:
                  1  2
     end: conditionalRuntimeJoinSeed
@@ -9,7 +9,7 @@ L2:
     ifdef:
         LM_TEST_CONDITIONAL_RUNTIME_JOIN:
             join: (conditionalRuntimeJoinSeed) conditionalRuntimeJoin
-                columns((int: key) (int: value))
+                columns: (int: key) (int: value)
                 rows:
             end: conditionalRuntimeJoin
     end: ifdef

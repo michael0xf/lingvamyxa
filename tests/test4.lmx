@@ -22,7 +22,7 @@ dataset: harvest
     --- {end: blue}
 
     table:
-        columns((serial: id) (Text: region)     (Text: crop) (real: tons)   (decimal: moisture))
+        columns: (serial: id) (Text: region)     (Text: crop) (real: tons)   (decimal: moisture)
 {end: green}
         rows:
 {gray}           1             "north field"    wheat   12.50         0.14

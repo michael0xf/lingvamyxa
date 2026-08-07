@@ -2,7 +2,7 @@ L2:
     table:
         source
         name: `define.value`
-        columns((class: class) (@: char value))
+        columns: (class: class) (@: char value)
         rows:
                  LM_TEST_TYPEDEF_PROJECTION_BRANCH  0
     end: `define.value`
@@ -11,7 +11,7 @@ L2:
 
     table:
         name: functionPointerType
-        columns((class: class) (int: value))
+        columns: (class: class) (int: value)
         rows:
                  LmTypedefProjectionAlternative  1
     end: functionPointerType

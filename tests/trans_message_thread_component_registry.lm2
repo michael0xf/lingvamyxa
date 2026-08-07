@@ -10,7 +10,7 @@ prototype
 table:
     source
     name: `fn.thread-context.managed`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_test_component_destroy_a 1
              lm_test_component_destroy_b 1
@@ -18,28 +18,28 @@ end: `fn.thread-context.managed`
 
 table:
     name: `forward.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmTestThreadComponent c.struct
 end: `forward.backend`
 
 table:
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmTestThreadComponent c.struct
 end: `layout.backend`
 
 table:
     name: `class.reference-base`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmTestThreadComponent 1
 end: `class.reference-base`
 
 table:
     name: `LmTestThreadComponent.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              observer int
              marker   int
@@ -47,7 +47,7 @@ end: `LmTestThreadComponent.field.class`
 
 table:
     name: `LmTestThreadComponent.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              observer 0
              marker   1
@@ -55,7 +55,7 @@ end: `LmTestThreadComponent.field.index`
 
 table:
     name: `LmTestThreadComponent.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              observer 1
 end: `LmTestThreadComponent.field.address-depth`

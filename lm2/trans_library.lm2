@@ -1,7 +1,7 @@
 table:
     source
     name: `define.value`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              LM_UNUSED  "(void)"
 end: `define.value`

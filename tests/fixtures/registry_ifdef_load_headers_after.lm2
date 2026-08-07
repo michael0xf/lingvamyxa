@@ -1,7 +1,7 @@
 table:
     source
     name: `prelude.sequence`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lmTestPreludeAfterGenerated  1
 end: `prelude.sequence`
@@ -9,7 +9,7 @@ end: `prelude.sequence`
 table:
     source
     name: `lmTestPreludeAfterGenerated.item`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              include  0
 end: `lmTestPreludeAfterGenerated.item`

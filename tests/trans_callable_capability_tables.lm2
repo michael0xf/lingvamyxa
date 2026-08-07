@@ -3,7 +3,7 @@ import: "lm2/own.lm2"
 table:
     source
     name: `callable.partial`
-    columns((class: class) (serial: value))
+    columns: (class: class) (serial: value)
     rows:
              AddX 1
              AddX 2
@@ -13,7 +13,7 @@ end: `callable.partial`
 table:
     source
     name: `callable.partial`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              WrongAddX 1
 end: `callable.partial`
@@ -21,7 +21,7 @@ end: `callable.partial`
 table:
     source
     name: `callable.capture`
-    columns((class: class) (serial: value))
+    columns: (class: class) (serial: value)
     rows:
              AddX 1
              AddX 2
@@ -31,7 +31,7 @@ end: `callable.capture`
 table:
     source
     name: `callable.capture`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              WrongAddX 1
 end: `callable.capture`
@@ -39,7 +39,7 @@ end: `callable.capture`
 table:
     source
     name: `callable.projection`
-    columns((class: class) (projection: value))
+    columns: (class: class) (projection: value)
     rows:
              AddX `c.function-pointer`
              AddX `c.closure-struct`
@@ -49,7 +49,7 @@ end: `callable.projection`
 table:
     source
     name: `callable.projection`
-    columns((class: class) (class: value))
+    columns: (class: class) (class: value)
     rows:
              WrongAddX `c.closure-struct`
 end: `callable.projection`
@@ -57,25 +57,25 @@ end: `callable.projection`
 table:
     source
     name: `lm.test.callable.capability.seed`
-    columns((class: class) (serial: partial) (serial: capture) (projection: projection))
+    columns: (class: class) (serial: partial) (serial: capture) (projection: projection)
     rows:
              JoinedAddX  1  1  `c.closure-struct`
 end: `lm.test.callable.capability.seed`
 
 join: (`lm.test.callable.capability.seed`) `lm.test.callable.capability.middle`
-    columns((class: class) (serial: partial) (serial: capture) (projection: projection))
+    columns: (class: class) (serial: partial) (serial: capture) (projection: projection)
     rows:
 end: `lm.test.callable.capability.middle`
 
 join: (`lm.test.callable.capability.middle`) callable
-    columns((class: class) (serial: partial) (serial: capture) (projection: projection))
+    columns: (class: class) (serial: partial) (serial: capture) (projection: projection)
     rows:
 end: callable
 
 table:
     source
     name: callable
-    columns((class: class) (serial: partial) (serial: capture) (projection: projection))
+    columns: (class: class) (serial: partial) (serial: capture) (projection: projection)
     rows:
              JoinedAddX  None  None  None
 end: callable

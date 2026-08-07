@@ -1,7 +1,7 @@
 table:
     source
     name: alias
-    columns((class: class) (class: backend) (class: target))
+    columns: (class: class) (class: backend) (class: target)
     rows:
              LmTestAliasInvalidNodeFlag  c.typedef  int
 end: alias
@@ -9,7 +9,7 @@ end: alias
 table:
     source
     name: `alias.target.const`
-    columns((class: class) (node: value))
+    columns: (class: class) (node: value)
     rows:
              LmTestAliasInvalidNodeFlag
              L2:

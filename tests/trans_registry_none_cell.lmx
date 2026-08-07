@@ -1,7 +1,7 @@
 L2:
     table:
         name: class
-        columns((class: class) (class: kind))
+        columns: (class: class) (class: kind)
         rows:
                  optionalFlag      decimal
                  `None.cell`       relation
@@ -9,14 +9,14 @@ L2:
 
     table:
         name: `None.cell`
-        columns((class: class) (int: value))
+        columns: (class: class) (int: value)
         rows:
                  optionalFlag      0
     end: `None.cell`
 
     table:
         name: `registry.none-cell.smoke`
-        columns((class: class) (optionalFlag: flag)  (@: char payload))
+        columns: (class: class) (optionalFlag: flag)  (@: char payload)
         rows:
                  skipped           0                    kept
                  present           7                    kept

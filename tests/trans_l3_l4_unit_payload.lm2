@@ -1,7 +1,7 @@
 table:
     source
     name: unit
-    columns((class: class) (class: backend) (node: payload))
+    columns: (class: class) (class: backend) (node: payload)
     rows:
              lm_test_l3_unit_payload  c.static-unit
              L3:

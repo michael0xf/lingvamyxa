@@ -2,7 +2,7 @@ L2:
     table:
         source
         name: `define.value`
-        columns((class: class) (@: char value))
+        columns: (class: class) (@: char value)
         rows:
                  LM_TEST_IFDEF_ROOT  1
     end: `define.value`

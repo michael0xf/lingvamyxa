@@ -1,6 +1,6 @@
 table:
     name: `lm.test.ifdef.join-order.seed`
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
              FEATURE_28
              L2:
@@ -19,12 +19,12 @@ table:
 end: `lm.test.ifdef.join-order.seed`
 
 join: (`lm.test.ifdef.join-order.seed`) `lm.test.ifdef.join-order.middle`
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
 end: `lm.test.ifdef.join-order.middle`
 
 join: (`lm.test.ifdef.join-order.middle`) ifdef
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
 end: ifdef
 

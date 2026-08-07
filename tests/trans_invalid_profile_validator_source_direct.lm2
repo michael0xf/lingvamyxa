@@ -1,7 +1,7 @@
 table:
     source
     name: `profile.validator`
-    columns((class: class) (@: char binding))
+    columns: (class: class) (@: char binding)
     rows:
              `c99.format-mismatch`  lm_trans_validate_c_printf_call
 end: `profile.validator`

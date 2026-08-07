@@ -1,7 +1,7 @@
 L2:
     table:
         name: sampleTable
-        columns((int: id) (const: (@: char label)))
+        columns: (int: id) (const: (@: char label))
         rows:
                  7  "seven"
                  9  "nine"

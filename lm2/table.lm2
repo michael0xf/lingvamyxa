@@ -12,7 +12,7 @@ unit
 
 table:
     name: `constant.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LM_TABLE_LMX_STRUCTURE                    c.define
              LM_TABLE_LMX_FIELD_LIST                   c.define
@@ -21,7 +21,7 @@ end: `constant.backend`
 
 table:
     name: `constant.value`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LM_TABLE_LMX_STRUCTURE                    1
              LM_TABLE_LMX_FIELD_LIST                   2
@@ -30,7 +30,7 @@ end: `constant.value`
 
 table:
     name: LmTableBuffer
-    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
+    columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
              data      char                   0                       1
              length    size_t                 1                       0
@@ -40,7 +40,7 @@ end: LmTableBuffer
 
 table:
     name: LmTableColumn
-    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
+    columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
              spelling  char                   0                       1
              width     size_t                 1                       0
@@ -48,14 +48,14 @@ end: LmTableColumn
 
 table:
     name: LmTableEmitTablesFrame
-    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+    columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
              field  LmP0Field              0                       0                                1
 end: LmTableEmitTablesFrame
 
 table:
     name: LmTableLmxFrame
-    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+    columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
              field    LmP0Field              0                       0                                1
              trailer  LmP0Trailer            1                       0                                1
@@ -65,14 +65,14 @@ end: LmTableLmxFrame
 
 table:
     name: LmTableError
-    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`))
+    columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
              message  char                   0                       1                                1
 end: LmTableError
 
 table:
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmTableBuffer  c.struct
              LmTableColumn  c.struct
@@ -83,7 +83,7 @@ end: `layout.backend`
 
 table:
     name: `class.reference-base`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmTableBuffer  1
              LmTableColumn  1

@@ -1,7 +1,7 @@
 table:
     source
     name: ifdef
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
              default
              L2:
@@ -15,7 +15,7 @@ end: ifdef
 table:
     source
     name: `ifdef.body`
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
              default
              L2:

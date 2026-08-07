@@ -3,7 +3,7 @@ import: "lm2/own.lm2"
 table:
     source
     name: `call.lowering`
-    columns((class: class) (binding: handler))
+    columns: (class: class) (binding: handler)
     rows:
              function  lm_trans_call_lower_statement
              function  lm_trans_call_lower_value
@@ -13,7 +13,7 @@ end: `call.lowering`
 table:
     source
     name: `call.lowering`
-    columns((class: class) (class: handler))
+    columns: (class: class) (class: handler)
     rows:
              callable  lm_trans_call_lower_statement
 end: `call.lowering`
@@ -21,25 +21,25 @@ end: `call.lowering`
 table:
     source
     name: `lm.test.call.lowering.seed`
-    columns((class: class) (int: marker) (binding: lowering))
+    columns: (class: class) (int: marker) (binding: lowering)
     rows:
              function  1  lm_trans_call_lower_value
 end: `lm.test.call.lowering.seed`
 
 join: (`lm.test.call.lowering.seed`) `lm.test.call.lowering.middle`
-    columns((class: class) (int: marker) (binding: lowering))
+    columns: (class: class) (int: marker) (binding: lowering)
     rows:
 end: `lm.test.call.lowering.middle`
 
 join: (`lm.test.call.lowering.middle`) call
-    columns((class: class) (int: marker) (binding: lowering))
+    columns: (class: class) (int: marker) (binding: lowering)
     rows:
 end: call
 
 table:
     source
     name: call
-    columns((class: class) (int: marker) (binding: lowering))
+    columns: (class: class) (int: marker) (binding: lowering)
     rows:
              function  2  None
 end: call

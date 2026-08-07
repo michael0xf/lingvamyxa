@@ -1,7 +1,7 @@
 table:
     source
     name: `define.value`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              LM_UNUSED  "(void)"
 end: `define.value`
@@ -23,7 +23,7 @@ predef: "lm2/own_abi.lm2"
 table:
     source
     name: `fn.thread-context.none`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_p0_dash_fence_status_after_comment_trim 1
              lm_p0_dump_append 1
@@ -40,7 +40,7 @@ end: `fn.thread-context.none`
 table:
     source
     name: `fn.thread-context.managed`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_p0_registry_component_destroy 1
              lm_p0_registry_source_formal_param_unwrap_index 1
@@ -59,7 +59,7 @@ include: "<ctype.h>" "<stdarg.h>" "<stdio.h>" "<stdlib.h>" "<string.h>" "<limits
 
 table:
     name: `constant.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LM_P0_STREAM_EVENT_ITEM                           c.define
              LM_P0_STREAM_EVENT_DELIM                          c.define
@@ -97,7 +97,7 @@ end: `constant.backend`
 
 table:
     name: `constant.value`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LM_P0_STREAM_EVENT_ITEM                           1
              LM_P0_STREAM_EVENT_DELIM                          2
@@ -135,7 +135,7 @@ end: `constant.value`
 
 table:
     name: `alias.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmP0StreamEventKind   c.typedef
              LmP0TrailerRole       c.typedef
@@ -146,7 +146,7 @@ end: `alias.backend`
 
 table:
     name: `alias.target`
-    columns((class: class) (class: target))
+    columns: (class: class) (class: target)
     rows:
              LmP0StreamEventKind   int
              LmP0TrailerRole       int
@@ -157,7 +157,7 @@ end: `alias.target`
 
 table:
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmP0StreamEvent        c.struct
              LmP0Document           c.named-struct
@@ -175,7 +175,7 @@ end: `layout.backend`
 
 table:
     name: `class.reference-base`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmP0StreamEvent        1
              LmP0Document           1
@@ -193,7 +193,7 @@ end: `class.reference-base`
 
 table:
     name: `LmP0StreamEvent.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              kind         LmP0StreamEventKind
              node_flags   unsigned
@@ -207,7 +207,7 @@ end: `LmP0StreamEvent.field.class`
 
 table:
     name: `LmP0StreamEvent.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              kind         0
              node_flags   1
@@ -221,21 +221,21 @@ end: `LmP0StreamEvent.field.index`
 
 table:
     name: `LmP0StreamEvent.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              text   1
 end: `LmP0StreamEvent.field.address-depth`
 
 table:
     name: `LmP0StreamEvent.field.const`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              text   1
 end: `LmP0StreamEvent.field.const`
 
 table:
     name: `LmP0Document.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              source            char
              source_length     size_t
@@ -251,7 +251,7 @@ end: `LmP0Document.field.class`
 
 table:
     name: `LmP0Document.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              source            0
              source_length     1
@@ -267,7 +267,7 @@ end: `LmP0Document.field.index`
 
 table:
     name: `LmP0Document.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              source            1
              root              0
@@ -280,7 +280,7 @@ end: `LmP0Document.field.address-depth`
 
 table:
     name: `LmP0PendingDelimiter.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              active int
              event  LmP0StreamEvent
@@ -288,7 +288,7 @@ end: `LmP0PendingDelimiter.field.class`
 
 table:
     name: `LmP0PendingDelimiter.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              active 0
              event  1
@@ -296,14 +296,14 @@ end: `LmP0PendingDelimiter.field.index`
 
 table:
     name: `LmP0PendingDelimiter.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              event  0
 end: `LmP0PendingDelimiter.field.address-depth`
 
 table:
     name: `LmP0PendingMix.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              events    LmP0StreamEvent
              count     size_t
@@ -312,7 +312,7 @@ end: `LmP0PendingMix.field.class`
 
 table:
     name: `LmP0PendingMix.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              events    0
              count     1
@@ -321,14 +321,14 @@ end: `LmP0PendingMix.field.index`
 
 table:
     name: `LmP0PendingMix.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              events 0
 end: `LmP0PendingMix.field.address-depth`
 
 table:
     name: `LmP0IndentStack.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              columns   size_t
              count     size_t
@@ -337,7 +337,7 @@ end: `LmP0IndentStack.field.class`
 
 table:
     name: `LmP0IndentStack.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              columns   0
              count     1
@@ -346,14 +346,14 @@ end: `LmP0IndentStack.field.index`
 
 table:
     name: `LmP0IndentStack.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              columns  1
 end: `LmP0IndentStack.field.address-depth`
 
 table:
     name: `LmP0DisabledState.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              body_started   int
              pending_item   int
@@ -364,7 +364,7 @@ end: `LmP0DisabledState.field.class`
 
 table:
     name: `LmP0DisabledState.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              body_started   0
              pending_item   1
@@ -375,7 +375,7 @@ end: `LmP0DisabledState.field.index`
 
 table:
     name: `LmP0Stack.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              parents   LmP0Structure
              owners    LmP0Node
@@ -385,7 +385,7 @@ end: `LmP0Stack.field.class`
 
 table:
     name: `LmP0Stack.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              parents   0
              owners    1
@@ -395,7 +395,7 @@ end: `LmP0Stack.field.index`
 
 table:
     name: `LmP0Stack.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              parents  1
              owners   1
@@ -404,7 +404,7 @@ end: `LmP0Stack.field.address-depth`
 
 table:
     name: `LmP0Dump.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              data      char
              length    size_t
@@ -414,7 +414,7 @@ end: `LmP0Dump.field.class`
 
 table:
     name: `LmP0Dump.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              data      0
              length    1
@@ -424,14 +424,14 @@ end: `LmP0Dump.field.index`
 
 table:
     name: `LmP0Dump.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              data   1
 end: `LmP0Dump.field.address-depth`
 
 table:
     name: `LmP0DumpFrame.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              phase      int
              node       LmP0Node
@@ -443,7 +443,7 @@ end: `LmP0DumpFrame.field.class`
 
 table:
     name: `LmP0DumpFrame.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              phase      0
              node       1
@@ -455,7 +455,7 @@ end: `LmP0DumpFrame.field.index`
 
 table:
     name: `LmP0DumpFrame.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              node       0
              structure  0
@@ -465,7 +465,7 @@ end: `LmP0DumpFrame.field.address-depth`
 
 table:
     name: `LmP0DumpFrame.field.const`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              node       1
              structure  1
@@ -475,7 +475,7 @@ end: `LmP0DumpFrame.field.const`
 
 table:
     name: `LmP0FieldParseLoopFrame.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              indent_stack                  LmP0IndentStack
              structure                     LmP0Structure
@@ -501,7 +501,7 @@ end: `LmP0FieldParseLoopFrame.field.class`
 
 table:
     name: `LmP0FieldParseLoopFrame.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              indent_stack                  0
              structure                     1
@@ -527,7 +527,7 @@ end: `LmP0FieldParseLoopFrame.field.index`
 
 table:
     name: `LmP0FieldParseLoopFrame.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              indent_stack 0
              structure    0
@@ -537,14 +537,14 @@ end: `LmP0FieldParseLoopFrame.field.address-depth`
 
 table:
     name: `LmP0FieldParseLoopFrame.field.const`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              text   1
 end: `LmP0FieldParseLoopFrame.field.const`
 
 table:
     name: `LmP0Registry.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              view     LmRegistryView
              loaded   int
@@ -553,7 +553,7 @@ end: `LmP0Registry.field.class`
 
 table:
     name: `LmP0Registry.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              view     0
              loaded   1
@@ -562,14 +562,14 @@ end: `LmP0Registry.field.index`
 
 table:
     name: `LmP0Registry.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              view     0
 end: `LmP0Registry.field.address-depth`
 
 table:
     name: `LmP0PostprocessFrame.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              phase      int
              node       LmP0Node
@@ -580,7 +580,7 @@ end: `LmP0PostprocessFrame.field.class`
 
 table:
     name: `LmP0PostprocessFrame.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              phase      0
              node       1
@@ -591,7 +591,7 @@ end: `LmP0PostprocessFrame.field.index`
 
 table:
     name: `LmP0PostprocessFrame.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              node       0
              structure  0

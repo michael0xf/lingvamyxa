@@ -1,13 +1,13 @@
 table:
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              pairReturn  c.struct
 end: `layout.backend`
 
 table:
     name: pairReturn
-    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
              incompatible  int  0
 end: pairReturn

@@ -1,7 +1,7 @@
 table:
     source
     name: `class.reference-base`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              short  1
              short  0
@@ -11,7 +11,7 @@ end: `class.reference-base`
 table:
     source
     name: `class.reference-base`
-    columns((class: class) (class: value))
+    columns: (class: class) (class: value)
     rows:
              long  int
 end: `class.reference-base`
@@ -19,25 +19,25 @@ end: `class.reference-base`
 table:
     source
     name: `lm.test.class.reference-base.seed`
-    columns((class: class) (int: marker) (int: `reference-base`))
+    columns: (class: class) (int: marker) (int: `reference-base`)
     rows:
              float  7  1
 end: `lm.test.class.reference-base.seed`
 
 join: (`lm.test.class.reference-base.seed`) `lm.test.class.reference-base.middle`
-    columns((class: class) (int: marker) (int: `reference-base`))
+    columns: (class: class) (int: marker) (int: `reference-base`)
     rows:
 end: `lm.test.class.reference-base.middle`
 
 join: (`lm.test.class.reference-base.middle`) class
-    columns((class: class) (int: marker) (int: `reference-base`))
+    columns: (class: class) (int: marker) (int: `reference-base`)
     rows:
 end: class
 
 table:
     source
     name: class
-    columns((class: class) (int: marker) (int: `reference-base`))
+    columns: (class: class) (int: marker) (int: `reference-base`)
     rows:
              float  8  None
 end: class
@@ -45,7 +45,7 @@ end: class
 table:
     source
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmTestClassReferenceBase  c.struct
 end: `layout.backend`
@@ -53,7 +53,7 @@ end: `layout.backend`
 table:
     source
     name: LmTestClassReferenceBase
-    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
              direct    short  0
              fallback  long   1

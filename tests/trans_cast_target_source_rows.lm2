@@ -3,7 +3,7 @@ import: "lm2/own.lm2"
 table:
     source
     name: `cast.target`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              void  0
              void  1
@@ -13,7 +13,7 @@ end: `cast.target`
 table:
     source
     name: `cast.target`
-    columns((class: class) (class: value))
+    columns: (class: class) (class: value)
     rows:
              LmOwnAllocationDescriptor  int
 end: `cast.target`
@@ -21,25 +21,25 @@ end: `cast.target`
 table:
     source
     name: `lm.test.cast.target.seed`
-    columns((class: class) (int: marker) (int: target))
+    columns: (class: class) (int: marker) (int: target)
     rows:
              LmOwnPtrStack  7  1
 end: `lm.test.cast.target.seed`
 
 join: (`lm.test.cast.target.seed`) `lm.test.cast.target.middle`
-    columns((class: class) (int: marker) (int: target))
+    columns: (class: class) (int: marker) (int: target)
     rows:
 end: `lm.test.cast.target.middle`
 
 join: (`lm.test.cast.target.middle`) `cast`
-    columns((class: class) (int: marker) (int: target))
+    columns: (class: class) (int: marker) (int: target)
     rows:
 end: `cast`
 
 table:
     source
     name: `cast`
-    columns((class: class) (int: marker) (int: target))
+    columns: (class: class) (int: marker) (int: target)
     rows:
              LmOwnPtrStack  8  None
 end: `cast`

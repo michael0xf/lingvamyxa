@@ -1,7 +1,7 @@
 table:
     source
     name: `define.value`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              `LmTestPredefFunction(value)`  "((value) + 1)"
              `LmTestPredefCleanup(value)`   "((void)(value))"
@@ -10,7 +10,7 @@ end: `define.value`
 table:
     source
     name: `fn.thread-context.none`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmTestPredefCleanup   1
              LmTestPredefFunction  1
@@ -18,7 +18,7 @@ end: `fn.thread-context.none`
 
 table:
     name: `predefHeaders.item`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              "include"  0
              "fn"       1
@@ -26,14 +26,14 @@ end: `predefHeaders.item`
 
 table:
     name: `prelude.sequence`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              "predefHeaders"  1
 end: `prelude.sequence`
 
 table:
     name: include
-    columns((class: class) (const: (@: char target)))
+    columns: (class: class) (const: (@: char target))
     rows:
              "time"    "<time.h>"
              "stdlib"  "<stdlib.h>"
@@ -41,14 +41,14 @@ end: include
 
 table:
     name: `fn.external`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              abs  1
 end: `fn.external`
 
 table:
     name: functionPointerType
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmTestPredefEquals  1
 end: functionPointerType

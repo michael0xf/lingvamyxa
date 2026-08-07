@@ -1,6 +1,6 @@
 table:
     name: conditionalImportFixture
-    columns((int: id) (int: value))
+    columns: (int: id) (int: value)
     rows:
              1  37
 end: conditionalImportFixture

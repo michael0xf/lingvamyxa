@@ -2,7 +2,7 @@ L2:
     table:
         source
         name: `define.value`
-        columns((class: class) (@: char value))
+        columns: (class: class) (@: char value)
         rows:
                  LM_TEST_LOCAL_REGISTRY_TABLE  1
     end: `define.value`
@@ -15,7 +15,7 @@ L2:
                 `LM_TEST_LOCAL_REGISTRY_TABLE`:
                     table:
                         name: nestedLocalRegistryTable
-                        columns((class: class) (int: value))
+                        columns: (class: class) (int: value)
                         rows:
                                  nestedLocalKey  1
                     end: nestedLocalRegistryTable

@@ -3,7 +3,7 @@ import: "lm2/mix/Array.lm2"
 table:
     source
     name: `fn.thread-context.none`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_test_int_ptr_equals  1
 end: `fn.thread-context.none`

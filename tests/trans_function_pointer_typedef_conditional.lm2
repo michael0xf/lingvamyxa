@@ -3,28 +3,28 @@ L2:
 
     table:
         name: `conditionalHeaders.item`
-        columns((class: class) (size_t: index))
+        columns: (class: class) (size_t: index)
         rows:
                  "include"  0
     end: `conditionalHeaders.item`
 
     table:
         name: include
-        columns((class: class) (@: char target))
+        columns: (class: class) (@: char target)
         rows:
                  conditionalHeaders  "<stddef.h>"
     end: include
 
     table:
         name: `prelude.sequence`
-        columns((class: class) (int: value))
+        columns: (class: class) (int: value)
         rows:
                  "conditionalHeaders"  1
     end: `prelude.sequence`
 
     table:
         name: functionPointerType
-        columns((class: class) (int: value))
+        columns: (class: class) (int: value)
         rows:
                  LmConditionalEquals  1
     end: functionPointerType

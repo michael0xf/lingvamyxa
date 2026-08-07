@@ -1,7 +1,7 @@
 table:
     source
     name: `fn.thread-context.managed`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_test_conflicting_thread_context  1
 end: `fn.thread-context.managed`
@@ -9,7 +9,7 @@ end: `fn.thread-context.managed`
 table:
     source
     name: `fn.thread-context.none`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_test_conflicting_thread_context  1
 end: `fn.thread-context.none`

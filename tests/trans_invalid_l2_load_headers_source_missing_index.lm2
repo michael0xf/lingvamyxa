@@ -1,7 +1,7 @@
 table:
     source
     name: `receiver.atom.statement`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              loadHeaders  lm_trans_atom_statement_emit_sequence_prelude
 end: `receiver.atom.statement`
@@ -9,7 +9,7 @@ end: `receiver.atom.statement`
 table:
     source
     name: loadHeaders
-    columns((class: class) (int: marker) (size_t: item))
+    columns: (class: class) (int: marker) (size_t: item)
     rows:
              include  1  12
              include  2  None

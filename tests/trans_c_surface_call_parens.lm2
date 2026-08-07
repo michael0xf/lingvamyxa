@@ -2,7 +2,7 @@ L2:
     table:
         source
         name: class
-        columns((class: class) (class: kind))
+        columns: (class: class) (class: kind)
         rows:
                  LmBranch  layout
     end: class
@@ -10,7 +10,7 @@ L2:
     table:
         source
         name: LmBranch
-        columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`))
+        columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
         rows:
                  value  int  0  0
     end: LmBranch
@@ -18,7 +18,7 @@ L2:
     table:
         source
         name: `layout.backend`
-        columns((class: class) (class: backend))
+        columns: (class: class) (class: backend)
         rows:
                  LmBranch  c.struct
     end: `layout.backend`
@@ -26,7 +26,7 @@ L2:
     table:
         source
         name: `fn.thread-context.none`
-        columns((class: class) (int: value))
+        columns: (class: class) (int: value)
         rows:
                  add   1
                  wrap  1

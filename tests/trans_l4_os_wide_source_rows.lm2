@@ -1,6 +1,6 @@
 table:
     name: os
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
              win
              L2:
@@ -13,7 +13,7 @@ end: os
 
 table:
     name: os
-    columns((class: class) (int: marker) (node: body))
+    columns: (class: class) (int: marker) (node: body)
     rows:
              mac 2
              L2:
@@ -25,7 +25,7 @@ end: os
 
 table:
     name: `os.body`
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
              unix
              L2:
@@ -37,7 +37,7 @@ end: `os.body`
 
 table:
     name: `lm.test.os.wide.default.seed`
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
              default
              L2:
@@ -49,12 +49,12 @@ table:
 end: `lm.test.os.wide.default.seed`
 
 join: (`lm.test.os.wide.default.seed`) `lm.test.os.wide.default.middle`
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
 end: `lm.test.os.wide.default.middle`
 
 join: (`lm.test.os.wide.default.middle`) os
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
 end: os
 

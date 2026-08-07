@@ -3,7 +3,7 @@ L2:
 
     table:
         name: `registry.view.parity.lookup`
-        columns((class: class) (@: char value))
+        columns: (class: class) (@: char value)
         rows:
                  default      localDefault
                  localExact   localExactValue
@@ -14,7 +14,7 @@ L2:
 
     table:
         name: `registry.view.parity.multi`
-        columns((class: class) (@: char left) (@: char right))
+        columns: (class: class) (@: char left) (@: char right)
         rows:
                  localMulti   localLeft         localRight
                  sharedMulti  localSharedLeft   None
@@ -23,7 +23,7 @@ L2:
 
     table:
         name: `registry.view.parity.keyonly`
-        columns((class: class))
+        columns: (class: class)
         rows:
                  localKeyOnly
                  duplicateKeyOnly
@@ -32,7 +32,7 @@ L2:
 
     table:
         name: `registry.view.parity.allnone`
-        columns((class: class) (@: char left) (@: char middle) (@: char right))
+        columns: (class: class) (@: char left) (@: char middle) (@: char right)
         rows:
                  localAllNone      None       None         None
                  duplicateAllNone  None       None         None
@@ -41,14 +41,14 @@ L2:
 
     table:
         name: `registry.view.parity.duplicateColumns`
-        columns((class: class) (@: char value) (@: char value))
+        columns: (class: class) (@: char value) (@: char value)
         rows:
                  localDuplicateColumns  localFirst  localSecond
                  partialDuplicate       survives    None
     end: `registry.view.parity.duplicateColumns`
 
     join: (registryViewParityWideA registryViewParityWideB) registryViewParityWideJoined
-        columns((class: class) (@: char left) (@: char middle) (@: char right))
+        columns: (class: class) (@: char left) (@: char middle) (@: char right)
         rows:
                  localWide       localLeft  None         localRight
                  localWideNone   None       None         None
@@ -56,13 +56,13 @@ L2:
     end: registryViewParityWideJoined
 
     join: (registryViewParityJoinBase) registryViewParityJoined
-        columns((class: class) (@: char value))
+        columns: (class: class) (@: char value)
         rows:
                  localJoin  localJoinValue
     end: registryViewParityJoined
 
     join: (registryViewParityNamespaceBase) namespace
-        columns((class: class) (class: `receiver.type`))
+        columns: (class: class) (class: `receiver.type`)
         rows:
     end: namespace
 

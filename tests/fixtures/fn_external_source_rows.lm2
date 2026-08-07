@@ -1,6 +1,6 @@
 table:
     name: `fn.external`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_test_external_direct  1
              lm_test_external_direct  0
@@ -9,7 +9,7 @@ end: `fn.external`
 
 table:
     name: `fn.external`
-    columns((class: class) (class: value))
+    columns: (class: class) (class: value)
     rows:
              lm_test_external_fallback  1
 end: `fn.external`

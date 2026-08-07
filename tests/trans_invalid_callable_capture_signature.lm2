@@ -3,7 +3,7 @@ import: "lm2/own.lm2"
 table:
     source
     name: `callable.capture`
-    columns((class: class) (serial: value))
+    columns: (class: class) (serial: value)
     rows:
              AddX 1
 end: `callable.capture`
@@ -11,7 +11,7 @@ end: `callable.capture`
 table:
     source
     name: `callable.projection`
-    columns((class: class) (projection: value))
+    columns: (class: class) (projection: value)
     rows:
              AddX `c.closure-struct`
 end: `callable.projection`

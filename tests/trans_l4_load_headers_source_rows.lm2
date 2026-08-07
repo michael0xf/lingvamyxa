@@ -1,13 +1,13 @@
 table:
     name: include
-    columns((class: class) (@: char target))
+    columns: (class: class) (@: char target)
     rows:
              stddef  "<stddef.h>"
 end: include
 
 table:
     name: `receiver.atom.statement`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              loadHeaders  lm_trans_atom_statement_emit_include_prelude
              loadHeaders  lm_trans_atom_statement_emit_sequence_prelude
@@ -16,40 +16,40 @@ end: `receiver.atom.statement`
 
 table:
     name: `receiver.atom.statement`
-    columns((class: class) (class: receiver))
+    columns: (class: class) (class: receiver)
     rows:
              include  lm_trans_atom_statement_emit_include_prelude
 end: `receiver.atom.statement`
 
 table:
     name: `lm.test.receiver.atom.statement.seed`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              define  lm_trans_atom_statement_emit_define_prelude
 end: `lm.test.receiver.atom.statement.seed`
 
 join: (`lm.test.receiver.atom.statement.seed`) `receiver.atom.statement`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
 end: `receiver.atom.statement`
 
 table:
     name: `receiver.atom.statement`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              define  None
 end: `receiver.atom.statement`
 
 table:
     name: `loadHeaders.item`
-    columns((class: class) (int: index))
+    columns: (class: class) (int: index)
     rows:
              include  11
 end: `loadHeaders.item`
 
 table:
     name: `loadHeaders.item`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              ifdef  14
              os     13
@@ -57,19 +57,19 @@ end: `loadHeaders.item`
 
 table:
     name: `lm.test.loadHeaders.seed`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              define  12
 end: `lm.test.loadHeaders.seed`
 
 join: (`lm.test.loadHeaders.seed`) `loadHeaders.item`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
 end: `loadHeaders.item`
 
 table:
     name: `loadHeaders.item`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              os       17
              include  15
@@ -79,59 +79,59 @@ end: `loadHeaders.item`
 
 table:
     name: loadHeaders
-    columns((class: class) (size_t: item))
+    columns: (class: class) (size_t: item)
     rows:
              include  777
 end: loadHeaders
 
 table:
     name: loadHeaders
-    columns((class: class) (size_t: item) (int: marker))
+    columns: (class: class) (size_t: item) (int: marker)
     rows:
              include  18  1
 end: loadHeaders
 
 table:
     name: loadHeaders
-    columns((class: class) (int: marker) (size_t: item))
+    columns: (class: class) (int: marker) (size_t: item)
     rows:
              define  2  19
 end: loadHeaders
 
 table:
     name: `lm.test.loadHeaders.wide.seed`
-    columns((class: class) (size_t: item) (int: marker))
+    columns: (class: class) (size_t: item) (int: marker)
     rows:
              os  20  3
 end: `lm.test.loadHeaders.wide.seed`
 
 join: (`lm.test.loadHeaders.wide.seed`) `lm.test.loadHeaders.wide.middle`
-    columns((class: class) (size_t: item) (int: marker))
+    columns: (class: class) (size_t: item) (int: marker)
     rows:
 end: `lm.test.loadHeaders.wide.middle`
 
 join: (`lm.test.loadHeaders.wide.middle`) loadHeaders
-    columns((class: class) (size_t: item) (int: marker))
+    columns: (class: class) (size_t: item) (int: marker)
     rows:
 end: loadHeaders
 
 table:
     name: loadHeaders
-    columns((char: class) (size_t: item) (int: marker))
+    columns: (char: class) (size_t: item) (int: marker)
     rows:
              ifdef  21  4
 end: loadHeaders
 
 table:
     name: `loadHeaders.item`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              include  22
 end: `loadHeaders.item`
 
 table:
     name: loadHeaders
-    columns((class: class) (size_t: item) (int: marker))
+    columns: (class: class) (size_t: item) (int: marker)
     rows:
              include  None  5
 end: loadHeaders

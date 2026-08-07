@@ -2,7 +2,7 @@ L2:
     table:
         source
         name: `receiver.l3`
-        columns((class: class) (int: marker) (int: exclude))
+        columns: (class: class) (int: marker) (int: exclude)
         rows:
                  `return`  7  1
     end: `receiver.l3`

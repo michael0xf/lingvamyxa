@@ -2,7 +2,7 @@ L2:
     table:
         source
         name: `registry.generic-key.smoke`
-        columns((@: char key) (@: char value))
+        columns: (@: char key) (@: char value)
         rows:
                  sample  ok
     end: `registry.generic-key.smoke`

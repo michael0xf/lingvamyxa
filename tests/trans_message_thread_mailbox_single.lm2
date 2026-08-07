@@ -11,7 +11,7 @@ include: "<string.h>"
 table:
     source
     name: `fn.thread-context.managed`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_test_mailbox_receive_entry 1
              lm_test_mailbox_send_entry    1
@@ -22,28 +22,28 @@ end: `fn.thread-context.managed`
 
 table:
     name: `forward.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmTestMailboxContext c.struct
 end: `forward.backend`
 
 table:
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmTestMailboxContext c.struct
 end: `layout.backend`
 
 table:
     name: `class.reference-base`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmTestMailboxContext 1
 end: `class.reference-base`
 
 table:
     name: `LmTestMailboxContext.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              receiver       LmMessageThread
              sender         LmMessageThread
@@ -57,7 +57,7 @@ end: `LmTestMailboxContext.field.class`
 
 table:
     name: `LmTestMailboxContext.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              receiver       0
              sender         1
@@ -71,7 +71,7 @@ end: `LmTestMailboxContext.field.index`
 
 table:
     name: `LmTestMailboxContext.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              receiver 0
              sender   0

@@ -1,7 +1,7 @@
 table:
     source
     name: `None.cell`
-    columns((class: class) (decimal: value))
+    columns: (class: class) (decimal: value)
     rows:
              LmNoneDirect    1
              LmNoneDirect    0
@@ -13,7 +13,7 @@ end: `None.cell`
 table:
     source
     name: `None.cell`
-    columns((class: class) (decimal: sentinel))
+    columns: (class: class) (decimal: sentinel)
     rows:
              LmNoneFallback  0
 end: `None.cell`
@@ -21,25 +21,25 @@ end: `None.cell`
 table:
     source
     name: `lm.test.none-cell.seed`
-    columns((class: class) (int: marker) (decimal: cell))
+    columns: (class: class) (int: marker) (decimal: cell)
     rows:
              LmNoneJoined  7  0
 end: `lm.test.none-cell.seed`
 
 join: (`lm.test.none-cell.seed`) `lm.test.none-cell.middle`
-    columns((class: class) (int: marker) (decimal: cell))
+    columns: (class: class) (int: marker) (decimal: cell)
     rows:
 end: `lm.test.none-cell.middle`
 
 join: (`lm.test.none-cell.middle`) `None`
-    columns((class: class) (int: marker) (decimal: cell))
+    columns: (class: class) (int: marker) (decimal: cell)
     rows:
 end: `None`
 
 table:
     source
     name: `None`
-    columns((class: class) (int: marker) (decimal: cell))
+    columns: (class: class) (int: marker) (decimal: cell)
     rows:
              default  8  0
 end: `None`
@@ -47,7 +47,7 @@ end: `None`
 table:
     source
     name: `None`
-    columns((class: class) (int: marker) (decimal: cell))
+    columns: (class: class) (int: marker) (decimal: cell)
     rows:
              LmNoneJoined  9   None
              default       10  None
@@ -56,7 +56,7 @@ end: `None`
 table:
     source
     name: `define.value`
-    columns((class: class) (LmNoneDirect: value))
+    columns: (class: class) (LmNoneDirect: value)
     rows:
              LM_TEST_NONE_DIRECT    0
              LM_TEST_NONE_SURVIVES  1
@@ -65,7 +65,7 @@ end: `define.value`
 table:
     source
     name: `define.value`
-    columns((class: class) (LmNoneFallback: value))
+    columns: (class: class) (LmNoneFallback: value)
     rows:
              LM_TEST_NONE_FALLBACK  0
 end: `define.value`
@@ -73,7 +73,7 @@ end: `define.value`
 table:
     source
     name: `define.value`
-    columns((class: class) (LmNoneJoined: value))
+    columns: (class: class) (LmNoneJoined: value)
     rows:
              LM_TEST_NONE_JOINED  0
 end: `define.value`
@@ -81,7 +81,7 @@ end: `define.value`
 table:
     source
     name: `define.value`
-    columns((class: class) (LmNoneDefault: value))
+    columns: (class: class) (LmNoneDefault: value)
     rows:
              LM_TEST_NONE_DEFAULT  0
 end: `define.value`

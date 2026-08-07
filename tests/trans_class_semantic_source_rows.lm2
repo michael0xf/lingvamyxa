@@ -1,7 +1,7 @@
 table:
     source
     name: `class.semantic`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              int  opaqueHandle
              int  integer
@@ -11,7 +11,7 @@ end: `class.semantic`
 table:
     source
     name: `class.semantic`
-    columns((class: class) (class: value))
+    columns: (class: class) (class: value)
     rows:
              short  opaqueHandle
 end: `class.semantic`
@@ -19,25 +19,25 @@ end: `class.semantic`
 table:
     source
     name: `lm.test.class.semantic.seed`
-    columns((class: class) (int: marker) (@: char semantic))
+    columns: (class: class) (int: marker) (@: char semantic)
     rows:
              long  7  opaqueHandle
 end: `lm.test.class.semantic.seed`
 
 join: (`lm.test.class.semantic.seed`) `lm.test.class.semantic.middle`
-    columns((class: class) (int: marker) (@: char semantic))
+    columns: (class: class) (int: marker) (@: char semantic)
     rows:
 end: `lm.test.class.semantic.middle`
 
 join: (`lm.test.class.semantic.middle`) class
-    columns((class: class) (int: marker) (@: char semantic))
+    columns: (class: class) (int: marker) (@: char semantic)
     rows:
 end: class
 
 table:
     source
     name: class
-    columns((class: class) (int: marker) (@: char semantic))
+    columns: (class: class) (int: marker) (@: char semantic)
     rows:
              long  8  None
 end: class
@@ -45,7 +45,7 @@ end: class
 table:
     source
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmTestClassSemantic  c.struct
 end: `layout.backend`
@@ -53,7 +53,7 @@ end: `layout.backend`
 table:
     source
     name: LmTestClassSemantic
-    columns((class: class) (class: `field.class`) (size_t: `field.index`))
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
              direct    int    0
              fallback  short  1

@@ -15,7 +15,7 @@ include: "<limits.h>" "<stdint.h>" "<stdio.h>" "<stdlib.h>" "<string.h>"
 table:
     source
     name: `define.value`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              LmCivetwebRequestInfo  "struct mg_request_info"
 end: `define.value`
@@ -23,7 +23,7 @@ end: `define.value`
 table:
     source
     name: `class.spelling`
-    columns((class: class) (@: char spelling))
+    columns: (class: class) (@: char spelling)
     rows:
              LmCivetwebConnection   "struct mg_connection"
              LmCivetwebRequestInfo  "struct mg_request_info"
@@ -33,7 +33,7 @@ end: `class.spelling`
 table:
     source
     name: class
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              LmCivetwebConnection   opaqueReference
              LmCivetwebRequestInfo  opaqueReference
@@ -43,7 +43,7 @@ end: class
 table:
     source
     name: `class.c.projection`
-    columns((class: class) (@: char spelling))
+    columns: (class: class) (@: char spelling)
     rows:
              LmCivetwebConnection   "struct mg_connection"
              LmCivetwebRequestInfo  "struct mg_request_info"
@@ -53,7 +53,7 @@ end: `class.c.projection`
 table:
     source
     name: `forward.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmRestLmxHttpServer  c.struct
 end: `forward.backend`
@@ -61,7 +61,7 @@ end: `forward.backend`
 table:
     source
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmRestLmxHttpServer           c.named-struct
              LmRestLmxHttpServerOptionsV1  c.struct
@@ -70,7 +70,7 @@ end: `layout.backend`
 table:
     source
     name: `class.reference-base`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmRestLmxHttpServer           1
              LmRestLmxHttpServerOptionsV1  1
@@ -81,7 +81,7 @@ end: `class.reference-base`
 table:
     source
     name: `cast.target`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmRestLmxHttpServer           1
              LmRestLmxHttpServerOptionsV1  1
@@ -90,7 +90,7 @@ end: `cast.target`
 table:
     source
     name: LmRestLmxHttpServer
-    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`))
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
     rows:
              runtime              LmMessageThreadRuntime  0 0
              context              void                    1 1
@@ -104,7 +104,7 @@ end: LmRestLmxHttpServer
 table:
     source
     name: `fn.thread-context.none`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_rest_lmx_http_ascii_is_hex              1
              lm_rest_lmx_http_ascii_lower               1
@@ -130,7 +130,7 @@ end: `fn.thread-context.none`
 table:
     source
     name: `fn.external`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_rest_lmx_http_server_provider_name  1
              lm_rest_lmx_http_server_start          1

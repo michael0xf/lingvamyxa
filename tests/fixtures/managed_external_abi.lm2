@@ -1,7 +1,7 @@
 table:
     source
     name: `fn.thread-context.managed`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_test_imported_managed_external  1
 end: `fn.thread-context.managed`
@@ -9,7 +9,7 @@ end: `fn.thread-context.managed`
 table:
     source
     name: `fn.external`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_test_imported_managed_external  1
 end: `fn.external`

@@ -1,6 +1,6 @@
 table:
     name: alpha
-    columns((class: class) (char: left) (int: number) (boolean: enabled))
+    columns: (class: class) (char: left) (int: number) (boolean: enabled)
     rows:
              first      "left-old"    1     1
              duplicate  "left-first"  2     1
@@ -10,27 +10,27 @@ end: alpha
 
 table:
     name: beta
-    columns((class: class) (char: left) (int: number) (boolean: enabled))
+    columns: (class: class) (char: left) (int: number) (boolean: enabled)
     rows:
              betaKey  "beta-left"  4  1
 end: beta
 
 join: (alpha beta) gamma
-    columns((class: class) (char: left) (int: number) (boolean: enabled))
+    columns: (class: class) (char: left) (int: number) (boolean: enabled)
     rows:
              directKey  "direct-left"  5  0
 end: gamma
 
 table:
     name: columnOrder
-    columns((class: class) (char: value) (char: value))
+    columns: (class: class) (char: value) (char: value)
     rows:
              duplicateColumn  "first-column"  "last-column"
 end: columnOrder
 
 table:
     name: synthetic
-    columns((class: class) (char: value))
+    columns: (class: class) (char: value)
     rows:
              explicitKey  "explicit-value"
 end: synthetic

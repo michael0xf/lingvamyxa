@@ -3,7 +3,7 @@ import: "lm2/own.lm2"
 table:
     source
     name: `callable.partial.form`
-    columns((class: class) (binding: materializer))
+    columns: (class: class) (binding: materializer)
     rows:
              directPartial  lm_trans_materialize_call_frame_partial
              directPartial  lm_trans_materialize_partial_callable
@@ -17,7 +17,7 @@ end: `callable.partial.form`
 table:
     source
     name: `callable.partial.form`
-    columns((class: class) (class: materializer))
+    columns: (class: class) (class: materializer)
     rows:
              fallbackPartial  lm_trans_materialize_partial_callable
 end: `callable.partial.form`
@@ -25,25 +25,25 @@ end: `callable.partial.form`
 table:
     source
     name: `lm.test.callable.partial.form.seed`
-    columns((class: class) (int: marker) (binding: form))
+    columns: (class: class) (int: marker) (binding: form)
     rows:
              joinedPartial  7  lm_trans_materialize_partial_callable
 end: `lm.test.callable.partial.form.seed`
 
 join: (`lm.test.callable.partial.form.seed`) `lm.test.callable.partial.form.middle`
-    columns((class: class) (int: marker) (binding: form))
+    columns: (class: class) (int: marker) (binding: form)
     rows:
 end: `lm.test.callable.partial.form.middle`
 
 join: (`lm.test.callable.partial.form.middle`) `callable.partial`
-    columns((class: class) (int: marker) (binding: form))
+    columns: (class: class) (int: marker) (binding: form)
     rows:
 end: `callable.partial`
 
 table:
     source
     name: `callable.partial`
-    columns((class: class) (int: marker) (binding: form))
+    columns: (class: class) (int: marker) (binding: form)
     rows:
              joinedPartial  8  None
 end: `callable.partial`

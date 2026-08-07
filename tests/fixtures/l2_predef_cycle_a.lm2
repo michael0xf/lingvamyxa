@@ -2,7 +2,7 @@ predef: "l2_predef_cycle_b.lm2"
 
 table:
     name: predefCycleA
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              "a"  1
 end: predefCycleA

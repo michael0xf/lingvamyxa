@@ -1,14 +1,14 @@
 table:
     source
     name: `fn.c.calling-convention`
-    columns((class: class) (callingConvention: convention))
+    columns: (class: class) (callingConvention: convention)
     rows:
              lm_test_stdcall  c.stdcall
 end: `fn.c.calling-convention`
 
 table:
     name: `define.value`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              LM_LMX_ABI_STDCALL      "*"
              LM_TEST_REQUIRE_POINTER "sizeof *"
@@ -17,7 +17,7 @@ end: `define.value`
 table:
     source
     name: fn
-    columns((class: class) (class: descriptor) (class: receiver))
+    columns: (class: class) (class: descriptor) (class: receiver)
     rows:
              lm_test_stdcall  function  fn
 end: fn
@@ -25,7 +25,7 @@ end: fn
 table:
     source
     name: `fn.external`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_test_stdcall  1
 end: `fn.external`
@@ -33,7 +33,7 @@ end: `fn.external`
 table:
     source
     name: lm_test_stdcall
-    columns((class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (class: `return.class`))
+    columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (class: `return.class`)
     rows:
              value   int   0     None  None
              return  None  None  None  int
@@ -42,7 +42,7 @@ end: lm_test_stdcall
 table:
     source
     name: `fn.thread-context.none`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_test_stdcall  1
 end: `fn.thread-context.none`

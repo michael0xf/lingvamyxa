@@ -1,7 +1,7 @@
 L2:
     table:
         name: namedArgTable
-        columns((int(name: "id"; value: "5")) (const: (@: char label)))
+        columns: (int(name: "id"; value: "5")) (const: (@: char label))
         rows:
                  42  "forty-two"
     end: namedArgTable

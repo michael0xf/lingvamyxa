@@ -7,7 +7,7 @@ include: "<string.h>"
 table:
     source
     name: `fn.thread-context.none`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_registry_view_row_delete_any 1
              lm_table_cell_delete_any 1

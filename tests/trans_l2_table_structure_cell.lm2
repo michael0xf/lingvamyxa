@@ -1,7 +1,7 @@
 table:
     source
     name: class
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              Point  layout
 end: class
@@ -9,7 +9,7 @@ end: class
 table:
     source
     name: Point
-    columns((class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`))
+    columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
              x  int  0  0
              y  int  1  0
@@ -18,7 +18,7 @@ end: Point
 table:
     source
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              Point  c.struct
 end: `layout.backend`
@@ -26,7 +26,7 @@ end: `layout.backend`
 table:
     source
     name: `class.reference-base`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              Point  1
 end: `class.reference-base`
@@ -35,7 +35,7 @@ include: "trans_l2_table_structure_cell.support.h"
 
 table:
     name: pointTable
-    columns((Point: point) (int: tag))
+    columns: (Point: point) (int: tag)
     rows:
              Point:
                  x: 3

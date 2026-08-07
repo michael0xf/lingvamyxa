@@ -1,7 +1,7 @@
 table:
     source
     name: `define.value`
-    columns((@: char key) (@: char value))
+    columns: (@: char key) (@: char value)
     rows:
              LM_TEST_L2_SOURCE_TABLE_GENERIC_KEY  83
 end: `define.value`
@@ -10,7 +10,7 @@ define
 
 table:
     name: runtimeKeyTable
-    columns((int: key) (int: value))
+    columns: (int: key) (int: value)
     rows:
              7  9
 end: runtimeKeyTable

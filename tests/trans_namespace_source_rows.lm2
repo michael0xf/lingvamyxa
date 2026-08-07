@@ -1,7 +1,7 @@
 table:
     source
     name: namespace
-    columns((class: class) (class: `receiver.type`))
+    columns: (class: class) (class: `receiver.type`)
     rows:
              LmTestDirectStatement  `receiver.statement`
              LmTestDirectStatement  None
@@ -10,7 +10,7 @@ end: namespace
 table:
     source
     name: namespace
-    columns((class: class) (relation: `receiver.type`))
+    columns: (class: class) (relation: `receiver.type`)
     rows:
              LmTestFallbackStatement  `receiver.statement`
 end: namespace
@@ -18,7 +18,7 @@ end: namespace
 table:
     source
     name: `lm.test.namespace.seed`
-    columns((class: class) (class: `receiver.type`))
+    columns: (class: class) (class: `receiver.type`)
     rows:
              LmTestJoined0  `receiver.statement`
              LmTestJoined0  `receiver.statement`
@@ -26,14 +26,14 @@ table:
 end: `lm.test.namespace.seed`
 
 join: (`lm.test.namespace.seed`) namespace
-    columns((class: class) (class: `receiver.type`))
+    columns: (class: class) (class: `receiver.type`)
     rows:
 end: namespace
 
 table:
     source
     name: namespace
-    columns((class: class) (class: `receiver.type`))
+    columns: (class: class) (class: `receiver.type`)
     rows:
              LmTestJoined0  None
              LmTestJoined2  None
@@ -42,7 +42,7 @@ end: namespace
 table:
     source
     name: `receiver.statement`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              LmTestDirectStatement    lm_trans_statement_emit_assert
              LmTestFallbackStatement  lm_trans_statement_emit_assert

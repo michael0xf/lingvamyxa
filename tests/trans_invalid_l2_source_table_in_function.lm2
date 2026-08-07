@@ -4,7 +4,7 @@ L2:
             table:
                 source
                 name: localSourceTable
-                columns((int: key) (int: value))
+                columns: (int: key) (int: value)
                 rows:
                          1  2
             end: localSourceTable

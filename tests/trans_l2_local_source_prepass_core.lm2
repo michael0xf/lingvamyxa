@@ -30,7 +30,7 @@ fn: lm_test_local_prepass_case () int
     int: status
 
     source_path: "tests/trans_l2_local_source_prepass_core.lm2"
-    source: "table:\n    name: LmLocalPrepassSource\n    columns((class: class) (char: value))\n    rows:\n             LmLocalPrepassFirst  \"first\"\nend: LmLocalPrepassSource\ntable:\n    name: LmLocalPrepassSource\n    columns((class: class) (char: value))\n    rows:\n             LmLocalPrepassSecond  \"second\"\nend: LmLocalPrepassSource\njoin: (LmLocalPrepassSource) LmLocalPrepassTarget\n    columns((class: class) (char: value))\n    rows:\nend: LmLocalPrepassTarget\n"
+    source: "table:\n    name: LmLocalPrepassSource\n    columns: (class: class) (char: value)\n    rows:\n             LmLocalPrepassFirst  \"first\"\nend: LmLocalPrepassSource\ntable:\n    name: LmLocalPrepassSource\n    columns: (class: class) (char: value)\n    rows:\n             LmLocalPrepassSecond  \"second\"\nend: LmLocalPrepassSource\njoin: (LmLocalPrepassSource) LmLocalPrepassTarget\n    columns: (class: class) (char: value)\n    rows:\nend: LmLocalPrepassTarget\n"
     document: 0
     namespace_: 0
     status: 0
@@ -112,7 +112,7 @@ fn: lm_test_local_prepass_deferred_import_case () int
 
     source_path: "tests/trans_l2_local_source_prepass_core.lm2"
     imported_path: "tests/fixtures/l2_local_source_prepass_import.lm2"
-    source: "import: \"fixtures/l2_local_source_prepass_import.lm2\"\njoin: (LmLocalPrepassImportedSource) LmLocalPrepassImportedTarget\n    columns((class: class) (char: value))\n    rows:\nend: LmLocalPrepassImportedTarget\n"
+    source: "import: \"fixtures/l2_local_source_prepass_import.lm2\"\njoin: (LmLocalPrepassImportedSource) LmLocalPrepassImportedTarget\n    columns: (class: class) (char: value)\n    rows:\nend: LmLocalPrepassImportedTarget\n"
     document: 0
     namespace_: 0
     status: 0

@@ -1,7 +1,7 @@
 table:
     source
     name: functionPointerType
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmTestConflictingCallback  1
 end: functionPointerType
@@ -9,7 +9,7 @@ end: functionPointerType
 table:
     source
     name: fn
-    columns((class: class) (class: descriptor) (class: receiver))
+    columns: (class: class) (class: descriptor) (class: receiver)
     rows:
              LmTestConflictingCallback  callableDescriptor  fn
 end: fn
@@ -17,7 +17,7 @@ end: fn
 table:
     source
     name: `fn.thread-context.managed`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmTestConflictingCallback  1
 end: `fn.thread-context.managed`
@@ -25,7 +25,7 @@ end: `fn.thread-context.managed`
 table:
     source
     name: `fn.thread-context.none`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmTestConflictingCallback  1
 end: `fn.thread-context.none`

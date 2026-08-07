@@ -1,7 +1,7 @@
 table:
     source
     name: include
-    columns((class: class) (@: char target))
+    columns: (class: class) (@: char target)
     rows:
              stddef  "<stddef.h>"
 end: include
@@ -9,7 +9,7 @@ end: include
 table:
     source
     name: `define.value`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              LM_TEST_NAMESPACE_L2_OVERLAY  7
 end: `define.value`
@@ -17,25 +17,25 @@ end: `define.value`
 table:
     source
     name: `lm.test.namespace.l2.receiver.seed`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              lmTestNamespaceL2  lm_trans_atom_statement_emit_sequence_prelude
 end: `lm.test.namespace.l2.receiver.seed`
 
 join: (`lm.test.namespace.l2.receiver.seed`) `lm.test.namespace.l2.receiver.middle`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
 end: `lm.test.namespace.l2.receiver.middle`
 
 join: (`lm.test.namespace.l2.receiver.middle`) `receiver.atom.statement`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
 end: `receiver.atom.statement`
 
 table:
     source
     name: `lmTestNamespaceL2.item`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              include  0
 end: `lmTestNamespaceL2.item`
@@ -43,7 +43,7 @@ end: `lmTestNamespaceL2.item`
 table:
     source
     name: `lmTestNamespaceL2.item`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              define  1
 end: `lmTestNamespaceL2.item`
@@ -51,7 +51,7 @@ end: `lmTestNamespaceL2.item`
 table:
     source
     name: unit
-    columns((class: class) (class: backend) (node: payload))
+    columns: (class: class) (class: backend) (node: payload)
     rows:
              lm_test_namespace_l2_payload_direct  c.static-unit
              L2:

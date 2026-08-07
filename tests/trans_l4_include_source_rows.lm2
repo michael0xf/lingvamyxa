@@ -1,6 +1,6 @@
 table:
     name: include
-    columns((class: class) (@: char target))
+    columns: (class: class) (@: char target)
     rows:
              lm_test_include_source           "<limits.h>"
              lm_test_include_duplicate        "<float.h>"
@@ -14,26 +14,26 @@ end: include
 
 table:
     name: include
-    columns((class: class) (@: char kind))
+    columns: (class: class) (@: char kind)
     rows:
              lm_test_include_schema_fallback  "<signal.h>"
 end: include
 
 table:
     name: `lm.test.include.seed`
-    columns((class: class) (@: char target))
+    columns: (class: class) (@: char target)
     rows:
              lm_test_include_joined  "<assert.h>"
 end: `lm.test.include.seed`
 
 join: (`lm.test.include.seed`) include
-    columns((class: class) (@: char target))
+    columns: (class: class) (@: char target)
     rows:
 end: include
 
 table:
     name: include
-    columns((class: class) (@: char target) (int: marker))
+    columns: (class: class) (@: char target) (int: marker)
     rows:
              lm_test_include_wide_source     "<stdbool.h>"  1
              lm_test_include_wide_duplicate  "<math.h>"     2
@@ -45,20 +45,20 @@ end: include
 
 table:
     name: `include.target`
-    columns((class: class) (@: char target))
+    columns: (class: class) (@: char target)
     rows:
              lm_test_include_wide_physical  "<stdint.h>"
 end: `include.target`
 
 table:
     name: `lm.test.include.wide.seed`
-    columns((class: class) (@: char target) (int: marker))
+    columns: (class: class) (@: char target) (int: marker)
     rows:
              lm_test_include_wide_joined  "<ctype.h>"  7
 end: `lm.test.include.wide.seed`
 
 join: (`lm.test.include.wide.seed`) include
-    columns((class: class) (@: char target) (int: marker))
+    columns: (class: class) (@: char target) (int: marker)
     rows:
 end: include
 

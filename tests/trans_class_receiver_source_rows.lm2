@@ -1,7 +1,7 @@
 table:
     source
     name: `class.receiver`
-    columns((class: class) (binding: emit) (binding: structure_value_alloc) (binding: structure_value_fill))
+    columns: (class: class) (binding: emit) (binding: structure_value_alloc) (binding: structure_value_fill)
     rows:
              `[]`  lm_trans_type_receiver_array_emit  lm_trans_type_receiver_array_structure_value_alloc  lm_trans_type_receiver_array_structure_value_fill
 end: `class.receiver`
@@ -9,7 +9,7 @@ end: `class.receiver`
 table:
     source
     name: `class.receiver.emit`
-    columns((class: class) (binding: emit))
+    columns: (class: class) (binding: emit)
     rows:
              `[]`  lm_trans_type_receiver_array_emit
 end: `class.receiver.emit`
@@ -17,7 +17,7 @@ end: `class.receiver.emit`
 table:
     source
     name: `class.receiver.structure_value_fill`
-    columns((class: class) (char: structure_value_fill))
+    columns: (class: class) (char: structure_value_fill)
     rows:
              `[]`  lm_trans_type_receiver_array_structure_value_fill
 end: `class.receiver.structure_value_fill`

@@ -1,6 +1,6 @@
 table:
     name: class
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              node                relation
              frame               descriptor
@@ -37,7 +37,7 @@ end: class
 
 table:
     name: `None.cell`
-    columns((class: class) (decimal: value))
+    columns: (class: class) (decimal: value)
     rows:
              nodeFlag    0
              frameFlag   0
@@ -46,7 +46,7 @@ end: `None.cell`
 
 table:
     name: `p0.compact-token`
-    columns((class: class) (boolean: value))
+    columns: (class: class) (boolean: value)
     rows:
              `!=`   1
              `<=`   1
@@ -62,7 +62,7 @@ end: `p0.compact-token`
 
 table:
     name: `node.kind`
-    columns((class: class) (nodeKind: value))
+    columns: (class: class) (nodeKind: value)
     rows:
              structure          1
              frame              2
@@ -72,7 +72,7 @@ end: `node.kind`
 
 table:
     name: `node.flag`
-    columns((class: class) (nodeFlag: value))
+    columns: (class: class) (nodeFlag: value)
     rows:
              inactive           1
              mix                2
@@ -81,7 +81,7 @@ end: `node.flag`
 
 table:
     name: `frame.flag`
-    columns((class: class) (frameFlag: value))
+    columns: (class: class) (frameFlag: value)
     rows:
              colon               1
              compact             2
@@ -91,7 +91,7 @@ end: `frame.flag`
 
 table:
     name: namespace
-    columns((class: class) (class: parser_class))
+    columns: (class: class) (class: parser_class)
     rows:
              `end`     `trailer.end`
              `return`  `trailer.return`
@@ -100,14 +100,14 @@ end: namespace
 
 table:
     name: `trailer.flag`
-    columns((class: class) (trailerFlag: value))
+    columns: (class: class) (trailerFlag: value)
     rows:
              `tail-cutter`     1
 end: `trailer.flag`
 
 table:
     name: `trailer.role`
-    columns((class: class) (binding: value))
+    columns: (class: class) (binding: value)
     rows:
              `trailer.end`     LM_P0_TRAILER_ROLE_END
              `trailer.return`  LM_P0_TRAILER_ROLE_RETURN
@@ -116,7 +116,7 @@ end: `trailer.role`
 
 table:
     name: `trailer.allow-bare`
-    columns((class: class) (boolean: value))
+    columns: (class: class) (boolean: value)
     rows:
              `trailer.end`     0
              `trailer.return`  1
@@ -125,7 +125,7 @@ end: `trailer.allow-bare`
 
 table:
     name: `trailer.target`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              `trailer.return`  fn
 end: `trailer.target`

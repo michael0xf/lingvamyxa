@@ -191,21 +191,21 @@ fn: lm_trans_top_level_function_header (
 
 table:
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmTransRegistryImportFrame     c.struct
 end: `layout.backend`
 
 table:
     name: `class.reference-base`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmTransRegistryImportFrame     1
 end: `class.reference-base`
 
 table:
     name: `LmTransRegistryImportFrame.field.class`
-    columns((class: class) (class: field))
+    columns: (class: class) (class: field)
     rows:
              field        LmP0Field
              descend_l2   int
@@ -213,7 +213,7 @@ end: `LmTransRegistryImportFrame.field.class`
 
 table:
     name: `LmTransRegistryImportFrame.field.index`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              field        0
              descend_l2   1
@@ -221,14 +221,14 @@ end: `LmTransRegistryImportFrame.field.index`
 
 table:
     name: `LmTransRegistryImportFrame.field.address-depth`
-    columns((class: class) (size_t: depth))
+    columns: (class: class) (size_t: depth)
     rows:
              field        0
 end: `LmTransRegistryImportFrame.field.address-depth`
 
 table:
     name: `LmTransRegistryImportFrame.field.const`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              field        1
 end: `LmTransRegistryImportFrame.field.const`

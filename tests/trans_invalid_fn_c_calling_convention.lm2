@@ -1,6 +1,6 @@
 table:
     name: class
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              c.fastcall  callingConvention
 end: class
@@ -8,7 +8,7 @@ end: class
 table:
     source
     name: `fn.c.calling-convention`
-    columns((class: class) (callingConvention: convention))
+    columns: (class: class) (callingConvention: convention)
     rows:
              lm_test_unsupported_calling_convention  c.fastcall
 end: `fn.c.calling-convention`

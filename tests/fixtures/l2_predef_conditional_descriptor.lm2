@@ -2,7 +2,7 @@ include: "fixtures/l2_predef_conditional_descriptor.support.h"
 
 table:
     name: functionPointerType
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmTestPredefConditional  1
 end: functionPointerType

@@ -2,7 +2,7 @@ L2:
     table:
         source
         name: `registry.multicolumn.smoke`
-        columns((class: class) (@: char left)  (@: char right))
+        columns: (class: class) (@: char left)  (@: char right)
         rows:
                  sample        one          None
     end: `registry.multicolumn.smoke`

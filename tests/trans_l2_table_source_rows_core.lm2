@@ -128,8 +128,8 @@ fn: lm_test_l2_table_source_rows_core () int
     int: projected_covered
     int: status
 
-    source: "table:\n    name: l2Source\n    columns((class: class) (char: label) (node: body))\n    rows:\n             sampleKey  \"hello\"\n             payload:\n                 nested\n             end: payload\n             nodeKey:\n                 nestedKey\n             end: nodeKey\n             \"source-only\"\n             payload2:\n                 nested2\n             end: payload2\n             nativeText\n             nativeLabel:\n                 nestedLabel\n             end: nativeLabel\n             payload3:\n                 nested3\n             end: payload3\nend: l2Source\n"
-    conflict_source: "table:\n    name: class\n    columns((class: class) (class: kind))\n    rows:\n             LmL2BatchKindConflict opaqueReference\n             LmL2BatchKindConflict function\nend: class\n"
+    source: "table:\n    name: l2Source\n    columns: (class: class) (char: label) (node: body)\n    rows:\n             sampleKey  \"hello\"\n             payload:\n                 nested\n             end: payload\n             nodeKey:\n                 nestedKey\n             end: nodeKey\n             \"source-only\"\n             payload2:\n                 nested2\n             end: payload2\n             nativeText\n             nativeLabel:\n                 nestedLabel\n             end: nativeLabel\n             payload3:\n                 nested3\n             end: payload3\nend: l2Source\n"
+    conflict_source: "table:\n    name: class\n    columns: (class: class) (class: kind)\n    rows:\n             LmL2BatchKindConflict opaqueReference\n             LmL2BatchKindConflict function\nend: class\n"
     document: 0
     conflict_document: 0
     namespace_: 0

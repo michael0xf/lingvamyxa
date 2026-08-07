@@ -1,7 +1,7 @@
 table:
     source
     name: `receiver.statement`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              if  lm_trans_statement_emit_while
              if  lm_trans_statement_emit_if
@@ -11,7 +11,7 @@ end: `receiver.statement`
 table:
     source
     name: `receiver.statement`
-    columns((class: class) (class: receiver))
+    columns: (class: class) (class: receiver)
     rows:
              while  lm_trans_statement_emit_while
 end: `receiver.statement`
@@ -19,25 +19,25 @@ end: `receiver.statement`
 table:
     source
     name: `lm.test.receiver.statement.seed`
-    columns((class: class) (int: marker) (binding: statement))
+    columns: (class: class) (int: marker) (binding: statement)
     rows:
              `return`  1  lm_trans_statement_emit_return
 end: `lm.test.receiver.statement.seed`
 
 join: (`lm.test.receiver.statement.seed`) `lm.test.receiver.statement.middle`
-    columns((class: class) (int: marker) (binding: statement))
+    columns: (class: class) (int: marker) (binding: statement)
     rows:
 end: `lm.test.receiver.statement.middle`
 
 join: (`lm.test.receiver.statement.middle`) receiver
-    columns((class: class) (int: marker) (binding: statement))
+    columns: (class: class) (int: marker) (binding: statement)
     rows:
 end: receiver
 
 table:
     source
     name: receiver
-    columns((class: class) (int: marker) (binding: statement))
+    columns: (class: class) (int: marker) (binding: statement)
     rows:
              `return`  2  None
 end: receiver

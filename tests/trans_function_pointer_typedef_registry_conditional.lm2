@@ -3,7 +3,7 @@
 table:
     source
     name: functionPointerType
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmRegistryConditionalEquals  1
 end: functionPointerType
@@ -11,7 +11,7 @@ end: functionPointerType
 table:
     source
     name: ifdef
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
              LM_TEST_REGISTRY_FUNCTION_POINTER_BRANCH
              L2:

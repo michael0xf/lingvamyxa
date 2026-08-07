@@ -3,7 +3,7 @@ predef: "lm2/own_abi.lm2"
 table:
     source
     name: `define.value`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              `lm_own_new_zero(size)`  "lm_test_tracked_new_zero(lm_test_direct_new_zero_calls, (size))"
 end: `define.value`
@@ -11,7 +11,7 @@ end: `define.value`
 table:
     source
     name: `fn.thread-context.none`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_test_tracked_new_zero  1
 end: `fn.thread-context.none`

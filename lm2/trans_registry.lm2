@@ -1,6 +1,6 @@
 table:
     name: class
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              c.struct                   descriptor
              c.union                    descriptor
@@ -165,7 +165,7 @@ end: class
 
 table:
     name: `class.category`
-    columns((class: class) (categoryFlag: value)  (categoryFlag: numeric)  (categoryFlag: integer)  (categoryFlag: floating)  (categoryFlag: reference)  (categoryFlag: opaque)  (categoryFlag: callable)  (categoryFlag: descriptor)  (categoryFlag: fixedWidth)  (categoryFlag: profileWidth))
+    columns: (class: class) (categoryFlag: value)  (categoryFlag: numeric)  (categoryFlag: integer)  (categoryFlag: floating)  (categoryFlag: reference)  (categoryFlag: opaque)  (categoryFlag: callable)  (categoryFlag: descriptor)  (categoryFlag: fixedWidth)  (categoryFlag: profileWidth)
     rows:
              int              1              1                1                0                 0                 0               0                0                  0                  1
              u32              1              1                1                0                 0                 0               0                0                  1                  0
@@ -180,7 +180,7 @@ end: `class.category`
 
 table:
     name: `class.semantic`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              void      none
              char      integer
@@ -211,7 +211,7 @@ end: `class.semantic`
 
 table:
     name: `class.range`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              char      "C99-char(profile)"
              short     "C99-short(profile)"
@@ -241,7 +241,7 @@ end: `class.range`
 
 table:
     name: `class.spelling`
-    columns((class: class) (@: char spelling))
+    columns: (class: class) (@: char spelling)
     rows:
              categoryFlag uint8_t
              uint8  uint8_t
@@ -261,7 +261,7 @@ end: `class.spelling`
 
 table:
     name: `printf.format`
-    columns((class: class) (@: char spelling))
+    columns: (class: class) (@: char spelling)
     rows:
              int       "%d"
              unsigned  "%u"
@@ -274,7 +274,7 @@ end: `printf.format`
 
 table:
     name: `printf.argument.class`
-    columns((class: class) (class: value))
+    columns: (class: class) (class: value)
     rows:
              `%d`   int
              `%i`   int
@@ -306,7 +306,7 @@ end: `printf.argument.class`
 
 table:
     name: `printf.conversion.rule`
-    columns((class: class) (class: expected)  (profileRule: profile))
+    columns: (class: class) (class: expected)  (profileRule: profile)
     rows:
              `%d`   int       `c99.format-mismatch`
              `%i`   int       `c99.format-mismatch`
@@ -338,7 +338,7 @@ end: `printf.conversion.rule`
 
 table:
     name: `class.c.projection`
-    columns((class: class) (@: char spelling))
+    columns: (class: class) (@: char spelling)
     rows:
              void      void
              char      char
@@ -369,7 +369,7 @@ end: `class.c.projection`
 
 table:
     name: `core.c.include`
-    columns((class: class) (@: char target))
+    columns: (class: class) (@: char target)
     rows:
              core_stddef   "<stddef.h>"
              core_stdint   "<stdint.h>"
@@ -381,7 +381,7 @@ end: `core.c.include`
 
 table:
     name: `serialization.codec`
-    columns((class: class) (@: char codec))
+    columns: (class: class) (@: char codec)
     rows:
              char      lmx.char
              short     lmx.decimal-atom
@@ -411,12 +411,12 @@ end: `serialization.codec`
 
 table:
     name: int8
-    columns((class: class) (int8: `context literal`))
+    columns: (class: class) (int8: `context literal`)
     rows:
 end: int8
 
 join: (int8) Boolean
-    columns((class: class) (int8: `context literal`))
+    columns: (class: class) (int8: `context literal`)
     rows:
              None    -1
              false   0
@@ -426,7 +426,7 @@ end: Boolean
 
 table:
     name: `contextual.literal.value`
-    columns((class: class) (relation: value))
+    columns: (class: class) (relation: value)
     rows:
              None    `None.value`
              OK      `OK.value`
@@ -436,7 +436,7 @@ end: `contextual.literal.value`
 
 table:
     name: `None.value`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              int              0
              u32              0
@@ -452,7 +452,7 @@ end: `None.value`
 
 table:
     name: `OK.value`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              int              1
              u32              1
@@ -465,7 +465,7 @@ end: `OK.value`
 
 table:
     name: `false.value`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              Boolean          0
              int8             0
@@ -473,7 +473,7 @@ end: `false.value`
 
 table:
     name: `true.value`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              Boolean          1
              int8             1
@@ -481,7 +481,7 @@ end: `true.value`
 
 table:
     name: `callable.projection`
-    columns((class: class) (projection: value))
+    columns: (class: class) (projection: value)
     rows:
              fn                         c.function-symbol
              function                   c.function-symbol
@@ -498,7 +498,7 @@ end: `callable.projection`
 
 table:
     name: `c99.ub.policy`
-    columns((class: class) (class: policy))
+    columns: (class: class) (class: policy)
     rows:
              `c99.null-dereference`     diagnostic
              `c99.signed-overflow`      `profile-defined`
@@ -509,14 +509,14 @@ end: `c99.ub.policy`
 
 table:
     name: `profile.validator`
-    columns((class: class) (@: char binding))
+    columns: (class: class) (@: char binding)
     rows:
              `c99.format-mismatch`  lm_trans_validate_c_printf_call
 end: `profile.validator`
 
 table:
     name: `class.cTail`
-    columns((class: class) (@: char spelling))
+    columns: (class: class) (@: char spelling)
     rows:
              void      void
              char      char
@@ -533,21 +533,21 @@ end: `class.cTail`
 
 table:
     name: `class.reference-base`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              FILE   1
 end: `class.reference-base`
 
 table:
     name: `class.receiver`
-    columns((class: class) (binding: emit)                     (binding: structure_value_alloc)                     (binding: structure_value_fill))
+    columns: (class: class) (binding: emit)                     (binding: structure_value_alloc)                     (binding: structure_value_fill)
     rows:
              `[]`   lm_trans_type_receiver_array_emit  lm_trans_type_receiver_array_structure_value_alloc  lm_trans_type_receiver_array_structure_value_fill
 end: `class.receiver`
 
 table:
     name: `receiver.function`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              fn     lm_trans_receiver_fn
              callable lm_trans_receiver_callable
@@ -558,7 +558,7 @@ end: `receiver.function`
 
 table:
     name: namespace
-    columns((class: class) (class: `receiver.type`))
+    columns: (class: class) (class: `receiver.type`)
     rows:
              L1            `receiver.level`
              L2            `receiver.level`
@@ -610,7 +610,7 @@ end: namespace
 
 table:
     name: `receiver.type`
-    columns((class: class) (binding: dispatcher))
+    columns: (class: class) (binding: dispatcher)
     rows:
              `receiver.level`      lm_trans_dispatch_level_receiver
              `receiver.function`   lm_trans_dispatch_function_receiver
@@ -621,7 +621,7 @@ end: `receiver.type`
 
 table:
     name: `receiver.level`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              L1     lm_trans_emit_l1_frame
              L2     lm_trans_emit_l2_frame
@@ -630,14 +630,14 @@ end: `receiver.level`
 
 table:
     name: `receiver.l3.exclude`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              predef  1
 end: `receiver.l3.exclude`
 
 table:
     name: `receiver.statement`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              table         lm_trans_statement_emit_table
              descriptor    lm_trans_statement_emit_descriptor
@@ -678,7 +678,7 @@ end: `receiver.statement`
 
 table:
     name: `receiver.expr`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              cast   lm_trans_expr_emit_cast_frame
              implements lm_trans_expr_emit_implements_frame
@@ -686,7 +686,7 @@ end: `receiver.expr`
 
 table:
     name: `namespace.l4.payload`
-    columns((class: class) (@: char L4))
+    columns: (class: class) (@: char L4)
     rows:
              import  `l4.payload`
              L2      `l4.payload`
@@ -695,7 +695,7 @@ end: `namespace.l4.payload`
 
 table:
     name: `receiver.atom.statement`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              include          lm_trans_atom_statement_emit_include_prelude
              define           lm_trans_atom_statement_emit_define_prelude
@@ -714,7 +714,7 @@ end: `receiver.atom.statement`
 
 table:
     name: `loadHeaders.item`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              include    0
              define     1
@@ -731,7 +731,7 @@ end: `loadHeaders.item`
 
 table:
     name: `receiver.positional-name`
-    columns((class: class) (class: argument)  (size_t: index))
+    columns: (class: class) (class: argument)  (size_t: index)
     rows:
              fn            name              0
              fm            name              0
@@ -747,21 +747,21 @@ end: `receiver.positional-name`
 
 table:
     name: `receiver.formal-param.unwrap`
-    columns((class: class) (size_t: index))
+    columns: (class: class) (size_t: index)
     rows:
              const  0
 end: `receiver.formal-param.unwrap`
 
 table:
     name: `receiver.modifier`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              external  lm_trans_top_level_function_header
 end: `receiver.modifier`
 
 table:
     name: `receiver.trailer`
-    columns((class: class) (binding: receiver))
+    columns: (class: class) (binding: receiver)
     rows:
              `end`  lm_trans_validate_end_trailer
              `until`  lm_trans_validate_end_trailer
@@ -769,7 +769,7 @@ end: `receiver.trailer`
 
 table:
     name: `call.lowering`
-    columns((class: class) (binding: handler))
+    columns: (class: class) (binding: handler)
     rows:
              function  lm_trans_call_lower_value
              callable  lm_trans_call_lower_statement
@@ -777,7 +777,7 @@ end: `call.lowering`
 
 table:
     name: `materialize.argument`
-    columns((class: class) (binding: materializer))
+    columns: (class: class) (binding: materializer)
     rows:
              `callable.zero-arg.value`  lm_trans_materialize_zero_arg_callable
              `callable.descriptor.value` lm_trans_materialize_callable_descriptor_value
@@ -786,7 +786,7 @@ end: `materialize.argument`
 
 table:
     name: `callable.partial.form`
-    columns((class: class) (binding: materializer))
+    columns: (class: class) (binding: materializer)
     rows:
              `call-frame` lm_trans_materialize_call_frame_partial
              partial      lm_trans_materialize_partial_callable
@@ -794,7 +794,7 @@ end: `callable.partial.form`
 
 table:
     name: `cast.target`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              char                     1
              uchar                    1
@@ -934,7 +934,7 @@ end: `cast.target`
 
 table:
     name: `operator.prefix`
-    columns((class: class) (@: char ansi_c)  (binding: emitter))
+    columns: (class: class) (@: char ansi_c)  (binding: emitter)
     rows:
              `++`   "++"           lm_trans_expr_emit_operator
              `--`   "--"           lm_trans_expr_emit_operator
@@ -948,7 +948,7 @@ end: `operator.prefix`
 
 table:
     name: `operator.postfix`
-    columns((class: class) (@: char ansi_c)  (binding: emitter))
+    columns: (class: class) (@: char ansi_c)  (binding: emitter)
     rows:
              `++`   "++"           lm_trans_expr_emit_operator
              `--`   "--"           lm_trans_expr_emit_operator
@@ -956,7 +956,7 @@ end: `operator.postfix`
 
 table:
     name: `operator.infix`
-    columns((class: class) (@: char ansi_c)  (binding: emitter))
+    columns: (class: class) (@: char ansi_c)  (binding: emitter)
     rows:
              `+`    "+"            lm_trans_expr_emit_operator
              `-`    "-"            lm_trans_expr_emit_operator
@@ -981,7 +981,7 @@ end: `operator.infix`
 
 table:
     name: `operator.index`
-    columns((class: class) (@: char ansi_c)  (binding: emitter))
+    columns: (class: class) (@: char ansi_c)  (binding: emitter)
     rows:
              `[`    "["            lm_trans_expr_emit_operator
              `]`    "]"            lm_trans_expr_emit_operator
@@ -989,7 +989,7 @@ end: `operator.index`
 
 table:
     name: `expr.atom`
-    columns((class: class) (@: char ansi_c)  (binding: emitter))
+    columns: (class: class) (@: char ansi_c)  (binding: emitter)
     rows:
              `.`    "."            lm_trans_expr_emit_c_dot
              None   "None"         lm_trans_expr_emit_contextual_literal
@@ -1000,7 +1000,7 @@ end: `expr.atom`
 
 table:
     name: `expr_spelling_binding`
-    columns((class: class) (class: binding_table))
+    columns: (class: class) (class: binding_table)
     rows:
              `operator.prefix`   `operator.prefix.ansi_c`
              `operator.postfix`  `operator.postfix.ansi_c`
@@ -1011,7 +1011,7 @@ end: `expr_spelling_binding`
 
 table:
     name: expr_emitter_binding
-    columns((class: class) (class: binding_table))
+    columns: (class: class) (class: binding_table)
     rows:
              `operator.prefix`   `operator.prefix.emitter`
              `operator.postfix`  `operator.postfix.emitter`

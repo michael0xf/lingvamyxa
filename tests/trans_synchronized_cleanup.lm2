@@ -2,7 +2,7 @@ L2:
 . table:
 . . source
 . . name: `fn.thread-context.none`
-. . columns((class: class) (int: value))
+. . columns: (class: class) (int: value)
 . . rows:
 . . . lm_synchronized_enter  1
 . . . lm_synchronized_leave  1

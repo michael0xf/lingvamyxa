@@ -2,7 +2,7 @@ L2:
 . table:
 . . source
 . . name: `fn.thread-context.none`
-. . columns((class: class) (int: value))
+. . columns: (class: class) (int: value)
 . . rows:
 . . . reset_trace  1
 . . . mark_trace   1

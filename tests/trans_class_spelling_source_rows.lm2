@@ -1,7 +1,7 @@
 table:
     source
     name: `class.spelling`
-    columns((class: class) (@: char spelling))
+    columns: (class: class) (@: char spelling)
     rows:
              directType  short
              directType  int
@@ -11,7 +11,7 @@ end: `class.spelling`
 table:
     source
     name: `class.spelling`
-    columns((class: class) (class: spelling))
+    columns: (class: class) (class: spelling)
     rows:
              fallbackType  short
 end: `class.spelling`
@@ -19,26 +19,26 @@ end: `class.spelling`
 table:
     source
     name: `lm.test.class.spelling.seed`
-    columns((class: class) (int: marker) (@: char spelling))
+    columns: (class: class) (int: marker) (@: char spelling)
     rows:
              joinedType  7  long
              default     9  unsigned
 end: `lm.test.class.spelling.seed`
 
 join: (`lm.test.class.spelling.seed`) `lm.test.class.spelling.middle`
-    columns((class: class) (int: marker) (@: char spelling))
+    columns: (class: class) (int: marker) (@: char spelling)
     rows:
 end: `lm.test.class.spelling.middle`
 
 join: (`lm.test.class.spelling.middle`) class
-    columns((class: class) (int: marker) (@: char spelling))
+    columns: (class: class) (int: marker) (@: char spelling)
     rows:
 end: class
 
 table:
     source
     name: class
-    columns((class: class) (int: marker) (@: char spelling))
+    columns: (class: class) (int: marker) (@: char spelling)
     rows:
              joinedType  8  None
              default    10  None

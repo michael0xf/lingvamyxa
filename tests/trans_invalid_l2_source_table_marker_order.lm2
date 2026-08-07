@@ -2,7 +2,7 @@ L2:
     table:
         name: misplacedSourceTable
         source
-        columns((int: key) (int: value))
+        columns: (int: key) (int: value)
         rows:
                  1  2
     end: misplacedSourceTable

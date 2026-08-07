@@ -4,7 +4,7 @@ predef: "lm2/rest_lmx_http_client_abi.lm2"
 table:
     source
     name: `define.value`
-    columns((class: class) (@: char value))
+    columns: (class: class) (@: char value)
     rows:
              LM_UNUSED                            "(void)"
              LM_REST_LMX_CLIENT_PROVIDER_NONE     0
@@ -19,7 +19,7 @@ end: `define.value`
 table:
     source
     name: class
-    columns((class: class) (class: kind))
+    columns: (class: class) (class: kind)
     rows:
              LmCurlEasy          opaqueReference
              LmCurlSlist         opaqueReference
@@ -33,7 +33,7 @@ end: class
 table:
     source
     name: `class.c.projection`
-    columns((class: class) (@: char spelling))
+    columns: (class: class) (@: char spelling)
     rows:
              LmCurlEasy          "CURL"
              LmCurlSlist         "struct curl_slist"
@@ -47,7 +47,7 @@ end: `class.c.projection`
 table:
     source
     name: `cast.target`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmCurlEasy                     1
              LmCurlSlist                    1
@@ -63,7 +63,7 @@ end: `cast.target`
 table:
     source
     name: `layout.backend`
-    columns((class: class) (class: backend))
+    columns: (class: class) (class: backend)
     rows:
              LmRestLmxHttpClientContext c.struct
 end: `layout.backend`
@@ -71,7 +71,7 @@ end: `layout.backend`
 table:
     source
     name: `class.reference-base`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              LmRestLmxHttpClientContext 1
 end: `class.reference-base`
@@ -79,7 +79,7 @@ end: `class.reference-base`
 table:
     source
     name: LmRestLmxHttpClientContext
-    columns((class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`))
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
     rows:
              curl_initialized int   0 0
              session          void  1 1
@@ -88,7 +88,7 @@ end: LmRestLmxHttpClientContext
 table:
     source
     name: `fn.thread-context.none`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_rest_lmx_http_client_invalid_provider_configuration 1
              lm_rest_lmx_http_client_invalid_winhttp_target         1
@@ -107,7 +107,7 @@ end: `fn.thread-context.none`
 table:
     source
     name: `fn.external`
-    columns((class: class) (int: value))
+    columns: (class: class) (int: value)
     rows:
              lm_rest_lmx_http_client_provider_name    1
              lm_rest_lmx_http_client_install_default  1

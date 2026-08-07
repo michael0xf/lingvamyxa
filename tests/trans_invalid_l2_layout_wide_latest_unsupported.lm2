@@ -1,7 +1,7 @@
 table:
     source
     name: layout
-    columns((class: class) (class: backend) (int: marker))
+    columns: (class: class) (class: backend) (int: marker)
     rows:
              LmTestLayoutWideLatestUnsupported  c.struct  1
              LmTestLayoutWideLatestUnsupported  c.other   2

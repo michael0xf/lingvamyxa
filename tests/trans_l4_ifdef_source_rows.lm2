@@ -12,7 +12,7 @@
 
 table:
     name: ifdef
-    columns((class: class) (node: payload))
+    columns: (class: class) (node: payload)
     rows:
              LM_TEST_IFDEF_WRONG_SCHEMA
              L2:
@@ -24,7 +24,7 @@ end: ifdef
 
 table:
     name: ifdef
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
              LM_TEST_IFDEF_DIRECT
              L2:
@@ -42,7 +42,7 @@ end: ifdef
 
 table:
     name: `lm.test.ifdef.seed`
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
              LM_TEST_IFDEF_JOINED
              L2:
@@ -53,13 +53,13 @@ table:
 end: `lm.test.ifdef.seed`
 
 join: (`lm.test.ifdef.seed`) ifdef
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
 end: ifdef
 
 table:
     name: ifdef
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
              LM_TEST_IFDEF_WIDE
              L2:
@@ -72,7 +72,7 @@ end: ifdef
 
 table:
     name: ifdef
-    columns((class: class) (int: marker) (node: body))
+    columns: (class: class) (int: marker) (node: body)
     rows:
              LM_TEST_IFDEF_REORDERED 2
              L2:
@@ -84,7 +84,7 @@ end: ifdef
 
 table:
     name: `ifdef.body`
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
              LM_TEST_IFDEF_PHYSICAL
              L2:
@@ -96,7 +96,7 @@ end: `ifdef.body`
 
 table:
     name: `lm.test.ifdef.wide.seed`
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
              LM_TEST_IFDEF_DOUBLE_JOINED
              L2:
@@ -108,18 +108,18 @@ table:
 end: `lm.test.ifdef.wide.seed`
 
 join: (`lm.test.ifdef.wide.seed`) `lm.test.ifdef.wide.middle`
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
 end: `lm.test.ifdef.wide.middle`
 
 join: (`lm.test.ifdef.wide.middle`) ifdef
-    columns((class: class) (node: body) (int: marker))
+    columns: (class: class) (node: body) (int: marker)
     rows:
 end: ifdef
 
 table:
     name: ifdef
-    columns((char: class) (node: body) (int: marker))
+    columns: (char: class) (node: body) (int: marker)
     rows:
              LM_TEST_IFDEF_WRONG_WIDE_SCHEMA
              L2:
@@ -132,7 +132,7 @@ end: ifdef
 
 table:
     name: ifdef
-    columns((class: class) (node: body))
+    columns: (class: class) (node: body)
     rows:
              LM_TEST_IFDEF_LATE
              L2:

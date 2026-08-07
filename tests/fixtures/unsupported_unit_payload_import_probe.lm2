@@ -1,7 +1,7 @@
 table:
     source
     name: unit
-    columns((class: class) (class: backend) (node: payload))
+    columns: (class: class) (class: backend) (node: payload)
     rows:
              lm_test_namespace_l2_payload_imported  c.static-unit
              import: "../../build/obj/tests/unsupported_unit_payload.lm4"
