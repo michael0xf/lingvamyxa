@@ -4184,9 +4184,11 @@ static int lm_trans_top_level_atom_binding(struct LmMessageThread *lm_lmx_messag
 static int lm_trans_top_level_statement_binding(struct LmMessageThread *lm_lmx_message_thread, const LmTransHeadBinding *binding, LmTransTopLevelItem *out);
 static const char * lm_trans_namespace_receiver_type_from_head(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *head);
 static const char * lm_trans_level_receiver_binding_from_head(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *head);
+static const char * lm_trans_substrate_receiver_binding_from_head(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *head);
+static const char * lm_trans_substrate_receiver_binding_from_frame(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
 static const char * lm_trans_level_receiver_binding_from_frame(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
 static int lm_trans_frame_has_level_receiver_binding(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame, const char *binding);
-static int lm_trans_frame_is_l1_level_receiver(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
+static int lm_trans_frame_is_l1_substrate_receiver(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
 static int lm_trans_frame_is_l2_level_receiver(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
 static const char * lm_trans_trailer_receiver_binding_from_head(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *head);
 static int lm_trans_frame_is_l3_level_receiver(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
@@ -4194,9 +4196,9 @@ static int lm_trans_frame_is_l2_or_l3_level_receiver(struct LmMessageThread *lm_
 static int lm_trans_l3_profile_enter_frame(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
 static void lm_trans_l3_profile_restore(struct LmMessageThread *lm_lmx_message_thread, int previous_depth);
 static int lm_trans_top_level_level_binding(struct LmMessageThread *lm_lmx_message_thread, const LmTransHeadBinding *binding, LmTransTopLevelItem *out);
+static int lm_trans_top_level_substrate_binding(struct LmMessageThread *lm_lmx_message_thread, const LmTransHeadBinding *binding, LmTransTopLevelItem *out);
 static const LmP0Text * lm_trans_end_frame_target(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
-static int lm_trans_end_frame_targets_level_receiver_binding(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame, const char *binding);
-static int lm_trans_end_frame_targets_l1_level_receiver(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
+static int lm_trans_end_frame_targets_l1_substrate_receiver(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame);
 static int lm_trans_emit_callable_descriptor_params_body(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransFormalParamList *params, const LmTransNamespace *namespace_, int emit_void_when_empty);
 static int lm_trans_emit_callable_descriptor_closure_layout(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransFunctionHeader *function, const LmTransNamespace *namespace_);
 static int lm_trans_emit_callable_descriptor_pointer_alias(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransFunctionHeader *function);
@@ -32859,6 +32861,24 @@ static const char * lm_trans_level_receiver_binding_from_head(struct LmMessageTh
     return lm_trans_namespace_registry_source_path_n2_named_typed_value(lm_lmx_message_thread, 0, head, "receiver.level", "class", "class", "receiver", "binding");
 }
 
+static const char * lm_trans_substrate_receiver_binding_from_head(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *head) {
+    (void)lm_lmx_message_thread;
+    const char *receiver_type;
+    receiver_type = lm_trans_namespace_receiver_type_from_head(lm_lmx_message_thread, head);
+    if (receiver_type == 0 || strcmp(receiver_type, "receiver.substrate") != 0) {
+        return 0;
+    }
+    return lm_trans_namespace_registry_source_path_n2_named_typed_value(lm_lmx_message_thread, 0, head, "receiver.substrate", "class", "class", "receiver", "binding");
+}
+
+static const char * lm_trans_substrate_receiver_binding_from_frame(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame) {
+    (void)lm_lmx_message_thread;
+    if (frame != 0) {
+        return lm_trans_substrate_receiver_binding_from_head(lm_lmx_message_thread, frame -> head);
+    }
+    return 0;
+}
+
 static const char * lm_trans_level_receiver_binding_from_frame(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame) {
     (void)lm_lmx_message_thread;
     if (frame != 0) {
@@ -32877,9 +32897,11 @@ static int lm_trans_frame_has_level_receiver_binding(struct LmMessageThread *lm_
     return actual != 0 && strcmp(actual, binding) == 0;
 }
 
-static int lm_trans_frame_is_l1_level_receiver(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame) {
+static int lm_trans_frame_is_l1_substrate_receiver(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame) {
     (void)lm_lmx_message_thread;
-    return lm_trans_frame_has_level_receiver_binding(lm_lmx_message_thread, frame, "lm_trans_emit_l1_frame");
+    const char *actual;
+    actual = lm_trans_substrate_receiver_binding_from_frame(lm_lmx_message_thread, frame);
+    return actual != 0 && strcmp(actual, "lm_trans_emit_l1_frame") == 0;
 }
 
 static int lm_trans_frame_is_l2_level_receiver(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame) {
@@ -32931,11 +32953,6 @@ static int lm_trans_top_level_level_binding(struct LmMessageThread *lm_lmx_messa
         fprintf(stderr, "trans registry error: receiver.level has no binding for top-level frame\n");
         return -1;
     }
-    if (lm_trans_frame_is_l1_level_receiver(lm_lmx_message_thread, out -> frame)) {
-        out->emit_after_prototypes = &lm_trans_top_level_emit_l1;
-        out->emits_top_level = 1;
-        return 1;
-    }
     if (lm_trans_frame_is_l2_level_receiver(lm_lmx_message_thread, out -> frame)) {
         out->emit_after_prototypes = &lm_trans_top_level_emit_l2;
         out->emits_top_level = 1;
@@ -32947,6 +32964,26 @@ static int lm_trans_top_level_level_binding(struct LmMessageThread *lm_lmx_messa
         return 1;
     }
     fprintf(stderr, "trans registry error: unknown receiver.level binding %s\n", receiver);
+    return -1;
+}
+
+static int lm_trans_top_level_substrate_binding(struct LmMessageThread *lm_lmx_message_thread, const LmTransHeadBinding *binding, LmTransTopLevelItem *out) {
+    (void)lm_lmx_message_thread;
+    const char *receiver;
+    if (binding == 0 || out == 0 || binding -> receiver_type == 0 || strcmp(binding -> receiver_type, "receiver.substrate") != 0) {
+        return 0;
+    }
+    receiver = lm_trans_substrate_receiver_binding_from_frame(lm_lmx_message_thread, out -> frame);
+    if (receiver == 0) {
+        fprintf(stderr, "trans registry error: receiver.substrate has no binding for top-level frame\n");
+        return -1;
+    }
+    if (lm_trans_frame_is_l1_substrate_receiver(lm_lmx_message_thread, out -> frame)) {
+        out->emit_after_prototypes = &lm_trans_top_level_emit_l1;
+        out->emits_top_level = 1;
+        return 1;
+    }
+    fprintf(stderr, "trans registry error: unknown receiver.substrate binding %s\n", receiver);
     return -1;
 }
 
@@ -32968,21 +33005,13 @@ static const LmP0Text * lm_trans_end_frame_target(struct LmMessageThread *lm_lmx
     return field -> value -> as -> atom;
 }
 
-static int lm_trans_end_frame_targets_level_receiver_binding(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame, const char *binding) {
+static int lm_trans_end_frame_targets_l1_substrate_receiver(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame) {
     (void)lm_lmx_message_thread;
     const LmP0Text * target;
     const char *actual;
-    if (binding == 0) {
-        return 0;
-    }
     target = lm_trans_end_frame_target(lm_lmx_message_thread, frame);
-    actual = lm_trans_level_receiver_binding_from_head(lm_lmx_message_thread, target);
-    return actual != 0 && strcmp(actual, binding) == 0;
-}
-
-static int lm_trans_end_frame_targets_l1_level_receiver(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame) {
-    (void)lm_lmx_message_thread;
-    return lm_trans_end_frame_targets_level_receiver_binding(lm_lmx_message_thread, frame, "lm_trans_emit_l1_frame");
+    actual = lm_trans_substrate_receiver_binding_from_head(lm_lmx_message_thread, target);
+    return actual != 0 && strcmp(actual, "lm_trans_emit_l1_frame") == 0;
 }
 
 static int lm_trans_emit_callable_descriptor_params_body(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransFormalParamList *params, const LmTransNamespace *namespace_, int emit_void_when_empty) {
@@ -33788,6 +33817,7 @@ static int lm_trans_lower_top_level_item(struct LmMessageThread *lm_lmx_message_
     LmTransHeadBinding * binding;
     int function_status;
     int statement_status;
+    int substrate_status;
     int level_status;
     if (out == 0) {
         return 1;
@@ -33852,16 +33882,22 @@ static int lm_trans_lower_top_level_item(struct LmMessageThread *lm_lmx_message_
     }
     statement_status = lm_trans_top_level_statement_binding(lm_lmx_message_thread, binding, out);
     if (statement_status == 0) {
+        substrate_status = lm_trans_top_level_substrate_binding(lm_lmx_message_thread, binding, out);
+    }
+    else {
+        substrate_status = 0;
+    }
+    if (statement_status == 0 && substrate_status == 0) {
         level_status = lm_trans_top_level_level_binding(lm_lmx_message_thread, binding, out);
     }
     else {
         level_status = 0;
     }
     lm_own_delete(binding, 0);
-    if (statement_status < 0 || level_status < 0) {
+    if (statement_status < 0 || substrate_status < 0 || level_status < 0) {
         return 1;
     }
-    if (statement_status != 0 || level_status != 0) {
+    if (statement_status != 0 || substrate_status != 0 || level_status != 0) {
         return 0;
     }
     if (lm_trans_frame_looks_top_level_storage_declaration(lm_lmx_message_thread, out -> frame, namespace_)) {
@@ -33877,7 +33913,7 @@ static int lm_trans_lower_top_level_item(struct LmMessageThread *lm_lmx_message_
         out->emits_top_level = 1;
         return 0;
     }
-    fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, registered top-level statement frame, named structure, or registered level receiver\n");
+    fprintf(stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, registered top-level statement frame, named structure, substrate escape, or registered level receiver\n");
     return 1;
 }
 
@@ -35477,7 +35513,7 @@ static int lm_trans_os_branch_looks_l2(struct LmMessageThread *lm_lmx_message_th
         node = field -> value;
         if (lm_trans_node_is_ignored(lm_lmx_message_thread, node) == 0) {
             if (node -> kind == LM_P0_NODE_FRAME) {
-                if (lm_trans_frame_is_l1_level_receiver(lm_lmx_message_thread, node -> as -> frame) == 0 && lm_trans_text_equals(lm_lmx_message_thread, node -> as -> frame -> head, "include") == 0 && lm_trans_text_equals(lm_lmx_message_thread, node -> as -> frame -> head, "os") == 0 && lm_trans_text_equals(lm_lmx_message_thread, node -> as -> frame -> head, "ifdef") == 0 && lm_trans_end_frame_targets_l1_level_receiver(lm_lmx_message_thread, node -> as -> frame) == 0) {
+                if (lm_trans_frame_is_l1_substrate_receiver(lm_lmx_message_thread, node -> as -> frame) == 0 && lm_trans_text_equals(lm_lmx_message_thread, node -> as -> frame -> head, "include") == 0 && lm_trans_text_equals(lm_lmx_message_thread, node -> as -> frame -> head, "os") == 0 && lm_trans_text_equals(lm_lmx_message_thread, node -> as -> frame -> head, "ifdef") == 0 && lm_trans_end_frame_targets_l1_substrate_receiver(lm_lmx_message_thread, node -> as -> frame) == 0) {
                     return 1;
                 }
             }
@@ -36406,7 +36442,7 @@ static int lm_trans_l4_payload_structure_looks_bare_l2(struct LmMessageThread *l
                 return 0;
             }
             if (node -> kind == LM_P0_NODE_FRAME) {
-                if (lm_trans_frame_is_l1_level_receiver(lm_lmx_message_thread, node -> as -> frame) || lm_trans_frame_is_l2_or_l3_level_receiver(lm_lmx_message_thread, node -> as -> frame) || lm_trans_text_equals(lm_lmx_message_thread, node -> as -> frame -> head, "include") || lm_trans_text_equals(lm_lmx_message_thread, node -> as -> frame -> head, "os") || lm_trans_text_equals(lm_lmx_message_thread, node -> as -> frame -> head, "ifdef") || lm_trans_end_frame_targets_l1_level_receiver(lm_lmx_message_thread, node -> as -> frame)) {
+                if (lm_trans_frame_is_l1_substrate_receiver(lm_lmx_message_thread, node -> as -> frame) || lm_trans_frame_is_l2_or_l3_level_receiver(lm_lmx_message_thread, node -> as -> frame) || lm_trans_text_equals(lm_lmx_message_thread, node -> as -> frame -> head, "include") || lm_trans_text_equals(lm_lmx_message_thread, node -> as -> frame -> head, "os") || lm_trans_text_equals(lm_lmx_message_thread, node -> as -> frame -> head, "ifdef") || lm_trans_end_frame_targets_l1_substrate_receiver(lm_lmx_message_thread, node -> as -> frame)) {
                     return 0;
                 }
                 found = 1;
@@ -37258,7 +37294,7 @@ static int lm_trans_emit_l1_node(struct LmMessageThread *lm_lmx_message_thread, 
         return lm_trans_emit_l1_structure(lm_lmx_message_thread, output, node -> as -> structure);
     }
     if (node -> kind == LM_P0_NODE_FRAME) {
-        if (lm_trans_frame_is_l1_level_receiver(lm_lmx_message_thread, node -> as -> frame)) {
+        if (lm_trans_frame_is_l1_substrate_receiver(lm_lmx_message_thread, node -> as -> frame)) {
             return lm_trans_emit_l1_frame(lm_lmx_message_thread, output, node -> as -> frame);
         }
         if (lm_trans_frame_is_l2_level_receiver(lm_lmx_message_thread, node -> as -> frame)) {
@@ -37276,7 +37312,7 @@ static int lm_trans_emit_l1_node(struct LmMessageThread *lm_lmx_message_thread, 
         if (lm_trans_text_equals(lm_lmx_message_thread, node -> as -> frame -> head, "include")) {
             return lm_trans_emit_l1_include_frame(lm_lmx_message_thread, output, node -> as -> frame);
         }
-        if (lm_trans_end_frame_targets_l1_level_receiver(lm_lmx_message_thread, node -> as -> frame)) {
+        if (lm_trans_end_frame_targets_l1_substrate_receiver(lm_lmx_message_thread, node -> as -> frame)) {
             return 0;
         }
         fprintf(stderr, "trans error: unknown translator receiver inside L1\n");
@@ -37630,7 +37666,7 @@ static int lm_trans_emit_root_sequence(struct LmMessageThread *lm_lmx_message_th
                 return 1;
             }
             handled = 0;
-            if (lm_trans_frame_is_l1_level_receiver(lm_lmx_message_thread, node -> as -> frame)) {
+            if (lm_trans_frame_is_l1_substrate_receiver(lm_lmx_message_thread, node -> as -> frame)) {
                 if (lm_trans_emit_l1_body(lm_lmx_message_thread, prelude_file, node -> as -> frame, emitted) != 0) {
                     return 1;
                 }
@@ -37684,7 +37720,7 @@ static int lm_trans_emit_root_sequence(struct LmMessageThread *lm_lmx_message_th
                 }
                 handled = 1;
             }
-            if (handled == 0 && lm_trans_end_frame_targets_l1_level_receiver(lm_lmx_message_thread, node -> as -> frame)) {
+            if (handled == 0 && lm_trans_end_frame_targets_l1_substrate_receiver(lm_lmx_message_thread, node -> as -> frame)) {
                 if (emitted != 0) {
                     emitted[0] = 1;
                 }

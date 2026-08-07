@@ -67,6 +67,7 @@ table:
              `class.reference-base`      relation
              `class.receiver`           relation
              `receiver.type`            relation
+             `receiver.substrate`       relation
              `receiver.level`           relation
              `receiver.l3.exclude`      relation
              `receiver.function`        relation
@@ -560,7 +561,7 @@ table:
     name: namespace
     columns: (class: class) (class: `receiver.type`)
     rows:
-             L1            `receiver.level`
+             L1            `receiver.substrate`
              L2            `receiver.level`
              L3            `receiver.level`
              fn            `receiver.function`
@@ -612,6 +613,7 @@ table:
     name: `receiver.type`
     columns: (class: class) (binding: dispatcher)
     rows:
+             `receiver.substrate`  lm_trans_dispatch_substrate_receiver
              `receiver.level`      lm_trans_dispatch_level_receiver
              `receiver.function`   lm_trans_dispatch_function_receiver
              `receiver.statement`  lm_trans_dispatch_statement_receiver
@@ -620,10 +622,16 @@ table:
 end: `receiver.type`
 
 table:
-    name: `receiver.level`
+    name: `receiver.substrate`
     columns: (class: class) (binding: receiver)
     rows:
              L1     lm_trans_emit_l1_frame
+end: `receiver.substrate`
+
+table:
+    name: `receiver.level`
+    columns: (class: class) (binding: receiver)
+    rows:
              L2     lm_trans_emit_l2_frame
              L3     lm_trans_emit_l3_frame
 end: `receiver.level`

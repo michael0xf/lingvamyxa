@@ -1,0 +1,105 @@
+table:
+    source
+    name: namespace
+    columns: (class: class) (class: `receiver.type`)
+    rows:
+             LmTestDirectSubstrate    `receiver.substrate`
+             LmTestDirectSubstrate    None
+end: namespace
+
+table:
+    source
+    name: namespace
+    columns: (class: class) (relation: `receiver.type`)
+    rows:
+             LmTestFallbackSubstrate  `receiver.substrate`
+end: namespace
+
+table:
+    source
+    name: `lm.test.namespace.substrate.seed`
+    columns: (class: class) (class: `receiver.type`)
+    rows:
+             LmTestJoinedSubstrate  `receiver.substrate`
+end: `lm.test.namespace.substrate.seed`
+
+join: (`lm.test.namespace.substrate.seed`) namespace
+    columns: (class: class) (class: `receiver.type`)
+    rows:
+end: namespace
+
+table:
+    source
+    name: namespace
+    columns: (class: class) (class: `receiver.type`)
+    rows:
+             LmTestJoinedSubstrate  None
+end: namespace
+
+table:
+    source
+    name: `receiver.substrate`
+    columns: (class: class) (binding: receiver)
+    rows:
+             LmTestDirectSubstrate  lm_trans_emit_l2_frame
+             LmTestDirectSubstrate  lm_trans_emit_l1_frame
+             LmTestDirectSubstrate  None
+end: `receiver.substrate`
+
+table:
+    source
+    name: `receiver.substrate`
+    columns: (class: class) (class: receiver)
+    rows:
+             LmTestFallbackSubstrate  lm_trans_emit_l1_frame
+end: `receiver.substrate`
+
+table:
+    source
+    name: `lm.test.receiver.substrate.seed`
+    columns: (class: class) (int: marker) (binding: substrate)
+    rows:
+             LmTestJoinedSubstrate  1  lm_trans_emit_l1_frame
+end: `lm.test.receiver.substrate.seed`
+
+join: (`lm.test.receiver.substrate.seed`) `lm.test.receiver.substrate.middle`
+    columns: (class: class) (int: marker) (binding: substrate)
+    rows:
+end: `lm.test.receiver.substrate.middle`
+
+join: (`lm.test.receiver.substrate.middle`) receiver
+    columns: (class: class) (int: marker) (binding: substrate)
+    rows:
+end: receiver
+
+table:
+    source
+    name: receiver
+    columns: (class: class) (int: marker) (binding: substrate)
+    rows:
+             LmTestJoinedSubstrate  2  None
+end: receiver
+
+LmTestDirectSubstrate:
+===
+static int lm_test_receiver_substrate_direct(void) { return 101; }
+===
+end: LmTestDirectSubstrate
+
+LmTestFallbackSubstrate:
+===
+static int lm_test_receiver_substrate_fallback(void) { return 202; }
+===
+end: LmTestFallbackSubstrate
+
+LmTestJoinedSubstrate:
+===
+static int lm_test_receiver_substrate_joined(void) { return 303; }
+===
+end: LmTestJoinedSubstrate
+
+external:
+    fn: main () int
+        return: c.lm_test_receiver_substrate_direct() != 101 || c.lm_test_receiver_substrate_fallback() != 202 || c.lm_test_receiver_substrate_joined() != 303
+    end: main
+end: external

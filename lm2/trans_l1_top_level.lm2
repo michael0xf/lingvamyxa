@@ -560,6 +560,19 @@ fn: lm_trans_level_receiver_binding_from_head (const: (LmP0Text: head)) const: @
         return: 0
 return: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, head, "receiver.level", "class", "class", "receiver", "binding")
 
+fn: lm_trans_substrate_receiver_binding_from_head (const: (LmP0Text: head)) const: @: char
+    const: @: char receiver_type
+
+    receiver_type: lm_trans_namespace_receiver_type_from_head(head)
+    if: receiver_type = 0 || c.strcmp(receiver_type, "receiver.substrate") != 0
+        return: 0
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, head, "receiver.substrate", "class", "class", "receiver", "binding")
+
+fn: lm_trans_substrate_receiver_binding_from_frame (const: (LmP0Frame: frame)) const: @: char
+    if: frame != 0
+        return: lm_trans_substrate_receiver_binding_from_head(frame\head)
+return: 0
+
 fn: lm_trans_level_receiver_binding_from_frame (const: (LmP0Frame: frame)) const: @: char
     if: frame != 0
         return: lm_trans_level_receiver_binding_from_head(frame\head)
@@ -574,8 +587,11 @@ fn: lm_trans_frame_has_level_receiver_binding (const: (LmP0Frame: frame); const:
     actual: lm_trans_level_receiver_binding_from_frame(frame)
 return: actual != 0 && c.strcmp(actual, binding) = 0
 
-fn: lm_trans_frame_is_l1_level_receiver (const: (LmP0Frame: frame)) int
-return: lm_trans_frame_has_level_receiver_binding(frame, "lm_trans_emit_l1_frame")
+fn: lm_trans_frame_is_l1_substrate_receiver (const: (LmP0Frame: frame)) int
+    const: @: char actual
+
+    actual: lm_trans_substrate_receiver_binding_from_frame(frame)
+return: actual != 0 && c.strcmp(actual, "lm_trans_emit_l1_frame") = 0
 
 fn: lm_trans_frame_is_l2_level_receiver (const: (LmP0Frame: frame)) int
 return: lm_trans_frame_has_level_receiver_binding(frame, "lm_trans_emit_l2_frame")
@@ -613,10 +629,6 @@ fn: lm_trans_top_level_level_binding (const: (LmTransHeadBinding: binding); LmTr
     if: receiver = 0
         c.fprintf(c.stderr, "trans registry error: receiver.level has no binding for top-level frame\n")
         return: -1
-    if: lm_trans_frame_is_l1_level_receiver(out\frame)
-        out\emit_after_prototypes: @lm_trans_top_level_emit_l1
-        out\emits_top_level: 1
-        return: 1
     if: lm_trans_frame_is_l2_level_receiver(out\frame)
         out\emit_after_prototypes: @lm_trans_top_level_emit_l2
         out\emits_top_level: 1
@@ -627,6 +639,24 @@ fn: lm_trans_top_level_level_binding (const: (LmTransHeadBinding: binding); LmTr
         return: 1
 
     c.fprintf(c.stderr, "trans registry error: unknown receiver.level binding %s\n", receiver)
+return: -1
+
+fn: lm_trans_top_level_substrate_binding (const: (LmTransHeadBinding: binding); LmTransTopLevelItem: out) int
+    const: @: char receiver
+
+    if: binding = 0 || out = 0 || binding\receiver_type = 0 || c.strcmp(binding\receiver_type, "receiver.substrate") != 0
+        return: 0
+
+    receiver: lm_trans_substrate_receiver_binding_from_frame(out\frame)
+    if: receiver = 0
+        c.fprintf(c.stderr, "trans registry error: receiver.substrate has no binding for top-level frame\n")
+        return: -1
+    if: lm_trans_frame_is_l1_substrate_receiver(out\frame)
+        out\emit_after_prototypes: @lm_trans_top_level_emit_l1
+        out\emits_top_level: 1
+        return: 1
+
+    c.fprintf(c.stderr, "trans registry error: unknown receiver.substrate binding %s\n", receiver)
 return: -1
 
 fn: lm_trans_end_frame_target (const: (LmP0Frame: frame)) const: LmP0Text
@@ -645,19 +675,13 @@ fn: lm_trans_end_frame_target (const: (LmP0Frame: frame)) const: LmP0Text
         return: 0
 return: field\value\as\atom
 
-fn: lm_trans_end_frame_targets_level_receiver_binding (const: (LmP0Frame: frame); const: @(char binding)) int
+fn: lm_trans_end_frame_targets_l1_substrate_receiver (const: (LmP0Frame: frame)) int
     const: LmP0Text: target
     const: @: char actual
 
-    if: binding = 0
-        return: 0
-
     target: lm_trans_end_frame_target(frame)
-    actual: lm_trans_level_receiver_binding_from_head(target)
-return: actual != 0 && c.strcmp(actual, binding) = 0
-
-fn: lm_trans_end_frame_targets_l1_level_receiver (const: (LmP0Frame: frame)) int
-return: lm_trans_end_frame_targets_level_receiver_binding(frame, "lm_trans_emit_l1_frame")
+    actual: lm_trans_substrate_receiver_binding_from_head(target)
+return: actual != 0 && c.strcmp(actual, "lm_trans_emit_l1_frame") = 0
 
 fn: lm_trans_emit_callable_descriptor_params_body (FILE: file; const: (LmTransFormalParamList: params); const: (LmTransNamespace: namespace_); int: emit_void_when_empty) int
     size_t: index
@@ -1357,6 +1381,7 @@ fn: lm_trans_lower_top_level_item (
     LmTransHeadBinding: binding
     int: function_status
     int: statement_status
+    int: substrate_status
     int: level_status
 
     if: out = 0
@@ -1417,13 +1442,17 @@ fn: lm_trans_lower_top_level_item (
         return: 1
     statement_status: lm_trans_top_level_statement_binding(binding, out)
     if: statement_status = 0
+        substrate_status: lm_trans_top_level_substrate_binding(binding, out)
+    else:
+        substrate_status: 0
+    if: statement_status = 0 && substrate_status = 0
         level_status: lm_trans_top_level_level_binding(binding, out)
     else:
         level_status: 0
     lm_own_delete(binding, 0)
-    if: statement_status < 0 || level_status < 0
+    if: statement_status < 0 || substrate_status < 0 || level_status < 0
         return: 1
-    if: statement_status != 0 || level_status != 0
+    if: statement_status != 0 || substrate_status != 0 || level_status != 0
         return: 0
 
     if: lm_trans_frame_looks_top_level_storage_declaration(out\frame, namespace_)
@@ -1439,7 +1468,7 @@ fn: lm_trans_lower_top_level_item (
         out\emits_top_level: 1
         return: 0
 
-    c.fprintf(c.stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, registered top-level statement frame, named structure, or registered level receiver\n")
+    c.fprintf(c.stderr, "trans L2 error: top-level L2 field must be fn, sub, external fn/sub, registered top-level statement frame, named structure, substrate escape, or registered level receiver\n")
 return: 1
 
 fn: lm_trans_top_level_item_lowered_new (
@@ -2816,7 +2845,7 @@ fn: lm_trans_os_branch_looks_l2 (const: (LmP0Structure: body)) int
         node: field\value
         if: lm_trans_node_is_ignored(node) = 0
             if: node\kind = c.LM_P0_NODE_FRAME
-                if: lm_trans_frame_is_l1_level_receiver(node\as\frame) = 0 && lm_trans_text_equals(node\as\frame\head, "include") = 0 && lm_trans_text_equals(node\as\frame\head, "os") = 0 && lm_trans_text_equals(node\as\frame\head, "ifdef") = 0 && lm_trans_end_frame_targets_l1_level_receiver(node\as\frame) = 0
+                if: lm_trans_frame_is_l1_substrate_receiver(node\as\frame) = 0 && lm_trans_text_equals(node\as\frame\head, "include") = 0 && lm_trans_text_equals(node\as\frame\head, "os") = 0 && lm_trans_text_equals(node\as\frame\head, "ifdef") = 0 && lm_trans_end_frame_targets_l1_substrate_receiver(node\as\frame) = 0
                     return: 1
                 ---
             if: node\kind = c.LM_P0_NODE_STRUCTURE
@@ -3607,7 +3636,7 @@ fn: lm_trans_l4_payload_structure_looks_bare_l2 (const: (LmP0Structure: body)) i
             if: node\kind = c.LM_P0_NODE_ATOM
                 return: 0
             if: node\kind = c.LM_P0_NODE_FRAME
-                if: lm_trans_frame_is_l1_level_receiver(node\as\frame) || lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame) || lm_trans_text_equals(node\as\frame\head, "include") || lm_trans_text_equals(node\as\frame\head, "os") || lm_trans_text_equals(node\as\frame\head, "ifdef") || lm_trans_end_frame_targets_l1_level_receiver(node\as\frame)
+                if: lm_trans_frame_is_l1_substrate_receiver(node\as\frame) || lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame) || lm_trans_text_equals(node\as\frame\head, "include") || lm_trans_text_equals(node\as\frame\head, "os") || lm_trans_text_equals(node\as\frame\head, "ifdef") || lm_trans_end_frame_targets_l1_substrate_receiver(node\as\frame)
                     return: 0
                 found: 1
             else:
@@ -4350,7 +4379,7 @@ fn: lm_trans_emit_l1_node (FILE: output; const: (LmP0Node: node)) int
         return: lm_trans_emit_l1_structure(output, node\as\structure)
 
     if: node\kind = c.LM_P0_NODE_FRAME
-        if: lm_trans_frame_is_l1_level_receiver(node\as\frame)
+        if: lm_trans_frame_is_l1_substrate_receiver(node\as\frame)
             return: lm_trans_emit_l1_frame(output, node\as\frame)
         if: lm_trans_frame_is_l2_level_receiver(node\as\frame)
             return: lm_trans_emit_l2_frame(output, node\as\frame)
@@ -4362,7 +4391,7 @@ fn: lm_trans_emit_l1_node (FILE: output; const: (LmP0Node: node)) int
             return: lm_trans_emit_l1_ifdef_frame(output, node\as\frame)
         if: lm_trans_text_equals(node\as\frame\head, "include")
             return: lm_trans_emit_l1_include_frame(output, node\as\frame)
-        if: lm_trans_end_frame_targets_l1_level_receiver(node\as\frame)
+        if: lm_trans_end_frame_targets_l1_substrate_receiver(node\as\frame)
             return: 0
 
         c.fprintf(c.stderr, "trans error: unknown translator receiver inside L1\n")
@@ -4683,7 +4712,7 @@ fn: lm_trans_emit_root_sequence (FILE: output; const: (LmP0Node: root); int: imp
                 return: 1
 
             handled: 0
-            if: lm_trans_frame_is_l1_level_receiver(node\as\frame)
+            if: lm_trans_frame_is_l1_substrate_receiver(node\as\frame)
                 if: lm_trans_emit_l1_body(prelude_file, node\as\frame, emitted) != 0
                     return: 1
                 if: emitted != 0
@@ -4719,7 +4748,7 @@ fn: lm_trans_emit_root_sequence (FILE: output; const: (LmP0Node: root); int: imp
                 if: emitted != 0
                     emitted[0]: 1
                 handled: 1
-            if: handled = 0 && lm_trans_end_frame_targets_l1_level_receiver(node\as\frame)
+            if: handled = 0 && lm_trans_end_frame_targets_l1_substrate_receiver(node\as\frame)
                 if: emitted != 0
                     emitted[0]: 1
                 handled: 1

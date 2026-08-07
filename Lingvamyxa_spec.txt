@@ -7873,7 +7873,8 @@ The following list contains exact spellings registered by the current L2
 translator. It is an implementation baseline, not a claim that every later
 profile family is already a core receiver.
 
-    level receivers:       L1, L2, L3
+    substrate receivers:   L1
+    level receivers:       L2, L3
     definition receivers:  fn, callable, fm, sub
     control statements:    if, else, while, return, stop, break, continue,
                            synchronized, finally, assert
@@ -14445,11 +14446,15 @@ local named/merged Structure and local Table-row fallbacks rely on their
 surrounding emitted C block, the shared translation-unit projection state and
 the bounded prelude replay described in 19.20.4.
 
-20.2.2. L1 and L2 Translator Receivers
+20.2.2. L1 Substrate Escape and Level Receivers
 
-`L1` and `L2` are ordinary translator receivers that consume one body Structure.
-Since a Structure contains an ordered field sequence, this is enough to consume
-any number of source fields.
+`L2` and `L3` are level receivers. `L1` is instead an external-substrate escape
+receiver. All three consume one body Structure; since a Structure contains an
+ordered field sequence, this is enough to consume any number of source fields.
+The bootstrap records this distinction explicitly: `L1` is in
+`receiver.substrate`, while only `L2` and `L3` are in `receiver.level`. Thus the
+ability to embed a necessary substrate fragment does not make L1 a third
+Lingvamyxa source-semantic level.
 
 The `L1` receiver walks its body fields in order. If a field is a string/payload
 atom, `L1` writes that payload at the current generated L1 position. This rule is

@@ -4,7 +4,7 @@ table:
     columns: (class: class) (class: `receiver.type`) (int: marker)
     rows:
              default       `receiver.statement`  9
-             LmWideDirect  `receiver.level`  10
+             LmWideDirect  `receiver.substrate`  10
              LmWideDirect  None              11
              LmWideDirectWins  `receiver.statement`  12
 end: namespace
@@ -14,7 +14,7 @@ table:
     name: namespace
     columns: (class: class) (class: `receiver.type`)
     rows:
-             LmWideDirectWins  `receiver.level`
+             LmWideDirectWins  `receiver.substrate`
 end: namespace
 
 table:
@@ -22,7 +22,7 @@ table:
     name: `namespace.receiver.type`
     columns: (class: class) (class: value)
     rows:
-             LmWideFlat  `receiver.level`
+             LmWideFlat  `receiver.substrate`
 end: `namespace.receiver.type`
 
 table:
@@ -30,7 +30,7 @@ table:
     name: namespace
     columns: (class: class) (relation: `receiver.type`) (int: marker)
     rows:
-             LmWideFallback  `receiver.level`  20
+             LmWideFallback  `receiver.substrate`  20
 end: namespace
 
 table:
@@ -38,7 +38,7 @@ table:
     name: `namespace.receiver`
     columns: (class: class) (class: type) (int: marker)
     rows:
-             LmWideSplit  `receiver.level`  50
+             LmWideSplit  `receiver.substrate`  50
 end: `namespace.receiver`
 
 table:
@@ -46,9 +46,9 @@ table:
     name: `lm.test.namespace.ncolumn.seed`
     columns: (class: class) (class: `receiver.type`) (int: marker)
     rows:
-             LmWideJoined0  `receiver.level`  30
-             LmWideJoined0  `receiver.level`  31
-             LmWideJoined2  `receiver.level`  32
+             LmWideJoined0  `receiver.substrate`  30
+             LmWideJoined0  `receiver.substrate`  31
+             LmWideJoined2  `receiver.substrate`  32
 end: `lm.test.namespace.ncolumn.seed`
 
 join: (`lm.test.namespace.ncolumn.seed`) namespace
@@ -67,7 +67,7 @@ end: namespace
 
 table:
     source
-    name: `receiver.level`
+    name: `receiver.substrate`
     columns: (class: class) (binding: receiver)
     rows:
              LmWideDirect    lm_trans_emit_l1_frame
@@ -77,7 +77,7 @@ table:
              LmWideDirectWins  lm_trans_emit_l1_frame
              LmWideSplit       lm_trans_emit_l1_frame
              LmWideFlat        lm_trans_emit_l1_frame
-end: `receiver.level`
+end: `receiver.substrate`
 
 table:
     source
