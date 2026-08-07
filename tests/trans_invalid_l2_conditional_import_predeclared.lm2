@@ -1,9 +1,14 @@
-L1:
-===
-#define LM_TEST_L2_CONDITIONAL_IMPORT_PREDECLARED 0
-===
-
 L2:
+    table:
+        source
+        name: `define.value`
+        columns((class: class) (@: char value))
+        rows:
+                 LM_TEST_L2_CONDITIONAL_IMPORT_PREDECLARED  0
+    end: `define.value`
+
+    define
+
     import: "fixtures/l2_conditional_import_fixture.lm2"
 
     ifdef:

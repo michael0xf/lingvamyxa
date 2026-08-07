@@ -1,9 +1,14 @@
-L1:
-===
-#define LM_TEST_IFDEF_L2 0
-===
-
 L2:
+    table:
+        source
+        name: `define.value`
+        columns((class: class) (@: char value))
+        rows:
+                 LM_TEST_IFDEF_L2  0
+    end: `define.value`
+
+    define
+
     ifdef:
         `!LM_TEST_IFDEF_L2`:
             fn: lm_test_ifdef_l2_value () int

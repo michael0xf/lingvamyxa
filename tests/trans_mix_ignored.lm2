@@ -1,8 +1,9 @@
 {style: system}
-L1:
-===
-int main(void) {
-    return 0;
-}
-===
+L2:
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2
 {end: system}

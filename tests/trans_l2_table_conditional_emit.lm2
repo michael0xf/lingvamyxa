@@ -1,9 +1,14 @@
-L1:
-===
-#define LM_TEST_L2_TABLE_CONDITIONAL_EMIT 1
-===
-
 L2:
+    table:
+        source
+        name: `define.value`
+        columns((class: class) (@: char value))
+        rows:
+                 LM_TEST_L2_TABLE_CONDITIONAL_EMIT  1
+    end: `define.value`
+
+    define
+
     ifdef:
         `LM_TEST_L2_TABLE_CONDITIONAL_EMIT`:
             table:

@@ -1,11 +1,6 @@
-L1:
-===
-#ifndef LM_TEST_FUNCTION_POINTER_BRANCH
-#define LM_TEST_FUNCTION_POINTER_BRANCH 0
-#endif
-===
-
 L2:
+    `ifndef-default`: LM_TEST_FUNCTION_POINTER_BRANCH 0
+
     table:
         name: `conditionalHeaders.item`
         columns((class: class) (size_t: index))

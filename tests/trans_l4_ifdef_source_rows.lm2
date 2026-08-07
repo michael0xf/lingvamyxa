@@ -1,39 +1,14 @@
-L1:
-===
-#ifndef LM_TEST_IFDEF_DIRECT
-#define LM_TEST_IFDEF_DIRECT 0
-#endif
-#ifndef LM_TEST_IFDEF_LATE
-#define LM_TEST_IFDEF_LATE 0
-#endif
-#ifndef LM_TEST_IFDEF_WRONG_SCHEMA
-#define LM_TEST_IFDEF_WRONG_SCHEMA 0
-#endif
-#ifndef LM_TEST_IFDEF_JOINED
-#define LM_TEST_IFDEF_JOINED 0
-#endif
-#ifndef LM_TEST_IFDEF_NONE
-#define LM_TEST_IFDEF_NONE 0
-#endif
-#ifndef LM_TEST_IFDEF_WIDE
-#define LM_TEST_IFDEF_WIDE 0
-#endif
-#ifndef LM_TEST_IFDEF_REORDERED
-#define LM_TEST_IFDEF_REORDERED 0
-#endif
-#ifndef LM_TEST_IFDEF_PHYSICAL
-#define LM_TEST_IFDEF_PHYSICAL 0
-#endif
-#ifndef LM_TEST_IFDEF_DOUBLE_JOINED
-#define LM_TEST_IFDEF_DOUBLE_JOINED 0
-#endif
-#ifndef LM_TEST_IFDEF_WRONG_WIDE_SCHEMA
-#define LM_TEST_IFDEF_WRONG_WIDE_SCHEMA 0
-#endif
-#ifndef LM_TEST_IFDEF_EXPECTED
-#define LM_TEST_IFDEF_EXPECTED 61
-#endif
-===
+`ifndef-default`: LM_TEST_IFDEF_DIRECT 0
+`ifndef-default`: LM_TEST_IFDEF_LATE 0
+`ifndef-default`: LM_TEST_IFDEF_WRONG_SCHEMA 0
+`ifndef-default`: LM_TEST_IFDEF_JOINED 0
+`ifndef-default`: LM_TEST_IFDEF_NONE 0
+`ifndef-default`: LM_TEST_IFDEF_WIDE 0
+`ifndef-default`: LM_TEST_IFDEF_REORDERED 0
+`ifndef-default`: LM_TEST_IFDEF_PHYSICAL 0
+`ifndef-default`: LM_TEST_IFDEF_DOUBLE_JOINED 0
+`ifndef-default`: LM_TEST_IFDEF_WRONG_WIDE_SCHEMA 0
+`ifndef-default`: LM_TEST_IFDEF_EXPECTED 61
 
 table:
     name: ifdef
