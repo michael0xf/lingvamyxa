@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <setjmp.h>
 
+#include <string.h>
 struct LmOwnArena;
 struct LmMessageThread;
 struct LmMessageThreadRuntime;

@@ -10449,6 +10449,14 @@ The operation does not modify the `Circle` binding and does not create
 `field.class` or any other row. Repeating the construction creates another
 Structure in an arena; it does not create or update a type-level entity.
 
+The construction body belongs to the new instance. It supplies values to
+fields selected from the already resolved descriptor; it does not declare,
+extend or replace that descriptor. When an exact first-level field name occurs
+more than once, body initializers with that name select its occurrences in
+source order. A body initializer for which no corresponding descriptor
+occurrence exists is a construction error. Fields omitted by the body are
+initialized according to the selected construction profile.
+
 An anonymous/bounded Structure literal may take its field shape directly from
 the source Structure instead of resolving a named descriptor. It is still
 allocated in the current arena and creates no descriptor or Table entry.
@@ -10502,6 +10510,27 @@ introduce a distinct core Value kind and must not be inferred from arbitrary
 table rows.
 
 19.20.4. Current Bootstrap Divergence
+
+The hosted local-constructor path recognizes a visible named-Structure
+constructor in a form such as `Circle: circle ... end: circle`, allocates a distinct
+arena-owned instance, and binds only `circle`. It reads the descriptor already
+bound as `Circle` and publishes neither another descriptor occurrence nor
+Registry/Table rows. Until the current-arena migration is complete, this path
+selects the MessageThread root arena directly.
+
+The hosted constructor path does not yet project a second physical C value for
+a construction result whose name is already visible. It rejects that case
+before publishing the result and identifies occurrence-aware value projection
+as the missing backend facility. This is a staged backend limitation: the
+source-language admission rule remains `implements(old, new)`, and the early
+hosted rejection neither changes that predicate nor makes a compatible result
+rebinding invalid in the language.
+
+During the staged migration, the older named-structure declaration path still
+emits its historical hosted C layout/storage projection as part of that
+declaration. That target artifact is bootstrap debt only: it is not an
+instance-construction operation and does not combine descriptor declaration
+with construction in the language model.
 
 The hosted bootstrap exposes normalized `structuralFields` views for
 named-structure declarations and the current physical `merge:` path. They do
@@ -10558,10 +10587,11 @@ The normalized `structuralFields` view is the only compiler-semantic shape state
 produced by named-structure and physical `merge:` declarations. These paths no
 longer publish implicit `owner.field.*`, `class.present`, `class.kind`,
 `class.reference-base` or `layout.backend` Registry rows. They still emit the
-hosted C layout/storage projection. Repeated target declarations are suppressed
-only when the implementation-private per-output projection state described in
-section 20.2.1.1 proves that the earlier target declaration is identical and is
-present wherever the later declaration would be present.
+legacy hosted C layout/storage projection; the explicit named-constructor path
+does not. Repeated target declarations are suppressed only when the
+implementation-private per-output projection state described in section
+20.2.1.1 proves that the earlier target declaration is identical and is present
+wherever the later declaration would be present.
 
 Layout collection, declaration/type-head recognition, top-level lowering,
 typed field-chain class resolution, physical `merge:` source admission and L2

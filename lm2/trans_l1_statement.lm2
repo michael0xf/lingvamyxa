@@ -400,10 +400,21 @@ fn: lm_trans_name_argument_from_frame (const: (LmP0Frame: frame); LmP0Text: out_
 return: 0
 
 fn: lm_trans_frame_close_target (const: (LmP0Frame: frame); LmP0Text: out_target) int
+    const: LmP0Structure: body
+    const: LmP0Field: name_field
+    const: LmP0Field: value_body_field
+
     if: frame = 0 || out_target = 0
         return: 0
 
     if: lm_trans_name_argument_from_frame(frame, out_target)
+        return: 1
+
+    body: lm_trans_unwrap_single_anonymous_structure(frame\body)
+    name_field: lm_trans_nth_field(body, 0U)
+    value_body_field: lm_trans_nth_field(body, 1U)
+    if: lm_trans_is_c_reference_name(frame\head) = 0 && lm_trans_is_reserved_head_name(frame\head) = 0 && lm_trans_text_all_char(frame\head, '@') = 0 && lm_trans_text_is_array_receiver_head(frame\head) = 0 && (frame\flags & c.LM_P0_FRAME_COLON) != 0U && name_field != 0 && name_field\value != 0 && name_field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_atom_can_be_new_binding_name(name_field\value\as\atom) && value_body_field != 0 && value_body_field\next = 0 && value_body_field\value != 0 && value_body_field\value\kind = c.LM_P0_NODE_STRUCTURE && value_body_field\value\span\line > name_field\value\span\line
+        out_target[0]: name_field\value\as\atom[0]
         return: 1
 
     out_target[0]: frame\head[0]
@@ -613,6 +624,8 @@ fn: lm_trans_emit_message_thread_runtime_prelude (FILE: file) int
         return: 0
 
     lm_trans_emitted_message_thread_runtime_prelude: 1
+    if: lm_trans_put(file, "#include <string.h>\n") != 0
+        return: 1
     if: lm_trans_put(file, "struct LmOwnArena;\n") != 0
         return: 1
     if: lm_trans_put(file, "struct LmMessageThread;\n") != 0
@@ -3704,6 +3717,208 @@ fn: lm_trans_frame_looks_named_structure_layout_declaration (
             saw_field: 1
         field: field\next
 return: saw_field
+
+fn: lm_trans_frame_looks_named_structure_construction (
+    const: LmP0Frame: frame
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Structure: body
+    const: LmP0Field: name_field
+    const: LmP0Field: value_body_field
+
+    if: frame = 0 || namespace_ = 0 || (frame\flags & c.LM_P0_FRAME_COLON) = 0U || lm_trans_namespace_has_named_structure_binding(namespace_, frame\head) = 0
+        return: 0
+
+    body: lm_trans_named_structure_body(frame)
+    name_field: lm_trans_nth_field(body, 0U)
+    value_body_field: lm_trans_nth_field(body, 1U)
+    if: name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM || lm_trans_atom_can_be_new_binding_name(name_field\value\as\atom) = 0
+        return: 0
+    if: value_body_field = 0 || value_body_field\next != 0 || value_body_field\value = 0 || value_body_field\value\kind != c.LM_P0_NODE_STRUCTURE || value_body_field\value\span\line <= name_field\value\span\line
+        return: 0
+return: 1
+
+fn: lm_trans_named_structure_construction_field_occurrence (
+    const: LmP0Structure: body
+    const: LmP0Field: selected
+    const: LmP0Text: name
+) size_t
+    const: LmP0Field: field
+    const: LmP0Frame: field_frame
+    size_t: occurrence
+
+    occurrence: 0U
+    field: 0
+    if: body != 0
+        field: body\first_field
+    while: field != 0 && field != selected
+        if: lm_trans_node_is_ignored(field\value) = 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_FRAME
+            field_frame: field\value\as\frame
+            if: lm_trans_identifier_same(field_frame\head, name)
+                occurrence: occurrence + 1U
+            ---
+        ---
+        field: field\next
+return: occurrence
+
+fn: lm_trans_emit_named_structure_construction_initializer (
+    FILE: file
+    const: LmP0Frame: frame
+    const: LmP0Text: instance_name
+    const: LmTransDescriptor: descriptor
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    const: LmP0Structure: outer_body
+    const: LmP0Field: value_body_field
+    const: LmP0Structure: value_body
+    const: LmP0Field: field
+    const: LmP0Frame: field_frame
+    const: LmP0Structure: initializer
+    const: LmP0Field: initializer_first
+    const: LmTransDescriptorField: descriptor_field
+    LmTransL4CallableType: expected_type
+    @: char logical_name
+    @: char projected_name
+    LmP0Text: projected_name_text
+    size_t: occurrence
+    size_t: matching_count
+
+    if: file = 0 || frame = 0 || instance_name = 0 || descriptor = 0 || namespace_ = 0
+        return: 1
+
+    if: descriptor\has_structural_fields = 0
+        c.fprintf(c.stderr, "trans L2 structure construction error: \"%.*s\" has no structural descriptor\n", (cast: int frame\head\length), frame\head\data)
+        return: 1
+
+    outer_body: lm_trans_named_structure_body(frame)
+    value_body_field: lm_trans_nth_field(outer_body, 1U)
+    if: value_body_field = 0 || value_body_field\value = 0 || value_body_field\value\kind != c.LM_P0_NODE_STRUCTURE
+        return: 1
+    value_body: value_body_field\value\as\structure
+
+    expected_type: lm_trans_expr_callable_type_new()
+    if: expected_type = 0
+        return: 1
+    finally: lm_trans_expr_callable_type_delete(expected_type)
+
+    field: value_body\first_field
+    while: field != 0
+        logical_name: 0
+        projected_name: 0
+        projected_name_text: 0
+
+        if: lm_trans_node_is_ignored(field\value) = 0 && (field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME)
+            c.fprintf(c.stderr, "trans L2 structure construction error: initializer body for \"%.*s\" expects field frames\n", (cast: int frame\head\length), frame\head\data)
+            return: 1
+
+        if: lm_trans_node_is_ignored(field\value) = 0
+            field_frame: field\value\as\frame
+            initializer: lm_trans_named_structure_body(field_frame)
+            initializer_first: lm_trans_l2_structure_first_present_field(initializer)
+            if: (field_frame\flags & c.LM_P0_FRAME_COLON) = 0U || lm_trans_atom_can_be_new_binding_name(field_frame\head) = 0 || initializer_first = 0
+                c.fprintf(c.stderr, "trans L2 structure construction error: field \"%.*s\" expects an initializer expression\n", (cast: int field_frame\head\length), field_frame\head\data)
+                return: 1
+
+            logical_name: lm_trans_descriptor_name_copy(field_frame\head)
+            if: logical_name = 0
+                return: 1
+            occurrence: lm_trans_named_structure_construction_field_occurrence(value_body, field, field_frame\head)
+            descriptor_field: lm_trans_descriptor_structural_field_occurrence(descriptor, logical_name, occurrence)
+            if: descriptor_field = 0
+                matching_count: lm_trans_descriptor_structural_field_occurrence_count(descriptor, logical_name)
+                c.fprintf(c.stderr, "trans L2 structure construction error: class \"%.*s\" has no field occurrence [%zu]%.*s (matching occurrence count: %zu)\n", (cast: int frame\head\length), frame\head\data, occurrence, (cast: int field_frame\head\length), field_frame\head\data, matching_count)
+                lm_own_delete(logical_name, 0)
+                return: 1
+            ---
+
+            projected_name: lm_trans_descriptor_projected_member_name_new(descriptor, descriptor_field)
+            if: projected_name = 0
+                lm_own_delete(logical_name, 0)
+                return: 1
+            projected_name_text: lm_trans_text_from_cstr(projected_name)
+            if: projected_name_text = 0
+                lm_own_delete(projected_name, 0)
+                lm_own_delete(logical_name, 0)
+                return: 1
+
+            if: lm_trans_named_structure_type_set_cstr(expected_type, descriptor_field\descriptor_name, descriptor_field\address_depth, descriptor_field\is_const) = 0
+                lm_trans_text_ref_destroy(@ projected_name_text)
+                lm_own_delete(projected_name, 0)
+                lm_own_delete(logical_name, 0)
+                return: 1
+
+            if: descriptor_field\has_array_count
+                c.fprintf(c.stderr, "trans hosted C backend limitation: construction of fixed-array field [%zu]%.*s on \"%.*s\" requires ArrayReference projection\n", occurrence, (cast: int field_frame\head\length), field_frame\head\data, (cast: int frame\head\length), frame\head\data)
+                lm_trans_text_ref_destroy(@ projected_name_text)
+                lm_own_delete(projected_name, 0)
+                lm_own_delete(logical_name, 0)
+                return: 1
+
+            if: descriptor_field\is_const
+                if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "memcpy((void *)&") != 0 || lm_trans_emit_identifier(file, instance_name) != 0 || lm_trans_put(file, "->") != 0 || lm_trans_emit_identifier(file, projected_name_text) != 0 || lm_trans_put(file, ", &(") != 0 || lm_trans_emit_callable_type_named(file, expected_type, 0, namespace_) != 0 || lm_trans_put(file, "){") != 0 || lm_trans_emit_expr_range_with_expected_type(file, initializer_first, 0, namespace_, expected_type) != 0 || lm_trans_put(file, "}, sizeof(") != 0 || lm_trans_emit_identifier(file, instance_name) != 0 || lm_trans_put(file, "->") != 0 || lm_trans_emit_identifier(file, projected_name_text) != 0 || lm_trans_put(file, "));\n") != 0
+                    lm_trans_text_ref_destroy(@ projected_name_text)
+                    lm_own_delete(projected_name, 0)
+                    lm_own_delete(logical_name, 0)
+                    return: 1
+                ---
+            else:
+                if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, instance_name) != 0 || lm_trans_put(file, "->") != 0 || lm_trans_emit_identifier(file, projected_name_text) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_expr_range_with_expected_type(file, initializer_first, 0, namespace_, expected_type) != 0 || lm_trans_put(file, ";\n") != 0
+                    lm_trans_text_ref_destroy(@ projected_name_text)
+                    lm_own_delete(projected_name, 0)
+                    lm_own_delete(logical_name, 0)
+                    return: 1
+                ---
+            ---
+
+            lm_trans_text_ref_destroy(@ projected_name_text)
+            lm_own_delete(projected_name, 0)
+            lm_own_delete(logical_name, 0)
+        ---
+        field: field\next
+
+return: 0
+
+fn: lm_trans_emit_named_structure_construction (
+    FILE: file
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    const: LmP0Structure: body
+    const: LmP0Field: name_field
+    const: LmP0Text: instance_name
+    const: LmTransSymbol: existing_symbol
+    const: LmTransDescriptor: descriptor
+    int: status
+
+    if: file = 0 || frame = 0 || namespace_ = 0 || lm_trans_frame_looks_named_structure_construction(frame, namespace_) = 0
+        return: 1
+
+    body: lm_trans_named_structure_body(frame)
+    name_field: lm_trans_nth_field(body, 0U)
+    instance_name: name_field\value\as\atom
+
+    existing_symbol: lm_trans_namespace_find(namespace_, instance_name)
+    if: existing_symbol != 0
+        c.fprintf(c.stderr, "trans hosted C backend limitation: Structure construction result \"%.*s\" collides with an existing binding and requires occurrence-aware value projection\n", (cast: int instance_name\length), instance_name\data)
+        return: 1
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, frame\head)
+    if: descriptor = 0 || descriptor\has_structural_fields = 0
+        return: 1
+
+    if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_emit_identifier(file, instance_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_emit_identifier(file, instance_name) != 0 || lm_trans_put(file, "));\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_emit_identifier(file, instance_name) != 0 || lm_trans_put(file, " == 0) {\n") != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "abort();\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+
+    status: lm_trans_emit_named_structure_construction_initializer(file, frame, instance_name, descriptor, indent, namespace_)
+    if: status != 0
+        return: 1
+return: lm_trans_namespace_declare_storage_binding(namespace_, instance_name, frame\head)
 
 fn: lm_trans_named_structure_relation_table_new (
     const: LmP0Text: owner
@@ -7580,6 +7795,16 @@ fn: lm_trans_statement_emit_storage_declaration (
     c.LM_UNUSED(stack)
 return: lm_trans_emit_declaration(file, frame, indent, namespace_)
 
+fn: lm_trans_statement_emit_named_structure_construction (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    c.LM_UNUSED(stack)
+return: lm_trans_emit_named_structure_construction(file, frame, indent, namespace_)
+
 fn: lm_trans_statement_emit_pointer_declaration (
     FILE: file
     LmTransStatementStack: stack
@@ -7708,6 +7933,10 @@ fn: lm_trans_lower_statement_frame (
     if: symbol != 0 && lm_trans_l3_receiver_is_excluded(namespace_, dispatch_head)
         c.fprintf(c.stderr, "trans L3 error: receiver \"%.*s\" is not available in L3\n", (cast: int dispatch_head\length), dispatch_head\data)
         return: 1
+
+    if: lm_trans_frame_looks_named_structure_construction(frame, namespace_)
+        out\emit: @lm_trans_statement_emit_named_structure_construction
+        return: 0
 
     if: (lm_trans_namespace_layout_source_is_supported(namespace_, frame\head) || lm_trans_namespace_has_named_structure_binding(namespace_, frame\head)) && lm_trans_frame_looks_storage_declaration(frame, namespace_)
         out\emit: @lm_trans_statement_emit_storage_declaration

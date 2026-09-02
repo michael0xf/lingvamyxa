@@ -1,0 +1,43 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+Point:
+    int: x
+    int: untouched
+    int: x
+end: Point
+
+external:
+    fn: main () int
+        Point: first
+            x: 10 + 1
+            x: 12
+        end: first
+
+        Point: second
+            untouched: 20
+            x: 21
+            x: 22
+        end: second
+
+        Point: same (first)
+
+        if: first = 0 || second = 0 || first = second || same != first
+            return: 1
+        if: first\[0]x != 11 || first\[1]x != 12 || first\x != 12 || first\untouched != 0
+            return: 2
+        if: second\[0]x != 21 || second\[1]x != 22 || second\x != 22 || second\untouched != 20
+            return: 3
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), first) = 0
+            return: 4
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), second) = 0
+            return: 5
+        return: 0
+    end: main
+end: external

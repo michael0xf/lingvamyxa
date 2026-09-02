@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <setjmp.h>
 
+#include <string.h>
 struct LmOwnArena;
 struct LmMessageThread;
 struct LmMessageThreadRuntime;
@@ -3922,6 +3923,10 @@ static int lm_trans_named_structure_type_is_available(struct LmMessageThread *lm
 static int lm_trans_named_structure_field_info_for_owner(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *field_frame, const LmTransNamespace *namespace_, const LmP0Text *pending_owner, LmTransL4CallableType *out_type, const LmP0Text **out_name, const LmP0Field **out_initializer);
 static int lm_trans_named_structure_field_info(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *field_frame, const LmTransNamespace *namespace_, LmTransL4CallableType *out_type, const LmP0Text **out_name, const LmP0Field **out_initializer);
 static int lm_trans_frame_looks_named_structure_layout_declaration(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame, const LmTransNamespace *namespace_);
+static int lm_trans_frame_looks_named_structure_construction(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame, const LmTransNamespace *namespace_);
+static size_t lm_trans_named_structure_construction_field_occurrence(struct LmMessageThread *lm_lmx_message_thread, const LmP0Structure *body, const LmP0Field *selected, const LmP0Text *name);
+static int lm_trans_emit_named_structure_construction_initializer(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, const LmP0Text *instance_name, const LmTransDescriptor *descriptor, unsigned indent, LmTransNamespace *namespace_);
+static int lm_trans_emit_named_structure_construction(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static char * lm_trans_named_structure_relation_table_new(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *owner, const char *suffix);
 static int lm_trans_named_structure_push_relation(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *owner, const char *suffix, const LmP0Text *key, const LmP0Text *payload);
 static int lm_trans_declare_named_structure_owner(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmP0Text *owner);
@@ -4061,6 +4066,7 @@ static int lm_trans_statement_emit_array_declaration(struct LmMessageThread *lm_
 static int lm_trans_statement_emit_structure_declaration(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_c_tagged_declaration(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_storage_declaration(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
+static int lm_trans_statement_emit_named_structure_construction(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_pointer_declaration(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_target_assignment(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
 static int lm_trans_statement_emit_named_structure(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_);
@@ -21464,10 +21470,20 @@ static int lm_trans_name_argument_from_frame(struct LmMessageThread *lm_lmx_mess
 
 static int lm_trans_frame_close_target(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame, LmP0Text *out_target) {
     (void)lm_lmx_message_thread;
+    const LmP0Structure * body;
+    const LmP0Field * name_field;
+    const LmP0Field * value_body_field;
     if (frame == 0 || out_target == 0) {
         return 0;
     }
     if (lm_trans_name_argument_from_frame(lm_lmx_message_thread, frame, out_target)) {
+        return 1;
+    }
+    body = lm_trans_unwrap_single_anonymous_structure(lm_lmx_message_thread, frame -> body);
+    name_field = lm_trans_nth_field(lm_lmx_message_thread, body, 0U);
+    value_body_field = lm_trans_nth_field(lm_lmx_message_thread, body, 1U);
+    if (lm_trans_is_c_reference_name(lm_lmx_message_thread, frame -> head) == 0 && lm_trans_is_reserved_head_name(lm_lmx_message_thread, frame -> head) == 0 && lm_trans_text_all_char(lm_lmx_message_thread, frame -> head, '@') == 0 && lm_trans_text_is_array_receiver_head(lm_lmx_message_thread, frame -> head) == 0 && (frame -> flags & LM_P0_FRAME_COLON) != 0U && name_field != 0 && name_field -> value != 0 && name_field -> value -> kind == LM_P0_NODE_ATOM && lm_trans_atom_can_be_new_binding_name(lm_lmx_message_thread, name_field -> value -> as -> atom) && value_body_field != 0 && value_body_field -> next == 0 && value_body_field -> value != 0 && value_body_field -> value -> kind == LM_P0_NODE_STRUCTURE && value_body_field -> value -> span -> line > name_field -> value -> span -> line) {
+        out_target[0] = name_field -> value -> as -> atom[0];
         return 1;
     }
     out_target[0] = frame -> head[0];
@@ -21703,6 +21719,9 @@ static int lm_trans_emit_message_thread_runtime_prelude(struct LmMessageThread *
         return 0;
     }
     lm_trans_emitted_message_thread_runtime_prelude = 1;
+    if (lm_trans_put(lm_lmx_message_thread, file, "#include <string.h>\n") != 0) {
+        return 1;
+    }
     if (lm_trans_put(lm_lmx_message_thread, file, "struct LmOwnArena;\n") != 0) {
         return 1;
     }
@@ -25877,6 +25896,242 @@ static int lm_trans_frame_looks_named_structure_layout_declaration(struct LmMess
         lm_trans_expr_callable_type_delete(lm_lmx_message_thread, field_type);
         return lm_return_2;
     }
+}
+
+static int lm_trans_frame_looks_named_structure_construction(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *frame, const LmTransNamespace *namespace_) {
+    (void)lm_lmx_message_thread;
+    const LmP0Structure * body;
+    const LmP0Field * name_field;
+    const LmP0Field * value_body_field;
+    if (frame == 0 || namespace_ == 0 || (frame -> flags & LM_P0_FRAME_COLON) == 0U || lm_trans_namespace_has_named_structure_binding(lm_lmx_message_thread, namespace_, frame -> head) == 0) {
+        return 0;
+    }
+    body = lm_trans_named_structure_body(lm_lmx_message_thread, frame);
+    name_field = lm_trans_nth_field(lm_lmx_message_thread, body, 0U);
+    value_body_field = lm_trans_nth_field(lm_lmx_message_thread, body, 1U);
+    if (name_field == 0 || name_field -> value == 0 || name_field -> value -> kind != LM_P0_NODE_ATOM || lm_trans_atom_can_be_new_binding_name(lm_lmx_message_thread, name_field -> value -> as -> atom) == 0) {
+        return 0;
+    }
+    if (value_body_field == 0 || value_body_field -> next != 0 || value_body_field -> value == 0 || value_body_field -> value -> kind != LM_P0_NODE_STRUCTURE || value_body_field -> value -> span -> line <= name_field -> value -> span -> line) {
+        return 0;
+    }
+    return 1;
+}
+
+static size_t lm_trans_named_structure_construction_field_occurrence(struct LmMessageThread *lm_lmx_message_thread, const LmP0Structure *body, const LmP0Field *selected, const LmP0Text *name) {
+    (void)lm_lmx_message_thread;
+    const LmP0Field * field;
+    const LmP0Frame * field_frame;
+    size_t occurrence;
+    occurrence = 0U;
+    field = 0;
+    if (body != 0) {
+        field = body -> first_field;
+    }
+    while (field != 0 && field != selected) {
+        if (lm_trans_node_is_ignored(lm_lmx_message_thread, field -> value) == 0 && field -> value != 0 && field -> value -> kind == LM_P0_NODE_FRAME) {
+            field_frame = field -> value -> as -> frame;
+            if (lm_trans_identifier_same(lm_lmx_message_thread, field_frame -> head, name)) {
+                occurrence = occurrence + 1U;
+            }
+        }
+        field = field -> next;
+    }
+    return occurrence;
+}
+
+static int lm_trans_emit_named_structure_construction_initializer(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, const LmP0Text *instance_name, const LmTransDescriptor *descriptor, unsigned indent, LmTransNamespace *namespace_) {
+    (void)lm_lmx_message_thread;
+    const LmP0Structure * outer_body;
+    const LmP0Field * value_body_field;
+    const LmP0Structure * value_body;
+    const LmP0Field * field;
+    const LmP0Frame * field_frame;
+    const LmP0Structure * initializer;
+    const LmP0Field * initializer_first;
+    const LmTransDescriptorField * descriptor_field;
+    LmTransL4CallableType * expected_type;
+    char *logical_name;
+    char *projected_name;
+    LmP0Text * projected_name_text;
+    size_t occurrence;
+    size_t matching_count;
+    if (file == 0 || frame == 0 || instance_name == 0 || descriptor == 0 || namespace_ == 0) {
+        return 1;
+    }
+    if (descriptor -> has_structural_fields == 0) {
+        fprintf(stderr, "trans L2 structure construction error: \"%.*s\" has no structural descriptor\n", (((int)frame -> head -> length)), frame -> head -> data);
+        return 1;
+    }
+    outer_body = lm_trans_named_structure_body(lm_lmx_message_thread, frame);
+    value_body_field = lm_trans_nth_field(lm_lmx_message_thread, outer_body, 1U);
+    if (value_body_field == 0 || value_body_field -> value == 0 || value_body_field -> value -> kind != LM_P0_NODE_STRUCTURE) {
+        return 1;
+    }
+    value_body = value_body_field -> value -> as -> structure;
+    expected_type = lm_trans_expr_callable_type_new(lm_lmx_message_thread);
+    if (expected_type == 0) {
+        return 1;
+    }
+    field = value_body -> first_field;
+    while (field != 0) {
+        logical_name = 0;
+        projected_name = 0;
+        projected_name_text = 0;
+        if (lm_trans_node_is_ignored(lm_lmx_message_thread, field -> value) == 0 && (field -> value == 0 || field -> value -> kind != LM_P0_NODE_FRAME)) {
+            fprintf(stderr, "trans L2 structure construction error: initializer body for \"%.*s\" expects field frames\n", (((int)frame -> head -> length)), frame -> head -> data);
+            {
+                int lm_return_0 = 1;
+                lm_trans_expr_callable_type_delete(lm_lmx_message_thread, expected_type);
+                return lm_return_0;
+            }
+        }
+        if (lm_trans_node_is_ignored(lm_lmx_message_thread, field -> value) == 0) {
+            field_frame = field -> value -> as -> frame;
+            initializer = lm_trans_named_structure_body(lm_lmx_message_thread, field_frame);
+            initializer_first = lm_trans_l2_structure_first_present_field(lm_lmx_message_thread, initializer);
+            if ((field_frame -> flags & LM_P0_FRAME_COLON) == 0U || lm_trans_atom_can_be_new_binding_name(lm_lmx_message_thread, field_frame -> head) == 0 || initializer_first == 0) {
+                fprintf(stderr, "trans L2 structure construction error: field \"%.*s\" expects an initializer expression\n", (((int)field_frame -> head -> length)), field_frame -> head -> data);
+                {
+                    int lm_return_1 = 1;
+                    lm_trans_expr_callable_type_delete(lm_lmx_message_thread, expected_type);
+                    return lm_return_1;
+                }
+            }
+            logical_name = lm_trans_descriptor_name_copy(lm_lmx_message_thread, field_frame -> head);
+            if (logical_name == 0) {
+                {
+                    int lm_return_2 = 1;
+                    lm_trans_expr_callable_type_delete(lm_lmx_message_thread, expected_type);
+                    return lm_return_2;
+                }
+            }
+            occurrence = lm_trans_named_structure_construction_field_occurrence(lm_lmx_message_thread, value_body, field, field_frame -> head);
+            descriptor_field = lm_trans_descriptor_structural_field_occurrence(lm_lmx_message_thread, descriptor, logical_name, occurrence);
+            if (descriptor_field == 0) {
+                matching_count = lm_trans_descriptor_structural_field_occurrence_count(lm_lmx_message_thread, descriptor, logical_name);
+                fprintf(stderr, "trans L2 structure construction error: class \"%.*s\" has no field occurrence [%zu]%.*s (matching occurrence count: %zu)\n", (((int)frame -> head -> length)), frame -> head -> data, occurrence, (((int)field_frame -> head -> length)), field_frame -> head -> data, matching_count);
+                lm_own_delete(logical_name, 0);
+                {
+                    int lm_return_3 = 1;
+                    lm_trans_expr_callable_type_delete(lm_lmx_message_thread, expected_type);
+                    return lm_return_3;
+                }
+            }
+            projected_name = lm_trans_descriptor_projected_member_name_new(lm_lmx_message_thread, descriptor, descriptor_field);
+            if (projected_name == 0) {
+                lm_own_delete(logical_name, 0);
+                {
+                    int lm_return_4 = 1;
+                    lm_trans_expr_callable_type_delete(lm_lmx_message_thread, expected_type);
+                    return lm_return_4;
+                }
+            }
+            projected_name_text = lm_trans_text_from_cstr(lm_lmx_message_thread, projected_name);
+            if (projected_name_text == 0) {
+                lm_own_delete(projected_name, 0);
+                lm_own_delete(logical_name, 0);
+                {
+                    int lm_return_5 = 1;
+                    lm_trans_expr_callable_type_delete(lm_lmx_message_thread, expected_type);
+                    return lm_return_5;
+                }
+            }
+            if (lm_trans_named_structure_type_set_cstr(lm_lmx_message_thread, expected_type, descriptor_field -> descriptor_name, descriptor_field -> address_depth, descriptor_field -> is_const) == 0) {
+                lm_trans_text_ref_destroy(&projected_name_text);
+                lm_own_delete(projected_name, 0);
+                lm_own_delete(logical_name, 0);
+                {
+                    int lm_return_6 = 1;
+                    lm_trans_expr_callable_type_delete(lm_lmx_message_thread, expected_type);
+                    return lm_return_6;
+                }
+            }
+            if (descriptor_field -> has_array_count) {
+                fprintf(stderr, "trans hosted C backend limitation: construction of fixed-array field [%zu]%.*s on \"%.*s\" requires ArrayReference projection\n", occurrence, (((int)field_frame -> head -> length)), field_frame -> head -> data, (((int)frame -> head -> length)), frame -> head -> data);
+                lm_trans_text_ref_destroy(&projected_name_text);
+                lm_own_delete(projected_name, 0);
+                lm_own_delete(logical_name, 0);
+                {
+                    int lm_return_7 = 1;
+                    lm_trans_expr_callable_type_delete(lm_lmx_message_thread, expected_type);
+                    return lm_return_7;
+                }
+            }
+            if (descriptor_field -> is_const) {
+                if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "memcpy((void *)&") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, instance_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "->") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, projected_name_text) != 0 || lm_trans_put(lm_lmx_message_thread, file, ", &(") != 0 || lm_trans_emit_callable_type_named(lm_lmx_message_thread, file, expected_type, 0, namespace_) != 0 || lm_trans_put(lm_lmx_message_thread, file, "){") != 0 || lm_trans_emit_expr_range_with_expected_type(lm_lmx_message_thread, file, initializer_first, 0, namespace_, expected_type) != 0 || lm_trans_put(lm_lmx_message_thread, file, "}, sizeof(") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, instance_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "->") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, projected_name_text) != 0 || lm_trans_put(lm_lmx_message_thread, file, "));\n") != 0) {
+                    lm_trans_text_ref_destroy(&projected_name_text);
+                    lm_own_delete(projected_name, 0);
+                    lm_own_delete(logical_name, 0);
+                    {
+                        int lm_return_8 = 1;
+                        lm_trans_expr_callable_type_delete(lm_lmx_message_thread, expected_type);
+                        return lm_return_8;
+                    }
+                }
+            }
+            else {
+                if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, instance_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "->") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, projected_name_text) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = ") != 0 || lm_trans_emit_expr_range_with_expected_type(lm_lmx_message_thread, file, initializer_first, 0, namespace_, expected_type) != 0 || lm_trans_put(lm_lmx_message_thread, file, ";\n") != 0) {
+                    lm_trans_text_ref_destroy(&projected_name_text);
+                    lm_own_delete(projected_name, 0);
+                    lm_own_delete(logical_name, 0);
+                    {
+                        int lm_return_9 = 1;
+                        lm_trans_expr_callable_type_delete(lm_lmx_message_thread, expected_type);
+                        return lm_return_9;
+                    }
+                }
+            }
+            lm_trans_text_ref_destroy(&projected_name_text);
+            lm_own_delete(projected_name, 0);
+            lm_own_delete(logical_name, 0);
+        }
+        field = field -> next;
+    }
+    {
+        int lm_return_10 = 0;
+        lm_trans_expr_callable_type_delete(lm_lmx_message_thread, expected_type);
+        return lm_return_10;
+    }
+}
+
+static int lm_trans_emit_named_structure_construction(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_) {
+    (void)lm_lmx_message_thread;
+    const LmP0Structure * body;
+    const LmP0Field * name_field;
+    const LmP0Text * instance_name;
+    const LmTransSymbol * existing_symbol;
+    const LmTransDescriptor * descriptor;
+    int status;
+    if (file == 0 || frame == 0 || namespace_ == 0 || lm_trans_frame_looks_named_structure_construction(lm_lmx_message_thread, frame, namespace_) == 0) {
+        return 1;
+    }
+    body = lm_trans_named_structure_body(lm_lmx_message_thread, frame);
+    name_field = lm_trans_nth_field(lm_lmx_message_thread, body, 0U);
+    instance_name = name_field -> value -> as -> atom;
+    existing_symbol = lm_trans_namespace_find(lm_lmx_message_thread, namespace_, instance_name);
+    if (existing_symbol != 0) {
+        fprintf(stderr, "trans hosted C backend limitation: Structure construction result \"%.*s\" collides with an existing binding and requires occurrence-aware value projection\n", (((int)instance_name -> length)), instance_name -> data);
+        return 1;
+    }
+    descriptor = lm_trans_namespace_descriptor(lm_lmx_message_thread, namespace_, frame -> head);
+    if (descriptor == 0 || descriptor -> has_structural_fields == 0) {
+        return 1;
+    }
+    if (lm_trans_emit_message_thread_runtime_prelude(lm_lmx_message_thread, lm_trans_prelude_file(lm_lmx_message_thread, file)) != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, frame -> head) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, instance_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = (") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, frame -> head) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, instance_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, "));\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "if (") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, instance_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " == 0) {\n") != 0 || lm_trans_emit_indent(lm_lmx_message_thread, file, indent + 1U) != 0 || lm_trans_put(lm_lmx_message_thread, file, "abort();\n") != 0 || lm_trans_emit_indent(lm_lmx_message_thread, file, indent) != 0 || lm_trans_put(lm_lmx_message_thread, file, "}\n") != 0) {
+        return 1;
+    }
+    status = lm_trans_emit_named_structure_construction_initializer(lm_lmx_message_thread, file, frame, instance_name, descriptor, indent, namespace_);
+    if (status != 0) {
+        return 1;
+    }
+    return lm_trans_namespace_declare_storage_binding(lm_lmx_message_thread, namespace_, instance_name, frame -> head);
 }
 
 static char * lm_trans_named_structure_relation_table_new(struct LmMessageThread *lm_lmx_message_thread, const LmP0Text *owner, const char *suffix) {
@@ -30769,6 +31024,12 @@ static int lm_trans_statement_emit_storage_declaration(struct LmMessageThread *l
     return lm_trans_emit_declaration(lm_lmx_message_thread, file, frame, indent, namespace_);
 }
 
+static int lm_trans_statement_emit_named_structure_construction(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_) {
+    (void)lm_lmx_message_thread;
+    LM_UNUSED(stack);
+    return lm_trans_emit_named_structure_construction(lm_lmx_message_thread, file, frame, indent, namespace_);
+}
+
 static int lm_trans_statement_emit_pointer_declaration(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransStatementStack *stack, const LmP0Frame *frame, unsigned indent, LmTransNamespace *namespace_) {
     (void)lm_lmx_message_thread;
     LM_UNUSED(stack);
@@ -30880,146 +31141,154 @@ static int lm_trans_lower_statement_frame(struct LmMessageThread *lm_lmx_message
             return lm_return_0;
         }
     }
-    if ((lm_trans_namespace_layout_source_is_supported(lm_lmx_message_thread, namespace_, frame -> head) || lm_trans_namespace_has_named_structure_binding(lm_lmx_message_thread, namespace_, frame -> head)) && lm_trans_frame_looks_storage_declaration(lm_lmx_message_thread, frame, namespace_)) {
-        out->emit = &lm_trans_statement_emit_storage_declaration;
+    if (lm_trans_frame_looks_named_structure_construction(lm_lmx_message_thread, frame, namespace_)) {
+        out->emit = &lm_trans_statement_emit_named_structure_construction;
         {
             int lm_return_1 = 0;
             lm_trans_text_ref_destroy(&family_head);
             return lm_return_1;
         }
     }
+    if ((lm_trans_namespace_layout_source_is_supported(lm_lmx_message_thread, namespace_, frame -> head) || lm_trans_namespace_has_named_structure_binding(lm_lmx_message_thread, namespace_, frame -> head)) && lm_trans_frame_looks_storage_declaration(lm_lmx_message_thread, frame, namespace_)) {
+        out->emit = &lm_trans_statement_emit_storage_declaration;
+        {
+            int lm_return_2 = 0;
+            lm_trans_text_ref_destroy(&family_head);
+            return lm_return_2;
+        }
+    }
     if (symbol != 0) {
         if (symbol -> callable_is_thread_handler) {
             fprintf(stderr, "trans L2 error: thread handler \"%.*s\" cannot be called directly; send a message to its route\n", (((int)frame -> head -> length)), frame -> head -> data);
             {
-                int lm_return_2 = 1;
+                int lm_return_3 = 1;
                 lm_trans_text_ref_destroy(&family_head);
-                return lm_return_2;
+                return lm_return_3;
             }
         }
         if (lm_trans_symbol_is(lm_lmx_message_thread, symbol, "receiver.statement")) {
             if (lm_trans_text_equals(lm_lmx_message_thread, dispatch_head, "@")) {
                 out->emit = &lm_trans_statement_emit_pointer_declaration;
                 {
-                    int lm_return_3 = 0;
-                    lm_trans_text_ref_destroy(&family_head);
-                    return lm_return_3;
-                }
-            }
-            if (lm_trans_statement_lowering_from_head(lm_lmx_message_thread, dispatch_head, namespace_, out)) {
-                {
                     int lm_return_4 = 0;
                     lm_trans_text_ref_destroy(&family_head);
                     return lm_return_4;
                 }
             }
+            if (lm_trans_statement_lowering_from_head(lm_lmx_message_thread, dispatch_head, namespace_, out)) {
+                {
+                    int lm_return_5 = 0;
+                    lm_trans_text_ref_destroy(&family_head);
+                    return lm_return_5;
+                }
+            }
             fprintf(stderr, "trans registry inconsistency: receiver.statement \"%.*s\" has no statement binding\n", (((int)dispatch_head -> length)), dispatch_head -> data);
             {
-                int lm_return_5 = 1;
-                lm_trans_text_ref_destroy(&family_head);
-                return lm_return_5;
-            }
-        }
-        if (lm_trans_symbol_is(lm_lmx_message_thread, symbol, "receiver.function")) {
-            out->emit = &lm_trans_statement_emit_nested_function;
-            {
-                int lm_return_6 = 0;
+                int lm_return_6 = 1;
                 lm_trans_text_ref_destroy(&family_head);
                 return lm_return_6;
             }
         }
-        if (lm_trans_symbol_is_executable_callable(lm_lmx_message_thread, symbol)) {
-            out->emit = &lm_trans_statement_emit_call;
+        if (lm_trans_symbol_is(lm_lmx_message_thread, symbol, "receiver.function")) {
+            out->emit = &lm_trans_statement_emit_nested_function;
             {
                 int lm_return_7 = 0;
                 lm_trans_text_ref_destroy(&family_head);
                 return lm_return_7;
             }
         }
-        if (lm_trans_symbol_is(lm_lmx_message_thread, symbol, "variable")) {
-            out->emit = &lm_trans_statement_emit_assignment;
+        if (lm_trans_symbol_is_executable_callable(lm_lmx_message_thread, symbol)) {
+            out->emit = &lm_trans_statement_emit_call;
             {
                 int lm_return_8 = 0;
                 lm_trans_text_ref_destroy(&family_head);
                 return lm_return_8;
             }
         }
+        if (lm_trans_symbol_is(lm_lmx_message_thread, symbol, "variable")) {
+            out->emit = &lm_trans_statement_emit_assignment;
+            {
+                int lm_return_9 = 0;
+                lm_trans_text_ref_destroy(&family_head);
+                return lm_return_9;
+            }
+        }
         if (lm_trans_symbol_is(lm_lmx_message_thread, symbol, "class") || lm_trans_symbol_is(lm_lmx_message_thread, symbol, "callableDescriptor")) {
             if (lm_trans_frame_looks_storage_declaration(lm_lmx_message_thread, frame, namespace_)) {
                 out->emit = &lm_trans_statement_emit_storage_declaration;
                 {
-                    int lm_return_9 = 0;
+                    int lm_return_10 = 0;
                     lm_trans_text_ref_destroy(&family_head);
-                    return lm_return_9;
+                    return lm_return_10;
                 }
             }
             fprintf(stderr, "trans L2 error: \"%.*s\" is %s, not a declaration frame\n", (((int)frame -> head -> length)), frame -> head -> data, lm_trans_symbol_class_name(lm_lmx_message_thread, symbol -> class_name));
             {
-                int lm_return_10 = 1;
+                int lm_return_11 = 1;
                 lm_trans_text_ref_destroy(&family_head);
-                return lm_return_10;
+                return lm_return_11;
             }
         }
     }
     if (lm_trans_head_looks_assignable_target(lm_lmx_message_thread, frame -> head)) {
         out->emit = &lm_trans_statement_emit_target_assignment;
         {
-            int lm_return_11 = 0;
+            int lm_return_12 = 0;
             lm_trans_text_ref_destroy(&family_head);
-            return lm_return_11;
+            return lm_return_12;
         }
     }
     if (lm_trans_is_c_reference_name(lm_lmx_message_thread, frame -> head)) {
         if (lm_trans_statement_lowering_from_head(lm_lmx_message_thread, frame -> head, namespace_, out)) {
             {
-                int lm_return_12 = 0;
+                int lm_return_13 = 0;
                 lm_trans_text_ref_destroy(&family_head);
-                return lm_return_12;
+                return lm_return_13;
             }
         }
         out->emit = &lm_trans_statement_emit_call;
-        {
-            int lm_return_13 = 0;
-            lm_trans_text_ref_destroy(&family_head);
-            return lm_return_13;
-        }
-    }
-    if (symbol == 0 && lm_trans_statement_lowering_from_head(lm_lmx_message_thread, frame -> head, namespace_, out)) {
         {
             int lm_return_14 = 0;
             lm_trans_text_ref_destroy(&family_head);
             return lm_return_14;
         }
     }
-    if (lm_trans_frame_looks_storage_declaration(lm_lmx_message_thread, frame, namespace_)) {
-        out->emit = &lm_trans_statement_emit_storage_declaration;
+    if (symbol == 0 && lm_trans_statement_lowering_from_head(lm_lmx_message_thread, frame -> head, namespace_, out)) {
         {
             int lm_return_15 = 0;
             lm_trans_text_ref_destroy(&family_head);
             return lm_return_15;
         }
     }
-    if (lm_trans_frame_looks_named_structure_declaration(lm_lmx_message_thread, frame)) {
-        out->emit = &lm_trans_statement_emit_named_structure;
+    if (lm_trans_frame_looks_storage_declaration(lm_lmx_message_thread, frame, namespace_)) {
+        out->emit = &lm_trans_statement_emit_storage_declaration;
         {
             int lm_return_16 = 0;
             lm_trans_text_ref_destroy(&family_head);
             return lm_return_16;
         }
     }
-    if (symbol == 0) {
-        fprintf(stderr, "trans L2 statement error: unknown Lingvamyxa name \"%.*s\"; use c.%.*s for explicit C-surface spelling\n", (((int)frame -> head -> length)), frame -> head -> data, (((int)frame -> head -> length)), frame -> head -> data);
+    if (lm_trans_frame_looks_named_structure_declaration(lm_lmx_message_thread, frame)) {
+        out->emit = &lm_trans_statement_emit_named_structure;
         {
-            int lm_return_17 = 1;
+            int lm_return_17 = 0;
             lm_trans_text_ref_destroy(&family_head);
             return lm_return_17;
         }
     }
+    if (symbol == 0) {
+        fprintf(stderr, "trans L2 statement error: unknown Lingvamyxa name \"%.*s\"; use c.%.*s for explicit C-surface spelling\n", (((int)frame -> head -> length)), frame -> head -> data, (((int)frame -> head -> length)), frame -> head -> data);
+        {
+            int lm_return_18 = 1;
+            lm_trans_text_ref_destroy(&family_head);
+            return lm_return_18;
+        }
+    }
     fprintf(stderr, "trans L2 error: \"%.*s\" is %s, not a statement head\n", (((int)frame -> head -> length)), frame -> head -> data, lm_trans_symbol_class_name(lm_lmx_message_thread, symbol -> class_name));
     {
-        int lm_return_18 = 1;
+        int lm_return_19 = 1;
         lm_trans_text_ref_destroy(&family_head);
-        return lm_return_18;
+        return lm_return_19;
     }
 }
 

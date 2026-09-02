@@ -1,0 +1,15 @@
+L2:
+    Point:
+        int: x
+    end: Point
+
+    external:
+        fn: main () int
+            int: value 0
+            Point: value
+                x: 1
+            end: value
+            return: 0
+        end: main
+    end: external
+end: L2

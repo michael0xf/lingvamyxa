@@ -1,0 +1,17 @@
+L2:
+    Point:
+        int: x
+        int: x
+    end: Point
+
+    external:
+        fn: main () int
+            Point: occurrenceConstruction
+                x: 1
+                x: 2
+                x: 3
+            end: occurrenceConstruction
+            return: 0
+        end: main
+    end: external
+end: L2
