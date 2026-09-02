@@ -86,7 +86,7 @@ end: `printf.conversion.rule.profile`
 
 external:
     fn: main () int
-        [64]: char buffer
+        c.array: [64]: char buffer
         int: signed_value 7
         unsigned: unsigned_value 9U
         int: written

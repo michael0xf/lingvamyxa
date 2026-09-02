@@ -27,7 +27,7 @@ L2:
 .
 . external:
 . . fn: main () int
-. . . [2]: LmRawBox boxes
+. . . c.array: [2]: LmRawBox boxes
 . . . c.boxes[1].value: 7
 . . . return: c.boxes[1].value != 7
 . . end: main

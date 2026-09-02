@@ -5032,7 +5032,7 @@ static int lm_table_descriptor_add_column(struct LmMessageThread *lm_lmx_message
     }
     descriptor_data[0] = descriptor;
     descriptor_lengths[0] = strlen(descriptor);
-    return lm_table_descriptor_add_column_slices(lm_lmx_message_thread, table, name, strlen(name), 0, 0U, (((const char **)descriptor_data)), descriptor_lengths, 1U, 0U, 0U, 0);
+    return lm_table_descriptor_add_column_slices(lm_lmx_message_thread, table, name, strlen(name), 0, 0U, descriptor_data, descriptor_lengths, 1U, 0U, 0U, 0);
 }
 
 static LmTableDescriptor * lm_table_descriptor_new_empty_slice(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length) {
@@ -19167,6 +19167,7 @@ static int lm_trans_profile_validator_enabled(struct LmMessageThread *lm_lmx_mes
 static const char * lm_trans_printf_conversion_typed_value(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, char conversion, char modifier, const char *source_path, const char *value_column_name, const char *value_descriptor) {
     (void)lm_lmx_message_thread;
     char key_buffer[5];
+    const char *key_data = key_buffer;
     LmP0Text * key;
     const char *value;
     size_t index;
@@ -19187,7 +19188,7 @@ static const char * lm_trans_printf_conversion_typed_value(struct LmMessageThrea
     key_buffer[index] = conversion;
     index = index + 1U;
     key_buffer[index] = '\0';
-    key->data = key_buffer;
+    key->data = key_data;
     key->length = index;
     value = lm_trans_namespace_registry_source_path_n2_named_typed_value(lm_lmx_message_thread, namespace_, key, source_path, "class", "class", value_column_name, value_descriptor);
     lm_trans_text_ref_destroy(&key);
@@ -24414,6 +24415,9 @@ static int lm_trans_node_has_direct_c_array_storage(struct LmMessageThread *lm_l
         return lm_trans_namespace_value_is_c_array_storage(lm_lmx_message_thread, namespace_, node -> as -> atom);
     }
     if (node -> kind == LM_P0_NODE_FRAME) {
+        if (lm_trans_is_c_reference_name(lm_lmx_message_thread, node -> as -> frame -> head)) {
+            return 0;
+        }
         if (lm_trans_callable_frame_result_storage_category(lm_lmx_message_thread, node -> as -> frame, namespace_, &is_array_reference, &is_raw_pointer)) {
             return 0;
         }
@@ -24781,18 +24785,25 @@ static int lm_trans_guard_known_raw_pointer_range(struct LmMessageThread *lm_lmx
             return lm_return_0;
         }
     }
-    if (candidate_status == 1 && lm_trans_raw_pointer_type_compatible(lm_lmx_message_thread, candidate_class, candidate_depth, candidate_base_is_const, expected_class, expected_address_depth, expected_base_is_const, namespace_)) {
+    if (candidate_status == 1 && candidate_depth == 0U && expected_address_depth == 0U && (expected_class == 0 || expected_class -> length == 0U || candidate_class -> length == 0U || lm_trans_identifier_same(lm_lmx_message_thread, candidate_class, expected_class))) {
         {
             int lm_return_1 = 0;
             lm_trans_text_ref_destroy(&candidate_class);
             return lm_return_1;
         }
     }
+    if (candidate_status == 1 && lm_trans_raw_pointer_type_compatible(lm_lmx_message_thread, candidate_class, candidate_depth, candidate_base_is_const, expected_class, expected_address_depth, expected_base_is_const, namespace_)) {
+        {
+            int lm_return_2 = 0;
+            lm_trans_text_ref_destroy(&candidate_class);
+            return lm_return_2;
+        }
+    }
     fprintf(stderr, "trans L2 type error: %s cannot consume this raw pointer expression at the required type, address depth, or const qualification\n", effective_context);
     {
-        int lm_return_2 = 1;
+        int lm_return_3 = 1;
         lm_trans_text_ref_destroy(&candidate_class);
-        return lm_return_2;
+        return lm_return_3;
     }
 }
 
@@ -24829,25 +24840,32 @@ static int lm_trans_guard_c_array_value_range(struct LmMessageThread *lm_lmx_mes
             }
         }
     }
-    if (category_status == 1 && candidate_depth == expected_address_depth && (expected_class == 0 || expected_class -> length == 0U || candidate_class -> length == 0U || lm_trans_identifier_same(lm_lmx_message_thread, candidate_class, expected_class)) && (candidate_depth == 0U || candidate_base_is_const == 0 || expected_base_is_const)) {
+    if (has_c_array && category_status == 1 && candidate_depth != 0U && expected_address_depth != 0U && lm_trans_raw_pointer_type_compatible(lm_lmx_message_thread, candidate_class, candidate_depth, candidate_base_is_const, expected_class, expected_address_depth, expected_base_is_const, namespace_)) {
         {
             int lm_return_2 = 0;
             lm_trans_text_ref_destroy(&candidate_class);
             return lm_return_2;
         }
     }
-    if (category_status == -2) {
+    if (category_status == 1 && candidate_depth == expected_address_depth && (expected_class == 0 || expected_class -> length == 0U || candidate_class -> length == 0U || lm_trans_identifier_same(lm_lmx_message_thread, candidate_class, expected_class)) && (candidate_depth == 0U || candidate_base_is_const == 0 || expected_base_is_const)) {
         {
-            int lm_return_3 = 1;
+            int lm_return_3 = 0;
             lm_trans_text_ref_destroy(&candidate_class);
             return lm_return_3;
         }
     }
-    if (has_c_array && category_status <= 0 && expected_address_depth == 0U && lm_trans_c_array_compound_operands_are_scalar(lm_lmx_message_thread, first, stop, namespace_)) {
+    if (category_status == -2) {
         {
-            int lm_return_4 = 0;
+            int lm_return_4 = 1;
             lm_trans_text_ref_destroy(&candidate_class);
             return lm_return_4;
+        }
+    }
+    if (has_c_array && category_status <= 0 && expected_address_depth == 0U && lm_trans_c_array_compound_operands_are_scalar(lm_lmx_message_thread, first, stop, namespace_)) {
+        {
+            int lm_return_5 = 0;
+            lm_trans_text_ref_destroy(&candidate_class);
+            return lm_return_5;
         }
     }
     effective_context = "typed value";
@@ -24861,9 +24879,9 @@ static int lm_trans_guard_c_array_value_range(struct LmMessageThread *lm_lmx_mes
         fprintf(stderr, "trans L2 type error: %s cannot consume this raw pointer expression at the required type, address depth, or const qualification\n", effective_context);
     }
     {
-        int lm_return_5 = 1;
+        int lm_return_6 = 1;
         lm_trans_text_ref_destroy(&candidate_class);
-        return lm_return_5;
+        return lm_return_6;
     }
 }
 
@@ -29886,7 +29904,7 @@ static LmTableDescriptor * lm_trans_l2_table_source_descriptor_new(struct LmMess
         }
         descriptor_data[0] = type_value -> data;
         descriptor_lengths[0] = type_value -> length;
-        if (lm_table_descriptor_add_column_slices(lm_lmx_message_thread, descriptor, column_value -> data, column_value -> length, type_value -> data, type_value -> length, (((const char **)descriptor_data)), descriptor_lengths, 1U, column_types[column_index] -> address_depth, column_types[column_index] -> array_rank, column_types[column_index] -> is_const) != 0) {
+        if (lm_table_descriptor_add_column_slices(lm_lmx_message_thread, descriptor, column_value -> data, column_value -> length, type_value -> data, type_value -> length, descriptor_data, descriptor_lengths, 1U, column_types[column_index] -> address_depth, column_types[column_index] -> array_rank, column_types[column_index] -> is_const) != 0) {
             lm_table_descriptor_delete_any(descriptor);
             descriptor = 0;
             break;
@@ -46048,7 +46066,7 @@ static int lm_trans_table_descriptor_add_generated_column_shaped(struct LmMessag
     }
     descriptor_data[0] = descriptor;
     descriptor_lengths[0] = strlen(descriptor);
-    return lm_table_descriptor_add_column_slices(lm_lmx_message_thread, table, name, strlen(name), type_name, strlen(type_name), (((const char **)descriptor_data)), descriptor_lengths, 1U, address_depth, array_rank, is_const);
+    return lm_table_descriptor_add_column_slices(lm_lmx_message_thread, table, name, strlen(name), type_name, strlen(type_name), descriptor_data, descriptor_lengths, 1U, address_depth, array_rank, is_const);
 }
 
 static int lm_trans_table_descriptor_add_generated_column(struct LmMessageThread *lm_lmx_message_thread, LmTableDescriptor *table, const char *name, const char *type_name, const char *descriptor) {

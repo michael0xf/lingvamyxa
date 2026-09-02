@@ -1,0 +1,34 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: mutable_void_present (@: void storage) int
+    return: storage != 0
+end: mutable_void_present
+
+fn: const_void_present (const: @: void storage) int
+    return: storage != 0
+end: const_void_present
+
+fn: const_char_table_matches (const: @@: char table) int
+    return: table != 0 && table[0] != 0 && table[1] != 0 && table[0][0] = 'l' && table[1][0] = 'r'
+end: const_char_table_matches
+
+external:
+    fn: main () int
+        c.array: [2]: char bytes 'a' '\0'
+        c.array: [2]: char copied
+        c.array: const: [2]: @: char names "left" "right"
+        const: @: char source "z"
+        size_t: byte_length c.strlen(bytes)
+
+        copied[0]: source[0]
+        copied[1]: '\0'
+        return: mutable_void_present(bytes) = 0 || const_void_present(bytes) = 0 || const_char_table_matches(names) = 0 || byte_length != 1U || copied[0] != 'z'
+    end: main
+end: external

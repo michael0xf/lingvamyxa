@@ -2719,7 +2719,7 @@ fn: lm_trans_registry_push_owner_relation_size_with_fact (
     size_t: value
     @: LmTransRegistryFact out_fact
 ) int
-    [32]: char buffer
+    c.array: [32]: char buffer
 
     c.snprintf:
         buffer c.sizeof(buffer)
@@ -2744,14 +2744,14 @@ fn: lm_trans_table_descriptor_add_generated_column_shaped (
     size_t: array_rank
     int: is_const
 ) int
-    const: [1]: @: char descriptor_data
-    [1]: size_t descriptor_lengths
+    c.array: const: [1]: @: char descriptor_data
+    c.array: [1]: size_t descriptor_lengths
 
     if: table = 0 || name = 0 || type_name = 0 || descriptor = 0
         return: 1
     descriptor_data[0]: descriptor
     descriptor_lengths[0]: c.strlen(descriptor)
-return: lm_table_descriptor_add_column_slices(table, name, c.strlen(name), type_name, c.strlen(type_name), (cast: (const: @@: char) descriptor_data), descriptor_lengths, 1U, address_depth, array_rank, is_const)
+return: lm_table_descriptor_add_column_slices(table, name, c.strlen(name), type_name, c.strlen(type_name), descriptor_data, descriptor_lengths, 1U, address_depth, array_rank, is_const)
 
 fn: lm_trans_table_descriptor_add_generated_column (
     LmTableDescriptor: table
@@ -3206,7 +3206,7 @@ fn: lm_trans_registry_materialize_fn_descriptor_param (const: (LmP0Text: functio
     LmTransRegistryFact: index_fact
     LmTransRegistryFact: address_depth_fact
     LmTransRegistryFact: const_fact
-    [32]: char fallback_name
+    c.array: [32]: char fallback_name
     int: status
 
     param_name: lm_trans_l4_text_view_new("")
@@ -3559,7 +3559,7 @@ fn: lm_trans_registry_load_import_frame (const: (LmP0Frame: frame); const: @(cha
     const: LmP0Node: node
     LmP0Text: path_value
     @: char candidate_name
-    [4096]: char registry_path
+    c.array: [4096]: char registry_path
     int: loaded
 
     if: frame = 0
@@ -3657,7 +3657,7 @@ fn: lm_trans_registry_load_predef_frame (const: (LmP0Frame: frame); const: @(cha
     const: LmP0Node: node
     LmP0Text: path_value
     @: char candidate_name
-    [4096]: char registry_path
+    c.array: [4096]: char registry_path
     int: found
 
     if: frame = 0
@@ -3982,7 +3982,7 @@ fn: lm_trans_registry_candidate_name (size_t: index) const: @: char
 return: 0
 
 fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
-    [4096]: char registry_path
+    c.array: [4096]: char registry_path
     const: @: char candidate_name
     const: @: char override_path
     const: @: char view_mode

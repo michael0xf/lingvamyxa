@@ -22,8 +22,8 @@ fn: lm_test_ncolumn_add_column (
     const: @(char first_descriptor)
     const: @(char second_descriptor)
 ) int
-    const: [2]: @: char descriptor_data
-    [2]: size_t descriptor_lengths
+    c.array: const: [2]: @: char descriptor_data
+    c.array: [2]: size_t descriptor_lengths
     size_t: descriptor_count
     size_t: type_name_length
 
@@ -40,13 +40,13 @@ fn: lm_test_ncolumn_add_column (
         descriptor_data[descriptor_count]: second_descriptor
         descriptor_lengths[descriptor_count]: c.strlen(second_descriptor)
         descriptor_count: descriptor_count + 1U
-return: lm_table_descriptor_add_column_slices(table, name, c.strlen(name), type_name, type_name_length, (cast: (const: @@: char) descriptor_data), descriptor_lengths, descriptor_count, address_depth, array_rank, is_const)
+return: lm_table_descriptor_add_column_slices(table, name, c.strlen(name), type_name, type_name_length, descriptor_data, descriptor_lengths, descriptor_count, address_depth, array_rank, is_const)
 
 fn: lm_test_ncolumn_column_builder_atomic () int
     LmTableDescriptor: table
     const: LmTableColumnDescriptor: column
-    const: [2]: @: char descriptor_data
-    [2]: size_t descriptor_lengths
+    c.array: const: [2]: @: char descriptor_data
+    c.array: [2]: size_t descriptor_lengths
     int: status
 
     table: lm_table_descriptor_new_empty_slice("builder.atomic", 14U)
@@ -57,13 +57,13 @@ fn: lm_test_ncolumn_column_builder_atomic () int
     descriptor_data[1]: "ordered.second"
     descriptor_lengths[0]: 7U
     descriptor_lengths[1]: 14U
-    status: lm_table_descriptor_add_column_slices(table, "value", 5U, "char", 4U, (cast: (const: @@: char) descriptor_data), descriptor_lengths, 2U, 2U, 1U, 1)
+    status: lm_table_descriptor_add_column_slices(table, "value", 5U, "char", 4U, descriptor_data, descriptor_lengths, 2U, 2U, 1U, 1)
     column: lm_table_descriptor_column_at(table, 0U)
     if: status = 0 && (column = 0 || column\type_name = 0 || c.strcmp(column\type_name, "char") != 0 || column\address_depth != 2U || column\array_rank != 1U || column\is_const = 0 || lm_table_column_descriptor_descriptor_count(column) != 2U || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 0U), "payload") != 0 || c.strcmp(lm_table_column_descriptor_descriptor_at(column, 1U), "ordered.second") != 0 || lm_table_column_descriptor_has_descriptor(column, "payload") = 0 || lm_table_column_descriptor_has_descriptor(column, "ordered.second") = 0 || lm_table_column_descriptor_has_descriptor(column, "missing") != 0 || lm_table_column_descriptor_has_descriptor(column, 0) != 0)
         status: 1
 
     descriptor_data[1]: 0
-    if: status = 0 && lm_table_descriptor_add_column_slices(table, "broken", 6U, "char", 4U, (cast: (const: @@: char) descriptor_data), descriptor_lengths, 2U, 0U, 0U, 0) = 0
+    if: status = 0 && lm_table_descriptor_add_column_slices(table, "broken", 6U, "char", 4U, descriptor_data, descriptor_lengths, 2U, 0U, 0U, 0) = 0
         status: 1
     if: status = 0 && lm_table_descriptor_column_count(table) != 1U
         status: 1
@@ -78,8 +78,8 @@ fn: lm_test_ncolumn_column_builder_atomic () int
 return: status
 
 fn: lm_test_ncolumn_row_cell_builder_atomic () int
-    [16]: char atom_data
-    [16]: char value_data
+    c.array: [16]: char atom_data
+    c.array: [16]: char value_data
     LmTableRow: row
     const: LmTableCell: cell
     int: node_marker

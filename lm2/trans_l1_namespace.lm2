@@ -417,7 +417,7 @@ fn: lm_trans_descriptor_projected_member_name_new (
     const: LmTransDescriptor: descriptor
     const: LmTransDescriptorField: selected_field
 ) @: char
-    [64]: char base_name
+    c.array: [64]: char base_name
     @: char projected_name
     const: LmTransDescriptorField: newest_field
     const: LmTransDescriptorField: field
@@ -938,7 +938,7 @@ fn: lm_trans_text_is_operator_atom (const: (LmP0Text: text)) int
 return: lm_trans_registry_has_any_expr_emitter_binding(text)
 
 fn: lm_trans_copy_stream (FILE: target; FILE: source) int
-    [4096]: char buffer
+    c.array: [4096]: char buffer
     size_t: count
 
     if: target = 0 || source = 0

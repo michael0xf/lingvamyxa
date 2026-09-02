@@ -3810,7 +3810,7 @@ static int lm_table_descriptor_add_column(struct LmMessageThread *lm_lmx_message
     }
     descriptor_data[0] = descriptor;
     descriptor_lengths[0] = strlen(descriptor);
-    return lm_table_descriptor_add_column_slices(lm_lmx_message_thread, table, name, strlen(name), 0, 0U, (((const char **)descriptor_data)), descriptor_lengths, 1U, 0U, 0U, 0);
+    return lm_table_descriptor_add_column_slices(lm_lmx_message_thread, table, name, strlen(name), 0, 0U, descriptor_data, descriptor_lengths, 1U, 0U, 0U, 0);
 }
 
 static LmTableDescriptor * lm_table_descriptor_new_empty_slice(struct LmMessageThread *lm_lmx_message_thread, const char *name, size_t name_length) {
@@ -6423,7 +6423,7 @@ static LmTableDescriptor * lm_p0_registry_source_descriptor_new(struct LmMessage
         if (descriptor == 0) {
             break;
         }
-        if (lm_table_descriptor_add_column_slices(lm_lmx_message_thread, descriptor, column_value -> data, column_value -> length, type_data, type_length, (((const char **)descriptor_data)), descriptor_lengths, columns[column_index] -> descriptor_count, columns[column_index] -> address_depth, columns[column_index] -> array_rank, columns[column_index] -> is_const) != 0) {
+        if (lm_table_descriptor_add_column_slices(lm_lmx_message_thread, descriptor, column_value -> data, column_value -> length, type_data, type_length, descriptor_data, descriptor_lengths, columns[column_index] -> descriptor_count, columns[column_index] -> address_depth, columns[column_index] -> array_rank, columns[column_index] -> is_const) != 0) {
             lm_table_descriptor_delete_any(descriptor);
             descriptor = 0;
             break;

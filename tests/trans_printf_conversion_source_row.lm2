@@ -1,6 +1,6 @@
 external:
     fn: main () int
-        [128]: char buffer
+        c.array: [128]: char buffer
         long: long_value 7
         size_t: size_value 9U
         double: double_value 1.5

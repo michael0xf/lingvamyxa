@@ -38,8 +38,8 @@ external:
         @: int value
         @: void removed
         @: void previous
-        [3]: @: void source
-        [5]: @: void target
+        c.array: [3]: @: void source
+        c.array: [5]: @: void target
         @@: void clone
 
         source[0]: @ten
@@ -87,9 +87,9 @@ external:
         assert: lm_array_size(@array) = 2U
 
         lm_array_clear(@array)
-        assert: lm_array_copy_from(@array, cast: (@@: void) source; 3U, 0U, 0U, 3U) = 3U
+        assert: lm_array_copy_from(@array, source; 3U, 0U, 0U, 3U) = 3U
         assert: lm_array_size(@array) = 3U
-        assert: lm_array_insert_array(@array, cast: (@@: void) source; 3U, 1U, 1U, 2U) = 2U
+        assert: lm_array_insert_array(@array, source; 3U, 1U, 1U, 2U) = 2U
         assert: lm_array_size(@array) = 5U
         lm_array_reverse(@array, 0U, 4U)
         value: cast: (@: int) lm_array_element_at(@array, 0U)
@@ -97,10 +97,12 @@ external:
         value: cast: (@: int) lm_array_element_at(@array, 4U)
         assert: value[0] = 10
 
-        assert: lm_array_copy_to(@array, cast: (@@: void) target; 5U) = 5U
-        value: cast: (@: int) target[0]
+        assert: lm_array_copy_to(@array, target; 5U) = 5U
+        previous: target[0]
+        value: cast: (@: int) previous
         assert: value[0] = 20
-        value: cast: (@: int) target[4]
+        previous: target[4]
+        value: cast: (@: int) previous
         assert: value[0] = 10
 
         clone: lm_array_clone_items(@array)

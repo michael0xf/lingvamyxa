@@ -14913,14 +14913,17 @@ above. For an array of pointers, the pointer slot itself remains assignable whil
 an update that traverses the declared pointer depth and reaches the const base
 element is rejected.
 
-The hosted bootstrap provides this exact `c.array` receiver. Legacy direct
-C-array lowering paths for some standalone `[]:` declarations remain migration
-debt and do not define source semantics; ordinary `[]:` continues to mean
-ArrayReference construction. During this preparatory step, the strict boundary
-classification therefore applies to `c.array`, admitted `LmSlice`-backed
-ArrayReferences and ArrayReference-returning callables. Historical standalone
-fixed `[]:` declarations are removed by the following ArrayReference migration,
-not reclassified as normative raw storage here.
+The hosted bootstrap provides this exact `c.array` receiver. Intentional raw
+arrays in production bootstrap code and low-level fixtures use `c.array`,
+including buffers that require C array-to-pointer decay, `sizeof(array)` or a
+raw-pointer ABI. Legacy direct C-array lowering paths for remaining standalone
+`[]:` declarations are pending ArrayReference migration and do not define
+source semantics; ordinary `[]:` continues to mean ArrayReference construction.
+During this preparatory step, the strict boundary classification therefore
+applies to `c.array`, admitted `LmSlice`-backed ArrayReferences and
+ArrayReference-returning callables. Historical standalone fixed `[]:`
+declarations are removed by the following ArrayReference migration, not
+reclassified as normative raw storage here.
 
 The current hosted validator deliberately accepts a conservative subset of C
 constant expressions before emitting top-level storage or an initialized VLA.

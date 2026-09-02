@@ -256,8 +256,8 @@ fn: lm_table_descriptor_add_column_slices (
 return: 0
 
 fn: lm_table_descriptor_add_column (LmTableDescriptor: table; const: @(char name); const: @(char descriptor)) int
-    const: [1]: @: char descriptor_data
-    [1]: size_t descriptor_lengths
+    c.array: const: [1]: @: char descriptor_data
+    c.array: [1]: size_t descriptor_lengths
 
     if: name = 0
         return: 1
@@ -266,7 +266,7 @@ fn: lm_table_descriptor_add_column (LmTableDescriptor: table; const: @(char name
 
     descriptor_data[0]: descriptor
     descriptor_lengths[0]: c.strlen(descriptor)
-return: lm_table_descriptor_add_column_slices(table, name, c.strlen(name), 0, 0U, (cast: (const: @@: char) descriptor_data), descriptor_lengths, 1U, 0U, 0U, 0)
+return: lm_table_descriptor_add_column_slices(table, name, c.strlen(name), 0, 0U, descriptor_data, descriptor_lengths, 1U, 0U, 0U, 0)
 
 fn: lm_table_descriptor_new_empty_slice (const: @(char name); size_t: name_length) LmTableDescriptor
     LmTableDescriptor: table

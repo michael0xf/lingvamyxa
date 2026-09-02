@@ -1818,7 +1818,7 @@ end: lm_trans_emit_callable_return_chain_adapter
 fn: lm_trans_callable_binder_name_new (const: (LmP0Text: source_name); const: (LmP0Text: descriptor_name); size_t: bound_count) @: char
     const: @: char prefix
     const: @: char middle
-    [32]: char count_buffer
+    c.array: [32]: char count_buffer
     size_t: prefix_length
     size_t: middle_length
     size_t: count_length
@@ -1975,7 +1975,7 @@ end: lm_trans_call_body_positional_arg_count
 fn: lm_trans_callable_default_adapter_name_new (const: (LmP0Text: source_name); const: (LmP0Text: descriptor_name)) @: char
     const: @: char prefix
     const: @: char middle
-    [32]: char id_buffer
+    c.array: [32]: char id_buffer
     size_t: prefix_length
     size_t: middle_length
     size_t: id_length
@@ -4110,7 +4110,8 @@ fn: lm_trans_printf_conversion_typed_value (
     const: @(char value_column_name)
     const: @(char value_descriptor)
 ) const: @: char
-    [5]: char key_buffer
+    c.array: [5]: char key_buffer
+    const: @: char key_data key_buffer
     LmP0Text: key
     const: @: char value
     size_t: index
@@ -4132,7 +4133,7 @@ fn: lm_trans_printf_conversion_typed_value (
     index: index + 1U
     key_buffer[index]: '\0'
 
-    key\data: key_buffer
+    key\data: key_data
     key\length: index
     value: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, key, source_path, "class", "class", value_column_name, value_descriptor)
     lm_trans_text_ref_destroy(@ key)

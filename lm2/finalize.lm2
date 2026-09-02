@@ -114,7 +114,7 @@ fn: lm_finalize_join_path (@: char buffer; size_t: size; @: char base; @: char t
 return: 0
 
 fn: lm_finalize_has_project_marker (@: char path) int
-    []: char marker_path 2048
+    c.array: []: char marker_path 2048
 
     if: lm_finalize_join_path(marker_path, c.sizeof(marker_path), path, "lm2/buildCore.lmx") != 0
         return: 0
@@ -141,9 +141,9 @@ fn: lm_finalize_trim_last_path_part (@: char path) int
 return: 0
 
 fn: lm_finalize_enter_project_root (@: char program_path) int
-    []: char search_path 1024
-    []: char executable_path 1024
-    []: char cwd 1024
+    c.array: []: char search_path 1024
+    c.array: []: char executable_path 1024
+    c.array: []: char cwd 1024
     int: depth
 
     if: lm_finalize_platform_getcwd(cwd, c.sizeof(cwd)) = 0
@@ -233,7 +233,7 @@ sub: lm_finalize_next_artifact_path (@: char path; size_t: size; @: char artifac
 end: lm_finalize_next_artifact_path
 
 fn: lm_finalize_copy_once (@: char source_path; @: char output_path; int: quiet) int
-    []: char buffer 32768
+    c.array: []: char buffer 32768
     FILE: source
     FILE: output
     size_t: count
@@ -290,8 +290,8 @@ fn: lm_finalize_copy_with_retry (@: char source_path; @: char output_path) int
 return: 0
 
 fn: lm_finalize_install_next_tool (@: char tool_name) int
-    []: char source_path 256
-    []: char output_path 256
+    c.array: []: char source_path 256
+    c.array: []: char output_path 256
 
     lm_finalize_next_tool_path(source_path, c.sizeof(source_path), tool_name)
     lm_finalize_live_tool_path(output_path, c.sizeof(output_path), tool_name)
@@ -303,8 +303,8 @@ fn: lm_finalize_install_next_tool (@: char tool_name) int
 return: 0
 
 fn: lm_finalize_install_legacy_next_tool (@: char tool_name) int
-    []: char source_path 256
-    []: char output_path 256
+    c.array: []: char source_path 256
+    c.array: []: char output_path 256
 
     lm_finalize_legacy_next_tool_path(source_path, c.sizeof(source_path), tool_name)
     lm_finalize_live_tool_path(output_path, c.sizeof(output_path), tool_name)
@@ -321,8 +321,8 @@ fn: lm_finalize_install_legacy_next_tool (@: char tool_name) int
 return: 0
 
 fn: lm_finalize_install_next_artifact (@: char artifact_name) int
-    []: char source_path 256
-    []: char output_path 256
+    c.array: []: char source_path 256
+    c.array: []: char output_path 256
 
     lm_finalize_next_artifact_path(source_path, c.sizeof(source_path), artifact_name)
     lm_finalize_live_artifact_path(output_path, c.sizeof(output_path), artifact_name)
@@ -334,9 +334,9 @@ fn: lm_finalize_install_next_artifact (@: char artifact_name) int
 return: 0
 
 fn: lm_finalize_defer () int
-    []: char root_path 1024
-    []: char finalize_path 1400
-    []: char command 4096
+    c.array: []: char root_path 1024
+    c.array: []: char finalize_path 1400
+    c.array: []: char command 4096
     int: status
 
     if: lm_finalize_platform_getcwd(root_path, c.sizeof(root_path)) = 0
@@ -368,7 +368,7 @@ return: 0
 
 external:
     fn: main (int: argc; @@: char argv) int
-        []: char staged_build_core_path 256
+        c.array: []: char staged_build_core_path 256
 
         if: lm_finalize_enter_project_root(argv[0]) != 0
             return: 1

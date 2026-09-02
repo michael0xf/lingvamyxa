@@ -150,7 +150,7 @@ prototype
 
 ifdef:
     `LM_REST_LMX_SERVER_PROVIDER != LM_REST_LMX_SERVER_PROVIDER_NONE && LM_REST_LMX_SERVER_PROVIDER != LM_REST_LMX_SERVER_PROVIDER_CIVETWEB`:
-        [-1]: char lm_rest_lmx_http_server_unknown_provider
+        c.array: [-1]: char lm_rest_lmx_http_server_unknown_provider
 end: ifdef
 
 ifdef:
@@ -470,11 +470,11 @@ ifdef:
             fn: lm_rest_lmx_http_server_start (LmMessageThreadRuntime: runtime; const: (LmRestLmxHttpServerOptionsV1: options); @: LmRestLmxHttpServer out_server) int
                 LmRestLmxHttpServer: server 0
                 c.struct: c.mg_callbacks callbacks
-                [4]: LmCivetwebServerPort ports
-                [320]: char listening_ports
-                [32]: char worker_count
-                [32]: char request_timeout
-                const: [13]: @: char configuration
+                c.array: [4]: LmCivetwebServerPort ports
+                c.array: [320]: char listening_ports
+                c.array: [32]: char worker_count
+                c.array: [32]: char request_timeout
+                c.array: const: [13]: @: char configuration
                 const: @: char base_path
                 int: port_count
                 int: written

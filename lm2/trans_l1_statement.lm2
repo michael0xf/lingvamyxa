@@ -1781,7 +1781,7 @@ fn: lm_trans_expr_segment_single_atom (
 return: 1
 
 fn: lm_trans_array_value_helper_name_new () @: char
-    [64]: char buffer
+    c.array: [64]: char buffer
     int: written
     @: char name
 
@@ -2223,6 +2223,8 @@ fn: lm_trans_node_has_direct_c_array_storage (
     if: node\kind = c.LM_P0_NODE_ATOM
         return: lm_trans_namespace_value_is_c_array_storage(namespace_, node\as\atom)
     if: node\kind = c.LM_P0_NODE_FRAME
+        if: lm_trans_is_c_reference_name(node\as\frame\head)
+            return: 0
         if: lm_trans_callable_frame_result_storage_category(node\as\frame, namespace_, @ is_array_reference, @ is_raw_pointer)
             return: 0
         field: node\as\frame\body\first_field
@@ -2557,6 +2559,8 @@ fn: lm_trans_guard_known_raw_pointer_range (
     candidate_status: lm_trans_raw_pointer_range_result_info(first, stop, namespace_, @ candidate_depth, @ candidate_base_is_const, candidate_class)
     if: candidate_status = 0
         return: 0
+    if: candidate_status = 1 && candidate_depth = 0U && expected_address_depth = 0U && (expected_class = 0 || expected_class\length = 0U || candidate_class\length = 0U || lm_trans_identifier_same(candidate_class, expected_class))
+        return: 0
     if: candidate_status = 1 && lm_trans_raw_pointer_type_compatible(candidate_class, candidate_depth, candidate_base_is_const, expected_class, expected_address_depth, expected_base_is_const, namespace_)
         return: 0
 
@@ -2594,6 +2598,8 @@ fn: lm_trans_guard_c_array_value_range (
         if: (expected_class = 0 || lm_trans_text_equals(expected_class, "LmSlice") = 0) && lm_trans_text_equals(candidate_class, "LmSlice") = 0
             return: 0
     ---
+    if: has_c_array && category_status = 1 && candidate_depth != 0U && expected_address_depth != 0U && lm_trans_raw_pointer_type_compatible(candidate_class, candidate_depth, candidate_base_is_const, expected_class, expected_address_depth, expected_base_is_const, namespace_)
+        return: 0
     if: category_status = 1 && candidate_depth = expected_address_depth && (expected_class = 0 || expected_class\length = 0U || candidate_class\length = 0U || lm_trans_identifier_same(candidate_class, expected_class)) && (candidate_depth = 0U || candidate_base_is_const = 0 || expected_base_is_const)
         return: 0
     if: category_status = -2
@@ -2784,7 +2790,7 @@ fn: lm_trans_emit_typed_value_return_statement (
 ) int
     const: LmP0Structure: structure_value
     LmP0Text: return_name
-    [64]: char return_name_storage
+    c.array: [64]: char return_name_storage
     unsigned: return_id
     int: can_consume
     int: needs_null_check
@@ -3097,7 +3103,7 @@ fn: lm_trans_emit_raw_callable_return_statement (
     LmP0Text: return_name
     const: LmTransSymbol: symbol
     LmTransCallableValue: value
-    [64]: char return_name_storage
+    c.array: [64]: char return_name_storage
     unsigned: return_id
 
     if: out_consumed != 0
@@ -3951,7 +3957,7 @@ fn: lm_trans_c_array_declaration_name (
 return: 0
 
 fn: lm_trans_size_literal_cstr_new (size_t: value) @: char
-    [32]: char buffer
+    c.array: [32]: char buffer
     int: written
     @: char result
 
@@ -5473,8 +5479,8 @@ fn: lm_trans_named_structure_push_field_relations (
     LmP0Text: index_payload
     LmP0Text: depth_payload
     LmP0Text: const_payload
-    [32]: char index_buffer
-    [32]: char depth_buffer
+    c.array: [32]: char index_buffer
+    c.array: [32]: char depth_buffer
     int: status
 
     if: owner = 0 || name = 0 || type = 0 || type\class_name = 0
@@ -5811,7 +5817,7 @@ fn: lm_trans_anonymous_structure_parts (
 return: 1
 
 fn: lm_trans_anonymous_structure_c_type_name_new (const: (LmP0Text: result_name)) @: char
-    [32]: char suffix
+    c.array: [32]: char suffix
     unsigned: id
     int: written
 
@@ -6425,8 +6431,8 @@ fn: lm_trans_l2_table_source_descriptor_new (
     @: LmP0Text column_names
     size_t: column_count
 ) LmTableDescriptor
-    const: [1]: @: char descriptor_data
-    [1]: size_t descriptor_lengths
+    c.array: const: [1]: @: char descriptor_data
+    c.array: [1]: size_t descriptor_lengths
     LmP0Text: table_value
     LmP0Text: column_value
     LmP0Text: type_value
@@ -6454,7 +6460,7 @@ fn: lm_trans_l2_table_source_descriptor_new (
             break
         descriptor_data[0]: type_value\data
         descriptor_lengths[0]: type_value\length
-        if: lm_table_descriptor_add_column_slices(descriptor, column_value\data, column_value\length, type_value\data, type_value\length, (cast: (const: @@: char) descriptor_data), descriptor_lengths, 1U, column_types[column_index]\address_depth, column_types[column_index]\array_rank, column_types[column_index]\is_const) != 0
+        if: lm_table_descriptor_add_column_slices(descriptor, column_value\data, column_value\length, type_value\data, type_value\length, descriptor_data, descriptor_lengths, 1U, column_types[column_index]\address_depth, column_types[column_index]\array_rank, column_types[column_index]\is_const) != 0
             lm_table_descriptor_delete_any(descriptor)
             descriptor: 0
             break
@@ -7315,7 +7321,7 @@ fn: lm_trans_l2_table_cell_inline_layout_body (
 return: 0
 
 fn: lm_trans_l2_table_cell_storage_name_new (const: @(char object_name); size_t: row_index; size_t: column_index) @: char
-    [64]: char suffix
+    c.array: [64]: char suffix
 
     c.snprintf(suffix, c.sizeof(suffix), "_r%zu_c%zu", row_index, column_index)
 return: lm_trans_l2_object_suffix_name_new(object_name, suffix)

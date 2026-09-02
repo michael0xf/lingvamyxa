@@ -214,7 +214,7 @@ fn: lm_vcpkg_file_exists (@: char path) int
 return: 1
 
 fn: lm_vcpkg_has_project_marker (@: char path) int
-    []: char marker_path 2048
+    c.array: []: char marker_path 2048
 
     if: lm_vcpkg_join_path(marker_path, c.sizeof(marker_path), path, "cmake/vcpkg-sources/vcpkg.json") != 0
         return: 0
@@ -222,9 +222,9 @@ fn: lm_vcpkg_has_project_marker (@: char path) int
 return: lm_vcpkg_file_exists(marker_path)
 
 fn: lm_vcpkg_enter_project_root (@: char program_path) int
-    []: char search_path 1024
-    []: char executable_path 1024
-    []: char cwd 1024
+    c.array: []: char search_path 1024
+    c.array: []: char executable_path 1024
+    c.array: []: char cwd 1024
     int: depth
 
     if: lm_vcpkg_platform_getcwd(cwd, c.sizeof(cwd)) = 0
@@ -300,7 +300,7 @@ fn: lm_vcpkg_append_quoted (@: char buffer; size_t: size; size_t: used; @: char 
 return: lm_vcpkg_append(buffer, size, used, "\"")
 
 fn: lm_vcpkg_append_prefixed_arg (@: char buffer; size_t: size; size_t: used; @: char prefix; @: char value) size_t
-    []: char arg 2048
+    c.array: []: char arg 2048
 
     if: strlen(prefix) + strlen(value) >= c.sizeof(arg)
         c.fprintf: c.stderr "vcpkgFetch.lm0: vcpkg argument is too long\n"
@@ -313,7 +313,7 @@ return: lm_vcpkg_append_quoted(buffer, size, used, arg, 1)
 fn: lm_vcpkg_discover_tool (@: char buffer; size_t: size; @@: char root_out) int
     @: char tool_env
     @: char root_env
-    []: char candidate 1024
+    c.array: []: char candidate 1024
 
     root_out[0]: 0
 
@@ -454,7 +454,7 @@ return: 0
 
 fn: lm_vcpkg_build_command (LmVcpkgOptions: options; @: char command; size_t: size) int
     @: char discovered_root 0
-    []: char discovered_tool 1024
+    c.array: []: char discovered_tool 1024
     size_t: used
 
     if: options\vcpkg_tool[0] != '\0'
@@ -538,7 +538,7 @@ return: 0
 external:
     fn: main (int: argc; @@: char argv) int
         LmVcpkgOptions: options
-        []: char command 8192
+        c.array: []: char command 8192
         int: status
 
         options: lm_vcpkg_options_new()

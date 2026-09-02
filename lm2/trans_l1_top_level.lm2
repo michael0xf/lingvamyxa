@@ -2265,7 +2265,7 @@ return: 1
 fn: lm_trans_validate_l2_predef_frame (const: (LmP0Frame: frame)) int
     const: LmP0Field: field
     const: LmP0Node: node
-    [4096]: char path
+    c.array: [4096]: char path
     int: found
 
     if: frame = 0
@@ -2608,7 +2608,7 @@ return: status
 fn: lm_trans_declare_l2_import_frame (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
     const: LmP0Field: field
     const: LmP0Node: node
-    [4096]: char path
+    c.array: [4096]: char path
     int: declared
 
     if: frame = 0
@@ -2634,7 +2634,7 @@ return: lm_trans_validate_end_trailer(frame)
 fn: lm_trans_emit_l2_import_prelude (FILE: file; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
     const: LmP0Field: field
     const: LmP0Node: node
-    [4096]: char path
+    c.array: [4096]: char path
     int: emitted
 
     if: frame = 0
@@ -2660,7 +2660,7 @@ return: 0
 fn: lm_trans_emit_l2_import_functions (FILE: file; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
     const: LmP0Field: field
     const: LmP0Node: node
-    [4096]: char path
+    c.array: [4096]: char path
     int: emitted
 
     if: frame = 0
@@ -3732,7 +3732,7 @@ fn: lm_trans_emit_l4_payload_import_frame (FILE: output; const: (LmP0Frame: fram
     LmP0Document: document
     LmP0Text: path_value
     @: char candidate_name
-    [4096]: char payload_path
+    c.array: [4096]: char payload_path
     int: emitted
     int: status
 

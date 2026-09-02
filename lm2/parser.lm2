@@ -1298,7 +1298,7 @@ fn: lm_p0_match_raw_comment_fence_line (const: @(char source); size_t: line_star
 return: lm_p0_line_rest_is_horizontal_space(source, line_start + star_count, line_end)
 
 sub: lm_p0_dump_append_size (LmP0Dump: dump; size_t: value)
-    []: char buffer 32
+    c.array: []: char buffer 32
     size_t: index
 
     if: value = 0U
@@ -1557,8 +1557,8 @@ fn: lm_p0_registry_source_descriptor_new (const: (LmP0Text: table_name); @: LmRe
     LmP0Text: descriptor_value
     LmP0Text: type_value
     LmTableDescriptor: descriptor
-    const: [16]: @: char descriptor_data
-    [16]: size_t descriptor_lengths
+    c.array: const: [16]: @: char descriptor_data
+    c.array: [16]: size_t descriptor_lengths
     const: @: char type_data
     size_t: type_length
     size_t: column_index
@@ -1610,7 +1610,7 @@ fn: lm_p0_registry_source_descriptor_new (const: (LmP0Text: table_name); @: LmRe
             descriptor_index: descriptor_index + 1U
         if: descriptor = 0
             break
-        if: lm_table_descriptor_add_column_slices(descriptor, column_value\data, column_value\length, type_data, type_length, (cast: (const: @@: char) descriptor_data), descriptor_lengths, columns[column_index]\descriptor_count, columns[column_index]\address_depth, columns[column_index]\array_rank, columns[column_index]\is_const) != 0
+        if: lm_table_descriptor_add_column_slices(descriptor, column_value\data, column_value\length, type_data, type_length, descriptor_data, descriptor_lengths, columns[column_index]\descriptor_count, columns[column_index]\address_depth, columns[column_index]\array_rank, columns[column_index]\is_const) != 0
             lm_table_descriptor_delete_any(descriptor)
             descriptor: 0
             break
@@ -1856,9 +1856,9 @@ fn: lm_p0_find_layout_line_end (const: @(char source); size_t: length; size_t: s
     size_t: current_line_indent
     size_t: current_line_dot_level
     size_t: ignored_content_offset
-    [c.LM_P0_LAYOUT_DELIMITER_STACK_LIMIT]: size_t delimiter_indent_stack
-    [c.LM_P0_LAYOUT_DELIMITER_STACK_LIMIT]: size_t delimiter_dot_stack
-    [c.LM_P0_LAYOUT_DELIMITER_STACK_LIMIT]: char delimiter_stack
+    c.array: [c.LM_P0_LAYOUT_DELIMITER_STACK_LIMIT]: size_t delimiter_indent_stack
+    c.array: [c.LM_P0_LAYOUT_DELIMITER_STACK_LIMIT]: size_t delimiter_dot_stack
+    c.array: [c.LM_P0_LAYOUT_DELIMITER_STACK_LIMIT]: char delimiter_stack
     char: quote
     i: start
     depth: 0U
@@ -5652,7 +5652,7 @@ end: external
 fn: lm_p0_registry_load_default () int
     LmP0Registry: registry
     const: @: char override_path
-    const: [4]: @: char candidates
+    c.array: const: [4]: @: char candidates
     const: @: char registry_path
     LmP0Document: document
     const: LmP0Diagnostic: diagnostic
