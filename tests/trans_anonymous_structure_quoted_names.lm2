@@ -1,0 +1,19 @@
+external:
+    fn: main () int
+        (): `space name`
+            int: field 7
+            int: field 8
+            int: `field name` 9
+        end: `space name`
+
+        if: `space name` = 0
+            return: 1
+        if: `space name` \field != 8
+            return: 2
+        if: `space name` \ `field name` != 9
+            return: 3
+        if: `space name` \[0]field != 7
+            return: 4
+        return: 0
+    end: main
+end: external

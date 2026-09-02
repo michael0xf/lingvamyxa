@@ -2236,11 +2236,12 @@ formal-parameter Structure. In `f()`, `f` is a compact Frame whose body
 Structure has zero fields. Positional skips are expressed by repeated explicit
 separators such as `a,,c` or `a;;c`, not by `()`.
 
-The spelling `():` is a different form: it is a reserved receiver-head spelling
-named `()`, analogous to `[]:`. It may be consumed by a semantic profile as a
-named Structure-like variable/aggregate declaration. Therefore `()` and `():`
-are not the same parse item: `()` is an empty bounded Structure field, while
-`(): value` is a colon Frame whose head spelling is `()`.
+The spelling `():` is a different form: it is the Structure-construction
+receiver head named `()`, analogous to the Array-construction head `[]:`.
+Therefore `()` and `():` are not the same parse item: `()` is an empty bounded
+Structure field, while `(): value` is a colon Frame whose head spelling is `()`.
+The L2/L3 construction semantics of that Frame are specified in section
+19.20.1.1.
 
 For short colon-forms, semicolon carries structural load because it terminates the current open short form. This rule is universal; it is not specific to parenthesized Structures.
 
@@ -5189,6 +5190,15 @@ field name in the Structure's logical ordered field sequence:
 
     value\field
 
+When the left value is written as an exact quoted identifier, its closing
+backtick requires the ordinary token boundary before the field-follow operator:
+
+    `exact value` \field
+    `exact value` \ `exact field`
+
+Both spellings are the same typed field-follow operation; the whitespace does
+not turn `\` into a raw-load prefix.
+
 An explicit occurrence-qualified field-follow is written:
 
     value\[occurrence]field
@@ -7561,7 +7571,7 @@ Semantic outline:
     join                       registered Table receiver; normatively consumes explicit Tables and returns an arena-owned Table
     while                      registered receiver, semantics depend on level
     operator/infix tokens       structural operator fields consumed into expression Structures
-    ()                         head receiver spelling for ordinary arena-owned Structure-reference forms
+    (): result                construct one arena-owned Structure and bind its StructureReference with a descriptor attached directly to that result binding
     []                         head receiver spelling for arena-owned Array forms; postfix `target[...]` is index/access
     @                          L2 address-of storage location
     \                          L2 prefix raw load, and typed field-follow separator in `a\field`
@@ -7832,9 +7842,10 @@ explicitly below.
         `implements(CandidateName, RequiredName)` is IMPLEMENTED by the hosted
         translator for the minimal namespace-only predicate. Translation and
         interpretation use the same source-semantic algorithm: resolve both
-        descriptor names in the namespace at the source point and check that
-        every first-level name exposed by the requirement is exposed by the
-        candidate. Unresolved or malformed descriptors are diagnostics; field
+        names in the namespace at the source point, read the descriptors carried
+        by those bindings, and check that every first-level name exposed by the
+        requirement is exposed by the candidate. Unresolved names or bindings
+        with missing/malformed descriptors are diagnostics; field
         values, nested contents, `requires.method`, `method`, ordinary rows and
         `default` are not consulted.
         See section 19.21.3.
@@ -10438,12 +10449,17 @@ operations, requirements, constraints and any profile-defined metadata. The
 core does not require one fixed descriptor layout; the selected declaration and
 consumer profiles must agree on it.
 
-Creating a descriptor and creating an instance are separate operations. A
-descriptor declaration or import explicitly changes the namespace. Instance
-construction reads an already visible descriptor, allocates an aggregate, and
-returns its reference. It does not register a class, generate rows, extend a
-table, or otherwise change the namespace except for an explicitly requested
-result binding.
+Creating a reusable named descriptor and creating an instance from that
+descriptor are separate operations. A named descriptor declaration or import
+explicitly changes the namespace. Named instance construction reads an already
+visible descriptor, allocates an aggregate, and returns its reference. It does
+not register a class, generate rows, extend a table, or otherwise change the
+namespace except for an explicitly requested result binding.
+
+The anonymous shape-derived construction of section 19.20.1.1 does not declare
+a reusable named descriptor. It derives a pending descriptor from the source
+shape and attaches that descriptor directly to the requested result binding;
+there is no separate descriptor binding for construction to resolve first.
 
 19.20.1. Structure Construction
 
@@ -10480,12 +10496,149 @@ initialized according to the selected construction profile.
 
 An anonymous/bounded Structure literal may take its field shape directly from
 the source Structure instead of resolving a named descriptor. It is still
-allocated in the current arena and creates no descriptor or Table entry.
+allocated in the current arena. Its result binding carries the descriptor
+derived from that shape, but construction creates no separate descriptor
+binding or Table entry.
 
 Top-level/module construction follows the same rule. It uses the module/root
 arena selected for that execution context. A backend may realize that arena
 with static-duration C storage as an optimization, but source semantics do not
 contain a separate static object category.
+
+19.20.1.1. Anonymous Structure Construction with `():`
+
+The ordinary L2/L3 form:
+
+    (): result
+        int: count 3
+        @: char text "hello"
+        int: count 4
+    end: result
+
+constructs one local Structure value without first declaring or resolving a
+separate named type. The receiver body is a source-ordered Structure of field
+declarations. Each field declaration supplies the descriptor and exact name of
+one result field and may supply one initializer. The receiver head must contain
+exactly one result-binding name. It is not a variadic declaration and does not
+infer a result name from a field.
+
+The normative operation is:
+
+    1. Read the body declarations without publishing `result` or any body field
+       as a lexical binding.
+    2. Build the pending result descriptor directly from those declarations.
+       This descriptor belongs to the pending `result` binding; no additional
+       namespace name is invented for it.
+    3. If an exact `result` name is already visible, apply the ordinary
+       `implements(old, new)` admission rule of section 7.3.1 to the visible
+       descriptor and the complete pending descriptor. On failure, publish
+       nothing and do not replace the visible occurrence.
+    4. Allocate one Structure referent in the selected current arena.
+    5. Initialize its field slots in logical source order.
+    6. Publish one StructureReference occurrence named `result`, with the
+       pending descriptor attached directly to that binding.
+
+An invisible result name therefore introduces an ordinary local value binding.
+A visible result name is a redeclaration, not an in-place overwrite. The
+constructor creates no hidden class name, synthetic type entity, constructor
+binding or second descriptor binding. In particular, the result name does not
+become a reusable constructor merely because its binding carries the descriptor
+needed for field-follow, `implements`, argument checking and return checking.
+
+Explicit field initializers are evaluated once in source order. An omitted
+initializer uses the initialization rule of the selected field descriptor and
+profile. The hosted C profile zero-initializes an omitted primitive or admitted
+machine-address field; a profile that has no initialization rule for an omitted
+field must diagnose that construction. Descriptor data does not silently supply
+instance defaults.
+
+Field order and repeated exact field names are preserved. In the example above,
+`result\[0]count` denotes the first `count`, `result\[1]count` denotes the
+second, and unqualified `result\count` denotes the newest, second occurrence.
+Repeated names contribute only one exposed name to the name-only `implements`
+predicate, as specified in sections 2.1 and 19.21.3.
+
+A field initializer may be an existing StructureReference or ArrayReference
+whose binding descriptor is admitted for that field. The exact reference is
+stored; the nested referent is not copied or embedded. For example, when
+`child` is an earlier anonymous Structure value, an inferred field form such
+as:
+
+    (): parent
+        nested: child
+    end: parent
+
+names the field `nested`, obtains its descriptor from the visible `child`
+binding and initializes it with that same StructureReference. This does not
+turn `child` into a language-level type or constructor. A consumer may likewise
+infer a primitive field descriptor from an initializer when the selected
+profile defines an unambiguous inference rule; inference is not a second
+compatibility algorithm.
+
+The empty form is present and meaningful:
+
+    (): empty
+
+It allocates a distinct arena-owned empty Structure, publishes a binding with a
+present empty descriptor and therefore satisfies every requirement whose
+first-level name set is empty. It is not a null reference, missing value or
+descriptor declaration.
+
+Construction publishes no Registry or Table rows. The only namespace change is
+the explicitly requested result-binding occurrence after successful admission.
+An implementation may keep private layout and code-generation metadata, but
+that metadata is not a namespace binding and cannot be observed as descriptor
+data.
+
+The current hosted C profile initially supports Primitive and admitted
+StructureReference fields inside executable bodies when every field descriptor,
+physical projection and initializer conversion is inferable at translation
+time. A body item without an inferable field descriptor, a dynamic field shape
+or an unsupported projection is a hosted-backend diagnostic; it must not be
+guessed from ANSI C syntax.
+
+Although the source-semantic rule above admits an ArrayReference field, the
+current hosted anonymous-Structure projection does not yet preserve the array
+element descriptor, shape and rank needed to project such a field. This applies
+both to an explicitly array-shaped field declaration and to an inferred field
+whose initializer is an existing ArrayReference. The hosted translator must
+diagnose either case before emitting a C typedef, allocation or initializer; it
+must not discard the shape and lower the initializer as a scalar or raw C
+address. Support remains pending the ordinary ArrayReference migration.
+
+Name-only compatibility also does not imply that two hosted C layouts are
+interchangeable. Source-semantically, an anonymous StructureReference whose
+descriptor implements a named requirement may be supplied as that function
+argument, used in an admitted plain-name rebind, or returned under that named
+descriptor. Those operations retain the exact StructureReference and apply the
+ordinary `implements` predicate; they do not require equal field types, field
+order or backend struct tags.
+
+The current hosted C projection cannot yet realize those cross-layout cases.
+An anonymous construction currently has a private per-site projected C struct,
+while a named descriptor may have a different projected struct. Until a
+structural adapter, view or representation-independent projection is available,
+the hosted translator must diagnose a value flow between distinct anonymous
+and named Structure projections, in either direction, before emitting the
+argument, field initializer, assignment/rebind or return. It must not rely on
+an implicit C pointer conversion, an unchecked cast, coincidentally equal
+member offsets or common-prefix layout. This is only a hosted backend
+limitation; it does not add layout comparison to `implements` and does not
+change the source-semantic admission result.
+
+Source semantics also admit module/top-level construction in the selected
+module or root arena. Hosted lowering of `():` at top level remains pending the
+common source-ordered module-initialization mechanism and must currently be
+diagnosed rather than emitted as an unowned C static aggregate. Capturing a
+local anonymous StructureReference in an actual hosted nested-function closure
+likewise remains pending closure-environment lowering; until that lowering is
+available, the hosted backend diagnoses the capture. The current hosted
+projection also diagnoses an anonymous-construction result name that is already
+visible, including a source-semantically compatible redeclaration, until it can
+project multiple value occurrences without overwriting a target-language slot.
+An incompatible collision is independently rejected by the normative
+`implements(old, new)` rule. These are projection limitations, not additional
+Value kinds or source-language lifetime rules.
 
 19.20.2. Descriptor Content and Backend Projection
 
@@ -10761,8 +10914,13 @@ RegistryView rows during ordinary name resolution.
     implements(CandidateName, RequiredName)
 
 Both arguments are single namespace-name atoms, including exact quoted names
-when required by the identifier rules. They name descriptors; they are not
-runtime instances and are not evaluated as ordinary value expressions.
+when required by the identifier rules. Each name resolves to a binding that
+carries a descriptor. The binding may be an explicit descriptor declaration or
+an ordinary Primitive, StructureReference or ArrayReference value binding with
+its descriptor attached. `implements` reads the descriptors and does not
+evaluate, copy or otherwise consume the values. Thus an anonymous construction
+result from section 19.20.1.1 may be an operand by its result-binding name; this
+does not create a synthetic type entity for that result.
 
 A descriptor exposes a normalized set of first-level binding names. For
 example, the structural declaration:

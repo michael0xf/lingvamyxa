@@ -1,0 +1,14 @@
+external:
+    fn: main () int
+        (): capturedAssignmentTarget
+            int: value 7
+        end: capturedAssignmentTarget
+
+        fn: writeCaptured () int
+            capturedAssignmentTarget\value: 8
+            return: 0
+        ---
+
+        return: writeCaptured()
+    end: main
+end: external

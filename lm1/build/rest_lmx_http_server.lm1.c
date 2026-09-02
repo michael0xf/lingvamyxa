@@ -1271,7 +1271,7 @@ static const char * lm_rest_lmx_http_route(const LmRestLmxHttpServer *server, co
 static int lm_rest_lmx_http_begin_request(struct mg_connection *connection) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
-    const LmCivetwebRequestInfo * request = 0;
+    const struct mg_request_info * request = 0;
     LmRestLmxHttpServer * server = 0;
     const char *content_length_text = 0;
     const char *content_type_text = 0;

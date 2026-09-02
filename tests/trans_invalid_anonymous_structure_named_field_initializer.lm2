@@ -1,0 +1,27 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+AnonymousFieldInitializerRequirement:
+    int: value
+end: AnonymousFieldInitializerRequirement
+
+external:
+    fn: main () int
+        (): lmTestAnonymousFieldInitializerChild
+            int: extra 7
+            int: value 42
+        end: lmTestAnonymousFieldInitializerChild
+
+        (): lmTestAnonymousFieldInitializerParent
+            AnonymousFieldInitializerRequirement: item lmTestAnonymousFieldInitializerChild
+        end: lmTestAnonymousFieldInitializerParent
+
+        return: lmTestAnonymousFieldInitializerParent\item\value != 42
+    end: main
+end: external

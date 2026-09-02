@@ -1,0 +1,13 @@
+external:
+    fn: main () int
+        []: int values 2
+        values[0]: 10
+        values[1]: 20
+
+        (): holder
+            items: values
+        end: holder
+
+        return: 0
+    end: main
+end: external

@@ -1,0 +1,26 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+AnonymousReturnRequirement:
+    int: value
+end: AnonymousReturnRequirement
+
+fn: makeAnonymousReturnValue () AnonymousReturnRequirement
+    (): lmTestAnonymousReturnValue
+        int: extra 3
+        int: value 9
+    end: lmTestAnonymousReturnValue
+    return: lmTestAnonymousReturnValue
+end: makeAnonymousReturnValue
+
+external:
+    fn: main () int
+        return: makeAnonymousReturnValue() = 0
+    end: main
+end: external

@@ -1,0 +1,90 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+AnonymousRequired:
+    int: number
+    @: char text
+    int: omitted
+    @: char optionalText
+    int: repeated
+    int: nested
+    int: inferredNumber
+    @: char inferredText
+end: AnonymousRequired
+
+AnonymousMissing:
+    int: absent
+end: AnonymousMissing
+
+AnonymousChildRequired:
+    int: childValue
+end: AnonymousChildRequired
+
+AnonymousRepeatedRequirement:
+    int: repeated
+    @: char repeated
+end: AnonymousRepeatedRequirement
+
+external:
+    fn: main () int
+        (): child
+            int: childValue 31
+        end: child
+
+        (): first
+            int: number 7
+            @: char text "hello"
+            int: omitted
+            @: char optionalText
+            int: repeated 10
+            int: repeated 20
+            nested: child
+            inferredNumber: 41
+            inferredText: "world"
+        end: first
+
+        (): second
+            int: repeated 30
+        end: second
+
+        @: void childIdentity (cast: (@: void) child)
+        @: void firstIdentity (cast: (@: void) first)
+        @: void secondIdentity (cast: (@: void) second)
+
+        if: child = 0 || first = 0 || second = 0
+            return: 1
+        if: childIdentity = firstIdentity || childIdentity = secondIdentity || firstIdentity = secondIdentity || firstIdentity != (cast: (@: void) first)
+            return: 2
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), child) = 0
+            return: 3
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), first) = 0
+            return: 4
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), second) = 0
+            return: 5
+        if: first\number != 7 || first\text[0] != 'h' || first\text[4] != 'o'
+            return: 6
+        if: first\omitted != 0 || first\optionalText != 0
+            return: 7
+        if: first\[0]repeated != 10 || first\[1]repeated != 20 || first\repeated != 20
+            return: 8
+        if: first\nested != child || first\nested\childValue != 31
+            return: 9
+        if: first\inferredNumber != 41 || first\inferredText[0] != 'w' || first\inferredText[4] != 'd'
+            return: 10
+        if: implements(first, AnonymousRequired) != 1
+            return: 11
+        if: implements(first, AnonymousMissing) != 0
+            return: 12
+        if: implements(child, AnonymousChildRequired) != 1
+            return: 13
+        if: implements(second, AnonymousRepeatedRequirement) != 1
+            return: 14
+        return: 0
+    end: main
+end: external

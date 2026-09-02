@@ -538,6 +538,9 @@ fn: lm_trans_top_level_statement_binding (const: (LmTransHeadBinding: binding); 
         out\emit_before_functions: @lm_trans_top_level_emit_merge_named_structure_typedef
         out\emits_top_level: 1
         return: 1
+    if: c.strcmp(receiver, "lm_trans_statement_emit_structure_declaration") = 0
+        c.fprintf(c.stderr, "trans hosted C backend limitation: top-level anonymous Structure value requires module/root-arena initialization\n")
+        return: -1
 return: 0
 
 fn: lm_trans_namespace_receiver_type_from_head (const: (LmP0Text: head)) const: @: char

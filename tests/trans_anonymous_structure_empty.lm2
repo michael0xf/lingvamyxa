@@ -1,0 +1,31 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+AnonymousEmptyRequirement:
+end: AnonymousEmptyRequirement
+
+external:
+    fn: main () int
+        (): firstEmpty
+        (): secondEmpty
+
+        @: void firstIdentity (cast: (@: void) firstEmpty)
+        @: void secondIdentity (cast: (@: void) secondEmpty)
+
+        if: firstEmpty = 0 || secondEmpty = 0 || firstIdentity = secondIdentity
+            return: 1
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), firstEmpty) = 0
+            return: 2
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), secondEmpty) = 0
+            return: 3
+        if: implements(firstEmpty, AnonymousEmptyRequirement) != 1
+            return: 4
+        return: 0
+    end: main
+end: external

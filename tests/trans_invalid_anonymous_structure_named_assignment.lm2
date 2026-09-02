@@ -1,0 +1,28 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+AnonymousAssignmentRequirement:
+    int: value
+end: AnonymousAssignmentRequirement
+
+external:
+    fn: main () int
+        AnonymousAssignmentRequirement: lmTestNamedAssignmentTarget
+            value: 1
+        end: lmTestNamedAssignmentTarget
+
+        (): lmTestAnonymousAssignmentValue
+            int: extra 3
+            int: value 2
+        end: lmTestAnonymousAssignmentValue
+
+        lmTestNamedAssignmentTarget: lmTestAnonymousAssignmentValue
+        return: 0
+    end: main
+end: external

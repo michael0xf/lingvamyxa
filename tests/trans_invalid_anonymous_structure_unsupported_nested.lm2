@@ -1,0 +1,10 @@
+external:
+    fn: main () int
+        (): outer
+            (): inlineNested
+                int: value 1
+            end: inlineNested
+        end: outer
+        return: 0
+    end: main
+end: external

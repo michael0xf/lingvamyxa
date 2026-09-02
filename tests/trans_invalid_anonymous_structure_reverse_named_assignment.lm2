@@ -1,0 +1,29 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+AnonymousReverseAssignmentCandidate:
+    int: extra
+    int: value
+end: AnonymousReverseAssignmentCandidate
+
+external:
+    fn: main () int
+        AnonymousReverseAssignmentCandidate: lmTestNamedReverseAssignmentValue
+            extra: 7
+            value: 42
+        end: lmTestNamedReverseAssignmentValue
+
+        (): lmTestAnonymousReverseAssignmentTarget
+            int: value 8
+        end: lmTestAnonymousReverseAssignmentTarget
+
+        lmTestAnonymousReverseAssignmentTarget: lmTestNamedReverseAssignmentValue
+        return: lmTestAnonymousReverseAssignmentTarget\value != 42
+    end: main
+end: external

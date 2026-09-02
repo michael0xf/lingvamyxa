@@ -1,0 +1,8 @@
+external:
+    fn: main () int
+        (): value
+            untypedField
+        end: value
+        return: 0
+    end: main
+end: external

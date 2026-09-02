@@ -597,6 +597,18 @@ fn: lm_trans_namespace_type_is_structural (
     const: LmP0Text: name
 ) int
 
+fn: lm_trans_effective_value_descriptor_from_atom (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) const: LmTransDescriptor
+
+fn: lm_trans_guard_direct_structure_value_layout (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: candidate_name
+    const: LmTransDescriptor: required_descriptor
+    const: @(char context)
+) int
+
 fn: lm_trans_symbol_new (
     const: LmP0Text: name
     const: @: char kind
@@ -805,6 +817,14 @@ fn: lm_trans_capture_stack_find (
 fn: lm_trans_capture_stack_add_copy (
     LmOwnPtrStack: captures
     const: LmTransCapture: source
+) int
+
+fn: lm_trans_head_next_field_chain_segment (
+    const: LmP0Text: head
+    @: size_t offset
+    LmP0Text: out_segment
+    @: int out_has_occurrence
+    @: size_t out_occurrence
 ) int
 
 fn: lm_trans_local_name_stack_has (

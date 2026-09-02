@@ -1,0 +1,8 @@
+external:
+    fn: main () int
+        (): value extra
+            int: field 1
+        end: value
+        return: 0
+    end: main
+end: external

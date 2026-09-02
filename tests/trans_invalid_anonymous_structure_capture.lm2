@@ -1,0 +1,13 @@
+external:
+    fn: main () int
+        (): captured
+            int: value 7
+        end: captured
+
+        fn: readCaptured () int
+            return: captured\value
+        ---
+
+        return: readCaptured()
+    end: main
+end: external

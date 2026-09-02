@@ -1,0 +1,11 @@
+external:
+    fn: main () int
+        (): anonymousCompatibleCollisionProbe
+            int: field 1
+        end: anonymousCompatibleCollisionProbe
+
+        (): anonymousCompatibleCollisionProbe
+
+        return: 0
+    end: main
+end: external

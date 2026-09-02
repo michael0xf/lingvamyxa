@@ -415,12 +415,20 @@ fn: lm_trans_nodes_touch (const: (LmP0Node: left); const: (LmP0Node: right)) int
     return: (((((left != 0) && (right != 0)) && (left\span != 0)) && (right\span != 0)) && ((left\span\offset + left\span\length) = right\span\offset))
 end: lm_trans_nodes_touch
 
+fn: lm_trans_node_is_exact_quoted_identifier (const: (LmP0Node: node)) int
+    const: LmP0Text: atom
+    if: node = 0 || node\kind != c.LM_P0_NODE_ATOM
+        return: 0
+    atom: node\as\atom
+    return: atom != 0 && atom\data != 0 && atom\length >= 2U && atom\data[0] = '`' && atom\data[atom\length - 1U] = '`'
+end: lm_trans_node_is_exact_quoted_identifier
+
 fn: lm_trans_atom_is_infix_expr_operator (const: (LmP0Text: text); const: (LmP0Node: operator_node); const: (LmP0Node: previous_operand)) int
     int: registry_result
     if: lm_trans_text_equals(text, "\\")
         if: (lm_trans_registry_has_expr_emitter_class(text, "operator.infix") = 0)
             return: 0
-        registry_result: (((previous_operand != 0) && lm_trans_nodes_touch(previous_operand, operator_node)) && ((previous_operand\kind = c.LM_P0_NODE_ATOM) && lm_trans_atom_starts_string(previous_operand\as\atom) = 0))
+        registry_result: (((previous_operand != 0) && (lm_trans_nodes_touch(previous_operand, operator_node) || lm_trans_node_is_exact_quoted_identifier(previous_operand))) && ((previous_operand\kind = c.LM_P0_NODE_ATOM) && lm_trans_atom_starts_string(previous_operand\as\atom) = 0))
         return: registry_result
     return: lm_trans_registry_has_expr_emitter_binding_class(text, "operator.infix")
 end: lm_trans_atom_is_infix_expr_operator
@@ -1527,9 +1535,13 @@ end: lm_trans_emit_callable_adapter_args
 
 fn: lm_trans_layout_type_implicit_address_depth (const: (LmP0Text: class_name); const: (LmTransNamespace: namespace_)) size_t
     const: @: char class_kind
+    const: LmTransDescriptor: descriptor
 
     if: class_name = 0
         return: 0U
+    descriptor: lm_trans_namespace_descriptor(namespace_, class_name)
+    if: descriptor != 0 && lm_trans_descriptor_class_relation_value(descriptor, "lm.trans.c.type") != 0
+        return: 1U
     if: lm_trans_namespace_has_named_structure_binding(namespace_, class_name)
         return: 1U
     if: lm_trans_registry_is_function_pointer_type_name(namespace_, class_name)
@@ -1545,6 +1557,22 @@ return: 0U
 
 fn: lm_trans_effective_address_depth (const: (LmP0Text: class_name); size_t: explicit_depth; const: (LmTransNamespace: namespace_)) size_t
 return: explicit_depth + lm_trans_layout_type_implicit_address_depth(class_name, namespace_)
+
+fn: lm_trans_emit_projected_type_name (
+    FILE: file
+    const: LmP0Text: class_name
+    const: LmTransNamespace: namespace_
+) int
+    const: LmTransDescriptor: descriptor
+    const: @: char projected_name
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, class_name)
+    projected_name: 0
+    if: descriptor != 0
+        projected_name: lm_trans_descriptor_class_relation_value(descriptor, "lm.trans.c.type")
+    if: projected_name != 0
+        return: lm_trans_put(file, projected_name)
+return: lm_trans_emit_type_name(file, class_name)
 
 fn: lm_trans_emit_callable_type_named (FILE: file; const: (LmTransL4CallableType: type); const: (LmP0Text: name); const: (LmTransNamespace: namespace_)) int
     size_t: i
@@ -1572,7 +1600,7 @@ fn: lm_trans_emit_callable_type_named (FILE: file; const: (LmTransL4CallableType
     effective_address_depth: lm_trans_effective_address_depth(type\class_name, type\address_depth, namespace_)
     if: (type\is_const && (lm_trans_put(file, "const ") != 0))
         return: 1
-    if: (lm_trans_emit_type_name(file, type\class_name) != 0)
+    if: (lm_trans_emit_projected_type_name(file, type\class_name, namespace_) != 0)
         return: 1
     if: (((effective_address_depth != 0U) || ((name != 0) && (name\length != 0U))) && (lm_trans_put(file, " ") != 0))
         return: 1
@@ -2948,6 +2976,8 @@ end: lm_trans_expr_segments_parse_fields
 fn: lm_trans_expr_stack_push_segments (FILE: file; LmTransExprStack: stack; const: (LmOwnPtrStack: segments); const: (LmTransNamespace: namespace_)) int
     size_t: index
     const: LmTransExprSegment: segment
+    const: LmP0Node: candidate_node
+    const: LmTransDescriptor: required_descriptor
     int: materialized
     if: (segments = 0)
         return: 0
@@ -2957,6 +2987,15 @@ fn: lm_trans_expr_stack_push_segments (FILE: file; LmTransExprStack: stack; cons
         segment: (cast: (LmTransExprSegment) lm_own_ptr_stack_at(segments, index))
         if: (segment = 0)
             return: 1
+        candidate_node: 0
+        if: segment\first != 0 && segment\first != segment\stop && segment\first\next = segment\stop
+            candidate_node: segment\first\value
+        if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_ATOM && segment\expected_param != 0 && segment\expected_param\type != 0
+            required_descriptor: lm_trans_namespace_descriptor(namespace_, segment\expected_param\type\class_name)
+            if: lm_trans_guard_direct_structure_value_layout(namespace_, candidate_node\as\atom, required_descriptor, "function argument") != 0
+                return: 1
+            ---
+        ---
         if: (lm_trans_expr_stack_try_materialize_segment(file, stack, segment, namespace_, @ materialized) != 0)
             return: 1
         if: (materialized = 0)
@@ -4725,7 +4764,7 @@ fn: lm_trans_lower_expr_atom (const: (LmP0Node: node); const: (LmP0Node: previou
                 lm_trans_expr_atom_lowering_set_builtin(out, node\as\atom, "lm_trans_expr_emit_c_surface")
             else:
                 if: lm_trans_text_equals(node\as\atom, "\\")
-                    if: ((previous_operand != 0) && lm_trans_nodes_touch(previous_operand, node))
+                    if: ((previous_operand != 0) && (lm_trans_nodes_touch(previous_operand, node) || lm_trans_node_is_exact_quoted_identifier(previous_operand)))
                         return: lm_trans_expr_atom_lowering_set_from_class(out, node\as\atom, "operator.infix")
                     else:
                         return: lm_trans_expr_atom_lowering_set_from_class(out, node\as\atom, "operator.prefix")
@@ -4898,6 +4937,7 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     const: LmP0Node: previous_operand
     LmTransL4CallableType: pending_expected_type
     LmP0Text: operand_class
+    const: LmTransDescriptor: operand_descriptor
     int: expect_field_name
     int: expect_c_field_name
     int: c_dot_path
@@ -4906,6 +4946,7 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     int: was_expect_field_name
     int: was_expect_c_field_name
     int: field_class_status
+    int: projection_status
     int: wrote
     const: @: char field_class
     LmTransExprAtomLowering: atom
@@ -5063,6 +5104,18 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                     if: (((address_next_operand && (expect_field_name = 0)) && (expect_c_field_name = 0)) && lm_trans_atom_is_operand_like(node\as\atom))
                         lm_trans_expr_atom_lowering_set_builtin(atom, node\as\atom, "lm_trans_expr_emit_addressable_value")
                         piece_leading_space: 0
+                    if: was_expect_field_name && operand_class\length != 0U
+                        operand_descriptor: lm_trans_namespace_descriptor(namespace_, operand_class)
+                        if: operand_descriptor != 0 && lm_trans_descriptor_class_relation_value(operand_descriptor, "lm.trans.c.indexed-members") != 0
+                            projection_status: lm_trans_expr_atom_lowering_project_field(atom, namespace_, operand_class, node\as\atom, 0, 0U)
+                            if: projection_status < 0
+                                lm_trans_expr_atom_lowering_delete(atom)
+                                lm_trans_expr_callable_type_delete(pending_expected_type)
+                                lm_trans_text_ref_destroy(@ operand_class)
+                                return: 1
+                            ---
+                        ---
+                    ---
                     if: (lm_trans_text_equals(node\as\atom, "=") || lm_trans_text_equals(node\as\atom, "!=")) && previous_operand != 0
                         if: operand_class\length != 0U || (previous_operand\kind = c.LM_P0_NODE_ATOM && lm_trans_expr_value_class_from_atom(previous_operand\as\atom, namespace_, operand_class))
                             if: lm_trans_callable_type_reset(pending_expected_type) != 0
@@ -5384,7 +5437,18 @@ end: lm_trans_emit_expr_range
 
 fn: lm_trans_emit_expr_range_with_expected_type (FILE: file; const: (LmP0Field: first); const: (LmP0Field: stop); const: (LmTransNamespace: namespace_); const: (LmTransL4CallableType: expected_type)) int
     LmTransExprJob: job
+    const: LmP0Node: candidate_node
+    const: LmTransDescriptor: required_descriptor
     int: status
+
+    candidate_node: lm_trans_c_arg_single_node(first, stop)
+    if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_ATOM && expected_type != 0
+        required_descriptor: lm_trans_namespace_descriptor(namespace_, expected_type\class_name)
+        if: lm_trans_guard_direct_structure_value_layout(namespace_, candidate_node\as\atom, required_descriptor, "typed expression") != 0
+            return: 1
+        ---
+    ---
+
     job: lm_trans_expr_job_new()
     if: (job = 0)
         return: 1
@@ -5585,7 +5649,7 @@ fn: lm_trans_emit_type_node (FILE: file; const: (LmP0Node: type_node); const: (L
             if: implicit_depth != 0U && lm_trans_type_suffix_stack_push(@ suffixes, implicit_depth) != 0
                 status: 1
                 break
-            status: lm_trans_emit_type_name(file, current\as\atom)
+            status: lm_trans_emit_projected_type_name(file, current\as\atom, namespace_)
             break
         if: ((current\kind = c.LM_P0_NODE_FRAME) && lm_trans_text_equals(current\as\frame\head, "const"))
             field: current\as\frame\body\first_field
@@ -5741,7 +5805,7 @@ fn: lm_trans_emit_type_head_only (FILE: file; const: (LmP0Text: type_head); cons
 
     if: lm_trans_builtin_c_type_name(type_head)
         return: lm_trans_emit_type_name(file, type_head)
-    status: lm_trans_emit_name(file, type_head)
+    status: lm_trans_emit_projected_type_name(file, type_head, namespace_)
     implicit_depth: lm_trans_layout_type_implicit_address_depth(type_head, namespace_)
     if: status = 0 && implicit_depth != 0U
         status: lm_trans_emit_type_pointer_suffix(file, implicit_depth)

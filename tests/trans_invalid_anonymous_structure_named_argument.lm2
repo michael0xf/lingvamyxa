@@ -1,0 +1,27 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+AnonymousArgumentRequirement:
+    int: value
+end: AnonymousArgumentRequirement
+
+fn: readAnonymousArgumentRequirement (AnonymousArgumentRequirement: argument) int
+    return: argument\value
+end: readAnonymousArgumentRequirement
+
+external:
+    fn: main () int
+        (): lmTestAnonymousArgumentValue
+            int: extra 3
+            int: value 7
+        end: lmTestAnonymousArgumentValue
+
+        return: readAnonymousArgumentRequirement(lmTestAnonymousArgumentValue)
+    end: main
+end: external

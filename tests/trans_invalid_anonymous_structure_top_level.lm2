@@ -1,0 +1,5 @@
+L2:
+    (): topLevelValue
+        int: value 1
+    end: topLevelValue
+end: L2
