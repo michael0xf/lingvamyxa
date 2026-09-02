@@ -4,8 +4,8 @@ L2:
 . . name: class
 . . columns: (class: class) (class: kind)
 . . rows:
-. . . Leaf    layout
-. . . Branch  layout
+. . . Leaf    primitive
+. . . Branch  primitive
 . end: class
 .
 . table:

@@ -18,11 +18,20 @@ fn: lm_trans_namespace_layout_source_is_supported (
     const: LmP0Text: class_name
 ) int
     const: @: char backend
+    const: @: char projection
 
-    if: lm_trans_namespace_type_is_structural(namespace_, class_name)
-        return: 1
+    if: class_name = 0
+        return: 0
+
     backend: lm_trans_layout_backend_value(namespace_, class_name)
-return: lm_trans_layout_backend_is_supported(backend)
+    if: backend != 0
+        return: lm_trans_layout_backend_is_supported(backend)
+
+    projection: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, class_name, "class.c.projection", "class", "class", "spelling", "char")
+    if: projection != 0
+        return: lm_trans_layout_backend_is_supported(projection)
+
+return: lm_trans_namespace_has_named_structure_binding(namespace_, class_name)
 
 fn: lm_trans_fn_external_value (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: @: char
     if: name = 0
@@ -486,17 +495,178 @@ fn: lm_trans_sort_layout_fields (@: LmTransLayoutField fields; size_t: field_cou
         i: i + 1U
 return: 0
 
-fn: lm_trans_emit_layout_field (FILE: file; const: (LmTransLayoutField: field); const: (LmTransNamespace: namespace_); unsigned: indent) int
+fn: lm_trans_registry_layout_row_field_name (
+    const: LmTransNamespace: namespace_
+    const: @: char layout_name
+    const: @: char relation_name
+    const: @: char value_column_name
+    const: LmTransRegistryFact: row
+) const: @: char
+    const: LmTableCell: source_key_cell
+
+    if: layout_name = 0 || relation_name = 0 || value_column_name = 0 || row = 0 || row\key = 0 || row\payload = 0
+        return: 0
+
+    source_key_cell: 0
+    lm_trans_layout_field_source_value(namespace_, layout_name, relation_name, value_column_name, "class", row, @ source_key_cell)
+    if: source_key_cell != 0 && source_key_cell\value != 0
+        return: source_key_cell\value
+return: row\key
+
+fn: lm_trans_registry_relation_rows_duplicate_field_name (
+    const: LmTransNamespace: namespace_
+    const: @: char layout_name
+    const: LmOwnPtrStack: left_rows
+    const: @: char left_relation_name
+    const: @: char left_value_column_name
+    const: LmOwnPtrStack: right_rows
+    const: @: char right_relation_name
+    const: @: char right_value_column_name
+    int: same_rows
+) const: @: char
+    size_t: i
+    size_t: j
+    const: LmTransRegistryFact: left
+    const: LmTransRegistryFact: right
+    const: @: char left_name
+    const: @: char right_name
+
+    if: left_rows = 0 || right_rows = 0
+        return: 0
+
+    i: 0U
+    while: i < left_rows\count
+        left: lm_own_ptr_stack_at(left_rows, i)
+        left_name: lm_trans_registry_layout_row_field_name(namespace_, layout_name, left_relation_name, left_value_column_name, left)
+        if: left_name != 0
+            j: 0U
+            if: same_rows
+                j: i + 1U
+            while: j < right_rows\count
+                right: lm_own_ptr_stack_at(right_rows, j)
+                right_name: lm_trans_registry_layout_row_field_name(namespace_, layout_name, right_relation_name, right_value_column_name, right)
+                if: right_name != 0 && c.strcmp(left_name, right_name) = 0
+                    return: left_name
+                j: j + 1U
+            ---
+        ---
+        i: i + 1U
+return: 0
+
+fn: lm_trans_registry_layout_duplicate_field_name (
+    const: LmP0Text: layout_name
+    const: LmTransNamespace: namespace_
+) const: @: char
+    const: LmOwnPtrStack: class_rows
+    const: LmOwnPtrStack: union_rows
+    const: @: char duplicate_name
+
+    if: layout_name = 0
+        return: 0
+
+    class_rows: lm_trans_namespace_registry_relation_stack(namespace_, layout_name, "field.class")
+    union_rows: lm_trans_namespace_registry_relation_stack(namespace_, layout_name, "field.union")
+
+    duplicate_name: lm_trans_registry_relation_rows_duplicate_field_name(namespace_, layout_name\data, class_rows, "field.class", "field", class_rows, "field.class", "field", 1)
+    if: duplicate_name != 0
+        return: duplicate_name
+    duplicate_name: lm_trans_registry_relation_rows_duplicate_field_name(namespace_, layout_name\data, union_rows, "field.union", "union", union_rows, "field.union", "union", 1)
+    if: duplicate_name != 0
+        return: duplicate_name
+return: lm_trans_registry_relation_rows_duplicate_field_name(namespace_, layout_name\data, class_rows, "field.class", "field", union_rows, "field.union", "union", 0)
+
+fn: lm_trans_validate_layout_occurrence_projection_source (
+    const: @(char layout_name)
+    const: LmTransNamespace: namespace_
+) int
+    @: LmTransLayoutField fields
+    LmP0Text: layout_text
+    const: LmTransDescriptor: descriptor
+    const: @: char duplicate_name
+    size_t: field_capacity
+    size_t: field_count
+    size_t: i
+    size_t: j
+
+    if: layout_name = 0
+        return: 1
+
+    layout_text: lm_trans_l4_text_view_new(layout_name)
+    if: layout_text = 0
+        return: 1
+    finally: lm_trans_l4_text_view_delete(@ layout_text)
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, layout_text)
+    if: descriptor != 0 && descriptor\has_structural_fields && descriptor\registry_materialized = 0
+        return: 0
+
+    duplicate_name: lm_trans_registry_layout_duplicate_field_name(layout_text, namespace_)
+    if: duplicate_name != 0
+        c.fprintf(c.stderr, "trans L4 layout error: registry-only layout %s has ambiguous duplicate field %s; occurrence-aware projection requires a source namespace descriptor\n", layout_name, duplicate_name)
+        return: 1
+
+    field_capacity: 256U
+    fields: lm_trans_layout_fields_new(field_capacity)
+    if: fields = 0
+        return: 1
+    finally: lm_trans_layout_fields_delete(fields, field_capacity)
+
+    if: lm_trans_collect_layout_fields(layout_name, namespace_, fields, field_capacity, @ field_count) != 0
+        return: 1
+
+    i: 0U
+    while: i < field_count
+        j: i + 1U
+        while: j < field_count
+            if: fields[i]\index = fields[j]\index
+                c.fprintf(c.stderr, "trans L4 layout error: registry-only layout %s has ambiguous duplicate field.index %zu\n", layout_name, fields[i]\index)
+                return: 1
+            j: j + 1U
+        i: i + 1U
+return: 0
+
+fn: lm_trans_emit_layout_field (
+    FILE: file
+    const: LmTransLayoutField: field
+    const: LmTransDescriptor: owner_descriptor
+    const: LmTransNamespace: namespace_
+    unsigned: indent
+) int
     LmTransCDeclarator: declarator
+    const: LmTransDescriptorField: descriptor_field
+    @: char projected_member_name
+    const: @: char member_name
+    LmP0Text: member_name_text
     size_t: effective_address_depth
 
     if: file = 0 || field = 0
         return: 1
     declarator: 0
+    projected_member_name: 0
+    finally: lm_own_delete(projected_member_name, 0)
+    member_name: field\name
+    if: owner_descriptor != 0
+        descriptor_field: lm_trans_descriptor_structural_field_by_index(owner_descriptor, field\index)
+        if: descriptor_field = 0 || descriptor_field\name = 0 || field\name = 0 || c.strcmp(descriptor_field\name, field\name) != 0
+            c.fprintf(c.stderr, "trans L4 layout error: descriptor field index %zu is missing, ambiguous, or names a different field\n", field\index)
+            return: 1
+        projected_member_name: lm_trans_descriptor_projected_member_name_new(owner_descriptor, descriptor_field)
+        if: projected_member_name = 0
+            return: 1
+        member_name: projected_member_name
+    ---
+    if: member_name = 0
+        return: 1
+
+    member_name_text: lm_trans_text_from_cstr(member_name)
+    if: member_name_text = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ member_name_text)
+
     effective_address_depth: lm_trans_layout_field_effective_address_depth(field, namespace_)
 
     if: field\is_union
-        if: field\union_layout_name = 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "union {\n") != 0 || lm_trans_emit_layout_fields(file, field\union_layout_name, namespace_, indent + 1U) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "} ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(field\name)) != 0
+        if: field\union_layout_name = 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "union {\n") != 0 || lm_trans_emit_layout_fields(file, field\union_layout_name, namespace_, indent + 1U) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "} ") != 0 || lm_trans_emit_identifier(file, member_name_text) != 0
             return: 1
         ---
     else:
@@ -504,7 +674,7 @@ fn: lm_trans_emit_layout_field (FILE: file; const: (LmTransLayoutField: field); 
             if: field\is_const || effective_address_depth != 0U || field\has_array_count
                 c.fprintf(c.stderr, "trans L4 layout error: function pointer field %s cannot use const, pointer-depth, or array-count\n", field\name)
                 return: 1
-            if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_l4_function_pointer_type_field(file, namespace_, field\class_name, field\name, "layout") != 0
+            if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_l4_function_pointer_type_field(file, namespace_, field\class_name, member_name, "layout") != 0
                 return: 1
             ---
         else:
@@ -512,7 +682,7 @@ fn: lm_trans_emit_layout_field (FILE: file; const: (LmTransLayoutField: field); 
             if: declarator = 0
                 return: 1
             lm_trans_text_assign_cstr(declarator\type_head, field\class_name)
-            lm_trans_text_assign_cstr(declarator\name, field\name)
+            lm_trans_text_assign_cstr(declarator\name, member_name)
             declarator\pointer_depth: field\address_depth
             declarator\type_is_head: 1
             if: field\has_array_count
@@ -533,9 +703,28 @@ return: lm_trans_put(file, ";\n")
 
 fn: lm_trans_emit_layout_fields (FILE: file; const: @(char layout_name); const: (LmTransNamespace: namespace_); unsigned: indent) int
     @: LmTransLayoutField fields
+    LmP0Text: layout_text
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptor: owner_descriptor
     size_t: field_capacity
     size_t: field_count
     size_t: i
+
+    if: layout_name = 0
+        return: 1
+
+    layout_text: lm_trans_l4_text_view_new(layout_name)
+    if: layout_text = 0
+        return: 1
+    finally: lm_trans_l4_text_view_delete(@ layout_text)
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, layout_text)
+    owner_descriptor: 0
+    if: descriptor != 0 && descriptor\has_structural_fields
+        owner_descriptor: descriptor
+
+    if: lm_trans_validate_layout_occurrence_projection_source(layout_name, namespace_) != 0
+        return: 1
 
     field_capacity: 256U
     fields: lm_trans_layout_fields_new(field_capacity)
@@ -550,7 +739,7 @@ fn: lm_trans_emit_layout_fields (FILE: file; const: @(char layout_name); const: 
 
     i: 0U
     while: i < field_count
-        if: lm_trans_emit_layout_field(file, fields[i], namespace_, indent) != 0
+        if: lm_trans_emit_layout_field(file, fields[i], owner_descriptor, namespace_, indent) != 0
             lm_trans_layout_fields_delete(fields, field_capacity)
             return: 1
         i: i + 1U
@@ -2041,6 +2230,7 @@ fn: lm_trans_declare_registry_sub_descriptor (LmTransNamespace: namespace_; cons
     LmP0Node: params_node
     LmP0Node: frame_node
     LmTransFunctionHeader: function
+    LmTransSymbol: symbol
     LmP0Text: name_text
     int: status
 
@@ -2086,6 +2276,14 @@ fn: lm_trans_declare_registry_sub_descriptor (LmTransNamespace: namespace_; cons
         return: 1
 
     status: lm_trans_namespace_publish_function_callable(namespace_, function, function\c_name) != 0
+    if: status = 0
+        symbol: lm_trans_namespace_find_mutable(namespace_, name_text)
+        if: symbol = 0
+            status: 1
+        else:
+            symbol\registry_materialized: 1
+        ---
+    ---
 
     lm_trans_function_header_destroy(function)
     lm_trans_l4_text_view_delete(@ name_text)
@@ -2096,6 +2294,7 @@ fn: lm_trans_declare_registry_fn_descriptor (LmTransNamespace: namespace_; const
     LmP0Node: return_node
     LmP0Node: frame_node
     LmTransFunctionHeader: function
+    LmTransSymbol: symbol
     LmP0Text: name_text
     int: has_thread_context
     const: @: char receiver_name
@@ -2154,6 +2353,14 @@ fn: lm_trans_declare_registry_fn_descriptor (LmTransNamespace: namespace_; const
         return: 1
 
     status: lm_trans_namespace_publish_function_callable(namespace_, function, function\c_name) != 0
+    if: status = 0
+        symbol: lm_trans_namespace_find_mutable(namespace_, name_text)
+        if: symbol = 0
+            status: 1
+        else:
+            symbol\registry_materialized: 1
+        ---
+    ---
 
     lm_trans_function_header_destroy(function)
     lm_trans_l4_text_view_delete(@ name_text)

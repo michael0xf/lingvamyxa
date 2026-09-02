@@ -200,6 +200,12 @@ fn: lm_test_structural_descriptor_dual_write_core () int
     resolved_class: 0
     if: status = 0 && (lm_trans_namespace_descriptor(namespace_, name) != 0 || lm_trans_collect_layout_fields("RegistryOnly", namespace_, fields, 16U, @ field_count) != 0 || field_count != 1U || c.strcmp(fields[0]\class_name, "long") != 0 || fields[0]\address_depth != 2U || fields[0]\is_const = 0 || lm_trans_layout_field_class_resolve(name, field_name, namespace_, @ resolved_class) != 1 || resolved_class = 0 || c.strcmp(resolved_class, "long") != 0 || lm_trans_l2_table_layout_field_type(name, field_name, namespace_, field_type) = 0 || lm_trans_text_equals(field_type\class_name, "long") = 0 || field_type\address_depth != 2U || field_type\is_const = 0)
         status: 1
+    if: status = 0 && (lm_trans_namespace_materialize_class_descriptors(namespace_) != 0 || lm_trans_namespace_materialize_class_descriptors(namespace_) != 0)
+        status: 1
+    descriptor: lm_trans_namespace_descriptor(namespace_, name)
+    descriptor_field: lm_trans_descriptor_structural_field(descriptor, "fallback_value")
+    if: status = 0 && (descriptor = 0 || descriptor\registry_materialized = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0 || descriptor\structural_fields\count != 1U || descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "long") != 0 || descriptor_field\address_depth != 2U || descriptor_field\is_const = 0)
+        status: 1
     lm_trans_text_ref_destroy(@ field_name)
     lm_trans_text_ref_destroy(@ name)
 
@@ -212,8 +218,33 @@ fn: lm_test_structural_descriptor_dual_write_core () int
         owned_descriptor: 0
     if: status = 0 && lm_test_structural_descriptor_registry_field("EmptyAuthoritative", "ghost", "int", "0", "0", 0, 0, 0) != 0
         status: 1
+    if: status = 0 && lm_trans_namespace_materialize_class_descriptors(namespace_) != 0
+        status: 1
+    descriptor: lm_trans_namespace_descriptor(namespace_, name)
     resolved_class: 0
-    if: status = 0 && (lm_trans_collect_layout_fields("EmptyAuthoritative", namespace_, fields, 16U, @ field_count) != 0 || field_count != 0U || lm_trans_layout_field_class_resolve(name, field_name, namespace_, @ resolved_class) != 0 || resolved_class != 0)
+    if: status = 0 && (descriptor = 0 || descriptor\registry_materialized != 0 || descriptor\structural_fields = 0 || descriptor\structural_fields\count != 0U || lm_trans_collect_layout_fields("EmptyAuthoritative", namespace_, fields, 16U, @ field_count) != 0 || field_count != 0U || lm_trans_layout_field_class_resolve(name, field_name, namespace_, @ resolved_class) != 0 || resolved_class != 0)
+        status: 1
+
+    lm_trans_text_ref_destroy(@ field_name)
+    lm_trans_text_ref_destroy(@ name)
+    if: status = 0 && (lm_test_structural_descriptor_note_layout("DescriptorlessOverlay") != 0 || lm_test_structural_descriptor_registry_field("DescriptorlessOverlay", "registry_field", "int", "0", "0", 0, 0, 0) != 0)
+        status: 1
+    name: lm_trans_text_from_cstr("DescriptorlessOverlay")
+    if: status = 0 && (name = 0 || lm_trans_namespace_materialize_class_descriptors(namespace_) != 0)
+        status: 1
+    symbol_before: lm_trans_namespace_find(namespace_, name)
+    descriptor: lm_trans_namespace_descriptor(namespace_, name)
+    descriptor_field: lm_trans_descriptor_structural_field(descriptor, "registry_field")
+    if: status = 0 && (symbol_before = 0 || symbol_before\registry_materialized = 0 || descriptor = 0 || descriptor\registry_materialized = 0 || descriptor_field = 0)
+        status: 1
+    if: status = 0 && lm_trans_namespace_declare(namespace_, name, "variable") != 0
+        status: 1
+    symbol_after: lm_trans_namespace_find(namespace_, name)
+    if: status = 0 && (symbol_after = 0 || symbol_after = symbol_before || symbol_after\registry_materialized != 0 || symbol_after\descriptor != 0)
+        status: 1
+    if: status = 0 && lm_trans_namespace_materialize_class_descriptors(namespace_) != 0
+        status: 1
+    if: status = 0 && (lm_trans_namespace_find(namespace_, name) != symbol_after || lm_trans_namespace_descriptor(namespace_, name) != 0 || symbol_before\descriptor != descriptor || descriptor\registry_materialized = 0 || lm_trans_descriptor_structural_field(descriptor, "registry_field") != descriptor_field)
         status: 1
 
     lm_trans_descriptor_delete(owned_descriptor)

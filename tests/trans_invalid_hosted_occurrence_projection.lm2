@@ -1,0 +1,9 @@
+L2:
+    RepeatedShape:
+        int: value 1
+    end: RepeatedShape
+
+    RepeatedShape:
+        int: value 2
+    end: RepeatedShape
+end: L2

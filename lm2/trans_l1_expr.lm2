@@ -422,6 +422,33 @@ fn: lm_trans_atom_is_infix_expr_operator (const: (LmP0Text: text); const: (LmP0N
     return: lm_trans_registry_has_expr_emitter_binding_class(text, "operator.infix")
 end: lm_trans_atom_is_infix_expr_operator
 
+fn: lm_trans_expr_selector_close (const: (LmP0Field: open)) const: LmP0Field
+    const: LmP0Field: field
+    const: LmP0Node: node
+    int: depth
+
+    if: open = 0 || open\value = 0 || open\value\kind != c.LM_P0_NODE_ATOM || lm_trans_text_equals(open\value\as\atom, "[") = 0
+        return: 0
+
+    depth: 1
+    field: open\next
+    while: field != 0
+        node: field\value
+        if: node != 0 && node\kind = c.LM_P0_NODE_ATOM
+            if: lm_trans_text_equals(node\as\atom, "[")
+                depth: depth + 1
+            else:
+                if: lm_trans_text_equals(node\as\atom, "]")
+                    depth: depth - 1
+                    if: depth = 0
+                        return: field
+                    ---
+                ---
+            ---
+        ---
+        field: field\next
+return: 0
+
 fn: lm_trans_expr_segment_end (const: (LmP0Field: first)) const: LmP0Field
     const: LmP0Field: field
     const: LmP0Field: operand
@@ -485,6 +512,13 @@ fn: lm_trans_expr_segment_end (const: (LmP0Field: first)) const: LmP0Field
                         operand: field\next
                         if: (operand = 0)
                             return: field
+                        if: lm_trans_text_equals(node\as\atom, "\\") && operand\value != 0 && operand\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(operand\value\as\atom, "[")
+                            const: LmP0Field: selector_close
+                            selector_close: lm_trans_expr_selector_close(operand)
+                            if: selector_close = 0 || selector_close\next = 0
+                                return: field
+                            operand: selector_close\next
+                        ---
                         while: (((operand\value != 0) && (operand\value\kind = c.LM_P0_NODE_ATOM)) && lm_trans_atom_is_prefix_expr_operator(operand\value\as\atom))
                             operand: operand\next
                             if: (operand = 0)
@@ -1489,17 +1523,20 @@ fn: lm_trans_emit_callable_adapter_args (FILE: file; @: LmTransAbiParam params; 
 end: lm_trans_emit_callable_adapter_args
 
 fn: lm_trans_layout_type_implicit_address_depth (const: (LmP0Text: class_name); const: (LmTransNamespace: namespace_)) size_t
-    const: @: char projection
+    const: @: char class_kind
+
     if: class_name = 0
         return: 0U
-    if: lm_trans_namespace_type_is_structural(namespace_, class_name)
+    if: lm_trans_namespace_has_named_structure_binding(namespace_, class_name)
         return: 1U
-    if: lm_trans_builtin_c_type_name(class_name)
+    if: lm_trans_registry_is_function_pointer_type_name(namespace_, class_name)
         return: 0U
     if: lm_trans_namespace_class_is_reference_base(namespace_, class_name)
         return: 1U
-    projection: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, class_name, "class.c.projection", "class", "class", "spelling", "char")
-    if: projection != 0 && (c.strcmp(projection, "c.struct") = 0 || c.strcmp(projection, "c.named-struct") = 0 || c.strcmp(projection, "c.union") = 0 || c.strcmp(projection, "c.named-union") = 0)
+    class_kind: lm_trans_namespace_class_kind_value(namespace_, class_name)
+    if: class_kind != 0 && c.strcmp(class_kind, "primitive") = 0
+        return: 0U
+    if: lm_trans_namespace_layout_source_is_supported(namespace_, class_name)
         return: 1U
 return: 0U
 
@@ -3026,28 +3063,101 @@ fn: lm_trans_call_args_layout (LmOwnPtrStack: segments; const: (LmP0Structure: b
     return: lm_trans_expr_segments_parse_fields(segments, field)
 end: lm_trans_call_args_layout
 
-fn: lm_trans_head_next_field_chain_segment (const: (LmP0Text: head); @: size_t offset; LmP0Text: out_segment) int
+fn: lm_trans_field_chain_segment_parse (
+    const: LmP0Text: segment
+    LmP0Text: out_name
+    @: int has_occurrence
+    @: size_t occurrence
+) int
+    size_t: close_index
+    size_t: i
+    @: char ordinal_text
+
+    if: out_name != 0
+        out_name\data: ""
+        out_name\length: 0U
+    if: has_occurrence != 0
+        has_occurrence[0]: 0
+    if: occurrence != 0
+        occurrence[0]: 0U
+    if: segment = 0 || out_name = 0 || has_occurrence = 0 || occurrence = 0 || segment\data = 0 || segment\length = 0U
+        return: 0
+
+    if: segment\data[0] != '['
+        out_name[0]: segment[0]
+        return: 1
+
+    close_index: 1U
+    while: close_index < segment\length && segment\data[close_index] != ']'
+        close_index: close_index + 1U
+    if: close_index = 1U || close_index >= segment\length || close_index + 1U >= segment\length
+        return: 0
+
+    i: 1U
+    while: i < close_index
+        if: segment\data[i] < '0' || segment\data[i] > '9'
+            return: 0
+        i: i + 1U
+
+    ordinal_text: lm_own_copy_bytes(segment\data + 1U, close_index - 1U)
+    if: ordinal_text = 0
+        return: 0
+    if: lm_trans_parse_size_payload(ordinal_text, occurrence) = 0
+        lm_own_delete(ordinal_text, 0)
+        return: 0
+    lm_own_delete(ordinal_text, 0)
+
+    out_name\data: segment\data + close_index + 1U
+    out_name\length: segment\length - close_index - 1U
+    if: out_name\length = 0U || lm_trans_atom_is_identifier_like(out_name) = 0
+        out_name\data: ""
+        out_name\length: 0U
+        occurrence[0]: 0U
+        return: 0
+    has_occurrence[0]: 1
+return: 1
+
+fn: lm_trans_head_next_field_chain_segment (
+    const: LmP0Text: head
+    @: size_t offset
+    LmP0Text: out_segment
+    @: int out_has_occurrence
+    @: size_t out_occurrence
+) int
     size_t: start
     size_t: segment_end
+    LmP0Text: raw_segment
     if: (out_segment != 0)
         out_segment\data: ""
         out_segment\length: 0U
-    if: (((((head = 0) || (head\data = 0)) || (offset = 0)) || (out_segment = 0)) || (offset[0] > head\length))
+    if: out_has_occurrence != 0
+        out_has_occurrence[0]: 0
+    if: out_occurrence != 0
+        out_occurrence[0]: 0U
+    if: head = 0 || head\data = 0 || offset = 0 || out_segment = 0 || out_has_occurrence = 0 || out_occurrence = 0 || offset[0] > head\length
         return: 0
     start: offset[0]
     segment_end: start
     while: ((segment_end < head\length) && (head\data[segment_end] != '\\'))
         segment_end: segment_end + 1U
-    out_segment\data: (head\data + start)
-    out_segment\length: (segment_end - start)
+    raw_segment: lm_trans_text_ref_new_cstr("")
+    if: raw_segment = 0
+        return: -1
+    raw_segment\data: head\data + start
+    raw_segment\length: segment_end - start
     if: (segment_end < head\length)
         offset[0]: (segment_end + 1U)
     else:
         offset[0]: (head\length + 1U)
-    if: (out_segment\length != 0U)
+    if: lm_trans_field_chain_segment_parse(raw_segment, out_segment, out_has_occurrence, out_occurrence)
+        lm_trans_text_ref_destroy(@ raw_segment)
         return: 1
-    return: -1
-end: lm_trans_head_next_field_chain_segment
+    if: raw_segment\length > 0U && raw_segment\data[0] = '['
+        c.fprintf(c.stderr, "trans hosted C backend limitation: structural field occurrence selector expects [N]field with a zero-based decimal literal N\n")
+    else:
+        c.fprintf(c.stderr, "trans L2 type error: malformed field-chain segment\n")
+    lm_trans_text_ref_destroy(@ raw_segment)
+return: -1
 
 fn: lm_trans_layout_field_class_resolve (
     const: (LmP0Text: owner)
@@ -3090,12 +3200,125 @@ fn: lm_trans_layout_field_class_resolve (
     return: 1
 end: lm_trans_layout_field_class_resolve
 
+fn: lm_trans_field_chain_member_resolve (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: owner_class
+    const: LmP0Text: field_name
+    int: has_occurrence
+    size_t: occurrence
+    const: @(LmTransDescriptor out_descriptor)
+    const: @(LmTransDescriptorField out_field)
+    @@: char out_projected_name
+) int
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptorField: descriptor_field
+    @: char descriptor_field_name
+    @: char projected_name
+
+    if: out_descriptor != 0
+        out_descriptor[0]: 0
+    if: out_field != 0
+        out_field[0]: 0
+    if: out_projected_name != 0
+        out_projected_name[0]: 0
+    if: namespace_ = 0 || owner_class = 0 || field_name = 0 || out_descriptor = 0 || out_field = 0 || out_projected_name = 0
+        return: 0
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, owner_class)
+    if: descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0
+        return: 0
+
+    descriptor_field_name: lm_trans_descriptor_name_copy(field_name)
+    if: descriptor_field_name = 0
+        return: -1
+    if: has_occurrence
+        descriptor_field: lm_trans_descriptor_structural_field_occurrence(descriptor, descriptor_field_name, occurrence)
+    else:
+        descriptor_field: lm_trans_descriptor_structural_field(descriptor, descriptor_field_name)
+    lm_own_delete(descriptor_field_name, 0)
+    if: descriptor_field = 0
+        return: 0
+
+    projected_name: lm_trans_descriptor_projected_member_name_new(descriptor, descriptor_field)
+    if: projected_name = 0
+        return: -1
+    out_descriptor[0]: descriptor
+    out_field[0]: descriptor_field
+    out_projected_name[0]: projected_name
+return: 1
+
+fn: lm_trans_layout_field_class_resolve_occurrence (
+    const: LmP0Text: owner
+    const: LmP0Text: field_name
+    int: has_occurrence
+    size_t: occurrence
+    const: LmTransNamespace: namespace_
+    const: @@(char out_class)
+) int
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptorField: descriptor_field
+    @: char projected_name
+    int: status
+
+    if: out_class != 0
+        out_class[0]: 0
+    if: has_occurrence = 0
+        return: lm_trans_layout_field_class_resolve(owner, field_name, namespace_, out_class)
+    if: owner = 0 || field_name = 0 || out_class = 0
+        return: 0
+
+    status: lm_trans_field_chain_member_resolve(namespace_, owner, field_name, 1, occurrence, @ descriptor, @ descriptor_field, @ projected_name)
+    lm_own_delete(projected_name, 0)
+    if: status <= 0
+        return: status
+    if: descriptor_field\is_union || descriptor_field\descriptor_name = 0
+        return: 0
+    out_class[0]: descriptor_field\descriptor_name
+return: 1
+
+fn: lm_trans_expr_atom_lowering_project_field (
+    LmTransExprAtomLowering: lowering
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: owner_class
+    const: LmP0Text: field_name
+    int: has_occurrence
+    size_t: occurrence
+) int
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptorField: descriptor_field
+    @: char projected_name
+    @: char persistent_name
+    LmP0Text: projected_text
+    int: status
+
+    if: lowering = 0
+        return: -1
+    status: lm_trans_field_chain_member_resolve(namespace_, owner_class, field_name, has_occurrence, occurrence, @ descriptor, @ descriptor_field, @ projected_name)
+    if: status <= 0
+        return: status
+
+    projected_text: lm_trans_text_from_cstr(projected_name)
+    if: projected_text = 0
+        lm_own_delete(projected_name, 0)
+        return: -1
+    persistent_name: lm_trans_registry_value_copy_cstr(projected_text)
+    lm_trans_text_ref_destroy(@ projected_text)
+    lm_own_delete(projected_name, 0)
+    if: persistent_name = 0
+        return: -1
+
+    lowering\text\data: persistent_name
+    lowering\text\length: c.strlen(persistent_name)
+return: 1
+
 fn: lm_trans_callable_expression_descriptor_name (const: (LmP0Text: head); const: (LmTransNamespace: namespace_); LmP0Text: out_descriptor_name) int
     const: LmTransSymbol: symbol
     LmP0Text: segment
     LmP0Text: current_class
     const: @: char field_class
     size_t: offset
+    size_t: occurrence
+    int: has_occurrence
     int: segment_status
     int: field_class_status
     int: has_field_chain
@@ -3112,13 +3335,18 @@ fn: lm_trans_callable_expression_descriptor_name (const: (LmP0Text: head); const
         lm_trans_text_ref_destroy(@ current_class)
         return: -1
     offset: 0U
-    segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment)
+    segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment, @ has_occurrence, @ occurrence)
     if: (segment_status <= 0)
         lm_trans_text_ref_destroy(@ segment)
         lm_trans_text_ref_destroy(@ current_class)
         if: (segment_status < 0)
             return: -1
         return: 0
+    if: has_occurrence
+        c.fprintf(c.stderr, "trans L2 type error: structural field occurrence selector requires a preceding field-follow target\n")
+        lm_trans_text_ref_destroy(@ segment)
+        lm_trans_text_ref_destroy(@ current_class)
+        return: -1
     symbol: lm_trans_namespace_find(namespace_, segment)
     if: ((symbol = 0) || (symbol\class_name = 0))
         lm_trans_text_ref_destroy(@ segment)
@@ -3129,12 +3357,11 @@ fn: lm_trans_callable_expression_descriptor_name (const: (LmP0Text: head); const
     has_field_chain: (offset <= head\length)
     result: 0
     while: ((result = 0) && (offset <= head\length))
-        segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment)
+        segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment, @ has_occurrence, @ occurrence)
         if: (segment_status <= 0)
-            c.fprintf(c.stderr, "trans L2 type error: malformed field-chain callable head \"%.*s\"\n", (cast: int head\length), head\data)
             result: -1
             break
-        field_class_status: lm_trans_layout_field_class_resolve(current_class, segment, namespace_, @ field_class)
+        field_class_status: lm_trans_layout_field_class_resolve_occurrence(current_class, segment, has_occurrence, occurrence, namespace_, @ field_class)
         if: (field_class_status < 0)
             result: -1
             break
@@ -3219,31 +3446,91 @@ fn: lm_trans_callable_expression_signature_new (const: (LmTransNamespace: namesp
 end: lm_trans_callable_expression_signature_new
 
 fn: lm_trans_emit_callable_head_expression (FILE: file; const: (LmP0Text: head); const: (LmTransNamespace: namespace_)) int
+    const: LmTransSymbol: symbol
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptorField: descriptor_field
     LmP0Text: segment
+    LmP0Text: current_class
+    const: @: char field_class
+    @: char projected_name
     size_t: offset
+    size_t: occurrence
+    int: has_occurrence
     int: segment_status
+    int: member_status
+    int: field_class_status
     int: status
     if: ((head = 0) || (lm_trans_text_contains_char(head, '\\') = 0))
         return: lm_trans_emit_expr_atom(file, head, namespace_)
     segment: lm_trans_text_ref_new_cstr("")
-    if: (segment = 0)
+    current_class: lm_trans_text_ref_new_cstr("")
+    if: segment = 0 || current_class = 0
+        lm_trans_text_ref_destroy(@ segment)
+        lm_trans_text_ref_destroy(@ current_class)
         return: 1
     offset: 0U
-    segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment)
-    if: (segment_status <= 0)
+    segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment, @ has_occurrence, @ occurrence)
+    if: segment_status <= 0 || has_occurrence
+        if: has_occurrence
+            c.fprintf(c.stderr, "trans L2 type error: structural field occurrence selector requires a preceding field-follow target\n")
         lm_trans_text_ref_destroy(@ segment)
+        lm_trans_text_ref_destroy(@ current_class)
         return: 1
+    symbol: lm_trans_namespace_find(namespace_, segment)
+    if: symbol = 0
+        current_class\data: ""
+        current_class\length: 0U
+    else:
+        if: lm_trans_namespace_relation_text_latest(namespace_, segment, "variable.type", current_class) = 0
+            if: symbol\class_name != 0
+                lm_trans_text_assign_cstr(current_class, symbol\class_name)
+            else:
+                current_class\data: ""
+                current_class\length: 0U
+            ---
+        ---
     status: lm_trans_emit_expr_atom(file, segment, namespace_)
     while: ((status = 0) && (offset <= head\length))
-        segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment)
+        segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment, @ has_occurrence, @ occurrence)
         if: (segment_status <= 0)
             status: 1
             break
-        if: ((lm_trans_put(file, "->") != 0) || (lm_trans_emit_identifier(file, segment) != 0))
+        projected_name: 0
+        member_status: lm_trans_field_chain_member_resolve(namespace_, current_class, segment, has_occurrence, occurrence, @ descriptor, @ descriptor_field, @ projected_name)
+        if: member_status < 0
             status: 1
             break
+        if: member_status = 0 && has_occurrence
+            c.fprintf(c.stderr, "trans L2 type error: class \"%.*s\" has no structural field occurrence [%zu]%.*s\n", (cast: int current_class\length), current_class\data, occurrence, (cast: int segment\length), segment\data)
+            status: 1
+            break
+        if: lm_trans_put(file, "->") != 0
+            lm_own_delete(projected_name, 0)
+            status: 1
+            break
+        if: member_status > 0
+            if: lm_trans_put(file, projected_name) != 0
+                lm_own_delete(projected_name, 0)
+                status: 1
+                break
+            lm_own_delete(projected_name, 0)
+        else:
+            if: lm_trans_emit_identifier(file, segment) != 0
+                status: 1
+                break
+            ---
+        field_class_status: lm_trans_layout_field_class_resolve_occurrence(current_class, segment, has_occurrence, occurrence, namespace_, @ field_class)
+        if: field_class_status < 0
+            status: 1
+            break
+        if: field_class_status > 0
+            lm_trans_text_assign_cstr(current_class, field_class)
+        else:
+            current_class\data: ""
+            current_class\length: 0U
         ---
     lm_trans_text_ref_destroy(@ segment)
+    lm_trans_text_ref_destroy(@ current_class)
     return: status
 end: lm_trans_emit_callable_head_expression
 
@@ -3555,6 +3842,8 @@ fn: lm_trans_printf_arg_class_from_field_chain (const: (LmP0Text: atom); const: 
     LmP0Text: current_class
     const: @: char field_class
     size_t: offset
+    size_t: occurrence
+    int: has_occurrence
     int: segment_status
     int: field_class_status
     int: result
@@ -3573,8 +3862,12 @@ fn: lm_trans_printf_arg_class_from_field_chain (const: (LmP0Text: atom); const: 
         return: 0
 
     offset: 0U
-    segment_status: lm_trans_head_next_field_chain_segment(atom, @ offset, segment)
+    segment_status: lm_trans_head_next_field_chain_segment(atom, @ offset, segment, @ has_occurrence, @ occurrence)
     if: segment_status <= 0
+        lm_trans_text_ref_destroy(@ segment)
+        lm_trans_text_ref_destroy(@ current_class)
+        return: 0
+    if: has_occurrence
         lm_trans_text_ref_destroy(@ segment)
         lm_trans_text_ref_destroy(@ current_class)
         return: 0
@@ -3594,11 +3887,11 @@ fn: lm_trans_printf_arg_class_from_field_chain (const: (LmP0Text: atom); const: 
 
     result: 1
     while: result && offset <= atom\length
-        segment_status: lm_trans_head_next_field_chain_segment(atom, @ offset, segment)
+        segment_status: lm_trans_head_next_field_chain_segment(atom, @ offset, segment, @ has_occurrence, @ occurrence)
         if: segment_status <= 0
             result: 0
             break
-        field_class_status: lm_trans_layout_field_class_resolve(current_class, segment, namespace_, @ field_class)
+        field_class_status: lm_trans_layout_field_class_resolve_occurrence(current_class, segment, has_occurrence, occurrence, namespace_, @ field_class)
         if: field_class_status <= 0
             result: 0
             break
@@ -3927,14 +4220,12 @@ fn: lm_trans_implements (
     const: (LmTransNamespace: namespace_)
     const: (LmP0Text: candidate_name)
     const: (LmP0Text: required_name)
-    @(int out_result)
+    @: int out_result
 ) int
     const: LmTransSymbol: candidate_symbol
     const: LmTransSymbol: required_symbol
     const: LmTransDescriptor: candidate
     const: LmTransDescriptor: required
-    const: LmTransDescriptorField: requirement
-    size_t: i
 
     if: out_result != 0
         out_result[0]: 0
@@ -3966,18 +4257,9 @@ fn: lm_trans_implements (
         c.fprintf(c.stderr, "trans L2 implements error: required \"%.*s\" has no field descriptor\n", (cast: int required_name\length), required_name\data)
         return: 1
 
-    i: 0U
-    while: i < required\structural_fields\count
-        requirement: lm_own_ptr_stack_at(required\structural_fields, i)
-        if: requirement = 0 || requirement\name = 0
-            c.fprintf(c.stderr, "trans internal error: malformed required field in namespace descriptor\n")
-            return: 1
-        if: lm_trans_descriptor_structural_field(candidate, requirement\name) = 0
-            return: 0
-
-        i: i + 1U
-
-    out_result[0]: 1
+    if: lm_trans_descriptor_implements(candidate, required, out_result) != 0
+        c.fprintf(c.stderr, "trans internal error: malformed field in namespace descriptor comparison\n")
+        return: 1
 return: 0
 
 fn: lm_trans_implements_arg_key (const: (LmP0Field: first); const: (LmP0Field: stop); LmP0Text: out_key) int
@@ -4564,6 +4846,49 @@ fn: lm_trans_find_matching_index_close (const: (LmP0Field: open); const: (LmP0Fi
     return: 0
 end: lm_trans_find_matching_index_close
 
+fn: lm_trans_expr_occurrence_literal_parse (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    @: size_t out_occurrence
+) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    @: char payload
+    size_t: i
+    int: result
+
+    if: out_occurrence != 0
+        out_occurrence[0]: 0U
+    if: out_occurrence = 0
+        return: 0
+
+    field: first
+    while: field != 0 && field != stop && lm_trans_node_is_ignored(field\value)
+        field: field\next
+    if: field = stop || field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM
+        return: 0
+    node: field\value
+    field: field\next
+    while: field != 0 && field != stop && lm_trans_node_is_ignored(field\value)
+        field: field\next
+    if: field != stop
+        return: 0
+
+    if: node\as\atom = 0 || node\as\atom\data = 0 || node\as\atom\length = 0U
+        return: 0
+    i: 0U
+    while: i < node\as\atom\length
+        if: node\as\atom\data[i] < '0' || node\as\atom\data[i] > '9'
+            return: 0
+        i: i + 1U
+
+    payload: lm_trans_text_copy_cstr(node\as\atom)
+    if: payload = 0
+        return: -1
+    result: lm_trans_parse_size_payload(payload, out_occurrence)
+    lm_own_delete(payload, 0)
+return: result
+
 fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: (LmTransExprRangeJob: range); const: (LmTransNamespace: namespace_)) int
     const: LmP0Field: field
     const: LmP0Node: node
@@ -4575,7 +4900,11 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     int: c_dot_path
     int: address_next_operand
     int: piece_leading_space
+    int: was_expect_field_name
+    int: was_expect_c_field_name
+    int: field_class_status
     int: wrote
+    const: @: char field_class
     LmTransExprAtomLowering: atom
     if: ((lowered = 0) || (range = 0))
         return: 1
@@ -4601,38 +4930,119 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     c_dot_path: range\c_dot_path
     wrote: range\wrote
     address_next_operand: 0
+    if: previous_operand != 0 && previous_operand\kind = c.LM_P0_NODE_ATOM
+        if: lm_trans_expr_value_class_from_atom(previous_operand\as\atom, namespace_, operand_class) = 0
+            operand_class\data: ""
+            operand_class\length: 0U
+        ---
+    ---
     while: (field != range\stop)
         node: field\value
         if: (lm_trans_node_is_ignored(node) = 0)
             if: lm_trans_field_is_atom(field, "[")
                 const: LmP0Field: close
-                if: (previous_operand = 0)
-                    c.fprintf(c.stderr, "trans L2 error: index operator expects a target expression\n")
-                    lm_trans_expr_atom_lowering_delete(atom)
-                    lm_trans_expr_callable_type_delete(pending_expected_type)
-                    lm_trans_text_ref_destroy(@ operand_class)
-                    return: 1
                 close: lm_trans_find_matching_index_close(field, range\stop)
                 if: (close = 0)
-                    c.fprintf(c.stderr, "trans L2 error: unclosed index operator\n")
+                    if: expect_field_name
+                        c.fprintf(c.stderr, "trans L2 error: unclosed structural field occurrence selector\n")
+                    else:
+                        c.fprintf(c.stderr, "trans L2 error: unclosed index operator\n")
                     lm_trans_expr_atom_lowering_delete(atom)
                     lm_trans_expr_callable_type_delete(pending_expected_type)
                     lm_trans_text_ref_destroy(@ operand_class)
                     return: 1
-                if: (lm_trans_expr_lowered_range_append_index(lowered, field\next, close) != 0)
-                    lm_trans_expr_atom_lowering_delete(atom)
-                    lm_trans_expr_callable_type_delete(pending_expected_type)
-                    lm_trans_text_ref_destroy(@ operand_class)
-                    return: 1
-                previous_operand: close\value
-                expect_field_name: 0
-                expect_c_field_name: 0
-                c_dot_path: 0
-                wrote: 1
-                field: close\next
-                continue
+                if: expect_field_name
+                    const: LmP0Field: selected_field
+                    const: LmP0Node: selected_node
+                    size_t: occurrence
+                    int: occurrence_status
+                    int: projection_status
+
+                    occurrence_status: lm_trans_expr_occurrence_literal_parse(field\next, close, @ occurrence)
+                    if: occurrence_status <= 0
+                        c.fprintf(c.stderr, "trans hosted C backend limitation: structural field occurrence selector expects [N]field with a zero-based decimal literal N\n")
+                        lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
+                        lm_trans_text_ref_destroy(@ operand_class)
+                        return: 1
+                    selected_field: close\next
+                    while: selected_field != 0 && selected_field != range\stop && lm_trans_node_is_ignored(selected_field\value)
+                        selected_field: selected_field\next
+                    if: selected_field = range\stop || selected_field = 0 || selected_field\value = 0 || selected_field\value\kind != c.LM_P0_NODE_ATOM || lm_trans_atom_is_identifier_like(selected_field\value\as\atom) = 0
+                        c.fprintf(c.stderr, "trans L2 error: field-follow occurrence selector expects a field name after ]\n")
+                        lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
+                        lm_trans_text_ref_destroy(@ operand_class)
+                        return: 1
+                    if: operand_class\length = 0U
+                        c.fprintf(c.stderr, "trans L2 type error: structural field occurrence selector requires a statically known structural target class\n")
+                        lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
+                        lm_trans_text_ref_destroy(@ operand_class)
+                        return: 1
+                    selected_node: selected_field\value
+                    lm_trans_expr_atom_lowering_set_builtin(atom, selected_node\as\atom, "lm_trans_expr_emit_field_name")
+                    projection_status: lm_trans_expr_atom_lowering_project_field(atom, namespace_, operand_class, selected_node\as\atom, 1, occurrence)
+                    if: projection_status < 0
+                        lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
+                        lm_trans_text_ref_destroy(@ operand_class)
+                        return: 1
+                    if: projection_status = 0
+                        c.fprintf(c.stderr, "trans L2 field access error: class \"%.*s\" has no structural field occurrence [%zu]%.*s\n", (cast: int operand_class\length), operand_class\data, occurrence, (cast: int selected_node\as\atom\length), selected_node\as\atom\data)
+                        lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
+                        lm_trans_text_ref_destroy(@ operand_class)
+                        return: 1
+                    field_class_status: lm_trans_layout_field_class_resolve_occurrence(operand_class, selected_node\as\atom, 1, occurrence, namespace_, @ field_class)
+                    if: field_class_status < 0
+                        lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
+                        lm_trans_text_ref_destroy(@ operand_class)
+                        return: 1
+                    if: field_class_status > 0
+                        lm_trans_text_assign_cstr(operand_class, field_class)
+                    else:
+                        operand_class\data: ""
+                        operand_class\length: 0U
+                    piece_leading_space: wrote
+                    if: lm_trans_expr_lowered_range_append_atom(lowered, piece_leading_space, selected_node, atom) != 0
+                        lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
+                        lm_trans_text_ref_destroy(@ operand_class)
+                        return: 1
+                    previous_operand: selected_node
+                    expect_field_name: 0
+                    expect_c_field_name: 0
+                    c_dot_path: 0
+                    address_next_operand: 0
+                    wrote: 1
+                    field: selected_field\next
+                    continue
+                else:
+                    if: (previous_operand = 0)
+                        c.fprintf(c.stderr, "trans L2 error: index operator expects a target expression\n")
+                        lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
+                        lm_trans_text_ref_destroy(@ operand_class)
+                        return: 1
+                    if: (lm_trans_expr_lowered_range_append_index(lowered, field\next, close) != 0)
+                        lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
+                        lm_trans_text_ref_destroy(@ operand_class)
+                        return: 1
+                    previous_operand: close\value
+                    expect_field_name: 0
+                    expect_c_field_name: 0
+                    c_dot_path: 0
+                    wrote: 1
+                    field: close\next
+                    continue
+                ---
             else:
                 if: (node\kind = c.LM_P0_NODE_ATOM)
+                    was_expect_field_name: expect_field_name
+                    was_expect_c_field_name: expect_c_field_name
                     piece_leading_space: wrote
                     if: (lm_trans_lower_expr_atom(node, previous_operand, expect_field_name, expect_c_field_name, c_dot_path, atom) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
@@ -4650,8 +5060,8 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                     if: (((address_next_operand && (expect_field_name = 0)) && (expect_c_field_name = 0)) && lm_trans_atom_is_operand_like(node\as\atom))
                         lm_trans_expr_atom_lowering_set_builtin(atom, node\as\atom, "lm_trans_expr_emit_addressable_value")
                         piece_leading_space: 0
-                    if: (lm_trans_text_equals(node\as\atom, "=") || lm_trans_text_equals(node\as\atom, "!=")) && previous_operand != 0 && previous_operand\kind = c.LM_P0_NODE_ATOM
-                        if: lm_trans_expr_value_class_from_atom(previous_operand\as\atom, namespace_, operand_class)
+                    if: (lm_trans_text_equals(node\as\atom, "=") || lm_trans_text_equals(node\as\atom, "!=")) && previous_operand != 0
+                        if: operand_class\length != 0U || (previous_operand\kind = c.LM_P0_NODE_ATOM && lm_trans_expr_value_class_from_atom(previous_operand\as\atom, namespace_, operand_class))
                             if: lm_trans_callable_type_reset(pending_expected_type) != 0
                                 lm_trans_expr_atom_lowering_delete(atom)
                                 lm_trans_expr_callable_type_delete(pending_expected_type)
@@ -4665,6 +5075,31 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
+                    if: was_expect_field_name
+                        field_class_status: lm_trans_layout_field_class_resolve_occurrence(operand_class, node\as\atom, 0, 0U, namespace_, @ field_class)
+                        if: field_class_status < 0
+                            lm_trans_expr_atom_lowering_delete(atom)
+                            lm_trans_expr_callable_type_delete(pending_expected_type)
+                            lm_trans_text_ref_destroy(@ operand_class)
+                            return: 1
+                        if: field_class_status > 0
+                            lm_trans_text_assign_cstr(operand_class, field_class)
+                        else:
+                            operand_class\data: ""
+                            operand_class\length: 0U
+                        ---
+                    else:
+                        if: was_expect_c_field_name
+                            operand_class\data: ""
+                            operand_class\length: 0U
+                        else:
+                            if: lm_trans_atom_is_operand_like(node\as\atom)
+                                if: lm_trans_expr_value_class_from_atom(node\as\atom, namespace_, operand_class) = 0
+                                    operand_class\data: ""
+                                    operand_class\length: 0U
+                                ---
+                            ---
+                        ---
                     if: lm_trans_text_equals(node\as\atom, "@")
                         address_next_operand: 1
                     else:

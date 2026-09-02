@@ -1186,7 +1186,7 @@ return: 1
 fn: lm_trans_top_level_declare_named_structure (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\frame = 0
         return: 1
-return: lm_trans_declare_named_structure_layout(namespace_, item\frame)
+return: lm_trans_declare_hosted_named_structure_layout(namespace_, item\frame)
 
 fn: lm_trans_top_level_emit_named_structure_typedef_once (
     FILE: file
@@ -1265,7 +1265,7 @@ fn: lm_trans_top_level_declare_function_named_structures_in_scope (
     while: field != 0
         node: field\value
         if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_looks_named_structure_layout_declaration(node\as\frame, namespace_)
-            if: lm_trans_declare_named_structure_layout(namespace_, node\as\frame) != 0
+            if: lm_trans_declare_hosted_named_structure_layout(namespace_, node\as\frame) != 0
                 return: 1
         ---
         field: field\next
@@ -1344,7 +1344,7 @@ return: lm_trans_emit_named_structure_storage(file, item\frame, 0U, namespace_, 
 fn: lm_trans_top_level_declare_merge_named_structure (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\frame = 0
         return: 1
-return: lm_trans_declare_merge_named_structure_layout(namespace_, item\frame)
+return: lm_trans_declare_hosted_merge_named_structure_layout(namespace_, item\frame)
 
 fn: lm_trans_top_level_emit_merge_named_structure_typedef (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     FILE: declaration_file
@@ -2107,6 +2107,8 @@ fn: lm_trans_emit_l2_structure_with_namespace (FILE: file; const: (LmP0Structure
                 return: 1
             lm_trans_top_level_item_delete(item)
             field: field\next
+        if: lm_trans_namespace_materialize_registry_heads(namespace_) != 0
+            return: 1
     ---
 
     if: lm_trans_emit_message_thread_runtime_prelude(prelude_file) != 0 || lm_trans_emit_l2_structure_prelude(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_prototypes(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_after_prototypes(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_functions(file, body, namespace_) != 0

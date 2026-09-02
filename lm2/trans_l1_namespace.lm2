@@ -213,7 +213,7 @@ fn: lm_trans_descriptor_cstr_copy (const: @(char value)) @: char
     @: char copy
     size_t: value_length
 
-    if: value = 0 || value[0] = '\\0'
+    if: value = 0 || value[0] = '\0'
         return: 0
 
     value_length: c.strlen(value)
@@ -340,14 +340,194 @@ fn: lm_trans_descriptor_structural_field (
         ---
 return: 0
 
+fn: lm_trans_descriptor_structural_field_occurrence (
+    const: LmTransDescriptor: descriptor
+    const: @: char name
+    size_t: occurrence
+) const: LmTransDescriptorField
+    size_t: i
+    size_t: current_occurrence
+    const: LmTransDescriptorField: field
+
+    if: descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0 || name = 0
+        return: 0
+
+    current_occurrence: 0U
+    i: 0U
+    while: i < descriptor\structural_fields\count
+        field: lm_own_ptr_stack_at(descriptor\structural_fields, i)
+        if: field != 0 && field\name != 0 && c.strcmp(field\name, name) = 0
+            if: current_occurrence = occurrence
+                return: field
+            current_occurrence: current_occurrence + 1U
+        ---
+        i: i + 1U
+return: 0
+
+fn: lm_trans_descriptor_structural_field_by_index (
+    const: LmTransDescriptor: descriptor
+    size_t: field_index
+) const: LmTransDescriptorField
+    size_t: i
+    const: LmTransDescriptorField: field
+    const: LmTransDescriptorField: result
+
+    if: descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0
+        return: 0
+
+    result: 0
+    i: 0U
+    while: i < descriptor\structural_fields\count
+        field: lm_own_ptr_stack_at(descriptor\structural_fields, i)
+        if: field != 0 && field\index = field_index
+            if: result != 0
+                return: 0
+            result: field
+        ---
+        i: i + 1U
+return: result
+
+fn: lm_trans_descriptor_structural_field_occurrence_count (
+    const: LmTransDescriptor: descriptor
+    const: @: char name
+) size_t
+    size_t: i
+    size_t: count
+    const: LmTransDescriptorField: field
+
+    if: descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0 || name = 0
+        return: 0U
+
+    count: 0U
+    i: 0U
+    while: i < descriptor\structural_fields\count
+        field: lm_own_ptr_stack_at(descriptor\structural_fields, i)
+        if: field != 0 && field\name != 0 && c.strcmp(field\name, name) = 0
+            count: count + 1U
+        i: i + 1U
+return: count
+
+fn: lm_trans_descriptor_has_structural_field_name (
+    const: LmTransDescriptor: descriptor
+    const: @: char name
+) int
+return: lm_trans_descriptor_structural_field_occurrence_count(descriptor, name) != 0U
+
+fn: lm_trans_descriptor_projected_member_name_new (
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptorField: selected_field
+) @: char
+    [64]: char base_name
+    @: char projected_name
+    const: LmTransDescriptorField: newest_field
+    const: LmTransDescriptorField: field
+    size_t: i
+    size_t: suffix_count
+    size_t: base_length
+    size_t: capacity
+    int: selected_is_owned
+    int: written
+
+    if: descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0 || selected_field = 0 || selected_field\name = 0
+        return: 0
+
+    selected_is_owned: 0
+    i: 0U
+    while: i < descriptor\structural_fields\count
+        field: lm_own_ptr_stack_at(descriptor\structural_fields, i)
+        if: field = selected_field
+            selected_is_owned: 1
+            break
+        i: i + 1U
+    if: selected_is_owned = 0
+        return: 0
+
+    newest_field: lm_trans_descriptor_structural_field(descriptor, selected_field\name)
+    if: newest_field = selected_field
+        return: lm_trans_descriptor_cstr_copy(selected_field\name)
+
+    written: c.snprintf(base_name, c.sizeof(base_name), "lm__occurrence_%zu", selected_field\index)
+    if: written <= 0 || (cast: size_t written) >= c.sizeof(base_name)
+        return: 0
+
+    base_length: cast: size_t written
+    capacity: base_length + descriptor\structural_fields\count + 1U
+    projected_name: lm_own_new_zero(capacity)
+    if: projected_name = 0
+        return: 0
+    c.memcpy(projected_name, base_name, base_length)
+
+    suffix_count: 0U
+    while: lm_trans_descriptor_has_structural_field_name(descriptor, projected_name)
+        if: base_length + suffix_count + 1U >= capacity
+            lm_own_delete(projected_name, 0)
+            return: 0
+        projected_name[base_length + suffix_count]: '_'
+        suffix_count: suffix_count + 1U
+        projected_name[base_length + suffix_count]: '\0'
+return: projected_name
+
+fn: lm_trans_descriptor_has_exact_structural_field (
+    const: LmTransDescriptor: descriptor
+    const: LmP0Text: name
+    const: LmP0Text: descriptor_name
+    size_t: index
+    size_t: address_depth
+    size_t: array_count
+    int: has_array_count
+    int: is_const
+    int: is_union
+) int
+    const: LmTransDescriptorField: field
+    size_t: i
+
+    if: descriptor = 0 || descriptor\structural_fields = 0 || name = 0 || descriptor_name = 0
+        return: 0
+
+    i: 0U
+    while: i < descriptor\structural_fields\count
+        field: lm_own_ptr_stack_at(descriptor\structural_fields, i)
+        if: field != 0 && field\name != 0 && field\descriptor_name != 0 && lm_trans_text_equals(name, field\name) != 0 && lm_trans_text_equals(descriptor_name, field\descriptor_name) != 0 && field\index = index && field\address_depth = address_depth && field\array_count = array_count && field\has_array_count = (has_array_count != 0) && field\is_const = (is_const != 0) && field\is_union = (is_union != 0)
+            return: 1
+        i: i + 1U
+return: 0
+
+fn: lm_trans_descriptor_implements (
+    const: LmTransDescriptor: candidate
+    const: LmTransDescriptor: required
+    @: int out_result
+) int
+    const: LmTransDescriptorField: requirement
+    size_t: i
+
+    if: out_result != 0
+        out_result[0]: 0
+    if: candidate = 0 || required = 0 || out_result = 0
+        return: 1
+    if: candidate\has_structural_fields = 0 || candidate\structural_fields = 0 || required\has_structural_fields = 0 || required\structural_fields = 0
+        return: 1
+
+    i: 0U
+    while: i < required\structural_fields\count
+        requirement: lm_own_ptr_stack_at(required\structural_fields, i)
+        if: requirement = 0 || requirement\name = 0
+            return: 1
+        if: lm_trans_descriptor_structural_field(candidate, requirement\name) = 0
+            return: 0
+        i: i + 1U
+    ---
+
+    out_result[0]: 1
+return: 0
+
 fn: lm_trans_descriptor_relation_find (
     const: LmTransDescriptor: descriptor
     const: @(char relation_name)
-) const: LmTransDescriptorRelation
+) LmTransDescriptorRelation
     size_t: i
-    const: LmTransDescriptorRelation: relation
+    LmTransDescriptorRelation: relation
 
-    if: descriptor = 0 || descriptor\class_relations = 0 || relation_name = 0 || relation_name[0] = '\\0'
+    if: descriptor = 0 || descriptor\class_relations = 0 || relation_name = 0 || relation_name[0] = '\0'
         return: 0
 
     i: descriptor\class_relations\count
@@ -368,15 +548,15 @@ fn: lm_trans_descriptor_set_class_relation (
     @: char relation_copy
     @: char payload_copy
 
-    if: descriptor = 0 || descriptor\class_relations = 0 || relation_name = 0 || relation_name[0] = '\\0' || payload = 0
+    if: descriptor = 0 || descriptor\class_relations = 0 || relation_name = 0 || relation_name[0] = '\0' || payload = 0
         return: 1
 
     relation: lm_trans_descriptor_relation_find(descriptor, relation_name)
     if: relation != 0
-        lm_own_delete(relation\payload, 0)
         payload_copy: lm_trans_descriptor_cstr_copy(payload)
         if: payload_copy = 0
             return: 1
+        lm_own_delete(relation\payload, 0)
         relation\payload: payload_copy
         return: 0
 
@@ -1479,6 +1659,25 @@ fn: lm_trans_namespace_type_is_structural (
     descriptor: lm_trans_namespace_descriptor(namespace_, name)
 return: descriptor != 0 && descriptor\has_structural_fields
 
+fn: lm_trans_namespace_has_named_structure_binding (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+    LmP0Text: variable_type
+    int: result
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: symbol = 0 || lm_trans_symbol_is(symbol, "variable") = 0 || symbol\descriptor = 0 || symbol\descriptor\has_structural_fields = 0 || symbol\has_c_name = 0
+        return: 0
+
+    variable_type: lm_trans_text_ref_new_cstr("")
+    if: variable_type = 0
+        return: 0
+    result: lm_trans_namespace_relation_text_latest(namespace_, name, "variable.type", variable_type) != 0 && lm_trans_text_same(variable_type, name)
+    lm_trans_text_ref_destroy(@ variable_type)
+return: result
+
 fn: lm_trans_namespace_relation_symbol_latest (const: (LmTransNamespace: namespace_); const: (LmP0Text: name); const: @(char relation_name)) const: LmTransSymbol
     LmTransIdentifierCard: card
     LmTransIdentifierRelation: relation
@@ -1562,7 +1761,13 @@ fn: lm_trans_head_binding_resolve (const: (LmTransNamespace: namespace_); const:
     lm_own_delete(resolved, 0)
 return: 0
 
-fn: lm_trans_namespace_declare_with_c_name (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind); const: (LmP0Text: c_name)) int
+fn: lm_trans_namespace_take_symbol_with_c_name (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @(char kind)
+    const: LmP0Text: c_name
+    LmTransDescriptor: descriptor
+) int
     LmTransSymbol: symbol
 
     if: namespace_ = 0 || name = 0
@@ -1575,20 +1780,90 @@ fn: lm_trans_namespace_declare_with_c_name (LmTransNamespace: namespace_; const:
     symbol: lm_trans_symbol_new(name, kind, namespace_\depth)
     if: symbol = 0
         return: 1
+    symbol\descriptor: descriptor
     if: c_name != 0 && lm_trans_symbol_set_c_name(symbol, c_name) != 0
+        symbol\descriptor: 0
         lm_trans_symbol_destroy(symbol)
         return: 1
     if: namespace_\items = 0 || lm_own_ptr_stack_push(namespace_\items, symbol) != 0
+        symbol\descriptor: 0
         lm_trans_symbol_destroy(symbol)
         return: 1
     if: lm_trans_identifier_table_add_symbol(namespace_\identifiers, symbol) != 0
         symbol: lm_own_ptr_stack_pop(namespace_\items)
+        symbol\descriptor: 0
         lm_trans_symbol_destroy(symbol)
         return: 1
 return: 0
 
+fn: lm_trans_namespace_declare_with_c_name (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind); const: (LmP0Text: c_name)) int
+return: lm_trans_namespace_take_symbol_with_c_name(namespace_, name, kind, c_name, 0)
+
 fn: lm_trans_namespace_declare (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind)) int
 return: lm_trans_namespace_declare_with_c_name(namespace_, name, kind, 0)
+
+fn: lm_trans_namespace_bind_descriptor_with_c_name (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @(char kind)
+    const: LmP0Text: c_name
+    LmTransDescriptor: descriptor
+) int
+    const: LmTransSymbol: old_symbol
+    int: compatible
+
+    if: namespace_ = 0 || name = 0 || descriptor = 0
+        return: 1
+
+    old_symbol: lm_trans_namespace_find(namespace_, name)
+    if: old_symbol != 0
+        if: old_symbol\descriptor = 0
+            c.fprintf(c.stderr, "trans L2 redeclaration error: old binding \"%.*s\" has no structural descriptor\n", (cast: int name\length), name\data)
+            return: 1
+        if: old_symbol\descriptor = descriptor
+            c.fprintf(c.stderr, "trans L2 redeclaration error: pending descriptor for \"%.*s\" aliases the old binding\n", (cast: int name\length), name\data)
+            return: 1
+        if: lm_trans_descriptor_implements(old_symbol\descriptor, descriptor, @ compatible) != 0
+            c.fprintf(c.stderr, "trans L2 redeclaration error: malformed descriptor for \"%.*s\"\n", (cast: int name\length), name\data)
+            return: 1
+        if: compatible = 0
+            c.fprintf(c.stderr, "trans L2 redeclaration error: implements(old, new) is false for \"%.*s\"\n", (cast: int name\length), name\data)
+            return: 1
+        ---
+    ---
+
+return: lm_trans_namespace_take_symbol_with_c_name(namespace_, name, kind, c_name, descriptor)
+
+fn: lm_trans_namespace_bind_descriptor (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @(char kind)
+    LmTransDescriptor: descriptor
+) int
+return: lm_trans_namespace_bind_descriptor_with_c_name(namespace_, name, kind, 0, descriptor)
+
+fn: lm_trans_namespace_rollback_descriptor_binding (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    LmTransDescriptor: descriptor
+) int
+    LmTransSymbol: symbol
+    LmTransSymbol: removed
+
+    if: namespace_ = 0 || namespace_\items = 0 || name = 0 || descriptor = 0
+        return: 1
+
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0 || symbol\descriptor != descriptor || symbol\depth != namespace_\depth || lm_own_ptr_stack_top(namespace_\items) != symbol
+        return: 1
+
+    removed: lm_own_ptr_stack_pop(namespace_\items)
+    if: removed != symbol
+        return: 1
+    lm_trans_identifier_table_remove_symbol(namespace_\identifiers, symbol)
+    symbol\descriptor: 0
+    lm_trans_symbol_destroy(symbol)
+return: 0
 
 fn: lm_trans_namespace_attach_descriptor (LmTransNamespace: namespace_; const: (LmP0Text: name); LmTransDescriptor: descriptor) int
     LmTransSymbol: symbol
@@ -1640,6 +1915,7 @@ fn: lm_trans_namespace_declare_visible_symbol_if_missing (
 ) int
     LmP0Text: name_text
     const: LmTransSymbol: existing
+    LmTransSymbol: symbol
     int: status
 
     if: namespace_ = 0 || name = 0 || kind = 0
@@ -1655,6 +1931,12 @@ fn: lm_trans_namespace_declare_visible_symbol_if_missing (
         return: 0
 
     status: lm_trans_namespace_declare(namespace_, name_text, kind)
+    if: status = 0
+        symbol: lm_trans_namespace_find_mutable(namespace_, name_text)
+        if: symbol = 0
+            return: 1
+        symbol\registry_materialized: 1
+    ---
 return: status
 
 fn: lm_trans_registry_key_is_c_surface_name (const: @(char name)) int
@@ -1817,12 +2099,13 @@ fn: lm_trans_namespace_materialize_class_descriptor_relations (
     const: (LmP0Text: class_name)
     LmTransDescriptor: descriptor
 ) int
-    LmTransIdentifierTable: identifiers
+    const: LmTransIdentifierTable: identifiers
     LmTransIdentifierCard: class_card
     LmTransIdentifierRelation: relation
     const: LmOwnPtrStack: rows
     const: LmTransRegistryFact: latest_row
     size_t: relation_bucket_index
+    int: private_registry
 
     if: namespace_ = 0 || class_name = 0 || class_name\data = 0 || descriptor = 0
         return: 1
@@ -1830,31 +2113,43 @@ fn: lm_trans_namespace_materialize_class_descriptor_relations (
         descriptor\class_relations: lm_trans_ptr_stack_new(lm_trans_descriptor_relation_delete_any)
         if: descriptor\class_relations = 0
             return: 1
+        ---
+    ---
 
     identifiers: namespace_\registry_identifiers
     class_card: 0
     if: identifiers != 0
         class_card: lm_trans_identifier_table_find_card(identifiers, class_name)
-    if: class_card = 0 && c.lm_trans_registry != 0 && c.lm_trans_registry\identifiers != 0 && c.lm_trans_registry->identifiers != identifiers
+    if: class_card = 0 && c.lm_trans_registry != 0 && c.lm_trans_registry->identifiers != 0 && c.lm_trans_registry->identifiers != identifiers
         class_card: lm_trans_identifier_table_find_card(c.lm_trans_registry->identifiers, class_name)
 
     if: class_card = 0
         return: 0
 
+    private_registry: identifiers != 0 && (c.lm_trans_registry = 0 || c.lm_trans_registry->identifiers != identifiers)
     relation_bucket_index: 0U
     while: relation_bucket_index < class_card\relation_bucket_count
         relation: class_card\relation_buckets[relation_bucket_index]
         while: relation != 0
             if: lm_trans_namespace_relation_name_is_class_metadata(relation\name) != 0
-                rows: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, relation\name)
+                rows: relation\symbols
+                if: private_registry = 0
+                    rows: lm_trans_registry_relation_stack_for_table(relation\name)
+                ---
                 if: rows != 0
                     latest_row: lm_trans_registry_relation_stack_latest_row(rows, class_name)
                     if: latest_row != 0 && latest_row\payload != 0
                         if: lm_trans_descriptor_set_class_relation(descriptor, relation\name, latest_row\payload) != 0
                             return: 1
+                        ---
+                    ---
+                ---
+            ---
             relation: relation\next
+        ---
         relation_bucket_index: relation_bucket_index + 1U
-    return: 0
+    ---
+return: 0
 
 fn: lm_trans_namespace_materialize_class_typed_relation_value (
     const: (LmTransNamespace: namespace_)
@@ -1866,7 +2161,8 @@ fn: lm_trans_namespace_materialize_class_typed_relation_value (
 ) const: @: char
     @: char relation_path
     size_t: relation_path_length
-    @: char value
+    const: @: char value
+    const: @: char typed_value
 
     if: owner = 0 || owner\data = 0 || relation_name = 0 || n2_value_column_name = 0 || value_descriptor = 0
         return: 0
@@ -1878,20 +2174,22 @@ fn: lm_trans_namespace_materialize_class_typed_relation_value (
     relation_path: lm_trans_registry_source_relation_path_new(owner\data, relation_name, @ relation_path_length)
     if: relation_path = 0
         return: value
-    value: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, owner, relation_path, "class", "class", n2_value_column_name, value_descriptor)
+    typed_value: lm_trans_registry_source_path_n2_named_typed_value(namespace_, relation_path, "class", "class", n2_value_column_name, value_descriptor, facade_row)
     lm_own_delete(relation_path, 0)
+    if: typed_value != 0
+        return: typed_value
 return: value
 
 fn: lm_trans_namespace_materialize_class_descriptor_add_field (
-    const: (LmTransNamespace: namespace_)
-    const: (LmP0Text: class_name)
-    (LmTransDescriptor: descriptor)
-    const: (LmP0Text: field_name)
-    (LmTransRegistryFact: field_row)
-    (LmOwnPtrStack: index_rows)
-    (LmOwnPtrStack: address_depth_rows)
-    (LmOwnPtrStack: const_rows)
-    (LmOwnPtrStack: array_count_rows)
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: class_name
+    LmTransDescriptor: descriptor
+    const: LmP0Text: field_name
+    const: LmTransRegistryFact: field_row
+    const: LmOwnPtrStack: index_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: const_rows
+    const: LmOwnPtrStack: array_count_rows
     const: @(char type_relation_name)
     const: @(char type_n2_column_name)
     int: is_union
@@ -1909,6 +2207,7 @@ fn: lm_trans_namespace_materialize_class_descriptor_add_field (
     size_t: field_index
     size_t: field_address_depth
     size_t: field_array_count
+    size_t: field_const_flag
     int: field_is_const
     int: has_array_count
 
@@ -1938,6 +2237,7 @@ fn: lm_trans_namespace_materialize_class_descriptor_add_field (
 
     field_address_depth: 0U
     field_array_count: 0U
+    field_const_flag: 0U
     has_array_count: 0
     field_is_const: 0
 
@@ -1948,10 +2248,10 @@ fn: lm_trans_namespace_materialize_class_descriptor_add_field (
 
     const_payload: lm_trans_namespace_materialize_class_typed_relation_value(namespace_, class_name, "field.const", "value", "int", const_row)
     if: const_payload != 0
-        if: lm_trans_parse_size_payload(const_payload, @ field_address_depth) = 0
+        if: lm_trans_parse_size_payload(const_payload, @ field_const_flag) = 0
             c.fprintf(c.stderr, "trans L2 struct descriptor error: class %.*s.%.*s has invalid field.const\n", (cast: int class_name\length), class_name\data, (cast: int field_name\length), field_name\data)
             return: 1
-        field_is_const: field_address_depth != 0U
+        field_is_const: field_const_flag != 0U
 
     array_count_payload: lm_trans_namespace_materialize_class_typed_relation_value(namespace_, class_name, "field.array-count", "count", "size_t", array_count_row)
     if: array_count_payload != 0
@@ -1960,43 +2260,37 @@ fn: lm_trans_namespace_materialize_class_descriptor_add_field (
             return: 1
         has_array_count: 1
 
+    if: lm_trans_descriptor_has_exact_structural_field(descriptor, field_name, type_name, field_index, field_address_depth, field_array_count, has_array_count, field_is_const, is_union) != 0
+        return: 0
     if: lm_trans_descriptor_add_structural_field(descriptor, field_name, type_name, field_index, field_address_depth, field_array_count, has_array_count, field_is_const, is_union) != 0
         return: 1
 return: 0
 
 fn: lm_trans_namespace_materialize_class_descriptors (LmTransNamespace: namespace_) int
     const: @(char class_present_table)
-    const: LmP0Text: class_present_text
-    LmOwnPtrStack: class_rows
-    LmOwnPtrStack: class_rows_fields
-    LmOwnPtrStack: union_rows_fields
-    LmOwnPtrStack: index_rows
-    LmOwnPtrStack: address_depth_rows
-    LmOwnPtrStack: const_rows
-    LmOwnPtrStack: array_count_rows
+    const: LmOwnPtrStack: class_rows
+    const: LmOwnPtrStack: class_rows_fields
+    const: LmOwnPtrStack: union_rows_fields
+    const: LmOwnPtrStack: index_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: const_rows
+    const: LmOwnPtrStack: array_count_rows
     LmOwnPtrStack: processed_classes
-    LmOwnPtrStack: seen_fields
     size_t: class_index
     size_t: field_index
     LmTransRegistryFact: class_row
     LmTransRegistryFact: field_row
     @(char class_key)
     @(char seen_name)
-    @(char seen_name_owner)
     LmP0Text: class_name
     LmP0Text: field_name
+    LmTransSymbol: class_symbol
     LmTransDescriptor: descriptor
+    LmTransDescriptor: owned_descriptor
     int: descriptor_is_new
 
     class_present_table: "class.present"
-    class_present_text: lm_trans_text_from_cstr(class_present_table)
-    if: class_present_text = 0
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ class_present_text)
-
-    class_rows: lm_trans_namespace_registry_relation_stack(namespace_, class_present_text, "row")
-    if: class_rows = 0
-        class_rows: lm_trans_registry_relation_stack_for_table(class_present_table)
+    class_rows: lm_trans_registry_relation_stack_for_table(class_present_table)
     if: class_rows = 0
         return: 0
 
@@ -2031,11 +2325,20 @@ fn: lm_trans_namespace_materialize_class_descriptors (LmTransNamespace: namespac
             lm_own_delete(seen_name, 0)
             return: 1
 
-        if: lm_trans_namespace_find(namespace_, class_name) = 0 && lm_trans_namespace_declare(namespace_, class_name, "class") != 0
-            return: 1
+        class_symbol: lm_trans_namespace_find_mutable(namespace_, class_name)
+        if: class_symbol = 0
+            if: lm_trans_namespace_declare(namespace_, class_name, "class") != 0
+                return: 1
+            class_symbol: lm_trans_namespace_find_mutable(namespace_, class_name)
+            if: class_symbol = 0
+                return: 1
+            class_symbol\registry_materialized: 1
+        ---
 
-        if: lm_trans_namespace_find(namespace_, class_name) = 0
-            return: 1
+        if: class_symbol\registry_materialized = 0
+            class_index: class_index + 1U
+            continue
+        ---
 
         class_rows_fields: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, "field.class")
         union_rows_fields: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, "field.union")
@@ -2044,25 +2347,29 @@ fn: lm_trans_namespace_materialize_class_descriptors (LmTransNamespace: namespac
         const_rows: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, "field.const")
         array_count_rows: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, "field.array-count")
 
-        descriptor: lm_trans_namespace_descriptor(namespace_, class_name)
+        descriptor: class_symbol\descriptor
+        owned_descriptor: 0
+        finally: lm_trans_descriptor_delete(owned_descriptor)
         descriptor_is_new: 0
         if: descriptor = 0
-            descriptor: lm_trans_descriptor_new()
+            owned_descriptor: lm_trans_descriptor_new()
+            descriptor: owned_descriptor
             if: descriptor = 0 || lm_trans_descriptor_mark_structural_fields(descriptor) != 0
                 return: 1
+            ---
+            descriptor\registry_materialized: 1
             descriptor_is_new: 1
-            finally: if: descriptor_is_new != 0
-                        lm_trans_descriptor_delete(descriptor)
+        ---
+
+        if: descriptor_is_new = 0 && descriptor\registry_materialized = 0
+            class_index: class_index + 1U
+            continue
+        ---
 
         if: lm_trans_namespace_materialize_class_descriptor_relations(namespace_, class_name, descriptor) != 0
             return: 1
 
         if: descriptor\has_structural_fields != 0 && descriptor\structural_fields != 0
-            seen_fields: lm_trans_ptr_stack_new(c.lm_own_delete_plain)
-            if: seen_fields = 0
-                return: 1
-            finally: lm_trans_ptr_stack_delete(@ seen_fields)
-
             if: class_rows_fields != 0
                 field_index: 0U
                 while: field_index < class_rows_fields\count
@@ -2073,20 +2380,12 @@ fn: lm_trans_namespace_materialize_class_descriptors (LmTransNamespace: namespac
                             return: 1
                         finally: lm_trans_text_ref_destroy(@ field_name)
 
-                        seen_name_owner: lm_trans_text_copy_cstr(field_name)
-                        if: seen_name_owner = 0
+                        if: lm_trans_namespace_materialize_class_descriptor_add_field(namespace_, class_name, descriptor, field_name, field_row, index_rows, address_depth_rows, const_rows, array_count_rows, "field.class", "field", 0) != 0
                             return: 1
-                        if: lm_trans_string_stack_has(seen_fields, seen_name_owner) != 0
-                            lm_own_delete(seen_name_owner, 0)
-                        else:
-                            if: lm_own_ptr_stack_push(seen_fields, seen_name_owner) != 0
-                                lm_own_delete(seen_name_owner, 0)
-                                return: 1
-                            if: lm_trans_namespace_materialize_class_descriptor_add_field(namespace_, class_name, descriptor, field_name, field_row, index_rows, address_depth_rows, const_rows, array_count_rows, "field.class", "field", 0) != 0
-                                return: 1
                     ---
                     field_index: field_index + 1U
                 ---
+            ---
 
             if: union_rows_fields != 0
                 field_index: 0U
@@ -2098,25 +2397,21 @@ fn: lm_trans_namespace_materialize_class_descriptors (LmTransNamespace: namespac
                             return: 1
                         finally: lm_trans_text_ref_destroy(@ field_name)
 
-                        seen_name_owner: lm_trans_text_copy_cstr(field_name)
-                        if: seen_name_owner = 0
+                        if: lm_trans_namespace_materialize_class_descriptor_add_field(namespace_, class_name, descriptor, field_name, field_row, index_rows, address_depth_rows, const_rows, array_count_rows, "field.union", "union", 1) != 0
                             return: 1
-                        if: lm_trans_string_stack_has(seen_fields, seen_name_owner) != 0
-                            lm_own_delete(seen_name_owner, 0)
-                        else:
-                            if: lm_own_ptr_stack_push(seen_fields, seen_name_owner) != 0
-                                lm_own_delete(seen_name_owner, 0)
-                                return: 1
-                            if: lm_trans_namespace_materialize_class_descriptor_add_field(namespace_, class_name, descriptor, field_name, field_row, index_rows, address_depth_rows, const_rows, array_count_rows, "field.union", "union", 1) != 0
-                                return: 1
+                    ---
+                    field_index: field_index + 1U
                 ---
-                field_index: field_index + 1U
             ---
+        ---
 
         if: descriptor_is_new != 0
             if: lm_trans_namespace_attach_descriptor(namespace_, class_name, descriptor) != 0
                 return: 1
+            ---
             descriptor: 0
+            owned_descriptor: 0
+        ---
 
         class_index: class_index + 1U
     ---
@@ -2156,10 +2451,12 @@ fn: lm_trans_namespace_materialize_registry_receivers (LmTransNamespace: namespa
 return: lm_trans_namespace_declare_visible_symbol_if_missing(namespace_, "@", "receiver.statement")
 
 fn: lm_trans_namespace_materialize_registry_heads (LmTransNamespace: namespace_) int
-    if: lm_trans_namespace_materialize_class_descriptors(namespace_) != 0
+    if: lm_trans_namespace_materialize_registry_receivers(namespace_) != 0
+        return: 1
+    if: lm_trans_declare_registry_fn_descriptors(namespace_) != 0
         return: 1
 
-    return: lm_trans_namespace_materialize_registry_receivers(namespace_)
+    return: lm_trans_namespace_materialize_class_descriptors(namespace_)
 
 fn: lm_trans_namespace_attach_registry (LmTransNamespace: namespace_) int
     if: namespace_ = 0 || lm_trans_registry = 0 || lm_trans_registry\view = 0

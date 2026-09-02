@@ -1,4 +1,5 @@
 predef: "lm2/own_abi.lm2"
+predef: "lm2/parser_abi.lm2"
 
 table:
     source
@@ -14,6 +15,7 @@ table:
     columns: (class: class) (int: value)
     rows:
              lm_test_tracked_new_zero  1
+             lm_test_abi_layout_slot   1
 end: `fn.thread-context.none`
 
 include
@@ -31,6 +33,11 @@ external:
         return: c.calloc(1U, size)
     end: lm_test_tracked_new_zero
 end: external
+
+fn: lm_test_abi_layout_slot (@: unsigned direct_new_zero_calls) LmP0Text
+    LmP0Text: copy
+    copy: lm_test_tracked_new_zero(direct_new_zero_calls, c.sizeof(copy[0]))
+return: copy
 
 User:
     int: age
@@ -50,7 +57,12 @@ return: user
 external:
     fn: main () int
         unsigned: directNewZeroCalls 0U
-        User: returnSource
+        LmP0Text: abiSlot lm_test_abi_layout_slot(@ directNewZeroCalls)
+        if: abiSlot = 0 || directNewZeroCalls != 1U
+            return: 6
+        c.free: abiSlot
+
+        User: returnSource 0
         if: User = 0
             return: 5
         User: first make_user(@ directNewZeroCalls, @ returnSource, 41)

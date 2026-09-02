@@ -4,7 +4,7 @@ L2:
 . . name: class
 . . columns: (class: class) (class: kind)
 . . rows:
-. . . LmTestText  layout
+. . . LmTestText  primitive
 . end: class
 .
 . table:

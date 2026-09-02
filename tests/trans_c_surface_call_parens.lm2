@@ -46,7 +46,7 @@ L2:
         fn: main () int
             int: variable 5
             c.struct: c.LmBranch branch
-            @: LmBranch node @ branch
+            LmBranch: node @ branch
             c.branch.value: 23
             return: c.add(c.variable, c.wrap(c.add(2, c.node->value))) != 30
         end: main

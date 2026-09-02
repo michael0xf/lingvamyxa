@@ -1,0 +1,43 @@
+L2:
+    fn: LmOccurrenceCall (int: value) int
+
+    table:
+        source
+        name: functionPointerType
+        columns: (class: class) (int: value)
+        rows:
+                 LmOccurrenceCall  1
+    end: functionPointerType
+
+    table:
+        source
+        name: `fn.thread-context.none`
+        columns: (class: class) (int: value)
+        rows:
+                 occurrenceIncrement  1
+                 occurrenceDouble     1
+    end: `fn.thread-context.none`
+
+    fn: occurrenceIncrement (int: value) int
+        return: value + 1
+    end: occurrenceIncrement
+
+    fn: occurrenceDouble (int: value) int
+        return: value * 2
+    end: occurrenceDouble
+
+    OccurrenceCallbacks:
+        LmOccurrenceCall: callback @ occurrenceIncrement
+        LmOccurrenceCall: callback @ occurrenceDouble
+    end: OccurrenceCallbacks
+
+    external:
+        fn: main () int
+            if: OccurrenceCallbacks\[0]callback(20) != 21
+                return: 1
+            if: OccurrenceCallbacks\[1]callback(20) != 40
+                return: 2
+            return: OccurrenceCallbacks\callback(20) != 40
+        end: main
+    end: external
+end: L2

@@ -1,0 +1,37 @@
+import: "lm2/trans_library.lm2"
+
+external:
+    fn: main () int
+        return: lm_test_class_metadata_relation_parity_core()
+    end: main
+end: external
+
+fn: lm_test_class_metadata_relation_parity_core () int
+    LmTransNamespace: namespace_
+    LmP0Text: class_name
+    const: LmOwnPtrStack: class_rows
+    const: LmTransDescriptor: descriptor
+    const: @: char present_value
+    int: status
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_load_for_source("tests/trans_class_metadata_relation_parity_core.lm2") != 0
+        return: 1
+    lm_trans_registry\view_mode: 2
+
+    namespace_: lm_trans_namespace_new()
+    class_name: lm_trans_text_from_cstr("class")
+    status: namespace_ = 0 || class_name = 0
+    if: status = 0 && lm_trans_namespace_attach_registry(namespace_) != 0
+        status: 1
+
+    class_rows: lm_trans_registry_relation_stack_for_table("class.present")
+    descriptor: lm_trans_namespace_descriptor(namespace_, class_name)
+    present_value: lm_trans_descriptor_class_relation_value(descriptor, "class.present")
+    if: status = 0 && (class_rows = 0 || class_rows\count = 0U || descriptor = 0 || present_value = 0 || c.strcmp(present_value, "class") != 0 || lm_registry_view_find_local_table_slice(lm_trans_registry\view, "class.class.present", 19U) != 0)
+        status: 1
+
+    lm_trans_text_ref_destroy(@ class_name)
+    lm_trans_namespace_delete(namespace_)
+    lm_trans_registry_destroy()
+return: status

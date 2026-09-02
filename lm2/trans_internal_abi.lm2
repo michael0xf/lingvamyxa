@@ -300,6 +300,11 @@ fn: lm_trans_namespace_layout_source_is_supported (
     const: LmP0Text: class_name
 ) int
 
+fn: lm_trans_namespace_has_named_structure_binding (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
 fn: lm_trans_namespace_declare_storage_binding (
     LmTransNamespace: namespace_
     const: LmP0Text: name
@@ -527,6 +532,10 @@ sub: lm_trans_descriptor_field_delete_any (
     @: void object
 )
 
+sub: lm_trans_descriptor_relation_delete_any (
+    @: void object
+)
+
 sub: lm_trans_descriptor_delete (
     LmTransDescriptor: descriptor
 )
@@ -555,6 +564,33 @@ fn: lm_trans_descriptor_structural_field (
     const: LmTransDescriptor: descriptor
     const: @: char name
 ) const: LmTransDescriptorField
+
+fn: lm_trans_descriptor_implements (
+    const: LmTransDescriptor: candidate
+    const: LmTransDescriptor: required
+    @: int out_result
+) int
+
+fn: lm_trans_namespace_bind_descriptor_with_c_name (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @: char kind
+    const: LmP0Text: c_name
+    LmTransDescriptor: descriptor
+) int
+
+fn: lm_trans_namespace_bind_descriptor (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @: char kind
+    LmTransDescriptor: descriptor
+) int
+
+fn: lm_trans_namespace_rollback_descriptor_binding (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    LmTransDescriptor: descriptor
+) int
 
 fn: lm_trans_namespace_attach_descriptor (
     LmTransNamespace: namespace_

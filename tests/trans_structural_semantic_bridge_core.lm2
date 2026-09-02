@@ -6,7 +6,35 @@ external:
     end: main
 end: external
 
-fn: lm_test_attach_empty_structural_descriptor (
+fn: lm_test_attach_local_structural_layout (
+    LmTransNamespace: namespace_
+    const: @(char name)
+) int
+    LmP0Text: name_text
+    LmP0Text: storage_name
+    @: char storage_name_text
+    LmTransDescriptor: descriptor
+    int: status
+
+    name_text: lm_trans_text_from_cstr(name)
+    storage_name_text: 0
+    storage_name: 0
+    descriptor: lm_trans_descriptor_new()
+    status: name_text = 0 || descriptor = 0
+    if: status = 0
+        storage_name_text: lm_trans_prefixed_identifier_name_new("lm_", name_text, "")
+        if: storage_name_text != 0
+            storage_name: lm_trans_text_from_cstr(storage_name_text)
+        status: storage_name = 0 || lm_trans_namespace_declare_c_name(namespace_, name_text, "variable", storage_name) != 0 || lm_trans_namespace_declare_relation_text(namespace_, name_text, "variable.type", name_text) != 0 || lm_trans_descriptor_mark_structural_fields(descriptor) != 0 || lm_trans_namespace_attach_descriptor(namespace_, name_text, descriptor) != 0
+    if: status = 0
+        descriptor: 0
+    lm_trans_descriptor_delete(descriptor)
+    lm_trans_text_ref_destroy(@ storage_name)
+    lm_own_delete(storage_name_text, 0)
+    lm_trans_text_ref_destroy(@ name_text)
+return: status != 0
+
+fn: lm_test_attach_shape_only_descriptor (
     LmTransNamespace: namespace_
     const: @(char name)
 ) int
@@ -202,6 +230,9 @@ fn: lm_test_structural_semantic_bridge_core () int
     LmP0Text: explicit_name
     LmP0Text: projection_name
     LmP0Text: builtin_name
+    LmP0Text: function_pointer_name
+    LmP0Text: opaque_reference_name
+    LmP0Text: shape_only_name
     LmP0Text: unsupported_name
     LmP0Text: bridge_name
     LmP0Text: callable_name
@@ -251,7 +282,7 @@ fn: lm_test_structural_semantic_bridge_core () int
     top_level_source: "BridgeB:\n    ManualStructural: child\nend: BridgeB\n"
     type_source: "ManualStructural\n"
     field_source: "ManualStructural: child\n"
-    projection_output: "ManualStructural *|ManualStructural *|ManualStructural ***callable|ManualStructural *abi_structural, ExplicitAbiLayout **abi_explicit, ProjectionAbiLayout *abi_projection|ManualStructural * *declared|ManualStructural * captured;\n|ManualStructural * **|ManualStructural * child;\n|typedef struct ManualRow {\n    ManualStructural *child;\n} ManualRow;\n|typedef struct BridgeB {\n    ManualStructural *child;\n} BridgeB;\n|typedef struct makeManualReturn makeManualReturn;\n\nstruct makeManualReturn {\n    ManualStructural * child;\n};\n\n"
+    projection_output: "ManualStructural *|ManualStructural *|ManualStructural ***callable|ManualStructural *abi_structural, ExplicitAbiLayout **abi_explicit, ProjectionAbiLayout *abi_projection|ManualStructural * *declared|ManualStructural * captured;\n|ManualStructural * **|ManualStructural * child;\n|typedef struct ManualRow {\n    ManualStructural *child;\n} ManualRow;\n|struct BridgeB;\ntypedef struct BridgeB BridgeB;\nstruct BridgeB {\n    ManualStructural *child;\n};\n|typedef struct makeManualReturn makeManualReturn;\n\nstruct makeManualReturn {\n    ManualStructural * child;\n};\n\n"
     namespace_: 0
     structural_name: 0
     scope_name: 0
@@ -259,6 +290,9 @@ fn: lm_test_structural_semantic_bridge_core () int
     explicit_name: 0
     projection_name: 0
     builtin_name: 0
+    function_pointer_name: 0
+    opaque_reference_name: 0
+    shape_only_name: 0
     unsupported_name: 0
     bridge_name: 0
     callable_name: 0
@@ -295,7 +329,7 @@ fn: lm_test_structural_semantic_bridge_core () int
     status: 0
 
     lm_trans_registry_destroy()
-    if: lm_trans_registry_load_for_source("tests/trans_structural_semantic_bridge_core.lm2") != 0
+    if: lm_trans_registry_load_for_source("tests/trans_structural_semantic_bridge_core.lm2") != 0 || lm_trans_registry_materialize_predef_path("lm2/own_abi.lm2") != 0
         return: 1
     lm_trans_registry\view_mode: 2
 
@@ -306,6 +340,9 @@ fn: lm_test_structural_semantic_bridge_core () int
     explicit_name: lm_trans_text_from_cstr("ExplicitAbiLayout")
     projection_name: lm_trans_text_from_cstr("c.ProjectionAbiLayout")
     builtin_name: lm_trans_text_from_cstr("int")
+    function_pointer_name: lm_trans_text_from_cstr("LmOwnDelete")
+    opaque_reference_name: lm_trans_text_from_cstr("FILE")
+    shape_only_name: lm_trans_text_from_cstr("ShapeOnly")
     unsupported_name: lm_trans_text_from_cstr("UnsupportedAbiLayout")
     bridge_name: lm_trans_text_from_cstr("BridgeB")
     callable_name: lm_trans_text_from_cstr("callable")
@@ -313,7 +350,7 @@ fn: lm_test_structural_semantic_bridge_core () int
     function_name: lm_trans_text_from_cstr("makeManual")
     layout_field: lm_own_new_zero(c.sizeof(layout_field[0]))
     expected_type: lm_trans_expr_callable_type_new()
-    if: namespace_ = 0 || structural_name = 0 || scope_name = 0 || conflict_name = 0 || explicit_name = 0 || projection_name = 0 || builtin_name = 0 || unsupported_name = 0 || bridge_name = 0 || callable_name = 0 || capture_name = 0 || function_name = 0 || layout_field = 0 || expected_type = 0 || lm_trans_namespace_attach_registry(namespace_) != 0
+    if: namespace_ = 0 || structural_name = 0 || scope_name = 0 || conflict_name = 0 || explicit_name = 0 || projection_name = 0 || builtin_name = 0 || function_pointer_name = 0 || opaque_reference_name = 0 || shape_only_name = 0 || unsupported_name = 0 || bridge_name = 0 || callable_name = 0 || capture_name = 0 || function_name = 0 || layout_field = 0 || expected_type = 0 || lm_trans_namespace_attach_registry(namespace_) != 0
         status: 1
 
     if: lm_trans_registry != 0
@@ -321,14 +358,17 @@ fn: lm_test_structural_semantic_bridge_core () int
         baseline_view_fact_count: lm_registry_view_fact_count(lm_trans_registry\view)
         baseline_source_table_count: lm_registry_view_source_table_count(lm_trans_registry\view)
 
-    if: status = 0 && (lm_test_attach_empty_structural_descriptor(namespace_, "ManualStructural") != 0 || lm_test_attach_empty_structural_descriptor(namespace_, "ScopedStructural") != 0 || lm_test_attach_empty_structural_descriptor(namespace_, "ConflictingStructural") != 0)
+    if: status = 0 && (lm_test_attach_local_structural_layout(namespace_, "ManualStructural") != 0 || lm_test_attach_local_structural_layout(namespace_, "ScopedStructural") != 0 || lm_test_attach_local_structural_layout(namespace_, "ConflictingStructural") != 0 || lm_test_attach_shape_only_descriptor(namespace_, "ShapeOnly") != 0)
         status: 1
 
     descriptor: lm_trans_namespace_descriptor(namespace_, structural_name)
-    if: status = 0 && (descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0 || descriptor\structural_fields\count != 0U || lm_trans_namespace_type_is_structural(namespace_, structural_name) = 0 || lm_trans_head_can_declare_storage(structural_name, namespace_) = 0 || lm_trans_namespace_class_has(namespace_, structural_name) != 0 || lm_trans_layout_backend_value(namespace_, structural_name) != 0 || lm_trans_namespace_layout_source_is_supported(namespace_, structural_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "ManualStructural") = 0)
+    if: status = 0 && (descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0 || descriptor\structural_fields\count != 0U || lm_trans_namespace_type_is_structural(namespace_, structural_name) = 0 || lm_trans_head_can_declare_storage(structural_name, namespace_) = 0 || lm_trans_namespace_class_has(namespace_, structural_name) != 0 || lm_trans_layout_backend_value(namespace_, structural_name) != 0 || lm_trans_namespace_layout_source_is_supported(namespace_, structural_name) = 0 || lm_trans_namespace_has_named_structure_binding(namespace_, structural_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "ManualStructural") = 0)
         status: 1
 
     if: status = 0 && (lm_trans_layout_type_implicit_address_depth(structural_name, namespace_) != 1U || lm_trans_effective_address_depth(structural_name, 0U, namespace_) != 1U || lm_trans_effective_address_depth(structural_name, 2U, namespace_) != 3U || lm_trans_layout_type_implicit_address_depth(structural_name, 0) != 0U || lm_trans_effective_address_depth(structural_name, 2U, 0) != 2U || lm_trans_layout_type_implicit_address_depth(builtin_name, namespace_) != 0U)
+        status: 1
+
+    if: status = 0 && (lm_trans_namespace_type_is_structural(namespace_, builtin_name) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, builtin_name) != 0 || lm_trans_namespace_has_named_structure_binding(namespace_, builtin_name) != 0 || lm_trans_layout_type_implicit_address_depth(builtin_name, namespace_) != 0U || lm_trans_namespace_type_is_structural(namespace_, function_pointer_name) = 0 || lm_trans_registry_is_function_pointer_type_name(namespace_, function_pointer_name) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, function_pointer_name) != 0 || lm_trans_namespace_has_named_structure_binding(namespace_, function_pointer_name) != 0 || lm_trans_layout_type_implicit_address_depth(function_pointer_name, namespace_) != 0U || lm_trans_namespace_type_is_structural(namespace_, opaque_reference_name) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, opaque_reference_name) != 0 || lm_trans_namespace_has_named_structure_binding(namespace_, opaque_reference_name) != 0 || lm_trans_layout_type_implicit_address_depth(opaque_reference_name, namespace_) != 1U || lm_trans_namespace_type_is_structural(namespace_, shape_only_name) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, shape_only_name) != 0 || lm_trans_namespace_has_named_structure_binding(namespace_, shape_only_name) != 0 || lm_trans_layout_type_implicit_address_depth(shape_only_name, namespace_) != 0U || lm_trans_head_can_declare_storage(shape_only_name, namespace_) != 0)
         status: 1
 
     layout_field\class_name: "ManualStructural"
@@ -402,7 +442,7 @@ fn: lm_test_structural_semantic_bridge_core () int
     if: status = 0 && lm_trans_registry_note_layout_backend(conflict_name, "c.unsupported") != 0
         status: 1
     backend: lm_trans_layout_backend_value(namespace_, conflict_name)
-    if: status = 0 && (backend = 0 || c.strcmp(backend, "c.unsupported") != 0 || lm_trans_namespace_layout_source_is_supported(namespace_, conflict_name) = 0)
+    if: status = 0 && (backend = 0 || c.strcmp(backend, "c.unsupported") != 0 || lm_trans_namespace_layout_source_is_supported(namespace_, conflict_name) != 0 || lm_trans_namespace_has_named_structure_binding(namespace_, conflict_name) = 0 || lm_trans_head_can_declare_storage(conflict_name, namespace_) = 0 || lm_trans_layout_type_implicit_address_depth(conflict_name, namespace_) != 1U || lm_trans_effective_address_depth(conflict_name, 1U, namespace_) != 2U)
         status: 1
 
     explicit_descriptor: lm_trans_descriptor_new()
@@ -412,7 +452,7 @@ fn: lm_test_structural_semantic_bridge_core () int
         explicit_descriptor: 0
     if: status = 0 && (lm_trans_registry_note_class_present(explicit_name) != 0 || lm_trans_registry_note_class_reference_base(explicit_name) != 0 || lm_trans_registry_note_layout_backend(explicit_name, "c.struct") != 0 || lm_trans_registry_note_class_present(unsupported_name) != 0 || lm_trans_registry_note_layout_backend(unsupported_name, "c.unsupported") != 0)
         status: 1
-    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, explicit_name) = 0 || lm_trans_namespace_type_is_structural(namespace_, explicit_name) != 0 || lm_trans_head_can_declare_storage(explicit_name, namespace_) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, explicit_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "ExplicitAbiLayout") = 0 || lm_trans_layout_type_implicit_address_depth(explicit_name, namespace_) != 1U || lm_trans_effective_address_depth(explicit_name, 1U, namespace_) != 2U || lm_trans_namespace_layout_source_is_supported(namespace_, unsupported_name) != 0)
+    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, explicit_name) = 0 || lm_trans_namespace_type_is_structural(namespace_, explicit_name) != 0 || lm_trans_head_can_declare_storage(explicit_name, namespace_) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, explicit_name) = 0 || lm_trans_namespace_has_named_structure_binding(namespace_, explicit_name) != 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "ExplicitAbiLayout") = 0 || lm_trans_layout_type_implicit_address_depth(explicit_name, namespace_) != 1U || lm_trans_effective_address_depth(explicit_name, 1U, namespace_) != 2U || lm_trans_namespace_layout_source_is_supported(namespace_, unsupported_name) != 0)
         status: 1
     projection_descriptor: lm_trans_descriptor_new()
     if: status = 0 && (projection_descriptor = 0 || lm_trans_namespace_declare_generated(namespace_, projection_name, "variable") != 0 || lm_trans_namespace_attach_descriptor(namespace_, projection_name, projection_descriptor) != 0)
@@ -492,6 +532,9 @@ fn: lm_test_structural_semantic_bridge_core () int
     lm_trans_text_ref_destroy(@ explicit_name)
     lm_trans_text_ref_destroy(@ projection_name)
     lm_trans_text_ref_destroy(@ builtin_name)
+    lm_trans_text_ref_destroy(@ function_pointer_name)
+    lm_trans_text_ref_destroy(@ opaque_reference_name)
+    lm_trans_text_ref_destroy(@ shape_only_name)
     lm_trans_text_ref_destroy(@ conflict_name)
     lm_trans_text_ref_destroy(@ scope_name)
     lm_trans_text_ref_destroy(@ structural_name)

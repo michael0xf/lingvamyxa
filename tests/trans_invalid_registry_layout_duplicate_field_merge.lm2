@@ -1,0 +1,35 @@
+L2:
+    table:
+        source
+        name: class
+        columns: (class: class) (class: kind)
+        rows:
+                 DuplicateFieldLayout  primitive
+    end: class
+
+    table:
+        source
+        name: DuplicateFieldLayout
+        columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
+        rows:
+                 value  int   0  0
+                 value  char  1  0
+    end: DuplicateFieldLayout
+
+    table:
+        source
+        name: `layout.backend`
+        columns: (class: class) (class: backend)
+        rows:
+                 DuplicateFieldLayout  c.struct
+    end: `layout.backend`
+
+    merge: (DuplicateFieldLayout) DuplicateFieldMerge
+    end: DuplicateFieldMerge
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2

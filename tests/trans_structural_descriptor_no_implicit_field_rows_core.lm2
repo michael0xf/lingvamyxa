@@ -231,7 +231,7 @@ fn: lm_test_structural_descriptor_no_implicit_field_rows_core () int
 
     named_source: "PhysicalNamed:\n    answer: 7\n"
     merge_source: "merge: (DescriptorSource) MergeTarget\n    int: local_value 9\nend: MergeTarget\n"
-    shadow_source: "merge: (ShadowTarget) ShadowTarget\n    ShadowTarget: self_ref\nend: ShadowTarget\n"
+    shadow_source: "merge: (ShadowTarget) ShadowTarget\n    int: outer_field\nend: ShadowTarget\n"
     named_document: 0
     merge_document: 0
     shadow_document: 0
@@ -342,10 +342,7 @@ fn: lm_test_structural_descriptor_no_implicit_field_rows_core () int
     if: status = 0 && (outer_shadow_descriptor = 0 || inner_shadow_descriptor = 0 || inner_shadow_descriptor = outer_shadow_descriptor || inner_shadow_descriptor\has_structural_fields = 0 || inner_shadow_descriptor\structural_fields\count != 2U || inner_shadow_symbol = 0 || inner_shadow_symbol = outer_shadow_symbol || inner_shadow_relation = 0 || inner_shadow_relation = outer_shadow_relation || lm_test_no_implicit_owner_has_namespace_bindings(namespace_, "ShadowTarget", "lm_ShadowTarget") != 0)
         status: 1
     descriptor_field: lm_trans_descriptor_structural_field(inner_shadow_descriptor, "outer_field")
-    if: status = 0 && (descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 0U)
-        status: 1
-    descriptor_field: lm_trans_descriptor_structural_field(inner_shadow_descriptor, "self_ref")
-    if: status = 0 && (descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "ShadowTarget") != 0 || descriptor_field\index != 1U || descriptor_field\address_depth != 0U || lm_trans_namespace_type_is_structural(namespace_, owner_name) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, owner_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "ShadowTarget") = 0 || lm_test_no_implicit_field_rows_for_owner("ShadowTarget") != 0 || lm_test_no_implicit_owner_has_no_registry_metadata(namespace_, "ShadowTarget") != 0)
+    if: status = 0 && (descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 1U || descriptor_field\address_depth != 0U || lm_trans_namespace_type_is_structural(namespace_, owner_name) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, owner_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "ShadowTarget") = 0 || lm_test_no_implicit_field_rows_for_owner("ShadowTarget") != 0 || lm_test_no_implicit_owner_has_no_registry_metadata(namespace_, "ShadowTarget") != 0)
         status: 1
     if: namespace_ != 0
         lm_trans_namespace_leave_scope(namespace_)

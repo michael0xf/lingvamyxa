@@ -4,7 +4,7 @@ L2:
 . . name: class
 . . columns: (class: class) (class: kind)
 . . rows:
-. . . LmRawBox  layout
+. . . LmRawBox  primitive
 . end: class
 .
 . table:

@@ -13,11 +13,15 @@ fn: lm_test_namespace_descriptor_core () int
     const: LmTransDescriptor: inner
     const: LmTransDescriptorField: field
     const: LmTransSymbol: symbol
+    const: LmTransSymbol: rebound_symbol
+    LmTransDescriptor: rollback_descriptor
     LmP0Text: name
     LmP0Text: field_name
     LmP0Text: second_field_name
     LmP0Text: field_descriptor
     LmP0Text: missing
+    size_t: baseline_item_count
+    int: rollback_bound
     int: status
 
     namespace_: lm_trans_namespace_new()
@@ -27,6 +31,9 @@ fn: lm_test_namespace_descriptor_core () int
     second_field_name: lm_trans_text_from_cstr("hash")
     field_descriptor: lm_trans_text_from_cstr("int")
     missing: lm_trans_text_from_cstr("Missing")
+    baseline_item_count: 0U
+    rollback_descriptor: 0
+    rollback_bound: 0
     status: 0
 
     if: namespace_ = 0 || descriptor = 0 || name = 0 || field_name = 0 || second_field_name = 0 || field_descriptor = 0 || missing = 0
@@ -36,15 +43,24 @@ fn: lm_test_namespace_descriptor_core () int
         status: 1
 
     outer: descriptor
-    if: status = 0 && (lm_trans_namespace_declare(namespace_, name, "descriptor") != 0 || lm_trans_namespace_attach_descriptor(namespace_, name, descriptor) != 0)
+    if: status = 0 && lm_trans_namespace_bind_descriptor(namespace_, name, "descriptor", descriptor) != 0
         status: 1
     if: status = 0
         descriptor: 0
 
     symbol: lm_trans_namespace_find(namespace_, name)
     outer: lm_trans_namespace_descriptor(namespace_, name)
+    if: namespace_ != 0 && namespace_\items != 0
+        baseline_item_count: namespace_\items\count
     field: lm_trans_descriptor_structural_field(outer, "equals")
     if: status = 0 && (symbol = 0 || lm_trans_symbol_is(symbol, "descriptor") = 0 || outer = 0 || outer\has_structural_fields = 0 || outer\structural_fields = 0 || outer\structural_fields\count != 2U || field = 0 || field\descriptor_name = 0 || c.strcmp(field\descriptor_name, "int") != 0 || lm_trans_descriptor_structural_field(outer, "missing") != 0)
+        status: 1
+
+    if: status = 0 && lm_trans_namespace_bind_descriptor(namespace_, name, "descriptor", outer) = 0
+        if: lm_trans_namespace_rollback_descriptor_binding(namespace_, name, outer) != 0
+            return: 1
+        status: 1
+    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, name) != outer || lm_trans_namespace_find(namespace_, name) != symbol || namespace_\items\count != baseline_item_count)
         status: 1
 
     if: status = 0 && lm_trans_namespace_descriptor(namespace_, missing) != 0
@@ -52,15 +68,51 @@ fn: lm_test_namespace_descriptor_core () int
 
     lm_trans_namespace_enter_scope(namespace_)
     descriptor: lm_trans_descriptor_new()
-    if: descriptor = 0 || lm_trans_descriptor_mark_structural_fields(descriptor) != 0 || lm_trans_namespace_declare(namespace_, name, "descriptor") != 0 || lm_trans_namespace_attach_descriptor(namespace_, name, descriptor) != 0
+    if: descriptor = 0 || lm_trans_descriptor_mark_structural_fields(descriptor) != 0 || lm_trans_descriptor_add_structural_field(descriptor, field_name, field_descriptor, 0U, 0U, 0U, 0, 0, 0) != 0 || lm_trans_namespace_bind_descriptor(namespace_, name, "descriptor", descriptor) != 0
         status: 1
     else:
         descriptor: 0
     inner: lm_trans_namespace_descriptor(namespace_, name)
-    if: status = 0 && (inner = 0 || inner = outer || inner\has_structural_fields = 0 || inner\structural_fields = 0 || inner\structural_fields\count != 0U)
+    if: status = 0 && (inner = 0 || inner = outer || inner\has_structural_fields = 0 || inner\structural_fields = 0 || inner\structural_fields\count != 1U || lm_trans_descriptor_structural_field(inner, "equals") = 0)
         status: 1
     lm_trans_namespace_leave_scope(namespace_)
     if: status = 0 && lm_trans_namespace_descriptor(namespace_, name) != outer
+        status: 1
+
+    descriptor: lm_trans_descriptor_new()
+    if: status = 0 && (descriptor = 0 || lm_trans_descriptor_mark_structural_fields(descriptor) != 0 || lm_trans_descriptor_add_structural_field(descriptor, field_name, field_descriptor, 0U, 0U, 0U, 0, 0, 0) != 0)
+        status: 1
+    if: status = 0
+        rollback_descriptor: descriptor
+        if: lm_trans_namespace_bind_descriptor(namespace_, name, "descriptor", descriptor) != 0
+            status: 1
+        else:
+            descriptor: 0
+            rollback_bound: 1
+        ---
+    rebound_symbol: lm_trans_namespace_find(namespace_, name)
+    if: rollback_bound != 0
+        if: status = 0 && (rebound_symbol = 0 || rebound_symbol = symbol || lm_trans_namespace_descriptor(namespace_, name) != rollback_descriptor)
+            status: 1
+        if: lm_trans_namespace_rollback_descriptor_binding(namespace_, name, rollback_descriptor) != 0
+            status: 1
+        else:
+            descriptor: rollback_descriptor
+            rollback_descriptor: 0
+            rollback_bound: 0
+        ---
+    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, name) != outer || lm_trans_namespace_find(namespace_, name) != symbol || namespace_\items\count != baseline_item_count)
+        status: 1
+    lm_trans_descriptor_delete(descriptor)
+    descriptor: 0
+
+    descriptor: lm_trans_descriptor_new()
+    if: status = 0 && (descriptor = 0 || lm_trans_descriptor_mark_structural_fields(descriptor) != 0 || lm_trans_descriptor_add_structural_field(descriptor, field_name, field_descriptor, 0U, 0U, 0U, 0, 0, 0) != 0 || lm_trans_descriptor_add_structural_field(descriptor, second_field_name, field_descriptor, 1U, 0U, 0U, 0, 0, 0) != 0 || lm_trans_descriptor_add_structural_field(descriptor, missing, field_descriptor, 2U, 0U, 0U, 0, 0, 0) != 0)
+        status: 1
+    if: status = 0 && lm_trans_namespace_bind_descriptor(namespace_, name, "descriptor", descriptor) = 0
+        descriptor: 0
+        status: 1
+    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, name) != outer || lm_trans_namespace_find(namespace_, name) != symbol)
         status: 1
 
     lm_trans_descriptor_delete(descriptor)

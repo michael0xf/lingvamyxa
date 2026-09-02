@@ -1,4 +1,11 @@
 table:
+    name: class
+    columns: (class: class) (class: kind)
+    rows:
+             LmArrayEnumeration  primitive
+end: class
+
+table:
     name: LmArrayEnumeration
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:

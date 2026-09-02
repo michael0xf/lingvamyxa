@@ -77,6 +77,14 @@ end: `SplitOnly.field.class`
 
 table:
     source
+    name: `SplitOnly.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             flag  0
+end: `SplitOnly.field.index`
+
+table:
+    source
     name: WrongSchema
     columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`)
     rows:

@@ -1,0 +1,8 @@
+RedeclaredShape:
+    int: existing_field
+end: RedeclaredShape
+
+RedeclaredShape:
+    int: existing_field
+    int: added_field
+end: RedeclaredShape

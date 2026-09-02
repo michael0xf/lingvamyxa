@@ -5,6 +5,7 @@ table:
              LmTransIdentifierRelation   c.struct
              LmTransIdentifierCard       c.struct
              LmTransDescriptorField      c.struct
+             LmTransDescriptorRelation   c.struct
              LmTransDescriptor           c.struct
              LmTransNamespace            c.struct
              LmTransRegistryFact         c.struct
@@ -128,6 +129,7 @@ table:
              lm_trans_capture_delete_any 1
              lm_trans_cleanup_delete_any 1
              lm_trans_descriptor_field_delete_any 1
+             lm_trans_descriptor_relation_delete_any 1
              lm_trans_descriptor_delete_any 1
              lm_trans_expr_job_destroy_call_args 1
              lm_trans_expr_job_destroy_lowered_range 1
@@ -382,6 +384,7 @@ table:
              LmTransFormalParam             c.struct
              LmTransFormalParamList         c.struct
              LmTransDescriptorField         c.struct
+             LmTransDescriptorRelation      c.struct
              LmTransDescriptor              c.struct
              LmTransSymbol                  c.struct
              LmTransCleanup                 c.struct
@@ -442,6 +445,7 @@ table:
              LmTransFormalParam             1
              LmTransFormalParamList         1
              LmTransDescriptorField         1
+             LmTransDescriptorRelation      1
              LmTransDescriptor              1
              LmTransSymbol                  1
              LmTransCleanup                 1
@@ -676,6 +680,7 @@ table:
              structural_fields       LmOwnPtrStack          0                       0                                0
              has_structural_fields   int                    1                       0                                0
              class_relations         LmOwnPtrStack          2                       0                                0
+             registry_materialized   int                    3                       0                                0
 end: LmTransDescriptor
 
 table:
@@ -706,6 +711,7 @@ table:
              callable_has_thread_context int                 21                      0                                0
              callable_is_thread_handler int                  22                      0                                0
              descriptor               LmTransDescriptor      23                      0                                0
+             registry_materialized     int                    24                      0                                0
 end: LmTransSymbol
 
 table:
