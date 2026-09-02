@@ -1,0 +1,9 @@
+external:
+    fn: main () int
+        const: int: value 0
+        const: @: int source @ value
+        c.array: [1]: @: int pointers
+        pointers[0]: source
+        return: 0
+    end: main
+end: external

@@ -1,0 +1,46 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: row_second (@: int row) int
+    return: row[1]
+end: row_second
+
+fn: pointer_first (@@: int values) int
+    return: values[0][0]
+end: pointer_first
+
+fn: slot_is_null (@: LmSlice slot) int
+    return: slot[0] = 0
+end: slot_is_null
+
+external:
+    fn: main () int
+        int: pointed 13
+        int: alternate 17
+        c.array:
+            [][]: int matrix 2 2
+                []: 1 2
+                []: 3 4
+        ---
+        c.array: [1]: @: int pointers @ pointed
+        c.array: const: [1]: @: int const_pointers @ pointed
+        c.array: [1]: int row_indices 1
+        []: int first [7]
+        []: int second [8]
+        @: LmSlice slot @ first
+        @: int matrix_element @ matrix[0][1]
+        int: loaded_pointed \ pointers[0]
+        c.array: [1]: @: LmSlice slice_slots @ first
+        slot: @ second
+        slice_slots[0]: @ second
+        pointers[0]: @ pointed
+        const_pointers[0]: @ alternate
+        return: row_second(matrix[row_indices[0]]) != 4 || pointer_first(pointers) != 13 || matrix_element[0] != 2 || loaded_pointed != 13 || const_pointers[0][0] != 17 || slot_is_null(slot) || slot[0] != second || slice_slots[0][0] != second
+    end: main
+end: external

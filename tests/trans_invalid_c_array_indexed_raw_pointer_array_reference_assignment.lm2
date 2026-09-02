@@ -1,0 +1,17 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+external:
+    fn: main () int
+        @@: int pointers
+        []: int managed [7]
+        pointers[0]: managed
+        return: 0
+    end: main
+end: external

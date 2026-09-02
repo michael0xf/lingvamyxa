@@ -1,0 +1,10 @@
+external:
+    fn: main () int
+        int: value 0
+        @: int one @ value
+        @@: int wrong @ one
+        c.array: [1]: @: int pointers
+        pointers[0]: wrong
+        return: 0
+    end: main
+end: external

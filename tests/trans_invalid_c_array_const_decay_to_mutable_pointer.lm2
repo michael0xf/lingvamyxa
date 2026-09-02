@@ -1,0 +1,20 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: mutate (@: int values) int
+    values[0]: 8
+    return: values[0]
+end: mutate
+
+external:
+    fn: main () int
+        c.array: const: [1]: int: values 7
+        return: mutate(values)
+    end: main
+end: external

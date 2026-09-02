@@ -1,0 +1,8 @@
+external:
+    fn: main () int
+        int: index_value 0
+        @: int raw_index @ index_value
+        c.array: [2]: int: values 1 2
+        return: values[raw_index]
+    end: main
+end: external

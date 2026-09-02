@@ -1,0 +1,10 @@
+fn: take_chars (@: char values) int
+    return: values[0]
+end: take_chars
+
+external:
+    fn: main () int
+        c.array: [1]: int: raw 7
+        return: take_chars(raw)
+    end: main
+end: external

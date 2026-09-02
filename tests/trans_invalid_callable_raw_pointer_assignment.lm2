@@ -1,0 +1,13 @@
+c.array: [1]: char characters
+
+fn: makeWrong () @: char
+    return: characters
+end: makeWrong
+
+external:
+    fn: main () int
+        @: int pointer 0
+        pointer: makeWrong()
+        return: 0
+    end: main
+end: external

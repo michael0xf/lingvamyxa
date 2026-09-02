@@ -1,0 +1,13 @@
+L2:
+    fn: runtime_value () int
+        return: 7
+    end: runtime_value
+
+    c.array: [1]: int: raw runtime_value()
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2

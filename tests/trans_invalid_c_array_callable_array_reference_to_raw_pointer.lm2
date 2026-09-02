@@ -1,0 +1,22 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: make () []: int
+    return: [7]
+end: make
+
+fn: first (@: int values) int
+    return: values[0]
+end: first
+
+external:
+    fn: main () int
+        return: first(make())
+    end: main
+end: external

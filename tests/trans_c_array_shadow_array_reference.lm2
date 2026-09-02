@@ -1,0 +1,22 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: first ([]: int values) int
+    return: values[0]
+end: first
+
+external:
+    fn: main () int
+        c.array: [1]: int: values 3
+        if: values[0] = 3
+            []: int values [7]
+            return: first(values) != 7
+        return: 2
+    end: main
+end: external

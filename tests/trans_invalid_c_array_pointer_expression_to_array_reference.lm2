@@ -1,0 +1,20 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: consume ([]: int values) int
+    return: values[0]
+end: consume
+
+external:
+    fn: main () int
+        c.array: [1]: int: raw 7
+        @: int pointer raw
+        return: consume(pointer + 0)
+    end: main
+end: external

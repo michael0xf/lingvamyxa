@@ -4108,6 +4108,14 @@ translation unit after the build profile's headers, defines and toolchain
 inputs have been applied. This is the canonical and permanent L2 C-surface
 escape; it is not a Lingvamyxa namespace and not a temporary bootstrap shortcut.
 
+Exact registered receiver heads take precedence over this generic copying rule
+in receiver/head position. Thus `c.struct:`, `c.union:`, `c.enum:` and
+`c.array:` are consumed by their registered L2 receiver semantics rather than
+being copied as calls or updates of C identifiers named `struct`, `union`,
+`enum` or `array`. A `c.*` spelling for which no exact receiver applies remains
+the generic C-surface escape described here. This precedence is contextual and
+does not make `c` a namespace.
+
 A dotted continuation after the explicit C door remains in the C surface:
 
     c.tree.branch
@@ -7578,6 +7586,7 @@ Semantic outline:
     table                      registered receiver constructing an ordinary Table value; legacy C/Registry projections remain implementation debt
     relation/rule/query        ordinary descriptor/Table vocabulary; no current generic receiver heads
     c.union                    registered L2 physical-layout receiver; generic union is not registered
+    c.array                    registered L2 raw C-array storage receiver; ordinary [] constructs an ArrayReference
     method/requires.method     legacy bootstrap Tables; not normative implements input
     implements                 namespace-only structural compatibility receiver; translated or interpreted with the same predicate
     message/operation          ordinary Structures/descriptors in L2/L3; no current generic receiver heads
@@ -8103,7 +8112,7 @@ profile family is already a core receiver.
     module/source:         table, import, predef, join, merge
     machine/build receivers (intended L2-only; current L3 gates incomplete):
                            include, define, ifndef-default, os, ifdef, guard,
-                           extern_c, c.struct, c.union, c.enum
+                           extern_c, c.struct, c.union, c.enum, c.array
     expression receivers:  cast: TargetDescriptor expression
                            implements(CandidateName, RequiredName)
     modifier/trailers:     external; end, until
@@ -8127,6 +8136,11 @@ implementation debt; physical C layout is only a backend projection.
 Named-Structure descriptor declarations and physical `merge:` declarations no
 longer publish implicit owner or field Registry rows, instances or object
 storage.
+
+The exact `c.array` receiver is registered as an L2-only machine-storage
+receiver and is rejected on an active L3 surface. Its nested bracket Frame is a
+raw C declarator consumed by `c.array`; it is not dispatched as the ordinary
+`[]` ArrayReference constructor.
 
 The current expression operator tables register these exact families:
 
@@ -14737,8 +14751,10 @@ Structure or Array expression yields its arena-owned reference. This keeps
 `u32: x` simple and prevents an embedded record from
 silently becoming a copyable whole-Structure expression.
 
-This section is the L2-specific low-level machine operator/parser-form surface.
-It is not part of L3. In this sense L3 is smaller than L2: L3 keeps the
+This section specifies the L2-specific low-level machine operator/parser-form
+surface. Its machine forms are not part of L3; ordinary shared forms mentioned
+for contrast retain their separately specified L2/L3 availability. In this
+sense L3 is smaller than L2: L3 keeps the
 high-level algorithmic/control, data/query and runtime surface and excludes raw
 storage, address, physical layout-storage and unchecked access. A parser form
 from this section is L2-only only when its source semantics expose such machine
@@ -14806,8 +14822,132 @@ raw typed address is a separate L2 low-level operation. If a backend needs raw
 fixed C-array storage, it must expose a distinct explicit L2 machine-storage
 operation and must not assign that meaning to ordinary `[]:`.
 
-The current bootstrap still contains direct C-array declaration paths for some
-`[]:` forms. They are implementation debt and do not define source semantics.
+The distinct hosted C99 machine-storage receiver is `c.array`. It has exactly
+one logical child, in one of these two forms:
+
+    c.array: ArrayDeclaratorFrame
+    c.array: const: ArrayDeclaratorFrame
+
+`ArrayDeclaratorFrame` must have a head made only of one or more bracket groups.
+The optional `const` Frame must itself contain exactly that one bracket Frame.
+No other child, sibling declaration or qualifier is admitted by the minimal
+receiver. Examples:
+
+    c.array: [3]: int: top_values 2 4 6
+    c.array:
+        [][]: int matrix 2 2
+            []: 1 2
+            []: 3 4
+    ---
+    c.array: const: [2]: int: fixed_values 9 11
+    c.array: [rows][columns]: int: matrix
+
+The array rank is the number of bracket groups and must be at least one. A
+non-empty group such as `[rows]` supplies its own extent expression. Each empty
+group consumes exactly one following declarator field after the element type
+and binding name, in bracket order. After all empty groups have consumed their
+extents, the remaining fields are initializer clauses. A missing extent is a
+`c.array` receiver diagnostic; an initializer is never used to infer a missing
+extent. An extent supplied after an empty group must be a single atom in the
+minimal hosted profile; a compound extent expression is written inside a
+non-empty bracket group. Empty and non-empty groups may be mixed.
+
+The element type uses the existing L2 C-declarator type forms, including an
+admitted address-depth type for pointer elements. The optional `const` wrapper
+has the same C-profile meaning as other declaration composition: it qualifies
+the base element type. It does not turn the declaration into an ordinary
+immutable ArrayReference.
+
+`c.array` declares target-machine C array storage. It allocates no Array
+object/header, arena backing, owner edge, length/shape/stride record or bounds
+metadata. The storage is not a Lingvamyxa Value and the declared name is a
+machine-storage designator, not an ArrayReference. Where the hosted C expression
+profile admits array-to-pointer conversion, consuming the designator produces
+the corresponding typed-address Primitive. Its address depth is determined by
+the element's admitted address depth plus the one remaining array dimension:
+indexing may expose a rank-one subarray for decay, while indexing every array
+dimension exposes the element itself. A designator with more than one remaining
+dimension is not silently flattened to an unrelated pointer type. Conversion to
+or from an ordinary ArrayReference requires an explicit operation which states
+the raw backing address, shape and lifetime contract.
+
+At block scope the declaration has C automatic storage duration. Runtime extent
+expressions select the admitted C99 variable-length-array rules; a VLA cannot
+have an initializer. At module/top level the hosted lowering emits internal-linkage
+`static` storage, requires constant extents and applies the C99 requirements for
+static initializers. With no initializer, automatic elements are indeterminate
+and static elements are zero-initialized. A present initializer follows C99
+aggregate initialization. In the conservative hosted bootstrap, a
+multidimensional initializer must spell each nested dimension with an explicit
+`[]:` or Structure brace group; flat brace-elided scalar clauses are rejected.
+Omitted elements are zero-initialized and excess or incompatible initializers
+are diagnostics. The conservative hosted bootstrap additionally
+requires a top-level address initializer to name storage whose declaration has
+already been emitted; a source-forward machine-storage initializer is rejected
+rather than reordered behind its dependency.
+
+A block-scope `c.array` has the ordinary lifetime of its C automatic storage.
+Capturing that storage into an arena-owned callable would not extend its
+lifetime. Until an explicit raw-lifetime capture/adapter operation exists, the
+hosted backend rejects such a capture instead of emitting a potentially dangling
+closure pointer.
+
+Postfix indexing dispatches from the binding category. For `c.array`, `a[i]` is
+unchecked raw C-array indexing and does not use the checked ArrayReference
+operation. One bracket suffix consumes one dimension, so multidimensional raw
+storage uses `a[i][j]`, not an ArrayReference multi-coordinate shorthand. A
+partial index denotes the remaining raw subarray; a full-rank index denotes an
+element lvalue and may be read, addressed or used as an update head. No view is
+created and no bounds check is synthesized. Statically known dangerous accesses
+remain subject to the selected C99 undefined-behavior policy.
+
+Taking the address of a whole or partially indexed C array produces a C
+pointer-to-array type rather than another ordinary typed-address depth. The
+minimal hosted profile does not yet expose pointer-to-array declarators as a
+Lingvamyxa type and rejects that expression instead of misclassifying it as
+`T **`; address-of remains admitted after all array dimensions have been
+indexed to an element.
+
+The `const` wrapper qualifies the base element, following the declarator rule
+above. For an array of pointers, the pointer slot itself remains assignable while
+an update that traverses the declared pointer depth and reaches the const base
+element is rejected.
+
+The hosted bootstrap provides this exact `c.array` receiver. Legacy direct
+C-array lowering paths for some standalone `[]:` declarations remain migration
+debt and do not define source semantics; ordinary `[]:` continues to mean
+ArrayReference construction. During this preparatory step, the strict boundary
+classification therefore applies to `c.array`, admitted `LmSlice`-backed
+ArrayReferences and ArrayReference-returning callables. Historical standalone
+fixed `[]:` declarations are removed by the following ArrayReference migration,
+not reclassified as normative raw storage here.
+
+The current hosted validator deliberately accepts a conservative subset of C
+constant expressions before emitting top-level storage or an initialized VLA.
+Literal/operator expressions and unresolved C macro or enum atoms are admitted;
+known runtime bindings, call Frames and call-shaped `c.*(...)` atoms are
+rejected. Cast and `sizeof` constant-expression classification is pending a
+full C-expression classifier and may therefore be rejected even when a C99
+compiler could prove the expression constant. This is a hosted limitation, not
+a change to the C99 constant-expression rules above.
+
+Until an explicit raw-storage/ArrayReference adapter receiver is registered,
+the hosted translator conservatively rejects a typed boundary expression that
+directly contains a `c.array` designator where an ArrayReference is required,
+or an ArrayReference where a raw pointer is required. This includes casts and
+compound expressions whose result category is not proven independently of their
+root storage. For a direct `c.array` chain the hosted classifier tracks declared
+rank, consumed postfix indices and element address depth: a rank-one remaining
+subarray may decay to its corresponding raw address, and a full-rank index is an
+element rather than the whole designator. Partial-array update heads remain
+invalid because C arrays are not assignable. It must not emit an incompatible
+pointer conversion and delegate the distinction to the C compiler.
+
+The existing hosted spelling `arrayReference\ptr` (and a cast wrapped directly
+around that spelling) is the current explicit backing-address bridge. It yields
+only the raw data address; it does not carry length, rank or lifetime, and the
+consumer is responsible for the missing contract. It is retained for bootstrap
+compatibility until the dedicated adapter receiver replaces it.
 
 Names that contain spaces use exact quoted identifiers as ordinary fields:
 

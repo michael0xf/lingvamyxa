@@ -1,0 +1,12 @@
+c.array: const: [1]: int values 7
+
+fn: makeWrong () const: @: int
+    return: values
+end: makeWrong
+
+external:
+    fn: main () int
+        @: int pointer makeWrong()
+        return: pointer[0]
+    end: main
+end: external

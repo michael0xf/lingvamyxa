@@ -600,6 +600,7 @@ table:
              const         `receiver.statement`
              `()`          `receiver.statement`
              `[]`          `receiver.statement`
+             c.array       `receiver.statement`
              c.struct      `receiver.statement`
              c.union       `receiver.statement`
              c.enum        `receiver.statement`
@@ -640,6 +641,7 @@ table:
     columns: (class: class) (int: value)
     rows:
              predef  1
+             c.array 1
 end: `receiver.l3.exclude`
 
 table:
@@ -677,6 +679,7 @@ table:
              const         lm_trans_statement_emit_const_declaration
              `()`          lm_trans_statement_emit_structure_declaration
              `[]`          lm_trans_statement_emit_array_declaration
+             c.array       lm_trans_statement_emit_c_array_declaration
              c.struct      lm_trans_statement_emit_c_tagged_declaration
              c.union       lm_trans_statement_emit_c_tagged_declaration
              c.enum        lm_trans_statement_emit_c_tagged_declaration

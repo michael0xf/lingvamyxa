@@ -1,0 +1,12 @@
+external:
+    fn: main () int
+        int: value 7
+        @: int source @ value
+        c.array: [1]: @: int initialized source
+        c.array: [1]: @: int assigned
+        c.array: const: [1]: @: int const_base
+        assigned[0]: source
+        const_base[0]: source
+        return: initialized[0][0] != 7 || assigned[0][0] != 7 || const_base[0][0] != 7
+    end: main
+end: external

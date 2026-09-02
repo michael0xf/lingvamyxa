@@ -1558,6 +1558,42 @@ return: 0U
 fn: lm_trans_effective_address_depth (const: (LmP0Text: class_name); size_t: explicit_depth; const: (LmTransNamespace: namespace_)) size_t
 return: explicit_depth + lm_trans_layout_type_implicit_address_depth(class_name, namespace_)
 
+fn: lm_trans_raw_pointer_type_compatible (
+    const: LmP0Text: source_class
+    size_t: source_address_depth
+    int: source_base_is_const
+    const: LmP0Text: target_class
+    size_t: target_address_depth
+    int: target_base_is_const
+    const: LmTransNamespace: namespace_
+) int
+    size_t: source_effective_depth
+    size_t: target_effective_depth
+    int: source_is_void_pointer
+    int: target_is_void_pointer
+
+    source_effective_depth: lm_trans_effective_address_depth(source_class, source_address_depth, namespace_)
+    target_effective_depth: lm_trans_effective_address_depth(target_class, target_address_depth, namespace_)
+    source_is_void_pointer: source_effective_depth = 1U && lm_trans_text_equals(source_class, "void")
+    target_is_void_pointer: target_effective_depth = 1U && lm_trans_text_equals(target_class, "void")
+    if: source_is_void_pointer
+        if: source_base_is_const
+            return: target_effective_depth = 1U && target_base_is_const
+        return: target_effective_depth != 0U
+    if: target_is_void_pointer
+        if: target_base_is_const
+            return: source_effective_depth != 0U
+        return: source_effective_depth != 0U && (source_effective_depth != 1U || source_base_is_const = 0)
+    if: source_address_depth != target_address_depth
+        return: 0
+    if: source_class != 0 && source_class\length != 0U && target_class != 0 && target_class\length != 0U && lm_trans_identifier_same(source_class, target_class) = 0
+        return: 0
+    if: source_base_is_const = target_base_is_const
+        return: 1
+    if: source_base_is_const || target_base_is_const = 0
+        return: 0
+return: source_effective_depth = 1U && target_effective_depth = 1U
+
 fn: lm_trans_emit_projected_type_name (
     FILE: file
     const: LmP0Text: class_name
@@ -2978,6 +3014,9 @@ fn: lm_trans_expr_stack_push_segments (FILE: file; LmTransExprStack: stack; cons
     const: LmTransExprSegment: segment
     const: LmP0Node: candidate_node
     const: LmTransDescriptor: required_descriptor
+    const: LmTransSymbol: candidate_symbol
+    LmTransL4CallableType: candidate_type
+    int: candidate_type_status
     int: materialized
     if: (segments = 0)
         return: 0
@@ -2987,14 +3026,44 @@ fn: lm_trans_expr_stack_push_segments (FILE: file; LmTransExprStack: stack; cons
         segment: (cast: (LmTransExprSegment) lm_own_ptr_stack_at(segments, index))
         if: (segment = 0)
             return: 1
-        candidate_node: 0
-        if: segment\first != 0 && segment\first != segment\stop && segment\first\next = segment\stop
-            candidate_node: segment\first\value
+        candidate_node: lm_trans_c_arg_single_node(segment\first, segment\stop)
+        candidate_symbol: 0
+        if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_FRAME
+            candidate_symbol: lm_trans_namespace_find(namespace_, candidate_node\as\frame\head)
+        if: candidate_symbol != 0 && lm_trans_symbol_is_executable_callable(candidate_symbol) && segment\expected_param != 0 && segment\expected_param\type != 0 && (segment\expected_param\is_array || segment\expected_param\type\address_depth != 0U)
+            candidate_type: lm_trans_expr_callable_type_new()
+            if: candidate_type = 0
+                return: 1
+            candidate_type_status: lm_trans_node_result_type(candidate_node, namespace_, candidate_type)
+            if: candidate_type_status < 0
+                lm_trans_expr_callable_type_delete(candidate_type)
+                return: 1
+            if: candidate_type_status > 0 && segment\expected_param\is_array && candidate_type\array_rank = 0U && (candidate_type\address_depth != 0U || lm_trans_text_equals(candidate_type\class_name, "LmSlice") = 0)
+                c.fprintf(c.stderr, "trans L2 type error: array parameter requires an ArrayReference result\n")
+                lm_trans_expr_callable_type_delete(candidate_type)
+                return: 1
+            if: candidate_type_status > 0 && segment\expected_param\is_array = 0 && segment\expected_param\type\address_depth != 0U && (candidate_type\array_rank != 0U || (candidate_type\address_depth = 0U && lm_trans_text_equals(candidate_type\class_name, "LmSlice")))
+                c.fprintf(c.stderr, "trans L2 type error: raw pointer parameter cannot consume an ArrayReference result without an explicit adapter\n")
+                lm_trans_expr_callable_type_delete(candidate_type)
+                return: 1
+            ---
+            if: candidate_type_status > 0 && segment\expected_param\is_array = 0 && segment\expected_param\type\address_depth != 0U && candidate_type\array_rank = 0U && lm_trans_raw_pointer_type_compatible(candidate_type\class_name, candidate_type\address_depth, candidate_type\is_const, segment\expected_param\type\class_name, segment\expected_param\type\address_depth, segment\expected_param\type\is_const, namespace_) = 0
+                c.fprintf(c.stderr, "trans L2 type error: raw pointer parameter cannot consume a callable result with a different type, address depth, or const qualification\n")
+                lm_trans_expr_callable_type_delete(candidate_type)
+                return: 1
+            ---
+            lm_trans_expr_callable_type_delete(candidate_type)
         if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_ATOM && segment\expected_param != 0 && segment\expected_param\type != 0
             required_descriptor: lm_trans_namespace_descriptor(namespace_, segment\expected_param\type\class_name)
             if: lm_trans_guard_direct_structure_value_layout(namespace_, candidate_node\as\atom, required_descriptor, "function argument") != 0
                 return: 1
             ---
+        ---
+        if: segment\expected_param != 0 && segment\expected_param\is_array = 0 && segment\expected_param\type != 0 && lm_trans_guard_c_array_value_range(segment\first, segment\stop, namespace_, segment\expected_param\type\class_name, segment\expected_param\type\address_depth, segment\expected_param\type\is_const, "function argument") != 0
+            return: 1
+        if: segment\expected_param != 0 && segment\expected_param\is_array = 0 && segment\expected_param\type != 0 && segment\expected_param\type\address_depth != 0U && lm_trans_range_has_direct_array_reference(segment\first, segment\stop, namespace_) && (segment\expected_param\type\address_depth != 1U || lm_trans_text_equals(segment\expected_param\type\class_name, "LmSlice") = 0 || lm_trans_range_is_direct_array_reference_address(segment\first, segment\stop, namespace_) = 0) && lm_trans_range_is_array_reference_data_pointer(segment\first, segment\stop, namespace_) = 0
+            c.fprintf(c.stderr, "trans L2 type error: raw pointer parameter cannot consume an ArrayReference without an explicit adapter\n")
+            return: 1
         ---
         if: (lm_trans_expr_stack_try_materialize_segment(file, stack, segment, namespace_, @ materialized) != 0)
             return: 1
@@ -4546,7 +4615,20 @@ fn: lm_trans_expr_emit_value (FILE: file; const: (LmTransExprAtomLowering: lower
 end: lm_trans_expr_emit_value
 
 fn: lm_trans_expr_emit_addressable_value (FILE: file; const: (LmTransExprAtomLowering: lowering); const: (LmTransNamespace: namespace_)) int
-    return: lm_trans_emit_expr_atom_mode(file, lowering\text, namespace_, 1)
+    LmP0Text: slice_name
+    int: status
+
+    if: lowering = 0
+        return: 1
+    slice_name: lm_trans_text_ref_new_cstr("")
+    if: slice_name = 0
+        return: 1
+    if: lm_trans_namespace_relation_text_for_latest_binding(namespace_, lowering\text, "variable.slice-name", slice_name)
+        status: lm_trans_emit_identifier(file, slice_name)
+    else:
+        status: lm_trans_emit_expr_atom_mode(file, lowering\text, namespace_, 1)
+    lm_trans_text_ref_destroy(@ slice_name)
+    return: status
 end: lm_trans_expr_emit_addressable_value
 
 fn: lm_trans_expr_emit_name (FILE: file; const: (LmTransExprAtomLowering: lowering); const: (LmTransNamespace: namespace_)) int
@@ -5439,9 +5521,49 @@ fn: lm_trans_emit_expr_range_with_expected_type (FILE: file; const: (LmP0Field: 
     LmTransExprJob: job
     const: LmP0Node: candidate_node
     const: LmTransDescriptor: required_descriptor
+    const: LmTransSymbol: candidate_symbol
+    LmTransL4CallableType: candidate_type
+    int: candidate_type_status
+    int: expected_array_reference
     int: status
 
     candidate_node: lm_trans_c_arg_single_node(first, stop)
+    expected_array_reference: expected_type != 0 && (expected_type\array_rank != 0U || (expected_type\address_depth = 0U && lm_trans_text_equals(expected_type\class_name, "LmSlice")))
+    if: lm_trans_guard_array_reference_range(first, stop, namespace_, expected_array_reference, "typed expression") != 0
+        return: 1
+    if: expected_type != 0 && expected_array_reference = 0 && lm_trans_guard_c_array_value_range(first, stop, namespace_, expected_type\class_name, expected_type\address_depth, expected_type\is_const, "typed expression") != 0
+        return: 1
+    if: expected_type != 0 && expected_type\array_rank = 0U && expected_type\address_depth != 0U && lm_trans_range_has_direct_array_reference(first, stop, namespace_) && (expected_type\address_depth != 1U || lm_trans_text_equals(expected_type\class_name, "LmSlice") = 0 || lm_trans_range_is_direct_array_reference_address(first, stop, namespace_) = 0) && lm_trans_range_is_array_reference_data_pointer(first, stop, namespace_) = 0
+        c.fprintf(c.stderr, "trans L2 type error: raw pointer expression cannot consume an ArrayReference without an explicit adapter\n")
+        return: 1
+    ---
+    candidate_symbol: 0
+    if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_FRAME
+        candidate_symbol: lm_trans_namespace_find(namespace_, candidate_node\as\frame\head)
+    if: candidate_symbol != 0 && lm_trans_symbol_is_executable_callable(candidate_symbol) && expected_type != 0 && (expected_array_reference || expected_type\address_depth != 0U)
+        candidate_type: lm_trans_expr_callable_type_new()
+        if: candidate_type = 0
+            return: 1
+        candidate_type_status: lm_trans_node_result_type(candidate_node, namespace_, candidate_type)
+        if: candidate_type_status < 0
+            lm_trans_expr_callable_type_delete(candidate_type)
+            return: 1
+        if: candidate_type_status > 0 && expected_array_reference && candidate_type\array_rank = 0U && (candidate_type\address_depth != 0U || lm_trans_text_equals(candidate_type\class_name, "LmSlice") = 0)
+            c.fprintf(c.stderr, "trans L2 type error: typed expression requires an ArrayReference result\n")
+            lm_trans_expr_callable_type_delete(candidate_type)
+            return: 1
+        if: candidate_type_status > 0 && expected_array_reference = 0 && expected_type\address_depth != 0U && (candidate_type\array_rank != 0U || (candidate_type\address_depth = 0U && lm_trans_text_equals(candidate_type\class_name, "LmSlice")))
+            c.fprintf(c.stderr, "trans L2 type error: raw pointer expression cannot consume an ArrayReference result without an explicit adapter\n")
+            lm_trans_expr_callable_type_delete(candidate_type)
+            return: 1
+        ---
+        if: candidate_type_status > 0 && expected_array_reference = 0 && expected_type\address_depth != 0U && candidate_type\array_rank = 0U && lm_trans_raw_pointer_type_compatible(candidate_type\class_name, candidate_type\address_depth, candidate_type\is_const, expected_type\class_name, expected_type\address_depth, expected_type\is_const, namespace_) = 0
+            c.fprintf(c.stderr, "trans L2 type error: raw pointer expression cannot consume a callable result with a different type, address depth, or const qualification\n")
+            lm_trans_expr_callable_type_delete(candidate_type)
+            return: 1
+        ---
+        lm_trans_expr_callable_type_delete(candidate_type)
+    ---
     if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_ATOM && expected_type != 0
         required_descriptor: lm_trans_namespace_descriptor(namespace_, expected_type\class_name)
         if: lm_trans_guard_direct_structure_value_layout(namespace_, candidate_node\as\atom, required_descriptor, "typed expression") != 0
@@ -5982,7 +6104,10 @@ fn: lm_trans_emit_array_param (FILE: file; const: (LmTransFormalParam: param); L
         ---
     if: status != 0
         return: 1
-    return: lm_trans_namespace_declare_array_slice_expr(namespace_, param\name, slice_name_storage)
+    status: lm_trans_namespace_mark_array_reference(namespace_, param\name)
+    if: status = 0
+        status: lm_trans_namespace_declare_array_slice_expr(namespace_, param\name, slice_name_storage)
+    return: status
 end: lm_trans_emit_array_param
 
 fn: lm_trans_emit_formal_param (
@@ -6017,5 +6142,7 @@ fn: lm_trans_emit_formal_param (
     status: lm_trans_emit_callable_type_named(file, param\type, param\name, namespace_)
     if: status = 0
         status: lm_trans_namespace_declare_storage_binding(namespace_, param\name, param\type\class_name)
+    if: status = 0 && param\type\address_depth != 0U
+        status: lm_trans_namespace_mark_raw_pointer(namespace_, param\name, param\type\address_depth, param\type\is_const)
     return: status
 end: lm_trans_emit_formal_param

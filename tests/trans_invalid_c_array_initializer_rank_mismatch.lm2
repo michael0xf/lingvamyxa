@@ -1,0 +1,7 @@
+external:
+    fn: main () int
+        c.array: [][]: int matrix 2 2
+        c.array: [1]: @: int rows matrix
+        return: 0
+    end: main
+end: external

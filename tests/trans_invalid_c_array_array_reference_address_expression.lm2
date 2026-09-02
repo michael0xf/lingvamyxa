@@ -1,0 +1,19 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: consume ([]: int values) int
+    return: values[0]
+end: consume
+
+external:
+    fn: main () int
+        []: int managed [7]
+        return: consume(@ managed + 0)
+    end: main
+end: external

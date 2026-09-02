@@ -1,0 +1,9 @@
+c.array: [1]: int: source 7
+int: runtime_index 0
+c.array: [1]: @: int pointers @ source[runtime_index]
+
+external:
+    fn: main () int
+        return: pointers[0][0]
+    end: main
+end: external

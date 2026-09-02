@@ -1,0 +1,14 @@
+Holder:
+    @: int pointer
+end: Holder
+
+fn: take_scalar (int: value) int
+    return: value
+end: take_scalar
+
+external:
+    fn: main () int
+        c.array: [1]: Holder: holders
+        return: take_scalar(holders[0]\pointer)
+    end: main
+end: external

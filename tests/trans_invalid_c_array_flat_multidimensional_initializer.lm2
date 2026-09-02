@@ -1,0 +1,7 @@
+c.array: [][]: int matrix 2 2 1 2 3 4
+
+external:
+    fn: main () int
+        return: matrix[0][0]
+    end: main
+end: external

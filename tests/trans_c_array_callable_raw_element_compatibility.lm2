@@ -1,0 +1,14 @@
+c.array: [1]: int values 7
+
+fn: make_raw () @: int
+    return: values
+end: make_raw
+
+external:
+    fn: main () int
+        c.array: [1]: @: int initialized make_raw()
+        c.array: [1]: @: int assigned
+        assigned[0]: make_raw()
+        return: initialized[0][0] != 7 || assigned[0][0] != 7
+    end: main
+end: external

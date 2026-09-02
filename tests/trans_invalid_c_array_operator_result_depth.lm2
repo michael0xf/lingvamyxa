@@ -1,0 +1,10 @@
+fn: take_pointer (@: int value) int
+    return: value != 0
+end: take_pointer
+
+external:
+    fn: main () int
+        c.array: [1]: int: raw 7
+        return: take_pointer(raw && raw)
+    end: main
+end: external

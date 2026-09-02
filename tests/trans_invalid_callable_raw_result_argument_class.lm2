@@ -1,0 +1,15 @@
+c.array: [1]: char chars
+
+fn: make_raw () @: char
+    return: chars
+end: make_raw
+
+fn: take_int (@: int pointer) int
+    return: pointer != 0
+end: take_int
+
+external:
+    fn: main () int
+        return: take_int(make_raw())
+    end: main
+end: external

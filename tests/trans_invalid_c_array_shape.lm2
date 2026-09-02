@@ -1,0 +1,10 @@
+L2:
+    external:
+        fn: main () int
+            c.array:
+                [1]: int: first 1
+                [1]: int: second 2
+            return: 0
+        end: main
+    end: external
+end: L2

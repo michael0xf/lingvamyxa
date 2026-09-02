@@ -1,0 +1,18 @@
+Left:
+    int: value
+end: Left
+
+Right:
+    int: value
+end: Right
+
+fn: take_right (Right: value) int
+    return: value\value
+end: take_right
+
+external:
+    fn: main () int
+        c.array: [1]: Left: raw
+        return: take_right(raw[0])
+    end: main
+end: external

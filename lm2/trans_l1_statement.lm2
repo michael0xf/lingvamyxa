@@ -1900,6 +1900,770 @@ fn: lm_trans_emit_array_value_helper (
     helper_name: 0
 return: 0
 
+fn: lm_trans_callable_frame_result_storage_category (
+    const: LmP0Frame: frame
+    const: LmTransNamespace: namespace_
+    @: int out_array_reference
+    @: int out_raw_pointer
+) int
+    const: LmTransSymbol: symbol
+    LmTransL4CallableType: type
+
+    if: out_array_reference != 0
+        out_array_reference[0]: 0
+    if: out_raw_pointer != 0
+        out_raw_pointer[0]: 0
+    if: frame = 0 || out_array_reference = 0 || out_raw_pointer = 0
+        return: 0
+    symbol: lm_trans_namespace_find(namespace_, frame\head)
+    if: symbol = 0 || lm_trans_symbol_is_executable_callable(symbol) = 0 || symbol\callable_returns_value = 0 || symbol\callable_return_node = 0
+        return: 0
+
+    type: lm_trans_expr_callable_type_new()
+    if: type = 0
+        return: 0
+    if: lm_trans_l4_callable_type_from_node(symbol\callable_return_node, type) = 0
+        lm_trans_expr_callable_type_delete(type)
+        return: 0
+    out_array_reference[0]: type\array_rank != 0U || (type\address_depth = 0U && lm_trans_text_equals(type\class_name, "LmSlice"))
+    out_raw_pointer[0]: out_array_reference[0] = 0 && type\address_depth != 0U
+    lm_trans_expr_callable_type_delete(type)
+return: 1
+
+fn: lm_trans_node_has_direct_array_reference (
+    const: LmP0Node: node
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+    int: is_array_reference
+    int: is_raw_pointer
+
+    if: node = 0 || lm_trans_node_is_ignored(node)
+        return: 0
+    if: node\kind = c.LM_P0_NODE_ATOM
+        return: lm_trans_namespace_value_is_array_reference(namespace_, node\as\atom)
+    if: node\kind = c.LM_P0_NODE_FRAME
+        if: lm_trans_callable_frame_result_storage_category(node\as\frame, namespace_, @ is_array_reference, @ is_raw_pointer)
+            return: is_array_reference
+        field: node\as\frame\body\first_field
+    else:
+        if: node\kind != c.LM_P0_NODE_STRUCTURE
+            return: 0
+        field: node\as\structure\first_field
+    ---
+    while: field != 0
+        if: lm_trans_node_has_direct_array_reference(field\value, namespace_)
+            return: 1
+        field: field\next
+return: 0
+
+fn: lm_trans_node_has_direct_raw_pointer (
+    const: LmP0Node: node
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+    int: is_array_reference
+    int: is_raw_pointer
+
+    if: node = 0 || lm_trans_node_is_ignored(node)
+        return: 0
+    if: node\kind = c.LM_P0_NODE_ATOM
+        return: lm_trans_namespace_value_is_raw_pointer(namespace_, node\as\atom)
+    if: node\kind = c.LM_P0_NODE_FRAME
+        if: lm_trans_callable_frame_result_storage_category(node\as\frame, namespace_, @ is_array_reference, @ is_raw_pointer)
+            return: is_raw_pointer
+        field: node\as\frame\body\first_field
+    else:
+        if: node\kind != c.LM_P0_NODE_STRUCTURE
+            return: 0
+        field: node\as\structure\first_field
+    ---
+    while: field != 0
+        if: lm_trans_node_has_direct_raw_pointer(field\value, namespace_)
+            return: 1
+        field: field\next
+return: 0
+
+fn: lm_trans_range_has_direct_raw_pointer (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+
+    field: first
+    while: field != 0 && field != stop
+        if: lm_trans_node_has_direct_raw_pointer(field\value, namespace_)
+            return: 1
+        field: field\next
+return: 0
+
+fn: lm_trans_node_has_non_c_array_raw_pointer (
+    const: LmP0Node: node
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+    int: is_array_reference
+    int: is_raw_pointer
+
+    if: node = 0 || lm_trans_node_is_ignored(node)
+        return: 0
+    if: node\kind = c.LM_P0_NODE_ATOM
+        return: lm_trans_namespace_value_raw_pointer_depth(namespace_, node\as\atom) != 0U
+    if: node\kind = c.LM_P0_NODE_FRAME
+        if: lm_trans_callable_frame_result_storage_category(node\as\frame, namespace_, @ is_array_reference, @ is_raw_pointer)
+            return: is_raw_pointer
+        field: node\as\frame\body\first_field
+    else:
+        if: node\kind != c.LM_P0_NODE_STRUCTURE
+            return: 0
+        field: node\as\structure\first_field
+    ---
+    while: field != 0
+        if: lm_trans_node_has_non_c_array_raw_pointer(field\value, namespace_)
+            return: 1
+        field: field\next
+return: 0
+
+fn: lm_trans_range_has_non_c_array_raw_pointer (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+
+    field: first
+    while: field != 0 && field != stop
+        if: lm_trans_node_has_non_c_array_raw_pointer(field\value, namespace_)
+            return: 1
+        field: field\next
+return: 0
+
+fn: lm_trans_range_has_direct_array_reference (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+
+    field: first
+    while: field != 0 && field != stop
+        if: lm_trans_node_has_direct_array_reference(field\value, namespace_)
+            return: 1
+        field: field\next
+return: 0
+
+fn: lm_trans_transparent_parenthesized_node (
+    const: LmP0Node: node
+) const: LmP0Node
+    const: LmP0Node: current
+    const: LmP0Field: field
+
+    current: node
+    while: current != 0 && current\kind = c.LM_P0_NODE_STRUCTURE
+        field: current\as\structure\first_field
+        if: field = 0 || field\next != 0 || field\value = 0
+            return: current
+        current: field\value
+return: current
+
+fn: lm_trans_range_is_direct_array_reference_address (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: range_first
+    const: LmP0Field: range_stop
+    const: LmP0Node: value_node
+    const: LmP0Field: value_field
+
+    range_first: first
+    range_stop: stop
+    while: range_first != 0 && range_first != range_stop && range_first\next = range_stop && range_first\value != 0 && range_first\value\kind = c.LM_P0_NODE_STRUCTURE
+        range_first: range_first\value\as\structure\first_field
+        range_stop: 0
+
+    if: range_first = 0 || range_first = range_stop || range_first\value = 0 || range_first\value\kind != c.LM_P0_NODE_ATOM || lm_trans_text_equals(range_first\value\as\atom, "@") = 0
+        return: 0
+    value_field: range_first\next
+    if: value_field = 0 || value_field = range_stop || value_field\next != range_stop || value_field\value = 0
+        return: 0
+    value_node: lm_trans_transparent_parenthesized_node(value_field\value)
+    if: value_node = 0 || value_node\kind != c.LM_P0_NODE_ATOM
+        return: 0
+return: lm_trans_namespace_value_is_array_reference(namespace_, value_node\as\atom)
+
+fn: lm_trans_fields_contain_array_reference_address (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: LmP0Node: value_node
+    int: is_array_reference
+    int: is_raw_pointer
+
+    field: first
+    while: field != 0 && field != stop
+        node: field\value
+        if: node != 0 && node\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(node\as\atom, "@") && field\next != 0 && field\next != stop
+            value_node: lm_trans_transparent_parenthesized_node(field\next\value)
+            if: value_node != 0 && value_node\kind = c.LM_P0_NODE_ATOM && lm_trans_namespace_value_is_array_reference(namespace_, value_node\as\atom)
+                return: 1
+            ---
+        ---
+        if: node != 0 && node\kind = c.LM_P0_NODE_STRUCTURE && lm_trans_fields_contain_array_reference_address(node\as\structure\first_field, 0, namespace_)
+            return: 1
+        if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && lm_trans_callable_frame_result_storage_category(node\as\frame, namespace_, @ is_array_reference, @ is_raw_pointer) = 0 && lm_trans_fields_contain_array_reference_address(node\as\frame\body\first_field, 0, namespace_)
+            return: 1
+        field: field\next
+return: 0
+
+fn: lm_trans_fields_are_array_reference_data_pointer (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: range_first
+    const: LmP0Field: range_stop
+    const: LmP0Node: root_node
+    const: LmP0Field: follow_field
+    const: LmP0Field: member_field
+
+    range_first: first
+    range_stop: stop
+    while: range_first != 0 && range_first != range_stop && range_first\next = range_stop && range_first\value != 0 && range_first\value\kind = c.LM_P0_NODE_STRUCTURE
+        range_first: range_first\value\as\structure\first_field
+        range_stop: 0
+
+    if: range_first = 0 || range_first = range_stop || range_first\value = 0
+        return: 0
+    root_node: lm_trans_transparent_parenthesized_node(range_first\value)
+    if: root_node = 0 || root_node\kind != c.LM_P0_NODE_ATOM || lm_trans_namespace_value_is_array_reference(namespace_, root_node\as\atom) = 0
+        return: 0
+    follow_field: range_first\next
+    if: follow_field = 0 || follow_field = range_stop || follow_field\value = 0 || follow_field\value\kind != c.LM_P0_NODE_ATOM || lm_trans_text_equals(follow_field\value\as\atom, "\\") = 0
+        return: 0
+    member_field: follow_field\next
+    if: member_field = 0 || member_field = range_stop || member_field\next != range_stop || member_field\value = 0 || member_field\value\kind != c.LM_P0_NODE_ATOM
+        return: 0
+return: lm_trans_text_equals(member_field\value\as\atom, "ptr")
+
+fn: lm_trans_range_is_array_reference_data_pointer (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Node: node
+    const: LmP0Field: range_first
+    const: LmP0Field: range_stop
+    const: LmP0Field: body_first
+
+    if: lm_trans_fields_are_array_reference_data_pointer(first, stop, namespace_)
+        return: 1
+    range_first: first
+    range_stop: stop
+    while: range_first != 0 && range_first != range_stop && range_first\next = range_stop && range_first\value != 0 && range_first\value\kind = c.LM_P0_NODE_STRUCTURE
+        range_first: range_first\value\as\structure\first_field
+        range_stop: 0
+    if: range_first = 0 || range_first = range_stop || range_first\next != range_stop || range_first\value = 0
+        return: 0
+    node: lm_trans_transparent_parenthesized_node(range_first\value)
+    if: node = 0 || node\kind != c.LM_P0_NODE_FRAME || lm_trans_text_equals(node\as\frame\head, "cast") = 0 || node\as\frame\body = 0
+        return: 0
+    body_first: node\as\frame\body\first_field
+    if: body_first = 0
+        return: 0
+return: lm_trans_fields_are_array_reference_data_pointer(body_first\next, 0, namespace_)
+
+fn: lm_trans_fields_contain_array_reference_data_pointer (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+    const: LmP0Field: follow_field
+    const: LmP0Field: member_field
+    const: LmP0Node: node
+    const: LmP0Node: root_node
+    int: is_array_reference
+    int: is_raw_pointer
+
+    field: first
+    while: field != 0 && field != stop
+        node: field\value
+        root_node: lm_trans_transparent_parenthesized_node(node)
+        if: root_node != 0 && root_node\kind = c.LM_P0_NODE_ATOM && lm_trans_namespace_value_is_array_reference(namespace_, root_node\as\atom)
+            follow_field: field\next
+            member_field: 0
+            if: follow_field != 0 && follow_field != stop && follow_field\value != 0 && follow_field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(follow_field\value\as\atom, "\\")
+                member_field: follow_field\next
+            if: member_field != 0 && member_field != stop && member_field\value != 0 && member_field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(member_field\value\as\atom, "ptr")
+                return: 1
+            ---
+        ---
+        if: node != 0 && node\kind = c.LM_P0_NODE_STRUCTURE && lm_trans_fields_contain_array_reference_data_pointer(node\as\structure\first_field, 0, namespace_)
+            return: 1
+        if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && lm_trans_callable_frame_result_storage_category(node\as\frame, namespace_, @ is_array_reference, @ is_raw_pointer) = 0 && lm_trans_fields_contain_array_reference_data_pointer(node\as\frame\body\first_field, 0, namespace_)
+            return: 1
+        field: field\next
+return: 0
+
+fn: lm_trans_node_has_direct_c_array_storage (
+    const: LmP0Node: node
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+    int: is_array_reference
+    int: is_raw_pointer
+
+    if: node = 0 || lm_trans_node_is_ignored(node)
+        return: 0
+    if: node\kind = c.LM_P0_NODE_ATOM
+        return: lm_trans_namespace_value_is_c_array_storage(namespace_, node\as\atom)
+    if: node\kind = c.LM_P0_NODE_FRAME
+        if: lm_trans_callable_frame_result_storage_category(node\as\frame, namespace_, @ is_array_reference, @ is_raw_pointer)
+            return: 0
+        field: node\as\frame\body\first_field
+    else:
+        if: node\kind != c.LM_P0_NODE_STRUCTURE
+            return: 0
+        field: node\as\structure\first_field
+    ---
+    while: field != 0
+        if: lm_trans_node_has_direct_c_array_storage(field\value, namespace_)
+            return: 1
+        field: field\next
+return: 0
+
+fn: lm_trans_range_has_direct_c_array_storage (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+
+    field: first
+    while: field != 0 && field != stop
+        if: lm_trans_node_has_direct_c_array_storage(field\value, namespace_)
+            return: 1
+        field: field\next
+return: 0
+
+fn: lm_trans_c_array_postfix_index_count (
+    const: LmP0Field: storage_field
+    const: LmP0Field: stop
+    @: size_t out_count
+    const: @(LmP0Field out_end)
+) int
+    const: LmP0Field: field
+    size_t: depth
+    size_t: count
+
+    if: out_count != 0
+        out_count[0]: 0U
+    if: out_end != 0
+        out_end[0]: storage_field
+    if: storage_field = 0 || out_count = 0 || out_end = 0
+        return: 1
+    field: storage_field\next
+    count: 0U
+    while: field != 0 && field != stop && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(field\value\as\atom, "[")
+        depth: 1U
+        field: field\next
+        while: field != 0 && field != stop && depth != 0U
+            if: field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(field\value\as\atom, "[")
+                depth: depth + 1U
+            if: field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(field\value\as\atom, "]")
+                depth: depth - 1U
+            field: field\next
+        if: depth != 0U
+            return: 1
+        count: count + 1U
+    out_count[0]: count
+    out_end[0]: field
+return: 0
+
+fn: lm_trans_validate_c_array_postfix_index_ranges (
+    const: LmP0Field: storage_field
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: close_field
+    const: LmP0Field: field
+    const: LmP0Field: index_first
+    size_t: depth
+
+    if: storage_field = 0
+        return: 1
+    field: storage_field\next
+    while: field != 0 && field != stop && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(field\value\as\atom, "[")
+        index_first: field\next
+        close_field: index_first
+        depth: 1U
+        while: close_field != 0 && close_field != stop && depth != 0U
+            if: close_field\value != 0 && close_field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(close_field\value\as\atom, "[")
+                depth: depth + 1U
+            if: close_field\value != 0 && close_field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(close_field\value\as\atom, "]")
+                depth: depth - 1U
+            if: depth != 0U
+                close_field: close_field\next
+        ---
+        if: close_field = 0 || close_field = stop || index_first = close_field
+            return: 1
+        if: lm_trans_guard_c_array_value_range(index_first, close_field, namespace_, 0, 0U, 0, "c.array index expression") != 0
+            return: 1
+        if: lm_trans_range_has_non_c_array_raw_pointer(index_first, close_field, namespace_) || lm_trans_range_has_direct_array_reference(index_first, close_field, namespace_) || lm_trans_fields_contain_array_reference_data_pointer(index_first, close_field, namespace_)
+            c.fprintf(c.stderr, "trans L2 type error: c.array index expression must be a scalar value, not a pointer or ArrayReference\n")
+            return: 1
+        ---
+        field: close_field\next
+return: 0
+
+fn: lm_trans_c_array_range_result_info (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+    @: size_t out_depth
+    @: int out_base_is_const
+    LmP0Text: out_class
+) int
+    const: LmP0Field: field
+    const: LmP0Field: range_first
+    const: LmP0Field: range_stop
+    const: LmP0Field: root
+    size_t: address_count
+    size_t: dereference_count
+    size_t: element_depth
+    size_t: index_count
+    size_t: rank
+
+    if: out_depth != 0
+        out_depth[0]: 0U
+    if: out_base_is_const != 0
+        out_base_is_const[0]: 0
+    if: out_class != 0
+        out_class\data: ""
+        out_class\length: 0U
+    if: first = 0 || out_depth = 0 || out_base_is_const = 0
+        return: 0
+
+    range_first: first
+    range_stop: stop
+    while: range_first != 0 && range_first != range_stop && range_first\next = range_stop && range_first\value != 0 && range_first\value\kind = c.LM_P0_NODE_STRUCTURE
+        range_first: range_first\value\as\structure\first_field
+        range_stop: 0
+    if: range_first = 0
+        return: 0
+
+    address_count: 0U
+    dereference_count: 0U
+    field: range_first
+    while: field != 0 && field != range_stop && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && (lm_trans_text_equals(field\value\as\atom, "@") || lm_trans_text_equals(field\value\as\atom, "\\"))
+        if: lm_trans_text_equals(field\value\as\atom, "@")
+            address_count: address_count + 1U
+        else:
+            dereference_count: dereference_count + 1U
+        field: field\next
+    root: field
+    if: root = 0 || root = range_stop || root\value = 0 || root\value\kind != c.LM_P0_NODE_ATOM || lm_trans_namespace_value_is_c_array_storage(namespace_, root\value\as\atom) = 0
+        return: 0
+
+    rank: lm_trans_namespace_value_c_array_rank(namespace_, root\value\as\atom)
+    element_depth: lm_trans_namespace_value_c_array_element_address_depth(namespace_, root\value\as\atom)
+    if: rank = 0U
+        return: -1
+    if: lm_trans_validate_c_array_postfix_index_ranges(root, range_stop, namespace_) != 0
+        return: -2
+    if: lm_trans_c_array_postfix_index_count(root, range_stop, @ index_count, @ field) != 0
+        return: -1
+    if: field != range_stop
+        return: -1
+    if: address_count != 0U && index_count < rank
+        return: -1
+    if: index_count < rank
+        if: rank - index_count != 1U
+            return: -1
+        out_depth[0]: element_depth + 1U
+    else:
+        if: index_count - rank > element_depth
+            return: -1
+        out_depth[0]: element_depth - (index_count - rank)
+    ---
+    if: out_depth[0] + address_count < dereference_count
+        return: -1
+    out_depth[0]: out_depth[0] + address_count - dereference_count
+    out_base_is_const[0]: lm_trans_namespace_value_c_array_element_is_const(namespace_, root\value\as\atom)
+    if: out_class != 0
+        lm_trans_namespace_relation_text_for_latest_binding(namespace_, root\value\as\atom, "variable.type", out_class)
+return: 1
+
+fn: lm_trans_c_array_compound_operands_are_scalar (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+    const: LmP0Field: chain_end
+    const: LmP0Field: previous
+    const: LmP0Node: node
+    size_t: effective_depth
+    size_t: index_count
+    int: base_is_const
+    int: category_status
+    int: is_array_reference
+    int: is_raw_pointer
+
+    previous: 0
+    field: first
+    while: field != 0 && field != stop
+        node: field\value
+        if: node != 0 && node\kind = c.LM_P0_NODE_ATOM && lm_trans_namespace_value_is_c_array_storage(namespace_, node\as\atom)
+            if: previous != 0 && previous\value != 0 && previous\value\kind = c.LM_P0_NODE_ATOM && (lm_trans_text_equals(previous\value\as\atom, "@") || lm_trans_text_equals(previous\value\as\atom, "\\"))
+                return: 0
+            if: lm_trans_c_array_postfix_index_count(field, stop, @ index_count, @ chain_end) != 0
+                return: 0
+            if: chain_end != stop && chain_end != 0 && chain_end\value != 0 && chain_end\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(chain_end\value\as\atom, "\\")
+                return: 0
+            category_status: lm_trans_c_array_range_result_info(field, chain_end, namespace_, @ effective_depth, @ base_is_const, 0)
+            if: category_status != 1 || effective_depth != 0U
+                return: 0
+            previous: field
+            field: chain_end
+            continue
+        ---
+        if: node != 0 && node\kind = c.LM_P0_NODE_FRAME
+            if: lm_trans_callable_frame_result_storage_category(node\as\frame, namespace_, @ is_array_reference, @ is_raw_pointer) = 0 && lm_trans_node_has_direct_c_array_storage(node, namespace_)
+                return: 0
+            ---
+        if: node != 0 && node\kind = c.LM_P0_NODE_STRUCTURE && lm_trans_c_array_compound_operands_are_scalar(node\as\structure\first_field, 0, namespace_) = 0
+            return: 0
+        previous: field
+        field: field\next
+return: 1
+
+fn: lm_trans_raw_pointer_range_result_info (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+    @: size_t out_depth
+    @: int out_base_is_const
+    LmP0Text: out_class
+) int
+    const: LmP0Field: field
+    const: LmP0Field: range_first
+    const: LmP0Field: range_stop
+    const: LmP0Field: root
+    size_t: address_count
+    size_t: dereference_count
+    size_t: index_count
+    size_t: root_depth
+
+    if: out_depth != 0
+        out_depth[0]: 0U
+    if: out_base_is_const != 0
+        out_base_is_const[0]: 0
+    if: out_class != 0
+        out_class\data: ""
+        out_class\length: 0U
+    if: first = 0 || out_depth = 0 || out_base_is_const = 0
+        return: 0
+
+    range_first: first
+    range_stop: stop
+    while: range_first != 0 && range_first != range_stop && range_first\next = range_stop && range_first\value != 0 && range_first\value\kind = c.LM_P0_NODE_STRUCTURE
+        range_first: range_first\value\as\structure\first_field
+        range_stop: 0
+    if: range_first = 0
+        return: 0
+
+    address_count: 0U
+    dereference_count: 0U
+    field: range_first
+    while: field != 0 && field != range_stop && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && (lm_trans_text_equals(field\value\as\atom, "@") || lm_trans_text_equals(field\value\as\atom, "\\"))
+        if: lm_trans_text_equals(field\value\as\atom, "@")
+            address_count: address_count + 1U
+        else:
+            dereference_count: dereference_count + 1U
+        field: field\next
+    root: field
+    if: root = 0 || root = range_stop || root\value = 0 || root\value\kind != c.LM_P0_NODE_ATOM || lm_trans_namespace_value_is_c_array_storage(namespace_, root\value\as\atom)
+        return: 0
+    root_depth: lm_trans_namespace_value_raw_pointer_depth(namespace_, root\value\as\atom)
+    if: root_depth = 0U || lm_trans_c_array_postfix_index_count(root, range_stop, @ index_count, @ field) != 0 || field != range_stop
+        return: 0
+    if: index_count > root_depth || root_depth - index_count + address_count < dereference_count
+        return: -1
+    out_depth[0]: root_depth - index_count + address_count - dereference_count
+    out_base_is_const[0]: lm_trans_namespace_value_raw_pointer_base_is_const(namespace_, root\value\as\atom)
+    if: out_class != 0
+        lm_trans_namespace_relation_text_for_latest_binding(namespace_, root\value\as\atom, "variable.type", out_class)
+return: 1
+
+fn: lm_trans_guard_known_raw_pointer_range (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: expected_class
+    size_t: expected_address_depth
+    int: expected_base_is_const
+    const: @(char context)
+) int
+    const: LmP0Node: candidate_node
+    const: LmTransSymbol: candidate_symbol
+    const: @: char effective_context
+    LmTransL4CallableType: candidate_type
+    LmP0Text: candidate_class
+    size_t: candidate_depth
+    int: candidate_base_is_const
+    int: candidate_status
+    int: candidate_type_status
+
+    effective_context: "typed value"
+    if: context != 0
+        effective_context: context
+
+    candidate_node: 0
+    if: first != 0 && first != stop && first\next = stop
+        candidate_node: lm_trans_transparent_parenthesized_node(first\value)
+    candidate_symbol: 0
+    if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_FRAME
+        candidate_symbol: lm_trans_namespace_find(namespace_, candidate_node\as\frame\head)
+    if: candidate_symbol != 0 && lm_trans_symbol_is_executable_callable(candidate_symbol)
+        candidate_type: lm_trans_expr_callable_type_new()
+        if: candidate_type = 0
+            return: 1
+        candidate_type_status: lm_trans_node_result_type(candidate_node, namespace_, candidate_type)
+        if: candidate_type_status < 0
+            lm_trans_expr_callable_type_delete(candidate_type)
+            return: 1
+        if: candidate_type_status > 0 && candidate_type\array_rank = 0U && candidate_type\address_depth != 0U
+            if: lm_trans_raw_pointer_type_compatible(candidate_type\class_name, candidate_type\address_depth, candidate_type\is_const, expected_class, expected_address_depth, expected_base_is_const, namespace_)
+                lm_trans_expr_callable_type_delete(candidate_type)
+                return: 0
+            c.fprintf(c.stderr, "trans L2 type error: %s cannot consume this callable raw pointer result at the required type, address depth, or const qualification\n", effective_context)
+            lm_trans_expr_callable_type_delete(candidate_type)
+            return: 1
+        ---
+        lm_trans_expr_callable_type_delete(candidate_type)
+    ---
+
+    candidate_class: lm_trans_statement_text_new()
+    if: candidate_class = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ candidate_class)
+
+    candidate_status: lm_trans_raw_pointer_range_result_info(first, stop, namespace_, @ candidate_depth, @ candidate_base_is_const, candidate_class)
+    if: candidate_status = 0
+        return: 0
+    if: candidate_status = 1 && lm_trans_raw_pointer_type_compatible(candidate_class, candidate_depth, candidate_base_is_const, expected_class, expected_address_depth, expected_base_is_const, namespace_)
+        return: 0
+
+    c.fprintf(c.stderr, "trans L2 type error: %s cannot consume this raw pointer expression at the required type, address depth, or const qualification\n", effective_context)
+return: 1
+
+fn: lm_trans_guard_c_array_value_range (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: expected_class
+    size_t: expected_address_depth
+    int: expected_base_is_const
+    const: @(char context)
+) int
+    const: @: char effective_context
+    LmP0Text: candidate_class
+    size_t: candidate_depth
+    int: candidate_base_is_const
+    int: category_status
+    int: has_c_array
+
+    has_c_array: lm_trans_range_has_direct_c_array_storage(first, stop, namespace_)
+    candidate_class: lm_trans_statement_text_new()
+    if: candidate_class = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ candidate_class)
+
+    if: has_c_array
+        category_status: lm_trans_c_array_range_result_info(first, stop, namespace_, @ candidate_depth, @ candidate_base_is_const, candidate_class)
+    else:
+        category_status: lm_trans_raw_pointer_range_result_info(first, stop, namespace_, @ candidate_depth, @ candidate_base_is_const, candidate_class)
+        if: category_status = 0
+            return: 0
+        if: (expected_class = 0 || lm_trans_text_equals(expected_class, "LmSlice") = 0) && lm_trans_text_equals(candidate_class, "LmSlice") = 0
+            return: 0
+    ---
+    if: category_status = 1 && candidate_depth = expected_address_depth && (expected_class = 0 || expected_class\length = 0U || candidate_class\length = 0U || lm_trans_identifier_same(candidate_class, expected_class)) && (candidate_depth = 0U || candidate_base_is_const = 0 || expected_base_is_const)
+        return: 0
+    if: category_status = -2
+        return: 1
+    if: has_c_array && category_status <= 0 && expected_address_depth = 0U && lm_trans_c_array_compound_operands_are_scalar(first, stop, namespace_)
+        return: 0
+    effective_context: "typed value"
+    if: context != 0
+        effective_context: context
+    if: has_c_array
+        c.fprintf(c.stderr, "trans L2 type error: %s cannot consume this c.array expression at the required type, address depth, or const qualification\n", effective_context)
+    else:
+        c.fprintf(c.stderr, "trans L2 type error: %s cannot consume this raw pointer expression at the required type, address depth, or const qualification\n", effective_context)
+return: 1
+
+fn: lm_trans_guard_array_reference_range (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+    int: required
+    const: @(char context)
+) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: @: char effective_context
+    LmP0Text: candidate_class
+    size_t: candidate_depth
+    int: candidate_base_is_const
+    int: candidate_status
+
+    if: required = 0
+        return: 0
+    effective_context: "typed value"
+    if: context != 0
+        effective_context: context
+
+    if: lm_trans_range_is_direct_array_reference_address(first, stop, namespace_) || lm_trans_fields_contain_array_reference_address(first, stop, namespace_)
+        c.fprintf(c.stderr, "trans L2 type error: %s requires an ArrayReference value, not the address of an ArrayReference slot\n", effective_context)
+        return: 1
+
+    if: lm_trans_range_is_array_reference_data_pointer(first, stop, namespace_) || lm_trans_fields_contain_array_reference_data_pointer(first, stop, namespace_)
+        c.fprintf(c.stderr, "trans L2 type error: %s requires an ArrayReference value, not its raw data pointer\n", effective_context)
+        return: 1
+
+    candidate_class: lm_trans_statement_text_new()
+    if: candidate_class = 0
+        return: 1
+    candidate_status: lm_trans_raw_pointer_range_result_info(first, stop, namespace_, @ candidate_depth, @ candidate_base_is_const, candidate_class)
+    if: candidate_status = 1 && candidate_depth = 0U && lm_trans_text_equals(candidate_class, "LmSlice")
+        lm_trans_text_ref_destroy(@ candidate_class)
+        return: 0
+    lm_trans_text_ref_destroy(@ candidate_class)
+    if: candidate_status != 0
+        c.fprintf(c.stderr, "trans L2 type error: %s requires an ArrayReference; raw pointer/storage requires an explicit adapter\n", effective_context)
+        return: 1
+
+    if: lm_trans_range_has_direct_raw_pointer(first, stop, namespace_)
+        c.fprintf(c.stderr, "trans L2 type error: %s requires an ArrayReference; raw pointer/storage requires an explicit adapter\n", effective_context)
+        return: 1
+
+    field: first
+    if: field != 0 && field != stop && field\next = stop
+        node: field\value
+        if: node != 0 && node\kind = c.LM_P0_NODE_ATOM && lm_trans_namespace_value_is_array_reference(namespace_, node\as\atom) = 0
+            c.fprintf(c.stderr, "trans L2 type error: %s requires an ArrayReference\n", effective_context)
+            return: 1
+        ---
+    ---
+return: 0
+
 fn: lm_trans_materialize_array_value (
     FILE: file
     LmTransExprStack: stack
@@ -1913,6 +2677,7 @@ fn: lm_trans_materialize_array_value (
     LmP0Text: slice_expr
     LmP0Text: slice_length
     const: LmTransFormalParam: param
+    int: single_atom
 
     if: out_consumed != 0
         out_consumed[0]: 0
@@ -1932,17 +2697,36 @@ fn: lm_trans_materialize_array_value (
         lm_trans_text_ref_destroy(@ slice_expr)
         lm_trans_text_ref_destroy(@ slice_length)
 
-    if: lm_trans_expr_segment_single_atom(segment, atom) && lm_trans_namespace_relation_text_latest(namespace_, atom, "variable.slice-name", slice_expr)
+    param: 0
+    if: segment != 0
+        param: segment\expected_param
+
+    single_atom: lm_trans_expr_segment_single_atom(segment, atom)
+
+    if: param != 0 && param\is_array && single_atom && lm_trans_namespace_value_is_c_array_storage(namespace_, atom)
+        c.fprintf(c.stderr, "trans L2 type error: array parameter requires an ArrayReference; c.array storage requires an explicit adapter\n")
+        return: 1
+    ---
+
+    if: single_atom && lm_trans_namespace_relation_text_for_latest_binding(namespace_, atom, "variable.slice-name", slice_expr)
         if: lm_trans_expr_stack_push_text(stack, slice_expr\data) != 0
             return: 1
         out_consumed[0]: 1
         return: 0
 
-    if: lm_trans_expr_segment_single_atom(segment, atom) && lm_trans_namespace_relation_text_latest(namespace_, atom, "variable.slice-length", slice_length)
+    if: single_atom && lm_trans_namespace_relation_text_for_latest_binding(namespace_, atom, "variable.slice-length", slice_length)
         if: lm_trans_expr_stack_push_text(stack, " }") != 0 || lm_trans_expr_stack_push_text(stack, slice_length\data) != 0 || lm_trans_expr_stack_push_text(stack, ", ") != 0 || lm_trans_expr_stack_push_name_text(stack, atom) != 0 || lm_trans_expr_stack_push_text(stack, "(void *)") != 0 || lm_trans_expr_stack_push_text(stack, "&(LmSlice){ ") != 0
             return: 1
         out_consumed[0]: 1
         return: 0
+
+    if: param != 0 && param\is_array && lm_trans_guard_array_reference_range(segment\first, segment\stop, namespace_, 1, "array parameter") != 0
+        return: 1
+
+    if: param != 0 && param\is_array
+        if: single_atom
+            return: 0
+    ---
 
     value: lm_trans_expr_segment_single_structure_value(segment)
     if: value = 0
@@ -1953,9 +2737,6 @@ fn: lm_trans_materialize_array_value (
         return: 1
     finally: lm_trans_text_ref_destroy(@ helper_name)
 
-    param: 0
-    if: segment != 0
-        param: segment\expected_param
     if: lm_trans_emit_array_value_helper(file, param, value, namespace_, helper_name) != 0 || lm_trans_expr_stack_push_text(stack, ")") != 0 || lm_trans_expr_stack_push_text(stack, "lm_lmx_message_thread") != 0 || lm_trans_expr_stack_push_text(stack, "(") != 0 || lm_trans_expr_stack_push_name_text(stack, helper_name) != 0
         return: 1
 
@@ -2513,22 +3294,74 @@ fn: lm_trans_emit_return_statement (
 ) int
     const: LmP0Node: candidate_node
     const: LmTransDescriptor: required_descriptor
+    const: LmTransSymbol: candidate_symbol
+    LmTransL4CallableType: candidate_type
     LmTransL4CallableType: expected_type
+    int: candidate_type_status
+    int: expected_array_reference
     unsigned: return_id
     int: consumed
 
     candidate_node: 0
-    if: return_fields != 0 && return_fields\next = 0 && return_fields\value != 0 && return_fields\value\kind = c.LM_P0_NODE_ATOM
+    if: return_fields != 0 && return_fields\next = 0 && return_fields\value != 0
         candidate_node: return_fields\value
-    if: candidate_node != 0 && namespace_ != 0 && namespace_\return_type_node != 0
+    if: namespace_ != 0 && namespace_\return_type_node != 0
         expected_type: lm_trans_expr_callable_type_new()
         if: expected_type = 0
             return: 1
         if: lm_trans_l4_callable_type_from_node(namespace_\return_type_node, expected_type)
-            required_descriptor: lm_trans_namespace_descriptor(namespace_, expected_type\class_name)
-            if: lm_trans_guard_direct_structure_value_layout(namespace_, candidate_node\as\atom, required_descriptor, "return value") != 0
+            expected_array_reference: expected_type\array_rank != 0U || (expected_type\address_depth = 0U && lm_trans_text_equals(expected_type\class_name, "LmSlice"))
+            if: lm_trans_guard_array_reference_range(return_fields, 0, namespace_, expected_array_reference, "return value") != 0
                 lm_trans_expr_callable_type_delete(expected_type)
                 return: 1
+            ---
+            if: expected_array_reference = 0 && lm_trans_guard_c_array_value_range(return_fields, 0, namespace_, expected_type\class_name, expected_type\address_depth, expected_type\is_const, "return value") != 0
+                lm_trans_expr_callable_type_delete(expected_type)
+                return: 1
+            ---
+            if: expected_type\array_rank = 0U && expected_type\address_depth != 0U && lm_trans_range_has_direct_array_reference(return_fields, 0, namespace_) && (expected_type\address_depth != 1U || lm_trans_text_equals(expected_type\class_name, "LmSlice") = 0 || lm_trans_range_is_direct_array_reference_address(return_fields, 0, namespace_) = 0) && lm_trans_range_is_array_reference_data_pointer(return_fields, 0, namespace_) = 0
+                c.fprintf(c.stderr, "trans L2 type error: raw pointer return cannot consume an ArrayReference without an explicit adapter\n")
+                lm_trans_expr_callable_type_delete(expected_type)
+                return: 1
+            ---
+            candidate_symbol: 0
+            if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_FRAME
+                candidate_symbol: lm_trans_namespace_find(namespace_, candidate_node\as\frame\head)
+            if: candidate_symbol != 0 && lm_trans_symbol_is_executable_callable(candidate_symbol) && (expected_array_reference || expected_type\address_depth != 0U)
+                candidate_type: lm_trans_expr_callable_type_new()
+                if: candidate_type = 0
+                    lm_trans_expr_callable_type_delete(expected_type)
+                    return: 1
+                candidate_type_status: lm_trans_node_result_type(candidate_node, namespace_, candidate_type)
+                if: candidate_type_status < 0
+                    lm_trans_expr_callable_type_delete(candidate_type)
+                    lm_trans_expr_callable_type_delete(expected_type)
+                    return: 1
+                if: candidate_type_status > 0 && expected_array_reference && candidate_type\array_rank = 0U && (candidate_type\address_depth != 0U || lm_trans_text_equals(candidate_type\class_name, "LmSlice") = 0)
+                    c.fprintf(c.stderr, "trans L2 type error: return value requires an ArrayReference result\n")
+                    lm_trans_expr_callable_type_delete(candidate_type)
+                    lm_trans_expr_callable_type_delete(expected_type)
+                    return: 1
+                if: candidate_type_status > 0 && expected_array_reference = 0 && expected_type\address_depth != 0U && (candidate_type\array_rank != 0U || (candidate_type\address_depth = 0U && lm_trans_text_equals(candidate_type\class_name, "LmSlice")))
+                    c.fprintf(c.stderr, "trans L2 type error: raw pointer return cannot consume an ArrayReference result without an explicit adapter\n")
+                    lm_trans_expr_callable_type_delete(candidate_type)
+                    lm_trans_expr_callable_type_delete(expected_type)
+                    return: 1
+                ---
+                if: candidate_type_status > 0 && expected_array_reference = 0 && expected_type\address_depth != 0U && candidate_type\array_rank = 0U && lm_trans_raw_pointer_type_compatible(candidate_type\class_name, candidate_type\address_depth, candidate_type\is_const, expected_type\class_name, expected_type\address_depth, expected_type\is_const, namespace_) = 0
+                    c.fprintf(c.stderr, "trans L2 type error: raw pointer return cannot consume callable %.*s result %.*s depth %zu const %d as %.*s depth %zu const %d\n", (cast: int candidate_node\as\frame\head\length), candidate_node\as\frame\head\data, (cast: int candidate_type\class_name\length), candidate_type\class_name\data, candidate_type\address_depth, candidate_type\is_const, (cast: int expected_type\class_name\length), expected_type\class_name\data, expected_type\address_depth, expected_type\is_const)
+                    lm_trans_expr_callable_type_delete(candidate_type)
+                    lm_trans_expr_callable_type_delete(expected_type)
+                    return: 1
+                ---
+                lm_trans_expr_callable_type_delete(candidate_type)
+            ---
+            if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_ATOM
+                required_descriptor: lm_trans_namespace_descriptor(namespace_, expected_type\class_name)
+                if: lm_trans_guard_direct_structure_value_layout(namespace_, candidate_node\as\atom, required_descriptor, "return value") != 0
+                    lm_trans_expr_callable_type_delete(expected_type)
+                    return: 1
+                ---
             ---
         ---
         lm_trans_expr_callable_type_delete(expected_type)
@@ -2800,6 +3633,8 @@ fn: lm_trans_emit_pointer_declaration_with_qualifier (
     const: LmP0Field: type_field
     const: LmP0Field: name_field
     const: LmP0Node: name_node
+    const: LmP0Text: expected_class
+    int: status
 
     body: lm_trans_unwrap_single_anonymous_structure(frame\body)
     type_field: lm_trans_nth_field(body, 0U)
@@ -2809,6 +3644,17 @@ fn: lm_trans_emit_pointer_declaration_with_qualifier (
         return: 1
 
     name_node: name_field\value
+    expected_class: 0
+    if: type_field\value != 0 && type_field\value\kind = c.LM_P0_NODE_ATOM
+        expected_class: type_field\value\as\atom
+    if: name_field\next != 0 && lm_trans_guard_c_array_value_range(name_field\next, 0, namespace_, expected_class, frame\head\length, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0), "raw pointer initializer") != 0
+        return: 1
+    if: name_field\next != 0 && lm_trans_guard_known_raw_pointer_range(name_field\next, 0, namespace_, expected_class, frame\head\length, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0), "raw pointer initializer") != 0
+        return: 1
+    if: name_field\next != 0 && lm_trans_range_has_direct_array_reference(name_field\next, 0, namespace_) && (frame\head\length != 1U || type_field\value = 0 || type_field\value\kind != c.LM_P0_NODE_ATOM || lm_trans_text_equals(type_field\value\as\atom, "LmSlice") = 0 || lm_trans_range_is_direct_array_reference_address(name_field\next, 0, namespace_) = 0) && lm_trans_range_is_array_reference_data_pointer(name_field\next, 0, namespace_) = 0
+        c.fprintf(c.stderr, "trans L2 type error: raw pointer initializer cannot consume an ArrayReference without an explicit adapter\n")
+        return: 1
+    ---
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
     if: qualifier != 0 && lm_trans_put(file, qualifier) != 0
@@ -2821,7 +3667,10 @@ fn: lm_trans_emit_pointer_declaration_with_qualifier (
         return: 1
     if: lm_trans_put(file, ";\n") != 0
         return: 1
-return: lm_trans_namespace_declare_node_storage_binding(namespace_, name_node\as\atom, type_field\value)
+    status: lm_trans_namespace_declare_node_storage_binding(namespace_, name_node\as\atom, type_field\value)
+    if: status = 0
+        status: lm_trans_namespace_mark_raw_pointer(namespace_, name_node\as\atom, frame\head\length, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0))
+return: status
 
 fn: lm_trans_emit_pointer_declaration (
     FILE: file
@@ -2899,6 +3748,50 @@ fn: lm_trans_emit_array_initializer (
         return: 1
 return: lm_trans_put(file, "}")
 
+fn: lm_trans_c_array_declaration_parts (
+    const: LmP0Frame: frame
+    const: @(LmP0Frame out_array_frame)
+    @: int out_is_const
+) int
+    const: LmP0Structure: body
+    const: LmP0Field: field
+    const: LmP0Frame: declaration
+
+    if: out_array_frame != 0
+        out_array_frame[0]: 0
+    if: out_is_const != 0
+        out_is_const[0]: 0
+    if: frame = 0 || out_array_frame = 0 || out_is_const = 0 || lm_trans_text_equals(frame\head, "c.array") = 0
+        c.fprintf(c.stderr, "trans L2 c.array error: expected a c.array declaration frame\n")
+        return: 1
+
+    body: lm_trans_unwrap_single_anonymous_structure(frame\body)
+    field: 0
+    if: body != 0
+        field: body\first_field
+    if: field = 0 || field\next != 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME
+        c.fprintf(c.stderr, "trans L2 c.array error: c.array expects exactly one bracket-head array declaration\n")
+        return: 1
+
+    declaration: field\value\as\frame
+    if: lm_trans_text_equals(declaration\head, "const")
+        out_is_const[0]: 1
+        body: lm_trans_unwrap_single_anonymous_structure(declaration\body)
+        field: 0
+        if: body != 0
+            field: body\first_field
+        if: field = 0 || field\next != 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME
+            c.fprintf(c.stderr, "trans L2 c.array error: const c.array expects exactly one bracket-head array declaration\n")
+            return: 1
+        declaration: field\value\as\frame
+    ---
+
+    if: lm_trans_text_is_array_receiver_head(declaration\head) = 0
+        c.fprintf(c.stderr, "trans L2 c.array error: c.array requires a []-family declarator\n")
+        return: 1
+    out_array_frame[0]: declaration
+return: 0
+
 fn: lm_trans_array_declarator_error (const: @(char message)) int
     if: message != 0
         c.fprintf(c.stderr, "%s\n", message)
@@ -2907,7 +3800,7 @@ return: 1
 fn: lm_trans_array_declarator_read_from_frame (
     LmTransCDeclarator: declarator
     const: LmP0Frame: frame
-    LmTransNamespace: namespace_
+    const: LmTransNamespace: namespace_
     int: allow_single_frame
     int: allow_type_head
     int: require_name
@@ -3002,6 +3895,59 @@ fn: lm_trans_array_declarator_read_from_frame (
 
     declarator\pointer_depth: pointer_depth
     declarator\type_node: type_field\value
+return: 0
+
+fn: lm_trans_array_declarator_rank (
+    const: LmTransCDeclarator: declarator
+) size_t
+    LmP0Text: dimension
+    size_t: dimension_index
+    size_t: rank
+
+    if: declarator = 0 || declarator\array_head = 0
+        return: 0U
+    dimension: lm_trans_statement_text_new()
+    if: dimension = 0
+        return: 0U
+    finally: lm_trans_text_ref_destroy(@ dimension)
+    dimension_index: 0U
+    rank: declarator\literal_dimension_count
+    while: lm_trans_array_head_next_dimension(declarator\array_head, @ dimension_index, dimension)
+        rank: rank + 1U
+return: rank
+
+fn: lm_trans_c_array_declaration_name (
+    const: LmP0Frame: frame
+    const: LmTransNamespace: namespace_
+    LmP0Text: out_name
+    @: size_t out_rank
+    @: size_t out_element_address_depth
+) int
+    const: LmP0Frame: declaration
+    LmTransCDeclarator: declarator
+    int: is_const
+
+    if: out_name != 0
+        out_name\data: ""
+        out_name\length: 0U
+    if: out_rank != 0
+        out_rank[0]: 0U
+    if: out_element_address_depth != 0
+        out_element_address_depth[0]: 0U
+    if: out_name = 0 || out_rank = 0 || out_element_address_depth = 0 || lm_trans_c_array_declaration_parts(frame, @ declaration, @ is_const) != 0
+        return: 1
+    c.LM_UNUSED(is_const)
+
+    declarator: lm_trans_statement_c_declarator_new()
+    if: declarator = 0
+        return: 1
+    finally: lm_trans_statement_c_declarator_destroy(declarator)
+    declarator\atom_dimensions_only: 1
+    if: lm_trans_array_declarator_read_from_frame(declarator, declaration, namespace_, 1, 1, 1, "trans L2 c.array error: declaration expects a type, name, and extent", "trans L2 c.array error: pointer declaration expects a type, name, and extent", "trans L2 c.array error: nested declaration expects a type, name, and extent") != 0
+        return: 1
+    out_name[0]: declarator\name[0]
+    out_rank[0]: lm_trans_array_declarator_rank(declarator)
+    out_element_address_depth[0]: declarator\pointer_depth
 return: 0
 
 fn: lm_trans_size_literal_cstr_new (size_t: value) @: char
@@ -3169,29 +4115,467 @@ fn: lm_trans_emit_array_slice_value_declaration (
         return: 1
 
     status: lm_trans_namespace_declare_storage_binding(namespace_, declarator\name, slice_type)
+    if: status = 0
+        status: lm_trans_namespace_mark_array_reference(namespace_, declarator\name)
 return: status
 
-fn: lm_trans_emit_array_declaration_with_qualifier (
+fn: lm_trans_c_array_node_requires_runtime (
+    const: LmP0Node: node
+    const: LmTransNamespace: namespace_
+    int: allow_address_constants
+) int
+    const: LmP0Field: field
+    const: LmTransSymbol: symbol
+
+    if: node = 0 || lm_trans_node_is_ignored(node)
+        return: 0
+    if: node\kind = c.LM_P0_NODE_ATOM
+        if: lm_trans_text_contains_char(node\as\atom, '(')
+            return: 1
+        if: allow_address_constants && lm_trans_namespace_value_is_c_array_storage(namespace_, node\as\atom)
+            return: lm_trans_namespace_value_is_emitted_c_array_storage(namespace_, node\as\atom) = 0
+        symbol: lm_trans_namespace_find(namespace_, node\as\atom)
+        if: symbol = 0
+            return: 0
+        if: allow_address_constants && lm_trans_symbol_is_executable_callable(symbol)
+            return: 0
+        return: 1
+    if: node\kind = c.LM_P0_NODE_FRAME
+        if: lm_trans_text_is_array_receiver_head(node\as\frame\head) = 0
+            return: 1
+        field: node\as\frame\body\first_field
+    else:
+        if: node\kind != c.LM_P0_NODE_STRUCTURE
+            return: 1
+        field: node\as\structure\first_field
+    ---
+
+    while: field != 0
+        if: lm_trans_c_array_node_requires_runtime(field\value, namespace_, allow_address_constants)
+            return: 1
+        field: field\next
+return: 0
+
+fn: lm_trans_c_array_postfix_indices_require_runtime (
+    const: LmP0Field: storage_field
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: close_field
+    const: LmP0Field: field
+    size_t: depth
+
+    if: storage_field = 0
+        return: 1
+    field: storage_field\next
+    while: field != 0 && field != stop && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(field\value\as\atom, "[")
+        close_field: field\next
+        depth: 1U
+        while: close_field != 0 && close_field != stop && depth != 0U
+            if: close_field\value != 0 && close_field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(close_field\value\as\atom, "[")
+                depth: depth + 1U
+            if: close_field\value != 0 && close_field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(close_field\value\as\atom, "]")
+                depth: depth - 1U
+            if: depth != 0U && lm_trans_c_array_node_requires_runtime(close_field\value, namespace_, 0)
+                return: 1
+            close_field: close_field\next
+        ---
+        if: depth != 0U
+            return: 1
+        field: close_field
+    return: field != stop
+
+fn: lm_trans_c_array_range_is_prior_element_address_constant (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: end_field
+    const: LmP0Field: range_first
+    const: LmP0Field: range_stop
+    const: LmP0Field: root
+    size_t: index_count
+    size_t: rank
+
+    range_first: first
+    range_stop: stop
+    while: range_first != 0 && range_first != range_stop && range_first\next = range_stop && range_first\value != 0 && range_first\value\kind = c.LM_P0_NODE_STRUCTURE
+        range_first: range_first\value\as\structure\first_field
+        range_stop: 0
+    if: range_first = 0 || range_first = range_stop || range_first\value = 0 || range_first\value\kind != c.LM_P0_NODE_ATOM || lm_trans_text_equals(range_first\value\as\atom, "@") = 0
+        return: 0
+    root: range_first\next
+    if: root = 0 || root = range_stop || root\value = 0 || root\value\kind != c.LM_P0_NODE_ATOM || lm_trans_namespace_value_is_c_array_storage(namespace_, root\value\as\atom) = 0 || lm_trans_namespace_value_is_emitted_c_array_storage(namespace_, root\value\as\atom) = 0
+        return: 0
+    if: lm_trans_validate_c_array_postfix_index_ranges(root, range_stop, namespace_) != 0
+        return: 0
+    if: lm_trans_c_array_postfix_index_count(root, range_stop, @ index_count, @ end_field) != 0 || end_field != range_stop
+        return: 0
+    rank: lm_trans_namespace_value_c_array_rank(namespace_, root\value\as\atom)
+    if: rank = 0U || index_count != rank
+        return: 0
+    if: lm_trans_c_array_postfix_indices_require_runtime(root, range_stop, namespace_)
+        return: 0
+return: 1
+
+fn: lm_trans_c_array_initializer_fields_require_runtime (
+    const: LmP0Field: first
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Field: cursor
+    const: LmP0Field: field
+    const: LmP0Field: next
+    const: LmP0Node: node
+    const: LmP0Structure: nested
+
+    field: first
+    while: field != 0
+        node: field\value
+        if: node = 0 || lm_trans_node_is_ignored(node)
+            field: field\next
+            continue
+        nested: 0
+        if: node\kind = c.LM_P0_NODE_STRUCTURE
+            nested: node\as\structure
+        if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_text_is_array_receiver_head(node\as\frame\head)
+            nested: node\as\frame\body
+        if: nested != 0
+            if: lm_trans_c_array_initializer_fields_require_runtime(nested\first_field, namespace_)
+                return: 1
+            field: field\next
+            continue
+        ---
+
+        next: lm_trans_expr_segment_end(field)
+        if: lm_trans_c_array_range_is_prior_element_address_constant(field, next, namespace_) = 0
+            cursor: field
+            while: cursor != next
+                if: lm_trans_c_array_node_requires_runtime(cursor\value, namespace_, 1)
+                    return: 1
+                cursor: cursor\next
+            ---
+        ---
+        field: next
+return: 0
+
+fn: lm_trans_c_array_dimension_requires_runtime (
+    const: LmP0Text: dimension
+    const: LmTransNamespace: namespace_
+    @: int out_runtime
+) int
+    LmP0Document: document
+    const: LmP0Node: root
+    const: LmP0Field: first
+
+    if: out_runtime != 0
+        out_runtime[0]: 0
+    if: dimension = 0 || dimension\length = 0U || out_runtime = 0
+        return: 1
+
+    document: 0
+    if: lm_p0_parse_bytes(dimension\data, dimension\length, @ document) != 0 || document = 0
+        if: document != 0
+            lm_p0_document_destroy(document)
+        c.fprintf(c.stderr, "trans L2 c.array error: array extent is not a valid expression\n")
+        return: 1
+    root: lm_p0_document_root(document)
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        lm_p0_document_destroy(document)
+        c.fprintf(c.stderr, "trans L2 c.array error: array extent is not a valid expression\n")
+        return: 1
+    first: root\as\structure\first_field
+    if: first = 0 || lm_trans_expr_segment_end(first) != 0
+        lm_p0_document_destroy(document)
+        c.fprintf(c.stderr, "trans L2 c.array error: array extent expects exactly one expression\n")
+        return: 1
+
+    out_runtime[0]: lm_trans_c_array_node_requires_runtime(root, namespace_, 0)
+    lm_p0_document_destroy(document)
+return: 0
+
+fn: lm_trans_c_array_declarator_element_is_lmslice (
+    const: LmTransCDeclarator: declarator
+) int
+    if: declarator = 0
+        return: 0
+    if: declarator\type_is_head
+        return: lm_trans_text_equals(declarator\type_head, "LmSlice")
+    if: declarator\type_node != 0 && declarator\type_node\kind = c.LM_P0_NODE_ATOM
+        return: lm_trans_text_equals(declarator\type_node\as\atom, "LmSlice")
+return: 0
+
+fn: lm_trans_c_array_decimal_extent (
+    const: LmP0Text: text
+    @: size_t out_value
+) int
+    size_t: index
+    size_t: value
+    unsigned: digit
+
+    if: out_value != 0
+        out_value[0]: 0U
+    if: text = 0 || text\length = 0U || out_value = 0
+        return: 0
+    value: 0U
+    index: 0U
+    while: index < text\length
+        if: text\data[index] < '0' || text\data[index] > '9'
+            return: 0
+        digit: (cast: unsigned (text\data[index] - '0'))
+        if: value > ((cast: size_t -1) - (cast: size_t digit)) / 10U
+            return: 0
+        value: value * 10U + (cast: size_t digit)
+        index: index + 1U
+    out_value[0]: value
+return: 1
+
+fn: lm_trans_c_array_initializer_leaf_count (
+    const: LmP0Field: first
+    @: size_t out_count
+) int
+    const: LmP0Field: field
+    const: LmP0Field: next
+    const: LmP0Node: node
+    const: LmP0Structure: nested
+    size_t: nested_count
+
+    if: out_count = 0
+        return: 1
+    out_count[0]: 0U
+    field: first
+    while: field != 0
+        node: field\value
+        if: node = 0 || lm_trans_node_is_ignored(node)
+            field: field\next
+            continue
+        nested: 0
+        if: node\kind = c.LM_P0_NODE_STRUCTURE
+            nested: node\as\structure
+        if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_text_is_array_receiver_head(node\as\frame\head)
+            nested: node\as\frame\body
+        if: nested != 0
+            if: lm_trans_c_array_initializer_leaf_count(nested\first_field, @ nested_count) != 0 || out_count[0] > (cast: size_t -1) - nested_count
+                return: 1
+            out_count[0]: out_count[0] + nested_count
+            field: field\next
+            continue
+        ---
+        next: lm_trans_expr_segment_end(field)
+        if: out_count[0] = (cast: size_t -1)
+            return: 1
+        out_count[0]: out_count[0] + 1U
+        field: next
+return: 0
+
+fn: lm_trans_validate_c_array_initializer_count (
+    const: LmTransCDeclarator: declarator
+    const: LmP0Field: initializer
+) int
+    LmP0Text: dimension
+    const: LmP0Field: expression_dimension
+    const: LmP0Node: node
+    size_t: dimension_index
+    size_t: extent
+    size_t: initializer_count
+    size_t: total
+
+    if: declarator = 0 || initializer = 0
+        return: 0
+    dimension: lm_trans_statement_text_new()
+    if: dimension = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ dimension)
+
+    expression_dimension: declarator\expression_dimensions
+    dimension_index: 0U
+    total: 1U
+    while: lm_trans_array_head_next_dimension(declarator\array_head, @ dimension_index, dimension)
+        if: dimension\length != 0U
+            if: lm_trans_c_array_decimal_extent(dimension, @ extent) = 0
+                return: 0
+            ---
+        else:
+            if: expression_dimension = 0
+                return: 0
+            node: expression_dimension\value
+            if: node = 0 || node\kind != c.LM_P0_NODE_ATOM || lm_trans_c_array_decimal_extent(node\as\atom, @ extent) = 0
+                return: 0
+            expression_dimension: expression_dimension\next
+        ---
+        if: extent != 0U && total > (cast: size_t -1) / extent
+            return: 0
+        total: total * extent
+    ---
+
+    if: lm_trans_c_array_initializer_leaf_count(initializer, @ initializer_count) != 0
+        return: 1
+    if: initializer_count > total
+        c.fprintf(c.stderr, "trans L2 c.array error: initializer has %zu elements for storage with %zu elements\n", initializer_count, total)
+        return: 1
+return: 0
+
+fn: lm_trans_validate_c_array_initializer_fields (
+    const: LmP0Field: first
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: element_class
+    size_t: element_address_depth
+    int: element_base_is_const
+    int: element_is_lmslice
+) int
+    const: LmP0Field: field
+    const: LmP0Field: next
+    const: LmP0Node: node
+    const: LmP0Structure: nested
+
+    field: first
+    while: field != 0
+        node: field\value
+        if: node = 0 || lm_trans_node_is_ignored(node)
+            field: field\next
+            continue
+        nested: 0
+        if: node\kind = c.LM_P0_NODE_STRUCTURE
+            nested: node\as\structure
+        if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_text_is_array_receiver_head(node\as\frame\head)
+            nested: node\as\frame\body
+        if: nested != 0
+            if: lm_trans_validate_c_array_initializer_fields(nested\first_field, namespace_, element_class, element_address_depth, element_base_is_const, element_is_lmslice) != 0
+                return: 1
+            field: field\next
+            continue
+        ---
+
+        next: lm_trans_expr_segment_end(field)
+        if: lm_trans_guard_c_array_value_range(field, next, namespace_, element_class, element_address_depth, element_base_is_const, "c.array element initializer") != 0
+            return: 1
+        if: lm_trans_guard_known_raw_pointer_range(field, next, namespace_, element_class, element_address_depth, element_base_is_const, "c.array element initializer") != 0
+            return: 1
+        if: lm_trans_range_has_direct_array_reference(field, next, namespace_) && (element_address_depth != 1U || element_is_lmslice = 0 || lm_trans_range_is_direct_array_reference_address(field, next, namespace_) = 0) && (element_address_depth = 0U || lm_trans_range_is_array_reference_data_pointer(field, next, namespace_) = 0)
+            c.fprintf(c.stderr, "trans L2 type error: c.array element initializer cannot consume an ArrayReference without an explicit raw-storage adapter\n")
+            return: 1
+        field: next
+return: 0
+
+fn: lm_trans_c_array_multidimensional_initializer_is_grouped (
+    const: LmP0Field: first
+) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+
+    field: first
+    while: field != 0
+        node: field\value
+        if: node = 0 || lm_trans_node_is_ignored(node)
+            field: field\next
+            continue
+        if: node\kind != c.LM_P0_NODE_STRUCTURE && (node\kind != c.LM_P0_NODE_FRAME || lm_trans_text_is_array_receiver_head(node\as\frame\head) = 0)
+            return: 0
+        field: field\next
+return: 1
+
+fn: lm_trans_validate_c_array_declarator (
+    const: LmTransCDeclarator: declarator
+    const: LmP0Field: initializer
+    const: LmTransNamespace: namespace_
+    int: is_static
+    int: element_base_is_const
+) int
+    LmP0Text: dimension
+    const: LmP0Field: expression_dimension
+    const: LmP0Text: element_class
+    size_t: dimension_index
+    int: dimension_runtime
+    int: runtime_extent
+
+    if: declarator = 0 || declarator\array_head = 0
+        return: 1
+    if: initializer != 0 && lm_trans_array_declarator_rank(declarator) > 1U && lm_trans_c_array_multidimensional_initializer_is_grouped(initializer) = 0
+        c.fprintf(c.stderr, "trans L2 c.array error: multidimensional initializer requires explicit nested [] groups\n")
+        return: 1
+    ---
+    dimension: lm_trans_statement_text_new()
+    if: dimension = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ dimension)
+
+    dimension_index: 0U
+    expression_dimension: declarator\expression_dimensions
+    runtime_extent: 0
+    while: lm_trans_array_head_next_dimension(declarator\array_head, @ dimension_index, dimension)
+        if: dimension\length != 0U
+            if: lm_trans_c_array_dimension_requires_runtime(dimension, namespace_, @ dimension_runtime) != 0
+                return: 1
+            if: dimension_runtime
+                runtime_extent: 1
+            ---
+        else:
+            if: expression_dimension = 0 || expression_dimension\value = 0 || lm_trans_array_body_dimension_can_consume(expression_dimension) = 0
+                c.fprintf(c.stderr, "trans L2 c.array error: c.array dimension expects a size expression\n")
+                return: 1
+            if: lm_trans_c_array_node_requires_runtime(expression_dimension\value, namespace_, 0)
+                runtime_extent: 1
+            expression_dimension: expression_dimension\next
+        ---
+    ---
+
+    element_class: 0
+    if: declarator\type_is_head
+        element_class: declarator\type_head
+    if: declarator\type_is_head = 0 && declarator\type_node != 0 && declarator\type_node\kind = c.LM_P0_NODE_ATOM
+        element_class: declarator\type_node\as\atom
+    if: initializer != 0 && lm_trans_validate_c_array_initializer_fields(initializer, namespace_, element_class, declarator\pointer_depth, element_base_is_const, lm_trans_c_array_declarator_element_is_lmslice(declarator)) != 0
+        return: 1
+    if: initializer != 0 && lm_trans_validate_c_array_initializer_count(declarator, initializer) != 0
+        return: 1
+
+    if: is_static && runtime_extent
+        c.fprintf(c.stderr, "trans L2 c.array error: top-level extent must be a C integer constant expression\n")
+        return: 1
+    if: initializer != 0 && runtime_extent
+        c.fprintf(c.stderr, "trans L2 c.array error: a variable-length c.array cannot have an initializer\n")
+        return: 1
+    if: is_static
+        if: lm_trans_c_array_initializer_fields_require_runtime(initializer, namespace_)
+            c.fprintf(c.stderr, "trans L2 c.array error: top-level initializer must be a C constant initializer\n")
+            return: 1
+        ---
+    ---
+return: 0
+
+fn: lm_trans_emit_array_declaration_core (
     FILE: file
     const: LmP0Frame: frame
     unsigned: indent
     LmTransNamespace: namespace_
     const: @(char qualifier)
+    int: allow_array_reference_semantics
 ) int
     const: LmP0Field: initializer_field
     const: LmP0Structure: slice_value
     LmTransCDeclarator: declarator
+    int: status
 
     declarator: lm_trans_statement_c_declarator_new()
     if: declarator = 0
         return: 1
     finally: lm_trans_statement_c_declarator_destroy(declarator)
 
+    if: allow_array_reference_semantics = 0
+        declarator\atom_dimensions_only: 1
+
     if: lm_trans_array_declarator_read_from_frame(declarator, frame, namespace_, 1, 1, 1, "trans L2 error: [] declaration expects [@...] type name size...", "trans L2 error: array pointer declaration expects type and name", "trans L2 error: array declaration expects a type/name declaration") != 0
+        return: 1
+
+    initializer_field: lm_trans_c_declarator_expression_dimension_tail(declarator)
+    if: allow_array_reference_semantics = 0 && lm_trans_validate_c_array_declarator(declarator, initializer_field, namespace_, qualifier != 0 && (c.strcmp(qualifier, "static ") = 0 || c.strcmp(qualifier, "static const ") = 0), qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0)) != 0
         return: 1
 
     slice_value: lm_trans_array_declarator_single_structure_value(declarator)
     if: slice_value != 0
+        if: allow_array_reference_semantics = 0
+            c.fprintf(c.stderr, "trans L2 c.array error: c.array requires explicit machine extents and cannot construct an ArrayReference value\n")
+            return: 1
+        ---
         return: lm_trans_emit_array_slice_value_declaration(file, declarator, slice_value, indent, namespace_, qualifier)
 
     if: lm_trans_emit_indent(file, indent) != 0
@@ -3202,16 +4586,53 @@ fn: lm_trans_emit_array_declaration_with_qualifier (
     if: lm_trans_emit_c_declarator(file, declarator, namespace_, "[] array dimension") != 0
         return: 1
 
-    initializer_field: lm_trans_c_declarator_expression_dimension_tail(declarator)
     if: initializer_field != 0 && lm_trans_emit_array_initializer(file, initializer_field, namespace_) != 0
         return: 1
     if: lm_trans_put(file, ";\n") != 0
         return: 1
-    if: lm_trans_emit_array_slice_sidecar(file, declarator, indent, namespace_, "[] array dimension") != 0
-        return: 1
     if: declarator\type_is_head
-        return: lm_trans_namespace_declare_storage_binding(namespace_, declarator\name, declarator\type_head)
-return: lm_trans_namespace_declare_node_storage_binding(namespace_, declarator\name, declarator\type_node)
+        status: lm_trans_namespace_declare_storage_binding(namespace_, declarator\name, declarator\type_head)
+    else:
+        status: lm_trans_namespace_declare_node_storage_binding(namespace_, declarator\name, declarator\type_node)
+    ---
+    if: status = 0 && allow_array_reference_semantics = 0
+        status: lm_trans_namespace_mark_c_array_storage(namespace_, declarator\name, lm_trans_array_declarator_rank(declarator), declarator\pointer_depth, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0))
+    if: status = 0 && allow_array_reference_semantics = 0
+        status: lm_trans_namespace_mark_c_array_emitted(namespace_, declarator\name)
+    if: status = 0 && allow_array_reference_semantics
+        status: lm_trans_emit_array_slice_sidecar(file, declarator, indent, namespace_, "[] array dimension")
+return: status
+
+fn: lm_trans_emit_array_declaration_with_qualifier (
+    FILE: file
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+    const: @(char qualifier)
+) int
+return: lm_trans_emit_array_declaration_core(file, frame, indent, namespace_, qualifier, 1)
+
+fn: lm_trans_emit_c_array_declaration_with_qualifier (
+    FILE: file
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+    const: @(char qualifier)
+) int
+    const: LmP0Frame: declaration
+    int: is_const
+
+    if: lm_trans_c_array_declaration_parts(frame, @ declaration, @ is_const) != 0
+        return: 1
+    if: is_const
+        if: qualifier != 0 && c.strcmp(qualifier, "static ") = 0
+            return: lm_trans_emit_array_declaration_core(file, declaration, indent, namespace_, "static const ", 0)
+        if: qualifier != 0 && qualifier[0] != '\0'
+            c.fprintf(c.stderr, "trans L2 c.array error: unsupported storage qualifier for const c.array\n")
+            return: 1
+        return: lm_trans_emit_array_declaration_core(file, declaration, indent, namespace_, "const ", 0)
+    ---
+return: lm_trans_emit_array_declaration_core(file, declaration, indent, namespace_, qualifier, 0)
 
 fn: lm_trans_emit_array_declaration (
     FILE: file
@@ -3235,6 +4656,8 @@ fn: lm_trans_emit_pointer_declaration_repeat_with_qualifier (
     const: LmP0Field: name_field
     const: LmP0Node: type_node
     const: LmP0Node: name_node
+    const: LmP0Text: expected_class
+    int: status
 
     template_body: 0
     if: template_frame != 0
@@ -3260,11 +4683,21 @@ fn: lm_trans_emit_pointer_declaration_repeat_with_qualifier (
     ---
 
     name_node: name_field\value
+    expected_class: 0
+    if: type_node != 0 && type_node\kind = c.LM_P0_NODE_ATOM
+        expected_class: type_node\as\atom
+    if: name_field\next != 0 && lm_trans_guard_c_array_value_range(name_field\next, 0, namespace_, expected_class, template_frame\head\length, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0), "raw pointer initializer") != 0
+        return: 1
+    if: name_field\next != 0 && lm_trans_guard_known_raw_pointer_range(name_field\next, 0, namespace_, expected_class, template_frame\head\length, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0), "raw pointer initializer") != 0
+        return: 1
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
     if: qualifier != 0 && lm_trans_put(file, qualifier) != 0
         return: 1
     if: lm_trans_emit_type_and_name(file, type_node, name_node\as\atom, template_frame\head\length, namespace_) != 0
+        return: 1
+    if: name_field\next != 0 && lm_trans_range_has_direct_array_reference(name_field\next, 0, namespace_) && (template_frame\head\length != 1U || type_node = 0 || type_node\kind != c.LM_P0_NODE_ATOM || lm_trans_text_equals(type_node\as\atom, "LmSlice") = 0 || lm_trans_range_is_direct_array_reference_address(name_field\next, 0, namespace_) = 0) && lm_trans_range_is_array_reference_data_pointer(name_field\next, 0, namespace_) = 0
+        c.fprintf(c.stderr, "trans L2 type error: raw pointer initializer cannot consume an ArrayReference without an explicit adapter\n")
         return: 1
     if: name_field\next != 0 && lm_trans_put(file, " = ") != 0
         return: 1
@@ -3272,7 +4705,10 @@ fn: lm_trans_emit_pointer_declaration_repeat_with_qualifier (
         return: 1
     if: lm_trans_put(file, ";\n") != 0
         return: 1
-return: lm_trans_namespace_declare_node_storage_binding(namespace_, name_node\as\atom, type_node)
+    status: lm_trans_namespace_declare_node_storage_binding(namespace_, name_node\as\atom, type_node)
+    if: status = 0
+        status: lm_trans_namespace_mark_raw_pointer(namespace_, name_node\as\atom, template_frame\head\length, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0))
+return: status
 
 fn: lm_trans_emit_array_declaration_repeat_with_qualifier (
     FILE: file
@@ -6909,12 +8345,124 @@ fn: lm_trans_guard_direct_structure_assignment (
     lm_trans_text_ref_destroy(@ target_class)
 return: status
 
+fn: lm_trans_guard_array_storage_assignment (
+    const: LmP0Frame: frame
+    const: LmTransNamespace: namespace_
+) int
+    LmP0Text: target_payload
+    LmP0Text: target_root
+    LmP0Text: target_type
+    size_t: close_index
+    size_t: consumed_depth
+    size_t: element_depth
+    size_t: index
+    size_t: index_count
+    size_t: rank
+    size_t: root_start
+    size_t: root_raw_pointer_depth
+    size_t: target_raw_pointer_depth
+    int: target_is_c_array_element
+    int: target_is_array_reference
+    int: target_base_is_const
+    int: target_has_field_follow
+    int: target_type_is_lmslice
+
+    if: frame = 0 || frame\body = 0
+        return: 0
+    target_payload: lm_trans_statement_text_new()
+    target_root: lm_trans_statement_text_new()
+    target_type: lm_trans_statement_text_new()
+    if: target_payload = 0 || target_root = 0 || target_type = 0
+        lm_trans_text_ref_destroy(@ target_payload)
+        lm_trans_text_ref_destroy(@ target_root)
+        lm_trans_text_ref_destroy(@ target_type)
+        return: 1
+    finally:
+        lm_trans_text_ref_destroy(@ target_payload)
+        lm_trans_text_ref_destroy(@ target_root)
+        lm_trans_text_ref_destroy(@ target_type)
+    target_raw_pointer_depth: 0U
+    target_is_c_array_element: 0
+    target_is_array_reference: 0
+    target_base_is_const: 0
+    target_has_field_follow: 0
+    target_type_is_lmslice: 0
+    if: lm_trans_identifier_payload(frame\head, target_payload)
+        root_start: 0U
+        while: root_start < target_payload\length && target_payload\data[root_start] = '\\'
+            root_start: root_start + 1U
+        index: root_start
+        while: index < target_payload\length && target_payload\data[index] != '[' && target_payload\data[index] != '\\'
+            index: index + 1U
+        target_root\data: target_payload\data + root_start
+        target_root\length: index - root_start
+        index_count: 0U
+        while: index < target_payload\length && target_payload\data[index] = '['
+            if: lm_trans_array_head_find_close(target_payload, index, @ close_index) = 0
+                c.fprintf(c.stderr, "trans L2 error: unclosed index in assignment target\n")
+                return: 1
+            index_count: index_count + 1U
+            index: close_index + 1U
+        if: index < target_payload\length && target_payload\data[index] = '\\'
+            target_has_field_follow: 1
+        if: lm_trans_namespace_relation_text_for_latest_binding(namespace_, target_root, "variable.type", target_type)
+            target_type_is_lmslice: lm_trans_text_equals(target_type, "LmSlice")
+        rank: lm_trans_namespace_value_c_array_rank(namespace_, target_root)
+        if: rank != 0U
+            if: index_count < rank
+                c.fprintf(c.stderr, "trans L2 type error: c.array assignment target must index all %zu dimensions before update\n", rank)
+                return: 1
+            element_depth: lm_trans_namespace_value_c_array_element_address_depth(namespace_, target_root)
+            target_base_is_const: lm_trans_namespace_value_c_array_element_is_const(namespace_, target_root)
+            consumed_depth: index_count - rank
+            if: consumed_depth > element_depth
+                c.fprintf(c.stderr, "trans L2 type error: c.array assignment target has too many index operations for its element address depth\n")
+                return: 1
+            if: lm_trans_namespace_value_c_array_element_is_const(namespace_, target_root) && consumed_depth = element_depth
+                c.fprintf(c.stderr, "trans L2 type error: const c.array base element is not an update target\n")
+                return: 1
+            target_raw_pointer_depth: element_depth - consumed_depth
+            target_is_c_array_element: 1
+        else:
+            root_raw_pointer_depth: lm_trans_namespace_value_raw_pointer_depth(namespace_, target_root)
+            target_base_is_const: lm_trans_namespace_value_raw_pointer_base_is_const(namespace_, target_root)
+            consumed_depth: root_start + index_count
+            if: root_raw_pointer_depth > consumed_depth
+                target_raw_pointer_depth: root_raw_pointer_depth - consumed_depth
+            if: root_raw_pointer_depth != 0U && root_raw_pointer_depth = consumed_depth && target_type_is_lmslice
+                target_is_array_reference: 1
+            ---
+        ---
+    ---
+    if: lm_trans_namespace_value_is_c_array_storage(namespace_, frame\head)
+        c.fprintf(c.stderr, "trans L2 type error: c.array storage is not a whole-value assignment target; update an element or use an explicit adapter\n")
+        return: 1
+    if: lm_trans_namespace_value_is_array_reference(namespace_, frame\head) || target_is_array_reference
+        return: lm_trans_guard_array_reference_range(frame\body\first_field, 0, namespace_, 1, "ArrayReference assignment")
+    if: target_raw_pointer_depth = 0U
+        target_raw_pointer_depth: lm_trans_namespace_value_raw_pointer_depth(namespace_, frame\head)
+    if: lm_trans_guard_c_array_value_range(frame\body\first_field, 0, namespace_, target_type, target_raw_pointer_depth, target_base_is_const, "assignment") != 0
+        return: 1
+    if: target_raw_pointer_depth != 0U && target_has_field_follow = 0 && lm_trans_guard_known_raw_pointer_range(frame\body\first_field, 0, namespace_, target_type, target_raw_pointer_depth, target_base_is_const, "raw pointer assignment") != 0
+        return: 1
+    if: target_is_c_array_element && lm_trans_guard_known_raw_pointer_range(frame\body\first_field, 0, namespace_, target_type, target_raw_pointer_depth, target_base_is_const, "c.array element assignment") != 0
+        return: 1
+    if: target_is_c_array_element && lm_trans_range_has_direct_array_reference(frame\body\first_field, 0, namespace_) && (target_raw_pointer_depth != 1U || target_type_is_lmslice = 0 || lm_trans_range_is_direct_array_reference_address(frame\body\first_field, 0, namespace_) = 0) && (target_raw_pointer_depth = 0U || lm_trans_range_is_array_reference_data_pointer(frame\body\first_field, 0, namespace_) = 0)
+        c.fprintf(c.stderr, "trans L2 type error: c.array element assignment cannot consume an ArrayReference without an explicit raw-storage adapter\n")
+        return: 1
+    if: target_raw_pointer_depth != 0U && lm_trans_range_has_direct_array_reference(frame\body\first_field, 0, namespace_) && (target_raw_pointer_depth != 1U || target_type_is_lmslice = 0 || lm_trans_range_is_direct_array_reference_address(frame\body\first_field, 0, namespace_) = 0) && lm_trans_range_is_array_reference_data_pointer(frame\body\first_field, 0, namespace_) = 0
+        c.fprintf(c.stderr, "trans L2 type error: raw pointer assignment cannot consume an ArrayReference without an explicit adapter\n")
+        return: 1
+return: 0
+
 fn: lm_trans_emit_target_assignment (
     FILE: file
     const: LmP0Frame: frame
     unsigned: indent
     const: LmTransNamespace: namespace_
 ) int
+    if: lm_trans_guard_array_storage_assignment(frame, namespace_) != 0
+        return: 1
     if: lm_trans_guard_direct_structure_assignment(frame, namespace_) != 0
         return: 1
 
@@ -6934,6 +8482,8 @@ fn: lm_trans_emit_assignment (
     unsigned: indent
     const: LmTransNamespace: namespace_
 ) int
+    if: lm_trans_guard_array_storage_assignment(frame, namespace_) != 0
+        return: 1
     if: lm_trans_guard_direct_structure_assignment(frame, namespace_) != 0
         return: 1
 
@@ -7964,6 +9514,16 @@ fn: lm_trans_statement_emit_array_declaration (
     c.LM_UNUSED(stack)
 return: lm_trans_emit_array_declaration(file, frame, indent, namespace_)
 
+fn: lm_trans_statement_emit_c_array_declaration (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    c.LM_UNUSED(stack)
+return: lm_trans_emit_c_array_declaration_with_qualifier(file, frame, indent, namespace_, "")
+
 fn: lm_trans_statement_emit_structure_declaration (
     FILE: file
     LmTransStatementStack: stack
@@ -8129,7 +9689,7 @@ fn: lm_trans_lower_statement_frame (
         ---
     ---
 
-    if: symbol != 0 && lm_trans_l3_receiver_is_excluded(namespace_, dispatch_head)
+    if: lm_trans_l3_receiver_is_excluded(namespace_, dispatch_head)
         c.fprintf(c.stderr, "trans L3 error: receiver \"%.*s\" is not available in L3\n", (cast: int dispatch_head\length), dispatch_head\data)
         return: 1
 
@@ -10073,7 +11633,7 @@ fn: lm_trans_pointer_bindings_init () int
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_include_prelude", @lm_trans_statement_emit_include_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_define_prelude", @lm_trans_statement_emit_define_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifndef_default_prelude", @lm_trans_statement_emit_ifndef_default_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_os_prelude", @lm_trans_statement_emit_os_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifdef_prelude", @lm_trans_statement_emit_ifdef_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_guard_prelude", @lm_trans_statement_emit_guard_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_extern_c_prelude", @lm_trans_statement_emit_extern_c_prelude) != 0)
         status: 1
-    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_import", @lm_trans_statement_emit_import) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_predef", @lm_trans_statement_emit_predef) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_table", @lm_trans_statement_emit_table) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_join", @lm_trans_statement_emit_join) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_merge_named_structure", @lm_trans_statement_emit_merge_named_structure) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_const_declaration", @lm_trans_statement_emit_const_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_array_declaration", @lm_trans_statement_emit_array_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_structure_declaration", @lm_trans_statement_emit_structure_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_c_tagged_declaration", @lm_trans_statement_emit_c_tagged_declaration) != 0)
+    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_import", @lm_trans_statement_emit_import) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_predef", @lm_trans_statement_emit_predef) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_table", @lm_trans_statement_emit_table) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_join", @lm_trans_statement_emit_join) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_merge_named_structure", @lm_trans_statement_emit_merge_named_structure) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_const_declaration", @lm_trans_statement_emit_const_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_array_declaration", @lm_trans_statement_emit_array_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_c_array_declaration", @lm_trans_statement_emit_c_array_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_structure_declaration", @lm_trans_statement_emit_structure_declaration) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_c_tagged_declaration", @lm_trans_statement_emit_c_tagged_declaration) != 0)
         status: 1
     if: status = 0 && lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_contextual_literal_assignment", @lm_trans_statement_emit_contextual_literal_assignment) != 0
         status: 1
@@ -10350,6 +11910,8 @@ fn: lm_trans_capture_from_decl_frame (
     const: LmP0Field: name_field
     const: LmP0Frame: current
     const: LmP0Frame: inner
+    size_t: c_array_element_depth
+    size_t: c_array_rank
 
     if: frame = 0 || out = 0
         return: 0
@@ -10362,6 +11924,18 @@ fn: lm_trans_capture_from_decl_frame (
         current: field\value\as\frame
 
     body: lm_trans_unwrap_single_anonymous_structure(current\body)
+
+    if: lm_trans_text_equals(current\head, "c.array")
+        if: lm_trans_capture_reset(out) != 0
+            return: 0
+        if: lm_trans_c_array_declaration_name(current, namespace_, out\name, @ c_array_rank, @ c_array_element_depth) != 0
+            return: 0
+        c.LM_UNUSED(c_array_rank)
+        c.LM_UNUSED(c_array_element_depth)
+        out\type_head[0]: current\head[0]
+        out\type_is_head: 1
+        return: 1
+    ---
 
     if: lm_trans_text_equals(current\head, "()")
         name_field: lm_trans_l2_structure_first_present_field(body)
@@ -10619,7 +12193,12 @@ fn: lm_trans_collect_capture_use_from_atom (
             c.fprintf(c.stderr, "trans hosted C backend limitation: capture of local anonymous Structure \"%.*s\" requires hoisted structural type projection\n", (cast: int candidate\name\length), candidate\name\data)
             status: 1
         else:
-            status: lm_trans_capture_stack_add_copy(captures, candidate)
+            if: candidate\type_is_head && lm_trans_text_equals(candidate\type_head, "c.array")
+                c.fprintf(c.stderr, "trans hosted C backend limitation: capture of local c.array storage \"%.*s\" requires an explicit raw-lifetime adapter\n", (cast: int candidate\name\length), candidate\name\data)
+                status: 1
+            else:
+                status: lm_trans_capture_stack_add_copy(captures, candidate)
+            ---
         ---
     ---
     lm_trans_text_ref_destroy(@ root)

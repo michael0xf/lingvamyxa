@@ -1,0 +1,14 @@
+fn: consume (@@: int values) int
+    return: values[0][0]
+end: consume
+
+external:
+    fn: main () int
+        c.array:
+            [][]: int matrix 2 2
+                []: 1 2
+                []: 3 4
+        ---
+        return: consume(@ matrix[0])
+    end: main
+end: external

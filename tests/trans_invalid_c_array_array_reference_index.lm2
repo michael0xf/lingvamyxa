@@ -1,0 +1,7 @@
+external:
+    fn: main () int
+        []: int managed [0]
+        c.array: [2]: int: values 1 2
+        return: values[managed]
+    end: main
+end: external

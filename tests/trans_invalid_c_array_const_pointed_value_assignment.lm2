@@ -1,0 +1,8 @@
+external:
+    fn: main () int
+        int: value 7
+        c.array: const: [1]: @: int pointers @ value
+        pointers[0][0]: 8
+        return: 0
+    end: main
+end: external

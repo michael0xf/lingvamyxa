@@ -1732,6 +1732,219 @@ fn: lm_trans_namespace_relation_text_latest (const: (LmTransNamespace: namespace
     out_text[0]: symbol\c_name[0]
 return: 1
 
+fn: lm_trans_namespace_relation_symbol_for_latest_binding (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @(char relation_name)
+) const: LmTransSymbol
+    const: LmTransSymbol: binding
+    const: LmTransSymbol: symbol
+    size_t: index
+
+    if: namespace_ = 0 || namespace_\items = 0 || name = 0 || relation_name = 0
+        return: 0
+    binding: lm_trans_namespace_find(namespace_, name)
+    if: binding = 0
+        return: 0
+
+    index: namespace_\items\count
+    while: index > 0U
+        index: index - 1U
+        symbol: (cast: (LmTransSymbol) lm_own_ptr_stack_at(namespace_\items, index))
+        if: symbol = binding
+            return: 0
+        if: symbol != 0 && lm_trans_identifier_same(symbol\name, name) && lm_trans_symbol_is(symbol, relation_name)
+            return: symbol
+        ---
+return: 0
+
+fn: lm_trans_namespace_relation_text_for_latest_binding (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @(char relation_name)
+    LmP0Text: out_text
+) int
+    const: LmTransSymbol: symbol
+
+    if: out_text != 0
+        out_text\data: ""
+        out_text\length: 0U
+    if: out_text = 0
+        return: 0
+    symbol: lm_trans_namespace_relation_symbol_for_latest_binding(namespace_, name, relation_name)
+    if: symbol = 0 || symbol\has_c_name = 0 || symbol\c_name = 0
+        return: 0
+    out_text[0]: symbol\c_name[0]
+return: 1
+
+fn: lm_trans_namespace_mark_c_array_storage (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    size_t: rank
+    size_t: element_address_depth
+    int: element_is_const
+) int
+    LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0
+        return: 1
+    symbol\c_array_storage: 1
+    symbol\c_array_rank: rank
+    symbol\c_array_element_address_depth: element_address_depth
+    symbol\c_array_element_const: element_is_const
+    symbol\array_reference: 0
+    symbol\raw_pointer_depth: 0U
+    symbol\raw_pointer_base_const: 0
+return: 0
+
+fn: lm_trans_namespace_mark_array_reference (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0
+        return: 1
+    symbol\array_reference: 1
+    symbol\c_array_storage: 0
+    symbol\c_array_rank: 0U
+    symbol\c_array_element_address_depth: 0U
+    symbol\c_array_emitted: 0
+    symbol\c_array_element_const: 0
+    symbol\raw_pointer_depth: 0U
+    symbol\raw_pointer_base_const: 0
+return: 0
+
+fn: lm_trans_namespace_mark_raw_pointer (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    size_t: depth
+    int: base_is_const
+) int
+    LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0
+        return: 1
+    if: depth = 0U
+        return: 1
+    symbol\raw_pointer_depth: depth
+    symbol\raw_pointer_base_const: base_is_const
+    symbol\array_reference: 0
+    symbol\c_array_storage: 0
+    symbol\c_array_rank: 0U
+    symbol\c_array_element_address_depth: 0U
+    symbol\c_array_emitted: 0
+    symbol\c_array_element_const: 0
+return: 0
+
+fn: lm_trans_namespace_value_is_c_array_storage (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+return: symbol != 0 && symbol\c_array_storage
+
+fn: lm_trans_namespace_mark_c_array_emitted (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0 || symbol\c_array_storage = 0
+        return: 1
+    symbol\c_array_emitted: 1
+return: 0
+
+fn: lm_trans_namespace_value_is_emitted_c_array_storage (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+return: symbol != 0 && symbol\c_array_storage && symbol\c_array_emitted
+
+fn: lm_trans_namespace_value_is_array_reference (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+    const: LmTransSymbol: type_relation
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: symbol = 0 || symbol\c_array_storage || symbol\raw_pointer_depth != 0U
+        return: 0
+    if: symbol\array_reference
+        return: 1
+    type_relation: lm_trans_namespace_relation_symbol_for_latest_binding(namespace_, name, "variable.type")
+return: type_relation != 0 && type_relation\has_c_name && type_relation\c_name != 0 && lm_trans_text_equals(type_relation\c_name, "LmSlice")
+
+fn: lm_trans_namespace_value_is_raw_pointer (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+return: symbol != 0 && (symbol\raw_pointer_depth != 0U || symbol\c_array_storage)
+
+fn: lm_trans_namespace_value_raw_pointer_depth (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: symbol = 0
+        return: 0U
+return: symbol\raw_pointer_depth
+
+fn: lm_trans_namespace_value_raw_pointer_base_is_const (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+return: symbol != 0 && symbol\raw_pointer_depth != 0U && symbol\raw_pointer_base_const
+
+fn: lm_trans_namespace_value_c_array_rank (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: symbol = 0 || symbol\c_array_storage = 0
+        return: 0U
+return: symbol\c_array_rank
+
+fn: lm_trans_namespace_value_c_array_element_address_depth (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: symbol = 0 || symbol\c_array_storage = 0
+        return: 0U
+return: symbol\c_array_element_address_depth
+
+fn: lm_trans_namespace_value_c_array_element_is_const (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+return: symbol != 0 && symbol\c_array_storage && symbol\c_array_element_const
+
 fn: lm_trans_effective_value_descriptor_from_atom (
     const: LmTransNamespace: namespace_
     const: LmP0Text: name

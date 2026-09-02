@@ -1,0 +1,14 @@
+Item:
+    int: value
+end: Item
+
+fn: consume (Item: item) int
+    return: item\value
+end: consume
+
+external:
+    fn: main () int
+        c.array: [1]: Item: raw
+        return: consume(raw)
+    end: main
+end: external

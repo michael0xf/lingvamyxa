@@ -1,0 +1,10 @@
+fn: consume (@: int row) int
+    return: row[0]
+end: consume
+
+external:
+    fn: main () int
+        c.array: [][]: int matrix 2 2
+        return: consume(matrix)
+    end: main
+end: external

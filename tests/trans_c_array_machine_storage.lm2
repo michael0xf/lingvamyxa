@@ -1,0 +1,17 @@
+L2:
+    c.array: const: [3]: int: top_values 2 4 6
+    c.array: [1]: int: top_target 13
+    c.array: [1]: @: int top_pointers top_target
+
+    external:
+        fn: main () int
+            c.array:
+                [][]: int local_matrix 2 2
+                    []: 1 2
+                    []: 3 4
+            ---
+            local_matrix[1][0]: top_values[1] + 5
+            return: c.sizeof(top_values) != 3U * c.sizeof(top_values[0]) || local_matrix[0][1] != 2 || local_matrix[1][0] != 9 || top_pointers[0][0] != 13
+        end: main
+    end: external
+end: L2

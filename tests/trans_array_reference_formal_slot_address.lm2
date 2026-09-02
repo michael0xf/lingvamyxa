@@ -1,0 +1,23 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: slot_length (@: LmSlice slot) size_t
+    return: slot[0]\length
+end: slot_length
+
+fn: through ([]: int value) int
+    return: slot_length((@ value)) != 1U || value[0] != 7
+end: through
+
+external:
+    fn: main () int
+        []: int value [7]
+        return: through(value)
+    end: main
+end: external

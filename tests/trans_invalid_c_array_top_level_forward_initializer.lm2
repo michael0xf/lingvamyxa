@@ -1,0 +1,10 @@
+L2:
+    c.array: [1]: @: int pointers later
+    c.array: [1]: int: later 7
+
+    external:
+        fn: main () int
+            return: pointers[0][0] != 7
+        end: main
+    end: external
+end: L2

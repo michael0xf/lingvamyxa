@@ -541,6 +541,11 @@ fn: lm_trans_top_level_statement_binding (const: (LmTransHeadBinding: binding); 
     if: c.strcmp(receiver, "lm_trans_statement_emit_structure_declaration") = 0
         c.fprintf(c.stderr, "trans hosted C backend limitation: top-level anonymous Structure value requires module/root-arena initialization\n")
         return: -1
+    if: c.strcmp(receiver, "lm_trans_statement_emit_c_array_declaration") = 0
+        out\declare: @lm_trans_top_level_declare_c_array
+        out\emit_after_prototypes: @lm_trans_top_level_emit_c_array
+        out\emits_top_level: 1
+        return: 1
 return: 0
 
 fn: lm_trans_namespace_receiver_type_from_head (const: (LmP0Text: head)) const: @: char
@@ -1073,7 +1078,7 @@ fn: lm_trans_frame_looks_top_level_storage_declaration (const: (LmP0Frame: frame
     inner: lm_trans_const_storage_inner_frame(frame)
 return: lm_trans_frame_looks_storage_declaration(inner, namespace_) || (inner != 0 && lm_trans_text_all_char(inner\head, '@')) || (inner != 0 && lm_trans_text_is_array_receiver_head(inner\head))
 
-fn: lm_trans_top_level_declare_storage_declaration (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+fn: lm_trans_top_level_declare_storage_frame (LmTransNamespace: namespace_; const: (LmP0Frame: input_frame)) int
     const: LmP0Frame: frame
     const: LmP0Structure: body
     const: LmP0Field: field
@@ -1082,11 +1087,12 @@ fn: lm_trans_top_level_declare_storage_declaration (LmTransNamespace: namespace_
     const: LmP0Node: type_node
     const: LmP0Node: name_node
     const: LmP0Frame: inner
+    int: status
 
-    if: item = 0 || item\frame = 0
+    if: input_frame = 0
         return: 1
 
-    frame: item\frame
+    frame: input_frame
     inner: lm_trans_const_storage_inner_frame(frame)
     if: inner != 0
         frame: inner
@@ -1111,7 +1117,10 @@ fn: lm_trans_top_level_declare_storage_declaration (LmTransNamespace: namespace_
             name_node: name_field\value
         if: name_node = 0 || name_node\kind != c.LM_P0_NODE_ATOM
             return: 1
-        return: lm_trans_namespace_declare_node_storage_binding(namespace_, name_node\as\atom, type_node)
+        status: lm_trans_namespace_declare_node_storage_binding(namespace_, name_node\as\atom, type_node)
+        if: status = 0
+            status: lm_trans_namespace_mark_raw_pointer(namespace_, name_node\as\atom, frame\head\length, inner != 0)
+        return: status
 
     if: lm_trans_text_is_array_receiver_head(frame\head)
         type_node: 0
@@ -1163,6 +1172,32 @@ fn: lm_trans_top_level_declare_storage_declaration (LmTransNamespace: namespace_
 
 return: 1
 
+fn: lm_trans_top_level_declare_storage_declaration (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    if: item = 0
+        return: 1
+return: lm_trans_top_level_declare_storage_frame(namespace_, item\frame)
+
+fn: lm_trans_top_level_declare_c_array (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    const: LmP0Frame: declaration
+    LmP0Text: name
+    size_t: rank
+    size_t: element_address_depth
+    int: is_const
+    int: status
+
+    if: item = 0 || lm_trans_c_array_declaration_parts(item\frame, @ declaration, @ is_const) != 0
+        return: 1
+    name: lm_trans_text_ref_new_cstr("")
+    if: name = 0
+        return: 1
+    status: lm_trans_c_array_declaration_name(item\frame, namespace_, name, @ rank, @ element_address_depth)
+    if: status = 0
+        status: lm_trans_top_level_declare_storage_frame(namespace_, declaration)
+    if: status = 0
+        status: lm_trans_namespace_mark_c_array_storage(namespace_, name, rank, element_address_depth, is_const)
+    lm_trans_text_ref_destroy(@ name)
+return: status
+
 fn: lm_trans_top_level_emit_static_declaration (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     const: LmP0Frame: frame
     const: LmP0Frame: inner
@@ -1184,6 +1219,11 @@ fn: lm_trans_top_level_emit_static_declaration (FILE: file; LmTransNamespace: na
     if: lm_trans_text_is_array_receiver_head(frame\head)
         return: lm_trans_emit_array_declaration_with_qualifier(file, frame, 0U, namespace_, qualifier)
 return: 1
+
+fn: lm_trans_top_level_emit_c_array (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    if: item = 0
+        return: 1
+return: lm_trans_emit_c_array_declaration_with_qualifier(file, item\frame, 0U, namespace_, "static ")
 
 fn: lm_trans_top_level_declare_named_structure (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\frame = 0
@@ -1394,6 +1434,10 @@ fn: lm_trans_lower_top_level_item (
         return: 1
 
     out\frame: node\as\frame
+
+    if: lm_trans_l3_receiver_is_excluded(namespace_, out\frame\head)
+        c.fprintf(c.stderr, "trans L3 error: receiver \"%.*s\" is not available in L3\n", (cast: int out\frame\head\length), out\frame\head\data)
+        return: 1
 
     out\function: lm_trans_function_header_new()
     if: out\function = 0

@@ -1,0 +1,35 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+Holder:
+    @: int pointer
+end: Holder
+
+c.array: [1]: int values 7
+
+fn: make_raw () @: int
+    return: values
+end: make_raw
+
+fn: relay () const: @: int
+    return: make_raw()
+end: relay
+
+fn: inspect (const: @: int pointer) int
+    return: pointer[0] != 7
+end: inspect
+
+external:
+    fn: main () int
+        Holder: holder
+            pointer: make_raw()
+        end: holder
+        return: holder = 0 || inspect(make_raw()) || inspect(relay()) || holder\pointer[0] != 7
+    end: main
+end: external

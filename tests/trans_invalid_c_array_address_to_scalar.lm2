@@ -1,0 +1,10 @@
+fn: take_scalar (int: value) int
+    return: value
+end: take_scalar
+
+external:
+    fn: main () int
+        c.array: [1]: int: raw 7
+        return: take_scalar(@ raw[0])
+    end: main
+end: external

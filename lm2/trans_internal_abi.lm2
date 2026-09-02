@@ -279,6 +279,68 @@ fn: lm_trans_emit_type_name (
     const: LmP0Text: name
 ) int
 
+fn: lm_trans_expr_segment_end (
+    const: LmP0Field: first
+) const: LmP0Field
+
+fn: lm_trans_node_result_type (
+    const: LmP0Node: node
+    const: LmTransNamespace: namespace_
+    LmTransL4CallableType: out
+) int
+
+fn: lm_trans_raw_pointer_type_compatible (
+    const: LmP0Text: source_class
+    size_t: source_address_depth
+    int: source_base_is_const
+    const: LmP0Text: target_class
+    size_t: target_address_depth
+    int: target_base_is_const
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_range_has_direct_array_reference (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_range_is_direct_array_reference_address (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_range_is_array_reference_data_pointer (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_range_has_direct_c_array_storage (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_guard_c_array_value_range (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: expected_class
+    size_t: expected_address_depth
+    int: expected_base_is_const
+    const: @(char context)
+) int
+
+fn: lm_trans_guard_array_reference_range (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+    int: required
+    const: @(char context)
+) int
+
 fn: lm_trans_emit_type_node (
     FILE: file
     const: LmP0Node: type_node
@@ -334,6 +396,28 @@ fn: lm_trans_emit_pointer_declaration_with_qualifier (
 ) int
 
 fn: lm_trans_emit_array_declaration_with_qualifier (
+    FILE: file
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+    const: @: char qualifier
+) int
+
+fn: lm_trans_c_array_declaration_parts (
+    const: LmP0Frame: frame
+    const: @(LmP0Frame out_array_frame)
+    @: int out_is_const
+) int
+
+fn: lm_trans_c_array_declaration_name (
+    const: LmP0Frame: frame
+    const: LmTransNamespace: namespace_
+    LmP0Text: out_name
+    @: size_t out_rank
+    @: size_t out_element_address_depth
+) int
+
+fn: lm_trans_emit_c_array_declaration_with_qualifier (
     FILE: file
     const: LmP0Frame: frame
     unsigned: indent
@@ -595,6 +679,83 @@ fn: lm_trans_namespace_descriptor (
 fn: lm_trans_namespace_type_is_structural (
     const: LmTransNamespace: namespace_
     const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_mark_c_array_storage (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    size_t: rank
+    size_t: element_address_depth
+    int: element_is_const
+) int
+
+fn: lm_trans_namespace_mark_array_reference (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_mark_raw_pointer (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    size_t: depth
+    int: base_is_const
+) int
+
+fn: lm_trans_namespace_value_is_c_array_storage (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_mark_c_array_emitted (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_value_is_emitted_c_array_storage (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_value_is_array_reference (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_value_is_raw_pointer (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_value_raw_pointer_depth (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+
+fn: lm_trans_namespace_value_raw_pointer_base_is_const (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_value_c_array_rank (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+
+fn: lm_trans_namespace_value_c_array_element_address_depth (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+
+fn: lm_trans_namespace_value_c_array_element_is_const (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_relation_text_for_latest_binding (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @(char relation_name)
+    LmP0Text: out_text
 ) int
 
 fn: lm_trans_effective_value_descriptor_from_atom (
@@ -1287,6 +1448,17 @@ fn: lm_trans_top_level_declare_ifdef (
 ) int
 
 fn: lm_trans_top_level_declare_merge_named_structure (
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+
+fn: lm_trans_top_level_declare_c_array (
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+
+fn: lm_trans_top_level_emit_c_array (
+    FILE: file
     LmTransNamespace: namespace_
     const: LmTransTopLevelItem: item
 ) int

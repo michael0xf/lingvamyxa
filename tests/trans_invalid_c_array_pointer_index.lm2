@@ -1,0 +1,11 @@
+fn: first (@: int row) int
+    return: row[0]
+end: first
+
+external:
+    fn: main () int
+        c.array: [][]: int matrix 2 2 1 2 3 4
+        c.array: [1]: int indices 1
+        return: first(matrix[indices])
+    end: main
+end: external

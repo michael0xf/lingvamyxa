@@ -1,0 +1,17 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+external:
+    fn: main () int
+        int: value 7
+        c.array: [1]: @: int pointers @ value
+        @: int wrong \ pointers[0]
+        return: 0
+    end: main
+end: external

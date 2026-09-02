@@ -1,0 +1,15 @@
+c.array: [1]: @: int pointers
+
+fn: make_raw () @@: int
+    return: pointers
+end: make_raw
+
+fn: bad_return () @: int
+    return: make_raw()
+end: bad_return
+
+external:
+    fn: main () int
+        return: bad_return() != 0
+    end: main
+end: external

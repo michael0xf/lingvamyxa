@@ -1,0 +1,17 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+external:
+    fn: main () int
+        []: int values [7]
+        @: LmSlice slot ((@ values))
+        @: int raw ((values\ptr))
+        return: slot[0] != values || raw[0] != 7
+    end: main
+end: external

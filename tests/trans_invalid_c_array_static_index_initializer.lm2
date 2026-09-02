@@ -1,0 +1,10 @@
+L2:
+    c.array: const: [1]: int: source 7
+    c.array: [1]: int: target source[0]
+
+    external:
+        fn: main () int
+            return: target[0]
+        end: main
+    end: external
+end: L2

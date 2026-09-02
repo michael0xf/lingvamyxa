@@ -1,0 +1,8 @@
+c.array: [1]: int: source 7
+c.array: [1]: @: int pointers @ source[0]
+
+external:
+    fn: main () int
+        return: pointers[0][0] != 7
+    end: main
+end: external

@@ -1,0 +1,23 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: make_slot () @: LmSlice
+    LmSlice: value
+    return: @ value
+end: make_slot
+
+fn: consume ([]: int values) int
+    return: values[0]
+end: consume
+
+external:
+    fn: main () int
+        return: consume(make_slot())
+    end: main
+end: external

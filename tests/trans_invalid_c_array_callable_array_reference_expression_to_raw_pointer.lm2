@@ -1,0 +1,22 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: makeArray () []: int
+    return: [7]
+end: makeArray
+
+fn: firstRaw (@: int values) int
+    return: values[0]
+end: firstRaw
+
+external:
+    fn: main () int
+        return: firstRaw(makeArray() + 0)
+    end: main
+end: external
