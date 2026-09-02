@@ -1,0 +1,8 @@
+L2:
+    merge: (
+        InlineRecursive:
+            InlineRecursive: next
+            int: value
+    ) InlineRecursiveMerge
+    end: InlineRecursiveMerge
+end: L2

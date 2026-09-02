@@ -1,0 +1,18 @@
+L2:
+    RepeatedShape:
+        int: value
+    end: RepeatedShape
+
+    RepeatedShape:
+        int: value
+    end: RepeatedShape
+
+    external:
+        fn: main () int
+            RepeatedShape: repeated
+                value: 2
+            end: repeated
+            return: repeated\value != 2
+        end: main
+    end: external
+end: L2

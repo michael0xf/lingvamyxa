@@ -1,0 +1,13 @@
+L2:
+    CompatibleMergeSource:
+        int: a
+    end: CompatibleMergeSource
+
+    CompatibleMergeShape:
+        int: a
+        int: b
+    end: CompatibleMergeShape
+
+    merge: (CompatibleMergeSource) CompatibleMergeShape
+    end: CompatibleMergeShape
+end: L2

@@ -1,6 +1,6 @@
 L2:
     BridgeA:
-        int: value 17
+        int: value
     end: BridgeA
 
     BridgeB:
@@ -9,7 +9,13 @@ L2:
 
     external:
         fn: main () int
-            return: BridgeA\value != 17 || BridgeB = 0
+            BridgeA: bridgeA
+                value: 17
+            end: bridgeA
+            BridgeB: bridgeB
+                child: bridgeA
+            end: bridgeB
+            return: bridgeA\value != 17 || bridgeB = 0 || bridgeB\child != bridgeA
         end: main
     end: external
 end: L2

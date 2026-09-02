@@ -1,0 +1,5 @@
+L2:
+    InitializerDescriptor:
+        int: value 1
+    end: InitializerDescriptor
+end: L2

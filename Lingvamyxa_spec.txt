@@ -7557,7 +7557,7 @@ Semantic outline:
     operator                   proposed explicit operator-descriptor declaration; current bootstrap derives initial bindings from legacy Tables
     if                         registered receiver, semantics depend on level
     match                      proposed receiver; not registered by the current bootstrap; no built-in `case` syntax
-    merge                      registered head; current handler performs legacy named-layout projection plus arena instance construction, not yet generic high-level Structure merge
+    merge                      registered head; current handler declares a composed namespace descriptor and emits only its hosted type/layout projection; it does not construct an instance and is not yet generic high-level Structure merge
     join                       registered Table receiver; normatively consumes explicit Tables and returns an arena-owned Table
     while                      registered receiver, semantics depend on level
     operator/infix tokens       structural operator fields consumed into expression Structures
@@ -7808,12 +7808,14 @@ explicitly below.
 
     16. merge / join
         `merge:` is REGISTERED ONLY for the contract below: its current handler
-        performs physical named-layout/C-storage merging. The ordered high-level
-        Structure merge specified in section 19.17 is NOT IMPLEMENTED. Proposed:
-        split descriptor/Structure merge (L2/L3) from physical layout projection
-        (L2-only). `join:` currently has legacy source-row behavior; normative
-        `join:` consumes explicitly resolved Tables and produces an ordinary
-        arena-owned Table reference.
+        composes and binds a named structural descriptor and emits its hosted C
+        type/layout projection. It emits no result-object storage and constructs
+        no Structure instance. The ordered high-level Structure merge specified
+        in section 19.17 is NOT IMPLEMENTED. Proposed: keep descriptor/Structure
+        merge (L2/L3) separate from optional physical layout projection (L2-only).
+        `join:` currently has legacy source-row behavior; normative `join:`
+        consumes explicitly resolved Tables and produces an ordinary arena-owned
+        Table reference.
 
     17. table / source / import / predef
         `table:` constructs an ordinary arena-owned Table and may explicitly
@@ -7867,11 +7869,12 @@ explicitly below.
     21. model / descriptor / union / c.union
         `model` is ordinary Structure data. A standalone `descriptor:`
         declaration receiver is NOT REGISTERED by the current bootstrap. Named
-        Structure declarations and the current physical `merge:` path do attach
-        normalized first-level descriptor views to their explicit namespace
-        bindings without emitting Registry field rows. Broader descriptor
-        content remains ordinary Structure/Array data interpreted by selected
-        consumers.
+        Structure descriptor declarations and the current physical `merge:`
+        path do attach normalized first-level descriptor views to their explicit
+        namespace bindings and emit hosted type/layout projections without
+        emitting Registry field rows or implicit instance storage. Broader
+        descriptor content remains ordinary Structure/Array data interpreted by
+        selected consumers.
         High-level `union:` is NOT IMPLEMENTED. A future variant
         declaration must create an explicit descriptor without choosing physical storage. The
         physical `c.union:` machine-layout receiver is IMPLEMENTED, but its
@@ -8097,20 +8100,22 @@ profile family is already a core receiver.
                            include, define, os, ifdef, fn, layout, constant,
                            alias, forward, prototype, guard, extern_c, unit
 
-The current `merge` handler consumes a named layout Structure, emits its physical
-layout projection and materializes an instance. Its module/static path is legacy;
-normatively all instances use module/root/current arenas. It does not yet
-implement the generic high-level merge contract. Current `join` still composes
-legacy source rows; it must become ordinary Table-to-Table composition. The
-current bootstrap still lists `predef` in
-`receiver.l3.exclude`. Its local-source early prepass scans only implicit or
+The current `merge` handler consumes layout-describing sources, publishes a
+composed descriptor under its explicit target name and emits that descriptor's
+hosted type/layout projection. It never emits an implicit target object or
+materializes a Structure instance; a value must be created separately through
+an explicit constructor. It does not yet implement the generic high-level merge
+contract. Current `join` still composes legacy source rows; it must become
+ordinary Table-to-Table composition. The current bootstrap still lists `predef`
+in `receiver.l3.exclude`. Its local-source early prepass scans only implicit or
 explicit L2 surfaces, although ordinary declaration can still materialize
-table/join on an explicit L3 surface. Hoisted implicit-`.lm3` handling and
-`.lm3` predef targets remain implementation work. These are implementation
-gaps, not intended level restrictions. The built-in named-layout fallback
-remains implementation debt; physical C layout is only a backend projection.
-Named-structure and physical `merge:` declarations no longer publish implicit
-owner or field Registry rows.
+table/join on an explicit L3 surface. Hoisted implicit-`.lm3` handling and `.lm3`
+predef targets remain implementation work. These are implementation gaps, not
+intended level restrictions. The built-in named-layout fallback remains
+implementation debt; physical C layout is only a backend projection.
+Named-Structure descriptor declarations and physical `merge:` declarations no
+longer publish implicit owner or field Registry rows, instances or object
+storage.
 
 The current expression operator tables register these exact families:
 
@@ -9186,19 +9191,35 @@ preprocessor include and not runtime mutation of its source operands. The parser
 builds an ordinary `merge:` Frame; the active receiver/operator namespace gives
 that Frame structural-merge semantics.
 
-This is the target contract. The current registered handler still performs a
-physical named-layout projection and materializes a Structure instance. During
-migration its declaration phase attaches a normalized `structuralFields` view
-to the existing namespace binding. The physical merge path no longer emits
-implicit Registry field relations; layout collection reads that descriptor
-view. Registry field relations remain accepted as a compatibility fallback for
-an explicitly authored or imported ABI layout whose namespace binding has no
-structural-field view. The handler still emits hosted C layout/storage, but
-declaring either its merge target or an ordinary named structure publishes no
-owner or field Registry metadata. Its local arena path and remaining legacy
-top-level backing are implementation details; normatively every result is an
-arena-owned StructureReference. This does not yet implement the generic ordered
-high-level Structure merge.
+This is the target contract. The current registered handler is instead a
+descriptor-composition declaration: it resolves layout-describing sources,
+builds a normalized `structuralFields` view, publishes that descriptor under the
+explicit merge-target name and emits a hosted C type/layout projection. It does
+not evaluate a source call merely because its declared result supplies a layout,
+does not emit target-object storage and does not materialize a Structure
+instance. Constructing a value from the resulting descriptor is a separate
+explicit constructor operation.
+
+The physical descriptor-composition path no longer emits implicit Registry
+field relations; layout collection reads the descriptor view. Registry field
+relations remain accepted as a compatibility fallback for an explicitly
+authored or imported ABI layout whose namespace binding has no structural-field
+view. Declaring either a merge target or an ordinary named-Structure descriptor
+publishes no owner or field Registry metadata. This current handler does not yet
+implement the generic ordered high-level Structure merge described below; when
+that value-producing contract is implemented, its result is an arena-owned
+StructureReference.
+
+For example, the current physical form:
+
+    merge: (BaseFields AuditFields) CombinedFields
+        u32: flags
+    end: CombinedFields
+
+binds the composed descriptor as `CombinedFields` and may emit a C type for it.
+It does not create a value named `CombinedFields`. A later form such as
+`CombinedFields: combined ... end: combined` is the separate operation that
+constructs and binds an instance.
 
 Semantic form:
 
@@ -10477,6 +10498,12 @@ metadata. Those C artifacts are a projection and are not registry facts or
 language-visible values unless a program explicitly asks a backend operation to
 materialize them.
 
+Declaring that descriptor does not declare a same-name instance. Values stored
+inside descriptor data, when a descriptor profile admits them, remain data of
+the descriptor itself; they are not hidden defaults for an object. Initializers
+for an instance belong to a separate construction operation that resolves the
+descriptor and allocates that instance.
+
 The minimal hosted profile obtains the `implements` surface from the normalized
 first-level field names of a namespace descriptor. View presence is distinct
 from cardinality: a present empty first-level view is authoritative and is not
@@ -10518,6 +10545,10 @@ bound as `Circle` and publishes neither another descriptor occurrence nor
 Registry/Table rows. Until the current-arena migration is complete, this path
 selects the MessageThread root arena directly.
 
+This explicit named-constructor lowering is currently an executable/local path.
+Hosted module/top-level construction in a module/root arena is still pending;
+descriptor declaration does not stand in for it and creates no fallback value.
+
 The hosted constructor path does not yet project a second physical C value for
 a construction result whose name is already visible. It rejects that case
 before publishing the result and identifies occurrence-aware value projection
@@ -10526,15 +10557,36 @@ source-language admission rule remains `implements(old, new)`, and the early
 hosted rejection neither changes that predicate nor makes a compatible result
 rebinding invalid in the language.
 
-During the staged migration, the older named-structure declaration path still
-emits its historical hosted C layout/storage projection as part of that
-declaration. That target artifact is bootstrap debt only: it is not an
-instance-construction operation and does not combine descriptor declaration
-with construction in the language model.
+The hosted named-Structure declaration path now publishes only its namespace
+descriptor and emits only the corresponding C type/layout projection. It emits
+no same-name object, pointer binding, static backing, arena allocation or field
+initialization. The hosted physical `merge:` declaration follows the same rule:
+it publishes the composed target descriptor and projects its target type, but
+does not construct a merge-result value. Either descriptor can be used by a
+later explicit constructor.
+
+A present-empty descriptor remains semantically empty. Because ISO C requires
+a complete projected aggregate to contain storage, the hosted backend emits one
+private dummy byte for that projection only. The byte is not a descriptor field,
+is not accessible through field-follow, and does not participate in
+`implements`.
+
+The compact hosted declaration form currently accepts typed descriptor fields
+without instance initializer values. A trailing initializer in a named-
+Structure declaration, an inline physical-merge descriptor source or the local
+field list of a physical `merge:` declaration is rejected rather than silently
+discarded or reinterpreted as an implicit instance default.
 
 The hosted bootstrap exposes normalized `structuralFields` views for
 named-structure declarations and the current physical `merge:` path. They do
 not create a second descriptor symbol.
+
+The translator may use an implementation-private symbol discriminator to tell
+whether a visible descriptor also supplies the hosted constructor behavior.
+That discriminator is neither a source Value kind nor a class, role, Table or
+additional language-visible descriptor category. Source semantics remain the
+ordinary namespace descriptor plus whatever constructor behavior the active
+profile explicitly supplies.
 
 The namespace declaration core used by either path fully constructs a pending
 descriptor, checks a captured old descriptor with the same predicate as
@@ -10548,28 +10600,28 @@ The hosted backend does not yet project every same-name namespace occurrence as
 an independently addressable Structure/Table row. Ordinary lookup and current
 typed lowering use the newest admitted descriptor. Older same-name occurrences
 remain namespace state for scope restoration, but explicit source access to a
-chosen occurrence and target-storage projection of that occurrence sequence are
-pending work. The ANSI C collision/fingerprint rules may consequently reject or
-suppress a physical layout emission that the source-level name-subset predicate
-admits; that is a documented backend limitation, not an additional
-source-language compatibility rule.
+chosen descriptor occurrence and separate target-type projection of that
+occurrence sequence are pending work. The ANSI C collision/fingerprint rules
+may consequently reject or suppress a physical layout emission that the source-
+level name-subset predicate admits; that is a documented backend limitation,
+not an additional source-language compatibility rule.
 
-The current hosted translator rejects a compatible repeated named `Structure`
-or physical `merge:` before publishing that occurrence or emitting a second
-ANSI C type/storage declaration. Its diagnostic identifies missing
-occurrence-aware type and storage projection. This hosted-backend rejection
-happens after applying the same descriptor predicate; it does not make the
-redeclaration invalid in the language or remove the admitted occurrence
-behavior of the namespace core.
+The current hosted translator admits and publishes a structurally identical
+repeated named `Structure` or physical `merge:` descriptor and may suppress its
+redundant target type declaration. It rejects a compatible but non-identical
+repeat before publication because that case requires occurrence-aware target-
+type projection. This hosted-backend rejection happens after applying the same
+descriptor predicate; it does not make the redeclaration invalid in the
+language or remove the admitted occurrence behavior of the namespace core.
 
-Function-local named structures are no longer declared by a separate
+Function-local named-Structure descriptors are no longer declared by a separate
 function-body prepass during the module declaration phase. When their hosted C
 typedefs must precede function bodies, the prelude emitter performs one bounded
 two-pass replay inside a temporary namespace scope: it first declares the
-function parameters and the directly contained named-structure declarations,
-then emits their typedefs, and finally leaves that scope. Descriptors created by
-this replay do not survive into the later function-body phase; the body creates
-its own lexical bindings when it is emitted.
+function parameters and the directly contained named-Structure descriptor
+declarations, then emits their typedefs, and finally leaves that scope.
+Descriptors created by this replay do not survive into the later function-body
+phase; the body creates its own lexical bindings when it is emitted.
 
 The replay hoists a local typedef only while that declaration is compatible
 with the translation-unit projection already emitted at the same canonical C
@@ -10586,9 +10638,10 @@ lifetime nor creates Registry data.
 The normalized `structuralFields` view is the only compiler-semantic shape state
 produced by named-structure and physical `merge:` declarations. These paths no
 longer publish implicit `owner.field.*`, `class.present`, `class.kind`,
-`class.reference-base` or `layout.backend` Registry rows. They still emit the
-legacy hosted C layout/storage projection; the explicit named-constructor path
-does not. Repeated target declarations are suppressed only when the
+`class.reference-base` or `layout.backend` Registry rows. They emit a hosted C
+type/layout projection only and never emit object storage; the explicit named-
+constructor path separately emits an arena allocation for the requested value.
+Repeated target declarations are suppressed only when the
 implementation-private per-output projection state described in section
 20.2.1.1 proves that the earlier target declaration is identical and is present
 wherever the later declaration would be present.
@@ -10621,9 +10674,10 @@ return layouts. The fallback does not publish those rows into the namespace
 descriptor and does not make Registry a second source-semantic lookup
 environment.
 
-The current hosted C named-layout/storage path and legacy top-level backing
-remain implementation debt. Explicit ABI Registry fallback remains supported
-during this migration and does not define source semantics.
+The current hosted C named-layout path is a backend type projection, not a value
+materialization path. Remaining generic top-level backing and explicit ABI
+Registry fallback are separate implementation debt; neither defines source
+semantics or restores an implicit instance to a descriptor declaration.
 
 
 19.21. Operations, Operators and Receivers
@@ -12167,9 +12221,10 @@ every Structure or Array named in that block. Destruction follows arena
 lifetime and surviving ownership edges, not source spelling or the C scope
 selected by a particular lowering.
 
-The current root-arena bootstrap chooses the Message Thread root for migrated
-local named, merge-produced and `fm` result Structures, Array values, and
-closure environments and descriptors.
+The current root-arena bootstrap chooses the Message Thread root for explicitly
+constructed local named Structures, `fm` result Structures, Array values, and
+closure environments and descriptors. Named-Structure and physical-`merge:`
+descriptor declarations allocate none of those values.
 This coarse choice intentionally outlives every ordinary function return. It
 may retain memory longer than a future precise implementation, but it preserves
 identity and prevents a local Structure from becoming a dangling stack value.
@@ -12936,11 +12991,14 @@ where the allocation is semantically part of an owner region.
 
 19.29.12.2. Current Root-Arena Materialization
 
-The current migrated paths allocate local named, merge-produced and `fm` result
-Structures, arena-backed Array values, and closure environments/descriptors in
-the root Message Thread arena. Legacy top-level named objects and non-source
-runtime tables still have static C-backed paths. Those paths are implementation
-debt and must migrate to module/root-arena materialization.
+The current migrated paths allocate explicitly constructed local named
+Structures, `fm` result Structures, arena-backed Array values, and closure
+environments/descriptors in the root Message Thread arena. A named-Structure or
+physical-`merge:` descriptor declaration performs no allocation. Remaining
+generic top-level value/backing paths and non-source runtime tables may still
+use static C-backed representations. Those paths are separate implementation
+debt and must migrate to module/root-arena materialization where they represent
+ordinary source values.
 
 Conceptual generated form for an ordinary local Structure is:
 
@@ -14193,11 +14251,15 @@ Current hosted-bootstrap implementation:
     process-entry `return` requests root-loop stop after generated cleanup;
     ordinary stop is first-request-wins, while diagnostic/runtime collection
         failures use a failure-dominant status channel;
-    migrated local named and merge-produced Structures, `fm` result Structures,
+    explicitly constructed local named Structures, `fm` result Structures,
         arena-backed Array values and closure environments/descriptors are
         root-arena managed;
-    legacy top-level named objects and non-source runtime tables still have
-        static-backed paths which must migrate to module/root arenas;
+    named-Structure and physical-`merge:` descriptor declarations emit only
+        namespace descriptors and hosted type/layout projections, never object
+        storage or arena allocations;
+    remaining generic top-level value/backing paths and non-source runtime
+        tables may still have static-backed representations which must migrate
+        to module/root arenas when they represent ordinary source values;
     arena allocation, array allocation, descriptors, lazy edges, freeze,
         absorption and tree-cut helpers exist;
     root-arena destruction releases ordinary generated Structures, Array
@@ -14639,9 +14701,11 @@ source descriptor. A Table may be passed to an explicit descriptor-conversion
 operation as authoring data, but the table name, keys and cells declare nothing
 by themselves.
 
-The current named-structure fallback and top-level untracked static backing are
-legacy bootstrap behavior. They are not normative language semantics and must
-be removed or confined behind the backend projection boundary.
+The current named-Structure fallback is confined to descriptor-driven C
+type/layout projection and creates no source value or backing storage. Remaining
+top-level untracked static backing in other bootstrap paths is not normative
+language semantics and must be removed or confined behind an explicit backend
+representation of the module/root-arena contract.
 
 20.2.1.1. Source Descriptors and Target Projection Are Separate
 

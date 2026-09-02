@@ -1,0 +1,7 @@
+L2:
+    merge: (
+        InlineSource:
+            int: sourceValue 1
+    ) InlineInitializedMerge
+    end: InlineInitializedMerge
+end: L2

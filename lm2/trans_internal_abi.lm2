@@ -404,14 +404,6 @@ fn: lm_trans_typedef_projection_claim_local_prepared_cstr (
     @: int out_suppress
 ) int
 
-fn: lm_trans_emit_named_structure_storage (
-    FILE: file
-    const: LmP0Frame: frame
-    unsigned: indent
-    LmTransNamespace: namespace_
-    const: @: char qualifier
-) int
-
 fn: lm_trans_declare_merge_named_structure_layout (
     LmTransNamespace: namespace_
     const: LmP0Frame: frame
@@ -422,14 +414,6 @@ fn: lm_trans_emit_merge_named_structure_typedef (
     const: LmP0Frame: frame
     unsigned: indent
     const: LmTransNamespace: namespace_
-) int
-
-fn: lm_trans_emit_merge_named_structure_storage (
-    FILE: file
-    const: LmP0Frame: frame
-    unsigned: indent
-    LmTransNamespace: namespace_
-    const: @: char qualifier
 ) int
 
 fn: lm_trans_text_all_char (
@@ -564,6 +548,11 @@ fn: lm_trans_descriptor_structural_field (
     const: LmTransDescriptor: descriptor
     const: @: char name
 ) const: LmTransDescriptorField
+
+fn: lm_trans_descriptor_structural_same (
+    const: LmTransDescriptor: old_descriptor
+    const: LmTransDescriptor: new_descriptor
+) int
 
 fn: lm_trans_descriptor_implements (
     const: LmTransDescriptor: candidate
@@ -1283,12 +1272,6 @@ fn: lm_trans_top_level_declare_merge_named_structure (
 ) int
 
 fn: lm_trans_top_level_emit_merge_named_structure_typedef (
-    FILE: file
-    LmTransNamespace: namespace_
-    const: LmTransTopLevelItem: item
-) int
-
-fn: lm_trans_top_level_emit_merge_named_structure_storage (
     FILE: file
     LmTransNamespace: namespace_
     const: LmTransTopLevelItem: item

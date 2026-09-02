@@ -1,0 +1,7 @@
+L2:
+    TopLevelPoint:
+        int: x
+    end: TopLevelPoint
+
+    TopLevelPoint: topLevelPoint
+end: L2

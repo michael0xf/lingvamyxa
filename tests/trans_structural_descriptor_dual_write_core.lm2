@@ -103,8 +103,8 @@ fn: lm_test_structural_descriptor_dual_write_core () int
     size_t: field_count
     int: status
 
-    named_source: "NamedValue:\n    answer: 7\n"
-    merge_source: "merge: (NamedValue UnionSource ArraySource) CombinedValue\n    int: local_value 9\nend: CombinedValue\n"
+    named_source: "NamedValue:\n    int: answer\nend: NamedValue\n"
+    merge_source: "merge: (NamedValue UnionSource ArraySource) CombinedValue\n    int: local_value\nend: CombinedValue\n"
     named_document: 0
     merge_document: 0
     namespace_: 0
@@ -153,7 +153,7 @@ fn: lm_test_structural_descriptor_dual_write_core () int
     symbol_after: lm_trans_namespace_find(namespace_, name)
     descriptor: lm_trans_namespace_descriptor(namespace_, name)
     descriptor_field: lm_trans_descriptor_structural_field(descriptor, "answer")
-    if: status = 0 && (symbol_after = 0 || lm_trans_symbol_is(symbol_after, "variable") = 0 || descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 1U || descriptor_field = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 0U || descriptor_field\address_depth != 0U || descriptor_field\is_union || descriptor_field\has_array_count)
+    if: status = 0 && (symbol_after = 0 || lm_trans_symbol_is(symbol_after, "structureConstructor") = 0 || symbol_after\has_c_name || lm_trans_namespace_relation_symbol_latest(namespace_, name, "variable.type") != 0 || descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 1U || descriptor_field = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 0U || descriptor_field\address_depth != 0U || descriptor_field\is_union || descriptor_field\has_array_count)
         status: 1
     lm_trans_text_ref_destroy(@ name)
 
@@ -163,8 +163,9 @@ fn: lm_test_structural_descriptor_dual_write_core () int
         status: 1
 
     name: lm_trans_text_from_cstr("CombinedValue")
+    symbol_after: lm_trans_namespace_find(namespace_, name)
     descriptor: lm_trans_namespace_descriptor(namespace_, name)
-    if: status = 0 && (descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 4U)
+    if: status = 0 && (symbol_after = 0 || lm_trans_symbol_is(symbol_after, "structureConstructor") = 0 || symbol_after\has_c_name || lm_trans_namespace_relation_symbol_latest(namespace_, name, "variable.type") != 0 || descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 4U)
         status: 1
     descriptor_field: lm_trans_descriptor_structural_field(descriptor, "answer")
     if: status = 0 && (descriptor_field = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 0U)

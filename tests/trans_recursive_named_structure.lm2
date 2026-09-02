@@ -1,12 +1,16 @@
 L2:
     RecursiveShape:
-        RecursiveShape: next 0
-        int: value 2
+        RecursiveShape: next
+        int: value
     end: RecursiveShape
 
     external:
         fn: main () int
-            return: RecursiveShape = 0 || RecursiveShape\next != 0 || RecursiveShape\value != 2
+            RecursiveShape: recursiveShape
+                next: 0
+                value: 2
+            end: recursiveShape
+            return: recursiveShape = 0 || recursiveShape\next != 0 || recursiveShape\value != 2
         end: main
     end: external
 end: L2

@@ -1,0 +1,10 @@
+L2:
+    CompatibleNamedShape:
+        int: a
+        int: b
+    end: CompatibleNamedShape
+
+    CompatibleNamedShape:
+        int: a
+    end: CompatibleNamedShape
+end: L2

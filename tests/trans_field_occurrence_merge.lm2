@@ -1,23 +1,32 @@
 L2:
     OccurrenceBase:
-        int: value 3
-        int: other 7
+        int: value
+        int: other
     end: OccurrenceBase
 
     merge: (OccurrenceBase) OccurrenceMerged
-        int: value 4
+        int: value
     end: OccurrenceMerged
 
     external:
         fn: main () int
-            if: OccurrenceBase\value != 3 || OccurrenceBase\other != 7
+            OccurrenceBase: base
+                value: 3
+                other: 7
+            end: base
+            OccurrenceMerged: merged
+                value: 0
+                value: 4
+            end: merged
+
+            if: base\value != 3 || base\other != 7
                 return: 3
-            if: OccurrenceMerged\[0]value != 0
+            if: merged\[0]value != 0
                 return: 1
-            if: OccurrenceMerged\[1]value != 4 || OccurrenceMerged\value != 4
+            if: merged\[1]value != 4 || merged\value != 4
                 return: 2
-            OccurrenceMerged\[0]value: 5
-            return: OccurrenceMerged\[0]value != 5 || OccurrenceMerged\[1]value != 4
+            merged\[0]value: 5
+            return: merged\[0]value != 5 || merged\[1]value != 4
         end: main
     end: external
 end: L2

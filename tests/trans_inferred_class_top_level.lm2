@@ -1,11 +1,16 @@
 L2:
     Config:
-        host: c."localhost"
-        port: 8080
+        @: char host
+        int: port
+    end: Config
 
     external:
         fn: main () int
-            return: Config\port != 8080
+            Config: config
+                host: c."localhost"
+                port: 8080
+            end: config
+            return: config\port != 8080
         end: main
     end: external
 end: L2

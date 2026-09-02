@@ -492,6 +492,36 @@ fn: lm_trans_descriptor_has_exact_structural_field (
         i: i + 1U
 return: 0
 
+fn: lm_trans_descriptor_structural_same (
+    const: LmTransDescriptor: old_descriptor
+    const: LmTransDescriptor: new_descriptor
+) int
+    const: LmTransDescriptorField: old_field
+    const: LmTransDescriptorField: new_field
+    size_t: i
+
+    if: old_descriptor = 0 || new_descriptor = 0
+        return: 0
+    if: old_descriptor\has_structural_fields != new_descriptor\has_structural_fields
+        return: 0
+    if: old_descriptor\structural_fields = 0 || new_descriptor\structural_fields = 0
+        return: old_descriptor\structural_fields = new_descriptor\structural_fields && old_descriptor\has_structural_fields = 0
+    if: old_descriptor\structural_fields\count != new_descriptor\structural_fields\count
+        return: 0
+
+    i: 0U
+    while: i < old_descriptor\structural_fields\count
+        old_field: lm_own_ptr_stack_at(old_descriptor\structural_fields, i)
+        new_field: lm_own_ptr_stack_at(new_descriptor\structural_fields, i)
+        if: old_field = 0 || new_field = 0 || old_field\name = 0 || new_field\name = 0 || old_field\descriptor_name = 0 || new_field\descriptor_name = 0
+            return: 0
+        if: c.strcmp(old_field\name, new_field\name) != 0 || c.strcmp(old_field\descriptor_name, new_field\descriptor_name) != 0 || old_field\index != new_field\index || old_field\address_depth != new_field\address_depth || old_field\array_count != new_field\array_count || old_field\has_array_count != new_field\has_array_count || old_field\is_const != new_field\is_const || old_field\is_union != new_field\is_union
+            return: 0
+        i: i + 1U
+    ---
+
+return: 1
+
 fn: lm_trans_descriptor_implements (
     const: LmTransDescriptor: candidate
     const: LmTransDescriptor: required
@@ -1664,19 +1694,9 @@ fn: lm_trans_namespace_has_named_structure_binding (
     const: LmP0Text: name
 ) int
     const: LmTransSymbol: symbol
-    LmP0Text: variable_type
-    int: result
 
     symbol: lm_trans_namespace_find(namespace_, name)
-    if: symbol = 0 || lm_trans_symbol_is(symbol, "variable") = 0 || symbol\descriptor = 0 || symbol\descriptor\has_structural_fields = 0 || symbol\has_c_name = 0
-        return: 0
-
-    variable_type: lm_trans_text_ref_new_cstr("")
-    if: variable_type = 0
-        return: 0
-    result: lm_trans_namespace_relation_text_latest(namespace_, name, "variable.type", variable_type) != 0 && lm_trans_text_same(variable_type, name)
-    lm_trans_text_ref_destroy(@ variable_type)
-return: result
+return: symbol != 0 && lm_trans_symbol_is(symbol, "structureConstructor") && symbol\descriptor != 0 && symbol\descriptor\has_structural_fields && symbol\descriptor\structural_fields != 0
 
 fn: lm_trans_namespace_relation_symbol_latest (const: (LmTransNamespace: namespace_); const: (LmP0Text: name); const: @(char relation_name)) const: LmTransSymbol
     LmTransIdentifierCard: card

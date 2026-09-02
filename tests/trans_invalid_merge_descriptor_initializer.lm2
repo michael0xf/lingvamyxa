@@ -1,0 +1,9 @@
+L2:
+    InitializerBase:
+        int: base
+    end: InitializerBase
+
+    merge: (InitializerBase) InitializerMerge
+        int: value 1
+    end: InitializerMerge
+end: L2

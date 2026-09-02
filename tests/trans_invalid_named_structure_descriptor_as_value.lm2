@@ -1,0 +1,13 @@
+L2:
+    DescriptorOnly:
+        int: value
+    end: DescriptorOnly
+
+    external:
+        fn: main () int
+            if: DescriptorOnly = 0
+                return: 1
+            return: 0
+        end: main
+    end: external
+end: L2

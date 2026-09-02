@@ -27,17 +27,22 @@ L2:
     end: occurrenceDouble
 
     OccurrenceCallbacks:
-        LmOccurrenceCall: callback @ occurrenceIncrement
-        LmOccurrenceCall: callback @ occurrenceDouble
+        LmOccurrenceCall: callback
+        LmOccurrenceCall: callback
     end: OccurrenceCallbacks
 
     external:
         fn: main () int
-            if: OccurrenceCallbacks\[0]callback(20) != 21
+            OccurrenceCallbacks: callbacks
+                callback: @ occurrenceIncrement
+                callback: @ occurrenceDouble
+            end: callbacks
+
+            if: callbacks\[0]callback(20) != 21
                 return: 1
-            if: OccurrenceCallbacks\[1]callback(20) != 40
+            if: callbacks\[1]callback(20) != 40
                 return: 2
-            return: OccurrenceCallbacks\callback(20) != 40
+            return: callbacks\callback(20) != 40
         end: main
     end: external
 end: L2

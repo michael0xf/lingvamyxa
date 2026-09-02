@@ -1,31 +1,37 @@
 L2:
     OccurrenceValue:
-        int: value 10
-        @: char text "ok"
-        int: value 20
+        int: value
+        @: char text
+        int: value
     end: OccurrenceValue
 
     external:
         fn: main () int
-            if: OccurrenceValue\[0]value != 10
+            OccurrenceValue: occurrenceValue
+                value: 10
+                text: "ok"
+                value: 20
+            end: occurrenceValue
+
+            if: occurrenceValue\[0]value != 10
                 return: 1
-            if: OccurrenceValue\[1]value != 20
+            if: occurrenceValue\[1]value != 20
                 return: 2
-            if: OccurrenceValue\value != 20
+            if: occurrenceValue\value != 20
                 return: 3
-            if: OccurrenceValue\text[1] != 'k'
+            if: occurrenceValue\text[1] != 'k'
                 return: 4
 
-            OccurrenceValue\[0]value: 11
-            if: OccurrenceValue\[0]value != 11 || OccurrenceValue\[1]value != 20 || OccurrenceValue\value != 20
+            occurrenceValue\[0]value: 11
+            if: occurrenceValue\[0]value != 11 || occurrenceValue\[1]value != 20 || occurrenceValue\value != 20
                 return: 5
 
-            OccurrenceValue\value: 21
-            if: OccurrenceValue\[0]value != 11 || OccurrenceValue\[1]value != 21 || OccurrenceValue\value != 21
+            occurrenceValue\value: 21
+            if: occurrenceValue\[0]value != 11 || occurrenceValue\[1]value != 21 || occurrenceValue\value != 21
                 return: 6
 
-            OccurrenceValue: 0
-            return: OccurrenceValue != 0
+            occurrenceValue: 0
+            return: occurrenceValue != 0
         end: main
     end: external
 end: L2

@@ -1,12 +1,16 @@
 L2:
     OccurrenceBounds:
-        int: value 1
-        int: value 2
+        int: value
+        int: value
     end: OccurrenceBounds
 
     external:
         fn: main () int
-            return: OccurrenceBounds\[2]value
+            OccurrenceBounds: occurrenceBounds
+                value: 1
+                value: 2
+            end: occurrenceBounds
+            return: occurrenceBounds\[2]value
         end: main
     end: external
 end: L2

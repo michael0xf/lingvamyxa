@@ -80,12 +80,13 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     const: LmTransDescriptor: descriptor
     const: LmTransDescriptor: emitted_descriptor
     const: LmTransDescriptorField: descriptor_field
+    const: LmTransSymbol: descriptor_symbol
     FILE: output
     int: status
     int: typedef_projection_entered
     int: local_projection_scope_entered
 
-    source: "fn: inspectLocal (int: seed) int\n    LocalRecord:\n        answer: seed\n    return: LocalRecord\\answer\nend: inspectLocal\n"
+    source: "fn: inspectLocal (int: seed) int\n    LocalRecord:\n        int: answer\n    end: LocalRecord\n    LocalRecord: localRecord\n        answer: seed\n    end: localRecord\n    return: localRecord\\answer\nend: inspectLocal\n"
     document: 0
     item: 0
     namespace_: 0
@@ -93,6 +94,7 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     local_frame: 0
     descriptor: 0
     emitted_descriptor: 0
+    descriptor_symbol: 0
     output: 0
     status: 0
     typedef_projection_entered: 0
@@ -125,8 +127,9 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     if: status = 0 && (lm_trans_top_level_declare_function_params(namespace_, item\function) != 0 || lm_trans_top_level_declare_function_named_structures_in_scope(namespace_, item\function) != 0)
         status: 1
     descriptor: lm_trans_namespace_descriptor(namespace_, local_name)
+    descriptor_symbol: lm_trans_namespace_find(namespace_, local_name)
     descriptor_field: lm_trans_descriptor_structural_field(descriptor, "answer")
-    if: status = 0 && (descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 1U || descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0)
+    if: status = 0 && (descriptor = 0 || descriptor_symbol = 0 || lm_trans_symbol_is(descriptor_symbol, "structureConstructor") = 0 || descriptor_symbol\has_c_name || lm_trans_namespace_relation_symbol_latest(namespace_, local_name, "variable.type") != 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 1U || descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0)
         status: 1
     if: status = 0 && lm_trans_top_level_emit_function_named_structure_typedefs_in_scope(output, namespace_, item\function) != 0
         status: 1
@@ -160,7 +163,7 @@ fn: lm_test_function_local_structural_descriptor_scope_core () int
     if: namespace_ != 0
         lm_trans_namespace_leave_scope(namespace_)
 
-    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, local_name) != 0 || lm_test_file_substring_count(output, "typedef struct LocalRecord") != 1U || lm_test_file_substring_count(output, "LocalRecord *lm_LocalRecord") != 1U)
+    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, local_name) != 0 || lm_test_file_substring_count(output, "typedef struct LocalRecord") != 1U || lm_test_file_substring_count(output, "LocalRecord *lm_LocalRecord") != 0U || lm_test_file_substring_count(output, "lm_LocalRecord_storage") != 0U)
         status: 1
 
     if: output != 0

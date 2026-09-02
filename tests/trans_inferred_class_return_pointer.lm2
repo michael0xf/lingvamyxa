@@ -45,7 +45,8 @@ end: User
 
 fn: make_user (@: unsigned lm_test_direct_new_zero_calls; @: User return_source; int: age) User
     User: user
-    user\age: age
+        age: age
+    end: user
     return_source[0]: user
     lm_test_direct_new_zero_calls[0]: 0U
 return: user
@@ -63,7 +64,10 @@ external:
         c.free: abiSlot
 
         User: returnSource 0
-        if: User = 0
+        User: defaultUser
+            age: 0
+        end: defaultUser
+        if: defaultUser = 0
             return: 5
         User: first make_user(@ directNewZeroCalls, @ returnSource, 41)
         if: first = 0 || first != returnSource || directNewZeroCalls != 0U || c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), first) = 0

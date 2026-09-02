@@ -737,6 +737,13 @@ fn: lm_trans_emit_layout_fields (FILE: file; const: @(char layout_name); const: 
         lm_trans_layout_fields_delete(fields, field_capacity)
         return: 1
 
+    if: field_count = 0U
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "unsigned char lm_lmx_empty_structure;\n") != 0
+            lm_trans_layout_fields_delete(fields, field_capacity)
+            return: 1
+        ---
+    ---
+
     i: 0U
     while: i < field_count
         if: lm_trans_emit_layout_field(file, fields[i], owner_descriptor, namespace_, indent) != 0

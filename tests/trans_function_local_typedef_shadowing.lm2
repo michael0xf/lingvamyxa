@@ -1,14 +1,22 @@
 L2:
     fn: lm_test_local_typedef_left () int
         LmTestLocalShadow:
-            int: left 1
-        return: LmTestLocalShadow\left
+            int: left
+        end: LmTestLocalShadow
+        LmTestLocalShadow: leftValue
+            left: 1
+        end: leftValue
+        return: leftValue\left
     end: lm_test_local_typedef_left
 
     fn: lm_test_local_typedef_right () int
         LmTestLocalShadow:
-            int: right 2
-        return: LmTestLocalShadow\right
+            int: right
+        end: LmTestLocalShadow
+        LmTestLocalShadow: rightValue
+            right: 2
+        end: rightValue
+        return: rightValue\right
     end: lm_test_local_typedef_right
 
     external:

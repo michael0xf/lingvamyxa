@@ -1,0 +1,26 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+EmptyShape:
+end: EmptyShape
+
+EmptyShape:
+end: EmptyShape
+
+external:
+    fn: main () int
+        EmptyShape: emptyValue
+
+        if: emptyValue = 0
+            return: 1
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), emptyValue) = 0
+            return: 2
+        return: 0
+    end: main
+end: external

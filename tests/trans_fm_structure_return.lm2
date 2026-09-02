@@ -1,18 +1,18 @@
 L2:
     FmResultProbe:
-        @: void source 0
+        @: void source
     end: FmResultProbe
 
-    sub: lm_test_remember_fm_result (@: void value)
-        c.lm_FmResultProbe\source: value
+    sub: lm_test_remember_fm_result (FmResultProbe: probe; @: void value)
+        probe\source: value
     end: lm_test_remember_fm_result
 
-    fn: lm_test_is_fm_result (@: void value) int
-        return: FmResultProbe\source = value
+    fn: lm_test_is_fm_result (FmResultProbe: probe; @: void value) int
+        return: probe\source = value
     end: lm_test_is_fm_result
 
-    fm: pair () (int: left; int: right)
-        lm_test_remember_fm_result(c.lm_fm_result)
+    fm: pair (FmResultProbe: probe) (int: left; int: right)
+        lm_test_remember_fm_result(probe, c.lm_fm_result)
         return: (1 2)
     end: pair
 
@@ -20,29 +20,35 @@ L2:
         return: (right: 5; left: 4)
     end: namedPair
 
-    fm: boxedUser () (User: value; int: marker)
-        return: (User 7)
+    fm: boxedUser (User: user) (User: value; int: marker)
+        return: (user 7)
     end: boxedUser
 
     # The fm layout is registered after the declaration pass, so a referenced
     # Structure may be declared later in the same L2 module.
     User:
-        int: age 9
+        int: age
     end: User
 
     external:
         fn: main () int
+            FmResultProbe: probe
+                source: 0
+            end: probe
+            User: user
+                age: 9
+            end: user
             pairReturn: first
             namedPairReturn: second
             pairReturn: again
             boxedUserReturn: boxed
-            first: pair()
-            if: lm_test_is_fm_result(cast: (@: void) first) = 0
+            first: pair(probe)
+            if: lm_test_is_fm_result(probe, cast: (@: void) first) = 0
                 return: 1
             second: namedPair()
-            again: pair()
-            boxed: boxedUser()
-            return: first = again || first\left != 1 || first\right != 2 || second\left != 4 || second\right != 5 || again\left != 1 || again\right != 2 || boxed\value != User || boxed\value\age != 9 || boxed\marker != 7
+            again: pair(probe)
+            boxed: boxedUser(user)
+            return: first = again || first\left != 1 || first\right != 2 || second\left != 4 || second\right != 5 || again\left != 1 || again\right != 2 || boxed\value != user || boxed\value\age != 9 || boxed\marker != 7
         end: main
     end: external
 end: L2

@@ -1,11 +1,15 @@
 L2:
     OccurrenceDynamic:
-        int: value 1
-        int: value 2
+        int: value
+        int: value
     end: OccurrenceDynamic
 
     fn: selectOccurrence (int: occurrence) int
-        return: OccurrenceDynamic\[occurrence]value
+        OccurrenceDynamic: occurrenceDynamic
+            value: 1
+            value: 2
+        end: occurrenceDynamic
+        return: occurrenceDynamic\[occurrence]value
     end: selectOccurrence
 
     external:

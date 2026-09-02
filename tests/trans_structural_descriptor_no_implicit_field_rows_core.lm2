@@ -180,24 +180,19 @@ return: 0
 fn: lm_test_no_implicit_owner_has_namespace_bindings (
     const: LmTransNamespace: namespace_
     const: @(char owner_name)
-    const: @(char expected_c_name)
 ) int
     LmP0Text: owner
-    LmP0Text: relation_type
     const: LmTransSymbol: symbol
     int: status
 
     owner: lm_trans_text_from_cstr(owner_name)
-    relation_type: lm_trans_text_ref_new_cstr("")
-    if: owner = 0 || relation_type = 0
-        lm_trans_text_ref_destroy(@ relation_type)
+    if: owner = 0
         lm_trans_text_ref_destroy(@ owner)
         return: 1
 
     symbol: lm_trans_namespace_find(namespace_, owner)
-    status: symbol = 0 || lm_trans_symbol_is(symbol, "variable") = 0 || symbol\has_c_name = 0 || symbol\c_name = 0 || lm_trans_text_equals(symbol\c_name, expected_c_name) = 0 || lm_trans_namespace_relation_text_latest(namespace_, owner, "variable.type", relation_type) = 0 || lm_trans_text_equals(relation_type, owner_name) = 0
+    status: symbol = 0 || lm_trans_symbol_is(symbol, "structureConstructor") = 0 || symbol\has_c_name || symbol\descriptor = 0 || lm_trans_namespace_relation_symbol_latest(namespace_, owner, "variable.type") != 0
 
-    lm_trans_text_ref_destroy(@ relation_type)
     lm_trans_text_ref_destroy(@ owner)
 return: status != 0
 
@@ -222,15 +217,13 @@ fn: lm_test_structural_descriptor_no_implicit_field_rows_core () int
     const: LmTransDescriptorField: descriptor_field
     const: LmTransSymbol: outer_shadow_symbol
     const: LmTransSymbol: inner_shadow_symbol
-    const: LmTransSymbol: outer_shadow_relation
-    const: LmTransSymbol: inner_shadow_relation
     size_t: baseline_fact_count
     size_t: baseline_view_fact_count
     size_t: baseline_source_table_count
     int: status
 
-    named_source: "PhysicalNamed:\n    answer: 7\n"
-    merge_source: "merge: (DescriptorSource) MergeTarget\n    int: local_value 9\nend: MergeTarget\n"
+    named_source: "PhysicalNamed:\n    int: answer\nend: PhysicalNamed\n"
+    merge_source: "merge: (DescriptorSource) MergeTarget\n    int: local_value\nend: MergeTarget\n"
     shadow_source: "merge: (ShadowTarget) ShadowTarget\n    int: outer_field\nend: ShadowTarget\n"
     named_document: 0
     merge_document: 0
@@ -244,8 +237,6 @@ fn: lm_test_structural_descriptor_no_implicit_field_rows_core () int
     inner_shadow_descriptor: 0
     outer_shadow_symbol: 0
     inner_shadow_symbol: 0
-    outer_shadow_relation: 0
-    inner_shadow_relation: 0
     baseline_fact_count: 0U
     baseline_view_fact_count: 0U
     baseline_source_table_count: 0U
@@ -274,7 +265,7 @@ fn: lm_test_structural_descriptor_no_implicit_field_rows_core () int
     owner_name: lm_trans_text_from_cstr("PhysicalNamed")
     descriptor: lm_trans_namespace_descriptor(namespace_, owner_name)
     descriptor_field: lm_trans_descriptor_structural_field(descriptor, "answer")
-    if: status = 0 && (owner_name = 0 || descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 1U || descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 0U || lm_trans_namespace_type_is_structural(namespace_, owner_name) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, owner_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "PhysicalNamed") = 0 || lm_test_no_implicit_field_rows_for_owner("PhysicalNamed") != 0 || lm_test_no_implicit_owner_has_no_registry_metadata(namespace_, "PhysicalNamed") != 0 || lm_test_no_implicit_owner_has_namespace_bindings(namespace_, "PhysicalNamed", "lm_PhysicalNamed") != 0)
+    if: status = 0 && (owner_name = 0 || descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields\count != 1U || descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 0U || lm_trans_namespace_type_is_structural(namespace_, owner_name) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, owner_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "PhysicalNamed") = 0 || lm_test_no_implicit_field_rows_for_owner("PhysicalNamed") != 0 || lm_test_no_implicit_owner_has_no_registry_metadata(namespace_, "PhysicalNamed") != 0 || lm_test_no_implicit_owner_has_namespace_bindings(namespace_, "PhysicalNamed") != 0)
         status: 1
     lm_trans_text_ref_destroy(@ owner_name)
 
@@ -282,18 +273,18 @@ fn: lm_test_structural_descriptor_no_implicit_field_rows_core () int
     field_name: lm_trans_text_from_cstr("const_ptr")
     type_name: lm_trans_text_from_cstr("int")
     owned_descriptor: lm_trans_descriptor_new()
-    if: status = 0 && (owner_name = 0 || field_name = 0 || type_name = 0 || lm_trans_declare_named_structure_owner(namespace_, owner_name) != 0 || owned_descriptor = 0 || lm_trans_descriptor_mark_structural_fields(owned_descriptor) != 0 || lm_trans_descriptor_add_structural_field(owned_descriptor, field_name, type_name, 0U, 1U, 0U, 0, 1, 0) != 0)
+    if: status = 0 && (owner_name = 0 || field_name = 0 || type_name = 0 || owned_descriptor = 0 || lm_trans_descriptor_mark_structural_fields(owned_descriptor) != 0 || lm_trans_descriptor_add_structural_field(owned_descriptor, field_name, type_name, 0U, 1U, 0U, 0, 1, 0) != 0)
         status: 1
     lm_trans_text_ref_destroy(@ field_name)
     lm_trans_text_ref_destroy(@ type_name)
 
     field_name: lm_trans_text_from_cstr("union_array")
     type_name: lm_trans_text_from_cstr("UnionPayload")
-    if: status = 0 && (field_name = 0 || type_name = 0 || lm_trans_descriptor_add_structural_field(owned_descriptor, field_name, type_name, 1U, 0U, 3U, 1, 0, 1) != 0 || lm_trans_namespace_attach_descriptor(namespace_, owner_name, owned_descriptor) != 0)
+    if: status = 0 && (field_name = 0 || type_name = 0 || lm_trans_descriptor_add_structural_field(owned_descriptor, field_name, type_name, 1U, 0U, 3U, 1, 0, 1) != 0 || lm_trans_namespace_bind_descriptor(namespace_, owner_name, "structureConstructor", owned_descriptor) != 0)
         status: 1
     if: status = 0
         owned_descriptor: 0
-    if: status = 0 && (lm_trans_namespace_type_is_structural(namespace_, owner_name) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, owner_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "DescriptorSource") = 0 || lm_test_no_implicit_field_rows_for_owner("DescriptorSource") != 0 || lm_test_no_implicit_owner_has_no_registry_metadata(namespace_, "DescriptorSource") != 0 || lm_test_no_implicit_owner_has_namespace_bindings(namespace_, "DescriptorSource", "lm_DescriptorSource") != 0)
+    if: status = 0 && (lm_trans_namespace_type_is_structural(namespace_, owner_name) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, owner_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "DescriptorSource") = 0 || lm_test_no_implicit_field_rows_for_owner("DescriptorSource") != 0 || lm_test_no_implicit_owner_has_no_registry_metadata(namespace_, "DescriptorSource") != 0 || lm_test_no_implicit_owner_has_namespace_bindings(namespace_, "DescriptorSource") != 0)
         status: 1
     lm_trans_text_ref_destroy(@ field_name)
     lm_trans_text_ref_destroy(@ type_name)
@@ -312,7 +303,7 @@ fn: lm_test_structural_descriptor_no_implicit_field_rows_core () int
     if: status = 0 && (descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "UnionPayload") != 0 || descriptor_field\index != 1U || descriptor_field\is_union = 0 || descriptor_field\has_array_count = 0 || descriptor_field\array_count != 3U)
         status: 1
     descriptor_field: lm_trans_descriptor_structural_field(descriptor, "local_value")
-    if: status = 0 && (descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 2U || lm_trans_namespace_type_is_structural(namespace_, owner_name) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, owner_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "MergeTarget") = 0 || lm_test_no_implicit_field_rows_for_owner("MergeTarget") != 0 || lm_test_no_implicit_owner_has_no_registry_metadata(namespace_, "MergeTarget") != 0 || lm_test_no_implicit_owner_has_namespace_bindings(namespace_, "MergeTarget", "lm_MergeTarget") != 0)
+    if: status = 0 && (descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 2U || lm_trans_namespace_type_is_structural(namespace_, owner_name) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, owner_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "MergeTarget") = 0 || lm_test_no_implicit_field_rows_for_owner("MergeTarget") != 0 || lm_test_no_implicit_owner_has_no_registry_metadata(namespace_, "MergeTarget") != 0 || lm_test_no_implicit_owner_has_namespace_bindings(namespace_, "MergeTarget") != 0)
         status: 1
     lm_trans_text_ref_destroy(@ owner_name)
 
@@ -320,14 +311,13 @@ fn: lm_test_structural_descriptor_no_implicit_field_rows_core () int
     field_name: lm_trans_text_from_cstr("outer_field")
     type_name: lm_trans_text_from_cstr("int")
     owned_descriptor: lm_trans_descriptor_new()
-    if: status = 0 && (owner_name = 0 || field_name = 0 || type_name = 0 || lm_trans_declare_named_structure_owner(namespace_, owner_name) != 0 || owned_descriptor = 0 || lm_trans_descriptor_mark_structural_fields(owned_descriptor) != 0 || lm_trans_descriptor_add_structural_field(owned_descriptor, field_name, type_name, 0U, 0U, 0U, 0, 0, 0) != 0 || lm_trans_namespace_attach_descriptor(namespace_, owner_name, owned_descriptor) != 0)
+    if: status = 0 && (owner_name = 0 || field_name = 0 || type_name = 0 || owned_descriptor = 0 || lm_trans_descriptor_mark_structural_fields(owned_descriptor) != 0 || lm_trans_descriptor_add_structural_field(owned_descriptor, field_name, type_name, 0U, 0U, 0U, 0, 0, 0) != 0 || lm_trans_namespace_bind_descriptor(namespace_, owner_name, "structureConstructor", owned_descriptor) != 0)
         status: 1
     if: status = 0
         owned_descriptor: 0
     outer_shadow_descriptor: lm_trans_namespace_descriptor(namespace_, owner_name)
     outer_shadow_symbol: lm_trans_namespace_find(namespace_, owner_name)
-    outer_shadow_relation: lm_trans_namespace_relation_symbol_latest(namespace_, owner_name, "variable.type")
-    if: status = 0 && (outer_shadow_descriptor = 0 || outer_shadow_symbol = 0 || outer_shadow_relation = 0 || lm_test_no_implicit_owner_has_no_registry_metadata(namespace_, "ShadowTarget") != 0 || lm_test_no_implicit_owner_has_namespace_bindings(namespace_, "ShadowTarget", "lm_ShadowTarget") != 0)
+    if: status = 0 && (outer_shadow_descriptor = 0 || outer_shadow_symbol = 0 || lm_trans_namespace_relation_symbol_latest(namespace_, owner_name, "variable.type") != 0 || lm_test_no_implicit_owner_has_no_registry_metadata(namespace_, "ShadowTarget") != 0 || lm_test_no_implicit_owner_has_namespace_bindings(namespace_, "ShadowTarget") != 0)
         status: 1
     lm_trans_text_ref_destroy(@ field_name)
     lm_trans_text_ref_destroy(@ type_name)
@@ -338,15 +328,14 @@ fn: lm_test_structural_descriptor_no_implicit_field_rows_core () int
         status: 1
     inner_shadow_descriptor: lm_trans_namespace_descriptor(namespace_, owner_name)
     inner_shadow_symbol: lm_trans_namespace_find(namespace_, owner_name)
-    inner_shadow_relation: lm_trans_namespace_relation_symbol_latest(namespace_, owner_name, "variable.type")
-    if: status = 0 && (outer_shadow_descriptor = 0 || inner_shadow_descriptor = 0 || inner_shadow_descriptor = outer_shadow_descriptor || inner_shadow_descriptor\has_structural_fields = 0 || inner_shadow_descriptor\structural_fields\count != 2U || inner_shadow_symbol = 0 || inner_shadow_symbol = outer_shadow_symbol || inner_shadow_relation = 0 || inner_shadow_relation = outer_shadow_relation || lm_test_no_implicit_owner_has_namespace_bindings(namespace_, "ShadowTarget", "lm_ShadowTarget") != 0)
+    if: status = 0 && (outer_shadow_descriptor = 0 || inner_shadow_descriptor = 0 || inner_shadow_descriptor = outer_shadow_descriptor || inner_shadow_descriptor\has_structural_fields = 0 || inner_shadow_descriptor\structural_fields\count != 2U || inner_shadow_symbol = 0 || inner_shadow_symbol = outer_shadow_symbol || lm_trans_namespace_relation_symbol_latest(namespace_, owner_name, "variable.type") != 0 || lm_test_no_implicit_owner_has_namespace_bindings(namespace_, "ShadowTarget") != 0)
         status: 1
     descriptor_field: lm_trans_descriptor_structural_field(inner_shadow_descriptor, "outer_field")
     if: status = 0 && (descriptor_field = 0 || descriptor_field\descriptor_name = 0 || c.strcmp(descriptor_field\descriptor_name, "int") != 0 || descriptor_field\index != 1U || descriptor_field\address_depth != 0U || lm_trans_namespace_type_is_structural(namespace_, owner_name) = 0 || lm_trans_namespace_layout_source_is_supported(namespace_, owner_name) = 0 || lm_trans_layout_class_requires_pointer_field(namespace_, "ShadowTarget") = 0 || lm_test_no_implicit_field_rows_for_owner("ShadowTarget") != 0 || lm_test_no_implicit_owner_has_no_registry_metadata(namespace_, "ShadowTarget") != 0)
         status: 1
     if: namespace_ != 0
         lm_trans_namespace_leave_scope(namespace_)
-    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, owner_name) != outer_shadow_descriptor || lm_trans_namespace_find(namespace_, owner_name) != outer_shadow_symbol || lm_trans_namespace_relation_symbol_latest(namespace_, owner_name, "variable.type") != outer_shadow_relation || lm_test_no_implicit_owner_has_namespace_bindings(namespace_, "ShadowTarget", "lm_ShadowTarget") != 0 || lm_test_no_implicit_owner_has_no_registry_metadata(namespace_, "ShadowTarget") != 0)
+    if: status = 0 && (lm_trans_namespace_descriptor(namespace_, owner_name) != outer_shadow_descriptor || lm_trans_namespace_find(namespace_, owner_name) != outer_shadow_symbol || lm_trans_namespace_relation_symbol_latest(namespace_, owner_name, "variable.type") != 0 || lm_test_no_implicit_owner_has_namespace_bindings(namespace_, "ShadowTarget") != 0 || lm_test_no_implicit_owner_has_no_registry_metadata(namespace_, "ShadowTarget") != 0)
         status: 1
     lm_trans_text_ref_destroy(@ owner_name)
 

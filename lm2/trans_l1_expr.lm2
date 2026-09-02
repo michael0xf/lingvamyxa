@@ -288,6 +288,9 @@ fn: lm_trans_validate_expr_atom_mode (const: (LmP0Text: atom); const: (LmTransNa
         return: 1
     if: (allow_callable_value && lm_trans_symbol_is_executable_callable(symbol))
         return: 0
+    if: lm_trans_symbol_is(symbol, "structureConstructor")
+        c.fprintf(c.stderr, "trans L2 error: Structure descriptor \"%.*s\" is not an expression value\n", (cast: int atom\length), atom\data)
+        return: 1
     if: ((((lm_trans_symbol_is(symbol, "procedure") || lm_trans_symbol_is(symbol, "function")) || lm_trans_symbol_is(symbol, "label")) || lm_trans_symbol_is(symbol, "class")) || lm_trans_symbol_is(symbol, "callableDescriptor"))
         c.fprintf(c.stderr, "trans L2 error: \"%.*s\" is %s, not an expression value\n", (cast: int atom\length), atom\data, lm_trans_symbol_class_name(symbol\class_name))
         return: 1

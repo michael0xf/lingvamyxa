@@ -136,11 +136,14 @@ fn: lm_make_merge_call () LmMergeCall
 end: lm_make_merge_call
 
 merge: (LmMergeDirect LmMergeJoined LmMergeWide LmMergeWideJoined lm_make_merge_call()) LmMergeCombined
-    int: local_value 29
+    int: local_value
 end: LmMergeCombined
 
 external:
     fn: main () int
-        return: lm_test_layout_backend_merge_consumers() || lm_make_merge_call() != 0 || LmMergeCombined\local_value != 29
+        LmMergeCombined: combined
+            local_value: 29
+        end: combined
+        return: lm_test_layout_backend_merge_consumers() || lm_make_merge_call() != 0 || combined\local_value != 29
     end: main
 end: external

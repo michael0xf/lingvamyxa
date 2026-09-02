@@ -536,7 +536,6 @@ fn: lm_trans_top_level_statement_binding (const: (LmTransHeadBinding: binding); 
     if: c.strcmp(receiver, "lm_trans_statement_emit_merge_named_structure") = 0
         out\declare: @lm_trans_top_level_declare_merge_named_structure
         out\emit_before_functions: @lm_trans_top_level_emit_merge_named_structure_typedef
-        out\emit_after_prototypes: @lm_trans_top_level_emit_merge_named_structure_storage
         out\emits_top_level: 1
         return: 1
 return: 0
@@ -1336,11 +1335,6 @@ fn: lm_trans_top_level_function_body_has_named_structure_declaration (
         field: field\next
 return: 0
 
-fn: lm_trans_top_level_emit_named_structure_storage (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    if: item = 0 || item\frame = 0
-        return: 1
-return: lm_trans_emit_named_structure_storage(file, item\frame, 0U, namespace_, "static ")
-
 fn: lm_trans_top_level_declare_merge_named_structure (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\frame = 0
         return: 1
@@ -1361,11 +1355,6 @@ fn: lm_trans_top_level_emit_merge_named_structure_typedef (FILE: file; LmTransNa
         status: lm_trans_typedef_projection_emit_prepared_text(file, lm_trans_merge_target_name(item\frame), declaration_file, @ emitted)
     c.fclose(declaration_file)
 return: status
-
-fn: lm_trans_top_level_emit_merge_named_structure_storage (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
-    if: item = 0 || item\frame = 0
-        return: 1
-return: lm_trans_emit_merge_named_structure_storage(file, item\frame, 0U, namespace_, "static ")
 
 fn: lm_trans_lower_top_level_item (
     const: LmP0Node: node
@@ -1449,6 +1438,10 @@ fn: lm_trans_lower_top_level_item (
     if: statement_status != 0 || substrate_status != 0 || level_status != 0
         return: 0
 
+    if: lm_trans_namespace_has_named_structure_binding(namespace_, out\frame\head) && lm_trans_frame_looks_storage_declaration(out\frame, namespace_)
+        c.fprintf(c.stderr, "trans hosted C backend limitation: top-level Structure value \"%.*s\" requires module/root-arena initialization\n", (cast: int out\frame\head\length), out\frame\head\data)
+        return: 1
+
     if: lm_trans_frame_looks_top_level_storage_declaration(out\frame, namespace_)
         out\declare: @lm_trans_top_level_declare_storage_declaration
         out\emit_after_prototypes: @lm_trans_top_level_emit_static_declaration
@@ -1458,7 +1451,6 @@ fn: lm_trans_lower_top_level_item (
     if: lm_trans_frame_looks_named_structure_layout_declaration(out\frame, namespace_)
         out\declare: @lm_trans_top_level_declare_named_structure
         out\emit_before_functions: @lm_trans_top_level_emit_named_structure_typedef
-        out\emit_after_prototypes: @lm_trans_top_level_emit_named_structure_storage
         out\emits_top_level: 1
         return: 0
 

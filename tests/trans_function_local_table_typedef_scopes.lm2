@@ -21,7 +21,11 @@ L2:
 
     fn: lm_test_local_table_inner_shadow () int
         lm_l2_table_innerSample_row:
-            int: outer 31
+            int: outer
+        end: lm_l2_table_innerSample_row
+        lm_l2_table_innerSample_row: outerRow
+            outer: 31
+        end: outerRow
         if: 1 = 1
             table:
                 name: innerSample
@@ -32,7 +36,7 @@ L2:
             if: innerSample\inner != 41
                 return: 1
         end: if
-        return: lm_l2_table_innerSample_row\outer
+        return: outerRow\outer
     end: lm_test_local_table_inner_shadow
 
     external:

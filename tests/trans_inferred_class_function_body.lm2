@@ -1,8 +1,12 @@
 L2:
     fn: check (int: age) int
         User:
+            int: age
+        end: User
+        User: user
             age: age
-        return: User\age
+        end: user
+        return: user\age
     end: check
 
     external:
