@@ -231,6 +231,7 @@ fn: lm_test_structural_semantic_bridge_core () int
     const: LmTransSymbol: inner_scope_symbol
     LmTransDescriptor: explicit_descriptor
     LmTransDescriptor: projection_descriptor
+    LmTransDescriptor: row_descriptor
     LmTransLayoutField: layout_field
     LmTransL4CallableType: expected_type
     LmP0Document: document
@@ -268,7 +269,7 @@ fn: lm_test_structural_semantic_bridge_core () int
     top_level_source: "BridgeB:\n    ManualStructural: child\nend: BridgeB\n"
     type_source: "ManualStructural\n"
     field_source: "ManualStructural: child\n"
-    projection_output: "ManualStructural *|ManualStructural *|ManualStructural ***callable|ManualStructural *abi_structural, ExplicitAbiLayout **abi_explicit, ProjectionAbiLayout *abi_projection|ManualStructural * *declared|ManualStructural * captured;\n|ManualStructural * **|ManualStructural * child;\n|typedef struct ManualRow {\n    ManualStructural *child;\n} ManualRow;\n|struct BridgeB;\ntypedef struct BridgeB BridgeB;\nstruct BridgeB {\n    ManualStructural *child;\n};\n|typedef struct makeManualReturn makeManualReturn;\n\nstruct makeManualReturn {\n    ManualStructural * child;\n};\n\n"
+    projection_output: "ManualStructural *|ManualStructural *|ManualStructural ***callable|ManualStructural *abi_structural, ExplicitAbiLayout **abi_explicit, ProjectionAbiLayout *abi_projection|ManualStructural * *declared|ManualStructural * captured;\n|ManualStructural * **|ManualStructural * child;\n|struct ManualRow;\ntypedef struct ManualRow ManualRow;\nstruct ManualRow {\n    ManualStructural *lm__field_0;\n};\n|struct BridgeB;\ntypedef struct BridgeB BridgeB;\nstruct BridgeB {\n    ManualStructural *child;\n};\n|typedef struct makeManualReturn makeManualReturn;\n\nstruct makeManualReturn {\n    ManualStructural * child;\n};\n\n"
     namespace_: 0
     structural_name: 0
     scope_name: 0
@@ -303,6 +304,7 @@ fn: lm_test_structural_semantic_bridge_core () int
     merge_name: 0
     explicit_descriptor: 0
     projection_descriptor: 0
+    row_descriptor: 0
     scope_descriptor: 0
     scope_symbol: 0
     inner_scope_symbol: 0
@@ -467,6 +469,11 @@ fn: lm_test_structural_semantic_bridge_core () int
             status: 1
         ---
     if: status = 0
+        row_descriptor: lm_trans_l2_runtime_table_row_descriptor_new(column_types, column_names, 1U, "ManualRow")
+        if: row_descriptor = 0
+            status: 1
+        ---
+    if: status = 0
         expected_type\address_depth: 2U
         abi_params[0]\class_name: "ManualStructural"
         abi_params[0]\name: "abi_structural"
@@ -482,7 +489,7 @@ fn: lm_test_structural_semantic_bridge_core () int
         ---
     if: status = 0
         expected_type\address_depth: 0U
-        if: lm_trans_emit_l2_table_row_type(output, "ManualRow", column_types, column_names, 1U, 0U, namespace_) != 0 || lm_trans_put(output, "|") != 0 || lm_trans_emit_named_structure_typedef(output, top_level_item\frame, 0U, namespace_) != 0 || lm_trans_put(output, "|") != 0 || lm_trans_emit_function_return_structure(output, function_name, lm_p0_document_root(field_document), namespace_) != 0 || lm_test_file_equals(output, projection_output) = 0
+        if: lm_trans_emit_l2_runtime_table_local_row_type(output, "ManualRow", row_descriptor, 0U, namespace_) != 0 || lm_trans_put(output, "|") != 0 || lm_trans_emit_named_structure_typedef(output, top_level_item\frame, 0U, namespace_) != 0 || lm_trans_put(output, "|") != 0 || lm_trans_emit_function_return_structure(output, function_name, lm_p0_document_root(field_document), namespace_) != 0 || lm_test_file_equals(output, projection_output) = 0
             status: 1
         ---
 
@@ -490,6 +497,7 @@ fn: lm_test_structural_semantic_bridge_core () int
     if: output != 0
         c.fclose(output)
     lm_trans_l2_table_columns_destroy(column_types, column_names, 1U)
+    lm_trans_descriptor_delete(row_descriptor)
     lm_trans_statement_c_declarator_destroy(declarator)
     lm_trans_capture_destroy(capture)
     lm_trans_expr_abi_params_delete(abi_params, 3U)

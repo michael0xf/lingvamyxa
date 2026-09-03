@@ -1,0 +1,29 @@
+L2:
+    import: "lm2/own.lm2"
+
+    callable: AddX (int: value) int
+
+    fn: add_one (int: value) int
+        return: value + 1
+    end: add_one
+
+    fn: call_add (AddX: callback) int
+        return: callback(3)
+    end: call_add
+
+    fn: test (AddX: callback) int
+        table:
+            name: t
+            columns: (AddX: callback)
+            rows:
+                     callback
+        end: t
+        return: call_add(t[0]\callback) != 4
+    end: test
+
+    external:
+        fn: main () int
+            return: test(add_one)
+        end: main
+    end: external
+end: L2

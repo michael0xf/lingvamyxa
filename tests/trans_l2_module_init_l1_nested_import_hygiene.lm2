@@ -1,0 +1,21 @@
+L1:
+    L2:
+        import: "fixtures/l2_module_init_l1_nested_import_collision.lm2"
+    end: L2
+end: L1
+
+L2:
+    Holder:
+        int: value
+    end: Holder
+
+    Holder: nestedImportValue
+        value: 7
+    end: nestedImportValue
+
+    external:
+        fn: main () int
+            return: nestedImportValue = 0 || nestedImportValue\value != 7
+        end: main
+    end: external
+end: L2

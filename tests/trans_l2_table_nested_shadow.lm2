@@ -1,0 +1,28 @@
+L2:
+    fn: lm_test_p1_nested_table_shadow () int
+        table:
+            name: p1NestedShadow
+            columns: (int: value)
+            rows:
+                     3
+        end: p1NestedShadow
+
+        if: 1 = 1
+            table:
+                name: p1NestedShadow
+                columns: (int: value)
+                rows:
+                         5
+            end: p1NestedShadow
+            if: p1NestedShadow[0]\value != 5
+                return: 1
+        end: if
+        return: p1NestedShadow[0]\value != 3
+    end: lm_test_p1_nested_table_shadow
+
+    external:
+        fn: main () int
+            return: lm_test_p1_nested_table_shadow()
+        end: main
+    end: external
+end: L2

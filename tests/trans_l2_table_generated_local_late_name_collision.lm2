@@ -1,0 +1,19 @@
+L2:
+    fn: lm_test_p1_local_late_name_collision () int
+        table:
+            name: p1LocalLateCollision
+            columns: (int: value)
+            rows:
+                     7
+        end: p1LocalLateCollision
+
+        int: lm_lmx_anonymous_structure_p1LocalLateCollision_0 5
+        return: p1LocalLateCollision[0]\value + lm_lmx_anonymous_structure_p1LocalLateCollision_0
+    end: lm_test_p1_local_late_name_collision
+
+    external:
+        fn: main () int
+            return: lm_test_p1_local_late_name_collision() != 12
+        end: main
+    end: external
+end: L2

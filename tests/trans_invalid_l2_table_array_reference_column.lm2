@@ -1,0 +1,14 @@
+external:
+    fn: main () int
+        []: int source_values 2 7 9
+
+        table:
+            name: stage9ArrayColumnTable
+            columns: ([]: int values)
+            rows:
+                     source_values
+        end: stage9ArrayColumnTable
+
+        return: 0
+    end: main
+end: external

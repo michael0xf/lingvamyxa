@@ -324,6 +324,8 @@ fn: lm_trans_emit_expr_atom_mode (FILE: file; const: (LmP0Text: atom); const: (L
     const: LmTransSymbol: symbol
     if: (lm_trans_validate_expr_atom_mode(atom, namespace_, allow_callable_value) != 0)
         return: 1
+    if: lm_trans_text_equals(atom, "c.lm_lmx_message_thread")
+        return: lm_trans_put(file, lm_trans_current_thread_name())
     symbol: lm_trans_namespace_find(namespace_, atom)
     if: ((symbol != 0) && symbol\has_c_name)
         return: lm_trans_write_text(file, symbol\c_name)
@@ -1634,10 +1636,47 @@ fn: lm_trans_emit_projected_type_name (
         return: lm_trans_put(file, projected_name)
 return: lm_trans_emit_type_name(file, class_name)
 
+fn: lm_trans_runtime_table_private_type_position (
+    const: LmP0Text: class_name
+    const: LmTransNamespace: namespace_
+) int
+    const: LmTransDescriptor: descriptor
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, class_name)
+return: descriptor != 0 && lm_trans_descriptor_class_relation_value(descriptor, "lm.trans.table-runtime-read-only") != 0
+
+fn: lm_trans_emit_internal_type_head_only (
+    FILE: file
+    const: LmP0Text: type_head
+    const: LmTransNamespace: namespace_
+) int
+    size_t: implicit_depth
+    size_t: index
+    int: status
+
+    if: lm_trans_builtin_c_type_name(type_head)
+        return: lm_trans_emit_type_name(file, type_head)
+    status: lm_trans_emit_projected_type_name(file, type_head, namespace_)
+    implicit_depth: lm_trans_layout_type_implicit_address_depth(type_head, namespace_)
+    if: status = 0 && implicit_depth != 0U
+        if: lm_trans_put(file, " ") != 0
+            return: 1
+        index: 0U
+        while: index < implicit_depth
+            if: lm_trans_put(file, "*") != 0
+                return: 1
+            index: index + 1U
+        ---
+    ---
+return: status
+
 fn: lm_trans_emit_callable_type_named (FILE: file; const: (LmTransL4CallableType: type); const: (LmP0Text: name); const: (LmTransNamespace: namespace_)) int
     size_t: i
     size_t: effective_address_depth
     if: ((file = 0) || (type = 0))
+        return: 1
+    if: lm_trans_runtime_table_private_type_position(type\class_name, namespace_)
+        c.fprintf(c.stderr, "trans L2 Table error: runtime Table row type is private and cannot appear in a source type position\n")
         return: 1
     if: type\array_rank != 0U
         if: lm_trans_put(file, "LmSlice *") != 0
@@ -2604,7 +2643,7 @@ fn: lm_trans_expr_stack_push_lazy_binder_fields (FILE: file; LmTransExprStack: s
         return: 1
     if: bound_count != 0U && lm_trans_expr_stack_push_text(stack, ", ") != 0
         return: 1
-    if: lm_trans_expr_stack_push_text(stack, "lm_lmx_message_thread") != 0
+    if: lm_trans_expr_stack_push_text(stack, lm_trans_current_thread_name()) != 0
         return: 1
     if: ((lm_trans_expr_stack_push_text(stack, "(") != 0) || (lm_trans_expr_stack_push_name_text(stack, binder_name) != 0))
         return: 1
@@ -2695,14 +2734,14 @@ fn: lm_trans_expr_stack_push_forced_zero_arg_callable (LmTransExprStack: stack; 
         return: 1
     if: callable_value\uses_closure_struct
         if: symbol\callable_has_thread_context
-            if: (lm_trans_expr_stack_push_text(stack, "lm_lmx_message_thread") != 0) || (lm_trans_expr_stack_push_text(stack, ", ") != 0)
+            if: (lm_trans_expr_stack_push_text(stack, lm_trans_current_thread_name()) != 0) || (lm_trans_expr_stack_push_text(stack, ", ") != 0)
                 return: 1
         ---
         if: ((((lm_trans_expr_stack_push_text(stack, "->env") != 0) || (lm_trans_expr_stack_push_name_text(stack, callable_value\code_name) != 0)) || (lm_trans_expr_stack_push_text(stack, "->call(") != 0)) || (lm_trans_expr_stack_push_name_text(stack, callable_value\code_name) != 0))
             return: 1
         return: 0
     if: symbol\callable_has_thread_context
-        if: lm_trans_expr_stack_push_text(stack, "lm_lmx_message_thread") != 0
+        if: lm_trans_expr_stack_push_text(stack, lm_trans_current_thread_name()) != 0
             return: 1
     ---
     if: ((lm_trans_expr_stack_push_text(stack, "(") != 0) || (lm_trans_expr_stack_push_name_text(stack, callable_value\code_name) != 0))
@@ -3074,6 +3113,8 @@ fn: lm_trans_expr_stack_push_segments (FILE: file; LmTransExprStack: stack; cons
         ---
         if: segment\expected_param != 0 && segment\expected_param\is_array = 0 && segment\expected_param\type != 0 && lm_trans_guard_c_array_value_range(segment\first, segment\stop, namespace_, segment\expected_param\type\class_name, segment\expected_param\type\address_depth, segment\expected_param\type\is_const, "function argument") != 0
             return: 1
+        if: segment\expected_param != 0 && segment\expected_param\is_array = 0 && segment\expected_param\type != 0 && lm_trans_guard_runtime_table_indexed_field_range(segment\first, segment\stop, namespace_, segment\expected_param\type\class_name, segment\expected_param\type\address_depth, segment\expected_param\type\is_const, "function argument") != 0
+            return: 1
         if: segment\expected_param != 0 && segment\expected_param\is_array = 0 && segment\expected_param\type != 0 && segment\expected_param\type\address_depth != 0U && lm_trans_range_has_direct_array_reference(segment\first, segment\stop, namespace_) && (segment\expected_param\type\address_depth != 1U || lm_trans_text_equals(segment\expected_param\type\class_name, "LmSlice") = 0 || lm_trans_range_is_direct_array_reference_address(segment\first, segment\stop, namespace_) = 0) && lm_trans_range_is_array_reference_data_pointer(segment\first, segment\stop, namespace_) = 0
             c.fprintf(c.stderr, "trans L2 type error: raw pointer parameter cannot consume an ArrayReference without an explicit adapter\n")
             return: 1
@@ -3437,6 +3478,7 @@ return: 1
 
 fn: lm_trans_callable_expression_descriptor_name (const: (LmP0Text: head); const: (LmTransNamespace: namespace_); LmP0Text: out_descriptor_name) int
     const: LmTransSymbol: symbol
+    const: LmTransDescriptor: root_descriptor
     LmP0Text: segment
     LmP0Text: current_class
     const: @: char field_class
@@ -3446,7 +3488,9 @@ fn: lm_trans_callable_expression_descriptor_name (const: (LmP0Text: head); const
     int: segment_status
     int: field_class_status
     int: has_field_chain
+    int: first_member
     int: result
+    @: char direct_field_name
     if: (out_descriptor_name != 0)
         out_descriptor_name\data: ""
         out_descriptor_name\length: 0U
@@ -3478,13 +3522,26 @@ fn: lm_trans_callable_expression_descriptor_name (const: (LmP0Text: head); const
         return: 0
     if: (lm_trans_namespace_relation_text_latest(namespace_, segment, "variable.type", current_class) = 0)
         lm_trans_text_assign_cstr(current_class, symbol\class_name)
+    root_descriptor: lm_trans_namespace_descriptor(namespace_, segment)
     has_field_chain: (offset <= head\length)
+    first_member: 1
     result: 0
     while: ((result = 0) && (offset <= head\length))
         segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment, @ has_occurrence, @ occurrence)
         if: (segment_status <= 0)
             result: -1
             break
+        if: first_member && root_descriptor != 0 && lm_trans_descriptor_class_relation_value(root_descriptor, "lm.trans.table-runtime-read-only") != 0 && lm_trans_text_equals(segment, "ptr") = 0 && lm_trans_text_equals(segment, "length") = 0
+            direct_field_name: lm_trans_descriptor_name_copy(segment)
+            if: direct_field_name != 0 && lm_trans_descriptor_structural_field(root_descriptor, direct_field_name) != 0
+                c.fprintf(c.stderr, "trans L2 Table error: callable-head row field \"%.*s\" requires indexing before field access\n", (cast: int segment\length), segment\data)
+                lm_own_delete(direct_field_name, 0)
+                result: -1
+                break
+            ---
+            lm_own_delete(direct_field_name, 0)
+        ---
+        first_member: 0
         field_class_status: lm_trans_layout_field_class_resolve_occurrence(current_class, segment, has_occurrence, occurrence, namespace_, @ field_class)
         if: (field_class_status < 0)
             result: -1
@@ -3789,7 +3846,7 @@ fn: lm_trans_expr_stack_schedule_call_args_mode (FILE: file; LmTransExprStack: s
     if: status = 0 && callee != 0 && callee\callable_has_thread_context
         if: (segments\count > 0U || (include_env && callee\has_env_arg)) && lm_trans_expr_stack_push_text(stack, ", ") != 0
             status: 1
-        if: status = 0 && lm_trans_expr_stack_push_text(stack, "lm_lmx_message_thread") != 0
+        if: status = 0 && lm_trans_expr_stack_push_text(stack, lm_trans_current_thread_name()) != 0
             status: 1
         ---
     lm_trans_expr_segment_stack_delete(@ segments)
@@ -4033,12 +4090,25 @@ fn: lm_trans_printf_arg_class_from_segment (const: (LmP0Field: first); const: (L
     const: LmP0Node: node
     const: LmP0Field: type_field
     const: LmP0Node: type_node
+    LmTransL4CallableType: table_field_type
+    int: table_field_status
     int: unsigned_literal
 
     if: out_class != 0
         out_class\data: ""
         out_class\length: 0U
     if: out_class = 0
+        return: 0
+    table_field_type: lm_trans_expr_callable_type_new()
+    if: table_field_type = 0
+        return: 0
+    table_field_status: lm_trans_runtime_table_indexed_field_type(first, stop, namespace_, table_field_type)
+    if: table_field_status > 0
+        lm_trans_text_assign_cstr(out_class, table_field_type\class_name\data)
+        lm_trans_expr_callable_type_delete(table_field_type)
+        return: 1
+    lm_trans_expr_callable_type_delete(table_field_type)
+    if: table_field_status < 0
         return: 0
     node: lm_trans_c_arg_single_node(first, stop)
     if: node = 0
@@ -4674,7 +4744,7 @@ fn: lm_trans_emit_array_reference_items_expression (
         return: 1
     if: lm_trans_namespace_value_array_reference_element_is_const(namespace_, name) && lm_trans_put(file, "const ") != 0
         return: 1
-    if: lm_trans_emit_type_head_only(file, element_type, namespace_) != 0
+    if: lm_trans_emit_internal_type_head_only(file, element_type, namespace_) != 0
         return: 1
     if: pointer_depth != 0U && lm_trans_put(file, " ") != 0
         return: 1
@@ -4696,6 +4766,13 @@ fn: lm_trans_expr_emit_name (FILE: file; const: (LmTransExprAtomLowering: loweri
     c.LM_UNUSED(namespace_)
     return: lm_trans_emit_name(file, lowering\text)
 end: lm_trans_expr_emit_name
+
+fn: lm_trans_expr_emit_c_surface (FILE: file; const: (LmTransExprAtomLowering: lowering); const: (LmTransNamespace: namespace_)) int
+    c.LM_UNUSED(namespace_)
+    if: lowering != 0 && lm_trans_text_equals(lowering\text, "c.lm_lmx_message_thread")
+        return: lm_trans_put(file, lm_trans_current_thread_name())
+    return: lm_trans_emit_name(file, lowering\text)
+end: lm_trans_expr_emit_c_surface
 
 fn: lm_trans_expr_emit_raw (FILE: file; const: (LmTransExprAtomLowering: lowering); const: (LmTransNamespace: namespace_)) int
     c.LM_UNUSED(namespace_)
@@ -5074,6 +5151,26 @@ fn: lm_trans_expr_occurrence_literal_parse (
     lm_own_delete(payload, 0)
 return: result
 
+fn: lm_trans_expr_node_has_runtime_table_root (
+    const: LmP0Node: node
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Node: current
+    const: LmP0Field: field
+
+    current: node
+    while: current != 0 && current\kind = c.LM_P0_NODE_STRUCTURE
+        field: current\as\structure\first_field
+        while: field != 0 && lm_trans_node_is_ignored(field\value)
+            field: field\next
+        if: field = 0 || field\value = 0
+            return: 0
+        current: field\value
+    ---
+    if: current = 0 || current\kind != c.LM_P0_NODE_ATOM
+        return: 0
+return: lm_trans_runtime_table_private_type_position(current\as\atom, namespace_)
+
 fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: (LmTransExprRangeJob: range); const: (LmTransNamespace: namespace_)) int
     const: LmP0Field: field
     const: LmP0Node: node
@@ -5083,6 +5180,7 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     const: LmTransDescriptor: operand_descriptor
     const: LmP0Node: indexed_candidate_node
     const: LmP0Field: indexed_candidate_field
+    const: LmP0Text: direct_table_field_root
     int: expect_field_name
     int: expect_c_field_name
     int: c_dot_path
@@ -5094,9 +5192,13 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     int: projection_status
     int: indexed_candidate_type_status
     int: wrote
+    int: runtime_table_lvalue
+    int: pending_table_update
+    int: had_previous_operand
     size_t: array_reference_rank
     size_t: array_reference_index_count
     const: @: char field_class
+    @: char direct_field_name
     const: LmTransSymbol: array_element_type_relation
     LmTransExprAtomLowering: atom
     LmTransExprPiece: indexed_root_piece
@@ -5129,6 +5231,9 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     array_reference_index_count: 0U
     array_element_type_relation: 0
     indexed_root_piece: 0
+    direct_table_field_root: 0
+    runtime_table_lvalue: lm_trans_expr_node_has_runtime_table_root(previous_operand, namespace_)
+    pending_table_update: 0
     if: previous_operand != 0 && previous_operand\kind = c.LM_P0_NODE_ATOM
         if: lm_trans_expr_value_class_from_atom(previous_operand\as\atom, namespace_, operand_class) = 0
             operand_class\data: ""
@@ -5325,12 +5430,51 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                 if: (node\kind = c.LM_P0_NODE_ATOM)
                     was_expect_field_name: expect_field_name
                     was_expect_c_field_name: expect_c_field_name
+                    had_previous_operand: previous_operand != 0
                     piece_leading_space: wrote
+                    if: was_expect_field_name = 0
+                        direct_table_field_root: 0
+                        indexed_candidate_node: previous_operand
+                        while: indexed_candidate_node != 0 && indexed_candidate_node\kind = c.LM_P0_NODE_STRUCTURE
+                            indexed_candidate_field: indexed_candidate_node\as\structure\first_field
+                            if: indexed_candidate_field = 0 || indexed_candidate_field\next != 0 || indexed_candidate_field\value = 0
+                                indexed_candidate_node: 0
+                            else:
+                                indexed_candidate_node: indexed_candidate_field\value
+                            ---
+                        ---
+                        if: lm_trans_text_equals(node\as\atom, "\\") && previous_operand != 0 && previous_operand\kind = c.LM_P0_NODE_STRUCTURE && runtime_table_lvalue && indexed_candidate_node = 0
+                            c.fprintf(c.stderr, "trans hosted Table limitation: field-follow on a parenthesized indexed runtime Table row is not supported; remove the parentheses around the indexed row\n")
+                            lm_trans_expr_atom_lowering_delete(atom)
+                            lm_trans_expr_callable_type_delete(pending_expected_type)
+                            lm_trans_text_ref_destroy(@ operand_class)
+                            return: 1
+                        ---
+                        if: lm_trans_text_equals(node\as\atom, "\\") && indexed_candidate_node != 0 && indexed_candidate_node\kind = c.LM_P0_NODE_ATOM && lm_trans_namespace_value_is_array_reference(namespace_, indexed_candidate_node\as\atom)
+                            operand_descriptor: lm_trans_namespace_descriptor(namespace_, indexed_candidate_node\as\atom)
+                            if: operand_descriptor != 0 && lm_trans_descriptor_class_relation_value(operand_descriptor, "lm.trans.table-runtime-read-only") != 0
+                                direct_table_field_root: indexed_candidate_node\as\atom
+                            ---
+                        ---
+                    ---
                     if: (lm_trans_lower_expr_atom(node, previous_operand, expect_field_name, expect_c_field_name, c_dot_path, atom) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
                         lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
+                    if: lm_trans_text_equals(node\as\atom, "++") || lm_trans_text_equals(node\as\atom, "--")
+                        if: had_previous_operand
+                            if: runtime_table_lvalue
+                                c.fprintf(c.stderr, "trans L2 Table error: increment/decrement cannot mutate runtime Table storage\n")
+                                lm_trans_expr_atom_lowering_delete(atom)
+                                lm_trans_expr_callable_type_delete(pending_expected_type)
+                                lm_trans_text_ref_destroy(@ operand_class)
+                                return: 1
+                            ---
+                        else:
+                            pending_table_update: 1
+                        ---
+                    ---
                     if: atom\emit = @lm_trans_expr_emit_contextual_literal
                         if: lm_trans_contextual_literal_set_expected_type(atom, pending_expected_type) != 0
                             lm_trans_expr_atom_lowering_delete(atom)
@@ -5340,8 +5484,30 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         ---
                     ---
                     if: (((address_next_operand && (expect_field_name = 0)) && (expect_c_field_name = 0)) && lm_trans_atom_is_operand_like(node\as\atom))
+                        operand_descriptor: lm_trans_namespace_descriptor(namespace_, node\as\atom)
+                        if: operand_descriptor != 0 && lm_trans_descriptor_class_relation_value(operand_descriptor, "lm.trans.table-runtime-read-only") != 0
+                            c.fprintf(c.stderr, "trans L2 Table error: address of runtime Table binding is not available\n")
+                            lm_trans_expr_atom_lowering_delete(atom)
+                            lm_trans_expr_callable_type_delete(pending_expected_type)
+                            lm_trans_text_ref_destroy(@ operand_class)
+                            return: 1
+                        ---
                         lm_trans_expr_atom_lowering_set_builtin(atom, node\as\atom, "lm_trans_expr_emit_addressable_value")
                         piece_leading_space: 0
+                    if: was_expect_field_name && direct_table_field_root != 0 && lm_trans_text_equals(node\as\atom, "ptr") = 0 && lm_trans_text_equals(node\as\atom, "length") = 0
+                        operand_descriptor: lm_trans_namespace_descriptor(namespace_, direct_table_field_root)
+                        direct_field_name: lm_trans_descriptor_name_copy(node\as\atom)
+                        if: direct_field_name != 0 && lm_trans_descriptor_structural_field(operand_descriptor, direct_field_name) != 0
+                            c.fprintf(c.stderr, "trans L2 Table error: row field \"%.*s\" requires indexing; use %.*s[0]\\%.*s\n", (cast: int node\as\atom\length), node\as\atom\data, (cast: int direct_table_field_root\length), direct_table_field_root\data, (cast: int node\as\atom\length), node\as\atom\data)
+                        else:
+                            c.fprintf(c.stderr, "trans L2 Table error: runtime Table header has no field \"%.*s\"; only ptr and length are available before indexing\n", (cast: int node\as\atom\length), node\as\atom\data)
+                        ---
+                        lm_own_delete(direct_field_name, 0)
+                        lm_trans_expr_atom_lowering_delete(atom)
+                        lm_trans_expr_callable_type_delete(pending_expected_type)
+                        lm_trans_text_ref_destroy(@ operand_class)
+                        return: 1
+                    ---
                     if: was_expect_field_name && operand_class\length != 0U
                         operand_descriptor: lm_trans_namespace_descriptor(namespace_, operand_class)
                         if: operand_descriptor != 0 && lm_trans_descriptor_class_relation_value(operand_descriptor, "lm.trans.c.indexed-members") != 0
@@ -5400,6 +5566,24 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         if: lm_trans_atom_is_operand_like(node\as\atom)
                             address_next_operand: 0
                         ---
+                    if: lm_trans_atom_is_operand_like(node\as\atom)
+                        if: was_expect_field_name = 0 && was_expect_c_field_name = 0
+                            runtime_table_lvalue: lm_trans_runtime_table_private_type_position(node\as\atom, namespace_)
+                        ---
+                        if: pending_table_update
+                            if: runtime_table_lvalue
+                                c.fprintf(c.stderr, "trans L2 Table error: increment/decrement cannot mutate runtime Table storage\n")
+                                lm_trans_expr_atom_lowering_delete(atom)
+                                lm_trans_expr_callable_type_delete(pending_expected_type)
+                                lm_trans_text_ref_destroy(@ operand_class)
+                                return: 1
+                            pending_table_update: 0
+                        ---
+                    else:
+                        if: lm_trans_text_equals(node\as\atom, "\\") = 0 && lm_trans_text_equals(node\as\atom, ".") = 0 && lm_trans_text_equals(node\as\atom, "++") = 0 && lm_trans_text_equals(node\as\atom, "--") = 0
+                            runtime_table_lvalue: 0
+                        ---
+                    ---
                     if: (lm_trans_expr_lowered_range_append_atom(lowered, piece_leading_space, node, atom) != 0)
                         lm_trans_expr_atom_lowering_delete(atom)
                         lm_trans_expr_callable_type_delete(pending_expected_type)
@@ -5407,6 +5591,15 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         return: 1
                     ---
                 else:
+                    if: address_next_operand && node\kind = c.LM_P0_NODE_STRUCTURE
+                        if: lm_trans_expr_node_has_runtime_table_root(node, namespace_)
+                            c.fprintf(c.stderr, "trans L2 Table error: address of runtime Table storage is not available\n")
+                            lm_trans_expr_atom_lowering_delete(atom)
+                            lm_trans_expr_callable_type_delete(pending_expected_type)
+                            lm_trans_text_ref_destroy(@ operand_class)
+                            return: 1
+                        ---
+                    ---
                     if: node\kind = c.LM_P0_NODE_STRUCTURE && previous_operand != 0
                         indexed_candidate_node: previous_operand
                         while: indexed_candidate_node != 0 && indexed_candidate_node\kind = c.LM_P0_NODE_STRUCTURE
@@ -5453,6 +5646,16 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
+                    runtime_table_lvalue: lm_trans_expr_node_has_runtime_table_root(node, namespace_)
+                    if: pending_table_update
+                        if: runtime_table_lvalue
+                            c.fprintf(c.stderr, "trans L2 Table error: increment/decrement cannot mutate runtime Table storage\n")
+                            lm_trans_expr_atom_lowering_delete(atom)
+                            lm_trans_expr_callable_type_delete(pending_expected_type)
+                            lm_trans_text_ref_destroy(@ operand_class)
+                            return: 1
+                        pending_table_update: 0
+                    ---
                     previous_operand: node
                     expect_field_name: 0
                     expect_c_field_name: 0
@@ -5469,6 +5672,12 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
         return: 1
     if: expect_c_field_name
         c.fprintf(c.stderr, "trans L2 error: C value-field dot expects a field name\n")
+        lm_trans_expr_atom_lowering_delete(atom)
+        lm_trans_expr_callable_type_delete(pending_expected_type)
+        lm_trans_text_ref_destroy(@ operand_class)
+        return: 1
+    if: pending_table_update
+        c.fprintf(c.stderr, "trans L2 error: increment/decrement expects an operand\n")
         lm_trans_expr_atom_lowering_delete(atom)
         lm_trans_expr_callable_type_delete(pending_expected_type)
         lm_trans_text_ref_destroy(@ operand_class)
@@ -5745,6 +5954,8 @@ fn: lm_trans_emit_expr_range_with_expected_type (FILE: file; const: (LmP0Field: 
         ---
     if: expected_type != 0 && expected_array_reference = 0 && lm_trans_guard_c_array_value_range(first, stop, namespace_, expected_type\class_name, expected_type\address_depth, expected_type\is_const, "typed expression") != 0
         return: 1
+    if: expected_type != 0 && expected_array_reference = 0 && lm_trans_guard_runtime_table_indexed_field_range(first, stop, namespace_, expected_type\class_name, expected_type\address_depth, expected_type\is_const, "typed expression") != 0
+        return: 1
     if: expected_type != 0 && expected_type\array_rank = 0U && expected_type\address_depth != 0U && lm_trans_range_has_direct_array_reference(first, stop, namespace_) && (expected_type\address_depth != 1U || lm_trans_text_equals(expected_type\class_name, "LmSlice") = 0 || lm_trans_range_is_direct_array_reference_address(first, stop, namespace_) = 0) && lm_trans_range_is_array_reference_data_pointer(first, stop, namespace_) = 0
         c.fprintf(c.stderr, "trans L2 type error: raw pointer expression cannot consume an ArrayReference without an explicit adapter\n")
         return: 1
@@ -5979,6 +6190,10 @@ fn: lm_trans_emit_type_node (FILE: file; const: (LmP0Node: type_node); const: (L
             status: 1
             break
         if: (current\kind = c.LM_P0_NODE_ATOM)
+            if: lm_trans_runtime_table_private_type_position(current\as\atom, namespace_)
+                c.fprintf(c.stderr, "trans L2 Table error: runtime Table row type is private and cannot appear in a source type position\n")
+                status: 1
+                break
             implicit_depth: lm_trans_layout_type_implicit_address_depth(current\as\atom, namespace_)
             if: implicit_depth != 0U && lm_trans_type_suffix_stack_push(@ suffixes, implicit_depth) != 0
                 status: 1
@@ -6134,16 +6349,10 @@ fn: lm_trans_emit_type_and_name (FILE: file; const: (LmP0Node: type_node); const
 end: lm_trans_emit_type_and_name
 
 fn: lm_trans_emit_type_head_only (FILE: file; const: (LmP0Text: type_head); const: (LmTransNamespace: namespace_)) int
-    size_t: implicit_depth
-    int: status
-
-    if: lm_trans_builtin_c_type_name(type_head)
-        return: lm_trans_emit_type_name(file, type_head)
-    status: lm_trans_emit_projected_type_name(file, type_head, namespace_)
-    implicit_depth: lm_trans_layout_type_implicit_address_depth(type_head, namespace_)
-    if: status = 0 && implicit_depth != 0U
-        status: lm_trans_emit_type_pointer_suffix(file, implicit_depth)
-    return: status
+    if: lm_trans_runtime_table_private_type_position(type_head, namespace_)
+        c.fprintf(c.stderr, "trans L2 Table error: runtime Table row type is private and cannot appear in a source type position\n")
+        return: 1
+    return: lm_trans_emit_internal_type_head_only(file, type_head, namespace_)
 end: lm_trans_emit_type_head_only
 
 fn: lm_trans_emit_c_dimension_text (FILE: file; const: (LmP0Text: dimension); const: (LmTransNamespace: namespace_); const: @(char error_name)) int

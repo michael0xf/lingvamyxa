@@ -1,0 +1,30 @@
+L2:
+    P1CellPoint:
+        int: value
+    end: P1CellPoint
+
+    fn: lm_test_p1_parenthesized_cell () int
+        P1CellPoint: existing
+            value: 17
+        end: existing
+
+        table:
+            name: p1PointTable
+            columns: (P1CellPoint: point)
+            rows:
+                     (existing)
+        end: p1PointTable
+
+        if: p1PointTable = 0 || p1PointTable[0] = 0
+            return: 1
+        if: p1PointTable[0]\point != existing
+            return: 2
+        return: p1PointTable[0]\point\value != 17
+    end: lm_test_p1_parenthesized_cell
+
+    external:
+        fn: main () int
+            return: lm_test_p1_parenthesized_cell()
+        end: main
+    end: external
+end: L2

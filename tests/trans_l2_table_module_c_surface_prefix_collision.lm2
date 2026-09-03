@@ -1,0 +1,18 @@
+L1:
+    "static int lm_lmx_module_private_1_value_1(void) { return 19; }\n"
+end: L1
+
+L2:
+    table:
+        name: p1ModuleCSurfaceCollision
+        columns: (int: value)
+        rows:
+                 7
+    end: p1ModuleCSurfaceCollision
+
+    external:
+        fn: main () int
+            return: c.lm_lmx_module_private_1_value_1() != 19 || p1ModuleCSurfaceCollision[0]\value != 7
+        end: main
+    end: external
+end: L2

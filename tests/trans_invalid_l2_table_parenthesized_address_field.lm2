@@ -1,0 +1,14 @@
+fn: lm_test_p1_address_field () int
+    table:
+        name: p1AddressField
+        columns: (int: value)
+        rows:
+                 7
+    end: p1AddressField
+    return: @ (p1AddressField[0]\value) != 0
+
+external:
+    fn: main () int
+        return: lm_test_p1_address_field()
+    end: main
+end: external

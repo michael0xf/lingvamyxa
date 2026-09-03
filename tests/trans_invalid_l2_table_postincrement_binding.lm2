@@ -1,0 +1,11 @@
+L2:
+    fn: invalid_table_postincrement_binding () int
+        table:
+            name: t
+            columns: (int: value)
+            rows:
+                     7
+        end: t
+        return: t++ = 0
+    end: invalid_table_postincrement_binding
+end: L2

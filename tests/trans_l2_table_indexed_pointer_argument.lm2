@@ -1,0 +1,21 @@
+L2:
+    fn: accept (const: (@: char text)) int
+        return: c.strcmp(text; "ok")
+    end: accept
+
+    fn: lm_test_table_indexed_pointer_argument () int
+        table:
+            name: t
+            columns: (const: (@: char text))
+            rows:
+                     "ok"
+        end: t
+        return: accept(t[0]\text)
+    end: lm_test_table_indexed_pointer_argument
+
+    external:
+        fn: main () int
+            return: lm_test_table_indexed_pointer_argument()
+        end: main
+    end: external
+end: L2

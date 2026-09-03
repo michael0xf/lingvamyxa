@@ -1,0 +1,12 @@
+external:
+    fn: main () int
+        table:
+            name: stage9DirectFieldTable
+            columns: (int: value)
+            rows:
+                     7
+        end: stage9DirectFieldTable
+
+        return: stage9DirectFieldTable\value
+    end: main
+end: external

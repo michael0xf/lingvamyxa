@@ -1,0 +1,15 @@
+L2:
+    fn: accept_mutable (@: char text) int
+        return: text = 0
+    end: accept_mutable
+
+    fn: test () int
+        table:
+            name: t
+            columns: (const: (@: char text))
+            rows:
+                     "ok"
+        end: t
+        return: accept_mutable(t[0]\text)
+    end: test
+end: L2

@@ -122,6 +122,20 @@ sub: lm_trans_module_init_entry_delete_any (
 
 fn: lm_trans_module_init_registry_init () int
 
+fn: lm_trans_module_init_names_prepare () int
+
+fn: lm_trans_module_init_private_name_new (
+    const: @: char role
+    unsigned: id
+) @: char
+
+fn: lm_trans_module_init_dispatcher_name () const: @: char
+fn: lm_trans_module_init_thread_name () const: @: char
+fn: lm_trans_module_init_arena_name () const: @: char
+sub: lm_trans_module_init_emission_enter ()
+sub: lm_trans_module_init_emission_leave ()
+fn: lm_trans_current_thread_name () const: @: char
+
 sub: lm_trans_module_init_registry_destroy ()
 
 fn: lm_trans_module_init_entry_register (
@@ -349,10 +363,23 @@ fn: lm_trans_raw_pointer_type_compatible (
     const: LmTransNamespace: namespace_
 ) int
 
+fn: lm_trans_effective_address_depth (
+    const: LmP0Text: class_name
+    size_t: explicit_depth
+    const: LmTransNamespace: namespace_
+) size_t
+
 fn: lm_trans_range_has_direct_array_reference (
     const: LmP0Field: first
     const: LmP0Field: stop
     const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_c_array_postfix_index_count (
+    const: LmP0Field: storage_field
+    const: LmP0Field: stop
+    @: size_t out_count
+    const: @(LmP0Field out_end)
 ) int
 
 fn: lm_trans_range_is_direct_array_reference_address (
@@ -529,6 +556,12 @@ fn: lm_trans_emit_named_structure_typedef (
 
 fn: lm_trans_typedef_projection_output_enter (FILE: prelude_file; FILE: body_file) int
 fn: lm_trans_typedef_projection_output_leave () int
+fn: lm_trans_typedef_projection_is_registered_body_file (FILE: file) int
+fn: lm_trans_typedef_projection_prelude_alias_enter (FILE: file) int
+fn: lm_trans_typedef_projection_prelude_alias_leave (FILE: file) int
+fn: lm_trans_typedef_projection_reserve_source_node (const: LmP0Node: node) int
+fn: lm_trans_typedef_projection_reserve_loaded_source_paths () int
+fn: lm_trans_typedef_projection_source_name_has_prefix (const: @: char prefix) int
 fn: lm_trans_typedef_projection_scope_depth () size_t
 fn: lm_trans_typedef_projection_scope_enter () int
 fn: lm_trans_typedef_projection_scope_leave () int
@@ -1387,6 +1420,19 @@ fn: lm_trans_statement_emit_table (
     LmTransStatementStack: stack
     const: LmP0Frame: frame
     unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_module_init_declare_table (
+    const: LmP0Frame: frame
+    LmTransModuleInitEntry: entry
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_module_init_emit_table_initializer (
+    FILE: file
+    const: LmP0Frame: frame
+    const: LmTransModuleInitEntry: entry
     LmTransNamespace: namespace_
 ) int
 

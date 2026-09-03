@@ -1,0 +1,24 @@
+L2:
+    fn: lm_test_p1_repeated_local_table () int
+        table:
+            name: p1RepeatedLocal
+            columns: (int: value)
+            rows:
+                     1
+        end: p1RepeatedLocal
+
+        table:
+            name: p1RepeatedLocal
+            columns: (int: value)
+            rows:
+                     2
+        end: p1RepeatedLocal
+        return: p1RepeatedLocal[0]\value
+    end: lm_test_p1_repeated_local_table
+
+    external:
+        fn: main () int
+            return: lm_test_p1_repeated_local_table()
+        end: main
+    end: external
+end: L2

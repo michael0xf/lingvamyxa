@@ -6,7 +6,9 @@ L2:
             rows:
                      11
         end: sample
-        return: sample\left
+        if: sample = 0 || sample\ptr = 0 || sample\length != 1U || sample[0] = 0
+            return: 0
+        return: sample[0]\left
     end: lm_test_local_table_left
 
     fn: lm_test_local_table_right () int
@@ -16,7 +18,9 @@ L2:
             rows:
                      22
         end: sample
-        return: sample\right
+        if: sample = 0 || sample\ptr = 0 || sample\length != 1U || sample[0] = 0
+            return: 0
+        return: sample[0]\right
     end: lm_test_local_table_right
 
     fn: lm_test_local_table_inner_shadow () int
@@ -33,7 +37,7 @@ L2:
                 rows:
                          41
             end: innerSample
-            if: innerSample\inner != 41
+            if: innerSample = 0 || innerSample\ptr = 0 || innerSample\length != 1U || innerSample[0] = 0 || innerSample[0]\inner != 41
                 return: 1
         end: if
         return: outerRow\outer

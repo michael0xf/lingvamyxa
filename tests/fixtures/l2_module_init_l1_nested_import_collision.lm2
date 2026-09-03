@@ -1,0 +1,7 @@
+L2:
+    external:
+        fn: lm_lmx_module_private_1_init_all () int
+            return: 43
+        end: lm_lmx_module_private_1_init_all
+    end: external
+end: L2

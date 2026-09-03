@@ -1,0 +1,10 @@
+fn: lm_test_root_thread_alias_visible () int
+    return: c.lm_lmx_message_thread != 0
+end: lm_test_root_thread_alias_visible
+
+external:
+    fn: main () int
+        int: lm_lmx_message_thread 0
+        return: lm_lmx_message_thread != 0 || lm_test_root_thread_alias_visible() = 0
+    end: main
+end: external

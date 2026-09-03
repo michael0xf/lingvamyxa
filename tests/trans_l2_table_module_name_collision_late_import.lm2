@@ -1,0 +1,16 @@
+L2:
+    table:
+        name: p1ModuleLateImportCollision
+        columns: (int: value)
+        rows:
+                 7
+    end: p1ModuleLateImportCollision
+
+    import: "fixtures/l2_module_init_name_collision_late_import.lm2"
+
+    external:
+        fn: main () int
+            return: lm_test_module_collision_late_import_probe() != 13 || p1ModuleLateImportCollision = 0 || p1ModuleLateImportCollision[0] = 0 || p1ModuleLateImportCollision[0]\value != 7
+        end: main
+    end: external
+end: L2

@@ -1,0 +1,8 @@
+L2:
+    table:
+        name: invalidCellType
+        columns: (int: value)
+        rows:
+                 "wrong"
+    end: invalidCellType
+end: L2

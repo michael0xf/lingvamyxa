@@ -1,0 +1,20 @@
+L2:
+    lm_l2_table_sample_row:
+        int: incompatible
+    end: lm_l2_table_sample_row
+
+    table:
+        name: sample
+        columns: (int: id)
+        rows:
+                 1
+    end: sample
+
+    external:
+        fn: main () int
+            if: sample = 0 || sample\ptr = 0 || sample\length != 1U || sample[0] = 0
+                return: 1
+            return: sample[0]\id != 1
+        end: main
+    end: external
+end: L2

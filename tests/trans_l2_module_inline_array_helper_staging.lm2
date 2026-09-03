@@ -1,0 +1,21 @@
+L2:
+    int: lm_value 7
+
+    fn: pick ([]: int values; int: index) int
+        return: values[index]
+    end: pick
+
+    Holder:
+        int: value
+    end: Holder
+
+    Holder: repro
+        value: pick([pick([lm_value 8], 0) 9], 0)
+    end: repro
+
+    external:
+        fn: main () int
+            return: repro = 0 || repro\value != 7
+        end: main
+    end: external
+end: L2

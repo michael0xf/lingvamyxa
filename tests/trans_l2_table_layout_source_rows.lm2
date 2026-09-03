@@ -163,18 +163,20 @@ end: layoutTable
 
 external:
     fn: main () int
-        if: layoutTable\plain\value != 7
+        if: layoutTable = 0 || layoutTable\ptr = 0 || layoutTable\length != 1U || layoutTable[0] = 0
             return: 1
-        if: c.strcmp(layoutTable\qualified\text, "ok") != 0
+        if: layoutTable[0]\plain = 0 || layoutTable[0]\plain\value != 7
             return: 2
-        if: layoutTable\partial\value != 5
+        if: layoutTable[0]\qualified = 0 || c.strcmp(layoutTable[0]\qualified\text, "ok") != 0
             return: 3
-        if: layoutTable\overlay\value != -1
+        if: layoutTable[0]\partial = 0 || layoutTable[0]\partial\value != 5
             return: 4
-        if: layoutTable\split\flag != 1
+        if: layoutTable[0]\overlay = 0 || layoutTable[0]\overlay\value != -1
             return: 5
-        if: layoutTable\wrong\value != 6
+        if: layoutTable[0]\split = 0 || layoutTable[0]\split\flag != 1
             return: 6
+        if: layoutTable[0]\wrong = 0 || layoutTable[0]\wrong\value != 6
+            return: 7
         return: 0
     end: main
 end: external

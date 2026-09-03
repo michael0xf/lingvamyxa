@@ -1,0 +1,18 @@
+L2:
+    table:
+        name: p1ModuleLateCollision
+        columns: (int: value)
+        rows:
+                 7
+    end: p1ModuleLateCollision
+
+    lm_lmx_anonymous_structure_p1ModuleLateCollision_0:
+        int: userValue
+    end: lm_lmx_anonymous_structure_p1ModuleLateCollision_0
+
+    external:
+        fn: main () int
+            return: p1ModuleLateCollision = 0 || p1ModuleLateCollision[0] = 0 || p1ModuleLateCollision[0]\value != 7
+        end: main
+    end: external
+end: L2

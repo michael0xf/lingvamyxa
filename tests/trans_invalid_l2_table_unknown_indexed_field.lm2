@@ -1,0 +1,14 @@
+L2:
+    table:
+        name: t
+        columns: (int: value)
+        rows:
+                 7
+    end: t
+
+    external:
+        fn: main () int
+            return: t[0]\bogus
+        end: main
+    end: external
+end: L2

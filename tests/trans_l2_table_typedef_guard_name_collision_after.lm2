@@ -1,0 +1,16 @@
+L2:
+    table:
+        name: p1TypedefGuardAfter
+        columns: (int: value)
+        rows:
+                 7
+    end: p1TypedefGuardAfter
+
+    int: lm_lmx_module_private_1_typedef_defined_lm_lmx_anonymous_structure_t_0 5
+
+    external:
+        fn: main () int
+            return: lm_lmx_module_private_1_typedef_defined_lm_lmx_anonymous_structure_t_0 != 5 || p1TypedefGuardAfter[0]\value != 7
+        end: main
+    end: external
+end: L2

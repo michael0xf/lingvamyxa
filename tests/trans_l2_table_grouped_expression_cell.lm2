@@ -1,0 +1,14 @@
+L2:
+    table:
+        name: groupedExpressionCell
+        columns: (int: value)
+        rows:
+                 (1    +    2)
+    end: groupedExpressionCell
+
+    external:
+        fn: main () int
+            return: groupedExpressionCell = 0 || groupedExpressionCell\length != 1 || groupedExpressionCell[0]\value != 3
+        end: main
+    end: external
+end: L2

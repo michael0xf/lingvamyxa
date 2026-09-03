@@ -1,0 +1,9 @@
+L2:
+    int: lm_lmx_module_private_1_typedef_defined_LmSlice 7
+
+    external:
+        fn: main () int
+            return: lm_lmx_module_private_1_typedef_defined_LmSlice != 7
+        end: main
+    end: external
+end: L2

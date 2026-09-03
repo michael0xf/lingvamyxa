@@ -9,10 +9,12 @@ L2:
 
     external:
         fn: main () int
-            if: sampleTable\id != 7
+            if: sampleTable = 0 || sampleTable\ptr = 0 || sampleTable\length != 2U || sampleTable[0] = 0 || sampleTable[1] = 0
                 return: 1
-            if: sampleTable\label[0] != 's'
+            if: sampleTable[0]\id != 7 || sampleTable[0]\label[0] != 's'
                 return: 2
+            if: sampleTable[1]\id != 9 || sampleTable[1]\label[0] != 'n'
+                return: 3
             return: 0
         end: main
     end: external

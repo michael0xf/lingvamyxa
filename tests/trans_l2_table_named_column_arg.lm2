@@ -8,9 +8,9 @@ L2:
 
     external:
         fn: main () int
-            if: namedArgTable\id != 42
+            if: namedArgTable = 0 || namedArgTable\ptr = 0 || namedArgTable\length != 1U || namedArgTable[0] = 0
                 return: 1
-            if: namedArgTable\label[0] != 'f'
+            if: namedArgTable[0]\id != 42 || namedArgTable[0]\label[0] != 'f'
                 return: 2
             return: 0
         end: main

@@ -1,0 +1,21 @@
+L2:
+    table:
+        name: p1RepeatedModule
+        columns: (int: value)
+        rows:
+                 1
+    end: p1RepeatedModule
+
+    table:
+        name: p1RepeatedModule
+        columns: (int: value)
+        rows:
+                 2
+    end: p1RepeatedModule
+
+    external:
+        fn: main () int
+            return: p1RepeatedModule = 0 || p1RepeatedModule[0] = 0 || p1RepeatedModule[0]\value != 2
+        end: main
+    end: external
+end: L2

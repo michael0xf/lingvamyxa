@@ -1,0 +1,25 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+L1:
+    "#define LM_LMX_UNUSED_MODULE_INIT 123\n"
+end: L1
+
+table:
+    name: macroCollisionTable
+    columns: (int: value)
+    rows:
+             7
+end: macroCollisionTable
+
+external:
+    fn: main () int
+        return: macroCollisionTable[0]\value != 7
+    end: main
+end: external

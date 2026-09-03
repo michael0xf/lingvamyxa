@@ -1,0 +1,17 @@
+L2:
+    fn: accept_char (@: char value) int
+        return: value = 0
+    end: accept_char
+
+    fn: test () int
+        int: value 7
+        @: int pointer @ value
+        table:
+            name: t
+            columns: (@@: int pointers)
+            rows:
+                     (@ pointer)
+        end: t
+        return: accept_char(t[0]\pointers[0])
+    end: test
+end: L2

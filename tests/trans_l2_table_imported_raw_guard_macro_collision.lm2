@@ -1,0 +1,23 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+import: "fixtures/l2_module_raw_guard_macro_collision.lm2"
+
+table:
+    name: rawImportGuardTable
+    columns: (int: value)
+    rows:
+             7
+end: rawImportGuardTable
+
+external:
+    fn: main () int
+        return: rawImportGuardTable[0]\value != 7
+    end: main
+end: external

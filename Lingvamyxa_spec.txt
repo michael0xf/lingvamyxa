@@ -7586,14 +7586,14 @@ Semantic outline:
     if                         registered receiver, semantics depend on level
     match                      proposed receiver; not registered by the current bootstrap; no built-in `case` syntax
     merge                      registered head; current handler declares a composed namespace descriptor and emits only its hosted type/layout projection; it does not construct an instance and is not yet generic high-level Structure merge
-    join                       registered Table receiver; normatively consumes explicit Tables and returns an arena-owned Table
+    join                       registered Table receiver; source-marked joins are implemented for translation-time Tables; runtime Table join remains pending
     while                      registered receiver, semantics depend on level
     operator/infix tokens       structural operator fields consumed into expression Structures
     (): result                construct one arena-owned Structure and bind its StructureReference with a descriptor attached directly to that result binding
     []                         head receiver spelling for arena-owned Array forms; postfix `target[...]` is index/access
     @                          L2 address-of storage location
     \                          L2 prefix raw load, and typed field-follow separator in `a\field`
-    table                      registered receiver constructing an ordinary Table value; legacy C/Registry projections remain implementation debt
+    table                      registered receiver constructing an ordinary Table value; the hosted unmarked runtime form is an arena-backed read-only ArrayReference of row StructureReferences
     relation/rule/query        ordinary descriptor/Table vocabulary; no current generic receiver heads
     c.union                    registered L2 physical-layout receiver; generic union is not registered
     c.array                    registered L2 raw C-array storage receiver; ordinary [] constructs an ArrayReference
@@ -9333,8 +9333,48 @@ diagnostics and leave the namespace unchanged.
 All ordinary table values are composed from Structures and arrays and follow
 their arena lifetimes. An ANSI C backend may emit constant/generated data only
 when that representation implements the observable module/root-arena lifetime;
-C `static` storage is not table source semantics. The current bootstrap's
-direct static-row emission is implementation debt.
+C `static` storage is not table source semantics.
+
+In the current hosted C99 profile, an unmarked `table:` directly on an
+executable module surface or inside a managed function constructs an
+arena-backed, read-only Table ArrayReference. Its binding has the hosted
+`LmSlice *` projection. `length` is the number of rows. For a non-empty Table,
+`ptr` designates an arena-owned rank-one backing array of row
+StructureReferences; every constructed row is a distinct arena-owned Structure.
+An inline non-primitive cell constructor likewise materializes its referent in
+that arena. An empty Table still has a non-null arena-owned header, with zero
+`length` and null `ptr`.
+
+Row access is explicit indexing followed by field-follow:
+
+    orders[0]\id
+    orders[i]\total
+
+The former hosted shorthand `orders\id` is not Table row access and is rejected.
+`orders\length` and `orders\ptr` expose the current header metadata/backing
+bridge. The Table binding and rows are read-only in this bootstrap stage;
+indexed field update is rejected rather than emitted as mutable C storage.
+ArrayReference-valued Table columns remain pending because the current private
+row metadata does not yet carry their complete element/rank contract, so the
+hosted translator rejects them explicitly.
+
+Construction evaluates row cells once in source order and publishes the Table
+binding only after the complete header, backing and rows have been initialized.
+A local Table requires a managed Message Thread context. A direct module Table
+uses the source-ordered root initializer of section 19.29.12.2.1 and therefore
+inherits its current unique-root-`main`, conditional-wrapper and imported-main
+restrictions. A Table constructor in an external function without a managed
+Message Thread context is rejected.
+
+The hosted C row layout and all helper/type names used to lower it are private
+projection state. They create no namespace-visible row descriptor and reserve
+no source spelling; a user declaration that happens to match an older generated
+row-type spelling does not conflict with the Table.
+
+The explicit leading `source` form remains a translation-time Table projection
+and emits no public runtime Table binding. Source-marked ordered joins are
+implemented for that projection. Runtime `join:` lowering is still pending; an
+unmarked join is diagnosed rather than silently discarded.
 
 The L2/L3 receiver `join` materializes a new table value from several
 table-producing sources:
@@ -13189,12 +13229,12 @@ The current migrated paths allocate explicitly constructed local and direct
 module-level named Structures, local and direct module-level anonymous
 Structures, `fm` result Structures, admitted ordinary Arrays in managed Message
 Thread contexts (including extent-bearing `[]:` declarations and direct
-module-level ArrayReferences), and closure environments/descriptors in the root
-Message Thread arena. A named-Structure or physical-`merge:` descriptor
-declaration performs no allocation. Non-source runtime tables may still use a
-static C-backed representation. That path is separate implementation debt and
-must migrate to module/root-arena materialization where it represents an
-ordinary source value.
+module-level ArrayReferences), unmarked runtime Tables in managed functions and
+directly on executable module surfaces, and closure environments/descriptors in
+the root Message Thread arena. A named-Structure or physical-`merge:` descriptor
+declaration performs no allocation. A source-marked Table is the separate
+translation-time projection described in section 19.17 and has no runtime Table
+binding.
 
 Conceptual generated form for an ordinary local Structure is:
 
@@ -13252,7 +13292,8 @@ ordinary value sites in the attached root Message Thread arena:
 
     named Structure construction;
     anonymous `():` Structure construction, including an empty Structure;
-    ordinary `[]:` ArrayReference construction.
+    ordinary `[]:` ArrayReference construction;
+    unmarked runtime `table:` construction.
 
 A descriptor declaration, function definition, raw `c.array` declaration or
 source-only translation Table is not such a site. The mechanism implements the
@@ -13263,10 +13304,11 @@ derived from the resolved source path and source span. It may emit a C
 declaration or private anonymous-layout type needed by that site. For the value
 itself it emits only a zero-initialized static reference slot: a `T *`-shaped
 slot for a StructureReference or an `LmSlice *`-shaped slot for an
-ArrayReference. The referent, Array header and every owned Array backing level
-must be allocated in the supplied arena. A static Structure instance, static
-anonymous aggregate, static ordinary-Array element buffer or pointer into such
-backing is not a conforming implementation of this boundary.
+ArrayReference, including the hosted Table projection. The referent,
+Array/Table header and every owned backing level or row must be allocated in
+the supplied arena. A static Structure instance, static anonymous aggregate,
+static ordinary-Array or Table row buffer, or pointer into such backing is not
+a conforming implementation of this boundary.
 
 Each site has one private initializer helper whose logical parameters are the
 executing `LmMessageThread` and selected `LmOwnArena`. The helper performs the
@@ -13277,7 +13319,10 @@ rule, and an empty `():` site still allocates one non-null, distinct empty
 Structure referent. For an ArrayReference, extent expressions are evaluated
 exactly once in dimension source order before backing allocation, then present
 payload expressions are evaluated exactly once in element source order. The
-header and all backing levels belong to the supplied arena.
+header and all backing levels belong to the supplied arena. For a runtime Table,
+row-cell expressions are evaluated exactly once in row/column source order; the
+helper allocates the header, row-reference backing and each row referent before
+publishing the private Table slot.
 
 The helper publishes its private reference slot only after that site has
 completed successfully. A typed exact-reference initializer forwards the
@@ -14557,19 +14602,19 @@ Current hosted-bootstrap implementation:
     ordinary stop is first-request-wins, while diagnostic/runtime collection
         failures use a failure-dominant status channel;
     explicitly constructed local and direct module-level named/anonymous
-        Structures, `fm` result Structures, arena-backed local/module Array
-        values and closure environments/descriptors are root-arena managed;
+        Structures, `fm` result Structures, arena-backed local/module Array and
+        runtime Table values, and closure environments/descriptors are
+        root-arena managed;
     named-Structure and physical-`merge:` descriptor declarations emit only
         namespace descriptors and hosted type/layout projections, never object
         storage or arena allocations;
-    direct module-level named Structure, anonymous `():` and ordinary `[]:`
-        sites use a source-ordered initializer after root attachment and retain
-        only private static reference slots; non-source runtime tables remain a
-        static-backed path which must migrate to module/root arenas;
+    direct module-level named Structure, anonymous `():`, ordinary `[]:` and
+        unmarked runtime `table:` sites use a source-ordered initializer after
+        root attachment and retain only private static reference slots;
     arena allocation, array allocation, descriptors, lazy edges, freeze,
         absorption and tree-cut helpers exist;
-    root-arena destruction releases ordinary generated Structures, Array
-        objects/headers and owned Array backing storage;
+    root-arena destruction releases ordinary generated Structures, Array/Table
+        objects/headers, Table rows and owned backing storage;
     partial-callable binder ownership and other remaining unscoped allocation
         paths still require separate owner integration;
     generated standalone programs construct a worker pool only when `thread:`

@@ -1,0 +1,27 @@
+L2:
+    Holder:
+        @: int value
+    end: Holder
+
+    fn: accept (@: int value) int
+        return: value[0] != 7
+    end: accept
+
+    fn: test () int
+        int: value 7
+        table:
+            name: t
+            columns: (Holder: holder)
+            rows:
+                     Holder:
+                         value: (@ value)
+        end: t
+        return: accept(t[0]\holder\value)
+    end: test
+
+    external:
+        fn: main () int
+            return: test()
+        end: main
+    end: external
+end: L2

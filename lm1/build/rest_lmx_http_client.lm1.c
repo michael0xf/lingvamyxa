@@ -10,30 +10,30 @@ struct LmOwnArena;
 struct LmMessageThread;
 struct LmMessageThreadRuntime;
 struct LmMessageThreadPool;
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmSlice
-#define LM_LMX_TYPEDEF_DEFINED_LmSlice 1
-#define LM_LMX_TYPEDEF_ID_A_LmSlice 0xdd6442dffff43f92ULL
-#define LM_LMX_TYPEDEF_ID_B_LmSlice 0x21d9c62537977663ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmSlice
+#define lm_lmx_module_private_1_typedef_defined_LmSlice 1
+#define lm_lmx_module_private_1_typedef_id_a_LmSlice 0xdd6442dffff43f92ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmSlice 0x21d9c62537977663ULL
 typedef struct LmSlice {
     void *ptr;
     size_t length;
 } LmSlice;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmSlice) || !defined(LM_LMX_TYPEDEF_ID_B_LmSlice) || LM_LMX_TYPEDEF_ID_A_LmSlice != 0xdd6442dffff43f92ULL || LM_LMX_TYPEDEF_ID_B_LmSlice != 0x21d9c62537977663ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmSlice) || !defined(lm_lmx_module_private_1_typedef_id_b_LmSlice) || lm_lmx_module_private_1_typedef_id_a_LmSlice != 0xdd6442dffff43f92ULL || lm_lmx_module_private_1_typedef_id_b_LmSlice != 0x21d9c62537977663ULL
 #error "Lingvamyxa conflicting typedef projection for LmSlice"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_IncomingMessage
-#define LM_LMX_TYPEDEF_DEFINED_IncomingMessage 1
-#define LM_LMX_TYPEDEF_ID_A_IncomingMessage 0x10eae12962f7f58fULL
-#define LM_LMX_TYPEDEF_ID_B_IncomingMessage 0xb2add056afdd41bcULL
+#ifndef lm_lmx_module_private_1_typedef_defined_IncomingMessage
+#define lm_lmx_module_private_1_typedef_defined_IncomingMessage 1
+#define lm_lmx_module_private_1_typedef_id_a_IncomingMessage 0x10eae12962f7f58fULL
+#define lm_lmx_module_private_1_typedef_id_b_IncomingMessage 0xb2add056afdd41bcULL
 typedef struct IncomingMessage IncomingMessage;
 struct IncomingMessage {
     const char *lmx;
     size_t length;
 };
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_IncomingMessage) || !defined(LM_LMX_TYPEDEF_ID_B_IncomingMessage) || LM_LMX_TYPEDEF_ID_A_IncomingMessage != 0x10eae12962f7f58fULL || LM_LMX_TYPEDEF_ID_B_IncomingMessage != 0xb2add056afdd41bcULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_IncomingMessage) || !defined(lm_lmx_module_private_1_typedef_id_b_IncomingMessage) || lm_lmx_module_private_1_typedef_id_a_IncomingMessage != 0x10eae12962f7f58fULL || lm_lmx_module_private_1_typedef_id_b_IncomingMessage != 0xb2add056afdd41bcULL
 #error "Lingvamyxa conflicting typedef projection for IncomingMessage"
 #endif
 #endif
@@ -44,13 +44,13 @@ struct LmMessageThreadRuntime *lm_message_thread_runtime_new(void);
 int lm_rest_lmx_http_client_install_default(struct LmMessageThreadRuntime *runtime);
 #endif
 #ifdef LM_REST_LMX_INSTALL_DEFAULT_SERVER
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxHttpServer
-#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxHttpServer 1
-#define LM_LMX_TYPEDEF_ID_A_LmRestLmxHttpServer 0xc93320eec144d348ULL
-#define LM_LMX_TYPEDEF_ID_B_LmRestLmxHttpServer 0x25d8028910651f29ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmRestLmxHttpServer
+#define lm_lmx_module_private_1_typedef_defined_LmRestLmxHttpServer 1
+#define lm_lmx_module_private_1_typedef_id_a_LmRestLmxHttpServer 0xc93320eec144d348ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmRestLmxHttpServer 0x25d8028910651f29ULL
 typedef struct LmRestLmxHttpServer LmRestLmxHttpServer;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmRestLmxHttpServer) || !defined(LM_LMX_TYPEDEF_ID_B_LmRestLmxHttpServer) || LM_LMX_TYPEDEF_ID_A_LmRestLmxHttpServer != 0xc93320eec144d348ULL || LM_LMX_TYPEDEF_ID_B_LmRestLmxHttpServer != 0x25d8028910651f29ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmRestLmxHttpServer) || !defined(lm_lmx_module_private_1_typedef_id_b_LmRestLmxHttpServer) || lm_lmx_module_private_1_typedef_id_a_LmRestLmxHttpServer != 0xc93320eec144d348ULL || lm_lmx_module_private_1_typedef_id_b_LmRestLmxHttpServer != 0x25d8028910651f29ULL
 #error "Lingvamyxa conflicting typedef projection for LmRestLmxHttpServer"
 #endif
 #endif
@@ -87,10 +87,10 @@ size_t lm_message_thread_collection_count(const struct LmMessageThread *thread);
 void lm_own_arena_freeze(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena);
 void *lm_own_arena_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t size);
 void *lm_own_arena_array_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadExecutionContext
-#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadExecutionContext 1
-#define LM_LMX_TYPEDEF_ID_A_LmMessageThreadExecutionContext 0xa01e9b4b1dd2bdb5ULL
-#define LM_LMX_TYPEDEF_ID_B_LmMessageThreadExecutionContext 0x5b5c3f9ba71f9c50ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmMessageThreadExecutionContext
+#define lm_lmx_module_private_1_typedef_defined_LmMessageThreadExecutionContext 1
+#define lm_lmx_module_private_1_typedef_id_a_LmMessageThreadExecutionContext 0xa01e9b4b1dd2bdb5ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmMessageThreadExecutionContext 0x5b5c3f9ba71f9c50ULL
 typedef struct LmMessageThreadExecutionContext LmMessageThreadExecutionContext;
 struct LmMessageThreadExecutionContext {
     jmp_buf diagnostic_root;
@@ -101,17 +101,17 @@ struct LmMessageThreadExecutionContext {
     const char *diagnostic_expr;
 };
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThreadExecutionContext) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThreadExecutionContext) || LM_LMX_TYPEDEF_ID_A_LmMessageThreadExecutionContext != 0xa01e9b4b1dd2bdb5ULL || LM_LMX_TYPEDEF_ID_B_LmMessageThreadExecutionContext != 0x5b5c3f9ba71f9c50ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmMessageThreadExecutionContext) || !defined(lm_lmx_module_private_1_typedef_id_b_LmMessageThreadExecutionContext) || lm_lmx_module_private_1_typedef_id_a_LmMessageThreadExecutionContext != 0xa01e9b4b1dd2bdb5ULL || lm_lmx_module_private_1_typedef_id_b_LmMessageThreadExecutionContext != 0x5b5c3f9ba71f9c50ULL
 #error "Lingvamyxa conflicting typedef projection for LmMessageThreadExecutionContext"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmLmxMessageThreadEntry
-#define LM_LMX_TYPEDEF_DEFINED_LmLmxMessageThreadEntry 1
-#define LM_LMX_TYPEDEF_ID_A_LmLmxMessageThreadEntry 0x645bb4e15cf3f304ULL
-#define LM_LMX_TYPEDEF_ID_B_LmLmxMessageThreadEntry 0xb3dc5cc6edc7d305ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmLmxMessageThreadEntry
+#define lm_lmx_module_private_1_typedef_defined_LmLmxMessageThreadEntry 1
+#define lm_lmx_module_private_1_typedef_id_a_LmLmxMessageThreadEntry 0x645bb4e15cf3f304ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmLmxMessageThreadEntry 0xb3dc5cc6edc7d305ULL
 typedef int (*LmLmxMessageThreadEntry)(struct LmMessageThread *thread);
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmLmxMessageThreadEntry) || !defined(LM_LMX_TYPEDEF_ID_B_LmLmxMessageThreadEntry) || LM_LMX_TYPEDEF_ID_A_LmLmxMessageThreadEntry != 0x645bb4e15cf3f304ULL || LM_LMX_TYPEDEF_ID_B_LmLmxMessageThreadEntry != 0xb3dc5cc6edc7d305ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmLmxMessageThreadEntry) || !defined(lm_lmx_module_private_1_typedef_id_b_LmLmxMessageThreadEntry) || lm_lmx_module_private_1_typedef_id_a_LmLmxMessageThreadEntry != 0x645bb4e15cf3f304ULL || lm_lmx_module_private_1_typedef_id_b_LmLmxMessageThreadEntry != 0xb3dc5cc6edc7d305ULL
 #error "Lingvamyxa conflicting typedef projection for LmLmxMessageThreadEntry"
 #endif
 #endif
@@ -200,79 +200,79 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
 }
 #undef LM_LMX_UNUSED_ENTRY_HELPER
 
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields
-#define LM_LMX_TYPEDEF_DEFINED_LmOwnDestroyFields 1
-#define LM_LMX_TYPEDEF_ID_A_LmOwnDestroyFields 0x87dae9040942b0a0ULL
-#define LM_LMX_TYPEDEF_ID_B_LmOwnDestroyFields 0x38ad69ed565e4a65ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmOwnDestroyFields
+#define lm_lmx_module_private_1_typedef_defined_LmOwnDestroyFields 1
+#define lm_lmx_module_private_1_typedef_id_a_LmOwnDestroyFields 0x87dae9040942b0a0ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmOwnDestroyFields 0x38ad69ed565e4a65ULL
 typedef void (*LmOwnDestroyFields)(void *object);
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnDestroyFields) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnDestroyFields) || LM_LMX_TYPEDEF_ID_A_LmOwnDestroyFields != 0x87dae9040942b0a0ULL || LM_LMX_TYPEDEF_ID_B_LmOwnDestroyFields != 0x38ad69ed565e4a65ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmOwnDestroyFields) || !defined(lm_lmx_module_private_1_typedef_id_b_LmOwnDestroyFields) || lm_lmx_module_private_1_typedef_id_a_LmOwnDestroyFields != 0x87dae9040942b0a0ULL || lm_lmx_module_private_1_typedef_id_b_LmOwnDestroyFields != 0x38ad69ed565e4a65ULL
 #error "Lingvamyxa conflicting typedef projection for LmOwnDestroyFields"
 #endif
 #endif
 
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnDelete
-#define LM_LMX_TYPEDEF_DEFINED_LmOwnDelete 1
-#define LM_LMX_TYPEDEF_ID_A_LmOwnDelete 0xe0a897d278d341eeULL
-#define LM_LMX_TYPEDEF_ID_B_LmOwnDelete 0xca76caf7c88baa9fULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmOwnDelete
+#define lm_lmx_module_private_1_typedef_defined_LmOwnDelete 1
+#define lm_lmx_module_private_1_typedef_id_a_LmOwnDelete 0xe0a897d278d341eeULL
+#define lm_lmx_module_private_1_typedef_id_b_LmOwnDelete 0xca76caf7c88baa9fULL
 typedef void (*LmOwnDelete)(void *object);
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnDelete) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnDelete) || LM_LMX_TYPEDEF_ID_A_LmOwnDelete != 0xe0a897d278d341eeULL || LM_LMX_TYPEDEF_ID_B_LmOwnDelete != 0xca76caf7c88baa9fULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmOwnDelete) || !defined(lm_lmx_module_private_1_typedef_id_b_LmOwnDelete) || lm_lmx_module_private_1_typedef_id_a_LmOwnDelete != 0xe0a897d278d341eeULL || lm_lmx_module_private_1_typedef_id_b_LmOwnDelete != 0xca76caf7c88baa9fULL
 #error "Lingvamyxa conflicting typedef projection for LmOwnDelete"
 #endif
 #endif
 
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmHostThreadEntry
-#define LM_LMX_TYPEDEF_DEFINED_LmHostThreadEntry 1
-#define LM_LMX_TYPEDEF_ID_A_LmHostThreadEntry 0x2bcd1683deffe5bbULL
-#define LM_LMX_TYPEDEF_ID_B_LmHostThreadEntry 0xbf88e44dfd79f8f2ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmHostThreadEntry
+#define lm_lmx_module_private_1_typedef_defined_LmHostThreadEntry 1
+#define lm_lmx_module_private_1_typedef_id_a_LmHostThreadEntry 0x2bcd1683deffe5bbULL
+#define lm_lmx_module_private_1_typedef_id_b_LmHostThreadEntry 0xbf88e44dfd79f8f2ULL
 typedef void * (*LmHostThreadEntry)(void *argument);
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmHostThreadEntry) || !defined(LM_LMX_TYPEDEF_ID_B_LmHostThreadEntry) || LM_LMX_TYPEDEF_ID_A_LmHostThreadEntry != 0x2bcd1683deffe5bbULL || LM_LMX_TYPEDEF_ID_B_LmHostThreadEntry != 0xbf88e44dfd79f8f2ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmHostThreadEntry) || !defined(lm_lmx_module_private_1_typedef_id_b_LmHostThreadEntry) || lm_lmx_module_private_1_typedef_id_a_LmHostThreadEntry != 0x2bcd1683deffe5bbULL || lm_lmx_module_private_1_typedef_id_b_LmHostThreadEntry != 0xbf88e44dfd79f8f2ULL
 #error "Lingvamyxa conflicting typedef projection for LmHostThreadEntry"
 #endif
 #endif
 
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadEntry
-#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadEntry 1
-#define LM_LMX_TYPEDEF_ID_A_LmMessageThreadEntry 0x8154b7f7ecc2154bULL
-#define LM_LMX_TYPEDEF_ID_B_LmMessageThreadEntry 0x29354c13a34b4916ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmMessageThreadEntry
+#define lm_lmx_module_private_1_typedef_defined_LmMessageThreadEntry 1
+#define lm_lmx_module_private_1_typedef_id_a_LmMessageThreadEntry 0x8154b7f7ecc2154bULL
+#define lm_lmx_module_private_1_typedef_id_b_LmMessageThreadEntry 0x29354c13a34b4916ULL
 typedef void (*LmMessageThreadEntry)(struct LmMessageThread *lm_lmx_message_thread, void *argument);
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThreadEntry) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThreadEntry) || LM_LMX_TYPEDEF_ID_A_LmMessageThreadEntry != 0x8154b7f7ecc2154bULL || LM_LMX_TYPEDEF_ID_B_LmMessageThreadEntry != 0x29354c13a34b4916ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmMessageThreadEntry) || !defined(lm_lmx_module_private_1_typedef_id_b_LmMessageThreadEntry) || lm_lmx_module_private_1_typedef_id_a_LmMessageThreadEntry != 0x8154b7f7ecc2154bULL || lm_lmx_module_private_1_typedef_id_b_LmMessageThreadEntry != 0x29354c13a34b4916ULL
 #error "Lingvamyxa conflicting typedef projection for LmMessageThreadEntry"
 #endif
 #endif
 
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy
-#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponentDestroy 1
-#define LM_LMX_TYPEDEF_ID_A_LmMessageThreadComponentDestroy 0x994bdd720ae8075eULL
-#define LM_LMX_TYPEDEF_ID_B_LmMessageThreadComponentDestroy 0xb551f3efe92f53b7ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmMessageThreadComponentDestroy
+#define lm_lmx_module_private_1_typedef_defined_LmMessageThreadComponentDestroy 1
+#define lm_lmx_module_private_1_typedef_id_a_LmMessageThreadComponentDestroy 0x994bdd720ae8075eULL
+#define lm_lmx_module_private_1_typedef_id_b_LmMessageThreadComponentDestroy 0xb551f3efe92f53b7ULL
 typedef void (*LmMessageThreadComponentDestroy)(struct LmMessageThread *lm_lmx_message_thread, void *component);
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThreadComponentDestroy) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThreadComponentDestroy) || LM_LMX_TYPEDEF_ID_A_LmMessageThreadComponentDestroy != 0x994bdd720ae8075eULL || LM_LMX_TYPEDEF_ID_B_LmMessageThreadComponentDestroy != 0xb551f3efe92f53b7ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmMessageThreadComponentDestroy) || !defined(lm_lmx_module_private_1_typedef_id_b_LmMessageThreadComponentDestroy) || lm_lmx_module_private_1_typedef_id_a_LmMessageThreadComponentDestroy != 0x994bdd720ae8075eULL || lm_lmx_module_private_1_typedef_id_b_LmMessageThreadComponentDestroy != 0xb551f3efe92f53b7ULL
 #error "Lingvamyxa conflicting typedef projection for LmMessageThreadComponentDestroy"
 #endif
 #endif
 
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxPost
-#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxPost 1
-#define LM_LMX_TYPEDEF_ID_A_LmRestLmxPost 0xf02a42b4277dbd4aULL
-#define LM_LMX_TYPEDEF_ID_B_LmRestLmxPost 0x950c7db65a0b5dbbULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmRestLmxPost
+#define lm_lmx_module_private_1_typedef_defined_LmRestLmxPost 1
+#define lm_lmx_module_private_1_typedef_id_a_LmRestLmxPost 0xf02a42b4277dbd4aULL
+#define lm_lmx_module_private_1_typedef_id_b_LmRestLmxPost 0x950c7db65a0b5dbbULL
 typedef int (*LmRestLmxPost)(void *context, const char *normalized_uri, const char *body, size_t length, unsigned *out_http_status);
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmRestLmxPost) || !defined(LM_LMX_TYPEDEF_ID_B_LmRestLmxPost) || LM_LMX_TYPEDEF_ID_A_LmRestLmxPost != 0xf02a42b4277dbd4aULL || LM_LMX_TYPEDEF_ID_B_LmRestLmxPost != 0x950c7db65a0b5dbbULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmRestLmxPost) || !defined(lm_lmx_module_private_1_typedef_id_b_LmRestLmxPost) || lm_lmx_module_private_1_typedef_id_a_LmRestLmxPost != 0xf02a42b4277dbd4aULL || lm_lmx_module_private_1_typedef_id_b_LmRestLmxPost != 0x950c7db65a0b5dbbULL
 #error "Lingvamyxa conflicting typedef projection for LmRestLmxPost"
 #endif
 #endif
 
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxDestroy
-#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxDestroy 1
-#define LM_LMX_TYPEDEF_ID_A_LmRestLmxDestroy 0x4a99563ebb3cfe42ULL
-#define LM_LMX_TYPEDEF_ID_B_LmRestLmxDestroy 0xae9da72f8f4d2a73ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmRestLmxDestroy
+#define lm_lmx_module_private_1_typedef_defined_LmRestLmxDestroy 1
+#define lm_lmx_module_private_1_typedef_id_a_LmRestLmxDestroy 0x4a99563ebb3cfe42ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmRestLmxDestroy 0xae9da72f8f4d2a73ULL
 typedef void (*LmRestLmxDestroy)(void *context);
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmRestLmxDestroy) || !defined(LM_LMX_TYPEDEF_ID_B_LmRestLmxDestroy) || LM_LMX_TYPEDEF_ID_A_LmRestLmxDestroy != 0x4a99563ebb3cfe42ULL || LM_LMX_TYPEDEF_ID_B_LmRestLmxDestroy != 0xae9da72f8f4d2a73ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmRestLmxDestroy) || !defined(lm_lmx_module_private_1_typedef_id_b_LmRestLmxDestroy) || lm_lmx_module_private_1_typedef_id_a_LmRestLmxDestroy != 0x4a99563ebb3cfe42ULL || lm_lmx_module_private_1_typedef_id_b_LmRestLmxDestroy != 0xae9da72f8f4d2a73ULL
 #error "Lingvamyxa conflicting typedef projection for LmRestLmxDestroy"
 #endif
 #endif
@@ -450,185 +450,185 @@ typedef void (*LmRestLmxDestroy)(void *context);
 #define LM_REST_LMX_WINHTTP_HEADERS L"Content-Type: application/lmx\r\nAccept: application/lmx\r\n"
 
 
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnEdgeKind
-#define LM_LMX_TYPEDEF_DEFINED_LmOwnEdgeKind 1
-#define LM_LMX_TYPEDEF_ID_A_LmOwnEdgeKind 0x1b0ba13001d5c752ULL
-#define LM_LMX_TYPEDEF_ID_B_LmOwnEdgeKind 0x9d7b68ae3c8fab5bULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmOwnEdgeKind
+#define lm_lmx_module_private_1_typedef_defined_LmOwnEdgeKind 1
+#define lm_lmx_module_private_1_typedef_id_a_LmOwnEdgeKind 0x1b0ba13001d5c752ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmOwnEdgeKind 0x9d7b68ae3c8fab5bULL
 typedef int LmOwnEdgeKind;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnEdgeKind) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnEdgeKind) || LM_LMX_TYPEDEF_ID_A_LmOwnEdgeKind != 0x1b0ba13001d5c752ULL || LM_LMX_TYPEDEF_ID_B_LmOwnEdgeKind != 0x9d7b68ae3c8fab5bULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmOwnEdgeKind) || !defined(lm_lmx_module_private_1_typedef_id_b_LmOwnEdgeKind) || lm_lmx_module_private_1_typedef_id_a_LmOwnEdgeKind != 0x1b0ba13001d5c752ULL || lm_lmx_module_private_1_typedef_id_b_LmOwnEdgeKind != 0x9d7b68ae3c8fab5bULL
 #error "Lingvamyxa conflicting typedef projection for LmOwnEdgeKind"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadState
-#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadState 1
-#define LM_LMX_TYPEDEF_ID_A_LmMessageThreadState 0x680d7f7cf5d18c05ULL
-#define LM_LMX_TYPEDEF_ID_B_LmMessageThreadState 0x4a157ef92e57affaULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmMessageThreadState
+#define lm_lmx_module_private_1_typedef_defined_LmMessageThreadState 1
+#define lm_lmx_module_private_1_typedef_id_a_LmMessageThreadState 0x680d7f7cf5d18c05ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmMessageThreadState 0x4a157ef92e57affaULL
 typedef int LmMessageThreadState;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThreadState) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThreadState) || LM_LMX_TYPEDEF_ID_A_LmMessageThreadState != 0x680d7f7cf5d18c05ULL || LM_LMX_TYPEDEF_ID_B_LmMessageThreadState != 0x4a157ef92e57affaULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmMessageThreadState) || !defined(lm_lmx_module_private_1_typedef_id_b_LmMessageThreadState) || lm_lmx_module_private_1_typedef_id_a_LmMessageThreadState != 0x680d7f7cf5d18c05ULL || lm_lmx_module_private_1_typedef_id_b_LmMessageThreadState != 0x4a157ef92e57affaULL
 #error "Lingvamyxa conflicting typedef projection for LmMessageThreadState"
 #endif
 #endif
 
 
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnPtrStack
-#define LM_LMX_TYPEDEF_DEFINED_LmOwnPtrStack 1
-#define LM_LMX_TYPEDEF_ID_A_LmOwnPtrStack 0x9ae3c1a28ace4260ULL
-#define LM_LMX_TYPEDEF_ID_B_LmOwnPtrStack 0x2a7c240a466f8699ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmOwnPtrStack
+#define lm_lmx_module_private_1_typedef_defined_LmOwnPtrStack 1
+#define lm_lmx_module_private_1_typedef_id_a_LmOwnPtrStack 0x9ae3c1a28ace4260ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmOwnPtrStack 0x2a7c240a466f8699ULL
 typedef struct LmOwnPtrStack LmOwnPtrStack;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnPtrStack) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnPtrStack) || LM_LMX_TYPEDEF_ID_A_LmOwnPtrStack != 0x9ae3c1a28ace4260ULL || LM_LMX_TYPEDEF_ID_B_LmOwnPtrStack != 0x2a7c240a466f8699ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmOwnPtrStack) || !defined(lm_lmx_module_private_1_typedef_id_b_LmOwnPtrStack) || lm_lmx_module_private_1_typedef_id_a_LmOwnPtrStack != 0x9ae3c1a28ace4260ULL || lm_lmx_module_private_1_typedef_id_b_LmOwnPtrStack != 0x2a7c240a466f8699ULL
 #error "Lingvamyxa conflicting typedef projection for LmOwnPtrStack"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnValueStack
-#define LM_LMX_TYPEDEF_DEFINED_LmOwnValueStack 1
-#define LM_LMX_TYPEDEF_ID_A_LmOwnValueStack 0xa909010bae94e210ULL
-#define LM_LMX_TYPEDEF_ID_B_LmOwnValueStack 0xa4cd51ea3c5f8959ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmOwnValueStack
+#define lm_lmx_module_private_1_typedef_defined_LmOwnValueStack 1
+#define lm_lmx_module_private_1_typedef_id_a_LmOwnValueStack 0xa909010bae94e210ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmOwnValueStack 0xa4cd51ea3c5f8959ULL
 typedef struct LmOwnValueStack LmOwnValueStack;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnValueStack) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnValueStack) || LM_LMX_TYPEDEF_ID_A_LmOwnValueStack != 0xa909010bae94e210ULL || LM_LMX_TYPEDEF_ID_B_LmOwnValueStack != 0xa4cd51ea3c5f8959ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmOwnValueStack) || !defined(lm_lmx_module_private_1_typedef_id_b_LmOwnValueStack) || lm_lmx_module_private_1_typedef_id_a_LmOwnValueStack != 0xa909010bae94e210ULL || lm_lmx_module_private_1_typedef_id_b_LmOwnValueStack != 0xa4cd51ea3c5f8959ULL
 #error "Lingvamyxa conflicting typedef projection for LmOwnValueStack"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnAllocationDescriptor
-#define LM_LMX_TYPEDEF_DEFINED_LmOwnAllocationDescriptor 1
-#define LM_LMX_TYPEDEF_ID_A_LmOwnAllocationDescriptor 0x8af26fce7d92fafcULL
-#define LM_LMX_TYPEDEF_ID_B_LmOwnAllocationDescriptor 0xb93049b7294f551dULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmOwnAllocationDescriptor
+#define lm_lmx_module_private_1_typedef_defined_LmOwnAllocationDescriptor 1
+#define lm_lmx_module_private_1_typedef_id_a_LmOwnAllocationDescriptor 0x8af26fce7d92fafcULL
+#define lm_lmx_module_private_1_typedef_id_b_LmOwnAllocationDescriptor 0xb93049b7294f551dULL
 typedef struct LmOwnAllocationDescriptor LmOwnAllocationDescriptor;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnAllocationDescriptor) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnAllocationDescriptor) || LM_LMX_TYPEDEF_ID_A_LmOwnAllocationDescriptor != 0x8af26fce7d92fafcULL || LM_LMX_TYPEDEF_ID_B_LmOwnAllocationDescriptor != 0xb93049b7294f551dULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmOwnAllocationDescriptor) || !defined(lm_lmx_module_private_1_typedef_id_b_LmOwnAllocationDescriptor) || lm_lmx_module_private_1_typedef_id_a_LmOwnAllocationDescriptor != 0x8af26fce7d92fafcULL || lm_lmx_module_private_1_typedef_id_b_LmOwnAllocationDescriptor != 0xb93049b7294f551dULL
 #error "Lingvamyxa conflicting typedef projection for LmOwnAllocationDescriptor"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnLazyEdge
-#define LM_LMX_TYPEDEF_DEFINED_LmOwnLazyEdge 1
-#define LM_LMX_TYPEDEF_ID_A_LmOwnLazyEdge 0xdcd1331c45e5a0b0ULL
-#define LM_LMX_TYPEDEF_ID_B_LmOwnLazyEdge 0xeb121590159143d9ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmOwnLazyEdge
+#define lm_lmx_module_private_1_typedef_defined_LmOwnLazyEdge 1
+#define lm_lmx_module_private_1_typedef_id_a_LmOwnLazyEdge 0xdcd1331c45e5a0b0ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmOwnLazyEdge 0xeb121590159143d9ULL
 typedef struct LmOwnLazyEdge LmOwnLazyEdge;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnLazyEdge) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnLazyEdge) || LM_LMX_TYPEDEF_ID_A_LmOwnLazyEdge != 0xdcd1331c45e5a0b0ULL || LM_LMX_TYPEDEF_ID_B_LmOwnLazyEdge != 0xeb121590159143d9ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmOwnLazyEdge) || !defined(lm_lmx_module_private_1_typedef_id_b_LmOwnLazyEdge) || lm_lmx_module_private_1_typedef_id_a_LmOwnLazyEdge != 0xdcd1331c45e5a0b0ULL || lm_lmx_module_private_1_typedef_id_b_LmOwnLazyEdge != 0xeb121590159143d9ULL
 #error "Lingvamyxa conflicting typedef projection for LmOwnLazyEdge"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmOwnArena
-#define LM_LMX_TYPEDEF_DEFINED_LmOwnArena 1
-#define LM_LMX_TYPEDEF_ID_A_LmOwnArena 0x7c55fcb0a940aa3cULL
-#define LM_LMX_TYPEDEF_ID_B_LmOwnArena 0xcdfc77b6ba3bf135ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmOwnArena
+#define lm_lmx_module_private_1_typedef_defined_LmOwnArena 1
+#define lm_lmx_module_private_1_typedef_id_a_LmOwnArena 0x7c55fcb0a940aa3cULL
+#define lm_lmx_module_private_1_typedef_id_b_LmOwnArena 0xcdfc77b6ba3bf135ULL
 typedef struct LmOwnArena LmOwnArena;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmOwnArena) || !defined(LM_LMX_TYPEDEF_ID_B_LmOwnArena) || LM_LMX_TYPEDEF_ID_A_LmOwnArena != 0x7c55fcb0a940aa3cULL || LM_LMX_TYPEDEF_ID_B_LmOwnArena != 0xcdfc77b6ba3bf135ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmOwnArena) || !defined(lm_lmx_module_private_1_typedef_id_b_LmOwnArena) || lm_lmx_module_private_1_typedef_id_a_LmOwnArena != 0x7c55fcb0a940aa3cULL || lm_lmx_module_private_1_typedef_id_b_LmOwnArena != 0xcdfc77b6ba3bf135ULL
 #error "Lingvamyxa conflicting typedef projection for LmOwnArena"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmHostThread
-#define LM_LMX_TYPEDEF_DEFINED_LmHostThread 1
-#define LM_LMX_TYPEDEF_ID_A_LmHostThread 0x0ee0cef52f19074eULL
-#define LM_LMX_TYPEDEF_ID_B_LmHostThread 0x9f6403534e9de8efULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmHostThread
+#define lm_lmx_module_private_1_typedef_defined_LmHostThread 1
+#define lm_lmx_module_private_1_typedef_id_a_LmHostThread 0x0ee0cef52f19074eULL
+#define lm_lmx_module_private_1_typedef_id_b_LmHostThread 0x9f6403534e9de8efULL
 typedef struct LmHostThread LmHostThread;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmHostThread) || !defined(LM_LMX_TYPEDEF_ID_B_LmHostThread) || LM_LMX_TYPEDEF_ID_A_LmHostThread != 0x0ee0cef52f19074eULL || LM_LMX_TYPEDEF_ID_B_LmHostThread != 0x9f6403534e9de8efULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmHostThread) || !defined(lm_lmx_module_private_1_typedef_id_b_LmHostThread) || lm_lmx_module_private_1_typedef_id_a_LmHostThread != 0x0ee0cef52f19074eULL || lm_lmx_module_private_1_typedef_id_b_LmHostThread != 0x9f6403534e9de8efULL
 #error "Lingvamyxa conflicting typedef projection for LmHostThread"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmMutex
-#define LM_LMX_TYPEDEF_DEFINED_LmMutex 1
-#define LM_LMX_TYPEDEF_ID_A_LmMutex 0x26d0d7b596af7a34ULL
-#define LM_LMX_TYPEDEF_ID_B_LmMutex 0xa8c35a70241bcbcdULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmMutex
+#define lm_lmx_module_private_1_typedef_defined_LmMutex 1
+#define lm_lmx_module_private_1_typedef_id_a_LmMutex 0x26d0d7b596af7a34ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmMutex 0xa8c35a70241bcbcdULL
 typedef struct LmMutex LmMutex;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmMutex) || !defined(LM_LMX_TYPEDEF_ID_B_LmMutex) || LM_LMX_TYPEDEF_ID_A_LmMutex != 0x26d0d7b596af7a34ULL || LM_LMX_TYPEDEF_ID_B_LmMutex != 0xa8c35a70241bcbcdULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmMutex) || !defined(lm_lmx_module_private_1_typedef_id_b_LmMutex) || lm_lmx_module_private_1_typedef_id_a_LmMutex != 0x26d0d7b596af7a34ULL || lm_lmx_module_private_1_typedef_id_b_LmMutex != 0xa8c35a70241bcbcdULL
 #error "Lingvamyxa conflicting typedef projection for LmMutex"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmCondition
-#define LM_LMX_TYPEDEF_DEFINED_LmCondition 1
-#define LM_LMX_TYPEDEF_ID_A_LmCondition 0xb0d7d0c00a11e970ULL
-#define LM_LMX_TYPEDEF_ID_B_LmCondition 0x10616230e414eea1ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmCondition
+#define lm_lmx_module_private_1_typedef_defined_LmCondition 1
+#define lm_lmx_module_private_1_typedef_id_a_LmCondition 0xb0d7d0c00a11e970ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmCondition 0x10616230e414eea1ULL
 typedef struct LmCondition LmCondition;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmCondition) || !defined(LM_LMX_TYPEDEF_ID_B_LmCondition) || LM_LMX_TYPEDEF_ID_A_LmCondition != 0xb0d7d0c00a11e970ULL || LM_LMX_TYPEDEF_ID_B_LmCondition != 0x10616230e414eea1ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmCondition) || !defined(lm_lmx_module_private_1_typedef_id_b_LmCondition) || lm_lmx_module_private_1_typedef_id_a_LmCondition != 0xb0d7d0c00a11e970ULL || lm_lmx_module_private_1_typedef_id_b_LmCondition != 0x10616230e414eea1ULL
 #error "Lingvamyxa conflicting typedef projection for LmCondition"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessage
-#define LM_LMX_TYPEDEF_DEFINED_LmMessage 1
-#define LM_LMX_TYPEDEF_ID_A_LmMessage 0x7b0d63fc6cdc6820ULL
-#define LM_LMX_TYPEDEF_ID_B_LmMessage 0xe461bdf9461df589ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmMessage
+#define lm_lmx_module_private_1_typedef_defined_LmMessage 1
+#define lm_lmx_module_private_1_typedef_id_a_LmMessage 0x7b0d63fc6cdc6820ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmMessage 0xe461bdf9461df589ULL
 typedef struct LmMessage LmMessage;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessage) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessage) || LM_LMX_TYPEDEF_ID_A_LmMessage != 0x7b0d63fc6cdc6820ULL || LM_LMX_TYPEDEF_ID_B_LmMessage != 0xe461bdf9461df589ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmMessage) || !defined(lm_lmx_module_private_1_typedef_id_b_LmMessage) || lm_lmx_module_private_1_typedef_id_a_LmMessage != 0x7b0d63fc6cdc6820ULL || lm_lmx_module_private_1_typedef_id_b_LmMessage != 0xe461bdf9461df589ULL
 #error "Lingvamyxa conflicting typedef projection for LmMessage"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageOutboxEntry
-#define LM_LMX_TYPEDEF_DEFINED_LmMessageOutboxEntry 1
-#define LM_LMX_TYPEDEF_ID_A_LmMessageOutboxEntry 0xda71b412537e2bf6ULL
-#define LM_LMX_TYPEDEF_ID_B_LmMessageOutboxEntry 0x84fe1ad0603fee37ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmMessageOutboxEntry
+#define lm_lmx_module_private_1_typedef_defined_LmMessageOutboxEntry 1
+#define lm_lmx_module_private_1_typedef_id_a_LmMessageOutboxEntry 0xda71b412537e2bf6ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmMessageOutboxEntry 0x84fe1ad0603fee37ULL
 typedef struct LmMessageOutboxEntry LmMessageOutboxEntry;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageOutboxEntry) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageOutboxEntry) || LM_LMX_TYPEDEF_ID_A_LmMessageOutboxEntry != 0xda71b412537e2bf6ULL || LM_LMX_TYPEDEF_ID_B_LmMessageOutboxEntry != 0x84fe1ad0603fee37ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmMessageOutboxEntry) || !defined(lm_lmx_module_private_1_typedef_id_b_LmMessageOutboxEntry) || lm_lmx_module_private_1_typedef_id_a_LmMessageOutboxEntry != 0xda71b412537e2bf6ULL || lm_lmx_module_private_1_typedef_id_b_LmMessageOutboxEntry != 0x84fe1ad0603fee37ULL
 #error "Lingvamyxa conflicting typedef projection for LmMessageOutboxEntry"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageRoute
-#define LM_LMX_TYPEDEF_DEFINED_LmMessageRoute 1
-#define LM_LMX_TYPEDEF_ID_A_LmMessageRoute 0x590ea0a7fef33476ULL
-#define LM_LMX_TYPEDEF_ID_B_LmMessageRoute 0x5917a7ba09ea1f87ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmMessageRoute
+#define lm_lmx_module_private_1_typedef_defined_LmMessageRoute 1
+#define lm_lmx_module_private_1_typedef_id_a_LmMessageRoute 0x590ea0a7fef33476ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmMessageRoute 0x5917a7ba09ea1f87ULL
 typedef struct LmMessageRoute LmMessageRoute;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageRoute) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageRoute) || LM_LMX_TYPEDEF_ID_A_LmMessageRoute != 0x590ea0a7fef33476ULL || LM_LMX_TYPEDEF_ID_B_LmMessageRoute != 0x5917a7ba09ea1f87ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmMessageRoute) || !defined(lm_lmx_module_private_1_typedef_id_b_LmMessageRoute) || lm_lmx_module_private_1_typedef_id_a_LmMessageRoute != 0x590ea0a7fef33476ULL || lm_lmx_module_private_1_typedef_id_b_LmMessageRoute != 0x5917a7ba09ea1f87ULL
 #error "Lingvamyxa conflicting typedef projection for LmMessageRoute"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadRuntime
-#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadRuntime 1
-#define LM_LMX_TYPEDEF_ID_A_LmMessageThreadRuntime 0xbcdbce07d745c668ULL
-#define LM_LMX_TYPEDEF_ID_B_LmMessageThreadRuntime 0x5267d0b311015cb1ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmMessageThreadRuntime
+#define lm_lmx_module_private_1_typedef_defined_LmMessageThreadRuntime 1
+#define lm_lmx_module_private_1_typedef_id_a_LmMessageThreadRuntime 0xbcdbce07d745c668ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmMessageThreadRuntime 0x5267d0b311015cb1ULL
 typedef struct LmMessageThreadRuntime LmMessageThreadRuntime;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThreadRuntime) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThreadRuntime) || LM_LMX_TYPEDEF_ID_A_LmMessageThreadRuntime != 0xbcdbce07d745c668ULL || LM_LMX_TYPEDEF_ID_B_LmMessageThreadRuntime != 0x5267d0b311015cb1ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmMessageThreadRuntime) || !defined(lm_lmx_module_private_1_typedef_id_b_LmMessageThreadRuntime) || lm_lmx_module_private_1_typedef_id_a_LmMessageThreadRuntime != 0xbcdbce07d745c668ULL || lm_lmx_module_private_1_typedef_id_b_LmMessageThreadRuntime != 0x5267d0b311015cb1ULL
 #error "Lingvamyxa conflicting typedef projection for LmMessageThreadRuntime"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxProviderOpsV1
-#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxProviderOpsV1 1
-#define LM_LMX_TYPEDEF_ID_A_LmRestLmxProviderOpsV1 0xaadc7c363d31231cULL
-#define LM_LMX_TYPEDEF_ID_B_LmRestLmxProviderOpsV1 0x0e805817ebcbb71dULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmRestLmxProviderOpsV1
+#define lm_lmx_module_private_1_typedef_defined_LmRestLmxProviderOpsV1 1
+#define lm_lmx_module_private_1_typedef_id_a_LmRestLmxProviderOpsV1 0xaadc7c363d31231cULL
+#define lm_lmx_module_private_1_typedef_id_b_LmRestLmxProviderOpsV1 0x0e805817ebcbb71dULL
 typedef struct LmRestLmxProviderOpsV1 LmRestLmxProviderOpsV1;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmRestLmxProviderOpsV1) || !defined(LM_LMX_TYPEDEF_ID_B_LmRestLmxProviderOpsV1) || LM_LMX_TYPEDEF_ID_A_LmRestLmxProviderOpsV1 != 0xaadc7c363d31231cULL || LM_LMX_TYPEDEF_ID_B_LmRestLmxProviderOpsV1 != 0x0e805817ebcbb71dULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmRestLmxProviderOpsV1) || !defined(lm_lmx_module_private_1_typedef_id_b_LmRestLmxProviderOpsV1) || lm_lmx_module_private_1_typedef_id_a_LmRestLmxProviderOpsV1 != 0xaadc7c363d31231cULL || lm_lmx_module_private_1_typedef_id_b_LmRestLmxProviderOpsV1 != 0x0e805817ebcbb71dULL
 #error "Lingvamyxa conflicting typedef projection for LmRestLmxProviderOpsV1"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadPool
-#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadPool 1
-#define LM_LMX_TYPEDEF_ID_A_LmMessageThreadPool 0xd41eb629c50c1a70ULL
-#define LM_LMX_TYPEDEF_ID_B_LmMessageThreadPool 0xe036b7fbdebf6a29ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmMessageThreadPool
+#define lm_lmx_module_private_1_typedef_defined_LmMessageThreadPool 1
+#define lm_lmx_module_private_1_typedef_id_a_LmMessageThreadPool 0xd41eb629c50c1a70ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmMessageThreadPool 0xe036b7fbdebf6a29ULL
 typedef struct LmMessageThreadPool LmMessageThreadPool;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThreadPool) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThreadPool) || LM_LMX_TYPEDEF_ID_A_LmMessageThreadPool != 0xd41eb629c50c1a70ULL || LM_LMX_TYPEDEF_ID_B_LmMessageThreadPool != 0xe036b7fbdebf6a29ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmMessageThreadPool) || !defined(lm_lmx_module_private_1_typedef_id_b_LmMessageThreadPool) || lm_lmx_module_private_1_typedef_id_a_LmMessageThreadPool != 0xd41eb629c50c1a70ULL || lm_lmx_module_private_1_typedef_id_b_LmMessageThreadPool != 0xe036b7fbdebf6a29ULL
 #error "Lingvamyxa conflicting typedef projection for LmMessageThreadPool"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponent
-#define LM_LMX_TYPEDEF_DEFINED_LmMessageThreadComponent 1
-#define LM_LMX_TYPEDEF_ID_A_LmMessageThreadComponent 0x9adbfcfc5ede09deULL
-#define LM_LMX_TYPEDEF_ID_B_LmMessageThreadComponent 0x55c1ece857e1fb9fULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmMessageThreadComponent
+#define lm_lmx_module_private_1_typedef_defined_LmMessageThreadComponent 1
+#define lm_lmx_module_private_1_typedef_id_a_LmMessageThreadComponent 0x9adbfcfc5ede09deULL
+#define lm_lmx_module_private_1_typedef_id_b_LmMessageThreadComponent 0x55c1ece857e1fb9fULL
 typedef struct LmMessageThreadComponent LmMessageThreadComponent;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThreadComponent) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThreadComponent) || LM_LMX_TYPEDEF_ID_A_LmMessageThreadComponent != 0x9adbfcfc5ede09deULL || LM_LMX_TYPEDEF_ID_B_LmMessageThreadComponent != 0x55c1ece857e1fb9fULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmMessageThreadComponent) || !defined(lm_lmx_module_private_1_typedef_id_b_LmMessageThreadComponent) || lm_lmx_module_private_1_typedef_id_a_LmMessageThreadComponent != 0x9adbfcfc5ede09deULL || lm_lmx_module_private_1_typedef_id_b_LmMessageThreadComponent != 0x55c1ece857e1fb9fULL
 #error "Lingvamyxa conflicting typedef projection for LmMessageThreadComponent"
 #endif
 #endif
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmMessageThread
-#define LM_LMX_TYPEDEF_DEFINED_LmMessageThread 1
-#define LM_LMX_TYPEDEF_ID_A_LmMessageThread 0xb24ebdc4cbfa0b14ULL
-#define LM_LMX_TYPEDEF_ID_B_LmMessageThread 0x198bda4c3705b0e5ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmMessageThread
+#define lm_lmx_module_private_1_typedef_defined_LmMessageThread 1
+#define lm_lmx_module_private_1_typedef_id_a_LmMessageThread 0xb24ebdc4cbfa0b14ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmMessageThread 0x198bda4c3705b0e5ULL
 typedef struct LmMessageThread LmMessageThread;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmMessageThread) || !defined(LM_LMX_TYPEDEF_ID_B_LmMessageThread) || LM_LMX_TYPEDEF_ID_A_LmMessageThread != 0xb24ebdc4cbfa0b14ULL || LM_LMX_TYPEDEF_ID_B_LmMessageThread != 0x198bda4c3705b0e5ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmMessageThread) || !defined(lm_lmx_module_private_1_typedef_id_b_LmMessageThread) || lm_lmx_module_private_1_typedef_id_a_LmMessageThread != 0xb24ebdc4cbfa0b14ULL || lm_lmx_module_private_1_typedef_id_b_LmMessageThread != 0x198bda4c3705b0e5ULL
 #error "Lingvamyxa conflicting typedef projection for LmMessageThread"
 #endif
 #endif
@@ -810,16 +810,16 @@ struct LmMessageThread {
     int turn_active;
     int turn_failed;
 };
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmRestLmxHttpClientContext
-#define LM_LMX_TYPEDEF_DEFINED_LmRestLmxHttpClientContext 1
-#define LM_LMX_TYPEDEF_ID_A_LmRestLmxHttpClientContext 0x0c111efa18728812ULL
-#define LM_LMX_TYPEDEF_ID_B_LmRestLmxHttpClientContext 0xed23b3601acf4b23ULL
+#ifndef lm_lmx_module_private_1_typedef_defined_LmRestLmxHttpClientContext
+#define lm_lmx_module_private_1_typedef_defined_LmRestLmxHttpClientContext 1
+#define lm_lmx_module_private_1_typedef_id_a_LmRestLmxHttpClientContext 0x0c111efa18728812ULL
+#define lm_lmx_module_private_1_typedef_id_b_LmRestLmxHttpClientContext 0xed23b3601acf4b23ULL
 typedef struct LmRestLmxHttpClientContext {
     int curl_initialized;
     void *session;
 } LmRestLmxHttpClientContext;
 #else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmRestLmxHttpClientContext) || !defined(LM_LMX_TYPEDEF_ID_B_LmRestLmxHttpClientContext) || LM_LMX_TYPEDEF_ID_A_LmRestLmxHttpClientContext != 0x0c111efa18728812ULL || LM_LMX_TYPEDEF_ID_B_LmRestLmxHttpClientContext != 0xed23b3601acf4b23ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmRestLmxHttpClientContext) || !defined(lm_lmx_module_private_1_typedef_id_b_LmRestLmxHttpClientContext) || lm_lmx_module_private_1_typedef_id_a_LmRestLmxHttpClientContext != 0x0c111efa18728812ULL || lm_lmx_module_private_1_typedef_id_b_LmRestLmxHttpClientContext != 0xed23b3601acf4b23ULL
 #error "Lingvamyxa conflicting typedef projection for LmRestLmxHttpClientContext"
 #endif
 #endif

@@ -1,0 +1,8 @@
+L2:
+    table:
+        name: invalidUngroupedSpaced
+        columns: (int: value)
+        rows:
+                 1 + 2
+    end: invalidUngroupedSpaced
+end: L2

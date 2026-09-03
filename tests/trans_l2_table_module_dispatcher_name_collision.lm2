@@ -1,0 +1,20 @@
+L2:
+    table:
+        name: p1ModuleDispatcherCollision
+        columns: (int: value)
+        rows:
+                 7
+    end: p1ModuleDispatcherCollision
+
+    external:
+        fn: lm_lmx_module_private_1_init_all () int
+            return: 17
+        end: lm_lmx_module_private_1_init_all
+    end: external
+
+    external:
+        fn: main () int
+            return: lm_lmx_module_private_1_init_all() != 17 || p1ModuleDispatcherCollision = 0 || p1ModuleDispatcherCollision[0]\value != 7
+        end: main
+    end: external
+end: L2

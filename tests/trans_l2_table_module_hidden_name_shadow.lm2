@@ -1,0 +1,17 @@
+L2:
+    int: lm_lmx_message_thread 9
+    int: lm_lmx_module_arena 11
+
+    table:
+        name: hiddenNameTable
+        columns: (int: thread_value) (int: arena_value)
+        rows:
+                 lm_lmx_message_thread lm_lmx_module_arena
+    end: hiddenNameTable
+
+    external:
+        fn: main () int
+            return: hiddenNameTable[0]\thread_value != 9 || hiddenNameTable[0]\arena_value != 11
+        end: main
+    end: external
+end: L2

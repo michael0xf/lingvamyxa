@@ -1,0 +1,12 @@
+L2:
+    external:
+        fn: lm_lmx_module_private_1_init_site_1 () int
+            return: 13
+        end: lm_lmx_module_private_1_init_site_1
+    end: external
+
+    external:
+        fn: lm_test_module_collision_late_import_probe () int
+            return: lm_lmx_module_private_1_init_site_1()
+        end: lm_test_module_collision_late_import_probe
+end: L2

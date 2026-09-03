@@ -1,0 +1,17 @@
+L2:
+    fn: lm_test_p1_hidden_context_name () int
+        table:
+            name: lm_lmx_message_thread
+            columns: (int: value)
+            rows:
+                     7
+        end: lm_lmx_message_thread
+        return: lm_lmx_message_thread = 0 || lm_lmx_message_thread[0] = 0 || lm_lmx_message_thread[0]\value != 7
+    end: lm_test_p1_hidden_context_name
+
+    external:
+        fn: main () int
+            return: lm_test_p1_hidden_context_name()
+        end: main
+    end: external
+end: L2

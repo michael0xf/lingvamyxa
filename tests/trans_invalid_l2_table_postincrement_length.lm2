@@ -1,0 +1,11 @@
+L2:
+    fn: invalid_table_postincrement_length () size_t
+        table:
+            name: t
+            columns: (int: value)
+            rows:
+                     7
+        end: t
+        return: t\length++
+    end: invalid_table_postincrement_length
+end: L2

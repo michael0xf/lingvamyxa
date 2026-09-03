@@ -205,7 +205,67 @@ fn: lm_trans_write_all (FILE: file; const: @(char data); size_t: length) int
         return: 0
 return: 1
 
+fn: lm_trans_main_scaffold_token_has_prefix (
+    const: @(char token)
+    size_t: token_length
+    const: @(char prefix)
+) int
+    size_t: prefix_length
+
+    if: token = 0 || prefix = 0
+        return: 0
+    prefix_length: c.strlen(prefix)
+return: token_length >= prefix_length && c.memcmp(token, prefix, prefix_length) = 0
+
+fn: lm_trans_main_scaffold_token_equals (
+    const: @(char token)
+    size_t: token_length
+    const: @(char expected)
+) int
+    if: token = 0 || expected = 0
+        return: 0
+return: token_length = c.strlen(expected) && c.memcmp(token, expected, token_length) = 0
+
+fn: lm_trans_main_scaffold_token_is_private (
+    const: @(char token)
+    size_t: token_length
+) int
+    if: lm_trans_main_scaffold_token_has_prefix(token, token_length, "lm_lmx_application_") || lm_trans_main_scaffold_token_has_prefix(token, token_length, "lm_lmx_thread_") || lm_trans_main_scaffold_token_has_prefix(token, token_length, "lm_lmx_declared_thread_")
+        return: 1
+    if: lm_trans_main_scaffold_token_equals(token, token_length, "lm_lmx_message_thread") || lm_trans_main_scaffold_token_equals(token, token_length, "lm_lmx_rest_lmx_http_server") || lm_trans_main_scaffold_token_equals(token, token_length, "lm_message_thread_main_context") || lm_trans_main_scaffold_token_equals(token, token_length, "lm_message_thread_exit_status") || lm_trans_main_scaffold_token_equals(token, token_length, "lm_message_thread_turn_end")
+        return: 1
+return: 0
+
+fn: lm_trans_put_main_scaffold_private (FILE: file; const: @(char text)) int
+    size_t: end
+    size_t: index
+
+    if: file = 0 || text = 0 || lm_trans_module_init_private_stem = 0
+        return: 1
+    index: 0U
+    while: text[index] != '\0'
+        if: (text[index] >= 'A' && text[index] <= 'Z') || (text[index] >= 'a' && text[index] <= 'z') || text[index] = '_'
+            end: index + 1U
+            while: (text[end] >= 'A' && text[end] <= 'Z') || (text[end] >= 'a' && text[end] <= 'z') || (text[end] >= '0' && text[end] <= '9') || text[end] = '_'
+                end: end + 1U
+            if: lm_trans_main_scaffold_token_is_private(text + index, end - index)
+                if: lm_trans_write_all(file, lm_trans_module_init_private_stem, c.strlen(lm_trans_module_init_private_stem)) != 0 || lm_trans_write_all(file, "main_", 5U) != 0
+                    return: 1
+            ---
+            if: lm_trans_write_all(file, text + index, end - index) != 0
+                return: 1
+            index: end
+        else:
+            if: lm_trans_write_all(file, text + index, 1U) != 0
+                return: 1
+            index: index + 1U
+        ---
+    ---
+return: 0
+
 fn: lm_trans_put (FILE: file; const: @(char text)) int
+    if: lm_trans_main_scaffold_private_emission_depth != 0U
+        return: lm_trans_put_main_scaffold_private(file, text)
     if: c.fputs(text, file) < 0
         return: 1
 return: 0

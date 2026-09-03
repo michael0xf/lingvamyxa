@@ -1,0 +1,14 @@
+fn: lm_test_p1_address_length () int
+    table:
+        name: p1AddressLength
+        columns: (int: value)
+        rows:
+                 7
+    end: p1AddressLength
+    return: @ (p1AddressLength\length) != 0
+
+external:
+    fn: main () int
+        return: lm_test_p1_address_length()
+    end: main
+end: external

@@ -3817,6 +3817,7 @@ fn: lm_trans_registry_load_imports_from_structure (const: (LmP0Structure: struct
     const: LmP0Node: node
     LmTransHeadBinding: binding
     @: void popped
+    int: child_descend_l2
     int: previous_depth
     int: status
 
@@ -3857,18 +3858,20 @@ fn: lm_trans_registry_load_imports_from_structure (const: (LmP0Structure: struct
                 status: 1
                 break
             if: binding\statement_frame = @ lm_trans_statement_emit_import
-                if: lm_trans_registry_load_import_frame(node\as\frame, source_path) != 0
+                if: frame\descend_l2 != 2 && lm_trans_registry_load_import_frame(node\as\frame, source_path) != 0
                     status: 1
                     break
+                ---
             ---
             else:
                 if: binding\statement_frame = @ lm_trans_statement_emit_predef
-                    if: lm_trans_registry_load_predef_frame(node\as\frame, source_path) != 0
+                    if: frame\descend_l2 != 2 && lm_trans_registry_load_predef_frame(node\as\frame, source_path) != 0
                         status: 1
                         break
+                    ---
                 ---
                 else:
-                    if: frame\descend_l2 != 0 && lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame) != 0 && node\as\frame\body != 0 && node\as\frame\body\first_field != 0
+                    if: frame\descend_l2 != 0 && node\as\frame\body != 0 && node\as\frame\body\first_field != 0 && (lm_trans_frame_is_l1_substrate_receiver(node\as\frame) != 0 || lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame) != 0 || frame\descend_l2 = 2 || lm_trans_text_equals(node\as\frame\head, "os") || lm_trans_text_equals(node\as\frame\head, "ifdef"))
                         if: lm_trans_frame_is_l3_level_receiver(node\as\frame)
                             previous_depth: lm_trans_l3_profile_enter_frame(node\as\frame)
                             status: lm_trans_registry_load_imports_from_structure(node\as\frame\body, source_path, 0)
@@ -3877,7 +3880,12 @@ fn: lm_trans_registry_load_imports_from_structure (const: (LmP0Structure: struct
                                 break
                         ---
                         else:
-                            frame: lm_trans_registry_import_frame_new(node\as\frame\body\first_field, 0)
+                            if: lm_trans_frame_is_l2_level_receiver(node\as\frame)
+                                child_descend_l2: 0
+                            else:
+                                child_descend_l2: 2
+                            ---
+                            frame: lm_trans_registry_import_frame_new(node\as\frame\body\first_field, child_descend_l2)
                             if: frame = 0
                                 status: 1
                                 break
@@ -4315,6 +4323,8 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_emitted_function_return_structs: lm_trans_ptr_stack_new(lm_own_delete_plain)
     if: lm_trans_declared_import_paths = 0 || lm_trans_declared_import_documents = 0 || lm_trans_emitted_import_prelude_paths = 0 || lm_trans_emitted_import_module_init_paths = 0 || lm_trans_emitted_import_function_paths = 0 || lm_trans_emitted_callable_adapters = 0 || lm_trans_emitted_callable_binders = 0 || lm_trans_emitted_array_value_helpers = 0 || lm_trans_emitted_function_return_structs = 0 || lm_trans_module_init_registry_init() != 0
         c.fprintf(c.stderr, "trans error: out of memory while creating module state stacks\n")
+        status: 1
+    if: status = 0 && (lm_trans_typedef_projection_reserve_loaded_source_paths() != 0 || lm_trans_typedef_projection_reserve_source_node(root) != 0 || lm_trans_module_init_names_prepare() != 0)
         status: 1
     if: status = 0
         status: lm_trans_emit_module_prelude_plan(prelude_output)

@@ -1,0 +1,31 @@
+L2:
+    import: "lm2/own.lm2"
+
+    callable: AddX (int: value) int
+
+    fn: addDefault (int: base 4; int: value) int
+        return: base + value
+    end: addDefault
+
+    fn: callAdd (AddX: add) int
+        return: add(3)
+    end: callAdd
+
+    fn: pick ([]: int values; int: index) int
+        return: values[index]
+    end: pick
+
+    Holder:
+        int: value
+    end: Holder
+
+    Holder: repro
+        value: pick([callAdd(addDefault()) 9], 0)
+    end: repro
+
+    external:
+        fn: main () int
+            return: repro = 0 || repro\value != 7
+        end: main
+    end: external
+end: L2

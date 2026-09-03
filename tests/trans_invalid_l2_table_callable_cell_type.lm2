@@ -1,0 +1,10 @@
+L2:
+    callable: AddX (int: value) int
+
+    table:
+        name: t
+        columns: (AddX: callback)
+        rows:
+                 7
+    end: t
+end: L2

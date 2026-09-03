@@ -45,10 +45,12 @@ end: pointTable
 
 external:
     fn: main () int
-        if: pointTable\point\x != 3
+        if: pointTable = 0 || pointTable\ptr = 0 || pointTable\length != 1U || pointTable[0] = 0 || pointTable[0]\point = 0
             return: 1
-        if: pointTable\tag != 11
+        if: pointTable[0]\point\x != 3 || pointTable[0]\point\y != 4
             return: 2
+        if: pointTable[0]\tag != 11
+            return: 3
         return: 0
     end: main
 end: external

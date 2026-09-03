@@ -1,0 +1,14 @@
+fn: lm_test_p1_address_ptr () int
+    table:
+        name: p1AddressPtr
+        columns: (int: value)
+        rows:
+                 7
+    end: p1AddressPtr
+    return: @ (p1AddressPtr\ptr) != 0
+
+external:
+    fn: main () int
+        return: lm_test_p1_address_ptr()
+    end: main
+end: external

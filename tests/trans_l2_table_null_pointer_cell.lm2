@@ -1,0 +1,17 @@
+L2:
+    fn: lm_test_table_null_pointer_cell () int
+        table:
+            name: t
+            columns: (const: (@: char text))
+            rows:
+                     00
+        end: t
+        return: t[0]\text != 0
+    end: lm_test_table_null_pointer_cell
+
+    external:
+        fn: main () int
+            return: lm_test_table_null_pointer_cell()
+        end: main
+    end: external
+end: L2

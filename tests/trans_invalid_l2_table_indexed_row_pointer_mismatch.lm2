@@ -1,0 +1,15 @@
+L2:
+    fn: accept_char_pointer (@: char p) int
+        return: p = 0
+    end: accept_char_pointer
+
+    fn: lm_test_table_indexed_row_pointer_mismatch () int
+        table:
+            name: t
+            columns: (int: value)
+            rows:
+                     7
+        end: t
+        return: accept_char_pointer(t[0])
+    end: lm_test_table_indexed_row_pointer_mismatch
+end: L2

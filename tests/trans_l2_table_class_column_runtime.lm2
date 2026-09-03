@@ -9,10 +9,12 @@ L2:
 
     external:
         fn: main () int
-            if: runtimeClassColumn\class != 7
+            if: runtimeClassColumn = 0 || runtimeClassColumn\ptr = 0 || runtimeClassColumn\length != 2U || runtimeClassColumn[0] = 0 || runtimeClassColumn[1] = 0
                 return: 1
-            if: runtimeClassColumn\value != 11
+            if: runtimeClassColumn[0]\class != 7 || runtimeClassColumn[0]\value != 11
                 return: 2
+            if: runtimeClassColumn[1]\class != 13 || runtimeClassColumn[1]\value != 17
+                return: 3
             return: 0
         end: main
     end: external

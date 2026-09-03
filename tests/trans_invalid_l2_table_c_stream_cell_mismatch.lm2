@@ -1,0 +1,6 @@
+table:
+    name: t
+    columns: (int: value)
+    rows:
+             c.stderr
+end: t

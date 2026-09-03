@@ -1,0 +1,12 @@
+external:
+    fn: lm_test_stage9_unmanaged_external_table () int
+        table:
+            name: stage9UnmanagedTable
+            columns: (int: value)
+            rows:
+                     7
+        end: stage9UnmanagedTable
+
+        return: stage9UnmanagedTable[0]\value
+    end: lm_test_stage9_unmanaged_external_table
+end: external

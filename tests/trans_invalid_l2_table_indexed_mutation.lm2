@@ -1,0 +1,13 @@
+external:
+    fn: main () int
+        table:
+            name: stage9ConstRowTable
+            columns: (int: value)
+            rows:
+                     7
+        end: stage9ConstRowTable
+
+        stage9ConstRowTable[0]\value: 9
+        return: 0
+    end: main
+end: external

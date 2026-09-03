@@ -1,0 +1,12 @@
+L2:
+    fn: test () int
+        table:
+            name: t
+            columns: (const: (@: char text))
+            rows:
+                     "ok"
+        end: t
+        c.printf: "%d\n" t[0]\text
+        return: 0
+    end: test
+end: L2

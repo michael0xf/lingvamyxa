@@ -11,30 +11,34 @@ L2:
 
     ifdef:
         `LM_TEST_L2_TABLE_CONDITIONAL_EMIT`:
-            table:
-                name: conditionalEmitActive
-                columns: (int: id) (const: (@: char label))
-                rows:
-                         17  "active"
-            end: conditionalEmitActive
-
             fn: lm_test_l2_table_conditional_value () int
-                if: conditionalEmitActive\id != 17
+                table:
+                    name: conditionalEmitActive
+                    columns: (int: id) (const: (@: char label))
+                    rows:
+                             17  "active"
+                end: conditionalEmitActive
+
+                if: conditionalEmitActive = 0 || conditionalEmitActive\ptr = 0 || conditionalEmitActive\length != 1U || conditionalEmitActive[0] = 0
                     return: 1
-                return: conditionalEmitActive\label[0] != 'a'
+                if: conditionalEmitActive[0]\id != 17 || conditionalEmitActive[0]\label[0] != 'a'
+                    return: 2
+                return: 0
             end: lm_test_l2_table_conditional_value
         default:
-            table:
-                name: conditionalEmitDefault
-                columns: (int: id) (const: (@: char label))
-                rows:
-                         23  "default"
-            end: conditionalEmitDefault
-
             fn: lm_test_l2_table_conditional_value () int
-                if: conditionalEmitDefault\id != 23
+                table:
+                    name: conditionalEmitDefault
+                    columns: (int: id) (const: (@: char label))
+                    rows:
+                             23  "default"
+                end: conditionalEmitDefault
+
+                if: conditionalEmitDefault = 0 || conditionalEmitDefault\ptr = 0 || conditionalEmitDefault\length != 1U || conditionalEmitDefault[0] = 0
                     return: 1
-                return: conditionalEmitDefault\label[0] != 'd'
+                if: conditionalEmitDefault[0]\id != 23 || conditionalEmitDefault[0]\label[0] != 'd'
+                    return: 2
+                return: 0
             end: lm_test_l2_table_conditional_value
     end: ifdef
 

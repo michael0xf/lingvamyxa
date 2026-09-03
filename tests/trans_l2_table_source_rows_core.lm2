@@ -191,7 +191,7 @@ fn: lm_test_l2_table_source_rows_core () int
     unmarked_name: lm_trans_text_from_cstr("markerOnlyRuntime")
     if: status = 0 && (unmarked_frame = 0 || unmarked_name = 0 || lm_trans_materialize_l2_table_source(namespace_, unmarked_frame, 0) = 0 || lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "markerOnlyRuntime", 17U) != 0)
         status: 1
-    if: status = 0 && (lm_trans_declare_l2_table(namespace_, unmarked_frame) != 0 || lm_trans_namespace_find(namespace_, unmarked_name) = 0 || lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "markerOnlyRuntime", 17U) != 0)
+    if: status = 0 && (lm_trans_declare_l2_table(namespace_, unmarked_frame) != 0 || lm_trans_namespace_find(namespace_, unmarked_name) != 0 || lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "markerOnlyRuntime", 17U) != 0)
         status: 1
     if: status = 0 && (lm_test_l2_table_source_column_is(lm_table_descriptor_column_at(descriptor, 0U), "class", "class", 0U, 0U, 0) = 0 || lm_test_l2_table_source_column_is(lm_table_descriptor_column_at(descriptor, 1U), "label", "char", 0U, 0U, 0) = 0 || lm_test_l2_table_source_column_is(lm_table_descriptor_column_at(descriptor, 2U), "body", "node", 0U, 0U, 0) = 0)
         status: 1

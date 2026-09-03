@@ -1,0 +1,17 @@
+Point:
+    int: x
+    int: y
+end: Point
+
+table:
+    name: t
+    columns: (Point: point)
+    rows:
+             ((x: 3; y: 4))
+end: t
+
+external:
+    fn: main () int
+        return: t[0]\point\x != 3 || t[0]\point\y != 4
+    end: main
+end: external

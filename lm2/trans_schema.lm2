@@ -95,6 +95,7 @@ table:
     columns: (class: class) (int: value)
     rows:
              LmTransModuleInitEntry 1
+             LmTransDescriptor     1
 end: `cast.target`
 
 table:
@@ -107,6 +108,7 @@ table:
              LM_TRANS_MODULE_INIT_KIND_NAMED_STRUCTURE 1
              LM_TRANS_MODULE_INIT_KIND_ANONYMOUS_STRUCTURE 2
              LM_TRANS_MODULE_INIT_KIND_ARRAY_REFERENCE 3
+             LM_TRANS_MODULE_INIT_KIND_TABLE 4
 end: `define.value`
 
 table:
@@ -916,6 +918,7 @@ table:
              next_scope_id     size_t         5  0
              prelude_file      FILE           6  0
              body_file         FILE           7  0
+             source_names      LmOwnPtrStack  8  0
 end: LmTransTypedefProjectionOutput
 
 table:

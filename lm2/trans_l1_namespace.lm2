@@ -1314,6 +1314,7 @@ return: lm_own_ptr_stack_top(card\symbols)
 
 fn: lm_trans_symbol_new (const: (LmP0Text: name); const: @(char kind); unsigned: depth) LmTransSymbol
     LmTransSymbol: symbol
+    @: char name_copy
 
     symbol: lm_own_new_zero(c.sizeof(symbol[0]))
     if: symbol = 0
@@ -1323,6 +1324,15 @@ fn: lm_trans_symbol_new (const: (LmP0Text: name); const: @(char kind); unsigned:
     if: symbol\name = 0
         lm_trans_symbol_destroy(symbol)
         return: 0
+    if: name != 0
+        name_copy: lm_trans_text_copy_cstr(name)
+        if: name_copy = 0
+            lm_trans_symbol_destroy(symbol)
+            return: 0
+        symbol\name_storage: name_copy
+        symbol\name\data: name_copy
+        symbol\name\length: name\length
+    ---
     symbol\c_name: lm_trans_text_ref_new_cstr("")
     symbol\env_arg: lm_trans_text_ref_new_cstr("")
     symbol\closure_call_name: lm_trans_text_ref_new_cstr("")

@@ -1,0 +1,12 @@
+L2:
+    fn: lm_test_table_local_const_pointer_cell_mismatch () int
+        const: @: char p "wrong"
+        table:
+            name: t
+            columns: (@: char text)
+            rows:
+                     p
+        end: t
+        return: t[0]\text = 0
+    end: lm_test_table_local_const_pointer_cell_mismatch
+end: L2

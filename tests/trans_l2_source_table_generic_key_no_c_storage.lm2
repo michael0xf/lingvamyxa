@@ -19,9 +19,9 @@ external:
     fn: main () int
         if: c.LM_TEST_L2_SOURCE_TABLE_GENERIC_KEY != 83
             return: 1
-        if: runtimeKeyTable\key != 7
+        if: runtimeKeyTable = 0 || runtimeKeyTable\ptr = 0 || runtimeKeyTable\length != 1U || runtimeKeyTable[0] = 0
             return: 2
-        if: runtimeKeyTable\value != 9
+        if: runtimeKeyTable[0]\key != 7 || runtimeKeyTable[0]\value != 9
             return: 3
         return: 0
     end: main

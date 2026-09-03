@@ -1,0 +1,17 @@
+L2:
+    table:
+        name: contextualCells
+        columns: (Boolean: value)
+        rows:
+                 None
+                 OK
+                 false
+                 true
+    end: contextualCells
+
+    external:
+        fn: main () int
+            return: contextualCells\length != 4U || contextualCells[0]\value != -1 || contextualCells[1]\value != 1 || contextualCells[2]\value != 0 || contextualCells[3]\value != 1
+        end: main
+    end: external
+end: L2

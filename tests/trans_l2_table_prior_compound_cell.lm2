@@ -1,0 +1,24 @@
+L2:
+    table:
+        name: p1Prior
+        columns: (size_t: value)
+        rows:
+                 40U
+                 99U
+    end: p1Prior
+
+    table:
+        name: p1Derived
+        columns: (size_t: total)
+        rows:
+                 (p1Prior[0]\value    +    p1Prior\length)
+    end: p1Derived
+
+    external:
+        fn: main () int
+            if: p1Prior\length != 2U || p1Derived = 0 || p1Derived\length != 1U || p1Derived[0] = 0
+                return: 1
+            return: p1Derived[0]\total != 42U
+        end: main
+    end: external
+end: L2

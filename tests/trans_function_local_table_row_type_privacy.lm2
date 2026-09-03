@@ -1,0 +1,24 @@
+L2:
+    fn: lm_test_local_table_row_type_privacy () int
+        lm_l2_table_sample_row:
+            int: incompatible
+        end: lm_l2_table_sample_row
+
+        table:
+            name: sample
+            columns: (int: id)
+            rows:
+                     1
+        end: sample
+
+        if: sample = 0 || sample\ptr = 0 || sample\length != 1U || sample[0] = 0
+            return: 0
+        return: sample[0]\id
+    end: lm_test_local_table_row_type_privacy
+
+    external:
+        fn: main () int
+            return: lm_test_local_table_row_type_privacy() != 1
+        end: main
+    end: external
+end: L2

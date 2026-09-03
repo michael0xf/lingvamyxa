@@ -1,0 +1,14 @@
+fn: lm_test_p1_address_row () int
+    table:
+        name: p1AddressRow
+        columns: (int: value)
+        rows:
+                 7
+    end: p1AddressRow
+    return: @ (p1AddressRow[0]) != 0
+
+external:
+    fn: main () int
+        return: lm_test_p1_address_row()
+    end: main
+end: external

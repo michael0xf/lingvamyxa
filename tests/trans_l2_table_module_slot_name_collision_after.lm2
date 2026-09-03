@@ -1,0 +1,16 @@
+L2:
+    table:
+        name: p1ModuleSlotAfter
+        columns: (int: value)
+        rows:
+                 7
+    end: p1ModuleSlotAfter
+
+    int: lm_lmx_module_private_1_value_1 9
+
+    external:
+        fn: main () int
+            return: lm_lmx_module_private_1_value_1 != 9 || p1ModuleSlotAfter = 0 || p1ModuleSlotAfter[0] = 0 || p1ModuleSlotAfter[0]\value != 7
+        end: main
+    end: external
+end: L2

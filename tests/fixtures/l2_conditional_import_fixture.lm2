@@ -1,10 +1,12 @@
-table:
-    name: conditionalImportFixture
-    columns: (int: id) (int: value)
-    rows:
-             1  37
-end: conditionalImportFixture
-
 fn: lm_test_l2_conditional_import_fixture_value () int
-    return: conditionalImportFixture\value
+    table:
+        name: conditionalImportFixture
+        columns: (int: id) (int: value)
+        rows:
+                 1  37
+    end: conditionalImportFixture
+
+    if: conditionalImportFixture = 0 || conditionalImportFixture\ptr = 0 || conditionalImportFixture\length != 1U || conditionalImportFixture[0] = 0
+        return: 0
+    return: conditionalImportFixture[0]\value
 end: lm_test_l2_conditional_import_fixture_value

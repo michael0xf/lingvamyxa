@@ -1,0 +1,71 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: lm_test_stage9_table_local_step (@: int trace; int: marker; int: value) int
+    trace[0]: trace[0] * 10 + marker
+return: value
+
+fn: lm_test_stage9_local_table () int
+    int: trace 0
+    LmOwnArena: root lm_message_thread_owner(c.lm_lmx_message_thread)
+    const: LmOwnAllocationDescriptor: header_descriptor
+    const: LmOwnAllocationDescriptor: backing_descriptor
+    const: LmOwnAllocationDescriptor: row0_descriptor
+    const: LmOwnAllocationDescriptor: row1_descriptor
+    const: LmOwnAllocationDescriptor: empty_header_descriptor
+
+    table:
+        name: stage9LocalTable
+        columns: (int: left) (int: right)
+        rows:
+                 lm_test_stage9_table_local_step(@ trace; 1; 31)  lm_test_stage9_table_local_step(@ trace; 2; 32)
+                 lm_test_stage9_table_local_step(@ trace; 3; 41)  lm_test_stage9_table_local_step(@ trace; 4; 42)
+    end: stage9LocalTable
+
+    table:
+        name: stage9LocalEmptyTable
+        columns: (int: value)
+        rows:
+    end: stage9LocalEmptyTable
+
+    if: stage9LocalTable = 0 || stage9LocalTable\ptr = 0 || stage9LocalTable\length != 2U
+        return: 21
+    if: trace != 1234
+        return: 22
+    if: stage9LocalTable[0] = 0 || stage9LocalTable[1] = 0 || stage9LocalTable[0] = stage9LocalTable[1]
+        return: 23
+    if: stage9LocalTable[0]\left != 31 || stage9LocalTable[0]\right != 32 || stage9LocalTable[1]\left != 41 || stage9LocalTable[1]\right != 42
+        return: 24
+
+    header_descriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, root, stage9LocalTable)
+    backing_descriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, root, stage9LocalTable\ptr)
+    row0_descriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, root, stage9LocalTable[0])
+    row1_descriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, root, stage9LocalTable[1])
+    if: root = 0 || header_descriptor = 0 || backing_descriptor = 0 || row0_descriptor = 0 || row1_descriptor = 0
+        return: 25
+    if: header_descriptor = backing_descriptor || row0_descriptor = backing_descriptor || row1_descriptor = backing_descriptor || row0_descriptor = row1_descriptor
+        return: 26
+    if: header_descriptor\owner != root || backing_descriptor\owner != root || row0_descriptor\owner != root || row1_descriptor\owner != root
+        return: 27
+    if: backing_descriptor\rank != 1U || backing_descriptor\level != 0U || backing_descriptor\count != 2U
+        return: 28
+
+    if: stage9LocalEmptyTable = 0 || stage9LocalEmptyTable\ptr != 0 || stage9LocalEmptyTable\length != 0U
+        return: 29
+    empty_header_descriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, root, stage9LocalEmptyTable)
+    if: empty_header_descriptor = 0 || empty_header_descriptor\owner != root
+        return: 30
+    return: 0
+end: lm_test_stage9_local_table
+
+external:
+    fn: main () int
+        return: lm_test_stage9_local_table()
+    end: main
+end: external

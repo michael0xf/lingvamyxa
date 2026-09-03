@@ -1,0 +1,19 @@
+L2:
+    int: lm_lmx_thread_startup_failed 41
+    int: lm_lmx_application_exit_ready 42
+    int: lm_message_thread_exit_status 43
+
+    Holder:
+        int: value
+    end: Holder
+
+    Holder: rootMainShadowValue
+        value: 7
+    end: rootMainShadowValue
+
+    external:
+        fn: main () int
+            return: lm_lmx_thread_startup_failed != 41 || lm_lmx_application_exit_ready != 42 || lm_message_thread_exit_status != 43 || rootMainShadowValue = 0 || rootMainShadowValue\value != 7
+        end: main
+    end: external
+end: L2
