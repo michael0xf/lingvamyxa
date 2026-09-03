@@ -1,0 +1,13 @@
+c.array: [1]: int: moduleInitOrderTrace
+
+fn: lm_test_module_init_order_step (int: marker; int: value) int
+    moduleInitOrderTrace[0]: moduleInitOrderTrace[0] * 10 + marker
+return: value
+
+ModuleInitImportedValue:
+    int: marker
+end: ModuleInitImportedValue
+
+ModuleInitImportedValue: moduleInitImportedValue
+    marker: lm_test_module_init_order_step(1; 11)
+end: moduleInitImportedValue

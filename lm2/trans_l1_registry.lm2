@@ -3,6 +3,7 @@ const: @: char lm_trans_current_source_path
 LmOwnPtrStack: lm_trans_declared_import_paths
 LmOwnPtrStack: lm_trans_declared_import_documents
 LmOwnPtrStack: lm_trans_emitted_import_prelude_paths
+LmOwnPtrStack: lm_trans_emitted_import_module_init_paths
 LmOwnPtrStack: lm_trans_emitted_import_function_paths
 LmOwnPtrStack: lm_trans_emitted_callable_adapters
 LmOwnPtrStack: lm_trans_emitted_callable_binders
@@ -21,8 +22,161 @@ int: lm_trans_l2_conditional_import_depth
 int: lm_trans_l2_executable_statement_depth
 int: lm_trans_l2_conditional_emission_depth
 LmOwnPtrStack: lm_trans_typedef_projection_outputs
+LmOwnPtrStack: lm_trans_module_init_entries
+unsigned: lm_trans_next_module_init_id
+const: @: char lm_trans_module_init_root_source_path
+size_t: lm_trans_module_init_root_main_count
+int: lm_trans_module_init_wrapped_main_seen
 
 LmTransRegistry: lm_trans_registry
+
+sub: lm_trans_module_init_entry_delete_any (@: void object)
+    LmTransModuleInitEntry: entry
+
+    entry: cast: (LmTransModuleInitEntry) object
+    if: entry = 0
+        return
+    lm_own_delete(entry\source_path, 0)
+    lm_own_delete(entry\source_site, 0)
+    lm_own_delete(entry\slot_name, 0)
+    lm_own_delete(entry\helper_name, 0)
+    lm_own_delete(entry\c_type_name, 0)
+    entry\namespace_owner: 0
+    entry\descriptor: 0
+    lm_own_delete(entry, 0)
+end: lm_trans_module_init_entry_delete_any
+
+fn: lm_trans_source_site_new (const: @(char source_path); size_t: source_offset) @: char
+    @: char source_site
+    int: needed
+
+    if: source_path = 0
+        return: 0
+    needed: c.snprintf(0, 0, "%s#%zu", source_path, source_offset)
+    if: needed < 0
+        return: 0
+    source_site: cast: (@: char) lm_own_new_zero((cast: size_t needed) + 1U)
+    if: source_site = 0
+        return: 0
+    if: c.snprintf(source_site, (cast: size_t needed) + 1U, "%s#%zu", source_path, source_offset) != needed
+        lm_own_delete(source_site, 0)
+        return: 0
+return: source_site
+
+fn: lm_trans_module_init_generated_name_new (const: @(char prefix); unsigned: id) @: char
+    @: char name
+    int: needed
+
+    if: prefix = 0 || id = 0U
+        return: 0
+    needed: c.snprintf(0, 0, "%s%u", prefix, id)
+    if: needed < 0
+        return: 0
+    name: cast: (@: char) lm_own_new_zero((cast: size_t needed) + 1U)
+    if: name = 0
+        return: 0
+    if: c.snprintf(name, (cast: size_t needed) + 1U, "%s%u", prefix, id) != needed
+        lm_own_delete(name, 0)
+        return: 0
+return: name
+
+fn: lm_trans_module_init_registry_init () int
+    if: lm_trans_module_init_entries != 0
+        if: lm_trans_next_module_init_id = 0U
+            return: 1
+        return: 0
+    lm_trans_module_init_entries: lm_trans_ptr_stack_new(lm_trans_module_init_entry_delete_any)
+    if: lm_trans_module_init_entries = 0
+        return: 1
+    lm_trans_next_module_init_id: 1U
+return: 0
+
+sub: lm_trans_module_init_registry_destroy ()
+    lm_trans_ptr_stack_delete(@ lm_trans_module_init_entries)
+    lm_trans_next_module_init_id: 0U
+end: lm_trans_module_init_registry_destroy
+
+fn: lm_trans_module_init_entry_find (const: @(char source_path); size_t: source_offset) const: LmTransModuleInitEntry
+    const: LmTransModuleInitEntry: entry
+    size_t: index
+
+    if: source_path = 0 || lm_trans_module_init_entries = 0
+        return: 0
+    index: 0U
+    while: index < lm_trans_module_init_entries\count
+        entry: cast: (const: LmTransModuleInitEntry) lm_own_ptr_stack_at(lm_trans_module_init_entries, index)
+        if: entry != 0 && entry\source_path != 0 && entry\source_offset = source_offset && c.strcmp(entry\source_path, source_path) = 0
+            return: entry
+        index: index + 1U
+return: 0
+
+fn: lm_trans_module_init_entry_register (
+    const: @(char source_path)
+    size_t: source_offset
+    int: kind
+    const: LmTransNamespace: namespace_owner
+    size_t: namespace_item_limit
+) LmTransModuleInitEntry
+    const: LmTransModuleInitEntry: existing
+    LmTransModuleInitEntry: entry
+
+    if: source_path = 0 || namespace_owner = 0 || (kind != c.LM_TRANS_MODULE_INIT_KIND_NAMED_STRUCTURE && kind != c.LM_TRANS_MODULE_INIT_KIND_ANONYMOUS_STRUCTURE && kind != c.LM_TRANS_MODULE_INIT_KIND_ARRAY_REFERENCE)
+        return: 0
+    if: lm_trans_module_init_registry_init() != 0
+        return: 0
+    existing: lm_trans_module_init_entry_find(source_path, source_offset)
+    if: existing != 0
+        if: existing\kind != kind || existing\namespace_owner != namespace_owner || existing\namespace_item_limit != namespace_item_limit
+            return: 0
+        return: cast: (LmTransModuleInitEntry) existing
+    if: lm_trans_next_module_init_id = 0U
+        return: 0
+
+    entry: lm_own_new_zero(c.sizeof(entry[0]))
+    if: entry = 0
+        return: 0
+    entry\source_path: lm_trans_text_copy_cstr_from_cstr(source_path)
+    entry\source_site: lm_trans_source_site_new(source_path, source_offset)
+    entry\slot_name: lm_trans_module_init_generated_name_new("lm_lmx_module_value_", lm_trans_next_module_init_id)
+    entry\helper_name: lm_trans_module_init_generated_name_new("lm_lmx_module_init_site_", lm_trans_next_module_init_id)
+    if: entry\source_path = 0 || entry\source_site = 0 || entry\slot_name = 0 || entry\helper_name = 0
+        lm_trans_module_init_entry_delete_any(entry)
+        return: 0
+    entry\source_offset: source_offset
+    entry\kind: kind
+    entry\id: lm_trans_next_module_init_id
+    entry\namespace_owner: namespace_owner
+    entry\namespace_item_limit: namespace_item_limit
+    if: lm_own_ptr_stack_push(lm_trans_module_init_entries, entry) != 0
+        lm_trans_module_init_entry_delete_any(entry)
+        return: 0
+    lm_trans_next_module_init_id: lm_trans_next_module_init_id + 1U
+return: entry
+
+fn: lm_trans_module_init_entry_count () size_t
+    if: lm_trans_module_init_entries = 0
+        return: 0U
+return: lm_trans_module_init_entries\count
+
+fn: lm_trans_module_init_entry_at (size_t: index) const: LmTransModuleInitEntry
+    if: lm_trans_module_init_entries = 0 || index >= lm_trans_module_init_entries\count
+        return: 0
+return: cast: (const: LmTransModuleInitEntry) lm_own_ptr_stack_at(lm_trans_module_init_entries, index)
+
+fn: lm_trans_module_init_entry_set_c_type_name (LmTransModuleInitEntry: entry; const: @(char c_type_name)) int
+    @: char copy
+
+    if: entry = 0
+        return: 1
+    copy: 0
+    if: c_type_name != 0
+        copy: lm_trans_text_copy_cstr_from_cstr(c_type_name)
+        if: copy = 0
+            return: 1
+    ---
+    lm_own_delete(entry\c_type_name, 0)
+    entry\c_type_name: copy
+return: 0
 
 sub: lm_trans_typedef_projection_entry_delete_any (@: void object)
     LmTransTypedefProjectionEntry: entry

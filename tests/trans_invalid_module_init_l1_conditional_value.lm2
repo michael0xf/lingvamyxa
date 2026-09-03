@@ -1,0 +1,16 @@
+ifdef:
+    LM_TEST_MODULE_INIT_L1_CONDITIONAL:
+        L2:
+            (): moduleInitL1ConditionalValue
+                int: value 1
+            end: moduleInitL1ConditionalValue
+        end: L2
+end: ifdef
+
+L2:
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2

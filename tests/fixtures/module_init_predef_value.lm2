@@ -1,0 +1,7 @@
+int: lm_test_module_predef_trace 0
+
+fn: lm_test_module_predef_step (int: marker; size_t: extent) size_t
+    lm_test_module_predef_trace: lm_test_module_predef_trace * 10 + marker
+return: extent
+
+[]: int lm_test_module_predef_values lm_test_module_predef_step(1; 1U) 11

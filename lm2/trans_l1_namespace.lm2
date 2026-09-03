@@ -1020,6 +1020,18 @@ sub: lm_trans_ptr_stack_remove_pointer (LmOwnPtrStack: stack; const: @(void item
             return
 end: lm_trans_ptr_stack_remove_pointer
 
+fn: lm_trans_ptr_stack_has_pointer (const: (LmOwnPtrStack: stack); const: @(void item)) int
+    size_t: index
+
+    if: stack = 0 || item = 0
+        return: 0
+    index: 0U
+    while: index < stack\count
+        if: stack\items[index] = item
+            return: 1
+        index: index + 1U
+return: 0
+
 sub: lm_trans_identifier_relation_destroy (LmTransIdentifierRelation: relation)
     if: relation != 0
         lm_trans_ptr_stack_delete(@ relation\symbols)
@@ -1551,6 +1563,8 @@ sub: lm_trans_namespace_destroy (LmTransNamespace: namespace_)
         namespace_\hoisted_functions: 0
         namespace_\message_thread_entry: 0
         namespace_\managed_message_thread_context: 0
+        namespace_\source_item_limit: 0U
+        namespace_\source_item_limit_active: 0
 end: lm_trans_namespace_destroy
 
 sub: lm_trans_namespace_destroy_any (@: void object)
@@ -1667,14 +1681,83 @@ fn: lm_trans_emit_return_name (FILE: file; unsigned: id) int
         return: 1
 return: 0
 
+fn: lm_trans_namespace_source_item_count (const: (LmTransNamespace: namespace_)) size_t
+    if: namespace_ = 0 || namespace_\items = 0
+        return: 0U
+return: namespace_\items\count
+
+fn: lm_trans_namespace_source_limit_enter (
+    LmTransNamespace: namespace_
+    size_t: item_limit
+    @: size_t previous_limit
+    @: int previous_active
+) int
+    if: previous_limit != 0
+        previous_limit[0]: 0U
+    if: previous_active != 0
+        previous_active[0]: 0
+    if: namespace_ = 0 || namespace_\items = 0 || previous_limit = 0 || previous_active = 0 || item_limit > namespace_\items\count
+        return: 1
+
+    previous_limit[0]: namespace_\source_item_limit
+    previous_active[0]: namespace_\source_item_limit_active
+    if: namespace_\source_item_limit_active && item_limit > namespace_\source_item_limit
+        item_limit: namespace_\source_item_limit
+    namespace_\source_item_limit: item_limit
+    namespace_\source_item_limit_active: 1
+return: 0
+
+sub: lm_trans_namespace_source_limit_restore (
+    LmTransNamespace: namespace_
+    size_t: previous_limit
+    int: previous_active
+)
+    if: namespace_ = 0
+        return
+    namespace_\source_item_limit: previous_limit
+    namespace_\source_item_limit_active: previous_active != 0
+end: lm_trans_namespace_source_limit_restore
+
+fn: lm_trans_namespace_effective_source_item_limit (const: (LmTransNamespace: namespace_)) size_t
+    size_t: item_count
+
+    item_count: lm_trans_namespace_source_item_count(namespace_)
+    if: namespace_ != 0 && namespace_\source_item_limit_active && namespace_\source_item_limit < item_count
+        return: namespace_\source_item_limit
+return: item_count
+
+fn: lm_trans_namespace_find_visible_symbol (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) LmTransSymbol
+    LmTransIdentifierCard: card
+    LmTransSymbol: symbol
+    size_t: index
+
+    if: namespace_ = 0 || namespace_\items = 0 || namespace_\identifiers = 0 || name = 0
+        return: 0
+    card: lm_trans_identifier_table_find_card(namespace_\identifiers, name)
+    if: card = 0 || card\symbols = 0
+        return: 0
+
+    index: lm_trans_namespace_effective_source_item_limit(namespace_)
+    while: index > 0U
+        index: index - 1U
+        symbol: cast: (LmTransSymbol) lm_own_ptr_stack_at(namespace_\items, index)
+        if: symbol != 0 && lm_trans_identifier_same(symbol\name, name) && lm_trans_ptr_stack_has_pointer(card\symbols, symbol)
+            return: symbol
+        ---
+return: 0
+
 fn: lm_trans_namespace_find (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: LmTransSymbol
     if: namespace_ = 0
         return: 0
+    if: namespace_\source_item_limit_active
+        return: lm_trans_namespace_find_visible_symbol(namespace_, name)
 return: lm_trans_identifier_table_find_latest_symbol(namespace_\identifiers, name)
 
 fn: lm_trans_namespace_find_mutable (LmTransNamespace: namespace_; const: (LmP0Text: name)) LmTransSymbol
     if: namespace_ = 0
         return: 0
+    if: namespace_\source_item_limit_active
+        return: lm_trans_namespace_find_visible_symbol(namespace_, name)
 return: lm_trans_identifier_table_find_latest_symbol(namespace_\identifiers, name)
 
 fn: lm_trans_namespace_descriptor (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: LmTransDescriptor
@@ -1706,8 +1789,19 @@ return: symbol != 0 && lm_trans_symbol_is(symbol, "structureConstructor") && sym
 fn: lm_trans_namespace_relation_symbol_latest (const: (LmTransNamespace: namespace_); const: (LmP0Text: name); const: @(char relation_name)) const: LmTransSymbol
     LmTransIdentifierCard: card
     LmTransIdentifierRelation: relation
+    const: LmTransSymbol: symbol
+    size_t: index
 
     if: namespace_ = 0 || namespace_\identifiers = 0 || name = 0 || relation_name = 0
+        return: 0
+    if: namespace_\source_item_limit_active
+        index: lm_trans_namespace_effective_source_item_limit(namespace_)
+        while: index > 0U
+            index: index - 1U
+            symbol: cast: (const: LmTransSymbol) lm_own_ptr_stack_at(namespace_\items, index)
+            if: symbol != 0 && lm_trans_identifier_same(symbol\name, name) && lm_trans_symbol_is(symbol, relation_name)
+                return: symbol
+            ---
         return: 0
     card: lm_trans_identifier_table_find_card(namespace_\identifiers, name)
     if: card = 0
@@ -1747,7 +1841,7 @@ fn: lm_trans_namespace_relation_symbol_for_latest_binding (
     if: binding = 0
         return: 0
 
-    index: namespace_\items\count
+    index: lm_trans_namespace_effective_source_item_limit(namespace_)
     while: index > 0U
         index: index - 1U
         symbol: (cast: (LmTransSymbol) lm_own_ptr_stack_at(namespace_\items, index))

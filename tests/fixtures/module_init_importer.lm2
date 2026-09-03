@@ -1,0 +1,3 @@
+import: "module_init_dependency.lm2"
+
+[]: int lm_test_importer_values lm_test_module_init_extent(3; 2U) 31 32

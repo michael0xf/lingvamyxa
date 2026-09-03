@@ -1,0 +1,46 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+ModuleInitPoint:
+    int: x
+    int: y
+end: ModuleInitPoint
+
+ModuleInitPoint: moduleInitDefaultPoint
+
+ModuleInitPoint: moduleInitExplicitPoint
+    x: 7
+    y: 9
+end: moduleInitExplicitPoint
+
+ModuleInitPoint: moduleInitAliasPoint moduleInitExplicitPoint
+
+external:
+    fn: main () int
+        const: LmOwnAllocationDescriptor: defaultDescriptor
+        const: LmOwnAllocationDescriptor: explicitDescriptor
+
+        if: moduleInitDefaultPoint = 0 || moduleInitExplicitPoint = 0 || moduleInitAliasPoint = 0
+            return: 1
+        if: moduleInitDefaultPoint = moduleInitExplicitPoint || moduleInitAliasPoint != moduleInitExplicitPoint
+            return: 2
+        if: moduleInitDefaultPoint\x != 0 || moduleInitDefaultPoint\y != 0
+            return: 3
+        if: moduleInitExplicitPoint\x != 7 || moduleInitExplicitPoint\y != 9
+            return: 4
+
+        defaultDescriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), moduleInitDefaultPoint)
+        explicitDescriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), moduleInitExplicitPoint)
+        if: defaultDescriptor = 0 || explicitDescriptor = 0
+            return: 5
+        if: defaultDescriptor\owner != lm_message_thread_owner(c.lm_lmx_message_thread) || explicitDescriptor\owner != lm_message_thread_owner(c.lm_lmx_message_thread)
+            return: 6
+        return: 0
+    end: main
+end: external

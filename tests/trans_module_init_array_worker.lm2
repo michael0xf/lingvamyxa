@@ -1,0 +1,43 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+[]: int lm_test_module_shared_values 3 7 11 13
+
+thread: lm_test_module_array_worker (IncomingMessage: message)
+    route: "/module-array-worker"
+    if: message\lmx = 0 || message\length != 2U
+        exit: 31
+        return:
+    ---
+    if: lm_test_module_shared_values\length != 3U || lm_test_module_shared_values[0] != 7 || lm_test_module_shared_values[1] != 11 || lm_test_module_shared_values[2] != 13
+        exit: 32
+        return:
+    ---
+    exit: 0
+end: lm_test_module_array_worker
+
+external:
+    fn: main () int
+        @: int items lm_test_module_shared_values\ptr
+        LmOwnArena: root lm_message_thread_owner(c.lm_lmx_message_thread)
+        const: LmOwnAllocationDescriptor: header_descriptor
+        const: LmOwnAllocationDescriptor: backing_descriptor
+
+        if: lm_test_module_shared_values = 0 || items = 0
+            return: 1
+        header_descriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, root, lm_test_module_shared_values)
+        backing_descriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, root, items)
+        if: root = 0 || header_descriptor = 0 || backing_descriptor = 0
+            return: 2
+        if: header_descriptor\owner != root || backing_descriptor\owner != root || backing_descriptor\rank != 1U || backing_descriptor\level != 0U || backing_descriptor\count != 3U
+            return: 3
+
+        send: "/module-array-worker" "{}" 2U
+    end: main
+end: external

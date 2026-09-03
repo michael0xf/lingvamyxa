@@ -1,0 +1,11 @@
+ModuleInitConstPoint:
+    int: value
+end: ModuleInitConstPoint
+
+const: ModuleInitConstPoint: moduleInitConstPoint
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

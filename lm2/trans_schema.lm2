@@ -8,6 +8,7 @@ table:
              LmTransDescriptorRelation   c.struct
              LmTransDescriptor           c.struct
              LmTransNamespace            c.struct
+             LmTransModuleInitEntry      c.struct
              LmTransRegistryFact         c.struct
              LmTransRegistryCloneFrame   c.struct
              LmTransExprSegment          c.struct
@@ -87,11 +88,22 @@ table:
 end: `fn.thread-context.managed`
 
 table:
+    source
+    name: `cast.target`
+    columns: (class: class) (int: value)
+    rows:
+             LmTransModuleInitEntry 1
+end: `cast.target`
+
+table:
     name: `define.value`
     columns: (class: class) (@: char value)
     rows:
              LM_TRANS_REGISTRY_CLONE_STRUCTURE 1
              LM_TRANS_REGISTRY_CLONE_TRAILER   2
+             LM_TRANS_MODULE_INIT_KIND_NAMED_STRUCTURE 1
+             LM_TRANS_MODULE_INIT_KIND_ANONYMOUS_STRUCTURE 2
+             LM_TRANS_MODULE_INIT_KIND_ARRAY_REFERENCE 3
 end: `define.value`
 
 table:
@@ -126,6 +138,7 @@ table:
     rows:
              lm_trans_callable_projection_cache_entry_delete_any 1
              lm_trans_typedef_projection_entry_delete_any 1
+             lm_trans_module_init_entry_delete_any 1
              lm_trans_capture_delete_any 1
              lm_trans_cleanup_delete_any 1
              lm_trans_descriptor_field_delete_any 1
@@ -375,6 +388,7 @@ table:
              LmTransIdentifierCard          c.struct
              LmTransIdentifierTable         c.struct
              LmTransRegistry                c.struct
+             LmTransModuleInitEntry         c.struct
              LmTransRegistryFact            c.struct
              LmTransRegistryCloneFrame      c.struct
              LmTransLayoutField             c.struct
@@ -436,6 +450,7 @@ table:
              LmTransIdentifierCard          1
              LmTransIdentifierTable         1
              LmTransRegistry                1
+             LmTransModuleInitEntry         1
              LmTransRegistryFact            1
              LmTransRegistryCloneFrame      1
              LmTransLayoutField             1
@@ -538,6 +553,23 @@ table:
              predefined_descriptor_sites LmOwnPtrStack 11           0
              early_l2_source_sites LmOwnPtrStack      12            0
 end: LmTransRegistry
+
+table:
+    name: LmTransModuleInitEntry
+    columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
+    rows:
+             source_path          char                  0                       1                                0
+             source_offset        size_t                1                       0                                0
+             source_site          char                  2                       1                                0
+             kind                 int                   3                       0                                0
+             id                   unsigned              4                       0                                0
+             slot_name            char                  5                       1                                0
+             helper_name          char                  6                       1                                0
+             c_type_name          char                  7                       1                                0
+             namespace_owner      LmTransNamespace      8                       0                                1
+             namespace_item_limit size_t                9                       0                                0
+             descriptor           LmTransDescriptor     10                      0                                1
+end: LmTransModuleInitEntry
 
 table:
     name: LmTransRegistryFact
@@ -1118,6 +1150,8 @@ table:
              function              LmTransFunctionHeader         6                 0                                0
              emit_prototype        LmTransTopLevelEmitHandler    7                 0                                0
              emit_after_prototypes LmTransTopLevelEmitHandler    8                 0                                0
+             module_init_entry     LmTransModuleInitEntry        9                 0                                1
+             emit_module_init      LmTransTopLevelEmitHandler    10                0                                0
 end: LmTransTopLevelItem
 
 table:
@@ -1158,4 +1192,6 @@ table:
              message_thread_entry int                    13                      0                                0
              thread_declarations  LmOwnPtrStack          14                      0                                0
              managed_message_thread_context int          15                      0                                0
+             source_item_limit    size_t                 16                      0                                0
+             source_item_limit_active int                17                      0                                0
 end: LmTransNamespace

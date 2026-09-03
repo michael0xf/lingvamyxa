@@ -111,6 +111,49 @@ fn: lm_trans_text_assign_cstr (
 
 fn: lm_trans_registry_init () int
 
+fn: lm_trans_source_site_new (
+    const: @: char source_path
+    size_t: source_offset
+) @: char
+
+sub: lm_trans_module_init_entry_delete_any (
+    @: void object
+)
+
+fn: lm_trans_module_init_registry_init () int
+
+sub: lm_trans_module_init_registry_destroy ()
+
+fn: lm_trans_module_init_entry_register (
+    const: @: char source_path
+    size_t: source_offset
+    int: kind
+    const: LmTransNamespace: namespace_owner
+    size_t: namespace_item_limit
+) LmTransModuleInitEntry
+
+fn: lm_trans_module_init_entry_find (
+    const: @: char source_path
+    size_t: source_offset
+) const: LmTransModuleInitEntry
+
+fn: lm_trans_module_init_entry_count () size_t
+
+fn: lm_trans_module_init_entry_at (
+    size_t: index
+) const: LmTransModuleInitEntry
+
+fn: lm_trans_module_init_entry_set_c_type_name (
+    LmTransModuleInitEntry: entry
+    const: @: char c_type_name
+) int
+
+fn: lm_trans_top_level_emit_import_module_initializers (
+    FILE: file
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+
 fn: lm_trans_emit_identifier (
     FILE: file
     const: LmP0Text: name
@@ -810,6 +853,23 @@ fn: lm_trans_namespace_value_c_array_element_is_const (
     const: LmTransNamespace: namespace_
     const: LmP0Text: name
 ) int
+
+fn: lm_trans_namespace_source_item_count (
+    const: LmTransNamespace: namespace_
+) size_t
+
+fn: lm_trans_namespace_source_limit_enter (
+    LmTransNamespace: namespace_
+    size_t: item_limit
+    @: size_t previous_limit
+    @: int previous_active
+) int
+
+sub: lm_trans_namespace_source_limit_restore (
+    LmTransNamespace: namespace_
+    size_t: previous_limit
+    int: previous_active
+)
 
 fn: lm_trans_namespace_relation_text_for_latest_binding (
     const: LmTransNamespace: namespace_

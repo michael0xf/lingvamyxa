@@ -1,0 +1,7 @@
+import: "fixtures/module_init_imported_main.lm2"
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

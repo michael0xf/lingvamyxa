@@ -10605,11 +10605,13 @@ that metadata is not a namespace binding and cannot be observed as descriptor
 data.
 
 The current hosted C profile initially supports Primitive and admitted
-StructureReference fields inside executable bodies when every field descriptor,
-physical projection and initializer conversion is inferable at translation
-time. A body item without an inferable field descriptor, a dynamic field shape
-or an unsupported projection is a hosted-backend diagnostic; it must not be
-guessed from ANSI C syntax.
+StructureReference fields inside executable bodies and at direct module level
+when every field descriptor, physical projection and initializer conversion is
+inferable at translation time. Direct module-level construction uses the
+source-ordered root-arena initialization boundary of section 19.29.12.2.1. A
+body item without an inferable field descriptor, a dynamic field shape or an
+unsupported projection is a hosted-backend diagnostic; it must not be guessed
+from ANSI C syntax.
 
 Although the source-semantic rule above admits an ArrayReference field, the
 current hosted anonymous-Structure projection does not yet preserve the array
@@ -10641,16 +10643,16 @@ limitation; it does not add layout comparison to `implements` and does not
 change the source-semantic admission result.
 
 Source semantics also admit module/top-level construction in the selected
-module or root arena. Hosted lowering of `():` at top level remains pending the
-common source-ordered module-initialization mechanism and must currently be
-diagnosed rather than emitted as an unowned C static aggregate. Capturing a
-local anonymous StructureReference in an actual hosted nested-function closure
-likewise remains pending closure-environment lowering; until that lowering is
-available, the hosted backend diagnoses the capture. The current hosted
-projection also diagnoses an anonymous-construction result name that is already
-visible, including a source-semantically compatible redeclaration, until it can
-project multiple value occurrences without overwriting a target-language slot.
-An incompatible collision is independently rejected by the normative
+module or root arena. The hosted profile lowers a direct module-level `():`
+site through the common source-ordered initialization mechanism of section
+19.29.12.2.1; it does not emit an unowned C static aggregate. Capturing a local
+anonymous StructureReference in an actual hosted nested-function closure
+remains pending closure-environment lowering; until that lowering is available,
+the hosted backend diagnoses the capture. The current hosted projection also
+diagnoses an anonymous-construction result name that is already visible,
+including a source-semantically compatible redeclaration, until it can project
+multiple value occurrences without overwriting a target-language slot. An
+incompatible collision is independently rejected by the normative
 `implements(old, new)` rule. These are projection limitations, not additional
 Value kinds or source-language lifetime rules.
 
@@ -10705,16 +10707,25 @@ table rows.
 
 19.20.4. Current Bootstrap Divergence
 
-The hosted local-constructor path recognizes a visible named-Structure
-constructor in a form such as `Circle: circle ... end: circle`, allocates a distinct
+The hosted constructor path recognizes a visible named-Structure constructor in
+a form such as `Circle: circle ... end: circle`, allocates a distinct
 arena-owned instance, and binds only `circle`. It reads the descriptor already
 bound as `Circle` and publishes neither another descriptor occurrence nor
-Registry/Table rows. Until the current-arena migration is complete, this path
-selects the MessageThread root arena directly.
+Registry/Table rows. Until the current-arena migration is complete, an
+executable/local site selects the MessageThread root arena directly. A direct
+module/top-level site receives that same root arena explicitly through the
+source-ordered initialization mechanism of section 19.29.12.2.1.
 
-This explicit named-constructor lowering is currently an executable/local path.
-Hosted module/top-level construction in a module/root arena is still pending;
-descriptor declaration does not stand in for it and creates no fallback value.
+Descriptor declaration does not stand in for explicit construction and creates
+no fallback value. A distinct-name typed initializer such as
+`Circle: alias circle` forwards the exact visible StructureReference into a
+new binding slot; it does not allocate or copy another `Circle`.
+
+The current hosted binding metadata does not yet carry referent constness for a
+named StructureReference. A `const:`-wrapped named construction or typed
+forwarding is therefore diagnosed before emission, both locally and at module
+level, until that qualifier can be preserved by assignment and field-update
+validation.
 
 The hosted constructor path does not yet project a second physical C value for
 a construction result whose name is already visible. It rejects that case
@@ -13164,15 +13175,16 @@ where the allocation is semantically part of an owner region.
 
 19.29.12.2. Current Root-Arena Materialization
 
-The current migrated paths allocate explicitly constructed local named
-Structures, `fm` result Structures, admitted local ordinary Arrays in managed
-Message Thread contexts (including extent-bearing `[]:` declarations), and
-closure environments/descriptors in the root Message Thread arena. A
-named-Structure or physical-`merge:` descriptor declaration performs no
-allocation. Remaining generic top-level value/backing paths and non-source
-runtime tables may still use static C-backed representations. Those paths are
-separate implementation debt and must migrate to module/root-arena
-materialization where they represent ordinary source values.
+The current migrated paths allocate explicitly constructed local and direct
+module-level named Structures, local and direct module-level anonymous
+Structures, `fm` result Structures, admitted ordinary Arrays in managed Message
+Thread contexts (including extent-bearing `[]:` declarations and direct
+module-level ArrayReferences), and closure environments/descriptors in the root
+Message Thread arena. A named-Structure or physical-`merge:` descriptor
+declaration performs no allocation. Non-source runtime tables may still use a
+static C-backed representation. That path is separate implementation debt and
+must migrate to module/root-arena materialization where it represents an
+ordinary source value.
 
 Conceptual generated form for an ordinary local Structure is:
 
@@ -13221,6 +13233,115 @@ The root-only strategy means that independently returned objects remain valid
 and distinct until root-arena destruction. It intentionally delays
 reclamation. Later owner profiles may reclaim non-escaping regions earlier but
 must preserve the exact same visible references and addresses.
+
+
+19.29.12.2.1. Hosted Source-Ordered Module Initialization
+
+The hosted ANSI C executable boundary materializes these direct module-level
+ordinary value sites in the attached root Message Thread arena:
+
+    named Structure construction;
+    anonymous `():` Structure construction, including an empty Structure;
+    ordinary `[]:` ArrayReference construction.
+
+A descriptor declaration, function definition, raw `c.array` declaration or
+source-only translation Table is not such a site. The mechanism implements the
+ordinary arena rules; it does not introduce a module-static source Value kind.
+
+The backend gives every value-producing source site a stable private identity
+derived from the resolved source path and source span. It may emit a C
+declaration or private anonymous-layout type needed by that site. For the value
+itself it emits only a zero-initialized static reference slot: a `T *`-shaped
+slot for a StructureReference or an `LmSlice *`-shaped slot for an
+ArrayReference. The referent, Array header and every owned Array backing level
+must be allocated in the supplied arena. A static Structure instance, static
+anonymous aggregate, static ordinary-Array element buffer or pointer into such
+backing is not a conforming implementation of this boundary.
+
+Each site has one private initializer helper whose logical parameters are the
+executing `LmMessageThread` and selected `LmOwnArena`. The helper performs the
+same validation, allocation and initialization as the corresponding local
+constructor. Named and anonymous Structure fields are initialized exactly once
+in logical source order. An omitted field follows its ordinary initialization
+rule, and an empty `():` site still allocates one non-null, distinct empty
+Structure referent. For an ArrayReference, extent expressions are evaluated
+exactly once in dimension source order before backing allocation, then present
+payload expressions are evaluated exactly once in element source order. The
+header and all backing levels belong to the supplied arena.
+
+The helper publishes its private reference slot only after that site has
+completed successfully. A typed exact-reference initializer forwards the
+already visible reference into its own slot without copying or reallocating the
+referent. Thus a later binding such as `Point: alias original` has exact
+reference identity with `original`; reading either binding after module
+initialization observes the same object. Two actual constructor sites allocate
+distinct referents even when their descriptors and initializer values are the
+same.
+
+Module initialization is an ordered traversal, not a C initializer dependency
+accident. Direct sites run in source order. At the first ordinary `import`
+occurrence, the imported module's dependency traversal and direct sites run at
+that source position before traversal resumes in the importer. A module and
+each of its stable source sites run at most once in one generated executable,
+keyed by the path produced by the import resolver. Repeated imports that resolve
+to the same path therefore neither allocate another instance nor repeat
+initializer side effects. A later import cannot retroactively make one of its
+bindings visible to an earlier initializer. Modules selected by the established
+hoisted `predef` traversal participate once in that traversal's deterministic
+order; reaching the same resolved module path again through `predef` or
+`import` does not schedule its value sites again.
+
+The current resolver does not canonicalize lexically distinct relative path
+spellings such as `x.lm2` and `./x.lm2`; they remain distinct module identities
+until portable path normalization is added.
+
+Every helper is emitted after the declarations and callable prototypes needed
+by its body. The generated dispatcher is invoked only after the process root
+Message Thread has been attached and its root arena is available. It receives
+that actor and arena explicitly. It completes before the user `main` body,
+before any declared worker actor is started, and before any route or inbound
+provider can make worker execution observable. If initialization fails, the
+hosted failure path does not enter user `main` or start workers; it tears down
+the attached root by the ordinary generated cleanup path. Successfully
+published references remain alive until that root arena is destroyed.
+
+Initializer name resolution uses the namespace snapshot immediately before the
+site. The pending result slot is not a provisional self-binding. Consequently,
+an initializer cannot refer to the result being constructed unless an older
+visible occurrence already exists, and it cannot refer to a binding introduced
+later in the module traversal. An unresolved self-reference and a forward
+reference are hosted diagnostics; the backend must not emit a tentative null
+slot and let either expression observe it. The current occurrence-projection
+limitations described in sections 19.20.1.1 and 19.20.4 may independently
+reject publication of a result whose exact name already has an older visible
+occurrence. That limitation does not make the pending occurrence visible as a
+self-reference.
+
+The initial hosted boundary is deliberately unconditional. A direct ordinary
+value site nested in `os`, `ifdef`, `guard` or another conditionally emitted
+top-level wrapper is rejected until conditional namespace replay and a
+presence-matched initializer schedule are implemented. A module value inside
+an `extern_c` wrapper is likewise rejected until that wrapper participates in
+the dedicated slot/helper phases instead of recursively emitting a complete
+module pipeline. A module value inside an L2/L3 level receiver nested in an
+already active module surface is rejected for the same reason until nested
+surface declaration and scheduling are replayed in source order. A local
+constructor in an executable `if` remains an ordinary execution-time operation
+and is not affected by this restriction.
+
+The complete generated executable must provide exactly one non-imported hosted
+`main` definition to own the attached root. A root translation containing
+module-level ordinary value sites but no such entry is rejected until an
+explicit library/module-initializer ABI is selected. An imported module need
+not define `main`; its sites join the importing executable's dispatcher. A
+`main` definition supplied by an imported module is rejected, as are multiple
+candidate `main` definitions anywhere in the root import graph. A `main`
+inside a conditional, `extern_c` or nested level wrapper cannot host this
+unconditional module-value schedule and is rejected when module sites exist.
+These are
+hosted executable-boundary restrictions, not new source Value kinds or general
+rules forbidding another runtime profile from exposing an explicit module
+initializer.
 
 
 19.29.12.3. Generated Cleanup for Explicit Low-Level Resources
@@ -14425,15 +14546,16 @@ Current hosted-bootstrap implementation:
     process-entry `return` requests root-loop stop after generated cleanup;
     ordinary stop is first-request-wins, while diagnostic/runtime collection
         failures use a failure-dominant status channel;
-    explicitly constructed local named Structures, `fm` result Structures,
-        arena-backed Array values and closure environments/descriptors are
-        root-arena managed;
+    explicitly constructed local and direct module-level named/anonymous
+        Structures, `fm` result Structures, arena-backed local/module Array
+        values and closure environments/descriptors are root-arena managed;
     named-Structure and physical-`merge:` descriptor declarations emit only
         namespace descriptors and hosted type/layout projections, never object
         storage or arena allocations;
-    remaining generic top-level value/backing paths and non-source runtime
-        tables may still have static-backed representations which must migrate
-        to module/root arenas when they represent ordinary source values;
+    direct module-level named Structure, anonymous `():` and ordinary `[]:`
+        sites use a source-ordered initializer after root attachment and retain
+        only private static reference slots; non-source runtime tables remain a
+        static-backed path which must migrate to module/root arenas;
     arena allocation, array allocation, descriptors, lazy edges, freeze,
         absorption and tree-cut helpers exist;
     root-arena destruction releases ordinary generated Structures, Array
@@ -14921,19 +15043,20 @@ including buffers that require C array-to-pointer decay, `sizeof(array)` or a
 raw-pointer ABI. `c.array` remains C storage and is not affected by the ordinary
 ArrayReference lowering described below.
 
-In the current hosted migration stage, an admitted ordinary local `[]:`
-declaration inside a managed function materializes a persistent `LmSlice`
-Array header plus arena-owned backing storage in the executing Message Thread's
-root owner arena (the generated root actor's arena at process entry). This
-applies to both trailing extents and payload-bearing bracket groups and to
-repeated declarations. Extent expressions are evaluated exactly once in source
-order. The current bootstrap admits statically typed integer extents in the
-non-negative `long long` range; malformed or out-of-range C99 integer literals
-are rejected before C emission, and a negative runtime result enters the hosted
-construction-failure path before any backing allocation. Untyped `c.*` atoms
-and calls are not admitted as ArrayReference extents in this stage, except for
-the dedicated `c.sizeof(...)` expression form. Each repeated binding
-receives a distinct header, and any backing
+In the current hosted migration stage, an admitted ordinary `[]:` declaration
+inside a managed function or directly on an executable module surface
+materializes a persistent `LmSlice` Array header plus arena-owned backing
+storage in the executing Message Thread's root owner arena (the generated root
+actor's arena at process entry). A direct module site uses the source-ordered
+initializer of section 19.29.12.2.1. This applies to both trailing extents and
+payload-bearing bracket groups and to repeated declarations. Extent expressions
+are evaluated exactly once in source order. The current bootstrap admits
+statically typed integer extents in the non-negative `long long` range;
+malformed or out-of-range C99 integer literals are rejected before C emission,
+and a negative runtime result enters the hosted construction-failure path before
+any backing allocation. Untyped `c.*` atoms and calls are not admitted as
+ArrayReference extents in this stage, except for the dedicated `c.sizeof(...)`
+expression form. Each repeated binding receives a distinct header, and any backing
 allocations created for it are distinct rather than shared. Backing storage is
 initially zero, after which present initializer elements are assigned in source
 order; a multidimensional initializer uses explicit nested groups in this
@@ -14946,16 +15069,18 @@ does not copy its backing. Prefix `@` applied to the binding addresses the
 ArrayReference slot, while `arrayReference\ptr` remains the explicit raw-backing
 bridge described below.
 
-This stage deliberately does not materialize an ordinary top-level `[]:` value.
-The hosted translator rejects that form until a module initializer can run once
-after root-arena attachment and before worker actors become observable. It also
-rejects ordinary Array construction in an external function that has no managed
-Message Thread context. The current unchecked indexing projection accepts only
-an unquoted direct ArrayReference binding followed by enough immediate bracket
-suffixes to consume every rank. An exact-quoted or parenthesized reference or a
-callable result must first be rebound to an admitted unquoted ArrayReference
-binding before a complete index chain is used. A chain that consumes fewer
-ranks is rejected until partial-index Array views are implemented.
+At a direct module/top-level site this stage retains only a private static
+`LmSlice *` reference slot; the header and backing are root-arena allocations.
+The hosted translator rejects such a site when the complete executable has no
+unique non-imported root `main`, or when the site is conditionally emitted, as
+specified in section 19.29.12.2.1. It also rejects ordinary Array construction
+in an external function that has no managed Message Thread context. The current
+unchecked indexing projection accepts only an unquoted direct ArrayReference
+binding followed by enough immediate bracket suffixes to consume every rank. An
+exact-quoted or parenthesized reference or a callable result must first be
+rebound to an admitted unquoted ArrayReference binding before a complete index
+chain is used. A chain that consumes fewer ranks is rejected until partial-index
+Array views are implemented.
 Capturing an ordinary ArrayReference through a closure environment, runtime
 element descriptors, complete runtime rank/shape/stride/storage metadata in the
 Array header, runtime bounds checking for ArrayReference indexing at every rank,

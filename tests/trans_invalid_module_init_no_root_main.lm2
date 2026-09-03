@@ -1,0 +1,9 @@
+L2:
+    (): moduleInitValueWithoutRootMain
+        int: value 1
+    end: moduleInitValueWithoutRootMain
+
+    fn: lm_test_module_init_no_root_probe () int
+        return: 0
+    end: lm_test_module_init_no_root_probe
+end: L2

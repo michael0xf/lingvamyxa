@@ -1,0 +1,18 @@
+import: "fixtures/module_init_once_fixture.lm2"
+import: "fixtures/module_init_once_fixture.lm2"
+
+(): moduleInitImporterValue
+    int: marker lm_test_module_init_order_step(2; 22)
+end: moduleInitImporterValue
+
+external:
+    fn: main () int
+        if: moduleInitImportedValue = 0 || moduleInitImporterValue = 0
+            return: 1
+        if: moduleInitImportedValue\marker != 11 || moduleInitImporterValue\marker != 22
+            return: 2
+        if: moduleInitOrderTrace[0] != 12
+            return: 3
+        return: 0
+    end: main
+end: external

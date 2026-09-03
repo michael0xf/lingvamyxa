@@ -1,0 +1,17 @@
+L2:
+    ModuleInitForwardValue:
+        int: value
+    end: ModuleInitForwardValue
+
+    ModuleInitForwardValue: moduleInitEarlyValue moduleInitLaterValue
+
+    ModuleInitForwardValue: moduleInitLaterValue
+        value: 9
+    end: moduleInitLaterValue
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2

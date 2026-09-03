@@ -1,0 +1,23 @@
+import:
+    "fixtures/module_init_importer.lm2"
+    "fixtures/module_init_dependency.lm2"
+    "fixtures/module_init_importer.lm2"
+end: import
+
+[]: int lm_test_root_values lm_test_module_init_extent(4; 2U) 41 42
+
+external:
+    fn: main () int
+        if: lm_test_module_init_trace != 1234
+            return: 1
+        if: lm_test_dependency_first\length != 2U || lm_test_dependency_first[0] != 11 || lm_test_dependency_first[1] != 12
+            return: 2
+        if: lm_test_dependency_second\length != 1U || lm_test_dependency_second[0] != 21
+            return: 3
+        if: lm_test_importer_values\length != 2U || lm_test_importer_values[0] != 31 || lm_test_importer_values[1] != 32
+            return: 4
+        if: lm_test_root_values\length != 2U || lm_test_root_values[0] != 41 || lm_test_root_values[1] != 42
+            return: 5
+        return: 0
+    end: main
+end: external

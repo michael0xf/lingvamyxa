@@ -1,0 +1,8 @@
+int: lm_test_module_init_trace 0
+
+fn: lm_test_module_init_extent (int: marker; size_t: extent) size_t
+    lm_test_module_init_trace: lm_test_module_init_trace * 10 + marker
+return: extent
+
+[]: int lm_test_dependency_first lm_test_module_init_extent(1; 2U) 11 12
+[]: int lm_test_dependency_second lm_test_module_init_extent(2; 1U) 21

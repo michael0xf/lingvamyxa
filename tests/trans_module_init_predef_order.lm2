@@ -1,0 +1,17 @@
+[]: int lm_test_module_predef_root_before lm_test_module_predef_step(2; 1U) 22
+
+predef: "fixtures/module_init_predef_value.lm2"
+predef: "fixtures/module_init_predef_value.lm2"
+import: "fixtures/module_init_predef_value.lm2"
+
+[]: int lm_test_module_predef_root_after lm_test_module_predef_step(3; 1U) 33
+
+external:
+    fn: main () int
+        if: lm_test_module_predef_trace != 123
+            return: 1
+        if: lm_test_module_predef_values[0] != 11 || lm_test_module_predef_root_before[0] != 22 || lm_test_module_predef_root_after[0] != 33
+            return: 2
+        return: 0
+    end: main
+end: external

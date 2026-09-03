@@ -1,0 +1,10 @@
+ConstNamedPoint:
+    int: value
+end: ConstNamedPoint
+
+external:
+    fn: main () int
+        const: ConstNamedPoint: point
+        return: 0
+    end: main
+end: external

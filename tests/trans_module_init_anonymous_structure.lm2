@@ -1,0 +1,43 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+(): moduleInitAnonymousValue
+    int: value 3
+    int: untouched
+    int: value 5
+end: moduleInitAnonymousValue
+
+(): moduleInitEmptyA
+(): moduleInitEmptyB
+
+external:
+    fn: main () int
+        @: void emptyAIdentity (cast: (@: void) moduleInitEmptyA)
+        @: void emptyBIdentity (cast: (@: void) moduleInitEmptyB)
+        const: LmOwnAllocationDescriptor: valueDescriptor
+        const: LmOwnAllocationDescriptor: emptyADescriptor
+        const: LmOwnAllocationDescriptor: emptyBDescriptor
+
+        if: moduleInitAnonymousValue = 0 || moduleInitEmptyA = 0 || moduleInitEmptyB = 0
+            return: 1
+        if: moduleInitAnonymousValue\[0]value != 3 || moduleInitAnonymousValue\[1]value != 5 || moduleInitAnonymousValue\value != 5 || moduleInitAnonymousValue\untouched != 0
+            return: 2
+        if: emptyAIdentity = emptyBIdentity
+            return: 3
+
+        valueDescriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), moduleInitAnonymousValue)
+        emptyADescriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), moduleInitEmptyA)
+        emptyBDescriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), moduleInitEmptyB)
+        if: valueDescriptor = 0 || emptyADescriptor = 0 || emptyBDescriptor = 0
+            return: 4
+        if: valueDescriptor\owner != lm_message_thread_owner(c.lm_lmx_message_thread) || emptyADescriptor\owner != lm_message_thread_owner(c.lm_lmx_message_thread) || emptyBDescriptor\owner != lm_message_thread_owner(c.lm_lmx_message_thread)
+            return: 5
+        return: 0
+    end: main
+end: external

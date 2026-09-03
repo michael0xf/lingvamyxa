@@ -1,0 +1,13 @@
+extern_c:
+    L2:
+        (): moduleInitExternCValue
+            int: value 1
+        end: moduleInitExternCValue
+    end: L2
+end: extern_c
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

@@ -1,3 +1,5 @@
+int: lm_trans_module_init_unsupported_wrapper_depth
+
 sub: lm_trans_top_level_item_destroy (LmTransTopLevelItem: item)
     if: item != 0
         lm_trans_function_header_destroy(item\function)
@@ -123,6 +125,22 @@ fn: lm_trans_function_apply_thread_context_profile (
         return: 1
 return: lm_trans_function_thread_context_profile(namespace_, function\name, function\is_external, @ function\has_thread_context)
 
+fn: lm_trans_top_level_note_module_init_main (const: (LmTransFunctionHeader: function)) int
+    if: function = 0 || function\is_external = 0 || lm_trans_text_equals(function\c_name, "main") = 0
+        return: 0
+    if: lm_trans_module_init_root_source_path = 0
+        return: 0
+    if: lm_trans_current_source_path = 0 || c.strcmp(lm_trans_current_source_path, lm_trans_module_init_root_source_path) != 0
+        c.fprintf(c.stderr, "trans hosted module-init limitation: an imported module cannot declare external main\n")
+        return: 1
+    if: lm_trans_l2_conditional_import_depth > 0 || lm_trans_l2_conditional_emission_depth > 0 || lm_trans_module_init_unsupported_wrapper_depth > 0
+        lm_trans_module_init_wrapped_main_seen: 1
+    if: lm_trans_module_init_root_main_count != 0U
+        c.fprintf(c.stderr, "trans hosted module-init limitation: a document cannot declare multiple external main functions\n")
+        return: 1
+    lm_trans_module_init_root_main_count: 1U
+return: 0
+
 fn: lm_trans_top_level_declare_function (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\function = 0
         return: 1
@@ -146,7 +164,9 @@ fn: lm_trans_top_level_declare_function (LmTransNamespace: namespace_; const: (L
             return: 1
         ---
     ---
-return: lm_trans_top_level_declare_generated_return_class(namespace_, item\function)
+    if: lm_trans_top_level_declare_generated_return_class(namespace_, item\function) != 0
+        return: 1
+return: lm_trans_top_level_note_module_init_main(item\function)
 
 fn: lm_trans_top_level_is_predefined_function_descriptor (
     const: (LmTransNamespace: namespace_)
@@ -199,19 +219,35 @@ fn: lm_trans_top_level_declare_function_compatible (LmTransNamespace: namespace_
             return: 1
         ---
     ---
-return: lm_trans_top_level_declare_generated_return_class(namespace_, item\function)
+    if: lm_trans_top_level_declare_generated_return_class(namespace_, item\function) != 0
+        return: 1
+return: lm_trans_top_level_note_module_init_main(item\function)
 
 fn: lm_trans_top_level_emit_l1 (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     c.LM_UNUSED(namespace_)
 return: lm_trans_emit_l1_frame(file, item\frame)
 
 fn: lm_trans_top_level_emit_l2 (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    int: previous_depth
+    int: status
+
     c.LM_UNUSED(namespace_)
-return: lm_trans_emit_l2_frame(file, item\frame)
+    previous_depth: lm_trans_module_init_unsupported_wrapper_depth
+    lm_trans_module_init_unsupported_wrapper_depth: previous_depth + 1
+    status: lm_trans_emit_l2_frame(file, item\frame)
+    lm_trans_module_init_unsupported_wrapper_depth: previous_depth
+return: status
 
 fn: lm_trans_top_level_emit_l3 (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    int: previous_depth
+    int: status
+
     c.LM_UNUSED(namespace_)
-return: lm_trans_emit_l3_frame(file, item\frame)
+    previous_depth: lm_trans_module_init_unsupported_wrapper_depth
+    lm_trans_module_init_unsupported_wrapper_depth: previous_depth + 1
+    status: lm_trans_emit_l3_frame(file, item\frame)
+    lm_trans_module_init_unsupported_wrapper_depth: previous_depth
+return: status
 
 fn: lm_trans_top_level_emit_os (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_os_frame(file, item\frame, namespace_)
@@ -253,11 +289,17 @@ return: lm_trans_statement_emit_join(file, 0, lm_trans_top_level_item_frame(item
 fn: lm_trans_top_level_emit_import_prelude (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_import_prelude(file, lm_trans_top_level_item_frame(item), namespace_)
 
+fn: lm_trans_top_level_emit_import_module_initializers (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+return: lm_trans_emit_l2_import_module_initializers(file, lm_trans_top_level_item_frame(item), namespace_)
+
 fn: lm_trans_top_level_emit_import_functions (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_import_functions(file, lm_trans_top_level_item_frame(item), namespace_)
 
 fn: lm_trans_top_level_emit_predef_prelude (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_import_prelude(file, lm_trans_top_level_item_frame(item), namespace_)
+
+fn: lm_trans_top_level_emit_predef_module_initializers (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+return: lm_trans_emit_l2_import_module_initializers(file, lm_trans_top_level_item_frame(item), namespace_)
 
 fn: lm_trans_top_level_emit_predef_functions (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
 return: lm_trans_emit_l2_import_functions(file, lm_trans_top_level_item_frame(item), namespace_)
@@ -517,10 +559,12 @@ fn: lm_trans_top_level_statement_binding (const: (LmTransHeadBinding: binding); 
     if: c.strcmp(receiver, "lm_trans_statement_emit_import") = 0
         out\declare: @lm_trans_top_level_declare_import
         out\emit_before_functions: @lm_trans_top_level_emit_import_prelude
+        out\emit_module_init: @lm_trans_top_level_emit_import_module_initializers
         out\emit_function: @lm_trans_top_level_emit_import_functions
         return: 1
     if: c.strcmp(receiver, "lm_trans_statement_emit_predef") = 0
         out\emit_before_functions: @lm_trans_top_level_emit_predef_prelude
+        out\emit_module_init: @lm_trans_top_level_emit_predef_module_initializers
         out\emit_function: @lm_trans_top_level_emit_predef_functions
         return: 1
     if: c.strcmp(receiver, "lm_trans_statement_emit_table") = 0
@@ -1184,6 +1228,148 @@ fn: lm_trans_top_level_emit_c_array (FILE: file; LmTransNamespace: namespace_; c
         return: 1
 return: lm_trans_emit_c_array_declaration_with_qualifier(file, item\frame, 0U, namespace_, "static ")
 
+fn: lm_trans_top_level_module_value_frame (
+    const: LmTransTopLevelItem: item
+    @: int out_is_const
+) const: LmP0Frame
+    const: LmP0Frame: inner
+
+    if: out_is_const != 0
+        out_is_const[0]: 0
+    if: item = 0 || item\frame = 0
+        return: 0
+    inner: lm_trans_const_storage_inner_frame(item\frame)
+    if: inner != 0
+        if: out_is_const != 0
+            out_is_const[0]: 1
+        return: inner
+    ---
+return: item\frame
+
+fn: lm_trans_top_level_module_value_kind (
+    const: LmTransTopLevelItem: item
+    const: LmTransNamespace: namespace_
+) int
+    const: LmP0Frame: frame
+    int: is_const
+
+    frame: lm_trans_top_level_module_value_frame(item, @ is_const)
+    c.LM_UNUSED(is_const)
+    if: frame = 0
+        return: 0
+    if: lm_trans_text_is_array_receiver_head(frame\head)
+        return: c.LM_TRANS_MODULE_INIT_KIND_ARRAY_REFERENCE
+    if: lm_trans_text_equals(frame\head, "()")
+        return: c.LM_TRANS_MODULE_INIT_KIND_ANONYMOUS_STRUCTURE
+    if: lm_trans_namespace_has_named_structure_binding(namespace_, frame\head) && lm_trans_frame_looks_storage_declaration(frame, namespace_)
+        return: c.LM_TRANS_MODULE_INIT_KIND_NAMED_STRUCTURE
+return: 0
+
+fn: lm_trans_top_level_module_init_entry_for_item (
+    const: LmTransTopLevelItem: item
+) const: LmTransModuleInitEntry
+    if: item = 0 || item\node = 0 || item\node\span = 0 || lm_trans_current_source_path = 0
+        return: 0
+return: lm_trans_module_init_entry_find(lm_trans_current_source_path, item\node\span\offset)
+
+sub: lm_trans_top_level_configure_module_value_item (
+    LmTransTopLevelItem: item
+    const: LmTransModuleInitEntry: entry
+)
+    if: item = 0
+        return
+    item\module_init_entry: entry
+    item\declare: @lm_trans_top_level_declare_module_value
+    item\emit_before_functions: @lm_trans_top_level_emit_module_value_prelude
+    item\emit_after_prototypes: @lm_trans_top_level_emit_module_value_slot
+    item\emit_module_init: @lm_trans_top_level_emit_module_value_initializer
+    item\emits_top_level: 1
+end: lm_trans_top_level_configure_module_value_item
+
+fn: lm_trans_top_level_declare_module_value (
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+    LmTransModuleInitEntry: entry
+    const: LmP0Frame: frame
+    int: is_const
+    int: kind
+    size_t: item_limit
+
+    if: namespace_ = 0 || item = 0 || item\node = 0 || item\node\span = 0 || lm_trans_current_source_path = 0
+        return: 1
+    if: lm_trans_l2_conditional_import_depth > 0 || lm_trans_l2_conditional_emission_depth > 0 || lm_trans_module_init_unsupported_wrapper_depth > 0
+        c.fprintf(c.stderr, "trans hosted module-init limitation: top-level aggregate values are not supported inside os/ifdef/guard/extern_c or nested level wrappers\n")
+        return: 1
+
+    frame: lm_trans_top_level_module_value_frame(item, @ is_const)
+    kind: lm_trans_top_level_module_value_kind(item, namespace_)
+    if: frame = 0 || kind = 0
+        return: 1
+    entry: cast: (LmTransModuleInitEntry) lm_trans_top_level_module_init_entry_for_item(item)
+    if: entry = 0
+        item_limit: lm_trans_namespace_source_item_count(namespace_)
+        entry: lm_trans_module_init_entry_register(lm_trans_current_source_path, item\node\span\offset, kind, namespace_, item_limit)
+    if: entry = 0 || entry\kind != kind
+        return: 1
+return: lm_trans_module_init_declare_value(frame, is_const, entry, namespace_)
+
+fn: lm_trans_top_level_module_value_emit_with_source_limit (
+    FILE: file
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+    int: phase
+) int
+    const: LmTransModuleInitEntry: entry
+    const: LmP0Frame: frame
+    size_t: previous_limit
+    int: previous_active
+    int: is_const
+    int: status
+
+    if: file = 0 || namespace_ = 0 || item = 0
+        return: 1
+    entry: item\module_init_entry
+    if: entry = 0
+        entry: lm_trans_top_level_module_init_entry_for_item(item)
+    frame: lm_trans_top_level_module_value_frame(item, @ is_const)
+    if: entry = 0 || frame = 0 || entry\namespace_owner != namespace_
+        return: 1
+    if: lm_trans_namespace_source_limit_enter(namespace_, entry\namespace_item_limit, @ previous_limit, @ previous_active) != 0
+        return: 1
+    if: phase = 0
+        status: lm_trans_module_init_emit_value_prelude(file, frame, entry, namespace_)
+    else:
+        if: phase = 1
+            status: lm_trans_module_init_emit_value_slot(file, frame, entry, namespace_)
+        else:
+            status: lm_trans_module_init_emit_value_initializer(file, frame, is_const, entry, namespace_)
+        ---
+    ---
+    lm_trans_namespace_source_limit_restore(namespace_, previous_limit, previous_active)
+return: status
+
+fn: lm_trans_top_level_emit_module_value_prelude (
+    FILE: file
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+return: lm_trans_top_level_module_value_emit_with_source_limit(file, namespace_, item, 0)
+
+fn: lm_trans_top_level_emit_module_value_slot (
+    FILE: file
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+return: lm_trans_top_level_module_value_emit_with_source_limit(file, namespace_, item, 1)
+
+fn: lm_trans_top_level_emit_module_value_initializer (
+    FILE: file
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+return: lm_trans_top_level_module_value_emit_with_source_limit(file, namespace_, item, 2)
+
 fn: lm_trans_top_level_declare_named_structure (LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0 || item\frame = 0
         return: 1
@@ -1368,7 +1554,8 @@ fn: lm_trans_lower_top_level_item (
     int: statement_status
     int: substrate_status
     int: level_status
-    const: LmP0Frame: storage_inner
+    int: module_value_kind
+    const: LmTransModuleInitEntry: module_init_entry
 
     if: out = 0
         return: 1
@@ -1399,6 +1586,11 @@ fn: lm_trans_lower_top_level_item (
         c.fprintf(c.stderr, "trans L3 error: receiver \"%.*s\" is not available in L3\n", (cast: int out\frame\head\length), out\frame\head\data)
         return: 1
 
+    module_init_entry: lm_trans_top_level_module_init_entry_for_item(out)
+    if: module_init_entry != 0
+        lm_trans_top_level_configure_module_value_item(out, module_init_entry)
+        return: 0
+
     out\function: lm_trans_function_header_new()
     if: out\function = 0
         return: 1
@@ -1424,10 +1616,10 @@ fn: lm_trans_lower_top_level_item (
     lm_trans_function_header_destroy(out\function)
     out\function: 0
 
-    storage_inner: lm_trans_const_storage_inner_frame(out\frame)
-    if: lm_trans_text_is_array_receiver_head(out\frame\head) || (storage_inner != 0 && lm_trans_text_is_array_receiver_head(storage_inner\head))
-        c.fprintf(c.stderr, "trans hosted ArrayReference limitation: top-level ordinary [] construction requires module/root-arena initialization\n")
-        return: 1
+    module_value_kind: lm_trans_top_level_module_value_kind(out, namespace_)
+    if: module_value_kind != 0
+        lm_trans_top_level_configure_module_value_item(out, 0)
+        return: 0
 
     binding: lm_trans_head_binding_new()
     if: binding = 0
@@ -1449,10 +1641,6 @@ fn: lm_trans_lower_top_level_item (
         return: 1
     if: statement_status != 0 || substrate_status != 0 || level_status != 0
         return: 0
-
-    if: lm_trans_namespace_has_named_structure_binding(namespace_, out\frame\head) && lm_trans_frame_looks_storage_declaration(out\frame, namespace_)
-        c.fprintf(c.stderr, "trans hosted C backend limitation: top-level Structure value \"%.*s\" requires module/root-arena initialization\n", (cast: int out\frame\head\length), out\frame\head\data)
-        return: 1
 
     if: lm_trans_frame_looks_top_level_storage_declaration(out\frame, namespace_)
         out\declare: @lm_trans_top_level_declare_storage_declaration
@@ -2007,6 +2195,64 @@ fn: lm_trans_emit_l2_structure_after_prototypes (FILE: file; const: (LmP0Structu
         field: field\next
 return: 0
 
+fn: lm_trans_emit_l2_structure_module_initializers (FILE: file; const: (LmP0Structure: body); LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransTopLevelItem: item
+    int: status
+
+    if: namespace_ = 0
+        return: 1
+
+    field: 0
+    if: body != 0
+        field: body\first_field
+    while: field != 0
+        node: field\value
+        item: lm_trans_top_level_item_lowered_new(node, namespace_)
+        if: item = 0
+            return: 1
+        if: item\emit_module_init != 0
+            status: item\emit_module_init(file, namespace_, item)
+        else:
+            status: 0
+        ---
+        if: status != 0
+            lm_trans_top_level_item_delete(item)
+            return: 1
+        lm_trans_top_level_item_delete(item)
+        field: field\next
+return: 0
+
+fn: lm_trans_emit_module_init_dispatcher (FILE: file) int
+    const: LmTransModuleInitEntry: entry
+    LmP0Text: helper_name
+    size_t: index
+
+    if: file = 0
+        return: 1
+    if: lm_trans_module_init_entry_count() = 0U && lm_trans_module_init_root_main_count = 0U
+        return: 0
+    if: lm_trans_put(file, "#if defined(__GNUC__) || defined(__clang__)\n#define LM_LMX_UNUSED_MODULE_INIT __attribute__((unused))\n#else\n#define LM_LMX_UNUSED_MODULE_INIT\n#endif\nstatic int LM_LMX_UNUSED_MODULE_INIT lm_lmx_module_init_all(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *lm_lmx_module_arena) {\n    (void)lm_lmx_message_thread;\n    (void)lm_lmx_module_arena;\n") != 0
+        return: 1
+    index: 0U
+    while: index < lm_trans_module_init_entry_count()
+        entry: lm_trans_module_init_entry_at(index)
+        if: entry = 0 || entry\helper_name = 0
+            return: 1
+        helper_name: lm_trans_text_from_cstr(entry\helper_name)
+        if: helper_name = 0
+            return: 1
+        if: lm_trans_put(file, "    if (") != 0 || lm_trans_emit_identifier(file, helper_name) != 0 || lm_trans_put(file, "(lm_lmx_message_thread, lm_lmx_module_arena) != 0) return 1;\n") != 0
+            lm_trans_text_ref_destroy(@ helper_name)
+            return: 1
+        lm_trans_text_ref_destroy(@ helper_name)
+        index: index + 1U
+    ---
+    if: lm_trans_put(file, "    return 0;\n}\n#undef LM_LMX_UNUSED_MODULE_INIT\n\n") != 0
+        return: 1
+return: 0
+
 fn: lm_trans_emit_l2_structure_functions (FILE: file; const: (LmP0Structure: body); LmTransNamespace: namespace_) int
     const: LmP0Field: field
     const: LmP0Node: node
@@ -2113,7 +2359,7 @@ fn: lm_trans_emit_l2_structure_with_namespace (FILE: file; const: (LmP0Structure
             return: 1
     ---
 
-    if: lm_trans_emit_message_thread_runtime_prelude(prelude_file) != 0 || lm_trans_emit_l2_structure_prelude(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_prototypes(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_after_prototypes(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_functions(file, body, namespace_) != 0
+    if: lm_trans_emit_message_thread_runtime_prelude(prelude_file) != 0 || lm_trans_emit_l2_structure_prelude(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_prototypes(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_after_prototypes(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_module_initializers(prelude_file, body, namespace_) != 0 || lm_trans_emit_l2_structure_functions(file, body, namespace_) != 0
         return: 1
 
     if: explicit_l2 != 0
@@ -2423,6 +2669,46 @@ fn: lm_trans_emit_l2_import_root_after_prototypes (FILE: file; const: (LmP0Node:
         field: field\next
 return: 0
 
+fn: lm_trans_emit_l2_import_root_module_initializers (FILE: file; const: (LmP0Node: root); int: implicit_l2; LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmTransTopLevelItem: item
+    int: previous_depth
+    int: status
+
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        return: 1
+    if: implicit_l2 && lm_trans_root_has_explicit_l2_frame(root\as\structure) = 0
+        return: lm_trans_emit_l2_structure_module_initializers(file, root\as\structure, namespace_)
+
+    field: root\as\structure\first_field
+    while: field != 0
+        node: field\value
+        if: lm_trans_node_is_ignored(node) = 0
+            if: node\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame)
+                previous_depth: lm_trans_l3_profile_enter_frame(node\as\frame)
+                status: lm_trans_emit_l2_structure_module_initializers(file, node\as\frame\body, namespace_)
+                lm_trans_l3_profile_restore(previous_depth)
+            else:
+                item: lm_trans_top_level_item_lowered_new(node, namespace_)
+                if: item = 0
+                    return: 1
+                if: item\emit_module_init != 0
+                    status: item\emit_module_init(file, namespace_, item)
+                    if: status = 0
+                        status: lm_trans_put(file, "\n")
+                    ---
+                else:
+                    status: 0
+                ---
+                lm_trans_top_level_item_delete(item)
+            ---
+            if: status != 0
+                return: 1
+        ---
+        field: field\next
+return: 0
+
 fn: lm_trans_emit_l2_import_root_functions (FILE: file; const: (LmP0Node: root); int: implicit_l2; LmTransNamespace: namespace_) int
     const: LmP0Field: field
     const: LmP0Node: node
@@ -2542,6 +2828,31 @@ fn: lm_trans_emit_l2_import_path_prelude (FILE: file; LmTransNamespace: namespac
     lm_p0_document_destroy(document)
 return: status
 
+fn: lm_trans_emit_l2_import_path_module_initializers (FILE: file; LmTransNamespace: namespace_; const: @(char path)) int
+    LmP0Document: document
+    const: @: char previous_source_path
+    int: loaded
+    int: status
+
+    if: path = 0
+        return: 1
+    if: lm_trans_string_stack_has(lm_trans_emitted_import_module_init_paths, path)
+        return: 0
+    if: lm_trans_import_stack_note(lm_trans_emitted_import_module_init_paths, path) != 0
+        return: 1
+    if: lm_trans_registry_load_file_path(path, 1, @ loaded) != 0
+        return: 1
+    document: 0
+    if: lm_trans_import_parse_document(path, @ document, "module initializer") != 0
+        return: 1
+
+    previous_source_path: lm_trans_current_source_path
+    lm_trans_current_source_path: path
+    status: lm_trans_emit_l2_import_root_module_initializers(file, lm_p0_document_root(document), lm_trans_path_has_extension(path, ".lm2"), namespace_)
+    lm_trans_current_source_path: previous_source_path
+    lm_p0_document_destroy(document)
+return: status
+
 fn: lm_trans_emit_l2_import_path_functions (FILE: file; LmTransNamespace: namespace_; const: @(char path)) int
     LmP0Document: document
     const: @: char previous_source_path
@@ -2615,6 +2926,30 @@ fn: lm_trans_emit_l2_import_prelude (FILE: file; const: (LmP0Frame: frame); LmTr
             emitted: 1
         field: field\next
 
+    if: emitted = 0
+        c.fprintf(c.stderr, "trans L2 import error: import receiver expects at least one path\n")
+        return: 1
+return: 0
+
+fn: lm_trans_emit_l2_import_module_initializers (FILE: file; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    c.array: [4096]: char path
+    int: emitted
+
+    if: frame = 0
+        return: 1
+    emitted: 0
+    field: frame\body\first_field
+    while: field != 0
+        node: field\value
+        if: lm_trans_node_is_ignored(node) = 0
+            if: lm_trans_import_resolve_node(node, path, 4096U, "import") != 0
+                return: 1
+            if: lm_trans_emit_l2_import_path_module_initializers(file, namespace_, path) != 0
+                return: 1
+            emitted: 1
+        field: field\next
     if: emitted = 0
         c.fprintf(c.stderr, "trans L2 import error: import receiver expects at least one path\n")
         return: 1
@@ -3299,18 +3634,32 @@ fn: lm_trans_emit_l2_guard_frame (FILE: output; const: (LmP0Frame: frame); LmTra
 return: status
 
 fn: lm_trans_declare_l2_extern_c_frame (LmTransNamespace: namespace_; const: (LmP0Frame: frame)) int
+    int: previous_depth
+    int: status
+
     if: frame = 0
         return: 1
-    if: lm_trans_declare_l2_wrapper_body(namespace_, frame\body) != 0
+    previous_depth: lm_trans_module_init_unsupported_wrapper_depth
+    lm_trans_module_init_unsupported_wrapper_depth: previous_depth + 1
+    status: lm_trans_declare_l2_wrapper_body(namespace_, frame\body)
+    lm_trans_module_init_unsupported_wrapper_depth: previous_depth
+    if: status != 0
         return: 1
 return: lm_trans_validate_end_trailer(frame)
 
 fn: lm_trans_emit_l2_extern_c_frame (FILE: output; const: (LmP0Frame: frame); LmTransNamespace: namespace_) int
+    int: previous_depth
+    int: status
+
     if: frame = 0
         return: 1
     if: lm_trans_put(output, "#ifdef __cplusplus\nextern \"C\" {\n#endif\n") != 0
         return: 1
-    if: lm_trans_emit_l2_wrapper_body(output, frame\body, namespace_) != 0
+    previous_depth: lm_trans_module_init_unsupported_wrapper_depth
+    lm_trans_module_init_unsupported_wrapper_depth: previous_depth + 1
+    status: lm_trans_emit_l2_wrapper_body(output, frame\body, namespace_)
+    lm_trans_module_init_unsupported_wrapper_depth: previous_depth
+    if: status != 0
         return: 1
     if: lm_trans_put(output, "#ifdef __cplusplus\n}\n#endif\n") != 0
         return: 1
@@ -4373,6 +4722,9 @@ fn: lm_trans_emit_l1_include_frame (FILE: output; const: (LmP0Frame: frame)) int
 return: lm_trans_validate_end_trailer(frame)
 
 fn: lm_trans_emit_l1_node (FILE: output; const: (LmP0Node: node)) int
+    int: previous_depth
+    int: status
+
     if: lm_trans_node_is_ignored(node)
         return: 0
 
@@ -4388,9 +4740,17 @@ fn: lm_trans_emit_l1_node (FILE: output; const: (LmP0Node: node)) int
         if: lm_trans_frame_is_l1_substrate_receiver(node\as\frame)
             return: lm_trans_emit_l1_frame(output, node\as\frame)
         if: lm_trans_frame_is_l2_level_receiver(node\as\frame)
-            return: lm_trans_emit_l2_frame(output, node\as\frame)
+            previous_depth: lm_trans_module_init_unsupported_wrapper_depth
+            lm_trans_module_init_unsupported_wrapper_depth: previous_depth + 1
+            status: lm_trans_emit_l2_frame(output, node\as\frame)
+            lm_trans_module_init_unsupported_wrapper_depth: previous_depth
+            return: status
         if: lm_trans_frame_is_l3_level_receiver(node\as\frame)
-            return: lm_trans_emit_l3_frame(output, node\as\frame)
+            previous_depth: lm_trans_module_init_unsupported_wrapper_depth
+            lm_trans_module_init_unsupported_wrapper_depth: previous_depth + 1
+            status: lm_trans_emit_l3_frame(output, node\as\frame)
+            lm_trans_module_init_unsupported_wrapper_depth: previous_depth
+            return: status
         if: lm_trans_text_equals(node\as\frame\head, "os")
             return: lm_trans_emit_l1_os_frame(output, node\as\frame)
         if: lm_trans_text_equals(node\as\frame\head, "ifdef")

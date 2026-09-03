@@ -4282,6 +4282,9 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
 
     lm_trans_prelude_output: prelude_output
     lm_trans_current_source_path: source_path
+    lm_trans_module_init_root_source_path: source_path
+    lm_trans_module_init_root_main_count: 0U
+    lm_trans_module_init_wrapped_main_seen: 0
     lm_trans_next_array_value_helper_id: 0U
     lm_trans_next_anonymous_structure_id: 0U
     lm_trans_emitted_message_thread_runtime_prelude: 0
@@ -4292,7 +4295,9 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_l2_conditional_import_depth: 0
     lm_trans_l2_executable_statement_depth: 0
     lm_trans_l2_conditional_emission_depth: 0
+    lm_trans_module_init_unsupported_wrapper_depth: 0
     emitted: 0
+    status: 0
     if: lm_trans_typedef_projection_output_enter(prelude_output, body_output) != 0
         c.fprintf(c.stderr, "trans error: out of memory while creating typedef projection state\n")
         status: 1
@@ -4302,12 +4307,13 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_declared_import_documents: lm_trans_ptr_stack_new(0)
     lm_trans_emitted_import_prelude_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_emitted_import_module_init_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_emitted_import_function_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_emitted_callable_adapters: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_emitted_callable_binders: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_emitted_array_value_helpers: lm_trans_ptr_stack_new(lm_own_delete_plain)
     lm_trans_emitted_function_return_structs: lm_trans_ptr_stack_new(lm_own_delete_plain)
-    if: lm_trans_declared_import_paths = 0 || lm_trans_declared_import_documents = 0 || lm_trans_emitted_import_prelude_paths = 0 || lm_trans_emitted_import_function_paths = 0 || lm_trans_emitted_callable_adapters = 0 || lm_trans_emitted_callable_binders = 0 || lm_trans_emitted_array_value_helpers = 0 || lm_trans_emitted_function_return_structs = 0
+    if: lm_trans_declared_import_paths = 0 || lm_trans_declared_import_documents = 0 || lm_trans_emitted_import_prelude_paths = 0 || lm_trans_emitted_import_module_init_paths = 0 || lm_trans_emitted_import_function_paths = 0 || lm_trans_emitted_callable_adapters = 0 || lm_trans_emitted_callable_binders = 0 || lm_trans_emitted_array_value_helpers = 0 || lm_trans_emitted_function_return_structs = 0 || lm_trans_module_init_registry_init() != 0
         c.fprintf(c.stderr, "trans error: out of memory while creating module state stacks\n")
         status: 1
     if: status = 0
@@ -4315,12 +4321,22 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     ---
     if: status = 0
         status: lm_trans_emit_root_sequence(body_output, root, lm_trans_path_has_extension(source_path, ".lm2"), @ emitted)
+    if: status = 0 && lm_trans_module_init_entry_count() != 0U && lm_trans_module_init_wrapped_main_seen
+        c.fprintf(c.stderr, "trans hosted module-init limitation: a conditional or wrapped main cannot host module value initialization\n")
+        status: 1
+    if: status = 0 && lm_trans_module_init_entry_count() != 0U && lm_trans_module_init_root_main_count = 0U
+        c.fprintf(c.stderr, "trans hosted module-init limitation: top-level aggregate values require one root external main\n")
+        status: 1
+    if: status = 0 && lm_trans_module_init_root_main_count != 0U
+        status: lm_trans_emit_module_init_dispatcher(prelude_output)
 
+    lm_trans_module_init_registry_destroy()
     lm_trans_ptr_stack_delete(@ lm_trans_emitted_function_return_structs)
     lm_trans_ptr_stack_delete(@ lm_trans_emitted_array_value_helpers)
     lm_trans_ptr_stack_delete(@ lm_trans_emitted_callable_binders)
     lm_trans_ptr_stack_delete(@ lm_trans_emitted_callable_adapters)
     lm_trans_ptr_stack_delete(@ lm_trans_emitted_import_function_paths)
+    lm_trans_ptr_stack_delete(@ lm_trans_emitted_import_module_init_paths)
     lm_trans_ptr_stack_delete(@ lm_trans_emitted_import_prelude_paths)
     lm_trans_import_documents_drain(lm_trans_declared_import_documents)
     lm_trans_ptr_stack_delete(@ lm_trans_declared_import_documents)
@@ -4335,6 +4351,10 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_l2_conditional_import_depth: 0
     lm_trans_l2_executable_statement_depth: 0
     lm_trans_l2_conditional_emission_depth: previous_conditional_emission_depth
+    lm_trans_module_init_unsupported_wrapper_depth: 0
+    lm_trans_module_init_root_main_count: 0U
+    lm_trans_module_init_wrapped_main_seen: 0
+    lm_trans_module_init_root_source_path: 0
     lm_trans_current_source_path: 0
     lm_trans_prelude_output: previous_prelude_output
     if: status = 0 && emitted = 0

@@ -1630,12 +1630,25 @@ int main(int argc, char **argv);
 
 
 
+static int lm_lmx_module_init_all(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *lm_lmx_module_arena);
 static inline int lm_message_thread_diagnostic_status(const LmMessageThreadExecutionContext *context) {
     if (context == 0 || context->diagnostic_code == 0) {
         return 1;
     }
     return context->diagnostic_code;
 }
+#if defined(__GNUC__) || defined(__clang__)
+#define LM_LMX_UNUSED_MODULE_INIT __attribute__((unused))
+#else
+#define LM_LMX_UNUSED_MODULE_INIT
+#endif
+static int LM_LMX_UNUSED_MODULE_INIT lm_lmx_module_init_all(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *lm_lmx_module_arena) {
+    (void)lm_lmx_message_thread;
+    (void)lm_lmx_module_arena;
+    return 0;
+}
+#undef LM_LMX_UNUSED_MODULE_INIT
+
 
 static LmBuildOptions * lm_build_options_new(struct LmMessageThread *lm_lmx_message_thread) {
     (void)lm_lmx_message_thread;
@@ -2460,6 +2473,14 @@ int main(int argc, char **argv) {
     }
 #endif
     if (!lm_lmx_thread_startup_failed && lm_message_thread_runtime_attach_root(lm_lmx_application_runtime, lm_lmx_message_thread) != 0) lm_lmx_thread_startup_failed = 1; else if (!lm_lmx_thread_startup_failed) lm_lmx_application_root_attached = 1;
+    if (!lm_lmx_thread_startup_failed) {
+        lm_message_thread_main_context.diagnostic_code = 0;
+        if (setjmp(lm_message_thread_main_context.diagnostic_root) == 0) {
+            if (lm_lmx_module_init_all(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread)) != 0) lm_lmx_thread_startup_failed = 1;
+        } else {
+            lm_lmx_thread_startup_failed = 1;
+        }
+    }
     if (lm_lmx_thread_startup_failed) lm_message_thread_request_failure(lm_lmx_message_thread, 1);
     while (lm_message_thread_begin_turn(lm_lmx_message_thread)) {
         if (lm_lmx_application_controller_failure) {

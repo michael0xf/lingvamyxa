@@ -1,0 +1,13 @@
+L2:
+    ModuleInitSelfValue:
+        int: value
+    end: ModuleInitSelfValue
+
+    ModuleInitSelfValue: moduleInitSelfValue moduleInitSelfValue
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2
