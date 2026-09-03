@@ -1,0 +1,287 @@
+Lingvamyxa Julia Integration Plan
+================================
+
+Status
+
+Working provisioning plan for bundling a private Julia into the
+Lingvamyxa runtime and exposing it as an L5-style "julia" receiver.
+Companion to include_python.txt; same fetch / verify / stage / generate
+/ populate / manifest pattern (Appendix B there).
+
+Goal
+
+Reach Julia's scientific ecosystem from Lingvamyxa without a system
+Julia: DifferentialEquations, JuMP, Flux, Turing, and the array stack
+with a genuinely fast JIT.
+
+Tier
+
+Tier 1. Julia ships an official prebuilt tarball that is relocatable by
+design ("extract and run"), libjulia has a documented C embedding API,
+and Pkg is built in. Provisions like CPython.
+
+
+1. Prerequisites (developer machine)
+------------------------------------
+
+Already in the project: CMake, Ninja, Git, a C toolchain.
+
+Add:
+
+    uv or curl        fetch the Julia tarball
+    tar               unpack (.tar.gz on unix, .zip on Windows)
+
+
+2. Fetch the redistributable
+----------------------------
+
+Source: the JuliaLang S3 bucket:
+
+    https://julialang-s3.julialang.org/bin/<os>/<arch>/<major.minor>/julia-<ver>-<triple>.tar.gz
+
+    os      linux | mac | winnt
+    arch    x64 | aarch64
+    triple  linux-x86_64 | linux-aarch64 | macaarch64 | mac64 | win64
+
+JuliaLang publishes a sha256 file per asset; pin it in the DISTS table.
+
+
+3. Stage
+--------
+
+Unpack into build/libs/julia/ (strip the single julia-<ver>/ top dir):
+
+    build/libs/julia/bin/julia
+    build/libs/julia/lib/libjulia.{so,dylib}       (libjulia.dll)
+    build/libs/julia/include/julia/julia.h
+    build/libs/julia/share/julia/                  stdlib + base sysimage
+    build/libs/julia/lib/julia/sys.{so,dylib}      the system image
+
+Package depot: build/libs/julia-depot/ (see section 7).
+
+
+4. CMake integration
+--------------------
+
+    option(LINGVAMYXA_ENABLE_JULIA "Bundle Julia and build the julia receiver" OFF)
+
+    if(LINGVAMYXA_ENABLE_JULIA)
+      set(LM_JL_HOME ${CMAKE_BINARY_DIR}/libs/julia)
+      add_library(lingvamyxa_julia INTERFACE)
+      target_include_directories(lingvamyxa_julia INTERFACE ${LM_JL_HOME}/include/julia)
+      target_compile_definitions(lingvamyxa_julia INTERFACE LINGVAMYXA_JULIA=1)
+      # libjulia loaded at runtime; JULIA_BINDIR set from the exe location
+      install(DIRECTORY ${LM_JL_HOME}/ DESTINATION bin/julia)
+    endif()
+
+
+5. The C shim (juliahost)  --  lm1/build/juliahost.lm1.c
+------------------------------------------------------
+
+5.1 Start
+
+    setenv JULIA_BINDIR   <exe_dir>/../libs/julia/bin   (from the exe
+      location, not the environment)
+    setenv JULIA_DEPOT_PATH <exe_dir>/../libs/julia-depot
+    jl_init();                       # picks up the staged sysimage
+    ...
+    jl_atexit_hook(0);               # at shutdown
+
+    One runtime per process. Call from the thread that ran jl_init, or
+    jl_adopt_thread / jl_gc_safe_enter for other L5 threads (Julia 1.9+).
+
+5.2 Value and array bridge, LmArray <-> Julia
+
+    Lingvamyxa -> Julia, contiguous:
+        jl_apply_array_type(jl_float64_type, 1) then
+        jl_ptr_to_array_1d(atype, buf, n, 0)   # 0 = do not own -> no copy
+        keep a JL_GC_PUSH root for the lifetime of the call.
+    Julia -> Lingvamyxa:
+        jl_array_data + jl_array_len on the returned jl_array_t*, wrap as
+        an external-view LmArray; hold the jl_value_t* rooted (or copy)
+        because Julia's GC is moving-free for arrays but still tracks
+        them.
+
+5.3 Call entry
+
+    jl_value_t *m  = (jl_value_t*)jl_eval_string("using DifferentialEquations");
+    jl_function_t *f = jl_get_function(jl_main_module, "solve");
+    jl_value_t *r  = jl_call2(f, arg1, arg2);
+    Wrap eval / call so any L5 thread routes through it.
+
+5.4 Errors
+
+    if (jl_exception_occurred()) { format via jl_typeof_str +
+      jl_call to Base.showerror; return an LMX failure record;
+      jl_exception_clear(); }
+
+5.5 First-result latency
+
+    jl_init plus the first `using` of a heavy package compiles code:
+    hundreds of ms to seconds. Acceptable for a batch receiver; for a
+    hot path, precompile a custom sysimage with PackageCompiler (that
+    needs Julia at build time -- keep it an optional manual step).
+
+
+6. ABI descriptors and the L5 receiver
+--------------------------------------
+
+    lm2/juliahost_abi.lm2     predef + fn.external prototypes
+    receiver "julia", selector "julia.eval" / "julia.call"
+
+    julia.eval "using Statistics"
+    q = julia.call "quantile" series 0.95
+
+
+7. Packages
+-----------
+
+Pkg is built in. Populate the depot hermetically:
+
+    build/libs/julia/bin/julia --project=build/libs/julia-proj \
+      -e 'using Pkg; Pkg.instantiate()'
+
+with a committed Project.toml + Manifest.toml. Vendor the resulting
+build/libs/julia-depot/ (registries, packages, compiled) into the tree
+or rebuild it in the provision step. Point JULIA_DEPOT_PATH at it.
+
+
+8. Packaging per platform
+-------------------------
+
+    Linux    build/libs/julia/ beside the binary; RPATH
+             $ORIGIN/../libs/julia/lib and .../lib/julia
+    macOS    julia/ into Contents/Resources/julia; codesign the .dylib
+             files and sys.dylib; @loader_path RPATH
+    Windows  julia/bin on the DLL search path
+
+Footprint is large (~500 MB with stdlib and sysimage); trim unused
+stdlib packages and test dirs.
+
+
+9. What the tool does not do
+----------------------------
+
+    write the body of lm_juliahost_* (the array bridge, GC rooting, the
+    exception mapping);
+    choose the Project.toml package set;
+    build a custom sysimage with PackageCompiler (needs Julia at build
+    time);
+    codesign or notarise the macOS bundle.
+
+
+Appendix. Provisioning utility sketch  --  lm2/provision_julia.lm2
+==============================================================
+
+Shared helpers mirror lm2/vcpkgFetch.lm2 and are elided. Illustrative.
+
+========================================================================
+# lm2/provision_julia.lm2 -- stage a private Julia, wire the julia receiver
+
+include
+os
+constant
+layout
+fn
+prototype
+unit
+
+predef: "libc_abi.lm2"
+predef: "lm2/own_abi.lm2"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+constant: JL_MM  "1.10"
+constant: JL_VER "1.10.4"
+constant: JL_BASE "https://julialang-s3.julialang.org/bin"
+
+table:
+    source
+    name: JLDIST
+    columns: (class: class)  (@: char triple)   (@: char os)   (@: char arch)   (@: char asm)         (@: char sha256)
+    rows:
+             linux_x64    "x86_64-unknown-linux-gnu"   "linux"  "x64"      "linux-x86_64"    "REPLACE_ME"
+             linux_arm64  "aarch64-unknown-linux-gnu"  "linux"  "aarch64"  "linux-aarch64"   "REPLACE_ME"
+             mac_arm64    "aarch64-apple-darwin"       "mac"    "aarch64"  "macaarch64"      "REPLACE_ME"
+             mac_x64      "x86_64-apple-darwin"        "mac"    "x64"      "mac64"           "REPLACE_ME"
+             win_x64      "x86_64-pc-windows-msvc"     "winnt"  "x64"      "win64"           "REPLACE_ME"
+end: JLDIST
+
+fn: lm_jl_url (@: char buffer; size_t: size; @: char os; @: char arch; @: char asm) int
+    snprintf(buffer, size, "%s/%s/%s/%s/julia-%s-%s.tar.gz", JL_BASE, os, arch, JL_MM, JL_VER, asm)
+return: 0
+
+fn: lm_jl_write_cmake () int
+    FILE: f
+    f: fopen("cmake/EmbeddedJulia.cmake", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "# generated by provision_julia.lm0\n"
+    c.fprintf: f "option(LINGVAMYXA_ENABLE_JULIA \"Bundle Julia\" OFF)\n"
+    c.fprintf: f "if(LINGVAMYXA_ENABLE_JULIA)\n"
+    c.fprintf: f "  set(LM_JL_HOME \"${CMAKE_BINARY_DIR}/libs/julia\")\n"
+    c.fprintf: f "  add_library(lingvamyxa_julia INTERFACE)\n"
+    c.fprintf: f "  target_include_directories(lingvamyxa_julia INTERFACE ${LM_JL_HOME}/include/julia)\n"
+    c.fprintf: f "  target_compile_definitions(lingvamyxa_julia INTERFACE LINGVAMYXA_JULIA=1)\n"
+    c.fprintf: f "  install(DIRECTORY ${LM_JL_HOME}/ DESTINATION bin/julia)\n"
+    c.fprintf: f "endif()\n"
+    fclose(f)
+return: 0
+
+fn: lm_jl_write_shim_stub () int
+    FILE: f
+    f: fopen("lm2/juliahost_abi.lm2", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "# generated by provision_julia.lm0\n"
+    c.fprintf: f "predef: \"libc_abi.lm2\"\n\n"
+    c.fprintf: f "external:\n"
+    c.fprintf: f "    fn: lm_juliahost_start () int\n"
+    c.fprintf: f "    fn: lm_juliahost_stop ()\n"
+    c.fprintf: f "    fn: lm_juliahost_eval (@: char code; @: void result_out) int\n"
+    c.fprintf: f "    fn: lm_juliahost_call (@: char func; @: void argv; size_t: argc; @: void result_out) int\n"
+    c.fprintf: f "end: external\n"
+    fclose(f)
+return: 0
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        c.array: []: char cmake 1024
+        c.array: []: char url 1024
+        c.array: []: char archive 2048
+        @: char os 0
+        @: char arch 0
+        @: char asm 0
+        @: char sha 0
+
+        if: lm_enter_project_root(argv[0]) != 0
+            return: 1
+        strcpy(cmake, lm_env_or_default("LM_CMAKE", "cmake"))
+
+        if: lm_jl_dist_lookup(lm_host_triple(), @ os, @ arch, @ asm, @ sha) != 0
+            return: 1
+        if: lm_jl_url(url, c.sizeof(url), os, arch, asm) != 0
+            return: 1
+        if: lm_join_path(archive, c.sizeof(archive), "third_party", "julia.tar.gz") != 0
+            return: 1
+
+        if: lm_fetch(url, archive) != 0
+            return: 1
+        if: lm_verify_sha256(archive, sha) != 0
+            return: 1
+        # julia-<ver>/ single top dir -> strip one component
+        if: lm_extract_strip1(cmake, archive, "build/libs/julia") != 0
+            return: 1
+        if: lm_jl_write_cmake() != 0
+            return: 1
+        if: lm_jl_write_shim_stub() != 0
+            return: 1
+        # optional: instantiate the project depot offline
+        if: lm_run("build/libs/julia/bin/julia --project=build/libs/julia-proj -e \"using Pkg; Pkg.instantiate()\"") != 0
+            c.fprintf: c.stderr "provision_julia.lm0: Pkg.instantiate skipped\n"
+        if: lm_write_manifest("build/libs/julia/PROVISION_MANIFEST.txt", "julia", JL_VER, sha) != 0
+            return: 1
+
+        c.printf: "provision_julia.lm0: done. build with -DLINGVAMYXA_ENABLE_JULIA=ON\n"
+    return: 0
+end: external
+========================================================================

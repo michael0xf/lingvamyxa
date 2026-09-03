@@ -1,0 +1,227 @@
+Lingvamyxa Pyodide Integration Plan  (second Python, scientific, sandboxed)
+========================================================================
+
+Status
+
+Working provisioning plan for running Pyodide -- CPython plus ~250
+scientific packages compiled to WebAssembly -- as a sandboxed
+"second Python" inside the Lingvamyxa runtime. One of the four
+Python-family plans (see include_python.txt).
+
+Prerequisites: include_wasm.txt (a WASM runtime) and include_quickjs.txt
+(a JS engine). Pyodide targets Emscripten and expects a JavaScript host,
+so a C host must run pyodide.asm.js in an embedded JS engine that in
+turn drives the wasm. That wiring is the reason this plan is rated
+medium, not easy -- the download itself is trivial.
+
+Goal
+
+The real scientific stack -- numpy, scipy, pandas, scikit-learn,
+scikit-image, statsmodels, sympy, networkx, shapely -- sandboxed, with
+no system Python. When numpy is required and isolation matters, this is
+the option; when isolation does not matter, embedded CPython
+(include_python.txt) is simpler and faster.
+
+Tier
+
+Tier 3. Fetch the Pyodide distribution (a versioned tarball of
+pyodide.asm.wasm + pyodide.asm.js + python_stdlib.zip + packages), embed
+a JS engine to host it, bridge through the JS boundary.
+
+
+1. Prerequisites (developer machine)
+------------------------------------
+
+Already in the project: CMake, Ninja, Git, a C toolchain, plus
+provisioned build/libs/wasm and build/libs/quickjs-src
+(include_wasm.txt, include_quickjs.txt).
+
+Add:
+
+    uv or curl        fetch the Pyodide release tarball (~10-300 MB
+                      depending on how many packages are included)
+    tar / bzip2       unpack
+
+
+2. Fetch the distribution
+-------------------------
+
+Source: the Pyodide GitHub releases:
+
+    https://github.com/pyodide/pyodide/releases/download/<ver>/pyodide-<ver>.tar.bz2
+    (or pyodide-core-<ver>.tar.bz2 for the minimal set, then add wheels)
+
+Contents of pyodide/ :
+
+    pyodide.asm.wasm      the CPython + Emscripten runtime
+    pyodide.asm.js        the Emscripten JS glue (this is what the JS
+                          engine executes)
+    pyodide.js / .mjs     the loadPyodide() entry point
+    python_stdlib.zip
+    pyodide-lock.json     the package index
+    *.whl                 numpy, scipy, pandas, ... (Emscripten wheels)
+
+Pin the tarball sha256. The blob is architecture-independent.
+
+
+3. Stage
+--------
+
+    build/libs/wasm-guests/pyodide/           the whole pyodide/ tree
+    build/libs/wasm-guests/pyodide/data/      granted at runtime
+
+
+4. CMake integration
+--------------------
+
+No new library target. Install rule copies
+build/libs/wasm-guests/pyodide/ next to the binary. The receiver reuses
+lingvamyxa_wasm and lingvamyxa_js.
+
+
+5. The C shim (pyodidehost)  --  lm1/build/pyodidehost.lm1.c
+--------------------------------------------------------
+
+5.1 Bring up the JS host
+
+    Create a QuickJS runtime (jshost from include_quickjs.txt). Provide
+    the few Web/Node globals pyodide.asm.js needs that are not pure ES:
+    a fetch() shim that reads from the staged pyodide/ directory, a
+    minimal TextEncoder/TextDecoder, performance.now, and the
+    WebAssembly object -- back WebAssembly.instantiate/compile onto the
+    bundled wasm runtime (libwasmtime) so the .wasm actually executes
+    through Wasmtime, not a JS interpreter.
+
+5.2 Load Pyodide
+
+    Evaluate pyodide.js, then call
+        globalThis.loadPyodide({ indexURL: "file:///pyodide/" })
+    Drive the returned promise to completion by pumping QuickJS pending
+    jobs plus the wasm runtime.
+
+5.3 Run
+
+    pyodide.runPython(code)  or  pyodide.runPythonAsync(code)
+    Results come back as JS values; convert via pyodide.toJs / .toPy at
+    the boundary.
+
+5.4 Arrays
+
+    Zero-copy is possible but layered: an LmArray buffer -> a JS
+    ArrayBuffer view over the same bytes (QuickJS ArrayBuffer) ->
+    pyodide's memoryview -> numpy.frombuffer. In practice, one copy in
+    and one copy out through pyodide.toJs is the pragmatic path; the
+    Rwanda-scale data in the SPI example is a few MB, so it does not
+    matter.
+
+5.5 Notes
+
+    single-threaded; no worker_threads under this setup.
+    footprint is the largest in the catalog (tens to hundreds of MB).
+    cold start is seconds (load Pyodide + import numpy).
+    the whole thing still runs inside the wasm sandbox: the guest only
+    sees the preopened pyodide/ and the granted data dir.
+
+
+6. ABI descriptors and the L5 receiver
+--------------------------------------
+
+    lm2/pyodidehost_abi.lm2   predef + fn.external prototypes
+    receiver "python" with LINGVAMYXA_PYTHON_IMPL=pyodide, or a distinct
+    "pyodide" receiver if it coexists with embedded CPython.
+
+
+7. Packages
+-----------
+
+    bundled       everything in pyodide-lock.json is already in the
+                  tarball; nothing to do
+    extra pure    micropip.install("name") at runtime (needs network),
+                  or drop the wheel into the staged packages/ and add it
+                  to a local lock
+    extra binary  only if an Emscripten wheel exists (Pyodide builds a
+                  fixed set); otherwise not available
+
+
+8. What the tool does not do
+----------------------------
+
+    write the JS host shims (fetch, WebAssembly-on-Wasmtime, the job
+    pump) -- this is the real integration work;
+    build Emscripten wheels that Pyodide does not ship;
+    reduce the footprint below what pyodide-core needs.
+
+
+Appendix. Provisioning utility sketch  --  lm2/provision_python_pyodide.lm2
+====================================================================
+
+Assumes build/libs/wasm and build/libs/quickjs-src are provisioned.
+Shared helpers mirror lm2/vcpkgFetch.lm2 and are elided. Illustrative.
+
+========================================================================
+# lm2/provision_python_pyodide.lm2 -- stage the Pyodide distribution
+
+include
+constant
+fn
+prototype
+unit
+
+predef: "libc_abi.lm2"
+predef: "lm2/own_abi.lm2"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+constant: PYO_VER "0.26.2"
+constant: PYO_URL "https://github.com/pyodide/pyodide/releases/download/0.26.2/pyodide-0.26.2.tar.bz2"
+constant: PYO_SHA "REPLACE_ME"
+
+fn: lm_pyo_write_shim_stub () int
+    FILE: f
+    f: fopen("lm2/pyodidehost_abi.lm2", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "# generated by provision_python_pyodide.lm0\n"
+    c.fprintf: f "predef: \"libc_abi.lm2\"\n\n"
+    c.fprintf: f "external:\n"
+    c.fprintf: f "    fn: lm_pyodidehost_open (@: char grant_dir) int\n"
+    c.fprintf: f "    fn: lm_pyodidehost_run (@: char code; @: void result_out) int\n"
+    c.fprintf: f "    fn: lm_pyodidehost_close ()\n"
+    c.fprintf: f "end: external\n"
+    fclose(f)
+return: 0
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        c.array: []: char cmake 1024
+        c.array: []: char archive 2048
+
+        if: lm_enter_project_root(argv[0]) != 0
+            return: 1
+        strcpy(cmake, lm_env_or_default("LM_CMAKE", "cmake"))
+
+        if: lm_file_exists("build/libs/wasm/lib/libwasmtime.a") = 0
+            c.fprintf: c.stderr "provision_python_pyodide.lm0: run provision_wasm.lm0 first\n"
+            return: 1
+        if: lm_file_exists("build/libs/quickjs-src/quickjs.c") = 0
+            c.fprintf: c.stderr "provision_python_pyodide.lm0: run provision_quickjs.lm0 first\n"
+            return: 1
+
+        if: lm_join_path(archive, c.sizeof(archive), "third_party", "pyodide.tar.bz2") != 0
+            return: 1
+        if: lm_fetch(PYO_URL, archive) != 0
+            return: 1
+        if: lm_verify_sha256(archive, PYO_SHA) != 0
+            return: 1
+        if: lm_extract_into(cmake, archive, "build/libs/wasm-guests") != 0
+            return: 1
+        if: lm_pyo_write_shim_stub() != 0
+            return: 1
+        if: lm_write_manifest("build/libs/wasm-guests/pyodide/PROVISION_MANIFEST.txt", "pyodide", PYO_VER, PYO_SHA) != 0
+            return: 1
+
+        c.printf: "provision_python_pyodide.lm0: distribution staged.\n"
+        c.printf: "  remaining work: the JS host shims (see include_python_pyodide.txt section 5)\n"
+        c.printf: "  build with LINGVAMYXA_PYTHON_IMPL=pyodide\n"
+    return: 0
+end: external
+========================================================================

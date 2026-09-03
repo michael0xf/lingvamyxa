@@ -1,0 +1,210 @@
+Lingvamyxa TinyCC (libtcc) Integration Plan
+==========================================
+
+Status
+
+Working provisioning plan for vendoring TinyCC as libtcc into the
+Lingvamyxa runtime and exposing it as an L5-style "tcc" receiver.
+Companion to include_python.txt; same verify / stage / generate /
+manifest pattern, no runtime download.
+
+Goal
+
+Not a foreign language ecosystem -- a way to compile and run C at
+runtime, in-process. Lingvamyxa can accept a C snippet, JIT it with
+libtcc, link it against the already-bundled C libraries (curl, sqlite,
+gmp, sodium, pcre2, zlib, yyjson, decNumber) and call the result. The
+tightest possible "call any C library" glue, and a fast path for hot
+numeric kernels a user writes inline.
+
+Tier
+
+Tier 2. Small C tree, `./configure && make libtcc.a`, fast build.
+
+
+1. Prerequisites (developer machine)
+------------------------------------
+
+Already in the project: CMake, Ninja, Git, a C toolchain, a POSIX shell
++ make (already used for the bundled GMP/MPFR builds). uv or curl to
+fetch the source once.
+
+
+2. Vendor the source
+--------------------
+
+Source: repo.or.cz/tinycc.git (or a mirror release tarball). Pin the
+commit and its sha256. Commit third_party/tinycc.tar.gz.
+
+TinyCC needs its architecture backend selected at configure time; it
+supports x86, x86_64, arm, aarch64 and riscv64. Codegen quality is below
+GCC/Clang -- fine for glue and moderate kernels, not for -O3 hot loops.
+
+
+3. CMake integration
+--------------------
+
+Wrap the native build:
+
+    option(LINGVAMYXA_ENABLE_TCC "Build the tcc receiver" OFF)
+
+    if(LINGVAMYXA_ENABLE_TCC)
+      add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/libs/tinycc/libtcc.a
+        COMMAND sh -c "cd ${CMAKE_BINARY_DIR}/libs/tinycc-src && \
+          ./configure --prefix=${CMAKE_BINARY_DIR}/libs/tinycc \
+                      --cc=${CMAKE_C_COMPILER} --extra-cflags=-fPIC && \
+          make libtcc.a && make install")
+      add_custom_target(build_tcc DEPENDS .../libtcc.a)
+      add_library(lingvamyxa_tcc STATIC IMPORTED GLOBAL)
+      set_target_properties(lingvamyxa_tcc PROPERTIES
+        IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/libs/tinycc/lib/libtcc.a)
+      target_include_directories(lingvamyxa_tcc INTERFACE
+        ${CMAKE_BINARY_DIR}/libs/tinycc/include)
+      add_dependencies(lingvamyxa_tcc build_tcc)
+    endif()
+
+Stage build/libs/tinycc/lib/tcc/ (the tiny runtime support: libtcc1.a,
+include shims) beside the binary and point tcc_set_lib_path at it.
+
+
+4. The C shim (tcchost)  --  lm1/build/tcchost.lm1.c
+--------------------------------------------------
+
+    TCCState *s = tcc_new();
+    tcc_set_lib_path(s, <exe_dir>/../libs/tinycc/lib/tcc);
+    tcc_set_output_type(s, TCC_OUTPUT_MEMORY);
+    tcc_add_include_path(s, ...);                 # project headers if wanted
+    tcc_add_library_path(s, <build/libs>);        # the bundled .a files
+    tcc_add_symbol(s, "lm_alloc", (void*)lm_alloc);   # expose host callbacks
+    if (tcc_compile_string(s, src) < 0) { -> LMX failure record; }
+    tcc_relocate(s, TCC_RELOCATE_AUTO);
+    fn = tcc_get_symbol(s, "lm_kernel");
+    // call fn with LmArray buffers passed as raw pointers + lengths
+    tcc_delete(s);
+
+    Errors: an error callback set with tcc_set_error_func collects
+    diagnostics; compile/relocate failure -> LMX failure record.
+
+    Arrays: zero ceremony -- an LmArray's data pointer and length are
+    passed straight to the compiled C function; the kernel writes back
+    in place. No marshalling.
+
+    No GIL. TCCState is not thread-safe; one per L5 thread, or serialise
+    compilation and share only the resulting function pointers.
+
+
+5. ABI descriptors and the L5 receiver
+--------------------------------------
+
+    lm2/tcchost_abi.lm2      predef + fn.external prototypes
+    receiver "tcc", selector "tcc.compile" (returns a handle) and
+    "tcc.call" (invoke a symbol with buffer args)
+
+    k = tcc.compile """
+        void scale(double *x, long n, double f){ for(long i=0;i<n;i++) x[i]*=f; }
+    """
+    tcc.call k "scale" buffer n 2.0
+
+
+6. Packages
+-----------
+
+None. The "library" is C itself plus whatever is already in
+build/libs/ .
+
+
+7. What the tool does not do
+----------------------------
+
+    write the body of lm_tcchost_* (the symbol table exposure, the
+    handle registry, the error callback);
+    sandbox the compiled C -- it runs with full host privileges, so the
+    tcc receiver must sit behind Lingvamyxa's own authority checks.
+
+
+Appendix. Provisioning utility sketch  --  lm2/provision_tinycc.lm2
+==============================================================
+
+Shared helpers mirror lm2/vcpkgFetch.lm2 and are elided. Illustrative.
+
+========================================================================
+# lm2/provision_tinycc.lm2 -- vendor TinyCC, build libtcc, wire the tcc receiver
+
+include
+constant
+fn
+prototype
+unit
+
+predef: "libc_abi.lm2"
+predef: "lm2/own_abi.lm2"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+constant: TCC_REF "mob"
+constant: TCC_URL "https://repo.or.cz/tinycc.git/snapshot/HEAD.tar.gz"
+constant: TCC_SHA "REPLACE_ME"
+
+fn: lm_tcc_write_cmake () int
+    FILE: f
+    f: fopen("cmake/EmbeddedTcc.cmake", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "# generated by provision_tinycc.lm0\n"
+    c.fprintf: f "option(LINGVAMYXA_ENABLE_TCC \"Build the tcc receiver\" OFF)\n"
+    c.fprintf: f "if(LINGVAMYXA_ENABLE_TCC)\n"
+    c.fprintf: f "  set(S \"${CMAKE_BINARY_DIR}/libs/tinycc-src\")\n"
+    c.fprintf: f "  set(P \"${CMAKE_BINARY_DIR}/libs/tinycc\")\n"
+    c.fprintf: f "  add_custom_command(OUTPUT ${P}/lib/libtcc.a\n"
+    c.fprintf: f "    COMMAND sh -c \"cd ${S} && ./configure --prefix=${P} --cc=${CMAKE_C_COMPILER} --extra-cflags=-fPIC && make libtcc.a && make install\")\n"
+    c.fprintf: f "  add_custom_target(build_tcc DEPENDS ${P}/lib/libtcc.a)\n"
+    c.fprintf: f "  add_library(lingvamyxa_tcc STATIC IMPORTED GLOBAL)\n"
+    c.fprintf: f "  set_target_properties(lingvamyxa_tcc PROPERTIES IMPORTED_LOCATION ${P}/lib/libtcc.a)\n"
+    c.fprintf: f "  target_include_directories(lingvamyxa_tcc INTERFACE ${P}/include)\n"
+    c.fprintf: f "  add_dependencies(lingvamyxa_tcc build_tcc)\n"
+    c.fprintf: f "endif()\n"
+    fclose(f)
+return: 0
+
+fn: lm_tcc_write_shim_stub () int
+    FILE: f
+    f: fopen("lm2/tcchost_abi.lm2", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "# generated by provision_tinycc.lm0\n"
+    c.fprintf: f "predef: \"libc_abi.lm2\"\n\n"
+    c.fprintf: f "external:\n"
+    c.fprintf: f "    fn: lm_tcchost_compile (@: char code; @: void handle_out) int\n"
+    c.fprintf: f "    fn: lm_tcchost_call (@: void handle; @: char symbol; @: void argv; size_t: argc; @: void result_out) int\n"
+    c.fprintf: f "    fn: lm_tcchost_free (@: void handle)\n"
+    c.fprintf: f "end: external\n"
+    fclose(f)
+return: 0
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        c.array: []: char cmake 1024
+        c.array: []: char archive 2048
+
+        if: lm_enter_project_root(argv[0]) != 0
+            return: 1
+        strcpy(cmake, lm_env_or_default("LM_CMAKE", "cmake"))
+
+        if: lm_join_path(archive, c.sizeof(archive), "third_party", "tinycc.tar.gz") != 0
+            return: 1
+        if: lm_fetch(TCC_URL, archive) != 0
+            return: 1
+        if: lm_verify_sha256(archive, TCC_SHA) != 0
+            return: 1
+        if: lm_extract_strip1(cmake, archive, "build/libs/tinycc-src") != 0
+            return: 1
+        if: lm_tcc_write_cmake() != 0
+            return: 1
+        if: lm_tcc_write_shim_stub() != 0
+            return: 1
+        if: lm_write_manifest("build/libs/tinycc-src/PROVISION_MANIFEST.txt", "tinycc", TCC_REF, TCC_SHA) != 0
+            return: 1
+
+        c.printf: "provision_tinycc.lm0: done. build with -DLINGVAMYXA_ENABLE_TCC=ON\n"
+    return: 0
+end: external
+========================================================================

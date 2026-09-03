@@ -1,0 +1,228 @@
+Lingvamyxa CPython-on-WASI Integration Plan  (second Python, sandboxed)
+====================================================================
+
+Status
+
+Working provisioning plan for running CPython as a WASI guest under the
+bundled WASM runtime -- an isolated "second Python" that cannot crash
+the Lingvamyxa process and only sees the directories it is granted. One
+of the four Python-family plans (see include_python.txt).
+
+Prerequisite: include_wasm.txt (the wasm receiver) must be provisioned
+first; this plan adds a guest module and a Python-specific surface on
+top of it.
+
+Goal
+
+The pure-Python part of the ecosystem, sandboxed: parsing, business
+logic, requests-style glue, templating, pure-Python data code. Runs
+with no JS shim (unlike Pyodide). The scientific stack (numpy, scipy) is
+the weak spot -- wasip1 wheels for it exist but are still thin; use
+include_python.txt (embedded CPython) or include_python_pyodide.txt when
+numpy is required.
+
+Tier
+
+Tier 3. Fetch a python.wasm plus its stdlib zip, stage them as a guest
+of the wasm runtime, vendor pure-Python site-packages as a zip. The
+provisioning is easy; the wheel supply for compiled packages is the
+limitation.
+
+
+1. Prerequisites (developer machine)
+------------------------------------
+
+Already in the project: CMake, Ninja, Git, a C toolchain, plus a
+provisioned build/libs/wasm (include_wasm.txt).
+
+Add:
+
+    uv or curl        fetch python.wasm and the stdlib archive
+    tar / unzip       unpack
+
+
+2. Fetch the guest
+------------------
+
+Options, in order of "just works under a plain WASI runtime":
+
+    VMware Labs "WebAssembly Language Runtimes"
+        github.com/vmware-labs/webassembly-language-runtimes releases:
+        python/python-<ver>/python-<ver>.wasm  +  the /usr/local/lib
+        tree (stdlib). Built for wasi-sdk, runs under wasmtime/WAMR.
+    Wasmer's python package
+        `wasmer` distributes a python.wasm; the .wasm + lib layout is
+        usable standalone.
+    CPython upstream wasm32-wasip1 CI artifacts
+        the reference build; you assemble python.wasm + python<ver>.zip
+        yourself.
+
+Pin the chosen asset's sha256 in the DISTS table. python.wasm is
+architecture-independent -- one file for every target.
+
+
+3. Stage
+--------
+
+    build/libs/wasm-guests/python/python.wasm
+    build/libs/wasm-guests/python/lib/python3.12.zip      the stdlib
+    build/libs/wasm-guests/python/site-packages.zip       pure-Python deps
+    build/libs/wasm-guests/python/data/                    (granted at runtime)
+
+
+4. CMake integration
+--------------------
+
+No new library target. Add an install rule that copies
+build/libs/wasm-guests/python/ next to the binary. The wasm receiver
+target (include_wasm.txt) already links libwasmtime.
+
+
+5. The Python surface on the wasm receiver
+-----------------------------------------
+
+The wasmhost shim (include_wasm.txt, section 5) already loads and runs
+WASI modules. Add a thin "python" facade over it:
+
+    lm_pyhost_wasi_open()
+        wasmhost.load "python/python.wasm"
+        wasi args:  ["python", "-I", "-S"]
+        wasi env:   PYTHONPATH=/lib/python3.12.zip:/site-packages.zip
+                    PYTHONDONTWRITEBYTECODE=1
+        preopen:    build/libs/wasm-guests/python -> "/"
+                    <granted data dir>            -> "/data"
+    lm_pyhost_wasi_eval(code)
+        write the code to a preopened /tmp file (or feed on argv), run
+        _start, collect stdout as the result, stderr+exit code as a
+        failure record.
+
+For a typed, non-stdio boundary use componentize-py at build time: it
+packs CPython + a spi.py-style module + pure deps into one .wasm
+component with a WIT interface; wit-bindgen-c then generates C stubs so
+Lingvamyxa calls compute(...) like a native function. This is the
+cleaner long-term shape; it needs componentize-py on the build machine.
+
+    arrays   across the WASI stdio boundary: serialise (Arrow IPC bytes
+             through a preopened file, or length-prefixed f64 blocks).
+             across a WIT component boundary: list<f32> in the interface,
+             no serialisation.
+    threads  none by default in wasip1.
+    startup  ~100-500 ms to instantiate CPython; fine for a batch
+             receiver, not for a hot path.
+
+
+6. ABI descriptors and the L5 receiver
+--------------------------------------
+
+    lm2/pyhost_wasi_abi.lm2   predef + fn.external prototypes
+    receiver "python" with a build switch
+    LINGVAMYXA_PYTHON_IMPL=cpython|pypy|wasi|pyodide selecting the
+    backend; the Lingvamyxa surface (py.import / py.call) does not
+    change.
+
+
+7. Packages
+-----------
+
+    pure Python   pip download --only-binary=:none: --no-deps into a
+                  folder, zip it as site-packages.zip, add to PYTHONPATH
+                  inside the guest. Or `uv pip install --target` then zip.
+    compiled      look for a wasip1 wheel (tags like
+                  cp312-cp312-wasi_0_0_0_wasm32); availability is
+                  currently limited to a small set. If missing, this
+                  backend cannot provide that package -- fall back to
+                  include_python.txt or include_python_pyodide.txt.
+
+
+8. What the tool does not do
+----------------------------
+
+    write the python facade over the wasm receiver, or the
+    componentize-py build;
+    produce wasip1 wheels that do not yet exist;
+    decide the pure-Python dependency set.
+
+
+Appendix. Provisioning utility sketch  --  lm2/provision_python_wasi.lm2
+==================================================================
+
+Assumes build/libs/wasm is already provisioned. Shared helpers mirror
+lm2/vcpkgFetch.lm2 and are elided. Illustrative.
+
+========================================================================
+# lm2/provision_python_wasi.lm2 -- stage a CPython WASI guest
+
+include
+constant
+fn
+prototype
+unit
+
+predef: "libc_abi.lm2"
+predef: "lm2/own_abi.lm2"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+constant: PYW_VER "3.12.0"
+constant: PYW_WASM_URL "https://github.com/vmware-labs/webassembly-language-runtimes/releases/download/python%2F3.12.0%2B20231211/python-3.12.0.wasm"
+constant: PYW_WASM_SHA "REPLACE_ME"
+constant: PYW_LIB_URL  "https://github.com/vmware-labs/webassembly-language-runtimes/releases/download/python%2F3.12.0%2B20231211/libpython-3.12.0.tar.gz"
+constant: PYW_LIB_SHA  "REPLACE_ME"
+
+fn: lm_pyw_write_shim_stub () int
+    FILE: f
+    f: fopen("lm2/pyhost_wasi_abi.lm2", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "# generated by provision_python_wasi.lm0\n"
+    c.fprintf: f "predef: \"libc_abi.lm2\"\n\n"
+    c.fprintf: f "external:\n"
+    c.fprintf: f "    fn: lm_pyhost_wasi_open (@: char grant_dir) int\n"
+    c.fprintf: f "    fn: lm_pyhost_wasi_eval (@: char code; @: void result_out) int\n"
+    c.fprintf: f "    fn: lm_pyhost_wasi_close ()\n"
+    c.fprintf: f "end: external\n"
+    fclose(f)
+return: 0
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        c.array: []: char cmake 1024
+        c.array: []: char wasm_path 2048
+        c.array: []: char lib_path 2048
+
+        if: lm_enter_project_root(argv[0]) != 0
+            return: 1
+        strcpy(cmake, lm_env_or_default("LM_CMAKE", "cmake"))
+
+        if: lm_file_exists("build/libs/wasm/lib/libwasmtime.a") = 0
+            c.fprintf: c.stderr "provision_python_wasi.lm0: run provision_wasm.lm0 first\n"
+            return: 1
+
+        if: lm_join_path(wasm_path, c.sizeof(wasm_path), "build/libs/wasm-guests/python", "python.wasm") != 0
+            return: 1
+        if: lm_join_path(lib_path, c.sizeof(lib_path), "third_party", "cpython-wasi-lib.tar.gz") != 0
+            return: 1
+
+        if: lm_fetch(PYW_WASM_URL, wasm_path) != 0
+            return: 1
+        if: lm_verify_sha256(wasm_path, PYW_WASM_SHA) != 0
+            return: 1
+        if: lm_fetch(PYW_LIB_URL, lib_path) != 0
+            return: 1
+        if: lm_verify_sha256(lib_path, PYW_LIB_SHA) != 0
+            return: 1
+        if: lm_extract_into(cmake, lib_path, "build/libs/wasm-guests/python") != 0
+            return: 1
+
+        # zip the stdlib and any vendored pure-Python packages
+        if: lm_run("cd build/libs/wasm-guests/python/lib && zip -qr ../python3.12.zip python3.12") != 0
+            c.fprintf: c.stderr "provision_python_wasi.lm0: stdlib zip step skipped\n"
+
+        if: lm_pyw_write_shim_stub() != 0
+            return: 1
+        if: lm_write_manifest("build/libs/wasm-guests/python/PROVISION_MANIFEST.txt", "cpython-wasi", PYW_VER, PYW_WASM_SHA) != 0
+            return: 1
+
+        c.printf: "provision_python_wasi.lm0: done. set LINGVAMYXA_PYTHON_IMPL=wasi\n"
+    return: 0
+end: external
+========================================================================

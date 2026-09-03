@@ -1,0 +1,169 @@
+Lingvamyxa PyPy Integration Plan  (second Python, JIT)
+====================================================
+
+Status
+
+Working provisioning plan for bundling PyPy instead of, or beside,
+CPython. This is one of the four Python-family plans; the other three
+are include_python.txt (embedded CPython), include_python_wasi.txt and
+include_python_pyodide.txt.
+
+Read include_python.txt first. PyPy's embedding API deliberately mirrors
+CPython's, so ~90% of that plan applies unchanged. This file only
+records the differences.
+
+Goal
+
+Almost all of PyPI, with PyPy's tracing JIT: much faster pure-Python and
+long-running numeric loops, at the cost of slower startup and a larger
+footprint. C extensions load through cpyext (slower than on CPython,
+mostly compatible).
+
+Tier
+
+Tier 1. PyPy ships an official portable (relocatable) tarball, exposes
+libpypy3.x-c with CPython-compatible headers, and bundles pip. Provisions
+exactly like include_python.txt with the distribution swapped.
+
+
+1. Prerequisites (developer machine)
+------------------------------------
+
+Same as include_python.txt: the project toolchain, uv or curl, tar
+(portable PyPy ships .tar.bz2 on unix, .zip on Windows -- bz2 needs
+bzip2 or bsdtar).
+
+
+2. Fetch the redistributable
+----------------------------
+
+Source: the PyPy downloads. Asset:
+
+    pypy3.10-v<ver>-<platform>.tar.bz2
+
+    platform   linux64 | aarch64 | macos_x86_64 | macos_arm64 | win64
+
+The "portable" builds are the relocatable ones. PyPy publishes a
+.sha256 beside each asset; pin it in the DISTS table.
+
+
+3. Stage
+--------
+
+Unpack into build/libs/pypy/ (strip the single top dir):
+
+    build/libs/pypy/bin/pypy3
+    build/libs/pypy/bin/libpypy3.10-c.{so,dylib}     (libpypy3.10-c.dll)
+    build/libs/pypy/include/                          Python.h and friends
+    build/libs/pypy/lib/pypy3.10/                     stdlib
+    build/libs/pypy/lib/pypy3.10/site-packages/       (populated in 7)
+
+
+4. CMake integration
+--------------------
+
+Identical to include_python.txt section 3 with the paths above and
+
+    Py_LIMITED_API is NOT usable with PyPy; link/resolve
+    libpypy3.10-c directly and pin the minor version, or load it with
+    dlopen and resolve the CPython-named symbols (Py_InitializeFromConfig,
+    PyRun_String, PyObject_CallObject, the buffer protocol) by name.
+
+
+5. The C shim (pyhost)
+----------------------
+
+Reuse lm1/build/pyhost.lm1.c from include_python.txt verbatim where
+possible. Differences:
+
+    - no limited API: compile against PyPy's Python.h, or keep the shim
+      dlopen-based and symbol-name-driven so one shim serves both
+      CPython and PyPy;
+    - cpyext wraps C-extension objects; GetBuffer / memoryview still work
+      for the LmArray bridge, but expect a small marshalling tax at the
+      boundary vs CPython;
+    - the GIL exists (PyPy has a GIL); PyGILState_Ensure / _Release are
+      present. Same "Python calls serialise" note.
+    - sys.executable points at the Lingvamyxa binary; set
+      multiprocessing.set_executable(build/libs/pypy/bin/pypy3), same as
+      the CPython plan.
+
+
+6. ABI descriptors and the L5 receiver
+--------------------------------------
+
+Same as include_python.txt: lm2/pyhost_abi.lm2, receiver "python" /
+selector "py.call". If both CPython and PyPy are bundled, add a
+build-time switch (LINGVAMYXA_PYTHON_IMPL=cpython|pypy) selecting which
+libpython the shim loads; the Lingvamyxa surface does not change.
+
+
+7. Packages
+-----------
+
+pip is bundled:
+
+    build/libs/pypy/bin/pypy3 -m ensurepip
+    build/libs/pypy/bin/pypy3 -m pip install --no-input --only-binary=:all: \
+        -r requirements.lock \
+        --target build/libs/pypy/lib/pypy3.10/site-packages
+
+Wheel availability is narrower than CPython: many pure-Python wheels
+just work; big binary wheels (numpy, pandas) have PyPy builds but not
+for every version -- pin against what PyPy's index actually has, or let
+pip build from source (needs a C compiler at provision time).
+
+
+8. Packaging per platform
+-------------------------
+
+Same as include_python.txt section 6, paths under build/libs/pypy/ .
+
+
+9. What the tool does not do
+----------------------------
+
+    write the body of lm_pyhost_* (shared with the CPython plan);
+    curate requirements.in;
+    fill the DISTS sha256 column;
+    codesign or notarise the macOS bundle.
+
+
+Appendix. Provisioning utility sketch  --  lm2/provision_python_pypy.lm2
+==================================================================
+
+This is lm2/provision_python.lm2 (include_python.txt Appendix B) with the
+distribution table and the interpreter path changed. Only the deltas:
+
+========================================================================
+# lm2/provision_python_pypy.lm2 -- stage a private PyPy
+
+constant: PYPY_VER  "7.3.17"
+constant: PYPY_PYMM "3.10"
+constant: PYPY_BASE "https://downloads.python.org/pypy"
+
+table:
+    source
+    name: PYPYDIST
+    columns: (class: class)  (@: char triple)              (@: char plat)        (@: char sha256)
+    rows:
+             linux_x64    "x86_64-unknown-linux-gnu"   "linux64"        "REPLACE_ME"
+             linux_arm64  "aarch64-unknown-linux-gnu"  "aarch64"        "REPLACE_ME"
+             mac_arm64    "aarch64-apple-darwin"       "macos_arm64"    "REPLACE_ME"
+             mac_x64      "x86_64-apple-darwin"        "macos_x86_64"   "REPLACE_ME"
+             win_x64      "x86_64-pc-windows-msvc"     "win64"          "REPLACE_ME"
+end: PYPYDIST
+
+fn: lm_pypy_url (@: char buffer; size_t: size; @: char plat) int
+    snprintf(buffer, size, "%s/pypy%s-v%s-%s.tar.bz2", PYPY_BASE, PYPY_PYMM, PYPY_VER, plat)
+return: 0
+
+fn: lm_pypy_interp_relpath () @: char
+return: "bin/pypy3"
+
+# main(): identical pipeline to provision_python.lm2 --
+#   dist_lookup -> fetch -> verify_sha256 -> extract (strip 1) into
+#   build/libs/pypy -> write cmake/EmbeddedPython.cmake (impl=pypy) ->
+#   reuse the pyhost shim + abi -> pip populate with lm_pypy_interp_relpath
+#   -> write PROVISION_MANIFEST.txt
+========================================================================

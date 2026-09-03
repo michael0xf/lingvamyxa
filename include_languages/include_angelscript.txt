@@ -1,0 +1,211 @@
+Lingvamyxa AngelScript / Squirrel / ChaiScript Integration Plan
+=============================================================
+
+Status
+
+Working provisioning plan for vendoring a typed embeddable scripting
+language -- AngelScript, Squirrel or ChaiScript -- into the Lingvamyxa
+runtime and exposing it as an L5-style "as" (or "sq" / "chai") receiver.
+Companion to include_python.txt; same verify / stage / generate /
+manifest pattern, no runtime download.
+
+Goal
+
+Scripting with a C-like, statically typed surface, designed for game
+and application embedding. All three are C++; the Lingvamyxa Qt shell
+already links C++, so a C++ translation unit is acceptable as long as
+the shim exposes an extern "C" ABI to Lingvamyxa.
+
+    AngelScript  static typing close to C++, explicit registered API,
+                 mature, deterministic; source-only add-ons.
+    Squirrel     Lua-like dynamic language with classes and a C API
+                 (sq_*); small.
+    ChaiScript   header-only C++, tightest C++ interop, heavier compile
+                 times, dynamic typing.
+
+Tier
+
+Tier 2. Vendor C++ source, build a static lib with the project
+toolchain.
+
+
+1. Prerequisites (developer machine)
+------------------------------------
+
+Already in the project: CMake, Ninja, Git, a C++ toolchain (present for
+the Qt app). uv or curl to fetch the release once.
+
+
+2. Vendor the source
+--------------------
+
+    AngelScript  from angelcode.com; sdk/angelscript/source/*.cpp +
+                 include/angelscript.h; add-ons under sdk/add_on/ are
+                 source you copy as needed (scriptstdstring,
+                 scriptarray, scriptbuilder).
+    Squirrel     from github.com/albertodemichelis/squirrel; CMake tree,
+                 squirrel/ + sqstdlib/ ; header squirrel.h.
+    ChaiScript   from github.com/ChaiScript/ChaiScript; header-only,
+                 include/chaiscript/*.
+
+Pin the sha256. Commit third_party/angelscript/ (etc.).
+
+
+3. CMake integration
+--------------------
+
+    option(LINGVAMYXA_ENABLE_AS "Build the as receiver" OFF)
+
+    if(LINGVAMYXA_ENABLE_AS)
+      file(GLOB AS_SRC .../angelscript/sdk/angelscript/source/*.cpp)
+      add_library(lingvamyxa_as STATIC ${AS_SRC}
+        .../add_on/scriptstdstring/scriptstdstring.cpp
+        .../add_on/scriptarray/scriptarray.cpp
+        .../add_on/scriptbuilder/scriptbuilder.cpp)
+      target_include_directories(lingvamyxa_as PUBLIC
+        .../angelscript/sdk/angelscript/include
+        .../angelscript/sdk/add_on)
+      target_compile_definitions(lingvamyxa_as PUBLIC LINGVAMYXA_AS=1)
+    endif()
+
+Squirrel/ChaiScript: add_subdirectory or, for ChaiScript, just an
+INTERFACE target with the include dir.
+
+
+4. The C shim (ashost)  --  lm1/build/ashost.lm1.c  (compiled as C++)
+-----------------------------------------------------------------
+
+AngelScript:
+
+    asIScriptEngine *e = asCreateScriptEngine();
+    RegisterStdString(e); RegisterScriptArray(e, true);
+    // register the Lingvamyxa call surface: e->RegisterGlobalFunction(...)
+    CScriptBuilder b; b.StartNewModule(e, "lm"); b.AddSectionFromMemory("lm", src);
+    b.BuildModule();
+    asIScriptContext *c = e->CreateContext();
+    c->Prepare(e->GetModule("lm")->GetFunctionByDecl("void main()"));
+    int r = c->Execute();                    // asEXECUTION_FINISHED == 2
+    Errors: a message callback (e->SetMessageCallback) collects
+    diagnostics; on r != FINISHED read c->GetExceptionString() ->
+    LMX failure record.
+    Arrays: a CScriptArray backed by a copy, or register an opaque
+    "Buffer" type over the arena pointer with opIndex accessors (no
+    copy). AngelScript primitives include double, int64, uint8.
+
+Squirrel:  sq_open(1024); sqstd_dofile / sq_compilebuffer + sq_call;
+    sq_getlasterror; blobs (SQUserPointer) for binary data.
+
+ChaiScript:  chaiscript::ChaiScript chai; chai.eval(src); catch
+    chaiscript::exception::eval_error for the message.
+
+No GIL; one engine/VM per L5 thread.
+
+
+5. ABI descriptors and the L5 receiver
+--------------------------------------
+
+    lm2/ashost_abi.lm2       predef + fn.external prototypes (extern "C")
+    receiver "as" (or "sq" / "chai"), selector "<x>.eval" / "<x>.call"
+
+
+6. Packages
+-----------
+
+None. Vendor script sources. AngelScript add-ons are compiled in at
+build time.
+
+
+7. What the tool does not do
+----------------------------
+
+    write the body of lm_ashost_* for the chosen impl, including the
+    registered Lingvamyxa call surface;
+    pick which add-ons to compile in.
+
+
+Appendix. Provisioning utility sketch  --  lm2/provision_angelscript.lm2
+==================================================================
+
+Shared helpers mirror lm2/vcpkgFetch.lm2 and are elided. Illustrative;
+shows the AngelScript path.
+
+========================================================================
+# lm2/provision_angelscript.lm2 -- vendor AngelScript, wire the as receiver
+
+include
+constant
+fn
+prototype
+unit
+
+predef: "libc_abi.lm2"
+predef: "lm2/own_abi.lm2"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+constant: AS_VER "2.37.0"
+constant: AS_URL "https://www.angelcode.com/angelscript/sdk/files/angelscript_2.37.0.zip"
+constant: AS_SHA "REPLACE_ME"
+
+fn: lm_as_write_cmake () int
+    FILE: f
+    f: fopen("cmake/EmbeddedAs.cmake", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "# generated by provision_angelscript.lm0\n"
+    c.fprintf: f "option(LINGVAMYXA_ENABLE_AS \"Build the as receiver\" OFF)\n"
+    c.fprintf: f "if(LINGVAMYXA_ENABLE_AS)\n"
+    c.fprintf: f "  set(S \"${CMAKE_SOURCE_DIR}/third_party/angelscript/sdk\")\n"
+    c.fprintf: f "  file(GLOB AS_SRC ${S}/angelscript/source/*.cpp)\n"
+    c.fprintf: f "  add_library(lingvamyxa_as STATIC ${AS_SRC}\n"
+    c.fprintf: f "    ${S}/add_on/scriptstdstring/scriptstdstring.cpp\n"
+    c.fprintf: f "    ${S}/add_on/scriptarray/scriptarray.cpp\n"
+    c.fprintf: f "    ${S}/add_on/scriptbuilder/scriptbuilder.cpp)\n"
+    c.fprintf: f "  target_include_directories(lingvamyxa_as PUBLIC ${S}/angelscript/include ${S}/add_on)\n"
+    c.fprintf: f "  target_compile_definitions(lingvamyxa_as PUBLIC LINGVAMYXA_AS=1)\n"
+    c.fprintf: f "endif()\n"
+    fclose(f)
+return: 0
+
+fn: lm_as_write_shim_stub () int
+    FILE: f
+    f: fopen("lm2/ashost_abi.lm2", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "# generated by provision_angelscript.lm0\n"
+    c.fprintf: f "predef: \"libc_abi.lm2\"\n\n"
+    c.fprintf: f "external:\n"
+    c.fprintf: f "    fn: lm_ashost_new () @: void\n"
+    c.fprintf: f "    fn: lm_ashost_free (@: void engine)\n"
+    c.fprintf: f "    fn: lm_ashost_eval (@: void engine; @: char code; @: void result_out) int\n"
+    c.fprintf: f "end: external\n"
+    fclose(f)
+return: 0
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        c.array: []: char cmake 1024
+        c.array: []: char archive 2048
+
+        if: lm_enter_project_root(argv[0]) != 0
+            return: 1
+        strcpy(cmake, lm_env_or_default("LM_CMAKE", "cmake"))
+
+        if: lm_join_path(archive, c.sizeof(archive), "third_party", "angelscript.zip") != 0
+            return: 1
+        if: lm_fetch(AS_URL, archive) != 0
+            return: 1
+        if: lm_verify_sha256(archive, AS_SHA) != 0
+            return: 1
+        if: lm_extract_strip1(cmake, archive, "third_party/angelscript") != 0
+            return: 1
+        if: lm_as_write_cmake() != 0
+            return: 1
+        if: lm_as_write_shim_stub() != 0
+            return: 1
+        if: lm_write_manifest("third_party/angelscript/PROVISION_MANIFEST.txt", "angelscript", AS_VER, AS_SHA) != 0
+            return: 1
+
+        c.printf: "provision_angelscript.lm0: done. build with -DLINGVAMYXA_ENABLE_AS=ON\n"
+    return: 0
+end: external
+========================================================================

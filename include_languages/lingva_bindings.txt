@@ -1,0 +1,225 @@
+Lingvamyxa Embeddable Runtime Catalog
+=====================================
+
+Status
+
+Catalog of foreign language runtimes that can be bundled into the
+Lingvamyxa runtime and reached through the existing C-ABI projection,
+so a Lingvamyxa program can borrow another ecosystem's libraries
+without that ecosystem being installed on the target machine.
+
+This is not a language specification. It is a companion index to the
+per-runtime provisioning plans in this directory.
+
+
+Selection rule
+
+A runtime is listed here only if a provisioning utility of the same
+kind as lm2/provision_python.lm2 (see include_python.txt, Appendix B)
+can realistically stand it up from scratch:
+
+    fetch a prebuilt relocatable redistributable, or vendor a small C
+    source amalgamation;
+    verify a pinned hash;
+    stage it under build/libs/<x> or third_party/<x>;
+    generate cmake/Embedded<X>.cmake and an lm2/<x>host_abi.lm2 stub;
+    optionally populate a package set with the runtime's own manager;
+    write a provenance manifest.
+
+No multi-gigabyte SDK, no per-target recompilation of the runtime, a
+stable C embedding ABI to link. Runtimes that fail this bar are in the
+Removed section with the reason; use them as a sidecar instead.
+
+
+Column key
+
+    Ref   the worked reference every plan here follows is
+          include_python.txt (embedded CPython, option B); its
+          Appendix B is the pattern each provision_<x>.lm2 mirrors.
+    Doc   the per-runtime provisioning plan in this directory.
+
+
+Tier 1 -- full ecosystem, provisions almost like CPython
+=======================================================
+
+Fetch a prebuilt relocatable runtime, link a stable C embedding API,
+populate packages with the runtime's own resolver.
+
+    Runtime        Ecosystem                                  Ref                 Doc
+    -------------  -----------------------------------------  ------------------  -----------------------
+    OpenJDK / JVM  Maven Central: Java, Kotlin, Scala,        include_python.txt  include_openjdk.txt
+                   Clojure. Geo: NetCDF-Java, GeoTools,
+                   JTS, Apache SIS
+    .NET CoreCLR   NuGet: C#, F#. Math.NET, ML.NET,           include_python.txt  include_dotnet.txt
+                   ImageSharp, NetTopologySuite
+    Julia          SciML, JuMP, Flux,                          include_python.txt  include_julia.txt
+                   DifferentialEquations
+    PyPy           almost all of PyPI (cpyext for C            include_python.txt  include_python_pypy.txt
+                   extensions); "second Python, JIT"
+
+Notes
+
+    OpenJDK / JVM
+        fetch    Adoptium Temurin JRE tarball for os+arch (api.adoptium.net)
+        embed    JNI Invocation API (JNI_CreateJavaVM from libjvm);
+                 Panama FFM (java.lang.foreign) for the modern boundary
+        pkgs     coursier native launcher resolves Maven coordinates to
+                 a classpath directory
+        wrinkle  one JVM per process, cannot recreate; JVM installs its
+                 own SIGSEGV/SIGBUS handlers (-Xrs damps this); -Xmx is
+                 presized; ~40 MB JRE (jlink shrink needs a full JDK)
+
+    .NET CoreCLR
+        fetch    dotnet-runtime-<ver>-<rid>.tar.gz from the .NET release
+                 feed (rid: linux-x64, osx-arm64, win-x64, ...)
+        embed    nethost / hostfxr, the official native hosting C API,
+                 shipped inside the runtime package
+        pkgs     dotnet restore (needs the SDK), or a ~50-line fetcher
+                 over the nuget.org v3-flatcontainer (a .nupkg is a zip)
+        wrinkle  one CoreCLR per process; AssemblyLoadContext for
+                 isolation/unload; JIT warmup
+
+    Julia
+        fetch    official julia-<ver>-<triple>.tar.gz (explicitly
+                 relocatable: extract and run)
+        embed    libjulia + julia.h (jl_init, jl_eval_string,
+                 jl_atexit_hook)
+        pkgs     built-in Pkg; vendor a pre-resolved JULIA_DEPOT_PATH
+        wrinkle  large (~500 MB with stdlib); big time-to-first-result;
+                 one runtime; call from the jl_init thread or
+                 jl_adopt_thread
+
+    PyPy
+        fetch    portable-pypy tarball (pypy.org/download)
+        embed    libpypy3.x-c; headers mirror CPython's Python.h; same
+                 Py_InitializeFromConfig flow
+        pkgs     bundled pip (pypy -m ensurepip), --target into
+                 site-packages
+        wrinkle  identical to include_python.txt (GIL, shared crash
+                 domain, sys.executable); read that file, swap the
+                 distribution and the triples table
+
+
+Tier 2 -- vendor a C amalgamation, build with the project compiler
+=================================================================
+
+No runtime download. Drop the source into third_party/<x>, add a static
+library target, link. Arguably simpler than CPython.
+
+    Runtime          Niche                              Ref                 Doc
+    ---------------  ---------------------------------  ------------------  -------------------------
+    Lua 5.4          the reference embeddable           include_python.txt  include_lua.txt
+    LuaJIT           Lua 5.1 + trace JIT + C FFI        include_python.txt  include_luajit.txt
+    QuickJS-ng       JS ES2023, many runtimes          include_python.txt  include_quickjs.txt
+    Duktape          JS ES5.1, single .c + .h           include_python.txt  include_duktape.txt
+    MuJS / JerryScr. JS, kilobyte-class                 include_python.txt  include_mujs.txt
+    Janet            modern Lisp, built for embed       include_python.txt  include_janet.txt
+    Wren/s7/Chibi    fibers / Scheme in one file        include_python.txt  include_wren.txt
+    Tcl              the language made to be embedded   include_python.txt  include_tcl.txt
+    AngelScript/     typed scripting (C++)             include_python.txt  include_angelscript.txt
+      Squirrel/ChaiS.
+    mruby            Ruby for embedding                 include_python.txt  include_mruby.txt
+    Berry/Umka/      tiny embeddables                   include_python.txt  include_berry.txt
+      Gravity/...
+    TinyCC (libtcc)  compile and run C in-process       include_python.txt  include_tinycc.txt
+
+Notes
+
+    delivery   most ship a prepared amalgamation (one or few .c files);
+               vendor the release tarball into third_party/<x>, compile
+               with the project's own toolchain into build/libs/lib<x>.a
+    packages   Lua -> LuaRocks, Janet -> jpm, all optional and needing
+               the host runtime; otherwise vendor the language's own
+               source files
+    wrinkles   LuaJIT has a DynASM build step and is Lua 5.1;
+               Tcl and Chibi-Scheme also stage a script stdlib
+               directory (set TCL_LIBRARY / CHIBI module path);
+               AngelScript/Squirrel/ChaiScript are C++ TUs -- expose
+               the shim as extern "C";
+               mruby's build runs on a host Ruby (bundled minirake) and
+               its gembox is fixed at build time, not runtime
+
+
+Tier 3 -- WASM, including a "second Python"
+==========================================
+
+Provisioning the runtime and a pure-Python "second Python" is easy and
+fits the same pattern; the scientific stack under WASM is the weak spot.
+
+    Layer                       Approach                                   Ref                 Doc
+    --------------------------  ----------------------------------------  ------------------  --------------------------
+    WASM runtime                Wasmtime/Wasmer prebuilt C-API libs, or  include_python.txt  include_wasm.txt
+                                WAMR/wasm3 as a small C build
+    Second Python, pure         CPython wasm32-wasip1 python.wasm +      include_python.txt  include_python_wasi.txt
+                                stdlib zip under the runtime; vendored
+                                pure-Python site-packages
+    Second Python, scientific   Pyodide blob (~250 wheels incl.          include_python.txt  include_python_pyodide.txt
+                                numpy/scipy); Emscripten target needs a
+                                JS host (embed QuickJS)
+
+Notes
+
+    easy      WASM runtime: prebuilt C-API tarball, fetch/verify/stage/
+              link, exactly Appendix B. WASI grants preopened dirs =
+              capability scoping, aligned with the L4/L5 authority model
+    easy      pure "second Python": vendored python.wasm runs under the
+              runtime with no JS shim; pure-Python libs as a PYTHONPATH
+              zip inside the guest
+    medium    Pyodide: the blob download is trivial but Pyodide targets
+              Emscripten and expects a JS host, so the C host must embed
+              a JS engine (include_quickjs.txt) to run pyodide.asm.js
+    limits    wasm32 has a 4 GB memory ceiling (memory64 immature);
+              ~100-500 ms cold instantiation; numpy/scipy wheels for
+              wasip1 are still thin
+
+
+Borderline (kept with caveats; no per-row doc in this pass)
+==========================================================
+
+    Runtime       Why borderline
+    ------------  --------------------------------------------------------
+    SWI-Prolog    prebuilt binaries and a documented C API (PL_initialise)
+                  exist, but the relocatable-tarball matrix is less clean
+                  than Java or Julia. Relevant: Lingvamyxa calls itself a
+                  logical language
+    GNU Guile     heavier than the other Schemes: pulls in libgc (BDW GC),
+                  GMP and libunistring and compiles a large Scheme stdlib;
+                  not a single-file amalgamation
+
+
+Removed -- too hard to provision from scratch; use a sidecar
+===========================================================
+
+    Runtime                 Reason
+    ----------------------  ------------------------------------------------
+    Node.js / libnode       not in the standard distribution; needs a
+                            custom Node build with --shared; embedding API
+                            still stabilizing
+    R / libR                no relocatable redistributable; moving R_HOME
+                            is a known ordeal
+    Ruby / Perl (lib*)      no clean prebuilt relocatable matrix; building
+                            from source (perlbrew, ruby-build) is the norm;
+                            mruby covers the embed niche
+    GraalVM Native Image    needs the native-image toolchain plus a C
+                            toolchain and a per-target compile
+    .NET NativeAOT          needs the full .NET SDK plus a per-target
+                            compile (plain CoreCLR hosting stays in Tier 1)
+    ECL / SBCL shared lib   a build is required; no relocatable matrix
+    Go (c-shared)           every .so carries its own runtime, GC and
+                            scheduler; two cannot coexist; signal-handler
+                            clashes; fine as a single plugin, not a bridge
+    Erlang / BEAM           in-process hosting is unusual; run as a C-node
+                            or sidecar
+    V8 / deno_core / Bun    need a GN or Rust+V8 build
+
+
+Baseline document
+
+    include_python.txt          embedded CPython (option B); the pattern
+                                every plan in this catalog follows.
+
+    Python family (4 files):
+        include_python.txt          embedded CPython, in-process
+        include_python_pypy.txt     PyPy, in-process, JIT
+        include_python_wasi.txt     CPython on WASI, sandboxed
+        include_python_pyodide.txt  Pyodide, sandboxed, scientific stack

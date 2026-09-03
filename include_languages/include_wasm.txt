@@ -1,0 +1,271 @@
+Lingvamyxa WASM Runtime Integration Plan
+=======================================
+
+Status
+
+Working provisioning plan for bundling a WebAssembly runtime into the
+Lingvamyxa runtime and exposing it as an L5-style "wasm" receiver.
+Companion to include_python.txt; same fetch / verify / stage / generate
+/ manifest pattern.
+
+Goal
+
+One embedded runtime, many source languages: anything compiled to
+WASM / WASI / a WASM component. Sandboxed by construction (linear memory
+is isolated; WASI grants only the file descriptors and preopened
+directories you hand it -- a natural fit for Lingvamyxa's L4/L5
+authority model). This file provisions the runtime; the two
+"second Python" plans (include_python_wasi.txt, include_python_pyodide.txt)
+build on it.
+
+Tier
+
+Tier 3. Wasmtime and Wasmer publish prebuilt C-API libraries per
+triple -- fetch / verify / stage / link, exactly Appendix B. WAMR and
+wasm3 are small C builds if a tinier footprint is wanted.
+
+
+1. Prerequisites (developer machine)
+------------------------------------
+
+Already in the project: CMake, Ninja, Git, a C toolchain.
+
+Add:
+
+    uv or curl        fetch the C-API tarball
+    tar / xz          unpack (Wasmtime ships .tar.xz)
+
+Optional: wasmtime's or WAMR's AOT compiler (wamrc / `wasmtime compile`)
+as a separate tool download, to precompile guest modules to native code.
+
+
+2. Fetch the redistributable
+----------------------------
+
+Wasmtime C API (recommended default):
+
+    https://github.com/bytecodealliance/wasmtime/releases/download/vNN.0.0/
+        wasmtime-vNN.0.0-<triple>-c-api.tar.xz
+
+    triple  x86_64-linux | aarch64-linux | x86_64-macos | aarch64-macos |
+            x86_64-mingw (or x86_64-windows)
+
+Contents: lib/libwasmtime.a (+ .so/.dylib), include/wasm.h, wasi.h,
+wasmtime.h. Pin the release sha256 (GitHub publishes it in the release
+notes / a .sha256 asset).
+
+Alternatives:
+    Wasmer   wasmer-<triple>.tar.gz -> lib/libwasmer.a + include/wasm.h,
+             wasmer.h
+    WAMR     vendor the source (github.com/bytecodealliance/wasm-micro-runtime),
+             CMake build with the project toolchain -> libiwasm.a
+    wasm3    single-header-ish amalgamation, trivial build
+
+
+3. Stage
+--------
+
+Unpack into build/libs/wasm/ :
+
+    build/libs/wasm/lib/libwasmtime.a
+    build/libs/wasm/include/{wasm.h,wasi.h,wasmtime.h}
+
+Guest modules and their data go under build/libs/wasm-guests/ .
+
+
+4. CMake integration
+--------------------
+
+    option(LINGVAMYXA_ENABLE_WASM "Build the wasm receiver" OFF)
+
+    if(LINGVAMYXA_ENABLE_WASM)
+      set(LM_WASM_HOME ${CMAKE_BINARY_DIR}/libs/wasm)
+      add_library(lingvamyxa_wasm STATIC IMPORTED GLOBAL)
+      set_target_properties(lingvamyxa_wasm PROPERTIES
+        IMPORTED_LOCATION ${LM_WASM_HOME}/lib/libwasmtime.a)
+      target_include_directories(lingvamyxa_wasm INTERFACE ${LM_WASM_HOME}/include)
+      target_compile_definitions(lingvamyxa_wasm INTERFACE LINGVAMYXA_WASM=1)
+    endif()
+
+libwasmtime.a is fully static; no runtime .so to ship on Linux/macOS.
+
+
+5. The C shim (wasmhost)  --  lm1/build/wasmhost.lm1.c
+---------------------------------------------------
+
+5.1 Start
+
+    wasm_engine_t *eng = wasm_engine_new();
+    wasmtime_store_t *store = wasmtime_store_new(eng, NULL, NULL);
+    wasmtime_context_t *ctx = wasmtime_store_context(store);
+
+5.2 Load a guest
+
+    read build/libs/wasm-guests/<mod>.wasm (or .cwasm if AOT-compiled)
+    wasmtime_module_new(eng, bytes, len, &module);
+    wasi_config_t *wc = wasi_config_new();
+    wasi_config_preopen_dir(wc, host_data_dir, "/data");   # capability
+    wasmtime_context_set_wasi(ctx, wc);
+    wasmtime_linker_define_wasi(linker);
+    wasmtime_linker_instantiate(linker, ctx, module, &instance, &trap);
+
+5.3 Call
+
+    wasmtime_instance_export_get(ctx, &instance, "run", ...) -> func
+    wasmtime_func_call(ctx, &func, args, nargs, results, nresults, &trap)
+
+5.4 Value and array bridge
+
+    Guest memory is a separate linear address space. Get it with
+    wasmtime_instance_export_get(..., "memory") and
+    wasmtime_memory_data(ctx, &mem) + _data_size. Copy the LmArray in
+    (guest allocates via an exported malloc, host memcpy into
+    memory_data + offset), run, copy the result out. For a WIT
+    component, use wit-bindgen-c generated glue instead of raw offsets.
+
+5.5 Errors and limits
+
+    a wasm_trap_t -> message + wasm backtrace -> LMX failure record.
+    wasmtime_store_limiter to cap memory and table growth per instance.
+    wasm32 addressable memory ceiling is 4 GB; memory64 is still
+    maturing. Cold instantiation is ~1-10 ms for a plain module,
+    ~100-500 ms for a CPython guest.
+
+
+6. ABI descriptors and the L5 receiver
+--------------------------------------
+
+    lm2/wasmhost_abi.lm2     predef + fn.external prototypes
+    receiver "wasm", selectors "wasm.load" / "wasm.call"
+
+    m = wasm.load "guests/spi.wasm" grant: "/data"
+    r = wasm.call m "compute" series scale
+
+
+7. Packaging per platform
+-------------------------
+
+Static libwasmtime.a means nothing extra to ship on Linux/macOS beyond
+the guest .wasm files. On Windows co-locate wasmtime.dll if you took the
+shared build. AOT .cwasm files are target-specific -- generate per
+triple in the provision step or at first run.
+
+
+8. What the tool does not do
+----------------------------
+
+    write the body of lm_wasmhost_* (the linear-memory bridge or the
+    component glue);
+    produce guest .wasm modules (that is the job of the language-
+    specific plans);
+    AOT-compile guests (optional wamrc / wasmtime compile step).
+
+
+Appendix. Provisioning utility sketch  --  lm2/provision_wasm.lm2
+==============================================================
+
+Shared helpers mirror lm2/vcpkgFetch.lm2 and are elided. Illustrative.
+
+========================================================================
+# lm2/provision_wasm.lm2 -- stage the Wasmtime C API, wire the wasm receiver
+
+include
+os
+constant
+layout
+fn
+prototype
+unit
+
+predef: "libc_abi.lm2"
+predef: "lm2/own_abi.lm2"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+constant: WT_VER "24.0.0"
+constant: WT_BASE "https://github.com/bytecodealliance/wasmtime/releases/download"
+
+table:
+    source
+    name: WTDIST
+    columns: (class: class)  (@: char triple)              (@: char asm)          (@: char sha256)
+    rows:
+             linux_x64    "x86_64-unknown-linux-gnu"   "x86_64-linux"    "REPLACE_ME"
+             linux_arm64  "aarch64-unknown-linux-gnu"  "aarch64-linux"   "REPLACE_ME"
+             mac_arm64    "aarch64-apple-darwin"       "aarch64-macos"   "REPLACE_ME"
+             mac_x64      "x86_64-apple-darwin"        "x86_64-macos"    "REPLACE_ME"
+             win_x64      "x86_64-pc-windows-msvc"     "x86_64-mingw"    "REPLACE_ME"
+end: WTDIST
+
+fn: lm_wt_url (@: char buffer; size_t: size; @: char asm) int
+    snprintf(buffer, size, "%s/v%s/wasmtime-v%s-%s-c-api.tar.xz", WT_BASE, WT_VER, WT_VER, asm)
+return: 0
+
+fn: lm_wt_write_cmake () int
+    FILE: f
+    f: fopen("cmake/EmbeddedWasm.cmake", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "# generated by provision_wasm.lm0\n"
+    c.fprintf: f "option(LINGVAMYXA_ENABLE_WASM \"Build the wasm receiver\" OFF)\n"
+    c.fprintf: f "if(LINGVAMYXA_ENABLE_WASM)\n"
+    c.fprintf: f "  set(H \"${CMAKE_BINARY_DIR}/libs/wasm\")\n"
+    c.fprintf: f "  add_library(lingvamyxa_wasm STATIC IMPORTED GLOBAL)\n"
+    c.fprintf: f "  set_target_properties(lingvamyxa_wasm PROPERTIES IMPORTED_LOCATION ${H}/lib/libwasmtime.a)\n"
+    c.fprintf: f "  target_include_directories(lingvamyxa_wasm INTERFACE ${H}/include)\n"
+    c.fprintf: f "  target_compile_definitions(lingvamyxa_wasm INTERFACE LINGVAMYXA_WASM=1)\n"
+    c.fprintf: f "endif()\n"
+    fclose(f)
+return: 0
+
+fn: lm_wt_write_shim_stub () int
+    FILE: f
+    f: fopen("lm2/wasmhost_abi.lm2", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "# generated by provision_wasm.lm0\n"
+    c.fprintf: f "predef: \"libc_abi.lm2\"\n\n"
+    c.fprintf: f "external:\n"
+    c.fprintf: f "    fn: lm_wasmhost_start () int\n"
+    c.fprintf: f "    fn: lm_wasmhost_stop ()\n"
+    c.fprintf: f "    fn: lm_wasmhost_load (@: char path; @: char grant_dir; @: void module_out) int\n"
+    c.fprintf: f "    fn: lm_wasmhost_call (@: void module; @: char export; @: void argv; size_t: argc; @: void result_out) int\n"
+    c.fprintf: f "end: external\n"
+    fclose(f)
+return: 0
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        c.array: []: char cmake 1024
+        c.array: []: char url 1024
+        c.array: []: char archive 2048
+        @: char asm 0
+        @: char sha 0
+
+        if: lm_enter_project_root(argv[0]) != 0
+            return: 1
+        strcpy(cmake, lm_env_or_default("LM_CMAKE", "cmake"))
+
+        if: lm_wt_dist_lookup(lm_host_triple(), @ asm, @ sha) != 0
+            return: 1
+        if: lm_wt_url(url, c.sizeof(url), asm) != 0
+            return: 1
+        if: lm_join_path(archive, c.sizeof(archive), "third_party", "wasmtime-c-api.tar.xz") != 0
+            return: 1
+
+        if: lm_fetch(url, archive) != 0
+            return: 1
+        if: lm_verify_sha256(archive, sha) != 0
+            return: 1
+        if: lm_extract_strip1(cmake, archive, "build/libs/wasm") != 0
+            return: 1
+        if: lm_wt_write_cmake() != 0
+            return: 1
+        if: lm_wt_write_shim_stub() != 0
+            return: 1
+        if: lm_write_manifest("build/libs/wasm/PROVISION_MANIFEST.txt", "wasmtime", WT_VER, sha) != 0
+            return: 1
+
+        c.printf: "provision_wasm.lm0: done. build with -DLINGVAMYXA_ENABLE_WASM=ON\n"
+    return: 0
+end: external
+========================================================================

@@ -1,0 +1,323 @@
+Lingvamyxa OpenJDK / JVM Integration Plan
+========================================
+
+Status
+
+Working provisioning plan for bundling a private JVM into the Lingvamyxa
+runtime and exposing it as an L5-style "jvm" receiver. Companion to
+include_python.txt; it follows the same fetch / verify / stage / generate
+/ populate / manifest pattern (Appendix B there).
+
+Goal
+
+Reach the whole Maven Central ecosystem from Lingvamyxa without a system
+JDK: Java, Kotlin, Scala and Clojure libraries. For the climate / geo
+work discussed elsewhere this is NetCDF-Java (Unidata), GeoTools, JTS and
+Apache SIS.
+
+Tier
+
+Tier 1. A prebuilt relocatable JRE exists for every target, the JNI
+Invocation API is stable, and Maven coordinates resolve to a plain
+directory of JAR files. Provisions almost exactly like CPython.
+
+
+1. Prerequisites (developer machine)
+------------------------------------
+
+Already in the project: CMake, Ninja, Git, a C toolchain.
+
+Add:
+
+    uv or curl        fetch the JRE tarball and the coursier launcher
+    tar               unpack (Adoptium ships .tar.gz and .zip)
+
+No system Java. The bundled JRE runs everything, including coursier.
+
+
+2. Fetch the redistributable
+----------------------------
+
+Source: Adoptium Temurin (Eclipse Adoptium). The API returns a direct
+binary per os and arch:
+
+    https://api.adoptium.net/v3/binary/latest/21/ga/<os>/<arch>/jre/hotspot/normal/eclipse
+
+    os    linux | mac | windows
+    arch  x64 | aarch64
+
+Zulu (Azul) and Liberica (BellSoft) are drop-in alternatives with the
+same layout. Pin the resolved asset name and its SHA-256 in the DISTS
+table of the tool below; Adoptium publishes a .sha256.txt beside each
+asset.
+
+The JRE tree is relocatable: nothing is compiled in against an absolute
+path, and JAVA_HOME is computed from the executable location at runtime.
+
+
+3. Stage
+--------
+
+Unpack into build/libs/jvm/ :
+
+    build/libs/jvm/bin/                java, keytool, ...
+    build/libs/jvm/lib/server/libjvm.{so,dylib}   (jvm.dll on Windows)
+    build/libs/jvm/include/jni.h, <os>/jni_md.h
+    build/libs/jvm/lib/modules         the module image
+
+Keep classpath JARs separate: build/libs/jvm-cp/ .
+
+
+4. CMake integration
+--------------------
+
+    option(LINGVAMYXA_ENABLE_JVM "Bundle a JVM and build the jvm receiver" OFF)
+
+    if(LINGVAMYXA_ENABLE_JVM)
+      set(LM_JVM_HOME ${CMAKE_BINARY_DIR}/libs/jvm)
+      add_library(lingvamyxa_jvm INTERFACE)
+      target_include_directories(lingvamyxa_jvm INTERFACE
+        ${LM_JVM_HOME}/include
+        ${LM_JVM_HOME}/include/linux)   # or /darwin, /win32
+      target_compile_definitions(lingvamyxa_jvm INTERFACE LINGVAMYXA_JVM=1)
+      # libjvm is loaded at runtime (dlopen ${LM_JVM_HOME}/lib/server/libjvm.*)
+      # so the build stays independent of the exact JDK version.
+      install(DIRECTORY ${LM_JVM_HOME}/ DESTINATION bin/jvm)
+    endif()
+
+
+5. The C shim (jvmhost)  --  lm1/build/jvmhost.lm1.c
+---------------------------------------------------
+
+5.1 Start
+
+    dlopen ${JAVA_HOME}/lib/server/libjvm.*  (path from the executable
+    location, JAVA_HOME never read from the environment) and resolve
+    JNI_CreateJavaVM.
+
+    JavaVMOption opts[]:
+        -Djava.class.path=<build/libs/jvm-cp/*>
+        -Xrs                       # reduce JVM signal-handler use
+        -Xmx<budget>               # heap is presized
+        -XX:+UseSerialGC           # optional, predictable pauses
+    JNI_CreateJavaVM(&vm, (void**)&env, &vm_args)
+
+    One JVM per process; it cannot be created twice or fully recreated.
+
+5.2 Threads
+
+    Every Lingvamyxa L5 thread that calls in must
+    (*vm)->AttachCurrentThread(vm, &env, NULL) first and
+    DetachCurrentThread on the way out. Cache a per-thread JNIEnv*.
+
+5.3 Value and array bridge, LmArray <-> Java
+
+    Lingvamyxa -> Java, contiguous primitive array:
+        NewDirectByteBuffer(env, buf, nbytes) over the arena buffer
+        (zero copy) and hand the Java side a java.nio.*Buffer view, or
+        New<T>Array + Set<T>ArrayRegion when a real T[] is required
+        (one copy).
+    Java -> Lingvamyxa:
+        GetDirectBufferAddress for a direct buffer (borrow, store the
+        global ref as the external-view destructor), otherwise
+        Get<T>ArrayElements + a copy into an owned LmArray.
+
+5.4 Call entry
+
+    int lm_jvmhost_call(const char *cls, const char *method,
+                        const char *sig, const LmValue *argv, size_t argc,
+                        LmValue *result_out);
+
+    FindClass / GetStaticMethodID / CallStatic<T>MethodA, jvalue[] built
+    from argv. Panama FFM (java.lang.foreign) is the modern alternative
+    to hand-written JNI signatures once the JRE is >= 22.
+
+5.5 Errors
+
+    ExceptionCheck after every call; ExceptionOccurred + a helper that
+    calls Throwable.toString and getStackTrace, formatted into an LMX
+    failure record; ExceptionClear.
+
+5.6 Stop
+
+    (*vm)->DestroyJavaVM(vm) at shutdown (returns only after non-daemon
+    threads finish).
+
+
+6. ABI descriptors and the L5 receiver
+--------------------------------------
+
+    lm2/jvmhost_abi.lm2      predef + fn.external prototypes for the shim
+    receiver "jvm" with selector "jvm.call" routed to lm_jvmhost_call
+
+    jvm.import "ucar.nc2.NetcdfFiles" as nc
+    ds = nc.open(path)
+
+
+7. Packages
+-----------
+
+coursier is a single self-contained launcher that resolves Maven
+coordinates with no system Java (a native cs binary, or a bootstrap JAR
+run by the staged JRE):
+
+    cs fetch --classpath -r central \
+        org.geotools:gt-main:31.2 \
+        edu.ucar:cdm-core:5.5.3 \
+      > build/libs/jvm-cp.path
+
+Vendor the resolved JARs into build/libs/jvm-cp/ and pass the directory
+on -Djava.class.path. A dependency lock is the coursier resolution
+report committed to the tree.
+
+
+8. Packaging per platform
+-------------------------
+
+    Linux    build/libs/jvm/ beside the binary; RPATH
+             $ORIGIN/../libs/jvm/lib/server
+    macOS    jvm/ into Contents/Resources/jvm; codesign libjvm.dylib and
+             the .dylib/.jnilib files under lib/; @loader_path RPATH
+    Windows  jvm/bin and jvm/bin/server on the DLL search path
+
+
+9. What the tool does not do
+----------------------------
+
+    write the body of lm_jvmhost_* (the buffer bridge, the attach/detach
+    bookkeeping, the exception-to-failure-record mapping);
+    choose the Maven coordinate set;
+    jlink a smaller custom runtime (that needs a full JDK, not just the
+    JRE, so it stays a manual optional step);
+    codesign or notarise the macOS bundle.
+
+
+Appendix. Provisioning utility sketch  --  lm2/provision_jvm.lm2
+==============================================================
+
+Option parsing, project-root discovery and the lm_*_join_path /
+lm_*_file_exists / lm_*_read_file / lm_*_run helpers mirror
+lm2/vcpkgFetch.lm2 and lm2/make.lm2 and are elided. Illustrative syntax.
+
+========================================================================
+# lm2/provision_jvm.lm2 -- stage a private Temurin JRE, wire the jvm receiver
+
+include
+os
+constant
+layout
+fn
+prototype
+unit
+
+predef: "libc_abi.lm2"
+predef: "lm2/own_abi.lm2"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+table:
+    source
+    name: JVMDIST
+    columns: (class: class)  (@: char triple)   (@: char os)   (@: char arch)   (@: char sha256)
+    rows:
+             linux_x64    "x86_64-unknown-linux-gnu"   "linux"    "x64"      "REPLACE_ME"
+             linux_arm64  "aarch64-unknown-linux-gnu"  "linux"    "aarch64"  "REPLACE_ME"
+             mac_arm64    "aarch64-apple-darwin"       "mac"      "aarch64"  "REPLACE_ME"
+             mac_x64      "x86_64-apple-darwin"        "mac"      "x64"      "REPLACE_ME"
+             win_x64      "x86_64-pc-windows-msvc"     "windows"  "x64"      "REPLACE_ME"
+end: JVMDIST
+
+constant: JVM_FEATURE "21"
+constant: JVM_API "https://api.adoptium.net/v3/binary/latest"
+
+fn: lm_jvm_url (@: char buffer; size_t: size; @: char os; @: char arch) int
+    snprintf(buffer, size, "%s/%s/ga/%s/%s/jre/hotspot/normal/eclipse", JVM_API, JVM_FEATURE, os, arch)
+return: 0
+
+fn: lm_jvm_stage (@: char cmake; @: char archive; @: char stage_dir) int
+    c.array: []: char command 4096
+    snprintf(command, c.sizeof(command), "\"%s\" -E rm -rf \"%s\"", cmake, stage_dir)
+    if: lm_run(command) != 0
+        return: 1
+    snprintf(command, c.sizeof(command), "\"%s\" -E make_directory \"%s\"", cmake, stage_dir)
+    if: lm_run(command) != 0
+        return: 1
+    # Temurin tars have a single top folder jdk-21.../ ; --strip-components 1
+    snprintf(command, c.sizeof(command), "\"%s\" -E chdir \"%s\" tar xzf \"%s\" --strip-components=1", cmake, stage_dir, archive)
+return: lm_run(command)
+
+fn: lm_jvm_write_cmake (@: char stage_dir) int
+    FILE: f
+    f: fopen("cmake/EmbeddedJvm.cmake", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "# generated by provision_jvm.lm0\n"
+    c.fprintf: f "option(LINGVAMYXA_ENABLE_JVM \"Bundle a JVM\" OFF)\n"
+    c.fprintf: f "if(LINGVAMYXA_ENABLE_JVM)\n"
+    c.fprintf: f "  set(LM_JVM_HOME \"${CMAKE_BINARY_DIR}/libs/jvm\")\n"
+    c.fprintf: f "  add_library(lingvamyxa_jvm INTERFACE)\n"
+    c.fprintf: f "  target_include_directories(lingvamyxa_jvm INTERFACE ${LM_JVM_HOME}/include)\n"
+    c.fprintf: f "  target_compile_definitions(lingvamyxa_jvm INTERFACE LINGVAMYXA_JVM=1)\n"
+    c.fprintf: f "  install(DIRECTORY ${LM_JVM_HOME}/ DESTINATION bin/jvm)\n"
+    c.fprintf: f "endif()\n"
+    fclose(f)
+return: 0
+
+fn: lm_jvm_write_shim_stub () int
+    FILE: f
+    if: lm_file_exists("lm1/build/jvmhost.lm1.c") != 0
+        return: 0
+    f: fopen("lm2/jvmhost_abi.lm2", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "# generated by provision_jvm.lm0\n"
+    c.fprintf: f "predef: \"libc_abi.lm2\"\n\n"
+    c.fprintf: f "external:\n"
+    c.fprintf: f "    fn: lm_jvmhost_start () int\n"
+    c.fprintf: f "    fn: lm_jvmhost_stop ()\n"
+    c.fprintf: f "    fn: lm_jvmhost_call (@: char cls; @: char method; @: char sig; @: void argv; size_t: argc; @: void result_out) int\n"
+    c.fprintf: f "end: external\n"
+    fclose(f)
+return: 0
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        c.array: []: char cmake 1024
+        c.array: []: char url 1024
+        c.array: []: char archive 2048
+        @: char os 0
+        @: char arch 0
+        @: char sha 0
+
+        if: lm_enter_project_root(argv[0]) != 0
+            return: 1
+        strcpy(cmake, lm_env_or_default("LM_CMAKE", "cmake"))
+
+        # row: select: JVMDIST where: (triple = host triple)
+        if: lm_jvm_dist_lookup(lm_host_triple(), @ os, @ arch, @ sha) != 0
+            return: 1
+
+        if: lm_jvm_url(url, c.sizeof(url), os, arch) != 0
+            return: 1
+        if: lm_join_path(archive, c.sizeof(archive), "third_party", "temurin-jre.tar.gz") != 0
+            return: 1
+
+        if: lm_fetch(url, archive) != 0
+            return: 1
+        if: lm_verify_sha256(archive, sha) != 0
+            return: 1
+        if: lm_jvm_stage(cmake, archive, "build/libs/jvm") != 0
+            return: 1
+        if: lm_jvm_write_cmake("build/libs/jvm") != 0
+            return: 1
+        if: lm_jvm_write_shim_stub() != 0
+            return: 1
+        # optional: resolve the Maven set with a staged coursier launcher
+        if: lm_run("build/libs/cs fetch --classpath -r central @deps.txt > build/libs/jvm-cp.path") != 0
+            c.fprintf: c.stderr "provision_jvm.lm0: coursier step skipped\n"
+        if: lm_write_manifest("build/libs/jvm/PROVISION_MANIFEST.txt", "temurin", JVM_FEATURE, sha) != 0
+            return: 1
+
+        c.printf: "provision_jvm.lm0: done. build with -DLINGVAMYXA_ENABLE_JVM=ON\n"
+    return: 0
+end: external
+========================================================================

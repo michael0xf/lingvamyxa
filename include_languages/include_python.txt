@@ -1,0 +1,911 @@
+Lingvamyxa Embedded CPython Integration Plan
+===========================================
+
+Status
+
+This file is a working implementation plan for bundling a private CPython
+interpreter into the Lingvamyxa runtime and exposing it as an L5-style
+"python" receiver. It is not a language specification.
+
+Goal
+
+Widen the assortment of scientific libraries available to Lingvamyxa
+programs and make calling them as cheap as possible, without requiring any
+Python installation on the target machine. Isolation, capability scoping
+and reproducible-plugin concerns are handled by Lingvamyxa itself and are
+out of scope here; this feature is the pragmatic "hardcode a script"
+escape hatch.
+
+Approach in one line
+
+Vendor a relocatable CPython (python-build-standalone), stage its tree
+next to the built binary like the other third_party bundles, load
+libpython through a thin C shim, and route a "py.call" message to it.
+"Add a library" then means "pip install into the bundled site-packages".
+
+Notation
+
+    Caution:  a pitfall specific to this project's configuration.
+    Note:     a design choice worth recording.
+
+
+0. Order Of Work
+----------------
+
+Minimum viable path (about one to two days):
+
+    1. Fetch one python-build-standalone archive (section 1).
+    2. Link libpython, call Py_Initialize with PYTHONHOME pointed at the
+       staged tree, run PyRun_SimpleString("import numpy, sys").
+    3. Confirm the interpreter loads and finds numpy.
+
+Then grow outward: PyConfig isolated init (3.1), GIL wrappers (3.2), the
+LmArray bridge (3.3), the generic call plus error mapping (3.4), ABI
+descriptors and the receiver (4), the lockfile-driven site-packages
+refresh (5), packaging (6), tests (7).
+
+The full third_party build profile driven by buildCore.lm0 --full should
+gain an optional "stage python" step; it is a copy stage, not a compile
+stage, because the interpreter is prebuilt.
+
+
+1. Prerequisites (Developer Machine)
+------------------------------------
+
+Already required by the project:
+
+    CMake (>= 3.20);
+    Ninja;
+    Git;
+    a C toolchain (MinGW via Qt on Windows, clang or gcc elsewhere).
+
+Add:
+
+    uv (Astral, single static binary, needs no Python)
+        Downloads the CPython distribution, compiles the dependency
+        lockfile, and drives pip against the bundled interpreter. Removes
+        any need for a system Python during bootstrap.
+
+    Linux only:
+        patchelf                RPATH surgery on libpython and on the
+                                shared objects shipped inside wheels;
+        zstd                    to unpack .tar.zst assets, or download the
+                                .tar.gz asset instead and skip this.
+
+    macOS only:
+        Xcode Command Line Tools (xcode-select --install)
+                                provides install_name_tool, otool,
+                                codesign, lipo;
+        Developer ID certificate
+                                only if the distributed bundle will be
+                                notarised.
+
+    Windows only:
+        nothing beyond the existing Qt MinGW toolchain, provided the shim
+        loads python3.dll through LoadLibraryW + GetProcAddress (see the
+        MinGW/MSVC caution in section 2). Windows 11 tar unpacks .tar.zst;
+        otherwise use 7-Zip or bsdtar.
+
+A system Python is not needed on the developer machine or the target
+machine. Bootstrap uses the bundled interpreter.
+
+
+2. Vendor The CPython Distribution
+----------------------------------
+
+Source: the python-build-standalone project (repository
+astral-sh/python-build-standalone). Release assets are named like
+
+    cpython-3.12.x+YYYYMMDD-<triple>-install_only_stripped.tar.gz
+
+Choices:
+
+    Version         3.12. Best wheel compatibility. 3.13 offers a
+                    free-threaded build, but a large fraction of C
+                    extensions do not support it yet; not now.
+
+    Variant         install_only_stripped. Ships pip and the full stdlib,
+                    omits build artifacts, strips symbols.
+
+    Triples         one archive per target, for example:
+                        x86_64-unknown-linux-gnu
+                        aarch64-unknown-linux-gnu
+                        aarch64-apple-darwin
+                        x86_64-apple-darwin
+                        x86_64-pc-windows-msvc
+
+Caution: MinGW versus MSVC on Windows.
+    The Windows python-build-standalone builds are produced with MSVC.
+    The project's Windows executable is built with Qt's MinGW. Calling the
+    C API across the DLL boundary is fine because it is a C ABI, but CRT
+    objects must not cross the boundary:
+
+        no FILE* handed to CPython;
+        no pointer allocated by one CRT and freed by the other;
+        no shared errno.
+
+    Practical rules:
+        load python3.dll (the limited-API forwarder) with LoadLibraryW +
+        GetProcAddress, or link against python312.lib;
+        open files for Python on the Python side, never pass a MinGW-CRT
+        handle in;
+        keep to the limited API (see section 3).
+
+Placement:
+    Keep the archives beside the other bundles, for example
+
+        third_party/cpython.<triple>.tar.gz
+
+    matching the existing third_party/curl.zip, third_party/sqlite.zip
+    convention. Unpack during the build into build/libs/python/.
+
+Fetching:
+
+    # populate a local cache with the interpreter tree
+    uv python install --install-dir third_party/_cpython-cache 3.12
+
+    # or fetch the specific asset with curl and commit the .tar.gz
+
+
+3. CMake Integration
+--------------------
+
+New module: cmake/EmbeddedPython.cmake.
+
+    option(LINGVAMYXA_ENABLE_EMBEDDED_PYTHON
+           "Bundle CPython and build the py-receiver" OFF)
+
+    if(LINGVAMYXA_ENABLE_EMBEDDED_PYTHON)
+      # _lm_py_triple derived from CMAKE_SYSTEM_NAME + CMAKE_SYSTEM_PROCESSOR
+      set(_lm_py_root ${CMAKE_BINARY_DIR}/libs/python)
+
+      add_custom_command(
+        OUTPUT ${_lm_py_root}/pyvenv.cfg
+        COMMAND ${CMAKE_COMMAND} -E tar xzf
+                ${CMAKE_SOURCE_DIR}/third_party/cpython.${_lm_py_triple}.tar.gz
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/libs)
+      add_custom_target(stage_python DEPENDS ${_lm_py_root}/pyvenv.cfg)
+
+      add_library(lingvamyxa_python INTERFACE)
+      target_include_directories(lingvamyxa_python INTERFACE
+        ${_lm_py_root}/include/python3.12)
+      target_compile_definitions(lingvamyxa_python INTERFACE
+        LINGVAMYXA_EMBEDDED_PYTHON=1
+        Py_LIMITED_API=0x030C0000)
+      # libpython is NOT linked here; the shim loads it at runtime
+      # (dlopen / LoadLibraryW), so the build stays version-agnostic.
+    endif()
+
+Note: Py_LIMITED_API gives a stable ABI, so the runtime does not need a
+rebuild on each CPython minor release. The cost: the numpy C API
+(PyArray_*) is not available directly; use the buffer protocol and
+memoryview instead (section 3.3).
+
+Install / staging:
+
+    Copy the whole python/ tree next to the built binary, or into the
+    application bundle:
+
+        bin/, lib/python3.12/, lib/python3.12/site-packages/
+        Windows: python312.dll, python3.dll, Lib/, DLLs/
+
+    RPATH / loader path:
+        Linux    $ORIGIN/../libs/python/lib
+        macOS    @loader_path/../libs/python/lib  (and Frameworks, see 6)
+        Windows  co-locate the DLLs with the .exe
+
+Wire into buildCore.lm0 --full:
+    add stage_python to the bundled-dependency list alongside libcurl.a,
+    libsqlite3.a, libyyjson.a and the rest. It is a copy stage.
+
+
+4. C Runtime Shim (pyhost)
+--------------------------
+
+New source: lm1/build/pyhost.lm1.c. Later rewritten as lm2/pyhost.lm2;
+until then it lives in the L1 substrate.
+
+4.1 Hermetic initialisation
+
+    Resolve all paths from the executable location, not from environment
+    variables, so nothing leaks in from a developer's Python setup.
+
+        PyStatus lm_pyhost_init(void) {
+            PyConfig cfg;
+            PyConfig_InitIsolatedConfig(&cfg);   /* ignore ~/.local,
+                                                    PYTHONPATH, PYTHONHOME */
+            /* exe_dir from dladdr / _NSGetExecutablePath /
+               GetModuleFileNameW */
+            PyConfig_SetString(&cfg, &cfg.home,
+                               exe_dir "/../libs/python");
+            PyConfig_SetString(&cfg, &cfg.executable,
+                               exe_dir "/../libs/python/bin/python3");
+            cfg.site_import            = 1;
+            cfg.user_site_directory    = 0;
+            cfg.parse_argv             = 0;
+            cfg.install_signal_handlers = 0;   /* signals belong to host */
+
+            PyStatus st = Py_InitializeFromConfig(&cfg);
+            PyConfig_Clear(&cfg);
+            return st;
+        }
+
+    After init, set environment for bundled data directories if the geo or
+    TLS libraries are shipped: GDAL_DATA, PROJ_LIB, SSL_CERT_FILE
+    (certifi), MPLCONFIGDIR.
+
+    cfg.executable pointing at the real bundled python3 binary is what lets
+    multiprocessing and any subprocess.run([sys.executable, ...]) work.
+
+4.2 GIL wrappers
+
+    Any L5 thread may call in; every call takes the GIL.
+
+        typedef struct { PyGILState_STATE g; } lm_py_scope;
+
+        lm_py_scope lm_py_enter(void) {
+            lm_py_scope s; s.g = PyGILState_Ensure(); return s;
+        }
+        void lm_py_leave(lm_py_scope s) { PyGILState_Release(s.g); }
+
+    Document the consequence: Python calls serialise globally. numpy, scipy
+    and BLAS release the GIL in hot loops, so numeric and I/O work still
+    overlaps; pure-Python work does not.
+
+4.3 Array bridge, LmArray <-> Python
+
+    Lingvamyxa -> Python:
+        for storage owned or view, C-contiguous, hand out
+        PyMemoryView_FromMemory(buf, nbytes, PyBUF_WRITE) and let the
+        Python side do numpy.frombuffer(mv).reshape(shape). Zero copy.
+        Non-contiguous or Fortran-order paths copy.
+
+    Python -> Lingvamyxa:
+        PyObject_GetBuffer(obj, &view,
+                           PyBUF_C_CONTIGUOUS | PyBUF_FORMAT);
+        build an LmArray with storage = external-view, data set to the
+        buffer pointer, and store the Py_buffer in the L2 adapter with
+        Py_DECREF as the arena destructor. This is exactly the role
+        external-view is defined for in Lingvamyxa_spec.txt: an
+        arena-owned Array header whose adapter holds a foreign primitive
+        handle.
+
+4.4 Generic call and error mapping
+
+        /* module, attr, argv[] of LmValue, kwargs as a Structure
+           -> LmValue on success, LmDiagnostic on failure */
+        LmValue lm_pyhost_call(const char *module, const char *attr,
+                               const LmValue *argv, size_t argc,
+                               const LmStruct *kw);
+
+    Internally: PyImport_ImportModule, PyObject_GetAttrString, build args
+    and kwargs from scalars / strings / LmArray / Structure, PyObject_Call.
+    On exception: PyErr_Fetch plus traceback.format_exception, formatted
+    into a string, returned as an LMX failure record that enters the
+    ordinary reply / failure / continuation path.
+
+4.5 Finalisation
+
+    Py_FinalizeEx() during runtime shutdown.
+
+
+5. ABI Descriptors And L5 Receiver
+----------------------------------
+
+    lm2/pyhost_abi.lm2
+        predef plus fn.external prototypes for the shim entry points,
+        following own_abi.lm2, parser_abi.lm2,
+        registry_source_loader_abi.lm2.
+
+    Receiver registration
+        a "python" receiver with a "py.call" selector routed to
+        lm_pyhost_call. It fits the existing Message Thread model with no
+        new concepts.
+
+    Idiomatic surface (later, in lm2/)
+
+        py.import "numpy" as np
+        s = np.sum(matrix, axis: 0)
+        # lowers to lm_pyhost_call("numpy", "sum", [matrix], { axis: 0 })
+
+
+6. Populate site-packages
+-------------------------
+
+This is the "widen the assortment" mechanism.
+
+    # requirements.in -> requirements.lock, with hashes and transitive pins
+    uv pip compile requirements.in -o requirements.lock
+
+    # fill the bundle with wheels only; no compiler needed at build time
+    build/libs/python/bin/python3 -m pip install \
+        --no-input --require-hashes --only-binary=:all: \
+        -r requirements.lock \
+        --target build/libs/python/lib/python3.12/site-packages
+
+Cross-target populate (building for another OS or architecture):
+
+        --platform manylinux2014_x86_64 \
+        --python-version 3.12 --implementation cp --abi cp312 \
+        --only-binary=:all:
+
+Size trimming:
+    remove __pycache__, tests/, and .dist-info when importlib.metadata is
+    not needed; strip .so files. numpy + scipy + pandas is roughly
+    120 MB added; torch is roughly 2 GB. Curate the list rather than
+    shipping everything.
+
+CMake target:
+    regenerate_python_pkgs rebuilds site-packages from the lockfile.
+
+Caution: transitive licences. numpy and scipy are BSD, but for example
+lmoments3 (Pearson III, used by SPEI) is GPL. Run pip-licenses over the
+lockfile before distributing.
+
+
+7. Packaging Per Platform
+-------------------------
+
+    Linux
+        python/ tree beside the binary;
+        patchelf --set-rpath '$ORIGIN/../libs/python/lib' on libpython and
+        on any wheel .so whose load fails;
+        ship as AppImage or tarball.
+
+    macOS
+        python/ -> Contents/Resources/python;
+        libpython3.12.dylib -> Contents/Frameworks;
+        install_name_tool -change / -add_rpath @loader_path/...;
+        codesign every .so and .dylib inside wheels (or --deep), then
+        notarise.
+        Caution: the hardened runtime conflicts with JIT wheels such as
+        numba; test before committing to notarisation.
+
+    Windows
+        python312.dll, python3.dll, Lib/, DLLs/, site-packages/ beside the
+        .exe;
+        observe the MinGW/MSVC boundary rules from section 2.
+
+
+8. Tests
+--------
+
+New directory following the existing tests/ layout:
+
+    init, import sys, Py_FinalizeEx, then re-init without crashing;
+    import numpy and read its version;
+    round trip an LmArray through numpy.sum and back, asserting the buffer
+    address is unchanged (zero copy);
+    a Python exception surfaces as an LMX failure record with a traceback;
+    multiprocessing.Pool with set_executable configured does not hang
+    (Linux, macOS);
+    CI matrix: linux-x64, linux-arm64, macos-arm64, windows-x64.
+
+
+9. Documentation
+----------------
+
+Add a README.md section modelled on the Qt section:
+
+    the enable flag, -DLINGVAMYXA_ENABLE_EMBEDDED_PYTHON=ON;
+    how to edit requirements.in and regenerate the bundle;
+    size and licence notes;
+    the MinGW/MSVC limitation on Windows.
+
+
+Appendix. What This Does And Does Not Buy
+----------------------------------------
+
+Buys:
+    the whole scientific Python ecosystem for compute and scripting,
+    installed by pip into the bundle: numpy, scipy, pandas, polars,
+    pyarrow, xarray, dask, scikit-learn, scikit-image, statsmodels,
+    sympy, numba, torch, jax, onnxruntime, opencv, GDAL/rasterio,
+    netCDF4/h5py, and so on;
+    a near-trivial call surface via the buffer protocol, all on the
+    standard CPython C API.
+
+Does not buy:
+    process isolation: a segfault or Py_FatalError in any C extension
+    takes down the whole Lingvamyxa process;
+    true parallelism across Python code: one interpreter, one GIL;
+    an independent GUI event loop: PySide, PyQt and tkinter import, but
+    the main loop must be arbitrated against the Qt shell.
+
+These three are acceptable here because the sandbox is Lingvamyxa itself
+and the feature's purpose is convenience, not containment.
+
+
+Appendix B. A Lingvamyxa Utility That Provisions All Of The Above
+----------------------------------------------------------------
+
+Sketch of provision_python: a self-contained tool that, starting from
+roughly the current project, performs sections 1 through 6 with no manual
+steps. What it assumes already exists is only what is in the tree today:
+
+    the L0 tool layer and the buildCore.lm0 / make.lm0 drivers;
+    libc_abi.lm2 and lm2/own_abi.lm2;
+    the bundled libcurl and libsodium in build/libs;
+    the table / registry receivers;
+    the third_party and cmake staging conventions.
+
+What it needs that is not in the tree yet: a requirements.lock lockfile
+(a human choice, section 6) and the sha256 column of the PYDIST table
+below (pinned by hand when the CPython build is bumped).
+
+It does: pick the distribution for the host triple, download it, verify
+the hash with the bundled libsodium, unpack and stage it into
+build/libs/python, generate cmake/EmbeddedPython.cmake, drop the pyhost
+shim skeleton plus its ABI file, populate site-packages from the
+lockfile with the just-staged interpreter, and write a provenance
+manifest.
+
+Illustrative only. The syntax follows the idiom of lm2/vcpkgFetch.lm2 and
+lm2/make.lm2; it is not guaranteed to parse. Lingvamyxa's syntax is
+unique and still moving. Helpers named lm_py_join_path,
+lm_py_file_exists, lm_py_read_file and lm_py_enter_project_root are
+elided; they mirror lm_vcpkg_join_path, lm_vcpkg_file_exists and
+lm_vcpkg_enter_project_root in lm2/vcpkgFetch.lm2 almost line for line.
+
+Lives in:
+
+    lm2/provision_python.lm2         the tool -> build/lm0/provision_python.lm0
+    lm2/provision_python_abi.lm2     predef facts for its own helpers
+    requirements.in, requirements.lock   the curated scientific set
+    tests/provision_python_smoke.lm2 offline smoke test
+
+The distribution matrix is a table, following the development plan's rule
+that tables are the source of truth and any strcmp ladder over them is
+only a cache / materialized view.
+
+========================================================================
+# lm2/provision_python.lm2
+# Provision a private CPython for the L5 "python" receiver.
+# Bootstraps from today's project; no system Python required.
+
+include
+os
+constant
+layout
+fn
+prototype
+unit
+
+predef: "libc_abi.lm2"
+predef: "lm2/own_abi.lm2"
+
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# ---- options --------------------------------------------------------
+
+table:
+    name: LmPyOptions
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
+    rows:
+             py_version    char   0   1
+             triple        char   1   1
+             dist_dir      char   2   1
+             stage_dir     char   3   1
+             requirements  char   4   1
+             offline       int    5   0
+             dry_run       int    6   0
+end: LmPyOptions
+
+table:
+    name: `layout.backend`
+    columns: (class: class) (class: backend)
+    rows:
+             LmPyOptions c.struct
+end: `layout.backend`
+
+table:
+    name: `class.reference-base`
+    columns: (class: class) (int: value)
+    rows:
+             LmPyOptions 1
+end: `class.reference-base`
+
+# ---- distribution matrix (source of truth) -------------------------
+
+table:
+    source
+    name: PYDIST
+    columns: (class: class)  (@: char triple)              (@: char asset)                                                                     (@: char sha256)  (@: char root)
+    rows:
+             linux_x64    "x86_64-unknown-linux-gnu"   "cpython-3.12.7+20241016-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"   "REPLACE_ME"  "python"
+             linux_arm64  "aarch64-unknown-linux-gnu"  "cpython-3.12.7+20241016-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz"  "REPLACE_ME"  "python"
+             mac_arm64    "aarch64-apple-darwin"       "cpython-3.12.7+20241016-aarch64-apple-darwin-install_only_stripped.tar.gz"       "REPLACE_ME"  "python"
+             mac_x64      "x86_64-apple-darwin"        "cpython-3.12.7+20241016-x86_64-apple-darwin-install_only_stripped.tar.gz"        "REPLACE_ME"  "python"
+             win_x64      "x86_64-pc-windows-msvc"     "cpython-3.12.7+20241016-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"     "REPLACE_ME"  "python"
+end: PYDIST
+
+constant: PYBS_BASE_URL "https://github.com/astral-sh/python-build-standalone/releases/download/20241016"
+
+# ---- small helpers (idiom: lm2/make.lm2) --------------------------
+
+fn: lm_py_env_or_default (@: char name; @: char fallback) @: char
+    @: char value
+    value: getenv(name)
+    if: value = 0 || value[0] = '\0'
+        return: fallback
+return: value
+
+fn: lm_py_run (@: char command) int
+    int: status
+    c.printf: "%s\n" command
+    status: system(command)
+    if: status != 0
+        c.fprintf: c.stderr "provision_python.lm0: command failed (%d): %s\n" status command
+        return: 1
+return: 0
+
+os:
+    win:
+        fn: lm_py_host_triple () @: char
+        return: "x86_64-pc-windows-msvc"
+
+        fn: lm_py_interp_relpath () @: char
+        return: "python.exe"
+    mac:
+        fn: lm_py_host_triple () @: char
+        return: lm_py_env_or_default("LM_PY_TRIPLE", "aarch64-apple-darwin")
+
+        fn: lm_py_interp_relpath () @: char
+        return: "bin/python3"
+    default:
+        fn: lm_py_host_triple () @: char
+        return: lm_py_env_or_default("LM_PY_TRIPLE", "x86_64-unknown-linux-gnu")
+
+        fn: lm_py_interp_relpath () @: char
+        return: "bin/python3"
+end: os
+
+# ---- PYDIST lookup -------------------------------------------------
+
+fn: lm_py_dist_lookup (@: char triple; @@: char asset_out; @@: char sha_out; @@: char root_out) int
+    # reference model: a logical query over PYDIST
+    #   select: asset sha256 root  from: PYDIST  where: triple = triple
+    # an early bootstrap answers it from the materialized rows directly.
+    row: select: PYDIST where: (triple = triple)
+    if: row = 0
+        c.fprintf: c.stderr "provision_python.lm0: no distribution for triple %s\n" triple
+        return: 1
+    asset_out[0]: row\asset
+    sha_out[0]:   row\sha256
+    root_out[0]:  row\root
+return: 0
+
+# ---- steps ------------------------------------------------------
+
+fn: lm_py_fetch (LmPyOptions: options; @: char asset; @: char out_path) int
+    c.array: []: char url 2048
+    c.array: []: char command 4096
+
+    if: lm_py_join_path(url, c.sizeof(url), PYBS_BASE_URL, asset) != 0
+        return: 1
+
+    if: lm_py_file_exists(out_path) != 0
+        c.printf: "provision_python.lm0: archive present, skip download: %s\n" out_path
+        return: 0
+
+    if: options\offline != 0
+        c.fprintf: c.stderr "provision_python.lm0: offline and archive missing: %s\n" out_path
+        return: 1
+
+    # libcurl is already bundled (build/libs/libcurl.a); a later revision
+    # calls c.curl_easy_* directly. For now, shell the co-installed curl.
+    snprintf(command, c.sizeof(command), "curl -fL --retry 3 -o \"%s\" \"%s\"", out_path, url)
+    if: options\dry_run != 0
+        c.printf: "DRYRUN %s\n" command
+        return: 0
+return: lm_py_run(command)
+
+fn: lm_py_verify_sha256 (@: char path; @: char expected) int
+    c.array: []: char digest 32
+    c.array: []: char hex 65
+    @: char blob 0
+    size_t: blob_len 0U
+    size_t: i
+
+    if: strcmp(expected, "REPLACE_ME") = 0
+        c.fprintf: c.stderr "provision_python.lm0: PYDIST sha256 not filled in\n"
+        return: 1
+
+    if: lm_py_read_file(path, @ blob, @ blob_len) != 0
+        return: 1
+
+    # libsodium is bundled (build/libs/libsodium.a)
+    c.crypto_hash_sha256(digest, blob, blob_len)
+    lm_own_delete(blob, 0)
+
+    i: 0U
+    while: i < 32U
+        snprintf(hex + i * 2U, 3U, "%02x", digest[i] & 0xFF)
+        i: i + 1U
+
+    if: strcmp(hex, expected) != 0
+        c.fprintf: c.stderr "provision_python.lm0: sha256 mismatch\n  want %s\n  got  %s\n" expected hex
+        return: 1
+
+    c.printf: "provision_python.lm0: sha256 ok\n"
+return: 0
+
+fn: lm_py_extract (@: char cmake; @: char archive; @: char dest_parent) int
+    c.array: []: char command 4096
+    snprintf(command, c.sizeof(command), "\"%s\" -E make_directory \"%s\"", cmake, dest_parent)
+    if: lm_py_run(command) != 0
+        return: 1
+    snprintf(command, c.sizeof(command), "\"%s\" -E chdir \"%s\" \"%s\" -E tar xzf \"%s\"", cmake, dest_parent, cmake, archive)
+return: lm_py_run(command)
+
+fn: lm_py_stage (@: char cmake; @: char unpacked_root; @: char stage_dir) int
+    c.array: []: char command 4096
+    snprintf(command, c.sizeof(command), "\"%s\" -E rm -rf \"%s\"", cmake, stage_dir)
+    if: lm_py_run(command) != 0
+        return: 1
+    snprintf(command, c.sizeof(command), "\"%s\" -E copy_directory \"%s\" \"%s\"", cmake, unpacked_root, stage_dir)
+return: lm_py_run(command)
+
+fn: lm_py_write_cmake_module (LmPyOptions: options) int
+    FILE: f
+    f: fopen("cmake/EmbeddedPython.cmake", "wb")
+    if: f = 0
+        c.fprintf: c.stderr "provision_python.lm0: cannot write cmake/EmbeddedPython.cmake\n"
+        return: 1
+    c.fprintf: f "# generated by provision_python.lm0 -- do not edit by hand\n"
+    c.fprintf: f "option(LINGVAMYXA_ENABLE_EMBEDDED_PYTHON \"Bundle CPython\" OFF)\n"
+    c.fprintf: f "if(LINGVAMYXA_ENABLE_EMBEDDED_PYTHON)\n"
+    c.fprintf: f "  set(LM_PY_STAGE \"${CMAKE_BINARY_DIR}/libs/python\")\n"
+    c.fprintf: f "  add_library(lingvamyxa_python INTERFACE)\n"
+    c.fprintf: f "  target_include_directories(lingvamyxa_python INTERFACE ${LM_PY_STAGE}/include/python%s)\n" options\py_version
+    c.fprintf: f "  target_compile_definitions(lingvamyxa_python INTERFACE LINGVAMYXA_EMBEDDED_PYTHON=1 Py_LIMITED_API=0x030C0000)\n"
+    c.fprintf: f "  install(DIRECTORY ${LM_PY_STAGE}/ DESTINATION bin/python)\n"
+    c.fprintf: f "endif()\n"
+    fclose(f)
+    c.printf: "provision_python.lm0: wrote cmake/EmbeddedPython.cmake\n"
+return: 0
+
+fn: lm_py_write_shim_skeleton () int
+    FILE: f
+
+    if: lm_py_file_exists("lm1/build/pyhost.lm1.c") != 0
+        c.printf: "provision_python.lm0: pyhost shim present, keeping it\n"
+        return: 0
+
+    f: fopen("lm1/build/pyhost.lm1.c", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "/* skeleton by provision_python.lm0; grow per include_python.txt section 4 */\n"
+    c.fprintf: f "#include <Python.h>\n\n"
+    c.fprintf: f "PyStatus lm_pyhost_init(void);\n"
+    c.fprintf: f "void      lm_pyhost_finalize(void);\n"
+    c.fprintf: f "int       lm_pyhost_call(const char *mod, const char *attr,\n"
+    c.fprintf: f "                         const void *argv, size_t argc, const void *kw,\n"
+    c.fprintf: f "                         void **result_out);\n"
+    fclose(f)
+
+    f: fopen("lm2/pyhost_abi.lm2", "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "# generated by provision_python.lm0\n"
+    c.fprintf: f "predef: \"libc_abi.lm2\"\n\n"
+    c.fprintf: f "external:\n"
+    c.fprintf: f "    fn: lm_pyhost_init () int\n"
+    c.fprintf: f "    fn: lm_pyhost_finalize ()\n"
+    c.fprintf: f "    fn: lm_pyhost_call (@: char mod; @: char attr; @: void argv; size_t: argc; @: void kw; @@: void result_out) int\n"
+    c.fprintf: f "end: external\n"
+    fclose(f)
+    c.printf: "provision_python.lm0: wrote pyhost skeleton + abi\n"
+return: 0
+
+fn: lm_py_pip_populate (LmPyOptions: options) int
+    c.array: []: char interp 2048
+    c.array: []: char command 4096
+
+    if: lm_py_join_path(interp, c.sizeof(interp), options\stage_dir, lm_py_interp_relpath()) != 0
+        return: 1
+
+    if: lm_py_file_exists(options\requirements) = 0
+        c.fprintf: c.stderr "provision_python.lm0: no lockfile %s; skip site-packages\n" options\requirements
+        return: 0
+
+    snprintf(command, c.sizeof(command),
+        "\"%s\" -m pip install --no-input --require-hashes --only-binary=:all: -r \"%s\" --target \"%s/lib/python%s/site-packages\"",
+        interp, options\requirements, options\stage_dir, options\py_version)
+
+    if: options\dry_run != 0
+        c.printf: "DRYRUN %s\n" command
+        return: 0
+return: lm_py_run(command)
+
+fn: lm_py_write_manifest (LmPyOptions: options; @: char asset; @: char sha) int
+    FILE: f
+    c.array: []: char path 2048
+
+    if: lm_py_join_path(path, c.sizeof(path), options\stage_dir, "PROVISION_MANIFEST.txt") != 0
+        return: 1
+    f: fopen(path, "wb")
+    if: f = 0
+        return: 1
+    c.fprintf: f "tool        provision_python.lm0\n"
+    c.fprintf: f "py_version  %s\n" options\py_version
+    c.fprintf: f "triple      %s\n" options\triple
+    c.fprintf: f "asset       %s\n" asset
+    c.fprintf: f "sha256      %s\n" sha
+    c.fprintf: f "source      %s\n" PYBS_BASE_URL
+    fclose(f)
+return: 0
+
+sub: lm_py_usage ()
+    c.printf: "usage: provision_python.lm0 [options]\n"
+    c.printf: "  --version <x.y>     CPython minor, default 3.12\n"
+    c.printf: "  --triple <triple>   override host triple\n"
+    c.printf: "  --dist-dir <dir>    archive cache, default third_party\n"
+    c.printf: "  --stage-dir <dir>   staged tree, default build/libs/python\n"
+    c.printf: "  --requirements <f>  lockfile, default requirements.lock\n"
+    c.printf: "  --offline          fail instead of downloading\n"
+    c.printf: "  --dry-run          print actions only\n"
+end: lm_py_usage
+
+fn: lm_py_parse_options (int: argc; @@: char argv; LmPyOptions: options) int
+    int: i
+
+    options\py_version:   lm_py_env_or_default("LM_PY_VERSION", "3.12")
+    options\triple:       lm_py_host_triple()
+    options\dist_dir:     lm_py_env_or_default("LM_PY_DIST_DIR", "third_party")
+    options\stage_dir:    lm_py_env_or_default("LM_PY_STAGE_DIR", "build/libs/python")
+    options\requirements: lm_py_env_or_default("LM_PY_REQUIREMENTS", "requirements.lock")
+    options\offline:      0
+    options\dry_run:      0
+
+    i: 1
+    while: i < argc
+        if: strcmp(argv[i], "--version") = 0
+            i: i + 1
+            if: i >= argc
+                return: 1
+            options\py_version: argv[i]
+            i: i + 1
+            continue
+        if: strcmp(argv[i], "--triple") = 0
+            i: i + 1
+            if: i >= argc
+                return: 1
+            options\triple: argv[i]
+            i: i + 1
+            continue
+        if: strcmp(argv[i], "--dist-dir") = 0
+            i: i + 1
+            if: i >= argc
+                return: 1
+            options\dist_dir: argv[i]
+            i: i + 1
+            continue
+        if: strcmp(argv[i], "--stage-dir") = 0
+            i: i + 1
+            if: i >= argc
+                return: 1
+            options\stage_dir: argv[i]
+            i: i + 1
+            continue
+        if: strcmp(argv[i], "--requirements") = 0
+            i: i + 1
+            if: i >= argc
+                return: 1
+            options\requirements: argv[i]
+            i: i + 1
+            continue
+        if: strcmp(argv[i], "--offline") = 0
+            options\offline: 1
+            i: i + 1
+            continue
+        if: strcmp(argv[i], "--dry-run") = 0
+            options\dry_run: 1
+            i: i + 1
+            continue
+        if: strcmp(argv[i], "--help") = 0 || strcmp(argv[i], "-h") = 0
+            lm_py_usage()
+            return: 2
+        c.fprintf: c.stderr "provision_python.lm0: unknown option %s\n" argv[i]
+        return: 1
+return: 0
+
+# ---- entry ---------------------------------------------------------
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        LmPyOptions: options
+        @: char asset 0
+        @: char sha 0
+        @: char root 0
+        c.array: []: char cmake 1024
+        c.array: []: char archive_path 2048
+        c.array: []: char unpacked 2048
+        int: status
+
+        options: lm_own_new_zero(c.sizeof(c.LmPyOptions))
+        if: options = 0
+            return: 1
+
+        status: lm_py_parse_options(argc, argv, options)
+        if: status = 2
+            return: 0
+        if: status != 0
+            lm_py_usage()
+            return: 1
+
+        if: lm_py_enter_project_root(argv[0]) != 0
+            return: 1
+
+        strcpy(cmake, lm_py_env_or_default("LM_CMAKE", "cmake"))
+
+        if: lm_py_dist_lookup(options\triple, @ asset, @ sha, @ root) != 0
+            return: 1
+
+        if: lm_py_join_path(archive_path, c.sizeof(archive_path), options\dist_dir, asset) != 0
+            return: 1
+        if: lm_py_join_path(unpacked, c.sizeof(unpacked), options\dist_dir, root) != 0
+            return: 1
+
+        if: lm_py_fetch(options, asset, archive_path) != 0
+            return: 1
+        if: lm_py_verify_sha256(archive_path, sha) != 0
+            return: 1
+        if: lm_py_extract(cmake, archive_path, options\dist_dir) != 0
+            return: 1
+        if: lm_py_stage(cmake, unpacked, options\stage_dir) != 0
+            return: 1
+        if: lm_py_write_cmake_module(options) != 0
+            return: 1
+        if: lm_py_write_shim_skeleton() != 0
+            return: 1
+        if: lm_py_pip_populate(options) != 0
+            return: 1
+        if: lm_py_write_manifest(options, asset, sha) != 0
+            return: 1
+
+        c.printf: "provision_python.lm0: done. build with -DLINGVAMYXA_ENABLE_EMBEDDED_PYTHON=ON\n"
+    return: 0
+end: external
+========================================================================
+
+
+Wiring into the existing build
+------------------------------
+
+provision_python.lm2 builds like the other L0 tools: buildCore.lm0
+regenerates lm1/build/provision_python.lm1.c from it, and CMake builds
+build/lm0/provision_python.lm0. buildCore.lm0 --full then gains one
+guarded step, sitting next to the libcurl / libsqlite3 / libsodium
+bundle builds:
+
+    if LINGVAMYXA_ENABLE_EMBEDDED_PYTHON is set:
+        run  build/lm0/provision_python.lm0
+
+From that point cmake/EmbeddedPython.cmake exists, the runtime target
+links lingvamyxa_python, and lm2/pyhost_abi.lm2 is on the predef path.
+The pyhost shim body (section 4) is then the only hand-written C left in
+the feature, and even its skeleton and ABI file were generated.
+
+
+What the tool deliberately does not do
+--------------------------------------
+
+    write the body of lm_pyhost_* -- the buffer-protocol bridge, the GIL
+    scopes, the traceback-to-failure-record mapping; section 4 is hand
+    work, done once;
+    choose requirements.in -- the scientific package set is a human
+    decision;
+    fill the PYDIST sha256 column -- pinned by hand when the CPython
+    build date is bumped, then checked on every run by lm_py_verify_sha256;
+    codesign or notarise the macOS bundle -- section 6, needs signing
+    identity and is environment-specific.
+
+
+One-line use
+------------
+
+    build/lm0/provision_python.lm0                     # host triple, defaults
+    build/lm0/provision_python.lm0 --dry-run           # print the plan
+    build/lm0/provision_python.lm0 --triple x86_64-pc-windows-msvc --offline
+                                                       # stage a pre-fetched archive
