@@ -1,0 +1,15 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+external:
+    fn: lm_test_unmanaged_array_reference () int
+        []: int values 2 1 2
+        return: values[0]
+    end: lm_test_unmanaged_array_reference
+end: external

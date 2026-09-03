@@ -1,0 +1,9 @@
+fn: lm_test_take_char_array ([]: char values) int
+return: 0
+
+external:
+    fn: main () int
+        []: int values 1 7
+        return: lm_test_take_char_array(values)
+    end: main
+end: external

@@ -10,6 +10,19 @@ struct LmOwnArena;
 struct LmMessageThread;
 struct LmMessageThreadRuntime;
 struct LmMessageThreadPool;
+#ifndef LM_LMX_TYPEDEF_DEFINED_LmSlice
+#define LM_LMX_TYPEDEF_DEFINED_LmSlice 1
+#define LM_LMX_TYPEDEF_ID_A_LmSlice 0xdd6442dffff43f92ULL
+#define LM_LMX_TYPEDEF_ID_B_LmSlice 0x21d9c62537977663ULL
+typedef struct LmSlice {
+    void *ptr;
+    size_t length;
+} LmSlice;
+#else
+#if !defined(LM_LMX_TYPEDEF_ID_A_LmSlice) || !defined(LM_LMX_TYPEDEF_ID_B_LmSlice) || LM_LMX_TYPEDEF_ID_A_LmSlice != 0xdd6442dffff43f92ULL || LM_LMX_TYPEDEF_ID_B_LmSlice != 0x21d9c62537977663ULL
+#error "Lingvamyxa conflicting typedef projection for LmSlice"
+#endif
+#endif
 #ifndef LM_LMX_TYPEDEF_DEFINED_IncomingMessage
 #define LM_LMX_TYPEDEF_DEFINED_IncomingMessage 1
 #define LM_LMX_TYPEDEF_ID_A_IncomingMessage 0x10eae12962f7f58fULL
@@ -648,19 +661,6 @@ typedef struct LmMessageThread LmMessageThread;
 
 #include <stddef.h>
 
-#ifndef LM_LMX_TYPEDEF_DEFINED_LmSlice
-#define LM_LMX_TYPEDEF_DEFINED_LmSlice 1
-#define LM_LMX_TYPEDEF_ID_A_LmSlice 0xdd6442dffff43f92ULL
-#define LM_LMX_TYPEDEF_ID_B_LmSlice 0x21d9c62537977663ULL
-typedef struct LmSlice {
-    void *ptr;
-    size_t length;
-} LmSlice;
-#else
-#if !defined(LM_LMX_TYPEDEF_ID_A_LmSlice) || !defined(LM_LMX_TYPEDEF_ID_B_LmSlice) || LM_LMX_TYPEDEF_ID_A_LmSlice != 0xdd6442dffff43f92ULL || LM_LMX_TYPEDEF_ID_B_LmSlice != 0x21d9c62537977663ULL
-#error "Lingvamyxa conflicting typedef projection for LmSlice"
-#endif
-#endif
 struct LmOwnPtrStack {
     void **items;
     size_t count;

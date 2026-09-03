@@ -1,0 +1,15 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+external:
+    fn: main () int
+        [][]: int matrix 2 2 1 2 3 4
+        return: 0
+    end: main
+end: external

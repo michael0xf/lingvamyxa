@@ -1,0 +1,27 @@
+fn: lm_test_pointer_array_value ([]: @ int values) int
+return: values[1][0]
+
+external:
+    fn: main () int
+        int: first 7
+        int: second 11
+        [2]: @: int values @ first @ second
+        const: [2]: int: fixed 5 6
+
+        if: values = 0 || values\length != 2U || fixed = 0 || fixed\length != 2U
+            return: 1
+        if: values[0] != @ first || values[1] != @ second
+            return: 2
+        if: values[0][0] != 7 || values[1][0] != 11
+            return: 3
+        if: lm_test_pointer_array_value(values) != 11
+            return: 6
+        if: fixed[0] != 5 || fixed[1] != 6
+            return: 4
+        values[0]: @ second
+        values[0][0]: 13
+        if: second != 13 || values[0] != @ second
+            return: 5
+        return: 0
+    end: main
+end: external

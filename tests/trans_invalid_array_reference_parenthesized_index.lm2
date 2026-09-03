@@ -1,0 +1,6 @@
+external:
+    fn: main () int
+        []: int values 1 7
+        return: (values)[0]
+    end: main
+end: external

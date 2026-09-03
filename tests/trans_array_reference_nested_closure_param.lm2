@@ -1,0 +1,38 @@
+import: "lm2/own.lm2"
+
+table:
+    source
+    name: `callable.capture`
+    columns: (class: class) (serial: value)
+    rows:
+             LmArrayReader 1
+end: `callable.capture`
+
+table:
+    source
+    name: `callable.projection`
+    columns: (class: class) (projection: value)
+    rows:
+             LmArrayReader `c.closure-struct`
+end: `callable.projection`
+
+fn: LmArrayReader ([]: @ int values) []: (@: int)
+
+fn: lm_test_make_array_reader () LmArrayReader
+    fn: read_first ([]: @ int values) []: (@: int)
+        return: values
+    ---
+    return: read_first
+end: lm_test_make_array_reader
+
+external:
+    fn: main () int
+        int: first 17
+        int: second 23
+        [2]: @: int values @ first @ second
+        LmArrayReader: read_first lm_test_make_array_reader()
+        LmSlice: returned read_first(values)
+        @@: int returned_items returned\ptr
+        return: returned != values || returned_items[0][0] != 17 || returned_items[1][0] != 23
+    end: main
+end: external

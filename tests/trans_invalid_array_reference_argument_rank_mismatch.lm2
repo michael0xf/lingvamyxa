@@ -1,0 +1,9 @@
+fn: lm_test_array_requires_matrix ([][]: int value) int
+return: value[0][0]
+
+external:
+    fn: main () int
+        []: int flat 1 7
+        return: lm_test_array_requires_matrix(flat)
+    end: main
+end: external

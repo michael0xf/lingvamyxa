@@ -1,0 +1,17 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+include: "<math.h>"
+
+external:
+    fn: main () int
+        [cast: (long c.HUGE_VAL)]: int: values
+        return: values = 0
+    end: main
+end: external

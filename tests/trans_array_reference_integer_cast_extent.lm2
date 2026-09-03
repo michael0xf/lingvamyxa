@@ -1,0 +1,15 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+external:
+    fn: main () int
+        [cast: (size_t 3)]: int: values 1 2 3
+        return: values[2] != 3
+    end: main
+end: external

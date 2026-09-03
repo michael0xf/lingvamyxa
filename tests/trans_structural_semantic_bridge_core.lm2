@@ -103,7 +103,7 @@ fn: lm_test_structural_owner_has_no_registry_metadata (
     const: LmTransNamespace: namespace_
     const: @(char owner_name)
 ) int
-    const: [4]: @: char table_names
+    c.array: const: [4]: @: char table_names
     LmP0Text: owner
     size_t: i
 

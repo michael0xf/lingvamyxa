@@ -18,8 +18,8 @@ return: lm_trans_registry_push_generated_source_n2_row_values(
 )
 
 fn: lm_test_generated_prelude_source_rows_core () int
-    [3]: LmTransRegistryFact facts
-    const: [3]: @: char expected_keys
+    c.array: [3]: LmTransRegistryFact facts
+    c.array: const: [3]: @: char expected_keys
     const: LmTableDescriptor: descriptor
     const: LmTableColumnDescriptor: key_column
     const: LmTableColumnDescriptor: value_column

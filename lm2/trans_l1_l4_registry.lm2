@@ -1457,24 +1457,30 @@ fn: lm_trans_collect_abi_return (
     int: return_key_policy
     const: @@(char out_class_name)
     @: size_t out_address_depth
+    @: size_t out_array_rank
     @: int out_is_const
 ) int
     const: LmOwnPtrStack: class_rows
     const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: array_rank_rows
     const: LmOwnPtrStack: const_rows
     LmP0Text: owner_text
     LmP0Text: return_key
     LmTransRegistryFact: class_row
     LmTransRegistryFact: address_depth_row
+    LmTransRegistryFact: array_rank_row
     LmTransRegistryFact: const_row
     const: @: char class_payload
     const: @: char address_depth_payload
+    const: @: char array_rank_payload
     const: @: char const_payload
     @: char class_path
     @: char address_depth_path
+    @: char array_rank_path
     @: char const_path
     size_t: source_path_length
     size_t: address_depth
+    size_t: array_rank
     size_t: const_flag
     int: status
 
@@ -1482,9 +1488,11 @@ fn: lm_trans_collect_abi_return (
         out_class_name[0]: 0
     if: out_address_depth != 0
         out_address_depth[0]: 0U
+    if: out_array_rank != 0
+        out_array_rank[0]: 0U
     if: out_is_const != 0
         out_is_const[0]: 0
-    if: owner_name = 0 || out_class_name = 0 || out_address_depth = 0 || out_is_const = 0 || return_key_policy < 0 || return_key_policy > 2
+    if: owner_name = 0 || out_class_name = 0 || out_address_depth = 0 || out_array_rank = 0 || out_is_const = 0 || return_key_policy < 0 || return_key_policy > 2
         return: 3
 
     owner_text: lm_trans_l4_text_view_new(owner_name)
@@ -1508,34 +1516,42 @@ fn: lm_trans_collect_abi_return (
 
     class_path: 0
     address_depth_path: 0
+    array_rank_path: 0
     const_path: 0
     status: 0
     if: lm_trans_registry_view_parity_enabled() != 0
         class_path: lm_trans_registry_source_relation_path_new(owner_name, "return.class", @ source_path_length)
         address_depth_path: lm_trans_registry_source_relation_path_new(owner_name, "return.address-depth", @ source_path_length)
+        array_rank_path: lm_trans_registry_source_relation_path_new(owner_name, "return.array-rank", @ source_path_length)
         const_path: lm_trans_registry_source_relation_path_new(owner_name, "return.const", @ source_path_length)
-        if: class_path = 0 || address_depth_path = 0 || const_path = 0
+        if: class_path = 0 || address_depth_path = 0 || array_rank_path = 0 || const_path = 0
             status: 3
     ---
 
     class_payload: lm_trans_abi_source_text_value(namespace_, class_path, "class", class_row, 0)
     address_depth_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.address-depth")
+    array_rank_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.array-rank")
     const_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.const")
     address_depth_row: lm_trans_registry_relation_stack_latest_row(address_depth_rows, return_key)
+    array_rank_row: lm_trans_registry_relation_stack_latest_row(array_rank_rows, return_key)
     const_row: lm_trans_registry_relation_stack_latest_row(const_rows, return_key)
     address_depth_payload: lm_trans_abi_source_text_value(namespace_, address_depth_path, "size_t", address_depth_row, 0)
+    array_rank_payload: lm_trans_abi_source_text_value(namespace_, array_rank_path, "size_t", array_rank_row, 0)
     const_payload: lm_trans_abi_source_text_value(namespace_, const_path, "int", const_row, 0)
     address_depth: 0U
+    array_rank: 0U
     const_flag: 0U
-    if: status = 0 && (class_payload = 0 || (address_depth_row != 0 && (address_depth_payload = 0 || lm_trans_parse_size_payload(address_depth_payload, @ address_depth) = 0)) || (const_row != 0 && (const_payload = 0 || lm_trans_parse_size_payload(const_payload, @ const_flag) = 0)))
+    if: status = 0 && (class_payload = 0 || (address_depth_row != 0 && (address_depth_payload = 0 || lm_trans_parse_size_payload(address_depth_payload, @ address_depth) = 0)) || (array_rank_row != 0 && (array_rank_payload = 0 || lm_trans_parse_size_payload(array_rank_payload, @ array_rank) = 0)) || (const_row != 0 && (const_payload = 0 || lm_trans_parse_size_payload(const_payload, @ const_flag) = 0)))
         status: 2
 
     if: status = 0
         out_class_name[0]: class_payload
         out_address_depth[0]: address_depth
+        out_array_rank[0]: array_rank
         out_is_const[0]: const_flag != 0U
 
     lm_own_delete(const_path, 0)
+    lm_own_delete(array_rank_path, 0)
     lm_own_delete(address_depth_path, 0)
     lm_own_delete(class_path, 0)
     lm_trans_l4_text_view_delete(@ owner_text)
@@ -1546,6 +1562,7 @@ fn: lm_trans_collect_abi_params (@: LmTransAbiParam params; size_t: capacity; @:
     const: LmOwnPtrStack: class_rows
     const: LmOwnPtrStack: index_rows
     const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: array_rank_rows
     const: LmOwnPtrStack: const_rows
     const: LmTableCell: source_key_cell
     LmP0Text: owner_text
@@ -1553,15 +1570,18 @@ fn: lm_trans_collect_abi_params (@: LmTransAbiParam params; size_t: capacity; @:
     LmTransRegistryFact: row
     LmTransRegistryFact: index_row
     LmTransRegistryFact: address_depth_row
+    LmTransRegistryFact: array_rank_row
     LmTransRegistryFact: const_row
     const: @: char class_payload
     const: @: char index_payload
     const: @: char address_depth_payload
+    const: @: char array_rank_payload
     const: @: char const_payload
     const: @: char param_name
     @: char class_path
     @: char index_path
     @: char address_depth_path
+    @: char array_rank_path
     @: char const_path
     size_t: source_path_length
     size_t: i
@@ -1586,17 +1606,20 @@ fn: lm_trans_collect_abi_params (@: LmTransAbiParam params; size_t: capacity; @:
     class_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "param.class")
     index_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "param.index")
     address_depth_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "param.address-depth")
+    array_rank_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "param.array-rank")
     const_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "param.const")
     class_path: 0
     index_path: 0
     address_depth_path: 0
+    array_rank_path: 0
     const_path: 0
     if: lm_trans_registry_view_parity_enabled() != 0
         class_path: lm_trans_registry_source_relation_path_new(owner_name, "param.class", @ source_path_length)
         index_path: lm_trans_registry_source_relation_path_new(owner_name, "param.index", @ source_path_length)
         address_depth_path: lm_trans_registry_source_relation_path_new(owner_name, "param.address-depth", @ source_path_length)
+        array_rank_path: lm_trans_registry_source_relation_path_new(owner_name, "param.array-rank", @ source_path_length)
         const_path: lm_trans_registry_source_relation_path_new(owner_name, "param.const", @ source_path_length)
-        if: class_path = 0 || index_path = 0 || address_depth_path = 0 || const_path = 0
+        if: class_path = 0 || index_path = 0 || address_depth_path = 0 || array_rank_path = 0 || const_path = 0
             status: 1
     ---
 
@@ -1633,6 +1656,12 @@ fn: lm_trans_collect_abi_params (@: LmTransAbiParam params; size_t: capacity; @:
                         if: address_depth_row != 0 && (address_depth_payload = 0 || lm_trans_parse_size_payload(address_depth_payload, @ params[out_count[0]]\address_depth) = 0)
                             c.fprintf(c.stderr, "trans L4 %s error: parameter %s.%s has invalid param.address-depth\n", error_name, owner_name, row\key)
                             status: 1
+                        array_rank_row: lm_trans_registry_relation_stack_latest_row(array_rank_rows, param_text)
+                        array_rank_payload: lm_trans_abi_source_text_value(namespace_, array_rank_path, "size_t", array_rank_row, 0)
+                        params[out_count[0]]\array_rank: 0U
+                        if: status = 0 && array_rank_row != 0 && (array_rank_payload = 0 || lm_trans_parse_size_payload(array_rank_payload, @ params[out_count[0]]\array_rank) = 0)
+                            c.fprintf(c.stderr, "trans L4 %s error: parameter %s.%s has invalid param.array-rank\n", error_name, owner_name, row\key)
+                            status: 1
                         const_row: lm_trans_registry_relation_stack_latest_row(const_rows, param_text)
                         const_payload: lm_trans_abi_source_text_value(namespace_, const_path, "int", const_row, 0)
                         const_flag: 0U
@@ -1661,6 +1690,7 @@ fn: lm_trans_collect_abi_params (@: LmTransAbiParam params; size_t: capacity; @:
         ---
 
     lm_own_delete(const_path, 0)
+    lm_own_delete(array_rank_path, 0)
     lm_own_delete(address_depth_path, 0)
     lm_own_delete(index_path, 0)
     lm_own_delete(class_path, 0)
@@ -1681,8 +1711,15 @@ fn: lm_trans_emit_abi_params (FILE: file; @: LmTransAbiParam params; size_t: cou
     while: i < count
         if: i != 0U && lm_trans_put(file, ", ") != 0
             return: 1
-        if: lm_trans_emit_abi_typed_name(file, params[i]\class_name, params[i]\address_depth, params[i]\is_const, params[i]\name, namespace_) != 0
-            return: 1
+        if: params[i]\array_rank != 0U
+            if: lm_trans_put(file, "LmSlice *") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(params[i]\name)) != 0
+                return: 1
+            ---
+        else:
+            if: lm_trans_emit_abi_typed_name(file, params[i]\class_name, params[i]\address_depth, params[i]\is_const, params[i]\name, namespace_) != 0
+                return: 1
+            ---
+        ---
         i: i + 1U
 return: 0
 
@@ -1908,13 +1945,14 @@ return: 0
 fn: lm_trans_emit_abi_return_type (FILE: file; const: (LmTransNamespace: namespace_); const: @(char owner_name); const: @(char error_name)) int
     const: @: char class_name
     size_t: address_depth
+    size_t: array_rank
     int: is_const
     int: status
 
     if: file = 0 || owner_name = 0 || error_name = 0
         return: 1
 
-    status: lm_trans_collect_abi_return(namespace_, owner_name, 0, @ class_name, @ address_depth, @ is_const)
+    status: lm_trans_collect_abi_return(namespace_, owner_name, 0, @ class_name, @ address_depth, @ array_rank, @ is_const)
     if: status = 1
         c.fprintf(c.stderr, "trans L4 %s error: %s requires return.class\n", error_name, owner_name)
         return: 1
@@ -1924,6 +1962,8 @@ fn: lm_trans_emit_abi_return_type (FILE: file; const: (LmTransNamespace: namespa
     if: status != 0
         return: 1
 
+    if: array_rank != 0U
+        return: lm_trans_put(file, "LmSlice *")
 return: lm_trans_emit_abi_typed_name(file, class_name, address_depth, is_const, 0, namespace_)
 
 fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: namespace_); const: @(char name); const: @(char error_name)) int
@@ -2105,16 +2145,59 @@ fn: lm_trans_registry_synthetic_at_head (size_t: address_depth) @: char
     head[address_depth]: '\0'
 return: head
 
-fn: lm_trans_registry_synthetic_callable_type_node (const: @(char class_name); size_t: address_depth; int: is_const; const: @(char name)) LmP0Node
+fn: lm_trans_registry_synthetic_array_head (size_t: array_rank) @: char
+    @: char head
+    size_t: index
+
+    if: array_rank = 0U || array_rank > (c.SIZE_MAX - 1U) / 2U
+        return: 0
+
+    head: lm_own_arena_new_zero(lm_trans_registry\value_arena, (array_rank * 2U) + 1U)
+    if: head = 0
+        return: 0
+    index: 0U
+    while: index < array_rank
+        head[index * 2U]: '['
+        head[(index * 2U) + 1U]: ']'
+        index: index + 1U
+    head[array_rank * 2U]: '\0'
+return: head
+
+fn: lm_trans_registry_synthetic_callable_type_node (const: @(char class_name); size_t: address_depth; size_t: array_rank; int: is_const; const: @(char name)) LmP0Node
     LmP0Node: node
+    LmP0Node: element_node
     LmP0Node: wrapper
     @: char at_head
+    @: char array_head
 
     if: class_name = 0
         return: 0
 
     node: 0
-    if: address_depth != 0U
+    if: array_rank != 0U
+        if: address_depth = 0U
+            return: 0
+        array_head: lm_trans_registry_synthetic_array_head(array_rank)
+        if: array_head = 0
+            return: 0
+        node: lm_trans_registry_synthetic_frame_node_cstr(array_head)
+        if: node = 0
+            return: 0
+        if: address_depth > 1U
+            at_head: lm_trans_registry_synthetic_at_head(address_depth - 1U)
+            if: at_head = 0
+                return: 0
+            element_node: lm_trans_registry_synthetic_frame_node_cstr(at_head)
+            if: element_node = 0 || lm_trans_registry_synthetic_append_node(element_node\as\frame\body, lm_trans_registry_synthetic_atom_node_cstr(class_name)) = 0
+                return: 0
+            ---
+        else:
+            element_node: lm_trans_registry_synthetic_atom_node_cstr(class_name)
+        ---
+        if: element_node = 0 || lm_trans_registry_synthetic_append_node(node\as\frame\body, element_node) = 0 || (name != 0 && lm_trans_registry_synthetic_append_node(node\as\frame\body, lm_trans_registry_synthetic_atom_node_cstr(name)) = 0)
+            return: 0
+    ---
+    if: array_rank = 0U && address_depth != 0U
         at_head: lm_trans_registry_synthetic_at_head(address_depth)
         if: at_head = 0
             return: 0
@@ -2124,12 +2207,12 @@ fn: lm_trans_registry_synthetic_callable_type_node (const: @(char class_name); s
         if: name != 0 && lm_trans_registry_synthetic_append_node(node\as\frame\body, lm_trans_registry_synthetic_atom_node_cstr(name)) = 0
             return: 0
     ---
-    if: address_depth = 0U && name != 0
+    if: array_rank = 0U && address_depth = 0U && name != 0
         node: lm_trans_registry_synthetic_frame_node_cstr(class_name)
         if: node = 0 || lm_trans_registry_synthetic_append_node(node\as\frame\body, lm_trans_registry_synthetic_atom_node_cstr(name)) = 0
             return: 0
     ---
-    if: address_depth = 0U && name = 0
+    if: array_rank = 0U && address_depth = 0U && name = 0
         node: lm_trans_registry_synthetic_atom_node_cstr(class_name)
         if: node = 0
             return: 0
@@ -2147,13 +2230,14 @@ fn: lm_trans_registry_synthetic_return_node (const: (LmTransNamespace: namespace
     const: @: char class_name
     LmP0Node: return_node
     size_t: address_depth
+    size_t: array_rank
     int: is_const
     int: status
 
     if: name = 0
         return: 0
 
-    status: lm_trans_collect_abi_return(namespace_, name, 1, @ class_name, @ address_depth, @ is_const)
+    status: lm_trans_collect_abi_return(namespace_, name, 1, @ class_name, @ address_depth, @ array_rank, @ is_const)
     if: status = 1
         c.fprintf(c.stderr, "trans L4 fn import error: %s requires return.class\n", name)
         return: 0
@@ -2163,7 +2247,7 @@ fn: lm_trans_registry_synthetic_return_node (const: (LmTransNamespace: namespace
     if: status != 0
         return: 0
 
-    return_node: lm_trans_registry_synthetic_callable_type_node(class_name, address_depth, is_const, 0)
+    return_node: lm_trans_registry_synthetic_callable_type_node(class_name, address_depth, array_rank, is_const, 0)
 return: return_node
 
 fn: lm_trans_registry_synthetic_params_node (const: (LmTransNamespace: namespace_); const: @(char name)) LmP0Node
@@ -2192,7 +2276,7 @@ fn: lm_trans_registry_synthetic_params_node (const: (LmTransNamespace: namespace
 
     i: 0U
     while: i < param_count
-        param_node: lm_trans_registry_synthetic_callable_type_node(params[i]\class_name, params[i]\address_depth, params[i]\is_const, params[i]\name)
+        param_node: lm_trans_registry_synthetic_callable_type_node(params[i]\class_name, params[i]\address_depth, params[i]\array_rank, params[i]\is_const, params[i]\name)
         if: param_node = 0 || lm_trans_registry_synthetic_append_node(params_node\as\structure, param_node) = 0
             lm_trans_l4_abi_params_delete(params, param_capacity)
             return: 0
@@ -2977,6 +3061,7 @@ fn: lm_trans_registry_materialize_generated_param_source_row (
     const: (LmTransRegistryFact: class_fact)
     const: (LmTransRegistryFact: index_fact)
     const: (LmTransRegistryFact: address_depth_fact)
+    const: (LmTransRegistryFact: array_rank_fact)
     const: (LmTransRegistryFact: const_fact)
 ) int
     @: char table_name
@@ -2985,7 +3070,7 @@ fn: lm_trans_registry_materialize_generated_param_source_row (
     LmTableCell: key_cell
     int: status
 
-    if: function_name = 0 || class_fact = 0 || index_fact = 0 || class_fact\key = 0 || class_fact\payload = 0 || index_fact\key = 0 || index_fact\payload = 0 || c.strcmp(class_fact\key, index_fact\key) != 0 || (address_depth_fact != 0 && (address_depth_fact\key = 0 || c.strcmp(class_fact\key, address_depth_fact\key) != 0)) || (const_fact != 0 && (const_fact\key = 0 || c.strcmp(class_fact\key, const_fact\key) != 0)) || c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
+    if: function_name = 0 || class_fact = 0 || index_fact = 0 || class_fact\key = 0 || class_fact\payload = 0 || index_fact\key = 0 || index_fact\payload = 0 || c.strcmp(class_fact\key, index_fact\key) != 0 || (address_depth_fact != 0 && (address_depth_fact\key = 0 || c.strcmp(class_fact\key, address_depth_fact\key) != 0)) || (array_rank_fact != 0 && (array_rank_fact\key = 0 || c.strcmp(class_fact\key, array_rank_fact\key) != 0)) || (const_fact != 0 && (const_fact\key = 0 || c.strcmp(class_fact\key, const_fact\key) != 0)) || c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
         return: 1
 
     table_name: lm_trans_registry_relation_name_new(function_name, ".param")
@@ -2997,7 +3082,7 @@ fn: lm_trans_registry_materialize_generated_param_source_row (
         status: 1
     if: status = 0
         descriptor: lm_table_descriptor_new_empty_slice(table_name, c.strlen(table_name))
-        if: descriptor = 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "name", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "class", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "index", "size_t", "size_t") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "address-depth", "size_t", "size_t") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "const", "int", "int") != 0
+        if: descriptor = 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "name", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "class", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "index", "size_t", "size_t") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "address-depth", "size_t", "size_t") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "array-rank", "size_t", "size_t") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "const", "int", "int") != 0
             status: 1
     ---
     lm_own_delete(table_name, 0)
@@ -3014,7 +3099,7 @@ fn: lm_trans_registry_materialize_generated_param_source_row (
         else:
             key_cell: 0
     ---
-    if: status = 0 && (lm_trans_table_row_take_generated_fact_cell(row, class_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, index_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, address_depth_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, const_fact) != 0)
+    if: status = 0 && (lm_trans_table_row_take_generated_fact_cell(row, class_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, index_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, address_depth_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, array_rank_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, const_fact) != 0)
         status: 1
     if: status = 0
         if: lm_table_descriptor_take_materialized_row(descriptor, row) != 0
@@ -3038,6 +3123,7 @@ fn: lm_trans_registry_materialize_generated_return_source_row (
     const: (LmP0Text: function_name)
     const: (LmTransRegistryFact: class_fact)
     const: (LmTransRegistryFact: address_depth_fact)
+    const: (LmTransRegistryFact: array_rank_fact)
     const: (LmTransRegistryFact: const_fact)
 ) int
     @: char table_name
@@ -3046,7 +3132,7 @@ fn: lm_trans_registry_materialize_generated_return_source_row (
     LmTableCell: key_cell
     int: status
 
-    if: function_name = 0 || class_fact = 0 || class_fact\key = 0 || class_fact\payload = 0 || (address_depth_fact != 0 && (address_depth_fact\key = 0 || c.strcmp(class_fact\key, address_depth_fact\key) != 0)) || (const_fact != 0 && (const_fact\key = 0 || c.strcmp(class_fact\key, const_fact\key) != 0)) || c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
+    if: function_name = 0 || class_fact = 0 || class_fact\key = 0 || class_fact\payload = 0 || (address_depth_fact != 0 && (address_depth_fact\key = 0 || c.strcmp(class_fact\key, address_depth_fact\key) != 0)) || (array_rank_fact != 0 && (array_rank_fact\key = 0 || c.strcmp(class_fact\key, array_rank_fact\key) != 0)) || (const_fact != 0 && (const_fact\key = 0 || c.strcmp(class_fact\key, const_fact\key) != 0)) || c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
         return: 1
 
     table_name: lm_trans_registry_relation_name_new(function_name, ".return")
@@ -3058,7 +3144,7 @@ fn: lm_trans_registry_materialize_generated_return_source_row (
         status: 1
     if: status = 0
         descriptor: lm_table_descriptor_new_empty_slice(table_name, c.strlen(table_name))
-        if: descriptor = 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "name", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "class", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "address-depth", "size_t", "size_t") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "const", "int", "int") != 0
+        if: descriptor = 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "name", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "class", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "address-depth", "size_t", "size_t") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "array-rank", "size_t", "size_t") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "const", "int", "int") != 0
             status: 1
     ---
     lm_own_delete(table_name, 0)
@@ -3075,7 +3161,7 @@ fn: lm_trans_registry_materialize_generated_return_source_row (
         else:
             key_cell: 0
     ---
-    if: status = 0 && (lm_trans_table_row_take_generated_fact_cell(row, class_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, address_depth_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, const_fact) != 0)
+    if: status = 0 && (lm_trans_table_row_take_generated_fact_cell(row, class_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, address_depth_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, array_rank_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, const_fact) != 0)
         status: 1
     if: status = 0
         if: lm_table_descriptor_take_materialized_row(descriptor, row) != 0
@@ -3163,6 +3249,13 @@ fn: lm_trans_l4_callable_type_from_node (const: (LmP0Node: node); LmTransL4Calla
                 return: 0
             out\array_rank: out\array_rank + rank
             out\address_depth: out\address_depth + 1U
+            while: field != 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && field\value\as\atom\length != 0U && lm_trans_text_all_char(field\value\as\atom, '@')
+                if: field\value\as\atom\length > c.SIZE_MAX - out\address_depth
+                    return: 0
+                out\address_depth: out\address_depth + field\value\as\atom\length
+                field: field\next
+            if: field = 0 || field\value = 0
+                return: 0
             current: field\value
             continue
         ---
@@ -3176,6 +3269,7 @@ fn: lm_trans_registry_materialize_fn_descriptor_return (const: (LmP0Text: functi
     LmP0Text: return_name
     LmTransRegistryFact: class_fact
     LmTransRegistryFact: address_depth_fact
+    LmTransRegistryFact: array_rank_fact
     LmTransRegistryFact: const_fact
     int: status
 
@@ -3186,15 +3280,18 @@ fn: lm_trans_registry_materialize_fn_descriptor_return (const: (LmP0Text: functi
 
     class_fact: 0
     address_depth_fact: 0
+    array_rank_fact: 0
     const_fact: 0
     status: 0
     if: lm_trans_registry_push_owner_relation_text_with_fact(function_name, ".return.class", return_name, return_type\class_name, @ class_fact) != 0
         status: 1
     if: status = 0 && (return_type\address_depth != 0U || lm_trans_registry_owner_relation_has_key(function_name, "return.address-depth", return_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.address-depth", return_name, return_type\address_depth, @ address_depth_fact) != 0
         status: 1
+    if: status = 0 && (return_type\array_rank != 0U || lm_trans_registry_owner_relation_has_key(function_name, "return.array-rank", return_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.array-rank", return_name, return_type\array_rank, @ array_rank_fact) != 0
+        status: 1
     if: status = 0 && (return_type\is_const || lm_trans_registry_owner_relation_has_key(function_name, "return.const", return_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.const", return_name, (cast: size_t (return_type\is_const != 0)), @ const_fact) != 0
         status: 1
-    if: status = 0 && lm_trans_registry_materialize_generated_return_source_row(function_name, class_fact, address_depth_fact, const_fact) != 0
+    if: status = 0 && lm_trans_registry_materialize_generated_return_source_row(function_name, class_fact, address_depth_fact, array_rank_fact, const_fact) != 0
         status: 1
 
     lm_trans_l4_text_view_delete(@ return_name)
@@ -3205,6 +3302,7 @@ fn: lm_trans_registry_materialize_fn_descriptor_param (const: (LmP0Text: functio
     LmTransRegistryFact: class_fact
     LmTransRegistryFact: index_fact
     LmTransRegistryFact: address_depth_fact
+    LmTransRegistryFact: array_rank_fact
     LmTransRegistryFact: const_fact
     c.array: [32]: char fallback_name
     int: status
@@ -3227,6 +3325,7 @@ fn: lm_trans_registry_materialize_fn_descriptor_param (const: (LmP0Text: functio
     class_fact: 0
     index_fact: 0
     address_depth_fact: 0
+    array_rank_fact: 0
     const_fact: 0
     status: 0
     if: lm_trans_registry_push_owner_relation_text_with_fact(function_name, ".param.class", param_name, param\type\class_name, @ class_fact) != 0
@@ -3235,11 +3334,13 @@ fn: lm_trans_registry_materialize_fn_descriptor_param (const: (LmP0Text: functio
         status: 1
     if: status = 0 && (param\type\address_depth != 0U || lm_trans_registry_owner_relation_has_key(function_name, "param.address-depth", param_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.address-depth", param_name, param\type\address_depth, @ address_depth_fact) != 0
         status: 1
+    if: status = 0 && (param\type\array_rank != 0U || lm_trans_registry_owner_relation_has_key(function_name, "param.array-rank", param_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.array-rank", param_name, param\type\array_rank, @ array_rank_fact) != 0
+        status: 1
     if: status = 0 && (param\type\is_const || lm_trans_registry_owner_relation_has_key(function_name, "param.const", param_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.const", param_name, (cast: size_t (param\type\is_const != 0)), @ const_fact) != 0
         status: 1
     if: status = 0 && lm_trans_registry_note_class_present(param\type\class_name) != 0
         status: 1
-    if: status = 0 && lm_trans_registry_materialize_generated_param_source_row(function_name, class_fact, index_fact, address_depth_fact, const_fact) != 0
+    if: status = 0 && lm_trans_registry_materialize_generated_param_source_row(function_name, class_fact, index_fact, address_depth_fact, array_rank_fact, const_fact) != 0
         status: 1
     lm_trans_l4_text_view_delete(@ param_name)
 return: status

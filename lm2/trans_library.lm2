@@ -23,7 +23,7 @@ predef: "lm2/parser_abi.lm2"
 predef: "lm2/trans_internal_abi.lm2"
 import: "lm2/table_descriptor.lm2"
 
-include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+include: "<limits.h>" "<stdio.h>" "<stdlib.h>" "<string.h>"
 
 import: "lm2/trans_schema.lm2"
 

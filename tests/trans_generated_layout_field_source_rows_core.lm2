@@ -7,13 +7,13 @@ external:
 end: external
 
 fn: lm_test_generated_layout_field_source_rows_core () int
-    const: [6]: @: char suffixes
-    const: [6]: @: char source_paths
-    const: [6]: @: char relation_names
-    const: [6]: @: char value_column_names
-    const: [6]: @: char value_descriptors
-    const: [6]: @: char raw_payloads
-    const: [6]: @: char expected_payloads
+    c.array: const: [6]: @: char suffixes
+    c.array: const: [6]: @: char source_paths
+    c.array: const: [6]: @: char relation_names
+    c.array: const: [6]: @: char value_column_names
+    c.array: const: [6]: @: char value_descriptors
+    c.array: const: [6]: @: char raw_payloads
+    c.array: const: [6]: @: char expected_payloads
     const: LmRegistryViewRow: view_row
     LmTransRegistryFact: fact
     const: LmTableDescriptor: descriptor

@@ -1,0 +1,11 @@
+external:
+    fn: main () int
+        []: int captured 1 7
+
+        fn: read_captured () int
+            return: captured[0]
+        ---
+
+        return: read_captured()
+    end: main
+end: external

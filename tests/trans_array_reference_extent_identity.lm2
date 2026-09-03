@@ -1,0 +1,53 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: lm_test_array_identity ([]: int value) []: int
+return: value
+
+fn: lm_test_array_make () []: int
+    []: int made 3 7 8 9
+return: made
+
+external:
+    fn: main () int
+        []: int first 2 1 2; second 2 3 4
+        LmSlice: second_original second
+        LmSlice: returned lm_test_array_identity(first)
+        LmSlice: made lm_test_array_make()
+        @: LmSlice second_slot @ second
+        @: int first_items first\ptr
+        @: int second_items second\ptr
+        @: int made_items made\ptr
+        const: LmOwnAllocationDescriptor: made_header_descriptor
+        const: LmOwnAllocationDescriptor: made_backing_descriptor
+
+        if: first = 0 || second = 0 || returned = 0 || made = 0
+            return: 1
+        if: first = second || first\ptr = second\ptr || second_original != second
+            return: 2
+        if: returned != first
+            return: 3
+        if: second_slot = 0 || second_slot[0] != second || first_items[1] != 2 || second_items[0] != 3
+            return: 4
+        if: made\length != 3U || made_items[0] != 7 || made_items[2] != 9
+            return: 5
+
+        made_header_descriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), made)
+        made_backing_descriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), made_items)
+        if: made_header_descriptor = 0 || made_backing_descriptor = 0 || made_header_descriptor\owner != lm_message_thread_owner(c.lm_lmx_message_thread) || made_backing_descriptor\owner != lm_message_thread_owner(c.lm_lmx_message_thread)
+            return: 6
+
+        second: first
+        if: second != first || second_slot[0] != first
+            return: 7
+        if: second_original = first || second_items[1] != 4
+            return: 8
+        return: 0
+    end: main
+end: external

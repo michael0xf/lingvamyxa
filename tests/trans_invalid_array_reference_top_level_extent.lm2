@@ -1,0 +1,16 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+[]: int top_level_values 2 1 2
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

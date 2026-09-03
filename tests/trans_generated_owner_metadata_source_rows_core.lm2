@@ -28,10 +28,10 @@ fn: lm_test_generated_owner_metadata_value (size_t: index; const: (LmP0Text: own
 return: lm_trans_layout_backend_value(0, owner)
 
 fn: lm_test_generated_owner_metadata_source_rows_core () int
-    const: [3]: @: char table_names
-    const: [3]: @: char value_column_names
-    const: [3]: @: char value_descriptors
-    const: [3]: @: char expected_payloads
+    c.array: const: [3]: @: char table_names
+    c.array: const: [3]: @: char value_column_names
+    c.array: const: [3]: @: char value_descriptors
+    c.array: const: [3]: @: char expected_payloads
     const: LmRegistryViewRow: view_row
     const: LmRegistryViewRow: owner_present_view_row
     const: LmRegistryViewRow: kind_present_view_row

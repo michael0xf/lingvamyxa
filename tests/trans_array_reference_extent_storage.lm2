@@ -1,0 +1,66 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: lm_test_array_extent (@: int trace; int: marker; size_t: value) size_t
+    trace[0]: trace[0] * 10 + marker
+return: value
+
+external:
+    fn: main () int
+        int: trace 0
+        []: int trailing_extent 4 11 12
+        [3]: int: bracket_extent 21
+        [][]: int matrix 2 3 [[1 2 3] [4 5]]
+        [][][]: int cube 2 2 2 [[[1 2] [3 4]] [[5 6] [7]]]
+        [lm_test_array_extent(@ trace; 1; 2U)][lm_test_array_extent(@ trace; 2; 3U)][lm_test_array_extent(@ trace; 3; 4U)]: int: dynamic
+        @: int trailing_items trailing_extent\ptr
+        @: int bracket_items bracket_extent\ptr
+        @@: int matrix_items cast: (@@: int) matrix\ptr
+        @@@: int cube_items cast: (@@@: int) cube\ptr
+        @@@: int dynamic_items cast: (@@@: int) dynamic\ptr
+        const: LmOwnAllocationDescriptor: header_descriptor
+        const: LmOwnAllocationDescriptor: top_descriptor
+        const: LmOwnAllocationDescriptor: middle_descriptor
+        const: LmOwnAllocationDescriptor: leaf_descriptor
+
+        if: trailing_extent = 0 || bracket_extent = 0 || matrix = 0 || cube = 0 || dynamic = 0
+            return: 1
+        if: trailing_extent\length != 4U || bracket_extent\length != 3U || matrix\length != 2U || cube\length != 2U || dynamic\length != 2U
+            return: 2
+        if: trace != 123
+            return: 3
+        if: trailing_items = 0 || bracket_items = 0 || matrix_items = 0 || cube_items = 0 || dynamic_items = 0
+            return: 4
+
+        if: trailing_items[0] != 11 || trailing_items[1] != 12 || trailing_items[2] != 0 || trailing_items[3] != 0
+            return: 5
+        if: bracket_items[0] != 21 || bracket_items[1] != 0 || bracket_items[2] != 0
+            return: 6
+        if: matrix_items[0][0] != 1 || matrix_items[0][2] != 3 || matrix_items[1][0] != 4 || matrix_items[1][1] != 5 || matrix_items[1][2] != 0
+            return: 7
+        if: cube_items[0][0][0] != 1 || cube_items[0][1][1] != 4 || cube_items[1][0][1] != 6 || cube_items[1][1][0] != 7 || cube_items[1][1][1] != 0
+            return: 8
+        if: dynamic_items[1][2][3] != 0
+            return: 9
+
+        header_descriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), dynamic)
+        top_descriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), dynamic_items)
+        middle_descriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), dynamic_items[1])
+        leaf_descriptor: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), dynamic_items[1][2])
+        if: header_descriptor = 0 || header_descriptor\owner != lm_message_thread_owner(c.lm_lmx_message_thread)
+            return: 10
+        if: top_descriptor = 0 || top_descriptor\owner != lm_message_thread_owner(c.lm_lmx_message_thread) || top_descriptor\rank != 3U || top_descriptor\level != 0U || top_descriptor\count != 2U
+            return: 11
+        if: middle_descriptor = 0 || middle_descriptor\owner != lm_message_thread_owner(c.lm_lmx_message_thread) || middle_descriptor\rank != 3U || middle_descriptor\level != 1U || middle_descriptor\count != 3U
+            return: 12
+        if: leaf_descriptor = 0 || leaf_descriptor\owner != lm_message_thread_owner(c.lm_lmx_message_thread) || leaf_descriptor\rank != 3U || leaf_descriptor\level != 2U || leaf_descriptor\count != 4U
+            return: 13
+        return: 0
+    end: main
+end: external

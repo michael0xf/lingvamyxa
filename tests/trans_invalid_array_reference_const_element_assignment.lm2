@@ -1,0 +1,7 @@
+external:
+    fn: main () int
+        const: [2]: int: values 1 2
+        values[0]: 3
+        return: 0
+    end: main
+end: external

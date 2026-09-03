@@ -1,0 +1,9 @@
+fn: lm_test_array_for_index () []: int
+    []: int values 1 7
+return: values
+
+external:
+    fn: main () int
+        return: lm_test_array_for_index()[0]
+    end: main
+end: external

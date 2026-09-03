@@ -1,0 +1,35 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: lm_test_array_formal_name_hygiene ([]: int value) int
+    int: value_items 37
+    value[0]: value_items
+return: value[0]
+
+external:
+    fn: main () int
+        []: int first 1 1; second 1 2
+        LmSlice: second_original second
+        @: LmSlice second_slot @ second
+
+        second: first
+        second[0]: 11
+        if: second != first || first[0] != 11 || second[0] != 11
+            return: 1
+
+        second_slot[0]: second_original
+        second[0]: 13
+        if: second != second_original || second[0] != 13 || first[0] != 11
+            return: 2
+
+        if: lm_test_array_formal_name_hygiene(second) != 37 || second[0] != 37
+            return: 3
+        return: 0
+    end: main
+end: external

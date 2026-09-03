@@ -1,0 +1,8 @@
+external:
+    fn: main () int
+        []: int flat 1 7
+        [][]: int matrix 1 1 [[9]]
+        flat: matrix
+        return: 0
+    end: main
+end: external

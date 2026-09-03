@@ -1,0 +1,16 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+external:
+    fn: main () int
+        double: extent 2.0
+        []: int values extent
+        return: values = 0
+    end: main
+end: external

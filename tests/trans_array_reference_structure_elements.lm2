@@ -1,0 +1,26 @@
+Item:
+    int: value
+end: Item
+
+external:
+    fn: main () int
+        Item: first
+            value: 7
+        end: first
+        Item: second
+            value: 11
+        end: second
+        [2]: Item: values first second
+
+        if: values = 0 || values\length != 2U
+            return: 1
+        if: values[0] != first || values[1] != second
+            return: 2
+        if: values[0]\value != 7 || values[1]\value != 11
+            return: 3
+        values[0]: second
+        if: values[0] != second || values[0]\value != 11
+            return: 4
+        return: 0
+    end: main
+end: external

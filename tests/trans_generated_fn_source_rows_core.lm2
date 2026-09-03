@@ -75,11 +75,11 @@ fn: lm_test_generated_fn_path_cell_is (
 return: 1
 
 fn: lm_test_generated_fn_source_rows_core () int
-    [2]: LmTransRegistryFact descriptor_facts
-    [2]: LmTransRegistryFact receiver_facts
-    const: [2]: @: char keys
-    const: [2]: @: char descriptors
-    const: [2]: @: char receivers
+    c.array: [2]: LmTransRegistryFact descriptor_facts
+    c.array: [2]: LmTransRegistryFact receiver_facts
+    c.array: const: [2]: @: char keys
+    c.array: const: [2]: @: char descriptors
+    c.array: const: [2]: @: char receivers
     const: LmTableDescriptor: table
     const: LmTableRow: row
     const: LmTableCell: receiver_cell

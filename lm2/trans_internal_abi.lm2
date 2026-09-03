@@ -248,6 +248,7 @@ fn: lm_trans_collect_abi_return (
     int: return_key_policy
     const: @@(char out_class_name)
     @: size_t out_address_depth
+    @: size_t out_array_rank
     @: int out_is_const
 ) int
 
@@ -341,6 +342,27 @@ fn: lm_trans_guard_array_reference_range (
     const: @(char context)
 ) int
 
+fn: lm_trans_guard_array_reference_shape_range (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: expected_element_class
+    size_t: expected_rank
+    size_t: expected_element_address_depth
+    int: expected_element_is_const
+    const: @(char context)
+) int
+
+fn: lm_trans_emit_array_reference_items_expression (
+    FILE: file
+    const: LmP0Text: name
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_array_param_c_name_new (
+    const: LmTransFormalParam: param
+) @: char
+
 fn: lm_trans_emit_type_node (
     FILE: file
     const: LmP0Node: type_node
@@ -377,6 +399,20 @@ fn: lm_trans_namespace_declare_node_storage_binding (
     LmTransNamespace: namespace_
     const: LmP0Text: name
     const: LmP0Node: type_node
+) int
+
+fn: lm_trans_namespace_declare_c_name (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @: char kind
+    const: LmP0Text: c_name
+) int
+
+fn: lm_trans_namespace_declare_relation_text (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @: char relation_name
+    const: LmP0Text: payload
 ) int
 
 fn: lm_trans_emit_declaration_with_qualifier (
@@ -692,6 +728,9 @@ fn: lm_trans_namespace_mark_c_array_storage (
 fn: lm_trans_namespace_mark_array_reference (
     LmTransNamespace: namespace_
     const: LmP0Text: name
+    size_t: rank
+    size_t: element_address_depth
+    int: element_is_const
 ) int
 
 fn: lm_trans_namespace_mark_raw_pointer (
@@ -719,6 +758,27 @@ fn: lm_trans_namespace_value_is_emitted_c_array_storage (
 fn: lm_trans_namespace_value_is_array_reference (
     const: LmTransNamespace: namespace_
     const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_value_array_reference_rank (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+
+fn: lm_trans_namespace_value_array_reference_element_address_depth (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+
+fn: lm_trans_namespace_value_array_reference_element_is_const (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_value_array_reference_element_type (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    LmP0Text: out_type
 ) int
 
 fn: lm_trans_namespace_value_is_raw_pointer (

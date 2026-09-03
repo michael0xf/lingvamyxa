@@ -1,0 +1,18 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: lm_test_quoted_array_formal ([]: int `array value`) int
+return: `array value` = 0
+
+external:
+    fn: main () int
+        []: int values 2 3 7
+        return: lm_test_quoted_array_formal(values)
+    end: main
+end: external

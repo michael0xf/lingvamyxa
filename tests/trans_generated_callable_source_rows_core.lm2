@@ -45,10 +45,10 @@ fn: lm_test_generated_callable_path_cell_is (
 return: 1
 
 fn: lm_test_generated_callable_source_rows_core () int
-    const: [2]: @: char keys
-    const: [3]: @: char table_names
-    const: [3]: @: char value_descriptors
-    const: [3]: @: char payloads
+    c.array: const: [2]: @: char keys
+    c.array: const: [3]: @: char table_names
+    c.array: const: [3]: @: char value_descriptors
+    c.array: const: [3]: @: char payloads
     const: LmTableDescriptor: table
     const: LmTableRow: row
     const: LmTableCell: partial_cell

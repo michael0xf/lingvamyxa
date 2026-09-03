@@ -10618,7 +10618,7 @@ both to an explicitly array-shaped field declaration and to an inferred field
 whose initializer is an existing ArrayReference. The hosted translator must
 diagnose either case before emitting a C typedef, allocation or initializer; it
 must not discard the shape and lower the initializer as a scalar or raw C
-address. Support remains pending the ordinary ArrayReference migration.
+address. Support remains pending dedicated ArrayReference-field projection.
 
 Name-only compatibility also does not imply that two hosted C layouts are
 interchangeable. Source-semantically, an anonymous StructureReference whose
@@ -12394,9 +12394,10 @@ lifetime and surviving ownership edges, not source spelling or the C scope
 selected by a particular lowering.
 
 The current root-arena bootstrap chooses the Message Thread root for explicitly
-constructed local named Structures, `fm` result Structures, Array values, and
-closure environments and descriptors. Named-Structure and physical-`merge:`
-descriptor declarations allocate none of those values.
+constructed local named Structures, `fm` result Structures, admitted local
+Array values in managed Message Thread contexts, and closure environments and
+descriptors. Named-Structure and physical-`merge:` descriptor declarations
+allocate none of those values.
 This coarse choice intentionally outlives every ordinary function return. It
 may retain memory longer than a future precise implementation, but it preserves
 identity and prevents a local Structure from becoming a dangling stack value.
@@ -13164,13 +13165,14 @@ where the allocation is semantically part of an owner region.
 19.29.12.2. Current Root-Arena Materialization
 
 The current migrated paths allocate explicitly constructed local named
-Structures, `fm` result Structures, arena-backed Array values, and closure
-environments/descriptors in the root Message Thread arena. A named-Structure or
-physical-`merge:` descriptor declaration performs no allocation. Remaining
-generic top-level value/backing paths and non-source runtime tables may still
-use static C-backed representations. Those paths are separate implementation
-debt and must migrate to module/root-arena materialization where they represent
-ordinary source values.
+Structures, `fm` result Structures, admitted local ordinary Arrays in managed
+Message Thread contexts (including extent-bearing `[]:` declarations), and
+closure environments/descriptors in the root Message Thread arena. A
+named-Structure or physical-`merge:` descriptor declaration performs no
+allocation. Remaining generic top-level value/backing paths and non-source
+runtime tables may still use static C-backed representations. Those paths are
+separate implementation debt and must migrate to module/root-arena
+materialization where they represent ordinary source values.
 
 Conceptual generated form for an ordinary local Structure is:
 
@@ -14916,14 +14918,51 @@ element is rejected.
 The hosted bootstrap provides this exact `c.array` receiver. Intentional raw
 arrays in production bootstrap code and low-level fixtures use `c.array`,
 including buffers that require C array-to-pointer decay, `sizeof(array)` or a
-raw-pointer ABI. Legacy direct C-array lowering paths for remaining standalone
-`[]:` declarations are pending ArrayReference migration and do not define
-source semantics; ordinary `[]:` continues to mean ArrayReference construction.
-During this preparatory step, the strict boundary classification therefore
-applies to `c.array`, admitted `LmSlice`-backed ArrayReferences and
-ArrayReference-returning callables. Historical standalone fixed `[]:`
-declarations are removed by the following ArrayReference migration, not
-reclassified as normative raw storage here.
+raw-pointer ABI. `c.array` remains C storage and is not affected by the ordinary
+ArrayReference lowering described below.
+
+In the current hosted migration stage, an admitted ordinary local `[]:`
+declaration inside a managed function materializes a persistent `LmSlice`
+Array header plus arena-owned backing storage in the executing Message Thread's
+root owner arena (the generated root actor's arena at process entry). This
+applies to both trailing extents and payload-bearing bracket groups and to
+repeated declarations. Extent expressions are evaluated exactly once in source
+order. The current bootstrap admits statically typed integer extents in the
+non-negative `long long` range; malformed or out-of-range C99 integer literals
+are rejected before C emission, and a negative runtime result enters the hosted
+construction-failure path before any backing allocation. Untyped `c.*` atoms
+and calls are not admitted as ArrayReference extents in this stage, except for
+the dedicated `c.sizeof(...)` expression form. Each repeated binding
+receives a distinct header, and any backing
+allocations created for it are distinct rather than shared. Backing storage is
+initially zero, after which present initializer elements are assigned in source
+order; a multidimensional initializer uses explicit nested groups in this
+conservative bootstrap. The hosted header currently stores only `ptr` and the
+first-dimension `length`. The translator separately tracks binding-local rank,
+element type/address depth and constness; when statically known, it checks them
+at typed argument, return and whole-reference-assignment boundaries. Passing,
+returning or assigning the ArrayReference publishes the existing header and
+does not copy its backing. Prefix `@` applied to the binding addresses the
+ArrayReference slot, while `arrayReference\ptr` remains the explicit raw-backing
+bridge described below.
+
+This stage deliberately does not materialize an ordinary top-level `[]:` value.
+The hosted translator rejects that form until a module initializer can run once
+after root-arena attachment and before worker actors become observable. It also
+rejects ordinary Array construction in an external function that has no managed
+Message Thread context. The current unchecked indexing projection accepts only
+an unquoted direct ArrayReference binding followed by enough immediate bracket
+suffixes to consume every rank. An exact-quoted or parenthesized reference or a
+callable result must first be rebound to an admitted unquoted ArrayReference
+binding before a complete index chain is used. A chain that consumes fewer
+ranks is rejected until partial-index Array views are implemented.
+Capturing an ordinary ArrayReference through a closure environment, runtime
+element descriptors, complete runtime rank/shape/stride/storage metadata in the
+Array header, runtime bounds checking for ArrayReference indexing at every rank,
+complete multidimensional shape checking and partial-index Array views remain
+pending hosted work. Allocation descriptors record owner, count, rank and level
+for current backing allocations, but that implementation metadata does not by
+itself complete the source-level view contract.
 
 The current hosted validator deliberately accepts a conservative subset of C
 constant expressions before emitting top-level storage or an initialized VLA.

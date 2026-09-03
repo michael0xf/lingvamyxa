@@ -1,0 +1,10 @@
+fn: lm_test_take_mutable_array ([]: int values) int
+    values[0]: 9
+return: values[0]
+
+external:
+    fn: main () int
+        const: []: int values 1 7
+        return: lm_test_take_mutable_array(values)
+    end: main
+end: external
