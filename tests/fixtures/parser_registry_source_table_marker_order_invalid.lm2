@@ -1,0 +1,7 @@
+table:
+    name: markerOrderTable
+    source
+    columns: (class: class) (int: value)
+    rows:
+             key  1
+end: markerOrderTable

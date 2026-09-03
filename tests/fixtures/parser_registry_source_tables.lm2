@@ -1,4 +1,7 @@
 table:
+    {style: system}
+    source
+    {end: system}
     name: alpha
     columns: (class: class) (char: left) (int: number) (boolean: enabled)
     rows:
@@ -16,6 +19,7 @@ table:
 end: beta
 
 join: (alpha beta) gamma
+    source
     columns: (class: class) (char: left) (int: number) (boolean: enabled)
     rows:
              directKey  "direct-left"  5  0

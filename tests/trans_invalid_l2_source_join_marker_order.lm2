@@ -1,0 +1,21 @@
+L2:
+    table:
+        source
+        name: misplacedSourceJoinSeed
+        columns: (class: class) (int: value)
+        rows:
+                 seedKey  1
+    end: misplacedSourceJoinSeed
+
+    join: (misplacedSourceJoinSeed) misplacedSourceJoinTarget
+        columns: (class: class) (int: value)
+        source
+        rows:
+    end: misplacedSourceJoinTarget
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2

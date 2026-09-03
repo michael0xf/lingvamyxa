@@ -1,0 +1,22 @@
+L2:
+    table:
+        source
+        name: duplicateSourceJoinSeed
+        columns: (class: class) (int: value)
+        rows:
+                 seedKey  1
+    end: duplicateSourceJoinSeed
+
+    join: (duplicateSourceJoinSeed) duplicateSourceJoinTarget
+        source
+        source
+        columns: (class: class) (int: value)
+        rows:
+    end: duplicateSourceJoinTarget
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2

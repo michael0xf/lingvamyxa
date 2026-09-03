@@ -1,0 +1,14 @@
+table:
+    source
+    name: marked
+    columns: (class: class) (int: value)
+    rows:
+             markedKey  1
+end: marked
+
+table:
+    name: unmarked
+    columns: (class: class) (int: value)
+    rows:
+             unmarkedKey  2
+end: unmarked

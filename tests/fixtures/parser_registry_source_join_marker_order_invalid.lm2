@@ -1,0 +1,12 @@
+table:
+    name: markerOrderJoinSeed
+    columns: (class: class) (int: value)
+    rows:
+             key  1
+end: markerOrderJoinSeed
+
+join: (markerOrderJoinSeed) markerOrderJoin
+    columns: (class: class) (int: value)
+    source
+    rows:
+end: markerOrderJoin

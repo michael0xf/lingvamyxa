@@ -15,12 +15,14 @@ table:
 end: `lm.test.l2.join.statement.seed`
 
 join: (`lm.test.l2.join.namespace.seed`) namespace
+    source
     columns: (class: class) (class: `receiver.type`)
     rows:
              l2JoinDirect  `receiver.statement`
 end: namespace
 
 join: (`lm.test.l2.join.statement.seed`) `receiver.statement`
+    source
     columns: (class: class) (binding: receiver)
     rows:
              l2JoinDirect  lm_trans_statement_emit_assert

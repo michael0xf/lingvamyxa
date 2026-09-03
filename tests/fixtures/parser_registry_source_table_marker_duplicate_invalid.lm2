@@ -1,0 +1,8 @@
+table:
+    source
+    source
+    name: markerDuplicateTable
+    columns: (class: class) (int: value)
+    rows:
+             key  1
+end: markerDuplicateTable

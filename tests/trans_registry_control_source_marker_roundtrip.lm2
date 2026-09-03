@@ -1,0 +1,137 @@
+table:
+    source
+    name: `define.value`
+    columns: (class: class) (@: char value)
+    rows:
+             LM_UNUSED  "(void)"
+end: `define.value`
+
+import: "lm2/registry_control.lm2"
+
+fn: lm_test_registry_control_rejects_invalid_table_marker (const: @(char path)) int
+    LmRegistryControlError: error
+    LmP0Document: document
+    @: char text
+    int: status
+
+    error: lm_registry_control_error_new()
+    document: 0
+    text: 0
+    if: error = 0 || lm_p0_parse_file(path, @ document) != 0 || document = 0
+        lm_registry_control_error_delete(error)
+        lm_p0_document_destroy(document)
+        return: 1
+
+    text: lm_registry_control_document_to_lmx_alloc(document, error)
+    status: text != 0
+    lm_own_delete(text, 0)
+    lm_p0_document_destroy(document)
+    lm_registry_control_error_delete(error)
+return: status
+
+fn: lm_test_registry_control_direct_frame_column_spelling (
+    const: LmP0Document: document
+    LmRegistryControlError: error
+) int
+    const: LmP0Node: root
+    const: LmP0Field: field
+    const: LmP0Frame: table_frame
+    const: LmP0Frame: columns_frame
+    const: LmP0Node: descriptor
+    const: LmP0Node: direct_frame
+    @: char spelling
+    int: status
+
+    root: lm_p0_document_root(document)
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        return: 1
+    field: root\as\structure\first_field
+    if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME
+        return: 1
+    table_frame: field\value\as\frame
+    columns_frame: lm_registry_control_find_child_frame(table_frame, "columns")
+    if: columns_frame = 0
+        return: 1
+    descriptor: lm_registry_control_nth_visible_field(columns_frame\body, 0U)
+    if: descriptor = 0 || descriptor\kind != c.LM_P0_NODE_STRUCTURE
+        return: 1
+    direct_frame: lm_registry_control_nth_visible_field(descriptor\as\structure, 0U)
+    if: direct_frame = 0 || direct_frame\kind != c.LM_P0_NODE_FRAME
+        return: 1
+
+    spelling: lm_registry_control_column_spelling_alloc(direct_frame, error)
+    if: spelling = 0
+        return: 1
+    status: c.strcmp(spelling, "(class: class)") != 0
+    lm_own_delete(spelling, 0)
+return: status
+
+external:
+    fn: main () int
+        LmRegistryControlError: error 0
+        LmP0Document: first_document 0
+        LmP0Document: second_document 0
+        @: char first_text 0
+        @: char second_text 0
+        @: char marker
+        int: status
+
+        c.LM_UNUSED(c.lm_registry_control_text_equals_text)
+        c.LM_UNUSED(c.lm_registry_control_rename_files_column_descriptor)
+        status: 0
+        error: lm_registry_control_error_new()
+        if: error = 0
+            return: 1
+
+        if: lm_p0_parse_file("tests/fixtures/serializer_source_marker_roundtrip.lmx", @ first_document) != 0 || first_document = 0
+            status: 2
+        if: status = 0
+            first_text: lm_registry_control_document_to_lmx_alloc(first_document, error)
+            if: first_text = 0
+                status: 3
+            ---
+        ---
+        if: status = 0 && (lm_p0_parse_string(first_text, @ second_document) != 0 || second_document = 0)
+            status: 4
+        if: status = 0
+            second_text: lm_registry_control_document_to_lmx_alloc(second_document, error)
+            if: second_text = 0
+                status: 5
+            ---
+        ---
+        if: status = 0 && c.strcmp(first_text, second_text) != 0
+            status: 6
+
+        if: status = 0 && c.strstr(first_text, "table:\n    source\n    name: marked\n") = 0
+            status: 7
+        if: status = 0 && c.strstr(first_text, "table:\n    name: unmarked\n") = 0
+            status: 8
+        if: status = 0 && c.strstr(first_text, "table:\n    source\n    name: unmarked\n") != 0
+            status: 9
+        if: status = 0 && c.strstr(first_text, "    columns: (class: class)  (int: value)\n") = 0
+            status: 10
+
+        if: status = 0
+            marker: c.strstr(first_text, "    source\n")
+            if: marker = 0 || c.strstr(marker + 1, "    source\n") != 0
+                status: 11
+            ---
+        ---
+        if: status = 0 && lm_test_registry_control_direct_frame_column_spelling(first_document, error) != 0
+            status: 12
+        if: status = 0 && lm_test_registry_control_rejects_invalid_table_marker("tests/fixtures/parser_registry_source_table_marker_order_invalid.lm2") != 0
+            status: 13
+        if: status = 0 && lm_test_registry_control_rejects_invalid_table_marker("tests/fixtures/parser_registry_source_table_marker_duplicate_invalid.lm2") != 0
+            status: 14
+
+        if: status != 0 && error\message != 0
+            c.fprintf: c.stderr "registry-control source-marker roundtrip: %s\n" error\message
+
+        lm_own_delete(second_text, 0)
+        lm_p0_document_destroy(second_document)
+        lm_own_delete(first_text, 0)
+        lm_p0_document_destroy(first_document)
+        lm_registry_control_error_delete(error)
+        return: status
+    end: main
+end: external

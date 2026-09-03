@@ -246,6 +246,39 @@ fn: lm_table_nth_visible_field (const: (LmP0Structure: structure); size_t: index
 
 return: 0
 
+fn: lm_table_source_marker (
+    const: LmP0Frame: table_frame
+    @: int out_source_marker
+    LmTableError: error
+) int
+    const: LmP0Field: field
+    const: LmP0Field: first
+    const: LmP0Node: node
+
+    if: out_source_marker = 0
+        return: 0
+    out_source_marker[0]: 0
+    if: table_frame = 0 || table_frame\body = 0
+        return: 1
+
+    first: 0
+    field: table_frame\body\first_field
+    while: field != 0
+        node: field\value
+        if: lm_table_node_ignored(node) = 0
+            if: first = 0
+                first: field
+            if: node\kind = c.LM_P0_NODE_ATOM && lm_table_text_equals(node\as\atom\data, node\as\atom\length, "source")
+                if: field != first || out_source_marker[0] != 0
+                    lm_table_error_set(error, "table source marker must be the first present table body field and appear exactly once")
+                    return: 0
+                out_source_marker[0]: 1
+            ---
+        ---
+        field: field\next
+
+return: 1
+
 fn: lm_table_find_child_frame (const: (LmP0Frame: frame); const: @: char head) const: LmP0Frame
     const: LmP0Field: field
     const: LmP0Node: node
@@ -707,7 +740,10 @@ fn: lm_table_to_lmx_alloc (const: (LmP0Frame: table_frame); LmTableError: error)
     size_t: column_count
     size_t: row_count
     @: char result
+    int: source_marker
 
+    if: lm_table_source_marker(table_frame, @ source_marker, error) = 0
+        return: 0
     buffer: lm_table_buffer_new()
     if: buffer = 0
         lm_table_error_set(error, "out of memory while creating table formatter")
@@ -733,6 +769,8 @@ fn: lm_table_to_lmx_alloc (const: (LmP0Frame: table_frame); LmTableError: error)
     lm_table_end_name(table_frame, table_name_data, table_name_length, @ end_name_data, @ end_name_length)
 
     lm_table_buffer_append_cstr(buffer, "table:\n")
+    if: source_marker != 0
+        lm_table_buffer_append_cstr(buffer, "    source\n")
     lm_table_buffer_append_cstr(buffer, "    name: ")
     lm_table_buffer_append_text(buffer, table_name_data, table_name_length)
     lm_table_buffer_append_cstr(buffer, "\n")

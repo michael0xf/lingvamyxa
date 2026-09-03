@@ -1,0 +1,13 @@
+table:
+    name: markerDuplicateJoinSeed
+    columns: (class: class) (int: value)
+    rows:
+             key  1
+end: markerDuplicateJoinSeed
+
+join: (markerDuplicateJoinSeed) markerDuplicateJoin
+    source
+    source
+    columns: (class: class) (int: value)
+    rows:
+end: markerDuplicateJoin

@@ -4228,6 +4228,7 @@ static void lm_trans_l2_table_columns_destroy(struct LmMessageThread *lm_lmx_mes
 static int lm_trans_l2_source_read_columns(struct LmMessageThread *lm_lmx_message_thread, const LmP0Structure *body, const char *error_context, LmTransL4CallableType ***out_types, LmP0Text ***out_names, size_t *out_count);
 static int lm_trans_l2_table_read_columns(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *table_frame, LmTransL4CallableType ***out_types, LmP0Text ***out_names, size_t *out_count);
 static int lm_trans_l2_source_columns_registry_keyed(struct LmMessageThread *lm_lmx_message_thread, LmTransL4CallableType **column_types, LmP0Text **column_names, size_t column_count, int *out_registry_keyed);
+static int lm_trans_l2_body_source_marker(struct LmMessageThread *lm_lmx_message_thread, const LmP0Structure *body, const char *error_context, int *out_source_marker);
 static int lm_trans_l2_table_body_is_source_only(struct LmMessageThread *lm_lmx_message_thread, const LmP0Structure *body, const char *error_context, int *out_source_only);
 static const LmP0Frame * lm_trans_l2_table_rows_frame(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *table_frame);
 static int lm_trans_l2_table_row_count(struct LmMessageThread *lm_lmx_message_thread, const LmP0Frame *rows_frame, size_t column_count, size_t *out_row_count);
@@ -32299,28 +32300,36 @@ static int lm_trans_l2_source_columns_registry_keyed(struct LmMessageThread *lm_
     }
 }
 
-static int lm_trans_l2_table_body_is_source_only(struct LmMessageThread *lm_lmx_message_thread, const LmP0Structure *body, const char *error_context, int *out_source_only) {
+static int lm_trans_l2_body_source_marker(struct LmMessageThread *lm_lmx_message_thread, const LmP0Structure *body, const char *error_context, int *out_source_marker) {
     (void)lm_lmx_message_thread;
     const LmP0Field * first_field;
     const LmP0Field * field;
-    LmTransL4CallableType * *column_types;
-    LmP0Text * *column_names;
-    size_t column_count;
-    if (body == 0 || out_source_only == 0) {
+    if (body == 0 || error_context == 0 || out_source_marker == 0) {
         return 1;
     }
-    out_source_only[0] = 0;
+    out_source_marker[0] = 0;
     first_field = lm_trans_l2_structure_first_present_field(lm_lmx_message_thread, body);
     field = first_field;
     while (field != 0) {
         if (field -> value != 0 && field -> value -> kind == LM_P0_NODE_ATOM && lm_trans_text_equals(lm_lmx_message_thread, field -> value -> as -> atom, "source")) {
-            if (field != first_field || out_source_only[0] != 0) {
-                fprintf(stderr, "trans L2 table error: source marker must be the first table body field and appear exactly once\n");
+            if (field != first_field || out_source_marker[0] != 0) {
+                fprintf(stderr, "trans L2 %s error: source marker must be the first %s body field and appear exactly once\n", error_context, error_context);
                 return 1;
             }
-            out_source_only[0] = 1;
+            out_source_marker[0] = 1;
         }
         field = lm_trans_l2_structure_next_present_field(lm_lmx_message_thread, field);
+    }
+    return 0;
+}
+
+static int lm_trans_l2_table_body_is_source_only(struct LmMessageThread *lm_lmx_message_thread, const LmP0Structure *body, const char *error_context, int *out_source_only) {
+    (void)lm_lmx_message_thread;
+    LmTransL4CallableType * *column_types;
+    LmP0Text * *column_names;
+    size_t column_count;
+    if (lm_trans_l2_body_source_marker(lm_lmx_message_thread, body, error_context, out_source_only) != 0) {
+        return 1;
     }
     if (out_source_only[0] != 0) {
         return 0;
@@ -32549,7 +32558,11 @@ static int lm_trans_materialize_l2_table_source(struct LmMessageThread *lm_lmx_m
     LmP0Text * *column_names;
     size_t column_count;
     size_t row_count;
+    int source_marker;
     if (namespace_ == 0 || frame == 0) {
+        return 1;
+    }
+    if (lm_trans_l2_body_source_marker(lm_lmx_message_thread, frame -> body, "table", &source_marker) != 0) {
         return 1;
     }
     table_name = lm_trans_l2_table_name_atom(lm_lmx_message_thread, frame);
@@ -32678,16 +32691,23 @@ static int lm_trans_l2_join_body_rows(struct LmMessageThread *lm_lmx_message_thr
     const LmP0Frame * child;
     int have_columns;
     int have_rows;
+    int source_marker;
     if (body == 0 || out_rows == 0) {
         return 1;
     }
     out_rows[0] = 0;
+    if (lm_trans_l2_body_source_marker(lm_lmx_message_thread, body, "join", &source_marker) != 0) {
+        return 1;
+    }
     have_columns = 0;
     have_rows = 0;
     field = lm_trans_l2_structure_first_present_field(lm_lmx_message_thread, body);
+    if (source_marker != 0) {
+        field = lm_trans_l2_structure_next_present_field(lm_lmx_message_thread, field);
+    }
     while (field != 0) {
         if (field -> value == 0 || field -> value -> kind != LM_P0_NODE_FRAME) {
-            fprintf(stderr, "trans L2 join error: join body expects columns/rows frames\n");
+            fprintf(stderr, "trans L2 join error: join body expects an optional first source marker followed by columns/rows frames\n");
             return 1;
         }
         child = field -> value -> as -> frame;
@@ -32708,7 +32728,7 @@ static int lm_trans_l2_join_body_rows(struct LmMessageThread *lm_lmx_message_thr
                 out_rows[0] = child;
             }
             else {
-                fprintf(stderr, "trans L2 join error: join body expects columns/rows frames\n");
+                fprintf(stderr, "trans L2 join error: join body expects an optional first source marker followed by columns/rows frames\n");
                 return 1;
             }
         }

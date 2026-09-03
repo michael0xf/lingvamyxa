@@ -7624,31 +7624,42 @@ fn: lm_trans_l2_source_columns_registry_keyed (
     out_registry_keyed[0]: name_payload\length = 5U && c.memcmp(name_payload\data, "class", 5U) = 0
 return: 0
 
-fn: lm_trans_l2_table_body_is_source_only (
+fn: lm_trans_l2_body_source_marker (
     const: LmP0Structure: body
     const: @(char error_context)
-    @: int out_source_only
+    @: int out_source_marker
 ) int
     const: LmP0Field: first_field
     const: LmP0Field: field
-    @: LmTransL4CallableType column_types
-    @: LmP0Text column_names
-    size_t: column_count
 
-    if: body = 0 || out_source_only = 0
+    if: body = 0 || error_context = 0 || out_source_marker = 0
         return: 1
-    out_source_only[0]: 0
+    out_source_marker[0]: 0
 
     first_field: lm_trans_l2_structure_first_present_field(body)
     field: first_field
     while: field != 0
         if: field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_text_equals(field\value\as\atom, "source")
-            if: field != first_field || out_source_only[0] != 0
-                c.fprintf(c.stderr, "trans L2 table error: source marker must be the first table body field and appear exactly once\n")
+            if: field != first_field || out_source_marker[0] != 0
+                c.fprintf(c.stderr, "trans L2 %s error: source marker must be the first %s body field and appear exactly once\n", error_context, error_context)
                 return: 1
-            out_source_only[0]: 1
+            out_source_marker[0]: 1
         ---
         field: lm_trans_l2_structure_next_present_field(field)
+
+return: 0
+
+fn: lm_trans_l2_table_body_is_source_only (
+    const: LmP0Structure: body
+    const: @(char error_context)
+    @: int out_source_only
+) int
+    @: LmTransL4CallableType column_types
+    @: LmP0Text column_names
+    size_t: column_count
+
+    if: lm_trans_l2_body_source_marker(body, error_context, out_source_only) != 0
+        return: 1
 
     if: out_source_only[0] != 0
         return: 0
@@ -7872,8 +7883,11 @@ fn: lm_trans_materialize_l2_table_source (
     @: LmP0Text column_names
     size_t: column_count
     size_t: row_count
+    int: source_marker
 
     if: namespace_ = 0 || frame = 0
+        return: 1
+    if: lm_trans_l2_body_source_marker(frame\body, "table", @ source_marker) != 0
         return: 1
 
     table_name: lm_trans_l2_table_name_atom(frame)
@@ -7980,16 +7994,21 @@ fn: lm_trans_l2_join_body_rows (const: (LmP0Structure: body); const: @(LmP0Frame
     const: LmP0Frame: child
     int: have_columns
     int: have_rows
+    int: source_marker
 
     if: body = 0 || out_rows = 0
         return: 1
     out_rows[0]: 0
+    if: lm_trans_l2_body_source_marker(body, "join", @ source_marker) != 0
+        return: 1
     have_columns: 0
     have_rows: 0
     field: lm_trans_l2_structure_first_present_field(body)
+    if: source_marker != 0
+        field: lm_trans_l2_structure_next_present_field(field)
     while: field != 0
         if: field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME
-            c.fprintf(c.stderr, "trans L2 join error: join body expects columns/rows frames\n")
+            c.fprintf(c.stderr, "trans L2 join error: join body expects an optional first source marker followed by columns/rows frames\n")
             return: 1
         child: field\value\as\frame
         if: lm_trans_text_equals(child\head, "columns")
@@ -8005,7 +8024,7 @@ fn: lm_trans_l2_join_body_rows (const: (LmP0Structure: body); const: @(LmP0Frame
                 have_rows: 1
                 out_rows[0]: child
             else:
-                c.fprintf(c.stderr, "trans L2 join error: join body expects columns/rows frames\n")
+                c.fprintf(c.stderr, "trans L2 join error: join body expects an optional first source marker followed by columns/rows frames\n")
                 return: 1
             ---
         ---

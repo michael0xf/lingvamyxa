@@ -1620,6 +1620,7 @@ static void lm_registry_source_columns_destroy(struct LmMessageThread *lm_lmx_me
 static int lm_registry_source_columns_from_frame(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, LmRegistrySourceColumn **columns, size_t columns_capacity, size_t *out_count);
 static int lm_registry_source_validate_named_trailer(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, const LmP0Frame *frame, const LmP0Text *expected_name);
 static int lm_registry_source_rows_from_frame(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame, const LmP0Text *table_name, LmRegistrySourceColumn **columns, size_t column_count);
+static int lm_registry_source_body_first_after_optional_source(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, const LmP0Structure *body, const char *marker_error, const LmP0Field **out_first);
 static int lm_registry_source_table_from_frame(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame);
 static int lm_registry_source_seen_table_add(struct LmMessageThread *lm_lmx_message_thread, LmOwnPtrStack *seen, const LmP0Text *table_name);
 static int lm_registry_source_check_table_frame_unique(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, const LmP0Frame *frame, LmOwnPtrStack *seen);
@@ -2385,11 +2386,50 @@ static int lm_registry_source_rows_from_frame(struct LmMessageThread *lm_lmx_mes
     return 1;
 }
 
+static int lm_registry_source_body_first_after_optional_source(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, const LmP0Structure *body, const char *marker_error, const LmP0Field **out_first) {
+    (void)lm_lmx_message_thread;
+    const LmP0Field * field;
+    const LmP0Field * first;
+    const LmP0Node * node;
+    int source_seen;
+    if (out_first == 0) {
+        return 1;
+    }
+    out_first[0] = 0;
+    first = 0;
+    source_seen = 0;
+    field = 0;
+    if (body != 0) {
+        field = body -> first_field;
+    }
+    while (field != 0) {
+        node = field -> value;
+        if (node != 0 && lm_registry_source_node_is_ignored(lm_lmx_message_thread, node) == 0) {
+            if (node -> kind == LM_P0_NODE_ATOM && lm_registry_source_text_equals(lm_lmx_message_thread, lm_registry_source_node_atom(lm_lmx_message_thread, node), "source") != 0) {
+                if (source_seen != 0 || first != 0) {
+                    lm_registry_source_error(lm_lmx_message_thread, loader, marker_error);
+                    return 1;
+                }
+                source_seen = 1;
+            }
+            else {
+                if (first == 0) {
+                    first = field;
+                }
+            }
+        }
+        field = field -> next;
+    }
+    out_first[0] = first;
+    return 0;
+}
+
 static int lm_registry_source_table_from_frame(struct LmMessageThread *lm_lmx_message_thread, const LmRegistrySourceLoader *loader, void *context, const LmP0Frame *frame) {
     (void)lm_lmx_message_thread;
     const LmP0Field * field;
     const LmP0Node * node;
     const LmP0Frame * node_frame;
+    const LmP0Structure * body;
     LmRegistrySourceColumn * *columns;
     const LmP0Text * table_name;
     size_t column_count;
@@ -2399,6 +2439,11 @@ static int lm_registry_source_table_from_frame(struct LmMessageThread *lm_lmx_me
     int status;
     if (frame == 0 || lm_registry_source_text_equals(lm_lmx_message_thread, lm_registry_source_frame_head(lm_lmx_message_thread, frame), "table") == 0) {
         return 0;
+    }
+    body = lm_registry_source_frame_body(lm_lmx_message_thread, frame);
+    field = 0;
+    if (lm_registry_source_body_first_after_optional_source(lm_lmx_message_thread, loader, body, "table source marker must be the first present table body field and appear exactly once", &field) != 0) {
+        return -1;
     }
     columns = lm_own_new_zero(128U * sizeof(columns[0]));
     if (columns == 0) {
@@ -2410,7 +2455,6 @@ static int lm_registry_source_table_from_frame(struct LmMessageThread *lm_lmx_me
     have_rows = 0;
     column_count = 0U;
     table_name = 0;
-    field = lm_registry_source_frame_body(lm_lmx_message_thread, frame) -> first_field;
     while (field != 0) {
         node = field -> value;
         if (node != 0 && lm_registry_source_node_is_ignored(lm_lmx_message_thread, node) == 0) {
@@ -2680,6 +2724,9 @@ static int lm_registry_source_join_from_frame(struct LmMessageThread *lm_lmx_mes
         lm_registry_source_error(lm_lmx_message_thread, loader, "join expects (sourceTables...) targetName and a table fragment body");
         return -1;
     }
+    if (lm_registry_source_body_first_after_optional_source(lm_lmx_message_thread, loader, body, "join source marker must be the first present join body field and appear exactly once", &field) != 0) {
+        return -1;
+    }
     columns = lm_own_new_zero(128U * sizeof(columns[0]));
     if (columns == 0) {
         lm_registry_source_error(lm_lmx_message_thread, loader, "out of memory while reading join columns");
@@ -2689,7 +2736,6 @@ static int lm_registry_source_join_from_frame(struct LmMessageThread *lm_lmx_mes
     have_rows = 0;
     rows_frame = 0;
     column_count = 0U;
-    field = lm_registry_source_next_present_field(lm_lmx_message_thread, body -> first_field);
     while (field != 0) {
         node = field -> value;
         if (node != 0 && lm_registry_source_node_is_ignored(lm_lmx_message_thread, node) == 0) {

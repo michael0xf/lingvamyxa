@@ -1,0 +1,16 @@
+L2:
+    table:
+        source
+        source
+        name: duplicateSourceTableMarker
+        columns: (int: key) (int: value)
+        rows:
+                 1  2
+    end: duplicateSourceTableMarker
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2
