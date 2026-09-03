@@ -1,0 +1,45 @@
+import: "lm2/trans_library.lm2"
+
+external:
+    fn: main () int
+        return: lm_test_l2_bootstrap_source_marker_core()
+    end: main
+end: external
+
+fn: lm_test_l2_bootstrap_source_marker_core () int
+    const: @(char source_path)
+    LmP0Document: document
+    const: LmP0Node: root
+    size_t: loaded_fact_count
+    size_t: view_fact_count
+    size_t: source_table_count
+    size_t: mutation_generation
+    size_t: early_site_count
+    int: status
+
+    source_path: "tests/fixtures/l2_bootstrap_unmarked_table_invalid.lm2"
+    document: 0
+    status: 0
+
+    if: lm_trans_registry_load_for_source("tests/trans_l2_bootstrap_source_marker_core.lm2") != 0 || lm_p0_parse_file(source_path, @ document) != 0 || document = 0
+        if: document != 0
+            lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+
+    root: lm_p0_document_root(document)
+    loaded_fact_count: lm_trans_registry\loaded_fact_count
+    view_fact_count: lm_registry_view_fact_count(lm_trans_registry\view)
+    source_table_count: lm_registry_view_source_table_count(lm_trans_registry\view)
+    mutation_generation: lm_trans_registry\view\mutation_generation
+    early_site_count: lm_trans_registry\early_l2_source_sites\count
+    if: root = 0 || lm_trans_materialize_l2_bootstrap_root(root, source_path) = 0
+        status: 1
+    if: status = 0 && (lm_trans_registry\loaded_fact_count != loaded_fact_count || lm_registry_view_fact_count(lm_trans_registry\view) != view_fact_count || lm_registry_view_source_table_count(lm_trans_registry\view) != source_table_count || lm_trans_registry\view\mutation_generation != mutation_generation || lm_trans_registry\early_l2_source_sites\count != early_site_count)
+        status: 1
+    if: status = 0 && (lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "LmBootstrapMarkerBoundarySource", 31U) != 0 || lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "LmBootstrapMarkerBoundaryRuntime", 32U) != 0)
+        status: 1
+
+    lm_p0_document_destroy(document)
+    lm_trans_registry_destroy()
+return: status

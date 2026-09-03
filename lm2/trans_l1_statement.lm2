@@ -7597,33 +7597,6 @@ fn: lm_trans_l2_table_read_columns (
         return: 1
 return: lm_trans_l2_source_read_columns(table_frame\body, "table", out_types, out_names, out_count)
 
-fn: lm_trans_l2_source_columns_registry_keyed (
-    @: LmTransL4CallableType column_types
-    @: LmP0Text column_names
-    size_t: column_count
-    @: int out_registry_keyed
-) int
-    LmP0Text: name_payload
-
-    if: out_registry_keyed = 0
-        return: 1
-    out_registry_keyed[0]: 0
-    if: column_types = 0 || column_names = 0 || column_count = 0U || column_types[0] = 0 || column_names[0] = 0 || column_types[0]\class_name = 0
-        return: 1
-    if: column_types[0]\address_depth != 0U || column_types[0]\is_const != 0 || column_types[0]\array_rank != 0U
-        return: 0
-
-    name_payload: lm_trans_text_ref_new_cstr("")
-    if: name_payload = 0
-        lm_trans_text_ref_destroy(@ name_payload)
-        return: 1
-    finally: lm_trans_text_ref_destroy(@ name_payload)
-
-    if: lm_trans_registry_identifier_value(column_names[0], name_payload) = 0
-        return: 1
-    out_registry_keyed[0]: name_payload\length = 5U && c.memcmp(name_payload\data, "class", 5U) = 0
-return: 0
-
 fn: lm_trans_l2_body_source_marker (
     const: LmP0Structure: body
     const: @(char error_context)
@@ -7654,24 +7627,7 @@ fn: lm_trans_l2_table_body_is_source_only (
     const: @(char error_context)
     @: int out_source_only
 ) int
-    @: LmTransL4CallableType column_types
-    @: LmP0Text column_names
-    size_t: column_count
-
-    if: lm_trans_l2_body_source_marker(body, error_context, out_source_only) != 0
-        return: 1
-
-    if: out_source_only[0] != 0
-        return: 0
-
-    column_types: 0
-    column_names: 0
-    column_count: 0U
-    finally: lm_trans_l2_table_columns_destroy(column_types, column_names, column_count)
-    if: lm_trans_l2_source_read_columns(body, error_context, @ column_types, @ column_names, @ column_count) != 0
-        return: 1
-
-return: lm_trans_l2_source_columns_registry_keyed(column_types, column_names, column_count, out_source_only)
+return: lm_trans_l2_body_source_marker(body, error_context, out_source_only)
 
 fn: lm_trans_l2_table_rows_frame (const: (LmP0Frame: table_frame)) const: LmP0Frame
     const: LmP0Frame: rows_frame
@@ -7889,6 +7845,9 @@ fn: lm_trans_materialize_l2_table_source (
         return: 1
     if: lm_trans_l2_body_source_marker(frame\body, "table", @ source_marker) != 0
         return: 1
+    if: source_marker = 0
+        c.fprintf(c.stderr, "trans L2 table error: source materialization requires an explicit first source marker\n")
+        return: 1
 
     table_name: lm_trans_l2_table_name_atom(frame)
     if: table_name = 0
@@ -7946,6 +7905,17 @@ fn: lm_trans_l2_join_header (
         c.fprintf(c.stderr, "trans L2 join error: unexpected fields after join body\n")
         return: 1
 return: 0
+
+fn: lm_trans_l2_join_is_source_only (const: (LmP0Frame: frame); @: int out_source_only) int
+    const: LmP0Structure: sources
+    const: LmP0Structure: body
+    const: LmP0Text: target_name
+
+    if: out_source_only = 0 || lm_trans_l2_join_header(frame, @ sources, @ target_name, @ body) != 0
+        return: 1
+    c.LM_UNUSED(sources)
+    c.LM_UNUSED(target_name)
+return: lm_trans_l2_body_source_marker(body, "join", out_source_only)
 
 fn: lm_trans_l2_join_sources_ready (
     LmTransNamespace: namespace_
@@ -8307,12 +8277,18 @@ fn: lm_trans_materialize_l2_join_source (LmTransNamespace: namespace_; const: (L
     LmTableDescriptor: existing
     const: LmTableDescriptor: snapshot_source
     int: candidate_is_target
+    int: source_marker
     int: status
 
     if: namespace_ = 0 || frame = 0 || c.lm_trans_registry = 0 || lm_trans_namespace_registry_view(namespace_) != c.lm_trans_registry->view
         return: 1
     view: c.lm_trans_registry->view
-    if: view = 0 || lm_trans_l2_join_header(frame, @ sources, @ target_name, @ body) != 0 || lm_trans_l2_join_body_rows(body, @ rows_frame) != 0
+    if: view = 0 || lm_trans_l2_join_header(frame, @ sources, @ target_name, @ body) != 0 || lm_trans_l2_body_source_marker(body, "join", @ source_marker) != 0
+        return: 1
+    if: source_marker = 0
+        c.fprintf(c.stderr, "trans L2 join error: source materialization requires an explicit first source marker\n")
+        return: 1
+    if: lm_trans_l2_join_body_rows(body, @ rows_frame) != 0
         return: 1
 
     column_types: 0
@@ -8391,10 +8367,15 @@ fn: lm_trans_materialize_l2_join_source (LmTransNamespace: namespace_; const: (L
 return: 0
 
 fn: lm_trans_declare_l2_join_mode (LmTransNamespace: namespace_; const: (LmP0Frame: frame); int: materialize_source) int
-    if: lm_trans_validate_l2_join_frame(frame) != 0
+    int: source_only
+
+    if: lm_trans_validate_l2_join_frame(frame) != 0 || lm_trans_l2_join_is_source_only(frame, @ source_only) != 0
         return: 1
     if: lm_trans_l2_table_materialization_suppression_depth > 0
         c.fprintf(c.stderr, "trans L2 join error: joins are not allowed in os/ifdef branches\n")
+        return: 1
+    if: source_only = 0
+        c.fprintf(c.stderr, "trans L2 join error: runtime join lowering is not implemented\n")
         return: 1
     if: materialize_source = 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)
         return: 0
@@ -8505,7 +8486,7 @@ fn: lm_trans_declare_l2_table_mode (
         return: 1
     if: source_only = 0 && lm_trans_declare_l2_table_binding(namespace_, frame) != 0
         return: 1
-    if: materialize_source = 0 || lm_trans_l2_table_materialization_suppression_depth > 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)
+    if: source_only = 0 || materialize_source = 0 || lm_trans_l2_table_materialization_suppression_depth > 0 || (lm_trans_current_source_path != 0 && lm_trans_registry_path_is_predefined(lm_trans_current_source_path) != 0)
         return: 0
 return: lm_trans_materialize_l2_table_source(namespace_, frame, 0)
 

@@ -471,20 +471,24 @@ declared bindings must be visible before later declarations:
         "receivers.lm2"
     end: predef
 
-Before the module prelude is planned, direct `table:` and `join:` Frames on the
-current L2 or L3 module surface construct ordinary Table values in source order. For an
-implicit `.lm2` or `.lm3` module this is the file root; for a mixed or
-explicitly wrapped source it is the body of each explicit `L2:` or `L3:` Frame.
-The early scan does not descend into conditional, guard, function or other
-receiver bodies. The ordinary declaration pass still validates each Frame and
-creates any explicitly requested Table binding, but it does not reconstruct a
-source site that the early pass already completed. No row, column or cell
-becomes a namespace binding during this prepass.
+Before the module prelude is planned, direct `table:` and `join:` Frames whose
+body begins with `source` construct translation-time/module-owned Table values
+in source order. For an implicit `.lm2` or `.lm3` module this scan covers the
+file root; for a mixed or explicitly wrapped source it covers the body of each
+explicit `L2:` or `L3:` Frame. An unmarked Table or join is an ordinary runtime
+construction site and is left to the ordinary declaration and emission passes;
+its column names and descriptors never opt it into the early scan. The early
+scan does not descend into conditional, guard, function or other receiver
+bodies. The ordinary declaration pass still validates each Frame and creates
+any explicitly requested Table binding, but it does not reconstruct a source
+site that the early pass already completed. No row, column or cell becomes a
+namespace binding during this prepass.
 
-The current local-source early prepass scans only implicit or explicit L2
-surfaces. Ordinary declaration can still materialize `table:`/`join:` on an
-explicit L3 surface. Hoisted implicit-`.lm3` handling and `.lm3` `predef`
-targets remain implementation work; this is not a semantic restriction of L3.
+The current local-source early prepass scans source-marked Frames only on
+implicit or explicit L2 surfaces. Ordinary declaration can still materialize a
+source-marked `table:`/`join:` on an explicit L3 surface. Hoisted implicit-`.lm3`
+handling and `.lm3` `predef` targets remain implementation work; this is not a
+semantic restriction of L3.
 
 A `table:` may put the bare atom `source` first in its direct body:
 
@@ -503,10 +507,11 @@ table-body field and appear exactly once; a misplaced or duplicate marker is an
 error. It is a projection/lifetime option for this Table, not another semantic
 document kind.
 
-An early local `join:` is constructed only when every source Table binding is
-already visible from the initial namespace, a selected `predef`, or preceding
-local declarations. If an ordinary `import:` will provide a missing source
-later, the join remains deferred to the ordinary declaration pass.
+An early local source-marked `join:` is constructed only when every source
+Table binding is already visible from the initial namespace, a selected
+`predef`, or preceding local declarations. If an ordinary `import:` will
+provide a missing source later, the join remains deferred to the ordinary
+declaration pass. An unmarked join never enters this readiness check.
 
 `predef` has the path-list shape of `import`, but is a hoisted import. Before
 ordinary top-level lowering and before the module prelude is planned, its
@@ -558,6 +563,11 @@ The bootstrap parser may use explicit configuration Tables. Its automatic
 candidates and an explicit `LM_P0_REGISTRY` override currently accept `.lm2`
 modules only. This is an implementation loader restriction, not ambient
 language Registry semantics.
+
+The translator's earlier source-only bootstrap path is stricter: every root
+`table:` or `join:` Frame selected by that path must carry the first-body
+`source` marker. An unmarked Frame is diagnosed rather than silently ignored
+or inferred from a `class` column.
 
 0.1.2. Long Multi-Module Version
 

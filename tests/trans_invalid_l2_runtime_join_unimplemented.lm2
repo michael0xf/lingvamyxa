@@ -1,0 +1,20 @@
+L2:
+    table:
+        source
+        name: runtimeJoinSeed
+        columns: (class: class) (int: value)
+        rows:
+                 runtimeJoinSeedKey  7
+    end: runtimeJoinSeed
+
+    join: (runtimeJoinSeed) runtimeJoinTarget
+        columns: (class: class) (int: value)
+        rows:
+    end: runtimeJoinTarget
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L2

@@ -1,0 +1,19 @@
+L2:
+    table:
+        name: runtimeClassColumn
+        columns: (int: class) (int: value)
+        rows:
+                 7   11
+                 13  17
+    end: runtimeClassColumn
+
+    external:
+        fn: main () int
+            if: runtimeClassColumn\class != 7
+                return: 1
+            if: runtimeClassColumn\value != 11
+                return: 2
+            return: 0
+        end: main
+    end: external
+end: L2

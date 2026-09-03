@@ -1,0 +1,44 @@
+import: "lm2/trans_library.lm2"
+
+external:
+    fn: main () int
+        return: lm_test_l2_predef_source_marker_core()
+    end: main
+end: external
+
+fn: lm_test_l2_predef_source_marker_core () int
+    const: @(char source_path)
+    const: @(char source)
+    LmP0Document: document
+    const: LmP0Node: root
+    const: LmTableDescriptor: marked_table
+    size_t: source_table_count
+    size_t: early_site_count
+    int: status
+
+    source_path: "tests/trans_l2_predef_source_marker_core.lm2"
+    source: "table:\n    source\n    name: LmPredefMarkerBoundarySource\n    columns: (class: class) (int: value)\n    rows:\n             LmPredefMarkerBoundaryKey  7\nend: LmPredefMarkerBoundarySource\ntable:\n    name: LmPredefMarkerBoundaryRuntime\n    columns: (int: class) (int: value)\n    rows:\n             11  13\nend: LmPredefMarkerBoundaryRuntime\njoin: (LmPredefMarkerBoundarySource) LmPredefMarkerBoundaryJoin\n    columns: (class: class) (int: value)\n    rows:\nend: LmPredefMarkerBoundaryJoin\n"
+    document: 0
+    status: 0
+
+    if: lm_trans_registry_load_for_source(source_path) != 0 || lm_p0_parse_string(source, @ document) != 0 || document = 0
+        if: document != 0
+            lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+
+    root: lm_p0_document_root(document)
+    source_table_count: lm_registry_view_source_table_count(lm_trans_registry\view)
+    early_site_count: lm_trans_registry\early_l2_source_sites\count
+    if: root = 0 || lm_trans_materialize_l2_predef_root(root, source_path) != 0
+        status: 1
+
+    marked_table: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "LmPredefMarkerBoundarySource", 28U)
+    if: status = 0 && (marked_table = 0 || lm_table_descriptor_materialized_row_count(marked_table) != 1U || lm_registry_view_source_table_count(lm_trans_registry\view) != source_table_count + 1U || lm_trans_registry\early_l2_source_sites\count != early_site_count + 1U)
+        status: 1
+    if: status = 0 && (lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "LmPredefMarkerBoundaryRuntime", 29U) != 0 || lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "LmPredefMarkerBoundaryJoin", 26U) != 0)
+        status: 1
+
+    lm_p0_document_destroy(document)
+    lm_trans_registry_destroy()
+return: status

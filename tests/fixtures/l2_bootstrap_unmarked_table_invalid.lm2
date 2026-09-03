@@ -1,0 +1,14 @@
+table:
+    source
+    name: LmBootstrapMarkerBoundarySource
+    columns: (class: class) (int: value)
+    rows:
+             LmBootstrapMarkerBoundaryKey  7
+end: LmBootstrapMarkerBoundarySource
+
+table:
+    name: LmBootstrapMarkerBoundaryRuntime
+    columns: (int: class) (int: value)
+    rows:
+             11  13
+end: LmBootstrapMarkerBoundaryRuntime

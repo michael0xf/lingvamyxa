@@ -164,7 +164,53 @@ fn: lm_test_local_prepass_deferred_import_case () int
     lm_trans_registry_destroy()
 return: status
 
+fn: lm_test_local_prepass_unmarked_case () int
+    const: @(char source_path)
+    const: @(char source)
+    LmP0Document: document
+    const: LmP0Node: root
+    size_t: early_site_count
+    size_t: loaded_fact_count
+    size_t: view_fact_count
+    size_t: source_table_count
+    size_t: mutation_generation
+    int: status
+
+    source_path: "tests/trans_l2_local_source_prepass_core.lm2"
+    source: "table:\n    name: LmLocalPrepassRuntime\n    columns: (int: class) (int: value)\n    rows:\n             17  29\nend: LmLocalPrepassRuntime\njoin: (LmLocalPrepassRuntime) LmLocalPrepassRuntimeJoin\n    columns: (int: class) (int: value)\n    rows:\nend: LmLocalPrepassRuntimeJoin\n"
+    document: 0
+    status: 0
+
+    if: lm_trans_registry_load_for_source(source_path) != 0 || lm_p0_parse_string(source, @ document) != 0 || document = 0
+        if: document != 0
+            lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+
+    root: lm_p0_document_root(document)
+    if: root = 0 || lm_trans_registry_load_inline_root(root, source_path) != 0
+        status: 1
+
+    early_site_count: lm_trans_registry\early_l2_source_sites\count
+    loaded_fact_count: lm_trans_registry\loaded_fact_count
+    view_fact_count: lm_registry_view_fact_count(lm_trans_registry\view)
+    source_table_count: lm_registry_view_source_table_count(lm_trans_registry\view)
+    mutation_generation: lm_trans_registry\view\mutation_generation
+
+    if: status = 0 && (lm_trans_materialize_local_l2_source_root(root, source_path, 1) != 0 || lm_trans_materialize_local_l2_source_root(root, source_path, 1) != 0)
+        status: 1
+    if: status = 0 && (lm_trans_registry\early_l2_source_sites\count != early_site_count || lm_trans_registry\loaded_fact_count != loaded_fact_count || lm_registry_view_fact_count(lm_trans_registry\view) != view_fact_count || lm_registry_view_source_table_count(lm_trans_registry\view) != source_table_count || lm_trans_registry\view\mutation_generation != mutation_generation || lm_test_local_prepass_table("LmLocalPrepassRuntime") != 0 || lm_test_local_prepass_table("LmLocalPrepassRuntimeJoin") != 0)
+        status: 1
+    if: status = 0 && lm_trans_registry_assert_view_parity() != 0
+        status: 1
+
+    lm_p0_document_destroy(document)
+    lm_trans_registry_destroy()
+return: status
+
 fn: lm_test_l2_local_source_prepass_core () int
     if: lm_test_local_prepass_case() != 0
         return: 1
-return: lm_test_local_prepass_deferred_import_case()
+    if: lm_test_local_prepass_deferred_import_case() != 0
+        return: 1
+return: lm_test_local_prepass_unmarked_case()

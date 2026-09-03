@@ -77,11 +77,14 @@ return: rows\count
 fn: lm_test_l2_table_source_rows_core () int
     const: @(char source)
     const: @(char conflict_source)
+    const: @(char unmarked_source)
     LmP0Document: document
     LmP0Document: conflict_document
+    LmP0Document: unmarked_document
     LmTransNamespace: namespace_
     const: LmP0Frame: table_frame
     const: LmP0Frame: conflict_frame
+    const: LmP0Frame: unmarked_frame
     const: LmP0Frame: rows_frame
     const: LmP0Field: source_field
     const: LmP0Node: source_body_node
@@ -113,6 +116,7 @@ fn: lm_test_l2_table_source_rows_core () int
     const: LmTransRegistryFact: label_fact
     const: LmTransRegistryFact: body_fact
     LmP0Text: key_text
+    LmP0Text: unmarked_name
     size_t: loaded_fact_count
     size_t: view_fact_count
     size_t: source_table_count
@@ -130,10 +134,13 @@ fn: lm_test_l2_table_source_rows_core () int
 
     source: "table:\n    source\n    name: l2Source\n    columns: (class: class) (char: label) (node: body)\n    rows:\n             sampleKey  \"hello\"\n             payload:\n                 nested\n             end: payload\n             nodeKey:\n                 nestedKey\n             end: nodeKey\n             \"source-only\"\n             payload2:\n                 nested2\n             end: payload2\n             nativeText\n             nativeLabel:\n                 nestedLabel\n             end: nativeLabel\n             payload3:\n                 nested3\n             end: payload3\nend: l2Source\n"
     conflict_source: "table:\n    source\n    name: class\n    columns: (class: class) (class: kind)\n    rows:\n             LmL2BatchKindConflict opaqueReference\n             LmL2BatchKindConflict function\nend: class\n"
+    unmarked_source: "table:\n    name: markerOnlyRuntime\n    columns: (int: class) (int: value)\n    rows:\n             17  29\nend: markerOnlyRuntime\n"
     document: 0
     conflict_document: 0
+    unmarked_document: 0
     namespace_: 0
     key_text: 0
+    unmarked_name: 0
     status: 0
 
     if: lm_test_l2_table_source_registry_init() != 0
@@ -174,6 +181,17 @@ fn: lm_test_l2_table_source_rows_core () int
 
     descriptor: lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "l2Source", 8U)
     if: status = 0 && (descriptor = 0 || lm_table_descriptor_column_count(descriptor) != 3U || lm_table_descriptor_materialized_row_count(descriptor) != 3U)
+        status: 1
+
+    if: status = 0 && (lm_p0_parse_string(unmarked_source, @ unmarked_document) != 0 || unmarked_document = 0)
+        status: 1
+    unmarked_frame: 0
+    if: unmarked_document != 0
+        unmarked_frame: lm_test_l2_table_source_root_frame(unmarked_document)
+    unmarked_name: lm_trans_text_from_cstr("markerOnlyRuntime")
+    if: status = 0 && (unmarked_frame = 0 || unmarked_name = 0 || lm_trans_materialize_l2_table_source(namespace_, unmarked_frame, 0) = 0 || lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "markerOnlyRuntime", 17U) != 0)
+        status: 1
+    if: status = 0 && (lm_trans_declare_l2_table(namespace_, unmarked_frame) != 0 || lm_trans_namespace_find(namespace_, unmarked_name) = 0 || lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "markerOnlyRuntime", 17U) != 0)
         status: 1
     if: status = 0 && (lm_test_l2_table_source_column_is(lm_table_descriptor_column_at(descriptor, 0U), "class", "class", 0U, 0U, 0) = 0 || lm_test_l2_table_source_column_is(lm_table_descriptor_column_at(descriptor, 1U), "label", "char", 0U, 0U, 0) = 0 || lm_test_l2_table_source_column_is(lm_table_descriptor_column_at(descriptor, 2U), "body", "node", 0U, 0U, 0) = 0)
         status: 1
@@ -300,10 +318,13 @@ fn: lm_test_l2_table_source_rows_core () int
         status: 1
 
     lm_trans_text_ref_destroy(@ key_text)
+    lm_trans_text_ref_destroy(@ unmarked_name)
     lm_trans_namespace_delete(namespace_)
     if: document != 0
         lm_p0_document_destroy(document)
     if: conflict_document != 0
         lm_p0_document_destroy(conflict_document)
+    if: unmarked_document != 0
+        lm_p0_document_destroy(unmarked_document)
     lm_trans_registry_destroy()
 return: status

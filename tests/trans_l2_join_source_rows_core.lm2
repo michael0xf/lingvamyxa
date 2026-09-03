@@ -48,6 +48,38 @@ fn: lm_test_l2_join_relation_count (const: @(char table)) size_t
         return: 0U
 return: rows\count
 
+fn: lm_test_l2_join_unmarked_materializer_rejected (LmTransNamespace: namespace_) int
+    const: @(char source)
+    LmP0Document: document
+    const: LmP0Frame: frame
+    size_t: loaded_fact_count
+    size_t: view_fact_count
+    size_t: source_table_count
+    size_t: mutation_generation
+    int: status
+
+    source: "join: (LmL2UnmarkedJoinSource) LmL2UnmarkedJoinTarget\n    columns: (int: key) (int: value)\n    rows:\nend: LmL2UnmarkedJoinTarget\n"
+    document: 0
+    if: namespace_ = 0 || lm_p0_parse_string(source, @ document) != 0 || document = 0
+        if: document != 0
+            lm_p0_document_destroy(document)
+        return: 1
+
+    frame: lm_test_l2_join_root_frame_at(document, 0U)
+    loaded_fact_count: lm_trans_registry\loaded_fact_count
+    view_fact_count: lm_registry_view_fact_count(lm_trans_registry\view)
+    source_table_count: lm_registry_view_source_table_count(lm_trans_registry\view)
+    mutation_generation: lm_trans_registry\view\mutation_generation
+    status: 0
+
+    if: frame = 0 || lm_trans_materialize_l2_join_source(namespace_, frame) = 0
+        status: 1
+    if: status = 0 && (lm_trans_registry\loaded_fact_count != loaded_fact_count || lm_registry_view_fact_count(lm_trans_registry\view) != view_fact_count || lm_registry_view_source_table_count(lm_trans_registry\view) != source_table_count || lm_trans_registry\view\mutation_generation != mutation_generation || lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "LmL2UnmarkedJoinTarget", 22U) != 0 || lm_test_l2_join_relation_count("LmL2UnmarkedJoinTarget") != 0U)
+        status: 1
+
+    lm_p0_document_destroy(document)
+return: status
+
 fn: lm_test_l2_join_missing_source (LmTransNamespace: namespace_) int
     const: @(char source)
     LmP0Document: document
@@ -204,7 +236,7 @@ fn: lm_test_l2_join_emitter_is_source_only (LmTransNamespace: namespace_) int
     int: previous_depth
     int: status
 
-    source: "table:\n    name: LmL2RuntimeJoinSource\n    columns: (int: key) (int: value)\n    rows:\n             1  2\nend: LmL2RuntimeJoinSource\njoin: (LmL2RuntimeJoinSource) LmL2RuntimeJoinTarget\n    columns: (int: key) (int: value)\n    rows:\n             3  4\nend: LmL2RuntimeJoinTarget\n"
+    source: "table:\n    source\n    name: LmL2RuntimeJoinSource\n    columns: (int: key) (int: value)\n    rows:\n             1  2\nend: LmL2RuntimeJoinSource\njoin: (LmL2RuntimeJoinSource) LmL2RuntimeJoinTarget\n    source\n    columns: (int: key) (int: value)\n    rows:\n             3  4\nend: LmL2RuntimeJoinTarget\n"
     document: 0
     output: 0
     status: 0
@@ -441,6 +473,8 @@ fn: lm_test_l2_join_source_rows_core () int
     if: status = 0 && (lm_trans_registry\loaded_fact_count != loaded_fact_count || lm_registry_view_fact_count(lm_trans_registry\view) != view_fact_count || lm_registry_view_source_table_count(lm_trans_registry\view) != source_table_count || lm_trans_registry\view\mutation_generation != mutation_generation || lm_registry_view_class_count(lm_trans_registry\view) != class_count || lm_test_l2_join_relation_count("class") != class_relation_count || lm_test_l2_join_relation_count("class.kind") != class_kind_relation_count || lm_test_l2_join_relation_count("class.present") != class_present_relation_count || lm_registry_view_find_local_source_table_slice(lm_trans_registry\view, "class", 5U) != 0)
         status: 1
 
+    if: status = 0 && lm_test_l2_join_unmarked_materializer_rejected(namespace_) != 0
+        status: 1
     if: status = 0 && lm_test_l2_join_missing_source(namespace_) != 0
         status: 1
     if: status = 0 && lm_test_l2_join_incompatible_schema(namespace_) != 0
