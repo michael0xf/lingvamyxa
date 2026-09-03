@@ -1,4 +1,5 @@
 table:
+    source
     name: `forward.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -16,6 +17,7 @@ table:
 end: `forward.backend`
 
 table:
+    source
     name: `forward.backend`
     columns: (class: class) (class: kind)
     rows:
@@ -23,6 +25,7 @@ table:
 end: `forward.backend`
 
 table:
+    source
     name: `lm.test.forward.seed`
     columns: (class: class) (class: backend)
     rows:
@@ -30,11 +33,13 @@ table:
 end: `lm.test.forward.seed`
 
 join: (`lm.test.forward.seed`) `forward.backend`
+    source
     columns: (class: class) (class: backend)
     rows:
 end: `forward.backend`
 
 table:
+    source
     name: forward
     columns: (class: class) (class: backend) (int: marker)
     rows:
@@ -53,6 +58,7 @@ table:
 end: forward
 
 table:
+    source
     name: `forward.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -61,6 +67,7 @@ table:
 end: `forward.backend`
 
 table:
+    source
     name: `lm.test.forward.wide.seed`
     columns: (class: class) (class: backend) (int: marker)
     rows:
@@ -68,11 +75,13 @@ table:
 end: `lm.test.forward.wide.seed`
 
 join: (`lm.test.forward.wide.seed`) forward
+    source
     columns: (class: class) (class: backend) (int: marker)
     rows:
 end: forward
 
 table:
+    source
     name: forward
     columns: (class: class) (@: char backend) (int: marker)
     rows:
@@ -80,6 +89,7 @@ table:
 end: forward
 
 table:
+    source
     name: `layout.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -94,6 +104,7 @@ table:
 end: `layout.backend`
 
 table:
+    source
     name: LmTestForwardLayout
     columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
@@ -101,6 +112,7 @@ table:
 end: LmTestForwardLayout
 
 table:
+    source
     name: LmTestForwardJoined
     columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
@@ -108,6 +120,7 @@ table:
 end: LmTestForwardJoined
 
 table:
+    source
     name: LmTestForwardSchemaFallback
     columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
@@ -115,6 +128,7 @@ table:
 end: LmTestForwardSchemaFallback
 
 table:
+    source
     name: LmTestForwardWideLayout
     columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
@@ -122,6 +136,7 @@ table:
 end: LmTestForwardWideLayout
 
 table:
+    source
     name: LmTestForwardWideBackendOverlay
     columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
@@ -129,6 +144,7 @@ table:
 end: LmTestForwardWideBackendOverlay
 
 table:
+    source
     name: LmTestForwardWidePhysical
     columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
@@ -136,6 +152,7 @@ table:
 end: LmTestForwardWidePhysical
 
 table:
+    source
     name: LmTestForwardWideJoined
     columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
@@ -143,6 +160,7 @@ table:
 end: LmTestForwardWideJoined
 
 table:
+    source
     name: LmTestForwardWideSchemaFallback
     columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:

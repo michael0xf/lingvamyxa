@@ -25,11 +25,13 @@ table:
 end: `lm.test.class.reference-base.seed`
 
 join: (`lm.test.class.reference-base.seed`) `lm.test.class.reference-base.middle`
+    source
     columns: (class: class) (int: marker) (int: `reference-base`)
     rows:
 end: `lm.test.class.reference-base.middle`
 
 join: (`lm.test.class.reference-base.middle`) class
+    source
     columns: (class: class) (int: marker) (int: `reference-base`)
     rows:
 end: class

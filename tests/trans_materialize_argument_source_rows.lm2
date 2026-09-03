@@ -27,11 +27,13 @@ table:
 end: `lm.test.materialize.argument.seed`
 
 join: (`lm.test.materialize.argument.seed`) `lm.test.materialize.argument.middle`
+    source
     columns: (class: class) (int: marker) (binding: argument)
     rows:
 end: `lm.test.materialize.argument.middle`
 
 join: (`lm.test.materialize.argument.middle`) materialize
+    source
     columns: (class: class) (int: marker) (binding: argument)
     rows:
 end: materialize

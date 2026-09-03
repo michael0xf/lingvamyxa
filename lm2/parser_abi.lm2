@@ -1,4 +1,5 @@
 table:
+    source
     name: include
     columns: (class: class) (@: char target)
     rows:
@@ -6,6 +7,7 @@ table:
 end: include
 
 table:
+    source
     name: `alias.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -16,6 +18,7 @@ table:
 end: `alias.backend`
 
 table:
+    source
     name: `alias.target`
     columns: (class: class) (class: target)
     rows:
@@ -26,6 +29,7 @@ table:
 end: `alias.target`
 
 table:
+    source
     name: `constant.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -44,6 +48,7 @@ table:
 end: `constant.backend`
 
 table:
+    source
     name: `constant.value`
     columns: (class: class) (int: value)
     rows:
@@ -62,6 +67,7 @@ table:
 end: `constant.value`
 
 table:
+    source
     name: `forward.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -72,6 +78,7 @@ table:
 end: `forward.backend`
 
 table:
+    source
     name: `layout.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -87,6 +94,7 @@ table:
 end: `layout.backend`
 
 table:
+    source
     name: `class.reference-base`
     columns: (class: class) (int: value)
     rows:
@@ -103,6 +111,7 @@ table:
 end: `class.reference-base`
 
 table:
+    source
     name: `LmP0Text.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -111,6 +120,7 @@ table:
 end: `LmP0Text.field.class`
 
 table:
+    source
     name: `LmP0Text.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -119,6 +129,7 @@ table:
 end: `LmP0Text.field.index`
 
 table:
+    source
     name: `LmP0Text.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -126,6 +137,7 @@ table:
 end: `LmP0Text.field.address-depth`
 
 table:
+    source
     name: `LmP0Text.field.const`
     columns: (class: class) (int: value)
     rows:
@@ -133,6 +145,7 @@ table:
 end: `LmP0Text.field.const`
 
 table:
+    source
     name: `LmP0Span.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -143,6 +156,7 @@ table:
 end: `LmP0Span.field.class`
 
 table:
+    source
     name: `LmP0Span.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -153,6 +167,7 @@ table:
 end: `LmP0Span.field.index`
 
 table:
+    source
     name: `LmP0Diagnostic.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -163,6 +178,7 @@ table:
 end: `LmP0Diagnostic.field.class`
 
 table:
+    source
     name: `LmP0Diagnostic.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -173,6 +189,7 @@ table:
 end: `LmP0Diagnostic.field.index`
 
 table:
+    source
     name: `LmP0Diagnostic.field.array-count`
     columns: (class: class) (size_t: count)
     rows:
@@ -180,6 +197,7 @@ table:
 end: `LmP0Diagnostic.field.array-count`
 
 table:
+    source
     name: `LmP0Structure.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -190,6 +208,7 @@ table:
 end: `LmP0Structure.field.class`
 
 table:
+    source
     name: `LmP0Structure.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -200,6 +219,7 @@ table:
 end: `LmP0Structure.field.index`
 
 table:
+    source
     name: `LmP0Structure.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -209,6 +229,7 @@ table:
 end: `LmP0Structure.field.address-depth`
 
 table:
+    source
     name: `LmP0Trailer.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -218,6 +239,7 @@ table:
 end: `LmP0Trailer.field.class`
 
 table:
+    source
     name: `LmP0Trailer.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -227,6 +249,7 @@ table:
 end: `LmP0Trailer.field.index`
 
 table:
+    source
     name: `LmP0Trailer.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -235,6 +258,7 @@ table:
 end: `LmP0Trailer.field.address-depth`
 
 table:
+    source
     name: `LmP0Frame.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -245,6 +269,7 @@ table:
 end: `LmP0Frame.field.class`
 
 table:
+    source
     name: `LmP0Frame.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -255,6 +280,7 @@ table:
 end: `LmP0Frame.field.index`
 
 table:
+    source
     name: `LmP0Frame.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -264,6 +290,7 @@ table:
 end: `LmP0Frame.field.address-depth`
 
 table:
+    source
     name: `LmP0Node.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -274,6 +301,7 @@ table:
 end: `LmP0Node.field.class`
 
 table:
+    source
     name: `LmP0Node.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -284,6 +312,7 @@ table:
 end: `LmP0Node.field.index`
 
 table:
+    source
     name: `LmP0Node.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -292,6 +321,7 @@ table:
 end: `LmP0Node.field.address-depth`
 
 table:
+    source
     name: `LmP0NodeAs.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -301,6 +331,7 @@ table:
 end: `LmP0NodeAs.field.class`
 
 table:
+    source
     name: `LmP0NodeAs.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -310,6 +341,7 @@ table:
 end: `LmP0NodeAs.field.index`
 
 table:
+    source
     name: `LmP0NodeAs.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -319,6 +351,7 @@ table:
 end: `LmP0NodeAs.field.address-depth`
 
 table:
+    source
     name: `LmP0Field.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -327,6 +360,7 @@ table:
 end: `LmP0Field.field.class`
 
 table:
+    source
     name: `LmP0Field.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -335,6 +369,7 @@ table:
 end: `LmP0Field.field.index`
 
 table:
+    source
     name: `LmP0Field.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -343,6 +378,7 @@ table:
 end: `LmP0Field.field.address-depth`
 
 table:
+    source
     name: `fn.external`
     columns: (class: class) (int: value)
     rows:

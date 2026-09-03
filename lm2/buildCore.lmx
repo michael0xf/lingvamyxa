@@ -20,6 +20,7 @@ L2:
     unit
 
     table:
+        source
         name: LmBuildOptions
         columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
         rows:
@@ -28,6 +29,7 @@ L2:
     end: LmBuildOptions
 
     table:
+        source
         name: `layout.backend`
         columns: (class: class) (class: backend)
         rows:
@@ -35,6 +37,7 @@ L2:
     end: `layout.backend`
 
     table:
+        source
         name: `class.reference-base`
         columns: (class: class) (int: value)
         rows:
@@ -42,6 +45,7 @@ L2:
     end: `class.reference-base`
 
     table:
+        source
         name: BUILD
         columns: (class: class) (binding: l2)                (@: char win)                                       (@: char unix)
         rows:

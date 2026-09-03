@@ -1,5 +1,6 @@
 L2:
     table:
+        source
         name: class
         columns: (class: class) (class: kind)
         rows:
@@ -8,6 +9,7 @@ L2:
     end: class
 
     table:
+        source
         name: `None.cell`
         columns: (class: class) (int: value)
         rows:
@@ -15,6 +17,7 @@ L2:
     end: `None.cell`
 
     table:
+        source
         name: `registry.none-cell.smoke`
         columns: (class: class) (optionalFlag: flag)  (@: char payload)
         rows:

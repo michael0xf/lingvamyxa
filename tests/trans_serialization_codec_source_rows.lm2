@@ -19,11 +19,13 @@ table:
 end: `lm.test.serialization.codec.seed`
 
 join: (`lm.test.serialization.codec.seed`) `lm.test.serialization.codec.middle`
+    source
     columns: (class: class) (int: marker) (@: char codec)
     rows:
 end: `lm.test.serialization.codec.middle`
 
 join: (`lm.test.serialization.codec.middle`) serialization
+    source
     columns: (class: class) (int: marker) (@: char codec)
     rows:
 end: serialization

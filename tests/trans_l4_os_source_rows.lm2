@@ -1,4 +1,5 @@
 table:
+    source
     name: os
     columns: (class: class) (node: payload)
     rows:
@@ -11,6 +12,7 @@ table:
 end: os
 
 table:
+    source
     name: os
     columns: (class: class) (node: body)
     rows:
@@ -29,6 +31,7 @@ table:
 end: os
 
 table:
+    source
     name: `lm.test.os.seed`
     columns: (class: class) (node: body)
     rows:
@@ -41,11 +44,13 @@ table:
 end: `lm.test.os.seed`
 
 join: (`lm.test.os.seed`) os
+    source
     columns: (class: class) (node: body)
     rows:
 end: os
 
 table:
+    source
     name: os
     columns: (class: class) (node: body) (int: marker)
     rows:
@@ -59,6 +64,7 @@ table:
 end: os
 
 table:
+    source
     name: os
     columns: (class: class) (int: marker) (node: body)
     rows:
@@ -71,6 +77,7 @@ table:
 end: os
 
 table:
+    source
     name: `os.body`
     columns: (class: class) (node: body)
     rows:
@@ -83,6 +90,7 @@ table:
 end: `os.body`
 
 table:
+    source
     name: `lm.test.os.wide.seed`
     columns: (class: class) (node: body) (int: marker)
     rows:
@@ -96,16 +104,19 @@ table:
 end: `lm.test.os.wide.seed`
 
 join: (`lm.test.os.wide.seed`) `lm.test.os.wide.middle`
+    source
     columns: (class: class) (node: body) (int: marker)
     rows:
 end: `lm.test.os.wide.middle`
 
 join: (`lm.test.os.wide.middle`) os
+    source
     columns: (class: class) (node: body) (int: marker)
     rows:
 end: os
 
 table:
+    source
     name: os
     columns: (char: class) (node: body) (int: marker)
     rows:
@@ -119,6 +130,7 @@ table:
 end: os
 
 table:
+    source
     name: os
     columns: (class: class) (node: body)
     rows:

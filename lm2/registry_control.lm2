@@ -11,6 +11,7 @@ prototype
 unit
 
 table:
+    source
     name: `constant.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -20,6 +21,7 @@ table:
 end: `constant.backend`
 
 table:
+    source
     name: `constant.value`
     columns: (class: class) (int: value)
     rows:
@@ -29,6 +31,7 @@ table:
 end: `constant.value`
 
 table:
+    source
     name: LmRegistryControlBuffer
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
@@ -39,6 +42,7 @@ table:
 end: LmRegistryControlBuffer
 
 table:
+    source
     name: LmRegistryControlColumn
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
@@ -47,6 +51,7 @@ table:
 end: LmRegistryControlColumn
 
 table:
+    source
     name: LmRegistryControlColumnSpellingFrame
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -55,6 +60,7 @@ table:
 end: LmRegistryControlColumnSpellingFrame
 
 table:
+    source
     name: LmRegistryControlNodeLmxFrame
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -65,6 +71,7 @@ table:
 end: LmRegistryControlNodeLmxFrame
 
 table:
+    source
     name: LmRegistryControlRenameDescriptorFrame
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -72,6 +79,7 @@ table:
 end: LmRegistryControlRenameDescriptorFrame
 
 table:
+    source
     name: LmRegistryControlRenameStructureFrame
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -79,6 +87,7 @@ table:
 end: LmRegistryControlRenameStructureFrame
 
 table:
+    source
     name: LmRegistryControlError
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -86,6 +95,7 @@ table:
 end: LmRegistryControlError
 
 table:
+    source
     name: LmRegistryControlRename
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -96,6 +106,7 @@ table:
 end: LmRegistryControlRename
 
 table:
+    source
     name: `layout.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -110,6 +121,7 @@ table:
 end: `layout.backend`
 
 table:
+    source
     name: `class.reference-base`
     columns: (class: class) (int: value)
     rows:

@@ -25,11 +25,13 @@ table:
 end: `lm.test.receiver.function.seed`
 
 join: (`lm.test.receiver.function.seed`) `lm.test.receiver.function.middle`
+    source
     columns: (class: class) (int: marker) (binding: function)
     rows:
 end: `lm.test.receiver.function.middle`
 
 join: (`lm.test.receiver.function.middle`) receiver
+    source
     columns: (class: class) (int: marker) (binding: function)
     rows:
 end: receiver

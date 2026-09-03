@@ -7,6 +7,7 @@ table:
 end: `lm.test.untyped-layout.seed`
 
 join: (`lm.test.untyped-layout.seed`) `layout.backend`
+    source
     columns: (class: class) (class: backend)
     rows:
 end: `layout.backend`

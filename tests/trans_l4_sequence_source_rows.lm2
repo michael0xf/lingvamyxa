@@ -1,4 +1,5 @@
 table:
+    source
     name: `receiver.atom.statement`
     columns: (class: class) (binding: receiver)
     rows:
@@ -6,6 +7,7 @@ table:
 end: `receiver.atom.statement`
 
 table:
+    source
     name: include
     columns: (class: class) (@: char target)
     rows:
@@ -13,6 +15,7 @@ table:
 end: include
 
 table:
+    source
     name: `lmTestLoadHeadersSequence.item`
     columns: (class: class) (size_t: index)
     rows:
@@ -20,6 +23,7 @@ table:
 end: `lmTestLoadHeadersSequence.item`
 
 table:
+    source
     name: lmTestLoadHeadersSequence
     columns: (class: class) (size_t: item)
     rows:
@@ -27,6 +31,7 @@ table:
 end: lmTestLoadHeadersSequence
 
 table:
+    source
     name: lmTestLoadHeadersSequence
     columns: (class: class) (size_t: item) (int: marker)
     rows:
@@ -34,6 +39,7 @@ table:
 end: lmTestLoadHeadersSequence
 
 table:
+    source
     name: `lm.test.sequence.wide.seed`
     columns: (class: class) (size_t: item) (int: marker)
     rows:
@@ -41,16 +47,19 @@ table:
 end: `lm.test.sequence.wide.seed`
 
 join: (`lm.test.sequence.wide.seed`) `lm.test.sequence.wide.middle`
+    source
     columns: (class: class) (size_t: item) (int: marker)
     rows:
 end: `lm.test.sequence.wide.middle`
 
 join: (`lm.test.sequence.wide.middle`) lmTestLoadHeadersSequence
+    source
     columns: (class: class) (size_t: item) (int: marker)
     rows:
 end: lmTestLoadHeadersSequence
 
 table:
+    source
     name: lmTestLoadHeadersSequence
     columns: (class: class) (int: marker) (size_t: item)
     rows:
@@ -58,6 +67,7 @@ table:
 end: lmTestLoadHeadersSequence
 
 table:
+    source
     name: lmTestLoadHeadersSequence
     columns: (class: class) (int: item) (int: marker)
     rows:
@@ -65,6 +75,7 @@ table:
 end: lmTestLoadHeadersSequence
 
 table:
+    source
     name: lmTestLoadHeadersSequence
     columns: (class: class) (size_t: item) (int: marker)
     rows:
@@ -73,6 +84,7 @@ table:
 end: lmTestLoadHeadersSequence
 
 table:
+    source
     name: `lmTestLoadHeadersSequence.item`
     columns: (class: class) (size_t: index)
     rows:

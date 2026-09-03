@@ -1,5 +1,6 @@
 L2:
     table:
+        source
         name: namespace
         columns: (class: class) (class: `receiver.type`)
         rows:
@@ -7,6 +8,7 @@ L2:
     end: namespace
 
     table:
+        source
         name: `receiver.statement`
         columns: (class: class) (binding: receiver)
         rows:

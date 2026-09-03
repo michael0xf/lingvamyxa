@@ -1,4 +1,5 @@
 table:
+    source
     name: class
     columns: (class: class) (class: kind)
     rows:
@@ -6,6 +7,7 @@ table:
 end: class
 
 table:
+    source
     name: LmArray
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
@@ -15,6 +17,7 @@ table:
 end: LmArray
 
 table:
+    source
     name: `layout.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -22,6 +25,7 @@ table:
 end: `layout.backend`
 
 table:
+    source
     name: functionPointerType
     columns: (class: class) (int: value)
     rows:

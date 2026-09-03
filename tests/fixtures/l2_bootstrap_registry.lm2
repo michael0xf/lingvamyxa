@@ -1,4 +1,5 @@
 table:
+    source
     name: lmTestBootstrapSource
     columns: (class: class) (class: kind)
     rows:
@@ -6,6 +7,7 @@ table:
 end: lmTestBootstrapSource
 
 table:
+    source
     name: lmTestBootstrap
     columns: (class: class) (class: kind)
     rows:
@@ -13,6 +15,7 @@ table:
 end: lmTestBootstrap
 
 join: (lmTestBootstrapSource) lmTestBootstrap
+    source
     columns: (class: class) (class: kind)
     rows:
         lmTestBootstrapDirect relation

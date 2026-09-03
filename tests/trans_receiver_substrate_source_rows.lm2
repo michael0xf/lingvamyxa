@@ -24,6 +24,7 @@ table:
 end: `lm.test.namespace.substrate.seed`
 
 join: (`lm.test.namespace.substrate.seed`) namespace
+    source
     columns: (class: class) (class: `receiver.type`)
     rows:
 end: namespace
@@ -63,11 +64,13 @@ table:
 end: `lm.test.receiver.substrate.seed`
 
 join: (`lm.test.receiver.substrate.seed`) `lm.test.receiver.substrate.middle`
+    source
     columns: (class: class) (int: marker) (binding: substrate)
     rows:
 end: `lm.test.receiver.substrate.middle`
 
 join: (`lm.test.receiver.substrate.middle`) receiver
+    source
     columns: (class: class) (int: marker) (binding: substrate)
     rows:
 end: receiver

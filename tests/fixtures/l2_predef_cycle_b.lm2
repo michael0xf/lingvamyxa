@@ -1,6 +1,7 @@
 predef: "l2_predef_cycle_a.lm2"
 
 table:
+    source
     name: predefCycleB
     columns: (class: class) (int: value)
     rows:
@@ -8,6 +9,7 @@ table:
 end: predefCycleB
 
 table:
+    source
     name: functionPointerType
     columns: (class: class) (int: value)
     rows:

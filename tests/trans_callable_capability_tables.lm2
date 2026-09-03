@@ -63,11 +63,13 @@ table:
 end: `lm.test.callable.capability.seed`
 
 join: (`lm.test.callable.capability.seed`) `lm.test.callable.capability.middle`
+    source
     columns: (class: class) (serial: partial) (serial: capture) (projection: projection)
     rows:
 end: `lm.test.callable.capability.middle`
 
 join: (`lm.test.callable.capability.middle`) callable
+    source
     columns: (class: class) (serial: partial) (serial: capture) (projection: projection)
     rows:
 end: callable

@@ -25,11 +25,13 @@ L2:
     end: `lm.test.class.ctail.seed`
 
     join: (`lm.test.class.ctail.seed`) `lm.test.class.ctail.middle`
+        source
         columns: (class: class) (int: marker) (@: char cTail)
         rows:
     end: `lm.test.class.ctail.middle`
 
     join: (`lm.test.class.ctail.middle`) class
+        source
         columns: (class: class) (int: marker) (@: char cTail)
         rows:
     end: class

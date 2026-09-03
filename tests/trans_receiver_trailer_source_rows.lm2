@@ -25,6 +25,7 @@ L2:
     end: `lm.test.namespace.trailer.seed`
 
     join: (`lm.test.namespace.trailer.seed`) namespace
+        source
         columns: (class: class) (class: `receiver.type`)
         rows:
     end: namespace
@@ -64,11 +65,13 @@ L2:
     end: `lm.test.receiver.trailer.seed`
 
     join: (`lm.test.receiver.trailer.seed`) `lm.test.receiver.trailer.middle`
+        source
         columns: (class: class) (int: marker) (binding: trailer)
         rows:
     end: `lm.test.receiver.trailer.middle`
 
     join: (`lm.test.receiver.trailer.middle`) receiver
+        source
         columns: (class: class) (int: marker) (binding: trailer)
         rows:
     end: receiver

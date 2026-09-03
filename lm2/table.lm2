@@ -11,6 +11,7 @@ prototype
 unit
 
 table:
+    source
     name: `constant.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -20,6 +21,7 @@ table:
 end: `constant.backend`
 
 table:
+    source
     name: `constant.value`
     columns: (class: class) (int: value)
     rows:
@@ -29,6 +31,7 @@ table:
 end: `constant.value`
 
 table:
+    source
     name: LmTableBuffer
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
@@ -39,6 +42,7 @@ table:
 end: LmTableBuffer
 
 table:
+    source
     name: LmTableColumn
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
@@ -47,6 +51,7 @@ table:
 end: LmTableColumn
 
 table:
+    source
     name: LmTableEmitTablesFrame
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -54,6 +59,7 @@ table:
 end: LmTableEmitTablesFrame
 
 table:
+    source
     name: LmTableLmxFrame
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -64,6 +70,7 @@ table:
 end: LmTableLmxFrame
 
 table:
+    source
     name: LmTableError
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -71,6 +78,7 @@ table:
 end: LmTableError
 
 table:
+    source
     name: `layout.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -82,6 +90,7 @@ table:
 end: `layout.backend`
 
 table:
+    source
     name: `class.reference-base`
     columns: (class: class) (int: value)
     rows:

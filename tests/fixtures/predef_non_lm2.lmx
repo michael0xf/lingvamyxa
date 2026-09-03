@@ -1,4 +1,5 @@
 table:
+    source
     name: predefNonLm2Marker
     columns: (class: class) (int: value)
     rows:

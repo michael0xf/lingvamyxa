@@ -1,4 +1,5 @@
 table:
+    source
     name: `lm.test.ifdef.join-order.seed`
     columns: (class: class) (node: body) (int: marker)
     rows:
@@ -19,11 +20,13 @@ table:
 end: `lm.test.ifdef.join-order.seed`
 
 join: (`lm.test.ifdef.join-order.seed`) `lm.test.ifdef.join-order.middle`
+    source
     columns: (class: class) (node: body) (int: marker)
     rows:
 end: `lm.test.ifdef.join-order.middle`
 
 join: (`lm.test.ifdef.join-order.middle`) ifdef
+    source
     columns: (class: class) (node: body) (int: marker)
     rows:
 end: ifdef

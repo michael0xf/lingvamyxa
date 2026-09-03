@@ -1,4 +1,5 @@
 table:
+    source
     name: `forward.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -38,6 +39,7 @@ table:
 end: `forward.backend`
 
 table:
+    source
     name: functionPointerType
     columns: (class: class) (int: value)
     rows:
@@ -96,6 +98,7 @@ table:
 end: `cast.target`
 
 table:
+    source
     name: `define.value`
     columns: (class: class) (@: char value)
     rows:
@@ -107,6 +110,7 @@ table:
 end: `define.value`
 
 table:
+    source
     name: fn
     columns: (class: class) (class: descriptor) (class: receiver)
     rows:
@@ -174,6 +178,7 @@ table:
 end: `fn.thread-context.none`
 
 table:
+    source
     name: LmTransExprSegmentMaterializer
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -186,6 +191,7 @@ table:
 end: LmTransExprSegmentMaterializer
 
 table:
+    source
     name: LmTransCallLoweringHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -196,6 +202,7 @@ table:
 end: LmTransCallLoweringHandler
 
 table:
+    source
     name: LmTransExprFrameHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -207,6 +214,7 @@ table:
 end: LmTransExprFrameHandler
 
 table:
+    source
     name: LmTransExprAtomEmitHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -217,6 +225,7 @@ table:
 end: LmTransExprAtomEmitHandler
 
 table:
+    source
     name: LmTransExprAtomStateHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -230,6 +239,7 @@ table:
 end: LmTransExprAtomStateHandler
 
 table:
+    source
     name: LmTransExprPieceEmitHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -243,6 +253,7 @@ table:
 end: LmTransExprPieceEmitHandler
 
 table:
+    source
     name: LmTransExprJobHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -254,6 +265,7 @@ table:
 end: LmTransExprJobHandler
 
 table:
+    source
     name: LmTransExprJobDestroyHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -262,6 +274,7 @@ table:
 end: LmTransExprJobDestroyHandler
 
 table:
+    source
     name: LmTransStatementJobHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -273,6 +286,7 @@ table:
 end: LmTransStatementJobHandler
 
 table:
+    source
     name: LmTransStatementJobDestroyHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -281,6 +295,7 @@ table:
 end: LmTransStatementJobDestroyHandler
 
 table:
+    source
     name: LmTransStatementFrameHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -293,6 +308,7 @@ table:
 end: LmTransStatementFrameHandler
 
 table:
+    source
     name: LmTransAtomStatementHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -304,6 +320,7 @@ table:
 end: LmTransAtomStatementHandler
 
 table:
+    source
     name: LmTransFunctionHeaderReceiver
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -314,6 +331,7 @@ table:
 end: LmTransFunctionHeaderReceiver
 
 table:
+    source
     name: LmTransTypeEmitReceiver
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -323,6 +341,7 @@ table:
 end: LmTransTypeEmitReceiver
 
 table:
+    source
     name: LmTransTypeStructureValueAllocReceiver
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -338,6 +357,7 @@ table:
 end: LmTransTypeStructureValueAllocReceiver
 
 table:
+    source
     name: LmTransTypeStructureValueFillReceiver
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -352,6 +372,7 @@ table:
 end: LmTransTypeStructureValueFillReceiver
 
 table:
+    source
     name: LmTransTopLevelDeclareHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -361,6 +382,7 @@ table:
 end: LmTransTopLevelDeclareHandler
 
 table:
+    source
     name: LmTransTopLevelEmitHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -371,6 +393,7 @@ table:
 end: LmTransTopLevelEmitHandler
 
 table:
+    source
     name: LmTransL4PayloadFrameHandler
     columns: (class: class) (class: `param.class`) (size_t: `param.index`) (size_t: `param.address-depth`) (int: `param.const`) (class: `return.class`) (size_t: `return.address-depth`) (int: `return.const`)
     rows:
@@ -381,6 +404,7 @@ table:
 end: LmTransL4PayloadFrameHandler
 
 table:
+    source
     name: `layout.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -443,6 +467,7 @@ table:
 end: `layout.backend`
 
 table:
+    source
     name: `class.reference-base`
     columns: (class: class) (int: value)
     rows:
@@ -505,6 +530,7 @@ table:
 end: `class.reference-base`
 
 table:
+    source
     name: LmTransIdentifierRelation
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -514,6 +540,7 @@ table:
 end: LmTransIdentifierRelation
 
 table:
+    source
     name: LmTransIdentifierCard
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
@@ -527,6 +554,7 @@ table:
 end: LmTransIdentifierCard
 
 table:
+    source
     name: LmTransIdentifierTable
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
@@ -536,6 +564,7 @@ table:
 end: LmTransIdentifierTable
 
 table:
+    source
     name: LmTransRegistry
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
@@ -555,6 +584,7 @@ table:
 end: LmTransRegistry
 
 table:
+    source
     name: LmTransModuleInitEntry
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -572,6 +602,7 @@ table:
 end: LmTransModuleInitEntry
 
 table:
+    source
     name: LmTransRegistryFact
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -583,6 +614,7 @@ table:
 end: LmTransRegistryFact
 
 table:
+    source
     name: LmTransPointerBinding
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -591,6 +623,7 @@ table:
 end: LmTransPointerBinding
 
 table:
+    source
     name: LmTransRegistryCloneFrame
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -602,6 +635,7 @@ table:
 end: LmTransRegistryCloneFrame
 
 table:
+    source
     name: LmTransLayoutField
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -617,6 +651,7 @@ table:
 end: LmTransLayoutField
 
 table:
+    source
     name: LmTransCDeclarator
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -634,6 +669,7 @@ table:
 end: LmTransCDeclarator
 
 table:
+    source
     name: `LmTransCDeclarator.field.array-count`
     columns: (class: class) (size_t: count)
     rows:
@@ -641,6 +677,7 @@ table:
 end: `LmTransCDeclarator.field.array-count`
 
 table:
+    source
     name: LmTransAbiParam
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -653,6 +690,7 @@ table:
 end: LmTransAbiParam
 
 table:
+    source
     name: LmTransL4CallableType
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -663,6 +701,7 @@ table:
 end: LmTransL4CallableType
 
 table:
+    source
     name: LmTransFormalParam
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -677,6 +716,7 @@ table:
 end: LmTransFormalParam
 
 table:
+    source
     name: LmTransFormalParamList
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -685,6 +725,7 @@ table:
 end: LmTransFormalParamList
 
 table:
+    source
     name: LmTransDescriptorField
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -699,6 +740,7 @@ table:
 end: LmTransDescriptorField
 
 table:
+    source
     name: LmTransDescriptorRelation
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -707,6 +749,7 @@ table:
 end: LmTransDescriptorRelation
 
 table:
+    source
     name: LmTransDescriptor
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -717,6 +760,7 @@ table:
 end: LmTransDescriptor
 
 table:
+    source
     name: LmTransSymbol
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -759,6 +803,7 @@ table:
 end: LmTransSymbol
 
 table:
+    source
     name: LmTransCleanup
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -768,6 +813,7 @@ table:
 end: LmTransCleanup
 
 table:
+    source
     name: LmTransLoop
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)
     rows:
@@ -775,6 +821,7 @@ table:
 end: LmTransLoop
 
 table:
+    source
     name: LmTransExprSegment
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -785,6 +832,7 @@ table:
 end: LmTransExprSegment
 
 table:
+    source
     name: LmTransStructReturnFieldValue
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -794,6 +842,7 @@ table:
 end: LmTransStructReturnFieldValue
 
 table:
+    source
     name: LmTransCallLowering
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -803,6 +852,7 @@ table:
 end: LmTransCallLowering
 
 table:
+    source
     name: LmTransRegistrySourcePathCacheEntry
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -820,6 +870,7 @@ table:
 end: LmTransRegistrySourcePathCacheEntry
 
 table:
+    source
     name: LmTransCallableProjectionCacheEntry
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -828,6 +879,7 @@ table:
 end: LmTransCallableProjectionCacheEntry
 
 table:
+    source
     name: LmTransTypedefProjectionPathStep
     columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
@@ -836,6 +888,7 @@ table:
 end: LmTransTypedefProjectionPathStep
 
 table:
+    source
     name: LmTransTypedefProjectionEntry
     columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
     rows:
@@ -851,6 +904,7 @@ table:
 end: LmTransTypedefProjectionEntry
 
 table:
+    source
     name: LmTransTypedefProjectionOutput
     columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
     rows:
@@ -865,6 +919,7 @@ table:
 end: LmTransTypedefProjectionOutput
 
 table:
+    source
     name: LmTransCallableValue
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -878,6 +933,7 @@ table:
 end: LmTransCallableValue
 
 table:
+    source
     name: LmTransExprLoweredRange
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
@@ -886,6 +942,7 @@ table:
 end: LmTransExprLoweredRange
 
 table:
+    source
     name: LmTransExprStack
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
@@ -893,6 +950,7 @@ table:
 end: LmTransExprStack
 
 table:
+    source
     name: LmTransExprRangeJob
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -907,6 +965,7 @@ table:
 end: LmTransExprRangeJob
 
 table:
+    source
     name: LmTransExprCallArgsJob
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -916,6 +975,7 @@ table:
 end: LmTransExprCallArgsJob
 
 table:
+    source
     name: LmTransExprAtomLowering
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -926,6 +986,7 @@ table:
 end: LmTransExprAtomLowering
 
 table:
+    source
     name: LmTransExprPiece
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -938,6 +999,7 @@ table:
 end: LmTransExprPiece
 
 table:
+    source
     name: LmTransExprJob
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -953,6 +1015,7 @@ table:
 end: LmTransExprJob
 
 table:
+    source
     name: LmTransStatementListJob
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -963,6 +1026,7 @@ table:
 end: LmTransStatementListJob
 
 table:
+    source
     name: LmTransStatementNodeJob
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -972,6 +1036,7 @@ table:
 end: LmTransStatementNodeJob
 
 table:
+    source
     name: LmTransStatementFrameJob
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -980,6 +1045,7 @@ table:
 end: LmTransStatementFrameJob
 
 table:
+    source
     name: LmTransStatementTextJob
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -988,6 +1054,7 @@ table:
 end: LmTransStatementTextJob
 
 table:
+    source
     name: LmTransStatementStack
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
@@ -995,6 +1062,7 @@ table:
 end: LmTransStatementStack
 
 table:
+    source
     name: LmTransArrayStructureValueFillFrame
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -1004,6 +1072,7 @@ table:
 end: LmTransArrayStructureValueFillFrame
 
 table:
+    source
     name: LmTransStatementJob
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
@@ -1016,6 +1085,7 @@ table:
 end: LmTransStatementJob
 
 table:
+    source
     name: LmTransStatementLowering
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)
     rows:
@@ -1023,6 +1093,7 @@ table:
 end: LmTransStatementLowering
 
 table:
+    source
     name: LmTransFunctionState
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -1040,6 +1111,7 @@ table:
 end: LmTransFunctionState
 
 table:
+    source
     name: LmTransFunctionHeader
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -1066,6 +1138,7 @@ table:
 end: LmTransFunctionHeader
 
 table:
+    source
     name: LmTransThreadDeclaration
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -1075,6 +1148,7 @@ table:
 end: LmTransThreadDeclaration
 
 table:
+    source
     name: LmTransCapture
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -1086,6 +1160,7 @@ table:
 end: LmTransCapture
 
 table:
+    source
     name: LmTransHoistedFunction
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -1100,6 +1175,7 @@ table:
 end: LmTransHoistedFunction
 
 table:
+    source
     name: LmTransBinding
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)
     rows:
@@ -1117,6 +1193,7 @@ table:
 end: LmTransBinding
 
 table:
+    source
     name: LmTransHeadBinding
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -1129,6 +1206,7 @@ table:
 end: LmTransHeadBinding
 
 table:
+    source
     name: LmTransL4PayloadPointerBinding
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -1138,6 +1216,7 @@ table:
 end: LmTransL4PayloadPointerBinding
 
 table:
+    source
     name: LmTransTopLevelItem
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -1155,6 +1234,7 @@ table:
 end: LmTransTopLevelItem
 
 table:
+    source
     name: LmTransFunctionEmitFrame
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -1166,6 +1246,7 @@ table:
 end: LmTransFunctionEmitFrame
 
 table:
+    source
     name: LmTransTypePointerSuffix
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:
@@ -1173,6 +1254,7 @@ table:
 end: LmTransTypePointerSuffix
 
 table:
+    source
     name: LmTransNamespace
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
     rows:

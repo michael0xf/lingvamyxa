@@ -1,6 +1,7 @@
 include: "fixtures/l2_predef_conditional_descriptor.support.h"
 
 table:
+    source
     name: functionPointerType
     columns: (class: class) (int: value)
     rows:

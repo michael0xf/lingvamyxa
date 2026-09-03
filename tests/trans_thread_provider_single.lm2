@@ -17,6 +17,7 @@ table:
 end: `fn.thread-context.none`
 
 table:
+    source
     name: `forward.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -24,6 +25,7 @@ table:
 end: `forward.backend`
 
 table:
+    source
     name: `layout.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -31,6 +33,7 @@ table:
 end: `layout.backend`
 
 table:
+    source
     name: `class.reference-base`
     columns: (class: class) (int: value)
     rows:
@@ -38,6 +41,7 @@ table:
 end: `class.reference-base`
 
 table:
+    source
     name: `LmTestHostContext.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -47,6 +51,7 @@ table:
 end: `LmTestHostContext.field.class`
 
 table:
+    source
     name: `LmTestHostContext.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -56,6 +61,7 @@ table:
 end: `LmTestHostContext.field.index`
 
 table:
+    source
     name: `LmTestHostContext.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:

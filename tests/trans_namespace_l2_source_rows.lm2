@@ -23,11 +23,13 @@ table:
 end: `lm.test.namespace.l2.receiver.seed`
 
 join: (`lm.test.namespace.l2.receiver.seed`) `lm.test.namespace.l2.receiver.middle`
+    source
     columns: (class: class) (binding: receiver)
     rows:
 end: `lm.test.namespace.l2.receiver.middle`
 
 join: (`lm.test.namespace.l2.receiver.middle`) `receiver.atom.statement`
+    source
     columns: (class: class) (binding: receiver)
     rows:
 end: `receiver.atom.statement`

@@ -27,11 +27,13 @@ table:
 end: `lm.test.none-cell.seed`
 
 join: (`lm.test.none-cell.seed`) `lm.test.none-cell.middle`
+    source
     columns: (class: class) (int: marker) (decimal: cell)
     rows:
 end: `lm.test.none-cell.middle`
 
 join: (`lm.test.none-cell.middle`) `None`
+    source
     columns: (class: class) (int: marker) (decimal: cell)
     rows:
 end: `None`

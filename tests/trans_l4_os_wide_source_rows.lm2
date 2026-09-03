@@ -1,4 +1,5 @@
 table:
+    source
     name: os
     columns: (class: class) (node: body) (int: marker)
     rows:
@@ -12,6 +13,7 @@ table:
 end: os
 
 table:
+    source
     name: os
     columns: (class: class) (int: marker) (node: body)
     rows:
@@ -24,6 +26,7 @@ table:
 end: os
 
 table:
+    source
     name: `os.body`
     columns: (class: class) (node: body)
     rows:
@@ -36,6 +39,7 @@ table:
 end: `os.body`
 
 table:
+    source
     name: `lm.test.os.wide.default.seed`
     columns: (class: class) (node: body) (int: marker)
     rows:
@@ -49,11 +53,13 @@ table:
 end: `lm.test.os.wide.default.seed`
 
 join: (`lm.test.os.wide.default.seed`) `lm.test.os.wide.default.middle`
+    source
     columns: (class: class) (node: body) (int: marker)
     rows:
 end: `lm.test.os.wide.default.middle`
 
 join: (`lm.test.os.wide.default.middle`) os
+    source
     columns: (class: class) (node: body) (int: marker)
     rows:
 end: os

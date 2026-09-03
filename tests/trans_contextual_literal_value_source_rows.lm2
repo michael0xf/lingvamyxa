@@ -25,11 +25,13 @@ table:
 end: `lm.test.contextual.literal.seed`
 
 join: (`lm.test.contextual.literal.seed`) `lm.test.contextual.literal.middle`
+    source
     columns: (class: class) (int: marker) (relation: value)
     rows:
 end: `lm.test.contextual.literal.middle`
 
 join: (`lm.test.contextual.literal.middle`) `contextual.literal`
+    source
     columns: (class: class) (int: marker) (relation: value)
     rows:
 end: `contextual.literal`
@@ -70,6 +72,7 @@ table:
 end: `lm.test.contextual.class.seed`
 
 join: (`lm.test.contextual.class.seed`) uint8
+    source
     columns: (class: class) (uint8: `context literal`)
     rows:
 end: uint8
@@ -124,11 +127,13 @@ table:
 end: `lm.test.contextual.class.wide.seed`
 
 join: (`lm.test.contextual.class.wide.seed`) `lm.test.contextual.class.wide.middle`
+    source
     columns: (class: class) (int: marker) (short: `context literal`)
     rows:
 end: `lm.test.contextual.class.wide.middle`
 
 join: (`lm.test.contextual.class.wide.middle`) short
+    source
     columns: (class: class) (int: marker) (short: `context literal`)
     rows:
 end: short
@@ -193,11 +198,13 @@ table:
 end: `lm.test.contextual.target.seed`
 
 join: (`lm.test.contextual.target.seed`) `lm.test.contextual.target.middle`
+    source
     columns: (class: class) (int: marker) (@: char value)
     rows:
 end: `lm.test.contextual.target.middle`
 
 join: (`lm.test.contextual.target.middle`) `lm.test.contextual.joined`
+    source
     columns: (class: class) (int: marker) (@: char value)
     rows:
 end: `lm.test.contextual.joined`

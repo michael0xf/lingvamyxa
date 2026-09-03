@@ -1,5 +1,6 @@
 L2:
     table:
+        source
         name: `column.param.rule`
         columns: (class: class) (const: (int: value))  (@@: char spelling)  ([3]: int item)
         rows:

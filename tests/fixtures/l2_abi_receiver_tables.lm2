@@ -1,4 +1,5 @@
 table:
+    source
     name: `layout.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -9,6 +10,7 @@ table:
 end: `layout.backend`
 
 table:
+    source
     name: `LmTestLayout.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -17,6 +19,7 @@ table:
 end: `LmTestLayout.field.class`
 
 table:
+    source
     name: `LmTestLayout.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -25,6 +28,7 @@ table:
 end: `LmTestLayout.field.index`
 
 table:
+    source
     name: `LmTestLayout.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -32,6 +36,7 @@ table:
 end: `LmTestLayout.field.address-depth`
 
 table:
+    source
     name: `LmTestLayout.field.array-count`
     columns: (class: class) (size_t: count)
     rows:
@@ -39,6 +44,7 @@ table:
 end: `LmTestLayout.field.array-count`
 
 table:
+    source
     name: `LmTestNamed.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -46,6 +52,7 @@ table:
 end: `LmTestNamed.field.class`
 
 table:
+    source
     name: `LmTestNamed.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -53,6 +60,7 @@ table:
 end: `LmTestNamed.field.index`
 
 table:
+    source
     name: `LmTestUnion.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -61,6 +69,7 @@ table:
 end: `LmTestUnion.field.class`
 
 table:
+    source
     name: `LmTestUnion.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -69,6 +78,7 @@ table:
 end: `LmTestUnion.field.index`
 
 table:
+    source
     name: `LmTestUnion.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -76,6 +86,7 @@ table:
 end: `LmTestUnion.field.address-depth`
 
 table:
+    source
     name: `LmTestNode.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -83,6 +94,7 @@ table:
 end: `LmTestNode.field.class`
 
 table:
+    source
     name: `LmTestNode.field.union`
     columns: (class: class) (class: union)
     rows:
@@ -90,6 +102,7 @@ table:
 end: `LmTestNode.field.union`
 
 table:
+    source
     name: `LmTestNode.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -98,6 +111,7 @@ table:
 end: `LmTestNode.field.index`
 
 table:
+    source
     name: `LmTestNodeAs.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -106,6 +120,7 @@ table:
 end: `LmTestNodeAs.field.class`
 
 table:
+    source
     name: `LmTestNodeAs.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -114,6 +129,7 @@ table:
 end: `LmTestNodeAs.field.index`
 
 table:
+    source
     name: `LmTestNodeAs.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -121,6 +137,7 @@ table:
 end: `LmTestNodeAs.field.address-depth`
 
 table:
+    source
     name: `alias.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -128,6 +145,7 @@ table:
 end: `alias.backend`
 
 table:
+    source
     name: `alias.target`
     columns: (class: class) (class: target)
     rows:
@@ -135,6 +153,7 @@ table:
 end: `alias.target`
 
 table:
+    source
     name: `forward.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -142,6 +161,7 @@ table:
 end: `forward.backend`
 
 table:
+    source
     name: functionPointerType
     columns: (class: class) (int: value)
     rows:
@@ -149,6 +169,7 @@ table:
 end: functionPointerType
 
 table:
+    source
     name: `unit.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -156,6 +177,7 @@ table:
 end: `unit.backend`
 
 table:
+    source
     name: `unit.payload`
     columns: (class: class) (node: payload)
     rows:

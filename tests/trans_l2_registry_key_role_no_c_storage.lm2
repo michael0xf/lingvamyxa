@@ -1,4 +1,5 @@
 table:
+    source
     name: define
     columns: (char: class) (@: char value) (int: marker)
     rows:

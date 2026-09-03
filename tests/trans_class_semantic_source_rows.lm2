@@ -25,11 +25,13 @@ table:
 end: `lm.test.class.semantic.seed`
 
 join: (`lm.test.class.semantic.seed`) `lm.test.class.semantic.middle`
+    source
     columns: (class: class) (int: marker) (@: char semantic)
     rows:
 end: `lm.test.class.semantic.middle`
 
 join: (`lm.test.class.semantic.middle`) class
+    source
     columns: (class: class) (int: marker) (@: char semantic)
     rows:
 end: class

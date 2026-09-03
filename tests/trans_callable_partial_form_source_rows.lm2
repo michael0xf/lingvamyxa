@@ -31,11 +31,13 @@ table:
 end: `lm.test.callable.partial.form.seed`
 
 join: (`lm.test.callable.partial.form.seed`) `lm.test.callable.partial.form.middle`
+    source
     columns: (class: class) (int: marker) (binding: form)
     rows:
 end: `lm.test.callable.partial.form.middle`
 
 join: (`lm.test.callable.partial.form.middle`) `callable.partial`
+    source
     columns: (class: class) (int: marker) (binding: form)
     rows:
 end: `callable.partial`

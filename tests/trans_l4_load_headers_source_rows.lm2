@@ -1,4 +1,5 @@
 table:
+    source
     name: include
     columns: (class: class) (@: char target)
     rows:
@@ -6,6 +7,7 @@ table:
 end: include
 
 table:
+    source
     name: `receiver.atom.statement`
     columns: (class: class) (binding: receiver)
     rows:
@@ -15,6 +17,7 @@ table:
 end: `receiver.atom.statement`
 
 table:
+    source
     name: `receiver.atom.statement`
     columns: (class: class) (class: receiver)
     rows:
@@ -22,6 +25,7 @@ table:
 end: `receiver.atom.statement`
 
 table:
+    source
     name: `lm.test.receiver.atom.statement.seed`
     columns: (class: class) (binding: receiver)
     rows:
@@ -29,11 +33,13 @@ table:
 end: `lm.test.receiver.atom.statement.seed`
 
 join: (`lm.test.receiver.atom.statement.seed`) `receiver.atom.statement`
+    source
     columns: (class: class) (binding: receiver)
     rows:
 end: `receiver.atom.statement`
 
 table:
+    source
     name: `receiver.atom.statement`
     columns: (class: class) (binding: receiver)
     rows:
@@ -41,6 +47,7 @@ table:
 end: `receiver.atom.statement`
 
 table:
+    source
     name: `loadHeaders.item`
     columns: (class: class) (int: index)
     rows:
@@ -48,6 +55,7 @@ table:
 end: `loadHeaders.item`
 
 table:
+    source
     name: `loadHeaders.item`
     columns: (class: class) (size_t: index)
     rows:
@@ -56,6 +64,7 @@ table:
 end: `loadHeaders.item`
 
 table:
+    source
     name: `lm.test.loadHeaders.seed`
     columns: (class: class) (size_t: index)
     rows:
@@ -63,11 +72,13 @@ table:
 end: `lm.test.loadHeaders.seed`
 
 join: (`lm.test.loadHeaders.seed`) `loadHeaders.item`
+    source
     columns: (class: class) (size_t: index)
     rows:
 end: `loadHeaders.item`
 
 table:
+    source
     name: `loadHeaders.item`
     columns: (class: class) (size_t: index)
     rows:
@@ -78,6 +89,7 @@ table:
 end: `loadHeaders.item`
 
 table:
+    source
     name: loadHeaders
     columns: (class: class) (size_t: item)
     rows:
@@ -85,6 +97,7 @@ table:
 end: loadHeaders
 
 table:
+    source
     name: loadHeaders
     columns: (class: class) (size_t: item) (int: marker)
     rows:
@@ -92,6 +105,7 @@ table:
 end: loadHeaders
 
 table:
+    source
     name: loadHeaders
     columns: (class: class) (int: marker) (size_t: item)
     rows:
@@ -99,6 +113,7 @@ table:
 end: loadHeaders
 
 table:
+    source
     name: `lm.test.loadHeaders.wide.seed`
     columns: (class: class) (size_t: item) (int: marker)
     rows:
@@ -106,16 +121,19 @@ table:
 end: `lm.test.loadHeaders.wide.seed`
 
 join: (`lm.test.loadHeaders.wide.seed`) `lm.test.loadHeaders.wide.middle`
+    source
     columns: (class: class) (size_t: item) (int: marker)
     rows:
 end: `lm.test.loadHeaders.wide.middle`
 
 join: (`lm.test.loadHeaders.wide.middle`) loadHeaders
+    source
     columns: (class: class) (size_t: item) (int: marker)
     rows:
 end: loadHeaders
 
 table:
+    source
     name: loadHeaders
     columns: (char: class) (size_t: item) (int: marker)
     rows:
@@ -123,6 +141,7 @@ table:
 end: loadHeaders
 
 table:
+    source
     name: `loadHeaders.item`
     columns: (class: class) (size_t: index)
     rows:
@@ -130,6 +149,7 @@ table:
 end: `loadHeaders.item`
 
 table:
+    source
     name: loadHeaders
     columns: (class: class) (size_t: item) (int: marker)
     rows:

@@ -26,6 +26,7 @@ table:
 end: `lm.test.namespace.seed`
 
 join: (`lm.test.namespace.seed`) namespace
+    source
     columns: (class: class) (class: `receiver.type`)
     rows:
 end: namespace

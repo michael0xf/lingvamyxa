@@ -1,4 +1,5 @@
 table:
+    source
     name: include
     columns: (class: class) (@: char target)
     rows:
@@ -8,6 +9,7 @@ table:
 end: include
 
 table:
+    source
     name: `fn.external`
     columns: (class: class) (int: value)
     rows:
@@ -28,6 +30,7 @@ table:
 end: `fn.external`
 
 table:
+    source
     name: class
     columns: (class: class) (class: kind)
     rows:
@@ -35,6 +38,7 @@ table:
 end: class
 
 table:
+    source
     name: `class.reference-base`
     columns: (class: class) (int: value)
     rows:

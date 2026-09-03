@@ -33,6 +33,7 @@ table:
 end: `lm.test.expr_emitter_binding.seed`
 
 join: (`lm.test.expr_emitter_binding.seed`) expr_emitter_binding
+    source
     columns: (class: class) (class: binding_table)
     rows:
 end: expr_emitter_binding
@@ -70,11 +71,13 @@ table:
 end: `lm.test.meta.infix.spelling.seed`
 
 join: (`lm.test.meta.infix.spelling.seed`) `lm.test.meta.infix.spelling.middle`
+    source
     columns: (class: class) (int: marker) (@: char ansi_c)
     rows:
 end: `lm.test.meta.infix.spelling.middle`
 
 join: (`lm.test.meta.infix.spelling.middle`) `operator.infix`
+    source
     columns: (class: class) (int: marker) (@: char ansi_c)
     rows:
 end: `operator.infix`
@@ -107,11 +110,13 @@ table:
 end: `lm.test.meta.infix.emitter.seed`
 
 join: (`lm.test.meta.infix.emitter.seed`) `lm.test.meta.infix.emitter.middle`
+    source
     columns: (class: class) (binding: emitter) (int: marker)
     rows:
 end: `lm.test.meta.infix.emitter.middle`
 
 join: (`lm.test.meta.infix.emitter.middle`) `lm.test.meta.infix`
+    source
     columns: (class: class) (binding: emitter) (int: marker)
     rows:
 end: `lm.test.meta.infix`
@@ -174,11 +179,13 @@ table:
 end: `lm.test.expr_emitter_binding.wide.seed`
 
 join: (`lm.test.expr_emitter_binding.wide.seed`) `lm.test.expr_emitter_binding.wide.middle`
+    source
     columns: (class: class) (int: marker) (class: binding_table)
     rows:
 end: `lm.test.expr_emitter_binding.wide.middle`
 
 join: (`lm.test.expr_emitter_binding.wide.middle`) expr_emitter_binding
+    source
     columns: (class: class) (int: marker) (class: binding_table)
     rows:
 end: expr_emitter_binding

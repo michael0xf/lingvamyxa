@@ -3,6 +3,7 @@ include: "trans_fn_external_source_rows.support.h"
 predef: "fixtures/fn_external_source_rows.lm2"
 
 table:
+    source
     name: `lm.test.fn.external.seed`
     columns: (class: class) (int: marker) (class: descriptor) (int: external) (class: receiver)
     rows:
@@ -10,16 +11,19 @@ table:
 end: `lm.test.fn.external.seed`
 
 join: (`lm.test.fn.external.seed`) `lm.test.fn.external.middle`
+    source
     columns: (class: class) (int: marker) (class: descriptor) (int: external) (class: receiver)
     rows:
 end: `lm.test.fn.external.middle`
 
 join: (`lm.test.fn.external.middle`) fn
+    source
     columns: (class: class) (int: marker) (class: descriptor) (int: external) (class: receiver)
     rows:
 end: fn
 
 table:
+    source
     name: fn
     columns: (class: class) (int: marker) (class: descriptor) (int: external) (class: receiver)
     rows:
@@ -27,6 +31,7 @@ table:
 end: fn
 
 table:
+    source
     name: fn
     columns: (class: class) (class: descriptor) (int: external)
     rows:
@@ -35,6 +40,7 @@ table:
 end: fn
 
 table:
+    source
     name: `fn.receiver`
     columns: (class: class) (class: value)
     rows:
@@ -42,6 +48,7 @@ table:
 end: `fn.receiver`
 
 table:
+    source
     name: `fn.receiver`
     columns: (class: class) (class: receiver)
     rows:
@@ -49,6 +56,7 @@ table:
 end: `fn.receiver`
 
 table:
+    source
     name: class
     columns: (class: class) (class: kind)
     rows:

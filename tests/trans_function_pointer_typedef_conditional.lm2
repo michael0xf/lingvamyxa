@@ -2,6 +2,7 @@ L2:
     `ifndef-default`: LM_TEST_FUNCTION_POINTER_BRANCH 0
 
     table:
+        source
         name: `conditionalHeaders.item`
         columns: (class: class) (size_t: index)
         rows:
@@ -9,6 +10,7 @@ L2:
     end: `conditionalHeaders.item`
 
     table:
+        source
         name: include
         columns: (class: class) (@: char target)
         rows:
@@ -16,6 +18,7 @@ L2:
     end: include
 
     table:
+        source
         name: `prelude.sequence`
         columns: (class: class) (int: value)
         rows:
@@ -23,6 +26,7 @@ L2:
     end: `prelude.sequence`
 
     table:
+        source
         name: functionPointerType
         columns: (class: class) (int: value)
         rows:

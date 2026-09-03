@@ -233,6 +233,7 @@ fn: lm_trans_top_level_function_header (
 ) int
 
 table:
+    source
     name: `layout.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -240,6 +241,7 @@ table:
 end: `layout.backend`
 
 table:
+    source
     name: `class.reference-base`
     columns: (class: class) (int: value)
     rows:
@@ -247,6 +249,7 @@ table:
 end: `class.reference-base`
 
 table:
+    source
     name: `LmTransRegistryImportFrame.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -255,6 +258,7 @@ table:
 end: `LmTransRegistryImportFrame.field.class`
 
 table:
+    source
     name: `LmTransRegistryImportFrame.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -263,6 +267,7 @@ table:
 end: `LmTransRegistryImportFrame.field.index`
 
 table:
+    source
     name: `LmTransRegistryImportFrame.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -270,6 +275,7 @@ table:
 end: `LmTransRegistryImportFrame.field.address-depth`
 
 table:
+    source
     name: `LmTransRegistryImportFrame.field.const`
     columns: (class: class) (int: value)
     rows:

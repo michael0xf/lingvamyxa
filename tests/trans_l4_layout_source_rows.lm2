@@ -1,4 +1,5 @@
 table:
+    source
     name: `layout.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -14,6 +15,7 @@ table:
 end: `layout.backend`
 
 table:
+    source
     name: LmTestSourceOrdered
     columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
@@ -22,6 +24,7 @@ table:
 end: LmTestSourceOrdered
 
 table:
+    source
     name: LmTestSourceDepth
     columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
     rows:
@@ -30,6 +33,7 @@ table:
 end: LmTestSourceDepth
 
 table:
+    source
     name: LmTestSourceQualified
     columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`)
     rows:
@@ -38,6 +42,7 @@ table:
 end: LmTestSourceQualified
 
 table:
+    source
     name: `lm.test.layout.fields.seed`
     columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`)
     rows:
@@ -45,16 +50,19 @@ table:
 end: `lm.test.layout.fields.seed`
 
 join: (`lm.test.layout.fields.seed`) `lm.test.layout.fields.middle`
+    source
     columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`)
     rows:
 end: `lm.test.layout.fields.middle`
 
 join: (`lm.test.layout.fields.middle`) LmTestSourceJoined
+    source
     columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`) (int: `field.const`)
     rows:
 end: LmTestSourceJoined
 
 table:
+    source
     name: LmTestSourceOverlay
     columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
@@ -63,6 +71,7 @@ table:
 end: LmTestSourceOverlay
 
 table:
+    source
     name: `LmTestSourceOverlay.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -70,6 +79,7 @@ table:
 end: `LmTestSourceOverlay.field.class`
 
 table:
+    source
     name: `LmTestSourceOverlay.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -78,6 +88,7 @@ table:
 end: `LmTestSourceOverlay.field.index`
 
 table:
+    source
     name: LmTestSourceInner
     columns: (class: class) (class: `field.class`) (size_t: `field.index`)
     rows:
@@ -85,6 +96,7 @@ table:
 end: LmTestSourceInner
 
 table:
+    source
     name: LmTestSourceWideArray
     columns: (class: class) (int: marker) (size_t: `field.array-count`) (class: `field.class`) (int: `field.const`) (size_t: `field.address-depth`) (size_t: `field.index`)
     rows:
@@ -92,6 +104,7 @@ table:
 end: LmTestSourceWideArray
 
 table:
+    source
     name: `LmTestSourceWideArray.field.index`
     columns: (class: class) (int: index)
     rows:
@@ -99,6 +112,7 @@ table:
 end: `LmTestSourceWideArray.field.index`
 
 table:
+    source
     name: LmTestSourceWideOuter
     columns: (class: class) (class: `field.union`) (size_t: `field.index`) (size_t: `field.array-count`)
     rows:
@@ -106,6 +120,7 @@ table:
 end: LmTestSourceWideOuter
 
 table:
+    source
     name: `LmTestSourceOuter.field.union`
     columns: (class: class) (class: union)
     rows:
@@ -113,6 +128,7 @@ table:
 end: `LmTestSourceOuter.field.union`
 
 table:
+    source
     name: `LmTestSourceOuter.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -120,6 +136,7 @@ table:
 end: `LmTestSourceOuter.field.index`
 
 table:
+    source
     name: `LmTestSourceOuter.field.array-count`
     columns: (class: class) (size_t: count)
     rows:

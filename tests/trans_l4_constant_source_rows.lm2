@@ -1,4 +1,5 @@
 table:
+    source
     name: constant
     columns: (class: class) (class: backend) (int: value)
     rows:
@@ -11,6 +12,7 @@ table:
 end: constant
 
 table:
+    source
     name: `constant.value`
     columns: (class: class) (int: value)
     rows:
@@ -19,6 +21,7 @@ table:
 end: `constant.value`
 
 table:
+    source
     name: `constant.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -27,6 +30,7 @@ table:
 end: `constant.backend`
 
 table:
+    source
     name: constant
     columns: (class: class) (class: backend) (int: value) (int: marker)
     rows:
@@ -40,6 +44,7 @@ table:
 end: constant
 
 table:
+    source
     name: `constant.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -48,6 +53,7 @@ table:
 end: `constant.backend`
 
 table:
+    source
     name: `constant.value`
     columns: (class: class) (int: value)
     rows:
@@ -56,6 +62,7 @@ table:
 end: `constant.value`
 
 table:
+    source
     name: `lm.test.constant.wide.seed`
     columns: (class: class) (class: backend) (int: value) (int: marker)
     rows:
@@ -63,11 +70,13 @@ table:
 end: `lm.test.constant.wide.seed`
 
 join: (`lm.test.constant.wide.seed`) constant
+    source
     columns: (class: class) (class: backend) (int: value) (int: marker)
     rows:
 end: constant
 
 table:
+    source
     name: constant
     columns: (class: class) (@: char backend) (int: value) (int: marker)
     rows:
@@ -75,6 +84,7 @@ table:
 end: constant
 
 table:
+    source
     name: constant
     columns: (class: class) (class: backend) (@: char value) (int: marker)
     rows:

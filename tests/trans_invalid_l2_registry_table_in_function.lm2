@@ -2,6 +2,7 @@ L2:
     external:
         fn: main () int
             table:
+                source
                 name: localRegistryTable
                 columns: (class: class) (int: value)
                 rows:

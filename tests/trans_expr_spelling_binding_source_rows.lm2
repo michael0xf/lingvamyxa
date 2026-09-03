@@ -58,11 +58,13 @@ table:
 end: `lm.test.expr_spelling_binding.seed`
 
 join: (`lm.test.expr_spelling_binding.seed`) `lm.test.expr_spelling_binding.middle`
+    source
     columns: (class: class) (class: binding_table) (int: marker)
     rows:
 end: `lm.test.expr_spelling_binding.middle`
 
 join: (`lm.test.expr_spelling_binding.middle`) expr_spelling_binding
+    source
     columns: (class: class) (class: binding_table) (int: marker)
     rows:
 end: expr_spelling_binding

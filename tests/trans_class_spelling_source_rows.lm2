@@ -26,11 +26,13 @@ table:
 end: `lm.test.class.spelling.seed`
 
 join: (`lm.test.class.spelling.seed`) `lm.test.class.spelling.middle`
+    source
     columns: (class: class) (int: marker) (@: char spelling)
     rows:
 end: `lm.test.class.spelling.middle`
 
 join: (`lm.test.class.spelling.middle`) class
+    source
     columns: (class: class) (int: marker) (@: char spelling)
     rows:
 end: class

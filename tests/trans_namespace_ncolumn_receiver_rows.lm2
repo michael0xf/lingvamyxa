@@ -52,6 +52,7 @@ table:
 end: `lm.test.namespace.ncolumn.seed`
 
 join: (`lm.test.namespace.ncolumn.seed`) namespace
+    source
     columns: (class: class) (class: `receiver.type`) (int: marker)
     rows:
 end: namespace

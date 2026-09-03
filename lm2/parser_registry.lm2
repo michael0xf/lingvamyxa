@@ -1,4 +1,5 @@
 table:
+    source
     name: class
     columns: (class: class) (class: kind)
     rows:
@@ -36,6 +37,7 @@ table:
 end: class
 
 table:
+    source
     name: `None.cell`
     columns: (class: class) (decimal: value)
     rows:
@@ -45,6 +47,7 @@ table:
 end: `None.cell`
 
 table:
+    source
     name: `p0.compact-token`
     columns: (class: class) (boolean: value)
     rows:
@@ -61,6 +64,7 @@ table:
 end: `p0.compact-token`
 
 table:
+    source
     name: `node.kind`
     columns: (class: class) (nodeKind: value)
     rows:
@@ -71,6 +75,7 @@ table:
 end: `node.kind`
 
 table:
+    source
     name: `node.flag`
     columns: (class: class) (nodeFlag: value)
     rows:
@@ -80,6 +85,7 @@ table:
 end: `node.flag`
 
 table:
+    source
     name: `frame.flag`
     columns: (class: class) (frameFlag: value)
     rows:
@@ -90,6 +96,7 @@ table:
 end: `frame.flag`
 
 table:
+    source
     name: namespace
     columns: (class: class) (class: parser_class)
     rows:
@@ -99,6 +106,7 @@ table:
 end: namespace
 
 table:
+    source
     name: `trailer.flag`
     columns: (class: class) (trailerFlag: value)
     rows:
@@ -106,6 +114,7 @@ table:
 end: `trailer.flag`
 
 table:
+    source
     name: `trailer.role`
     columns: (class: class) (binding: value)
     rows:
@@ -115,6 +124,7 @@ table:
 end: `trailer.role`
 
 table:
+    source
     name: `trailer.allow-bare`
     columns: (class: class) (boolean: value)
     rows:
@@ -124,6 +134,7 @@ table:
 end: `trailer.allow-bare`
 
 table:
+    source
     name: `trailer.target`
     columns: (class: class) (@: char value)
     rows:

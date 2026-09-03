@@ -1,4 +1,5 @@
 table:
+    source
     name: unit
     columns: (class: class) (int: marker) (node: payload) (int: extra) (class: backend)
     rows:
@@ -79,6 +80,7 @@ table:
 end: unit
 
 table:
+    source
     name: unit
     columns: (class: class) (class: backend) (node: payload)
     rows:
@@ -93,6 +95,7 @@ table:
 end: unit
 
 table:
+    source
     name: `unit.payload`
     columns: (class: class) (node: payload)
     rows:
@@ -115,6 +118,7 @@ table:
 end: `unit.payload`
 
 table:
+    source
     name: `unit.payload`
     columns: (class: class) (char: payload)
     rows:
@@ -122,6 +126,7 @@ table:
 end: `unit.payload`
 
 table:
+    source
     name: `unit.payload`
     columns: (class: class) (@: char payload)
     rows:
@@ -129,6 +134,7 @@ table:
 end: `unit.payload`
 
 table:
+    source
     name: `unit.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -138,6 +144,7 @@ table:
 end: `unit.backend`
 
 table:
+    source
     name: `lm.test.unit.joined.seed`
     columns: (class: class) (class: backend) (node: payload)
     rows:
@@ -152,11 +159,13 @@ table:
 end: `lm.test.unit.joined.seed`
 
 join: (`lm.test.unit.joined.seed`) `lm.test.unit.joined.middle`
+    source
     columns: (class: class) (class: backend) (node: payload)
     rows:
 end: `lm.test.unit.joined.middle`
 
 join: (`lm.test.unit.joined.middle`) unit
+    source
     columns: (class: class) (class: backend) (node: payload)
     rows:
 end: unit

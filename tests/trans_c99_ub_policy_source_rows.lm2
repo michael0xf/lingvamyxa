@@ -25,11 +25,13 @@ table:
 end: `lm.test.c99.ub.policy.seed`
 
 join: (`lm.test.c99.ub.policy.seed`) `lm.test.c99.ub.policy.middle`
+    source
     columns: (class: class) (int: marker) (class: policy)
     rows:
 end: `lm.test.c99.ub.policy.middle`
 
 join: (`lm.test.c99.ub.policy.middle`) `c99.ub`
+    source
     columns: (class: class) (int: marker) (class: policy)
     rows:
 end: `c99.ub`

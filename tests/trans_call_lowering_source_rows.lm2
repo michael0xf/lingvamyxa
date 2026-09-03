@@ -27,11 +27,13 @@ table:
 end: `lm.test.call.lowering.seed`
 
 join: (`lm.test.call.lowering.seed`) `lm.test.call.lowering.middle`
+    source
     columns: (class: class) (int: marker) (binding: lowering)
     rows:
 end: `lm.test.call.lowering.middle`
 
 join: (`lm.test.call.lowering.middle`) call
+    source
     columns: (class: class) (int: marker) (binding: lowering)
     rows:
 end: call

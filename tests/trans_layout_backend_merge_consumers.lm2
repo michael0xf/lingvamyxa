@@ -33,6 +33,7 @@ table:
 end: `lm.test.layout.backend.merge.seed`
 
 join: (`lm.test.layout.backend.merge.seed`) `layout.backend`
+    source
     columns: (class: class) (class: backend)
     rows:
 end: `layout.backend`
@@ -62,11 +63,13 @@ table:
 end: `lm.test.layout.backend.merge.wide.seed`
 
 join: (`lm.test.layout.backend.merge.wide.seed`) `lm.test.layout.backend.merge.wide.middle`
+    source
     columns: (class: class) (class: backend) (int: marker)
     rows:
 end: `lm.test.layout.backend.merge.wide.middle`
 
 join: (`lm.test.layout.backend.merge.wide.middle`) layout
+    source
     columns: (class: class) (class: backend) (int: marker)
     rows:
 end: layout

@@ -25,11 +25,13 @@ table:
 end: `lm.test.receiver.statement.seed`
 
 join: (`lm.test.receiver.statement.seed`) `lm.test.receiver.statement.middle`
+    source
     columns: (class: class) (int: marker) (binding: statement)
     rows:
 end: `lm.test.receiver.statement.middle`
 
 join: (`lm.test.receiver.statement.middle`) receiver
+    source
     columns: (class: class) (int: marker) (binding: statement)
     rows:
 end: receiver

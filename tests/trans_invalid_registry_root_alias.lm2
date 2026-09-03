@@ -1,5 +1,6 @@
 registry:
     table:
+        source
         name: `lm.test.removed.registry.root.alias`
         columns: (class: class) (int: value)
         rows:

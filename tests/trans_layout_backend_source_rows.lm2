@@ -39,11 +39,13 @@ table:
 end: `lm.test.layout.backend.wide.seed`
 
 join: (`lm.test.layout.backend.wide.seed`) `lm.test.layout.backend.wide.middle`
+    source
     columns: (class: class) (class: backend) (int: marker)
     rows:
 end: `lm.test.layout.backend.wide.middle`
 
 join: (`lm.test.layout.backend.wide.middle`) layout
+    source
     columns: (class: class) (class: backend) (int: marker)
     rows:
 end: layout

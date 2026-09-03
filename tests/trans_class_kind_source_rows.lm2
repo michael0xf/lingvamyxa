@@ -53,11 +53,13 @@ table:
 end: `lm.test.class.kind.wide.seed`
 
 join: (`lm.test.class.kind.wide.seed`) `lm.test.class.kind.wide.middle`
+    source
     columns: (class: class) (class: kind) (int: marker)
     rows:
 end: `lm.test.class.kind.wide.middle`
 
 join: (`lm.test.class.kind.wide.middle`) class
+    source
     columns: (class: class) (class: kind) (int: marker)
     rows:
 end: class
@@ -79,6 +81,7 @@ table:
 end: `lm.test.class.kind.source.seed`
 
 join: (`lm.test.class.kind.source.seed`) class
+    source
     columns: (class: class) (class: kind)
     rows:
 end: class
@@ -117,6 +120,7 @@ table:
 end: `lm.test.class.kind.compat.seed`
 
 join: (`lm.test.class.kind.compat.seed`) `class.kind`
+    source
     columns: (class: class) (class: kind)
     rows:
 end: `class.kind`

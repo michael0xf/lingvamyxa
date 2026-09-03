@@ -1,4 +1,5 @@
 table:
+    source
     name: `define.value`
     columns: (class: class) (@: char value)
     rows:
@@ -12,6 +13,7 @@ table:
 end: `define.value`
 
 table:
+    source
     name: `define.value`
     columns: (class: class) (@: char kind)
     rows:
@@ -19,6 +21,7 @@ table:
 end: `define.value`
 
 table:
+    source
     name: `define.value`
     columns: (class: class) (node: value)
     rows:
@@ -31,6 +34,7 @@ table:
 end: `define.value`
 
 table:
+    source
     name: `lm.test.define.seed`
     columns: (class: class) (@: char value)
     rows:
@@ -38,11 +42,13 @@ table:
 end: `lm.test.define.seed`
 
 join: (`lm.test.define.seed`) `define.value`
+    source
     columns: (class: class) (@: char value)
     rows:
 end: `define.value`
 
 table:
+    source
     name: define
     columns: (class: class) (@: char value) (int: marker)
     rows:
@@ -56,6 +62,7 @@ table:
 end: define
 
 table:
+    source
     name: `define.value`
     columns: (class: class) (@: char value)
     rows:
@@ -63,6 +70,7 @@ table:
 end: `define.value`
 
 table:
+    source
     name: `lm.test.define.wide.seed`
     columns: (class: class) (@: char value) (int: marker)
     rows:
@@ -70,11 +78,13 @@ table:
 end: `lm.test.define.wide.seed`
 
 join: (`lm.test.define.wide.seed`) define
+    source
     columns: (class: class) (@: char value) (int: marker)
     rows:
 end: define
 
 table:
+    source
     name: define
     columns: (class: class) (int: value) (int: marker)
     rows:

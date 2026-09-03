@@ -1,4 +1,5 @@
 table:
+    source
     name: `core.c.include`
     columns: (class: class) (@: char target)
     rows:
@@ -13,6 +14,7 @@ table:
 end: `core.c.include`
 
 table:
+    source
     name: `core.c.include`
     columns: (class: class) (@: char kind)
     rows:
@@ -20,6 +22,7 @@ table:
 end: `core.c.include`
 
 table:
+    source
     name: `lm.test.core.include.seed`
     columns: (class: class) (@: char target)
     rows:
@@ -27,11 +30,13 @@ table:
 end: `lm.test.core.include.seed`
 
 join: (`lm.test.core.include.seed`) `core.c.include`
+    source
     columns: (class: class) (@: char target)
     rows:
 end: `core.c.include`
 
 table:
+    source
     name: core
     columns: (class: class) (@: char `c.include`) (int: marker)
     rows:
@@ -44,6 +49,7 @@ table:
 end: core
 
 table:
+    source
     name: `core.c.include`
     columns: (class: class) (@: char target)
     rows:
@@ -51,6 +57,7 @@ table:
 end: `core.c.include`
 
 table:
+    source
     name: `lm.test.core.include.wide.seed`
     columns: (class: class) (@: char `c.include`) (int: marker)
     rows:
@@ -58,6 +65,7 @@ table:
 end: `lm.test.core.include.wide.seed`
 
 join: (`lm.test.core.include.wide.seed`) core
+    source
     columns: (class: class) (@: char `c.include`) (int: marker)
     rows:
 end: core

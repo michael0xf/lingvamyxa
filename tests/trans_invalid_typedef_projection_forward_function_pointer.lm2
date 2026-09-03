@@ -1,4 +1,5 @@
 table:
+    source
     name: `forward.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -6,6 +7,7 @@ table:
 end: `forward.backend`
 
 table:
+    source
     name: functionPointerType
     columns: (class: class) (int: value)
     rows:

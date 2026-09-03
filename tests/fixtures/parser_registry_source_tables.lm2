@@ -12,6 +12,7 @@ table:
 end: alpha
 
 table:
+    source
     name: beta
     columns: (class: class) (char: left) (int: number) (boolean: enabled)
     rows:
@@ -26,6 +27,7 @@ join: (alpha beta) gamma
 end: gamma
 
 table:
+    source
     name: columnOrder
     columns: (class: class) (char: value) (char: value)
     rows:
@@ -33,6 +35,7 @@ table:
 end: columnOrder
 
 table:
+    source
     name: synthetic
     columns: (class: class) (char: value)
     rows:

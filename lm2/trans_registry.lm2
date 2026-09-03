@@ -1,4 +1,5 @@
 table:
+    source
     name: class
     columns: (class: class) (class: kind)
     rows:
@@ -165,6 +166,7 @@ table:
 end: class
 
 table:
+    source
     name: `class.category`
     columns: (class: class) (categoryFlag: value)  (categoryFlag: numeric)  (categoryFlag: integer)  (categoryFlag: floating)  (categoryFlag: reference)  (categoryFlag: opaque)  (categoryFlag: callable)  (categoryFlag: descriptor)  (categoryFlag: fixedWidth)  (categoryFlag: profileWidth)
     rows:
@@ -180,6 +182,7 @@ table:
 end: `class.category`
 
 table:
+    source
     name: `class.semantic`
     columns: (class: class) (@: char value)
     rows:
@@ -211,6 +214,7 @@ table:
 end: `class.semantic`
 
 table:
+    source
     name: `class.range`
     columns: (class: class) (@: char value)
     rows:
@@ -241,6 +245,7 @@ table:
 end: `class.range`
 
 table:
+    source
     name: `class.spelling`
     columns: (class: class) (@: char spelling)
     rows:
@@ -261,6 +266,7 @@ table:
 end: `class.spelling`
 
 table:
+    source
     name: `printf.format`
     columns: (class: class) (@: char spelling)
     rows:
@@ -274,6 +280,7 @@ table:
 end: `printf.format`
 
 table:
+    source
     name: `printf.argument.class`
     columns: (class: class) (class: value)
     rows:
@@ -306,6 +313,7 @@ table:
 end: `printf.argument.class`
 
 table:
+    source
     name: `printf.conversion.rule`
     columns: (class: class) (class: expected)  (profileRule: profile)
     rows:
@@ -338,6 +346,7 @@ table:
 end: `printf.conversion.rule`
 
 table:
+    source
     name: `class.c.projection`
     columns: (class: class) (@: char spelling)
     rows:
@@ -369,6 +378,7 @@ table:
 end: `class.c.projection`
 
 table:
+    source
     name: `core.c.include`
     columns: (class: class) (@: char target)
     rows:
@@ -381,6 +391,7 @@ table:
 end: `core.c.include`
 
 table:
+    source
     name: `serialization.codec`
     columns: (class: class) (@: char codec)
     rows:
@@ -411,12 +422,14 @@ table:
 end: `serialization.codec`
 
 table:
+    source
     name: int8
     columns: (class: class) (int8: `context literal`)
     rows:
 end: int8
 
 join: (int8) Boolean
+    source
     columns: (class: class) (int8: `context literal`)
     rows:
              None    -1
@@ -426,6 +439,7 @@ join: (int8) Boolean
 end: Boolean
 
 table:
+    source
     name: `contextual.literal.value`
     columns: (class: class) (relation: value)
     rows:
@@ -436,6 +450,7 @@ table:
 end: `contextual.literal.value`
 
 table:
+    source
     name: `None.value`
     columns: (class: class) (@: char value)
     rows:
@@ -452,6 +467,7 @@ table:
 end: `None.value`
 
 table:
+    source
     name: `OK.value`
     columns: (class: class) (@: char value)
     rows:
@@ -465,6 +481,7 @@ table:
 end: `OK.value`
 
 table:
+    source
     name: `false.value`
     columns: (class: class) (@: char value)
     rows:
@@ -473,6 +490,7 @@ table:
 end: `false.value`
 
 table:
+    source
     name: `true.value`
     columns: (class: class) (@: char value)
     rows:
@@ -481,6 +499,7 @@ table:
 end: `true.value`
 
 table:
+    source
     name: `callable.projection`
     columns: (class: class) (projection: value)
     rows:
@@ -498,6 +517,7 @@ table:
 end: `callable.projection`
 
 table:
+    source
     name: `c99.ub.policy`
     columns: (class: class) (class: policy)
     rows:
@@ -509,6 +529,7 @@ table:
 end: `c99.ub.policy`
 
 table:
+    source
     name: `profile.validator`
     columns: (class: class) (@: char binding)
     rows:
@@ -516,6 +537,7 @@ table:
 end: `profile.validator`
 
 table:
+    source
     name: `class.cTail`
     columns: (class: class) (@: char spelling)
     rows:
@@ -533,6 +555,7 @@ table:
 end: `class.cTail`
 
 table:
+    source
     name: `class.reference-base`
     columns: (class: class) (int: value)
     rows:
@@ -540,6 +563,7 @@ table:
 end: `class.reference-base`
 
 table:
+    source
     name: `class.receiver`
     columns: (class: class) (binding: emit)                     (binding: structure_value_alloc)                     (binding: structure_value_fill)
     rows:
@@ -547,6 +571,7 @@ table:
 end: `class.receiver`
 
 table:
+    source
     name: `receiver.function`
     columns: (class: class) (binding: receiver)
     rows:
@@ -558,6 +583,7 @@ table:
 end: `receiver.function`
 
 table:
+    source
     name: namespace
     columns: (class: class) (class: `receiver.type`)
     rows:
@@ -610,6 +636,7 @@ table:
 end: namespace
 
 table:
+    source
     name: `receiver.type`
     columns: (class: class) (binding: dispatcher)
     rows:
@@ -622,6 +649,7 @@ table:
 end: `receiver.type`
 
 table:
+    source
     name: `receiver.substrate`
     columns: (class: class) (binding: receiver)
     rows:
@@ -629,6 +657,7 @@ table:
 end: `receiver.substrate`
 
 table:
+    source
     name: `receiver.level`
     columns: (class: class) (binding: receiver)
     rows:
@@ -637,6 +666,7 @@ table:
 end: `receiver.level`
 
 table:
+    source
     name: `receiver.l3.exclude`
     columns: (class: class) (int: value)
     rows:
@@ -645,6 +675,7 @@ table:
 end: `receiver.l3.exclude`
 
 table:
+    source
     name: `receiver.statement`
     columns: (class: class) (binding: receiver)
     rows:
@@ -686,6 +717,7 @@ table:
 end: `receiver.statement`
 
 table:
+    source
     name: `receiver.expr`
     columns: (class: class) (binding: receiver)
     rows:
@@ -694,6 +726,7 @@ table:
 end: `receiver.expr`
 
 table:
+    source
     name: `namespace.l4.payload`
     columns: (class: class) (@: char L4)
     rows:
@@ -703,6 +736,7 @@ table:
 end: `namespace.l4.payload`
 
 table:
+    source
     name: `receiver.atom.statement`
     columns: (class: class) (binding: receiver)
     rows:
@@ -722,6 +756,7 @@ table:
 end: `receiver.atom.statement`
 
 table:
+    source
     name: `loadHeaders.item`
     columns: (class: class) (size_t: index)
     rows:
@@ -739,6 +774,7 @@ table:
 end: `loadHeaders.item`
 
 table:
+    source
     name: `receiver.positional-name`
     columns: (class: class) (class: argument)  (size_t: index)
     rows:
@@ -754,6 +790,7 @@ table:
 end: `receiver.positional-name`
 
 table:
+    source
     name: `receiver.formal-param.unwrap`
     columns: (class: class) (size_t: index)
     rows:
@@ -761,6 +798,7 @@ table:
 end: `receiver.formal-param.unwrap`
 
 table:
+    source
     name: `receiver.modifier`
     columns: (class: class) (binding: receiver)
     rows:
@@ -768,6 +806,7 @@ table:
 end: `receiver.modifier`
 
 table:
+    source
     name: `receiver.trailer`
     columns: (class: class) (binding: receiver)
     rows:
@@ -776,6 +815,7 @@ table:
 end: `receiver.trailer`
 
 table:
+    source
     name: `call.lowering`
     columns: (class: class) (binding: handler)
     rows:
@@ -784,6 +824,7 @@ table:
 end: `call.lowering`
 
 table:
+    source
     name: `materialize.argument`
     columns: (class: class) (binding: materializer)
     rows:
@@ -793,6 +834,7 @@ table:
 end: `materialize.argument`
 
 table:
+    source
     name: `callable.partial.form`
     columns: (class: class) (binding: materializer)
     rows:
@@ -801,6 +843,7 @@ table:
 end: `callable.partial.form`
 
 table:
+    source
     name: `cast.target`
     columns: (class: class) (int: value)
     rows:
@@ -941,6 +984,7 @@ table:
 end: `cast.target`
 
 table:
+    source
     name: `operator.prefix`
     columns: (class: class) (@: char ansi_c)  (binding: emitter)
     rows:
@@ -955,6 +999,7 @@ table:
 end: `operator.prefix`
 
 table:
+    source
     name: `operator.postfix`
     columns: (class: class) (@: char ansi_c)  (binding: emitter)
     rows:
@@ -963,6 +1008,7 @@ table:
 end: `operator.postfix`
 
 table:
+    source
     name: `operator.infix`
     columns: (class: class) (@: char ansi_c)  (binding: emitter)
     rows:
@@ -988,6 +1034,7 @@ table:
 end: `operator.infix`
 
 table:
+    source
     name: `operator.index`
     columns: (class: class) (@: char ansi_c)  (binding: emitter)
     rows:
@@ -996,6 +1043,7 @@ table:
 end: `operator.index`
 
 table:
+    source
     name: `expr.atom`
     columns: (class: class) (@: char ansi_c)  (binding: emitter)
     rows:
@@ -1007,6 +1055,7 @@ table:
 end: `expr.atom`
 
 table:
+    source
     name: `expr_spelling_binding`
     columns: (class: class) (class: binding_table)
     rows:
@@ -1018,6 +1067,7 @@ table:
 end: `expr_spelling_binding`
 
 table:
+    source
     name: expr_emitter_binding
     columns: (class: class) (class: binding_table)
     rows:

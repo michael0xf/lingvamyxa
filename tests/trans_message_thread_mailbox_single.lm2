@@ -21,6 +21,7 @@ table:
 end: `fn.thread-context.managed`
 
 table:
+    source
     name: `forward.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -28,6 +29,7 @@ table:
 end: `forward.backend`
 
 table:
+    source
     name: `layout.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -35,6 +37,7 @@ table:
 end: `layout.backend`
 
 table:
+    source
     name: `class.reference-base`
     columns: (class: class) (int: value)
     rows:
@@ -42,6 +45,7 @@ table:
 end: `class.reference-base`
 
 table:
+    source
     name: `LmTestMailboxContext.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -56,6 +60,7 @@ table:
 end: `LmTestMailboxContext.field.class`
 
 table:
+    source
     name: `LmTestMailboxContext.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -70,6 +75,7 @@ table:
 end: `LmTestMailboxContext.field.index`
 
 table:
+    source
     name: `LmTestMailboxContext.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:

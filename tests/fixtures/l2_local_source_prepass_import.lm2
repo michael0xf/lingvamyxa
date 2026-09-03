@@ -1,4 +1,5 @@
 table:
+    source
     name: LmLocalPrepassImportedSource
     columns: (class: class) (char: value)
     rows:

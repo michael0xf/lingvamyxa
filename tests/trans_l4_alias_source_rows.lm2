@@ -1,4 +1,5 @@
 table:
+    source
     name: alias
     columns: (class: class) (int: marker) (int: `target.const`) (class: target) (int: extra) (size_t: `target.address-depth`) (class: backend)
     rows:
@@ -16,6 +17,7 @@ table:
 end: alias
 
 table:
+    source
     name: alias
     columns: (class: class) (int: marker) (class: backend)
     rows:
@@ -23,6 +25,7 @@ table:
 end: alias
 
 table:
+    source
     name: alias
     columns: (class: class) (@: char backend) (int: marker)
     rows:
@@ -30,6 +33,7 @@ table:
 end: alias
 
 table:
+    source
     name: `alias.target`
     columns: (class: class) (class: target)
     rows:
@@ -40,6 +44,7 @@ table:
 end: `alias.target`
 
 table:
+    source
     name: `alias.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -48,6 +53,7 @@ table:
 end: `alias.backend`
 
 table:
+    source
     name: `alias.target.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -56,6 +62,7 @@ table:
 end: `alias.target.address-depth`
 
 table:
+    source
     name: `alias.target.const`
     columns: (class: class) (int: value)
     rows:
@@ -64,6 +71,7 @@ table:
 end: `alias.target.const`
 
 table:
+    source
     name: `alias.target`
     columns: (class: class) (char: target)
     rows:
@@ -71,6 +79,7 @@ table:
 end: `alias.target`
 
 table:
+    source
     name: `alias.target.address-depth`
     columns: (class: class) (int: depth)
     rows:
@@ -78,6 +87,7 @@ table:
 end: `alias.target.address-depth`
 
 table:
+    source
     name: `alias.target.const`
     columns: (class: class) (size_t: value)
     rows:
@@ -85,6 +95,7 @@ table:
 end: `alias.target.const`
 
 table:
+    source
     name: `lm.test.alias.joined.seed`
     columns: (class: class) (class: backend) (class: target) (size_t: `target.address-depth`) (int: `target.const`)
     rows:
@@ -92,11 +103,13 @@ table:
 end: `lm.test.alias.joined.seed`
 
 join: (`lm.test.alias.joined.seed`) `lm.test.alias.joined.middle`
+    source
     columns: (class: class) (class: backend) (class: target) (size_t: `target.address-depth`) (int: `target.const`)
     rows:
 end: `lm.test.alias.joined.middle`
 
 join: (`lm.test.alias.joined.middle`) alias
+    source
     columns: (class: class) (class: backend) (class: target) (size_t: `target.address-depth`) (int: `target.const`)
     rows:
 end: alias

@@ -27,11 +27,13 @@ table:
 end: `lm.test.cast.target.seed`
 
 join: (`lm.test.cast.target.seed`) `lm.test.cast.target.middle`
+    source
     columns: (class: class) (int: marker) (int: target)
     rows:
 end: `lm.test.cast.target.middle`
 
 join: (`lm.test.cast.target.middle`) `cast`
+    source
     columns: (class: class) (int: marker) (int: target)
     rows:
 end: `cast`

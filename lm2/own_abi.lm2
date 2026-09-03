@@ -1,4 +1,5 @@
 table:
+    source
     name: include
     columns: (class: class) (@: char target)
     rows:
@@ -6,6 +7,7 @@ table:
 end: include
 
 table:
+    source
     name: functionPointerType
     columns: (class: class) (int: value)
     rows:
@@ -27,6 +29,7 @@ fn: LmRestLmxPost (@: void context; const: @(char normalized_uri); const: @(char
 fn: LmRestLmxDestroy (@: void context) void
 
 table:
+    source
     name: class
     columns: (class: class) (class: kind)
     rows:
@@ -34,6 +37,7 @@ table:
 end: class
 
 table:
+    source
     name: `alias.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -42,6 +46,7 @@ table:
 end: `alias.backend`
 
 table:
+    source
     name: `alias.target`
     columns: (class: class) (class: target)
     rows:
@@ -50,6 +55,7 @@ table:
 end: `alias.target`
 
 table:
+    source
     name: `forward.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -72,6 +78,7 @@ table:
 end: `forward.backend`
 
 table:
+    source
     name: `constant.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -93,6 +100,7 @@ table:
 end: `constant.backend`
 
 table:
+    source
     name: `constant.value`
     columns: (class: class) (int: value)
     rows:
@@ -114,6 +122,7 @@ table:
 end: `constant.value`
 
 table:
+    source
     name: `layout.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -137,6 +146,7 @@ table:
 end: `layout.backend`
 
 table:
+    source
     name: `class.reference-base`
     columns: (class: class) (int: value)
     rows:
@@ -161,6 +171,7 @@ table:
 end: `class.reference-base`
 
 table:
+    source
     name: `LmSlice.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -169,6 +180,7 @@ table:
 end: `LmSlice.field.class`
 
 table:
+    source
     name: `LmSlice.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -177,6 +189,7 @@ table:
 end: `LmSlice.field.index`
 
 table:
+    source
     name: `LmSlice.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -184,6 +197,7 @@ table:
 end: `LmSlice.field.address-depth`
 
 table:
+    source
     name: `LmOwnPtrStack.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -194,6 +208,7 @@ table:
 end: `LmOwnPtrStack.field.class`
 
 table:
+    source
     name: `LmOwnPtrStack.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -204,6 +219,7 @@ table:
 end: `LmOwnPtrStack.field.index`
 
 table:
+    source
     name: `LmOwnPtrStack.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -211,6 +227,7 @@ table:
 end: `LmOwnPtrStack.field.address-depth`
 
 table:
+    source
     name: `LmOwnValueStack.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -221,6 +238,7 @@ table:
 end: `LmOwnValueStack.field.class`
 
 table:
+    source
     name: `LmOwnValueStack.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -231,6 +249,7 @@ table:
 end: `LmOwnValueStack.field.index`
 
 table:
+    source
     name: `LmOwnValueStack.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -238,6 +257,7 @@ table:
 end: `LmOwnValueStack.field.address-depth`
 
 table:
+    source
     name: `LmOwnAllocationDescriptor.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -251,6 +271,7 @@ table:
 end: `LmOwnAllocationDescriptor.field.class`
 
 table:
+    source
     name: `LmOwnAllocationDescriptor.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -264,6 +285,7 @@ table:
 end: `LmOwnAllocationDescriptor.field.index`
 
 table:
+    source
     name: `LmOwnAllocationDescriptor.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -272,6 +294,7 @@ table:
 end: `LmOwnAllocationDescriptor.field.address-depth`
 
 table:
+    source
     name: `LmOwnLazyEdge.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -284,6 +307,7 @@ table:
 end: `LmOwnLazyEdge.field.class`
 
 table:
+    source
     name: `LmOwnLazyEdge.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -296,6 +320,7 @@ table:
 end: `LmOwnLazyEdge.field.index`
 
 table:
+    source
     name: `LmOwnLazyEdge.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -306,6 +331,7 @@ table:
 end: `LmOwnLazyEdge.field.address-depth`
 
 table:
+    source
     name: `LmOwnLazyEdge.field.const`
     columns: (class: class) (int: value)
     rows:
@@ -314,6 +340,7 @@ table:
 end: `LmOwnLazyEdge.field.const`
 
 table:
+    source
     name: `LmOwnArena.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -328,6 +355,7 @@ table:
 end: `LmOwnArena.field.class`
 
 table:
+    source
     name: `LmOwnArena.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -342,6 +370,7 @@ table:
 end: `LmOwnArena.field.index`
 
 table:
+    source
     name: `LmOwnArena.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -354,6 +383,7 @@ table:
 end: `LmOwnArena.field.address-depth`
 
 table:
+    source
     name: `LmHostThread.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -365,6 +395,7 @@ table:
 end: `LmHostThread.field.class`
 
 table:
+    source
     name: `LmHostThread.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -376,6 +407,7 @@ table:
 end: `LmHostThread.field.index`
 
 table:
+    source
     name: `LmHostThread.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -384,6 +416,7 @@ table:
 end: `LmHostThread.field.address-depth`
 
 table:
+    source
     name: `LmMutex.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -391,6 +424,7 @@ table:
 end: `LmMutex.field.class`
 
 table:
+    source
     name: `LmMutex.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -398,6 +432,7 @@ table:
 end: `LmMutex.field.index`
 
 table:
+    source
     name: `LmMutex.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -405,6 +440,7 @@ table:
 end: `LmMutex.field.address-depth`
 
 table:
+    source
     name: `LmCondition.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -412,6 +448,7 @@ table:
 end: `LmCondition.field.class`
 
 table:
+    source
     name: `LmCondition.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -419,6 +456,7 @@ table:
 end: `LmCondition.field.index`
 
 table:
+    source
     name: `LmCondition.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -426,6 +464,7 @@ table:
 end: `LmCondition.field.address-depth`
 
 table:
+    source
     name: `LmMessageThreadComponent.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -436,6 +475,7 @@ table:
 end: `LmMessageThreadComponent.field.class`
 
 table:
+    source
     name: `LmMessageThreadComponent.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -446,6 +486,7 @@ table:
 end: `LmMessageThreadComponent.field.index`
 
 table:
+    source
     name: `LmMessageThreadComponent.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -455,6 +496,7 @@ table:
 end: `LmMessageThreadComponent.field.address-depth`
 
 table:
+    source
     name: `IncomingMessage.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -463,6 +505,7 @@ table:
 end: `IncomingMessage.field.class`
 
 table:
+    source
     name: `IncomingMessage.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -471,6 +514,7 @@ table:
 end: `IncomingMessage.field.index`
 
 table:
+    source
     name: `IncomingMessage.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -478,6 +522,7 @@ table:
 end: `IncomingMessage.field.address-depth`
 
 table:
+    source
     name: `IncomingMessage.field.const`
     columns: (class: class) (int: value)
     rows:
@@ -485,6 +530,7 @@ table:
 end: `IncomingMessage.field.const`
 
 table:
+    source
     name: `LmMessage.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -494,6 +540,7 @@ table:
 end: `LmMessage.field.class`
 
 table:
+    source
     name: `LmMessage.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -503,6 +550,7 @@ table:
 end: `LmMessage.field.index`
 
 table:
+    source
     name: `LmMessage.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -511,6 +559,7 @@ table:
 end: `LmMessage.field.address-depth`
 
 table:
+    source
     name: `LmMessageOutboxEntry.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -521,6 +570,7 @@ table:
 end: `LmMessageOutboxEntry.field.class`
 
 table:
+    source
     name: `LmMessageOutboxEntry.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -531,6 +581,7 @@ table:
 end: `LmMessageOutboxEntry.field.index`
 
 table:
+    source
     name: `LmMessageOutboxEntry.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -541,6 +592,7 @@ table:
 end: `LmMessageOutboxEntry.field.address-depth`
 
 table:
+    source
     name: `LmMessageRoute.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -550,6 +602,7 @@ table:
 end: `LmMessageRoute.field.class`
 
 table:
+    source
     name: `LmMessageRoute.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -559,6 +612,7 @@ table:
 end: `LmMessageRoute.field.index`
 
 table:
+    source
     name: `LmMessageRoute.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -568,6 +622,7 @@ table:
 end: `LmMessageRoute.field.address-depth`
 
 table:
+    source
     name: `LmRestLmxProviderOpsV1.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -577,6 +632,7 @@ table:
 end: `LmRestLmxProviderOpsV1.field.class`
 
 table:
+    source
     name: `LmRestLmxProviderOpsV1.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -586,6 +642,7 @@ table:
 end: `LmRestLmxProviderOpsV1.field.index`
 
 table:
+    source
     name: `LmMessageThreadRuntime.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -610,6 +667,7 @@ table:
 end: `LmMessageThreadRuntime.field.class`
 
 table:
+    source
     name: `LmMessageThreadRuntime.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -634,6 +692,7 @@ table:
 end: `LmMessageThreadRuntime.field.index`
 
 table:
+    source
     name: `LmMessageThreadRuntime.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -647,6 +706,7 @@ table:
 end: `LmMessageThreadRuntime.field.address-depth`
 
 table:
+    source
     name: `LmMessageThreadPool.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -668,6 +728,7 @@ table:
 end: `LmMessageThreadPool.field.class`
 
 table:
+    source
     name: `LmMessageThreadPool.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -689,6 +750,7 @@ table:
 end: `LmMessageThreadPool.field.index`
 
 table:
+    source
     name: `LmMessageThreadPool.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -703,6 +765,7 @@ table:
 end: `LmMessageThreadPool.field.address-depth`
 
 table:
+    source
     name: `LmMessageThread.field.class`
     columns: (class: class) (class: field)
     rows:
@@ -748,6 +811,7 @@ table:
 end: `LmMessageThread.field.class`
 
 table:
+    source
     name: `LmMessageThread.field.index`
     columns: (class: class) (size_t: index)
     rows:
@@ -793,6 +857,7 @@ table:
 end: `LmMessageThread.field.index`
 
 table:
+    source
     name: `LmMessageThread.field.address-depth`
     columns: (class: class) (size_t: depth)
     rows:
@@ -818,6 +883,7 @@ table:
 end: `LmMessageThread.field.address-depth`
 
 table:
+    source
     name: `fn.external`
     columns: (class: class) (int: value)
     rows:

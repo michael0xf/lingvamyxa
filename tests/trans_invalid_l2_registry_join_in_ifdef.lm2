@@ -1,5 +1,6 @@
 L2:
     table:
+        source
         name: conditionalRegistryJoinSeed
         columns: (class: class) (int: value)
         rows:
@@ -9,6 +10,7 @@ L2:
     ifdef:
         LM_TEST_CONDITIONAL_REGISTRY_JOIN:
             join: (conditionalRegistryJoinSeed) conditionalRegistryJoin
+                source
                 columns: (class: class) (int: value)
                 rows:
             end: conditionalRegistryJoin

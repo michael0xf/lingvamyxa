@@ -11,6 +11,7 @@
 `ifndef-default`: LM_TEST_IFDEF_EXPECTED 61
 
 table:
+    source
     name: ifdef
     columns: (class: class) (node: payload)
     rows:
@@ -23,6 +24,7 @@ table:
 end: ifdef
 
 table:
+    source
     name: ifdef
     columns: (class: class) (node: body)
     rows:
@@ -41,6 +43,7 @@ table:
 end: ifdef
 
 table:
+    source
     name: `lm.test.ifdef.seed`
     columns: (class: class) (node: body)
     rows:
@@ -53,11 +56,13 @@ table:
 end: `lm.test.ifdef.seed`
 
 join: (`lm.test.ifdef.seed`) ifdef
+    source
     columns: (class: class) (node: body)
     rows:
 end: ifdef
 
 table:
+    source
     name: ifdef
     columns: (class: class) (node: body) (int: marker)
     rows:
@@ -71,6 +76,7 @@ table:
 end: ifdef
 
 table:
+    source
     name: ifdef
     columns: (class: class) (int: marker) (node: body)
     rows:
@@ -83,6 +89,7 @@ table:
 end: ifdef
 
 table:
+    source
     name: `ifdef.body`
     columns: (class: class) (node: body)
     rows:
@@ -95,6 +102,7 @@ table:
 end: `ifdef.body`
 
 table:
+    source
     name: `lm.test.ifdef.wide.seed`
     columns: (class: class) (node: body) (int: marker)
     rows:
@@ -108,16 +116,19 @@ table:
 end: `lm.test.ifdef.wide.seed`
 
 join: (`lm.test.ifdef.wide.seed`) `lm.test.ifdef.wide.middle`
+    source
     columns: (class: class) (node: body) (int: marker)
     rows:
 end: `lm.test.ifdef.wide.middle`
 
 join: (`lm.test.ifdef.wide.middle`) ifdef
+    source
     columns: (class: class) (node: body) (int: marker)
     rows:
 end: ifdef
 
 table:
+    source
     name: ifdef
     columns: (char: class) (node: body) (int: marker)
     rows:
@@ -131,6 +142,7 @@ table:
 end: ifdef
 
 table:
+    source
     name: ifdef
     columns: (class: class) (node: body)
     rows:

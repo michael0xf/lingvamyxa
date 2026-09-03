@@ -25,11 +25,13 @@ table:
 end: `lm.test.class.range.seed`
 
 join: (`lm.test.class.range.seed`) `lm.test.class.range.middle`
+    source
     columns: (class: class) (int: marker) (@: char range)
     rows:
 end: `lm.test.class.range.middle`
 
 join: (`lm.test.class.range.middle`) `class`
+    source
     columns: (class: class) (int: marker) (@: char range)
     rows:
 end: `class`

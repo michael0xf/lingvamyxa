@@ -32,11 +32,13 @@ table:
 end: `lm.test.receiver.atom.wide.seed`
 
 join: (`lm.test.receiver.atom.wide.seed`) `lm.test.receiver.atom.wide.middle`
+    source
     columns: (class: class) (binding: statement) (int: marker)
     rows:
 end: `lm.test.receiver.atom.wide.middle`
 
 join: (`lm.test.receiver.atom.wide.middle`) `receiver.atom`
+    source
     columns: (class: class) (binding: statement) (int: marker)
     rows:
 end: `receiver.atom`

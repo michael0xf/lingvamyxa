@@ -1,6 +1,7 @@
 predef: "l2_predef_cycle_b.lm2"
 
 table:
+    source
     name: predefCycleA
     columns: (class: class) (int: value)
     rows:

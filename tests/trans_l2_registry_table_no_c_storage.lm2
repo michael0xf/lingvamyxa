@@ -1,5 +1,6 @@
 L2:
     table:
+        source
         name: `lm.test.l2.registry.metadata`
         columns: (class: class) (binding: receiver) (node: payload)
         rows:
@@ -10,6 +11,7 @@ L2:
     end: `lm.test.l2.registry.metadata`
 
     join: (`lm.test.l2.registry.metadata`) `lm.test.l2.registry.joined`
+        source
         columns: (class: class) (binding: receiver) (node: payload)
         rows:
                  directKey  lm_trans_statement_emit_if

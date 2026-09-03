@@ -2,6 +2,7 @@ L2:
     predef: "fixtures/registry_view_parity_base.lm2"
 
     table:
+        source
         name: `registry.view.parity.lookup`
         columns: (class: class) (@: char value)
         rows:
@@ -13,6 +14,7 @@ L2:
     end: `registry.view.parity.lookup`
 
     table:
+        source
         name: `registry.view.parity.multi`
         columns: (class: class) (@: char left) (@: char right)
         rows:
@@ -22,6 +24,7 @@ L2:
     end: `registry.view.parity.multi`
 
     table:
+        source
         name: `registry.view.parity.keyonly`
         columns: (class: class)
         rows:
@@ -31,6 +34,7 @@ L2:
     end: `registry.view.parity.keyonly`
 
     table:
+        source
         name: `registry.view.parity.allnone`
         columns: (class: class) (@: char left) (@: char middle) (@: char right)
         rows:
@@ -40,6 +44,7 @@ L2:
     end: `registry.view.parity.allnone`
 
     table:
+        source
         name: `registry.view.parity.duplicateColumns`
         columns: (class: class) (@: char value) (@: char value)
         rows:
@@ -48,6 +53,7 @@ L2:
     end: `registry.view.parity.duplicateColumns`
 
     join: (registryViewParityWideA registryViewParityWideB) registryViewParityWideJoined
+        source
         columns: (class: class) (@: char left) (@: char middle) (@: char right)
         rows:
                  localWide       localLeft  None         localRight
@@ -56,12 +62,14 @@ L2:
     end: registryViewParityWideJoined
 
     join: (registryViewParityJoinBase) registryViewParityJoined
+        source
         columns: (class: class) (@: char value)
         rows:
                  localJoin  localJoinValue
     end: registryViewParityJoined
 
     join: (registryViewParityNamespaceBase) namespace
+        source
         columns: (class: class) (class: `receiver.type`)
         rows:
     end: namespace

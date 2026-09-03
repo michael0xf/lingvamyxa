@@ -1,5 +1,6 @@
 L2:
     table:
+        source
         name: registryJoinSeed
         columns: (class: class) (int: value)
         rows:
@@ -9,6 +10,7 @@ L2:
     external:
         fn: main () int
             join: (registryJoinSeed) localRegistryJoin
+                source
                 columns: (class: class) (int: value)
                 rows:
             end: localRegistryJoin

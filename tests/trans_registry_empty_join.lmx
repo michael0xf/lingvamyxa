@@ -1,11 +1,13 @@
 L2:
     table:
+        source
         name: int8
         columns: (class: class) (int8: `context literal`)
         rows:
     end: int8
 
     join: (int8) Boolean
+        source
         columns: (class: class) (int8: `context literal`)
         rows:
                  None    -1

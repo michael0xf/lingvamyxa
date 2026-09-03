@@ -1,4 +1,5 @@
 table:
+    source
     name: `receiver.statement`
     columns: (class: class) (binding: receiver)
     rows:

@@ -11,6 +11,7 @@ prototype
 unit
 
 table:
+    source
     name: LmVcpkgOptions
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:
@@ -24,6 +25,7 @@ table:
 end: LmVcpkgOptions
 
 table:
+    source
     name: `layout.backend`
     columns: (class: class) (class: backend)
     rows:
@@ -31,6 +33,7 @@ table:
 end: `layout.backend`
 
 table:
+    source
     name: `class.reference-base`
     columns: (class: class) (int: value)
     rows:

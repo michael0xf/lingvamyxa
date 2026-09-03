@@ -10,6 +10,7 @@ L2:
     define
 
     table:
+        source
         name: functionPointerType
         columns: (class: class) (int: value)
         rows:

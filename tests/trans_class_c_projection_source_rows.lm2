@@ -30,11 +30,13 @@ L2:
     end: `lm.test.class.c.projection.seed`
 
     join: (`lm.test.class.c.projection.seed`) `lm.test.class.c.projection.middle`
+        source
         columns: (class: class) (int: marker) (@: char `c.projection`)
         rows:
     end: `lm.test.class.c.projection.middle`
 
     join: (`lm.test.class.c.projection.middle`) class
+        source
         columns: (class: class) (int: marker) (@: char `c.projection`)
         rows:
     end: class
