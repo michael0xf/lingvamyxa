@@ -569,14 +569,15 @@ struct LmMessageThread {
 };
 #ifndef lm_lmx_module_private_1_typedef_defined_LmBuildOptions
 #define lm_lmx_module_private_1_typedef_defined_LmBuildOptions 1
-#define lm_lmx_module_private_1_typedef_id_a_LmBuildOptions 0x6e8a8214925db5a6ULL
-#define lm_lmx_module_private_1_typedef_id_b_LmBuildOptions 0x95a0ddb536068c67ULL
+#define lm_lmx_module_private_1_typedef_id_a_LmBuildOptions 0x00e08a2e2777177bULL
+#define lm_lmx_module_private_1_typedef_id_b_LmBuildOptions 0x28289df227a734e4ULL
 typedef struct LmBuildOptions {
     int full_build;
     int next_build;
+    int test_suite;
 } LmBuildOptions;
 #else
-#if !defined(lm_lmx_module_private_1_typedef_id_a_LmBuildOptions) || !defined(lm_lmx_module_private_1_typedef_id_b_LmBuildOptions) || lm_lmx_module_private_1_typedef_id_a_LmBuildOptions != 0x6e8a8214925db5a6ULL || lm_lmx_module_private_1_typedef_id_b_LmBuildOptions != 0x95a0ddb536068c67ULL
+#if !defined(lm_lmx_module_private_1_typedef_id_a_LmBuildOptions) || !defined(lm_lmx_module_private_1_typedef_id_b_LmBuildOptions) || lm_lmx_module_private_1_typedef_id_a_LmBuildOptions != 0x00e08a2e2777177bULL || lm_lmx_module_private_1_typedef_id_b_LmBuildOptions != 0x28289df227a734e4ULL
 #error "Lingvamyxa conflicting typedef projection for LmBuildOptions"
 #endif
 #endif
@@ -1072,6 +1073,11 @@ static int lm_build_unsetenv(struct LmMessageThread *lm_lmx_message_thread, char
 static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_message_thread, FILE *file, char *output_dir, char *parser_library, char *own_library) {
     (void)lm_lmx_message_thread;
     fputs("$ErrorActionPreference = 'Continue'\n", file);
+    fputs("$lmTestSuite = $env:LM_TEST_SUITE\n", file);
+    fputs("if (-not $lmTestSuite) { $lmTestSuite = 'full' }\n", file);
+    fputs("if ('smoke','core','full' -notcontains $lmTestSuite) { throw ('unknown LM_TEST_SUITE: ' + $lmTestSuite) }\n", file);
+    fputs("$lmSmokeTrans = 'trans_integer_add.lm2','trans_include_receiver.lm2','trans_registry_view_parity.lmx','trans_getenv_index_probe.lm2','trans_invalid_anonymous_structure_shape.lm2'\n", file);
+    fputs("Write-Host ('lm0 staged tests suite: ' + $lmTestSuite)\n", file);
     fputs("function Invoke-LmTestWithTimeout([string]$Path, [string]$Name) {\n", file);
     fputs("    $process = Start-Process -FilePath (Resolve-Path -LiteralPath $Path).Path -WorkingDirectory (Get-Location).Path -PassThru\n", file);
     fputs("    if (-not $process.WaitForExit(30000)) { $process.Kill(); throw ($Name + ' timed out') }\n", file);
@@ -1182,12 +1188,15 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("}\n", file);
     fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File | Where-Object { $_.Name -like 'trans_*' -and ($_.Extension -eq '.lm2' -or $_.Extension -eq '.lmx') } | Sort-Object Name) {\n", file);
     fputs("    if ($transSkip -contains $testFile.Name) { continue }\n", file);
+    fputs("    if ($lmTestSuite -eq 'smoke' -and $lmSmokeTrans -notcontains $testFile.Name) { continue }\n", file);
     fputs("    $cPath = Join-Path 'build/obj/tests' ($testFile.BaseName + '.c')\n", file);
     fputs("    $exePath = Join-Path 'build/obj/tests' ($testFile.BaseName + '.exe')\n", file);
     fputs("    if ($testFile.Name -like 'trans_invalid_*') {\n", file);
     fputs("        $previousViewMode = $env:LM_TRANS_REGISTRY_VIEW\n", file);
     fputs("        try {\n", file);
-    fputs("            foreach ($viewMode in @('legacy', '1', 'view')) {\n", file);
+    fputs("            $viewModes = 'view'\n", file);
+    fputs("            if ($lmTestSuite -eq 'full') { $viewModes = 'legacy','1','view' }\n", file);
+    fputs("            foreach ($viewMode in $viewModes) {\n", file);
     fputs("                $env:LM_TRANS_REGISTRY_VIEW = $viewMode\n", file);
     fputs("                Remove-Item -LiteralPath $cPath -Force -ErrorAction SilentlyContinue\n", file);
     fputs("                & $trans $testFile.FullName $cPath *> $null\n", file);
@@ -1249,6 +1258,7 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("        if ($LASTEXITCODE -ne 0) { throw 'conditional predef descriptor branch run failed' }\n", file);
     fputs("    }\n", file);
     fputs("}\n", file);
+    fputs("if ($lmTestSuite -eq 'full') {\n", file);
     fputs("$httpClientDefaultC = Join-Path 'build/obj/tests' 'trans_rest_lmx_http_client_default.c'\n", file);
     fputs("$httpClientDefaultTest = Join-Path 'build/obj/tests' 'trans_rest_lmx_http_client_default.exe'\n", file);
     fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_INSTALL_DEFAULT_CLIENT=1' '-Ilm1' $httpClientDefaultC 'tests/trans_rest_lmx_http_client_default_stub.c' $parserLib $ownLib '-o' $httpClientDefaultTest\n", file);
@@ -1350,7 +1360,8 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("finally {\n", file);
     fputs("    if ($null -eq $previousThreadProvider) { Remove-Item Env:LM_THREAD_PROVIDER -ErrorAction SilentlyContinue } else { $env:LM_THREAD_PROVIDER = $previousThreadProvider }\n", file);
     fputs("}\n", file);
-    fputs("Write-Host 'lm0 staged tests passed'\n", file);
+    fputs("}\n", file);
+    fputs("Write-Host ('lm0 staged tests passed: ' + $lmTestSuite)\n", file);
     return 0;
 }
 #else
@@ -1479,6 +1490,10 @@ static int lm_build_unsetenv(struct LmMessageThread *lm_lmx_message_thread, char
 static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_message_thread, FILE *file, char *output_dir, char *parser_library, char *own_library) {
     (void)lm_lmx_message_thread;
     fputs("set -eu\n", file);
+    fputs("lm_test_suite=${LM_TEST_SUITE:-full}\n", file);
+    fputs("if [ \"$lm_test_suite\" != smoke ] && [ \"$lm_test_suite\" != core ] && [ \"$lm_test_suite\" != full ]; then echo \"unknown LM_TEST_SUITE: $lm_test_suite\" >&2; exit 1; fi\n", file);
+    fputs("lm_smoke_trans=' trans_integer_add.lm2 trans_include_receiver.lm2 trans_registry_view_parity.lmx trans_getenv_index_probe.lm2 trans_invalid_anonymous_structure_shape.lm2 '\n", file);
+    fputs("echo \"lm0 staged tests suite: $lm_test_suite\"\n", file);
     fputs("lm_run_with_watchdog() {\n", file);
     fputs("    if command -v timeout >/dev/null 2>&1; then\n", file);
     fputs("        if timeout 30s \"$@\"; then return 0; else lm_watchdog_status=$?; return \"$lm_watchdog_status\"; fi\n", file);
@@ -1591,12 +1606,17 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("for src in tests/trans_*.lm2 tests/trans_*.lmx; do\n", file);
     fputs("    [ -e \"$src\" ] || continue\n", file);
     fputs("    name=${src##*/}\n", file);
+    fputs("    if [ \"$lm_test_suite\" = smoke ]; then\n", file);
+    fputs("        case \"$lm_smoke_trans\" in *\" $name \"*) ;; *) continue ;; esac\n", file);
+    fputs("    fi\n", file);
     fputs("    base=${name%.*}\n", file);
     fputs("    c_path=\"build/obj/tests/$base.c\"\n", file);
     fputs("    exe_path=\"build/obj/tests/$base\"\n", file);
     fputs("    case \"$name\" in\n", file);
     fputs("        trans_invalid_*)\n", file);
-    fputs("            for view_mode in legacy 1 view; do\n", file);
+    fputs("            lm_invalid_views=view\n", file);
+    fputs("            if [ \"$lm_test_suite\" = full ]; then lm_invalid_views='legacy 1 view'; fi\n", file);
+    fputs("            for view_mode in $lm_invalid_views; do\n", file);
     fputs("                rm -f \"$c_path\"\n", file);
     fputs("                if LM_TRANS_REGISTRY_VIEW=\"$view_mode\" \"$trans\" \"$src\" \"$c_path\" >/dev/null 2>&1; then code=0; else code=$?; fi\n", file);
     fputs("                if [ \"$code\" -ne 1 ]; then echo \"negative trans test expected exit 1: $name [$view_mode] got $code\" >&2; exit 1; fi\n", file);
@@ -1639,6 +1659,7 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("    [ -n \"$exe_path\" ] || continue\n", file);
     fputs("    \"$exe_path\"\n", file);
     fputs("done < build/obj/tests/run_jobs\n", file);
+    fputs("if [ \"$lm_test_suite\" = full ]; then\n", file);
     fputs("http_client_default_c='build/obj/tests/trans_rest_lmx_http_client_default.c'\n", file);
     fputs("http_client_default_test='build/obj/tests/trans_rest_lmx_http_client_default'\n", file);
     fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_INSTALL_DEFAULT_CLIENT=1 -Ilm1 \"$http_client_default_c\" tests/trans_rest_lmx_http_client_default_stub.c \"$parserLib\" \"$ownLib\" -o \"$http_client_default_test\"\n", file);
@@ -1709,7 +1730,8 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("native_rest_lmx_ingress_test='build/obj/tests/message_thread_rest_lmx_ingress_native'\n", file);
     fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_rest_lmx_ingress.c -o \"$native_rest_lmx_ingress_test\"\n", file);
     fputs("lm_run_with_watchdog \"$native_rest_lmx_ingress_test\"\n", file);
-    fputs("echo 'lm0 staged tests passed'\n", file);
+    fputs("fi\n", file);
+    fputs("echo \"lm0 staged tests passed: $lm_test_suite\"\n", file);
     return 0;
 }
 #endif
@@ -1729,6 +1751,7 @@ static char * lm_build_default_generator(struct LmMessageThread *lm_lmx_message_
 static char * lm_build_default_make_program(struct LmMessageThread *lm_lmx_message_thread);
 static char * lm_build_default_cc(struct LmMessageThread *lm_lmx_message_thread);
 static char * lm_build_default_cxx(struct LmMessageThread *lm_lmx_message_thread);
+static char * lm_build_test_suite_name(struct LmMessageThread *lm_lmx_message_thread, int suite);
 static void lm_build_print_usage(struct LmMessageThread *lm_lmx_message_thread);
 static int lm_build_parse_options(struct LmMessageThread *lm_lmx_message_thread, int argc, char **argv, LmBuildOptions *options);
 static char * lm_build_output_dir(struct LmMessageThread *lm_lmx_message_thread, LmBuildOptions *options);
@@ -1966,35 +1989,72 @@ static char * lm_build_default_cxx(struct LmMessageThread *lm_lmx_message_thread
     return "";
 }
 
+static char * lm_build_test_suite_name(struct LmMessageThread *lm_lmx_message_thread, int suite) {
+    (void)lm_lmx_message_thread;
+    if (suite == 2) {
+        return "smoke";
+    }
+    if (suite == 1) {
+        return "core";
+    }
+    return "full";
+}
+
 static void lm_build_print_usage(struct LmMessageThread *lm_lmx_message_thread) {
     (void)lm_lmx_message_thread;
-    printf("usage: buildCore.lm0 [--build] [--full] [--next]\n");
+    printf("usage: buildCore.lm0 [--build] [--full] [--next] [--tests smoke core full]\n");
     printf("  --build refresh the L0 bootstrap tools\n");
     printf("  --full  refresh L0 tools, then build the bundled third_party profile\n");
     printf("  --next  verify the staged L0 bootstrap tools without installing them\n");
+    printf("  --tests smoke, core or full  staged test suite (default full)\n");
 }
 
 static int lm_build_parse_options(struct LmMessageThread *lm_lmx_message_thread, int argc, char **argv, LmBuildOptions *options) {
     (void)lm_lmx_message_thread;
     int index;
+    char *option;
     options->full_build = 0;
     options->next_build = 0;
+    options->test_suite = 0;
     index = 1;
     while (index < argc) {
-        if (strcmp(argv[index], "--build") == 0) {
+        option = argv[index];
+        if (strcmp(option, "--build") == 0) {
         }
-        if (strcmp(argv[index], "--full") == 0) {
+        if (strcmp(option, "--full") == 0) {
             options->full_build = 1;
         }
-        if (strcmp(argv[index], "--next") == 0) {
+        if (strcmp(option, "--next") == 0) {
             options->next_build = 1;
         }
-        if (strcmp(argv[index], "--help") == 0 || strcmp(argv[index], "-h") == 0) {
+        if (strcmp(option, "--tests") == 0) {
+            if (index + 1 >= argc) {
+                fprintf(stderr, "buildCore.lm0: --tests requires smoke, core or full\n");
+                lm_build_print_usage(lm_lmx_message_thread);
+                return 1;
+            }
+            if (strcmp(argv[index + 1], "smoke") == 0) {
+                options->test_suite = 2;
+            }
+            if (strcmp(argv[index + 1], "core") == 0) {
+                options->test_suite = 1;
+            }
+            if (strcmp(argv[index + 1], "full") == 0) {
+                options->test_suite = 0;
+            }
+            if (strcmp(argv[index + 1], "smoke") != 0 && strcmp(argv[index + 1], "core") != 0 && strcmp(argv[index + 1], "full") != 0) {
+                fprintf(stderr, "buildCore.lm0: unknown test suite: %s\n", argv[index + 1]);
+                lm_build_print_usage(lm_lmx_message_thread);
+                return 1;
+            }
+            index = index + 1;
+        }
+        if (strcmp(option, "--help") == 0 || strcmp(option, "-h") == 0) {
             lm_build_print_usage(lm_lmx_message_thread);
             return 2;
         }
-        if (strcmp(argv[index], "--build") != 0 && strcmp(argv[index], "--full") != 0 && strcmp(argv[index], "--next") != 0 && strcmp(argv[index], "--help") != 0 && strcmp(argv[index], "-h") != 0) {
-            fprintf(stderr, "buildCore.lm0: unknown option: %s\n", argv[index]);
+        if (strcmp(option, "--build") != 0 && strcmp(option, "--full") != 0 && strcmp(option, "--next") != 0 && strcmp(option, "--help") != 0 && strcmp(option, "-h") != 0 && strcmp(option, "--tests") != 0) {
+            fprintf(stderr, "buildCore.lm0: unknown option: %s\n", option);
             lm_build_print_usage(lm_lmx_message_thread);
             return 1;
         }
@@ -2582,6 +2642,11 @@ static int lm_build_run_bootstrap(struct LmMessageThread *lm_lmx_message_thread,
     }
     if (lm_build_run_canary(lm_lmx_message_thread) != 0) {
         fprintf(stderr, "buildCore.lm0: staged bootstrap tools failed the --next rebuild; live tools were not overwritten\n");
+        return 1;
+    }
+    fprintf(stderr, "buildCore.lm0: running staged tests (%s)\n", lm_build_test_suite_name(lm_lmx_message_thread, options -> test_suite));
+    if (lm_build_setenv(lm_lmx_message_thread, "LM_TEST_SUITE", lm_build_test_suite_name(lm_lmx_message_thread, options -> test_suite)) != 0) {
+        fprintf(stderr, "buildCore.lm0: cannot set LM_TEST_SUITE\n");
         return 1;
     }
     if (lm_build_run_staged_tests(lm_lmx_message_thread, trusted_make, output_dir, parser_library, own_library) != 0) {

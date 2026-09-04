@@ -26,6 +26,7 @@ L2:
         rows:
                  full_build  int                    0                       0
                  next_build  int                    1                       0
+                 test_suite  int                    2                       0
     end: LmBuildOptions
 
     table:
@@ -193,6 +194,11 @@ L2:
 
             fn: lm_build_write_platform_tests_script (FILE: file; @: char output_dir; @: char parser_library; @: char own_library) int
                 c.fputs("$ErrorActionPreference = 'Continue'\n", file)
+                c.fputs("$lmTestSuite = $env:LM_TEST_SUITE\n", file)
+                c.fputs("if (-not $lmTestSuite) { $lmTestSuite = 'full' }\n", file)
+                c.fputs("if ('smoke','core','full' -notcontains $lmTestSuite) { throw ('unknown LM_TEST_SUITE: ' + $lmTestSuite) }\n", file)
+                c.fputs("$lmSmokeTrans = 'trans_integer_add.lm2','trans_include_receiver.lm2','trans_registry_view_parity.lmx','trans_getenv_index_probe.lm2','trans_invalid_anonymous_structure_shape.lm2'\n", file)
+                c.fputs("Write-Host ('lm0 staged tests suite: ' + $lmTestSuite)\n", file)
                 c.fputs("function Invoke-LmTestWithTimeout([string]$Path, [string]$Name) {\n", file)
                 c.fputs("    $process = Start-Process -FilePath (Resolve-Path -LiteralPath $Path).Path -WorkingDirectory (Get-Location).Path -PassThru\n", file)
                 c.fputs("    if (-not $process.WaitForExit(30000)) { $process.Kill(); throw ($Name + ' timed out') }\n", file)
@@ -315,12 +321,15 @@ L2:
                 c.fputs("}\n", file)
                 c.fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File | Where-Object { $_.Name -like 'trans_*' -and ($_.Extension -eq '.lm2' -or $_.Extension -eq '.lmx') } | Sort-Object Name) {\n", file)
                 c.fputs("    if ($transSkip -contains $testFile.Name) { continue }\n", file)
+                c.fputs("    if ($lmTestSuite -eq 'smoke' -and $lmSmokeTrans -notcontains $testFile.Name) { continue }\n", file)
                 c.fputs("    $cPath = Join-Path 'build/obj/tests' ($testFile.BaseName + '.c')\n", file)
                 c.fputs("    $exePath = Join-Path 'build/obj/tests' ($testFile.BaseName + '.exe')\n", file)
                 c.fputs("    if ($testFile.Name -like 'trans_invalid_*') {\n", file)
                 c.fputs("        $previousViewMode = $env:LM_TRANS_REGISTRY_VIEW\n", file)
                 c.fputs("        try {\n", file)
-                c.fputs("            foreach ($viewMode in @('legacy', '1', 'view')) {\n", file)
+                c.fputs("            $viewModes = 'view'\n", file)
+                c.fputs("            if ($lmTestSuite -eq 'full') { $viewModes = 'legacy','1','view' }\n", file)
+                c.fputs("            foreach ($viewMode in $viewModes) {\n", file)
                 c.fputs("                $env:LM_TRANS_REGISTRY_VIEW = $viewMode\n", file)
                 c.fputs("                Remove-Item -LiteralPath $cPath -Force -ErrorAction SilentlyContinue\n", file)
                 c.fputs("                & $trans $testFile.FullName $cPath *> $null\n", file)
@@ -382,6 +391,7 @@ L2:
                 c.fputs("        if ($LASTEXITCODE -ne 0) { throw 'conditional predef descriptor branch run failed' }\n", file)
                 c.fputs("    }\n", file)
                 c.fputs("}\n", file)
+                c.fputs("if ($lmTestSuite -eq 'full') {\n", file)
                 c.fputs("$httpClientDefaultC = Join-Path 'build/obj/tests' 'trans_rest_lmx_http_client_default.c'\n", file)
                 c.fputs("$httpClientDefaultTest = Join-Path 'build/obj/tests' 'trans_rest_lmx_http_client_default.exe'\n", file)
                 c.fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_INSTALL_DEFAULT_CLIENT=1' '-Ilm1' $httpClientDefaultC 'tests/trans_rest_lmx_http_client_default_stub.c' $parserLib $ownLib '-o' $httpClientDefaultTest\n", file)
@@ -483,7 +493,8 @@ L2:
                 c.fputs("finally {\n", file)
                 c.fputs("    if ($null -eq $previousThreadProvider) { Remove-Item Env:LM_THREAD_PROVIDER -ErrorAction SilentlyContinue } else { $env:LM_THREAD_PROVIDER = $previousThreadProvider }\n", file)
                 c.fputs("}\n", file)
-                c.fputs("Write-Host 'lm0 staged tests passed'\n", file)
+                c.fputs("}\n", file)
+                c.fputs("Write-Host ('lm0 staged tests passed: ' + $lmTestSuite)\n", file)
                 return: 0
             end: lm_build_write_platform_tests_script
         default:
@@ -571,6 +582,10 @@ L2:
 
             fn: lm_build_write_platform_tests_script (FILE: file; @: char output_dir; @: char parser_library; @: char own_library) int
                 c.fputs("set -eu\n", file)
+                c.fputs("lm_test_suite=${LM_TEST_SUITE:-full}\n", file)
+                c.fputs("if [ \"$lm_test_suite\" != smoke ] && [ \"$lm_test_suite\" != core ] && [ \"$lm_test_suite\" != full ]; then echo \"unknown LM_TEST_SUITE: $lm_test_suite\" >&2; exit 1; fi\n", file)
+                c.fputs("lm_smoke_trans=' trans_integer_add.lm2 trans_include_receiver.lm2 trans_registry_view_parity.lmx trans_getenv_index_probe.lm2 trans_invalid_anonymous_structure_shape.lm2 '\n", file)
+                c.fputs("echo \"lm0 staged tests suite: $lm_test_suite\"\n", file)
                 c.fputs("lm_run_with_watchdog() {\n", file)
                 c.fputs("    if command -v timeout >/dev/null 2>&1; then\n", file)
                 c.fputs("        if timeout 30s \"$@\"; then return 0; else lm_watchdog_status=$?; return \"$lm_watchdog_status\"; fi\n", file)
@@ -695,12 +710,17 @@ L2:
                 c.fputs("for src in tests/trans_*.lm2 tests/trans_*.lmx; do\n", file)
                 c.fputs("    [ -e \"$src\" ] || continue\n", file)
                 c.fputs("    name=${src##*/}\n", file)
+                c.fputs("    if [ \"$lm_test_suite\" = smoke ]; then\n", file)
+                c.fputs("        case \"$lm_smoke_trans\" in *\" $name \"*) ;; *) continue ;; esac\n", file)
+                c.fputs("    fi\n", file)
                 c.fputs("    base=${name%.*}\n", file)
                 c.fputs("    c_path=\"build/obj/tests/$base.c\"\n", file)
                 c.fputs("    exe_path=\"build/obj/tests/$base\"\n", file)
                 c.fputs("    case \"$name\" in\n", file)
                 c.fputs("        trans_invalid_*)\n", file)
-                c.fputs("            for view_mode in legacy 1 view; do\n", file)
+                c.fputs("            lm_invalid_views=view\n", file)
+                c.fputs("            if [ \"$lm_test_suite\" = full ]; then lm_invalid_views='legacy 1 view'; fi\n", file)
+                c.fputs("            for view_mode in $lm_invalid_views; do\n", file)
                 c.fputs("                rm -f \"$c_path\"\n", file)
                 c.fputs("                if LM_TRANS_REGISTRY_VIEW=\"$view_mode\" \"$trans\" \"$src\" \"$c_path\" >/dev/null 2>&1; then code=0; else code=$?; fi\n", file)
                 c.fputs("                if [ \"$code\" -ne 1 ]; then echo \"negative trans test expected exit 1: $name [$view_mode] got $code\" >&2; exit 1; fi\n", file)
@@ -743,6 +763,7 @@ L2:
                 c.fputs("    [ -n \"$exe_path\" ] || continue\n", file)
                 c.fputs("    \"$exe_path\"\n", file)
                 c.fputs("done < build/obj/tests/run_jobs\n", file)
+                c.fputs("if [ \"$lm_test_suite\" = full ]; then\n", file)
                 c.fputs("http_client_default_c='build/obj/tests/trans_rest_lmx_http_client_default.c'\n", file)
                 c.fputs("http_client_default_test='build/obj/tests/trans_rest_lmx_http_client_default'\n", file)
                 c.fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_INSTALL_DEFAULT_CLIENT=1 -Ilm1 \"$http_client_default_c\" tests/trans_rest_lmx_http_client_default_stub.c \"$parserLib\" \"$ownLib\" -o \"$http_client_default_test\"\n", file)
@@ -813,7 +834,8 @@ L2:
                 c.fputs("native_rest_lmx_ingress_test='build/obj/tests/message_thread_rest_lmx_ingress_native'\n", file)
                 c.fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_rest_lmx_ingress.c -o \"$native_rest_lmx_ingress_test\"\n", file)
                 c.fputs("lm_run_with_watchdog \"$native_rest_lmx_ingress_test\"\n", file)
-                c.fputs("echo 'lm0 staged tests passed'\n", file)
+                c.fputs("fi\n", file)
+                c.fputs("echo \"lm0 staged tests passed: $lm_test_suite\"\n", file)
                 return: 0
             end: lm_build_write_platform_tests_script
     end: os
@@ -985,32 +1007,60 @@ L2:
         return: ""
     end: lm_build_default_cxx
     
+    fn: lm_build_test_suite_name (int: suite) @: char
+        if: suite = 2
+            return: "smoke"
+        if: suite = 1
+            return: "core"
+        return: "full"
+    end: lm_build_test_suite_name
+
     sub: lm_build_print_usage ()
-        c.printf: "usage: buildCore.lm0 [--build] [--full] [--next]\n"
+        c.printf: "usage: buildCore.lm0 [--build] [--full] [--next] [--tests smoke core full]\n"
         c.printf: "  --build refresh the L0 bootstrap tools\n"
         c.printf: "  --full  refresh L0 tools, then build the bundled third_party profile\n"
         c.printf: "  --next  verify the staged L0 bootstrap tools without installing them\n"
+        c.printf: "  --tests smoke, core or full  staged test suite (default full)\n"
     end: lm_build_print_usage
     
     fn: lm_build_parse_options (int: argc; @@: char argv; LmBuildOptions: options) int
         int: index
+        @: char option
     
         options\full_build: 0
         options\next_build: 0
+        options\test_suite: 0
         index: 1
     
         while: index < argc
-            if: c.strcmp(argv[index], "--build") = 0
+            option: argv[index]
+            if: c.strcmp(option, "--build") = 0
                 # Explicit default bootstrap mode.
-            if: c.strcmp(argv[index], "--full") = 0
+            if: c.strcmp(option, "--full") = 0
                 options\full_build: 1
-            if: c.strcmp(argv[index], "--next") = 0
+            if: c.strcmp(option, "--next") = 0
                 options\next_build: 1
-            if: c.strcmp(argv[index], "--help") = 0 || c.strcmp(argv[index], "-h") = 0
+            if: c.strcmp(option, "--tests") = 0
+                if: index + 1 >= argc
+                    c.fprintf: c.stderr "buildCore.lm0: --tests requires smoke, core or full\n"
+                    lm_build_print_usage()
+                    return: 1
+                if: c.strcmp(argv[index + 1], "smoke") = 0
+                    options\test_suite: 2
+                if: c.strcmp(argv[index + 1], "core") = 0
+                    options\test_suite: 1
+                if: c.strcmp(argv[index + 1], "full") = 0
+                    options\test_suite: 0
+                if: c.strcmp(argv[index + 1], "smoke") != 0 && c.strcmp(argv[index + 1], "core") != 0 && c.strcmp(argv[index + 1], "full") != 0
+                    c.fprintf: c.stderr "buildCore.lm0: unknown test suite: %s\n" argv[index + 1]
+                    lm_build_print_usage()
+                    return: 1
+                index: index + 1
+            if: c.strcmp(option, "--help") = 0 || c.strcmp(option, "-h") = 0
                 lm_build_print_usage()
                 return: 2
-            if: c.strcmp(argv[index], "--build") != 0 && c.strcmp(argv[index], "--full") != 0 && c.strcmp(argv[index], "--next") != 0 && c.strcmp(argv[index], "--help") != 0 && c.strcmp(argv[index], "-h") != 0
-                c.fprintf: c.stderr "buildCore.lm0: unknown option: %s\n" argv[index]
+            if: c.strcmp(option, "--build") != 0 && c.strcmp(option, "--full") != 0 && c.strcmp(option, "--next") != 0 && c.strcmp(option, "--help") != 0 && c.strcmp(option, "-h") != 0 && c.strcmp(option, "--tests") != 0
+                c.fprintf: c.stderr "buildCore.lm0: unknown option: %s\n" option
                 lm_build_print_usage()
                 return: 1
             index: index + 1
@@ -1608,6 +1658,10 @@ L2:
             c.fprintf: c.stderr "buildCore.lm0: staged bootstrap tools failed the --next rebuild; live tools were not overwritten\n"
             return: 1
 
+        c.fprintf: c.stderr "buildCore.lm0: running staged tests (%s)\n" lm_build_test_suite_name(options\test_suite)
+        if: lm_build_setenv("LM_TEST_SUITE", lm_build_test_suite_name(options\test_suite)) != 0
+            c.fprintf: c.stderr "buildCore.lm0: cannot set LM_TEST_SUITE\n"
+            return: 1
         if: lm_build_run_staged_tests(trusted_make, output_dir, parser_library, own_library) != 0
             c.fprintf: c.stderr "buildCore.lm0: staged bootstrap tools failed tests; live tools were not overwritten\n"
             return: 1
