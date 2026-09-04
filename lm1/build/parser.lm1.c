@@ -8875,7 +8875,7 @@ static int lm_p0_parse_fields_until_with_layout(struct LmMessageThread *lm_lmx_m
                 }
             }
             else {
-                if ((text[i] == '[') && (lm_p0_field_start_looks_explicit_frame(lm_lmx_message_thread, document, text, length, i, line, column) == 0)) {
+                if (((text[i] == '[') && (lm_p0_field_start_looks_explicit_frame(lm_lmx_message_thread, document, text, length, i, line, column) == 0)) && ((i == 0U) || (text[i - 1U] != ')'))) {
                     if (lm_p0_find_matching_bracket(lm_lmx_message_thread, document, text, length, i, line, column, &close_index) == 0) {
                         return lm_p0_field_parse_fail(lm_lmx_message_thread, &parse_stack, &indent_stack, &indent_stack_owned);
                     }

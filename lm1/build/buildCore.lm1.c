@@ -941,6 +941,8 @@ static char * lm_build_platform_canary_command_path(struct LmMessageThread *lm_l
 static int lm_build_prepare_platform_canary(struct LmMessageThread *lm_lmx_message_thread, char *canary_path);
 static char * lm_build_platform_tests_script_path(struct LmMessageThread *lm_lmx_message_thread);
 static char * lm_build_platform_tests_command_format(struct LmMessageThread *lm_lmx_message_thread);
+static int lm_build_setenv(struct LmMessageThread *lm_lmx_message_thread, char *name, char *value);
+static int lm_build_unsetenv(struct LmMessageThread *lm_lmx_message_thread, char *name);
 static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_message_thread, FILE *file, char *output_dir, char *parser_library, char *own_library);
 
 static char * lm_build_exe_suffix(struct LmMessageThread *lm_lmx_message_thread) {
@@ -1044,6 +1046,29 @@ static char * lm_build_platform_tests_command_format(struct LmMessageThread *lm_
     return "powershell -NoProfile -ExecutionPolicy Bypass -File \"%s\"";
 }
 
+static int lm_build_setenv(struct LmMessageThread *lm_lmx_message_thread, char *name, char *value) {
+    (void)lm_lmx_message_thread;
+    char assignment[256];
+    if (name == 0) {
+        return 1;
+    }
+    if (value == 0) {
+        value = "";
+    }
+    snprintf(assignment, sizeof(assignment), "%s=%s", name, value);
+    return _putenv(assignment);
+}
+
+static int lm_build_unsetenv(struct LmMessageThread *lm_lmx_message_thread, char *name) {
+    (void)lm_lmx_message_thread;
+    char assignment[256];
+    if (name == 0) {
+        return 1;
+    }
+    snprintf(assignment, sizeof(assignment), "%s=", name);
+    return _putenv(assignment);
+}
+
 static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_message_thread, FILE *file, char *output_dir, char *parser_library, char *own_library) {
     (void)lm_lmx_message_thread;
     fputs("$ErrorActionPreference = 'Continue'\n", file);
@@ -1136,6 +1161,15 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("$parserSkip = @()\n", file);
     fputs("$transSkip = @()\n", file);
     fputs("$transTranslationOnly = @('trans_l4_abi_receivers.lm2', 'trans_message_thread_pool_single.lm2', 'trans_message_thread_mailbox_single.lm2')\n", file);
+    fprintf(file, "$transLib = '%s/libtrans.lm0.a'\n", output_dir);
+    fputs("if (-not (Test-Path -LiteralPath $transLib -PathType Leaf)) {\n", file);
+    fputs("    & $make 'cc' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Ilm1' '-c' 'lm1/build/trans_library.lm1.c' '-o' 'build/obj/trans_library.lm1.o'\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw 'libtrans compile failed' }\n", file);
+    fputs("    & $make 'ar' 'rcs' $transLib 'build/obj/trans_library.lm1.o'\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw 'libtrans archive failed' }\n", file);
+    fputs("    & $make 'ranlib' $transLib\n", file);
+    fputs("    if ($LASTEXITCODE -ne 0) { throw 'libtrans ranlib failed' }\n", file);
+    fputs("}\n", file);
     fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File -Filter '*.lmx' | Sort-Object Name) {\n", file);
     fputs("    if ($testFile.Name -like 'trans_*') { continue }\n", file);
     fputs("    if ($parserSkip -contains $testFile.Name) { continue }\n", file);
@@ -1167,6 +1201,12 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("        }\n", file);
     fputs("        continue\n", file);
     fputs("    }\n", file);
+    fputs("    $previousLinkLibrary = $env:LM_TRANS_LINK_LIBRARY\n", file);
+    fputs("    $extraLibs = @($parserLib, $ownLib)\n", file);
+    fputs("    if (Select-String -LiteralPath $testFile.FullName -Pattern 'import: \"lm2/trans_library.lm2\"' -Quiet) {\n", file);
+    fputs("        $env:LM_TRANS_LINK_LIBRARY = '1'\n", file);
+    fputs("        $extraLibs = @($transLib, $parserLib, $ownLib)\n", file);
+    fputs("    }\n", file);
     fputs("    if ($testFile.Name -eq 'trans_registry_view_parity.lmx') {\n", file);
     fputs("        $legacyPath = $cPath + '.legacy'\n", file);
     fputs("        $previousViewMode = $env:LM_TRANS_REGISTRY_VIEW\n", file);
@@ -1190,13 +1230,14 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("        $env:LM_TRANS_REGISTRY_VIEW = $previousViewMode\n", file);
     fputs("        if ($viewCode -ne 0) { throw ('trans smoke translation failed: ' + $testFile.Name) }\n", file);
     fputs("    }\n", file);
+    fputs("    if ($null -eq $previousLinkLibrary) { Remove-Item Env:LM_TRANS_LINK_LIBRARY -ErrorAction SilentlyContinue } else { $env:LM_TRANS_LINK_LIBRARY = $previousLinkLibrary }\n", file);
     fputs("    if ($transTranslationOnly -contains $testFile.Name) { continue }\n", file);
     fputs("    $supportCPath = Join-Path 'tests' ($testFile.BaseName + '.support.c')\n", file);
     fputs("    $supportCSources = @()\n", file);
     fputs("    if (Test-Path -LiteralPath $supportCPath -PathType Leaf) { $supportCSources = @($supportCPath) }\n", file);
     fputs("    $warningErrorArgs = @()\n", file);
     fputs("    if ($testFile.Name -eq 'trans_l2_predef_conditional_descriptor.lm2') { $warningErrorArgs = @('-Werror') }\n", file);
-    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' $warningErrorArgs '-Ilm1' '-Itests' $cPath $supportCSources $parserLib $ownLib '-o' $exePath\n", file);
+    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' $warningErrorArgs '-Ilm1' '-Itests' $cPath $supportCSources $extraLibs '-o' $exePath\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke link failed: ' + $testFile.Name) }\n", file);
     fputs("    & (Resolve-Path -LiteralPath $exePath).Path\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke run failed: ' + $testFile.Name) }\n", file);
@@ -1329,6 +1370,8 @@ static char * lm_build_platform_canary_command_path(struct LmMessageThread *lm_l
 static int lm_build_prepare_platform_canary(struct LmMessageThread *lm_lmx_message_thread, char *canary_path);
 static char * lm_build_platform_tests_script_path(struct LmMessageThread *lm_lmx_message_thread);
 static char * lm_build_platform_tests_command_format(struct LmMessageThread *lm_lmx_message_thread);
+static int lm_build_setenv(struct LmMessageThread *lm_lmx_message_thread, char *name, char *value);
+static int lm_build_unsetenv(struct LmMessageThread *lm_lmx_message_thread, char *name);
 static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_message_thread, FILE *file, char *output_dir, char *parser_library, char *own_library);
 
 static char * lm_build_exe_suffix(struct LmMessageThread *lm_lmx_message_thread) {
@@ -1413,6 +1456,26 @@ static char * lm_build_platform_tests_command_format(struct LmMessageThread *lm_
     return "sh \"%s\"";
 }
 
+static int lm_build_setenv(struct LmMessageThread *lm_lmx_message_thread, char *name, char *value) {
+    (void)lm_lmx_message_thread;
+    if (name == 0) {
+        return 1;
+    }
+    if (value == 0) {
+        value = "";
+    }
+    return setenv(name, value, 1);
+}
+
+static int lm_build_unsetenv(struct LmMessageThread *lm_lmx_message_thread, char *name) {
+    (void)lm_lmx_message_thread;
+    if (name == 0) {
+        return 1;
+    }
+    unsetenv(name);
+    return 0;
+}
+
 static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_message_thread, FILE *file, char *output_dir, char *parser_library, char *own_library) {
     (void)lm_lmx_message_thread;
     fputs("set -eu\n", file);
@@ -1492,6 +1555,39 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("        *) if [ \"$code\" -ne 0 ]; then echo \"positive parser test failed: $name\" >&2; exit 1; fi ;;\n", file);
     fputs("    esac\n", file);
     fputs("done\n", file);
+    fprintf(file, "transLib='%s/libtrans.lm0.a'\n", output_dir);
+    fputs("if [ ! -f \"$transLib\" ]; then\n", file);
+    fputs("    \"$make_tool\" cc -std=c99 -Wall -Wextra -Wpedantic -Ilm1 -c lm1/build/trans_library.lm1.c -o build/obj/trans_library.lm1.o\n", file);
+    fputs("    \"$make_tool\" ar rcs \"$transLib\" build/obj/trans_library.lm1.o\n", file);
+    fputs("    \"$make_tool\" ranlib \"$transLib\"\n", file);
+    fputs("fi\n", file);
+    fputs("lm_test_jobs=${LM_TEST_JOBS:-}\n", file);
+    fputs("if [ -z \"$lm_test_jobs\" ]; then\n", file);
+    fputs("    if command -v nproc >/dev/null 2>&1; then lm_test_jobs=$(nproc)\n", file);
+    fputs("    elif command -v sysctl >/dev/null 2>&1; then lm_test_jobs=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)\n", file);
+    fputs("    else lm_test_jobs=4\n", file);
+    fputs("    fi\n", file);
+    fputs("fi\n", file);
+    fputs("lm_run_link_jobs() {\n", file);
+    fputs("    lm_job_n=0\n", file);
+    fputs("    lm_job_fail=0\n", file);
+    fputs("    lm_job_pids=\n", file);
+    fputs("    while IFS= read -r lm_job_cmd; do\n", file);
+    fputs("        [ -n \"$lm_job_cmd\" ] || continue\n", file);
+    fputs("        eval \"$lm_job_cmd\" &\n", file);
+    fputs("        lm_job_pids=\"$lm_job_pids $!\"\n", file);
+    fputs("        lm_job_n=$((lm_job_n + 1))\n", file);
+    fputs("        if [ \"$lm_job_n\" -ge \"$lm_test_jobs\" ]; then\n", file);
+    fputs("            for lm_job_pid in $lm_job_pids; do if wait \"$lm_job_pid\"; then :; else lm_job_fail=1; fi; done\n", file);
+    fputs("            lm_job_n=0\n", file);
+    fputs("            lm_job_pids=\n", file);
+    fputs("        fi\n", file);
+    fputs("    done\n", file);
+    fputs("    for lm_job_pid in $lm_job_pids; do if wait \"$lm_job_pid\"; then :; else lm_job_fail=1; fi; done\n", file);
+    fputs("    return \"$lm_job_fail\"\n", file);
+    fputs("}\n", file);
+    fputs(": > build/obj/tests/link_jobs\n", file);
+    fputs(": > build/obj/tests/run_jobs\n", file);
     fputs("for src in tests/trans_*.lm2 tests/trans_*.lmx; do\n", file);
     fputs("    [ -e \"$src\" ] || continue\n", file);
     fputs("    name=${src##*/}\n", file);
@@ -1509,29 +1605,40 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("            continue\n", file);
     fputs("            ;;\n", file);
     fputs("    esac\n", file);
+    fputs("    link_env=\n", file);
+    fputs("    extra_libs=\"$parserLib $ownLib\"\n", file);
+    fputs("    if grep -q 'import: \"lm2/trans_library.lm2\"' \"$src\" 2>/dev/null; then\n", file);
+    fputs("        link_env='LM_TRANS_LINK_LIBRARY=1'\n", file);
+    fputs("        extra_libs=\"$transLib $parserLib $ownLib\"\n", file);
+    fputs("    fi\n", file);
     fputs("    case \"$name\" in\n", file);
     fputs("        trans_registry_view_parity.lmx)\n", file);
     fputs("            legacy_path=\"$c_path.legacy\"\n", file);
-    fputs("            LM_TRANS_REGISTRY_VIEW=legacy \"$trans\" \"$src\" \"$legacy_path\"\n", file);
-    fputs("            LM_TRANS_REGISTRY_VIEW=view \"$trans\" \"$src\" \"$c_path\"\n", file);
+    fputs("            LM_TRANS_REGISTRY_VIEW=legacy $link_env \"$trans\" \"$src\" \"$legacy_path\"\n", file);
+    fputs("            LM_TRANS_REGISTRY_VIEW=view $link_env \"$trans\" \"$src\" \"$c_path\"\n", file);
     fputs("            cmp \"$legacy_path\" \"$c_path\"\n", file);
     fputs("            rm -f \"$legacy_path\"\n", file);
     fputs("            ;;\n", file);
-    fputs("        *) LM_TRANS_REGISTRY_VIEW=view \"$trans\" \"$src\" \"$c_path\" ;;\n", file);
+    fputs("        *) LM_TRANS_REGISTRY_VIEW=view $link_env \"$trans\" \"$src\" \"$c_path\" ;;\n", file);
     fputs("    esac\n", file);
     fputs("    case \"$name\" in trans_l4_abi_receivers.lm2|trans_message_thread_pool_single.lm2|trans_message_thread_mailbox_single.lm2) continue ;; esac\n", file);
     fputs("    support_c=\n", file);
     fputs("    if [ -f \"tests/$base.support.c\" ]; then support_c=\"tests/$base.support.c\"; fi\n", file);
     fputs("    warning_error=\n", file);
     fputs("    if [ \"$name\" = trans_l2_predef_conditional_descriptor.lm2 ]; then warning_error=-Werror; fi\n", file);
-    fputs("    \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic ${warning_error:+\"$warning_error\"} -Ilm1 -Itests \"$c_path\" ${support_c:+\"$support_c\"} \"$parserLib\" \"$ownLib\" -o \"$exe_path\"\n", file);
-    fputs("    \"$exe_path\"\n", file);
+    fputs("    printf '%s\\n' \"\\\"$make_tool\\\" link -std=c99 -Wall -Wextra -Wpedantic ${warning_error:+$warning_error} -Ilm1 -Itests \\\"$c_path\\\" ${support_c:+\\\"$support_c\\\"} $extra_libs -o \\\"$exe_path\\\"\" >> build/obj/tests/link_jobs\n", file);
+    fputs("    printf '%s\\n' \"$exe_path\" >> build/obj/tests/run_jobs\n", file);
     fputs("    if [ \"$name\" = trans_l2_predef_conditional_descriptor.lm2 ]; then\n", file);
     fputs("        branch_exe_path=\"build/obj/tests/${base}_branch\"\n", file);
-    fputs("        \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_TEST_PREDEF_DESCRIPTOR_BRANCH=1 -Ilm1 -Itests \"$c_path\" ${support_c:+\"$support_c\"} \"$parserLib\" \"$ownLib\" -o \"$branch_exe_path\"\n", file);
-    fputs("        \"$branch_exe_path\"\n", file);
+    fputs("        printf '%s\\n' \"\\\"$make_tool\\\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_TEST_PREDEF_DESCRIPTOR_BRANCH=1 -Ilm1 -Itests \\\"$c_path\\\" ${support_c:+\\\"$support_c\\\"} $extra_libs -o \\\"$branch_exe_path\\\"\" >> build/obj/tests/link_jobs\n", file);
+    fputs("        printf '%s\\n' \"$branch_exe_path\" >> build/obj/tests/run_jobs\n", file);
     fputs("    fi\n", file);
     fputs("done\n", file);
+    fputs("if ! lm_run_link_jobs < build/obj/tests/link_jobs; then echo 'trans test link failed' >&2; exit 1; fi\n", file);
+    fputs("while IFS= read -r exe_path; do\n", file);
+    fputs("    [ -n \"$exe_path\" ] || continue\n", file);
+    fputs("    \"$exe_path\"\n", file);
+    fputs("done < build/obj/tests/run_jobs\n", file);
     fputs("http_client_default_c='build/obj/tests/trans_rest_lmx_http_client_default.c'\n", file);
     fputs("http_client_default_test='build/obj/tests/trans_rest_lmx_http_client_default'\n", file);
     fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_INSTALL_DEFAULT_CLIENT=1 -Ilm1 \"$http_client_default_c\" tests/trans_rest_lmx_http_client_default_stub.c \"$parserLib\" \"$ownLib\" -o \"$http_client_default_test\"\n", file);
@@ -1634,6 +1741,7 @@ static int lm_build_trans(struct LmMessageThread *lm_lmx_message_thread, char *t
 static int lm_build_generate_all(struct LmMessageThread *lm_lmx_message_thread, char *trans_tool);
 static int lm_build_parser_library(struct LmMessageThread *lm_lmx_message_thread, char *make_tool, char *output_dir);
 static int lm_build_own_library(struct LmMessageThread *lm_lmx_message_thread, char *make_tool, char *output_dir);
+static int lm_build_trans_library(struct LmMessageThread *lm_lmx_message_thread, char *make_tool, char *output_dir);
 static int lm_build_compile_trans(struct LmMessageThread *lm_lmx_message_thread, char *make_tool, char *output_dir, char *parser_library, char *own_library);
 static int lm_build_compile_generated_tools(struct LmMessageThread *lm_lmx_message_thread, char *make_tool, char *output_dir, char *parser_library, char *own_library);
 static int lm_build_run_canary(struct LmMessageThread *lm_lmx_message_thread);
@@ -2014,6 +2122,14 @@ static int lm_build_generate_all(struct LmMessageThread *lm_lmx_message_thread, 
     if (lm_build_trans(lm_lmx_message_thread, trans_tool, "lm2/trans.lm2", "lm1/build/trans.lm1.c") != 0) {
         return 1;
     }
+    if (lm_build_setenv(lm_lmx_message_thread, "LM_TRANS_LIBRARY", "1") != 0) {
+        return 1;
+    }
+    if (lm_build_trans(lm_lmx_message_thread, trans_tool, "lm2/trans_library.lm2", "lm1/build/trans_library.lm1.c") != 0) {
+        lm_build_unsetenv(lm_lmx_message_thread, "LM_TRANS_LIBRARY");
+        return 1;
+    }
+    lm_build_unsetenv(lm_lmx_message_thread, "LM_TRANS_LIBRARY");
     if (lm_build_trans(lm_lmx_message_thread, trans_tool, "lm2/parser.lm2", "lm1/build/parser.lm1.c") != 0) {
         return 1;
     }
@@ -2062,6 +2178,23 @@ static int lm_build_own_library(struct LmMessageThread *lm_lmx_message_thread, c
     }
     remove(library_path);
     snprintf(command, sizeof(command), "rcs \"%s\" \"build/obj/own.lm1.o\"", library_path);
+    if (lm_build_make(lm_lmx_message_thread, make_tool, "ar", command) != 0) {
+        return 1;
+    }
+    snprintf(command, sizeof(command), "\"%s\"", library_path);
+    return lm_build_make(lm_lmx_message_thread, make_tool, "ranlib", command);
+}
+
+static int lm_build_trans_library(struct LmMessageThread *lm_lmx_message_thread, char *make_tool, char *output_dir) {
+    (void)lm_lmx_message_thread;
+    char library_path[512];
+    char command[4096];
+    snprintf(library_path, sizeof(library_path), "%s/libtrans.lm0.a", output_dir);
+    if (lm_build_make(lm_lmx_message_thread, make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" -c \"lm1/build/trans_library.lm1.c\" -o \"build/obj/trans_library.lm1.o\"") != 0) {
+        return 1;
+    }
+    remove(library_path);
+    snprintf(command, sizeof(command), "rcs \"%s\" \"build/obj/trans_library.lm1.o\"", library_path);
     if (lm_build_make(lm_lmx_message_thread, make_tool, "ar", command) != 0) {
         return 1;
     }
@@ -2433,6 +2566,9 @@ static int lm_build_run_bootstrap(struct LmMessageThread *lm_lmx_message_thread,
         return 1;
     }
     if (lm_build_own_library(lm_lmx_message_thread, trusted_make, output_dir) != 0) {
+        return 1;
+    }
+    if (lm_build_trans_library(lm_lmx_message_thread, trusted_make, output_dir) != 0) {
         return 1;
     }
     if (lm_build_compile_trans(lm_lmx_message_thread, trusted_make, output_dir, parser_library, own_library) != 0) {

@@ -1997,7 +1997,7 @@ fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: names
     status: 0
     if: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, name, error_name) != 0
         status: 1
-    if: status = 0 && is_external = 0 && lm_trans_put(file, "static ") != 0
+    if: status = 0 && is_external = 0 && lm_trans_put_file_scope_static(file) != 0
         status: 1
     if: status = 0 && is_sub && lm_trans_put(file, "void") != 0
         status: 1

@@ -3744,6 +3744,28 @@ fn: lm_trans_expr_stack_try_emit_callable_expression_frame (FILE: file; LmTransE
     return: 1
 end: lm_trans_expr_stack_try_emit_callable_expression_frame
 
+fn: lm_trans_c_surface_result_type (const: (LmP0Text: head); const: (LmTransNamespace: namespace_); LmTransL4CallableType: out) int
+    LmP0Text: tail
+    const: LmTransSymbol: symbol
+    int: status
+
+    if: ((head = 0) || (out = 0) || (lm_trans_is_c_reference_name(head) = 0))
+        return: 0
+    tail: lm_trans_text_ref_tail_new(head, 2U)
+    if: (tail = 0)
+        return: -1
+    symbol: lm_trans_namespace_find(namespace_, tail)
+    if: ((symbol = 0) || (lm_trans_symbol_is_value_callable(symbol) = 0))
+        lm_trans_text_ref_destroy(@ tail)
+        return: 0
+    if: lm_trans_callable_return_type_from_node(symbol\callable_return_node, out)
+        status: 1
+    else:
+        status: 0
+    lm_trans_text_ref_destroy(@ tail)
+    return: status
+end: lm_trans_c_surface_result_type
+
 fn: lm_trans_call_frame_result_type (const: (LmP0Frame: frame); const: (LmTransNamespace: namespace_); LmTransL4CallableType: out) int
     LmTransCallLowering: call
     LmOwnPtrStack: segments
@@ -3793,10 +3815,10 @@ fn: lm_trans_call_frame_result_type (const: (LmP0Frame: frame); const: (LmTransN
         lm_trans_expr_segment_stack_delete(@ segments)
         return: -1
     if: (call\signature = 0)
-        c.fprintf(c.stderr, "trans L2 type error: C-surface call has no Lingvamyxa result type\n")
+        status: lm_trans_c_surface_result_type(frame\head, namespace_, out)
         lm_trans_expr_call_lowering_delete(call)
         lm_trans_expr_segment_stack_delete(@ segments)
-        return: -1
+        return: status
     if: (lm_trans_call_args_layout(segments, frame\body, call\signature) != 0)
         lm_trans_expr_call_lowering_delete(call)
         lm_trans_expr_segment_stack_delete(@ segments)

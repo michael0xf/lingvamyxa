@@ -1,0 +1,8 @@
+L2:
+    external:
+        fn: main () int
+            int: value 1
+            value: value + 1
+        return: value != 2
+    end: external
+end: L2

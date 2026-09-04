@@ -1,0 +1,32 @@
+L2:
+    fn: fib (int: n) int
+        if: n < 2
+            return: n
+        return: fib(n - 1) + fib(n - 2)
+    end: fib
+
+    external:
+        fn: main () int
+            int: a 0
+            int: b 1
+            int: next 0
+            int: i 0
+
+            while: i < 15
+                next: a + b
+                a: b
+                b: next
+                i: i + 1
+
+            if: a != 610
+                return: 1
+            if: fib(15) != 610
+                return: 2
+            if: fib(12) != 144
+                return: 3
+            if: fib(2) = fib(1) + fib(0)
+                return: 0
+            return: 4
+        end: main
+    end: external
+end: L2

@@ -1,0 +1,4 @@
+record: sample
+    id: 1
+    name: smoke
+end: sample

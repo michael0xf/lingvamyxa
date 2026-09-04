@@ -96,6 +96,11 @@ fn: lm_trans_text_ref_new_cstr (
     const: @: char text
 ) LmP0Text
 
+fn: lm_trans_text_ref_tail_new (
+    const: LmP0Text: text
+    size_t: offset
+) LmP0Text
+
 fn: lm_trans_text_ref_destroy (
     @: LmP0Text text
 ) void
@@ -346,6 +351,12 @@ fn: lm_trans_emit_type_name (
 fn: lm_trans_expr_segment_end (
     const: LmP0Field: first
 ) const: LmP0Field
+
+fn: lm_trans_c_surface_result_type (
+    const: LmP0Text: head
+    const: LmTransNamespace: namespace_
+    LmTransL4CallableType: out
+) int
 
 fn: lm_trans_node_result_type (
     const: LmP0Node: node

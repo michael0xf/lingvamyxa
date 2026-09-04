@@ -1,0 +1,20 @@
+L2:
+    include: "<stdlib.h>"
+    fn: lm_test_letters () @: char
+    return: "ABC"
+
+    external:
+        fn: main () int
+            @: char name "PATH"
+            if: lm_test_letters()[0] != 'A'
+                return: 1
+            if: lm_test_letters()[2] != 'C'
+                return: 2
+            if: c.getenv(name) = 0
+                return: 0
+            if: c.getenv(name)[0] = '0'
+                return: 3
+        return: 0
+    end: external
+end: L2
+

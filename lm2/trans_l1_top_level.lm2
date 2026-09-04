@@ -34,6 +34,66 @@ fn: lm_trans_top_level_item_frame (const: (LmTransTopLevelItem: item)) const: Lm
         return: item\frame
 return: 0
 
+fn: lm_trans_env_nonzero (const: @(char name)) int
+    if: name = 0 || c.getenv(name) = 0
+        return: 0
+    if: c.getenv(name)[0] = '0'
+        return: 0
+return: 1
+
+fn: lm_trans_path_ends_with (const: @(char path); const: @(char suffix)) int
+    size_t: path_length
+    size_t: suffix_length
+    size_t: index
+
+    if: path = 0 || suffix = 0
+        return: 0
+    path_length: c.strlen(path)
+    suffix_length: c.strlen(suffix)
+    if: path_length < suffix_length
+        return: 0
+    index: 0U
+    while: index < suffix_length
+        if: path[path_length - suffix_length + index] != suffix[index]
+            return: 0
+        index: index + 1U
+return: 1
+
+fn: lm_trans_current_is_imported_module () int
+    if: lm_trans_current_source_path = 0
+        return: 0
+    if: lm_trans_registry = 0
+        return: 0
+    if: lm_trans_registry\source_path = 0
+        return: 0
+    if: c.strcmp(lm_trans_current_source_path, lm_trans_registry\source_path) = 0
+        return: 0
+return: 1
+
+fn: lm_trans_should_emit_file_scope_static () int
+    if: lm_trans_env_nonzero("LM_TRANS_LIBRARY")
+        return: 0
+    if: lm_trans_env_nonzero("LM_TRANS_LINK_LIBRARY") && lm_trans_current_is_imported_module()
+        return: 0
+return: 1
+
+fn: lm_trans_put_file_scope_static (FILE: file) int
+    if: lm_trans_should_emit_file_scope_static() = 0
+        return: 0
+return: lm_trans_put(file, "static ")
+
+fn: lm_trans_file_scope_storage_qualifier () @: char
+    if: lm_trans_env_nonzero("LM_TRANS_LIBRARY")
+        return: "/*exported*/ "
+    if: lm_trans_env_nonzero("LM_TRANS_LINK_LIBRARY") && lm_trans_current_is_imported_module()
+        return: "extern "
+return: "static "
+
+fn: lm_trans_should_link_imported_library (const: @(char path)) int
+    if: lm_trans_env_nonzero("LM_TRANS_LINK_LIBRARY") = 0
+        return: 0
+return: lm_trans_path_ends_with(path, "trans_library.lm2")
+
 fn: lm_trans_top_level_declare_generated_return_class (LmTransNamespace: namespace_; const: (LmTransFunctionHeader: function)) int
     @: char return_type_name_storage
     LmP0Text: return_type_name
@@ -981,7 +1041,7 @@ fn: lm_trans_emit_function_prototype (FILE: file; const: (LmTransFunctionHeader:
         return: 1
 
     if: function\is_sub
-        if: function\is_external = 0 && lm_trans_put(file, "static ") != 0
+        if: function\is_external = 0 && lm_trans_put_file_scope_static(file) != 0
             lm_trans_text_ref_destroy(@ raw_return_descriptor_name)
             return: 1
         if: lm_trans_put(file, "void ") != 0
@@ -995,7 +1055,7 @@ fn: lm_trans_emit_function_prototype (FILE: file; const: (LmTransFunctionHeader:
         if: function\is_struct_return && lm_trans_emit_function_return_structure_once(file, function\c_name, function\return_node, namespace_) != 0
             lm_trans_text_ref_destroy(@ raw_return_descriptor_name)
             return: 1
-        if: function\is_external = 0 && lm_trans_put(file, "static ") != 0
+        if: function\is_external = 0 && lm_trans_put_file_scope_static(file) != 0
             lm_trans_text_ref_destroy(@ raw_return_descriptor_name)
             return: 1
         if: function\is_struct_return
@@ -1212,9 +1272,19 @@ fn: lm_trans_top_level_emit_static_declaration (FILE: file; LmTransNamespace: na
     frame: item\frame
     qualifier: "static "
     inner: lm_trans_const_storage_inner_frame(frame)
+    if: lm_trans_env_nonzero("LM_TRANS_LIBRARY")
+        qualifier: "/*exported*/ "
+    if: lm_trans_env_nonzero("LM_TRANS_LINK_LIBRARY") && lm_trans_current_is_imported_module()
+        qualifier: "extern "
     if: inner != 0
         frame: inner
-        qualifier: "static const "
+        if: lm_trans_env_nonzero("LM_TRANS_LIBRARY")
+            qualifier: "const "
+        if: lm_trans_env_nonzero("LM_TRANS_LINK_LIBRARY") && lm_trans_current_is_imported_module()
+            qualifier: "extern const "
+        if: lm_trans_should_emit_file_scope_static()
+            qualifier: "static const "
+        ---
     if: lm_trans_frame_looks_storage_declaration(frame, namespace_)
         return: lm_trans_emit_declaration_with_qualifier(file, frame, 0U, namespace_, qualifier)
     if: lm_trans_text_all_char(frame\head, '@')
@@ -1226,7 +1296,7 @@ return: 1
 fn: lm_trans_top_level_emit_c_array (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     if: item = 0
         return: 1
-return: lm_trans_emit_c_array_declaration_with_qualifier(file, item\frame, 0U, namespace_, "static ")
+return: lm_trans_emit_c_array_declaration_with_qualifier(file, item\frame, 0U, namespace_, lm_trans_file_scope_storage_qualifier())
 
 fn: lm_trans_top_level_module_value_frame (
     const: LmTransTopLevelItem: item
@@ -1738,7 +1808,7 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
 
     if: function\is_sub
         if: function\is_external = 0
-            if: lm_trans_put(file, "static ") != 0
+            if: lm_trans_put_file_scope_static(file) != 0
                 lm_trans_ptr_stack_delete(@ hoisted_functions)
                 return: 1
         ---
@@ -1759,7 +1829,7 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
                 return: 1
         ---
         if: function\is_external = 0
-            if: lm_trans_put(file, "static ") != 0
+            if: lm_trans_put_file_scope_static(file) != 0
                 lm_trans_ptr_stack_delete(@ hoisted_functions)
                 return: 1
         ---
@@ -2871,6 +2941,10 @@ fn: lm_trans_emit_l2_import_path_module_initializers (FILE: file; LmTransNamespa
 
     if: path = 0
         return: 1
+    if: lm_trans_should_link_imported_library(path)
+        if: lm_trans_string_stack_has(lm_trans_emitted_import_module_init_paths, path)
+            return: 0
+        return: lm_trans_import_stack_note(lm_trans_emitted_import_module_init_paths, path)
     if: lm_trans_string_stack_has(lm_trans_emitted_import_module_init_paths, path)
         return: 0
     if: lm_trans_import_stack_note(lm_trans_emitted_import_module_init_paths, path) != 0
@@ -2896,6 +2970,10 @@ fn: lm_trans_emit_l2_import_path_functions (FILE: file; LmTransNamespace: namesp
 
     if: path = 0
         return: 1
+    if: lm_trans_should_link_imported_library(path)
+        if: lm_trans_string_stack_has(lm_trans_emitted_import_function_paths, path)
+            return: 0
+        return: lm_trans_import_stack_note(lm_trans_emitted_import_function_paths, path)
     if: lm_trans_string_stack_has(lm_trans_emitted_import_function_paths, path)
         return: 0
     if: lm_trans_import_stack_note(lm_trans_emitted_import_function_paths, path) != 0
