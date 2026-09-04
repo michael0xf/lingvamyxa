@@ -4,7 +4,7 @@ Lingvamyxa OpenJDK / JVM Integration Plan
 Status
 
 Working provisioning plan for bundling a private JVM into the Lingvamyxa
-runtime and exposing it as an L5-style "jvm" receiver. Companion to
+runtime and exposing it as an Message Thread "jvm" receiver. Companion to
 include_python.txt; it follows the same fetch / verify / stage / generate
 / populate / manifest pattern (Appendix B there).
 
@@ -106,7 +106,7 @@ Keep classpath JARs separate: build/libs/jvm-cp/ .
 
 5.2 Threads
 
-    Every Lingvamyxa L5 thread that calls in must
+    Every Lingvamyxa Message Thread that calls in must
     (*vm)->AttachCurrentThread(vm, &env, NULL) first and
     DetachCurrentThread on the way out. Cache a per-thread JNIEnv*.
 
@@ -144,7 +144,7 @@ Keep classpath JARs separate: build/libs/jvm-cp/ .
     threads finish).
 
 
-6. ABI descriptors and the L5 receiver
+6. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/jvmhost_abi.lm2      predef + fn.external prototypes for the shim

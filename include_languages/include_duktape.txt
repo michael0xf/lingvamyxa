@@ -4,7 +4,7 @@ Lingvamyxa Duktape Integration Plan
 Status
 
 Working provisioning plan for vendoring Duktape into the Lingvamyxa
-runtime and exposing it as an L5-style "duk" receiver. Companion to
+runtime and exposing it as an Message Thread "duk" receiver. Companion to
 include_python.txt; same verify / stage / generate / manifest pattern,
 no runtime download. This is the smallest realistic embed in the
 catalog.
@@ -68,7 +68,7 @@ cover Linux/macOS/Windows on x64 and arm64.
     result at the stack top: duk_get_number / duk_get_string / ...
     duk_destroy_heap(ctx);
 
-    One heap per interpreter; create many, one per L5 thread.
+    One heap per interpreter; create many, one per Message Thread.
 
     Arrays:  duk_push_external_buffer + duk_config_buffer over the arena
     buffer, then wrap as a Uint8Array/Float64Array on the JS side --
@@ -77,10 +77,10 @@ cover Linux/macOS/Windows on x64 and arm64.
     Errors:  non-zero rc -> the value on top is an Error; read .stack
     (or .message) and return an LMX failure record; duk_pop.
 
-    No GIL. One duk_context per L5 thread.
+    No GIL. One duk_context per Message Thread.
 
 
-5. ABI descriptors and the L5 receiver
+5. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/dukhost_abi.lm2      predef + fn.external prototypes

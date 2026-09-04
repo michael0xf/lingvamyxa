@@ -4,7 +4,7 @@ Lingvamyxa Janet Integration Plan
 Status
 
 Working provisioning plan for vendoring Janet into the Lingvamyxa
-runtime and exposing it as an L5-style "janet" receiver. Companion to
+runtime and exposing it as an Message Thread "janet" receiver. Companion to
 include_python.txt; same verify / stage / generate / manifest pattern,
 no runtime download.
 
@@ -66,7 +66,7 @@ Pin the release sha256. Commit third_party/janet/ .
     janet_deinit();
 
     One VM per process by default (janet_init is global). For isolation
-    across L5 threads use separate JanetTable environments and a lock,
+    across Message Threads use separate JanetTable environments and a lock,
     or build with JANET_THREADS and message between janet/thread
     abstractions.
 
@@ -78,7 +78,7 @@ Pin the release sha256. Commit third_party/janet/ .
     fiber stack (janet_stacktrace) into an LMX failure record.
 
 
-5. ABI descriptors and the L5 receiver
+5. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/janethost_abi.lm2    predef + fn.external prototypes

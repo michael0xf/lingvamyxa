@@ -4,7 +4,7 @@ Lingvamyxa QuickJS-ng Integration Plan
 Status
 
 Working provisioning plan for vendoring QuickJS-ng into the Lingvamyxa
-runtime and exposing it as an L5-style "js" receiver. Companion to
+runtime and exposing it as an Message Thread "js" receiver. Companion to
 include_python.txt; same verify / stage / generate / manifest pattern,
 no runtime download.
 
@@ -80,10 +80,10 @@ QuickJS-ng also ships its own CMakeLists.txt; using it directly is fine.
     Pending jobs (promises):  drain with JS_ExecutePendingJob in a loop
     after eval if the script uses async.
 
-    No GIL. One JSRuntime per L5 thread.
+    No GIL. One JSRuntime per Message Thread.
 
 
-5. ABI descriptors and the L5 receiver
+5. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/jshost_abi.lm2       predef + fn.external prototypes

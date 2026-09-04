@@ -4,7 +4,7 @@ Lingvamyxa Julia Integration Plan
 Status
 
 Working provisioning plan for bundling a private Julia into the
-Lingvamyxa runtime and exposing it as an L5-style "julia" receiver.
+Lingvamyxa runtime and exposing it as an Message Thread "julia" receiver.
 Companion to include_python.txt; same fetch / verify / stage / generate
 / populate / manifest pattern (Appendix B there).
 
@@ -88,7 +88,7 @@ Package depot: build/libs/julia-depot/ (see section 7).
     jl_atexit_hook(0);               # at shutdown
 
     One runtime per process. Call from the thread that ran jl_init, or
-    jl_adopt_thread / jl_gc_safe_enter for other L5 threads (Julia 1.9+).
+    jl_adopt_thread / jl_gc_safe_enter for other Message Threads (Julia 1.9+).
 
 5.2 Value and array bridge, LmArray <-> Julia
 
@@ -107,7 +107,7 @@ Package depot: build/libs/julia-depot/ (see section 7).
     jl_value_t *m  = (jl_value_t*)jl_eval_string("using DifferentialEquations");
     jl_function_t *f = jl_get_function(jl_main_module, "solve");
     jl_value_t *r  = jl_call2(f, arg1, arg2);
-    Wrap eval / call so any L5 thread routes through it.
+    Wrap eval / call so any Message Thread routes through it.
 
 5.4 Errors
 
@@ -123,7 +123,7 @@ Package depot: build/libs/julia-depot/ (see section 7).
     needs Julia at build time -- keep it an optional manual step).
 
 
-6. ABI descriptors and the L5 receiver
+6. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/juliahost_abi.lm2     predef + fn.external prototypes

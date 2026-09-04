@@ -5,7 +5,7 @@ Status
 
 This file is a working implementation plan. It is not a language
 specification. It records the current intended order for moving from the
-bootstrap parser/translator to table-driven L3/L4/L5 semantics.
+bootstrap parser/translator to table-driven L3 semantics.
 
 
 1. Move ANSI C Surface Rules to Registry Tables
@@ -99,27 +99,28 @@ This is the first major proof that the table-driven semantic core is real.
 
 Implementation rule:
 
-    Strict classification happens in L4 registry tables. Type checking and
+    Strict classification happens in L3 registry tables. Type checking and
     expression/class resolution must be designed as logical queries over the
     active registry view. SQL-like queries are the reference model; C arrays,
     row logs, hash tables, future SQLite indexes or other algorithms are only
-    caches/materialized views or execution strategies over L4 tables. Do not
+    caches/materialized views or execution strategies over those tables. Do not
     move semantic decisions into a second hardcoded type system merely because
     the first cache is in memory.
 
 
-7. Implement Validator/Merge at the L4/L5 Boundary
+7. Implement Validator/Merge at Message Boundaries
 --------------------------------------------------
 
-L4 supplies registry classes, relation tables, validators, effects, lifetimes
+L3 registry tables supply classes, relations, validators, effects, lifetimes
 and authority policy.
 
-L5 message/receiver boundaries run Validator/Merge.
+Message and receiver boundaries run Validator/Merge over those tables.
 
 The useful formulation is:
 
-    L4 supplies tables.
-    L5 boundary runs validator/merge over incoming messages and receiver state.
+    Registry tables supply classification and policy.
+    Message boundaries run validator/merge over incoming messages and
+    receiver state.
 
 Validator/Merge should not become a separate semantic world. It is the
 table-walking driver that turns a proposed message/expression into a
@@ -143,13 +144,13 @@ L3 should host reusable safe algorithms that no longer need low-level direct
 control.
 
 
-9. Implement L5 Threads
------------------------
+9. Implement Message Threads
+----------------------------
 
-Implement L5 Threads after the message pipeline and table-driven validation are
-usable.
+Implement Message Threads after the message pipeline and table-driven
+validation are usable.
 
-L5 Threads should provide:
+Message Threads should provide:
 
     message queues;
     local registry view/cache;
@@ -163,10 +164,10 @@ L5 Threads should provide:
 10. Implement HTTP Profile
 --------------------------
 
-Implement the HTTP profile as an L5 transport envelope and adapter.
+Implement the HTTP profile as a Message Thread transport envelope and adapter.
 
 HTTP is not the semantic message model. It accepts or produces LMX messages
-that enter the ordinary L5 validation/merge pipeline.
+that enter the ordinary validation/merge pipeline.
 
 
 11. Implement Authentication and Authorization
@@ -176,7 +177,7 @@ Implement auth last in this sequence.
 
 Authentication and authorization are validator/evidence/authority table layers
 over the message pipeline. They should use libsodium or another explicitly
-chosen runtime primitive at the L1/L2 boundary where required, but the L5
-semantic model remains:
+chosen runtime primitive at the L1/L2 boundary where required, but the
+message semantic model remains:
 
     credential/verifier -> evidence rows -> authority tables -> message validation

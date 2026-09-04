@@ -161,7 +161,7 @@ Notes
 
     easy      WASM runtime: prebuilt C-API tarball, fetch/verify/stage/
               link, exactly Appendix B. WASI grants preopened dirs =
-              capability scoping, aligned with the L4/L5 authority model
+              capability scoping, aligned with the registry/message authority model
     easy      pure "second Python": vendored python.wasm runs under the
               runtime with no JS shim; pure-Python libs as a PYTHONPATH
               zip inside the guest

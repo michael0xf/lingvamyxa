@@ -4,7 +4,7 @@ Lingvamyxa Tcl Integration Plan
 Status
 
 Working provisioning plan for vendoring Tcl into the Lingvamyxa runtime
-and exposing it as an L5-style "tcl" receiver. Companion to
+and exposing it as an Message Thread "tcl" receiver. Companion to
 include_python.txt; same verify / stage / generate / manifest pattern.
 Tcl builds from a C source tree with autotools and stages a small script
 library, so it sits between the pure-amalgamation Tier 2 entries and the
@@ -78,7 +78,7 @@ library. Stage it beside the binary and point TCL_LIBRARY at it.
     const char *res = Tcl_GetStringResult(ip);
     Tcl_DeleteInterp(ip);
 
-    Many interpreters; one per L5 thread (build with --enable-threads and
+    Many interpreters; one per Message Thread (build with --enable-threads and
     use Tcl_CreateInterp per thread; interps are not shared across
     threads).
 
@@ -90,7 +90,7 @@ library. Stage it beside the binary and point TCL_LIBRARY at it.
     return options dict; format into an LMX failure record.
 
 
-5. ABI descriptors and the L5 receiver
+5. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/tclhost_abi.lm2      predef + fn.external prototypes

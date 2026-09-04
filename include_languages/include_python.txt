@@ -4,7 +4,7 @@ Lingvamyxa Embedded CPython Integration Plan
 Status
 
 This file is a working implementation plan for bundling a private CPython
-interpreter into the Lingvamyxa runtime and exposing it as an L5-style
+interpreter into the Lingvamyxa runtime and exposing it as a Message Thread
 "python" receiver. It is not a language specification.
 
 Goal
@@ -239,7 +239,7 @@ until then it lives in the L1 substrate.
 
 4.2 GIL wrappers
 
-    Any L5 thread may call in; every call takes the GIL.
+    Any Message Thread may call in; every call takes the GIL.
 
         typedef struct { PyGILState_STATE g; } lm_py_scope;
 
@@ -289,7 +289,7 @@ until then it lives in the L1 substrate.
     Py_FinalizeEx() during runtime shutdown.
 
 
-5. ABI Descriptors And L5 Receiver
+5. ABI Descriptors And Message Thread Receiver
 ----------------------------------
 
     lm2/pyhost_abi.lm2
@@ -460,7 +460,7 @@ only a cache / materialized view.
 
 ========================================================================
 # lm2/provision_python.lm2
-# Provision a private CPython for the L5 "python" receiver.
+# Provision a private CPython for the python receiver.
 # Bootstraps from today's project; no system Python required.
 
 include

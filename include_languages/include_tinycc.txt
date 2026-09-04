@@ -4,7 +4,7 @@ Lingvamyxa TinyCC (libtcc) Integration Plan
 Status
 
 Working provisioning plan for vendoring TinyCC as libtcc into the
-Lingvamyxa runtime and exposing it as an L5-style "tcc" receiver.
+Lingvamyxa runtime and exposing it as an Message Thread "tcc" receiver.
 Companion to include_python.txt; same verify / stage / generate /
 manifest pattern, no runtime download.
 
@@ -89,11 +89,11 @@ include shims) beside the binary and point tcc_set_lib_path at it.
     passed straight to the compiled C function; the kernel writes back
     in place. No marshalling.
 
-    No GIL. TCCState is not thread-safe; one per L5 thread, or serialise
+    No GIL. TCCState is not thread-safe; one per Message Thread, or serialise
     compilation and share only the resulting function pointers.
 
 
-5. ABI descriptors and the L5 receiver
+5. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/tcchost_abi.lm2      predef + fn.external prototypes

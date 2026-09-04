@@ -5,7 +5,7 @@ Status
 
 Working provisioning plan for vendoring a small class- or Scheme-based
 language -- Wren, s7 or Chibi-Scheme -- into the Lingvamyxa runtime and
-exposing it as an L5-style "wren" (or "scm") receiver. Companion to
+exposing it as an Message Thread "wren" (or "scm") receiver. Companion to
 include_python.txt; same verify / stage / generate / manifest pattern,
 no runtime download.
 
@@ -91,10 +91,10 @@ s7  --  lm1/build/s7host.lm1.c
 Chibi  --  sexp ctx = sexp_make_eval_context(...);
     sexp_eval_string(ctx, src, -1, NULL); bytevectors for binary data.
 
-No GIL in any; one VM/context per L5 thread.
+No GIL in any; one VM/context per Message Thread.
 
 
-5. ABI descriptors and the L5 receiver
+5. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/wrenhost_abi.lm2     predef + fn.external prototypes

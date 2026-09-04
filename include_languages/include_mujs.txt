@@ -5,7 +5,7 @@ Status
 
 Working provisioning plan for vendoring a kilobyte-class JavaScript
 engine -- MuJS or JerryScript -- into the Lingvamyxa runtime and
-exposing it as an L5-style "js" receiver. Companion to
+exposing it as an Message Thread "js" receiver. Companion to
 include_python.txt; same verify / stage / generate / manifest pattern,
 no runtime download.
 
@@ -81,10 +81,10 @@ JerryScript:
     Arrays: jerry_arraybuffer_external / jerry_typedarray for a
     no-copy view over the arena buffer.
 
-No GIL in either; one state per L5 thread.
+No GIL in either; one state per Message Thread.
 
 
-5. ABI descriptors and the L5 receiver
+5. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/jshost_abi.lm2       predef + fn.external prototypes

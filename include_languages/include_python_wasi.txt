@@ -111,7 +111,7 @@ cleaner long-term shape; it needs componentize-py on the build machine.
              receiver, not for a hot path.
 
 
-6. ABI descriptors and the L5 receiver
+6. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/pyhost_wasi_abi.lm2   predef + fn.external prototypes

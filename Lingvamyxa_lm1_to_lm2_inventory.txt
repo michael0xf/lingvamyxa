@@ -9,8 +9,8 @@ replacement.
 
 The current rule is:
 
-    L2 registry and predef modules hold ABI/data facts; legacy L4 paths are
-    compatibility fallbacks only.
+    L2 registry and predef modules hold ABI/data facts; retired registry-loader
+    paths are compatibility fallbacks only.
     L2 sources explicitly import or predefine the needed ABI sources.
     L2 prelude receivers consume the active namespace and print ANSI C.
     `lm1/build/*.lm1.c` is the portable generated L1 snapshot kept in Git.

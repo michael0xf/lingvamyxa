@@ -4,7 +4,7 @@ Lingvamyxa LuaJIT Integration Plan
 Status
 
 Working provisioning plan for vendoring LuaJIT into the Lingvamyxa
-runtime and exposing it as an L5-style "luajit" receiver (or as the
+runtime and exposing it as an Message Thread "luajit" receiver (or as the
 "lua" receiver's fast backend). Companion to include_python.txt; same
 verify / stage / generate / manifest pattern, with a small extra build
 step and no runtime download.
@@ -84,10 +84,10 @@ LuaJIT ships a Makefile, not CMake. Two options:
     Errors: lua_pcall + debug.traceback as the message handler, same as
     the Lua plan.
 
-    No GIL. One lua_State per L5 thread for lock-free isolation.
+    No GIL. One lua_State per Message Thread for lock-free isolation.
 
 
-5. ABI descriptors and the L5 receiver
+5. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/luajithost_abi.lm2   predef + fn.external prototypes

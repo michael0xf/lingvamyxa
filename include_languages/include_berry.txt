@@ -5,7 +5,7 @@ Status
 
 Working provisioning plan for vendoring one of the tiny embeddable
 languages -- Berry, Umka, Gravity, Pocketlang or Pawn -- into the
-Lingvamyxa runtime and exposing it as an L5-style receiver. Companion to
+Lingvamyxa runtime and exposing it as an Message Thread receiver. Companion to
 include_python.txt; same verify / stage / generate / manifest pattern,
 no runtime download.
 
@@ -86,10 +86,10 @@ Umka:
 
 Arrays: each VM exposes a bytes/buffer or list type; wrap the arena
 pointer with an accessor object for no-copy, or copy into a native
-list. No GIL; one VM per L5 thread.
+list. No GIL; one VM per Message Thread.
 
 
-5. ABI descriptors and the L5 receiver
+5. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/<lang>host_abi.lm2   predef + fn.external prototypes

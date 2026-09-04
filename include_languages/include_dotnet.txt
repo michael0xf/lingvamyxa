@@ -4,7 +4,7 @@ Lingvamyxa .NET CoreCLR Integration Plan
 Status
 
 Working provisioning plan for bundling the .NET runtime into the
-Lingvamyxa runtime and exposing it as an L5-style "clr" receiver.
+Lingvamyxa runtime and exposing it as an Message Thread "clr" receiver.
 Companion to include_python.txt; same fetch / verify / stage / generate
 / populate / manifest pattern (Appendix B there).
 
@@ -129,7 +129,7 @@ are loaded at runtime.
     hostfxr_close(ctx) at shutdown. CoreCLR itself is not torn down.
 
 
-6. ABI descriptors and the L5 receiver
+6. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/clrhost_abi.lm2      predef + fn.external prototypes

@@ -4,7 +4,7 @@ Lingvamyxa mruby Integration Plan
 Status
 
 Working provisioning plan for vendoring mruby into the Lingvamyxa
-runtime and exposing it as an L5-style "mruby" receiver. Companion to
+runtime and exposing it as an Message Thread "mruby" receiver. Companion to
 include_python.txt; same verify / stage / generate / manifest pattern,
 no runtime download, with one bootstrap wrinkle (the build runs on a
 host Ruby).
@@ -90,7 +90,7 @@ Wrap the native build:
         LMX failure record; mrb->exc = 0; }
     mrb_close(mrb);
 
-    Many states; one mrb_state per L5 thread (states are not shared
+    Many states; one mrb_state per Message Thread (states are not shared
     across threads).
 
     Arrays:  mrb_str_new (copy) for binary; for numeric data, an
@@ -101,7 +101,7 @@ Wrap the native build:
     No GIL, but a state is single-threaded.
 
 
-5. ABI descriptors and the L5 receiver
+5. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/mrubyhost_abi.lm2    predef + fn.external prototypes

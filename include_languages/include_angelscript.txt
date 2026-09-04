@@ -5,7 +5,7 @@ Status
 
 Working provisioning plan for vendoring a typed embeddable scripting
 language -- AngelScript, Squirrel or ChaiScript -- into the Lingvamyxa
-runtime and exposing it as an L5-style "as" (or "sq" / "chai") receiver.
+runtime and exposing it as an Message Thread "as" (or "sq" / "chai") receiver.
 Companion to include_python.txt; same verify / stage / generate /
 manifest pattern, no runtime download.
 
@@ -98,10 +98,10 @@ Squirrel:  sq_open(1024); sqstd_dofile / sq_compilebuffer + sq_call;
 ChaiScript:  chaiscript::ChaiScript chai; chai.eval(src); catch
     chaiscript::exception::eval_error for the message.
 
-No GIL; one engine/VM per L5 thread.
+No GIL; one engine/VM per Message Thread.
 
 
-5. ABI descriptors and the L5 receiver
+5. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/ashost_abi.lm2       predef + fn.external prototypes (extern "C")

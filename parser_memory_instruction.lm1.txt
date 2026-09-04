@@ -37,9 +37,9 @@ The first parser should use a small number of explicit owners:
     LmDiagnosticArena
         Owns diagnostics and source spans.
 
-All owners are local to one parser run and one L5-style execution context.
-The first implementation does not need a global GC. It needs local owner-tree
-bookkeeping inside one parser/L5-thread-like execution context.
+All owners are local to one parser run and one Message Thread-style execution
+context. The first implementation does not need a global GC. It needs local
+owner-tree bookkeeping inside one parser or Message Thread execution context.
 
 
 2. No Raw Escaping Pointers
@@ -167,7 +167,7 @@ pointer with the newly copied target-owned pointer.
 Promotion is ownership maintenance, not memory release.
 
 It runs automatically as part of local owner-tree cutting/detaching inside one
-parser run or one L5 Thread. It is not a separately invoked Lingvamyxa source
+parser run or one Message Thread. It is not a separately invoked Lingvamyxa source
 operation and it is not a global GC.
 
     lm_tree_cut(owner)
@@ -196,8 +196,8 @@ rule is:
 
 The analogous later runtime rule is:
 
-    destroy L5 Thread
-        releases that L5 Thread memory graph.
+    destroy Message Thread
+        releases that Message Thread memory graph.
 
 Explicit L2 shared/external resources, when introduced, have separate
 destruction/lifetime contracts.
@@ -370,9 +370,10 @@ It does need:
     diagnostics for promotion/copy failure.
 
 
-12. Relationship to Later L5 Runtime
+12. Relationship to Later Message Thread Runtime
 
-This parser memory style is intentionally compatible with the L5 Thread model:
+This parser memory style is intentionally compatible with the Message Thread
+model:
 
     local owner graph;
     no raw cross-thread references;
@@ -381,4 +382,4 @@ This parser memory style is intentionally compatible with the L5 Thread model:
     no global stop-the-world requirement.
 
 The first parser may be single-threaded, but its data model should not block a
-later L5 Thread implementation.
+later Message Thread implementation.

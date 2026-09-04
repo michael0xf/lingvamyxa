@@ -4,7 +4,7 @@ Lingvamyxa WASM Runtime Integration Plan
 Status
 
 Working provisioning plan for bundling a WebAssembly runtime into the
-Lingvamyxa runtime and exposing it as an L5-style "wasm" receiver.
+Lingvamyxa runtime and exposing it as an Message Thread "wasm" receiver.
 Companion to include_python.txt; same fetch / verify / stage / generate
 / manifest pattern.
 
@@ -13,7 +13,7 @@ Goal
 One embedded runtime, many source languages: anything compiled to
 WASM / WASI / a WASM component. Sandboxed by construction (linear memory
 is isolated; WASI grants only the file descriptors and preopened
-directories you hand it -- a natural fit for Lingvamyxa's L4/L5
+directories you hand it -- a natural fit for Lingvamyxa registry and Message Thread
 authority model). This file provisions the runtime; the two
 "second Python" plans (include_python_wasi.txt, include_python_pyodide.txt)
 build on it.
@@ -132,7 +132,7 @@ libwasmtime.a is fully static; no runtime .so to ship on Linux/macOS.
     ~100-500 ms for a CPython guest.
 
 
-6. ABI descriptors and the L5 receiver
+6. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/wasmhost_abi.lm2     predef + fn.external prototypes

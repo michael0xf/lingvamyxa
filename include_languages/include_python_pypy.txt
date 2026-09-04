@@ -89,7 +89,7 @@ possible. Differences:
       the CPython plan.
 
 
-6. ABI descriptors and the L5 receiver
+6. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
 Same as include_python.txt: lm2/pyhost_abi.lm2, receiver "python" /

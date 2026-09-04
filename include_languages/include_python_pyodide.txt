@@ -123,7 +123,7 @@ lingvamyxa_wasm and lingvamyxa_js.
     sees the preopened pyodide/ and the granted data dir.
 
 
-6. ABI descriptors and the L5 receiver
+6. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/pyodidehost_abi.lm2   predef + fn.external prototypes

@@ -1008,17 +1008,14 @@ are ordinary shared L2/L3 receiver families.
 Only a concrete receiver whose semantics expose a low-level machine operation
 is L2-only. Their detailed receiver families are specified in section 19.
 
-The removed names L4 and L5 do not denote source profiles, implicit file
+The names L4 and L5 do not denote source profiles, implicit file
 profiles or semantic strata. The legacy extensions `.lm4`/`.lm5` and root
 receivers `L4:`/`L5:` are rejected rather than mapped silently to L2/L3.
 
-Historical specifications map as follows: the former L4 model/registry surface
-is now ordinary descriptor, Table/Registry, evidence, composition and query
-families in sections 19.17 through 19.18 and 19.20 through 19.27. The former L5
-surface is now the message pipeline in section 19.19 and the Message Thread,
-service and authorization families in sections 19.28 through 19.32. These are
-ordinary shared receiver families: they are available in both L2 and L3 unless
-a concrete operation exposes the low-level machine surface.
+Descriptor, Table/Registry, evidence, composition, query, message,
+Message Thread, service and authorization families are ordinary shared
+L2/L3 receivers specified in section 19. They are available in both L2
+and L3 unless a concrete operation exposes the low-level machine surface.
 
 1.6. Level Receivers
 
@@ -12733,7 +12730,8 @@ Conceptual components of one Message Thread include:
         current namespace/execution context
         scheduler state
 
-This is a runtime Structure family, not a removed `L5:` source block. Message
+This is a runtime Structure family, not a source-level profile or level
+receiver. Message
 Thread descriptors and operations are ordinary L2/L3 descriptors and receivers
 explicitly visible in the namespace. The top-level `thread:` declaration is
 implemented by the current profile. `send:` is implemented for owned-LMX FIFO
@@ -15310,7 +15308,7 @@ compatible only with a `c.struct` forward declaration, and a `c.union` or
 families at one projected name is a projection error.
 
 The common projection state covers named structures, physical `merge:`,
-non-forward `c.struct`/`c.union` layout typedefs, L4 alias/forward declarations,
+non-forward `c.struct`/`c.union` layout typedefs, alias/forward declarations,
 function-pointer typedefs and implementation-private generated ABI typedefs.
 The latter include callable closure layouts and aliases, capture and binder
 environments, `fm` return layouts, Table row layouts and fixed

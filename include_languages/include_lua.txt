@@ -4,7 +4,7 @@ Lingvamyxa Lua 5.4 Integration Plan
 Status
 
 Working provisioning plan for vendoring Lua 5.4 into the Lingvamyxa
-runtime and exposing it as an L5-style "lua" receiver. Companion to
+runtime and exposing it as an Message Thread "lua" receiver. Companion to
 include_python.txt; same verify / stage / generate / manifest pattern,
 minus the runtime download -- Lua is a small C source tree built by the
 project's own toolchain.
@@ -61,7 +61,7 @@ No install step: the code is linked into the runtime binary.
 --------------------------------------------------
 
     lua_State *L = luaL_newstate();   luaL_openlibs(L);
-    One lua_State per interpreter; create many, one per L5 thread if you
+    One lua_State per interpreter; create many, one per Message Thread if you
     want isolation with no shared lock.
 
     Call:  luaL_loadstring / lua_pcall, args pushed via lua_push*,
@@ -77,10 +77,10 @@ No install step: the code is linked into the runtime binary.
     message handler; return an LMX failure record.
 
     No GIL. Each lua_State is single-threaded; never share one across
-    L5 threads without your own lock.
+    Message Threads without your own lock.
 
 
-5. ABI descriptors and the L5 receiver
+5. ABI descriptors and the Message Thread receiver
 --------------------------------------
 
     lm2/luahost_abi.lm2      predef + fn.external prototypes
