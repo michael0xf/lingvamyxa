@@ -287,7 +287,7 @@ fn: lm_test_l2_predef_source_rows_core () int
     lm_trans_l2_table_materialization_suppression_depth: 0
     lm_trans_l2_conditional_import_depth: 0
     lm_trans_l2_conditional_emission_depth: 0
-    prelude_file: c.tmpfile()
+    prelude_file: lm_trans_tmpfile()
     if: status = 0
         if: prelude_file = 0 || lm_trans_typedef_projection_output_enter(prelude_file, 0) != 0
             status: 1

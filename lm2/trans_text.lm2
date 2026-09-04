@@ -1,5 +1,54 @@
 predef: "lm2/own_abi.lm2"
 
+size_t: lm_trans_tmpfile_seq
+
+fn: lm_trans_tmpfile () FILE
+    FILE: file
+    @: char dir
+    c.array: [512]: char path
+    @: char format
+
+    file: c.tmpfile()
+    if: file != 0
+        return: file
+
+    dir: c.getenv("TEMP")
+    if: dir = 0 || dir[0] = '\0'
+        dir: c.getenv("TMP")
+    if: dir = 0 || dir[0] = '\0'
+        dir: c.getenv("TMPDIR")
+    if: dir = 0 || dir[0] = '\0'
+        c.fprintf(c.stderr, "trans error: cannot create a temporary file\n")
+        return: 0
+
+    format: "%s/lmx-%zu.tmp"
+    if: c.strchr(dir, '\\') != 0
+        format: "%s\\lmx-%zu.tmp"
+
+    lm_trans_tmpfile_seq: lm_trans_tmpfile_seq + 1U
+    if: c.snprintf(path, 512, format, dir, lm_trans_tmpfile_seq) < 0
+        c.fprintf(c.stderr, "trans error: cannot create a temporary file\n")
+        return: 0
+    file: c.fopen(path, "w+bD")
+    if: file != 0
+        return: file
+    file: c.fopen(path, "w+b")
+    if: file = 0
+        c.fprintf(c.stderr, "trans error: cannot create a temporary file\n")
+    return: file
+end: lm_trans_tmpfile
+
+fn: lm_trans_qualifier_is_const (const: @(char qualifier)) int
+    if: qualifier = 0
+        return: 0
+    if: c.strcmp(qualifier, "const ") = 0
+        return: 1
+    if: c.strcmp(qualifier, "static const ") = 0
+        return: 1
+    if: c.strcmp(qualifier, "extern const ") = 0
+        return: 1
+return: 0
+
 fn: lm_trans_text_equals (const: (LmP0Text: text); const: @(char value)) int
     size_t: length
 

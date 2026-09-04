@@ -23,6 +23,8 @@ fn: lm_trans_binding_resolve (
     LmTransBinding: out
 ) int
 
+fn: lm_trans_qualifier_is_const (const: @(char qualifier)) int
+
 fn: lm_trans_text_equals (
     const: LmP0Text: text
     const: @: char value

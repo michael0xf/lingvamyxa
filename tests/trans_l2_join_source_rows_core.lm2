@@ -247,7 +247,7 @@ fn: lm_test_l2_join_emitter_is_source_only (LmTransNamespace: namespace_) int
 
     table_frame: lm_test_l2_join_root_frame_at(document, 0U)
     join_frame: lm_test_l2_join_root_frame_at(document, 1U)
-    output: c.tmpfile()
+    output: lm_trans_tmpfile()
     if: table_frame = 0 || join_frame = 0 || output = 0 || lm_trans_declare_l2_table(namespace_, table_frame) != 0 || lm_trans_declare_l2_join(namespace_, join_frame) != 0
         status: 1
 

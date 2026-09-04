@@ -858,8 +858,8 @@ fn: lm_trans_emit_callable_descriptor_claimed (FILE: file; const: (LmTransFuncti
     if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
         return: 1
 
-    closure_declaration_file: c.tmpfile()
-    pointer_declaration_file: c.tmpfile()
+    closure_declaration_file: lm_trans_tmpfile()
+    pointer_declaration_file: lm_trans_tmpfile()
     closure_name_length: function\c_name\length + 7U
     closure_name: lm_own_new_zero(closure_name_length + 1U)
     if: closure_declaration_file = 0 || pointer_declaration_file = 0 || closure_name = 0
@@ -1469,7 +1469,7 @@ fn: lm_trans_top_level_emit_named_structure_typedef_once (
     if: file = 0 || namespace_ = 0 || frame = 0
         return: 1
 
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
     emitted: 0
@@ -1498,7 +1498,7 @@ fn: lm_trans_top_level_emit_local_named_structure_typedef_if_compatible (
     if: file = 0 || namespace_ = 0 || frame = 0
         return: 1
 
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
     emitted: 0
@@ -1614,7 +1614,7 @@ fn: lm_trans_top_level_emit_merge_named_structure_typedef (FILE: file; LmTransNa
 
     if: item = 0 || item\frame = 0
         return: 1
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
     status: lm_trans_emit_merge_named_structure_typedef(declaration_file, item\frame, 0U, namespace_)

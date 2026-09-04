@@ -459,7 +459,7 @@ fn: lm_test_structural_semantic_bridge_core () int
     declarator: lm_trans_statement_c_declarator_new()
     column_types: (cast: (@: LmTransL4CallableType) lm_own_new_zero(c.sizeof(column_types[0])))
     column_names: (cast: (@: LmP0Text) lm_own_new_zero(c.sizeof(column_names[0])))
-    output: c.tmpfile()
+    output: lm_trans_tmpfile()
     if: status = 0 && (type_node = 0 || type_node\kind != c.LM_P0_NODE_ATOM || field_node = 0 || field_node\kind != c.LM_P0_NODE_FRAME || abi_params = 0 || capture = 0 || declarator = 0 || column_types = 0 || column_names = 0 || output = 0)
         status: 1
     if: status = 0

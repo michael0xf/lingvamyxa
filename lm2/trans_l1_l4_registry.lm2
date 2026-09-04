@@ -845,7 +845,7 @@ fn: lm_trans_emit_layout_definition (FILE: file; const: @(char layout_name); con
     declaration_file: 0
     target_file: file
     if: emits_typedef
-        declaration_file: c.tmpfile()
+        declaration_file: lm_trans_tmpfile()
         target_file: declaration_file
     ---
     if: target_file = 0
@@ -1807,7 +1807,7 @@ fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: (LmTransNamespace: names
             lm_trans_l4_text_view_delete(@ name_text)
             lm_trans_ptr_stack_delete(@ names)
             return: 1
-        declaration_file: c.tmpfile()
+        declaration_file: lm_trans_tmpfile()
         if: declaration_file = 0
             lm_trans_l4_text_view_delete(@ name_text)
             lm_trans_ptr_stack_delete(@ names)
@@ -1920,7 +1920,7 @@ fn: lm_trans_emit_l4_forward_typedefs (FILE: file; const: (LmTransNamespace: nam
                 lm_trans_ptr_stack_delete(@ names)
                 return: 1
         ---
-        declaration_file: c.tmpfile()
+        declaration_file: lm_trans_tmpfile()
         if: declaration_file = 0
             lm_trans_ptr_stack_delete(@ names)
             return: 1
@@ -2505,7 +2505,7 @@ fn: lm_trans_emit_l4_function_pointer_type_name (FILE: file; const: (LmTransName
         lm_trans_text_ref_destroy(@ name_text)
         return: 1
 
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         lm_trans_l4_abi_params_delete(params, param_capacity)
         lm_trans_text_ref_destroy(@ name_text)

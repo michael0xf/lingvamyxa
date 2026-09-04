@@ -2309,7 +2309,7 @@ fn: lm_trans_emit_callable_binder_env_typedef_once (FILE: file; const: (LmTransS
     int: status
     if: (((file = 0) || (source_symbol = 0)) || (namespace_ = 0)) || (env_type_name = 0)
         return: 1
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
     emitted: 0

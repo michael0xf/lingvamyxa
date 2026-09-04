@@ -55,7 +55,7 @@ fn: lm_test_typedef_projection_declaration_file (const: @(char declaration)) FIL
 
     if: declaration = 0
         return: 0
-    file: c.tmpfile()
+    file: lm_trans_tmpfile()
     if: file = 0
         return: 0
     if: lm_trans_put(file, declaration) != 0
@@ -143,7 +143,7 @@ fn: lm_test_typedef_projection_base_rules () int
 
     declaration_a: "typedef struct Foo {\n    int value;\n} Foo;\n"
     declaration_b: "typedef struct Foo {\n    double value;\n} Foo;\n"
-    output: c.tmpfile()
+    output: lm_trans_tmpfile()
     entered: 0
     status: output = 0
     if: status = 0 && lm_trans_typedef_projection_output_enter(0, output) != 0
@@ -190,9 +190,9 @@ fn: lm_test_typedef_projection_target_region_order () int
 
     declaration_a: "typedef struct RegionFoo {\n    int value;\n} RegionFoo;\n"
     declaration_b: "typedef struct RegionFoo {\n    double value;\n} RegionFoo;\n"
-    prelude_output: c.tmpfile()
-    body_output: c.tmpfile()
-    unknown_output: c.tmpfile()
+    prelude_output: lm_trans_tmpfile()
+    body_output: lm_trans_tmpfile()
+    unknown_output: lm_trans_tmpfile()
     entered: 0
     status: prelude_output = 0 || body_output = 0 || unknown_output = 0
 
@@ -245,7 +245,7 @@ fn: lm_test_typedef_projection_presence_rules () int
 
     declaration_a: "typedef struct Foo {\n    int value;\n} Foo;\n"
     declaration_b: "typedef struct Foo {\n    double value;\n} Foo;\n"
-    output: c.tmpfile()
+    output: lm_trans_tmpfile()
     entered: 0
     status: output = 0
     if: status = 0 && lm_trans_typedef_projection_output_enter(0, output) != 0
@@ -278,7 +278,7 @@ fn: lm_test_typedef_projection_presence_rules () int
     if: output != 0
         c.fclose(output)
 
-    output: c.tmpfile()
+    output: lm_trans_tmpfile()
     status: status || output = 0
     if: status = 0 && lm_trans_typedef_projection_output_enter(0, output) != 0
         status: 1
@@ -311,7 +311,7 @@ fn: lm_test_typedef_projection_presence_rules () int
     if: output != 0
         c.fclose(output)
 
-    output: c.tmpfile()
+    output: lm_trans_tmpfile()
     status: status || output = 0
     if: status = 0 && lm_trans_typedef_projection_output_enter(0, output) != 0
         status: 1
@@ -352,8 +352,8 @@ fn: lm_test_typedef_projection_canonical_and_nested_outputs () int
     int: status
 
     declaration: "typedef struct Foo {\n    int value;\n} Foo;\n"
-    outer_output: c.tmpfile()
-    inner_output: c.tmpfile()
+    outer_output: lm_trans_tmpfile()
+    inner_output: lm_trans_tmpfile()
     name: lm_trans_text_from_cstr("Foo")
     quoted_name: lm_trans_text_from_cstr("`Foo`")
     outer_entered: 0
@@ -410,7 +410,7 @@ fn: lm_test_typedef_projection_error_lifecycle () int
     int: status
 
     declaration: "typedef int Fresh;\n"
-    output: c.tmpfile()
+    output: lm_trans_tmpfile()
     entered: 0
     status: output = 0
     if: status = 0 && lm_trans_typedef_projection_output_enter(0, 0) = 0
@@ -466,7 +466,7 @@ fn: lm_test_typedef_projection_local_conditional_ancestor () int
 
     declaration_a: "typedef int ConditionalLocal;\n"
     declaration_b: "typedef double ConditionalLocal;\n"
-    output: c.tmpfile()
+    output: lm_trans_tmpfile()
     entered: 0
     branch_entered: 0
     status: output = 0
@@ -534,7 +534,7 @@ fn: lm_test_typedef_projection_named_shape_conflict (
     int: emitted
     int: status
 
-    output: c.tmpfile()
+    output: lm_trans_tmpfile()
     entered: 0
     status: output = 0
     if: status = 0 && lm_trans_typedef_projection_output_enter(0, output) != 0

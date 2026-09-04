@@ -60,7 +60,7 @@ fn: lm_test_anonymous_structure_namespace_core () int
         status: 1
     frame: lm_test_anonymous_structure_root_frame(document)
     namespace_: lm_trans_namespace_new()
-    output: c.tmpfile()
+    output: lm_trans_tmpfile()
     if: status = 0 && (frame = 0 || namespace_ = 0 || output = 0 || lm_trans_namespace_attach_registry(namespace_) != 0)
         status: 1
 

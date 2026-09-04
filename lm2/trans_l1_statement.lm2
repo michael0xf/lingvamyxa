@@ -189,7 +189,7 @@ fn: lm_trans_emit_env_type (
     if: function = 0 || function\has_env = 0 || function\captures = 0
         return: 0
 
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
     status: lm_trans_emit_env_type_raw(declaration_file, function, namespace_)
@@ -558,7 +558,7 @@ fn: lm_trans_emit_lm_slice_type (FILE: file) int
     int: emitted
     int: status
 
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
     status: lm_trans_emit_lm_slice_type_raw(declaration_file)
@@ -572,7 +572,7 @@ fn: lm_trans_emit_incoming_message_type (FILE: file) int
     int: emitted
     int: status
 
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
     status: lm_trans_emit_incoming_message_type_raw(declaration_file)
@@ -589,7 +589,7 @@ fn: lm_trans_emit_rest_lmx_http_server_type (FILE: file) int
     int: emitted
     int: status
 
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
     status: lm_trans_emit_rest_lmx_http_server_type_raw(declaration_file)
@@ -606,7 +606,7 @@ fn: lm_trans_emit_message_thread_execution_context_type (FILE: file) int
     int: emitted
     int: status
 
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
     status: lm_trans_emit_message_thread_execution_context_type_raw(declaration_file)
@@ -623,7 +623,7 @@ fn: lm_trans_emit_lmx_message_thread_entry_type (FILE: file) int
     int: emitted
     int: status
 
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
     status: lm_trans_emit_lmx_message_thread_entry_type_raw(declaration_file)
@@ -1989,7 +1989,7 @@ fn: lm_trans_emit_array_value_helper (
 
     if: lm_trans_emit_message_thread_runtime_prelude(prelude_file) != 0
         return: 1
-    definition_file: c.tmpfile()
+    definition_file: lm_trans_tmpfile()
     if: definition_file = 0 || lm_trans_typedef_projection_prelude_alias_enter(definition_file) != 0
         if: definition_file != 0
             c.fclose(definition_file)
@@ -4064,9 +4064,9 @@ fn: lm_trans_emit_pointer_declaration_with_qualifier (
     expected_class: 0
     if: type_field\value != 0 && type_field\value\kind = c.LM_P0_NODE_ATOM
         expected_class: type_field\value\as\atom
-    if: name_field\next != 0 && lm_trans_guard_c_array_value_range(name_field\next, 0, namespace_, expected_class, frame\head\length, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0), "raw pointer initializer") != 0
+    if: name_field\next != 0 && lm_trans_guard_c_array_value_range(name_field\next, 0, namespace_, expected_class, frame\head\length, lm_trans_qualifier_is_const(qualifier), "raw pointer initializer") != 0
         return: 1
-    if: name_field\next != 0 && lm_trans_guard_known_raw_pointer_range(name_field\next, 0, namespace_, expected_class, frame\head\length, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0), "raw pointer initializer") != 0
+    if: name_field\next != 0 && lm_trans_guard_known_raw_pointer_range(name_field\next, 0, namespace_, expected_class, frame\head\length, lm_trans_qualifier_is_const(qualifier), "raw pointer initializer") != 0
         return: 1
     if: name_field\next != 0 && lm_trans_range_has_direct_array_reference(name_field\next, 0, namespace_) && (frame\head\length != 1U || type_field\value = 0 || type_field\value\kind != c.LM_P0_NODE_ATOM || lm_trans_text_equals(type_field\value\as\atom, "LmSlice") = 0 || lm_trans_range_is_direct_array_reference_address(name_field\next, 0, namespace_) = 0) && lm_trans_range_is_array_reference_data_pointer(name_field\next, 0, namespace_) = 0
         c.fprintf(c.stderr, "trans L2 type error: raw pointer initializer cannot consume an ArrayReference without an explicit adapter\n")
@@ -4086,7 +4086,7 @@ fn: lm_trans_emit_pointer_declaration_with_qualifier (
         return: 1
     status: lm_trans_namespace_declare_node_storage_binding(namespace_, name_node\as\atom, type_field\value)
     if: status = 0
-        status: lm_trans_namespace_mark_raw_pointer(namespace_, name_node\as\atom, frame\head\length, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0))
+        status: lm_trans_namespace_mark_raw_pointer(namespace_, name_node\as\atom, frame\head\length, lm_trans_qualifier_is_const(qualifier))
 return: status
 
 fn: lm_trans_emit_pointer_declaration (
@@ -4984,7 +4984,7 @@ fn: lm_trans_emit_managed_array_declaration (
     if: rank = 0U
         c.fprintf(c.stderr, "trans L2 ArrayReference error: ordinary [] declaration requires at least one dimension\n")
         return: 1
-    element_is_const: qualifier != 0 && c.strcmp(qualifier, "const ") = 0
+    element_is_const: lm_trans_qualifier_is_const(qualifier)
 
     id: lm_trans_next_array_value_helper_id
     lm_trans_next_array_value_helper_id: lm_trans_next_array_value_helper_id + 1U
@@ -5078,7 +5078,7 @@ fn: lm_trans_emit_array_slice_value_declaration (
         return: 1
     if: lm_trans_array_declarator_empty_rank(declarator, @ rank) = 0
         return: 1
-    element_is_const: qualifier != 0 && c.strcmp(qualifier, "const ") = 0
+    element_is_const: lm_trans_qualifier_is_const(qualifier)
 
     param: lm_trans_formal_param_new()
     helper_name: lm_trans_statement_text_new()
@@ -5646,7 +5646,7 @@ fn: lm_trans_emit_array_declaration_core (
         return: 1
 
     initializer_field: lm_trans_c_declarator_expression_dimension_tail(declarator)
-    if: allow_array_reference_semantics = 0 && lm_trans_validate_c_array_declarator(declarator, initializer_field, namespace_, qualifier != 0 && (c.strcmp(qualifier, "static ") = 0 || c.strcmp(qualifier, "static const ") = 0), qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0)) != 0
+    if: allow_array_reference_semantics = 0 && lm_trans_validate_c_array_declarator(declarator, initializer_field, namespace_, qualifier != 0 && (c.strcmp(qualifier, "static ") = 0 || c.strcmp(qualifier, "static const ") = 0), lm_trans_qualifier_is_const(qualifier)) != 0
         return: 1
 
     slice_value: lm_trans_array_declarator_single_structure_value(declarator)
@@ -5678,7 +5678,7 @@ fn: lm_trans_emit_array_declaration_core (
         status: lm_trans_namespace_declare_node_storage_binding(namespace_, declarator\name, declarator\type_node)
     ---
     if: status = 0 && allow_array_reference_semantics = 0
-        status: lm_trans_namespace_mark_c_array_storage(namespace_, declarator\name, lm_trans_array_declarator_rank(declarator), declarator\pointer_depth, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0))
+        status: lm_trans_namespace_mark_c_array_storage(namespace_, declarator\name, lm_trans_array_declarator_rank(declarator), declarator\pointer_depth, lm_trans_qualifier_is_const(qualifier))
     if: status = 0 && allow_array_reference_semantics = 0
         status: lm_trans_namespace_mark_c_array_emitted(namespace_, declarator\name)
 return: status
@@ -5766,9 +5766,9 @@ fn: lm_trans_emit_pointer_declaration_repeat_with_qualifier (
     expected_class: 0
     if: type_node != 0 && type_node\kind = c.LM_P0_NODE_ATOM
         expected_class: type_node\as\atom
-    if: name_field\next != 0 && lm_trans_guard_c_array_value_range(name_field\next, 0, namespace_, expected_class, template_frame\head\length, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0), "raw pointer initializer") != 0
+    if: name_field\next != 0 && lm_trans_guard_c_array_value_range(name_field\next, 0, namespace_, expected_class, template_frame\head\length, lm_trans_qualifier_is_const(qualifier), "raw pointer initializer") != 0
         return: 1
-    if: name_field\next != 0 && lm_trans_guard_known_raw_pointer_range(name_field\next, 0, namespace_, expected_class, template_frame\head\length, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0), "raw pointer initializer") != 0
+    if: name_field\next != 0 && lm_trans_guard_known_raw_pointer_range(name_field\next, 0, namespace_, expected_class, template_frame\head\length, lm_trans_qualifier_is_const(qualifier), "raw pointer initializer") != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
@@ -5787,7 +5787,7 @@ fn: lm_trans_emit_pointer_declaration_repeat_with_qualifier (
         return: 1
     status: lm_trans_namespace_declare_node_storage_binding(namespace_, name_node\as\atom, type_node)
     if: status = 0
-        status: lm_trans_namespace_mark_raw_pointer(namespace_, name_node\as\atom, template_frame\head\length, qualifier != 0 && (c.strcmp(qualifier, "const ") = 0 || c.strcmp(qualifier, "static const ") = 0))
+        status: lm_trans_namespace_mark_raw_pointer(namespace_, name_node\as\atom, template_frame\head\length, lm_trans_qualifier_is_const(qualifier))
 return: status
 
 fn: lm_trans_emit_array_declaration_repeat_with_qualifier (
@@ -7167,7 +7167,7 @@ fn: lm_trans_emit_l2_runtime_table_local_row_type (
 
     if: file = 0 || c_type_name = 0 || descriptor = 0 || namespace_ = 0
         return: 1
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
     status: lm_trans_emit_anonymous_structure_typedef(declaration_file, c_type_name, descriptor, 0U, namespace_)
@@ -7193,7 +7193,7 @@ fn: lm_trans_emit_l2_runtime_table_module_row_type (
 
     if: file = 0 || c_type_name = 0 || descriptor = 0 || namespace_ = 0
         return: 1
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
     status: lm_trans_emit_anonymous_structure_typedef(declaration_file, c_type_name, descriptor, 0U, namespace_)
@@ -7902,7 +7902,7 @@ fn: lm_trans_module_init_emit_value_initializer (
 
     if: file = 0 || frame = 0 || entry = 0 || namespace_ = 0
         return: 1
-    helper_output: c.tmpfile()
+    helper_output: lm_trans_tmpfile()
     if: helper_output = 0
         c.fprintf(c.stderr, "trans module-init error: cannot create helper staging stream\n")
         return: 1
@@ -10788,7 +10788,7 @@ fn: lm_trans_emit_function_return_structure_once (
     if: type_name = 0
         return: 1
 
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         lm_own_delete(type_name, 0)
         return: 1
@@ -11129,7 +11129,7 @@ fn: lm_trans_statement_stack_schedule_named_structure (
     c.LM_UNUSED(stack)
     if: lm_trans_declare_hosted_named_structure_layout(namespace_, frame) != 0
         return: 1
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
     status: lm_trans_emit_named_structure_typedef(declaration_file, frame, 0U, namespace_)
@@ -11158,7 +11158,7 @@ fn: lm_trans_statement_stack_schedule_merge_named_structure (
     if: lm_trans_declare_hosted_merge_named_structure_layout(namespace_, frame) != 0
         return: 1
     target: lm_trans_merge_target_name(frame)
-    declaration_file: c.tmpfile()
+    declaration_file: lm_trans_tmpfile()
     if: target = 0 || declaration_file = 0
         return: 1
     status: lm_trans_emit_merge_named_structure_typedef(declaration_file, frame, 0U, namespace_)
