@@ -2330,7 +2330,7 @@ static int lm_build_compile_generated_tools(struct LmMessageThread *lm_lmx_messa
     if (lm_build_make(lm_lmx_message_thread, make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/finalize.lm1.c\" \"%s\" -o \"%s/finalize.lm0%s\"", own_library, output_dir, lm_build_exe_suffix(lm_lmx_message_thread));
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L \"lm1/build/finalize.lm1.c\" \"%s\" -o \"%s/finalize.lm0%s\"", own_library, output_dir, lm_build_exe_suffix(lm_lmx_message_thread));
     if (lm_build_make(lm_lmx_message_thread, make_tool, "link", command) != 0) {
         return 1;
     }
@@ -2342,7 +2342,7 @@ static int lm_build_compile_generated_tools(struct LmMessageThread *lm_lmx_messa
     if (lm_build_make(lm_lmx_message_thread, make_tool, "link", command) != 0) {
         return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/buildCore.lm1.c\" \"%s\" -o \"%s/buildCore.lm0%s\"", own_library, output_dir, lm_build_exe_suffix(lm_lmx_message_thread));
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L -I\"lm1\" \"lm1/build/buildCore.lm1.c\" \"%s\" -o \"%s/buildCore.lm0%s\"", own_library, output_dir, lm_build_exe_suffix(lm_lmx_message_thread));
     return lm_build_make(lm_lmx_message_thread, make_tool, "link", command);
 }
 

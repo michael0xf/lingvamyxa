@@ -219,7 +219,7 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
 #if defined(_WIN32)
 /* no POSIX feature macro on Windows */
 #else
-#define _POSIX_C_SOURCE 199309L
+#define _POSIX_C_SOURCE 200809L
 #endif
 
 #include <stdio.h>
@@ -329,10 +329,10 @@ static int lm_finalize_platform_is_drive_absolute(struct LmMessageThread *lm_lmx
 
 static void lm_finalize_platform_sleep_retry(struct LmMessageThread *lm_lmx_message_thread) {
     (void)lm_lmx_message_thread;
-    struct timespec request;
-    request.tv_sec = 0;
-    request.tv_nsec = 250000000L;
-    nanosleep(&request, 0);
+    int started;
+    started = clock();
+    while (started >= 0 && clock() - started < CLOCKS_PER_SEC / 4) {
+    }
 }
 
 static const char * lm_finalize_platform_defer_command_format(struct LmMessageThread *lm_lmx_message_thread) {
