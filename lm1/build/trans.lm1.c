@@ -53155,14 +53155,22 @@ static FILE * lm_trans_tmpfile(struct LmMessageThread *lm_lmx_message_thread) {
         fprintf(stderr, "trans error: cannot create a temporary file\n");
         return 0;
     }
-    format = "%s/lmx-%zu.tmp";
+    format = "%s/lmx-%p-%zu.tmp";
     if (strchr(dir, '\\') != 0) {
-        format = "%s\\lmx-%zu.tmp";
+        format = "%s\\lmx-%p-%zu.tmp";
     }
     lm_trans_tmpfile_seq = lm_trans_tmpfile_seq + 1U;
-    if (snprintf(path, 512, format, dir, lm_trans_tmpfile_seq) < 0) {
+    if (snprintf(path, 512, format, dir, &path, lm_trans_tmpfile_seq) < 0) {
         fprintf(stderr, "trans error: cannot create a temporary file\n");
         return 0;
+    }
+    file = fopen(path, "w+bDx");
+    if (file != 0) {
+        return file;
+    }
+    file = fopen(path, "w+bx");
+    if (file != 0) {
+        return file;
     }
     file = fopen(path, "w+bD");
     if (file != 0) {
