@@ -1685,12 +1685,12 @@ static int lm_build_write_platform_tests_script(struct LmMessageThread *lm_lmx_m
     fputs("    case \"$name\" in\n", file);
     fputs("        trans_registry_view_parity.lmx)\n", file);
     fputs("            legacy_path=\"$c_path.legacy\"\n", file);
-    fputs("            LM_TRANS_REGISTRY_VIEW=legacy $link_env \"$trans\" \"$src\" \"$legacy_path\"\n", file);
-    fputs("            LM_TRANS_REGISTRY_VIEW=view $link_env \"$trans\" \"$src\" \"$c_path\"\n", file);
+    fputs("            env LM_TRANS_REGISTRY_VIEW=legacy $link_env \"$trans\" \"$src\" \"$legacy_path\"\n", file);
+    fputs("            env LM_TRANS_REGISTRY_VIEW=view $link_env \"$trans\" \"$src\" \"$c_path\"\n", file);
     fputs("            cmp \"$legacy_path\" \"$c_path\"\n", file);
     fputs("            rm -f \"$legacy_path\"\n", file);
     fputs("            ;;\n", file);
-    fputs("        *) LM_TRANS_REGISTRY_VIEW=view $link_env \"$trans\" \"$src\" \"$c_path\" ;;\n", file);
+    fputs("        *) env LM_TRANS_REGISTRY_VIEW=view $link_env \"$trans\" \"$src\" \"$c_path\" ;;\n", file);
     fputs("    esac\n", file);
     fputs("    case \"$name\" in trans_l4_abi_receivers.lm2|trans_message_thread_pool_single.lm2|trans_message_thread_mailbox_single.lm2) continue ;; esac\n", file);
     fputs("    support_c=\n", file);
