@@ -32,11 +32,13 @@ Nearby cache destructor already uses `cast:` and gets a pointer cast; Mix
 pages (no reference-base) do not. Until void is not an empty Structure, this
 rebind idiom is how untyped destructor arguments become typed pointers.
 
-Confirming tests (current version)
+Confirming tests
 
     tests/trans_invalid_void_as_empty_structure.lm2
-        trans should reject `void: cell` (exit 1). Today trans exits 0.
+        trans rejects `void: cell` (exit 1). void is a primitive with
+        semantic:none, no cell — not a declarable empty Structure.
 
     tests/trans_mix_void_object_rebind.lm2
         Mix analogue of `symbol: object`: recover `@: LmMixPage` from
-        `@: void` by assignment. Runs exit 0 on the current hole.
+        `@: void` by assignment. The void* → T* hole remains until
+        pointer-cast of untyped destructor arguments is a real converter.

@@ -3912,6 +3912,10 @@ fn: lm_trans_emit_declaration_with_qualifier (
     allowed_previous: 0
     finally: lm_trans_expr_callable_type_delete(expected_type)
 
+    if: lm_trans_text_equals(frame\head, "void")
+        c.fprintf(c.stderr, "trans L2 type error: void is not an empty Structure; it has no cell\n")
+        return: 1
+
     is_structural_default: (qualifier = 0 || qualifier[0] = '\0') && name_field\next = 0 && lm_trans_namespace_has_named_structure_binding(namespace_, frame\head)
     if: is_structural_default && lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
         return: 1
@@ -10360,15 +10364,8 @@ fn: lm_trans_guard_direct_structure_assignment (
 ) int
     const: LmP0Field: value_field
     const: LmP0Node: candidate_node
-    const: LmTransDescriptor: candidate_descriptor
-    const: LmTransDescriptor: target_root_descriptor
     const: LmTransDescriptor: required_descriptor
     LmP0Text: target_class
-    LmP0Text: target_payload
-    LmP0Text: target_root
-    size_t: root_start
-    size_t: root_end
-    int: crosses_indexed_layout
     int: status
 
     if: frame = 0 || frame\body = 0
@@ -10378,36 +10375,15 @@ fn: lm_trans_guard_direct_structure_assignment (
     if: value_field = 0 || value_field\next != 0 || value_field\value = 0 || value_field\value\kind != c.LM_P0_NODE_ATOM
         return: 0
     candidate_node: value_field\value
-
-    candidate_descriptor: lm_trans_effective_value_descriptor_from_atom(namespace_, candidate_node\as\atom)
-    crosses_indexed_layout: candidate_descriptor != 0 && lm_trans_descriptor_class_relation_value(candidate_descriptor, "lm.trans.c.indexed-members") != 0
-
-    if: crosses_indexed_layout = 0
-        target_payload: lm_trans_statement_text_new()
-        target_root: lm_trans_statement_text_new()
-        if: target_payload = 0 || target_root = 0
-            lm_trans_text_ref_destroy(@ target_payload)
-            lm_trans_text_ref_destroy(@ target_root)
-            return: 1
-
-        if: lm_trans_identifier_payload(frame\head, target_payload)
-            root_start: 0U
-            while: root_start < target_payload\length && target_payload\data[root_start] = '\\'
-                root_start: root_start + 1U
-            root_end: root_start
-            while: root_end < target_payload\length && target_payload\data[root_end] != '\\' && target_payload\data[root_end] != '['
-                root_end: root_end + 1U
-            target_root\data: target_payload\data + root_start
-            target_root\length: root_end - root_start
-            target_root_descriptor: lm_trans_effective_value_descriptor_from_atom(namespace_, target_root)
-            crosses_indexed_layout: target_root_descriptor != 0 && lm_trans_descriptor_class_relation_value(target_root_descriptor, "lm.trans.c.indexed-members") != 0
-        ---
-        lm_trans_text_ref_destroy(@ target_root)
-        lm_trans_text_ref_destroy(@ target_payload)
-    ---
-
-    if: crosses_indexed_layout = 0
+    if: frame\head = 0 || frame\head\data = 0
         return: 0
+    status: 0
+    while: status < (cast: int frame\head\length)
+        if: frame\head\data[status] = '\\' || frame\head\data[status] = '['
+            return: 0
+        ---
+        status: status + 1
+    ---
 
     target_class: lm_trans_statement_text_new()
     if: target_class = 0

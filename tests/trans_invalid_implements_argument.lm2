@@ -1,0 +1,20 @@
+L2:
+    Plain:
+        int: toString
+    end: Plain
+
+    Equatable:
+        int: equals
+    end: Equatable
+
+    fn: takeEq (Equatable: e) int
+        return: 0
+    end: takeEq
+
+    external:
+        fn: main () int
+            Plain: p
+            return: takeEq(p)
+        end: main
+    end: external
+end: L2

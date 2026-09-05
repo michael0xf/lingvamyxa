@@ -2215,6 +2215,75 @@ fn: lm_trans_effective_value_descriptor_from_atom (
         return: lm_trans_namespace_descriptor(namespace_, candidate_type\c_name)
 return: 0
 
+fn: lm_trans_atom_is_void_primitive (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    LmP0Text: type_name
+    int: is_void
+
+    if: name = 0
+        return: 0
+    if: lm_trans_text_equals(name, "void")
+        return: 1
+    if: namespace_ = 0
+        return: 0
+
+    type_name: lm_trans_text_ref_new_cstr("")
+    if: type_name = 0
+        return: 0
+    is_void: 0
+    if: lm_trans_namespace_relation_text_for_latest_binding(namespace_, name, "variable.type", type_name)
+        is_void: lm_trans_text_equals(type_name, "void")
+    ---
+    lm_trans_text_ref_destroy(@ type_name)
+return: is_void
+
+fn: lm_trans_admit_implements (
+    const: LmTransNamespace: namespace_
+    const: LmTransDescriptor: candidate_descriptor
+    const: LmTransDescriptor: required_descriptor
+    const: LmP0Text: candidate_name
+    const: @(char context)
+) int
+    int: compatible
+    int: candidate_is_indexed
+    int: required_is_indexed
+
+    if: namespace_ = 0 || candidate_descriptor = 0 || required_descriptor = 0
+        return: 0
+    if: candidate_descriptor = required_descriptor
+        return: 0
+    if: lm_trans_atom_is_void_primitive(namespace_, candidate_name)
+        return: 0
+
+    if: lm_trans_descriptor_implements(candidate_descriptor, required_descriptor, required_descriptor, @ compatible) != 0
+        if: candidate_name != 0
+            c.fprintf(c.stderr, "trans internal error: malformed structural descriptor while checking \"%.*s\" in %s\n", (cast: int candidate_name\length), candidate_name\data, context)
+        else:
+            c.fprintf(c.stderr, "trans internal error: malformed structural descriptor in %s\n", context)
+        ---
+        return: 1
+    if: compatible = 0
+        if: candidate_name != 0
+            c.fprintf(c.stderr, "trans L2 type error: implements(varA varB Consumer) is false for \"%.*s\" in %s\n", (cast: int candidate_name\length), candidate_name\data, context)
+        else:
+            c.fprintf(c.stderr, "trans L2 type error: implements(varA varB Consumer) is false in %s\n", context)
+        ---
+        return: 1
+
+    candidate_is_indexed: lm_trans_descriptor_class_relation_value(candidate_descriptor, "lm.trans.c.indexed-members") != 0
+    required_is_indexed: lm_trans_descriptor_class_relation_value(required_descriptor, "lm.trans.c.indexed-members") != 0
+    if: candidate_is_indexed = 0 && required_is_indexed = 0
+        return: 0
+
+    if: candidate_name != 0
+        c.fprintf(c.stderr, "trans hosted C backend limitation: \"%.*s\" implements the required descriptor in %s, but distinct hosted C layouts require an adapter/projection\n", (cast: int candidate_name\length), candidate_name\data, context)
+    else:
+        c.fprintf(c.stderr, "trans hosted C backend limitation: value implements the required descriptor in %s, but distinct hosted C layouts require an adapter/projection\n", context)
+    ---
+return: 1
+
 fn: lm_trans_guard_direct_structure_value_layout (
     const: LmTransNamespace: namespace_
     const: LmP0Text: candidate_name
@@ -2222,31 +2291,14 @@ fn: lm_trans_guard_direct_structure_value_layout (
     const: @(char context)
 ) int
     const: LmTransDescriptor: candidate_descriptor
-    int: candidate_is_indexed
-    int: required_is_indexed
-    int: compatible
 
     if: namespace_ = 0 || candidate_name = 0 || required_descriptor = 0
         return: 0
 
     candidate_descriptor: lm_trans_effective_value_descriptor_from_atom(namespace_, candidate_name)
-    if: candidate_descriptor = 0 || candidate_descriptor = required_descriptor
+    if: candidate_descriptor = 0
         return: 0
-
-    candidate_is_indexed: lm_trans_descriptor_class_relation_value(candidate_descriptor, "lm.trans.c.indexed-members") != 0
-    required_is_indexed: lm_trans_descriptor_class_relation_value(required_descriptor, "lm.trans.c.indexed-members") != 0
-    if: candidate_is_indexed = 0 && required_is_indexed = 0
-        return: 0
-
-    if: lm_trans_descriptor_implements(candidate_descriptor, required_descriptor, required_descriptor, @ compatible) != 0
-        c.fprintf(c.stderr, "trans internal error: malformed structural descriptor while checking direct value \"%.*s\" in %s\n", (cast: int candidate_name\length), candidate_name\data, context)
-        return: 1
-    if: compatible = 0
-        c.fprintf(c.stderr, "trans L2 type error: implements(varA varB Consumer) is false for direct structural value \"%.*s\" in %s\n", (cast: int candidate_name\length), candidate_name\data, context)
-        return: 1
-
-    c.fprintf(c.stderr, "trans hosted C backend limitation: direct structural value \"%.*s\" implements the required descriptor in %s, but distinct hosted C layouts require an adapter/projection\n", (cast: int candidate_name\length), candidate_name\data, context)
-return: 1
+return: lm_trans_admit_implements(namespace_, candidate_descriptor, required_descriptor, candidate_name, context)
 
 fn: lm_trans_is_c_reference_name (const: (LmP0Text: name)) int
 return: name != 0 && lm_trans_text_starts_with(name, "c.") && name\length > 2U
