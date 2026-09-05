@@ -5,7 +5,7 @@ external:
     sub: lm_array_enumeration_destroy (@: LmArrayEnumeration enumeration)
         if: enumeration != 0
             if: enumeration\items != 0
-                c.free(enumeration\items)
+                lm_own_delete_plain(enumeration\items)
             enumeration\items: 0
             enumeration\count: 0U
             enumeration\index: 0U

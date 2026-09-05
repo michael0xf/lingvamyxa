@@ -1,0 +1,87 @@
+import: "lm2/mix/old/Mix.lm2"
+
+external:
+    fn: main () int
+        LmMixDoc: doc
+        LmMixTag: outer
+        LmMixTag: inner
+        LmMixTag: nested
+        LmMixCursor: here
+        @: LmMixPage root
+        @: LmMixCursor here_ptr
+        @: LmMixCursor nested_head
+        @: LmMixCursor outer_head
+        @: LmMixKeyDict by_name
+        @: LmMixKeyDict same
+        @: LmArray upper
+        @: LmMixTag t0
+        @: LmMixCursor let
+        size_t: n
+
+        assert: lm_mix_doc_init(@ doc, 16U) = 0
+        root: lm_mix_doc_root(@ doc)
+
+        assert: lm_mix_tag_init(@ outer, "outer", root, 0U) = 0
+        assert: lm_mix_tag_init(@ inner, "inner", root, 1U) = 0
+
+        by_name: lm_mix_page_key_dict(root, "outer")
+        assert: by_name != 0
+        assert: lm_mix_key_dict_size(by_name) = 2U
+        assert: lm_mix_key_dict_let_at(by_name, 0U) = lm_mix_tag_head(@ outer)
+        assert: lm_mix_key_dict_let_at(by_name, 1U) = lm_mix_tag_tail(@ outer)
+        assert: lm_mix_page_get_key_dict(root, "inner") != 0
+        assert: lm_mix_key_dict_size(lm_mix_page_get_key_dict(root, "inner")) = 2U
+
+        upper: lm_mix_tag_get_upper(@ inner)
+        assert: upper != 0
+        assert: lm_array_size(upper) = 0U
+        upper: lm_mix_tag_get_upper(@ outer)
+        assert: lm_array_size(upper) = 0U
+
+        assert: lm_mix_tag_init(@ nested, "outer", root, 1U) = 0
+        same: lm_mix_page_get_key_dict(root, "outer")
+        assert: lm_mix_key_dict_size(same) = 4U
+        upper: lm_mix_tag_get_upper(@ nested)
+        assert: lm_array_size(upper) = 1U
+        t0: cast: (@: LmMixTag) lm_array_element_at(upper, 0U)
+        assert: t0 = @ outer
+
+        here_ptr: @ here
+        assert: lm_mix_cursor_init(here_ptr, root, 2U) = 0
+        let: lm_mix_key_dict_let_for_address(same, lm_mix_cursor_address(here_ptr))
+        assert: let != 0
+        assert: let\tag = @ nested
+
+        nested_head: lm_mix_tag_head(@ nested)
+        outer_head: lm_mix_tag_head(@ outer)
+        n: lm_array_size(lm_mix_cursor_get_upper(nested_head))
+        assert: n = 1U
+
+        assert: nested_head\index = 1U
+        assert: lm_mix_cursor_prev(nested_head) = 0
+        assert: nested_head\index = 0U
+        assert: outer_head\index = 1U
+        assert: lm_mix_key_dict_let_at(same, 0U) = nested_head
+        assert: lm_mix_key_dict_let_at(same, 1U) = outer_head
+        upper: lm_mix_tag_get_upper(@ nested)
+        assert: lm_array_size(upper) = 1U
+        t0: cast: (@: LmMixTag) lm_array_element_at(upper, 0U)
+        assert: t0 = @ outer
+        upper: lm_mix_tag_get_upper(@ outer)
+        assert: lm_array_size(upper) = 1U
+        t0: cast: (@: LmMixTag) lm_array_element_at(upper, 0U)
+        assert: t0 = @ nested
+
+        assert: lm_mix_cursor_next(nested_head) = 0
+        assert: nested_head\index = 1U
+        assert: outer_head\index = 0U
+        assert: lm_mix_key_dict_let_at(same, 0U) = outer_head
+        assert: lm_mix_key_dict_get_prev(same, nested_head) = outer_head
+
+        lm_mix_tag_destroy(@ nested)
+        lm_mix_tag_destroy(@ inner)
+        lm_mix_tag_destroy(@ outer)
+        lm_mix_doc_destroy(@ doc)
+        return: 0
+    end: main
+end: external

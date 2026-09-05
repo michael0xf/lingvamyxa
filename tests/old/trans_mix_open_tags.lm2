@@ -1,0 +1,74 @@
+import: "lm2/mix/old/Mix.lm2"
+
+external:
+    fn: main () int
+        LmMixDoc: doc
+        LmMixTag: outer
+        LmMixTag: inner
+        LmMixCursor: here
+        @: LmMixPage root
+        @: LmMixPage extra
+        @: LmMixCursor here_ptr
+        @: LmMixTag t0
+        @: LmMixTag t1
+        @@: void found
+        size_t: n
+        size_t: bytes
+
+        found: 0
+        if: lm_own_size_multiply(8U, c.sizeof(found[0]), @ bytes) != 0
+            return: 1
+        found: cast: (@@: void) lm_own_new_zero(bytes)
+        if: found = 0
+            return: 1
+
+        assert: lm_mix_doc_init(@ doc, 16U) = 0
+        root: lm_mix_doc_root(@ doc)
+        assert: lm_mix_page_bunch_first(root) = root
+
+        assert: lm_mix_tag_init(@ outer, "outer", root, 0U) = 0
+        assert: lm_mix_tag_init(@ inner, "inner", root, 1U) = 0
+        here_ptr: @ here
+        assert: lm_mix_cursor_init(here_ptr, root, 2U) = 0
+
+        n: lm_mix_cursor_open_tags(here_ptr, found, 8U)
+        assert: n = 2U
+        t0: cast: (@: LmMixTag) found[0]
+        t1: cast: (@: LmMixTag) found[1]
+        assert: t0 = @ outer
+        assert: t1 = @ inner
+
+        n: lm_mix_tag_open_tags(@ inner, found, 8U)
+        assert: n = 2U
+        t0: cast: (@: LmMixTag) found[0]
+        t1: cast: (@: LmMixTag) found[1]
+        assert: t0 = @ outer
+        assert: t1 = @ inner
+
+        n: lm_mix_tag_open_tags(@ outer, found, 8U)
+        assert: n = 1U
+        t0: cast: (@: LmMixTag) found[0]
+        assert: t0 = @ outer
+
+        assert: lm_mix_cursor_next(here_ptr) = 0
+        n: lm_mix_cursor_open_tags(here_ptr, found, 8U)
+        assert: n = 1U
+        t0: cast: (@: LmMixTag) found[0]
+        assert: t0 = @ outer
+
+        extra: lm_mix_page_new_next(root)
+        assert: extra != 0
+        assert: lm_mix_page_cut_after(root) = 0
+        assert: lm_mix_page_bunch_first(extra) = extra
+        assert: lm_mix_cursor_init(here_ptr, extra, 0U) = 0
+        n: lm_mix_cursor_open_tags(here_ptr, found, 8U)
+        assert: n = 0U
+
+        lm_mix_page_delete(extra)
+        lm_mix_tag_destroy(@ inner)
+        lm_mix_tag_destroy(@ outer)
+        lm_mix_doc_destroy(@ doc)
+        lm_own_delete_plain(found)
+        return: 0
+    end: main
+end: external

@@ -1,4 +1,4 @@
-import: "lm2/mix/Mix.lm2"
+import: "lm2/mix/old/Mix.lm2"
 
 external:
     fn: main () int
@@ -93,6 +93,7 @@ external:
         assert: extra\lock = 0
 
         lm_mix_page_delete(extra)
+        lm_mix_tag_destroy(@ mark)
         lm_mix_doc_destroy(@ doc)
         return: 0
     end: main

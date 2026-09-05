@@ -1,4 +1,4 @@
-import: "lm2/mix/Mix.lm2"
+import: "lm2/mix/old/Mix.lm2"
 
 fn: lm_mix_page_from_object (@: void object) @: LmMixPage
     @: LmMixPage page

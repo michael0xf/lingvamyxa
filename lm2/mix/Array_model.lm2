@@ -8,6 +8,22 @@ end: class
 
 table:
     source
+    name: `cast.target`
+    columns: (class: class) (int: value)
+    rows:
+             LmArray  1
+end: `cast.target`
+
+table:
+    source
+    name: `class.range`
+    columns: (class: class) (int: value)
+    rows:
+             LmArray  1
+end: `class.range`
+
+table:
+    source
     name: LmArray
     columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
     rows:

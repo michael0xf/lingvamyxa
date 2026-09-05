@@ -1,0 +1,117 @@
+import: "lm2/mix/HashArray.lm2"
+
+table:
+    source
+    name: `fn.thread-context.none`
+    columns: (class: class) (int: value)
+    rows:
+             lm_test_int_hash    1
+             lm_test_int_equals  1
+end: `fn.thread-context.none`
+
+fn: lm_test_int_hash (@: void item) int
+    @: int value
+
+    if: item = 0
+        return: 0
+    value: cast: (@: int) item
+    return: value[0]
+end: lm_test_int_hash
+
+fn: lm_test_int_equals (@: void left; @: void right) int
+    @: int left_int
+    @: int right_int
+
+    if: left = 0 || right = 0
+        return: left = right
+    left_int: cast: (@: int) left
+    right_int: cast: (@: int) right
+    return: left_int[0] = right_int[0]
+end: lm_test_int_equals
+
+fn: lm_test_int_hash_ref () LmHashArrayHash
+    return: c.lm_test_int_hash
+end: lm_test_int_hash_ref
+
+fn: lm_test_int_equals_ref () LmArrayEquals
+    return: c.lm_test_int_equals
+end: lm_test_int_equals_ref
+
+external:
+    fn: main () int
+        LmHashArray: table
+        @: LmArray as_array
+        int: ten 10
+        int: twenty 20
+        int: thirty 30
+        int: twenty_b 20
+        @: void got
+        @: int value
+        int: at
+        int: count
+
+        if: lm_hash_array_init(table, 4U, lm_test_int_hash_ref(), lm_test_int_equals_ref()) != 0
+            return: 1
+        as_array: lm_hash_array_as_array(table)
+        if: as_array = 0 || table\items = 0
+            return: 2
+
+        at: lm_hash_array_add_element(table, @ ten)
+        if: at != 0
+            return: 3
+        at: lm_hash_array_add_element(table, @ thirty)
+        if: at != 1
+            return: 4
+        at: lm_hash_array_add_element(table, @ twenty)
+        if: at != 1
+            return: 5
+        if: lm_array_size(as_array) != 3U
+            return: 6
+
+        value: cast: (@: int) lm_hash_array_item_at(table, 0)
+        if: value[0] != 10
+            return: 7
+        value: cast: (@: int) lm_hash_array_item_at(table, 1)
+        if: value[0] != 20
+            return: 8
+        value: cast: (@: int) lm_hash_array_item_at(table, 2)
+        if: value[0] != 30
+            return: 9
+
+        if: lm_hash_array_contains(table, @ twenty) = 0
+            return: 10
+        if: lm_hash_array_index_of_object(table, @ twenty) != 1
+            return: 11
+        got: lm_hash_array_get_by_code(table, 20)
+        value: cast: (@: int) got
+        if: value[0] != 20
+            return: 12
+
+        at: lm_hash_array_put(table, @ twenty_b)
+        if: at != 1
+            return: 13
+        if: lm_array_size(as_array) != 3U
+            return: 14
+
+        at: lm_hash_array_add_element(table, @ twenty_b)
+        if: at != 1
+            return: 15
+        if: lm_array_size(as_array) != 4U
+            return: 16
+
+        count: lm_hash_array_remove_elements(table, 20)
+        if: count != 2
+            return: 17
+        if: lm_array_size(as_array) != 2U
+            return: 18
+        value: cast: (@: int) lm_hash_array_item_at(table, 0)
+        if: value[0] != 10
+            return: 19
+        value: cast: (@: int) lm_hash_array_item_at(table, 1)
+        if: value[0] != 30
+            return: 20
+
+        lm_hash_array_destroy(table)
+        return: 0
+    end: main
+end: external

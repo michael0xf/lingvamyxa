@@ -1,0 +1,750 @@
+Structure Representation Refactoring
+Переделка представления Structure
+==================================
+
+Status / Статус
+---------------
+
+EN: Working assignment against Lingvamyxa_spec.txt §0, §2, §3, §6.5, §7.2,
+§19.17, §19.21.3, §19.28–19.29. Not a spec change. The hosted translator
+currently projects Structures as per-name C typedefs and `fn:` as namespace
+C functions; that projection is treated as if it were the language. This
+note restores the spec ontology and gives a step plan.
+
+RU: Рабочее ТЗ по Lingvamyxa_spec.txt §0, §2, §3, §6.5, §7.2, §19.17,
+§19.21.3, §19.28–19.29. Это не правка спецификации. Hosted trans сейчас
+проецирует Structure как отдельный C typedef на каждое имя, а `fn:` — как
+C-функцию в namespace, и обращается с этой проекцией как с языком. Документ
+возвращает онтологию спеки и даёт план шагов.
+
+
+0. One-sentence assignment / Задание одной фразой
+-------------------------------------------------
+
+EN: A Structure is arena data denoted by a StructureReference: its own
+descriptor plus a reference to an anonymous field blob of arbitrary length.
+`fn:`, `merge:`, named declarations and constructors produce or consume
+those references. C typedefs, C function symbols and table rows named
+`class` / `layout.backend` are backend artifacts, never source values.
+
+RU: Structure — данные в арене, обозначаемые StructureReference: собственный
+дескриптор плюс ссылка на безымянный кусок полей произвольной длины.
+`fn:`, `merge:`, именованные объявления и конструкторы создают или потребляют
+эти ссылки. C typedef, C-символ функции и строки таблиц `class` /
+`layout.backend` — артефакты бэкенда, не значения языка.
+
+
+1. Spec contract (normative for this work)
+Контракт спецификации (норматив для этой работы)
+------------------------------------------------
+
+1.1 Value ontology / Онтология значений  (spec §2, §0)
+
+    Value = Primitive | StructureReference | ArrayReference
+
+EN: There is no fourth ordinary value category. No `Struct` kind, no C
+aggregate kind, no registry-class kind, no table-cell kind, no Java object
+kind, no per-instance vtable kind. A Primitive is a scalar cell whose
+*description* is an ordinary Structure (§2.2.2). A StructureReference
+denotes one arena-managed Structure with stable identity and an ordered
+field stream (named and/or positional). An ArrayReference denotes one
+arena-managed array and its backing storage; it is a distinct category even
+when the backend shares machinery with Structures.
+
+RU: Четвёртой обычной категории нет. Нет вида `Struct`, C-агрегата,
+registry-class, ячейки таблицы, Java-объекта, vtable на экземпляр.
+Primitive — скалярная ячейка, *описание* которой — обычная Structure
+(§2.2.2). StructureReference обозначает одну Structure в арене со
+стабильной идентичностью и упорядоченным потоком полей (имена и/или
+позиции). ArrayReference обозначает один массив и его хранилище; это
+отдельная категория, даже если бэкенд делит машинерию со Structure.
+
+1.2 What a Structure may contain / Что может лежать в Structure  (§3.1)
+
+EN: Fields are primitives, StructureReferences or ArrayReferences. Tree
+shape is those reference edges. A field is not a C member and not a
+method slot. Duplicate names are distinct occurrences; unqualified lookup
+selects the newest (§2.3).
+
+RU: Поля — примитивы, StructureReference или ArrayReference. Дерево —
+эти рёбра-ссылки. Поле — не член C-struct и не слот метода. Одинаковые
+имена — разные occurrence; обычный lookup берёт новейшую (§2.3).
+
+1.3 Descriptor / Дескриптор  (§0, §2.1, §2.2.2, §7.2.1)
+
+EN: A type is not an entity. Compatibility is `implements(varA, varB,
+Consumer)` on namespace descriptors (§19.21.3). Constructing a value does
+not declare a descriptor or mutate the namespace except when the source
+form also introduces a binding.
+
+A descriptor is itself a Structure. It may live as the Structure's *own*
+descriptor (the description of this referent). It is not a forest of
+pointers from the instance to other type-objects. Tables `class`,
+`class.semantic`, `layout.backend` are one profile's serialization of
+description Structures, not the language's list of kinds (§0, §2.2.2).
+
+The named-Structure *declaration* publishes a namespace descriptor. It
+does not allocate an instance. An explicit constructor later materializes
+a StructureReference in an arena (§19.28 hosted notes; constructor is a
+separate operation).
+
+RU: Тип — не сущность. Совместимость — `implements(varA, varB, Consumer)`
+по дескрипторам в namespace (§19.21.3). Построение значения само по себе
+не объявляет дескриптор и не меняет namespace, пока форма явно не вводит
+привязку.
+
+Дескриптор сам есть Structure. У референта — *свой* дескриптор (описание
+этого куска). Это не лес указателей из instance на чужие type-object.
+Таблицы `class` / `layout.backend` — сериализация профиля, не список
+видов языка.
+
+Именованное *объявление* Structure публикует дескриптор в namespace и
+не выделяет instance. Явный конструктор позже материализует
+StructureReference в арене.
+
+1.4 `fn:` is a Structure / `fn:` — это Structure  (§2 ¶ executable,
+    §3.3, §7.2.1)
+
+EN: At source-semantic level, executable definitions are namespace
+bindings. A first-class callable, closure environment or similar
+non-primitive callable *value* is a StructureReference. A translator may
+lower a callable to a target-language symbol or trampoline; that
+optimization does not add a source-level value kind.
+
+`fn:` is ordinary receiver consumption of an ordinary `fn` Structure
+(§7.2.1). Descriptor-only `fn: Name (args) Result` creates a callable
+*descriptor value* (a Structure) and binds it. An `fn` with a body is an
+executable binding; the value that names it is still a reference, not a
+C function object. A Structure does not execute by existing (§3.3).
+Call happens only when a receiver/subroutine consumes that reference as a
+call.
+
+C99 spellings `int (*add)(int)`, a typedef, a function symbol, a
+trampoline or a closure struct are projection spellings of the L2-to-L1
+profile. They are not source-level callable kinds and are not the
+semantic parent of the descriptor (§7.2.1).
+
+RU: Исполняемые определения в семантике — привязки namespace. Callable
+первого класса, closure, любой не-примитивный callable — это
+StructureReference. Транслятор может снизить callable в символ или
+trampoline целевого языка; это не добавляет вид значения.
+
+`fn:` — обычное потребление обычной Structure с головой `fn` (§7.2.1).
+Форма без тела создаёт *значение-дескриптор* (Structure) и привязывает
+его. Форма с телом — исполняемая привязка; значение, которое её именует,
+всё равно ссылка, не C-объект функции. Structure не исполняется от того,
+что существует (§3.3). Вызов — только когда приёмник потребляет эту
+ссылку как вызов.
+
+`int (*add)(int)`, typedef, символ, trampoline, closure-struct — спеллинг
+профиля L2→L1, не виды callable в языке.
+
+1.5 ArrayReference constructor `[]`  (§6.5)
+
+EN: `[]` constructs an ArrayReference. The visible descriptor may hold
+element type, rank, shape, storage, stride. The header and backing live
+in the selected arena. An array is not a Structure subtype. Operations
+over arrays are ordinary namespace-resolved calls.
+
+The hosted ANSI C *illustration* may use `char *` or `User **` *inside*
+backing storage. That pointer is not the ArrayReference value. The value
+includes bounds/lifetime metadata (§ hosted examples around `[]: char`).
+
+RU: `[]` строит ArrayReference. Дескриптор может нести тип элемента,
+rank, shape, storage, stride. Шапка и backing — в выбранной арене.
+Массив не подтип Structure. Операции над массивами — обычные вызовы
+через namespace.
+
+В иллюстрации hosted C внутри backing может быть `char *` / `User **`.
+Этот указатель — не значение ArrayReference. Значение включает метаданные
+границ/жизни.
+
+1.6 `merge`  (§2.3, §19.17)
+
+EN: `merge` appends field sequences left-to-right, then the vertical body.
+It does not delete, rename or in-place replace. Newest same-name
+occurrence wins unqualified lookup; older remain as `\[k]name`. This is
+not Java override (one slot, old method gone). Hosted physical `merge:`
+today composes *descriptors* and may emit a C projection; it does not
+materialize a merge-result instance. Generic high-level value-producing
+`merge` is specified and not yet the current handler.
+
+`merge` of Array fields into HashArray means HashArray *has* those fields.
+It does not mean HashArray *is* Array (§2.4 File vs FILE).
+
+RU: `merge` дописывает последовательности полей слева направо, затем
+тело. Не удаляет, не переименовывает, не заменяет на месте. Новейшая
+одноимённая occurrence выигрывает обычный lookup; старые остаются как
+`\[k]name`. Это не Java override. Нынешний physical `merge:` собирает
+*дескрипторы* и может выдать C-проекцию; instance результата не создаёт.
+Значение-производящий merge в спеке есть, current handler — нет.
+
+Смержить поля Array в HashArray значит HashArray *имеет* эти поля. Не
+значит, что HashArray *есть* Array.
+
+1.7 Passing and return  (§2, §19.29)
+
+EN: Structures and arrays are always passed by reference. Binding,
+argument, field update and `return` do not copy the aggregate. `return`
+publishes the existing reference: no allocate, clone, promote or identity
+change on that path.
+
+RU: Structure и array всегда передаются ссылкой. Привязка, аргумент,
+обновление поля и `return` не копируют агрегат. `return` публикует уже
+существующую ссылку.
+
+
+2. How hosted implementation broke the spec
+Как hosted-реализация сломала спеку
+-------------------------------------------
+
+EN: The translator treated a convenient C projection as if it were the
+ontology. Concrete breaks observed in the current tree:
+
+2.1 Per-name C typedef as if it were the Structure
+    `User` / `LmArray` / `LmHashArray` each emit `typedef struct { ... } T`.
+    Field-follow `x\foo` is compiled as `x->foo` on that typedef.
+    Spec: a backend *may* project to a C struct; that layout is never a
+    Lingvamyxa value and never a reason to create registry rows (§2).
+    The implementation inverted this: without a typedef the type "does not
+    exist", and `fn` inside a named Structure is rejected as "not layout".
+
+2.2 `fn:` emitted as a C function in the module namespace
+    `fn: lm_array_add_element (@: LmArray array; ...)` becomes
+    `static int lm_array_add_element(LmMessageThread *, LmArray *, ...)`.
+    The name is a callable *symbol*, not a StructureReference sitting in a
+    field. Merge of `LmArray` into `LmHashArray` therefore copies only
+    data slots (`items`, `amount`, `capacity`). There is no `add_element`
+    field to append. Spec: a first-class callable value is a Structure
+    reference; C function symbols are projection (§2, §7.2.1).
+
+2.3 `functionPointerType` as a source kind
+    `LmArrayEquals` / `LmHashArrayHash` project to `int (*)(...)`.
+    Storing them in a C struct field is treated as the language's way to
+    hold "methods". Spec: that spelling is L2-to-L1 projection, not a
+    callable kind, not the parent of the descriptor (§7.2.1).
+
+2.4 Tables `class` / `layout.backend` / `field.index` as ontology
+    `Array_model.lm2` declares `LmArray` as `primitive` plus a field table
+    plus `c.struct`. Spec: a table named `class` has meaning only to the
+    profile that reads it; table membership does not declare a primitive
+    or alter the value ontology (§0, §2.2.2). Hosted trans uses those
+    tables as the *definition* of the type.
+
+2.5 Extra C address depth on named-struct references
+    A named-Structure instance is already a StructureReference (hosted:
+    arena pointer). Writing `@: LmHashArray` then `array\hash` emitted
+    `LmHashArray **` and `array->hash` on a pointer-to-pointer. Spec
+    illustration: `User` already starts at C depth 1; `@: User` is
+    `User **` (§ hosted examples). The extra `@:` was compensating for
+    treating the reference as a C value struct.
+
+2.6 Declaration vs instance collapsed or inverted
+    Spec: declaration publishes a descriptor and allocates nothing;
+    constructor materializes a reference. Hosted named-structure
+    declaration emits a typedef (projection of the descriptor) which is
+    correct *as projection*, then instance construction does
+    `sizeof(ThatTypedef)`. The blob's shape is frozen as that C type
+    instead of "anonymous field vector described by the descriptor".
+
+2.7 `[]` is closer to the spec than Structure is
+    ArrayReference already uses one header (`LmSlice { ptr, length }`)
+    plus arena backing. Element C pointers may live *inside* the blob.
+    Structure should have been the same idea: one header, anonymous
+    payload, descriptor on the side (the Structure's own descriptor).
+    Instead Structure grew N typedefs.
+
+RU: Транслятор принял удобную C-проекцию за онтологию. Конкретные разрывы:
+
+2.1 Typedef на имя как будто это и есть Structure.
+    `x\foo` → `x->foo` в этом typedef. Без typedef тип «не существует»,
+    `fn` внутри named Structure отвергается как «не layout».
+    Спека: бэкенд *может* проецировать в C struct; это не значение языка.
+
+2.2 `fn:` → C-функция в namespace модуля, не StructureReference в поле.
+    Merge копирует только data-слоты. Поля-ссылки на callable нет.
+
+2.3 `functionPointerType` обращается как вид callable. Спека: это спеллинг.
+
+2.4 Таблицы `class` / `layout.backend` задают тип. Спека: это профиль.
+
+2.5 Лишняя C-глубина `@:` у named-struct (ссылка уже глубина 1).
+
+2.6 Объявление дескриптора слито с формой instance через `sizeof(T)`.
+
+2.7 `[]` ближе к спеке (одна шапка + blob), Structure — нет.
+
+
+3. Target representation (implementation, still not a spec change)
+Целевое представление (реализация, не смена спеки)
+--------------------------------------------------
+
+3.1 One machine header for StructureReference
+Одна машинная шапка для StructureReference
+
+EN: Analogous to current `LmSlice` for ArrayReference. One C struct in the
+runtime, used for every StructureReference. Suggested shape (names are
+implementation-local, not source vocabulary):
+
+    header (the Structure's own descriptor reference
+            + a standard reference to an anonymous field blob)
+
+    anonymous field blob
+        contiguous arena memory
+        N slots, N taken from the own descriptor's field stream
+        each slot is a Primitive cell or a StructureReference
+        or an ArrayReference
+        no C type per source name
+
+The header *is* (or directly holds) the referent's own descriptor. It does
+not hold pointers to other types' descriptors. Other Structures are reached
+only as field values (references), like any nested Structure.
+
+RU: По аналогии с нынешним `LmSlice` для ArrayReference. Одна C-struct
+рантайма на всякий StructureReference. Предлагаемая форма (имена
+локальны для реализации, не словарь исходника):
+
+    шапка (ссылка на собственный дескриптор референта
+           + стандартная ссылка на безымянный кусок полей)
+
+    безымянный кусок полей
+        сплошная память арены
+        N слотов, N из потока полей собственного дескриптора
+        слот — ячейка Primitive, либо StructureReference,
+        либо ArrayReference
+        нет C-типа на каждое исходное имя
+
+Шапка *есть* (или прямо держит) собственный дескриптор референта. Чужих
+дескрипторов в instance нет. Другие Structure достижимы только как
+значения полей (ссылки).
+
+3.2 Descriptor is a Structure, stored as a StructureReference
+Дескриптор — Structure, хранится как StructureReference
+
+EN: The descriptor of `User` is itself a StructureReference (often
+immortal in a module/root arena). Its fields describe the instance field
+stream: names, occurrence order, each field's value category
+(primitive description | StructureReference | ArrayReference | callable
+Structure). Nested `fn:` / `sub:` / `callable:` in that descriptor are
+fields whose values are StructureReferences to callable Structures.
+`merge` of descriptors is append of those field streams (§2.3, §19.17).
+
+An instance of `User` has:
+    own descriptor = that `User` descriptor reference (one pointer)
+    blob           = slots according to that stream
+
+It does not copy the descriptor's callable fields into every instance.
+Lookup `u\close` uses the own descriptor, finds the newest `close`
+occurrence, and either
+    - reads an instance slot, if that field is an instance field, or
+    - follows the descriptor field itself, if that field lives on the
+      descriptor (typical for `fn:` as shared callable reference).
+
+Which fields are instance payload vs descriptor-only is a descriptor
+flag/occurrence, not a second value kind. Default for `fn:`/`sub:`/
+`callable:` in a named-Structure *declaration* is descriptor-only
+(declaration allocates no instance). Default for `int:`, `@: T`, `[]:`
+is instance payload.
+
+RU: Дескриптор `User` сам есть StructureReference (часто в module/root
+арене). Его поля описывают поток полей instance: имена, порядок
+occurrence, категория значения каждого поля. Вложенные `fn:` / `sub:` /
+`callable:` в этом дескрипторе — поля, значения которых —
+StructureReference на callable Structure. `merge` дескрипторов — append
+этих потоков.
+
+Instance `User`:
+    свой дескриптор = эта ссылка (один указатель)
+    blob            = слоты по этому потоку
+
+Он не копирует callable-поля дескриптора в каждый instance.
+`u\close` идёт в свой дескриптор, берёт новейшую occurrence `close`.
+
+Какие поля — payload instance, какие — только дескриптор — флаг/occurrence
+дескриптора, не второй вид значения. По умолчанию `fn:`/`sub:`/`callable:`
+в *объявлении* named-Structure — только дескриптор. `int:`, `@: T`, `[]:`
+— payload instance.
+
+3.3 `fn:` produces a StructureReference
+`fn:` создаёт StructureReference
+
+EN: Consuming an `fn` Structure:
+    1. Build/bind a callable Structure (descriptor-only or with body).
+    2. The namespace name refers to that StructureReference.
+    3. If the `fn` appears as a field of another Structure/descriptor,
+       that field's value is the same kind of reference.
+    4. The translator *may* also emit a C function and record its address
+       inside the callable Structure's blob as a primitive/opaque cell
+       for the L1 profile. That cell is not the source value. Source
+       code never names the C type of that cell.
+
+Call: a receiver sees a Frame whose head resolves to a callable
+StructureReference and consumes it as a call (§3.2–3.3). Not:
+`lm_foo(...)` as a C symbol that happens to share a spelling.
+
+RU: Потребление Structure `fn`:
+    1. Построить/привязать callable Structure (дескриптор или с телом).
+    2. Имя в namespace — эта StructureReference.
+    3. Если `fn` — поле другой Structure/дескриптора, значение поля —
+       такая же ссылка.
+    4. Транслятор *может* эмитировать C-функцию и записать её адрес в
+       blob callable Structure как primitive/opaque ячейку профиля L1.
+       Эта ячейка не значение исходника. Исходник не именует C-тип ячейки.
+
+Вызов: приёмник видит Frame, голова резолвится в callable
+StructureReference, потребляет как вызов. Не: C-символ `lm_foo(...)`.
+
+3.4 Constructor and declaration stay split
+Объявление и конструктор разделены
+
+EN: `User:` … `end: User` at declaration position → namespace descriptor
+(a StructureReference in the descriptor arena), no instance.
+`User: u` … `end: u` at value position → allocate header+blob in the
+current arena, own descriptor = `User`, initialize instance fields.
+`return: u` forwards that reference.
+
+RU: `User:` … `end: User` на месте объявления → дескриптор в namespace,
+без instance. `User: u` … `end: u` на месте значения → шапка+blob в
+текущей арене, свой дескриптор = `User`. `return: u` пробрасывает ссылку.
+
+3.5 Field-follow
+Доступ к полю
+
+EN: `u\foo` is not `u->foo` in a named typedef. It is: load `u`'s own
+descriptor; find newest occurrence `foo`; if instance field, index the
+anonymous blob; if descriptor field, read that field of the descriptor
+Structure. Result category is whatever that field's description says
+(primitive / StructureReference / ArrayReference).
+
+`implements(varA, varB, Consumer)` continues to walk P0 uses of `varB`
+in Consumer against the descriptor field stream of `varA` (§2.1). It
+does not compare C struct member lists.
+
+RU: `u\foo` — не `u->foo` в typedef. Это: взять свой дескриптор `u`;
+найти новейшую occurrence `foo`; instance-поле → индекс в blob;
+поле дескриптора → прочитать его у дескриптора. Категория результата —
+как в описании поля.
+
+`implements` по-прежнему идёт по P0 uses, не по списку членов C-struct.
+
+3.6 What the translator may still do in C
+Что trans всё ещё может делать в C
+
+EN: Emit one header struct. Emit arena allocation of header+blob.
+Emit C functions as L1 bodies of callable Structures and store an
+opaque code pointer in that Structure's blob. Emit nothing that source
+must mention (`LmArray`, `LmArrayEquals`, `int (*)(void*)` as a
+language type). Per-name typedefs are an optional later optimization
+when the descriptor is closed and the profile proves it; they are not
+the first implementation.
+
+RU: Одна шапка. Arena new шапка+blob. C-функции как L1-тела callable
+Structure, opaque указатель в blob этой Structure. Ничего, что исходник
+обязан называть как тип языка. Typedef на имя — поздняя оптимизация
+закрытого дескриптора, не первый шаг.
+
+
+4. Non-goals / Что не делаем (можно отрезать)
+---------------------------------------------
+
+EN:
+    G1. Java objects, vtables on instances, `extends`, method overload.
+        Spec substitute: merge + occurrence + `implements(..., Consumer)`.
+    G2. Generic high-level value-producing `merge` of live instances
+        (§19.17 current handler gap). First ship descriptor-stream merge
+        onto the one-header representation.
+    G3. Interpreting P0 instead of emitting C for `fn` bodies. Keep C
+        emission; wrap it as a StructureReference.
+    G4. Migrating `lm2/own.lm2`, Mix (`lm2/mix/old`), table `class` ABI,
+        REST hosts, in the first phases. They stay L2 machine/profile
+        clients of the old projection until a later phase.
+    G5. Putting foreign descriptors into instances. Own descriptor only.
+    G6. Making Array a subtype of Structure. `[]` remains ArrayReference
+        (§6.5). Share *machinery* (header + blob), not ontology.
+    G7. Editing parser P0 rules except where `fn` as a field of a
+        named-Structure declaration is already parsed as a Structure and
+        only the trans consumer rejects it. Prefer trans-only change.
+    G8. Bootstrap `buildCore` relaunch as part of this work unless a
+        later phase explicitly needs a new trans binary from git C.
+
+RU:
+    G1. Java-объекты, vtable на instance, `extends`, overload.
+    G2. Value-producing `merge` живых instance — не первый корабль.
+    G3. Не интерпретировать P0 вместо эмиссии C для тел `fn`.
+    G4. Не мигрировать own / Mix / table-class ABI в первых фазах.
+    G5. Не класть чужие дескрипторы в instance.
+    G6. Array не подтип Structure. Общая машинерия — да, онтология — нет.
+    G7. Парсер не трогать, пока trans просто отвергает уже разобранное.
+    G8. Не перезапускать bootstrap, пока не нужна новая бинарная trans.
+
+
+5. Constraints on the work / Ограничения работ
+----------------------------------------------
+
+EN:
+    Follow the spec text cited in §1; do not "fix" the spec to match
+    hosted C. If a hosted test encodes the broken projection (per-name
+    typedef required, `functionPointerType` as a language type, `@:`
+    extra depth on a StructureReference), mark it as a projection test
+    or move it, do not treat it as a language invariant.
+    Do not mix this work with Mix port, void-cell language fixes, or
+    buildCore. Language sources under `lm2/trans_*.lm2` are in scope
+    for the phases that name them; `lm2/mix` stays on the old
+    projection until a named later phase.
+    Tests allowed throughout. Each phase has an exit criterion.
+
+RU:
+    Держать текст спеки из §1; не подгонять спеку под hosted C.
+    Тесты, которые кодируют сломанную проекцию, не считать инвариантом
+    языка. Не смешивать с портом Mix, void-cell и buildCore.
+    `lm2/trans_*.lm2` — в скоупе названных фаз; `lm2/mix` — на старой
+    проекции до явно названной фазы. Тесты на каждом шаге.
+
+
+6. Step plan / Пошаговый план
+-----------------------------
+
+Phase 0 — freeze the diagnosis
+Фаза 0 — зафиксировать диагноз
+
+    0.1 Keep this file as the assignment. Do not start emitting a new
+        header until Phase 1 tests exist as failing or xfail.
+    0.2 Inventory hosted paths that emit per-name typedefs
+        (`lm_trans_emit_named_structure_typedef`, physical `merge:`
+        target types, table `layout.backend` + class field tables).
+    0.3 Inventory `fn:` lowering (external vs internal, descriptor-only,
+        functionPointerType, nested fn in named Structure — currently
+        rejected).
+    0.4 Write a short matrix: spec paragraph → current function → lie.
+        Exit: the matrix is in-repo (this file §2 is the seed).
+
+Phase 1 — one Structure header, empty payload
+Фаза 1 — одна шапка Structure, пустой payload
+
+    1.1 Introduce a single runtime header (implementation name free;
+        must not become a source type). Fields at minimum:
+            own descriptor (StructureReference)
+            payload pointer (anonymous blob)
+            payload slot count (or derive only from descriptor)
+        Mirror `LmSlice` discipline: one typedef for all Structures.
+    1.2 Named-Structure *declaration* `S:` `end: S` with no fields:
+        publish a descriptor StructureReference; do not emit `typedef
+        struct S`. Empty descriptor remains empty; do not invent a
+        dummy source field. A private backend byte, if ISO C still
+        needs a complete aggregate for the *header*, is not a
+        descriptor field (§ hosted empty descriptor note).
+    1.3 Constructor `S: x` `end: x` for that empty S: allocate header
+        in the current Message Thread arena; own descriptor = S;
+        payload empty. `x` is a StructureReference. `return: x` is
+        the same pointer.
+    1.4 Tests (must follow spec, not old typedef tests):
+            two `S: a` and `S: b` are distinct references;
+            `return` of a local S is the same pointer;
+            declaration of S allocates no instance;
+            `implements` with empty Consumer is true.
+    Exit: empty Structure lives without a per-name C struct type.
+
+Phase 2 — anonymous field blob of primitives
+Фаза 2 — безымянный blob примитивов
+
+    2.1 Declaration
+            Point:
+                int: x
+                int: y
+            end: Point
+        Descriptor field stream has two primitive fields. Still no
+        `typedef struct Point { int x; int y; }`.
+    2.2 Constructor fills payload slots in declaration order.
+        `p\x` / `p\y` resolve through the own descriptor to slot
+        indices, then load/store the primitive cell in the blob.
+    2.3 Occurrence: two fields named `x` → newest is `p\x`, older
+        `p\[0]x` (spec §2.3). Do not require C names
+        `lm__occurrence_*` until a profile asks for a C projection.
+    2.4 Tests: init, field-follow, update, occurrence, return identity.
+    Exit: primitive fields work with one header + blob.
+
+Phase 3 — nested StructureReference and ArrayReference slots
+Фаза 3 — слоты-ссылки на Structure и Array
+
+    3.1 A field whose description is a Structure descriptor stores a
+        StructureReference in the blob (the same header pointer), not
+        an inline C nested struct.
+    3.2 A field `[]: T` stores an ArrayReference (existing `[]`
+        machinery). Do not store raw `T *` as the field's source value.
+    3.3 Tests: tree of Structures; array of StructureReferences;
+        `p\child\x` walks two descriptors. No Java object graph: just
+        references in slots.
+    Exit: §3.1 "Structure may contain StructureReferences and
+        ArrayReferences" is true on the new header.
+
+Phase 4 — `fn:` as StructureReference
+Фаза 4 — `fn:` как StructureReference
+
+    4.1 Descriptor-only `fn: AddX (int) int` creates a callable
+        descriptor Structure and binds `AddX` to that reference
+        (§7.2.1 steps 1–8). No Registry row. Do not project it as
+        the language type `int (*)(int)`.
+    4.2 Executable `fn: add (int: x) int` … `end: add` binds an
+        executable StructureReference. Trans may emit a C function
+        and put an opaque code pointer in that Structure's blob.
+        Source still sees a StructureReference.
+    4.3 Nested `fn:` inside a named-Structure *declaration* is a
+        descriptor field whose value is that callable reference.
+        Trans must stop rejecting it as "not layout". It is a field
+        of the descriptor Structure.
+    4.4 Call: Frame head resolves to a callable StructureReference;
+        the call receiver consumes it. Tests: bind, pass as argument,
+        `return` the reference without copying, `implements(addX AddX
+        consumer)` when Consumer uses AddX as callable.
+    4.5 Cut if needed: closures/capture (§7.2.1 env Structure) can
+        wait for 4.b; first ship no-capture nested fn.
+    Exit: `fn` is data (a StructureReference). C symbol is projection.
+
+Phase 5 — `merge` of descriptor field streams on the new header
+Фаза 5 — `merge` потоков полей дескриптора на новой шапке
+
+    5.1 `merge: (A) B` plus body appends descriptor field streams.
+        Result is a new descriptor StructureReference named `B`.
+        No instance. No `typedef struct B`.
+    5.2 If `A` has descriptor-only `fn:` fields, they appear on `B`
+        as appended occurrences. Newest same-name `fn` wins
+        unqualified lookup. This is how "methods move" without
+        objects or vtables: they were never methods; they were
+        fields of the descriptor.
+    5.3 Instance constructor of `B` allocates payload only for
+        instance fields, not for descriptor-only `fn` fields.
+    5.4 Tests: merge Point-like data fields; merge a descriptor that
+        carries `fn: close`; construct B; `b\close` finds the
+        callable reference on B's own descriptor; two instances of B
+        share that descriptor reference (same pointer), they do not
+        each own a copy of `close`.
+    Exit: merge of descriptors copies `fn` fields because they are
+        StructureReferences in the field stream.
+
+Phase 6 — call through field-follow
+Фаза 6 — вызов через field-follow
+
+    6.1 `b\close(args)` / `close: b args` according to existing call
+        syntax: the value of `b\close` is a StructureReference;
+        the Frame consumes it as callee.
+    6.2 No C member function. No `b->close` in the sense of a
+        function pointer field on the instance unless the descriptor
+        marked that `fn` as an *instance* payload field (rare; not
+        default).
+    6.3 Tests: File-like descriptor with `close` on the descriptor;
+        Consumer walks `f\close`; `implements(myFile File manager)`.
+    Exit: spec §2.4 File vs FILE can be authored without C vtables.
+
+Phase 7 — stop lying in old projection tests
+Фаза 7 — перестать врать в старых тестах проекции
+
+    7.1 Split tests: language tests (ontology) vs projection tests
+        (this hosted C profile still emits typedef X).
+    7.2 Language tests must not require `struct LmFoo` in the C
+        output for a named Structure introduced after Phase 1.
+    7.3 Projection tests that document current typedef emission stay
+        only for *legacy* table-`class` types (Phase 8+), or die.
+    Exit: a new named Structure has no per-name typedef in the
+        generated C of the language tests.
+
+Phase 8 — optional: share blob machinery with `[]` without merging ontology
+Фаза 8 — опционально: общая машинерия с `[]` без слияния онтологии
+
+    8.1 If header+blob for Structure and `LmSlice`+backing for Array
+        can share arena helpers, do it internally. Source still has
+        two categories.
+    8.2 Do not store an ArrayReference as a Structure or vice versa.
+    Exit: one allocator path, two spec categories.
+
+Phase 9 — later, out of first delivery
+Фаза 9 — позже, не первая поставка
+
+    9.1 Migrate table-`class` layouts (own, Mix in `lm2/mix/old`) off
+        per-name typedef onto the one header. Large. Explicit go-ahead.
+    9.2 Value-producing `merge` of live instances (§19.17 generic
+        contract).
+    9.3 Closure env Structure for nested `fn` that captures (§7.2.1).
+    9.4 Closed-descriptor optimization: emit a private C struct when
+        the profile proves the field stream is fixed. Must remain
+        invisible in source. Must not resurrect `class` tables as
+        ontology.
+    9.5 `copy` / `move` / `borrow` / `own` (memory plan). Orthogonal;
+        the one-header representation must not block them.
+
+
+7. Acceptance for the first delivery
+Приёмка первой поставки
+-----------------------
+
+EN: Phases 1–6 plus 7.1–7.2. After that:
+
+    - A named Structure is a descriptor (StructureReference) plus
+      instances that are header+anonymous blob.
+    - Generated C for those new Structures has one header type, not
+      `typedef struct ThatName`.
+    - `fn:` in a descriptor is a field holding a StructureReference.
+    - `merge` of such descriptors appends those fields; instances of
+      the result share the result descriptor; they do not grow a
+      per-object method table.
+    - Field-follow and call use the own descriptor, not C members.
+    - `[]` unchanged as ArrayReference.
+    - Mix / own / table-class ABI unchanged unless Phase 9.1 starts.
+    - Spec text unchanged; this file is not a spec amendment.
+
+RU: Фазы 1–6 и 7.1–7.2. После этого:
+
+    - Именованная Structure — дескриптор (StructureReference) плюс
+      instance = шапка + безымянный blob.
+    - В C для этих новых Structure — один тип шапки, не
+      `typedef struct ThatName`.
+    - `fn:` в дескрипторе — поле со StructureReference.
+    - `merge` таких дескрипторов дописывает эти поля; instance
+      результата делят дескриптор; таблицы методов на объект нет.
+    - Field-follow и вызов идут через свой дескриптор, не через
+      члены C-struct.
+    - `[]` по-прежнему ArrayReference.
+    - Mix / own / table-class ABI без изменений, пока нет фазы 9.1.
+    - Текст спеки не меняется; этот файл — не поправка спеки.
+
+
+8. Mapping from recent Mix/Array work
+Связь с недавней работой Mix/Array
+----------------------------------
+
+EN: `lm2/mix/Array.lm2` top-level `fn` + `Array_model` tables is the
+broken projection (this file §2.2–2.4). `merge: (LmArray) LmHashArray`
+proved hosted descriptor-field append already exists *for C layout*.
+That is Phase 5's ancestor, not the destination: it still emits
+`struct LmHashArray { items; amount; capacity; hash; equals; }` and
+does not move `lm_array_*` because those are not fields.
+
+Do not rewrite Mix or HashArray onto the one-header model until
+Phases 1–6 exist and language tests pass. HashArray/Mix remain
+clients of the old projection in `lm2/mix` / `lm2/mix/old`.
+
+RU: `Array.lm2` + таблицы модели — сломанная проекция (§2.2–2.4).
+`merge: (LmArray) LmHashArray` показал, что append полей дескриптора
+уже есть *для C layout*. Это предок фазы 5, не цель: всё ещё
+`struct LmHashArray { ... }` и `lm_array_*` не поля.
+
+Не переписывать Mix/HashArray на одну шапку, пока нет фаз 1–6 и не
+проходят языковые тесты.
+
+
+9. References / Отсылки
+-----------------------
+
+    Lingvamyxa_spec.txt
+        §0 Core Formula, namespace, tables are data
+        §2 Value ontology, implements, primitive descriptions, merge
+           occurrence, File vs FILE
+        §3 Structure, Frame, Structures do not execute
+        §6.5 ArrayReference, `[]`
+        §7.2.1 Descriptor-only `fn`, callable is a Structure
+        §19.17 merge / join
+        §19.21.3 implements(varA, varB, Consumer)
+        §19.28–19.29 hosted declaration vs constructor, arena
+    memory_model_development_plan.txt
+        arena, return-as-reference, coarse root; orthogonal but
+        Phase 1 constructors must use the current arena
+    This file does not amend those documents.

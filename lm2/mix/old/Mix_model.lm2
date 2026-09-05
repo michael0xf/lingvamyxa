@@ -20,6 +20,7 @@ table:
              LmMixCursor  primitive
              LmMixTag       primitive
              LmMixDoc       primitive
+             LmMixKeyDict   primitive
 end: class
 
 table:
@@ -31,6 +32,7 @@ table:
              LmMixCursor  1
              LmMixTag       1
              LmMixDoc       1
+             LmMixKeyDict   1
 end: `cast.target`
 
 table:
@@ -42,6 +44,7 @@ table:
              LmMixCursor  1
              LmMixTag       1
              LmMixDoc       1
+             LmMixKeyDict   1
 end: `class.range`
 
 table:
@@ -53,6 +56,7 @@ table:
              LmMixCursor  c.struct
              LmMixTag       c.struct
              LmMixDoc       c.struct
+             LmMixKeyDict   c.struct
 end: `forward.backend`
 
 table:
@@ -64,6 +68,7 @@ table:
              LmMixCursor  c.named-struct
              LmMixTag       c.named-struct
              LmMixDoc       c.named-struct
+             LmMixKeyDict   c.named-struct
 end: `layout.backend`
 
 table:
@@ -88,6 +93,7 @@ table:
              parent  LmMixPage     5  1
              index   size_t        6  0
              lock    int           7  0
+             dicts   LmArray       8  1
 end: LmMixPage
 
 table:
@@ -99,6 +105,7 @@ table:
              index  size_t         1  0
              kind   int            2  0
              tag    LmMixTag       3  1
+             upper  LmArray        4  1
 end: LmMixCursor
 
 table:
@@ -118,6 +125,15 @@ table:
     rows:
              root  LmMixPage       0  1
 end: LmMixDoc
+
+table:
+    source
+    name: LmMixKeyDict
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
+    rows:
+             name  char            0  1
+             lets  LmArray         1  1
+end: LmMixKeyDict
 
 MixPosition:
     int: address

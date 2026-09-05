@@ -1,0 +1,26 @@
+import: "lm2/mix/HashArray.lm2"
+
+external:
+    fn: main () int
+        LmHashArray: table
+        @: LmArray as_array
+        @: void slot
+
+        as_array: cast: (@: LmArray) table
+        if: lm_array_init(as_array, 4U) != 0
+            return: 1
+        slot: table
+        if: slot = 0
+            return: 5
+        table\hash: 0
+        table\equals: 0
+        if: table\amount != 0U
+            return: 2
+        if: table\items = 0
+            return: 3
+        if: slot = 0
+            return: 4
+        lm_array_destroy(as_array)
+        return: 0
+    end: main
+end: external
