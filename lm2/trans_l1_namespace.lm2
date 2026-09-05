@@ -530,25 +530,37 @@ return: 1
 fn: lm_trans_descriptor_implements (
     const: LmTransDescriptor: candidate
     const: LmTransDescriptor: required
+    const: LmTransDescriptor: consumer
     @: int out_result
 ) int
-    const: LmTransDescriptorField: requirement
+    const: LmTransDescriptorField: used
     size_t: i
 
     if: out_result != 0
         out_result[0]: 0
-    if: candidate = 0 || required = 0 || out_result = 0
+    if: candidate = 0 || required = 0 || consumer = 0 || out_result = 0
         return: 1
-    if: candidate\has_structural_fields = 0 || candidate\structural_fields = 0 || required\has_structural_fields = 0 || required\structural_fields = 0
-        return: 1
+    if: required\has_structural_fields = 0 || required\structural_fields = 0 || required\structural_fields\count = 0U
+        out_result[0]: 1
+        return: 0
+    if: consumer\has_structural_fields = 0 || consumer\structural_fields = 0 || consumer\structural_fields\count = 0U
+        out_result[0]: 1
+        return: 0
+    if: candidate\has_structural_fields = 0 || candidate\structural_fields = 0
+        out_result[0]: 0
+        return: 0
 
     i: 0U
-    while: i < required\structural_fields\count
-        requirement: lm_own_ptr_stack_at(required\structural_fields, i)
-        if: requirement = 0 || requirement\name = 0
+    while: i < consumer\structural_fields\count
+        used: lm_own_ptr_stack_at(consumer\structural_fields, i)
+        if: used = 0 || used\name = 0
             return: 1
-        if: lm_trans_descriptor_structural_field(candidate, requirement\name) = 0
-            return: 0
+        if: lm_trans_descriptor_structural_field(required, used\name) != 0
+            if: lm_trans_descriptor_structural_field(candidate, used\name) = 0
+                out_result[0]: 0
+                return: 0
+            ---
+        ---
         i: i + 1U
     ---
 
@@ -2226,11 +2238,11 @@ fn: lm_trans_guard_direct_structure_value_layout (
     if: candidate_is_indexed = 0 && required_is_indexed = 0
         return: 0
 
-    if: lm_trans_descriptor_implements(candidate_descriptor, required_descriptor, @ compatible) != 0
+    if: lm_trans_descriptor_implements(candidate_descriptor, required_descriptor, required_descriptor, @ compatible) != 0
         c.fprintf(c.stderr, "trans internal error: malformed structural descriptor while checking direct value \"%.*s\" in %s\n", (cast: int candidate_name\length), candidate_name\data, context)
         return: 1
     if: compatible = 0
-        c.fprintf(c.stderr, "trans L2 type error: implements(candidate, required) is false for direct structural value \"%.*s\" in %s\n", (cast: int candidate_name\length), candidate_name\data, context)
+        c.fprintf(c.stderr, "trans L2 type error: implements(varA varB Consumer) is false for direct structural value \"%.*s\" in %s\n", (cast: int candidate_name\length), candidate_name\data, context)
         return: 1
 
     c.fprintf(c.stderr, "trans hosted C backend limitation: direct structural value \"%.*s\" implements the required descriptor in %s, but distinct hosted C layouts require an adapter/projection\n", (cast: int candidate_name\length), candidate_name\data, context)
@@ -2352,11 +2364,11 @@ fn: lm_trans_namespace_bind_descriptor_with_c_name (
         if: old_symbol\descriptor = descriptor
             c.fprintf(c.stderr, "trans L2 redeclaration error: pending descriptor for \"%.*s\" aliases the old binding\n", (cast: int name\length), name\data)
             return: 1
-        if: lm_trans_descriptor_implements(old_symbol\descriptor, descriptor, @ compatible) != 0
+        if: lm_trans_descriptor_implements(old_symbol\descriptor, descriptor, descriptor, @ compatible) != 0
             c.fprintf(c.stderr, "trans L2 redeclaration error: malformed descriptor for \"%.*s\"\n", (cast: int name\length), name\data)
             return: 1
         if: compatible = 0
-            c.fprintf(c.stderr, "trans L2 redeclaration error: implements(old, new) is false for \"%.*s\"\n", (cast: int name\length), name\data)
+            c.fprintf(c.stderr, "trans L2 redeclaration error: implements(varA varB Consumer) is false for \"%.*s\"\n", (cast: int name\length), name\data)
             return: 1
         ---
     ---

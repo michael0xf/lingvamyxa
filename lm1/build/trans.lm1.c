@@ -2439,7 +2439,7 @@ static int lm_trans_descriptor_mark_structural_fields(struct LmMessageThread *lm
 static int lm_trans_descriptor_add_structural_field(struct LmMessageThread *lm_lmx_message_thread, LmTransDescriptor *descriptor, const LmP0Text *name, const LmP0Text *descriptor_name, size_t index, size_t address_depth, size_t array_count, int has_array_count, int is_const, int is_union);
 static const LmTransDescriptorField * lm_trans_descriptor_structural_field(struct LmMessageThread *lm_lmx_message_thread, const LmTransDescriptor *descriptor, const char *name);
 static int lm_trans_descriptor_structural_same(struct LmMessageThread *lm_lmx_message_thread, const LmTransDescriptor *old_descriptor, const LmTransDescriptor *new_descriptor);
-static int lm_trans_descriptor_implements(struct LmMessageThread *lm_lmx_message_thread, const LmTransDescriptor *candidate, const LmTransDescriptor *required, int *out_result);
+static int lm_trans_descriptor_implements(struct LmMessageThread *lm_lmx_message_thread, const LmTransDescriptor *candidate, const LmTransDescriptor *required, const LmTransDescriptor *consumer, int *out_result);
 static int lm_trans_namespace_bind_descriptor_with_c_name(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmP0Text *name, const char *kind, const LmP0Text *c_name, LmTransDescriptor *descriptor);
 static int lm_trans_namespace_bind_descriptor(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmP0Text *name, const char *kind, LmTransDescriptor *descriptor);
 static int lm_trans_namespace_rollback_descriptor_binding(struct LmMessageThread *lm_lmx_message_thread, LmTransNamespace *namespace_, const LmP0Text *name, LmTransDescriptor *descriptor);
@@ -2487,7 +2487,7 @@ static int lm_trans_callable_descriptor_allows_partial(struct LmMessageThread *l
 static int lm_trans_callable_descriptor_allows_capture(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *name);
 static int lm_trans_callable_descriptor_uses_closure_struct(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *name);
 static int lm_trans_callable_descriptor_is_raw_function_reference(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *name);
-static int lm_trans_implements(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *candidate_name, const LmP0Text *required_name, int *out_result);
+static int lm_trans_implements(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *candidate_name, const LmP0Text *required_name, const LmP0Text *consumer_name, int *out_result);
 static int lm_trans_node_callable_descriptor_name(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *node, const LmTransNamespace *namespace_, LmP0Text *out_name);
 static int lm_trans_formal_param_list_has_any(struct LmMessageThread *lm_lmx_message_thread, const LmTransFormalParamList *params);
 static void lm_trans_formal_param_list_delete(struct LmMessageThread *lm_lmx_message_thread, LmTransFormalParamList *list);
@@ -3667,7 +3667,7 @@ static int lm_trans_descriptor_has_structural_field_name(struct LmMessageThread 
 static char * lm_trans_descriptor_projected_member_name_new(struct LmMessageThread *lm_lmx_message_thread, const LmTransDescriptor *descriptor, const LmTransDescriptorField *selected_field);
 static int lm_trans_descriptor_has_exact_structural_field(struct LmMessageThread *lm_lmx_message_thread, const LmTransDescriptor *descriptor, const LmP0Text *name, const LmP0Text *descriptor_name, size_t index, size_t address_depth, size_t array_count, int has_array_count, int is_const, int is_union);
 static int lm_trans_descriptor_structural_same(struct LmMessageThread *lm_lmx_message_thread, const LmTransDescriptor *old_descriptor, const LmTransDescriptor *new_descriptor);
-static int lm_trans_descriptor_implements(struct LmMessageThread *lm_lmx_message_thread, const LmTransDescriptor *candidate, const LmTransDescriptor *required, int *out_result);
+static int lm_trans_descriptor_implements(struct LmMessageThread *lm_lmx_message_thread, const LmTransDescriptor *candidate, const LmTransDescriptor *required, const LmTransDescriptor *consumer, int *out_result);
 static LmTransDescriptorRelation * lm_trans_descriptor_relation_find(struct LmMessageThread *lm_lmx_message_thread, const LmTransDescriptor *descriptor, const char *relation_name);
 static int lm_trans_descriptor_set_class_relation(struct LmMessageThread *lm_lmx_message_thread, LmTransDescriptor *descriptor, const char *relation_name, const char *payload);
 static const char * lm_trans_descriptor_class_relation_value(struct LmMessageThread *lm_lmx_message_thread, const LmTransDescriptor *descriptor, const char *relation_name);
@@ -4030,7 +4030,7 @@ static int lm_trans_validate_profile_c_printf_call(struct LmMessageThread *lm_lm
 static const char * lm_trans_class_range_value(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *key);
 static const char * lm_trans_cast_target_value(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *key);
 static int lm_trans_cast_type_is_allowed(struct LmMessageThread *lm_lmx_message_thread, const LmP0Node *type_node, const LmTransNamespace *namespace_);
-static int lm_trans_implements(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *candidate_name, const LmP0Text *required_name, int *out_result);
+static int lm_trans_implements(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *candidate_name, const LmP0Text *required_name, const LmP0Text *consumer_name, int *out_result);
 static int lm_trans_implements_arg_key(struct LmMessageThread *lm_lmx_message_thread, const LmP0Field *first, const LmP0Field *stop, LmP0Text *out_key);
 static int lm_trans_expr_emit_implements_frame(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_expr_emit_cast_frame(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
@@ -12178,27 +12178,39 @@ static int lm_trans_descriptor_structural_same(struct LmMessageThread *lm_lmx_me
     return 1;
 }
 
-static int lm_trans_descriptor_implements(struct LmMessageThread *lm_lmx_message_thread, const LmTransDescriptor *candidate, const LmTransDescriptor *required, int *out_result) {
+static int lm_trans_descriptor_implements(struct LmMessageThread *lm_lmx_message_thread, const LmTransDescriptor *candidate, const LmTransDescriptor *required, const LmTransDescriptor *consumer, int *out_result) {
     (void)lm_lmx_message_thread;
-    const LmTransDescriptorField * requirement;
+    const LmTransDescriptorField * used;
     size_t i;
     if (out_result != 0) {
         out_result[0] = 0;
     }
-    if (candidate == 0 || required == 0 || out_result == 0) {
+    if (candidate == 0 || required == 0 || consumer == 0 || out_result == 0) {
         return 1;
     }
-    if (candidate -> has_structural_fields == 0 || candidate -> structural_fields == 0 || required -> has_structural_fields == 0 || required -> structural_fields == 0) {
-        return 1;
+    if (required -> has_structural_fields == 0 || required -> structural_fields == 0 || required -> structural_fields -> count == 0U) {
+        out_result[0] = 1;
+        return 0;
+    }
+    if (consumer -> has_structural_fields == 0 || consumer -> structural_fields == 0 || consumer -> structural_fields -> count == 0U) {
+        out_result[0] = 1;
+        return 0;
+    }
+    if (candidate -> has_structural_fields == 0 || candidate -> structural_fields == 0) {
+        out_result[0] = 0;
+        return 0;
     }
     i = 0U;
-    while (i < required -> structural_fields -> count) {
-        requirement = lm_own_ptr_stack_at(required -> structural_fields, i);
-        if (requirement == 0 || requirement -> name == 0) {
+    while (i < consumer -> structural_fields -> count) {
+        used = lm_own_ptr_stack_at(consumer -> structural_fields, i);
+        if (used == 0 || used -> name == 0) {
             return 1;
         }
-        if (lm_trans_descriptor_structural_field(lm_lmx_message_thread, candidate, requirement -> name) == 0) {
-            return 0;
+        if (lm_trans_descriptor_structural_field(lm_lmx_message_thread, required, used -> name) != 0) {
+            if (lm_trans_descriptor_structural_field(lm_lmx_message_thread, candidate, used -> name) == 0) {
+                out_result[0] = 0;
+                return 0;
+            }
         }
         i = i + 1U;
     }
@@ -14056,12 +14068,12 @@ static int lm_trans_guard_direct_structure_value_layout(struct LmMessageThread *
     if (candidate_is_indexed == 0 && required_is_indexed == 0) {
         return 0;
     }
-    if (lm_trans_descriptor_implements(lm_lmx_message_thread, candidate_descriptor, required_descriptor, &compatible) != 0) {
+    if (lm_trans_descriptor_implements(lm_lmx_message_thread, candidate_descriptor, required_descriptor, required_descriptor, &compatible) != 0) {
         fprintf(stderr, "trans internal error: malformed structural descriptor while checking direct value \"%.*s\" in %s\n", (((int)candidate_name -> length)), candidate_name -> data, context);
         return 1;
     }
     if (compatible == 0) {
-        fprintf(stderr, "trans L2 type error: implements(candidate, required) is false for direct structural value \"%.*s\" in %s\n", (((int)candidate_name -> length)), candidate_name -> data, context);
+        fprintf(stderr, "trans L2 type error: implements(varA varB Consumer) is false for direct structural value \"%.*s\" in %s\n", (((int)candidate_name -> length)), candidate_name -> data, context);
         return 1;
     }
     fprintf(stderr, "trans hosted C backend limitation: direct structural value \"%.*s\" implements the required descriptor in %s, but distinct hosted C layouts require an adapter/projection\n", (((int)candidate_name -> length)), candidate_name -> data, context);
@@ -14193,12 +14205,12 @@ static int lm_trans_namespace_bind_descriptor_with_c_name(struct LmMessageThread
             fprintf(stderr, "trans L2 redeclaration error: pending descriptor for \"%.*s\" aliases the old binding\n", (((int)name -> length)), name -> data);
             return 1;
         }
-        if (lm_trans_descriptor_implements(lm_lmx_message_thread, old_symbol -> descriptor, descriptor, &compatible) != 0) {
+        if (lm_trans_descriptor_implements(lm_lmx_message_thread, old_symbol -> descriptor, descriptor, descriptor, &compatible) != 0) {
             fprintf(stderr, "trans L2 redeclaration error: malformed descriptor for \"%.*s\"\n", (((int)name -> length)), name -> data);
             return 1;
         }
         if (compatible == 0) {
-            fprintf(stderr, "trans L2 redeclaration error: implements(old, new) is false for \"%.*s\"\n", (((int)name -> length)), name -> data);
+            fprintf(stderr, "trans L2 redeclaration error: implements(varA varB Consumer) is false for \"%.*s\"\n", (((int)name -> length)), name -> data);
             return 1;
         }
     }
@@ -20674,16 +20686,18 @@ static int lm_trans_cast_type_is_allowed(struct LmMessageThread *lm_lmx_message_
     return 0;
 }
 
-static int lm_trans_implements(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *candidate_name, const LmP0Text *required_name, int *out_result) {
+static int lm_trans_implements(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *candidate_name, const LmP0Text *required_name, const LmP0Text *consumer_name, int *out_result) {
     (void)lm_lmx_message_thread;
     const LmTransSymbol * candidate_symbol;
     const LmTransSymbol * required_symbol;
+    const LmTransSymbol * consumer_symbol;
     const LmTransDescriptor * candidate;
     const LmTransDescriptor * required;
+    const LmTransDescriptor * consumer;
     if (out_result != 0) {
         out_result[0] = 0;
     }
-    if (namespace_ == 0 || candidate_name == 0 || required_name == 0 || out_result == 0) {
+    if (namespace_ == 0 || candidate_name == 0 || required_name == 0 || consumer_name == 0 || out_result == 0) {
         return 1;
     }
     candidate_symbol = lm_trans_namespace_find(lm_lmx_message_thread, namespace_, candidate_name);
@@ -20692,6 +20706,9 @@ static int lm_trans_implements(struct LmMessageThread *lm_lmx_message_thread, co
         return 1;
     }
     candidate = candidate_symbol -> descriptor;
+    if (candidate == 0) {
+        candidate = lm_trans_effective_value_descriptor_from_atom(lm_lmx_message_thread, namespace_, candidate_name);
+    }
     if (candidate == 0) {
         fprintf(stderr, "trans L2 implements error: candidate \"%.*s\" is not a descriptor\n", (((int)candidate_name -> length)), candidate_name -> data);
         return 1;
@@ -20706,15 +20723,20 @@ static int lm_trans_implements(struct LmMessageThread *lm_lmx_message_thread, co
         fprintf(stderr, "trans L2 implements error: required name \"%.*s\" is not a descriptor\n", (((int)required_name -> length)), required_name -> data);
         return 1;
     }
-    if (candidate -> has_structural_fields == 0 || candidate -> structural_fields == 0) {
-        fprintf(stderr, "trans L2 implements error: candidate \"%.*s\" has no field descriptor\n", (((int)candidate_name -> length)), candidate_name -> data);
+    consumer_symbol = lm_trans_namespace_find(lm_lmx_message_thread, namespace_, consumer_name);
+    if (consumer_symbol == 0) {
+        fprintf(stderr, "trans L2 implements error: unknown consumer descriptor \"%.*s\"\n", (((int)consumer_name -> length)), consumer_name -> data);
         return 1;
     }
-    if (required -> has_structural_fields == 0 || required -> structural_fields == 0) {
-        fprintf(stderr, "trans L2 implements error: required \"%.*s\" has no field descriptor\n", (((int)required_name -> length)), required_name -> data);
+    consumer = consumer_symbol -> descriptor;
+    if (consumer == 0) {
+        consumer = lm_trans_effective_value_descriptor_from_atom(lm_lmx_message_thread, namespace_, consumer_name);
+    }
+    if (consumer == 0) {
+        fprintf(stderr, "trans L2 implements error: consumer \"%.*s\" is not a descriptor\n", (((int)consumer_name -> length)), consumer_name -> data);
         return 1;
     }
-    if (lm_trans_descriptor_implements(lm_lmx_message_thread, candidate, required, out_result) != 0) {
+    if (lm_trans_descriptor_implements(lm_lmx_message_thread, candidate, required, consumer, out_result) != 0) {
         fprintf(stderr, "trans internal error: malformed field in namespace descriptor comparison\n");
         return 1;
     }
@@ -20745,10 +20767,13 @@ static int lm_trans_expr_emit_implements_frame(struct LmMessageThread *lm_lmx_me
     const LmP0Field * candidate_stop;
     const LmP0Field * required_first;
     const LmP0Field * required_stop;
+    const LmP0Field * consumer_first;
+    const LmP0Field * consumer_stop;
     const LmP0Field * extra_first;
     const LmP0Field * extra_stop;
     LmP0Text * candidate_key;
     LmP0Text * required_key;
+    LmP0Text * consumer_key;
     int result;
     int status;
     if (frame == 0) {
@@ -20758,24 +20783,26 @@ static int lm_trans_expr_emit_implements_frame(struct LmMessageThread *lm_lmx_me
         fprintf(stderr, "trans internal error: implements receiver requires an expression stack\n");
         return 1;
     }
-    if (lm_trans_c_call_arg_segment_at(lm_lmx_message_thread, frame -> body, 0U, &candidate_first, &candidate_stop) == 0 || lm_trans_c_call_arg_segment_at(lm_lmx_message_thread, frame -> body, 1U, &required_first, &required_stop) == 0 || lm_trans_c_call_arg_segment_at(lm_lmx_message_thread, frame -> body, 2U, &extra_first, &extra_stop) != 0) {
-        fprintf(stderr, "trans L2 error: implements expects exactly two descriptor names\n");
+    if (lm_trans_c_call_arg_segment_at(lm_lmx_message_thread, frame -> body, 0U, &candidate_first, &candidate_stop) == 0 || lm_trans_c_call_arg_segment_at(lm_lmx_message_thread, frame -> body, 1U, &required_first, &required_stop) == 0 || lm_trans_c_call_arg_segment_at(lm_lmx_message_thread, frame -> body, 2U, &consumer_first, &consumer_stop) == 0 || lm_trans_c_call_arg_segment_at(lm_lmx_message_thread, frame -> body, 3U, &extra_first, &extra_stop) != 0) {
+        fprintf(stderr, "trans L2 error: implements expects candidate, required, consumer\n");
         return 1;
     }
     candidate_key = lm_trans_text_ref_new_cstr("");
     required_key = lm_trans_text_ref_new_cstr("");
-    if (candidate_key == 0 || required_key == 0) {
+    consumer_key = lm_trans_text_ref_new_cstr("");
+    if (candidate_key == 0 || required_key == 0 || consumer_key == 0) {
         lm_trans_text_ref_destroy(&candidate_key);
         lm_trans_text_ref_destroy(&required_key);
+        lm_trans_text_ref_destroy(&consumer_key);
         return 1;
     }
     status = 0;
-    if (lm_trans_implements_arg_key(lm_lmx_message_thread, candidate_first, candidate_stop, candidate_key) == 0 || lm_trans_implements_arg_key(lm_lmx_message_thread, required_first, required_stop, required_key) == 0) {
+    if (lm_trans_implements_arg_key(lm_lmx_message_thread, candidate_first, candidate_stop, candidate_key) == 0 || lm_trans_implements_arg_key(lm_lmx_message_thread, required_first, required_stop, required_key) == 0 || lm_trans_implements_arg_key(lm_lmx_message_thread, consumer_first, consumer_stop, consumer_key) == 0) {
         fprintf(stderr, "trans L2 error: implements expects Lingvamyxa descriptor names\n");
         status = 1;
     }
     else {
-        if (lm_trans_implements(lm_lmx_message_thread, namespace_, candidate_key, required_key, &result) != 0) {
+        if (lm_trans_implements(lm_lmx_message_thread, namespace_, candidate_key, required_key, consumer_key, &result) != 0) {
             status = 1;
         }
         else {
@@ -20789,6 +20816,7 @@ static int lm_trans_expr_emit_implements_frame(struct LmMessageThread *lm_lmx_me
     }
     lm_trans_text_ref_destroy(&candidate_key);
     lm_trans_text_ref_destroy(&required_key);
+    lm_trans_text_ref_destroy(&consumer_key);
     return status;
 }
 
@@ -31678,12 +31706,12 @@ static int lm_trans_hosted_descriptor_redeclaration_is_unsupported(struct LmMess
         fprintf(stderr, "trans L2 redeclaration error: old binding \"%.*s\" has no structural descriptor\n", (((int)owner -> length)), owner -> data);
         return 1;
     }
-    if (lm_trans_descriptor_implements(lm_lmx_message_thread, old_symbol -> descriptor, pending_descriptor, &compatible) != 0) {
+    if (lm_trans_descriptor_implements(lm_lmx_message_thread, old_symbol -> descriptor, pending_descriptor, pending_descriptor, &compatible) != 0) {
         fprintf(stderr, "trans L2 redeclaration error: malformed descriptor for \"%.*s\"\n", (((int)owner -> length)), owner -> data);
         return 1;
     }
     if (compatible == 0) {
-        fprintf(stderr, "trans L2 redeclaration error: implements(old, new) is false for \"%.*s\"\n", (((int)owner -> length)), owner -> data);
+        fprintf(stderr, "trans L2 redeclaration error: implements(varA varB Consumer) is false for \"%.*s\"\n", (((int)owner -> length)), owner -> data);
         return 1;
     }
     if (lm_trans_descriptor_structural_same(lm_lmx_message_thread, old_symbol -> descriptor, pending_descriptor)) {
@@ -32309,12 +32337,12 @@ static int lm_trans_anonymous_structure_collision_is_unsupported(struct LmMessag
         fprintf(stderr, "trans L2 redeclaration error: old binding \"%.*s\" has no structural descriptor\n", (((int)result_name -> length)), result_name -> data);
         return 1;
     }
-    if (lm_trans_descriptor_implements(lm_lmx_message_thread, old_symbol -> descriptor, pending_descriptor, &compatible) != 0) {
+    if (lm_trans_descriptor_implements(lm_lmx_message_thread, old_symbol -> descriptor, pending_descriptor, pending_descriptor, &compatible) != 0) {
         fprintf(stderr, "trans L2 redeclaration error: malformed descriptor for \"%.*s\"\n", (((int)result_name -> length)), result_name -> data);
         return 1;
     }
     if (compatible == 0) {
-        fprintf(stderr, "trans L2 redeclaration error: implements(old, new) is false for \"%.*s\"\n", (((int)result_name -> length)), result_name -> data);
+        fprintf(stderr, "trans L2 redeclaration error: implements(varA varB Consumer) is false for \"%.*s\"\n", (((int)result_name -> length)), result_name -> data);
         return 1;
     }
     fprintf(stderr, "trans hosted C backend limitation: compatible anonymous Structure result \"%.*s\" requires occurrence-aware value projection\n", (((int)result_name -> length)), result_name -> data);

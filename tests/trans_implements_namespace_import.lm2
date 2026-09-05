@@ -12,9 +12,9 @@ L2:
 
     external:
         fn: main () int
-            assert: implements(ImportedCandidate, ImportedRequirement) = 1
-            assert: implements(LocalCandidate, LocalRequirement) = 1
-            assert: implements(LocalCandidate, ImportedRequirement) = 0
+            assert: implements(ImportedCandidate, ImportedRequirement, ImportedRequirement) = 1
+            assert: implements(LocalCandidate, LocalRequirement, LocalRequirement) = 1
+            assert: implements(LocalCandidate, ImportedRequirement, ImportedRequirement) = 0
             return: 0
         end: main
     end: external

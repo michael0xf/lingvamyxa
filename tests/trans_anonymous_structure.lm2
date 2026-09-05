@@ -77,13 +77,13 @@ external:
             return: 9
         if: first\inferredNumber != 41 || first\inferredText[0] != 'w' || first\inferredText[4] != 'd'
             return: 10
-        if: implements(first, AnonymousRequired) != 1
+        if: implements(first, AnonymousRequired, AnonymousRequired) != 1
             return: 11
-        if: implements(first, AnonymousMissing) != 0
+        if: implements(first, AnonymousMissing, AnonymousMissing) != 0
             return: 12
-        if: implements(child, AnonymousChildRequired) != 1
+        if: implements(child, AnonymousChildRequired, AnonymousChildRequired) != 1
             return: 13
-        if: implements(second, AnonymousRepeatedRequirement) != 1
+        if: implements(second, AnonymousRepeatedRequirement, AnonymousRepeatedRequirement) != 1
             return: 14
         return: 0
     end: main

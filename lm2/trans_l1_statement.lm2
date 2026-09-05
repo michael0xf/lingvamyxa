@@ -6609,11 +6609,11 @@ fn: lm_trans_hosted_descriptor_redeclaration_is_unsupported (
     if: old_symbol\descriptor = 0
         c.fprintf(c.stderr, "trans L2 redeclaration error: old binding \"%.*s\" has no structural descriptor\n", (cast: int owner\length), owner\data)
         return: 1
-    if: lm_trans_descriptor_implements(old_symbol\descriptor, pending_descriptor, @ compatible) != 0
+    if: lm_trans_descriptor_implements(old_symbol\descriptor, pending_descriptor, pending_descriptor, @ compatible) != 0
         c.fprintf(c.stderr, "trans L2 redeclaration error: malformed descriptor for \"%.*s\"\n", (cast: int owner\length), owner\data)
         return: 1
     if: compatible = 0
-        c.fprintf(c.stderr, "trans L2 redeclaration error: implements(old, new) is false for \"%.*s\"\n", (cast: int owner\length), owner\data)
+        c.fprintf(c.stderr, "trans L2 redeclaration error: implements(varA varB Consumer) is false for \"%.*s\"\n", (cast: int owner\length), owner\data)
         return: 1
 
     if: lm_trans_descriptor_structural_same(old_symbol\descriptor, pending_descriptor)
@@ -7104,11 +7104,11 @@ fn: lm_trans_anonymous_structure_collision_is_unsupported (
     if: old_symbol\descriptor = 0
         c.fprintf(c.stderr, "trans L2 redeclaration error: old binding \"%.*s\" has no structural descriptor\n", (cast: int result_name\length), result_name\data)
         return: 1
-    if: lm_trans_descriptor_implements(old_symbol\descriptor, pending_descriptor, @ compatible) != 0
+    if: lm_trans_descriptor_implements(old_symbol\descriptor, pending_descriptor, pending_descriptor, @ compatible) != 0
         c.fprintf(c.stderr, "trans L2 redeclaration error: malformed descriptor for \"%.*s\"\n", (cast: int result_name\length), result_name\data)
         return: 1
     if: compatible = 0
-        c.fprintf(c.stderr, "trans L2 redeclaration error: implements(old, new) is false for \"%.*s\"\n", (cast: int result_name\length), result_name\data)
+        c.fprintf(c.stderr, "trans L2 redeclaration error: implements(varA varB Consumer) is false for \"%.*s\"\n", (cast: int result_name\length), result_name\data)
         return: 1
 
     c.fprintf(c.stderr, "trans hosted C backend limitation: compatible anonymous Structure result \"%.*s\" requires occurrence-aware value projection\n", (cast: int result_name\length), result_name\data)

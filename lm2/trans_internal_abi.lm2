@@ -772,6 +772,7 @@ fn: lm_trans_descriptor_structural_same (
 fn: lm_trans_descriptor_implements (
     const: LmTransDescriptor: candidate
     const: LmTransDescriptor: required
+    const: LmTransDescriptor: consumer
     @: int out_result
 ) int
 
@@ -1030,6 +1031,7 @@ fn: lm_trans_implements (
     const: LmTransNamespace: namespace_
     const: LmP0Text: candidate_name
     const: LmP0Text: required_name
+    const: LmP0Text: consumer_name
     @: int out_result
 ) int
 

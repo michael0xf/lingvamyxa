@@ -43,15 +43,21 @@ SelfDescribing:
     int: inspect
 end: SelfDescribing
 
+ThinConsumer:
+    int: extra
+end: ThinConsumer
+
 external:
     fn: main () int
-        assert: implements(User, Equatable) = 1
-        assert: implements(Plain, Equatable) = 0
-        assert: implements(User, Serializable) = 0
-        assert: implements(MultiCandidate, CompleteRequirement) = 1
-        assert: implements(MultiCandidate, IncompleteRequirement) = 0
-        assert: implements(`QuotedCandidate`, `QuotedRequirement`) = 1
-        assert: implements(SelfDescribing, SelfDescribing) = 1
+        assert: implements(User, Equatable, Equatable) = 1
+        assert: implements(Plain, Equatable, Equatable) = 0
+        assert: implements(User, Serializable, Serializable) = 0
+        assert: implements(MultiCandidate, CompleteRequirement, CompleteRequirement) = 1
+        assert: implements(MultiCandidate, IncompleteRequirement, IncompleteRequirement) = 0
+        assert: implements(`QuotedCandidate`, `QuotedRequirement`, `QuotedRequirement`) = 1
+        assert: implements(SelfDescribing, SelfDescribing, SelfDescribing) = 1
+        assert: implements(Plain, Equatable, ThinConsumer) = 1
+        assert: implements(User, Equatable, ThinConsumer) = 1
         return: 0
     end: main
 end: external

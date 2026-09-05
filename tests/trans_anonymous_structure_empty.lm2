@@ -24,7 +24,7 @@ external:
             return: 2
         if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), secondEmpty) = 0
             return: 3
-        if: implements(firstEmpty, AnonymousEmptyRequirement) != 1
+        if: implements(firstEmpty, AnonymousEmptyRequirement, AnonymousEmptyRequirement) != 1
             return: 4
         return: 0
     end: main

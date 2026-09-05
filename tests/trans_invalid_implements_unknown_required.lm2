@@ -4,6 +4,6 @@ end: KnownCandidate
 
 external:
     fn: main () int
-        return: implements(KnownCandidate, MissingProtocol)
+        return: implements(KnownCandidate, MissingProtocol, MissingProtocol)
     end: main
 end: external
