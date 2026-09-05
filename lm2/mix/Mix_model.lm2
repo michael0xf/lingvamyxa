@@ -3,11 +3,11 @@ table:
     name: `define.value`
     columns: (class: class) (@: char value)
     rows:
-             LM_MIX_OCC_NONE      0
-             LM_MIX_OCC_CURSOR    1
-             LM_MIX_OCC_TAG_HEAD  2
-             LM_MIX_OCC_TAG_TAIL  3
-             LM_MIX_OCC_VALUE     4
+             LM_MIX_KIND_NONE     0
+             LM_MIX_KIND_CURSOR   1
+             LM_MIX_KIND_TAG_HEAD 2
+             LM_MIX_KIND_TAG_TAIL 3
+             LM_MIX_KIND_VALUE    4
              LM_MIX_DEFAULT_LENGTH 32
 end: `define.value`
 
@@ -17,7 +17,7 @@ table:
     columns: (class: class) (class: kind)
     rows:
              LmMixPage      primitive
-             LmMixOccupant  primitive
+             LmMixCursor  primitive
              LmMixTag       primitive
              LmMixDoc       primitive
 end: class
@@ -28,7 +28,7 @@ table:
     columns: (class: class) (int: value)
     rows:
              LmMixPage      1
-             LmMixOccupant  1
+             LmMixCursor  1
              LmMixTag       1
              LmMixDoc       1
 end: `cast.target`
@@ -39,7 +39,7 @@ table:
     columns: (class: class) (int: value)
     rows:
              LmMixPage      1
-             LmMixOccupant  1
+             LmMixCursor  1
              LmMixTag       1
              LmMixDoc       1
 end: `class.range`
@@ -50,7 +50,7 @@ table:
     columns: (class: class) (class: backend)
     rows:
              LmMixPage      c.struct
-             LmMixOccupant  c.struct
+             LmMixCursor  c.struct
              LmMixTag       c.struct
              LmMixDoc       c.struct
 end: `forward.backend`
@@ -61,7 +61,7 @@ table:
     columns: (class: class) (class: backend)
     rows:
              LmMixPage      c.named-struct
-             LmMixOccupant  c.named-struct
+             LmMixCursor  c.named-struct
              LmMixTag       c.named-struct
              LmMixDoc       c.named-struct
 end: `layout.backend`
@@ -92,22 +92,22 @@ end: LmMixPage
 
 table:
     source
-    name: LmMixOccupant
+    name: LmMixCursor
     columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
     rows:
              page   LmMixPage      0  1
              index  size_t         1  0
              kind   int            2  0
              tag    LmMixTag       3  1
-end: LmMixOccupant
+end: LmMixCursor
 
 table:
     source
     name: LmMixTag
     columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
     rows:
-             head  LmMixOccupant   0  0
-             tail  LmMixOccupant   1  0
+             head  LmMixCursor   0  0
+             tail  LmMixCursor   1  0
              name  char            2  1
 end: LmMixTag
 
