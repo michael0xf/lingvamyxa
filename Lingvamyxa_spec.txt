@@ -12646,7 +12646,8 @@ or mirrors.
 Mix here is not only an overlay on LMX source. It is a universal document:
 a placement tree of nodes, memory cells at the leaves, and dynamic marks,
 cursors and attributes over those positions. World Wide Mix is that document
-when a node can be addressed from any device by a hierarchical path.
+when a node can be named by a hierarchical path from another carrier. The
+Internet is not required for that (section 19.28.10.1).
 
 19.28.10.1. Not the Web and Not a File
 
@@ -12669,11 +12670,30 @@ cell may hold an LMX tree with finer leaves. The document need not already be
 a «file» or a «picture»; that is decided by the Consumer of the LMX value, not
 by the Mix address scheme.
 
+World Wide here is not the Web and not IP. The Internet is not required.
+It is the same path of numbers (`3.17.4`) that can be named from another
+carrier. The carrier may be anything: RAM, a disk sector, a wire, radio, a
+flash drive, a carrier pigeon. Hop codec and occupancy change with the
+carrier; the address does not.
+
+A physical link carries a page or a chunk along an already known path. A
+pigeon carries a serialized node or a short envelope (path, capability, which
+Consumer). That is transport, not Mix topology.
+
+HTTP POST (`application/lmx`) is one way to carry LMX messages. It is a layer
+beside Mix (section 19.28.10.15). Without it Mix is the same: bunches,
+next/prev, prefix locks, mirrors. Neighbour `3.18` is a neighbour in a bunch,
+not a DNS host.
+
+The world is a placement tree, not a socket network. Wide means the address
+is not «the file on this machine at byte 12044».
+
 19.28.10.2. Two Trees
 
     Mix (this section)
-        topology: siblings, realm prefix, lock, mirror, cursor;
+        topology: siblings, realm prefix, bunch, lock, mirror, cursor;
         edge: neighbour index, a natural number, written `3.17.4`;
+        bunch: the occupied children of one prefix; next/prev only inside it;
         leaf: a cell (memory or a reference to a value);
         overlay of marks on positions of this tree, not a second parse tree.
 
@@ -12697,8 +12717,10 @@ its position. The anchor is addressed by a Mix path; fields are read as LMX.
 19.28.10.3. Address: a Path of Integers
 
 There is no bound on the number of levels. An address is a sequence of
-non-negative integers (ℕ₀) from the root to a cell. Path length is depth. A
-level index is any such integer, with no ceiling.
+non-negative integers (ℕ₀) from the root to a cell. Path length is the depth
+of that cell, not the height of the whole tree: branches under one parent may
+differ in length (section 19.28.10.6). A level index is any such integer, with
+no ceiling.
 
 A cell may be a byte, a word, a buffer or a child Structure. The index counts
 neighbours, not bytes. The written path is not LMX source grammar: numbers
@@ -12732,8 +12754,9 @@ Occupancy is a property of the carrier, not of the address.
         children plus, if needed, a map from path index to local slot.
 
     Small network
-        also about 5 bits: tens of machines, not thousands of hosts per
-        level.
+        also about 5 bits, when that is the carrier: tens of machines, not
+        thousands of hosts per level. A network here is an example carrier,
+        not a required layer.
 
     Disk
         how many cells fit in a 4 KB sector or a 32 KB cluster (256 Kbit)
@@ -12742,7 +12765,7 @@ Occupancy is a property of the carrier, not of the address.
         in the same sector.
 
 A type chain on a path (`u5.u12.u6.u10`) is how that node was serialized, not
-what it is called. Mirrors of one page (section 19.28.10.11): RAM and network
+what it is called. Mirrors of one page (section 19.28.10.12): RAM and network
 are narrow; disk is slightly wider; the number path is one.
 
 Unallocated numbers at a Mix level are simply not allocated. That is not an
@@ -12768,11 +12791,55 @@ Inserting or deleting a sibling changes only indices at that level, not
 «every byte after the point». Cursors therefore survive edits, as in the Mix
 design note.
 
-19.28.10.6. World-Wide Realm Prefixes
+19.28.10.6. Uneven Branches; next/prev on a Bunch
 
-World hierarchy is a path prefix, not a fixed number of slots «for the
-planet». How many levels belong to realm, volume, document or chapter is a
-profile, not an address canon.
+The Mix tree is not complete and not a grid of one height. Under one parent a
+child may be a leaf while a neighbour is a node with a long subtree:
+
+    3.17.4          a leaf, a member of bunch(3.17)
+    3.17.5          a node, the same bunch
+    3.17.5.0.2      a cell deeper in the second branch
+
+Depth is the length of a particular path, not a world level. There is no ruler
+«every cell at depth 4» and no next along such a ruler.
+
+A bunch is the occupied child indices of one prefix:
+
+    bunch(P) = { i ∈ ℕ₀ | P.i is allocated }
+
+Gaps are not in the bunch: if `3.17` holds 0, 4, 5, the bunch is {0, 4, 5},
+not 0..5. next/prev is the neighbour in that set, in ℕ₀ order:
+
+    next(3.17.4) = 3.17.5
+    prev(3.17.4) = 3.17.0
+
+not `3.17.5.0.2` (that is another bunch, deeper) and not «the next document in
+the world».
+
+A cursor has two orthogonal moves:
+
+    down / up      lengthen or shorten the path (the branch);
+    next / prev    change the last index inside the same bunch.
+
+next does not climb to the parent, does not descend into a foreign branch, and
+does not jump into another prefix's bunch. The end of a bunch is no next, not
+«the absolute next Mix». The world root is a bunch too: next there walks
+occupied roots, not every disk on the planet.
+
+Connectivity is therefore not absolute. Absolute connectivity would be a
+doubly-linked list of all documents at the base, with overflow pouring into
+the neighbour on that list. Here neighbourhood is local: if a cell fills, the
+writer deepens this branch, takes a free index in *this* bunch, compacts, or
+refuses. Walking next is navigation, not a spill chute.
+
+A lock on prefix P covers bunch(P) and every deeper bunch inside P. A mirror
+of P mirrors this uneven subtree, not a chain of absolute next links.
+
+19.28.10.7. World-Wide Realm Prefixes
+
+World hierarchy is a path prefix in the placement tree, not the Internet and
+not a fixed number of slots «for the planet». How many levels belong to
+realm, volume, document or chapter is a profile, not an address canon.
 
 Example meaning (profile, not language):
 
@@ -12791,7 +12858,7 @@ cursor in chunks. Mix cursors for large bodies are already described with
 messages in section 19.19.1.2; here the address is simply hierarchical and
 world-wide, with no depth ceiling.
 
-19.28.10.7. Mix Overlay on This Tree
+19.28.10.8. Mix Overlay on This Tree
 
 Mix is still not a second parse tree.
 
@@ -12800,7 +12867,7 @@ The same addresses hold:
     active marks and intervals (colour, link, diagnostic);
     overlapping sets;
     cursors of several consumers;
-    locks on path prefixes (section 19.28.10.10);
+    locks on path prefixes (section 19.28.10.11);
     attributes such as «still a raw buffer» or «already a File».
 
 The LMX parser still builds P0 Structures and places Mix anchors in parallel.
@@ -12808,7 +12875,7 @@ World Wide Mix adds only that an anchor has a path of integers (`3.17.4`, or
 however it is stored locally) that can be sent to another device without
 «open my file at byte 12044».
 
-19.28.10.8. Type Lives in the Cell's LMX Value, Not in the Mix Address
+19.28.10.9. Type Lives in the Cell's LMX Value, Not in the Mix Address
 
 The address `3.17.4` does not type the contents. Typing happens when a
 Consumer walks the LMX value stored in that cell:
@@ -12827,7 +12894,7 @@ Until someone asks for File, a Mix cell may hold substrate (JPEG, UTF-8, a
 word). Meaning is attached by an LMX Consumer, not by the Mix path and not by
 MIME.
 
-19.28.10.9. Merge of Pages and Contracts
+19.28.10.10. Merge of Pages and Contracts
 
 A document node may be assembled by merging Structures: a base page plus
 audit plus local fields. Merge order is occurrence displacement (the newest
@@ -12837,7 +12904,7 @@ The same holds for cell descriptions: `u32` is merge(cell, count/integer) plus
 range `0..2^32-1` plus spelling. `FILE` is merge(cell, opaque). On disk both
 may occupy one slot in a sector-sized page; the contracts differ.
 
-19.28.10.10. Locks
+19.28.10.11. Locks
 
 A lock is not `flock` on a file and not a byte range in a linear buffer. It
 hangs on a path prefix: the subtree is locked, every longer address inside
@@ -12845,7 +12912,9 @@ it.
 
 It is an ordinary Structure or Mix attribute on an interval, not a new value
 kind. An LMX message may carry a capability for a prefix; a lock says that
-this writer is changing that Mix prefix.
+this writer is changing that Mix prefix. A lock on prefix P covers bunch(P)
+and every deeper bunch inside P, not «the whole document» and not an
+absolute next-chain.
 
 Lock extent is what the writer changes in the Mix tree (which prefixes), not
 the LMX used tree. The only likeness to `implements` is «do not lock what you
@@ -12873,7 +12942,7 @@ still does not version every edit.
 An expired or revoked capability means no lock. A format failure on a
 `handle` field remains a converter diagnostic, not a lock diagnostic.
 
-19.28.10.11. Mirrors
+19.28.10.12. Mirrors
 
 A mirror is not a second document and not a git clone as a kind. It is
 another path (another realm prefix) whose nodes, for a given reader Consumer,
@@ -12912,26 +12981,35 @@ A mirror's name is an attribute, not part of the address. A mirror's address
 is its own path. Original and mirror are comparable only through
 `implements` for a concrete reader, not as «forever the same bytes».
 
-19.28.10.12. What This Model Does Not Do
+19.28.10.13. What This Model Does Not Do
 
 It does not replace the P0 parser and does not introduce `Value = ℕ₀`.
 It does not bound tree depth or the magnitude of a level index.
+It does not force branches to one depth and does not make a global
+next/prev of all Mix documents.
 It does not fix cell size and does not tie addresses to bytes.
 It does not become the Web: no mandatory URL text, DNS, or MIME as type.
+It does not require the Internet, IP, or HTTP. The carrier may be anything.
 It does not version the document on every edit (history is a listener over
 Mix).
 It does not introduce `flock` on «the whole file» and does not make a mirror
 a second document kind.
 
-19.28.10.13. Minimal Core
+19.28.10.14. Minimal Core
 
     address = a path of ℕ₀ integers, written with dots;
+    depth is the length of that path; branches under one parent may differ;
+    bunch = the occupied children of one prefix; gaps are not in the bunch;
+    next/prev only inside a bunch, not an absolute chain of documents;
     hop storage is the carrier's affair (a 5->12->6->10 chain, varint, ...);
+    the carrier may be anything: RAM, disk, wire, radio, flash, pigeon;
+    the Internet is not required; HTTP is one message transport beside Mix;
     typical occupancy: RAM and a small network about 5 bits, disk about
     10..12;
     RAM node: sparse, about 32 children — a working mirror of the page;
     cursor = path plus offset inside a buffer cell;
-    insert/delete at a level shifts only sibling indices;
+    down/up walks a branch; next/prev walks a bunch;
+    insert/delete at a level shifts only sibling indices in that bunch;
     lock = Mix attribute or capability on a path prefix;
     mirror = another prefix plus a catch-up listener, not a second kind;
     Mix attributes hang on a cursor or interval, not on a byte range;
@@ -12939,9 +13017,9 @@ a second document kind.
     the Mix path.
 
 Realm profiles, page serialization and capabilities on a path prefix are
-network around the document, not the document model itself.
+delivery and carrier around the document, not the document model itself.
 
-19.28.10.14. Relation to REST/LMX and Message Queues
+19.28.10.15. Relation to REST/LMX and Message Queues
 
 Section 19.28.7 moves *messages*: a complete LMX document as owned bytes into
 a FIFO inbox, locally by route or remotely by HTTP POST (`application/lmx`).
@@ -12952,11 +13030,14 @@ This section places *cells*: a path of integers, cursors, prefix locks,
 mirrors. The unit is a document node. A message may *name* a Mix path instead
 of carrying the body (section 19.19.1.2). Transport still ships only the short
 envelope; the receiver walks Mix. The two layers stack. They are not the same
-tree.
+tree. Transport is not Mix and need not be IP: the same envelope can go on a
+wire, radio, a flash drive or a carrier pigeon. Without HTTP, Mix does not
+change.
 
-A Mix sibling (`3.18` next to `3.17`) is a document neighbour, not a host.
-A machine appears only if a profile maps a realm prefix onto one. Disk-full
-is storage-profile policy, not an implication of the path:
+A Mix sibling (`3.18` next to `3.17`) is next in bunch(`3`), not a host and
+not a spill chute. A machine appears only if a profile maps a realm prefix
+onto one. Disk-full is storage-profile policy, not an implication of the
+path and not «pour into the absolute next»:
 
     refuse the write;
     compact live slots;
