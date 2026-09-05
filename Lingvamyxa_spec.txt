@@ -103,8 +103,8 @@ types, or an implicit side effect of value construction. A table named `class`
 or a relation named `layout.backend` has meaning only to the explicit profile or
 consumer that reads it.
 
-Language-core compatibility is the first-level-name predicate over bindings and
-descriptors visible in the namespace. Callable consumption may separately
+Language-core compatibility is `implements(A, B, C)`: structure `A` may be used
+in place of structure `B` in consumer `C`. Callable consumption may separately
 validate a requested call as ordinary execution. An implementation may
 internally index those bindings with arrays, hash tables, generated C data or
 database tables, but that representation is not source semantics. Runtime
@@ -1141,31 +1141,56 @@ registry-class or table-cell value kind in the minimal source syntax.
 
 2.1. Type Compatibility through Namespace Descriptors
 
-Compatibility is the namespace-only structural predicate described by
-`implements` in section 19.21.3. A descriptor exposes its first-level names.
-`implements(Candidate, Required)` is true exactly when every first-level name
-exposed by `Required` is also exposed by `Candidate`.
+A type is not an entity. Compatibility is the fact that a structure `A` may be
+used in place of a structure `B` in a structure `C`. That fact is the
+namespace-only structural predicate `implements(A, B, C)` in section 19.21.3.
 
-The minimal predicate compares names only. It does not compare the values behind
-those names, field order, duplicate count, nested contents, callable signatures,
-mutability, ownership, effects, ABI spelling or target-language layout. A name
-such as `validate` has no privileged hook behavior: when present, it is one
-ordinary first-level name and the candidate must also expose it.
+`C` is the consumer: code or data, walked as a P0 tree. «Used in C» means C
+mentions `B` and concrete branches of `B` (name paths) at syntactic field-follow
+and argument sites. The comparison does not require every first-level name of
+`B` on `A`. It requires only those paths of `B` that `C` actually touches.
+
+    implements(A, B, C)
+        iff every path in uses(C, B) is present on A
+
+`uses(C, B)` is the set of syntactic name paths (`B`, `B.foo`, `B.foo.bar`, …)
+collected from C. Collection stays at P0 field-follow; it is not alias analysis,
+callee expansion, computed-name evaluation or heap dataflow. A path that is not
+syntactically visible in C is unchecked at this site, or is carried explicitly
+across an LMX Message boundary.
+
+A leaf of a used path that is a Primitive is admitted by category
+(`class.category` / `class.semantic`) and, when present, a range validator
+(`class.range` or explicit min/max). An unused nested structure is not expanded.
+An empty `uses(C, B)` is true: there is nothing to use. There is no two-argument
+form. Without a consumer there is no type.
+
+The predicate does not compare values behind names, field order, duplicate
+count, unused nested contents, callable signatures, mutability, ownership,
+effects, ABI spelling or target-language layout. A name such as `validate` has
+no privileged hook behavior: when a used path names it, the candidate must
+expose that ordinary name along the path.
 
 Repeated occurrences do not add multiplicity to this predicate. One occurrence
 of an exact name and any greater number of occurrences expose the same one name
-to `implements`; occurrence-qualified field access does not change that rule.
+along a path; occurrence-qualified field access does not change that rule.
 
-Primitive descriptors expose the same kind of first-level surface virtually
-through their namespace bindings. They do not use a second compatibility
-algorithm. Constructing an instance does not create or modify a descriptor and
-does not add compatibility evidence.
+Primitive descriptors expose the same kind of name surface virtually through
+their namespace bindings. They do not use a second compatibility algorithm.
+Constructing an instance does not create or modify a descriptor and does not
+add compatibility evidence.
 
-Compatibility is directional. `implements(A, B)` does not imply
-`implements(B, A)`. Casts, adapters, validation calls and other application
+Compatibility is directional and consumer-relative. `implements(A, B, C)` does
+not imply `implements(B, A, C)` and does not imply `implements(A, B, C2)` for a
+different consumer. Casts, adapters, validation calls and other application
 operations may be written as ordinary namespace-visible code, but they are not
 implicit parts of `implements`. Backend projection implements an already made
 namespace decision and is not compatibility evidence.
+
+A translator or interpreter applies `implements(A, B, C)` at plain-name rebind,
+argument consumption and return admission, supplying `C` from the remaining
+known source tree, or from an explicit Message consumer or used-path list.
+Those applications are not a two-argument source receiver.
 
 
 3. Structures and Frames
@@ -3420,7 +3445,8 @@ write/update step uses the ordinary head/update form:
     i: newValue
 
 If `i: newValue` resolves as a plain-name rebind, it applies
-`implements(old, new)` and appends the admitted namespace occurrence. A backend
+`implements(new, old, C)` with `C` the remaining known source that still
+sees `i`, and appends the admitted namespace occurrence. A backend
 may reuse or update physical storage only as an unobservable optimization that
 preserves the ordered-occurrence behavior, including restoration of an older
 visible occurrence when a nested scope ends. If `i` resolves to a function,
@@ -4609,8 +4635,9 @@ may treat that Structure as one value or unpack/map it as a sequence of returned
 values where their receiver signature admits it. The explicit return Structure
 is also reference-only. It may be created in an explicit caller-provided target
 arena before the body starts, created once in the callee's current arena before
-the body starts, or be another existing StructureReference whose descriptor
-implements the return descriptor. A
+the body starts, or be another existing StructureReference for which
+`implements(that reference, the declared return descriptor, the return
+consumers)` holds. A
 translator may use a hidden output
 reference or eliminate unobservable physical field traffic, but it must
 preserve the reference-only result, Structure identity and the
@@ -4842,12 +4869,13 @@ The receiver-level algorithm is:
     7. Explicitly bind that descriptor value in the current lexical namespace.
     8. If the exact name is already visible, apply the compatible
        redeclaration rule from section 7.3.1 using
-       `implements(OldType, NewType)` before publishing the new occurrence.
+       `implements(NewType, OldType, C)` before publishing the new occurrence,
+       with `C` the remaining known source that still sees the name.
 
 Those steps define the language rule. The current hosted migration has not yet
 replaced its separate callable-shape symbol fields with this descriptor value,
 so descriptor-only `fn` redefinition and using such a callable directly as an
-`implements` operand remain implementation work covered by section 21.7. This
+`implements(A, B, C)` operand remain implementation work covered by section 21.7. This
 backend gap does not change the namespace rule above.
 
 The declaration produces no Registry/Table rows. A separate explicit export
@@ -4866,9 +4894,9 @@ They may be recorded in an explicit backend Table, but they are not separate
 source-level callable kinds and are not the semantic parent of the descriptor.
 
 The descriptor is data. It does not define an implementation and cannot be
-called merely because its name is visible. It may be used as the `Required`
-operand of the first-level-name `implements` predicate for arguments, return
-values, local bindings, table rows, validators or message targets. A receiver
+called merely because its name is visible. It may be used as `B` in
+`implements(A, B, C)` for arguments, return values, local bindings, table rows,
+validators or message targets, with `C` the consumer that uses `B`. A receiver
 that actually calls a value separately checks that the value supports the
 requested call; call consumption is not a second compatibility system.
 
@@ -4888,8 +4916,9 @@ Here `AddX` is a callable descriptor binding in the visible lexical namespace.
 `makeAdder` is an executable binding. `x` is a formal binding in
 `makeAdder`'s local namespace view. `addX` is a nested executable binding in
 that local view, and `y` is local to `addX`. The final `return: addX` returns
-the local executable binding/reference when its descriptor implements `AddX`
-by the rule in section 2.1.
+the local executable binding/reference when
+`implements(addX, AddX, the return consumers of makeAdder)` holds by the rule
+in section 2.1.
 Closure evaluation must materialize any required environment/capture Structure
 for `x` in a selected surviving arena before the callable reference becomes the
 return expression's value. `return` then publishes that already produced
@@ -4906,7 +4935,7 @@ executable produced by partial evaluation.
 
 In the example above:
 
-    makeAdder(10) -> residual callable whose descriptor implements AddX
+    makeAdder(10) -> residual callable admitted by `implements(residual, AddX, callAdd-like consumers)`
 
 The call has already bound `x = 10`. The returned `addX` callable represents the
 remaining computation:
@@ -4944,8 +4973,8 @@ Keep this distinct from the two other deferred/result mechanisms:
 7.2.3. Callable Descriptor Argument Consumption and Partial Binding
 
 When a receiver/function parameter is declared with a callable descriptor, the
-argument descriptor must implement that requirement by the ordinary
-first-level-name rule. A visible executable binding in that position is consumed
+argument is admitted by `implements(argument, that descriptor, the callee body)`
+from section 2.1. A visible executable binding in that position is consumed
 as a value; it is not invoked merely because the function receiver consumes
 arguments. If the body later calls that value, the call receiver checks whether
 the requested call can be consumed and reports an error if it cannot.
@@ -4964,8 +4993,8 @@ Example:
 
     callSource(five)
 
-The descriptor of `five` implements `IntSource`, so the consumer receives the
-value bound as `five`. The call happens only inside `callSource`, where
+`implements(five, IntSource, the body of callSource)` holds, so the consumer
+receives the value bound as `five`. The call happens only inside `callSource`, where
 `source()` is explicitly consumed as a zero-argument call.
 
 If a compact call appears in a callable-descriptor argument position, the active
@@ -4989,8 +5018,9 @@ materialization, not an extension of `implements`. The descriptor receiver head
     callAdd(addBase(4))
 
 Here `addBase(4)` is not executed at the argument site. The argument site binds
-`base = 4` and produces a residual callable whose descriptor implements `AddX`;
-later `callAdd` calls that residual callable with `value = 3`.
+`base = 4` and produces a residual callable admitted by
+`implements(residual, AddX, the body of callAdd)`; later `callAdd` calls that
+residual callable with `value = 3`.
 
 Normatively, `callable: AddX ...` explicitly binds a callable descriptor whose
 fields may be represented conceptually as:
@@ -5119,7 +5149,7 @@ argument is executed, passed as a value, followed through a no-argument return
 chain, or lowered into a residual callable. If the selected receiver cannot
 construct or consume the requested callable value, it reports an error instead
 of silently invoking another function. That receiver error does not add
-signature comparison to `implements`.
+signature comparison to `implements(A, B, C)`.
 
 7.3. Subroutine Definition Form
 
@@ -5178,22 +5208,20 @@ consumer may use a private provisional self-binding while constructing a
 recursive descriptor or executable; that provisional binding is discarded on
 failure. The consumer then applies the same structural predicate as:
 
-    implements(OldType, NewType)
+    implements(NewType, OldType, C)
 
-`OldType` is the candidate and `NewType` is the requirement. Therefore every
-first-level name exposed by `NewType` must already be exposed by `OldType`:
-
-    Names(NewType) subset-of Names(OldType)
-
-The comparison is directional. A redeclaration may retain or remove exposed
-names, but it may not introduce a first-level name that the preceding occurrence
-does not expose. The reverse comparison is neither performed nor implied.
+`NewType` is A, `OldType` is B, and `C` is the remaining known source tree that
+still sees the name. Every path of `OldType` that `C` uses must be present on
+`NewType`. Unused names of `OldType` need not appear on `NewType`. Extra names
+on `NewType` are irrelevant. The comparison is directional and consumer-relative.
+The reverse comparison is neither performed nor implied.
 
 A false result or a missing/malformed descriptor rejects the redeclaration and
-leaves the namespace unchanged. This rule is not evaluated as
-`implements(Name, Name)`: ordinary lookup would resolve both operands to the
-same occurrence. The consumer compares the captured old descriptor and the
-pending new descriptor directly.
+leaves the namespace unchanged. This rule is not evaluated as a two-argument
+`implements` and is not evaluated as `implements(Name, Name, C)` through ordinary
+lookup: lookup would resolve both name operands to the same occurrence. The
+consumer compares the captured old descriptor, the pending new descriptor and
+the remaining known uses of the name.
 
 On success, the new binding occurrence is appended to the namespace state and
 ordinary lookup at following source points selects it. The preceding occurrence
@@ -5290,10 +5318,12 @@ call/receiver consumption, it uses the same namespace rule as declaration:
 
 The consumer captures the descriptor of the visible `i` occurrence as the old
 descriptor, obtains the descriptor of `otherCallable` as the pending new
-descriptor, and applies `implements(old, new)`. On success it appends a new `i`
-occurrence; on failure the namespace is unchanged. The value may be callable or
-non-callable—the compatibility predicate examines only first-level names. Source
-semantics does not require separate function-pointer or assignment syntax.
+descriptor, and applies `implements(new, old, C)` with `C` the remaining known
+source that still sees `i`. On success it appends a new `i` occurrence; on
+failure the namespace is unchanged. The value may be callable or non-callable—
+the compatibility predicate examines used name paths in `C`, not a second
+callable-signature rule. Source semantics does not require separate
+function-pointer or assignment syntax.
 
 An update whose head is an addressable field/index location instead mutates that
 selected storage location according to its receiver. It is not a plain-name
@@ -5308,7 +5338,7 @@ an operator method or receiver may lower a read of `i` to a zero-argument call
 The structural core has no second callable-signature compatibility rule. A
 selected call receiver still validates whether its argument Structure can be
 consumed by the resolved value, but that validation is ordinary execution and
-does not alter `implements` or the plain-name rebind rule.
+does not alter `implements(A, B, C)` or the plain-name rebind rule.
 
 7.3.3. Nested `fn` and `sub` Definitions
 
@@ -5329,8 +5359,8 @@ A nested `fn` or `sub` may not escape its defining scope unless a later closure/
 
 Because names are shared across types, variables, models and executables, a
 nested definition of an already visible exact name is a redeclaration. The
-following is valid only if the descriptor of the preceding `helper` implements
-the descriptor of the pending function according to section 7.3.1; otherwise it
+following is valid only if `implements(pending helper, preceding helper, the
+remaining body of outer)` holds according to section 7.3.1; otherwise it
 is rejected without changing the namespace:
 
 fn: outer () (int)
@@ -5577,11 +5607,11 @@ The core return forms are:
 Inside an executable body, `return` exits the current executable body.
 
 For an `fn`, the core profile requires a value-bearing return form. `return:
-value` evaluates or consumes one logical value whose namespace descriptor must
-implement the declared return descriptor by section 2.1, then exits the current
-executable body. If the function return model is aggregate-valued, `value`
-denotes one StructureReference or ArrayReference admitted by that same
-first-level-name predicate. Whitespace-separated short-tail fields admitted by
+value` evaluates or consumes one logical value admitted by
+`implements(value, the declared return descriptor, the return consumers)` by
+section 2.1, then exits the current executable body. If the function return
+model is aggregate-valued, `value` denotes one StructureReference or
+ArrayReference admitted by that same predicate. Whitespace-separated short-tail fields admitted by
 an `fm` receiver populate its already existing return Structure before the
 control exit; they do not create an aggregate value or allocate a Structure in
 the `return` operation.
@@ -5747,7 +5777,8 @@ copy the return Structure.
 An `fm` return-description Structure with several fields defines one arena-owned
 return Structure. Updating its declared fields and returning an existing
 Structure reference are source-semantically equivalent when the produced
-Structure's descriptor implements the declared return descriptor.
+Structure is admitted by `implements(that Structure, the declared return
+descriptor, the return consumers)`.
 
 Example positional structural return:
 
@@ -5769,7 +5800,8 @@ The current function name is not a special return target. It is an ordinary name
 
 If an execution profile exposes a local result binding with the same visible
 name as the function, the ordinary head/update form may rebind that name when
-the old result descriptor implements the descriptor of the pending value:
+`implements(pending value, old result, the remaining body that still sees
+that result name)` holds:
 
 fn: square (int(x)) (int)
     square: x * x
@@ -5813,8 +5845,9 @@ receiver signature admits it. The field types themselves do not define the
 explicit return Structure.
 
 For a Structure or Array result, `return: expression` forwards the exact
-reference produced by `expression` after its descriptor implements the declared
-return descriptor. Return lowering must not
+reference produced by `expression` after
+`implements(expression, the declared return descriptor, the return consumers)`
+holds. Return lowering must not
 allocate, clone, copy, materialize or promote the referenced object, and it must
 not change its address or identity. The local binding that contains the
 reference may cease to exist; the referenced object belongs to its arena, not
@@ -5955,7 +5988,8 @@ Conceptual meaning:
 The token after the type constructor is not evaluated as an existing value. It
 is the raw name proposed by the declaration. If the exact name is already
 visible, the form is a redeclaration governed by
-`implements(OldType, NewType)` as specified in section 7.3.1.
+`implements(NewType, OldType, C)` as specified in section 7.3.1, with `C` the
+remaining known source that still sees the name.
 
 9.1.1. Nested Descriptor and Constructor Forms
 
@@ -6031,7 +6065,7 @@ or:
 
 is meaningful only if `int` or `PlantBed` resolves in the active namespace as a
 primitive constructor or as a binding that the active profile exposes as a
-Structure constructor. Merely exposing first-level names for `implements`, or
+Structure constructor. Merely exposing names for `implements(A, B, C)`, or
 supplying backend layout information, does not by itself make a binding a
 constructor. `PlantBed: bed` materializes a `PlantBed` Structure in the selected
 arena and explicitly introduces only the binding `bed`; it does not declare or
@@ -6244,8 +6278,9 @@ The implementation of `@ⁿ` may be represented by reserved operator descriptors
 Address-depth projection composes with the base type category. A primitive base
 type starts at address depth 0. External scalar L1 base types imported by a
 projection profile, such as `size_t` in the hosted C99 profile, also start at
-address depth 0. This remains true when a primitive exposes first-level names
-and a physical aggregate spelling: those names participate in `implements`, but
+address depth 0. This remains true when a primitive exposes names
+and a physical aggregate spelling: those names participate in
+`implements(A, B, C)` when a consumer uses them, but
 do not turn the primitive value into a reference. A Structure/opaque-reference descriptor denotes a source-level reference
 by its bare name and therefore starts at address depth 1 in an ANSI C pointer
 projection. This includes ordinary Lingvamyxa descriptors such as `User`
@@ -6708,7 +6743,8 @@ a new field occurrence.
 
 When a plain name such as `a` resolves as value rebinding, the old visible
 descriptor and the pending value descriptor are checked with
-`implements(old, new)`. Success appends a new binding occurrence named `a` and
+`implements(new, old, C)`, where `C` is the remaining known source that still
+sees `a`. Success appends a new binding occurrence named `a` and
 makes it the result of ordinary lookup; failure changes nothing. This is not an
 in-place mutation of the preceding namespace occurrence.
 
@@ -6749,8 +6785,9 @@ may refine storage mutation without replacing those rules.
 A function return value is one logical source-level value: Primitive,
 StructureReference or ArrayReference. A structural value is an arena-owned
 reference. If the return is an `fm` Structure, updating the fields of its existing
-return Structure and returning one Structure reference whose descriptor
-implements the declared return descriptor are source-semantically equivalent.
+return Structure and returning one Structure reference admitted by
+`implements(that reference, the declared return descriptor, the return
+consumers)` are source-semantically equivalent.
 
 A function may return a Structure with ordered and/or semantic named fields.
 
@@ -7595,7 +7632,7 @@ Semantic outline:
     c.union                    registered L2 physical-layout receiver; generic union is not registered
     c.array                    registered L2 raw C-array storage receiver; ordinary [] constructs an ArrayReference
     method/requires.method     legacy bootstrap Tables; not normative implements input
-    implements                 namespace-only structural compatibility receiver; translated or interpreted with the same predicate
+    implements                 implements(A, B, C) consumer-relative structural compatibility receiver; translated or interpreted with the same predicate
     message/operation          ordinary Structures/descriptors in L2/L3; no current generic receiver heads
 
 
@@ -7855,15 +7892,16 @@ explicitly below.
         Table rows/cells are never imported as names.
 
     18. cast / implements
-        `implements(CandidateName, RequiredName)` is IMPLEMENTED by the hosted
-        translator for the minimal namespace-only predicate. Translation and
-        interpretation use the same source-semantic algorithm: resolve both
-        names in the namespace at the source point, read the descriptors carried
-        by those bindings, and check that every first-level name exposed by the
-        requirement is exposed by the candidate. Unresolved names or bindings
+        The language form is `implements(A, B, C)` as specified in section
+        19.21.3. The hosted translator currently still evaluates a two-name
+        first-level subset internally as a migration gap; that is not a source
+        receiver and must not be written as `implements(A, B)`. Translation and
+        interpretation use the same source-semantic algorithm once `C` is
+        supplied: resolve `A` and `B`, walk `C` for syntactic paths of `B`, and
+        admit `A` when every such path is present. Unresolved names or bindings
         with missing/malformed descriptors are diagnostics; field
-        values, nested contents, `requires.method`, `method`, ordinary rows and
-        `default` are not consulted.
+        values, unused nested contents, `requires.method`, `method`, ordinary
+        rows and `default` are not consulted.
         See section 19.21.3.
         `cast:` is REGISTERED ONLY for high-level conversion semantics: its
         current emitter lowers directly to a target-language C cast. Proposed:
@@ -7926,8 +7964,9 @@ explicitly below.
 
     24. entry / provides / satisfies / conflict
         ordinary descriptor/data fields, not registered receivers. A program may
-        cache `provides`/`satisfies` results in a Table, but `implements` computes
-        compatibility from namespace descriptors. Namespace conflicts and Table
+        cache `provides`/`satisfies` results in a Table, but `implements(A, B, C)`
+        computes compatibility from namespace descriptors and the consumer `C`.
+        Namespace conflicts and Table
         merge conflicts remain distinct.
 
     25. procedural / object / functional / logical
@@ -8121,7 +8160,7 @@ profile family is already a core receiver.
                            include, define, ifndef-default, os, ifdef, guard,
                            extern_c, c.struct, c.union, c.enum, c.array
     expression receivers:  cast: TargetDescriptor expression
-                           implements(CandidateName, RequiredName)
+                           implements(A, B, C)
     modifier/trailers:     external; end, until
     prelude atom consumers:
                            include, define, os, ifdef, fn, layout, constant,
@@ -8165,7 +8204,7 @@ part of its initial namespace and backend configuration:
     class / class.kind / class.present
         legacy classification data; not core class semantics;
     method / requires.method
-        legacy data relations; the current `implements` receiver does not read
+        legacy data relations; the `implements` receiver does not read
         them;
     namespace / receiver.*
         legacy input used to build explicit receiver bindings;
@@ -8427,8 +8466,9 @@ Treat all range policies as ordinary receiver Structures consumed by `for`.
 
 19.6. `each`
 
-`each` iterates over a container or a Structure whose descriptor implements the
-iterator requirement exposed by the resolved `each` receiver.
+`each` iterates over a container or a Structure admitted by
+`implements(source, the iterator requirement, the each body)` for the
+requirement exposed by the resolved `each` receiver.
 
 Array-like example:
 
@@ -8452,7 +8492,7 @@ Semantic requirement:
 
 For arrays or array-like containers, `each` may lower to an index loop.
 
-After that first-level-name check, the `each` receiver separately consumes the
+After that used-path check, the `each` receiver separately consumes the
 iterator's `next(env)` operation until no value is produced. Failure to consume
 that call is an ordinary receiver error, not another compatibility relation.
 
@@ -8462,8 +8502,8 @@ In the source form:
 
 the `source` field is consumed by the `each` receiver as an iteration source. If
 `source` resolves to a container, `each` iterates over that container. If its
-descriptor implements the iterator requirement, `each` consumes the Structure
-as iterator data. If `source` resolves to a visible zero-argument iterator
+`implements(source, the iterator requirement, the each body)` holds, `each`
+consumes the Structure as iterator data. If `source` resolves to a visible zero-argument iterator
 function, `each` may consume the callable binding by creating its iterator
 state, equivalent to the explicit compact form `source()`.
 
@@ -8486,7 +8526,8 @@ Runtime forms inside an executable body:
     return: value
 
 For an `fn`, `return: value` consumes a Primitive, StructureReference or
-ArrayReference whose descriptor implements the declared return descriptor and
+ArrayReference admitted by `implements(value, the declared return descriptor,
+the return consumers)` and
 exits. For a Structure or Array result it forwards the exact reference under
 section 8.8. A bare `return` is not a valid `fn` return in the core profile.
 
@@ -8868,19 +8909,22 @@ values resolved in the active lexical namespace view by the active L3/profile
 receiver set. For example, `Text` or `Point` must be visible descriptor names if
 they are used in `iterator(Text)` or `iterator(Point)`.
 
-Calling a function whose return descriptor implements the iterator requirement
+Calling a function admitted by `implements(that function, the iterator
+requirement, the each/next consumers)` as an iterator source
 does not execute its body to completion. It creates an iterator state Structure.
 
 The translator lowers the iterator body into a `next(env)` implementation.
 
 Each `yield` consumes one produced value. It inspects the current function's return descriptor, verifies that the descriptor defines a yield-protocol, checks the produced value against that protocol, emits one value from `next(env)` and records the resume state in `env`.
 
-The `each` receiver consumes Structures whose descriptors implement its iterator
-requirement by repeatedly calling their `next(env)` implementation until no
+The `each` receiver consumes Structures admitted by
+`implements(source, its iterator requirement, the each body)` by repeatedly
+calling their `next(env)` implementation until no
 value is produced.
 
 This is the standard lazy-production protocol for sequences. A call to an
-function whose return descriptor implements the iterator requirement creates a
+function admitted as an iterator source by `implements(that function, the
+iterator requirement, the each/next consumers)` creates a
 resumable state Structure; it does not
 force every later produced value immediately. One consumer step asks for one
 value, `next(env)` runs until the next `yield` or termination, then the state is
@@ -9110,9 +9154,10 @@ For the `iterator(T)` profile, the canonical source form is:
     yield: value
 
 The current `fn` return descriptor, such as `iterator(T)`, tells `yield` which
-yield-protocol is active. The `yield` tail is the produced value. The value's
-descriptor must implement `T`; any additional iterator operation checks are
-ordinary `yield` receiver validation rather than another compatibility system.
+yield-protocol is active. The `yield` tail is the produced value.
+`implements(value, T, the yield/next consumers)` must hold; any additional
+iterator operation checks are ordinary `yield` receiver validation rather than
+another compatibility system.
 
 There is no hidden flattening. If `value` itself has an iterator type, then `yield: value` yields that iterator value as the produced value when the active protocol admits it. Flattening or forwarding another iterator requires a separate receiver such as `yieldFrom`.
 
@@ -9259,7 +9304,8 @@ Semantic form:
 
 Each part is consumed in a Structure-producing context. A part may be a visible
 Structure/descriptor binding, a bounded or vertical Structure literal, or a
-call/receiver result whose declared result descriptor implements `Structure`. If a
+call/receiver result admitted by `implements(that result, Structure, the merge
+consumers)`. If a
 named Frame in the argument stream is not resolved as a callable receiver in the
 active namespace, a tolerant structural profile may keep that Frame as an
 ordinary named field of the merge result.
@@ -9383,7 +9429,8 @@ table-producing sources:
 The bounded first argument is the ordered source-table list. Each source item is
 consumed in a table-producing context: it may name a table value visible in the
 active namespace, be a table literal/fragment, or be a receiver/call whose
-declared result descriptor implements the table descriptor. The second
+declared result is admitted by `implements(that result, the table descriptor,
+the join consumers)`. The second
 argument is the target table name. The `join` receiver normalizes that
 argument as its `name`, so the canonical explicit close is `end: targetName`;
 `end: join` remains the admitted receiver/head close alternative.
@@ -9504,8 +9551,9 @@ descriptor, or resolving an expression never inserts or queries such a key
 implicitly.
 
 Language-level structural compatibility is instead defined by descriptors
-explicitly bound in the current namespace. In particular, `implements` does not
-consult the tables described in this section; see section 19.21.3.
+explicitly bound in the current namespace and by the consumer `C`. In
+particular, `implements(A, B, C)` does not consult the tables described in this
+section; see section 19.21.3.
 
 19.18.2. Relation Tables and Explicit Import/Overlay
 
@@ -10023,7 +10071,7 @@ descriptor rows are:
         Duplicate, override, replace, prefer, reject or profile-defined conflict
         handling inside the explicit Table/operation consumed by this descriptor.
         It does not govern lexical namespace redeclaration and cannot bypass
-        `implements(old, new)`.
+        `implements(new, old, C)`.
 
     diagnostic policy
         Diagnostic code, severity and message produced for missing, rejected,
@@ -10591,9 +10639,10 @@ The normative operation is:
        This descriptor belongs to the pending `result` binding; no additional
        namespace name is invented for it.
     3. If an exact `result` name is already visible, apply the ordinary
-       `implements(old, new)` admission rule of section 7.3.1 to the visible
-       descriptor and the complete pending descriptor. On failure, publish
-       nothing and do not replace the visible occurrence.
+       `implements(new, old, C)` admission rule of section 7.3.1 to the visible
+       descriptor, the complete pending descriptor and the remaining known
+       uses of the name. On failure, publish nothing and do not replace the
+       visible occurrence.
     4. Allocate one Structure referent in the selected current arena.
     5. Initialize its field slots in logical source order.
     6. Publish one StructureReference occurrence named `result`, with the
@@ -10604,7 +10653,7 @@ A visible result name is a redeclaration, not an in-place overwrite. The
 constructor creates no hidden class name, synthetic type entity, constructor
 binding or second descriptor binding. In particular, the result name does not
 become a reusable constructor merely because its binding carries the descriptor
-needed for field-follow, `implements`, argument checking and return checking.
+needed for field-follow, `implements(A, B, C)`, argument checking and return checking.
 
 Explicit field initializers are evaluated once in source order. An omitted
 initializer uses the initialization rule of the selected field descriptor and
@@ -10616,8 +10665,8 @@ instance defaults.
 Field order and repeated exact field names are preserved. In the example above,
 `result\[0]count` denotes the first `count`, `result\[1]count` denotes the
 second, and unqualified `result\count` denotes the newest, second occurrence.
-Repeated names contribute only one exposed name to the name-only `implements`
-predicate, as specified in sections 2.1 and 19.21.3.
+Repeated names contribute only one name along a used path of the
+`implements(A, B, C)` predicate, as specified in sections 2.1 and 19.21.3.
 
 A field initializer may be an existing StructureReference or ArrayReference
 whose binding descriptor is admitted for that field. The exact reference is
@@ -10641,8 +10690,8 @@ The empty form is present and meaningful:
     (): empty
 
 It allocates a distinct arena-owned empty Structure, publishes a binding with a
-present empty descriptor and therefore satisfies every requirement whose
-first-level name set is empty. It is not a null reference, missing value or
+present empty descriptor and therefore satisfies every consumer whose
+`uses(C, B)` is empty. It is not a null reference, missing value or
 descriptor declaration.
 
 Construction publishes no Registry or Table rows. The only namespace change is
@@ -10669,13 +10718,14 @@ diagnose either case before emitting a C typedef, allocation or initializer; it
 must not discard the shape and lower the initializer as a scalar or raw C
 address. Support remains pending dedicated ArrayReference-field projection.
 
-Name-only compatibility also does not imply that two hosted C layouts are
-interchangeable. Source-semantically, an anonymous StructureReference whose
-descriptor implements a named requirement may be supplied as that function
-argument, used in an admitted plain-name rebind, or returned under that named
-descriptor. Those operations retain the exact StructureReference and apply the
-ordinary `implements` predicate; they do not require equal field types, field
-order or backend struct tags.
+Used-path compatibility also does not imply that two hosted C layouts are
+interchangeable. Source-semantically, an anonymous StructureReference admitted
+by `implements(that reference, a named requirement, the argument/rebind/return
+consumer)` may be supplied as that function argument, used in an admitted
+plain-name rebind, or returned under that named descriptor. Those operations
+retain the exact StructureReference and apply the ordinary `implements(A, B, C)`
+predicate; they do not require equal field types, field order or backend struct
+tags.
 
 The current hosted C projection cannot yet realize those cross-layout cases.
 An anonymous construction currently has a private per-site projected C struct,
@@ -10686,7 +10736,7 @@ and named Structure projections, in either direction, before emitting the
 argument, field initializer, assignment/rebind or return. It must not rely on
 an implicit C pointer conversion, an unchecked cast, coincidentally equal
 member offsets or common-prefix layout. This is only a hosted backend
-limitation; it does not add layout comparison to `implements` and does not
+limitation; it does not add layout comparison to `implements(A, B, C)` and does not
 change the source-semantic admission result.
 
 Source semantics also admit module/top-level construction in the selected
@@ -10700,15 +10750,15 @@ diagnoses an anonymous-construction result name that is already visible,
 including a source-semantically compatible redeclaration, until it can project
 multiple value occurrences without overwriting a target-language slot. An
 incompatible collision is independently rejected by the normative
-`implements(old, new)` rule. These are projection limitations, not additional
+`implements(new, old, C)` rule. These are projection limitations, not additional
 Value kinds or source-language lifetime rules.
 
 19.20.2. Descriptor Content and Backend Projection
 
 A structural descriptor is an ordinary StructureReference explicitly bound in
-the namespace. Its compatibility surface is the set of first-level binding
-names described by that Structure; the program chooses those names and the
-values behind them. A hosted C backend may derive a C `struct` declaration,
+the namespace. Its compatibility surface is the set of name paths that a
+consumer actually uses; the program chooses those names and the values behind
+them. A hosted C backend may derive a C `struct` declaration,
 field offsets, alignment and access code from that descriptor plus compiler
 metadata. Those C artifacts are a projection and are not registry facts or
 language-visible values unless a program explicitly asks a backend operation to
@@ -10720,17 +10770,18 @@ the descriptor itself; they are not hidden defaults for an object. Initializers
 for an instance belong to a separate construction operation that resolves the
 descriptor and allocates that instance.
 
-The minimal hosted profile obtains the `implements` surface from the normalized
-first-level field names of a namespace descriptor. View presence is distinct
-from cardinality: a present empty first-level view is authoritative and is not
-equivalent to an absent/malformed descriptor. Binding such a descriptor changes
-the namespace at that source point; it does not insert rows into any Table or
-Registry.
+The language obtains the `implements(A, B, C)` surface from the name paths of
+`B` used in `C`. The hosted bootstrap currently still materializes a first-level
+field-name view as a migration aid; that view is not the predicate. View
+presence is distinct from cardinality: a present empty used-path set is
+authoritative and is not equivalent to an absent/malformed descriptor. Binding
+such a descriptor changes the namespace at that source point; it does not insert
+rows into any Table or Registry.
 
-The presence of that first-level shape is sufficient for `implements`, but is
+The presence of names is sufficient for those used paths, but is
 not an implicit constructor binding. Primitive bindings, imported ABI/layout
 bindings and ordinary Structure constructor bindings may all expose comparable
-first-level names. A form such as `PlantBed: bed` constructs only when the
+names. A form such as `PlantBed: bed` constructs only when the
 resolved `PlantBed` binding also supplies the ordinary constructor behavior of
 the active profile. Thus adding virtual first-level names to a primitive or an
 ABI value for structural comparison does not silently make `Type: value`
@@ -10778,7 +10829,7 @@ The hosted constructor path does not yet project a second physical C value for
 a construction result whose name is already visible. It rejects that case
 before publishing the result and identifies occurrence-aware value projection
 as the missing backend facility. This is a staged backend limitation: the
-source-language admission rule remains `implements(old, new)`, and the early
+source-language admission rule remains `implements(new, old, C)`, and the early
 hosted rejection neither changes that predicate nor makes a compatible result
 rebinding invalid in the language.
 
@@ -10794,7 +10845,7 @@ A present-empty descriptor remains semantically empty. Because ISO C requires
 a complete projected aggregate to contain storage, the hosted backend emits one
 private dummy byte for that projection only. The byte is not a descriptor field,
 is not accessible through field-follow, and does not participate in
-`implements`.
+`implements(A, B, C)`.
 
 The compact hosted declaration form currently accepts typed descriptor fields
 without instance initializer values. A trailing initializer in a named-
@@ -10815,7 +10866,7 @@ profile explicitly supplies.
 
 The namespace declaration core used by either path fully constructs a pending
 descriptor, checks a captured old descriptor with the same predicate as
-`implements(old, new)`, and publishes the new occurrence only after that check
+`implements(new, old, C)`, and publishes the new occurrence only after that check
 succeeds. A failed comparison leaves the namespace unchanged. This is the
 source-semantic admission rule; a hosted target may still fail before
 publication when it cannot represent an admitted occurrence, as described
@@ -10828,7 +10879,7 @@ remain namespace state for scope restoration, but explicit source access to a
 chosen descriptor occurrence and separate target-type projection of that
 occurrence sequence are pending work. The ANSI C collision/fingerprint rules
 may consequently reject or suppress a physical layout emission that the source-
-level name-subset predicate admits; that is a documented backend limitation,
+level used-path predicate admits; that is a documented backend limitation,
 not an additional source-language compatibility rule.
 
 The current hosted translator admits and publishes a structurally identical
@@ -10983,96 +11034,113 @@ RegistryView rows during ordinary name resolution.
 
 `implements` is an expression receiver with the form:
 
-    implements(CandidateName, RequiredName)
+    implements(A, B, C)
 
-Both arguments are single namespace-name atoms, including exact quoted names
-when required by the identifier rules. Each name resolves to a binding that
+`A` and `B` are single namespace-name atoms, including exact quoted names when
+required by the identifier rules. Each of those names resolves to a binding that
 carries a descriptor. The binding may be an explicit descriptor declaration or
 an ordinary Primitive, StructureReference or ArrayReference value binding with
-its descriptor attached. `implements` reads the descriptors and does not
-evaluate, copy or otherwise consume the values. Thus an anonymous construction
-result from section 19.20.1.1 may be an operand by its result-binding name; this
-does not create a synthetic type entity for that result.
+its descriptor attached. `C` is a namespace name of a block, function, module
+body or other Structure whose P0 tree is the consumer. `implements` reads the
+descriptors of `A` and `B` and walks `C`; it does not evaluate, copy or otherwise
+consume the values of `A` and `B`. Thus an anonymous construction result from
+section 19.20.1.1 may be an operand by its result-binding name; this does not
+create a synthetic type entity for that result.
 
-A descriptor exposes a normalized set of first-level binding names. For
-example, the structural declaration:
+There is no two-argument form. A translator or interpreter that applies the
+predicate at rebind, argument or return supplies `C` itself; that is not a
+source receiver.
+
+A descriptor exposes names along paths. For example, the structural declaration:
 
     A:
         E: b
         F: c
     end: A
 
-exposes the names `b` and `c`. The constructor/type heads `E` and `F`, the
-values stored behind `b` and `c`, and nested names below them do not participate
-in the minimal comparison. Primitive descriptors expose an equivalent surface
-virtually through their namespace bindings.
+exposes the names `b` and `c`. Nested names participate only when `C` actually
+follows them. Constructor/type heads `E` and `F` do not participate. Primitive
+descriptors expose an equivalent name surface virtually through their namespace
+bindings. A Primitive leaf is admitted by category (`class.category` /
+`class.semantic`) and, when present, a range validator, not by a new primitive
+kind.
 
 The source-semantic evaluation algorithm is:
 
-    1. Resolve `CandidateName` in the active lexical namespace.
-    2. Resolve `RequiredName` in the same namespace view.
-    3. If either name is unresolved, report a diagnostic and produce no boolean
-       result.
-    4. Obtain the candidate and requirement descriptors from the bindings.
-    5. If either binding lacks the required descriptor role, report a
+    1. Resolve `A` in the active lexical namespace.
+    2. Resolve `B` in the same namespace view.
+    3. Resolve `C` to a P0 tree (block, function body, module remainder, or
+       explicit Message consumer / used-path list).
+    4. If `A` or `B` is unresolved, or `C` has no walkable tree and no explicit
+       used-path list, report a diagnostic and produce no boolean result.
+    5. Obtain the candidate descriptor from `A` and the requirement descriptor
+       from `B`. If either binding lacks the required descriptor role, report a
        diagnostic.
-    6. For every first-level name exposed by the requirement, test whether the
-       candidate exposes the same exact name.
-    7. Produce `true` when every required name is present; otherwise produce
-       `false`.
+    6. Collect `paths = uses(C, B)`: syntactic name paths of `B` in `C`
+       (field-follow / `\`, and nested access in the same C after an argument
+       whose expected descriptor is `B`). Do not count a mere declaration of
+       `B`. Do not follow aliases, callees, computed names or heap storage.
+    7. For every path, descend the candidate descriptor by those exact names.
+       A missing name produces `false`.
+    8. A Primitive leaf is admitted when the candidate leaf's category is
+       compatible with the requirement leaf's category; a range validator on
+       the requirement leaf, if any, must hold. Nested unused structure is not
+       expanded.
+    9. Produce `true` when every collected path is present (an empty path set
+       is `true`); otherwise produce `false`.
 
 Equivalently:
 
-    implements(Candidate, Required)
-        iff Names(Required) subset-of Names(Candidate)
+    implements(A, B, C)
+        iff every path in uses(C, B) is present on A
 
-Order, duplicate count, the values behind names, nested contents, signatures,
-mutability and other metadata do not affect this minimal predicate. The
-comparison does not recurse. `validate` is not a hook: if a requirement exposes
-that name, the candidate must expose the same ordinary name.
+Order, duplicate count, the values behind unused names, unused nested contents,
+signatures, mutability and other metadata do not affect this predicate.
+`validate` is not a hook: if a used path names it, the candidate must expose
+that ordinary name along the path.
 
 Name equality is not checked before namespace resolution. Consequently,
-`implements(X, X)` is an error when `X` is unresolved. When both arguments
-resolve to the same valid descriptor, the normal requirement comparison
-determines the result.
+`implements(X, X, C)` is an error when `X` is unresolved. When `A` and `B`
+resolve to the same valid descriptor, the used-path comparison still determines
+the result.
 
-An explicitly present empty first-level name set is satisfied and produces
-`true`. Absence of a descriptor or of its first-level view is not an empty
-descriptor; it is malformed/unresolved and produces a diagnostic.
+Absence of a descriptor or of its name view is not an empty consumer; it is
+malformed/unresolved and produces a diagnostic.
 
-`implements` only reads namespace state at its source point. It does not modify
-the namespace, create evidence rows, materialize a `satisfies` relation or
-register either descriptor. If a Table is used to author descriptor data, an
-explicit declaration/import must first bind the converted descriptor.
+`implements` only reads namespace state and the consumer tree at its source
+point. It does not modify the namespace, create evidence rows, materialize a
+`satisfies` relation or register either descriptor. If a Table is used to author
+descriptor data, an explicit declaration/import must first bind the converted
+descriptor.
 
 The source-semantic result is boolean. ANSI C lowering may represent `false`
 and `true` as integer constants `0` and `1`.
 
 A translator applies this algorithm while lowering a statically known namespace
-state. An interpreter applies the same algorithm against its current namespace
-state. An operation over arbitrary descriptor or Registry values that are not
-resolved as namespace names may use another receiver, but it does not redefine
-`implements`.
+state and a known consumer tree. An interpreter applies the same algorithm
+against its current namespace state and the current consumer tree. An operation
+over arbitrary descriptor or Registry values that are not resolved as namespace
+names may use another receiver, but it does not redefine `implements`.
 
-Example normalized descriptor state:
+Example. `Equatable` exposes `equals`. `User` exposes `equals` and `hash`.
+Consumer `C` calls `item\equals`. Then `implements(User, Equatable, C)` is true
+when both descriptors were explicitly declared or imported into the active
+namespace. A different consumer that also uses `hash` as an `Equatable` path
+would demand that path of `User`.
 
-    Equatable.names -> (equals)
-    User.names      -> (equals hash)
+The hosted bootstrap currently still evaluates a two-name first-level subset
+internally as a migration gap; that is not the language form and must not be
+written as a two-argument source receiver. Field types, indices, order, pointer
+depth, constness, array shape, legacy `requires.method`, `method`, ordinary
+descriptor rows and `default` tables are not consulted. See section 21.7.
 
-Then `implements(User, Equatable)` is true when both descriptors were
-explicitly declared or imported into the active namespace.
-
-The hosted bootstrap implements this minimal namespace-descriptor algorithm.
-It compares normalized first-level structural-field names only. Field types,
-indices, order, pointer depth, constness, array shape, legacy `requires.method`,
-`method`, ordinary descriptor rows and `default` tables are not consulted.
-
-Compatible redeclaration uses this same predicate over two descriptor values,
-but it does not perform the name-based expression
-`implements(Name, Name)`. The declaration consumer captures the old descriptor,
-fully constructs the pending new descriptor without publishing it, evaluates
-the descriptor predicate in the direction `implements(old, new)`, and publishes
-the new binding occurrence only when the result is true.
+Compatible redeclaration uses this same predicate over two descriptor values
+and a remaining consumer, but it does not perform the name-based expression
+`implements(Name, Name, C)` through ordinary lookup. The declaration consumer
+captures the old descriptor, fully constructs the pending new descriptor without
+publishing it, evaluates `implements(new, old, C)` with `C` the remaining known
+source that still sees the name, and publishes the new binding occurrence only
+when the result is true.
 
 19.21.4. Generic Operations
 
@@ -11177,14 +11245,15 @@ program may cache compatibility results in a Table:
 
 The concrete descriptor exposes representation and primitive operations.
 External roles/contracts are explicit views over those operations. Structural
-compatibility is computed by `implements` from namespace descriptors; a stored
+compatibility is computed by `implements(A, B, C)` from namespace descriptors
+and consumer `C`; a stored
 `satisfies` row is only cached application data.
 
 19.23.3. Conflicts
 
 Namespace declaration/import conflicts and ordinary Table merge conflicts are
 distinct. A same-name declaration/import becomes the newest visible occurrence
-only after the common `implements(old, new)` check succeeds. A false result or a
+only after the common `implements(new, old, C)` check succeeds. A false result or a
 missing/malformed descriptor is a diagnostic and changes nothing. Ordinary
 Table merge remains ordinary data processing and does not acquire this
 namespace rule merely because a Table also permits repeated keys.
@@ -14871,8 +14940,8 @@ This integrated model reduces to these rules:
     construction side effects = no class/layout/field/backend rows and no
                   namespace change except an explicit result binding;
     descriptor = ordinary StructureReference explicitly bound in namespace;
-    compatibility / implements = first-level-name subset comparison of
-                  namespace-visible descriptors;
+    compatibility / implements = implements(A, B, C): A covers the paths of B
+                  used in consumer C;
     table / Registry / RegistryView = optional ordinary values composed from
                   Structures and Arrays;
     table name / key / row / cell = data, never an implicit namespace binding;
@@ -15232,7 +15301,8 @@ That descriptor is an ordinary Structure. A Table may store descriptor-like
 data, but table names and rows do not implicitly introduce descriptors, fields
 or namespace bindings.
 
-Type checking and `implements` read namespace-visible descriptors. Backend
+Type checking and `implements(A, B, C)` read namespace-visible descriptors and
+the consumer tree. Backend
 layout projection consumes an already resolved descriptor and may choose C
 structs, pointers, handles, universal records or accessors without changing
 source semantics.
@@ -15392,7 +15462,8 @@ as alternative implementations of a structurally admitted interface: the same
 function or Structure name may appear in several
 `win`/`mac`/`unix`/`default` branches. Each
 same-name occurrence must pass the common directional
-`implements(old, new)` check before it is imported. Branch declarations are
+`implements(new, old, C)` check before it is imported, with `C` the remaining
+known source that still sees the name. Branch declarations are
 considered in source order, so that order determines which descriptor is `old`
 and which pending descriptor is `new`. After such an import, later L2 code
 resolves the newest admitted occurrence normally:
@@ -15612,7 +15683,7 @@ Examples:
     tree\branch: branch
     leafs[3]: 10
 
-After resolution, a plain-name form applies `implements(old, new)` and appends
+After resolution, a plain-name form applies `implements(new, old, C)` and appends
 the admitted binding occurrence; an addressable field/index form mutates the
 selected storage location; and a function/subroutine/receiver form is consumed
 as a call. A backend may reuse physical storage for the first case only when
@@ -15757,7 +15828,8 @@ Value runtime form inside a body:
     return: value
 
 For an `fn`, `return: value` consumes a Primitive, StructureReference or
-ArrayReference whose descriptor implements the declared return descriptor and
+ArrayReference admitted by `implements(value, the declared return descriptor,
+the return consumers)` and
 exits. For a Structure or Array result it forwards the exact reference under
 sections 8.8 and 19.29.5. A bare `return` is not a valid `fn` return in the core
 profile.
@@ -15898,7 +15970,7 @@ newest still-active occurrence.
 The rule is shared lexical lookup, not global lookup. A view may be local to an
 executable definition, block, receiver context, module, service, explicit
 namespace import or runtime profile. Names in the visible chain share lookup and
-the same `implements(old, new)` admission rule, but the language does not define
+the same `implements(new, old, C)` admission rule, but the language does not define
 one global dictionary for all programs and services.
 
 Inside one active lexical namespace view, Lingvamyxa does not use separate
@@ -15919,8 +15991,8 @@ The local view may be implemented as a persistent overlay, copy-on-write map,
 statically resolved lexical environment or another representation preserving
 the same behavior. No runtime namespace object is required.
 
-A plain-name rebind inside an executable body applies `implements(old, new)` and
-appends the admitted occurrence to the local namespace view. It does not mutate
+A plain-name rebind inside an executable body applies `implements(new, old, C)`
+and appends the admitted occurrence to the local namespace view. It does not mutate
 the preceding or outer occurrence. Updating an addressable field/index location
 is instead storage mutation and does not append a namespace occurrence.
 
@@ -15932,14 +16004,15 @@ the externally visible descriptor of the executable definition.
 Local redeclaration and plain-name rebinding use exactly the same rule as every
 other namespace redeclaration:
 
-    implements(OldType, NewType)
+    implements(NewType, OldType, C)
 
-The first-level names of `NewType` must be a subset of the first-level names of
-`OldType`. There is no additional callable-signature, variance, mutability,
-effect, ownership or conversion algorithm in the language core. If an
-application wants to validate any such property, it represents that validation
-as ordinary data and code. A first-level name such as `validate` participates
-in `implements` only as a required name.
+`C` is the remaining known source that still sees the name. Every path of
+`OldType` that `C` uses must be present on `NewType`. There is no additional
+callable-signature, variance, mutability, effect, ownership or conversion
+algorithm in the language core. If an application wants to validate any such
+property, it represents that validation as ordinary data and code. A name such
+as `validate` participates in `implements(A, B, C)` only when `C` uses that
+path.
 
 The old descriptor is captured before the pending local occurrence is visible.
 On success the new occurrence becomes the result of ordinary lookup; on failure
@@ -15967,8 +16040,8 @@ return: strategy(x)
 
 Here `strategy` is explicitly introduced as a local binding whose initial value
 is reached as `slow path`. Rebinding it to the value reached as `fast path` is
-valid only when the captured old descriptor implements the pending new
-descriptor by first-level name. The later call `strategy(x)` is separately
+valid only when `implements(fast path, slow path, the remaining body that still
+sees strategy)` holds. The later call `strategy(x)` is separately
 validated by the resolved call consumer.
 
 This operation does not replace `slow path`, `fast path`, `compute`, or any outer namespace binding. It only changes the local namespace view used inside the current executable body.
@@ -15976,22 +16049,23 @@ This operation does not replace `slow path`, `fast path`, `compute`, or any oute
 21.5. Directional Structural Redeclaration
 
 Redeclaration is neither unrestricted replacement nor nominal type equality. It
-is the one directional first-level-name check from section 7.3.1.
+is the one directional used-path check from section 7.3.1:
+`implements(new, old, C)` with `C` the remaining known uses of the name.
 
 Therefore:
 
     int: x 1
     x: "hello"
 
-is invalid when the descriptor of the old `x` occurrence does not implement the
-descriptor proposed by the new occurrence.
+is invalid when the pending text value cannot be used as the old `x` in the
+remaining known uses of that name.
 
 And:
 
     factorial: "hello"
 
-is invalid when the old `factorial` descriptor does not expose every first-level
-name exposed by the pending text descriptor. The fact that one value is
+is invalid when remaining uses of `factorial` still require paths that the
+pending text descriptor does not provide. The fact that one value is
 callable is not checked by a second hidden compatibility system.
 
 21.6. Interaction with Return and Function Names
@@ -16019,7 +16093,7 @@ A translator may optimize local namespace operations by:
     rejecting or de-optimizing cases that escape the local namespace view beyond the executable lifetime
 
 The source rule is structural: local declarations and plain-name rebinds append
-namespace occurrences only after `implements(old, new)` succeeds when an older
+namespace occurrences only after `implements(new, old, C)` succeeds when an older
 exact-name occurrence is visible. No particular runtime namespace
 representation is required.
 
@@ -16038,7 +16112,7 @@ descriptor object and therefore rejects passing the exact descriptor pointer
 already owned by the preceding occurrence. That is an implementation memory-
 ownership guard, not an additional source compatibility rule. A general rebind
 of the same StructureReference remains admissible because
-`implements(old, new)` compares its first-level names; its lowering must retain,
+`implements(new, old, C)` compares used name paths; its lowering must retain,
 clone or reference-count the value instead of creating two raw owners.
 
 ?
