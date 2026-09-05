@@ -1,0 +1,170 @@
+L2:
+    table:
+        source
+        name: HelloConfig
+        columns: (class: class) (class: field_type) (class: owner) (char: default)
+        rows:
+                 greeting  Text  owned  "Hello World"
+                 maxI      int   value  3
+                 maxJ      int   value  3
+    end: HelloConfig
+
+    table:
+        source
+        name: HelloConfig_rules
+        columns: (class: class) (char: condition)
+        rows:
+                 positiveBounds  "maxI > 0 && maxJ > 0"
+    end: HelloConfig_rules
+
+    table:
+        source
+        name: entryPoint
+        columns: (class: class) (Symbol: implementation)
+        rows:
+                 app  helloMain
+    end: entryPoint
+end: L2
+
+L5:
+    behavior: HelloConfig
+        message: run helloMain
+    ---
+
+    fact: model HelloConfig
+    fact: message HelloConfig run helloMain
+    fact: entryPoint app helloMain
+
+    target:
+        app
+        kind: executable
+        sources: ("src/hello_world.lm3")
+        entry: helloMain
+        output: "build/bin/hello_world.lm0.exe"
+    ---
+
+    build: app
+end: L5
+
+L3:
+    fn: words () iterator(Text)
+        yield: "Hello"
+        yield: "World"
+    end: words
+
+    fn: checkedGreeting (HelloConfig(cfg)) (Text)
+        throws:
+            EmptyGreeting
+        ---
+
+        guard: cfg\greeting\len > 0
+            fail: EmptyGreeting cfg\greeting
+        ---
+
+        return: cfg\greeting
+    end: checkedGreeting
+
+    sub: helloMain
+        HelloConfig: cfg
+            greeting: "Hello World"
+            maxI: 3
+            maxJ: 3
+        ---
+
+        HelloConfig: emptyCfg
+            greeting: ""
+            maxI: 1
+            maxJ: 1
+        ---
+
+        handler: EmptyGreeting
+            Text: badText
+            System\out\println: ("handled EmptyGreeting: " + badText)
+        ---
+
+        finally:
+            System\out\println: "--- finally helloMain ---"
+        ---
+
+        assert: cfg\maxI = 3
+        assert: cfg\maxJ = 3
+
+        System\out\println: checkedGreeting(cfg)
+        System\out\println: checkedGreeting(emptyCfg)
+
+        each: word in words
+            match: word
+                ---
+                    "Hello"
+                    System\out\println: "match: Hello"
+                ---
+                    default
+                    System\out\println: ("match default: " + word)
+                ---
+            end: match
+        end: each
+
+        int: k 0
+
+        while: k < 5
+            k: k + 1
+
+            if: k = 2
+                continue
+            ---
+
+            if: k > 3
+                break
+            ---
+
+            System\out\println: ("while k: " + k)
+        end: while
+
+        int: redoFlag 0
+
+        while: redoFlag < 2
+            redoFlag: redoFlag + 1
+
+            if: redoFlag = 1
+                redo
+            ---
+
+            System\out\println: "redo executed once"
+            break
+        end: while
+
+        untilDemo:
+            System\out\println: "until body executes before condition"
+        until: true
+
+        int: attempt 0
+
+        loadAttempt:
+            retryable:
+                finally: System\out\println: "--- cleanup attempt ---"
+
+                attempt: attempt + 1
+
+                if: attempt < 2
+                    System\out\println: "--- retry loadAttempt ---"
+                    retry: loadAttempt
+                ---
+
+                System\out\println: ("retryable attempt: " + attempt)
+            ---
+        end: loadAttempt
+
+        outerLoop:
+            for: int(i, 1) (i <= cfg\maxI) i++
+                for: int(j, 1) (j <= cfg\maxJ) j++
+                    if: i = 2 && j = 2
+                        System\out\println: "--- continue outerLoop ---"
+                        continue: outerLoop
+                    ---
+
+                    System\out\println: ("i: " + i + ", j: " + j)
+        end: outerLoop
+
+        System\out\println: "Done."
+    end: helloMain
+end: L3
