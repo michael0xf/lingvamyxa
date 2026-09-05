@@ -12635,9 +12635,315 @@ Default deterministic message-runtime profile:
 Atomic operations are low-level implementation operations, not a replacement for
 ordinary messages.
 
-19.28.10. ANSI C Lowering and Boundaries
+19.28.10. World Wide Mix
 
-19.28.10.1. Explicit Runtime and Worker Pool
+This section is a document and addressing model. It is not a replacement for
+the P0 parser, Mix overlay markup in section 0.0.2, or
+`implements(varA varB Consumer)` in sections 2.1 through 2.4 and 19.21.3. The
+current hosted bootstrap does not implement World Wide Mix paths, prefix locks
+or mirrors.
+
+Mix here is not only an overlay on LMX source. It is a universal document:
+a placement tree of nodes, memory cells at the leaves, and dynamic marks,
+cursors and attributes over those positions. World Wide Mix is that document
+when a node can be addressed from any device by a hierarchical path.
+
+19.28.10.1. Not the Web and Not a File
+
+The Web combines a URL, bytes and a Content-Type. Meaning appears after
+download and a separate parser (HTML, JPEG, JSON). The type lives in a header,
+not in how a consumer walks the document.
+
+A disk file is a linear byte sequence addressed by offset from the start.
+Insertion in the middle shifts every later address. Editors and networks then
+live in a different world from the file.
+
+World Wide Mix is a *placement* tree: where a node sits in the world. LMX is a
+*value* tree: which fields a Structure has and what a Consumer touches. They
+are different trees. They meet in a cell: a Mix address holds an LMX value
+(Structure, Array or Primitive). The path `3.17.4` is not `file\close`.
+`implements(varA varB Consumer)` does not number Mix siblings.
+
+Raw input before a receiver is substrate in a cell. After recognition the same
+cell may hold an LMX tree with finer leaves. The document need not already be
+a «file» or a «picture»; that is decided by the Consumer of the LMX value, not
+by the Mix address scheme.
+
+19.28.10.2. Two Trees
+
+    Mix (this section)
+        topology: siblings, realm prefix, lock, mirror, cursor;
+        edge: neighbour index, a natural number, written `3.17.4`;
+        leaf: a cell (memory or a reference to a value);
+        overlay of marks on positions of this tree, not a second parse tree.
+
+    LMX (sections 2 and 19.21.3)
+        value: Primitive | StructureReference | ArrayReference;
+        edge: field name, `file\close`, merge occurrences;
+        type: `implements(varA varB Consumer)` — the used tree of *that* value;
+        P0 source builds this tree; `{...}` places Mix marks *on* it.
+
+Analogies are allowed (thin or fat Consumer, shadowing, «if you did not touch
+it, do not require it»). Identity is not:
+
+    inserting a Mix sibling changes index `3.18`, not a Structure field;
+    merging descriptors shadows `close`, not a cell address;
+    a 33rd Mix child is a new slot at that level;
+    a 33rd LMX field is a new name occurrence in a Structure.
+
+The parser may still build both at once: a P0 Structure and a Mix anchor on
+its position. The anchor is addressed by a Mix path; fields are read as LMX.
+
+19.28.10.3. Address: a Path of Integers
+
+There is no bound on the number of levels. An address is a sequence of
+non-negative integers (ℕ₀) from the root to a cell. Path length is depth. A
+level index is any such integer, with no ceiling.
+
+A cell may be a byte, a word, a buffer or a child Structure. The index counts
+neighbours, not bytes. The written path is not LMX source grammar: numbers
+separated by dots, of different lengths because the numbers differ.
+
+    3.17.4.1023
+    0.0.5
+    3.100000
+
+The address is not tied to bytes. Whoever stores it chooses a codec: varint, a
+chain of widths matching live fan-out
+
+    5 bits -> 12 bits -> 6 bits -> 10 bits
+
+or anything else. Externally these are the same numbers. `3.17` remains
+`3.17` when a slot starts being stored in 12 bits instead of 5. Width is
+compression of an integer, not an address type.
+
+A prefix of k numbers names a subtree. A shorter address is a shallower path.
+Leading zeros in text do not count: `03.17` = `3.17`.
+
+Storage widths (5 bits, 12 bits) are not different path types. Otherwise a
+node that gained a 33rd child would change its address type.
+
+19.28.10.4. How Many Bits Storage Uses
+
+Occupancy is a property of the carrier, not of the address.
+
+    Device RAM
+        typically about 5 bits: tens of children. A compact vector of live
+        children plus, if needed, a map from path index to local slot.
+
+    Small network
+        also about 5 bits: tens of machines, not thousands of hosts per
+        level.
+
+    Disk
+        how many cells fit in a 4 KB sector or a 32 KB cluster (256 Kbit)
+        depends on cell size. With a 4-byte pointer: about 10 bits per
+        sector, about 12 per cluster. A buffer cell means fewer neighbours
+        in the same sector.
+
+A type chain on a path (`u5.u12.u6.u10`) is how that node was serialized, not
+what it is called. Mirrors of one page (section 19.28.10.11): RAM and network
+are narrow; disk is slightly wider; the number path is one.
+
+Unallocated numbers at a Mix level are simply not allocated. That is not an
+LMX unused path: Structure fields and neighbour slots are different trees.
+
+19.28.10.5. Cell, Node, Document
+
+A cell is a leaf: a memory region. Its description is an ordinary Structure
+(contract plus architecture: count/integer/opaque, range, spelling); see
+section 2.2.2. It is not a closed list of kinds such as «int, FILE, image».
+
+A node is a Structure: named or positional fields and child references. On
+disk it is on the order of a 4 KB sector or a 32 KB cluster (256 Kbit). In
+RAM and on a small network it is sparse, with tens of children.
+
+A document is a root plus a tree of nodes plus a Mix overlay on tree
+positions. It is not a filename extension. A file is one way to serialize
+node pages.
+
+A Mix position is not a byte offset. It is a dynamic address in the tree (a
+path of integers plus a cursor inside the cell when the cell is a buffer).
+Inserting or deleting a sibling changes only indices at that level, not
+«every byte after the point». Cursors therefore survive edits, as in the Mix
+design note.
+
+19.28.10.6. World-Wide Realm Prefixes
+
+World hierarchy is a path prefix, not a fixed number of slots «for the
+planet». How many levels belong to realm, volume, document or chapter is a
+profile, not an address canon.
+
+Example meaning (profile, not language):
+
+    first levels     realm / administrator / planet-service
+    next             document / volume
+    deeper           chapter, section, block, cell
+
+The first level has as many roots as were allocated. Names are not DNS: they
+are numbers. A human name, if needed, is a Mix attribute or a Structure field
+on the node, not part of the address. The address is stable; the human name
+may change.
+
+An LMX message need not carry the body. It carries a path (length plus
+indices), a capability, and which Consumer will walk. The body is read by
+cursor in chunks. Mix cursors for large bodies are already described with
+messages in section 19.19.1.2; here the address is simply hierarchical and
+world-wide, with no depth ceiling.
+
+19.28.10.7. Mix Overlay on This Tree
+
+Mix is still not a second parse tree.
+
+The same addresses hold:
+
+    active marks and intervals (colour, link, diagnostic);
+    overlapping sets;
+    cursors of several consumers;
+    locks on path prefixes (section 19.28.10.10);
+    attributes such as «still a raw buffer» or «already a File».
+
+The LMX parser still builds P0 Structures and places Mix anchors in parallel.
+World Wide Mix adds only that an anchor has a path of integers (`3.17.4`, or
+however it is stored locally) that can be sent to another device without
+«open my file at byte 12044».
+
+19.28.10.8. Type Lives in the Cell's LMX Value, Not in the Mix Address
+
+The address `3.17.4` does not type the contents. Typing happens when a
+Consumer walks the LMX value stored in that cell:
+
+    implements(varA varB Consumer)
+
+    varA       the LMX value in the cell (or what is being substituted);
+    varB       a role (File, paragraph, table, raw word);
+    Consumer   who walks *value fields*, not Mix neighbours.
+
+Strict mode: FileManager uses `file\close` and `file\read` — a fat LMX used
+tree. Relaxed mode: File consumes a primitive FILE into a `handle` field — a
+thin LMX leaf, converter selected by merge key.
+
+Until someone asks for File, a Mix cell may hold substrate (JPEG, UTF-8, a
+word). Meaning is attached by an LMX Consumer, not by the Mix path and not by
+MIME.
+
+19.28.10.9. Merge of Pages and Contracts
+
+A document node may be assembled by merging Structures: a base page plus
+audit plus local fields. Merge order is occurrence displacement (the newest
+name shadows; the older remains as `\[k]`), not in-place field replacement.
+
+The same holds for cell descriptions: `u32` is merge(cell, count/integer) plus
+range `0..2^32-1` plus spelling. `FILE` is merge(cell, opaque). On disk both
+may occupy one slot in a sector-sized page; the contracts differ.
+
+19.28.10.10. Locks
+
+A lock is not `flock` on a file and not a byte range in a linear buffer. It
+hangs on a path prefix: the subtree is locked, every longer address inside
+it.
+
+It is an ordinary Structure or Mix attribute on an interval, not a new value
+kind. An LMX message may carry a capability for a prefix; a lock says that
+this writer is changing that Mix prefix.
+
+Lock extent is what the writer changes in the Mix tree (which prefixes), not
+the LMX used tree. The only likeness to `implements` is «do not lock what you
+do not touch»:
+
+    a thin writer (move a word, read a mark)
+        readers need no lock; the writer takes a lock on the prefix it
+        actually changes, not on the whole volume;
+
+    a fat writer
+        the lock covers the Mix prefixes it writes; other fields of the
+        same node may remain open to other cursors.
+
+Several reading cursors on one document are admitted. The writer does not
+evict readers from the whole document: it shadows its prefix.
+
+Nested locks are taken along the path, short prefix before long (ancestor
+before descendant). Otherwise two writers on a chapter and a paragraph
+deadlock easily. That is a storage-profile rule, not a second type system.
+
+A lock does not create a `documentVersion`. Releasing a lock is an event for
+listeners (history, mirrors), like insert/delete. The base Mix container
+still does not version every edit.
+
+An expired or revoked capability means no lock. A format failure on a
+`handle` field remains a converter diagnostic, not a lock diagnostic.
+
+19.28.10.11. Mirrors
+
+A mirror is not a second document and not a git clone as a kind. It is
+another path (another realm prefix) whose nodes, for a given reader Consumer,
+cover the same fields as the original.
+
+Everyday mirrors exist without a «second document»:
+
+    address             a path of integers;
+    RAM / small network storage of about 5 bits per hop, tens of children
+                        or machines;
+    disk                storage of about 10..12 bits under a sector or
+                        cluster.
+
+RAM is a narrow projection of the same page: the Consumer walks the same
+path numbers; only live slots sit in memory. A network of tens of machines
+is the same kind of narrow projection.
+
+A network mirror is that relation on another prefix:
+
+    primary     the prefix written to;
+    mirror      the prefix read from while it catches up.
+
+Writes go to primary. The mirror catches up through listeners over Mix (as
+history and undo do), not a new document version on every edit. While a
+writer holds a lock on a prefix, the mirror is either read-only on that
+prefix or serves the last caught-up page — a profile and Consumer-thickness
+choice. A thin mark reader may tolerate lag; a writer that is performing
+close must not write to a stale mirror.
+
+Conflict of two writes without a shared lock is not «last MIME wins». As with
+Mix marks, the occurrence chain is kept; last-wins is a projection for a
+simple renderer; a semantic Consumer may see the whole chain and merge along
+its used tree.
+
+A mirror's name is an attribute, not part of the address. A mirror's address
+is its own path. Original and mirror are comparable only through
+`implements` for a concrete reader, not as «forever the same bytes».
+
+19.28.10.12. What This Model Does Not Do
+
+It does not replace the P0 parser and does not introduce `Value = ℕ₀`.
+It does not bound tree depth or the magnitude of a level index.
+It does not fix cell size and does not tie addresses to bytes.
+It does not become the Web: no mandatory URL text, DNS, or MIME as type.
+It does not version the document on every edit (history is a listener over
+Mix).
+It does not introduce `flock` on «the whole file» and does not make a mirror
+a second document kind.
+
+19.28.10.13. Minimal Core
+
+    address = a path of ℕ₀ integers, written with dots;
+    hop storage is the carrier's affair (a 5->12->6->10 chain, varint, ...);
+    typical occupancy: RAM and a small network about 5 bits, disk about
+    10..12;
+    RAM node: sparse, about 32 children — a working mirror of the page;
+    cursor = path plus offset inside a buffer cell;
+    insert/delete at a level shifts only sibling indices;
+    lock = Mix attribute or capability on a path prefix;
+    mirror = another prefix plus a catch-up listener, not a second kind;
+    Mix attributes hang on a cursor or interval, not on a byte range;
+    `implements(varA varB Consumer)` types the LMX value in the cell, not
+    the Mix path.
+
+Realm profiles, page serialization and capabilities on a path prefix are
+network around the document, not the document model itself.
+
+19.28.11. ANSI C Lowering and Boundaries
+
+19.28.11.1. Explicit Runtime and Worker Pool
 
 The hosted runtime distinguishes three objects:
 
@@ -12673,7 +12979,7 @@ yet implemented.
 The source-level rule remains message isolation, even when a pool maps many
 Message Threads onto fewer host threads.
 
-19.28.10.2. Host Thread Provider
+19.28.11.2. Host Thread Provider
 
 The build setting is:
 
@@ -12709,7 +13015,7 @@ their pthread path adds `-pthread`.
 These provider operations are L2/runtime implementation facilities. Selecting
 a provider does not expose raw host-thread synchronization as an L3 operation.
 
-19.28.10.3. Lifecycle and Control
+19.28.11.3. Lifecycle and Control
 
 For native providers, the host thread which creates an
 `LmMessageThreadRuntime` is its controller. For `single`, the outer cooperative
@@ -12746,7 +13052,7 @@ quiesced.
 The host-thread wrapper is likewise controlled by its creator. Its entry
 callback cannot join or delete the wrapper which is currently starting it.
 
-19.28.10.4. Message Boundary Status
+19.28.11.4. Message Boundary Status
 
 The controller ABI is infrastructure, not a substitute for Message Thread
 communication. Source-level code must not exchange raw foreign actor, pool or
@@ -13665,7 +13971,7 @@ and counter accessors are also exported by the bootstrap ABI.
 
 The ABI has no `lm_message_thread_root`, `lm_message_thread_current` or
 `lm_message_thread_set_current` lookup. Managed entry and arena operations
-receive the executing actor explicitly as described in section 19.28.10.
+receive the executing actor explicitly as described in section 19.28.11.
 
 This is an implementation API, not source syntax. It may evolve without
 changing the source rules, provided ordinary Structure/Array identity, arena
