@@ -1,0 +1,111 @@
+implements used tree
+
+Predicate (spec 2.1, 19.21.3):
+
+    implements(varA varB Consumer)
+        iff every path in uses(Consumer varB) is present on varA
+            and every primitive leaf of those paths is admitted as in 2.2.3
+
+Consumer is a P0 tree: remaining known source that still sees the name
+(rebind, argument, return, redeclaration), or another P0 document on a
+Message boundary. uses(Consumer, varB) is syntactic field-follow only
+(`varB`, `varB\foo`, `varB\foo\bar`, and nested access in the same Consumer
+after an argument whose expected descriptor is varB).
+
+Empty uses is true. An unused field of varB is not required. Without a
+Consumer there is no type. There is no two-argument form.
+
+Collection is not alias analysis, callee expansion, computed-name
+evaluation or heap dataflow. A mere declaration of varB is not a use.
+
+
+Remaining P0 tree vs fat required descriptor
+
+Spec Consumer is the remaining source that still sees the name, not the
+declared type taken as a whole (2.1.2: not a Java interface). Thickness
+is how far that source actually follows fields:
+
+    fat  FileManager writes f\close, f\read — those paths are required;
+         an untouched File method is not
+    thin File itself consumes a FILE word and does not field-follow it —
+         primitive-leaf rule 2.2.3, merge-keyed converter
+
+Hosted trans currently calls implements(A, B, B): Consumer is replaced by
+the required descriptor. lm_trans_descriptor_implements then walks that
+descriptor's first-level field names. uses becomes every field of B.
+
+    fn: takeEq (Equatable: e) int
+        return: 0
+    end: takeEq
+    Plain: p
+    return: takeEq(p)
+
+    fat Equatable as Consumer: uses = {equals} → Plain fails
+    remaining P0 = takeEq body: uses = {}     → true
+
+The same split on assignment `e: p` and on `return: p` when the remaining
+tree never field-follows the Equatable paths. tests/trans_invalid_implements_*
+encode the fat approximation. Remaining P0 would reject only when the
+callee/return/rebind tail actually writes those paths.
+
+The 3-arg C helper already takes a Consumer descriptor, but auto-admit
+always passes required as Consumer, and even a real Consumer is still a
+descriptor field list, not a P0 walk. Nested paths are not collected.
+
+
+Paths not in the source are not checked
+
+"Not in the source" means the path is not a field-follow in this P0 tree.
+It is not a hidden field of the declared type. If it is not in this P0,
+it is not in uses, implements does not see it.
+
+Alias — do not follow renaming:
+
+    x: y
+    x\foo
+
+    uses of x contains foo. uses of y does not, until y itself is
+    field-followed. "x is y" is analysis; it is not done.
+
+Callee body is not substituted into the caller:
+
+    fn: takeEq (Equatable: e) int
+        return: e\equals
+    end: takeEq
+
+    fn: main () int
+        Plain: p
+        return: takeEq(p)
+    end: main
+
+    main has no p\equals. equals lives in takeEq's source. When Consumer
+    is takeEq, the path is in source. When Consumer is main, it is not,
+    and it is not inferred. Argument admission uses the callee body as
+    Consumer because that is another piece of source, not because hidden
+    uses were guessed.
+
+Computed name / index is not a name path:
+
+    e[i]
+    e\[nameVar]
+
+    not e\equals. No name in the text — not checked as equals.
+
+Heap / another box is not dataflow:
+
+    box\payload: e
+    …
+    box\payload\equals
+
+    the second line is uses of box, not uses of e. That payload once
+    held e is not a syntactic fact about e.
+
+Message is not telepathy on send. The sender's source does not contain
+the receiver's later file\close; send: does not require it. On receive
+the envelope is already P0. validate walks that tree (message expression
+plus handler body). That is source again, a different document, not a
+list of paths that were never written.
+
+An explicit Message Consumer / used-path list, if used, only packages
+the same syntactic paths. It is not a second analysis. Paths absent
+from P0 stay absent from uses. Empty uses is true.
