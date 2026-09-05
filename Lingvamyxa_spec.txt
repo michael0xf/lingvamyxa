@@ -8224,8 +8224,9 @@ explicitly below.
         loop-closing lowering that re-enters the closed frame while false.
 
     4.  for
-        NOT IMPLEMENTED. Proposed: register a statement receiver consuming
-        initialization, condition, step and body Structures.
+        IMPLEMENTED for the compact counter/triplet form in section 19.5:
+        `for: int(i, 0) (i < n) i++` plus a vertical or compact body.
+        Range-style forms such as `for: i 0 n` remain NOT IMPLEMENTED.
 
     5.  each
         NOT IMPLEMENTED. Proposed: register a statement receiver over an array

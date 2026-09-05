@@ -599,6 +599,7 @@ table:
              if            `receiver.statement`
              else          `receiver.statement`
              while         `receiver.statement`
+             for           `receiver.statement`
              `return`      `receiver.statement`
              stop          `receiver.statement`
              exit          `receiver.statement`
@@ -683,6 +684,7 @@ table:
              if            lm_trans_statement_emit_if
              else          lm_trans_statement_emit_else
              while         lm_trans_statement_emit_while
+             for           lm_trans_statement_emit_for
              `return`      lm_trans_statement_emit_return
              stop          lm_trans_statement_emit_stop
              exit          lm_trans_statement_emit_exit

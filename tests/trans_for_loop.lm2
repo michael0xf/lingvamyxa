@@ -1,0 +1,18 @@
+L2:
+    external:
+        fn: main () int
+            int: sum 0
+            int: continued 0
+            int: nested 0
+            for: int(i, 1) (i <= 3) i++
+                sum: sum + i
+            for: int(j, 0) (j < 3) j++
+                if: j = 1
+                    continue
+                continued: continued + j
+            for: int(a, 1) (a <= 2) a++
+                for: int(b, 1) (b <= 2) b++
+                    nested: nested + a * 10 + b
+        return: sum != 6 || continued != 2 || nested != 66
+    end: external
+end: L2
