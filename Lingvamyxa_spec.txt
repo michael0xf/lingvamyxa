@@ -12941,6 +12941,33 @@ a second document kind.
 Realm profiles, page serialization and capabilities on a path prefix are
 network around the document, not the document model itself.
 
+19.28.10.14. Relation to REST/LMX and Message Queues
+
+Section 19.28.7 moves *messages*: a complete LMX document as owned bytes into
+a FIFO inbox, locally by route or remotely by HTTP POST (`application/lmx`).
+The unit is an actor turn. REST/LMX does not place document pages in a
+neighbour slot of a Mix path.
+
+This section places *cells*: a path of integers, cursors, prefix locks,
+mirrors. The unit is a document node. A message may *name* a Mix path instead
+of carrying the body (section 19.19.1.2). Transport still ships only the short
+envelope; the receiver walks Mix. The two layers stack. They are not the same
+tree.
+
+A Mix sibling (`3.18` next to `3.17`) is a document neighbour, not a host.
+A machine appears only if a profile maps a realm prefix onto one. Disk-full
+is storage-profile policy, not an implication of the path:
+
+    refuse the write;
+    compact live slots;
+    evict cold cells to a *declared* mirror prefix that published a
+    capability.
+
+It is not «when this disk fills, fetch films onto the roommate's disk».
+Without a mirror capability the write fails. With one, a Consumer may *pull*
+a cell by cursor when it actually uses it. Pushing an unread movie onto an
+unrelated neighbour is neither Mix placement nor REST/LMX delivery.
+
 19.28.11. ANSI C Lowering and Boundaries
 
 19.28.11.1. Explicit Runtime and Worker Pool
