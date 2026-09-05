@@ -7029,6 +7029,7 @@ fn: lm_trans_emit_named_structure_graph_descriptor (
     const: LmTransDescriptor: descriptor
     const: LmP0Structure: body
     const: LmP0Field: field
+    const: LmTransDescriptorField: callable_field
     size_t: descriptor_index
 
     if: file = 0 || frame = 0 || frame\head = 0
@@ -7068,7 +7069,22 @@ fn: lm_trans_emit_named_structure_graph_descriptor (
         return: 1
     if: lm_trans_put(file, "static LmLmxStructure lm_lmx_desc_") != 0 || lm_trans_emit_identifier(file, frame\head) != 0
         return: 1
-return: lm_trans_put(file, ";\n")
+    if: lm_trans_put(file, ";\n") != 0
+        return: 1
+    if: descriptor = 0 || descriptor\structural_fields = 0
+        return: 0
+    descriptor_index: 0U
+    while: descriptor_index < descriptor\structural_fields\count
+        callable_field: lm_own_ptr_stack_at(descriptor\structural_fields, descriptor_index)
+        if: lm_trans_descriptor_field_is_callable(callable_field) && callable_field\name != 0
+            if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "static int lm_lmx_fn_") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, "_") != 0 || lm_trans_put(file, callable_field\name) != 0
+                return: 1
+            if: lm_trans_put(file, "(void) { return 0; }\n") != 0
+                return: 1
+            ---
+        ---
+        descriptor_index: descriptor_index + 1U
+return: 0
 
 fn: lm_trans_emit_named_structure_field_declaration (
     FILE: file

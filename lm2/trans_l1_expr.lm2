@@ -3674,6 +3674,10 @@ fn: lm_trans_emit_callable_head_expression (FILE: file; const: (LmP0Text: head);
                 current_class\length: 0U
             ---
         ---
+    if: lm_trans_put(file, "(") != 0
+        lm_trans_text_ref_destroy(@ segment)
+        lm_trans_text_ref_destroy(@ current_class)
+        return: 1
     status: lm_trans_emit_expr_atom(file, segment, namespace_)
     while: ((status = 0) && (offset <= head\length))
         segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment, @ has_occurrence, @ occurrence)
@@ -3689,6 +3693,15 @@ fn: lm_trans_emit_callable_head_expression (FILE: file; const: (LmP0Text: head);
             c.fprintf(c.stderr, "trans L2 type error: class \"%.*s\" has no structural field occurrence [%zu]%.*s\n", (cast: int current_class\length), current_class\data, occurrence, (cast: int segment\length), segment\data)
             status: 1
             break
+        if: member_status > 0 && lm_trans_descriptor_field_is_callable(descriptor_field)
+            lm_own_delete(projected_name, 0)
+            if: lm_trans_put(file, ", lm_lmx_fn_") != 0 || lm_trans_emit_identifier(file, current_class) != 0 || lm_trans_put(file, "_") != 0 || lm_trans_emit_identifier(file, segment) != 0
+                status: 1
+                break
+            field_class_status: lm_trans_layout_field_class_resolve_occurrence(current_class, segment, has_occurrence, occurrence, namespace_, @ field_class)
+            if: field_class_status > 0
+                lm_trans_text_assign_cstr(current_class, field_class)
+            continue
         if: lm_trans_put(file, "->") != 0
             lm_own_delete(projected_name, 0)
             status: 1
@@ -3714,6 +3727,8 @@ fn: lm_trans_emit_callable_head_expression (FILE: file; const: (LmP0Text: head);
             current_class\data: ""
             current_class\length: 0U
         ---
+    if: status = 0 && lm_trans_put(file, ")") != 0
+        status: 1
     lm_trans_text_ref_destroy(@ segment)
     lm_trans_text_ref_destroy(@ current_class)
     return: status
