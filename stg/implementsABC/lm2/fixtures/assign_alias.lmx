@@ -1,0 +1,10 @@
+fn: take (Equatable: e) int
+    if: e\equals
+        e\foo: 1
+    x: e
+    y: x
+    y\hash
+    x: 0
+    x\toString
+    return: e\bar
+end: take

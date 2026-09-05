@@ -1,0 +1,3 @@
+fn: takeEq (Equatable: e) int
+    return: e\equals
+end: takeEq

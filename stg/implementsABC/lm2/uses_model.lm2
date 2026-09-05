@@ -1,0 +1,60 @@
+table:
+    source
+    name: class
+    columns: (class: class) (class: kind)
+    rows:
+             LmStgUses  primitive
+end: class
+
+table:
+    source
+    name: `class.reference-base`
+    columns: (class: class) (int: value)
+    rows:
+             LmStgUses  1
+end: `class.reference-base`
+
+table:
+    source
+    name: `cast.target`
+    columns: (class: class) (int: value)
+    rows:
+             LmStgUses  1
+end: `cast.target`
+
+table:
+    source
+    name: `class.range`
+    columns: (class: class) (int: value)
+    rows:
+             LmStgUses  1
+end: `class.range`
+
+table:
+    source
+    name: `forward.backend`
+    columns: (class: class) (class: backend)
+    rows:
+             LmStgUses  c.struct
+end: `forward.backend`
+
+table:
+    source
+    name: `layout.backend`
+    columns: (class: class) (class: backend)
+    rows:
+             LmStgUses  c.named-struct
+end: `layout.backend`
+
+table:
+    source
+    name: LmStgUses
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
+    rows:
+             var_data      char    0  1
+             var_length    size_t  1  0
+             alias_count   size_t  2  0
+             path_count    size_t  3  0
+             aliases       char    4  1
+             paths         char    5  1
+end: LmStgUses

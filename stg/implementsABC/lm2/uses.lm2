@@ -1,0 +1,364 @@
+include
+define
+os
+ifdef
+forward
+alias
+constant
+layout
+fn
+prototype
+unit
+
+predef: "lm2/parser_abi.lm2"
+predef: "uses_model.lm2"
+
+fn: lm_stg_text_eq (const: (LmP0Text: text); const: @(char s)) int
+    size_t: n
+
+    if: text = 0 || text\data = 0 || s = 0
+        return: 0
+    n: c.strlen(s)
+    if: text\length != n
+        return: 0
+    return: c.memcmp(text\data, s, n) = 0
+end: lm_stg_text_eq
+
+fn: lm_stg_text_eq_text (const: (LmP0Text: a); const: (LmP0Text: b)) int
+    if: a = 0 || b = 0 || a\data = 0 || b\data = 0
+        return: 0
+    if: a\length != b\length
+        return: 0
+    return: c.memcmp(a\data, b\data, a\length) = 0
+end: lm_stg_text_eq_text
+
+fn: lm_stg_is_slash_atom (const: (LmP0Text: text)) int
+    return: text != 0 && text\length = 1U && text\data != 0 && text\data[0] = '\\'
+end: lm_stg_is_slash_atom
+
+fn: lm_stg_is_control_head (const: (LmP0Text: head)) int
+    if: lm_stg_text_eq(head, "if") != 0 || lm_stg_text_eq(head, "else") != 0 || lm_stg_text_eq(head, "while") != 0 || lm_stg_text_eq(head, "for") != 0 || lm_stg_text_eq(head, "return") != 0 || lm_stg_text_eq(head, "throw") != 0 || lm_stg_text_eq(head, "catch") != 0 || lm_stg_text_eq(head, "assert") != 0 || lm_stg_text_eq(head, "synchronized") != 0 || lm_stg_text_eq(head, "fn") != 0 || lm_stg_text_eq(head, "sub") != 0 || lm_stg_text_eq(head, "external") != 0 || lm_stg_text_eq(head, "table") != 0 || lm_stg_text_eq(head, "finally") != 0 || lm_stg_text_eq(head, "L2") != 0 || lm_stg_text_eq(head, "end") != 0
+        return: 1
+    return: 0
+end: lm_stg_is_control_head
+
+fn: lm_stg_uses_init (LmStgUses: uses; const: @(char varb)) int
+    if: uses = 0 || varb = 0
+        return: 1
+    uses\var_length: c.strlen(varb)
+    uses\var_data: cast: (@: char) c.calloc(1U, uses\var_length + 1U)
+    uses\aliases: cast: (@: char) c.calloc(32U, 64U)
+    uses\paths: cast: (@: char) c.calloc(64U, 128U)
+    if: uses\var_data = 0 || uses\aliases = 0 || uses\paths = 0
+        return: 1
+    c.memcpy(uses\var_data, varb, uses\var_length)
+    uses\var_data[uses\var_length]: '\0'
+    uses\alias_count: 1U
+    uses\path_count: 0U
+    c.memcpy(uses\aliases, varb, uses\var_length)
+    uses\aliases[uses\var_length]: '\0'
+    return: 0
+end: lm_stg_uses_init
+
+sub: lm_stg_uses_destroy (LmStgUses: uses)
+    if: uses = 0
+        return
+    c.free(uses\var_data)
+    c.free(uses\aliases)
+    c.free(uses\paths)
+    uses\var_data: 0
+    uses\aliases: 0
+    uses\paths: 0
+    uses\alias_count: 0U
+    uses\path_count: 0U
+end: lm_stg_uses_destroy
+
+fn: lm_stg_alias_has (LmStgUses: uses; const: (LmP0Text: name)) int
+    size_t: i
+    @: char slot
+    size_t: n
+
+    if: uses = 0 || name = 0 || name\data = 0
+        return: 0
+    i: 0U
+    while: i < uses\alias_count
+        slot: uses\aliases + (i * 64U)
+        n: c.strlen(slot)
+        if: n = name\length && c.memcmp(slot, name\data, n) = 0
+            return: 1
+        i: i + 1U
+    return: 0
+end: lm_stg_alias_has
+
+fn: lm_stg_alias_has_bytes (LmStgUses: uses; const: @(char data); size_t: length) int
+    size_t: i
+    @: char slot
+    size_t: n
+
+    if: uses = 0 || data = 0
+        return: 0
+    i: 0U
+    while: i < uses\alias_count
+        slot: uses\aliases + (i * 64U)
+        n: c.strlen(slot)
+        if: n = length && c.memcmp(slot, data, n) = 0
+            return: 1
+        i: i + 1U
+    return: 0
+end: lm_stg_alias_has_bytes
+
+sub: lm_stg_alias_add (LmStgUses: uses; const: (LmP0Text: name))
+    @: char slot
+
+    if: uses = 0 || name = 0 || name\data = 0 || name\length = 0U || name\length >= 64U
+        return
+    if: lm_stg_alias_has(uses, name) != 0
+        return
+    if: uses\alias_count >= 32U
+        return
+    slot: uses\aliases + (uses\alias_count * 64U)
+    c.memcpy(slot, name\data, name\length)
+    slot[name\length]: '\0'
+    uses\alias_count: uses\alias_count + 1U
+end: lm_stg_alias_add
+
+sub: lm_stg_alias_remove (LmStgUses: uses; const: (LmP0Text: name))
+    size_t: i
+    @: char slot
+    @: char last
+    size_t: n
+
+    if: uses = 0 || name = 0 || name\data = 0
+        return
+    if: name\length = uses\var_length && c.memcmp(name\data, uses\var_data, name\length) = 0
+        return
+    i: 1U
+    while: i < uses\alias_count
+        slot: uses\aliases + (i * 64U)
+        n: c.strlen(slot)
+        if: n = name\length && c.memcmp(slot, name\data, n) = 0
+            last: uses\aliases + ((uses\alias_count - 1U) * 64U)
+            c.memcpy(slot, last, 64U)
+            uses\alias_count: uses\alias_count - 1U
+            return
+        i: i + 1U
+end: lm_stg_alias_remove
+
+sub: lm_stg_path_add (LmStgUses: uses; const: @(char path); size_t: length)
+    @: char slot
+    size_t: i
+    size_t: n
+
+    if: uses = 0 || path = 0 || length = 0U || length >= 128U
+        return
+    i: 0U
+    while: i < uses\path_count
+        slot: uses\paths + (i * 128U)
+        n: c.strlen(slot)
+        if: n = length && c.memcmp(slot, path, n) = 0
+            return
+        i: i + 1U
+    if: uses\path_count >= 64U
+        return
+    slot: uses\paths + (uses\path_count * 128U)
+    c.memcpy(slot, path, length)
+    slot[length]: '\0'
+    uses\path_count: uses\path_count + 1U
+end: lm_stg_path_add
+
+fn: lm_stg_slash_offset (const: @(char data); size_t: length) size_t
+    size_t: i
+
+    i: 0U
+    while: i < length
+        if: data[i] = '\\'
+            return: i
+        i: i + 1U
+    return: length
+end: lm_stg_slash_offset
+
+fn: lm_stg_body_single_atom (const: (LmP0Structure: body)) LmP0Text
+    LmP0Field: field
+    LmP0Node: node
+
+    if: body = 0
+        return: 0
+    field: body\first_field
+    if: field = 0 || field\next != 0 || field\value = 0
+        return: 0
+    node: field\value
+    if: node\kind != c.LM_P0_NODE_ATOM || lm_p0_node_atom(node) = 0
+        return: 0
+    return: lm_p0_node_atom(node)
+end: lm_stg_body_single_atom
+
+fn: lm_stg_scan_follow_from (LmStgUses: uses; LmP0Field: start) LmP0Field
+    LmP0Field: field
+    LmP0Node: node
+    LmP0Text: name
+    c.array: [128]: char path
+    size_t: used
+    int: tracked
+
+    if: start = 0 || start\value = 0
+        return: start
+    node: start\value
+    if: node\kind != c.LM_P0_NODE_ATOM || lm_p0_node_atom(node) = 0
+        return: start
+    name: lm_p0_node_atom(node)
+    tracked: lm_stg_alias_has(uses, name)
+    field: start\next
+    if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM || lm_stg_is_slash_atom(lm_p0_node_atom(field\value)) = 0
+        return: start
+    used: 0U
+    while: field != 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_stg_is_slash_atom(lm_p0_node_atom(field\value)) != 0
+        field: field\next
+        if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM || lm_p0_node_atom(field\value) = 0
+            return: start
+        name: lm_p0_node_atom(field\value)
+        if: tracked != 0 && name\length > 0U
+            if: used != 0U && used + 1U < 128U
+                path[used]: '\\'
+                used: used + 1U
+            if: used + name\length < 128U
+                c.memcpy(path + used, name\data, name\length)
+                used: used + name\length
+            ---
+        ---
+        field: field\next
+    if: tracked != 0 && used > 0U
+        lm_stg_path_add(uses, path, used)
+    return: field
+end: lm_stg_scan_follow_from
+
+fn: lm_stg_uses_walk_frame (LmStgUses: uses; const: (LmP0Frame: frame)) int
+    LmP0Text: head
+    LmP0Text: rhs
+    size_t: slash
+    size_t: rest
+
+    if: uses = 0 || frame = 0
+        return: 0
+    head: lm_p0_frame_head(frame)
+    if: head != 0 && head\data != 0 && head\length > 0U
+        slash: lm_stg_slash_offset(head\data, head\length)
+        if: slash < head\length
+            if: lm_stg_alias_has_bytes(uses, head\data, slash) != 0 && slash + 1U < head\length
+                rest: head\length - slash - 1U
+                lm_stg_path_add(uses, head\data + slash + 1U, rest)
+            ---
+            return: lm_stg_uses_walk_structure(uses, lm_p0_frame_body(frame))
+        ---
+    if: lm_stg_is_control_head(head) != 0
+        return: lm_stg_uses_walk_structure(uses, lm_p0_frame_body(frame))
+    if: lm_stg_uses_walk_structure(uses, lm_p0_frame_body(frame)) != 0
+        return: 1
+    rhs: lm_stg_body_single_atom(lm_p0_frame_body(frame))
+    if: rhs != 0
+        if: lm_stg_alias_has(uses, rhs) != 0
+            lm_stg_alias_add(uses, head)
+        ---
+        if: lm_stg_alias_has(uses, rhs) = 0
+            lm_stg_alias_remove(uses, head)
+        ---
+    ---
+    if: rhs = 0
+        lm_stg_alias_remove(uses, head)
+    return: 0
+end: lm_stg_uses_walk_frame
+
+fn: lm_stg_uses_walk_structure (LmStgUses: uses; const: (LmP0Structure: body)) int
+    LmP0Field: field
+    LmP0Field: next
+    LmP0Node: node
+
+    if: uses = 0 || body = 0
+        return: 0
+    field: body\first_field
+    while: field != 0
+        next: lm_stg_scan_follow_from(uses, field)
+        if: next != field
+            field: next
+        ---
+        if: next = field
+            node: field\value
+            if: lm_stg_uses_walk_node(uses, node) != 0
+                return: 1
+            field: field\next
+        ---
+    return: 0
+end: lm_stg_uses_walk_structure
+
+fn: lm_stg_uses_walk_node (LmStgUses: uses; LmP0Node: node) int
+    if: uses = 0 || node = 0
+        return: 0
+    if: node\kind = c.LM_P0_NODE_STRUCTURE
+        return: lm_stg_uses_walk_structure(uses, lm_p0_node_structure(node))
+    if: node\kind = c.LM_P0_NODE_FRAME
+        return: lm_stg_uses_walk_frame(uses, lm_p0_node_frame(node))
+    return: 0
+end: lm_stg_uses_walk_node
+
+fn: lm_stg_uses_collect (const: @(char source); const: @(char varb); LmStgUses: uses) int
+    LmP0Document: document 0
+    const: LmP0Node: root
+    int: status
+
+    if: source = 0 || varb = 0 || uses = 0
+        return: 1
+    if: lm_stg_uses_init(uses, varb) != 0
+        return: 1
+    status: lm_p0_parse_string(source, @ document)
+    if: status != 0
+        lm_p0_document_destroy(document)
+        return: 1
+    root: lm_p0_document_root(document)
+    status: lm_stg_uses_walk_node(uses, cast: (LmP0Node) root)
+    lm_p0_document_destroy(document)
+    return: status
+end: lm_stg_uses_collect
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        LmP0Document: document 0
+        const: LmP0Node: root
+        const: LmP0Diagnostic: diagnostic
+        LmStgUses: uses
+        @: char slot
+        size_t: i
+        int: status
+
+        if: argc != 3
+            c.fputs("usage: uses.lm0 <source.lmx> <varB>\n", c.stderr)
+            return: 1
+        uses: cast: (LmStgUses) c.calloc(1U, c.sizeof(uses[0]))
+        if: uses = 0
+            return: 1
+        if: lm_stg_uses_init(uses, argv[2]) != 0
+            c.fputs("uses init failed\n", c.stderr)
+            return: 1
+        status: lm_p0_parse_file(argv[1], @ document)
+        if: status != 0
+            diagnostic: lm_p0_document_diagnostic(document)
+            if: diagnostic != 0
+                c.fprintf(c.stderr, "P0 parse error %d: %s\n", diagnostic\code, diagnostic\message)
+            lm_stg_uses_destroy(uses)
+            lm_p0_document_destroy(document)
+            return: 1
+        root: lm_p0_document_root(document)
+        status: lm_stg_uses_walk_node(uses, cast: (LmP0Node) root)
+        if: status != 0
+            lm_stg_uses_destroy(uses)
+            lm_p0_document_destroy(document)
+            return: 1
+        i: 0U
+        while: i < uses\path_count
+            slot: uses\paths + (i * 128U)
+            c.puts(slot)
+            i: i + 1U
+        lm_stg_uses_destroy(uses)
+        lm_p0_document_destroy(document)
+        return: 0
+    end: main
+end: external
+
