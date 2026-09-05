@@ -3775,7 +3775,7 @@ fn: lm_trans_emit_return_statement (
             ---
             if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_ATOM
                 required_descriptor: lm_trans_namespace_descriptor(namespace_, expected_type\class_name)
-                if: lm_trans_guard_direct_structure_value_layout(namespace_, candidate_node\as\atom, required_descriptor, "return value") != 0
+                if: lm_trans_admit_consumer_uses(namespace_, candidate_node\as\atom, required_descriptor, candidate_node\as\atom, lm_trans_uses_get_fn_frame(), "return value") != 0
                     lm_trans_expr_callable_type_delete(expected_type)
                     return: 1
                 ---
@@ -8169,8 +8169,22 @@ fn: lm_trans_l2_table_rows_frame (const: (LmP0Frame: table_frame)) const: LmP0Fr
         c.fprintf(c.stderr, "trans L2 table error: table must contain rows\n")
 return: rows_frame
 
-fn: lm_trans_l2_table_row_count (const: (LmP0Frame: rows_frame); size_t: column_count; @: size_t out_row_count) int
+fn: lm_trans_l2_table_emit_cell_spelling (const: LmP0Node: node) int
+    if: node = 0
+        return: c.fputs("<empty>", c.stderr) < 0
+    if: node\kind = c.LM_P0_NODE_ATOM && node\as\atom != 0 && node\as\atom\data != 0
+        return: c.fprintf(c.stderr, "%.*s", (cast: int node\as\atom\length), node\as\atom\data) < 0
+    if: node\kind = c.LM_P0_NODE_FRAME && node\as\frame != 0 && node\as\frame\head != 0 && node\as\frame\head\data != 0
+        return: c.fprintf(c.stderr, "(%.*s:)", (cast: int node\as\frame\head\length), node\as\frame\head\data) < 0
+return: c.fputs("<cell>", c.stderr) < 0
+
+fn: lm_trans_l2_table_row_count (const: (LmP0Frame: rows_frame); size_t: column_count; @: size_t out_row_count; const: LmP0Text: table_name) int
+    const: LmP0Field: field
     size_t: cell_count
+    size_t: leftover
+    size_t: skip
+    size_t: index
+    int: first_leftover
 
     if: out_row_count = 0 || rows_frame = 0 || column_count = 0U
         return: 1
@@ -8179,7 +8193,31 @@ fn: lm_trans_l2_table_row_count (const: (LmP0Frame: rows_frame); size_t: column_
         out_row_count[0]: 0U
         return: 0
     if: (cell_count % column_count) != 0U
-        c.fprintf(c.stderr, "trans L2 table error: rows cell count must be divisible by column count\n")
+        leftover: cell_count % column_count
+        if: table_name != 0 && table_name\data != 0
+            c.fprintf(c.stderr, "trans L2 table error: \"%.*s\" rows have %zu cells, not divisible by %zu columns (%zu leftover)", (cast: int table_name\length), table_name\data, cell_count, column_count, leftover)
+        else:
+            c.fprintf(c.stderr, "trans L2 table error: rows have %zu cells, not divisible by %zu columns (%zu leftover)", cell_count, column_count, leftover)
+        ---
+        skip: cell_count - leftover
+        index: 0U
+        first_leftover: 1
+        field: lm_trans_l2_table_first_cell_field(rows_frame\body)
+        while: field != 0
+            if: index >= skip
+                if: first_leftover != 0
+                    c.fputs(": leftover", c.stderr)
+                    first_leftover: 0
+                c.fputc(' ', c.stderr)
+                if: lm_trans_l2_table_emit_cell_spelling(field\value) != 0
+                    c.fputc('\n', c.stderr)
+                    return: 1
+                ---
+            ---
+            index: index + 1U
+            field: lm_trans_l2_table_next_cell_field(field)
+        ---
+        c.fputc('\n', c.stderr)
         return: 1
     out_row_count[0]: cell_count / column_count
 return: 0
@@ -8312,7 +8350,7 @@ fn: lm_trans_module_init_declare_table (
     if: lm_trans_l2_table_read_columns(frame, @ column_types, @ column_names, @ column_count) != 0
         return: 1
     rows_frame: lm_trans_l2_table_rows_frame(frame)
-    if: rows_frame = 0 || lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count) != 0
+    if: rows_frame = 0 || lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count, table_name) != 0
         return: 1
     c.LM_UNUSED(row_count)
 
@@ -8538,7 +8576,7 @@ fn: lm_trans_materialize_l2_table_source (
         return: 1
 
     rows_frame: lm_trans_l2_table_rows_frame(frame)
-    if: rows_frame = 0 || lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count) != 0
+    if: rows_frame = 0 || lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count, table_name) != 0
         return: 1
 return: lm_trans_l2_table_materialize_source_rows(namespace_, table_name, rows_frame, column_types, column_names, column_count, row_count, require_facade)
 
@@ -8976,7 +9014,7 @@ fn: lm_trans_materialize_l2_join_source (LmTransNamespace: namespace_; const: (L
         return: 1
 
     row_count: 0U
-    if: rows_frame != 0 && lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count) != 0
+    if: rows_frame != 0 && lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count, target_name) != 0
         return: 1
 
     candidate: lm_trans_l2_table_source_descriptor_new(target_name, column_types, column_names, column_count)
@@ -9637,7 +9675,7 @@ fn: lm_trans_module_init_emit_table_initializer (
     if: lm_trans_l2_table_read_columns(frame, @ column_types, @ column_names, @ column_count) != 0
         return: 1
     rows_frame: lm_trans_l2_table_rows_frame(frame)
-    if: rows_frame = 0 || lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count) != 0
+    if: rows_frame = 0 || lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count, table_name) != 0
         return: 1
 
     value_name: lm_trans_l2_object_suffix_name_new(entry\helper_name, "_value")
@@ -9700,7 +9738,7 @@ fn: lm_trans_emit_l2_table_storage_value (
         return: 1
 
     rows_frame: lm_trans_l2_table_rows_frame(frame)
-    if: rows_frame = 0 || lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count) != 0
+    if: rows_frame = 0 || lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count, table_name) != 0
         return: 1
 
     row_type_name: lm_trans_l2_runtime_table_row_type_name_new(table_name, namespace_)
@@ -9758,7 +9796,7 @@ fn: lm_trans_validate_l2_join_frame (const: (LmP0Frame: frame)) int
         return: 1
 
     row_count: 0U
-    if: rows_frame != 0 && lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count) != 0
+    if: rows_frame != 0 && lm_trans_l2_table_row_count(rows_frame, column_count, @ row_count, target_name) != 0
         return: 1
 return: 0
 
@@ -10391,7 +10429,7 @@ fn: lm_trans_guard_direct_structure_assignment (
     status: 0
     if: lm_trans_expr_value_class_from_atom(frame\head, namespace_, target_class)
         required_descriptor: lm_trans_namespace_descriptor(namespace_, target_class)
-        status: lm_trans_guard_direct_structure_value_layout(namespace_, candidate_node\as\atom, required_descriptor, "assignment")
+        status: lm_trans_admit_consumer_uses(namespace_, candidate_node\as\atom, required_descriptor, frame\head, lm_trans_uses_get_fn_frame(), "assignment")
     ---
     lm_trans_text_ref_destroy(@ target_class)
 return: status
@@ -13880,6 +13918,7 @@ fn: lm_trans_namespace_set_callable_shape (
     symbol\callable_has_thread_context: function\has_thread_context
     symbol\callable_is_thread_handler: function\is_thread_handler
     symbol\callable_throws_node: function\throws_node
+    symbol\callable_frame: function\frame
 return: 0
 
 fn: lm_trans_function_header_read_params (LmTransFunctionHeader: function) int

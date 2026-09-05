@@ -1,0 +1,157 @@
+predef: "lm2/own_abi.lm2"
+
+external:
+    fn: lm_stg_convert_int_long (int: n) long
+        return: (cast: long n)
+    end: lm_stg_convert_int_long
+end: external
+
+external:
+    fn: lm_stg_convert_long_int (long: n) int
+        if: n > 2147483647 || n < -2147483648
+            return: 0
+        return: (cast: int n)
+    end: lm_stg_convert_long_int
+end: external
+
+external:
+    fn: lm_stg_convert_int_double (int: n) double
+        return: (cast: double n)
+    end: lm_stg_convert_int_double
+end: external
+
+external:
+    fn: lm_stg_convert_double_int (double: n) int
+        return: (cast: int n)
+    end: lm_stg_convert_double_int
+end: external
+
+external:
+    fn: lm_stg_convert_Boolean_int (int: flag) int
+        if: flag < 0
+            return: -1
+        if: flag > 0
+            return: 1
+        return: 0
+    end: lm_stg_convert_Boolean_int
+end: external
+
+external:
+    fn: lm_stg_convert_int_Boolean (int: n) int
+        if: n < 0
+            return: -1
+        if: n > 0
+            return: 1
+        return: 0
+    end: lm_stg_convert_int_Boolean
+end: external
+
+external:
+    fn: lm_stg_convert_text_int (@: char text) int
+        @: char end
+        long: n
+
+        if: text = 0
+            return: 0
+        n: c.strtol(text, @ end, 10)
+        return: (cast: int n)
+    end: lm_stg_convert_text_int
+end: external
+
+external:
+    fn: lm_stg_convert_text_double (@: char text) double
+        if: text = 0
+            return: 0.0
+        return: c.strtod(text, 0)
+    end: lm_stg_convert_text_double
+end: external
+
+fn: lm_stg_convert_i8_i16 (int: n) int
+fn: lm_stg_convert_i8_i32 (int: n) int
+fn: lm_stg_convert_i8_i64 (int: n) long
+fn: lm_stg_convert_i8_int (int: n) int
+fn: lm_stg_convert_i8_long (int: n) long
+fn: lm_stg_convert_i16_i32 (int: n) int
+fn: lm_stg_convert_i16_i64 (int: n) long
+fn: lm_stg_convert_i16_int (int: n) int
+fn: lm_stg_convert_i16_long (int: n) long
+fn: lm_stg_convert_i32_i64 (int: n) long
+fn: lm_stg_convert_i32_long (int: n) long
+fn: lm_stg_convert_int_i64 (int: n) long
+fn: lm_stg_convert_short_int (int: n) int
+fn: lm_stg_convert_short_long (int: n) long
+fn: lm_stg_convert_char_int (int: n) int
+fn: lm_stg_convert_u8_u16 (unsigned: n) unsigned
+fn: lm_stg_convert_u8_u32 (unsigned: n) unsigned
+fn: lm_stg_convert_u8_u64 (unsigned: n) ulong
+fn: lm_stg_convert_u8_size_t (unsigned: n) size_t
+fn: lm_stg_convert_u16_u32 (unsigned: n) unsigned
+fn: lm_stg_convert_u16_u64 (unsigned: n) ulong
+fn: lm_stg_convert_u16_size_t (unsigned: n) size_t
+fn: lm_stg_convert_u32_u64 (unsigned: n) ulong
+fn: lm_stg_convert_u32_size_t (unsigned: n) size_t
+fn: lm_stg_convert_unsigned_ulong (unsigned: n) ulong
+fn: lm_stg_convert_size_t_u64 (size_t: n) ulong
+fn: lm_stg_convert_i16_i8 (int: n) int
+fn: lm_stg_convert_i32_i8 (int: n) int
+fn: lm_stg_convert_i32_i16 (int: n) int
+fn: lm_stg_convert_i64_i32 (long: n) int
+fn: lm_stg_convert_i64_int (long: n) int
+fn: lm_stg_convert_int_i8 (int: n) int
+fn: lm_stg_convert_int_i16 (int: n) int
+fn: lm_stg_convert_int_short (int: n) int
+fn: lm_stg_convert_int_char (int: n) int
+fn: lm_stg_convert_u16_u8 (unsigned: n) unsigned
+fn: lm_stg_convert_u32_u8 (unsigned: n) unsigned
+fn: lm_stg_convert_u32_u16 (unsigned: n) unsigned
+fn: lm_stg_convert_u64_u32 (ulong: n) unsigned
+fn: lm_stg_convert_u64_size_t (ulong: n) size_t
+fn: lm_stg_convert_size_t_u32 (size_t: n) unsigned
+fn: lm_stg_convert_ulong_unsigned (ulong: n) unsigned
+fn: lm_stg_convert_int_unsigned (int: n) unsigned
+fn: lm_stg_convert_unsigned_int (unsigned: n) int
+fn: lm_stg_convert_i32_u32 (int: n) unsigned
+fn: lm_stg_convert_u32_i32 (unsigned: n) int
+fn: lm_stg_convert_i64_u64 (long: n) ulong
+fn: lm_stg_convert_u64_i64 (ulong: n) long
+fn: lm_stg_convert_long_ulong (long: n) ulong
+fn: lm_stg_convert_ulong_long (ulong: n) long
+fn: lm_stg_convert_int_size_t (int: n) size_t
+fn: lm_stg_convert_size_t_int (size_t: n) int
+fn: lm_stg_convert_isize_usize (long: n) size_t
+fn: lm_stg_convert_usize_isize (size_t: n) long
+fn: lm_stg_convert_int_float (int: n) float
+fn: lm_stg_convert_long_double (long: n) double
+fn: lm_stg_convert_u32_double (unsigned: n) double
+fn: lm_stg_convert_u64_double (ulong: n) double
+fn: lm_stg_convert_float_double (float: n) double
+fn: lm_stg_convert_double_float (double: n) float
+fn: lm_stg_convert_float_int (float: n) int
+fn: lm_stg_convert_double_long (double: n) long
+fn: lm_stg_convert_double_u32 (double: n) unsigned
+fn: lm_stg_convert_Boolean_i8 (int: flag) int
+fn: lm_stg_convert_bool_int (int: flag) int
+fn: lm_stg_convert_flag_int (int: flag) int
+fn: lm_stg_convert_int_bool (int: n) int
+fn: lm_stg_convert_i8_Boolean (int: n) int
+fn: lm_stg_convert_text_long (@: char text) long
+fn: lm_stg_convert_text_u32 (@: char text) unsigned
+fn: lm_stg_convert_text_u64 (@: char text) ulong
+fn: lm_stg_convert_text_Boolean (@: char text) int
+fn: lm_stg_convert_int_text (int: n) @: char
+fn: lm_stg_convert_long_text (long: n) @: char
+fn: lm_stg_convert_u32_text (unsigned: n) @: char
+fn: lm_stg_convert_double_text (double: n) @: char
+fn: lm_stg_convert_Boolean_text (int: flag) @: char
+fn: lm_stg_convert_address_size_t (@: void p) size_t
+fn: lm_stg_convert_size_t_address (size_t: n) @: void
+fn: lm_stg_convert_address_int (@: void p) int
+fn: lm_stg_convert_u32_FILE (unsigned: n) @: void
+fn: lm_stg_convert_u32_File_handle (unsigned: n) int
+fn: lm_stg_convert_int_bigint (int: n) @: void
+fn: lm_stg_convert_long_bigint (long: n) @: void
+fn: lm_stg_convert_text_bigint (@: char text) @: void
+fn: lm_stg_convert_bigint_int (@: void z) int
+fn: lm_stg_convert_double_real (double: n) @: void
+fn: lm_stg_convert_text_decimal (@: char text) @: void
+fn: lm_stg_convert_decimal_double (@: void d) double

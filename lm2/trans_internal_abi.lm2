@@ -941,6 +941,18 @@ fn: lm_trans_atom_is_void_primitive (
     const: LmP0Text: name
 ) int
 
+fn: lm_trans_name_has_primitive_description (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_primitive_leaf_implements (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: candidate_name
+    const: LmP0Text: required_name
+    @: int out_result
+) int
+
 fn: lm_trans_admit_implements (
     const: LmTransNamespace: namespace_
     const: LmTransDescriptor: candidate_descriptor
@@ -953,6 +965,19 @@ fn: lm_trans_guard_direct_structure_value_layout (
     const: LmTransNamespace: namespace_
     const: LmP0Text: candidate_name
     const: LmTransDescriptor: required_descriptor
+    const: @(char context)
+) int
+
+sub: lm_trans_uses_set_fn_frame (const: LmP0Frame: frame)
+
+fn: lm_trans_uses_get_fn_frame () const: LmP0Frame
+
+fn: lm_trans_admit_consumer_uses (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: candidate_name
+    const: LmTransDescriptor: required_descriptor
+    const: LmP0Text: varb
+    const: LmP0Frame: consumer
     const: @(char context)
 ) int
 

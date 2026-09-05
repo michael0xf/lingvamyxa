@@ -2378,7 +2378,12 @@ static int lm_registry_source_rows_from_frame(struct LmMessageThread *lm_lmx_mes
         field = field -> next;
     }
     if ((field_index % column_count) != 0U) {
-        lm_registry_source_error(lm_lmx_message_thread, loader, "rows field count is not divisible by column count; use explicit None for empty cells");
+        if (table_name != 0 && table_name -> data != 0) {
+            fprintf(stderr, "%s registry error: \"%.*s\" rows have %zu fields, not divisible by %zu columns (%zu leftover); quote operator characters or use explicit None\n", lm_registry_source_error_prefix(lm_lmx_message_thread, loader), (((int)table_name -> length)), table_name -> data, field_index, column_count, field_index % column_count);
+        }
+        else {
+            fprintf(stderr, "%s registry error: rows have %zu fields, not divisible by %zu columns (%zu leftover); quote operator characters or use explicit None\n", lm_registry_source_error_prefix(lm_lmx_message_thread, loader), field_index, column_count, field_index % column_count);
+        }
         lm_own_delete(row_cells, 0);
         return -1;
     }
