@@ -2048,7 +2048,9 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
         ---
     ---
     if: status = 0
+        lm_trans_uses_set_fn_frame(function\frame)
         status: lm_trans_emit_statement_list(file, function\body_start, body_indent, namespace_)
+        lm_trans_uses_set_fn_frame(0)
     if: status = 0
         status: lm_trans_validate_end_trailer(frame)
     if: status = 0 && (frame\trailer = 0 || lm_trans_text_equals(frame\trailer\spelling, "return") = 0)

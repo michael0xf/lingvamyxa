@@ -806,6 +806,7 @@ table:
              array_reference_element_address_depth size_t       34                      0                                0
              array_reference_element_const int                  35                      0                                0
              callable_throws_node     LmP0Node               36                      0                                1
+             callable_frame           LmP0Frame              37                      0                                1
 end: LmTransSymbol
 
 table:

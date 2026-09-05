@@ -3775,7 +3775,7 @@ fn: lm_trans_emit_return_statement (
             ---
             if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_ATOM
                 required_descriptor: lm_trans_namespace_descriptor(namespace_, expected_type\class_name)
-                if: lm_trans_guard_direct_structure_value_layout(namespace_, candidate_node\as\atom, required_descriptor, "return value") != 0
+                if: lm_trans_admit_consumer_uses(namespace_, candidate_node\as\atom, required_descriptor, candidate_node\as\atom, lm_trans_uses_get_fn_frame(), "return value") != 0
                     lm_trans_expr_callable_type_delete(expected_type)
                     return: 1
                 ---
@@ -10429,7 +10429,7 @@ fn: lm_trans_guard_direct_structure_assignment (
     status: 0
     if: lm_trans_expr_value_class_from_atom(frame\head, namespace_, target_class)
         required_descriptor: lm_trans_namespace_descriptor(namespace_, target_class)
-        status: lm_trans_guard_direct_structure_value_layout(namespace_, candidate_node\as\atom, required_descriptor, "assignment")
+        status: lm_trans_admit_consumer_uses(namespace_, candidate_node\as\atom, required_descriptor, frame\head, lm_trans_uses_get_fn_frame(), "assignment")
     ---
     lm_trans_text_ref_destroy(@ target_class)
 return: status
@@ -13918,6 +13918,7 @@ fn: lm_trans_namespace_set_callable_shape (
     symbol\callable_has_thread_context: function\has_thread_context
     symbol\callable_is_thread_handler: function\is_thread_handler
     symbol\callable_throws_node: function\throws_node
+    symbol\callable_frame: function\frame
 return: 0
 
 fn: lm_trans_function_header_read_params (LmTransFunctionHeader: function) int

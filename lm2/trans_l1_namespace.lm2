@@ -567,6 +567,221 @@ fn: lm_trans_descriptor_implements (
     out_result[0]: 1
 return: 0
 
+const: LmP0Frame: lm_trans_uses_fn_frame
+
+sub: lm_trans_uses_set_fn_frame (const: LmP0Frame: frame)
+    lm_trans_uses_fn_frame: frame
+end: lm_trans_uses_set_fn_frame
+
+fn: lm_trans_uses_get_fn_frame () const: LmP0Frame
+return: lm_trans_uses_fn_frame
+
+fn: lm_trans_uses_is_slash_atom (const: (LmP0Text: text)) int
+return: text != 0 && text\length = 1U && text\data != 0 && text\data[0] = '\\'
+
+fn: lm_trans_uses_is_control_head (const: (LmP0Text: head)) int
+    if: head = 0
+        return: 0
+    if: lm_trans_text_equals(head, "if") != 0 || lm_trans_text_equals(head, "else") != 0 || lm_trans_text_equals(head, "while") != 0 || lm_trans_text_equals(head, "for") != 0 || lm_trans_text_equals(head, "return") != 0 || lm_trans_text_equals(head, "throw") != 0 || lm_trans_text_equals(head, "catch") != 0 || lm_trans_text_equals(head, "assert") != 0 || lm_trans_text_equals(head, "fn") != 0 || lm_trans_text_equals(head, "sub") != 0 || lm_trans_text_equals(head, "external") != 0 || lm_trans_text_equals(head, "table") != 0 || lm_trans_text_equals(head, "finally") != 0 || lm_trans_text_equals(head, "L2") != 0
+        return: 1
+return: 0
+
+fn: lm_trans_uses_slash_offset (const: @(char data); size_t: length) size_t
+    size_t: i
+
+    i: 0U
+    while: i < length
+        if: data[i] = '\\'
+            return: i
+        i: i + 1U
+return: length
+
+sub: lm_trans_uses_path_add (@: char paths; @: size_t count; const: @(char path); size_t: length)
+    @: char slot
+    size_t: i
+    size_t: n
+
+    if: paths = 0 || count = 0 || path = 0 || length = 0U || length >= 128U
+        return
+    i: 0U
+    while: i < count[0]
+        slot: paths + (i * 128U)
+        n: c.strlen(slot)
+        if: n = length && c.memcmp(slot, path, n) = 0
+            return
+        i: i + 1U
+    if: count[0] >= 64U
+        return
+    slot: paths + (count[0] * 128U)
+    c.memcpy(slot, path, length)
+    slot[length]: '\0'
+    count[0]: count[0] + 1U
+end: lm_trans_uses_path_add
+
+fn: lm_trans_uses_name_eq (const: (LmP0Text: name); const: (LmP0Text: varb)) int
+    LmP0Text: payload
+    int: same
+
+    if: name = 0 || varb = 0
+        return: 0
+    payload: lm_own_new_zero(c.sizeof(payload[0]))
+    if: payload = 0
+        return: 0
+    same: 0
+    if: lm_trans_identifier_payload(name, payload)
+        same: lm_trans_text_same(payload, varb)
+        if: same = 0
+            same: lm_trans_identifier_same(name, varb)
+        ---
+    ---
+    lm_own_delete(payload, 0)
+return: same
+
+fn: lm_trans_uses_scan_follow (const: (LmP0Text: varb); @: char paths; @: size_t count; LmP0Field: start) LmP0Field
+    LmP0Field: field
+    LmP0Text: name
+    c.array: [128]: char path
+    size_t: used
+    int: tracked
+
+    if: start = 0 || start\value = 0 || start\value\kind != c.LM_P0_NODE_ATOM
+        return: start
+    name: start\value\as\atom
+    tracked: lm_trans_uses_name_eq(name, varb)
+    field: start\next
+    if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM || lm_trans_uses_is_slash_atom(field\value\as\atom) = 0
+        return: start
+    used: 0U
+    while: field != 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_uses_is_slash_atom(field\value\as\atom) != 0
+        field: field\next
+        if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM || field\value\as\atom = 0
+            return: start
+        name: field\value\as\atom
+        if: tracked != 0 && name\length > 0U
+            if: used != 0U && used + 1U < 128U
+                path[used]: '\\'
+                used: used + 1U
+            if: used + name\length < 128U
+                c.memcpy(path + used, name\data, name\length)
+                used: used + name\length
+            ---
+        ---
+        field: field\next
+    if: tracked != 0 && used > 0U
+        lm_trans_uses_path_add(paths, count, path, used)
+return: field
+
+fn: lm_trans_uses_walk_frame (const: (LmP0Text: varb); @: char paths; @: size_t count; const: (LmP0Frame: frame)) int
+    LmP0Text: head
+    size_t: slash
+    size_t: rest
+
+    if: varb = 0 || frame = 0
+        return: 0
+    head: frame\head
+    if: head != 0 && head\data != 0 && head\length > 0U
+        slash: lm_trans_uses_slash_offset(head\data, head\length)
+        if: slash < head\length
+            if: slash > 0U
+                head: lm_own_new_zero(c.sizeof(head[0]))
+                if: head != 0
+                    head\data: frame\head\data
+                    head\length: slash
+                    if: lm_trans_uses_name_eq(head, varb) != 0 && slash + 1U < frame\head\length
+                        rest: frame\head\length - slash - 1U
+                        lm_trans_uses_path_add(paths, count, frame\head\data + slash + 1U, rest)
+                    ---
+                    lm_own_delete(head, 0)
+                ---
+            ---
+            return: lm_trans_uses_walk_structure(varb, paths, count, frame\body)
+        ---
+    if: lm_trans_uses_is_control_head(frame\head) != 0
+        return: lm_trans_uses_walk_structure(varb, paths, count, frame\body)
+return: lm_trans_uses_walk_structure(varb, paths, count, frame\body)
+
+fn: lm_trans_uses_walk_structure (const: (LmP0Text: varb); @: char paths; @: size_t count; const: (LmP0Structure: body)) int
+    LmP0Field: field
+    LmP0Field: next
+
+    if: varb = 0 || body = 0
+        return: 0
+    field: body\first_field
+    while: field != 0
+        next: lm_trans_uses_scan_follow(varb, paths, count, field)
+        if: next != field
+            field: next
+        else:
+            if: lm_trans_uses_walk_node(varb, paths, count, field\value) != 0
+                return: 1
+            field: field\next
+        ---
+return: 0
+
+fn: lm_trans_uses_walk_node (const: (LmP0Text: varb); @: char paths; @: size_t count; const: (LmP0Node: node)) int
+    if: varb = 0 || node = 0
+        return: 0
+    if: node\kind = c.LM_P0_NODE_STRUCTURE
+        return: lm_trans_uses_walk_structure(varb, paths, count, node\as\structure)
+    if: node\kind = c.LM_P0_NODE_FRAME
+        return: lm_trans_uses_walk_frame(varb, paths, count, node\as\frame)
+return: 0
+
+fn: lm_trans_uses_path_on_descriptor (const: (LmTransDescriptor: candidate); const: @(char path)) int
+    c.array: [128]: char segment
+    size_t: i
+
+    if: candidate = 0 || path = 0 || path[0] = '\0'
+        return: 0
+    i: 0U
+    while: path[i] != '\0' && path[i] != '\\' && i < 127U
+        segment[i]: path[i]
+        i: i + 1U
+    segment[i]: '\0'
+    if: lm_trans_descriptor_structural_field(candidate, segment) = 0
+        return: 0
+return: 1
+
+fn: lm_trans_admit_consumer_uses (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: candidate_name
+    const: LmTransDescriptor: required_descriptor
+    const: LmP0Text: varb
+    const: LmP0Frame: consumer
+    const: @(char context)
+) int
+    const: LmTransDescriptor: candidate_descriptor
+    @: char paths
+    size_t: path_count
+
+    if: namespace_ = 0 || candidate_name = 0 || required_descriptor = 0 || varb = 0 || consumer = 0
+        return: lm_trans_guard_direct_structure_value_layout(namespace_, candidate_name, required_descriptor, context)
+    if: candidate_name\data = 0 || candidate_name\length = 0U || (candidate_name\data[0] >= '0' && candidate_name\data[0] <= '9')
+        return: 0
+    if: lm_trans_atom_is_void_primitive(namespace_, candidate_name)
+        return: 0
+
+    candidate_descriptor: lm_trans_effective_value_descriptor_from_atom(namespace_, candidate_name)
+    if: candidate_descriptor = 0
+        return: 0
+
+    paths: lm_own_new_zero(64U * 128U)
+    if: paths = 0
+        return: 1
+    path_count: 0U
+    if: lm_trans_uses_walk_frame(varb, paths, @ path_count, consumer) != 0
+        lm_own_delete(paths, 0)
+        return: 1
+    if: path_count = 0U
+        lm_own_delete(paths, 0)
+        if: lm_trans_descriptor_class_relation_value(candidate_descriptor, "lm.trans.c.indexed-members") = 0 && lm_trans_descriptor_class_relation_value(required_descriptor, "lm.trans.c.indexed-members") = 0
+            return: 0
+        c.fprintf(c.stderr, "trans hosted C backend limitation: \"%.*s\" implements the required descriptor in %s, but distinct hosted C layouts require an adapter/projection\n", (cast: int candidate_name\length), candidate_name\data, context)
+        return: 1
+    ---
+    lm_own_delete(paths, 0)
+return: lm_trans_admit_implements(namespace_, candidate_descriptor, required_descriptor, candidate_name, context)
+
 fn: lm_trans_descriptor_relation_find (
     const: LmTransDescriptor: descriptor
     const: @(char relation_name)
@@ -3258,6 +3473,7 @@ fn: lm_trans_symbol_copy_signature (LmTransSymbol: target; const: (LmTransSymbol
     target\callable_has_thread_context: source\callable_has_thread_context
     target\callable_is_thread_handler: source\callable_is_thread_handler
     target\callable_throws_node: source\callable_throws_node
+    target\callable_frame: source\callable_frame
 return: 0
 
 fn: lm_trans_namespace_declare_compatible (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind)) int

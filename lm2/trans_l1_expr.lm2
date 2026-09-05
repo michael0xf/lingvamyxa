@@ -2637,7 +2637,7 @@ fn: lm_trans_expr_stack_push_lazy_binder_fields (FILE: file; LmTransExprStack: s
             break
         index: index + 1U
     if: (status = 0)
-        status: lm_trans_expr_stack_push_segments(file, stack, segments, namespace_)
+        status: lm_trans_expr_stack_push_segments(file, stack, segments, namespace_, source_symbol)
     lm_trans_expr_segment_stack_delete(@ segments)
     if: (status != 0)
         return: 1
@@ -3061,7 +3061,7 @@ fn: lm_trans_expr_segments_parse_fields (LmOwnPtrStack: segments; const: (LmP0Fi
     return: 0
 end: lm_trans_expr_segments_parse_fields
 
-fn: lm_trans_expr_stack_push_segments (FILE: file; LmTransExprStack: stack; const: (LmOwnPtrStack: segments); const: (LmTransNamespace: namespace_)) int
+fn: lm_trans_expr_stack_push_segments (FILE: file; LmTransExprStack: stack; const: (LmOwnPtrStack: segments); const: (LmTransNamespace: namespace_); const: (LmTransSymbol: callee)) int
     size_t: index
     const: LmTransExprSegment: segment
     const: LmP0Node: candidate_node
@@ -3070,6 +3070,7 @@ fn: lm_trans_expr_stack_push_segments (FILE: file; LmTransExprStack: stack; cons
     LmTransL4CallableType: candidate_type
     int: candidate_type_status
     int: materialized
+    const: LmP0Frame: callee_frame
     if: (segments = 0)
         return: 0
     index: segments\count
@@ -3107,7 +3108,10 @@ fn: lm_trans_expr_stack_push_segments (FILE: file; LmTransExprStack: stack; cons
             lm_trans_expr_callable_type_delete(candidate_type)
         if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_ATOM && segment\expected_param != 0 && segment\expected_param\type != 0
             required_descriptor: lm_trans_namespace_descriptor(namespace_, segment\expected_param\type\class_name)
-            if: lm_trans_guard_direct_structure_value_layout(namespace_, candidate_node\as\atom, required_descriptor, "function argument") != 0
+            callee_frame: 0
+            if: callee != 0
+                callee_frame: callee\callable_frame
+            if: lm_trans_admit_consumer_uses(namespace_, candidate_node\as\atom, required_descriptor, segment\expected_param\name, callee_frame, "function argument") != 0
                 return: 1
             ---
         ---
@@ -3858,7 +3862,7 @@ fn: lm_trans_expr_stack_schedule_call_args_mode (FILE: file; LmTransExprStack: s
         return: 1
     status: lm_trans_call_args_layout(segments, body, callee)
     if: (status = 0)
-        status: lm_trans_expr_stack_push_segments(file, stack, segments, namespace_)
+        status: lm_trans_expr_stack_push_segments(file, stack, segments, namespace_, callee)
     if: status = 0 && include_env && callee != 0 && callee\has_env_arg
         if: ((segments\count > 0U) && (lm_trans_expr_stack_push_text(stack, ", ") != 0))
             status: 1

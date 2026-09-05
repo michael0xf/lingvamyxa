@@ -243,6 +243,7 @@ sub: lm_trans_symbol_destroy_fields (LmTransSymbol: symbol)
         symbol\callable_returns_value: 0
         symbol\callable_is_struct_return: 0
         symbol\callable_throws_node: 0
+        symbol\callable_frame: 0
         lm_trans_descriptor_delete_any(symbol\descriptor)
         symbol\descriptor: 0
 end: lm_trans_symbol_destroy_fields
