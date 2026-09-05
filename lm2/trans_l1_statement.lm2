@@ -8168,7 +8168,6 @@ fn: lm_trans_module_init_emit_value_slot (
     LmP0Text: slot_name
     LmP0Text: c_type_name
 
-    c.LM_UNUSED(namespace_)
     if: file = 0 || frame = 0 || entry = 0 || entry\slot_name = 0
         return: 1
     slot_name: lm_trans_text_from_cstr(entry\slot_name)
@@ -8184,7 +8183,7 @@ fn: lm_trans_module_init_emit_value_slot (
         ---
     else:
         if: entry\kind = c.LM_TRANS_MODULE_INIT_KIND_NAMED_STRUCTURE
-            if: lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *") != 0
+            if: lm_trans_emit_projected_type_name(file, frame\head, namespace_) != 0 || lm_trans_put(file, " *") != 0
                 return: 1
             ---
         else:

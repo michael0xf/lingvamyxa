@@ -34635,7 +34635,6 @@ static int lm_trans_module_init_emit_value_slot(struct LmMessageThread *lm_lmx_m
     (void)lm_lmx_message_thread;
     LmP0Text * slot_name;
     LmP0Text * c_type_name;
-    LM_UNUSED(namespace_);
     if (file == 0 || frame == 0 || entry == 0 || entry -> slot_name == 0) {
         return 1;
     }
@@ -34661,7 +34660,7 @@ static int lm_trans_module_init_emit_value_slot(struct LmMessageThread *lm_lmx_m
     }
     else {
         if (entry -> kind == LM_TRANS_MODULE_INIT_KIND_NAMED_STRUCTURE) {
-            if (lm_trans_emit_identifier(lm_lmx_message_thread, file, frame -> head) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *") != 0) {
+            if (lm_trans_emit_projected_type_name(lm_lmx_message_thread, file, frame -> head, namespace_) != 0 || lm_trans_put(lm_lmx_message_thread, file, " *") != 0) {
                 {
                     int lm_return_2 = 1;
                     lm_trans_text_ref_destroy(&slot_name);
