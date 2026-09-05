@@ -294,11 +294,14 @@ EN:
     arena metadata stacks (`allocations` / descriptors / lazy edges) are
     `lm_own_new_zero`; Mix pages and `items` use `lm_own_new_zero` / `c.free`.
 
-  Hosted chunks (struct_refactoring.txt §2 — still true):
-    per-name `typedef struct`; size is `sizeof(T)`; field-follow is `->`;
-    rank-N `[]` is a ladder of `lm_own_arena_array_new_zero` (C `T **`),
-    not one rectangle. Empty Structure still has the dummy
-    `lm_lmx_empty_structure` byte.
+  Hosted chunks (struct_refactoring.txt first delivery, Phases 1–6 / 8):
+    named Structure is a graph header (`LmLmxStructure *` / `lm_lmx_layout_*`)
+    with own-descriptor prefix, not `typedef struct ThatName`; empty named
+    Structure is prefix + 0 payload; nested StructureReference and `[]`
+    fields are slots; rank-N ordinary `[]` is one rectangle (`T *` + cell
+    product), not a `T **` ladder. Hosted field-follow still emits C `->`.
+    Mix / own / table-class and per-name typedef tests stay on the old
+    projection until that file's Phase 9.1.
 
   Trans lowering:
     local and direct module named/anonymous Structures, `fm` results, admitted
@@ -312,8 +315,9 @@ EN:
   Spec already records this as a *coarse* bootstrap: one root arena that
   outlives every ordinary function return; tree-cut currently promotes lazy
   edges and does not reclaim general unreachable root objects. That coarse
-  retain-until-thread-death profile is valid. The lie is unscoped shells and
-  typedef-sized chunks, not "only one arena".
+  retain-until-thread-death profile is valid. The remaining lie is unscoped
+  shells and Mix/own typedef-sized chunks, not "only one arena" and not
+  language-test named Structures.
 
 RU:
 
@@ -332,10 +336,13 @@ RU:
     `arena_head`, не регионы корня; стеки метаданных арены — `lm_own_new_zero`;
     страницы Mix и `items` — `lm_own_new_zero` / `c.free`.
 
-  Hosted-куски (struct_refactoring.txt §2):
-    typedef на имя; размер `sizeof(T)`; field-follow — `->`; rank-N `[]` —
-    лесенка аллокаций, не прямоугольник. Пустая Structure — байт
-    `lm_lmx_empty_structure`.
+  Hosted-куски (первая поставка struct_refactoring.txt, фазы 1–6 / 8):
+    именованная Structure — graph header (`LmLmxStructure *` /
+    `lm_lmx_layout_*`) с префиксом своего дескриптора, не `typedef struct
+    ThatName`; пустая — префикс + 0 payload; вложенные StructureReference
+    и `[]` — слоты; rank-N обычный `[]` — один прямоугольник. Hosted
+    field-follow всё ещё эмитит C `->`. Mix / own / table-class — старая
+    проекция до фазы 9.1 того файла.
 
   Lowering trans:
     локальные и модульные Structure, результаты `fm`, допущенные Array и
@@ -346,8 +353,8 @@ RU:
 
   Спека уже называет это грубым bootstrap: одна root-арена переживает любой
   обычный return; tree-cut сейчас только promote lazy-рёбер. Грубый профиль
-  «держать до смерти потока» законен. Ложь — бесхозные шапки и куски
-  `sizeof(T)`, не «арена одна».
+  «держать до смерти потока» законен. Ложь — бесхозные шапки и Mix/own-куски
+  `sizeof(T)`, не «арена одна» и не языковые named Structure.
 
 
 3. Gaps vs spec / Дыры относительно спеки
@@ -355,14 +362,12 @@ RU:
 
 EN (priority order):
 
-  G0. Hosted Structure/Array chunks are still the old C projection.
-      Until struct_refactoring Phases 1–3 and 8: size is `sizeof(T)`,
-      field-follow is `->`, nested Structure is inline or extra C depth,
-      rank-N is `T **`. Precise collection cannot see which words are
-      StructureReference edges. Shared descriptors are not a first-word
-      prefix. Empty unit is not prefix + 0 payload.
-      Do not duplicate those phases here; constructors of new Structures
-      must allocate in the current Message Thread arena.
+  G0. Language-test named Structures now have descriptor prefix + payload
+      slots (struct_refactoring first delivery). Precise collection can
+      walk those slots once end-turn reclaim exists (G4). Remaining old
+      projection: Mix / own / table-class, and hosted C still emits `->`.
+      Do not duplicate representation phases here; constructors of new
+      Structures must allocate in the current Message Thread arena.
 
   G1. Unscoped allocation still in use.
       `lm_own_new_zero` / `c.free` remain for bootstrap helpers, arena
@@ -415,14 +420,14 @@ EN (priority order):
       `await` / `schedule` are not implemented. Do not add whole-branch
       owner-transfer as a source operation.
 
-  G8. Array views vs copies, and the rectangle.
-      Spec §6.5: slice/partial index/reshape are borrowed views; they must
-      not outlive backing; `return` of a view must not implicit-copy.
-      Hosted arrays are mostly owned headers+backing. The rank ladder
-      (struct_refactoring Phase 8) is extra regions the collector must
-      not leak until it is one rectangle. L3 checked vs L2 unchecked index
-      is not consistently gated (`receiver.l3.exclude` still incomplete
-      per §1.4).
+  G8. Array views vs copies.
+      Spec §6.5 / §19.29.1: L3 slice/reshape is an ArrayReference in this
+      Message's graph; L2 raw view is a machine address that pins against
+      compaction. Ordinary rank-N `[]` is already one rectangle (struct
+      Phase 8). Remaining: view lifetime vs backing, no implicit copy on
+      `return` of a view, L3 checked vs L2 unchecked index
+      (`receiver.l3.exclude` still incomplete per §1.4). Mix/own arrays
+      may still be the old ladder until Phase 9.1.
 
   G9. L2 machine surface incomplete.
       Exact semantics of `@`, prefix `\`, field-follow, raw store, address
@@ -455,10 +460,11 @@ EN (priority order):
 
 RU (тот же порядок):
 
-  G0. Hosted-куски всё ещё старая C-проекция.
-      Пока нет фаз 1–3 и 8 struct_refactoring: `sizeof(T)`, `->`, лесенка
-      массивов. Точный сбор не видит, какие слова — StructureReference.
-      Конструкторы новых Structure — в текущей арене Message Thread.
+  G0. Языковые named Structure уже с префиксом дескриптора и слотами
+      (первая поставка struct_refactoring). Точный сбор — когда появится
+      G4. Старая проекция: Mix / own / table-class; hosted C всё ещё `->`.
+      Фазы представления сюда не дублировать. Конструкторы — в арене
+      текущего Message Thread.
 
   G1. Бесхозные аллокации.
       `lm_own_new_zero` / `c.free` в хелперах, шапках арен, стеках метаданных
@@ -489,7 +495,8 @@ RU (тот же порядок):
   G7. Message ещё не неактивный L3 Thread. `send:` копирует байты LMX.
       Не добавлять owner-transfer ветки.
 
-  G8. View против copy у Array; плюс лесенка рангов вместо прямоугольника.
+  G8. View против copy у Array. Обычный rank-N `[]` уже прямоугольник
+      (фаза 8 представления). Лесенка может остаться у Mix/own до 9.1.
 
   G9. Машинная поверхность L2. Mix-адреса — дерево размещения без арены
       Message; курсоры — L3 Thread. `@` пинит объект против компакта на
@@ -511,10 +518,11 @@ Phase A — hosted conformance (do first, no new source operators)
 
   EN:
     Representation (owned by struct_refactoring.txt, not duplicated):
-      Phases 1–3 and 8. New Structure chunks: descriptor prefix + payload,
-      size from the descriptor, allocated in the current L3 Thread arena.
-      Nested StructureReference slots are the value graph. Rank-N `[]` is
-      one rectangle. Mix / own / table-class stay on the old projection
+      First delivery (Phases 1–6, 7.1–7.2, 8) is in. New language-test
+      Structure chunks: descriptor prefix + payload, size from the
+      descriptor, allocated in the current L3 Thread arena. Nested
+      StructureReference slots are the value graph. Rank-N ordinary `[]`
+      is one rectangle. Mix / own / table-class stay on the old projection
       until that file's Phase 9.1.
 
     Ownership on this file:
@@ -539,8 +547,9 @@ Phase A — hosted conformance (do first, no new source operators)
        StructureReferences is allowed and does not hang tree-cut.
 
   RU:
-    Представление (struct_refactoring.txt): фазы 1–3 и 8. Новые куски —
-    префикс + payload в арене L3 Thread. Mix/own — старая проекция до 9.1.
+    Представление (struct_refactoring.txt): первая поставка (фазы 1–6,
+    7.1–7.2, 8) уже в дереве. Новые языковые куски — префикс + payload в
+    арене L3 Thread. Mix/own — старая проекция до 9.1.
 
     Владение в этом файле:
     1. Обычные Structure/Array — только `lm_own_arena_new_zero` арены
