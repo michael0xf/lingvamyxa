@@ -1,0 +1,55 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+Point:
+    int: x
+    int: y
+end: Point
+
+merge: (Point) NamedPoint
+    int: nameTag
+end: NamedPoint
+
+Closer:
+    fn: close () int
+end: Closer
+
+merge: (Closer) File
+    int: handle
+end: File
+
+fn: useFile (File: f) int
+    return: f\handle
+end: useFile
+
+external:
+    fn: main () int
+        NamedPoint: p
+            x: 1
+            y: 2
+            nameTag: 3
+        end: p
+        File: a
+            handle: 4
+        end: a
+        File: b
+            handle: 5
+        end: b
+
+        if: p = 0 || p\x != 1 || p\y != 2 || p\nameTag != 3
+            return: 1
+        if: a = 0 || b = 0 || a = b
+            return: 2
+        if: a\handle != 4 || b\handle != 5
+            return: 3
+        if: implements(a File useFile) != 1
+            return: 4
+        return: 0
+    end: main
+end: external
