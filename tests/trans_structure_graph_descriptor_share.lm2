@@ -1,0 +1,49 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+EmptyS:
+end: EmptyS
+
+Point:
+    int: x
+    int: y
+end: Point
+
+external:
+    fn: main () int
+        EmptyS: a
+        EmptyS: b
+        Point: p
+            x: 1
+            y: 2
+        end: p
+        Point: q
+            x: 3
+            y: 4
+        end: q
+        @@: void emptyA (cast: (@@: void) a)
+        @@: void emptyB (cast: (@@: void) b)
+        @@: void pointA (cast: (@@: void) p)
+        @@: void pointB (cast: (@@: void) q)
+
+        if: a = 0 || b = 0 || a = b || p = 0 || q = 0 || p = q
+            return: 1
+        if: emptyA = 0 || emptyB = 0 || emptyA[0] = 0 || emptyA[0] != emptyB[0]
+            return: 2
+        if: emptyA[0] = (cast: (@: void) a) || emptyB[0] = (cast: (@: void) b)
+            return: 3
+        if: pointA = 0 || pointB = 0 || pointA[0] = 0 || pointA[0] != pointB[0]
+            return: 4
+        if: pointA[0] = (cast: (@: void) p) || pointB[0] = (cast: (@: void) q)
+            return: 5
+        if: emptyA[0] = pointA[0]
+            return: 6
+        return: 0
+    end: main
+end: external

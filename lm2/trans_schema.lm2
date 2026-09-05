@@ -96,6 +96,9 @@ table:
     rows:
              LmTransModuleInitEntry 1
              LmTransDescriptor     1
+             LmTransDescriptorField 1
+             LmTransDescriptorRelation 1
+             LmTransSymbol         1
 end: `cast.target`
 
 table:

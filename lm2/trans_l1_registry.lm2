@@ -1038,7 +1038,7 @@ fn: lm_trans_typedef_projection_emit_guard_hash (FILE: file; u64: hash) int
     unsigned: high
     unsigned: low
 
-    high: cast: unsigned (hash >> 32U)
+    high: cast: unsigned (hash `>>` 32U)
     low: cast: unsigned hash
     if: c.fprintf(file, "0x%08x%08xULL", high, low) < 0
         return: 1

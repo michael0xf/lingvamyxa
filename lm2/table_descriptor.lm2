@@ -51,7 +51,7 @@ return: stack
 sub: lm_table_column_descriptor_delete_any (@: void object)
     LmTableColumnDescriptor: column
 
-    column: object
+    column: cast: (LmTableColumnDescriptor) object
     if: column = 0
         return
     lm_own_delete(column\name, 0)
@@ -70,7 +70,7 @@ end: lm_table_column_descriptor_delete_any
 sub: lm_table_cell_delete_any (@: void object)
     LmTableCell: cell
 
-    cell: object
+    cell: cast: (LmTableCell) object
     if: cell = 0
         return
     lm_own_delete(cell\atom, 0)
@@ -85,7 +85,7 @@ end: lm_table_cell_delete_any
 sub: lm_table_row_delete_any (@: void object)
     LmTableRow: row
 
-    row: object
+    row: cast: (LmTableRow) object
     if: row = 0
         return
     if: row\cells != 0
@@ -100,7 +100,7 @@ end: lm_table_row_delete_any
 sub: lm_registry_view_row_delete_any (@: void object)
     LmRegistryViewRow: row
 
-    row: object
+    row: cast: (LmRegistryViewRow) object
     if: row = 0
         return
     lm_own_delete(row\table, 0)
@@ -117,7 +117,7 @@ end: lm_registry_view_row_delete_any
 sub: lm_table_descriptor_delete_any (@: void object)
     LmTableDescriptor: table
 
-    table: object
+    table: cast: (LmTableDescriptor) object
     if: table = 0
         return
     if: table\columns != 0

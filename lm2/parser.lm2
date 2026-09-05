@@ -719,7 +719,7 @@ end: lm_p0_indent_stack_free
 sub: lm_p0_indent_stack_free_any (@: void object)
     LmP0IndentStack: stack
 
-    stack: object
+    stack: cast: (LmP0IndentStack) object
     lm_p0_indent_stack_free(stack)
 end: lm_p0_indent_stack_free_any
 

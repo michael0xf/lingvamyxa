@@ -39,6 +39,19 @@ end: `class.reference-base`
 
 table:
     source
+    name: `cast.target`
+    columns: (class: class) (int: value)
+    rows:
+             LmTableColumnDescriptor  1
+             LmTableCell              1
+             LmTableRow               1
+             LmRegistryViewRow        1
+             LmTableDescriptor        1
+             LmRegistryView           1
+end: `cast.target`
+
+table:
+    source
     name: `LmTableColumnDescriptor.field.class`
     columns: (class: class) (class: field)
     rows:

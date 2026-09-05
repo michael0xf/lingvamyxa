@@ -1,0 +1,33 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+Node:
+    int: value
+    Node: next
+end: Node
+
+external:
+    fn: main () int
+        Node: loop
+            value: 1
+            next: 0
+        end: loop
+
+        loop\next: loop
+        if: loop = 0 || loop\next != loop || loop\next\next != loop || loop\next\value != 1
+            return: 1
+        if: c.lm_own_tree_cut(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread)) != 0
+            return: 2
+        if: loop\next != loop || loop\value != 1
+            return: 3
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), loop) = 0
+            return: 4
+        return: 0
+    end: main
+end: external

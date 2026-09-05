@@ -9,6 +9,8 @@ Language tests (ontology after struct_refactoring.txt Phases 1–6):
     tests/trans_structure_graph_merge.lm2
     tests/trans_structure_graph_call.lm2
     tests/trans_structure_graph_array_rect.lm2
+    tests/trans_structure_graph_descriptor_share.lm2
+    tests/trans_structure_graph_cycle.lm2
 
 These must not require `typedef struct ThatName` in generated C for a
 named Structure introduced by the test. Generated C uses one header

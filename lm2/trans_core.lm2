@@ -251,7 +251,7 @@ end: lm_trans_symbol_destroy_fields
 sub: lm_trans_symbol_destroy_fields_any (@: void object)
     LmTransSymbol: symbol
 
-    symbol: object
+    symbol: cast: (LmTransSymbol) object
     lm_trans_symbol_destroy_fields(symbol)
 end: lm_trans_symbol_destroy_fields_any
 
@@ -262,7 +262,7 @@ end: lm_trans_symbol_destroy
 sub: lm_trans_symbol_delete_any (@: void object)
     LmTransSymbol: symbol
 
-    symbol: object
+    symbol: cast: (LmTransSymbol) object
     lm_trans_symbol_destroy(symbol)
 end: lm_trans_symbol_delete_any
 

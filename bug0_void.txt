@@ -4,33 +4,25 @@ Spec §2.2.2.6: void is semantic:none — no cell. Unit is an empty Structure
 (`(): empty`). They are not the same. Confusing them would make an empty
 Structure interchangeable with int / a missing cell.
 
-Current hosted trans accepts a void local as if it were a declarable empty
-Structure:
+Hosted trans now rejects a void local as a declarable cell:
 
     void: cell
 
-trans exits 0 and emits `void cell;`. That is an incomplete C type
-(`variable has incomplete type 'void'`). A real empty Structure is a live
-arena object, lowered as:
+trans exits 1: `void is not an empty Structure; it has no cell`.
+A real empty Structure is a live arena object: graph header prefix + 0
+payload (`LmLmxStructure *`, interned `lm_lmx_desc_Name`), not a dummy
+`unsigned char lm_lmx_empty_structure` byte.
 
-    struct Empty {
-        unsigned char lm_lmx_empty_structure;
-    };
+Destructor callbacks still receive `@: void object` (C `void *`) from the
+own-stack. They recover a typed pointer by:
 
-Why trans_core writes `symbol: object` without cast
+    entry: cast: (LmTransCallableProjectionCacheEntry) object
 
-lm2/trans_core.lm2 destructor callbacks receive `@: void object` (C `void *`)
-from the own-stack. They recover a typed pointer by:
-
-    LmTransSymbol: symbol
-    symbol: object
-
-That assignment lowers to the void* hole `symbol = object;` (C allows
-`void *` → `T *`). An explicit `cast: (LmMixPage) object` currently emits
-`(LmMixPage)object` — a value cast of void* to the struct, which C rejects.
-Nearby cache destructor already uses `cast:` and gets a pointer cast; Mix
-pages (no reference-base) do not. Until void is not an empty Structure, this
-rebind idiom is how untyped destructor arguments become typed pointers.
+The same form is used for trans symbol/descriptor/field/relation, table
+column/cell/row, and parser indent-stack destructors. That emits a pointer
+cast (`T *`) when the type is reference-base. Mix pages (no
+reference-base) still cannot use that converter; Mix stays on the old
+projection until struct_refactoring Phase 9.1.
 
 Confirming tests
 
@@ -38,7 +30,9 @@ Confirming tests
         trans rejects `void: cell` (exit 1). void is a primitive with
         semantic:none, no cell — not a declarable empty Structure.
 
-    tests/trans_mix_void_object_rebind.lm2
-        Mix analogue of `symbol: object`: recover `@: LmMixPage` from
-        `@: void` by assignment. The void* → T* hole remains until
-        pointer-cast of untyped destructor arguments is a real converter.
+    tests/trans_structure_graph_empty.lm2
+        empty named Structure is an arena object; identity survives
+        `return`; two instances are distinct.
+
+    tests/trans_anonymous_structure_empty.lm2
+        two `():` sites are distinct arena objects.

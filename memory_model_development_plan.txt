@@ -292,7 +292,12 @@ EN:
     `lm_own_arena_new` mallocs the arena shell; extra arenas hang on
     `arena_head` as sibling shells, not regions of the root;
     arena metadata stacks (`allocations` / descriptors / lazy edges) are
-    `lm_own_new_zero`; Mix pages and `items` use `lm_own_new_zero` / `c.free`.
+    `lm_own_new_zero`; Mix pages and `items` use `lm_own_new_zero` / `c.free`;
+    trans/parser/table/registry compiler internals (`lm_own_new_zero` of
+    P0 nodes, namespaces, jobs, descriptor tables) are L2 bootstrap, not
+    ordinary user Structure/Array. Generated callable-binder `lm_result` /
+    `lm_env` now go through `lm_own_arena_new_zero` of the Message arena
+    (same as hoisted closures).
 
   Hosted chunks (struct_refactoring.txt first delivery, Phases 1–6 / 8):
     named Structure is a graph header (`LmLmxStructure *` / `lm_lmx_layout_*`)
@@ -334,7 +339,10 @@ RU:
   Всё ещё бесхозно:
     `lm_own_arena_new` malloc'ит шапку арены; лишние арены — соседи в
     `arena_head`, не регионы корня; стеки метаданных арены — `lm_own_new_zero`;
-    страницы Mix и `items` — `lm_own_new_zero` / `c.free`.
+    страницы Mix и `items` — `lm_own_new_zero` / `c.free`;
+    внутренности trans/parser/table/registry — L2 bootstrap. Сгенерированные
+    callable-binder `lm_result` / `lm_env` — уже `lm_own_arena_new_zero`
+    арены Message.
 
   Hosted-куски (первая поставка struct_refactoring.txt, фазы 1–6 / 8):
     именованная Structure — graph header (`LmLmxStructure *` /
@@ -377,12 +385,12 @@ EN (priority order):
       arena and not `c.free`. Cursors are L3 Threads. One-header Mix is
       struct_refactoring Phase 9.1.
 
-  G2. void confused with empty Structure.
-      See `bug0_void.txt`. `void: cell` trans-accepts and emits illegal
-      `void cell;`. Unit (`(): empty`) is an arena object. After
-      struct_refactoring Phase 1 that object is descriptor prefix + empty
-      payload, not `struct Empty { unsigned char lm_lmx_empty_structure; }`.
-      Destructor rebind `symbol: object` depends on the void* hole.
+  G2. void vs empty Structure is split for language tests.
+      See `bug0_void.txt`. `void: cell` trans-rejects (no cell). Unit
+      (`(): empty`) and empty named Structure are arena objects: descriptor
+      prefix + empty payload. Destructor callbacks recover `@: void` with
+      `cast: (T) object` (pointer cast on reference-base types). Mix pages
+      still lack that converter until Phase 9.1.
 
   G3. Extra arena shells are sibling mallocs.
       The L3 default is one thread arena (bump + block list). Extra
@@ -471,9 +479,9 @@ RU (тот же порядок):
       и Mix. Страницы Mix — склад слотов Mix, не арена Message. Курсоры —
       L3 Thread. Одна шапка Mix — фаза 9.1 другого файла.
 
-  G2. void путают с пустой Structure.
-      `bug0_void.txt`. После фазы 1 unit — префикс + пустой payload, не
-      dummy-байт.
+  G2. void и пустая Structure разведены в языковых тестах.
+      `void: cell` — ошибка trans. Unit — префикс + 0 payload. Деструкторы
+      trans/parser/table — `cast: (T) object`. Mix — до 9.1.
 
   G3. Шапки арен — соседние malloc.
       Дефолт L3 — одна арена потока (bump + список блоков). Список
@@ -526,25 +534,29 @@ Phase A — hosted conformance (do first, no new source operators)
       until that file's Phase 9.1.
 
     Ownership on this file:
-    1. Move remaining ordinary Structure/Array paths off `lm_own_new_zero`
-       onto `lm_own_arena_new_zero` of the current Message arena. Mix pages
-       stay Mix page/slot storage (no Message arena); collect live slots
-       when a Mix branch is deleted. Cursor Threads use their own Message
-       arenas. Do not put the Mix tree into a Message arena.
-    2. Fix void vs empty Structure (`bug0_void.txt`) so unit remains an
-       arena object (prefix + 0 payload once Phase 1 exists) and `void` is
-       not a declarable cell. Then replace `symbol: object` destructor
-       rebinds with an explicit typed cast that actually emits `T *`, or a
-       small `lm_own_from_untyped` helper.
-    3. Inventory leftover static-backed / unscoped paths (partial-callable
-       binders, trans registry internals that are *not* the module-value
-       slots). Parser P0 nodes allocate from the thread arena like any
-       other Structure; they are not a second arena.
+    1. Ordinary user Structure/Array and generated callable-binder
+       `lm_result` / `lm_env` use `lm_own_arena_new_zero` of the current
+       Message arena. Mix pages stay Mix page/slot storage (no Message
+       arena); collect live slots when a Mix branch is deleted. Cursor
+       Threads use their own Message arenas. Do not put the Mix tree into
+       a Message arena. Trans/parser/table/registry internals remain L2
+       bootstrap `lm_own_new_zero` until those compiler objects are
+       themselves graph chunks.
+    2. void vs empty Structure (`bug0_void.txt`): unit is an arena object
+       (prefix + 0 payload); `void: cell` is a trans error. Destructor
+       rebinds use `cast: (T) object` (pointer cast on reference-base).
+       Mix pages still need a converter after Phase 9.1.
+    3. Leftover unscoped: arena shells (`lm_own_arena_new`), arena metadata
+       stacks, Mix pages/`items`, parser extra arena shells, trans registry
+       internals that are *not* module-value slots. Parser P0 nodes still
+       allocate as compiler objects, not as L3 user Structure.
     4. Tests: empty Structure identity across `return`; two `():` sites are
        distinct; two instances share one descriptor pointer and do not each
        own a copy; module alias is exact-reference; Mix page lives in a
-       Mix page store, not `lm_message_thread_owner`; `void: x` is a trans error; a cycle of
-       StructureReferences is allowed and does not hang tree-cut.
+       Mix page store, not `lm_message_thread_owner` (still Mix-old);
+       `void: x` is a trans error; a cycle of StructureReferences is
+       allowed and does not hang tree-cut; partial-callable binders are
+       Message-arena objects.
 
   RU:
     Представление (struct_refactoring.txt): первая поставка (фазы 1–6,
@@ -552,15 +564,19 @@ Phase A — hosted conformance (do first, no new source operators)
     арене L3 Thread. Mix/own — старая проекция до 9.1.
 
     Владение в этом файле:
-    1. Обычные Structure/Array — только `lm_own_arena_new_zero` арены
-       Message. Дерево Mix — не арена; курсоры — L3 Thread.
-    2. Развести void и пустую Structure. Unit — префикс + 0 payload.
-    3. Инвентаризация static/unscoped. Узлы P0 выделяются в арене потока,
-       как любая Structure; второй арены нет.
+    1. Обычные Structure/Array и сгенерированные callable-binder
+       `lm_result` / `lm_env` — `lm_own_arena_new_zero` арены Message.
+       Дерево Mix — не арена; курсоры — L3 Thread. Внутренности trans —
+       L2 bootstrap.
+    2. void и пустая Structure разведены. Unit — префикс + 0 payload.
+       Деструкторы — `cast: (T) object`.
+    3. Остаток unscoped: шапки арен, стеки метаданных, Mix, внутренности
+       trans/parser. Узлы P0 пока объекты компилятора, не L3 Structure.
     4. Тесты: тождество пустой Structure через `return`; два `():` различны;
        два instance делят дескриптор; модульный alias — та же ссылка;
-       страница Mix не в арене Message; `void: x` — ошибка trans;
-       цикл StructureReference допустим и не вешает tree-cut.
+       страница Mix не в арене Message (ещё Mix-old); `void: x` — ошибка
+       trans; цикл StructureReference допустим и не вешает tree-cut;
+       partial-callable binder — объект арены Message.
 
 Phase B — borrow, exact return, diagnostics
 Фаза B — borrow, точный return, диагностика

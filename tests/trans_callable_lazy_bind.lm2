@@ -20,8 +20,20 @@ fn: callAdd (AddX: add) int
     return: add(3)
 end: callAdd
 
+fn: binderInArena (AddX: add) int
+    if: add = 0
+        return: 1
+    if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), add) = 0
+        return: 1
+    return: 0
+end: binderInArena
+
 external:
     fn: main () int
-        return: callSource(five) != 5 || callAdd(addBase(4)) != 7 || callAdd(partial(addBase, 4)) != 7
+        if: callSource(five) != 5 || callAdd(addBase(4)) != 7 || callAdd(partial(addBase, 4)) != 7
+            return: 1
+        if: binderInArena(partial(addBase, 4)) != 0
+            return: 2
+        return: 0
     end: main
 end: external

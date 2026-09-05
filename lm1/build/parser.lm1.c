@@ -3040,6 +3040,7 @@ static int lm_registry_source_load_root(struct LmMessageThread *lm_lmx_message_t
 
 
 
+
 #include <string.h>
 static char * lm_table_descriptor_copy_slice(struct LmMessageThread *lm_lmx_message_thread, const char *data, size_t length);
 static char * lm_table_descriptor_copy_cstr(struct LmMessageThread *lm_lmx_message_thread, const char *value);
@@ -3644,7 +3645,7 @@ static void lm_table_column_descriptor_delete_any(void *object) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     LmTableColumnDescriptor * column;
-    column = object;
+    column = ((LmTableColumnDescriptor *)object);
     if (column == 0) {
         return;
     }
@@ -3666,7 +3667,7 @@ static void lm_table_cell_delete_any(void *object) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     LmTableCell * cell;
-    cell = object;
+    cell = ((LmTableCell *)object);
     if (cell == 0) {
         return;
     }
@@ -3683,7 +3684,7 @@ static void lm_table_row_delete_any(void *object) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     LmTableRow * row;
-    row = object;
+    row = ((LmTableRow *)object);
     if (row == 0) {
         return;
     }
@@ -3701,7 +3702,7 @@ static void lm_registry_view_row_delete_any(void *object) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     LmRegistryViewRow * row;
-    row = object;
+    row = ((LmRegistryViewRow *)object);
     if (row == 0) {
         return;
     }
@@ -3720,7 +3721,7 @@ static void lm_table_descriptor_delete_any(void *object) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     LmTableDescriptor * table;
-    table = object;
+    table = ((LmTableDescriptor *)object);
     if (table == 0) {
         return;
     }
@@ -5385,7 +5386,7 @@ static void lm_p0_indent_stack_free_any(void *object) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     LmP0IndentStack * stack;
-    stack = object;
+    stack = ((LmP0IndentStack *)object);
     lm_p0_indent_stack_free(lm_lmx_message_thread, stack);
 }
 

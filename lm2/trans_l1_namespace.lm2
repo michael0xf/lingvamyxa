@@ -226,7 +226,7 @@ return: copy
 sub: lm_trans_descriptor_field_delete_any (@: void object)
     LmTransDescriptorField: field
 
-    field: object
+    field: cast: (LmTransDescriptorField) object
     if: field != 0
         lm_own_delete(field\name, 0)
         field\name: 0
@@ -238,7 +238,7 @@ end: lm_trans_descriptor_field_delete_any
 sub: lm_trans_descriptor_relation_delete_any (@: void object)
     LmTransDescriptorRelation: relation
 
-    relation: object
+    relation: cast: (LmTransDescriptorRelation) object
     if: relation != 0
         lm_own_delete(relation\relation, 0)
         relation\relation: 0
@@ -258,7 +258,7 @@ end: lm_trans_descriptor_delete
 sub: lm_trans_descriptor_delete_any (@: void object)
     LmTransDescriptor: descriptor
 
-    descriptor: object
+    descriptor: cast: (LmTransDescriptor) object
     lm_trans_descriptor_delete(descriptor)
 end: lm_trans_descriptor_delete_any
 
