@@ -5,6 +5,10 @@ Status
 Unified draft. This document contains the structural core, the L2/L3 source
 profiles, registry and message operators, runtime services and authentication.
 
+Type compatibility is `implements(A, B, C)` (sections 2.1–2.4 and 19.21.3):
+the used tree of consumer `C`, merge-keyed converters at primitive leaves, no
+two-argument form. Hosted trans still lags that predicate (section 21.7).
+
 0. Core Formula
 
 Lingvamyxa is based on the following model:
@@ -1101,10 +1105,13 @@ The complete source-semantic value ontology is:
 
 There is no fourth ordinary value category.
 
-Primitives include numbers, booleans, atoms, symbols, enum-like values and the
-explicit machine scalars admitted by L2. A selected L2 profile may include typed
-addresses among its primitive machine values; doing so does not turn a target
-language aggregate into a Lingvamyxa value category.
+A Primitive is a source-level scalar whose *description* is an ordinary
+Structure (section 2.2.2). The language does not have a closed list of
+primitive kinds such as «int, boolean, FILE». A profile names primitives by
+merging semantic-contract fields with architecture fields (range, width,
+spelling). A selected L2 profile may include typed addresses among those
+descriptions; doing so does not turn a target-language aggregate into a
+Lingvamyxa value category.
 
 A `StructureReference` denotes one owner-arena-managed Structure with stable
 identity and ordered positional or named fields. Objects, Frames, bodies,
@@ -1141,9 +1148,10 @@ registry-class or table-cell value kind in the minimal source syntax.
 
 2.1. Type Compatibility through Namespace Descriptors
 
-A type is not an entity. Compatibility is the fact that a structure `A` may be
-used in place of a structure `B` in a structure `C`. That fact is the
-namespace-only structural predicate `implements(A, B, C)` in section 19.21.3.
+A type is not an entity and is not created on the fly as a synthetic namespace
+object. Compatibility is the fact that a structure `A` may be used in place of
+a structure `B` in a structure `C`. That fact is the namespace-only structural
+predicate `implements(A, B, C)` in section 19.21.3.
 
 `C` is the consumer: code or data, walked as a P0 tree. «Used in C» means C
 mentions `B` and concrete branches of `B` (name paths) at syntactic field-follow
@@ -1152,6 +1160,7 @@ and argument sites. The comparison does not require every first-level name of
 
     implements(A, B, C)
         iff every path in uses(C, B) is present on A
+            and every primitive leaf of those paths is admitted as in 2.2.3
 
 `uses(C, B)` is the set of syntactic name paths (`B`, `B.foo`, `B.foo.bar`, …)
 collected from C. Collection stays at P0 field-follow; it is not alias analysis,
@@ -1159,38 +1168,415 @@ callee expansion, computed-name evaluation or heap dataflow. A path that is not
 syntactically visible in C is unchecked at this site, or is carried explicitly
 across an LMX Message boundary.
 
-A leaf of a used path that is a Primitive is admitted by category
-(`class.category` / `class.semantic`) and, when present, a range validator
-(`class.range` or explicit min/max). An unused nested structure is not expanded.
-An empty `uses(C, B)` is true: there is nothing to use. There is no two-argument
-form. Without a consumer there is no type.
+This is generic by default. The requirement set is computed from the consumer
+body, not from a separately declared interface taken as a whole. An unused
+method or field of `B` is not required. An empty `uses(C, B)` is true: there is
+nothing to use. There is no two-argument form. Without a consumer there is no
+type.
 
-The predicate does not compare values behind names, field order, duplicate
-count, unused nested contents, callable signatures, mutability, ownership,
-effects, ABI spelling or target-language layout. A name such as `validate` has
-no privileged hook behavior: when a used path names it, the candidate must
-expose that ordinary name along the path.
+The predicate does not compare values behind unused names, field order,
+duplicate count, unused nested contents, callable signatures, mutability,
+ownership, effects, ABI spelling or target-language layout. A name such as
+`validate` has no privileged hook behavior: when a used path names it, the
+candidate must expose that ordinary name along the path.
 
 Repeated occurrences do not add multiplicity to this predicate. One occurrence
 of an exact name and any greater number of occurrences expose the same one name
-along a path; occurrence-qualified field access does not change that rule.
+along a path. Unqualified lookup of that name selects the newest occurrence
+(section 2.3). Occurrence-qualified field access names a specific occurrence
+and does not change the used-path rule.
 
-Primitive descriptors expose the same kind of name surface virtually through
-their namespace bindings. They do not use a second compatibility algorithm.
 Constructing an instance does not create or modify a descriptor and does not
 add compatibility evidence.
 
 Compatibility is directional and consumer-relative. `implements(A, B, C)` does
 not imply `implements(B, A, C)` and does not imply `implements(A, B, C2)` for a
-different consumer. Casts, adapters, validation calls and other application
-operations may be written as ordinary namespace-visible code, but they are not
-implicit parts of `implements`. Backend projection implements an already made
-namespace decision and is not compatibility evidence.
+different consumer. Backend projection implements an already made namespace
+decision and is not compatibility evidence. Explicit converters (section 2.2.4)
+are ordinary receivers; `implements` does not invoke them.
 
 A translator or interpreter applies `implements(A, B, C)` at plain-name rebind,
 argument consumption and return admission, supplying `C` from the remaining
 known source tree, or from an explicit Message consumer or used-path list.
 Those applications are not a two-argument source receiver.
+
+2.1.1. Two Thicknesses of the Same Predicate
+
+The same `implements(A, B, C)` is strict or relaxed according to how thick `C`
+is, not according to a second type system.
+
+When `C` walks fields of `B` — for example `FileManager` consumes `f\close` and
+`f\read` on a `File` — the used tree is fat down to those leaves. Admission is
+strict: `A` must provide every such path. A `File` method that `FileManager`
+does not touch is not required. This used-tree check is the language's generic:
+the contract is the consumer body.
+
+When `C` is thin — for example `File` itself is the consumer of a primitive
+`FILE` word that it later passes into its own methods — `uses(C, FILE)` does
+not enter a method tree on that word. The leaf is a memory cell. Admission is
+then the primitive-leaf rule of section 2.2.3: conversion is not forbidden, and
+a converter is selected by key from the merge history of the descriptors.
+This is wider than duck typing: the bits remain uncommitted until this `C`
+asks, and a keyed converter may still produce the word the consumer needs.
+
+Wanting `File` to be a file, and not an abstract machine word, is therefore not
+a prohibition `u32 ↛ FILE`. It is the decision to put the operations on the
+`File` structure and to make consumers call `file\close` rather than a parallel
+function over a raw word. If the consumer only calls an external `fclose(word)`,
+the consumed value remains a word.
+
+2.1.2. What This Is Not
+
+It is not Java's nominative interface taken as a whole. Java requires every
+method of the declared interface; unused methods are commonly stubbed and fail
+later. Lingvamyxa requires the paths this `C` actually uses.
+
+It is not Python's class-tagged object with optional manual `int(s)`. A Python
+value already has a class; conversion is a call the program writes, or a late
+`AttributeError`. Lingvamyxa conversion at a primitive leaf is keyed by merge
+history of descriptors and aimed at what this consumer asked.
+
+Near neighbours exist and are not this predicate: C++ template instantiation
+checks operations that were instantiated; Haskell collects constraints from a
+body but still names type classes; Go and TypeScript compare a declared shape;
+pydantic, serde and .NET `TypeConverter` coerce to a declared schema. None of
+them is `implements(A, B, C)` plus merge-keyed converters on the used tree.
+
+2.2. Substrate, Primitive Leaves and Conversion Keys
+
+2.2.1. Memory Substrate Is Not a Fourth Value Kind
+
+Physically there is only a memory cell: a finite bit string, equivalently a
+non-negative integer ℕ₀ in binary form. External input before any receiver
+recognizes it — a decimal numeral, UTF-8 text, an image, a machine word — is
+that same substrate.
+
+This substrate axiom belongs to L0 and to unrecognized buffers. It does not
+replace the source-semantic ontology:
+
+    Value = Primitive | StructureReference | ArrayReference
+
+A StructureReference still has arena identity. An ArrayReference still has
+elements. A Primitive is a source-level scalar whose descriptor is a Structure
+(section 2.2.2). Declaring `Value = ℕ₀` would collapse arenas, opaque handles
+and field-follow back into a single bit pile.
+
+Recognition is receiver consumption. After a codec, parser or `fromLmx`
+receiver runs, the buffer becomes a Structure tree whose leaves are again
+memory cells, typically smaller (machine words or bytes). Recursion stops
+where this `C` stops following fields. The ideal «always down to a byte» is
+not required; `C` says how fine the leaf is.
+
+The same bits may carry different descriptors. These are not one ℕ₀ that a
+backend language interprets:
+
+    1. abstract ℕ₀ after recognition as a number;
+    2. a numeral Structure (digits plus radix);
+    3. an encoding (UTF-8, little-endian word);
+    4. the raw buffer before any of the three.
+
+`implements` compares those descriptors, not the bits. The consumer `C` selects
+which of the four was asked. Target-language assignment rules (including ANSI
+C) are a backend. The language may lower to C, to another machine, or to a
+natural-language dump; that choice is not the ontology.
+
+2.2.2. Primitive Descriptions Are Ordinary Structures
+
+A primitive is not a built-in kind in the grammar. It is a memory cell plus a
+namespace-bound description Structure. The description is authored the same way
+as `User` or `File`: fields, `merge`, table rows that are themselves
+Structures. Hosted tables `class`, `class.semantic`, `class.category`,
+`class.range`, `class.spelling` and `class.c.projection` are one profile's
+serialization of those Structures, not the language's list of primitives.
+
+Two axes sit on the same description and must not be collapsed:
+
+    semantic contract
+        what a consumer may ask of the cell: count, integer, flag, ratio,
+        float(profile), complex(profile), atom, address, opaque, none.
+
+    architecture binding
+        how this profile lays the cell down: bit width, signedness, range,
+        backend spelling (`uint32_t`, `FILE *`, `int8_t`). Spelling is
+        projection data. It is not a Lingvamyxa value kind.
+
+`merge` of description Structures is the lattice. A more specific primitive
+is a later merge part: it shadows general contract fields for unqualified
+lookup and keeps them as earlier occurrences (section 2.3). `u32` is not «the
+set ℤ». It is a cell whose description merged count/integer contracts with a
+32-bit unsigned range and a C spelling.
+
+2.2.2.1. Shape of a Description
+
+A primitive description is a Structure. Profiles may name the fields as they
+wish; the roles below are the source-semantic surface `implements` and
+converters read. A field that `C` does not follow is unused, like any other
+unused path.
+
+    cell
+        marker that this description is a primitive leaf, not a Structure
+        constructor. Presence only.
+
+    semantic
+        newest contract name on the lattice (section 2.2.2.2).
+
+    numeric / integer / floating / reference / opaque / callable / descriptor
+        boolean flags recording which contracts were merged in. Hosted
+        `class.category` is this row. Flags are not a second predicate.
+
+    width
+        `fixed(N)` or `profile`. Distinct from range: `int` is profile-width
+        C99 `int`; `u32` is fixed 32.
+
+    signed
+        whether the integer contract uses a sign bit.
+
+    range
+        closed interval on the cell interpreted as ℕ₀ or ℤ, or `opaque`, or
+        a profile token such as `C99-int(profile)`. Pascal-style `0..255`.
+        Range is a validator field, not a new primitive kind.
+
+    spelling
+        backend type token for lowering. Many descriptions may share one
+        spelling (`Boolean` and `int8` may both spell `int8_t`).
+
+    convert
+        optional named converters keyed for section 2.2.4. Later merge parts
+        displace earlier keys of the same converter name.
+
+Nothing in this shape is a Java class. It is data that `merge` composes and
+that `uses(C, B)` may or may not touch.
+
+2.2.2.2. Semantic Contract Lattice
+
+Contracts are fields, merged from general to specific. A useful numeric spine
+is:
+
+    flag ⊂ count/ℕ₀ ⊂ integer/ℤ ⊂ ratio/ℚ ⊂ float(profile) ⊂ complex(profile)
+
+ℕ₀ includes 0 (indices, `size_t`). School ℕ starting at 1 is not the count
+contract. Irrationals 𝕀 are not a contract: no architecture implements them.
+IEEE `double` is `float(profile)`, not ℝ. `bigint` / `real` / `decimal` in a
+profile are still descriptions on this lattice (exact integer, high-precision
+float, decimal float) with different architecture bindings (GMP, MPFR,
+decNumber), not extra Value kinds.
+
+Orthogonal contracts, same substrate, not rungs of that spine:
+
+    atom
+        finite named ℕ₀ (enumerations, symbols). Range is the admitted names
+        or ordinals, not «ℂ».
+
+    address
+        L2 typed address. Integer-shaped; not numeric-compatible with `int`
+        unless this `C` uses it as integer.
+
+    opaque
+        handle identity. `FILE` lives here. The cell may be pointer-sized;
+        the contract is not integer.
+
+    none
+        `void`: no cell content. Distinct from unit.
+
+    unit
+        empty Structure (the other leaf, section 2.2.2.6), not a primitive
+        with range `0`.
+
+Merging `integer` into a description does not make `+` a field of the cell.
+Operators remain namespace receivers. If `C` writes `x + 1`, that is the `+`
+receiver consuming `x`; admission of `x` at that site uses the numeric/
+integer flags only when that consumer's used paths, or the operator's
+admitted operand contract, ask for them.
+
+2.2.2.3. Architecture Binding
+
+Width, signedness, range and spelling bind the contract to a machine. They
+are how a Java-style interface would be implemented under a concrete CPU/ABI,
+except the «implementation» is data on the same Structure.
+
+    u8      count + integer, unsigned, fixed 8, range 0..255
+    i32     integer, signed, fixed 32, range INT32_MIN..INT32_MAX
+    int     integer, signed, profile width, range C99-int(profile)
+    size_t  count, unsigned, profile width, range 0..SIZE_MAX(profile)
+    Boolean flag, range -1..1, spelling may be int8_t
+    double  float(profile), range C99-double(profile)
+    FILE    opaque, range opaque, spelling FILE
+    void    none
+
+Two descriptions with the same spelling are not thereby the same contract:
+`Boolean` and `int8` may both lower to `int8_t` and still differ in `semantic`
+and `range`. Two descriptions with the same contract and different spellings
+are profile aliases (`uint8` / `u8`).
+
+Hosted `class.semantic` stores the newest contract name. Hosted `class.range`
+stores the range field. Hosted `class.category` stores the merged flags.
+Hosted `class.spelling` / `class.c.projection` store lowering. Completeness of
+those tables is a profile duty (every named primitive has a description), not
+a language enumeration. The current bootstrap rows are incomplete; missing
+rows are a hosted gap, not missing kinds.
+
+2.2.2.4. Authoring by `merge`
+
+A profile authors a primitive by merging contract parts and then architecture
+fields. Conceptual source, not a required spelling:
+
+    Cell:
+    end: Cell
+
+    Count:
+        semantic: count
+        numeric: 1
+        integer: 1
+        signed: 0
+    end: Count
+
+    merge: (Cell Count) u32
+        width: fixed(32)
+        range: 0..4294967295
+        spelling: uint32_t
+    end: u32
+
+    merge: (Cell) FILE
+        semantic: opaque
+        opaque: 1
+        reference: 1
+        range: opaque
+        spelling: FILE
+    end: FILE
+
+    merge: (Cell) Boolean
+        semantic: flag
+        range: -1..1
+        width: fixed(8)
+        spelling: int8_t
+    end: Boolean
+
+`u32` then has count/integer from `Count` and width/range/spelling from the
+body. Unqualified `semantic` is `count`. `FILE` did not merge `Count`, so a
+consumer that only moves a word may still admit `u32` at a `FILE` leaf
+(section 2.2.3); a consumer that follows `opaque` / `close` on a `File`
+Structure will not.
+
+Converter keys (section 2.2.4) are further merge fields on the same
+description, for example a decimal-text → `u32` receiver recorded on `u32`,
+or `u32` → `File.handle` recorded on `File`.
+
+2.2.2.5. What Is Not a Primitive Description
+
+    A C `struct` tag, `typedef`, or `FILE` layout in a header.
+    A Registry/Table row that was never imported as a namespace descriptor.
+    `bigint` / `real` / `SQL` as extra Value categories — they are names with
+        descriptions and L1 libraries when a profile installs them (sections
+        6.6 and 9.0).
+    Text, images, decimal numerals as distinct kinds — they are substrate
+        plus a description (numeral Structure, encoding, or raw buffer;
+        section 2.2.1). After recognition they are Structure/Array trees
+        whose leaves again have primitive descriptions.
+    An empty Structure — unit leaf, section 2.2.2.6.
+
+2.2.2.6. Unit: Empty Structure, Not Zero
+
+An explicitly present empty Structure (`(): empty`) is the other lawful leaf
+of a used path: the name is there, `uses(C, B)` inside it is empty, admission
+is true. That is not the primitive `0` and not `void`. `void` is `semantic:
+none` on a primitive description: no cell. Unit is a Structure with no
+fields. Confusing them would make `(): empty` interchangeable with `int`.
+
+2.2.3. Primitive Leaves of `implements`
+
+At a used-path leaf that is a Primitive, `implements` does not walk the
+primitive description as if it were `User\foo\bar` unless `C` actually follows
+those description fields. It reads only what this consumer uses of that
+description, and otherwise treats the leaf as a memory cell.
+
+    If uses(C, B) is empty at that leaf, the result is true.
+    If C only moves the cell (pass, store, return the word), the result is
+        true when conversion is not forbidden and a converter key exists, or
+        when A and B already name the same primitive description.
+    If C follows description fields (width, range, signed, handle-ness),
+        those fields are ordinary used paths and must be present on A.
+
+The language does not maintain a pairwise deny-matrix of primitive names
+(`u32 ↛ FILE`) as the meaning of File-ness. Forbidding conversion at a word
+leaf is a field of the description, rarely used. File-ness lives on a
+`File` Structure whose consumers call `file\close`.
+
+Hosted bootstrap today does not implement this leaf rule. Explicit `cast:`
+allow-lists *target names* in `class.range` / `cast.target` and ignores the
+source and `C`. Implicit scalar assignment often emits target `=` and lets the
+C compiler decide. Raw pointers deny unless the class names match, plus
+`void*` holes. Those three hosted behaviors are migration gaps, not the
+source-semantic leaf rule. See sections 18 item 18 and 21.7.
+
+2.2.4. Converters Are Explicit Receivers Selected by Merge Key
+
+`implements` never invokes a converter. It only observes, at a primitive leaf,
+that conversion is not forbidden and that a converter is present on the key
+taken from the merge history of the two descriptions.
+
+The translator or interpreter, when lowering the substitution edge (argument,
+plain-name rebind, field initializer, return) where `implements(A, B, C)` was
+applied, selects that converter by key and inserts the call. There is no
+search over all codec pairs, no silent DWIM loop inside `implements`, and no
+hidden dataflow.
+
+The key is populated by `merge` of description Structures. If `File` merged a
+`u32` handle field, the key `u32 → File.handle` (or `u32 → FILE` where `FILE`
+is the word contract inside `File`) is present. Later merge parts displace
+earlier keys for the same name by the occurrence rule of section 2.3: the
+newest converter on that key wins; older keys remain as earlier occurrences.
+
+Failure of the converter is not `implements false`. It is an ordinary receiver
+failure at translation or interpretation of that edge (a format diagnostic;
+hosted profiles may spell it after `NumberFormatException`: decimal text
+`"Hello world!"` cannot become a file handle). `"123"` may become `u32` and
+then the `handle` field of `File` because `File`'s description merged `u32`.
+Until some `C` asked for `File` paths, the buffer was still bytes.
+
+A missing key means no conversion at that edge. The program writes an explicit
+receiver if it wants one. Ambiguity is a merge-order fact, not a search.
+
+2.3. `merge` as Ordered Occurrence Displacement
+
+`merge` of Structures (section 19.17) appends field sequences from left to
+right, then the vertical body of the `merge:` Frame as a trailing part. The
+core stream does not delete, rename or in-place replace a field.
+
+Unqualified name lookup on the merged descriptor selects the *newest*
+occurrence of that exact name (walk from the end of the field stream). Earlier
+occurrences remain and are addressed as `\[0]name`, `\[1]name`, …. This is the
+same occurrence rule as the lexical namespace. Displacement is therefore real
+and is ordered by `merge`: later sources and the body shadow earlier same-name
+fields for ordinary lookup without erasing them.
+
+Hosted C projection keeps the source member name on the newest occurrence and
+spells older same-name fields as `lm__occurrence_<index>`.
+
+Description lattices and converter keys use this same rule. Merging `integer`
+then a more specific `u32` range shadows the general contract for unqualified
+lookup; the general field remains as an earlier occurrence. Merging a second
+converter onto the same key shadows the first converter.
+
+This is not Java override (one slot, the old method is gone). It is mix-in
+composition plus occurrence shadowing.
+
+2.4. Worked Contrast: Word `FILE` versus Structure `File`
+
+A libc-style `fclose` that consumes a machine word has a thin `C`. Then
+`implements(u32var, FILEvar, fclose)` is true under 2.2.3: nothing but a cell
+is used. Widths `u16` / `u32` / `u64` are conversions on that cell, not a
+metaphysical difference from `FILE`.
+
+An LMX `File` that carries `handle`, `close` and `read`, with `FileManager`
+calling `f\close` and `f\read`, has a fat `C`. Then `implements(u32var, File,
+FileManager)` is false: the word has no those paths. `implements(myFile, File,
+FileManager)` is true when `myFile` provides them. Putting `u32` into `File`
+by `merge` means `File` *has* a word field; it does not mean `File` *is* `u32`.
+
+The same language therefore contains strict used-tree typing (the manager)
+and consumer-driven conversion at word leaves (inside `File`, which is itself
+a consumer of primitive `FILE`). Switching between them is changing `C`, not
+enabling a flag.
 
 
 3. Structures and Frames
@@ -5933,7 +6319,7 @@ executable definition.
 
 9.0. Default C99 Bootstrap Type and Dependency Map
 
-The default ANSI C / C99 bootstrap profile may use the following implementation mapping for primitive and service-level source types. This is an implementation/dependency map, not a separate source grammar.
+The default ANSI C / C99 bootstrap profile may use the following implementation mapping for primitive and service-level source types. This is an architecture-binding / dependency map for descriptions authored as in section 2.2.2, not a language list of primitive kinds and not a separate source grammar.
 
     i/u      -> C integer          -> no vcpkg
     bool     -> C int / bool       -> no vcpkg
@@ -5969,7 +6355,8 @@ import/declaration receiver consumes that data.
 The structural core does not require a separate `field` receiver. In
 declaration context, a visible primitive or model constructor consumes a raw
 identifier token and creates the requested value binding. A primitive
-constructor initializes a primitive. A Structure or Array constructor
+constructor resolves to a primitive description Structure (section 2.2.2) and
+initializes a cell under that description. A Structure or Array constructor
 materializes the value in the selected arena and binds its reference. Neither
 operation creates a class, layout, backend or field table.
 
@@ -7904,9 +8291,14 @@ explicitly below.
         rows and `default` are not consulted.
         See section 19.21.3.
         `cast:` is REGISTERED ONLY for high-level conversion semantics: its
-        current emitter lowers directly to a target-language C cast. Proposed:
-        add method/codec-selected high-level conversion for L2/L3 and restrict
-        raw representation/address casts to L2; the current L3 gate is missing.
+        current emitter allow-lists the *target* name in `class.range` or
+        `cast.target`, ignores the source and the consumer `C`, and lowers to a
+        target-language C cast. That is not the primitive-leaf rule of
+        sections 2.2.3–2.2.4. Proposed: converters are ordinary receivers
+        selected by merge key on the substitution edge; `implements` only
+        observes that the key exists and that conversion is not forbidden;
+        restrict raw representation/address casts to L2; the current L3 gate
+        is missing.
 
     19. class / relation / rule / query
         `class` has no privileged core table meaning. A Table named `class` is
@@ -9313,15 +9705,23 @@ ordinary named field of the merge result.
 The default merge is ordered and append-only:
 
     1. Normalize each part to a field sequence.
-    2. Append the field sequences from left to right.
-    3. Preserve duplicate field names and duplicate receiver heads.
-    4. Do not silently override, delete, rename or deduplicate fields.
+    2. Append the field sequences from left to right, then the vertical body
+       of the `merge:` Frame as a trailing part.
+    3. Preserve duplicate field names and duplicate receiver heads as distinct
+       occurrences in that order.
+    4. Do not delete, rename or in-place replace a field.
 
-Conflict interpretation is left to the consumer of the merged Structure. A
-layout receiver may reject duplicate field names, a table receiver may accept
-repeated rows, and another profile may define first-wins, last-wins or explicit
-override rules. Those policies are receiver semantics above `merge`; the core
-`merge` result is the ordered field stream.
+Unqualified lookup of a name on the merged descriptor selects the newest
+occurrence (the last appended field of that exact name). Earlier occurrences
+remain and are addressed as `\[0]name`, `\[1]name`, …. This is the same
+occurrence rule as the lexical namespace and is the displacement used by
+description lattices and converter keys (section 2.3). Hosted C projection
+keeps the source member spelling on the newest occurrence and names older
+same-name fields `lm__occurrence_<index>`.
+
+A layout receiver may still reject duplicate field names as a projection
+limitation. A table receiver may accept repeated rows. Those policies do not
+replace the core ordered field stream.
 
 Example:
 
@@ -11060,10 +11460,9 @@ A descriptor exposes names along paths. For example, the structural declaration:
 
 exposes the names `b` and `c`. Nested names participate only when `C` actually
 follows them. Constructor/type heads `E` and `F` do not participate. Primitive
-descriptors expose an equivalent name surface virtually through their namespace
-bindings. A Primitive leaf is admitted by category (`class.category` /
-`class.semantic`) and, when present, a range validator, not by a new primitive
-kind.
+descriptors are ordinary Structures (section 2.2.2). A Primitive leaf is
+admitted by the leaf rule in section 2.2.3, not by a second algorithm and not
+by a new primitive kind.
 
 The source-semantic evaluation algorithm is:
 
@@ -11081,18 +11480,27 @@ The source-semantic evaluation algorithm is:
        whose expected descriptor is `B`). Do not count a mere declaration of
        `B`. Do not follow aliases, callees, computed names or heap storage.
     7. For every path, descend the candidate descriptor by those exact names.
-       A missing name produces `false`.
-    8. A Primitive leaf is admitted when the candidate leaf's category is
-       compatible with the requirement leaf's category; a range validator on
-       the requirement leaf, if any, must hold. Nested unused structure is not
-       expanded.
-    9. Produce `true` when every collected path is present (an empty path set
-       is `true`); otherwise produce `false`.
+       Unqualified names select the newest occurrence (section 2.3). A missing
+       name produces `false`. Nested unused structure is not expanded.
+    8. When the walk stops at a Primitive leaf, apply section 2.2.3: empty use
+       is true; a word-moving use is true when conversion is not forbidden and
+       a merge-keyed converter exists or the descriptions already match; fields
+       of the primitive description that `C` actually follows are ordinary
+       used paths. `implements` does not invoke the converter.
+    9. Produce `true` when every collected path is present and every primitive
+       leaf is admitted (an empty path set is `true`); otherwise produce
+       `false`.
 
 Equivalently:
 
     implements(A, B, C)
         iff every path in uses(C, B) is present on A
+            and every primitive leaf of those paths is admitted as in 2.2.3
+
+The translator or interpreter, on the substitution edge where this predicate
+was applied, selects a merge-keyed converter if step 8 required one and
+inserts that receiver call. Converter failure is a receiver diagnostic at that
+edge, not a boolean `false` from `implements`. See section 2.2.4.
 
 Order, duplicate count, the values behind unused names, unused nested contents,
 signatures, mutability and other metadata do not affect this predicate.
@@ -11127,6 +11535,16 @@ Consumer `C` calls `item\equals`. Then `implements(User, Equatable, C)` is true
 when both descriptors were explicitly declared or imported into the active
 namespace. A different consumer that also uses `hash` as an `Equatable` path
 would demand that path of `User`.
+
+Example, two thicknesses. `File` is a Structure with `handle`, `close` and
+`read`. `FileManager` calls `f\close` and `f\read`. Then
+`implements(u32var, File, FileManager)` is false: a word has no those paths.
+`implements(myFile, File, FileManager)` is true when `myFile` provides them.
+The same `File` as consumer of a primitive `FILE` word that it stores in
+`handle` has a thin `C`; `implements(u32var, FILE, File)` may be true under
+section 2.2.3, and the translator inserts the merge-keyed converter on that
+edge. Putting `u32` into `File` by `merge` means `File` has a word field; it
+does not mean `File` is `u32`.
 
 The hosted bootstrap currently still evaluates a two-name first-level subset
 internally as a migration gap; that is not the language form and must not be
@@ -14941,7 +15359,9 @@ This integrated model reduces to these rules:
                   namespace change except an explicit result binding;
     descriptor = ordinary StructureReference explicitly bound in namespace;
     compatibility / implements = implements(A, B, C): A covers the paths of B
-                  used in consumer C;
+                  used in consumer C; primitive leaves follow 2.2.3–2.2.4
+                  (merge-keyed converter observed, not invoked, by implements);
+                  merge displacement is newest occurrence (2.3);
     table / Registry / RegistryView = optional ordinary values composed from
                   Structures and Arrays;
     table name / key / row / cell = data, never an implicit namespace binding;

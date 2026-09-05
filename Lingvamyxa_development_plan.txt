@@ -99,13 +99,14 @@ This is the first major proof that the table-driven semantic core is real.
 
 Implementation rule:
 
-    Strict classification happens in L3 registry tables. Type checking and
-    expression/class resolution must be designed as logical queries over the
-    active registry view. SQL-like queries are the reference model; C arrays,
-    row logs, hash tables, future SQLite indexes or other algorithms are only
-    caches/materialized views or execution strategies over those tables. Do not
-    move semantic decisions into a second hardcoded type system merely because
-    the first cache is in memory.
+    Source-semantic compatibility is `implements(A, B, C)` as specified in
+    Lingvamyxa_spec.txt sections 2.1–2.4 and 19.21.3 (used tree of consumer C,
+    merge-keyed converters at primitive leaves). Registry tables author
+    descriptors and converter keys as ordinary LMX Structures; they are not a
+    second type system. SQL-like queries, C arrays, row logs, hash tables or
+    SQLite indexes are caches over those tables. Do not move semantic decisions
+    into hosted C assignment rules, `cast.target` allow-lists, or a hardcoded
+    pairwise primitive matrix.
 
 
 7. Implement Validator/Merge at Message Boundaries

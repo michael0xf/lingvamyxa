@@ -5,6 +5,11 @@ Status
 This file is an implementation instruction for the first L1/C99 translator.
 It is not a replacement for Lingvamyxa_spec.txt.
 
+Source-semantic compatibility is `implements(A, B, C)` in Lingvamyxa_spec.txt
+sections 2.1–2.4 and 19.21.3. This instruction covers backend projection of
+already admitted descriptors to ANSI C layouts. C assignment, C casts and
+`cast.target` allow-lists are not the language predicate.
+
 Here "L1" means the external ANSI C / C99 bootstrap and lowering layer. It does
 not define a new Lingvamyxa source level.
 
