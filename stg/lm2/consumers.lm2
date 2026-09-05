@@ -1,0 +1,21 @@
+WordMover:
+    int: cell
+end: WordMover
+
+StoreLong:
+    long: cell
+end: StoreLong
+
+StoreText:
+    int: cell
+end: StoreText
+
+DescriptionWalker:
+    int: width
+    int: range
+    int: signed
+end: DescriptionWalker
+
+OpaqueCloser:
+    int: close
+end: OpaqueCloser

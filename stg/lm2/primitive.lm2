@@ -1,0 +1,78 @@
+table:
+    source
+    name: class
+    columns: (class: class) (class: kind)
+    rows:
+             Cell                       class
+             Count                      class
+             Integer                    class
+             Flag                       class
+             Ratio                      class
+             Float                      class
+             Complex                    class
+             Atom                       class
+             Address                    class
+             Opaque                     class
+             Text                       class
+             `primitive.description`    relation
+             `primitive.convert`        relation
+end: class
+
+table:
+    source
+    name: `primitive.description`
+    columns: (class: class) (categoryFlag: cell) (class: semantic) (categoryFlag: numeric) (categoryFlag: integer) (categoryFlag: floating) (categoryFlag: reference) (categoryFlag: opaque) (categoryFlag: callable) (categoryFlag: descriptor) (categoryFlag: signed) (class: width) (class: range) (class: spelling) (class: convert)
+    rows:
+             Cell     1  None    0  0  0  0  0  0  0  0  None      None                     None            None
+             Count    1  count   1  1  0  0  0  0  0  0  profile   "0..SIZE_MAX(profile)"   None            keyed
+             Integer  1  integer 1  1  0  0  0  0  0  1  profile   "C99-int(profile)"       None            keyed
+             Flag     1  flag    0  0  0  0  0  0  0  0  fixed8    "-1..1"                  int8_t          keyed
+             Ratio    1  ratio   1  0  0  0  0  0  0  0  profile   None                     None            keyed
+             Float    1  float   1  0  1  0  0  0  0  0  profile   "C99-double(profile)"    None            keyed
+             Complex  1  complex 1  0  1  0  0  0  0  0  profile   None                     None            keyed
+             Atom     1  atom    0  0  0  0  0  0  0  0  profile   None                     None            keyed
+             Address  1  address 0  1  0  1  0  0  0  0  profile   None                     None            keyed
+             Opaque   1  opaque  0  0  0  1  1  0  0  0  profile   opaque                   None            keyed
+             Text     1  atom    0  0  0  0  0  0  0  0  profile   None                     "char *"        keyed
+             None     0  none    0  0  0  0  0  0  0  0  None      None                     void            forbidden
+             void     0  none    0  0  0  0  0  0  0  0  None      None                     void            forbidden
+
+             char     1  integer 1  1  0  0  0  0  0  1  profile   "C99-char(profile)"      char            keyed
+             short    1  integer 1  1  0  0  0  0  0  1  profile   "C99-short(profile)"     short           keyed
+             int      1  integer 1  1  0  0  0  0  0  1  profile   "C99-int(profile)"       int             keyed
+             long     1  integer 1  1  0  0  0  0  0  1  profile   "C99-long(profile)"      long            keyed
+             llong    1  integer 1  1  0  0  0  0  0  1  profile   "C99-long-long(profile)" "long long"     keyed
+             float    1  float   1  0  1  0  0  0  0  0  profile   "C99-float(profile)"     float           keyed
+             double   1  float   1  0  1  0  0  0  0  0  profile   "C99-double(profile)"    double          keyed
+             flong    1  float   1  0  1  0  0  0  0  0  profile   "C99-long-double(profile)" "long double" keyed
+             signed   1  integer 1  1  0  0  0  0  0  1  profile   "C99-signed-int(profile)" signed         keyed
+             unsigned 1  integer 1  1  0  0  0  0  0  0  profile   "C99-unsigned-int(profile)" unsigned     keyed
+             uchar    1  count   1  1  0  0  0  0  0  0  profile   "0..UCHAR_MAX(profile)"  "unsigned char" keyed
+             ushort   1  count   1  1  0  0  0  0  0  0  profile   "0..USHRT_MAX(profile)"  "unsigned short" keyed
+             uint     1  count   1  1  0  0  0  0  0  0  profile   "0..UINT_MAX(profile)"   "unsigned int"  keyed
+             ulong    1  count   1  1  0  0  0  0  0  0  profile   "0..ULONG_MAX(profile)"  "unsigned long" keyed
+             ullong   1  count   1  1  0  0  0  0  0  0  profile   "0..ULLONG_MAX(profile)" "unsigned long long" keyed
+             size_t   1  count   1  1  0  0  0  0  0  0  profile   "0..SIZE_MAX(profile)"   size_t          keyed
+             usize    1  count   1  1  0  1  0  0  0  0  profile   "0..SIZE_MAX(profile)"   size_t          keyed
+             isize    1  integer 1  1  0  1  0  0  0  1  profile   "ptrdiff(profile)"       ptrdiff_t       keyed
+             categoryFlag 1 flag 0  0  0  0  0  0  0  0  fixed8    "0..1"                   uint8_t         keyed
+             uint8    1  count   1  1  0  0  0  0  0  0  fixed8    "0..UINT8_MAX"           uint8_t         keyed
+             int8     1  integer 1  1  0  0  0  0  0  1  fixed8    "INT8_MIN..INT8_MAX"     int8_t          keyed
+             Boolean  1  flag    0  0  0  0  0  0  0  0  fixed8    "-1..1"                  int8_t          keyed
+             bool     1  flag    0  0  0  0  0  0  0  0  fixed8    "0..1"                   _Bool           keyed
+             u8       1  count   1  1  0  0  0  0  0  0  fixed8    "0..UINT8_MAX"           uint8_t         keyed
+             u16      1  count   1  1  0  0  0  0  0  0  fixed16   "0..UINT16_MAX"          uint16_t        keyed
+             u32      1  count   1  1  0  0  0  0  0  0  fixed32   "0..UINT32_MAX"          uint32_t        keyed
+             u64      1  count   1  1  0  0  0  0  0  0  fixed64   "0..UINT64_MAX"          uint64_t        keyed
+             i8       1  integer 1  1  0  0  0  0  0  1  fixed8    "INT8_MIN..INT8_MAX"     int8_t          keyed
+             i16      1  integer 1  1  0  0  0  0  0  1  fixed16   "INT16_MIN..INT16_MAX"   int16_t         keyed
+             i32      1  integer 1  1  0  0  0  0  0  1  fixed32   "INT32_MIN..INT32_MAX"   int32_t         keyed
+             i64      1  integer 1  1  0  0  0  0  0  1  fixed64   "INT64_MIN..INT64_MAX"   int64_t         keyed
+             f32      1  float   1  0  1  0  0  0  0  0  fixed32   "C99-float(profile)"     float           keyed
+             f64      1  float   1  0  1  0  0  0  0  0  fixed64   "C99-double(profile)"    double          keyed
+             FILE     1  opaqueHandle 0 0 0 1 1 0 0 0 profile    opaque                   FILE            keyed
+             bigint   1  integer 1  1  0  0  0  0  0  1  library   unbounded                mpz_t           keyed
+             real     1  float   1  0  1  0  0  0  0  0  library   mpfr                     mpfr_t          keyed
+             decimal  1  float   1  0  1  0  0  0  0  0  library   decNumber                decNumber       keyed
+             DecimalText 1 atom  0  0  0  0  0  0  0  0  profile   utf8-decimal             "char *"        keyed
+end: `primitive.description`

@@ -1,0 +1,9 @@
+File:
+    int: handle
+    int: close
+    int: read
+end: File
+
+FileHandleConsumer:
+    int: handle
+end: FileHandleConsumer
