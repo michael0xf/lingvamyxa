@@ -39,7 +39,8 @@ Array:
     Not this graph. One array descriptor + one rectangular `d0×d1×…` backing.
     Index is an offset. A row of StructureReference elements enters the
     Structure graph in those chunks. Mix hop addresses (`ℕ₀` path) are a
-    placement tree, not this graph. P0 / used-tree of Consumer stay trees.
+    placement tree, not this graph. Mix is not a Message; cursors are
+    L3 Threads (spec §19.29.2.1). P0 / used-tree of Consumer stay trees.
 
 Lifetime inside one L3 Thread:
     Reachability in that Thread's Structure graph. End-turn collection
@@ -142,7 +143,8 @@ Array:
     Не этот граф. Один дескриптор массива + прямоугольник `d0×d1×…`.
     Индекс — смещение. Ряд StructureReference входит в граф Structure
     уже в тех кусках. Адреса Mix (`путь ℕ₀`) — дерево размещения, не
-    этот граф. P0 и used-tree у Consumer остаются деревьями.
+    этот граф. Mix — не Message; курсоры — L3 Thread (§19.29.2.1). P0 и
+    used-tree у Consumer остаются деревьями.
 
 Жизнь внутри одного L3 Thread:
     Достижимость в графе Structure этого потока. Сбор на end-turn идёт
@@ -365,10 +367,10 @@ EN (priority order):
   G1. Unscoped allocation still in use.
       `lm_own_new_zero` / `c.free` remain for bootstrap helpers, arena
       shells, arena metadata stacks, and Mix pages (`lm2/mix/Mix.lm2`).
-      Spec: ordinary Structure/Array materialization belongs to an owner
-      region. Mix pages move onto the thread arena as *old-projection*
-      clients; rewriting Mix onto the one-header model is struct_refactoring
-      Phase 9.1, not this file.
+      Spec: ordinary Structure/Array materialization belongs to the
+      Message arena. Mix pages are Mix page/slot storage, not a Message
+      arena and not `c.free`. Cursors are L3 Threads. One-header Mix is
+      struct_refactoring Phase 9.1.
 
   G2. void confused with empty Structure.
       See `bug0_void.txt`. `void: cell` trans-accepts and emits illegal
@@ -427,7 +429,8 @@ EN (priority order):
       arithmetic and unchecked index are still listed as profile work (§18.2).
       No generic `mem:` / `freemem:` / shared-block / low-level thread
       profile. Mix hop addresses are a placement tree, not this L2
-      cell-address machine. An `@` taken inside nested work pins that
+      cell-address machine; Mix tree has no Message arena; cursors are
+      L3 Threads. An `@` taken inside nested work pins that
       object against compaction at end-turn until the address dies.
 
   G10. Control-exit collection passes.
@@ -459,8 +462,8 @@ RU (тот же порядок):
 
   G1. Бесхозные аллокации.
       `lm_own_new_zero` / `c.free` в хелперах, шапках арен, стеках метаданных
-      и Mix. Страницы Mix — на арену потока как клиенты старой проекции;
-      одна шапка Mix — фаза 9.1 другого файла.
+      и Mix. Страницы Mix — склад слотов Mix, не арена Message. Курсоры —
+      L3 Thread. Одна шапка Mix — фаза 9.1 другого файла.
 
   G2. void путают с пустой Structure.
       `bug0_void.txt`. После фазы 1 unit — префикс + пустой payload, не
@@ -488,8 +491,9 @@ RU (тот же порядок):
 
   G8. View против copy у Array; плюс лесенка рангов вместо прямоугольника.
 
-  G9. Машинная поверхность L2. Mix-адреса — дерево размещения. `@` пинит
-      объект против компакта на end-turn.
+  G9. Машинная поверхность L2. Mix-адреса — дерево размещения без арены
+      Message; курсоры — L3 Thread. `@` пинит объект против компакта на
+      end-turn.
 
   G10. Сбор на выходе управления — тот же обход одной арены от выживших
        корней, не вложенная арена. Давление памяти — рост и/или end-turn.
@@ -515,10 +519,10 @@ Phase A — hosted conformance (do first, no new source operators)
 
     Ownership on this file:
     1. Move remaining ordinary Structure/Array paths off `lm_own_new_zero`
-       onto `lm_own_arena_new_zero(lm_message_thread_owner(...))`, including
-       Mix pages and item blocks as old-projection clients. Destroy Mix via
-       arena lifetime or an explicit owner edge, not `c.free` of unscoped
-       blocks. Do not malloc new arena shells for that move.
+       onto `lm_own_arena_new_zero` of the current Message arena. Mix pages
+       stay Mix page/slot storage (no Message arena); collect live slots
+       when a Mix branch is deleted. Cursor Threads use their own Message
+       arenas. Do not put the Mix tree into a Message arena.
     2. Fix void vs empty Structure (`bug0_void.txt`) so unit remains an
        arena object (prefix + 0 payload once Phase 1 exists) and `void` is
        not a declarable cell. Then replace `symbol: object` destructor
@@ -530,8 +534,8 @@ Phase A — hosted conformance (do first, no new source operators)
        other Structure; they are not a second arena.
     4. Tests: empty Structure identity across `return`; two `():` sites are
        distinct; two instances share one descriptor pointer and do not each
-       own a copy; module alias is exact-reference; Mix page lives in the
-       current Message Thread owner; `void: x` is a trans error; a cycle of
+       own a copy; module alias is exact-reference; Mix page lives in a
+       Mix page store, not `lm_message_thread_owner`; `void: x` is a trans error; a cycle of
        StructureReferences is allowed and does not hang tree-cut.
 
   RU:
@@ -539,15 +543,14 @@ Phase A — hosted conformance (do first, no new source operators)
     префикс + payload в арене L3 Thread. Mix/own — старая проекция до 9.1.
 
     Владение в этом файле:
-    1. Обычные Structure/Array — только `lm_own_arena_new_zero` от owner
-       потока, включая страницы Mix как клиенты старой проекции. Не malloc
-       новых шапок арен ради этого.
+    1. Обычные Structure/Array — только `lm_own_arena_new_zero` арены
+       Message. Дерево Mix — не арена; курсоры — L3 Thread.
     2. Развести void и пустую Structure. Unit — префикс + 0 payload.
     3. Инвентаризация static/unscoped. Узлы P0 выделяются в арене потока,
        как любая Structure; второй арены нет.
     4. Тесты: тождество пустой Structure через `return`; два `():` различны;
        два instance делят дескриптор; модульный alias — та же ссылка;
-       Mix в owner текущего Message Thread; `void: x` — ошибка trans;
+       страница Mix не в арене Message; `void: x` — ошибка trans;
        цикл StructureReference допустим и не вешает tree-cut.
 
 Phase B — borrow, exact return, diagnostics
@@ -613,8 +616,11 @@ Phase D — end-turn reclaim on the one Message arena
        fewer blocks and rewrite slots. Shared descriptors stay roots.
        Not after handler return, not on `return` / `retry`.
     3. No nested arena to destroy.
-    4. Mix bunch cut remains topology. Sending an isolated bunch is a
-       Message: an inactive L3 Thread whose arena holds that graph.
+    4. Mix tree is page/slot storage of raw data, no Message arena. Do not
+       make Mix an L3 Message: concurrent cursors would block on one turn.
+       Mix LMX still has Structures; that graph is not a Message. A Message
+       in Mix is a blob. On death a cursor deletes it, or itself. Cursors
+       are L3 Threads.
     5. Keep collection Message-Thread-local. One execution thread inside
        the actor is why the walk needs no mutator handshake.
        Never stop-the-world for other Message Threads.
@@ -630,8 +636,9 @@ Phase D — end-turn reclaim on the one Message arena
        выживших в меньшее число блоков. Не после возврата handler, не на
        `return` / `retry`.
     3. Вложенной арены нет.
-    4. Cut пучка Mix — топология. Отправка изолированного пучка — Message:
-       неактивный L3 Thread, в чьей арене этот граф.
+    4. Дерево Mix — сырые слоты. Не делать Mix L3 Message: курсоры
+       заблокируются на одном ходе. LMX Mix со Structure, но граф не
+       Message. Курсоры — L3 Thread.
     5. Сбор только внутри Message Thread. Один поток исполнения актора —
        без handshake мутаторов. Чужие Message Thread не стопать.
 
@@ -645,17 +652,18 @@ Phase E — message boundary and Mix
     into it. Do not implement owner-detach/attach of a branch. Do not
     overload `send:`'s current LMX-bytes argument list as a second
     meaning.
-    Mix pages/cursors/tags become ordinary arena referents on the thread
-    arena; next/prev and cutAfter are topology, not a second allocator.
-    One-header Mix is struct_refactoring 9.1. Locks stay `synchronized`
-    on the page monitor (already in `lm2/mix`).
+    Mix tree is page/slot storage without a Message arena. Cursors are
+    L3 Threads and send Messages to listeners. cutAfter/delete-branch
+    compacts Mix live slots, not Message end-turn. One-header Mix is
+    struct_refactoring 9.1. Locks stay `synchronized` on the page monitor
+    (already in `lm2/mix`).
 
   RU:
     Через границу: Message — полный LMX в неактивном L3 Thread. Граф
     рождается в арене того потока (или кодек пишет туда). Отправитель
     ссылок не держит. Owner-detach/attach ветки не делать. Не давать
-    текущему `send:` с байтами LMX второго смысла. Страницы Mix — референты
-    арены потока; next/prev и cutAfter — топология. Одна шапка Mix — 9.1.
+    текущему `send:` с байтами LMX второго смысла. Дерево Mix — не арена;
+    курсоры — Thread; cut бранча уплотняет слоты Mix. Одна шапка Mix — 9.1.
 
 Phase F — arrays, L2 machine, later control
 Фаза F — массивы, машина L2, поздний контроль
@@ -686,25 +694,25 @@ EN:
     trans: `void: x` rejected; `(): a` and `(): b` distinct non-null;
     two instances of S share the S descriptor pointer; `return` of a local
     Structure is the same pointer; a cyclic StructureReference pair trans-
-    accepts; Mix page allocated from `lm_message_thread_owner`; assigning
+    accepts; Mix page is Mix store, not `lm_message_thread_owner`; assigning
     Empty to LmMixPage rejected.
     runtime: end-turn collection does not free a returned Structure while
     the root lives; after thread delete the referent is gone; end-turn
     compact (once Phase D exists) may move only objects that have no live
     `@` and must not run on ordinary nested `return`.
     later: sender holds no ref into a sent Message Thread; Mix cutAfter
-    then send of the isolated bunch as an inactive L3 Thread.
+    compacts Mix live slots; a cursor Thread sends Messages to listeners.
 
 RU:
     trans: `void: x` отвергнут; два `():` различны и не null; два instance
     делят дескриптор; `return` локальной Structure — тот же указатель;
-    цикл ссылок допустим; страница Mix из `lm_message_thread_owner`;
+    цикл ссылок допустим; страница Mix не из арены Message;
     Empty ↛ LmMixPage.
     runtime: end-turn не освобождает возвращённую Structure, пока жив root;
     после delete потока референта нет; компакт на end-turn (фаза D) не
     двигает объект с живым `@` и не бежит на обычном вложенном `return`.
     позже: у отправителя нет ссылки в отправленный Message Thread;
-    Mix cutAfter и send изолированного пучка как неактивный L3 Thread.
+    Mix cutAfter уплотняет слоты Mix; курсор — L3 Thread.
 
 
 6. What not to do / Чего не делать
@@ -764,8 +772,7 @@ RU:
         §8.8 return;
         §11 address-depth / @ / raw load;
         §19.28 Message Thread, one callback per actor, end-turn collection;
-        §19.29 still says owner; this plan does not implement that
-        vocabulary — later spec pass: Thread + reachability + Message;
+        §19.29 Memory Model; Mix is not a Message, §19.29.2.1;
         operator summary items 28–31.
     Representation: struct_refactoring.txt
         descriptor prefix + payload; `fn:` as StructureReference;
@@ -774,7 +781,7 @@ RU:
         Thread root).
     Runtime: lm2/own.lm2, lm2/own_abi.lm2
     Lowering: lm2/trans_l1_statement.lm2, trans module-init paths
-    Mix (to move onto the thread arena, old projection): lm2/mix/Mix.lm2,
+    Mix (no Message arena; cursors are Threads): lm2/mix/Mix.lm2,
         lm2/mix/Mix_model.lm2
     Void/unit hole: bug0_void.txt,
         tests/trans_invalid_void_as_empty_structure.lm2,

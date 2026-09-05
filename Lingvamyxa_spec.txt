@@ -204,7 +204,9 @@ representation.
 Mix is the Lingvamyxa overlay markup model. It is not an XML-like tree
 markup system, not an HTML preprocessor and not a separate mini-language.
 Mix is a parallel active mark and interval overlay built during the same
-source traversal that builds ordinary Structures and arrays.
+source traversal that builds ordinary Structures and arrays. Mix is not a
+Message. Its placement tree is not stored in a Message arena
+(section 19.29.2.1).
 
 The compact formula is:
 
@@ -12352,11 +12354,12 @@ header. Constructing one from a template is ordinary instantiation of that
 LMX into a new Message's arena. Templates are the normal way to mint Messages;
 there is no second "lightweight message" kind.
 
-Each Message has exactly one arena. L3 does not name arenas, owners, or
-allocation policy. The arena is a bump pointer plus a list of backing blocks
-(section 19.29.0). Capacity is not a source parameter. A full block appends
-another block; that is not a language error. Allocation fails only when the
-host refuses another block.
+Each Message has exactly one arena for its Structure/Array graph. Mix is
+not a Message and does not live in that arena (section 19.29.2.1). L3 does
+not name arenas, owners, or allocation policy. A Message arena is a bump
+pointer plus a list of backing blocks (section 19.29.0). Capacity is not a
+source parameter. A full block appends another block; that is not a
+language error. Allocation fails only when the host refuses another block.
 
 An L3 Thread is a Message that has been launched in its own execution thread.
 Inactive Messages have an arena and a graph and have not begun a turn.
@@ -12394,7 +12397,8 @@ admitted forms:
         blocks, and those blocks now belong to R. Then discard M as a
         Message/Thread identity. R continues bumping its current block;
         leftover space in M's last block may be ignored until collection.
-        After join there is one Message and one arena.
+        After join there is one Message and one Message arena. Mix is not
+        a Message; there is no Mix arena to splice (section 19.29.2.1).
 
     Activate. Schedule M as its own L3 Thread. There is no splice. M keeps
         its arena and runs its own turns.
@@ -12917,6 +12921,10 @@ the P0 parser, Mix overlay markup in section 0.0.2, or
 current hosted bootstrap does not implement World Wide Mix paths, prefix locks
 or mirrors.
 
+Mix is not a Message (section 19.29.2.1). Cursors are autonomous L3 Threads
+and notify listeners by sending Messages. The Mix placement tree is not
+stored in a Message arena.
+
 Mix here is not only an overlay on LMX source. It is a universal document:
 a placement tree of nodes, memory cells at the leaves, and dynamic marks,
 cursors and attributes over those positions. World Wide Mix is that document
@@ -13047,9 +13055,13 @@ LMX unused path: Structure fields and neighbour slots are different trees.
 
 19.28.10.5. Cell, Node, Document
 
-A cell is a leaf: a memory region. Its description is an ordinary Structure
+A cell is a leaf: a raw memory region in the Mix store, not a slot of a
+Message graph (section 19.29.2.1). Its description is an ordinary Structure
 (contract plus architecture: count/integer/opaque, range, spelling); see
 section 2.2.2. It is not a closed list of kinds such as «int, FILE, image».
+A Message kept in a cell is stored as raw payload. Destruction of that
+Message does not walk Mix; a cursor deletes the cell, or deletes itself
+from Mix if it is that Message.
 
 A node is a Structure: named or positional fields and child references. On
 disk it is on the order of a 4 KB sector or a 32 KB cluster (256 Kbit). In
@@ -13460,15 +13472,17 @@ semantics above the raw L1 implementation and lowering stratum.
 
 Every ordinary non-primitive Lingvamyxa value is a StructureReference or an
 ArrayReference. Its referent is materialized exactly once in an arena. An arena
-is the implementation of one Message's storage: a bump pointer plus a list of
-backing blocks. It is not a source storage class and not an L3 name. Lingvamyxa
-has no ordinary stack, heap or static object category.
+is a bump pointer plus a list of backing blocks. It is not a source storage
+class and not an L3 name. A Message has one such arena for its Structure/Array
+graph. Mix is not a Message and does not use that arena (section 19.29.2.1).
+Lingvamyxa has no ordinary stack, heap or static object category.
 
 L3 construction uses the arena of the current Message (the running L3 Thread,
 or the inactive Message being filled from a template). L3 has no arena
 argument and no owner object. Module/top-level construction uses the process
 root Message's arena, or interned descriptors that outlive turns. Nested
-frame/handler/branch arenas are not part of the L3 model (section 19.28.5).
+frame/handler/branch arenas are not part of the L3 Message model
+(section 19.28.5). Mix is not that nesting.
 The operators `own:`, `borrow:` and `move:` are not L3 receivers.
 
 Section 19.29.12 records the hosted C99 bootstrap (`LmOwnArena`, `libown`).
@@ -13562,6 +13576,13 @@ The following rules are normative for the structural memory model:
        facilities. They do not turn an ordinary Structure or Array into raw
        storage.
 
+   15. Mix is not a Message and must not be implemented as one: a Mix
+       Message would block concurrent cursors on a single turn loop.
+       Mix LMX still has an implementation graph; that graph is not a
+       Message. Cursors are L3 Threads. Mix cells are raw data, not graph
+       edges. A Message stored in Mix is a blob; on destruction a cursor
+       deletes it from Mix, or deletes itself (section 19.29.2.1).
+
 These are source-semantic rules. A lowering profile may use direct C storage for
 an explicitly declared L2 machine object, but it may not substitute C automatic
 or static duration for the arena contract of an ordinary Structure or Array.
@@ -13592,7 +13613,59 @@ refuses another block.
 
 There are no nested frame, handler, attempt, transaction or branch arenas in
 L3. Leaves do not get arenas. Parser P0 nodes allocate in the current
-Message's arena like any Structure.
+Message's arena like any Structure. Mix is not a nested Message region
+(section 19.29.2.1).
+
+
+19.29.2.1. Mix Is Not a Message
+
+Mix is not a Message. There is nothing to join or splice with a Message
+arena. Mix is concurrent: many cursors may walk and edit one document under
+prefix locks (section 19.28.10.11).
+
+Do not implement the Mix document as an L3 Message. A Message admits one
+execution thread and one turn at a time. If Mix were that Message, every
+cursor would enqueue on its inbox and block behind one turn loop. Mix LMX
+(`lm2/mix`) is still LMX, so the implementation has Structures (page, items,
+cursor objects). That implementation graph is not a Message and must not be
+forced into one. It is an awkward extra graph; the alternative (one Mix
+Message) is worse: it serializes the document.
+
+A Mix cursor is an autonomous L3 Thread (a running Message). Its local
+state lives in that cursor's Message arena. The cursor notifies listeners
+by sending Messages. Listeners are other Messages. Cursors do not wait on
+a Mix-document Message to take a turn.
+
+The Mix placement tree (ℕ₀ hops, bunches, pages, live neighbour slots) is
+not a Structure graph and does not need a Message-style arena. Pages and
+live slots are Mix's own store — a simple page/slot machine without
+end-turn collection. Deleting a Mix branch compacts live slots in that
+store (`cutAfter` / delete at a level). That is Mix topology maintenance,
+not Message end-turn collection.
+
+Mix cells hold raw data: bytes, opaque cells, serialized LMX. They are not
+StructureReference slots and not part of any Message's graph. Even when the
+payload *is* a Message, Mix stores a blob of that Message, not a live
+reference into its arena. Message end-turn does not walk Mix pages. Mix
+branch delete does not collect a cursor's Message arena.
+
+A cursor or listener that needs ordinary LMX materializes a copy in *its*
+Message arena (copy or serialize from Mix storage). The path node stays Mix
+placement.
+
+When a Message that was stored in Mix is destroyed, a cursor must delete
+that blob from the Mix document. If the cursor Thread *is* that Message, it
+removes itself from Mix on the way out. Mix does not hold the Message graph
+alive, and Message destruction does not by itself compact Mix; the cursor's
+delete does.
+
+A document-wide Mix store is that page/slot machine, separate from every
+cursor Thread. Mix LMX Structures that describe pages exist as hosted
+implementation objects of that store, not as a Mix-document Message graph.
+They are not a second Message arena and not a nested owner.
+
+Hosted Mix pages that still use `lm_own_new_zero` / `c.free` are bootstrap
+debt of the Mix store, not a reason to put Mix into a Message arena.
 
 Lexical scope and arena lifetime are distinct. A function frame holds local
 reference slots; it does not own the referents. The end of a lexical block is
@@ -15338,7 +15411,8 @@ operations.
 The ordinary Message model remains:
 
     one arena per Message;
-    local reachability collection once per turn, at end-turn;
+    Mix is not a Message; cursors are Threads; Mix tree is not a Message arena;
+    Message collection once per turn at end-turn;
     exact-reference ordinary Structure/Array return;
     message-boundary join, activate or serialize;
     no raw mutable reference crossing from one Message arena into another.
@@ -15448,8 +15522,14 @@ The normative memory rules are:
         join, activate, or serialize; no raw mutable reference;
 
     collection
-        local reachability walk of one Message once per turn, at
-        end-turn (section 19.29.4); compaction there, not in the allocator;
+        Message: once per turn, at end-turn (section 19.29.4);
+        Mix branch delete: compact Mix live slots, not Message collection;
+
+    Mix
+        not a Message (a Mix Message would block concurrent cursors);
+        Mix LMX has an implementation graph that is not a Message;
+        cursors are L3 Threads; cells are raw blobs; on Message death a
+        cursor deletes the blob, or itself (section 19.29.2.1);
 
     L2
         may expose low-level machine allocation, raw storage, addresses,

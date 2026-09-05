@@ -34,6 +34,11 @@ The first parser should use a small number of explicit owners:
     LmTreeArena
         Owns the P0 Structure tree.
 
+    Mix overlay during parse
+        Mix is not a Message. Parse-time Mix marks may hang on P0 nodes in
+        the parser tree arena. A Mix document's placement store and later
+        cursor Threads are section 19.29.2.1, not this parser-run owner.
+
     LmDiagnosticArena
         Owns diagnostics and source spans.
 

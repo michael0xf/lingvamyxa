@@ -179,5 +179,15 @@ The first port should focus on the small core:
     change notifications;
     low allocation pressure.
 
+Mix is not a Message and must not be implemented as one: Mix is
+multithreaded, and an L3 Message would serialize every cursor behind one
+turn. Mix LMX (`lm2/mix`) still has Structures; that implementation graph
+is not a Message. Cursors are autonomous L3 Threads and notify listeners
+by Messages. The Mix placement tree is a simple page/slot store of raw
+data, no Message arena, compacted when a Mix branch is deleted. A Message
+in Mix is a blob; on destruction a cursor deletes it from Mix, or deletes
+itself. Cursor local state lives in that cursor Thread's Message arena.
+See Lingvamyxa_spec.txt section 19.29.2.1.
+
 Parser nodes, undo history, semantic invalidation and editor policies should
 not be hardcoded into the base Mix container.
