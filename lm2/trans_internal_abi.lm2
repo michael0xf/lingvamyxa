@@ -556,6 +556,14 @@ fn: lm_trans_emit_c_array_declaration_with_qualifier (
     const: @: char qualifier
 ) int
 
+fn: lm_trans_frame_is_structure_callable_field (
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_descriptor_field_is_callable (
+    const: LmTransDescriptorField: field
+) int
+
 fn: lm_trans_frame_looks_named_structure_layout_declaration (
     const: LmP0Frame: frame
     const: LmTransNamespace: namespace_

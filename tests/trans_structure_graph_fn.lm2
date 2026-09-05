@@ -1,0 +1,50 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: AddX (int) int
+
+fn: add (int: x) int
+    return: x + 1
+end: add
+
+File:
+    int: handle
+    fn: close () int
+end: File
+
+fn: takeAdd (AddX: f; int: x) int
+    return: 0
+end: takeAdd
+
+fn: fileManager (File: f) int
+    return: 0
+end: fileManager
+
+external:
+    fn: main () int
+        AddX: bound add
+        File: f
+            handle: 3
+        end: f
+
+        if: bound = 0
+            return: 1
+        if: takeAdd(bound, 1) != 0
+            return: 2
+        if: add(1) != 2
+            return: 3
+        if: f = 0 || f\handle != 3
+            return: 4
+        if: implements(bound AddX takeAdd) != 1
+            return: 5
+        if: implements(f File fileManager) != 1
+            return: 6
+        return: 0
+    end: main
+end: external

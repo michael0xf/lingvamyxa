@@ -6019,6 +6019,32 @@ return: lm_trans_unwrap_single_anonymous_structure(frame\body)
 fn: lm_trans_frame_looks_named_structure_declaration (const: (LmP0Frame: frame)) int
 return: frame != 0 && lm_trans_is_c_reference_name(frame\head) = 0 && lm_trans_is_reserved_head_name(frame\head) = 0 && lm_trans_text_all_char(frame\head, '@') = 0 && lm_trans_text_is_array_receiver_head(frame\head) = 0 && (frame\flags & c.LM_P0_FRAME_COLON) != 0U && (frame\flags & c.LM_P0_FRAME_INLINE_BODY) = 0U
 
+fn: lm_trans_frame_is_structure_callable_field (const: (LmP0Frame: frame)) int
+    if: frame = 0 || frame\head = 0
+        return: 0
+    if: lm_trans_text_equals(frame\head, "fn")
+        return: 1
+    if: lm_trans_text_equals(frame\head, "sub")
+        return: 1
+return: lm_trans_text_equals(frame\head, "callable")
+
+fn: lm_trans_descriptor_field_is_callable (
+    const: LmTransDescriptorField: field
+) int
+return: field != 0 && field\descriptor_name != 0 && c.strcmp(field\descriptor_name, "lm.trans.callable") = 0
+
+fn: lm_trans_structure_callable_field_name (
+    const: LmP0Frame: field_frame
+) const: LmP0Text
+    const: LmP0Field: name_field
+
+    if: lm_trans_frame_is_structure_callable_field(field_frame) = 0
+        return: 0
+    name_field: lm_trans_nth_field(field_frame\body, 0U)
+    if: name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
+        return: 0
+return: name_field\value\as\atom
+
 fn: lm_trans_named_structure_type_set_cstr (
     LmTransL4CallableType: type
     const: @(char class_name)
@@ -6363,7 +6389,7 @@ fn: lm_trans_frame_looks_named_structure_layout_declaration (
     while: field != 0
         if: lm_trans_node_is_ignored(field\value) = 0 && field\value\kind != c.LM_P0_NODE_FRAME
             return: 0
-        if: lm_trans_node_is_ignored(field\value) = 0 && lm_trans_named_structure_field_info_for_owner(field\value\as\frame, namespace_, frame\head, field_type, @ name, @ initializer) = 0
+        if: lm_trans_node_is_ignored(field\value) = 0 && lm_trans_frame_is_structure_callable_field(field\value\as\frame) = 0 && lm_trans_named_structure_field_info_for_owner(field\value\as\frame, namespace_, frame\head, field_type, @ name, @ initializer) = 0
             return: 0
         field: field\next
 return: 1
@@ -6462,6 +6488,9 @@ fn: lm_trans_emit_named_structure_construction_initializer (
             c.fprintf(c.stderr, "trans L2 structure construction error: initializer body for \"%.*s\" expects field frames\n", (cast: int frame\head\length), frame\head\data)
             return: 1
 
+        if: lm_trans_node_is_ignored(field\value) = 0 && field\value\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_structure_callable_field(field\value\as\frame)
+            field: field\next
+            continue
         if: lm_trans_node_is_ignored(field\value) = 0
             field_frame: field\value\as\frame
             initializer: lm_trans_named_structure_body(field_frame)
@@ -6770,15 +6799,31 @@ fn: lm_trans_declare_named_structure_layout_mode (
         field: body\first_field
     index: 0U
     while: field != 0
-        if: lm_trans_node_is_ignored(field\value) = 0 && (field\value\kind != c.LM_P0_NODE_FRAME || lm_trans_named_structure_field_info_for_owner(field\value\as\frame, namespace_, frame\head, field_type, @ name, @ initializer) = 0)
-            return: 1
-        if: lm_trans_node_is_ignored(field\value) = 0 && initializer != 0
-            c.fprintf(c.stderr, "trans L2 structure descriptor error: field \"%.*s\" cannot contain an instance initializer; construct a value explicitly\n", (cast: int name\length), name\data)
-            return: 1
-        if: lm_trans_node_is_ignored(field\value) = 0 && lm_trans_descriptor_add_structural_field(descriptor, name, field_type\class_name, index, field_type\address_depth, 0U, 0, field_type\is_const, 0) != 0
-            return: 1
         if: lm_trans_node_is_ignored(field\value) = 0
+            if: field\value\kind != c.LM_P0_NODE_FRAME
+                return: 1
+            if: lm_trans_frame_is_structure_callable_field(field\value\as\frame)
+                name: lm_trans_structure_callable_field_name(field\value\as\frame)
+                if: name = 0
+                    c.fprintf(c.stderr, "trans L2 structure descriptor error: nested fn/sub/callable expects a name\n")
+                    return: 1
+                if: lm_trans_named_structure_type_set_cstr(field_type, "lm.trans.callable", 1U, 0) = 0
+                    return: 1
+                if: lm_trans_descriptor_add_structural_field(descriptor, name, field_type\class_name, index, field_type\address_depth, 0U, 0, 0, 0) != 0
+                    return: 1
+                ---
+            else:
+                if: lm_trans_named_structure_field_info_for_owner(field\value\as\frame, namespace_, frame\head, field_type, @ name, @ initializer) = 0
+                    return: 1
+                if: initializer != 0
+                    c.fprintf(c.stderr, "trans L2 structure descriptor error: field \"%.*s\" cannot contain an instance initializer; construct a value explicitly\n", (cast: int name\length), name\data)
+                    return: 1
+                if: lm_trans_descriptor_add_structural_field(descriptor, name, field_type\class_name, index, field_type\address_depth, 0U, 0, field_type\is_const, 0) != 0
+                    return: 1
+                ---
+            ---
             index: index + 1U
+        ---
         field: field\next
 
     if: reject_hosted_redeclaration && lm_trans_hosted_descriptor_redeclaration_is_unsupported(namespace_, frame\head, descriptor) != 0
@@ -6863,6 +6908,8 @@ fn: lm_trans_descriptor_graph_field_is_slot_for_owner (
     if: lm_trans_namespace_has_named_structure_binding(namespace_, type_name)
         return: 1
     if: lm_trans_text_equals(type_name, "LmSlice")
+        return: 1
+    if: lm_trans_text_equals(type_name, "lm.trans.callable")
         return: 1
 return: 0
 
@@ -7003,6 +7050,10 @@ fn: lm_trans_emit_named_structure_graph_descriptor (
             field: body\first_field
         descriptor_index: 0U
         while: field != 0
+            if: lm_trans_node_is_ignored(field\value) = 0 && field\value\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_structure_callable_field(field\value\as\frame)
+                descriptor_index: descriptor_index + 1U
+                field: field\next
+                continue
             if: lm_trans_node_is_ignored(field\value) = 0 && (field\value\kind != c.LM_P0_NODE_FRAME || lm_trans_emit_named_structure_field_declaration(file, field\value\as\frame, descriptor, descriptor_index, indent + 1U, namespace_) != 0)
                 return: 1
             if: lm_trans_node_is_ignored(field\value) = 0
@@ -7103,6 +7154,10 @@ fn: lm_trans_emit_named_structure_typedef (
         field: body\first_field
     descriptor_index: 0U
     while: field != 0
+        if: lm_trans_node_is_ignored(field\value) = 0 && field\value\kind = c.LM_P0_NODE_FRAME && lm_trans_frame_is_structure_callable_field(field\value\as\frame)
+            descriptor_index: descriptor_index + 1U
+            field: field\next
+            continue
         if: lm_trans_node_is_ignored(field\value) = 0 && (field\value\kind != c.LM_P0_NODE_FRAME || lm_trans_emit_named_structure_field_declaration(file, field\value\as\frame, descriptor, descriptor_index, indent + 1U, namespace_) != 0)
             return: 1
         if: lm_trans_node_is_ignored(field\value) = 0
