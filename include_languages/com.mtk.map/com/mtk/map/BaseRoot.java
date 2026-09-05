@@ -24,6 +24,13 @@ public class BaseRoot extends Tag{
         init("root", this, false, this, false, new String[]{"nodeName", nodeName}, null);
     }
 
+    /**
+     * Mix пучок of this document's base pages (isolated next/prev chain).
+     */
+    public Bunch bunch() {
+        return new Bunch(leaf);
+    }
+
     public KeyDict getOrNewKeyDict(Key key) {
         UniqueArray dict = getDict();
         KeyDict keyDict = (KeyDict) dict.get(key.hashCode());

@@ -9,8 +9,10 @@ package com.mtk.map;
  * them so two writers on one live document are safe to port.
  *
  * Protocol:
- * 1. Every node is 32 slots ({@link #SIZE} = 5 bits). Same page for Leaf
- *    and internal Branch: overflow memmove stays short, address digits match.
+ * 1. Default page is {@link #LENGTH} slots (32). Each Branch/Leaf may use
+ *    any integer length (Mix path {@code 12.45.23432.7}). Packed
+ *    {@link #getAddress(int)} is mixed-radix by those lengths; for 32
+ *    it matches the old {@code << 5}.
  *    Page edit / slot re-sort: the monitor is the Leaf (this).
  * 2. Split / child re-sort: the monitor is that Branch, acquired bottom-up
  *    (page then parent), only up to the height that actually changes.
@@ -27,8 +29,51 @@ public class Branch extends LiveVector implements LiveVector.Element{
 
 
 
+    /** Default Mix RAM hop (~5 bits). Not a type of address. */
     final static int SIZE = 5;
     final static int LENGTH = 1 << SIZE;
+
+    int length = LENGTH;
+
+    public static int checkLength(int n) {
+        if (n < 1)
+            throw new IllegalArgumentException("Branch length " + n);
+        return n;
+    }
+
+    public int getLength() {
+        return length;
+    }
+
+    /**
+     * Page capacity of this node, any positive integer. {@code 3.17} stays
+     * {@code 3.17} when the page grows from 32 to 23433 slots.
+     */
+    public synchronized void setLength(int n) {
+        n = checkLength(n);
+        if (amount > n)
+            throw new IndexOutOfBoundsException("occupied " + amount + " > " + n);
+        if (length == n && arr != null && arr.length == n)
+            return;
+        Object[] next = new Object[n];
+        if (arr != null && amount > 0)
+            System.arraycopy(arr, 0, next, 0, amount);
+        arr = next;
+        length = n;
+    }
+
+    /**
+     * Mix hole: raise {@link #amount} so {@code index} exists. Null slots
+     * are not in the bunch. Does not shift neighbours.
+     */
+    public synchronized void ensureSlot(int index) {
+        if (index < 0 || index >= getLength())
+            throw new IndexOutOfBoundsException("slot " + index + " / " + getLength());
+        if (arr == null)
+            expand();
+        if (index >= amount)
+            amount = index + 1;
+    }
 
     /**
      * Porting: lock two tree pages in address order (lower, then higher).
@@ -98,12 +143,22 @@ public class Branch extends LiveVector implements LiveVector.Element{
         amount = size;
     }
     Branch(BaseRoot tipTop){
+        this(tipTop, LENGTH);
+    }
+
+    Branch(BaseRoot tipTop, int hopLength){
         branch = tipTop;
-        array(LENGTH);
+        length = checkLength(hopLength);
+        array(length);
     }
 
     Branch(Branch node, int at){
-        array(LENGTH);
+        this(node, at, node != null ? node.getLength() : LENGTH);
+    }
+
+    Branch(Branch node, int at, int hopLength){
+        length = checkLength(hopLength);
+        array(length);
         if (at < node.size()){
             node.insertElementAt(this, at);
         }else
@@ -118,7 +173,7 @@ public class Branch extends LiveVector implements LiveVector.Element{
     }
 
     public int getMaxBlockLength(){
-        return LENGTH;
+        return getLength();
     }
 
     public synchronized Branch getOrNewNode(){
@@ -196,14 +251,29 @@ public class Branch extends LiveVector implements LiveVector.Element{
     }
 
     public Branch newNode(){
-        return new Branch(getRoot());
+        return new Branch(getRoot(), getLength());
     }
 
     /*public Branch newBranch(){
         return new Branch();
     } */
     public synchronized Branch newNext() {
-        return new Branch(getOrNewNode(), getIndex() + 1);
+        return new Branch(getOrNewNode(), getIndex() + 1, getLength());
+    }
+
+    /**
+     * Mix пучок: grow an isolated leaf chain from this vertex (any node,
+     * not only the main root). The new leaf is on the tree; next/prev are
+     * not joined to the caller's bunch.
+     */
+    public Leaf newBunch() {
+        return newBunch(getLength());
+    }
+
+    public Leaf newBunch(int hopLength) {
+        if (this instanceof Leaf)
+            return ((Leaf) this).newBunch(hopLength);
+        return new Leaf(this, size(), hopLength);
     }
     public synchronized Branch getOrNewNext(){
         Branch branch = (Branch)getOrNewNode().elementAt(getIndex() + 1);
@@ -275,7 +345,7 @@ public class Branch extends LiveVector implements LiveVector.Element{
     @Override
     protected void expand() {
         if (arr == null){
-            arr = new Object[LENGTH];
+            arr = new Object[getLength()];
         }else {
             throw new IndexOutOfBoundsException("Branch expand");
         }
@@ -283,7 +353,7 @@ public class Branch extends LiveVector implements LiveVector.Element{
 
     @Override
     protected void expandTo(int index){
-        if (index >= LENGTH)
+        if (index >= getLength())
             throw new IndexOutOfBoundsException("Branch expandTo " + index);
         else if (arr == null)
             expand();
@@ -334,24 +404,57 @@ public class Branch extends LiveVector implements LiveVector.Element{
 
 
 
+    /**
+     * Packed Mix path for KeyDict / cursor order. Mixed radix by each
+     * ancestor's {@link #getLength()}; default 32 is the old {@code << 5}.
+     * The visible address is {@link #pathString(int)}.
+     */
     int getAddress(int fromIndex){
-        int address = fromIndex;
-        int level = 1;
-        Branch branch = getPlace();
-        int index = this.index;
-        while (branch != null){
-            address += (index << (level * Branch.SIZE));
-            /*if (this instanceof Leaf){
-                if (((Leaf)this).prev != null){
-                    int stop = 1;
-                }
-
-            } */
-            level++;
-            index = branch.index;
-            branch = branch.getPlace();
+        long address = fromIndex;
+        long factor = getLength();
+        Branch node = this;
+        Branch parent = getPlace();
+        while (parent != null){
+            address += (long) node.index * factor;
+            if (address > Integer.MAX_VALUE)
+                throw new IndexOutOfBoundsException("Mix packed address exceeds 32-bit");
+            long next = factor * (long) parent.getLength();
+            if (factor != 0 && next / factor != parent.getLength())
+                throw new IndexOutOfBoundsException("Mix packed address exceeds 32-bit");
+            factor = next;
+            node = parent;
+            parent = node.getPlace();
         }
-        return address;
+        return (int) address;
+    }
+
+    /**
+     * Mix path of ℕ₀ from the root hop to {@code fromIndex} on this page.
+     * Example: {@code 12.45.23432.7}.
+     */
+    public int[] getPath(int fromIndex) {
+        int depth = getLevel() + 1;
+        int[] path = new int[depth];
+        path[depth - 1] = fromIndex;
+        Branch node = this;
+        int i = depth - 2;
+        while (i >= 0 && node != null) {
+            path[i] = node.index;
+            node = node.getPlace();
+            i--;
+        }
+        return path;
+    }
+
+    public String pathString(int fromIndex) {
+        int[] path = getPath(fromIndex);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < path.length; i++) {
+            if (i > 0)
+                sb.append('.');
+            sb.append(path[i]);
+        }
+        return sb.toString();
     }
 
 
