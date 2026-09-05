@@ -18,7 +18,9 @@ labelled as bootstrap/projection; they must not be read as adding value kinds.
 The working assignment that restores that reading in the implementation is
 `struct_refactoring.txt`. Hosted trans still lags `implements` (section 21.7)
 and still emits per-name C types; that lag is a defect of the bootstrap, not
-a license to treat those types as Lingvamyxa values.
+a license to treat those types as Lingvamyxa values. The structural memory
+model is section 19.29: one arena per Message; an L3 Thread is a running
+Message; lifetime is reachability; delivery is join, activate or serialize.
 
 0. Core Formula
 
@@ -1129,12 +1131,13 @@ spelling). A selected L2 profile may include typed addresses among those
 descriptions; doing so does not turn a target-language aggregate into a
 Lingvamyxa value category.
 
-A `StructureReference` denotes one owner-arena-managed Structure with stable
-identity and ordered positional or named fields. Objects, Frames, bodies,
+A `StructureReference` denotes one arena-managed Structure with stable
+identity and ordered positional or named fields. The arena is the arena of
+the Message that holds the chunk (section 19.28.5). Objects, Frames, bodies,
 configurations, expressions, model fragments and callable/protocol descriptors
 are Structures when they need non-primitive representation.
 
-An `ArrayReference` denotes one owner-arena-managed array and its element
+An `ArrayReference` denotes one arena-managed array and its element
 storage. Arrays are a distinct source-semantic reference category even when a
 backend shares implementation machinery with Structures. Text may be represented
 by an immutable Structure or Array reference according to its visible
@@ -6356,10 +6359,9 @@ was bound or the object was created lexically inside the function. Ordinary
 local Structures and arrays are arena-managed reference objects from the moment
 they are materialized; they are not C automatic aggregate values. Before an
 arena containing a returned reference is cut, the runtime publishes that
-reference to the caller/continuation and retains, detaches or reparents its
-already existing arena region as required. These owner-graph operations preserve
-the address and must not allocate on the return path. Section 19.29 defines the
-owner ordering.
+reference to the caller/continuation. The referent already lives in this
+Message's arena. Section 19.29.5 defines the return order; it preserves
+the address and must not allocate on the return path.
 
 For `fm`, positional or named return fields populate an already existing
 arena-owned result Structure. The caller may provide an explicit target arena
@@ -12111,25 +12113,29 @@ Open points for the optional explicit Registry/query library:
 
 19.28.1. Scope
 
-A Message Thread is a minimal LMX machine:
+A Message is a complete LMX machine, not a small envelope. An L3 Thread is
+that Message launched in its own execution thread (section 19.28.5). The
+machine has:
 
-    isolated state tree;
-    local arenas/owner graph;
-    current namespace/execution context;
-    message queue;
+    the Message's LMX graph (Structures, arrays, Mix overlay as ordinary
+        referents);
+    one arena, as the implementation of that graph's storage;
+    current namespace/execution context when running;
+    message queue when a queue profile exists;
     validator/merge stage;
     executor;
     logical message generator;
     optional application Registry/cache references.
 
-It is not necessarily an operating-system thread.
+It is not necessarily an operating-system thread. Inside one running Message
+at most one callback executes at a time (section 19.28.11.1).
 
 19.28.2. Message Thread
 
-A Message Thread owns:
+A running Message (an L3 Thread) holds:
 
-    root state;
-    local arenas/owner tree;
+    root state in its own graph;
+    one arena (bump pointer plus a list of backing blocks);
     current-turn ExecutionContext association;
     inbox/outbox queues in a queue-enabled profile;
     namespace context and explicit policy values;
@@ -12137,16 +12143,18 @@ A Message Thread owns:
     validator and executor policy;
     diagnostics/failure state.
 
-No raw mutable reference owned by one Message Thread may point directly into another
-Message Thread in the default profile.
+No raw mutable StructureReference or ArrayReference of one Message may point
+into another Message's arena in the default profile, except interned
+process-root descriptors that outlive both. In-process delivery may splice
+arenas (section 19.28.6); after that splice there is one Message.
 
 In this section, "current" or "executing" Message Thread means the explicit
 `LmMessageThread` reference carried into the executing body. The hosted C
 lowering passes it as the first Message Thread entry parameter and propagates
 it to managed functions as the hidden `lm_lmx_message_thread` parameter. It is
 not looked up in process-global state or TLS. Successive turns of one Message
-Thread may execute on different host workers without changing the actor
-reference or its owner graph.
+may execute on different host workers without changing the actor reference or
+its arena.
 
 19.28.2.1. Message Thread Namespace Context and Optional Data Caches
 
@@ -12171,14 +12179,15 @@ emit messages only under an explicitly installed reactive operation/profile.
 
 19.28.2.2. Root Process, Turns and Cooperative Stop
 
-Message Thread is an L2/L3 runtime Structure family, not a source level. Every
-generated standalone process begins with one root Message Thread. Applications,
+Message Thread is an L2/L3 runtime reading of a Message: the Message has been
+launched in its own execution thread. It is not a source level. Every
+generated standalone process begins with one root Message, running. Applications,
 tests and bootstrap tools use the same rule; a build utility is not exempt merely
 because another build stage launches it.
 
 The process entry runs in an unbounded turn loop. Its abstract shape is:
 
-    initialize the root Message Thread, root owner and ExecutionContext
+    initialize the root Message and ExecutionContext
     while the Message Thread state admits begin-turn
         reset turn-local diagnostic state
         receive/check inbox work when a queue profile exists
@@ -12312,19 +12321,20 @@ controller.
 
 19.28.3. Root State and Handler Frame
 
-Root state is durable state owned by the Message Thread.
+Root state is durable state in the running Message's graph.
 
-A handler frame is created when a validated message is executed. It owns local
-temporary state, cleanup entries and diagnostic context. Its ordinary Structure
-and Array bindings are reference slots. An aggregate referent may belong to the
-thread root, continuation or an arena controlled by a detachable branch owner
-rather than to the handler frame.
+A handler frame is created when a validated Message is executed. It has local
+temporary bindings, cleanup entries and diagnostic context. Its ordinary
+Structure and Array bindings are reference slots into this Message's graph.
+There is no nested handler arena and no detachable-branch owner. Temporary
+referents that remain reachable from the Message root survive end-turn
+collection; the rest are dropped with that collection (section 19.29).
 
 19.28.4. Cleanup and Control Exit
 
-Cleanup is local to the current handler/frame/thread owner. Control exits such
+Cleanup is local to the current running Message. Control exits such
 as `return`, `throw`, `break`, `continue` and cancellation must run required
-cleanup before the owner is cut or reused. Cleanup must not destroy an arena
+cleanup before end-turn collection. Collection must not release a referent
 that is still reachable through a published return/reference root. A Structure
 or Array return first publishes its exact existing reference under the rule in
 section 19.29.5; frame cleanup never copies, moves or rematerializes the
@@ -12334,7 +12344,26 @@ returned aggregate.
 the current execution reaches cleanup through its ordinary visible control
 flow. The stopping safe point is the common end-turn boundary.
 
-19.28.5. Message Structure
+19.28.5. Message, L3 Thread and Template
+
+A Message is full LMX: a graph of Structures and arrays, optional Mix overlay,
+namespace/context as needed to run. It is not a byte envelope with a small
+header. Constructing one from a template is ordinary instantiation of that
+LMX into a new Message's arena. Templates are the normal way to mint Messages;
+there is no second "lightweight message" kind.
+
+Each Message has exactly one arena. L3 does not name arenas, owners, or
+allocation policy. The arena is a bump pointer plus a list of backing blocks
+(section 19.29.0). Capacity is not a source parameter. A full block appends
+another block; that is not a language error. Allocation fails only when the
+host refuses another block.
+
+An L3 Thread is a Message that has been launched in its own execution thread.
+Inactive Messages have an arena and a graph and have not begun a turn.
+Running Messages are L3 Threads. The same ontology covers both: there is no
+Thread kind separate from Message.
+
+19.28.5.1. Message pipeline names
 
 Message states:
 
@@ -12349,17 +12378,52 @@ Message states:
 for a message after descriptor/signature resolution but before all authority/effect
 validation has completed.
 
-19.28.6. Transfer Modes and Borrowed Payloads
+19.28.6. Delivery: join, activate, or serialize
 
-Across Message Thread boundaries, payloads cross by:
+A payload leaves one Message only as another Message. L3 has no `own`,
+`borrow`, `move`, or whole-branch owner-transfer operators. Assignment and
+`return` stay inside the current Message. An optional explicit `copy`
+materializes a second graph in the current Message's arena; it is a value
+operation, not an ownership operation.
 
-    copy;
-    serialization;
-    whole-branch ownership transfer;
-    immutable/shared profile handle.
+In-process delivery of an inactive Message M to a running Message R has two
+admitted forms:
 
-A borrowed raw reference may not cross into another Message Thread as a raw mutable
-reference.
+    Join. At a dispatch safe point of R, splice M's arena block list onto
+        R's arena. Pointers inside M's graph stay valid: they address M's
+        blocks, and those blocks now belong to R. Then discard M as a
+        Message/Thread identity. R continues bumping its current block;
+        leftover space in M's last block may be ignored until collection.
+        After join there is one Message and one arena.
+
+    Activate. Schedule M as its own L3 Thread. There is no splice. M keeps
+        its arena and runs its own turns.
+
+Join is valid only when all of the following hold:
+
+    M is inactive (no executing callback);
+    every StructureReference and ArrayReference in M's graph points into
+        M's own blocks, or into interned process-root/module descriptors
+        that outlive both Messages;
+    R holds no StructureReference into M before the splice, and M holds none
+        into R except such interned descriptors;
+    R and M belong to the same hosted runtime / process.
+
+If M was built in its own arena from a template or by construction into that
+arena, the second and third bullets are the construction rule, not a later
+analysis. A graph that still points into the sender is not a deliverable
+Message.
+
+Join is the normal in-process consume path (mailbox handler runs on R and
+reads the payload as part of R's graph). Activate is the path where the
+Message itself is the actor. They are not mixed for one delivery.
+
+Across process, codec, or runtime: serialize into a new inactive Message's
+arena. Block lists cannot be spliced through a wire.
+
+A raw L2 address is not a delivery form. Shared read-only/mmap resources
+cross as L2 typed handles under an explicit profile, not as Message graph
+edges and not as owner-edges.
 
 19.28.7. Queue, Scheduling and Dispatch
 
@@ -12369,7 +12433,8 @@ A Message Thread processes messages through the standard pipeline:
     validate/merge
     execute
     generate outgoing messages
-    run local collection safe point
+    commit outbox
+    end-turn collection
 
 This is the full queue-enabled turn profile. In the current hosted bootstrap,
 one turn consists of the root-body step followed by the same end-turn
@@ -13271,7 +13336,7 @@ The hosted runtime distinguishes three objects:
         host workers, synchronization, FIFO ready queue and pool-owned actors;
 
     LmMessageThread
-        actor state, root arena/owner graph, current-turn ExecutionContext
+        actor state, the Message's one arena, current-turn ExecutionContext
         association, entry callback, status and turn/collection counters.
 
 There is no process-global root/current Message Thread and no TLS scheduler
@@ -13374,11 +13439,11 @@ callback cannot join or delete the wrapper which is currently starting it.
 The controller ABI is infrastructure, not a substitute for Message Thread
 communication. Source-level code must not exchange raw foreign actor, pool or
 runtime pointers. Cross-actor and cross-runtime communication will use
-inbox/outbox messages with the copy, serialization, immutable-sharing or
-whole-branch-transfer rules of section 19.29.
+inbox/outbox Messages with the join, activate, serialize or immutable-sharing
+rules of sections 19.28.6 and 19.29.7.
 
 The current `void *argument` entry parameter is a low-level hosted ABI facility;
-it does not weaken the source ownership boundary. `send:` and `thread:` are
+it does not weaken the Message isolation boundary. `send:` and `thread:` are
 implemented by the source and runtime contracts in sections 19.27 and 19.28.7.
 `exit:` is implemented for the generated one-runtime, zero-or-one-pool
 application profile. `reply`, `await` and `schedule` remain NOT IMPLEMENTED as
@@ -13386,7 +13451,7 @@ generic source operations; multi-runtime shutdown remains an explicit host
 controller responsibility.
 
 
-19.29. Ownership and Memory Operators
+19.29. Memory Model
 
 19.29.0. Scope, Status and Level Independence
 
@@ -13395,15 +13460,20 @@ semantics above the raw L1 implementation and lowering stratum.
 
 Every ordinary non-primitive Lingvamyxa value is a StructureReference or an
 ArrayReference. Its referent is materialized exactly once in an arena. An arena
-is the semantic lifetime region for ordinary Structures, Array referents and
-owned Array backing storage; it is not a source storage class. Lingvamyxa has
-no ordinary stack, heap or static object category.
+is the implementation of one Message's storage: a bump pointer plus a list of
+backing blocks. It is not a source storage class and not an L3 name. Lingvamyxa
+has no ordinary stack, heap or static object category.
 
-Every execution context supplies a current arena. Ordinary construction uses
-that arena unless the invoked operation explicitly accepts another arena.
-Module/top-level construction uses a module or root arena. Owners may group or
-control arenas for branches, frames, handlers, continuations, modules or Message
-Threads, but owner terminology does not introduce another allocation model.
+L3 construction uses the arena of the current Message (the running L3 Thread,
+or the inactive Message being filled from a template). L3 has no arena
+argument and no owner object. Module/top-level construction uses the process
+root Message's arena, or interned descriptors that outlive turns. Nested
+frame/handler/branch arenas are not part of the L3 model (section 19.28.5).
+The operators `own:`, `borrow:` and `move:` are not L3 receivers.
+
+Section 19.29.12 records the hosted C99 bootstrap (`LmOwnArena`, `libown`).
+That ABI is not L3 ontology and must not be read as adding owner objects,
+nested arenas or `own`/`borrow`/`move` receivers.
 
 Memory policy is not a third source level. L2 and L3 are the only Lingvamyxa
 source levels:
@@ -13429,8 +13499,8 @@ reference identity and exact-reference return for Structures and Arrays.
 
 The hosted C99 bootstrap currently uses one coarse root `LmOwnArena` for the
 migrated local paths. Remaining static-backed and unscoped paths are
-implementation debt, not alternative source semantics. More precise frame,
-handler and detachable-branch arenas may be added without changing the model.
+implementation debt, not alternative source semantics. Extra sibling arena
+shells on a Message are defects, not nested owners to keep.
 
 
 19.29.1. Core Arena Rules and Reference Representation
@@ -13440,45 +13510,53 @@ The following rules are normative for the structural memory model:
     1. Every ordinary Structure and Array referent is arena-allocated and observed
        through a StructureReference or ArrayReference.
 
-    2. An owned Array's object/header and backing storage belong to an arena. A
-       view may borrow backing storage from another Array and cannot outlive the
-       source arena.
+    2. An Array's header and backing rectangle belong to the same Message
+       arena. An L3 slice or reshape is an ArrayReference in that graph; it
+       remains as long as it is reachable. An L2 raw view is a machine
+       address and pins against compaction; it is not a borrow edge.
 
     3. Local bindings contain references only. Binding, argument passing,
        update and return do not copy the referenced aggregate.
 
-    4. Ordinary construction uses the current arena. Another arena is used only
-       when an explicit operation accepts it as an argument.
+    4. Ordinary construction uses the current Message's arena. L3 has no
+       operation that accepts another arena as an argument.
 
-    5. Top-level/module construction uses a module or root arena.
+    5. Top-level/module construction uses the process root Message's arena,
+       or interned descriptors that outlive turns.
 
     6. Constructing a Structure or Array creates no registry rows, descriptors
        or namespace bindings other than an explicitly requested result binding.
 
-    7. Destroying an arena invalidates and releases every ordinary referent and
-       owned Array backing allocation in that arena. It must not occur while a
-       valid surviving reference still depends on the arena.
+    7. Destroying a Message's arena invalidates and releases every ordinary
+       referent and Array backing allocation in that arena. It happens when
+       the Message is discarded (after join, or at Thread termination), not
+       while a valid surviving reference in that same Message still depends
+       on the arena.
 
-    8. A borrowed reference does not extend the source arena lifetime and must
-       not remain observable after that arena is invalidated.
+    8. There is no L3 borrowed-reference kind. A StructureReference or
+       ArrayReference is live while reachable from its Message's roots.
+       End-turn collection of that Message drops the rest.
 
-    9. Explicit `copy`, `move`, `borrow` and `own` operations, when implemented,
-       have namespace-visible contracts. They are independent of ordinary
-       binding, field access and `return`.
+    9. L3 has no `own`, `borrow` or `move` receivers. An optional explicit
+       `copy` materializes a second graph in the current Message's arena.
+       It is independent of ordinary binding, field access and `return`.
 
    10. `return` publishes the exact StructureReference or ArrayReference
        produced by its expression. It performs no allocation, clone, copy,
-       materialization, promotion or identity change.
+       materialization, promotion, compaction or identity change.
 
    11. There is no implicit promotion between stack, heap and static storage,
        because these are not ordinary Lingvamyxa lifetime categories.
 
-   12. Every Message Thread owns an isolated arena/owner graph in the default
-       message profile; no raw mutable reference crosses that boundary.
+   12. Each Message has one isolated arena. No raw mutable reference crosses
+       from one Message's arena into another except interned process-root
+       descriptors. After an in-process join (section 19.28.6) there is one
+       Message.
 
-   13. A payload crosses an inter-Message-Thread boundary by explicit copy,
-       serialization or whole-branch transfer. Shared immutable or foreign
-       resources require an explicit contract.
+   13. A payload crosses Messages as a Message: in-process join of arenas,
+       activation as an L3 Thread, or serialization into a new Message.
+       Shared immutable or foreign resources require an explicit L2 handle
+       contract.
 
    14. Raw L2 addresses and external resources are separate primitive/foreign
        facilities. They do not turn an ordinary Structure or Array into raw
@@ -13489,490 +13567,273 @@ an explicitly declared L2 machine object, but it may not substitute C automatic
 or static duration for the arena contract of an ordinary Structure or Array.
 
 
-19.29.2. Branch Arenas and Owners
+19.29.2. One Arena per Message
 
-An owner controls or designates an arena; it does not introduce another
-allocation mechanism. At every source point the ExecutionContext identifies
-the current arena. An owner may correspond to:
+Each Message has exactly one arena. An L3 Thread is that Message launched in
+its own execution thread (section 19.28.5). L3 does not name the arena.
 
-    a Structure branch;
-    an executable frame;
-    a handler;
-    a retry attempt;
-    a transaction;
-    module state;
-    a continuation or future result context;
-    a detachable message payload branch;
-    a Message Thread root;
-    an explicit external-resource wrapper.
+The arena is a bump pointer plus a list of backing blocks. Capacity is not a
+source parameter and is not guessed. Allocate:
 
-A branch arena is an arena controlled by a branch Structure or another owner
-with the same lifetime role. Its intended shape is:
+    if the request fits in the current block, bump;
+    if the current block is full, take another host block (at least the
+        request, otherwise a default or doubling size) and bump there;
+    if the request is larger than the default block, give it a dedicated
+        block of that size.
 
-    root branch
-        branch arena
-            child Structure
-            child Array referent and backing storage
-            child text
-            child expression tree
-            child decimal storage
-            child descriptor Structures
+Existing pointers stay valid: objects in older blocks do not move because a
+block filled. Structure chunks address each other by StructureReference; they
+do not need one contiguous range. An Array rectangle is one contiguous
+allocation and may occupy its own block. Membership in the arena is membership
+in the block list, not `base <= p < base+size` on a single slab.
 
-Leaf Structures, Array referents and owned Array backing storage are allocated in
-the current arena. They need not own separate arenas; an arena per leaf usually
-adds overhead without useful reclamation granularity.
+A full block is not a language error. Allocation fails only when the host
+refuses another block.
 
-A branch farther from the leaves may own one arena for an entire subtree. When
-that branch becomes unreachable from every surviving owner, is transferred as
-a whole, or is destroyed with its owner, the region can be handled as one unit.
-This is the expected case for documents, syntax trees, message payloads,
-configuration trees, explicit registry values and high-level runtime state.
+There are no nested frame, handler, attempt, transaction or branch arenas in
+L3. Leaves do not get arenas. Parser P0 nodes allocate in the current
+Message's arena like any Structure.
 
-Lexical scope and arena lifetime are distinct. A lexical function frame owns
-its local reference slots, but it does not necessarily own their referents.
-Ordinary construction uses the current arena. A branch, frame, handler,
-attempt, continuation, module or Message Thread may supply that current arena.
-Another arena can be chosen only by an explicit operation whose signature
-accepts it, for example:
+Lexical scope and arena lifetime are distinct. A function frame holds local
+reference slots; it does not own the referents. The end of a lexical block is
+not permission to free. Destruction follows Message lifetime and reachability
+from that Message's roots (section 19.29.4).
 
-    the current Message Thread root;
-    a caller-provided result owner;
-    a continuation owner;
-    a module-state owner;
-    a handler or transaction owner;
-    a detachable branch owner;
-    an explicitly passed detachable branch arena.
+The hosted bootstrap currently puts ordinary local construction in the running
+Message's root arena. That outlives every ordinary function return. It may
+retain memory until end-turn collection; it must not turn a local Structure
+into a dangling C stack value.
 
-No registry lookup or table row implicitly selects an arena.
-
-Consequently, the end of a lexical block is not by itself permission to free
-every Structure or Array named in that block. Destruction follows arena
-lifetime and surviving ownership edges, not source spelling or the C scope
-selected by a particular lowering.
-
-The current root-arena bootstrap chooses the Message Thread root for explicitly
-constructed local named Structures, `fm` result Structures, admitted local
-Array values in managed Message Thread contexts, and closure environments and
-descriptors. Named-Structure and physical-`merge:` descriptor declarations
-allocate none of those values.
-This coarse choice intentionally outlives every ordinary function return. It
-may retain memory longer than a future precise implementation, but it preserves
-identity and prevents a local Structure from becoming a dangling stack value.
+No registry lookup or table row selects an arena. L3 has no arena argument.
 
 
-19.29.3. Ownership Edges, Borrow and Explicit Ownership Operations
+19.29.3. Structure Graph and Array Rectangle
 
-An owner graph contains edges between owner-managed objects and regions. The
-standard edge kinds are:
+A Structure arena chunk always starts with a StructureReference to its own
+descriptor, then a flat payload of slots. Chunk size is the descriptor
+reference plus the sum of slot sizes. A StructureReference slot points at
+another such chunk. Memory of Structures is an ordinary graph: slots may share
+a referent, and cycles are allowed. There is no per-name `typedef` and no
+vtable. Field-follow `x\foo` loads `x`'s own descriptor, finds the newest
+occurrence `foo`, and reads that slot.
 
-    OWNED
-        the target region is owned through this edge and remains part of the
-        owning graph while the edge is valid;
+"Own descriptor" is that prefix. It is not an ownership object.
 
-    BORROWED
-        the edge is a view into another owner's region and does not by itself
-        extend that owner lifetime;
+An ArrayReference is not this graph. It has one array descriptor and one
+rectangular backing block of `d0 × d1 × …` cells. Indexing is an offset.
+A row of StructureReference elements enters the Structure graph in those
+chunks. Mix hop addresses (`ℕ₀` path) are a placement tree, not this graph.
+P0 and the used-tree of `Consumer` remain trees.
 
-    LAZY_OWNED
-        an explicit deferred owner-copy contract; the implementation may
-        temporarily refer to source storage but must preserve owned semantics
-        before source storage can disappear or mutate incompatibly;
+Shared descriptors typically live in the process root Message or an intern
+that outlives turns. Two instances of a named Structure share one descriptor
+pointer; they do not each own a copy.
 
-    EXTERNAL
-        lifetime is controlled by an explicit external resource profile and
-        its release or validity contract;
-
-    TRANSFERRED
-        conceptual state used while a whole owned branch is detached from one
-        Message Thread or owner and attached to another. Sender-side access is
-        invalidated according to the transfer contract.
-
-A value obtained from outside the current owner may be treated as borrowed by
-default. This includes a view into an incoming message frame, a field projected
-from another branch, a slice into an array owned elsewhere, or a handle to an
-external resource whose wrapper does not own the resource.
-
-Borrowing does not transfer release responsibility. A borrowed edge is valid
-only while the source owner and arena epoch remain valid. If the target must
-retain independent data after that lifetime, an operation explicitly resolved
-from the namespace must establish an owned representation.
-
-The language intends generic ownership operations, but they are not yet
-implemented as source operators in the current bootstrap:
-
-    copy / move / borrow / own    PROPOSED; NOT IMPLEMENTED
-
-They are ordinary receivers or callables explicitly bound in the namespace.
-Their visible descriptors define source and target reference categories, target
-arena, ownership edge, effects and failure result. A program may store policy
-or descriptor data in an ordinary Table, but the Table has no memory-model
-effect until an explicitly resolved operation reads it.
-
-Conceptual future source forms are:
-
-    own: saved m\payload
-    borrow: view m\payload
-    copy: dst src
-    move: dst src
-
-The old draft spelling `owner: saved value` denoted the operation now called
-`own`; it must not be confused with an owner object or with allocation policy.
-No spelling in this paragraph is registered by the current source bootstrap
-unless a profile explicitly supplies the receiver.
-
-The historical exact-head readable spelling:
-
-    `owner saved`: m\payload
-
-was another proposed presentation of the same operation. It does not define a
-new grammar category and should normalize to the same future generic `own`
-receiver/method, if that readable alias is retained at all.
-
-The proposed operations have these contracts:
-
-    `own`
-        establishes explicitly retained ownership in a target arena;
-
-    `borrow`
-        returns a view bounded by the source arena lifetime;
-
-    `copy`
-        materializes an independent value in the explicit target arena, or in
-        the current arena when the operation declares no target argument;
-
-    `move`
-        transfers or reparents an existing arena region when the visible
-        descriptor permits it, and invalidates or empties the source binding
-        according to that contract.
-
-An explicit owned edge does not require one physical implementation strategy.
-An implementation may satisfy its contract through:
-
-    immediate deep copy;
-    immutable sharing;
-    copy-on-write;
-    source-owner pinning inside one Message Thread;
-    whole-branch reparenting;
-    deferred owner-copy with automatic promotion at owner-tree cutting.
-
-Deferred owner-copy means that an edge is semantically owned by the target
-owner even though it temporarily refers to source storage. Before the source
-owner is destroyed, reset or transferred, the runtime must do one of the
-following:
-
-    copy the referenced value into the target owner;
-    redirect the edge to a stable immutable/shared representation;
-    keep the source owner pinned inside the same Message Thread owner graph;
-    reparent or absorb the whole existing source region without changing the
-    referenced object's identity when that operation is valid.
-
-For mutable values, lazy ownership requires freezing, copy-on-write, a mutation
-barrier, immediate copy or another mechanism which prevents the target from
-observing mutations forbidden by the owned-value contract. For immutable
-Structures or Arrays, source text, interned values, explicit descriptor values
-and parser trees, source-owner pinning or lazy promotion may be natural.
-
-`LAZY_OWNED` describes an explicit ownership operation. It must never be
-introduced merely to implement ordinary Structure or Array `return`. A return
-does not request an owned copy and must not trigger lazy promotion on its path.
-
-An application may store ownership and transfer policy as ordinary data, for
-example:
-
-    ownership.result[array_new] = owned
-    ownership.result[array_at]  = borrowed
-    ownership.edge[MessageEnvelope][payload] = owned
-    ownership.edge[MessageEnvelope][view] = borrowed
-    ownership.edge[MessageEnvelope][nativeHandle] = external
-    resource.release[MessageEnvelope][nativeHandle] = close
-    copy.policy[MessageEnvelope][payload] = deep
-    transfer.policy[MessageEnvelope][payload] = forbidden
-    transfer.policy[Message][payload] = copy
-
-These rows do not select an arena or operation merely by existing. They matter
-only when passed to an explicitly bound consumer. A concrete operation exposing
-a raw allocator or address is L2-only; checked high-level ownership operations
-may be shared by L2 and L3.
+Hosted trans still emitting per-name `typedef` and a ladder of rank
+allocations is a bootstrap defect (`struct_refactoring.txt`), not this model.
 
 
-19.29.4. No Escaping Borrow
+19.29.4. Reachability and Collection
 
-The no-escaping-borrow rule follows from owner validity.
+The Structure graph lives in the Message's arena: every ordinary chunk is a
+block of that arena. Arena membership is not liveness. A finished frame's
+temporaries remain in those blocks until collection; they are simply not
+reachable from roots.
 
-A borrowed reference is valid only inside the frame, handler, message-frame
-epoch, branch lifetime or owner lifetime that produced it. It may not remain in
-longer-lived state after the source owner becomes invalid. It may not cross an
-inter-Message-Thread boundary as a raw reference.
+A StructureReference or ArrayReference is live while a walk from the Message's
+roots can reach it through StructureReference slots (and Array elements that
+are such slots). Roots are the Message root, published return/continuation
+roots, and interned process-root descriptors. There is no second owner graph
+and no L3 borrowed-reference kind. The walk is that one Structure graph, with
+a mark because it may contain cycles.
 
-Conceptually invalid retention, assuming `m\payload` is borrowed from a message
-frame which ends before `saved`:
+Collection of a running Message is that walk from those roots. Unreachable
+chunks and Array backings may be released, or survivors copied into fewer
+blocks with slots rewritten (compaction, section 19.29.8). Shared descriptors
+are roots, not per-instance copies.
 
-    handler: retainPayload m
-        saved: m\payload
-    ---
+Collection is local to one Message. It does not stop other Messages, scan
+foreign arenas, or require a process-global heap lock. Inside one running
+Message at most one callback executes at a time, so the walk needs no mutator
+handshake with another callback of the same Message.
 
-The plain binding records another reference; it does not silently copy the
-payload or extend the source owner.
+A control operator does not free memory merely because it changes control
+flow. Content collection of a running Message runs **once per turn, at
+end-turn**, after outbox commit and turn cleanup. User C frames of the
+handler or root-body are gone; hosted locals of that step are not roots.
+There is no collection after the handler returns and before outbox: send
+may still allocate, and a second walk would not see a quieter graph.
 
-A future explicit ownership operation could make retention independent:
+Ordinary `return`, `break`, `continue`, `retry`, `redo`, `throw` to `catch`,
+and handler return are not collection points. They may make locals
+unreachable; those objects stay in the arena blocks until end-turn.
+`assert` or an uncaught `throw` that leaves the turn reaches the same
+end-turn (or Message termination). Running-Message termination releases
+the whole arena.
 
-    handler: retainPayload m
-        own: saved m\payload
-    ---
+Implementation-defined memory pressure uses this same walk only at
+end-turn, not as compact-in-allocator.
 
-This second form is only a proposed source spelling until `own` is registered.
-Its semantics would come from the selected descriptor operation and could use explicit
-copy, immutable sharing or permitted whole-region ownership maintenance.
+A local reference slot dies with its frame. The referent does not die while
+it remains reachable from a Message root. That is why a locally constructed
+Structure may be returned: it is not a C automatic aggregate.
 
-No-escaping-borrow does not prohibit returning an ordinary Structure or Array
-merely because its reference slot is local. Local aggregates are references,
-not stack values. Every well-typed aggregate result may be returned, and the
-runtime must preserve its existing object and identity. The relevant question
-is whether its arena survives, detaches or is reparented.
-
-If a return expression denotes a borrowed object owned by a surviving caller,
-module, continuation, thread root or other live region, returning that exact
-reference is valid. If its source owner is to be destroyed, the ownership
-configuration must be resolved before the return transfer: the object must
-already reside in a surviving owner, or its existing owner region must be
-retainable, detachable or reparentable without copying the aggregate. The
-`return` operation itself may not repair the situation by allocating or
-copying.
-
-A raw address into explicit L2 machine storage is not a StructureReference or
-ArrayReference. Its escape rules belong to the selected low-level L2
-machine/ABI profile. Ordinary return does not turn it into an arena-managed
-reference.
+No StructureReference of one Message may point into another Message's arena
+except interned process-root descriptors. After send, the sender holds no
+reference into the sent Message. After in-process join (section 19.28.6) the
+payload graph is part of the receiver. An L2 `@` or raw view that would
+survive collection compact of its referent is a machine-address pin, not a
+missing `own`. Ordinary return does not turn a raw L2 address into an
+arena-managed reference.
 
 
-19.29.5. Return and Owner Lifetime
+19.29.5. Return
 
-For an ordinary Structure or Array result, `return` publishes the exact reference
-already produced by its expression. It must not:
+For an ordinary Structure or Array result, `return` publishes the exact
+reference already produced by its expression. It must not:
 
     allocate a result object;
     clone or copy the object;
     materialize an aggregate from the object;
     allocate a replacement aggregate in another arena;
-    perform an owner-copy;
-    promote a lazy-owned edge;
+    compact or relocate the object;
     change the object's address or identity.
 
-An explicit constructor inside a return expression allocates in its current or
-explicit target arena according to its visible contract. The constructor
-finishes first and produces one reference; `return` publishes that same
-reference without a second allocation or copy.
-
-Similarly, an explicit future `copy`, `own` or message-transfer expression may
-allocate according to its own contract before it becomes the return value. The
-return receiver does not add another object or ownership operation.
+An explicit constructor inside a return expression allocates in the current
+Message's arena. The constructor finishes first and produces one reference;
+`return` publishes that same reference without a second allocation or copy.
+An optional explicit `copy` that is the return expression likewise finishes
+first; `return` does not add another object.
 
 Every well-typed ordinary Structure or Array may be returned. An aggregate is
 not rejected merely because it was constructed or named inside the returning
-function. Its selected arena must outlive the return, or its existing arena
-region must be detachable or retainable without copying the aggregate.
+function. It already lives in this Message's arena.
 
-The required abstract order for an aggregate-reference return is:
+The required abstract order is:
 
     1. evaluate the return expression and obtain its existing reference;
 
     2. publish that exact reference as the caller, continuation, future or
-       enclosing result edge/root;
+       enclosing result root of this Message;
 
-    3. retain, detach or reparent its existing owner region when required;
+    3. let the local frame slot die;
 
-    4. mark exited frame, handler, attempt or branch owners and update the
-       current Message Thread owner graph;
+    4. do not collect, compact or allocate on this path.
 
-    5. run an optional local collection pass at the selected safe point;
-
-    6. release only regions for which no valid surviving edge or root remains.
-
-Steps 2 and 3 are owner-graph updates, not object materialization. A profile
-which uses precise frame or branch owners must reserve required edge, detach or
-transfer metadata before the return path, or implement those updates without
-allocation. In particular, an out-of-memory condition must not force a hidden
-return copy as a fallback.
-
-A local reference slot dies with its frame. The referenced Structure or Array
-does not die while its arena survives. This distinction is why backend
-representation remains reference-shaped even when the source binding is local.
+Out-of-memory must not force a hidden return copy. Collection, if any, waits
+for a selected safe point (typically end-turn), at which the published
+reference is a live root.
 
 An `fm` multi-field result is itself an ordinary Structure. In the current
-bootstrap it is allocated once in the function prologue in the root owner
-arena, its declared fields are filled on each selected return path, and the
-same `lm_fm_result` reference is returned. No return path allocates or copies
-the result.
-
-Future caller-provided result-owner or continuation-owner variants are also
-valid if they preserve the same rules: result storage exists before the return
-operation, and `return` publishes the exact reference to it.
+bootstrap it is allocated once in the function prologue in the running
+Message's arena, its declared fields are filled on each selected return path,
+and the same `lm_fm_result` reference is returned. No return path allocates
+or copies the result.
 
 
-19.29.6. Message Thread Memory
+19.29.6. Running Message (L3 Thread)
 
-A Message Thread owns an isolated memory tree or forest. It is the semantic
-unit for ordinary message-local ownership and local collection.
+A running Message is an L3 Thread: the same Message, launched in its own
+execution thread (section 19.28.5). It is the unit of isolation and of local
+collection. Conceptual components:
 
-Conceptual components of one Message Thread include:
+    the Message's LMX graph and one arena;
+    incoming message queue when a queue profile exists;
+    current handler frame (bindings, not a nested arena);
+    optional intern table;
+    optional application Registry/cache references;
+    current namespace/execution context;
+    scheduler state.
 
-    MessageThread
-        root state reference
-        incoming message queue
-        current handler frame
-        temporary arenas
-        branch arenas
-        continuation/future owners
-        immutable value store
-        intern table
-        optional application Registry/cache references
-        current namespace/execution context
-        scheduler state
+This is a runtime Structure family, not a source-level profile. `thread:` and
+`send:` are ordinary L2/L3 receivers. `reply`, `await` and `schedule` remain
+proposed until those receivers are declared and lowered.
 
-This is a runtime Structure family, not a source-level profile or level
-receiver. Message
-Thread descriptors and operations are ordinary L2/L3 descriptors and receivers
-explicitly visible in the namespace. The top-level `thread:` declaration is
-implemented by the current profile. `send:` is implemented for owned-LMX FIFO
-delivery as described in section 19.28.7. `reply`, `await` and `schedule` remain
-proposed until their source receivers are explicitly declared and lowered.
+Any Registry, cache or Table of a Message is ordinary Structure/Array data in
+that Message's arena. It is optional application state, not an allocator.
 
-Any Registry, cache or Table owned by a Message Thread is itself ordinary
-Structure/Array data allocated in that thread's arenas. It is optional
-application state, not part of the language's allocation or name-resolution
-machinery.
+Raw StructureReferences inside one Message may point only into that Message's
+arena or into interned process-root descriptors. A raw reference from one
+Message into another Message's arena is invalid until an in-process join has
+made them one Message.
 
-The hosted pool scheduler and owned-LMX FIFO inbox/outbox queues are
-implemented. The pool ready queue still schedules actors rather than carrying
-messages; the source `thread:` handler consumes the separate inbox one message
-per turn.
-
-Raw references inside one Message Thread may point only into regions owned by
-that Message Thread or into explicitly shared immutable/external storage
-admitted by the active profile. A raw reference from one Message Thread into
-another Message Thread's private owner graph is invalid.
-
-This makes normal memory management local. Releasing memory for one Message
-Thread does not require stopping or scanning every Message Thread in the
-process. An implementation may map several Message Threads onto one OS thread,
-or one Message Thread onto scheduled work across host threads, provided the
-same isolation and ordering rules are preserved.
-
-The default deterministic execution profile has one active handler at a time
-per Message Thread. That property makes handler and message-boundary arena
-maintenance local. A different profile may permit internal parallel work, but
-it must introduce the synchronization and publication rules needed to preserve
-the owner graph; the existence of L2 low-level thread operations does not
-silently weaken the default Message Thread model.
+Releasing one Message does not require stopping or scanning every Message in
+the process. An implementation may map several running Messages onto one OS
+thread, or one running Message onto scheduled work across host workers,
+provided at most one callback of that Message runs at a time and the arena
+moves with the actor, never with the worker.
 
 Every generated standalone bootstrap program currently begins as one root
-Message Thread and runs its external process entry in that thread's turn loop.
-This includes `parser`, `trans`, `make`, `finalize` and `buildCore`. Therefore
-all such tools legitimately depend on the owner runtime. The fact that a tool
-is used during the build does not make it exempt from its own root Message
-Thread lifetime.
+Message and runs its external process entry in that Message's turn loop.
+This includes `parser`, `trans`, `make`, `finalize` and `buildCore`. A build
+tool is not exempt from its own root Message lifetime.
 
 
 19.29.7. Message Boundary
 
-An inter-Message-Thread boundary is a memory boundary.
+A payload leaves one Message only as another Message (section 19.28.6). The
+admitted forms are:
 
-A message payload crosses that boundary in one of three ordinary ways:
+    Join
+        In-process consume: splice the inactive Message's arena onto the
+        running receiver, then discard the inactive Message identity.
+        Pointers inside the payload stay valid. Preconditions are in
+        section 19.28.6: closed graph, inactive sender-payload, same
+        runtime, no prior cross-references.
 
-    copy;
-    serialization;
-    whole-branch ownership transfer.
+    Activate
+        The Message is launched as its own L3 Thread. No splice.
 
-Copy means that the receiver obtains a representation owned by one of its own
-regions, or obtains a message-frame value which is valid for the frame and must
-be explicitly retained according to policy before a longer lifetime is used.
+    Serialize
+        Across process, codec or runtime: reconstruct the graph in a new
+        inactive Message's arena. Block lists cannot be spliced through a
+        wire.
 
-Serialization means that the sender converts the payload to a byte, text or
-record representation and the receiver reconstructs its own Structure or Array
-in a receiver arena. Codec selection, validation and failure are defined by an
-explicit codec/transfer descriptor, not by hidden pointer transport.
+There is no whole-branch owner-transfer operator and no borrowed payload
+kind. After send, the sender holds no StructureReference into the sent
+Message. Same-Message `return` is the exact-reference operation of
+section 19.29.5, not a boundary.
 
-Whole-branch ownership transfer means that the sender detaches an entire owned
-region and the receiver attaches that existing region to its own owner graph.
-The objects inside the branch retain their identities. After transfer,
-sender-side references and handles into that region are invalid according to
-the transfer policy.
+Explicit immutable sharing uses an intern or L2 typed handle whose profile
+defines cross-Message validity. Neither is a raw mutable StructureReference
+crossing the boundary.
 
-A message must not contain a raw borrowed reference into the sender's private
-owner graph when the receiver is a different Message Thread. An intra-thread
-message may use a frame borrow only when the active profile explicitly defines
-that lifetime and the handler cannot retain it beyond validity.
-
-Explicit immutable sharing is permitted only when the implementation preserves
-immutability, stable publication and thread safety. An externally managed
-resource may be represented by a typed handle whose profile defines
-cross-thread validity. Neither case is an ordinary raw mutable Structure
-reference crossing the boundary.
-
-An application may represent additional boundary policy as ordinary Table data,
-for example:
-
-    message.transfer[PayloadClass][copy] = CopyProvider
-    message.transfer[PayloadClass][serialize] = CodecProvider
-    message.transfer[PayloadClass][wholeBranch] = TransferProvider
-
-Such rows have no effect until a receiver selected through an explicit namespace
-binding consumes that Table. They are not current source operators. The current
-implemented `send:` accepts already serialized LMX bytes and copies them into
-runtime-owned queue storage. Adding copy/whole-branch payload operations must
-not overload that bootstrap argument list ambiguously.
-
-Reply values, failures, futures and continuations obey the same rule. A reply
-wrapper does not grant permission to retain a sender-private raw reference.
-Cross-boundary result transport is copy, serialization or whole-region
-transfer; an ordinary same-Message-Thread function `return` is instead the
-exact-reference operation defined in section 19.29.5.
+The current implemented `send:` accepts already serialized LMX bytes and
+copies them into queue storage. Join and activate of live graphs must not
+overload that bootstrap argument list ambiguously. `reply`, `await` and
+`schedule` remain NOT IMPLEMENTED as generic source operations; they will
+use the same Message forms.
 
 
-19.29.8. Temporary Arenas, Tree Cutting and Message Thread Destruction
+19.29.8. Compaction and Message Destruction
 
-Temporary values may be allocated in a frame, handler, retry-attempt or
-transaction arena and released as a group after that owner ends, provided no
-surviving reference still depends on the region.
+Compaction is part of end-turn collection (section 19.29.4), not in the
+allocator, not on ordinary `return`, and not before outbox. C frames of the
+turn step are gone; live roots are the Message roots. The collector may
+copy survivors into fewer blocks, rewrite StructureReference slots, and
+return empty blocks to the host. That is how the block list does not grow
+without bound. It is not how a mid-turn allocate avoids "arena too small"
+— that case appends a block.
 
-Long-lived values must be reachable from a surviving owner such as the Message
-Thread root, a module-state Structure, a continuation, a detachable branch or
-another persistent owner.
+Ordinary `return` does not compact. Allocation failure does not compact.
+One execution thread inside the Message removes a mutator race; it does not
+make the allocator a safe point. Hosted C locals and L2 `@` are roots the
+arena graph does not list. Mid-turn almost everything is still reachable,
+so a copy would keep the garbage collection is meant to drop.
 
-When a branch or subtree is cut from the local owner graph, the implementation
-may run an automatic tree-cut procedure for that Message Thread. The procedure
-may:
+Objects with a live L2 `@` or raw view are pinned against that compact
+until the address dies.
 
-    identify regions no longer reachable from live owner roots;
-    promote explicit lazy-owned edges when their contracts require it;
-    pin source owners still needed by explicit lazy-owned edges;
-    detach branch roots which have become independent owners;
-    absorb or reparent an existing region when permitted;
-    mark abandoned regions for release;
-    release frame, handler, attempt or transaction arenas;
-    destroy the complete owner graph when the Message Thread terminates.
+Destroying a running Message releases its arena (every block). Destroying
+an inactive Message that was joined has already transferred its blocks;
+only the Message identity is discarded. Explicit L2 raw or external
+resources follow their own contracts: Message destruction does not silently
+free an externally managed resource, and it must release a resource whose
+wrapper in this Message required release.
 
-This procedure is not a separately invoked source-language operation. It is
-local structural memory machinery attached to owner lifetime. It is not a
-global tracing collector and does not require a stop-the-world phase.
-
-Actual release may be coarser than logical tree cutting. A profile may release
-regions immediately, batch release until the end of a handler, or retain all
-ordinary Structure and Array memory until the Message Thread is destroyed. The
-current root-only bootstrap uses the last strategy for generated ordinary
-aggregate referents.
-That is a coarse implementation of the owner model, not a different global-GC
-model.
-
-Explicit L2 raw or external resources have their own destruction contracts.
-Destroying a Message Thread does not silently free a raw resource whose
-profile says it is externally managed, nor may it leave an owned external
-resource unreleased when its contract requires release.
-
-Owner-tree cutting may allocate only when carrying out an explicit ownership
-contract such as `LAZY_OWNED` promotion. It must not allocate a replacement for
-an ordinary Structure or Array merely because a function returned it. Exact
-reference identity remains observable across ordinary returns.
+Collection and compaction must not allocate a replacement for an ordinary
+Structure or Array merely because a function returned it. Exact reference
+identity remains observable across ordinary returns.
 
 
 19.29.9. Immutable Values and Interning
@@ -14013,9 +13874,9 @@ alias. A copy operation may therefore return shared immutable storage when its
 contract defines value independence rather than distinct object identity.
 
 Immutable sharing across Message Threads is permitted only when publication,
-lifetime and thread safety are guaranteed. Intern tables reside in a Message
-Thread, module, root or explicitly shared immutable arena. The chosen profile
-must state which arena keeps the canonical object alive.
+lifetime and thread safety are guaranteed. Intern tables reside in a Message's arena or in interned process-root
+storage that outlives turns. The chosen profile must state which Message
+keeps the canonical object alive.
 
 Interning does not change the `return` rule. Returning an interned Structure or
 Array publishes the exact reference produced by the expression; it does not
@@ -14037,19 +13898,16 @@ receiver/ABI contract. Ordinary ArrayReferences remain arena-managed at both
 L2 and L3, and a raw buffer is not an ArrayReference.
 
 When a low-level resource is represented inside a high-level Structure, the
-edge must describe at least whether it is:
+L2 handle contract must say at least whether it is:
 
-    owned;
-    borrowed;
+    released with this Message;
+    not released by this Message (pin / foreign);
     immutable/shared;
-    externally managed;
-    transferable;
     protected by synchronization.
 
-An owned external edge is released according to its declared release method
-when the owning region is destroyed. A borrowed external edge is not released
-by the borrower and must not outlive the external owner. An externally managed
-edge follows the lifetime of its declared provider or handle profile.
+That is an L2 resource contract, not an L3 owner-edge kind. A handle released
+with this Message is released when the Message is destroyed. A foreign handle
+is not. Ordinary ArrayReferences remain arena-managed at both L2 and L3.
 
 L3 excludes source operations which expose raw machine storage or addresses.
 It may use a checked wrapper StructureReference, a Primitive handle admitted by
@@ -14063,54 +13921,32 @@ and L3, while unchecked address arithmetic over its backing buffer is L2-only.
 A Message Thread or service operation may be available at both levels, while a
 raw OS-thread handle, atomic operation or allocator call is L2-only.
 
-Raw low-level references must still obey their declared owner lifetime and must
-not cross Message Thread boundaries contrary to the message profile. Dropping
-to L2 does not silently weaken an already selected Message Thread isolation
-contract; it gives the programmer explicit machine mechanisms whose use must
-be described by the L2 profile.
+Raw low-level references must still obey their declared L2 contract and must
+not cross Message boundaries contrary to sections 19.28.6 and 19.29.7. Dropping
+to L2 does not silently weaken Message isolation; it gives explicit machine
+mechanisms whose use must be described by the L2 profile.
 
 
-19.29.11. Arena Selection and Explicit Ownership Operations
+19.29.11. No L3 Arena Argument
 
-Arena selection is supplied by the ExecutionContext or by an explicit operation
-argument. The memory model defines no ordinary `stack:`, `heap:` or `static:`
-allocation receiver, and no Registry/Table selects object lifetime.
+The memory model defines no ordinary `stack:`, `heap:` or `static:` allocation
+receiver, and no Registry/Table selects object lifetime.
 
-Ordinary Structure and Array constructors materialize in the current arena.
-Module/top-level constructors use a module or root arena. A constructor may use
-another arena only when its namespace-visible signature explicitly accepts that
-arena as an argument.
+Ordinary Structure and Array constructors materialize in the current Message's
+arena. Module/top-level constructors use the process root Message's arena or
+interned descriptors. L3 has no constructor argument that selects another
+arena and no owner object.
 
-`copy`, `move`, `borrow` and `own`, when implemented, are ordinary explicitly
-bound operations. Their descriptors define target arena, edge semantics,
-effects and failure behavior. They do not require separate ownership grammar.
+L3 receivers:
 
-Conceptual future forms are:
+    own: / borrow: / move:     not L3; do not register;
+    copy:                      optional ordinary deep copy into the current
+                               Message's arena; NOT IMPLEMENTED generically.
 
-    own: saved m\payload
-    borrow: view m\payload
-    copy: dst src
-    move: dst src
-
-Current status:
-
-    copy    proposed source operation; NOT IMPLEMENTED generically;
-    move    proposed source operation; NOT IMPLEMENTED generically;
-    borrow  proposed source operation; NOT IMPLEMENTED generically;
-    own     proposed source operation; NOT IMPLEMENTED generically.
-
-The low-level owner runtime already provides arena and lazy-edge helpers. Their
-existence does not make these generic source operations available. Availability
-requires an explicit receiver/callable binding and a namespace-visible
-descriptor.
-
-Tables may contain ownership policy as ordinary application data. Such data has
-no effect until an explicitly bound operation receives and consumes it. The
-meaning of a field follows the descriptor and operation contracts visible in
-the namespace plus the current/explicit arena—not an ambient row lookup.
-
-The absence of a lifetime annotation does not authorize a hidden copy at
-`return`. Ordinary return remains exact-reference publication.
+`libown` helpers are not those receivers. The absence of a lifetime annotation
+does not authorize a hidden copy at `return`. Ordinary return remains
+exact-reference publication (section 19.29.5). Cross-Message movement is
+`send:` of a Message (section 19.28.6), not `move`.
 
 
 19.29.12. ANSI C Lowering Strategy
@@ -14552,6 +14388,11 @@ already selected as a surviving result.
 
 19.29.12.4. Conceptual Future Precise-Owner Runtime
 
+Bootstrap note: L3 has one arena per Message and no owner object
+(sections 19.28.5 and 19.29.0–19.29.2). This subsection is historical
+`libown` design. Do not implement it as source semantics and do not present
+`LmOwnerArena` as the current ABI.
+
 A more precise future runtime may represent branch, frame, handler and
 continuation owners explicitly. The following API is conceptual design, not the
 current ABI and not source syntax:
@@ -14630,7 +14471,7 @@ Generated operations may be selected from namespace-visible descriptors:
         implements a selected message/codec boundary;
 
     trace_owner_edges
-        supports local owner-tree walking or local branch-root reference
+        supports local owner-graph walking or local branch-root reference
         tracking.
 
 The old historical names `LmArena`, `LmBranch` and `LmThread` described this
@@ -14688,7 +14529,7 @@ fixed source syntax:
     binary layout of arenas and owner handles;
     lazy-edge table representation;
     immutable-store representation;
-    local owner-tree metadata;
+    local owner-graph metadata;
     allocation descriptor indexing;
     message serialization format;
     OS-thread and scheduler mapping;
@@ -14828,190 +14669,130 @@ diagnostic and collector/runtime failures use the failure-dominant channel so
 that a preceding `stop: 0` cannot hide a later fatal condition in the same
 turn.
 
-The memory model has two related local mechanisms:
+The memory model has one local collection: a reachability walk of the current
+Message's Structure graph (section 19.29.4). There is no owner-tree cutting
+and no nested owner region.
 
-    Message Thread local collection;
-    owner-tree cutting and owner-region maintenance.
-
-Memory reclamation is performed through owner lifetime and these mechanisms.
 A control operator does not free memory merely because it changes control flow.
-It may leave a frame, handler, retry attempt, transaction, branch owner or whole
-Message Thread. Such an exit changes the owner graph and creates a possible
-collection safe point.
+It may leave a frame, handler or the whole running Message. Ordinary `return`
+does not collect. Collection runs once per turn, at end-turn
+(section 19.29.4).
 
-Local collection may run at these points:
+The collector is local to one Message. It does not:
 
-    after normal frame completion;
-    after handler completion;
-    after transaction completion;
-    after `return`;
-    after `break`;
-    after `continue`;
-    after labelled `break`;
-    after labelled `continue`;
-    after `throw`;
-    after `retry`;
-    after `redo`;
-    after an `assert` diagnostic exit;
-    after a requested `stop` reaches end-turn;
-    after owner replacement;
-    after owner removal;
-    after local branch/subtree detachment;
-    after incoming or outgoing message-boundary completion;
-    before or during Message Thread termination;
-    under implementation-defined memory pressure.
-
-The collector is local to one Message Thread. It does not:
-
-    stop unrelated Message Threads;
-    scan foreign owner/arena graphs;
+    stop unrelated Messages;
+    scan foreign arenas;
     require one global heap lock;
     perform global tracing as a source-semantic requirement.
 
 It may inspect:
 
-    the current Message Thread owner tree;
-    local arenas and branch roots;
-    allocation descriptors;
-    explicit lazy-owned edges;
-    borrowed-edge metadata;
-    local reachability metadata;
+    the current Message's roots and StructureReference slots;
+    Array backings in this arena;
     continuation and future roots;
-    message-frame roots;
+    live L2 `@` pins;
     implementation priority and memory-pressure metadata.
 
 It may:
 
-    cut unreachable local branches;
-    release frame-local arenas;
-    release handler-local arenas;
-    release transaction arenas;
-    release abandoned retry-attempt arenas;
-    release detached branch arenas no longer rooted;
-    promote explicit deferred-owned edges when required;
-    pin source owners when required;
-    detach surviving branch roots as independent owners;
-    absorb or reparent complete existing owner regions;
-    destroy the complete Message Thread owner graph at termination.
+    mark unreachable chunks and Array backings;
+    release them, or compact survivors into fewer blocks (section 19.29.8);
+    destroy the Message's arena at termination.
 
-An explicit lazy-owned edge may require data copying as part of its own
-contract. An ordinary Structure or Array `return` does not. The collector must
-preserve the returned aggregate's exact reference and may retain, detach or
-reparent its existing owner region rather than materializing another object.
+An ordinary Structure or Array `return` does not copy. The collector must
+preserve every still-reachable referent's exact reference.
 
-Actual release is implementation-defined within these constraints. A profile
-may release immediately after a local cut, batch releases until the end of the
-current handler, or retain ordinary Structure and Array memory until the entire
-Message Thread is destroyed.
+A profile may retain ordinary Structure and Array memory until the entire
+running Message is destroyed. The current root-only bootstrap uses that
+coarse strategy for generated ordinary referents. It is this model with
+late collection, not a different global GC.
 
-This is memory collection by effect because it can reclaim memory
-automatically. It is not a global tracing collector by mechanics. Its units of
-collection are owner regions:
-
-    frame arena;
-    handler arena;
-    retry-attempt arena;
-    transaction arena;
-    detachable branch arena;
-    continuation arena;
-    complete Message Thread owner graph.
+The unit of collection is the Message arena, not frame/handler/attempt
+arenas.
 
 
-19.29.14.1. Terms: Collection and Owner-Tree Cutting
+19.29.14.1. Terms: Collection
 
 This document does not define a general high-level source operation which
 releases an arbitrary ordinary Structure or Array referent.
 
-The term collection means a local memory collection pass for one Message
-Thread.
-
-The term owner-tree cutting means a structural update of that Message Thread's
-owner graph after edges or roots change.
+The term collection means a local reachability walk of one Message's
+Structure graph. It runs once per turn, at end-turn (section 19.29.4).
 
 A collection pass may include:
 
-    owner-tree cutting;
-    arena reclamation;
-    explicit deferred-owner promotion;
-    source-owner pinning;
-    branch detachment;
-    branch reparenting;
-    complete thread-arena destruction.
+    marking from Message roots;
+    releasing unreachable chunks and Array backings;
+    compacting survivors into fewer blocks;
+    pinning objects with a live L2 `@`;
+    destroying the Message arena at termination.
 
 These mechanisms are not finalization syntax and are not ordinary control-flow
-handlers. They are runtime memory machinery attached to owner lifetime.
+handlers. They are runtime memory machinery of the Message arena.
 
-An owner-tree cut is logically distinct from physical release. A branch may be
-removed from one parent and immediately become a detached surviving root. A
-region may be marked reclaimable but physically retained until a batch safe
-point. A frozen region may be absorbed into another owner. These choices must
-preserve all live references and edge contracts.
+Logical unreachability is distinct from physical release. A chunk may be
+marked reclaimable but retained until a batch safe point. A profile may
+compact at end-turn or retain until the running Message is destroyed. These
+choices must preserve all live references.
 
-The current root-only bootstrap implements only coarse parts of this process:
-root allocation, arena-wide destruction, lazy-edge support, arena freezing,
-arena absorption and tree-cut/lazy-promotion helpers. More precise per-frame
-or per-handler reclamation is future work.
+The current root-only bootstrap implements coarse parts: root allocation,
+arena-wide destruction at Thread teardown, and lazy-edge helpers. End-turn
+reachability collection and compaction of the one Message arena are the
+next precise steps, not nested frame arenas.
 
 
-19.29.14.2. Control Exit and Owner Lifetime
+19.29.14.2. Control Exit and Lifetime
 
-Control exits are connected to memory only through owner lifetime.
+Control exits are connected to memory only through Message reachability.
 
 Generic sequence:
 
     select the control exit;
     evaluate and preserve any result/failure reference required by that exit;
-    establish every surviving owner edge or root;
-    mark affected frame, handler, attempt, transaction or branch owners as
-        exited, abandoned, detached or destroyed;
-    update the local owner graph;
+    publish surviving roots of this Message;
     run required explicit resource cleanups in valid dependency order;
-    run a Message Thread local collection pass if this point is selected;
-    physically release regions permitted by the active implementation profile;
+    run a local collection pass only at end-turn (section 19.29.4);
     complete the control transfer.
 
-For an ordinary StructureReference or ArrayReference return, the result-specific
-ordering in 19.29.5 is normative: evaluate and publish the exact existing
-reference before any owner which could invalidate it is cut.
-Retain/detach/reparent operations may update the owner graph but may not
+For an ordinary StructureReference or ArrayReference return, section 19.29.5
+is normative: evaluate and publish the exact existing reference. Do not
 allocate a replacement aggregate.
 
 The control operations relate to safe points as follows:
 
     `return`, `break`, `continue`
-        leave ordinary executable or loop scopes and may create local
-        collection safe points;
+        leave ordinary executable or loop scopes; they are not collection
+        safe points;
 
     labelled `break`, labelled `continue`
-        may leave several nested frames and therefore mark several owner
-        regions before one collection pass;
+        may leave several nested frames; still not collection safe points
+        by themselves;
 
     `throw`
-        leaves recoverable failure scopes and may create a safe point;
+        leaves recoverable failure scopes. Unwind to `catch` does not
+        collect. Uncaught `throw` that leaves the turn collects at
+        end-turn or termination;
 
-    `retry`
-        abandons one retry-attempt owner and may collect that attempt before
-        the next attempt begins;
-
-    `redo`
-        restarts the receiver-defined repeatable unit and may abandon its
-        attempt-local owners;
+    `retry` / `redo`
+        abandon attempt-local bindings; do not collect. The next attempt
+        runs in the same turn. Garbage waits until end-turn. There is no
+        nested attempt arena;
 
     `assert`
-        exits through the diagnostic path and may abandon frames or the whole
-        Message Thread;
+        if it leaves the turn, collection is that turn's end-turn or
+        Message termination;
 
     `stop`
-        requests current-Message-Thread termination but does not itself leave
+        requests current-Message termination but does not itself leave
         the current lexical scope; cleanup and collection occur through
         ordinary control flow and the common end-turn boundary;
 
-    Message Thread termination
-        destroys the complete ordinary owner graph except for explicitly
-        transferred or externally managed resources.
+    running-Message termination
+        destroys the Message arena except for interned process-root
+        descriptors and explicitly managed L2 resources.
 
 No control operator is a memory operation by itself. Reclamation follows
-because owner lifetime changes.
+because roots and reachability change.
 
 `finally` and generated cleanup handlers run because their enclosing scope or
 resource contract requires cleanup. They must not invalidate a surviving
@@ -15228,7 +15009,7 @@ Conceptual sequence:
     mark every otherwise unreachable region reclaimable;
     physically release according to the implementation profile.
 
-This is the ordinary memory-cutter path for local owner-tree mutation.
+This is the ordinary memory-cutter path for local owner-graph mutation.
 
 It does not scan all objects in the process.
 
@@ -15430,23 +15211,15 @@ The collector must preserve:
     copy/serialization/whole-branch-transfer boundary rules;
     valid external-resource ownership and cleanup ordering.
 
-The regular processing pattern is:
+The regular processing pattern is one collection per turn, at end-turn:
 
     receive message
-        -> commit payload into receiver ownership
+        -> join or activate (section 19.28.6)
+        -> execute handler or root-body
+        -> commit outbox
+        -> turn cleanup
         -> run local collection pass
-        -> validate, schedule or execute handler work
-
-    send message
-        -> commit payload transfer to queue/transport/target owner
-        -> run local collection pass
-        -> continue current handler
-
-    finish handler
-        -> publish result/reply/failure roots
-        -> run required cleanup
-        -> run local collection pass
-        -> wait for or receive next message
+        -> next turn or stop
 
 The current hosted bootstrap's root-only arena may implement these collection
 calls as no-ops for ordinary root-owned Structures and Arrays and release
@@ -15562,13 +15335,13 @@ external implementation/lowering substrate and is not a Lingvamyxa source
 level. L3 may use checked wrappers but does not directly expose these machine
 operations.
 
-The ordinary Message Thread model remains:
+The ordinary Message model remains:
 
-    local owner/arena graph;
-    owner-tree cutting and local collection;
+    one arena per Message;
+    local reachability collection once per turn, at end-turn;
     exact-reference ordinary Structure/Array return;
-    message-boundary copy, serialization or whole-branch transfer;
-    no raw mutable reference crossing an inter-Message-Thread boundary.
+    message-boundary join, activate or serialize;
+    no raw mutable reference crossing from one Message arena into another.
 
 A future L2 profile may define operations for:
 
@@ -15594,8 +15367,8 @@ NOT IMPLEMENTED unless an active L2 profile explicitly installs their bindings.
 
 A low-level execution thread is not automatically a Message Thread. It may
 expose raw addresses, shared mutable buffers and platform synchronization under
-its explicit L2 profile. A Message Thread is the higher structural runtime
-unit with an owner graph, queue and message boundary.
+its explicit L2 profile. A running Message is the higher structural runtime
+unit with one arena, a queue and a message boundary.
 
 L3 code may see:
 
@@ -15610,7 +15383,7 @@ rather than the raw address, allocator or synchronization operation.
 An explicit low-level `freemem` operation, when implemented, is not:
 
     a local Message Thread collection pass;
-    an owner-tree cut;
+    an end-turn collection pass;
     an ordinary Structure/Array destructor;
     a message-boundary rule;
     a high-level `return` operation.
@@ -15645,40 +15418,38 @@ arena-owned Structures/Arrays.
 The normative memory rules are:
 
     ordinary Structure / Array
-        stable reference to an arena-allocated referent;
+        stable reference to a referent in a Message arena;
+
+    Message
+        full LMX; one arena (bump plus block list);
+
+    L3 Thread
+        a Message launched in its own execution thread;
 
     current arena
-        default destination of ordinary construction;
+        the arena of the current Message; L3 does not name it;
 
-    explicit target arena
-        available only through an operation whose namespace-visible signature
-        accepts it;
+    no L3 arena argument, owner object, `own:`, `borrow:` or `move:`;
 
     module/top-level value
-        allocated in a module or root arena;
+        process root Message arena, or interned descriptors;
 
     binding / argument / return
         forwards the existing reference without aggregate copy;
 
     return
         publishes the exact existing reference without allocation, copy,
-        materialization, owner-copy, lazy promotion or identity change;
+        compaction or identity change;
 
-    borrow
-        does not extend source arena lifetime;
+    optional `copy`
+        second graph in the current Message's arena;
 
-    explicit ownership operation
-        may copy, share, detach or establish a lazy-owned edge according to its
-        explicit namespace-visible contract, independently of return;
-
-    Message Thread
-        owns an isolated local arena/owner graph;
-
-    inter-Message-Thread boundary
-        copy, serialization or whole-branch transfer; no raw mutable reference;
+    inter-Message boundary
+        join, activate, or serialize; no raw mutable reference;
 
     collection
-        local owner-region reclamation, not required global tracing;
+        local reachability walk of one Message once per turn, at
+        end-turn (section 19.29.4); compaction there, not in the allocator;
 
     L2
         may expose low-level machine allocation, raw storage, addresses,
@@ -15986,11 +15757,11 @@ operation may query a supplied Table; it is not a global role hierarchy.
 This integrated model reduces to these rules:
 
     Value = Primitive | StructureReference | ArrayReference;
-    Structure / Array = arena-owned referent observed through its reference;
+    Structure / Array = Message-arena referent observed through its reference;
     namespace = Name -> ordered Binding occurrences at a source point;
     ordinary lookup = newest still-active occurrence of the exact name;
     declaration / import / plain-name rebind = explicit namespace-changing operation;
-    construction = resolve descriptor, allocate in the current arena,
+    construction = resolve descriptor, allocate in the current Message's arena,
                   initialize and return/bind a reference;
     construction side effects = no class/layout/field/backend rows and no
                   namespace change except an explicit result binding;

@@ -712,8 +712,9 @@ Phase 9 — later, out of first delivery
         the profile proves the field stream is fixed. Must remain
         invisible in source. Must not resurrect `class` tables as
         ontology.
-    9.5 `copy` / `move` / `borrow` / `own` (memory plan). Orthogonal;
-        the one-header representation must not block them.
+    9.5 Explicit `copy` if a profile wants a second identity (memory
+        plan). Not `own` / `borrow` / `move`; L3 has no owner object.
+        The one-header representation must not block `copy`.
 
 
 7. Acceptance for the first delivery
@@ -791,8 +792,9 @@ RU: `Array.lm2` + таблицы модели — сломанная проек�
         §19.21.3 implements(varA, varB, Consumer)
         §19.28–19.29 hosted declaration vs constructor, arena
     memory_model_development_plan.txt
-        arena, return-as-reference, coarse root; orthogonal but
-        Phase 1 constructors must use the current arena
+        one L3 Thread arena as bump + block list; no nested arenas; no
+        source-level owner; Message = inactive L3 Thread; compact only
+        at end-turn; Phase 1 constructors use the current Thread arena
     Lingvamyxa_spec.txt was aligned with this assignment (ontology vs
     projection). Remaining hosted notes in the spec describe current
     bootstrap defects, not extra value kinds.

@@ -6,12 +6,224 @@ Status / Статус
 ---------------
 
 EN: Working note against Lingvamyxa_spec.txt §2, §6.5, §8.8, §11, §19.28–19.29
-and the current tree (`lm2/own.lm2`, `lm2/own_abi.lm2`, trans lowering,
-`lm2/mix`). Not a spec change.
+and struct_refactoring.txt. Current code: `lm2/own.lm2`, `lm2/own_abi.lm2`,
+trans lowering, `lm2/mix`. Spec §19.29 is the Memory Model: L3 Thread is a
+running Message; one arena per Message; lifetime is reachability; delivery
+is join, activate or serialize. Hosted `libown` in §19.29.12 is bootstrap,
+not L3 ontology.
 
-RU: Рабочая заметка по спеке §2, §6.5, §8.8, §11, §19.28–19.29 и текущему
-коду (`lm2/own.lm2`, `lm2/own_abi.lm2`, lowering trans, `lm2/mix`).
-Это не правка спецификации.
+RU: Рабочая заметка по спеке §2, §6.5, §8.8, §11, §19.28–19.29 и
+`struct_refactoring.txt`. Код: `lm2/own.lm2`, `lm2/own_abi.lm2`, lowering
+trans, `lm2/mix`. Спека §19.29 — Memory Model: L3 Thread есть запущенный
+Message; одна арена на Message; жизнь — достижимость; доставка — join,
+activate или serialize. Hosted `libown` в §19.29.12 — bootstrap, не
+онтология L3.
+
+
+0. Two graphs, one L3 Thread arena
+Два графа, одна арена L3 Thread
+---------------------------------
+
+EN: Representation work is `struct_refactoring.txt`. This file is where
+chunks live and how a Thread reclaims them. They meet at: a constructor
+allocates in the current L3 Thread's arena; size comes from the descriptor;
+collection walks StructureReference slots as value edges.
+
+Value graph (Structure):
+    Arena chunk = own-descriptor prefix + flat payload. A StructureReference
+    slot is a pointer to another such chunk. Slots may share a referent;
+    cycles are allowed. `x\foo` is descriptor → newest occurrence → slot,
+    not `->` on a per-name typedef.
+
+Array:
+    Not this graph. One array descriptor + one rectangular `d0×d1×…` backing.
+    Index is an offset. A row of StructureReference elements enters the
+    Structure graph in those chunks. Mix hop addresses (`ℕ₀` path) are a
+    placement tree, not this graph. P0 / used-tree of Consumer stay trees.
+
+Lifetime inside one L3 Thread:
+    Reachability in that Thread's Structure graph. End-turn collection
+    walks live roots (thread root, published refs) and StructureReference
+    slots. There is no second source-level "owner graph" of OWNED /
+    BORROWED / LAZY_OWNED / EXTERNAL / TRANSFERRED edges. Those names are
+    bootstrap/runtime residue in `libown` and spec §19.29, not L3 ontology.
+
+    Do not add `own:`, `borrow:`, `move:` as language receivers. Assignment
+    and `return` are the same reference in this Thread. An explicit `copy`
+    (when it exists) is an ordinary value operation: a second graph with a
+    new identity, not "establish ownership in a target arena". L2 `@` / raw
+    views pin against compaction; they are machine addresses, not borrow
+    edges.
+
+    "Own descriptor" on a Structure chunk is the type-description prefix,
+    not an ownership object. Parser "owner level" is source nesting. Keep
+    those words. Drop memory-owner as a source concept.
+
+L3 Thread physical picture:
+    Message Thread is the L2/L3 runtime family (§19.28.2.2). L3 does not
+    name arenas. Inside one L3 Thread there is one execution thread: a pool
+    may run later turns on another worker, but never two callbacks of the
+    same actor at once (§19.28.11.1). That removes a mutator race on the
+    arena. It does not make every program point a collection safe point.
+
+    Default: one arena per L3 Thread — the Message Thread root. That is
+    the only unscoped allocation for the actor. Ordinary Structure/Array
+    chunks live there. L3 does not name this arena. Module/descriptor
+    Structures that outlive a turn live on this root (or on the process
+    root Message Thread), not in disposable turn storage.
+
+    The arena is not one pre-sized slab. Capacity is not a parameter anyone
+    guesses. Physically it is a bump pointer plus a list of backing blocks
+    (LLVM `BumpPtrAllocator`, C++ `monotonic_buffer_resource`, game frame
+    allocators — the same machine):
+
+        allocate: if the request fits in the current block, bump;
+                  if the current block is full, malloc/mmap another block
+                  (policy: at least the request, otherwise a default/doubling
+                  size) and bump there;
+                  if the request is larger than the default block, give it
+                  a dedicated block of that size.
+
+    Existing pointers stay valid: objects in older blocks do not move.
+    Structure chunks already point at each other by StructureReference;
+    they never needed one contiguous range. An Array rectangle *does* need
+    one contiguous backing — that is one allocation, which may be its own
+    block. "In this arena" is membership in the block list (or an allocation
+    descriptor), not `base <= p < base+size` on a single slab.
+
+    A full block is not a user-facing error and not a language exception.
+    The only allocation failure is the host refusing another block (true
+    OS OOM). Do not relocate the graph because a block filled.
+
+    Compaction is part of the one end-turn collection (spec §19.29.4),
+    after outbox commit. Not after handler return, not in the allocator,
+    not on ordinary `return`. A full block still just appends another
+    block.
+
+    Why not compact in the allocator when memory is short: one thread
+    removes the race, not the C stack. Hosted locals and `@` / views are
+    roots the arena graph does not list. Mid-sausage almost everything is
+    still reachable, so a copy keeps the garbage you wanted to drop. If
+    the bump block is full and nothing has been cut, in-place compact
+    reclaims nothing — the answer is a new chunk. Copying also needs that
+    new chunk; do the growth without the move. Compact-on-OOM becomes
+    possible only if activation records live in the graph and C does not
+    cache arena pointers across an allocation. That is not the current
+    hosted lowering.
+
+    Nested arenas are not part of the L3 default. One growing block-list
+    arena plus one end-turn collection already drops sausage garbage.
+    Frame/handler/parser do not get their own arenas.
+
+    Isolation is the Message, not an owner. An L3 Thread is a Message
+    launched in its own execution thread (spec §19.28.5). Sending constructs
+    an inactive Message from a template (or by filling that Message's
+    arena). In-process consume splices that arena onto the receiver and
+    discards the inactive Message (join). Alternatively the Message is
+    activated as its own Thread. Cross-process delivery serializes into a
+    new Message. Join needs a closed graph: no refs into the sender, no
+    refs from the receiver into the payload until after the splice.
+
+    `retry` is a collection pass on this same arena from the surviving
+    roots, not a nested-arena destroy.
+
+RU: Представление — `struct_refactoring.txt`. Этот файл — владение, сбор
+и где лежат куски. Стык: конструктор выделяет в текущей арене; размер —
+из дескриптора; сбор ходит по слотам StructureReference как по рёбрам
+значения.
+
+Граф значений (Structure):
+    Кусок = префикс своего дескриптора + ровный payload. Слот-ссылка —
+    указатель на такой же кусок. Слоты могут делить референт; циклы
+    разрешены. `x\foo` — свой дескриптор → новейшая occurrence → слот,
+    не `->` в typedef на имя.
+
+Array:
+    Не этот граф. Один дескриптор массива + прямоугольник `d0×d1×…`.
+    Индекс — смещение. Ряд StructureReference входит в граф Structure
+    уже в тех кусках. Адреса Mix (`путь ℕ₀`) — дерево размещения, не
+    этот граф. P0 и used-tree у Consumer остаются деревьями.
+
+Жизнь внутри одного L3 Thread:
+    Достижимость в графе Structure этого потока. Сбор на end-turn идёт
+    от живых корней и слотов-ссылок. Второго исходного «графа владельцев»
+    с рёбрами OWNED / BORROWED / LAZY_OWNED / EXTERNAL / TRANSFERRED нет.
+    Эти имена — остаток bootstrap/`libown` и §19.29, не онтология L3.
+
+    Не добавлять приёмники `own:`, `borrow:`, `move:`. Привязка и `return`
+    — та же ссылка в этом потоке. Явный `copy` — обычная операция над
+    значением (второй граф, новая идентичность), не «владение в целевой
+    арене». L2 `@` пинит против компакта; это машинный адрес, не borrow.
+
+    «Свой дескриптор» у куска Structure — префикс описания, не объект
+    владения. «Owner level» в парсере — вложенность исходника. Слова
+    оставить. Memory-owner из языка убрать.
+
+Физика L3 Thread:
+    Message Thread — семейство рантайма L2/L3 (§19.28.2.2). L3 арены не
+    именует. Внутри одного L3 Thread — один поток исполнения: пул может
+    сменить воркера между ходами, но не два callback одного актора сразу
+    (§19.28.11.1). Гонки мутаторов на арене нет. Это не делает каждую
+    точку программы safe point сбора.
+
+    Дефолт: одна арена на L3 Thread — корень Message Thread. Это
+    единственный бесхозный malloc актора. Обычные куски Structure/Array
+    живут там. L3 эту арену не именует. Дескрипторы, которые переживают
+    ход, — на этом корне (или на корневом Message Thread процесса).
+
+    Арена — не одна плита угаданного размера. Ёмкость не параметр.
+    Физически: bump-указатель и список блоков backing (тот же механизм,
+    что LLVM `BumpPtrAllocator` / C++ `monotonic_buffer_resource`):
+
+        allocate: запрос влезает в текущий блок — bump;
+                  блок полон — malloc/mmap следующего (не меньше запроса,
+                  иначе размер по политике/удвоению) и bump туда;
+                  запрос больше блока по умолчанию — отдельный блок
+                  под этот размер.
+
+    Старые указатели живы: объекты в прошлых блоках не едут. Куски
+    Structure и так ссылаются друг на друга; один сплошной диапазон им
+    не нужен. Прямоугольник Array — одно непрерывное выделение, ему
+    можно отдать отдельный блок. «В этой арене» — членство в списке
+    блоков, не `base <= p < base+size` одной плиты.
+
+    Полный блок — не ошибка языка. Отказ allocate — только когда хост
+    не даёт следующий блок (настоящий OOM ОС). Граф из-за полного блока
+    не переезжает.
+
+    Компактирование: только когда вложенная работа хода/handler/frame
+    вернулась в корень L3 Thread (сбор на end-turn). C-кадры сосиски уже
+    сняты; живые корни — граф владельцев. Обход графа Structure от них,
+    мусор сосиски выбросить, выживших при желании скопировать в меньшее
+    число блоков и переписать слоты, пустые блоки отдать хосту. Так
+    список блоков не растёт без предела от хода к ходу. Это не способ
+    угадать размер в середине хода — там просто дописывается блок.
+    Обычный `return` не компактирует и не копирует.
+
+    Почему не компактировать в аллокаторе, когда памяти мало: один поток
+    снимает гонку, не C-стек. Hosted-локали и `@` / view — корни, которых
+    нет в графе арены. В середине сосиски почти всё ещё достижимо, копия
+    утащит тот мусор, который хотели выбросить. Если bump-блок полон и
+    срезов не было, compact на месте не освободит ничего — нужен новый
+    кусок. Копирующий сбор тоже просит этот кусок; рост — без переноса.
+    Compact-on-OOM — только если кадры живут в графе и C не кэширует
+    указатели арены через allocation. Нынешний hosted lowering таким
+    не является.
+
+    Вложенных арен в дефолте L3 нет. Одна растущая арена и сбор на
+    выбранных safe point уже выбрасывают мусор сосиски обходом живых
+    корней. Frame/handler/parser своих арен не получают.
+
+    Изоляция — Message, не owner. L3 Thread — Message, запущенный в своём
+    потоке исполнения (спека §19.28.5). Отправка строит неактивный Message
+    из шаблона. In-process consume склеивает его арену к получателю и
+    выбрасывает неактивный Message (join). Либо Message активируют как
+    свой Thread. Через процесс — сериализация в новый Message. Join
+    требует замкнутый граф: нет ссылок в отправителя и нет ссылок
+    получателя в payload до склейки.
+
+    `retry` — обход этой же арены от выживших корней, не destroy
+    вложенной арены.
 
 
 1. Spec contract / Контракт спецификации
@@ -22,59 +234,69 @@ ArrayReference. Each referent is materialized once in an arena. There is no
 source-level stack / heap / static object category. Local bindings hold
 references. Binding, argument passing, field update and `return` never copy
 the aggregate. `return` publishes the exact existing reference: no allocate,
-clone, promote or identity change on the return path. Before an arena that
-holds a published reference is cut, the runtime retains, detaches or reparents
-that existing region.
+clone, promote, compact or identity change on the return path.
 
-Current arena is the default construction target. Another arena is used only
-when a namespace-visible operation accepts it. Module/top-level values use a
-module or root arena. Lexical scope is not permission to free.
+Construction uses the executing L3 Thread's arena. L3 has no arena argument
+and no owner object. Lexical scope is not permission to free. End-turn
+collection drops what is unreachable from that Thread's roots.
 
-Ownership edges: OWNED, BORROWED, LAZY_OWNED, EXTERNAL, TRANSFERRED (conceptual
-during whole-branch move). Borrow does not extend source lifetime
-(no-escaping-borrow). Generic source operators `copy` / `move` / `borrow` /
-`own` are specified but not implemented.
+Cross-thread payload is a Message: full LMX in an inactive L3 Thread.
+Not copy-plus-owner-transfer of a branch, and not `own`/`move`/`borrow`.
+Collection is local to one Message Thread, not a global GC. L2 may expose
+raw addresses, unchecked index, allocators, atomics. L3 excludes those
+machine operations but is not a sandbox.
 
-A Message Thread owns an isolated owner/arena graph. Inter-thread payload
-crosses only by copy, serialization or whole-branch transfer. Collection is
-local owner-tree cutting, not a global GC. L2 may expose raw addresses,
-unchecked index, allocators, atomics. L3 excludes those machine operations
-but is not a sandbox.
+Spec §19.29 still describes owner graphs and proposed `own`/`borrow`/`move`
+receivers. This plan does not implement them. A later spec pass should
+replace that vocabulary with Thread + reachability + Message.
 
 RU: Обычные не-примитивы — только StructureReference и ArrayReference.
 Референт один раз материализуется в арене. Категорий stack/heap/static у
 исходника нет. Локальные слоты хранят ссылки. Привязка, аргумент, поле и
 `return` не копируют агрегат. `return` публикует ту же ссылку: без выделения,
-клона, promote и смены адреса. Перед срезом арены со опубликованной ссылкой
-рантайм retain/detach/reparent уже существующий регион.
+клона, promote, компакта и смены адреса.
 
-Текущая арена — цель обычной конструкции. Другая арена — только если операция
-явно принимает её. Модульные значения — module/root арена. Лексический конец
-блока сам по себе не освобождает объекты.
+Конструкция — в арене исполняющегося L3 Thread. В L3 нет аргумента-арены
+и нет объекта owner. Лексический конец блока не освобождает. Сбор на
+end-turn бросает недостижимое от корней этого потока.
 
-Рёбра: OWNED, BORROWED, LAZY_OWNED, EXTERNAL, TRANSFERRED. Заимствование не
-продлевает жизнь источника. Операторы `copy` / `move` / `borrow` / `own` в
-спеке есть, в bootstrap как исходные приёмники — нет.
+Полезная нагрузка через границу — Message: полный LMX в неактивном
+L3 Thread. Не copy+transfer ветки и не `own`/`move`/`borrow`. Сбор
+локален одному Message Thread. L2 может показывать сырые адреса. L3 их
+не показывает.
 
-Message Thread владеет изолированным графом арен. Через границу потока —
-copy, сериализация или передача целой ветки. Сбор — локальная обрезка дерева
-владельцев, не глобальный GC. L2 может показывать сырые адреса и аллокаторы.
-L3 их не показывает, но это не песочница.
+§19.29 ещё описывает граф владельцев и приёмники `own`/`borrow`/`move`.
+Этот план их не реализует. Позже спеку стоит перевести на Thread +
+достижимость + Message.
 
 
-2. Already in the tree / Уже есть в проекте
--------------------------------------------
+2. Already in the project / Уже есть в проекте
+----------------------------------------------
 
 EN:
 
   Runtime (`libown` / `LmOwnArena` / `LmMessageThread`):
-    root arena per actor; generated programs attach an unpooled root and
-    drive its turn loop; pool actors share the same arena/collection ABI;
+    one `root_owner` per actor; generated programs attach an unpooled root
+    and drive its turn loop; pool actors share the same arena/collection ABI;
+    the arena follows the actor if a later turn runs on another worker;
+    at most one active entry callback per actor;
     `lm_own_arena_new_zero`, array alloc, allocation descriptors, lazy edges,
-    freeze, absorb; `lm_own_tree_cut` is called at every end-turn;
-    destruction of the actor releases the whole root arena;
+    freeze, absorb; `lm_own_tree_cut` at every end-turn;
+    actor destruction releases the whole root arena;
     edge kinds BORROWED / OWNED / LAZY_OWNED / EXTERNAL exist in the ABI;
     pthread / Win32 / single host providers.
+
+  What is still unscoped:
+    `lm_own_arena_new` mallocs the arena shell; extra arenas hang on
+    `arena_head` as sibling shells, not regions of the root;
+    arena metadata stacks (`allocations` / descriptors / lazy edges) are
+    `lm_own_new_zero`; Mix pages and `items` use `lm_own_new_zero` / `c.free`.
+
+  Hosted chunks (struct_refactoring.txt §2 — still true):
+    per-name `typedef struct`; size is `sizeof(T)`; field-follow is `->`;
+    rank-N `[]` is a ladder of `lm_own_arena_array_new_zero` (C `T **`),
+    not one rectangle. Empty Structure still has the dummy
+    `lm_lmx_empty_structure` byte.
 
   Trans lowering:
     local and direct module named/anonymous Structures, `fm` results, admitted
@@ -85,33 +307,45 @@ EN:
     descriptor/`merge:` declarations allocate no objects;
     `return` of a Structure/Array is a pointer forward in the hosted C profile.
 
-  Spec itself already records this as a *coarse* bootstrap: one root arena
-  that outlives every ordinary function return; tree-cut currently promotes
-  lazy edges and does not reclaim general unreachable root objects.
+  Spec already records this as a *coarse* bootstrap: one root arena that
+  outlives every ordinary function return; tree-cut currently promotes lazy
+  edges and does not reclaim general unreachable root objects. That coarse
+  retain-until-thread-death profile is valid. The lie is unscoped shells and
+  typedef-sized chunks, not "only one arena".
 
 RU:
 
   Рантайм (`libown` / `LmOwnArena` / `LmMessageThread`):
-    корневая арена на актора; generated-программы цепляют unpooled root и
-    крутят turn loop; пул акторов — тот же ABI арен/сбора;
+    один `root_owner` на актора; generated-программы цепляют unpooled root и
+    крутят turn loop; пул — тот же ABI арен/сбора; арена едет с актором на
+    другой воркер; не больше одного активного callback на актора;
     `lm_own_arena_new_zero`, массивы, дескрипторы аллокаций, lazy-рёбра,
     freeze, absorb; `lm_own_tree_cut` на каждом end-turn;
     уничтожение актора снимает всю корневую арену;
     виды рёбер BORROWED / OWNED / LAZY_OWNED / EXTERNAL в ABI;
     провайдеры pthread / Win32 / single.
 
+  Всё ещё бесхозно:
+    `lm_own_arena_new` malloc'ит шапку арены; лишние арены — соседи в
+    `arena_head`, не регионы корня; стеки метаданных арены — `lm_own_new_zero`;
+    страницы Mix и `items` — `lm_own_new_zero` / `c.free`.
+
+  Hosted-куски (struct_refactoring.txt §2):
+    typedef на имя; размер `sizeof(T)`; field-follow — `->`; rank-N `[]` —
+    лесенка аллокаций, не прямоугольник. Пустая Structure — байт
+    `lm_lmx_empty_structure`.
+
   Lowering trans:
-    локальные и модульные именованные/анонимные Structure, результаты `fm`,
-    допущенные Array и runtime Table в managed-контексте идут через
-    `lm_own_arena_new_zero` в root owner;
-    модульные value-сайты — source-ordered helper и приватный статический
-    слот *ссылки* (не статический агрегат);
+    локальные и модульные Structure, результаты `fm`, допущенные Array и
+    runtime Table — `lm_own_arena_new_zero` в root owner;
+    модульные value-сайты — helper и статический слот *ссылки*;
     объявления дескрипторов/`merge:` объектов не выделяют;
     `return` Structure/Array в hosted C — проброс указателя.
 
   Спека уже называет это грубым bootstrap: одна root-арена переживает любой
-  обычный return; tree-cut сейчас только promote lazy-рёбер и не собирает
-  обычные недостижимые объекты root-арены.
+  обычный return; tree-cut сейчас только promote lazy-рёбер. Грубый профиль
+  «держать до смерти потока» законен. Ложь — бесхозные шапки и куски
+  `sizeof(T)`, не «арена одна».
 
 
 3. Gaps vs spec / Дыры относительно спеки
@@ -119,140 +353,150 @@ RU:
 
 EN (priority order):
 
+  G0. Hosted Structure/Array chunks are still the old C projection.
+      Until struct_refactoring Phases 1–3 and 8: size is `sizeof(T)`,
+      field-follow is `->`, nested Structure is inline or extra C depth,
+      rank-N is `T **`. Precise collection cannot see which words are
+      StructureReference edges. Shared descriptors are not a first-word
+      prefix. Empty unit is not prefix + 0 payload.
+      Do not duplicate those phases here; constructors of new Structures
+      must allocate in the current Message Thread arena.
+
   G1. Unscoped allocation still in use.
-      `lm_own_new_zero` / `c.free` remain for bootstrap helpers and for Mix
-      pages (`lm2/mix/Mix.lm2`: page + `items` are unscoped). Spec: ordinary
-      Structure/Array materialization belongs to an owner region; unscoped
-      helpers are implementation debt.
+      `lm_own_new_zero` / `c.free` remain for bootstrap helpers, arena
+      shells, arena metadata stacks, and Mix pages (`lm2/mix/Mix.lm2`).
+      Spec: ordinary Structure/Array materialization belongs to an owner
+      region. Mix pages move onto the thread arena as *old-projection*
+      clients; rewriting Mix onto the one-header model is struct_refactoring
+      Phase 9.1, not this file.
 
   G2. void confused with empty Structure.
       See `bug0_void.txt`. `void: cell` trans-accepts and emits illegal
-      `void cell;`. Unit (`(): empty`) is an arena object with
-      `lm_lmx_empty_structure`. Destructor rebind `symbol: object` depends on
-      the void* hole. Until void is not a declarable unit, ownership of empty
-      Structures and untyped callbacks stay entangled.
+      `void cell;`. Unit (`(): empty`) is an arena object. After
+      struct_refactoring Phase 1 that object is descriptor prefix + empty
+      payload, not `struct Empty { unsigned char lm_lmx_empty_structure; }`.
+      Destructor rebind `symbol: object` depends on the void* hole.
 
-  G3. One coarse root arena; no turn / handler / frame / branch arena.
-      Spec next step (§19.29.14.9): a disposable turn/handler owner under the
-      Message Thread root. Surviving references retain/detach/reparent
-      *before* that owner is destroyed. `return` must not copy to escape.
-      Today everything lives until thread teardown.
+  G3. Extra arena shells are sibling mallocs.
+      The L3 default is one thread arena (bump + block list). Extra
+      `lm_own_arena_new` shells on `arena_head` are the defect. Do not
+      replace them with nested turn/handler/frame arenas. Those inner
+      owners are not required once end-turn collection walks this one
+      arena. Sibling mallocs go away; nested arenas do not come in.
 
   G4. `lm_own_tree_cut` does not reclaim.
-      End-turn collection is a safe point that promotes lazy-owned edges.
-      It does not walk owner roots, cut unreachable branches, or release
-      frame/handler/attempt regions. Need real owner-graph metadata, not
-      only an allocation list on the root arena.
+      End-turn is a safe point that promotes lazy-owned edges. It does
+      not walk owner roots + StructureReference slots, drop unreachable
+      sausage objects, or compact survivors into the root. Need descriptor-
+      prefixed chunks (G0 / struct Phase 3) before a precise walk; cycles
+      need a mark, not a tree walk of slots. Shared descriptors are roots,
+      not owned by each instance. First conformance may still retain until
+      thread death; reclaim/compact at end-turn is the next precise step,
+      not compact-in-allocator.
 
-  G5. Source `copy` / `move` / `borrow` / `own` missing.
-      Runtime has lazy-edge / absorb / copy-bytes helpers. They are not
-      namespace-visible receivers. Without them, no-escaping-borrow cannot
-      be repaired in source (`own: saved m\payload`). Tables of ownership
-      policy exist only as documentation.
+  G5. Do not implement source `own` / `borrow` / `move`.
+      Spec §19.29 proposes them; this plan drops them from L3. An optional
+      later `copy` is an ordinary deep-copy receiver (new identity), not an
+      ownership operator. Runtime lazy-edge / absorb helpers stay private
+      to `libown` until that C ABI is retired.
 
-  G6. No-escaping-borrow is not diagnosed.
-      Plain `saved: m\payload` records another reference and does not copy.
-      Trans does not yet reject retaining a message-frame / view / slice
-      beyond the source owner. Need borrow-edge tracking and diagnostics
-      (or a required `own`/`copy` before escape).
+  G6. Cross-thread refs must not exist, rather than "borrow escape".
+      A Message is another L3 Thread. The sender must not retain a
+      StructureReference into it. Incoming payload is that Thread's graph,
+      not a borrowed view of the mailbox. L2 `@` that outlives end-turn
+      compact is a pin/diagnostic on the machine profile, not `own:`.
 
-  G7. Message-boundary transfer incomplete.
+  G7. Message is not yet an inactive L3 Thread.
       `send:` copies already-serialized LMX bytes into FIFO storage.
-      Structure/Array copy, codec serialization of live referents, and
-      whole-branch detach/attach (objects keep identity, sender handles
-      die) are not source operations. `reply` / `await` / `schedule` are
-      not implemented. Nested Message Thread call cleanup stack is missing.
+      The target picture: construct the payload in a new inactive Message
+      Thread's arena; enqueue that Thread; dispatch activates it. `reply` /
+      `await` / `schedule` are not implemented. Do not add whole-branch
+      owner-transfer as a source operation.
 
-  G8. Array views vs copies.
+  G8. Array views vs copies, and the rectangle.
       Spec §6.5: slice/partial index/reshape are borrowed views; they must
-      not outlive backing arena; `return` of a view must not implicit-copy.
-      Hosted arrays are mostly owned headers+backing. View metadata, stride,
-      and escape checks are unfinished. L3 checked index vs L2 unchecked
-      raw-address index is not consistently gated (`receiver.l3.exclude`
-      still incomplete per §1.4).
+      not outlive backing; `return` of a view must not implicit-copy.
+      Hosted arrays are mostly owned headers+backing. The rank ladder
+      (struct_refactoring Phase 8) is extra regions the collector must
+      not leak until it is one rectangle. L3 checked vs L2 unchecked index
+      is not consistently gated (`receiver.l3.exclude` still incomplete
+      per §1.4).
 
   G9. L2 machine surface incomplete.
       Exact semantics of `@`, prefix `\`, field-follow, raw store, address
       arithmetic and unchecked index are still listed as profile work (§18.2).
       No generic `mem:` / `freemem:` / shared-block / low-level thread
-      profile. Mix hop addresses (`ℕ₀` path) are a *placement* tree, not this
-      L2 cell-address machine; they must not be conflated.
+      profile. Mix hop addresses are a placement tree, not this L2
+      cell-address machine. An `@` taken inside nested work pins that
+      object against compaction at end-turn until the address dies.
 
-  G10. Control-exit owners.
-       `return` / `throw` / `catch` / `assert` / `stop` lower, but retryable
-       attempt arenas, labelled break/continue, `redo`, and a frame/cleanup
-       stack for nested Message Thread calls are not implemented. Memory
-       pressure and owner-replacement cuts are conceptual.
+  G10. Control-exit collection passes.
+       `return` / `throw` / `catch` / `assert` / `stop` lower, but retry,
+       labelled break/continue, `redo`, and a frame/cleanup stack for nested
+       Message Thread calls are not implemented. Those points, when they
+       exist, run the same one-arena walk from the surviving roots. They
+       do not allocate a nested arena. Memory pressure is growth and/or
+       end-turn collection, not compact-in-allocator.
 
   G11. Interning / immutable store.
-       Optional optimization (§19.29.9). Not required for first conformance,
-       but Mix tags/cursors and parser trees are natural later clients.
+       Optional optimization (§19.29.9). Not required for first conformance.
+       Mix tags/cursors and parser P0 trees are natural later clients.
        Must not change `return` identity.
 
   G12. Precise-owner ABI (§19.29.12.4).
-       `LmOwnerArena` / `LmOwnerBranch` / type-ops (`copy_to`,
-       `trace_owner_edges`, `release_external_fields`) is design, not current
+       `LmOwnerArena` / `LmOwnerBranch` / type-ops is design, not current
        C ABI. Current ABI stays `LmOwnArena`. Do not pretend the old names
-       `LmArena`/`LmBranch` are live.
+       `LmArena`/`LmBranch` are live. Do not introduce `LmOwnerArena` until
+       this one thread arena actually cuts and, if the profile asks,
+       compacts at end-turn.
 
 RU (тот же порядок):
 
+  G0. Hosted-куски всё ещё старая C-проекция.
+      Пока нет фаз 1–3 и 8 struct_refactoring: `sizeof(T)`, `->`, лесенка
+      массивов. Точный сбор не видит, какие слова — StructureReference.
+      Конструкторы новых Structure — в текущей арене Message Thread.
+
   G1. Бесхозные аллокации.
-      `lm_own_new_zero` / `c.free` ещё в bootstrap-хелперах и в Mix
-      (`lm2/mix/Mix.lm2`: страница и `items`). По спеке обычная материализация
-      Structure/Array — в регион владельца.
+      `lm_own_new_zero` / `c.free` в хелперах, шапках арен, стеках метаданных
+      и Mix. Страницы Mix — на арену потока как клиенты старой проекции;
+      одна шапка Mix — фаза 9.1 другого файла.
 
   G2. void путают с пустой Structure.
-      `bug0_void.txt`. `void: cell` проходит trans и даёт нелегальный
-      `void cell;`. Unit (`(): empty`) — объект арены. `symbol: object` живёт
-      на дыре void*. Пока void — «пустой юнит», владение пустыми Structure и
-      нетипизированные callback склеены.
+      `bug0_void.txt`. После фазы 1 unit — префикс + пустой payload, не
+      dummy-байт.
 
-  G3. Одна грубая root-арена; нет turn/handler/frame/branch.
-      Следующий шаг спеки: disposable owner хода/обработчика под корнем
-      Message Thread. Выживающие ссылки retain/detach/reparent *до* уничтожения
-      этого owner. `return` не копирует «чтобы спасти». Сейчас всё живёт до
-      teardown потока.
+  G3. Шапки арен — соседние malloc.
+      Дефолт L3 — одна арена потока (bump + список блоков). Список
+      `arena_head` — дефект. Не менять его на вложенные арены хода/
+      handler/frame: при сборе на end-turn они не нужны.
 
   G4. `lm_own_tree_cut` не собирает.
-      End-turn — safe point с promote lazy-рёбер. Нет обхода корней, среза
-      недостижимых веток, освобождения frame/handler/attempt. Нужны метаданные
-      графа владельцев, не только список аллокаций root-арены.
+      End-turn — safe point с promote lazy. Нет обхода корней + слотов
+      ссылок, нет сброса мусора сосиски, нет компакта выживших в корень.
+      Сначала G0. Циклы — mark, не tree-walk. Дескрипторы — корни.
+      Держать до смерти потока — законно для первой соответственности.
 
-  G5. Нет исходных `copy` / `move` / `borrow` / `own`.
-      Хелперы lazy-edge / absorb / copy-bytes — не приёмники пространства
-      имён. Без них no-escaping-borrow нельзя починить в исходнике
-      (`own: saved m\payload`).
+  G5. Исходные `own` / `borrow` / `move` не делать. Опциональный `copy` —
+      обычное глубокое копирование, не владение.
 
-  G6. Утечку borrow не диагностируют.
-      `saved: m\payload` просто ещё одна ссылка. Trans не отвергает удержание
-      кадра сообщения / view / slice дольше источника.
+  G6. Ссылок через границу потока нет, а не «утечка borrow». Message —
+      другой L3 Thread.
 
-  G7. Граница Message Thread недоделана.
-      `send:` копирует уже сериализованные байты LMX. Нет copy живого
-      Structure/Array, кодека референта и detach/attach целой ветки.
-      Нет `reply` / `await` / `schedule` и cleanup-стека вложенных вызовов.
+  G7. Message ещё не неактивный L3 Thread. `send:` копирует байты LMX.
+      Не добавлять owner-transfer ветки.
 
-  G8. View против copy у Array.
-      Срез/частичный индекс — заимствованный view; `return` view не делает
-      скрытую копию. Hosted-массивы в основном owned header+backing.
-      L3 checked vs L2 unchecked индекс не закрыт таблицей `receiver.l3.exclude`.
+  G8. View против copy у Array; плюс лесенка рангов вместо прямоугольника.
 
-  G9. Машинная поверхность L2.
-      Точная семантика `@`, prefix `\`, field-follow, raw store, адресной
-      арифметики и unchecked index — ещё работа профиля. Нет generic
-      `mem:` / `freemem:` / shared-block. Адреса Mix (`путь ℕ₀`) — дерево
-      размещения, не эта машинная модель ячейки.
+  G9. Машинная поверхность L2. Mix-адреса — дерево размещения. `@` пинит
+      объект против компакта на end-turn.
 
-  G10. Owner на выходе управления.
-      `return` / `throw` / `catch` / `assert` / `stop` есть; нет attempt-арен
-      `retryable`, labelled break/continue, `redo`, frame/cleanup стека.
-      Давление памяти и замена owner — концепт.
+  G10. Сбор на выходе управления — тот же обход одной арены от выживших
+       корней, не вложенная арена. Давление памяти — рост и/или end-turn.
 
-  G11. Intern / immutable store — позже, не блокер первой соответственности.
+  G11. Intern / immutable store — позже.
 
-  G12. Precise-owner ABI (`LmOwnerArena` / `LmOwnerBranch`) — дизайн, не
-      текущий C ABI. Живой ABI — `LmOwnArena`.
+  G12. Precise-owner ABI — дизайн. Живой ABI — `LmOwnArena`.
 
 
 4. Work to finish / Что допилить
@@ -262,132 +506,156 @@ Phase A — hosted conformance (do first, no new source operators)
 Фаза A — соответствие bootstrap (сначала, без новых приёмников)
 
   EN:
+    Representation (owned by struct_refactoring.txt, not duplicated):
+      Phases 1–3 and 8. New Structure chunks: descriptor prefix + payload,
+      size from the descriptor, allocated in the current L3 Thread arena.
+      Nested StructureReference slots are the value graph. Rank-N `[]` is
+      one rectangle. Mix / own / table-class stay on the old projection
+      until that file's Phase 9.1.
+
+    Ownership on this file:
     1. Move remaining ordinary Structure/Array paths off `lm_own_new_zero`
        onto `lm_own_arena_new_zero(lm_message_thread_owner(...))`, including
-       Mix pages and item blocks. Destroy Mix via arena lifetime or an
-       explicit owner edge, not `c.free` of unscoped blocks.
+       Mix pages and item blocks as old-projection clients. Destroy Mix via
+       arena lifetime or an explicit owner edge, not `c.free` of unscoped
+       blocks. Do not malloc new arena shells for that move.
     2. Fix void vs empty Structure (`bug0_void.txt`) so unit remains an
-       arena object and `void` is not a declarable cell. Then replace
-       `symbol: object` destructor rebinds with an explicit typed cast that
-       actually emits `T *`, or a small `lm_own_from_untyped` helper.
+       arena object (prefix + 0 payload once Phase 1 exists) and `void` is
+       not a declarable cell. Then replace `symbol: object` destructor
+       rebinds with an explicit typed cast that actually emits `T *`, or a
+       small `lm_own_from_untyped` helper.
     3. Inventory leftover static-backed / unscoped paths (partial-callable
        binders, trans registry internals that are *not* the module-value
-       slots). Keep parser tree arenas as explicit owner regions (already
-       closer to the model).
+       slots). Parser P0 nodes allocate from the thread arena like any
+       other Structure; they are not a second arena.
     4. Tests: empty Structure identity across `return`; two `():` sites are
-       distinct; module alias is exact-reference; Mix page lives in the
-       current Message Thread owner; `void: x` is a trans error.
+       distinct; two instances share one descriptor pointer and do not each
+       own a copy; module alias is exact-reference; Mix page lives in the
+       current Message Thread owner; `void: x` is a trans error; a cycle of
+       StructureReferences is allowed and does not hang tree-cut.
 
   RU:
+    Представление (struct_refactoring.txt): фазы 1–3 и 8. Новые куски —
+    префикс + payload в арене L3 Thread. Mix/own — старая проекция до 9.1.
+
+    Владение в этом файле:
     1. Обычные Structure/Array — только `lm_own_arena_new_zero` от owner
-       потока, включая страницы Mix и `items`. Уничтожение Mix — временем
-       арены или явным ребром, не `c.free` бесхозного блока.
-    2. Развести void и пустую Structure (`bug0_void.txt`). Затем `symbol:
-       object` заменить на приведение, которое реально даёт `T *`, или на
-       хелпер `lm_own_from_untyped`.
-    3. Инвентаризация оставшихся static/unscoped путей (partial-callable и
-       т.п.). Арены дерева парсера оставить явными регионами owner.
+       потока, включая страницы Mix как клиенты старой проекции. Не malloc
+       новых шапок арен ради этого.
+    2. Развести void и пустую Structure. Unit — префикс + 0 payload.
+    3. Инвентаризация static/unscoped. Узлы P0 выделяются в арене потока,
+       как любая Structure; второй арены нет.
     4. Тесты: тождество пустой Structure через `return`; два `():` различны;
-       модульный alias — та же ссылка; страница Mix в owner текущего
-       Message Thread; `void: x` — ошибка trans.
+       два instance делят дескриптор; модульный alias — та же ссылка;
+       Mix в owner текущего Message Thread; `void: x` — ошибка trans;
+       цикл StructureReference допустим и не вешает tree-cut.
 
 Phase B — borrow, exact return, diagnostics
 Фаза B — borrow, точный return, диагностика
 
   EN:
-    1. Record BORROWED vs OWNED on generated bindings that come from message
-       frames, array views and external handles.
-    2. Diagnose escape of a borrowed reference into a longer-lived slot
-       (module, thread root, `saved` across handler end) unless an explicit
-       `own`/`copy` (Phase C) already ran.
-    3. Keep `return` allocation-free; add tests that a locally constructed
-       Structure address is unchanged after return (already the coarse-root
-       behavior) and that returning a dying-frame *borrow* is rejected or
-       requires a surviving owner — never a hidden copy.
+    1. Do not lower message-frame fields as BORROWED-into-another-owner.
+       After send, the sender has no StructureReference into the Message
+       Thread. A slice/view in L3 is an ArrayReference in this Thread's
+       graph; compact keeps it if it is still reachable.
+    2. Diagnose an L2 `@` / raw view that would survive end-turn compact
+       of its referent. That is a machine-address pin, not a missing `own`.
+    3. Keep `return` allocation-free and compaction-free; add tests that a
+       locally constructed Structure address is unchanged after return
+       (already the coarse-root behavior). Never a hidden copy, never a
+       compact.
     4. Enforce L3 exclusion of raw address/load/unchecked index/`c.struct`
        projections; admit `predef` in L3 as §1.4 asks.
 
   RU:
-    1. Помечать BORROWED vs OWNED у привязок из кадра сообщения, array view
-       и внешних handle.
-    2. Диагностировать утечку borrow в более долгий слот, пока не сделан
-       явный `own`/`copy`.
-    3. `return` без аллокации; тесты: адрес локально построенной Structure
-       не меняется; return умирающего borrow — отказ или живой owner, никогда
-       скрытая копия.
+    1. Поля кадра сообщения не lower'ить как BORROWED в чужого owner.
+       После send у отправителя нет StructureReference в Message Thread.
+       Срез в L3 — ArrayReference в графе этого потока.
+    2. Диагностировать L2 `@` / сырой view, который пережил бы компакт
+       своего референта. Это pin машинного адреса, не недостающий `own`.
+    3. `return` без аллокации и без компакта; тесты: адрес локально
+       построенной Structure не меняется. Никогда скрытая копия.
     4. L3 не видит сырой адрес/load/unchecked index/`c.struct`; `predef` в
        L3 допустить (§1.4).
 
-Phase C — source ownership receivers
-Фаза C — исходные приёмники владения
+Phase C — optional explicit `copy` (not ownership)
+Фаза C — опциональный явный `copy` (не владение)
 
   EN:
-    Register `copy:`, `move:`, `borrow:`, `own:` as ordinary L2/L3 receivers
-    with namespace-visible descriptors (target arena, edge, effects, failure).
-    Lower `own`/`copy` to copy_to or lazy-owned edge; `move` to absorb /
-    reparent / transfer; `borrow` to a view that does not extend lifetime.
-    Do not use these as hidden `return` lowering. Policy Tables remain data
-    until a bound operation reads them.
+    If a profile wants a second identity of a live graph, register `copy:`
+    as an ordinary L2/L3 receiver that materializes a new Structure/Array
+    graph in the current Thread arena. Do not register `own:`, `borrow:`,
+    `move:`. Do not take a target arena/owner argument. Do not use `copy`
+    as hidden `return` lowering. Cross-thread remains `send:` of a Message
+    (inactive L3 Thread), not `move`.
 
   RU:
-    Зарегистрировать `copy:`, `move:`, `borrow:`, `own:` как обычные
-    приёмники L2/L3 с видимыми дескрипторами. `own`/`copy` → copy_to или
-    lazy-owned; `move` → absorb/reparent/transfer; `borrow` → view без
-    продления жизни. Не подсовывать их под `return`. Таблицы политики —
-    данные, пока их не съест явная операция.
+    Если профилю нужна вторая идентичность живого графа — `copy:` как
+    обычный приёмник: новый граф в арене текущего потока. Не регистрировать
+    `own:`, `borrow:`, `move:`. Без аргумента арены/owner. Не подсовывать
+    `copy` под `return`. Через границу — `send:` Message (неактивный
+    L3 Thread), не `move`.
 
-Phase D — precise local collection
-Фаза D — точный локальный сбор
+Phase D — end-turn reclaim on the one Message arena
+Фаза D — сбор на end-turn в одной арене Message
 
   EN:
-    1. Introduce a turn/handler owner under the thread root (spec's "next
-       precise reclamation step"). Allocate turn-local values there.
-    2. On `return`/`throw`/handler end: publish surviving refs, then
-       retain/detach/reparent their regions, then destroy the non-surviving
-       turn owner as one region. No copy on that path. No allocation on
-       the return path if out of memory.
-    3. Upgrade `lm_own_tree_cut` to walk live roots, promote lazy edges that
-       the contract requires, pin sources if needed, mark abandoned regions,
-       release them according to the profile (immediate, batch-at-handler,
-       or still retain-until-thread-death as a valid *coarser* profile).
-    4. Later: frame arenas, retry-attempt arenas, detachable document/Mix
-       branch arenas (a Mix bunch cut is a natural detachable branch).
-    5. Keep collection Message-Thread-local. Never stop-the-world.
+    Prerequisite: StructureReference slots exist (struct_refactoring Phase 3)
+    so the walk can see value edges. Cycles use a mark.
+
+    1. Keep the L3 default: one Message Thread arena as a bump + block list.
+       A full block appends another block. Do not guess a capacity. Do not
+       fail allocate unless the host refuses the next block. Do not move
+       because a block filled.
+    2. Once per turn, at end-turn after outbox: walk live Message roots
+       and StructureReference slots; pin objects whose L2 `@` still exists;
+       mark unreachable objects; release them, or copy survivors into
+       fewer blocks and rewrite slots. Shared descriptors stay roots.
+       Not after handler return, not on `return` / `retry`.
+    3. No nested arena to destroy.
+    4. Mix bunch cut remains topology. Sending an isolated bunch is a
+       Message: an inactive L3 Thread whose arena holds that graph.
+    5. Keep collection Message-Thread-local. One execution thread inside
+       the actor is why the walk needs no mutator handshake.
+       Never stop-the-world for other Message Threads.
 
   RU:
-    1. Owner хода/обработчика под корнем потока. Turn-local значения — туда.
-    2. На `return`/`throw`/конце handler: опубликовать выжившие ссылки,
-       retain/detach/reparent их регионы, уничтожить невыживший turn owner
-       одним куском. Без копии и без аллокации на пути return при OOM.
-    3. `lm_own_tree_cut`: обход живых корней, promote lazy по контракту,
-       pin источников, пометка брошенных регионов, освобождение по профилю
-       (сразу / пакетом на конце handler / до смерти потока — грубее, но
-       законно).
-    4. Потом: frame-арены, attempt-арены retry, отсоединяемые ветки
-       документа/Mix (cut пучка Mix — естественная detachable branch).
-    5. Сбор только внутри Message Thread.
+    Сначала слоты StructureReference (фаза 3 представления). Циклы — mark.
+
+    1. Одна арена Message Thread: bump + список блоков. Блок кончился —
+       следующий блок. Ёмкость не угадывать. Allocate не падает, пока хост
+       даёт блок. Из-за полного блока не переезжать.
+    2. Один раз за ход, на end-turn после outbox: обход живых корней и
+       слотов-ссылок; pin по живому L2 `@`; мусор снять или скопировать
+       выживших в меньшее число блоков. Не после возврата handler, не на
+       `return` / `retry`.
+    3. Вложенной арены нет.
+    4. Cut пучка Mix — топология. Отправка изолированного пучка — Message:
+       неактивный L3 Thread, в чьей арене этот граф.
+    5. Сбор только внутри Message Thread. Один поток исполнения актора —
+       без handshake мутаторов. Чужие Message Thread не стопать.
 
 Phase E — message boundary and Mix
 Фаза E — граница сообщений и Mix
 
   EN:
-    Payload crossing threads: implement copy of a Structure/Array into the
-    receiver arena; serialization through an explicit codec; whole-branch
-    transfer (detach sender region, attach receiver, invalidate sender
-    handles). Do not overload `send:`'s current LMX-bytes argument list.
-    Mix pages/cursors/tags become ordinary arena referents; next/prev and
-    cutAfter are topology, not a second allocator. A Mix bunch isolated by
-    cut is a candidate detachable branch for transfer. Locks stay
-    `synchronized` on the page monitor (already in `lm2/mix`).
+    Payload crossing threads: a Message is full LMX in an inactive L3
+    Thread. Construct that graph in the new Thread's arena (or serialize
+    into it through an explicit codec). The sender does not retain refs
+    into it. Do not implement owner-detach/attach of a branch. Do not
+    overload `send:`'s current LMX-bytes argument list as a second
+    meaning.
+    Mix pages/cursors/tags become ordinary arena referents on the thread
+    arena; next/prev and cutAfter are topology, not a second allocator.
+    One-header Mix is struct_refactoring 9.1. Locks stay `synchronized`
+    on the page monitor (already in `lm2/mix`).
 
   RU:
-    Через границу потоков: copy Structure/Array в арену приёмника;
-    сериализация явным кодеком; transfer целой ветки (detach у отправителя,
-    attach у приёмника, инвалидация handle отправителя). Не расширять
-    двусмысленно текущий `send:` с байтами LMX. Страницы/курсоры/тэги Mix —
-    обычные референты арены; next/prev и cutAfter — топология, не второй
-    аллокатор. Пучок после cut — кандидат detachable branch. Локи —
-    `synchronized` на мониторе страницы (уже в `lm2/mix`).
+    Через границу: Message — полный LMX в неактивном L3 Thread. Граф
+    рождается в арене того потока (или кодек пишет туда). Отправитель
+    ссылок не держит. Owner-detach/attach ветки не делать. Не давать
+    текущему `send:` с байтами LMX второго смысла. Страницы Mix — референты
+    арены потока; next/prev и cutAfter — топология. Одна шапка Mix — 9.1.
 
 Phase F — arrays, L2 machine, later control
 Фаза F — массивы, машина L2, поздний контроль
@@ -396,20 +664,19 @@ Phase F — arrays, L2 machine, later control
     Array views with shape/stride; checked L3 index throwing into `catch`;
     L2 unchecked index only on raw typed addresses. Finish `@` / raw load /
     address-depth declaration against one explicit L2 memory profile
-    (cell size, arithmetic). Shared read-only / mmap resources as EXTERNAL
-    edges with typed handles — not as copied message payloads. Then
-    `retryable` attempt arenas, labelled break/continue, nested-call cleanup
-    stack, optional intern table. Precise `LmOwnerArena` ABI only after the
-    current `LmOwnArena` graph actually cuts and reclaims.
+    (cell size, arithmetic). Shared read-only / mmap resources as L2 typed
+    handles — not as Message payloads and not as EXTERNAL owner-edges. Then
+    `retryable`, labelled break/continue, nested-call cleanup stack, optional
+    intern table. Keep the C name `LmOwnArena`; do not introduce
+    `LmOwnerArena` as a language object.
 
   RU:
     Array view с shape/stride; checked индекс L3 через `throw`/`catch`;
     L2 unchecked — только по сырому типизированному адресу. Довести `@` /
     raw load / address-depth на одном явном L2-профиле памяти. Большие
-    read-only/mmap — EXTERNAL с типизированным handle, не копия в сообщении.
-    Затем attempt-арены `retryable`, labelled break/continue, cleanup-стек
-    вложенных вызовов, опциональный intern. ABI `LmOwnerArena` — только
-    когда текущий граф `LmOwnArena` уже реально режет и освобождает.
+    read-only/mmap — L2 handle, не Message и не ребро owner. Затем
+    `retryable`, labelled break/continue, cleanup-стек, intern. C-имя
+    `LmOwnArena` оставить; `LmOwnerArena` в язык не вводить.
 
 
 5. Suggested order of tests / Порядок тестов
@@ -417,23 +684,27 @@ Phase F — arrays, L2 machine, later control
 
 EN:
     trans: `void: x` rejected; `(): a` and `(): b` distinct non-null;
-    `return` of a local Structure is the same pointer; Mix page allocated
-    from `lm_message_thread_owner`; assigning Empty to LmMixPage rejected.
+    two instances of S share the S descriptor pointer; `return` of a local
+    Structure is the same pointer; a cyclic StructureReference pair trans-
+    accepts; Mix page allocated from `lm_message_thread_owner`; assigning
+    Empty to LmMixPage rejected.
     runtime: end-turn collection does not free a returned Structure while
-    the root lives; after thread delete the referent is gone.
-    later: borrow escape diagnostic; `own`/`copy` retain across handler;
-    turn-local arena released while a returned object in root survives;
-    Mix cutAfter then transfer/detach of the isolated bunch.
+    the root lives; after thread delete the referent is gone; end-turn
+    compact (once Phase D exists) may move only objects that have no live
+    `@` and must not run on ordinary nested `return`.
+    later: sender holds no ref into a sent Message Thread; Mix cutAfter
+    then send of the isolated bunch as an inactive L3 Thread.
 
 RU:
-    trans: `void: x` отвергнут; два `():` различны и не null; `return`
-    локальной Structure — тот же указатель; страница Mix из
-    `lm_message_thread_owner`; Empty ↛ LmMixPage.
+    trans: `void: x` отвергнут; два `():` различны и не null; два instance
+    делят дескриптор; `return` локальной Structure — тот же указатель;
+    цикл ссылок допустим; страница Mix из `lm_message_thread_owner`;
+    Empty ↛ LmMixPage.
     runtime: end-turn не освобождает возвращённую Structure, пока жив root;
-    после delete потока референта нет.
-    позже: диагностика утечки borrow; `own`/`copy` переживает handler;
-    turn-local арена умерла, а возвращённый объект в root жив; Mix cutAfter
-    и detach изолированного пучка.
+    после delete потока референта нет; компакт на end-turn (фаза D) не
+    двигает объект с живым `@` и не бежит на обычном вложенном `return`.
+    позже: у отправителя нет ссылки в отправленный Message Thread;
+    Mix cutAfter и send изолированного пучка как неактивный L3 Thread.
 
 
 6. What not to do / Чего не делать
@@ -441,38 +712,70 @@ RU:
 
 EN:
     Do not derive Structure/Array lifetime from C automatic/static duration.
-    Do not hide a copy inside `return` to make locals "safe".
+    Do not hide a copy or a compact inside `return` to make locals "safe".
+    Do not relocate the Structure graph because a backing block filled.
+    Do not give the arena a guessed capacity and error when it overflows.
+    Do not add nested turn/handler/frame arenas on top of the one L3
+    Thread block list.
+    Do not implement source `own:`, `borrow:`, `move:`, or an owner object.
+    Do not treat a Message as a borrowed subgraph of the sender.
+    Do not compact in the allocator because "there is only one thread";
+    one thread is the mutator rule, not a stack map.
+    Do not tree-walk value slots for reclaim; the Structure graph has cycles.
+    Do not conflate Structure graph, Mix placement tree, P0 tree, or
+    used-tree of Consumer.
     Do not treat Registry/Table membership as an allocator.
     Do not install a process-global GC or stop-the-world scan.
-    Do not conflate Mix placement paths with L2 cell addresses.
+    Do not migrate Mix / own / table-class onto the one-header model from
+    this plan (struct_refactoring Phase 9.1).
     Do not implement `LmOwnerArena` names until `LmOwnArena` collection is
     real; the spec forbids presenting those names as the current ABI.
     Do not "fix" language sources in `./lm2` trans/parser from a Mix-only
-    change set while another machine owns that tree — except through the
-    agreed git mainline.
+    change set while another machine owns that checkout — except through
+    the agreed git mainline.
 
 RU:
     Не выводить жизнь Structure/Array из automatic/static C.
-    Не прятать копию в `return`, «чтобы локали не висели».
+    Не прятать копию или компакт в `return`.
+    Не переезжать граф Structure из-за полного блока backing.
+    Не угадывать ёмкость арены и не падать, когда она «кончилась».
+    Не навешивать вложенные арены хода/handler/frame на список блоков
+    L3 Thread.
+    Не делать исходные `own:`, `borrow:`, `move:` и объект owner.
+    Не считать Message заимствованным подграфом отправителя.
+    Не компактировать в аллокаторе из-за «потока один»; один поток —
+    правило мутатора, не карта стека.
+    Не обходить слоты значений как дерево: в графе Structure есть циклы.
+    Не смешивать граф Structure, дерево размещения Mix, P0 и used-tree.
     Не делать членство в Registry/Table аллокатором.
     Не ставить процессный GC и stop-the-world.
-    Не смешивать пути размещения Mix с адресами ячеек L2.
+    Не переносить Mix/own на одну шапку из этого плана.
     Не внедрять имена `LmOwnerArena`, пока сбор `LmOwnArena` не настоящий.
-    Не править trans/parser в `./lm2` «заодно с Mix», пока это дерево
+    Не править trans/parser в `./lm2` «заодно с Mix», пока этот checkout
     пилят на другой машине — только через согласованный main.
 
 
-7. Pointers / Ориентиры в дереве
---------------------------------
+7. Pointers / Ориентиры
+-----------------------
 
     Spec: Lingvamyxa_spec.txt
-        §2 value ontology; §6.5 arrays/views; §8.8 return;
+        §2 value ontology, Structure graph, implements;
+        §6.5 arrays/views, rectangle not a tree of arrays;
+        §8.8 return;
         §11 address-depth / @ / raw load;
-        §19.28 Message Thread; §19.29 ownership (normative + status);
+        §19.28 Message Thread, one callback per actor, end-turn collection;
+        §19.29 still says owner; this plan does not implement that
+        vocabulary — later spec pass: Thread + reachability + Message;
         operator summary items 28–31.
+    Representation: struct_refactoring.txt
+        descriptor prefix + payload; `fn:` as StructureReference;
+        Array rectangle; Mix/own stay old projection until Phase 9.1;
+        Phase 1 constructors use the current arena (this file: the L3
+        Thread root).
     Runtime: lm2/own.lm2, lm2/own_abi.lm2
     Lowering: lm2/trans_l1_statement.lm2, trans module-init paths
-    Mix (to move onto arenas): lm2/mix/Mix.lm2, lm2/mix/Mix_model.lm2
+    Mix (to move onto the thread arena, old projection): lm2/mix/Mix.lm2,
+        lm2/mix/Mix_model.lm2
     Void/unit hole: bug0_void.txt,
         tests/trans_invalid_void_as_empty_structure.lm2,
         tests/trans_mix_void_object_rebind.lm2
