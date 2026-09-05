@@ -1174,7 +1174,8 @@ which are StructureReferences, which are ArrayReferences. The chunk size is:
     size of the descriptor reference + sum of slot sizes
 
 A StructureReference slot is a pointer to another such chunk. Memory is an
-ordinary tree. There is no per-name `typedef` and no vtable. Field-follow
+ordinary graph: slots may share a referent, and cycles are allowed. There is no
+per-name `typedef` and no vtable. Field-follow
 `x\foo` loads `x`'s own descriptor, finds the newest occurrence `foo`, and
 reads that slot. A `fn` / `sub` / `callable` field of a descriptor is another
 slot holding a StructureReference to a callable chunk. Merge appends that
@@ -1193,12 +1194,12 @@ Structure or callable to exist. A translator may still emit a C function and
 store an opaque code pointer inside a callable Structure's payload as L1
 data. The source value remains the StructureReference.
 
-An ArrayReference is not this tree. It has one array descriptor (element
+An ArrayReference is not this graph. It has one array descriptor (element
 description, rank, shape, optional stride) and one rectangular backing block
 of `d0 × d1 × … × dN-1` cells. Multidimensional layout is shape and stride,
 not a tree of arrays. Indexing is an offset into that block. If an element
 is a StructureReference, the backing is a flat row of pointers to Structure
-chunks; the Structure tree begins in those chunks, each with its own
+chunks; those chunks enter the Structure graph, each with its own
 descriptor prefix. A rank-1 array whose elements are ArrayReferences is
 ordinary nested references, not a ragged rank-N array. The nested `[]`
 matrix literal in section 6.5 is rectangular notation, not uneven rows.
@@ -1317,7 +1318,7 @@ elements. A Primitive is a source-level scalar whose descriptor is a Structure
 and field-follow back into a single bit pile.
 
 Recognition is receiver consumption. After a codec, parser or `fromLmx`
-receiver runs, the buffer becomes a Structure tree whose leaves are again
+receiver runs, the buffer becomes a Structure graph whose leaves are again
 memory cells, typically smaller (machine words or bytes). Recursion stops
 where this Consumer stops following fields. The ideal «always down to a byte» is
 not required; Consumer says how fine the leaf is.
@@ -1525,7 +1526,7 @@ or `u32` → `File.handle` recorded on `File`.
         6.6 and 9.0).
     Text, images, decimal numerals as distinct kinds — they are substrate
         plus a description (numeral Structure, encoding, or raw buffer;
-        section 2.2.1). After recognition they are Structure/Array trees
+        section 2.2.1). After recognition they are Structure/Array graphs
         whose leaves again have primitive descriptions.
     An empty Structure — unit leaf, section 2.2.2.6.
 
@@ -1643,8 +1644,8 @@ Each field holds a Primitive, a StructureReference or an ArrayReference. A
 nested `fn` / `sub` / `callable` in a descriptor is a field whose value is a
 StructureReference to a callable Structure.
 
-A Structure may contain StructureReferences and ArrayReferences to nested
-aggregates. Tree-shaped data is represented by those reference edges.
+A Structure may contain StructureReferences and ArrayReferences to other
+aggregates. Graph-shaped data is represented by those reference edges.
 In the conforming projection of section 2, the arena chunk always starts
 with that own-descriptor reference, then a flat payload of slots. Other
 Structures are reached only as field values.

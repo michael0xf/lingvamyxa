@@ -25,8 +25,8 @@ typedef на имя, function-pointer как примитив и `structuralFiel
 EN: A Structure chunk in the arena always starts with a reference to its own
 descriptor; the rest is a flat payload of slots whose count and kinds that
 descriptor names. Size = sizeof(descriptor-ref) + sum of slot sizes. Nested
-StructureReferences are pointers to the same kind of chunk (a tree). An
-ArrayReference is not that tree: one array descriptor plus one rectangular
+StructureReferences are pointers to the same kind of chunk (a graph). An
+ArrayReference is not that graph: one array descriptor plus one rectangular
 `d0×d1×…` backing block. `fn:` is a StructureReference in a descriptor slot.
 C typedefs, C function symbols and `class` / `layout.backend` tables are
 backend artifacts, never source values.
@@ -34,8 +34,8 @@ backend artifacts, never source values.
 RU: Кусок Structure в арене всегда начинается со ссылки на свой дескриптор;
 дальше ровные слоты, число и вид которых говорит дескриптор. Размер =
 sizeof(ссылка на дескриптор) + сумма размеров слотов. Вложенные
-StructureReference — указатели на такой же кусок (дерево). ArrayReference —
-не это дерево: один дескриптор массива плюс один прямоугольник `d0×d1×…`.
+StructureReference — указатели на такой же кусок (граф). ArrayReference —
+не этот граф: один дескриптор массива плюс один прямоугольник `d0×d1×…`.
 `fn:` — StructureReference в слоте дескриптора. C typedef, C-символ функции
 и таблицы `class` / `layout.backend` — артефакты бэкенда, не значения языка.
 
@@ -67,12 +67,12 @@ Primitive — скалярная ячейка, *описание* которой
 
 1.2 What a Structure may contain / Что может лежать в Structure  (§3.1)
 
-EN: Fields are primitives, StructureReferences or ArrayReferences. Tree
+EN: Fields are primitives, StructureReferences or ArrayReferences. Graph
 shape is those reference edges. A field is not a C member and not a
 method slot. Duplicate names are distinct occurrences; unqualified lookup
 selects the newest (§2.3).
 
-RU: Поля — примитивы, StructureReference или ArrayReference. Дерево —
+RU: Поля — примитивы, StructureReference или ArrayReference. Граф —
 эти рёбра-ссылки. Поле — не член C-struct и не слот метода. Одинаковые
 имена — разные occurrence; обычный lookup берёт новейшую (§2.3).
 
@@ -153,7 +153,7 @@ block of `d0 × d1 × … × dN-1` cells. Multidimensional layout is shape and
 stride, not a tree of row arrays. Indexing is an offset. There is no
 first-class ragged rank-N array. Nested `[]` in a matrix literal is
 rectangular notation. An array of ArrayReferences or StructureReferences
-is a flat row of pointers; the Structure tree starts in those chunks.
+is a flat row of pointers; those chunks enter the Structure graph.
 
 No per-element Structure descriptor on primitive cells. Length/rank/shape
 live on the array descriptor, not as Structure fields of the ArrayReference
@@ -163,7 +163,7 @@ RU: `[]` строит ArrayReference. Один дескриптор массив
 ячеек `d0×d1×…`. Многомерность — shape и stride, не дерево строк. Индекс —
 смещение. Неровного rank-N как вида массива нет. Вложенный `[]` в литерале
 матрицы — запись прямоугольника. Массив ссылок — ровный ряд указателей;
-дерево Structure начинается уже в тех кусках.
+граф Structure начинается уже в тех кусках.
 
 На каждый примитивный элемент дескриптор не вешается. Длина/rank/shape —
 на дескрипторе массива, не поля Structure у ArrayReference.
@@ -313,7 +313,7 @@ Chunk size:
     sizeof(descriptor-ref) + sum of slot sizes
 
 A StructureReference slot is a pointer to another such chunk. Memory is
-an ordinary tree. No per-name `typedef`, no vtable. `x\foo` = own
+an ordinary graph. No per-name `typedef`, no vtable. `x\foo` = own
 descriptor → newest occurrence `foo` → read that slot. `fn:` on the
 descriptor is another slot holding a StructureReference to a callable
 chunk.
@@ -329,24 +329,24 @@ RU: Кусок Structure в арене всегда начинается со с
 Первое слово — StructureReference на него. Дескриптор сам Structure,
 обычно один на всех instance этого имени. Дальше — ровная начинка.
 Размер = sizeof(ссылка на дескриптор) + сумма размеров слотов.
-Слот-ссылка — указатель на такой же кусок. Дерево в памяти. `x\foo` =
+Слот-ссылка — указатель на такой же кусок. Граф в памяти. `x\foo` =
 свой дескриптор → индекс слота. `fn:` в дескрипторе — слот-ссылка на
 callable-кусок. Чужих дескрипторов в instance нет.
 
 3.1.1 Array chunk: one descriptor, one rectangle
 Кусок Array: один дескриптор, один прямоугольник
 
-EN: Arrays do not use the Structure tree. One ArrayReference descriptor
+EN: Arrays do not use the Structure graph. One ArrayReference descriptor
 (element type, rank, shape, optional stride) and one backing rectangle
 of `d0×d1×…×dN-1` cells. Index = offset. No per-element descriptor on
 primitive cells. If an element is a StructureReference, backing is a
-flat row of pointers to Structure chunks; the tree starts there (each
-chunk has the descriptor prefix). Rank-1 array of ArrayReferences is
+flat row of pointers to Structure chunks; those chunks enter the graph
+(each chunk has the descriptor prefix). Rank-1 array of ArrayReferences is
 nested references, not a ragged rank-N array.
 
 Hosted must stop allocating `lm_own_arena_array_new_zero` per rank.
 
-RU: Массивы — не дерево Structure. Один дескриптор ArrayReference и один
+RU: Массивы — не граф Structure. Один дескриптор ArrayReference и один
 прямоугольник ячеек. Индекс — смещение. На примитивный элемент
 дескриптор не вешается. Элемент-StructureReference — ровный ряд
 указателей на structure-куски. Hosted не должен аллоцировать backing
@@ -606,8 +606,8 @@ Phase 3 — nested StructureReference and ArrayReference slots
         an inline C nested struct.
     3.2 A field `[]: T` stores an ArrayReference (existing `[]`
         machinery). Do not store raw `T *` as the field's source value.
-    3.3 Tests: tree of Structures; array of StructureReferences;
-        `p\child\x` walks two descriptors. No Java object graph: just
+    3.3 Tests: graph of Structures; array of StructureReferences;
+        `p\child\x` walks two descriptors. No Java objects or vtables: just
         references in slots.
     Exit: §3.1 "Structure may contain StructureReferences and
         ArrayReferences" is true on the new header.
