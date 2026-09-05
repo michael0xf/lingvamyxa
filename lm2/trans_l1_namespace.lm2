@@ -2347,6 +2347,56 @@ fn: lm_trans_namespace_value_array_reference_element_type (
         return: 0
 return: lm_trans_namespace_relation_text_for_latest_binding(namespace_, name, "variable.array-element-type", out_type)
 
+fn: lm_trans_namespace_declare_array_helper_id (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    unsigned: id
+) int
+    c.array: [32]: char buffer
+    LmP0Text: payload
+    int: written
+    int: status
+
+    written: c.snprintf(buffer, c.sizeof(buffer), "%u", id)
+    if: written < 0 || (cast: size_t written) >= c.sizeof(buffer)
+        return: 1
+    payload: lm_trans_text_ref_new_cstr(buffer)
+    if: payload = 0
+        return: 1
+    status: lm_trans_namespace_declare_relation_text(namespace_, name, "variable.array-helper-id", payload)
+    lm_trans_text_ref_destroy(@ payload)
+return: status
+
+fn: lm_trans_namespace_value_array_helper_id (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    @: unsigned out_id
+) int
+    LmP0Text: payload
+    size_t: i
+    unsigned: value
+
+    if: out_id != 0
+        out_id[0]: 0U
+    payload: lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 0
+    finally: lm_trans_text_ref_destroy(@ payload)
+    if: lm_trans_namespace_relation_text_for_latest_binding(namespace_, name, "variable.array-helper-id", payload) = 0
+        return: 0
+    if: payload\data = 0 || payload\length = 0U
+        return: 0
+    value: 0U
+    i: 0U
+    while: i < payload\length
+        if: payload\data[i] < '0' || payload\data[i] > '9'
+            return: 0
+        value: value * 10U + (cast: unsigned (payload\data[i] - '0'))
+        i: i + 1U
+    if: out_id != 0
+        out_id[0]: value
+return: 1
+
 fn: lm_trans_namespace_value_is_raw_pointer (
     const: LmTransNamespace: namespace_
     const: LmP0Text: name

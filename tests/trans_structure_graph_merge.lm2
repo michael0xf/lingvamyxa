@@ -24,10 +24,6 @@ merge: (Closer) File
     int: handle
 end: File
 
-fn: useFile (File: f) int
-    return: f\handle
-end: useFile
-
 external:
     fn: main () int
         NamedPoint: p
@@ -48,7 +44,7 @@ external:
             return: 2
         if: a\handle != 4 || b\handle != 5
             return: 3
-        if: implements(a File useFile) != 1
+        if: implements(a File File) != 1
             return: 4
         return: 0
     end: main

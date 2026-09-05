@@ -1896,7 +1896,7 @@ static int lm_registry_source_frame_formal_param_unwrap_index(struct LmMessageTh
     if (frame == 0 || out_index == 0) {
         return 0;
     }
-    if (loader != 0 && loader -> formal_param_unwrap_index != 0 && loader->formal_param_unwrap_index(lm_lmx_message_thread, loader, context, frame, out_index) != 0) {
+    if (loader != 0 && loader -> formal_param_unwrap_index != 0 && (loader->formal_param_unwrap_index)(lm_lmx_message_thread, loader, context, frame, out_index) != 0) {
         return 1;
     }
     if (lm_registry_source_text_equals(lm_lmx_message_thread, lm_registry_source_frame_head(lm_lmx_message_thread, frame), "const")) {
@@ -1911,7 +1911,7 @@ static int lm_registry_source_frame_positional_name_index(struct LmMessageThread
     if (frame == 0 || out_index == 0) {
         return 0;
     }
-    if (loader != 0 && loader -> positional_name_index != 0 && loader->positional_name_index(lm_lmx_message_thread, loader, context, frame, out_index) != 0) {
+    if (loader != 0 && loader -> positional_name_index != 0 && (loader->positional_name_index)(lm_lmx_message_thread, loader, context, frame, out_index) != 0) {
         return 1;
     }
     if (lm_registry_source_text_all_char(lm_lmx_message_thread, lm_registry_source_frame_head(lm_lmx_message_thread, frame), '@') != 0 || lm_registry_source_text_is_array_receiver_head(lm_lmx_message_thread, lm_registry_source_frame_head(lm_lmx_message_thread, frame)) != 0) {
@@ -2369,7 +2369,7 @@ static int lm_registry_source_rows_from_frame(struct LmMessageThread *lm_lmx_mes
                     return -1;
                 }
             }
-            if (column_index + 1U == column_count && loader->push_table_row(lm_lmx_message_thread, context, table_name, columns, column_count, row_cells) != 0) {
+            if (column_index + 1U == column_count && (loader->push_table_row)(lm_lmx_message_thread, context, table_name, columns, column_count, row_cells) != 0) {
                 lm_own_delete(row_cells, 0);
                 return -1;
             }
@@ -2491,7 +2491,7 @@ static int lm_registry_source_table_from_frame(struct LmMessageThread *lm_lmx_me
                     lm_registry_source_columns_destroy(lm_lmx_message_thread, columns, column_count);
                     return -1;
                 }
-                if (loader != 0 && loader -> push_column_metadata != 0 && loader->push_column_metadata(lm_lmx_message_thread, context, table_name, columns, column_count) != 0) {
+                if (loader != 0 && loader -> push_column_metadata != 0 && (loader->push_column_metadata)(lm_lmx_message_thread, context, table_name, columns, column_count) != 0) {
                     lm_registry_source_error(lm_lmx_message_thread, loader, "cannot store table column metadata");
                     lm_registry_source_columns_destroy(lm_lmx_message_thread, columns, column_count);
                     return -1;
@@ -2691,7 +2691,7 @@ static int lm_registry_source_join_sources_into_target(struct LmMessageThread *l
                 return -1;
             }
             source_name = lm_registry_source_node_atom(lm_lmx_message_thread, node);
-            if (source_name == 0 || loader->join_table(lm_lmx_message_thread, context, source_name, target_name) != 0) {
+            if (source_name == 0 || (loader->join_table)(lm_lmx_message_thread, context, source_name, target_name) != 0) {
                 return -1;
             }
         }
@@ -2761,7 +2761,7 @@ static int lm_registry_source_join_from_frame(struct LmMessageThread *lm_lmx_mes
                     lm_registry_source_columns_destroy(lm_lmx_message_thread, columns, column_count);
                     return -1;
                 }
-                if (loader != 0 && loader -> push_column_metadata != 0 && loader->push_column_metadata(lm_lmx_message_thread, context, target_name, columns, column_count) != 0) {
+                if (loader != 0 && loader -> push_column_metadata != 0 && (loader->push_column_metadata)(lm_lmx_message_thread, context, target_name, columns, column_count) != 0) {
                     lm_registry_source_error(lm_lmx_message_thread, loader, "cannot store join target column metadata");
                     lm_registry_source_columns_destroy(lm_lmx_message_thread, columns, column_count);
                     return -1;

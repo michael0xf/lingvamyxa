@@ -1200,7 +1200,7 @@ static unsigned LM_LMX_ABI_STDCALL lm_native_host_thread_entry(void *argument) {
     struct LmMessageThread *lm_lmx_message_thread = 0;
     (void)lm_lmx_message_thread;
     LmNativeHostThreadState * thread = (((LmNativeHostThreadState *)argument));
-    thread->result = thread->entry(thread -> argument);
+    thread->result = (thread->entry)(thread -> argument);
     return 0U;
 }
 

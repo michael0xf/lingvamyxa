@@ -947,6 +947,18 @@ fn: lm_trans_namespace_value_array_reference_element_type (
     LmP0Text: out_type
 ) int
 
+fn: lm_trans_namespace_declare_array_helper_id (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    unsigned: id
+) int
+
+fn: lm_trans_namespace_value_array_helper_id (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    @: unsigned out_id
+) int
+
 fn: lm_trans_namespace_value_is_raw_pointer (
     const: LmTransNamespace: namespace_
     const: LmP0Text: name

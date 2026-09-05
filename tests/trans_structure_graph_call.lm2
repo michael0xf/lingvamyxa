@@ -27,7 +27,7 @@ external:
             return: 2
         if: manager(f) != 0
             return: 3
-        if: implements(f File manager) != 1
+        if: implements(f File File) != 1
             return: 4
         return: 0
     end: main

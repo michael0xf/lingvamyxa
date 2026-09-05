@@ -3555,7 +3555,7 @@ fn: lm_trans_callable_expression_descriptor_name (const: (LmP0Text: head); const
             result: -1
             break
         lm_trans_text_assign_cstr(current_class, field_class)
-    if: (result = 0) && lm_trans_registry_is_function_pointer_type_name(namespace_, current_class)
+    if: (result = 0) && (lm_trans_registry_is_function_pointer_type_name(namespace_, current_class) || lm_trans_text_equals(current_class, "lm.trans.callable"))
         out_descriptor_name[0]: current_class[0]
         result: 1
     if: (result = 0) && has_field_chain
@@ -3737,6 +3737,7 @@ end: lm_trans_emit_callable_head_expression
 fn: lm_trans_expr_stack_try_emit_callable_expression_frame (FILE: file; LmTransExprStack: stack; const: (LmP0Frame: frame); const: (LmTransNamespace: namespace_)) int
     LmP0Text: descriptor_name
     LmTransSymbol: signature
+    const: LmP0Field: arg_field
     int: status
     if: (frame = 0)
         return: 0
@@ -3747,6 +3748,22 @@ fn: lm_trans_expr_stack_try_emit_callable_expression_frame (FILE: file; LmTransE
     if: (status <= 0)
         lm_trans_text_ref_destroy(@ descriptor_name)
         return: status
+    if: lm_trans_text_equals(descriptor_name, "lm.trans.callable")
+        arg_field: 0
+        if: frame\body != 0
+            arg_field: frame\body\first_field
+        while: arg_field != 0 && lm_trans_node_is_ignored(arg_field\value)
+            arg_field: arg_field\next
+        if: arg_field != 0
+            c.fprintf(c.stderr, "trans hosted C backend limitation: field-follow descriptor fn call takes no arguments in this profile\n")
+            lm_trans_text_ref_destroy(@ descriptor_name)
+            return: -1
+        if: ((lm_trans_emit_callable_head_expression(file, frame\head, namespace_) != 0) || (lm_trans_put(file, "(") != 0) || (lm_trans_expr_stack_push_text(stack, ")") != 0))
+            lm_trans_text_ref_destroy(@ descriptor_name)
+            return: -1
+        lm_trans_text_ref_destroy(@ descriptor_name)
+        return: 1
+    ---
     signature: lm_trans_callable_expression_signature_new(namespace_, descriptor_name)
     if: (signature = 0)
         c.fprintf(c.stderr, "trans L2 internal error: cannot build callable-expression signature for \"%.*s\"\n", (cast: int descriptor_name\length), descriptor_name\data)
@@ -3801,6 +3818,16 @@ fn: lm_trans_call_frame_result_type (const: (LmP0Frame: frame); const: (LmTransN
         lm_trans_text_ref_destroy(@ descriptor_name)
         return: -1
     if: (status > 0)
+        if: lm_trans_text_equals(descriptor_name, "lm.trans.callable")
+            if: lm_trans_callable_type_reset(out) != 0
+                lm_trans_text_ref_destroy(@ descriptor_name)
+                return: -1
+            if: lm_trans_text_assign_cstr(out\class_name, "int") = 0
+                lm_trans_text_ref_destroy(@ descriptor_name)
+                return: -1
+            lm_trans_text_ref_destroy(@ descriptor_name)
+            return: 1
+        ---
         signature: lm_trans_callable_expression_signature_new(namespace_, descriptor_name)
         segments: lm_trans_expr_segment_stack_new()
         if: ((signature = 0) || (segments = 0))
@@ -4821,8 +4848,8 @@ fn: lm_trans_emit_array_reference_items_expression (
         c.fprintf(c.stderr, "trans L2 internal error: ArrayReference items projection requires binding-local element type metadata\n")
         return: 1
 
-    pointer_depth: rank + lm_trans_namespace_value_array_reference_element_address_depth(namespace_, name)
-    if: pointer_depth < rank || lm_trans_put(file, "((") != 0
+    pointer_depth: 1U + lm_trans_namespace_value_array_reference_element_address_depth(namespace_, name)
+    if: pointer_depth = 0U || lm_trans_put(file, "((") != 0
         return: 1
     if: lm_trans_namespace_value_array_reference_element_is_const(namespace_, name) && lm_trans_put(file, "const ") != 0
         return: 1
@@ -5165,6 +5192,35 @@ fn: lm_trans_expr_lowered_range_append_index (LmTransExprLoweredRange: range; co
     return: status
 end: lm_trans_expr_lowered_range_append_index
 
+fn: lm_trans_expr_lowered_range_append_array_rectangle_index (
+    LmTransExprLoweredRange: range
+    const: (LmP0Field: first)
+    const: (LmP0Field: stop)
+    unsigned: id
+    size_t: rank
+    size_t: index
+) int
+    LmTransExprPiece: piece
+    int: status
+
+    piece: lm_trans_expr_piece_new()
+    if: (piece = 0) || piece\atom = 0 || piece\atom\expected_type = 0
+        lm_trans_expr_piece_delete(piece)
+        return: 1
+    piece\atom\expected_type\array_rank: rank
+    piece\atom\expected_type\address_depth: index
+    piece\atom\expected_type\is_const: (cast: int id)
+    piece\emit: @lm_trans_expr_piece_emit_array_rectangle_index
+    piece\leading_space: 0
+    piece\node: 0
+    piece\first: first
+    piece\stop: stop
+    status: lm_own_ptr_stack_push(range\pieces, piece)
+    if: (status != 0)
+        lm_trans_expr_piece_delete(piece)
+    return: status
+end: lm_trans_expr_lowered_range_append_array_rectangle_index
+
 fn: lm_trans_field_is_atom (const: (LmP0Field: field); const: @(char spelling)) int
     return: ((((field != 0) && (field\value != 0)) && (field\value\kind = c.LM_P0_NODE_ATOM)) && lm_trans_text_equals(field\value\as\atom, spelling))
 end: lm_trans_field_is_atom
@@ -5279,6 +5335,7 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     int: had_previous_operand
     size_t: array_reference_rank
     size_t: array_reference_index_count
+    unsigned: array_helper_id
     const: @: char field_class
     @: char direct_field_name
     const: LmTransSymbol: array_element_type_relation
@@ -5311,6 +5368,7 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     address_next_operand: 0
     array_reference_rank: 0U
     array_reference_index_count: 0U
+    array_helper_id: 0U
     array_element_type_relation: 0
     indexed_root_piece: 0
     direct_table_field_root: 0
@@ -5475,11 +5533,21 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                             ---
                         ---
                     ---
-                    if: (lm_trans_expr_lowered_range_append_index(lowered, field\next, close) != 0)
-                        lm_trans_expr_atom_lowering_delete(atom)
-                        lm_trans_expr_callable_type_delete(pending_expected_type)
-                        lm_trans_text_ref_destroy(@ operand_class)
-                        return: 1
+                    if: array_reference_rank != 0U && indexed_root_piece != 0 && indexed_root_piece\atom != 0 && indexed_root_piece\atom\text != 0 && lm_trans_namespace_value_array_helper_id(namespace_, indexed_root_piece\atom\text, @ array_helper_id)
+                        if: (lm_trans_expr_lowered_range_append_array_rectangle_index(lowered, field\next, close, array_helper_id, array_reference_rank, array_reference_index_count) != 0)
+                            lm_trans_expr_atom_lowering_delete(atom)
+                            lm_trans_expr_callable_type_delete(pending_expected_type)
+                            lm_trans_text_ref_destroy(@ operand_class)
+                            return: 1
+                        ---
+                    else:
+                        if: (lm_trans_expr_lowered_range_append_index(lowered, field\next, close) != 0)
+                            lm_trans_expr_atom_lowering_delete(atom)
+                            lm_trans_expr_callable_type_delete(pending_expected_type)
+                            lm_trans_text_ref_destroy(@ operand_class)
+                            return: 1
+                        ---
+                    ---
                     if: array_reference_rank != 0U
                         array_reference_index_count: array_reference_index_count + 1U
                         if: array_reference_index_count < array_reference_rank
@@ -5820,6 +5888,62 @@ fn: lm_trans_expr_piece_emit_index (FILE: file; LmTransExprStack: stack; LmTrans
         return: 1
     return: 0
 end: lm_trans_expr_piece_emit_index
+
+fn: lm_trans_expr_piece_emit_array_rectangle_index (FILE: file; LmTransExprStack: stack; LmTransExprLoweredRange: lowered; const: (LmTransExprPiece: piece); const: (LmTransNamespace: namespace_); @: int out_suspend) int
+    unsigned: id
+    size_t: rank
+    size_t: index
+    size_t: j
+    @: char stem
+
+    c.LM_UNUSED(stack)
+    if: (out_suspend != 0)
+        out_suspend[0]: 0
+    if: piece = 0 || piece\atom = 0 || piece\atom\expected_type = 0 || piece\atom\expected_type\is_const < 0
+        lm_trans_expr_lowered_range_delete(lowered)
+        return: 1
+    id: (cast: unsigned piece\atom\expected_type\is_const)
+    rank: piece\atom\expected_type\array_rank
+    index: piece\atom\expected_type\address_depth
+    if: rank = 0U || index >= rank
+        lm_trans_expr_lowered_range_delete(lowered)
+        return: 1
+    if: index = 0U && lm_trans_put(file, "[") != 0
+        lm_trans_expr_lowered_range_delete(lowered)
+        return: 1
+    if: lm_trans_emit_expr_range(file, piece\first, piece\stop, namespace_) != 0
+        lm_trans_expr_lowered_range_delete(lowered)
+        return: 1
+    if: index + 1U >= rank
+        if: lm_trans_put(file, "]") != 0
+            lm_trans_expr_lowered_range_delete(lowered)
+            return: 1
+        ---
+    else:
+        if: lm_trans_module_init_names_prepare() != 0
+            lm_trans_expr_lowered_range_delete(lowered)
+            return: 1
+        stem: lm_trans_module_init_private_name_new("array_extent_", 0U)
+        if: stem = 0
+            c.fprintf(c.stderr, "trans L2 ArrayReference error: rectangle index is missing extent names\n")
+            lm_trans_expr_lowered_range_delete(lowered)
+            return: 1
+        j: index + 1U
+        while: j < rank
+            if: lm_trans_put(file, " * ") != 0 || c.fprintf(file, "%s%u_%zu", stem, id, j) < 0
+                lm_own_delete(stem, 0)
+                lm_trans_expr_lowered_range_delete(lowered)
+                return: 1
+            j: j + 1U
+        lm_own_delete(stem, 0)
+        if: lm_trans_put(file, " + ") != 0
+            lm_trans_expr_lowered_range_delete(lowered)
+            return: 1
+        ---
+    ---
+    lowered\index: lowered\index + 1U
+    return: 0
+end: lm_trans_expr_piece_emit_array_rectangle_index
 
 fn: lm_trans_expr_stack_emit_lowered_range (FILE: file; LmTransExprStack: stack; LmTransExprLoweredRange: lowered; const: (LmTransNamespace: namespace_)) int
     const: LmTransExprPiece: piece
