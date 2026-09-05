@@ -1,0 +1,60 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+Point:
+    int: x
+    int: y
+end: Point
+
+Box:
+    Point: child
+    int: tag
+end: Box
+
+Node:
+    int: value
+    Node: next
+end: Node
+
+external:
+    fn: main () int
+        Point: a
+            x: 1
+            y: 2
+        end: a
+        Point: b (copy: a)
+        Box: outer
+            child: a
+            tag: 9
+        end: outer
+        Box: copiedBox (copy: outer)
+        Node: loop
+            value: 4
+            next: 0
+        end: loop
+
+        loop\next: loop
+        Node: copiedLoop (copy: loop)
+
+        if: a = 0 || b = 0 || a = b || b\x != 1 || b\y != 2
+            return: 1
+        a\x: 8
+        if: b\x != 1 || a\x != 8
+            return: 2
+        if: copiedBox = 0 || copiedBox = outer || copiedBox\tag != 9
+            return: 3
+        if: copiedBox\child = 0 || copiedBox\child = a || copiedBox\child\x != 1
+            return: 4
+        if: copiedLoop = 0 || copiedLoop = loop || copiedLoop\next != copiedLoop || copiedLoop\value != 4
+            return: 5
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), b) = 0
+            return: 6
+        return: 0
+    end: main
+end: external

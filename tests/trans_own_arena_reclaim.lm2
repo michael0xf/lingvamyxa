@@ -1,0 +1,31 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+external:
+    fn: main () int
+        LmOwnArena: arena
+        @: void kept
+        @: void dropped
+
+        arena: lm_message_thread_owner(c.lm_lmx_message_thread)
+        kept: lm_own_arena_new_zero(arena, 32U)
+        dropped: lm_own_arena_new_zero(arena, 32U)
+        if: kept = 0 || dropped = 0
+            return: 1
+        if: lm_own_arena_root_add(arena, kept) != 0
+            return: 2
+        if: lm_own_arena_reclaim(arena) != 0
+            return: 3
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, arena, kept) = 0
+            return: 4
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, arena, dropped) != 0
+            return: 5
+        return: 0
+    end: main
+end: external

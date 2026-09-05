@@ -4594,6 +4594,26 @@ fn: lm_trans_expr_emit_implements_frame (FILE: file; LmTransExprStack: stack; co
     lm_trans_text_ref_destroy(@ consumer_key)
 return: status
 
+fn: lm_trans_expr_emit_copy_frame (FILE: file; LmTransExprStack: stack; const: (LmP0Frame: frame); const: (LmTransNamespace: namespace_)) int
+    const: LmP0Field: first
+    c.LM_UNUSED(namespace_)
+    if: frame = 0
+        return: 0
+    first: lm_trans_call_body_first_field(frame\body)
+    if: first = 0
+        c.fprintf(c.stderr, "trans L2 error: copy expects a Structure or Array expression\n")
+        return: 1
+    if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
+    if: lm_trans_put(file, "lm_own_arena_copy_graph(") != 0 || lm_trans_put(file, lm_trans_current_thread_name()) != 0 || lm_trans_put(file, ", lm_message_thread_owner(") != 0 || lm_trans_put(file, lm_trans_current_thread_name()) != 0 || lm_trans_put(file, "), (") != 0
+        return: 1
+    if: lm_trans_expr_stack_push_text(stack, "))") != 0
+        return: 1
+    if: lm_trans_expr_stack_push_range(stack, first, 0) != 0
+        return: 1
+    return: 0
+end: lm_trans_expr_emit_copy_frame
+
 fn: lm_trans_expr_emit_cast_frame (FILE: file; LmTransExprStack: stack; const: (LmP0Frame: frame); const: (LmTransNamespace: namespace_)) int
     const: LmP0Field: type_field
     const: LmP0Field: expr_first
@@ -5021,6 +5041,11 @@ fn: lm_trans_expr_atom_lowering_set_from_tables (LmTransExprAtomLowering: loweri
 
     spelling: lm_trans_expr_source_path_value(key, spelling_table, "ansi_c", "char")
     binding: lm_trans_expr_source_path_value(key, emitter_table, "emitter", "binding")
+
+    if: lm_trans_l3_profile_depth != 0 && lm_trans_text_equals(key, "@")
+        c.fprintf(c.stderr, "trans L3 error: raw address-of @ is not available in L3\n")
+        return: 1
+    ---
 
     if: (((spelling = 0) || (binding = 0)) || (lm_trans_expr_atom_lowering_set_binding(lowering, binding) != 0))
         key_length: 0

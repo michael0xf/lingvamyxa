@@ -56,6 +56,7 @@ table:
              LmUintptr                   1
              LmNativeHostThreadState     1
              LmMessageThreadPool         1
+             LmOwnAllocationDescriptor   1
 end: `cast.target`
 
 table:
@@ -1133,6 +1134,13 @@ fn: lm_native_message_thread_pool_collect (LmMessageThread: thread) int
         lm_message_thread_request_failure(thread, 1)
         return: 1
     if: c.lm_own_tree_cut(thread, thread\root_owner) != 0
+        if: lm_native_message_thread_state_lock(thread) != 0
+            c.abort()
+        thread\collector_failed: 1
+        lm_native_message_thread_state_unlock(thread)
+        lm_message_thread_request_failure(thread, 1)
+        return: 1
+    if: c.lm_own_arena_reclaim(thread, thread\root_owner) != 0
         if: lm_native_message_thread_state_lock(thread) != 0
             c.abort()
         thread\collector_failed: 1
@@ -2498,7 +2506,7 @@ end: external
 fn: lm_own_arena_shell_is_zero (const: (LmOwnArena: arena)) int
     if: arena = 0
         return: 0
-return: arena\allocations = 0 && arena\allocation_descriptors = 0 && arena\lazy_edges = 0 && arena\frozen = 0 && arena\owner_thread = 0 && arena\registry_previous = 0 && arena\registry_next = 0 && arena\runtime_owned_shell = 0
+return: arena\allocations = 0 && arena\allocation_descriptors = 0 && arena\lazy_edges = 0 && arena\frozen = 0 && arena\owner_thread = 0 && arena\registry_previous = 0 && arena\registry_next = 0 && arena\runtime_owned_shell = 0 && arena\roots = 0
 
 fn: lm_own_arena_register (LmMessageThread: owner_thread; LmOwnArena: arena) int
     LmOwnArena: tail
@@ -2580,6 +2588,7 @@ fn: lm_own_arena_init_registered (LmOwnArena: arena; LmMessageThread: owner_thre
     LmOwnPtrStack: allocations
     LmOwnPtrStack: allocation_descriptors
     LmOwnPtrStack: lazy_edges
+    LmOwnPtrStack: roots
 
     if: arena = 0 || owner_thread = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread || lm_own_arena_shell_is_zero(arena) = 0
         return: 1
@@ -2587,7 +2596,9 @@ fn: lm_own_arena_init_registered (LmOwnArena: arena; LmMessageThread: owner_thre
     allocations: lm_own_new_zero(c.sizeof(allocations[0]))
     allocation_descriptors: lm_own_new_zero(c.sizeof(allocation_descriptors[0]))
     lazy_edges: lm_own_new_zero(c.sizeof(lazy_edges[0]))
-    if: allocations = 0 || allocation_descriptors = 0 || lazy_edges = 0
+    roots: lm_own_new_zero(c.sizeof(roots[0]))
+    if: allocations = 0 || allocation_descriptors = 0 || lazy_edges = 0 || roots = 0
+        lm_own_delete(roots, 0)
         lm_own_delete(lazy_edges, 0)
         lm_own_delete(allocation_descriptors, 0)
         lm_own_delete(allocations, 0)
@@ -2596,12 +2607,16 @@ fn: lm_own_arena_init_registered (LmOwnArena: arena; LmMessageThread: owner_thre
     lm_own_ptr_stack_init(allocations, c.free)
     lm_own_ptr_stack_init(allocation_descriptors, c.lm_own_delete_plain)
     lm_own_ptr_stack_init(lazy_edges, c.lm_own_delete_plain)
+    lm_own_ptr_stack_init(roots, 0)
     arena\allocations: allocations
     arena\allocation_descriptors: allocation_descriptors
     arena\lazy_edges: lazy_edges
+    arena\roots: roots
     arena\frozen: 0
     arena\runtime_owned_shell: runtime_owned_shell != 0
     if: lm_own_arena_register(owner_thread, arena) != 0
+        lm_own_ptr_stack_destroy(arena\roots)
+        lm_own_delete(arena\roots, 0)
         lm_own_ptr_stack_destroy(arena\lazy_edges)
         lm_own_delete(arena\lazy_edges, 0)
         lm_own_ptr_stack_destroy(arena\allocation_descriptors)
@@ -2630,6 +2645,8 @@ fn: lm_own_arena_release (LmMessageThread: owner_thread; LmOwnArena: arena; int:
     if: lm_own_arena_detach(owner_thread, arena) != 0
         return: 1
 
+    lm_own_ptr_stack_destroy(arena\roots)
+    lm_own_delete(arena\roots, 0)
     lm_own_ptr_stack_destroy(arena\lazy_edges)
     lm_own_delete(arena\lazy_edges, 0)
     lm_own_ptr_stack_destroy(arena\allocation_descriptors)
@@ -3005,6 +3022,8 @@ fn: lm_own_allocation_descriptor_push (LmOwnPtrStack: descriptors; @: void addre
     descriptor\count: count
     descriptor\rank: rank
     descriptor\level: level
+    descriptor\marked: 0
+    descriptor\pinned: 0
     status: lm_own_ptr_stack_push(descriptors, descriptor)
     if: status != 0
         lm_own_delete(descriptor, 0)
@@ -3134,6 +3153,208 @@ external:
             edge\kind: c.LM_OWN_EDGE_OWNED
             i: i + 1U
 
+    return: 0
+end: external
+
+fn: lm_own_copy_visit_find (const: (LmOwnPtrStack: sources); const: (LmOwnPtrStack: copies); const: @(void source)) @: void
+    size_t: index
+
+    if: sources = 0 || copies = 0 || source = 0
+        return: 0
+    index: 0U
+    while: index < sources\count
+        if: lm_own_ptr_stack_at(sources, index) = source
+            return: lm_own_ptr_stack_at(copies, index)
+        index: index + 1U
+return: 0
+
+fn: lm_own_arena_copy_graph_into (LmOwnArena: arena; @: void source; LmOwnPtrStack: sources; LmOwnPtrStack: copies) @: void
+    const: LmOwnAllocationDescriptor: descriptor
+    @: void copy
+    @: void child
+    @: void copied
+    @: uchar raw
+    @: void slot
+    size_t: pointer_size
+    size_t: offset
+
+    if: arena = 0 || source = 0
+        return: source
+    copy: lm_own_copy_visit_find(sources, copies, source)
+    if: copy != 0
+        return: copy
+    descriptor: lm_own_allocation_descriptor_find(arena\allocation_descriptors, source)
+    if: descriptor = 0
+        return: source
+
+    copy: lm_own_arena_new_zero(arena, descriptor\bytes)
+    if: copy = 0
+        return: 0
+    c.memcpy(copy, source, descriptor\bytes)
+    if: lm_own_ptr_stack_push(sources, source) != 0 || lm_own_ptr_stack_push(copies, copy) != 0
+        return: 0
+
+    pointer_size: c.sizeof(slot)
+    if: pointer_size = 0U
+        return: copy
+    raw: cast: (@: uchar) copy
+    offset: 0U
+    while: offset + pointer_size <= descriptor\bytes
+        c.memcpy(@ child, raw + offset, pointer_size)
+        if: child != 0 && lm_own_allocation_descriptor_find(arena\allocation_descriptors, child) != 0
+            copied: lm_own_arena_copy_graph_into(arena, child, sources, copies)
+            c.memcpy(raw + offset, @ copied, pointer_size)
+        ---
+        offset: offset + pointer_size
+return: copy
+
+sub: lm_own_arena_mark (LmOwnArena: arena; @: void object)
+    LmOwnAllocationDescriptor: descriptor
+    @: void child
+    @: void slot
+    @: uchar raw
+    size_t: pointer_size
+    size_t: offset
+
+    if: arena = 0 || object = 0 || arena\allocation_descriptors = 0
+        return
+    descriptor: cast: (LmOwnAllocationDescriptor) lm_own_allocation_descriptor_find(arena\allocation_descriptors, object)
+    if: descriptor = 0 || descriptor\marked
+        return
+    descriptor\marked: 1
+    pointer_size: c.sizeof(slot)
+    if: pointer_size = 0U || descriptor\bytes < pointer_size
+        return
+    raw: cast: (@: uchar) object
+    offset: 0U
+    while: offset + pointer_size <= descriptor\bytes
+        c.memcpy(@ child, raw + offset, pointer_size)
+        if: child != 0
+            lm_own_arena_mark(arena, child)
+        ---
+        offset: offset + pointer_size
+end: lm_own_arena_mark
+
+external:
+    fn: lm_own_arena_pin (LmOwnArena: arena; @: void address) int
+        LmOwnAllocationDescriptor: descriptor
+
+        if: arena = 0 || address = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\allocation_descriptors = 0
+            return: 1
+        descriptor: cast: (LmOwnAllocationDescriptor) lm_own_allocation_descriptor_find(arena\allocation_descriptors, address)
+        if: descriptor = 0
+            return: 1
+        descriptor\pinned: 1
+    return: 0
+end: external
+
+external:
+    fn: lm_own_arena_root_add (LmOwnArena: arena; @: void address) int
+        size_t: index
+
+        if: arena = 0 || address = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\roots = 0
+            return: 1
+        index: 0U
+        while: index < arena\roots\count
+            if: lm_own_ptr_stack_at(arena\roots, index) = address
+                return: 0
+            index: index + 1U
+    return: lm_own_ptr_stack_push(arena\roots, address)
+end: external
+
+external:
+    fn: lm_own_arena_copy_graph (LmOwnArena: arena; @: void source) @: void
+        LmOwnPtrStack: sources
+        LmOwnPtrStack: copies
+        @: void copy
+
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\frozen
+            return: 0
+        if: source = 0
+            return: 0
+        sources: lm_own_new_zero(c.sizeof(sources[0]))
+        copies: lm_own_new_zero(c.sizeof(copies[0]))
+        if: sources = 0 || copies = 0
+            lm_own_delete(sources, 0)
+            lm_own_delete(copies, 0)
+            return: 0
+        lm_own_ptr_stack_init(sources, 0)
+        lm_own_ptr_stack_init(copies, 0)
+        copy: lm_own_arena_copy_graph_into(arena, source, sources, copies)
+        lm_own_ptr_stack_destroy(sources)
+        lm_own_ptr_stack_destroy(copies)
+        lm_own_delete(sources, 0)
+        lm_own_delete(copies, 0)
+    return: copy
+end: external
+
+external:
+    fn: lm_own_arena_reclaim (LmOwnArena: arena) int
+        LmOwnAllocationDescriptor: descriptor
+        @: void object
+        @: void item
+        size_t: index
+        size_t: keep
+
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\frozen
+            return: 1
+        if: arena\allocations = 0 || arena\allocation_descriptors = 0
+            return: 1
+        if: lm_own_arena_promote_lazy_edges(arena) != 0
+            return: 1
+
+        index: 0U
+        while: index < arena\allocation_descriptors\count
+            descriptor: lm_own_ptr_stack_at(arena\allocation_descriptors, index)
+            if: descriptor != 0
+                descriptor\marked: 0
+            index: index + 1U
+
+        if: arena\roots != 0
+            index: 0U
+            while: index < arena\roots\count
+                lm_own_arena_mark(arena, lm_own_ptr_stack_at(arena\roots, index))
+                index: index + 1U
+            ---
+        ---
+
+        index: 0U
+        while: index < arena\allocation_descriptors\count
+            descriptor: lm_own_ptr_stack_at(arena\allocation_descriptors, index)
+            if: descriptor != 0 && descriptor\pinned
+                lm_own_arena_mark(arena, descriptor\address)
+            index: index + 1U
+
+        keep: 0U
+        index: 0U
+        while: index < arena\allocations\count
+            object: lm_own_ptr_stack_at(arena\allocations, index)
+            descriptor: lm_own_ptr_stack_at(arena\allocation_descriptors, index)
+            if: descriptor != 0 && (descriptor\marked != 0 || descriptor\pinned != 0)
+                arena\allocations\items[keep]: object
+                arena\allocation_descriptors\items[keep]: descriptor
+                keep: keep + 1U
+            else:
+                if: object != 0
+                    c.free(object)
+                if: descriptor != 0
+                    lm_own_delete(descriptor, 0)
+            ---
+            index: index + 1U
+        arena\allocations\count: keep
+        arena\allocation_descriptors\count: keep
+
+        if: arena\roots != 0
+            keep: 0U
+            index: 0U
+            while: index < arena\roots\count
+                item: lm_own_ptr_stack_at(arena\roots, index)
+                if: item != 0 && lm_own_allocation_descriptor_find(arena\allocation_descriptors, item) != 0
+                    arena\roots\items[keep]: item
+                    keep: keep + 1U
+                index: index + 1U
+            arena\roots\count: keep
+        ---
     return: 0
 end: external
 
@@ -3501,6 +3722,12 @@ external:
             lm_message_thread_request_failure(thread, 1)
             return: 1
         if: c.lm_own_tree_cut(thread, thread\root_owner) != 0
+            if: c.lm_native_message_thread_state_lock(thread) = 0
+                thread\collector_failed: 1
+                c.lm_native_message_thread_state_unlock(thread)
+            lm_message_thread_request_failure(thread, 1)
+            return: 1
+        if: c.lm_own_arena_reclaim(thread, thread\root_owner) != 0
             if: c.lm_native_message_thread_state_lock(thread) = 0
                 thread\collector_failed: 1
                 c.lm_native_message_thread_state_unlock(thread)

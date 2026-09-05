@@ -39,8 +39,10 @@ Array:
     Not this graph. One array descriptor + one rectangular `d0×d1×…` backing.
     Index is an offset. A row of StructureReference elements enters the
     Structure graph in those chunks. Mix hop addresses (`ℕ₀` path) are a
-    placement tree, not this graph. Mix is not a Message; cursors are
-    L3 Threads (spec §19.29.2.1). P0 / used-tree of Consumer stay trees.
+    placement tree, not this graph. Mix LMX is ordinary LMX: not automatically
+    an L3 Thread, and not automatically in a Message arena. Mix may use no
+    arena or a private arena. Cursors may be L3 Threads (spec §19.29.2.1).
+    P0 / used-tree of Consumer stay trees.
 
 Lifetime inside one L3 Thread:
     Reachability in that Thread's Structure graph. End-turn collection
@@ -379,10 +381,10 @@ EN (priority order):
 
   G1. Unscoped allocation still in use.
       `lm_own_new_zero` / `c.free` remain for bootstrap helpers, arena
-      shells, arena metadata stacks, and Mix pages (`lm2/mix/Mix.lm2`).
+      shells, arena metadata stacks, and Mix pages (`lm2/mix`).
       Spec: ordinary Structure/Array materialization belongs to the
-      Message arena. Mix pages are Mix page/slot storage, not a Message
-      arena and not `c.free`. Cursors are L3 Threads. One-header Mix is
+      Message arena. Mix LMX is ordinary LMX — own arena or none, not an
+      automatic L3 Thread. Cursors may be L3 Threads. One-header Mix is
       struct_refactoring Phase 9.1.
 
   G2. void vs empty Structure is split for language tests.
@@ -476,8 +478,9 @@ RU (тот же порядок):
 
   G1. Бесхозные аллокации.
       `lm_own_new_zero` / `c.free` в хелперах, шапках арен, стеках метаданных
-      и Mix. Страницы Mix — склад слотов Mix, не арена Message. Курсоры —
-      L3 Thread. Одна шапка Mix — фаза 9.1 другого файла.
+      и Mix. Mix LMX — обыкновенный LMX (своя арена или без); не
+      автоматически L3 Thread. Курсоры могут быть L3 Thread. Одна шапка
+      Mix — фаза 9.1 другого файла.
 
   G2. void и пустая Structure разведены в языковых тестах.
       `void: cell` — ошибка trans. Unit — префикс + 0 payload. Деструкторы
@@ -641,11 +644,10 @@ Phase D — end-turn reclaim on the one Message arena
        fewer blocks and rewrite slots. Shared descriptors stay roots.
        Not after handler return, not on `return` / `retry`.
     3. No nested arena to destroy.
-    4. Mix tree is page/slot storage of raw data, no Message arena. Do not
-       make Mix an L3 Message: concurrent cursors would block on one turn.
-       Mix LMX still has Structures; that graph is not a Message. A Message
-       in Mix is a blob. On death a cursor deletes it, or itself. Cursors
-       are L3 Threads.
+    4. Mix LMX is ordinary LMX, not an L3 Thread by default. It may have no
+       arena or a private arena; do not force Mix pages into a Message
+       arena. Do not make Mix an L3 Message: concurrent cursors would block
+       on one turn. A Message in Mix is a blob. Cursors may be L3 Threads.
     5. Keep collection Message-Thread-local. One execution thread inside
        the actor is why the walk needs no mutator handshake.
        Never stop-the-world for other Message Threads.
@@ -677,18 +679,19 @@ Phase E — message boundary and Mix
     into it. Do not implement owner-detach/attach of a branch. Do not
     overload `send:`'s current LMX-bytes argument list as a second
     meaning.
-    Mix tree is page/slot storage without a Message arena. Cursors are
-    L3 Threads and send Messages to listeners. cutAfter/delete-branch
-    compacts Mix live slots, not Message end-turn. One-header Mix is
-    struct_refactoring 9.1. Locks stay `synchronized` on the page monitor
-    (already in `lm2/mix`).
+    Mix LMX is ordinary LMX: own arena, or none; not automatically an L3
+    Thread. Cursors may be L3 Threads and send Messages to listeners.
+    cutAfter/delete-branch compacts Mix live slots, not Message end-turn.
+    One-header Mix is struct_refactoring 9.1. Locks stay `synchronized` on
+    the page monitor (already in `lm2/mix`).
 
   RU:
     Через границу: Message — полный LMX в неактивном L3 Thread. Граф
     рождается в арене того потока (или кодек пишет туда). Отправитель
     ссылок не держит. Owner-detach/attach ветки не делать. Не давать
-    текущему `send:` с байтами LMX второго смысла. Дерево Mix — не арена;
-    курсоры — Thread; cut бранча уплотняет слоты Mix. Одна шапка Mix — 9.1.
+    текущему `send:` с байтами LMX второго смысла. Mix LMX — обыкновенный
+    LMX (своя арена или без арены), не автоматически L3 Thread; курсоры
+    могут быть Thread; cut бранча уплотняет слоты Mix. Одна шапка Mix — 9.1.
 
 Phase F — arrays, L2 machine, later control
 Фаза F — массивы, машина L2, поздний контроль

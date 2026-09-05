@@ -268,6 +268,8 @@ table:
              count         size_t
              rank          size_t
              level         size_t
+             marked        int
+             pinned        int
 end: `LmOwnAllocationDescriptor.field.class`
 
 table:
@@ -282,6 +284,8 @@ table:
              count         4
              rank          5
              level         6
+             marked        7
+             pinned        8
 end: `LmOwnAllocationDescriptor.field.index`
 
 table:
@@ -352,6 +356,7 @@ table:
              registry_previous       LmOwnArena
              registry_next           LmOwnArena
              runtime_owned_shell     int
+             roots                   LmOwnPtrStack
 end: `LmOwnArena.field.class`
 
 table:
@@ -367,6 +372,7 @@ table:
              registry_previous       5
              registry_next           6
              runtime_owned_shell     7
+             roots                   8
 end: `LmOwnArena.field.index`
 
 table:
@@ -380,6 +386,7 @@ table:
              owner_thread            0
              registry_previous       0
              registry_next           0
+             roots                   0
 end: `LmOwnArena.field.address-depth`
 
 table:
@@ -924,6 +931,10 @@ table:
              lm_own_arena_owner_thread 1
              lm_own_tree_cut           1
              lm_own_tree_cut_promote_lazy_edges 1
+             lm_own_arena_pin          1
+             lm_own_arena_root_add     1
+             lm_own_arena_copy_graph   1
+             lm_own_arena_reclaim      1
              lm_thread_provider_name         1
              lm_host_thread_new              1
              lm_host_thread_delete           1
@@ -1006,6 +1017,10 @@ table:
              lm_own_arena_owner_thread 1
              lm_own_tree_cut           1
              lm_own_tree_cut_promote_lazy_edges 1
+             lm_own_arena_pin          1
+             lm_own_arena_root_add     1
+             lm_own_arena_copy_graph   1
+             lm_own_arena_reclaim      1
              lm_message_thread_component_attach 1
              lm_message_thread_component_get    1
              lm_message_thread_component_remove 1
@@ -1048,6 +1063,10 @@ fn: lm_own_arena_is_frozen (const: (LmOwnArena: arena)) int
 fn: lm_own_arena_owner_thread (const: (LmOwnArena: arena)) LmMessageThread
 fn: lm_own_tree_cut (LmOwnArena: arena) int
 fn: lm_own_tree_cut_promote_lazy_edges (LmOwnArena: arena) int
+fn: lm_own_arena_pin (LmOwnArena: arena; @: void address) int
+fn: lm_own_arena_root_add (LmOwnArena: arena; @: void address) int
+fn: lm_own_arena_copy_graph (LmOwnArena: arena; @: void source) @: void
+fn: lm_own_arena_reclaim (LmOwnArena: arena) int
 fn: lm_thread_provider_name () const: @: char
 fn: lm_host_thread_new () LmHostThread
 fn: lm_host_thread_delete (LmHostThread: thread) void

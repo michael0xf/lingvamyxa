@@ -568,9 +568,9 @@ resolution and import deduplication, and is available on L2 and L3 module
 surfaces. The selected module retains its own source profile; using `predef`
 does not make an L2-only machine operation available in L3.
 
-The current bootstrap accepts `.lm2` targets only and lists `predef` in
-`receiver.l3.exclude`. Admitting `.lm3` targets and the `predef` receiver on an
-L3 surface is implementation work under the high-level-subset model.
+The current bootstrap accepts `.lm2` targets only. `predef` is admitted on an
+L3 surface; `.lm3` targets remain implementation work under the high-level-subset
+model.
 
 There are no implicit `.lm4` or `.lm5` profiles. Both extensions and both
 legacy level wrappers are rejected. Table/Registry values may be constructed in
@@ -1016,13 +1016,12 @@ needs unchecked access or another machine operation belongs to L2; a
 high-level descriptor or handle that hides the raw representation may be used
 from both L2 and L3.
 
-The current bootstrap does not yet enforce this boundary consistently. Its
-`receiver.l3.exclude` table excludes `predef`, which is not a machine
-operation, while several physical layout and raw expression paths still need
-explicit L3 gates. Alignment work is therefore to admit `predef` in L3, add
-implicit-L3/local-early-prepass parity for `table` and `join`, and exclude or
-replace the concrete raw address/load, unchecked-index and physical
-`c.struct`/`c.union`/`c.enum` projections.
+`receiver.l3.exclude` admits `predef` and excludes physical `c.struct` /
+`c.union` / `c.enum` / `c.array` plus L2 machine receivers `include`,
+`define`, `ifndef-default`, `os`, `ifdef`, `guard`, `extern_c`. Prefix `@`
+(raw address-of) is rejected on an L3 surface. Implicit-L3/local-early-prepass
+parity for `table` and `join`, and L3 gates for unchecked index on raw
+addresses, remain alignment work.
 
 1.5. Receiver Families Are Not Levels
 
@@ -8718,8 +8717,7 @@ hosted type/layout projection. It never emits an implicit target object or
 materializes a Structure instance; a value must be created separately through
 an explicit constructor. It does not yet implement the generic high-level merge
 contract. Current `join` still composes legacy source rows; it must become
-ordinary Table-to-Table composition. The current bootstrap still lists `predef`
-in `receiver.l3.exclude`. Its local-source early prepass scans only implicit or
+ordinary Table-to-Table composition. `predef` is admitted in L3. Local-source early prepass still scans only implicit or
 explicit L2 surfaces, although ordinary declaration can still materialize
 table/join on an explicit L3 surface. Hoisted implicit-`.lm3` handling and `.lm3`
 predef targets remain implementation work. These are implementation gaps, not
@@ -13625,20 +13623,27 @@ prefix locks (section 19.28.10.11).
 
 Do not implement the Mix document as an L3 Message. A Message admits one
 execution thread and one turn at a time. If Mix were that Message, every
-cursor would enqueue on its inbox and block behind one turn loop. Mix LMX
-(`lm2/mix`) is still LMX, so the implementation has Structures (page, items,
-cursor objects). That implementation graph is not a Message and must not be
-forced into one. It is an awkward extra graph; the alternative (one Mix
-Message) is worse: it serializes the document.
+cursor would enqueue on its inbox and block behind one turn loop.
 
-A Mix cursor is an autonomous L3 Thread (a running Message). Its local
-state lives in that cursor's Message arena. The cursor notifies listeners
-by sending Messages. Listeners are other Messages. Cursors do not wait on
-a Mix-document Message to take a turn.
+Mix LMX (`lm2/mix`) is ordinary LMX. Ordinary LMX is not automatically an
+L3 Thread and does not automatically receive that Thread's Message arena.
+The Mix document may allocate with no arena (a page/slot store and
+`lm_own_new_zero` / `c.free`), or with a private arena that is not the
+current Message Thread arena. A cursor that *is* an L3 Thread has that
+cursor's Message arena for the cursor's own running LMX, distinct from
+Mix storage. Do not force Mix pages into a Message arena in order to
+"port" them.
+
+The alternative (one Mix Message) is worse: it serializes the document.
+
+A Mix cursor may be an autonomous L3 Thread (a running Message). Its local
+state then lives in that cursor's Message arena. The cursor notifies
+listeners by sending Messages. Listeners are other Messages. Cursors do
+not wait on a Mix-document Message to take a turn.
 
 The Mix placement tree (ℕ₀ hops, bunches, pages, live neighbour slots) is
-not a Structure graph and does not need a Message-style arena. Pages and
-live slots are Mix's own store — a simple page/slot machine without
+not a Structure graph. Pages and live slots are Mix's own store — a
+page/slot machine, with or without a private arena, without Message
 end-turn collection. Deleting a Mix branch compacts live slots in that
 store (`cutAfter` / delete at a level). That is Mix topology maintenance,
 not Message end-turn collection.
@@ -13664,8 +13669,8 @@ cursor Thread. Mix LMX Structures that describe pages exist as hosted
 implementation objects of that store, not as a Mix-document Message graph.
 They are not a second Message arena and not a nested owner.
 
-Hosted Mix pages that still use `lm_own_new_zero` / `c.free` are bootstrap
-debt of the Mix store, not a reason to put Mix into a Message arena.
+Hosted Mix pages that use `lm_own_new_zero` / `c.free` are a legitimate
+no-arena Mix store, not a reason to put Mix into a Message arena.
 
 Lexical scope and arena lifetime are distinct. A function frame holds local
 reference slots; it does not own the referents. The end of a lexical block is
@@ -14014,7 +14019,7 @@ L3 receivers:
 
     own: / borrow: / move:     not L3; do not register;
     copy:                      optional ordinary deep copy into the current
-                               Message's arena; NOT IMPLEMENTED generically.
+                               Message's arena (`copy: expr`).
 
 `libown` helpers are not those receivers. The absence of a lifetime annotation
 does not authorize a hidden copy at `return`. Ordinary return remains

@@ -919,6 +919,8 @@ struct LmOwnAllocationDescriptor {
     size_t count;
     size_t rank;
     size_t level;
+    int marked;
+    int pinned;
 };
 struct LmOwnLazyEdge {
     LmOwnEdgeKind kind;
@@ -937,6 +939,7 @@ struct LmOwnArena {
     LmOwnArena * registry_previous;
     LmOwnArena * registry_next;
     int runtime_owned_shell;
+    LmOwnPtrStack * roots;
 };
 struct LmHostThread {
     void *implementation;
@@ -2210,6 +2213,10 @@ int (lm_own_arena_is_frozen)(struct LmMessageThread *lm_lmx_message_thread, cons
 LmMessageThread * (lm_own_arena_owner_thread)(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena);
 int (lm_own_tree_cut)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_arena_pin)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *address);
+int (lm_own_arena_root_add)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *address);
+void * (lm_own_arena_copy_graph)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *source);
+int (lm_own_arena_reclaim)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
 const char * (lm_thread_provider_name)(void);
 LmHostThread * (lm_host_thread_new)(void);
 void (lm_host_thread_delete)(LmHostThread *thread);
@@ -2636,6 +2643,10 @@ static int lm_trans_declare_registry_fn_descriptors(struct LmMessageThread *lm_l
 static int lm_trans_emit_root_sequence(struct LmMessageThread *lm_lmx_message_thread, FILE *output, const LmP0Node *root, int implicit_l2, int *emitted);
 static int lm_trans_l4_payload_pointer_bindings_init(struct LmMessageThread *lm_lmx_message_thread);
 static void lm_trans_l4_payload_pointer_bindings_destroy(struct LmMessageThread *lm_lmx_message_thread);
+
+
+
+
 
 
 
@@ -4105,6 +4116,7 @@ static int lm_trans_cast_type_is_allowed(struct LmMessageThread *lm_lmx_message_
 static int lm_trans_implements(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *candidate_name, const LmP0Text *required_name, const LmP0Text *consumer_name, int *out_result);
 static int lm_trans_implements_arg_key(struct LmMessageThread *lm_lmx_message_thread, const LmP0Field *first, const LmP0Field *stop, LmP0Text *out_key);
 static int lm_trans_expr_emit_implements_frame(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
+static int lm_trans_expr_emit_copy_frame(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static int lm_trans_expr_emit_cast_frame(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_);
 static const char * lm_trans_expr_frame_receiver_binding_from_head(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *head);
 static int lm_trans_lookup_expr_frame_receiver_binding(struct LmMessageThread *lm_lmx_message_thread, const LmTransNamespace *namespace_, const LmP0Text *head, LmTransBinding *out);
@@ -4454,6 +4466,8 @@ static int lm_trans_module_init_declare_value(struct LmMessageThread *lm_lmx_mes
 static int lm_trans_module_init_emit_value_prelude(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, const LmTransModuleInitEntry *entry, LmTransNamespace *namespace_);
 static int lm_trans_module_init_emit_value_slot(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, const LmTransModuleInitEntry *entry, LmTransNamespace *namespace_);
 static int lm_trans_module_init_emit_helper_open(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmTransModuleInitEntry *entry);
+static int lm_trans_module_init_emit_slot_root(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Text *slot_name, const LmP0Text *value_name);
+static int lm_trans_module_init_emit_slot_root_cstr(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const char *slot_name, const char *value_name);
 static int lm_trans_module_init_emit_named_structure_initializer(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, const LmTransModuleInitEntry *entry, LmTransNamespace *namespace_);
 static int lm_trans_module_init_emit_anonymous_structure_initializer(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, const LmTransModuleInitEntry *entry, LmTransNamespace *namespace_);
 static int lm_trans_module_init_emit_array_reference_initializer(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, int element_is_const, const LmTransModuleInitEntry *entry, LmTransNamespace *namespace_);
@@ -21469,6 +21483,33 @@ static int lm_trans_expr_emit_implements_frame(struct LmMessageThread *lm_lmx_me
     return status;
 }
 
+static int lm_trans_expr_emit_copy_frame(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_) {
+    (void)lm_lmx_message_thread;
+    const LmP0Field * first;
+    LM_UNUSED(namespace_);
+    if (frame == 0) {
+        return 0;
+    }
+    first = lm_trans_call_body_first_field(lm_lmx_message_thread, frame -> body);
+    if (first == 0) {
+        fprintf(stderr, "trans L2 error: copy expects a Structure or Array expression\n");
+        return 1;
+    }
+    if (lm_trans_emit_message_thread_runtime_prelude(lm_lmx_message_thread, lm_trans_prelude_file(lm_lmx_message_thread, file)) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "lm_own_arena_copy_graph(") != 0 || lm_trans_put(lm_lmx_message_thread, file, lm_trans_current_thread_name(lm_lmx_message_thread)) != 0 || lm_trans_put(lm_lmx_message_thread, file, ", lm_message_thread_owner(") != 0 || lm_trans_put(lm_lmx_message_thread, file, lm_trans_current_thread_name(lm_lmx_message_thread)) != 0 || lm_trans_put(lm_lmx_message_thread, file, "), (") != 0) {
+        return 1;
+    }
+    if (lm_trans_expr_stack_push_text(lm_lmx_message_thread, stack, "))") != 0) {
+        return 1;
+    }
+    if (lm_trans_expr_stack_push_range(lm_lmx_message_thread, stack, first, 0) != 0) {
+        return 1;
+    }
+    return 0;
+}
+
 static int lm_trans_expr_emit_cast_frame(struct LmMessageThread *lm_lmx_message_thread, FILE *file, LmTransExprStack *stack, const LmP0Frame *frame, const LmTransNamespace *namespace_) {
     (void)lm_lmx_message_thread;
     const LmP0Field * type_field;
@@ -22022,6 +22063,10 @@ static int lm_trans_expr_atom_lowering_set_from_tables(struct LmMessageThread *l
     const char *key_data;
     spelling = lm_trans_expr_source_path_value(lm_lmx_message_thread, key, spelling_table, "ansi_c", "char");
     binding = lm_trans_expr_source_path_value(lm_lmx_message_thread, key, emitter_table, "emitter", "binding");
+    if (lm_trans_l3_profile_depth != 0 && lm_trans_text_equals(lm_lmx_message_thread, key, "@")) {
+        fprintf(stderr, "trans L3 error: raw address-of @ is not available in L3\n");
+        return 1;
+    }
     if (((spelling == 0) || (binding == 0)) || (lm_trans_expr_atom_lowering_set_binding(lm_lmx_message_thread, lowering, binding) != 0)) {
         key_length = 0;
         key_data = "";
@@ -24937,6 +24982,18 @@ static int lm_trans_emit_message_thread_runtime_prelude(struct LmMessageThread *
         return 1;
     }
     if (lm_trans_put(lm_lmx_message_thread, file, "void *lm_own_arena_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t size);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "void *lm_own_arena_copy_graph(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, const void *source);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "int lm_own_arena_pin(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, void *address);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "int lm_own_arena_root_add(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, void *address);\n") != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "int lm_own_arena_reclaim(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena);\n") != 0) {
         return 1;
     }
     if (lm_trans_put(lm_lmx_message_thread, file, "void *lm_own_arena_array_new_zero(struct LmMessageThread *lm_lmx_message_thread, struct LmOwnArena *arena, size_t element_size, size_t count, size_t rank, size_t level);\n") != 0) {
@@ -34678,6 +34735,54 @@ static int lm_trans_module_init_emit_helper_open(struct LmMessageThread *lm_lmx_
     }
 }
 
+static int lm_trans_module_init_emit_slot_root(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Text *slot_name, const LmP0Text *value_name) {
+    (void)lm_lmx_message_thread;
+    const char *thread_name;
+    const char *arena_name;
+    if (file == 0 || slot_name == 0 || value_name == 0) {
+        return 1;
+    }
+    thread_name = lm_trans_module_init_thread_name(lm_lmx_message_thread);
+    arena_name = lm_trans_module_init_arena_name(lm_lmx_message_thread);
+    if (thread_name == 0 || arena_name == 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    ") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, slot_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = ") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, value_name) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, ";\n    if (") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, slot_name) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, " != 0 && lm_own_arena_root_add(") != 0 || lm_trans_put(lm_lmx_message_thread, file, thread_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, ", ") != 0 || lm_trans_put(lm_lmx_message_thread, file, arena_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, ", ") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, slot_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, ") != 0) return 1;\n    return 0;\n}\n") != 0) {
+        return 1;
+    }
+    return 0;
+}
+
+static int lm_trans_module_init_emit_slot_root_cstr(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const char *slot_name, const char *value_name) {
+    (void)lm_lmx_message_thread;
+    const char *thread_name;
+    const char *arena_name;
+    if (file == 0 || slot_name == 0 || value_name == 0) {
+        return 1;
+    }
+    thread_name = lm_trans_module_init_thread_name(lm_lmx_message_thread);
+    arena_name = lm_trans_module_init_arena_name(lm_lmx_message_thread);
+    if (thread_name == 0 || arena_name == 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, "    ") != 0 || lm_trans_put(lm_lmx_message_thread, file, slot_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = ") != 0 || lm_trans_put(lm_lmx_message_thread, file, value_name) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, ";\n    if (") != 0 || lm_trans_put(lm_lmx_message_thread, file, slot_name) != 0) {
+        return 1;
+    }
+    if (lm_trans_put(lm_lmx_message_thread, file, " != 0 && lm_own_arena_root_add(") != 0 || lm_trans_put(lm_lmx_message_thread, file, thread_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, ", ") != 0 || lm_trans_put(lm_lmx_message_thread, file, arena_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, ", ") != 0 || lm_trans_put(lm_lmx_message_thread, file, slot_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, ") != 0) return 1;\n    return 0;\n}\n") != 0) {
+        return 1;
+    }
+    return 0;
+}
+
 static int lm_trans_module_init_emit_named_structure_initializer(struct LmMessageThread *lm_lmx_message_thread, FILE *file, const LmP0Frame *frame, const LmTransModuleInitEntry *entry, LmTransNamespace *namespace_) {
     (void)lm_lmx_message_thread;
     const LmP0Structure * body;
@@ -34853,7 +34958,7 @@ static int lm_trans_module_init_emit_named_structure_initializer(struct LmMessag
             lm_trans_expr_callable_type_delete(lm_lmx_message_thread, expected_type);
         }
     }
-    if (lm_trans_put(lm_lmx_message_thread, file, "    ") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, slot_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = ") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, value_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, ";\n    return 0;\n}\n") != 0) {
+    if (lm_trans_module_init_emit_slot_root(lm_lmx_message_thread, file, slot_name, value_name) != 0) {
         {
             int lm_return_13 = 1;
             lm_trans_text_ref_destroy(&slot_name);
@@ -34927,7 +35032,7 @@ static int lm_trans_module_init_emit_anonymous_structure_initializer(struct LmMe
             return lm_return_2;
         }
     }
-    if (lm_trans_put(lm_lmx_message_thread, file, "    ") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, slot_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = ") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, value_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, ";\n    return 0;\n}\n") != 0) {
+    if (lm_trans_module_init_emit_slot_root(lm_lmx_message_thread, file, slot_name, value_name) != 0) {
         {
             int lm_return_3 = 1;
             lm_trans_text_ref_destroy(&c_type_name);
@@ -35163,7 +35268,7 @@ static int lm_trans_module_init_emit_array_reference_initializer(struct LmMessag
             return lm_return_14;
         }
     }
-    if (lm_trans_put(lm_lmx_message_thread, file, "    ") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, slot_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = ") != 0 || lm_trans_emit_identifier(lm_lmx_message_thread, file, value_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, ";\n    return 0;\n}\n") != 0) {
+    if (lm_trans_module_init_emit_slot_root(lm_lmx_message_thread, file, slot_name, value_name) != 0) {
         {
             int lm_return_15 = 1;
             lm_trans_text_ref_destroy(&slot_name);
@@ -37342,7 +37447,7 @@ static int lm_trans_module_init_emit_table_initializer(struct LmMessageThread *l
             return lm_return_4;
         }
     }
-    if (lm_trans_put(lm_lmx_message_thread, file, "    ") != 0 || lm_trans_put(lm_lmx_message_thread, file, entry -> slot_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, " = ") != 0 || lm_trans_put(lm_lmx_message_thread, file, value_name) != 0 || lm_trans_put(lm_lmx_message_thread, file, ";\n    return 0;\n}\n") != 0) {
+    if (lm_trans_module_init_emit_slot_root_cstr(lm_lmx_message_thread, file, entry -> slot_name, value_name) != 0) {
         {
             int lm_return_5 = 1;
             lm_own_delete(value_name, 0);
@@ -43511,7 +43616,7 @@ static int lm_trans_pointer_bindings_init(struct LmMessageThread *lm_lmx_message
     if (status == 0 && lm_trans_pointer_binding_push_expr_emit(lm_lmx_message_thread, "lm_trans_expr_emit_contextual_literal", &lm_trans_expr_emit_contextual_literal, &lm_trans_expr_state_value) != 0) {
         status = 1;
     }
-    if (status == 0 && (lm_trans_pointer_binding_push_expr_emit(lm_lmx_message_thread, "lm_trans_expr_emit_operator", &lm_trans_expr_emit_raw, &lm_trans_expr_state_operator) != 0 || lm_trans_pointer_binding_push_expr_emit(lm_lmx_message_thread, "lm_trans_expr_emit_deref", &lm_trans_expr_emit_raw, &lm_trans_expr_state_deref) != 0 || lm_trans_pointer_binding_push_expr_emit(lm_lmx_message_thread, "lm_trans_expr_emit_pointer_follow", &lm_trans_expr_emit_raw, &lm_trans_expr_state_pointer_follow) != 0 || lm_trans_pointer_binding_push_expr_emit(lm_lmx_message_thread, "lm_trans_expr_emit_c_dot", &lm_trans_expr_emit_raw, &lm_trans_expr_state_c_dot) != 0 || lm_trans_pointer_binding_push_expr_frame(lm_lmx_message_thread, "lm_trans_expr_emit_cast_frame", &lm_trans_expr_emit_cast_frame) != 0 || lm_trans_pointer_binding_push_expr_frame(lm_lmx_message_thread, "lm_trans_expr_emit_implements_frame", &lm_trans_expr_emit_implements_frame) != 0)) {
+    if (status == 0 && (lm_trans_pointer_binding_push_expr_emit(lm_lmx_message_thread, "lm_trans_expr_emit_operator", &lm_trans_expr_emit_raw, &lm_trans_expr_state_operator) != 0 || lm_trans_pointer_binding_push_expr_emit(lm_lmx_message_thread, "lm_trans_expr_emit_deref", &lm_trans_expr_emit_raw, &lm_trans_expr_state_deref) != 0 || lm_trans_pointer_binding_push_expr_emit(lm_lmx_message_thread, "lm_trans_expr_emit_pointer_follow", &lm_trans_expr_emit_raw, &lm_trans_expr_state_pointer_follow) != 0 || lm_trans_pointer_binding_push_expr_emit(lm_lmx_message_thread, "lm_trans_expr_emit_c_dot", &lm_trans_expr_emit_raw, &lm_trans_expr_state_c_dot) != 0 || lm_trans_pointer_binding_push_expr_frame(lm_lmx_message_thread, "lm_trans_expr_emit_cast_frame", &lm_trans_expr_emit_cast_frame) != 0 || lm_trans_pointer_binding_push_expr_frame(lm_lmx_message_thread, "lm_trans_expr_emit_implements_frame", &lm_trans_expr_emit_implements_frame) != 0 || lm_trans_pointer_binding_push_expr_frame(lm_lmx_message_thread, "lm_trans_expr_emit_copy_frame", &lm_trans_expr_emit_copy_frame) != 0)) {
         status = 1;
     }
     if (status == 0 && (lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_return", &lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_stop", &lm_trans_statement_emit_stop) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_exit", &lm_trans_statement_emit_exit) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_send", &lm_trans_statement_emit_send) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_if", &lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_while", &lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_for", &lm_trans_statement_emit_for) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_throws", &lm_trans_statement_emit_throws) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_throw", &lm_trans_statement_emit_throw) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_catch", &lm_trans_statement_emit_catch) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_else", &lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_synchronized", &lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_finally", &lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_assert", &lm_trans_statement_emit_assert) != 0 || lm_trans_pointer_binding_push_statement(lm_lmx_message_thread, "lm_trans_statement_emit_loop_jump", &lm_trans_statement_emit_loop_jump) != 0)) {

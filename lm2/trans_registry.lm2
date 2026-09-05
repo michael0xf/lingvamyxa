@@ -674,8 +674,17 @@ table:
     name: `receiver.l3.exclude`
     columns: (class: class) (int: value)
     rows:
-             predef  1
              c.array 1
+             c.struct 1
+             c.union 1
+             c.enum 1
+             include 1
+             define 1
+             `ifndef-default` 1
+             os 1
+             ifdef 1
+             guard 1
+             extern_c 1
 end: `receiver.l3.exclude`
 
 table:
@@ -731,6 +740,7 @@ table:
     rows:
              cast   lm_trans_expr_emit_cast_frame
              implements lm_trans_expr_emit_implements_frame
+             copy   lm_trans_expr_emit_copy_frame
 end: `receiver.expr`
 
 table:

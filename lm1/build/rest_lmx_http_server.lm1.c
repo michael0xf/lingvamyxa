@@ -447,6 +447,10 @@ typedef void (*LmRestLmxDestroy)(void *context);
 
 
 
+
+
+
+
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -719,6 +723,8 @@ struct LmOwnAllocationDescriptor {
     size_t count;
     size_t rank;
     size_t level;
+    int marked;
+    int pinned;
 };
 struct LmOwnLazyEdge {
     LmOwnEdgeKind kind;
@@ -737,6 +743,7 @@ struct LmOwnArena {
     LmOwnArena * registry_previous;
     LmOwnArena * registry_next;
     int runtime_owned_shell;
+    LmOwnPtrStack * roots;
 };
 struct LmHostThread {
     void *implementation;
@@ -924,6 +931,10 @@ int (lm_own_arena_is_frozen)(struct LmMessageThread *lm_lmx_message_thread, cons
 LmMessageThread * (lm_own_arena_owner_thread)(struct LmMessageThread *lm_lmx_message_thread, const LmOwnArena *arena);
 int (lm_own_tree_cut)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
 int (lm_own_tree_cut_promote_lazy_edges)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
+int (lm_own_arena_pin)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *address);
+int (lm_own_arena_root_add)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *address);
+void * (lm_own_arena_copy_graph)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *source);
+int (lm_own_arena_reclaim)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
 const char * (lm_thread_provider_name)(void);
 LmHostThread * (lm_host_thread_new)(void);
 void (lm_host_thread_delete)(LmHostThread *thread);

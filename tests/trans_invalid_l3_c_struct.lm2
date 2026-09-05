@@ -1,0 +1,8 @@
+L3:
+    external:
+        fn: main () int
+            c.struct: c.LmTagProbeStruct item
+            return: 0
+        end: main
+    end: external
+end: L3

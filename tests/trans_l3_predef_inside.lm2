@@ -1,0 +1,11 @@
+L3:
+    predef: "fixtures/l3_predef_registry.lm2"
+
+    L3PredefLevel:
+        external:
+            fn: main () int
+                return: 0
+            end: main
+        end: external
+    end: L3PredefLevel
+end: L3
