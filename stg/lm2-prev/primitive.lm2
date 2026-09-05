@@ -74,5 +74,5 @@ table:
              bigint   1  integer 1  1  0  0  0  0  0  1  library   unbounded                mpz_t           keyed
              real     1  float   1  0  1  0  0  0  0  0  library   mpfr                     mpfr_t          keyed
              decimal  1  float   1  0  1  0  0  0  0  0  library   decNumber                decNumber       keyed
-             DecimalText 1 atom  0  0  0  0  0  0  0  0  profile   "utf8-decimal"           "char *"        keyed
+             DecimalText 1 atom  0  0  0  0  0  0  0  0  profile   utf8-decimal             "char *"        keyed
 end: `primitive.description`
