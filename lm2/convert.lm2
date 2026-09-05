@@ -1,0 +1,136 @@
+table:
+    source
+    name: `primitive.convert`
+    columns: (class: from) (class: to) (categoryFlag: forbidden) (@: char kind) (@: char receiver) (@: char impl)
+    rows:
+             int       int        0  identity  None                         "lm2/convert_impl.lm2"
+             long      long       0  identity  None                         "lm2/convert_impl.lm2"
+             u32       u32        0  identity  None                         "lm2/convert_impl.lm2"
+             double    double     0  identity  None                         "lm2/convert_impl.lm2"
+             Boolean   Boolean    0  identity  None                         "lm2/convert_impl.lm2"
+             Text      Text       0  identity  None                         "lm2/convert_impl.lm2"
+
+             i8        i16        0  widen     lm_stg_convert_i8_i16        "lm2/convert_impl.lm2"
+             i8        i32        0  widen     lm_stg_convert_i8_i32        "lm2/convert_impl.lm2"
+             i8        i64        0  widen     lm_stg_convert_i8_i64        "lm2/convert_impl.lm2"
+             i8        int        0  widen     lm_stg_convert_i8_int        "lm2/convert_impl.lm2"
+             i8        long       0  widen     lm_stg_convert_i8_long       "lm2/convert_impl.lm2"
+             i16       i32        0  widen     lm_stg_convert_i16_i32       "lm2/convert_impl.lm2"
+             i16       i64        0  widen     lm_stg_convert_i16_i64       "lm2/convert_impl.lm2"
+             i16       int        0  widen     lm_stg_convert_i16_int       "lm2/convert_impl.lm2"
+             i16       long       0  widen     lm_stg_convert_i16_long      "lm2/convert_impl.lm2"
+             i32       i64        0  widen     lm_stg_convert_i32_i64       "lm2/convert_impl.lm2"
+             i32       long       0  widen     lm_stg_convert_i32_long      "lm2/convert_impl.lm2"
+             int       long       0  widen     lm_stg_convert_int_long      "lm2/convert_impl.lm2"
+             int       i64        0  widen     lm_stg_convert_int_i64       "lm2/convert_impl.lm2"
+             short     int        0  widen     lm_stg_convert_short_int     "lm2/convert_impl.lm2"
+             short     long       0  widen     lm_stg_convert_short_long    "lm2/convert_impl.lm2"
+             char      int        0  widen     lm_stg_convert_char_int      "lm2/convert_impl.lm2"
+             u8        u16        0  widen     lm_stg_convert_u8_u16        "lm2/convert_impl.lm2"
+             u8        u32        0  widen     lm_stg_convert_u8_u32        "lm2/convert_impl.lm2"
+             u8        u64        0  widen     lm_stg_convert_u8_u64        "lm2/convert_impl.lm2"
+             u8        size_t     0  widen     lm_stg_convert_u8_size_t     "lm2/convert_impl.lm2"
+             u16       u32        0  widen     lm_stg_convert_u16_u32       "lm2/convert_impl.lm2"
+             u16       u64        0  widen     lm_stg_convert_u16_u64       "lm2/convert_impl.lm2"
+             u16       size_t     0  widen     lm_stg_convert_u16_size_t    "lm2/convert_impl.lm2"
+             u32       u64        0  widen     lm_stg_convert_u32_u64       "lm2/convert_impl.lm2"
+             u32       size_t     0  widen     lm_stg_convert_u32_size_t    "lm2/convert_impl.lm2"
+             uint8     u16        0  widen     lm_stg_convert_u8_u16        "lm2/convert_impl.lm2"
+             unsigned  ulong      0  widen     lm_stg_convert_unsigned_ulong "lm2/convert_impl.lm2"
+             size_t    u64        0  widen     lm_stg_convert_size_t_u64    "lm2/convert_impl.lm2"
+             usize     u64        0  widen     lm_stg_convert_size_t_u64    "lm2/convert_impl.lm2"
+
+             i16       i8         0  narrow    lm_stg_convert_i16_i8        "lm2/convert_impl.lm2"
+             i32       i8         0  narrow    lm_stg_convert_i32_i8        "lm2/convert_impl.lm2"
+             i32       i16        0  narrow    lm_stg_convert_i32_i16       "lm2/convert_impl.lm2"
+             i64       i32        0  narrow    lm_stg_convert_i64_i32       "lm2/convert_impl.lm2"
+             i64       int        0  narrow    lm_stg_convert_i64_int       "lm2/convert_impl.lm2"
+             long      int        0  narrow    lm_stg_convert_long_int      "lm2/convert_impl.lm2"
+             int       i8         0  narrow    lm_stg_convert_int_i8        "lm2/convert_impl.lm2"
+             int       i16        0  narrow    lm_stg_convert_int_i16       "lm2/convert_impl.lm2"
+             int       short      0  narrow    lm_stg_convert_int_short     "lm2/convert_impl.lm2"
+             int       char       0  narrow    lm_stg_convert_int_char      "lm2/convert_impl.lm2"
+             u16       u8         0  narrow    lm_stg_convert_u16_u8        "lm2/convert_impl.lm2"
+             u32       u8         0  narrow    lm_stg_convert_u32_u8        "lm2/convert_impl.lm2"
+             u32       u16        0  narrow    lm_stg_convert_u32_u16       "lm2/convert_impl.lm2"
+             u64       u32        0  narrow    lm_stg_convert_u64_u32       "lm2/convert_impl.lm2"
+             u64       size_t     0  narrow    lm_stg_convert_u64_size_t    "lm2/convert_impl.lm2"
+             size_t    u32        0  narrow    lm_stg_convert_size_t_u32    "lm2/convert_impl.lm2"
+             ulong     unsigned   0  narrow    lm_stg_convert_ulong_unsigned "lm2/convert_impl.lm2"
+
+             int       unsigned   0  sign      lm_stg_convert_int_unsigned  "lm2/convert_impl.lm2"
+             unsigned  int        0  sign      lm_stg_convert_unsigned_int  "lm2/convert_impl.lm2"
+             i32       u32        0  sign      lm_stg_convert_i32_u32       "lm2/convert_impl.lm2"
+             u32       i32        0  sign      lm_stg_convert_u32_i32       "lm2/convert_impl.lm2"
+             i64       u64        0  sign      lm_stg_convert_i64_u64       "lm2/convert_impl.lm2"
+             u64       i64        0  sign      lm_stg_convert_u64_i64       "lm2/convert_impl.lm2"
+             long      ulong      0  sign      lm_stg_convert_long_ulong    "lm2/convert_impl.lm2"
+             ulong     long       0  sign      lm_stg_convert_ulong_long    "lm2/convert_impl.lm2"
+             int       size_t     0  sign      lm_stg_convert_int_size_t    "lm2/convert_impl.lm2"
+             size_t    int        0  sign      lm_stg_convert_size_t_int    "lm2/convert_impl.lm2"
+             isize     usize      0  sign      lm_stg_convert_isize_usize   "lm2/convert_impl.lm2"
+             usize     isize      0  sign      lm_stg_convert_usize_isize   "lm2/convert_impl.lm2"
+
+             int       float      0  float     lm_stg_convert_int_float     "lm2/convert_impl.lm2"
+             int       double     0  float     lm_stg_convert_int_double    "lm2/convert_impl.lm2"
+             long      double     0  float     lm_stg_convert_long_double   "lm2/convert_impl.lm2"
+             u32       double     0  float     lm_stg_convert_u32_double    "lm2/convert_impl.lm2"
+             u64       double     0  float     lm_stg_convert_u64_double    "lm2/convert_impl.lm2"
+             float     double     0  widen     lm_stg_convert_float_double  "lm2/convert_impl.lm2"
+             f32       f64        0  widen     lm_stg_convert_float_double  "lm2/convert_impl.lm2"
+             double    float      0  narrow    lm_stg_convert_double_float  "lm2/convert_impl.lm2"
+             f64       f32        0  narrow    lm_stg_convert_double_float  "lm2/convert_impl.lm2"
+             double    int        0  trunc     lm_stg_convert_double_int    "lm2/convert_impl.lm2"
+             float     int        0  trunc     lm_stg_convert_float_int     "lm2/convert_impl.lm2"
+             double    long       0  trunc     lm_stg_convert_double_long   "lm2/convert_impl.lm2"
+             double    u32        0  trunc     lm_stg_convert_double_u32    "lm2/convert_impl.lm2"
+
+             Boolean   int        0  flag      lm_stg_convert_Boolean_int   "lm2/convert_impl.lm2"
+             Boolean   i8         0  flag      lm_stg_convert_Boolean_i8    "lm2/convert_impl.lm2"
+             bool      int        0  flag      lm_stg_convert_bool_int      "lm2/convert_impl.lm2"
+             categoryFlag int     0  flag      lm_stg_convert_flag_int      "lm2/convert_impl.lm2"
+             int       Boolean    0  flag      lm_stg_convert_int_Boolean   "lm2/convert_impl.lm2"
+             int       bool       0  flag      lm_stg_convert_int_bool      "lm2/convert_impl.lm2"
+             i8        Boolean    0  flag      lm_stg_convert_i8_Boolean    "lm2/convert_impl.lm2"
+
+             DecimalText int      0  text      lm_stg_convert_text_int      "lm2/convert_impl.lm2"
+             DecimalText long     0  text      lm_stg_convert_text_long     "lm2/convert_impl.lm2"
+             DecimalText u32      0  text      lm_stg_convert_text_u32      "lm2/convert_impl.lm2"
+             DecimalText u64      0  text      lm_stg_convert_text_u64      "lm2/convert_impl.lm2"
+             DecimalText double   0  text      lm_stg_convert_text_double   "lm2/convert_impl.lm2"
+             DecimalText Boolean  0  text      lm_stg_convert_text_Boolean  "lm2/convert_impl.lm2"
+             Text      int        0  text      lm_stg_convert_text_int      "lm2/convert_impl.lm2"
+             Text      long       0  text      lm_stg_convert_text_long     "lm2/convert_impl.lm2"
+             Text      double     0  text      lm_stg_convert_text_double   "lm2/convert_impl.lm2"
+             int       Text       0  text      lm_stg_convert_int_text      "lm2/convert_impl.lm2"
+             long      Text       0  text      lm_stg_convert_long_text     "lm2/convert_impl.lm2"
+             u32       Text       0  text      lm_stg_convert_u32_text      "lm2/convert_impl.lm2"
+             double    Text       0  text      lm_stg_convert_double_text   "lm2/convert_impl.lm2"
+             Boolean   Text       0  text      lm_stg_convert_Boolean_text  "lm2/convert_impl.lm2"
+
+             Address   size_t     0  addr      lm_stg_convert_address_size_t "lm2/convert_impl.lm2"
+             size_t    Address    0  addr      lm_stg_convert_size_t_address "lm2/convert_impl.lm2"
+             Address   usize      0  addr      lm_stg_convert_address_size_t "lm2/convert_impl.lm2"
+             Address   int        0  addr      lm_stg_convert_address_int    "lm2/convert_impl.lm2"
+
+             u32       FILE       0  opaque    lm_stg_convert_u32_FILE      "lm2/convert_impl.lm2"
+
+             int       bigint     0  library   lm_stg_convert_int_bigint    "lm2/convert_impl.lm2"
+             long      bigint     0  library   lm_stg_convert_long_bigint   "lm2/convert_impl.lm2"
+             DecimalText bigint   0  library   lm_stg_convert_text_bigint   "lm2/convert_impl.lm2"
+             bigint    int        0  library   lm_stg_convert_bigint_int    "lm2/convert_impl.lm2"
+             double    real       0  library   lm_stg_convert_double_real   "lm2/convert_impl.lm2"
+             DecimalText decimal  0  library   lm_stg_convert_text_decimal  "lm2/convert_impl.lm2"
+             decimal   double     0  library   lm_stg_convert_decimal_double "lm2/convert_impl.lm2"
+
+             void      int        1  none      None                         None
+             void      long       1  none      None                         None
+             void      u32        1  none      None                         None
+             void      Text       1  none      None                         None
+             void      FILE       1  none      None                         None
+             void      Boolean    1  none      None                         None
+             int       void       1  none      None                         None
+             Text      void       1  none      None                         None
+             FILE      void       1  none      None                         None
+             None      int        1  none      None                         None
+end: `primitive.convert`

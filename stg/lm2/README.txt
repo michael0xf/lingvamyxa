@@ -15,9 +15,12 @@ Spec (Lingvamyxa_spec.txt):
     §6.6          C99 / GMP / MPFR / decNumber spellings
     §19.21.3      used-tree algorithm
 
-Live bootstrap (do not replace from here until trans reads convert keys):
+Live bootstrap now loads these tables (trans reads convert=keyed/forbidden
+at primitive leaves of implements; converter insertion on substitution
+edges is still later):
 
-    lm2/primitive.lm2     loaded at trans start; convert column is still None
+    lm2/primitive.lm2     loaded at trans start; convert column keyed/forbidden
+    lm2/convert.lm2       merge-keyed converter rows
     lm2/core.lm2          class kinds for void, int, FILE, …
 
 This directory is a *maximal* profile: as many merge-keyed converters as we

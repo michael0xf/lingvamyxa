@@ -1,0 +1,13 @@
+table:
+    source
+    name: `lm.test.table.row-shape`
+    columns: (class: class) (int: marker) (class: kind)
+    rows:
+             Probe  1  utf8-decimal
+end: `lm.test.table.row-shape`
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

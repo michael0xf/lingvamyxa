@@ -4446,30 +4446,11 @@ fn: lm_trans_implements (
     const: LmTransDescriptor: candidate
     const: LmTransDescriptor: required
     const: LmTransDescriptor: consumer
+    int: status
 
     if: out_result != 0
         out_result[0]: 0
     if: namespace_ = 0 || candidate_name = 0 || required_name = 0 || consumer_name = 0 || out_result = 0
-        return: 1
-
-    candidate_symbol: lm_trans_namespace_find(namespace_, candidate_name)
-    if: candidate_symbol = 0
-        c.fprintf(c.stderr, "trans L2 implements error: unknown candidate descriptor \"%.*s\"\n", (cast: int candidate_name\length), candidate_name\data)
-        return: 1
-    candidate: candidate_symbol\descriptor
-    if: candidate = 0
-        candidate: lm_trans_effective_value_descriptor_from_atom(namespace_, candidate_name)
-    if: candidate = 0
-        c.fprintf(c.stderr, "trans L2 implements error: candidate \"%.*s\" is not a descriptor\n", (cast: int candidate_name\length), candidate_name\data)
-        return: 1
-
-    required_symbol: lm_trans_namespace_find(namespace_, required_name)
-    if: required_symbol = 0
-        c.fprintf(c.stderr, "trans L2 implements error: unknown required descriptor \"%.*s\"\n", (cast: int required_name\length), required_name\data)
-        return: 1
-    required: required_symbol\descriptor
-    if: required = 0
-        c.fprintf(c.stderr, "trans L2 implements error: required name \"%.*s\" is not a descriptor\n", (cast: int required_name\length), required_name\data)
         return: 1
 
     consumer_symbol: lm_trans_namespace_find(namespace_, consumer_name)
@@ -4481,6 +4462,44 @@ fn: lm_trans_implements (
         consumer: lm_trans_effective_value_descriptor_from_atom(namespace_, consumer_name)
     if: consumer = 0
         c.fprintf(c.stderr, "trans L2 implements error: consumer \"%.*s\" is not a descriptor\n", (cast: int consumer_name\length), consumer_name\data)
+        return: 1
+
+    status: lm_trans_primitive_leaf_implements(namespace_, candidate_name, required_name, out_result)
+    if: status = 1
+        return: 1
+    if: status = 0
+        return: 0
+
+    candidate_symbol: lm_trans_namespace_find(namespace_, candidate_name)
+    candidate: 0
+    if: candidate_symbol != 0
+        candidate: candidate_symbol\descriptor
+        if: candidate = 0
+            candidate: lm_trans_effective_value_descriptor_from_atom(namespace_, candidate_name)
+        ---
+    ---
+    required_symbol: lm_trans_namespace_find(namespace_, required_name)
+    required: 0
+    if: required_symbol != 0
+        required: required_symbol\descriptor
+    ---
+
+    if: candidate = 0 && lm_trans_name_has_primitive_description(namespace_, candidate_name) != 0 && required != 0
+        if: required\has_structural_fields = 0 || required\structural_fields = 0 || required\structural_fields\count = 0U
+            out_result[0]: 1
+            return: 0
+        out_result[0]: 0
+        return: 0
+
+    if: required = 0 && lm_trans_name_has_primitive_description(namespace_, required_name) != 0 && candidate != 0
+        out_result[0]: 0
+        return: 0
+
+    if: candidate = 0
+        c.fprintf(c.stderr, "trans L2 implements error: unknown candidate descriptor \"%.*s\"\n", (cast: int candidate_name\length), candidate_name\data)
+        return: 1
+    if: required = 0
+        c.fprintf(c.stderr, "trans L2 implements error: unknown required descriptor \"%.*s\"\n", (cast: int required_name\length), required_name\data)
         return: 1
 
     if: lm_trans_descriptor_implements(candidate, required, consumer, out_result) != 0

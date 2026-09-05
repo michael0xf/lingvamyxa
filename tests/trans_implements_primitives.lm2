@@ -1,0 +1,37 @@
+WordMover:
+    int: cell
+end: WordMover
+
+DescriptionWalker:
+    int: width
+    int: range
+    int: signedness
+end: DescriptionWalker
+
+OpaqueCloser:
+    int: close
+end: OpaqueCloser
+
+File:
+    int: handle
+    int: close
+    int: read
+end: File
+
+external:
+    fn: main () int
+        assert: implements(`int`, `int`, WordMover) = 1
+        assert: implements(`int`, `u32`, WordMover) = 1
+        assert: implements(`u32`, `int`, WordMover) = 1
+        assert: implements(`int`, `long`, WordMover) = 1
+        assert: implements(`int`, `double`, WordMover) = 1
+        assert: implements(Boolean, `int`, WordMover) = 1
+        assert: implements(`u32`, `FILE`, WordMover) = 1
+        assert: implements(`int`, `u32`, DescriptionWalker) = 1
+        assert: implements(`void`, `int`, WordMover) = 0
+        assert: implements(`int`, `void`, WordMover) = 0
+        assert: implements(`u32`, File, OpaqueCloser) = 0
+        assert: implements(File, File, OpaqueCloser) = 1
+        return: 0
+    end: main
+end: external

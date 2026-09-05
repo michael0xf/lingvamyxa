@@ -941,6 +941,18 @@ fn: lm_trans_atom_is_void_primitive (
     const: LmP0Text: name
 ) int
 
+fn: lm_trans_name_has_primitive_description (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_primitive_leaf_implements (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: candidate_name
+    const: LmP0Text: required_name
+    @: int out_result
+) int
+
 fn: lm_trans_admit_implements (
     const: LmTransNamespace: namespace_
     const: LmTransDescriptor: candidate_descriptor
