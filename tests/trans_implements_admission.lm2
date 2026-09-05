@@ -1,0 +1,25 @@
+L2:
+    User:
+        int: equals
+        int: extra
+    end: User
+
+    fn: takeUser (User: u) int
+        return: u\equals
+    end: takeUser
+
+    fn: passUser (User: u) User
+        return: u
+    end: passUser
+
+    external:
+        fn: main () int
+            User: first
+            User: second
+            first\equals: 3
+            second: first
+            second: passUser(first)
+            return: takeUser(second) != 3
+        end: main
+    end: external
+end: L2

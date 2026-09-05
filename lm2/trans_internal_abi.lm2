@@ -936,6 +936,19 @@ fn: lm_trans_effective_value_descriptor_from_atom (
     const: LmP0Text: name
 ) const: LmTransDescriptor
 
+fn: lm_trans_atom_is_void_primitive (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_admit_implements (
+    const: LmTransNamespace: namespace_
+    const: LmTransDescriptor: candidate_descriptor
+    const: LmTransDescriptor: required_descriptor
+    const: LmP0Text: candidate_name
+    const: @(char context)
+) int
+
 fn: lm_trans_guard_direct_structure_value_layout (
     const: LmTransNamespace: namespace_
     const: LmP0Text: candidate_name

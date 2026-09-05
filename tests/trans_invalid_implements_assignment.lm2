@@ -1,0 +1,18 @@
+L2:
+    Plain:
+        int: toString
+    end: Plain
+
+    Equatable:
+        int: equals
+    end: Equatable
+
+    external:
+        fn: main () int
+            Equatable: e
+            Plain: p
+            e: p
+            return: 0
+        end: main
+    end: external
+end: L2
