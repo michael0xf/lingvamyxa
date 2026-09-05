@@ -1,0 +1,37 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+EmptyS:
+end: EmptyS
+
+fn: sameEmpty (EmptyS: x) EmptyS
+    return: x
+end: sameEmpty
+
+external:
+    fn: main () int
+        EmptyS: a
+        EmptyS: b
+        EmptyS: r (sameEmpty(a))
+
+        if: a = 0 || b = 0
+            return: 1
+        if: a = b
+            return: 2
+        if: r != a
+            return: 3
+        if: implements(a EmptyS EmptyS) != 1
+            return: 4
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), a) = 0
+            return: 5
+        if: c.lm_own_arena_allocation_descriptor(c.lm_lmx_message_thread, lm_message_thread_owner(c.lm_lmx_message_thread), b) = 0
+            return: 6
+        return: 0
+    end: main
+end: external

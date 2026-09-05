@@ -13,6 +13,7 @@ int: lm_trans_emitted_message_thread_runtime_prelude
 int: lm_trans_emitted_message_thread_main_helper
 int: lm_trans_emitted_message_thread_assert_helper
 int: lm_trans_emitted_c_calling_convention_prelude
+int: lm_trans_emitted_structure_graph_header
 int: lm_trans_emitted_throw_channel
 int: lm_trans_throwing_call_allowed
 unsigned: lm_trans_next_catch_id

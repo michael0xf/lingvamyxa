@@ -3936,8 +3936,18 @@ fn: lm_trans_emit_declaration_with_qualifier (
         return: 1
 
     if: is_structural_default
-        if: lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_emit_identifier(file, name_node\as\atom) != 0 || lm_trans_put(file, "))") != 0
-            return: 1
+        if: lm_trans_named_structure_uses_graph_header(namespace_, frame\head)
+            if: lm_trans_emit_structure_graph_header(lm_trans_prelude_file(file)) != 0
+                return: 1
+            if: lm_trans_put(file, " = ") != 0
+                return: 1
+            if: lm_trans_emit_graph_structure_new(file, frame\head, "lm_lmx_message_thread", "lm_message_thread_owner(lm_lmx_message_thread)") != 0
+                return: 1
+            ---
+        else:
+            if: lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_emit_identifier(file, name_node\as\atom) != 0 || lm_trans_put(file, "))") != 0
+                return: 1
+            ---
         ---
     else:
         if: name_field\next != 0
@@ -3962,7 +3972,7 @@ fn: lm_trans_emit_declaration_with_qualifier (
     if: lm_trans_put(file, ";\n") != 0
         return: 1
 
-    if: is_structural_default
+    if: is_structural_default && lm_trans_named_structure_uses_graph_header(namespace_, frame\head) = 0
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_emit_identifier(file, name_node\as\atom) != 0 || lm_trans_put(file, " == 0) {\n") != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "abort();\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
             return: 1
     ---
@@ -6462,6 +6472,15 @@ fn: lm_trans_emit_named_structure_construction (
     if: descriptor = 0 || descriptor\has_structural_fields = 0
         return: 1
 
+    if: lm_trans_descriptor_payload_is_empty(descriptor)
+        if: lm_trans_emit_structure_graph_header(lm_trans_prelude_file(file)) != 0
+            return: 1
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "LmLmxStructure *") != 0 || lm_trans_emit_identifier(file, instance_name) != 0 || lm_trans_put(file, " = ") != 0
+            return: 1
+        if: lm_trans_emit_graph_structure_new(file, frame\head, "lm_lmx_message_thread", "lm_message_thread_owner(lm_lmx_message_thread)") != 0 || lm_trans_put(file, ";\n") != 0
+            return: 1
+        return: lm_trans_namespace_declare_storage_binding(namespace_, instance_name, frame\head)
+
     if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
         return: 1
     if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_emit_identifier(file, instance_name) != 0 || lm_trans_put(file, " = (") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(lm_lmx_message_thread, lm_message_thread_owner(lm_lmx_message_thread), sizeof(*") != 0 || lm_trans_emit_identifier(file, instance_name) != 0 || lm_trans_put(file, "));\n") != 0
@@ -6671,6 +6690,8 @@ fn: lm_trans_declare_named_structure_layout_mode (
 
     if: reject_hosted_redeclaration && lm_trans_hosted_descriptor_redeclaration_is_unsupported(namespace_, frame\head, descriptor) != 0
         return: 1
+    if: lm_trans_descriptor_payload_is_empty(descriptor) && lm_trans_descriptor_set_class_relation(descriptor, "lm.trans.c.type", "LmLmxStructure") != 0
+        return: 1
     if: lm_trans_bind_named_structure_descriptor(namespace_, frame\head, @ descriptor) != 0
         return: 1
 return: 0
@@ -6686,6 +6707,79 @@ fn: lm_trans_declare_hosted_named_structure_layout (
     const: LmP0Frame: frame
 ) int
 return: lm_trans_declare_named_structure_layout_mode(namespace_, frame, 1)
+
+fn: lm_trans_descriptor_payload_is_empty (
+    const: LmTransDescriptor: descriptor
+) int
+    if: descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0
+        return: 0
+return: descriptor\structural_fields\count = 0U
+
+fn: lm_trans_named_structure_uses_graph_header (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+return: lm_trans_descriptor_payload_is_empty(lm_trans_namespace_descriptor(namespace_, name))
+
+fn: lm_trans_emit_structure_graph_header (
+    FILE: file
+) int
+    if: file = 0
+        return: 1
+    if: lm_trans_emit_message_thread_runtime_prelude(file) != 0
+        return: 1
+    if: lm_trans_emitted_structure_graph_header
+        return: 0
+
+    lm_trans_emitted_structure_graph_header: 1
+    if: lm_trans_put(file, "typedef struct LmLmxStructure LmLmxStructure;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "struct LmLmxStructure {\n    LmLmxStructure *descriptor;\n};\n") != 0
+        return: 1
+    if: lm_trans_put(file, "static LmLmxStructure lm_lmx_structure_descriptor;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "static LmLmxStructure *lm_lmx_structure_new_in(struct LmMessageThread *thread, struct LmOwnArena *arena, LmLmxStructure *descriptor)\n{\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    LmLmxStructure *chunk;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (lm_lmx_structure_descriptor.descriptor == 0)\n        lm_lmx_structure_descriptor.descriptor = &lm_lmx_structure_descriptor;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (descriptor != 0 && descriptor->descriptor == 0)\n        descriptor->descriptor = &lm_lmx_structure_descriptor;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    chunk = (LmLmxStructure *)lm_own_arena_new_zero(thread, arena, sizeof(LmLmxStructure));\n") != 0
+        return: 1
+    if: lm_trans_put(file, "    if (chunk == 0)\n        abort();\n") != 0
+        return: 1
+return: lm_trans_put(file, "    chunk->descriptor = descriptor;\n    return chunk;\n}\n")
+
+fn: lm_trans_emit_graph_structure_new (
+    FILE: file
+    const: LmP0Text: descriptor_name
+    const: @: char thread_expr
+    const: @: char arena_expr
+) int
+    if: file = 0 || descriptor_name = 0 || thread_expr = 0 || arena_expr = 0
+        return: 1
+    if: lm_trans_put(file, "lm_lmx_structure_new_in(") != 0 || lm_trans_put(file, thread_expr) != 0 || lm_trans_put(file, ", ") != 0 || lm_trans_put(file, arena_expr) != 0
+        return: 1
+    if: lm_trans_put(file, ", &lm_lmx_desc_") != 0 || lm_trans_emit_identifier(file, descriptor_name) != 0
+        return: 1
+return: lm_trans_put(file, ")")
+
+fn: lm_trans_emit_named_structure_graph_descriptor (
+    FILE: file
+    const: LmP0Frame: frame
+    unsigned: indent
+) int
+    if: file = 0 || frame = 0 || frame\head = 0
+        return: 1
+    if: lm_trans_emit_structure_graph_header(lm_trans_prelude_file(file)) != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0
+        return: 1
+    if: lm_trans_put(file, "static LmLmxStructure lm_lmx_desc_") != 0 || lm_trans_emit_identifier(file, frame\head) != 0
+        return: 1
+return: lm_trans_put(file, ";\n")
 
 fn: lm_trans_emit_named_structure_field_declaration (
     FILE: file
@@ -6751,6 +6845,8 @@ fn: lm_trans_emit_named_structure_typedef (
     descriptor: lm_trans_namespace_descriptor(namespace_, frame\head)
     if: descriptor = 0 || descriptor\has_structural_fields = 0
         return: 1
+    if: lm_trans_descriptor_payload_is_empty(descriptor)
+        return: lm_trans_emit_named_structure_graph_descriptor(file, frame, indent)
 
     if: lm_trans_emit_indent(file, indent) != 0
         return: 1
@@ -7748,28 +7844,40 @@ fn: lm_trans_module_init_emit_named_structure_initializer (
         lm_trans_text_ref_destroy(@ value_name)
         lm_own_delete(value_name_storage, 0)
 
-    if: lm_trans_put(file, "    ") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_emit_identifier(file, value_name) != 0 || lm_trans_put(file, " = ") != 0
-        return: 1
-    if: lm_trans_frame_looks_named_structure_construction(frame, namespace_) || initializer = 0
-        if: lm_trans_put(file, "(") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(") != 0 || lm_trans_put(file, thread_name) != 0 || lm_trans_put(file, ", ") != 0 || lm_trans_put(file, arena_name) != 0 || lm_trans_put(file, ", sizeof(*") != 0 || lm_trans_emit_identifier(file, value_name) != 0 || lm_trans_put(file, "));\n") != 0
+    if: lm_trans_named_structure_uses_graph_header(namespace_, frame\head)
+        if: lm_trans_emit_structure_graph_header(lm_trans_prelude_file(file)) != 0
+            return: 1
+        if: lm_trans_put(file, "    LmLmxStructure *") != 0 || lm_trans_emit_identifier(file, value_name) != 0 || lm_trans_put(file, " = ") != 0
+            return: 1
+        if: lm_trans_emit_graph_structure_new(file, frame\head, thread_name, arena_name) != 0 || lm_trans_put(file, ";\n") != 0
             return: 1
         if: lm_trans_put(file, "    if (") != 0 || lm_trans_emit_identifier(file, value_name) != 0 || lm_trans_put(file, " == 0) return 1;\n") != 0
             return: 1
-        if: lm_trans_frame_looks_named_structure_construction(frame, namespace_)
-            descriptor: lm_trans_namespace_descriptor(namespace_, frame\head)
-            if: descriptor = 0 || lm_trans_emit_named_structure_construction_initializer(file, frame, value_name, descriptor, 1U, namespace_) != 0
-                return: 1
-            ---
         ---
     else:
-        expected_type: lm_trans_expr_callable_type_new()
-        if: expected_type = 0
+        if: lm_trans_put(file, "    ") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *") != 0 || lm_trans_emit_identifier(file, value_name) != 0 || lm_trans_put(file, " = ") != 0
             return: 1
-        expected_type\class_name[0]: frame\head[0]
-        if: lm_trans_emit_expr_range_with_expected_type(file, initializer, 0, namespace_, expected_type) != 0 || lm_trans_put(file, ";\n") != 0
+        if: lm_trans_frame_looks_named_structure_construction(frame, namespace_) || initializer = 0
+            if: lm_trans_put(file, "(") != 0 || lm_trans_emit_identifier(file, frame\head) != 0 || lm_trans_put(file, " *)lm_own_arena_new_zero(") != 0 || lm_trans_put(file, thread_name) != 0 || lm_trans_put(file, ", ") != 0 || lm_trans_put(file, arena_name) != 0 || lm_trans_put(file, ", sizeof(*") != 0 || lm_trans_emit_identifier(file, value_name) != 0 || lm_trans_put(file, "));\n") != 0
+                return: 1
+            if: lm_trans_put(file, "    if (") != 0 || lm_trans_emit_identifier(file, value_name) != 0 || lm_trans_put(file, " == 0) return 1;\n") != 0
+                return: 1
+            if: lm_trans_frame_looks_named_structure_construction(frame, namespace_)
+                descriptor: lm_trans_namespace_descriptor(namespace_, frame\head)
+                if: descriptor = 0 || lm_trans_emit_named_structure_construction_initializer(file, frame, value_name, descriptor, 1U, namespace_) != 0
+                    return: 1
+                ---
+            ---
+        else:
+            expected_type: lm_trans_expr_callable_type_new()
+            if: expected_type = 0
+                return: 1
+            expected_type\class_name[0]: frame\head[0]
+            if: lm_trans_emit_expr_range_with_expected_type(file, initializer, 0, namespace_, expected_type) != 0 || lm_trans_put(file, ";\n") != 0
+                lm_trans_expr_callable_type_delete(expected_type)
+                return: 1
             lm_trans_expr_callable_type_delete(expected_type)
-            return: 1
-        lm_trans_expr_callable_type_delete(expected_type)
+        ---
     ---
 
     if: lm_trans_put(file, "    ") != 0 || lm_trans_emit_identifier(file, slot_name) != 0 || lm_trans_put(file, " = ") != 0 || lm_trans_emit_identifier(file, value_name) != 0 || lm_trans_put(file, ";\n    return 0;\n}\n") != 0

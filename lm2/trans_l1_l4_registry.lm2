@@ -4351,6 +4351,7 @@ fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_pat
     lm_trans_emitted_message_thread_main_helper: 0
     lm_trans_emitted_message_thread_assert_helper: 0
     lm_trans_emitted_c_calling_convention_prelude: 0
+    lm_trans_emitted_structure_graph_header: 0
     lm_trans_l2_table_materialization_suppression_depth: 0
     lm_trans_l2_conditional_import_depth: 0
     lm_trans_l2_executable_statement_depth: 0

@@ -560,6 +560,26 @@ fn: lm_trans_declare_named_structure_layout (
     const: LmP0Frame: frame
 ) int
 
+fn: lm_trans_descriptor_payload_is_empty (
+    const: LmTransDescriptor: descriptor
+) int
+
+fn: lm_trans_named_structure_uses_graph_header (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_emit_structure_graph_header (
+    FILE: file
+) int
+
+fn: lm_trans_emit_graph_structure_new (
+    FILE: file
+    const: LmP0Text: descriptor_name
+    const: @: char thread_expr
+    const: @: char arena_expr
+) int
+
 fn: lm_trans_emit_named_structure_typedef (
     FILE: file
     const: LmP0Frame: frame
