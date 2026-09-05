@@ -99,8 +99,8 @@ This is the first major proof that the table-driven semantic core is real.
 
 Implementation rule:
 
-    Source-semantic compatibility is `implements(A, B, C)` as specified in
-    Lingvamyxa_spec.txt sections 2.1–2.4 and 19.21.3 (used tree of consumer C,
+    Source-semantic compatibility is `implements(varA varB Consumer)` as specified in
+    Lingvamyxa_spec.txt sections 2.1–2.4 and 19.21.3 (used tree of Consumer,
     merge-keyed converters at primitive leaves). Registry tables author
     descriptors and converter keys as ordinary LMX Structures; they are not a
     second type system. SQL-like queries, C arrays, row logs, hash tables or
