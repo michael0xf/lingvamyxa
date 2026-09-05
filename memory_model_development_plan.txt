@@ -1,0 +1,481 @@
+Memory Model Development Plan
+План доработки модели памяти
+=============================
+
+Status / Статус
+---------------
+
+EN: Working note against Lingvamyxa_spec.txt §2, §6.5, §8.8, §11, §19.28–19.29
+and the current tree (`lm2/own.lm2`, `lm2/own_abi.lm2`, trans lowering,
+`lm2/mix`). Not a spec change.
+
+RU: Рабочая заметка по спеке §2, §6.5, §8.8, §11, §19.28–19.29 и текущему
+коду (`lm2/own.lm2`, `lm2/own_abi.lm2`, lowering trans, `lm2/mix`).
+Это не правка спецификации.
+
+
+1. Spec contract / Контракт спецификации
+----------------------------------------
+
+EN: Ordinary non-primitive values are only StructureReference and
+ArrayReference. Each referent is materialized once in an arena. There is no
+source-level stack / heap / static object category. Local bindings hold
+references. Binding, argument passing, field update and `return` never copy
+the aggregate. `return` publishes the exact existing reference: no allocate,
+clone, promote or identity change on the return path. Before an arena that
+holds a published reference is cut, the runtime retains, detaches or reparents
+that existing region.
+
+Current arena is the default construction target. Another arena is used only
+when a namespace-visible operation accepts it. Module/top-level values use a
+module or root arena. Lexical scope is not permission to free.
+
+Ownership edges: OWNED, BORROWED, LAZY_OWNED, EXTERNAL, TRANSFERRED (conceptual
+during whole-branch move). Borrow does not extend source lifetime
+(no-escaping-borrow). Generic source operators `copy` / `move` / `borrow` /
+`own` are specified but not implemented.
+
+A Message Thread owns an isolated owner/arena graph. Inter-thread payload
+crosses only by copy, serialization or whole-branch transfer. Collection is
+local owner-tree cutting, not a global GC. L2 may expose raw addresses,
+unchecked index, allocators, atomics. L3 excludes those machine operations
+but is not a sandbox.
+
+RU: Обычные не-примитивы — только StructureReference и ArrayReference.
+Референт один раз материализуется в арене. Категорий stack/heap/static у
+исходника нет. Локальные слоты хранят ссылки. Привязка, аргумент, поле и
+`return` не копируют агрегат. `return` публикует ту же ссылку: без выделения,
+клона, promote и смены адреса. Перед срезом арены со опубликованной ссылкой
+рантайм retain/detach/reparent уже существующий регион.
+
+Текущая арена — цель обычной конструкции. Другая арена — только если операция
+явно принимает её. Модульные значения — module/root арена. Лексический конец
+блока сам по себе не освобождает объекты.
+
+Рёбра: OWNED, BORROWED, LAZY_OWNED, EXTERNAL, TRANSFERRED. Заимствование не
+продлевает жизнь источника. Операторы `copy` / `move` / `borrow` / `own` в
+спеке есть, в bootstrap как исходные приёмники — нет.
+
+Message Thread владеет изолированным графом арен. Через границу потока —
+copy, сериализация или передача целой ветки. Сбор — локальная обрезка дерева
+владельцев, не глобальный GC. L2 может показывать сырые адреса и аллокаторы.
+L3 их не показывает, но это не песочница.
+
+
+2. Already in the tree / Уже есть в проекте
+-------------------------------------------
+
+EN:
+
+  Runtime (`libown` / `LmOwnArena` / `LmMessageThread`):
+    root arena per actor; generated programs attach an unpooled root and
+    drive its turn loop; pool actors share the same arena/collection ABI;
+    `lm_own_arena_new_zero`, array alloc, allocation descriptors, lazy edges,
+    freeze, absorb; `lm_own_tree_cut` is called at every end-turn;
+    destruction of the actor releases the whole root arena;
+    edge kinds BORROWED / OWNED / LAZY_OWNED / EXTERNAL exist in the ABI;
+    pthread / Win32 / single host providers.
+
+  Trans lowering:
+    local and direct module named/anonymous Structures, `fm` results, admitted
+    Arrays and unmarked runtime Tables in managed Message Thread context go
+    through `lm_own_arena_new_zero` in the root owner;
+    module-level value sites use source-ordered helpers and private static
+    *reference slots* (not static aggregates);
+    descriptor/`merge:` declarations allocate no objects;
+    `return` of a Structure/Array is a pointer forward in the hosted C profile.
+
+  Spec itself already records this as a *coarse* bootstrap: one root arena
+  that outlives every ordinary function return; tree-cut currently promotes
+  lazy edges and does not reclaim general unreachable root objects.
+
+RU:
+
+  Рантайм (`libown` / `LmOwnArena` / `LmMessageThread`):
+    корневая арена на актора; generated-программы цепляют unpooled root и
+    крутят turn loop; пул акторов — тот же ABI арен/сбора;
+    `lm_own_arena_new_zero`, массивы, дескрипторы аллокаций, lazy-рёбра,
+    freeze, absorb; `lm_own_tree_cut` на каждом end-turn;
+    уничтожение актора снимает всю корневую арену;
+    виды рёбер BORROWED / OWNED / LAZY_OWNED / EXTERNAL в ABI;
+    провайдеры pthread / Win32 / single.
+
+  Lowering trans:
+    локальные и модульные именованные/анонимные Structure, результаты `fm`,
+    допущенные Array и runtime Table в managed-контексте идут через
+    `lm_own_arena_new_zero` в root owner;
+    модульные value-сайты — source-ordered helper и приватный статический
+    слот *ссылки* (не статический агрегат);
+    объявления дескрипторов/`merge:` объектов не выделяют;
+    `return` Structure/Array в hosted C — проброс указателя.
+
+  Спека уже называет это грубым bootstrap: одна root-арена переживает любой
+  обычный return; tree-cut сейчас только promote lazy-рёбер и не собирает
+  обычные недостижимые объекты root-арены.
+
+
+3. Gaps vs spec / Дыры относительно спеки
+-----------------------------------------
+
+EN (priority order):
+
+  G1. Unscoped allocation still in use.
+      `lm_own_new_zero` / `c.free` remain for bootstrap helpers and for Mix
+      pages (`lm2/mix/Mix.lm2`: page + `items` are unscoped). Spec: ordinary
+      Structure/Array materialization belongs to an owner region; unscoped
+      helpers are implementation debt.
+
+  G2. void confused with empty Structure.
+      See `bug0_void.txt`. `void: cell` trans-accepts and emits illegal
+      `void cell;`. Unit (`(): empty`) is an arena object with
+      `lm_lmx_empty_structure`. Destructor rebind `symbol: object` depends on
+      the void* hole. Until void is not a declarable unit, ownership of empty
+      Structures and untyped callbacks stay entangled.
+
+  G3. One coarse root arena; no turn / handler / frame / branch arena.
+      Spec next step (§19.29.14.9): a disposable turn/handler owner under the
+      Message Thread root. Surviving references retain/detach/reparent
+      *before* that owner is destroyed. `return` must not copy to escape.
+      Today everything lives until thread teardown.
+
+  G4. `lm_own_tree_cut` does not reclaim.
+      End-turn collection is a safe point that promotes lazy-owned edges.
+      It does not walk owner roots, cut unreachable branches, or release
+      frame/handler/attempt regions. Need real owner-graph metadata, not
+      only an allocation list on the root arena.
+
+  G5. Source `copy` / `move` / `borrow` / `own` missing.
+      Runtime has lazy-edge / absorb / copy-bytes helpers. They are not
+      namespace-visible receivers. Without them, no-escaping-borrow cannot
+      be repaired in source (`own: saved m\payload`). Tables of ownership
+      policy exist only as documentation.
+
+  G6. No-escaping-borrow is not diagnosed.
+      Plain `saved: m\payload` records another reference and does not copy.
+      Trans does not yet reject retaining a message-frame / view / slice
+      beyond the source owner. Need borrow-edge tracking and diagnostics
+      (or a required `own`/`copy` before escape).
+
+  G7. Message-boundary transfer incomplete.
+      `send:` copies already-serialized LMX bytes into FIFO storage.
+      Structure/Array copy, codec serialization of live referents, and
+      whole-branch detach/attach (objects keep identity, sender handles
+      die) are not source operations. `reply` / `await` / `schedule` are
+      not implemented. Nested Message Thread call cleanup stack is missing.
+
+  G8. Array views vs copies.
+      Spec §6.5: slice/partial index/reshape are borrowed views; they must
+      not outlive backing arena; `return` of a view must not implicit-copy.
+      Hosted arrays are mostly owned headers+backing. View metadata, stride,
+      and escape checks are unfinished. L3 checked index vs L2 unchecked
+      raw-address index is not consistently gated (`receiver.l3.exclude`
+      still incomplete per §1.4).
+
+  G9. L2 machine surface incomplete.
+      Exact semantics of `@`, prefix `\`, field-follow, raw store, address
+      arithmetic and unchecked index are still listed as profile work (§18.2).
+      No generic `mem:` / `freemem:` / shared-block / low-level thread
+      profile. Mix hop addresses (`ℕ₀` path) are a *placement* tree, not this
+      L2 cell-address machine; they must not be conflated.
+
+  G10. Control-exit owners.
+       `return` / `throw` / `catch` / `assert` / `stop` lower, but retryable
+       attempt arenas, labelled break/continue, `redo`, and a frame/cleanup
+       stack for nested Message Thread calls are not implemented. Memory
+       pressure and owner-replacement cuts are conceptual.
+
+  G11. Interning / immutable store.
+       Optional optimization (§19.29.9). Not required for first conformance,
+       but Mix tags/cursors and parser trees are natural later clients.
+       Must not change `return` identity.
+
+  G12. Precise-owner ABI (§19.29.12.4).
+       `LmOwnerArena` / `LmOwnerBranch` / type-ops (`copy_to`,
+       `trace_owner_edges`, `release_external_fields`) is design, not current
+       C ABI. Current ABI stays `LmOwnArena`. Do not pretend the old names
+       `LmArena`/`LmBranch` are live.
+
+RU (тот же порядок):
+
+  G1. Бесхозные аллокации.
+      `lm_own_new_zero` / `c.free` ещё в bootstrap-хелперах и в Mix
+      (`lm2/mix/Mix.lm2`: страница и `items`). По спеке обычная материализация
+      Structure/Array — в регион владельца.
+
+  G2. void путают с пустой Structure.
+      `bug0_void.txt`. `void: cell` проходит trans и даёт нелегальный
+      `void cell;`. Unit (`(): empty`) — объект арены. `symbol: object` живёт
+      на дыре void*. Пока void — «пустой юнит», владение пустыми Structure и
+      нетипизированные callback склеены.
+
+  G3. Одна грубая root-арена; нет turn/handler/frame/branch.
+      Следующий шаг спеки: disposable owner хода/обработчика под корнем
+      Message Thread. Выживающие ссылки retain/detach/reparent *до* уничтожения
+      этого owner. `return` не копирует «чтобы спасти». Сейчас всё живёт до
+      teardown потока.
+
+  G4. `lm_own_tree_cut` не собирает.
+      End-turn — safe point с promote lazy-рёбер. Нет обхода корней, среза
+      недостижимых веток, освобождения frame/handler/attempt. Нужны метаданные
+      графа владельцев, не только список аллокаций root-арены.
+
+  G5. Нет исходных `copy` / `move` / `borrow` / `own`.
+      Хелперы lazy-edge / absorb / copy-bytes — не приёмники пространства
+      имён. Без них no-escaping-borrow нельзя починить в исходнике
+      (`own: saved m\payload`).
+
+  G6. Утечку borrow не диагностируют.
+      `saved: m\payload` просто ещё одна ссылка. Trans не отвергает удержание
+      кадра сообщения / view / slice дольше источника.
+
+  G7. Граница Message Thread недоделана.
+      `send:` копирует уже сериализованные байты LMX. Нет copy живого
+      Structure/Array, кодека референта и detach/attach целой ветки.
+      Нет `reply` / `await` / `schedule` и cleanup-стека вложенных вызовов.
+
+  G8. View против copy у Array.
+      Срез/частичный индекс — заимствованный view; `return` view не делает
+      скрытую копию. Hosted-массивы в основном owned header+backing.
+      L3 checked vs L2 unchecked индекс не закрыт таблицей `receiver.l3.exclude`.
+
+  G9. Машинная поверхность L2.
+      Точная семантика `@`, prefix `\`, field-follow, raw store, адресной
+      арифметики и unchecked index — ещё работа профиля. Нет generic
+      `mem:` / `freemem:` / shared-block. Адреса Mix (`путь ℕ₀`) — дерево
+      размещения, не эта машинная модель ячейки.
+
+  G10. Owner на выходе управления.
+      `return` / `throw` / `catch` / `assert` / `stop` есть; нет attempt-арен
+      `retryable`, labelled break/continue, `redo`, frame/cleanup стека.
+      Давление памяти и замена owner — концепт.
+
+  G11. Intern / immutable store — позже, не блокер первой соответственности.
+
+  G12. Precise-owner ABI (`LmOwnerArena` / `LmOwnerBranch`) — дизайн, не
+      текущий C ABI. Живой ABI — `LmOwnArena`.
+
+
+4. Work to finish / Что допилить
+--------------------------------
+
+Phase A — hosted conformance (do first, no new source operators)
+Фаза A — соответствие bootstrap (сначала, без новых приёмников)
+
+  EN:
+    1. Move remaining ordinary Structure/Array paths off `lm_own_new_zero`
+       onto `lm_own_arena_new_zero(lm_message_thread_owner(...))`, including
+       Mix pages and item blocks. Destroy Mix via arena lifetime or an
+       explicit owner edge, not `c.free` of unscoped blocks.
+    2. Fix void vs empty Structure (`bug0_void.txt`) so unit remains an
+       arena object and `void` is not a declarable cell. Then replace
+       `symbol: object` destructor rebinds with an explicit typed cast that
+       actually emits `T *`, or a small `lm_own_from_untyped` helper.
+    3. Inventory leftover static-backed / unscoped paths (partial-callable
+       binders, trans registry internals that are *not* the module-value
+       slots). Keep parser tree arenas as explicit owner regions (already
+       closer to the model).
+    4. Tests: empty Structure identity across `return`; two `():` sites are
+       distinct; module alias is exact-reference; Mix page lives in the
+       current Message Thread owner; `void: x` is a trans error.
+
+  RU:
+    1. Обычные Structure/Array — только `lm_own_arena_new_zero` от owner
+       потока, включая страницы Mix и `items`. Уничтожение Mix — временем
+       арены или явным ребром, не `c.free` бесхозного блока.
+    2. Развести void и пустую Structure (`bug0_void.txt`). Затем `symbol:
+       object` заменить на приведение, которое реально даёт `T *`, или на
+       хелпер `lm_own_from_untyped`.
+    3. Инвентаризация оставшихся static/unscoped путей (partial-callable и
+       т.п.). Арены дерева парсера оставить явными регионами owner.
+    4. Тесты: тождество пустой Structure через `return`; два `():` различны;
+       модульный alias — та же ссылка; страница Mix в owner текущего
+       Message Thread; `void: x` — ошибка trans.
+
+Phase B — borrow, exact return, diagnostics
+Фаза B — borrow, точный return, диагностика
+
+  EN:
+    1. Record BORROWED vs OWNED on generated bindings that come from message
+       frames, array views and external handles.
+    2. Diagnose escape of a borrowed reference into a longer-lived slot
+       (module, thread root, `saved` across handler end) unless an explicit
+       `own`/`copy` (Phase C) already ran.
+    3. Keep `return` allocation-free; add tests that a locally constructed
+       Structure address is unchanged after return (already the coarse-root
+       behavior) and that returning a dying-frame *borrow* is rejected or
+       requires a surviving owner — never a hidden copy.
+    4. Enforce L3 exclusion of raw address/load/unchecked index/`c.struct`
+       projections; admit `predef` in L3 as §1.4 asks.
+
+  RU:
+    1. Помечать BORROWED vs OWNED у привязок из кадра сообщения, array view
+       и внешних handle.
+    2. Диагностировать утечку borrow в более долгий слот, пока не сделан
+       явный `own`/`copy`.
+    3. `return` без аллокации; тесты: адрес локально построенной Structure
+       не меняется; return умирающего borrow — отказ или живой owner, никогда
+       скрытая копия.
+    4. L3 не видит сырой адрес/load/unchecked index/`c.struct`; `predef` в
+       L3 допустить (§1.4).
+
+Phase C — source ownership receivers
+Фаза C — исходные приёмники владения
+
+  EN:
+    Register `copy:`, `move:`, `borrow:`, `own:` as ordinary L2/L3 receivers
+    with namespace-visible descriptors (target arena, edge, effects, failure).
+    Lower `own`/`copy` to copy_to or lazy-owned edge; `move` to absorb /
+    reparent / transfer; `borrow` to a view that does not extend lifetime.
+    Do not use these as hidden `return` lowering. Policy Tables remain data
+    until a bound operation reads them.
+
+  RU:
+    Зарегистрировать `copy:`, `move:`, `borrow:`, `own:` как обычные
+    приёмники L2/L3 с видимыми дескрипторами. `own`/`copy` → copy_to или
+    lazy-owned; `move` → absorb/reparent/transfer; `borrow` → view без
+    продления жизни. Не подсовывать их под `return`. Таблицы политики —
+    данные, пока их не съест явная операция.
+
+Phase D — precise local collection
+Фаза D — точный локальный сбор
+
+  EN:
+    1. Introduce a turn/handler owner under the thread root (spec's "next
+       precise reclamation step"). Allocate turn-local values there.
+    2. On `return`/`throw`/handler end: publish surviving refs, then
+       retain/detach/reparent their regions, then destroy the non-surviving
+       turn owner as one region. No copy on that path. No allocation on
+       the return path if out of memory.
+    3. Upgrade `lm_own_tree_cut` to walk live roots, promote lazy edges that
+       the contract requires, pin sources if needed, mark abandoned regions,
+       release them according to the profile (immediate, batch-at-handler,
+       or still retain-until-thread-death as a valid *coarser* profile).
+    4. Later: frame arenas, retry-attempt arenas, detachable document/Mix
+       branch arenas (a Mix bunch cut is a natural detachable branch).
+    5. Keep collection Message-Thread-local. Never stop-the-world.
+
+  RU:
+    1. Owner хода/обработчика под корнем потока. Turn-local значения — туда.
+    2. На `return`/`throw`/конце handler: опубликовать выжившие ссылки,
+       retain/detach/reparent их регионы, уничтожить невыживший turn owner
+       одним куском. Без копии и без аллокации на пути return при OOM.
+    3. `lm_own_tree_cut`: обход живых корней, promote lazy по контракту,
+       pin источников, пометка брошенных регионов, освобождение по профилю
+       (сразу / пакетом на конце handler / до смерти потока — грубее, но
+       законно).
+    4. Потом: frame-арены, attempt-арены retry, отсоединяемые ветки
+       документа/Mix (cut пучка Mix — естественная detachable branch).
+    5. Сбор только внутри Message Thread.
+
+Phase E — message boundary and Mix
+Фаза E — граница сообщений и Mix
+
+  EN:
+    Payload crossing threads: implement copy of a Structure/Array into the
+    receiver arena; serialization through an explicit codec; whole-branch
+    transfer (detach sender region, attach receiver, invalidate sender
+    handles). Do not overload `send:`'s current LMX-bytes argument list.
+    Mix pages/cursors/tags become ordinary arena referents; next/prev and
+    cutAfter are topology, not a second allocator. A Mix bunch isolated by
+    cut is a candidate detachable branch for transfer. Locks stay
+    `synchronized` on the page monitor (already in `lm2/mix`).
+
+  RU:
+    Через границу потоков: copy Structure/Array в арену приёмника;
+    сериализация явным кодеком; transfer целой ветки (detach у отправителя,
+    attach у приёмника, инвалидация handle отправителя). Не расширять
+    двусмысленно текущий `send:` с байтами LMX. Страницы/курсоры/тэги Mix —
+    обычные референты арены; next/prev и cutAfter — топология, не второй
+    аллокатор. Пучок после cut — кандидат detachable branch. Локи —
+    `synchronized` на мониторе страницы (уже в `lm2/mix`).
+
+Phase F — arrays, L2 machine, later control
+Фаза F — массивы, машина L2, поздний контроль
+
+  EN:
+    Array views with shape/stride; checked L3 index throwing into `catch`;
+    L2 unchecked index only on raw typed addresses. Finish `@` / raw load /
+    address-depth declaration against one explicit L2 memory profile
+    (cell size, arithmetic). Shared read-only / mmap resources as EXTERNAL
+    edges with typed handles — not as copied message payloads. Then
+    `retryable` attempt arenas, labelled break/continue, nested-call cleanup
+    stack, optional intern table. Precise `LmOwnerArena` ABI only after the
+    current `LmOwnArena` graph actually cuts and reclaims.
+
+  RU:
+    Array view с shape/stride; checked индекс L3 через `throw`/`catch`;
+    L2 unchecked — только по сырому типизированному адресу. Довести `@` /
+    raw load / address-depth на одном явном L2-профиле памяти. Большие
+    read-only/mmap — EXTERNAL с типизированным handle, не копия в сообщении.
+    Затем attempt-арены `retryable`, labelled break/continue, cleanup-стек
+    вложенных вызовов, опциональный intern. ABI `LmOwnerArena` — только
+    когда текущий граф `LmOwnArena` уже реально режет и освобождает.
+
+
+5. Suggested order of tests / Порядок тестов
+-------------------------------------------
+
+EN:
+    trans: `void: x` rejected; `(): a` and `(): b` distinct non-null;
+    `return` of a local Structure is the same pointer; Mix page allocated
+    from `lm_message_thread_owner`; assigning Empty to LmMixPage rejected.
+    runtime: end-turn collection does not free a returned Structure while
+    the root lives; after thread delete the referent is gone.
+    later: borrow escape diagnostic; `own`/`copy` retain across handler;
+    turn-local arena released while a returned object in root survives;
+    Mix cutAfter then transfer/detach of the isolated bunch.
+
+RU:
+    trans: `void: x` отвергнут; два `():` различны и не null; `return`
+    локальной Structure — тот же указатель; страница Mix из
+    `lm_message_thread_owner`; Empty ↛ LmMixPage.
+    runtime: end-turn не освобождает возвращённую Structure, пока жив root;
+    после delete потока референта нет.
+    позже: диагностика утечки borrow; `own`/`copy` переживает handler;
+    turn-local арена умерла, а возвращённый объект в root жив; Mix cutAfter
+    и detach изолированного пучка.
+
+
+6. What not to do / Чего не делать
+----------------------------------
+
+EN:
+    Do not derive Structure/Array lifetime from C automatic/static duration.
+    Do not hide a copy inside `return` to make locals "safe".
+    Do not treat Registry/Table membership as an allocator.
+    Do not install a process-global GC or stop-the-world scan.
+    Do not conflate Mix placement paths with L2 cell addresses.
+    Do not implement `LmOwnerArena` names until `LmOwnArena` collection is
+    real; the spec forbids presenting those names as the current ABI.
+    Do not "fix" language sources in `./lm2` trans/parser from a Mix-only
+    change set while another machine owns that tree — except through the
+    agreed git mainline.
+
+RU:
+    Не выводить жизнь Structure/Array из automatic/static C.
+    Не прятать копию в `return`, «чтобы локали не висели».
+    Не делать членство в Registry/Table аллокатором.
+    Не ставить процессный GC и stop-the-world.
+    Не смешивать пути размещения Mix с адресами ячеек L2.
+    Не внедрять имена `LmOwnerArena`, пока сбор `LmOwnArena` не настоящий.
+    Не править trans/parser в `./lm2` «заодно с Mix», пока это дерево
+    пилят на другой машине — только через согласованный main.
+
+
+7. Pointers / Ориентиры в дереве
+--------------------------------
+
+    Spec: Lingvamyxa_spec.txt
+        §2 value ontology; §6.5 arrays/views; §8.8 return;
+        §11 address-depth / @ / raw load;
+        §19.28 Message Thread; §19.29 ownership (normative + status);
+        operator summary items 28–31.
+    Runtime: lm2/own.lm2, lm2/own_abi.lm2
+    Lowering: lm2/trans_l1_statement.lm2, trans module-init paths
+    Mix (to move onto arenas): lm2/mix/Mix.lm2, lm2/mix/Mix_model.lm2
+    Void/unit hole: bug0_void.txt,
+        tests/trans_invalid_void_as_empty_structure.lm2,
+        tests/trans_mix_void_object_rebind.lm2
+    Existing empty-Structure tests:
+        tests/trans_anonymous_structure_empty.lm2,
+        tests/trans_empty_named_structure_descriptor.lm2
