@@ -1,0 +1,63 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+Point:
+    int: x
+    int: y
+end: Point
+
+TwoX:
+    int: x
+    int: x
+end: TwoX
+
+fn: samePoint (Point: p) Point
+    return: p
+end: samePoint
+
+external:
+    fn: main () int
+        Point: a
+            x: 1
+            y: 2
+        end: a
+        Point: b
+            x: 3
+            y: 4
+        end: b
+        Point: r (samePoint(a))
+        TwoX: t
+            x: 10
+            x: 20
+        end: t
+
+        if: a = 0 || b = 0 || a = b
+            return: 1
+        if: a\x != 1 || a\y != 2
+            return: 2
+        a\x: 5
+        if: a\x != 5 || a\y != 2 || b\x != 3
+            return: 3
+        if: r != a || r\x != 5
+            return: 4
+        if: t\[0]x != 10
+            return: 5
+        if: t\[1]x != 20 || t\x != 20
+            return: 6
+        t\[0]x: 11
+        if: t\[0]x != 11 || t\[1]x != 20 || t\x != 20
+            return: 7
+        t\x: 21
+        if: t\[0]x != 11 || t\[1]x != 21 || t\x != 21
+            return: 8
+        if: implements(a Point Point) != 1
+            return: 9
+        return: 0
+    end: main
+end: external

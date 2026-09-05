@@ -350,6 +350,12 @@ fn: lm_trans_emit_type_name (
     const: LmP0Text: name
 ) int
 
+fn: lm_trans_emit_projected_type_name (
+    FILE: file
+    const: LmP0Text: class_name
+    const: LmTransNamespace: namespace_
+) int
+
 fn: lm_trans_expr_segment_end (
     const: LmP0Field: first
 ) const: LmP0Field
@@ -564,10 +570,19 @@ fn: lm_trans_descriptor_payload_is_empty (
     const: LmTransDescriptor: descriptor
 ) int
 
+fn: lm_trans_descriptor_payload_is_graph_primitives (
+    const: LmTransNamespace: namespace_
+    const: LmTransDescriptor: descriptor
+) int
+
 fn: lm_trans_named_structure_uses_graph_header (
     const: LmTransNamespace: namespace_
     const: LmP0Text: name
 ) int
+
+fn: lm_trans_graph_layout_c_type_new (
+    const: LmP0Text: name
+) @: char
 
 fn: lm_trans_emit_structure_graph_header (
     FILE: file
@@ -578,6 +593,22 @@ fn: lm_trans_emit_graph_structure_new (
     const: LmP0Text: descriptor_name
     const: @: char thread_expr
     const: @: char arena_expr
+    const: LmP0Text: instance_name
+) int
+
+fn: lm_trans_l2_c_identifier_new (
+    const: @: char prefix
+    const: LmP0Text: text
+    const: @: char suffix
+) @: char
+
+fn: lm_trans_emit_named_structure_field_declaration (
+    FILE: file
+    const: LmP0Frame: field_frame
+    const: LmTransDescriptor: descriptor
+    size_t: descriptor_index
+    unsigned: indent
+    const: LmTransNamespace: namespace_
 ) int
 
 fn: lm_trans_emit_named_structure_typedef (
