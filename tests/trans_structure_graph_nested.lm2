@@ -1,0 +1,81 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+Point:
+    int: x
+    int: y
+end: Point
+
+Box:
+    Point: child
+    int: tag
+end: Box
+
+Node:
+    int: value
+    Node: next
+end: Node
+
+Holder:
+    []: int numbers
+end: Holder
+
+fn: sameBox (Box: b) Box
+    return: b
+end: sameBox
+
+external:
+    fn: main () int
+        Point: p
+            x: 1
+            y: 2
+        end: p
+        Box: a
+            child: p
+            tag: 9
+        end: a
+        Box: b
+            child: p
+            tag: 8
+        end: b
+        Box: r (sameBox(a))
+        Node: tail
+            value: 3
+            next: 0
+        end: tail
+        Node: head
+            value: 1
+            next: tail
+        end: head
+        []: int nums 3 4 5 6
+        Holder: h
+            numbers: nums
+        end: h
+
+        if: a = 0 || b = 0 || a = b
+            return: 1
+        if: a\child != p || a\child\x != 1 || a\child\y != 2 || a\tag != 9
+            return: 2
+        a\child\x: 7
+        if: p\x != 7 || a\child\x != 7 || b\child\x != 7
+            return: 3
+        if: r != a || r\child != p || r\tag != 9
+            return: 4
+        if: head\value != 1 || head\next != tail || head\next\value != 3 || tail\next != 0
+            return: 5
+        if: h\numbers != nums || h\numbers\length != 3U
+            return: 6
+        if: nums[0] != 4 || nums[2] != 6
+            return: 7
+        [2]: Point: points p p
+        if: points[0] != p || points[1] != p || points[0]\x != 7
+            return: 8
+        return: 0
+    end: main
+end: external

@@ -575,6 +575,17 @@ fn: lm_trans_descriptor_payload_is_graph_primitives (
     const: LmTransDescriptor: descriptor
 ) int
 
+fn: lm_trans_descriptor_payload_is_graph_slots (
+    const: LmTransNamespace: namespace_
+    const: LmTransDescriptor: descriptor
+) int
+
+fn: lm_trans_descriptor_payload_is_graph_slots_for_owner (
+    const: LmTransNamespace: namespace_
+    const: LmTransDescriptor: descriptor
+    const: LmP0Text: pending_owner
+) int
+
 fn: lm_trans_named_structure_uses_graph_header (
     const: LmTransNamespace: namespace_
     const: LmP0Text: name
