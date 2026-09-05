@@ -1,0 +1,475 @@
+import: "lm2/own.lm2"
+predef: "Mix_model.lm2"
+
+external:
+    sub: lm_synchronized_enter (@: void object)
+        @: int depth
+
+        if: object != 0
+            depth: cast: (@: int) object
+            depth[0]: depth[0] + 1
+    end: lm_synchronized_enter
+end: external
+
+external:
+    sub: lm_synchronized_leave (@: void object)
+        @: int depth
+
+        if: object != 0
+            depth: cast: (@: int) object
+            depth[0]: depth[0] - 1
+    end: lm_synchronized_leave
+end: external
+
+external:
+    fn: lm_mix_default_length () size_t
+        return: 32U
+    end: lm_mix_default_length
+end: external
+
+external:
+    sub: lm_mix_occupant_clear (@: LmMixOccupant occ)
+        if: occ != 0
+            occ\page: 0
+            occ\index: 0U
+            occ\kind: 0
+            occ\tag: 0
+    end: lm_mix_occupant_clear
+end: external
+
+external:
+    sub: lm_mix_occupant_place (@: LmMixOccupant occ; @: LmMixPage page; size_t: index)
+        if: occ != 0
+            occ\page: page
+            occ\index: index
+    end: lm_mix_occupant_place
+end: external
+
+external:
+    fn: lm_mix_page_at (@: LmMixPage page; size_t: index) @: LmMixOccupant
+        if: page = 0 || page\items = 0 || index >= page\amount
+            return: 0
+        return: cast: (@: LmMixOccupant) page\items[index]
+    end: lm_mix_page_at
+end: external
+
+external:
+    sub: lm_mix_page_reindex (@: LmMixPage page; size_t: from)
+        size_t: i
+        @: LmMixOccupant occ
+
+        if: page = 0 || page\items = 0
+            return
+        i: from
+        while: i < page\amount
+            occ: cast: (@: LmMixOccupant) page\items[i]
+            if: occ != 0
+                occ\page: page
+                occ\index: i
+            i: i + 1U
+    end: lm_mix_page_reindex
+end: external
+
+external:
+    fn: lm_mix_page_init (@: LmMixPage page; size_t: length) int
+        size_t: bytes
+        @@: void items
+
+        if: page = 0 || length = 0U
+            return: 1
+        if: lm_own_size_multiply(length, c.sizeof(items[0]), @ bytes) != 0
+            return: 1
+        items: cast: (@@: void) lm_own_new_zero(bytes)
+        if: items = 0
+            return: 1
+        page\items: items
+        page\amount: 0U
+        page\length: length
+        page\next: 0
+        page\prev: 0
+        page\parent: 0
+        page\index: 0U
+        page\lock: 0
+        return: 0
+    end: lm_mix_page_init
+end: external
+
+external:
+    sub: lm_mix_page_destroy (@: LmMixPage page)
+        if: page = 0
+            return
+        if: page\items != 0
+            c.free(page\items)
+        page\items: 0
+        page\amount: 0U
+        page\length: 0U
+        page\next: 0
+        page\prev: 0
+        page\parent: 0
+        page\index: 0U
+        page\lock: 0
+    end: lm_mix_page_destroy
+end: external
+
+external:
+    fn: lm_mix_page_new (size_t: length) @: LmMixPage
+        @: LmMixPage page
+
+        page: cast: (@: LmMixPage) lm_own_new_zero(c.sizeof(page[0]))
+        if: page = 0
+            return: 0
+        if: lm_mix_page_init(page, length) != 0
+            c.free(page)
+            return: 0
+        return: page
+    end: lm_mix_page_new
+end: external
+
+external:
+    sub: lm_mix_page_delete (@: LmMixPage page)
+        lm_mix_page_destroy(page)
+        c.free(page)
+    end: lm_mix_page_delete
+end: external
+
+external:
+    fn: lm_mix_page_cut_after (@: LmMixPage page) int
+        @: LmMixPage n
+
+        if: page = 0
+            return: 1
+        n: page\next
+        if: n = 0
+            return: 0
+        synchronized: @ page\lock
+            synchronized: @ n\lock
+                if: page\next = n
+                    n\prev: 0
+                    page\next: 0
+                return: 0
+            ---
+        ---
+    end: lm_mix_page_cut_after
+end: external
+
+external:
+    fn: lm_mix_page_cut_before (@: LmMixPage page) int
+        @: LmMixPage p
+
+        if: page = 0
+            return: 1
+        p: page\prev
+        if: p = 0
+            return: 0
+        synchronized: @ p\lock
+            synchronized: @ page\lock
+                if: page\prev = p
+                    p\next: 0
+                    page\prev: 0
+                return: 0
+            ---
+        ---
+    end: lm_mix_page_cut_before
+end: external
+
+external:
+    fn: lm_mix_page_link_after (@: LmMixPage page; @: LmMixPage next) int
+        @: LmMixPage old
+
+        if: page = 0 || next = 0
+            return: 1
+        synchronized: @ page\lock
+            synchronized: @ next\lock
+                old: page\next
+                next\prev: page
+                next\next: old
+                page\next: next
+                if: old != 0
+                    old\prev: next
+                next\parent: page\parent
+                next\index: page\index + 1U
+                return: 0
+            ---
+        ---
+    end: lm_mix_page_link_after
+end: external
+
+external:
+    fn: lm_mix_page_new_next (@: LmMixPage page) @: LmMixPage
+        @: LmMixPage next
+        size_t: length
+
+        if: page = 0
+            return: 0
+        length: page\length
+        if: length = 0U
+            length: lm_mix_default_length()
+        next: lm_mix_page_new(length)
+        if: next = 0
+            return: 0
+        if: lm_mix_page_link_after(page, next) != 0
+            lm_mix_page_delete(next)
+            return: 0
+        return: next
+    end: lm_mix_page_new_next
+end: external
+
+external:
+    fn: lm_mix_page_insert (@: LmMixPage page; size_t: index; @: LmMixOccupant occ) int
+        size_t: i
+        @: LmMixPage next
+
+        if: page = 0 || occ = 0 || page\items = 0
+            return: 1
+        synchronized: @ page\lock
+            if: index > page\amount
+                index: page\amount
+            if: page\amount = page\length
+                next: page\next
+                if: next = 0 || next\amount = next\length
+                    next: lm_mix_page_new_next(page)
+                if: next = 0
+                    return: 1
+                if: index = page\amount
+                    return: lm_mix_page_insert(next, 0U, occ)
+                i: page\amount - 1U
+                if: lm_mix_page_insert(next, 0U, cast: (@: LmMixOccupant) page\items[i]) != 0
+                    return: 1
+                page\items[i]: 0
+                page\amount: page\amount - 1U
+            i: page\amount
+            while: i > index
+                page\items[i]: page\items[i - 1U]
+                i: i - 1U
+            page\items[index]: occ
+            page\amount: page\amount + 1U
+            lm_mix_page_reindex(page, index)
+            return: 0
+        ---
+    end: lm_mix_page_insert
+end: external
+
+external:
+    fn: lm_mix_page_remove_at (@: LmMixPage page; size_t: index) @: LmMixOccupant
+        @: LmMixOccupant occ
+        size_t: i
+
+        if: page = 0 || page\items = 0 || index >= page\amount
+            return: 0
+        synchronized: @ page\lock
+            occ: cast: (@: LmMixOccupant) page\items[index]
+            i: index
+            while: i + 1U < page\amount
+                page\items[i]: page\items[i + 1U]
+                i: i + 1U
+            page\amount: page\amount - 1U
+            if: page\amount < page\length
+                page\items[page\amount]: 0
+            lm_mix_page_reindex(page, index)
+            if: occ != 0
+                occ\page: 0
+                occ\index: 0U
+            return: occ
+        ---
+    end: lm_mix_page_remove_at
+end: external
+
+external:
+    fn: lm_mix_occupant_address (@: LmMixOccupant occ) int
+        @: LmMixPage page
+        long: address
+
+        if: occ = 0 || occ\page = 0
+            return: -1
+        address: (cast: long occ\index)
+        page: occ\page\prev
+        while: page != 0
+            address: address + (cast: long page\length)
+            if: address > 2147483647
+                return: -1
+            page: page\prev
+        return: (cast: int address)
+    end: lm_mix_occupant_address
+end: external
+
+external:
+    fn: lm_mix_cursor_init (@: LmMixOccupant occ; @: LmMixPage page; size_t: index) int
+        if: occ = 0
+            return: 1
+        lm_mix_occupant_clear(occ)
+        occ\kind: 1
+        return: lm_mix_page_insert(page, index, occ)
+    end: lm_mix_cursor_init
+end: external
+
+external:
+    fn: lm_mix_cursor_next (@: LmMixOccupant occ) int
+        @: LmMixPage page
+        @: LmMixPage next
+        @: LmMixOccupant other
+        size_t: index
+
+        if: occ = 0 || occ\page = 0
+            return: 1
+        page: occ\page
+        index: occ\index
+        if: index + 1U < page\amount
+            synchronized: @ page\lock
+                other: lm_mix_page_at(page, index + 1U)
+                page\items[index]: other
+                page\items[index + 1U]: occ
+                lm_mix_occupant_place(other, page, index)
+                lm_mix_occupant_place(occ, page, index + 1U)
+                return: 0
+            ---
+        next: page\next
+        while: next != 0 && next\amount = 0U
+            next: next\next
+        if: next = 0 || next\items = 0
+            return: 1
+        synchronized: @ page\lock
+            synchronized: @ next\lock
+                other: lm_mix_page_at(next, 0U)
+                page\items[index]: other
+                next\items[0]: occ
+                lm_mix_occupant_place(other, page, index)
+                lm_mix_occupant_place(occ, next, 0U)
+                return: 0
+            ---
+        ---
+    end: lm_mix_cursor_next
+end: external
+
+external:
+    fn: lm_mix_cursor_prev (@: LmMixOccupant occ) int
+        @: LmMixPage page
+        @: LmMixPage prev
+        @: LmMixOccupant other
+        size_t: index
+        size_t: last
+
+        if: occ = 0 || occ\page = 0
+            return: 1
+        page: occ\page
+        index: occ\index
+        if: index > 0U
+            synchronized: @ page\lock
+                other: lm_mix_page_at(page, index - 1U)
+                page\items[index]: other
+                page\items[index - 1U]: occ
+                lm_mix_occupant_place(other, page, index)
+                lm_mix_occupant_place(occ, page, index - 1U)
+                return: 0
+            ---
+        prev: page\prev
+        while: prev != 0 && prev\amount = 0U
+            prev: prev\prev
+        if: prev = 0 || prev\amount = 0U || prev\items = 0
+            return: 1
+        last: prev\amount - 1U
+        synchronized: @ prev\lock
+            synchronized: @ page\lock
+                other: lm_mix_page_at(prev, last)
+                page\items[index]: other
+                prev\items[last]: occ
+                lm_mix_occupant_place(other, page, index)
+                lm_mix_occupant_place(occ, prev, last)
+                return: 0
+            ---
+        ---
+    end: lm_mix_cursor_prev
+end: external
+
+external:
+    fn: lm_mix_tag_init (@: LmMixTag tag; @: char name; @: LmMixPage page; size_t: at) int
+        @: LmMixOccupant head
+        @: LmMixOccupant tail
+
+        if: tag = 0 || page = 0
+            return: 1
+        tag\name: name
+        head: @ tag\head
+        tail: @ tag\tail
+        lm_mix_occupant_clear(head)
+        lm_mix_occupant_clear(tail)
+        head\kind: 2
+        tail\kind: 3
+        head\tag: tag
+        tail\tag: tag
+        if: lm_mix_page_insert(page, at, head) != 0
+            return: 1
+        return: lm_mix_page_insert(head\page, head\index + 1U, tail)
+    end: lm_mix_tag_init
+end: external
+
+external:
+    fn: lm_mix_tag_head (@: LmMixTag tag) @: LmMixOccupant
+        if: tag = 0
+            return: 0
+        return: @ tag\head
+    end: lm_mix_tag_head
+end: external
+
+external:
+    fn: lm_mix_tag_tail (@: LmMixTag tag) @: LmMixOccupant
+        if: tag = 0
+            return: 0
+        return: @ tag\tail
+    end: lm_mix_tag_tail
+end: external
+
+external:
+    fn: lm_mix_doc_root (@: LmMixDoc doc) @: LmMixPage
+        if: doc = 0
+            return: 0
+        return: doc\root
+    end: lm_mix_doc_root
+end: external
+
+external:
+    fn: lm_mix_tag_contains (@: LmMixTag tag; @: LmMixOccupant occ) int
+        int: head
+        int: tail
+        int: at
+
+        if: tag = 0 || occ = 0
+            return: 0
+        head: lm_mix_occupant_address(@ tag\head)
+        tail: lm_mix_occupant_address(@ tag\tail)
+        at: lm_mix_occupant_address(occ)
+        if: head < 0 || tail < 0 || at < 0
+            return: 0
+        if: head <= at && at <= tail
+            return: 1
+        return: 0
+    end: lm_mix_tag_contains
+end: external
+
+external:
+    fn: lm_mix_doc_init (@: LmMixDoc doc; size_t: length) int
+        if: doc = 0
+            return: 1
+        if: length = 0U
+            length: lm_mix_default_length()
+        doc\root: lm_mix_page_new(length)
+        if: doc\root = 0
+            return: 1
+        return: 0
+    end: lm_mix_doc_init
+end: external
+
+external:
+    sub: lm_mix_doc_destroy (@: LmMixDoc doc)
+        @: LmMixPage page
+        @: LmMixPage next
+
+        if: doc = 0
+            return
+        page: doc\root
+        while: page != 0
+            next: page\next
+            lm_mix_page_delete(page)
+            page: next
+        doc\root: 0
+    end: lm_mix_doc_destroy
+end: external

@@ -1,0 +1,99 @@
+import: "lm2/mix/Mix.lm2"
+
+external:
+    fn: main () int
+        LmMixDoc: doc
+        LmMixOccupant: here
+        LmMixOccupant: there
+        LmMixOccupant: hop
+        LmMixTag: mark
+        @: LmMixPage root
+        @: LmMixPage extra
+        @: LmMixOccupant here_ptr
+        @: LmMixOccupant there_ptr
+        @: LmMixOccupant hop_ptr
+        @: LmMixOccupant head
+        @: LmMixOccupant tail
+
+        assert: implements(MixCursorView, MixPosition, MixPosition) = 1
+        assert: implements(MixTagView, MixCursorView, MixCursorView) = 1
+        assert: implements(MixPosition, MixCursorView, MixCursorView) = 0
+        assert: implements(MixPosition, MixCursorView, MixPosition) = 1
+        assert: implements(MixCursorView, MixTagView, MixAddressConsumer) = 1
+        assert: implements(MixPosition, MixTagView, MixEditConsumer) = 0
+        assert: implements(MixTagView, MixCursorView, MixEditConsumer) = 1
+
+        assert: lm_mix_doc_init(@ doc, 8U) = 0
+        root: lm_mix_doc_root(@ doc)
+        assert: root != 0
+        assert: root\length = 8U
+        assert: root\lock = 0
+
+        here_ptr: @ here
+        there_ptr: @ there
+        hop_ptr: @ hop
+        assert: lm_mix_cursor_init(here_ptr, root, 0U) = 0
+        assert: lm_mix_cursor_init(there_ptr, root, 1U) = 0
+        assert: root\amount = 2U
+        assert: here_ptr\index = 0U
+        assert: there_ptr\index = 1U
+        assert: lm_mix_occupant_address(here_ptr) = 0
+        assert: lm_mix_occupant_address(there_ptr) = 1
+        assert: root\lock = 0
+
+        assert: lm_mix_cursor_next(here_ptr) = 0
+        assert: here_ptr\index = 1U
+        assert: there_ptr\index = 0U
+        assert: lm_mix_cursor_prev(here_ptr) = 0
+        assert: here_ptr\index = 0U
+        assert: there_ptr\index = 1U
+        assert: root\lock = 0
+
+        lm_mix_page_remove_at(root, here_ptr\index)
+        lm_mix_page_remove_at(root, there_ptr\index)
+        assert: root\amount = 0U
+
+        assert: lm_mix_tag_init(@ mark, "color", root, 0U) = 0
+        head: lm_mix_tag_head(@ mark)
+        tail: lm_mix_tag_tail(@ mark)
+        assert: head\kind = 2
+        assert: tail\kind = 3
+        assert: head\index = 0U
+        assert: tail\index = 1U
+        assert: lm_mix_cursor_init(here_ptr, root, 1U) = 0
+        assert: here_ptr\index = 1U
+        assert: tail\index = 2U
+        assert: lm_mix_tag_contains(@ mark, here_ptr) != 0
+
+        assert: lm_mix_cursor_next(here_ptr) = 0
+        assert: here_ptr\index = 2U
+        assert: tail\index = 1U
+        assert: lm_mix_tag_contains(@ mark, here_ptr) = 0
+
+        extra: lm_mix_page_new_next(root)
+        assert: extra != 0
+        assert: root\next = extra
+        assert: extra\prev = root
+        assert: extra\lock = 0
+        assert: lm_mix_cursor_init(hop_ptr, extra, 0U) = 0
+        assert: hop_ptr\page = extra
+        assert: hop_ptr\index = 0U
+        assert: lm_mix_cursor_next(here_ptr) = 0
+        assert: here_ptr\page = extra
+        assert: here_ptr\index = 0U
+        assert: hop_ptr\page = root
+        assert: lm_mix_cursor_prev(here_ptr) = 0
+        assert: here_ptr\page = root
+        assert: extra\lock = 0
+        assert: root\lock = 0
+        assert: lm_mix_page_cut_after(root) = 0
+        assert: root\next = 0
+        assert: extra\prev = 0
+        assert: root\lock = 0
+        assert: extra\lock = 0
+
+        lm_mix_page_delete(extra)
+        lm_mix_doc_destroy(@ doc)
+        return: 0
+    end: main
+end: external

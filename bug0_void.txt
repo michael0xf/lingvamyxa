@@ -1,0 +1,42 @@
+bug0: void treated as an empty Structure
+
+Spec §2.2.2.6: void is semantic:none — no cell. Unit is an empty Structure
+(`(): empty`). They are not the same. Confusing them would make an empty
+Structure interchangeable with int / a missing cell.
+
+Current hosted trans accepts a void local as if it were a declarable empty
+Structure:
+
+    void: cell
+
+trans exits 0 and emits `void cell;`. That is an incomplete C type
+(`variable has incomplete type 'void'`). A real empty Structure is a live
+arena object, lowered as:
+
+    struct Empty {
+        unsigned char lm_lmx_empty_structure;
+    };
+
+Why trans_core writes `symbol: object` without cast
+
+lm2/trans_core.lm2 destructor callbacks receive `@: void object` (C `void *`)
+from the own-stack. They recover a typed pointer by:
+
+    LmTransSymbol: symbol
+    symbol: object
+
+That assignment lowers to the void* hole `symbol = object;` (C allows
+`void *` → `T *`). An explicit `cast: (LmMixPage) object` currently emits
+`(LmMixPage)object` — a value cast of void* to the struct, which C rejects.
+Nearby cache destructor already uses `cast:` and gets a pointer cast; Mix
+pages (no reference-base) do not. Until void is not an empty Structure, this
+rebind idiom is how untyped destructor arguments become typed pointers.
+
+Confirming tests (current version)
+
+    tests/trans_invalid_void_as_empty_structure.lm2
+        trans should reject `void: cell` (exit 1). Today trans exits 0.
+
+    tests/trans_mix_void_object_rebind.lm2
+        Mix analogue of `symbol: object`: recover `@: LmMixPage` from
+        `@: void` by assignment. Runs exit 0 on the current hole.

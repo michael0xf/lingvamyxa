@@ -1,0 +1,22 @@
+import: "lm2/mix/Mix.lm2"
+
+fn: lm_mix_page_from_object (@: void object) @: LmMixPage
+    @: LmMixPage page
+    page: object
+    return: page
+end: lm_mix_page_from_object
+
+external:
+    fn: main () int
+        @: LmMixPage page
+        @: LmMixPage recovered
+
+        page: lm_mix_page_new(4U)
+        assert: page != 0
+        recovered: lm_mix_page_from_object(page)
+        assert: recovered = page
+        assert: recovered\length = 4U
+        lm_mix_page_delete(page)
+        return: 0
+    end: main
+end: external
