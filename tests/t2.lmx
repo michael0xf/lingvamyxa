@@ -53,16 +53,17 @@ L3:
     end: words
 
     fn: checkedGreeting (HelloConfig(cfg)) (Text)
-        throws:
-            EmptyGreeting
-        ---
+        throws: 
+		GreetingRetry 
+		GreetingSkip
 
-        guard: cfg\greeting\len > 0
-            fail: EmptyGreeting cfg\greeting
-        ---
+        if: cfg\greeting\len = 0
+            fail: GreetingRetry(cfg)
 
-        return: cfg\greeting
-    end: checkedGreeting
+        if: cfg\greeting\len < 0
+	    fail: GreetingSkip(cfg\greeting)
+
+    return: cfg\greeting
 
     sub: helloMain
         HelloConfig: cfg
@@ -77,10 +78,6 @@ L3:
             maxJ: 1
         ---
 
-        handler: EmptyGreeting
-            Text: badText
-            System\out\println: ("handled EmptyGreeting: " + badText)
-        ---
 
         finally:
             System\out\println: "--- finally helloMain ---"
@@ -89,8 +86,17 @@ L3:
         assert: cfg\maxI = 3
         assert: cfg\maxJ = 3
 
-        System\out\println: checkedGreeting(cfg)
-        System\out\println: checkedGreeting(emptyCfg)
+	---
+		catch: GreetingRetry ()
+ 			cfg\greeting\len++
+ 	        System\out\println: checkedGreeting(cfg)
+	---
+		catch: GreetingRetry ()
+ 			emptyCfg\greeting\len++
+	        System\out\println: checkedGreeting(emptyCfg)
+
+	catch: GreetingSkip (Text: badText)
+            System\out\println: ("handled EmptyGreeting: " + badText)
 
         each: word in words
             match: word
