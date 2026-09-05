@@ -3897,6 +3897,8 @@ fn: lm_trans_emit_declaration_with_qualifier (
     LmTransL4CallableType: expected_type
     int: is_raw_callable
     int: is_structural_default
+    const: LmP0Node: throws_node
+    int: allowed_previous
 
     body: lm_trans_unwrap_single_anonymous_structure(frame\body)
     name_field: lm_trans_nth_field(body, 0U)
@@ -3906,6 +3908,8 @@ fn: lm_trans_emit_declaration_with_qualifier (
 
     name_node: name_field\value
     expected_type: 0
+    throws_node: 0
+    allowed_previous: 0
     finally: lm_trans_expr_callable_type_delete(expected_type)
 
     is_structural_default: (qualifier = 0 || qualifier[0] = '\0') && name_field\next = 0 && lm_trans_namespace_has_named_structure_binding(namespace_, frame\head)
@@ -3937,10 +3941,18 @@ fn: lm_trans_emit_declaration_with_qualifier (
             if: expected_type = 0
                 return: 1
             expected_type\class_name[0]: frame\head[0]
+            if: name_field\next\next = 0
+                throws_node: lm_trans_node_throws_node(name_field\next\value, namespace_)
+            allowed_previous: lm_trans_throwing_call_allowed
+            if: throws_node != 0
+                lm_trans_throwing_call_allowed: 1
             if: lm_trans_put(file, " = ") != 0
+                lm_trans_throwing_call_allowed: allowed_previous
                 return: 1
             if: lm_trans_emit_expr_range_with_expected_type(file, name_field\next, 0, namespace_, expected_type) != 0
+                lm_trans_throwing_call_allowed: allowed_previous
                 return: 1
+            lm_trans_throwing_call_allowed: allowed_previous
         ---
     ---
     if: lm_trans_put(file, ";\n") != 0
@@ -3950,7 +3962,11 @@ fn: lm_trans_emit_declaration_with_qualifier (
         if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "if (") != 0 || lm_trans_emit_identifier(file, name_node\as\atom) != 0 || lm_trans_put(file, " == 0) {\n") != 0 || lm_trans_emit_indent(file, indent + 1U) != 0 || lm_trans_put(file, "abort();\n") != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
             return: 1
     ---
-return: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, frame\head)
+    if: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, frame\head) != 0
+        return: 1
+    if: throws_node != 0
+        return: lm_trans_emit_throwing_dispatch(file, indent, namespace_, throws_node)
+return: 0
 
 fn: lm_trans_namespace_declare_storage_binding (
     LmTransNamespace: namespace_
@@ -5909,10 +5925,11 @@ fn: lm_trans_emit_call_statement (
     FILE: file
     const: LmP0Frame: frame
     unsigned: indent
-    const: LmTransNamespace: namespace_
+    LmTransNamespace: namespace_
 ) int
     LmTransCallLowering: call
     int: has_args
+    const: LmP0Node: throws_node
 
     call: lm_trans_statement_call_lowering_new()
     if: call = 0
@@ -5945,7 +5962,12 @@ fn: lm_trans_emit_call_statement (
             return: 1
         if: lm_trans_put(file, ")") != 0
             return: 1
-        return: lm_trans_put(file, ";\n")
+        if: lm_trans_put(file, ";\n") != 0
+            return: 1
+        throws_node: lm_trans_symbol_throws_node(call\signature)
+        if: throws_node != 0
+            return: lm_trans_emit_throwing_dispatch(file, indent, namespace_, throws_node)
+        return: 0
 
     if: lm_trans_emit_name(file, call\name) != 0
         return: 1
@@ -5955,7 +5977,12 @@ fn: lm_trans_emit_call_statement (
         return: 1
     if: lm_trans_put(file, ")") != 0
         return: 1
-return: lm_trans_put(file, ";\n")
+    if: lm_trans_put(file, ";\n") != 0
+        return: 1
+    throws_node: lm_trans_symbol_throws_node(call\signature)
+    if: throws_node != 0
+        return: lm_trans_emit_throwing_dispatch(file, indent, namespace_, throws_node)
+return: 0
 
 fn: lm_trans_text_contains_char (const: (LmP0Text: text); char: ch) int
     size_t: i
@@ -10578,22 +10605,42 @@ fn: lm_trans_emit_assignment (
     FILE: file
     const: LmP0Frame: frame
     unsigned: indent
-    const: LmTransNamespace: namespace_
+    LmTransNamespace: namespace_
 ) int
+    const: LmP0Node: throws_node
+    int: allowed_previous
+
     if: lm_trans_guard_array_storage_assignment(frame, namespace_) != 0
         return: 1
     if: lm_trans_guard_direct_structure_assignment(frame, namespace_) != 0
         return: 1
 
+    throws_node: 0
+    if: frame != 0 && frame\body != 0 && frame\body\first_field != 0 && frame\body\first_field\next = 0
+        throws_node: lm_trans_node_throws_node(frame\body\first_field\value, namespace_)
+    allowed_previous: lm_trans_throwing_call_allowed
+    if: throws_node != 0
+        lm_trans_throwing_call_allowed: 1
+
     if: lm_trans_emit_indent(file, indent) != 0
+        lm_trans_throwing_call_allowed: allowed_previous
         return: 1
     if: lm_trans_emit_expr_atom(file, frame\head, namespace_) != 0
+        lm_trans_throwing_call_allowed: allowed_previous
         return: 1
     if: lm_trans_put(file, " = ") != 0
+        lm_trans_throwing_call_allowed: allowed_previous
         return: 1
     if: lm_trans_emit_expr_fields(file, frame\body\first_field, namespace_) != 0
+        lm_trans_throwing_call_allowed: allowed_previous
         return: 1
-return: lm_trans_put(file, ";\n")
+    if: lm_trans_put(file, ";\n") != 0
+        lm_trans_throwing_call_allowed: allowed_previous
+        return: 1
+    lm_trans_throwing_call_allowed: allowed_previous
+    if: throws_node != 0
+        return: lm_trans_emit_throwing_dispatch(file, indent, namespace_, throws_node)
+return: 0
 
 fn: lm_trans_emit_contextual_literal_assignment (
     FILE: file
@@ -10836,6 +10883,7 @@ fn: lm_trans_statement_stack_push_list (
     unsigned: indent
     int: unwrap_single_structure
     const: LmP0Frame: repeat_frame
+    int: register_catches
 ) int
     LmTransStatementJob: job
     int: status
@@ -10853,6 +10901,7 @@ fn: lm_trans_statement_stack_push_list (
     job\list\indent: indent
     job\list\unwrap_single_structure: unwrap_single_structure
     job\list\repeat_frame: repeat_frame
+    job\list\register_catches: register_catches
     status: lm_trans_statement_stack_push(stack, job)
     if: status != 0
         lm_trans_statement_job_delete(job)
@@ -11027,7 +11076,7 @@ fn: lm_trans_statement_stack_schedule_control (
     if: status = 0
         status: lm_trans_statement_stack_push_scope_cleanups(stack, indent + 1U)
     if: status = 0
-        status: lm_trans_statement_stack_push_list(stack, body_start, indent + 1U, 1, 0)
+        status: lm_trans_statement_stack_push_list(stack, body_start, indent + 1U, 1, 0, 1)
 
     if: status != 0
         if: is_loop
@@ -11077,7 +11126,7 @@ fn: lm_trans_statement_stack_schedule_synchronized (
     if: status = 0
         status: lm_trans_statement_stack_push_scope_cleanups(stack, indent + 1U)
     if: status = 0
-        status: lm_trans_statement_stack_push_list(stack, body_start, indent + 1U, 1, 0)
+        status: lm_trans_statement_stack_push_list(stack, body_start, indent + 1U, 1, 0, 1)
 
     if: status != 0
         lm_trans_cleanup_pop(namespace_)
@@ -11108,7 +11157,7 @@ fn: lm_trans_statement_stack_schedule_else (
     if: status = 0
         status: lm_trans_statement_stack_push_scope_cleanups(stack, indent + 1U)
     if: status = 0
-        status: lm_trans_statement_stack_push_list(stack, frame\body\first_field, indent + 1U, 1, 0)
+        status: lm_trans_statement_stack_push_list(stack, frame\body\first_field, indent + 1U, 1, 0, 1)
     if: status != 0
         lm_trans_typedef_projection_scope_leave()
         lm_trans_namespace_leave_scope(namespace_)
@@ -11357,6 +11406,94 @@ fn: lm_trans_statement_emit_send (
         return: 1
 return: 0
 
+fn: lm_trans_emit_throw_channel_prelude (FILE: file) int
+    if: lm_trans_emitted_throw_channel
+        return: 0
+    lm_trans_emitted_throw_channel: 1
+    if: lm_trans_put(file, "static int lm_throw_code = 0;\n") != 0
+        return: 1
+    if: lm_trans_put(file, "static union { long i; void *p; } lm_throw_payload[8];\n") != 0
+        return: 1
+return: 0
+
+fn: lm_trans_emit_throw_return (
+    FILE: file
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    if: lm_trans_emit_cleanups_until(file, indent, namespace_, 0U) != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0
+        return: 1
+    if: namespace_ = 0 || namespace_\return_type_node = 0
+        return: lm_trans_put(file, "return;\n")
+    if: namespace_\return_type_is_struct
+        c.fprintf(c.stderr, "trans L2 error: throw from fm Structure return is not implemented in this profile\n")
+        return: 1
+return: lm_trans_put(file, "return 0;\n")
+
+fn: lm_trans_symbol_throws_node (const: (LmTransSymbol: symbol)) const: LmP0Node
+    if: symbol = 0 || symbol\has_callable_shape = 0
+        return: 0
+return: symbol\callable_throws_node
+
+fn: lm_trans_node_throws_node (const: (LmP0Node: node); const: (LmTransNamespace: namespace_)) const: LmP0Node
+    if: node = 0 || node\kind != c.LM_P0_NODE_FRAME || node\as\frame = 0
+        return: 0
+return: lm_trans_symbol_throws_node(lm_trans_namespace_find(namespace_, node\as\frame\head))
+
+fn: lm_trans_emit_throwing_dispatch (
+    FILE: file
+    unsigned: indent
+    LmTransNamespace: namespace_
+    const: LmP0Node: throws_node
+) int
+    const: LmP0Field: field
+    const: LmP0Node: name_node
+    const: LmP0Text: name
+    LmTransCatchPad: pad
+    int: code
+
+    if: throws_node = 0
+        return: 0
+    if: throws_node\kind != c.LM_P0_NODE_FRAME || throws_node\as\frame = 0 || throws_node\as\frame\body = 0
+        return: 1
+    if: lm_trans_emit_throw_channel_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
+
+    field: throws_node\as\frame\body\first_field
+    while: field != 0
+        name_node: field\value
+        if: name_node = 0 || name_node\kind != c.LM_P0_NODE_ATOM
+            c.fprintf(c.stderr, "trans L2 error: throws lists names, not types\n")
+            return: 1
+        name: name_node\as\atom
+        code: lm_trans_throw_name_code(name)
+        if: code = 0
+            return: 1
+        pad: lm_trans_catch_find(namespace_, name)
+        if: pad != 0
+            if: lm_trans_emit_indent(file, indent) != 0
+                return: 1
+            if: c.fprintf(file, "if (lm_throw_code == %d) goto lm_catch_%u;\n", code, pad\id) < 0
+                return: 1
+            ---
+        else:
+            if: lm_trans_throws_contains(namespace_\throws_node, name) = 0
+                c.fprintf(c.stderr, "trans L2 error: throw \"%.*s\" is not caught and is not in throws\n", (cast: int name\length), name\data)
+                return: 1
+            if: lm_trans_emit_indent(file, indent) != 0
+                return: 1
+            if: c.fprintf(file, "if (lm_throw_code == %d) {\n", code) < 0
+                return: 1
+            if: lm_trans_emit_throw_return(file, indent + 1U, namespace_) != 0
+                return: 1
+            if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+                return: 1
+            ---
+        field: field\next
+return: 0
+
 fn: lm_trans_emit_for_expr_segment (
     FILE: file
     const: LmP0Field: first
@@ -11463,7 +11600,7 @@ fn: lm_trans_statement_stack_schedule_for (
     if: status = 0
         status: lm_trans_statement_stack_push_scope_cleanups(stack, indent + 2U)
     if: status = 0 && body_field != 0
-        status: lm_trans_statement_stack_push_list(stack, body_field, indent + 2U, 1, 0)
+        status: lm_trans_statement_stack_push_list(stack, body_field, indent + 2U, 1, 0, 1)
 
     if: status != 0
         lm_trans_loop_pop(namespace_)
@@ -11498,6 +11635,228 @@ fn: lm_trans_statement_emit_for (
     LmTransNamespace: namespace_
 ) int
 return: lm_trans_statement_stack_schedule_for(file, stack, frame, indent, namespace_)
+
+fn: lm_trans_statement_emit_throws (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    c.LM_UNUSED(file)
+    c.LM_UNUSED(stack)
+    c.LM_UNUSED(indent)
+    c.LM_UNUSED(namespace_)
+    if: frame = 0
+        return: 1
+    c.fprintf(c.stderr, "trans L2 error: throws is only valid immediately after the function header\n")
+return: 1
+
+fn: lm_trans_statement_emit_throw (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    const: LmP0Field: name_field
+    const: LmP0Node: name_node
+    const: LmP0Frame: throw_frame
+    const: LmP0Field: arg
+    const: LmP0Field: arg_next
+    const: LmP0Text: name
+    int: code
+    int: slot
+
+    c.LM_UNUSED(stack)
+    if: frame = 0 || frame\body = 0 || frame\body\first_field = 0
+        c.fprintf(c.stderr, "trans L2 error: throw receiver expects Name(arguments)\n")
+        return: 1
+
+    name_field: frame\body\first_field
+    name_node: name_field\value
+    if: name_node = 0 || name_node\kind != c.LM_P0_NODE_FRAME || name_node\as\frame = 0
+        c.fprintf(c.stderr, "trans L2 error: throw receiver expects Name(arguments)\n")
+        return: 1
+    if: name_field\next != 0
+        c.fprintf(c.stderr, "trans L2 error: throw receiver expects a single Name(arguments) form\n")
+        return: 1
+
+    throw_frame: name_node\as\frame
+    name: throw_frame\head
+    if: lm_trans_throws_contains(namespace_\throws_node, name) = 0
+        c.fprintf(c.stderr, "trans L2 error: throw \"%.*s\" is not in the current throws set\n", (cast: int name\length), name\data)
+        return: 1
+
+    code: lm_trans_throw_name_code(name)
+    if: code = 0
+        return: 1
+    if: lm_trans_emit_throw_channel_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
+
+    slot: 0
+    if: throw_frame\body != 0
+        arg: throw_frame\body\first_field
+        while: arg != 0
+            if: slot >= 8
+                c.fprintf(c.stderr, "trans L2 error: throw payload is limited to 8 arguments in this profile\n")
+                return: 1
+            arg_next: lm_trans_expr_segment_end(arg)
+            if: lm_trans_emit_indent(file, indent) != 0
+                return: 1
+            if: c.fprintf(file, "lm_throw_payload[%d].i = (long)(", slot) < 0
+                return: 1
+            if: lm_trans_emit_expr_range(file, arg, arg_next, namespace_) != 0
+                return: 1
+            if: lm_trans_put(file, ");\n") != 0
+                return: 1
+            if: lm_trans_emit_indent(file, indent) != 0
+                return: 1
+            if: c.fprintf(file, "lm_throw_payload[%d].p = (void *)(unsigned long)lm_throw_payload[%d].i;\n", slot, slot) < 0
+                return: 1
+            slot: slot + 1
+            arg: arg_next
+        ---
+    ---
+
+    if: lm_trans_emit_indent(file, indent) != 0
+        return: 1
+    if: c.fprintf(file, "lm_throw_code = %d;\n", code) < 0
+        return: 1
+return: lm_trans_emit_throw_return(file, indent, namespace_)
+
+fn: lm_trans_catch_param_is_integer (const: (LmP0Text: type_head)) int
+return: lm_trans_text_equals(type_head, "int") || lm_trans_text_equals(type_head, "unsigned") || lm_trans_text_equals(type_head, "long") || lm_trans_text_equals(type_head, "short") || lm_trans_text_equals(type_head, "size_t") || lm_trans_text_equals(type_head, "char")
+
+fn: lm_trans_emit_catch_params (
+    FILE: file
+    const: LmP0Structure: params
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: LmP0Frame: param_frame
+    const: LmP0Field: name_field
+    const: LmP0Node: name_node
+    int: slot
+
+    if: params = 0
+        return: 0
+
+    slot: 0
+    field: params\first_field
+    while: field != 0
+        node: field\value
+        if: node = 0 || node\kind != c.LM_P0_NODE_FRAME || node\as\frame = 0
+            c.fprintf(c.stderr, "trans L2 error: catch parameters expect type: name bindings\n")
+            return: 1
+        param_frame: node\as\frame
+        name_field: 0
+        if: param_frame\body != 0
+            name_field: param_frame\body\first_field
+        if: name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
+            c.fprintf(c.stderr, "trans L2 error: catch parameter expects a name\n")
+            return: 1
+        if: slot >= 8
+            c.fprintf(c.stderr, "trans L2 error: catch payload is limited to 8 arguments in this profile\n")
+            return: 1
+        name_node: name_field\value
+        if: lm_trans_emit_indent(file, indent) != 0
+            return: 1
+        if: lm_trans_emit_type_head_only(file, param_frame\head, namespace_) != 0
+            return: 1
+        if: lm_trans_put(file, " ") != 0 || lm_trans_emit_identifier(file, name_node\as\atom) != 0
+            return: 1
+        if: lm_trans_catch_param_is_integer(param_frame\head)
+            if: c.fprintf(file, " = (") < 0
+                return: 1
+            if: lm_trans_emit_type_head_only(file, param_frame\head, namespace_) != 0
+                return: 1
+            if: c.fprintf(file, ")lm_throw_payload[%d].i;\n", slot) < 0
+                return: 1
+            ---
+        else:
+            if: c.fprintf(file, " = (") < 0
+                return: 1
+            if: lm_trans_emit_type_head_only(file, param_frame\head, namespace_) != 0
+                return: 1
+            if: c.fprintf(file, ")lm_throw_payload[%d].p;\n", slot) < 0
+                return: 1
+            ---
+        if: lm_trans_namespace_declare_storage_binding(namespace_, name_node\as\atom, param_frame\head) != 0
+            return: 1
+        slot: slot + 1
+        field: field\next
+return: 0
+
+fn: lm_trans_statement_emit_catch (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+    const: LmP0Field: name_field
+    const: LmP0Field: params_field
+    const: LmP0Field: body_field
+    const: LmP0Node: name_node
+    const: LmP0Structure: params
+    const: LmP0Field: body_start
+    unsigned: catch_id
+    LmTransCatchPad: pad
+
+    c.LM_UNUSED(stack)
+    if: frame = 0 || frame\body = 0 || frame\body\first_field = 0
+        c.fprintf(c.stderr, "trans L2 error: catch receiver expects Name (parameters)\n")
+        return: 1
+
+    name_field: frame\body\first_field
+    name_node: name_field\value
+    if: name_node = 0 || name_node\kind != c.LM_P0_NODE_ATOM
+        c.fprintf(c.stderr, "trans L2 error: catch receiver expects a throw name\n")
+        return: 1
+
+    params_field: name_field\next
+    if: params_field = 0 || params_field\value = 0 || params_field\value\kind != c.LM_P0_NODE_STRUCTURE
+        c.fprintf(c.stderr, "trans L2 error: catch receiver expects Name (parameters)\n")
+        return: 1
+    params: params_field\value\as\structure
+    body_field: params_field\next
+    body_start: body_field
+    if: body_field != 0 && body_field\next = 0 && body_field\value != 0 && body_field\value\kind = c.LM_P0_NODE_STRUCTURE
+        body_start: body_field\value\as\structure\first_field
+
+    if: lm_trans_throw_name_code(name_node\as\atom) = 0
+        return: 1
+    if: lm_trans_emit_throw_channel_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
+
+    pad: lm_trans_catch_find(namespace_, name_node\as\atom)
+    if: pad = 0 || pad\depth != namespace_\depth
+        c.fprintf(c.stderr, "trans L2 internal error: catch \"%.*s\" was not registered in this block\n", (cast: int name_node\as\atom\length), name_node\as\atom\data)
+        return: 1
+    catch_id: pad\id
+
+    if: lm_trans_emit_indent(file, indent) != 0
+        return: 1
+    if: c.fprintf(file, "goto lm_after_catch_%u;\n", catch_id) < 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0
+        return: 1
+    if: c.fprintf(file, "lm_catch_%u: {\n", catch_id) < 0
+        return: 1
+    if: lm_trans_emit_catch_params(file, params, indent + 1U, namespace_) != 0
+        return: 1
+    if: body_start != 0 && lm_trans_emit_statement_list(file, body_start, indent + 1U, namespace_) != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "}\n") != 0
+        return: 1
+    if: lm_trans_emit_indent(file, indent) != 0
+        return: 1
+    if: c.fprintf(file, "lm_after_catch_%u: ;\n", catch_id) < 0
+        return: 1
+return: 0
 
 fn: lm_trans_statement_emit_else (
     FILE: file
@@ -12694,6 +13053,56 @@ fn: lm_trans_statement_stack_emit_node (
         repeated_frame\flags: c.LM_P0_FRAME_COMPACT
         repeated_frame\body: node\as\structure
         return: lm_trans_statement_stack_emit_frame(file, stack, repeated_frame, indent, namespace_)
+
+    if: node\kind = c.LM_P0_NODE_STRUCTURE
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "{\n") != 0
+            return: 1
+        lm_trans_namespace_enter_scope(namespace_)
+        if: lm_trans_typedef_projection_scope_enter() != 0
+            lm_trans_namespace_leave_scope(namespace_)
+            return: 1
+        if: lm_trans_statement_stack_push_indent_text(stack, indent, "}\n") != 0
+            lm_trans_typedef_projection_scope_leave()
+            lm_trans_namespace_leave_scope(namespace_)
+            return: 1
+        if: lm_trans_statement_stack_push_simple(stack, @lm_trans_statement_job_leave_scope) != 0
+            lm_trans_typedef_projection_scope_leave()
+            lm_trans_namespace_leave_scope(namespace_)
+            return: 1
+        if: node\as\structure != 0 && node\as\structure\first_field != 0
+            return: lm_trans_statement_stack_push_list(stack, node\as\structure\first_field, indent + 1U, 1, 0, 1)
+        return: 0
+return: 0
+
+fn: lm_trans_catch_register_fields (LmTransNamespace: namespace_; const: (LmP0Field: first)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: LmP0Frame: frame
+    const: LmP0Field: name_field
+    const: LmP0Node: name_node
+    unsigned: catch_id
+
+    field: first
+    while: field != 0
+        node: field\value
+        if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && node\as\frame != 0 && lm_trans_text_equals(node\as\frame\head, "catch")
+            frame: node\as\frame
+            name_field: 0
+            if: frame\body != 0
+                name_field: frame\body\first_field
+            if: name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
+                c.fprintf(c.stderr, "trans L2 error: catch receiver expects a throw name\n")
+                return: 1
+            name_node: name_field\value
+            if: lm_trans_throw_name_code(name_node\as\atom) = 0
+                return: 1
+            lm_trans_next_catch_id: lm_trans_next_catch_id + 1U
+            catch_id: lm_trans_next_catch_id
+            if: lm_trans_catch_push(namespace_, name_node\as\atom, catch_id) != 0
+                return: 1
+            ---
+        ---
+        field: field\next
 return: 0
 
 fn: lm_trans_statement_job_emit_list (
@@ -12715,6 +13124,8 @@ fn: lm_trans_statement_job_emit_list (
     field: lm_trans_statement_list_first_field(job\list\field, job\list\unwrap_single_structure)
     if: field = 0
         return: 0
+    if: job\list\register_catches && lm_trans_catch_register_fields(namespace_, field) != 0
+        return: 1
 
     node: field\value
     current_repeat_frame: 0
@@ -12731,7 +13142,7 @@ fn: lm_trans_statement_job_emit_list (
     ---
     status: 0
     if: field\next != 0
-        status: lm_trans_statement_stack_push_list(stack, field\next, job\list\indent, 0, next_repeat_frame)
+        status: lm_trans_statement_stack_push_list(stack, field\next, job\list\indent, 0, next_repeat_frame, 0)
     if: status = 0
         status: lm_trans_statement_stack_push_node(stack, field\value, job\list\indent, current_repeat_frame)
 return: status
@@ -12847,7 +13258,7 @@ fn: lm_trans_emit_statement_list (
     projection_scope_depth: lm_trans_typedef_projection_scope_depth()
     previous_executable_depth: lm_trans_l2_executable_statement_depth
     lm_trans_l2_executable_statement_depth: previous_executable_depth + 1
-    status: lm_trans_statement_stack_push_list(stack, first, indent, 1, 0)
+    status: lm_trans_statement_stack_push_list(stack, first, indent, 1, 0, 1)
     while: status = 0 && stack\jobs != 0 && stack\jobs\count > 0U
         job: (cast: (LmTransStatementJob) lm_own_ptr_stack_pop(stack\jobs))
         if: job = 0
@@ -13492,6 +13903,7 @@ fn: lm_trans_namespace_set_callable_shape (
     symbol\callable_is_external: function\is_external
     symbol\callable_has_thread_context: function\has_thread_context
     symbol\callable_is_thread_handler: function\is_thread_handler
+    symbol\callable_throws_node: function\throws_node
 return: 0
 
 fn: lm_trans_function_header_read_params (LmTransFunctionHeader: function) int
@@ -13507,6 +13919,82 @@ fn: lm_trans_function_header_read_params (LmTransFunctionHeader: function) int
     function\params: lm_trans_formal_param_list_from_node(function\params_node, allow_unnamed, "function parameters")
     if: function\params = 0
         return: 1
+return: 0
+
+fn: lm_trans_throw_name_code (const: (LmP0Text: name)) int
+    size_t: index
+    LmP0Text: stored
+    LmP0Text: copy
+
+    if: name = 0
+        return: 0
+    if: lm_trans_throw_names = 0
+        lm_trans_throw_names: lm_trans_ptr_stack_new(lm_trans_text_ref_delete_any)
+        if: lm_trans_throw_names = 0
+            return: 0
+        ---
+    ---
+
+    index: 0U
+    while: index < lm_trans_throw_names\count
+        stored: lm_own_ptr_stack_at(lm_trans_throw_names, index)
+        if: stored != 0 && lm_trans_text_same(stored, name)
+            return: (cast: int index) + 1
+        index: index + 1U
+
+    copy: lm_trans_text_ref_new(name)
+    if: copy = 0
+        return: 0
+    if: lm_own_ptr_stack_push(lm_trans_throw_names, copy) != 0
+        lm_trans_text_ref_delete_any(copy)
+        return: 0
+return: (cast: int lm_trans_throw_names\count)
+
+fn: lm_trans_throws_contains (const: (LmP0Node: throws_node); const: (LmP0Text: name)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+
+    if: throws_node = 0 || name = 0 || throws_node\kind != c.LM_P0_NODE_FRAME || throws_node\as\frame = 0 || throws_node\as\frame\body = 0
+        return: 0
+
+    field: throws_node\as\frame\body\first_field
+    while: field != 0
+        node: field\value
+        if: node != 0 && node\kind = c.LM_P0_NODE_ATOM && lm_trans_text_same(node\as\atom, name)
+            return: 1
+        field: field\next
+return: 0
+
+fn: lm_trans_function_header_take_throws (LmTransFunctionHeader: out) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    const: LmP0Field: name_field
+    const: LmP0Node: name_node
+
+    if: out = 0 || out\body_start = 0
+        return: 0
+
+    field: out\body_start
+    node: field\value
+    if: node = 0 || node\kind != c.LM_P0_NODE_FRAME || node\as\frame = 0 || lm_trans_text_equals(node\as\frame\head, "throws") = 0
+        return: 0
+
+    if: node\as\frame\body = 0 || node\as\frame\body\first_field = 0
+        c.fprintf(c.stderr, "trans L2 error: throws receiver expects names\n")
+        return: 1
+
+    name_field: node\as\frame\body\first_field
+    while: name_field != 0
+        name_node: name_field\value
+        if: name_node = 0 || name_node\kind != c.LM_P0_NODE_ATOM
+            c.fprintf(c.stderr, "trans L2 error: throws lists names, not types\n")
+            return: 1
+        if: lm_trans_throw_name_code(name_node\as\atom) = 0
+            return: 1
+        name_field: name_field\next
+
+    out\throws_node: node
+    out\body_start: field\next
 return: 0
 
 fn: lm_trans_function_header_common (
@@ -13570,6 +14058,8 @@ fn: lm_trans_function_header_common (
             out\is_descriptor_only: 1
         if: lm_trans_function_header_read_params(out) != 0
             return: -1
+        if: lm_trans_function_header_take_throws(out) != 0
+            return: -1
         return: 1
 
     return_field: lm_trans_nth_field(frame\body, 2U)
@@ -13591,6 +14081,8 @@ fn: lm_trans_function_header_common (
         c.fprintf(c.stderr, "trans L2 error: callable is supported only for descriptor-only fn declarations in this profile\n")
         return: -1
     if: lm_trans_function_header_read_params(out) != 0
+        return: -1
+    if: lm_trans_function_header_take_throws(out) != 0
         return: -1
 return: 1
 
@@ -13867,7 +14359,7 @@ fn: lm_trans_pointer_bindings_init () int
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_operator", @lm_trans_expr_emit_raw, @lm_trans_expr_state_operator) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_deref", @lm_trans_expr_emit_raw, @lm_trans_expr_state_deref) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_pointer_follow", @lm_trans_expr_emit_raw, @lm_trans_expr_state_pointer_follow) != 0 || lm_trans_pointer_binding_push_expr_emit("lm_trans_expr_emit_c_dot", @lm_trans_expr_emit_raw, @lm_trans_expr_state_c_dot) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_cast_frame", @lm_trans_expr_emit_cast_frame) != 0 || lm_trans_pointer_binding_push_expr_frame("lm_trans_expr_emit_implements_frame", @lm_trans_expr_emit_implements_frame) != 0)
         status: 1
-    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_return", @lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_stop", @lm_trans_statement_emit_stop) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_exit", @lm_trans_statement_emit_exit) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_send", @lm_trans_statement_emit_send) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_if", @lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_while", @lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_for", @lm_trans_statement_emit_for) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_else", @lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", @lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_finally", @lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_assert", @lm_trans_statement_emit_assert) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", @lm_trans_statement_emit_loop_jump) != 0)
+    if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_return", @lm_trans_statement_emit_return) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_stop", @lm_trans_statement_emit_stop) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_exit", @lm_trans_statement_emit_exit) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_send", @lm_trans_statement_emit_send) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_if", @lm_trans_statement_emit_if) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_while", @lm_trans_statement_emit_while) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_for", @lm_trans_statement_emit_for) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_throws", @lm_trans_statement_emit_throws) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_throw", @lm_trans_statement_emit_throw) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_catch", @lm_trans_statement_emit_catch) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_else", @lm_trans_statement_emit_else) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_synchronized", @lm_trans_statement_emit_synchronized) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_finally", @lm_trans_statement_emit_finally) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_assert", @lm_trans_statement_emit_assert) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_loop_jump", @lm_trans_statement_emit_loop_jump) != 0)
         status: 1
     if: status = 0 && (lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_include_prelude", @lm_trans_statement_emit_include_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_define_prelude", @lm_trans_statement_emit_define_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifndef_default_prelude", @lm_trans_statement_emit_ifndef_default_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_os_prelude", @lm_trans_statement_emit_os_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_ifdef_prelude", @lm_trans_statement_emit_ifdef_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_guard_prelude", @lm_trans_statement_emit_guard_prelude) != 0 || lm_trans_pointer_binding_push_statement("lm_trans_statement_emit_extern_c_prelude", @lm_trans_statement_emit_extern_c_prelude) != 0)
         status: 1

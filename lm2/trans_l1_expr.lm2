@@ -4627,6 +4627,13 @@ fn: lm_trans_expr_stack_emit_frame (FILE: file; LmTransExprStack: stack; const: 
         lm_trans_expr_call_lowering_delete(call)
         lm_own_delete(expr_receiver, 0)
         return: 1
+    if: call\signature != 0 && call\signature\callable_throws_node != 0
+        if: lm_trans_throwing_call_allowed = 0
+            c.fprintf(c.stderr, "trans L2 error: throwing call \"%.*s\" must be a statement or the entire assignment\n", (cast: int frame\head\length), frame\head\data)
+            lm_trans_expr_call_lowering_delete(call)
+            lm_own_delete(expr_receiver, 0)
+            return: 1
+        lm_trans_throwing_call_allowed: 0
     if: lm_trans_validate_profile_c_printf_call(frame, namespace_) != 0
         lm_trans_expr_call_lowering_delete(call)
         lm_own_delete(expr_receiver, 0)

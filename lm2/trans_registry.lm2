@@ -600,6 +600,9 @@ table:
              else          `receiver.statement`
              while         `receiver.statement`
              for           `receiver.statement`
+             throws        `receiver.statement`
+             throw         `receiver.statement`
+             catch         `receiver.statement`
              `return`      `receiver.statement`
              stop          `receiver.statement`
              exit          `receiver.statement`
@@ -685,6 +688,9 @@ table:
              else          lm_trans_statement_emit_else
              while         lm_trans_statement_emit_while
              for           lm_trans_statement_emit_for
+             throws        lm_trans_statement_emit_throws
+             throw         lm_trans_statement_emit_throw
+             catch         lm_trans_statement_emit_catch
              `return`      lm_trans_statement_emit_return
              stop          lm_trans_statement_emit_stop
              exit          lm_trans_statement_emit_exit
@@ -955,6 +961,7 @@ table:
              LmTransL4PayloadPointerBinding 1
              LmTransLayoutField       1
              LmTransLoop              1
+             LmTransCatchPad          1
              LmTransNamespace         1
              LmTransPointerBinding    1
              LmTransRegistry          1

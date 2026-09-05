@@ -164,6 +164,7 @@ table:
              lm_trans_hoisted_function_delete_any 1
              lm_trans_thread_declaration_delete_any 1
              lm_trans_loop_delete_any 1
+             lm_trans_catch_pad_delete_any 1
              lm_trans_namespace_destroy_any 1
              lm_trans_pointer_binding_delete 1
              lm_trans_ptr_stack_delete 1
@@ -429,6 +430,7 @@ table:
              LmTransSymbol                  c.struct
              LmTransCleanup                 c.struct
              LmTransLoop                    c.struct
+             LmTransCatchPad                c.struct
              LmTransExprSegment             c.struct
              LmTransStructReturnFieldValue  c.struct
              LmTransCallLowering            c.struct
@@ -492,6 +494,7 @@ table:
              LmTransSymbol                  1
              LmTransCleanup                 1
              LmTransLoop                    1
+             LmTransCatchPad                1
              LmTransExprSegment             1
              LmTransStructReturnFieldValue  1
              LmTransCallLowering            1
@@ -802,6 +805,7 @@ table:
              array_reference_rank        size_t                 33                      0                                0
              array_reference_element_address_depth size_t       34                      0                                0
              array_reference_element_const int                  35                      0                                0
+             callable_throws_node     LmP0Node               36                      0                                1
 end: LmTransSymbol
 
 table:
@@ -821,6 +825,16 @@ table:
     rows:
              cleanup_base  size_t                 0
 end: LmTransLoop
+
+table:
+    source
+    name: LmTransCatchPad
+    columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)  (int: `field.const`)
+    rows:
+             name   LmP0Text               0                       0                                1
+             id     unsigned               1                       0                                0
+             depth  unsigned               2                       0                                0
+end: LmTransCatchPad
 
 table:
     source
@@ -1026,6 +1040,7 @@ table:
              indent                  unsigned               1                       0                                0
              unwrap_single_structure int                    2                       0                                0
              repeat_frame            LmP0Frame              3                       0                                1
+             register_catches        int                    4                       0                                0
 end: LmTransStatementListJob
 
 table:
@@ -1111,6 +1126,8 @@ table:
              has_previous_control_stacks int                    8                       0                                0
              previous_message_thread_entry int                  9                       0                                0
              previous_managed_message_thread_context int        10                      0                                0
+             previous_catches            LmOwnPtrStack          11                      0                                0
+             previous_throws_node        LmP0Node               12                      0                                1
 end: LmTransFunctionState
 
 table:
@@ -1138,6 +1155,7 @@ table:
              has_thread_context    int                    17                      0                                0
              is_thread_handler     int                    18                      0                                0
              thread_route_literal  LmP0Text               19                      0                                1
+             throws_node           LmP0Node               20                      0                                1
 end: LmTransFunctionHeader
 
 table:
@@ -1279,4 +1297,6 @@ table:
              managed_message_thread_context int          15                      0                                0
              source_item_limit    size_t                 16                      0                                0
              source_item_limit_active int                17                      0                                0
+             catches              LmOwnPtrStack          18                      0                                0
+             throws_node          LmP0Node               19                      0                                1
 end: LmTransNamespace

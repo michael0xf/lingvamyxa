@@ -1077,6 +1077,23 @@ fn: lm_trans_emit_function_params (
     LmTransNamespace: namespace_
 ) int
 
+fn: lm_trans_emit_throw_channel_prelude (FILE: file) int
+
+fn: lm_trans_emit_throwing_dispatch (
+    FILE: file
+    unsigned: indent
+    LmTransNamespace: namespace_
+    const: LmP0Node: throws_node
+) int
+
+fn: lm_trans_node_throws_node (const: (LmP0Node: node); const: (LmTransNamespace: namespace_)) const: LmP0Node
+
+fn: lm_trans_symbol_throws_node (const: (LmTransSymbol: symbol)) const: LmP0Node
+
+fn: lm_trans_function_header_take_throws (LmTransFunctionHeader: out) int
+
+sub: lm_trans_catch_pad_delete_any (@: void object)
+
 fn: lm_trans_emit_thread_handler_prologue (
     FILE: file
     const: LmTransFunctionHeader: function
@@ -1280,6 +1297,30 @@ fn: lm_trans_statement_emit_exit (
 ) int
 
 fn: lm_trans_statement_emit_for (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_throws (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_throw (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_catch (
     FILE: file
     LmTransStatementStack: stack
     const: LmP0Frame: frame

@@ -1961,6 +1961,8 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
     state\previous_hoisted_functions: namespace_\hoisted_functions
     state\previous_cleanups: namespace_\cleanups
     state\previous_loops: namespace_\loops
+    state\previous_catches: namespace_\catches
+    state\previous_throws_node: namespace_\throws_node
     state\previous_message_thread_entry: namespace_\message_thread_entry
     state\previous_managed_message_thread_context: namespace_\managed_message_thread_context
     state\has_previous_control_stacks: 1
@@ -1979,15 +1981,21 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
     namespace_\managed_message_thread_context: is_message_thread_entry || function\is_thread_handler || function\has_thread_context
     namespace_\cleanups: lm_trans_ptr_stack_new(@lm_trans_cleanup_delete_any)
     namespace_\loops: lm_trans_ptr_stack_new(@lm_trans_loop_delete_any)
-    if: namespace_\cleanups = 0 || namespace_\loops = 0
+    namespace_\catches: lm_trans_ptr_stack_new(@lm_trans_catch_pad_delete_any)
+    namespace_\throws_node: function\throws_node
+    if: namespace_\cleanups = 0 || namespace_\loops = 0 || namespace_\catches = 0
         lm_trans_ptr_stack_delete(@ namespace_\cleanups)
         lm_trans_ptr_stack_delete(@ namespace_\loops)
+        lm_trans_ptr_stack_delete(@ namespace_\catches)
         namespace_\cleanups: state\previous_cleanups
         namespace_\loops: state\previous_loops
+        namespace_\catches: state\previous_catches
+        namespace_\throws_node: state\previous_throws_node
         namespace_\message_thread_entry: state\previous_message_thread_entry
         namespace_\managed_message_thread_context: state\previous_managed_message_thread_context
         state\previous_cleanups: 0
         state\previous_loops: 0
+        state\previous_catches: 0
         state\has_previous_control_stacks: 0
         lm_trans_function_state_delete(state)
         lm_trans_namespace_leave_scope(namespace_)
@@ -2030,6 +2038,15 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
         status: lm_trans_emit_thread_handler_prologue(file, function, body_indent)
     if: status = 0 && function\is_struct_return
         status: lm_trans_emit_fm_result_prologue(file, function\c_name, body_indent)
+    if: status = 0 && function\throws_node != 0
+        if: lm_trans_emit_throw_channel_prelude(lm_trans_prelude_file(file)) != 0
+            status: 1
+        else:
+            if: lm_trans_emit_indent(file, body_indent) != 0 || lm_trans_put(file, "lm_throw_code = 0;\n") != 0
+                status: 1
+            ---
+        ---
+    ---
     if: status = 0
         status: lm_trans_emit_statement_list(file, function\body_start, body_indent, namespace_)
     if: status = 0
@@ -2058,10 +2075,14 @@ fn: lm_trans_emit_function_with_hoisted (FILE: file; const: (LmTransFunctionHead
     namespace_\managed_message_thread_context: state\previous_managed_message_thread_context
     lm_trans_ptr_stack_delete(@ namespace_\cleanups)
     lm_trans_ptr_stack_delete(@ namespace_\loops)
+    lm_trans_ptr_stack_delete(@ namespace_\catches)
     namespace_\cleanups: state\previous_cleanups
     namespace_\loops: state\previous_loops
+    namespace_\catches: state\previous_catches
+    namespace_\throws_node: state\previous_throws_node
     state\previous_cleanups: 0
     state\previous_loops: 0
+    state\previous_catches: 0
     state\has_previous_control_stacks: 0
     lm_trans_function_state_delete(state)
     lm_trans_namespace_leave_scope(namespace_)

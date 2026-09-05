@@ -58,10 +58,10 @@ L3:
 		GreetingSkip
 
         if: cfg\greeting\len = 0
-            fail: GreetingRetry(cfg)
+            throw: GreetingRetry(cfg)
 
         if: cfg\greeting\len < 0
-	    fail: GreetingSkip(cfg\greeting)
+	    throw: GreetingSkip(cfg\greeting)
 
     return: cfg\greeting
 

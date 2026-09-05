@@ -1,0 +1,35 @@
+L2:
+    fn: parsePositive (int(n)) int
+        throws: NonPositive
+        if: n <= 0
+            throw: NonPositive()
+        return: n
+    end: parsePositive
+
+    fn: parseOrZero (int(n)) int
+        throws: NonPositive
+        if: n <= 0
+            throw: NonPositive(n)
+        return: n
+    end: parseOrZero
+
+    external:
+        fn: main () int
+            int: n 0
+            int: value 0
+            int: skipped 0
+            int: payload 0
+            catch: NonPositive ()
+                n: 1
+            value: parsePositive(n)
+            ---
+                skipped: parsePositive(-1)
+                catch: NonPositive ()
+                    skipped: 0
+            ---
+                payload: parseOrZero(-4)
+                catch: NonPositive (int: bad)
+                    payload: bad
+        return: value != 1 || skipped != 0 || payload != -4
+    end: external
+end: L2

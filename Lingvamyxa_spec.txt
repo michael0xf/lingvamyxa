@@ -6293,7 +6293,7 @@ values allowed by its declared return type. That is the C-like convention: the
 caller tests the value or does not.
 
 With `throws`, a recoverable failure is not a value of the declared return
-type. It is `fail` delivered to `catch` as specified in sections 19.11 and
+type. It is `throw` delivered to `catch` as specified in sections 19.11 and
 19.29.14.4.
 
 ---ANSI C---
@@ -6999,7 +6999,7 @@ against that length automatically:
     beds[i] means index(beds, i)
 
 where `index` requires `0 <= i < beds\len` (or the visible length field of
-that Array Structure). Out of range is `fail: Bounds`, not `assert` and not a
+that Array Structure). Out of range is `throw: Bounds`, not `assert` and not a
 sentinel element. `None` may be a valid element; it is not a bounds result.
 
 L2 does not insert that check automatically. L2 may index an explicit raw
@@ -7009,7 +7009,7 @@ ArrayReference indexing.
 ?
 Slicing, negative indexes if any, multidimensional arrays, text encoding and
 the boundary between parser form and receiver/operator form remain to be
-finished. The bounds channel is `fail`/`catch`.
+finished. The bounds channel is `throw`/`catch`.
 ?
 
 ---ANSI C---
@@ -8074,7 +8074,7 @@ raw indexing and address arithmetic.
 ?
 The array/text specification must still define slicing, negative indexes if
 any, multidimensional arrays, text encoding and the boundary between parser
-form and receiver/operator form. Bounds failure itself uses `fail`/`catch`
+form and receiver/operator form. Bounds failure itself uses `throw`/`catch`
 as specified in section 12.3.
 ?
 
@@ -8087,10 +8087,10 @@ are specified in sections 7.2 and 7.3.3.
 ?
 
 Without `throws`, erroneous results may be represented as ordinary values
-allowed by the declared return type. With `throws`, they are `fail` delivered
+allowed by the declared return type. With `throws`, they are `throw` delivered
 to `catch` (sections 19.11 and 19.29.14.4). Iterator exhaustion, message
 validation/execution failure and L3 ArrayReference bounds failure use that
-same `fail`/`catch` rule. They are not encoded as `None` and are not
+same `throw`/`catch` rule. They are not encoded as `None` and are not
 `assert`.
 18.3. ANSI C Implementation Variants
 
@@ -8245,13 +8245,15 @@ explicitly below.
     9.  finally
         IMPLEMENTED executable/scope cleanup receiver; L2/L3.
 
-    10. catch / fail / throws
-        NOT IMPLEMENTED as recoverable failure flow. The registered `guard:` is
-        an unrelated module/prelude guard. Proposed: register distinct
-        `catch:`, `fail:` and `throws:` receivers; do not overload the module
-        guard. `fail: Name(arguments)` delivers the arguments as payload to
-        `catch: Name (...)` in the caller block. Duplicate `catch` names in one
-        block are an error; a series uses nested blocks.
+    10. catch / throw / throws
+        IMPLEMENTED L2/L3 recoverable failure flow. `throws:` on `fn`/`sub`
+        lists names. `throw: Name(arguments)` leaves the current
+        executable with a dummy return. `catch: Name (parameters)` is a
+        skipped landing pad; after it, execution continues in the same block.
+        A throwing call must be a statement or the entire assignment; nested
+        throwing expressions are rejected. Duplicate `catch` names in one
+        block are an error; a series uses nested `---` blocks. C lowering is
+        a same-TU throw channel plus `goto` to the selected catch.
 
     11. retry / retryable
         NOT IMPLEMENTED. Proposed: register retry-frame and retry-transfer
@@ -8273,7 +8275,7 @@ explicitly below.
     14. yield
         NOT IMPLEMENTED. Proposed: register a function-body receiver that emits
         an iterator value and persists the resume state in the iterator
-        Structure. Exhaustion is `fail: Stop`, caught by `each`; it is not a
+        Structure. Exhaustion is `throw: Stop`, caught by `each`; it is not a
         `None` result from `next`.
 
     15. labelled break / labelled continue
@@ -8346,7 +8348,7 @@ explicitly below.
         with `throws: Failure`, and
         `execute(ExecutionPlan) -> Result` with `throws: Failure`, plus an
         `emit:` statement receiver that appends a proposed message to the
-        current Message Thread outbox. Failure is `fail`/`catch`, not a second
+        current Message Thread outbox. Failure is `throw`/`catch`, not a second
         return type. These operations belong to L2/L3. The lower-level hosted runtime
         now has FIFO inbox/outbox byte queues and local route delivery, but that
         ABI does not itself parse, validate or execute the LMX document and does
@@ -8380,7 +8382,7 @@ explicitly below.
         `profile.validator` Table lookup exists, but
         the generic validation pipeline is NOT IMPLEMENTED. Proposed: the
         `validate` operation from item 20 returns an ExecutionPlan containing
-        validation/authority evidence, or `fail: Failure` with that diagnostic
+        validation/authority evidence, or `throw: Failure` with that diagnostic
         as payload; no separate `evidence:` receiver is required.
 
     24. entry / provides / satisfies / conflict
@@ -8407,7 +8409,7 @@ explicitly below.
         `toLmx(Value) -> Text` with `throws: Failure` and
         `fromLmx(TargetDescriptor, Text) -> Value` with `throws: Failure`,
         selected through visible callable/codec descriptors rather than parser
-        primitives. Encoding failure is `fail`/`catch`, not a union return.
+        primitives. Encoding failure is `throw`/`catch`, not a union return.
 
     27. stop / exit / send / reply / await / schedule / thread
         `stop:` is an IMPLEMENTED L2/L3 statement receiver. Its admitted forms
@@ -8529,7 +8531,7 @@ explicitly below.
         responsibility of their explicit host controller.
 
         `reply`, `await` and `schedule` are NOT IMPLEMENTED as source receivers.
-        Proposed contracts: `reply` sends the declared result or, on `fail`,
+        Proposed contracts: `reply` sends the declared result or, on `throw`,
         a failure message with the same name and payload; `await(Future) ->
         Value` with `throws: Failure`; and `schedule(Message, Time)`.
 
@@ -8918,9 +8920,9 @@ For arrays or array-like containers, `each` may lower to an index loop.
 
 After that used-path check, the `each` receiver separately consumes the
 iterator's `next(env)` operation. `next` produces a value by `yield` or ends
-the sequence by `fail: Stop`. `each` catches `Stop` and finishes the loop.
+the sequence by `throw: Stop`. `each` catches `Stop` and finishes the loop.
 That is the same `catch` rule as section 19.11. Exhaustion is not a `None`
-element: `None` may be a valid yielded value. Any other `fail` from `next`
+element: `None` may be a valid yielded value. Any other `throw` from `next`
 propagates unless the `each` body or caller has a matching `catch`. Failure
 to consume `next` as a call is an ordinary receiver error, not another
 compatibility relation.
@@ -9054,7 +9056,7 @@ Cleanups are executed when their associated frame or scope is exited by:
     continue;
     labelled break;
     labelled continue;
-    fail;
+    throw;
     retry;
     redo;
     assert diagnostic exit;
@@ -9067,24 +9069,24 @@ A cleanup body is executed outside the registration operation. It is not execute
 `finally` cleanups are part of the Message Thread execution-context model in
 section 19.28.
 
-A control exit from inside a cleanup body (`fail`, `assert`, `return`,
+A control exit from inside a cleanup body (`throw`, `assert`, `return`,
 `break`, `continue`, `retry`, `redo`) does not re-enter the `finally`
 registration that is currently running. A nested `finally` written in that
 cleanup body is a new registration for the cleanup frame, not a second run of
 the outer one. After the current cleanup is left, remaining not-yet-run
 cleanups of the abandoned outer frame still run in reverse registration
-order. Then the exit is delivered as usual: `fail` to `catch`/`throws`,
+order. Then the exit is delivered as usual: `throw` to `catch`/`throws`,
 `assert` to the diagnostic root, `return`/`break`/`continue`/`retry`/`redo`
 to their ordinary targets.
 
-19.11. `catch`, `fail`, `throws`
+19.11. `catch`, `throw`, `throws`
 
-`catch`, `fail` and `throws` define declared recoverable failure flow.
+`catch`, `throw` and `throws` define declared recoverable failure flow.
 
 They are distinct from `assert`. They are not the module/prelude `guard:`
 receiver.
 
-    catch / fail / throws:
+    catch / throw / throws:
         declared, expected, recoverable failure path
 
     assert:
@@ -9094,7 +9096,7 @@ The detection condition is an ordinary `if`. There is no failure-flow `guard:`.
 
 19.11.1. `throws`
 
-An executable definition may declare the failure names that may leave its body
+An executable definition may declare the names that may leave its body
 with `throws`.
 
 A caller of that executable must provide a `catch` for each listed name or
@@ -9103,38 +9105,38 @@ itself declare that name in `throws`. A call that does neither is rejected.
 `throws` lists names, not types. Those names are the `catch` landing pads the
 caller must supply.
 
-19.11.2. `fail`
+19.11.2. `throw`
 
-`fail: Name(arguments)` exits the current executable body. It does not
-continue the remainder of that activation after the `fail` site and does not
+`throw: Name(arguments)` exits the current executable body. It does not
+continue the remainder of that activation after the `throw` site and does not
 produce the declared return value. A `catch` that calls the same executable
 again starts a new activation from the beginning of that executable. That
 re-call is not resumption of the abandoned frame.
 
-The arguments are the failure payload. They bind to the parameters of the
+The arguments are the throw payload. They bind to the parameters of the
 selected `catch: Name (...)`.
 
 Semantic effect:
 
-    select failure name `Name`;
+    select throw name `Name`;
     bind the payload from `arguments`;
     execute affected `finally` cleanups for the current frame exit;
     leave the current executable;
     deliver the payload to the matching `catch` in the caller block, or
         propagate through that caller's `throws`.
 
-`fail` is part of the declared `throws` set. It is not a diagnostic abort.
+`throw` is part of the declared `throws` set. It is not a diagnostic abort.
 
-`fail` does not transfer to the thread diagnostic root.
+`throw` does not transfer to the thread diagnostic root.
 
-`fail` does not use the `assert` channel.
+`throw` does not use the `assert` channel.
 
 19.11.3. `catch`
 
 `catch: Name (parameters)` is a landing pad in a caller block. It is not an
 ordinary nested `sub` and is not entered on first pass through the block.
 
-Its body runs only when `fail: Name(...)` is delivered. After the `catch` body
+Its body runs only when `throw: Name(...)` is delivered. After the `catch` body
 completes, execution continues in the same block at the statements following
 that `catch`. Those following statements, up to the next `catch` in the same
 block or the end of the block, are the region re-entered or skipped according
@@ -9143,11 +9145,11 @@ following region; a `catch` after a call continues past the `catch`.
 
 Two `catch` receivers with the same name in one block are an error. A series
 of same-named `catch` receivers is written as separate nested blocks, each
-with its own `catch`. A `fail` is delivered to the `catch` of that name in the
-block from which the failing executable was called, not to a same-named
+with its own `catch`. A `throw` is delivered to the `catch` of that name in the
+block from which the throwing executable was called, not to a same-named
 `catch` in a sibling block.
 
-A `fail` of the same name from inside a `catch` body is not a re-entry of that
+A `throw` of the same name from inside a `catch` body is not a re-entry of that
 same landing pad. It is a new failure in the enclosing caller.
 
 Example from `tests/t2.lmx`:
@@ -9158,10 +9160,10 @@ fn: checkedGreeting (HelloConfig(cfg)) (Text)
         GreetingSkip
 
     if: cfg\greeting\len = 0
-        fail: GreetingRetry(cfg)
+        throw: GreetingRetry(cfg)
 
     if: cfg\greeting\len < 0
-        fail: GreetingSkip(cfg\greeting)
+        throw: GreetingSkip(cfg\greeting)
 
     return: cfg\greeting
 
@@ -9192,23 +9194,23 @@ sub: helloMain
         System\out\println: ("handled EmptyGreeting: " + badText)
 
 
-`checkedGreeting` may leave by `return: cfg\greeting` or by `fail`. The empty
+`checkedGreeting` may leave by `return: cfg\greeting` or by `throw`. The empty
 `GreetingRetry ()` catch parameters mean this landing pad takes no payload
 fields; it mutates the outer `cfg` or `emptyCfg`. `GreetingSkip` binds
-`cfg\greeting` from `fail: GreetingSkip(cfg\greeting)` to `badText`.
+`cfg\greeting` from `throw: GreetingSkip(cfg\greeting)` to `badText`.
 
 Each anonymous `---` block owns one `GreetingRetry` catch and one call. The
 two `GreetingRetry` names are therefore not duplicates. `GreetingSkip` sits
 in `helloMain` after those blocks, so a skip continues at the statements
 after that `catch`.
 
-19.11.4. Failure propagation
+19.11.4. Throw propagation
 
-If a failure is not caught in the current block, it must be propagated by an
+If a throw is not caught in the current block, it must be propagated by an
 enclosing or calling executable whose `throws` declaration includes that
-failure name.
+name.
 
-Failure propagation is structured. It is not a raw jump through arbitrary
+Throw propagation is structured. It is not a raw jump through arbitrary
 stack frames in the source semantics. It is not a C `goto` from the callee
 into the caller.
 
@@ -9270,7 +9272,7 @@ If the condition is true, execution continues normally.
 
 If the condition is false, the current execution/checking phase fails with an `AssertionViolation` diagnostic.
 
-`assert` is not recoverable `fail` control flow.
+`assert` is not recoverable `throw` control flow.
 
 `assert` is not part of the declared `throws` set.
 
@@ -9290,7 +9292,7 @@ Default L2 descriptor/configuration-loading use, if exposed by a receiver profil
 
     an assertion violation terminates the current model-loading or translation pass with a diagnostic error.
 
-`assert` is intended for impossible states, broken invariants, corrupted internal assumptions or translator/model errors. Expected input failure must use `if`, `fail` and `catch`.
+`assert` is intended for impossible states, broken invariants, corrupted internal assumptions or translator/model errors. Expected input failure must use `if`, `throw` and `catch`.
 
 19.13.1. `log` and `error`
 
@@ -9316,7 +9318,7 @@ Examples:
 or profile-defined informational record.
 
 `error` records an error/diagnostic observation. It is not reserved parser
-syntax and it is not automatically equivalent to `fail`, `assert`, `return` or
+syntax and it is not automatically equivalent to `throw`, `assert`, `return` or
 thread termination. If a profile wants an error observation to also fail,
 abort, throw, send a failure message or terminate a task, that behavior must
 be defined by that profile or by an explicit surrounding receiver.
@@ -9392,7 +9394,7 @@ It is:
     words() -> iterator state Structure
     next(env) -> "Hello"
     next(env) -> "World"
-    next(env) -> fail: Stop
+    next(env) -> throw: Stop
 
 Therefore `yield` provides demand-driven production:
 
@@ -9578,7 +9580,7 @@ When `yield` is implemented, that state is the same class of arena-owned
 environment as nested `fn` capture in section 7.3.3: copied into surviving
 slots at iterator creation, then read and written through those slots by
 `next`. Source-level code does not depend on the physical layout of this
-state Structure. `fail: Stop` from `next` still uses the `catch` rule in
+state Structure. `throw: Stop` from `next` still uses the `catch` rule in
 section 19.15.3; it does not require a second capture model.
 
 19.15.3. `next(env)`
@@ -9591,18 +9593,18 @@ must resume. That value may be `None` when `T` admits it. `None` is an
 element, not the end of the sequence.
 
 When the iterator is exhausted — the body ends after the last `yield`, or
-the body executes `fail: Stop` — `next` does not return a sentinel `T`.
+the body executes `throw: Stop` — `next` does not return a sentinel `T`.
 It fails with `Stop`:
 
-    fail: Stop
+    throw: Stop
 
 `iterator(T)` therefore implies that `next` has `throws: Stop` in addition
 to any other `throws` declared by the iterator body. `each` catches `Stop`
 and ends the loop. A read or parse failure in the iterator body uses a
-different name (`fail: ReadError ...` or whatever the body declared) and
+different name (`throw: ReadError ...` or whatever the body declared) and
 is not swallowed by `each`.
 
-This is the same `catch`/`fail`/`throws` rule as section 19.11. Comparing
+This is the same `catch`/`throw`/`throws` rule as section 19.11. Comparing
 the produced value with `None` is not the exhaustion test.
 
 19.15.4. `yield` value construction
@@ -9646,7 +9648,7 @@ each: point in makePoints
     draw: point
 
 `each` repeatedly calls `next`. A yielded `Point` is bound to `point`.
-`fail: Stop` is caught by `each` and ends the loop. Another `fail` from
+`throw: Stop` is caught by `each` and ends the loop. Another `throw` from
 `next` is not `Stop` and follows ordinary `catch`/`throws` in the caller
 of `each`.
 
@@ -10939,7 +10941,7 @@ and effect/lifetime rules.
 It does not decide which implementation is meant. It runs the implementation
 already selected by validation:
 
-    ExecutionPlan -> ExecutionContext -> result or `fail: Failure`
+    ExecutionPlan -> ExecutionContext -> result or `throw: Failure`
 
 The result produced here is an execution result inside the current execution
 context. It is not yet a reply message merely because it exists. The consumer of
@@ -11010,7 +11012,7 @@ The standard high-level pipeline is:
         -> implementation selection -> ConcreteExpression
         -> execution-plan construction -> ExecutionPlan
         -> Executor
-        -> Result or `fail: Failure`
+        -> Result or `throw: Failure`
         -> Boundary Result Consumer
         -> Logical Message Generator
         -> New IncomingMessage(s)
@@ -12197,7 +12199,7 @@ rather than to the handler frame.
 19.28.4. Cleanup and Control Exit
 
 Cleanup is local to the current handler/frame/thread owner. Control exits such
-as `return`, `fail`, `break`, `continue` and cancellation must run required
+as `return`, `throw`, `break`, `continue` and cancellation must run required
 cleanup before the owner is cut or reused. Cleanup must not destroy an arena
 that is still reachable through a published return/reference root. A Structure
 or Array return first publishes its exact existing reference under the rule in
@@ -12523,7 +12525,7 @@ Core message semantics are intentionally smaller than broker/runtime policy:
 
     message = proposed, potentially executable/action-capable expression;
     validation/merge -> ExecutionPlan;
-    execution -> result or `fail: Failure`;
+    execution -> result or `throw: Failure`;
     boundary -> reply/failure message to `replyTo` or a local continuation.
 
 The core language does not require a broker-style acknowledgement, dead-letter
@@ -12644,17 +12646,17 @@ This keeps the boundary clean:
 
     validator/merge
         turns the candidate plus profile rows into a concrete plan, or
-        `fail: Failure` with the diagnostic payload;
+        `throw: Failure` with the diagnostic payload;
 
     executor
-        runs only the concrete plan and records a result or `fail: Failure`
+        runs only the concrete plan and records a result or `throw: Failure`
         plus evidence rows according to the selected profile.
 
 19.28.8. Reply, Future, Failure and Continuation
 
 Replies and futures are message records. Failures crossing a Message Thread
 boundary are data messages, not hidden exceptions. The message carries the
-same `fail` name and payload that `catch` would have received in-process.
+same `throw` name and payload that `catch` would have received in-process.
 It is not a second return type.
 
 A result crossing a Message Thread or service boundary is represented as a message.
@@ -14683,15 +14685,17 @@ Implementation status for this subsection:
     `return`, `stop`, unlabelled `break`, unlabelled `continue` and `assert`
         have current bootstrap lowering;
 
-    recoverable `catch` / `fail` / `throws`, `retryable` / `retry`,
+    recoverable `catch` / `throw` / `throws`
+        have current bootstrap lowering;
+
+    `retryable` / `retry`,
         `redo` and labelled `break` / labelled `continue`
         are PROPOSED memory contracts and NOT IMPLEMENTED as those source
         receivers.
 
 The currently registered `guard:` is an unrelated module/prelude guard. It
-does not implement recoverable failure. References to `catch`, `fail` and
-`throws` in this subsection specify their required memory behavior if and
-when those receivers are added.
+does not implement recoverable `throw`/`catch`. References to `catch`, `throw`
+and `throws` in this subsection specify their required memory behavior.
 
 Current `stop:` is a cooperative state transition rather than an immediate
 control transfer. It reaches collection when execution arrives at the common
@@ -14721,7 +14725,7 @@ Local collection may run at these points:
     after `continue`;
     after labelled `break`;
     after labelled `continue`;
-    after `fail`;
+    after `throw`;
     after `retry`;
     after `redo`;
     after an `assert` diagnostic exit;
@@ -14858,7 +14862,7 @@ The control operations relate to safe points as follows:
         may leave several nested frames and therefore mark several owner
         regions before one collection pass;
 
-    `fail`
+    `throw`
         leaves recoverable failure scopes and may create a safe point;
 
     `retry`
@@ -14917,7 +14921,7 @@ An assertion violation is not part of the declared `throws` set.
 An assertion violation is not caught by `catch` unless a non-default
 diagnostic profile explicitly bridges the two channels.
 
-An assertion violation does not execute `fail` merely because both paths leave
+An assertion violation does not execute `throw` merely because both paths leave
 the current body.
 
 Assertion exit may reclaim memory because it abandons owner regions. The
@@ -14938,28 +14942,28 @@ exit must not silently reinterpret ordinary Structure or Array `return`
 semantics.
 
 
-19.29.14.4. `catch`, `fail`, `throws`
+19.29.14.4. `catch`, `throw`, `throws`
 
-`catch`, `fail` and `throws` define declared recoverable failure flow. They are
+`catch`, `throw` and `throws` define declared recoverable failure flow. They are
 distinct from `assert`. They are not the module/prelude `guard:` receiver.
 
-    catch / fail / throws
+    catch / throw / throws
         declared, expected, recoverable failure path;
 
     assert
         diagnostic invariant violation path.
 
-`throws` lists the failure names that may leave the executable as recoverable
-failures. A caller of such an executable must provide a `catch` for each listed
+`throws` lists the names that may leave the executable. A caller of such
+an executable must provide a `catch` for each listed
 name or itself declare that name in `throws`. A call that does neither is
 rejected.
 
-`fail: Name(arguments)` exits the current executable body. It does not
-continue the remainder of that activation after the `fail` site and does not
+`throw: Name(arguments)` exits the current executable body. It does not
+continue the remainder of that activation after the `throw` site and does not
 produce the declared return value. A `catch` that calls the same executable
 again starts a new activation from the beginning of that executable. That
 re-call is not resumption of the abandoned frame. The
-arguments are the failure payload. They bind to the parameters of the selected
+arguments are the throw payload. They bind to the parameters of the selected
 `catch: Name (...)`.
 
 `catch: Name (parameters)` is a landing pad in a caller block, not an ordinary
@@ -14973,15 +14977,15 @@ region; a `catch` after a call continues past the `catch`.
 
 Two `catch` receivers with the same name in one block are an error. A series
 of same-named `catch` receivers is written as separate nested blocks, each
-with its own `catch`. A `fail` is delivered to the `catch` of that name in the
-block from which the failing executable was called, not to a same-named
+with its own `catch`. A `throw` is delivered to the `catch` of that name in the
+block from which the throwing executable was called, not to a same-named
 `catch` in a sibling block.
 
 Default recoverable-failure sequence:
 
-    a condition or callee produces `fail: Name(arguments)`;
+    a condition or callee produces `throw: Name(arguments)`;
     bind the payload arguments in an owner visible to the selected `catch`;
-    leave the failing body; do not resume at the `fail` site;
+    leave the throwing body; do not resume at the `throw` site;
     mark the abandoned callee frame owners exited;
     update the owner graph;
     run required cleanup for the abandoned frame;
@@ -14989,11 +14993,11 @@ Default recoverable-failure sequence:
     run the matching `catch` body in the caller block;
     continue in that caller block after that `catch`.
 
-`fail` does not transfer to the diagnostic root by default.
+`throw` does not transfer to the diagnostic root by default.
 
-`fail` does not use the assertion channel.
+`throw` does not use the assertion channel.
 
-`fail` does not directly release memory. It creates a possible safe point by
+`throw` does not directly release memory. It creates a possible safe point by
 leaving an owner context.
 
 A failure payload which must survive the abandoned owner must already be owned
@@ -15007,9 +15011,9 @@ If a failure crosses a Message Thread boundary, it uses ordinary message
 boundary behavior: copy, serialization or whole-branch ownership transfer. A
 raw reference into the failing Message Thread owner graph does not cross.
 
-A translator may lower `fail` as a structured status return from the callee
+A translator may lower `throw` as a structured status return from the callee
 and a same-function branch or `goto` in the caller to the point after the
-selected `catch`. It must not lower `fail` as a `goto` from the callee into
+selected `catch`. It must not lower `throw` as a `goto` from the callee into
 the caller. Root-level `longjmp` is not the default.
 
 `catch` re-entry must not observe an abandoned callee's invalid borrowed
@@ -15017,7 +15021,7 @@ references. A compiler or runtime may reject such a retained borrow, clear the
 binding according to its descriptor, or maintain the source owner if the edge
 was explicitly established as owned before the failure.
 
-A `fail` of the same name from inside a `catch` body is not a re-entry of that
+A `throw` of the same name from inside a `catch` body is not a re-entry of that
 same landing pad. It is a new failure in the enclosing caller, subject to that
 caller's `catch` or `throws`.
 
@@ -15267,7 +15271,7 @@ A boundary is completed after any of these events:
 
     a message handler completes normally;
 
-    a message handler exits by `return`, `fail`, `retry`, `redo`, assertion
+    a message handler exits by `return`, `throw`, `retry`, `redo`, assertion
         diagnostic exit, cancellation or Message Thread termination;
 
     a reply/failure has been committed to its future, continuation or target
@@ -16853,7 +16857,7 @@ unless an L2 profile explicitly enables or redefines them:
     match / default-pattern receivers
     each
     finally
-    catch / fail / throws
+    catch / throw / throws
     retry / retryable
     assert
     redo
