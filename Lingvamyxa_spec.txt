@@ -7,7 +7,18 @@ profiles, registry and message operators, runtime services and authentication.
 
 Type compatibility is `implements(varA varB Consumer)` (sections 2.1–2.4 and 19.21.3):
 the used tree of `Consumer`, merge-keyed converters at primitive leaves, no
-two-argument form. Hosted trans still lags that predicate (section 21.7).
+two-argument form.
+
+Source semantics are sections 0, 2 and 3: Value is Primitive, StructureReference
+or ArrayReference. A Structure holds primitives and references. A callable
+value is a StructureReference. C `typedef`s, C function symbols, C address
+depth and tables named `class` / `layout.backend` are L1 projection. They are
+not the ontology. Passages that describe the current hosted translator are
+labelled as bootstrap/projection; they must not be read as adding value kinds.
+The working assignment that restores that reading in the implementation is
+`struct_refactoring.txt`. Hosted trans still lags `implements` (section 21.7)
+and still emits per-name C types; that lag is a defect of the bootstrap, not
+a license to treat those types as Lingvamyxa values.
 
 0. Core Formula
 
@@ -817,7 +828,11 @@ those Structures and assign typed meaning to them.
 
 A compact description is:
 
-    Lingvamyxa is an object-oriented, functional and logical structural language whose self-hosting infrastructure begins at L2/lm2 and whose hosted bootstrap may lower through an external L1 substrate.
+    Lingvamyxa is a structural language: source builds Structures; receivers
+    consume them. Functional and logical uses are those Structures under
+    different receivers. Self-hosting infrastructure begins at L2/lm2. The
+    hosted bootstrap may lower through an external L1 substrate. It is not a
+    class-object language.
 
 More precisely:
 
@@ -839,13 +854,15 @@ Lingvamyxa REST profile provides a standard event/message transport between
 groups of Message Threads and service instances. HTTP is the transport
 envelope; Lingvamyxa messages and Structures remain the semantic payload.
 
-The object-oriented side is structural, not class-magical. An explicit model
-descriptor is a Structure bound in the namespace and may describe fields,
-defaults, constraints and operations. Constructing an instance reads the
-visible descriptor, allocates one Structure in the selected arena, initializes
-it and returns its reference. Construction does not create descriptor tables or
-namespace entries other than an explicitly declared result binding. Operations
-are selected through visible namespace bindings and descriptor information.
+There is no class-object model. An explicit model descriptor is a Structure
+bound in the namespace and may describe fields, defaults, constraints and
+operations (including `fn` / `sub` / `callable` fields whose values are
+StructureReferences). Constructing a value reads the visible descriptor,
+allocates one Structure in the selected arena, initializes it and returns its
+reference. Construction does not create descriptor tables or namespace entries
+other than an explicitly declared result binding. Operations are selected
+through visible namespace bindings and that descriptor. An instance holds
+exactly one own descriptor; it does not hold a table of foreign type objects.
 
 The functional side is also structural. A function or subroutine definition is a
 Structure consumed by the `fn` or `sub` receiver. A call spelling is a Frame, but
@@ -1143,7 +1160,48 @@ A backend may project a known Structure or array to a C `struct`, pointer and
 length pair, flat allocation or another optimized representation. Such target
 layouts are backend artifacts, never additional Lingvamyxa values and never a
 reason to create registry rows. There is no fundamental `Struct`, C aggregate,
-registry-class or table-cell value kind in the minimal source syntax.
+registry-class, function-pointer, vtable or table-cell value kind in the
+minimal source syntax.
+
+The conforming in-memory projection of a Structure is one arena chunk that
+always begins with its own descriptor. The first word is a StructureReference
+to that descriptor. The descriptor itself is a Structure (usually one shared
+instance per name in a module/root arena, not a copy in every value). After
+the first word comes a flat payload of slots. The translator or runtime reads
+the descriptor's field stream: how many slots, which are Primitive cells,
+which are StructureReferences, which are ArrayReferences. The chunk size is:
+
+    size of the descriptor reference + sum of slot sizes
+
+A StructureReference slot is a pointer to another such chunk. Memory is an
+ordinary tree. There is no per-name `typedef` and no vtable. Field-follow
+`x\foo` loads `x`'s own descriptor, finds the newest occurrence `foo`, and
+reads that slot. A `fn` / `sub` / `callable` field of a descriptor is another
+slot holding a StructureReference to a callable chunk. Merge appends that
+field as any other field (sections 2.3 and 19.17). The field is not a method
+slot on each instance and not a C function type.
+
+The instance holds exactly that one descriptor reference at the start of the
+chunk. It does not hold pointers to other types' descriptors. Other
+Structures are reached only as field values.
+
+If the descriptor is known statically, the translator need not re-derive the
+chunk size at every access. The prefix invariant is the same: every Structure
+chunk is self-describing. A closed per-name `typedef` is a later optimization
+of that layout, not the first implementation, and must not be required for a
+Structure or callable to exist. A translator may still emit a C function and
+store an opaque code pointer inside a callable Structure's payload as L1
+data. The source value remains the StructureReference.
+
+An ArrayReference is not this tree. It has one array descriptor (element
+description, rank, shape, optional stride) and one rectangular backing block
+of `d0 × d1 × … × dN-1` cells. Multidimensional layout is shape and stride,
+not a tree of arrays. Indexing is an offset into that block. If an element
+is a StructureReference, the backing is a flat row of pointers to Structure
+chunks; the Structure tree begins in those chunks, each with its own
+descriptor prefix. A rank-1 array whose elements are ArrayReferences is
+ordinary nested references, not a ragged rank-N array. The nested `[]`
+matrix literal in section 6.5 is rectangular notation, not uneven rows.
 
 2.1. Type Compatibility through Namespace Descriptors
 
@@ -1581,9 +1639,15 @@ enabling a flag.
 A Structure is an arena-resident aggregate referent containing an ordered set of
 fields. The source-semantic value that denotes it is a StructureReference.
 Fields may have names, and field order is part of the logical Structure.
+Each field holds a Primitive, a StructureReference or an ArrayReference. A
+nested `fn` / `sub` / `callable` in a descriptor is a field whose value is a
+StructureReference to a callable Structure.
 
 A Structure may contain StructureReferences and ArrayReferences to nested
 aggregates. Tree-shaped data is represented by those reference edges.
+In the conforming projection of section 2, the arena chunk always starts
+with that own-descriptor reference, then a flat payload of slots. Other
+Structures are reached only as field values.
 
 3.2. Frame
 
@@ -3844,14 +3908,16 @@ with the same namespace resolution and head/update form as ordinary source.
 
 6.5. Basic Array Operations
 
-An array is an arena-owned Array object denoted by an `ArrayReference`. Its
+An array is an arena-owned Array referent denoted by an `ArrayReference`. Its
 visible descriptor may describe element type, shape, rank and optional stride
-metadata. The Array object/header and its owned backing storage are materialized
-in the selected arena.
+metadata. The Array header and its owned backing storage are materialized in
+the selected arena.
 
 An array is not a special execution object and is not a Structure subtype in the
 source value ontology. Operations over arrays are ordinary visible
-procedure/function/operator calls resolved through the namespace.
+procedure/function/operator calls resolved through the namespace. A backend may
+share header-plus-blob machinery with Structure without merging the two
+categories.
 
 A Primitive scalar remains a Primitive. For array-expression broadcasting, an
 evaluator may assign it a virtual rank-0 shape without materializing an Array
@@ -3870,6 +3936,18 @@ array:
 end: array
 
 The canonical constructor receiver is [].
+
+The Array referent is one header plus one backing block. Rank-N means shape
+`[d0, d1, …, dN-1]` and `size = d0 × d1 × … × dN-1` cells in that block.
+Multidimensional layout is shape and stride, not a tree of row allocations.
+There is no first-class ragged or uneven rank-N array. Nested `[]` in a
+literal is rectangular notation for that one block, not an array of arrays
+of independent lengths. An array whose *element* type is ArrayReference or
+StructureReference is a flat row of references; those referents are separate
+chunks (Structures with a descriptor prefix, or other ArrayReferents).
+
+A descriptor is not stored on every primitive element. The ArrayReference
+holds one array descriptor. Indexing is an offset into the rectangle.
 
 Examples:
 
@@ -3890,11 +3968,20 @@ end: values
 .. 6
 end: matrix
 
+The matrix example is one rank-2 ArrayReference of shape `[2, 3]`, not two
+independent rank-1 arrays.
+
 The exact compact literal form is implementation-defined at early bootstrap
-levels, but the resulting value must be an ArrayReference. A view retains a
-bounded reference to backing storage owned by another arena. An `external-view`
-is still an arena-owned Array object/header whose explicit L2 adapter holds a
-foreign primitive handle; the raw storage itself is not an ArrayReference.
+levels, but the resulting value must be an ArrayReference with one backing
+rectangle. A view retains a bounded reference to backing storage owned by
+another arena. An `external-view` is still an arena-owned Array header whose
+explicit L2 adapter holds a foreign primitive handle; the raw storage itself
+is not an ArrayReference.
+
+The current hosted translator that allocates `lm_own_arena_array_new_zero`
+once per rank (C `T **`, an array of row pointers) is a defect relative to
+this section. Rank metadata beside the value is not a substitute for shape
+on the array descriptor.
 
 6.5.1. Indexing
 
@@ -5267,11 +5354,13 @@ operation may serialize descriptor fields to a Table, conceptually:
     callableKind[AddX]   -> callableDescriptor
 
 Such export is not part of `fn` declaration and does not add namespace names.
-The callable descriptor is the semantic object. C99 forms such as
-`int (*add)(int)`, a `typedef`, a function symbol, a trampoline or a closure
-structure are projection spellings selected by the active L2-to-L1 profile.
-They may be recorded in an explicit backend Table, but they are not separate
-source-level callable kinds and are not the semantic parent of the descriptor.
+The callable descriptor is the semantic value: a StructureReference. C99 forms
+such as `int (*add)(int)`, a `typedef`, a function symbol, a trampoline or a
+closure structure are projection spellings selected by the active L2-to-L1
+profile. They may be recorded in an explicit backend Table, but they are not
+separate source-level callable kinds, not Primitives, and not the semantic
+parent of the descriptor. A function-pointer spelling must not be given a
+source address-depth of its own.
 
 The descriptor is data. It does not define an implementation and cannot be
 called merely because its name is visible. It may be used as `varB` in
@@ -6450,12 +6539,14 @@ and must not be treated as merely a spelling of `char *`.
 
 ---ANSI C---
 A hosted ANSI C backend may represent a known String as a pointer-and-length
-object and may represent a known array with contiguous backing storage. It must
-obtain every ordinary Structure and Array object from the selected Lingvamyxa
+header and may represent a known array with contiguous backing storage. It must
+obtain every ordinary Structure and Array referent from the selected Lingvamyxa
 arena. A generated `typedef struct`, flat element block or direct field access
-is an optimization; C automatic or static storage duration is not observable
-source semantics. The concrete field names, descriptor representation, length
-type and string interning are implementation details.
+is an optional optimization of the one-header-plus-blob projection; it must not
+be required for the source value to exist. C automatic or static storage
+duration is not observable source semantics. The concrete field names,
+descriptor representation, length type and string interning are implementation
+details.
 ---ANSI C---
 
 9.2. Type Constructors
@@ -6680,25 +6771,35 @@ This keeps prefix address-of simple while preserving arbitrary address depth in 
 
 The implementation of `@ⁿ` may be represented by reserved operator descriptors in the L2 operator table. The source semantics only require that `@ⁿ` is parsed as a reserved operator family and that its declaration form produces typed address slots compatible with the active L2 memory profile.
 
-Address-depth projection composes with the base type category. A primitive base
-type starts at address depth 0. External scalar L1 base types imported by a
-projection profile, such as `size_t` in the hosted C99 profile, also start at
-address depth 0. This remains true when a primitive exposes names
-and a physical aggregate spelling: those names participate in
-`implements(varA varB Consumer)` when a consumer uses them, but
-do not turn the primitive value into a reference. A Structure/opaque-reference descriptor denotes a source-level reference
-by its bare name and therefore starts at address depth 1 in an ANSI C pointer
-projection. This includes ordinary Lingvamyxa descriptors such as `User`
-and opaque imported L1 object/layout types such as ANSI C `FILE`. An opaque
-reference descriptor may be stored, passed and addressed by LMX code. Its fields are
-not visible in the hosted C99 profile because the ANSI C/C99 substrate does not
-publish a portable field layout for that object type; this is not a separate
-LMX restriction. A profile/import that explicitly declares layout metadata for
-an opaque object type may make typed field-follow available for that imported
-layout. Explicit `@ⁿ` address-depth receivers add further address layers on top
-of that base category. Ordinary Array construction does not: it produces an
-ArrayReference whose backend representation includes its bounds/lifetime
-metadata as well as any element-storage address.
+Address-depth is an L2 machine-profile spelling of typed address *slots*, not
+a property of StructureReference or ArrayReference as values.
+
+A Primitive binding (`int: x`) is a cell. `@: int p` is an L2 slot that stores
+the address of a cell. `@@:` / `@@@:` nest those slots. Prefix `@x` is
+address-of the *binding* `x`. If `x` already holds an address, `@x` is
+address-of-address.
+
+A StructureReference binding (`User: u`) *is* the reference. It is not a C
+pointer that "starts at depth 1". `@: User slot` is an L2 address of the
+binding that stores that StructureReference. The same holds for an
+ArrayReference binding. Explicit `@ⁿ` adds layers on those slots only.
+
+Do not collapse `FILE` and `User`. `FILE` as authored in section 2.2.2.4 is a
+primitive opaque cell (a word whose description merged `Cell` with opaque
+spelling). `User` is a StructureReference. A C spelling `FILE *` for the
+primitive cell is projection of that cell, not proof that `FILE` is a
+Structure. A C spelling `User *` for a StructureReference is one possible
+header pointer, not a requirement that each Structure name have a C `typedef`.
+
+An imported opaque L1 name may be stored and passed without exposing fields.
+A profile/import that explicitly declares layout metadata may make typed
+field-follow available for that imported layout. That is import of ABI, not
+a third value category.
+
+Ordinary Array construction produces an ArrayReference. Its backend
+representation includes bounds/lifetime metadata as well as any
+element-storage address. That address is inside the Array, not the
+ArrayReference value.
 
 Primitive/scalar descriptors are explicit namespace bindings. A visible
 descriptor may refer to range, contextual-literal, projection or serialization
@@ -6706,45 +6807,49 @@ information through ordinary Structure fields. An explicit table may organize
 the same information for a library/profile, but table membership does not
 declare the primitive or alter the value ontology.
 
-Examples in the hosted ANSI C profile:
+Examples in the hosted ANSI C profile (one L1 spelling, not source kinds):
 
-    char          -> char
-    @: char       -> char *
+    char          -> primitive cell, C `char`
+    @: char       -> L2 address slot of a `char` cell, C `char *`
     []: char      -> ArrayReference
                      # backing storage may internally contain `char *`
 
-    FILE          -> FILE *      # opaque imported reference descriptor
-    @: FILE       -> FILE **     # address of a `FILE` reference slot
+    FILE          -> primitive opaque cell; C may spell the cell `FILE *`
+    @: FILE       -> L2 address of the binding that stores that cell
 
-    User          -> User *      # possible projection of a StructureReference
-    @: User       -> User **     # address of a `User` reference slot
+    User          -> StructureReference
+                     # C may use one structure header pointer; it need not
+                     # emit `typedef struct User`
+    @: User       -> L2 address of the binding that stores that reference
     []: User      -> ArrayReference
-                     # element backing may internally contain `User **`
+                     # element backing may internally contain header pointers
 
-The arrows in this table illustrate one hosted ANSI C projection. In
-particular, `char *` or `User **` may be a component of an ArrayReference
-representation, but is not the complete source value produced by `[]:`.
+The arrows illustrate one hosted ANSI C projection. In particular, `char *`
+or a header pointer may be a component of an ArrayReference representation,
+but is not the complete source value produced by `[]:`. A `FILE *` spelling
+of the primitive `FILE` cell is not a StructureReference and is not the same
+rule as a header pointer for `User`.
 
 The hosted C99 profile distinguishes three related, but not identical,
 reference/layout cases:
 
 1. A Lingvamyxa Structure descriptor is explicitly bound in the namespace and
    describes visible fields and their descriptors. Typed field-follow uses
-   that descriptor to determine the result of `user\age`.
+   that descriptor (slot index in the anonymous blob, or a descriptor-only
+   field) to determine the result of `user\age`. It is not defined as `user->age`.
 
-2. An opaque imported reference descriptor, such as `FILE`, may be visible for
-   storage and call signatures without exposing fields. Therefore `FILE: file`
-   may lower as `FILE *file`, and `fopen(...)` may return `FILE`, but field
-   follow is unavailable unless an explicit import binds a descriptor that
-   exposes the required field information.
+2. An imported primitive opaque cell, such as `FILE` in section 2.2.2.4, may
+   be visible for storage and call signatures without exposing Structure
+   fields. A C spelling `FILE *file` is projection of that cell. Field-follow
+   on `FILE` is unavailable unless an explicit import binds a Structure
+   descriptor that exposes fields (that would be a `File` Structure, not the
+   primitive cell).
 
-3. A projection-only pointer-follow may lower `a\b` to the selected L1 pointer
-   member spelling, for example `a->b` in the hosted C99 profile, without
-   requiring the LMX translator to prove the field layout. In this case the
-   selected L1 toolchain validates the projected spelling. For an opaque C99
-   type such as `FILE`, an attempted `file\some_field` in such a projection
-   path is accepted or rejected by the C compiler according to the platform's
-   visible C declarations.
+3. An L2 machine path may lower `a\b` to a selected L1 pointer-member
+   spelling, for example `a->b`, without the LMX translator proving a
+   Structure field stream. That path is L2 machine access, not Structure
+   field-follow. The L1 toolchain validates the spelling. It must not be
+   used as the definition of `user\age` for ordinary named Structures.
 
 Typed lookup is required when the translator needs the result descriptor before
 L1 compilation. Examples include a field-chain used as a callable head, such as
@@ -6755,24 +6860,32 @@ in the namespace. The lookup does not authorize a return-time copy: the same
 reference is returned.
 
 The namespace used to choose the hosted representation is the same namespace
-that resolved the source type. A visible descriptor with a present
-`structuralFields` view determines only the first-level semantic shape; it does
-not by itself select Primitive versus StructureReference and does not contribute
-an implicit reference layer. The base value category is resolved separately.
-In the hosted profile a function-pointer or explicitly declared Primitive starts
-at address depth 0, while an explicit reference-base, opaque reference or
-ordinary named-Structure constructor binding starts at address depth 1;
-explicit `@ⁿ` depth is then added. Explicitly imported ABI layout/projection
-metadata may supply the physical spelling or the compatibility fallback when no
-source category has been declared, but it does not replace the descriptor's
-semantic field view. A global Registry classification must not override a
-source category explicitly visible at the use site.
+that resolved the source type. The source field stream of the visible
+descriptor is the semantic shape. A compiler-private `structuralFields` cache
+of that stream is not a second descriptor, not a C `typedef`, and not a
+source value. It does not select Primitive versus StructureReference and does
+not contribute an implicit reference layer. The base value category is
+resolved from the binding: Primitive cell, StructureReference, or
+ArrayReference.
+
+L2 `@ⁿ` depth applies to typed address *slots* only (section 11.2). It is not
+assigned to StructureReference, ArrayReference, or callable Structure as if
+they were C pointers. A function-pointer C spelling has no source address
+depth; it is projection of a callable Structure or of an imported L1 ABI
+name.
+
+Explicitly imported ABI layout/projection metadata may supply physical
+spelling or a compatibility fallback when no source category has been
+declared, but it does not replace the descriptor's field stream. A global
+Registry classification must not override a source category explicitly
+visible at the use site.
 
 During bootstrap that compatibility fallback may read explicitly authored
 `class.reference-base`, `class.kind = opaqueReference`,
 `class.semantic = opaqueHandle` or `class.c.projection` metadata. These are
 projection inputs for imported ABI names, not facts created by declaring or
-constructing a Lingvamyxa Structure.
+constructing a Lingvamyxa Structure. They must not be used to decide that an
+ordinary named Structure "starts at C depth 1".
 
 The temporary hosted fallback for bindings that do not yet expose a
 structural-field view is documented in section 19.20.4. It is a bootstrap
@@ -6953,7 +7066,7 @@ Allow both forms: parser-level recognition for core operators and receiver-level
 12.1. Logical Model
 
 At L2 and L3, an ordinary array is an `ArrayReference`, distinct from a `StructureReference`.
-The Array object/header and its owned element storage are allocated in the
+The Array header and its owned element storage are allocated in the
 selected arena. The logical array model includes at least length and element
 storage and may include capacity, shape, rank, encoding, element descriptor and
 stride information. Text is represented by an immutable Structure or Array
@@ -6992,25 +7105,27 @@ Example conceptual Array meaning:
 
     beds[i] means index(beds, i)
 
-The operation receives the ArrayReference. An ArrayReference is a Structure
-with an explicit length field. L3 indexing checks the admitted coordinates
-against that length automatically:
+The operation receives the ArrayReference, not a Structure. Length, rank and
+shape live on the array descriptor (section 6.5), not as Structure fields of
+the ArrayReference value. L3 indexing checks the admitted coordinates against
+that descriptor automatically:
 
     beds[i] means index(beds, i)
 
-where `index` requires `0 <= i < beds\len` (or the visible length field of
-that Array Structure). Out of range is `throw: Bounds`, not `assert` and not a
-sentinel element. `None` may be a valid element; it is not a bounds result.
+where `index` requires `0 <= i < length(beds)` for rank 1, and a full rank-N
+index against `shape = [d0, …, dN-1]`. Out of range is `throw: Bounds`, not
+`assert` and not a sentinel element. `None` may be a valid element; it is not
+a bounds result.
 
 L2 does not insert that check automatically. L2 may index an explicit raw
 typed address as a low-level address operation, which is not ordinary
 ArrayReference indexing.
 
-?
-Slicing, negative indexes if any, multidimensional arrays, text encoding and
-the boundary between parser form and receiver/operator form remain to be
-finished. The bounds channel is `throw`/`catch`.
-?
+Multidimensional arrays are the rectangular rank-N model of section 6.5: one
+header, one backing rectangle, shape and stride. They are not unfinished and
+not ragged. Slicing details, negative indexes if any, text encoding and the
+boundary between parser form and receiver/operator form may still be
+profile-finished. The bounds channel is `throw`/`catch`.
 
 ---ANSI C---
 Possible array-lowering variants:
@@ -9735,12 +9850,16 @@ that Frame structural-merge semantics.
 
 This is the target contract. The current registered handler is instead a
 descriptor-composition declaration: it resolves layout-describing sources,
-builds a normalized `structuralFields` view, publishes that descriptor under the
-explicit merge-target name and emits a hosted C type/layout projection. It does
-not evaluate a source call merely because its declared result supplies a layout,
-does not emit target-object storage and does not materialize a Structure
-instance. Constructing a value from the resulting descriptor is a separate
-explicit constructor operation.
+publishes a descriptor Structure under the explicit merge-target name, and
+may still emit a hosted per-name C type as a *projection* of that descriptor.
+That C type is not the merge result and not a Lingvamyxa value. The handler
+does not evaluate a source call merely because its declared result supplies a
+layout, does not emit instance storage and does not materialize a
+StructureReference for the merged value. Constructing a value from the
+resulting descriptor is a separate explicit constructor operation. The
+conforming projection of the descriptor is the same one-header field stream
+as any other Structure; per-name `typedef` is optional and must not be
+required.
 
 The physical descriptor-composition path no longer emits implicit Registry
 field relations; layout collection reads the descriptor view. Registry field
@@ -11303,19 +11422,21 @@ source-language admission rule remains `implements(new old Consumer)`, and the e
 hosted rejection neither changes that predicate nor makes a compatible result
 rebinding invalid in the language.
 
-The hosted named-Structure declaration path now publishes only its namespace
-descriptor and emits only the corresponding C type/layout projection. It emits
-no same-name object, pointer binding, static backing, arena allocation or field
-initialization. The hosted physical `merge:` declaration follows the same rule:
-it publishes the composed target descriptor and projects its target type, but
-does not construct a merge-result value. Either descriptor can be used by a
-later explicit constructor.
+The hosted named-Structure declaration path publishes a namespace descriptor
+(a StructureReference). It must not allocate an instance. The current
+bootstrap still also emits a per-name C type/layout projection; that emission
+is a defect relative to the one-header projection in section 2 and must not
+be required for the descriptor to exist. The hosted physical `merge:`
+declaration follows the same rule: it publishes the composed target
+descriptor and must not construct a merge-result instance. Either descriptor
+can be used by a later explicit constructor.
 
-A present-empty descriptor remains semantically empty. Because ISO C requires
-a complete projected aggregate to contain storage, the hosted backend emits one
-private dummy byte for that projection only. The byte is not a descriptor field,
-is not accessible through field-follow, and does not participate in
-`implements(varA varB Consumer)`.
+A present-empty descriptor remains semantically empty. If a C aggregate used
+only as a *header* still needs a complete type, a private dummy byte may
+exist in that header projection only. The byte is not a descriptor field, is
+not a payload slot, is not accessible through field-follow, and does not
+participate in `implements(varA varB Consumer)`. It must not appear in the
+anonymous field blob.
 
 The compact hosted declaration form currently accepts typed descriptor fields
 without instance initializer values. A trailing initializer in a named-
@@ -11381,37 +11502,39 @@ namespace scope. Hosted C typedef deduplication is held in the current output's
 projection state, not in that lexical scope; it neither extends descriptor
 lifetime nor creates Registry data.
 
-The normalized `structuralFields` view is the only compiler-semantic shape state
-produced by named-structure and physical `merge:` declarations. These paths no
-longer publish implicit `owner.field.*`, `class.present`, `class.kind`,
-`class.reference-base` or `layout.backend` Registry rows. They emit a hosted C
-type/layout projection only and never emit object storage; the explicit named-
-constructor path separately emits an arena allocation for the requested value.
+The source field stream of the published descriptor is the semantic shape.
+A compiler-private `structuralFields` cache of that stream is not a second
+descriptor, not a C `typedef`, and not a source value. Named-structure and
+physical `merge:` declarations must not publish implicit `owner.field.*`,
+`class.present`, `class.kind`, `class.reference-base` or `layout.backend`
+Registry rows. They must not emit instance storage. The explicit named-
+constructor path separately allocates a StructureReference (header plus
+anonymous blob) for the requested value. A per-name C type, if the current
+bootstrap still emits one, is projection only.
 Repeated target declarations are suppressed only when the
 implementation-private per-output projection state described in section
 20.2.1.1 proves that the earlier target declaration is identical and is present
 wherever the later declaration would be present.
 
 Layout collection, declaration/type-head recognition, top-level lowering,
-typed field-chain class resolution, physical `merge:` source admission and L2
+typed field-chain resolution, physical `merge:` source admission and L2
 inline-Table field-type resolution consult the descriptor visible in the active
-namespace first. When its normalized `structuralFields` view is present, that
-view is authoritative, including when it is empty. A named structure can
-therefore be used by later declarations and as a physical merge source without
-relying on `class.present` or `layout.backend`. A missing or malformed field in
-a present view does not fall through to Registry data.
+namespace first. The descriptor's field stream is authoritative, including when
+it is empty. A compiler cache of that stream must match it; it must not invent
+C members. A named Structure can therefore be used by later declarations and as
+a merge source without `class.present` or `layout.backend`. A missing or
+malformed field in a present stream does not fall through to Registry data.
 
 All hosted C declaration, signature, field, callable-adapter and ABI projection
-paths now receive the active namespace. A present `structuralFields` view
-supplies semantic field shape only. Address depth is derived independently from
-the resolved value category: function-pointer and Primitive bindings start at
-0, explicit reference-base and ordinary named-Structure bindings start at 1,
-and explicit `@ⁿ` depth is added on top. Explicitly authored ABI
-reference/layout metadata remains a physical-projection or compatibility
-fallback; it may coexist with a structural view but cannot change that view's
-names. Named-structure and physical `merge:` declarations no longer emit that
-ABI metadata; the fallback remains available only for explicitly authored or
-imported layouts.
+paths receive the active namespace. The descriptor field stream supplies
+semantic shape only. L2 `@ⁿ` depth applies to typed address slots, not to
+StructureReference, ArrayReference or callable Structure (section 11.2).
+A C function-pointer spelling has no source address depth. Explicitly
+authored ABI reference/layout metadata remains a physical-projection or
+compatibility fallback for *imported* names; it may coexist with a descriptor
+field stream but cannot change that stream's names and cannot reclassify an
+ordinary named Structure as a C pointer kind. Named-structure and physical
+`merge:` declarations must not emit that ABI metadata.
 
 Registry field relations are consulted only when the namespace binding has no
 structural-field view. This preserves explicitly authored or imported ABI
@@ -13271,7 +13394,7 @@ semantics above the raw L1 implementation and lowering stratum.
 
 Every ordinary non-primitive Lingvamyxa value is a StructureReference or an
 ArrayReference. Its referent is materialized exactly once in an arena. An arena
-is the semantic lifetime region for ordinary Structures, Array objects and
+is the semantic lifetime region for ordinary Structures, Array referents and
 owned Array backing storage; it is not a source storage class. Lingvamyxa has
 no ordinary stack, heap or static object category.
 
@@ -13313,7 +13436,7 @@ handler and detachable-branch arenas may be added without changing the model.
 
 The following rules are normative for the structural memory model:
 
-    1. Every ordinary Structure and Array object is arena-allocated and observed
+    1. Every ordinary Structure and Array referent is arena-allocated and observed
        through a StructureReference or ArrayReference.
 
     2. An owned Array's object/header and backing storage belong to an arena. A
@@ -13388,13 +13511,13 @@ with the same lifetime role. Its intended shape is:
     root branch
         branch arena
             child Structure
-            child Array object and backing storage
+            child Array referent and backing storage
             child text
             child expression tree
             child decimal storage
             child descriptor Structures
 
-Leaf Structures, Array objects and owned Array backing storage are allocated in
+Leaf Structures, Array referents and owned Array backing storage are allocated in
 the current arena. They need not own separate arenas; an arena per leaf usually
 adds overhead without useful reclamation granularity.
 
@@ -14241,7 +14364,7 @@ The result allocation belongs to function/result materialization in the
 prologue. It is not performed by `return`. All return paths publish the same
 result reference for that invocation.
 
-An Array constructor allocates its Array object/header and owned backing storage
+An Array constructor allocates its Array header and owned backing storage
 in the selected arena through `lm_own_arena_new_zero` and
 `lm_own_arena_array_new_zero`. The header is not a structural type descriptor.
 Returning the Array publishes the existing ArrayReference; it does not recreate
@@ -15985,7 +16108,7 @@ Examples:
     @@: int pp
     @@@: int ppp
 
-The `leafs` constructor materializes one Array object/header and its owned
+The `leafs` constructor materializes one Array header and its owned
 backing storage in the current arena, initializes the requested cells and binds
 the resulting ArrayReference. Repeated bracket groups specify rank and
 dimensions. Both empty and payload-bearing bracket groups are accepted as

@@ -6,32 +6,38 @@ Status / Статус
 ---------------
 
 EN: Working assignment against Lingvamyxa_spec.txt §0, §2, §3, §6.5, §7.2,
-§19.17, §19.21.3, §19.28–19.29. Not a spec change. The hosted translator
-currently projects Structures as per-name C typedefs and `fn:` as namespace
-C functions; that projection is treated as if it were the language. This
-note restores the spec ontology and gives a step plan.
+§19.17, §19.21.3, §19.28–19.29. The spec text was cleaned to match this
+assignment: C address-depth, per-name typedef, function-pointer-as-primitive
+and `structuralFields`-as-the-shape were moved out of the ontology. The
+hosted translator still emits the old projection; that is implementation
+debt, not a spec license.
 
 RU: Рабочее ТЗ по Lingvamyxa_spec.txt §0, §2, §3, §6.5, §7.2, §19.17,
-§19.21.3, §19.28–19.29. Это не правка спецификации. Hosted trans сейчас
-проецирует Structure как отдельный C typedef на каждое имя, а `fn:` — как
-C-функцию в namespace, и обращается с этой проекцией как с языком. Документ
-возвращает онтологию спеки и даёт план шагов.
+§19.21.3, §19.28–19.29. Текст спеки подчищен под это ТЗ: C-глубина адреса,
+typedef на имя, function-pointer как примитив и `structuralFields` как форма
+убраны из онтологии. Hosted trans всё ещё эмитит старую проекцию — это долг
+реализации, не разрешение спеки.
 
 
 0. One-sentence assignment / Задание одной фразой
 -------------------------------------------------
 
-EN: A Structure is arena data denoted by a StructureReference: its own
-descriptor plus a reference to an anonymous field blob of arbitrary length.
-`fn:`, `merge:`, named declarations and constructors produce or consume
-those references. C typedefs, C function symbols and table rows named
-`class` / `layout.backend` are backend artifacts, never source values.
+EN: A Structure chunk in the arena always starts with a reference to its own
+descriptor; the rest is a flat payload of slots whose count and kinds that
+descriptor names. Size = sizeof(descriptor-ref) + sum of slot sizes. Nested
+StructureReferences are pointers to the same kind of chunk (a tree). An
+ArrayReference is not that tree: one array descriptor plus one rectangular
+`d0×d1×…` backing block. `fn:` is a StructureReference in a descriptor slot.
+C typedefs, C function symbols and `class` / `layout.backend` tables are
+backend artifacts, never source values.
 
-RU: Structure — данные в арене, обозначаемые StructureReference: собственный
-дескриптор плюс ссылка на безымянный кусок полей произвольной длины.
-`fn:`, `merge:`, именованные объявления и конструкторы создают или потребляют
-эти ссылки. C typedef, C-символ функции и строки таблиц `class` /
-`layout.backend` — артефакты бэкенда, не значения языка.
+RU: Кусок Structure в арене всегда начинается со ссылки на свой дескриптор;
+дальше ровные слоты, число и вид которых говорит дескриптор. Размер =
+sizeof(ссылка на дескриптор) + сумма размеров слотов. Вложенные
+StructureReference — указатели на такой же кусок (дерево). ArrayReference —
+не это дерево: один дескриптор массива плюс один прямоугольник `d0×d1×…`.
+`fn:` — StructureReference в слоте дескриптора. C typedef, C-символ функции
+и таблицы `class` / `layout.backend` — артефакты бэкенда, не значения языка.
 
 
 1. Spec contract (normative for this work)
@@ -139,25 +145,28 @@ trampoline целевого языка; это не добавляет вид з
 `int (*add)(int)`, typedef, символ, trampoline, closure-struct — спеллинг
 профиля L2→L1, не виды callable в языке.
 
-1.5 ArrayReference constructor `[]`  (§6.5)
+1.5 ArrayReference constructor `[]`  (§6.5, §12.3)
 
-EN: `[]` constructs an ArrayReference. The visible descriptor may hold
-element type, rank, shape, storage, stride. The header and backing live
-in the selected arena. An array is not a Structure subtype. Operations
-over arrays are ordinary namespace-resolved calls.
+EN: `[]` constructs an ArrayReference. One array descriptor (element
+description, rank, shape, optional stride) and one rectangular backing
+block of `d0 × d1 × … × dN-1` cells. Multidimensional layout is shape and
+stride, not a tree of row arrays. Indexing is an offset. There is no
+first-class ragged rank-N array. Nested `[]` in a matrix literal is
+rectangular notation. An array of ArrayReferences or StructureReferences
+is a flat row of pointers; the Structure tree starts in those chunks.
 
-The hosted ANSI C *illustration* may use `char *` or `User **` *inside*
-backing storage. That pointer is not the ArrayReference value. The value
-includes bounds/lifetime metadata (§ hosted examples around `[]: char`).
+No per-element Structure descriptor on primitive cells. Length/rank/shape
+live on the array descriptor, not as Structure fields of the ArrayReference
+(§12.3 must not call the array a Structure with `\len`).
 
-RU: `[]` строит ArrayReference. Дескриптор может нести тип элемента,
-rank, shape, storage, stride. Шапка и backing — в выбранной арене.
-Массив не подтип Structure. Операции над массивами — обычные вызовы
-через namespace.
+RU: `[]` строит ArrayReference. Один дескриптор массива и один прямоугольник
+ячеек `d0×d1×…`. Многомерность — shape и stride, не дерево строк. Индекс —
+смещение. Неровного rank-N как вида массива нет. Вложенный `[]` в литерале
+матрицы — запись прямоугольника. Массив ссылок — ровный ряд указателей;
+дерево Structure начинается уже в тех кусках.
 
-В иллюстрации hosted C внутри backing может быть `char *` / `User **`.
-Этот указатель — не значение ArrayReference. Значение включает метаданные
-границ/жизни.
+На каждый примитивный элемент дескриптор не вешается. Длина/rank/shape —
+на дескрипторе массива, не поля Structure у ArrayReference.
 
 1.6 `merge`  (§2.3, §19.17)
 
@@ -232,27 +241,32 @@ ontology. Concrete breaks observed in the current tree:
     tables as the *definition* of the type.
 
 2.5 Extra C address depth on named-struct references
-    A named-Structure instance is already a StructureReference (hosted:
-    arena pointer). Writing `@: LmHashArray` then `array\hash` emitted
-    `LmHashArray **` and `array->hash` on a pointer-to-pointer. Spec
-    illustration: `User` already starts at C depth 1; `@: User` is
-    `User **` (§ hosted examples). The extra `@:` was compensating for
-    treating the reference as a C value struct.
+    A named-Structure instance is already a StructureReference. Writing
+    `@: LmHashArray` then `array\hash` emitted `LmHashArray **`. Spec:
+    `@ⁿ` is an L2 address *slot*, not "Structure starts at C depth 1".
+    The extra `@:` compensated for treating the reference as a C value
+    struct.
 
 2.6 Declaration vs instance collapsed or inverted
     Spec: declaration publishes a descriptor and allocates nothing;
     constructor materializes a reference. Hosted named-structure
-    declaration emits a typedef (projection of the descriptor) which is
-    correct *as projection*, then instance construction does
-    `sizeof(ThatTypedef)`. The blob's shape is frozen as that C type
-    instead of "anonymous field vector described by the descriptor".
+    declaration emits a typedef, then instance construction does
+    `sizeof(ThatTypedef)`. The chunk is frozen as that C type instead of
+    "prefix descriptor-ref + payload sized from the descriptor".
 
-2.7 `[]` is closer to the spec than Structure is
-    ArrayReference already uses one header (`LmSlice { ptr, length }`)
-    plus arena backing. Element C pointers may live *inside* the blob.
-    Structure should have been the same idea: one header, anonymous
-    payload, descriptor on the side (the Structure's own descriptor).
-    Instead Structure grew N typedefs.
+2.7 Structure grew N typedefs instead of a self-describing chunk
+    Spec: every Structure chunk starts with its own descriptor reference,
+    then a flat payload. Hosted: a new `typedef struct Name` per name,
+    field-follow is `->` on that type.
+
+2.8 Multidimensional `[]` is a ladder of allocations, not one rectangle
+    Spec §6.5: one Array header, one backing, shape `[d0,d1,…]`, size the
+    product, index an offset. Nested `[]` in a matrix literal is that
+    rectangle. Hosted trans calls `lm_own_arena_array_new_zero` once per
+    rank (C `T **`, array of row pointers), keeps rank beside the binding
+    instead of shape on the array descriptor, and rejects "partial
+    multidimensional indexing". That is the C array-of-pointers model,
+    which can store ragged rows the spec does not ask for.
 
 RU: Транслятор принял удобную C-проекцию за онтологию. Конкретные разрывы:
 
@@ -268,55 +282,75 @@ RU: Транслятор принял удобную C-проекцию за о�
 
 2.4 Таблицы `class` / `layout.backend` задают тип. Спека: это профиль.
 
-2.5 Лишняя C-глубина `@:` у named-struct (ссылка уже глубина 1).
+2.5 Лишняя C-глубина `@:` у named-struct. Спека: `@ⁿ` — слот адреса, не
+    «Structure начинается с depth 1».
 
-2.6 Объявление дескриптора слито с формой instance через `sizeof(T)`.
+2.6 Объявление слито с instance через `sizeof(T)` вместо
+    «префикс-дескриптор + payload по дескриптору».
 
-2.7 `[]` ближе к спеке (одна шапка + blob), Structure — нет.
+2.7 Structure — N typedef вместо куска, который начинается со ссылки на
+    свой дескриптор.
+
+2.8 Многомерный `[]` — лесенка `lm_own_arena_array_new_zero` на ранг
+    (C `T **`), не один прямоугольник `d0×d1×…`.
 
 
-3. Target representation (implementation, still not a spec change)
-Целевое представление (реализация, не смена спеки)
---------------------------------------------------
+3. Target representation (now also the spec projection in §2 / §3.1 / §6.5)
+Целевое представление (оно же проекция спеки §2 / §3.1 / §6.5)
+---------------------------------------------------------------------
 
-3.1 One machine header for StructureReference
-Одна машинная шапка для StructureReference
+3.1 Structure chunk: descriptor prefix + flat slots
+Кусок Structure: префикс-дескриптор + ровные слоты
 
-EN: Analogous to current `LmSlice` for ArrayReference. One C struct in the
-runtime, used for every StructureReference. Suggested shape (names are
-implementation-local, not source vocabulary):
+EN: Every Structure arena chunk always starts with its own descriptor.
+Practically the first word is a StructureReference to that descriptor.
+The descriptor is itself a Structure, usually one shared instance per
+name (module/root arena), not a copy in every value. After that word:
+flat payload. The translator/runtime reads the descriptor field stream
+(how many slots, primitive vs StructureReference vs ArrayReference).
+Chunk size:
 
-    header (the Structure's own descriptor reference
-            + a standard reference to an anonymous field blob)
+    sizeof(descriptor-ref) + sum of slot sizes
 
-    anonymous field blob
-        contiguous arena memory
-        N slots, N taken from the own descriptor's field stream
-        each slot is a Primitive cell or a StructureReference
-        or an ArrayReference
-        no C type per source name
+A StructureReference slot is a pointer to another such chunk. Memory is
+an ordinary tree. No per-name `typedef`, no vtable. `x\foo` = own
+descriptor → newest occurrence `foo` → read that slot. `fn:` on the
+descriptor is another slot holding a StructureReference to a callable
+chunk.
 
-The header *is* (or directly holds) the referent's own descriptor. It does
-not hold pointers to other types' descriptors. Other Structures are reached
-only as field values (references), like any nested Structure.
+If the descriptor is known statically, the translator need not recompute
+size at every access. The prefix invariant stays: every chunk is
+self-describing. Closed `typedef` is a later optimization, not step one.
 
-RU: По аналогии с нынешним `LmSlice` для ArrayReference. Одна C-struct
-рантайма на всякий StructureReference. Предлагаемая форма (имена
-локальны для реализации, не словарь исходника):
+The instance holds only that one descriptor reference at the start. No
+foreign descriptors in the instance.
 
-    шапка (ссылка на собственный дескриптор референта
-           + стандартная ссылка на безымянный кусок полей)
+RU: Кусок Structure в арене всегда начинается со своего дескриптора.
+Первое слово — StructureReference на него. Дескриптор сам Structure,
+обычно один на всех instance этого имени. Дальше — ровная начинка.
+Размер = sizeof(ссылка на дескриптор) + сумма размеров слотов.
+Слот-ссылка — указатель на такой же кусок. Дерево в памяти. `x\foo` =
+свой дескриптор → индекс слота. `fn:` в дескрипторе — слот-ссылка на
+callable-кусок. Чужих дескрипторов в instance нет.
 
-    безымянный кусок полей
-        сплошная память арены
-        N слотов, N из потока полей собственного дескриптора
-        слот — ячейка Primitive, либо StructureReference,
-        либо ArrayReference
-        нет C-типа на каждое исходное имя
+3.1.1 Array chunk: one descriptor, one rectangle
+Кусок Array: один дескриптор, один прямоугольник
 
-Шапка *есть* (или прямо держит) собственный дескриптор референта. Чужих
-дескрипторов в instance нет. Другие Structure достижимы только как
-значения полей (ссылки).
+EN: Arrays do not use the Structure tree. One ArrayReference descriptor
+(element type, rank, shape, optional stride) and one backing rectangle
+of `d0×d1×…×dN-1` cells. Index = offset. No per-element descriptor on
+primitive cells. If an element is a StructureReference, backing is a
+flat row of pointers to Structure chunks; the tree starts there (each
+chunk has the descriptor prefix). Rank-1 array of ArrayReferences is
+nested references, not a ragged rank-N array.
+
+Hosted must stop allocating `lm_own_arena_array_new_zero` per rank.
+
+RU: Массивы — не дерево Structure. Один дескриптор ArrayReference и один
+прямоугольник ячеек. Индекс — смещение. На примитивный элемент
+дескриптор не вешается. Элемент-StructureReference — ровный ряд
+указателей на structure-куски. Hosted не должен аллоцировать backing
+на каждый ранг.
 
 3.2 Descriptor is a Structure, stored as a StructureReference
 Дескриптор — Structure, хранится как StructureReference
@@ -329,9 +363,9 @@ Structure). Nested `fn:` / `sub:` / `callable:` in that descriptor are
 fields whose values are StructureReferences to callable Structures.
 `merge` of descriptors is append of those field streams (§2.3, §19.17).
 
-An instance of `User` has:
-    own descriptor = that `User` descriptor reference (one pointer)
-    blob           = slots according to that stream
+An instance of `User` is one chunk:
+    first word = StructureReference to that `User` descriptor
+    rest       = instance payload slots (not a copy of descriptor-only `fn`)
 
 It does not copy the descriptor's callable fields into every instance.
 Lookup `u\close` uses the own descriptor, finds the newest `close`
@@ -353,9 +387,9 @@ occurrence, категория значения каждого поля. Вло�
 StructureReference на callable Structure. `merge` дескрипторов — append
 этих потоков.
 
-Instance `User`:
-    свой дескриптор = эта ссылка (один указатель)
-    blob            = слоты по этому потоку
+Instance `User` — один кусок:
+    первое слово = StructureReference на дескриптор `User`
+    дальше       = payload-слоты instance (не копия `fn` дескриптора)
 
 Он не копирует callable-поля дескриптора в каждый instance.
 `u\close` идёт в свой дескриптор, берёт новейшую occurrence `close`.
@@ -460,7 +494,7 @@ EN:
         clients of the old projection until a later phase.
     G5. Putting foreign descriptors into instances. Own descriptor only.
     G6. Making Array a subtype of Structure. `[]` remains ArrayReference
-        (§6.5). Share *machinery* (header + blob), not ontology.
+        (§6.5): one descriptor, one rectangle, not a Structure with `\len`.
     G7. Editing parser P0 rules except where `fn` as a field of a
         named-Structure declaration is already parsed as a Structure and
         only the trans consumer rejects it. Prefer trans-only change.
@@ -473,7 +507,8 @@ RU:
     G3. Не интерпретировать P0 вместо эмиссии C для тел `fn`.
     G4. Не мигрировать own / Mix / table-class ABI в первых фазах.
     G5. Не класть чужие дескрипторы в instance.
-    G6. Array не подтип Structure. Общая машинерия — да, онтология — нет.
+    G6. Array не подтип Structure и не Structure с полем `\len`. Один
+        дескриптор массива + один прямоугольник.
     G7. Парсер не трогать, пока trans просто отвергает уже разобранное.
     G8. Не перезапускать bootstrap, пока не нужна новая бинарная trans.
 
@@ -521,22 +556,22 @@ Phase 0 — freeze the diagnosis
 Phase 1 — one Structure header, empty payload
 Фаза 1 — одна шапка Structure, пустой payload
 
-    1.1 Introduce a single runtime header (implementation name free;
-        must not become a source type). Fields at minimum:
-            own descriptor (StructureReference)
-            payload pointer (anonymous blob)
-            payload slot count (or derive only from descriptor)
-        Mirror `LmSlice` discipline: one typedef for all Structures.
+    1.1 Every Structure chunk in the arena starts with one StructureReference
+        to its own descriptor (first word). Size = sizeof(that ref) + sum
+        of payload slot sizes from the descriptor. Empty S: payload length
+        0. The descriptor is a Structure, typically interned per name.
+        No second pointer to a detached blob required: prefix + payload
+        may be one allocation. Implementation name of the C header must
+        not become a source type. Do not emit `typedef struct S`.
     1.2 Named-Structure *declaration* `S:` `end: S` with no fields:
         publish a descriptor StructureReference; do not emit `typedef
         struct S`. Empty descriptor remains empty; do not invent a
         dummy source field. A private backend byte, if ISO C still
-        needs a complete aggregate for the *header*, is not a
-        descriptor field (§ hosted empty descriptor note).
-    1.3 Constructor `S: x` `end: x` for that empty S: allocate header
-        in the current Message Thread arena; own descriptor = S;
-        payload empty. `x` is a StructureReference. `return: x` is
-        the same pointer.
+        needs a complete aggregate, belongs only in a header projection,
+        never in the payload.
+    1.3 Constructor `S: x` `end: x` for that empty S: one arena chunk
+        whose first word is the S descriptor; payload empty. `x` is
+        that StructureReference. `return: x` is the same pointer.
     1.4 Tests (must follow spec, not old typedef tests):
             two `S: a` and `S: b` are distinct references;
             `return` of a local S is the same pointer;
@@ -647,14 +682,23 @@ Phase 7 — stop lying in old projection tests
     Exit: a new named Structure has no per-name typedef in the
         generated C of the language tests.
 
-Phase 8 — optional: share blob machinery with `[]` without merging ontology
-Фаза 8 — опционально: общая машинерия с `[]` без слияния онтологии
+Phase 8 — Array: one rectangle, not a ladder of ranks
+Фаза 8 — массив: один прямоугольник, не лесенка рангов
 
-    8.1 If header+blob for Structure and `LmSlice`+backing for Array
-        can share arena helpers, do it internally. Source still has
-        two categories.
-    8.2 Do not store an ArrayReference as a Structure or vice versa.
-    Exit: one allocator path, two spec categories.
+    8.1 Rank-N `[]` allocates one backing of `d0×d1×…` cells. Shape lives
+        on the array descriptor. Index = offset. Stop per-rank
+        `lm_own_arena_array_new_zero` and C `T **` row pointers.
+    8.2 Nested `[]` literals of equal row length are one rank-N value,
+        not N independent arrays. Ragged rows are not rank-N; they are
+        an array of ArrayReferences if ever needed.
+    8.3 Primitive elements: no descriptor per cell. StructureReference
+        elements: flat pointer row; each target chunk has the Structure
+        prefix of Phase 1.
+    8.4 Do not store an ArrayReference as a Structure or give it `\len`
+        as a Structure field. Length/rank/shape are array-descriptor
+        queries (`length` / `shape` / `rank` in §6.5.3).
+    Exit: matrix is one block; `partial multidimensional indexing` of
+        the old `T **` model is gone; two spec categories remain.
 
 Phase 9 — later, out of first delivery
 Фаза 9 — позже, не первая поставка
@@ -676,7 +720,7 @@ Phase 9 — later, out of first delivery
 Приёмка первой поставки
 -----------------------
 
-EN: Phases 1–6 plus 7.1–7.2. After that:
+EN: Phases 1–6, 7.1–7.2, and 8. After that:
 
     - A named Structure is a descriptor (StructureReference) plus
       instances that are header+anonymous blob.
@@ -687,11 +731,12 @@ EN: Phases 1–6 plus 7.1–7.2. After that:
       the result share the result descriptor; they do not grow a
       per-object method table.
     - Field-follow and call use the own descriptor, not C members.
-    - `[]` unchanged as ArrayReference.
+    - `[]` is ArrayReference: one descriptor, one rectangular backing;
+      no per-rank allocation ladder; not a Structure with `\len`.
     - Mix / own / table-class ABI unchanged unless Phase 9.1 starts.
     - Spec text unchanged; this file is not a spec amendment.
 
-RU: Фазы 1–6 и 7.1–7.2. После этого:
+RU: Фазы 1–6, 7.1–7.2 и 8. После этого:
 
     - Именованная Structure — дескриптор (StructureReference) плюс
       instance = шапка + безымянный blob.
@@ -702,7 +747,8 @@ RU: Фазы 1–6 и 7.1–7.2. После этого:
       результата делят дескриптор; таблицы методов на объект нет.
     - Field-follow и вызов идут через свой дескриптор, не через
       члены C-struct.
-    - `[]` по-прежнему ArrayReference.
+    - `[]` — ArrayReference: один дескриптор, один прямоугольник;
+      без лесенки аллокаций; не Structure с `\len`.
     - Mix / own / table-class ABI без изменений, пока нет фазы 9.1.
     - Текст спеки не меняется; этот файл — не поправка спеки.
 
@@ -747,4 +793,7 @@ RU: `Array.lm2` + таблицы модели — сломанная проек�
     memory_model_development_plan.txt
         arena, return-as-reference, coarse root; orthogonal but
         Phase 1 constructors must use the current arena
-    This file does not amend those documents.
+    Lingvamyxa_spec.txt was aligned with this assignment (ontology vs
+    projection). Remaining hosted notes in the spec describe current
+    bootstrap defects, not extra value kinds.
+    This file remains the implementation plan, not a second spec.
