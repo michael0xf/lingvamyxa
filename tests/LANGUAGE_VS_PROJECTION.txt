@@ -1,0 +1,25 @@
+Language tests vs hosted C projection tests
+==========================================
+
+Language tests (ontology after struct_refactoring.txt Phases 1–6):
+    tests/trans_structure_graph_empty.lm2
+    tests/trans_structure_graph_primitives.lm2
+    tests/trans_structure_graph_nested.lm2
+    tests/trans_structure_graph_fn.lm2
+    tests/trans_structure_graph_merge.lm2
+    tests/trans_structure_graph_call.lm2
+    tests/trans_structure_graph_array_rect.lm2
+
+These must not require `typedef struct ThatName` in generated C for a
+named Structure introduced by the test. Generated C uses one header
+(LmLmxStructure / lm_lmx_layout_*).
+
+Projection tests (legacy hosted C profile):
+    table `class` / `layout.backend` / `functionPointerType` fixtures
+    tests/trans_class_*.lm2
+    tests/trans_function_pointer_typedef_*.lm2
+    tests/trans_generated_*_source_rows_core.lm2
+    Mix / own / table-class ABI under lm2/mix and lm2/own.lm2
+
+Those may still emit per-name C typedefs until Phase 9.1. They are not
+language invariants.
