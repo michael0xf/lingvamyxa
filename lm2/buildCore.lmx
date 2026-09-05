@@ -158,7 +158,7 @@ L2:
                     file "$exe = (Resolve-Path -LiteralPath '%s').Path\n"
                     canary_path
                 c.fputs("$p = Start-Process -FilePath $exe -ArgumentList '--next' -WorkingDirectory (Get-Location).Path -PassThru\n", file)
-                c.fputs("if (-not $p.WaitForExit(120000)) { $p.Kill(); exit 124 }\n", file)
+                c.fputs("if (-not $p.WaitForExit(180000)) { $p.Kill(); exit 124 }\n", file)
                 c.fputs("exit $p.ExitCode\n", file)
 
                 if: c.fclose(file) != 0

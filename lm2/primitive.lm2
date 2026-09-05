@@ -1,0 +1,61 @@
+table:
+    source
+    name: class
+    columns: (class: class) (class: kind)
+    rows:
+             Cell                       class
+             Count                      class
+             Integer                    class
+             Flag                       class
+             Ratio                      class
+             Float                      class
+             Complex                    class
+             Atom                       class
+             Address                    class
+             Opaque                     class
+             `primitive.description`    relation
+end: class
+
+table:
+    source
+    name: `primitive.description`
+    columns: (class: class) (categoryFlag: cell) (class: semantic) (categoryFlag: numeric) (categoryFlag: integer) (categoryFlag: floating) (categoryFlag: reference) (categoryFlag: opaque) (categoryFlag: callable) (categoryFlag: descriptor) (categoryFlag: signed) (class: width) (class: range) (class: spelling) (class: convert)
+    rows:
+             Cell     1  None    0  0  0  0  0  0  0  0  None      None                     None            None
+             Count    1  count   1  1  0  0  0  0  0  0  profile   "0..SIZE_MAX(profile)"   None            None
+             Integer  1  integer 1  1  0  0  0  0  0  1  profile   "C99-int(profile)"       None            None
+             Flag     1  flag    0  0  0  0  0  0  0  0  fixed8    "-1..1"                  int8_t          None
+             Ratio    1  ratio   1  0  0  0  0  0  0  0  profile   None                     None            None
+             Float    1  float   1  0  1  0  0  0  0  0  profile   "C99-double(profile)"    None            None
+             Complex  1  complex 1  0  1  0  0  0  0  0  profile   None                     None            None
+             Atom     1  atom    0  0  0  0  0  0  0  0  profile   None                     None            None
+             Address  1  address 0  1  0  1  0  0  0  0  profile   None                     None            None
+             Opaque   1  opaque  0  0  0  1  1  0  0  0  profile   opaque                   None            None
+             None     0  none    0  0  0  0  0  0  0  0  None      None                     void            None
+
+             void     0  none    0  0  0  0  0  0  0  0  None      None                     void            None
+             char     1  integer 1  1  0  0  0  0  0  1  profile   "C99-char(profile)"      char            None
+             short    1  integer 1  1  0  0  0  0  0  1  profile   "C99-short(profile)"     short           None
+             int      1  integer 1  1  0  0  0  0  0  1  profile   "C99-int(profile)"       int             None
+             long     1  integer 1  1  0  0  0  0  0  1  profile   "C99-long(profile)"      long            None
+             float    1  float   1  0  1  0  0  0  0  0  profile   "C99-float(profile)"     float           None
+             double   1  float   1  0  1  0  0  0  0  0  profile   "C99-double(profile)"    double          None
+             signed   1  integer 1  1  0  0  0  0  0  1  profile   "C99-signed-int(profile)" signed         None
+             unsigned 1  integer 1  1  0  0  0  0  0  0  profile   "C99-unsigned-int(profile)" unsigned     None
+             uchar    1  count   1  1  0  0  0  0  0  0  profile   "0..UCHAR_MAX(profile)"  "unsigned char" None
+             ulong    1  count   1  1  0  0  0  0  0  0  profile   "0..ULONG_MAX(profile)"  "unsigned long" None
+             size_t   1  count   1  1  0  0  0  0  0  0  profile   "0..SIZE_MAX(profile)"   size_t          None
+             categoryFlag 1 flag 0  0  0  0  0  0  0  0  fixed8    "0..1"                   uint8_t         None
+             uint8    1  count   1  1  0  0  0  0  0  0  fixed8    "0..UINT8_MAX"           uint8_t         None
+             int8     1  integer 1  1  0  0  0  0  0  1  fixed8    "INT8_MIN..INT8_MAX"     int8_t          None
+             Boolean  1  flag    0  0  0  0  0  0  0  0  fixed8    "-1..1"                  int8_t          None
+             u8       1  count   1  1  0  0  0  0  0  0  fixed8    "0..UINT8_MAX"           uint8_t         None
+             u16      1  count   1  1  0  0  0  0  0  0  fixed16   "0..UINT16_MAX"          uint16_t        None
+             u32      1  count   1  1  0  0  0  0  0  0  fixed32   "0..UINT32_MAX"          uint32_t        None
+             u64      1  count   1  1  0  0  0  0  0  0  fixed64   "0..UINT64_MAX"          uint64_t        None
+             i8       1  integer 1  1  0  0  0  0  0  1  fixed8    "INT8_MIN..INT8_MAX"     int8_t          None
+             i16      1  integer 1  1  0  0  0  0  0  1  fixed16   "INT16_MIN..INT16_MAX"   int16_t         None
+             i32      1  integer 1  1  0  0  0  0  0  1  fixed32   "INT32_MIN..INT32_MAX"   int32_t         None
+             i64      1  integer 1  1  0  0  0  0  0  1  fixed64   "INT64_MIN..INT64_MAX"   int64_t         None
+             FILE     1  opaqueHandle 0 0 0 1 1 0 0 0 profile    opaque                   FILE            None
+end: `primitive.description`

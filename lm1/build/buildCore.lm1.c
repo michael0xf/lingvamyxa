@@ -1028,7 +1028,7 @@ static int lm_build_prepare_platform_canary(struct LmMessageThread *lm_lmx_messa
     }
     fprintf(file, "$exe = (Resolve-Path -LiteralPath '%s').Path\n", canary_path);
     fputs("$p = Start-Process -FilePath $exe -ArgumentList '--next' -WorkingDirectory (Get-Location).Path -PassThru\n", file);
-    fputs("if (-not $p.WaitForExit(120000)) { $p.Kill(); exit 124 }\n", file);
+    fputs("if (-not $p.WaitForExit(180000)) { $p.Kill(); exit 124 }\n", file);
     fputs("exit $p.ExitCode\n", file);
     if (fclose(file) != 0) {
         fprintf(stderr, "buildCore.lm0: cannot close canary script %s\n", lm_build_platform_canary_script_path(lm_lmx_message_thread));

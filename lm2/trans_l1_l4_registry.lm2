@@ -4079,6 +4079,13 @@ fn: lm_trans_registry_core_candidate_name (size_t: index) const: @: char
         return: "core.lm2"
 return: 0
 
+fn: lm_trans_registry_primitive_candidate_name (size_t: index) const: @: char
+    if: index = 0U
+        return: "lm2/primitive.lm2"
+    if: index = 1U
+        return: "primitive.lm2"
+return: 0
+
 fn: lm_trans_registry_candidate_name (size_t: index) const: @: char
     if: index = 0U
         return: "lm2/trans_registry.lm2"
@@ -4143,6 +4150,25 @@ fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
             break
         candidate_index: candidate_index + 1U
         candidate_name: lm_trans_registry_core_candidate_name(candidate_index)
+
+    loaded: 0
+    candidate_index: 0U
+    candidate_name: lm_trans_registry_primitive_candidate_name(candidate_index)
+    while: candidate_name != 0
+        if: lm_trans_registry_candidate_path(source_path, candidate_name, registry_path, 4096U) != 0
+            lm_trans_registry_destroy()
+            return: 1
+        if: lm_trans_registry_load_bootstrap_file_path(registry_path, 0, @ loaded) != 0
+            lm_trans_registry_destroy()
+            return: 1
+        if: loaded != 0
+            break
+        candidate_index: candidate_index + 1U
+        candidate_name: lm_trans_registry_primitive_candidate_name(candidate_index)
+    if: loaded = 0
+        c.fprintf(c.stderr, "trans registry error: cannot read lm2/primitive.lm2 or primitive.lm2\n")
+        lm_trans_registry_destroy()
+        return: 1
 
     override_path: c.getenv("LM_TRANS_REGISTRY")
     override_enabled: override_path != 0 && override_path[0] != '\0'
