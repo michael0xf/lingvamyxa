@@ -54,29 +54,29 @@ not to pretend that L1 disappears, but to make the core tools self-hosting at
 the L2 level wherever that is already practical.
 
 
-4. Port the MIX Container
+4. Port the Mix Container
 -------------------------
 
-Port the Java MIX/overlapper container to the current C/L2 codebase.
+Port the Java Mix/overlapper container to the current C/L2 codebase.
 
 The existing parser should later fill this container while it builds ordinary
-P0 Structures. MIX must not require a separate structural reparse.
+P0 Structures. Mix must not require a separate structural reparse.
 
 See:
 
-    Lingvamyxa_MIX_design_note.txt
+    Lingvamyxa_Mix_design_note.txt
 
 
-5. Let the Parser Fill MIX
+5. Let the Parser Fill Mix
 --------------------------
 
 The structural parser should create:
 
     ordinary P0 Structure tree;
-    MIX tags/sets/attributes over the same dynamic document;
-    links between parser-created Structures and MIX positions where useful.
+    Mix tags/sets/attributes over the same dynamic document;
+    links between parser-created Structures and Mix positions where useful.
 
-The parser remains the structural parser. MIX is the dynamic overlapping
+The parser remains the structural parser. Mix is the dynamic overlapping
 document layer that lets editor, markup, diagnostics and later semantic layers
 ask what attributes are active at a position.
 

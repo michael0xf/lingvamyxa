@@ -1,17 +1,17 @@
-Lingvamyxa MIX Container Design Note
+Lingvamyxa Mix Container Design Note
 ====================================
 
 Status
 
-This file records the intended shape of the MIX/overlapper container. It is a
-design note for the future port of the Java MIX container, not a final parser
+This file records the intended shape of the Mix/overlapper container. It is a
+design note for the future port of the Java Mix container, not a final parser
 specification.
 
 
 1. Purpose
 ----------
 
-MIX is the dynamic overlapping document layer used beside the ordinary P0
+Mix is the dynamic overlapping document layer used beside the ordinary P0
 Structure tree.
 
 It should support:
@@ -23,52 +23,52 @@ It should support:
     diagnostics and semantic annotations;
     later listeners such as history, undo, highlighting and table views.
 
-MIX is not a second ordinary parse tree.
+Mix is not a second ordinary parse tree.
 
 
 2. Positions Are Abstract and Dynamic
 -------------------------------------
 
-MIX positions are abstract positions after parsing/document construction.
+Mix positions are abstract positions after parsing/document construction.
 
 They are not raw byte offsets and not fixed source spans. A position may refer
 to text characters, parser objects, tags, Structures or other addressable
 objects. A text character can be one kind of object, but the model is not
 limited to text.
 
-The terms `sourceStart` and `sourceEnd`, when used at the MIX layer, should be
+The terms `sourceStart` and `sourceEnd`, when used at the Mix layer, should be
 understood as abstract dynamic document positions, not immutable coordinates in
 the original source text.
 
 
-3. No Parser Node Model Inside MIX
+3. No Parser Node Model Inside Mix
 ----------------------------------
 
-MIX does not own a parser node concept.
+Mix does not own a parser node concept.
 
 The structural parser may create P0 nodes, Structures, Frames and diagnostics.
-MIX stores overlapping sets and attributes over dynamic positions. At a cursor
-or tag position, MIX can report the currently active attribute table.
+Mix stores overlapping sets and attributes over dynamic positions. At a cursor
+or tag position, Mix can report the currently active attribute table.
 
-If a parser node, parser branch or parser leaf needs to be linked to MIX, that
-link is an attribute/reference stored over MIX positions. It is not the primary
-identity model of MIX.
+If a parser node, parser branch or parser leaf needs to be linked to Mix, that
+link is an attribute/reference stored over Mix positions. It is not the primary
+identity model of Mix.
 
 
 4. Dynamic Address of Cursor and Tag
 ------------------------------------
 
-A cursor or tag computes its current dynamic address from the MIX document
+A cursor or tag computes its current dynamic address from the Mix document
 structure.
 
-The link between parser/editor/semantic objects and MIX is therefore not
+The link between parser/editor/semantic objects and Mix is therefore not
 fundamentally:
 
     path + fixed span
 
 It is:
 
-    object reference + dynamic MIX position/address computation
+    object reference + dynamic Mix position/address computation
 
 This is the reason edits do not require recreating the whole document identity.
 
@@ -82,25 +82,25 @@ The operations:
     delete
     replace
 
-update dynamic MIX positions.
+update dynamic Mix positions.
 
-Existing MIX objects survive edits unless explicitly removed. MIX itself does
+Existing Mix objects survive edits unless explicitly removed. Mix itself does
 not automatically invalidate a partially edited parser Structure. Parser
 invalidation, partial reparse and diagnostic policy belong to the parser/editor
-layer above MIX.
+layer above Mix.
 
-MIX can report that active attributes changed. Consumers may listen to those
+Mix can report that active attributes changed. Consumers may listen to those
 changes and decide what they need to refresh.
 
 
 6. No Mandatory Version Per Edit
 --------------------------------
 
-MIX does not create a new documentVersion for every edit.
+Mix does not create a new documentVersion for every edit.
 
-The base MIX container is designed so editing does not consume large resources
+The base Mix container is designed so editing does not consume large resources
 per operation. History, undo, redo, branching versions and change logs should
-be implemented by listeners over MIX, not by the base container itself.
+be implemented by listeners over Mix, not by the base container itself.
 
 Such a listener may store an edit tree or any other history representation, but
 that is a separate layer.
@@ -109,45 +109,45 @@ that is a separate layer.
 7. Relationship to the Current Parser
 -------------------------------------
 
-The existing parser should eventually fill MIX while building the ordinary P0
+The existing parser should eventually fill Mix while building the ordinary P0
 Structure tree.
 
 The intended future parser walk creates:
 
     ordinary P0 Structure tree;
-    MIX tags/sets/attributes;
-    optional links between parser-created objects and MIX positions.
+    Mix tags/sets/attributes;
+    optional links between parser-created objects and Mix positions.
 
 This should be done in source/document order without requiring a separate
 structural reparse.
 
-Curly-brace MIX bounded forms are not ordinary P0 fields. They should produce
-MIX structures/tags/attributes while the ordinary structural stream ignores
+Curly-brace Mix bounded forms are not ordinary P0 fields. They should produce
+Mix structures/tags/attributes while the ordinary structural stream ignores
 them as fields.
 
 
 8. History and Notifications
 ----------------------------
 
-History is not built into the base MIX container.
+History is not built into the base Mix container.
 
 A history system can be a listener that receives edit and attribute-change
 events and stores a tree of changes.
 
 Likewise, syntax highlighting, diagnostics, semantic caches, view invalidation
-and IDE indexes should be listeners/consumers above MIX. MIX only needs to
+and IDE indexes should be listeners/consumers above Mix. Mix only needs to
 provide efficient dynamic positions and active attribute tables.
 
 
 9. Cursor-Based Body Access
 ---------------------------
 
-MIX is suitable for bodies that are too large or too active to copy into every
+Mix is suitable for bodies that are too large or too active to copy into every
 message. A message may carry a cursor, tag, range, capability or storage
-reference to a MIX-backed body. The receiver then reads or writes through
+reference to a Mix-backed body. The receiver then reads or writes through
 validated cursor operations.
 
-Multiple cursors may exist over the same MIX document/body. A cursor can expose:
+Multiple cursors may exist over the same Mix document/body. A cursor can expose:
 
     current dynamic position;
     active attribute table;
@@ -162,9 +162,9 @@ storage or another profile-defined source. The body can be read in chunks or by
 position on demand.
 
 Concurrent cursor reading and writing is not hardcoded into the base semantic
-model. It belongs to the selected MIX storage/runtime profile. The base design
+model. It belongs to the selected Mix storage/runtime profile. The base design
 only requires that cursor operations are ordinary validated LMX operations and
-that dynamic positions survive edits according to the MIX rules above.
+that dynamic positions survive edits according to the Mix rules above.
 
 
 10. Implementation Consequence
@@ -180,4 +180,4 @@ The first port should focus on the small core:
     low allocation pressure.
 
 Parser nodes, undo history, semantic invalidation and editor policies should
-not be hardcoded into the base MIX container.
+not be hardcoded into the base Mix container.

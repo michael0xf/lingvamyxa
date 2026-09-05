@@ -19,7 +19,7 @@ Lingvamyxa is based on the following model:
     L2 is the complete language surface, including low-level machine operations.
     L3 is the high-level subset of L2 without low-level machine operations.
     Source syntax builds Structures.
-    Source traversal also builds MIX overlay intervals in parallel with
+    Source traversal also builds Mix overlay intervals in parallel with
     Structures and arrays.
     Receivers and subroutines consume Structures.
     The core parser has one structural syntax.
@@ -186,81 +186,81 @@ to CSV, SQL rows, binary records, in-memory arrays, Lingvamyxa Structure
 serialization, JSON for legacy interoperability, or another backend
 representation.
 
-0.0.2. Secondly, Lingvamyxa has MIX overlay markup and document semantics.
+0.0.2. Secondly, Lingvamyxa has Mix overlay markup and document semantics.
 
-MIX is the Lingvamyxa overlay markup model. It is not an XML-like tree
+Mix is the Lingvamyxa overlay markup model. It is not an XML-like tree
 markup system, not an HTML preprocessor and not a separate mini-language.
-MIX is a parallel active mark and interval overlay built during the same
+Mix is a parallel active mark and interval overlay built during the same
 source traversal that builds ordinary Structures and arrays.
 
 The compact formula is:
 
     source traversal
         -> Structures and arrays
-        -> MIX active mark / interval overlay
+        -> Mix active mark / interval overlay
         -> receiver/profile consumption
 
 The source text may still look tree-shaped, because that is convenient for
-human reading and for structural parsing. The MIX view is different: it
+human reading and for structural parsing. The Mix view is different: it
 projects source positions, Structure nodes, array rows, fields and explicit
 marks into overlapping active sets. Therefore a Lingvamyxa source file can have
-MIX overlay information even when it contains no explicit curly-brace marks.
+Mix overlay information even when it contains no explicit curly-brace marks.
 Ordinary structural forms are also markable source-interval entities. Curly
 braces are only the explicit document-facing spelling for adding extra active
 marks to the same overlay model.
 
-Curly braces introduce MIX bounded forms `{...}`. They are bounded structural
-forms like parentheses and index brackets, but their result is a MIX payload
+Curly braces introduce Mix bounded forms `{...}`. They are bounded structural
+forms like parentheses and index brackets, but their result is a Mix payload
 Structure. When the P0 parser sees `{` outside ordinary string/comment/raw
-payload, it enters MIX payload parsing. The payload between `{` and its
+payload, it enters Mix payload parsing. The payload between `{` and its
 matching `}` is parsed by the same structural parser in its own local level-0
 context, so quoted strings, python-like raw strings, exact identifiers, block
 strings and comments keep their ordinary payload rules. A `}` inside such a
-payload is payload text, not the closing delimiter of the surrounding MIX
+payload is payload text, not the closing delimiter of the surrounding Mix
 bounded form.
 
-The resulting MIX bounded form payload Structure is stored immediately as a
-parser node with the source position/span of the mark and a MIX flag. Physical
+The resulting Mix bounded form payload Structure is stored immediately as a
+parser node with the source position/span of the mark and a Mix flag. Physical
 line breaks inside the mark do not create source-level/layout events for the
 surrounding Structure. The opener column of `{` does not become the local
-indentation base for the MIX payload.
+indentation base for the Mix payload.
 
-The MIX bounded form is anchored to a surrounding source item or source level.
+The Mix bounded form is anchored to a surrounding source item or source level.
 This anchoring is layout syntax, not mark semantics:
 
     item: {color: red} value
     item: value {color: red}
 
-Inline and tail MIX forms belong to the current field sequence of the current
+Inline and tail Mix forms belong to the current field sequence of the current
 source item.
 
     {color: red}    item: value
 
-A leading MIX prefix before the first ordinary item on a physical line is
+A leading Mix prefix before the first ordinary item on a physical line is
 stored before that item and uses the item's source level. In relaxed notation
-the physical width of the MIX prefix may occupy part of the indentation space;
+the physical width of the Mix prefix may occupy part of the indentation space;
 in canonical dotted notation the following dots still compute the source level
 normally.
 
     {color: red}
         item: value
 
-A column-0 physical line whose content is only one or more MIX bounded forms
-is a margin MIX run. It is queued and anchored to the next ordinary LMX source
-item after the run. A sequence of such margin MIX lines keeps its order and
+A column-0 physical line whose content is only one or more Mix bounded forms
+is a margin Mix run. It is queued and anchored to the next ordinary LMX source
+item after the run. A sequence of such margin Mix lines keeps its order and
 uses that next item's source level. If EOF is reached first, the run is attached
 to the current/document-end context.
 
-A standalone MIX line that is not a column-0 margin run follows the ordinary
+A standalone Mix line that is not a column-0 margin run follows the ordinary
 source-level/indentation rules of the line on which it is written.
 
-Ordinary structural consumers and translators may ignore MIX-flagged nodes,
-while document/MIX consumers project them into the active mark/overlay view. A
+Ordinary structural consumers and translators may ignore Mix-flagged nodes,
+while document/Mix consumers project them into the active mark/overlay view. A
 mark frame such as:
 
     {color: red}
 
-opens one active MIX mark entry. In this example the mark head is `color` and
+opens one active Mix mark entry. In this example the mark head is `color` and
 the active close name/value is `red`. The entry remains active until it is
 closed or until the containing source/document unit ends according to the
 selected profile. Unclosed entries are not silently forgotten; they remain
@@ -301,12 +301,12 @@ simple renderer may be `green`, but the underlying active chain still contains
 
 The active attribute view is therefore not just a flat map from name to one
 value. It is at least a key-to-stack, key-to-list or key-to-active-set view over
-the ordered active MIX entries. A rendering profile may project this view to a
+the ordered active Mix entries. A rendering profile may project this view to a
 simple last-open-wins table. A semantic, editor, diagnostic or registry profile
 may use the complete active chain and all intersecting active sets. P0 does not
-perform conflict resolution for MIX marks.
+perform conflict resolution for Mix marks.
 
-Example of the same tree and table-like data with explicit MIX overlay marks:
+Example of the same tree and table-like data with explicit Mix overlay marks:
 
 {style: system}
 dataset: harvest
@@ -344,13 +344,13 @@ end: harvest
 {end: system}
 
 From one compact unified syntax, the parser can simultaneously create
-hierarchical Structures, arrays and the MIX overlay graph. The MIX graph is a
+hierarchical Structures, arrays and the Mix overlay graph. The Mix graph is a
 layer of overlapping, partially hierarchical active sets laid over source
 positions and structural data. The language algorithm can therefore know the
 active values of all relevant elements at every position and can update them
 directly.
 
-MIX scanning is universal. MIX interpretation is profile-dependent.
+Mix scanning is universal. Mix interpretation is profile-dependent.
 
 A source/document consumer may know the ordinary Structure context, the array
 or row context, the source position context, the active explicit marks and the
@@ -362,20 +362,20 @@ only when a consumer chooses to activate, render or consume such internal
 payload marks.
 
 For example, a surrounding mark such as `{style: system}` may select a profile
-in which printed strings are treated as document text and their internal MIX
+in which printed strings are treated as document text and their internal Mix
 marks are interpreted. A SQL string profile may highlight or bind internal
 placeholders. A plain string profile may ignore them completely. The raw string
-value is not changed merely because MIX marks are visible to the parser or
+value is not changed merely because Mix marks are visible to the parser or
 document consumer.
 
-The MIX layer maintains active marks while traversing the source. It can
+The Mix layer maintains active marks while traversing the source. It can
 therefore expose all data at a position, including Structure context,
 structural-array context, current top attributes and the full active mark
 chains, with fast access and without requiring large contiguous memory blocks.
 
-MIX overlay data is produced below or alongside the level receivers; it is not
+Mix overlay data is produced below or alongside the level receivers; it is not
 message execution by itself. Explicit Registry/query and message receivers may
-consume accepted MIX-derived intervals, annotations and structural evidence.
+consume accepted Mix-derived intervals, annotations and structural evidence.
 
 0.0.3. Thirdly, Lingvamyxa is a high-level programming language.
 
@@ -1991,9 +1991,9 @@ This line may contain === without closing the block.
 
 This is a source-level fence form. The rule is the same fence principle as raw file comments: the fence must begin at column 0, the opening fence line is pure fence, and the closing fence must have exactly the same run length as the opening fence.
 
-3.4.4.4. MIX Mark-Based String Templates
+3.4.4.4. Mix Mark-Based String Templates
 
-Curly-brace marks inside text/string payloads provide a passive MIX analogue of
+Curly-brace marks inside text/string payloads provide a passive Mix analogue of
 string templates. They are internal payload marks first, not automatic runtime
 substitution.
 
@@ -2001,7 +2001,7 @@ Example:
 
     SQL: "select * from users where id = {userId}"
 
-MIX scanning may record `{userId}` as an internal mark, placeholder or interval
+Mix scanning may record `{userId}` as an internal mark, placeholder or interval
 event inside the string payload. An editor or document consumer may highlight it
 according to the selected string profile, such as SQL, JSON, regular expression
 text or Lingvamyxa source text. This recognition does not evaluate `userId`,
@@ -2009,14 +2009,14 @@ does not read variables and does not change the string value.
 
 Internal payload marks have their own isolated marker table and namespace. They
 are visible to consumers that inspect the string under a selected profile, but
-they are not mixed into the surrounding source-level active MIX table unless an
+they are not mixed into the surrounding source-level active Mix table unless an
 explicit consumer profile defines such a projection.
 
 Substitution or binding happens only when an explicit receiver consumes the
 string under a profile that defines that behavior. For example, a SQL receiver
 or driver may consume the string as a parameterized query, bind `userId` as an
 argument and apply the driver-specific escaping, encoding or binary parameter
-rules. The internal MIX mark only identifies a potential placeholder; the
+rules. The internal Mix mark only identifies a potential placeholder; the
 receiver decides whether it is meaningful and how it is consumed.
 
 This keeps string payload interpretation passive by default. The same source can
@@ -7251,7 +7251,7 @@ where:
 
 There is no separate line parser, brace parser, bracket parser or expression
 parser at P0. Physical lines are input fragments, not containers in the
-abstract tree. Parentheses, index brackets and MIX braces all enter nested P0
+abstract tree. Parentheses, index brackets and Mix braces all enter nested P0
 contexts; their difference is the channel where the resulting Structure is
 used.
 
@@ -7319,7 +7319,7 @@ Events:
         `[` and matching `]` bounded index/access delimiters.
 
     OPEN_MIX / CLOSE_MIX
-        `{` and matching `}` MIX bounded form delimiters.
+        `{` and matching `}` Mix bounded form delimiters.
 
     TAIL_CUTTER(candidate)
         a candidate visible close/cut form, such as `end`, `return`, `until`
@@ -7344,7 +7344,7 @@ Lexical shielding:
     LINE_COMMENT closes at physical newline.
 
     Therefore a `}` inside a string, exact identifier, raw string, block string
-    or comment inside a MIX bounded form does not close that MIX bounded form.
+    or comment inside a Mix bounded form does not close that Mix bounded form.
 
 Level transitions:
 
@@ -7417,20 +7417,20 @@ Bounded-form transitions:
     that context and attaches the resulting Structure as an index/access suffix
     to the preceding target or to a receiver form that admits bracket syntax.
 
-    OPEN_MIX starts a nested BOUNDED_MIX context for a MIX bounded form `{...}`.
+    OPEN_MIX starts a nested BOUNDED_MIX context for a Mix bounded form `{...}`.
     Its contents are parsed by
     the same P0 source/token rules in a local level-0 context. CLOSE_MIX closes
-    that context. The resulting Structure is stored as a MIX-flagged parser
+    that context. The resulting Structure is stored as a Mix-flagged parser
     node with its source position/span. Ordinary structural consumers may skip
-    MIX-flagged nodes; document/MIX consumers project them into active overlay
+    Mix-flagged nodes; document/Mix consumers project them into active overlay
     intervals and marks.
 
-    MIX bounded forms are then anchored to the surrounding source stream.
-    Inline/tail MIX is recorded in the current field sequence. A leading MIX
+    Mix bounded forms are then anchored to the surrounding source stream.
+    Inline/tail Mix is recorded in the current field sequence. A leading Mix
     prefix before an ordinary item is recorded at that following item's source
-    level before the item itself. A column-0 MIX-only physical line is queued
-    as a margin MIX event and attached to the next ordinary LMX source item;
-    several such lines keep their order. A non-margin standalone MIX line uses
+    level before the item itself. A column-0 Mix-only physical line is queued
+    as a margin Mix event and attached to the next ordinary LMX source item;
+    several such lines keep their order. A non-margin standalone Mix line uses
     the ordinary source level of that line.
 
     A matching closing delimiter line may return to the opener level. The
@@ -7463,7 +7463,7 @@ EOF transition:
 
 Output invariants:
 
-    P0 constructs Structure, Frame, Atom/value and MIX-flagged nodes with source
+    P0 constructs Structure, Frame, Atom/value and Mix-flagged nodes with source
     spans. It does not execute Structures, evaluate expressions, resolve
     functions, declare variables or decide type semantics.
 
@@ -7639,7 +7639,7 @@ Output invariants:
 
     mix_structure       ::= "{" source_fragment "}"
                             parsed by the same P0 source/token rules in a
-                            local level-0 context and stored as a MIX-flagged
+                            local level-0 context and stored as a Mix-flagged
                             Structure node
 
     index_access_suffix ::= "[" [ argument_list | vertical_argument_list ] "]"
@@ -7985,8 +7985,8 @@ Semantic outline:
     empty line                 level-0 structural boundary; closes an open level-1 vertical tail
     #                          line comment marker; ignores text to the end of the physical line
     %                          disabled item/block marker; syntax is still parsed and checked
-    {...}                      MIX bounded form; inline/tail belongs to the current item, leading prefix belongs to the following item,
-                               column-0 MIX-only lines anchor to the next ordinary LMX source item
+    {...}                      Mix bounded form; inline/tail belongs to the current item, leading prefix belongs to the following item,
+                               column-0 Mix-only lines anchor to the next ordinary LMX source item
     ***...                     column-0 raw file comment fence, 3..80 `*` characters; closing fence must have the same length; syntax inside is ignored
     ===...                     column-0 block string fence, 3..80 `=` characters; closing fence must have the same length
     end: name                  explicit named tail-cutter for a visible frame/entity/label block; not the only close mechanism
@@ -10220,7 +10220,7 @@ intermediate keys. For an n-ary expression, the registry may use signature keys,
 partial tables or chained binary relations. This is a storage/resolution
 technique; source syntax remains ordinary LMX expressions.
 
-19.18.3. Explicit Registry Sources and MIX Definitions
+19.18.3. Explicit Registry Sources and Mix Definitions
 
 LMX can describe registry data because it can describe Structures and Arrays.
 An L2 or L3 module may construct tables, compose them, and pass their references
@@ -10245,8 +10245,8 @@ Table descriptor, and `numericRegistry` is likewise an ordinary reference
 returned by the explicit `Registry` operation. Neither form binds `decimal`,
 `int` or `decimal_int_eq` as source names.
 
-MIX bounded forms `{...}` may annotate groups, documentation regions or visual
-clusters consumed by an explicit loader. MIX is not a second metadata language
+Mix bounded forms `{...}` may annotate groups, documentation regions or visual
+clusters consumed by an explicit loader. Mix is not a second metadata language
 and its marks do not mutate the namespace. Persistence of an explicit registry
 value is likewise a library/profile decision.
 
@@ -10543,7 +10543,7 @@ Those restrictions are policy decisions of the receiving side.
 A message expression may be as large as the receiver profile admits. Because
 the expression field is ordinary LMX, a message may contain nested expressions,
 deferred Structures, local descriptors, validators, calls, control receivers,
-MIX marks and other message-producing forms. These forms are not trusted merely
+Mix marks and other message-producing forms. These forms are not trusted merely
 because they appear in the message. They become executable only after
 validation/merge has reconciled them with the receiver namespace, visible
 descriptors and explicit policies and produced a ConcreteExpression /
@@ -10674,11 +10674,11 @@ authority evidence are supplied by the local runtime or transport ingress and
 validated separately. Likewise, knowing an endpoint and route does not itself
 grant authority to execute the contained expression.
 
-19.19.1.2. Message Body, External Structures and MIX Cursors
+19.19.1.2. Message Body, External Structures and Mix Cursors
 
 A message expression may contain its body inline, but it is not required to do
 so. A message may also carry references, cursors, ranges or capabilities that
-identify external LMX Structures, MIX documents, storage objects or streamable
+identify external LMX Structures, Mix documents, storage objects or streamable
 body regions.
 
 Inline body:
@@ -10721,8 +10721,8 @@ Example of a short semantic record that names a larger body:
         end: expression
     end: message
 
-MIX-aware storage may support multiple cursors over the same document/body.
-Cursors expose the current attribute table, Structure context, active MIX sets
+Mix-aware storage may support multiple cursors over the same document/body.
+Cursors expose the current attribute table, Structure context, active Mix sets
 and payload-local marks at their current position. Concurrent cursor use is a
 runtime/storage profile concern; the language-level rule is that cursor
 operations are ordinary validated LMX operations and may produce result/failure
@@ -11896,7 +11896,7 @@ Open points for the optional explicit Registry/query library:
     whether the first registry backend is hash tables, SQLite or both;
     resolver ranking/ambiguity defaults;
     how much current L2 hardcoded lowering moves into explicit backend Tables;
-    exact MIX bounded-form storage in overlay documents;
+    exact Mix bounded-form storage in overlay documents;
     standard diagnostic format for failed table lookup.
 
 
