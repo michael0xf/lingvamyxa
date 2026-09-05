@@ -1,0 +1,244 @@
+<root>
+    <autoRun method="run">
+        @mainScreen#run
+        @mp3#init
+    </autoRun>
+    <mainScreen activeBackColor="@blue" activeSelBackColor="@cyan" activeSelColor="@blue" activeColor="@cyan" defBackColor="@darkGray" defColor="@cyan" selBackColor="@darkBlue" selColor="@cyan">
+        <run>
+            @leftPanel#init
+            @leftPanel#select
+            @rightPanel#init
+            @rightPanel#unselect
+            @thirdPanel#init
+            @thirdPanel#unselect
+            <addKeyListener keys="nextSong" target="@mainScreen">
+                nextSong
+            </addKeyListener>
+            <addKeyListener keys="Repaint" target="@items">
+                @rightPanel@repaint
+                @leftPanel@repaint
+                @thirdPanel@repaint
+            </addKeyListener>
+            <addKeyListener keys="Resize">
+                <clearAllChildren>
+                    screenWidth
+                    screenHeight
+                    borderWide
+                    font
+                    w
+                    h
+                    x
+                    y
+                    rightX
+                    panelHeight
+                    panelWidth
+                    itemHeight
+                    painter
+                </clearAllChildren>
+                <run target="@leftPanel@items">
+                    insertScroller
+                    calcMenu
+                    @leftPanel@paint
+                </run>
+                <run target="@rightPanel@items">
+                    insertScroller
+                    calcMenu
+                    @rightPanel@paint
+                </run>
+                <run target="@thirdPanel@items">
+                    insertScroller
+                    calcMenu
+                    @thirdPanel@paint
+                </run>
+            </addKeyListener>
+            <call name="enter" target="@leftPanel#items"/>
+            <call name="enter" target="@rightPanel#items"/>
+            <call name="enter" target="@thirdPanel#items"/>
+        </run>
+        x=0
+        y=0
+        w=@panelWidth
+        h=@panelHeight
+        <leftPanel>
+            parentDir=E:\music
+            nextPanel=@rightPanel
+            prevPanel=@thirdPanel
+            <template>
+                borderWide=
+                font=
+                graphics=
+                <init method="run" target="@items">
+                    insertScroller
+                    @items
+                    calcMenu
+                </init>
+                <reRead method="run">
+                    <step0 method="run">
+                        @clearBody
+                        @linkToDir
+                        @mirror
+                        @sort
+                        @items
+                    </step0>
+                    <step1 method="run" target="@items">
+                        showPlayer
+                        calcMenu
+                        @lighter
+                        @paint
+                    </step1>
+                </reRead>
+                    <add target="$template" name="oftenRepaint" value="true"/>
+                    <clearBody>
+                        @items
+                    </clearBody>
+                    <linkToDir dir="$parentDir"/>
+                    <mirror sourceThread="FileThread" src="@linkToDir"/>
+                    <sort src="@dirBody" method="defSort">
+                        <items font="@bigFont"/>
+                    </sort>
+                    @items
+                    <call name="showPlayer" target="@items"/>
+                    <call name="calcMenu" target="@items"/>
+                    <lighter method="If" switch="$selected" target="@selectedItem" >
+                        <true method="run">
+                            <add name="color" value="@activeSelColor"/>
+                            <add name="backColor" value="@activeSelBackColor"/>
+                        </true>
+                        <false method="run">
+                            <add name="color" value="@selColor"/>
+                            <add name="backColor" value="@selBackColor"/>
+                        </false>
+                    </lighter>
+                    <paint method="run" target="@items">
+                        bar
+                        paintMenu
+                        paintScroller
+                    </paint>
+                    <set target="$template" name="oftenRepaint" value="false"/>
+                <!--</read>-->
+                <select method="run" target="$template">
+                    <add name="selected" value="true"/>
+                    <add name="color" value="@activeColor"/>
+                    <add name="backColor" value="@activeBackColor"/>
+                    @lighter
+                    <keys4 keys="Left" method="addKeyListener">
+                        @unselect
+                        $prevPanel#select
+                    </keys4>
+                    <keys0 keys="Right" method="addKeyListener">
+                        @unselect
+                        $nextPanel#select
+                    </keys0>
+                    <keys1 keys="Down" target="@selectedItem" method="addKeyListener">
+                        <remove name="color"/>
+                        <remove name="backColor"/>
+                        <increase var="@selectedIndex"/>
+                        <run target="@items">
+                            <clearChildren>
+                                itemHeight
+                                font
+                            </clearChildren>
+                            calcMenu
+                        </run>
+                        <add name="color" value="@activeSelColor"/>
+                        <add name="backColor" value="@activeSelBackColor"/>
+                        @paint
+                    </keys1>
+                    <keys2 keys="Up" target="@selectedItem" method="addKeyListener">
+                        <remove name="color"/>
+                        <remove name="backColor"/>
+                        <decrease var="@selectedIndex"/>
+                        <run target="@items">
+                            <clearChildren>
+                                itemHeight
+                                font
+                            </clearChildren>
+                            calcMenu
+                        </run>
+                        <add name="color" value="@activeSelColor"/>
+                        <add name="backColor" value="@activeSelBackColor"/>
+                        @paint
+                    </keys2>
+                    <keys3 keys="Enter,Space" method="addKeyListener" target="@selectedItem">
+                        enter
+                    </keys3>
+                    <keys4 keys="Escape" method="addKeyListener">
+                        escape
+                    </keys4>
+                    @paint
+                </select>
+                <repaint method="run">
+                    <run target="@items">
+                        <clearChildren>
+                            itemHeight
+                            font
+                        </clearChildren>
+                        calcMenu
+                    </run>
+                    @paint
+                </repaint>
+                <unselect method="run" target="$template">
+                    <add name="selected" value="false"/>
+                    <add name="color" value="@defColor"/>
+                    <add name="backColor" value="@defBackColor"/>
+                    @lighter
+                    <removeKeyListener listener="@keys0"/>
+                    <removeKeyListener listener="@keys1"/>
+                    <removeKeyListener listener="@keys2"/>
+                    @paint
+                </unselect>
+            </template>
+        </leftPanel>
+        <rightPanel>
+            x=@rightX
+            parentDir=E:\newsrc\newxml\work
+            nextPanel=@thirdPanel
+            prevPanel=@leftPanel
+            <init method="copy" from="@leftPanel#template" next="#init"/>
+        </rightPanel>
+        <thirdPanel>
+            x=@thirdX
+            parentDir=
+            nextPanel=@leftPanel
+            prevPanel=@rightPanel
+            <init method="copy" from="@leftPanel#template" next="#init"/>
+        </thirdPanel>
+    </mainScreen>
+    <mp3>
+        <init method="run">
+            @select
+            @read
+            <addKeyListener keys="nextSong" target="@items">
+                nextSong
+            </addKeyListener>
+        </init>
+        parentDir=
+        <read method="run">
+            <clearBody>
+                @items
+            </clearBody>
+            <linkToDir dir="$parentDir"/>
+            <mirror sourceThread="FileThread" src="@linkToDir"/>
+            <defSort src="@dirBody">
+                <items/>
+            </defSort>
+            @items
+            <lighter method="If" switch="$selected" target="@selectedItem" >
+                <true method="run">
+                    play
+                </true>
+                <false method="run">
+                    stop
+                </false>
+            </lighter>
+        </read>
+        <select method="run" target="$template">
+            <add name="selected" value="true"/>
+            @lighter
+        </select>
+        <unselect method="run" target="$template">
+            <add name="selected" value="false"/>
+            @lighter
+        </unselect>
+    </mp3>
+</root>
