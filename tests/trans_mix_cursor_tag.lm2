@@ -3,17 +3,17 @@ import: "lm2/mix/Mix.lm2"
 external:
     fn: main () int
         LmMixDoc: doc
-        LmMixOccupant: here
-        LmMixOccupant: there
-        LmMixOccupant: hop
+        LmMixCursor: here
+        LmMixCursor: there
+        LmMixCursor: hop
         LmMixTag: mark
         @: LmMixPage root
         @: LmMixPage extra
-        @: LmMixOccupant here_ptr
-        @: LmMixOccupant there_ptr
-        @: LmMixOccupant hop_ptr
-        @: LmMixOccupant head
-        @: LmMixOccupant tail
+        @: LmMixCursor here_ptr
+        @: LmMixCursor there_ptr
+        @: LmMixCursor hop_ptr
+        @: LmMixCursor head
+        @: LmMixCursor tail
 
         assert: implements(MixCursorView, MixPosition, MixPosition) = 1
         assert: implements(MixTagView, MixCursorView, MixCursorView) = 1
@@ -37,8 +37,8 @@ external:
         assert: root\amount = 2U
         assert: here_ptr\index = 0U
         assert: there_ptr\index = 1U
-        assert: lm_mix_occupant_address(here_ptr) = 0
-        assert: lm_mix_occupant_address(there_ptr) = 1
+        assert: lm_mix_cursor_address(here_ptr) = 0
+        assert: lm_mix_cursor_address(there_ptr) = 1
         assert: root\lock = 0
 
         assert: lm_mix_cursor_next(here_ptr) = 0

@@ -183,6 +183,13 @@ public class Cursor implements LiveVector.Element, Const, ISrc, IPointer{
             return -1;
     }
 
+    /** Mix path {@code 12.45.23432.7} for this cursor. */
+    public String pathString() {
+        if (leaf != null)
+            return leaf.pathString(getIndex());
+        return "";
+    }
+
     int getNextAddress(){
         Leaf leaf = getLeaf();
         if (leaf == null)

@@ -8,9 +8,15 @@ import com.mtk.map.i.ILet;
  * @author <a href="mailto:mtkravchenko@gmail.com">Mikhail Kravchenko</a>
  */
 public class Leaf extends Branch {
-    /** Porting (Lingvamyxa MIX): same 32-slot page as internal Branch. */
+    /** Default page length. Instance pages use {@link #getLength()}. */
     public static final int PAGE = Branch.LENGTH;
 
+    /**
+     * Mix пучок (WorldWideMix §5): next/prev only inside one bunch.
+     * The even tree used to keep every leaf in one absolute chain.
+     * A cut breaks that chain: two documents on the same Branch tree,
+     * each with its own isolated next/prev.
+     */
     Leaf next, prev;
 
     /**
@@ -193,8 +199,16 @@ public class Leaf extends Branch {
         super(tipTop);
     }
 
+    Leaf(BaseRoot tipTop, int hopLength){
+        super(tipTop, hopLength);
+    }
+
     Leaf(Branch node, int at){
         super(node, at);
+    }
+
+    Leaf(Branch node, int at, int hopLength){
+        super(node, at, hopLength);
     }
 
 
@@ -209,10 +223,11 @@ public class Leaf extends Branch {
             }
         }
         Object[] page = args;
-        if (args.length != PAGE) {
-            page = new Object[PAGE];
-            if (size > PAGE)
-                size = PAGE;
+        int pageLen = getLength();
+        if (args.length != pageLen) {
+            page = new Object[pageLen];
+            if (size > pageLen)
+                size = pageLen;
             System.arraycopy(args, 0, page, 0, size);
         } else {
             for(int i = size; i < args.length; i++){
@@ -232,9 +247,85 @@ public class Leaf extends Branch {
         return next;
     }
 
+    /**
+     * First leaf of this bunch (document). Stops at a cut; does not
+     * walk into another document on the same tree.
+     */
+    public Leaf bunchStart() {
+        Leaf p = this;
+        while (p.prev != null)
+            p = p.prev;
+        return p;
+    }
+
+    /**
+     * Last leaf of this bunch. Stops at a cut.
+     */
+    public Leaf bunchEnd() {
+        Leaf n = this;
+        while (n.next != null)
+            n = n.next;
+        return n;
+    }
+
+    public boolean sameBunch(Leaf other) {
+        if (other == null)
+            return false;
+        return bunchStart() == other.bunchStart();
+    }
+
+    /**
+     * Mix §5 first step: break next/prev after this leaf.
+     * This becomes the last page of its document; the old next starts
+     * another document on the same tree. Neighbours are not spliced.
+     */
+    public void cutAfter() {
+        final Leaf n = this.next;
+        if (n == null)
+            return;
+        Branch.lockAddressChain(this, n, null, new Runnable() {
+            public void run() {
+                if (Leaf.this.next != n)
+                    return;
+                n.prev = null;
+                Leaf.this.next = null;
+            }
+        });
+    }
+
+    /**
+     * Break next/prev before this leaf. This becomes the first page of
+     * its document; the old prev ends the other document.
+     */
+    public void cutBefore() {
+        final Leaf p = this.prev;
+        if (p == null)
+            return;
+        Branch.lockAddressChain(p, this, null, new Runnable() {
+            public void run() {
+                if (Leaf.this.prev != p)
+                    return;
+                p.next = null;
+                Leaf.this.prev = null;
+            }
+        });
+    }
+
+    /**
+     * Grow a new isolated bunch as a sibling page under the same parent.
+     * The new leaf is on the tree but not linked into this next/prev chain.
+     */
+    public synchronized Leaf newBunch() {
+        return newBunch(getLength());
+    }
+
+    public synchronized Leaf newBunch(int hopLength) {
+        return new Leaf(getOrNewNode(), getIndex() + 1, hopLength);
+    }
+
     public synchronized Branch newNext() {
 
-        Leaf leaf = new Leaf(getOrNewNode(), getIndex() + 1);
+        Leaf leaf = new Leaf(getOrNewNode(), getIndex() + 1, getLength());
         leaf.insertAfterOf(this);
         return leaf;
     }
@@ -242,7 +333,7 @@ public class Leaf extends Branch {
     // Porting: do not hold this across creating a lower-address sibling.
     // insertBeforeOf locks prev, then new leaf, then this.
     public Branch newPrev() {
-        Leaf leaf = new Leaf(getOrNewNode(), getIndex());
+        Leaf leaf = new Leaf(getOrNewNode(), getIndex(), getLength());
         leaf.insertBeforeOf(this);
         return leaf;
     }
