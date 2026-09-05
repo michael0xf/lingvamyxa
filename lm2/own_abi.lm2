@@ -1065,7 +1065,7 @@ fn: lm_own_tree_cut (LmOwnArena: arena) int
 fn: lm_own_tree_cut_promote_lazy_edges (LmOwnArena: arena) int
 fn: lm_own_arena_pin (LmOwnArena: arena; @: void address) int
 fn: lm_own_arena_root_add (LmOwnArena: arena; @: void address) int
-fn: lm_own_arena_copy_graph (LmOwnArena: arena; @: void source) @: void
+fn: lm_own_arena_copy_graph (LmOwnArena: arena; const: @(void source)) @: void
 fn: lm_own_arena_reclaim (LmOwnArena: arena) int
 fn: lm_thread_provider_name () const: @: char
 fn: lm_host_thread_new () LmHostThread

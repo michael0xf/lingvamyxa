@@ -3156,7 +3156,7 @@ external:
     return: 0
 end: external
 
-fn: lm_own_copy_visit_find (const: (LmOwnPtrStack: sources); const: (LmOwnPtrStack: copies); const: @(void source)) @: void
+fn: lm_own_copy_visit_find (const: (LmOwnPtrStack: sources); const: (LmOwnPtrStack: copies); @: void source) @: void
     size_t: index
 
     if: sources = 0 || copies = 0 || source = 0
@@ -3263,15 +3263,17 @@ external:
 end: external
 
 external:
-    fn: lm_own_arena_copy_graph (LmOwnArena: arena; @: void source) @: void
+    fn: lm_own_arena_copy_graph (LmOwnArena: arena; const: @(void source)) @: void
         LmOwnPtrStack: sources
         LmOwnPtrStack: copies
         @: void copy
+        @: void mutable_source
 
         if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\frozen
             return: 0
         if: source = 0
             return: 0
+        mutable_source: cast: (@: void) source
         sources: lm_own_new_zero(c.sizeof(sources[0]))
         copies: lm_own_new_zero(c.sizeof(copies[0]))
         if: sources = 0 || copies = 0
@@ -3280,7 +3282,7 @@ external:
             return: 0
         lm_own_ptr_stack_init(sources, 0)
         lm_own_ptr_stack_init(copies, 0)
-        copy: lm_own_arena_copy_graph_into(arena, source, sources, copies)
+        copy: lm_own_arena_copy_graph_into(arena, mutable_source, sources, copies)
         lm_own_ptr_stack_destroy(sources)
         lm_own_ptr_stack_destroy(copies)
         lm_own_delete(sources, 0)

@@ -888,7 +888,7 @@ int (lm_own_tree_cut)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena 
 int (lm_own_tree_cut_promote_lazy_edges)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
 int (lm_own_arena_pin)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *address);
 int (lm_own_arena_root_add)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *address);
-void * (lm_own_arena_copy_graph)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *source);
+void * (lm_own_arena_copy_graph)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, const void *source);
 int (lm_own_arena_reclaim)(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
 const char * (lm_thread_provider_name)(void);
 LmHostThread * (lm_host_thread_new)(void);
@@ -1641,12 +1641,12 @@ const LmOwnAllocationDescriptor * lm_own_arena_allocation_descriptor(struct LmMe
 char * lm_own_arena_copy_bytes(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, const char *source, size_t length);
 int lm_own_arena_add_lazy_edge(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *target, LmOwnArena *source, const void *source_ptr, size_t size, const void **patch_slot);
 int lm_own_arena_promote_lazy_edges(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
-static void * lm_own_copy_visit_find(struct LmMessageThread *lm_lmx_message_thread, const LmOwnPtrStack *sources, const LmOwnPtrStack *copies, const void *source);
+static void * lm_own_copy_visit_find(struct LmMessageThread *lm_lmx_message_thread, const LmOwnPtrStack *sources, const LmOwnPtrStack *copies, void *source);
 static void * lm_own_arena_copy_graph_into(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *source, LmOwnPtrStack *sources, LmOwnPtrStack *copies);
 static void lm_own_arena_mark(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *object);
 int lm_own_arena_pin(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *address);
 int lm_own_arena_root_add(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *address);
-void * lm_own_arena_copy_graph(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *source);
+void * lm_own_arena_copy_graph(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, const void *source);
 int lm_own_arena_reclaim(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena);
 int lm_own_arena_absorb(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *target, LmOwnArena *source);
 int lm_message_thread_init(LmMessageThread *thread);
@@ -4693,7 +4693,7 @@ int lm_own_arena_promote_lazy_edges(struct LmMessageThread *lm_lmx_message_threa
     return 0;
 }
 
-static void * lm_own_copy_visit_find(struct LmMessageThread *lm_lmx_message_thread, const LmOwnPtrStack *sources, const LmOwnPtrStack *copies, const void *source) {
+static void * lm_own_copy_visit_find(struct LmMessageThread *lm_lmx_message_thread, const LmOwnPtrStack *sources, const LmOwnPtrStack *copies, void *source) {
     (void)lm_lmx_message_thread;
     size_t index;
     if (sources == 0 || copies == 0 || source == 0) {
@@ -4816,17 +4816,19 @@ int lm_own_arena_root_add(struct LmMessageThread *lm_lmx_message_thread, LmOwnAr
     return lm_own_ptr_stack_push(arena -> roots, address);
 }
 
-void * lm_own_arena_copy_graph(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, void *source) {
+void * lm_own_arena_copy_graph(struct LmMessageThread *lm_lmx_message_thread, LmOwnArena *arena, const void *source) {
     (void)lm_lmx_message_thread;
     LmOwnPtrStack * sources;
     LmOwnPtrStack * copies;
     void *copy;
+    void *mutable_source;
     if (arena == 0 || lm_lmx_message_thread == 0 || arena -> owner_thread != lm_lmx_message_thread || arena -> frozen) {
         return 0;
     }
     if (source == 0) {
         return 0;
     }
+    mutable_source = ((void *)source);
     sources = lm_own_new_zero(sizeof(sources[0]));
     copies = lm_own_new_zero(sizeof(copies[0]));
     if (sources == 0 || copies == 0) {
@@ -4836,7 +4838,7 @@ void * lm_own_arena_copy_graph(struct LmMessageThread *lm_lmx_message_thread, Lm
     }
     lm_own_ptr_stack_init(sources, 0);
     lm_own_ptr_stack_init(copies, 0);
-    copy = lm_own_arena_copy_graph_into(lm_lmx_message_thread, arena, source, sources, copies);
+    copy = lm_own_arena_copy_graph_into(lm_lmx_message_thread, arena, mutable_source, sources, copies);
     lm_own_ptr_stack_destroy(sources);
     lm_own_ptr_stack_destroy(copies);
     lm_own_delete(sources, 0);
