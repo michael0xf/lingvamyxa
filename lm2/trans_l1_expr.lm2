@@ -222,6 +222,10 @@ sub: lm_trans_expr_piece_destroy_fields (LmTransExprPiece: piece)
     if: (piece != 0)
         lm_trans_expr_atom_lowering_delete(piece\atom)
         piece\atom: 0
+        lm_own_delete(piece\prefix, 0)
+        lm_own_delete(piece\suffix, 0)
+        piece\prefix: 0
+        piece\suffix: 0
     ---
 end: lm_trans_expr_piece_destroy_fields
 
@@ -2504,6 +2508,14 @@ fn: lm_trans_emit_callable_binder (FILE: file; const: (LmTransNamespace: namespa
             lm_trans_expr_callable_type_delete(return_type)
             return: 1
         ---
+    if: ((lm_trans_put(prelude_file, "    lm_result->structure.descriptor = &lm_lmx_callable_type_") != 0) || (lm_trans_emit_identifier(prelude_file, descriptor_name) != 0)) || (lm_trans_put(prelude_file, ".structure;\n") != 0)
+        lm_own_delete(env_type_name, 0)
+        lm_own_delete(call_name, 0)
+        lm_own_delete(destroy_name, 0)
+        lm_own_delete(binder_name, 0)
+        lm_trans_expr_abi_params_delete(descriptor_params, descriptor_params_capacity)
+        lm_trans_expr_callable_type_delete(return_type)
+        return: 1
     if: (((lm_trans_put(prelude_file, "    lm_result->call = ") != 0) || (lm_trans_emit_identifier(prelude_file, lm_trans_text_from_cstr(call_name)) != 0)) || (lm_trans_put(prelude_file, ";\n    lm_result->env = ") != 0))
         lm_own_delete(env_type_name, 0)
         lm_own_delete(call_name, 0)
@@ -3536,6 +3548,145 @@ fn: lm_trans_callable_expression_descriptor_name (const: (LmP0Text: head); const
     return: result
 end: lm_trans_callable_expression_descriptor_name
 
+fn: lm_trans_graph_callable_expression_field (
+    const: LmP0Text: head
+    const: LmTransNamespace: namespace_
+    const: @(LmTransDescriptorField out_field)
+) int
+    const: LmTransSymbol: symbol
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptorField: descriptor_field
+    LmP0Text: segment
+    LmP0Text: current_class
+    const: @: char field_class
+    @: char projected_name
+    size_t: offset
+    size_t: occurrence
+    int: has_occurrence
+    int: segment_status
+    int: member_status
+    int: field_class_status
+
+    if: out_field != 0
+        out_field[0]: 0
+    if: head = 0 || namespace_ = 0 || out_field = 0 || lm_trans_is_c_reference_name(head)
+        return: 0
+
+    segment: lm_trans_text_ref_new_cstr("")
+    current_class: lm_trans_text_ref_new_cstr("")
+    if: segment = 0 || current_class = 0
+        lm_trans_text_ref_destroy(@ segment)
+        lm_trans_text_ref_destroy(@ current_class)
+        return: -1
+
+    offset: 0U
+    segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment, @ has_occurrence, @ occurrence)
+    if: segment_status <= 0 || has_occurrence
+        lm_trans_text_ref_destroy(@ segment)
+        lm_trans_text_ref_destroy(@ current_class)
+        if: segment_status < 0
+            return: -1
+        return: 0
+
+    symbol: lm_trans_namespace_find(namespace_, segment)
+    if: symbol = 0 || symbol\class_name = 0
+        lm_trans_text_ref_destroy(@ segment)
+        lm_trans_text_ref_destroy(@ current_class)
+        return: 0
+    if: lm_trans_namespace_relation_text_latest(namespace_, segment, "variable.type", current_class) = 0
+        lm_trans_text_assign_cstr(current_class, symbol\class_name)
+    if: lm_trans_descriptor_uses_structure_graph(namespace_, current_class) = 0
+        lm_trans_text_ref_destroy(@ segment)
+        lm_trans_text_ref_destroy(@ current_class)
+        return: 0
+
+    descriptor_field: 0
+    while: offset <= head\length
+        segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment, @ has_occurrence, @ occurrence)
+        if: segment_status <= 0
+            lm_trans_text_ref_destroy(@ segment)
+            lm_trans_text_ref_destroy(@ current_class)
+            return: -1
+        projected_name: 0
+        member_status: lm_trans_field_chain_member_resolve(namespace_, current_class, segment, has_occurrence, occurrence, @ descriptor, @ descriptor_field, @ projected_name)
+        lm_own_delete(projected_name, 0)
+        if: member_status <= 0 || descriptor_field = 0
+            lm_trans_text_ref_destroy(@ segment)
+            lm_trans_text_ref_destroy(@ current_class)
+            if: member_status < 0
+                return: -1
+            return: 0
+        field_class_status: lm_trans_layout_field_class_resolve_occurrence(current_class, segment, has_occurrence, occurrence, namespace_, @ field_class)
+        if: field_class_status < 0
+            lm_trans_text_ref_destroy(@ segment)
+            lm_trans_text_ref_destroy(@ current_class)
+            return: -1
+        if: field_class_status > 0
+            lm_trans_text_assign_cstr(current_class, field_class)
+        else:
+            current_class\data: ""
+            current_class\length: 0U
+        ---
+
+    lm_trans_text_ref_destroy(@ segment)
+    lm_trans_text_ref_destroy(@ current_class)
+    if: descriptor_field = 0 || lm_trans_descriptor_field_is_callable(descriptor_field) = 0 || descriptor_field\callable_frame = 0
+        return: 0
+    out_field[0]: descriptor_field
+return: 1
+
+fn: lm_trans_callable_expression_signature_from_descriptor_field (
+    const: LmTransDescriptorField: field
+) LmTransSymbol
+    LmTransFunctionHeader: function
+    LmTransSymbol: signature
+    LmOwnPtrStack: param_names
+    LmP0Text: param_name
+    size_t: index
+
+    if: field = 0 || field\callable_frame = 0
+        return: 0
+    function: lm_trans_function_header_new()
+    if: function = 0
+        return: 0
+    if: lm_trans_function_header_from_frame(field\callable_frame, 0, function) <= 0
+        lm_trans_function_header_destroy(function)
+        return: 0
+
+    signature: lm_trans_symbol_new(function\name, "function", 0U)
+    param_names: lm_trans_ptr_stack_new(lm_trans_text_ref_delete_any)
+    if: signature = 0 || param_names = 0
+        lm_trans_symbol_destroy(signature)
+        lm_trans_ptr_stack_delete(@ param_names)
+        lm_trans_function_header_destroy(function)
+        return: 0
+
+    index: 0U
+    while: function\params != 0 && index < function\params\count
+        param_name: lm_trans_text_ref_new(function\params\params[index]\name)
+        if: param_name = 0 || lm_own_ptr_stack_push(param_names, param_name) != 0
+            lm_trans_text_ref_destroy(@ param_name)
+            lm_trans_symbol_destroy(signature)
+            lm_trans_ptr_stack_delete(@ param_names)
+            lm_trans_function_header_destroy(function)
+            return: 0
+        index: index + 1U
+
+    signature\param_names: param_names
+    signature\has_signature: 1
+    signature\callable_params_node: function\params_node
+    signature\callable_return_node: function\return_node
+    signature\has_callable_shape: 1
+    signature\callable_returns_value: function\is_sub = 0
+    signature\callable_is_struct_return: function\is_struct_return
+    signature\callable_is_external: function\is_external
+    signature\callable_has_thread_context: function\has_thread_context
+    signature\callable_is_thread_handler: function\is_thread_handler
+    signature\callable_throws_node: function\throws_node
+    signature\callable_frame: function\frame
+    lm_trans_function_header_destroy(function)
+return: signature
+
 fn: lm_trans_callable_expression_signature_fill_param_names (LmTransSymbol: signature) int
     const: LmP0Field: field
     LmP0Text: name
@@ -3600,6 +3751,134 @@ fn: lm_trans_callable_expression_signature_new (const: (LmTransNamespace: namesp
     return: signature
 end: lm_trans_callable_expression_signature_new
 
+fn: lm_trans_emit_graph_callable_head_expression (
+    FILE: file
+    const: LmP0Text: head
+    const: LmTransNamespace: namespace_
+) int
+    const: LmTransSymbol: symbol
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptorField: descriptor_field
+    LmP0Text: segment
+    LmP0Text: current_class
+    FILE: current
+    FILE: next
+    @: char projected_name
+    size_t: offset
+    size_t: occurrence
+    int: has_occurrence
+    int: segment_status
+    int: member_status
+    const: @: char field_class
+    int: field_class_status
+    LmTransFunctionHeader: function
+
+    segment: lm_trans_text_ref_new_cstr("")
+    current_class: lm_trans_text_ref_new_cstr("")
+    if: file = 0 || head = 0 || segment = 0 || current_class = 0
+        lm_trans_text_ref_destroy(@ segment)
+        lm_trans_text_ref_destroy(@ current_class)
+        return: 1
+    offset: 0U
+    segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment, @ has_occurrence, @ occurrence)
+    if: segment_status <= 0 || has_occurrence
+        lm_trans_text_ref_destroy(@ segment)
+        lm_trans_text_ref_destroy(@ current_class)
+        return: 1
+    symbol: lm_trans_namespace_find(namespace_, segment)
+    if: symbol = 0 || lm_trans_namespace_relation_text_latest(namespace_, segment, "variable.type", current_class) = 0
+        if: symbol != 0 && symbol\class_name != 0
+            lm_trans_text_assign_cstr(current_class, symbol\class_name)
+        ---
+    ---
+    if: lm_trans_descriptor_uses_structure_graph(namespace_, current_class) = 0
+        lm_trans_text_ref_destroy(@ segment)
+        lm_trans_text_ref_destroy(@ current_class)
+        return: 0
+
+    current: lm_trans_tmpfile()
+    if: current = 0 || lm_trans_emit_expr_atom(current, segment, namespace_) != 0
+        if: current != 0
+            c.fclose(current)
+        lm_trans_text_ref_destroy(@ segment)
+        lm_trans_text_ref_destroy(@ current_class)
+        return: -1
+
+    while: offset <= head\length
+        segment_status: lm_trans_head_next_field_chain_segment(head, @ offset, segment, @ has_occurrence, @ occurrence)
+        if: segment_status <= 0
+            c.fclose(current)
+            lm_trans_text_ref_destroy(@ segment)
+            lm_trans_text_ref_destroy(@ current_class)
+            return: -1
+        projected_name: 0
+        member_status: lm_trans_field_chain_member_resolve(namespace_, current_class, segment, has_occurrence, occurrence, @ descriptor, @ descriptor_field, @ projected_name)
+        lm_own_delete(projected_name, 0)
+        if: member_status <= 0 || descriptor_field = 0
+            c.fclose(current)
+            lm_trans_text_ref_destroy(@ segment)
+            lm_trans_text_ref_destroy(@ current_class)
+            return: -1
+        next: lm_trans_tmpfile()
+        if: next = 0
+            c.fclose(current)
+            lm_trans_text_ref_destroy(@ segment)
+            lm_trans_text_ref_destroy(@ current_class)
+            return: -1
+        if: lm_trans_descriptor_field_is_callable(descriptor_field)
+            function: lm_trans_function_header_new()
+            if: function = 0 || descriptor_field\callable_frame = 0 || lm_trans_function_header_from_frame(descriptor_field\callable_frame, 0, function) <= 0 || offset <= head\length
+                lm_trans_function_header_destroy(function)
+                c.fclose(next)
+                c.fclose(current)
+                lm_trans_text_ref_destroy(@ segment)
+                lm_trans_text_ref_destroy(@ current_class)
+                return: -1
+            if: lm_trans_put(next, "((") != 0
+                lm_trans_function_header_destroy(function)
+                c.fclose(next)
+                c.fclose(current)
+                lm_trans_text_ref_destroy(@ segment)
+                lm_trans_text_ref_destroy(@ current_class)
+                return: -1
+            if: function\is_sub
+                member_status: lm_trans_put(next, "void")
+            else:
+                member_status: lm_trans_emit_type_node(next, function\return_node, namespace_)
+            ---
+            if: member_status != 0 || lm_trans_put(next, " (*) (") != 0 || lm_trans_emit_function_params(next, function, namespace_) != 0 || lm_trans_put(next, "))lm_lmx_callable_code((*((LmLmxStructure **)lm_lmx_structure_field_cell((LmLmxStructure *)(") != 0 || lm_trans_copy_stream(next, current) != 0 || c.fprintf(next, "), %zuU)))))", descriptor_field\index) < 0
+                lm_trans_function_header_destroy(function)
+                c.fclose(next)
+                c.fclose(current)
+                lm_trans_text_ref_destroy(@ segment)
+                lm_trans_text_ref_destroy(@ current_class)
+                return: -1
+            lm_trans_function_header_destroy(function)
+        else:
+            if: lm_trans_put(next, "(*((") != 0 || lm_trans_emit_graph_field_storage_type(next, descriptor_field, namespace_) != 0 || lm_trans_put(next, " *)lm_lmx_structure_field_cell((LmLmxStructure *)(") != 0 || lm_trans_copy_stream(next, current) != 0 || c.fprintf(next, "), %zuU)))", descriptor_field\index) < 0
+                c.fclose(next)
+                c.fclose(current)
+                lm_trans_text_ref_destroy(@ segment)
+                lm_trans_text_ref_destroy(@ current_class)
+                return: -1
+        ---
+        c.fclose(current)
+        current: next
+        field_class_status: lm_trans_layout_field_class_resolve_occurrence(current_class, segment, has_occurrence, occurrence, namespace_, @ field_class)
+        if: field_class_status > 0
+            lm_trans_text_assign_cstr(current_class, field_class)
+        else:
+            current_class\data: ""
+            current_class\length: 0U
+        ---
+    member_status: lm_trans_copy_stream(file, current)
+    c.fclose(current)
+    lm_trans_text_ref_destroy(@ segment)
+    lm_trans_text_ref_destroy(@ current_class)
+    if: member_status != 0
+        return: -1
+return: 1
+
 fn: lm_trans_emit_callable_head_expression (FILE: file; const: (LmP0Text: head); const: (LmTransNamespace: namespace_)) int
     const: LmTransSymbol: symbol
     const: LmTransDescriptor: descriptor
@@ -3615,8 +3894,14 @@ fn: lm_trans_emit_callable_head_expression (FILE: file; const: (LmP0Text: head);
     int: member_status
     int: field_class_status
     int: status
+    int: graph_status
     if: ((head = 0) || (lm_trans_text_contains_char(head, '\\') = 0))
         return: lm_trans_emit_expr_atom(file, head, namespace_)
+    graph_status: lm_trans_emit_graph_callable_head_expression(file, head, namespace_)
+    if: graph_status < 0
+        return: 1
+    if: graph_status > 0
+        return: 0
     segment: lm_trans_text_ref_new_cstr("")
     current_class: lm_trans_text_ref_new_cstr("")
     if: segment = 0 || current_class = 0
@@ -3706,11 +3991,27 @@ end: lm_trans_emit_callable_head_expression
 
 fn: lm_trans_expr_stack_try_emit_callable_expression_frame (FILE: file; LmTransExprStack: stack; const: (LmP0Frame: frame); const: (LmTransNamespace: namespace_)) int
     LmP0Text: descriptor_name
+    const: LmTransDescriptorField: graph_field
     LmTransSymbol: signature
     const: LmP0Field: arg_field
     int: status
     if: (frame = 0)
         return: 0
+    status: lm_trans_graph_callable_expression_field(frame\head, namespace_, @ graph_field)
+    if: status < 0
+        return: -1
+    if: status > 0
+        signature: lm_trans_callable_expression_signature_from_descriptor_field(graph_field)
+        if: signature = 0
+            c.fprintf(c.stderr, "trans L2 internal error: cannot build graph callable signature for \"%.*s\"\n", (cast: int frame\head\length), frame\head\data)
+            return: -1
+        if: lm_trans_emit_callable_head_expression(file, frame\head, namespace_) != 0 || lm_trans_put(file, "(") != 0 || lm_trans_expr_stack_push_text(stack, ")") != 0
+            lm_trans_symbol_destroy(signature)
+            return: -1
+        if: lm_trans_expr_stack_push_call_args_owned(stack, frame\body, signature, signature) != 0
+            return: -1
+        return: 1
+    ---
     descriptor_name: lm_trans_text_ref_new_cstr("")
     if: (descriptor_name = 0)
         return: -1
@@ -3776,10 +4077,35 @@ fn: lm_trans_call_frame_result_type (const: (LmP0Frame: frame); const: (LmTransN
     LmTransCallLowering: call
     LmOwnPtrStack: segments
     LmP0Text: descriptor_name
+    const: LmTransDescriptorField: graph_field
     LmTransSymbol: signature
     int: status
     if: ((frame = 0) || (out = 0))
         return: 0
+    status: lm_trans_graph_callable_expression_field(frame\head, namespace_, @ graph_field)
+    if: status < 0
+        return: -1
+    if: status > 0
+        signature: lm_trans_callable_expression_signature_from_descriptor_field(graph_field)
+        if: signature = 0
+            return: -1
+        segments: lm_trans_expr_segment_stack_new()
+        if: segments = 0
+            lm_trans_symbol_destroy(signature)
+            return: -1
+        if: lm_trans_call_args_layout(segments, frame\body, signature) != 0
+            lm_trans_symbol_destroy(signature)
+            lm_trans_expr_segment_stack_delete(@ segments)
+            return: -1
+        if: lm_trans_callable_return_type_from_node(signature\callable_return_node, out)
+            status: 1
+        else:
+            status: 0
+        ---
+        lm_trans_symbol_destroy(signature)
+        lm_trans_expr_segment_stack_delete(@ segments)
+        return: status
+    ---
     descriptor_name: lm_trans_text_ref_new_cstr("")
     if: (descriptor_name = 0)
         return: -1
@@ -5304,6 +5630,83 @@ fn: lm_trans_expr_node_has_runtime_table_root (
         return: 0
 return: lm_trans_runtime_table_private_type_position(current\as\atom, namespace_)
 
+fn: lm_trans_emit_graph_field_storage_type (
+    FILE: file
+    const: LmTransDescriptorField: field
+    const: LmTransNamespace: namespace_
+) int
+    LmTransL4CallableType: type
+    int: status
+
+    if: file = 0 || field = 0 || field\descriptor_name = 0
+        return: 1
+    type: lm_trans_expr_callable_type_new()
+    if: type = 0
+        return: 1
+    if: lm_trans_callable_type_reset(type) != 0 || lm_trans_text_assign_cstr(type\class_name, field\descriptor_name) = 0
+        lm_trans_expr_callable_type_delete(type)
+        return: 1
+    type\address_depth: field\address_depth
+    type\is_const: field\is_const
+    status: lm_trans_emit_callable_type_named(file, type, 0, namespace_)
+    lm_trans_expr_callable_type_delete(type)
+return: status
+
+fn: lm_trans_expr_piece_wrap_graph_field (
+    LmTransExprPiece: root
+    LmTransExprPiece: tail
+    const: LmTransDescriptorField: field
+    const: LmTransNamespace: namespace_
+) int
+    FILE: prefix_file
+    FILE: suffix_file
+    @: char prefix
+    @: char suffix
+    size_t: length
+    int: status
+
+    if: root = 0 || field = 0
+        return: 1
+    if: tail = 0
+        tail: root
+    prefix_file: lm_trans_tmpfile()
+    suffix_file: lm_trans_tmpfile()
+    if: prefix_file = 0 || suffix_file = 0
+        if: prefix_file != 0
+            c.fclose(prefix_file)
+        if: suffix_file != 0
+            c.fclose(suffix_file)
+        return: 1
+
+    status: lm_trans_put(prefix_file, "(*((")
+    if: status = 0
+        status: lm_trans_emit_graph_field_storage_type(prefix_file, field, namespace_)
+    if: status = 0
+        status: lm_trans_put(prefix_file, " *)lm_lmx_structure_field_cell((LmLmxStructure *)(")
+    if: status = 0 && root\prefix != 0
+        status: lm_trans_put(prefix_file, root\prefix)
+    if: status = 0 && tail\suffix != 0
+        status: lm_trans_put(suffix_file, tail\suffix)
+    if: status = 0 && c.fprintf(suffix_file, "), %zuU)))", field\index) < 0
+        status: 1
+    prefix: 0
+    suffix: 0
+    if: status = 0
+        status: lm_trans_typedef_projection_file_copy(prefix_file, @ prefix, @ length)
+    if: status = 0
+        status: lm_trans_typedef_projection_file_copy(suffix_file, @ suffix, @ length)
+    c.fclose(prefix_file)
+    c.fclose(suffix_file)
+    if: status != 0
+        lm_own_delete(prefix, 0)
+        lm_own_delete(suffix, 0)
+        return: 1
+    lm_own_delete(root\prefix, 0)
+    lm_own_delete(tail\suffix, 0)
+    root\prefix: prefix
+    tail\suffix: suffix
+return: 0
+
 fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: (LmTransExprRangeJob: range); const: (LmTransNamespace: namespace_)) int
     const: LmP0Field: field
     const: LmP0Node: node
@@ -5311,6 +5714,8 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     LmTransL4CallableType: pending_expected_type
     LmP0Text: operand_class
     const: LmTransDescriptor: operand_descriptor
+    const: LmTransDescriptor: graph_descriptor
+    const: LmTransDescriptorField: graph_descriptor_field
     const: LmP0Node: indexed_candidate_node
     const: LmP0Field: indexed_candidate_field
     const: LmP0Text: direct_table_field_root
@@ -5327,15 +5732,20 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     int: wrote
     int: runtime_table_lvalue
     int: pending_table_update
+    int: graph_follow_pending
+    int: graph_suppress_atom
     int: had_previous_operand
     size_t: array_reference_rank
     size_t: array_reference_index_count
     unsigned: array_helper_id
     const: @: char field_class
     @: char direct_field_name
+    @: char graph_projected_name
     const: LmTransSymbol: array_element_type_relation
     LmTransExprAtomLowering: atom
     LmTransExprPiece: indexed_root_piece
+    LmTransExprPiece: graph_root_piece
+    LmTransExprPiece: graph_tail_piece
     LmTransL4CallableType: indexed_candidate_type
     if: ((lowered = 0) || (range = 0))
         return: 1
@@ -5366,6 +5776,11 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
     array_helper_id: 0U
     array_element_type_relation: 0
     indexed_root_piece: 0
+    graph_root_piece: 0
+    graph_tail_piece: 0
+    graph_follow_pending: 0
+    graph_suppress_atom: 0
+    graph_projected_name: 0
     direct_table_field_root: 0
     runtime_table_lvalue: lm_trans_expr_node_has_runtime_table_root(previous_operand, namespace_)
     pending_table_update: 0
@@ -5433,6 +5848,19 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
+                    if: graph_follow_pending
+                        graph_projected_name: 0
+                        projection_status: lm_trans_field_chain_member_resolve(namespace_, operand_class, selected_node\as\atom, 1, occurrence, @ graph_descriptor, @ graph_descriptor_field, @ graph_projected_name)
+                        lm_own_delete(graph_projected_name, 0)
+                        graph_projected_name: 0
+                        if: projection_status <= 0 || graph_root_piece = 0 || lm_trans_expr_piece_wrap_graph_field(graph_root_piece, graph_tail_piece, graph_descriptor_field, namespace_) != 0
+                            lm_trans_expr_atom_lowering_delete(atom)
+                            lm_trans_expr_callable_type_delete(pending_expected_type)
+                            lm_trans_text_ref_destroy(@ operand_class)
+                            return: 1
+                        lm_trans_text_assign_cstr(atom\text, "")
+                        graph_follow_pending: 0
+                    ---
                     field_class_status: lm_trans_layout_field_class_resolve_occurrence(operand_class, selected_node\as\atom, 1, occurrence, namespace_, @ field_class)
                     if: field_class_status < 0
                         lm_trans_expr_atom_lowering_delete(atom)
@@ -5550,6 +5978,13 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                             operand_class\length: 0U
                         else:
                             operand_class[0]: array_element_type_relation\c_name[0]
+                            if: lm_trans_descriptor_uses_structure_graph(namespace_, operand_class)
+                                graph_root_piece: indexed_root_piece
+                                graph_tail_piece: cast: (LmTransExprPiece) lm_own_ptr_stack_top(lowered\pieces)
+                            else:
+                                graph_root_piece: 0
+                                graph_tail_piece: 0
+                            ---
                             array_reference_rank: 0U
                             array_reference_index_count: 0U
                             array_element_type_relation: 0
@@ -5607,6 +6042,10 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
+                    if: was_expect_field_name = 0 && lm_trans_text_equals(node\as\atom, "\\") && graph_root_piece != 0 && lm_trans_descriptor_uses_structure_graph(namespace_, operand_class)
+                        graph_follow_pending: 1
+                        graph_suppress_atom: 1
+                    ---
                     if: lm_trans_text_equals(node\as\atom, "++") || lm_trans_text_equals(node\as\atom, "--")
                         if: had_previous_operand
                             if: runtime_table_lvalue
@@ -5655,13 +6094,27 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                     ---
                     if: was_expect_field_name && operand_class\length != 0U
                         operand_descriptor: lm_trans_namespace_descriptor(namespace_, operand_class)
-                        if: operand_descriptor != 0 && lm_trans_descriptor_class_relation_value(operand_descriptor, "lm.trans.c.indexed-members") != 0
-                            projection_status: lm_trans_expr_atom_lowering_project_field(atom, namespace_, operand_class, node\as\atom, 0, 0U)
-                            if: projection_status < 0
+                        if: graph_follow_pending && lm_trans_descriptor_uses_structure_graph(namespace_, operand_class)
+                            graph_projected_name: 0
+                            projection_status: lm_trans_field_chain_member_resolve(namespace_, operand_class, node\as\atom, 0, 0U, @ graph_descriptor, @ graph_descriptor_field, @ graph_projected_name)
+                            lm_own_delete(graph_projected_name, 0)
+                            graph_projected_name: 0
+                            if: projection_status <= 0 || graph_root_piece = 0 || lm_trans_expr_piece_wrap_graph_field(graph_root_piece, graph_tail_piece, graph_descriptor_field, namespace_) != 0
                                 lm_trans_expr_atom_lowering_delete(atom)
                                 lm_trans_expr_callable_type_delete(pending_expected_type)
                                 lm_trans_text_ref_destroy(@ operand_class)
                                 return: 1
+                            graph_follow_pending: 0
+                            graph_suppress_atom: 1
+                        else:
+                            if: operand_descriptor != 0 && lm_trans_descriptor_class_relation_value(operand_descriptor, "lm.trans.c.indexed-members") != 0
+                                projection_status: lm_trans_expr_atom_lowering_project_field(atom, namespace_, operand_class, node\as\atom, 0, 0U)
+                                if: projection_status < 0
+                                    lm_trans_expr_atom_lowering_delete(atom)
+                                    lm_trans_expr_callable_type_delete(pending_expected_type)
+                                    lm_trans_text_ref_destroy(@ operand_class)
+                                    return: 1
+                                ---
                             ---
                         ---
                     ---
@@ -5680,6 +6133,10 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
+                    if: graph_suppress_atom
+                        lm_trans_text_assign_cstr(atom\text, "")
+                        graph_suppress_atom: 0
+                    ---
                     if: was_expect_field_name
                         field_class_status: lm_trans_layout_field_class_resolve_occurrence(operand_class, node\as\atom, 0, 0U, namespace_, @ field_class)
                         if: field_class_status < 0
@@ -5734,6 +6191,21 @@ fn: lm_trans_expr_lowered_range_build (LmTransExprLoweredRange: lowered; const: 
                         lm_trans_expr_callable_type_delete(pending_expected_type)
                         lm_trans_text_ref_destroy(@ operand_class)
                         return: 1
+                    if: was_expect_field_name = 0 && was_expect_c_field_name = 0 && lm_trans_atom_is_operand_like(node\as\atom)
+                        if: lm_trans_descriptor_uses_structure_graph(namespace_, operand_class)
+                            graph_root_piece: cast: (LmTransExprPiece) lm_own_ptr_stack_top(lowered\pieces)
+                            graph_tail_piece: graph_root_piece
+                        else:
+                            graph_root_piece: 0
+                            graph_tail_piece: 0
+                        ---
+                    else:
+                        if: was_expect_field_name = 0 && lm_trans_text_equals(node\as\atom, "\\") = 0
+                            graph_root_piece: 0
+                            graph_tail_piece: 0
+                            graph_follow_pending: 0
+                        ---
+                    ---
                     ---
                 else:
                     if: address_next_operand && node\kind = c.LM_P0_NODE_STRUCTURE
@@ -5843,7 +6315,13 @@ fn: lm_trans_expr_piece_emit_atom (FILE: file; LmTransExprStack: stack; LmTransE
     c.LM_UNUSED(stack)
     if: (out_suspend != 0)
         out_suspend[0]: 0
+    if: piece\prefix != 0 && lm_trans_put(file, piece\prefix) != 0
+        lm_trans_expr_lowered_range_delete(lowered)
+        return: 1
     if: (lm_trans_emit_expr_atom_lowering(file, piece\atom, namespace_) != 0)
+        lm_trans_expr_lowered_range_delete(lowered)
+        return: 1
+    if: piece\suffix != 0 && lm_trans_put(file, piece\suffix) != 0
         lm_trans_expr_lowered_range_delete(lowered)
         return: 1
     lowered\index: lowered\index + 1U
@@ -5874,8 +6352,14 @@ fn: lm_trans_expr_piece_emit_index (FILE: file; LmTransExprStack: stack; LmTrans
     lowered\index: lowered\index + 1U
     if: (lm_trans_expr_stack_push_lowered_range(stack, lowered) != 0)
         return: 1
+    if: piece\suffix != 0 && lm_trans_expr_stack_push_text(stack, piece\suffix) != 0
+        lm_trans_expr_stack_pop_delete(stack)
+        return: 1
     if: (lm_trans_expr_stack_push_text(stack, "]") != 0)
         lm_trans_expr_stack_pop_delete(stack)
+        if: piece\suffix != 0
+            lm_trans_expr_stack_pop_delete(stack)
+        ---
         return: 1
     if: (lm_trans_expr_stack_push_range(stack, piece\first, piece\stop) != 0)
         lm_trans_expr_stack_pop_delete(stack)
@@ -5936,6 +6420,9 @@ fn: lm_trans_expr_piece_emit_array_rectangle_index (FILE: file; LmTransExprStack
             return: 1
         ---
     ---
+    if: piece\suffix != 0 && lm_trans_put(file, piece\suffix) != 0
+        lm_trans_expr_lowered_range_delete(lowered)
+        return: 1
     lowered\index: lowered\index + 1U
     return: 0
 end: lm_trans_expr_piece_emit_array_rectangle_index
@@ -6016,6 +6503,55 @@ fn: lm_trans_expr_job_emit_lowered_range (FILE: file; LmTransExprStack: stack; L
     job\destroy: 0
     return: lm_trans_expr_stack_emit_lowered_range(file, stack, range, namespace_)
 end: lm_trans_expr_job_emit_lowered_range
+
+fn: lm_trans_expr_job_materialize_typed_callable (FILE: file; LmTransExprStack: stack; LmTransExprJob: job; const: (LmTransNamespace: namespace_)) int
+    LmTransExprSegment: segment
+    int: consumed
+    if: job = 0 || job\segment = 0
+        return: 1
+    segment: job\segment
+    job\segment: 0
+    if: lm_trans_materialize_callable_descriptor_value(file, stack, segment, namespace_, @ consumed) != 0
+        lm_trans_expr_segment_delete(segment)
+        return: 1
+    lm_trans_expr_segment_delete(segment)
+    if: consumed = 0
+        c.fprintf(c.stderr, "trans L2 internal error: executable callable was not materialized as its expected descriptor value\n")
+        return: 1
+    return: 0
+end: lm_trans_expr_job_materialize_typed_callable
+
+fn: lm_trans_emit_typed_callable_descriptor_value (FILE: file; const: (LmP0Field: first); const: (LmP0Field: stop); const: (LmTransNamespace: namespace_); const: (LmTransSymbol: descriptor_symbol)) int
+    LmTransExprJob: job
+    const: LmP0Node: descriptor_name_node
+    int: status
+    if: descriptor_symbol = 0 || descriptor_symbol\name = 0
+        return: 1
+    descriptor_name_node: lm_trans_registry_synthetic_atom_node(descriptor_symbol\name)
+    if: descriptor_name_node = 0
+        return: 1
+    job: lm_trans_expr_job_new()
+    if: job = 0
+        return: 1
+    job\run: @lm_trans_expr_job_materialize_typed_callable
+    job\destroy: 0
+    job\segment: lm_trans_expr_segment_new()
+    if: job\segment = 0
+        lm_trans_expr_job_delete(job)
+        return: 1
+    job\segment\expected_param: lm_trans_formal_param_new()
+    if: job\segment\expected_param = 0
+        lm_trans_expr_segment_delete(job\segment)
+        job\segment: 0
+        lm_trans_expr_job_delete(job)
+        return: 1
+    job\segment\first: first
+    job\segment\stop: stop
+    job\segment\present: 1
+    job\segment\expected_param\source_node: descriptor_name_node
+    status: lm_trans_emit_expr_stack_run(file, job, namespace_)
+    return: status
+end: lm_trans_emit_typed_callable_descriptor_value
 
 fn: lm_trans_emit_expr_stack_run (FILE: file; LmTransExprJob: initial; const: (LmTransNamespace: namespace_)) int
     LmTransExprStack: stack
@@ -6135,6 +6671,7 @@ fn: lm_trans_emit_expr_range_with_expected_type (FILE: file; const: (LmP0Field: 
     const: LmP0Node: candidate_node
     const: LmTransDescriptor: required_descriptor
     const: LmTransSymbol: candidate_symbol
+    const: LmTransSymbol: expected_symbol
     LmTransL4CallableType: candidate_type
     int: candidate_type_status
     int: expected_array_reference
@@ -6187,6 +6724,14 @@ fn: lm_trans_emit_expr_range_with_expected_type (FILE: file; const: (LmP0Field: 
             return: 1
         ---
         lm_trans_expr_callable_type_delete(candidate_type)
+    ---
+    expected_symbol: 0
+    if: expected_type != 0
+        expected_symbol: lm_trans_namespace_find(namespace_, expected_type\class_name)
+    if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_ATOM && candidate_symbol = 0
+        candidate_symbol: lm_trans_namespace_find(namespace_, candidate_node\as\atom)
+    if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_ATOM && expected_symbol != 0 && lm_trans_symbol_is(expected_symbol, "callableDescriptor") && candidate_symbol != 0 && lm_trans_symbol_is_executable_callable(candidate_symbol)
+        return: lm_trans_emit_typed_callable_descriptor_value(file, first, stop, namespace_, expected_symbol)
     ---
     if: candidate_node != 0 && candidate_node\kind = c.LM_P0_NODE_ATOM && expected_type != 0
         required_descriptor: lm_trans_namespace_descriptor(namespace_, expected_type\class_name)

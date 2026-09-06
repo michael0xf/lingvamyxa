@@ -1,3 +1,0 @@
-L3:
-    predef: "fixtures/l2_predef_registry.lm2"
-end: L3

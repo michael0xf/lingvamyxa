@@ -640,6 +640,9 @@ fn: lm_trans_top_level_statement_binding (const: (LmTransHeadBinding: binding); 
     if: c.strcmp(receiver, "lm_trans_statement_emit_merge_named_structure") = 0
         out\declare: @lm_trans_top_level_declare_merge_named_structure
         out\emit_before_functions: @lm_trans_top_level_emit_merge_named_structure_typedef
+        out\emit_prototype: @lm_trans_top_level_emit_merge_named_structure_callable_prototypes
+        out\emit_after_prototypes: @lm_trans_top_level_emit_merge_named_structure_graph_descriptor
+        out\emit_function: @lm_trans_top_level_emit_merge_named_structure_callable_functions
         out\emits_top_level: 1
         return: 1
     if: c.strcmp(receiver, "lm_trans_statement_emit_structure_declaration") = 0
@@ -814,6 +817,12 @@ fn: lm_trans_emit_callable_descriptor_closure_layout (FILE: file; const: (LmTran
         c.fprintf(c.stderr, "trans L2 error: descriptor-only fn expects a single return type\n")
         return: 1
 
+    if: lm_trans_put(file, "static LmLmxRuntimeDescriptor lm_lmx_callable_type_") != 0
+        return: 1
+    if: lm_trans_write_text(file, function\c_name) != 0
+        return: 1
+    if: lm_trans_put(file, " = { { &lm_lmx_callable_descriptor.structure }, 0, 0U };\n") != 0
+        return: 1
     if: lm_trans_put(file, "typedef struct ") != 0
         return: 1
     if: lm_trans_write_text(file, function\c_name) != 0
@@ -826,7 +835,7 @@ fn: lm_trans_emit_callable_descriptor_closure_layout (FILE: file; const: (LmTran
         return: 1
     if: lm_trans_write_text(file, function\c_name) != 0
         return: 1
-    if: lm_trans_put(file, "Closure {\n    ") != 0
+    if: lm_trans_put(file, "Closure {\n    LmLmxStructure structure;\n    ") != 0
         return: 1
     if: lm_trans_emit_type_node(file, function\return_node, namespace_) != 0
         return: 1
@@ -855,7 +864,7 @@ fn: lm_trans_emit_callable_descriptor_claimed (FILE: file; const: (LmTransFuncti
 
     if: function = 0 || function\is_descriptor_only = 0 || function\c_name = 0
         return: 1
-    if: lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
+    if: lm_trans_emit_structure_graph_header(lm_trans_prelude_file(file)) != 0
         return: 1
 
     closure_declaration_file: lm_trans_tmpfile()
@@ -891,6 +900,7 @@ fn: lm_trans_top_level_emit_callable_descriptor (FILE: file; LmTransNamespace: n
     int: status
     LmP0Text: descriptor_name
     @: char descriptor_name_storage
+    int: predefined_hoisted
 
     descriptor_name: lm_trans_text_from_cstr("")
     if: item = 0 || item\frame = 0 || item\function = 0 || descriptor_name = 0 || lm_trans_registry_identifier_value(item\function\name, descriptor_name) = 0
@@ -902,7 +912,8 @@ fn: lm_trans_top_level_emit_callable_descriptor (FILE: file; LmTransNamespace: n
         lm_trans_text_ref_destroy(@ descriptor_name)
         return: 1
 
-    if: lm_trans_registry_predefined_descriptor_site_is_hoisted(lm_trans_current_source_path, item\node) = 0
+    predefined_hoisted: lm_trans_registry_predefined_descriptor_site_is_hoisted(lm_trans_current_source_path, item\node)
+    if: predefined_hoisted = 0
         if: lm_trans_registry_materialize_fn_descriptor_frame(item\frame) != 0
             lm_trans_text_ref_destroy(@ descriptor_name)
             lm_own_delete(descriptor_name_storage, 0)
@@ -920,7 +931,12 @@ fn: lm_trans_top_level_emit_callable_descriptor (FILE: file; LmTransNamespace: n
         if: lm_trans_l4_is_function_pointer_type(namespace_, descriptor_name_storage)
             status: lm_trans_emit_l4_function_pointer_type_name(file, namespace_, descriptor_name_storage, "functionPointerType")
         else:
-            status: 0
+            if: predefined_hoisted
+                status: 0
+            else:
+                status: lm_trans_emit_callable_descriptor_claimed(file, item\function, namespace_)
+            ---
+        ---
     ---
     lm_trans_text_ref_destroy(@ descriptor_name)
     lm_own_delete(descriptor_name_storage, 0)
@@ -1513,9 +1529,38 @@ fn: lm_trans_top_level_emit_local_named_structure_typedef_if_compatible (
 return: 0
 
 fn: lm_trans_top_level_emit_named_structure_typedef (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    FILE: prelude
+    int: status
     if: item = 0 || item\frame = 0
         return: 1
+    if: lm_trans_named_structure_uses_graph_header(namespace_, item\frame\head)
+        prelude: lm_trans_prelude_file(file)
+        status: lm_trans_emit_structure_graph_header(prelude)
+        if: status = 0
+            status: lm_trans_emit_named_structure_graph_descriptor_forward(prelude, item\frame\head)
+        return: status
 return: lm_trans_top_level_emit_named_structure_typedef_once(file, namespace_, item\frame, 0)
+
+fn: lm_trans_top_level_emit_named_structure_callable_prototypes (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    if: item = 0 || item\frame = 0
+        return: 1
+    if: lm_trans_named_structure_uses_graph_header(namespace_, item\frame\head) = 0
+        return: 0
+return: lm_trans_emit_named_structure_graph_callable_prototypes(file, item\frame\head, namespace_)
+
+fn: lm_trans_top_level_emit_named_structure_graph_descriptor (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    if: item = 0 || item\frame = 0
+        return: 1
+    if: lm_trans_named_structure_uses_graph_header(namespace_, item\frame\head) = 0
+        return: 0
+return: lm_trans_emit_named_structure_graph_descriptor(file, item\frame\head, 0U, namespace_)
+
+fn: lm_trans_top_level_emit_named_structure_callable_functions (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    if: item = 0 || item\frame = 0
+        return: 1
+    if: lm_trans_named_structure_uses_graph_header(namespace_, item\frame\head) = 0
+        return: 0
+return: lm_trans_emit_named_structure_graph_callable_functions(file, item\frame\head, namespace_)
 
 fn: lm_trans_top_level_declare_function_named_structures_in_scope (
     LmTransNamespace: namespace_
@@ -1609,11 +1654,20 @@ return: lm_trans_declare_hosted_merge_named_structure_layout(namespace_, item\fr
 
 fn: lm_trans_top_level_emit_merge_named_structure_typedef (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
     FILE: declaration_file
+    FILE: prelude
+    const: LmP0Text: target
     int: emitted
     int: status
 
     if: item = 0 || item\frame = 0
         return: 1
+    target: lm_trans_merge_target_name(item\frame)
+    if: lm_trans_named_structure_uses_graph_header(namespace_, target)
+        prelude: lm_trans_prelude_file(file)
+        status: lm_trans_emit_structure_graph_header(prelude)
+        if: status = 0
+            status: lm_trans_emit_named_structure_graph_descriptor_forward(prelude, target)
+        return: status
     declaration_file: lm_trans_tmpfile()
     if: declaration_file = 0
         return: 1
@@ -1622,6 +1676,33 @@ fn: lm_trans_top_level_emit_merge_named_structure_typedef (FILE: file; LmTransNa
         status: lm_trans_typedef_projection_emit_prepared_text(file, lm_trans_merge_target_name(item\frame), declaration_file, @ emitted)
     c.fclose(declaration_file)
 return: status
+
+fn: lm_trans_top_level_emit_merge_named_structure_callable_prototypes (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    const: LmP0Text: target
+    if: item = 0 || item\frame = 0
+        return: 1
+    target: lm_trans_merge_target_name(item\frame)
+    if: target = 0 || lm_trans_named_structure_uses_graph_header(namespace_, target) = 0
+        return: 0
+return: lm_trans_emit_named_structure_graph_callable_prototypes(file, target, namespace_)
+
+fn: lm_trans_top_level_emit_merge_named_structure_graph_descriptor (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    const: LmP0Text: target
+    if: item = 0 || item\frame = 0
+        return: 1
+    target: lm_trans_merge_target_name(item\frame)
+    if: target = 0 || lm_trans_named_structure_uses_graph_header(namespace_, target) = 0
+        return: 0
+return: lm_trans_emit_named_structure_graph_descriptor(file, target, 0U, namespace_)
+
+fn: lm_trans_top_level_emit_merge_named_structure_callable_functions (FILE: file; LmTransNamespace: namespace_; const: (LmTransTopLevelItem: item)) int
+    const: LmP0Text: target
+    if: item = 0 || item\frame = 0
+        return: 1
+    target: lm_trans_merge_target_name(item\frame)
+    if: target = 0 || lm_trans_named_structure_uses_graph_header(namespace_, target) = 0
+        return: 0
+return: lm_trans_emit_named_structure_graph_callable_functions(file, target, namespace_)
 
 fn: lm_trans_lower_top_level_item (
     const: LmP0Node: node
@@ -1730,6 +1811,9 @@ fn: lm_trans_lower_top_level_item (
     if: lm_trans_frame_looks_named_structure_layout_declaration(out\frame, namespace_)
         out\declare: @lm_trans_top_level_declare_named_structure
         out\emit_before_functions: @lm_trans_top_level_emit_named_structure_typedef
+        out\emit_prototype: @lm_trans_top_level_emit_named_structure_callable_prototypes
+        out\emit_after_prototypes: @lm_trans_top_level_emit_named_structure_graph_descriptor
+        out\emit_function: @lm_trans_top_level_emit_named_structure_callable_functions
         out\emits_top_level: 1
         return: 0
 

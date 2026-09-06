@@ -1228,6 +1228,17 @@ fn: lm_trans_emit_function (
     LmTransNamespace: namespace_
 ) int
 
+fn: lm_trans_emit_function_prototype (
+    FILE: file
+    const: LmTransFunctionHeader: function
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_named_structure_graph_descriptor_forward (
+    FILE: file
+    const: LmP0Text: name
+) int
+
 fn: lm_trans_emit_env_type (
     FILE: file
     const: LmTransFunctionHeader: function
@@ -1363,6 +1374,10 @@ fn: lm_trans_emit_l4_function_pointer_type_name (
 fn: lm_trans_registry_synthetic_params_node (
     const: LmTransNamespace: namespace_
     const: @: char name
+) LmP0Node
+
+fn: lm_trans_registry_synthetic_atom_node (
+    const: LmP0Text: text
 ) LmP0Node
 
 fn: lm_trans_registry_synthetic_return_node (

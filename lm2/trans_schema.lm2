@@ -745,6 +745,9 @@ table:
              is_const         int                    5                       0                                0
              has_array_count  int                    6                       0                                0
              is_union         int                    7                       0                                0
+             callable_frame   LmP0Frame              8                       0                                1
+             callable_owner   LmP0Text               9                       0                                1
+             callable_index   size_t                 10                      0                                0
 end: LmTransDescriptorField
 
 table:
@@ -1017,6 +1020,8 @@ table:
              atom           LmTransExprAtomLowering     3                  0                                0
              first          LmP0Field                   4                  0                                1
              stop           LmP0Field                   5                  0                                1
+             prefix         char                        6                  1                                0
+             suffix         char                        7                  1                                0
 end: LmTransExprPiece
 
 table:
@@ -1033,6 +1038,7 @@ table:
              range          LmTransExprRangeJob         6                       0                                0
              call_args      LmTransExprCallArgsJob      7                       0                                0
              lowered_range  LmTransExprLoweredRange     8                       0                                0
+             segment        LmTransExprSegment          9                       0                                0
 end: LmTransExprJob
 
 table:

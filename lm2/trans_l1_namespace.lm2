@@ -321,6 +321,35 @@ fn: lm_trans_descriptor_add_structural_field (
     descriptor\has_structural_fields: 1
 return: 0
 
+fn: lm_trans_descriptor_add_callable_field (
+    LmTransDescriptor: descriptor
+    const: LmP0Text: name
+    size_t: index
+    const: LmP0Frame: callable_frame
+    const: LmP0Text: callable_owner
+    size_t: callable_index
+) int
+    LmP0Text: callable_type
+    LmTransDescriptorField: field
+
+    if: descriptor = 0 || name = 0 || callable_frame = 0 || callable_owner = 0
+        return: 1
+    callable_type: lm_trans_text_ref_new_cstr("lm.trans.callable")
+    if: callable_type = 0
+        return: 1
+    if: lm_trans_descriptor_add_structural_field(descriptor, name, callable_type, index, 1U, 0U, 0, 0, 0) != 0
+        lm_trans_text_ref_destroy(@ callable_type)
+        return: 1
+    lm_trans_text_ref_destroy(@ callable_type)
+
+    field: lm_own_ptr_stack_at(descriptor\structural_fields, descriptor\structural_fields\count - 1U)
+    if: field = 0
+        return: 1
+    field\callable_frame: callable_frame
+    field\callable_owner: callable_owner
+    field\callable_index: callable_index
+return: 0
+
 fn: lm_trans_descriptor_structural_field (
     const: LmTransDescriptor: descriptor
     const: @: char name
@@ -851,6 +880,19 @@ fn: lm_trans_descriptor_class_relation_value (
     if: relation = 0 || relation\payload = 0
         return: 0
 return: relation\payload
+
+fn: lm_trans_descriptor_uses_structure_graph (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransDescriptor: descriptor
+    const: @: char c_type
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, name)
+    if: descriptor = 0 || descriptor\has_structural_fields = 0
+        return: 0
+    c_type: lm_trans_descriptor_class_relation_value(descriptor, "lm.trans.c.type")
+return: c_type != 0 && c.strcmp(c_type, "LmLmxStructure") = 0
 
 fn: lm_trans_function_state_new () LmTransFunctionState
     return: lm_own_new_zero(c.sizeof(c.LmTransFunctionState))

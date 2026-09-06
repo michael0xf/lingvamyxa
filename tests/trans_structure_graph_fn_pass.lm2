@@ -1,0 +1,34 @@
+predef: "lm2/own_abi.lm2"
+include
+alias
+forward
+constant
+fn
+layout
+prototype
+
+fn: AddX (int) int
+
+fn: add (int: x) int
+    return: x + 1
+end: add
+
+fn: identity (AddX: f) AddX
+    return: f
+end: identity
+
+fn: takeAdd (AddX: f; int: x) int
+    return: f(x)
+end: takeAdd
+
+external:
+    fn: main () int
+        AddX: bound add
+        AddX: returned identity(bound)
+        if: bound = 0 || returned != bound
+            return: 1
+        if: takeAdd(returned, 2) != 3
+            return: 2
+        return: 0
+    end: main
+end: external

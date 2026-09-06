@@ -204,19 +204,417 @@ static inline LM_LMX_UNUSED_ENTRY_HELPER int lm_lmx_message_thread_run_entry(LmL
 }
 #undef LM_LMX_UNUSED_ENTRY_HELPER
 
+typedef struct LmLmxStructure LmLmxStructure;
+struct LmLmxStructure {
+    LmLmxStructure *descriptor;
+};
+static LmLmxStructure lm_lmx_structure_descriptor;
+static void *lm_lmx_structure_new_in(struct LmMessageThread *thread, struct LmOwnArena *arena, LmLmxStructure *descriptor, size_t size)
+{
+    LmLmxStructure *chunk;
+    if (size < sizeof(LmLmxStructure))
+        size = sizeof(LmLmxStructure);
+    if (lm_lmx_structure_descriptor.descriptor == 0)
+        lm_lmx_structure_descriptor.descriptor = &lm_lmx_structure_descriptor;
+    if (descriptor != 0 && descriptor->descriptor == 0)
+        descriptor->descriptor = &lm_lmx_structure_descriptor;
+    chunk = (LmLmxStructure *)lm_own_arena_new_zero(thread, arena, size);
+    if (chunk == 0)
+        abort();
+    chunk->descriptor = descriptor;
+    return chunk;
+}
+#ifndef lm_lmx_module_private_1_typedef_defined_getenv
+#define lm_lmx_module_private_1_typedef_defined_getenv 1
+#define lm_lmx_module_private_1_typedef_id_a_getenv 0x494fd8239b6d99b9ULL
+#define lm_lmx_module_private_1_typedef_id_b_getenv 0xfa33a67e7d98250aULL
+typedef struct getenvClosure *getenv;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_getenv) || !defined(lm_lmx_module_private_1_typedef_id_b_getenv) || lm_lmx_module_private_1_typedef_id_a_getenv != 0x494fd8239b6d99b9ULL || lm_lmx_module_private_1_typedef_id_b_getenv != 0xfa33a67e7d98250aULL
+#error "Lingvamyxa conflicting typedef projection for getenv"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_getenvClosure
+#define lm_lmx_module_private_1_typedef_defined_getenvClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_getenvClosure 0x0a0dd0b30a73ca8dULL
+#define lm_lmx_module_private_1_typedef_id_b_getenvClosure 0x1a3d12d044616494ULL
+typedef struct getenvClosure getenvClosure;
+struct getenvClosure {
+    LmLmxStructure *descriptor;
+    char * (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, const char *);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_getenv = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_getenvClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_getenvClosure) || lm_lmx_module_private_1_typedef_id_a_getenvClosure != 0x0a0dd0b30a73ca8dULL || lm_lmx_module_private_1_typedef_id_b_getenvClosure != 0x1a3d12d044616494ULL
+#error "Lingvamyxa conflicting typedef projection for getenvClosure"
+#endif
+#endif
 
+#ifndef lm_lmx_module_private_1_typedef_defined_strlen
+#define lm_lmx_module_private_1_typedef_defined_strlen 1
+#define lm_lmx_module_private_1_typedef_id_a_strlen 0xcd88205ced3755c3ULL
+#define lm_lmx_module_private_1_typedef_id_b_strlen 0x3aeeb86a40a37ab4ULL
+typedef struct strlenClosure *strlen;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_strlen) || !defined(lm_lmx_module_private_1_typedef_id_b_strlen) || lm_lmx_module_private_1_typedef_id_a_strlen != 0xcd88205ced3755c3ULL || lm_lmx_module_private_1_typedef_id_b_strlen != 0x3aeeb86a40a37ab4ULL
+#error "Lingvamyxa conflicting typedef projection for strlen"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_strlenClosure
+#define lm_lmx_module_private_1_typedef_defined_strlenClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_strlenClosure 0x3c36d443d6587b43ULL
+#define lm_lmx_module_private_1_typedef_id_b_strlenClosure 0xd46e0141dda5117eULL
+typedef struct strlenClosure strlenClosure;
+struct strlenClosure {
+    LmLmxStructure *descriptor;
+    size_t (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, const char *);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_strlen = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_strlenClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_strlenClosure) || lm_lmx_module_private_1_typedef_id_a_strlenClosure != 0x3c36d443d6587b43ULL || lm_lmx_module_private_1_typedef_id_b_strlenClosure != 0xd46e0141dda5117eULL
+#error "Lingvamyxa conflicting typedef projection for strlenClosure"
+#endif
+#endif
 
+#ifndef lm_lmx_module_private_1_typedef_defined_strchr
+#define lm_lmx_module_private_1_typedef_defined_strchr 1
+#define lm_lmx_module_private_1_typedef_id_a_strchr 0x8ef99a7a28348ec7ULL
+#define lm_lmx_module_private_1_typedef_id_b_strchr 0xf38193d8aded3d54ULL
+typedef struct strchrClosure *strchr;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_strchr) || !defined(lm_lmx_module_private_1_typedef_id_b_strchr) || lm_lmx_module_private_1_typedef_id_a_strchr != 0x8ef99a7a28348ec7ULL || lm_lmx_module_private_1_typedef_id_b_strchr != 0xf38193d8aded3d54ULL
+#error "Lingvamyxa conflicting typedef projection for strchr"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_strchrClosure
+#define lm_lmx_module_private_1_typedef_defined_strchrClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_strchrClosure 0x4e991240d58f3cd0ULL
+#define lm_lmx_module_private_1_typedef_id_b_strchrClosure 0xf8cc928a714cad61ULL
+typedef struct strchrClosure strchrClosure;
+struct strchrClosure {
+    LmLmxStructure *descriptor;
+    char * (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, const char *, int);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_strchr = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_strchrClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_strchrClosure) || lm_lmx_module_private_1_typedef_id_a_strchrClosure != 0x4e991240d58f3cd0ULL || lm_lmx_module_private_1_typedef_id_b_strchrClosure != 0xf8cc928a714cad61ULL
+#error "Lingvamyxa conflicting typedef projection for strchrClosure"
+#endif
+#endif
 
+#ifndef lm_lmx_module_private_1_typedef_defined_memcpy
+#define lm_lmx_module_private_1_typedef_defined_memcpy 1
+#define lm_lmx_module_private_1_typedef_id_a_memcpy 0x7f5a55088d75c281ULL
+#define lm_lmx_module_private_1_typedef_id_b_memcpy 0x24ab06c42177549aULL
+typedef struct memcpyClosure *memcpy;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_memcpy) || !defined(lm_lmx_module_private_1_typedef_id_b_memcpy) || lm_lmx_module_private_1_typedef_id_a_memcpy != 0x7f5a55088d75c281ULL || lm_lmx_module_private_1_typedef_id_b_memcpy != 0x24ab06c42177549aULL
+#error "Lingvamyxa conflicting typedef projection for memcpy"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_memcpyClosure
+#define lm_lmx_module_private_1_typedef_defined_memcpyClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_memcpyClosure 0xf564b1b845e99c1bULL
+#define lm_lmx_module_private_1_typedef_id_b_memcpyClosure 0xe008560d8e0aadf6ULL
+typedef struct memcpyClosure memcpyClosure;
+struct memcpyClosure {
+    LmLmxStructure *descriptor;
+    void * (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, void *, const void *, size_t);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_memcpy = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_memcpyClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_memcpyClosure) || lm_lmx_module_private_1_typedef_id_a_memcpyClosure != 0xf564b1b845e99c1bULL || lm_lmx_module_private_1_typedef_id_b_memcpyClosure != 0xe008560d8e0aadf6ULL
+#error "Lingvamyxa conflicting typedef projection for memcpyClosure"
+#endif
+#endif
 
+#ifndef lm_lmx_module_private_1_typedef_defined_strcpy
+#define lm_lmx_module_private_1_typedef_defined_strcpy 1
+#define lm_lmx_module_private_1_typedef_id_a_strcpy 0xd70e86a4acaf9001ULL
+#define lm_lmx_module_private_1_typedef_id_b_strcpy 0x8440cbdc9f5407daULL
+typedef struct strcpyClosure *strcpy;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_strcpy) || !defined(lm_lmx_module_private_1_typedef_id_b_strcpy) || lm_lmx_module_private_1_typedef_id_a_strcpy != 0xd70e86a4acaf9001ULL || lm_lmx_module_private_1_typedef_id_b_strcpy != 0x8440cbdc9f5407daULL
+#error "Lingvamyxa conflicting typedef projection for strcpy"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_strcpyClosure
+#define lm_lmx_module_private_1_typedef_defined_strcpyClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_strcpyClosure 0x42fc06f9184e897bULL
+#define lm_lmx_module_private_1_typedef_id_b_strcpyClosure 0x4b5fbc37faf8fe56ULL
+typedef struct strcpyClosure strcpyClosure;
+struct strcpyClosure {
+    LmLmxStructure *descriptor;
+    char * (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, char *, const char *);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_strcpy = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_strcpyClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_strcpyClosure) || lm_lmx_module_private_1_typedef_id_a_strcpyClosure != 0x42fc06f9184e897bULL || lm_lmx_module_private_1_typedef_id_b_strcpyClosure != 0x4b5fbc37faf8fe56ULL
+#error "Lingvamyxa conflicting typedef projection for strcpyClosure"
+#endif
+#endif
 
+#ifndef lm_lmx_module_private_1_typedef_defined_strcat
+#define lm_lmx_module_private_1_typedef_defined_strcat 1
+#define lm_lmx_module_private_1_typedef_id_a_strcat 0x70d3184093fcf779ULL
+#define lm_lmx_module_private_1_typedef_id_b_strcat 0xa322e00ea301a4b2ULL
+typedef struct strcatClosure *strcat;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_strcat) || !defined(lm_lmx_module_private_1_typedef_id_b_strcat) || lm_lmx_module_private_1_typedef_id_a_strcat != 0x70d3184093fcf779ULL || lm_lmx_module_private_1_typedef_id_b_strcat != 0xa322e00ea301a4b2ULL
+#error "Lingvamyxa conflicting typedef projection for strcat"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_strcatClosure
+#define lm_lmx_module_private_1_typedef_defined_strcatClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_strcatClosure 0x6d839dd5679b3423ULL
+#define lm_lmx_module_private_1_typedef_id_b_strcatClosure 0x28ffb1e8c5c8dee6ULL
+typedef struct strcatClosure strcatClosure;
+struct strcatClosure {
+    LmLmxStructure *descriptor;
+    char * (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, char *, const char *);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_strcat = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_strcatClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_strcatClosure) || lm_lmx_module_private_1_typedef_id_a_strcatClosure != 0x6d839dd5679b3423ULL || lm_lmx_module_private_1_typedef_id_b_strcatClosure != 0x28ffb1e8c5c8dee6ULL
+#error "Lingvamyxa conflicting typedef projection for strcatClosure"
+#endif
+#endif
 
+#ifndef lm_lmx_module_private_1_typedef_defined_system
+#define lm_lmx_module_private_1_typedef_defined_system 1
+#define lm_lmx_module_private_1_typedef_id_a_system 0xb69b036c63493e1dULL
+#define lm_lmx_module_private_1_typedef_id_b_system 0xd694a5e3a8bb4b22ULL
+typedef struct systemClosure *system;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_system) || !defined(lm_lmx_module_private_1_typedef_id_b_system) || lm_lmx_module_private_1_typedef_id_a_system != 0xb69b036c63493e1dULL || lm_lmx_module_private_1_typedef_id_b_system != 0xd694a5e3a8bb4b22ULL
+#error "Lingvamyxa conflicting typedef projection for system"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_systemClosure
+#define lm_lmx_module_private_1_typedef_defined_systemClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_systemClosure 0xe68b472095cb825cULL
+#define lm_lmx_module_private_1_typedef_id_b_systemClosure 0xc61660e0eac79781ULL
+typedef struct systemClosure systemClosure;
+struct systemClosure {
+    LmLmxStructure *descriptor;
+    int (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, const char *);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_system = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_systemClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_systemClosure) || lm_lmx_module_private_1_typedef_id_a_systemClosure != 0xe68b472095cb825cULL || lm_lmx_module_private_1_typedef_id_b_systemClosure != 0xc61660e0eac79781ULL
+#error "Lingvamyxa conflicting typedef projection for systemClosure"
+#endif
+#endif
 
+#ifndef lm_lmx_module_private_1_typedef_defined_remove
+#define lm_lmx_module_private_1_typedef_defined_remove 1
+#define lm_lmx_module_private_1_typedef_id_a_remove 0x9671c71dbfc1aa67ULL
+#define lm_lmx_module_private_1_typedef_id_b_remove 0x089695e8bf310900ULL
+typedef struct removeClosure *remove;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_remove) || !defined(lm_lmx_module_private_1_typedef_id_b_remove) || lm_lmx_module_private_1_typedef_id_a_remove != 0x9671c71dbfc1aa67ULL || lm_lmx_module_private_1_typedef_id_b_remove != 0x089695e8bf310900ULL
+#error "Lingvamyxa conflicting typedef projection for remove"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_removeClosure
+#define lm_lmx_module_private_1_typedef_defined_removeClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_removeClosure 0x9d526cbabcff1d58ULL
+#define lm_lmx_module_private_1_typedef_id_b_removeClosure 0x23bc443d2d466355ULL
+typedef struct removeClosure removeClosure;
+struct removeClosure {
+    LmLmxStructure *descriptor;
+    int (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, const char *);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_remove = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_removeClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_removeClosure) || lm_lmx_module_private_1_typedef_id_a_removeClosure != 0x9d526cbabcff1d58ULL || lm_lmx_module_private_1_typedef_id_b_removeClosure != 0x23bc443d2d466355ULL
+#error "Lingvamyxa conflicting typedef projection for removeClosure"
+#endif
+#endif
 
+#ifndef lm_lmx_module_private_1_typedef_defined_fopen
+#define lm_lmx_module_private_1_typedef_defined_fopen 1
+#define lm_lmx_module_private_1_typedef_id_a_fopen 0x050d9ca69d1b97e1ULL
+#define lm_lmx_module_private_1_typedef_id_b_fopen 0x156e53a98e77c2eaULL
+typedef struct fopenClosure *fopen;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_fopen) || !defined(lm_lmx_module_private_1_typedef_id_b_fopen) || lm_lmx_module_private_1_typedef_id_a_fopen != 0x050d9ca69d1b97e1ULL || lm_lmx_module_private_1_typedef_id_b_fopen != 0x156e53a98e77c2eaULL
+#error "Lingvamyxa conflicting typedef projection for fopen"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_fopenClosure
+#define lm_lmx_module_private_1_typedef_defined_fopenClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_fopenClosure 0x42cfefbfcc3f6ec6ULL
+#define lm_lmx_module_private_1_typedef_id_b_fopenClosure 0xdace37da03ef3dbfULL
+typedef struct fopenClosure fopenClosure;
+struct fopenClosure {
+    LmLmxStructure *descriptor;
+    FILE * (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, const char *, const char *);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_fopen = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_fopenClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_fopenClosure) || lm_lmx_module_private_1_typedef_id_a_fopenClosure != 0x42cfefbfcc3f6ec6ULL || lm_lmx_module_private_1_typedef_id_b_fopenClosure != 0xdace37da03ef3dbfULL
+#error "Lingvamyxa conflicting typedef projection for fopenClosure"
+#endif
+#endif
 
+#ifndef lm_lmx_module_private_1_typedef_defined_fclose
+#define lm_lmx_module_private_1_typedef_defined_fclose 1
+#define lm_lmx_module_private_1_typedef_id_a_fclose 0x9bf7e91d437e8a7fULL
+#define lm_lmx_module_private_1_typedef_id_b_fclose 0x2a69b5cb6a59f7d4ULL
+typedef struct fcloseClosure *fclose;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_fclose) || !defined(lm_lmx_module_private_1_typedef_id_b_fclose) || lm_lmx_module_private_1_typedef_id_a_fclose != 0x9bf7e91d437e8a7fULL || lm_lmx_module_private_1_typedef_id_b_fclose != 0x2a69b5cb6a59f7d4ULL
+#error "Lingvamyxa conflicting typedef projection for fclose"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_fcloseClosure
+#define lm_lmx_module_private_1_typedef_defined_fcloseClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_fcloseClosure 0x94a4c4392a0264d5ULL
+#define lm_lmx_module_private_1_typedef_id_b_fcloseClosure 0x9b31bb8ec49c2262ULL
+typedef struct fcloseClosure fcloseClosure;
+struct fcloseClosure {
+    LmLmxStructure *descriptor;
+    int (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, FILE *);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_fclose = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_fcloseClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_fcloseClosure) || lm_lmx_module_private_1_typedef_id_a_fcloseClosure != 0x94a4c4392a0264d5ULL || lm_lmx_module_private_1_typedef_id_b_fcloseClosure != 0x9b31bb8ec49c2262ULL
+#error "Lingvamyxa conflicting typedef projection for fcloseClosure"
+#endif
+#endif
 
+#ifndef lm_lmx_module_private_1_typedef_defined_fread
+#define lm_lmx_module_private_1_typedef_defined_fread 1
+#define lm_lmx_module_private_1_typedef_id_a_fread 0x695af7ce31489fb5ULL
+#define lm_lmx_module_private_1_typedef_id_b_fread 0x1bb5f90bfea519e6ULL
+typedef struct freadClosure *fread;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_fread) || !defined(lm_lmx_module_private_1_typedef_id_b_fread) || lm_lmx_module_private_1_typedef_id_a_fread != 0x695af7ce31489fb5ULL || lm_lmx_module_private_1_typedef_id_b_fread != 0x1bb5f90bfea519e6ULL
+#error "Lingvamyxa conflicting typedef projection for fread"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_freadClosure
+#define lm_lmx_module_private_1_typedef_defined_freadClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_freadClosure 0xb8b7ba1568dbf1c8ULL
+#define lm_lmx_module_private_1_typedef_id_b_freadClosure 0x0ba0d125e1204071ULL
+typedef struct freadClosure freadClosure;
+struct freadClosure {
+    LmLmxStructure *descriptor;
+    size_t (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, void *, size_t, size_t, FILE *);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_fread = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_freadClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_freadClosure) || lm_lmx_module_private_1_typedef_id_a_freadClosure != 0xb8b7ba1568dbf1c8ULL || lm_lmx_module_private_1_typedef_id_b_freadClosure != 0x0ba0d125e1204071ULL
+#error "Lingvamyxa conflicting typedef projection for freadClosure"
+#endif
+#endif
 
+#ifndef lm_lmx_module_private_1_typedef_defined_fwrite
+#define lm_lmx_module_private_1_typedef_defined_fwrite 1
+#define lm_lmx_module_private_1_typedef_id_a_fwrite 0x07a6b003a12ad9b1ULL
+#define lm_lmx_module_private_1_typedef_id_b_fwrite 0xcadf07055d6cabf2ULL
+typedef struct fwriteClosure *fwrite;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_fwrite) || !defined(lm_lmx_module_private_1_typedef_id_b_fwrite) || lm_lmx_module_private_1_typedef_id_a_fwrite != 0x07a6b003a12ad9b1ULL || lm_lmx_module_private_1_typedef_id_b_fwrite != 0xcadf07055d6cabf2ULL
+#error "Lingvamyxa conflicting typedef projection for fwrite"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_fwriteClosure
+#define lm_lmx_module_private_1_typedef_defined_fwriteClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_fwriteClosure 0x6ba6235b0b2b379fULL
+#define lm_lmx_module_private_1_typedef_id_b_fwriteClosure 0xb1a389c160fd65d6ULL
+typedef struct fwriteClosure fwriteClosure;
+struct fwriteClosure {
+    LmLmxStructure *descriptor;
+    size_t (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, const void *, size_t, size_t, FILE *);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_fwrite = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_fwriteClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_fwriteClosure) || lm_lmx_module_private_1_typedef_id_a_fwriteClosure != 0x6ba6235b0b2b379fULL || lm_lmx_module_private_1_typedef_id_b_fwriteClosure != 0xb1a389c160fd65d6ULL
+#error "Lingvamyxa conflicting typedef projection for fwriteClosure"
+#endif
+#endif
 
+#ifndef lm_lmx_module_private_1_typedef_defined_ferror
+#define lm_lmx_module_private_1_typedef_defined_ferror 1
+#define lm_lmx_module_private_1_typedef_id_a_ferror 0x7dd8f8e18cdc0e9bULL
+#define lm_lmx_module_private_1_typedef_id_b_ferror 0x27c93d7a82e3530cULL
+typedef struct ferrorClosure *ferror;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_ferror) || !defined(lm_lmx_module_private_1_typedef_id_b_ferror) || lm_lmx_module_private_1_typedef_id_a_ferror != 0x7dd8f8e18cdc0e9bULL || lm_lmx_module_private_1_typedef_id_b_ferror != 0x27c93d7a82e3530cULL
+#error "Lingvamyxa conflicting typedef projection for ferror"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_ferrorClosure
+#define lm_lmx_module_private_1_typedef_defined_ferrorClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_ferrorClosure 0x65c2b796165379c9ULL
+#define lm_lmx_module_private_1_typedef_id_b_ferrorClosure 0xc2e5ae79a80b906eULL
+typedef struct ferrorClosure ferrorClosure;
+struct ferrorClosure {
+    LmLmxStructure *descriptor;
+    int (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, FILE *);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_ferror = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_ferrorClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_ferrorClosure) || lm_lmx_module_private_1_typedef_id_a_ferrorClosure != 0x65c2b796165379c9ULL || lm_lmx_module_private_1_typedef_id_b_ferrorClosure != 0xc2e5ae79a80b906eULL
+#error "Lingvamyxa conflicting typedef projection for ferrorClosure"
+#endif
+#endif
 
+#ifndef lm_lmx_module_private_1_typedef_defined_strcmp
+#define lm_lmx_module_private_1_typedef_defined_strcmp 1
+#define lm_lmx_module_private_1_typedef_id_a_strcmp 0xf710f35444dc2f51ULL
+#define lm_lmx_module_private_1_typedef_id_b_strcmp 0x6feca92f76b4c4b2ULL
+typedef struct strcmpClosure *strcmp;
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_strcmp) || !defined(lm_lmx_module_private_1_typedef_id_b_strcmp) || lm_lmx_module_private_1_typedef_id_a_strcmp != 0xf710f35444dc2f51ULL || lm_lmx_module_private_1_typedef_id_b_strcmp != 0x6feca92f76b4c4b2ULL
+#error "Lingvamyxa conflicting typedef projection for strcmp"
+#endif
+#endif
+#ifndef lm_lmx_module_private_1_typedef_defined_strcmpClosure
+#define lm_lmx_module_private_1_typedef_defined_strcmpClosure 1
+#define lm_lmx_module_private_1_typedef_id_a_strcmpClosure 0x56eff41635f44a95ULL
+#define lm_lmx_module_private_1_typedef_id_b_strcmpClosure 0xf6bb2f95615e67beULL
+typedef struct strcmpClosure strcmpClosure;
+struct strcmpClosure {
+    LmLmxStructure *descriptor;
+    int (*call)(void *env, struct LmMessageThread *lm_lmx_message_thread, const char *, const char *);
+    void *env;
+    void (*destroy)(void *env);
+};
+static LmLmxStructure lm_lmx_callable_desc_strcmp = {&lm_lmx_structure_descriptor};
+#else
+#if !defined(lm_lmx_module_private_1_typedef_id_a_strcmpClosure) || !defined(lm_lmx_module_private_1_typedef_id_b_strcmpClosure) || lm_lmx_module_private_1_typedef_id_a_strcmpClosure != 0x56eff41635f44a95ULL || lm_lmx_module_private_1_typedef_id_b_strcmpClosure != 0xf6bb2f95615e67beULL
+#error "Lingvamyxa conflicting typedef projection for strcmpClosure"
+#endif
+#endif
 
 
 

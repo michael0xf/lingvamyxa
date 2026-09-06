@@ -10,10 +10,15 @@ prototype
 File:
     int: handle
     fn: close () int
+        return: 17
+    end: close
+    fn: add (int: value) int
+        return: value + 4
+    end: add
 end: File
 
 fn: manager (File: f) int
-    return: f\close()
+    return: f\close() + f\add(2)
 end: manager
 
 external:
@@ -23,12 +28,14 @@ external:
         end: f
         if: f = 0 || f\handle != 1
             return: 1
-        if: f\close() != 0
+        if: f\close() != 17
             return: 2
-        if: manager(f) != 0
+        if: f\add(3) != 7
             return: 3
-        if: implements(f File File) != 1
+        if: manager(f) != 23
             return: 4
+        if: implements(f File File) != 1
+            return: 5
         return: 0
     end: main
 end: external
