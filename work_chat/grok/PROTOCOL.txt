@@ -1,0 +1,74 @@
+Grok file-drop chat
+===================
+
+Root (this machine):
+
+    C:\Nyasha_Planet\lingvamyxa\work_chat\grok\
+
+    inbox\      user -> grok  (new request)
+    outbox\     grok -> user  (reply)
+    seen\       grok marks a request as taken (same filename)
+
+Encoding: UTF-8. Newlines: CR LF or LF, both fine.
+
+Filename (id)
+-------------
+
+    YYYYMMDD-HHMMSS.txt
+
+Local time, 24-hour. If two files would share a second:
+
+    YYYYMMDD-HHMMSS-mmm.txt
+
+Example: 20260906-143201.txt
+
+No spaces. No path in the name. Same basename in inbox, outbox and seen.
+
+Request body (inbox)
+--------------------
+
+The whole file is the user message. No header required.
+
+Optional first line, if you want a type tag:
+
+    # grok-chat-v1
+
+Anything after that is still the request. If the first line is not that tag,
+the entire file is the request.
+
+Reply body (outbox)
+-------------------
+
+Same basename as the request. The whole file is Grok's answer (markdown/text).
+Do not require a header. Write the file only when the answer is complete
+(write to a temp name in outbox, then rename).
+
+    inbox\20260906-143201.txt     request
+    outbox\20260906-143201.txt    reply
+    seen\20260906-143201.txt      empty marker: this id is done or in flight
+
+Lifecycle
+---------
+
+1. User creates a new file in inbox\ with a datetime name.
+2. Grok notices a file in inbox\ whose basename is not in seen\ and not yet
+   in outbox\.
+3. Grok writes seen\<basename> immediately (claim), so a second watcher does
+   not take it.
+4. Grok reads the inbox file as the user request, does the work.
+5. Grok writes outbox\<basename> (temp + rename).
+6. Leave the inbox file in place. Do not delete user files.
+
+A request is new iff it is a *.txt in inbox\ and seen\<basename> does not exist.
+
+Watcher
+-------
+
+Do not wake the agent every N seconds on an empty inbox.
+
+Watch inbox\ for a newly created *.txt (ReadDirectoryChanges / fswatch /
+a loop that only prints when a new unseen basename appears). Emit one line
+per new file, then handle that file in one turn. Write the answer only to
+outbox\, plus a short note in the chat that the id was answered.
+
+This protocol is not Codex IPC. It is a drop directory on this machine.
