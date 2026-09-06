@@ -26,7 +26,8 @@ The words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT and
 MAY have their usual normative meanings. A section explicitly labelled
 UNRESOLVED records a decision that has not yet been made. An unresolved
 implementation detail must not be silently answered by restoring runtime
-descriptors, per-Structure C types, a runtime namespace, or any other
+descriptors, per-Structure C types, a separate runtime Name-to-Binding
+namespace object, or any other
 mechanism prohibited by this document.
 
 RU
@@ -44,7 +45,8 @@ C является вторичной реализацией.
 используются в обычном нормативном смысле. Раздел с явной пометкой
 UNRESOLVED фиксирует ещё не принятое решение. Неразрешённую техническую
 деталь нельзя молча решать возвратом runtime-дескрипторов, отдельных C-типов
-для Structure, runtime namespace или другого механизма, запрещённого этим
+для Structure, отдельного runtime-объекта namespace Name-to-Binding или
+другого механизма, запрещённого этим
 документом.
 
 
@@ -55,15 +57,17 @@ UNRESOLVED фиксирует ещё не принятое решение. Не�
 EN
 
 Keep the existing parser, replace the translator core, represent every
-runtime source node by the same three-word Lmx header, keep names outside
-the nodes in the sole Lmx-pointer-to-ShortNameId auxiliary table, compile
-every method to one program-wide reachable uniquely identified C entry
-accepting exactly the containing Structure Lmx pointer, construct all source
-Structures and source locals as runtime Lmx
-nodes, resolve arbitrary textual absolute paths from an explicit root, and execute merge dynamically
-by copying trees when program execution reaches the merge; every Message owns
-one logical arena, and every running L3 Thread consumes its FIFO message stream
-one turn at a time while different Messages may execute concurrently.
+runtime source node by the same three-word Lmx header, keep names outside the
+nodes in the sole Lmx-pointer-to-ShortNameId auxiliary table, compile every
+method to one program-wide reachable uniquely identified C entry recorded in
+`all_methods_array` together with its exact signature, pass the reserved
+callable-parent `node` plus the signature's declared and hidden dynamic-caller
+arguments, execute used method fields through C working locals with
+dirty-only publication before calls and exits, resolve arbitrary textual
+absolute paths from an explicit root, and execute merge dynamically by copying
+trees when program execution reaches the merge; every Message owns one logical
+arena, and every running L3 Thread consumes its FIFO message stream one turn at
+a time while different Messages may execute concurrently.
 
 RU
 
@@ -71,9 +75,12 @@ RU
 runtime-узел исходника одним и тем же трёхсловным заголовком Lmx, держать
 имена вне узлов в единственной вспомогательной таблице
 Lmx-указатель-в-ShortNameId, компилировать каждый метод в один достижимый во
-всей программе уникально идентифицированный C-entry ровно с одним аргументом —
-Lmx-указателем на содержащую Structure, строить все
-исходные Structure и исходные локальные значения как runtime-узлы Lmx,
+всей программе уникально идентифицированный C-entry, записанный в
+`all_methods_array` вместе с его точной сигнатурой, передавать
+зарезервированный `node`-родитель callable вместе с явными и
+скрытыми dynamic-caller аргументами сигнатуры, исполнять используемые
+поля метода через рабочие C-locals с публикацией только dirty-значений
+перед вызовами и выходами,
 разрешать произвольные текстовые абсолютные пути от явно переданного корня и
 выполнять merge динамически,
 копированием деревьев в тот момент, когда исполнение программы дошло до
@@ -97,30 +104,38 @@ The following are already decided and are not design options:
 4. A node contains no name, descriptor, type tag, vtable or per-Structure
    layout pointer.
 5. No named Structure causes a C typedef or a dedicated C struct layout.
-6. Source locals are Structure nodes, not semantic C locals.
-7. A generated C method has exactly one explicit parameter: the Lmx pointer
-   to the Structure containing the selected callable occurrence.
+6. A method loads only its own fields actually used through unqualified own
+   bindings into C working locals. These locals are the activation's working
+   values; the selected callable occurrence's containing Structure
+   (`callable->node`) is their published checkpoint, not an activation log.
+7. A generated C method receives the reserved `node` value
+   `callable->node`, its declared call arguments, and the exact hidden
+   dynamic-caller values required by its generated signature.
 8. Every generated method has program-wide reachable identity and a unique
    deterministic name; a long name mangled from its complete source path is
    the preferred spelling.
-9. Method entry addresses belong to one common recognizable physical class,
-   implemented by one or more registered ranges/sections or an equivalent
-   callable-record domain.
+9. Every callable resolves to an immutable `all_methods_array` record
+   conceptually containing `{ addr, sig }`. `addr` is the program-wide method
+   entry and `sig` is the exact ABI contract which must equal the canonical
+   signature expected by every call site that selects it.
 10. Merge is a runtime tree-copying operation. Translation never flattens a
     merge into a target C struct.
 11. The sole auxiliary node metadata table maps Lmx pointers to ShortNameId.
 12. Arbitrary textual absolute runtime path resolution starts at an explicitly
     supplied runtime root and uses
     that table.
-13. There is no runtime namespace and therefore no runtime namespace
-    push, overlay, merge, capture or pop.
+13. Dynamic caller visibility is source semantics. It is lowered to hidden C
+    arguments and native C activation records, not to a separately allocated
+    runtime Name-to-Binding namespace, overlay, capture object or pop stack.
 14. Every Message owns exactly one logical arena. Launching that Message as an
     L3 Thread preserves the same arena; the arena belongs to the Message, not
     to whichever host worker happens to execute a turn.
 15. All mutable/dynamic source-semantic Lmx nodes and payload storage created
-    for a Message, including Structures, source locals, non-interned primitives
-    and ordinary Arrays, belong to that Message arena. Immutable program-wide
-    pools such as `all_chars` and compiled method records/code may be shared.
+    for a Message, including Structures, published method fields, non-interned
+    primitives and ordinary Arrays, belong to that Message arena. C working
+    locals belong to native activations rather than the graph. Immutable
+    program-wide pools such as `all_chars` and compiled method records/code may
+    be shared.
 16. Every L3 Thread executes at most one of its turns at a time. Its admitted
     messages and staged outgoing messages are ordered FIFO. Distinct L3 Threads
     may execute concurrently and may migrate among host workers.
@@ -134,6 +149,33 @@ The following are already decided and are not design options:
     back on failure, before local collection of that Message arena. Collection
     runs at the common end-turn boundary; terminating the Message ultimately
     releases its arena after required transfer/cleanup.
+20. A through variable (an unqualified use not owned by the method) is copied
+    into a private C working local on entry. Primitive values are passed by
+    semantic value; Structure and Array reference values are copied as
+    references. Rebinding either working local is local to that activation.
+21. If the caller has no through binding required by the callee, the value
+    falls back to the immediate `node\name` of the selected callable. `node`
+    is reserved and cannot be declared, rebound or supplied by caller scope.
+22. Apart from the selected method's own dirty-field checkpoint, only an
+    explicit graph path such as `node\name` or `ref\name` mutates graph state
+    outside that method's private activation. Through working values are never
+    written back automatically.
+23. An actual write to an own C local marks its runtime dirty flag. Before every
+    outbound LMX call, every external/re-entrant/publishing runtime or foreign
+    boundary that exposes or controls graph state outside the current activation,
+    every `yield` suspension and every activation exit, only dirty own fields
+    are stored into `callable->node`; each flag is cleared after its store
+    succeeds. A private non-escaping helper used only for the current activation's
+    own traversal, classification or explicit graph operation is not a boundary,
+    even if it reads or writes the graph and is emitted as C. No reload occurs
+    after a call.
+24. The C call stack is the sole implicit activation history. Recursive and
+    mutually recursive calls intentionally overwrite the published working
+    state of method Structures; persistent or branching history requires an
+    explicit Structure, Array or Message.
+25. `yield` preserves the ordinary stack/continuation state, including working
+    locals and dirty state. `retry` is a local control operation, not a call,
+    and does not by itself trigger the pre-call checkpoint.
 
 Only the details explicitly identified as unresolved in section 14 remain
 open. They may choose among implementations only inside these fixed boundaries.
@@ -150,30 +192,37 @@ RU
    конкретной Structure.
 5. Именованная Structure не порождает typedef или отдельный layout struct в
    C.
-6. Локальные значения исходного языка являются узлами Structure, а не
-   семантическими C-local.
-7. Сгенерированный C-метод имеет ровно один явный параметр: Lmx pointer на
-   Structure, содержащую выбранный callable-occurrence.
+6. Метод загружает в рабочие C-locals только собственные поля, которые реально
+   использует через неквалифицированные own-bindings. Эти locals — рабочие
+   значения activation; containing Structure выбранного callable-occurrence
+   (`callable->node`) — их опубликованный checkpoint, а не журнал активаций.
+7. Сгенерированный C-метод получает зарезервированное значение
+   `node`, равное `callable->node`, явные аргументы вызова и точный набор
+   скрытых dynamic-caller значений из generated-сигнатуры.
 8. Каждый сгенерированный метод имеет достижимую во всей программе identity и
    уникальное детерминированное имя; предпочтительный spelling — длинное имя,
    полученное из полного пути исходника.
-9. Адреса входов методов принадлежат одной общей распознаваемой физической
-   категории, реализованной одним или несколькими зарегистрированными
-   диапазонами/секциями либо эквивалентным доменом callable-record.
+9. Каждый callable разрешается в immutable-запись `all_methods_array`,
+   концептуально содержащую `{ addr, sig }`. `addr` — вход метода, а `sig` —
+   точный ABI-контракт, который обязан быть равен канонической сигнатуре,
+   ожидаемой каждым выбирающим этот callable call site.
 10. Merge является runtime-операцией копирования дерева. Трансляция никогда
     не превращает merge заранее в целевой C struct.
 11. Единственная вспомогательная таблица метаданных узлов отображает
     Lmx-указатель в ShortNameId.
 12. Разрешение произвольного текстового абсолютного runtime-пути начинается
     от явно переданного runtime-корня и использует эту таблицу.
-13. Runtime namespace отсутствует; следовательно, отсутствуют его runtime
-    push, overlay, merge, capture и pop.
+13. Dynamic-видимость вызывающего является семантикой исходника. Она
+    снижается в скрытые C-аргументы и нативные C activation records,
+    а не в отдельно выделенный runtime namespace Name-to-Binding,
+    overlay, capture-object или pop-stack.
 14. Каждый Message владеет ровно одной логической arena. При запуске Message
     как L3 Thread сохраняется та же arena; она принадлежит Message, а не host
     worker, на котором случайно исполняется конкретный turn.
 15. Все изменяемые/dynamic Lmx-узлы и payload исходной семантики, создаваемые
-    для Message, включая Structures, locals исходника, не-interned примитивы и
-    обычные Arrays, принадлежат arena этого Message. Неизменяемые глобальные
+    для Message, включая Structures, опубликованные поля методов, не-interned
+    примитивы и обычные Arrays, принадлежат arena этого Message. Рабочие C
+    locals принадлежат нативным активациям, а не графу. Неизменяемые глобальные
     пулы наподобие `all_chars`, а также записи/код скомпилированных методов
     могут использоваться совместно.
 16. Каждый L3 Thread исполняет не более одного своего turn одновременно. Его
@@ -190,6 +239,35 @@ RU
     его при failure до локальной collection arena этого Message. Collection
     выполняется на общей границе end-turn; termination Message в итоге
     освобождает его arena после требуемого transfer/cleanup.
+20. «Сквозная» переменная (неквалифицированное имя, не принадлежащее
+    методу) копируется при входе в private-рабочий C-local.
+    Примитив передаётся по семантическому значению; значение ссылки
+    Structure/Array копируется как ссылка. Rebind любого такого
+    рабочего local остаётся в текущей activation.
+21. Если у caller нет требуемого callee сквозного binding, значение
+    берётся из непосредственного `node\name` выбранного callable. `node`
+    зарезервировано: его нельзя объявить, rebind-ить или передать из
+    namespace caller-а.
+22. Кроме dirty-checkpoint собственных полей выбранного метода, только явный
+    путь графа, например `node\name` или `ref\name`, изменяет graph-state вне
+    private activation этого метода. Сквозные рабочие значения никогда не
+    записываются обратно автоматически.
+23. Фактическая запись в own C-local ставит его runtime dirty flag. Перед каждым
+    исходящим LMX-call, каждой external/re-entrant/publishing runtime или foreign
+    границей, выносящей graph-state за пределы текущей activation,
+    каждой suspension `yield` и каждым выходом activation в `callable->node`
+    записываются только dirty own fields; флаг очищается после успешной записи.
+    Private non-escaping helper, выполняющий только traversal, classification или
+    explicit graph operation текущей activation, не становится границей, даже
+    если читает/пишет граф и эмитится как C. Reload после call не делается.
+24. Стек C-вызовов — единственная неявная история активаций.
+    Recursive и mutually recursive вызовы намеренно перезаписывают
+    опубликованное рабочее состояние Structures методов; для живущей
+    дольше return или ветвящейся истории нужны явные Structure, Array или
+    Message.
+25. `yield` сохраняет обычное состояние stack/continuation, включая рабочие
+    locals и dirty-state. `retry` — локальная control-операция, а не call, и сама
+    по себе не запускает pre-call checkpoint.
 
 Открыты только детали, явно названные неразрешёнными в разделе 14. Их можно
 выбирать лишь внутри этих уже зафиксированных границ.
@@ -343,7 +421,7 @@ EN
 
 Mix belongs to the same Message/Lmx graph ontology described by this document.
 Its placement edges, value edges, cursors, marks, locks, mirrors and messages may
-play different operational roles while remaining parts of one Message object
+play different operational roles while remaining parts of one Message/Lmx graph
 universe. The target Mix architecture is a Message-based graph.
 
 The current Java Mix implementation is a transitional procedural,
@@ -367,8 +445,8 @@ RU
 
 Mix принадлежит той же Message/Lmx-онтологии графа, которая описана этим
 документом. Рёбра размещения и значения, курсоры, метки, локи, зеркала и
-сообщения могут играть разные операционные роли внутри одной Message-вселенной
-объектов. Целевая архитектура Mix является Message-based графом.
+сообщения могут играть разные операционные роли внутри одной Message/Lmx-
+вселенной графа. Целевая архитектура Mix является Message-based графом.
 
 Текущая Java-реализация Mix — переходная процедурная многопоточная реализация в
 другой парадигме конкурентности. Она служит только свидетельством текущего
@@ -457,7 +535,11 @@ The new core consumes the parser tree and emits:
    including methods nested in named Structures;
 5. registration/construction operations that associate every live named node
    with its ShortNameId;
-6. calls using the one-Lmx-pointer method ABI.
+6. calls whose exact ABI is taken from the selected method's
+   `all_methods_array` signature, including reserved `node` and hidden
+   dynamic-caller values;
+7. C working locals and runtime dirty flags that implement method working state
+   and publish only dirty own fields at required call/exit checkpoints.
 
 Existing code may be consulted as an inventory of syntax and tests. Reusing a
 helper is allowed only when its semantics and representation already satisfy
@@ -481,7 +563,12 @@ compile-time merge не являются основой версии 2.
    исходника, включая методы внутри именованных Structure;
 5. операции регистрации/построения, связывающие каждый живой именованный
    узел с его ShortNameId;
-6. вызовы по ABI с одним Lmx-указателем.
+6. вызовы, точный ABI которых берётся из сигнатуры выбранного метода в
+   `all_methods_array`, включая зарезервированный `node` и скрытые
+   dynamic-caller значения;
+7. рабочие C-locals и runtime dirty flags, реализующие рабочее
+   состояние метода и публикующие только dirty own fields на
+   обязательных checkpoints call/exit.
 
 Существующий код можно использовать как перечень синтаксических конструкций и
 тестов. Повторно использовать helper можно только тогда, когда его семантика
@@ -626,6 +713,12 @@ paths reach it.
 node is not a descriptor pointer, next-sibling pointer, namespace frame,
 owner object, class link or C inheritance link.
 
+For a callable occurrence, this same header field supplies the reserved source
+word `node`: generated invocation passes `callable->node`. Consequently source
+`node\field` begins at that already selected parent and looks for its immediate
+child `field`; it does not apply a second `->node`. The caller cannot replace
+this reserved value with a dynamically visible binding.
+
 RU
 
 node является родителем в дереве вложенности исходника, материализованном
@@ -645,6 +738,12 @@ node является родителем в дереве вложенности 
 
 node не является указателем на дескриптор, next-sibling, frame namespace,
 owner object, class link или ссылкой C-наследования.
+
+Для callable-occurrence это же поле header даёт зарезервированное слово
+исходника `node`: generated-вызов передаёт `callable->node`. Поэтому
+`node\field` в исходнике начинается от уже выбранного родителя и ищет его
+непосредственного ребёнка `field`; второй `->node` не выполняется.
+Caller не может заменить это reserved-значение dynamic-binding-ом.
 
 
 3.3. Meaning of len and data
@@ -715,9 +814,12 @@ The fixed Lmx header replaces the need for a descriptor prefix. There is no
 separate runtime descriptor object at the front of an instance and no pointer
 from an instance to a shared descriptor.
 
-Names, layout, field kinds and callable signatures are not recovered by
-loading a descriptor from the node. Structural navigation uses data, len,
-address-range classification and the ShortNameId side table.
+Names, layout and field kinds are not recovered by loading a descriptor from
+the node. Structural navigation uses data, len, address-range classification
+and the ShortNameId side table. Callable ABI is recovered only after the leaf
+has been classified as callable: its immutable `all_methods_array` record
+supplies `{ addr, sig }`. That program-wide method record is machine/link data,
+not a descriptor attached to the Lmx node or a per-Structure source type.
 
 Source words historically called descriptors may still be ordinary parsed
 source Structures if the language exposes them as data. They have no
@@ -730,9 +832,12 @@ RU
 начале instance нет отдельного runtime-объекта дескриптора, а в instance нет
 указателя на общий дескриптор.
 
-Имена, layout, виды полей и сигнатуры callable не извлекаются загрузкой
-дескриптора из узла. Структурная навигация использует data, len,
-классификацию диапазона адресов и side table ShortNameId.
+Имена, layout и виды полей не извлекаются загрузкой дескриптора из узла.
+Структурная навигация использует data, len, классификацию диапазона адресов и
+side table ShortNameId. ABI callable получается только после классификации
+листа как callable: его immutable-запись в `all_methods_array` даёт
+`{ addr, sig }`. Эта глобальная запись метода — машинные/link-данные, а не
+присоединённый к Lmx-узлу descriptor или per-Structure тип исходника.
 
 Слова исходника, исторически называвшиеся descriptors, всё ещё могут быть
 обычными распарсенными Structure, если язык предоставляет их как данные. У
@@ -888,10 +993,11 @@ allocator/section APIs with defined behavior.
 
 Likewise, ISO C does not universally guarantee interchangeability of object
 pointers and function pointers. The requirement is semantic: callable payloads
-must belong to one recognizable physical class and resolve to entries invokable
-with the common ABI. Direct code addresses in one or more sections and pointers
-to correctly typed callable records are allowed profile alternatives. The exact
-portable or platform-specific representation is an UNRESOLVED profile decision.
+must belong to one recognizable physical class and resolve through immutable
+`{addr, sig}` records to entries invokable with their exact ABI.
+Direct code addresses in one or more sections and pointers to correctly typed
+callable records are allowed profile alternatives. The exact portable or
+platform-specific representation is an UNRESOLVED profile decision.
 
 RU
 
@@ -902,12 +1008,12 @@ membership helpers либо API allocator/section с определённым п
 
 Кроме того, ISO C не гарантирует на всех платформах взаимозаменяемость
 указателей на объект и указателей на функцию. Нормативно требуется следующее:
-callable payloads принадлежат одной распознаваемой физической категории и
-разрешаются во входы, вызываемые по общему ABI. Прямые адреса кода в одной
-или нескольких секциях и указатели на корректно типизированные callable-record
-являются допустимыми альтернативами профиля. Точное переносимое или
-platform-specific представление остаётся решением профиля с пометкой
-UNRESOLVED.
+callable payloads принадлежат одной распознаваемой физической категории и через
+неизменяемые записи `{addr, sig}` разрешаются во входы, вызываемые по их точному
+ABI. Прямые адреса кода в одной или нескольких секциях и указатели
+на корректно типизированные callable-record являются допустимыми альтернативами
+профиля. Точное переносимое или platform-specific представление остаётся
+решением профиля с пометкой UNRESOLVED.
 
 
 5. Names, paths and the sole side table
@@ -939,6 +1045,15 @@ section 14. The copied node is a new key; the source mapping remains unchanged.
 Table lifecycle must agree with node lifetime. A dead address must not later
 resolve to a stale name if storage is reused.
 
+Reconstructing the full current path of a known occurrence requires more than
+concatenating these short names. At each parent the runtime enumerates the
+ordered children and computes the occurrence's zero-based ordinal among siblings
+with the same ShortNameId. If equal-name siblings exist, the path emits the
+corresponding `[k]name` selector; it may emit `[0]name` explicitly although plain
+`name` selects that same first occurrence. This calculation uses only the
+reverse index, bounded child enumeration and `node`; it adds no forward
+namespace or cached full path.
+
 RU
 
 Runtime поддерживает ровно одно вспомогательное отображение, связанное с
@@ -961,6 +1076,15 @@ ABI, либо быть явно исключены из текстового nam
 адрес не должен позднее разрешаться в устаревшее имя при повторном
 использовании памяти.
 
+Для восстановления полного текущего пути известного occurrence недостаточно
+просто склеить короткие имена. На каждом parent runtime перечисляет ordered
+children и вычисляет нулевой ordinal occurrence среди siblings с тем же
+ShortNameId. При наличии одноимённых siblings путь выдаёт соответствующий
+селектор `[k]name`; `[0]name` можно писать явно, хотя plain `name` выбирает то же
+первое occurrence. Расчёт использует только reverse index, ограниченное
+перечисление children и `node`; forward namespace либо cached full path не
+добавляется.
+
 
 5.2. What the table is not
 Чем таблица не является
@@ -968,39 +1092,34 @@ ABI, либо быть явно исключены из текстового nam
 
 EN
 
-The table is not a namespace. Registering a node does not push a binding,
-shadow a caller binding, capture an outer scope, or make a name visible
-without a structural path.
+The table is not the dynamic caller namespace. Registering a node does not
+push a binding, shadow a caller binding, capture an outer scope or make a name
+visible. Node names are stable structural facts; call activity does not reorder
+or overlay the side table.
 
-There is no runtime operation equivalent to:
-
-* push namespace frame;
-* merge callee namespace over caller namespace;
-* copy all fields into a namespace;
-* restore a namespace on return;
-* capture a lexical environment;
-* search a stack of active name bindings.
-
-Node names are stable structural facts. Call activity does not reorder or
-overlay the side table.
+Dynamic caller visibility nevertheless exists as source semantics. The
+translator represents its current bindings by native C arguments and C working
+locals in each ordinary call-stack activation. It MUST NOT allocate a second
+Name-to-Binding dictionary, copy a whole namespace table, search a runtime
+binding stack or use the Lmx-to-ShortNameId table in the reverse direction as a
+dynamic environment. C return naturally discards the callee's private working
+slots; no namespace-object pop is performed.
 
 RU
 
-Таблица не является namespace. Регистрация узла не делает push binding, не
-shadow-ит binding вызывающего, не захватывает внешний scope и не делает имя
-видимым без структурного пути.
+Таблица не является dynamic namespace caller-а. Регистрация узла не делает
+push binding, не shadow-ит binding вызывающего, не захватывает внешний scope
+и не делает имя видимым. Имена узлов — стабильные структурные факты;
+активность вызовов не переупорядочивает и не накладывает side table.
 
-В runtime нет операций, эквивалентных следующим:
-
-* push frame namespace;
-* merge namespace вызываемого поверх namespace вызывающего;
-* копирование всех полей в namespace;
-* восстановление namespace при return;
-* захват lexical environment;
-* поиск по стеку активных name bindings.
-
-Имена узлов являются стабильными структурными фактами. Активность вызовов не
-переупорядочивает и не накладывает side table.
+Dynamic-видимость caller-а тем не менее существует как семантика
+исходника. Транслятор представляет её текущие bindings нативными
+C-аргументами и рабочими C-locals каждой обычной activation стека
+вызовов. Он не должен выделять второй словарь Name-to-Binding,
+копировать целую namespace-table, искать по runtime-стеку bindings или
+использовать Lmx-to-ShortNameId в обратном направлении как dynamic
+environment. C-return естественно удаляет private-слоты callee; pop объекта
+namespace не выполняется.
 
 
 5.3. Root-based path lookup
@@ -1030,13 +1149,17 @@ equivalent sequence for a constant path. An optimization MUST NOT change the
 answer after a runtime merge.
 
 If code already holds an Lmx pointer, that pointer is the resolved value and is
-used directly. A relative `field` traversal starts at the supplied containing
-Structure. An explicit `node\field` traversal first follows the actual parent
-link and then searches that parent's children. None of these operations resets
-the start point to root.
+used directly. An explicit relative path `base\field` starts from the resolved
+`base`. Reserved `node\field` starts from `callable->node` and selects its
+immediate child; it does not follow another parent link. None of these
+operations resets the start point to root.
 
-Lookup MUST NOT begin in a caller namespace, callee namespace, C lexical
-scope, descriptor or per-type field-offset table.
+A bare unqualified `field` is not this structural-path algorithm. It resolves
+to an own working local or to the dynamic caller value described in sections 6
+and 9, with immediate `node\field` as the fallback only when the caller has no
+such binding. Structural traversal MUST NOT search a dynamic environment,
+descriptor or per-type field-offset table; dynamic binding MUST NOT masquerade
+as root/path traversal.
 
 RU
 
@@ -1061,13 +1184,17 @@ RU
 не имеет права менять ответ после runtime merge.
 
 Если код уже имеет Lmx-указатель, этот указатель является разрешённым
-значением и используется прямо. Относительный переход `field` начинается от
-переданной содержащей Structure. Явный переход `node\field` сначала следует
-по настоящей родительской ссылке, затем ищет среди детей этого родителя. Ни
-одна из этих операций не сбрасывает начальную точку к root.
+значением и используется прямо. Явный относительный путь `base\field`
+начинается от разрешённого `base`. Reserved-путь `node\field` начинается
+от `callable->node` и выбирает его непосредственного ребёнка; второго перехода к
+родителю нет. Ни одна из этих операций не сбрасывает начальную точку к root.
 
-Lookup не должен начинаться в namespace вызывающего, namespace вызываемого,
-C lexical scope, descriptor или таблице смещений полей конкретного типа.
+Одиночное неквалифицированное `field` не является этим алгоритмом
+структурного пути. Оно разрешается в own working local либо dynamic-значение
+caller-а по разделам 6 и 9; непосредственное `node\field` служит fallback
+только когда такого binding нет у caller-а. Структурный traversal не ищет в
+dynamic environment, descriptor или per-type field-offset table; dynamic binding не
+маскируется под root/path traversal.
 
 
 5.4. Parent-relative access
@@ -1076,25 +1203,32 @@ C lexical scope, descriptor или таблице смещений полей к
 
 EN
 
-The explicit source relation node means the parent link stored in Lmx.
-Following node is therefore structural navigation, not implicit lexical
-capture.
+`node` is a reserved source word, not an ordinary ShortNameId or a binding that
+can be declared, shadowed, rebound or supplied by the caller. In a method it is
+the actual parent stored in the selected callable occurrence, exactly
+`callable->node`. Therefore `node\field` is explicit immediate-parent access
+from the callable and bypasses dynamic caller visibility.
 
-An implementation may combine an explicit upward node step with subsequent
-relative path operations, but it MUST preserve the exact source-parent relation
-of the concrete runtime copy. It must not restart at root unless the source
-operation explicitly requested an absolute root-based path.
+Further structural traversal may continue only when written explicitly. No
+unqualified name performs a transitive walk through source parents. The
+implementation MUST preserve the concrete parent selected by a runtime copy;
+after merge, the copied callable's rewritten `node` supplies the new immediate
+parent. It must not restart at root unless the source explicitly requests an
+absolute root-based path.
 
 RU
 
-Явное отношение исходника node означает родительскую ссылку, записанную в
-Lmx. Поэтому переход по node является структурной навигацией, а не неявным
-lexical capture.
+`node` — зарезервированное слово исходника, а не обычный ShortNameId или
+binding, который можно объявить, shadow-ить, rebind-ить или получить от
+caller-а. Внутри метода это реальный родитель выбранного callable-occurrence,
+точно `callable->node`. Поэтому `node\field` — явный доступ к immediate-parent
+callable, обходящий dynamic-видимость caller-а.
 
-Реализация может сочетать явный шаг вверх по node с последующими операциями
-относительного пути, но обязана сохранять точное отношение родителя исходника
-в конкретной runtime-копии. Она не начинает заново с root, если исходная
-операция явно не запросила абсолютный путь от root.
+Дальнейший структурный traversal продолжается только когда он написан явно.
+Никакое неквалифицированное имя не идёт транзитивно по родителям исходника.
+Реализация сохраняет конкретного родителя runtime-копии: после merge
+переписанный `node` скопированного callable даёт нового immediate-parent.
+К root перехода нет, если исходник явно не запросил абсолютный root-based путь.
 
 
 5.5. Repeated names
@@ -1105,8 +1239,8 @@ EN
 
 Children remain ordered, and repeated ShortNameId values are permitted.
 Merge MUST preserve all occurrences rather than overwriting a node in place.
-The plain spelling of a field must remain an alias for the designated default
-occurrence, including the agreed equivalence:
+The plain spelling of a field is defined as the designated default occurrence,
+including the agreed equivalence:
 
     path\field == path\[0]field
 
@@ -1119,7 +1253,7 @@ RU
 
 Дети сохраняют порядок, и повторяющиеся значения ShortNameId разрешены. Merge
 обязан сохранять все occurrences, а не заменять узел на месте. Обычная запись
-поля должна оставаться псевдонимом выбранного default occurrence, включая
+поля определяется как выбранный default occurrence, включая
 согласованную эквивалентность:
 
     path\field == path\[0]field
@@ -1131,9 +1265,9 @@ RU
 после merge.
 
 
-6. Methods and the one-pointer ABI
-Методы и ABI с одним указателем
-====================================
+6. Methods, dynamic caller ABI and working state
+Методы, ABI dynamic caller-а и рабочее состояние
+=================================================
 
 6.1. Every executable method becomes program-wide reachable code
 Каждый исполняемый метод становится достижимым во всей программе кодом
@@ -1223,218 +1357,715 @@ linker-а остаются UNRESOLVED, но отсутствие коллизи�
 обязательны.
 
 
-6.3. Exactly one explicit argument
-Ровно один явный аргумент
-------------------------------
+6.3. Generated method signature and reserved `node`
+Generated-сигнатура метода и reserved `node`
+---------------------------------------------------
 
 EN
 
-Every generated source method accepts exactly one explicit C argument:
+Three related identities are distinct. A source method has one generated C
+entry and immutable method record. The graph may contain many callable Lmx leaf
+occurrences whose `data` identifies that record. Every selected callable
+occurrence has one persistent containing Structure, `callable->node`, whose own
+fields are the published working state used for that selected call. Runtime
+merge may copy/rebase an occurrence while retaining the same method record.
+Throughout this document, "method Structure" is shorthand for this selected
+containing Structure; it never means the callable leaf and never means a fresh
+per-invocation graph object.
 
-    Lmx *node
+Older wording that says `node` is taken "from the descriptor" is interpreted
+only as shorthand for these two concrete facts: the selected callable
+occurrence supplies `callable->node`, and its immutable method record supplies
+`{addr,sig}`. It does not restore an attached descriptor object or a
+per-Structure type/layout record.
 
-The argument is the containing Structure of the callable occurrence: if
-`callable` is the selected method node, invocation passes `callable->node`.
-The parameter name is not normative; its type, arity and containing-Structure
-meaning are. A generated
-method MUST NOT expose separate C parameters for source arguments, source
-locals, captured values, a second self value, a descriptor, a namespace or an
-environment.
+Every generated method has an exact C signature. Its first semantic input is
+the reserved value:
 
-All source-semantic inputs needed by the method are reachable as Structure
-nodes from the supplied containing Structure and the runtime graph. The exact
-conventions for argument, result and failure subtrees are UNRESOLVED, but they
-must fit behind this one-pointer boundary.
+    Lmx *node = callable->node
 
-Backend helpers may use ordinary C parameters internally. That does not allow
-the externally generated source-method ABI to grow additional parameters.
+`node` is the concrete Structure containing the selected callable occurrence.
+The caller evaluates this field but does not choose, shadow or replace its
+value. Source `node` is reserved under every spelling, including an exact quoted
+identifier, and cannot be declared, dynamically supplied or rebound. After
+runtime merge, the copied callable's rebased parent supplies the value.
 
-Here "hidden argument" means an additional semantic C parameter emitted by the
-translator but absent from this one-pointer source-method contract, for example
-`LmMessageThread *`, `Arena *`, `ExecutionContext *`, `Namespace *`, a closure
-environment, separate source arguments or an output/result pointer. It does not
-mean registers/stack details inserted by the platform C ABI, and it does not
-forbid private runtime helpers from receiving an arena already derived from the
-method's sole Lmx argument. A C return value is a return channel, not an input
-argument; its exact form remains section 14.10 work.
+The remaining signature contains the declared call ABI and exactly the hidden
+dynamic-caller values the translated body requires. Here a hidden argument is
+a C parameter generated for an unqualified source name not declared as a
+parameter at that source call boundary. Hidden dynamic values are required
+language lowering, not forbidden infrastructure. A method still MUST NOT
+receive an unrelated `LmMessageThread *`, `Arena *`, `ExecutionContext *`,
+`Namespace *` or descriptor merely as ambient context; arena ownership is
+derived from `node` or its registered allocation range.
+
+Parameter order, value category and return/failure convention are part of
+`sig`. The exact result channel remains section 14.10 work, but no call may
+guess a prototype, erase a signature or invoke through an incompatible C
+function-pointer type.
 
 RU
 
-Каждый сгенерированный метод исходника принимает ровно один явный аргумент C:
+Три связанные identity различаются. У исходного метода есть одно generated
+C-entry и immutable method record. Граф может содержать много callable
+Lmx-листьев, `data` которых идентифицирует эту запись. У каждого выбранного
+callable-occurrence есть одна постоянная containing Structure,
+`callable->node`; её own fields являются опубликованным рабочим состоянием
+выбранного вызова. Runtime merge может скопировать/rebase occurrence, сохранив
+тот же method record. Во всём документе «Structure метода» является сокращением
+для этой выбранной containing Structure; это никогда не callable-лист и не
+свежий per-invocation graph-object.
 
-    Lmx *node
+Старая фраза «`node` берётся из дескриптора» является только сокращением двух
+конкретных фактов: выбранный callable-occurrence даёт `callable->node`, а его
+immutable method record даёт `{addr,sig}`. Она не возвращает attached descriptor
+object либо per-Structure запись type/layout.
 
-Аргументом является содержащая Structure callable-occurrence: если выбранный
-узел метода — `callable`, вызов передаёт `callable->node`. Имя параметра не
-нормативно; его тип, arity и смысл содержащей Structure нормативны.
-Сгенерированный
-метод не должен выставлять отдельные C-параметры для аргументов исходника,
-локальных значений исходника, captured values, второго self, descriptor,
-namespace или environment.
+У каждого generated-метода есть точная C-сигнатура. Её первый семантический
+вход — зарезервированное значение:
 
-Все входы семантики исходника, необходимые методу, достижимы как узлы
-Structure из переданной содержащей Structure и runtime-графа. Точные соглашения для
-поддеревьев аргументов, результата и ошибки остаются UNRESOLVED, но обязаны
-укладываться за эту границу с одним указателем.
+    Lmx *node = callable->node
 
-Внутренние backend helpers могут иметь обычные C-параметры. Это не разрешает
-расширять внешний ABI сгенерированного метода исходника дополнительными
-параметрами.
+`node` — конкретная Structure, содержащая выбранный callable-occurrence. Caller
+вычисляет это поле, но не выбирает, не shadow-ит и не заменяет его значение.
+`node` в исходнике зарезервирован при любом spelling, включая exact quoted
+identifier: его нельзя объявить, динамически передать или rebind-ить. После
+runtime merge значение даёт rebased-родитель скопированного callable.
 
-Здесь «скрытый аргумент» означает дополнительный семантический C-параметр,
-который транслятор добавил, хотя его нет в этом однопараметрическом контракте
-метода исходника, например `LmMessageThread *`, `Arena *`,
-`ExecutionContext *`, `Namespace *`, closure environment, отдельные аргументы
-исходника или output/result pointer. Это не означает регистры/детали стека,
-которые вводит платформенный C ABI, и не запрещает private runtime helpers
-принимать arena, уже определённую по единственному Lmx-аргументу метода.
-Возвращаемое C-значение является return channel, а не входным аргументом; его
-точная форма остаётся работой раздела 14.10.
+Остальная сигнатура содержит явный ABI вызова и ровно те скрытые
+dynamic-caller значения, которые нужны транслированному телу. Здесь
+скрытый аргумент — C-параметр, сгенерированный для неквалифицированного
+имени исходника, не объявленного параметром на этой границе вызова.
+Скрытые dynamic-значения — требуемое снижение семантики языка, а не
+запрещённая infrastructure. Метод всё так же не должен получать посторонний
+`LmMessageThread *`, `Arena *`, `ExecutionContext *`, `Namespace *` или descriptor как
+ambient context; arena выводится из `node` или его registered allocation range.
+
+Порядок параметров, категория значений и return/failure-соглашение входят в
+`sig`. Точный канал результата остаётся работой раздела 14.10, но вызов не
+может угадывать prototype, стирать сигнатуру или вызывать через
+несовместимый тип C function pointer.
 
 
-6.4. Source locals are Structures
-Локальные значения исходника являются Structure
+6.4. Through variables and dynamic caller visibility
+Сквозные переменные и dynamic-видимость caller-а
 ----------------------------------------------------
 
 EN
 
-A source declaration local to a method materializes one or more Lmx nodes
-under the execution Structure selected by the final call convention. A
-primitive-valued local is still a named Lmx node whose data points to
-primitive storage. A Structure-valued local is an Lmx subtree or reference as
-defined by the source operation.
+An unqualified name first selects the current activation's nearest own binding
+chosen by the source declaration rules: a declared formal/result or an own
+field/receiver-defined local of the selected containing Structure, represented
+by its C working value. Otherwise it is a through name supplied by the current
+caller activation. Consequently a callee requiring `x` receives the caller's
+current declared/formal/local/own-field value when any such binding is nearest,
+then an inherited through value, and only then the callee's immediate
+`node\[0]x` fallback. An explicit
+`node\field`, `reference\field` or `array[index]` expression is never resolved
+through this C-local channel. The translator computes two distinct sets:
 
-The translator MUST NOT replace a source local semantically with:
+* `DynRequired(M)`: M's free bare names plus transitive names required by exact
+  callees, excluding names satisfied by an own binding;
+* `OwnUsed(M)`: own graph-backed fields read/written unqualified by M or needed
+  to supply an outgoing callee's dynamic value.
 
-* an ANSI C automatic scalar;
-* a generated C struct local;
-* a closure-environment member;
-* an entry in a runtime namespace;
-* a hidden typed temporary whose lifetime defines source lifetime.
+Its compile-time namespace maps each selected source name to the corresponding
+C expression; it is compiler work state, not an emitted runtime dictionary.
 
-C automatic variables are allowed as short-lived implementation temporaries
-for loops, allocation results, address calculations and error propagation.
-They are not the storage or identity of a source local.
+For recursive and mutually recursive call-graph components, this dependency
+computation MUST reach a fixed point. A value required only by a deeper callee
+still belongs to each intervening signature needed to carry it down the dynamic
+chain, unless that call site resolves it from an own binding. This is forwarding
+of values through exact C activations, not lexical capture.
 
-Recursion and concurrent invocations therefore receive distinct runtime local
-nodes even though they execute the same global C method symbol.
+An own or through C value may itself contain a callable Lmx occurrence selected
+at runtime. The compiler resolves the activation binding and exact Consumer call
+signature; it need not know one concrete occurrence. At execution the selected
+occurrence's method record must have exactly that canonical `sig` before its
+typed `addr` is invoked.
+
+At method entry every used through value is copied into a private C working
+local:
+
+* a primitive is copied by semantic value;
+* a Structure or Array reference value is copied as the same reference.
+
+Rebinding either local affects only the current activation. A primitive update
+does not update the caller's value. Rebinding a Structure/Array local does not
+rebind the caller's reference. Mutation of the referenced material is possible
+only through an explicit path such as `reference\field` or an Array element
+operation and is visible to other references to that same material inside the
+Message.
+
+If the caller activation has no required through binding, lookup falls back to
+the immediate `node\name` of the selected callable. It does not search a chain
+of lexical source parents. The fallback is copied by the same primitive-versus-
+reference rule and remains local; changing the unqualified working value never
+writes it back to `node\name`. Only source spelling that explicitly names the
+path can mutate that graph field. If neither the caller chain nor the immediate
+fallback supplies the required name, the call is rejected by translation or
+runtime admission; no empty/global/lexical value is invented.
+
+A through value modified by a method is passed in its current local form to a
+deeper callee that requires the same name. Return never propagates that rebind
+upward. Thus visibility is transitive down the dynamic call chain, not through
+an implicit lexical-parent walk and not by shared mutable binding slots.
 
 RU
 
-Объявление исходника, локальное для метода, материализует один или несколько
-Lmx-узлов под Structure исполнения, выбранной окончательным соглашением
-вызова. Локальное значение с примитивным payload всё равно является
-именованным Lmx-узлом, data которого указывает на примитивное хранилище.
-Локальная Structure является поддеревом Lmx или ссылкой согласно операции
-исходника.
+Неквалифицированное имя сначала выбирает ближайший own binding текущей
+activation по правилам деклараций исходника: declared formal/result либо own
+field/receiver-defined local выбранной containing Structure, представленный его
+рабочим C-value. В противном случае это сквозное имя, получаемое от текущей
+activation caller-а. Поэтому callee, требующий `x`, получает ближайшее текущее
+declared/formal/local/own-field значение caller-а, затем inherited through-value
+и лишь затем непосредственный fallback `node\[0]x` callee. Явное
+`node\field`, `reference\field` или `array[index]` никогда не разрешается через
+этот канал C-local. Транслятор вычисляет два разных множества:
 
-Транслятор не должен семантически заменять local исходника следующим:
+* `DynRequired(M)`: свободные bare names M плюс транзитивные имена, требуемые
+  точными callees, кроме имён, удовлетворённых own binding;
+* `OwnUsed(M)`: own graph-backed fields, которые M читает/пишет
+  неквалифицированно либо должен передать как dynamic value callee.
 
-* автоматическим скаляром ANSI C;
-* локальным generated C struct;
-* member-ом closure environment;
-* записью runtime namespace;
-* скрытым типизированным temporary, lifetime которого определяет lifetime
-  исходника.
+Compile-time namespace связывает каждое выбранное имя исходника с
+соответствующим C-выражением; это служебное состояние compiler-а, а не
+выдаваемый runtime-словарь.
 
-Автоматические переменные C разрешены как короткоживущие служебные temporary
-для циклов, результатов allocation, вычисления адресов и передачи ошибки.
-Они не являются хранилищем или identity local-а исходника.
+Для recursive и mutually recursive компонентов call graph вычисление этих
+зависимостей обязано достигать fixed point. Значение, нужное только более
+глубокому callee, всё равно входит в каждую промежуточную сигнатуру, необходимую
+для его передачи вниз по dynamic-цепочке, если call site не разрешает его из
+собственного binding. Это forwarding значений через точные C-активации, а не
+лексический capture.
 
-Поэтому рекурсивные и параллельные вызовы получают разные runtime-узлы
-локальных значений, хотя исполняют один и тот же глобальный C-символ метода.
+Own либо through C-value может само содержать callable Lmx-occurrence,
+выбранный в runtime. Compiler разрешает activation binding и точную Consumer
+call-signature, но не обязан знать один конкретный occurrence. При исполнении
+method record выбранного occurrence обязан иметь в точности этот канонический
+`sig` до typed-вызова его `addr`.
+
+При входе в метод каждое используемое сквозное значение копируется в
+private-рабочий C-local:
+
+* примитив копируется по семантическому значению;
+* значение ссылки Structure или Array копируется как та же ссылка.
+
+Rebind любого local влияет только на текущую activation. Изменение примитива не
+меняет значение caller-а. Rebind local Structure/Array не rebind-ит ссылку
+caller-а. Изменение самого referenced-материала возможно только явным путём,
+например `reference\field`, либо операцией элемента Array и видно другим
+ссылкам на тот же материал внутри Message.
+
+Если в activation caller-а нет требуемого сквозного binding, lookup переходит к
+непосредственному `node\name` выбранного callable. Он не ищет по цепочке
+лексических родителей исходника. Fallback копируется по тому же правилу
+примитива/ссылки и остаётся локальным: изменение неквалифицированного
+рабочего значения никогда не пишет его обратно в `node\name`. Только явно
+написанный в исходнике путь может изменить это graph-field. Если ни caller-chain,
+ни immediate fallback не дают требуемого имени, translation/runtime admission
+отклоняет call; empty/global/lexical значение не придумывается.
+
+Изменённое методом сквозное значение передаётся в его текущей локальной
+форме более глубокому callee, которому нужно то же имя. Return никогда не
+передаёт этот rebind обратно вверх. Таким образом, видимость сквозна вниз по
+dynamic-цепочке вызовов, а не по неявному пути лексических родителей и не
+через общие mutable binding slots.
 
 
-6.5. Common callable physical class
-Общая физическая категория callable
-----------------------------------------------
+6.5. C working locals, dirty publication and no reload
+Рабочие C-locals, dirty-публикация и отсутствие reload
+---------------------------------------------------
 
 EN
 
-All generated source-method entries belong to one common callable physical
-class recognized by the runtime. A callable Lmx leaf stores in `data` either a
-direct entry address under an ABI that permits it, or a pointer to a callable
-record containing the correctly typed entry pointer. The physical class may be
-implemented by one or more registered ranges or linker sections; every range
-uses the same one-containing-Lmx-pointer semantic invocation ABI.
+At entry the translator creates C working locals only for `OwnUsed(M)` fields.
+It loads their current values from the selected `callable->node`. A
+`DynRequired(M)` value is instead a hidden activation input and never becomes an
+own backed field merely because M forwards it. An explicit structural path
+reads or mutates the current graph/referent on every execution and is not
+silently converted into a no-reload own-field cache. An unused field is neither
+loaded nor later stored merely because it exists in that Structure.
 
-There is no per-method callable C type in the source ontology and no vtable.
-Recognition that a leaf is executable comes from its `data` address-domain
-membership. The selected domain operation extracts and invokes the entry; no
-descriptor or node tag participates.
+Every binding classified as an own graph-backed field must resolve to its
+declared direct occurrence before entry. Normal runtime construction creates it
+in the containing Structure before the callable is admitted, and merge copies
+it with that Structure. If later structural mutation removes a required own
+field, invocation fails; it is not silently reclassified as a through value or
+immediate-node fallback.
 
-Platform glue may use section start/end symbols, a linker script, PE/COFF
-section facilities, ELF facilities, Mach-O facilities, or callable-record
-indirection. The chosen technique must retain one semantic callable class and
-the one-pointer invocation ABI. ISO C portability is not allowed to change the
-language ontology; it only selects the concrete domain operation.
+For every loaded own field the C activation retains the exact selected Lmx
+occurrence and keeps it rooted, rather than retaining only a ShortNameId. Normal
+payload assignment checkpoints that occurrence. If nested code structurally
+moves, detaches or replaces the occurrence while the activation is suspended,
+however, the later publication target is an unresolved conflict policy in
+section 14.22. A bootstrap may forbid/reject that structural mutation; it MUST
+NOT silently re-resolve a different `[0]` child, reinsert the old occurrence or
+pretend that writing a detached occurrence still writes "into its node". A
+moving collector must patch or pin every retained active reference.
+
+Every loaded own local has a runtime dirty state, initially clear. An actual
+execution-time write or rebind of that local marks it dirty. Static
+"may be assigned somewhere in this method", control-flow presence of a dead
+assignment, or inequality between a cached local and current graph storage MUST
+NOT by itself mark the local dirty. `++`, `--`, compound updates and an operation
+that actually writes through granted access count as writes. Merely making
+writable access available does not. An outlined helper must report the executed
+write, or generated lowering must otherwise instrument it; capability alone
+cannot dirty a clean snapshot.
+
+Immediately before every outbound LMX-call boundary, every external,
+re-entrant or publishing runtime/foreign boundary capable of exposing or
+controlling graph state outside the current activation, invoking user code or
+calling back into LMX, every `yield` suspension, and every
+activation-destroying exit, the
+generated method checkpoints only dirty own fields to the selected
+`callable->node`. Each dirty flag is cleared only after the corresponding store
+succeeds. A clean field MUST NOT be stored. A previously flushed field is clean
+until another actual local write. Through/declared values are never part of this
+automatic publication. Falling through the end of a body counts as an exit;
+`return`, `throw`, rethrow, failing `assert`, `stop` and cancellation are exit
+forms when they destroy the generated C activation.
+
+The callable, call arguments, dynamic/fallback operands, return value or throw
+payload are evaluated exactly once into required working temporaries before the
+checkpoint that transfers control. Every nested call, recursion, mutual
+recursion and synchronous callback is an LMX call boundary. A private,
+non-escaping helper used only for the current activation's own traversal,
+address classification or explicit graph operation is not a semantic boundary,
+even if it reads or writes the graph and the backend emits it as a C function.
+A call that may publish/escape state, invoke user code, re-enter LMX or transfer
+control outside the activation is a boundary; every uncertain external call is
+treated conservatively as one.
+
+For `return` and `throw`, the backend evaluates/roots the result or payload,
+checkpoints pre-cleanup dirty state, executes applicable `finally` cleanups,
+checkpoints own fields dirtied by those cleanups, and only then destroys the C
+activation/transfers control. The final checkpoint remains required when a
+cleanup makes its last assignment without another call.
+
+Dirty fields are considered in the forward source/child-occurrence order of
+their backing fields in the selected containing Structure. It is fixed that the
+intended outbound call or normal exit cannot proceed until every required dirty
+value has been published successfully and that a successful store clears only
+its own dirty state. Whether checkpoint stores are guaranteed infallible,
+prevalidated/all-or-nothing, or prefix-committing on failure remains the explicit
+ABI/error-policy choice in section 14.23. The selected policy must specify which
+dirty flags remain set, report failure without recursively entering the same
+failing epilogue, and must not smuggle in an undeclared rollback log.
+
+There is no automatic reload after a call. The caller's C working locals remain
+its activation snapshots. Explicit `node\field`, `reference\field` and Array
+operations observe and mutate current graph state. Therefore a clean cached
+local and an explicitly mutated graph field may intentionally differ. A later
+actual write to that C local makes it dirty, and its next checkpoint
+intentionally overwrites the published field. This rule is deterministic
+because one Message executes only one turn/call chain at a time.
 
 RU
 
-Все сгенерированные входы методов исходника принадлежат одной общей
-физической категории callable, распознаваемой runtime. Callable-лист Lmx
-хранит в `data` либо прямой адрес entry в допускающем это ABI, либо указатель
-на callable-record с корректно типизированным указателем entry. Физическая
-категория может быть реализована одним или несколькими зарегистрированными
-диапазонами/linker sections; все используют единый семантический ABI с одним
-указателем на содержащую Lmx.
+При входе транслятор создаёт рабочие C-locals только для полей `OwnUsed(M)`.
+Их текущие значения загружаются из выбранного `callable->node`. Значение
+`DynRequired(M)` вместо этого является hidden input activation и не становится
+own-backed field лишь потому, что M передаёт его дальше. Явный
+структурный путь при каждом исполнении читает или меняет текущий graph/referent и
+не превращается молча в no-reload cache own-field. Неиспользуемое поле не
+загружается и не записывается позже лишь потому, что оно есть в Structure.
 
-В онтологии исходника нет отдельного callable C-типа для каждого метода и нет
-vtable. То, что лист исполняем, определяется принадлежностью адреса `data`
-домену callable. Операция выбранного домена извлекает и вызывает entry; ни
-descriptor, ни tag узла не участвуют.
+Каждый binding, классифицированный как own graph-backed field, обязан до entry
+разрешиться в свой declared direct occurrence. Обычное runtime construction
+создаёт его в containing Structure до admission callable, а merge копирует его
+вместе с этой Structure. Если поздняя structural mutation удалила требуемое own
+field, invocation завершается failure; оно не переклассифицируется молча в
+through value либо immediate-node fallback.
 
-Platform glue может использовать символы начала/конца секции, linker script,
-средства секций PE/COFF, ELF, Mach-O либо косвенность через callable record.
-Выбранная техника обязана сохранять одну семантическую категорию callable и
-ABI вызова с одним указателем. Переносимость ISO C может выбирать конкретную
-операцию домена, но не менять онтологию языка.
+Для каждого загруженного own-field C-activation сохраняет и root-ит точный
+выбранный Lmx-occurrence, а не только ShortNameId для нового lookup. Обычный
+checkpoint payload-assignment пишет этот occurrence. Если nested code во время
+suspension структурно переместил, отсоединил или заменил occurrence, destination
+следующей публикации определяется ещё открытой conflict-policy раздела 14.22.
+Bootstrap может запретить/отклонить такую structural mutation; он не вправе
+молча заново выбрать другой `[0]` child, вставить старый occurrence назад или
+делать вид, что запись detached occurrence всё ещё происходит «себе в узел».
+Moving collector обязан patch-ить либо pin-ить каждую active-reference.
+
+Каждый загруженный own local имеет runtime dirty-state, изначально clear.
+Фактически исполнившаяся запись или rebind этого local ставит dirty. Статическое
+«ему могут где-то присвоить в этом методе», наличие assignment в
+неисполнившейся ветви или неравенство cached local и текущего graph storage сами
+по себе не маркируют local dirty. `++`, `--`, compound update и операция,
+фактически записавшая через предоставленный writable access, считаются
+записью. Сам факт предоставления writable access недостаточен: outlined helper
+обязан сообщить о состоявшейся записи либо lowering обязан иным способом
+инструментировать её; одна возможность записи не делает clean snapshot dirty.
+
+Непосредственно перед каждой границей исходящего LMX-call, каждой external,
+re-entrant или publishing runtime/foreign границей, способной вынести либо
+контролировать graph-state за пределами текущей activation, вызвать user code
+или callback/re-entry в LMX, каждой suspension `yield` и каждым уничтожающим
+activation выходом generated-метод пишет в выбранный `callable->node` только dirty own
+fields. Каждый dirty flag очищается только после успешной записи. Clean field не
+записывается. Ранее flushed field остаётся clean до следующей фактической записи
+в local. Сквозные/declared значения никогда не входят в эту автоматическую
+публикацию. Достижение конца тела является выходом; `return`, `throw`, rethrow,
+failing `assert`, `stop` и cancellation являются exit-формами, когда уничтожают
+generated C-activation.
+
+Callable, аргументы call, dynamic/fallback operands, значение return или payload
+throw вычисляются ровно один раз в нужные working temporaries до checkpoint,
+передающего управление. Любой nested call, recursion, mutual recursion и
+synchronous callback является LMX call-границей. Private non-escaping helper,
+выполняющий только traversal, address classification либо explicit graph
+operation текущей activation, не является semantic boundary, даже если читает
+или пишет граф и эмитится как C-функция. Call, который может публиковать/выносить
+state, вызвать user code, re-enter LMX либо передать управление наружу, является
+границей; любой сомнительный external call считается ею консервативно.
+
+Для `return` и `throw` backend вычисляет/укореняет result либо payload,
+checkpoint-ит pre-cleanup dirty-state, исполняет применимые `finally` cleanups,
+checkpoint-ит own fields, изменённые этими cleanups, и только затем уничтожает
+C-activation/передаёт управление. Финальный checkpoint обязателен, когда cleanup
+сделал последнюю запись без ещё одного вызова.
+
+Dirty fields рассматриваются в прямом source/child-occurrence порядке их
+backing fields в выбранной containing Structure. Закреплено, что предполагаемый
+outbound call либо normal exit не выполняется, пока каждое требуемое dirty-value
+не опубликовано успешно, а успешный store очищает только свой dirty-state.
+Будут ли checkpoint stores гарантированно infallible,
+prevalidated/all-or-nothing либо prefix-committing при failure — явный открытый
+выбор ABI/error-policy раздела 14.23. Выбранная policy обязана определить
+оставшиеся dirty flags, сообщить failure без рекурсивного входа в тот же failing
+epilogue и не прятать необъявленный rollback-log.
+
+Автоматического reload после call нет. Рабочие C-locals caller-а остаются
+snapshots его activation. Явные `node\field`, `reference\field` и Array-операции
+наблюдают и изменяют текущее graph-state. Поэтому clean cached local и явно
+изменённое graph-field могут намеренно различаться. Следующая фактическая
+запись в этот C-local делает его dirty, а его следующий checkpoint намеренно
+перезаписывает опубликованное поле. Правило детерминировано, потому
+что один Message исполняет только один turn/call-chain одновременно.
 
 
-6.6. Invocation
+6.6. `all_methods_array` and the common callable class
+`all_methods_array` и общая категория callable
+---------------------------------------------------
+
+EN
+
+Every generated entry is represented in the program-wide immutable method
+array by the conceptual record:
+
+    all_methods_array[i] = { addr, sig }
+
+`addr` identifies the globally reachable implementation. `sig` describes the
+complete source and physical invocation contract:
+
+* ABI version and target calling convention;
+* the fixed reserved structural `node` parameter;
+* every declared formal's canonical source name/position, required, optional or
+  default mode, semantic value/reference contract, exact C ABI type and pass
+  mode;
+* every hidden through value's canonical ShortNameId/name identity, semantic
+  copy mode, exact C ABI type and pass mode, in physical parameter order;
+* the source result contract and exact physical return/out-result convention;
+* every declared throw identity/name, payload contract and propagation ABI; and
+* an explicit varargs prohibition or a complete canonical varargs shape.
+
+Dynamic entries use a deterministic canonical order selected by the signature
+ABI version. A profile may use canonical ShortNameId/name order or another
+link-stable algorithm; the choice is not source-visible, but every translation
+unit and adapter for that ABI must agree. Hidden-name
+identities are canonical across translation units: a linker may relocate local
+ShortNameIds to program-wide identities, or `sig` may carry canonical name bytes
+or collision-checked stable hashes. Raw translation-unit-local numeric IDs MUST
+NOT be compared. The exact C spelling/encoding of `sig` remains ABI work; the
+presence of both fields and exact canonical signature equality at use are
+normative.
+
+A callable Lmx leaf has `data` in the registered `all_methods_array`/method-
+record physical domain. It does not contain a signature, descriptor or vtable
+in its Lmx header. Runtime classification obtains the immutable record. A call
+site invokes `addr` only through the exact function type described by `sig`.
+Varargs guessing, erasing the prototype to `void (*)(void)`, or treating all
+methods as a single one-pointer C function type is non-conforming.
+
+The physical domain may use linker sections or an equivalent generated array
+on PE/COFF, ELF, Mach-O or another target. A merge copy retains the same method
+record while rebasing the callable occurrence's `node`; it does not compile or
+duplicate the method.
+
+Code received later through a Message or module mechanism MUST NOT be invoked
+as an address with an unknown C signature. It first passes validation and is
+then translated and compiled into a registered method record, or is interpreted
+through a future interpreter preserving the same exact `sig` contract. Only
+after that admission may its callable occurrence enter the method domain.
+
+RU
+
+Каждый generated-entry представлен в immutable-массиве методов всей программы
+концептуальной записью:
+
+    all_methods_array[i] = { addr, sig }
+
+`addr` идентифицирует глобально достижимую реализацию. `sig` описывает полный
+source и physical invocation contract:
+
+* ABI-version и target calling convention;
+* фиксированный зарезервированный structural-параметр `node`;
+* canonical source name/position каждого declared formal, required/optional/
+  default mode, semantic value/reference contract, точный C ABI type и pass mode;
+* canonical ShortNameId/name identity каждого hidden through value, semantic
+  copy mode, точный C ABI type и pass mode в физическом порядке параметров;
+* source result contract и точный physical return/out-result convention;
+* identity/name каждого declared throw, payload contract и propagation ABI; и
+* явный запрет varargs либо полную canonical varargs shape.
+
+Dynamic entries идут в детерминированном canonical order, выбранном версией
+signature ABI. Профиль может выбрать порядок canonical ShortNameId/name или
+другой link-stable алгоритм; source semantics от выбора не зависит, но все
+translation units и adapters этого ABI обязаны совпадать. Identity скрытых имён
+каноничны между translation units: linker может
+релокировать локальные ShortNameIds в program-wide identity, либо `sig` может
+хранить canonical name bytes или stable hashes с проверкой коллизий. Raw
+локальные числовые IDs разных translation units сравнивать нельзя. Точные
+C-spelling/encoding `sig` остаются работой ABI; наличие обоих полей и точное
+равенство канонических сигнатур при использовании нормативны.
+
+`data` callable-листа Lmx входит в registered физический домен
+`all_methods_array`/method-record. Он не содержит сигнатуру, descriptor или vtable в
+заголовке Lmx. Runtime-классификация получает immutable-record. Call site
+вызывает `addr` только через точный тип функции, описанный `sig`. Угадывание
+varargs, стирание prototype до `void (*)(void)` или трактовка всех методов как
+одного однопараметрического C-типа не соответствует архитектуре.
+
+Физический домен может использовать linker sections либо эквивалентный generated-
+массив на PE/COFF, ELF, Mach-O или другой цели. Копия merge сохраняет ту же
+запись метода, rebasing `node` callable-occurrence; она не компилирует и не
+дублирует метод.
+
+Код, позднее полученный через Message- либо module-механизм, нельзя вызывать как
+адрес с неизвестной C-сигнатурой. Сначала он проходит validation, затем
+транслируется и компилируется в зарегистрированную method-record либо
+интерпретируется будущим интерпретатором, сохраняющим тот же exact `sig`
+contract. Только после такого admission его callable-occurrence входит в
+method-domain.
+
+
+6.7. Callable compatibility in `implements`
+Совместимость callable в `implements`
+-----------------------------------------
+
+EN
+
+`implements(A, B, Consumer)` remains directional and consumer-driven. It
+examines only paths/leaves actually used by `Consumer`. When a used leaf is
+consumed as a callable, its `sig` is part of that used leaf and validation must
+establish `sig(A.p) == sig(B.p) == ExpectedSig(Consumer,p)` at that call site.
+Different `addr` values are allowed when their canonical `sig` values are
+equal; an unused callable leaf does not impose an unrelated whole-Structure
+check. There is no implicit arity adapter, variance or ignored signature
+position once Consumer actually invokes the leaf.
+
+This is not a nominal type system or an attached descriptor. It is the minimum
+structural obligation needed to prevent a call site compiled for one exact C
+prototype from jumping to an incompatible method after rebind, reference
+selection or merge.
+
+RU
+
+`implements(A, B, Consumer)` остаётся направленным и зависящим от Consumer.
+Он рассматривает только пути/листья, реально используемые `Consumer`. Когда
+используемый лист потребляется как callable, его `sig` входит в этот лист, а
+validation обязана установить
+`sig(A.p) == sig(B.p) == ExpectedSig(Consumer,p)` в этом call site. Разные
+`addr` допустимы при равных canonical `sig`;
+неиспользуемый callable-лист не требует посторонней проверки всей Structure.
+После фактического использования leaf нет неявного arity adapter, variance или
+игнорируемой позиции сигнатуры.
+
+Это не nominal type system и не attached descriptor. Это минимальное структурное
+обязательство, не позволяющее call site, скомпилированному для одного
+точного C-prototype, прыгнуть в несовместимый метод после rebind, выбора по
+ссылке или merge.
+
+
+6.8. Invocation
 Вызов
---------------
+---------------
 
 EN
 
 Conceptually, invocation performs these steps:
 
-1. Resolve the callable node through the runtime tree/path rules.
-2. Verify that its data belongs to a range of the common callable physical
-   class and resolve its typed entry through that domain operation.
-3. Read the callable occurrence's containment parent `callable->node`.
-4. Invoke the globally named entry with that containing Structure pointer.
-5. Read the source-semantic result or failure from the graph according to the
-   final result convention.
+1. Resolve the call-capable activation binding or explicit structural/path
+   expression, evaluate the resulting callable Lmx occurrence exactly once and
+   retain/root it. An own, declared or hidden dynamic C value may itself hold the
+   runtime-selected occurrence.
+2. Classify its data in the common callable domain and obtain its immutable
+   `{ addr, sig }` record.
+3. Prove exact canonical equality between the selected `sig` and the signature
+   expected by the Consumer call site, including every hidden through position.
+4. Evaluate all declared operands exactly once, in specified source order, into
+   typed working temporaries.
+5. Select/copy every hidden through operand exactly once, in `sig` order, into
+   typed working temporaries. Each copies the current caller value or, when
+   absent, the selected callable's immediate `node\name` fallback. If both are
+   absent, validation/admission rejects the call before publication. Thus every
+   call operand and fallback is fixed before publication.
+6. Publish only dirty own fields of the caller and clear their flags after
+   successful stores.
+7. Invoke `addr` through the exact C prototype described by `sig`, using the
+   already evaluated operands.
+8. Receive the result/failure by the selected ABI and continue without
+   reloading the caller's working locals.
 
-No namespace is installed before step 4 and no namespace is restored after
-step 4. Context is structural and reachable through Lmx.
+Any nested call reached while evaluating steps 1, 4 or 5 establishes its own
+normal boundary. Generated C MUST materialize this order explicitly and MUST
+NOT rely on C's unspecified argument-evaluation order. In particular, the
+checkpoint cannot retroactively change the selected callable or fallback copy.
 
-A method copied by merge keeps the same global C entry address. Its copied
-Lmx placement and rewritten node relation provide the new structural context.
-Thus Array.resize code can be present as a field of a runtime HashArray copy
-without generating another C implementation.
+The C activation record established by this exact call is the dynamic caller
+namespace implementation. No separate namespace object is installed or
+restored. A method copied by merge keeps the same `{ addr, sig }`; its rewritten
+`node` provides the new structural fallback/context. Thus Array.resize may be a
+live method in a runtime HashArray copy without another C compilation.
 
 RU
 
 Концептуально вызов выполняет следующие шаги:
 
-1. Разрешить callable-узел по правилам runtime-дерева и путей.
-2. Проверить, что его data входит в диапазон общей физической категории
-   callable, и разрешить typed entry через операцию этого домена.
-3. Прочитать родителя callable-occurrence: `callable->node`.
-4. Вызвать глобально именованный entry с указателем на эту содержащую
-   Structure.
-5. Прочитать результат или ошибку семантики исходника из графа по
-   окончательному соглашению результата.
+1. Разрешить call-capable activation binding либо явное structural/path
+   expression, вычислить полученный callable Lmx-occurrence ровно один раз и
+   удержать/root-ить его. Own, declared либо hidden dynamic C-value само может
+   хранить occurrence, выбранный в runtime.
+2. Классифицировать его data в общем callable-домене и получить immutable-запись
+   `{ addr, sig }`.
+3. Доказать точное каноническое равенство выбранного `sig` и сигнатуры,
+   ожидаемой Consumer call site, включая каждую hidden through position.
+4. Вычислить все declared operands ровно один раз, в заданном source order, в
+   typed working temporaries.
+5. Выбрать/скопировать каждый hidden through operand ровно один раз, в порядке
+   `sig`, в typed working temporaries. Каждый копирует текущее значение caller-а
+   либо, при его отсутствии, непосредственный fallback `node\name` выбранного
+   callable. Если отсутствуют оба, validation/admission отклоняет call до
+   публикации. Поэтому все operands/fallback вызова зафиксированы до публикации.
+6. Опубликовать только dirty own fields caller-а и очистить их флаги после
+   успешных stores.
+7. Вызвать `addr` через точный C-prototype, описанный `sig`, используя уже
+   вычисленные operands.
+8. Получить result/failure по выбранному ABI и продолжить без reload рабочих
+   locals caller-а.
 
-Перед шагом 4 никакой namespace не устанавливается, а после шага 4 никакой
-namespace не восстанавливается. Контекст структурен и достижим через Lmx.
+Любой nested call при вычислении шагов 1, 4 или 5 устанавливает собственную
+обычную boundary. Generated C обязан явно материализовать этот порядок и не
+полагаться на unspecified порядок вычисления аргументов C. В частности,
+checkpoint не может задним числом изменить выбранный callable или fallback-copy.
 
-Метод, скопированный merge, сохраняет тот же глобальный C-адрес входа. Его
-место в скопированном Lmx и переписанное отношение node дают новый
-структурный контекст. Поэтому код Array.resize может присутствовать как поле
-runtime-копии HashArray без генерации ещё одной C-реализации.
+C activation record, созданный этим точным вызовом, является реализацией
+dynamic namespace caller-а. Отдельный namespace-object не устанавливается и не
+восстанавливается. Метод, скопированный merge, сохраняет тот же `{ addr, sig }`;
+его переписанный `node` даёт новый структурный fallback/context. Поэтому Array.resize
+может быть живым методом runtime-копии HashArray без ещё одной C-компиляции.
+
+
+6.9. Activation history, recursion, `yield` and `retry`
+История activation, recursion, `yield` и `retry`
+--------------------------------------------------
+
+EN
+
+The C call stack is the only implicit activation history. The containing
+Structure of the selected callable occurrence (`callable->node`) contains the
+method's published working state and is not a call log. Any history intended to
+survive return or to split between branches MUST be represented by an explicit
+Structure, Array or Message. The side effect of polluting the caller's biography
+through incorrectly constructed recursive calls is a memory-consuming
+architectural error whose use Lingvamyxa deliberately makes dangerous and
+logically impossible.
+
+Before a recursive or mutually recursive call, the current activation publishes
+only its dirty own fields. A nested activation through the same callable
+occurrence may publish new values into the same containing Structure. An
+occurrence copied by merge may identify the same method record but a different
+containing Structure. On return the suspended caller is not reloaded; its C
+working locals remain its snapshots. If it later writes one and reaches another
+checkpoint, that dirty value intentionally overwrites the currently published
+field. This overwrite semantics is deliberate. Code that needs a recursion
+biography must build it explicitly instead of relying on method-state pollution.
+
+`yield` is a semantic dirty-only checkpoint before suspension and then preserves
+normal stack/continuation state, including current working locals, hidden
+dynamic values and their cleared/remaining dirty flags. It does not reload on
+resume and is not transformed into a fabricated method-Structure activation
+log. A later `next` caller does not replace the producer activation's dynamic
+values. If a private continuation survives an end-turn collection, every Lmx
+reference it retains is a registered collector root until resume/close.
+
+`retry` is a control operation inside the current activation, not a call; it does
+not create a new call frame and does not trigger a checkpoint merely by being
+`retry`. It preserves current C values and graph mutations and performs no
+implicit rollback. Any actual call evaluated by repeated execution follows the
+ordinary call rule.
+
+A synchronous callback into the same Message is another nested C activation in
+the same serial turn and follows materialize/checkpoint/call/no-reload. A foreign
+adapter may retain already materialized typed values only for that synchronous
+call; its retained Lmx references are collector roots. An asynchronous callback
+cannot preserve an implicit returned C frame: same-Message work is a later FIFO
+Message turn carrying explicit Structure/Message state, and cross-Message work
+uses clone/serialization/transfer. A foreign thread cannot concurrently re-enter
+one Message's mutable graph under common L3 semantics.
+
+Direct tail recursion may be lowered to a loop and proven redundant checkpoints
+may be removed only if all observable state/publication ordering is unchanged.
+No finite backend promises an infinitely growing native C stack.
+
+RU
+
+Стек вызовов является единственной неявной историей активаций. Structure метода
+содержит рабочее опубликованное состояние метода и не является журналом вызовов.
+Любая история, предназначенная для переживания возврата или разделения между ветвями,
+должна быть представлена явной Structure, Array или Message. Побочный эффект
+загрязнения биографии вызывающего, при неграмотно составленных рекурсивных вызовах,
+это съедающая память архитектурная ошибка, использование которой Lingvamyxa намеренно делает опасной и логически невозможной.
+
+Перед recursive или mutually recursive call текущая activation публикует только
+свои dirty own fields. Nested activation через тот же callable-occurrence может
+опубликовать новые значения в ту же containing Structure. Скопированный merge
+occurrence может идентифицировать тот же method record, но другую containing
+Structure. После return suspended caller не reload-ится; его рабочие C-locals
+остаются его snapshots. Если позже он запишет один из них и достигнет
+следующего checkpoint, это dirty-значение намеренно перезапишет текущее
+опубликованное поле. Эта overwrite-семантика намеренна. Код, которому нужна
+биография recursion, обязан построить её явно, а не зависеть от загрязнения
+состояния метода.
+
+`yield` является semantic dirty-only checkpoint перед suspension, а затем
+сохраняет обычное состояние stack/continuation, включая рабочие locals, hidden
+dynamic values и их очищенные/оставшиеся dirty flags. При resume reload нет, и
+yield не превращается в выдуманный activation-log в Structure метода. Более
+поздний caller `next` не заменяет dynamic values producer activation. Если
+private continuation переживает end-turn collection, каждая удерживаемая им
+Lmx-reference является registered collector root до resume/close.
+
+`retry` — control-операция внутри текущей activation, а не call; она не создаёт
+новый call frame и не запускает checkpoint только потому, что это `retry`.
+Текущие C-values и graph mutations сохраняются, скрытого rollback нет. Любой
+фактический call при повторном исполнении следует обычному правилу call.
+
+Synchronous callback в том же Message является ещё одной nested C-activation в
+том же serial turn и следует materialize/checkpoint/call/no-reload. Foreign
+adapter может удержать уже материализованные typed values только на время этого
+synchronous call; его Lmx-references являются collector roots. Async callback не
+может сохранить неявный вернувшийся C-frame: работа того же Message становится
+поздним FIFO turn с явным Structure/Message-state, а cross-Message работа
+использует clone/serialization/transfer. Foreign thread не может конкурентно
+re-enter mutable graph одного Message в общей L3-семантике.
+
+Прямая tail recursion может быть lowered в loop, а доказанно избыточные
+checkpoints удалены только при сохранении всего наблюдаемого state/order
+publication. Ни один конечный backend не обещает бесконечно растущий native C
+stack.
 
 
 7. Runtime Structure construction
@@ -1552,15 +2183,23 @@ stable blocks and several disjoint registered address ranges.
 The arena contains every mutable or dynamically constructed source-semantic
 value owned by the Message:
 
-* Lmx occurrence headers for Structures, fields, methods, arguments, results
-  and source locals;
+* Lmx occurrence headers for Structures, fields, methods, explicitly
+  represented/published declared arguments, results and the published fields of
+  method Structures; this never requires fresh implicit argument/result nodes
+  per activation, and C working locals are activation storage rather than
+  additional graph occurrences;
 * branch/child storage addressed by Structure `data`;
 * non-interned primitive cells constructed for that Message;
 * ordinary Array headers, shapes, elements and backing storage once the exact
   Array payload ABI is fixed;
 * runtime merge results and every fresh occurrence copied into them;
-* Message envelope, continuation and other source-visible state represented as
+* Message envelope and other explicitly source-visible state represented as
   Lmx nodes.
+
+Opaque host continuation/stack storage used to suspend a turn is activation
+machinery, not a source graph occurrence or an implicit Lmx call log. It follows
+the continuation scheduler's physical lifetime while preserving the semantic C
+locals and dirty flags specified in section 6.9.
 
 Immutable program-wide substrate is not duplicated merely to satisfy arena
 ownership. `all_chars`, immutable intern pools, generated method code and
@@ -1570,11 +2209,12 @@ Mutable foreign storage is represented only by an explicit L2 handle and its
 declared lifetime/synchronization contract.
 
 An implementation may recover the owning arena from the address range
-containing the supplied `Lmx *`, or from equivalent allocator metadata. A
-generated source method therefore allocates relative to the arena of its
-single `containing_structure` argument; it does not receive a hidden arena,
-MessageThread or allocator parameter. Address-range-to-arena/domain metadata
-classifies storage regions and is not another per-node semantic table.
+containing the reserved `node` argument, or from equivalent allocator
+metadata. A generated source method therefore allocates relative to the arena
+of that `node`. Its declared and hidden through-value operands do not select or
+replace the arena, and it does not receive a hidden arena, MessageThread or
+allocator parameter. Address-range-to-arena/domain metadata classifies storage
+regions and is not another per-node semantic table.
 
 Migration note: the current hosted runtime has a canonical Message
 `root_owner` plus a registry of additional `LmOwnArena` allocation shells and
@@ -1595,15 +2235,23 @@ arena» не означает одно непрерывное однородно
 В arena находятся все изменяемые или динамически построенные source-semantic
 значения, принадлежащие Message:
 
-* заголовки occurrences Lmx для Structures, полей, методов, аргументов,
-  результатов и locals исходника;
+* заголовки occurrences Lmx для Structures, полей, методов, явно
+  представленных/опубликованных объявленных аргументов, результатов и
+  опубликованных полей Structures методов; это никогда не требует свежих
+  неявных узлов аргументов/результатов для каждой activation, а рабочие C locals
+  являются хранилищем активации, а не дополнительными occurrences графа;
 * хранилище ветвей/детей, адресуемое `data` Structure;
 * не-interned ячейки примитивов, построенные для этого Message;
 * заголовки, shape, элементы и backing storage обычных Arrays после фиксации
   точного ABI Array payload;
 * результаты runtime merge и все свежие occurrences, скопированные в них;
-* envelope Message, continuations и другое видимое исходнику состояние,
-  представленное Lmx-узлами.
+* envelope Message и другое явно видимое исходнику состояние, представленное
+  Lmx-узлами.
+
+Opaque host-хранилище continuation/stack, используемое для приостановки turn,
+является machinery активации, а не occurrence графа исходника или неявным Lmx
+call log. Оно следует физическому lifetime планировщика continuation, сохраняя
+семантические C locals и dirty flags по разделу 6.9.
 
 Неизменяемый глобальный субстрат программы не дублируется только ради arena
 ownership. `all_chars`, immutable intern pools, сгенерированный код методов и
@@ -1613,12 +2261,12 @@ arena своего Message. Изменяемое foreign storage предста�
 L2 handle с объявленным контрактом lifetime/synchronization.
 
 Реализация может определить arena-владельца по диапазону адреса, содержащему
-переданный `Lmx *`, либо по эквивалентным metadata allocator-а. Поэтому
-сгенерированный метод исходника выделяет память относительно arena своего
-единственного аргумента `containing_structure`; скрытый параметр arena,
-MessageThread или allocator ему не передаётся. Metadata
-address-range-to-arena/domain классифицируют области хранения и не являются
-другой семантической per-node таблицей.
+зарезервированный аргумент `node`, либо по эквивалентным metadata allocator-а.
+Поэтому сгенерированный метод исходника выделяет память относительно arena
+этого `node`. Объявленные operands и скрытые сквозные значения не выбирают и
+не заменяют arena; скрытый параметр arena, MessageThread или allocator методу
+не передаётся. Metadata address-range-to-arena/domain классифицируют области
+хранения и не являются другой семантической per-node таблицей.
 
 Примечание о миграции: текущий hosted runtime имеет канонический Message
 `root_owner`, registry дополнительных allocation shells `LmOwnArena` и
@@ -1820,78 +2468,123 @@ RU
 компилятор или генерирует машинные инструкции.
 
 
-9. No runtime namespace
-Отсутствие runtime namespace
-================================
+9. Dynamic caller visibility without a runtime namespace object
+Динамическая видимость вызывающего без runtime-объекта namespace
+==================================================================
 
-9.1. Final decision
-Окончательное решение
---------------------------
-
-EN
-
-Runtime name visibility is not implemented by a mutable namespace table.
-There is no name-to-stack-of-values structure populated on method entry.
-There is no merge of caller and callee namespace state. There is no reverse
-pop on return.
-
-The graph, its root, node parent relations, child ordering and ShortNameId
-mapping contain all runtime structural information used for lookup.
-
-Compile-time translator tables used while consuming the parser tree are
-implementation working data, not runtime language values. They must not leak
-into emitted code as the old namespace architecture.
-
-RU
-
-Runtime-видимость имён не реализуется изменяемой таблицей namespace. Нет
-структуры name-to-stack-of-values, заполняемой при входе в метод. Нет merge
-состояния namespace вызывающего и вызываемого. Нет обратного pop при return.
-
-Граф, его корень, отношения родителей node, порядок детей и отображение
-ShortNameId содержат всю runtime-структурную информацию, используемую lookup.
-
-Compile-time таблицы транслятора, используемые при потреблении дерева
-parser-а, являются служебными данными реализации, а не runtime-значениями
-языка. Они не должны просачиваться в выдаваемый код как старая архитектура
-namespace.
-
-
-9.2. Consequences
-Следствия
---------------
+9.1. Source semantics and C lowering
+Семантика исходника и lowering в C
+-------------------------------------
 
 EN
 
-Because there is no runtime namespace:
+Lingvamyxa has dynamic caller visibility: an unqualified name used by a method
+may be supplied by the current caller. The implementation does not represent
+that visibility by a mutable Name-to-Binding table, overlay or stack. For every
+exact call site, the translator resolves the required through-name set and
+lowers those values to exact hidden C parameters recorded in the callable
+signature. Native C parameter slots and the native C call stack are the runtime
+representation of the dynamic visibility chain.
 
-* method entry and return require no namespace cleanup;
-* recursion does not clone or stack namespace tables;
-* concurrent calls do not contend on a global visible-name table;
-* a method cannot accidentally see a caller local through a name overlay;
-* visibility is expressed by structural paths;
-* explicit node traversal has one concrete meaning;
-* merge changes a tree and its available paths, not a namespace.
+A primitive through value is copied by semantic value. A Structure or Array
+through value copies the reference value as-is. Rebinding either copied value
+inside the callee is local to that activation and is never written back to the
+caller automatically. Mutation of referenced material requires an explicit
+path through the reference. If the caller supplies no binding for an
+unqualified name required by the callee, lookup falls back to the immediate
+reserved `node\name`; it never walks a transitive lexical-parent chain.
 
-The ShortNameId side table may be implemented with hashing for performance,
-but that does not make it a namespace: its key is a concrete node address and
-its value never changes because of call nesting.
+The translator may use compile-time name tables while consuming the parser
+tree, computing exact call dependencies and emitting C expressions. Those
+tables are implementation working data, not runtime language values. The only
+runtime name metadata attached to ordinary graph identity remains the reverse
+`Lmx * -> ShortNameId` side table used for structural traversal.
 
 RU
 
-Поскольку runtime namespace отсутствует:
+В Lingvamyxa есть динамическая видимость вызывающего: неквалифицированное имя,
+используемое методом, может быть предоставлено текущим вызывающим. Реализация
+не представляет эту видимость изменяемой таблицей, overlay или стеком
+Name-to-Binding. Для каждого точного call site транслятор разрешает требуемый
+набор сквозных имён и понижает эти значения в точные скрытые параметры C,
+записанные в сигнатуре callable. Нативные слоты параметров C и нативный стек
+вызовов C являются runtime-представлением цепочки динамической видимости.
 
-* вход в метод и return не требуют cleanup namespace;
-* рекурсия не копирует и не складывает в стек таблицы namespace;
-* параллельные вызовы не конкурируют за глобальную таблицу видимых имён;
-* метод не может случайно увидеть local вызывающего через overlay имён;
-* видимость выражается структурными путями;
-* явный переход node имеет один конкретный смысл;
-* merge меняет дерево и доступные в нём пути, а не namespace.
+Сквозное примитивное значение копируется по семантическому значению. Для
+сквозной Structure или Array копируется само значение-ссылка как есть.
+Перепривязка любой такой копии внутри вызываемого локальна для этой активации и
+никогда автоматически не записывается обратно вызывающему. Изменение материала
+по ссылке требует явного пути через эту ссылку. Если вызывающий не предоставляет
+binding для требуемого вызываемым неквалифицированного имени, lookup откатывается
+к непосредственному зарезервированному `node\name`; сквозного прохода по цепочке
+лексических родителей нет.
+
+Транслятор может использовать compile-time таблицы имён при обработке дерева
+parser-а, вычислении точных зависимостей вызова и выдаче выражений C. Эти таблицы
+являются служебными данными реализации, а не runtime-значениями языка.
+Единственной runtime-metadata имени, связанной с обычной identity графа,
+остаётся обратная side table `Lmx * -> ShortNameId`, используемая структурным
+traversal.
+
+
+9.2. Call boundaries and published working state
+Границы вызова и опубликованное рабочее состояние
+---------------------------------------------------
+
+EN
+
+Method entry loads only own fields used through unqualified own bindings into C
+working locals and clears their runtime dirty flags. Explicit paths continue to
+access the graph directly. An actual local write or reference rebind marks the
+corresponding own field dirty. At every semantic boundary defined by 6.5, only
+dirty own fields are published to the selected `callable->node`; each flag is
+cleared after its store succeeds. Clean cached fields must not overwrite graph
+mutations made by a nested call or an explicit path. There is no automatic
+reload after a call: an unqualified local keeps its activation snapshot, while
+an explicit graph path observes current graph state.
+
+There is no namespace push/pop or namespace cleanup on entry and return. The C
+stack itself creates and destroys hidden through-value slots and working locals.
+Recursion and callbacks therefore need no separate namespace stack. Activations
+through the same callable occurrence do, however, checkpoint into the same
+published containing Structure, so recursive or mutually recursive activations
+intentionally overwrite that working published state. Persisted or branched
+activation history must be an explicit Structure, Array or Message, never an
+implicit namespace or per-call graph clone.
+
+The ShortNameId side table may use hashing for performance, but it is not a
+dynamic visibility namespace: its key is a concrete node address and its value
+does not change with call nesting. Runtime merge changes the containment tree,
+parent links and available structural paths; it does not merge call-scope
+tables.
+
+RU
+
+При входе метод загружает в рабочие C locals только собственные поля,
+используемые через неквалифицированные own-bindings, и очищает их runtime dirty
+flags. Явные пути продолжают обращаться прямо к графу. Фактическая локальная
+запись или перепривязка ссылки помечает соответствующее собственное поле dirty.
+На каждой semantic boundary из 6.5 только dirty собственные поля публикуются в
+выбранный `callable->node`; каждый флаг очищается после успешной записи. Чистые
+кэшированные поля не должны затирать изменения графа, сделанные вложенным
+вызовом или явным путём. Автоматической перезагрузки после вызова нет:
+неквалифицированный local сохраняет snapshot своей активации, тогда как явный
+путь графа наблюдает текущее состояние графа.
+
+При входе и return нет push/pop либо cleanup объекта namespace. Сам стек C
+создаёт и уничтожает слоты скрытых сквозных значений и рабочие locals. Поэтому
+рекурсии и callbacks не нужен отдельный стек namespace. Однако активации через
+один callable-occurrence делают checkpoint в одну и ту же опубликованную
+containing Structure, поэтому рекурсивные или взаимно рекурсивные активации
+намеренно перезаписывают это рабочее опубликованное состояние. Сохраняемая либо
+ветвящаяся история активаций обязана быть явной Structure, Array или Message, а
+не неявным namespace или per-call клоном графа.
 
 Side table ShortNameId может использовать hashing для производительности, но
-от этого она не становится namespace: её ключом является конкретный адрес
-узла, а значение не меняется из-за вложенности вызовов.
+она не является namespace динамической видимости: её ключ — конкретный адрес
+узла, а значение не меняется из-за вложенности вызовов. Runtime merge меняет
+дерево вложенности, родительские ссылки и доступные структурные пути; он не
+мержит таблицы scope вызовов.
 
 
 9.3. L3 Message concurrency is semantic
@@ -1995,31 +2688,47 @@ The exact C spellings are not fixed, but the runtime must provide the
 equivalent of these operations:
 
 1. Allocate a stable Lmx node or bounded Lmx subtree.
-2. Establish and validate the node parent relation.
-3. Register Lmx pointer to ShortNameId.
-4. Remove or invalidate that registration at end of lifetime.
-5. Derive the owning Message and its one arena from an Lmx address/root or
-   equivalent allocation-range metadata, without a generated-method argument.
-6. Find root by following node.
-7. Classify data by address range.
-8. Enumerate structural children using data and len.
-9. Find a child occurrence by ShortNameId.
-10. Resolve an arbitrary textual absolute path from an explicit root, and a
-   relative path from its supplied Structure.
-11. Resolve a callable-domain payload and invoke its entry with exactly
-    `callable->node`.
-12. Copy a containment tree while rebasing node and copying name IDs.
-13. Merge ordered runtime trees and a runtime body into a fresh result in the
+2. Establish and validate the `node` parent relation.
+3. Register `Lmx * -> ShortNameId` and remove or invalidate that registration at
+   the end of the node lifetime.
+4. Derive the owning Message and its one arena from the reserved `node` address
+   or equivalent allocation-range metadata, without an ambient generated-method
+   argument.
+5. Find a root by following `node`.
+6. Classify `data` by address range.
+7. Enumerate structural children using `data` and `len`.
+8. Find a child occurrence by ShortNameId, including indexed repeated names.
+9. Resolve an arbitrary textual absolute path from an explicit root and an
+   explicit relative path from its supplied Structure.
+10. Interpret reserved `node\field` from the callable occurrence's immediate
+    parent and use it as fallback for a required unqualified name absent from
+    the current caller.
+11. Resolve a callable payload to an immutable `all_methods_array` record
+    `{addr, sig}`, verify exact call-site compatibility with `sig`, and invoke
+    `addr` with the reserved `callable->node`, declared operands and exact hidden
+    through values.
+12. Copy primitive through values by semantic value and Structure/Array through
+    values by reference value, without automatic write-back on return.
+13. At method entry, load only used own fields into C working locals and
+    initialize their runtime dirty flags clear.
+14. Mark an own field dirty only when its working local is actually written or
+    rebound; at every semantic boundary defined by 6.5 and every
+    `return`/`throw`, store only dirty own fields and clear each flag after its
+    store succeeds.
+15. Resume after a call without automatically reloading working locals.
+16. Copy a containment tree while rebasing `node` and copying name IDs.
+17. Merge ordered runtime trees and a runtime body into a fresh result in the
     current Message arena.
-14. Admit incoming Messages into a per-L3-Thread FIFO, execute no more than one
+18. Admit incoming Messages into a per-L3-Thread FIFO, execute no more than one
     turn of the same L3 Thread concurrently, and publish staged output in FIFO
     order.
-15. At the common end-turn boundary, publish or roll back the outbox first and
+19. At the common end-turn boundary, publish or roll back the outbox first and
     then collect the owning Message arena; release the arena at Message
     termination after required transfer/cleanup.
 
 These operations may be fused or specialized. Their observable behavior may
-not depend on a per-Structure descriptor, C typedef or runtime namespace.
+not depend on a per-Structure descriptor, C typedef or separately allocated
+runtime Name-to-Binding namespace object.
 
 RU
 
@@ -2027,33 +2736,50 @@ RU
 следующих операций:
 
 1. Выделить стабильный Lmx-узел или ограниченное поддерево Lmx.
-2. Установить и проверить родительское отношение node.
-3. Зарегистрировать Lmx pointer в ShortNameId.
-4. Удалить или инвалидировать регистрацию в конце lifetime.
-5. Определить Message-владельца и его единственную arena по адресу/root Lmx
-   либо эквивалентным metadata диапазона allocation, не добавляя аргумент
-   сгенерированного метода.
-6. Найти root последовательным переходом node.
-7. Классифицировать data по диапазону адреса.
-8. Перечислить структурных детей с помощью data и len.
-9. Найти occurrence ребёнка по ShortNameId.
-10. Разрешить произвольный текстовый абсолютный путь от явно переданного root,
-   а относительный путь — от переданной Structure.
-11. Разрешить callable-payload по его физической категории и вызвать его entry
-    ровно с `callable->node`.
-12. Скопировать дерево вложенности с rebasing node и копированием name ID.
-13. Смержить упорядоченные runtime-деревья и runtime-тело в новый результат в
+2. Установить и проверить родительское отношение `node`.
+3. Зарегистрировать `Lmx * -> ShortNameId` и удалить либо инвалидировать эту
+   регистрацию в конце lifetime узла.
+4. Определить Message-владельца и его единственную arena по адресу
+   зарезервированного `node` либо эквивалентным metadata диапазона allocation,
+   не добавляя ambient-аргумент сгенерированного метода.
+5. Найти root последовательным переходом `node`.
+6. Классифицировать `data` по диапазону адреса.
+7. Перечислить структурных детей с помощью `data` и `len`.
+8. Найти occurrence ребёнка по ShortNameId, включая индексированные повторные
+   имена.
+9. Разрешить произвольный текстовый абсолютный путь от явно переданного root и
+   явный относительный путь от переданной Structure.
+10. Интерпретировать зарезервированный `node\field` от непосредственного
+    родителя occurrence callable и использовать его как fallback требуемого
+    неквалифицированного имени, отсутствующего у текущего вызывающего.
+11. Разрешить payload callable в неизменяемую запись `all_methods_array`
+    `{addr, sig}`, проверить точную совместимость call site с `sig` и вызвать
+    `addr` с зарезервированным `callable->node`, объявленными operands и точными
+    скрытыми сквозными значениями.
+12. Копировать сквозные примитивы по семантическому значению, а сквозные
+    Structure/Array — по значению ссылки, без автоматической обратной записи при
+    return.
+13. При входе в метод загружать только используемые собственные поля в рабочие
+    C locals и инициализировать их runtime dirty flags как clean.
+14. Помечать собственное поле dirty только при фактической записи либо
+    перепривязке его рабочего local; на каждой semantic boundary из 6.5 и перед каждым
+    `return`/`throw` записывать только dirty собственные поля и очищать каждый
+    flag после успешной записи.
+15. После вызова продолжать исполнение без автоматической перезагрузки рабочих
+    locals.
+16. Скопировать дерево вложенности с rebasing `node` и копированием name ID.
+17. Смержить упорядоченные runtime-деревья и runtime-тело в новый результат в
     текущей arena Message.
-14. Принимать входящие Messages в FIFO каждого L3 Thread, не исполнять
+18. Принимать входящие Messages в FIFO каждого L3 Thread, не исполнять
     одновременно более одного turn того же L3 Thread и публиковать
     подготовленный выход в FIFO-порядке.
-15. На общей границе end-turn сначала публиковать либо откатывать outbox, затем
+19. На общей границе end-turn сначала публиковать либо откатывать outbox, затем
     выполнять collection arena Message-владельца; при termination освобождать
     arena после обязательного transfer/cleanup.
 
 Эти операции можно объединять или специализировать. Их наблюдаемое поведение
-не может зависеть от descriptor конкретной Structure, C typedef или runtime
-namespace.
+не может зависеть от descriptor конкретной Structure, C typedef или отдельно
+выделенного runtime-объекта namespace Name-to-Binding.
 
 
 11. Translator pipeline required by this architecture
@@ -2068,25 +2794,38 @@ EN
 
 The replacement core has the following conceptual stages:
 
-1. Receive the unchanged parser tree.
-2. Walk the complete current source unit recursively.
-3. Assign deterministic ShortNameId values or references to the short-name
+1. Receive the unchanged parser tree and walk the complete current source unit
+   recursively, including executable bodies at every nesting depth.
+2. Assign deterministic ShortNameId values or references to the short-name
    identity mechanism.
-4. Assign a deterministic collision-free program-wide method identity to every
-   executable body, preferably a complete-path-mangled C spelling.
-5. Emit declarations/registration needed to make every method entry reachable
-   through the common callable physical class.
-6. Emit every method body using the one-containing-Structure-pointer ABI and
-   generic runtime structural operations.
-7. Emit runtime builders/evaluators for source Structure expressions and
-   source locals.
-8. Preserve merge as a runtime call at its execution position.
-9. Emit registration of newly constructed named nodes in the sole side table.
-10. Emit direct-reference and relative structural traversal where the source
+3. Assign a deterministic collision-free program-wide identity to every
+   executable method body, preferably a complete-path-mangled C spelling.
+4. Analyze each method's declared operands, used own fields, actual local write
+   sites, unqualified through-name requirements and statically known forwarding
+   requirements of its callees.
+5. Construct the exact callable signature from reserved `node`, declared
+   operands, hidden through values and the chosen result convention; derive an
+   exact expected signature at every callable call site.
+6. Emit declarations for every program-wide method and immutable
+   `all_methods_array` records `{addr, sig}` which make each implementation
+   reachable through the common callable physical class.
+7. Emit each method body with its exact C prototype. At entry, load only used
+   own fields into C working locals and initialize per-local runtime dirty flags.
+8. Emit actual-write dirty marking and a dirty-only publication checkpoint at
+   every semantic boundary defined by 6.5 and every `return`/`throw`; emit no automatic post-call
+   reload and no automatic through-value write-back.
+9. At each call site, resolve/validate the callable record, evaluate declared
+   operands and hidden through values according to the exact expected signature,
+   and pass reserved `callable->node` as the non-replaceable first input.
+10. Emit runtime builders/evaluators for explicit Structure, Array and Message
+    expressions. C working locals remain activation storage rather than fresh
+    implicit Lmx graph nodes.
+11. Preserve merge as a runtime call at its execution position and register
+    newly constructed named nodes in the sole reverse side table.
+12. Emit direct-reference and relative structural traversal where the source
     has a resolved/current Lmx pointer; emit root-based traversal only for an
     explicitly absolute/arbitrary textual path. Never emit ordinary Structure
     access as a generated C member access.
-11. Make method entries available through the common callable physical class.
 
 This outline does not require multiple compiler passes with these exact
 names. It specifies information flow and effects.
@@ -2095,25 +2834,40 @@ RU
 
 Новое ядро имеет следующие концептуальные стадии:
 
-1. Получить неизменённое дерево parser-а.
-2. Рекурсивно обойти всю текущую единицу исходника.
-3. Назначить детерминированные ShortNameId или ссылки на механизм identity
+1. Получить неизменённое дерево parser-а и рекурсивно обойти всю текущую
+   единицу исходника, включая исполняемые тела на любой глубине вложенности.
+2. Назначить детерминированные ShortNameId или ссылки на механизм identity
    короткого имени.
-4. Назначить каждому исполняемому телу метода детерминированный C-символ,
-   mangled из полного пути.
-5. Выдать объявления глобально видимых входов методов.
-6. Выдать каждое тело метода по ABI с одним Lmx-указателем и общими
-   структурными runtime-операциями.
-7. Выдать runtime builders/evaluators для выражений Structure и locals
-   исходника.
-8. Сохранить merge как runtime-вызов в его позиции исполнения.
-9. Выдать регистрацию новых именованных узлов в единственной side table.
-10. Выдать direct-reference и относительный структурный traversal там, где
+3. Назначить каждому исполняемому телу метода детерминированную уникальную во
+   всей программе identity, предпочтительно C-spelling, mangled из полного
+   пути.
+4. Проанализировать объявленные operands, используемые собственные поля,
+   места фактических локальных записей, требования неквалифицированных
+   сквозных имён и статически известные требования forwarding его callees.
+5. Построить точную сигнатуру callable из зарезервированного `node`,
+   объявленных operands, скрытых сквозных значений и выбранного соглашения
+   результата; получить точную ожидаемую сигнатуру каждого call site callable.
+6. Выдать объявления всех глобально достижимых методов и неизменяемые записи
+   `all_methods_array` `{addr, sig}`, делающие каждую реализацию доступной через
+   общую физическую категорию callable.
+7. Выдать тело каждого метода с его точным прототипом C. При входе загрузить
+   только используемые собственные поля в рабочие C locals и
+   инициализировать runtime dirty flag каждого такого local.
+8. Выдать marking dirty при фактических записях и dirty-only checkpoint
+   публикации на каждой semantic boundary из 6.5 и перед каждым `return`/`throw`; не выдавать
+   автоматическую post-call перезагрузку или обратную запись сквозных значений.
+9. В каждом call site разрешить/проверить запись callable, вычислить
+   объявленные operands и скрытые сквозные значения по точной ожидаемой
+   сигнатуре и передать не заменяемый `callable->node` первым входом.
+10. Выдать runtime builders/evaluators для явных выражений Structure, Array и
+    Message. Рабочие C locals остаются хранилищем активации, а не новыми
+    неявными Lmx-узлами графа.
+11. Сохранить merge как runtime-вызов в его позиции исполнения и выдавать
+    регистрацию новых именованных узлов в единственной обратной side table.
+12. Выдать direct-reference и относительный структурный traversal там, где
     исходник имеет разрешённый/current Lmx-указатель; traversal от root
     выдавать только для явно абсолютного/произвольного текстового пути.
     Обычный доступ к Structure никогда не выдавать как generated C member.
-11. Сделать входы методов доступными через общую физическую категорию
-    callable.
 
 Эта схема не требует compiler passes именно с такими названиями. Она задаёт
 поток информации и эффекты.
@@ -2134,7 +2888,15 @@ forget syntax. It may and must know:
 * the source order of children and merge inputs;
 * constant ShortNameId values for constant path components;
 * which program-wide method identity/entry implements a source method;
-* which runtime helper implements a source operation.
+* which runtime helper implements a source operation;
+* which own fields a method body actually reads or writes and which writes mark
+  their working locals dirty;
+* which unqualified values the method requires from a caller, including the
+  exact forwarded requirements of statically known callees;
+* the value category and order of declared and hidden inputs, the result
+  convention, and therefore the exact method/call-site signature;
+* which callable leaf of an `implements(A, B, Consumer)` check is actually used
+  and which exact signature that leaf requires.
 
 It must not turn that knowledge into a mandatory closed C layout for a
 Structure. Syntax knowledge selects generic runtime operations; it does not
@@ -2151,7 +2913,15 @@ RU
 * порядок детей и входов merge в исходнике;
 * константные ShortNameId константных компонентов пути;
 * какой глобальный C-символ реализует метод исходника;
-* какой runtime helper реализует операцию исходника.
+* какой runtime helper реализует операцию исходника;
+* какие собственные поля тело метода фактически читает либо пишет и какие
+  записи помечают их рабочие locals dirty;
+* какие неквалифицированные значения метод требует от вызывающего, включая
+  точные forwarded-требования статически известных callees;
+* категорию значения и порядок объявленных и скрытых входов, соглашение
+  результата и, следовательно, точную сигнатуру метода/call site;
+* какой callable leaf проверки `implements(A, B, Consumer)` фактически
+  используется и какую точную сигнатуру этот leaf требует.
 
 Он не должен превращать это знание в обязательный закрытый C-layout
 Structure. Знание синтаксиса выбирает общие runtime-операции, а не создаёт
@@ -2168,10 +2938,13 @@ The recursive source walk must treat an executable body as executable
 regardless of its nesting depth. A method nested in Array receives its own
 global path-mangled implementation symbol.
 
-The node created for that method at runtime stores a callable-domain payload in
-data which resolves to the method entry. The node's ShortNameId is stored only
-in the side table. Its node link records its concrete parent in that runtime
-tree.
+The node created for that method at runtime stores in `data` a callable-domain
+payload identifying an immutable `all_methods_array` record `{addr, sig}`. The
+record provides the implementation address and its exact callable signature;
+neither value is a per-Structure descriptor. The node's ShortNameId is stored
+only in the reverse side table. Its reserved `node` link records the concrete
+immediate parent in that runtime tree and becomes the first input when the
+callable is invoked.
 
 A descriptor-only callable declaration without a body must not silently
 receive a fake executable implementation. Its exact non-executable runtime
@@ -2183,10 +2956,13 @@ RU
 независимо от глубины вложенности. Метод внутри Array получает собственный
 глобальный path-mangled символ реализации.
 
-Узел, создаваемый для этого метода в runtime, хранит в data payload callable-
-домена, который разрешается в entry метода. ShortNameId узла хранится только в
-side table. Его ссылка node записывает конкретного родителя в этом
-runtime-дереве.
+Узел, создаваемый для этого метода в runtime, хранит в `data` payload
+callable-домена, идентифицирующий неизменяемую запись `all_methods_array`
+`{addr, sig}`. Запись предоставляет адрес реализации и точную сигнатуру
+callable; ни одно из этих значений не является descriptor конкретной Structure.
+ShortNameId узла хранится только в обратной side table. Его зарезервированная
+ссылка `node` записывает конкретного непосредственного родителя в этом
+runtime-дереве и становится первым входом при вызове callable.
 
 Callable-декларация без тела, содержащая только описание, не должна молча
 получать фальшивую исполняемую реализацию. Её точная неисполняемая
@@ -2208,28 +2984,60 @@ The following are explicitly non-conforming:
 4. Treating fn or sub inside a Structure as metadata while omitting its body.
 5. Generating a zero-returning stub for an un-emitted nested method.
 6. Translating merge by concatenating C member declarations.
-7. Performing merge during translation or program startup when source
-   control has not reached it.
+7. Performing merge during translation or program startup when source control
+   has not reached it.
 8. Representing a merge result as references to source containment children
    instead of a new copied tree.
-9. Giving generated methods one C parameter per source argument or local.
-10. Storing source locals only in automatic C variables.
-11. Creating closure structs or lexical-environment structs as the semantic
-    representation of nested methods.
-12. Implementing lookup with a runtime namespace stack or overlay.
-13. Adding a second per-node metadata map for type, descriptor, layout, path,
-    owner or callable signature.
-14. Looking up an arbitrary textual absolute path relative to whichever C
-    function happens to be executing instead of using its explicitly supplied
-    Lmx root. This prohibition does not redirect relative/direct-reference
+9. Treating reserved `node` as an ordinary declared/hidden argument which the
+   caller may replace, shadow or rebind, or interpreting `node\field` with a
+   second parent hop after `callable->node`.
+10. Omitting a required through value from the exact C signature and recovering
+    it from a global, thread-local, mutable Name-to-Binding table or overlay.
+11. Passing a primitive through value as a caller-writable cell, automatically
+    writing back any through value on return, or making callee reference
+    rebinding change the caller's binding.
+12. Materializing each implicit activation local as a fresh Lmx graph node, or
+    conversely keeping dirty method state only in C locals across a mandatory
+    publication checkpoint.
+13. Loading unused own method fields merely because they exist in the method
+    Structure.
+14. Deciding dirty state from static may-write analysis, from value inequality,
+    or from branch reachability instead of the runtime event of an actual local
+    write/rebind.
+15. Flushing all loaded fields, flushing a clean cached field, omitting a dirty
+    flush at any semantic boundary defined by section 6.5 or at an
+    activation-destroying `return`/`throw`, or clearing a dirty flag before its
+    store succeeds.
+16. Automatically reloading C working locals after a call or automatically
+    reconciling them with explicit graph mutation.
+17. Creating closure/lexical-environment structs, per-call Lmx activation
+    clones or another implicit activation log as the semantics of nested calls.
+18. Implementing dynamic caller visibility with a runtime namespace stack,
+    Name-to-Binding dictionary or overlay object.
+19. Adding a second per-node metadata map for type, descriptor, layout, path,
+    owner or callable signature. A program-wide immutable method record is not
+    per-node metadata.
+20. Erasing callable prototypes into one universal one-pointer or variadic C
+    type, invoking a method through an incompatible function-pointer type, or
+    accepting a runtime `sig` mismatch.
+21. Declaring `implements(A, B, Consumer)` successful while a callable leaf that
+    is actually used at the Consumer site has an incompatible exact signature.
+22. Looking up an arbitrary textual absolute path relative to whichever C
+    function happens to execute instead of using its explicitly supplied Lmx
+    root. This prohibition does not redirect relative/direct-reference
     traversal to root.
-15. Giving method symbols short names that can collide across files or
-    nested Structures.
-16. Depending on a whole-directory translation scan to know the shape of a
+23. Giving method symbols short names that can collide across files or nested
+    Structures.
+24. Depending on a whole-directory translation scan to know the shape of a
     merge input.
-17. Calling a compiler from runtime merge.
-18. Classifying a data payload by a per-Structure generated type rather than
+25. Calling a compiler from runtime merge.
+26. Classifying a `data` payload by a per-Structure generated type rather than
     its address range.
+27. Allowing two turns of one Message to overlap or sharing its mutable arena
+    tree with another concurrently running Message without a full explicit
+    clone and Message transfer.
+28. Treating `retry` as a call checkpoint or destroying/reconstructing ordinary
+    call-stack and dirty-local state merely because execution yields.
 
 RU
 
@@ -2243,28 +3051,59 @@ RU
 5. Генерация возвращающей ноль заглушки вместо неэмитированного вложенного
    метода.
 6. Трансляция merge конкатенацией объявлений C members.
-7. Выполнение merge во время трансляции или старта программы, когда
-   управление исходника до него не дошло.
+7. Выполнение merge во время трансляции или старта программы, когда управление
+   исходника до него не дошло.
 8. Представление результата merge ссылками на исходных детей вложенности
    вместо нового скопированного дерева.
-9. Отдельный C-параметр сгенерированного метода на каждый аргумент или local
-   исходника.
-10. Хранение local исходника только в автоматической переменной C.
-11. Создание closure structs или lexical-environment structs как
-    семантического представления вложенных методов.
-12. Реализация lookup стеком или overlay runtime namespace.
-13. Добавление второй per-node map для type, descriptor, layout, path, owner
-    или callable signature.
-14. Поиск произвольного текстового абсолютного пути относительно случайно
+9. Обращение с зарезервированным `node` как с обычным объявленным/скрытым
+   аргументом, который вызывающий может заменить, shadow или rebind, либо
+   интерпретация `node\field` со вторым подъёмом к родителю после
+   `callable->node`.
+10. Пропуск требуемого сквозного значения из точной сигнатуры C с последующим
+    восстановлением из global/thread-local изменяемой таблицы, dictionary или
+    overlay Name-to-Binding.
+11. Передача сквозного примитива как доступной для записи ячейки вызывающего,
+    автоматическая обратная запись любого сквозного значения при return либо
+    изменение binding вызывающего при перепривязке ссылки вызываемым.
+12. Материализация каждого неявного local активации как свежего Lmx-узла графа
+    либо, наоборот, сохранение dirty-состояния метода только в C locals через
+    обязательную границу публикации.
+13. Загрузка неиспользуемых собственных полей метода только потому, что они
+    присутствуют в Structure метода.
+14. Определение dirty по статическому may-write, неравенству значений или
+    достижимости ветки вместо runtime-события фактической записи/rebind local.
+15. Flush всех загруженных полей, flush чистого кэшированного поля, пропуск
+    dirty flush на любой semantic boundary из раздела 6.5 либо при уничтожающем
+    activation `return`/`throw`, либо очистка dirty flag до успешной записи.
+16. Автоматическая перезагрузка рабочих C locals после вызова либо их
+    автоматическое согласование с явным изменением графа.
+17. Создание closure/lexical-environment structs, per-call клонов Lmx-активации
+    или другого неявного журнала активаций как семантики вложенных вызовов.
+18. Реализация динамической видимости вызывающего runtime-стеком namespace,
+    dictionary Name-to-Binding либо объектом overlay.
+19. Добавление второй per-node map для type, descriptor, layout, path, owner
+    или callable signature. Глобальная неизменяемая запись метода не является
+    per-node metadata.
+20. Стирание прототипов callable в один универсальный one-pointer либо variadic
+    C-тип, вызов метода через несовместимый function-pointer type или принятие
+    несовпадения runtime `sig`.
+21. Признание `implements(A, B, Consumer)` успешным, когда фактически
+    используемый в Consumer call site callable leaf имеет несовместимую точную
+    сигнатуру.
+22. Поиск произвольного текстового абсолютного пути относительно случайно
     исполняемой C-функции вместо использования явно переданного root Lmx. Этот
     запрет не перенаправляет относительный/direct-reference traversal к root.
-15. Короткие имена символов методов, способные столкнуться между файлами или
+23. Короткие имена символов методов, способные столкнуться между файлами или
     вложенными Structure.
-16. Зависимость от сканирования всей директории для знания shape входа
-    merge.
-17. Вызов компилятора из runtime merge.
-18. Классификация payload data по generated type конкретной Structure вместо
+24. Зависимость от сканирования всей директории для знания shape входа merge.
+25. Вызов компилятора из runtime merge.
+26. Классификация payload `data` по generated type конкретной Structure вместо
     диапазона адреса.
+27. Пересечение двух turns одного Message либо совместное использование его
+    mutable arena-дерева другим параллельно исполняемым Message без полного
+    явного clone и передачи Message.
+28. Обращение с `retry` как с checkpoint вызова либо уничтожение/пересоздание
+    обычного состояния стека вызовов и dirty locals только из-за `yield`.
 
 
 13. Conformance examples and required tests
@@ -2311,10 +3150,11 @@ A method Array/resize nested inside Array must:
 * produce one program-wide reachable C entry with a deterministic unique name,
   preferably including the source unit and Array/resize path;
 * be available through the common callable physical class;
-* accept exactly one Lmx pointer;
+* have an exact C prototype whose first input is reserved `node` and whose
+  remaining declared and hidden through inputs match its immutable `sig`;
 * have its actual source body emitted;
 * be referenced by the callable-domain payload in `data` of its runtime method
-  node;
+  node through an `all_methods_array` record `{addr, sig}`;
 * execute the real body when resolved and invoked.
 
 A test that merely finds a similarly named C stub is insufficient.
@@ -2327,9 +3167,12 @@ RU
   уникальным именем, предпочтительно включающим единицу исходника и путь
   Array/resize;
 * быть доступным через общую физическую категорию callable;
-* принимать ровно один Lmx pointer;
+* иметь точный C-прототип, первым входом которого является зарезервированный
+  `node`, а остальные объявленные и скрытые сквозные входы соответствуют его
+  неизменяемому `sig`;
 * иметь сэмитированное настоящее тело исходника;
-* адресоваться через callable-domain payload в `data` его runtime-узла метода;
+* адресоваться через callable-domain payload в `data` его runtime-узла метода
+  посредством записи `all_methods_array` `{addr, sig}`;
 * исполнять настоящее тело при разрешении пути и вызове.
 
 Теста, который только находит похожую по имени C-заглушку, недостаточно.
@@ -2353,9 +3196,11 @@ A conformance test must demonstrate:
 6. Every named copied node has the correct ShortNameId side-table entry, with
    the selected positional convention applied to unnamed occurrences.
 7. Array method nodes in the result retain callable payloads resolving to the
-   original compiled methods.
-8. Invoking a copied Array method calls the entry with exactly
-   `copied_callable->node`, the new HashArray containing Structure.
+   original immutable `{addr, sig}` method records.
+8. Invoking a copied Array method validates the exact expected `sig`, supplies
+   `copied_callable->node` as reserved `node` (the new HashArray containing
+   Structure), and supplies every declared and hidden operand required by that
+   signature.
 9. The source Array tree remains structurally unchanged.
 10. The resulting HashArray can itself be an input to another merge.
 
@@ -2372,9 +3217,11 @@ RU
 6. Каждый именованный скопированный узел имеет правильную запись ShortNameId
    в side table; к безымянным применяется выбранное positional-соглашение.
 7. Узлы методов Array в результате сохраняют callable payloads, разрешаемые в
-   исходные скомпилированные методы.
-8. Вызов скопированного метода вызывает entry ровно с
-   `copied_callable->node`, новой содержащей Structure HashArray.
+   исходные неизменяемые записи методов `{addr, sig}`.
+8. Вызов скопированного метода проверяет точный ожидаемый `sig`, предоставляет
+   `copied_callable->node` как зарезервированный `node` (новую содержащую
+   Structure HashArray) и предоставляет все объявленные и скрытые operands,
+   требуемые этой сигнатурой.
 9. Исходное дерево Array структурно не меняется.
 10. Получившийся HashArray сам может быть входом следующего merge.
 
@@ -2388,52 +3235,91 @@ EN
 A path test must create at least three nested levels, supply the same explicit
 root and arbitrary textual absolute path from method contexts at different
 depths, and obtain the same root-selected node. A separate test must prove that
-relative access begins at `callable->node`, and that `node\field` follows the
-actual parent rather than resetting to root. Both must continue to pass after a
-runtime merge adds repeated short names.
+reserved `node` equals the concrete `callable->node` occurrence parent and that
+`node\field` selects its immediate child without another parent hop and without
+resetting to root. Both must continue to pass after runtime merge rebases the
+callable and adds repeated short names.
 
-The test must fail if lookup is accidentally implemented using C lexical
-locals or an active namespace stack.
+Structural path resolution must be independent of C working locals and hidden
+through-value slots. Conversely, unqualified dynamic caller visibility must be
+implemented by those exact C slots rather than by structural lookup, except for
+the defined immediate `node\field` fallback.
 
 RU
 
 Тест пути обязан создать как минимум три уровня вложенности, передать один и
 тот же явный root и произвольный текстовый абсолютный путь из контекстов
 методов на разной глубине и получить один и тот же выбранный от корня узел.
-Отдельный тест обязан доказать, что относительный доступ начинается от
-`callable->node`, а `node\field` следует по настоящему родителю, не
-сбрасываясь к root. Оба обязаны продолжать работать после runtime merge,
-добавляющего повторные короткие имена.
+Отдельный тест обязан доказать, что зарезервированный `node` равен конкретному
+родителю occurrence `callable->node`, а `node\field` выбирает его
+непосредственного ребёнка без второго подъёма к родителю и без сброса к root.
+Оба обязаны продолжать работать после runtime merge, который rebases callable
+и добавляет повторные короткие имена.
 
-Тест должен обнаруживать ошибку, если lookup случайно реализован через
-лексические locals C или стек активного namespace.
+Разрешение структурного пути обязано быть независимо от рабочих C locals и
+слотов скрытых сквозных значений. И наоборот, неквалифицированная динамическая
+видимость вызывающего должна реализовываться этими точными C-слотами, а не
+структурным lookup, кроме определённого fallback к непосредственному
+`node\field`.
 
 
-13.5. Source locals
-Локальные значения исходника
---------------------------------
+13.5. C working locals and dirty publication
+Рабочие C locals и dirty-публикация
+--------------------------------------
 
 EN
 
-A recursive-method test must show that:
+Required tests must demonstrate all of the following:
 
-* each invocation creates distinct Lmx nodes for source locals;
-* each local has the correct node parent;
-* each named local has a side-table mapping;
-* an inner invocation cannot overwrite an outer invocation's local by
-  sharing a C automatic as semantic storage;
-* no runtime namespace is required to restore visibility on return.
+* method entry loads only own fields actually used through unqualified own
+  bindings; an explicit graph path is never replaced by the no-reload cache,
+  and an unused own field is neither loaded nor spuriously stored;
+* every loaded field starts clean, an actually executed write/rebind marks it
+  dirty even when the assigned value compares equal, and a write in an untaken
+  branch does not mark it dirty;
+* at each 6.5 LMX/observable-call, yield and activation-exit boundary, dirty own
+  fields are stored and each flag is cleared only after its store succeeds;
+* a `return`/`throw` with `finally` checkpoints pre-cleanup state and then
+  checkpoints cleanup writes immediately before the C activation disappears;
+* an induced checkpoint-store failure follows the profile selected under
+  14.23, exposes exactly the stores/dirty flags that policy declares, and never
+  enters the intended call/normal exit after incomplete publication;
+* a clean cached field is not flushed. In particular, if a nested callee uses an
+  explicit reference/path to mutate that field's graph node, a later checkpoint
+  for another dirty field does not overwrite the nested mutation;
+* after that call, the unqualified C local still holds its entry/current-
+  activation snapshot while an explicit path observes the new graph value;
+  there is no automatic reload or reconciliation;
+* an explicit write to the local after return marks it dirty and intentionally
+  publishes over the then-current graph value at the next checkpoint.
 
 RU
 
-Тест рекурсивного метода обязан показать:
+Обязательные тесты должны показать всё следующее:
 
-* каждый вызов создаёт отдельные Lmx-узлы locals исходника;
-* каждый local имеет правильного родителя node;
-* каждый именованный local имеет отображение side table;
-* внутренний вызов не может перезаписать local внешнего вызова из-за общего
-  C automatic как семантического хранилища;
-* для восстановления видимости при return не требуется runtime namespace.
+* при входе метод загружает только собственные поля, фактически используемые
+  через неквалифицированные own-bindings; явный graph path не заменяется
+  no-reload cache, а неиспользуемое собственное поле не загружается и ложно не
+  записывается;
+* каждое загруженное поле начинает clean, фактически исполненная запись/rebind
+  помечает его dirty даже при равном присваиваемом значении, а запись в
+  непройденной ветке не помечает dirty;
+* на каждой semantic boundary, yield и activation-exit из 6.5 dirty
+  собственные поля записываются, а каждый flag очищается только после успешной
+  записи;
+* `return`/`throw` с `finally` checkpoint-ит pre-cleanup state, а затем прямо
+  перед исчезновением C-activation checkpoint-ит записи cleanup;
+* искусственно вызванный failure checkpoint-store следует выбранной по 14.23
+  policy, показывает ровно объявленные ею stores/dirty flags и не переходит к
+  предполагаемому call/normal exit после неполной публикации;
+* clean кэшированное поле не flush-ится. В частности, если nested callee через
+  явную ссылку/путь изменил узел графа этого поля, последующий checkpoint ради
+  другого dirty-поля не затирает nested-изменение;
+* после такого вызова неквалифицированный C local всё ещё хранит snapshot
+  входа/текущей activation, тогда как явный путь видит новое значение графа;
+  автоматического reload или согласования нет;
+* явная запись local после return помечает его dirty и намеренно публикует
+  поверх текущего значения графа при следующем checkpoint.
 
 
 13.6. Generated-C structural checks
@@ -2447,16 +3333,22 @@ regressions such as:
 
 * per-source-Structure typedef struct definitions;
 * descriptor fields in Lmx;
-* generated runtime namespace push/pop calls;
-* closure environment structs for source locals;
+* generated runtime Name-to-Binding namespace push/pop calls;
+* closure environment structs or fresh per-call Lmx activation graphs for
+  implicit working locals;
 * nested-method stubs;
-* source method signatures with more than one Lmx pointer parameter;
+* erased one-pointer/variadic source-method signatures, missing hidden through
+  operands or an invocation through an incompatible C function-pointer type;
+* eager loads of unused own fields, unconditional all-field flushes, static
+  dirty decisions or automatic post-call reloads;
 * compile-time-expanded merge members;
 * direct C member access used as the only implementation of a dynamic source
   path.
 
-Positive checks should verify symbol uniqueness, method-section membership,
-root lookup, side-table population and runtime merge timing.
+Positive checks should verify symbol uniqueness, immutable
+`all_methods_array {addr,sig}` membership, exact call-site validation, root
+lookup, side-table population, runtime merge timing and the dirty-only
+checkpoint rules.
 
 RU
 
@@ -2465,17 +3357,101 @@ RU
 
 * typedef struct на каждую Structure исходника;
 * descriptor fields в Lmx;
-* сгенерированные runtime-вызовы push/pop namespace;
-* structs closure environment для locals исходника;
+* сгенерированные runtime-вызовы push/pop namespace Name-to-Binding;
+* structs closure environment или свежие per-call Lmx-графы активации для
+  неявных рабочих locals;
 * заглушки вложенных методов;
-* сигнатуры методов исходника более чем с одним Lmx pointer parameter;
+* стёртые one-pointer/variadic сигнатуры методов, отсутствующие скрытые
+  сквозные operands или вызов через несовместимый тип function pointer C;
+* eager-загрузки неиспользуемых собственных полей, безусловные flush всех
+  полей, статическое определение dirty либо автоматический post-call reload;
 * раскрытые во время трансляции members merge;
 * прямой C member access как единственную реализацию динамического пути
   исходника.
 
-Положительные проверки должны подтверждать уникальность символов,
-принадлежность секции методов, lookup от root, заполнение side table и timing
-runtime merge.
+Положительные проверки должны подтверждать уникальность символов, присутствие
+в неизменяемом `all_methods_array {addr,sig}`, точную проверку call site, lookup
+от root, заполнение side table, timing runtime merge и правила dirty-only
+checkpoint.
+
+
+13.7. Through values, fallback and `implements`
+Сквозные значения, fallback и `implements`
+------------------------------------------------
+
+EN
+
+A call-chain test must pass an unqualified primitive and an unqualified
+Structure/Array reference through at least two nested methods. It must prove
+that the primitive is copied by semantic value, the reference value is copied
+as-is, local rebinding changes neither caller binding, and mutation occurs only
+when the callee uses an explicit path through the copied reference. Nothing is
+automatically written back on return.
+
+The same test must omit one required caller binding and prove that the callee
+uses its immediate `node\name` field, not a transitive lexical ancestor. It
+must also compare two implementations in an `implements(A, B, Consumer)` site:
+different `addr` values with exactly equal canonical `sig` are accepted, while
+a mismatched signature of the callable leaf actually used by Consumer is
+rejected. An unused callable leaf imposes no compatibility requirement.
+
+RU
+
+Тест цепочки вызовов обязан передать неквалифицированный примитив и
+неквалифицированную ссылку Structure/Array сквозь как минимум два вложенных
+метода. Он обязан доказать, что примитив копируется по семантическому значению,
+значение ссылки копируется как есть, локальная перепривязка не меняет ни один
+binding вызывающего, а изменение происходит только при использовании
+вызываемым явного пути через скопированную ссылку. При return ничего
+автоматически не записывается обратно.
+
+Тот же тест обязан пропустить один требуемый binding вызывающего и доказать,
+что вызываемый использует своё непосредственное поле `node\name`, а не
+сквозного лексического предка. Он также обязан сравнить две реализации в call
+site `implements(A, B, Consumer)`: разные значения `addr` с точно равным
+canonical `sig` принимаются, а несовпавшая сигнатура фактически используемого Consumer
+callable leaf отвергается. Неиспользуемый callable leaf не накладывает
+требования совместимости.
+
+
+13.8. Activation history, recursion, `yield`, `retry` and Messages
+История activation, recursion, `yield`, `retry` и Messages
+-----------------------------------------------------------
+
+EN
+
+A recursive and mutually recursive test must prove that ordinary C stack
+frames keep each activation's local snapshots and dirty flags, while every
+pre-call checkpoint through one callable occurrence publishes into the same
+containing Structure. A
+nested activation may therefore overwrite published method state without
+destroying the suspended caller's locals; no implicit activation history may
+be reconstructed from that Structure. A version requiring history must use an
+explicit Structure, Array or Message.
+
+A suspension test must show that `yield` preserves the ordinary continuation,
+working locals and dirty flags. A `retry` containing no actual call creates no
+frame and triggers no pre-call checkpoint. Message tests must additionally show
+that one Message turn has no concurrent peer mutating its arena tree, that
+sharing with another running Message requires full explicit clone/transfer, and
+that FIFO/end-turn rules remain unchanged.
+
+RU
+
+Recursive- и mutual-recursive-тест обязан доказать, что обычные frames стека C
+сохраняют snapshots locals и dirty flags каждой activation, тогда как каждый
+pre-call checkpoint публикует в один и тот же occurrence Structure метода.
+Поэтому nested activation может перезаписать опубликованное состояние метода,
+не уничтожая locals приостановленного вызывающего; из этой Structure нельзя
+восстанавливать неявную историю activation. Вариант, которому нужна история,
+обязан использовать явную Structure, Array или Message.
+
+Тест приостановки обязан показать, что `yield` сохраняет обычную continuation,
+рабочие locals и dirty flags. `retry`, не содержащий фактического вызова, не
+создаёт frame и не запускает pre-call checkpoint. Message-тесты дополнительно
+обязаны показать, что у одного turn Message нет конкурентного соседа,
+изменяющего его arena-дерево, что sharing с другим исполняемым Message требует
+полного явного clone/transfer и что правила FIFO/end-turn не меняются.
 
 
 14. Explicitly unresolved items
@@ -2549,6 +3525,11 @@ resources remain to be specified by physical range. Every ordinary mutable
 primitive cell created for a Message is nevertheless allocated in that
 Message's arena; only its exact physical class/copy policy remains open.
 
+This open question concerns copying graph payloads and merge operands. It does
+not reopen through-value semantics: a primitive hidden through operand is
+always copied by semantic value at a call, while a Structure/Array hidden
+operand copies its reference value as-is.
+
 14.8. Arrays
 
 It remains to define which address range and data/len convention represents
@@ -2575,17 +3556,25 @@ section 7.2.
 
 14.10. Exact method return ABI
 
-The one explicit Lmx pointer parameter is fixed. It remains to decide the C
-return type and where success, failure and source return values live in the
-runtime graph.
+The method input model is fixed: the non-replaceable first input is reserved
+`node = callable->node`, followed by the method's declared operands and exact
+hidden through values, all described by immutable `sig`. What remains open is
+the exact C return type/convention and where success, failure and source return
+values live in the runtime graph. Whatever convention is chosen becomes part
+of `sig` and must match exactly at the call site.
 
-14.11. Call context subtree
+14.11. Physical representation of published method state
 
-The supplied pointer is fixed: it is the Structure containing the selected
-callable occurrence (`callable->node`). What remains open is the exact
-arrangement of source arguments, locals and result below or through that
-containing Structure. All such values must be Structure nodes, and no
-additional generated-method parameters or runtime namespace may be introduced.
+The Structure containing the selected callable occurrence is fixed as the
+method's published working state. Native C stack frames are fixed as the sole
+implicit activation history; used own fields are working C locals, hidden
+through values are C parameters, and dirty-only checkpoints/no-reload are fixed.
+
+What remains open is the exact physical representation and helper ABI for each
+published own field, declared graph operand and result inside ordinary Lmx
+payload classes. That choice may not introduce a per-call activation subtree,
+a per-Structure descriptor or a runtime Name-to-Binding object, and may not
+change the fixed method signature or publication semantics.
 
 14.12. Descriptor-only callable forms
 
@@ -2596,8 +3585,10 @@ zero-returning methods.
 14.13. Method-section portability
 
 The exact implementation for PE/COFF, ELF, Mach-O and other supported
-profiles, including function-pointer versus void-pointer representation,
-section bounds and dead-code elimination retention, remains open.
+profiles, including the physical `all_methods_array {addr, sig}` representation,
+typed-function-pointer storage, section bounds, signature-ID encoding and
+dead-code elimination retention, remains open. Program-wide reachability,
+immutable exact signatures and exact typed invocation are fixed.
 
 14.14. Path-mangling encoding
 
@@ -2616,9 +3607,10 @@ the merge.
 14.16. Module linkage and loading
 
 It remains to define how a module guarantees that referenced method entries
-and Structure providers/references have been linked or loaded. This mechanism
-must not be a hidden Name-to-value runtime namespace. Runtime merge does not
-compile missing code.
+and Structure providers/references have been linked or loaded, and how modules
+agree on the exact `sig` encoding. This mechanism must not be a hidden
+Name-to-value runtime namespace. Runtime merge does not compile missing code or
+adapt incompatible signatures.
 
 14.17. Multiple roots and cross-root references
 
@@ -2638,6 +3630,12 @@ executes no more than one turn at once; its admitted inbox/outbox order is FIFO;
 different Message arenas may execute concurrently. Therefore allocation,
 ShortNameId registration and merge within one Message have one semantic writer
 and need no source-visible synchronization.
+
+Suspending with `yield` does not admit an overlapping turn over the same
+Message arena and does not replace ordinary stack/continuation state with graph
+history. Its continuation preserves C working locals and dirty flags. `retry`
+is not a call and creates neither a call frame nor a pre-call checkpoint merely
+by itself.
 
 Open implementation details are atomic linearization of concurrent admissions,
 worker scheduling/fairness between Messages, queue capacity/backpressure,
@@ -2659,7 +3657,44 @@ missing ShortNameId mappings.
 Caching constant path components, specializing range checks or sharing
 immutable substrate may be considered after the generic implementation is
 correct. Any optimization must remain observably equivalent after arbitrary
-runtime merge and must not make static C layout part of language semantics.
+runtime merge and must not make static C layout part of language semantics. It
+must also preserve dynamic caller value semantics, used-only entry loads,
+runtime actual-write dirty marking, dirty-only publication at section 6.5
+semantic boundaries and activation exits,
+the absence of automatic through-value write-back and post-call reload, and the
+observable distinction between an activation snapshot and an explicit path to
+current graph state.
+
+14.21. Explicit navigation above the immediate method parent
+
+Reserved `node` and immediate `node\field` are fixed: `node` already equals
+`callable->node`, and the field operation makes no second parent hop. The exact
+source spelling/receiver for intentionally obtaining a still higher containment
+ancestor is not yet fixed. It must be explicit and cannot restore automatic
+lexical-parent search. Repeating ordinary field segments must not acquire an
+implicit ancestor meaning merely as an implementation shortcut.
+
+14.22. Structural mutation of an active own-field backing occurrence
+
+Ordinary payload updates preserve the selected own occurrence and are already
+covered by dirty publication. What a suspended activation must do if nested code
+explicitly removes, moves or replaces that exact occurrence is not yet fixed.
+The profile must choose rejection/locking, update of the still-live detached
+identity, re-resolution with an explicit conflict check, or another stated
+policy. It may not silently choose a different `[0]` child or reinsert data while
+claiming that this follows from no-reload. Until this policy is selected, the
+bootstrap may reject structural mutation of an active backing occurrence.
+
+14.23. Checkpoint-store failure
+
+The success rule is fixed: every dirty own value required by the boundary is
+published before the outbound call/normal exit, and each successfully published
+value becomes clean. The failure behavior remains open: the implementation may
+make those stores infallible, prevalidate and commit atomically, or define a
+deterministic prefix-commit diagnostic. The chosen result/throw ABI must state
+visible stores and dirty flags, prevent the intended transfer on incomplete
+publication, and avoid recursive re-entry into the same failing epilogue. No
+transaction log or rollback is implied unless explicitly selected.
 
 RU
 
@@ -2729,6 +3764,11 @@ Interned immutable листья естественно совместно исп
 обычная mutable ячейка примитива, созданная для Message, выделяется в arena
 этого Message; открыты только её точная физическая категория и copy policy.
 
+Этот открытый вопрос относится к копированию payloads графа и operands merge.
+Он не открывает заново семантику сквозных значений: скрытый сквозной примитив
+при вызове всегда копируется по семантическому значению, а скрытый operand
+Structure/Array копирует значение ссылки как есть.
+
 14.8. Массивы
 
 Нужно определить диапазон адресов и соглашение data/len для ArrayReference,
@@ -2754,16 +3794,26 @@ failed turn закреплена. Identity живого адреса обяза�
 
 14.10. Точный ABI результата метода
 
-Один явный параметр Lmx pointer закреплён. Нужно решить C return type и место
-success, failure и source return values в runtime-графе.
+Модель входов метода закреплена: первым не заменяемым входом является
+зарезервированный `node = callable->node`, после него идут объявленные operands
+метода и точные скрытые сквозные значения; всё это описывает неизменяемый
+`sig`. Открыты точный C return type/convention и место success, failure и source
+return values в runtime-графе. Выбранное соглашение становится частью `sig` и
+обязано точно совпадать в call site.
 
-14.11. Поддерево контекста вызова
+14.11. Физическое представление опубликованного состояния метода
 
-Передаваемый указатель закреплён: это Structure, содержащая выбранный
-callable-occurrence (`callable->node`). Открытым остаётся точное размещение
-аргументов исходника, locals и результата под этой содержащей Structure либо
-через её ссылки. Все эти значения обязаны быть узлами Structure; нельзя
-добавлять параметры сгенерированного метода или runtime namespace.
+Structure, содержащая выбранный occurrence callable, закреплена как
+опубликованное рабочее состояние метода. Нативные frames стека C закреплены как
+единственная неявная история активаций; используемые собственные поля являются
+рабочими C locals, скрытые сквозные значения — параметрами C, а dirty-only
+checkpoints и отсутствие reload закреплены.
+
+Открыты точное физическое представление и helper ABI каждого опубликованного
+собственного поля, объявленного graph operand и результата внутри обычных
+классов payload Lmx. Этот выбор не может вводить per-call поддерево активации,
+descriptor конкретной Structure или runtime-объект Name-to-Binding и не может
+изменять закреплённую сигнатуру метода либо семантику публикации.
 
 14.12. Callable-формы без тела
 
@@ -2774,8 +3824,10 @@ callable-occurrence (`callable->node`). Открытым остаётся точ
 14.13. Переносимость секции методов
 
 Открыта точная реализация для PE/COFF, ELF, Mach-O и других поддерживаемых
-профилей, включая представление function-pointer относительно void-pointer,
-границы секций и удержание символов при dead-code elimination.
+профилей, включая физическое представление `all_methods_array {addr, sig}`,
+хранение typed function pointer, границы секций, кодирование ID сигнатуры и
+удержание символов при dead-code elimination. Глобальная достижимость,
+неизменяемые точные сигнатуры и точный typed-вызов закреплены.
 
 14.14. Кодирование path mangling
 
@@ -2795,9 +3847,10 @@ Timing runtime merge закреплён: он происходит при дос
 14.16. Linkage и загрузка модулей
 
 Нужно определить, как модуль гарантирует, что referenced method entries и
-providers/ссылки Structure слинкованы или загружены. Этот механизм не должен
-быть скрытым runtime namespace Name-to-value. Runtime merge не компилирует
-отсутствующий код.
+providers/ссылки Structure слинкованы или загружены, а также как модули
+согласуют точное кодирование `sig`. Этот механизм не должен быть скрытым
+runtime namespace Name-to-value. Runtime merge не компилирует отсутствующий
+код и не адаптирует несовместимые сигнатуры.
 
 14.17. Несколько корней и cross-root ссылки
 
@@ -2820,6 +3873,11 @@ inbox/outbox является FIFO; разные arena Messages могут ис�
 Message имеют одного семантического писателя и не требуют видимой исходнику
 синхронизации.
 
+Приостановка через `yield` не допускает пересекающийся turn над той же arena
+Message и не заменяет обычное состояние stack/continuation историей графа. Его
+continuation сохраняет рабочие C locals и dirty flags. `retry` не является
+вызовом и само по себе не создаёт ни call frame, ни pre-call checkpoint.
+
 Открыты реализация атомарной линеаризации одновременных admissions,
 scheduling/fairness между Messages, capacity/backpressure очереди,
 инициализация глобальных immutable реестров методов/диапазонов и координация
@@ -2841,7 +3899,43 @@ node или отсутствующие отображения ShortNameId.
 совместное использование immutable substrate можно рассматривать после
 корректной общей реализации. Любая оптимизация обязана оставаться наблюдаемо
 эквивалентной после произвольного runtime merge и не должна делать
-статический C layout частью семантики языка.
+статический C layout частью семантики языка. Она также обязана сохранять
+семантику сквозных значений вызывающего, used-only загрузки при входе,
+runtime-marking dirty по фактической записи, dirty-only публикацию на semantic
+boundaries раздела 6.5 и выходах activation, отсутствие автоматических write-back сквозных значений и post-call
+reload, а также наблюдаемое различие между snapshot активации и явным путём к
+текущему состоянию графа.
+
+14.21. Явная навигация выше непосредственного родителя метода
+
+Reserved `node` и непосредственное `node\field` закреплены: `node` уже равен
+`callable->node`, и field-operation не делает второго parent-hop. Точное source
+spelling/receiver для намеренного получения ещё более высокого containment
+ancestor пока не закреплено. Оно обязано быть явным и не может возвращать
+автоматический поиск по lexical parents. Повторение обычных field segments не
+получает неявное ancestor-значение как shortcut реализации.
+
+14.22. Structural mutation активного backing occurrence собственного поля
+
+Обычные payload updates сохраняют выбранный own occurrence и уже покрываются
+dirty publication. Поведение suspended activation, когда nested code явно
+удалил, переместил или заменил именно этот occurrence, пока не закреплено.
+Профиль обязан выбрать rejection/locking, update всё ещё живой detached identity,
+повторный lookup с явной conflict-check либо другую описанную policy. Он не может
+молча выбрать другой `[0]` child или вставить данные назад, утверждая, что это
+следует из no-reload. До выбора policy bootstrap может отклонять structural
+mutation активного backing occurrence.
+
+14.23. Failure checkpoint-store
+
+Success-rule закреплено: каждое dirty own-value, требуемое границей, публикуется
+до outbound call/normal exit, и каждое успешно опубликованное значение становится
+clean. Failure-поведение открыто: реализация может гарантировать infallible
+stores, prevalidate и commit-ить атомарно либо определить детерминированный
+prefix-commit diagnostic. Выбранный result/throw ABI обязан задать видимые
+stores и dirty flags, не допустить предполагаемый transfer при неполной
+публикации и избежать рекурсивного входа в тот же failing epilogue. Transaction
+log/rollback не подразумевается без явного выбора.
 
 
 15. Initial rewrite sequence
@@ -2855,34 +3949,48 @@ needed by the next:
 
 1. Freeze parser regression tests and define the parser-tree adapter boundary.
 2. Introduce the exact Lmx header without per-Structure extensions.
-3. Preserve/implement exactly one logical arena per Message and derive that
-   arena from a supplied Lmx node without a generated-method parameter.
-4. Implement stable node allocation inside that arena and the sole ShortNameId
-   side table.
-5. Implement address-range classification for structural data, all_chars and
+3. Preserve/implement exactly one logical arena per Message and derive it from
+   reserved method `node`, without ambient MessageThread/arena/context method
+   parameters.
+4. Implement stable node allocation in that arena and the sole reverse
+   `Lmx * -> ShortNameId` side table.
+5. Implement address-range classification for structural data, `all_chars` and
    the common callable physical class.
-6. Implement direct/relative traversal and explicit-root absolute path lookup.
+6. Implement direct/relative traversal, reserved immediate-parent
+   `node\field`, and explicit-root arbitrary textual path lookup.
 7. Implement deterministic collision-free method identities, preferably with
-   full-source-path C mangling.
-8. Recursively emit every method with the one-containing-Structure-pointer ABI
-   and make it available through the common callable physical class.
-9. Materialize source locals as Lmx nodes in the current Message arena.
-10. Implement generic containment-tree copy with node rebasing and name-table
-   registration.
-11. Implement ordered runtime merge at execution sites, allocating the result
+   full-source-path C mangling, plus one canonical exact-signature encoding.
+8. Recursively discover every method and analyze used own fields, actual write
+   sites, declared operands, hidden through-name dependencies and call-site
+   expected signatures.
+9. Emit every live body with its exact C prototype and register immutable
+   `all_methods_array {addr,sig}` records in the common callable class.
+10. Emit used-only entry loads, C working locals, runtime dirty flags,
+    actual-write marking, dirty-only checkpoints at every semantic boundary
+    defined by 6.5 and every
+    `return`/`throw`, and no automatic post-call reload/write-back.
+11. Emit exact call sites which validate `sig`, pass `callable->node`, declared
+    operands and hidden through values, using immediate `node\name` only as the
+    specified absent-caller fallback.
+12. Implement generic containment-tree copy with `node` rebasing and name-table
+    registration.
+13. Implement ordered runtime merge at execution sites, allocating the result
     in the current Message arena.
-12. Preserve/implement the per-L3-Thread FIFO inbox/outbox and the invariant
-    that turns of one L3 Thread never overlap while different Messages can run
-    concurrently.
-13. Preserve/implement publish-or-rollback followed by local Message-arena
+14. Preserve/implement the per-L3-Thread FIFO inbox/outbox and the invariant
+    that turns of one Message never overlap while distinct Messages can run
+    concurrently without shared mutable trees.
+15. Preserve/implement publish-or-rollback followed by local Message-arena
     collection at every common end-turn boundary.
-14. Add tests for runtime-produced merge inputs, nested methods, recursion and
-    repeated names.
-15. Add concurrency tests proving arena isolation, FIFO admission/publication,
+16. Add tests for runtime-produced merge inputs, nested methods, repeated names,
+    exact callable signatures and `implements` compatibility.
+17. Add tests for dynamic caller propagation, value/reference copy semantics,
+    fallback, dirty-only publication, no reload, recursion/callback overwrite,
+    explicit history, `yield` and `retry`.
+18. Add concurrency tests proving arena isolation, FIFO admission/publication,
     non-overlapping same-Message turns, end-turn collection ordering and
     parallel distinct Messages.
-16. Rebuild the translator with the new core only after these runtime
-    invariants pass independently.
+19. Rebuild the translator with the new core only after these runtime invariants
+    pass independently.
 
 This sequence is guidance, not permission to retain an incompatible old core
 behind adapters.
@@ -2895,33 +4003,49 @@ RU
 1. Зафиксировать regression tests parser-а и границу adapter-а его дерева.
 2. Ввести точный заголовок Lmx без расширений конкретной Structure.
 3. Сохранить/реализовать ровно одну логическую arena каждого Message и
-   определение этой arena по переданному Lmx-узлу без аргумента метода.
-4. Реализовать stable allocation узлов внутри этой arena и единственную side
-   table ShortNameId.
-5. Реализовать классификацию диапазонов для структурных data, all_chars и
+   определять её по зарезервированному `node` метода без ambient-параметров
+   MessageThread/arena/context.
+4. Реализовать stable allocation узлов внутри этой arena и единственную
+   обратную side table `Lmx * -> ShortNameId`.
+5. Реализовать классификацию диапазонов для структурных data, `all_chars` и
    общей физической категории callable.
-6. Реализовать direct/relative traversal и lookup абсолютного пути от явно
-   переданного root.
+6. Реализовать direct/relative traversal, зарезервированный непосредственный
+   `node\field` и lookup произвольного текстового пути от явно переданного root.
 7. Реализовать детерминированные collision-free identity методов,
-   предпочтительно с C-mangling полного пути исходника.
-8. Рекурсивно эмитить каждый метод по ABI с одним указателем на содержащую
-   Structure и делать его доступным через общую физическую категорию callable.
-9. Материализовать locals исходника как Lmx-узлы в текущей arena Message.
-10. Реализовать общее копирование дерева вложенности с rebasing node и
-   регистрацией name table.
-11. Реализовать упорядоченный runtime merge в местах исполнения с allocation
+   предпочтительно с C-mangling полного пути исходника, и одно каноническое
+   кодирование точных сигнатур.
+8. Рекурсивно обнаружить каждый метод и проанализировать используемые
+   собственные поля, места фактических записей, объявленные operands, скрытые
+   зависимости сквозных имён и ожидаемые сигнатуры call sites.
+9. Эмитить каждое живое тело с точным C-прототипом и регистрировать неизменяемые
+   записи `all_methods_array {addr,sig}` в общей категории callable.
+10. Эмитить used-only загрузки при входе, рабочие C locals, runtime dirty flags,
+    marking по фактическим записям, dirty-only checkpoints на каждой semantic
+    boundary из 6.5
+    и каждым `return`/`throw`, без автоматических post-call reload/write-back.
+11. Эмитить точные call sites, проверяющие `sig` и передающие
+    `callable->node`, объявленные operands и скрытые сквозные значения;
+    непосредственный `node\name` использовать только как заданный fallback
+    отсутствующего binding вызывающего.
+12. Реализовать общее копирование дерева вложенности с rebasing `node` и
+    регистрацией name table.
+13. Реализовать упорядоченный runtime merge в местах исполнения с allocation
     результата в текущей arena Message.
-12. Сохранить/реализовать FIFO inbox/outbox каждого L3 Thread и инвариант, по
-    которому turns одного L3 Thread не пересекаются, а разные Messages могут
-    исполняться параллельно.
-13. Сохранить/реализовать publish-or-rollback с последующей локальной
+14. Сохранить/реализовать FIFO inbox/outbox каждого L3 Thread и инвариант, по
+    которому turns одного Message не пересекаются, а разные Messages могут
+    исполняться параллельно без общих mutable-деревьев.
+15. Сохранить/реализовать publish-or-rollback с последующей локальной
     collection arena Message на каждой общей границе end-turn.
-14. Добавить тесты результатов runtime merge как входов merge, вложенных
-    методов, рекурсии и повторных имён.
-15. Добавить concurrency tests, доказывающие isolation arena, FIFO
+16. Добавить тесты результатов runtime merge как входов merge, вложенных
+    методов, повторных имён, точных сигнатур callable и совместимости
+    `implements`.
+17. Добавить тесты динамической передачи вызывающего, семантики копирования
+    value/reference, fallback, dirty-only публикации, отсутствия reload,
+    overwrite recursion/callback, явной истории, `yield` и `retry`.
+18. Добавить concurrency tests, доказывающие isolation arena, FIFO
     admission/publication, отсутствие пересекающихся turns одного Message,
     порядок end-turn collection и параллельность разных Messages.
-16. Самособирать транслятор новым ядром только после независимого прохождения
+19. Самособирать транслятор новым ядром только после независимого прохождения
     этих runtime-инвариантов.
 
 Эта последовательность является руководством, а не разрешением сохранить
@@ -2938,47 +4062,76 @@ The architecture rewrite is complete only when all of the following are true:
 
 1. Existing parser behavior required by the language remains intact.
 2. No generated named Structure requires a dedicated C struct or typedef.
-3. The only common node header is node, len, data in that order.
-4. A runtime node contains no name or descriptor.
-5. The only auxiliary per-node mapping is Lmx pointer to ShortNameId.
-6. Arbitrary textual absolute runtime paths resolve from an explicit root;
-   direct pointers and relative paths retain their supplied start node; both
-   remain correct after merge.
-7. Runtime contains no namespace overlay machinery.
-8. Every nested executable method has a real program-wide reachable
-   implementation entry.
-9. Every implementation identity is deterministic and program-wide unique;
-   path-derived C names are preferred and collision-free.
-10. Every source method accepts exactly one explicit Lmx pointer, and invocation
-    passes exactly `callable->node`, the containing Structure.
-11. Every callable payload is recognizable through the common callable
-    physical class and resolves to the correctly typed entry.
-12. Source locals have Lmx identity and correct node parents.
-13. merge allocates a new containment tree only when execution reaches it.
-14. merge copies nodes and rebases node rather than connecting containment by
-    links.
-15. merge accepts results that were themselves produced at runtime.
-16. A copied method invokes its original C body with the copied callable's
-    containing Structure, not the source owner or root.
-17. HashArray translation does not require static analysis of Array's C
-    layout or a whole-directory scan.
-18. Self-hosting and regression tests validate semantic behavior rather than
+3. The only common node header is `node`, `len`, `data` in that order.
+4. An ordinary runtime node contains no name, signature or descriptor.
+5. The only auxiliary persistent per-node name mapping is
+   `Lmx * -> ShortNameId`.
+6. Arbitrary textual absolute paths resolve from an explicit root; explicit
+   direct/relative paths retain their supplied start and remain correct after
+   merge.
+7. Dynamic caller visibility is lowered to exact hidden C value parameters and
+   native C stack slots; runtime contains no separately allocated mutable
+   Name-to-Binding namespace/overlay object.
+8. Every nested executable method has a real program-wide reachable body with
+   a deterministic unique, preferably full-source-path-mangled C identity.
+9. Reserved `node` is non-shadowable and non-rebindable, always equals the
+   selected `callable->node`, and makes `node\field` immediate-parent access
+   without a second parent hop.
+10. Every source method and call site has one exact canonical C signature:
+    reserved `node`, declared operands, exact hidden through values and the
+    selected result convention; the selected callable `sig` equals it.
+11. Every callable payload resolves through the common physical class to an
+    immutable `all_methods_array {addr,sig}` record; calls reject mismatched
+    `sig` and use the exact typed function-pointer invocation.
+12. `implements(A, B, Consumer)` validates the exact signature of every
+    callable leaf actually used by Consumer; distinct addresses with equal
+    canonical `sig` are allowed and unused callable leaves add no requirement.
+13. Method entry loads only actually used unqualified own fields into C working locals and
+    initializes their runtime dirty flags clear; implicit activations do not
+    create fresh local Lmx subtrees.
+14. Only an actually executed local write/rebind marks its own field dirty. At
+    every 6.5 LMX/observable-call, yield and activation-exit boundary, only dirty
+    own fields are stored, and each flag clears only after its store succeeds.
+15. Clean cached fields never flush, and working locals never automatically
+    reload or reconcile after a call.
+16. Primitive through values copy by semantic value; Structure/Array through
+    values copy the reference value as-is. Rebinding is activation-local, there
+    is no automatic write-back, and mutation requires an explicit reference
+    path.
+17. A required unqualified binding absent from the caller falls back only to
+    the callee's immediate reserved `node\name`, never a transitive lexical
+    parent chain.
+18. The native C stack is the sole implicit activation history. The selected
+    callable occurrence's containing Structure is published working state, not
+    a call log; recursive/callback overwrite is intentional and durable history
+    is an explicit Structure, Array or Message.
+19. `yield` preserves ordinary continuation, working locals and dirty flags;
+    `retry` alone is not a call and creates no frame or pre-call checkpoint.
+20. merge allocates a new containment tree only when execution reaches it.
+21. merge copies nodes and rebases `node` rather than connecting containment by
+    links, while preserving order and repeated occurrences.
+22. merge accepts results that were themselves produced at runtime.
+23. A copied method retains its immutable `{addr,sig}` record and invokes the
+    original body with copied `callable->node` plus exact declared/hidden
+    operands, not with the source owner or root.
+24. HashArray translation does not require static analysis of Array's C layout
+    or a whole-directory scan.
+25. Self-hosting and regression tests validate semantic behavior rather than
     only the visual shape of generated C.
-19. Mix is represented within the common Message/Lmx graph ontology; the
+26. Mix is represented within the common Message/Lmx graph ontology; the
     current Java procedural/multithreaded implementation is not treated as the
     target architecture.
-20. Every Message owns exactly one logical arena, and every dynamic mutable
-    ordinary Lmx node/payload of that Message is allocated in it.
-21. A generated source method derives its arena from its sole Lmx argument; it
-    receives no hidden MessageThread, arena, allocator or ExecutionContext
-    parameter.
-22. One L3 Thread never executes two of its turns concurrently; admitted input
-    and staged output preserve FIFO order, while distinct Messages can execute
-    concurrently without sharing mutable arena storage.
-23. Common Mix contains no transplanted Java/OS shared-memory synchronization
-    algorithm; its concurrent behavior is expressed through Message ownership
-    and Message delivery, independently of HTTP or any other transport.
-24. Every turn publishes its successful FIFO outbox or rolls it back on failure
+27. Every Message owns exactly one logical arena, every dynamic mutable ordinary
+    Lmx node/payload of that Message is allocated in it, and methods derive it
+    from reserved `node` without hidden MessageThread/arena/allocator/context.
+28. One L3 Thread never executes two turns of one Message concurrently; admitted
+    input and staged output preserve FIFO order, while distinct Messages can
+    execute concurrently without sharing mutable arena trees absent an explicit
+    full clone/transfer.
+29. Common Mix contains no transplanted Java/OS shared-memory synchronization
+    algorithm; concurrency is expressed through Message ownership and delivery,
+    independently of HTTP or any other transport.
+30. Every turn publishes its successful FIFO outbox or rolls it back on failure
     before local collection of the Message arena; Message termination releases
     that arena only after required transfer and cleanup.
 
@@ -2991,51 +4144,84 @@ RU
 следующее:
 
 1. Требуемое языком поведение существующего parser-а сохранено.
-2. Ни одна generated именованная Structure не требует отдельного C struct
-   или typedef.
-3. Единственный общий заголовок узла содержит node, len, data именно в этом
-   порядке.
-4. Runtime-узел не содержит имени или descriptor.
-5. Единственное вспомогательное per-node отображение — Lmx pointer в
-   ShortNameId.
-6. Произвольные текстовые абсолютные runtime-пути разрешаются от явно
-   переданного root; direct pointers и относительные пути сохраняют переданный
-   начальный узел; оба варианта остаются правильными после merge.
-7. В runtime нет механизма overlay namespace.
-8. Каждый вложенный исполняемый метод имеет настоящий достижимый во всей
-   программе implementation entry.
-9. Каждая implementation identity детерминирована и уникальна во всей
-   программе; path-derived C-имена предпочтительны и не имеют коллизий.
-10. Каждый метод исходника принимает ровно один явный Lmx pointer, и вызов
-    передаёт ровно `callable->node`, содержащую Structure.
-11. Каждый callable payload распознаётся через общую физическую категорию
-    callable и разрешается в корректно типизированный entry.
-12. Locals исходника имеют identity Lmx и правильных родителей node.
-13. merge выделяет новое дерево вложенности только при достижении его
+2. Ни одна generated именованная Structure не требует отдельного C struct или
+   typedef.
+3. Единственный общий заголовок узла содержит `node`, `len`, `data` именно в
+   этом порядке.
+4. Обычный runtime-узел не содержит имени, сигнатуры или descriptor.
+5. Единственное вспомогательное постоянное per-node отображение имени —
+   `Lmx * -> ShortNameId`.
+6. Произвольные текстовые абсолютные пути разрешаются от явно переданного root;
+   явные direct/relative пути сохраняют переданный start и остаются правильными
+   после merge.
+7. Динамическая видимость вызывающего понижается в точные скрытые C-параметры
+   значений и нативные слоты стека C; в runtime нет отдельно выделенного
+   mutable-объекта namespace/overlay Name-to-Binding.
+8. Каждый вложенный исполняемый метод имеет настоящее глобально достижимое тело
+   с детерминированной уникальной, предпочтительно mangled из полного пути
+   исходника, identity C.
+9. Зарезервированный `node` нельзя shadow или rebind; он всегда равен
+   выбранному `callable->node`, а `node\field` даёт непосредственный доступ
+   родителя без второго подъёма.
+10. Каждый метод исходника и call site имеет одну точную каноническую сигнатуру
+    C: зарезервированный `node`, объявленные operands, точные скрытые сквозные
+    значения и выбранное соглашение результата; `sig` выбранного callable равен
+    ей.
+11. Каждый callable payload разрешается через общую физическую категорию в
+    неизменяемую запись `all_methods_array {addr,sig}`; вызов отвергает
+    несовпадающий `sig` и использует точный typed function pointer.
+12. `implements(A, B, Consumer)` проверяет точную сигнатуру каждого фактически
+    используемого Consumer callable leaf; разные адреса с равным canonical `sig`
+    разрешены, а неиспользуемые callable leaves не добавляют требования.
+13. При входе метод загружает только фактически используемые
+    неквалифицированные собственные поля в
+    рабочие C locals и очищает их runtime dirty flags; неявные активации не
+    создают свежих локальных Lmx-поддеревьев.
+14. Только фактически исполненная запись/rebind local помечает собственное поле
+    dirty. На каждой boundary LMX/observable-call, yield и выхода activation из
+    6.5 записываются только dirty собственные поля, а каждый flag очищается лишь
+    после успешной записи.
+15. Clean кэшированные поля никогда не flush-ятся, а рабочие locals никогда
+    автоматически не reload-ятся и не согласуются после вызова.
+16. Сквозные примитивы копируются по семантическому значению, Structure/Array —
+    по значению ссылки как есть. Rebind локален для activation, автоматического
+    write-back нет, а mutation требует явного пути через ссылку.
+17. Требуемый неквалифицированный binding, отсутствующий у вызывающего,
+    откатывается только к непосредственному зарезервированному `node\name`
+    вызываемого, но не к сквозной цепочке лексических родителей.
+18. Нативный стек C — единственная неявная история активаций. Containing
+    Structure выбранного callable-occurrence является опубликованным рабочим
+    состоянием, а не call log; overwrite при recursion/callback намеренен, а
+    долговечная история является явной Structure, Array или Message.
+19. `yield` сохраняет обычную continuation, рабочие locals и dirty flags;
+    `retry` сам по себе не является вызовом и не создаёт frame либо pre-call
+    checkpoint.
+20. merge выделяет новое дерево вложенности только при достижении его
     исполнением.
-14. merge копирует узлы и rebases node, а не соединяет вложенность ссылками.
-15. merge принимает результаты, которые сами были произведены в runtime.
-16. Скопированный метод вызывает своё исходное C-тело с содержащей Structure
-    скопированного callable, а не с исходным owner или root.
-17. Трансляция HashArray не требует статического анализа C-layout Array или
+21. merge копирует узлы и rebases `node`, а не соединяет вложенность ссылками,
+    сохраняя порядок и повторные occurrences.
+22. merge принимает результаты, которые сами были произведены в runtime.
+23. Скопированный метод сохраняет неизменяемую запись `{addr,sig}` и вызывает
+    исходное тело с `callable->node` копии плюс точными объявленными/скрытыми
+    operands, а не с исходным owner или root.
+24. Трансляция HashArray не требует статического анализа C-layout Array или
     сканирования всей директории.
-18. Самосборка и regression tests проверяют семантическое поведение, а не
-    только внешний вид сгенерированного C.
-19. Mix представлен внутри общей Message/Lmx-онтологии графа; текущая
-    процедурная многопоточная Java-реализация не считается целевой
-    архитектурой.
-20. Каждый Message владеет ровно одной логической arena, и каждый dynamic
-    mutable обычный Lmx-узел/payload этого Message выделяется в ней.
-21. Сгенерированный метод исходника определяет свою arena по единственному
-    Lmx-аргументу; он не получает скрытый параметр MessageThread, arena,
-    allocator или ExecutionContext.
-22. Один L3 Thread никогда не исполняет два своих turn одновременно; принятый
-    вход и подготовленный выход сохраняют FIFO-порядок, а разные Messages могут
-    исполняться параллельно без общего mutable arena storage.
-23. Общий Mix не содержит перенесённого Java/OS алгоритма shared-memory
-    синхронизации; его конкурентность выражается через ownership Messages и
-    доставку Messages независимо от HTTP или любого другого транспорта.
-24. Каждый turn публикует успешный FIFO outbox либо откатывает его при failure
+25. Самосборка и regression tests проверяют семантическое поведение, а не только
+    внешний вид сгенерированного C.
+26. Mix представлен внутри общей Message/Lmx-онтологии графа; текущая
+    процедурная многопоточная Java-реализация не считается целевой архитектурой.
+27. Каждый Message владеет ровно одной логической arena, каждый dynamic mutable
+    обычный Lmx-узел/payload этого Message выделяется в ней, а методы определяют
+    её по зарезервированному `node` без скрытого
+    MessageThread/arena/allocator/context.
+28. Один L3 Thread никогда не исполняет два turns одного Message одновременно;
+    принятый вход и подготовленный выход сохраняют FIFO-порядок, а разные
+    Messages могут исполняться параллельно без общих mutable arena-деревьев при
+    отсутствии явного полного clone/transfer.
+29. Общий Mix не содержит перенесённого Java/OS алгоритма shared-memory
+    синхронизации; конкурентность выражается через ownership и доставку
+    Messages независимо от HTTP или любого другого транспорта.
+30. Каждый turn публикует успешный FIFO outbox либо откатывает его при failure
     до локальной collection arena Message; termination освобождает arena только
     после обязательного transfer и cleanup.
 
@@ -3047,39 +4233,56 @@ RU
 Краткий список инвариантов
 ==============================
 
-    Parser stays.                           / Parser сохраняется.
-    Translator core is replaced.            / Ядро транслятора заменяется.
-    One node shape: node, len, data.         / Одна форма узла.
-    node is the source-tree parent.          / node — родитель дерева исходника.
-    data is always a pointer.                / data всегда указатель.
-    Payload class comes from address range.  / Класс payload задаёт диапазон.
-    No node name or descriptor.              / В узле нет имени/desсriptor.
-    One Lmx* -> ShortNameId side table.       / Одна side table имён.
-    Arbitrary textual absolute paths start   / Произвольный текстовый абсолютный
-    at an explicit root.                     / путь идёт от явно переданного root.
-    No runtime namespace.                    / Runtime namespace отсутствует.
-    No per-Structure C typedef.               / Нет C typedef на Structure.
-    Source locals are Lmx nodes.              / Locals исходника — Lmx-узлы.
-    One Lmx* argument per C method.           / Один Lmx* аргумент метода.
-    Program-wide reachable unique methods.   / Методы достижимы во всей программе.
-    Path-mangled names are preferred.         / Path-mangled имена предпочтительны.
-    One callable physical class.              / Одна физическая категория callable.
-    Nested bodies are emitted and live.       / Вложенные тела эмитятся.
+    Parser stays.                              / Parser сохраняется.
+    Translator core is replaced.              / Ядро транслятора заменяется.
+    One node shape: node, len, data.           / Одна форма узла.
+    node is the source-tree parent.            / node — родитель дерева исходника.
+    Reserved node = callable->node.            / node задаёт occurrence callable.
+    node\field is immediate-parent access.     / Нет второго подъёма к родителю.
+    data is always a pointer.                  / data всегда указатель.
+    Payload class comes from address range.    / Класс payload задаёт диапазон.
+    No node name, signature or descriptor.     / В узле нет имени/sig/descriptor.
+    One Lmx* -> ShortNameId side table.         / Одна обратная side table имён.
+    Absolute text paths use explicit root.     / Текстовый путь идёт от root.
+    No runtime Name-to-Binding object.         / Нет runtime-объекта namespace.
+    Dynamic visibility uses exact C values.    / Сквозная видимость через C ABI.
+    Primitive through values copy by value.    / Примитив копируется по значению.
+    Structure/Array refs copy as-is.           / Ссылка копируется как есть.
+    Through values never auto-write back.      / Нет автоматического write-back.
+    Missing caller name falls to node\name.    / Fallback только к node\name.
+    No per-Structure C typedef.                / Нет C typedef на Structure.
+    Used own fields become C working locals.   / Поля работают через C locals.
+    Dirty means an actual runtime write.       / Dirty — фактическая запись.
+    Dirty-only flush at semantic boundaries.   / Flush на call/exit/yield boundary.
+    Clean fields do not flush.                 / Clean-поля не записываются.
+    No automatic post-call reload.             / Нет post-call reload.
+    C stack is the sole activation history.    / История активаций — стек C.
+    callable->node is published state.         / containing Structure — состояние.
+    Durable history is explicit graph data.    / История — Structure/Array/Message.
+    yield preserves continuation and dirty.    / yield сохраняет locals/dirty.
+    retry alone is not a call checkpoint.      / retry не является call.
+    Program-wide reachable unique methods.     / Методы достижимы во всей программе.
+    Path-mangled names are preferred.          / Path-mangled имена предпочтительны.
+    Callable record is {addr,sig}.             / Callable хранит addr и sig.
+    Every call requires exact canonical sig.   / Каждый вызов точно типизирован.
+    implements checks each used callable.      / Проверяется используемый leaf.
+    Nested bodies are emitted and live.        / Вложенные тела эмитятся.
     Mix is a Message/Lmx graph.                / Mix — Message/Lmx-граф.
     One arena belongs to each Message.         / У каждого Message одна arena.
     Dynamic mutable values use that arena.     / Mutable значения лежат в ней.
-    One L3 Thread turn runs at a time.          / Один turn L3 Thread за раз.
-    Inbox/outbox ordering is FIFO.              / Порядок inbox/outbox — FIFO.
-    Distinct Messages may run in parallel.      / Разные Messages параллельны.
-    Outbox precedes end-turn collection.        / Outbox раньше collection.
-    Termination releases the Message arena.     / Termination освобождает arena.
-    Common Mix uses Message coordination.       / Mix координируется Messages.
-    Raw synchronization is explicit L2 only.   / Raw-синхронизация только в L2.
-    merge runs at execution time.             / merge работает в runtime.
-    merge creates a copied tree.              / merge создаёт копию дерева.
+    One Message turn runs at a time.            / Один turn Message за раз.
+    Inbox/outbox ordering is FIFO.             / Порядок inbox/outbox — FIFO.
+    Distinct Messages may run in parallel.     / Разные Messages параллельны.
+    No mutable cross-Message sharing.          / Sharing только clone/transfer.
+    Outbox precedes end-turn collection.       / Outbox раньше collection.
+    Termination releases the Message arena.    / Termination освобождает arena.
+    Common Mix uses Message coordination.      / Mix координируется Messages.
+    Raw synchronization is explicit L2 only.  / Raw-синхронизация только в L2.
+    merge runs at execution time.              / merge работает в runtime.
+    merge creates a copied tree.               / merge создаёт копию дерева.
     Copied node links point into the copy.     / node копии указывает в копию.
-    Runtime merge results are mergeable.      / Результаты merge снова mergeable.
-    C is a secondary projection.              / C — вторичная проекция.
+    Runtime merge results are mergeable.       / Результаты merge снова mergeable.
+    C is a secondary projection.               / C — вторичная проекция.
 
 
 End of normative architecture agreement.
