@@ -20,6 +20,24 @@ function Write-I([string]$m) { Add-Content -LiteralPath $script:impLog -Value "$
 
 if (-not (Test-Path $l1trans)) { throw "missing $l1trans" }
 
+$drvC = Join-Path $root "tests\l1\bare_drive_resolve.c"
+$drvExe = Join-Path $bin "bare_drive_resolve.exe"
+$drvGcc = Join-Path $log "gcc_bare_drive_resolve.log"
+Write-I "CMD gcc $cflagsStr -o $drvExe $drvC"
+cmd /c "gcc $cflagsStr -o `"$drvExe`" `"$drvC`" > `"$drvGcc`" 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    Get-Content -LiteralPath $drvGcc | Select-Object -Last 30
+    throw "gcc failed bare_drive_resolve"
+}
+cmd /c "`"$drvExe`""
+if ($LASTEXITCODE -ne 0) { throw "bare_drive_resolve exit $LASTEXITCODE" }
+Write-I "EXIT run bare_drive_resolve 0"
+
+$genC = Join-Path $obj "l1trans.c"
+$genText = [System.IO.File]::ReadAllText($genC)
+if ($genText.IndexOf("source_path[1] == 58") -lt 0) { throw "generated l1trans.c missing drive-prefix test" }
+if ($genText.IndexOf("memcpy(buf, source_path, 2U)") -lt 0) { throw "generated l1trans.c missing drive-prefix memcpy 2U" }
+
 function Translate-Src([string]$src, [string]$name) {
     $cpath = Join-Path $obj ($name + ".c")
     $cpathB = Join-Path $obj ($name + "_b.c")
@@ -113,7 +131,7 @@ function Negative-Preserve([string]$src, [string]$name, [string]$diag) {
     $errText = [System.IO.File]::ReadAllText($err)
     if ($errText.IndexOf($diag) -lt 0) { throw "missing diagnostic '$diag': $errText" }
     if (Test-Path -LiteralPath $cpath) { throw "failed translate created $cpath" }
-    Write-I "EXIT negative $src $LASTEXITCODE diagnostic ok"
+    Write-I "EXIT negative $src $($p2.ExitCode) diagnostic ok"
 }
 
 Negative-Preserve "tests\l1\bare space\invalid_import_bare_missing.lm2" "invalid_import_bare_missing" "cannot read import"

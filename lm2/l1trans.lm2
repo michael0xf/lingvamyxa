@@ -2279,6 +2279,13 @@ fn: l1_resolve_bare_import (@: char buf; size_t: cap; const: @(char source_path)
             slash: i + 1U
         i: i + 1U
     if: slash = 0U
+        if: source_path[1] != 0 && source_path[1] = 58
+            if: 2U + n >= cap
+                return: 1
+            c.memcpy(buf, source_path, 2U)
+            c.strcpy(buf + 2U, file_name)
+            return: 0
+        ---
         if: n + 1U >= cap
             return: 1
         c.strcpy(buf, file_name)
