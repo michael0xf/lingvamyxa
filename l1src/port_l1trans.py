@@ -26,6 +26,7 @@ EMIT_PROTOS = """
         fn: l1_emit_cast (@: FILE out; const: @(LmP0Structure body); const: @(char path)) int
         fn: l1_emit_arg_list (@: FILE out; const: @(LmP0Structure body); const: @(char path)) int
         fn: l1_emit_type_token (@: FILE out; const: @(LmP0Node node); const: @(char path)) int
+        fn: l1_emit_ifdef (@: FILE out; const: @(LmP0Frame frame); const: @(char path); int: as_stmt; int: depth; const: @(LmP0Node owner)) int
         fn: l1_emit_item (@: FILE out; const: @(LmP0Node node); const: @(char path); int: in_l1; int: depth) int
     end: prototype
 """

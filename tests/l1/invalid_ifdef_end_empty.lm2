@@ -1,0 +1,10 @@
+L1:
+    ifdef:
+    end: WRONG
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L1

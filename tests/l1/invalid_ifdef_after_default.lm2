@@ -1,0 +1,18 @@
+L1:
+    ifdef:
+        default:
+            fn: v () int
+                return: 0
+            end: v
+        FLAG:
+            fn: v () int
+                return: 1
+            end: v
+    end: ifdef
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L1

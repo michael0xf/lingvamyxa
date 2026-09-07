@@ -110,6 +110,7 @@ The suites can also be run alone against a chosen generation:
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_smoke.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_parser.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_expr.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_ifdef.ps1
 ```
 
 All default to `gen0`; set `L1_GEN` (for example `gen2`) to pick another.
@@ -138,6 +139,14 @@ bytes 63,63,47,110, and tab followed by `0` emits `\0110` without absorbing
 the digit. Full ordinary-string recanonicalization and byte-blob declarations
 are not claimed.
 
+`run_ifdef.ps1` verifies four fixtures in 11 macro configurations on each
+of gen0/gen2, plus eight malformed branch/end cases that must not publish C.
+It covers `#if`/`#elif`/`#else`, nesting, quoted conditions, unit/function
+contexts and matching `end:` targets. Undefined `FLAG` and `-DFLAG=0` select
+default; `-DFLAG=1` selects the first branch. This suite is standalone, not
+invoked by `run_gen.ps1`; `define` and conditional-import policy are outside
+this checkpoint.
+
 ## Where output goes
 
 ```
@@ -145,7 +154,7 @@ build\l1trans\gen0|gen1|gen2|gen3\   executables
 build\obj\l1trans\gen<N>\            generated C and objects
 build\l1trans\oracles\               printTree.lm0 reference dumps
 build\l1trans\logs\                  seed.log, gen_accept.log, smoke.log,
-                                     parser_accept.log, expr.log, gcc_*.log,
+                                     parser_accept.log, expr.log, ifdef.log, gcc_*.log,
                                      builder stdout/stderr, per-dump pt_*
 ```
 

@@ -1,0 +1,33 @@
+L1:
+    ifdef:
+        `defined(FLAG) && !defined(OTHER)`:
+            fn: v () int
+                return: 1
+            end: v
+        end: `defined(FLAG) && !defined(OTHER)`
+        `FLAG == 2 || FLAG == 3`:
+            fn: v () int
+                return: 2
+            end: v
+        default:
+            fn: v () int
+                return: 0
+            end: v
+    end: ifdef
+
+    ifdef:
+        `defined(_WIN32)`:
+            ifdef:
+                `!defined(_WIN32)`:
+                    fn: never () int
+                        return: 8
+                    end: never
+            end: ifdef
+    end: ifdef
+
+    external:
+        fn: main () int
+            return: v()
+        end: main
+    end: external
+end: L1

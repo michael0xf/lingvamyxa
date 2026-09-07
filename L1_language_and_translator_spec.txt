@@ -996,7 +996,7 @@ L2-shaped copy kept only to produce the gen0 seed with stage-0
 `trans.lm0`; it is not the L1 source.
 
 Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
-`run_smoke.ps1`, `run_parser.ps1` and `run_expr.ps1`:
+`run_smoke.ps1`, `run_parser.ps1`, `run_expr.ps1` and `run_ifdef.ps1`:
 
   - the P0 parser, `own` and `parser_text` ported from frozen
     620db86 into `L1:` form, plus `printTree`, `make`, the
@@ -1027,6 +1027,12 @@ Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
     C99 trigraphs and octal-escape adjacency cannot alter these values.
     Full ordinary-string recanonicalization and byte-blob declarations
     (10.19) are not established by this checkpoint;
+  - `ifdef:` at unit and function scope: 11 compiled/run macro variants
+    on each of gen0/gen2, plus 8 malformed branch/end diagnostics with no
+    destination C published. Conditions emit `#if`/`#elif`, not `#ifdef`:
+    `FLAG` undefined or 0 selects default, while 1 selects the first branch.
+    Nested and backtick-quoted conditions retain their C preprocessor text;
+    branch and outer `end:` targets are checked. See `tests/l1/ifdef_*.lm2`;
   - parser acceptance against the old oracle: 16 positive fixtures
     whose `printTree` dumps match `build\lm0\printTree.lm0.exe`
     byte-for-byte, 5 malformed fixtures where both sides exit 1, and
