@@ -1,0 +1,21 @@
+L1:
+    fn: take (int: value) int
+        return: value
+    end: take
+
+    external:
+        fn: main () int
+            c.array: []: int xs 4
+            int: i 1
+            xs[0]: 10
+            xs[1]: 20
+            xs[2]: 30
+            xs[3]: 40
+            if: take(xs[i++]) != 20 || i != 2
+                return: 1
+            if: take(xs[i--]) != 30 || i != 1
+                return: 2
+            return: 0
+        end: main
+    end: external
+end: L1

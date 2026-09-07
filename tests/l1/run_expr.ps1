@@ -40,6 +40,28 @@ $cases = @(
         "add(*(&value), 1)",
         "add(*(&*(p)), 1)",
         "add(*(&*(p)) + 1, 1)"
+    )},
+    @{ Name = "expr_inc_arg"; Has = @(
+        "take(i--)",
+        "take(--i)",
+        "take(++i)",
+        "take(i++)",
+        "take(1 + --i)",
+        "a + ++b",
+        "take(- --i)",
+        "take(+ ++i)"
+    )},
+    @{ Name = "expr_arg_segments"; Has = @(
+        "sum4(a + b, c--, nested(++i, x | y), arr[index + 1])",
+        "nested(i--, x & y)"
+    )},
+    @{ Name = "expr_index_inc"; Has = @(
+        "take(xs[i++])",
+        "take(xs[i--])"
+    )},
+    @{ Name = "expr_index_deref"; Has = @(
+        "xs[* p]",
+        "take(xs[*(p)])"
     )}
 )
 

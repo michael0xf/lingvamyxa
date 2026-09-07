@@ -1008,14 +1008,17 @@ Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
     `-Werror=discarded-qualifiers`,
     `-Werror=implicit-function-declaration`, `-Werror=implicit-int`;
   - the gen2 compiler smoke suite;
-  - 13 expression fixtures executed on gen0 and gen2: nested calls,
+  - 17 expression fixtures executed on gen0 and gen2: nested calls,
     index/field arguments, unary/binary operations, parentheses, casts,
-    prefix dereference in reads, assignments, calls and mixed unary chains;
+    prefix dereference in reads, assignments, calls and mixed unary chains,
+    prefix/postfix `++`/`--` in arguments and indices, and `xs[\p]`;
     one malformed dereferenced assignment must fail with a diagnostic.
     `expr_cast_bound.lm2` preserves the whole bounded cast Frame:
     `id(2 * cast: (uchar) 128 + 128)` evaluates to 512, not 384;
     `expr_deref_mix.lm2` checks that, with `*p == 4`,
     `add(\ @ \ p + 1, 1)` emits `add(*(&*(p)) + 1, 1)` and returns 6;
+    `expr_inc_arg.lm2` distinguishes `a + ++b` from `a++ + b`
+    and preserves separate unary tokens in `take(- --i)`;
   - parser acceptance against the old oracle: 16 positive fixtures
     whose `printTree` dumps match `build\lm0\printTree.lm0.exe`
     byte-for-byte, 5 malformed fixtures where both sides exit 1, and
