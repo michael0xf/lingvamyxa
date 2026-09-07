@@ -10,7 +10,7 @@ $obj = "build\obj\l1trans\$gen"
 $bin = "build\l1trans\$gen"
 $log = Join-Path "build\l1trans\logs" $gen
 $script:ctlLog = Join-Path $log "control.log"
-$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -pedantic-errors -I . -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int"
+$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -pedantic-errors -I . -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -Werror=int-to-pointer-cast -Werror=pointer-to-int-cast"
 
 New-Item -ItemType Directory -Force -Path $obj, $bin, $log | Out-Null
 Set-Content -LiteralPath $script:ctlLog -Value "$(Get-Date -Format o) control start gen=$gen"
@@ -45,6 +45,11 @@ function Build-Run([string]$name, [string]$cpath, [int]$expect) {
     if ($LASTEXITCODE -ne 0) {
         Get-Content -LiteralPath $gccLog | Select-Object -Last 30
         throw "gcc failed $name"
+    }
+    if ($name.StartsWith("control_throw") -or $name.StartsWith("control_finally")) {
+        $gccText = ""
+        if (Test-Path -LiteralPath $gccLog) { $gccText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $gccLog)) }
+        if ($gccText.Trim().Length -gt 0) { throw "gcc log not empty $name : $gccText" }
     }
     cmd /c "$exepath > $runOut 2> $runErr"
     if ($LASTEXITCODE -ne $expect) { throw "run $name exit $LASTEXITCODE want $expect" }
@@ -102,6 +107,45 @@ Negative "invalid_switch_end" "end target does not match close target"
 Negative "invalid_switch_case_empty" "case expects an expression"
 Negative "invalid_control_label_c" "reserved L1 name"
 Negative "invalid_control_goto_l1" "reserved L1 name"
+
+$thC = Translate "control_throw"
+$thT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $thC))
+if ($thT.IndexOf("static int l1_throw_code = 0;") -lt 0) { throw "missing throw channel" }
+if ($thT.IndexOf("static long l1_throw_payload[8];") -lt 0) { throw "missing long payload array" }
+if ($thT.IndexOf("union") -ge 0) { throw "payload must not be a union" }
+if ($thT.IndexOf("l1_throw_code = 0;") -lt 0) { throw "missing handled-catch clear" }
+if ($thT.IndexOf("goto l1_catch_") -lt 0) { throw "missing catch goto" }
+if ($thT.IndexOf("l1_catch_") -lt 0) { throw "missing catch label" }
+if ($thT.IndexOf("l1_after_catch_") -lt 0) { throw "missing after-catch label" }
+Build-Run "control_throw" $thC 0
+
+$tpC = Translate "control_throw_prop"
+Build-Run "control_throw_prop" $tpC 0
+
+$trC = Translate "control_throw_rec"
+Build-Run "control_throw_rec" $trC 0
+
+$tfC = Translate "control_finally"
+$tfT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $tfC))
+if ($tfT.IndexOf("g = 7") -lt 0 -and $tfT.IndexOf("g = (7)") -lt 0) { throw "missing finally store" }
+Build-Run "control_finally" $tfC 0
+
+$thhC = Translate "control_throw_handled"
+$thhT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $thhC))
+if ($thhT.IndexOf("l1_throw_code = 0;") -lt 0) { throw "handled catch must clear throw code" }
+Build-Run "control_throw_handled" $thhC 0
+
+$tfhC = Translate "control_finally_helper"
+Build-Run "control_finally_helper" $tfhC 0
+
+Negative "invalid_throw_uncaught" "throw is not caught and is not in throws"
+Negative "invalid_throw_not_in_set" "throw is not in the current throws set"
+Negative "invalid_catch_dup" "duplicate catch in the same block"
+Negative "invalid_throw_nested" "throwing call must be a statement or the entire assignment"
+Negative "invalid_throw_name_c" "reserved L1 name"
+Negative "invalid_throw_arity" "throw payload arity mismatch"
+Negative "invalid_throw_payload_type" "unsupported throw payload type"
+Negative "invalid_throw_main_throws" "main cannot declare throws"
 
 Write-C "control ok"
 Write-Output "l1trans $gen control ok"

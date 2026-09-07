@@ -1,0 +1,15 @@
+fn: boom (int: n) int
+    throws: Fail
+    throw: Fail(n)
+    return: 0
+end: boom
+
+external:
+    fn: main () int
+        int: x 0
+        x: boom(1)
+        catch: Fail (@: char p)
+            x: 0
+        return: x
+    end: main
+end: external

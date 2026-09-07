@@ -1,0 +1,23 @@
+fn: inner (int: n) int
+    throws: Fail
+    if: n <= 0
+        throw: Fail(n)
+    return: n
+end: inner
+
+fn: mid (int: n) int
+    throws: Fail
+    int: r 0
+    r: inner(n)
+    return: r
+end: mid
+
+external:
+    fn: main () int
+        int: payload 0
+        payload: mid(-3)
+        catch: Fail (int: bad)
+            payload: bad
+        return: payload != -3
+    end: main
+end: external

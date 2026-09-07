@@ -1,0 +1,32 @@
+fn: inner (int: n) int
+    throws: Fail
+    if: n <= 0
+        throw: Fail(n)
+    return: n
+end: inner
+
+fn: wrapped (int: n) int
+    int: v 0
+    v: inner(n)
+    catch: Fail (int: bad)
+        v: bad
+    return: v
+end: wrapped
+
+fn: ok (int: n) int
+    throws: Fail
+    return: n
+end: ok
+
+external:
+    fn: main () int
+        int: a 0
+        int: b 0
+        a: wrapped(-4)
+        b: ok(2)
+        catch: Fail (int: unused)
+            unused: unused
+            return: 2
+        return: a != -4 || b != 2
+    end: main
+end: external

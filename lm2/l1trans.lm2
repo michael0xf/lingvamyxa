@@ -20,6 +20,29 @@ int: l1_imp_actn 0
 int: l1_imp_donen 0
 const: @: char l1_src 0
 size_t: l1_srcn 0
+c.array: []: char l1_th_names 2048
+c.array: []: int l1_th_ar 32
+int: l1_th_n 0
+int: l1_in_finally 0
+c.array: []: char l1_fn_names 2048
+c.array: []: int l1_fn_th 256
+c.array: []: int l1_fn_thn 32
+int: l1_fnn 0
+c.array: []: char l1_ca_names 2048
+c.array: []: int l1_ca_ids 32
+c.array: []: int l1_ca_d 32
+int: l1_ca_n 0
+int: l1_ca_next 0
+int: l1_blk_d 0
+LmP0Field: l1_fin_f 0
+int: l1_fin_depth 0
+int: l1_has_fin 0
+int: l1_th_ch 0
+int: l1_cur_void 0
+int: l1_throw_ok 0
+c.array: []: int l1_cur_th 8
+int: l1_cur_thn 0
+int: l1_allow_throws 0
 
 fn: l1_text_eq (const: (LmP0Text: text); const: @(char s)) int
     size_t: n
@@ -171,7 +194,189 @@ fn: l1_is_keyword (const: (LmP0Text: text)) int
         return: 1
     if: l1_text_eq(text, "goto")
         return: 1
+    if: l1_text_eq(text, "throw")
+        return: 1
+    if: l1_text_eq(text, "catch")
+        return: 1
+    if: l1_text_eq(text, "finally")
+        return: 1
+    if: l1_text_eq(text, "throws")
+        return: 1
 return: 0
+
+fn: l1_ident_to_buf (@: char dst; size_t: cap; const: (LmP0Text: text)) int
+    size_t: start 0U
+    size_t: n 0U
+    if: dst = 0 || cap < 2U || text = 0 || text\data = 0
+        return: 1
+    n: text\length
+    if: n >= 2U && text\data[0] = 96 && text\data[n - 1U] = 96
+        start: 1U
+        n: n - 2U
+    ---
+    if: n + 1U >= cap
+        return: 1
+    c.memcpy(dst, text\data + start, n)
+    dst[n]: 0
+return: 0
+
+fn: l1_throw_reset () void
+    l1_th_n: 0
+    l1_in_finally: 0
+    l1_fnn: 0
+    l1_ca_n: 0
+    l1_ca_next: 0
+    l1_blk_d: 0
+    l1_fin_f: 0
+    l1_fin_depth: 0
+    l1_has_fin: 0
+    l1_th_ch: 0
+    l1_cur_void: 0
+    l1_throw_ok: 0
+    l1_cur_thn: 0
+    l1_allow_throws: 0
+return
+
+fn: l1_throw_intern (const: (LmP0Text: text)) int
+    c.array: []: char buf 64
+    int: i 0
+    if: l1_ident_to_buf(buf, 64U, text) != 0
+        return: 0
+    while: i < l1_th_n
+        if: c.strcmp(l1_th_names + i * 64, buf) = 0
+            return: i + 1
+        i: i + 1
+    if: l1_th_n >= 32
+        return: 0
+    c.strcpy(l1_th_names + l1_th_n * 64, buf)
+    l1_th_ar[l1_th_n]: -1
+    l1_th_n: l1_th_n + 1
+return: l1_th_n
+
+fn: l1_is_payload_int (const: (LmP0Text: text)) int
+    if: l1_text_eq(text, "int") || l1_text_eq(text, "unsigned") || l1_text_eq(text, "long") || l1_text_eq(text, "short") || l1_text_eq(text, "size_t") || l1_text_eq(text, "char")
+        return: 1
+return: 0
+
+fn: l1_arity_bind (int: code; int: n; const: @(char path); const: (LmP0Node: node)) int
+    int: prev
+    if: code <= 0 || code > l1_th_n
+        return: 1
+    if: n < 0 || n > 8
+        return: l1_error(path, node, "throw payload is limited to 8 arguments")
+    prev: l1_th_ar[code - 1]
+    if: prev < 0
+        l1_th_ar[code - 1]: n
+        return: 0
+    if: prev != n
+        return: l1_error(path, node, "throw payload arity mismatch")
+return: 0
+
+fn: l1_count_catch_params (const: (LmP0Structure: params)) int
+    LmP0Field: field
+    int: n 0
+    if: params = 0
+        return: 0
+    field: params\first_field
+    while: field != 0
+        if: l1_node_ignored(field\value) = 0
+            n: n + 1
+        ---
+        field: field\next
+return: n
+
+fn: l1_fn_find (const: (LmP0Text: text)) int
+    c.array: []: char buf 64
+    int: i 0
+    if: l1_ident_to_buf(buf, 64U, text) != 0
+        return: -1
+    while: i < l1_fnn
+        if: c.strcmp(l1_fn_names + i * 64, buf) = 0
+            return: i
+        i: i + 1
+return: -1
+
+fn: l1_fn_ensure (const: (LmP0Text: text)) int
+    c.array: []: char buf 64
+    int: i
+    i: l1_fn_find(text)
+    if: i >= 0
+        return: i
+    if: l1_ident_to_buf(buf, 64U, text) != 0
+        return: -1
+    if: l1_fnn >= 32
+        return: -1
+    c.strcpy(l1_fn_names + l1_fnn * 64, buf)
+    l1_fn_thn[l1_fnn]: 0
+    i: l1_fnn
+    l1_fnn: l1_fnn + 1
+return: i
+
+fn: l1_fn_add_throw (int: fn_i; int: code) int
+    int: n
+    int: j 0
+    if: fn_i < 0 || fn_i >= l1_fnn || code = 0
+        return: 1
+    n: l1_fn_thn[fn_i]
+    while: j < n
+        if: l1_fn_th[fn_i * 8 + j] = code
+            return: 0
+        j: j + 1
+    if: n >= 8
+        return: 1
+    l1_fn_th[fn_i * 8 + n]: code
+    l1_fn_thn[fn_i]: n + 1
+return: 0
+
+fn: l1_fn_is_throwing (const: (LmP0Text: text)) int
+    int: i
+    i: l1_fn_find(text)
+    if: i < 0
+        return: 0
+return: l1_fn_thn[i] != 0
+
+fn: l1_cur_has_throw (int: code) int
+    int: i 0
+    while: i < l1_cur_thn
+        if: l1_cur_th[i] = code
+            return: 1
+        i: i + 1
+return: 0
+
+fn: l1_catch_find (const: (LmP0Text: text); int: same_depth) int
+    c.array: []: char buf 64
+    int: i
+    if: l1_ident_to_buf(buf, 64U, text) != 0
+        return: -1
+    i: l1_ca_n
+    while: i > 0
+        i: i - 1
+        if: c.strcmp(l1_ca_names + i * 64, buf) = 0
+            if: same_depth != 0 && l1_ca_d[i] != l1_blk_d
+                continue
+            ---
+            return: i
+        ---
+    ---
+return: -1
+
+fn: l1_catch_push (const: (LmP0Text: text); int: id) int
+    c.array: []: char buf 64
+    if: l1_ca_n >= 32
+        return: 1
+    if: l1_ident_to_buf(buf, 64U, text) != 0
+        return: 1
+    c.strcpy(l1_ca_names + l1_ca_n * 64, buf)
+    l1_ca_ids[l1_ca_n]: id
+    l1_ca_d[l1_ca_n]: l1_blk_d
+    l1_ca_n: l1_ca_n + 1
+return: 0
+
+fn: l1_catch_pop () void
+    while: l1_ca_n > 0 && l1_ca_d[l1_ca_n - 1] = l1_blk_d
+        l1_ca_n: l1_ca_n - 1
+    ---
+return
 
 fn: l1_write_text (FILE: out; const: (LmP0Text: text)) int
     if: out = 0 || text = 0 || text\data = 0
@@ -548,6 +753,11 @@ fn: l1_emit_call_frame (FILE: out; const: (LmP0Frame: frame); const: @(char path
     if: frame = 0
         return: 1
     head: frame\head
+    if: l1_fn_is_throwing(head) != 0
+        if: l1_throw_ok = 0
+            return: l1_error(path, node, "throwing call must be a statement or the entire assignment")
+        l1_throw_ok: 0
+    ---
     deref: l1_slash_prefix_len(head)
     if: deref = 0U
         if: l1_c_ident(out, head, path, node) != 0
@@ -1832,6 +2042,324 @@ fn: l1_emit_switch (FILE: out; const: (LmP0Frame: frame); const: @(char path); c
         return: 1
 return: l1_validate_end_trailer(frame, path, node)
 
+fn: l1_emit_throw_channel (FILE: out) int
+    if: l1_th_ch != 0
+        return: 0
+    l1_th_ch: 1
+    if: l1_write_cstr(out, "static int l1_throw_code = 0;\n") != 0
+        return: 1
+return: l1_write_cstr(out, "static long l1_throw_payload[8];\n")
+
+fn: l1_emit_finallies (FILE: out; const: @(char path); int: until_depth) int
+    LmP0Field: field
+    int: saved
+    if: l1_has_fin = 0 || l1_fin_depth < until_depth
+        return: 0
+    saved: l1_in_finally
+    l1_in_finally: 1
+    field: l1_fin_f
+    while: field != 0
+        if: l1_node_ignored(field\value) = 0
+            if: l1_emit_stmt(out, field\value, path) != 0
+                l1_in_finally: saved
+                return: 1
+            ---
+        ---
+        field: field\next
+    l1_in_finally: saved
+return: 0
+
+fn: l1_fin_pop_depth () void
+    if: l1_has_fin != 0 && l1_fin_depth = l1_blk_d
+        l1_has_fin: 0
+        l1_fin_f: 0
+    ---
+return
+
+fn: l1_register_catches (LmP0Field: field; const: @(char path)) int
+    const: LmP0Node: node
+    LmP0Field: name_field
+    int: id
+    int: exist
+    while: field != 0
+        node: field\value
+        if: l1_node_ignored(node) = 0 && node != 0 && node\kind = c.LM_P0_NODE_FRAME && l1_text_eq(node\as\frame\head, "catch")
+            name_field: 0
+            if: node\as\frame\body != 0
+                name_field: node\as\frame\body\first_field
+            ---
+            while: name_field != 0 && l1_node_ignored(name_field\value)
+                name_field: name_field\next
+            if: name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
+                return: l1_error(path, node, "catch expects a throw name")
+            if: l1_ident_is_reserved(name_field\value\as\atom) != 0
+                return: l1_error(path, name_field\value, "reserved L1 name")
+            exist: l1_catch_find(name_field\value\as\atom, 1)
+            if: exist >= 0
+                return: l1_error(path, node, "duplicate catch in the same block")
+            if: l1_throw_intern(name_field\value\as\atom) = 0
+                return: l1_error(path, name_field\value, "too many throw names")
+            l1_ca_next: l1_ca_next + 1
+            id: l1_ca_next
+            if: l1_catch_push(name_field\value\as\atom, id) != 0
+                return: l1_error(path, node, "too many catch pads")
+            ---
+        ---
+        field: field\next
+return: 0
+
+fn: l1_record_throws (LmP0Frame: throws_frame; const: (LmP0Text: fn_name); const: @(char path); const: (LmP0Node: node)) int
+    LmP0Field: field
+    int: fn_i
+    int: code
+    fn_i: l1_fn_ensure(fn_name)
+    if: fn_i < 0
+        return: l1_error(path, node, "too many throwing functions")
+    l1_cur_thn: 0
+    if: throws_frame = 0 || throws_frame\body = 0
+        return: l1_error(path, node, "throws expects names")
+    field: throws_frame\body\first_field
+    while: field != 0
+        if: l1_node_ignored(field\value) = 0
+            if: field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM
+                return: l1_error(path, field\value, "throws lists names, not types")
+            if: l1_ident_is_reserved(field\value\as\atom) != 0
+                return: l1_error(path, field\value, "reserved L1 name")
+            code: l1_throw_intern(field\value\as\atom)
+            if: code = 0
+                return: l1_error(path, field\value, "too many throw names")
+            if: l1_fn_add_throw(fn_i, code) != 0
+                return: 1
+            if: l1_cur_thn >= 8
+                return: l1_error(path, field\value, "too many throw names")
+            l1_cur_th[l1_cur_thn]: code
+            l1_cur_thn: l1_cur_thn + 1
+            ---
+        ---
+        field: field\next
+return: 0
+
+fn: l1_emit_throw_leave (FILE: out; const: @(char path)) int
+    if: l1_emit_finallies(out, path, 1) != 0
+        return: 1
+    if: l1_cur_void != 0
+        return: l1_write_cstr(out, "    return;\n")
+return: l1_write_cstr(out, "    return 0;\n")
+
+fn: l1_emit_throw_dispatch (FILE: out; const: (LmP0Text: name); const: @(char path); const: (LmP0Node: node)) int
+    int: fn_i
+    int: n
+    int: j 0
+    int: code
+    int: pad
+    if: l1_in_finally != 0
+        return: 0
+    fn_i: l1_fn_find(name)
+    if: fn_i < 0 || l1_fn_thn[fn_i] = 0
+        return: 0
+    n: l1_fn_thn[fn_i]
+    while: j < n
+        code: l1_fn_th[fn_i * 8 + j]
+        pad: l1_catch_find_code(code)
+        if: pad >= 0
+            if: c.fprintf(out, "    if (l1_throw_code == %d) goto l1_catch_%d;\n", code, l1_ca_ids[pad]) < 0
+                return: 1
+            ---
+        else:
+            if: l1_cur_has_throw(code) = 0
+                return: l1_error(path, node, "throw is not caught and is not in throws")
+            if: c.fprintf(out, "    if (l1_throw_code == %d) {\n", code) < 0
+                return: 1
+            if: l1_emit_throw_leave(out, path) != 0
+                return: 1
+            if: l1_write_cstr(out, "    }\n") != 0
+                return: 1
+            ---
+        ---
+        j: j + 1
+return: 0
+
+fn: l1_catch_find_code (int: code) int
+    c.array: []: char buf 64
+    int: i
+    if: code <= 0 || code > l1_th_n
+        return: -1
+    c.strcpy(buf, l1_th_names + (code - 1) * 64)
+    i: l1_ca_n
+    while: i > 0
+        i: i - 1
+        if: c.strcmp(l1_ca_names + i * 64, buf) = 0
+            return: i
+        ---
+    ---
+return: -1
+
+fn: l1_emit_throw (FILE: out; const: (LmP0Frame: frame); const: @(char path); const: (LmP0Node: node)) int
+    LmP0Field: field
+    const: LmP0Frame: throw_frame
+    LmP0Field: arg
+    LmP0Field: cursor
+    int: code
+    int: slot 0
+    if: frame = 0 || frame\body = 0
+        return: l1_error(path, node, "throw expects Name(arguments)")
+    field: frame\body\first_field
+    while: field != 0 && l1_node_ignored(field\value)
+        field: field\next
+    if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME
+        return: l1_error(path, node, "throw expects Name(arguments)")
+    arg: field\next
+    while: arg != 0 && l1_node_ignored(arg\value)
+        arg: arg\next
+    if: arg != 0
+        return: l1_error(path, node, "throw expects a single Name(arguments) form")
+    throw_frame: field\value\as\frame
+    if: throw_frame = 0 || throw_frame\head = 0
+        return: l1_error(path, node, "throw expects Name(arguments)")
+    if: l1_ident_is_reserved(throw_frame\head) != 0
+        return: l1_error(path, field\value, "reserved L1 name")
+    code: l1_throw_intern(throw_frame\head)
+    if: code = 0
+        return: l1_error(path, field\value, "too many throw names")
+    if: l1_cur_has_throw(code) = 0
+        return: l1_error(path, field\value, "throw is not in the current throws set")
+    if: l1_emit_throw_channel(out) != 0
+        return: 1
+    arg: 0
+    if: throw_frame\body != 0
+        arg: throw_frame\body\first_field
+    ---
+    while: arg != 0
+        if: l1_node_ignored(arg\value) = 0
+            if: slot >= 8
+                return: l1_error(path, arg\value, "throw payload is limited to 8 arguments")
+            if: c.fprintf(out, "    l1_throw_payload[%d] = (long)(", slot) < 0
+                return: 1
+            cursor: arg
+            if: l1_emit_one_expr(out, @ cursor, 0, path) != 0
+                return: 1
+            if: l1_write_cstr(out, ");\n") != 0
+                return: 1
+            slot: slot + 1
+            arg: cursor
+            continue
+        ---
+        arg: arg\next
+    if: l1_arity_bind(code, slot, path, field\value) != 0
+        return: 1
+    if: c.fprintf(out, "    l1_throw_code = %d;\n", code) < 0
+        return: 1
+return: l1_emit_throw_leave(out, path)
+
+fn: l1_emit_catch_params (FILE: out; const: (LmP0Structure: params); const: @(char path)) int
+    LmP0Field: field
+    const: LmP0Frame: param_frame
+    LmP0Field: name_field
+    int: slot 0
+    if: params = 0
+        return: 0
+    field: params\first_field
+    while: field != 0
+        if: l1_node_ignored(field\value) = 0
+            if: field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME
+                return: l1_error(path, field\value, "catch parameters expect type: name bindings")
+            param_frame: field\value\as\frame
+            name_field: 0
+            if: param_frame\body != 0
+                name_field: param_frame\body\first_field
+            ---
+            while: name_field != 0 && l1_node_ignored(name_field\value)
+                name_field: name_field\next
+            if: name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
+                return: l1_error(path, field\value, "catch parameter expects a name")
+            if: slot >= 8
+                return: l1_error(path, field\value, "catch payload is limited to 8 arguments")
+            if: l1_write_cstr(out, "        ") != 0
+                return: 1
+            if: l1_write_type_spelling(out, param_frame\head, path, field\value) != 0
+                return: 1
+            if: l1_write_cstr(out, " ") != 0
+                return: 1
+            if: l1_write_ident(out, name_field\value\as\atom, path, name_field\value) != 0
+                return: 1
+            if: l1_is_payload_int(param_frame\head) = 0
+                return: l1_error(path, field\value, "unsupported throw payload type")
+            if: c.fprintf(out, " = (") < 0
+                return: 1
+            if: l1_write_type_spelling(out, param_frame\head, path, field\value) != 0
+                return: 1
+            if: c.fprintf(out, ")l1_throw_payload[%d];\n", slot) < 0
+                return: 1
+            slot: slot + 1
+        ---
+        field: field\next
+return: 0
+
+fn: l1_emit_catch (FILE: out; const: (LmP0Frame: frame); const: @(char path); const: (LmP0Node: node)) int
+    LmP0Field: name_field
+    LmP0Field: params_field
+    LmP0Field: body_field
+    int: pad
+    int: id
+    int: code
+    if: frame = 0 || frame\body = 0
+        return: l1_error(path, node, "catch expects Name (parameters)")
+    name_field: frame\body\first_field
+    while: name_field != 0 && l1_node_ignored(name_field\value)
+        name_field: name_field\next
+    if: name_field = 0 || name_field\value = 0 || name_field\value\kind != c.LM_P0_NODE_ATOM
+        return: l1_error(path, node, "catch expects a throw name")
+    params_field: name_field\next
+    while: params_field != 0 && l1_node_ignored(params_field\value)
+        params_field: params_field\next
+    if: params_field = 0 || params_field\value = 0 || params_field\value\kind != c.LM_P0_NODE_STRUCTURE
+        return: l1_error(path, node, "catch expects Name (parameters)")
+    body_field: params_field\next
+    while: body_field != 0 && l1_node_ignored(body_field\value)
+        body_field: body_field\next
+    pad: l1_catch_find(name_field\value\as\atom, 0)
+    if: pad < 0
+        return: l1_error(path, node, "catch was not registered in this block")
+    id: l1_ca_ids[pad]
+    if: l1_emit_throw_channel(out) != 0
+        return: 1
+    if: c.fprintf(out, "    goto l1_after_catch_%d;\n", id) < 0
+        return: 1
+    if: c.fprintf(out, "l1_catch_%d: ;\n", id) < 0
+        return: 1
+    if: l1_write_cstr(out, "    {\n") != 0
+        return: 1
+    if: l1_emit_catch_params(out, params_field\value\as\structure, path) != 0
+        return: 1
+    code: l1_throw_intern(name_field\value\as\atom)
+    if: code = 0
+        return: l1_error(path, name_field\value, "too many throw names")
+    if: l1_arity_bind(code, l1_count_catch_params(params_field\value\as\structure), path, node) != 0
+        return: 1
+    if: l1_write_cstr(out, "        l1_throw_code = 0;\n") != 0
+        return: 1
+    if: body_field != 0
+        if: body_field\value != 0 && body_field\value\kind = c.LM_P0_NODE_STRUCTURE && (body_field\next = 0 || l1_node_ignored(body_field\next\value))
+            if: l1_emit_block(out, body_field\value\as\structure, path) != 0
+                return: 1
+            ---
+        else:
+            while: body_field != 0
+                if: l1_node_ignored(body_field\value) = 0
+                    if: l1_emit_stmt(out, body_field\value, path) != 0
+                        return: 1
+                    ---
+                ---
+                body_field: body_field\next
+            ---
+        ---
+    ---
+    if: l1_write_cstr(out, "    }\n") != 0
+        return: 1
+    if: c.fprintf(out, "l1_after_catch_%d: ;\n", id) < 0
+        return: 1
+return: 0
+
 fn: l1_emit_stmt (FILE: out; const: (LmP0Node: node); const: @(char path)) int
     const: LmP0Frame: frame
     LmP0Field: field
@@ -1853,6 +2381,8 @@ fn: l1_emit_stmt (FILE: out; const: (LmP0Node: node); const: @(char path)) int
         if: l1_text_eq(node\as\atom, "break")
             return: l1_write_cstr(out, "    break;\n")
         if: l1_text_eq(node\as\atom, "return")
+            if: l1_emit_finallies(out, path, 1) != 0
+                return: 1
             return: l1_write_cstr(out, "    return;\n")
         return: l1_error(path, node, "unsupported statement atom")
     if: node\kind != c.LM_P0_NODE_FRAME
@@ -1864,6 +2394,8 @@ fn: l1_emit_stmt (FILE: out; const: (LmP0Node: node); const: @(char path)) int
     if: l1_text_eq(head, "include")
         return: l1_emit_include(out, frame, path)
     if: l1_text_eq(head, "return")
+        if: l1_emit_finallies(out, path, 1) != 0
+            return: 1
         if: l1_write_cstr(out, "    return ") != 0
             return: 1
         if: l1_emit_expr(out, frame\body, path, 0) != 0
@@ -1877,6 +2409,24 @@ fn: l1_emit_stmt (FILE: out; const: (LmP0Node: node); const: @(char path)) int
         return: l1_emit_switch(out, frame, path, node)
     if: l1_text_eq(head, "goto")
         return: l1_emit_goto(out, frame, path, node)
+    if: l1_text_eq(head, "throw")
+        return: l1_emit_throw(out, frame, path, node)
+    if: l1_text_eq(head, "catch")
+        return: l1_emit_catch(out, frame, path, node)
+    if: l1_text_eq(head, "finally")
+        if: frame\body = 0 || frame\body\first_field = 0
+            return: l1_error(path, node, "finally expects a cleanup body")
+        if: l1_has_fin != 0
+            return: l1_error(path, node, "too many finally registrations")
+        l1_fin_f: frame\body\first_field
+        l1_fin_depth: l1_blk_d
+        l1_has_fin: 1
+        return: 0
+    if: l1_text_eq(head, "throws")
+        if: l1_allow_throws != 0
+            l1_allow_throws: 0
+            return: 0
+        return: l1_error(path, node, "throws is only valid immediately after the function header")
     if: l1_text_eq(head, "case") || l1_text_eq(head, "default")
         return: l1_error(path, node, "case/default outside switch")
     if: l1_text_eq(head, "if")
@@ -2055,9 +2605,33 @@ fn: l1_emit_stmt (FILE: out; const: (LmP0Node: node); const: @(char path)) int
             return: 1
         if: l1_write_cstr(out, " = ") != 0
             return: 1
+        field: 0
+        last: 0
+        if: frame\body != 0
+            field: frame\body\first_field
+        ---
+        while: field != 0 && l1_node_ignored(field\value)
+            field: field\next
+        if: field != 0
+            last: field\next
+            while: last != 0 && l1_node_ignored(last\value)
+                last: last\next
+            ---
+        ---
+        l1_throw_ok: 0
+        if: field != 0 && last = 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_FRAME && l1_fn_is_throwing(field\value\as\frame\head) != 0
+            l1_throw_ok: 1
+        ---
         if: l1_emit_expr(out, frame\body, path, 0) != 0
+            l1_throw_ok: 0
             return: 1
-        return: l1_write_cstr(out, ";\n")
+        l1_throw_ok: 0
+        if: l1_write_cstr(out, ";\n") != 0
+            return: 1
+        if: field != 0 && last = 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_FRAME
+            return: l1_emit_throw_dispatch(out, field\value\as\frame\head, path, field\value)
+        ---
+        return: 0
     if: l1_write_cstr(out, "    ") != 0
         return: 1
     if: l1_c_ident(out, head, path, node) != 0
@@ -2068,7 +2642,7 @@ fn: l1_emit_stmt (FILE: out; const: (LmP0Node: node); const: @(char path)) int
         return: 1
     if: l1_write_cstr(out, ");\n") != 0
         return: 1
-return: 0
+return: l1_emit_throw_dispatch(out, head, path, node)
 
 fn: l1_frame_is_repeatable (const: (LmP0Frame: frame)) int
     LmP0Field: field
@@ -2262,6 +2836,11 @@ fn: l1_emit_block (FILE: out; const: (LmP0Structure: body); const: @(char path))
     LmP0Frame: next
     if: body = 0
         return: 0
+    l1_blk_d: l1_blk_d + 1
+    if: l1_register_catches(body\first_field, path) != 0
+        l1_blk_d: l1_blk_d - 1
+        return: 1
+    ---
     field: body\first_field
     inherit: 0
     while: field != 0
@@ -2303,6 +2882,13 @@ fn: l1_emit_block (FILE: out; const: (LmP0Structure: body); const: @(char path))
         ---
         inherit: next
         field: field\next
+    if: l1_emit_finallies(out, path, l1_blk_d) != 0
+        l1_blk_d: l1_blk_d - 1
+        return: 1
+    ---
+    l1_fin_pop_depth()
+    l1_catch_pop()
+    l1_blk_d: l1_blk_d - 1
 return: 0
 
 fn: l1_emit_fn (FILE: out; const: (LmP0Frame: frame); const: @(char path); int: is_sub) int
@@ -2315,6 +2901,9 @@ fn: l1_emit_fn (FILE: out; const: (LmP0Frame: frame); const: @(char path); int: 
     const: LmP0Node: ret_node
     const: LmP0Node: body_node
     const: LmP0Text: fn_name
+    LmP0Field: throws_field
+    LmP0Field: rest_field
+    int: only_throws 0
     if: frame = 0 || frame\body = 0
         return: l1_error(path, 0, "fn without body")
     field: frame\body\first_field
@@ -2361,14 +2950,16 @@ fn: l1_emit_fn (FILE: out; const: (LmP0Frame: frame); const: @(char path); int: 
         return: l1_error(path, name_node, "fn name is not an identifier")
     ret_node: 0
     body_node: 0
+    l1_cur_void: is_sub
+    l1_cur_thn: 0
+    l1_allow_throws: 0
+    only_throws: 0
     if: is_sub != 0
         body_node: third
         if: fourth != 0
             return: l1_error(path, fourth, "sub has no return-type slot")
         if: body_node != 0 && body_node\kind != c.LM_P0_NODE_STRUCTURE
             return: l1_error(path, body_node, "sub body must be a block")
-        if: l1_write_cstr(out, "void") != 0
-            return: 1
         ---
     else:
         ret_node: third
@@ -2377,6 +2968,38 @@ fn: l1_emit_fn (FILE: out; const: (LmP0Frame: frame); const: @(char path); int: 
             return: l1_error(path, name_node, "fn missing return type")
         if: body_node != 0 && body_node\kind != c.LM_P0_NODE_STRUCTURE
             return: l1_error(path, body_node, "fn body must be a block")
+        ---
+    ---
+    throws_field: 0
+    rest_field: 0
+    if: body_node != 0 && body_node\as\structure != 0
+        throws_field: body_node\as\structure\first_field
+        while: throws_field != 0 && l1_node_ignored(throws_field\value)
+            throws_field: throws_field\next
+        if: throws_field != 0 && throws_field\value != 0 && throws_field\value\kind = c.LM_P0_NODE_FRAME && l1_text_eq(throws_field\value\as\frame\head, "throws")
+            if: l1_record_throws(throws_field\value\as\frame, fn_name, path, throws_field\value) != 0
+                return: 1
+            if: l1_head_is(fn_name, "main") != 0
+                return: l1_error(path, throws_field\value, "main cannot declare throws")
+            l1_allow_throws: 1
+            rest_field: throws_field\next
+            while: rest_field != 0 && l1_node_ignored(rest_field\value)
+                rest_field: rest_field\next
+            if: rest_field = 0 && (frame\trailer = 0 || frame\trailer\spelling = 0 || l1_text_eq(frame\trailer\spelling, "return") = 0)
+                only_throws: 1
+            ---
+        ---
+    ---
+    if: l1_cur_thn != 0 && only_throws = 0
+        if: l1_emit_throw_channel(out) != 0
+            return: 1
+        ---
+    ---
+    if: is_sub != 0
+        if: l1_write_cstr(out, "void") != 0
+            return: 1
+        ---
+    else:
         if: l1_emit_type_token(out, ret_node, path) != 0
             return: 1
         ---
@@ -2389,7 +3012,7 @@ fn: l1_emit_fn (FILE: out; const: (LmP0Frame: frame); const: @(char path); int: 
         return: 1
     if: l1_emit_param_list(out, params_node, path) != 0
         return: 1
-    if: body_node = 0 && (frame\trailer = 0 || frame\trailer\spelling = 0 || l1_text_eq(frame\trailer\spelling, "return") = 0)
+    if: (body_node = 0 || only_throws != 0) && (frame\trailer = 0 || frame\trailer\spelling = 0 || l1_text_eq(frame\trailer\spelling, "return") = 0)
         return: l1_write_cstr(out, ");\n")
     if: l1_write_cstr(out, ")\n{\n") != 0
         return: 1
@@ -2399,6 +3022,8 @@ fn: l1_emit_fn (FILE: out; const: (LmP0Frame: frame); const: @(char path); int: 
         ---
     ---
     if: frame\trailer != 0 && frame\trailer\spelling != 0 && frame\trailer\spelling\length != 0U && l1_text_eq(frame\trailer\spelling, "return")
+        if: l1_emit_finallies(out, path, 1) != 0
+            return: 1
         if: l1_write_cstr(out, "    return ") != 0
             return: 1
         if: l1_emit_expr(out, frame\trailer\body, path, 0) != 0
@@ -3213,6 +3838,7 @@ fn: l1_translate (const: @(char in_path); const: @(char out_path)) int
     c.array: []: char tmp 1040
     l1_imp_actn: 0
     l1_imp_donen: 0
+    l1_throw_reset()
 
     status: lm_p0_parse_file(in_path, @ document)
     if: status != 0
