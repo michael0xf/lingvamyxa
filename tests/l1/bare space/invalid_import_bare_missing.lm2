@@ -1,0 +1,8 @@
+L1:
+    import: "no_such_bare.lm2"
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L1

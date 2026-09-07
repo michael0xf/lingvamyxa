@@ -1,0 +1,6 @@
+L1:
+    import: "cb.lm2"
+    fn: ca () int
+        return: 0
+    end: ca
+end: L1

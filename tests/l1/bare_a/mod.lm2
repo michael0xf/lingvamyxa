@@ -1,0 +1,6 @@
+L1:
+    import: "helper.lm2"
+    fn: va () int
+        return: ha()
+    end: va
+end: L1

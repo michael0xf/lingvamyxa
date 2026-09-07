@@ -1,0 +1,4 @@
+﻿# Ignore local chat traffic; keep protocol docs if committed intentionally.
+inbox/
+outbox/
+seen/

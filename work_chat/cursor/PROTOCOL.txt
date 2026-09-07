@@ -1,17 +1,24 @@
-Cursos (Cursor / Composer) file-drop chat
-=========================================
+﻿Cursor (Composer / Auto) file-drop chat
+=======================================
 
 Root (this machine):
 
+    C:\Nyasha_Planet\lingvamyxa\work_chat\cursor\
+
+    inbox\      user -> cursor  (new request)
+    outbox\     cursor -> user  (reply)
+    seen\       cursor marks a request as taken (same filename)
+
+Legacy sibling path (same agent, older name):
+
     C:\Nyasha_Planet\lingvamyxa\work_chat\cursos\
 
-    inbox\      user -> cursos  (new request)
-    outbox\     cursos -> user  (reply)
-    seen\       cursos marks a request as taken (same filename)
+Prefer this `cursor\` channel going forward. Leave `cursos\` history in place.
 
-Sibling channel (Grok, not yours):
+Sibling channels (not yours):
 
     C:\Nyasha_Planet\lingvamyxa\work_chat\grok\
+    C:\Nyasha_Planet\lingvamyxa\work_chat\claude\
 
 Simple work stays here. Hard work: ask the user to drop it in Grok's
 inbox (subscription cost split — yearly vs monthly — not a skill ranking).
@@ -38,7 +45,7 @@ The whole file is the user message. No header required.
 
 Optional first line, if you want a type tag:
 
-    # cursos-chat-v1
+    # cursor-chat-v1
 
 Anything after that is still the request. If the first line is not that tag,
 the entire file is the request.
@@ -46,7 +53,7 @@ the entire file is the request.
 Reply body (outbox)
 -------------------
 
-Same basename as the request. The whole file is the cursos answer
+Same basename as the request. The whole file is the cursor answer
 (markdown/text). Do not require a header. Write the file only when the
 answer is complete (write to a temp name in outbox, then rename).
 
@@ -58,13 +65,13 @@ Lifecycle
 ---------
 
 1. User creates a new file in inbox\ with a datetime name.
-2. Cursos notices a file in inbox\ whose basename is not in seen\ and not
+2. Cursor notices a file in inbox\ whose basename is not in seen\ and not
    yet in outbox\.
-3. Cursos writes seen\<basename> immediately (claim), so a second watcher
+3. Cursor writes seen\<basename> immediately (claim), so a second watcher
    does not take it.
-4. Cursos reads the inbox file as the user request, does the work (or asks
+4. Cursor reads the inbox file as the user request, does the work (or asks
    to delegate hard work to Grok).
-5. Cursos writes outbox\<basename> (temp + rename).
+5. Cursor writes outbox\<basename> (temp + rename).
 6. Leave the inbox file in place. Do not delete user files.
 
 A request is new iff it is a *.txt in inbox\ and seen\<basename> does not exist.

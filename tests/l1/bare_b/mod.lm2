@@ -1,0 +1,6 @@
+L1:
+    import: "helper.lm2"
+    fn: vb () int
+        return: hb()
+    end: vb
+end: L1
