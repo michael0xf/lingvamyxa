@@ -12,6 +12,7 @@ to C99.
 | --- | --- |
 | Source syntax, strings, comments, normalization | 3–6, 15 |
 | Structure ontology, address-derived types, merge, compatibility | 2 |
+| Typing: guarantees, strictness and common objections | 2.5 |
 | Array descriptor pools and contiguous element storage | 6.5 |
 | Method definitions, return and explicit field access | 7–14 |
 | Control, exceptions and receiver families | 19.1–19.27 |
@@ -1070,6 +1071,7 @@ at consumption edges, rather than requiring a complete nominal contract or
 giving up all checking. A positive result covers the inspected requirements,
 not every possible future use. This does not relax an inspected path or call
 signature: missing required paths and mismatched required signatures fail.
+Section 2.5 explains the guarantees, failure boundaries and common objections.
 
 There are two distinct three-argument predicates, neither requiring a runtime
 Namespace or an implicit per-Structure type descriptor:
@@ -1175,21 +1177,11 @@ the consumed value remains a word.
 
 2.1.2. What This Is Not
 
-It is not Java's nominative interface taken as a whole. Java requires every
-method of the declared interface; unused methods are commonly stubbed and fail
-later. Lingvamyxa requires the paths this Consumer actually uses.
-
-It is not Python's class-tagged object with optional manual `int(s)`. A Python
-value already has a class; conversion is a call the program writes, or a late
-`AttributeError`. Lingvamyxa conversion at a primitive leaf may use an explicit
-description Structure composed by runtime `merge` and is aimed at what this
-Consumer asked.
-
-Near neighbours exist and are not this predicate: C++ template instantiation
-checks operations that were instantiated; Haskell collects constraints from a
-body but still names type classes; Go and TypeScript compare a declared shape;
-pydantic, serde and .NET `TypeConverter` coerce to a declared schema. None of
-them is `implements(varA varB Consumer)` plus merge-keyed converters on the used tree.
+This is not nominal membership, equality of whole declared interfaces or a
+proof of all future uses. It checks the requirements exposed by this Consumer;
+explicit description Structures and keyed converters serve the selected
+consumption edge. Neither construction nor a matching name certifies meaning,
+resource validity or behavior. The practical distinctions are collected in 2.5.
 
 2.1.3. Thin-Consumption Report
 
@@ -1215,6 +1207,13 @@ requirements cannot be resolved statically. Unknown coverage must not be
 presented as either verified thickness or an exhaustive list of thin leaves.
 External-handle lifetime contracts and checked wrappers (19.29.10) remain
 independent controls; this report does not replace them.
+
+The translator should also offer a diagnostic for an unqualified access whose
+selected Structure is known to contain several occurrences of that name. Report
+the selected `[0]` and the other known occurrences; explicit `[k]` selection
+states the choice. This is review information, not an admission rule or a change
+to lookup order. If the occurrence set is not statically known, do not claim
+that the access is unique.
 
 2.2. Substrate, Primitive Leaves and Conversion Keys
 
@@ -1635,6 +1634,214 @@ The same language therefore contains strict used-tree typing (the manager)
 and consumer-driven conversion at word leaves (inside `File`, which is itself
 a consumer of primitive `FILE`). Switching between them is changing Consumer, not
 enabling a flag.
+
+
+2.5. Typing / Типизация
+
+This section explains the contract of 2.1–2.4, 19.29 and 21. It introduces no
+nominal type layer and no global "strict mode". Recommendations are identified
+as such; the detailed operation rules remain in those sections. This is the
+L2/L3 model, not a claim about the separate direct-C99 L1 translator.
+
+2.5.1. What a Type Claim Means
+
+Address classification answers what a reference denotes: a primitive cell,
+method record, Array descriptor or another registered domain. Consumer-relative
+compatibility answers a different question: whether the inspected requirements
+of this use are met. An optional description is ordinary explicit data; it is
+not an automatically attached schema or a proof of a value's intended meaning.
+
+The controls are separate:
+
+| Control | What it establishes | What it does not establish |
+| --- | --- | --- |
+| `implements(A B Consumer)` | Known source used paths and admitted leaves | Unknown paths or all future uses |
+| `RuntimeImplements(A B Consumer)` | Requirements visible in the available current graph | Hidden Consumer behavior; it never runs Consumer |
+| Actual typed-call admission | Exact `sig` and supplied dynamic inputs | Correctness of the method's algorithm |
+| Keyed conversion | The selected conversion, with destination-range checks | Semantic units, resource validity or all-pair availability |
+| Immutability | No mutation of the protected value through an alias | Correct initialization, resource lifetime or transaction rollback |
+| Message ownership | No implicit cross-Message sharing of mutable arenas | Absence of external effects or universal fault containment |
+
+The two predicates are independent operations, not one ideal predicate and its
+approximation. Their common leaf rules do not erase their different inputs or
+coverage. A successful check freezes neither operand. Unknown coverage is
+reported separately from known thin consumption (2.1.3).
+
+2.5.2. Choosing Guarantees by the Consequences of Failure
+
+The design does not make total error prevention a prerequisite for useful
+checking. Evaluate both the requirements that are checked and what a failure
+can affect. Ordinary Message graph ownership and serial turns provide a local
+state boundary: no raw mutable link into another Message's arena is admitted,
+and local collection does not scan that arena (19.29). A failure policy may
+terminate the failed Message: stop its further turns, discard its staged outbox,
+perform the required cleanup and reclaim its arena (19.29.8). This terminates
+the logical Message, not forcibly its OS worker, which may serve other Messages.
+
+This is not a promise that every defect affects only one Message. Explicitly
+sent data can carry a logical error elsewhere; external resources, low-level
+operations and runtime/host failures need their own contracts. The L2/L3
+distinction is not a sandbox or an authority system (19.29.0, 19.29.10).
+
+Nor is a failed turn a transaction or automatic Message destruction. A caught
+`throw` can continue the turn. At end-turn, success publishes the FIFO outbox;
+failure discards its staged outbox, but not already published graph/own-field
+writes. A surviving Message can retain partially written state. Choosing the
+termination policy prevents reuse of that failed Message's partial state;
+reclaiming its arena does not reverse already published messages or external
+effects. Destruction is a separate operation that the failure policy can invoke
+(19.29.8, 19.29.14), not the meaning of every `throw`.
+
+Recommendation: choose stronger explicit contracts where consequences demand
+them—especially kernel/scheduler code, trust boundaries, external resources,
+and state that must not be left partially updated. Thin-consumption and unknown-
+coverage reports help locate these decisions; they are not new admission gates.
+
+2.5.3. Critical Trees, `const` and Validators
+
+Recommendation: for critical compatibility decisions, make the relevant trees
+of both `varA` and `varB` const throughout, including their explicit descriptions,
+and validate ranges and semantic constraints at their leaves. When those trees
+and validation requirements are available and evaluable at build time, the
+translator can check description values exactly, including units of measurement,
+and reject a mismatch before execution. This is more than checking the presence
+of a `unit` or `range` path.
+
+The explicit contract determines which values must agree and which conversions
+are admitted; neither `const` nor partial `implements` silently becomes equality
+of all fields. Constness alone does not make runtime-produced data available at
+build time. Keep intentional mutable working state explicit. This recommendation
+combines existing operations, not a new global mode or a replacement predicate.
+
+Protection concerns the actual qualified storage/value and referents, under
+the selected receiver/domain contract (9.1, 19.29.9). A constant reference must
+not be assumed to freeze every independently reachable object or foreign
+resource. A truly immutable referent cannot be changed through another alias;
+an update that creates a new value does not mutate that referent. Where a write
+is statically known to violate the qualification it is rejected at translation;
+runtime-selected access must preserve the same immutability contract.
+
+Existing negative fixture `tests/trans_invalid_array_reference_const_element_assignment.lm2`:
+
+    const: [2]: int: values 1 2
+    values[0]: 3
+
+The attempted element write is invalid. This fixture illustrates qualification,
+not implemented recursive freezing of arbitrary graphs in the replacement core.
+
+`const` alone supplies neither validation of initialization nor external-resource
+or transaction guarantees. Where partial publication is unacceptable, define an
+explicit validation/publication or recovery protocol (2.5.2).
+
+2.5.4. Common Questions and Objections
+
+1. "Where are generics?"
+   Structures are both ordinary data and material for explicit descriptions and
+   composition. Reuse is checked against Consumer's used tree rather than a
+   separate nominal interface. This is the model's generic mechanism (2.1.1),
+   not a claim to provide every property of parametric polymorphism.
+
+2. "How is rebinding different from mutation without assignment `=`?"
+   Bare `x: value` updates an activation value: own graph-backed locals become
+   dirty until a checkpoint; formal/result/dynamic copies stay local. Explicit
+   `p\x: value` or `a[i]: value` writes the selected referent. Neither bare-name
+   assignment nor ordinary field replacement implicitly appends an occurrence
+   (14.1, 20.4, 21.3–21.6).
+
+3. "Can an alias change the same object?"
+   Yes, for mutable referents inside one Message. Passing a Structure/Array
+   copies the reference, not the referent. Use explicit `copy:` where its
+   contract supplies independence, or genuinely immutable values when mutation
+   is unwanted; copying is not automatic (19.29.9–19.29.11, 21.4).
+
+4. "Can compatibility pass although the called method cannot obtain `x`?"
+   Yes, compatibility is not the entire call-admission condition. Suppose A and
+   B expose the same `m`, whose body uses bare `x`; Consumer only invokes `m`.
+   The used-callable check can pass, but the call must still supply `x` from
+   caller locals, inherited inputs or that callable's immediate `node\x`.
+   If none exists, admission fails. Known cases are rejected during translation;
+   a runtime-selected target needs the corresponding guard (21.3, 21.9).
+   This does not add callee-body expansion to `uses`.
+
+5. "Does a thin leaf check almost nothing?"
+   A read/transported word has the limited leaf contract of 2.2.3; unused data
+   imposes no requirement. Traversing a description requires its used paths,
+   but its terminal scalars may still be thin. Presence of `x\width` does not
+   prove `width = 32`. Validate the intended constraint, at build time when
+   2.5.3 applies.
+
+6. "Do broad converter tables make all values equivalent?"
+   No. Available keyed conversions widen the admitted word edges, not the set
+   of required structural paths or exact callable signatures. No profile must
+   supply all pairs, and neither predicate executes a converter (2.2.4).
+
+7. "Can narrowing silently wrap?"
+   Not under 2.2.4: with an available converter, `u16(255) -> u8` is admitted;
+   `u16(256) -> u8` is a range error, not zero. In-range rounding/precision loss
+   is a separate numeric-profile policy, not settled by a range check.
+
+8. "What distinguishes meters from feet?"
+   Explicit descriptions and operations can express units. Merely naming a
+   Structure `Meter`, storing a `unit` field, or adding `const` does not prove
+   unit agreement: the Consumer/validator must enforce the intended constraint.
+   The leaf rules do not silently compare descriptor values or their meaning.
+
+9. "Can an opaque callable be transported without checking its `sig`?"
+   Yes; transport need not know a future call's requirements. Every actual typed
+   call still requires the exact signature and dynamic inputs before invoking
+   the selected entry, even if a previous partial check never inspected it.
+   Equal signatures do not imply equal behavior (2.2.3.1, 21.9).
+
+10. "Can changing a method body break callers?"
+    Adding a free dynamic name can change `DynRequired` and thus `sig`.
+    Known callers must be revalidated; runtime-selected callables remain subject
+    to call admission. An immutable method record does not make every occurrence
+    that refers to it immutable, nor prohibit explicit compatible replacement.
+    A same-signature behavioral change remains a program correctness concern.
+
+11. "Why does a later merge part not override the first?"
+    `merge` constructs a new tree and preserves forward occurrence order; it
+    does not mutate its operands or implement last-wins inheritance (2.3).
+    If the result's `read` occurrences are A then B:
+
+        result\read == result\[0]read    selects A
+        result\[1]read                  selects B
+
+    Select B explicitly or compose the intended fields. The diagnostic in
+    2.1.3 can expose an unintended unqualified choice, including after an import
+    changes. Source parts need not be adjacent or statically available.
+
+12. "Is Structure extension impossible?"
+    No blanket ban follows from this model. There is no implicit nominal class
+    extension or last-wins override. Composition creates a new value; an explicit
+    receiver may append, replace, remove or move occurrences under its own
+    contract (21.11). Runtime structural lookup can observe such changes.
+    Compatibility must not assume that all graphs are permanently frozen.
+
+13. "Do arenas or `const` solve external-handle ownership?"
+    No. A thin `FILE`-like leaf does not prove validity, authority or single close;
+    immutable handle bits do not keep the external resource alive. Checked
+    wrappers and explicit resource/cleanup contracts are needed. L3 has no
+    ordinary `own:`/`borrow:`/`move:` operators; `copy:` does not invent a foreign
+    resource's duplication policy (19.29.10–19.29.11).
+
+14. "Are two predicates just two names for a contradiction?"
+    No: the predicates have different inputs and coverage; actual-call admission
+    is separate (2.5.1).
+
+2.5.5. Open Choices and Implementation Status
+
+Further RuntimeImplements application sites, in-range numeric rounding policies
+and physical call/result/exception ABI choices remain open in their respective
+sections. They do not reopen exact callable admission, checked conversion
+ranges, `[0]` lookup or dirty-only/no-reload checkpoints.
+
+The hosted compatibility walk is still shallow (19.21.3). This chapter and its
+examples define the replacement L2/L3 contract, not proof that the hosted walk,
+direct-C99 L1 or a current runtime implements it. Existing tests can preserve
+older expectations; for example `trans_field_occurrence_merge.lm2` and
+`trans_field_occurrence_callable.lm2` still expect last-wins unqualified access.
+Those assertions need migration, not a change to the normative `[0]` rule.
 
 
 3. Structures and Frames
@@ -10882,7 +11089,7 @@ Exactly one local collection pass runs at end-turn:
 This does not roll back earlier graph mutations. Method/handler return,
 `break`, `continue`, `retry`, `redo` and a caught `throw` are not collection
 points. An uncaught failure terminating a turn reaches the same boundary.
-Termination ultimately releases the whole Message arena.
+Message destruction ultimately releases the whole Message arena.
 
 The pass neither scans foreign mutable arenas nor requires a process-global
 heap lock. Same-Message turns do not overlap; other Messages may keep running.
@@ -11359,6 +11566,15 @@ The method-exit boundary and the end-turn boundary are distinct:
 Outbox rollback does not roll back previously published own-field or explicit
 graph mutations. No implicit graph transaction is introduced. The still-open C
 result/exception carrier cannot reorder these semantic boundaries.
+
+An uncaught failure that ends the turn follows point 3. The failure policy may
+then terminate that Message rather than allow further turns over partially
+written state: stop its execution lane, complete required cleanup and reclaim
+its arena under 19.29.8. This is logical Message termination, not forced OS-worker
+termination. Previously published messages or external effects are not undone.
+If the policy keeps the Message alive, its published own/graph state survives.
+Neither policy authorizes raw sharing of its mutable arena with other Messages;
+a caught `throw` alone does not invoke Message destruction.
 
 19.29.14.H. Historical Hosted Control and Ownership Vocabulary
 

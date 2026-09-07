@@ -1863,6 +1863,15 @@ invocation with an exact signature does not. Recurse through nonterminal uses:
 static-unresolved/unknown cases are reported separately. This is additional
 control and does not replace external handle/lifetime contracts.
 
+Main specification 2.5 (Typing) collects the guarantees and common objections.
+Its multiple-occurrence warning is advisory, not a new rejection rule. Do not
+infer recursive freezing from a const root, transaction rollback from arena
+ownership, or a ban on explicit graph mutation from immutable method records.
+For critical checks, const trees of both operands permit build-time validation
+of available descriptions, including units, under an explicit contract. A
+failure policy may terminate the logical Message and reclaim its arena, not
+forcibly terminate its OS worker; external effects are not rolled back.
+
 RU
 
 Есть два предиката (Lingvamyxa_spec.txt, 2.1): source/translator
@@ -1895,6 +1904,15 @@ signature не входит. По нетерминальным uses провер
 `x\width` может закончиться тонким scalar leaf. Пустое множество uses не является
 потреблением; static-unresolved/unknown выводятся отдельно. Отчёт даёт
 дополнительный контроль и не заменяет внешние контракты handles/lifetime.
+
+Основная спецификация §2.5 («Типизация») сводит гарантии и типичные возражения.
+Предупреждение о нескольких occurrences — рекомендация, не новое правило отказа.
+Нельзя выводить рекурсивную заморозку из const-корня, транзакционный откат из
+владения ареной или запрет явной мутации графа из неизменности method-record.
+Для критичных проверок const-деревья обоих операндов позволяют проверить при
+сборке доступные описания, включая единицы измерения, по явному контракту.
+Политика отказа может завершить сам Message и освободить арену, но не прибивает
+рабочий поток ОС и не откатывает внешние эффекты.
 
 
 6.8. Invocation
