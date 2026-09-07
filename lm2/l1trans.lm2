@@ -1553,12 +1553,7 @@ fn: l1_emit_stmt (FILE: out; const: (LmP0Node: node); const: @(char path)) int
     if: node = 0
         return: 1
     if: node\kind = c.LM_P0_NODE_STRUCTURE
-        field: node\as\structure\first_field
-        while: field != 0
-            if: l1_emit_stmt(out, field\value, path) != 0
-                return: 1
-            field: field\next
-        return: 0
+        return: l1_emit_block(out, node\as\structure, path)
     if: node\kind = c.LM_P0_NODE_ATOM
         if: l1_text_eq(node\as\atom, "continue")
             return: l1_write_cstr(out, "    continue;\n")
@@ -1601,14 +1596,8 @@ fn: l1_emit_stmt (FILE: out; const: (LmP0Node: node); const: @(char path)) int
     if: l1_text_eq(head, "else")
         if: l1_write_cstr(out, "    else {\n") != 0
             return: 1
-        if: frame\body != 0
-            field: frame\body\first_field
-            while: field != 0
-                if: l1_emit_stmt(out, field\value, path) != 0
-                    return: 1
-                field: field\next
-            ---
-        ---
+        if: l1_emit_block(out, frame\body, path) != 0
+            return: 1
         return: l1_write_cstr(out, "    }\n")
     if: l1_text_eq(head, "while")
         last: l1_last_active_field(frame\body)
@@ -1777,14 +1766,156 @@ fn: l1_emit_stmt (FILE: out; const: (LmP0Node: node); const: @(char path)) int
         return: 1
 return: 0
 
+fn: l1_frame_is_repeatable (const: (LmP0Frame: frame)) int
+    LmP0Field: field
+    if: frame = 0 || frame\head = 0
+        return: 0
+    if: l1_text_eq(frame\head, "@") || l1_text_eq(frame\head, "@@")
+        if: frame\body = 0 || frame\body\first_field = 0
+            return: 0
+        return: 1
+    if: l1_is_type_name(frame\head) = 0
+        return: 0
+    field: 0
+    if: frame\body != 0
+        field: frame\body\first_field
+    ---
+    while: field != 0 && l1_node_ignored(field\value)
+        field: field\next
+    if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM
+        return: 0
+return: 1
+
+fn: l1_emit_repeat_scalar (FILE: out; const: (LmP0Text: head); const: (LmP0Structure: body); const: @(char path); const: (LmP0Node: node)) int
+    LmP0Field: field
+    const: LmP0Node: name_node
+    if: l1_write_cstr(out, "    ") != 0
+        return: 1
+    if: l1_write_type_spelling(out, head) != 0
+        return: 1
+    field: 0
+    if: body != 0
+        field: body\first_field
+    ---
+    while: field != 0 && l1_node_ignored(field\value)
+        field: field\next
+    if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM
+        return: l1_error(path, node, "repeated declaration expects a name")
+    name_node: field\value
+    if: l1_write_cstr(out, " ") != 0
+        return: 1
+    if: l1_write_text(out, name_node\as\atom) != 0
+        return: 1
+    field: field\next
+    while: field != 0 && l1_node_ignored(field\value)
+        field: field\next
+    if: field != 0
+        if: l1_write_cstr(out, " = ") != 0
+            return: 1
+        if: l1_emit_expr_range(out, field, 0, path, 0) != 0
+            return: 1
+    ---
+return: l1_write_cstr(out, ";\n")
+
+fn: l1_emit_repeat_pointer (FILE: out; const: (LmP0Frame: template); const: (LmP0Structure: body); const: @(char path); const: (LmP0Node: node)) int
+    LmP0Field: tfield
+    LmP0Field: nfield
+    const: LmP0Node: type_node
+    const: LmP0Node: name_node
+    tfield: 0
+    if: template != 0 && template\body != 0
+        tfield: template\body\first_field
+    ---
+    while: tfield != 0 && l1_node_ignored(tfield\value)
+        tfield: tfield\next
+    nfield: 0
+    if: body != 0
+        nfield: body\first_field
+    ---
+    while: nfield != 0 && l1_node_ignored(nfield\value)
+        nfield: nfield\next
+    if: template = 0 || tfield = 0 || tfield\value = 0 || nfield = 0 || nfield\value = 0 || nfield\value\kind != c.LM_P0_NODE_ATOM
+        return: l1_error(path, node, "repeated @ declaration expects type template and name")
+    type_node: tfield\value
+    if: nfield\next != 0 && nfield\value\kind = c.LM_P0_NODE_ATOM && l1_is_type_name(nfield\value\as\atom)
+        type_node: nfield\value
+        nfield: nfield\next
+        while: nfield != 0 && l1_node_ignored(nfield\value)
+            nfield: nfield\next
+        if: nfield = 0 || nfield\value = 0 || nfield\value\kind != c.LM_P0_NODE_ATOM
+            return: l1_error(path, node, "repeated @ declaration override expects a variable name")
+    ---
+    name_node: nfield\value
+    if: l1_write_cstr(out, "    ") != 0
+        return: 1
+    if: l1_emit_type_token(out, type_node, path) != 0
+        return: 1
+    if: l1_text_eq(template\head, "@@")
+        if: l1_write_cstr(out, " **") != 0
+            return: 1
+        ---
+    else:
+        if: l1_write_cstr(out, " *") != 0
+            return: 1
+        ---
+    ---
+    if: l1_write_cstr(out, " ") != 0
+        return: 1
+    if: l1_write_text(out, name_node\as\atom) != 0
+        return: 1
+    nfield: nfield\next
+    while: nfield != 0 && l1_node_ignored(nfield\value)
+        nfield: nfield\next
+    if: nfield != 0
+        if: l1_write_cstr(out, " = ") != 0
+            return: 1
+        if: l1_emit_expr_range(out, nfield, 0, path, 0) != 0
+            return: 1
+    ---
+return: l1_write_cstr(out, ";\n")
+
 fn: l1_emit_block (FILE: out; const: (LmP0Structure: body); const: @(char path)) int
     LmP0Field: field
+    const: LmP0Node: node
+    LmP0Frame: inherit
+    LmP0Frame: current
+    LmP0Frame: next
     if: body = 0
         return: 0
     field: body\first_field
+    inherit: 0
     while: field != 0
-        if: l1_emit_stmt(out, field\value, path) != 0
-            return: 1
+        node: field\value
+        current: 0
+        if: inherit != 0 && node != 0 && node\kind = c.LM_P0_NODE_STRUCTURE
+            current: inherit
+        ---
+        next: 0
+        if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && l1_frame_is_repeatable(node\as\frame)
+            next: node\as\frame
+        else:
+            if: current != 0
+                next: current
+            ---
+        ---
+        if: l1_node_ignored(node) = 0
+            if: current != 0
+                if: l1_text_eq(current\head, "@") || l1_text_eq(current\head, "@@")
+                    if: l1_emit_repeat_pointer(out, current, node\as\structure, path, node) != 0
+                        return: 1
+                    ---
+                else:
+                    if: l1_emit_repeat_scalar(out, current\head, node\as\structure, path, node) != 0
+                        return: 1
+                    ---
+                ---
+            else:
+                if: l1_emit_stmt(out, node, path) != 0
+                    return: 1
+                ---
+            ---
+        ---
+        inherit: next
         field: field\next
 return: 0
 
@@ -1966,18 +2097,13 @@ fn: l1_emit_ifdef_body (FILE: out; const: (LmP0Structure: body); const: @(char p
     LmP0Field: field
     if: body = 0
         return: 0
+    if: as_stmt != 0
+        return: l1_emit_block(out, body, path)
     field: body\first_field
     while: field != 0
         if: l1_node_ignored(field\value) = 0
-            if: as_stmt != 0
-                if: l1_emit_stmt(out, field\value, path) != 0
-                    return: 1
-                ---
-            else:
-                if: l1_emit_item(out, field\value, path, 1, depth) != 0
-                    return: 1
-                ---
-            ---
+            if: l1_emit_item(out, field\value, path, 1, depth) != 0
+                return: 1
         ---
         field: field\next
 return: 0

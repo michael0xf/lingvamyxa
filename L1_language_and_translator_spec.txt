@@ -997,7 +997,7 @@ L2-shaped copy kept only to produce the gen0 seed with stage-0
 
 Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
 `run_smoke.ps1`, `run_parser.ps1`, `run_expr.ps1`, `run_ifdef.ps1`,
-`run_define.ps1` and `run_scalar.ps1`:
+`run_define.ps1`, `run_scalar.ps1` and `run_decl_repeat.ps1`:
 
   - the P0 parser, `own` and `parser_text` ported from frozen
     620db86 into `L1:` form, plus `printTree`, `make`, the
@@ -1020,6 +1020,12 @@ Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
     signed negatives (including an `i64 < 0` check), and a ported hash
     helper checked against independent full 64-bit forward/reverse values.
     This is direct C99 spelling, not primitive-pool or conversion semantics;
+  - repeated heads in supported scalar and @/@@ declarations: four
+    `tests/l1/decl_repeat_*.lm2` fixtures on gen0/gen2 check semicolon and
+    parenthesized forms, pointer depth/type overrides and if/while body lists.
+    Each list has its own repeat state; pointer type overrides affect only
+    that item. Ordinary assignments and %-disabled wrappers reset the template;
+    both reset diagnostics must leave no output C. Array repetition is not covered;
   - 22 expression fixtures executed on gen0 and gen2: nested calls,
     index/field arguments, unary/binary operations, parentheses, casts,
     prefix dereference in reads, assignments, calls and mixed unary chains,

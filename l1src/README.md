@@ -36,7 +36,8 @@ gen0 seed with the old stage-0 `trans.lm0`. It is not the L1 source.
 ## Prerequisites
 
 * `gcc` reachable on `PATH`. New-generation runners (`run_gen` / `run_smoke` /
-  `run_parser` / `run_expr` / `run_ifdef` / `run_define` / `run_scalar` / `build_l1`)
+  `run_parser` / `run_expr` / `run_ifdef` / `run_define` / `run_scalar` /
+  `run_decl_repeat` / `build_l1`)
   invoke it with `-std=c99 -Wall -Wextra -Wpedantic
   -I .` and four hard guards: `-Werror=incompatible-pointer-types
   -Werror=discarded-qualifiers -Werror=implicit-function-declaration
@@ -114,6 +115,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_expr.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_ifdef.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_define.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_scalar.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_decl_repeat.ps1
 ```
 
 All default to `gen0`; set `L1_GEN` (for example `gen2`) to pick another.
@@ -175,6 +177,22 @@ parameters/returns, const/pointers/arrays/casts, unit declarations and
 negatives. The ported hash helper has independent full 64-bit forward/reverse
 oracles; an `i64 < 0` check detects accidental unsigned mapping. Results are
 in `logs/<gen>/scalar.log`; this suite is not called by `run_gen.ps1`.
+
+`run_decl_repeat.ps1` checks four positive fixtures and two reset diagnostics
+on gen0/gen2. Established short declarations emit separate C declarations:
+
+```text
+int: x, 5; y, 10; z, 15
+int(a, 1) (b, 2) (c, 3)
+@: int px 0; py 0; char pc 0
+@@: char ppa 0; ppb 0
+```
+
+Repeat state belongs to each body list; an explicit pointer type override
+affects only that item. Ordinary assignments and `%`-disabled wrappers reset
+the template. The suite checks values, pointer types and nested if/while bodies;
+errors must not publish C. Array repetition is not covered. This standalone
+suite writes `logs/<gen>/decl_repeat.log` and is not called by `run_gen.ps1`.
 
 ## Where output goes
 

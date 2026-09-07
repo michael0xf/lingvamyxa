@@ -1,0 +1,18 @@
+L1:
+    external:
+        fn: main () int
+            char: ch 65
+            @: int px 0; py 0; char pc 0
+            @@: char ppa 0; ppb 0
+            if: px != 0 || py != 0 || pc != 0 || ppa != 0 || ppb != 0
+                return: 1
+            pc: @ ch
+            ppa: @ pc
+            if: pc[0] != 65
+                return: 2
+            if: ppa[0][0] != 65
+                return: 3
+            return: 0
+        end: main
+    end: external
+end: L1
