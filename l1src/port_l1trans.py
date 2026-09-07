@@ -18,6 +18,7 @@ DST = ROOT / "l1src" / "l1trans.lm2"
 EMIT_PROTOS = """
     prototype:
         fn: l1_emit_atom_c (@: FILE out; const: @(LmP0Text t)) int
+        fn: l1_emit_atom_node (@: FILE out; const: @(LmP0Node node)) int
         fn: l1_is_unary_prefix_atom (const: @(LmP0Text text)) int
         fn: l1_is_infix_atom (const: @(LmP0Text text)) int
         fn: l1_is_incdec_atom (const: @(LmP0Text text)) int

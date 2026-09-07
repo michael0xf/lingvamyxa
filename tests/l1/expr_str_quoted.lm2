@@ -1,0 +1,18 @@
+L1:
+    fn: take (const: @(char s)) const: @(char)
+        return: s
+    end: take
+
+    external:
+        fn: main () int
+            const: @(char q) "hello"
+            if: q[0] != 104 || q[1] != 101 || q[4] != 111 || q[5] != 0
+                return: 1
+            if: take("ok")[0] != 111 || take("ok")[1] != 107
+                return: 2
+            if: (cast: (int) 'A') != 65
+                return: 3
+            return: 0
+        end: main
+    end: external
+end: L1

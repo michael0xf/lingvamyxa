@@ -1008,7 +1008,7 @@ Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
     `-Werror=discarded-qualifiers`,
     `-Werror=implicit-function-declaration`, `-Werror=implicit-int`;
   - the gen2 compiler smoke suite;
-  - 17 expression fixtures executed on gen0 and gen2: nested calls,
+  - 22 expression fixtures executed on gen0 and gen2: nested calls,
     index/field arguments, unary/binary operations, parentheses, casts,
     prefix dereference in reads, assignments, calls and mixed unary chains,
     prefix/postfix `++`/`--` in arguments and indices, and `xs[\p]`;
@@ -1019,6 +1019,14 @@ Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
     `add(\ @ \ p + 1, 1)` emits `add(*(&*(p)) + 1, 1)` and returns 6;
     `expr_inc_arg.lm2` distinguishes `a + ++b` from `a++ + b`
     and preserves separate unary tokens in `take(- --i)`;
+    five string fixtures cover raw triple/fence values in initializers,
+    returns and arguments, plus ordinary string/character regressions.
+    Raw payloads are compared byte-for-byte, including the final NUL.
+    Fence provenance survives imports: payload `"""abc"""` stays nine
+    bytes, and `=` stays string data. Raw `??/n` stays bytes 63,63,47,110;
+    C99 trigraphs and octal-escape adjacency cannot alter these values.
+    Full ordinary-string recanonicalization and byte-blob declarations
+    (10.19) are not established by this checkpoint;
   - parser acceptance against the old oracle: 16 positive fixtures
     whose `printTree` dumps match `build\lm0\printTree.lm0.exe`
     byte-for-byte, 5 malformed fixtures where both sides exit 1, and

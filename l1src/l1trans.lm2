@@ -6,9 +6,12 @@ L1:
     c.array: []: char l1_imp_done 16640
     int: l1_imp_actn 0
     int: l1_imp_donen 0
+    const: @: char l1_src 0
+    size_t: l1_srcn 0
 
     prototype:
         fn: l1_emit_atom_c (@: FILE out; const: @(LmP0Text t)) int
+        fn: l1_emit_atom_node (@: FILE out; const: @(LmP0Node node)) int
         fn: l1_is_unary_prefix_atom (const: @(LmP0Text text)) int
         fn: l1_is_infix_atom (const: @(LmP0Text text)) int
         fn: l1_is_incdec_atom (const: @(LmP0Text text)) int
@@ -263,6 +266,159 @@ L1:
             return: l1_write_span(out, text\data + start, text\length - start)
     return: l1_c_ident_from(out, text, start)
 
+    fn: l1_emit_c99_string (@: FILE out; const: @(char data); size_t: n) int
+        size_t: i 0U
+        unsigned: b
+        c.array: []: char oct 5
+        if: l1_write_cstr(out, "\"") != 0
+            return: 1
+        while: i < n
+            b: (cast: (unsigned) (cast: (uchar) data[i]))
+            if: b = 34U
+                if: l1_write_cstr(out, "\\\"") != 0
+                    return: 1
+                i: i + 1U
+                continue
+            ---
+            if: b = 63U
+                if: l1_write_cstr(out, "\\?") != 0
+                    return: 1
+                i: i + 1U
+                continue
+            ---
+            if: b = 92U
+                if: l1_write_cstr(out, "\\\\") != 0
+                    return: 1
+                i: i + 1U
+                continue
+            ---
+            if: b = 10U
+                if: l1_write_cstr(out, "\\n") != 0
+                    return: 1
+                i: i + 1U
+                continue
+            ---
+            if: b = 13U
+                if: l1_write_cstr(out, "\\r") != 0
+                    return: 1
+                i: i + 1U
+                continue
+            ---
+            if: b < 32U || b > 126U
+                oct[0]: 92
+                oct[1]: (cast: (char) (48 + (b / 64U)))
+                oct[2]: (cast: (char) (48 + ((b / 8U) % 8U)))
+                oct[3]: (cast: (char) (48 + (b % 8U)))
+                oct[4]: 0
+                if: l1_write_cstr(out, oct) != 0
+                    return: 1
+                i: i + 1U
+                continue
+            ---
+            if: l1_write_span(out, data + i, 1U) != 0
+                return: 1
+            i: i + 1U
+    return: l1_write_cstr(out, "\"")
+
+    fn: l1_python_triple_quote (const: @(LmP0Text text)) int
+        if: text = 0 || text\data = 0 || text\length < 6U
+            return: 0
+        if: text\data[0] != text\data[1] || text\data[1] != text\data[2]
+            return: 0
+        if: text\data[0] != 34 && text\data[0] != 39
+            return: 0
+        if: text\data[text\length - 3U] != text\data[0] || text\data[text\length - 2U] != text\data[0] || text\data[text\length - 1U] != text\data[0]
+            return: 0
+    return: (cast: (int) text\data[0])
+
+    fn: l1_source_is_eq_fence (const: @(char src); size_t: n; size_t: off) int
+        size_t: i
+        size_t: eq 0U
+        if: src = 0 || off >= n
+            return: 0
+        if: off != 0U && src[off - 1U] != 10 && src[off - 1U] != 13
+            return: 0
+        if: src[off] != 61
+            return: 0
+        i: off
+        while: i < n && src[i] = 61
+            eq: eq + 1U
+            i: i + 1U
+        if: eq < 3U
+            return: 0
+        while: i < n && (src[i] = 32 || src[i] = 9)
+            i: i + 1U
+        if: i >= n || src[i] = 10 || src[i] = 13
+            return: 1
+    return: 0
+
+    fn: l1_src_release () void
+        if: l1_src != 0
+            c.free((cast: (@: void) l1_src))
+        ---
+        l1_src: 0
+        l1_srcn: 0
+
+    fn: l1_src_load (const: @(char path)) int
+        @: FILE f
+        long: n
+        size_t: nn
+        @: char buf
+        f: c.fopen(path, "rb")
+        if: f = 0
+            return: 1
+        if: c.fseek(f, 0, 2) != 0
+            c.fclose(f)
+            return: 1
+        n: c.ftell(f)
+        if: n < 0
+            c.fclose(f)
+            return: 1
+        c.rewind(f)
+        nn: (cast: (size_t) n)
+        buf: (cast: (@: char) c.malloc(nn + 1U))
+        if: buf = 0
+            c.fclose(f)
+            return: 1
+        if: nn != 0U && c.fread(buf, 1U, nn, f) != nn
+            c.free(buf)
+            c.fclose(f)
+            return: 1
+        c.fclose(f)
+        buf[nn]: 0
+        l1_src: buf
+        l1_srcn: nn
+    return: 0
+
+    fn: l1_node_is_block_string (const: @(LmP0Node node)) int
+        if: node = 0 || node\span = 0 || l1_src = 0
+            return: 0
+    return: l1_source_is_eq_fence(l1_src, l1_srcn, node\span\offset)
+
+    fn: l1_atom_is_raw_string (const: @(LmP0Node node)) int
+        if: node = 0 || node\kind != c.LM_P0_NODE_ATOM
+            return: 0
+        if: l1_node_is_block_string(node)
+            return: 1
+        if: l1_python_triple_quote(node\as\atom) != 0
+            return: 1
+    return: 0
+
+    fn: l1_emit_atom_node (@: FILE out; const: @(LmP0Node node)) int
+        const: @: LmP0Text text
+        int: q
+        if: node = 0 || node\kind != c.LM_P0_NODE_ATOM
+            return: 1
+        text: node\as\atom
+        if: l1_node_is_block_string(node)
+            if: text = 0
+                return: l1_emit_c99_string(out, "", 0U)
+            return: l1_emit_c99_string(out, text\data, text\length)
+        q: l1_python_triple_quote(text)
+        if: q != 0
+            return: l1_emit_c99_string(out, text\data + 3U, text\length - 6U)
+    return: l1_emit_atom_c(out, text)
+
     fn: l1_emit_call_frame (@: FILE out; const: @(LmP0Frame frame); const: @(char path); const: @(LmP0Node node)) int
         size_t: deref
         const: @: LmP0Text head
@@ -384,6 +540,13 @@ L1:
                     if: field\next != 0
                         next_node: field\next\value
                     ---
+                    if: l1_atom_is_raw_string(node)
+                        if: l1_emit_atom_node(out, node) != 0
+                            return: 1
+                        after_operand: 1
+                        field: field\next
+                        continue
+                    ---
                     if: l1_text_eq(node\as\atom, "\\")
                         if: after_operand != 0
                             if: l1_write_cstr(out, "->") != 0
@@ -415,7 +578,7 @@ L1:
                                             return: 1
                                         after_operand: 0
                                     else:
-                                        if: l1_emit_atom_c(out, node\as\atom) != 0
+                                        if: l1_emit_atom_node(out, node) != 0
                                             return: 1
                                         if: l1_is_infix_atom(node\as\atom) || l1_is_unary_prefix_atom(node\as\atom)
                                             after_operand: 0
@@ -512,6 +675,13 @@ L1:
                     if: field\next != 0 && field\next != stop
                         next_node: field\next\value
                     ---
+                    if: l1_atom_is_raw_string(node)
+                        if: l1_emit_atom_node(out, node) != 0
+                            return: 1
+                        after_operand: 1
+                        field: field\next
+                        continue
+                    ---
                     if: l1_text_eq(node\as\atom, "\\")
                         if: after_operand != 0
                             if: l1_write_cstr(out, "->") != 0
@@ -543,7 +713,7 @@ L1:
                                             return: 1
                                         after_operand: 0
                                     else:
-                                        if: l1_emit_atom_c(out, node\as\atom) != 0
+                                        if: l1_emit_atom_node(out, node) != 0
                                             return: 1
                                         if: l1_is_infix_atom(node\as\atom) || l1_is_unary_prefix_atom(node\as\atom)
                                             after_operand: 0
@@ -734,18 +904,24 @@ L1:
             break
         ---
         if: node\kind = c.LM_P0_NODE_ATOM
-            if: l1_text_eq(node\as\atom, "=")
-                if: l1_write_cstr(out, "==") != 0
+            if: l1_atom_is_raw_string(node)
+                if: l1_emit_atom_node(out, node) != 0
                     return: 1
                 ---
             else:
-                if: l1_text_eq(node\as\atom, "\\")
-                    if: l1_write_cstr(out, "->") != 0
+                if: l1_text_eq(node\as\atom, "=")
+                    if: l1_write_cstr(out, "==") != 0
                         return: 1
                     ---
                 else:
-                    if: l1_c_ident(out, node\as\atom) != 0
-                        return: 1
+                    if: l1_text_eq(node\as\atom, "\\")
+                        if: l1_write_cstr(out, "->") != 0
+                            return: 1
+                        ---
+                    else:
+                        if: l1_emit_atom_node(out, node) != 0
+                            return: 1
+                        ---
                     ---
                 ---
             ---
@@ -1091,7 +1267,7 @@ L1:
                 if: field\value = 0
                     return: l1_error(path, 0, "empty initializer")
                 if: field\value\kind = c.LM_P0_NODE_ATOM
-                    if: l1_c_ident(out, field\value\as\atom) != 0
+                    if: l1_emit_atom_node(out, field\value) != 0
                         return: 1
                     ---
                 else:
@@ -1311,6 +1487,7 @@ L1:
         @: LmP0Field cond_field
         const: @: LmP0Node name_node
         const: @: LmP0Text head
+        @: LmP0Field const_init 0
         if: l1_node_ignored(node)
             return: 0
         if: node = 0
@@ -1443,11 +1620,15 @@ L1:
             return: l1_emit_c_array(out, frame, path)
         if: l1_text_eq(head, "const") || l1_text_eq(head, "@") || l1_text_eq(head, "@@") || l1_is_type_name(head)
             field: 0
+            const_init: 0
             if: l1_text_eq(head, "const")
                 if: l1_write_cstr(out, "    const ") != 0
                     return: 1
                 if: frame\body = 0 || frame\body\first_field = 0 || frame\body\first_field\value = 0 || frame\body\first_field\value\kind != c.LM_P0_NODE_FRAME
                     return: l1_error(path, node, "const declaration missing type")
+                const_init: frame\body\first_field\next
+                while: const_init != 0 && l1_node_ignored(const_init\value)
+                    const_init: const_init\next
                 frame: frame\body\first_field\value\as\frame
                 if: frame = 0
                     return: l1_error(path, node, "const declaration missing type")
@@ -1493,6 +1674,9 @@ L1:
             field: field\next
             while: field != 0 && l1_node_ignored(field\value)
                 field: field\next
+            if: const_init != 0
+                field: const_init
+            ---
             if: field != 0
                 if: l1_write_cstr(out, " = ") != 0
                     return: 1
@@ -1719,6 +1903,8 @@ L1:
 
     fn: l1_emit_imported (@: FILE out; const: @(char in_path); int: depth) int
         @: LmP0Document document 0
+        const: @: char saved_src
+        size_t: saved_n
         const: @: LmP0Node root
         @: LmP0Field field
         int: status
@@ -1743,10 +1929,24 @@ L1:
             c.fprintf(c.stderr, "l1trans error: %s:1:1: missing L1 body\n", in_path)
             l1_imp_actn: l1_imp_actn - 1
             return: 1
+        saved_src: l1_src
+        saved_n: l1_srcn
+        l1_src: 0
+        l1_srcn: 0
+        if: l1_src_load(in_path) != 0
+            l1_src: saved_src
+            l1_srcn: saved_n
+            lm_p0_document_destroy(document)
+            l1_imp_actn: l1_imp_actn - 1
+            return: 1
+        ---
         if: root\kind = c.LM_P0_NODE_STRUCTURE
             field: root\as\structure\first_field
             while: field != 0
                 if: l1_emit_item(out, field\value, in_path, 0, depth) != 0
+                    l1_src_release()
+                    l1_src: saved_src
+                    l1_srcn: saved_n
                     lm_p0_document_destroy(document)
                     l1_imp_actn: l1_imp_actn - 1
                     return: 1
@@ -1754,11 +1954,17 @@ L1:
             ---
         else:
             if: l1_emit_item(out, root, in_path, 0, depth) != 0
+                l1_src_release()
+                l1_src: saved_src
+                l1_srcn: saved_n
                 lm_p0_document_destroy(document)
                 l1_imp_actn: l1_imp_actn - 1
                 return: 1
             ---
         ---
+        l1_src_release()
+        l1_src: saved_src
+        l1_srcn: saved_n
         lm_p0_document_destroy(document)
         l1_imp_actn: l1_imp_actn - 1
         if: l1_imp_push(l1_imp_done, @ l1_imp_donen, in_path) != 0
@@ -1890,20 +2096,27 @@ L1:
             lm_p0_document_destroy(document)
             return: l1_discard_temp(out, tmp)
 
+        if: l1_src_load(in_path) != 0
+            lm_p0_document_destroy(document)
+            return: l1_discard_temp(out, tmp)
+        ---
         if: root\kind = c.LM_P0_NODE_STRUCTURE
             field: root\as\structure\first_field
             while: field != 0
                 if: l1_emit_item(out, field\value, in_path, 0, 0) != 0
+                    l1_src_release()
                     lm_p0_document_destroy(document)
                     return: l1_discard_temp(out, tmp)
                 field: field\next
             ---
         else:
             if: l1_emit_item(out, root, in_path, 0, 0) != 0
+                l1_src_release()
                 lm_p0_document_destroy(document)
                 return: l1_discard_temp(out, tmp)
             ---
         ---
+        l1_src_release()
         lm_p0_document_destroy(document)
     return: l1_commit_temp(out, tmp, out_path)
 

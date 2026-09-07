@@ -62,6 +62,34 @@ $cases = @(
     @{ Name = "expr_index_deref"; Has = @(
         "xs[* p]",
         "take(xs[*(p)])"
+    )},
+    @{ Name = "expr_str_triple_double"; Has = @(
+        'double # not a comment\ncolon: stays data',
+        'backslash is raw: \\\" \\n',
+        'const char * t = "\?\?="'
+    )},
+    @{ Name = "expr_str_triple_single"; Has = @(
+        "single # not a comment",
+        'four \"\"\"\" five'
+    )},
+    @{ Name = "expr_str_triple_args"; Has = @(
+        ") # not syntax",
+        '"c"'
+    )},
+    @{ Name = "expr_str_fence"; Has = @(
+        'alpha\n    beta',
+        "=== literal content",
+        "from-import",
+        '\"\"\"abc\"\"\"',
+        'eq = ("=")',
+        'sl = ("\\")',
+        'br = ("[")',
+        'inc = ("++")',
+        'tb = ("\0110")'
+    )},
+    @{ Name = "expr_str_quoted"; Has = @(
+        '"hello"',
+        "'A'"
     )}
 )
 

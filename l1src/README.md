@@ -118,7 +118,7 @@ against `printTree.lm0.exe` on 16 positive fixtures, then requires exit 1
 from both on 5 malformed fixtures and exit 1 plus a `P0 parse error`
 diagnostic on a missing file.
 
-`run_expr.ps1` has 17 positive fixtures and one diagnostic case, verified on
+`run_expr.ps1` has 22 positive fixtures and one diagnostic case, verified on
 gen0 and gen2; `run_gen.ps1` does not invoke it automatically. It checks
 repeated C output, strict compilation and execution of nested calls,
 index/field arguments, unary/binary operators, parentheses, both cast
@@ -129,6 +129,14 @@ result 384. With `*p == 4`, `expr_deref_mix.lm2` checks that
 `expr_inc_arg.lm2` checks that `a + ++b` does not become `a++ + b`,
 and that `take(- --i)` keeps its separate unary operators. The ported
 `expr_arg_segments.lm2` retains the frozen nested-call results 22 and 21.
+
+Five string fixtures cover triple/fence values in initializers, returns and
+arguments, with independent byte-for-byte payload and final-NUL checks, plus
+ordinary string/character regressions. Fences retain source provenance across
+imports; quote runs and operator-like payload remain data. Raw `??/n` stays
+bytes 63,63,47,110, and tab followed by `0` emits `\0110` without absorbing
+the digit. Full ordinary-string recanonicalization and byte-blob declarations
+are not claimed.
 
 ## Where output goes
 
