@@ -1,5 +1,18 @@
 predef: "l1src/parser.lm1"
-include: "<stdio.h>" "<string.h>" "<stdlib.h>" "<windows.h>"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+os:
+    win:
+        include: "<windows.h>"
+        fn: l1_replace_file (const: @(char tmp); const: @(char out_path)) int
+            if: c.MoveFileExA(tmp, out_path, 1U) = 0
+                return: 1
+        return: 0
+    default:
+        fn: l1_replace_file (const: @(char tmp); const: @(char out_path)) int
+            if: c.rename(tmp, out_path) != 0
+                return: 1
+        return: 0
+end: os
 
 c.array: []: char l1_imp_act 16640
 c.array: []: char l1_imp_done 16640
@@ -533,7 +546,7 @@ fn: l1_commit_temp (@: FILE out; const: @(char tmp); const: @(char out_path)) in
         c.remove(tmp)
         c.fprintf(c.stderr, "l1trans error: cannot write %s\n", out_path)
         return: 1
-    if: c.MoveFileExA(tmp, out_path, 1U) = 0
+    if: l1_replace_file(tmp, out_path) != 0
         c.remove(tmp)
         c.fprintf(c.stderr, "l1trans error: cannot write %s\n", out_path)
         return: 1

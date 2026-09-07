@@ -1,0 +1,878 @@
+predef: "l1src/libc_abi.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+os:
+    win:
+        include: "<direct.h>" "<windows.h>"
+        fn: lm_build_exe_suffix () @: char
+        return: ".exe"
+        fn: lm_build_path_sep () @: char
+        return: "\\"
+        fn: lm_build_platform_chdir (const: @(char path)) int
+        return: c._chdir(path)
+        fn: lm_build_platform_getcwd (@: char buffer; size_t: size) @: char
+        return: c._getcwd(buffer, size)
+        fn: lm_build_platform_absolute (const: @(char path)) int
+            if: path = 0 || path[0] = 0
+                return: 0
+            if: (path[0] = 47 || path[0] = 92) && (path[1] = 47 || path[1] = 92)
+                return: 1
+            if: path[1] = 58 && (path[2] = 47 || path[2] = 92)
+                return: 1
+        return: 0
+        fn: lm_build_file_exists (const: @(char path)) int
+            @: FILE file
+            file: c.fopen(path, "rb")
+            if: file = 0
+                return: 0
+            c.fclose(file)
+        return: 1
+        fn: lm_build_has_qt_cmake () int
+        return: lm_build_file_exists("C:/Qt/Tools/CMake_64/bin/cmake.exe")
+        fn: lm_build_has_qt_mingw_make () int
+        return: lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe")
+        fn: lm_build_has_qt_gcc () int
+        return: lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/gcc.exe")
+        fn: lm_build_has_qt_gxx () int
+        return: lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/g++.exe")
+        fn: lm_build_platform_canary_command_format () @: char
+        return: "powershell -NoProfile -ExecutionPolicy Bypass -File \"%s\""
+        fn: lm_build_platform_canary_script_path () @: char
+        return: "build/obj/run_lm0_canary.ps1"
+        fn: lm_build_platform_canary_command_path (const: @(char canary_path)) @: char
+            if: canary_path = 0
+                return: lm_build_platform_canary_script_path()
+        return: lm_build_platform_canary_script_path()
+        fn: lm_build_prepare_platform_canary (const: @(char canary_path)) int
+            @: FILE file
+            file: c.fopen(lm_build_platform_canary_script_path(), "wb")
+            if: file = 0
+                c.fprintf(c.stderr, "buildCore.lm0: cannot write canary script %s\n", lm_build_platform_canary_script_path())
+                return: 1
+            c.fprintf(file, "$exe = (Resolve-Path -LiteralPath '%s').Path\n", canary_path)
+            c.fputs("$p = Start-Process -FilePath $exe -ArgumentList '--next' -WorkingDirectory (Get-Location).Path -PassThru\n", file)
+            c.fputs("if (-not $p.WaitForExit(180000)) { $p.Kill(); exit 124 }\n", file)
+            c.fputs("exit $p.ExitCode\n", file)
+            if: c.fclose(file) != 0
+                c.fprintf(c.stderr, "buildCore.lm0: cannot close canary script %s\n", lm_build_platform_canary_script_path())
+                return: 1
+        return: 0
+        fn: lm_build_platform_tests_script_path () @: char
+        return: "build/obj/tests/run_lm0_tests.ps1"
+        fn: lm_build_platform_tests_command_format () @: char
+        return: "powershell -NoProfile -ExecutionPolicy Bypass -File \"%s\""
+        fn: lm_build_setenv (const: @(char name); const: @(char value)) int
+            c.array: []: char assignment 256
+            if: name = 0
+                return: 1
+            if: value = 0
+                c.snprintf(assignment, c.sizeof(assignment), "%s=", name)
+            ---
+            if: value != 0
+                c.snprintf(assignment, c.sizeof(assignment), "%s=%s", name, value)
+            ---
+        return: c._putenv(assignment)
+        fn: lm_build_unsetenv (const: @(char name)) int
+            c.array: []: char assignment 256
+            if: name = 0
+                return: 1
+            c.snprintf(assignment, c.sizeof(assignment), "%s=", name)
+        return: c._putenv(assignment)
+        fn: lm_build_write_platform_tests_script (@: FILE file; const: @(char output_dir); const: @(char parser_library); const: @(char own_library)) int
+            c.fputs("$ErrorActionPreference = 'Stop'\n", file)
+            c.fputs("$lmTestSuite = $env:LM_TEST_SUITE\n", file)
+            c.fputs("if (-not $lmTestSuite) { $lmTestSuite = 'full' }\n", file)
+            c.fputs("if ('smoke','core','full' -notcontains $lmTestSuite) { throw ('unknown LM_TEST_SUITE: ' + $lmTestSuite) }\n", file)
+            c.fputs("Write-Host ('lm0 staged tests suite: ' + $lmTestSuite)\n", file)
+            c.fputs("foreach ($k in @('LM_TRANS_REGISTRY','LM_P0_REGISTRY','LM_TRANS_REGISTRY_VIEW','LM_P0_COMPARE_REGISTRY')) { Remove-Item ('Env:' + $k) -ErrorAction SilentlyContinue }\n", file)
+            c.fprintf(file, "$trans = '%s/l1trans.lm0%s'\n", output_dir, lm_build_exe_suffix())
+            c.fprintf(file, "$make = '%s/make.lm0%s'\n", output_dir, lm_build_exe_suffix())
+            c.fprintf(file, "$printTree = '%s/printTree.lm0%s'\n", output_dir, lm_build_exe_suffix())
+            c.fprintf(file, "Write-Host ('staged l1trans: ' + $trans)\n")
+            c.fprintf(file, "Write-Host ('staged make: ' + $make)\n")
+            c.fprintf(file, "# parser_library %s\n", parser_library)
+            c.fprintf(file, "# own_library %s\n", own_library)
+            c.fputs("New-Item -ItemType Directory -Force 'build/obj/tests' | Out-Null\n", file)
+            c.fputs("function Invoke-Lm1Pos([string]$Src) {\n", file)
+            c.fputs("    $name = [IO.Path]::GetFileNameWithoutExtension($Src)\n", file)
+            c.fputs("    $cPath = Join-Path 'build/obj/tests' ($name + '.c')\n", file)
+            c.fputs("    $exePath = Join-Path 'build/obj/tests' ($name + '.exe')\n", file)
+            c.fputs("    Write-Host ('translate ' + $Src)\n", file)
+            c.fputs("    & $trans $Src $cPath\n", file)
+            c.fputs("    if ($LASTEXITCODE -ne 0) { throw ('translate failed: ' + $Src) }\n", file)
+            c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-I.' '-Werror=incompatible-pointer-types' '-Werror=discarded-qualifiers' '-Werror=implicit-function-declaration' '-Werror=implicit-int' $cPath '-o' $exePath\n", file)
+            c.fputs("    if ($LASTEXITCODE -ne 0) { throw ('link failed: ' + $Src) }\n", file)
+            c.fputs("    & $exePath\n", file)
+            c.fputs("    if ($LASTEXITCODE -ne 0) { throw ('run failed: ' + $Src + ' exit ' + $LASTEXITCODE) }\n", file)
+            c.fputs("}\n", file)
+            c.fputs("function Invoke-Lm1Neg([string]$Src) {\n", file)
+            c.fputs("    $name = [IO.Path]::GetFileNameWithoutExtension($Src)\n", file)
+            c.fputs("    $cPath = Join-Path 'build/obj/tests' ($name + '.c')\n", file)
+            c.fputs("    if (Test-Path -LiteralPath $cPath) { Remove-Item -LiteralPath $cPath -Force }\n", file)
+            c.fputs("    Write-Host ('negative ' + $Src)\n", file)
+            c.fputs("    & $trans $Src $cPath\n", file)
+            c.fputs("    if ($LASTEXITCODE -eq 0) { throw ('negative translate unexpectedly passed: ' + $Src) }\n", file)
+            c.fputs("    if (Test-Path -LiteralPath $cPath) { throw ('negative translate published C: ' + $Src) }\n", file)
+            c.fputs("}\n", file)
+            c.fputs("& $printTree 'tests/l1/integer_add.lm1' | Out-Null\n", file)
+            c.fputs("if ($LASTEXITCODE -ne 0) { throw 'printTree integer_add failed' }\n", file)
+            c.fputs("$smokePos = @('tests/l1/integer_add.lm1','tests/l1/include_printf.lm1','tests/l1/for_loop.lm1')\n", file)
+            c.fputs("$corePos = $smokePos + @('tests/l1/control_throw_handled.lm1','tests/l1/control_finally.lm1','tests/l1/control_switch.lm1','tests/l1/array_1d.lm1','tests/l1/ident_fn.lm1')\n", file)
+            c.fputs("$fullPos = $corePos + @('tests/l1/lm1_unit.lm1','tests/l1/lm1_import.lm1','tests/l1/expr_nested_call.lm1','tests/l1/shift_ops.lm1','tests/l1/decl_repeat_scalar.lm1','tests/l1/c_array_const.lm1')\n", file)
+            c.fputs("$smokeNeg = @('tests/l1/invalid_empty_lm1.lm1')\n", file)
+            c.fputs("$coreNeg = $smokeNeg + @('tests/l1/invalid_throw_arity.lm1','tests/l1/invalid_throw_main_throws.lm1')\n", file)
+            c.fputs("$fullNeg = $coreNeg + @('tests/l1/invalid_throw_nested.lm1','tests/l1/invalid_throw_payload_type.lm1','tests/l1/invalid_lm1_l2.lm1')\n", file)
+            c.fputs("$pos = $smokePos\n", file)
+            c.fputs("$neg = $smokeNeg\n", file)
+            c.fputs("if ($lmTestSuite -eq 'core') { $pos = $corePos; $neg = $coreNeg }\n", file)
+            c.fputs("if ($lmTestSuite -eq 'full') { $pos = $fullPos; $neg = $fullNeg }\n", file)
+            c.fputs("foreach ($src in $pos) { Invoke-Lm1Pos $src }\n", file)
+            c.fputs("foreach ($src in $neg) { Invoke-Lm1Neg $src }\n", file)
+            c.fputs("Write-Host ('lm0 staged tests passed: ' + $lmTestSuite)\n", file)
+        return: 0
+    default:
+        include: "<unistd.h>"
+        fn: lm_build_exe_suffix () @: char
+        return: ""
+        fn: lm_build_path_sep () @: char
+        return: "/"
+        fn: lm_build_platform_chdir (const: @(char path)) int
+        return: c.chdir(path)
+        fn: lm_build_platform_getcwd (@: char buffer; size_t: size) @: char
+        return: c.getcwd(buffer, size)
+        fn: lm_build_platform_absolute (const: @(char path)) int
+            if: path = 0 || path[0] = 0
+                return: 0
+        return: path[0] = 47
+        fn: lm_build_file_exists (const: @(char path)) int
+            @: FILE file
+            file: c.fopen(path, "rb")
+            if: file = 0
+                return: 0
+            c.fclose(file)
+        return: 1
+        fn: lm_build_has_qt_cmake () int
+        return: 0
+        fn: lm_build_has_qt_mingw_make () int
+        return: 0
+        fn: lm_build_has_qt_gcc () int
+        return: 0
+        fn: lm_build_has_qt_gxx () int
+        return: 0
+        fn: lm_build_platform_canary_command_format () @: char
+        return: "sh -c 'if command -v timeout >/dev/null 2>&1; then timeout 120s \"$1\" --next; elif command -v gtimeout >/dev/null 2>&1; then gtimeout 120s \"$1\" --next; else \"$1\" --next; fi' sh \"%s\""
+        fn: lm_build_platform_canary_command_path (const: @(char canary_path)) @: char
+        return: canary_path
+        fn: lm_build_prepare_platform_canary (const: @(char canary_path)) int
+            if: canary_path = 0
+                return: 0
+        return: 0
+        fn: lm_build_platform_tests_script_path () @: char
+        return: "build/obj/tests/run_lm0_tests.sh"
+        fn: lm_build_platform_tests_command_format () @: char
+        return: "sh \"%s\""
+        fn: lm_build_setenv (const: @(char name); const: @(char value)) int
+            if: name = 0
+                return: 1
+            if: value = 0
+                return: c.setenv(name, "", 1)
+        return: c.setenv(name, value, 1)
+        fn: lm_build_unsetenv (const: @(char name)) int
+            if: name = 0
+                return: 1
+            c.unsetenv(name)
+        return: 0
+        fn: lm_build_write_platform_tests_script (@: FILE file; const: @(char output_dir); const: @(char parser_library); const: @(char own_library)) int
+            c.fputs("set -eu\n", file)
+            c.fputs("lm_test_suite=${LM_TEST_SUITE:-full}\n", file)
+            c.fputs("if [ \"$lm_test_suite\" != smoke ] && [ \"$lm_test_suite\" != core ] && [ \"$lm_test_suite\" != full ]; then echo \"unknown LM_TEST_SUITE: $lm_test_suite\" >&2; exit 1; fi\n", file)
+            c.fputs("echo \"lm0 staged tests suite: $lm_test_suite\"\n", file)
+            c.fputs("unset LM_TRANS_REGISTRY LM_P0_REGISTRY LM_TRANS_REGISTRY_VIEW LM_P0_COMPARE_REGISTRY || true\n", file)
+            c.fprintf(file, "trans='%s/l1trans.lm0%s'\n", output_dir, lm_build_exe_suffix())
+            c.fprintf(file, "make='%s/make.lm0%s'\n", output_dir, lm_build_exe_suffix())
+            c.fprintf(file, "printTree='%s/printTree.lm0%s'\n", output_dir, lm_build_exe_suffix())
+            c.fprintf(file, "echo \"staged l1trans: $trans\"\n")
+            c.fprintf(file, "echo \"staged make: $make\"\n")
+            c.fprintf(file, "# parser_library %s\n", parser_library)
+            c.fprintf(file, "# own_library %s\n", own_library)
+            c.fputs("mkdir -p build/obj/tests\n", file)
+            c.fputs("lm1_pos() {\n", file)
+            c.fputs("    src=$1\n", file)
+            c.fputs("    name=$(basename \"$src\" .lm1)\n", file)
+            c.fputs("    cpath=build/obj/tests/${name}.c\n", file)
+            c.fputs("    exepath=build/obj/tests/${name}\n", file)
+            c.fputs("    echo \"translate $src\"\n", file)
+            c.fputs("    \"$trans\" \"$src\" \"$cpath\"\n", file)
+            c.fputs("    \"$make\" link -std=c99 -Wall -Wextra -Wpedantic -I. -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int \"$cpath\" -o \"$exepath\"\n", file)
+            c.fputs("    \"$exepath\"\n", file)
+            c.fputs("}\n", file)
+            c.fputs("lm1_neg() {\n", file)
+            c.fputs("    src=$1\n", file)
+            c.fputs("    name=$(basename \"$src\" .lm1)\n", file)
+            c.fputs("    cpath=build/obj/tests/${name}.c\n", file)
+            c.fputs("    rm -f \"$cpath\"\n", file)
+            c.fputs("    echo \"negative $src\"\n", file)
+            c.fputs("    if \"$trans\" \"$src\" \"$cpath\"; then echo \"negative translate unexpectedly passed: $src\" >&2; exit 1; fi\n", file)
+            c.fputs("    if [ -f \"$cpath\" ]; then echo \"negative translate published C: $src\" >&2; exit 1; fi\n", file)
+            c.fputs("}\n", file)
+            c.fputs("\"$printTree\" tests/l1/integer_add.lm1 >/dev/null\n", file)
+            c.fputs("pos='tests/l1/integer_add.lm1 tests/l1/include_printf.lm1 tests/l1/for_loop.lm1'\n", file)
+            c.fputs("neg='tests/l1/invalid_empty_lm1.lm1'\n", file)
+            c.fputs("if [ \"$lm_test_suite\" = core ] || [ \"$lm_test_suite\" = full ]; then pos=\"$pos tests/l1/control_throw_handled.lm1 tests/l1/control_finally.lm1 tests/l1/control_switch.lm1 tests/l1/array_1d.lm1 tests/l1/ident_fn.lm1\"; neg=\"$neg tests/l1/invalid_throw_arity.lm1 tests/l1/invalid_throw_main_throws.lm1\"; fi\n", file)
+            c.fputs("if [ \"$lm_test_suite\" = full ]; then pos=\"$pos tests/l1/lm1_unit.lm1 tests/l1/lm1_import.lm1 tests/l1/expr_nested_call.lm1 tests/l1/shift_ops.lm1 tests/l1/decl_repeat_scalar.lm1 tests/l1/c_array_const.lm1\"; neg=\"$neg tests/l1/invalid_throw_nested.lm1 tests/l1/invalid_throw_payload_type.lm1 tests/l1/invalid_lm1_l2.lm1\"; fi\n", file)
+            c.fputs("for src in $pos; do lm1_pos \"$src\"; done\n", file)
+            c.fputs("for src in $neg; do lm1_neg \"$src\"; done\n", file)
+            c.fputs("echo \"lm0 staged tests passed: $lm_test_suite\"\n", file)
+        return: 0
+end: os
+
+int: lm_build_opt_full 0
+int: lm_build_opt_next 0
+int: lm_build_opt_tests 0
+
+fn: lm_build_is_path_separator (int: value) int
+return: value = 47 || value = 92
+
+fn: lm_build_has_path_separator (const: @(char path)) int
+    if: path = 0
+        return: 0
+return: c.strchr(path, 47) != 0 || c.strchr(path, 92) != 0
+
+fn: lm_build_is_absolute_path (const: @(char path)) int
+    if: path = 0 || path[0] = 0
+        return: 0
+    if: lm_build_platform_absolute(path) != 0
+        return: 1
+return: 0
+
+fn: lm_build_join_path (@: char buffer; size_t: size; const: @(char base); const: @(char tail)) int
+    size_t: base_length
+    size_t: tail_length
+    size_t: used
+    const: @: char sep
+    base_length: c.strlen(base)
+    tail_length: c.strlen(tail)
+    used: base_length
+    sep: lm_build_path_sep()
+    if: base_length + tail_length + 2U >= size
+        c.fprintf(c.stderr, "buildCore.lm0: path is too long\n")
+        return: 1
+    c.memcpy(buffer, base, base_length)
+    if: base_length > 0U && tail_length > 0U && lm_build_is_path_separator(base[base_length - 1U]) = 0 && lm_build_is_path_separator(tail[0]) = 0
+        c.memcpy(buffer + used, sep, c.strlen(sep))
+        used: used + c.strlen(sep)
+    ---
+    c.memcpy(buffer + used, tail, tail_length + 1U)
+return: 0
+
+fn: lm_build_trim_last_path_part (@: char path) int
+    size_t: length
+    length: c.strlen(path)
+    while: length > 0U && lm_build_is_path_separator(path[length - 1U])
+        path[length - 1U]: 0
+        length: length - 1U
+    ---
+    while: length > 0U
+        length: length - 1U
+        if: lm_build_is_path_separator(path[length])
+            path[length]: 0
+            return: 0
+        ---
+    ---
+    path[0]: 0
+return: 0
+
+fn: lm_build_has_project_marker (const: @(char path)) int
+    c.array: []: char marker_path 2048
+    if: lm_build_join_path(marker_path, c.sizeof(marker_path), path, "l1src/buildCore.lm1") != 0
+        return: 0
+    if: lm_build_file_exists(marker_path)
+        return: 1
+return: 0
+
+fn: lm_build_enter_project_root (const: @(char program_path)) int
+    c.array: []: char search_path 1024
+    c.array: []: char executable_path 1024
+    c.array: []: char cwd 1024
+    int: depth
+    if: lm_build_platform_getcwd(cwd, c.sizeof(cwd)) = 0
+        c.fprintf(c.stderr, "buildCore.lm0: cannot read current directory\n")
+        return: 1
+    if: program_path != 0 && program_path[0] != 0 && lm_build_has_path_separator(program_path)
+        if: lm_build_is_absolute_path(program_path)
+            if: c.strlen(program_path) >= c.sizeof(executable_path)
+                c.fprintf(c.stderr, "buildCore.lm0: executable path is too long\n")
+                return: 1
+            c.strcpy(executable_path, program_path)
+        ---
+        if: lm_build_is_absolute_path(program_path) = 0
+            if: lm_build_join_path(executable_path, c.sizeof(executable_path), cwd, program_path) != 0
+                return: 1
+            ---
+        ---
+        c.strcpy(search_path, executable_path)
+        lm_build_trim_last_path_part(search_path)
+    ---
+    if: program_path = 0 || program_path[0] = 0 || lm_build_has_path_separator(program_path) = 0
+        c.strcpy(search_path, cwd)
+    ---
+    depth: 0
+    while: depth < 12 && search_path[0] != 0
+        if: lm_build_has_project_marker(search_path)
+            if: lm_build_platform_chdir(search_path) != 0
+                c.fprintf(c.stderr, "buildCore.lm0: cannot enter project root %s\n", search_path)
+                return: 1
+            return: 0
+        ---
+        lm_build_trim_last_path_part(search_path)
+        depth: depth + 1
+    c.fprintf(c.stderr, "buildCore.lm0: cannot locate project root from %s\n", cwd)
+return: 1
+
+fn: lm_build_env_or_default (@: char name; @: char fallback) @: char
+    @: char value
+    value: c.getenv(name)
+    if: value = 0 || value[0] = 0
+        return: fallback
+return: value
+
+fn: lm_build_thread_provider () @: char
+    @: char value
+    value: lm_build_env_or_default("LM_THREAD_PROVIDER", "single")
+    if: c.strcmp(value, "auto") = 0 || c.strcmp(value, "pthread") = 0 || c.strcmp(value, "win32") = 0 || c.strcmp(value, "single") = 0
+        return: value
+    c.fprintf(c.stderr, "buildCore.lm0: unsupported LM_THREAD_PROVIDER '%s' (expected auto, pthread, win32 or single)\n", value)
+return: 0
+
+fn: lm_build_default_cmake () @: char
+    if: lm_build_has_qt_cmake()
+        return: "C:/Qt/Tools/CMake_64/bin/cmake.exe"
+return: "cmake"
+
+fn: lm_build_default_generator () @: char
+    if: lm_build_has_qt_mingw_make()
+        return: "MinGW Makefiles"
+return: ""
+
+fn: lm_build_default_make_program () @: char
+    if: lm_build_has_qt_mingw_make()
+        return: "C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe"
+return: ""
+
+fn: lm_build_default_cc () @: char
+    if: lm_build_has_qt_gcc()
+        return: "C:/Qt/Tools/mingw1310_64/bin/gcc.exe"
+return: ""
+
+fn: lm_build_default_cxx () @: char
+    if: lm_build_has_qt_gxx()
+        return: "C:/Qt/Tools/mingw1310_64/bin/g++.exe"
+return: ""
+
+fn: lm_build_test_suite_name (int: suite) @: char
+    if: suite = 2
+        return: "smoke"
+    if: suite = 1
+        return: "core"
+return: "full"
+
+sub: lm_build_print_usage ()
+    c.printf("usage: buildCore.lm0 [--build] [--full] [--next] [--tests smoke core full]\n")
+    c.printf("  --build refresh the L0 bootstrap tools\n")
+    c.printf("  --full  refresh L0 tools, then build the bundled third_party profile\n")
+    c.printf("  --next  verify the staged L0 bootstrap tools without installing them\n")
+    c.printf("  --tests smoke, core or full  staged test suite (default full)\n")
+end: lm_build_print_usage
+
+fn: lm_build_parse_options (int: argc; @@: char argv) int
+    int: index
+    @: char option
+    lm_build_opt_full: 0
+    lm_build_opt_next: 0
+    lm_build_opt_tests: 0
+    index: 1
+    while: index < argc
+        option: argv[index]
+        if: c.strcmp(option, "--build") = 0
+            index: index
+        ---
+        if: c.strcmp(option, "--full") = 0
+            lm_build_opt_full: 1
+        ---
+        if: c.strcmp(option, "--next") = 0
+            lm_build_opt_next: 1
+        ---
+        if: c.strcmp(option, "--tests") = 0
+            if: index + 1 >= argc
+                c.fprintf(c.stderr, "buildCore.lm0: --tests requires smoke, core or full\n")
+                lm_build_print_usage()
+                return: 1
+            if: c.strcmp(argv[index + 1], "smoke") = 0
+                lm_build_opt_tests: 2
+            ---
+            if: c.strcmp(argv[index + 1], "core") = 0
+                lm_build_opt_tests: 1
+            ---
+            if: c.strcmp(argv[index + 1], "full") = 0
+                lm_build_opt_tests: 0
+            ---
+            if: c.strcmp(argv[index + 1], "smoke") != 0 && c.strcmp(argv[index + 1], "core") != 0 && c.strcmp(argv[index + 1], "full") != 0
+                c.fprintf(c.stderr, "buildCore.lm0: unknown test suite: %s\n", argv[index + 1])
+                lm_build_print_usage()
+                return: 1
+            index: index + 1
+        ---
+        if: c.strcmp(option, "--help") = 0 || c.strcmp(option, "-h") = 0
+            lm_build_print_usage()
+            return: 2
+        ---
+        if: c.strcmp(option, "--build") != 0 && c.strcmp(option, "--full") != 0 && c.strcmp(option, "--next") != 0 && c.strcmp(option, "--help") != 0 && c.strcmp(option, "-h") != 0 && c.strcmp(option, "--tests") != 0
+            c.fprintf(c.stderr, "buildCore.lm0: unknown option: %s\n", option)
+            lm_build_print_usage()
+            return: 1
+        ---
+        index: index + 1
+return: 0
+
+fn: lm_build_output_dir () @: char
+    if: lm_build_opt_next != 0
+        return: "build/lm0/next/check"
+return: "build/lm0/next"
+
+fn: lm_build_append (@: char buffer; size_t: size; size_t: used; const: @(char text)) size_t
+    size_t: length
+    length: c.strlen(text)
+    if: used + length >= size
+        c.fprintf(c.stderr, "buildCore.lm0: command line is too long\n")
+        return: size
+    c.memcpy(buffer + used, text, length + 1U)
+return: used + length
+
+fn: lm_build_append_arg (@: char buffer; size_t: size; size_t: used; const: @(char arg)) size_t
+    used: lm_build_append(buffer, size, used, " \"")
+    if: used = size
+        return: size
+    used: lm_build_append(buffer, size, used, arg)
+    if: used = size
+        return: size
+return: lm_build_append(buffer, size, used, "\"")
+
+fn: lm_build_append_prefixed_arg (@: char buffer; size_t: size; size_t: used; const: @(char prefix); const: @(char value)) size_t
+    c.array: []: char arg 2048
+    if: c.strlen(prefix) + c.strlen(value) >= c.sizeof(arg)
+        c.fprintf(c.stderr, "buildCore.lm0: CMake argument is too long\n")
+        return: size
+    c.strcpy(arg, prefix)
+    c.strcat(arg, value)
+return: lm_build_append_arg(buffer, size, used, arg)
+
+fn: lm_build_run (const: @(char command)) int
+    int: status
+    c.printf("%s\n", command)
+    status: c.system(command)
+    if: status != 0
+        c.fprintf(c.stderr, "buildCore.lm0: command failed with status %d\n", status)
+        return: 1
+return: 0
+
+fn: lm_build_make (const: @(char make_tool); const: @(char operation); const: @(char args)) int
+    c.array: []: char command 8192
+    size_t: used 0U
+    command[0]: 0
+    used: lm_build_append(command, c.sizeof(command), used, make_tool)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, operation)
+    if: used = c.sizeof(command)
+        return: 1
+    if: args != 0 && args[0] != 0
+        used: lm_build_append(command, c.sizeof(command), used, " ")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append(command, c.sizeof(command), used, args)
+        if: used = c.sizeof(command)
+            return: 1
+        ---
+    ---
+return: lm_build_run(command)
+
+fn: lm_build_trans (const: @(char trans_tool); const: @(char source_path); const: @(char output_path)) int
+    c.array: []: char command 4096
+    size_t: used 0U
+    command[0]: 0
+    used: lm_build_append(command, c.sizeof(command), used, trans_tool)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, source_path)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, output_path)
+    if: used = c.sizeof(command)
+        return: 1
+return: lm_build_run(command)
+
+fn: lm_build_generate_all (const: @(char trans_tool)) int
+    if: lm_build_trans(trans_tool, "l1src/own.lm1", "lm1/build/own.lm1.c") != 0
+        return: 1
+    if: lm_build_trans(trans_tool, "l1src/parser.lm1", "lm1/build/parser.lm1.c") != 0
+        return: 1
+    if: lm_build_trans(trans_tool, "l1src/l1trans.lm1", "lm1/build/l1trans.lm1.c") != 0
+        return: 1
+    if: lm_build_trans(trans_tool, "l1src/printTree.lm1", "lm1/build/printTree.lm1.c") != 0
+        return: 1
+    if: lm_build_trans(trans_tool, "l1src/finalize.lm1", "lm1/build/finalize.lm1.c") != 0
+        return: 1
+    if: lm_build_trans(trans_tool, "l1src/make.lm1", "lm1/build/make.lm1.c") != 0
+        return: 1
+    if: lm_build_trans(trans_tool, "l1src/buildCore.lm1", "lm1/build/buildCore.lm1.c") != 0
+        return: 1
+return: 0
+
+fn: lm_build_parser_library (const: @(char make_tool); const: @(char output_dir)) int
+    c.array: []: char library_path 512
+    c.array: []: char command 4096
+    c.snprintf(library_path, c.sizeof(library_path), "%s/libparser.lm0.a", output_dir)
+    if: lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I. -c \"lm1/build/parser.lm1.c\" -o \"build/obj/parser.lm1.o\"") != 0
+        return: 1
+    c.remove(library_path)
+    c.snprintf(command, c.sizeof(command), "rcs \"%s\" \"build/obj/parser.lm1.o\"", library_path)
+    if: lm_build_make(make_tool, "ar", command) != 0
+        return: 1
+    c.snprintf(command, c.sizeof(command), "\"%s\"", library_path)
+return: lm_build_make(make_tool, "ranlib", command)
+
+fn: lm_build_own_library (const: @(char make_tool); const: @(char output_dir)) int
+    c.array: []: char library_path 512
+    c.array: []: char command 4096
+    c.snprintf(library_path, c.sizeof(library_path), "%s/libown.lm0.a", output_dir)
+    if: lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I. -c \"lm1/build/own.lm1.c\" -o \"build/obj/own.lm1.o\"") != 0
+        return: 1
+    c.remove(library_path)
+    c.snprintf(command, c.sizeof(command), "rcs \"%s\" \"build/obj/own.lm1.o\"", library_path)
+    if: lm_build_make(make_tool, "ar", command) != 0
+        return: 1
+    c.snprintf(command, c.sizeof(command), "\"%s\"", library_path)
+return: lm_build_make(make_tool, "ranlib", command)
+
+fn: lm_build_compile_l1trans (const: @(char make_tool); const: @(char output_dir)) int
+    c.array: []: char command 4096
+    c.snprintf(command, c.sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I. \"lm1/build/l1trans.lm1.c\" -o \"%s/l1trans.lm0%s\"", output_dir, lm_build_exe_suffix())
+return: lm_build_make(make_tool, "link", command)
+
+fn: lm_build_compile_generated_tools (const: @(char make_tool); const: @(char output_dir)) int
+    c.array: []: char command 4096
+    c.snprintf(command, c.sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/make.lm1.c\" -o \"%s/make.lm0%s\"", output_dir, lm_build_exe_suffix())
+    if: lm_build_make(make_tool, "link", command) != 0
+        return: 1
+    c.snprintf(command, c.sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L \"lm1/build/finalize.lm1.c\" -o \"%s/finalize.lm0%s\"", output_dir, lm_build_exe_suffix())
+    if: lm_build_make(make_tool, "link", command) != 0
+        return: 1
+    c.snprintf(command, c.sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I. \"lm1/build/printTree.lm1.c\" -o \"%s/printTree.lm0%s\"", output_dir, lm_build_exe_suffix())
+    if: lm_build_make(make_tool, "link", command) != 0
+        return: 1
+    c.snprintf(command, c.sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L -I. \"lm1/build/buildCore.lm1.c\" -o \"%s/buildCore.lm0%s\"", output_dir, lm_build_exe_suffix())
+return: lm_build_make(make_tool, "link", command)
+
+fn: lm_build_run_canary () int
+    c.array: []: char canary_path 512
+    @: char command_path
+    c.array: []: char command 4096
+    c.snprintf(canary_path, c.sizeof(canary_path), "build/lm0/next/buildCore.lm0%s", lm_build_exe_suffix())
+    if: lm_build_prepare_platform_canary(canary_path) != 0
+        return: 1
+    command_path: lm_build_platform_canary_command_path(canary_path)
+    c.snprintf(command, c.sizeof(command), lm_build_platform_canary_command_format(), command_path)
+return: lm_build_run(command)
+
+fn: lm_build_write_staged_tests_script (const: @(char output_dir); const: @(char parser_library); const: @(char own_library)) int
+    @: FILE file
+    file: c.fopen(lm_build_platform_tests_script_path(), "wb")
+    if: file = 0
+        c.fprintf(c.stderr, "buildCore.lm0: cannot write staged tests script %s\n", lm_build_platform_tests_script_path())
+        return: 1
+    if: lm_build_write_platform_tests_script(file, output_dir, parser_library, own_library) != 0
+        c.fclose(file)
+        return: 1
+    if: c.fclose(file) != 0
+        c.fprintf(c.stderr, "buildCore.lm0: cannot close staged tests script %s\n", lm_build_platform_tests_script_path())
+        return: 1
+return: 0
+
+fn: lm_build_run_staged_tests (const: @(char make_tool); const: @(char output_dir); const: @(char parser_library); const: @(char own_library)) int
+    c.array: []: char command 512
+    if: lm_build_make(make_tool, "mkdir", "\"build/obj/tests\"") != 0
+        return: 1
+    if: lm_build_write_staged_tests_script(output_dir, parser_library, own_library) != 0
+        return: 1
+    c.snprintf(command, c.sizeof(command), lm_build_platform_tests_command_format(), lm_build_platform_tests_script_path())
+return: lm_build_run(command)
+
+fn: lm_build_defer_finalize () int
+    c.array: []: char command 256
+    c.snprintf(command, c.sizeof(command), "build%slm0%snext%sfinalize.lm0%s --defer", lm_build_path_sep(), lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix())
+return: lm_build_run(command)
+
+fn: lm_build_extract_third_party_zips () int
+    @: char cmake_tool
+    c.array: []: char command 4096
+    size_t: used 0U
+    cmake_tool: lm_build_env_or_default("LM_CMAKE", lm_build_default_cmake())
+    command[0]: 0
+    used: lm_build_append(command, c.sizeof(command), used, cmake_tool)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-DLM_THIRD_PARTY_ARCHIVE_DIR=third_party")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-DLM_THIRD_PARTY_EXTRACT_DIR=build/third_party")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-P")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "cmake/ExtractThirdPartyZips.cmake")
+    if: used = c.sizeof(command)
+        return: 1
+return: lm_build_run(command)
+
+fn: lm_build_clear_full_cmake_cache (const: @(char cmake_tool); const: @(char build_dir)) int
+    c.array: []: char command 4096
+    c.array: []: char cache_path 2048
+    c.array: []: char files_path 2048
+    size_t: used
+    if: c.strlen(build_dir) + 32U >= c.sizeof(cache_path)
+        c.fprintf(c.stderr, "buildCore.lm0: full build directory is too long\n")
+        return: 1
+    c.snprintf(cache_path, c.sizeof(cache_path), "%s/CMakeCache.txt", build_dir)
+    c.snprintf(files_path, c.sizeof(files_path), "%s/CMakeFiles", build_dir)
+    used: 0U
+    command[0]: 0
+    used: lm_build_append(command, c.sizeof(command), used, cmake_tool)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-E")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "rm")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-f")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, cache_path)
+    if: used = c.sizeof(command)
+        return: 1
+    if: lm_build_run(command) != 0
+        return: 1
+    used: 0U
+    command[0]: 0
+    used: lm_build_append(command, c.sizeof(command), used, cmake_tool)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-E")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "rm")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-rf")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, files_path)
+    if: used = c.sizeof(command)
+        return: 1
+return: lm_build_run(command)
+
+fn: lm_build_full_configure () int
+    @: char cmake_tool
+    @: char build_dir
+    @: char build_type
+    @: char generator
+    @: char make_program
+    @: char cc
+    @: char cxx
+    @: char thread_provider
+    c.array: []: char command 8192
+    size_t: used 0U
+    cmake_tool: lm_build_env_or_default("LM_CMAKE", lm_build_default_cmake())
+    build_dir: lm_build_env_or_default("LM_FULL_BUILD_DIR", "build/libs")
+    build_type: lm_build_env_or_default("LM_FULL_BUILD_TYPE", "Debug")
+    generator: lm_build_env_or_default("LM_CMAKE_GENERATOR", lm_build_default_generator())
+    make_program: lm_build_env_or_default("LM_CMAKE_MAKE_PROGRAM", lm_build_default_make_program())
+    cc: lm_build_env_or_default("LM_CC", lm_build_default_cc())
+    cxx: lm_build_env_or_default("LM_CXX", lm_build_default_cxx())
+    thread_provider: lm_build_thread_provider()
+    if: thread_provider = 0
+        return: 1
+    if: lm_build_clear_full_cmake_cache(cmake_tool, build_dir) != 0
+        return: 1
+    command[0]: 0
+    used: lm_build_append(command, c.sizeof(command), used, cmake_tool)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-S")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, ".")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-B")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, build_dir)
+    if: used = c.sizeof(command)
+        return: 1
+    if: generator[0] != 0
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-G")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, generator)
+        if: used = c.sizeof(command)
+            return: 1
+        ---
+    ---
+    used: lm_build_append_prefixed_arg(command, c.sizeof(command), used, "-DCMAKE_BUILD_TYPE=", build_type)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_prefixed_arg(command, c.sizeof(command), used, "-DLM_THREAD_PROVIDER=", thread_provider)
+    if: used = c.sizeof(command)
+        return: 1
+    if: make_program[0] != 0
+        used: lm_build_append_prefixed_arg(command, c.sizeof(command), used, "-DCMAKE_MAKE_PROGRAM=", make_program)
+        if: used = c.sizeof(command)
+            return: 1
+        ---
+    ---
+    if: cc[0] != 0
+        used: lm_build_append_prefixed_arg(command, c.sizeof(command), used, "-DCMAKE_C_COMPILER=", cc)
+        if: used = c.sizeof(command)
+            return: 1
+        ---
+    ---
+    if: cxx[0] != 0
+        used: lm_build_append_prefixed_arg(command, c.sizeof(command), used, "-DCMAKE_CXX_COMPILER=", cxx)
+        if: used = c.sizeof(command)
+            return: 1
+        ---
+    ---
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-DLINGVAMYXA_ENABLE_EXTERNAL_DEPS=OFF")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-DLINGVAMYXA_ENABLE_BUNDLED_THIRD_PARTY=ON")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-DLM_THIRD_PARTY_SOURCE_DIR=build/third_party")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-DBUILD_LINGVAMYXA_QT_APP=OFF")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-DBUILD_BUILD_CORE_LM0=OFF")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-DLINGVAMYXA_BUILDCORE_ARGS=")
+    if: used = c.sizeof(command)
+        return: 1
+return: lm_build_run(command)
+
+fn: lm_build_full_build () int
+    @: char cmake_tool
+    @: char build_dir
+    c.array: []: char command 4096
+    size_t: used 0U
+    cmake_tool: lm_build_env_or_default("LM_CMAKE", lm_build_default_cmake())
+    build_dir: lm_build_env_or_default("LM_FULL_BUILD_DIR", "build/libs")
+    command[0]: 0
+    used: lm_build_append(command, c.sizeof(command), used, cmake_tool)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "--build")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, build_dir)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "--target")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "third_party.lm0")
+    if: used = c.sizeof(command)
+        return: 1
+return: lm_build_run(command)
+
+fn: lm_build_full_project () int
+    if: lm_build_extract_third_party_zips() != 0
+        return: 1
+    if: lm_build_full_configure() != 0
+        return: 1
+return: lm_build_full_build()
+
+fn: lm_build_run_bootstrap (const: @(char trusted_make); const: @(char built_trans)) int
+    @: char output_dir
+    c.array: []: char parser_library 512
+    c.array: []: char own_library 512
+    output_dir: lm_build_output_dir()
+    c.snprintf(parser_library, c.sizeof(parser_library), "%s/libparser.lm0.a", output_dir)
+    c.snprintf(own_library, c.sizeof(own_library), "%s/libown.lm0.a", output_dir)
+    if: lm_build_make(trusted_make, "mkdir", "\"lm1/build\" \"build/obj\" \"build/lm0\" \"build/lm0/next\" \"build/lm0/next/check\"") != 0
+        return: 1
+    if: lm_build_generate_all(built_trans) != 0
+        return: 1
+    if: lm_build_parser_library(trusted_make, output_dir) != 0
+        return: 1
+    if: lm_build_own_library(trusted_make, output_dir) != 0
+        return: 1
+    if: lm_build_compile_l1trans(trusted_make, output_dir) != 0
+        return: 1
+    if: lm_build_generate_all(built_trans) != 0
+        return: 1
+    if: lm_build_parser_library(trusted_make, output_dir) != 0
+        return: 1
+    if: lm_build_own_library(trusted_make, output_dir) != 0
+        return: 1
+    if: lm_build_compile_l1trans(trusted_make, output_dir) != 0
+        return: 1
+    if: lm_build_compile_generated_tools(trusted_make, output_dir) != 0
+        return: 1
+    if: lm_build_opt_next != 0
+        return: 0
+    if: lm_build_run_canary() != 0
+        c.fprintf(c.stderr, "buildCore.lm0: staged bootstrap tools failed the --next rebuild; live tools were not overwritten\n")
+        return: 1
+    c.fprintf(c.stderr, "buildCore.lm0: running staged tests (%s)\n", lm_build_test_suite_name(lm_build_opt_tests))
+    if: lm_build_setenv("LM_TEST_SUITE", lm_build_test_suite_name(lm_build_opt_tests)) != 0
+        c.fprintf(c.stderr, "buildCore.lm0: cannot set LM_TEST_SUITE\n")
+        return: 1
+    if: lm_build_run_staged_tests(trusted_make, output_dir, parser_library, own_library) != 0
+        c.fprintf(c.stderr, "buildCore.lm0: staged bootstrap tools failed tests; live tools were not overwritten\n")
+        return: 1
+    if: lm_build_opt_full != 0
+        if: lm_build_full_project() != 0
+            return: 1
+        ---
+    ---
+return: lm_build_defer_finalize()
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        @: char trusted_make
+        c.array: []: char trusted_make_buffer 128
+        c.array: []: char built_trans_buffer 128
+        int: parse_status
+        parse_status: lm_build_parse_options(argc, argv)
+        if: parse_status = 2
+            return: 0
+        if: parse_status != 0
+            return: 1
+        if: lm_build_enter_project_root(argv[0]) != 0
+            return: 1
+        if: lm_build_thread_provider() = 0
+            return: 1
+        c.snprintf(trusted_make_buffer, c.sizeof(trusted_make_buffer), "build%slm0%smake.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix())
+        c.snprintf(built_trans_buffer, c.sizeof(built_trans_buffer), "build%slm0%sl1trans.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix())
+        if: lm_build_opt_next != 0
+            c.snprintf(trusted_make_buffer, c.sizeof(trusted_make_buffer), "build%slm0%snext%smake.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix())
+            c.snprintf(built_trans_buffer, c.sizeof(built_trans_buffer), "build%slm0%snext%sl1trans.lm0%s", lm_build_path_sep(), lm_build_path_sep(), lm_build_path_sep(), lm_build_exe_suffix())
+        ---
+        trusted_make: lm_build_env_or_default("LM_MAKE", trusted_make_buffer)
+    return: lm_build_run_bootstrap(trusted_make, built_trans_buffer)
+end: external

@@ -1,0 +1,314 @@
+predef: "l1src/libc_abi.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>" "<errno.h>"
+os:
+    win:
+        include: "<direct.h>" "<windows.h>"
+        fn: lm_finalize_platform_getcwd (@: char buffer; size_t: size) @: char
+        return: c._getcwd(buffer, size)
+        fn: lm_finalize_platform_chdir (const: @(char path)) int
+        return: c._chdir(path)
+        fn: lm_finalize_platform_exe_suffix () const: @(char)
+        return: ".exe"
+        fn: lm_finalize_platform_path_sep () const: @(char)
+        return: "\\"
+        fn: lm_finalize_platform_is_drive_absolute (const: @(char path)) int
+            if: path = 0 || path[0] = 0
+                return: 0
+        return: path[1] = 58
+        sub: lm_finalize_platform_sleep_retry ()
+            c.Sleep(250U)
+        fn: lm_finalize_platform_defer_command_format () const: @(char)
+        return: "cd /d \"%s\" && start \"\" /B \"%s\" --copy"
+        fn: lm_finalize_replace_file (const: @(char tmp); const: @(char out_path)) int
+            if: c.MoveFileExA(tmp, out_path, 1U) = 0
+                return: 1
+        return: 0
+    default:
+        include: "<unistd.h>" "<time.h>"
+        fn: lm_finalize_platform_getcwd (@: char buffer; size_t: size) @: char
+        return: c.getcwd(buffer, size)
+        fn: lm_finalize_platform_chdir (const: @(char path)) int
+        return: c.chdir(path)
+        fn: lm_finalize_platform_exe_suffix () const: @(char)
+        return: ""
+        fn: lm_finalize_platform_path_sep () const: @(char)
+        return: "/"
+        fn: lm_finalize_platform_is_drive_absolute (const: @(char path)) int
+        return: 0
+        sub: lm_finalize_platform_sleep_retry ()
+            int: started
+            started: c.clock()
+            while: started >= 0 && c.clock() - started < c.CLOCKS_PER_SEC / 4
+                started: started
+            ---
+        end: lm_finalize_platform_sleep_retry
+        fn: lm_finalize_platform_defer_command_format () const: @(char)
+        return: "cd \"%s\" && \"%s\" \"--copy\" >/dev/null 2>&1 &"
+        fn: lm_finalize_replace_file (const: @(char tmp); const: @(char out_path)) int
+            if: c.rename(tmp, out_path) != 0
+                return: 1
+        return: 0
+end: os
+
+fn: lm_finalize_is_path_separator (int: value) int
+return: value = 47 || value = 92
+
+fn: lm_finalize_has_path_separator (const: @(char path)) int
+    if: path = 0
+        return: 0
+return: c.strchr(path, 47) != 0 || c.strchr(path, 92) != 0
+
+fn: lm_finalize_is_absolute_path (const: @(char path)) int
+    if: path = 0 || path[0] = 0
+        return: 0
+    if: lm_finalize_is_path_separator(path[0])
+        return: 1
+return: lm_finalize_platform_is_drive_absolute(path)
+
+fn: lm_finalize_file_exists (const: @(char path)) int
+    @: FILE file
+    file: c.fopen(path, "rb")
+    if: file = 0
+        return: 0
+    c.fclose(file)
+return: 1
+
+fn: lm_finalize_join_path (@: char buffer; size_t: size; const: @(char base); const: @(char tail)) int
+    size_t: base_length
+    size_t: tail_length
+    size_t: used
+    const: @: char sep
+    base_length: c.strlen(base)
+    tail_length: c.strlen(tail)
+    used: base_length
+    sep: lm_finalize_platform_path_sep()
+    if: base_length + tail_length + 2U >= size
+        c.fprintf(c.stderr, "finalize.lm0: path is too long\n")
+        return: 1
+    c.memcpy(buffer, base, base_length)
+    if: base_length > 0U && tail_length > 0U && lm_finalize_is_path_separator(base[base_length - 1U]) = 0 && lm_finalize_is_path_separator(tail[0]) = 0
+        c.memcpy(buffer + used, sep, c.strlen(sep))
+        used: used + c.strlen(sep)
+    ---
+    c.memcpy(buffer + used, tail, tail_length + 1U)
+return: 0
+
+fn: lm_finalize_has_project_marker (const: @(char path)) int
+    c.array: []: char marker_path 2048
+    if: lm_finalize_join_path(marker_path, c.sizeof(marker_path), path, "l1src/buildCore.lm1") != 0
+        return: 0
+    if: lm_finalize_file_exists(marker_path)
+        return: 1
+return: 0
+
+fn: lm_finalize_trim_last_path_part (@: char path) int
+    size_t: length
+    length: c.strlen(path)
+    while: length > 0U && lm_finalize_is_path_separator(path[length - 1U])
+        path[length - 1U]: 0
+        length: length - 1U
+    ---
+    while: length > 0U
+        length: length - 1U
+        if: lm_finalize_is_path_separator(path[length])
+            path[length]: 0
+            return: 0
+        ---
+    ---
+    path[0]: 0
+return: 0
+
+fn: lm_finalize_enter_project_root (const: @(char program_path)) int
+    c.array: []: char search_path 1024
+    c.array: []: char executable_path 1024
+    c.array: []: char cwd 1024
+    int: depth
+    if: lm_finalize_platform_getcwd(cwd, c.sizeof(cwd)) = 0
+        c.fprintf(c.stderr, "finalize.lm0: cannot read current directory\n")
+        return: 1
+    if: program_path != 0 && program_path[0] != 0 && lm_finalize_has_path_separator(program_path)
+        if: lm_finalize_is_absolute_path(program_path)
+            if: c.strlen(program_path) >= c.sizeof(executable_path)
+                c.fprintf(c.stderr, "finalize.lm0: executable path is too long\n")
+                return: 1
+            c.strcpy(executable_path, program_path)
+        ---
+        if: lm_finalize_is_absolute_path(program_path) = 0
+            if: lm_finalize_join_path(executable_path, c.sizeof(executable_path), cwd, program_path) != 0
+                return: 1
+            ---
+        ---
+        c.strcpy(search_path, executable_path)
+        lm_finalize_trim_last_path_part(search_path)
+    ---
+    if: program_path = 0 || program_path[0] = 0 || lm_finalize_has_path_separator(program_path) = 0
+        c.strcpy(search_path, cwd)
+    ---
+    depth: 0
+    while: depth < 12 && search_path[0] != 0
+        if: lm_finalize_has_project_marker(search_path)
+            if: lm_finalize_platform_chdir(search_path) != 0
+                c.fprintf(c.stderr, "finalize.lm0: cannot enter project root %s\n", search_path)
+                return: 1
+            return: 0
+        ---
+        lm_finalize_trim_last_path_part(search_path)
+        depth: depth + 1
+    c.fprintf(c.stderr, "finalize.lm0: cannot locate project root from %s\n", cwd)
+return: 1
+
+sub: lm_finalize_log (const: @(char message))
+    @: FILE log_file
+    log_file: c.fopen("build/lm0/finalize.log", "a")
+    if: log_file = 0
+        return
+    c.fprintf(log_file, "%s\n", message)
+    c.fclose(log_file)
+
+fn: lm_finalize_copy_once (const: @(char source_path); const: @(char output_path); int: quiet) int
+    c.array: []: char buffer 32768
+    @: FILE source
+    @: FILE output
+    size_t: count
+    int: status
+    source: c.fopen(source_path, "rb")
+    if: source = 0
+        if: quiet = 0
+            c.fprintf(c.stderr, "finalize.lm0: cannot open input file %s\n", source_path)
+        return: 1
+    output: c.fopen(output_path, "wb")
+    if: output = 0
+        if: quiet = 0
+            c.fprintf(c.stderr, "finalize.lm0: cannot open output file %s\n", output_path)
+        c.fclose(source)
+        return: 1
+    status: 0
+    count: c.fread(buffer, 1U, c.sizeof(buffer), source)
+    while: count > 0U
+        if: c.fwrite(buffer, 1U, count, output) != count
+            status: 1
+            break
+        ---
+        count: c.fread(buffer, 1U, c.sizeof(buffer), source)
+    if: c.ferror(source)
+        status: 1
+    if: c.fclose(output) != 0
+        status: 1
+    c.fclose(source)
+    if: status != 0
+        if: quiet = 0
+            c.fprintf(c.stderr, "finalize.lm0: cannot copy %s to %s\n", source_path, output_path)
+        return: 1
+    ---
+return: 0
+
+fn: lm_finalize_copy_with_retry (const: @(char source_path); const: @(char output_path)) int
+    c.array: []: char staging_path 280
+    int: attempt 0
+    if: c.strlen(output_path) + 5U >= c.sizeof(staging_path)
+        c.fprintf(c.stderr, "finalize.lm0: path is too long\n")
+        return: 1
+    c.snprintf(staging_path, c.sizeof(staging_path), "%s.new", output_path)
+    while: attempt < 40
+        if: lm_finalize_copy_once(source_path, staging_path, 1) = 0
+            if: lm_finalize_replace_file(staging_path, output_path) = 0
+                c.printf("finalize.lm0: copied %s to %s\n", source_path, output_path)
+                return: 0
+            ---
+            c.remove(staging_path)
+        ---
+        lm_finalize_platform_sleep_retry()
+        attempt: attempt + 1
+    if: lm_finalize_copy_once(source_path, staging_path, 0) != 0
+        return: 1
+    if: lm_finalize_replace_file(staging_path, output_path) != 0
+        c.remove(staging_path)
+        c.fprintf(c.stderr, "finalize.lm0: cannot replace %s\n", output_path)
+        return: 1
+    c.printf("finalize.lm0: copied %s to %s\n", source_path, output_path)
+return: 0
+
+sub: lm_finalize_live_tool_path (@: char path; size_t: size; const: @(char tool_name))
+    c.snprintf(path, size, "build%slm0%s%s.lm0%s", lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), tool_name, lm_finalize_platform_exe_suffix())
+
+sub: lm_finalize_next_tool_path (@: char path; size_t: size; const: @(char tool_name))
+    c.snprintf(path, size, "build%slm0%snext%s%s.lm0%s", lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), tool_name, lm_finalize_platform_exe_suffix())
+
+sub: lm_finalize_live_artifact_path (@: char path; size_t: size; const: @(char artifact_name))
+    c.snprintf(path, size, "build%slm0%s%s", lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), artifact_name)
+
+sub: lm_finalize_next_artifact_path (@: char path; size_t: size; const: @(char artifact_name))
+    c.snprintf(path, size, "build%slm0%snext%s%s", lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), artifact_name)
+
+fn: lm_finalize_install_next_tool (const: @(char tool_name)) int
+    c.array: []: char source_path 256
+    c.array: []: char output_path 256
+    lm_finalize_next_tool_path(source_path, c.sizeof(source_path), tool_name)
+    lm_finalize_live_tool_path(output_path, c.sizeof(output_path), tool_name)
+    if: lm_finalize_copy_with_retry(source_path, output_path) != 0
+        lm_finalize_log("copy failed")
+        return: 1
+    ---
+return: 0
+
+fn: lm_finalize_install_next_artifact (const: @(char artifact_name)) int
+    c.array: []: char source_path 256
+    c.array: []: char output_path 256
+    lm_finalize_next_artifact_path(source_path, c.sizeof(source_path), artifact_name)
+    lm_finalize_live_artifact_path(output_path, c.sizeof(output_path), artifact_name)
+    if: lm_finalize_copy_with_retry(source_path, output_path) != 0
+        lm_finalize_log("copy failed")
+        return: 1
+    ---
+return: 0
+
+fn: lm_finalize_defer () int
+    c.array: []: char root_path 1024
+    c.array: []: char finalize_path 1400
+    c.array: []: char command 4096
+    int: status
+    if: lm_finalize_platform_getcwd(root_path, c.sizeof(root_path)) = 0
+        c.fprintf(c.stderr, "finalize.lm0: cannot get current directory\n")
+        return: 1
+    c.snprintf(finalize_path, c.sizeof(finalize_path), "build%slm0%snext%sfinalize.lm0%s", lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), lm_finalize_platform_path_sep(), lm_finalize_platform_exe_suffix())
+    if: lm_finalize_file_exists(finalize_path) = 0
+        lm_finalize_live_tool_path(finalize_path, c.sizeof(finalize_path), "finalize")
+    ---
+    c.snprintf(command, c.sizeof(command), lm_finalize_platform_defer_command_format(), root_path, finalize_path)
+    status: c.system(command)
+    if: status != 0
+        c.fprintf(c.stderr, "finalize.lm0: cannot schedule deferred finalize step\n")
+        lm_finalize_log("defer failed")
+        return: 1
+    ---
+    lm_finalize_log("defer scheduled")
+    c.printf("finalize.lm0: scheduled deferred staged install\n")
+return: 0
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        if: lm_finalize_enter_project_root(argv[0]) != 0
+            return: 1
+        if: argc = 2 && c.strcmp(argv[1], "--defer") = 0
+            return: lm_finalize_defer()
+        if: argc != 1 && (argc != 2 || c.strcmp(argv[1], "--copy") != 0)
+            c.fprintf(c.stderr, "usage: finalize.lm0[.exe] [--defer|--copy]\n")
+            return: 1
+        lm_finalize_log("copy started")
+        if: lm_finalize_install_next_artifact("libparser.lm0.a") != 0
+            return: 1
+        if: lm_finalize_install_next_artifact("libown.lm0.a") != 0
+            return: 1
+        if: lm_finalize_install_next_tool("make") != 0
+            return: 1
+        if: lm_finalize_install_next_tool("l1trans") != 0
+            return: 1
+        if: lm_finalize_install_next_tool("printTree") != 0
+            return: 1
+        if: lm_finalize_install_next_tool("finalize") != 0
+            return: 1
+        if: lm_finalize_install_next_tool("buildCore") != 0
+            return: 1
+        lm_finalize_log("copy completed")
+    return: 0
+end: external

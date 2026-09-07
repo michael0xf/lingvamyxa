@@ -45,12 +45,12 @@ esac
 
 parser_source="lm1/build/parser.lm1.c"
 own_source="lm1/build/own.lm1.c"
-trans_source="lm1/build/trans.lm1.c"
+l1trans_source="lm1/build/l1trans.lm1.c"
 make_source="lm1/build/make.lm1.c"
 finalize_source="lm1/build/finalize.lm1.c"
 build_core_source="lm1/build/buildCore.lm1.c"
 
-for source_file in "$parser_source" "$own_source" "$trans_source" "$make_source" "$finalize_source" "$build_core_source"; do
+for source_file in "$parser_source" "$own_source" "$l1trans_source" "$make_source" "$finalize_source" "$build_core_source"; do
     if [ ! -f "$source_file" ]; then
         echo "buildCore.lm0.sh: source file not found: $source_file" >&2
         exit 1
@@ -86,17 +86,17 @@ posix_feature_define="-D_POSIX_C_SOURCE=200809L"
 "$LM_CMAKE" -E make_directory build/lm0
 "$LM_CMAKE" -E make_directory build/obj
 
-"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} -Ilm1 -c "$parser_source" -o build/obj/parser.lm1.o
+"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} -I. -c "$parser_source" -o build/obj/parser.lm1.o
 "$LM_AR" rcs build/lm0/libparser.lm0.a build/obj/parser.lm1.o
 "$LM_RANLIB" build/lm0/libparser.lm0.a
 
-"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} -Ilm1 -c "$own_source" -o build/obj/own.lm1.o
+"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} -I. -c "$own_source" -o build/obj/own.lm1.o
 "$LM_AR" rcs build/lm0/libown.lm0.a build/obj/own.lm1.o
 "$LM_RANLIB" build/lm0/libown.lm0.a
 
-"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} -Ilm1 "$trans_source" build/lm0/libparser.lm0.a build/lm0/libown.lm0.a -o build/lm0/trans.lm0
-"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} "$make_source" build/lm0/libown.lm0.a -o build/lm0/make.lm0
-"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} "$finalize_source" build/lm0/libown.lm0.a -o build/lm0/finalize.lm0
-"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} -Ilm1 "$build_core_source" build/lm0/libown.lm0.a -o build/lm0/buildCore.lm0
+"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} -I. "$l1trans_source" -o build/lm0/l1trans.lm0
+"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} "$make_source" -o build/lm0/make.lm0
+"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} "$finalize_source" -o build/lm0/finalize.lm0
+"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} -I. "$build_core_source" -o build/lm0/buildCore.lm0
 
 echo "built build/lm0 bootstrap tools"

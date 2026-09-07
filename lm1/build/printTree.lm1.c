@@ -6221,3 +6221,42 @@ char * lm_p0_dump_alloc(const LmP0Document * document)
     lm_p0_dump_delete(dump);
     return data;
 }
+#include <stdio.h>
+int main(int argc, char ** argv)
+{
+    LmP0Document * document = 0;
+    const LmP0Diagnostic * diagnostic;
+    char * dump;
+    int status;
+    setvbuf(stdout, 0, _IONBF, 0);
+    setvbuf(stderr, 0, _IONBF, 0);
+    if (argc != 2) {
+    fputs("usage: printTree <source>\n", stdout);
+    return 0;
+    }
+    status = lm_p0_parse_file(argv[1], &document);
+    if (status != 0) {
+    diagnostic = lm_p0_document_diagnostic(document);
+    if (diagnostic != 0) {
+    fprintf(stderr, "P0 parse error %d at %zu:%zu: %s\n", diagnostic->code, diagnostic->line, diagnostic->column, diagnostic->message);
+    }
+    if (diagnostic == 0) {
+    fputs("P0 parse error while reading ", stderr);
+    fputs(argv[1], stderr);
+    fputs("\n", stderr);
+    }
+    lm_p0_document_destroy(document);
+    return 1;
+    }
+    dump = lm_p0_dump_alloc(document);
+    if (dump == 0) {
+    fputs("P0 dump allocation failed\n", stderr);
+    lm_p0_document_destroy(document);
+    return 1;
+    }
+    fputs(dump, stdout);
+    fflush(stdout);
+    lm_p0_free(dump);
+    lm_p0_document_destroy(document);
+    return 0;
+}
