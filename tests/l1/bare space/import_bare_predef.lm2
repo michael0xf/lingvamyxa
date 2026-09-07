@@ -1,8 +1,0 @@
-L1:
-    external:
-        fn: main () int
-            return: add_one() != 7
-        end: main
-    end: external
-    predef: "add_one.lm2"
-end: L1

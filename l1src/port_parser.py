@@ -1,6 +1,6 @@
 # Convert frozen 620db86 parser.lm2 C-like functions into L1.
 # Skips L2 tables, registry/MessageThread ontology, and selftest.
-# Run from repo root. Output: l1src/parser.lm2
+# Run from repo root. Output: wrapperless l1src/parser.lm1
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 SRC = Path(r"C:\Nyasha_Planet\lingvamyxa_old_worked_version\lm2\parser.lm2")
-DST = Path(r"C:\Nyasha_Planet\lingvamyxa\l1src\parser.lm2")
+DST = Path(r"C:\Nyasha_Planet\lingvamyxa\l1src\parser.lm1")
 
 PTR = {
     "LmP0Text", "LmP0Span", "LmP0Diagnostic", "LmP0Structure", "LmP0Trailer",
@@ -428,41 +428,44 @@ def main() -> None:
             kept.append("    " + line if line.strip() else "")
         kept.append("")
 
+    def dedent4(s: str) -> str:
+        lines = s.splitlines()
+        out_lines = [ln[4:] if ln.startswith("    ") else ln for ln in lines]
+        return "\n".join(out_lines)
+
     out: list[str] = []
-    out.append("L1:")
-    out.append('    predef: "l1src/own.lm2"')
-    out.append('    predef: "l1src/parser_text.lm2"')
-    out.append('    include: "l1src/p0.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<ctype.h>" "<limits.h>"')
+    out.append('predef: "l1src/own.lm1"')
+    out.append('predef: "l1src/parser_text.lm1"')
+    out.append('include: "l1src/p0.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<ctype.h>" "<limits.h>"')
     out.append("")
-    out.append("    prototype:")
-    out.append(HAND_PROTOS.rstrip())
+    out.append("prototype:")
+    out.append(dedent4(HAND_PROTOS.rstrip()))
     for p in protos:
-        out.append(p)
-    out.append("    end: prototype")
+        out.append(p[4:] if p.startswith("    ") else p)
+    out.append("end: prototype")
     out.append("")
-    out.append(HAND_BLOCK.rstrip())
+    out.append(dedent4(HAND_BLOCK.rstrip()))
     out.append("")
-    out.extend(kept)
-    out.append("end: L1")
+    out.extend([(ln[4:] if ln.startswith("    ") else ln) for ln in kept])
     out.append("")
     text_out = "\n".join(out)
     old_mix = (
-        "                                node\\as\\structure: payload_document\\root\\as\\structure\n"
-        "                                payload_document\\root\\as\\structure: 0\n"
-        "                                if: lm_own_arena_absorb(document\\tree_arena, payload_document\\tree_arena) != 0\n"
-        "                                    lm_p0_set_diagnostic(document, 1, span_line, span_column, \"out of memory while moving MIX tree into parser arena\")\n"
-        "                                else:\n"
-        "                                    lm_p0_adjust_structure_spans_to_document(document, node\\as\\structure, payload_offset)\n"
-        "                                    status: 1"
+        "                            node\\as\\structure: payload_document\\root\\as\\structure\n"
+        "                            payload_document\\root\\as\\structure: 0\n"
+        "                            if: lm_own_arena_absorb(document\\tree_arena, payload_document\\tree_arena) != 0\n"
+        "                                lm_p0_set_diagnostic(document, 1, span_line, span_column, \"out of memory while moving MIX tree into parser arena\")\n"
+        "                            else:\n"
+        "                                lm_p0_adjust_structure_spans_to_document(document, node\\as\\structure, payload_offset)\n"
+        "                                status: 1"
     )
     new_mix = (
-        "                                if: lm_own_arena_absorb(document\\tree_arena, payload_document\\tree_arena) != 0\n"
-        "                                    lm_p0_set_diagnostic(document, 1, span_line, span_column, \"out of memory while moving MIX tree into parser arena\")\n"
-        "                                else:\n"
-        "                                    node\\as\\structure: payload_document\\root\\as\\structure\n"
-        "                                    payload_document\\root\\as\\structure: 0\n"
-        "                                    lm_p0_adjust_structure_spans_to_document(document, node\\as\\structure, payload_offset)\n"
-        "                                    status: 1"
+        "                            if: lm_own_arena_absorb(document\\tree_arena, payload_document\\tree_arena) != 0\n"
+        "                                lm_p0_set_diagnostic(document, 1, span_line, span_column, \"out of memory while moving MIX tree into parser arena\")\n"
+        "                            else:\n"
+        "                                node\\as\\structure: payload_document\\root\\as\\structure\n"
+        "                                payload_document\\root\\as\\structure: 0\n"
+        "                                lm_p0_adjust_structure_spans_to_document(document, node\\as\\structure, payload_offset)\n"
+        "                                status: 1"
     )
     mix_hits = text_out.count(old_mix)
     if mix_hits != 1 and new_mix not in text_out:

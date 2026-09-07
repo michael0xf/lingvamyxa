@@ -20,7 +20,7 @@ function Write-A([string]$m) { Add-Content -LiteralPath $script:arrLog -Value "$
 if (-not (Test-Path $l1trans)) { throw "missing $l1trans" }
 
 function Translate([string]$name) {
-    $src = "tests\l1\$name.lm2"
+    $src = "tests\l1\$name.lm1"
     $cpath = Join-Path $obj ($name + ".c")
     $cpathB = Join-Path $obj ($name + "_b.c")
     Write-A "BEGIN translate $src"
@@ -81,7 +81,7 @@ if ($pt.IndexOf("const char *candidates[4];") -lt 0) { throw "missing const char
 Build-Run "c_array_ptr" $pc 0
 
 function Negative([string]$name, [string]$diag) {
-    $src = "tests\l1\$name.lm2"
+    $src = "tests\l1\$name.lm1"
     $cpath = Join-Path $obj ($name + ".c")
     $err = Join-Path $log ($name + ".err")
     Write-A "BEGIN negative $src"

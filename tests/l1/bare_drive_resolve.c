@@ -1,5 +1,5 @@
 /* Focused harness for l1_resolve_bare_import drive-relative prefix.
- * No D: filesystem access. Same join rules as l1src/l1trans.lm2. */
+ * No D: filesystem access. Same join rules as l1src/l1trans.lm1. */
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>

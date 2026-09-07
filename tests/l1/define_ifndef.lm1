@@ -1,0 +1,7 @@
+`ifndef-default`: VALUE 7
+end: `ifndef-default`
+external:
+    fn: main () int
+        return: VALUE
+    end: main
+end: external

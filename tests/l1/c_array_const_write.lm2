@@ -1,9 +1,0 @@
-L1:
-    external:
-        fn: main () int
-            c.array: const: [1]: int: values 7
-            values[0]: 8
-            return: values[0]
-        end: main
-    end: external
-end: L1

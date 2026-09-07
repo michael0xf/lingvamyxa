@@ -1,0 +1,5 @@
+external:
+    fn: L1 () int
+        return: 0
+    end: L1
+end: external

@@ -1,0 +1,15 @@
+ifdef:
+    L3:
+        fn: v () int
+            return: 1
+        end: v
+    default:
+        fn: v () int
+            return: 0
+        end: v
+end: ifdef
+external:
+    fn: main () int
+        return: v()
+    end: main
+end: external

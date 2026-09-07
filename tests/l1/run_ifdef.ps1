@@ -20,7 +20,7 @@ function Write-I([string]$m) { Add-Content -LiteralPath $script:ifdefLog -Value 
 if (-not (Test-Path $l1trans)) { throw "missing $l1trans" }
 
 function Translate([string]$name) {
-    $src = "tests\l1\$name.lm2"
+    $src = "tests\l1\$name.lm1"
     $cpath = Join-Path $obj ($name + ".c")
     $cpathB = Join-Path $obj ($name + "_b.c")
     Write-I "BEGIN translate $src"
@@ -85,7 +85,7 @@ Build-Run "ifdef_ctx" $ctxC "-DFLAG=1" 4
 Build-Run "ifdef_ctx" $ctxC "" 5
 
 function Negative([string]$name, [string]$diag) {
-    $src = "tests\l1\$name.lm2"
+    $src = "tests\l1\$name.lm1"
     $cpath = Join-Path $obj ($name + ".c")
     $err = Join-Path $log ($name + ".err")
     Write-I "BEGIN negative $src"
@@ -106,6 +106,7 @@ Negative "invalid_ifdef_end_outer" "end target does not match close target"
 Negative "invalid_ifdef_end_branch" "end target does not match close target"
 Negative "invalid_ifdef_end_count" "end trailer expects exactly one target name"
 Negative "invalid_ifdef_end_empty" "end target does not match close target"
+Negative "invalid_lm1_ifdef_l3" "reserved L1 name"
 
 Write-I "ifdef ok"
 Write-Output "l1trans $gen ifdef ok"

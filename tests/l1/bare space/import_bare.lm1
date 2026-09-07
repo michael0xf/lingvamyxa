@@ -1,0 +1,6 @@
+import: "add_one.lm1"
+external:
+    fn: main () int
+        return: add_one() != 7
+    end: main
+end: external

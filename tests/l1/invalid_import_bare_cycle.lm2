@@ -1,8 +1,0 @@
-L1:
-    import: "tests/l1/bare_cycle/ca.lm2"
-    external:
-        fn: main () int
-            return: 0
-        end: main
-    end: external
-end: L1

@@ -1,0 +1,6 @@
+predef: "l1src/add.lm1"
+external:
+    fn: main () int
+        return: add(1, 2) != 3
+    end: main
+end: external

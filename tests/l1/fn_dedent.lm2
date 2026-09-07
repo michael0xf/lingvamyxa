@@ -1,6 +1,0 @@
-L1:
-    external:
-        fn: main () int
-            return: 0
-    end: external
-end: L1

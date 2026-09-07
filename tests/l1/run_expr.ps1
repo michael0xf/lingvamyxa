@@ -94,7 +94,7 @@ $cases = @(
 )
 
 foreach ($c in $cases) {
-    $src = "tests\l1\$($c.Name).lm2"
+    $src = "tests\l1\$($c.Name).lm1"
     $cpath = Join-Path $obj ($c.Name + ".c")
     $cpathB = Join-Path $obj ($c.Name + "_b.c")
     $exepath = Join-Path $bin ($c.Name + ".exe")
@@ -129,7 +129,7 @@ foreach ($c in $cases) {
     Write-E "EXIT run $($c.Name) 0"
 }
 
-$badSrc = "tests\l1\invalid_deref_target.lm2"
+$badSrc = "tests\l1\invalid_deref_target.lm1"
 $badC = Join-Path $obj "invalid_deref_target.c"
 $badErr = Join-Path $log "invalid_deref_target.err"
 Write-E "BEGIN negative $badSrc"

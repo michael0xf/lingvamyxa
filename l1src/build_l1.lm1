@@ -1,0 +1,282 @@
+include: "<stdio.h>" "<stdlib.h>" "<string.h>" "<errno.h>"
+os:
+    win:
+        include: "<direct.h>"
+        fn: lm_build_mkdir (const: @(char path)) int
+            int: rc
+            if: path = 0
+                return: 1
+            rc: c._mkdir(path)
+            if: rc = 0
+                return: 0
+            if: c.errno = c.EEXIST
+                return: 0
+            c.fprintf(c.stderr, "build_l1: mkdir failed %s\n", path)
+        return: 1
+    default:
+        include: "<sys/stat.h>"
+        fn: lm_build_mkdir (const: @(char path)) int
+            int: rc
+            if: path = 0
+                return: 1
+            rc: c.mkdir(path, 493)
+            if: rc = 0
+                return: 0
+            if: c.errno = c.EEXIST
+                return: 0
+            c.fprintf(c.stderr, "build_l1: mkdir failed %s\n", path)
+        return: 1
+end: os
+
+fn: lm_build_append (@: char buffer; size_t: size; size_t: used; const: @(char text)) size_t
+    size_t: length
+    if: buffer = 0 || text = 0 || size = 0U
+        return: size
+    if: used >= size
+        return: size
+    length: c.strlen(text)
+    if: length >= size - used
+        c.fprintf(c.stderr, "build_l1: command line is too long\n")
+        return: size
+    c.memcpy(buffer + used, text, length + 1U)
+return: used + length
+
+fn: lm_build_append_arg (@: char buffer; size_t: size; size_t: used; const: @(char arg)) size_t
+    if: arg = 0
+        return: size
+    if: used = 0U
+        used: lm_build_append(buffer, size, used, "\"")
+    else:
+        used: lm_build_append(buffer, size, used, " \"")
+    ---
+    if: used = size
+        return: size
+    used: lm_build_append(buffer, size, used, arg)
+    if: used = size
+        return: size
+return: lm_build_append(buffer, size, used, "\"")
+
+fn: lm_build_join_dir_file (@: char dest; size_t: size; const: @(char dir); const: @(char file)) int
+    int: n
+    if: dest = 0 || dir = 0 || file = 0 || size = 0U
+        return: 1
+    dest[0]: 0
+    n: c.snprintf(dest, size, "%s\\%s", dir, file)
+    if: n < 0
+        c.fprintf(c.stderr, "build_l1: path is too long\n")
+        dest[0]: 0
+        return: 1
+    if: (cast: size_t n) >= size
+        c.fprintf(c.stderr, "build_l1: path is too long\n")
+        dest[0]: 0
+        return: 1
+return: 0
+
+fn: lm_build_run (const: @(char command)) int
+    c.array: []: char wrapped 4112
+    size_t: used 0U
+    int: status
+    if: command = 0
+        return: 1
+    wrapped[0]: 0
+    used: lm_build_append(wrapped, c.sizeof(wrapped), used, "\"")
+    if: used = c.sizeof(wrapped)
+        return: 1
+    used: lm_build_append(wrapped, c.sizeof(wrapped), used, command)
+    if: used = c.sizeof(wrapped)
+        return: 1
+    used: lm_build_append(wrapped, c.sizeof(wrapped), used, "\"")
+    if: used = c.sizeof(wrapped)
+        return: 1
+    c.printf("%s\n", wrapped)
+    status: c.system(wrapped)
+    if: status != 0
+        c.fprintf(c.stderr, "build_l1: command failed with status %d\n", status)
+        return: 1
+    ---
+return: 0
+
+fn: lm_build_trans (const: @(char trans_tool); const: @(char source_path); const: @(char output_path)) int
+    c.array: []: char command 4096
+    size_t: used 0U
+    if: trans_tool = 0 || source_path = 0 || output_path = 0
+        return: 1
+    command[0]: 0
+    used: lm_build_append_arg(command, c.sizeof(command), used, trans_tool)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, source_path)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, output_path)
+    if: used = c.sizeof(command)
+        return: 1
+return: lm_build_run(command)
+
+fn: lm_build_cc (const: @(char c_path); const: @(char exe_path)) int
+    c.array: []: char command 4096
+    size_t: used 0U
+    if: c_path = 0 || exe_path = 0
+        return: 1
+    command[0]: 0
+    used: lm_build_append_arg(command, c.sizeof(command), used, "gcc")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-std=c99")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-Wall")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-Wextra")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-Wpedantic")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-I")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, ".")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-Werror=incompatible-pointer-types")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-Werror=discarded-qualifiers")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-Werror=implicit-function-declaration")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-Werror=implicit-int")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-o")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, exe_path)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, c_path)
+    if: used = c.sizeof(command)
+        return: 1
+return: lm_build_run(command)
+
+fn: lm_build_generate_all (const: @(char trans_tool); const: @(char obj_dir)) int
+    c.array: []: char outc 512
+    if: trans_tool = 0 || obj_dir = 0
+        return: 1
+    if: lm_build_join_dir_file(outc, c.sizeof(outc), obj_dir, "l1trans.c") != 0
+        return: 1
+    if: lm_build_trans(trans_tool, "l1src/l1trans.lm1", outc) != 0
+        return: 1
+    if: lm_build_join_dir_file(outc, c.sizeof(outc), obj_dir, "printTree.c") != 0
+        return: 1
+    if: lm_build_trans(trans_tool, "l1src/printTree.lm1", outc) != 0
+        return: 1
+    if: lm_build_join_dir_file(outc, c.sizeof(outc), obj_dir, "make.c") != 0
+        return: 1
+    if: lm_build_trans(trans_tool, "l1src/make.lm1", outc) != 0
+        return: 1
+    if: lm_build_join_dir_file(outc, c.sizeof(outc), obj_dir, "build_l1.c") != 0
+        return: 1
+    if: lm_build_trans(trans_tool, "l1src/build_l1.lm1", outc) != 0
+        return: 1
+return: 0
+
+fn: lm_build_compile_generated_tools (const: @(char obj_dir); const: @(char bin_dir)) int
+    c.array: []: char inc 512
+    c.array: []: char exe 512
+    if: obj_dir = 0 || bin_dir = 0
+        return: 1
+    if: lm_build_join_dir_file(inc, c.sizeof(inc), obj_dir, "l1trans.c") != 0
+        return: 1
+    if: lm_build_join_dir_file(exe, c.sizeof(exe), bin_dir, "l1trans.exe") != 0
+        return: 1
+    if: lm_build_cc(inc, exe) != 0
+        return: 1
+    if: lm_build_join_dir_file(inc, c.sizeof(inc), obj_dir, "printTree.c") != 0
+        return: 1
+    if: lm_build_join_dir_file(exe, c.sizeof(exe), bin_dir, "printTree.exe") != 0
+        return: 1
+    if: lm_build_cc(inc, exe) != 0
+        return: 1
+    if: lm_build_join_dir_file(inc, c.sizeof(inc), obj_dir, "make.c") != 0
+        return: 1
+    if: lm_build_join_dir_file(exe, c.sizeof(exe), bin_dir, "make.exe") != 0
+        return: 1
+    if: lm_build_cc(inc, exe) != 0
+        return: 1
+    if: lm_build_join_dir_file(inc, c.sizeof(inc), obj_dir, "build_l1.c") != 0
+        return: 1
+    if: lm_build_join_dir_file(exe, c.sizeof(exe), bin_dir, "build_l1.exe") != 0
+        return: 1
+    if: lm_build_cc(inc, exe) != 0
+        return: 1
+return: 0
+
+fn: lm_build_run_bootstrap (const: @(char trans_tool); const: @(char obj_dir); const: @(char bin_dir)) int
+    c.array: []: char built 512
+    if: lm_build_mkdir(obj_dir) != 0
+        return: 1
+    if: lm_build_mkdir(bin_dir) != 0
+        return: 1
+    if: lm_build_generate_all(trans_tool, obj_dir) != 0
+        return: 1
+    if: lm_build_compile_generated_tools(obj_dir, bin_dir) != 0
+        return: 1
+    if: lm_build_join_dir_file(built, c.sizeof(built), bin_dir, "l1trans.exe") != 0
+        return: 1
+    if: lm_build_generate_all(built, obj_dir) != 0
+        return: 1
+    if: lm_build_compile_generated_tools(obj_dir, bin_dir) != 0
+        return: 1
+return: 0
+
+fn: lm_build_selftest_append () int
+    c.array: []: char buf 32
+    c.array: []: char tiny 8
+    c.array: []: char path 32
+    size_t: used 0U
+    buf[0]: 0
+    used: lm_build_append(buf, c.sizeof(buf), used, "012345678901234567890123456789012")
+    if: used != c.sizeof(buf)
+        return: 1
+    used: 0U
+    buf[0]: 0
+    used: lm_build_append_arg(buf, c.sizeof(buf), used, "a")
+    if: used = c.sizeof(buf)
+        return: 1
+    if: buf[0] != 34 || buf[1] != 97 || buf[2] != 34
+        return: 1
+    used: 0U
+    buf[0]: 0
+    used: lm_build_append_arg(buf, c.sizeof(buf), used, "a b")
+    if: used = c.sizeof(buf)
+        return: 1
+    if: buf[0] != 34 || buf[1] != 97 || buf[2] != 32 || buf[3] != 98 || buf[4] != 34
+        return: 1
+    if: lm_build_join_dir_file(tiny, c.sizeof(tiny), "abcdef", "ghi") = 0
+        return: 1
+    if: tiny[0] != 0
+        return: 1
+    if: lm_build_join_dir_file(path, c.sizeof(path), "obj", "l1trans.c") != 0
+        return: 1
+    if: c.strcmp(path, "obj\\l1trans.c") != 0
+        return: 1
+return: 0
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        if: argc = 2
+            if: c.strcmp(argv[1], "selftest") = 0
+                return: lm_build_selftest_append()
+            ---
+        ---
+        if: argc != 4
+            c.fputs("usage: build_l1 <l1trans.exe> <obj_dir> <bin_dir>\n", c.stderr)
+            c.fputs("       build_l1 selftest\n", c.stderr)
+            return: 1
+    return: lm_build_run_bootstrap(argv[1], argv[2], argv[3])
+end: external

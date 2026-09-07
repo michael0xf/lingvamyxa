@@ -1,0 +1,6 @@
+define:
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

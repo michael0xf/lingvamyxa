@@ -1,8 +1,0 @@
-L1:
-    external:
-        fn: main () int
-            []: int arr 3 1 2 3; other
-            return: 0
-        end: main
-    end: external
-end: L1

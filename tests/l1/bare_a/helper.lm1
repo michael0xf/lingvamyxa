@@ -1,0 +1,3 @@
+fn: ha () int
+    return: 11
+end: ha

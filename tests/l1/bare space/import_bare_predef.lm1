@@ -1,0 +1,6 @@
+external:
+    fn: main () int
+        return: add_one() != 7
+    end: main
+end: external
+predef: "add_one.lm1"

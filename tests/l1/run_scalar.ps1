@@ -20,7 +20,7 @@ function Write-S([string]$m) { Add-Content -LiteralPath $script:scalarLog -Value
 if (-not (Test-Path $l1trans)) { throw "missing $l1trans" }
 
 function Translate([string]$name) {
-    $src = "tests\l1\$name.lm2"
+    $src = "tests\l1\$name.lm1"
     $cpath = Join-Path $obj ($name + ".c")
     $cpathB = Join-Path $obj ($name + "_b.c")
     Write-S "BEGIN translate $src"

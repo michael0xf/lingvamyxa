@@ -1,6 +1,0 @@
-L1:
-    predef: "tests/l1/mod_diamond_d.lm2"
-    fn: db () int
-        return: dd()
-    end: db
-end: L1

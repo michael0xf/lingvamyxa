@@ -1,8 +1,0 @@
-L1:
-    predef: "tests/l1/mod_diamond_b.lm2" "tests/l1/mod_diamond_c.lm2"
-    external:
-        fn: main () int
-            return: db() + dc() != 8
-        end: main
-    end: external
-end: L1

@@ -20,7 +20,7 @@ function Write-I([string]$m) { Add-Content -LiteralPath $script:identLog -Value 
 if (-not (Test-Path $l1trans)) { throw "missing $l1trans" }
 
 function Translate([string]$name) {
-    $src = "tests\l1\$name.lm2"
+    $src = "tests\l1\$name.lm1"
     $cpath = Join-Path $obj ($name + ".c")
     $cpathB = Join-Path $obj ($name + "_b.c")
     Write-I "BEGIN translate $src"
@@ -81,6 +81,18 @@ if ($strT.IndexOf('"a`b"') -lt 0 -and $strT.IndexOf('"a``b"') -lt 0) {
     if ($strT.IndexOf([char]96) -lt 0) { throw "string backtick was stripped" }
 }
 Build-Run "ident_string" $strC 0
+
+$okC = Translate "ident_reserved_ok"
+$okT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $okC))
+if ($okT.IndexOf("C_value") -lt 0) { throw "missing C_value" }
+if ($okT.IndexOf("L1State") -lt 0) { throw "missing L1State" }
+Build-Run "ident_reserved_ok" $okC 0
+
+$projC = Translate "ident_c_proj"
+$projT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $projC))
+if ($projT.IndexOf("return C;") -lt 0) { throw "missing c.C projection to C" }
+if ($projT.IndexOf("c.C") -ge 0) { throw "c. prefix leaked into C" }
+Build-Run "ident_c_proj" $projC 0
 
 Write-I "ident ok"
 Write-Output "l1trans $gen ident ok"

@@ -1,0 +1,15 @@
+fn: add (int: a; int: b) int
+    return: a + b
+end: add
+
+external:
+    fn: main () int
+        if: (1 + 2) * 3 != 9
+            return: 1
+        if: 1 + 2 * 3 != 7
+            return: 2
+        if: add((1 + 2) * 3, 1 + 2 * 3) != 16
+            return: 3
+        return: 0
+    end: main
+end: external

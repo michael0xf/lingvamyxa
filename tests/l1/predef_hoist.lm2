@@ -1,8 +1,0 @@
-L1:
-    external:
-        fn: main () int
-            return: add(2, 3) != 5
-        end: main
-    end: external
-    predef: "l1src/add.lm2"
-end: L1

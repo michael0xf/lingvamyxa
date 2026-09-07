@@ -20,7 +20,7 @@ function Write-R([string]$m) { Add-Content -LiteralPath $script:repLog -Value "$
 if (-not (Test-Path $l1trans)) { throw "missing $l1trans" }
 
 function Translate([string]$name) {
-    $src = "tests\l1\$name.lm2"
+    $src = "tests\l1\$name.lm1"
     $cpath = Join-Path $obj ($name + ".c")
     $cpathB = Join-Path $obj ($name + "_b.c")
     Write-R "BEGIN translate $src"
@@ -109,7 +109,7 @@ $actxC = Translate "decl_repeat_array_ctx"
 Build-Run "decl_repeat_array_ctx" $actxC 0
 
 function Negative([string]$name, [string]$diag) {
-    $src = "tests\l1\$name.lm2"
+    $src = "tests\l1\$name.lm1"
     $cpath = Join-Path $obj ($name + ".c")
     $err = Join-Path $log ($name + ".err")
     Write-R "BEGIN negative $src"

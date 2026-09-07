@@ -1,0 +1,6 @@
+fn: proto (int: n) int
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

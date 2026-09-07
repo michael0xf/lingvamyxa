@@ -1,5 +1,0 @@
-L1:
-    fn: hb () int
-        return: 22
-    end: hb
-end: L1

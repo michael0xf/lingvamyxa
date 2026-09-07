@@ -1,0 +1,4 @@
+predef: "tests/l1/mod_diamond_d.lm1"
+fn: dc () int
+    return: dd()
+end: dc

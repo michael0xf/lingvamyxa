@@ -1,6 +1,6 @@
 # l1src — L1-profiled sources for Translator-L1
 
-These are the `L1:` sources the new Translator-L1 compiles. They live here,
+These are wrapperless `.lm1` sources the new Translator-L1 compiles. They live here,
 not in `lm2/`, so that building them can never clobber the old chain's
 tracked `lm1/build/*.lm1.c`. Everything under `build/l1trans/` is generated
 and gitignored.
@@ -11,24 +11,24 @@ Reports in `work_chat/` describe past runs; they are not instructions.
 ## What is here
 
 Ported from frozen `lingvamyxa_old_worked_version` @ `620db86`, converted to
-the `L1:` profile with no L2 tables, no MessageThread and no registry load:
+the implicit `.lm1` L1 profile with no L2 tables, no MessageThread and no registry load:
 
 | file | origin |
 | --- | --- |
-| `parser.lm2` | frozen `lm2/parser.lm2` — P0 parser |
-| `parser_text.lm2` | frozen `lm2/parser_text.lm2` |
-| `own.lm2` | frozen `lm2/own.lm2`, reduced to malloc + ptr stack + arena |
+| `parser.lm1` | frozen `lm2/parser.lm2` — P0 parser |
+| `parser_text.lm1` | frozen `lm2/parser_text.lm2` |
+| `own.lm1` | frozen `lm2/own.lm2`, reduced to malloc + ptr stack + arena |
 | `p0.h` | C99 layouts and constants for the above |
-| `printTree.lm2` | thin P0 client: parse → dump → free |
-| `make.lm2` | L1-profiled build driver |
-| `libc_abi.lm2`, `add.lm2` | declaration prelude and import example |
+| `printTree.lm1` | thin P0 client: parse → dump → free |
+| `make.lm1` | L1-profiled build driver |
+| `libc_abi.lm1`, `add.lm1` | declaration prelude and import example |
 
 Written for L1 (not ported):
 
 | file | role |
 | --- | --- |
-| `l1trans.lm2` | the translator itself, in L1 |
-| `build_l1.lm2` | L1 builder: generate, compile, second pass |
+| `l1trans.lm1` | the translator itself, in L1 |
+| `build_l1.lm1` | L1 builder: generate, compile, second pass |
 
 `lm2/l1trans.lm2` is a separate, L2-shaped copy kept only to produce the
 gen0 seed with the old stage-0 `trans.lm0`. It is not the L1 source.
@@ -82,7 +82,7 @@ gcc -std=c99 -Wall -Wextra -Wpedantic -I lm1 -o build\l1trans\gen0\seed-<stamp>\
     build\lm0\libparser.lm0.a build\lm0\libown.lm0.a
 ```
 
-then translates/compiles/runs `tests\l1\integer_add.lm2` with that binary.
+then translates/compiles/runs `tests\l1\integer_add.lm1` with that binary.
 Only after those checks does it copy C and exe into the published gen0
 names, as two separate copies (not an atomic pair). The previous published
 gen0 is left in place until those checks pass. Missing `trans.lm0` / libs /
@@ -132,11 +132,11 @@ repeated C output, strict compilation and execution of nested calls,
 index/field arguments, unary/binary operators, parentheses, both cast
 spellings, prefix dereference, prefix/postfix `++`/`--` and their use in indices.
 The bounded cast regression distinguishes 512 from the formerly misgrouped
-result 384. With `*p == 4`, `expr_deref_mix.lm2` checks that
+result 384. With `*p == 4`, `expr_deref_mix.lm1` checks that
 `add(\ @ \ p + 1, 1)` emits `add(*(&*(p)) + 1, 1)` and returns 6.
-`expr_inc_arg.lm2` checks that `a + ++b` does not become `a++ + b`,
+`expr_inc_arg.lm1` checks that `a + ++b` does not become `a++ + b`,
 and that `take(- --i)` keeps its separate unary operators. The ported
-`expr_arg_segments.lm2` retains the frozen nested-call results 22 and 21.
+`expr_arg_segments.lm1` retains the frozen nested-call results 22 and 21.
 
 Five string fixtures cover triple/fence values in initializers, returns and
 arguments, with independent byte-for-byte payload and final-NUL checks, plus
@@ -241,9 +241,9 @@ Generation-specific suite logs are under `logs\<gen>\`.
 ## port_parser.py / port_l1trans.py
 
 Manual one-shot migration utilities used while converting the frozen L2
-sources into `L1:` form. They contain hard-coded absolute paths and are
+sources into wrapperless `.lm1` form. They contain hard-coded absolute paths and are
 **not** part of the native self-build. Do not run them for an ordinary
-build; the `.lm2` files in this directory are the source of truth.
+build; the `.lm1` files in this directory are the source of truth.
 
 ## Status
 

@@ -1,0 +1,23 @@
+define: VALUE 7
+end: define
+ifdef:
+    VALUE:
+        fn: used () int
+            return: 1
+        end: used
+    default:
+        fn: used () int
+            return: 0
+        end: used
+end: ifdef
+ifdef:
+    FLAG:
+        define: INNER 4
+    default:
+        define: INNER 2
+end: ifdef
+external:
+    fn: main () int
+        return: VALUE + used() + INNER
+    end: main
+end: external

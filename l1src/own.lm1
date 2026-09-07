@@ -1,0 +1,274 @@
+include: "l1src/p0.h" "<stdlib.h>" "<string.h>"
+
+int: lm_own_alloc_fails 0
+int: lm_own_ok_left -1
+int: lm_own_absorb_fails 0
+
+fn: lm_own_should_fail () int
+    if: lm_own_alloc_fails != 0
+        lm_own_alloc_fails: lm_own_alloc_fails - 1
+        return: 1
+    if: lm_own_ok_left = 0
+        return: 1
+    if: lm_own_ok_left > 0
+        lm_own_ok_left: lm_own_ok_left - 1
+    ---
+return: 0
+
+fn: lm_own_new_zero (size_t: size) @: void
+    if: lm_own_should_fail() != 0
+        return: 0
+return: c.calloc(1U, size)
+
+fn: lm_own_resize (@: void object; size_t: size) @: void
+    if: lm_own_should_fail() != 0
+        return: 0
+    if: size = 0U
+        c.free(object)
+        return: 0
+return: c.realloc(object, size)
+
+fn: lm_own_copy_bytes (const: @(char source); size_t: length) @: char
+    @: char copy
+    if: length = (cast: size_t -1)
+        return: 0
+    copy: lm_own_new_zero(length + 1U)
+    if: copy = 0
+        return: 0
+    if: source != 0 && length > 0U
+        c.memcpy(copy, source, length)
+    copy[length]: 0
+return: copy
+
+sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)
+    if: object != 0
+        if: destroy_fields != 0
+            destroy_fields(object)
+        ---
+        c.free(object)
+    ---
+end: lm_own_delete
+
+sub: lm_own_delete_plain (@: void object)
+    lm_own_delete(object, 0)
+end: lm_own_delete_plain
+
+sub: lm_own_pointer_array_delete (@@: void items; size_t: count; LmOwnDelete: delete_item)
+    size_t: index
+    if: items != 0
+        if: delete_item != 0
+            index: 0U
+            while: index < count
+                if: items[index] != 0
+                    delete_item(items[index])
+                    items[index]: 0
+                ---
+                index: index + 1U
+            ---
+        ---
+        c.free(items)
+    ---
+end: lm_own_pointer_array_delete
+
+sub: lm_own_ptr_stack_init (@: LmOwnPtrStack stack; LmOwnDelete: delete_item)
+    if: stack != 0
+        stack\items: 0
+        stack\count: 0U
+        stack\capacity: 0U
+        stack\delete_item: delete_item
+    ---
+end: lm_own_ptr_stack_init
+
+sub: lm_own_ptr_stack_destroy (@: LmOwnPtrStack stack)
+    if: stack != 0
+        lm_own_pointer_array_delete(stack\items, stack\count, stack\delete_item)
+        stack\items: 0
+        stack\count: 0U
+        stack\capacity: 0U
+        stack\delete_item: 0
+    ---
+end: lm_own_ptr_stack_destroy
+
+fn: lm_own_ptr_stack_new (LmOwnDelete: delete_item) @: LmOwnPtrStack
+    @: LmOwnPtrStack stack
+    stack: lm_own_new_zero(c.sizeof(c.LmOwnPtrStack))
+    if: stack = 0
+        return: 0
+    lm_own_ptr_stack_init(stack, delete_item)
+return: stack
+
+sub: lm_own_ptr_stack_delete (@: LmOwnPtrStack stack)
+    if: stack != 0
+        lm_own_ptr_stack_destroy(stack)
+        lm_own_delete(stack, 0)
+    ---
+end: lm_own_ptr_stack_delete
+
+fn: lm_own_ptr_stack_push (@: LmOwnPtrStack stack; @: void item) int
+    @@: void items
+    size_t: capacity
+    if: stack = 0
+        return: 1
+    if: stack\count = stack\capacity
+        if: stack\capacity = 0U
+            capacity: 8U
+        ---
+        if: stack\capacity != 0U
+            capacity: stack\capacity * 2U
+        ---
+        items: lm_own_resize(stack\items, capacity * c.sizeof(items[0]))
+        if: items = 0
+            return: 1
+        stack\items: items
+        stack\capacity: capacity
+    ---
+    stack\items[stack\count]: item
+    stack\count: stack\count + 1U
+return: 0
+
+fn: lm_own_ptr_stack_pop (@: LmOwnPtrStack stack) @: void
+    @: void item
+    if: stack = 0 || stack\count = 0U
+        return: 0
+    stack\count: stack\count - 1U
+    item: stack\items[stack\count]
+    stack\items[stack\count]: 0
+return: item
+
+fn: lm_own_ptr_stack_at (const: @(LmOwnPtrStack stack); size_t: index) @: void
+    if: stack = 0 || index >= stack\count
+        return: 0
+return: stack\items[index]
+
+fn: lm_own_ptr_stack_top (const: @(LmOwnPtrStack stack)) @: void
+    if: stack = 0 || stack\count = 0U
+        return: 0
+return: stack\items[stack\count - 1U]
+
+sub: lm_own_ptr_stack_truncate (@: LmOwnPtrStack stack; size_t: count)
+    @: void item
+    if: stack = 0
+        return
+    while: stack\count > count
+        item: lm_own_ptr_stack_pop(stack)
+        if: item != 0 && stack\delete_item != 0
+            stack\delete_item(item)
+        ---
+    ---
+end: lm_own_ptr_stack_truncate
+
+fn: lm_own_arena_init (@: LmOwnArena arena) int
+    if: arena = 0
+        return: 1
+    c.memset(arena, 0, c.sizeof(c.LmOwnArena))
+    arena\allocations: lm_own_ptr_stack_new(0)
+    if: arena\allocations = 0
+        return: 1
+return: 0
+
+sub: lm_own_arena_destroy (@: LmOwnArena arena)
+    @: void block
+    if: arena = 0
+        return
+    if: arena\allocations != 0
+        while: arena\allocations\count > 0U
+            block: lm_own_ptr_stack_pop(arena\allocations)
+            c.free(block)
+        ---
+        lm_own_ptr_stack_delete(arena\allocations)
+        arena\allocations: 0
+    ---
+    arena\frozen: 0
+end: lm_own_arena_destroy
+
+sub: lm_own_arena_freeze (@: LmOwnArena arena)
+    if: arena != 0
+        arena\frozen: 1
+    ---
+end: lm_own_arena_freeze
+
+fn: lm_own_arena_new_zero (@: LmOwnArena arena; size_t: size) @: void
+    @: void object
+    if: arena = 0 || arena\frozen != 0 || arena\allocations = 0
+        return: 0
+    object: lm_own_new_zero(size)
+    if: object = 0
+        return: 0
+    if: lm_own_ptr_stack_push(arena\allocations, object) != 0
+        c.free(object)
+        return: 0
+return: object
+
+fn: lm_own_arena_copy_bytes (@: LmOwnArena arena; const: @(char source); size_t: length) @: char
+    @: char copy
+    copy: lm_own_arena_new_zero(arena, length + 1U)
+    if: copy = 0
+        return: 0
+    if: source != 0 && length > 0U
+        c.memcpy(copy, source, length)
+    copy[length]: 0
+return: copy
+
+fn: lm_own_arena_add_lazy_edge (@: LmOwnArena target; @: LmOwnArena source; const: @(void source_ptr); size_t: size; const: @@(void patch_slot)) int
+    @: char copy
+    if: target = 0 || patch_slot = 0
+        return: 1
+    if: size = 0U
+        patch_slot[0]: ""
+        return: 0
+    copy: lm_own_arena_copy_bytes(target, source_ptr, size)
+    if: copy = 0
+        return: 1
+    patch_slot[0]: copy
+return: 0
+
+fn: lm_own_tree_cut (@: LmOwnArena arena) int
+    if: arena = 0
+        return: 1
+return: 0
+
+fn: lm_own_arena_absorb (@: LmOwnArena target; @: LmOwnArena source) int
+    @@: void items
+    size_t: i
+    size_t: n
+    size_t: need
+    size_t: capacity
+    if: target = 0 || source = 0
+        return: 1
+    if: lm_own_absorb_fails != 0
+        lm_own_absorb_fails: lm_own_absorb_fails - 1
+        return: 1
+    if: source = target
+        return: 0
+    if: target\frozen != 0 || target\allocations = 0
+        return: 1
+    if: source\allocations = 0 || source\allocations\count = 0U
+        return: 0
+    n: source\allocations\count
+    if: n != 0U && target\allocations\count > ((cast: size_t -1) - n)
+        return: 1
+    need: target\allocations\count + n
+    if: need > target\allocations\capacity
+        capacity: target\allocations\capacity
+        if: capacity = 0U
+            capacity: 8U
+        ---
+        while: capacity < need
+            if: capacity > ((cast: size_t -1) / 2U)
+                return: 1
+            capacity: capacity * 2U
+        if: c.sizeof(items[0]) != 0U && capacity > ((cast: size_t -1) / c.sizeof(items[0]))
+            return: 1
+        items: lm_own_resize(target\allocations\items, capacity * c.sizeof(items[0]))
+        if: items = 0
+            return: 1
+        target\allocations\items: items
+        target\allocations\capacity: capacity
+    ---
+    i: 0U
+    while: i < n
+        target\allocations\items[target\allocations\count]: source\allocations\items[i]
+        target\allocations\count: target\allocations\count + 1U
+        i: i + 1U
+    source\allocations\count: 0U
+return: 0

@@ -117,7 +117,7 @@ if ($ec -ne 0) {
 if (-not (Test-Path -LiteralPath $exeSeed)) { throw "seed gcc exit 0 but missing $exeSeed" }
 Write-S "EXE seed sha256=$((Get-FileHash -LiteralPath $exeSeed).Hash) bytes=$((Get-Item -LiteralPath $exeSeed).Length)"
 
-$addSrc = "tests\l1\integer_add.lm2"
+$addSrc = "tests\l1\integer_add.lm1"
 Require-File $addSrc "integer_add source"
 $addC = Join-Path $stageObj "integer_add.c"
 $addExe = Join-Path $stageBin "integer_add.exe"

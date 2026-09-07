@@ -1,5 +1,0 @@
-L1:
-    fn: dd () int
-        return: 4
-    end: dd
-end: L1

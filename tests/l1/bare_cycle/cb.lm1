@@ -1,0 +1,4 @@
+import: "ca.lm1"
+fn: cb () int
+    return: 0
+end: cb

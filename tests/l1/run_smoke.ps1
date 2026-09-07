@@ -177,13 +177,29 @@ if ($srcInfo.LastWriteTimeUtc -gt $exeInfo.LastWriteTimeUtc) {
 }
 Set-Content -LiteralPath $script:smokeLog -Value "$(Get-Date -Format o) smoke start src=$($srcInfo.LastWriteTimeUtc) exe=$($exeInfo.LastWriteTimeUtc) hash_src=$((Get-FileHash lm2\l1trans.lm2).Hash) hash_exe=$((Get-FileHash $l1trans).Hash)"
 
-Invoke-Translate "tests\l1\integer_add.lm2" "$obj\integer_add.c"
-Invoke-Translate "tests\l1\integer_add.lm2" "$obj\integer_add_b.c"
+Invoke-Translate "tests\l1\integer_add.lm1" "$obj\integer_add.c"
+Invoke-Translate "tests\l1\integer_add.lm1" "$obj\integer_add_b.c"
 Assert-ByteIdentical "$obj\integer_add.c" "$obj\integer_add_b.c"
 Invoke-CcRun "$obj\integer_add.c" "$bin\integer_add.exe" 0 $null
+Invoke-Translate "tests\l1\lm1_unit.lm1" "$obj\lm1_unit.c"
+Assert-CHas "$obj\lm1_unit.c" "int main(void)"
+Invoke-CcRun "$obj\lm1_unit.c" "$bin\lm1_unit.exe" 0 $null
+Invoke-Translate "tests\l1\lm1_unit.LM1" "$obj\lm1_unit_upper.c"
+Assert-ByteIdentical "$obj\lm1_unit.c" "$obj\lm1_unit_upper.c"
+Invoke-Translate "tests\l1\lm1_import.lm1" "$obj\lm1_import.c"
+Assert-CHas "$obj\lm1_import.c" "int lm1_mod_value(void)"
+Invoke-CcRun "$obj\lm1_import.c" "$bin\lm1_import.exe" 0 $null
+Invoke-Translate "tests\l1\ident_reserved_ok.lm1" "$obj\ident_reserved_ok.c"
+Assert-CHas "$obj\ident_reserved_ok.c" "C_value"
+Assert-CHas "$obj\ident_reserved_ok.c" "L1State"
+Invoke-CcRun "$obj\ident_reserved_ok.c" "$bin\ident_reserved_ok.exe" 0 $null
+Invoke-Translate "tests\l1\ident_c_proj.lm1" "$obj\ident_c_proj.c"
+Assert-CHas "$obj\ident_c_proj.c" "return C;"
+Assert-CLacks "$obj\ident_c_proj.c" "c.C"
+Invoke-CcRun "$obj\ident_c_proj.c" "$bin\ident_c_proj.exe" 0 $null
 
-Invoke-Translate "tests\l1\include_printf.lm2" "$obj\include_printf.c"
-Invoke-Translate "tests\l1\include_printf.lm2" "$obj\include_printf_b.c"
+Invoke-Translate "tests\l1\include_printf.lm1" "$obj\include_printf.c"
+Invoke-Translate "tests\l1\include_printf.lm1" "$obj\include_printf_b.c"
 Assert-ByteIdentical "$obj\include_printf.c" "$obj\include_printf_b.c"
 $inc = Get-Content "$obj\include_printf.c" -Raw
 if ($inc.Contains('#include "<stdio.h>"')) {
@@ -194,31 +210,31 @@ if (-not $inc.Contains("#include <stdio.h>")) {
 }
 Invoke-CcRun "$obj\include_printf.c" "$bin\include_printf.exe" 0 "include-ok`n"
 
-Invoke-Translate "tests\l1\for_loop.lm2" "$obj\for_loop.c"
-Invoke-Translate "tests\l1\for_loop.lm2" "$obj\for_loop_b.c"
+Invoke-Translate "tests\l1\for_loop.lm1" "$obj\for_loop.c"
+Invoke-Translate "tests\l1\for_loop.lm1" "$obj\for_loop_b.c"
 Assert-ByteIdentical "$obj\for_loop.c" "$obj\for_loop_b.c"
 Invoke-CcRun "$obj\for_loop.c" "$bin\for_loop.exe" 0 $null
 
-Invoke-Translate "tests\l1\array_1d.lm2" "$obj\array_1d.c"
-Invoke-Translate "tests\l1\array_1d.lm2" "$obj\array_1d_b.c"
+Invoke-Translate "tests\l1\array_1d.lm1" "$obj\array_1d.c"
+Invoke-Translate "tests\l1\array_1d.lm1" "$obj\array_1d_b.c"
 Assert-ByteIdentical "$obj\array_1d.c" "$obj\array_1d_b.c"
 Invoke-CcRun "$obj\array_1d.c" "$bin\array_1d.exe" 0 $null
 
-Invoke-Translate "tests\l1\array_2d.lm2" "$obj\array_2d.c"
-Invoke-Translate "tests\l1\array_2d.lm2" "$obj\array_2d_b.c"
+Invoke-Translate "tests\l1\array_2d.lm1" "$obj\array_2d.c"
+Invoke-Translate "tests\l1\array_2d.lm1" "$obj\array_2d_b.c"
 Assert-ByteIdentical "$obj\array_2d.c" "$obj\array_2d_b.c"
 Assert-CHas "$obj\array_2d.c" "int matrix[2][2]"
 Assert-CLacks "$obj\array_2d.c" "int matrix[2*2]"
 Invoke-CcRun "$obj\array_2d.c" "$bin\array_2d.exe" 0 $null
 
-Invoke-Translate "tests\l1\unary_call.lm2" "$obj\unary_call.c"
-Invoke-Translate "tests\l1\unary_call.lm2" "$obj\unary_call_b.c"
+Invoke-Translate "tests\l1\unary_call.lm1" "$obj\unary_call.c"
+Invoke-Translate "tests\l1\unary_call.lm1" "$obj\unary_call_b.c"
 Assert-ByteIdentical "$obj\unary_call.c" "$obj\unary_call_b.c"
 Assert-CHas "$obj\unary_call.c" "add2(-a, b)"
 Invoke-CcRun "$obj\unary_call.c" "$bin\unary_call.exe" 0 $null
 
-Invoke-Translate "tests\l1\field_follow.lm2" "$obj\field_follow.c"
-Invoke-Translate "tests\l1\field_follow.lm2" "$obj\field_follow_b.c"
+Invoke-Translate "tests\l1\field_follow.lm1" "$obj\field_follow.c"
+Invoke-Translate "tests\l1\field_follow.lm1" "$obj\field_follow_b.c"
 Assert-ByteIdentical "$obj\field_follow.c" "$obj\field_follow_b.c"
 Assert-CHas "$obj\field_follow.c" "->"
 Assert-CHas "$obj\field_follow.c" "p->length"
@@ -226,42 +242,42 @@ Assert-CLacks "$obj\field_follow.c" "return p \\"
 Assert-CLacks "$obj\field_follow.c" "return p\\"
 Invoke-CcRun "$obj\field_follow.c" "$bin\field_follow.exe" 0 $null
 
-Invoke-Translate "tests\l1\ptr_depth.lm2" "$obj\ptr_depth.c"
+Invoke-Translate "tests\l1\ptr_depth.lm1" "$obj\ptr_depth.c"
 Assert-CHas "$obj\ptr_depth.c" "int **"
 Invoke-CcRun "$obj\ptr_depth.c" "$bin\ptr_depth.exe" 0 $null
 
-Invoke-Translate "tests\l1\own_oom.lm2" "$obj\own_oom.c"
+Invoke-Translate "tests\l1\own_oom.lm1" "$obj\own_oom.c"
 Invoke-CcRun "$obj\own_oom.c" "$bin\own_oom.exe" 0 $null
 
-Invoke-Translate "tests\l1\init_expr.lm2" "$obj\init_expr.c"
-Invoke-Translate "tests\l1\init_expr.lm2" "$obj\init_expr_b.c"
+Invoke-Translate "tests\l1\init_expr.lm1" "$obj\init_expr.c"
+Invoke-Translate "tests\l1\init_expr.lm1" "$obj\init_expr_b.c"
 Assert-ByteIdentical "$obj\init_expr.c" "$obj\init_expr_b.c"
 Assert-CHas "$obj\init_expr.c" "int total = 1 + 2;"
 Assert-CLacks "$obj\init_expr.c" "int total = total"
 Invoke-CcRun "$obj\init_expr.c" "$bin\init_expr.exe" 0 $null
 
-Invoke-Translate "tests\l1\fn_dedent.lm2" "$obj\fn_dedent.c"
-Invoke-Translate "tests\l1\fn_dedent.lm2" "$obj\fn_dedent_b.c"
+Invoke-Translate "tests\l1\fn_dedent.lm1" "$obj\fn_dedent.c"
+Invoke-Translate "tests\l1\fn_dedent.lm1" "$obj\fn_dedent_b.c"
 Assert-ByteIdentical "$obj\fn_dedent.c" "$obj\fn_dedent_b.c"
 Invoke-CcRun "$obj\fn_dedent.c" "$bin\fn_dedent.exe" 0 $null
 
-Invoke-Translate "tests\l1\prototype.lm2" "$obj\prototype.c"
-Invoke-Translate "tests\l1\prototype.lm2" "$obj\prototype_b.c"
+Invoke-Translate "tests\l1\prototype.lm1" "$obj\prototype.c"
+Invoke-Translate "tests\l1\prototype.lm1" "$obj\prototype_b.c"
 Assert-ByteIdentical "$obj\prototype.c" "$obj\prototype_b.c"
 Assert-CHas "$obj\prototype.c" "int proto(int n);"
 Assert-CLacks "$obj\prototype.c" "int proto(int n)`r`n{"
 Assert-CLacks "$obj\prototype.c" "int proto(int n)`n{"
 Invoke-CcRun "$obj\prototype.c" "$bin\prototype.exe" 0 $null
 
-Invoke-Translate "tests\l1\sub_void.lm2" "$obj\sub_void.c"
-Invoke-Translate "tests\l1\sub_void.lm2" "$obj\sub_void_b.c"
+Invoke-Translate "tests\l1\sub_void.lm1" "$obj\sub_void.c"
+Invoke-Translate "tests\l1\sub_void.lm1" "$obj\sub_void_b.c"
 Assert-ByteIdentical "$obj\sub_void.c" "$obj\sub_void_b.c"
 Assert-CHas "$obj\sub_void.c" "void helper(int x)"
 Assert-CHas "$obj\sub_void.c" "x = x + 1;"
 Invoke-CcRun "$obj\sub_void.c" "$bin\sub_void.exe" 0 $null
 
-Invoke-Translate "tests\l1\shift_ops.lm2" "$obj\shift_ops.c"
-Invoke-Translate "tests\l1\shift_ops.lm2" "$obj\shift_ops_b.c"
+Invoke-Translate "tests\l1\shift_ops.lm1" "$obj\shift_ops.c"
+Invoke-Translate "tests\l1\shift_ops.lm1" "$obj\shift_ops_b.c"
 Assert-ByteIdentical "$obj\shift_ops.c" "$obj\shift_ops_b.c"
 Assert-CHas "$obj\shift_ops.c" "<<"
 Assert-CHas "$obj\shift_ops.c" ">>"
@@ -271,15 +287,37 @@ Invoke-CcRun "$obj\shift_ops.c" "$bin\shift_ops.exe" 0 $null
 
 Invoke-PreserveFail "tests\l1\invalid_no_l1.lm2" "$obj\invalid_no_l1.c" "$log\invalid_no_l1.err" "missing L1 body"
 Invoke-PreserveFail "tests\l1\invalid_nested_l1.lm2" "$obj\invalid_nested_l1.c" "$log\invalid_nested_l1.err" "missing L1 body"
-Invoke-PreserveFail "tests\l1\invalid_unsupported.lm2" "$obj\invalid_unsupported.c" "$log\invalid_unsupported.err" "unsupported L1 form"
-Invoke-PreserveFail "tests\l1\invalid_import_missing.lm2" "$obj\invalid_import_missing.c" "$log\invalid_import_missing.err" "cannot read import"
-Invoke-PreserveFail "tests\l1\invalid_import_cycle.lm2" "$obj\invalid_import_cycle.c" "$log\invalid_import_cycle.err" "import cycle"
-Invoke-PreserveFail "tests\l1\invalid_array_extent.lm2" "$obj\invalid_array_extent.c" "$log\invalid_array_extent.err" "array missing extent"
+Invoke-PreserveFail "tests\l1\invalid_empty_lm1.lm1" "$obj\invalid_empty_lm1.c" "$log\invalid_empty_lm1.err" "empty implicit L1 body"
+Invoke-PreserveFail "tests\l1\invalid_lm1_explicit_l1.lm1" "$obj\invalid_lm1_explicit_l1.c" "$log\invalid_lm1_explicit_l1.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_nested_l1.lm1" "$obj\invalid_lm1_nested_l1.c" "$log\invalid_lm1_nested_l1.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_l2.lm1" "$obj\invalid_lm1_l2.c" "$log\invalid_lm1_l2.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_l3.lm1" "$obj\invalid_lm1_l3.c" "$log\invalid_lm1_l3.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_c_top.lm1" "$obj\invalid_lm1_c_top.c" "$log\invalid_lm1_c_top.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_c_body.lm1" "$obj\invalid_lm1_c_body.c" "$log\invalid_lm1_c_body.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_atom.lm1" "$obj\invalid_lm1_atom.c" "$log\invalid_lm1_atom.err" "implicit L1 expects a statement frame"
+Invoke-PreserveFail "tests\l1\invalid_lm1_win.lm1" "$obj\invalid_lm1_win.c" "$log\invalid_lm1_win.err" "unsupported L1 form"
+Invoke-PreserveFail "tests\l1\invalid_lm1_default.lm1" "$obj\invalid_lm1_default.c" "$log\invalid_lm1_default.err" "unsupported L1 form"
+Invoke-PreserveFail "tests\l1\invalid_lm1_external_atom.lm1" "$obj\invalid_lm1_external_atom.c" "$log\invalid_lm1_external_atom.err" "external without fn"
+Invoke-PreserveFail "tests\l1\invalid_lm1_external_extra.lm1" "$obj\invalid_lm1_external_extra.c" "$log\invalid_lm1_external_extra.err" "unsupported L1 form"
+Invoke-PreserveFail "tests\l1\invalid_lm1_ident_c.lm1" "$obj\invalid_lm1_ident_c.c" "$log\invalid_lm1_ident_c.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_fn_l1.lm1" "$obj\invalid_lm1_fn_l1.c" "$log\invalid_lm1_fn_l1.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_define_l2.lm1" "$obj\invalid_lm1_define_l2.c" "$log\invalid_lm1_define_l2.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_ifdef_l3.lm1" "$obj\invalid_lm1_ifdef_l3.c" "$log\invalid_lm1_ifdef_l3.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_ref_c.lm1" "$obj\invalid_lm1_ref_c.c" "$log\invalid_lm1_ref_c.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_field_c.lm1" "$obj\invalid_lm1_field_c.c" "$log\invalid_lm1_field_c.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_type_l1.lm1" "$obj\invalid_lm1_type_l1.c" "$log\invalid_lm1_type_l1.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_param_l2.lm1" "$obj\invalid_lm1_param_l2.c" "$log\invalid_lm1_param_l2.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_lm1_define_repl_c.lm1" "$obj\invalid_lm1_define_repl_c.c" "$log\invalid_lm1_define_repl_c.err" "reserved L1 name"
+Invoke-PreserveFail "tests\l1\invalid_l1_wrong_ext.txt" "$obj\invalid_l1_wrong_ext.c" "$log\invalid_l1_wrong_ext.err" "l1trans expects a .lm1 or .lm2 source"
+Invoke-PreserveFail "tests\l1\invalid_unsupported.lm1" "$obj\invalid_unsupported.c" "$log\invalid_unsupported.err" "unsupported L1 form"
+Invoke-PreserveFail "tests\l1\invalid_import_missing.lm1" "$obj\invalid_import_missing.c" "$log\invalid_import_missing.err" "cannot read import"
+Invoke-PreserveFail "tests\l1\invalid_import_cycle.lm1" "$obj\invalid_import_cycle.c" "$log\invalid_import_cycle.err" "import cycle"
+Invoke-PreserveFail "tests\l1\invalid_array_extent.lm1" "$obj\invalid_array_extent.c" "$log\invalid_array_extent.err" "array missing extent"
 
 $dirDest = Join-Path $obj "publish_fail.c"
 if (Test-Path -LiteralPath $dirDest) { Remove-Item -LiteralPath $dirDest -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $dirDest | Out-Null
-cmd /c "$l1trans tests\l1\integer_add.lm2 $dirDest 2> $log\publish_fail.err"
+cmd /c "$l1trans tests\l1\integer_add.lm1 $dirDest 2> $log\publish_fail.err"
 if ($LASTEXITCODE -eq 0) {
     throw "expected publish failure over directory destination"
 }
@@ -291,36 +329,36 @@ if (Test-Path -LiteralPath ($dirDest + ".tmp")) {
 }
 Write-Log "publish-fail over directory preserved dest, exit $LASTEXITCODE"
 
-Invoke-Translate "tests\l1\import_add.lm2" "$obj\import_add.c"
-Invoke-Translate "tests\l1\import_add.lm2" "$obj\import_add_b.c"
+Invoke-Translate "tests\l1\import_add.lm1" "$obj\import_add.c"
+Invoke-Translate "tests\l1\import_add.lm1" "$obj\import_add_b.c"
 Assert-ByteIdentical "$obj\import_add.c" "$obj\import_add_b.c"
 Assert-CHas "$obj\import_add.c" "int add(int a, int b)"
 Invoke-CcRun "$obj\import_add.c" "$bin\import_add.exe" 0 $null
 
-Invoke-Translate "tests\l1\predef_hoist.lm2" "$obj\predef_hoist.c"
-Invoke-Translate "tests\l1\predef_hoist.lm2" "$obj\predef_hoist_b.c"
+Invoke-Translate "tests\l1\predef_hoist.lm1" "$obj\predef_hoist.c"
+Invoke-Translate "tests\l1\predef_hoist.lm1" "$obj\predef_hoist_b.c"
 Assert-ByteIdentical "$obj\predef_hoist.c" "$obj\predef_hoist_b.c"
 Assert-CHas "$obj\predef_hoist.c" "int add(int a, int b)"
 Invoke-CcRun "$obj\predef_hoist.c" "$bin\predef_hoist.exe" 0 $null
 
-Invoke-Translate "tests\l1\import_repeat.lm2" "$obj\import_repeat.c"
-Invoke-Translate "tests\l1\import_repeat.lm2" "$obj\import_repeat_b.c"
+Invoke-Translate "tests\l1\import_repeat.lm1" "$obj\import_repeat.c"
+Invoke-Translate "tests\l1\import_repeat.lm1" "$obj\import_repeat_b.c"
 Assert-ByteIdentical "$obj\import_repeat.c" "$obj\import_repeat_b.c"
 Invoke-CcRun "$obj\import_repeat.c" "$bin\import_repeat.exe" 0 $null
 
-Invoke-Translate "tests\l1\import_diamond.lm2" "$obj\import_diamond.c"
-Invoke-Translate "tests\l1\import_diamond.lm2" "$obj\import_diamond_b.c"
+Invoke-Translate "tests\l1\import_diamond.lm1" "$obj\import_diamond.c"
+Invoke-Translate "tests\l1\import_diamond.lm1" "$obj\import_diamond_b.c"
 Assert-ByteIdentical "$obj\import_diamond.c" "$obj\import_diamond_b.c"
 Invoke-CcRun "$obj\import_diamond.c" "$bin\import_diamond.exe" 0 $null
 
-Invoke-Translate "tests\l1\os_select.lm2" "$obj\os_select.c"
-Invoke-Translate "tests\l1\os_select.lm2" "$obj\os_select_b.c"
+Invoke-Translate "tests\l1\os_select.lm1" "$obj\os_select.c"
+Invoke-Translate "tests\l1\os_select.lm1" "$obj\os_select_b.c"
 Assert-ByteIdentical "$obj\os_select.c" "$obj\os_select_b.c"
 Assert-CHas "$obj\os_select.c" "#ifdef _WIN32"
 Invoke-CcRun "$obj\os_select.c" "$bin\os_select.exe" 0 $null
 
-Invoke-Translate "tests\l1\repro_call_index.lm2" "$obj\repro_call_index.c"
-Invoke-Translate "tests\l1\repro_call_index.lm2" "$obj\repro_call_index_b.c"
+Invoke-Translate "tests\l1\repro_call_index.lm1" "$obj\repro_call_index.c"
+Invoke-Translate "tests\l1\repro_call_index.lm1" "$obj\repro_call_index_b.c"
 Assert-ByteIdentical "$obj\repro_call_index.c" "$obj\repro_call_index_b.c"
 Assert-CHas "$obj\repro_call_index.c" "argv[1]"
 Assert-CLacks "$obj\repro_call_index.c" "[,"
@@ -329,8 +367,8 @@ Invoke-CcRun "$obj\repro_call_index.c" "$bin\repro_call_index.exe" 1 $null "" "n
 Invoke-CcRun "$obj\repro_call_index.c" "$bin\repro_call_index.exe" 0 $null "ok" "ok"
 Invoke-CcRun "$obj\repro_call_index.c" "$bin\repro_call_index.exe" 1 $null "bad" "bad"
 
-Invoke-Translate "tests\l1\repro_call_binop.lm2" "$obj\repro_call_binop.c"
-Invoke-Translate "tests\l1\repro_call_binop.lm2" "$obj\repro_call_binop_b.c"
+Invoke-Translate "tests\l1\repro_call_binop.lm1" "$obj\repro_call_binop.c"
+Invoke-Translate "tests\l1\repro_call_binop.lm1" "$obj\repro_call_binop_b.c"
 Assert-ByteIdentical "$obj\repro_call_binop.c" "$obj\repro_call_binop_b.c"
 Assert-CHas "$obj\repro_call_binop.c" "char buffer[32];"
 Assert-CHas "$obj\repro_call_binop.c" "memcpy(buffer + 0,"

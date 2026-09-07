@@ -1,4 +1,4 @@
-# Convert lm2/l1trans.lm2 (L2 C-like) into l1src/l1trans.lm2 (L1).
+# Convert lm2/l1trans.lm2 (L2 C-like) into wrapperless l1src/l1trans.lm1.
 from __future__ import annotations
 
 import importlib.util
@@ -10,11 +10,11 @@ pp = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pp)
 
 SRC = ROOT / "lm2" / "l1trans.lm2"
-DST = ROOT / "l1src" / "l1trans.lm2"
+DST = ROOT / "l1src" / "l1trans.lm1"
 
 # Seed lm2/l1trans.lm2 is compiled by trans.lm0 (L2). Do not put an L1
 # prototype: frame there. Inject typed forward decls here, matching
-# l1src/parser.lm2 HAND_PROTOS. Names must match later fn: definitions.
+# l1src/parser.lm1 HAND_PROTOS. Names must match later fn: definitions.
 EMIT_PROTOS = """
     prototype:
         fn: l1_emit_atom_c (@: FILE out; const: @(LmP0Text t)) int
@@ -27,7 +27,9 @@ EMIT_PROTOS = """
         fn: l1_emit_arg_list (@: FILE out; const: @(LmP0Structure body); const: @(char path)) int
         fn: l1_emit_type_token (@: FILE out; const: @(LmP0Node node); const: @(char path)) int
         fn: l1_emit_ifdef (@: FILE out; const: @(LmP0Frame frame); const: @(char path); int: as_stmt; int: depth; const: @(LmP0Node owner)) int
+        fn: l1_emit_import (@: FILE out; const: @(LmP0Frame frame); const: @(char path); int: depth) int
         fn: l1_emit_item (@: FILE out; const: @(LmP0Node node); const: @(char path); int: in_l1; int: depth) int
+        fn: l1_emit_l1_body (@: FILE out; const: @(LmP0Structure body); const: @(char path); int: depth) int
         fn: l1_emit_stmt (@: FILE out; const: @(LmP0Node node); const: @(char path)) int
         fn: l1_emit_block (@: FILE out; const: @(LmP0Structure body); const: @(char path)) int
     end: prototype
@@ -46,21 +48,14 @@ def main() -> None:
         s = line.strip()
         if s.startswith("predef:"):
             continue
-        body.append("    " + pp.convert_line(line) if line.strip() else "")
+        body.append(pp.convert_line(line) if line.strip() else "")
     out: list[str] = []
-    out.append("L1:")
-    out.append('    predef: "l1src/parser.lm2"')
+    out.append('predef: "l1src/parser.lm1"')
     out.extend(body)
     first_fn = next((i for i, line in enumerate(out) if line.strip().startswith("fn:")), len(out))
-    proto_lines = [ln.rstrip() for ln in EMIT_PROTOS.strip("\n").splitlines()]
+    proto_lines = [ln.rstrip()[4:] if ln.startswith("    ") else ln.rstrip() for ln in EMIT_PROTOS.strip("\n").splitlines()]
     proto_lines.append("")
     out[first_fn:first_fn] = proto_lines
-    if not out[-1].strip().startswith("end:"):
-        out.append("end: L1")
-    else:
-        # last end: external — still need end: L1
-        if "end: L1" not in out[-3:]:
-            out.append("end: L1")
     out.append("")
     DST.write_text("\n".join(out), encoding="utf-8", newline="\n")
     print(f"wrote {DST} lines={len(out)}")

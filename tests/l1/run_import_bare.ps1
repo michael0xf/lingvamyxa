@@ -69,7 +69,7 @@ function Build-Run([string]$name, [string]$cpath, [int]$expect) {
     Write-I "EXIT run $name $LASTEXITCODE"
 }
 
-$spaceSrc = "tests\l1\bare space\import_bare.lm2"
+$spaceSrc = "tests\l1\bare space\import_bare.lm1"
 $sc = Translate-Src $spaceSrc "import_bare"
 $st = [System.IO.File]::ReadAllText($sc)
 if ($st.IndexOf("int add_one(void)") -lt 0) { throw "missing add_one" }
@@ -80,10 +80,10 @@ try {
     $cwdC = Join-Path $obj "import_bare_cwd.c"
     $cwdB = Join-Path $obj "import_bare_cwd_b.c"
     $trans = $l1trans
-    Write-I "BEGIN translate cwd=tests\l1 bare space\import_bare.lm2"
-    & $trans "bare space\import_bare.lm2" $cwdC
+    Write-I "BEGIN translate cwd=tests\l1 bare space\import_bare.lm1"
+    & $trans "bare space\import_bare.lm1" $cwdC
     if ($LASTEXITCODE -ne 0) { throw "cwd translate failed $LASTEXITCODE" }
-    & $trans "bare space\import_bare.lm2" $cwdB
+    & $trans "bare space\import_bare.lm1" $cwdB
     if ($LASTEXITCODE -ne 0) { throw "cwd translate b failed" }
     $h1 = (Get-FileHash -LiteralPath $cwdC).Hash
     $h2 = (Get-FileHash -LiteralPath $cwdB).Hash
@@ -96,16 +96,16 @@ $cwdT = [System.IO.File]::ReadAllText((Join-Path $obj "import_bare_cwd.c"))
 if ($cwdT.IndexOf("int add_one(void)") -lt 0) { throw "cwd missing add_one" }
 Build-Run "import_bare_cwd" (Join-Path $obj "import_bare_cwd.c") 0
 
-$pc = Translate-Src "tests\l1\bare space\import_bare_predef.lm2" "import_bare_predef"
+$pc = Translate-Src "tests\l1\bare space\import_bare_predef.lm1" "import_bare_predef"
 Build-Run "import_bare_predef" $pc 0
 
-$rc = Translate-Src "tests\l1\bare space\import_bare_repeat.lm2" "import_bare_repeat"
+$rc = Translate-Src "tests\l1\bare space\import_bare_repeat.lm1" "import_bare_repeat"
 $rt = [System.IO.File]::ReadAllText($rc)
 $addCount = ([regex]::Matches($rt, "int add_one\(void\)")).Count
 if ($addCount -ne 1) { throw "repeat import emitted add_one $addCount times" }
 Build-Run "import_bare_repeat" $rc 0
 
-$dc = Translate-Src "tests\l1\import_bare_dirs.lm2" "import_bare_dirs"
+$dc = Translate-Src "tests\l1\import_bare_dirs.lm1" "import_bare_dirs"
 $dt = [System.IO.File]::ReadAllText($dc)
 if ($dt.IndexOf("int ha(void)") -lt 0) { throw "missing ha from bare_a/helper" }
 if ($dt.IndexOf("int hb(void)") -lt 0) { throw "missing hb from bare_b/helper" }
@@ -134,8 +134,8 @@ function Negative-Preserve([string]$src, [string]$name, [string]$diag) {
     Write-I "EXIT negative $src $($p2.ExitCode) diagnostic ok"
 }
 
-Negative-Preserve "tests\l1\bare space\invalid_import_bare_missing.lm2" "invalid_import_bare_missing" "cannot read import"
-Negative-Preserve "tests\l1\invalid_import_bare_cycle.lm2" "invalid_import_bare_cycle" "import cycle"
+Negative-Preserve "tests\l1\bare space\invalid_import_bare_missing.lm1" "invalid_import_bare_missing" "cannot read import"
+Negative-Preserve "tests\l1\invalid_import_bare_cycle.lm1" "invalid_import_bare_cycle" "import cycle"
 
 Write-I "import_bare ok"
 Write-Output "l1trans $gen import_bare ok"

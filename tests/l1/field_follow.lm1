@@ -1,0 +1,21 @@
+include: "l1src/p0.h" "<stdlib.h>"
+
+fn: take (@: LmP0Text p) size_t
+    if: p = 0
+        return: 0U
+return: p\length
+
+external:
+    fn: main () int
+        @: LmP0Text p
+        p: c.malloc(c.sizeof(c.LmP0Text))
+        if: p = 0
+            return: 1
+        p\data: "abc"
+        p\length: 3U
+        if: take(p) != 3U
+            c.free(p)
+            return: 1
+        c.free(p)
+    return: 0
+end: external

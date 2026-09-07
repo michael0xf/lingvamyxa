@@ -11,7 +11,7 @@ $obj = "build\obj\l1trans\$gen"
 $bin = "build\l1trans\$gen"
 $log = Join-Path "build\l1trans\logs" $gen
 $oracleDir = "build\l1trans\oracles"
-$ptSrc = "l1src\printTree.lm2"
+$ptSrc = "l1src\printTree.lm1"
 $ptC = Join-Path $obj "printTree.c"
 $ptExe = Join-Path $bin "printTree.exe"
 $lm0 = "build\lm0\printTree.lm0.exe"
@@ -63,9 +63,9 @@ function Invoke-Dump([string]$exe, [string]$src, [string]$out, [string]$err) {
 }
 
 $positive = @(
-    "tests\l1\integer_add.lm2",
-    "tests\l1\shift_ops.lm2",
-    "l1src\make.lm2",
+    "tests\l1\integer_add.lm1",
+    "tests\l1\shift_ops.lm1",
+    "l1src\make.lm1",
     "tests\block_string.lmx",
     "tests\hash_comment.lmx",
     "tests\raw_comment.lmx",
@@ -100,7 +100,7 @@ foreach ($src in $positive) {
     Write-PLog "MATCH $src hash=$h1 bytes=$((Get-Item $l1out).Length)"
 }
 
-$missEc = Invoke-Dump $ptExe "no_such_file.lm2" (Join-Path $log "pt_miss.stdout") (Join-Path $log "pt_miss.stderr")
+$missEc = Invoke-Dump $ptExe "no_such_file.lm1" (Join-Path $log "pt_miss.stdout") (Join-Path $log "pt_miss.stderr")
 if ($missEc -ne 1) { throw "missing file expected exit 1, got $missEc" }
 $missErr = Get-Content (Join-Path $log "pt_miss.stderr") -Raw
 if ($missErr -notmatch "P0 parse error") { throw "missing file missing diagnostic: $missErr" }

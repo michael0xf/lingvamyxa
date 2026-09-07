@@ -20,7 +20,7 @@ function Write-D([string]$m) { Add-Content -LiteralPath $script:defineLog -Value
 if (-not (Test-Path $l1trans)) { throw "missing $l1trans" }
 
 function Translate([string]$name) {
-    $src = "tests\l1\$name.lm2"
+    $src = "tests\l1\$name.lm1"
     $cpath = Join-Path $obj ($name + ".c")
     $cpathB = Join-Path $obj ($name + "_b.c")
     Write-D "BEGIN translate $src"
@@ -93,7 +93,7 @@ if ($tokText -match '#define \w+\(') { throw "function-like macro emitted" }
 Build-Run "define_tokens" $tokC "" 72
 
 function Negative([string]$name, [string]$diag) {
-    $src = "tests\l1\$name.lm2"
+    $src = "tests\l1\$name.lm1"
     $cpath = Join-Path $obj ($name + ".c")
     $err = Join-Path $log ($name + ".err")
     Write-D "BEGIN negative $src"
@@ -110,6 +110,8 @@ Negative "invalid_define_noname" "define receiver expects macro name as first at
 Negative "invalid_define_quoted_name" "define receiver expects macro name as identifier atom"
 Negative "invalid_define_nonatom" "define receiver expects atom tokens"
 Negative "invalid_define_end" "end target does not match close target"
+Negative "invalid_lm1_define_l2" "reserved L1 name"
+Negative "invalid_lm1_define_repl_c" "reserved L1 name"
 
 Write-D "define ok"
 Write-Output "l1trans $gen define ok"

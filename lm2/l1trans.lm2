@@ -48,6 +48,20 @@ fn: l1_head_is (const: (LmP0Text: text); const: @(char s)) int
         return: 1
 return: c.memcmp(text\data + start, s, n) = 0
 
+fn: l1_ident_is_reserved (const: (LmP0Text: text)) int
+    if: l1_head_is(text, "C") || l1_head_is(text, "L1") || l1_head_is(text, "L2") || l1_head_is(text, "L3")
+        return: 1
+return: 0
+
+fn: l1_span_is_reserved (const: @(char data); size_t: start; size_t: n) int
+    if: data = 0
+        return: 0
+    if: n = 1U && data[start] = 67
+        return: 1
+    if: n = 2U && data[start] = 76 && (data[start + 1U] = 49 || data[start + 1U] = 50 || data[start + 1U] = 51)
+        return: 1
+return: 0
+
 fn: l1_text_starts (const: (LmP0Text: text); const: @(char s)) int
     size_t: n
     if: text = 0 || text\data = 0 || s = 0
@@ -178,7 +192,9 @@ fn: l1_write_span (FILE: out; const: @(char data); size_t: n) int
         return: 1
 return: 0
 
-fn: l1_write_type_spelling (FILE: out; const: (LmP0Text: text)) int
+fn: l1_write_type_spelling (FILE: out; const: (LmP0Text: text); const: @(char path); const: (LmP0Node: node)) int
+    if: l1_ident_is_reserved(text) != 0
+        return: l1_error(path, node, "reserved L1 name")
     if: l1_text_eq(text, "ulong")
         return: l1_write_cstr(out, "unsigned long")
     if: l1_text_eq(text, "u8")
@@ -199,9 +215,11 @@ fn: l1_write_type_spelling (FILE: out; const: (LmP0Text: text)) int
         return: l1_write_cstr(out, "int64_t")
 return: l1_write_text(out, text)
 
-fn: l1_write_ident (FILE: out; const: (LmP0Text: text)) int
+fn: l1_write_ident (FILE: out; const: (LmP0Text: text); const: @(char path); const: (LmP0Node: node)) int
     size_t: start 0U
     size_t: n 0U
+    if: l1_ident_is_reserved(text) != 0
+        return: l1_error(path, node, "reserved L1 name")
     if: text = 0 || text\data = 0
         return: 1
     n: text\length
@@ -299,10 +317,12 @@ fn: l1_emit_stars (FILE: out; size_t: n) int
         n: n - 1U
 return: 0
 
-fn: l1_c_ident_from (FILE: out; const: (LmP0Text: text); size_t: start) int
+fn: l1_c_ident_from (FILE: out; const: (LmP0Text: text); size_t: start; const: @(char path); const: (LmP0Node: node)) int
     size_t: i
     size_t: from
     size_t: stop
+    int: skip_first 0
+    int: first_seg 1
     if: text = 0 || text\data = 0
         return: 0
     if: start >= text\length
@@ -312,11 +332,21 @@ fn: l1_c_ident_from (FILE: out; const: (LmP0Text: text); size_t: start) int
         start: start + 1U
         stop: stop - 1U
     ---
+    skip_first: 0
+    if: l1_text_starts(text, "c.") && start = 2U
+        skip_first: 1
+    ---
     from: start
     i: start
+    first_seg: 1
     while: i < stop
         if: text\data[i] = 92
             if: i > from
+                if: first_seg = 0 || skip_first = 0
+                    if: l1_span_is_reserved(text\data, from, i - from) != 0
+                        return: l1_error(path, node, "reserved L1 name")
+                    ---
+                ---
                 if: l1_write_span(out, text\data + from, i - from) != 0
                     return: 1
                 ---
@@ -325,16 +355,20 @@ fn: l1_c_ident_from (FILE: out; const: (LmP0Text: text); size_t: start) int
                 return: 1
             i: i + 1U
             from: i
+            first_seg: 0
             continue
         ---
         i: i + 1U
     if: from >= stop
         return: 0
-    if: from = start
-        return: l1_write_span(out, text\data + start, stop - start)
+    if: first_seg = 0 || skip_first = 0
+        if: l1_span_is_reserved(text\data, from, stop - from) != 0
+            return: l1_error(path, node, "reserved L1 name")
+        ---
+    ---
 return: l1_write_span(out, text\data + from, stop - from)
 
-fn: l1_c_ident (FILE: out; const: (LmP0Text: text)) int
+fn: l1_c_ident (FILE: out; const: (LmP0Text: text); const: @(char path); const: (LmP0Node: node)) int
     size_t: start 0U
     if: text = 0 || text\data = 0
         return: 0
@@ -342,7 +376,10 @@ fn: l1_c_ident (FILE: out; const: (LmP0Text: text)) int
         start: 2U
     if: start < text\length && (text\data[start] = 34 || text\data[start] = 39)
         return: l1_write_span(out, text\data + start, text\length - start)
-return: l1_c_ident_from(out, text, start)
+    if: start = 0U && l1_ident_is_reserved(text) != 0
+        return: l1_error(path, node, "reserved L1 name")
+    ---
+return: l1_c_ident_from(out, text, start, path, node)
 
 fn: l1_emit_c99_string (FILE: out; const: @(char data); size_t: n) int
     size_t: i 0U
@@ -482,7 +519,7 @@ fn: l1_atom_is_raw_string (const: (LmP0Node: node)) int
         return: 1
 return: 0
 
-fn: l1_emit_atom_node (FILE: out; const: (LmP0Node: node)) int
+fn: l1_emit_atom_node (FILE: out; const: (LmP0Node: node); const: @(char path)) int
     const: LmP0Text: text
     int: q
     if: node = 0 || node\kind != c.LM_P0_NODE_ATOM
@@ -495,7 +532,7 @@ fn: l1_emit_atom_node (FILE: out; const: (LmP0Node: node)) int
     q: l1_python_triple_quote(text)
     if: q != 0
         return: l1_emit_c99_string(out, text\data + 3U, text\length - 6U)
-return: l1_emit_atom_c(out, text)
+return: l1_emit_atom_c(out, text, path, node)
 
 fn: l1_emit_call_frame (FILE: out; const: (LmP0Frame: frame); const: @(char path); const: (LmP0Node: node)) int
     size_t: deref
@@ -505,7 +542,7 @@ fn: l1_emit_call_frame (FILE: out; const: (LmP0Frame: frame); const: @(char path
     head: frame\head
     deref: l1_slash_prefix_len(head)
     if: deref = 0U
-        if: l1_c_ident(out, head) != 0
+        if: l1_c_ident(out, head, path, node) != 0
             return: 1
         ---
     else:
@@ -515,7 +552,7 @@ fn: l1_emit_call_frame (FILE: out; const: (LmP0Frame: frame); const: @(char path
             return: 1
         if: l1_write_cstr(out, "(") != 0
             return: 1
-        if: l1_c_ident_from(out, head, deref) != 0
+        if: l1_c_ident_from(out, head, deref, path, node) != 0
             return: 1
         ---
     ---
@@ -534,14 +571,14 @@ fn: l1_emit_assign_head (FILE: out; const: (LmP0Text: head); const: @(char path)
     size_t: deref
     deref: l1_slash_prefix_len(head)
     if: deref = 0U
-        return: l1_c_ident(out, head)
+        return: l1_c_ident(out, head, path, node)
     if: deref = head\length
         return: l1_error(path, node, "dereferenced assignment target expects a name")
     if: l1_emit_stars(out, deref) != 0
         return: 1
     if: l1_write_cstr(out, "(") != 0
         return: 1
-    if: l1_c_ident_from(out, head, deref) != 0
+    if: l1_c_ident_from(out, head, deref, path, node) != 0
         return: 1
 return: l1_write_cstr(out, ")")
 
@@ -619,7 +656,7 @@ fn: l1_emit_expr (FILE: out; const: (LmP0Structure: body); const: @(char path); 
                     next_node: field\next\value
                 ---
                 if: l1_atom_is_raw_string(node)
-                    if: l1_emit_atom_node(out, node) != 0
+                    if: l1_emit_atom_node(out, node, path) != 0
                         return: 1
                     after_operand: 1
                     field: field\next
@@ -656,7 +693,7 @@ fn: l1_emit_expr (FILE: out; const: (LmP0Structure: body); const: @(char path); 
                                         return: 1
                                     after_operand: 0
                                 else:
-                                    if: l1_emit_atom_node(out, node) != 0
+                                    if: l1_emit_atom_node(out, node, path) != 0
                                         return: 1
                                     if: l1_is_infix_atom(node\as\atom) || l1_is_unary_prefix_atom(node\as\atom)
                                         after_operand: 0
@@ -754,7 +791,7 @@ fn: l1_emit_expr_range (FILE: out; LmP0Field: start; LmP0Field: stop; const: @(c
                     next_node: field\next\value
                 ---
                 if: l1_atom_is_raw_string(node)
-                    if: l1_emit_atom_node(out, node) != 0
+                    if: l1_emit_atom_node(out, node, path) != 0
                         return: 1
                     after_operand: 1
                     field: field\next
@@ -791,7 +828,7 @@ fn: l1_emit_expr_range (FILE: out; LmP0Field: start; LmP0Field: stop; const: @(c
                                         return: 1
                                     after_operand: 0
                                 else:
-                                    if: l1_emit_atom_node(out, node) != 0
+                                    if: l1_emit_atom_node(out, node, path) != 0
                                         return: 1
                                     if: l1_is_infix_atom(node\as\atom) || l1_is_unary_prefix_atom(node\as\atom)
                                         after_operand: 0
@@ -839,12 +876,12 @@ fn: l1_active_field (LmP0Field: field; LmP0Field: stop) LmP0Field
         return: 0
 return: field
 
-fn: l1_emit_atom_c (FILE: out; const: (LmP0Text: t)) int
+fn: l1_emit_atom_c (FILE: out; const: (LmP0Text: t); const: @(char path); const: (LmP0Node: node)) int
     if: l1_text_eq(t, "\\")
         return: l1_write_cstr(out, "->")
     if: l1_text_eq(t, "@")
         return: l1_write_cstr(out, "&")
-return: l1_c_ident(out, t)
+return: l1_c_ident(out, t, path, node)
 
 fn: l1_is_unary_prefix_atom (const: (LmP0Text: text)) int
     if: l1_text_eq(text, "!") || l1_text_eq(text, "~") || l1_text_eq(text, "@")
@@ -968,7 +1005,7 @@ fn: l1_emit_one_expr (FILE: out; @: LmP0Field cursor; LmP0Field: stop; const: @(
                     return: 1
                 ---
             else:
-                if: l1_c_ident(out, node\as\atom) != 0
+                if: l1_c_ident(out, node\as\atom, path, node) != 0
                     return: 1
                 ---
             ---
@@ -983,7 +1020,7 @@ fn: l1_emit_one_expr (FILE: out; @: LmP0Field cursor; LmP0Field: stop; const: @(
     ---
     if: node\kind = c.LM_P0_NODE_ATOM
         if: l1_atom_is_raw_string(node)
-            if: l1_emit_atom_node(out, node) != 0
+            if: l1_emit_atom_node(out, node, path) != 0
                 return: 1
             ---
         else:
@@ -997,7 +1034,7 @@ fn: l1_emit_one_expr (FILE: out; @: LmP0Field cursor; LmP0Field: stop; const: @(
                         return: 1
                     ---
                 else:
-                    if: l1_emit_atom_node(out, node) != 0
+                    if: l1_emit_atom_node(out, node, path) != 0
                         return: 1
                     ---
                 ---
@@ -1047,7 +1084,7 @@ fn: l1_emit_one_expr (FILE: out; @: LmP0Field cursor; LmP0Field: stop; const: @(
             field: l1_active_field(field\next, stop)
             if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM
                 return: l1_error(path, node, "field-follow missing name")
-            if: l1_c_ident(out, field\value\as\atom) != 0
+            if: l1_c_ident(out, field\value\as\atom, path, field\value) != 0
                 return: 1
             field: l1_active_field(field\next, stop)
             continue
@@ -1108,7 +1145,7 @@ fn: l1_emit_one_expr (FILE: out; @: LmP0Field cursor; LmP0Field: stop; const: @(
                     return: 1
                 ---
             else:
-                if: l1_c_ident(out, node\as\atom) != 0
+                if: l1_c_ident(out, node\as\atom, path, node) != 0
                     return: 1
                 ---
             ---
@@ -1194,7 +1231,7 @@ fn: l1_emit_type_token (FILE: out; const: (LmP0Node: node); const: @(char path))
     if: node = 0
         return: l1_error(path, 0, "missing type")
     if: node\kind = c.LM_P0_NODE_ATOM
-        return: l1_write_type_spelling(out, node\as\atom)
+        return: l1_write_type_spelling(out, node\as\atom, path, node)
     if: node\kind = c.LM_P0_NODE_FRAME
         if: l1_text_eq(node\as\frame\head, "const")
             if: l1_write_cstr(out, "const ") != 0
@@ -1219,7 +1256,7 @@ fn: l1_emit_type_token (FILE: out; const: (LmP0Node: node); const: @(char path))
             if: l1_emit_type_token(out, node\as\frame\body\first_field\value, path) != 0
                 return: 1
             return: l1_write_cstr(out, " **")
-        return: l1_write_type_spelling(out, node\as\frame\head)
+        return: l1_write_type_spelling(out, node\as\frame\head, path, node)
     if: node\kind = c.LM_P0_NODE_STRUCTURE
         if: node\as\structure\first_field = 0
             return: l1_error(path, node, "empty type")
@@ -1257,7 +1294,7 @@ fn: l1_emit_param (FILE: out; const: (LmP0Node: node); const: @(char path)) int
             return: l1_error(path, node, "array parameter missing name")
         if: l1_write_cstr(out, " ") != 0
             return: 1
-        if: l1_write_ident(out, field\value\as\atom) != 0
+        if: l1_write_ident(out, field\value\as\atom, path, field\value) != 0
             return: 1
         return: l1_write_cstr(out, "[]")
     if: l1_text_eq(head, "@") || l1_text_eq(head, "@@")
@@ -1280,7 +1317,7 @@ fn: l1_emit_param (FILE: out; const: (LmP0Node: node); const: @(char path)) int
             return: l1_error(path, node, "pointer parameter missing name")
         if: l1_write_cstr(out, " ") != 0
             return: 1
-        return: l1_write_ident(out, field\value\as\atom)
+        return: l1_write_ident(out, field\value\as\atom, path, field\value)
     if: l1_emit_type_token(out, node, path) != 0
         return: 1
     if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM
@@ -1288,7 +1325,7 @@ fn: l1_emit_param (FILE: out; const: (LmP0Node: node); const: @(char path)) int
     if: l1_write_cstr(out, " ") != 0
         return: 1
     name_node: field\value
-return: l1_write_ident(out, name_node\as\atom)
+return: l1_write_ident(out, name_node\as\atom, path, name_node)
 
 fn: l1_emit_param_list (FILE: out; const: (LmP0Node: node); const: @(char path)) int
     LmP0Field: field
@@ -1312,7 +1349,7 @@ fn: l1_emit_param_list (FILE: out; const: (LmP0Node: node); const: @(char path))
         return: l1_write_cstr(out, "void")
 return: 0
 
-fn: l1_write_bracket_extent (FILE: out; const: (LmP0Text: head)) int
+fn: l1_write_bracket_extent (FILE: out; const: (LmP0Text: head); const: @(char path); const: (LmP0Node: node)) int
     size_t: n
     size_t: off 1U
     if: head = 0 || head\data = 0 || head\length < 2U
@@ -1325,6 +1362,9 @@ fn: l1_write_bracket_extent (FILE: out; const: (LmP0Text: head)) int
     if: n > 2U && head\data[1] = 99 && head\data[2] = 46
         off: 3U
         n: n - 2U
+    ---
+    if: off = 1U && l1_span_is_reserved(head\data, off, n) != 0
+        return: l1_error(path, node, "reserved L1 name")
     ---
 return: l1_write_span(out, head\data + off, n)
 
@@ -1345,7 +1385,7 @@ fn: l1_emit_inits (FILE: out; LmP0Field: start; const: @(char path)) int
             if: field\value = 0
                 return: l1_error(path, 0, "empty initializer")
             if: field\value\kind = c.LM_P0_NODE_ATOM
-                if: l1_emit_atom_node(out, field\value) != 0
+                if: l1_emit_atom_node(out, field\value, path) != 0
                     return: 1
                 ---
             else:
@@ -1498,7 +1538,7 @@ fn: l1_emit_c_array (FILE: out; const: (LmP0Frame: frame); const: @(char path)) 
                 return: 1
             i: i + 1
         ---
-        if: l1_write_ident(out, name_node\as\atom) != 0
+        if: l1_write_ident(out, name_node\as\atom, path, name_node) != 0
             return: 1
         ---
     else:
@@ -1508,7 +1548,7 @@ fn: l1_emit_c_array (FILE: out; const: (LmP0Frame: frame); const: @(char path)) 
             if: name_node\as\frame\body != 0 && name_node\as\frame\body\first_field != 0 && name_node\as\frame\body\first_field\value != 0 && name_node\as\frame\body\first_field\value\kind = c.LM_P0_NODE_ATOM
                 if: l1_write_cstr(out, " ") != 0
                     return: 1
-                if: l1_write_ident(out, name_node\as\frame\body\first_field\value\as\atom) != 0
+                if: l1_write_ident(out, name_node\as\frame\body\first_field\value\as\atom, path, name_node\as\frame\body\first_field\value) != 0
                     return: 1
                 ---
             ---
@@ -1520,18 +1560,21 @@ fn: l1_emit_c_array (FILE: out; const: (LmP0Frame: frame); const: @(char path)) 
                 return: 1
             if: name_node\kind != c.LM_P0_NODE_ATOM
                 return: l1_error(path, name_node, "c.array name is not an identifier")
-            if: l1_write_ident(out, name_node\as\atom) != 0
+            if: l1_write_ident(out, name_node\as\atom, path, name_node) != 0
                 return: 1
             ---
         ---
     ---
     if: l1_write_cstr(out, "[") != 0
         return: 1
-    if: l1_write_bracket_extent(out, decl_head) != 0
+    if: l1_write_bracket_extent(out, decl_head, path, inner) != 0
         return: 1
     while: body_field != 0 && l1_node_ignored(body_field\value)
         body_field: body_field\next
     if: nested_form = 0 && decl_head != 0 && decl_head\length = 2U && body_field != 0 && body_field\value != 0 && body_field\value\kind = c.LM_P0_NODE_ATOM
+        if: l1_ident_is_reserved(body_field\value\as\atom) != 0
+            return: l1_error(path, body_field\value, "reserved L1 name")
+        ---
         if: l1_write_text(out, body_field\value\as\atom) != 0
             return: 1
         body_field: body_field\next
@@ -1584,7 +1627,7 @@ fn: l1_emit_bracket_array (FILE: out; const: (LmP0Frame: frame); const: @(char p
         return: 1
     if: l1_write_cstr(out, " ") != 0
         return: 1
-    if: l1_write_ident(out, name_node\as\atom) != 0
+    if: l1_write_ident(out, name_node\as\atom, path, name_node) != 0
         return: 1
     int: rank 0
     size_t: hi 0U
@@ -1602,6 +1645,9 @@ fn: l1_emit_bracket_array (FILE: out; const: (LmP0Frame: frame); const: @(char p
             return: 1
         if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM || l1_text_eq(field\value\as\atom, "[]")
             return: l1_error(path, name_node, "array missing extent")
+        if: l1_ident_is_reserved(field\value\as\atom) != 0
+            return: l1_error(path, field\value, "reserved L1 name")
+        ---
         if: l1_write_text(out, field\value\as\atom) != 0
             return: 1
         field: field\next
@@ -1634,7 +1680,7 @@ fn: l1_emit_for_init (FILE: out; const: (LmP0Node: node); const: @(char path)) i
     if: node = 0
         return: 0
     if: node\kind = c.LM_P0_NODE_FRAME && l1_is_type_name(node\as\frame\head)
-        if: l1_write_type_spelling(out, node\as\frame\head) != 0
+        if: l1_write_type_spelling(out, node\as\frame\head, path, node) != 0
             return: 1
         if: node\as\frame\body = 0 || node\as\frame\body\first_field = 0
             return: 0
@@ -1642,7 +1688,7 @@ fn: l1_emit_for_init (FILE: out; const: (LmP0Node: node); const: @(char path)) i
         if: l1_write_cstr(out, " ") != 0
             return: 1
         if: field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM
-            if: l1_write_ident(out, field\value\as\atom) != 0
+            if: l1_write_ident(out, field\value\as\atom, path, field\value) != 0
                 return: 1
             ---
         ---
@@ -1656,7 +1702,7 @@ fn: l1_emit_for_init (FILE: out; const: (LmP0Node: node); const: @(char path)) i
         ---
         return: 0
     if: node\kind = c.LM_P0_NODE_FRAME
-        if: l1_c_ident(out, node\as\frame\head) != 0
+        if: l1_c_ident(out, node\as\frame\head, path, node) != 0
             return: 1
         if: l1_write_cstr(out, " = ") != 0
             return: 1
@@ -1837,7 +1883,7 @@ fn: l1_emit_stmt (FILE: out; const: (LmP0Node: node); const: @(char path)) int
                 field: field\next
             ---
         else:
-            if: l1_write_type_spelling(out, head) != 0
+            if: l1_write_type_spelling(out, head, path, node) != 0
                 return: 1
             ---
         ---
@@ -1846,7 +1892,7 @@ fn: l1_emit_stmt (FILE: out; const: (LmP0Node: node); const: @(char path)) int
         name_node: field\value
         if: l1_write_cstr(out, " ") != 0
             return: 1
-        if: l1_write_ident(out, name_node\as\atom) != 0
+        if: l1_write_ident(out, name_node\as\atom, path, name_node) != 0
             return: 1
         field: field\next
         while: field != 0 && l1_node_ignored(field\value)
@@ -1882,7 +1928,7 @@ fn: l1_emit_stmt (FILE: out; const: (LmP0Node: node); const: @(char path)) int
         return: l1_write_cstr(out, ";\n")
     if: l1_write_cstr(out, "    ") != 0
         return: 1
-    if: l1_c_ident(out, head) != 0
+    if: l1_c_ident(out, head, path, node) != 0
         return: 1
     if: l1_write_cstr(out, "(") != 0
         return: 1
@@ -1921,7 +1967,7 @@ fn: l1_emit_repeat_scalar (FILE: out; const: (LmP0Text: head); const: (LmP0Struc
     const: LmP0Node: name_node
     if: l1_write_cstr(out, "    ") != 0
         return: 1
-    if: l1_write_type_spelling(out, head) != 0
+    if: l1_write_type_spelling(out, head, path, node) != 0
         return: 1
     field: 0
     if: body != 0
@@ -1934,7 +1980,7 @@ fn: l1_emit_repeat_scalar (FILE: out; const: (LmP0Text: head); const: (LmP0Struc
     name_node: field\value
     if: l1_write_cstr(out, " ") != 0
         return: 1
-    if: l1_write_ident(out, name_node\as\atom) != 0
+    if: l1_write_ident(out, name_node\as\atom, path, name_node) != 0
         return: 1
     field: field\next
     while: field != 0 && l1_node_ignored(field\value)
@@ -1991,7 +2037,7 @@ fn: l1_emit_repeat_pointer (FILE: out; const: (LmP0Frame: template); const: (LmP
     ---
     if: l1_write_cstr(out, " ") != 0
         return: 1
-    if: l1_write_ident(out, name_node\as\atom) != 0
+    if: l1_write_ident(out, name_node\as\atom, path, name_node) != 0
         return: 1
     nfield: nfield\next
     while: nfield != 0 && l1_node_ignored(nfield\value)
@@ -2045,10 +2091,13 @@ fn: l1_emit_repeat_array (FILE: out; const: (LmP0Frame: template); const: (LmP0S
         return: 1
     if: l1_write_cstr(out, " ") != 0
         return: 1
-    if: l1_write_ident(out, name_node\as\atom) != 0
+    if: l1_write_ident(out, name_node\as\atom, path, name_node) != 0
         return: 1
     if: l1_write_cstr(out, "[") != 0
         return: 1
+    if: l1_ident_is_reserved(efield\value\as\atom) != 0
+        return: l1_error(path, efield\value, "reserved L1 name")
+    ---
     if: l1_write_text(out, efield\value\as\atom) != 0
         return: 1
     if: l1_write_cstr(out, "]") != 0
@@ -2202,7 +2251,7 @@ fn: l1_emit_fn (FILE: out; const: (LmP0Frame: frame); const: @(char path); int: 
     ---
     if: l1_write_cstr(out, " ") != 0
         return: 1
-    if: l1_write_ident(out, fn_name) != 0
+    if: l1_write_ident(out, fn_name, path, name_node) != 0
         return: 1
     if: l1_write_cstr(out, "(") != 0
         return: 1
@@ -2345,6 +2394,9 @@ fn: l1_write_ifdef_condition (FILE: out; const: (LmP0Text: head); const: @(char 
     ---
     if: n = 0U
         return: l1_error(path, node, "ifdef branch expects a non-empty condition")
+    if: l1_ident_is_reserved(head) != 0
+        return: l1_error(path, node, "reserved L1 name")
+    ---
     if: l1_write_span(out, head\data + start, n) != 0
         return: 1
 return: 0
@@ -2496,6 +2548,9 @@ fn: l1_emit_define (FILE: out; const: (LmP0Frame: frame); const: @(char path); c
         if: ifndef_default != 0
             return: l1_error(path, field\value, "ifndef-default receiver expects macro name as identifier atom")
         return: l1_error(path, field\value, "define receiver expects macro name as identifier atom")
+    if: l1_ident_is_reserved(atom) != 0
+        return: l1_error(path, field\value, "reserved L1 name")
+    ---
     if: ifndef_default != 0
         if: l1_write_cstr(out, "#ifndef ") != 0
             return: 1
@@ -2527,6 +2582,9 @@ fn: l1_emit_define (FILE: out; const: (LmP0Frame: frame); const: @(char path); c
                 start: 1U
                 n: n - 2U
             ---
+            if: l1_ident_is_reserved(atom) != 0
+                return: l1_error(path, node, "reserved L1 name")
+            ---
             if: l1_write_cstr(out, " ") != 0
                 return: 1
             if: l1_write_span(out, atom\data + start, n) != 0
@@ -2540,6 +2598,226 @@ fn: l1_emit_define (FILE: out; const: (LmP0Frame: frame); const: @(char path); c
             return: 1
     ---
 return: l1_validate_end_trailer(frame, path, owner)
+
+fn: l1_path_is_lm1 (const: @(char path)) int
+    size_t: n 0U
+    int: c 0
+    if: path = 0
+        return: 0
+    n: c.strlen(path)
+    if: n < 4U
+        return: 0
+    if: path[n - 4U] != 46
+        return: 0
+    c: path[n - 3U]
+    if: c >= 65 && c <= 90
+        c: c + 32
+    ---
+    if: c != 108
+        return: 0
+    c: path[n - 2U]
+    if: c >= 65 && c <= 90
+        c: c + 32
+    ---
+    if: c != 109
+        return: 0
+    if: path[n - 1U] != 49
+        return: 0
+return: 1
+
+fn: l1_path_is_lm2 (const: @(char path)) int
+    size_t: n 0U
+    int: c 0
+    if: path = 0
+        return: 0
+    n: c.strlen(path)
+    if: n < 4U
+        return: 0
+    if: path[n - 4U] != 46
+        return: 0
+    c: path[n - 3U]
+    if: c >= 65 && c <= 90
+        c: c + 32
+    ---
+    if: c != 108
+        return: 0
+    c: path[n - 2U]
+    if: c >= 65 && c <= 90
+        c: c + 32
+    ---
+    if: c != 109
+        return: 0
+    if: path[n - 1U] != 50
+        return: 0
+return: 1
+
+fn: l1_text_is_receiver (const: (LmP0Text: text)) int
+return: l1_ident_is_reserved(text)
+
+fn: l1_unit_item_ok (const: (LmP0Text: text)) int
+    if: l1_text_eq(text, "include")
+        return: 1
+    if: l1_text_eq(text, "import")
+        return: 1
+    if: l1_text_eq(text, "predef")
+        return: 1
+    if: l1_text_eq(text, "os")
+        return: 1
+    if: l1_text_eq(text, "ifdef")
+        return: 1
+    if: l1_head_is(text, "define")
+        return: 1
+    if: l1_head_is(text, "ifndef-default")
+        return: 1
+    if: l1_text_eq(text, "prototype")
+        return: 1
+    if: l1_text_eq(text, "external")
+        return: 1
+    if: l1_text_eq(text, "fn")
+        return: 1
+    if: l1_text_eq(text, "sub")
+        return: 1
+    if: l1_text_eq(text, "end")
+        return: 1
+    if: l1_text_eq(text, "@") || l1_text_eq(text, "@@") || l1_text_eq(text, "const") || l1_is_type_name(text) || l1_text_eq(text, "c.array") || l1_text_starts(text, "[]")
+        return: 1
+return: 0
+
+fn: l1_validate_external_body (const: (LmP0Structure: body); const: @(char path)) int
+    LmP0Field: field
+    const: LmP0Node: node
+    int: saw 0
+    if: body = 0
+        return: l1_error(path, 0, "external without fn")
+    field: body\first_field
+    if: field = 0
+        return: l1_error(path, 0, "external without fn")
+    while: field != 0
+        node: field\value
+        if: l1_node_ignored(node) != 0
+            if: l1_validate_implicit_node(node, path, 0) != 0
+                return: 1
+            ---
+        else:
+            if: saw != 0
+                if: l1_validate_implicit_node(node, path, 0) != 0
+                    return: 1
+                return: l1_error(path, node, "unsupported L1 form")
+            ---
+            if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && (l1_text_eq(node\as\frame\head, "fn") || l1_text_eq(node\as\frame\head, "sub"))
+                saw: 1
+                if: l1_validate_implicit_structure(node\as\frame\body, path, 0) != 0
+                    return: 1
+                if: node\as\frame\trailer != 0 && node\as\frame\trailer\body != 0
+                    if: l1_validate_implicit_structure(node\as\frame\trailer\body, path, 0) != 0
+                        return: 1
+                    ---
+                ---
+            else:
+                if: node != 0 && node\kind = c.LM_P0_NODE_FRAME && l1_text_is_receiver(node\as\frame\head) != 0
+                    return: l1_error(path, node, "reserved L1 name")
+                return: l1_error(path, node, "external without fn")
+            ---
+        ---
+        field: field\next
+    if: saw = 0
+        return: l1_error(path, 0, "external without fn")
+return: 0
+
+fn: l1_validate_implicit_structure (const: (LmP0Structure: body); const: @(char path); int: top) int
+    LmP0Field: field
+    if: body = 0
+        return: 0
+    field: body\first_field
+    while: field != 0
+        if: l1_validate_implicit_node(field\value, path, top) != 0
+            return: 1
+        field: field\next
+    if: body\trailer != 0 && body\trailer\body != 0
+        if: l1_validate_implicit_structure(body\trailer\body, path, 0) != 0
+            return: 1
+        ---
+    ---
+return: 0
+
+fn: l1_validate_implicit_node (const: (LmP0Node: node); const: @(char path); int: top) int
+    if: node = 0
+        return: 0
+    if: top != 0 && node\kind = c.LM_P0_NODE_ATOM
+        return: l1_error(path, node, "implicit L1 expects a statement frame")
+    if: node\kind = c.LM_P0_NODE_STRUCTURE
+        return: l1_validate_implicit_structure(node\as\structure, path, top)
+    if: node\kind = c.LM_P0_NODE_FRAME
+        if: l1_text_is_receiver(node\as\frame\head) != 0
+            return: l1_error(path, node, "reserved L1 name")
+        if: top != 0 && l1_unit_item_ok(node\as\frame\head) = 0
+            return: l1_error(path, node, "unsupported L1 form")
+        ---
+        if: l1_text_eq(node\as\frame\head, "external")
+            if: l1_validate_external_body(node\as\frame\body, path) != 0
+                return: 1
+            ---
+        else:
+            if: l1_validate_implicit_structure(node\as\frame\body, path, 0) != 0
+                return: 1
+            ---
+        ---
+        if: node\as\frame\trailer != 0 && node\as\frame\trailer\body != 0
+            if: l1_validate_implicit_structure(node\as\frame\trailer\body, path, 0) != 0
+                return: 1
+            ---
+        ---
+        return: 0
+    if: node\kind = c.LM_P0_NODE_DISABLED && node\as != 0
+        if: node\as\frame != 0
+            if: l1_text_is_receiver(node\as\frame\head) != 0
+                return: l1_error(path, node, "reserved L1 name")
+            if: l1_validate_implicit_structure(node\as\frame\body, path, 0) != 0
+                return: 1
+            ---
+        ---
+        if: node\as\structure != 0
+            if: l1_validate_implicit_structure(node\as\structure, path, top) != 0
+                return: 1
+            ---
+        ---
+    ---
+return: 0
+
+fn: l1_emit_l1_body (FILE: out; const: (LmP0Structure: body); const: @(char path); int: depth) int
+    LmP0Field: field
+    if: body = 0
+        return: 0
+    field: body\first_field
+    while: field != 0
+        if: l1_node_ignored(field\value) = 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_FRAME && l1_text_eq(field\value\as\frame\head, "predef")
+            if: l1_emit_import(out, field\value\as\frame, path, depth) != 0
+                return: 1
+            ---
+        ---
+        field: field\next
+    field: body\first_field
+    while: field != 0
+        if: l1_node_ignored(field\value) = 0 && (field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME || l1_text_eq(field\value\as\frame\head, "predef") = 0)
+            if: l1_emit_item(out, field\value, path, 1, depth) != 0
+                return: 1
+            ---
+        ---
+        field: field\next
+return: 0
+
+fn: l1_emit_implicit_l1 (FILE: out; const: (LmP0Node: root); const: @(char path); int: depth) int
+    if: root = 0
+        return: l1_error(path, 0, "empty implicit L1 body")
+    if: l1_validate_implicit_node(root, path, 1) != 0
+        return: 1
+    if: root\kind = c.LM_P0_NODE_STRUCTURE
+        if: root\as\structure = 0 || root\as\structure\first_field = 0
+            return: l1_error(path, 0, "empty implicit L1 body")
+        return: l1_emit_l1_body(out, root\as\structure, path, depth)
+    if: root\kind = c.LM_P0_NODE_FRAME && l1_text_eq(root\as\frame\head, "predef")
+        return: l1_emit_import(out, root\as\frame, path, depth)
+return: l1_emit_item(out, root, path, 1, depth)
 
 fn: l1_imp_find (const: @(char tab); int: n; const: @(char path)) int
     int: i 0
@@ -2581,11 +2859,26 @@ fn: l1_emit_imported (FILE: out; const: @(char in_path); int: depth) int
         l1_imp_actn: l1_imp_actn - 1
         return: 1
     root: lm_p0_document_root(document)
-    if: root = 0 || l1_scan_l1(root) = 0
-        lm_p0_document_destroy(document)
-        c.fprintf(c.stderr, "l1trans error: %s:1:1: missing L1 body\n", in_path)
-        l1_imp_actn: l1_imp_actn - 1
-        return: 1
+    if: l1_path_is_lm1(in_path) != 0
+        if: root = 0
+            lm_p0_document_destroy(document)
+            c.fprintf(c.stderr, "l1trans error: %s:1:1: empty implicit L1 body\n", in_path)
+            l1_imp_actn: l1_imp_actn - 1
+            return: 1
+        ---
+    else:
+        if: l1_path_is_lm2(in_path) = 0
+            lm_p0_document_destroy(document)
+            c.fprintf(c.stderr, "l1trans error: %s:1:1: l1trans expects a .lm1 or .lm2 source\n", in_path)
+            l1_imp_actn: l1_imp_actn - 1
+            return: 1
+        if: root = 0 || l1_scan_l1(root) = 0
+            lm_p0_document_destroy(document)
+            c.fprintf(c.stderr, "l1trans error: %s:1:1: missing L1 body\n", in_path)
+            l1_imp_actn: l1_imp_actn - 1
+            return: 1
+        ---
+    ---
     saved_src: l1_src
     saved_n: l1_srcn
     l1_src: 0
@@ -2597,26 +2890,37 @@ fn: l1_emit_imported (FILE: out; const: @(char in_path); int: depth) int
         l1_imp_actn: l1_imp_actn - 1
         return: 1
     ---
-    if: root\kind = c.LM_P0_NODE_STRUCTURE
-        field: root\as\structure\first_field
-        while: field != 0
-            if: l1_emit_item(out, field\value, in_path, 0, depth) != 0
-                l1_src_release()
-                l1_src: saved_src
-                l1_srcn: saved_n
-                lm_p0_document_destroy(document)
-                l1_imp_actn: l1_imp_actn - 1
-                return: 1
-            field: field\next
-        ---
-    else:
-        if: l1_emit_item(out, root, in_path, 0, depth) != 0
+    if: l1_path_is_lm1(in_path) != 0
+        if: l1_emit_implicit_l1(out, root, in_path, depth) != 0
             l1_src_release()
             l1_src: saved_src
             l1_srcn: saved_n
             lm_p0_document_destroy(document)
             l1_imp_actn: l1_imp_actn - 1
             return: 1
+        ---
+    else:
+        if: root\kind = c.LM_P0_NODE_STRUCTURE
+            field: root\as\structure\first_field
+            while: field != 0
+                if: l1_emit_item(out, field\value, in_path, 0, depth) != 0
+                    l1_src_release()
+                    l1_src: saved_src
+                    l1_srcn: saved_n
+                    lm_p0_document_destroy(document)
+                    l1_imp_actn: l1_imp_actn - 1
+                    return: 1
+                field: field\next
+            ---
+        else:
+            if: l1_emit_item(out, root, in_path, 0, depth) != 0
+                l1_src_release()
+                l1_src: saved_src
+                l1_srcn: saved_n
+                lm_p0_document_destroy(document)
+                l1_imp_actn: l1_imp_actn - 1
+                return: 1
+            ---
         ---
     ---
     l1_src_release()
@@ -2665,25 +2969,7 @@ fn: l1_emit_item (FILE: out; const: (LmP0Node: node); const: @(char path); int: 
     if: node = 0 || node\kind != c.LM_P0_NODE_FRAME
         return: 0
     if: l1_text_eq(node\as\frame\head, "L1")
-        if: node\as\frame\body = 0
-            return: 0
-        field: node\as\frame\body\first_field
-        while: field != 0
-            if: l1_node_ignored(field\value) = 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_FRAME && l1_text_eq(field\value\as\frame\head, "predef")
-                if: l1_emit_import(out, field\value\as\frame, path, depth) != 0
-                    return: 1
-                ---
-            ---
-            field: field\next
-        field: node\as\frame\body\first_field
-        while: field != 0
-            if: l1_node_ignored(field\value) = 0 && (field\value = 0 || field\value\kind != c.LM_P0_NODE_FRAME || l1_text_eq(field\value\as\frame\head, "predef") = 0)
-                if: l1_emit_item(out, field\value, path, 1, depth) != 0
-                    return: 1
-                ---
-            ---
-            field: field\next
-        return: 0
+        return: l1_emit_l1_body(out, node\as\frame\body, path, depth)
     if: in_l1 = 0
         if: l1_text_eq(node\as\frame\head, "L2") || l1_text_eq(node\as\frame\head, "L3") || l1_text_eq(node\as\frame\head, "end")
             return: 0
@@ -2749,10 +3035,26 @@ fn: l1_translate (const: @(char in_path); const: @(char out_path)) int
         return: 1
 
     root: lm_p0_document_root(document)
-    if: root = 0 || l1_scan_l1(root) = 0
-        lm_p0_document_destroy(document)
-        c.fprintf(c.stderr, "l1trans error: %s:1:1: missing L1 body\n", in_path)
-        return: 1
+    if: l1_path_is_lm1(in_path) != 0
+        if: root = 0
+            lm_p0_document_destroy(document)
+            c.fprintf(c.stderr, "l1trans error: %s:1:1: empty implicit L1 body\n", in_path)
+            return: 1
+        if: l1_validate_implicit_node(root, in_path, 1) != 0
+            lm_p0_document_destroy(document)
+            return: 1
+        ---
+    else:
+        if: l1_path_is_lm2(in_path) = 0
+            lm_p0_document_destroy(document)
+            c.fprintf(c.stderr, "l1trans error: %s:1:1: l1trans expects a .lm1 or .lm2 source\n", in_path)
+            return: 1
+        if: root = 0 || l1_scan_l1(root) = 0
+            lm_p0_document_destroy(document)
+            c.fprintf(c.stderr, "l1trans error: %s:1:1: missing L1 body\n", in_path)
+            return: 1
+        ---
+    ---
 
     if: out_path = 0 || c.strlen(out_path) + 5U >= 1040U
         lm_p0_document_destroy(document)
@@ -2773,20 +3075,28 @@ fn: l1_translate (const: @(char in_path); const: @(char out_path)) int
         lm_p0_document_destroy(document)
         return: l1_discard_temp(out, tmp)
     ---
-    if: root\kind = c.LM_P0_NODE_STRUCTURE
-        field: root\as\structure\first_field
-        while: field != 0
-            if: l1_emit_item(out, field\value, in_path, 0, 0) != 0
-                l1_src_release()
-                lm_p0_document_destroy(document)
-                return: l1_discard_temp(out, tmp)
-            field: field\next
-        ---
-    else:
-        if: l1_emit_item(out, root, in_path, 0, 0) != 0
+    if: l1_path_is_lm1(in_path) != 0
+        if: l1_emit_implicit_l1(out, root, in_path, 0) != 0
             l1_src_release()
             lm_p0_document_destroy(document)
             return: l1_discard_temp(out, tmp)
+        ---
+    else:
+        if: root\kind = c.LM_P0_NODE_STRUCTURE
+            field: root\as\structure\first_field
+            while: field != 0
+                if: l1_emit_item(out, field\value, in_path, 0, 0) != 0
+                    l1_src_release()
+                    lm_p0_document_destroy(document)
+                    return: l1_discard_temp(out, tmp)
+                field: field\next
+            ---
+        else:
+            if: l1_emit_item(out, root, in_path, 0, 0) != 0
+                l1_src_release()
+                lm_p0_document_destroy(document)
+                return: l1_discard_temp(out, tmp)
+            ---
         ---
     ---
     l1_src_release()
@@ -2798,7 +3108,7 @@ external:
         c.setvbuf(c.stdout, 0, c._IONBF, 0)
         c.setvbuf(c.stderr, 0, c._IONBF, 0)
         if: argc != 3
-            c.fputs("usage: l1trans.exe <source.lm2> <output.c>\n", c.stderr)
+            c.fputs("usage: l1trans.exe <source.lm1> <output.c>\n", c.stderr)
             return: 1
     return: l1_translate(argv[1], argv[2])
 end: external

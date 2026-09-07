@@ -1,0 +1,6 @@
+include: "tests/l1/c_proj_C.h"
+external:
+    fn: main () int
+        return: c.C
+    end: main
+end: external

@@ -1,5 +1,0 @@
-L1:
-    fn: add_one () int
-        return: 7
-    end: add_one
-end: L1
