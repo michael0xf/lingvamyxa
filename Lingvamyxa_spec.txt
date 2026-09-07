@@ -12,7 +12,7 @@ to C99.
 | --- | --- |
 | Source syntax, strings, comments, normalization | 3–6, 15 |
 | Structure ontology, address-derived types, merge, compatibility | 2 |
-| Typing: guarantees, strictness and obtaining them | 2.5 |
+| Typing: guarantees, strictness, `throw: Type` | 2.5 |
 | Array descriptor pools and contiguous element storage | 6.5 |
 | Method definitions, return and explicit field access | 7–14 |
 | Control, exceptions and receiver families | 19.1–19.27 |
@@ -1081,7 +1081,10 @@ at consumption edges, rather than requiring a complete nominal contract or
 giving up all checking. A positive result covers the inspected requirements,
 not every possible future use. This does not relax an inspected path or call
 signature: missing required paths and mismatched required signatures fail.
-Section 2.5 explains the guarantees, failure boundaries and how to obtain them.
+A source/translator failure is a translation diagnostic. A runtime failure of
+the same check is `throw: Type` (2.5.6) and is caught like any other declared
+throw. Section 2.5 explains the guarantees, failure boundaries and how to
+obtain them.
 
 There are two distinct three-argument predicates, neither requiring a runtime
 Namespace or an implicit per-Structure type descriptor:
@@ -1577,8 +1580,8 @@ is the word contract inside `File`) is present. Later merge parts append later
 same-name occurrences by the rule of section 2.3: the first converter remains
 `[0]`; later converters require an explicit occurrence selection.
 
-Failure of the converter is not either predicate returning false. It is an
-ordinary receiver failure when that conversion executes; a known constant
+Failure of the converter is not either predicate returning false. At runtime
+it is `throw: Type` (2.5.6) from that consumption edge; a known constant
 failure may be diagnosed during translation (a format diagnostic;
 hosted profiles may spell it after `NumberFormatException`: decimal text
 `"Hello world!"` cannot become a file handle). `"123"` may become `u32` and
@@ -1936,6 +1939,44 @@ direct-C99 L1 or a current runtime implements it. Existing tests can preserve
 older expectations; for example `trans_field_occurrence_merge.lm2` and
 `trans_field_occurrence_callable.lm2` still expect last-wins unqualified access.
 Those assertions need migration, not a change to the normative `[0]` rule.
+
+2.5.6. Runtime Type Checks Throw `Type`
+
+Every runtime type/compatibility/admission check that rejects a value does so
+by `throw: Type(...)`. `Type` is a throw/catch name written like a procedure
+head, the same way as `Bounds` and `Stop`:
+
+    throw: Type(varA, varB, Consumer)
+    catch: Type (varA varB Consumer)
+    throws: Type
+
+The payload is the three operands of the failed check: the candidate, the
+required role, and the Consumer. A site that has no separate `varB` (for
+example a field-follow whose left side is not traversable) still throws `Type`
+and may pass the left value, the missing name/ordinal, and the consuming
+Structure.
+
+This includes, at runtime:
+
+    `RuntimeImplements` returning false;
+    a generated guard of source `implements` that fires while executing;
+    call admission of 21.3 step 4 (required dynamic name not supplied);
+    checked field-follow / occurrence selection (13.1);
+    a keyed conversion that fails at a consumption edge (2.2.4), including
+        destination-range failure.
+
+It does not include `throw: Bounds` (array index) or `throw: Stop` (iterator
+exhaustion). Those stay their own names. It does not include `assert`.
+
+Translation-time rejection of the same conditions remains a diagnostic: there
+is no running method and therefore no `catch`. Hosted bootstrap that still
+prints `trans L2 type error:` is that diagnostic channel, not a substitute
+runtime policy.
+
+A method that can reach a runtime type check lists `Type` in `throws`, or the
+caller supplies `catch: Type (...)`. An uncaught `Type` propagates as in
+19.11.4. It does not terminate the Message the way a failing `assert` does
+(2.5.2, 19.13). If it leaves the turn uncaught, the turn fails under 19.29.14.
 
 
 3. Structures and Frames
@@ -7435,8 +7476,8 @@ the left side is an Lmx reference or an array/reference form explicitly admitted
 by the selected runtime payload domain. In all cases, `\` implies an actual
 traversable referent, not a dotted external name. A missing, empty/sentinel or
 otherwise non-traversable left side is the same field-access error as a missing
-name: a translation diagnostic when statically known, checked runtime access
-otherwise. There is no second traversal policy for unknown models, dynamic
+name: a translation diagnostic when statically known, `throw: Type` (2.5.6)
+at runtime otherwise. There is no second traversal policy for unknown models, dynamic
 Structures or nullable handles. Field-follow walks the current ordered children
 and the reverse name index; `merge` may change those children, and the next
 follow uses the tree as it is then.
@@ -7451,7 +7492,8 @@ The occurrence expression is evaluated once and must produce a non-negative
 integer leaf admitted by the active numeric operation. Exact-name matches are
 counted from zero in the Structure's logical current order. A missing exact name or an ordinal outside the
 matching occurrence count is a field-access error. It is diagnosed during
-translation when statically known and by the checked runtime access otherwise.
+translation when statically known and is `throw: Type` (2.5.6) at runtime
+otherwise.
 The bracket before `field` is part of field-follow; a bracket after `field`
 remains postfix value indexing.
 
@@ -8642,9 +8684,9 @@ representation.
 
 Without `throws`, erroneous results may be represented as ordinary Lmx values
 allowed by the declared result contract. With `throws`, they are `throw`
-delivered to `catch` (sections 19.11 and 19.29.14). Iterator exhaustion,
-message validation/execution failure and checked array bounds failure use that
-same `throw`/`catch` rule. They are not encoded as `None` and are not
+delivered to `catch` (sections 19.11 and 19.29.14). Runtime type checks use
+`throw: Type` (2.5.6). Iterator exhaustion is `throw: Stop`; checked array
+bounds failure is `throw: Bounds`. They are not encoded as `None` and are not
 `assert`. The exact Revision-2 result/failure subtree and C return status are
 still open and are recorded by the callable `sig`. This open item does not
 permit a hidden Namespace/MessageThread/arena argument; it does not prohibit
@@ -9195,7 +9237,11 @@ A caller of that executable must provide a `catch` for each listed name or
 itself declare that name in `throws`. A call that does neither is rejected.
 
 `throws` lists names, not types. Those names are the `catch` landing pads the
-caller must supply.
+caller must supply. Runtime type/compatibility/admission failure uses the
+declared name `Type` (2.5.6), written like a procedure head:
+
+    throw: Type(varA, varB, Consumer)
+    catch: Type (varA varB Consumer)
 
 19.11.2. `throw`
 
@@ -12987,9 +13033,9 @@ For a required bare name `x`, a call establishes its value in this order:
        receiver-defined local;
     2. otherwise the x value dynamically inherited by that caller;
     3. otherwise the direct field node\[0]x of the selected callee node;
-    4. otherwise the callable is incompatible with that call and validation
-       must reject it (or the runtime admission boundary must fail if the
-       target could not be known before execution).
+    4. otherwise the callable is incompatible with that call: translation
+       rejects it when the target is known, otherwise the runtime admission
+       boundary does `throw: Type` (2.5.6).
 
 Thus the nearest dynamic caller value overrides the callee's structural
 fallback. The fallback is only the immediate supplied `node`; it is not a
