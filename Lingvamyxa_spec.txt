@@ -13209,21 +13209,45 @@ still requires a resource limit, an explicit failure, or semantics-preserving
 loop/trampoline/Message lowering; no finite implementation promises an infinite
 native stack.
 
-Non-normative genesis note. The rule grows straight out of the Lingvamyxa
-ontology — everything is a Structure, one serial Message thread, a small C
-stack in any interpreter — so an activation's state is a field of
-`callable->node` in the graph, not a slot in a C frame: a bare unqualified
-name looks like an Algol-60 stack local but lives like an instance field.
-Spill/no-reload is the seam between those two natures — the field is cached in
-a typed C working local, published back only when dirtied, never reloaded into
-a suspended caller — and the one serial Message thread makes that safe with no
-lock or barrier: a suspended caller's C snapshot cannot be raced, and other
-Messages hold disjoint arenas. An interpreter inherits the same shape: keep
-the Structure graph, walk it on a plain recursion stack that carries only
-control position, and let checkpoints keep the graph authoritative — no frame
-objects, closure chains or reload bookkeeping. It is what Algol wanted from
-nested procedures without the upward-funarg hole: state survives a return
-because it lives in the graph, not in a frame that disappeared.
+Non-normative genesis note.
+
+This rule follows directly from the Lingvamyxa ontology: everything is a
+Structure — including method and array descriptors — and each Message has one
+serial execution thread. A method’s Structure contains its single published
+working state, while native execution uses ordinary unpublished C stack
+activations.
+
+An unqualified name denoting the method’s own field looks like an Algol-60
+stack local but persists like an instance field. Spill/no-reload is the seam
+between these two natures. A used field is cached in a typed C working local;
+only a dirtied field is published back, before every call and every exit; a
+suspended caller is never reloaded after the callee returns. Dynamically
+resolved through-values are different: they are copied into the callee’s
+activation and are not published anywhere unless the program uses an explicit
+path.
+
+One serial execution thread per Message makes this safe without locks or
+memory barriers. A suspended caller’s C locals cannot be raced, and other
+Messages operate on disjoint arenas.
+
+Code that recursively re-enters the same published method state and then
+depends on a particular version of a bare caller value is intentionally bad
+style and has no language-level guarantee about which value will be observed.
+
+History that must survive a return other than as an ordinary return value, or
+remain distinct between branches, must be represented explicitly by a
+Structure, Array, or Message.
+
+An interpreter may walk the Structure graph using a small ordinary control
+stack carrying return state and declared arguments. It need not allocate a
+snapshot of the method’s working state for every call: no heap frame objects,
+closure chains, or reload bookkeeping are required. Published state survives
+a return because it lives in the graph, not in an activation that disappeared.
+
+This preserves the useful simplicity of Algol-style stack execution without
+the upward-funarg Algol-hole. Lingvamyxa avoids the upward-funarg problem by
+forbidding implicit capture of the caller frame, rather than by heapifying
+activations or constructing hidden closure chains.
 
 21.8. Callable Records and Typed Invocation
 
