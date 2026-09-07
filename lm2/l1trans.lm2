@@ -199,6 +199,18 @@ fn: l1_write_type_spelling (FILE: out; const: (LmP0Text: text)) int
         return: l1_write_cstr(out, "int64_t")
 return: l1_write_text(out, text)
 
+fn: l1_write_ident (FILE: out; const: (LmP0Text: text)) int
+    size_t: start 0U
+    size_t: n 0U
+    if: text = 0 || text\data = 0
+        return: 1
+    n: text\length
+    if: n >= 2U && text\data[0] = 96 && text\data[n - 1U] = 96
+        start: 1U
+        n: n - 2U
+    ---
+return: l1_write_span(out, text\data + start, n)
+
 fn: l1_error (const: @(char path); const: (LmP0Node: node); const: @(char msg)) int
     size_t: line 0U
     size_t: column 0U
@@ -290,13 +302,19 @@ return: 0
 fn: l1_c_ident_from (FILE: out; const: (LmP0Text: text); size_t: start) int
     size_t: i
     size_t: from
+    size_t: stop
     if: text = 0 || text\data = 0
         return: 0
     if: start >= text\length
         return: 0
+    stop: text\length
+    if: stop - start >= 2U && text\data[start] = 96 && text\data[stop - 1U] = 96
+        start: start + 1U
+        stop: stop - 1U
+    ---
     from: start
     i: start
-    while: i < text\length
+    while: i < stop
         if: text\data[i] = 92
             if: i > from
                 if: l1_write_span(out, text\data + from, i - from) != 0
@@ -310,11 +328,11 @@ fn: l1_c_ident_from (FILE: out; const: (LmP0Text: text); size_t: start) int
             continue
         ---
         i: i + 1U
-    if: from >= text\length
+    if: from >= stop
         return: 0
     if: from = start
-        return: l1_write_span(out, text\data + start, text\length - start)
-return: l1_write_span(out, text\data + from, text\length - from)
+        return: l1_write_span(out, text\data + start, stop - start)
+return: l1_write_span(out, text\data + from, stop - from)
 
 fn: l1_c_ident (FILE: out; const: (LmP0Text: text)) int
     size_t: start 0U
@@ -1239,7 +1257,7 @@ fn: l1_emit_param (FILE: out; const: (LmP0Node: node); const: @(char path)) int
             return: l1_error(path, node, "array parameter missing name")
         if: l1_write_cstr(out, " ") != 0
             return: 1
-        if: l1_write_text(out, field\value\as\atom) != 0
+        if: l1_write_ident(out, field\value\as\atom) != 0
             return: 1
         return: l1_write_cstr(out, "[]")
     if: l1_text_eq(head, "@") || l1_text_eq(head, "@@")
@@ -1262,7 +1280,7 @@ fn: l1_emit_param (FILE: out; const: (LmP0Node: node); const: @(char path)) int
             return: l1_error(path, node, "pointer parameter missing name")
         if: l1_write_cstr(out, " ") != 0
             return: 1
-        return: l1_write_text(out, field\value\as\atom)
+        return: l1_write_ident(out, field\value\as\atom)
     if: l1_emit_type_token(out, node, path) != 0
         return: 1
     if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM
@@ -1270,7 +1288,7 @@ fn: l1_emit_param (FILE: out; const: (LmP0Node: node); const: @(char path)) int
     if: l1_write_cstr(out, " ") != 0
         return: 1
     name_node: field\value
-return: l1_write_text(out, name_node\as\atom)
+return: l1_write_ident(out, name_node\as\atom)
 
 fn: l1_emit_param_list (FILE: out; const: (LmP0Node: node); const: @(char path)) int
     LmP0Field: field
@@ -1389,7 +1407,7 @@ fn: l1_emit_c_array (FILE: out; const: (LmP0Frame: frame); const: @(char path)) 
         if: name_node\as\frame\body != 0 && name_node\as\frame\body\first_field != 0 && name_node\as\frame\body\first_field\value != 0 && name_node\as\frame\body\first_field\value\kind = c.LM_P0_NODE_ATOM
             if: l1_write_cstr(out, " ") != 0
                 return: 1
-            if: l1_write_text(out, name_node\as\frame\body\first_field\value\as\atom) != 0
+            if: l1_write_ident(out, name_node\as\frame\body\first_field\value\as\atom) != 0
                 return: 1
             ---
         ---
@@ -1402,7 +1420,7 @@ fn: l1_emit_c_array (FILE: out; const: (LmP0Frame: frame); const: @(char path)) 
             return: 1
         if: name_node\kind != c.LM_P0_NODE_ATOM
             return: l1_error(path, name_node, "c.array name is not an identifier")
-        if: l1_write_text(out, name_node\as\atom) != 0
+        if: l1_write_ident(out, name_node\as\atom) != 0
             return: 1
         body_field: body_field\next
     ---
@@ -1458,7 +1476,7 @@ fn: l1_emit_bracket_array (FILE: out; const: (LmP0Frame: frame); const: @(char p
         return: 1
     if: l1_write_cstr(out, " ") != 0
         return: 1
-    if: l1_write_text(out, name_node\as\atom) != 0
+    if: l1_write_ident(out, name_node\as\atom) != 0
         return: 1
     int: rank 0
     size_t: hi 0U
@@ -1516,7 +1534,7 @@ fn: l1_emit_for_init (FILE: out; const: (LmP0Node: node); const: @(char path)) i
         if: l1_write_cstr(out, " ") != 0
             return: 1
         if: field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM
-            if: l1_write_text(out, field\value\as\atom) != 0
+            if: l1_write_ident(out, field\value\as\atom) != 0
                 return: 1
             ---
         ---
@@ -1720,7 +1738,7 @@ fn: l1_emit_stmt (FILE: out; const: (LmP0Node: node); const: @(char path)) int
         name_node: field\value
         if: l1_write_cstr(out, " ") != 0
             return: 1
-        if: l1_write_text(out, name_node\as\atom) != 0
+        if: l1_write_ident(out, name_node\as\atom) != 0
             return: 1
         field: field\next
         while: field != 0 && l1_node_ignored(field\value)
@@ -1804,7 +1822,7 @@ fn: l1_emit_repeat_scalar (FILE: out; const: (LmP0Text: head); const: (LmP0Struc
     name_node: field\value
     if: l1_write_cstr(out, " ") != 0
         return: 1
-    if: l1_write_text(out, name_node\as\atom) != 0
+    if: l1_write_ident(out, name_node\as\atom) != 0
         return: 1
     field: field\next
     while: field != 0 && l1_node_ignored(field\value)
@@ -1861,7 +1879,7 @@ fn: l1_emit_repeat_pointer (FILE: out; const: (LmP0Frame: template); const: (LmP
     ---
     if: l1_write_cstr(out, " ") != 0
         return: 1
-    if: l1_write_text(out, name_node\as\atom) != 0
+    if: l1_write_ident(out, name_node\as\atom) != 0
         return: 1
     nfield: nfield\next
     while: nfield != 0 && l1_node_ignored(nfield\value)
@@ -1997,7 +2015,7 @@ fn: l1_emit_fn (FILE: out; const: (LmP0Frame: frame); const: @(char path); int: 
     ---
     if: l1_write_cstr(out, " ") != 0
         return: 1
-    if: l1_write_text(out, fn_name) != 0
+    if: l1_write_ident(out, fn_name) != 0
         return: 1
     if: l1_write_cstr(out, "(") != 0
         return: 1

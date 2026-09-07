@@ -37,7 +37,7 @@ gen0 seed with the old stage-0 `trans.lm0`. It is not the L1 source.
 
 * `gcc` reachable on `PATH`. New-generation runners (`run_gen` / `run_smoke` /
   `run_parser` / `run_expr` / `run_ifdef` / `run_define` / `run_scalar` /
-  `run_decl_repeat` / `build_l1`)
+  `run_decl_repeat` / `run_ident` / `build_l1`)
   invoke it with `-std=c99 -Wall -Wextra -Wpedantic
   -I .` and four hard guards: `-Werror=incompatible-pointer-types
   -Werror=discarded-qualifiers -Werror=implicit-function-declaration
@@ -116,6 +116,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_ifdef.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_define.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_scalar.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_decl_repeat.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_ident.ps1
 ```
 
 All default to `gen0`; set `L1_GEN` (for example `gen2`) to pick another.
@@ -193,6 +194,13 @@ affects only that item. Ordinary assignments and `%`-disabled wrappers reset
 the template. The suite checks values, pointer types and nested if/while bodies;
 errors must not publish C. Array repetition is not covered. This standalone
 suite writes `logs/<gen>/decl_repeat.log` and is not called by `run_gen.ps1`.
+
+`run_ident.ps1` checks four fixtures on gen0/gen2: simple C-compatible names
+with or without outer backticks denote the same C identifier in declarations,
+parameters, calls and references. For example, `` []: int `xs`, 2 1 2 `` declares
+the array accessed as `xs[0]`. Quoted repeated scalar/pointer names are covered;
+literal string backticks remain bytes. No arbitrary-name mangling or parser
+adjacency change is implied. This standalone suite writes `logs/<gen>/ident.log`.
 
 ## Where output goes
 
