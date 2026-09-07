@@ -89,5 +89,54 @@ if ($unitText.IndexOf("unsigned long i = 1") -lt 0) { throw "for-init did not st
 if ($unitText.IndexOf("ulong") -ge 0) { throw "raw ulong in unit/for" }
 Build-Run "scalar_unit_for" $unitC 0
 
+$declC = Translate "scalar_fixed_decl"
+$declText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $declC))
+if ($declText.IndexOf("uint8_t a") -lt 0) { throw "missing uint8_t a" }
+if ($declText.IndexOf("uint16_t b") -lt 0) { throw "missing uint16_t b" }
+if ($declText.IndexOf("uint32_t c") -lt 0) { throw "missing uint32_t c" }
+if ($declText.IndexOf("uint64_t d") -lt 0) { throw "missing uint64_t d" }
+if ($declText.IndexOf("int8_t e") -lt 0) { throw "missing int8_t e" }
+if ($declText.IndexOf("int16_t f") -lt 0) { throw "missing int16_t f" }
+if ($declText.IndexOf("int32_t g") -lt 0) { throw "missing int32_t g" }
+if ($declText.IndexOf("int64_t h") -lt 0) { throw "missing int64_t h" }
+if ($declText.IndexOf("#include <stdint.h>") -lt 0) { throw "missing stdint.h" }
+Build-Run "scalar_fixed_decl" $declC 0
+
+$hashC = Translate "scalar_fixed_hash"
+$hashText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $hashC))
+if ($hashText.IndexOf("uint64_t guard_hash") -lt 0) { throw "missing uint64_t guard_hash" }
+if ($hashText.IndexOf("uint8_t byte") -lt 0) { throw "missing uint8_t byte" }
+if ($hashText.IndexOf("1099511628211ULL") -lt 0) { throw "missing FNV prime" }
+if ($hashText.IndexOf("0x5eeaf5dacf966d85ULL") -lt 0) { throw "missing independent forward oracle" }
+if ($hashText.IndexOf("0x67f171f418d3a1c1ULL") -lt 0) { throw "missing independent reverse oracle" }
+Build-Run "scalar_fixed_hash" $hashC 0
+
+$signedC = Translate "scalar_fixed_signed"
+$signedText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $signedC))
+if ($signedText.IndexOf("int8_t take_i8(int8_t x)") -lt 0) { throw "missing signed i8 param/return" }
+if ($signedText.IndexOf("int32_t take_i32(int32_t x)") -lt 0) { throw "missing signed i32 param/return" }
+if ($signedText.IndexOf("const int16_t k") -lt 0) { throw "missing const int16_t" }
+if ($signedText.IndexOf("int8_t * p") -lt 0 -and $signedText.IndexOf("int8_t *p") -lt 0) { throw "missing i8 pointer" }
+if ($signedText.IndexOf("int64_t xs[") -lt 0) { throw "missing i64 array" }
+if ($signedText.IndexOf("uint64_t xs[") -ge 0) { throw "i64 array mapped unsigned" }
+if ($signedText -notmatch '(?<![A-Za-z0-9_])int64_t xs\[') { throw "i64 array token is not signed int64_t" }
+if ($signedText.IndexOf("(int8_t)") -lt 0) { throw "missing i8 cast" }
+if ($signedText.IndexOf("uint8_t take_i8") -ge 0) { throw "i8 mapped unsigned" }
+if ($signedText.IndexOf("uint32_t take_i32") -ge 0) { throw "i32 mapped unsigned" }
+Build-Run "scalar_fixed_signed" $signedC 0
+
+$parenC = Translate "scalar_fixed_paren"
+$parenText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $parenC))
+if ($parenText.IndexOf("uint32_t v") -lt 0) { throw "missing uint32_t v declaration" }
+if ($parenText.IndexOf("(1 + 1) * 3") -lt 0) { throw "missing grouped (1 + 1) * 3" }
+Build-Run "scalar_fixed_paren" $parenC 0
+
+$fuC = Translate "scalar_fixed_unit_for"
+$fuText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $fuC))
+if ($fuText.IndexOf("uint64_t g") -lt 0) { throw "missing unit uint64_t g" }
+if ($fuText.IndexOf("uint32_t sum") -lt 0) { throw "missing uint32_t sum" }
+if ($fuText.IndexOf("uint32_t i = 1") -lt 0) { throw "for-init did not map u32" }
+Build-Run "scalar_fixed_unit_for" $fuC 0
+
 Write-S "scalar ok"
 Write-Output "l1trans $gen scalar ok"

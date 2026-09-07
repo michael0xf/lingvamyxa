@@ -1,0 +1,33 @@
+L1:
+    include: "<stdint.h>"
+    include: "<stddef.h>"
+    fn: guard_hash (const: @(char declaration); size_t: declaration_length; u64: seed; int: reverse) u64
+        u64: hash
+        u8: byte
+        size_t: index
+        size_t: offset
+        hash: seed
+        index: 0U
+        while: index < declaration_length
+            offset: index
+            if: reverse
+                offset: declaration_length - index - 1U
+            byte: (cast: (u8) declaration[offset])
+            hash: (hash ^ (cast: (u64) byte)) * 1099511628211ULL
+            index: index + 1U
+        return: hash
+    end: guard_hash
+    external:
+        fn: main () int
+            u64: fwd
+            u64: rev
+            fwd: guard_hash("guard-hash", 10U, 0xcbf29ce484222325ULL, 0)
+            rev: guard_hash("guard-hash", 10U, 0xcbf29ce484222325ULL, 1)
+            if: fwd != 0x5eeaf5dacf966d85ULL
+                return: 1
+            if: rev != 0x67f171f418d3a1c1ULL
+                return: 2
+            return: 0
+        end: main
+    end: external
+end: L1

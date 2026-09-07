@@ -996,7 +996,7 @@ L2-shaped copy kept only to produce the gen0 seed with stage-0
 `trans.lm0`; it is not the L1 source.
 
 Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
-`run_smoke.ps1`, `run_parser.ps1`, `run_expr.ps1`, `run_ifdef.ps1`
+`run_smoke.ps1`, `run_parser.ps1`, `run_expr.ps1`, `run_ifdef.ps1`,
 `run_define.ps1` and `run_scalar.ps1`:
 
   - the P0 parser, `own` and `parser_text` ported from frozen
@@ -1009,13 +1009,17 @@ Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
     `-Werror=discarded-qualifiers`,
     `-Werror=implicit-function-declaration`, `-Werror=implicit-int`;
   - the gen2 compiler smoke suite;
-  - `float`, `double` and `ulong` in existing C-type positions;
-    `ulong` emits `unsigned long`, without rewriting expression names.
-    Five `tests/l1/scalar_*.lm2` fixtures compile/run on gen0/gen2:
+  - `float`, `double`, `ulong`, `u8/u16/u32/u64` and `i8/i16/i32/i64`
+    in existing C-type positions. `ulong` emits `unsigned long`;
+    fixed-width aliases emit `uintN_t`/`intN_t` with explicit `<stdint.h>`
+    includes in fixtures, without rewriting expression names.
+    Ten `tests/l1/scalar_*.lm2` fixtures compile/run on gen0/gen2:
     full `snprintf` output/NUL, parameters/prototypes/returns,
     `strtoul` with end-pointer checking, const/pointer/array/cast forms,
-    and unit declarations plus a `for` initializer. This is direct C99
-    spelling, not primitive-pool or conversion semantics;
+    unit declarations and `for` initializers, multiline `(1 + 1) * 3`,
+    signed negatives (including an `i64 < 0` check), and a ported hash
+    helper checked against independent full 64-bit forward/reverse values.
+    This is direct C99 spelling, not primitive-pool or conversion semantics;
   - 22 expression fixtures executed on gen0 and gen2: nested calls,
     index/field arguments, unary/binary operations, parentheses, casts,
     prefix dereference in reads, assignments, calls and mixed unary chains,

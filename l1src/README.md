@@ -166,12 +166,15 @@ values are checked at execution; `=` and `(void)` only as emitted tokens.
 Function-like macros, hosted table commands and function-body placement are
 outside this checkpoint. Results are in `logs/<gen>/define.log`.
 
-`run_scalar.ps1` checks five fixtures on gen0/gen2 for `float`, `double`
-and `ulong` (`unsigned long` in C). Existing type positions include
+`run_scalar.ps1` checks ten fixtures on gen0/gen2 for `float`, `double`,
+`ulong` (`unsigned long`), `u8/u16/u32/u64` and `i8/i16/i32/i64`
+(`uintN_t`/`intN_t`, with explicit `<stdint.h>` includes). Type positions include
 parameters/returns, const/pointers/arrays/casts, unit declarations and
 `for` initializers. Executable checks cover exact floating values, full
-`snprintf` output/NUL and `strtoul` consumption. This standalone suite
-records `logs/<gen>/scalar.log`; it is not called by `run_gen.ps1`.
+`snprintf` output/NUL, `strtoul` consumption, multiline grouping and signed
+negatives. The ported hash helper has independent full 64-bit forward/reverse
+oracles; an `i64 < 0` check detects accidental unsigned mapping. Results are
+in `logs/<gen>/scalar.log`; this suite is not called by `run_gen.ps1`.
 
 ## Where output goes
 

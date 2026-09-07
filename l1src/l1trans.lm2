@@ -86,6 +86,22 @@ L1:
             return: 1
         if: l1_text_eq(text, "ulong")
             return: 1
+        if: l1_text_eq(text, "u8")
+            return: 1
+        if: l1_text_eq(text, "u16")
+            return: 1
+        if: l1_text_eq(text, "u32")
+            return: 1
+        if: l1_text_eq(text, "u64")
+            return: 1
+        if: l1_text_eq(text, "i8")
+            return: 1
+        if: l1_text_eq(text, "i16")
+            return: 1
+        if: l1_text_eq(text, "i32")
+            return: 1
+        if: l1_text_eq(text, "i64")
+            return: 1
         if: l1_text_eq(text, "LmP0NodeKind") || l1_text_eq(text, "LmP0TrailerRole") || l1_text_eq(text, "LmP0DashFenceStatus")
             return: 1
         if: l1_text_eq(text, "LmP0FieldParseFlags") || l1_text_eq(text, "LmP0FieldParseLoopContinuation")
@@ -167,6 +183,22 @@ L1:
     fn: l1_write_type_spelling (@: FILE out; const: @(LmP0Text text)) int
         if: l1_text_eq(text, "ulong")
             return: l1_write_cstr(out, "unsigned long")
+        if: l1_text_eq(text, "u8")
+            return: l1_write_cstr(out, "uint8_t")
+        if: l1_text_eq(text, "u16")
+            return: l1_write_cstr(out, "uint16_t")
+        if: l1_text_eq(text, "u32")
+            return: l1_write_cstr(out, "uint32_t")
+        if: l1_text_eq(text, "u64")
+            return: l1_write_cstr(out, "uint64_t")
+        if: l1_text_eq(text, "i8")
+            return: l1_write_cstr(out, "int8_t")
+        if: l1_text_eq(text, "i16")
+            return: l1_write_cstr(out, "int16_t")
+        if: l1_text_eq(text, "i32")
+            return: l1_write_cstr(out, "int32_t")
+        if: l1_text_eq(text, "i64")
+            return: l1_write_cstr(out, "int64_t")
     return: l1_write_text(out, text)
 
     fn: l1_error (const: @(char path); const: @(LmP0Node node); const: @(char msg)) int
