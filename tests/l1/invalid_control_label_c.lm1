@@ -1,0 +1,6 @@
+external:
+    fn: main () int
+        C:
+        return: 0
+    end: main
+end: external

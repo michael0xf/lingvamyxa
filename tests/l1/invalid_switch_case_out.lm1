@@ -1,0 +1,7 @@
+external:
+    fn: main () int
+        case: 1
+            return: 0
+        return: 1
+    end: main
+end: external

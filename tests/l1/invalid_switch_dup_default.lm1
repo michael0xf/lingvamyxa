@@ -1,0 +1,11 @@
+external:
+    fn: main () int
+        switch: 1
+            default:
+                return: 0
+            default:
+                return: 1
+        end: switch
+        return: 2
+    end: main
+end: external

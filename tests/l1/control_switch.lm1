@@ -1,0 +1,35 @@
+external:
+    fn: main () int
+        int: x 1
+        int: r 0
+        switch: x
+            case: 1
+                r: 10
+            case: 2
+                r: r + 1
+                break
+            default:
+                r: 99
+        end: switch
+        if: r != 11
+            return: 1
+        switch: 3
+            case: 1
+                return: 2
+            default:
+                r: 0
+        end: switch
+        switch: 1
+            case: 1
+                switch: 2
+                    case: 2
+                        return: 0
+                    default:
+                        return: 3
+                end: switch
+            default:
+                return: 4
+        end: switch
+        return: 5
+    end: main
+end: external
