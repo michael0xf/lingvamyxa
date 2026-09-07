@@ -13259,28 +13259,6 @@ Different Messages may concurrently execute callable occurrences that share the
 same immutable method record because their containing Structures and arenas are
 distinct.
 
-Normative ontology statement:
-
-    Стек вызовов является единственной неявной историей активаций. Structure
-    метода содержит рабочее опубликованное состояние метода и не является
-    журналом вызовов. Любая история, предназначенная для переживания возврата
-    или разделения между ветвями, должна быть представлена явной Structure,
-    Array или Message. Побочный эффект загрязнения биографии вызывающего, при
-    неграмотно составленных рекурсивных вызовах, это съедающая память
-    архитектурная ошибка, использование которой Lingvamyxa намеренно делает
-    опасной и логически невозможной.
-
-An English restatement is normative as well: history intended to survive a
-return, to be inspected later or to diverge between recursive branches must be
-explicit Structure, Array or Message data. The language does not silently turn
-stack ancestry into persistent graph biography. A recursive dispatcher or
-finite mutually recursive state machine is valid. Unbounded physical recursion
-still requires a resource limit, an explicit failure, or semantics-preserving
-loop/trampoline/Message lowering; no finite implementation promises an infinite
-native stack.
-
-Non-normative genesis note.
-
 This rule follows directly from the Lingvamyxa ontology: everything is a
 Structure — including method and array descriptors — and each Message has one
 serial execution thread. A method’s Structure contains its single published
@@ -13290,23 +13268,14 @@ activations.
 An unqualified name denoting the method’s own field looks like an Algol-60
 stack local but persists like an instance field. Spill/no-reload is the seam
 between these two natures. A used field is cached in a typed C working local;
-only a dirtied field is published back, before every call and every exit; a
-suspended caller is never reloaded after the callee returns. Dynamically
-resolved through-values are different: they are copied into the callee’s
-activation and are not published anywhere unless the program uses an explicit
-path.
+only a dirtied field is published back, before every call and every exit. 
+Dynamically resolved through-values are different: they are copied into the 
+callee’s activation and are not published anywhere unless the program uses an 
+explicit path.
 
 One serial execution thread per Message makes this safe without locks or
 memory barriers. A suspended caller’s C locals cannot be raced, and other
 Messages operate on disjoint arenas.
-
-Code that recursively re-enters the same published method state and then
-depends on a particular version of a bare caller value is intentionally bad
-style and has no language-level guarantee about which value will be observed.
-
-History that must survive a return other than as an ordinary return value, or
-remain distinct between branches, must be represented explicitly by a
-Structure, Array, or Message.
 
 An interpreter may walk the Structure graph using a small ordinary control
 stack carrying return state and declared arguments. It need not allocate a
