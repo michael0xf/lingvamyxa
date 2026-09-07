@@ -1,0 +1,26 @@
+L1:
+    include: "<stdlib.h>"
+
+    fn: ident (@@: int slot) @@: int
+    return: slot
+
+    external:
+        fn: main () int
+            @: int p
+            @@: int q
+            p: c.malloc(c.sizeof(c.int))
+            if: p = 0
+                return: 1
+            p[0]: 9
+            q: ident(@ p)
+            if: q = 0 || q[0] = 0 || q[0][0] != 9
+                c.free(p)
+                return: 1
+            q: (cast: (@@: int) @ p)
+            if: q = 0 || q[0][0] != 9
+                c.free(p)
+                return: 1
+            c.free(p)
+        return: 0
+    end: external
+end: L1

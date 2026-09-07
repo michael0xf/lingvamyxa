@@ -1,0 +1,77 @@
+L1:
+    predef: "l1src/parser.lm2"
+    include: "l1src/p0.h"
+
+    external:
+        fn: main () int
+            @: LmOwnArena a
+            @: LmOwnArena b
+            @: void x
+            @: LmP0Document d
+            a: lm_own_new_zero(c.sizeof(c.LmOwnArena))
+            b: lm_own_new_zero(c.sizeof(c.LmOwnArena))
+            if: a = 0 || b = 0
+                return: 1
+            if: lm_own_arena_init(a) != 0 || lm_own_arena_init(b) != 0
+                return: 1
+            x: lm_own_arena_new_zero(b, 8U)
+            if: x = 0
+                return: 1
+            lm_own_alloc_fails: 1
+            if: lm_own_arena_absorb(a, b) = 0
+                return: 2
+            if: b\allocations = 0 || b\allocations\count != 1U
+                return: 3
+            if: a\allocations = 0 || a\allocations\count != 0U
+                return: 4
+            lm_own_alloc_fails: 0
+            if: lm_own_arena_absorb(a, b) != 0
+                return: 5
+            if: b\allocations\count != 0U
+                return: 6
+            if: a\allocations\count != 1U
+                return: 7
+            lm_own_arena_destroy(a)
+            lm_own_arena_destroy(b)
+            lm_own_delete(a, 0)
+            lm_own_delete(b, 0)
+            d: lm_own_new_zero(c.sizeof(c.LmP0Document))
+            if: d = 0
+                return: 1
+            lm_own_ok_left: 4
+            if: lm_p0_document_init_owners(d) = 0
+                return: 8
+            lm_p0_document_destroy_owners(d)
+            if: d\owners_initialized != 0
+                return: 9
+            if: d\source_owner != 0 || d\token_arena != 0 || d\tree_arena != 0 || d\diagnostic_arena != 0
+                return: 10
+            lm_own_delete(d, 0)
+            lm_own_ok_left: -1
+            d: lm_own_new_zero(c.sizeof(c.LmP0Document))
+            if: d = 0
+                return: 11
+            lm_own_ok_left: 5
+            if: lm_p0_document_init_owners(d) = 0
+                return: 12
+            lm_p0_document_destroy_owners(d)
+            if: d\owners_initialized != 0 || d\source_owner != 0 || d\tree_arena != 0
+                return: 13
+            lm_own_delete(d, 0)
+            lm_own_ok_left: -1
+            d: 0
+            if: lm_p0_parse_string("L1:\n    int: x 0\nend: L1\n", @ d) != 0
+                lm_p0_document_destroy(d)
+                return: 14
+            if: d = 0 || d\root = 0 || d\root\as = 0 || d\root\as\structure = 0
+                lm_p0_document_destroy(d)
+                return: 15
+            lm_own_absorb_fails: 1
+            if: lm_p0_record_mix_mark(d, d\root\as\structure, "{x}", 3U, 1U, 1U, 0U, 3U) != 0
+                lm_p0_document_destroy(d)
+                return: 16
+            lm_own_absorb_fails: 0
+            lm_p0_document_destroy(d)
+        return: 0
+    end: external
+end: L1

@@ -1,0 +1,14 @@
+L1:
+    external:
+        fn: main () int
+            int: v 1
+            v: v << 2
+            if: v != 4
+                return: 1
+            v: v >> 1
+            if: v != 2
+                return: 2
+            return: 0
+        end: main
+    end: external
+end: L1

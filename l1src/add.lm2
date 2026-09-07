@@ -1,0 +1,5 @@
+L1:
+    fn: add (int: a; int: b) int
+        return: a + b
+    end: add
+end: L1

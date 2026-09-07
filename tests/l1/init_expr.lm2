@@ -1,0 +1,9 @@
+L1:
+    external:
+        fn: main () int
+            int: total 1 + 2
+            int: more total + 3
+            return: total != 3 || more != 6
+        end: main
+    end: external
+end: L1

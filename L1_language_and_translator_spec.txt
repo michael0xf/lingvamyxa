@@ -1,0 +1,1129 @@
+Lingvamyxa L1 Language and Translator — Draft 1
+==============================================
+
+Status: Draft 1, working language contract. Architectural basis:
+accepted Revision B (work_chat/grok/outbox/20260906-161525.txt) plus
+the user decisions recorded in work_chat/grok/inbox/.
+
+This is a draft normative assignment, not yet an amendment of
+Lingvamyxa_spec.txt. Where the two disagree about L2, the published
+Lingvamyxa_spec.txt and struct_refactoring_version_2.txt win.
+
+Translator-L1 development is under way in `main`. Baseline commit
+620db86 is the read-only syntax/C-like template only; it is not a
+Translator-L2 architecture source.
+
+Words MUST / MUST NOT / SHOULD / MAY are normative for L1 and
+Translator-L1. Items marked OPEN in section 10 are not decided; a
+slice MAY lag a contract feature without removing it (section 0).
+
+Closed decisions (do not reopen)
+--------------------------------
+  - Parser/P0 is reused.
+  - L1 lowers directly to equivalent ANSI C99.
+  - Established receivers and modules remain in L1. L1 is a full
+    language, not a disposable subset.
+  - `L1:` is the existing receiver/profile of this language. Do not
+    introduce `.l1`. Do not replace `L1:` with raw `C`.
+  - Receiver `C` is an isolated last-resort hatch. Ordinary
+    translator / runtime / bootstrap MUST NOT contain it and MUST NOT
+    depend on raw-C payload.
+  - Two separate translators: Translator-L1 and Translator-L2.
+  - Translator-L2 backend route is non-semantic: MAY emit L1 text,
+    MAY use a shared L1 emitter/IR API, MAY emit C99 directly. Same
+    L2 input ⇒ equivalent L2 semantics and ABI. None of these MAY
+    reuse the hosted trans_l1_* semantic core as foundation.
+  - Do not lock “L2 must go through L1”.
+  - Seed/self-host (was OPEN 10.6): Translator-L1 is **not** written
+    by hand as raw C. Existing C-like `.lm2` builder/compiler sources
+    are reprofiled to `L1:` (same file extension) and become the
+    self-host spine as early as possible. Current working bootstrap
+    is only the stage-0 bridge. Old chain stays beside the new one
+    until green self-host acceptance.
+  - Array physical model (restored language invariant, not a new
+    invention): rectangular rank-N C array, one contiguous backing
+    block in C row-major order. Not L2 Array ontology. Not rank-1
+    flattening. Not a ragged row-object tree.
+  - `include:` decodes the P0 string atom, then emits a C `#include`
+    form (`<stdio.h>` or `"local.h"`). Never `#include "<stdio.h>"`.
+
+Spellings marked OPEN or PROPOSED are not decisions. Established
+spellings are cited from current sources and from the Claude/Cursos
+audits named below.
+
+
+0. How to read this file
+------------------------
+
+Four layers, not to be mixed:
+
+  I.   Target-language contract of L1     (section 1)
+  II.  Translator-L1 architecture         (section 2)
+  III. Implementation slices and gates    (section 3)
+  IV.  Future Translator-L2 boundary      (section 4)
+
+Forbidden shortcuts: section 5.
+Self-build cadence: section 6.
+Evidence: section 7.
+OPEN: section 10.
+
+A slice MAY omit lowering of a contract feature. That is coverage,
+not deletion of the language. Exclusion from L1 requires an explicit
+user decision recorded in this file. None is recorded except the
+hatch policy for `C`.
+
+
+════════════════════════════════════════════════════════════════
+1. Target-language contract of L1
+════════════════════════════════════════════════════════════════
+
+1.1 Character
+
+L1 is a Lingvamyxa source profile. Surface syntax builds generic
+Structures. Receivers consume those Structures and assign meaning.
+For L1 that meaning is ANSI C99: translation units, types, objects,
+functions, expressions, control, linkage.
+
+L1 is not L2: it has no Lmx ontology, no Message arena, no runtime
+merge, no reserved `node` argument, no all_methods_array, no
+implements() as L2 predicate, no hosted Namespace/descriptor/class
+tables.
+
+L1 is not “C keywords in colon form”. Receiver is the structural
+mechanism (1.3). Modules are part of the language (1.4).
+
+1.2 Profile spelling: `L1:`
+
+An L1 unit is a P0 document whose L1 content is the body of an `L1:`
+Frame (existing substrate/profile receiver head, registered today as
+`receiver.substrate` → `lm_trans_emit_l1_frame` in
+lm2/trans_registry.lm2). Trailer `end: L1` when the close target is
+written.
+
+MUST: Translator-L1 consumes this profile. MUST NOT invent a `.l1`
+extension. MUST NOT treat `L1:` as the old raw-C dump.
+
+Hosted trans.lm0 today dumps `L1:` string atoms as C text. That is
+legacy behaviour of the old translator, not L1 language. Five test
+files still use the dump (section 7.3). They stay hosted-trans tests.
+
+A file MAY also contain sibling `L2:` / `L3:` Frames. Translator-L1
+MUST consume only `L1:` bodies. Translator-L2 consumes L2/L3.
+Hosted trans.lm0 remains responsible for current mixed files until
+retired.
+
+1.3 Receivers
+
+A receiver is not a parser keyword
+(Lingvamyxa_parser_P0_receiver_abi.txt). P0 builds a Frame:
+
+    head  = receiver spelling (LmP0Text)
+    body  = argument Structure
+    trailer = end:/return:/until:/…
+
+Semantic roles (for `fn`: name, args, ret, body) are assigned by the
+**compile-time** consumer of that Frame, not by P0.
+
+L1 keeps this structural Frame/receiver/module skeleton. It MUST NOT
+grow a generic **runtime** receiver protocol, Lmx dispatch,
+Message routing, or hosted Namespace/descriptor/registry ontology.
+
+For Draft 1 / first Translator-L1, a receiver is a **compile-time
+syntax-directed construct** (prelude head, or a name exported by an
+imported L1 module as an ordinary declaration). Translator-L1 matches
+the Frame head and emits the C99 image in this file. That is not a
+proof that L1 requires a dynamically extensible runtime receiver
+environment, nor that every receiver is an arbitrary user-supplied
+lowering function.
+
+A Frame whose head is unbound after prelude + `import:`/`predef:` of
+the unit is a diagnostic. That is “unbound in this unit”.
+
+How (or whether) L1 later lets a program **author a new receiver
+lowering** is OPEN (10.3) and is **not** required to start S1. Do not
+treat hosted `receiver.function` / `receiver.statement` tables as L1
+ontology.
+
+Prelude receivers with **established source spellings** (current
+lm2 sources, spec, trans_registry.lm2 namespace table). All belong
+to the L1 **contract** unless the user excludes one:
+
+    fn, sub, return, external,
+    include, import, predef, define, ifdef, os,
+    if, else, while, for, break, continue,
+    goto (labels + `goto:`),
+    cast,
+    throw, catch, finally, assert
+
+Cursos map (work_chat/cursos/outbox/20260906-161525.txt):
+
+    no `module:` token; a module is a file
+    import:  / predef:  path-list of string atoms; optional end:
+    include: ≥1 string header atoms
+    external: wraps exactly one fn/sub; end: external
+
+L2-profile heads (`table`, `join`, `merge`, `L2`, `L3`, `implements`
+as L2 predicate, Mix) are **not** L1 meaning. In an L1 unit they are
+unbound or explicitly rejected.
+
+C aggregates (struct/union/enum/typedef) MUST exist in L1 semantics
+(C99 types). The **head words** `struct:` / `typedef:` are OPEN
+(10.4). Do not treat them as decided. Hosted `Point:` named-Structure
+and `c.struct:` are not adopted as L1 spelling by this draft.
+
+1.3.1 Low-level surface forms (syntax-directed C99)
+
+These established Lingvamyxa surface forms stay in L1 because they
+map **locally** to C99. They are not a runtime protocol.
+
+`@` — pointer / address (two P0 contexts; do not unify into Lmx):
+
+    Declaration (established in lm2 sources):
+        @: T name      →  T *name
+        @@: T name     →  T **name
+        const: @: T p  →  const T *p
+    Unary on a value (hosted L2; L3 forbids it,
+    trans_l1_expr.lm2:5372 “raw address-of @ is not available in L3”):
+        @ x            →  &x
+    OPEN (narrow): whether L1 keeps unary `@` as `&`. Do not invent
+    a third “address object” kind.
+
+`\` — field-follow in **body** atoms (P0 splits to "a" "\\" "b"):
+
+    Syntax-directed C99 member access, not an Lmx path protocol.
+    Draft 1 does **not** pick a fixed `\\` → `->` (Claude 162853 /
+    user 163452). Type-directed `a.b` vs `p->b` and a single `->`
+    are observably different. Choose after a compatibility census on
+    the proven GOOD baseline (ticket 160432): count by-value vs
+    pointer uses of `\`. Until then OPEN (10.9). MUST NOT mass-rewrite
+    sources to force one spelling.
+
+    Frame **head** `a\b:` keeps `\` inside the head spelling (1.8).
+
+Strings and comments (Claude 162853; P0 keeps exact source
+bytes/spans; Translator-L1 emits deterministic C99, no L2 string
+ontology, no receiver `C`):
+
+    `"..."`  ATOM including quotes. C99 escapes in source. Unescaped
+             newline is parse error 19. No adjacent concatenation
+             (`"x" "y"` = two atoms). Decode C99, re-emit as **one
+             canonical C99 string literal** when used as an
+             expression string value. Payload bytes MUST NOT gain a
+             terminal newline for formatting.
+
+    `'x'`    C99 character constant (integer), not a string.
+
+    `"""`/`'''`  ATOM including delimiters. Payload raw (backslash
+             is a byte). Physical newlines kept, including a newline
+             immediately before the closer. Quote-run shortening per
+             spec. Decode: strip 3+3 quotes only.
+
+    `===`    ATOM. Column-0 `=` fences 3..80; fence lines not payload.
+             Parser strips **exactly one** line terminator before the
+             closing fence. Triple-quoted does **not**. L1 MUST follow
+             that parser contract; MUST NOT add a terminal newline to
+             the **value**. (Emitting an extra `\n` into a generated
+             *file* is not changing the string value.)
+
+    Expression string value (all of `"..."`, `"""`, `===` in expr
+    position): one canonical C99 representation — a string literal
+    with full escaping of `"`, `\`, newline, CR, NUL (`\0` / `\xHH`).
+    A **byte-blob declaration** (explicit length, NULs) is a separate
+    low-level form. Exact declaration spelling OPEN (10.19) if not
+    established on the GOOD baseline.
+
+    `#` line comments and `***` blocks: **not** P0 nodes, not runtime
+    values. MAY be dropped in C output. If kept, source-trivia copy
+    from neighbouring spans (`/* */`, escape `*/`) — not an AST.
+
+    `%` disabled: INACTIVE placeholder, no value, emit nothing
+    (optional trivia comment only).
+
+1.4 Modules
+
+Mandatory language, not an optional extra.
+
+    A program is one or more L1 units.
+    `import:` makes the imported unit’s declarations and exported
+    receivers available (spec 19.23.2 analogue: does not copy a
+    runtime namespace).
+    `predef:` is a hoisted import (established: declarations visible
+    before later top-level items).
+    `include:` is `#include` of a C header (1.6).
+    `external:` marks external C linkage of one fn/sub.
+
+OPEN are only **mechanics** (10.8): .c-per-unit vs concatenation,
+header generation, path identity, init-before-main. The language has
+multi-unit regardless.
+
+Atom `unit` / `unit.payload` is L4/registry in the hosted translator
+(Cursos). It is not adopted as an L1 filesystem module. OPEN whether
+L1 mentions it at all.
+
+1.5 Types, objects, functions (C99 image)
+
+L1 types **are** C99 types: void; the standard integer and floating
+types; `_Bool`; pointers; arrays; function types; struct/union/enum;
+qualifiers; typedef.
+
+Established **direct** declarator shapes (Claude
+work_chat/claude/outbox/20260906-162454.txt; P0 then C99). These
+are L1 surface, not hosted tables:
+
+    T: name                      T name;
+    T: name init                 T name = init;   (init = remaining
+                                                   fields; not a MIX `{`)
+    const: <declaration>         wraps the inner declarator
+    @: T name   /  @(T name)     char *name;      (same P0: F"@" S(2))
+    @@: T name                   T **name;
+    @: T                         T *   (nameless type/return: F"@" S(1))
+    const: @: T name             hosted convention const T *name
+                                 (not T *const — OPEN 10.13)
+    fn: name (params) ret body   definition (4 fields; body is last S)
+    fn: name (params) ret        prototype (3 fields, no body)
+    prototype + fn: …            established atom `prototype` wrapping
+                                 a 3-field fn (same prototype meaning)
+    sub: name (params) body      void procedure (no ret slot)
+    external: + one fn/sub       C external linkage
+    (T: n) / T(n) in param list  typed parameter
+    ;;                           POSITIONAL_SKIP
+
+Declaration vs later assignment (established, keep):
+
+    int: x 1     declaration + initializer
+    x: 2         assignment to existing x
+
+`fn` / `sub` parameters are typed Structures. MUST NOT inject
+LmMessageThread. Empty param list `()` is P0 S(0) → C `void` in
+the parameter list for a definition (C99).
+
+Return descriptor slot is polymorphic in P0 (bounded S(1) `int`,
+bare atom `void`, Frame `@: char`, …). Translator-L1 MUST accept
+those established shapes and reduce them to one C type. Protocol
+returns such as `iterator(Text)` are L2, not L1.
+
+Established `main`:
+
+    fn: main () int
+    fn: main (int: argc; @@: char argv) int
+
+→ `int main(void)` / `int main(int argc, char **argv)`.
+
+Arrays: Translator-L1 MUST NOT port L2 Array module/runtime/ontology
+(`lm2/mix/Array*` and hosted ArrayReference meaning). `[]:` and
+bootstrap-compatible `c.array` lower syntax-directed to ordinary
+ANSI C99 array / array parameter / indexing. Rank N and extents
+d0..dN-1 are preserved: this is **not** semantic rank-1 flattening.
+The C image is a rectangular array `T a[D0][D1]...` with one
+contiguous backing block in C row-major order, not `T a[D0*D1]` and
+not ragged `T *rows[D0]`. Nested `[]` denotes logical dimensions, not
+a tree of separately allocated rows. Elements are C cells, not Lmx
+nodes. Ordinary new L1 SHOULD use a non-`c.` `[]` Frame (exact head
+OPEN 10.14). Bootstrap-compatible L1 MAY still lower established
+`c.array: []: T name [N]` to `T name[N]` so make.lm2 does not need a
+mass rewrite (10.5/10.14). Multidimensional **declaration spelling**
+and array-of-pointer binding remain OPEN (10.15); if a spelling is
+accepted, layout is row-major/C-compatible contiguous.
+
+Function-pointer **types** have C99 meaning in L1 (`T (*p)(args)`).
+Hosted `functionPointerType` tables MUST NOT be the L1 mechanism.
+Exact direct spelling is OPEN (10.16).
+
+Variadic functions/calls have C99 meaning in L1. There is **no**
+established direct `...` spelling in current L1-like surface
+(hosted uses `c.fprintf`). Spelling is OPEN (10.17). MUST NOT
+claim that variadic is possible only through `c.`.
+
+Abstract parameters `(int; char)` vs named `(int: n)`: P0 does not
+distinguish a bare type atom from a value. OPEN (10.18): require
+names in S1, or treat a known-type lone atom as an abstract
+declarator.
+
+`@(T name)` and `@: T name` are the same P0. Both remain accepted
+inputs; no new head.
+
+1.6 Expressions, control, operators
+
+P0 delivers a **flat** field stream. Operator precedence,
+associativity, index grouping, `==` gluing, if/else adjacency,
+declarator binding, and cast-vs-group are **Translator-L1**
+normalization (section 1.8). Language meaning of the normalized
+tree is C99.
+
+Established control spellings: `if`/`else`/`while`/`for`/`return`/
+`break`/`continue`. `for:` is an early direct L1 construct, not an
+L2 Array iterator: hosted compact for-header
+`for: int(i, 1) (i <= n) i++` (tests/trans_for_loop.lm2,
+tests/t1.lmx, tests/l1/for_loop.lm2) is established sugar →
+C99 `for (int i = 1; i <= n; i++)`.
+
+`return` as a body Frame and `return` as a trailer are the same
+statement (Claude 20260906-161112).
+
+`switch` / `do` / `throw` / `catch` / `goto`: in the **contract**.
+Slices MAY lag. Exclusion from L1 requires a user decision.
+
+Infix `=` in expressions is C `==` in the hosted operator table
+(trans_registry.lm2). Assignment is `name:`. L1 MUST keep that
+established split unless the user changes it.
+
+1.7 Foreign C library (normal path)
+
+Normal L1 uses ANSI C libraries by:
+
+  1. `include:` of the header
+     (established: include: "<stdio.h>", tests/trans_include_receiver.lm2,
+     tests/l1/include_printf.lm2).
+     P0 keeps the source delimiters: the atom for `"<stdio.h>"` includes
+     the quotes. Translator-L1 MUST decode that string value, then emit
+     the C include form of the value: `#include <stdio.h>` for an angle
+     header (no extra quotes) or `#include "local.h"` for a quoted local
+     header. MUST NOT emit `#include "<stdio.h>"`.
+  2. L1 declarations of the functions (established prototype `fn:`
+     without body; hosted pattern in lm2/libc_abi.lm2)
+  3. ordinary call Frames after those declarations are in the unit
+     environment (same unit or `import:` / `predef:` of a prelude
+     module that declares the library)
+
+That is the writing style. A prelude module that declares libc is
+ordinary L1.
+
+`c.name` (c.printf, c.sizeof, c.fprintf):
+
+  - Lexer form is established (lm_p0_starts_c_surface_atom,
+    parser.lm2:2646; spec §6.6.6 for **L2** C-surface).
+  - Hosted trans strips `c.` and pastes C (lm_trans_strip_c_prefix).
+  - New L1 code: include + declared/imported names, not `c.printf`.
+  - Bootstrap-compatible L1 MAY accept `c.name` as a dumb
+    compile-time spelling (10.5), if the GOOD-baseline census
+    confirms the current-main frequency. Not receiver `C`.
+
+1.8 Parser/P0 contract (from Claude 20260906-160312 and 161112)
+
+P0 is generic. Translator-L1 MUST treat the following as parser
+contract, not as trans-registry ontology.
+
+Entry (parser_abi.lm2; generated C also passes
+LmMessageThread* on managed ABI — Translator-L1 MUST match the
+linked parser.lm1.c convention, not invent a second parser):
+
+    lm_p0_parse_string / lm_p0_parse_bytes / lm_p0_parse_file
+    lm_p0_document_root / lm_p0_document_diagnostic
+    lm_p0_document_destroy
+    optional accessors lm_p0_node_frame / _node_atom / …
+    optional lm_p0_dump_alloc / lm_p0_free
+
+Root: LmP0Document holds a copy of source bytes; LmP0Text.data and
+LmP0Span.offset index that buffer until destroy.
+
+Nodes:
+
+    LmP0Node      kind, flags, span, as
+    kind          STRUCTURE=1 FRAME=2 ATOM=3 DISABLED=4
+    flags         INACTIVE, MIX, POSITIONAL_SKIP
+    LmP0Structure first_field, last_field, field_count, trailer
+    LmP0Field     value, next
+    LmP0Frame     head, flags, body, trailer
+    LmP0Trailer   spelling, flags, body
+    LmP0Text      {data, length}  slice, NOT NUL-terminated
+    LmP0Span      line, column, offset, length (byte offset)
+
+Walk: first_field / next / value / kind / as.atom|frame|structure /
+frame.head. No public field iterator in fn.external; layout is ABI.
+
+P0 does **not** interpret receiver names. Mix `{...}` is a flagged
+node; ordinary L1 MAY ignore Mix-flagged nodes.
+
+Expressions arrive as generic P0 atoms, Frames and Structures, **not**
+as a C AST. Translator-L1 builds operator/index/declarator structure
+from that generic stream. The parser MUST NOT be changed for the first
+vertical in order to pre-build C expressions.
+
+P0 is already unambiguous for:
+
+  - nesting of statements via indent → Structure fields
+  - Frame head/body/trailer identity
+  - typed declaration shape: T(name) and (T: name) → Frame head=type
+    with name atom; const wraps; `;;` → POSITIONAL_SKIP
+  - literals: numbers (sign glued when allow_signed_number), char,
+    string, L-prefix, exact quoted identifiers — raw spelling in the
+    atom
+  - field separators comma/semicolon; closers --- / end:
+  - name(...) is always a Frame; (...) is always an anonymous Structure
+  - `c.`-surface chunks (`c.printf`, `c.a.b`) as one atom in compact
+    split (parser.lm2:2646–2729)
+
+Bootstrap compact-token pairs that P0 keeps **whole**
+(lm_p0_scan_builtin_compact_atom_piece, parser.lm2:2757–2767):
+
+    !=  <=  >=  &&  ||  ++  --
+
+Bootstrap compact-token sequences that P0 does **not** keep whole
+(each character is its own atom unless reconstructed):
+
+    ==   →  "=" "="
+    <<   →  "<" "<"
+    >>   →  ">" ">"
+    ->   →  "-" ">"
+    assignment combinations += -= *= /= %= &= |= ^= <<= >>=
+
+Reconstruction of those sequences is allowed **only** when P0 spans
+are exactly adjacent in source bytes:
+
+    span[i].offset + span[i].length == span[i+1].offset
+
+MUST NOT invent or delete whitespace after the fact. If a space
+separates the characters, they remain separate tokens.
+
+Different P0 contexts (same characters, different trees):
+
+  - Frame **head** (chunk immediately followed by `:` or `(`): the
+    chunk is kept whole. `System\out\println:` → head spelling
+    includes `\`. Operators in a head are not split.
+  - Body / argument **atoms**: compact-split applies. `text\length`
+    → "text" "\\" "length".
+  - `[` at the **start of a field** (and not after `)`) → bounded
+    STRUCTURE, not a pair of "[" "]" atoms (parser.lm2:3571–3600).
+  - `[` **after an operand** → bare atoms "[" … "]" with the interior
+    parsed as fields of the **same** Structure (parser.lm2:2874–2888).
+  - Signed numeric atoms: `allow_signed_number` is true at the start
+    of each field and after some separators; `-1` as a whole field is
+    one NUMBER atom; `x-1` is "x" "-" "1". Translator-L1 reads this;
+    it MUST NOT re-glue signs across a span gap.
+
+Translator-L1 MUST locally normalize (not P0, not a parser fork):
+
+  - operator precedence, associativity, arity over the flat field
+    stream of each Structure
+  - adjacent-span reconstruction of the split multi-character
+    operators listed above
+  - index nodes from post-operand "[" "]"
+  - field-follow `\` as a body atom (and, if needed for uniformity,
+    splitting a head that contains `\`)
+  - `@` as atom vs Frame head → pointer/address operator
+  - if/else (and catch/finally) as adjacent sibling fields, not a
+    single P0 node
+  - `return` Frame vs `return` trailer
+  - for-header slots: init, condition Structure, loose post atoms,
+    body = last field
+  - C declarators (`int * p`, arrays, function pointers)
+  - `(T)expr` vs grouping `(expr)` — same P0 shape
+
+The following are **OPEN implementation/language choices**, not
+decisions of this draft (Claude 20260906-161922 listed them as
+forks; do not treat as accepted):
+
+  - canonical member access `.` versus `\` versus `c.`
+  - whether L1 includes C ternary `?:` (P0 `:` is a level-A stop)
+  - whether to extend parser registry table `p0.compact-token` so
+    that `==` `<<` `>>` `->` arrive whole from P0, versus keeping
+    reconstruction in Translator-L1
+  - whether L1 accepts leading `[` as a bounded STRUCTURE (array
+    type / index sugar) in addition to post-operand "[" "]"
+
+Parser fixtures for this contract (Claude; exact P0 shape **and**
+byte span of each atom, not only exit code):
+
+    tests/short_form_body_after_inline_return.lmx
+    tests/t1.lmx (factorial + for)
+    tests/if_else_compact_probe.lmx
+    tests/compact_operator_split.lmx
+    tests/operator_atoms.lmx
+    tests/parser_c_char_literals.lmx
+    tests/parser_signed_number_call.lmx
+    tests/index_brackets_nested.lmx
+    optional: tests/return_inside_block_body_not_trailer.lmx
+
+Three described-but-missing operator fixtures (not created here):
+op_multichar_reconstruct, field_follow_vs_head,
+signed_number_positions. OPEN whether to add them before S2.
+
+Parser-only gate (printTree.lm0 on tests/*.lmx except trans_*;
+invalid_* must fail) remains the P0 acceptance, independent of
+Translator-L1.
+
+Link set for a consumer of P0: parser.lm1.c + own.lm1.c + the
+thread-provider shim the current parser ABI requires. MUST NOT link
+trans_*.lm2, parser_registry, table*, namespace, descriptor.
+
+1.9 Receiver `C` (hatch only)
+
+Last-resort opaque C99 payload inside an L1 unit.
+
+MUST NOT appear in ordinary L1 programs, Translator-L1 sources,
+runtime, or bootstrap.
+MUST NOT be how missing L1 sugar is filled.
+MUST NOT be an L2 backend.
+MAY exist as an isolated contract and at most one conformance slice
+**after** a working normal L1 (section 3.3 S8).
+P0 has no verbatim node kind; a hatch body is a block-string ATOM
+(Claude). That is hatch mechanics, not L1 design.
+
+
+════════════════════════════════════════════════════════════════
+2. Translator-L1 architecture
+════════════════════════════════════════════════════════════════
+
+2.1 Role
+
+Read L1 source (section 1), using P0 (1.8), emit ANSI C99 whose
+behaviour matches section 1. Do not implement L2.
+
+2.2 Passes
+
+    1. P0 parse
+    2. Select `L1:` bodies; ignore Mix-flagged nodes unless a later
+       L1 Mix profile exists (none in this draft)
+    3. Compose module graph (import/predef) and receiver environment
+    4. Normalize operators/index/declarators (1.8)
+    5. C-scope checking (C99 rules, compile-time only)
+    6. Emit C99, deterministic
+
+Compile-time scopes are C scopes. They are discarded after emit.
+They are not LmTransNamespace, not a runtime overlay, not
+descriptors.
+
+2.3 What not to reuse from hosted trans
+
+MUST NOT take as architecture:
+
+    LmTransNamespace / LmTransDescriptor / class tables
+    layout.backend / functionPointerType as ontology
+    graph header LmLmxStructure
+    MessageThread hidden argument
+    module-init dispatcher that requires hosted main wrapping
+    dump `L1:` payload writer as the centre of L1
+    c. strip as the library-call design
+
+MAY read hosted emit of `for:` / `include:` / `external:` as
+behavioural hints for C99 images.
+
+2.4 Product shape
+
+Translator-L1 is a **new** program, not a mode of trans.lm0.
+Build-output paths: section 10.7 (chosen). Source-tree name OPEN.
+Hosted trans.lm0 MUST keep its current meaning of `L1:` until a
+later, named retirement.
+
+2.5 Seed and early self-host (10.6 closed)
+
+MUST NOT author the Translator-L1 core as a raw-C program.
+
+Staged chain:
+
+  0. The current proven bootstrap is **only** the bridge. The
+     read-only **source sample** for self-host L1 is commit
+     `620db8612c32569c8dd507cca135d5d076144e9f` of
+     `lingvamyxa_old_worked_version`, used as a syntax/C-like
+     template; `main` supplies later necessary fixes. That checkout
+     is not switched from this work. The stage-0 executable compiles
+     implicit-L2 / `L2:` C-like `.lm2` and cannot consume structured
+     `L1:` — that dump path is legacy.
+  1. Translator-L1 generation 0 is written by **reprofiling**
+     suitable existing C-like `.lm2` modules (make, finalize, and a
+     new walker/emitter in that same style — not trans_l1_*).
+     File extension stays `.lm2`. `L1:` wrap is applied when the
+     consumer is already an L1 translator; until then generation 0
+     remains acceptable to stage-0 trans.lm0 as ordinary L2.
+  2. Stage-0 bootstrap builds generation 0 (`l1trans` executable).
+  3. Generation 0 compiles its own L1 sources and related L1
+     parser/builder modules (`L1:` profile).
+  4. Generation 1 repeats the build. Compare C text, behaviour, tests.
+  5. Old chain remains until that gate is green.
+
+Simple receiver rename (`L2:`/`implicit` → `L1:`) is allowed only
+where the body is already direct L1→C99. MUST NOT mechanically copy
+Namespace/descriptor/Lmx/Message from trans_l1_*.
+
+**Bootstrap-compatible intersection** (user 20260906-163300):
+
+  The first self-host **source surface** is the intersection of
+  forms already used in simple C-like `.lm2` builders and the new
+  direct L1→C99 mapping. Translator-L1 MUST lower those established
+  forms syntax-directed. MUST NOT force a mass rewrite of parser,
+  self-builder, or generation-0 l1trans to a prettier new spelling.
+
+  Most of the migration MUST be mechanical: `L1:` profile wrap,
+  file move, local adapters. Rewrite only sites that actually carry
+  L2 ontology or hosted Namespace/descriptor/Message.
+
+  Compile-time adapters are allowed if they are not runtime ontology
+  and do not use receiver `C`.
+
+  Parser sources SHOULD keep compiling without semantic rewrite;
+  ABI shim / link of existing libparser is allowed for the **earliest**
+  stage. The early self-build goal still includes compiling parser
+  source with the new L1 translator with minimal edits. The shim MUST
+  NOT become a permanent exception.
+
+  `own` MAY stay a linked dependency on the first vertical (Message/
+  arena semantics live there). Do not rewrite that runtime into L1
+  until self-host actually requires it.
+
+  `table: source` ABI/layout blocks (~62 on current main): choose a
+  narrow compile-time metadata adapter vs local translation to direct
+  L1 declarations after a diff budget on the GOOD baseline. MUST NOT
+  port runtime Namespace/descriptor machinery.
+
+  Generation-0 Translator-L1 source SHOULD be acceptable both to the
+  proven old bootstrap (as ordinary L2 `.lm2`) and to the new
+  Translator-L1 (as `L1:`), as far as possible. That intersection is
+  a bootstrap surface, not a declaration that all of L1 is a subset.
+
+  Compatibility budget: if a proposed L1 rule sharply increases
+  “local syntax adaptation” or “semantic rewrite” counts versus
+  “receiver rename only”, change the rule to match the established
+  simple form.
+
+Self-host is an **early** goal, not a distant extra. Slices in
+section 3 unlock this chain.
+
+
+════════════════════════════════════════════════════════════════
+3. Implementation slices, acceptance, gates
+════════════════════════════════════════════════════════════════
+
+3.1 Slices (coverage of section 1, not a smaller language)
+
+  S1  Enough L1 lowering to compile a C-like builder (make-class:
+      fn, pointers, arrays, os/ifdef/include, calls, main)
+  S2  Generation 0 l1trans: P0 walk + emit C for that subset
+      (new code in C-like `.lm2`, built by stage-0 trans.lm0)
+  S3  Reprofile make/finalize/printTree (and parser/own **bodies**
+      once LmP0/own layouts have an L1 C-struct spelling)
+  S4  `import`/`predef` so l1trans can consume a multi-file L1
+      program
+  S5  Generation 0 compiles the L1-wrapped copies (stage 1)
+  S6  Generation 1 repeats; two-pass C; cc -std=c99 -pedantic
+  S7  Remaining contract control (`goto`, `throw`/`catch`, `switch`)
+      as coverage, not a delay of self-host
+  S8  optional hatch after green self-host
+
+S1 MUST NOT be described as “L1 without modules”. Modules are in
+section 1.4; S4 is when lowering of that contract is required to
+be green.
+
+3.2 Acceptance
+
+    - Golden C for each slice test; run compiled C
+    - Two-pass byte-identical C (from S6)
+    - No LmMessageThread / hosted graph header in generated C unless
+      the L1 source declared those C types
+    - Ordinary translator/runtime/bootstrap: no receiver `C`, no
+      raw-C payload dependency
+    - P0 printTree gate remains green (section 6)
+
+Early behavioural smoke (Cursos 165154; **reference set**, not
+hosted C-text goldens). Compare translate → `gcc -std=c99 -pedantic`
+→ run/exit/stdout. Order:
+
+    tests/trans_integer_add.lm2
+    tests/trans_include_receiver.lm2
+    tests/trans_getenv_index_probe.lm2
+    tests/trans_agent_probe_array.lm2
+    tests/trans_for_loop.lm2
+    optional: tests/trans_agent_probe_recursion.lm2
+
+Copy/adapt those into a **separate** L1 runner under
+`build\l1trans\` (`L1:` wrap / dual-acceptance). MUST NOT rewrite
+the current `tests/trans_*` harness until L1 acceptance.
+
+Gaps → new tiny L1 fixtures, once the direct spelling is chosen:
+
+    prototype+include
+    struct field-follow (no table:/layout)
+    simple import/add without module-init
+
+`tests/trans_module_init_import_order.lm2` is late (after import
+lowering), not S1.
+
+3.3 Work split
+
+    Slices S1–S7 stay one owner stream, assigned per ticket.
+    Build wiring covers the **new** binary only.
+    MUST NOT assign a `C` emitter package in the first delivery.
+
+
+════════════════════════════════════════════════════════════════
+4. Translator-L2 boundary
+════════════════════════════════════════════════════════════════
+
+4.1 Role
+
+A **separate** semantic core. Consumes L2/L3 according to
+Lingvamyxa_spec.txt Revision 2 and
+struct_refactoring_version_2.txt: generic Lmx {node, len, data},
+address domains, ShortNameId index, all_methods_array {addr, sig},
+reserved `node` argument, through-variables, dirty checkpoints,
+runtime merge copy, Message arena and FIFO turns.
+
+MUST NOT continue hosted Namespace / descriptor / per-name typedef /
+graph-header architecture. Hosted trans_l1_* is historical reference
+and a test corpus, not a foundation.
+
+4.2 Shared with L1
+
+P0 parser. Optionally, if a backend profile uses it, Translator-L1’s
+C printer/IR as a **backend**, not as L2 semantics.
+
+4.3 Backend profiles (all allowed; equivalent)
+
+    P-L1text   emit L1 source, run Translator-L1
+    P-L1ir     call Translator-L1 emitter API
+    P-C99      emit C99 directly
+
+Same L2 input ⇒ same L2 semantics and ABI. Direct C99 does not
+license smuggling hosted trans_l1_* core. Receiver `C` is not a
+profile.
+
+4.4 When
+
+A second, separate program, written against the published
+Lingvamyxa_spec.txt and struct_refactoring_version_2.txt. Which
+route of 4.3 it takes — through L1 text, through a shared emitter
+API, or straight to C99 — is an implementation choice, not a
+semantic one. MUST NOT start by editing lm2/trans_l1_*.lm2.
+
+4.5 `fn:` in L2 ≠ `fn:` in L1
+
+L2 methods get reserved `node`, hidden dynamic arguments, and a
+method record. Translator-L2 owns that. Translator-L1 MUST NOT.
+
+4.6 Array backing (restored invariant, not a new invention)
+
+The rectangular one-block invariant was long-established on 620db86
+(one rectangular backing block; multidimensional layout is dimensions,
+not a tree of row allocations). Later Revision-2 draft text that
+marked contiguous-versus-another-representation as OPEN was a
+documentation regression; the published specification now carries the
+restored wording and is canonical:
+
+    struct_refactoring_version_2.txt §3.6
+        "Array referents: typed descriptor pools"
+    Lingvamyxa_spec.txt §6.5 and §12.2
+        Array reference → descriptor → element backing
+
+Do not restate that text here. What Translator-L2 must not contradict:
+
+  - An Array reference addresses a two-value record `{len, ptr}` in
+    one of the N typed service pools. The pool's address range
+    identifies the array type; the record carries no type tag.
+  - An Lmx Structure field MAY hold that descriptor pointer in its
+    own `data`. The field remains an ordinary Structure occurrence:
+    it does **not** become an Array header, and the array's elements
+    get no containment `node`.
+  - The record has exactly two values. Do not add rank, shape,
+    stride, name or `node` to it. Multidimensional indexing comes
+    from the array type and the indexing context, as in C.
+  - `ptr` addresses the element backing: one contiguous rectangular
+    block, C row-major, rank and extents preserved; not a tree of
+    separately allocated rows, not per-element allocations.
+  - Descriptor entries, pool blocks and backing belong to the owning
+    Message arena. The same address-range rule serves the primitive
+    service pools (whose entries hold values) and
+    `all_methods_array {addr, sig}`.
+  - The pool of descriptors and the language array it describes are
+    two different arrays, with two different lengths and two
+    different address ranges. Do not conflate them.
+
+Descriptor field placement/units, resize and view ABI are
+implementation detail; they MUST NOT break the one-block invariant or
+grow the two-value record. Do not port the old `lm2/mix/Array*`
+module as Translator-L2.
+
+These service pools are **L2** substrate. Translator-L1 has none of
+them: an L1 array is a plain C99 array (section 1.5).
+
+
+════════════════════════════════════════════════════════════════
+5. Forbidden shortcuts
+════════════════════════════════════════════════════════════════
+
+    - Do not dump `L1:` bodies as raw C (old trans.lm0 behaviour is
+      not L1).
+    - Do not introduce `.l1` or replace `L1:` with `C`.
+    - Do not fill missing L1 spellings with `C`.
+    - Do not use `c.printf` / `c.array:` as the writing style for
+      libc or C arrays.
+    - Do not inject MessageThread or Lmx headers from Translator-L1.
+    - Do not copy LmTransNamespace as L1 types.
+    - Do not treat a slice gap as a language exclusion.
+    - Do not treat OPEN spellings (struct:, typedef:, c.name) as
+      decided.
+    - Do not migrate the five hosted `L1:` dump tests to `C`.
+    - Do not implement L2 inside Translator-L1.
+    - Do not reuse hosted trans semantic core as Translator-L2.
+
+
+════════════════════════════════════════════════════════════════
+6. Self-build cadence
+════════════════════════════════════════════════════════════════
+
+Canonical gate (Cursos work_chat/cursos/outbox/20260906-162053.txt).
+CWD = repo root. Commit 620db86 is the chosen L1 syntax/C-like
+template without a proven-green old-gate prerequisite (ticket
+173700). Periodic old `buildCore` remains the later
+acceptance/install gate for replacing live `trans.lm0`, not an S1
+blocker.
+
+    .\buildCore.lm0.bat
+        Cold bootstrap from **already generated**
+        `lm1\build\*.lm1.c` → `build\lm0\*.exe` / libs.
+        This is **not** a full self-build from `lm2\` sources.
+
+    .\build\lm0\buildCore.lm0.exe
+        Canonical **periodic full self-build**: generate via trusted
+        `trans.lm0` (two passes) → libraries → tools → canary →
+        staged tests (default **full**) → finalize live install.
+        Equivalent: `cmake --build --preset run-buildcore`.
+
+    --tests smoke|core     intermediate suites (default of a bare
+                           buildCore.lm0.exe run is full)
+    --next                 staged tools **without** live install
+    --full                 also bundled third_party → build\libs;
+                           not required for every package
+
+Narrow checks (not the gate): printTree.lm0 on a `.lmx`; trans.lm0
+on one `.lm2`.
+
+When: after each **substantive** package and before important
+commit/integration. NOT after every small read-only or work_chat
+ticket.
+
+Success of a substantive full gate → orchestrator reviews scope
+diff → commit **only** that package on current `main` → push
+`origin/main`. Fail, canary fail, or “live tools were not
+overwritten” → **no** commit/push. MUST NOT touch other branches
+or working trees.
+
+l1trans lives **beside** trusted `trans.lm0` and MUST NOT replace
+it until L1 acceptance. `buildCore` default generate path stays
+old trans. `--tests core|full` MUST NOT include l1trans until then.
+
+Sections 1, 4 and 8 are the normative contract. Sections 3, 9 and
+10.7 describe the current implementation state, which moves.
+
+
+════════════════════════════════════════════════════════════════
+7. Evidence
+════════════════════════════════════════════════════════════════
+
+7.1 Parser
+    lm2/parser.lm2, lm2/parser_abi.lm2, lm2/parser_text.lm2
+    lm2/printTree.lm2
+    Lingvamyxa_parser_P0_*.txt
+    Claude: work_chat/claude/outbox/20260906-160312.txt
+            work_chat/claude/outbox/20260906-161112.txt
+            work_chat/claude/outbox/20260906-161922.txt
+            work_chat/claude/outbox/20260906-162454.txt
+            work_chat/claude/outbox/20260906-162853.txt
+
+7.2 Modules / receivers
+    Cursos: work_chat/cursos/outbox/20260906-161525.txt
+            work_chat/cursos/outbox/20260906-162053.txt
+            work_chat/cursos/outbox/20260906-163824.txt
+            work_chat/cursos/outbox/20260906-164254.txt
+            work_chat/cursos/outbox/20260906-165154.txt
+    spec ~637–650, 8863–8868, 19.23.2
+    lm2/trans_registry.lm2 namespace table
+    lm2/libc_abi.lm2 (declaration pattern, not c. dictionary)
+
+7.3 Legacy dump `L1:` (not L1 language; not a C-migration list)
+    tests/trans_ifdef_l1_nested.lm2
+    tests/trans_l2_table_module_c_surface_prefix_collision.lm2
+    tests/trans_l2_table_module_init_macro_collision.lm2
+    tests/fixtures/l2_module_raw_guard_macro_collision.lm2
+    tests/trans_l2_module_init_l1_nested_import_hygiene.lm2
+    Production lm2/*.lm2: zero `L1:` receiver frames.
+
+7.4 Revision 2 (Translator-L2 only)
+    Lingvamyxa_spec.txt (header Lmx, §0, §1)
+    struct_refactoring_version_2.txt §0.2
+
+
+════════════════════════════════════════════════════════════════
+8. MUST / MUST NOT
+════════════════════════════════════════════════════════════════
+
+MUST
+    - Reuse P0; consume `L1:` as this language’s profile.
+    - Keep receivers and modules as compile-time Frame/module
+      skeleton; keep `@`, `\`, triple-quoted/block strings, comments
+      as syntax-directed C99 forms.
+    - Lower L1 to equivalent C99 with no hidden service arguments.
+    - Integrate libc via include + declarations + modules + calls.
+    - Keep Translator-L1 and Translator-L2 as separate cores.
+    - Mark OPEN spellings as OPEN.
+    - Run full self-build on the cadence in section 6, not per
+      tiny ticket.
+
+MUST NOT
+    - Introduce `.l1` or replace `L1:` with `C`.
+    - Put `C` in ordinary translator/runtime/bootstrap.
+    - Adopt `c.printf` as normal style.
+    - Copy hosted Namespace/descriptor ontology into L1 or L2.
+    - Commit generated build artifacts, or bypass the section 6 gate
+      when replacing live tools.
+    - Choose OPEN items silently.
+
+
+════════════════════════════════════════════════════════════════
+9. First implementation slice (S1) — what it is
+════════════════════════════════════════════════════════════════
+
+S1 proves Translator-L1 can compile a make-class C-like unit
+(established forms already in lm2/make.lm2) to C99 that builds and
+runs. It does not redefine L1 to that intersection; it is the
+bootstrap surface (2.5).
+
+Current state — first code checkpoint. This section MOVES and is not
+part of the contract; sections 1, 4 and 8 remain the contract.
+Operating truth is the files in `l1src\` plus the logs under
+`build\l1trans\`, described in `l1src/README.md`.
+
+Layout. L1-profiled sources live in `l1src\`, so that building them
+cannot clobber the old chain's tracked `lm1\build\*.lm1.c`. All
+generated C and executables stay under `build\obj\l1trans\gen<N>\`
+and `build\l1trans\gen<N>\`. `lm2/l1trans.lm2` is a separate,
+L2-shaped copy kept only to produce the gen0 seed with stage-0
+`trans.lm0`; it is not the L1 source.
+
+Actually exercised by `tests\l1\run_gen.ps1`, `run_smoke.ps1` and
+`run_parser.ps1`:
+
+  - the P0 parser, `own` and `parser_text` ported from frozen
+    620db86 into `L1:` form, plus `printTree`, `make`, the
+    translator `l1trans` itself and the `build_l1` builder;
+  - a real gen1 → gen2 → gen3 fixed point: the three generated C
+    files are identical, hash
+    E77071BC4FD69AE61F3D648A90ABA63F4B3AC6BE296C0FACB4320E5E5AB51646;
+  - compilation under `-std=c99 -Wall -Wextra -Wpedantic` with four
+    hard guards — `-Werror=incompatible-pointer-types`,
+    `-Werror=discarded-qualifiers`,
+    `-Werror=implicit-function-declaration`, `-Werror=implicit-int`;
+  - the gen2 compiler smoke suite;
+  - parser acceptance against the old oracle: 16 positive fixtures
+    whose `printTree` dumps match `build\lm0\printTree.lm0.exe`
+    byte-for-byte, 5 malformed fixtures where both sides exit 1, and
+    a missing input where the L1 side exits 1 with a `P0 parse error`
+    diagnostic.
+
+`import:`/`predef:` concatenate imported `L1:` units into one C TU,
+emitting each unit once (10.8 still OPEN). `os:` emits
+`#ifdef _WIN32`. A small import/prototype/definition/link/run example
+is `tests/l1/import_add.lm2` + `l1src/add.lm2`; the diamond case is
+`tests/l1/import_diamond.lm2`. Rectangular 2-D C arrays are covered
+by `tests/l1/array_2d.lm2`.
+
+What this checkpoint is **not**:
+
+  - not coverage of section 1. Absence from the fixtures does not
+    demonstrate that a form is supported.
+  - not the second translator. Translator-L2 (section 4) does not
+    exist yet.
+  - not the old Qt/CMake `buildCore` gate, which is a separate chain
+    and not part of this checkpoint.
+  - not a clean-checkout guarantee: the gen0 seed is produced outside
+    the runner scripts and that step is not scripted in-tree.
+  - not a defect-free claim. Review findings stay open until a new
+    snapshot is presented and re-reviewed.
+
+Still open at this checkpoint: custom `LM_P0_REGISTRY`; the by-value
+`.` versus `->` question (10.9). The Windows builder now passes both
+rounds with spaces in seed, object and binary paths, rejects truncated
+path joins, and records stdout/stderr and stage exit codes. This
+checkpoint does not establish a working non-Windows build runner.
+
+
+════════════════════════════════════════════════════════════════
+10. OPEN
+════════════════════════════════════════════════════════════════
+
+Language/spelling (do not pretend decided):
+
+  10.3 Whether L1 later has an authoring ABI for **new** receiver
+       lowerings. Draft 1 first version: compile-time syntax-directed
+       prelude + module-exported declarations. Not a runtime dispatch
+       table. Not required for S1.
+  10.4 C aggregate **heads** in L1 (not `struct:`/`typedef:` by
+       default).
+  10.5 `c.name` / `c.array` as **bootstrap-compatible** compile-time
+       spellings (not receiver `C`, not library style for new code).
+       Current-main census (Claude 163301, re-check on GOOD baseline
+       160432): ~1900 `c.<ident>` and 57 `c.array` in the min
+       parser/build corpus; zero receiver `C`. If those counts hold,
+       compatibility wins: Translator-L1 MAY emit C identifier /
+       `T name[N]` syntax-directed from those forms. New code still
+       uses include + declared/imported names.
+  10.9 Field/member: body `\` vs `.` vs `c.`; C image `.` vs `->`.
+       Do not lock `\\` → `->`. Census by-value vs pointer on the
+       proven GOOD baseline (160432) first.
+  10.10 Whether L1 includes `?:` (P0 `:` stops the chunk).
+  10.11 Whether to extend `p0.compact-token` so `==` `<<` `>>` `->`
+        are whole P0 atoms, versus span-adjacent reconstruction in
+        Translator-L1.
+  10.12 Whether leading `[` as a bounded STRUCTURE is an L1 form.
+  10.13 `const: @: T x` → `const T *x` vs `T * const x`.
+        Hosted convention is the former; latter spelling OPEN.
+  10.14 Array **declaration spelling**: bootstrap MAY keep
+        `c.array: []: T name [N]` as a dumb C-array spelling
+        (59 one-dimensional `c.array` sites in the 620db86 closure).
+        Ordinary new L1 still prefers a non-`c.` `[]` form (exact
+        head OPEN). Physical model is **closed**: rectangular
+        rank-preserving C array, one contiguous row-major block.
+        Not L2 Array ontology. Not rank-1 flattening.
+  10.15 Multidimensional **declaration spelling** and
+        array-of-pointer declarators remain OPEN. If a
+        multidimensional form is accepted, layout is C row-major
+        `T a[D0][D1]...`, not a ragged row tree and not a collapsed
+        `T a[D0*D1]`. The physical one-block invariant is closed.
+  10.16 Direct spelling of a function-pointer type (C99 semantics
+        in; hosted functionPointerType table out).
+  10.17 Direct spelling of C99 variadic `...` (semantics in;
+        not “only via c.”).
+  10.18 Named vs abstract parameters (`int: n` vs bare `int`).
+  10.19 Explicit byte-blob declaration form (vs expression string
+        literal). Census on GOOD baseline before choosing.
+
+Mechanics (language still has the feature):
+
+  10.6 CLOSED: no hand-written raw-C core; reprofile C-like `.lm2`;
+       stage-0 bootstrap is the bridge; early self-host (2.5).
+  10.7 Source-tree: `lm2/l1trans.lm2` (S1/S2 choice; bootstrap
+       intersection, compiled by stage-0 trans.lm0 as ordinary L2).
+       **Build-output layout** is
+       chosen (Cursos 163824, implementation default, not language):
+
+           build\l1trans\gen0|gen1|gen2\l1trans.exe
+           build\obj\l1trans\gen0|gen1|gen2\   (generated C and .o)
+           build\l1trans\logs\
+
+       MUST NOT write `lm1\build` or overwrite
+       `build\lm0\trans.lm0.exe` / live libs until L1 acceptance.
+       Stage0 **links** existing libparser/libown read-only.
+       gen1↔gen2: compare generated C text and binary behaviour on
+       the same fixtures. Illustrative commands in that audit are
+       templates, not a promise, until the GOOD toolchain is
+       verified.
+
+       Git policy (Cursos 164254, implementation, not language):
+       `build\l1trans\**` and `build\obj\l1trans\**` are already
+       ignored via existing `build/`. No extra .gitignore rules now.
+       Until L1 acceptance, generated l1trans C MUST NOT be stored
+       in git. After acceptance a canonical snapshot MAY be exactly
+       `lm1\build\l1trans.lm1.c` by explicit whitelist — not gen0/1/2
+       trees, not overwrite of `trans.lm1.c`. Before every commit:
+       `git status`, `git diff --cached --name-only`, no staged
+       build artifacts or accidental snapshots.
+  10.8 Module output: one C TU vs many; path identity
+       (`x.lm2` vs `./x.lm2`); whether L1 has init-before-main.
+
+Not blocking S1: 10.4, 10.8 (single unit), 10.9–10.12, hatch, L2
+backend profile, throw/switch coverage order.
+
+Spec §0 still says only L2/L3 are source levels. This draft treats
+`L1:` as an existing profile receiver of a C99-meaning language.
+A later spec amendment is documentation, not S1.
+
+
+End of Draft 1.
