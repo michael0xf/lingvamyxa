@@ -7311,25 +7311,19 @@ explicit graph traversal to actual callable occurrences, not raw callable
 addresses. Table entries are never automatically callable occurrences or L2
 addresses.
 
-The exact L2 memory profile must define primitive cell size, address arithmetic,
-alignment, raw storage duration, allocation failure, callable-address
-representation and which explicit storage locations/occurrences are addressable through `@`. These choices
-apply to explicit L2 machine storage such as `c.struct:`, raw indexed storage
-and raw addresses. Ordinary Structure occurrences retain the Lmx header; primitives and Array
-references retain their registered service-domain interpretations and owning
-Message lifetime rules even when working values are projected to C.
+The operators themselves are specified above and in 13.1: they are built-in
+parser forms, not an open L2-operator set. An L2 machine profile still chooses
+primitive cell size, address arithmetic, alignment, raw storage duration,
+allocation failure, callable-address representation and which explicit machine
+locations `@` may address. Those choices apply to `c.struct:`, raw indexed
+storage and raw addresses. They do not redefine ordinary Lmx field-follow or
+checked Array indexing. Ordinary Structure occurrences retain the Lmx header;
+primitives and Array references retain their registered service-domain
+interpretations and owning Message lifetime rules even when working values are
+projected to C.
 
-variant 1:
-Treat `@ⁿ`, prefix `@`, prefix `\`, field-follow `\field` and the postfix
-index suffix `target[...]` as built-in L2 parser forms. The ordinary `[]:`
-Array constructor is a compiler/profile-resolved L2/L3 receiver and is not part of
-this L2-only list.
-
-variant 2:
-Treat them as bootstrap-registered L2 operators with parser support only for tokenization and precedence.
-
-variant 3:
-Allow both forms: parser-level recognition for core operators and receiver-level extension for specialized memory models.
+The ordinary `[]:` Array constructor remains a compiler/profile-resolved L2/L3
+receiver and is not an L2-only machine operator.
 
 
 12. Arrays, Text and Indexing
@@ -7413,7 +7407,13 @@ qualified-symbol form such as `c.printf`.
 At L2, a distinct raw operation may also accept a typed foreign address. At L3,
 the left side is an Lmx reference or an array/reference form explicitly admitted
 by the selected runtime payload domain. In all cases, `\` implies an actual
-traversable referent, not a dotted external name.
+traversable referent, not a dotted external name. A missing, empty/sentinel or
+otherwise non-traversable left side is the same field-access error as a missing
+name: a translation diagnostic when statically known, checked runtime access
+otherwise. There is no second traversal policy for unknown models, dynamic
+Structures or nullable handles. Field-follow walks the current ordered children
+and the reverse name index; `merge` may change those children, and the next
+follow uses the tree as it is then.
 
 When the referent contains repeated exact short names, an unqualified
 `value\field` selects the first matching occurrence, exactly `[0]field`. A particular
@@ -7484,15 +7484,8 @@ an ordinal, it must reject only that projection with a diagnostic such as:
 This is a historical hosted-backend limitation, not a restriction on
 Lingvamyxa source semantics. The Revision-2 runtime must implement dynamic
 occurrence selection. A statically or dynamically out-of-range ordinal is a
-field-access error; it must not silently select another occurrence.
-
-!!!
-Apart from the fixed missing-name and out-of-range behavior of the occurrence
-selector above, some field-follow failure semantics are not fixed. A final
-source-semantic rule must define behavior for dynamic Structures and
-nullable/empty references, including which failures are runtime errors or
-receiver-defined diagnostics.
-!!!
+field-access error; it must not silently select another occurrence. Empty,
+sentinel and non-referent left sides use the same field-access rule (13.1).
 
 ---ANSI C---
 Possible field-follow lowering variants:
@@ -8573,18 +8566,18 @@ prelude is not required or adopted by this excerpt.
 
 18. Remaining Open Points
 
-This section keeps only the remaining open points that affect common syntax,
-L2/L3 execution, expressions, arrays, text, field-follow, closure and ANSI C
-projection variants.
+This section keeps only remaining open points. Field-follow, `@` and `\` are
+not among them; they are specified in 11.3 and 13.1. What remains here is
+profile-level raw-storage arithmetic, some array/text surface details, and
+physical call/result encoding.
 
 18.1. Source-Semantic or Syntax Uncertainties
 
-!!!
-Field-follow traversal policy for unknown models, dynamic Structures and
-nullable handles is not fixed. Missing exact names and out-of-range occurrence
-ordinals already use the checked field-access rule above: they are diagnosed at
-translation time when statically known and otherwise by checked runtime access.
-!!!
+Field-follow, prefix `@`, prefix `\` and occurrence selection are specified in
+sections 11.3, 13.1 and 7.3. Missing exact names, out-of-range ordinals and a
+non-traversable left side are field-access errors: translation diagnostics when
+statically known, checked runtime access otherwise. That is the traversal
+policy. There is no separate unknown-model / nullable-handle rule.
 
 18.2. External or Profile-Level Specification Areas
 
@@ -8592,11 +8585,13 @@ The exact operator token set and backend lowering rules may be extended by
 profiles, but the ANSI C projection deliberately keeps C precedence and
 associativity for primitive arithmetic, comparison and boolean expressions.
 
-?
-The L2 memory/operator specification must define exact semantics for `@`,
-prefix `\`, field-follow `\field`, low-level addressable mutation, raw loads,
-raw indexing and address arithmetic.
-?
+The operators `@ⁿ`, prefix `@`, prefix `\`, field-follow `\field`,
+addressable `\slot:` / `\\slot:` stores and postfix `target[...]` are specified
+in sections 11.2, 11.3, 13.1 and 12. They are built-in parser forms. What an L2
+machine profile still chooses for *raw* storage is cell size, alignment, address
+arithmetic, storage duration, allocation failure and which explicit machine
+locations `@` may address. Those choices do not redefine the operators and do
+not apply to ordinary Lmx field-follow or checked Array indexing.
 
 ?
 The array/text specification must still define slicing, negative indexes if
