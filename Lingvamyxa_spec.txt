@@ -1747,10 +1747,12 @@ coverage reports help locate these decisions; they are not new admission gates.
 2.5.3. Critical Trees, `const` and Validators
 
 Recommendation: for critical compatibility decisions, make the relevant trees
-of both `varA` and `varB` const throughout, including their explicit descriptions,
-and validate ranges and semantic constraints at their leaves. `immutable` applies
-that qualification during construction; `RuntimeImmutable` applies it to an
-existing tree after checking the same boundary rules (9.1.2). When those trees
+of both `varA` and `varB` immutable, including their explicit descriptions,
+and validate ranges and semantic constraints at their leaves. `immutable`
+qualifies such a tree during construction; `RuntimeImmutable` qualifies an
+existing tree after checking the same boundary rules (9.1.2). Add `const` where
+the binding holding the tree must also stay fixed; the two are independent
+axes. When those trees
 and validation requirements are available and evaluable at build time, the
 translator can check description values exactly, including units of measurement,
 and reject a mismatch before execution. This is more than checking the presence
@@ -6753,25 +6755,47 @@ form; it is not a named semantic node.
 For example:
 
     const: char: (): s "hello" "world!"
+    immutable: char: []: s "hello" "world!"
     const: char: []: s "hello" "world!"
+    const: immutable: char: []: s "hello" "world!"
     const: String: (): s "hello" "world!"
     const: String: []: s "hello" "world!"
 
 These are parsed as nested forms:
 
     const(char(()(s, "hello", "world!")))
+    immutable(char([](s, "hello", "world!")))
     const(char([](s, "hello", "world!")))
+    const(immutable(char([](s, "hello", "world!"))))
     const(String(()(s, "hello", "world!")))
     const(String([](s, "hello", "world!")))
 
-The heads `const`, `char`, `String`, `()` and `[]` are ordinary source names
-resolved by compiler/profile state. In this profile:
+The heads `const`, `immutable`, `char`, `String`, `()` and `[]` are ordinary
+source names resolved by compiler/profile state. In this profile:
 
-    const       qualifies the introduced storage/value as immutable
+    const       fixes the introduced binding; it cannot be reassigned or rebound
+    immutable   fixes the value itself, for any payload and at any depth (9.1.2)
     char        selects the character primitive/element payload operation
     String      selects the Lingvamyxa immutable string value/reference model
     ()          creates a named Lmx Structure occurrence at runtime
     []          creates an Array descriptor/backing; a named Lmx field stores its reference
+
+`const` is universal in what it composes with, and shallow in what it covers. It
+is not restricted to the heads listed above, to a primitive payload or to a C
+declarator role: it composes with any receiver that introduces a binding,
+including primitive and Structure/Array constructors, address and declarator
+roles such as `const: @: T p` (20.2), and the definition receivers `fn`, `sub`
+and `fm`. What it fixes is that one cell or reference. The qualified binding may
+not be assigned, rebound or replaced through that name or through any alias, and
+a structural update may not remove, move or replace the qualified occurrence
+(21.11). It never reaches past the binding: `const: @: T p` pins the address
+slot and leaves the referent under its own contract.
+
+`immutable` is the other axis and covers the value instead of the binding
+(9.1.2). The two are independent, so a complete freeze of a value held inside an
+ordinary mutable Structure is written `const: immutable: <anything>`. Const
+qualification of a callable occurrence is the basis of the direct-invocation
+lowering in 21.8.
 
 Therefore the examples mean:
 
@@ -6779,12 +6803,25 @@ Therefore the examples mean:
         `s` is an immutable Structure reference whose fields contain character
         or text values according to the explicitly selected operation/profile.
 
-    const: char: []: s "hello" "world!"
+    immutable: char: []: s "hello" "world!"
         `s` is an Lmx field holding a reference to an Array descriptor in the
         typed service pool selected for element type `T`. The descriptor
         is `{len, data}` (6.5); `data` points to a contiguous block of
-        character/text cells. Const qualifies that field, descriptor and
-        backing; it does not make the array an Lmx node.
+        character/text cells. `immutable` qualifies the array value: neither
+        the descriptor nor the backing cells can change, through this or
+        through any other reference. It does not make the array an Lmx node,
+        and it does not fix the field `s`, which may still be reassigned to a
+        different array.
+
+    const: char: []: s "hello" "world!"
+        The same array, qualified on the binding instead: `s` cannot be
+        reassigned to a different array. The descriptor and the backing cells
+        stay writable, through `s` or through any other reference to them.
+
+    const: immutable: char: []: s "hello" "world!"
+        Both axes: `s` always denotes this array, and this array never
+        changes. This is the full freeze of an array held in an ordinary
+        mutable Structure.
 
     const: String: (): s "hello" "world!"
         `s` is a reference to an immutable Lmx Structure whose fields
@@ -6814,9 +6851,38 @@ observable source semantics.
 9.1.2. `immutable` and `RuntimeImmutable`
 
 These are ordinary L2/L3 receiver names, not parser keywords or a new kind of
-type. They apply the existing `const` contract throughout a selected Structure
-tree, including explicit descriptions, positional fields and every repeated
-occurrence. Coverage is not limited to `[0]` or to a Consumer's used paths.
+type.
+
+`const` and `immutable` are independent qualifications on different things, and
+neither is a deeper version of the other. `const` fixes one binding: the cell or
+reference it qualifies cannot be assigned, rebound or replaced. It says nothing
+about what a qualified reference points at. `immutable` fixes a value: the
+qualified thing's contents can never change, through this or through any other
+alias, for the whole life of that value. It says nothing about the binding that
+holds it, so a reference to an immutable value may still be reassigned.
+
+They compose, and only the composition freezes both:
+
+    const: x                 the binding is fixed; the value may still change
+    immutable: x             the value is fixed; the binding may be reassigned
+    const: immutable: x      both, a full freeze inside a mutable Structure
+
+`immutable` is universal. It applies to a primitive, to a Structure and its
+nested tree, to an Array together with its descriptor and backing, or to any
+other value. Within a selected Structure tree its coverage includes explicit
+descriptions, positional fields and every repeated occurrence, and is not
+limited to `[0]` or to a Consumer's used paths.
+
+Passing an immutable value never copies it. Nothing longer than a primitive is
+ever passed by value in any case: the ordinary pass modes already carry a
+Structure or Array as a reference value, and only a primitive by semantic value
+(21.4). What `immutable` adds is that it binds the primitive case too, so an
+immutable value is passed, returned and stored as a reference to that same
+value whatever representation the translator selects for it. A translator which
+would otherwise give it a valued C representation must still not emit a
+by-value copy at a call boundary, a return or an assignment: the identity of an
+immutable value is part of its contract (19.29.9). How a generated method body
+holds such a value internally remains an open ABI item.
 
     immutable: <Structure construction>
         qualifies the newly constructed Structure and its nested tree before
@@ -6842,7 +6908,7 @@ Both receivers use the same checked boundary:
    address domains; they are not additional containment branches. Immutable
    primitive/method domains are valid leaves. An Array reference also obeys
    point 2: its descriptor has no `node`, and these receivers do not silently
-   freeze mutable backing reached through that reference. Const Array
+   freeze mutable backing reached through that reference. Immutable Array
    construction and protection of its descriptor/elements follow 6.5 and 9.1.1.
    Never traverse or freeze a service pool merely because a value belongs to it.
 
@@ -6851,8 +6917,8 @@ receiver's declared `throws` path, not `assert`: no qualification is added and
 no successful construction result is published. Do not silently skip a
 mutable outside branch, copy it, retarget links or widen the selected tree.
 Once preflight succeeds, apply all required qualifications; a failed operation
-must not leave partial const coverage. `RuntimeImmutable` on an already
-qualifying immutable tree leaves it unchanged.
+must not leave partial coverage. `RuntimeImmutable` on an already qualifying
+immutable tree leaves it unchanged.
 
 This no-partial-action rule concerns the receiver's qualification and result
 publication. It does not roll back prior argument/initializer effects or the
@@ -8627,7 +8693,7 @@ prelude is not required or adopted by this excerpt.
     method/requires.method     legacy bootstrap Tables; not normative implements input
     implements                 source/translator compatibility over known Consumer requirements (2.1)
     RuntimeImplements          separate available-current-graph check; Message validation is the first intended application (2.1)
-    immutable                  const throughout a newly constructed Structure tree, with checked immutable reference boundaries (9.1.2)
+    immutable                  fixes the value of a newly constructed Structure tree, with checked immutable reference boundaries; independent of `const`, which fixes a binding (9.1.2)
     RuntimeImmutable           the same qualification for an existing tree; preflight before any change, declared throws on failure (9.1.2)
     message/operation          ordinary Lmx Structures/explicit description data in L2/L3; no current generic receiver heads
 
@@ -13354,6 +13420,93 @@ After runtime merge, a copied callable occurrence has a rebased `node` and the
 same immutable method record. Its machine body is reused, while its structural
 fallback fields come from the newly containing Structure and its dynamic values
 come from the current caller.
+
+Const callables and direct invocation
+
+`const` composes with the definition receivers, so `const: fn:`, `const: sub:`
+and `const: fm:` qualify the introduced callable occurrence itself (9.1.1). That
+qualification fixes the occurrence's payload: its `data`, and therefore its
+MethodId and the `{addr, sig}` record that MethodId identifies, cannot be
+assigned, rebound or replaced through any alias, and no structural update may
+remove, move or replace the occurrence (21.11). Its `callable->node` is that
+occurrence's own containment link and is fixed with it. The method record was
+always immutable; what `const` adds is that this occurrence still identifies
+that record on every later execution.
+
+An implementation should take this as its first call-boundary optimization. When
+a call site's selected callable occurrence is reached through a const-qualified
+path, steps 1, 2 and 6 of the evaluation order above are resolved at translation
+or link time and emit no runtime work:
+
+1. no child enumeration and no reverse-name-index probing to select the
+   occurrence (21.1--21.2); the resolved `Lmx *` and its `node` are constants;
+2. no runtime `all_methods_array[MethodId]` indexing and no per-call signature
+   comparison, because exact `sig` equality is discharged once at translation
+   (21.9);
+3. no `void *`-to-function-pointer conversion; the generated code calls the
+   method's globally unique C symbol directly, supplying `callable->node`, the
+   declared actuals and the dynamic values in `sig` order.
+
+This is the intended lowering for repeatedly executed internal methods,
+including calls inside nested loops, where the descriptor walk through the node
+would otherwise repeat on every iteration. It is a permitted optimization under
+21.12, not a second calling semantics: an unqualified callable occurrence keeps
+the full runtime resolution because it may legitimately be replaced.
+
+Const on the callable changes nothing else at the boundary. The caller's
+dirty-only checkpoint at step 5 still occurs, because that boundary is a
+property of the caller's own fields rather than of the callee's entry. Hidden
+dynamic values are still selected and passed per `sig`, and a `node\[0]name`
+fallback is still a runtime read unless that field is independently const.
+Generated C must still materialize the evaluation order explicitly. A const
+callable in an otherwise mutable containing Structure keeps ordinary writable
+own fields; only whole-tree `immutable`/`RuntimeImmutable` freezes those as well
+(9.1.2, 21.5--21.6).
+
+Other const occurrences
+
+The same reasoning extends to every other const occurrence, because the
+qualification rather than the payload kind is what licenses the shortcut
+(9.1.1). An implementation should resolve each const-qualified access once and
+thereafter reach the value without enumerating children or probing the reverse
+name index. How much can be folded depends on when the value is established:
+
+* A const occurrence whose initializer is evaluable at translation, including a
+  callable occurrence and a literal primitive, folds into the generated
+  instruction stream. Neither a lookup nor a load remains.
+* A const occurrence whose initializer runs during construction holds a value
+  established once and unchanged afterwards. Its address is resolved once and
+  generated code loads through that address directly. The lookup disappears;
+  the load does not. `const` alone does not move runtime-produced data to build
+  time (2.5.3).
+
+A Message builds its graph before its first turn and is torn down as a unit
+(19.29.6), so const bindings created with the graph are available as resolved
+addresses from the start of execution and remain valid for that Message's life.
+Runtime merge does not weaken this: it constructs a new tree under its own
+qualification and cannot mutate or thaw its immutable sources (9.1.2), so a
+merged copy acquires its own const bindings instead of invalidating existing
+ones.
+
+Pin from the point of successful qualification, not unconditionally from Message
+start. `const` and `immutable` qualify during construction, but
+`RuntimeImmutable` qualifies an existing tree later, possibly while an
+activation is suspended in a call (21.5). A field becomes eligible for the
+shortcut only once the qualification covering it has succeeded.
+
+For `const: @`, the qualification applies to the address slot: it is pinned, and
+generated code dereferences it directly instead of re-selecting the field on
+each use. Const does not extend past the reference. The referent keeps whatever
+contract it was built under, and reads through it remain ordinary explicit-path
+access under 21.5.
+
+Every such shortcut is a cache or a fold, never a replacement of graph storage.
+The containing node continues to hold the qualified value, and explicit paths,
+reflection, compatibility walks and Message serialization continue to read it
+there, exactly as own-field caching does not erase the corresponding fields from
+the graph (21.5). Because a const occurrence can be neither removed, moved nor
+replaced, these bindings also stay outside the unresolved active-backing
+conflict policy of 21.13.
 
 21.9. Compatibility and Exact Callable Admission
 
