@@ -6715,7 +6715,7 @@ Therefore the examples mean:
 
     const: char: []: s "hello" "world!"
         `s` is an Lmx field holding a reference to an Array descriptor in the
-        typed service pool for the used character/element type. The descriptor
+        typed service pool selected for element type `T`. The descriptor
         is `{len, data}` (6.5); `data` points to a contiguous block of
         character/text cells. Const qualifies that field, descriptor and
         backing; it does not make the array an Lmx node.
