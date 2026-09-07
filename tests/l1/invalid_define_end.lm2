@@ -1,0 +1,9 @@
+L1:
+    define: VALUE 7
+    end: WRONG
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
+end: L1

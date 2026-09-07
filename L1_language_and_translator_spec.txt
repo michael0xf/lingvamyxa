@@ -149,7 +149,7 @@ lm2 sources, spec, trans_registry.lm2 namespace table). All belong
 to the L1 **contract** unless the user excludes one:
 
     fn, sub, return, external,
-    include, import, predef, define, ifdef, os,
+    include, import, predef, define, ifndef-default, ifdef, os,
     if, else, while, for, break, continue,
     goto (labels + `goto:`),
     cast,
@@ -996,7 +996,8 @@ L2-shaped copy kept only to produce the gen0 seed with stage-0
 `trans.lm0`; it is not the L1 source.
 
 Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
-`run_smoke.ps1`, `run_parser.ps1`, `run_expr.ps1` and `run_ifdef.ps1`:
+`run_smoke.ps1`, `run_parser.ps1`, `run_expr.ps1`, `run_ifdef.ps1`
+and `run_define.ps1`:
 
   - the P0 parser, `own` and `parser_text` ported from frozen
     620db86 into `L1:` form, plus `printTree`, `make`, the
@@ -1033,6 +1034,17 @@ Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
     `FLAG` undefined or 0 selects default, while 1 selects the first branch.
     Nested and backtick-quoted conditions retain their C preprocessor text;
     branch and outer `end:` targets are checked. See `tests/l1/ifdef_*.lm2`;
+  - direct object-like `define:` and `` `ifndef-default`: `` at unit scope,
+    including nested `ifdef` unit branches: emit `#define`, or guard it
+    with `#ifndef`/`#endif`. Replacement atoms retain their C tokens;
+    only outer backticks are removed. An empty replacement stays empty.
+    `tests/l1/define_*.lm2` exercises 7 compile/run configurations per
+    gen0/gen2 and 4 malformed name/token/end cases with no output C.
+    For `` `ifndef-default`: VALUE 7 ``, undefined VALUE yields 7;
+    `-DVALUE=0` and `-DVALUE=9` retain 0 and 9. String bytes/NUL, alias,
+    character and backtick arithmetic values are checked at execution;
+    `=` and `(void)` have emitted-token checks only. Function-like macros,
+    hosted table commands and function-body placement are not covered;
   - parser acceptance against the old oracle: 16 positive fixtures
     whose `printTree` dumps match `build\lm0\printTree.lm0.exe`
     byte-for-byte, 5 malformed fixtures where both sides exit 1, and

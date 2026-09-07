@@ -30,6 +30,24 @@ fn: l1_text_eq (const: (LmP0Text: text); const: @(char s)) int
         return: n = 0U
 return: text\length = n && c.memcmp(text\data, s, n) = 0
 
+fn: l1_head_is (const: (LmP0Text: text); const: @(char s)) int
+    size_t: start 0U
+    size_t: n 0U
+    size_t: sn 0U
+    if: text = 0 || text\data = 0 || s = 0
+        return: 0
+    n: text\length
+    if: n >= 2U && text\data[0] = 96 && text\data[n - 1U] = 96
+        start: 1U
+        n: n - 2U
+    ---
+    sn: c.strlen(s)
+    if: n != sn
+        return: 0
+    if: n = 0U
+        return: 1
+return: c.memcmp(text\data + start, s, n) = 0
+
 fn: l1_text_starts (const: (LmP0Text: text); const: @(char s)) int
     size_t: n
     if: text = 0 || text\data = 0 || s = 0
@@ -2021,6 +2039,83 @@ fn: l1_emit_ifdef (FILE: out; const: (LmP0Frame: frame); const: @(char path); in
         return: 1
 return: 0
 
+fn: l1_emit_define (FILE: out; const: (LmP0Frame: frame); const: @(char path); const: (LmP0Node: owner); int: ifndef_default) int
+    LmP0Field: field
+    const: LmP0Node: node
+    const: LmP0Text: atom
+    size_t: start 0U
+    size_t: n 0U
+    if: frame = 0
+        return: 1
+    field: 0
+    if: frame\body != 0
+        field: frame\body\first_field
+    ---
+    while: field != 0 && l1_node_ignored(field\value)
+        field: field\next
+    if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM
+        if: ifndef_default != 0
+            return: l1_error(path, owner, "ifndef-default receiver expects macro name as first atom")
+        return: l1_error(path, owner, "define receiver expects macro name as first atom")
+    atom: field\value\as\atom
+    if: atom = 0 || atom\data = 0 || atom\length = 0U || atom\data[0] = 34 || atom\data[0] = 39
+        if: ifndef_default != 0
+            return: l1_error(path, field\value, "ifndef-default receiver expects macro name as identifier atom")
+        return: l1_error(path, field\value, "define receiver expects macro name as identifier atom")
+    n: atom\length
+    if: n >= 2U && atom\data[0] = 96 && atom\data[n - 1U] = 96
+        start: 1U
+        n: n - 2U
+    ---
+    if: n = 0U
+        if: ifndef_default != 0
+            return: l1_error(path, field\value, "ifndef-default receiver expects macro name as identifier atom")
+        return: l1_error(path, field\value, "define receiver expects macro name as identifier atom")
+    if: ifndef_default != 0
+        if: l1_write_cstr(out, "#ifndef ") != 0
+            return: 1
+        if: l1_write_span(out, atom\data + start, n) != 0
+            return: 1
+        if: l1_write_cstr(out, "\n") != 0
+            return: 1
+    ---
+    if: l1_write_cstr(out, "#define ") != 0
+        return: 1
+    if: l1_write_span(out, atom\data + start, n) != 0
+        return: 1
+    field: field\next
+    while: field != 0
+        if: l1_node_ignored(field\value) = 0
+            node: field\value
+            if: node = 0 || node\kind != c.LM_P0_NODE_ATOM
+                if: ifndef_default != 0
+                    return: l1_error(path, node, "ifndef-default receiver expects atom tokens")
+                return: l1_error(path, node, "define receiver expects atom tokens")
+            atom: node\as\atom
+            if: atom = 0 || atom\data = 0
+                if: ifndef_default != 0
+                    return: l1_error(path, node, "ifndef-default receiver expects atom tokens")
+                return: l1_error(path, node, "define receiver expects atom tokens")
+            start: 0U
+            n: atom\length
+            if: n >= 2U && atom\data[0] = 96 && atom\data[n - 1U] = 96
+                start: 1U
+                n: n - 2U
+            ---
+            if: l1_write_cstr(out, " ") != 0
+                return: 1
+            if: l1_write_span(out, atom\data + start, n) != 0
+                return: 1
+        ---
+        field: field\next
+    if: l1_write_cstr(out, "\n") != 0
+        return: 1
+    if: ifndef_default != 0
+        if: l1_write_cstr(out, "#endif\n") != 0
+            return: 1
+    ---
+return: l1_validate_end_trailer(frame, path, owner)
+
 fn: l1_imp_find (const: @(char tab); int: n; const: @(char path)) int
     int: i 0
     while: i < n
@@ -2166,6 +2261,10 @@ fn: l1_emit_item (FILE: out; const: (LmP0Node: node); const: @(char path); int: 
         return: l1_emit_os(out, node\as\frame, path, depth)
     if: l1_text_eq(node\as\frame\head, "ifdef")
         return: l1_emit_ifdef(out, node\as\frame, path, 0, depth, node)
+    if: l1_head_is(node\as\frame\head, "define")
+        return: l1_emit_define(out, node\as\frame, path, node, 0)
+    if: l1_head_is(node\as\frame\head, "ifndef-default")
+        return: l1_emit_define(out, node\as\frame, path, node, 1)
     if: l1_text_eq(node\as\frame\head, "prototype")
         if: node\as\frame\body = 0
             return: 0

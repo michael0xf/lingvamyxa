@@ -36,7 +36,8 @@ gen0 seed with the old stage-0 `trans.lm0`. It is not the L1 source.
 ## Prerequisites
 
 * `gcc` reachable on `PATH`. New-generation runners (`run_gen` / `run_smoke` /
-  `run_parser` / `run_expr` / `build_l1`) invoke it with `-std=c99 -Wall -Wextra -Wpedantic
+  `run_parser` / `run_expr` / `run_ifdef` / `run_define` / `build_l1`)
+  invoke it with `-std=c99 -Wall -Wextra -Wpedantic
   -I .` and four hard guards: `-Werror=incompatible-pointer-types
   -Werror=discarded-qualifiers -Werror=implicit-function-declaration
   -Werror=implicit-int`. The seed runner uses the older hosted command
@@ -111,6 +112,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_smoke.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_parser.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_expr.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_ifdef.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_define.ps1
 ```
 
 All default to `gen0`; set `L1_GEN` (for example `gen2`) to pick another.
@@ -144,8 +146,24 @@ of gen0/gen2, plus eight malformed branch/end cases that must not publish C.
 It covers `#if`/`#elif`/`#else`, nesting, quoted conditions, unit/function
 contexts and matching `end:` targets. Undefined `FLAG` and `-DFLAG=0` select
 default; `-DFLAG=1` selects the first branch. This suite is standalone, not
-invoked by `run_gen.ps1`; `define` and conditional-import policy are outside
-this checkpoint.
+invoked by `run_gen.ps1`. Conditional-import policy is outside this checkpoint.
+
+`run_define.ps1` is also standalone: four fixtures, seven compile/run
+configurations and four malformed name/token/end cases per gen0/gen2.
+It covers unit-level object-like macros, including inside `ifdef` branches:
+
+```text
+define: PRESENT
+define: MSG "ok"
+define: ADD `3 + 4`
+`ifndef-default`: VALUE 7
+```
+
+An empty replacement stays empty; `ifndef-default` preserves a command-line
+definition, including zero. String bytes/NUL, arithmetic, alias and character
+values are checked at execution; `=` and `(void)` only as emitted tokens.
+Function-like macros, hosted table commands and function-body placement are
+outside this checkpoint. Results are in `logs/<gen>/define.log`.
 
 ## Where output goes
 
