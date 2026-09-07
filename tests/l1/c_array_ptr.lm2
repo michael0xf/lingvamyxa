@@ -1,0 +1,22 @@
+L1:
+    external:
+        fn: main () int
+            c.array: const: [2]: @: char names "left" "right"
+            c.array: const: [4]: @: char candidates
+            candidates[0]: "ab"
+            candidates[1]: "cd"
+            if: names[0] == 0 || names[1] == 0
+                return: 1
+            if: names[0][0] != 'l' || names[1][0] != 'r'
+                return: 2
+            if: names[0][1] != 'e' || names[1][1] != 'i'
+                return: 3
+            if: candidates[0][0] != 'a' || candidates[1][0] != 'c'
+                return: 4
+            candidates[2]: names[0]
+            if: candidates[2][0] != 'l'
+                return: 5
+            return: 0
+        end: main
+    end: external
+end: L1

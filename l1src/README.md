@@ -37,7 +37,7 @@ gen0 seed with the old stage-0 `trans.lm0`. It is not the L1 source.
 
 * `gcc` reachable on `PATH`. New-generation runners (`run_gen` / `run_smoke` /
   `run_parser` / `run_expr` / `run_ifdef` / `run_define` / `run_scalar` /
-  `run_decl_repeat` / `run_ident` / `build_l1`)
+  `run_decl_repeat` / `run_ident` / `run_c_array` / `build_l1`)
   invoke it with `-std=c99 -Wall -Wextra -Wpedantic
   -I .` and four hard guards: `-Werror=incompatible-pointer-types
   -Werror=discarded-qualifiers -Werror=implicit-function-declaration
@@ -117,6 +117,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_define.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_scalar.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_decl_repeat.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_ident.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_c_array.ps1
 ```
 
 All default to `gen0`; set `L1_GEN` (for example `gen2`) to pick another.
@@ -207,6 +208,21 @@ parameters, calls and references. For example, `` []: int `xs`, 2 1 2 `` declare
 the array accessed as `xs[0]`. Quoted repeated scalar/pointer names are covered;
 literal string backticks remain bytes. No arbitrary-name mangling or parser
 adjacency change is implied. This standalone suite writes `logs/<gen>/ident.log`.
+
+`run_c_array.ps1` checks established one-dimensional bootstrap declarations:
+
+```text
+c.array: const: [3]: int: values 2 4 6
+c.array: [1]: int: target 13
+c.array: const: [2]: @: char names "left" "right"
+```
+
+The last form emits `const char *names[2]`, not `char *const names[2]`.
+On each of gen0/gen2, three fixtures compile/run with value, extent, mutation
+and pointer-table byte checks; a fourth translates but must fail compilation
+on a const-element write. Three malformed declarations must not publish C.
+This standalone suite writes `logs/<gen>/c_array.log`; `run_gen.ps1` does not
+invoke it. General array declarator spelling remains outside this checkpoint.
 
 ## Where output goes
 

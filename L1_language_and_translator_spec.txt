@@ -997,7 +997,8 @@ L2-shaped copy kept only to produce the gen0 seed with stage-0
 
 Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
 `run_smoke.ps1`, `run_parser.ps1`, `run_expr.ps1`, `run_ifdef.ps1`,
-`run_define.ps1`, `run_scalar.ps1`, `run_decl_repeat.ps1` and `run_ident.ps1`:
+`run_define.ps1`, `run_scalar.ps1`, `run_decl_repeat.ps1`, `run_ident.ps1`
+and `run_c_array.ps1`:
 
   - the P0 parser, `own` and `parser_text` ported from frozen
     620db86 into `L1:` form, plus `printTree`, `make`, the
@@ -1028,6 +1029,15 @@ Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
     repeat state; ordinary assignments and %-disabled wrappers reset it.
     Four reset/missing-extent diagnostics must leave no output C. Existing
     multidimensional arrays are unchanged; their repetition is not covered;
+  - bootstrap-compatible one-dimensional `c.array` with nested scalar or
+    @/@@ type heads and an optional outer `const`. For example,
+    `c.array: const: [2]: @: char names "left" "right"` emits
+    `const char *names[2]`: the pointers remain assignable. Three runtime
+    fixtures check local/global values, extents, writes and pointer-table bytes;
+    a fourth translates but must fail C compilation on a const-element write.
+    Three malformed declarations must fail translation without publishing C.
+    The standalone suite runs on gen0/gen2; this does not close general
+    multidimensional or array-of-pointer declaration spelling in 10.15;
   - quoted simple C-compatible identifiers: four `tests/l1/ident_*.lm2`
     fixtures on gen0/gen2 cover declarations, parameters, calls, references,
     arrays and scalar/pointer repeats. Only outer name backticks are removed;

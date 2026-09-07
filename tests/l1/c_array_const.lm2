@@ -1,0 +1,12 @@
+L1:
+    external:
+        fn: main () int
+            c.array: const: [3]: int: values 2 4 6
+            if: values[0] != 2 || values[1] != 4 || values[2] != 6
+                return: 1
+            if: c.sizeof(values) / c.sizeof(values[0]) != 3
+                return: 2
+            return: 0
+        end: main
+    end: external
+end: L1
