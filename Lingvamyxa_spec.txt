@@ -67,7 +67,8 @@ object. Section 21 specifies precedence, fallback and publication.
 
 Registries, schemas and tables are explicit program data. A receiver may query
 them, but construction does not register a name or type implicitly. Compatibility
-is the Consumer-relative predicate `implements(varA varB Consumer)` (2.1).
+uses source `implements(varA varB Consumer)` and the separate available-graph
+`RuntimeImplements(varA varB Consumer)` (2.1); neither promises total typing.
 
 0.0.1. First, Lingvamyxa is a general structural data notation.
 
@@ -1061,17 +1062,34 @@ may hold primitive values or copied references under 21; their storage does not
 define graph lifetime. Descriptor records for Arrays/methods are legitimate
 domain records, distinct from the prohibited implicit Structure schema.
 
-2.1. Structural Compatibility without Runtime Descriptors
+2.1. Two Consumer-Relative Compatibility Predicates
 
-A type is not a runtime entity. Compatibility is the explicit fact that `varA`
-may be used in place of `varB` in `Consumer`. The structural predicate
-`implements(varA varB Consumer)` in section 19.21.3 operates on paths in the
-source/current Structure model; it does not require a namespace descriptor.
+A formally precise type does not describe every use of a value. Lingvamyxa
+deliberately checks the requirements it can see and uses available conversions
+at consumption edges, rather than requiring a complete nominal contract or
+giving up all checking. A positive result covers the inspected requirements,
+not every possible future use. This does not relax an inspected path or call
+signature: missing required paths and mismatched required signatures fail.
 
-`Consumer` is the consuming structure: code or data, walked as a P0 tree. «Used in Consumer» means it
-mentions `varB` and concrete branches of `varB` (name paths) at syntactic field-follow
-and argument sites. The comparison does not require every first-level name of
-`varB` on `varA`. It requires only those paths of `varB` that `Consumer` actually touches.
+There are two distinct three-argument predicates, neither requiring a runtime
+Namespace or an implicit per-Structure type descriptor:
+
+    implements(varA varB Consumer)
+        translator/source check over the Consumer and requirements known at
+        this site. Consumer may be code or data represented by P0 Structures
+        or an explicit known used-path list.
+
+    RuntimeImplements(varA varB Consumer)
+        runtime check over the available current Structures. It walks what
+        is available; it does not execute Consumer to discover its uses,
+        reconstruct unavailable native code or require retaining its full
+        source/body in a hidden descriptor. Message validation is the first
+        intended application; other application sites remain to be specified.
+
+For source `implements`, «used» means visible field-follow and consumption
+sites in the known Consumer, including visible paths in alternative branches;
+it is not a trace of the branch that happens to execute. The check does not
+require every field of `varB`, only the requirements this Consumer exposes:
 
     implements(varA varB Consumer)
         iff every path in uses(Consumer varB) is present on varA
@@ -1080,14 +1098,16 @@ and argument sites. The comparison does not require every first-level name of
                 sig(varA.p) == sig(varB.p) == ExpectedSig(Consumer, p),
                 using the canonical all_methods_array signatures of 2.2.3.1
 
-`uses(Consumer varB)` is the set of syntactic name paths (`varB`, `varB.foo`, `varB.foo.bar`, …)
-collected from Consumer. Collection stays at P0 field-follow; it is not alias analysis,
-callee expansion, computed-name evaluation or heap dataflow. A path that is not
-syntactically visible in Consumer is unchecked at this site, or is carried explicitly
-across an LMX Message boundary.
+Here `uses(Consumer varB)` is the set of visible name paths (`varB`,
+`varB.foo`, `varB.foo.bar`, ...). Collection is not callee expansion, execution,
+computed-name evaluation or whole-heap alias/dataflow analysis. Unresolved uses
+are outside this check's coverage and are identified separately in 2.1.3.
+`RuntimeImplements` instead obtains its requirements from the available current
+Consumer graph and applies the same used-path/leaf rules to what it can inspect.
+Unavailable information is not invented and is not certified by success.
 
-This is generic by default. The requirement set is computed from the Consumer
-body, not from a separately declared interface taken as a whole. An unused
+For the source check, requirements come from the known Consumer body rather
+than a separately declared interface taken as a whole. An unused
 method or field of `varB` is not required. An empty `uses(Consumer varB)` is true: there is
 nothing to use. There is no two-argument form. Without a consumer there is no
 type.
@@ -1114,31 +1134,24 @@ Compatibility is directional and consumer-relative. `implements(varA varB Consum
 not imply `implements(varB varA Consumer)` and does not imply `implements(varA varB Consumer2)` for a
 different consumer. Backend projection implements an already made structural
 decision and is not compatibility evidence. Explicit converters (section 2.2.4)
-are ordinary receivers; `implements` does not invoke them.
+are ordinary receivers; neither predicate invokes them or mutates its operands.
 
-A translator or interpreter may apply `implements(varA varB Consumer)` at an
-explicit structural replacement, argument consumption and return admission,
-supplying Consumer from the remaining known source tree, or from an explicit
-Message Consumer or used-path list. This check is compiler/runtime work over
-Structures, not creation of a hidden runtime namespace or descriptor object.
-Those applications are not a two-argument source receiver.
+A translator/interpreter may apply source `implements` to a known replacement,
+argument or return and emit checks for its known requirements against the values
+eventually supplied. Such generated guards are not a whole-Consumer runtime
+analysis and do not erase the distinction from `RuntimeImplements`.
 
-Consumer has two roles here. Its P0 source determines the required syntactic
-paths and the expected signature at each call site; validation checks the
-supplied current graph occurrences and their immutable method records. Runtime
-merge may change the occurrences being checked without changing compiled call-
-site signatures. Bare dynamic inputs are not fields of a visibility object:
-their names, order and pass modes are recorded in `sig`, while invocation uses
-the caller's current C values or the selected callable's immediate `node`
-fallback. `implements` neither enumerates C frames nor reads a runtime Namespace.
-Success does not freeze either operand against later explicit graph mutation.
-Computed paths require an explicit runtime operation; P0 demand extraction does
-not silently become alias or heap analysis.
+Runtime merge can change checked occurrences without changing compiled call-site
+signatures. Success freezes neither operand. Call admission is a separate
+condition: every required dynamic input must be supplied by the current caller,
+its inherited value, or the selected callee's immediate `node` fallback (21.3).
+Missing fallback alone is not failure when a caller value exists. Neither
+predicate enumerates C frames or establishes that a future invocation will run.
 
-2.1.1. Two Thicknesses of the Same Predicate
+2.1.1. Thin and Thick Paths
 
-The same `implements(varA varB Consumer)` is strict or relaxed according to how thick `Consumer`
-is, not according to a second type system.
+Thickness belongs to the Consumer's use of a path, not to a nominal type or to
+the choice between the two predicates. Both use the leaf rules of 2.2.3.
 
 When `Consumer` walks fields of `varB` — for example `FileManager` consumes `f\close` and
 `f\read` on a `File` — the used tree is fat down to those leaves. Admission is
@@ -1178,6 +1191,31 @@ body but still names type classes; Go and TypeScript compare a declared shape;
 pydantic, serde and .NET `TypeConverter` coerce to a declared schema. None of
 them is `implements(varA varB Consumer)` plus merge-keyed converters on the used tree.
 
+2.1.3. Thin-Consumption Report
+
+The translator must be able to report actual terminal leaf consumptions in the
+Consumer it can inspect. This is a coverage/review artifact, not a new admission
+rule. Classify each used path recursively:
+
+    a callable actually invoked -> exact signature check; not a thin entry;
+    traversal continues through description fields -> descend, do not exempt
+        the entire description from further classification;
+    a terminal cell is read, passed, stored or returned without a deeper
+        contract -> report a thin consumption, including opaque callable
+        transport when that occurrence is not invoked at this site.
+
+Empty `uses` is no consumption and produces no entry. For example, reading
+`x\width` requires the `width` path but may consume its scalar leaf thinly;
+presence of `width` does not compare its value with another width. Passing
+`x\method` as data can be thin even though a later invocation checks its `sig`.
+
+The report has two separate sections: known thin consumptions with source
+location, path and consumption kind; and sites whose computed/dynamic paths or
+requirements cannot be resolved statically. Unknown coverage must not be
+presented as either verified thickness or an exhaustive list of thin leaves.
+External-handle lifetime contracts and checked wrappers (19.29.10) remain
+independent controls; this report does not replace them.
+
 2.2. Substrate, Primitive Leaves and Conversion Keys
 
 2.2.1. Memory Substrate Is Not a Fourth Value Kind
@@ -1214,8 +1252,8 @@ consumer stops following children. A profile may attach explicit descriptive
 Structures to values through ordinary graph links, but such descriptions are
 data and are not mandatory per-node headers used to discover a payload kind.
 
-`implements` compares only the source/current Structure paths its Consumer
-actually uses. If a profile wants semantic contracts beyond physical address
+The compatibility predicates compare only the requirements their respective
+Consumer views expose (2.1). If a profile wants contracts beyond physical address
 classification, it must make those contracts explicit Structure data and pass
 or reference them explicitly. Target-language assignment rules (including
 ANSI C) remain a backend concern.
@@ -1436,16 +1474,16 @@ is true. That is not the primitive `0` and not `void`. `void` is `semantic:
 none` on a primitive description: no cell. Unit is a Structure with no
 fields. Confusing them would make `(): empty` interchangeable with `int`.
 
-2.2.3. Primitive Leaves of `implements`
+2.2.3. Primitive Leaves of Both Compatibility Predicates
 
-At a used-path primitive leaf, `implements` does not invent or implicitly walk
+At a used-path primitive leaf, neither predicate invents or implicitly walks
 a primitive description as if it were `User\foo\bar`. It sees only the Lmx
 leaf and explicit graph paths the Consumer actually follows. A profile that
 requires width/range/handle contracts must provide an explicit referenced
 description Structure to the operation.
 
     If uses(Consumer varB) is empty at that leaf, the result is true.
-    If Consumer only moves the cell (pass, store, return the leaf reference),
+    If Consumer only reads or moves the cell (pass, store, return),
         the result is true under the selected structural operation.
     If Consumer follows description fields (width, range, signed, handle-ness),
         those fields are ordinary explicit used paths and must be present on
@@ -1463,7 +1501,7 @@ C compiler decide. Raw pointers deny unless the class names match, plus
 `void*` holes. Those three hosted behaviors are migration gaps, not the
 source-semantic leaf rule. See sections 18 item 18 and 21.7.
 
-2.2.3.1. Callable Leaves of `implements`
+2.2.3.1. Callable Leaves of Both Compatibility Predicates
 
 A callable occurrence identifies an immutable `all_methods_array {addr,sig}`
 record. For each path p actually invoked by Consumer, validation requires:
@@ -1478,21 +1516,20 @@ typed-call check.
 An unused callable is irrelevant. Transporting it as opaque data checks only
 the transport's actual requirements. Calling it admits no implicit variance,
 projection or arity adapter. Validation reads method records, never invokes the
-methods or guesses types from untyped function addresses. The same check applies
-to statically known replacements and current graphs admitted at runtime.
+methods or guesses types from untyped function addresses. This exact-signature
+rule is shared by source checks, runtime checks and actual call admission;
+sharing it does not identify the two compatibility predicates.
 
 2.2.4. Converters Are Explicit Receivers Selected by Merge Key
 
-`implements` never invokes a converter. An explicit conversion profile may
-inspect explicit description Structures and converter keys. There is no hidden
+Neither compatibility predicate invokes a converter. An explicit conversion
+profile may inspect description Structures and converter keys. There is no hidden
 description attached to a leaf and no ambient search through a namespace.
 
-The translator or interpreter, when lowering the substitution edge (argument,
-structural replacement, field initializer, return) where
-`implements(varA varB Consumer)` was
-applied, selects that converter by key and inserts the call. There is no
-search over all codec pairs, no silent DWIM loop inside `implements`, and no
-hidden dataflow.
+At the checked consumption edge (argument, structural replacement, field
+initializer or return), translation inserts the selected converter call or
+interpretation executes it. Selection uses an available explicit key, not a
+search over all codec pairs or hidden dataflow inside either predicate.
 
 The key is populated by `merge` of description Structures. If `File` merged a
 `u32` handle field, the key `u32 → File.handle` (or `u32 → FILE` where `FILE`
@@ -1500,8 +1537,9 @@ is the word contract inside `File`) is present. Later merge parts append later
 same-name occurrences by the rule of section 2.3: the first converter remains
 `[0]`; later converters require an explicit occurrence selection.
 
-Failure of the converter is not `implements false`. It is an ordinary receiver
-failure at translation or interpretation of that edge (a format diagnostic;
+Failure of the converter is not either predicate returning false. It is an
+ordinary receiver failure when that conversion executes; a known constant
+failure may be diagnosed during translation (a format diagnostic;
 hosted profiles may spell it after `NumberFormatException`: decimal text
 `"Hello world!"` cannot become a file handle). `"123"` may become `u32` and
 then the `handle` field of `File` because `File`'s description merged `u32`.
@@ -1509,6 +1547,36 @@ Until some `C` asked for `File` paths, the buffer was still bytes.
 
 A missing key means no conversion at that edge. The program writes an explicit
 receiver if it wants one. Ambiguity is a merge-order fact, not a search.
+
+No implementation or profile is obliged to provide every primitive-type pair.
+Large converter tables are useful coverage, not a completeness requirement.
+Use the available admitted conversions; a missing converter remains missing,
+not a reason to invent one or reject unrelated checks.
+
+Numeric conversion checks the value against the destination range before
+narrowing, wrapping or truncation could hide an out-of-range input. Outside
+that range the conversion fails; successful compatibility is not permission to
+silently wrap the value. For ordinary unsigned domains:
+
+    u8 -> u16       admitted; every u8 value is in the u16 range
+    u16(255) -> u8  admitted when this converter is available
+    u16(256) -> u8  range error, not zero
+
+A proven range inclusion may remove the physical check; the rule still applies
+to widening conversions. Fractional rounding and precision loss within the
+destination range remain explicit numeric-profile policies (6.6.2, 6.6.13).
+Range checking alone does not select a rounding mode for `1.5 -> i32`.
+
+Existing conversion spelling (excerpt, `tests/trans_class_range_source_rows.lm2`):
+
+    int: direct cast: int 7
+    short: fallback cast: short 8
+    long: joined cast: long 9
+
+The legacy `tests/trans_cast_receiver.lm2` instead contains
+`max: cast: size_t -1` and expects an unsigned result. Under the checked-range
+rule this is a range error; that fixture needs migration and is not evidence
+that the replacement translator already enforces the rule.
 
 2.3. `merge` as Ordered Occurrence Composition
 
@@ -4394,6 +4462,10 @@ Native C99-backed numeric types may lower to direct C99 operations when the
 active profile defines the overflow, conversion, comparison and evaluation
 rules.
 
+Numeric converters must enforce the destination-range rule of 2.2.4; a direct
+C cast is sufficient only when it preserves that rule. In-range rounding and
+precision-loss policy must still be named by the numeric profile.
+
 Examples:
 
     i32 + i32        -> i32 or promoted profile-defined integer result
@@ -5526,9 +5598,10 @@ recursive call graphs require a finite fixed-point propagation of
 C-parameter order.
 
 The compiler may compare source shapes with `implements(New Old Consumer)`
-before emitting a statically checkable replacement. Dynamic operations may
-perform the same comparison on live Structures. A used callable leaf requires
-the exact canonical signature selected for the Consumer call site. Neither case creates an ordered
+before emitting a statically checkable replacement and guards for its known
+requirements. This is not `RuntimeImplements` over an available runtime
+Consumer. A used callable leaf requires the exact canonical signature selected
+for the Consumer call site. Neither check creates an ordered
 Name-to-Binding overlay. The default child occurrence is `[0]`, not the newest
 declaration.
 
@@ -5536,8 +5609,8 @@ Revision-1 runtime namespace stacks, descriptor capture and environment objects
 are non-normative migration history and must not be reproduced in the new
 translator. Ordinary C arguments and automatic values are the runtime carrier
 of dynamic visibility. A structural operation may compare a pending Lmx
-subtree and the currently selected subtree with
-`implements(New Old Consumer)` before mutating or appending graph occurrences.
+subtree and the currently selected subtree against requirements established by
+source `implements(New Old Consumer)` before mutating or appending occurrences.
 Failure leaves the graph unchanged. Success does not change occurrence order:
 an appended same-name child is a later occurrence, while ordinary structural
 lookup remains the first `[0]` child.
@@ -5646,8 +5719,8 @@ changes only in this activation. This plain form neither immediately updates
 `node\[0]i` nor appends a child occurrence.
 
 Structural replacement or append requires an explicit addressable path or a
-structural receiver. That operation applies `implements(new old Consumer)` to
-the selected pending/current subtrees, leaves the graph unchanged on failure,
+structural receiver. With a known Consumer, source `implements(new old Consumer)`
+checks that update's requirements; its guards leave the graph unchanged on failure,
 and preserves the existing first occurrence as `[0]` when it appends. The value
 may be callable or non-callable. If Consumer invokes a used callable path, the
 comparison includes the exact `all_methods_array.sig` selected at that call
@@ -5667,9 +5740,11 @@ depending on the resolved occurrence and active profile. The generated C method
 still receives reserved `callable->node` and any hidden dynamic values required
 by its signature.
 
-Call admission has one coherent Consumer-relative rule. Structural paths,
+Source call admission is Consumer-relative. Structural paths,
 primitive leaves and used callable signatures are checked by
-`implements(varA varB Consumer)`. The selected call receiver additionally maps
+`implements(varA varB Consumer)`. The actual call must also satisfy its exact
+signature and dynamic-input admission (21.3); this does not automatically run
+`RuntimeImplements`. The selected call receiver additionally maps
 the concrete actual values into the already admitted declared formal ABI. It
 does not invent a second nominal callable type system.
 
@@ -6004,8 +6079,10 @@ Inside an executable body, `return` exits the current executable body.
 
 For an `fn`, the core profile requires a value-bearing return form. `return:
 value` evaluates or consumes one logical value admitted by
-`implements(value declaredReturn returnConsumers)` by
-section 2.1, then exits the current executable body. `value` denotes one Lmx
+source `implements(value declaredReturn returnConsumers)` for the known
+returnConsumers (2.1), then exits the current executable body. This does not
+run `RuntimeImplements` on every return or require retaining a Consumer body.
+`value` denotes one Lmx
 reference admitted by that same predicate, whether its payload domain is a
 scalar leaf, Structure branch, callable or array representation. Whitespace-separated short-tail fields admitted by
 an `fm` receiver populate its already existing return Structure before the
@@ -6230,8 +6307,8 @@ a Structure/callable reference, or an Array-descriptor reference. An `fm`
 returns one explicit Lmx result Structure whose children provide its
 multiple-return surface. The consumer may keep it or unpack those fields.
 
-`return: expression` returns the admitted value after
-`implements(expression declaredReturn returnConsumers)`. For a reference it
+`return: expression` returns a value satisfying the requirements established by
+source `implements(expression declaredReturn returnConsumers)`. For a reference it
 preserves the exact referent identity; return itself does not clone, allocate
 or promote a tree or Array. Any explicit construction belongs to evaluation of
 the expression. Primitive results follow their value contract.
@@ -7108,7 +7185,8 @@ fallback. To mutate graph state immediately, or to mutate any location other
 than the current method's own backing occurrence through its later dirty
 checkpoint, the program writes an explicit path such as `node\a: 4` or
 `reference\a: 4`. A receiver that explicitly defines structural
-append/replacement may apply `implements(new old Consumer)`, but it neither
+append/replacement may use source `implements(new old Consumer)` for a known
+Consumer, but it neither
 creates a runtime Namespace nor changes occurrence order. If a same-name child
 is appended, the existing first child remains structural `[0]`.
 
@@ -8119,7 +8197,8 @@ prelude is not required or adopted by this excerpt.
     c.union                    registered L2 physical-layout receiver; generic union is not registered
     c.array                    raw C-array storage receiver; ordinary [] instead returns the typed descriptor reference of 6.5
     method/requires.method     legacy bootstrap Tables; not normative implements input
-    implements                 implements(varA varB Consumer) consumer-relative structural compatibility receiver; translated or interpreted with the same predicate
+    implements                 source/translator compatibility over known Consumer requirements (2.1)
+    RuntimeImplements          separate available-current-graph check; Message validation is the first intended application (2.1)
     message/operation          ordinary Lmx Structures/explicit description data in L2/L3; no current generic receiver heads
 
 
@@ -9318,8 +9397,10 @@ Its semantic stages are:
     structural and operation resolution
         Follow already resolved Lmx links, relative `node`/child traversal or
         explicit-root textual paths. When compatibility is requested,
-        `implements(varA varB Consumer)` compares the actual Structure paths
-        used by `Consumer`; it does not compare attached descriptors.
+        `RuntimeImplements(varA varB Consumer)` checks the available current
+        Message/requirement Structures (2.1). It neither executes Consumer nor
+        reconstructs an unavailable body. Its partial coverage does not
+        replace the explicit validation, authority and lifetime checks below.
 
     validation and evidence
         Invoke explicitly linked validation/policy callables and construct
@@ -9541,29 +9622,24 @@ fallback, conversion or policy data may be expressed as explicit Structures,
 Arrays or Tables consumed by that receiver. Such data is never an ambient
 registry or runtime namespace.
 
-19.21.3. `implements`
+19.21.3. `implements` and `RuntimeImplements`
 
-`implements(varA varB Consumer)` is a structural used-path predicate. It takes
-the paths by which `Consumer` uses `varB`, traverses the corresponding current
-Lmx structures and asks whether `varA` provides the required paths/leaf
-contracts. Constant paths may be collected from P0; dynamic paths are checked
-by the explicitly selected runtime operation.
+Section 2.1 defines two operations: source `implements(varA varB Consumer)`
+uses known Consumer requirements; `RuntimeImplements(varA varB Consumer)` walks
+available current Structures, initially for Message validation. Neither runs
+Consumer to discover a future execution path. P0 extraction belongs to the
+source check, not to the definition of the runtime operation.
 
-If a path used by `Consumer` is invoked as a callable, its leaf contract includes
-the immutable `all_methods_array.sig` record. The candidate callable must admit
-the exact concrete call shape used by that Consumer: structural node, declared
-arguments, ordered dynamic names/pass modes and result/throw convention.
-Callable fields not invoked by Consumer are irrelevant, just as unused ordinary
-fields are irrelevant.
+Both are partial, directional used-path checks with the leaf rules of 2.2.3.
+An inspected callable invocation requires the exact immutable `sig`; opaque
+transport does not itself invoke or validate the future call. Neither predicate
+invokes converters, mutates its inputs, creates a Namespace or changes `[0]`
+occurrence selection. Consumption performs available keyed conversions under
+2.2.4. Actual call admission must separately supply the dynamic inputs of 21.3.
 
-`implements` does not require a descriptor prefix, generated C type or
-Name-to-Binding map. Optional schema/description Structures participate only
-when Consumer explicitly follows or receives them. The predicate neither calls
-a converter nor changes the graph. Any replacement or argument-consumption
-operation performs its own explicit update only after admission succeeds.
-
-For repeated names, ordinary traversal means `[0]`; an occurrence-qualified
-path checks that exact occurrence. Compatibility never changes occurrence order.
+Additional RuntimeImplements application sites and traversal policies beyond
+the available explicit requirements remain open; do not silently install it at
+every return, replacement or call. Unknown coverage remains unknown (2.1.3).
 
 Current hosted implementation status: `lm_trans_implements` /
 `lm_trans_descriptor_implements` still perform only a shallow legacy
@@ -9640,10 +9716,11 @@ program may cache compatibility results in a Table:
     provides[Array][Sized] = true
 
 External roles/contracts are explicit Structure views over operations.
-Structural compatibility is computed by an explicit
-`implements(varA varB Consumer)` walk over the supplied live/source Structures
-and `Consumer`; a stored
-`satisfies` row is only cached application data.
+Source `implements(varA varB Consumer)` checks the known Consumer requirements;
+the distinct runtime check and its initial Message-validation use are defined
+in 2.1. Merely exposing a Registry/Table does not select RuntimeImplements.
+A stored `satisfies` row is only cached application data, with no guarantee
+beyond the coverage and operand state of the check that produced it.
 
 19.23.3. Conflicts
 
@@ -10221,9 +10298,14 @@ The document/addressing model below remains current; execution follows 19.29.2.1
 
 This section is a document and addressing model. It is not a replacement for
 the P0 parser, Mix overlay markup in section 0.0.2, or
-`implements(varA varB Consumer)` in sections 2.1 through 2.4 and 19.21.3. The
+the compatibility operations in sections 2.1 through 2.4 and 19.21.3. The
 current hosted bootstrap does not implement World Wide Mix paths, prefix locks
 or mirrors.
+
+The `implements` examples below describe a known Consumer's requirements, not
+an automatic runtime walk or retained reader body. RuntimeImplements currently
+has Message validation as its intended application; Mix placement and mirroring
+do not silently prescribe additional application sites.
 
 The target Mix runtime must coordinate independently scheduled Message
 participants (section 19.29.2.1). A World Wide Mix placement/addressing tree
@@ -12119,9 +12201,10 @@ function/subroutine/receiver form resolves a callable Lmx node, reads its exact
 `{addr,sig}` method record, forms declared/dynamic arguments from the current C
 activation and invokes the typed entry beginning with `callable->node`.
 
-Any `implements(new old Consumer)` validation is an explicit compile-time or
-runtime graph operation over supplied Lmx values. It is not a descriptor gate
-that creates visibility. The reverse name index is updated for every created,
+Source `implements(new old Consumer)` validates known update requirements;
+generated guards may enforce those requirements on supplied values (2.1).
+This does not implicitly select RuntimeImplements or create visibility.
+The reverse name index is updated for every created,
 moved or removed occurrence. A backend may reuse physical storage only when it
 proves that node identity, graph references, occurrence order and arbitrary
 textual lookup in a mutated tree remain observationally identical.
@@ -12265,9 +12348,10 @@ Value runtime form inside a body:
 
     return: value
 
-For an `fn`, `return: value` consumes an Lmx value admitted by the explicitly
-requested `implements(value declaredReturn returnConsumers)` operation and
-exits. The exact C return/status channel and graph location of the returned Lmx
+For an `fn`, `return: value` consumes an Lmx value satisfying the contract checked
+by source `implements(value declaredReturn returnConsumers)` for the known
+Consumer, then exits. It does not automatically run RuntimeImplements. The
+exact C return/status channel and graph location of the returned Lmx
 value remain unresolved under sections 8.8 and 19.29.5; no hidden output
 parameter or alternative Value category is implied. A bare `return` is not a
 valid `fn` return in the core profile.
@@ -12806,20 +12890,18 @@ same immutable method record. Its machine body is reused, while its structural
 fallback fields come from the newly containing Structure and its dynamic values
 come from the current caller.
 
-21.9. `implements(varA, varB, Consumer)` at Callable Leaves
+21.9. Compatibility and Exact Callable Admission
 
-The three-argument predicate remains directional and Consumer-relative: `varA`
-is the candidate, `varB` is the required value/role and `Consumer` determines
-the paths actually used. It never becomes a two-argument nominal type test.
-
-For ordinary used paths it compares the actual current Lmx tree and primitive
-address-domain contracts. When Consumer actually invokes a callable leaf at
-used path `p`, that leaf's `all_methods_array.sig` is part of the used-tree
-comparison. Validation must establish the exact equation
+Source `implements` and the distinct `RuntimeImplements` retain their coverage
+limits from 2.1. `varA` is the candidate, `varB` the required role; neither is a
+two-argument nominal type test. When the inspected Consumer requires a callable
+invocation at path `p`, its immutable method signature participates:
 
     sig(varA.p) == sig(varB.p) == ExpectedSig(Consumer, p)
 
-at every concrete Consumer call site. Candidate and required addresses may
+This exact requirement also holds at every actual typed call, even if a previous
+partial check did not inspect that call. It is a call-admission guard, not an
+implicit execution of RuntimeImplements. Candidate and required addresses may
 differ; signature positions,
 pass modes, dynamic ShortNameIds and result/throw convention may not. An unused
 callable field does not reject substitution. Once Consumer invokes that field,

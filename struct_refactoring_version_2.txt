@@ -1826,42 +1826,75 @@ contract. Только после такого admission его callable-occurre
 method-domain.
 
 
-6.7. Callable compatibility in `implements`
-Совместимость callable в `implements`
+6.7. Consumer-relative compatibility
+Совместимость относительно Consumer
 -----------------------------------------
 
 EN
 
-`implements(A, B, Consumer)` remains directional and consumer-driven. It
-examines only paths/leaves actually used by `Consumer`. When a used leaf is
-consumed as a callable, its `sig` is part of that used leaf and validation must
-establish `sig(A.p) == sig(B.p) == ExpectedSig(Consumer,p)` at that call site.
-Different `addr` values are allowed when their canonical `sig` values are
-equal; an unused callable leaf does not impose an unrelated whole-Structure
-check. There is no implicit arity adapter, variance or ignored signature
-position once Consumer actually invokes the leaf.
+There are two predicates (Lingvamyxa_spec.txt, 2.1): source/translator
+`implements(A B Consumer)` uses the known Consumer; the separate
+`RuntimeImplements(A B Consumer)` inspects the currently available Structures.
+The runtime predicate neither executes Consumer nor requires retention or
+reconstruction of its hidden complete body. Its first intended use is Message
+validation; further application sites are not prescribed.
 
-This is not a nominal type system or an attached descriptor. It is the minimum
-structural obligation needed to prevent a call site compiled for one exact C
-prototype from jumping to an incompatible method after rebind, reference
-selection or merge.
+Compatibility is intentionally partial and Consumer-relative, not a proof of
+formal completeness over whole values. Success says nothing about unexamined
+or unavailable parts. It does not excuse a missing actually required path or an
+incompatible invoked callable: at its call site,
+`sig(A.p) == sig(B.p) == ExpectedSig(Consumer,p)` is required. Different
+`addr` values with equal canonical `sig` are allowed; unused callables impose
+no requirement. There is no implicit arity adapter, variance or ignored ABI
+position. A typed-call signature guard is not thereby a RuntimeImplements call.
+
+Primitive conversion follows main specification 2.2.4: use available explicit
+keyed converters; no key means no conversion, and all primitive pairs need not
+exist. Numeric conversion checks the target range and errors outside it.
+For `u8 -> u16` that check may be proved redundant; this does not impose exact
+preservation of fractional values or in-range floating-point precision, whose
+rounding/loss policy belongs to the explicit numeric profile (main specification
+6.6.2, 6.6.13).
+
+The thin-use report (main specification 2.1.3) classifies terminal used-path
+leaves: scalar read/move and opaque callable transport count as thin;
+invocation with an exact signature does not. Recurse through nonterminal uses:
+`x\width` can end at a thin scalar leaf. Empty use sets are not consumption;
+static-unresolved/unknown cases are reported separately. This is additional
+control and does not replace external handle/lifetime contracts.
 
 RU
 
-`implements(A, B, Consumer)` остаётся направленным и зависящим от Consumer.
-Он рассматривает только пути/листья, реально используемые `Consumer`. Когда
-используемый лист потребляется как callable, его `sig` входит в этот лист, а
-validation обязана установить
-`sig(A.p) == sig(B.p) == ExpectedSig(Consumer,p)` в этом call site. Разные
-`addr` допустимы при равных canonical `sig`;
-неиспользуемый callable-лист не требует посторонней проверки всей Structure.
-После фактического использования leaf нет неявного arity adapter, variance или
-игнорируемой позиции сигнатуры.
+Есть два предиката (Lingvamyxa_spec.txt, 2.1): source/translator
+`implements(A B Consumer)` использует известный Consumer; отдельный
+`RuntimeImplements(A B Consumer)` рассматривает доступные сейчас Structures.
+Runtime-предикат не исполняет Consumer и не требует сохранять или восстанавливать
+его скрытое полное тело. Первое намеченное применение — валидация Message;
+другие места применения пока не задаются.
 
-Это не nominal type system и не attached descriptor. Это минимальное структурное
-обязательство, не позволяющее call site, скомпилированному для одного
-точного C-prototype, прыгнуть в несовместимый метод после rebind, выбора по
-ссылке или merge.
+Совместимость намеренно частичная и зависит от Consumer, а не доказывает
+формальную полноту целых значений. Успех ничего не обещает о непроверенных или
+недоступных частях. Это не разрешает отсутствие фактически требуемого пути либо
+несовместимый вызов: в call site обязательно
+`sig(A.p) == sig(B.p) == ExpectedSig(Consumer,p)`. Разные `addr` допустимы при
+равном canonical `sig`; неиспользуемый callable требований не добавляет.
+Неявного arity adapter, variance или игнорируемой ABI-позиции нет. Проверка
+сигнатуры typed-call сама по себе не становится RuntimeImplements.
+
+Конверсии примитивов следуют основной спецификации 2.2.4: используются доступные
+явные keyed converters; отсутствие ключа означает отсутствие конверсии, а
+поддержка всех пар примитивов не обязательна. Числовая конверсия проверяет диапазон
+целевого типа и даёт ошибку за его пределами. Для `u8 -> u16` проверка может
+доказанно исчезнуть; это не требует точного сохранения дробности или in-range
+точности float — rounding/loss policy задаёт явный numeric profile (основная
+спецификация 6.6.2, 6.6.13).
+
+Thin-report (основная спецификация 2.1.3) классифицирует терминальные листья
+used-path: scalar read/move и перенос opaque callable входят; вызов с exact
+signature не входит. По нетерминальным uses проверка идёт рекурсивно:
+`x\width` может закончиться тонким scalar leaf. Пустое множество uses не является
+потреблением; static-unresolved/unknown выводятся отдельно. Отчёт даёт
+дополнительный контроль и не заменяет внешние контракты handles/lifetime.
 
 
 6.8. Invocation
@@ -3277,6 +3310,11 @@ different `addr` values with exactly equal canonical `sig` are accepted, while
 a mismatched signature of the callable leaf actually used by Consumer is
 rejected. An unused callable leaf imposes no compatibility requirement.
 
+A separate RuntimeImplements test for Message validation must use available
+Structures without executing Consumer or reconstructing a hidden body. It must
+distinguish limited success from a missing actually required path or invoked
+signature mismatch; unavailable/unexamined parts carry no success guarantee.
+
 RU
 
 Тест цепочки вызовов обязан передать неквалифицированный примитив и
@@ -3294,6 +3332,11 @@ site `implements(A, B, Consumer)`: разные значения `addr` с то�
 canonical `sig` принимаются, а несовпавшая сигнатура фактически используемого Consumer
 callable leaf отвергается. Неиспользуемый callable leaf не накладывает
 требования совместимости.
+
+Отдельный тест RuntimeImplements для валидации Message использует доступные
+Structures, не исполняет Consumer и не восстанавливает скрытое тело. Он отличает
+ограниченный успех от отсутствия фактически нужного пути или несовпадения
+сигнатуры вызова; недоступные/непроверенные части гарантии успеха не получают.
 
 
 13.8. Activation history, recursion, `yield`, `retry` and Messages
