@@ -1703,7 +1703,9 @@ coverage reports help locate these decisions; they are not new admission gates.
 
 Recommendation: for critical compatibility decisions, make the relevant trees
 of both `varA` and `varB` const throughout, including their explicit descriptions,
-and validate ranges and semantic constraints at their leaves. When those trees
+and validate ranges and semantic constraints at their leaves. `immutable` applies
+that qualification during construction; `RuntimeImmutable` applies it to an
+existing tree after checking the same boundary rules (9.1.2). When those trees
 and validation requirements are available and evaluable at build time, the
 translator can check description values exactly, including units of measurement,
 and reject a mismatch before execution. This is more than checking the presence
@@ -1713,7 +1715,14 @@ The explicit contract determines which values must agree and which conversions
 are admitted; neither `const` nor partial `implements` silently becomes equality
 of all fields. Constness alone does not make runtime-produced data available at
 build time. Keep intentional mutable working state explicit. This recommendation
-combines existing operations, not a new global mode or a replacement predicate.
+combines qualification and validation, not a new global mode or a replacement
+predicate.
+
+Whole-tree qualification avoids forgetting `const` on one protected field and
+keeps checked values and their descriptions from later drifting apart through
+alias writes. It stabilizes the Consumer's inputs, not its behavior: the
+Consumer can still change other mutable state, send messages or affect external
+resources. Immutability is neither purity nor proof of algorithmic correctness.
 
 Protection concerns the actual qualified storage/value and referents, under
 the selected receiver/domain contract (9.1, 19.29.9). A constant reference must
@@ -6674,6 +6683,92 @@ without changing observable graph semantics. C automatic/static duration is not
 observable source semantics.
 ---ANSI C---
 
+9.1.2. `immutable` and `RuntimeImmutable`
+
+These are ordinary L2/L3 receiver names, not parser keywords or a new kind of
+type. They apply the existing `const` contract throughout a selected Structure
+tree, including explicit descriptions, positional fields and every repeated
+occurrence. Coverage is not limited to `[0]` or to a Consumer's used paths.
+
+    immutable: <Structure construction>
+        qualifies the newly constructed Structure and its nested tree before
+        publishing the construction result. It does not move runtime
+        construction to translation time.
+
+    RuntimeImmutable: value
+        qualifies an existing Structure tree, retaining its identity. It does
+        not clone the tree or replace the caller's reference with a copy.
+
+Both receivers use the same checked boundary:
+
+1. A contained Structure branch is traversed only when its `node` points back
+   to the parent from which that branch is reached. The traversed containment
+   tree must be well formed (19.29.3); do not follow `node` upward or repair it.
+2. Other references may target only already immutable objects. Such a reference
+   is a permitted terminal boundary: do not traverse or requalify its referent.
+   Constness of one reference variable is not proof of referent immutability.
+   This condition is checked against the state before qualification, not against
+   changes made earlier in the walk. A mutable or unverified outside referent,
+   or malformed containment, fails the operation.
+3. Primitive cells, method records and Array descriptors are classified by their
+   address domains; they are not additional containment branches. Immutable
+   primitive/method domains are valid leaves. An Array reference also obeys
+   point 2: its descriptor has no `node`, and these receivers do not silently
+   freeze mutable backing reached through that reference. Const Array
+   construction and protection of its descriptor/elements follow 6.5 and 9.1.1.
+   Never traverse or freeze a service pool merely because a value belongs to it.
+
+The complete preflight precedes any qualification. Invalid input follows the
+receiver's declared `throws` path, not `assert`: no qualification is added and
+no successful construction result is published. Do not silently skip a
+mutable outside branch, copy it, retarget links or widen the selected tree.
+Once preflight succeeds, apply all required qualifications; a failed operation
+must not leave partial const coverage. `RuntimeImmutable` on an already
+qualifying immutable tree leaves it unchanged.
+
+This no-partial-action rule concerns the receiver's qualification and result
+publication. It does not roll back prior argument/initializer effects or the
+ordinary checkpoint before a call (21.6). It introduces no graph transaction.
+Runtime metadata/enforcement is a backend choice, not a new Lmx header field,
+attached type descriptor or Namespace.
+
+Protection applies through all aliases of the qualified storage. A write known
+to violate it is rejected at translation; runtime-selected writes must enforce
+the same const contract. Calling a method remains allowed, but neither explicit
+paths nor own-field C caches/flushes may mutate protected fields (21.5–21.6).
+Formal/dynamic argument copies may still change locally without write-back;
+rebinding such a local reference does not mutate the protected object. A merge
+or other explicit construction may create a new value under its own explicit
+qualification contract; it cannot mutate or thaw its immutable sources (19.17).
+Immutable handle bits do not freeze or keep alive a foreign resource.
+
+Example — every field of `limits`, including `nested\maximum`, is protected:
+
+    immutable:
+        (): limits
+            int: minimum 0
+            (): nested
+                int: maximum 100
+            end: nested
+        end: limits
+    end: immutable
+
+For an existing tree:
+
+    RuntimeImmutable: settings
+
+If `settings` references a mutable Structure whose `node` does not point back
+to the corresponding parent, this call throws and leaves the tree's previous
+qualification unchanged, including fields inspected before that reference.
+If that referent is already immutable, the reference is allowed and is not
+followed. The field holding it becomes const along with the other fields.
+
+These are specified receivers for the second translator. The existing
+const-element rejection example in 2.5.3 illustrates their write protection;
+it is not evidence that either new receiver is implemented in the hosted
+bootstrap or in the separate direct-C99 Translator-L1.
+
+
 9.2. Type Constructors
 
 A form such as:
@@ -8408,6 +8503,8 @@ prelude is not required or adopted by this excerpt.
     method/requires.method     legacy bootstrap Tables; not normative implements input
     implements                 source/translator compatibility over known Consumer requirements (2.1)
     RuntimeImplements          separate available-current-graph check; Message validation is the first intended application (2.1)
+    immutable                  const throughout a newly constructed Structure tree, with checked immutable reference boundaries (9.1.2)
+    RuntimeImmutable           the same qualification for an existing tree; preflight before any change, declared throws on failure (9.1.2)
     message/operation          ordinary Lmx Structures/explicit description data in L2/L3; no current generic receiver heads
 
 
@@ -11237,6 +11334,11 @@ lifetime ABI, never by descriptor or per-name-struct rules.
 
 19.29.9. Immutable Values and Interning
 
+`immutable` and `RuntimeImmutable` qualify Structure trees under 9.1.2. Their
+checked traversal stops at already immutable outside referents; mutable outside
+references fail before any qualification. Neither receiver implicitly interns
+or copies an existing value, or authorizes cross-Message publication.
+
 High-level payloads may be immutable by explicit operation/domain policy. A
 Structure leaf may point into an immutable address domain instead of owning
 separately mutable storage.
@@ -12860,6 +12962,12 @@ program must assign an own field or use an explicit graph path. Generated C may
 use further service temporaries for address
 classification, child lookup, dirty state, bounds checks and outcome
 propagation; those temporaries are not additional source entities.
+
+Const qualification of that backing, including a successful `RuntimeImmutable`
+while this activation is suspended in a call, remains binding on the cache.
+Neither a subsequent own-local assignment nor a checkpoint may bypass it. This
+does not reload the caller or reclassify an own field as a dynamic input; an
+activation-only copy with no write-back target remains a separate local value.
 
 At entry, each own working local records and roots the exact Lmx occurrence from
 which it was loaded. Normal payload assignment uses that identity. If nested

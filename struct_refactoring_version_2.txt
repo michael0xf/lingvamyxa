@@ -1874,6 +1874,14 @@ may run. Arena reclamation is a separate lifecycle step, not permission to
 resume. The host OS worker is not forcibly terminated and external effects are
 not rolled back. A caught `throw` is not an `assert` violation.
 
+`immutable` qualifies a newly constructed Structure tree; `RuntimeImmutable`
+qualifies an existing one without copying (main specification 9.1.2). Traverse
+contained branches only with `child.node == parent`; other references must
+already denote immutable objects and are not followed. Full preflight precedes
+qualification; rejection uses declared `throws` and leaves no partial freeze.
+Protection binds all aliases and own-field caches, not independent activation-
+local copies. It stabilizes data/descriptions, not the Consumer's behavior.
+
 RU
 
 Есть два предиката (Lingvamyxa_spec.txt, 2.1): source/translator
@@ -1917,6 +1925,15 @@ signature не входит. По нетерминальным uses провер
 запрещены. Освобождение арены — отдельный шаг, не разрешение продолжить Message.
 Рабочий поток ОС не прибивается, внешние эффекты не откатываются. Пойманный
 `throw` не равнозначен провалу `assert`.
+
+`immutable` квалифицирует новое дерево Structure при построении,
+`RuntimeImmutable` — существующее, без копирования (основная спецификация §9.1.2).
+Вложенные ветки обходятся только при `child\node = parent`; прочие ссылки
+должны вести на уже immutable-объекты и дальше не обходятся. Полная проверка
+предшествует квалификации: отказ — через объявленный `throws`, без частичной
+заморозки. Защита действует через все алиасы и кэши own-полей, но не запрещает
+менять независимые activation-local копии. Данные и описания стабилизируются;
+правильность действий потребителя из этого не следует.
 
 
 6.8. Invocation
