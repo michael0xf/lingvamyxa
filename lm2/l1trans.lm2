@@ -1792,6 +1792,10 @@ fn: l1_frame_is_repeatable (const: (LmP0Frame: frame)) int
         if: frame\body = 0 || frame\body\first_field = 0
             return: 0
         return: 1
+    if: l1_text_eq(frame\head, "[]")
+        if: frame\body = 0 || frame\body\first_field = 0
+            return: 0
+        return: 1
     if: l1_is_type_name(frame\head) = 0
         return: 0
     field: 0
@@ -1892,6 +1896,75 @@ fn: l1_emit_repeat_pointer (FILE: out; const: (LmP0Frame: template); const: (LmP
     ---
 return: l1_write_cstr(out, ";\n")
 
+fn: l1_emit_repeat_array (FILE: out; const: (LmP0Frame: template); const: (LmP0Structure: body); const: @(char path); const: (LmP0Node: node)) int
+    LmP0Field: tfield
+    LmP0Field: nfield
+    LmP0Field: efield
+    const: LmP0Node: type_node
+    const: LmP0Node: name_node
+    tfield: 0
+    if: template != 0 && template\body != 0
+        tfield: template\body\first_field
+    ---
+    while: tfield != 0 && l1_node_ignored(tfield\value)
+        tfield: tfield\next
+    nfield: 0
+    if: body != 0
+        nfield: body\first_field
+    ---
+    while: nfield != 0 && l1_node_ignored(nfield\value)
+        nfield: nfield\next
+    if: template = 0 || tfield = 0 || tfield\value = 0 || nfield = 0 || nfield\value = 0 || nfield\value\kind != c.LM_P0_NODE_ATOM
+        return: l1_error(path, node, "repeated [] declaration expects a variable name")
+    type_node: tfield\value
+    if: nfield\next != 0 && nfield\value\kind = c.LM_P0_NODE_ATOM && l1_is_type_name(nfield\value\as\atom)
+        type_node: nfield\value
+        nfield: nfield\next
+        while: nfield != 0 && l1_node_ignored(nfield\value)
+            nfield: nfield\next
+        if: nfield = 0 || nfield\value = 0 || nfield\value\kind != c.LM_P0_NODE_ATOM
+            return: l1_error(path, node, "repeated [] declaration override expects a variable name")
+    ---
+    name_node: nfield\value
+    efield: nfield\next
+    while: efield != 0 && l1_node_ignored(efield\value)
+        efield: efield\next
+    if: efield = 0 || efield\value = 0 || efield\value\kind != c.LM_P0_NODE_ATOM || l1_text_eq(efield\value\as\atom, "[]")
+        return: l1_error(path, node, "repeated [] declaration expects an extent")
+    if: l1_write_cstr(out, "    ") != 0
+        return: 1
+    if: l1_emit_type_token(out, type_node, path) != 0
+        return: 1
+    if: l1_write_cstr(out, " ") != 0
+        return: 1
+    if: l1_write_ident(out, name_node\as\atom) != 0
+        return: 1
+    if: l1_write_cstr(out, "[") != 0
+        return: 1
+    if: l1_write_text(out, efield\value\as\atom) != 0
+        return: 1
+    if: l1_write_cstr(out, "]") != 0
+        return: 1
+    efield: efield\next
+    while: efield != 0 && l1_node_ignored(efield\value)
+        efield: efield\next
+    if: efield != 0
+        if: l1_write_cstr(out, " = {") != 0
+            return: 1
+        if: efield\value != 0 && efield\value\kind = c.LM_P0_NODE_STRUCTURE && (efield\next = 0 || l1_node_ignored(efield\next\value))
+            if: l1_emit_inits(out, efield\value\as\structure\first_field, path) != 0
+                return: 1
+            ---
+        else:
+            if: l1_emit_inits(out, efield, path) != 0
+                return: 1
+            ---
+        ---
+        if: l1_write_cstr(out, "}") != 0
+            return: 1
+    ---
+return: l1_write_cstr(out, ";\n")
+
 fn: l1_emit_block (FILE: out; const: (LmP0Structure: body); const: @(char path)) int
     LmP0Field: field
     const: LmP0Node: node
@@ -1923,8 +1996,14 @@ fn: l1_emit_block (FILE: out; const: (LmP0Structure: body); const: @(char path))
                         return: 1
                     ---
                 else:
-                    if: l1_emit_repeat_scalar(out, current\head, node\as\structure, path, node) != 0
-                        return: 1
+                    if: l1_text_eq(current\head, "[]")
+                        if: l1_emit_repeat_array(out, current, node\as\structure, path, node) != 0
+                            return: 1
+                        ---
+                    else:
+                        if: l1_emit_repeat_scalar(out, current\head, node\as\structure, path, node) != 0
+                            return: 1
+                        ---
                     ---
                 ---
             else:

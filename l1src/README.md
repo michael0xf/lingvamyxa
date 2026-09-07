@@ -179,7 +179,7 @@ negatives. The ported hash helper has independent full 64-bit forward/reverse
 oracles; an `i64 < 0` check detects accidental unsigned mapping. Results are
 in `logs/<gen>/scalar.log`; this suite is not called by `run_gen.ps1`.
 
-`run_decl_repeat.ps1` checks four positive fixtures and two reset diagnostics
+`run_decl_repeat.ps1` checks eight positive fixtures and four diagnostics
 on gen0/gen2. Established short declarations emit separate C declarations:
 
 ```text
@@ -187,13 +187,19 @@ int: x, 5; y, 10; z, 15
 int(a, 1) (b, 2) (c, 3)
 @: int px 0; py 0; char pc 0
 @@: char ppa 0; ppb 0
+[]: int arr 3 1 2 3; other 3 4 5 6
+[]: int xs 2 (1, 2); ys 2 (4, 5)
 ```
 
-Repeat state belongs to each body list; an explicit pointer type override
-affects only that item. Ordinary assignments and `%`-disabled wrappers reset
-the template. The suite checks values, pointer types and nested if/while bodies;
-errors must not publish C. Array repetition is not covered. This standalone
-suite writes `logs/<gen>/decl_repeat.log` and is not called by `run_gen.ps1`.
+Repeat state belongs to each body list; an explicit pointer or array element
+type override affects only that item. Each repeated array has its own extent
+and initializer; grouped initializers behave as in the first declaration.
+Ordinary assignments and `%`-disabled wrappers reset the template. Tests check
+values, types, extents, independent mutation and nested bodies; reset and
+missing-extent errors must not publish C. Array repetition currently covers
+one-dimensional `[]:` only; existing multidimensional arrays are unchanged.
+This standalone suite writes `logs/<gen>/decl_repeat.log` and is not called
+by `run_gen.ps1`.
 
 `run_ident.ps1` checks four fixtures on gen0/gen2: simple C-compatible names
 with or without outer backticks denote the same C identifier in declarations,

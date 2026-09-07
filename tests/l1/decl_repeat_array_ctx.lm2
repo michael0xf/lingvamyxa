@@ -1,0 +1,15 @@
+L1:
+    external:
+        fn: main () int
+            []: int outer 2 1 2
+            if: outer[0] = 1
+                []: int a 2 3 4; b 2 5 6
+                if: a[0] != 3 || b[1] != 6
+                    return: 1
+            end: if
+            if: outer[1] != 2
+                return: 2
+            return: 0
+        end: main
+    end: external
+end: L1

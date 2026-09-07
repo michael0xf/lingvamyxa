@@ -1020,12 +1020,14 @@ Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
     signed negatives (including an `i64 < 0` check), and a ported hash
     helper checked against independent full 64-bit forward/reverse values.
     This is direct C99 spelling, not primitive-pool or conversion semantics;
-  - repeated heads in supported scalar and @/@@ declarations: four
+  - repeated heads in supported scalar, @/@@ and one-dimensional [] declarations: eight
     `tests/l1/decl_repeat_*.lm2` fixtures on gen0/gen2 check semicolon and
-    parenthesized forms, pointer depth/type overrides and if/while body lists.
-    Each list has its own repeat state; pointer type overrides affect only
-    that item. Ordinary assignments and %-disabled wrappers reset the template;
-    both reset diagnostics must leave no output C. Array repetition is not covered;
+    parenthesized forms, pointer depth, item-only type overrides, body lists,
+    own array extents/initializers and independent mutation. Grouped array
+    initializers behave as in the first declaration. Each list has its own
+    repeat state; ordinary assignments and %-disabled wrappers reset it.
+    Four reset/missing-extent diagnostics must leave no output C. Existing
+    multidimensional arrays are unchanged; their repetition is not covered;
   - quoted simple C-compatible identifiers: four `tests/l1/ident_*.lm2`
     fixtures on gen0/gen2 cover declarations, parameters, calls, references,
     arrays and scalar/pointer repeats. Only outer name backticks are removed;

@@ -81,6 +81,33 @@ if ($ctxT.IndexOf("int a = 1") -lt 0 -or $ctxT.IndexOf("int b = 2") -lt 0) { thr
 if ($ctxT.IndexOf("int c = 3") -lt 0 -or $ctxT.IndexOf("int d = 4") -lt 0) { throw "missing while-body repeats" }
 Build-Run "decl_repeat_ctx" $ctxC 0
 
+$arrC = Translate "decl_repeat_array"
+$arrT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $arrC))
+if ($arrT.IndexOf("int arr[3] = {1, 2, 3}") -lt 0) { throw "missing int arr[3]" }
+if ($arrT.IndexOf("int other[3] = {4, 5, 6}") -lt 0) { throw "missing inherited int other[3]" }
+if ($arrT.IndexOf("int xs[2] = {1, 2}") -lt 0) { throw "missing unwrapped int xs[2]" }
+if ($arrT.IndexOf("int ys[2] = {4, 5}") -lt 0) { throw "missing unwrapped inherited int ys[2]" }
+if ($arrT.IndexOf("{{4, 5}}") -ge 0) { throw "nested braces on repeated initializer" }
+Build-Run "decl_repeat_array" $arrC 0
+
+$extC = Translate "decl_repeat_array_ext"
+$extT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $extC))
+if ($extT.IndexOf("int a[2] = {1, 2}") -lt 0) { throw "missing int a[2]" }
+if ($extT.IndexOf("int b[4] = {9, 8, 7, 6}") -lt 0) { throw "missing int b[4] own initializer" }
+if ($extT.IndexOf("int c[3];") -lt 0) { throw "missing int c[3] without inherited initializer" }
+Build-Run "decl_repeat_array_ext" $extC 0
+
+$ovC = Translate "decl_repeat_array_override"
+$ovT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $ovC))
+if ($ovT.IndexOf("int arr[3]") -lt 0) { throw "missing int arr" }
+if ($ovT.IndexOf("char letters[2]") -lt 0) { throw "missing char override" }
+if ($ovT.IndexOf("int other[2]") -lt 0) { throw "override leaked into next template" }
+if ($ovT.IndexOf("char other") -ge 0) { throw "other became char" }
+Build-Run "decl_repeat_array_override" $ovC 0
+
+$actxC = Translate "decl_repeat_array_ctx"
+Build-Run "decl_repeat_array_ctx" $actxC 0
+
 function Negative([string]$name, [string]$diag) {
     $src = "tests\l1\$name.lm2"
     $cpath = Join-Path $obj ($name + ".c")
@@ -97,6 +124,8 @@ function Negative([string]$name, [string]$diag) {
 
 Negative "invalid_decl_repeat_reset" "unsupported statement atom"
 Negative "invalid_decl_repeat_disabled" "unsupported statement atom"
+Negative "invalid_decl_repeat_array_extent" "repeated [] declaration expects an extent"
+Negative "invalid_decl_repeat_array_brack" "repeated [] declaration expects an extent"
 
 Write-R "decl_repeat ok"
 Write-Output "l1trans $gen decl_repeat ok"
