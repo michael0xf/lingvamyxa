@@ -6714,17 +6714,21 @@ Therefore the examples mean:
         or text values according to the explicitly selected operation/profile.
 
     const: char: []: s "hello" "world!"
-        `s` is an immutable array-domain Lmx reference whose elements are
-        character/text values. Its exact storage and lifetime follow the
-        unresolved Array/lifetime ABI.
+        `s` is an Lmx field holding a reference to an Array descriptor in the
+        typed service pool for the used character/element type. The descriptor
+        is `{len, data}` (6.5); `data` points to a contiguous block of
+        character/text cells. Const qualifies that field, descriptor and
+        backing; it does not make the array an Lmx node.
 
     const: String: (): s "hello" "world!"
         `s` is a reference to an immutable Lmx Structure whose fields
         are references to immutable Lingvamyxa String values.
 
     const: String: []: s "hello" "world!"
-        `s` is an immutable logical array whose elements denote immutable
-        Lingvamyxa String values; physical element representation is unresolved.
+        `s` is an Lmx field holding a reference to an Array descriptor whose
+        contiguous backing stores references to immutable Lingvamyxa String
+        values. String encoding remains profile-defined; the Array ABI is the
+        two-value descriptor of 6.5, not an open layout.
 
 `char` and `String` are intentionally different operations/contracts. `char`
 selects a primitive/element payload domain. `String` has higher-level immutable text behavior
@@ -7068,8 +7072,9 @@ address-of-address.
 
 An Lmx child occurrence (`User: u`) *is* the source reference. It is not a C
 pointer category that "starts at depth 1". `@: User slot` is an L2 address of a
-machine slot that stores that Lmx reference. The same holds for an array-domain
-Lmx occurrence. Explicit `@ⁿ` adds layers on those machine slots only.
+machine slot that stores that Lmx reference. The same holds for an Lmx field
+that stores an Array descriptor reference (6.5). Explicit `@ⁿ` adds layers on
+those machine slots only.
 
 Do not collapse `FILE` and `User`. `FILE` as authored in section 2.2.2.4 is a
 primitive opaque cell (a word whose description merged `Cell` with opaque
@@ -7138,7 +7143,7 @@ headers. Returning or passing a resolved occurrence preserves the same Lmx
 reference.
 
 L2 `@ⁿ` depth applies to typed machine-address slots only (section 11.2), never
-to an Lmx Structure, callable or array-domain occurrence as a source value. An
+to an Lmx Structure, callable or Array-descriptor reference as a source value. An
 imported ABI description may guide an explicit raw L2 projection but cannot
 replace generic Structure traversal or create a per-source-name layout.
 
