@@ -12,7 +12,7 @@ to C99.
 | --- | --- |
 | Source syntax, strings, comments, normalization | 3–6, 15 |
 | Structure ontology, address-derived types, merge, compatibility | 2 |
-| Typing: guarantees, strictness and common objections | 2.5 |
+| Typing: guarantees, strictness and obtaining them | 2.5 |
 | Array descriptor pools and contiguous element storage | 6.5 |
 | Method definitions, return and explicit field access | 7–14 |
 | Control, exceptions and receiver families | 19.1–19.27 |
@@ -1080,7 +1080,7 @@ at consumption edges, rather than requiring a complete nominal contract or
 giving up all checking. A positive result covers the inspected requirements,
 not every possible future use. This does not relax an inspected path or call
 signature: missing required paths and mismatched required signatures fail.
-Section 2.5 explains the guarantees, failure boundaries and common objections.
+Section 2.5 explains the guarantees, failure boundaries and how to obtain them.
 
 There are two distinct three-argument predicates, neither requiring a runtime
 Namespace or an implicit per-Structure type descriptor:
@@ -1761,105 +1761,142 @@ not implemented recursive freezing of arbitrary graphs in the replacement core.
 or transaction guarantees. Where partial publication is unacceptable, define an
 explicit validation/publication or recovery protocol (2.5.2).
 
-2.5.4. Common Questions and Objections
+2.5.4. Obtaining a Given Guarantee
 
-1. "Where are generics?"
-   Structures are both ordinary data and material for explicit descriptions and
-   composition. Reuse is checked against Consumer's used tree rather than a
-   separate nominal interface. This is the model's generic mechanism (2.1.1),
-   not a claim to provide every property of parametric polymorphism.
+Most questions about this model reduce to one practical question: how do I write
+something so that the property I care about is actually checked? A guarantee here
+follows from where the author puts a distinction, not from a global mode. The same
+is true elsewhere — a C `typedef` documents an alias while a wrapping `struct`
+enforces one — but here the lever is which part of a Structure a Consumer must
+traverse.
 
-2. "How is rebinding different from mutation without assignment `=`?"
-   Bare `x: value` updates an activation value: own graph-backed locals become
-   dirty until a checkpoint; formal/result/dynamic copies stay local. Explicit
-   `p\x: value` or `a[i]: value` writes the selected referent. Neither bare-name
-   assignment nor ordinary field replacement implicitly appends an occurrence
-   (14.1, 20.4, 21.3–21.6).
+The entries below are recipes: what to write when a property must hold, what does
+not establish it, and where the rule lives.
 
-3. "Can an alias change the same object?"
-   Yes, for mutable referents inside one Message. Passing a Structure/Array
-   copies the reference, not the referent. Use explicit `copy:` where its
-   contract supplies independence, or genuinely immutable values when mutation
-   is unwanted; copying is not automatic (19.29.9–19.29.11, 21.4).
+Reuse and coverage
 
-4. "Can compatibility pass although the called method cannot obtain `x`?"
-   Yes, compatibility is not the entire call-admission condition. Suppose A and
-   B expose the same `m`, whose body uses bare `x`; Consumer only invokes `m`.
-   The used-callable check can pass, but the call must still supply `x` from
-   caller locals, inherited inputs or that callable's immediate `node\x`.
-   If none exists, admission fails. Known cases are rejected during translation;
-   a runtime-selected target needs the corresponding guard (21.3, 21.9).
-   This does not add callee-body expansion to `uses`.
+  Reusing one Consumer across many shapes of data
+    Write the Consumer against the paths it actually needs. Any Structure that
+    provides those paths, with admitted leaves and the exact signature at every
+    invoked callable, is accepted; Structures are both ordinary data and material
+    for explicit descriptions and composition, so the used tree is the contract.
+    Does not exist: a separate type-parameter declaration to instantiate. That
+    used-tree check is this model's generic mechanism, not a claim to provide
+    every property of parametric polymorphism. (2.1.1)
 
-5. "Does a thin leaf check almost nothing?"
-   A read/transported word has the limited leaf contract of 2.2.3; unused data
-   imposes no requirement. Traversing a description requires its used paths,
-   but its terminal scalars may still be thin. Presence of `x\width` does not
-   prove `width = 32`. Validate the intended constraint, at build time when
-   2.5.3 applies.
+  Knowing which check applies at a given site
+    Source `implements` runs at translation over the Consumer requirements known
+    there. `RuntimeImplements` walks the available current graph, with Message
+    validation as its first intended application. Actual typed-call admission is
+    separate from both and holds at every real call.
+    Does not hold: that one of these subsumes another, or that a successful check
+    freezes either operand. They have different inputs and coverage, and unknown
+    coverage is reported separately from known thin consumption. (2.5.1, 2.1.3)
 
-6. "Do broad converter tables make all values equivalent?"
-   No. Available keyed conversions widen the admitted word edges, not the set
-   of required structural paths or exact callable signatures. No profile must
-   supply all pairs, and neither predicate executes a converter (2.2.4).
+Values, names and mutation
 
-7. "Can narrowing silently wrap?"
-   Not under 2.2.4: with an available converter, `u16(255) -> u8` is admitted;
-   `u16(256) -> u8` is a range error, not zero. In-range rounding/precision loss
-   is a separate numeric-profile policy, not settled by a range check.
+  Distinguishing one kind of value from another
+    Encode the distinction in a path name the Consumer uses. In
+    `Distance: Meter: 1`, a Consumer following `d\Meter` requires that path, so a
+    Structure exposing only `Foot` does not satisfy it.
+    Does not establish it: naming an outer Structure `Meter`, storing
+    `unit: "meter"`, or adding `const`. Path presence never compares the value at
+    a leaf. Where the values are build-time available, 2.5.3 permits exact
+    comparison on const trees; otherwise require an explicit validator.
+    (2.1, 2.2.3)
 
-8. "What distinguishes meters from feet?"
-   What is encoded in a used path name is distinguished; what is encoded only
-   in a leaf value is not. With `Distance: Meter: 1`, a Consumer that follows
-   `d\Meter` requires the path `Meter`, so `Foot: 1` does not satisfy it. By
-   contrast, merely naming an outer Structure `Meter`, storing `unit: "meter"`,
-   or adding `const` does not compare that value with another leaf. Encode the
-   unit in a path the Consumer uses, or require an explicit validator; when the
-   values are build-time available, 2.5.3 also permits exact comparison on
-   const trees.
+  Constraining a scalar leaf
+    State the constraint and validate it. Presence of `x\width` does not prove
+    `width = 32`; traversing a description requires its used paths, but its
+    terminal scalars may still be thin. Validate at build time when 2.5.3
+    applies. (2.2.3, 2.5.3)
 
-9. "Can an opaque callable be transported without checking its `sig`?"
-   Yes; transport need not know a future call's requirements. Every actual typed
-   call still requires the exact signature and dynamic inputs before invoking
-   the selected entry, even if a previous partial check never inspected it.
-   Equal signatures do not imply equal behavior (2.2.3.1, 21.9).
+  Making a write visible to other holders of the value
+    Write through an explicit path: `p\x: value` or `a[i]: value` writes the
+    selected referent.
+    Does not do it: bare `x: value`, which updates an activation value — own
+    graph-backed locals become dirty until a checkpoint, and formal/result/
+    dynamic copies stay local. Neither form implicitly appends an occurrence.
+    (14.1, 20.4, 21.3–21.6)
 
-10. "Can changing a method body break callers?"
-    Adding a free dynamic name can change `DynRequired` and thus `sig`.
-    Known callers must be revalidated; runtime-selected callables remain subject
-    to call admission. An immutable method record does not make every occurrence
-    that refers to it immutable, nor prohibit explicit compatible replacement.
-    A same-signature behavioral change remains a program correctness concern.
+  Independence from another holder's mutation
+    Use `copy:` where its contract supplies independence, or use genuinely
+    immutable values when mutation is unwanted.
+    Does not do it: passing a Structure or Array, which copies the reference and
+    not the referent. Inside one Message, an alias can change a mutable referent.
+    (19.29.9–19.29.11, 21.4)
 
-11. "Why does a later merge part not override the first?"
-    `merge` constructs a new tree and preserves forward occurrence order; it
-    does not mutate its operands or implement last-wins inheritance (2.3).
-    If the result's `read` occurrences are A then B:
+Callables and calls
+
+  Knowing a call will be admitted
+    Rely on both conditions. Compatibility covers the used paths and the exact
+    signature of an invoked callable; the call must additionally supply every
+    dynamic input from caller locals, inherited inputs or that callable's
+    immediate `node\x`. Suppose A and B expose the same `m`, whose body uses bare
+    `x`, and Consumer only invokes `m`: the used-callable check can pass while
+    admission still fails. Known cases are rejected during translation; a
+    runtime-selected target needs the corresponding guard. This does not add
+    callee-body expansion to `uses`. (21.3, 21.9)
+
+  Checking a callable that is only transported
+    Expect the check at the call, not at the transport. Transport need not know a
+    future call's requirements; every actual typed call still requires the exact
+    signature and dynamic inputs before invoking the selected entry, even if a
+    previous partial check never inspected it. Equal signatures do not imply equal
+    behavior. (2.2.3.1, 21.9)
+
+  Changing a method body without breaking callers
+    Treat the free dynamic names of a body as part of its interface. Adding one
+    changes `DynRequired` and therefore `sig`; known callers must be revalidated,
+    and runtime-selected callables remain subject to call admission. An immutable
+    method record does not make every occurrence referring to it immutable, nor
+    does it prohibit explicit compatible replacement. A same-signature behavioral
+    change remains a program correctness concern. (21.8, 21.9)
+
+Composition
+
+  Making your part of a composition the one that is read
+    Select it explicitly or compose the intended fields. `merge` constructs a new
+    tree and preserves forward occurrence order; it does not mutate its operands
+    and does not implement last-wins inheritance. If the result's `read`
+    occurrences are A then B:
 
         result\read == result\[0]read    selects A
         result\[1]read                  selects B
 
-    Select B explicitly or compose the intended fields. The diagnostic in
-    2.1.3 can expose an unintended unqualified choice, including after an import
-    changes. Source parts need not be adjacent or statically available.
+    The diagnostic in 2.1.3 can expose an unintended unqualified choice, including
+    after an import changes. Source parts need not be adjacent or statically
+    available. (2.3, 2.1.3)
 
-12. "Is Structure extension impossible?"
-    No blanket ban follows from this model. There is no implicit nominal class
-    extension or last-wins override. Composition creates a new value; an explicit
-    receiver may append, replace, remove or move occurrences under its own
-    contract (21.11). Runtime structural lookup can observe such changes.
-    Compatibility must not assume that all graphs are permanently frozen.
+  Changing an existing Structure
+    Use an explicit receiver, which may append, replace, remove or move
+    occurrences under its own contract; runtime structural lookup can observe such
+    changes. Ordinary composition instead creates a new value. There is no
+    implicit nominal class extension and no last-wins override, and compatibility
+    must not assume that all graphs are permanently frozen. (21.11)
 
-13. "Do arenas or `const` solve external-handle ownership?"
-    No. A thin `FILE`-like leaf does not prove validity, authority or single close;
-    immutable handle bits do not keep the external resource alive. Checked
-    wrappers and explicit resource/cleanup contracts are needed. L3 has no
-    ordinary `own:`/`borrow:`/`move:` operators; `copy:` does not invent a foreign
-    resource's duplication policy (19.29.10–19.29.11).
+Conversions
 
-14. "Are two predicates just two names for a contradiction?"
-    No: the predicates have different inputs and coverage; actual-call admission
-    is separate (2.5.1).
+  Relying on a numeric conversion
+    Use an available keyed conversion and expect its destination-range check:
+    `u16(255) -> u8` is admitted, `u16(256) -> u8` is a range error, not zero.
+    In-range rounding and precision loss are a separate numeric-profile policy and
+    are not settled by a range check. (2.2.4)
+
+  Understanding what a broad converter table costs
+    Available keyed conversions widen the admitted word edges only. They do not
+    change the set of required structural paths or exact callable signatures, no
+    profile must supply all pairs, and neither predicate executes a converter.
+    (2.2.4)
+
+External resources
+
+  Establishing that a foreign handle is valid
+    Use checked wrappers and explicit resource/cleanup contracts. A thin
+    `FILE`-like leaf does not prove validity, authority or single close, and
+    immutable handle bits do not keep an external resource alive. L3 has no
+    ordinary `own:`/`borrow:`/`move:` operators, and `copy:` does not invent a
+    foreign resource's duplication policy. (19.29.10–19.29.11)
 
 2.5.5. Open Choices and Implementation Status
 
