@@ -1,0 +1,15 @@
+L1:
+    double: g 1.5
+    external:
+        fn: main () int
+            ulong: sum 0
+            for: ulong(i, 1) (i <= 3) i++
+                sum: sum + i
+            if: g != 1.5
+                return: 1
+            if: sum != 6
+                return: 2
+            return: 0
+        end: main
+    end: external
+end: L1

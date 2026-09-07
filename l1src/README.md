@@ -36,7 +36,7 @@ gen0 seed with the old stage-0 `trans.lm0`. It is not the L1 source.
 ## Prerequisites
 
 * `gcc` reachable on `PATH`. New-generation runners (`run_gen` / `run_smoke` /
-  `run_parser` / `run_expr` / `run_ifdef` / `run_define` / `build_l1`)
+  `run_parser` / `run_expr` / `run_ifdef` / `run_define` / `run_scalar` / `build_l1`)
   invoke it with `-std=c99 -Wall -Wextra -Wpedantic
   -I .` and four hard guards: `-Werror=incompatible-pointer-types
   -Werror=discarded-qualifiers -Werror=implicit-function-declaration
@@ -113,6 +113,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_parser.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_expr.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_ifdef.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_define.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_scalar.ps1
 ```
 
 All default to `gen0`; set `L1_GEN` (for example `gen2`) to pick another.
@@ -164,6 +165,13 @@ definition, including zero. String bytes/NUL, arithmetic, alias and character
 values are checked at execution; `=` and `(void)` only as emitted tokens.
 Function-like macros, hosted table commands and function-body placement are
 outside this checkpoint. Results are in `logs/<gen>/define.log`.
+
+`run_scalar.ps1` checks five fixtures on gen0/gen2 for `float`, `double`
+and `ulong` (`unsigned long` in C). Existing type positions include
+parameters/returns, const/pointers/arrays/casts, unit declarations and
+`for` initializers. Executable checks cover exact floating values, full
+`snprintf` output/NUL and `strtoul` consumption. This standalone suite
+records `logs/<gen>/scalar.log`; it is not called by `run_gen.ps1`.
 
 ## Where output goes
 
