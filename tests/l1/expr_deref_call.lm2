@@ -1,0 +1,21 @@
+L1:
+    int: hits 0
+    @: int gp 0
+
+    fn: getp () @: int
+        hits: hits + 1
+        return: gp
+    end: getp
+
+    external:
+        fn: main () int
+            int: value 4
+            gp: @ value
+            if: \getp() != 4
+                return: 1
+            if: hits != 1
+                return: 2
+            return: 0
+        end: main
+    end: external
+end: L1

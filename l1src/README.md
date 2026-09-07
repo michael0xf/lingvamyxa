@@ -118,11 +118,14 @@ against `printTree.lm0.exe` on 16 positive fixtures, then requires exit 1
 from both on 5 malformed fixtures and exit 1 plus a `P0 parse error`
 diagnostic on a missing file.
 
-`run_expr.ps1` is a separate eight-case regression suite, verified on gen2;
-`run_gen.ps1` does not invoke it automatically. It checks repeated C output,
-strict compilation and execution of nested calls, index/field arguments,
-unary/binary operators, parentheses and both cast spellings. The bounded
-cast regression distinguishes 512 from the formerly misgrouped result 384.
+`run_expr.ps1` has 13 positive fixtures and one diagnostic case, verified on
+gen0 and gen2; `run_gen.ps1` does not invoke it automatically. It checks
+repeated C output, strict compilation and execution of nested calls,
+index/field arguments, unary/binary operators, parentheses, both cast
+spellings, and prefix dereference in reads, assignments and mixed chains.
+The bounded cast regression distinguishes 512 from the formerly misgrouped
+result 384. With `*p == 4`, `expr_deref_mix.lm2` checks that
+`add(\ @ \ p + 1, 1)` emits `add(*(&*(p)) + 1, 1)` and returns 6.
 
 ## Where output goes
 
@@ -150,7 +153,7 @@ build; the `.lm2` files in this directory are the source of truth.
 Working today, exercised by the runners above: the ported P0 parser, `own`,
 `parser_text`, `printTree`, `make` and `l1trans` itself; a real
 gen1 → gen2 → gen3 fixed point on identical generated C; the four strict C99
-guards passing; the gen2 compiler smoke and expression suites; and the
+guards passing; gen2 compiler smoke and gen0/gen2 expression suites; and the
 parser oracle comparison described above.
 
 Not claimed: full coverage of the L1 contract in

@@ -28,7 +28,19 @@ $cases = @(
     @{ Name = "expr_parens"; Has = "add((1 + 2) * 3, 1 + 2 * 3)" },
     @{ Name = "expr_cast"; Has = "(uchar)259" },
     @{ Name = "expr_index_call"; Has = "xs[pick(1)]" },
-    @{ Name = "expr_cast_bound"; Has = "2 * ((uchar)128 + 128)" }
+    @{ Name = "expr_cast_bound"; Has = "2 * ((uchar)128 + 128)" },
+    @{ Name = "expr_deref_assign"; Has = "*(slot) = 1" },
+    @{ Name = "expr_deref_read"; Has = "* p + 1" },
+    @{ Name = "expr_deref_arg"; Has = "add(*(p), 1)" },
+    @{ Name = "expr_deref_call"; Has = "*(getp())" },
+    @{ Name = "expr_deref_mix"; Has = @(
+        "add(*(getp()), 1)",
+        "! * p",
+        "4 != * p",
+        "add(*(&value), 1)",
+        "add(*(&*(p)), 1)",
+        "add(*(&*(p)) + 1, 1)"
+    )}
 )
 
 foreach ($c in $cases) {
@@ -49,8 +61,11 @@ foreach ($c in $cases) {
     $h2 = (Get-FileHash -LiteralPath $cpathB).Hash
     if ($h1 -ne $h2) { throw "C differ $($c.Name)" }
     $ctext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $cpath))
-    if ($ctext.IndexOf($c.Has) -lt 0) { throw "missing '$($c.Has)' in $cpath" }
-    Write-E "C $($c.Name) sha256=$h1 has=$($c.Has)"
+    $need = @($c.Has)
+    foreach ($h in $need) {
+        if ($ctext.IndexOf($h) -lt 0) { throw "missing '$h' in $cpath" }
+    }
+    Write-E "C $($c.Name) sha256=$h1 has=$($need -join '; ')"
 
     Write-E "CMD gcc $cflagsStr -o $exepath $cpath"
     cmd /c "gcc $cflagsStr -o $exepath $cpath > $gccLog 2>&1"
@@ -63,6 +78,19 @@ foreach ($c in $cases) {
     if ($LASTEXITCODE -ne 0) { throw "run $($c.Name) exit $LASTEXITCODE" }
     Write-E "EXIT run $($c.Name) 0"
 }
+
+$badSrc = "tests\l1\invalid_deref_target.lm2"
+$badC = Join-Path $obj "invalid_deref_target.c"
+$badErr = Join-Path $log "invalid_deref_target.err"
+Write-E "BEGIN negative $badSrc"
+cmd /c "$l1trans $badSrc $badC > $log\invalid_deref_target.stdout 2> $badErr"
+if ($LASTEXITCODE -eq 0) { throw "expected translate failure: $badSrc" }
+$errText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $badErr))
+if ($errText.IndexOf("dereferenced assignment target expects a name") -lt 0) {
+    throw "missing deref-target diagnostic: $errText"
+}
+if (Test-Path -LiteralPath $badC) { throw "failed translate created $badC" }
+Write-E "EXIT negative $badSrc $($LASTEXITCODE) diagnostic ok"
 
 Write-E "expr ok"
 Write-Output "l1trans $gen expr ok"
