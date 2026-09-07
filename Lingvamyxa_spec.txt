@@ -13214,8 +13214,8 @@ merged callable occurrence which identifies the same C method record but has a
 different `node` publishes into its own containing Structure instead. The
 suspended outer activation is not reloaded and retains its own C values. It can
 later publish a value only if it actually modifies that local after its previous
-checkpoint. This intentionally makes attempts to use the containing Structure
-as an ever-growing recursive biography unsafe and visibly wrong.
+checkpoint. The resulting published value is determined by the serial order of
+dirty-only checkpoints; no activation snapshot is restored implicitly.
 
 Worked recursive example (state trace, not additional source syntax): M has
 an own field `x` in the containing Structure S. Both calls select the same
@@ -13240,30 +13240,11 @@ were only a dynamically imported value, its assignment would remain private
 and none of these own-field stores would occur. The published Structure holds
 working state; the C stack is the sole implicit activation history.
 
-A synchronous callback which re-enters LMX in the same Message is another nested
-C activation in the same serial turn. Before control crosses that callback
-boundary the caller materializes the callback's exact typed values and performs
-the ordinary dirty-only checkpoint; return uses the ordinary no-reload rule. If
-a foreign C API cannot carry those typed values directly, its L1 adapter may
-retain a private call-adapter record for the duration of the synchronous call.
-That record is backend state, not a source Namespace, and every retained Lmx
-reference is an arena/collector root while it is live.
-
-A callback which may run after the source activation has returned cannot retain
-an implicit caller biography. Same-Message work is enqueued as a later FIFO turn
-with explicit Structure/Message state; work for another Message crosses the
-normal clone/serialization/transfer boundary. A foreign thread may not
-concurrently re-enter one Message's mutable graph under the common L3 contract.
-Such raw shared-memory callbacks require an explicit L2 synchronization profile.
-Different Messages may concurrently execute callable occurrences that share the
-same immutable method record because their containing Structures and arenas are
-distinct.
-
-This rule follows directly from the Lingvamyxa ontology: everything is a
-Structure — including method and array descriptors — and each Message has one
-serial execution thread. A method’s Structure contains its single published
-working state, while native execution uses ordinary unpublished C stack
-activations.
+This is the stack/graph seam implied by the Lingvamyxa ontology. This rule 
+follows directly from the Lingvamyxa ontology: everything is a Structure — 
+including method and array descriptors — and each Message has one serial 
+execution thread. A method’s Structure contains its single published working 
+state, while native execution uses ordinary unpublished C stack activations.
 
 An unqualified name denoting the method’s own field looks like an Algol-60
 stack local but persists like an instance field. Spill/no-reload is the seam
@@ -13274,14 +13255,14 @@ callee’s activation and are not published anywhere unless the program uses an
 explicit path.
 
 One serial execution thread per Message makes this safe without locks or
-memory barriers. A suspended caller’s C locals cannot be raced, and other
+memory barriers. A suspended caller’s C locals cannot be raced, and other 
 Messages operate on disjoint arenas.
 
-An interpreter may walk the Structure graph using a small ordinary control
-stack carrying return state and declared arguments. It need not allocate a
-snapshot of the method’s working state for every call: no heap frame objects,
-closure chains, or reload bookkeeping are required. Published state survives
-a return because it lives in the graph, not in an activation that disappeared.
+An interpreter may implement the same rule with a small control stack carrying
+return state and declared arguments, plus a sparse activation-local set of
+working values that have been dirtied. It need not copy the method's complete
+working state for every call. Published state survives in the graph; activation
+history remains on the stack.
 
 This preserves the useful simplicity of Algol-style stack execution without
 the upward-funarg Algol-hole. Lingvamyxa avoids the upward-funarg problem by
