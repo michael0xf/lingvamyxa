@@ -1839,6 +1839,12 @@ The runtime predicate neither executes Consumer nor requires retention or
 reconstruction of its hidden complete body. Its first intended use is Message
 validation; further application sites are not prescribed.
 
+The agent-candidate machine (main specification 19.30.2) may use either
+predicate: an agent proposes candidates, a validator accepts or rejects them,
+and an explicit policy may rank the survivors. The predicates contribute
+compatibility evidence; they execute neither candidate nor Consumer and do not
+define ranking by themselves.
+
 Compatibility is intentionally partial and Consumer-relative, not a proof of
 formal completeness over whole values. Success says nothing about unexamined
 or unavailable parts. It does not excuse a missing actually required path or an
@@ -1874,6 +1880,11 @@ may run. Arena reclamation is a separate lifecycle step, not permission to
 resume. The host OS worker is not forcibly terminated and external effects are
 not rolled back. A caught `throw` is not an `assert` violation.
 
+A unit encoded in a path name is distinguished when Consumer follows that path:
+`d\Meter` is not satisfied by `Foot`. A unit stored only as a leaf value is not
+compared by path presence; use an explicit validator or, when values are
+available at build time, exact validation over const trees.
+
 `immutable` qualifies a newly constructed Structure tree; `RuntimeImmutable`
 qualifies an existing one without copying (main specification 9.1.2). Traverse
 contained branches only with `child.node == parent`; other references must
@@ -1890,6 +1901,12 @@ RU
 Runtime-предикат не исполняет Consumer и не требует сохранять или восстанавливать
 его скрытое полное тело. Первое намеченное применение — валидация Message;
 другие места применения пока не задаются.
+
+Машина agent candidates (основная спецификация §19.30.2) может использовать
+любой из двух предикатов: агент предлагает кандидатов, валидатор принимает либо
+отвергает их, а явная policy может ранжировать прошедшие варианты. Предикаты
+дают данные о совместимости, но не исполняют ни кандидата, ни Consumer и сами
+не задают ранжирование.
 
 Совместимость намеренно частичная и зависит от Consumer, а не доказывает
 формальную полноту целых значений. Успех ничего не обещает о непроверенных или
@@ -1925,6 +1942,11 @@ signature не входит. По нетерминальным uses провер
 запрещены. Освобождение арены — отдельный шаг, не разрешение продолжить Message.
 Рабочий поток ОС не прибивается, внешние эффекты не откатываются. Пойманный
 `throw` не равнозначен провалу `assert`.
+
+Единица, закодированная именем пути, различается, когда Consumer идёт по этому
+пути: `d\Meter` не удовлетворяется `Foot`. Значение единицы, хранимое только в
+листе, из наличия пути не сравнивается; нужен явный валидатор либо, когда
+значения доступны при сборке, точная проверка const-деревьев.
 
 `immutable` квалифицирует новое дерево Structure при построении,
 `RuntimeImmutable` — существующее, без копирования (основная спецификация §9.1.2).

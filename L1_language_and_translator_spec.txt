@@ -23,8 +23,9 @@ Closed decisions (do not reopen)
   - L1 lowers directly to equivalent ANSI C99.
   - Established receivers and modules remain in L1. L1 is a full
     language, not a disposable subset.
-  - `L1:` is the existing receiver/profile of this language. Do not
-    introduce `.l1`. Do not replace `L1:` with raw `C`.
+  - Final extension `.lm1` selects this language. The file root is its
+    L1 body; no outer `L1:` / `end: L1` is written. Do not introduce
+    `.l1` or replace L1 source with raw `C`.
   - Receiver `C` is an isolated last-resort hatch. Ordinary
     translator / runtime / bootstrap MUST NOT contain it and MUST NOT
     depend on raw-C payload.
@@ -35,11 +36,9 @@ Closed decisions (do not reopen)
     reuse the hosted trans_l1_* semantic core as foundation.
   - Do not lock “L2 must go through L1”.
   - Seed/self-host (was OPEN 10.6): Translator-L1 is **not** written
-    by hand as raw C. Existing C-like `.lm2` builder/compiler sources
-    are reprofiled to `L1:` (same file extension) and become the
-    self-host spine as early as possible. Current working bootstrap
-    is only the stage-0 bridge. Old chain stays beside the new one
-    until green self-host acceptance.
+    by hand as raw C. Suitable C-like sources are moved with minimal
+    semantic change to wrapperless `.lm1` and form the self-host spine.
+    The explicit `.lm2` seed mirror is only the stage-0 bridge.
   - Array physical model (restored language invariant, not a new
     invention): rectangular rank-N C array, one contiguous backing
     block in C row-major order. Not L2 Array ontology. Not rank-1
@@ -92,25 +91,40 @@ tables.
 L1 is not “C keywords in colon form”. Receiver is the structural
 mechanism (1.3). Modules are part of the language (1.4).
 
-1.2 Profile spelling: `L1:`
+1.2 Profile spelling: `.lm1`
 
-An L1 unit is a P0 document whose L1 content is the body of an `L1:`
-Frame (existing substrate/profile receiver head, registered today as
-`receiver.substrate` → `lm_trans_emit_l1_frame` in
-lm2/trans_registry.lm2). Trailer `end: L1` when the close target is
-written.
+An `.lm1` source is one implicit L1 unit. Its P0 document root is the
+unit body; it has no outer level Frame. Final-extension matching is
+case-insensitive and is not inferred from a receiver in the file.
 
-MUST: Translator-L1 consumes this profile. MUST NOT invent a `.l1`
-extension. MUST NOT treat `L1:` as the old raw-C dump.
+Translator-L1 MUST reject explicit `L1:`, `L2:` and `L3:` level Frames
+inside an `.lm1` unit, including nested bodies, and MUST reject unsupported
+top-level material instead of silently emitting an empty unit. The current
+self-host/bootstrap profile also rejects `C:`; only a separately enabled future
+hatch may admit it under 1.9. The temporary explicit-`L1:` `.lm2` route is a
+backward-compatibility path of the new translator, not L1 source syntax or the
+old stage-0 seed route. Other extensions do not select either route.
+
+L1 need not formalize every declaration category as one namespace. Nevertheless,
+`C`, `L1`, `L2` and `L3` are reserved across all L1 name categories: source may
+not declare, shadow or reuse any of them as a variable, function, module,
+receiver, macro/condition or other user-defined name. A reserved receiver that
+an enabled profile admits is the only use of that spelling.
+
+`tests/l1/lm1_unit.lm1` is the minimal source shape:
+
+    external:
+        fn: main () int
+            return: 0
+        end: main
+    end: external
 
 Hosted trans.lm0 today dumps `L1:` string atoms as C text. That is
 legacy behaviour of the old translator, not L1 language. Five test
 files still use the dump (section 7.3). They stay hosted-trans tests.
 
-A file MAY also contain sibling `L2:` / `L3:` Frames. Translator-L1
-MUST consume only `L1:` bodies. Translator-L2 consumes L2/L3.
-Hosted trans.lm0 remains responsible for current mixed files until
-retired.
+Translator-L2 separately consumes `.lm2` / `.lm3` roots. Mixed level
+siblings do not turn an `.lm1` file into a multi-profile container.
 
 1.3 Receivers
 
@@ -192,7 +206,7 @@ map **locally** to C99. They are not a runtime protocol.
 
     Prefix `\p` → C `*p`, `\\pp` → `**pp`, with C99 precedence.
     Assignment heads follow the same rule: `\slot: 1` → `*(slot) = 1`.
-    See `tests/l1/expr_deref_assign.lm2`, ported from the frozen
+    See `tests/l1/expr_deref_assign.lm1`, ported from the frozen
     `tests/trans_deref_assignment_target.lm2` regression.
 
     Field-follow in body atoms (P0 splits to "a" "\\" "b"):
@@ -361,7 +375,7 @@ Established control spellings: `if`/`else`/`while`/`for`/`return`/
 `break`/`continue`. `for:` is an early direct L1 construct, not an
 L2 Array iterator: hosted compact for-header
 `for: int(i, 1) (i <= n) i++` (tests/trans_for_loop.lm2,
-tests/t1.lmx, tests/l1/for_loop.lm2) is established sugar →
+tests/t1.lmx, tests/l1/for_loop.lm1) is established sugar →
 C99 `for (int i = 1; i <= n; i++)`.
 
 `return` as a body Frame and `return` as a trailer are the same
@@ -380,7 +394,7 @@ Normal L1 uses ANSI C libraries by:
 
   1. `include:` of the header
      (established: include: "<stdio.h>", tests/trans_include_receiver.lm2,
-     tests/l1/include_printf.lm2).
+     tests/l1/include_printf.lm1).
      P0 keeps the source delimiters: the atom for `"<stdio.h>"` includes
      the quotes. Translator-L1 MUST decode that string value, then emit
      the C include form of the value: `#include <stdio.h>` for an angle
@@ -579,8 +593,8 @@ behaviour matches section 1. Do not implement L2.
 2.2 Passes
 
     1. P0 parse
-    2. Select `L1:` bodies; ignore Mix-flagged nodes unless a later
-       L1 Mix profile exists (none in this draft)
+    2. Validate the implicit `.lm1` body; ignore Mix-flagged nodes
+       unless a later L1 Mix profile exists (none in this draft)
     3. Compose module graph (import/predef) and receiver environment
     4. Normalize operators/index/declarators (1.8)
     5. C-scope checking (C99 rules, compile-time only)
@@ -599,7 +613,7 @@ MUST NOT take as architecture:
     graph header LmLmxStructure
     MessageThread hidden argument
     module-init dispatcher that requires hosted main wrapping
-    dump `L1:` payload writer as the centre of L1
+    legacy `L1:` payload writer as the centre of L1
     c. strip as the library-call design
 
 MAY read hosted emit of `for:` / `include:` / `external:` as
@@ -608,7 +622,8 @@ behavioural hints for C99 images.
 2.4 Product shape
 
 Translator-L1 is a **new** program, not a mode of trans.lm0.
-Build-output paths: section 10.7 (chosen). Source-tree name OPEN.
+Real sources live under `l1src/`; the stage-0 mirror is
+`lm2/l1trans.lm2`. Build-output paths: section 10.7.
 Hosted trans.lm0 MUST keep its current meaning of `L1:` until a
 later, named retirement.
 
@@ -626,21 +641,18 @@ Staged chain:
      is not switched from this work. The stage-0 executable compiles
      implicit-L2 / `L2:` C-like `.lm2` and cannot consume structured
      `L1:` — that dump path is legacy.
-  1. Translator-L1 generation 0 is written by **reprofiling**
-     suitable existing C-like `.lm2` modules (make, finalize, and a
-     new walker/emitter in that same style — not trans_l1_*).
-     File extension stays `.lm2`. `L1:` wrap is applied when the
-     consumer is already an L1 translator; until then generation 0
-     remains acceptable to stage-0 trans.lm0 as ordinary L2.
-  2. Stage-0 bootstrap builds generation 0 (`l1trans` executable).
-  3. Generation 0 compiles its own L1 sources and related L1
-     parser/builder modules (`L1:` profile).
+  1. Translator-L1 generation 0 is written in the established C-like
+     surface, not in trans_l1_*. Its real source and related modules are
+     wrapperless `.lm1`. A separate explicit `.lm2` mirror remains
+     acceptable to stage-0 trans.lm0.
+  2. Stage-0 builds generation 0 (`l1trans` executable) from that mirror.
+  3. Generation 0 compiles the real `.lm1` translator, parser and builder.
   4. Generation 1 repeats the build. Compare C text, behaviour, tests.
   5. Old chain remains until that gate is green.
 
-Simple receiver rename (`L2:`/`implicit` → `L1:`) is allowed only
-where the body is already direct L1→C99. MUST NOT mechanically copy
-Namespace/descriptor/Lmx/Message from trans_l1_*.
+Mechanical migration to `.lm1` is allowed only where the body already
+has direct L1→C99 meaning. MUST NOT copy Namespace/descriptor/Lmx/Message
+from trans_l1_*.
 
 **Bootstrap-compatible intersection** (user 20260906-163300):
 
@@ -650,8 +662,8 @@ Namespace/descriptor/Lmx/Message from trans_l1_*.
   forms syntax-directed. MUST NOT force a mass rewrite of parser,
   self-builder, or generation-0 l1trans to a prettier new spelling.
 
-  Most of the migration MUST be mechanical: `L1:` profile wrap,
-  file move, local adapters. Rewrite only sites that actually carry
+  Most of the migration MUST be mechanical: `.lm1` rename, removal of
+  the obsolete outer wrapper, local adapters. Rewrite only sites that carry
   L2 ontology or hosted Namespace/descriptor/Message.
 
   Compile-time adapters are allowed if they are not runtime ontology
@@ -672,10 +684,9 @@ Namespace/descriptor/Lmx/Message from trans_l1_*.
   L1 declarations after a diff budget on the GOOD baseline. MUST NOT
   port runtime Namespace/descriptor machinery.
 
-  Generation-0 Translator-L1 source SHOULD be acceptable both to the
-  proven old bootstrap (as ordinary L2 `.lm2`) and to the new
-  Translator-L1 (as `L1:`), as far as possible. That intersection is
-  a bootstrap surface, not a declaration that all of L1 is a subset.
+  Keep the stage-0 `.lm2` mirror and real `.lm1` source mechanically
+  aligned where practical. Their shared surface is a bootstrap aid,
+  not a declaration that all of L1 is a subset of L2.
 
   Compatibility budget: if a proposed L1 rule sharply increases
   “local syntax adaptation” or “semantic rewrite” counts versus
@@ -695,12 +706,12 @@ section 3 unlock this chain.
   S1  Enough L1 lowering to compile a C-like builder (make-class:
       fn, pointers, arrays, os/ifdef/include, calls, main)
   S2  Generation 0 l1trans: P0 walk + emit C for that subset
-      (new code in C-like `.lm2`, built by stage-0 trans.lm0)
+      (real `.lm1` source plus explicit `.lm2` stage-0 mirror)
   S3  Reprofile make/finalize/printTree (and parser/own **bodies**
       once LmP0/own layouts have an L1 C-struct spelling)
   S4  `import`/`predef` so l1trans can consume a multi-file L1
       program
-  S5  Generation 0 compiles the L1-wrapped copies (stage 1)
+  S5  Generation 0 compiles the wrapperless `.lm1` sources (stage 1)
   S6  Generation 1 repeats; two-pass C; cc -std=c99 -pedantic
   S7  Remaining contract control (`goto`, `throw`/`catch`, `switch`)
       as coverage, not a delay of self-host
@@ -732,7 +743,7 @@ hosted C-text goldens). Compare translate → `gcc -std=c99 -pedantic`
     optional: tests/trans_agent_probe_recursion.lm2
 
 Copy/adapt those into a **separate** L1 runner under
-`build\l1trans\` (`L1:` wrap / dual-acceptance). MUST NOT rewrite
+`build\l1trans\` as wrapperless `.lm1`. MUST NOT rewrite
 the current `tests/trans_*` harness until L1 acceptance.
 
 Gaps → new tiny L1 fixtures, once the direct spelling is chosen:
@@ -846,9 +857,8 @@ them: an L1 array is a plain C99 array (section 1.5).
 5. Forbidden shortcuts
 ════════════════════════════════════════════════════════════════
 
-    - Do not dump `L1:` bodies as raw C (old trans.lm0 behaviour is
-      not L1).
-    - Do not introduce `.l1` or replace `L1:` with `C`.
+    - Do not treat historical `L1:` raw dumps as `.lm1` source.
+    - Do not introduce `.l1`, wrap `.lm1` in `L1:`, or replace L1 with `C`.
     - Do not fill missing L1 spellings with `C`.
     - Do not use `c.printf` / `c.array:` as the writing style for
       libc or C arrays.
@@ -953,7 +963,7 @@ Sections 1, 4 and 8 are the normative contract. Sections 3, 9 and
 ════════════════════════════════════════════════════════════════
 
 MUST
-    - Reuse P0; consume `L1:` as this language’s profile.
+    - Reuse P0; select the implicit L1 profile by final `.lm1`.
     - Keep receivers and modules as compile-time Frame/module
       skeleton; keep `@`, `\`, triple-quoted/block strings, comments
       as syntax-directed C99 forms.
@@ -965,7 +975,7 @@ MUST
       tiny ticket.
 
 MUST NOT
-    - Introduce `.l1` or replace `L1:` with `C`.
+    - Introduce `.l1`, put an outer `L1:` in `.lm1`, or replace L1 with `C`.
     - Put `C` in ordinary translator/runtime/bootstrap.
     - Adopt `c.printf` as normal style.
     - Copy hosted Namespace/descriptor ontology into L1 or L2.
@@ -1001,7 +1011,7 @@ Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
 and `run_c_array.ps1`:
 
   - the P0 parser, `own` and `parser_text` ported from frozen
-    620db86 into `L1:` form, plus `printTree`, `make`, the
+    620db86 into wrapperless `.lm1`, plus `printTree`, `make`, the
     translator `l1trans` itself and the `build_l1` builder;
   - a real gen1 → gen2 → gen3 fixed point: the three generated C
     files are identical; each run records their hashes in `gen_accept.log`;
@@ -1014,7 +1024,7 @@ and `run_c_array.ps1`:
     in existing C-type positions. `ulong` emits `unsigned long`;
     fixed-width aliases emit `uintN_t`/`intN_t` with explicit `<stdint.h>`
     includes in fixtures, without rewriting expression names.
-    Ten `tests/l1/scalar_*.lm2` fixtures compile/run on gen0/gen2:
+    Ten `tests/l1/scalar_*.lm1` fixtures compile/run on gen0/gen2:
     full `snprintf` output/NUL, parameters/prototypes/returns,
     `strtoul` with end-pointer checking, const/pointer/array/cast forms,
     unit declarations and `for` initializers, multiline `(1 + 1) * 3`,
@@ -1022,7 +1032,7 @@ and `run_c_array.ps1`:
     helper checked against independent full 64-bit forward/reverse values.
     This is direct C99 spelling, not primitive-pool or conversion semantics;
   - repeated heads in supported scalar, @/@@ and one-dimensional [] declarations: eight
-    `tests/l1/decl_repeat_*.lm2` fixtures on gen0/gen2 check semicolon and
+    `tests/l1/decl_repeat_*.lm1` fixtures on gen0/gen2 check semicolon and
     parenthesized forms, pointer depth, item-only type overrides, body lists,
     own array extents/initializers and independent mutation. Grouped array
     initializers behave as in the first declaration. Each list has its own
@@ -1038,7 +1048,7 @@ and `run_c_array.ps1`:
     Three malformed declarations must fail translation without publishing C.
     The standalone suite runs on gen0/gen2; this does not close general
     multidimensional or array-of-pointer declaration spelling in 10.15;
-  - quoted simple C-compatible identifiers: four `tests/l1/ident_*.lm2`
+  - quoted simple C-compatible identifiers: four `tests/l1/ident_*.lm1`
     fixtures on gen0/gen2 cover declarations, parameters, calls, references,
     arrays and scalar/pointer repeats. Only outer name backticks are removed;
     literal string bytes and macro/ifdef payloads remain unchanged. Arbitrary-name
@@ -1048,11 +1058,11 @@ and `run_c_array.ps1`:
     prefix dereference in reads, assignments, calls and mixed unary chains,
     prefix/postfix `++`/`--` in arguments and indices, and `xs[\p]`;
     one malformed dereferenced assignment must fail with a diagnostic.
-    `expr_cast_bound.lm2` preserves the whole bounded cast Frame:
+    `expr_cast_bound.lm1` preserves the whole bounded cast Frame:
     `id(2 * cast: (uchar) 128 + 128)` evaluates to 512, not 384;
-    `expr_deref_mix.lm2` checks that, with `*p == 4`,
+    `expr_deref_mix.lm1` checks that, with `*p == 4`,
     `add(\ @ \ p + 1, 1)` emits `add(*(&*(p)) + 1, 1)` and returns 6;
-    `expr_inc_arg.lm2` distinguishes `a + ++b` from `a++ + b`
+    `expr_inc_arg.lm1` distinguishes `a + ++b` from `a++ + b`
     and preserves separate unary tokens in `take(- --i)`;
     five string fixtures cover raw triple/fence values in initializers,
     returns and arguments, plus ordinary string/character regressions.
@@ -1067,12 +1077,12 @@ and `run_c_array.ps1`:
     destination C published. Conditions emit `#if`/`#elif`, not `#ifdef`:
     `FLAG` undefined or 0 selects default, while 1 selects the first branch.
     Nested and backtick-quoted conditions retain their C preprocessor text;
-    branch and outer `end:` targets are checked. See `tests/l1/ifdef_*.lm2`;
+    branch and outer `end:` targets are checked. See `tests/l1/ifdef_*.lm1`;
   - direct object-like `define:` and `` `ifndef-default`: `` at unit scope,
     including nested `ifdef` unit branches: emit `#define`, or guard it
     with `#ifndef`/`#endif`. Replacement atoms retain their C tokens;
     only outer backticks are removed. An empty replacement stays empty.
-    `tests/l1/define_*.lm2` exercises 7 compile/run configurations per
+    `tests/l1/define_*.lm1` exercises 7 compile/run configurations per
     gen0/gen2 and 4 malformed name/token/end cases with no output C.
     For `` `ifndef-default`: VALUE 7 ``, undefined VALUE yields 7;
     `-DVALUE=0` and `-DVALUE=9` retain 0 and 9. String bytes/NUL, alias,
@@ -1085,12 +1095,12 @@ and `run_c_array.ps1`:
     a missing input where the L1 side exits 1 with a `P0 parse error`
     diagnostic.
 
-`import:`/`predef:` concatenate imported `L1:` units into one C TU,
+`import:`/`predef:` concatenate imported `.lm1` units into one C TU,
 emitting each unit once (10.8 still OPEN). `os:` emits
 `#ifdef _WIN32`. A small import/prototype/definition/link/run example
-is `tests/l1/import_add.lm2` + `l1src/add.lm2`; the diamond case is
-`tests/l1/import_diamond.lm2`. Rectangular 2-D C arrays are covered
-by `tests/l1/array_2d.lm2`.
+is `tests/l1/import_add.lm1` + `l1src/add.lm1`; the diamond case is
+`tests/l1/import_diamond.lm1`. Rectangular 2-D C arrays are covered
+by `tests/l1/array_2d.lm1`.
 
 What this checkpoint is **not**:
 
@@ -1172,10 +1182,10 @@ Language/spelling (do not pretend decided):
 
 Mechanics (language still has the feature):
 
-  10.6 CLOSED: no hand-written raw-C core; reprofile C-like `.lm2`;
-       stage-0 bootstrap is the bridge; early self-host (2.5).
-  10.7 Source-tree: `lm2/l1trans.lm2` (S1/S2 choice; bootstrap
-       intersection, compiled by stage-0 trans.lm0 as ordinary L2).
+  10.6 CLOSED: no hand-written raw-C core; real sources are wrapperless
+       `.lm1`; stage-0 `.lm2` mirror is the bridge; early self-host (2.5).
+  10.7 Source-tree: `l1src/l1trans.lm1` is the real source;
+       `lm2/l1trans.lm2` is only its explicit stage-0 mirror.
        **Build-output layout** is
        chosen (Cursos 163824, implementation default, not language):
 
@@ -1201,14 +1211,13 @@ Mechanics (language still has the feature):
        `git status`, `git diff --cached --name-only`, no staged
        build artifacts or accidental snapshots.
   10.8 Module output: one C TU vs many; path identity
-       (`x.lm2` vs `./x.lm2`); whether L1 has init-before-main.
+       (`x.lm1` vs `./x.lm1`); whether L1 has init-before-main.
 
 Not blocking S1: 10.4, 10.8 (single unit), 10.9–10.12, hatch, L2
 backend profile, throw/switch coverage order.
 
-Spec §0 still says only L2/L3 are source levels. This draft treats
-`L1:` as an existing profile receiver of a C99-meaning language.
-A later spec amendment is documentation, not S1.
+Main spec §1.2 defines `.lm1` as the separate direct-C99 language
+profile; `.lm2` and `.lm3` belong to the second translator.
 
 
 End of Draft 1.

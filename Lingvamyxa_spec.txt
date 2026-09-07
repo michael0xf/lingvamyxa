@@ -410,20 +410,28 @@ inferred from the first receiver in the file.
 
 In the default profile:
 
+    `.lm1` means that the file root is consumed by the first translator as an
+        implicit direct-C99 L1 body; an outer `L1:` frame is rejected.
     `.lm2` means that the file root is consumed as an implicit L2 body.
     `.lm3` means that the file root is consumed as an implicit L3 body.
     `.lm4` and `.lm5` are legacy spellings, not source profiles, and are rejected.
 
 Explicit wrappers remain available only for levels admitted by the active
-source profile for the second translator. `L1:` selects its separate language
-and first translator (1.2). The legacy `L4:` and
+source profile for the second translator. The legacy `L4:` and
 `L5:` names are not registered as level receivers and are rejected wherever a
 level receiver is expected, whether root or nested. A translator source also
 has no separate root `registry:` level alias. Table/query source is written
 directly on an L2 or L3 module surface with `table:` and `join:`; dependencies
-requiring hoisted declarations are selected with `predef:`. A `.lm2` file does
-not need an outer `L2:` wrapper, and a `.lm3` file does not need an outer `L3:`
-wrapper.
+requiring hoisted declarations are selected with `predef:`. An `.lm1`, `.lm2`
+or `.lm3` file does not need its corresponding outer level wrapper; `.lm1`
+forbids one.
+
+`C`, `L1`, `L2` and `L3` are reserved profile/receiver spellings. In L1 they are
+forbidden as user-defined names across every declaration category, whether or
+not the implementation represents those categories as one namespace. They
+cannot be declared, shadowed or reused as variables, functions, modules,
+receivers, macros/conditions or other user names. Their only valid use is the
+reserved profile/receiver role admitted at that source position.
 
 The implicit root profile is deliberately attached to the source extension,
 not inferred from an arbitrary receiver name. A root-level `table:` in an
@@ -814,8 +822,9 @@ Examples of L0 artifacts:
 1.2. L1 Direct-Lowering Language and Bootstrap
 
 L1 is a separate Lingvamyxa source profile with the established structural
-syntax and a direct ANSI C99 meaning. `L1:` selects that language; it is not a
-raw-C text dump. Its receivers/modules remain part of the language. The first
+syntax and a direct ANSI C99 meaning. Final extension `.lm1` selects that
+language; the file root is its body, without an outer `L1:` frame. Its
+receivers/modules remain part of the language. The first
 translator reuses P0 and supports the parser/builder/self-hosting sources with
 minimal changes from the existing C-like code.
 
@@ -1087,6 +1096,13 @@ Namespace or an implicit per-Structure type descriptor:
         reconstruct unavailable native code or require retaining its full
         source/body in a hidden descriptor. Message validation is the first
         intended application; other application sites remain to be specified.
+
+The candidate machine of 19.30.2 may use either predicate. An agent proposes
+one or more `varA` candidates; a validator supplies the comparison role `varB`
+and `Consumer`, accepts or rejects each candidate, and an explicit policy may
+rank the survivors. The predicates are compatibility components of that
+validator. They execute neither the candidate nor Consumer and define no
+ranking policy by themselves.
 
 For source `implements`, «used» means visible field-follow and consumption
 sites in the known Consumer, including visible paths in alternative branches;
@@ -1661,6 +1677,7 @@ The controls are separate:
 | Keyed conversion | The selected conversion, with destination-range checks | Semantic units, resource validity or all-pair availability |
 | Immutability | No mutation of the protected value through an alias | Correct initialization, resource lifetime or transaction rollback |
 | Message ownership | No implicit cross-Message sharing of mutable arenas | Absence of external effects or universal fault containment |
+| Candidate validation | Explicit accept/reject; a separate policy may rank accepted candidates | Compatibility does not prove behavior or define ranking |
 
 The two predicates are independent operations, not one ideal predicate and its
 approximation. Their common leaf rules do not erase their different inputs or
@@ -1792,10 +1809,14 @@ explicit validation/publication or recovery protocol (2.5.2).
    is a separate numeric-profile policy, not settled by a range check.
 
 8. "What distinguishes meters from feet?"
-   Explicit descriptions and operations can express units. Merely naming a
-   Structure `Meter`, storing a `unit` field, or adding `const` does not prove
-   unit agreement: the Consumer/validator must enforce the intended constraint.
-   The leaf rules do not silently compare descriptor values or their meaning.
+   What is encoded in a used path name is distinguished; what is encoded only
+   in a leaf value is not. With `Distance: Meter: 1`, a Consumer that follows
+   `d\Meter` requires the path `Meter`, so `Foot: 1` does not satisfy it. By
+   contrast, merely naming an outer Structure `Meter`, storing `unit: "meter"`,
+   or adding `const` does not compare that value with another leaf. Encode the
+   unit in a path the Consumer uses, or require an explicit validator; when the
+   values are build-time available, 2.5.3 also permits exact comparison on
+   const trees.
 
 9. "Can an opaque callable be transported without checking its `sig`?"
    Yes; transport need not know a future call's requirements. Every actual typed
@@ -9948,6 +9969,9 @@ invokes converters, mutates its inputs, creates a Namespace or changes `[0]`
 occurrence selection. Consumption performs available keyed conversions under
 2.2.4. Actual call admission must separately supply the dynamic inputs of 21.3.
 
+The agent-candidate machine of 19.30.2 may use either predicate under the
+proposer/validator/policy split of 2.1.
+
 Additional RuntimeImplements application sites and traversal policies beyond
 the available explicit requirements remain open; do not silently install it at
 every return, replacement or call. Unknown coverage remains unknown (2.1.3).
@@ -11828,9 +11852,15 @@ and receive the Registry/Table to query as an explicit operand.
 19.30.2. Agent Candidates
 
 An agent receiver may propose candidate rows or messages. A validator must
-accept, reject or rank the candidate before an explicit operation updates the
-    target Registry/Table. No runtime namespace exists or is created by this
-    operation.
+accept or reject each candidate. An explicit policy may rank accepted
+candidates; only an explicit update publishes a selected result to the target
+Registry/Table. The validator may use source `implements(candidate,
+required, Consumer)` when the Consumer requirements are known, or
+`RuntimeImplements(candidate, required, Consumer)` over the available current
+graph. This is the same proposer → validator machine described in 2.1 and 2.5:
+the predicates contribute compatibility evidence but do not execute candidates
+or supply a ranking policy. No runtime namespace exists or is created by this
+operation.
 
 19.30.3. Boundaries and Bootstrap
 
@@ -12303,7 +12333,8 @@ Historical text and examples: `Lingvamyxa_spec_history.txt`, section 20.2.1.H.
 
 20.2.2. L1/L2/L3 Profiles and Explicit C Interoperability
 
-`L1:` selects the direct C99-oriented language/first translator (1.2).
+Final extension `.lm1` selects the direct C99-oriented language/first translator
+(1.2); its root is an implicit L1 body and an explicit `L1:` wrapper is invalid.
 `L2:` and `L3:` select profiles of the second translator. Each receiver
 consumes a Structure; it does not reinterpret arbitrary string fields as code.
 Unhandled strings at the translated body's top level are a consumer diagnostic.
