@@ -24,6 +24,24 @@ function Write-PLog([string]$msg) {
     Add-Content -LiteralPath $script:parserLog -Value "$(Get-Date -Format o) $msg"
 }
 
+$savedHosted = @{
+    LM_TRANS_REGISTRY = $env:LM_TRANS_REGISTRY
+    LM_TRANS_REGISTRY_VIEW = $env:LM_TRANS_REGISTRY_VIEW
+    LM_P0_REGISTRY = $env:LM_P0_REGISTRY
+    LM_P0_COMPARE_REGISTRY = $env:LM_P0_COMPARE_REGISTRY
+}
+Write-PLog "ENV incoming LM_P0_REGISTRY=$($env:LM_P0_REGISTRY) LM_P0_COMPARE_REGISTRY=$($env:LM_P0_COMPARE_REGISTRY)"
+function Restore-HostedRegistryEnv {
+    foreach ($k in @("LM_TRANS_REGISTRY", "LM_TRANS_REGISTRY_VIEW", "LM_P0_REGISTRY", "LM_P0_COMPARE_REGISTRY")) {
+        $v = $savedHosted[$k]
+        if ($null -eq $v -or $v -eq "") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+        else { Set-Item "Env:$k" $v }
+    }
+}
+try {
+foreach ($k in $savedHosted.Keys) { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+Write-PLog "ENV effective default hosted P0 for L1 translate and printTree.lm0 oracle"
+
 if (-not (Test-Path $l1trans)) { throw "missing $l1trans" }
 if (-not (Test-Path $lm0)) { throw "missing $lm0" }
 
@@ -113,3 +131,6 @@ foreach ($src in $malformed) {
 
 Write-PLog "parser accept ok"
 Write-Output "l1 printTree parser accept ok"
+} finally {
+    Restore-HostedRegistryEnv
+}

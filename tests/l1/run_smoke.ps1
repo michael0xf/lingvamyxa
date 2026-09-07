@@ -15,6 +15,22 @@ $script:smokeLog = Join-Path $log "smoke.log"
 $cflags = @("-std=c99", "-Wall", "-Wextra", "-Wpedantic", "-I", ".", "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers", "-Werror=implicit-function-declaration", "-Werror=implicit-int")
 $cflagsStr = ($cflags -join " ")
 
+$savedHosted = @{
+    LM_TRANS_REGISTRY = $env:LM_TRANS_REGISTRY
+    LM_TRANS_REGISTRY_VIEW = $env:LM_TRANS_REGISTRY_VIEW
+    LM_P0_REGISTRY = $env:LM_P0_REGISTRY
+    LM_P0_COMPARE_REGISTRY = $env:LM_P0_COMPARE_REGISTRY
+}
+function Restore-HostedRegistryEnv {
+    foreach ($k in @("LM_TRANS_REGISTRY", "LM_TRANS_REGISTRY_VIEW", "LM_P0_REGISTRY", "LM_P0_COMPARE_REGISTRY")) {
+        $v = $savedHosted[$k]
+        if ($null -eq $v -or $v -eq "") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+        else { Set-Item "Env:$k" $v }
+    }
+}
+try {
+foreach ($k in $savedHosted.Keys) { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+
 function Invoke-Translate([string]$src, [string]$dst) {
     & $l1trans $src $dst
     if ($LASTEXITCODE -ne 0) {
@@ -316,3 +332,6 @@ Invoke-CcRun "$obj\repro_call_binop.c" "$bin\repro_call_binop.exe" 0 $null
 
 Write-Log "smoke ok"
 Write-Output "l1trans gen0 smoke ok"
+} finally {
+    Restore-HostedRegistryEnv
+}

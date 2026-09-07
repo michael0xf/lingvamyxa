@@ -988,8 +988,8 @@ and `build\l1trans\gen<N>\`. `lm2/l1trans.lm2` is a separate,
 L2-shaped copy kept only to produce the gen0 seed with stage-0
 `trans.lm0`; it is not the L1 source.
 
-Actually exercised by `tests\l1\run_gen.ps1`, `run_smoke.ps1` and
-`run_parser.ps1`:
+Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
+`run_smoke.ps1` and `run_parser.ps1`:
 
   - the P0 parser, `own` and `parser_text` ported from frozen
     620db86 into `L1:` form, plus `printTree`, `make`, the
@@ -1023,8 +1023,16 @@ What this checkpoint is **not**:
     exist yet.
   - not the old Qt/CMake `buildCore` gate, which is a separate chain
     and not part of this checkpoint.
-  - not a clean-checkout guarantee: the gen0 seed is produced outside
-    the runner scripts and that step is not scripted in-tree.
+  - not a clean-checkout guarantee and not a source-only bootstrap.
+    `tests\l1\run_seed.ps1` is the in-tree scripted seed step: it
+    drives existing `build\lm0\trans.lm0.exe` plus
+    `libparser.lm0.a`/`libown.lm0.a` over `lm2\l1trans.lm2` under the
+    default hosted registry profile (`lm2\core.lm2`,
+    `lm2\primitive.lm2`, `lm2\convert.lm2`, `lm2\trans_registry.lm2`,
+    `lm2\parser_registry.lm2`; `LM_TRANS_REGISTRY` /
+    `LM_P0_REGISTRY` / `LM_TRANS_REGISTRY_VIEW` unset for that
+    process, view_mode 0). Those old-chain binaries remain external
+    prerequisites.
   - not a defect-free claim. Review findings stay open until a new
     snapshot is presented and re-reviewed.
 

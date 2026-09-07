@@ -35,29 +35,66 @@ gen0 seed with the old stage-0 `trans.lm0`. It is not the L1 source.
 
 ## Prerequisites
 
-* `gcc` reachable on `PATH`. The runners invoke it bare, with
-  `-std=c99 -Wall -Wextra -Wpedantic -I .` and four hard guards:
-  `-Werror=incompatible-pointer-types -Werror=discarded-qualifiers
-  -Werror=implicit-function-declaration -Werror=implicit-int`.
-* `powershell` for the three runner scripts.
-* Pre-existing artifacts from the old chain, already in the working tree:
-  * `build\lm0\printTree.lm0.exe` — the P0 oracle. `tests\l1\run_parser.ps1`
-    aborts without it.
-  * `build\lm0\trans.lm0.exe` — used once, outside these scripts, to make
-    the gen0 seed.
+* `gcc` reachable on `PATH`. New-generation runners (`run_gen` / `run_smoke` /
+  `run_parser` / `build_l1`) invoke it with `-std=c99 -Wall -Wextra -Wpedantic
+  -I .` and four hard guards: `-Werror=incompatible-pointer-types
+  -Werror=discarded-qualifiers -Werror=implicit-function-declaration
+  -Werror=implicit-int`. The seed runner uses the older hosted command
+  (`-I lm1`, no those `-Werror=` flags) that produced the working gen0
+  binary; hosted C may still warn (unused `extent_field`).
+* `powershell` for the four runner scripts.
+* External old-chain artifacts (not built by these L1 scripts; not a
+  source-only clean-machine bootstrap):
+  * `build\lm0\trans.lm0.exe` — stage-0 L2 translator for the gen0 seed.
+  * `build\lm0\libparser.lm0.a`, `build\lm0\libown.lm0.a` — linked into gen0.
+  * `lm2\parser_abi.lm2` — `predef` of `lm2\l1trans.lm2`.
+  * Default hosted registry profile (`run_seed`/`run_gen`/`run_parser`/`run_smoke`
+    clear `LM_TRANS_REGISTRY`, `LM_P0_REGISTRY`, `LM_TRANS_REGISTRY_VIEW`, and
+    `LM_P0_COMPARE_REGISTRY` for the whole hosted parse path, then restore): `lm2\core.lm2`, `lm2\primitive.lm2`,
+    `lm2\convert.lm2`, `lm2\trans_registry.lm2`, `lm2\parser_registry.lm2`.
+    View mode 0 (legacy). `convert_impl.lm2` is a convert-table impl path,
+    not a bootstrap candidate of this profile.
+  * `lm1\` — include directory used by the working seed `gcc` line.
+  * `build\lm0\printTree.lm0.exe` — P0 oracle for `tests\l1\run_parser.ps1`.
 * No Qt or CMake for this Windows checkpoint. New native generations
   do not link the L2 runtime; gen0 still uses the old bootstrap bridge.
 
 ## Commands (CWD = repo root)
 
-The gen0 seed is **not** produced by any script in the tree.
-`tests\l1\run_gen.ps1` requires `build\l1trans\gen0\l1trans.exe` to exist and
-throws `missing seed` otherwise. That seed is built once from the L2-shaped
-`lm2\l1trans.lm2` with the old `build\lm0\trans.lm0.exe` plus `gcc`;
-`build\l1trans\logs\build_gen0.log` records only the source and exe hashes of
-that step, not its command line.
+Start of a new self-build:
 
-With the seed present:
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_seed.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_gen.ps1
+```
+
+`run_seed.ps1` is the documented seed command. It refuses to treat an
+existing `build\l1trans\gen0\l1trans.exe` as success. Output of this run
+goes to a unique staging dir `build\obj\l1trans\gen0\seed-<stamp>` and
+`build\l1trans\gen0\seed-<stamp>`:
+
+```
+build\lm0\trans.lm0.exe lm2\l1trans.lm2 build\obj\l1trans\gen0\seed-<stamp>\l1trans.c
+gcc -std=c99 -Wall -Wextra -Wpedantic -I lm1 -o build\l1trans\gen0\seed-<stamp>\l1trans.exe ^
+    build\obj\l1trans\gen0\seed-<stamp>\l1trans.c ^
+    build\lm0\libparser.lm0.a build\lm0\libown.lm0.a
+```
+
+then translates/compiles/runs `tests\l1\integer_add.lm2` with that binary.
+Only after those checks does it copy C and exe into the published gen0
+names, as two separate copies (not an atomic pair). The previous published
+gen0 is left in place until those checks pass. Missing `trans.lm0` / libs /
+registry files / sources abort with the exact path.
+
+`build\l1trans\logs\seed.log` records incoming and effective registry env,
+CMD/EXIT of trans.lm0, seed gcc, integer_add translate/gcc/run, and SHA256
+of: bridge exe/libs, gcc.exe, `lm2\l1trans.lm2`, `parser_abi.lm2`, the five
+default registry files, integer_add source/C/exe, and the published seed
+C/exe. That is the recorded set; it is not claimed as a complete machine
+manifest. `port_parser.py` / `port_l1trans.py` are not invoked.
+
+`run_gen.ps1` then requires that published seed (it does not build one
+and does not fall back to a stale exe):
 
 ```
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_gen.ps1
@@ -86,9 +123,9 @@ diagnostic on a missing file.
 build\l1trans\gen0|gen1|gen2|gen3\   executables
 build\obj\l1trans\gen<N>\            generated C and objects
 build\l1trans\oracles\               printTree.lm0 reference dumps
-build\l1trans\logs\                  gen_accept.log, smoke.log,
+build\l1trans\logs\                  seed.log, gen_accept.log, smoke.log,
                                      parser_accept.log, gcc_*.log,
-                                     per-dump pt_l1_* / pt_lm0_*
+                                     builder stdout/stderr, per-dump pt_*
 ```
 
 Nothing here writes to `lm1\build`, `build\lm0`, or live tools.

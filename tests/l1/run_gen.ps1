@@ -34,7 +34,25 @@ function Invoke-LoggedExe([string]$title, [string]$exe, [string[]]$argv) {
 }
 
 $seed = "build\l1trans\gen0\l1trans.exe"
-if (-not (Test-Path $seed)) { throw "missing seed $seed" }
+if (-not (Test-Path $seed)) { throw "missing seed $seed — run tests\l1\run_seed.ps1 first (does not fall back to a stale exe)" }
+
+$savedHosted = @{
+    LM_TRANS_REGISTRY = $env:LM_TRANS_REGISTRY
+    LM_TRANS_REGISTRY_VIEW = $env:LM_TRANS_REGISTRY_VIEW
+    LM_P0_REGISTRY = $env:LM_P0_REGISTRY
+    LM_P0_COMPARE_REGISTRY = $env:LM_P0_COMPARE_REGISTRY
+}
+Write-G "ENV incoming LM_P0_REGISTRY=$($env:LM_P0_REGISTRY) LM_P0_COMPARE_REGISTRY=$($env:LM_P0_COMPARE_REGISTRY) LM_TRANS_REGISTRY=$($env:LM_TRANS_REGISTRY) LM_TRANS_REGISTRY_VIEW=$($env:LM_TRANS_REGISTRY_VIEW)"
+function Restore-HostedRegistryEnv {
+    foreach ($k in @("LM_TRANS_REGISTRY", "LM_TRANS_REGISTRY_VIEW", "LM_P0_REGISTRY", "LM_P0_COMPARE_REGISTRY")) {
+        $v = $savedHosted[$k]
+        if ($null -eq $v -or $v -eq "") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+        else { Set-Item "Env:$k" $v }
+    }
+}
+try {
+foreach ($k in $savedHosted.Keys) { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+Write-G "ENV effective default hosted P0/trans registry for gen0 and nested run_parser/run_smoke"
 
 Write-G "BEGIN gen1 translate"
 & $seed "l1src\l1trans.lm2" "build\obj\l1trans\gen1\l1trans.c"
@@ -111,3 +129,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_parser.ps1
 if ($LASTEXITCODE -ne 0) { throw "gen2 parser accept failed" }
 Write-G "gen2 parser accept ok"
 Write-Output "l1trans gen1/gen2/gen3 accept ok"
+} finally {
+    Restore-HostedRegistryEnv
+}
