@@ -96,10 +96,13 @@ function Invoke-Logged([string]$title, [scriptblock]$cmd) {
     return $ec
 }
 
-function Invoke-CcRun([string]$cpath, [string]$exepath, [int]$expectExit, [string]$expectOut) {
-    $gccLog = Join-Path $log ("gcc_" + [IO.Path]::GetFileNameWithoutExtension($exepath) + ".log")
-    $runOut = Join-Path $log ("run_" + [IO.Path]::GetFileNameWithoutExtension($exepath) + ".stdout")
-    $runErr = Join-Path $log ("run_" + [IO.Path]::GetFileNameWithoutExtension($exepath) + ".stderr")
+function Invoke-CcRun([string]$cpath, [string]$exepath, [int]$expectExit, [string]$expectOut, [string]$runArgs = "", [string]$runId = "") {
+    $baseName = [IO.Path]::GetFileNameWithoutExtension($exepath)
+    $gccLog = Join-Path $log ("gcc_" + $baseName + ".log")
+    $runTag = $baseName
+    if ($runId -and $runId.Trim().Length -gt 0) { $runTag = $baseName + "_" + $runId.Trim() }
+    $runOut = Join-Path $log ("run_" + $runTag + ".stdout")
+    $runErr = Join-Path $log ("run_" + $runTag + ".stderr")
     cmd /c "gcc $cflagsStr -o $exepath $cpath > $gccLog 2>&1"
     if ($LASTEXITCODE -ne 0) {
         throw "gcc failed: $cpath (see $gccLog)"
@@ -107,6 +110,7 @@ function Invoke-CcRun([string]$cpath, [string]$exepath, [int]$expectExit, [strin
     Write-Log "gcc $cpath -> $exepath exit 0"
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = (Join-Path (Get-Location) $exepath)
+    $psi.Arguments = $runArgs
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
@@ -122,9 +126,9 @@ function Invoke-CcRun([string]$cpath, [string]$exepath, [int]$expectExit, [strin
     $bytes = $ms.ToArray()
     [System.IO.File]::WriteAllBytes((Join-Path (Get-Location) $runOut), $bytes)
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $runErr), $errText)
-    Write-Log "run $exepath exit $ec stdout_bytes=$($bytes.Length)"
+    Write-Log "run $exepath args='$runArgs' id='$runId' exit $ec stdout_bytes=$($bytes.Length)"
     if ($ec -ne $expectExit) {
-        throw "run exit $ec expected $expectExit : $exepath"
+        throw "run exit $ec expected $expectExit : $exepath args='$runArgs'"
     }
     if ([string]::IsNullOrEmpty($expectOut)) {
         if ($bytes.Length -ne 0) {
@@ -320,7 +324,10 @@ Invoke-Translate "tests\l1\repro_call_index.lm2" "$obj\repro_call_index_b.c"
 Assert-ByteIdentical "$obj\repro_call_index.c" "$obj\repro_call_index_b.c"
 Assert-CHas "$obj\repro_call_index.c" "argv[1]"
 Assert-CLacks "$obj\repro_call_index.c" "[,"
-Invoke-CcRun "$obj\repro_call_index.c" "$bin\repro_call_index.exe" 1 $null
+# argc<2 -> 1; strcmp(argv[1],"ok")!=0 -> 1 for "bad", 0 for "ok"
+Invoke-CcRun "$obj\repro_call_index.c" "$bin\repro_call_index.exe" 1 $null "" "noargs"
+Invoke-CcRun "$obj\repro_call_index.c" "$bin\repro_call_index.exe" 0 $null "ok" "ok"
+Invoke-CcRun "$obj\repro_call_index.c" "$bin\repro_call_index.exe" 1 $null "bad" "bad"
 
 Invoke-Translate "tests\l1\repro_call_binop.lm2" "$obj\repro_call_binop.c"
 Invoke-Translate "tests\l1\repro_call_binop.lm2" "$obj\repro_call_binop_b.c"

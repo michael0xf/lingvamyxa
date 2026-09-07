@@ -1,0 +1,22 @@
+L1:
+    int: hits 0
+
+    fn: bump (int: n) int
+        hits: hits + 1
+        return: n
+    end: bump
+
+    fn: add (int: a; int: b) int
+        return: a + b
+    end: add
+
+    external:
+        fn: main () int
+            if: add(add(bump(1), 2), 3) != 6
+                return: 1
+            if: hits != 1
+                return: 2
+            return: 0
+        end: main
+    end: external
+end: L1

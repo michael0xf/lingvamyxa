@@ -989,19 +989,22 @@ L2-shaped copy kept only to produce the gen0 seed with stage-0
 `trans.lm0`; it is not the L1 source.
 
 Actually exercised by `tests\l1\run_seed.ps1`, `run_gen.ps1`,
-`run_smoke.ps1` and `run_parser.ps1`:
+`run_smoke.ps1`, `run_parser.ps1` and `run_expr.ps1`:
 
   - the P0 parser, `own` and `parser_text` ported from frozen
     620db86 into `L1:` form, plus `printTree`, `make`, the
     translator `l1trans` itself and the `build_l1` builder;
   - a real gen1 → gen2 → gen3 fixed point: the three generated C
-    files are identical, hash
-    E77071BC4FD69AE61F3D648A90ABA63F4B3AC6BE296C0FACB4320E5E5AB51646;
+    files are identical; each run records their hashes in `gen_accept.log`;
   - compilation under `-std=c99 -Wall -Wextra -Wpedantic` with four
     hard guards — `-Werror=incompatible-pointer-types`,
     `-Werror=discarded-qualifiers`,
     `-Werror=implicit-function-declaration`, `-Werror=implicit-int`;
   - the gen2 compiler smoke suite;
+  - eight executed gen2 expression fixtures: nested calls, index and
+    field arguments, unary/binary operations, parentheses and casts.
+    `expr_cast_bound.lm2` preserves the whole bounded cast Frame:
+    `id(2 * cast: (uchar) 128 + 128)` evaluates to 512, not 384;
   - parser acceptance against the old oracle: 16 positive fixtures
     whose `printTree` dumps match `build\lm0\printTree.lm0.exe`
     byte-for-byte, 5 malformed fixtures where both sides exit 1, and

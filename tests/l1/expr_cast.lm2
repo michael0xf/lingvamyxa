@@ -1,0 +1,19 @@
+L1:
+    include: "l1src/p0.h"
+
+    fn: id (int: x) int
+        return: x
+    end: id
+
+    external:
+        fn: main () int
+            if: id(259) != 259
+                return: 1
+            if: id(cast: (uchar) 259) != 3
+                return: 2
+            if: id(cast: (uchar 259)) != 3
+                return: 3
+            return: 0
+        end: main
+    end: external
+end: L1

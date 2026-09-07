@@ -36,13 +36,13 @@ gen0 seed with the old stage-0 `trans.lm0`. It is not the L1 source.
 ## Prerequisites
 
 * `gcc` reachable on `PATH`. New-generation runners (`run_gen` / `run_smoke` /
-  `run_parser` / `build_l1`) invoke it with `-std=c99 -Wall -Wextra -Wpedantic
+  `run_parser` / `run_expr` / `build_l1`) invoke it with `-std=c99 -Wall -Wextra -Wpedantic
   -I .` and four hard guards: `-Werror=incompatible-pointer-types
   -Werror=discarded-qualifiers -Werror=implicit-function-declaration
   -Werror=implicit-int`. The seed runner uses the older hosted command
   (`-I lm1`, no those `-Werror=` flags) that produced the working gen0
   binary; hosted C may still warn (unused `extent_field`).
-* `powershell` for the four runner scripts.
+* `powershell` for the runner scripts.
 * External old-chain artifacts (not built by these L1 scripts; not a
   source-only clean-machine bootstrap):
   * `build\lm0\trans.lm0.exe` — stage-0 L2 translator for the gen0 seed.
@@ -104,18 +104,25 @@ drives gen0 → gen1 → gen2 → gen3, requires `gen1 C == gen2 C == gen3 C`,
 runs the L1 builder selftest, bootstraps gen3 tools, then re-runs the smoke
 and parser suites with `L1_GEN=gen2`.
 
-The two suites can also be run alone against a chosen generation:
+The suites can also be run alone against a chosen generation:
 
 ```
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_smoke.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_parser.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_expr.ps1
 ```
 
-Both default to `gen0`; set `L1_GEN` (for example `gen2`) to pick another.
+All default to `gen0`; set `L1_GEN` (for example `gen2`) to pick another.
 `run_parser.ps1` compares this parser's `printTree` dumps byte-for-byte
 against `printTree.lm0.exe` on 16 positive fixtures, then requires exit 1
 from both on 5 malformed fixtures and exit 1 plus a `P0 parse error`
 diagnostic on a missing file.
+
+`run_expr.ps1` is a separate eight-case regression suite, verified on gen2;
+`run_gen.ps1` does not invoke it automatically. It checks repeated C output,
+strict compilation and execution of nested calls, index/field arguments,
+unary/binary operators, parentheses and both cast spellings. The bounded
+cast regression distinguishes 512 from the formerly misgrouped result 384.
 
 ## Where output goes
 
@@ -124,11 +131,12 @@ build\l1trans\gen0|gen1|gen2|gen3\   executables
 build\obj\l1trans\gen<N>\            generated C and objects
 build\l1trans\oracles\               printTree.lm0 reference dumps
 build\l1trans\logs\                  seed.log, gen_accept.log, smoke.log,
-                                     parser_accept.log, gcc_*.log,
+                                     parser_accept.log, expr.log, gcc_*.log,
                                      builder stdout/stderr, per-dump pt_*
 ```
 
 Nothing here writes to `lm1\build`, `build\lm0`, or live tools.
+Generation-specific suite logs are under `logs\<gen>\`.
 
 ## port_parser.py / port_l1trans.py
 
@@ -142,8 +150,8 @@ build; the `.lm2` files in this directory are the source of truth.
 Working today, exercised by the runners above: the ported P0 parser, `own`,
 `parser_text`, `printTree`, `make` and `l1trans` itself; a real
 gen1 → gen2 → gen3 fixed point on identical generated C; the four strict C99
-guards passing; the gen2 compiler smoke suite; and the parser oracle
-comparison described above.
+guards passing; the gen2 compiler smoke and expression suites; and the
+parser oracle comparison described above.
 
 Not claimed: full coverage of the L1 contract in
 `L1_language_and_translator_spec.txt`, the second Translator-L2, and the old
