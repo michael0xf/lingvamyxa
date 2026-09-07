@@ -1673,24 +1673,26 @@ The design does not make total error prevention a prerequisite for useful
 checking. Evaluate both the requirements that are checked and what a failure
 can affect. Ordinary Message graph ownership and serial turns provide a local
 state boundary: no raw mutable link into another Message's arena is admitted,
-and local collection does not scan that arena (19.29). A failure policy may
-terminate the failed Message: stop its further turns, discard its staged outbox,
-perform the required cleanup and reclaim its arena (19.29.8). This terminates
-the logical Message, not forcibly its OS worker, which may serve other Messages.
+and local collection does not scan that arena (19.29). A failing `assert`
+terminates the executing Message (19.13): required cleanups run, the failed
+turn's staged outbox is discarded, and no further turn of that Message may run.
+This is mandatory, not an optional recovery policy. Message destruction reclaims
+its arena under 19.29.8; logical termination does not forcibly terminate the OS
+worker, which may serve other Messages.
 
 This is not a promise that every defect affects only one Message. Explicitly
 sent data can carry a logical error elsewhere; external resources, low-level
 operations and runtime/host failures need their own contracts. The L2/L3
 distinction is not a sandbox or an authority system (19.29.0, 19.29.10).
 
-Nor is a failed turn a transaction or automatic Message destruction. A caught
-`throw` can continue the turn. At end-turn, success publishes the FIFO outbox;
-failure discards its staged outbox, but not already published graph/own-field
-writes. A surviving Message can retain partially written state. Choosing the
-termination policy prevents reuse of that failed Message's partial state;
-reclaiming its arena does not reverse already published messages or external
-effects. Destruction is a separate operation that the failure policy can invoke
-(19.29.8, 19.29.14), not the meaning of every `throw`.
+Termination is not transaction rollback. A caught `throw` can continue the turn;
+it is not an `assert` violation and does not itself destroy the Message. At
+end-turn, success publishes the FIFO outbox; failure discards its staged outbox,
+but not already published graph/own-field writes. Other failure paths follow
+their declared control/profile rules (19.29.14). If those rules permit the
+Message to survive, its partial state survives too; this does not permit
+resumption after a failing `assert`. Reclaiming an arena reverses neither
+already published messages nor external effects.
 
 Recommendation: choose stronger explicit contracts where consequences demand
 them—especially kernel/scheduler code, trust boundaries, external resources,
@@ -9233,9 +9235,14 @@ Default L3 runtime semantics in the Message Thread profile defined in section
     execute all active `finally` cleanups in the executing Message Thread's
         ExecutionContext;
     publish every own working local dirtied by those cleanups;
-    transfer control to the thread diagnostic root;
-    terminate the executing Message Thread/task by default after reporting the
-        diagnostic.
+    transfer control to the Message's diagnostic root;
+    report the diagnostic and terminate the executing Message: no further turn
+        of that Message may run.
+
+Termination after a failing `assert` is required, not a selectable recovery
+policy. It stops the logical Message, not forcibly its host OS worker. Stopping
+execution and destroying/reclaiming the Message are distinct lifecycle steps
+(19.29.8); that distinction does not allow the stopped Message to resume.
 
 Both publications are ordinary dirty-only checkpoints. The first exposes the
 pre-assert state to cleanup; the second occurs immediately before transfer and
@@ -11567,14 +11574,15 @@ Outbox rollback does not roll back previously published own-field or explicit
 graph mutations. No implicit graph transaction is introduced. The still-open C
 result/exception carrier cannot reorder these semantic boundaries.
 
-An uncaught failure that ends the turn follows point 3. The failure policy may
-then terminate that Message rather than allow further turns over partially
-written state: stop its execution lane, complete required cleanup and reclaim
-its arena under 19.29.8. This is logical Message termination, not forced OS-worker
-termination. Previously published messages or external effects are not undone.
-If the policy keeps the Message alive, its published own/graph state survives.
-Neither policy authorizes raw sharing of its mutable arena with other Messages;
-a caught `throw` alone does not invoke Message destruction.
+An uncaught failure that ends the turn follows point 3. A failing `assert`
+requires termination of the executing Message (19.13); no policy may resume its
+turns. Other failures follow their declared control/profile rules. If those
+rules retain the Message, its published own/graph state survives. Logical
+termination forbids further turns; destruction reclaims the arena under
+19.29.8. Neither requires forcibly terminating the host OS worker or undoes
+previously published messages or external effects. No failure path authorizes
+raw sharing of mutable arenas; a caught `throw` alone does not invoke Message
+destruction.
 
 19.29.14.H. Historical Hosted Control and Ownership Vocabulary
 

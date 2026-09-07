@@ -1869,8 +1869,10 @@ infer recursive freezing from a const root, transaction rollback from arena
 ownership, or a ban on explicit graph mutation from immutable method records.
 For critical checks, const trees of both operands permit build-time validation
 of available descriptions, including units, under an explicit contract. A
-failure policy may terminate the logical Message and reclaim its arena, not
-forcibly terminate its OS worker; external effects are not rolled back.
+failing `assert` requires logical Message termination (19.13): no further turn
+may run. Arena reclamation is a separate lifecycle step, not permission to
+resume. The host OS worker is not forcibly terminated and external effects are
+not rolled back. A caught `throw` is not an `assert` violation.
 
 RU
 
@@ -1911,8 +1913,10 @@ signature не входит. По нетерминальным uses провер
 владения ареной или запрет явной мутации графа из неизменности method-record.
 Для критичных проверок const-деревья обоих операндов позволяют проверить при
 сборке доступные описания, включая единицы измерения, по явному контракту.
-Политика отказа может завершить сам Message и освободить арену, но не прибивает
-рабочий поток ОС и не откатывает внешние эффекты.
+Провал `assert` обязательно завершает сам Message (§19.13): дальнейшие такты
+запрещены. Освобождение арены — отдельный шаг, не разрешение продолжить Message.
+Рабочий поток ОС не прибивается, внешние эффекты не откатываются. Пойманный
+`throw` не равнозначен провалу `assert`.
 
 
 6.8. Invocation
