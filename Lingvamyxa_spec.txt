@@ -13209,6 +13209,22 @@ still requires a resource limit, an explicit failure, or semantics-preserving
 loop/trampoline/Message lowering; no finite implementation promises an infinite
 native stack.
 
+Non-normative genesis note. The rule grows straight out of the Lingvamyxa
+ontology — everything is a Structure, one serial Message thread, a small C
+stack in any interpreter — so an activation's state is a field of
+`callable->node` in the graph, not a slot in a C frame: a bare unqualified
+name looks like an Algol-60 stack local but lives like an instance field.
+Spill/no-reload is the seam between those two natures — the field is cached in
+a typed C working local, published back only when dirtied, never reloaded into
+a suspended caller — and the one serial Message thread makes that safe with no
+lock or barrier: a suspended caller's C snapshot cannot be raced, and other
+Messages hold disjoint arenas. An interpreter inherits the same shape: keep
+the Structure graph, walk it on a plain recursion stack that carries only
+control position, and let checkpoints keep the graph authoritative — no frame
+objects, closure chains or reload bookkeeping. It is what Algol wanted from
+nested procedures without the upward-funarg hole: state survives a return
+because it lives in the graph, not in a frame that disappeared.
+
 21.8. Callable Records and Typed Invocation
 
 Every callable Lmx occurrence has `data` in the callable address domain and
