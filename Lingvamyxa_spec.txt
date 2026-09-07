@@ -125,7 +125,8 @@ The row values are visually aligned under the corresponding schema fields from
 comes from ordinary whitespace-separated row fields and the column count. A
 profile must not infer missing cells from the physical source line. If a table
 needs an empty or absent cell in a dense row, write an explicit value such as
-`None`.
+`None` (section 2.2.2.7). Do not write `0` for absence: `0` is integer zero,
+C NULL in addresses, and false in logical operations.
 
 Exact quoted identifiers such as `north field` and `river lowland` keep
 multi-word field values atomic.
@@ -1488,6 +1489,30 @@ of a used path: the name is there, `uses(Consumer varB)` inside it is empty, adm
 is true. That is not the primitive `0` and not `void`. `void` is `semantic:
 none` on a primitive description: no cell. Unit is a Structure with no
 fields. Confusing them would make `(): empty` interchangeable with `int`.
+
+2.2.2.7. `None` Is Per-Type; `0` Is C NULL and Logical False
+
+`None` is a contextual literal. Its payload is chosen by the expected type of
+the consumption site, not by one global encoding. Every domain that admits
+`None` supplies its own `None.value` (or an equivalent per-class description).
+A type without that row does not accept `None`.
+
+The hosted bootstrap currently has `None.value` rows for `int`, `u32`, `uint8`,
+`int8`, `Boolean`, `categoryFlag`, `double`, `FILE`, `functionPointer` and
+`closure`. Other classes fail at translation (`contextual literal "None" has no
+contextual value for type …`). Completeness is a table, not a language axiom.
+
+That table already shows `None` is not `0`: for `Boolean` (range `-1..1`),
+`false` is 0, `true`/`OK` are 1, and `None` is -1.
+
+The numeral `0` is ordinary integer zero. In address, opaque-handle and
+function-pointer cells it is the C null pointer. In logical/boolean operations
+it is false. It is not the missing-value marker and not `None`.
+
+Dense table rows (0.0.1, 19.26) still write the atom `None` for an absent cell;
+that is the table profile's missing-cell marker. Registry `None.cell` may spell
+a per-class sentinel used when reading table payloads. Those conventions do not
+make expression `None` equal to integer `0`.
 
 2.2.3. Primitive Leaves of Both Compatibility Predicates
 
@@ -7375,7 +7400,8 @@ indexes its value. It does not select the nth repeated field.
 
 For rank 1, require `0 <= i < length(beds)`; for rank N validate every coordinate
 against its dimension. Out of range is `throw: Bounds`, not `assert` or a
-sentinel. `None` may itself be an element and is not a bounds result.
+sentinel. `None` may itself be an element and is not a bounds result
+(2.2.2.7); it is not integer `0`.
 
 A profile defines which multi-coordinate/partial-index forms it admits.
 Rectangular rank-N elements occupy one row-major block; dimensions affect index
@@ -10381,9 +10407,12 @@ lowering and cost information in separate Tables:
             plus_u32_u32_l2 1
     end: cost
 
-`None` in these Tables is the selected table profile's missing-cell marker;
-it does not define an expression-level literal. Such profile data is separate
-from runtime service records such as Array `{len, data}` and method `{addr, sig}`.
+`None` in these Tables is the selected table profile's missing-cell marker
+(2.2.2.7). Expression `None` is a contextual literal whose payload is
+per-type; the bootstrap does not currently define it for every class. `0` in
+the same tables is a numeric/false/NULL cell, not absence. Such profile data is
+separate from runtime service records such as Array `{len, data}` and method
+`{addr, sig}`.
 
 A diagnostic is ordinary data too:
 
