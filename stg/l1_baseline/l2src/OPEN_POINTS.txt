@@ -681,25 +681,48 @@ SPEC 21.8 / ABI 6.6  method record {addr, sig}, node first, typed invoke
     before each call (not C argument order). Recursion and
     cycles are an implementation limit (`unsupported recursion`), not
     a language ban. Max 8 methods (9th is `too many methods`).
-    Generated `lmx_ranges_init` is 1+N (children + method records).
+    Generated `lmx_ranges_init` is 1+N, or 2+N when OwnUsed char
+    fields need the interned all_chars pool.
     Source `node` is reserved. Formals emit as `l2_p{i}_{j}`; intern
     keeps source names. Long names / too-deep if are diagnosed before
     dest is opened. Publication: write tmp; if dest exists rename
-    dest to dest.bak; rename tmp to dest; on fail restore bak; on
-    success remove bak. Not atomic. No recursive FS.
+    dest to dest.bak, or dest.bak.N if dest.bak already exists, so a
+    foreign regular bak is kept; rename tmp to dest; on fail restore
+    bak; on restore failure report the backup path and do not claim
+    dest was restored. Not atomic. No recursive FS. Files not created
+    by this run are not deleted.
     Variable arity 1–4; char, int, size_t, or const @(char) formals;
     int or size_t result. &&/|| keep C precedence as one L1 C
     expression. RHS is not prepped to temps (calls inlined; [] stay
     in the expr). Proof: C99 6.5.13/6.5.14 short-circuit, so a
     right-hand [] load or call is skipped. That is not a §21.8
-    materialized-order claim and is not transferred to own/through.
-    Partial ports: parser_text_predicates.lm2 and
-    parser_text_line_break.lm2 (lm_p0_line_break_width_at). They
-    do not replace l1src. const @(char) is a declared typed C-address
-    parameter (SPEC 11.3.1), not an LMX Array descriptor.
+    materialized-order claim and is not transferred to through.
+    Partial ports: parser_text_predicates.lm2,
+    parser_text_line_break.lm2 (lm_p0_line_break_width_at),
+    parser_text_starts_python.lm2 (lm_p0_starts_python_string).
+    They do not replace l1src. const @(char) is a declared typed
+    C-address parameter (SPEC 11.3.1), not an LMX Array descriptor.
 
-    OwnUsed/DynRequired remain empty: only declared formals. Not
-    Throws/Message/through/own. prototype: is emitted so forward
+SPEC 21.5 / 21.6  own char field of callable->node
+    DECIDED from the spec, not from C. `char: quote` in a method
+    body is an OwnUsed graph-backed field of the containing
+    Structure (`callable->node`), sibling of the METHOD leaves.
+    Builder materializes child i with data = all_chars cell.
+    Unqualified `quote` is the typed char C cache loaded at entry
+    from that exact occurrence. Assignment sets dirty even when the
+    value equals the cache. Checkpoint before outbound L2 calls and
+    every return publishes only dirty caches by rebinding
+    field->data to lmx_char_cell(cache); it does not mutate the
+    shared char payload (SPEC 2 / 21.4). Clean never republishes
+    (21.6 inner explicit write). No reload after a call. Explicit
+    `node\quote` (P0 frame head `node\quote`) writes the graph
+    child and does not touch the caller's cache. DynRequired stays
+    empty in this slice. No per-activation graph objects. Throws /
+    Message / yield / recursion remain implementation limits.
+
+    DynRequired remains empty (no through names in this slice).
+    OwnUsed is non-empty for methods that declare `char: name`.
+    Not Throws/Message/through. prototype: is emitted so forward
     calls do not depend on C declaration order.
 
 SPEC 11.3.1  declared typed C-address parameter
@@ -718,9 +741,9 @@ SPEC 21.13.5  record layout
     registered METHOD range; unit opened with that child count.
 
 SPEC 21.5–21.6  OwnUsed/DynRequired
-    AVOIDED as empty (proven: only declared formals and int
-    expressions). Checkpoint before the call is empty. node is the
-    unit Structure.
+    OwnUsed: see the DECIDED row above for char fields.
+    DynRequired remains AVOIDED as empty (no through names).
+    node is the unit Structure.
 
 ABI 14.9  Message arena
     AVOIDED. calloc/malloc like units 1–7. ASK at first Message.

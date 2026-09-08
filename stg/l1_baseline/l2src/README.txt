@@ -39,10 +39,17 @@ char/int/size_t and `const @(char)` formals, arity 1–4, int or
 size_t result. &&/|| stay L1 C &&/||; RHS is not prepped to temps
 (C99 6.5.13/6.5.14 short-circuit, including [] loads). That is not
 a §21.8 materialized-order claim and is not for own/through.
-Dest replace writes tmp, then dest.bak + rollback; not atomic.
-parser_text_predicates.lm2 and parser_text_line_break.lm2 are
-partial ports, not replacements of l1src. `main` remains the
-§1.7 adapter. Not L2 self-build. Single emitter source: l2trans.lm1.
+Dest replace writes tmp, then a unique dest.bak / dest.bak.N so
+an existing foreign bak is kept; rollback failure reports the
+backup path and does not claim dest was restored. Not atomic.
+`char: quote` in a method body is an OwnUsed graph field of
+`callable->node` (SPEC 21.5–21.6): typed C cache, all_chars cell
+in the graph, dirty-only publish before calls and return, no
+reload. Explicit `node\quote` writes the graph child, not the
+cache. parser_text_predicates.lm2, parser_text_line_break.lm2
+and parser_text_starts_python.lm2 are partial ports, not
+replacements of l1src. `main` remains the §1.7 adapter. Not L2
+self-build. Single emitter source: l2trans.lm1.
 
 Emit (L1), with `include: "<stdio.h>"` only when there is at least one puts:
 
