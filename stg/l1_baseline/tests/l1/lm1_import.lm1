@@ -1,0 +1,6 @@
+predef: "tests/l1/lm1_mod.lm1"
+external:
+    fn: main () int
+        return: lm1_mod_value() != 9
+    end: main
+end: external

@@ -1,0 +1,13 @@
+external:
+    fn: main () int
+        goto: done
+        return: 1
+        done:
+        int: n 0
+        loop:
+        n: n + 1
+        if: n < 2
+            goto: loop
+        return: n != 2
+    end: main
+end: external

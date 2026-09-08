@@ -1,0 +1,6 @@
+import: "tests/l1/bare_cycle/ca.lm1"
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

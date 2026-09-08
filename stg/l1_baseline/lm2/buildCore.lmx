@@ -1,0 +1,1783 @@
+L2:
+    table:
+        source
+        name: `define.value`
+        columns: (class: class) (@: char value)
+        rows:
+                 LM_UNUSED  "(void)"
+    end: `define.value`
+
+    include
+    define
+    os
+    ifdef
+    forward
+    alias
+    constant
+    layout
+    fn
+    prototype
+    unit
+
+    table:
+        source
+        name: LmBuildOptions
+        columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
+        rows:
+                 full_build  int                    0                       0
+                 next_build  int                    1                       0
+                 test_suite  int                    2                       0
+    end: LmBuildOptions
+
+    table:
+        source
+        name: `layout.backend`
+        columns: (class: class) (class: backend)
+        rows:
+                 LmBuildOptions  c.struct
+    end: `layout.backend`
+
+    table:
+        source
+        name: `class.reference-base`
+        columns: (class: class) (int: value)
+        rows:
+                 LmBuildOptions  1
+    end: `class.reference-base`
+
+    table:
+        source
+        name: BUILD
+        columns: (class: class) (binding: l2)                (@: char win)                                       (@: char unix)
+        rows:
+                 exe_suffix         lm_build_exe_suffix         ".exe"                                           ""
+                 path_sep           lm_build_path_sep           '\\'                                             '/'
+                 platform_chdir     lm_build_platform_chdir     _chdir                                           chdir
+                 platform_getcwd    lm_build_platform_getcwd    _getcwd                                          getcwd
+                 platform_absolute  lm_build_platform_absolute  None                                             None
+                 file_exists        lm_build_file_exists        None                                             None
+                 has_qt_cmake       lm_build_has_qt_cmake       "C:/Qt/Tools/CMake_64/bin/cmake.exe"             None
+                 has_qt_mingw_make  lm_build_has_qt_mingw_make  "C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe"  None
+                 has_qt_gcc         lm_build_has_qt_gcc         "C:/Qt/Tools/mingw1310_64/bin/gcc.exe"           None
+                 has_qt_gxx         lm_build_has_qt_gxx         "C:/Qt/Tools/mingw1310_64/bin/g++.exe"           None
+                 include            None                        "<direct.h>"                                     "<unistd.h>"
+    end: BUILD
+
+    predef: "lm2/own_abi.lm2"
+    
+    include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+    
+    os:
+        win:
+            include: "<direct.h>";
+            fn: lm_build_exe_suffix () @: char
+                return: ".exe"
+            end: lm_build_exe_suffix
+    
+            fn: lm_build_path_sep () @: char
+                return: "\\"
+            end: lm_build_path_sep
+    
+            fn: lm_build_platform_chdir (@: char path) int
+                return: c._chdir(path)
+            end: lm_build_platform_chdir
+    
+            fn: lm_build_platform_getcwd (@: char buffer; size_t: size) @: char
+                return: c._getcwd(buffer, size)
+            end: lm_build_platform_getcwd
+    
+            fn: lm_build_platform_absolute (@: char path) int
+                return:
+                    (
+                        (
+                            path[0] = '/' || path[0] = '\\'
+                        )
+                        &&
+                        (
+                            path[1] = '/' || path[1] = '\\'
+                        )
+                    )
+                    ||
+                    (
+                        path[0] != '\0' && path[1] = ':' &&
+                        (
+                            path[2] = '/' || path[2] = '\\'
+                        )
+                    )
+            end: lm_build_platform_absolute
+    
+            fn: lm_build_file_exists (@: char path) int
+                FILE: file
+    
+                file: c.fopen(path, "rb")
+                if: file = 0
+                    return: 0
+    
+                c.fclose: file
+                return: 1
+            end: lm_build_file_exists
+    
+            fn: lm_build_has_qt_cmake () int
+                return: lm_build_file_exists("C:/Qt/Tools/CMake_64/bin/cmake.exe")
+            end: lm_build_has_qt_cmake
+    
+            fn: lm_build_has_qt_mingw_make () int
+                return: lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe")
+            end: lm_build_has_qt_mingw_make
+    
+            fn: lm_build_has_qt_gcc () int
+                return: lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/gcc.exe")
+            end: lm_build_has_qt_gcc
+    
+            fn: lm_build_has_qt_gxx () int
+                return: lm_build_file_exists("C:/Qt/Tools/mingw1310_64/bin/g++.exe")
+            end: lm_build_has_qt_gxx
+
+            fn: lm_build_platform_canary_command_format () @: char
+                return: "powershell -NoProfile -ExecutionPolicy Bypass -File \"%s\""
+            end: lm_build_platform_canary_command_format
+
+            fn: lm_build_platform_canary_script_path () @: char
+                return: "build/obj/run_lm0_canary.ps1"
+            end: lm_build_platform_canary_script_path
+
+            fn: lm_build_platform_canary_command_path (@: char canary_path) @: char
+                c.LM_UNUSED(canary_path)
+                return: lm_build_platform_canary_script_path()
+            end: lm_build_platform_canary_command_path
+
+            fn: lm_build_prepare_platform_canary (@: char canary_path) int
+                FILE: file
+
+                file: c.fopen(lm_build_platform_canary_script_path(), "wb")
+                if: file = 0
+                    c.fprintf: c.stderr "buildCore.lm0: cannot write canary script %s\n" lm_build_platform_canary_script_path()
+                    return: 1
+
+                c.fprintf:
+                    file "$exe = (Resolve-Path -LiteralPath '%s').Path\n"
+                    canary_path
+                c.fputs("$p = Start-Process -FilePath $exe -ArgumentList '--next' -WorkingDirectory (Get-Location).Path -PassThru\n", file)
+                c.fputs("if (-not $p.WaitForExit(600000)) { $p.Kill(); exit 124 }\n", file)
+                c.fputs("exit $p.ExitCode\n", file)
+
+                if: c.fclose(file) != 0
+                    c.fprintf: c.stderr "buildCore.lm0: cannot close canary script %s\n" lm_build_platform_canary_script_path()
+                    return: 1
+
+                return: 0
+            end: lm_build_prepare_platform_canary
+
+            fn: lm_build_platform_tests_script_path () @: char
+                return: "build/obj/tests/run_lm0_tests.ps1"
+            end: lm_build_platform_tests_script_path
+
+            fn: lm_build_platform_tests_command_format () @: char
+                return: "powershell -NoProfile -ExecutionPolicy Bypass -File \"%s\""
+            end: lm_build_platform_tests_command_format
+
+            fn: lm_build_setenv (@: char name; @: char value) int
+                c.array: [256]: char assignment
+                if: name = 0
+                    return: 1
+                if: value = 0
+                    value: ""
+                c.snprintf: assignment c.sizeof(assignment) "%s=%s" name value
+            return: c._putenv(assignment)
+
+            fn: lm_build_unsetenv (@: char name) int
+                c.array: [256]: char assignment
+                if: name = 0
+                    return: 1
+                c.snprintf: assignment c.sizeof(assignment) "%s=" name
+            return: c._putenv(assignment)
+
+            fn: lm_build_write_platform_tests_script (FILE: file; @: char output_dir; @: char parser_library; @: char own_library) int
+                c.fputs("$ErrorActionPreference = 'Continue'\n", file)
+                c.fputs("$lmTestSuite = $env:LM_TEST_SUITE\n", file)
+                c.fputs("if (-not $lmTestSuite) { $lmTestSuite = 'full' }\n", file)
+                c.fputs("if ('smoke','core','full' -notcontains $lmTestSuite) { throw ('unknown LM_TEST_SUITE: ' + $lmTestSuite) }\n", file)
+                c.fputs("$lmSmokeTrans = 'trans_integer_add.lm2','trans_include_receiver.lm2','trans_registry_view_parity.lmx','trans_getenv_index_probe.lm2','trans_invalid_anonymous_structure_shape.lm2'\n", file)
+                c.fputs("Write-Host ('lm0 staged tests suite: ' + $lmTestSuite)\n", file)
+                c.fputs("function Invoke-LmTestWithTimeout([string]$Path, [string]$Name) {\n", file)
+                c.fputs("    $process = Start-Process -FilePath (Resolve-Path -LiteralPath $Path).Path -WorkingDirectory (Get-Location).Path -PassThru\n", file)
+                c.fputs("    if (-not $process.WaitForExit(30000)) { $process.Kill(); throw ($Name + ' timed out') }\n", file)
+                c.fputs("    if ($process.ExitCode -ne 0) { throw ($Name + ' failed with exit ' + $process.ExitCode) }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("$lmTestJobs = $env:LM_TEST_JOBS\n", file)
+                c.fputs("if (-not $lmTestJobs) { $lmTestJobs = [Environment]::ProcessorCount }\n", file)
+                c.fputs("try { $lmTestJobs = [int]$lmTestJobs } catch { $lmTestJobs = 4 }\n", file)
+                c.fputs("if ($lmTestJobs -lt 1) { $lmTestJobs = 1 }\n", file)
+                c.fputs("Write-Host ('lm0 test jobs: ' + $lmTestJobs)\n", file)
+                c.fputs("function ConvertTo-LmProcessArguments([string[]]$ArgumentList) {\n", file)
+                c.fputs("    ($ArgumentList | ForEach-Object {\n", file)
+                c.fputs("        if ($null -eq $_ -or $_ -eq '') { return }\n", file)
+                c.fputs("        if ($_ -notmatch '[ \\t\"]') { return $_ }\n", file)
+                c.fputs("        '\"' + $_.Replace('\\', '\\\\').Replace('\"', '\\\"') + '\"'\n", file)
+                c.fputs("    }) -join ' '\n", file)
+                c.fputs("}\n", file)
+                c.fputs("function Start-LmJobProcess($Job) {\n", file)
+                c.fputs("    $psi = New-Object System.Diagnostics.ProcessStartInfo\n", file)
+                c.fputs("    $psi.FileName = (Resolve-Path -LiteralPath $Job.File).Path\n", file)
+                c.fputs("    $psi.Arguments = ConvertTo-LmProcessArguments @($Job.Args)\n", file)
+                c.fputs("    $psi.UseShellExecute = $false\n", file)
+                c.fputs("    $psi.WorkingDirectory = (Get-Location).Path\n", file)
+                c.fputs("    if ($Job.Quiet) {\n", file)
+                c.fputs("        $psi.RedirectStandardOutput = $true\n", file)
+                c.fputs("        $psi.RedirectStandardError = $true\n", file)
+                c.fputs("    }\n", file)
+                c.fputs("    if ($Job.Env) {\n", file)
+                c.fputs("        foreach ($key in $Job.Env.Keys) {\n", file)
+                c.fputs("            $psi.EnvironmentVariables[$key] = [string]$Job.Env[$key]\n", file)
+                c.fputs("        }\n", file)
+                c.fputs("    }\n", file)
+                c.fputs("    $process = New-Object System.Diagnostics.Process\n", file)
+                c.fputs("    $process.StartInfo = $psi\n", file)
+                c.fputs("    $null = $process.Start()\n", file)
+                c.fputs("    return $process\n", file)
+                c.fputs("}\n", file)
+                c.fputs("function Invoke-LmJobQueue($Jobs) {\n", file)
+                c.fputs("    if ($null -eq $Jobs -or $Jobs.Count -eq 0) { return }\n", file)
+                c.fputs("    $running = New-Object 'System.Collections.Generic.List[object]'\n", file)
+                c.fputs("    $next = 0\n", file)
+                c.fputs("    $failure = $null\n", file)
+                c.fputs("    while ($next -lt $Jobs.Count -or $running.Count -gt 0) {\n", file)
+                c.fputs("        while ($running.Count -lt $lmTestJobs -and $next -lt $Jobs.Count) {\n", file)
+                c.fputs("            $job = $Jobs[$next]\n", file)
+                c.fputs("            $next++\n", file)
+                c.fputs("            $running.Add([pscustomobject]@{ Process = (Start-LmJobProcess $job); Job = $job })\n", file)
+                c.fputs("        }\n", file)
+                c.fputs("        Start-Sleep -Milliseconds 50\n", file)
+                c.fputs("        $still = New-Object 'System.Collections.Generic.List[object]'\n", file)
+                c.fputs("        foreach ($item in $running) {\n", file)
+                c.fputs("            if (-not $item.Process.HasExited) { $still.Add($item); continue }\n", file)
+                c.fputs("            if ($item.Job.Quiet) {\n", file)
+                c.fputs("                $null = $item.Process.StandardOutput.ReadToEnd()\n", file)
+                c.fputs("                $null = $item.Process.StandardError.ReadToEnd()\n", file)
+                c.fputs("            }\n", file)
+                c.fputs("            $expect = 0\n", file)
+                c.fputs("            if ($null -ne $item.Job.Expect) { $expect = [int]$item.Job.Expect }\n", file)
+                c.fputs("            if ($item.Process.ExitCode -ne $expect -and $null -eq $failure) {\n", file)
+                c.fputs("                $failure = $item.Job.Stage + ': ' + $item.Job.Name + ' got ' + $item.Process.ExitCode\n", file)
+                c.fputs("            }\n", file)
+                c.fputs("            $item.Process.Dispose()\n", file)
+                c.fputs("        }\n", file)
+                c.fputs("        $running = $still\n", file)
+                c.fputs("    }\n", file)
+                c.fputs("    if ($null -ne $failure) { throw $failure }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("$env:LM_P0_REGISTRY = 'lm2/parser_registry.lm2'\n", file)
+                c.fprintf:
+                    file "$printTree = '%s/printTree.lm0%s'\n"
+                    output_dir lm_build_exe_suffix()
+                c.fprintf:
+                    file "$trans = '%s/trans.lm0%s'\n"
+                    output_dir lm_build_exe_suffix()
+                c.fprintf:
+                    file "$make = '%s/make.lm0%s'\n"
+                    output_dir lm_build_exe_suffix()
+                c.fprintf:
+                    file "$parserLib = '%s'\n"
+                    parser_library
+                c.fprintf:
+                    file "$ownLib = '%s'\n"
+                    own_library
+                c.fputs("New-Item -ItemType Directory -Force 'build/obj/tests' | Out-Null\n", file)
+                c.fputs("$registrySelftest = Join-Path 'build/obj/tests' 'parser_registry_source_tables_selftest.exe'\n", file)
+                c.fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_P0_REGISTRY_SELFTEST' '-Ilm1' 'lm1/build/parser.lm1.c' $ownLib '-o' $registrySelftest\n", file)
+                c.fputs("if ($LASTEXITCODE -ne 0) { throw 'parser source-table selftest link failed' }\n", file)
+                c.fputs("$previousP0Registry = $env:LM_P0_REGISTRY\n", file)
+                c.fputs("try {\n", file)
+                c.fputs("    $registryFixture = 'tests/fixtures/parser_registry_source_tables.lm2'\n", file)
+                c.fputs("    $env:LM_P0_REGISTRY = $registryFixture\n", file)
+                c.fputs("    & (Resolve-Path -LiteralPath $registrySelftest).Path\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw ('parser source-table selftest failed: ' + $registryFixture) }\n", file)
+                c.fputs("    foreach ($invalidRegistryFixture in @('tests/fixtures/parser_registry_source_table_marker_order_invalid.lm2', 'tests/fixtures/parser_registry_source_table_marker_duplicate_invalid.lm2', 'tests/fixtures/parser_registry_source_join_marker_order_invalid.lm2', 'tests/fixtures/parser_registry_source_join_marker_duplicate_invalid.lm2')) {\n", file)
+                c.fputs("        $env:LM_P0_REGISTRY = $invalidRegistryFixture\n", file)
+                c.fputs("        & (Resolve-Path -LiteralPath $registrySelftest).Path *> $null\n", file)
+                c.fputs("        $invalidRegistryCode = $LASTEXITCODE\n", file)
+                c.fputs("        if ($invalidRegistryCode -ne 1) { throw ('invalid parser source marker expected exit 1: ' + $invalidRegistryFixture + ', got ' + $invalidRegistryCode) }\n", file)
+                c.fputs("    }\n", file)
+                c.fputs("    $legacyRegistryFixture = Join-Path 'build/obj/tests' 'parser_registry_source_tables.lm4'\n", file)
+                c.fputs("    Copy-Item -LiteralPath $registryFixture -Destination $legacyRegistryFixture -Force\n", file)
+                c.fputs("    try {\n", file)
+                c.fputs("        $env:LM_P0_REGISTRY = $legacyRegistryFixture\n", file)
+                c.fputs("        & (Resolve-Path -LiteralPath $registrySelftest).Path *> $null\n", file)
+                c.fputs("        $legacyCode = $LASTEXITCODE\n", file)
+                c.fputs("        if ($legacyCode -ne 1) { throw ('legacy .lm4 parser registry rejection expected exit 1, got ' + $legacyCode) }\n", file)
+                c.fputs("    }\n", file)
+                c.fputs("    finally { Remove-Item -LiteralPath $legacyRegistryFixture -Force -ErrorAction SilentlyContinue }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("finally {\n", file)
+                c.fputs("    if ($null -eq $previousP0Registry) { Remove-Item Env:LM_P0_REGISTRY -ErrorAction SilentlyContinue } else { $env:LM_P0_REGISTRY = $previousP0Registry }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("$tableSourceMarkerC = Join-Path 'build/obj/tests' 'table_source_marker_roundtrip.c'\n", file)
+                c.fputs("$tableSourceMarkerExe = Join-Path 'build/obj/tests' 'table_source_marker_roundtrip.exe'\n", file)
+                c.fputs("& $trans 'lm2/table.lm2' $tableSourceMarkerC\n", file)
+                c.fputs("if ($LASTEXITCODE -ne 0) { throw 'table source-marker roundtrip translation failed' }\n", file)
+                c.fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' $tableSourceMarkerC $parserLib $ownLib '-o' $tableSourceMarkerExe\n", file)
+                c.fputs("if ($LASTEXITCODE -ne 0) { throw 'table source-marker roundtrip link failed' }\n", file)
+                c.fputs("& (Resolve-Path -LiteralPath 'tests/table_source_marker_roundtrip.ps1').Path -TableTool (Resolve-Path -LiteralPath $tableSourceMarkerExe).Path\n", file)
+                c.fputs("$unsupportedSourceFixture = Join-Path 'build/obj/tests' 'unsupported_source.lm4'\n", file)
+                c.fputs("$unsupportedSourceOutput = Join-Path 'build/obj/tests' 'unsupported_source.c'\n", file)
+                c.fputs("Copy-Item -LiteralPath 'tests/trans_mix_ignored.lm2' -Destination $unsupportedSourceFixture -Force -ErrorAction Stop\n", file)
+                c.fputs("try {\n", file)
+                c.fputs("    & $trans $unsupportedSourceFixture $unsupportedSourceOutput *> $null\n", file)
+                c.fputs("    $unsupportedSourceCode = $LASTEXITCODE\n", file)
+                c.fputs("    if ($unsupportedSourceCode -ne 1) { throw ('legacy .lm4 source rejection expected exit 1, got ' + $unsupportedSourceCode) }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("finally {\n", file)
+                c.fputs("    Remove-Item -LiteralPath $unsupportedSourceFixture -Force -ErrorAction SilentlyContinue\n", file)
+                c.fputs("    Remove-Item -LiteralPath $unsupportedSourceOutput -Force -ErrorAction SilentlyContinue\n", file)
+                c.fputs("}\n", file)
+                c.fputs("$unsupportedTransRegistry = Join-Path 'build/obj/tests' 'unsupported_trans_registry.lm4'\n", file)
+                c.fputs("$unsupportedTransRegistryOutput = Join-Path 'build/obj/tests' 'unsupported_trans_registry.c'\n", file)
+                c.fputs("Copy-Item -LiteralPath 'lm2/trans_registry.lm2' -Destination $unsupportedTransRegistry -Force -ErrorAction Stop\n", file)
+                c.fputs("$previousTransRegistry = $env:LM_TRANS_REGISTRY\n", file)
+                c.fputs("try {\n", file)
+                c.fputs("    $env:LM_TRANS_REGISTRY = $unsupportedTransRegistry\n", file)
+                c.fputs("    & $trans 'tests/trans_include_receiver.lm2' $unsupportedTransRegistryOutput *> $null\n", file)
+                c.fputs("    $unsupportedTransRegistryCode = $LASTEXITCODE\n", file)
+                c.fputs("    if ($unsupportedTransRegistryCode -ne 1) { throw ('legacy .lm4 trans registry rejection expected exit 1, got ' + $unsupportedTransRegistryCode) }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("finally {\n", file)
+                c.fputs("    if ($null -eq $previousTransRegistry) { Remove-Item Env:LM_TRANS_REGISTRY -ErrorAction SilentlyContinue } else { $env:LM_TRANS_REGISTRY = $previousTransRegistry }\n", file)
+                c.fputs("    Remove-Item -LiteralPath $unsupportedTransRegistry -Force -ErrorAction SilentlyContinue\n", file)
+                c.fputs("    Remove-Item -LiteralPath $unsupportedTransRegistryOutput -Force -ErrorAction SilentlyContinue\n", file)
+                c.fputs("}\n", file)
+                c.fputs("$unsupportedUnitPayload = Join-Path 'build/obj/tests' 'unsupported_unit_payload.lm4'\n", file)
+                c.fputs("$unsupportedUnitPayloadOutput = Join-Path 'build/obj/tests' 'unsupported_unit_payload.c'\n", file)
+                c.fputs("Copy-Item -LiteralPath 'tests/fixtures/namespace_l2_payload_import.lm2' -Destination $unsupportedUnitPayload -Force -ErrorAction Stop\n", file)
+                c.fputs("try {\n", file)
+                c.fputs("    & $trans 'tests/fixtures/unsupported_unit_payload_import_probe.lm2' $unsupportedUnitPayloadOutput *> $null\n", file)
+                c.fputs("    $unsupportedUnitPayloadCode = $LASTEXITCODE\n", file)
+                c.fputs("    if ($unsupportedUnitPayloadCode -ne 1) { throw ('legacy .lm4 unit payload rejection expected exit 1, got ' + $unsupportedUnitPayloadCode) }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("finally {\n", file)
+                c.fputs("    Remove-Item -LiteralPath $unsupportedUnitPayload -Force -ErrorAction SilentlyContinue\n", file)
+                c.fputs("    Remove-Item -LiteralPath $unsupportedUnitPayloadOutput -Force -ErrorAction SilentlyContinue\n", file)
+                c.fputs("}\n", file)
+                c.fputs("$parserSkip = @()\n", file)
+                c.fputs("$transSkip = @()\n", file)
+                c.fputs("$transTranslationOnly = @('trans_l4_abi_receivers.lm2', 'trans_message_thread_pool_single.lm2', 'trans_message_thread_mailbox_single.lm2')\n", file)
+                c.fprintf:
+                    file "$transLib = '%s/libtrans.lm0.a'\n"
+                    output_dir
+                c.fputs("if (-not (Test-Path -LiteralPath $transLib -PathType Leaf)) {\n", file)
+                c.fputs("    & $make 'cc' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Ilm1' '-c' 'lm1/build/trans_library.lm1.c' '-o' 'build/obj/trans_library.lm1.o'\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'libtrans compile failed' }\n", file)
+                c.fputs("    & $make 'ar' 'rcs' $transLib 'build/obj/trans_library.lm1.o'\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'libtrans archive failed' }\n", file)
+                c.fputs("    & $make 'ranlib' $transLib\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'libtrans ranlib failed' }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File -Filter '*.lmx' | Sort-Object Name) {\n", file)
+                c.fputs("    if ($testFile.Name -like 'trans_*') { continue }\n", file)
+                c.fputs("    if ($parserSkip -contains $testFile.Name) { continue }\n", file)
+                c.fputs("    & $printTree $testFile.FullName *> $null\n", file)
+                c.fputs("    $code = $LASTEXITCODE\n", file)
+                c.fputs("    if ($testFile.Name -like 'invalid_*') {\n", file)
+                c.fputs("        if ($code -eq 0) { throw ('negative parser test unexpectedly passed: ' + $testFile.Name) }\n", file)
+                c.fputs("    }\n", file)
+                c.fputs("    elseif ($code -ne 0) { throw ('positive parser test failed: ' + $testFile.Name) }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("$transJobs = New-Object 'System.Collections.Generic.List[object]'\n", file)
+                c.fputs("$linkJobs = New-Object 'System.Collections.Generic.List[object]'\n", file)
+                c.fputs("$runJobs = New-Object 'System.Collections.Generic.List[object]'\n", file)
+                c.fputs("$parityLegacyPath = $null\n", file)
+                c.fputs("$parityViewPath = $null\n", file)
+                c.fputs("foreach ($testFile in Get-ChildItem -LiteralPath 'tests' -File | Where-Object { $_.Name -like 'trans_*' -and ($_.Extension -eq '.lm2' -or $_.Extension -eq '.lmx') } | Sort-Object Name) {\n", file)
+                c.fputs("    if ($transSkip -contains $testFile.Name) { continue }\n", file)
+                c.fputs("    if ($lmTestSuite -eq 'smoke' -and $lmSmokeTrans -notcontains $testFile.Name) { continue }\n", file)
+                c.fputs("    $cPath = Join-Path 'build/obj/tests' ($testFile.BaseName + '.c')\n", file)
+                c.fputs("    $exePath = Join-Path 'build/obj/tests' ($testFile.BaseName + '.exe')\n", file)
+                c.fputs("    if ($testFile.Name -like 'trans_invalid_*') {\n", file)
+                c.fputs("        $viewModes = @('view')\n", file)
+                c.fputs("        if ($lmTestSuite -eq 'full') { $viewModes = @('legacy','1','view') }\n", file)
+                c.fputs("        foreach ($viewMode in $viewModes) {\n", file)
+                c.fputs("            $viewPath = $cPath + '.' + $viewMode\n", file)
+                c.fputs("            $transJobs.Add([pscustomobject]@{ File = $trans; Args = @($testFile.FullName, $viewPath); Env = @{ LM_TRANS_REGISTRY_VIEW = $viewMode; LM_TRANS_LINK_LIBRARY = '0' }; Expect = 1; Quiet = $true; Name = ($testFile.Name + ' [' + $viewMode + ']'); Stage = 'negative trans test expected exit 1' })\n", file)
+                c.fputs("        }\n", file)
+                c.fputs("        continue\n", file)
+                c.fputs("    }\n", file)
+                c.fputs("    $extraLibs = @($parserLib, $ownLib)\n", file)
+                c.fputs("    $transEnv = @{ LM_TRANS_REGISTRY_VIEW = 'view'; LM_TRANS_LINK_LIBRARY = '0' }\n", file)
+                c.fputs("    if (Select-String -LiteralPath $testFile.FullName -Pattern 'import: \"lm2/trans_library.lm2\"' -Quiet) {\n", file)
+                c.fputs("        $transEnv['LM_TRANS_LINK_LIBRARY'] = '1'\n", file)
+                c.fputs("        $extraLibs = @($transLib, $parserLib, $ownLib)\n", file)
+                c.fputs("    }\n", file)
+                c.fputs("    if ($testFile.Name -eq 'trans_registry_view_parity.lmx') {\n", file)
+                c.fputs("        $parityLegacyPath = $cPath + '.legacy'\n", file)
+                c.fputs("        $parityViewPath = $cPath\n", file)
+                c.fputs("        $legacyEnv = @{ LM_TRANS_REGISTRY_VIEW = 'legacy'; LM_TRANS_LINK_LIBRARY = $transEnv['LM_TRANS_LINK_LIBRARY'] }\n", file)
+                c.fputs("        $transJobs.Add([pscustomobject]@{ File = $trans; Args = @($testFile.FullName, $parityLegacyPath); Env = $legacyEnv; Expect = 0; Quiet = $false; Name = 'legacy registry parity'; Stage = 'trans smoke translation failed' })\n", file)
+                c.fputs("        $transJobs.Add([pscustomobject]@{ File = $trans; Args = @($testFile.FullName, $cPath); Env = $transEnv; Expect = 0; Quiet = $false; Name = 'new registry view parity'; Stage = 'trans smoke translation failed' })\n", file)
+                c.fputs("    }\n", file)
+                c.fputs("    else {\n", file)
+                c.fputs("        $transJobs.Add([pscustomobject]@{ File = $trans; Args = @($testFile.FullName, $cPath); Env = $transEnv; Expect = 0; Quiet = $false; Name = $testFile.Name; Stage = 'trans smoke translation failed' })\n", file)
+                c.fputs("    }\n", file)
+                c.fputs("    if ($transTranslationOnly -contains $testFile.Name) { continue }\n", file)
+                c.fputs("    $supportCPath = Join-Path 'tests' ($testFile.BaseName + '.support.c')\n", file)
+                c.fputs("    $supportCSources = @()\n", file)
+                c.fputs("    if (Test-Path -LiteralPath $supportCPath -PathType Leaf) { $supportCSources = @($supportCPath) }\n", file)
+                c.fputs("    $warningErrorArgs = @()\n", file)
+                c.fputs("    if ($testFile.Name -eq 'trans_l2_predef_conditional_descriptor.lm2') { $warningErrorArgs = @('-Werror') }\n", file)
+                c.fputs("    $linkArgs = @('link', '-std=c99', '-Wall', '-Wextra', '-Wpedantic') + $warningErrorArgs + @('-Ilm1', '-Itests', $cPath) + $supportCSources + $extraLibs + @('-o', $exePath)\n", file)
+                c.fputs("    $linkJobs.Add([pscustomobject]@{ File = $make; Args = $linkArgs; Env = @{}; Expect = 0; Quiet = $false; Name = $testFile.Name; Stage = 'trans smoke link failed' })\n", file)
+                c.fputs("    $runJobs.Add($exePath)\n", file)
+                c.fputs("    if ($testFile.Name -eq 'trans_l2_predef_conditional_descriptor.lm2') {\n", file)
+                c.fputs("        $branchExePath = Join-Path 'build/obj/tests' ($testFile.BaseName + '_branch.exe')\n", file)
+                c.fputs("        $branchArgs = @('link', '-std=c99', '-Wall', '-Wextra', '-Wpedantic', '-Werror', '-DLM_TEST_PREDEF_DESCRIPTOR_BRANCH=1', '-Ilm1', '-Itests', $cPath) + $supportCSources + @($parserLib, $ownLib) + @('-o', $branchExePath)\n", file)
+                c.fputs("        $linkJobs.Add([pscustomobject]@{ File = $make; Args = $branchArgs; Env = @{}; Expect = 0; Quiet = $false; Name = 'conditional predef descriptor branch'; Stage = 'trans smoke link failed' })\n", file)
+                c.fputs("        $runJobs.Add($branchExePath)\n", file)
+                c.fputs("    }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("Invoke-LmJobQueue $transJobs\n", file)
+                c.fputs("if ($parityLegacyPath) {\n", file)
+                c.fputs("    if ((Get-FileHash -Algorithm SHA256 $parityLegacyPath).Hash -ne (Get-FileHash -Algorithm SHA256 $parityViewPath).Hash) { throw 'legacy/new registry outputs differ' }\n", file)
+                c.fputs("    Remove-Item -LiteralPath $parityLegacyPath -Force\n", file)
+                c.fputs("}\n", file)
+                c.fputs("Invoke-LmJobQueue $linkJobs\n", file)
+                c.fputs("foreach ($exePath in $runJobs) {\n", file)
+                c.fputs("    & (Resolve-Path -LiteralPath $exePath).Path\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw ('trans smoke run failed: ' + [IO.Path]::GetFileName($exePath)) }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("if ($lmTestSuite -eq 'full') {\n", file)
+                c.fputs("$httpClientDefaultC = Join-Path 'build/obj/tests' 'trans_rest_lmx_http_client_default.c'\n", file)
+                c.fputs("$httpClientDefaultTest = Join-Path 'build/obj/tests' 'trans_rest_lmx_http_client_default.exe'\n", file)
+                c.fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_INSTALL_DEFAULT_CLIENT=1' '-Ilm1' $httpClientDefaultC 'tests/trans_rest_lmx_http_client_default_stub.c' $parserLib $ownLib '-o' $httpClientDefaultTest\n", file)
+                c.fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX default-client lowering test link failed' }\n", file)
+                c.fputs("Invoke-LmTestWithTimeout $httpClientDefaultTest 'REST/LMX default-client lowering test'\n", file)
+                c.fputs("$previousInstallFailure = $env:LM_TEST_REST_LMX_INSTALL_FAIL\n", file)
+                c.fputs("try {\n", file)
+                c.fputs("    $env:LM_TEST_REST_LMX_INSTALL_FAIL = '1'\n", file)
+                c.fputs("    & (Resolve-Path -LiteralPath $httpClientDefaultTest).Path\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 1) { throw ('REST/LMX installer failure returned ' + $LASTEXITCODE + ', expected 1') }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("finally {\n", file)
+                c.fputs("    if ($null -eq $previousInstallFailure) { Remove-Item Env:LM_TEST_REST_LMX_INSTALL_FAIL -ErrorAction SilentlyContinue } else { $env:LM_TEST_REST_LMX_INSTALL_FAIL = $previousInstallFailure }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("$restLmxNoneTest = Join-Path 'build/obj/tests' 'rest_lmx_http_client_none.exe'\n", file)
+                c.fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_CLIENT_PROVIDER=0' '-Ilm1' 'lm1/build/rest_lmx_http_client.lm1.c' 'tests/rest_lmx_http_client_none.c' $ownLib '-o' $restLmxNoneTest\n", file)
+                c.fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX none-client test link failed' }\n", file)
+                c.fputs("Invoke-LmTestWithTimeout $restLmxNoneTest 'REST/LMX none-client test'\n", file)
+                c.fputs("$restLmxServerNoneTest = Join-Path 'build/obj/tests' 'rest_lmx_http_server_none.exe'\n", file)
+                c.fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_SERVER_PROVIDER=0' '-Ilm1' 'lm1/build/rest_lmx_http_server.lm1.c' 'tests/rest_lmx_http_server_none.c' $ownLib '-o' $restLmxServerNoneTest\n", file)
+                c.fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX none-server test link failed' }\n", file)
+                c.fputs("Invoke-LmTestWithTimeout $restLmxServerNoneTest 'REST/LMX none-server test'\n", file)
+                c.fputs("$httpServerDefaultC = Join-Path 'build/obj/tests' 'rest_lmx_http_server_default_source.c'\n", file)
+                c.fputs("$httpServerDefaultTest = Join-Path 'build/obj/tests' 'rest_lmx_http_server_default.exe'\n", file)
+                c.fputs("& $trans 'tests/rest_lmx_http_server_default_source.lm2' $httpServerDefaultC\n", file)
+                c.fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX default-server lowering test translation failed' }\n", file)
+                c.fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_INSTALL_DEFAULT_SERVER=1' '-Ilm1' $httpServerDefaultC 'tests/trans_rest_lmx_http_server_default_stub.c' $parserLib $ownLib '-o' $httpServerDefaultTest\n", file)
+                c.fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX default-server lowering test link failed' }\n", file)
+                c.fputs("Invoke-LmTestWithTimeout $httpServerDefaultTest 'REST/LMX default-server lowering test'\n", file)
+                c.fputs("$previousServerStartFailure = $env:LM_TEST_REST_LMX_SERVER_START_FAIL\n", file)
+                c.fputs("try {\n", file)
+                c.fputs("    $env:LM_TEST_REST_LMX_SERVER_START_FAIL = '1'\n", file)
+                c.fputs("    & (Resolve-Path -LiteralPath $httpServerDefaultTest).Path\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 1) { throw ('REST/LMX server start failure returned ' + $LASTEXITCODE + ', expected 1') }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("finally {\n", file)
+                c.fputs("    if ($null -eq $previousServerStartFailure) { Remove-Item Env:LM_TEST_REST_LMX_SERVER_START_FAIL -ErrorAction SilentlyContinue } else { $env:LM_TEST_REST_LMX_SERVER_START_FAIL = $previousServerStartFailure }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("$httpServerNoneC = Join-Path 'build/obj/tests' 'rest_lmx_http_server_none_source.c'\n", file)
+                c.fputs("$httpServerNoneLifecycleTest = Join-Path 'build/obj/tests' 'rest_lmx_http_server_none_lifecycle.exe'\n", file)
+                c.fputs("& $trans 'tests/rest_lmx_http_server_none_source.lm2' $httpServerNoneC\n", file)
+                c.fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX none-server lifecycle translation failed' }\n", file)
+                c.fputs("& $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-DLM_REST_LMX_INSTALL_DEFAULT_SERVER=1' '-Ilm1' $httpServerNoneC 'tests/trans_rest_lmx_http_server_none_stub.c' $parserLib $ownLib '-o' $httpServerNoneLifecycleTest\n", file)
+                c.fputs("if ($LASTEXITCODE -ne 0) { throw 'REST/LMX none-server lifecycle test link failed' }\n", file)
+                c.fputs("Invoke-LmTestWithTimeout $httpServerNoneLifecycleTest 'REST/LMX none-server lifecycle test'\n", file)
+                c.fputs("$previousThreadProvider = $env:LM_THREAD_PROVIDER\n", file)
+                c.fputs("try {\n", file)
+                c.fputs("    $singlePoolTest = Join-Path 'build/obj/tests' 'trans_message_thread_pool_single.exe'\n", file)
+                c.fputs("    $env:LM_THREAD_PROVIDER = 'single'\n", file)
+                c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'build/obj/tests/trans_message_thread_pool_single.c' '-o' $singlePoolTest\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'single MessageThread pool test link failed' }\n", file)
+                c.fputs("    Invoke-LmTestWithTimeout $singlePoolTest 'single MessageThread pool test'\n", file)
+                c.fputs("    $singleMailboxTest = Join-Path 'build/obj/tests' 'trans_message_thread_mailbox_single.exe'\n", file)
+                c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'build/obj/tests/trans_message_thread_mailbox_single.c' '-o' $singleMailboxTest\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'single MessageThread mailbox test link failed' }\n", file)
+                c.fputs("    Invoke-LmTestWithTimeout $singleMailboxTest 'single MessageThread mailbox test'\n", file)
+                c.fputs("    $singleRootDrainTest = Join-Path 'build/obj/tests' 'message_thread_root_drain_single.exe'\n", file)
+                c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_root_drain.c' '-o' $singleRootDrainTest\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'single MessageThread root/drain test link failed' }\n", file)
+                c.fputs("    Invoke-LmTestWithTimeout $singleRootDrainTest 'single MessageThread root/drain test'\n", file)
+                c.fputs("    $singleApplicationExitTest = Join-Path 'build/obj/tests' 'message_thread_application_exit_single.exe'\n", file)
+                c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_application_exit.c' '-o' $singleApplicationExitTest\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'single MessageThread application exit test link failed' }\n", file)
+                c.fputs("    Invoke-LmTestWithTimeout $singleApplicationExitTest 'single MessageThread application exit test'\n", file)
+                c.fputs("    $singleRestLmxProviderTest = Join-Path 'build/obj/tests' 'message_thread_rest_lmx_provider_single.exe'\n", file)
+                c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_rest_lmx_provider.c' '-o' $singleRestLmxProviderTest\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'single REST/LMX provider test link failed' }\n", file)
+                c.fputs("    Invoke-LmTestWithTimeout $singleRestLmxProviderTest 'single REST/LMX provider test'\n", file)
+                c.fputs("    $singleRestLmxIngressTest = Join-Path 'build/obj/tests' 'message_thread_rest_lmx_ingress_single.exe'\n", file)
+                c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_rest_lmx_ingress.c' '-o' $singleRestLmxIngressTest\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'single REST/LMX ingress test link failed' }\n", file)
+                c.fputs("    Invoke-LmTestWithTimeout $singleRestLmxIngressTest 'single REST/LMX ingress test'\n", file)
+                c.fputs("    $nativePoolTest = Join-Path 'build/obj/tests' 'message_thread_pool_native.exe'\n", file)
+                c.fputs("    $env:LM_THREAD_PROVIDER = 'win32'\n", file)
+                c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_pool_native.c' '-o' $nativePoolTest\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'Win32 MessageThread pool test link failed' }\n", file)
+                c.fputs("    Invoke-LmTestWithTimeout $nativePoolTest 'Win32 MessageThread pool test'\n", file)
+                c.fputs("    $nativeMailboxTest = Join-Path 'build/obj/tests' 'message_thread_mailbox_native.exe'\n", file)
+                c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_mailbox_native.c' '-o' $nativeMailboxTest\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'Win32 MessageThread mailbox test link failed' }\n", file)
+                c.fputs("    Invoke-LmTestWithTimeout $nativeMailboxTest 'Win32 MessageThread mailbox test'\n", file)
+                c.fputs("    $nativeRootDrainTest = Join-Path 'build/obj/tests' 'message_thread_root_drain_native.exe'\n", file)
+                c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_root_drain.c' '-o' $nativeRootDrainTest\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'Win32 MessageThread root/drain test link failed' }\n", file)
+                c.fputs("    Invoke-LmTestWithTimeout $nativeRootDrainTest 'Win32 MessageThread root/drain test'\n", file)
+                c.fputs("    $nativeApplicationExitTest = Join-Path 'build/obj/tests' 'message_thread_application_exit_native.exe'\n", file)
+                c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_application_exit.c' '-o' $nativeApplicationExitTest\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'Win32 MessageThread application exit test link failed' }\n", file)
+                c.fputs("    Invoke-LmTestWithTimeout $nativeApplicationExitTest 'Win32 MessageThread application exit test'\n", file)
+                c.fputs("    $nativeRestLmxProviderTest = Join-Path 'build/obj/tests' 'message_thread_rest_lmx_provider_native.exe'\n", file)
+                c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_rest_lmx_provider.c' '-o' $nativeRestLmxProviderTest\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'Win32 REST/LMX provider test link failed' }\n", file)
+                c.fputs("    Invoke-LmTestWithTimeout $nativeRestLmxProviderTest 'Win32 REST/LMX provider test'\n", file)
+                c.fputs("    $nativeRestLmxIngressTest = Join-Path 'build/obj/tests' 'message_thread_rest_lmx_ingress_native.exe'\n", file)
+                c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-Werror' '-Ilm1' 'lm1/build/own.lm1.c' 'tests/message_thread_rest_lmx_ingress.c' '-o' $nativeRestLmxIngressTest\n", file)
+                c.fputs("    if ($LASTEXITCODE -ne 0) { throw 'Win32 REST/LMX ingress test link failed' }\n", file)
+                c.fputs("    Invoke-LmTestWithTimeout $nativeRestLmxIngressTest 'Win32 REST/LMX ingress test'\n", file)
+                c.fputs("}\n", file)
+                c.fputs("finally {\n", file)
+                c.fputs("    if ($null -eq $previousThreadProvider) { Remove-Item Env:LM_THREAD_PROVIDER -ErrorAction SilentlyContinue } else { $env:LM_THREAD_PROVIDER = $previousThreadProvider }\n", file)
+                c.fputs("}\n", file)
+                c.fputs("}\n", file)
+                c.fputs("Write-Host ('lm0 staged tests passed: ' + $lmTestSuite)\n", file)
+                return: 0
+            end: lm_build_write_platform_tests_script
+        default:
+            include: "<unistd.h>";
+            fn: lm_build_exe_suffix () @: char
+                return: ""
+            end: lm_build_exe_suffix
+    
+            fn: lm_build_path_sep () @: char
+                return: "/"
+            end: lm_build_path_sep
+    
+            fn: lm_build_platform_chdir (@: char path) int
+                return: c.chdir(path)
+            end: lm_build_platform_chdir
+    
+            fn: lm_build_platform_getcwd (@: char buffer; size_t: size) @: char
+                return: c.getcwd(buffer, size)
+            end: lm_build_platform_getcwd
+    
+            fn: lm_build_platform_absolute (@: char path) int
+                return: path[0] = '/'
+            end: lm_build_platform_absolute
+    
+            fn: lm_build_file_exists (@: char path) int
+                FILE: file
+    
+                file: c.fopen(path, "rb")
+                if: file = 0
+                    return: 0
+    
+                c.fclose: file
+                return: 1
+            end: lm_build_file_exists
+    
+            fn: lm_build_has_qt_cmake () int
+                return: 0
+            end: lm_build_has_qt_cmake
+    
+            fn: lm_build_has_qt_mingw_make () int
+                return: 0
+            end: lm_build_has_qt_mingw_make
+    
+            fn: lm_build_has_qt_gcc () int
+                return: 0
+            end: lm_build_has_qt_gcc
+    
+            fn: lm_build_has_qt_gxx () int
+                return: 0
+            end: lm_build_has_qt_gxx
+
+            fn: lm_build_platform_canary_command_format () @: char
+                return: "sh -c 'if command -v timeout >/dev/null 2>&1; then timeout 120s \"$1\" --next; elif command -v gtimeout >/dev/null 2>&1; then gtimeout 120s \"$1\" --next; else \"$1\" --next; fi' sh \"%s\""
+            end: lm_build_platform_canary_command_format
+
+            fn: lm_build_platform_canary_command_path (@: char canary_path) @: char
+                return: canary_path
+            end: lm_build_platform_canary_command_path
+
+            fn: lm_build_prepare_platform_canary (@: char canary_path) int
+                c.LM_UNUSED(canary_path)
+                return: 0
+            end: lm_build_prepare_platform_canary
+
+            fn: lm_build_platform_tests_script_path () @: char
+                return: "build/obj/tests/run_lm0_tests.sh"
+            end: lm_build_platform_tests_script_path
+
+            fn: lm_build_platform_tests_command_format () @: char
+                return: "sh \"%s\""
+            end: lm_build_platform_tests_command_format
+
+            fn: lm_build_setenv (@: char name; @: char value) int
+                if: name = 0
+                    return: 1
+                if: value = 0
+                    value: ""
+            return: c.setenv(name, value, 1)
+
+            fn: lm_build_unsetenv (@: char name) int
+                if: name = 0
+                    return: 1
+                c.unsetenv(name)
+            return: 0
+
+            fn: lm_build_write_platform_tests_script (FILE: file; @: char output_dir; @: char parser_library; @: char own_library) int
+                c.fputs("set -eu\n", file)
+                c.fputs("lm_test_suite=${LM_TEST_SUITE:-full}\n", file)
+                c.fputs("if [ \"$lm_test_suite\" != smoke ] && [ \"$lm_test_suite\" != core ] && [ \"$lm_test_suite\" != full ]; then echo \"unknown LM_TEST_SUITE: $lm_test_suite\" >&2; exit 1; fi\n", file)
+                c.fputs("lm_smoke_trans=' trans_integer_add.lm2 trans_include_receiver.lm2 trans_registry_view_parity.lmx trans_getenv_index_probe.lm2 trans_invalid_anonymous_structure_shape.lm2 '\n", file)
+                c.fputs("echo \"lm0 staged tests suite: $lm_test_suite\"\n", file)
+                c.fputs("lm_run_with_watchdog() {\n", file)
+                c.fputs("    if command -v timeout >/dev/null 2>&1; then\n", file)
+                c.fputs("        if timeout 30s \"$@\"; then return 0; else lm_watchdog_status=$?; return \"$lm_watchdog_status\"; fi\n", file)
+                c.fputs("    fi\n", file)
+                c.fputs("    if command -v gtimeout >/dev/null 2>&1; then\n", file)
+                c.fputs("        if gtimeout 30s \"$@\"; then return 0; else lm_watchdog_status=$?; return \"$lm_watchdog_status\"; fi\n", file)
+                c.fputs("    fi\n", file)
+                c.fputs("    \"$@\" &\n", file)
+                c.fputs("    lm_watchdog_test_pid=$!\n", file)
+                c.fputs("    (\n", file)
+                c.fputs("        sleep 30\n", file)
+                c.fputs("        if kill -0 \"$lm_watchdog_test_pid\" 2>/dev/null; then\n", file)
+                c.fputs("            echo 'message-thread pool test timed out' >&2\n", file)
+                c.fputs("            kill -TERM \"$lm_watchdog_test_pid\" 2>/dev/null || true\n", file)
+                c.fputs("            sleep 2\n", file)
+                c.fputs("            kill -KILL \"$lm_watchdog_test_pid\" 2>/dev/null || true\n", file)
+                c.fputs("        fi\n", file)
+                c.fputs("    ) &\n", file)
+                c.fputs("    lm_watchdog_pid=$!\n", file)
+                c.fputs("    if wait \"$lm_watchdog_test_pid\"; then lm_watchdog_status=0; else lm_watchdog_status=$?; fi\n", file)
+                c.fputs("    kill \"$lm_watchdog_pid\" 2>/dev/null || true\n", file)
+                c.fputs("    wait \"$lm_watchdog_pid\" 2>/dev/null || true\n", file)
+                c.fputs("    return \"$lm_watchdog_status\"\n", file)
+                c.fputs("}\n", file)
+                c.fprintf:
+                    file "printTree='%s/printTree.lm0%s'\n"
+                    output_dir lm_build_exe_suffix()
+                c.fprintf:
+                    file "trans='%s/trans.lm0%s'\n"
+                    output_dir lm_build_exe_suffix()
+                c.fprintf:
+                    file "make_tool='%s/make.lm0%s'\n"
+                    output_dir lm_build_exe_suffix()
+                c.fprintf:
+                    file "parserLib='%s'\n"
+                    parser_library
+                c.fprintf:
+                    file "ownLib='%s'\n"
+                    own_library
+                c.fputs("export LM_P0_REGISTRY='lm2/parser_registry.lm2'\n", file)
+                c.fputs("mkdir -p build/obj/tests\n", file)
+                c.fputs("registry_selftest='build/obj/tests/parser_registry_source_tables_selftest'\n", file)
+                c.fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_P0_REGISTRY_SELFTEST -Ilm1 lm1/build/parser.lm1.c \"$ownLib\" -o \"$registry_selftest\"\n", file)
+                c.fputs("LM_P0_REGISTRY='tests/fixtures/parser_registry_source_tables.lm2' \"$registry_selftest\"\n", file)
+                c.fputs("for invalid_registry_fixture in tests/fixtures/parser_registry_source_table_marker_order_invalid.lm2 tests/fixtures/parser_registry_source_table_marker_duplicate_invalid.lm2 tests/fixtures/parser_registry_source_join_marker_order_invalid.lm2 tests/fixtures/parser_registry_source_join_marker_duplicate_invalid.lm2; do\n", file)
+                c.fputs("    if LM_P0_REGISTRY=\"$invalid_registry_fixture\" \"$registry_selftest\" >/dev/null 2>&1; then invalid_registry_code=0; else invalid_registry_code=$?; fi\n", file)
+                c.fputs("    if [ \"$invalid_registry_code\" -ne 1 ]; then echo \"invalid parser source marker expected exit 1: $invalid_registry_fixture, got $invalid_registry_code\" >&2; exit 1; fi\n", file)
+                c.fputs("done\n", file)
+                c.fputs("legacy_registry_fixture='build/obj/tests/parser_registry_source_tables.lm4'\n", file)
+                c.fputs("cp tests/fixtures/parser_registry_source_tables.lm2 \"$legacy_registry_fixture\"\n", file)
+                c.fputs("if LM_P0_REGISTRY=\"$legacy_registry_fixture\" \"$registry_selftest\" >/dev/null 2>&1; then legacy_code=0; else legacy_code=$?; fi\n", file)
+                c.fputs("rm -f \"$legacy_registry_fixture\"\n", file)
+                c.fputs("if [ \"$legacy_code\" -ne 1 ]; then echo \"legacy .lm4 parser registry rejection expected exit 1, got $legacy_code\" >&2; exit 1; fi\n", file)
+                c.fputs("table_source_marker_c='build/obj/tests/table_source_marker_roundtrip.c'\n", file)
+                c.fputs("table_source_marker_test='build/obj/tests/table_source_marker_roundtrip'\n", file)
+                c.fputs("\"$trans\" lm2/table.lm2 \"$table_source_marker_c\"\n", file)
+                c.fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 \"$table_source_marker_c\" \"$parserLib\" \"$ownLib\" -o \"$table_source_marker_test\"\n", file)
+                c.fputs("tests/table_source_marker_roundtrip.sh \"$table_source_marker_test\"\n", file)
+                c.fputs("unsupported_source_fixture='build/obj/tests/unsupported_source.lm4'\n", file)
+                c.fputs("unsupported_source_output='build/obj/tests/unsupported_source.c'\n", file)
+                c.fputs("cp tests/trans_mix_ignored.lm2 \"$unsupported_source_fixture\"\n", file)
+                c.fputs("if \"$trans\" \"$unsupported_source_fixture\" \"$unsupported_source_output\" >/dev/null 2>&1; then unsupported_source_code=0; else unsupported_source_code=$?; fi\n", file)
+                c.fputs("rm -f \"$unsupported_source_fixture\" \"$unsupported_source_output\"\n", file)
+                c.fputs("if [ \"$unsupported_source_code\" -ne 1 ]; then echo \"legacy .lm4 source rejection expected exit 1, got $unsupported_source_code\" >&2; exit 1; fi\n", file)
+                c.fputs("unsupported_trans_registry='build/obj/tests/unsupported_trans_registry.lm4'\n", file)
+                c.fputs("unsupported_trans_registry_output='build/obj/tests/unsupported_trans_registry.c'\n", file)
+                c.fputs("cp lm2/trans_registry.lm2 \"$unsupported_trans_registry\"\n", file)
+                c.fputs("if LM_TRANS_REGISTRY=\"$unsupported_trans_registry\" \"$trans\" tests/trans_include_receiver.lm2 \"$unsupported_trans_registry_output\" >/dev/null 2>&1; then unsupported_trans_registry_code=0; else unsupported_trans_registry_code=$?; fi\n", file)
+                c.fputs("rm -f \"$unsupported_trans_registry\" \"$unsupported_trans_registry_output\"\n", file)
+                c.fputs("if [ \"$unsupported_trans_registry_code\" -ne 1 ]; then echo \"legacy .lm4 trans registry rejection expected exit 1, got $unsupported_trans_registry_code\" >&2; exit 1; fi\n", file)
+                c.fputs("unsupported_unit_payload='build/obj/tests/unsupported_unit_payload.lm4'\n", file)
+                c.fputs("unsupported_unit_payload_output='build/obj/tests/unsupported_unit_payload.c'\n", file)
+                c.fputs("cp tests/fixtures/namespace_l2_payload_import.lm2 \"$unsupported_unit_payload\"\n", file)
+                c.fputs("if \"$trans\" tests/fixtures/unsupported_unit_payload_import_probe.lm2 \"$unsupported_unit_payload_output\" >/dev/null 2>&1; then unsupported_unit_payload_code=0; else unsupported_unit_payload_code=$?; fi\n", file)
+                c.fputs("rm -f \"$unsupported_unit_payload\" \"$unsupported_unit_payload_output\"\n", file)
+                c.fputs("if [ \"$unsupported_unit_payload_code\" -ne 1 ]; then echo \"legacy .lm4 unit payload rejection expected exit 1, got $unsupported_unit_payload_code\" >&2; exit 1; fi\n", file)
+                c.fputs("for src in tests/*.lmx; do\n", file)
+                c.fputs("    [ -e \"$src\" ] || continue\n", file)
+                c.fputs("    name=${src##*/}\n", file)
+                c.fputs("    case \"$name\" in trans_*) continue ;; esac\n", file)
+                c.fputs("    if \"$printTree\" \"$src\" >/dev/null 2>&1; then code=0; else code=$?; fi\n", file)
+                c.fputs("    case \"$name\" in\n", file)
+                c.fputs("        invalid_*) if [ \"$code\" -eq 0 ]; then echo \"negative parser test unexpectedly passed: $name\" >&2; exit 1; fi ;;\n", file)
+                c.fputs("        *) if [ \"$code\" -ne 0 ]; then echo \"positive parser test failed: $name\" >&2; exit 1; fi ;;\n", file)
+                c.fputs("    esac\n", file)
+                c.fputs("done\n", file)
+                c.fprintf:
+                    file "transLib='%s/libtrans.lm0.a'\n"
+                    output_dir
+                c.fputs("if [ ! -f \"$transLib\" ]; then\n", file)
+                c.fputs("    \"$make_tool\" cc -std=c99 -Wall -Wextra -Wpedantic -Ilm1 -c lm1/build/trans_library.lm1.c -o build/obj/trans_library.lm1.o\n", file)
+                c.fputs("    \"$make_tool\" ar rcs \"$transLib\" build/obj/trans_library.lm1.o\n", file)
+                c.fputs("    \"$make_tool\" ranlib \"$transLib\"\n", file)
+                c.fputs("fi\n", file)
+                c.fputs("lm_test_jobs=${LM_TEST_JOBS:-}\n", file)
+                c.fputs("if [ -z \"$lm_test_jobs\" ]; then\n", file)
+                c.fputs("    if command -v nproc >/dev/null 2>&1; then lm_test_jobs=$(nproc)\n", file)
+                c.fputs("    elif command -v sysctl >/dev/null 2>&1; then lm_test_jobs=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)\n", file)
+                c.fputs("    else lm_test_jobs=4\n", file)
+                c.fputs("    fi\n", file)
+                c.fputs("fi\n", file)
+                c.fputs("lm_run_link_jobs() {\n", file)
+                c.fputs("    lm_job_n=0\n", file)
+                c.fputs("    lm_job_fail=0\n", file)
+                c.fputs("    lm_job_pids=\n", file)
+                c.fputs("    while IFS= read -r lm_job_cmd; do\n", file)
+                c.fputs("        [ -n \"$lm_job_cmd\" ] || continue\n", file)
+                c.fputs("        eval \"$lm_job_cmd\" &\n", file)
+                c.fputs("        lm_job_pids=\"$lm_job_pids $!\"\n", file)
+                c.fputs("        lm_job_n=$((lm_job_n + 1))\n", file)
+                c.fputs("        if [ \"$lm_job_n\" -ge \"$lm_test_jobs\" ]; then\n", file)
+                c.fputs("            for lm_job_pid in $lm_job_pids; do if wait \"$lm_job_pid\"; then :; else lm_job_fail=1; fi; done\n", file)
+                c.fputs("            lm_job_n=0\n", file)
+                c.fputs("            lm_job_pids=\n", file)
+                c.fputs("        fi\n", file)
+                c.fputs("    done\n", file)
+                c.fputs("    for lm_job_pid in $lm_job_pids; do if wait \"$lm_job_pid\"; then :; else lm_job_fail=1; fi; done\n", file)
+                c.fputs("    return \"$lm_job_fail\"\n", file)
+                c.fputs("}\n", file)
+                c.fputs(": > build/obj/tests/link_jobs\n", file)
+                c.fputs(": > build/obj/tests/run_jobs\n", file)
+                c.fputs("for src in tests/trans_*.lm2 tests/trans_*.lmx; do\n", file)
+                c.fputs("    [ -e \"$src\" ] || continue\n", file)
+                c.fputs("    name=${src##*/}\n", file)
+                c.fputs("    if [ \"$lm_test_suite\" = smoke ]; then\n", file)
+                c.fputs("        case \"$lm_smoke_trans\" in *\" $name \"*) ;; *) continue ;; esac\n", file)
+                c.fputs("    fi\n", file)
+                c.fputs("    base=${name%.*}\n", file)
+                c.fputs("    c_path=\"build/obj/tests/$base.c\"\n", file)
+                c.fputs("    exe_path=\"build/obj/tests/$base\"\n", file)
+                c.fputs("    case \"$name\" in\n", file)
+                c.fputs("        trans_invalid_*)\n", file)
+                c.fputs("            lm_invalid_views=view\n", file)
+                c.fputs("            if [ \"$lm_test_suite\" = full ]; then lm_invalid_views='legacy 1 view'; fi\n", file)
+                c.fputs("            for view_mode in $lm_invalid_views; do\n", file)
+                c.fputs("                rm -f \"$c_path\"\n", file)
+                c.fputs("                if LM_TRANS_REGISTRY_VIEW=\"$view_mode\" \"$trans\" \"$src\" \"$c_path\" >/dev/null 2>&1; then code=0; else code=$?; fi\n", file)
+                c.fputs("                if [ \"$code\" -ne 1 ]; then echo \"negative trans test expected exit 1: $name [$view_mode] got $code\" >&2; exit 1; fi\n", file)
+                c.fputs("            done\n", file)
+                c.fputs("            rm -f \"$c_path\"\n", file)
+                c.fputs("            continue\n", file)
+                c.fputs("            ;;\n", file)
+                c.fputs("    esac\n", file)
+                c.fputs("    link_env=\n", file)
+                c.fputs("    extra_libs=\"$parserLib $ownLib\"\n", file)
+                c.fputs("    if grep -q 'import: \"lm2/trans_library.lm2\"' \"$src\" 2>/dev/null; then\n", file)
+                c.fputs("        link_env='LM_TRANS_LINK_LIBRARY=1'\n", file)
+                c.fputs("        extra_libs=\"$transLib $parserLib $ownLib\"\n", file)
+                c.fputs("    fi\n", file)
+                c.fputs("    case \"$name\" in\n", file)
+                c.fputs("        trans_registry_view_parity.lmx)\n", file)
+                c.fputs("            legacy_path=\"$c_path.legacy\"\n", file)
+                c.fputs("            env LM_TRANS_REGISTRY_VIEW=legacy $link_env \"$trans\" \"$src\" \"$legacy_path\"\n", file)
+                c.fputs("            env LM_TRANS_REGISTRY_VIEW=view $link_env \"$trans\" \"$src\" \"$c_path\"\n", file)
+                c.fputs("            cmp \"$legacy_path\" \"$c_path\"\n", file)
+                c.fputs("            rm -f \"$legacy_path\"\n", file)
+                c.fputs("            ;;\n", file)
+                c.fputs("        *) env LM_TRANS_REGISTRY_VIEW=view $link_env \"$trans\" \"$src\" \"$c_path\" ;;\n", file)
+                c.fputs("    esac\n", file)
+                c.fputs("    case \"$name\" in trans_l4_abi_receivers.lm2|trans_message_thread_pool_single.lm2|trans_message_thread_mailbox_single.lm2) continue ;; esac\n", file)
+                c.fputs("    support_c=\n", file)
+                c.fputs("    if [ -f \"tests/$base.support.c\" ]; then support_c=\"tests/$base.support.c\"; fi\n", file)
+                c.fputs("    warning_error=\n", file)
+                c.fputs("    if [ \"$name\" = trans_l2_predef_conditional_descriptor.lm2 ]; then warning_error=-Werror; fi\n", file)
+                c.fputs("    printf '%s\\n' \"\\\"$make_tool\\\" link -std=c99 -Wall -Wextra -Wpedantic ${warning_error:+$warning_error} -Ilm1 -Itests \\\"$c_path\\\" ${support_c:+\\\"$support_c\\\"} $extra_libs -o \\\"$exe_path\\\"\" >> build/obj/tests/link_jobs\n", file)
+                c.fputs("    printf '%s\\n' \"$exe_path\" >> build/obj/tests/run_jobs\n", file)
+                c.fputs("    if [ \"$name\" = trans_l2_predef_conditional_descriptor.lm2 ]; then\n", file)
+                c.fputs("        branch_exe_path=\"build/obj/tests/${base}_branch\"\n", file)
+                c.fputs("        printf '%s\\n' \"\\\"$make_tool\\\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_TEST_PREDEF_DESCRIPTOR_BRANCH=1 -Ilm1 -Itests \\\"$c_path\\\" ${support_c:+\\\"$support_c\\\"} $extra_libs -o \\\"$branch_exe_path\\\"\" >> build/obj/tests/link_jobs\n", file)
+                c.fputs("        printf '%s\\n' \"$branch_exe_path\" >> build/obj/tests/run_jobs\n", file)
+                c.fputs("    fi\n", file)
+                c.fputs("done\n", file)
+                c.fputs("if ! lm_run_link_jobs < build/obj/tests/link_jobs; then echo 'trans test link failed' >&2; exit 1; fi\n", file)
+                c.fputs("while IFS= read -r exe_path; do\n", file)
+                c.fputs("    [ -n \"$exe_path\" ] || continue\n", file)
+                c.fputs("    \"$exe_path\"\n", file)
+                c.fputs("done < build/obj/tests/run_jobs\n", file)
+                c.fputs("if [ \"$lm_test_suite\" = full ]; then\n", file)
+                c.fputs("http_client_default_c='build/obj/tests/trans_rest_lmx_http_client_default.c'\n", file)
+                c.fputs("http_client_default_test='build/obj/tests/trans_rest_lmx_http_client_default'\n", file)
+                c.fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_INSTALL_DEFAULT_CLIENT=1 -Ilm1 \"$http_client_default_c\" tests/trans_rest_lmx_http_client_default_stub.c \"$parserLib\" \"$ownLib\" -o \"$http_client_default_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$http_client_default_test\"\n", file)
+                c.fputs("if LM_TEST_REST_LMX_INSTALL_FAIL=1 lm_run_with_watchdog \"$http_client_default_test\"; then\n", file)
+                c.fputs("    echo 'REST/LMX installer failure unexpectedly succeeded' >&2\n", file)
+                c.fputs("    exit 1\n", file)
+                c.fputs("else\n", file)
+                c.fputs("    install_failure_status=$?\n", file)
+                c.fputs("    if [ \"$install_failure_status\" -ne 1 ]; then echo \"REST/LMX installer failure returned $install_failure_status, expected 1\" >&2; exit 1; fi\n", file)
+                c.fputs("fi\n", file)
+                c.fputs("rest_lmx_none_test='build/obj/tests/rest_lmx_http_client_none'\n", file)
+                c.fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_CLIENT_PROVIDER=0 -Ilm1 lm1/build/rest_lmx_http_client.lm1.c tests/rest_lmx_http_client_none.c \"$ownLib\" -o \"$rest_lmx_none_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$rest_lmx_none_test\"\n", file)
+                c.fputs("rest_lmx_server_none_test='build/obj/tests/rest_lmx_http_server_none'\n", file)
+                c.fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_SERVER_PROVIDER=0 -Ilm1 lm1/build/rest_lmx_http_server.lm1.c tests/rest_lmx_http_server_none.c \"$ownLib\" -o \"$rest_lmx_server_none_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$rest_lmx_server_none_test\"\n", file)
+                c.fputs("http_server_default_c='build/obj/tests/rest_lmx_http_server_default_source.c'\n", file)
+                c.fputs("http_server_default_test='build/obj/tests/rest_lmx_http_server_default'\n", file)
+                c.fputs("\"$trans\" tests/rest_lmx_http_server_default_source.lm2 \"$http_server_default_c\"\n", file)
+                c.fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_INSTALL_DEFAULT_SERVER=1 -Ilm1 \"$http_server_default_c\" tests/trans_rest_lmx_http_server_default_stub.c \"$parserLib\" \"$ownLib\" -o \"$http_server_default_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$http_server_default_test\"\n", file)
+                c.fputs("if LM_TEST_REST_LMX_SERVER_START_FAIL=1 lm_run_with_watchdog \"$http_server_default_test\"; then\n", file)
+                c.fputs("    echo 'REST/LMX server start failure unexpectedly succeeded' >&2\n", file)
+                c.fputs("    exit 1\n", file)
+                c.fputs("else\n", file)
+                c.fputs("    server_start_failure_status=$?\n", file)
+                c.fputs("    if [ \"$server_start_failure_status\" -ne 1 ]; then echo \"REST/LMX server start failure returned $server_start_failure_status, expected 1\" >&2; exit 1; fi\n", file)
+                c.fputs("fi\n", file)
+                c.fputs("http_server_none_c='build/obj/tests/rest_lmx_http_server_none_source.c'\n", file)
+                c.fputs("http_server_none_lifecycle_test='build/obj/tests/rest_lmx_http_server_none_lifecycle'\n", file)
+                c.fputs("\"$trans\" tests/rest_lmx_http_server_none_source.lm2 \"$http_server_none_c\"\n", file)
+                c.fputs("\"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -DLM_REST_LMX_INSTALL_DEFAULT_SERVER=1 -Ilm1 \"$http_server_none_c\" tests/trans_rest_lmx_http_server_none_stub.c \"$parserLib\" \"$ownLib\" -o \"$http_server_none_lifecycle_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$http_server_none_lifecycle_test\"\n", file)
+                c.fputs("single_pool_test='build/obj/tests/trans_message_thread_pool_single'\n", file)
+                c.fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c build/obj/tests/trans_message_thread_pool_single.c -o \"$single_pool_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$single_pool_test\"\n", file)
+                c.fputs("single_mailbox_test='build/obj/tests/trans_message_thread_mailbox_single'\n", file)
+                c.fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c build/obj/tests/trans_message_thread_mailbox_single.c -o \"$single_mailbox_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$single_mailbox_test\"\n", file)
+                c.fputs("single_root_drain_test='build/obj/tests/message_thread_root_drain_single'\n", file)
+                c.fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_root_drain.c -o \"$single_root_drain_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$single_root_drain_test\"\n", file)
+                c.fputs("single_application_exit_test='build/obj/tests/message_thread_application_exit_single'\n", file)
+                c.fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_application_exit.c -o \"$single_application_exit_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$single_application_exit_test\"\n", file)
+                c.fputs("single_rest_lmx_provider_test='build/obj/tests/message_thread_rest_lmx_provider_single'\n", file)
+                c.fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_rest_lmx_provider.c -o \"$single_rest_lmx_provider_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$single_rest_lmx_provider_test\"\n", file)
+                c.fputs("single_rest_lmx_ingress_test='build/obj/tests/message_thread_rest_lmx_ingress_single'\n", file)
+                c.fputs("LM_THREAD_PROVIDER=single \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_rest_lmx_ingress.c -o \"$single_rest_lmx_ingress_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$single_rest_lmx_ingress_test\"\n", file)
+                c.fputs("native_pool_test='build/obj/tests/message_thread_pool_native'\n", file)
+                c.fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_pool_native.c -o \"$native_pool_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$native_pool_test\"\n", file)
+                c.fputs("native_mailbox_test='build/obj/tests/message_thread_mailbox_native'\n", file)
+                c.fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_mailbox_native.c -o \"$native_mailbox_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$native_mailbox_test\"\n", file)
+                c.fputs("native_root_drain_test='build/obj/tests/message_thread_root_drain_native'\n", file)
+                c.fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_root_drain.c -o \"$native_root_drain_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$native_root_drain_test\"\n", file)
+                c.fputs("native_application_exit_test='build/obj/tests/message_thread_application_exit_native'\n", file)
+                c.fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_application_exit.c -o \"$native_application_exit_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$native_application_exit_test\"\n", file)
+                c.fputs("native_rest_lmx_provider_test='build/obj/tests/message_thread_rest_lmx_provider_native'\n", file)
+                c.fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_rest_lmx_provider.c -o \"$native_rest_lmx_provider_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$native_rest_lmx_provider_test\"\n", file)
+                c.fputs("native_rest_lmx_ingress_test='build/obj/tests/message_thread_rest_lmx_ingress_native'\n", file)
+                c.fputs("LM_THREAD_PROVIDER=pthread \"$make_tool\" link -std=c99 -Wall -Wextra -Wpedantic -Werror -Ilm1 lm1/build/own.lm1.c tests/message_thread_rest_lmx_ingress.c -o \"$native_rest_lmx_ingress_test\"\n", file)
+                c.fputs("lm_run_with_watchdog \"$native_rest_lmx_ingress_test\"\n", file)
+                c.fputs("fi\n", file)
+                c.fputs("echo \"lm0 staged tests passed: $lm_test_suite\"\n", file)
+                return: 0
+            end: lm_build_write_platform_tests_script
+    end: os
+    
+    fn: lm_build_options_new () LmBuildOptions
+        return: c.lm_own_new_zero(c.sizeof(c.LmBuildOptions))
+    end: lm_build_options_new
+    
+    sub: lm_build_options_delete (LmBuildOptions: options)
+        c.lm_own_delete: options 0
+    end: lm_build_options_delete
+    
+    fn: lm_build_is_path_separator (char: value) int
+        return: value = '/' || value = '\\'
+    end: lm_build_is_path_separator
+    
+    fn: lm_build_has_path_separator (@: char path) int
+        return: c.strchr(path, '/') != 0 || c.strchr(path, '\\') != 0
+    end: lm_build_has_path_separator
+    
+    fn: lm_build_is_absolute_path (@: char path) int
+        if: path = 0 || path[0] = '\0'
+            return: 0
+        if: lm_build_platform_absolute(path)
+            return: 1
+        return: 0
+    end: lm_build_is_absolute_path
+    
+    fn: lm_build_join_path (@: char buffer; size_t: size; @: char base; @: char tail) int
+        size_t: base_length
+        size_t: tail_length
+        size_t: used
+    
+        base_length: c.strlen(base)
+        tail_length: c.strlen(tail)
+        used: base_length
+    
+        if: base_length + tail_length + 2U >= size
+            c.fprintf: c.stderr "buildCore.lm0: path is too long\n"
+            return: 1
+    
+        c.memcpy(buffer, base, base_length)
+        if: base_length > 0U && tail_length > 0U && lm_build_is_path_separator(base[base_length - 1U]) = 0 && lm_build_is_path_separator(tail[0]) = 0
+            c.memcpy(buffer + used, lm_build_path_sep(), c.strlen(lm_build_path_sep()))
+            used: used + c.strlen(lm_build_path_sep())
+        c.memcpy(buffer + used, tail, tail_length + 1U)
+    
+        return: 0
+    end: lm_build_join_path
+    
+    fn: lm_build_trim_last_path_part (@: char path) int
+        size_t: length
+    
+        length: c.strlen(path)
+        while: length > 0U && lm_build_is_path_separator(path[length - 1U])
+            path[length - 1U]: '\0'
+            length: length - 1U
+    
+        while: length > 0U
+            length: length - 1U
+            if: lm_build_is_path_separator(path[length])
+                path[length]: '\0'
+                return: 0
+        ---
+    
+        path[0]: '\0'
+        return: 0
+    end: lm_build_trim_last_path_part
+    
+    fn: lm_build_has_project_marker (@: char path) int
+        c.array: [2048]: char marker_path
+    
+        if: lm_build_join_path(marker_path, c.sizeof(marker_path), path, "lm2/buildCore.lmx") != 0
+            return: 0
+        if: lm_build_file_exists(marker_path)
+            return: 1
+        return: 0
+    end: lm_build_has_project_marker
+    
+    fn: lm_build_enter_project_root (@: char program_path) int
+        c.array: [1024]: char search_path
+        c.array: [1024]: char executable_path
+        c.array: [1024]: char cwd
+        int: depth
+    
+        if: lm_build_platform_getcwd(cwd, c.sizeof(cwd)) = 0
+            c.fprintf: c.stderr "buildCore.lm0: cannot read current directory\n"
+            return: 1
+    
+        if: program_path != 0 && program_path[0] != '\0' && lm_build_has_path_separator(program_path)
+            if: lm_build_is_absolute_path(program_path)
+                if: c.strlen(program_path) >= c.sizeof(executable_path)
+                    c.fprintf: c.stderr "buildCore.lm0: executable path is too long\n"
+                    return: 1
+                c.strcpy(executable_path, program_path)
+            if: lm_build_is_absolute_path(program_path) = 0
+                if: lm_build_join_path(executable_path, c.sizeof(executable_path), cwd, program_path) != 0
+                    return: 1
+            ---
+    
+            c.strcpy(search_path, executable_path)
+            lm_build_trim_last_path_part(search_path)
+        ---
+        if: program_path = 0 || program_path[0] = '\0' || lm_build_has_path_separator(program_path) = 0
+            c.strcpy(search_path, cwd)
+    
+        depth: 0
+        while: depth < 12 && search_path[0] != '\0'
+            if: lm_build_has_project_marker(search_path)
+                if: lm_build_platform_chdir(search_path) != 0
+                    c.fprintf: c.stderr "buildCore.lm0: cannot enter project root %s\n" search_path
+                    return: 1
+                return: 0
+            lm_build_trim_last_path_part(search_path)
+            depth: depth + 1
+    
+        c.fprintf: c.stderr "buildCore.lm0: cannot locate project root from %s\n" cwd
+        return: 1
+    end: lm_build_enter_project_root
+    
+    fn: lm_build_env_or_default (@: char name; @: char fallback) @: char
+        @: char value
+    
+        value: c.getenv(name)
+        if: value = 0 || value[0] = '\0'
+            return: fallback
+    
+        return: value
+    end: lm_build_env_or_default
+
+    fn: lm_build_thread_provider () @: char
+        @: char value
+
+        value: lm_build_env_or_default("LM_THREAD_PROVIDER", "single")
+        if: c.strcmp(value, "auto") = 0 || c.strcmp(value, "pthread") = 0 || c.strcmp(value, "win32") = 0 || c.strcmp(value, "single") = 0
+            return: value
+
+        c.fprintf: c.stderr "buildCore.lm0: unsupported LM_THREAD_PROVIDER '%s' (expected auto, pthread, win32 or single)\n" value
+        return: 0
+    end: lm_build_thread_provider
+    
+    fn: lm_build_default_cmake () @: char
+        if: lm_build_has_qt_cmake()
+            return: "C:/Qt/Tools/CMake_64/bin/cmake.exe"
+        return: "cmake"
+    end: lm_build_default_cmake
+    
+    fn: lm_build_default_generator () @: char
+        if: lm_build_has_qt_mingw_make()
+            return: "MinGW Makefiles"
+        return: ""
+    end: lm_build_default_generator
+    
+    fn: lm_build_default_make_program () @: char
+        if: lm_build_has_qt_mingw_make()
+            return: "C:/Qt/Tools/mingw1310_64/bin/mingw32-make.exe"
+        return: ""
+    end: lm_build_default_make_program
+    
+    fn: lm_build_default_cc () @: char
+        if: lm_build_has_qt_gcc()
+            return: "C:/Qt/Tools/mingw1310_64/bin/gcc.exe"
+        return: ""
+    end: lm_build_default_cc
+    
+    fn: lm_build_default_cxx () @: char
+        if: lm_build_has_qt_gxx()
+            return: "C:/Qt/Tools/mingw1310_64/bin/g++.exe"
+        return: ""
+    end: lm_build_default_cxx
+    
+    fn: lm_build_test_suite_name (int: suite) @: char
+        if: suite = 2
+            return: "smoke"
+        if: suite = 1
+            return: "core"
+        return: "full"
+    end: lm_build_test_suite_name
+
+    sub: lm_build_print_usage ()
+        c.printf: "usage: buildCore.lm0 [--build] [--full] [--next] [--tests smoke core full]\n"
+        c.printf: "  --build refresh the L0 bootstrap tools\n"
+        c.printf: "  --full  refresh L0 tools, then build the bundled third_party profile\n"
+        c.printf: "  --next  verify the staged L0 bootstrap tools without installing them\n"
+        c.printf: "  --tests smoke, core or full  staged test suite (default full)\n"
+    end: lm_build_print_usage
+    
+    fn: lm_build_parse_options (int: argc; @@: char argv; LmBuildOptions: options) int
+        int: index
+        @: char option
+    
+        options\full_build: 0
+        options\next_build: 0
+        options\test_suite: 0
+        index: 1
+    
+        while: index < argc
+            option: argv[index]
+            if: c.strcmp(option, "--build") = 0
+                # Explicit default bootstrap mode.
+            if: c.strcmp(option, "--full") = 0
+                options\full_build: 1
+            if: c.strcmp(option, "--next") = 0
+                options\next_build: 1
+            if: c.strcmp(option, "--tests") = 0
+                if: index + 1 >= argc
+                    c.fprintf: c.stderr "buildCore.lm0: --tests requires smoke, core or full\n"
+                    lm_build_print_usage()
+                    return: 1
+                if: c.strcmp(argv[index + 1], "smoke") = 0
+                    options\test_suite: 2
+                if: c.strcmp(argv[index + 1], "core") = 0
+                    options\test_suite: 1
+                if: c.strcmp(argv[index + 1], "full") = 0
+                    options\test_suite: 0
+                if: c.strcmp(argv[index + 1], "smoke") != 0 && c.strcmp(argv[index + 1], "core") != 0 && c.strcmp(argv[index + 1], "full") != 0
+                    c.fprintf: c.stderr "buildCore.lm0: unknown test suite: %s\n" argv[index + 1]
+                    lm_build_print_usage()
+                    return: 1
+                index: index + 1
+            if: c.strcmp(option, "--help") = 0 || c.strcmp(option, "-h") = 0
+                lm_build_print_usage()
+                return: 2
+            if: c.strcmp(option, "--build") != 0 && c.strcmp(option, "--full") != 0 && c.strcmp(option, "--next") != 0 && c.strcmp(option, "--help") != 0 && c.strcmp(option, "-h") != 0 && c.strcmp(option, "--tests") != 0
+                c.fprintf: c.stderr "buildCore.lm0: unknown option: %s\n" option
+                lm_build_print_usage()
+                return: 1
+            index: index + 1
+    
+        return: 0
+    end: lm_build_parse_options
+
+    fn: lm_build_output_dir (LmBuildOptions: options) @: char
+        if: options\next_build
+            return: "build/lm0/next/check"
+        return: "build/lm0/next"
+    end: lm_build_output_dir
+    
+    fn: lm_build_append (@: char buffer; size_t: size; size_t: used; @: char text) size_t
+        size_t: length
+    
+        length: c.strlen(text)
+        if: used + length >= size
+            c.fprintf: c.stderr "buildCore.lm0: command line is too long\n"
+            return: size
+    
+        c.memcpy(buffer + used, text, length + 1U)
+        return: used + length
+    end: lm_build_append
+    
+    fn: lm_build_append_arg (@: char buffer; size_t: size; size_t: used; @: char arg) size_t
+        used: lm_build_append(buffer, size, used, " \"")
+        if: used = size
+            return: size
+        used: lm_build_append(buffer, size, used, arg)
+        if: used = size
+            return: size
+        return: lm_build_append(buffer, size, used, "\"")
+    end: lm_build_append_arg
+    
+    fn: lm_build_append_prefixed_arg (@: char buffer; size_t: size; size_t: used; @: char prefix; @: char value) size_t
+        c.array: [2048]: char arg
+    
+        if: c.strlen(prefix) + c.strlen(value) >= c.sizeof(arg)
+            c.fprintf: c.stderr "buildCore.lm0: CMake argument is too long\n"
+            return: size
+    
+        c.strcpy(arg, prefix)
+        c.strcat(arg, value)
+    
+        return: lm_build_append_arg(buffer, size, used, arg)
+    end: lm_build_append_prefixed_arg
+    
+    fn: lm_build_run (@: char command) int
+        int: status
+    
+        c.printf: "%s\n" command
+        status: c.system(command)
+        if: status != 0
+            c.fprintf: c.stderr "buildCore.lm0: command failed with status %d\n" status
+            return: 1
+    
+        return: 0
+    end: lm_build_run
+    
+    fn: lm_build_make (@: char make_tool; @: char operation; @: char args) int
+        c.array: [8192]: char command
+        size_t: used
+    
+        used: 0U
+        command[0]: '\0'
+    
+        used: lm_build_append(command, c.sizeof(command), used, make_tool)
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, operation)
+        if: used = c.sizeof(command)
+            return: 1
+    
+        if: args != 0 && args[0] != '\0'
+            used: lm_build_append(command, c.sizeof(command), used, " ")
+            if: used = c.sizeof(command)
+                return: 1
+            used: lm_build_append(command, c.sizeof(command), used, args)
+            if: used = c.sizeof(command)
+                return: 1
+        ---
+    
+        return: lm_build_run(command)
+    end: lm_build_make
+    
+    fn: lm_build_trans (@: char trans_tool; @: char source_path; @: char output_path) int
+        c.array: [4096]: char command
+        size_t: used
+    
+        used: 0U
+        command[0]: '\0'
+    
+        used: lm_build_append(command, c.sizeof(command), used, trans_tool)
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, source_path)
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, output_path)
+        if: used = c.sizeof(command)
+            return: 1
+    
+        return: lm_build_run(command)
+    end: lm_build_trans
+    
+    fn: lm_build_generate_all (@: char trans_tool) int
+        if: lm_build_trans(trans_tool, "lm2/own.lm2", "lm1/build/own.lm1.c") != 0
+            return: 1
+        if: lm_build_trans(trans_tool, "lm2/rest_lmx_http_client.lm2", "lm1/build/rest_lmx_http_client.lm1.c") != 0
+            return: 1
+        if: lm_build_trans(trans_tool, "lm2/rest_lmx_http_server.lm2", "lm1/build/rest_lmx_http_server.lm1.c") != 0
+            return: 1
+        if: lm_build_trans(trans_tool, "lm2/trans.lm2", "lm1/build/trans.lm1.c") != 0
+            return: 1
+        if: lm_build_setenv("LM_TRANS_LIBRARY", "1") != 0
+            return: 1
+        if: lm_build_trans(trans_tool, "lm2/trans_library.lm2", "lm1/build/trans_library.lm1.c") != 0
+            lm_build_unsetenv("LM_TRANS_LIBRARY")
+            return: 1
+        lm_build_unsetenv("LM_TRANS_LIBRARY")
+        if: lm_build_trans(trans_tool, "lm2/parser.lm2", "lm1/build/parser.lm1.c") != 0
+            return: 1
+        if: lm_build_trans(trans_tool, "lm2/printTree.lm2", "lm1/build/printTree.lm1.c") != 0
+            return: 1
+        if: lm_build_trans(trans_tool, "lm2/finalize.lm2", "lm1/build/finalize.lm1.c") != 0
+            return: 1
+        if: lm_build_trans(trans_tool, "lm2/make.lm2", "lm1/build/make.lm1.c") != 0
+            return: 1
+        if: lm_build_trans(trans_tool, "lm2/vcpkgFetch.lm2", "lm1/build/vcpkgFetch.lm1.c") != 0
+            return: 1
+        if: lm_build_trans(trans_tool, "lm2/buildCore.lmx", "lm1/build/buildCore.lm1.c") != 0
+            return: 1
+        return: 0
+    end: lm_build_generate_all
+    
+    fn: lm_build_parser_library (@: char make_tool; @: char output_dir) int
+        c.array: [512]: char library_path
+        c.array: [4096]: char command
+
+        c.snprintf:
+            library_path c.sizeof(library_path)
+            "%s/libparser.lm0.a"
+            output_dir
+        if: lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" -c \"lm1/build/parser.lm1.c\" -o \"build/obj/parser.lm1.o\"") != 0
+            return: 1
+        c.remove: library_path
+        c.snprintf:
+            command c.sizeof(command)
+            "rcs \"%s\" \"build/obj/parser.lm1.o\""
+            library_path
+        if: lm_build_make(make_tool, "ar", command) != 0
+            return: 1
+        c.snprintf:
+            command c.sizeof(command)
+            "\"%s\""
+            library_path
+        return: lm_build_make(make_tool, "ranlib", command)
+    end: lm_build_parser_library
+    
+    fn: lm_build_own_library (@: char make_tool; @: char output_dir) int
+        c.array: [512]: char library_path
+        c.array: [4096]: char command
+
+        c.snprintf:
+            library_path c.sizeof(library_path)
+            "%s/libown.lm0.a"
+            output_dir
+        if: lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" -c \"lm1/build/own.lm1.c\" -o \"build/obj/own.lm1.o\"") != 0
+            return: 1
+        c.remove: library_path
+        c.snprintf:
+            command c.sizeof(command)
+            "rcs \"%s\" \"build/obj/own.lm1.o\""
+            library_path
+        if: lm_build_make(make_tool, "ar", command) != 0
+            return: 1
+        c.snprintf:
+            command c.sizeof(command)
+            "\"%s\""
+            library_path
+        return: lm_build_make(make_tool, "ranlib", command)
+    end: lm_build_own_library
+
+    fn: lm_build_trans_library (@: char make_tool; @: char output_dir) int
+        c.array: [512]: char library_path
+        c.array: [4096]: char command
+
+        c.snprintf:
+            library_path c.sizeof(library_path)
+            "%s/libtrans.lm0.a"
+            output_dir
+        if: lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" -c \"lm1/build/trans_library.lm1.c\" -o \"build/obj/trans_library.lm1.o\"") != 0
+            return: 1
+        c.remove: library_path
+        c.snprintf:
+            command c.sizeof(command)
+            "rcs \"%s\" \"build/obj/trans_library.lm1.o\""
+            library_path
+        if: lm_build_make(make_tool, "ar", command) != 0
+            return: 1
+        c.snprintf:
+            command c.sizeof(command)
+            "\"%s\""
+            library_path
+        return: lm_build_make(make_tool, "ranlib", command)
+    end: lm_build_trans_library
+    
+    fn: lm_build_compile_trans (@: char make_tool; @: char output_dir; @: char parser_library; @: char own_library) int
+        c.array: [4096]: char command
+    
+        c.snprintf:
+            command c.sizeof(command)
+            "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/trans.lm1.c\" \"%s\" \"%s\" -o \"%s/trans.lm0%s\""
+            parser_library own_library output_dir lm_build_exe_suffix()
+    
+        if: lm_build_make(make_tool, "link", command) != 0
+            return: 1
+    
+        return: 0
+    end: lm_build_compile_trans
+    
+    fn: lm_build_compile_generated_tools (@: char make_tool; @: char output_dir; @: char parser_library; @: char own_library) int
+        c.array: [4096]: char command
+    
+        c.snprintf:
+            command c.sizeof(command)
+            "-std=c99 -Wall -Wextra -Wpedantic \"lm1/build/make.lm1.c\" \"%s\" -o \"%s/make.lm0%s\""
+            own_library output_dir lm_build_exe_suffix()
+        if: lm_build_make(make_tool, "link", command) != 0
+            return: 1
+    
+        c.snprintf:
+            command c.sizeof(command)
+            "-std=c99 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L \"lm1/build/finalize.lm1.c\" \"%s\" -o \"%s/finalize.lm0%s\""
+            own_library output_dir lm_build_exe_suffix()
+        if: lm_build_make(make_tool, "link", command) != 0
+            return: 1
+    
+        c.snprintf:
+            command c.sizeof(command)
+            "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/vcpkgFetch.lm1.c\" \"%s\" -o \"%s/vcpkgFetch.lm0%s\""
+            own_library output_dir lm_build_exe_suffix()
+        if: lm_build_make(make_tool, "link", command) != 0
+            return: 1
+    
+        c.snprintf:
+            command c.sizeof(command)
+            "-std=c99 -Wall -Wextra -Wpedantic -I\"lm1\" \"lm1/build/printTree.lm1.c\" \"%s\" \"%s\" -o \"%s/printTree.lm0%s\""
+            parser_library own_library output_dir lm_build_exe_suffix()
+        if: lm_build_make(make_tool, "link", command) != 0
+            return: 1
+    
+        c.snprintf:
+            command c.sizeof(command)
+            "-std=c99 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L -I\"lm1\" \"lm1/build/buildCore.lm1.c\" \"%s\" -o \"%s/buildCore.lm0%s\""
+            own_library output_dir lm_build_exe_suffix()
+        return: lm_build_make(make_tool, "link", command)
+    end: lm_build_compile_generated_tools
+
+    fn: lm_build_run_canary () int
+        c.array: [512]: char canary_path
+        @: char command_path
+        c.array: [4096]: char command
+
+        c.snprintf:
+            canary_path c.sizeof(canary_path)
+            "build/lm0/next/buildCore.lm0%s"
+            lm_build_exe_suffix()
+        if: lm_build_prepare_platform_canary(canary_path) != 0
+            return: 1
+        command_path: lm_build_platform_canary_command_path(canary_path)
+        c.snprintf:
+            command c.sizeof(command)
+            lm_build_platform_canary_command_format()
+            command_path
+
+        return: lm_build_run(command)
+    end: lm_build_run_canary
+
+    fn: lm_build_write_staged_tests_script (@: char output_dir; @: char parser_library; @: char own_library) int
+        FILE: file
+
+        file: c.fopen(lm_build_platform_tests_script_path(), "wb")
+        if: file = 0
+            c.fprintf: c.stderr "buildCore.lm0: cannot write staged tests script %s\n" lm_build_platform_tests_script_path()
+            return: 1
+
+        if: lm_build_write_platform_tests_script(file, output_dir, parser_library, own_library) != 0
+            c.fclose: file
+            return: 1
+
+        if: c.fclose(file) != 0
+            c.fprintf: c.stderr "buildCore.lm0: cannot close staged tests script %s\n" lm_build_platform_tests_script_path()
+            return: 1
+
+        return: 0
+    end: lm_build_write_staged_tests_script
+
+    fn: lm_build_run_staged_tests (@: char make_tool; @: char output_dir; @: char parser_library; @: char own_library) int
+        c.array: [512]: char command
+
+        if: lm_build_make(make_tool, "mkdir", "\"build/obj/tests\"") != 0
+            return: 1
+        if: lm_build_write_staged_tests_script(output_dir, parser_library, own_library) != 0
+            return: 1
+
+        c.snprintf:
+            command c.sizeof(command)
+            lm_build_platform_tests_command_format()
+            lm_build_platform_tests_script_path()
+
+        return: lm_build_run(command)
+    end: lm_build_run_staged_tests
+    
+    fn: lm_build_defer_finalize () int
+        c.array: [256]: char command
+    
+        c.snprintf:
+            command c.sizeof(command)
+            "build%slm0%snext%sfinalize.lm0%s --defer"
+            lm_build_path_sep() lm_build_path_sep() lm_build_path_sep() lm_build_exe_suffix()
+        return: lm_build_run(command)
+    end: lm_build_defer_finalize
+    
+    fn: lm_build_extract_third_party_zips () int
+        @: char cmake_tool
+        c.array: [4096]: char command
+        size_t: used
+    
+        cmake_tool: lm_build_env_or_default("LM_CMAKE", lm_build_default_cmake())
+    
+        used: 0U
+        command[0]: '\0'
+    
+        used: lm_build_append(command, c.sizeof(command), used, cmake_tool)
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-DLM_THIRD_PARTY_ARCHIVE_DIR=third_party")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-DLM_THIRD_PARTY_EXTRACT_DIR=build/third_party")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-P")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "cmake/ExtractThirdPartyZips.cmake")
+        if: used = c.sizeof(command)
+            return: 1
+    
+        return: lm_build_run(command)
+    end: lm_build_extract_third_party_zips
+    
+    fn: lm_build_clear_full_cmake_cache (@: char cmake_tool; @: char build_dir) int
+        c.array: [4096]: char command
+        c.array: [2048]: char cache_path
+        c.array: [2048]: char files_path
+        size_t: used
+    
+        if: c.strlen(build_dir) + 32U >= c.sizeof(cache_path)
+            c.fprintf: c.stderr "buildCore.lm0: full build directory is too long\n"
+            return: 1
+    
+        c.snprintf: cache_path c.sizeof(cache_path) "%s/CMakeCache.txt" build_dir
+        c.snprintf: files_path c.sizeof(files_path) "%s/CMakeFiles" build_dir
+    
+        used: 0U
+        command[0]: '\0'
+        used: lm_build_append(command, c.sizeof(command), used, cmake_tool)
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-E")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "rm")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-f")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, cache_path)
+        if: used = c.sizeof(command)
+            return: 1
+        if: lm_build_run(command) != 0
+            return: 1
+    
+        used: 0U
+        command[0]: '\0'
+        used: lm_build_append(command, c.sizeof(command), used, cmake_tool)
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-E")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "rm")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-rf")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, files_path)
+        if: used = c.sizeof(command)
+            return: 1
+    
+        return: lm_build_run(command)
+    end: lm_build_clear_full_cmake_cache
+    
+    fn: lm_build_full_configure () int
+        @: char cmake_tool
+        @: char build_dir
+        @: char build_type
+        @: char generator
+        @: char make_program
+        @: char cc
+        @: char cxx
+        @: char thread_provider
+        c.array: [8192]: char command
+        size_t: used
+    
+        cmake_tool: lm_build_env_or_default("LM_CMAKE", lm_build_default_cmake())
+        build_dir: lm_build_env_or_default("LM_FULL_BUILD_DIR", "build/libs")
+        build_type: lm_build_env_or_default("LM_FULL_BUILD_TYPE", "Debug")
+        generator: lm_build_env_or_default("LM_CMAKE_GENERATOR", lm_build_default_generator())
+        make_program: lm_build_env_or_default("LM_CMAKE_MAKE_PROGRAM", lm_build_default_make_program())
+        cc: lm_build_env_or_default("LM_CC", lm_build_default_cc())
+        cxx: lm_build_env_or_default("LM_CXX", lm_build_default_cxx())
+        thread_provider: lm_build_thread_provider()
+        if: thread_provider = 0
+            return: 1
+    
+        if: lm_build_clear_full_cmake_cache(cmake_tool, build_dir) != 0
+            return: 1
+    
+        used: 0U
+        command[0]: '\0'
+    
+        used: lm_build_append(command, c.sizeof(command), used, cmake_tool)
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-S")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, ".")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-B")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, build_dir)
+        if: used = c.sizeof(command)
+            return: 1
+    
+        if: generator[0] != '\0'
+            used: lm_build_append_arg(command, c.sizeof(command), used, "-G")
+            if: used = c.sizeof(command)
+                return: 1
+            used: lm_build_append_arg(command, c.sizeof(command), used, generator)
+            if: used = c.sizeof(command)
+                return: 1
+        ---
+    
+        used: lm_build_append_prefixed_arg(command, c.sizeof(command), used, "-DCMAKE_BUILD_TYPE=", build_type)
+        if: used = c.sizeof(command)
+            return: 1
+
+        used: lm_build_append_prefixed_arg(command, c.sizeof(command), used, "-DLM_THREAD_PROVIDER=", thread_provider)
+        if: used = c.sizeof(command)
+            return: 1
+    
+        if: make_program[0] != '\0'
+            used: lm_build_append_prefixed_arg(command, c.sizeof(command), used, "-DCMAKE_MAKE_PROGRAM=", make_program)
+            if: used = c.sizeof(command)
+                return: 1
+        ---
+    
+        if: cc[0] != '\0'
+            used: lm_build_append_prefixed_arg(command, c.sizeof(command), used, "-DCMAKE_C_COMPILER=", cc)
+            if: used = c.sizeof(command)
+                return: 1
+        ---
+    
+        if: cxx[0] != '\0'
+            used: lm_build_append_prefixed_arg(command, c.sizeof(command), used, "-DCMAKE_CXX_COMPILER=", cxx)
+            if: used = c.sizeof(command)
+                return: 1
+        ---
+    
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-DLINGVAMYXA_ENABLE_EXTERNAL_DEPS=OFF")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-DLINGVAMYXA_ENABLE_BUNDLED_THIRD_PARTY=ON")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-DLM_THIRD_PARTY_SOURCE_DIR=build/third_party")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-DBUILD_LINGVAMYXA_QT_APP=OFF")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-DBUILD_BUILD_CORE_LM0=OFF")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "-DLINGVAMYXA_BUILDCORE_ARGS=")
+        if: used = c.sizeof(command)
+            return: 1
+    
+        return: lm_build_run(command)
+    end: lm_build_full_configure
+    
+    fn: lm_build_full_build () int
+        @: char cmake_tool
+        @: char build_dir
+        c.array: [4096]: char command
+        size_t: used
+    
+        cmake_tool: lm_build_env_or_default("LM_CMAKE", lm_build_default_cmake())
+        build_dir: lm_build_env_or_default("LM_FULL_BUILD_DIR", "build/libs")
+    
+        used: 0U
+        command[0]: '\0'
+    
+        used: lm_build_append(command, c.sizeof(command), used, cmake_tool)
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "--build")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, build_dir)
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "--target")
+        if: used = c.sizeof(command)
+            return: 1
+        used: lm_build_append_arg(command, c.sizeof(command), used, "third_party.lm0")
+        if: used = c.sizeof(command)
+            return: 1
+    
+        return: lm_build_run(command)
+    end: lm_build_full_build
+    
+    fn: lm_build_full_project () int
+        if: lm_build_extract_third_party_zips() != 0
+            return: 1
+        if: lm_build_full_configure() != 0
+            return: 1
+        return: lm_build_full_build()
+    end: lm_build_full_project
+    
+    fn: lm_build_run_bootstrap (LmBuildOptions: options; @: char trusted_make; @: char built_trans) int
+        @: char output_dir
+        c.array: [512]: char parser_library
+        c.array: [512]: char own_library
+
+        output_dir: lm_build_output_dir(options)
+        c.snprintf:
+            parser_library c.sizeof(parser_library)
+            "%s/libparser.lm0.a"
+            output_dir
+        c.snprintf:
+            own_library c.sizeof(own_library)
+            "%s/libown.lm0.a"
+            output_dir
+
+        if: lm_build_make(trusted_make, "mkdir", "\"lm1/build\" \"build/obj\" \"build/lm0\" \"build/lm0/next\" \"build/lm0/next/check\"") != 0
+            return: 1
+    
+        if: lm_build_generate_all(built_trans) != 0
+            return: 1
+        if: lm_build_parser_library(trusted_make, output_dir) != 0
+            return: 1
+        if: lm_build_own_library(trusted_make, output_dir) != 0
+            return: 1
+        if: lm_build_compile_trans(trusted_make, output_dir, parser_library, own_library) != 0
+            return: 1
+    
+        if: lm_build_generate_all(built_trans) != 0
+            return: 1
+        if: lm_build_parser_library(trusted_make, output_dir) != 0
+            return: 1
+        if: lm_build_own_library(trusted_make, output_dir) != 0
+            return: 1
+        if: lm_build_trans_library(trusted_make, output_dir) != 0
+            return: 1
+        if: lm_build_compile_trans(trusted_make, output_dir, parser_library, own_library) != 0
+            return: 1
+    
+        if: lm_build_compile_generated_tools(trusted_make, output_dir, parser_library, own_library) != 0
+            return: 1
+
+        if: options\next_build
+            return: 0
+
+        if: lm_build_run_canary() != 0
+            c.fprintf: c.stderr "buildCore.lm0: staged bootstrap tools failed the --next rebuild; live tools were not overwritten\n"
+            return: 1
+
+        c.fprintf: c.stderr "buildCore.lm0: running staged tests (%s)\n" lm_build_test_suite_name(options\test_suite)
+        if: lm_build_setenv("LM_TEST_SUITE", lm_build_test_suite_name(options\test_suite)) != 0
+            c.fprintf: c.stderr "buildCore.lm0: cannot set LM_TEST_SUITE\n"
+            return: 1
+        if: lm_build_run_staged_tests(trusted_make, output_dir, parser_library, own_library) != 0
+            c.fprintf: c.stderr "buildCore.lm0: staged bootstrap tools failed tests; live tools were not overwritten\n"
+            return: 1
+    
+        if: options\full_build
+            if: lm_build_full_project() != 0
+                return: 1
+            return: lm_build_defer_finalize()
+    
+        return: lm_build_defer_finalize()
+    end: lm_build_run_bootstrap
+    
+    external:
+        fn: main (int: argc; @@: char argv) int
+            @: char trusted_make
+            c.array: [128]: char trusted_make_buffer
+            c.array: [128]: char built_trans_buffer
+            LmBuildOptions: options
+            int: parse_status
+            int: result
+    
+            options: lm_build_options_new()
+            if: options = 0
+                return: 1
+    
+            parse_status: lm_build_parse_options(argc, argv, options)
+            if: parse_status = 2
+                lm_build_options_delete(options)
+                return: 0
+            if: parse_status != 0
+                lm_build_options_delete(options)
+                return: 1
+    
+            if: lm_build_enter_project_root(argv[0]) != 0
+                lm_build_options_delete(options)
+                return: 1
+
+            if: lm_build_thread_provider() = 0
+                lm_build_options_delete(options)
+                return: 1
+    
+            c.snprintf:
+                trusted_make_buffer c.sizeof(trusted_make_buffer)
+                "build%slm0%smake.lm0%s"
+                lm_build_path_sep() lm_build_path_sep() lm_build_exe_suffix()
+            c.snprintf:
+                built_trans_buffer c.sizeof(built_trans_buffer)
+                "build%slm0%strans.lm0%s"
+                lm_build_path_sep() lm_build_path_sep() lm_build_exe_suffix()
+            if: options\next_build
+                c.snprintf:
+                    trusted_make_buffer c.sizeof(trusted_make_buffer)
+                    "build%slm0%snext%smake.lm0%s"
+                    lm_build_path_sep() lm_build_path_sep() lm_build_path_sep() lm_build_exe_suffix()
+                c.snprintf:
+                    built_trans_buffer c.sizeof(built_trans_buffer)
+                    "build%slm0%snext%strans.lm0%s"
+                    lm_build_path_sep() lm_build_path_sep() lm_build_path_sep() lm_build_exe_suffix()
+            ---
+    
+            trusted_make: lm_build_env_or_default("LM_MAKE", trusted_make_buffer)
+            result: lm_build_run_bootstrap(options, trusted_make, built_trans_buffer)
+    
+            lm_build_options_delete(options)
+            return: result
+        end: main
+    end: external
+end: L2

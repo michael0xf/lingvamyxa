@@ -1,0 +1,6 @@
+predef: "l1src/no_such_module.lm1"
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

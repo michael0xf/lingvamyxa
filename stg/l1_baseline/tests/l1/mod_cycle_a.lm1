@@ -1,0 +1,4 @@
+predef: "tests/l1/mod_cycle_b.lm1"
+fn: ca () int
+    return: 0
+end: ca

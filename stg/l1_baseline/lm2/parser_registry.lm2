@@ -1,0 +1,142 @@
+table:
+    source
+    name: class
+    columns: (class: class) (class: kind)
+    rows:
+             node                relation
+             frame               descriptor
+             trailer             relation
+             structure           descriptor
+             atom                descriptor
+             disabled            descriptor
+             inactive            descriptor
+             mix                 descriptor
+             `positional-skip`   descriptor
+             colon               descriptor
+             compact             descriptor
+             `inline-body`       descriptor
+             `separator-closed`  descriptor
+             `tail-cutter`       descriptor
+             `trailer.end`       descriptor
+             `trailer.return`    descriptor
+             `trailer.until`     descriptor
+             parser_class        relation
+             flag                relation
+             role                relation
+             `allow-bare`        relation
+             target              relation
+             `None.cell`         relation
+             decimal             literal
+             boolean             literal
+             serial              decimal
+             nodeKind            decimal
+             nodeFlag            decimal
+             frameFlag           decimal
+             trailerFlag         decimal
+             `p0.compact-token`  relation
+end: class
+
+table:
+    source
+    name: `None.cell`
+    columns: (class: class) (decimal: value)
+    rows:
+             nodeFlag    0
+             frameFlag   0
+             trailerFlag 0
+end: `None.cell`
+
+table:
+    source
+    name: `p0.compact-token`
+    columns: (class: class) (boolean: value)
+    rows:
+             `!=`   1
+             `<=`   1
+             `>=`   1
+             `&&`   1
+             `||`   1
+             `++`   1
+             `--`   1
+             `[]`   1
+             `<<`   1
+             `>>`   1
+end: `p0.compact-token`
+
+table:
+    source
+    name: `node.kind`
+    columns: (class: class) (nodeKind: value)
+    rows:
+             structure          1
+             frame              2
+             atom               3
+             disabled           4
+end: `node.kind`
+
+table:
+    source
+    name: `node.flag`
+    columns: (class: class) (nodeFlag: value)
+    rows:
+             inactive           1
+             mix                2
+             `positional-skip`  4
+end: `node.flag`
+
+table:
+    source
+    name: `frame.flag`
+    columns: (class: class) (frameFlag: value)
+    rows:
+             colon               1
+             compact             2
+             `inline-body`       4
+             `separator-closed`  8
+end: `frame.flag`
+
+table:
+    source
+    name: namespace
+    columns: (class: class) (class: parser_class)
+    rows:
+             `end`     `trailer.end`
+             `return`  `trailer.return`
+             `until`   `trailer.until`
+end: namespace
+
+table:
+    source
+    name: `trailer.flag`
+    columns: (class: class) (trailerFlag: value)
+    rows:
+             `tail-cutter`     1
+end: `trailer.flag`
+
+table:
+    source
+    name: `trailer.role`
+    columns: (class: class) (binding: value)
+    rows:
+             `trailer.end`     LM_P0_TRAILER_ROLE_END
+             `trailer.return`  LM_P0_TRAILER_ROLE_RETURN
+             `trailer.until`   LM_P0_TRAILER_ROLE_UNTIL
+end: `trailer.role`
+
+table:
+    source
+    name: `trailer.allow-bare`
+    columns: (class: class) (boolean: value)
+    rows:
+             `trailer.end`     0
+             `trailer.return`  1
+             `trailer.until`   0
+end: `trailer.allow-bare`
+
+table:
+    source
+    name: `trailer.target`
+    columns: (class: class) (@: char value)
+    rows:
+             `trailer.return`  fn
+end: `trailer.target`

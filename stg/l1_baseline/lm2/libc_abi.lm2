@@ -1,0 +1,61 @@
+table:
+    source
+    name: include
+    columns: (class: class) (@: char target)
+    rows:
+             libc_stdio  "<stdio.h>"
+             libc_stdlib "<stdlib.h>"
+             libc_string "<string.h>"
+end: include
+
+table:
+    source
+    name: `fn.external`
+    columns: (class: class) (int: value)
+    rows:
+             getenv  1
+             strlen  1
+             strchr  1
+             memcpy  1
+             strcpy  1
+             strcat  1
+             system  1
+             remove  1
+             fopen   1
+             fclose  1
+             fread   1
+             fwrite  1
+             ferror  1
+             strcmp  1
+end: `fn.external`
+
+table:
+    source
+    name: class
+    columns: (class: class) (class: kind)
+    rows:
+             FILE   opaqueReference
+end: class
+
+table:
+    source
+    name: `class.reference-base`
+    columns: (class: class) (int: value)
+    rows:
+             FILE   1
+end: `class.reference-base`
+
+fn: getenv (const: @(char name)) @: char
+fn: strlen (const: @(char text)) size_t
+fn: strchr (const: @(char text); int: value) @: char
+fn: memcpy (@: void target; const: @(void source); size_t: length) @: void
+fn: strcpy (@: char target; const: @(char source)) @: char
+fn: strcat (@: char target; const: @(char source)) @: char
+fn: system (const: @(char command)) int
+fn: remove (const: @(char path)) int
+fn: fopen (const: @(char path); const: @(char mode)) FILE
+fn: fclose (FILE: file) int
+fn: fread (@: void buffer; size_t: item_size; size_t: item_count; FILE: file) size_t
+fn: fwrite (const: @(void buffer); size_t: item_size; size_t: item_count; FILE: file) size_t
+fn: ferror (FILE: file) int
+fn: strcmp (const: @(char left); const: @(char right)) int

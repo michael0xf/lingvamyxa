@@ -1,0 +1,3798 @@
+predef: "lm2/own_abi.lm2"
+
+table:
+    source
+    name: `define.value`
+    columns: (class: class) (@: char value)
+    rows:
+             LM_THREAD_PROVIDER_AUTO 0
+             LM_THREAD_PROVIDER_PTHREAD   1
+             LM_THREAD_PROVIDER_WIN32     2
+             LM_THREAD_PROVIDER_SINGLE    3
+             LM_MESSAGE_STATUS_EXIT_DISCARDED "(-1)"
+             LM_UNUSED                    "(void)"
+end: `define.value`
+
+table:
+    source
+    name: functionPointerType
+    columns: (class: class) (int: value)
+    rows:
+             LmNativeHostThreadEntry  1
+end: functionPointerType
+
+fn: LmNativeHostThreadEntry (@: void argument) @: void
+
+table:
+    source
+    name: class
+    columns: (class: class) (class: kind)
+    rows:
+             LmPthreadHandle             primitive
+             LmPthreadMutex              primitive
+             LmPthreadCondition          primitive
+             LmUintptr                   primitive
+end: class
+
+table:
+    source
+    name: `class.c.projection`
+    columns: (class: class) (@: char spelling)
+    rows:
+             LmPthreadHandle             "pthread_t"
+             LmPthreadMutex              "pthread_mutex_t"
+             LmPthreadCondition          "pthread_cond_t"
+             LmUintptr                   "uintptr_t"
+end: `class.c.projection`
+
+table:
+    source
+    name: `cast.target`
+    columns: (class: class) (int: value)
+    rows:
+             LmPthreadHandle             1
+             LmPthreadMutex              1
+             LmPthreadCondition          1
+             LmUintptr                   1
+             LmNativeHostThreadState     1
+             LmMessageThreadPool         1
+             LmOwnAllocationDescriptor   1
+end: `cast.target`
+
+table:
+    source
+    name: `layout.backend`
+    columns: (class: class) (class: backend)
+    rows:
+             LmNativeHostThreadState  c.struct
+end: `layout.backend`
+
+table:
+    source
+    name: `class.reference-base`
+    columns: (class: class) (int: value)
+    rows:
+             LmNativeHostThreadState  1
+end: `class.reference-base`
+
+table:
+    source
+    name: LmNativeHostThreadState
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
+    rows:
+             handle     void                     0  1
+             thread_id  unsigned                 1  0
+             entry      LmNativeHostThreadEntry  2  0
+             argument   void                     3  1
+             result     void                     4  1
+end: LmNativeHostThreadState
+
+table:
+    source
+    name: `fn.c.calling-convention`
+    columns: (class: class) (callingConvention: convention)
+    rows:
+             lm_native_host_thread_entry  c.stdcall
+end: `fn.c.calling-convention`
+
+table:
+    source
+    name: `fn.thread-context.none`
+    columns: (class: class) (int: value)
+    rows:
+             lm_native_thread_identity_new_current 1
+             lm_native_thread_identity_is_current 1
+             lm_native_thread_identity_delete 1
+             lm_native_thread_provider_name 1
+             lm_native_host_thread_entry 1
+             lm_native_host_thread_start 1
+             lm_native_host_thread_join 1
+             lm_native_mutex_new 1
+             lm_native_mutex_delete 1
+             lm_native_mutex_lock 1
+             lm_native_mutex_unlock 1
+             lm_native_condition_new 1
+             lm_native_condition_delete 1
+             lm_native_condition_wait 1
+             lm_native_condition_signal 1
+             lm_native_condition_broadcast 1
+             lm_native_thread_provider_invalid_pthread_target 1
+             lm_native_thread_provider_invalid_win32_target 1
+             lm_native_thread_provider_invalid_value 1
+             lm_native_message_thread_state_lock 1
+             lm_native_message_thread_state_unlock 1
+             lm_native_message_thread_is_current 1
+             lm_native_message_thread_copy_cstr 1
+             lm_native_message_thread_ascii_equal_ignore_case 1
+             lm_native_message_thread_ascii_prefix_ignore_case 1
+             lm_native_message_thread_ascii_is_hex 1
+             lm_native_message_thread_ascii_is_unreserved 1
+             lm_native_message_thread_ascii_is_sub_delim 1
+             lm_native_message_thread_percent_encoded_is_valid 1
+             lm_native_message_thread_path_is_valid 1
+             lm_native_message_thread_ipv4_is_valid 1
+             lm_native_message_thread_ipv6_is_valid 1
+             lm_native_message_thread_reg_name_is_valid 1
+             lm_native_message_thread_port_is_valid 1
+             lm_native_message_thread_route_is_valid 1
+             lm_native_message_thread_endpoint_is_http 1
+             lm_native_message_thread_join_uri 1
+             lm_native_message_thread_message_new 1
+             lm_native_message_thread_message_delete 1
+             lm_native_message_thread_outbox_entry_delete 1
+             lm_native_message_thread_mailboxes_destroy 1
+             lm_native_message_thread_ready_push_locked 1
+             lm_native_message_thread_ready_pop_locked 1
+             lm_native_message_thread_schedule_stop_locked 1
+             lm_native_message_thread_pool_is_controller 1
+             lm_native_message_thread_pool_lifecycle_allowed 1
+             lm_native_message_thread_control_allowed_locked 1
+             lm_native_message_thread_invoke 1
+             lm_native_message_thread_pool_stop_locked 1
+             lm_native_message_thread_pool_is_quiescent_locked 1
+             lm_native_message_thread_pool_maybe_finish_drain_locked 1
+             lm_native_message_thread_pool_begin_turn 1
+             lm_native_message_thread_pool_collect 1
+             lm_native_message_thread_pool_end_turn 1
+             lm_native_message_thread_mark_exit_ready 1
+             lm_native_message_thread_deliver_remote 1
+             lm_native_message_thread_deliver_local 1
+             lm_native_message_thread_outbox_take 1
+             lm_native_message_thread_outbox_finish 1
+             lm_native_message_thread_current_message_finish 1
+             lm_native_message_thread_execute 1
+             lm_native_message_thread_worker 1
+             lm_native_message_thread_pool_pump_one 1
+             lm_native_message_thread_runtime_acquire_pool 1
+             lm_native_message_thread_runtime_release_pool 1
+             lm_native_message_thread_start 1
+             lm_native_message_thread_remove_pool_routes_locked 1
+             lm_message_thread_pool_pump 1
+             lm_message_thread_runtime_new 1
+             lm_message_thread_runtime_set_rest_lmx_provider 1
+             lm_message_thread_runtime_admit_lmx 1
+             lm_message_thread_request_exit 1
+             lm_message_thread_runtime_exit_state 1
+             lm_message_thread_runtime_attach_root 1
+             lm_message_thread_runtime_detach_root 1
+             lm_message_thread_runtime_delete 1
+             lm_message_thread_pool_new 1
+             lm_message_thread_pool_request_stop 1
+             lm_message_thread_pool_request_stop_when_idle 1
+             lm_message_thread_new_in 1
+             lm_message_thread_start 1
+             lm_message_thread_start_mailbox 1
+             lm_message_thread_bind_route 1
+             lm_message_thread_send_lmx 1
+             lm_message_thread_current_lmx 1
+             lm_message_thread_inbox_count 1
+             lm_message_thread_outbox_count 1
+             lm_message_thread_join 1
+             lm_message_thread_pool_delete 1
+end: `fn.thread-context.none`
+
+include
+define
+alias
+forward
+constant
+layout
+fn
+prototype
+
+include: "<stdint.h>" "<stdlib.h>" "<string.h>"
+
+`ifndef-default`: LM_THREAD_PROVIDER LM_THREAD_PROVIDER_SINGLE
+
+ifdef:
+    `LM_THREAD_PROVIDER == LM_THREAD_PROVIDER_PTHREAD || (LM_THREAD_PROVIDER == LM_THREAD_PROVIDER_AUTO && !defined(_WIN32) && (defined(__APPLE__) || defined(__unix__)))`:
+        ifdef:
+            `defined(_WIN32)`:
+                fn: lm_native_thread_provider_invalid_pthread_target () int
+                    return: c.LM_THREAD_PROVIDER_PTHREAD_IS_NOT_SUPPORTED_BY_WINDOWS
+                end: lm_native_thread_provider_invalid_pthread_target
+        end: ifdef
+
+        include: "<pthread.h>"
+
+        fn: lm_native_thread_identity_new_current () @: void
+            @: LmPthreadHandle identity c.calloc(1U, c.sizeof(identity[0]))
+
+            if: identity != 0
+                identity[0]: c.pthread_self()
+            return: identity
+        end: lm_native_thread_identity_new_current
+
+        fn: lm_native_thread_identity_is_current (const: @(void implementation)) int
+            const: @: LmPthreadHandle identity (cast: (const: @: LmPthreadHandle) implementation)
+
+            return: identity != 0 && c.pthread_equal(identity[0], c.pthread_self()) != 0
+        end: lm_native_thread_identity_is_current
+
+        sub: lm_native_thread_identity_delete (@: void implementation)
+            c.free(implementation)
+        end: lm_native_thread_identity_delete
+
+        fn: lm_native_thread_provider_name () const: @: char
+            return: "pthread"
+        end: lm_native_thread_provider_name
+
+        fn: lm_native_host_thread_start (LmNativeHostThreadEntry: entry; @: void argument; @: int status) @: void
+            @: LmPthreadHandle thread
+
+            if: status = 0
+                return: 0
+            status[0]: 1
+            if: entry = 0
+                return: 0
+            thread: c.calloc(1U, c.sizeof(thread[0]))
+            if: thread = 0
+                return: 0
+            if: c.pthread_create(thread, 0, entry, argument) != 0
+                c.free(thread)
+                return: 0
+            status[0]: 0
+            return: thread
+        end: lm_native_host_thread_start
+
+        fn: lm_native_host_thread_join (@: void implementation; @@: void result) int
+            @: LmPthreadHandle thread (cast: (@: LmPthreadHandle) implementation)
+
+            if: thread = 0
+                return: 1
+            if: c.pthread_join(thread[0], result) != 0
+                return: 1
+            c.free(thread)
+            return: 0
+        end: lm_native_host_thread_join
+
+        fn: lm_native_mutex_new () @: void
+            @: LmPthreadMutex mutex c.calloc(1U, c.sizeof(mutex[0]))
+
+            if: mutex = 0
+                return: 0
+            if: c.pthread_mutex_init(mutex, 0) != 0
+                c.free(mutex)
+                return: 0
+            return: mutex
+        end: lm_native_mutex_new
+
+        fn: lm_native_mutex_delete (@: void implementation) int
+            @: LmPthreadMutex mutex (cast: (@: LmPthreadMutex) implementation)
+
+            if: mutex = 0
+                return: 0
+            if: c.pthread_mutex_destroy(mutex) != 0
+                return: 1
+            c.free(implementation)
+            return: 0
+        end: lm_native_mutex_delete
+
+        fn: lm_native_mutex_lock (@: void implementation) int
+            if: implementation = 0
+                return: 1
+            return: c.pthread_mutex_lock((cast: (@: LmPthreadMutex) implementation))
+        end: lm_native_mutex_lock
+
+        fn: lm_native_mutex_unlock (@: void implementation) int
+            if: implementation = 0
+                return: 1
+            return: c.pthread_mutex_unlock((cast: (@: LmPthreadMutex) implementation))
+        end: lm_native_mutex_unlock
+
+        fn: lm_native_condition_new () @: void
+            @: LmPthreadCondition condition c.calloc(1U, c.sizeof(condition[0]))
+
+            if: condition = 0
+                return: 0
+            if: c.pthread_cond_init(condition, 0) != 0
+                c.free(condition)
+                return: 0
+            return: condition
+        end: lm_native_condition_new
+
+        fn: lm_native_condition_delete (@: void implementation) int
+            @: LmPthreadCondition condition (cast: (@: LmPthreadCondition) implementation)
+
+            if: condition = 0
+                return: 0
+            if: c.pthread_cond_destroy(condition) != 0
+                return: 1
+            c.free(implementation)
+            return: 0
+        end: lm_native_condition_delete
+
+        fn: lm_native_condition_wait (@: void condition; @: void mutex) int
+            if: condition = 0 || mutex = 0
+                return: 1
+            return: c.pthread_cond_wait((cast: (@: LmPthreadCondition) condition), (cast: (@: LmPthreadMutex) mutex))
+        end: lm_native_condition_wait
+
+        fn: lm_native_condition_signal (@: void implementation) int
+            if: implementation = 0
+                return: 1
+            return: c.pthread_cond_signal((cast: (@: LmPthreadCondition) implementation))
+        end: lm_native_condition_signal
+
+        fn: lm_native_condition_broadcast (@: void implementation) int
+            if: implementation = 0
+                return: 1
+            return: c.pthread_cond_broadcast((cast: (@: LmPthreadCondition) implementation))
+        end: lm_native_condition_broadcast
+
+    `LM_THREAD_PROVIDER == LM_THREAD_PROVIDER_WIN32 || (LM_THREAD_PROVIDER == LM_THREAD_PROVIDER_AUTO && defined(_WIN32))`:
+        ifdef:
+            `!defined(_WIN32)`:
+                fn: lm_native_thread_provider_invalid_win32_target () int
+                    return: c.LM_THREAD_PROVIDER_WIN32_REQUIRES_A_WINDOWS_TARGET
+                end: lm_native_thread_provider_invalid_win32_target
+        end: ifdef
+
+        include: "<process.h>" "<windows.h>"
+
+        fn: lm_native_thread_identity_new_current () @: void
+            @: unsigned identity c.calloc(1U, c.sizeof(identity[0]))
+
+            if: identity != 0
+                identity[0]: (cast: unsigned c.GetCurrentThreadId())
+            return: identity
+        end: lm_native_thread_identity_new_current
+
+        fn: lm_native_thread_identity_is_current (const: @(void implementation)) int
+            const: @: unsigned identity (cast: (const: @: unsigned) implementation)
+
+            return: identity != 0 && identity[0] = (cast: unsigned c.GetCurrentThreadId())
+        end: lm_native_thread_identity_is_current
+
+        sub: lm_native_thread_identity_delete (@: void implementation)
+            c.free(implementation)
+        end: lm_native_thread_identity_delete
+
+        fn: lm_native_host_thread_entry (@: void argument) unsigned
+            LmNativeHostThreadState: thread (cast: LmNativeHostThreadState argument)
+
+            thread\result: thread\entry(thread\argument)
+            return: 0U
+        end: lm_native_host_thread_entry
+
+        fn: lm_native_thread_provider_name () const: @: char
+            return: "win32"
+        end: lm_native_thread_provider_name
+
+        fn: lm_native_host_thread_start (LmNativeHostThreadEntry: entry; @: void argument; @: int status) @: void
+            LmNativeHostThreadState: thread
+            LmUintptr: handle
+
+            if: status = 0
+                return: 0
+            status[0]: 1
+            if: entry = 0
+                return: 0
+            thread: c.calloc(1U, c.sizeof(thread[0]))
+            if: thread = 0
+                return: 0
+            thread\entry: entry
+            thread\argument: argument
+            handle: (cast: LmUintptr c._beginthreadex(0, 0U, @lm_native_host_thread_entry, thread, 0U, @thread\thread_id))
+            if: handle = 0U
+                c.free(thread)
+                return: 0
+            thread\handle: (cast: (@: void) handle)
+            status[0]: 0
+            return: thread
+        end: lm_native_host_thread_start
+
+        fn: lm_native_host_thread_join (@: void implementation; @@: void result) int
+            LmNativeHostThreadState: thread (cast: LmNativeHostThreadState implementation)
+
+            if: thread = 0
+                return: 1
+            if: c.WaitForSingleObject(thread\handle, c.INFINITE) != c.WAIT_OBJECT_0
+                return: 1
+            if: result != 0
+                result[0]: thread\result
+            c.CloseHandle(thread\handle)
+            c.free(thread)
+            return: 0
+        end: lm_native_host_thread_join
+
+        fn: lm_native_mutex_new () @: void
+            @: void mutex c.calloc(1U, c.sizeof(c.CRITICAL_SECTION))
+
+            if: mutex = 0
+                return: 0
+            c.InitializeCriticalSection(mutex)
+            return: mutex
+        end: lm_native_mutex_new
+
+        fn: lm_native_mutex_delete (@: void implementation) int
+            if: implementation = 0
+                return: 0
+            c.DeleteCriticalSection(implementation)
+            c.free(implementation)
+            return: 0
+        end: lm_native_mutex_delete
+
+        fn: lm_native_mutex_lock (@: void implementation) int
+            if: implementation = 0
+                return: 1
+            c.EnterCriticalSection(implementation)
+            return: 0
+        end: lm_native_mutex_lock
+
+        fn: lm_native_mutex_unlock (@: void implementation) int
+            if: implementation = 0
+                return: 1
+            c.LeaveCriticalSection(implementation)
+            return: 0
+        end: lm_native_mutex_unlock
+
+        fn: lm_native_condition_new () @: void
+            @: void condition c.calloc(1U, c.sizeof(c.CONDITION_VARIABLE))
+
+            if: condition = 0
+                return: 0
+            c.InitializeConditionVariable(condition)
+            return: condition
+        end: lm_native_condition_new
+
+        fn: lm_native_condition_delete (@: void implementation) int
+            c.free(implementation)
+            return: 0
+        end: lm_native_condition_delete
+
+        fn: lm_native_condition_wait (@: void condition; @: void mutex) int
+            if: condition = 0 || mutex = 0
+                return: 1
+            if: c.SleepConditionVariableCS(condition, mutex, c.INFINITE)
+                return: 0
+            return: 1
+        end: lm_native_condition_wait
+
+        fn: lm_native_condition_signal (@: void implementation) int
+            if: implementation = 0
+                return: 1
+            c.WakeConditionVariable(implementation)
+            return: 0
+        end: lm_native_condition_signal
+
+        fn: lm_native_condition_broadcast (@: void implementation) int
+            if: implementation = 0
+                return: 1
+            c.WakeAllConditionVariable(implementation)
+            return: 0
+        end: lm_native_condition_broadcast
+
+    `LM_THREAD_PROVIDER == LM_THREAD_PROVIDER_SINGLE || (LM_THREAD_PROVIDER == LM_THREAD_PROVIDER_AUTO && !defined(_WIN32) && !defined(__APPLE__) && !defined(__unix__))`:
+        fn: lm_native_thread_identity_new_current () @: void
+            return: c.calloc(1U, 1U)
+        end: lm_native_thread_identity_new_current
+
+        fn: lm_native_thread_identity_is_current (const: @(void implementation)) int
+            return: implementation != 0
+        end: lm_native_thread_identity_is_current
+
+        sub: lm_native_thread_identity_delete (@: void implementation)
+            c.free(implementation)
+        end: lm_native_thread_identity_delete
+
+        fn: lm_native_thread_provider_name () const: @: char
+            return: "single"
+        end: lm_native_thread_provider_name
+
+        fn: lm_native_host_thread_start (LmNativeHostThreadEntry: entry; @: void argument; @: int status) @: void
+            LmNativeHostThreadState: thread
+
+            if: status = 0
+                return: 0
+            status[0]: 1
+            if: entry = 0
+                return: 0
+            thread: c.calloc(1U, c.sizeof(thread[0]))
+            if: thread = 0
+                return: 0
+            thread\result: entry(argument)
+            status[0]: 0
+            return: thread
+        end: lm_native_host_thread_start
+
+        fn: lm_native_host_thread_join (@: void implementation; @@: void result) int
+            LmNativeHostThreadState: thread (cast: LmNativeHostThreadState implementation)
+
+            if: thread = 0
+                return: 1
+            if: result != 0
+                result[0]: thread\result
+            c.free(thread)
+            return: 0
+        end: lm_native_host_thread_join
+
+        fn: lm_native_mutex_new () @: void
+            return: c.calloc(1U, 1U)
+        end: lm_native_mutex_new
+
+        fn: lm_native_mutex_delete (@: void implementation) int
+            c.free(implementation)
+            return: 0
+        end: lm_native_mutex_delete
+
+        fn: lm_native_mutex_lock (@: void implementation) int
+            return: implementation = 0
+        end: lm_native_mutex_lock
+
+        fn: lm_native_mutex_unlock (@: void implementation) int
+            return: implementation = 0
+        end: lm_native_mutex_unlock
+
+        fn: lm_native_condition_new () @: void
+            return: c.calloc(1U, 1U)
+        end: lm_native_condition_new
+
+        fn: lm_native_condition_delete (@: void implementation) int
+            c.free(implementation)
+            return: 0
+        end: lm_native_condition_delete
+
+        fn: lm_native_condition_wait (@: void condition; @: void mutex) int
+            c.LM_UNUSED(condition)
+            c.LM_UNUSED(mutex)
+            return: 1
+        end: lm_native_condition_wait
+
+        fn: lm_native_condition_signal (@: void implementation) int
+            return: implementation = 0
+        end: lm_native_condition_signal
+
+        fn: lm_native_condition_broadcast (@: void implementation) int
+            return: implementation = 0
+        end: lm_native_condition_broadcast
+
+    default:
+        fn: lm_native_thread_provider_invalid_value () int
+            return: c.LM_THREAD_PROVIDER_VALUE_IS_UNKNOWN
+        end: lm_native_thread_provider_invalid_value
+end: ifdef
+
+fn: lm_native_message_thread_state_lock (const: (LmMessageThread: thread)) int
+    if: thread = 0
+        return: 1
+    if: thread\state_mutex = 0
+        return: 0
+    return: lm_mutex_lock(thread\state_mutex)
+end: lm_native_message_thread_state_lock
+
+fn: lm_native_message_thread_state_unlock (const: (LmMessageThread: thread)) int
+    if: thread = 0
+        return: 1
+    if: thread\state_mutex = 0
+        return: 0
+    return: lm_mutex_unlock(thread\state_mutex)
+end: lm_native_message_thread_state_unlock
+
+fn: lm_native_message_thread_is_current (const: (LmMessageThread: thread)) int
+    const: LmMessageThreadPool: pool
+
+    if: thread = 0
+        return: 0
+    if: thread\pool = 0
+        return: thread\runtime != 0 && thread\runtime\root_thread = thread && thread\turn_active && lm_native_thread_identity_is_current(thread\runtime\identity)
+    if: !thread\executing
+        return: 0
+    pool: thread\pool
+    if: pool\single_mode
+        return: pool\runtime != 0 && pool\runtime\single_execution_depth != 0U && pool\runtime\single_active_thread = thread
+    return: lm_native_thread_identity_is_current(thread\execution_identity)
+end: lm_native_message_thread_is_current
+
+fn: lm_native_message_thread_copy_cstr (const: @(char source)) @: char
+    size_t: length
+    @: char copy
+
+    if: source = 0
+        return: 0
+    length: c.strlen(source)
+    if: length = (cast: size_t -1)
+        return: 0
+    copy: c.malloc(length + 1U)
+    if: copy != 0
+        c.memcpy(copy, source, length + 1U)
+    return: copy
+end: lm_native_message_thread_copy_cstr
+
+fn: lm_native_message_thread_ascii_equal_ignore_case (uchar: left; uchar: right) int
+    if: left >= (cast: uchar 'A') && left <= (cast: uchar 'Z')
+        left: (cast: uchar (left + ((cast: uchar 'a') - (cast: uchar 'A'))))
+    if: right >= (cast: uchar 'A') && right <= (cast: uchar 'Z')
+        right: (cast: uchar (right + ((cast: uchar 'a') - (cast: uchar 'A'))))
+    return: left = right
+end: lm_native_message_thread_ascii_equal_ignore_case
+
+fn: lm_native_message_thread_ascii_prefix_ignore_case (const: @(char text); const: @(char prefix); size_t: length) int
+    size_t: index 0U
+
+    if: text = 0 || prefix = 0
+        return: 0
+    while: index < length
+        if: text[index] = '\0' || lm_native_message_thread_ascii_equal_ignore_case((cast: uchar text[index]), (cast: uchar prefix[index])) = 0
+            return: 0
+        index: index + 1U
+    return: 1
+end: lm_native_message_thread_ascii_prefix_ignore_case
+
+fn: lm_native_message_thread_ascii_is_hex (uchar: value) int
+    return: (value >= (cast: uchar '0') && value <= (cast: uchar '9')) || (value >= (cast: uchar 'a') && value <= (cast: uchar 'f')) || (value >= (cast: uchar 'A') && value <= (cast: uchar 'F'))
+end: lm_native_message_thread_ascii_is_hex
+
+fn: lm_native_message_thread_ascii_is_unreserved (uchar: value) int
+    return: (value >= (cast: uchar 'a') && value <= (cast: uchar 'z')) || (value >= (cast: uchar 'A') && value <= (cast: uchar 'Z')) || (value >= (cast: uchar '0') && value <= (cast: uchar '9')) || value = (cast: uchar '-') || value = (cast: uchar '.') || value = (cast: uchar '_') || value = (cast: uchar '~')
+end: lm_native_message_thread_ascii_is_unreserved
+
+fn: lm_native_message_thread_ascii_is_sub_delim (uchar: value) int
+    return: value = (cast: uchar '!') || value = (cast: uchar '$') || value = (cast: uchar '&') || value = (cast: uchar '\'') || value = (cast: uchar '(') || value = (cast: uchar ')') || value = (cast: uchar '*') || value = (cast: uchar '+') || value = (cast: uchar ',') || value = (cast: uchar ';') || value = (cast: uchar '=')
+end: lm_native_message_thread_ascii_is_sub_delim
+
+fn: lm_native_message_thread_percent_encoded_is_valid (const: @(uchar text); size_t: length; @: size_t index) int
+    size_t: current index[0]
+
+    if: current + 2U >= length || lm_native_message_thread_ascii_is_hex(text[current + 1U]) = 0 || lm_native_message_thread_ascii_is_hex(text[current + 2U]) = 0
+        return: 0
+    index[0]: current + 2U
+    return: 1
+end: lm_native_message_thread_percent_encoded_is_valid
+
+fn: lm_native_message_thread_path_is_valid (const: @(char path); int: require_leading_slash) int
+    const: @: uchar text (cast: (const: @: uchar) path)
+    size_t: length
+    size_t: index 0U
+    size_t: segment_start 0U
+
+    if: text = 0
+        return: 0
+    length: c.strlen(path)
+    if: (require_leading_slash && (length = 0U || text[0] != (cast: uchar '/'))) || (!require_leading_slash && length != 0U && text[0] != (cast: uchar '/'))
+        return: 0
+    while: index < length
+        uchar: value text[index]
+
+        if: value <= 0x20U || value > 0x7eU || value = (cast: uchar '\\') || value = (cast: uchar '?') || value = (cast: uchar '#')
+            return: 0
+        if: value = (cast: uchar '/')
+            size_t: segment_length index - segment_start
+
+            if: index != 0U && text[index - 1U] = (cast: uchar '/')
+                return: 0
+            if: (segment_length = 1U && text[segment_start] = (cast: uchar '.')) || (segment_length = 2U && text[segment_start] = (cast: uchar '.') && text[segment_start + 1U] = (cast: uchar '.'))
+                return: 0
+            segment_start: index + 1U
+        else:
+            if: value = (cast: uchar '%')
+                if: lm_native_message_thread_percent_encoded_is_valid(text, length, @index) = 0
+                    return: 0
+                ---
+            else:
+                if: lm_native_message_thread_ascii_is_unreserved(value) = 0 && lm_native_message_thread_ascii_is_sub_delim(value) = 0 && value != (cast: uchar ':') && value != (cast: uchar '@')
+                    return: 0
+        ---
+        index: index + 1U
+    if: segment_start < length
+        size_t: segment_length length - segment_start
+
+        if: (segment_length = 1U && text[segment_start] = (cast: uchar '.')) || (segment_length = 2U && text[segment_start] = (cast: uchar '.') && text[segment_start + 1U] = (cast: uchar '.'))
+            return: 0
+        ---
+    return: 1
+end: lm_native_message_thread_path_is_valid
+
+fn: lm_native_message_thread_ipv4_is_valid (const: @(uchar text); size_t: length) int
+    size_t: index 0U
+    size_t: component 0U
+
+    while: index < length && component < 4U
+        size_t: digits 0U
+        unsigned: value 0U
+
+        while: index < length && text[index] != (cast: uchar '.')
+            if: text[index] < (cast: uchar '0') || text[index] > (cast: uchar '9') || digits = 3U
+                return: 0
+            value: value * 10U + (cast: unsigned (text[index] - (cast: uchar '0')))
+            digits: digits + 1U
+            index: index + 1U
+        if: digits = 0U || value > 255U || (digits > 1U && text[index - digits] = (cast: uchar '0'))
+            return: 0
+        component: component + 1U
+        if: index < length
+            index: index + 1U
+            if: index = length
+                return: 0
+            ---
+        ---
+    return: index = length && component = 4U
+end: lm_native_message_thread_ipv4_is_valid
+
+fn: lm_native_message_thread_ipv6_is_valid (const: @(uchar text); size_t: length) int
+    size_t: index 0U
+    size_t: groups 0U
+    int: compressed 0
+
+    if: length = 0U
+        return: 0
+    if: text[0] = (cast: uchar 'v') || text[0] = (cast: uchar 'V')
+        index: 1U
+        while: index < length && lm_native_message_thread_ascii_is_hex(text[index])
+            index: index + 1U
+        if: index = 1U || index >= length || text[index] != (cast: uchar '.')
+            return: 0
+        index: index + 1U
+        if: index = length
+            return: 0
+        while: index < length
+            if: lm_native_message_thread_ascii_is_unreserved(text[index]) = 0 && lm_native_message_thread_ascii_is_sub_delim(text[index]) = 0 && text[index] != (cast: uchar ':')
+                return: 0
+            index: index + 1U
+        return: 1
+    if: text[0] = (cast: uchar ':')
+        if: length < 2U || text[1] != (cast: uchar ':')
+            return: 0
+        compressed: 1
+        index: 2U
+        if: index = length
+            return: 1
+        ---
+    while: index < length
+        size_t: segment_start index
+        size_t: segment_length
+        size_t: scan
+        int: contains_dot 0
+
+        while: index < length && text[index] != (cast: uchar ':')
+            if: text[index] = (cast: uchar '.')
+                contains_dot: 1
+            index: index + 1U
+        segment_length: index - segment_start
+        if: segment_length = 0U
+            return: 0
+        if: contains_dot
+            if: index != length || groups > 6U || lm_native_message_thread_ipv4_is_valid(text + segment_start, segment_length) = 0
+                return: 0
+            groups: groups + 2U
+        else:
+            if: segment_length > 4U
+                return: 0
+            scan: segment_start
+            while: scan < index
+                if: lm_native_message_thread_ascii_is_hex(text[scan]) = 0
+                    return: 0
+                scan: scan + 1U
+            groups: groups + 1U
+        ---
+        if: groups > 8U || index = length
+            break
+        if: index + 1U < length && text[index + 1U] = (cast: uchar ':')
+            if: compressed
+                return: 0
+            compressed: 1
+            index: index + 2U
+            if: index = length
+                break
+            ---
+        else:
+            index: index + 1U
+            if: index = length
+                return: 0
+        ---
+    if: compressed
+        return: groups < 8U
+    return: groups = 8U
+end: lm_native_message_thread_ipv6_is_valid
+
+fn: lm_native_message_thread_reg_name_is_valid (const: @(uchar text); size_t: length) int
+    size_t: index 0U
+
+    if: length = 0U
+        return: 0
+    while: index < length
+        uchar: value text[index]
+
+        if: value = (cast: uchar '%')
+            if: lm_native_message_thread_percent_encoded_is_valid(text, length, @index) = 0
+                return: 0
+            ---
+        else:
+            if: lm_native_message_thread_ascii_is_unreserved(value) = 0 && lm_native_message_thread_ascii_is_sub_delim(value) = 0
+                return: 0
+        ---
+        index: index + 1U
+    return: 1
+end: lm_native_message_thread_reg_name_is_valid
+
+fn: lm_native_message_thread_port_is_valid (const: @(uchar text); size_t: length) int
+    size_t: index 0U
+    unsigned: value 0U
+
+    if: length = 0U
+        return: 0
+    while: index < length
+        if: text[index] < (cast: uchar '0') || text[index] > (cast: uchar '9')
+            return: 0
+        value: value * 10U + (cast: unsigned (text[index] - (cast: uchar '0')))
+        if: value > 65535U
+            return: 0
+        index: index + 1U
+    return: value != 0U
+end: lm_native_message_thread_port_is_valid
+
+fn: lm_native_message_thread_route_is_valid (const: @(char route)) int
+    return: lm_native_message_thread_path_is_valid(route, 1)
+end: lm_native_message_thread_route_is_valid
+
+fn: lm_native_message_thread_endpoint_is_http (const: @(char endpoint)) int
+    const: @: uchar text (cast: (const: @: uchar) endpoint)
+    const: @: uchar authority
+    const: @: uchar path
+    const: @: uchar authority_end
+    const: @: uchar host_end
+    const: @: uchar port 0
+    size_t: authority_length
+    size_t: host_length
+    size_t: port_length 0U
+    size_t: index
+
+    if: endpoint = 0 || endpoint[0] = '\0'
+        return: 0
+    if: lm_native_message_thread_ascii_prefix_ignore_case(endpoint, "http://", 7U)
+        authority: text + 7U
+    else:
+        if: lm_native_message_thread_ascii_prefix_ignore_case(endpoint, "https://", 8U)
+            authority: text + 8U
+        else:
+            return: 0
+    ---
+    path: authority
+    while: path[0] != 0U && path[0] != (cast: uchar '/')
+        if: path[0] <= 0x20U || path[0] > 0x7eU || path[0] = (cast: uchar '\\') || path[0] = (cast: uchar '?') || path[0] = (cast: uchar '#') || path[0] = (cast: uchar '@')
+            return: 0
+        path: path + 1
+    authority_end: path
+    authority_length: (cast: size_t (authority_end - authority))
+    if: authority_length = 0U
+        return: 0
+    if: authority[0] = (cast: uchar '[')
+        host_end: authority + 1U
+        while: host_end < authority_end && host_end[0] != (cast: uchar ']')
+            host_end: host_end + 1
+        if: host_end = authority_end || host_end = authority + 1U || lm_native_message_thread_ipv6_is_valid(authority + 1U, (cast: size_t (host_end - authority - 1U))) = 0
+            return: 0
+        host_end: host_end + 1U
+        if: host_end < authority_end
+            if: host_end[0] != (cast: uchar ':')
+                return: 0
+            port: host_end + 1U
+            port_length: (cast: size_t (authority_end - port))
+        ---
+    else:
+        host_end: authority_end
+        index: 0U
+        while: index < authority_length
+            if: authority[index] = (cast: uchar '[') || authority[index] = (cast: uchar ']')
+                return: 0
+            if: authority[index] = (cast: uchar ':')
+                if: port != 0
+                    return: 0
+                host_end: authority + index
+                port: host_end + 1U
+                port_length: (cast: size_t (authority_end - port))
+            index: index + 1U
+        host_length: (cast: size_t (host_end - authority))
+        if: lm_native_message_thread_reg_name_is_valid(authority, host_length) = 0
+            return: 0
+    ---
+    if: port != 0 && lm_native_message_thread_port_is_valid(port, port_length) = 0
+        return: 0
+    return: lm_native_message_thread_path_is_valid((cast: (const: @: char) path), 0)
+end: lm_native_message_thread_endpoint_is_http
+
+fn: lm_native_message_thread_join_uri (const: @(char endpoint); const: @(char route)) @: char
+    size_t: endpoint_length
+    size_t: route_length
+    size_t: copied_endpoint_length
+    @: char uri
+
+    if: endpoint = 0 || route = 0
+        return: 0
+    endpoint_length: c.strlen(endpoint)
+    route_length: c.strlen(route)
+    copied_endpoint_length: endpoint_length
+    if: endpoint_length != 0U && route_length != 0U && endpoint[endpoint_length - 1U] = '/' && route[0] = '/'
+        copied_endpoint_length: copied_endpoint_length - 1U
+    if: route_length > (cast: size_t -1) - copied_endpoint_length - 1U
+        return: 0
+    uri: c.malloc(copied_endpoint_length + route_length + 1U)
+    if: uri = 0
+        return: 0
+    if: copied_endpoint_length != 0U
+        c.memcpy(uri, endpoint, copied_endpoint_length)
+    if: route_length != 0U
+        c.memcpy(uri + copied_endpoint_length, route, route_length)
+    uri[copied_endpoint_length + route_length]: '\0'
+    return: uri
+end: lm_native_message_thread_join_uri
+
+fn: lm_native_message_thread_message_new (const: @(char lmx); size_t: length) LmMessage
+    LmMessage: message
+
+    if: lmx = 0 || length = (cast: size_t -1)
+        return: 0
+    message: c.calloc(1U, c.sizeof(message[0]))
+    if: message = 0
+        return: 0
+    message\lmx: c.malloc(length + 1U)
+    if: message\lmx = 0
+        c.free(message)
+        return: 0
+    if: length != 0U
+        c.memcpy(message\lmx, lmx, length)
+    message\lmx[length]: '\0'
+    message\length: length
+    return: message
+end: lm_native_message_thread_message_new
+
+sub: lm_native_message_thread_message_delete (LmMessage: message)
+    if: message != 0
+        c.free(message\lmx)
+        message\lmx: 0
+        c.free(message)
+end: lm_native_message_thread_message_delete
+
+sub: lm_native_message_thread_outbox_entry_delete (LmMessageOutboxEntry: entry)
+    if: entry != 0
+        c.free(entry\endpoint)
+        c.free(entry\route)
+        lm_native_message_thread_message_delete(entry\message)
+        c.free(entry)
+end: lm_native_message_thread_outbox_entry_delete
+
+sub: lm_native_message_thread_mailboxes_destroy (LmMessageThread: thread)
+    LmMessage: message
+    LmMessageOutboxEntry: entry
+
+    if: thread = 0
+        return
+    message: thread\inbox_head
+    while: message != 0
+        LmMessage: next message\next
+
+        lm_native_message_thread_message_delete(message)
+        message: next
+    entry: thread\outbox_head
+    while: entry != 0
+        LmMessageOutboxEntry: next entry\next
+
+        lm_native_message_thread_outbox_entry_delete(entry)
+        entry: next
+    lm_native_message_thread_message_delete(thread\current_message)
+    thread\inbox_head: 0
+    thread\inbox_tail: 0
+    thread\inbox_count: 0U
+    thread\outbox_head: 0
+    thread\outbox_tail: 0
+    thread\outbox_count: 0U
+    thread\current_message: 0
+end: lm_native_message_thread_mailboxes_destroy
+
+sub: lm_native_message_thread_ready_push_locked (LmMessageThreadPool: pool; LmMessageThread: thread)
+    thread\ready_next: 0
+    thread\scheduled: 1
+    if: pool\ready_tail = 0
+        pool\ready_head: thread
+    else:
+        pool\ready_tail\ready_next: thread
+    ---
+    pool\ready_tail: thread
+end: lm_native_message_thread_ready_push_locked
+
+fn: lm_native_message_thread_ready_pop_locked (LmMessageThreadPool: pool) LmMessageThread
+    LmMessageThread: thread pool\ready_head
+
+    if: thread = 0
+        return: 0
+    pool\ready_head: thread\ready_next
+    if: pool\ready_head = 0
+        pool\ready_tail: 0
+    thread\ready_next: 0
+    return: thread
+end: lm_native_message_thread_ready_pop_locked
+
+sub: lm_native_message_thread_schedule_stop_locked (LmMessageThreadPool: pool; LmMessageThread: thread)
+    if: !thread\scheduled && !thread\executing
+        lm_native_message_thread_ready_push_locked(pool, thread)
+        lm_condition_signal(pool\work_ready)
+end: lm_native_message_thread_schedule_stop_locked
+
+fn: lm_native_message_thread_pool_is_controller (const: (LmMessageThreadPool: pool)) int
+    return: pool != 0 && pool\runtime != 0 && lm_native_thread_identity_is_current(pool\runtime\identity)
+end: lm_native_message_thread_pool_is_controller
+
+fn: lm_native_message_thread_pool_lifecycle_allowed (const: (LmMessageThreadPool: pool)) int
+    return: lm_native_message_thread_pool_is_controller(pool) && pool\runtime\single_execution_depth = 0U && (pool\runtime\root_thread = 0 || !pool\runtime\root_thread\turn_active)
+end: lm_native_message_thread_pool_lifecycle_allowed
+
+fn: lm_native_message_thread_control_allowed_locked (const: (LmMessageThreadPool: pool); const: (LmMessageThread: thread)) int
+    if: lm_native_message_thread_pool_lifecycle_allowed(pool)
+        return: 1
+    if: pool\single_mode
+        return: pool\runtime\single_active_thread = thread
+    return: thread != 0 && thread\executing && lm_native_thread_identity_is_current(thread\execution_identity)
+end: lm_native_message_thread_control_allowed_locked
+
+fn: lm_native_message_thread_invoke (LmMessageThread: thread; LmMessageThreadEntry: entry; @: void argument) int
+    return: c.lm_lmx_message_thread_invoke_diagnostic(thread, entry, argument)
+end: lm_native_message_thread_invoke
+
+sub: lm_native_message_thread_pool_stop_locked (LmMessageThreadPool: pool)
+    LmMessageThread: thread
+
+    pool\stop_requested: 1
+    thread: pool\member_head
+    while: thread != 0
+        if: lm_native_message_thread_state_lock(thread) = 0
+            if: thread\state = c.LM_MESSAGE_THREAD_RUNNING
+                thread\stop_status: 0
+                thread\state: c.LM_MESSAGE_THREAD_STOPPING
+                lm_native_message_thread_schedule_stop_locked(pool, thread)
+            else:
+                if: thread\state = c.LM_MESSAGE_THREAD_NEW
+                    thread\state: c.LM_MESSAGE_THREAD_STOPPED
+                    lm_condition_broadcast(thread\stopped_condition)
+                ---
+            ---
+            lm_native_message_thread_state_unlock(thread)
+        ---
+        thread: thread\pool_next
+end: lm_native_message_thread_pool_stop_locked
+
+fn: lm_native_message_thread_pool_is_quiescent_locked (LmMessageThreadPool: pool) int
+    LmMessageThread: thread
+
+    if: pool = 0 || pool\ready_head != 0
+        return: 0
+    thread: pool\member_head
+    while: thread != 0
+        int: busy
+
+        if: lm_native_message_thread_state_lock(thread) != 0
+            c.abort()
+        busy: thread\scheduled || thread\executing || thread\current_message != 0 || thread\outbox_head != 0 || (thread\state = c.LM_MESSAGE_THREAD_RUNNING && thread\mailbox_mode && thread\inbox_head != 0)
+        lm_native_message_thread_state_unlock(thread)
+        if: busy
+            return: 0
+        thread: thread\pool_next
+    return: 1
+end: lm_native_message_thread_pool_is_quiescent_locked
+
+sub: lm_native_message_thread_pool_maybe_finish_drain_locked (LmMessageThreadPool: pool)
+    if: pool != 0 && pool\drain_requested && !pool\stop_requested && lm_native_message_thread_pool_is_quiescent_locked(pool)
+        lm_native_message_thread_pool_stop_locked(pool)
+        lm_condition_broadcast(pool\work_ready)
+end: lm_native_message_thread_pool_maybe_finish_drain_locked
+
+fn: lm_native_message_thread_pool_begin_turn (LmMessageThread: thread) int
+    if: lm_native_message_thread_state_lock(thread) != 0
+        c.abort()
+    if: thread\state != c.LM_MESSAGE_THREAD_RUNNING
+        lm_native_message_thread_state_unlock(thread)
+        return: 0
+    if: thread\mailbox_mode
+        LmMessage: message thread\inbox_head
+
+        if: message = 0 || thread\current_message != 0
+            lm_native_message_thread_state_unlock(thread)
+            return: 0
+        thread\inbox_head: message\next
+        if: thread\inbox_head = 0
+            thread\inbox_tail: 0
+        thread\inbox_count: thread\inbox_count - 1U
+        message\next: 0
+        thread\current_message: message
+    thread\turn_active: 1
+    thread\turn_failed: 0
+    thread\turn_count: thread\turn_count + 1U
+    lm_native_message_thread_state_unlock(thread)
+    return: 1
+end: lm_native_message_thread_pool_begin_turn
+
+fn: lm_native_message_thread_pool_collect (LmMessageThread: thread) int
+    if: lm_native_message_thread_state_lock(thread) != 0
+        c.abort()
+    thread\collection_count: thread\collection_count + 1U
+    lm_native_message_thread_state_unlock(thread)
+
+    if: thread\root_owner = 0 || thread\root_owner\owner_thread != thread || thread\arena_head != thread\root_owner || thread\root_owner\registry_previous != 0 || thread\arena_tail = 0 || thread\arena_tail\registry_next != 0 || thread\arena_count = 0U
+        if: lm_native_message_thread_state_lock(thread) != 0
+            c.abort()
+        thread\collector_failed: 1
+        lm_native_message_thread_state_unlock(thread)
+        lm_message_thread_request_failure(thread, 1)
+        return: 1
+    if: c.lm_own_tree_cut(thread, thread\root_owner) != 0
+        if: lm_native_message_thread_state_lock(thread) != 0
+            c.abort()
+        thread\collector_failed: 1
+        lm_native_message_thread_state_unlock(thread)
+        lm_message_thread_request_failure(thread, 1)
+        return: 1
+    if: c.lm_own_arena_reclaim(thread, thread\root_owner) != 0
+        if: lm_native_message_thread_state_lock(thread) != 0
+            c.abort()
+        thread\collector_failed: 1
+        lm_native_message_thread_state_unlock(thread)
+        lm_message_thread_request_failure(thread, 1)
+        return: 1
+    return: 0
+end: lm_native_message_thread_pool_collect
+
+fn: lm_native_message_thread_pool_end_turn (LmMessageThread: thread) int
+    int: status lm_native_message_thread_pool_collect(thread)
+
+    if: lm_native_message_thread_state_lock(thread) != 0
+        c.abort()
+    thread\turn_active: 0
+    if: thread\state = c.LM_MESSAGE_THREAD_STOPPING
+        thread\state: c.LM_MESSAGE_THREAD_STOPPED
+    if: thread\state = c.LM_MESSAGE_THREAD_STOPPED && thread\stopped_condition != 0
+        lm_condition_broadcast(thread\stopped_condition)
+    lm_native_message_thread_state_unlock(thread)
+    return: status
+end: lm_native_message_thread_pool_end_turn
+
+fn: lm_native_message_thread_mark_exit_ready (LmMessageThread: thread) int
+    LmMessageThreadRuntime: runtime
+    int: effective_status
+    int: turn_failed
+    int: became_ready 0
+
+    if: thread = 0
+        return: 0
+    if: lm_native_message_thread_state_lock(thread) != 0
+        return: 0
+    runtime: thread\runtime
+    effective_status: thread\stop_status
+    turn_failed: thread\turn_failed
+    lm_native_message_thread_state_unlock(thread)
+    if: runtime = 0
+        return: 0
+    if: runtime\route_mutex = 0 || lm_mutex_lock(runtime\route_mutex) != 0
+        return: 0
+    if: runtime\exit_requested && !runtime\exit_ready && runtime\exit_requester = thread
+        if: turn_failed
+            runtime\exit_status: effective_status
+        runtime\exit_ready: 1
+        runtime\exit_requester: 0
+        became_ready: 1
+    lm_mutex_unlock(runtime\route_mutex)
+    return: became_ready
+end: lm_native_message_thread_mark_exit_ready
+
+fn: lm_native_message_thread_deliver_remote (LmMessageThreadRuntime: runtime; const: @(char endpoint); const: @(char route); const: (LmMessage: message)) int
+    @: char normalized_uri
+    unsigned: http_status 0U
+    int: transport_status
+
+    if: runtime = 0 || message = 0 || runtime\route_mutex = 0 || lm_mutex_lock(runtime\route_mutex) != 0
+        return: 1
+    if: runtime\exit_ready
+        lm_mutex_unlock(runtime\route_mutex)
+        return: c.LM_MESSAGE_STATUS_EXIT_DISCARDED
+    LmRestLmxPost: post runtime\rest_lmx_post
+    @: void context runtime\rest_lmx_context
+
+    lm_mutex_unlock(runtime\route_mutex)
+    if: post = 0
+        return: c.LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED
+
+    normalized_uri: lm_native_message_thread_join_uri(endpoint, route)
+    if: normalized_uri = 0
+        return: 1
+    transport_status: c.post(context, normalized_uri, message\lmx, message\length, @http_status)
+    c.free(normalized_uri)
+    if: transport_status != 0
+        return: c.LM_MESSAGE_STATUS_TRANSPORT_FAILED
+    if: http_status >= 200U && http_status <= 299U
+        return: 0
+    if: http_status = 404U
+        return: c.LM_MESSAGE_STATUS_ROUTE_NOT_FOUND
+    if: http_status >= 100U && http_status <= 599U
+        return: c.LM_MESSAGE_STATUS_HTTP_REJECTED
+    return: c.LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR
+end: lm_native_message_thread_deliver_remote
+
+fn: lm_native_message_thread_deliver_local (LmMessageThreadRuntime: runtime; const: @(char route); LmMessage: message; int: reject_exit_requested) int
+    LmMessageRoute: binding
+    LmMessageThread: target
+    LmMessageThreadPool: pool
+    int: status c.LM_MESSAGE_STATUS_ROUTE_NOT_FOUND
+
+    if: runtime = 0 || runtime\route_mutex = 0 || lm_mutex_lock(runtime\route_mutex) != 0
+        return: 1
+    if: reject_exit_requested && runtime\exit_requested
+        lm_mutex_unlock(runtime\route_mutex)
+        return: c.LM_MESSAGE_STATUS_APPLICATION_STOPPING
+    if: runtime\exit_ready
+        lm_mutex_unlock(runtime\route_mutex)
+        return: c.LM_MESSAGE_STATUS_EXIT_DISCARDED
+    binding: runtime\route_head
+    while: binding != 0 && c.strcmp(binding\route, route) != 0
+        binding: binding\next
+    if: binding = 0
+        lm_mutex_unlock(runtime\route_mutex)
+        return: status
+    if: binding\target = 0 || binding\target\pool = 0
+        lm_mutex_unlock(runtime\route_mutex)
+        if: reject_exit_requested
+            return: c.LM_MESSAGE_STATUS_APPLICATION_STOPPING
+        return: status
+
+    target: binding\target
+    pool: target\pool
+    if: pool\runtime != runtime || lm_mutex_lock(pool\mutex) != 0
+        lm_mutex_unlock(runtime\route_mutex)
+        return: 1
+    if: lm_native_message_thread_state_lock(target) != 0
+        lm_mutex_unlock(pool\mutex)
+        lm_mutex_unlock(runtime\route_mutex)
+        return: 1
+    if: !pool\stop_requested && !pool\deleting && (!reject_exit_requested || !pool\drain_requested) && target\pool = pool && target\mailbox_mode && target\started && target\state = c.LM_MESSAGE_THREAD_RUNNING && target\inbox_count != (cast: size_t -1)
+        message\next: 0
+        if: target\inbox_tail = 0
+            target\inbox_head: message
+        else:
+            target\inbox_tail\next: message
+        ---
+        target\inbox_tail: message
+        target\inbox_count: target\inbox_count + 1U
+        if: !target\scheduled && !target\executing
+            lm_native_message_thread_ready_push_locked(pool, target)
+            lm_condition_signal(pool\work_ready)
+        status: 0
+    else:
+        if: reject_exit_requested && (pool\stop_requested || pool\drain_requested || pool\deleting || target\pool != pool || !target\mailbox_mode || !target\started || target\state != c.LM_MESSAGE_THREAD_RUNNING)
+            status: c.LM_MESSAGE_STATUS_APPLICATION_STOPPING
+        ---
+    ---
+    lm_native_message_thread_state_unlock(target)
+    lm_mutex_unlock(pool\mutex)
+    lm_mutex_unlock(runtime\route_mutex)
+    return: status
+end: lm_native_message_thread_deliver_local
+
+fn: lm_native_message_thread_outbox_take (LmMessageThread: thread) LmMessageOutboxEntry
+    LmMessageOutboxEntry: head
+
+    if: lm_native_message_thread_state_lock(thread) != 0
+        return: 0
+    head: thread\outbox_head
+    thread\outbox_head: 0
+    thread\outbox_tail: 0
+    thread\outbox_count: 0U
+    lm_native_message_thread_state_unlock(thread)
+    return: head
+end: lm_native_message_thread_outbox_take
+
+fn: lm_native_message_thread_outbox_finish (LmMessageThread: thread; int: commit) int
+    LmMessageOutboxEntry: entry lm_native_message_thread_outbox_take(thread)
+    int: first_status 0
+
+    while: entry != 0
+        LmMessageOutboxEntry: next entry\next
+        int: status 0
+
+        entry\next: 0
+        if: commit
+            if: entry\endpoint = 0 || entry\endpoint[0] = '\0'
+                status: lm_native_message_thread_deliver_local(thread\runtime, entry\route, entry\message, 0)
+                if: status = 0
+                    entry\message: 0
+                ---
+            else:
+                status: lm_native_message_thread_deliver_remote(thread\runtime, entry\endpoint, entry\route, entry\message)
+            ---
+        ---
+        if: first_status = 0 && status != 0 && status != c.LM_MESSAGE_STATUS_EXIT_DISCARDED
+            first_status: status
+        lm_native_message_thread_outbox_entry_delete(entry)
+        entry: next
+    if: first_status != 0
+        lm_message_thread_request_failure(thread, first_status)
+    return: first_status
+end: lm_native_message_thread_outbox_finish
+
+sub: lm_native_message_thread_current_message_finish (LmMessageThread: thread)
+    LmMessage: message
+
+    if: lm_native_message_thread_state_lock(thread) != 0
+        c.abort()
+    message: thread\current_message
+    thread\current_message: 0
+    lm_native_message_thread_state_unlock(thread)
+    lm_native_message_thread_message_delete(message)
+end: lm_native_message_thread_current_message_finish
+
+sub: lm_native_message_thread_execute (LmMessageThreadPool: pool; LmMessageThread: thread)
+    LmMessageThreadRuntime: runtime 0
+    LmMessageThread: previous_active_thread 0
+    int: run_entry
+    int: invoke_status 0
+    int: commit_allowed 0
+    int: exit_became_ready 0
+
+    if: pool\single_mode
+        runtime: pool\runtime
+        previous_active_thread: runtime\single_active_thread
+        runtime\single_active_thread: thread
+        runtime\single_execution_depth: runtime\single_execution_depth + 1U
+    run_entry: lm_native_message_thread_pool_begin_turn(thread)
+    if: run_entry
+        if: thread\entry = 0
+            lm_message_thread_request_failure(thread, 1)
+            invoke_status: 1
+        else:
+            invoke_status: lm_native_message_thread_invoke(thread, thread\entry, thread\entry_argument)
+        ---
+    ---
+    if: lm_native_message_thread_state_lock(thread) != 0
+        c.abort()
+    commit_allowed: run_entry && invoke_status = 0 && !thread\turn_failed
+    lm_native_message_thread_state_unlock(thread)
+    lm_native_message_thread_outbox_finish(thread, commit_allowed)
+    lm_native_message_thread_current_message_finish(thread)
+    lm_native_message_thread_pool_end_turn(thread)
+    exit_became_ready: lm_native_message_thread_mark_exit_ready(thread)
+    if: runtime != 0
+        runtime\single_execution_depth: runtime\single_execution_depth - 1U
+        runtime\single_active_thread: previous_active_thread
+
+    if: lm_mutex_lock(pool\mutex) != 0
+        c.abort()
+    if: lm_native_message_thread_state_lock(thread) != 0
+        c.abort()
+    thread\execution_identity: 0
+    thread\executing: 0
+    lm_native_message_thread_state_unlock(thread)
+    if: exit_became_ready
+        lm_native_message_thread_pool_stop_locked(pool)
+    if: lm_native_message_thread_state_lock(thread) != 0
+        c.abort()
+    if: pool\stop_requested && thread\state = c.LM_MESSAGE_THREAD_RUNNING
+        thread\stop_status: 0
+        thread\state: c.LM_MESSAGE_THREAD_STOPPING
+    if: thread\state = c.LM_MESSAGE_THREAD_STOPPING && !thread\scheduled
+        lm_native_message_thread_schedule_stop_locked(pool, thread)
+    if: thread\state = c.LM_MESSAGE_THREAD_RUNNING && ((thread\mailbox_mode && thread\inbox_head != 0) || (!thread\mailbox_mode && !pool\drain_requested))
+        if: !thread\scheduled
+            lm_native_message_thread_ready_push_locked(pool, thread)
+            lm_condition_signal(pool\work_ready)
+        ---
+    else:
+        lm_condition_broadcast(thread\stopped_condition)
+    ---
+    lm_native_message_thread_state_unlock(thread)
+    lm_native_message_thread_pool_maybe_finish_drain_locked(pool)
+    lm_mutex_unlock(pool\mutex)
+end: lm_native_message_thread_execute
+
+fn: lm_native_message_thread_worker (@: void argument) @: void
+    LmMessageThreadPool: pool (cast: LmMessageThreadPool argument)
+    @: void worker_identity lm_native_thread_identity_new_current()
+
+    if: worker_identity = 0
+        c.abort()
+    while: 1
+        LmMessageThread: thread
+
+        if: lm_mutex_lock(pool\mutex) != 0
+            c.abort()
+        while: pool\ready_head = 0 && !pool\stop_requested
+            if: lm_condition_wait(pool\work_ready, pool\mutex) != 0
+                c.abort()
+            ---
+        if: pool\ready_head = 0 && pool\stop_requested
+            lm_mutex_unlock(pool\mutex)
+            lm_native_thread_identity_delete(worker_identity)
+            return: 0
+        thread: lm_native_message_thread_ready_pop_locked(pool)
+        if: thread = 0 || lm_native_message_thread_state_lock(thread) != 0
+            c.abort()
+        thread\scheduled: 0
+        thread\executing: 1
+        thread\execution_identity: worker_identity
+        lm_native_message_thread_state_unlock(thread)
+        lm_mutex_unlock(pool\mutex)
+        lm_native_message_thread_execute(pool, thread)
+    return: 0
+end: lm_native_message_thread_worker
+
+fn: lm_native_message_thread_pool_pump_one (LmMessageThreadPool: pool) int
+    LmMessageThread: thread
+
+    if: pool = 0 || !pool\single_mode
+        return: -1
+    if: lm_mutex_lock(pool\mutex) != 0
+        c.abort()
+    thread: lm_native_message_thread_ready_pop_locked(pool)
+    if: thread = 0
+        lm_mutex_unlock(pool\mutex)
+        return: 0
+    if: lm_native_message_thread_state_lock(thread) != 0
+        c.abort()
+    thread\scheduled: 0
+    thread\executing: 1
+    lm_native_message_thread_state_unlock(thread)
+    lm_mutex_unlock(pool\mutex)
+    lm_native_message_thread_execute(pool, thread)
+    return: 1
+end: lm_native_message_thread_pool_pump_one
+
+external:
+    fn: lm_message_thread_pool_pump (LmMessageThreadPool: pool; size_t: max_turns) size_t
+        size_t: completed 0U
+
+        if: pool = 0 || max_turns = 0U || !pool\single_mode || pool\deleting || lm_native_message_thread_pool_lifecycle_allowed(pool) = 0
+            return: 0U
+        while: completed < max_turns && lm_native_message_thread_pool_pump_one(pool) > 0
+            completed: completed + 1U
+        return: completed
+    end: lm_message_thread_pool_pump
+end: external
+
+external:
+    fn: lm_message_thread_runtime_set_rest_lmx_provider (LmMessageThreadRuntime: runtime; const: (LmRestLmxProviderOpsV1: ops); @: void context) int
+        LmRestLmxPost: new_post 0
+        LmRestLmxDestroy: new_destroy 0
+        @: LmRestLmxPost new_post_slot @new_post
+        @: LmRestLmxDestroy new_destroy_slot @new_destroy
+        int: destroy_old 0
+
+        if: runtime = 0 || runtime\route_mutex = 0 || lm_native_thread_identity_is_current(runtime\identity) = 0
+            return: 1
+        if: ops = 0
+            if: context != 0
+                return: 1
+            ---
+        else:
+            if: ops\abi_size != c.sizeof(ops[0]) || ops\post = 0
+                return: 1
+            new_post_slot[0]: ops\post
+            new_destroy_slot[0]: ops\destroy
+        ---
+        if: lm_mutex_lock(runtime\route_mutex) != 0
+            return: 1
+        if: runtime\rest_lmx_provider_sealed || runtime\rest_lmx_provider_transition || runtime\deleting || runtime\pool_count != 0U || runtime\single_execution_depth != 0U || runtime\route_count != 0U || runtime\route_head != 0 || runtime\root_thread != 0 || runtime\exit_requester != 0 || runtime\exit_requested || runtime\exit_ready
+            lm_mutex_unlock(runtime\route_mutex)
+            return: 1
+        LmRestLmxPost: old_post runtime\rest_lmx_post
+        LmRestLmxDestroy: old_destroy runtime\rest_lmx_destroy
+        @: void old_context runtime\rest_lmx_context
+
+        if: old_post = new_post && old_destroy = new_destroy && old_context = context
+            lm_mutex_unlock(runtime\route_mutex)
+            return: 0
+        if: old_post != 0 && old_context != 0 && old_context = context
+            lm_mutex_unlock(runtime\route_mutex)
+            return: 1
+        destroy_old: old_post != 0 && old_destroy != 0
+        runtime\rest_lmx_provider_transition: destroy_old
+        runtime\rest_lmx_post: new_post
+        runtime\rest_lmx_destroy: new_destroy
+        runtime\rest_lmx_context: context
+        lm_mutex_unlock(runtime\route_mutex)
+
+        if: destroy_old
+            c.old_destroy(old_context)
+            if: lm_mutex_lock(runtime\route_mutex) != 0
+                c.abort()
+            if: !runtime\rest_lmx_provider_transition
+                c.abort()
+            runtime\rest_lmx_provider_transition: 0
+            lm_mutex_unlock(runtime\route_mutex)
+        return: 0
+    end: lm_message_thread_runtime_set_rest_lmx_provider
+end: external
+
+external:
+    fn: lm_message_thread_runtime_admit_lmx (LmMessageThreadRuntime: runtime; const: @(char route); const: @(char lmx); size_t: length) int
+        LmMessage: message
+        int: status
+
+        if: lm_native_message_thread_route_is_valid(route) = 0
+            return: c.LM_MESSAGE_STATUS_INVALID_ADDRESS
+        if: runtime = 0 || lmx = 0 || length = (cast: size_t -1)
+            return: 1
+        message: lm_native_message_thread_message_new(lmx, length)
+        if: message = 0
+            return: 1
+        status: lm_native_message_thread_deliver_local(runtime, route, message, 1)
+        if: status != 0
+            lm_native_message_thread_message_delete(message)
+        return: status
+    end: lm_message_thread_runtime_admit_lmx
+end: external
+
+external:
+    fn: lm_message_thread_request_exit (LmMessageThread: requester; int: status) int
+        LmMessageThreadRuntime: runtime
+        int: valid 0
+        int: selected_status
+
+        if: requester = 0 || lm_native_message_thread_state_lock(requester) != 0
+            return: 1
+        runtime: requester\runtime
+        if: runtime != 0 && lm_native_message_thread_is_current(requester) && ((requester\pool = 0 && runtime\root_thread = requester) || (requester\pool != 0 && requester\pool\runtime = runtime))
+            valid: 1
+        lm_native_message_thread_state_unlock(requester)
+        if: !valid || runtime\route_mutex = 0 || lm_mutex_lock(runtime\route_mutex) != 0
+            return: 1
+        if: !runtime\exit_requested
+            runtime\exit_requester: requester
+            runtime\exit_requested: 1
+            runtime\exit_ready: 0
+            runtime\exit_status: status
+        selected_status: runtime\exit_status
+        lm_mutex_unlock(runtime\route_mutex)
+        lm_message_thread_request_stop(requester, selected_status)
+        return: 0
+    end: lm_message_thread_request_exit
+end: external
+
+external:
+    fn: lm_message_thread_runtime_exit_state (LmMessageThreadRuntime: runtime; @: int out_requested; @: int out_ready; @: int out_status) int
+        if: out_requested = 0 || out_ready = 0 || out_status = 0
+            return: 1
+        out_requested[0]: 0
+        out_ready[0]: 0
+        out_status[0]: 0
+        if: runtime = 0 || runtime\route_mutex = 0 || lm_mutex_lock(runtime\route_mutex) != 0
+            return: 1
+        out_requested[0]: runtime\exit_requested
+        out_ready[0]: runtime\exit_ready
+        out_status[0]: runtime\exit_status
+        lm_mutex_unlock(runtime\route_mutex)
+        return: 0
+    end: lm_message_thread_runtime_exit_state
+end: external
+
+external:
+    fn: lm_message_thread_runtime_attach_root (LmMessageThreadRuntime: runtime; LmMessageThread: thread) int
+        int: status 1
+
+        if: runtime = 0 || thread = 0 || runtime\route_mutex = 0 || lm_native_thread_identity_is_current(runtime\identity) = 0 || lm_mutex_lock(runtime\route_mutex) != 0
+            return: 1
+        if: runtime\deleting || runtime\rest_lmx_provider_transition
+            lm_mutex_unlock(runtime\route_mutex)
+            return: 1
+        if: lm_native_message_thread_state_lock(thread) = 0
+            if: runtime\root_thread = 0 && thread\runtime = 0 && thread\pool = 0 && !thread\started && !thread\turn_active && !thread\executing && thread\state = c.LM_MESSAGE_THREAD_RUNNING && thread\outbox_head = 0 && thread\current_message = 0
+                runtime\root_thread: thread
+                runtime\rest_lmx_provider_sealed: 1
+                thread\runtime: runtime
+                status: 0
+            ---
+            lm_native_message_thread_state_unlock(thread)
+        ---
+        lm_mutex_unlock(runtime\route_mutex)
+        return: status
+    end: lm_message_thread_runtime_attach_root
+end: external
+
+external:
+    fn: lm_message_thread_runtime_detach_root (LmMessageThreadRuntime: runtime; LmMessageThread: thread) int
+        int: status 1
+
+        if: runtime = 0 || thread = 0 || runtime\route_mutex = 0 || lm_native_thread_identity_is_current(runtime\identity) = 0 || lm_mutex_lock(runtime\route_mutex) != 0
+            return: 1
+        if: lm_native_message_thread_state_lock(thread) = 0
+            if: runtime\root_thread = thread && thread\runtime = runtime && thread\pool = 0 && !thread\turn_active && !thread\executing && thread\outbox_head = 0
+                runtime\root_thread: 0
+                thread\runtime: 0
+                status: 0
+            ---
+            lm_native_message_thread_state_unlock(thread)
+        ---
+        lm_mutex_unlock(runtime\route_mutex)
+        return: status
+    end: lm_message_thread_runtime_detach_root
+end: external
+
+external:
+    fn: lm_message_thread_runtime_delete (LmMessageThreadRuntime: runtime) int
+        if: runtime = 0
+            return: 0
+        if: lm_native_thread_identity_is_current(runtime\identity) = 0 || runtime\route_mutex = 0 || lm_mutex_lock(runtime\route_mutex) != 0
+            return: 1
+        if: runtime\deleting || runtime\rest_lmx_provider_transition || runtime\pool_count != 0U || runtime\single_execution_depth != 0U || runtime\route_count != 0U || runtime\route_head != 0 || runtime\root_thread != 0
+            lm_mutex_unlock(runtime\route_mutex)
+            return: 1
+        LmRestLmxPost: old_post runtime\rest_lmx_post
+        LmRestLmxDestroy: old_destroy runtime\rest_lmx_destroy
+        @: void old_context runtime\rest_lmx_context
+
+        runtime\rest_lmx_post: 0
+        runtime\rest_lmx_destroy: 0
+        runtime\rest_lmx_context: 0
+        runtime\rest_lmx_provider_sealed: 1
+        runtime\deleting: 1
+        lm_mutex_unlock(runtime\route_mutex)
+        if: old_post != 0 && old_destroy != 0
+            c.old_destroy(old_context)
+        lm_mutex_delete(runtime\route_mutex)
+        runtime\route_mutex: 0
+        lm_native_thread_identity_delete(runtime\identity)
+        runtime\identity: 0
+        c.free(runtime)
+        return: 0
+    end: lm_message_thread_runtime_delete
+end: external
+
+fn: lm_native_message_thread_runtime_acquire_pool (LmMessageThreadRuntime: runtime) int
+    if: runtime = 0 || runtime\route_mutex = 0 || lm_mutex_lock(runtime\route_mutex) != 0
+        return: 1
+    if: runtime\deleting || runtime\rest_lmx_provider_transition || runtime\pool_count = (cast: size_t -1)
+        lm_mutex_unlock(runtime\route_mutex)
+        return: 1
+    runtime\rest_lmx_provider_sealed: 1
+    runtime\pool_count: runtime\pool_count + 1U
+    lm_mutex_unlock(runtime\route_mutex)
+    return: 0
+end: lm_native_message_thread_runtime_acquire_pool
+
+sub: lm_native_message_thread_runtime_release_pool (LmMessageThreadRuntime: runtime)
+    if: runtime = 0 || runtime\route_mutex = 0 || lm_mutex_lock(runtime\route_mutex) != 0
+        c.abort()
+    if: runtime\pool_count = 0U
+        c.abort()
+    runtime\pool_count: runtime\pool_count - 1U
+    lm_mutex_unlock(runtime\route_mutex)
+end: lm_native_message_thread_runtime_release_pool
+
+external:
+    fn: lm_message_thread_pool_new (LmMessageThreadRuntime: runtime; size_t: worker_count) LmMessageThreadPool
+        LmMessageThreadPool: pool
+        size_t: index
+
+        if: runtime = 0 || worker_count = 0U || lm_native_thread_identity_is_current(runtime\identity) = 0
+            return: 0
+        if: runtime\single_execution_depth != 0U
+            return: 0
+        pool: c.calloc(1U, c.sizeof(pool[0]))
+        if: pool = 0
+            return: 0
+        pool\runtime: runtime
+        pool\mutex: lm_mutex_new()
+        pool\work_ready: lm_condition_new()
+        pool\single_mode: c.strcmp(lm_thread_provider_name(), "single") = 0
+        if: pool\mutex = 0 || pool\work_ready = 0
+            lm_condition_delete(pool\work_ready)
+            lm_mutex_delete(pool\mutex)
+            c.free(pool)
+            return: 0
+        if: lm_native_message_thread_runtime_acquire_pool(runtime) != 0
+            lm_condition_delete(pool\work_ready)
+            lm_mutex_delete(pool\mutex)
+            c.free(pool)
+            return: 0
+        if: pool\single_mode
+            return: pool
+
+        pool\worker_count: worker_count
+        pool\workers: c.calloc(worker_count, c.sizeof(pool\workers[0]))
+        if: pool\workers = 0
+            lm_condition_delete(pool\work_ready)
+            lm_mutex_delete(pool\mutex)
+            lm_native_message_thread_runtime_release_pool(runtime)
+            c.free(pool)
+            return: 0
+
+        index: 0U
+        while: index < worker_count
+            pool\workers[index]: lm_host_thread_new()
+            if: pool\workers[index] = 0 || lm_host_thread_start(pool\workers[index], @lm_native_message_thread_worker, pool) != 0
+                size_t: cleanup_index
+                int: cleanup_failed 0
+
+                if: lm_mutex_lock(pool\mutex) != 0
+                    return: 0
+                lm_native_message_thread_pool_stop_locked(pool)
+                lm_condition_broadcast(pool\work_ready)
+                lm_mutex_unlock(pool\mutex)
+                cleanup_index: 0U
+                while: cleanup_index < pool\started_worker_count
+                    if: lm_host_thread_join(pool\workers[cleanup_index], 0) != 0
+                        cleanup_failed: 1
+                    cleanup_index: cleanup_index + 1U
+                if: cleanup_failed
+                    return: 0
+                cleanup_index: 0U
+                while: cleanup_index <= index
+                    lm_host_thread_delete(pool\workers[cleanup_index])
+                    cleanup_index: cleanup_index + 1U
+                c.free(pool\workers)
+                lm_condition_delete(pool\work_ready)
+                lm_mutex_delete(pool\mutex)
+                lm_native_message_thread_runtime_release_pool(runtime)
+                c.free(pool)
+                return: 0
+            ---
+            pool\started_worker_count: pool\started_worker_count + 1U
+            index: index + 1U
+        return: pool
+    end: lm_message_thread_pool_new
+end: external
+
+external:
+    sub: lm_message_thread_pool_request_stop (LmMessageThreadPool: pool)
+        if: pool = 0 || lm_mutex_lock(pool\mutex) != 0
+            return
+        if: pool\deleting || lm_native_message_thread_pool_lifecycle_allowed(pool) = 0
+            lm_mutex_unlock(pool\mutex)
+            return
+        lm_native_message_thread_pool_stop_locked(pool)
+        lm_condition_broadcast(pool\work_ready)
+        lm_mutex_unlock(pool\mutex)
+    end: lm_message_thread_pool_request_stop
+end: external
+
+external:
+    sub: lm_message_thread_pool_request_stop_when_idle (LmMessageThreadPool: pool)
+        if: pool = 0 || lm_mutex_lock(pool\mutex) != 0
+            return
+        if: pool\deleting || lm_native_message_thread_pool_lifecycle_allowed(pool) = 0
+            lm_mutex_unlock(pool\mutex)
+            return
+        pool\drain_requested: 1
+        lm_native_message_thread_pool_maybe_finish_drain_locked(pool)
+        lm_condition_broadcast(pool\work_ready)
+        lm_mutex_unlock(pool\mutex)
+    end: lm_message_thread_pool_request_stop_when_idle
+end: external
+
+external:
+    fn: lm_message_thread_runtime_new () LmMessageThreadRuntime
+        LmMessageThreadRuntime: runtime c.calloc(1U, c.sizeof(runtime[0]))
+
+        if: runtime = 0
+            return: 0
+        runtime\identity: lm_native_thread_identity_new_current()
+        runtime\route_mutex: lm_mutex_new()
+        if: runtime\identity = 0 || runtime\route_mutex = 0
+            lm_mutex_delete(runtime\route_mutex)
+            lm_native_thread_identity_delete(runtime\identity)
+            c.free(runtime)
+            return: 0
+        return: runtime
+    end: lm_message_thread_runtime_new
+end: external
+
+external:
+    fn: lm_message_thread_new_in (LmMessageThreadPool: pool) LmMessageThread
+        LmMessageThread: thread
+
+        if: pool = 0 || lm_native_message_thread_pool_lifecycle_allowed(pool) = 0
+            return: 0
+        thread: lm_message_thread_new()
+        if: thread = 0
+            return: 0
+        thread\state_mutex: lm_mutex_new()
+        thread\stopped_condition: lm_condition_new()
+        if: thread\state_mutex = 0 || thread\stopped_condition = 0
+            lm_message_thread_delete(thread)
+            return: 0
+        thread\state: c.LM_MESSAGE_THREAD_NEW
+        if: lm_mutex_lock(pool\mutex) != 0
+            lm_message_thread_delete(thread)
+            return: 0
+        if: pool\stop_requested || pool\drain_requested || pool\deleting
+            lm_mutex_unlock(pool\mutex)
+            lm_message_thread_delete(thread)
+            return: 0
+        thread\pool: pool
+        thread\runtime: pool\runtime
+        thread\pool_previous: pool\member_tail
+        if: pool\member_tail = 0
+            pool\member_head: thread
+        else:
+            pool\member_tail\pool_next: thread
+        ---
+        pool\member_tail: thread
+        pool\member_count: pool\member_count + 1U
+        lm_mutex_unlock(pool\mutex)
+        return: thread
+    end: lm_message_thread_new_in
+end: external
+
+fn: lm_native_message_thread_start (LmMessageThread: thread; LmMessageThreadEntry: entry; @: void argument; int: mailbox_mode) int
+    LmMessageThreadPool: pool
+
+    if: thread = 0 || entry = 0 || thread\pool = 0
+        return: 1
+    pool: thread\pool
+    if: lm_native_message_thread_pool_lifecycle_allowed(pool) = 0
+        return: 1
+    if: lm_mutex_lock(pool\mutex) != 0
+        return: 1
+    if: lm_native_message_thread_state_lock(thread) != 0
+        lm_mutex_unlock(pool\mutex)
+        return: 1
+    if: thread\pool != pool || pool\stop_requested || pool\drain_requested || pool\deleting || thread\state != c.LM_MESSAGE_THREAD_NEW || thread\started || thread\scheduled || thread\executing
+        lm_native_message_thread_state_unlock(thread)
+        lm_mutex_unlock(pool\mutex)
+        return: 1
+    thread\entry: entry
+    thread\entry_argument: argument
+    thread\mailbox_mode: mailbox_mode
+    thread\started: 1
+    thread\state: c.LM_MESSAGE_THREAD_RUNNING
+    if: !mailbox_mode
+        lm_native_message_thread_ready_push_locked(pool, thread)
+        lm_condition_signal(pool\work_ready)
+    lm_native_message_thread_state_unlock(thread)
+    lm_mutex_unlock(pool\mutex)
+    return: 0
+end: lm_native_message_thread_start
+
+external:
+    fn: lm_message_thread_start (LmMessageThread: thread; LmMessageThreadEntry: entry; @: void argument) int
+        return: lm_native_message_thread_start(thread, entry, argument, 0)
+    end: lm_message_thread_start
+end: external
+
+external:
+    fn: lm_message_thread_start_mailbox (LmMessageThread: thread; LmMessageThreadEntry: entry; @: void argument) int
+        return: lm_native_message_thread_start(thread, entry, argument, 1)
+    end: lm_message_thread_start_mailbox
+end: external
+
+external:
+    fn: lm_message_thread_bind_route (LmMessageThread: thread; const: @(char route)) int
+        LmMessageThreadPool: pool
+        LmMessageThreadRuntime: runtime
+        LmMessageRoute: binding
+        LmMessageRoute: cursor
+
+        if: thread = 0 || thread\pool = 0 || lm_native_message_thread_route_is_valid(route) = 0
+            return: c.LM_MESSAGE_STATUS_INVALID_ADDRESS
+        pool: thread\pool
+        runtime: pool\runtime
+        if: runtime = 0 || lm_native_message_thread_pool_lifecycle_allowed(pool) = 0
+            return: 1
+        binding: c.calloc(1U, c.sizeof(binding[0]))
+        if: binding = 0
+            return: 1
+        binding\route: lm_native_message_thread_copy_cstr(route)
+        if: binding\route = 0
+            c.free(binding)
+            return: 1
+        binding\target: thread
+        if: lm_mutex_lock(runtime\route_mutex) != 0
+            c.free(binding\route)
+            c.free(binding)
+            return: 1
+        cursor: runtime\route_head
+        while: cursor != 0
+            if: c.strcmp(cursor\route, route) = 0
+                lm_mutex_unlock(runtime\route_mutex)
+                c.free(binding\route)
+                c.free(binding)
+                return: 1
+            cursor: cursor\next
+        if: lm_mutex_lock(pool\mutex) != 0
+            lm_mutex_unlock(runtime\route_mutex)
+            c.free(binding\route)
+            c.free(binding)
+            return: 1
+        if: lm_native_message_thread_state_lock(thread) != 0
+            lm_mutex_unlock(pool\mutex)
+            lm_mutex_unlock(runtime\route_mutex)
+            c.free(binding\route)
+            c.free(binding)
+            return: 1
+        if: pool\runtime != runtime || pool\stop_requested || pool\drain_requested || pool\deleting || thread\pool != pool || !thread\started || !thread\mailbox_mode || thread\state != c.LM_MESSAGE_THREAD_RUNNING || runtime\route_count = (cast: size_t -1)
+            lm_native_message_thread_state_unlock(thread)
+            lm_mutex_unlock(pool\mutex)
+            lm_mutex_unlock(runtime\route_mutex)
+            c.free(binding\route)
+            c.free(binding)
+            return: 1
+        binding\next: runtime\route_head
+        runtime\route_head: binding
+        runtime\route_count: runtime\route_count + 1U
+        lm_native_message_thread_state_unlock(thread)
+        lm_mutex_unlock(pool\mutex)
+        lm_mutex_unlock(runtime\route_mutex)
+        return: 0
+    end: lm_message_thread_bind_route
+end: external
+
+external:
+    fn: lm_message_thread_send_lmx (LmMessageThread: sender; const: @(char endpoint); const: @(char route); const: @(char lmx); size_t: length) int
+        LmMessageOutboxEntry: entry
+
+        if: lm_native_message_thread_route_is_valid(route) = 0 || (endpoint != 0 && endpoint[0] != '\0' && lm_native_message_thread_endpoint_is_http(endpoint) = 0)
+            return: c.LM_MESSAGE_STATUS_INVALID_ADDRESS
+        entry: c.calloc(1U, c.sizeof(entry[0]))
+        if: entry = 0
+            return: 1
+        entry\route: lm_native_message_thread_copy_cstr(route)
+        if: endpoint != 0 && endpoint[0] != '\0'
+            entry\endpoint: lm_native_message_thread_copy_cstr(endpoint)
+        entry\message: lm_native_message_thread_message_new(lmx, length)
+        if: entry\route = 0 || entry\message = 0 || (endpoint != 0 && endpoint[0] != '\0' && entry\endpoint = 0)
+            lm_native_message_thread_outbox_entry_delete(entry)
+            return: 1
+        if: sender = 0 || lm_native_message_thread_state_lock(sender) != 0
+            lm_native_message_thread_outbox_entry_delete(entry)
+            return: 1
+        if: lm_native_message_thread_is_current(sender) = 0 || sender\runtime = 0 || (sender\pool != 0 && !sender\started) || (sender\pool = 0 && sender\runtime\root_thread != sender) || (sender\state != c.LM_MESSAGE_THREAD_RUNNING && sender\state != c.LM_MESSAGE_THREAD_STOPPING) || sender\outbox_count = (cast: size_t -1)
+            lm_native_message_thread_state_unlock(sender)
+            lm_native_message_thread_outbox_entry_delete(entry)
+            return: 1
+        entry\next: 0
+        if: sender\outbox_tail = 0
+            sender\outbox_head: entry
+        else:
+            sender\outbox_tail\next: entry
+        ---
+        sender\outbox_tail: entry
+        sender\outbox_count: sender\outbox_count + 1U
+        lm_native_message_thread_state_unlock(sender)
+        return: 0
+    end: lm_message_thread_send_lmx
+end: external
+
+external:
+    fn: lm_message_thread_current_lmx (LmMessageThread: thread; const: @@(char out_lmx); @: size_t out_length) int
+        if: out_lmx = 0 || out_length = 0
+            return: 1
+        out_lmx[0]: 0
+        out_length[0]: 0U
+        if: thread = 0 || lm_native_message_thread_state_lock(thread) != 0
+            return: 1
+        if: lm_native_message_thread_is_current(thread) = 0 || thread\current_message = 0
+            lm_native_message_thread_state_unlock(thread)
+            return: 1
+        out_lmx[0]: thread\current_message\lmx
+        out_length[0]: thread\current_message\length
+        lm_native_message_thread_state_unlock(thread)
+        return: 0
+    end: lm_message_thread_current_lmx
+end: external
+
+external:
+    fn: lm_message_thread_inbox_count (const: (LmMessageThread: thread)) size_t
+        size_t: result
+
+        if: thread = 0 || lm_native_message_thread_state_lock(thread) != 0
+            return: 0U
+        result: thread\inbox_count
+        lm_native_message_thread_state_unlock(thread)
+        return: result
+    end: lm_message_thread_inbox_count
+end: external
+
+external:
+    fn: lm_message_thread_outbox_count (const: (LmMessageThread: thread)) size_t
+        size_t: result
+
+        if: thread = 0 || lm_native_message_thread_state_lock(thread) != 0
+            return: 0U
+        result: thread\outbox_count
+        lm_native_message_thread_state_unlock(thread)
+        return: result
+    end: lm_message_thread_outbox_count
+end: external
+
+external:
+    fn: lm_message_thread_join (LmMessageThread: thread; @: int result) int
+        LmMessageThreadPool: pool
+
+        if: thread = 0 || result = 0 || thread\pool = 0
+            return: 1
+        pool: thread\pool
+        if: lm_native_message_thread_pool_lifecycle_allowed(pool) = 0
+            return: 1
+        if: lm_mutex_lock(pool\mutex) != 0
+            return: 1
+        if: lm_native_message_thread_state_lock(thread) != 0
+            lm_mutex_unlock(pool\mutex)
+            return: 1
+        if: thread\pool != pool || pool\deleting || !thread\started || thread\joining || thread\joined
+            lm_native_message_thread_state_unlock(thread)
+            lm_mutex_unlock(pool\mutex)
+            return: 1
+        thread\joining: 1
+        lm_mutex_unlock(pool\mutex)
+        if: !pool\single_mode
+            while: thread\state != c.LM_MESSAGE_THREAD_STOPPED || thread\scheduled || thread\executing
+                if: lm_condition_wait(thread\stopped_condition, thread\state_mutex) != 0
+                    thread\joining: 0
+                    lm_condition_broadcast(thread\stopped_condition)
+                    lm_native_message_thread_state_unlock(thread)
+                    return: 1
+                ---
+            result[0]: thread\stop_status
+            thread\joined: 1
+            thread\joining: 0
+            lm_condition_broadcast(thread\stopped_condition)
+            lm_native_message_thread_state_unlock(thread)
+            return: 0
+
+        lm_native_message_thread_state_unlock(thread)
+        while: 1
+            int: stopped
+            int: pump_status
+
+            if: lm_native_message_thread_state_lock(thread) != 0
+                return: 1
+            stopped: thread\state = c.LM_MESSAGE_THREAD_STOPPED && !thread\scheduled && !thread\executing
+            if: stopped
+                result[0]: thread\stop_status
+                thread\joined: 1
+                thread\joining: 0
+                lm_condition_broadcast(thread\stopped_condition)
+                lm_native_message_thread_state_unlock(thread)
+                return: 0
+            lm_native_message_thread_state_unlock(thread)
+            pump_status: lm_native_message_thread_pool_pump_one(pool)
+            if: pump_status <= 0
+                if: lm_native_message_thread_state_lock(thread) = 0
+                    thread\joining: 0
+                    lm_condition_broadcast(thread\stopped_condition)
+                    lm_native_message_thread_state_unlock(thread)
+                return: 1
+            ---
+        return: 1
+    end: lm_message_thread_join
+end: external
+
+sub: lm_native_message_thread_remove_pool_routes_locked (LmMessageThreadRuntime: runtime; LmMessageThreadPool: pool)
+    @: LmMessageRoute slot @runtime\route_head
+
+    while: slot[0] != 0
+        LmMessageRoute: binding slot[0]
+
+        if: binding\target != 0 && binding\target\pool = pool
+            slot[0]: binding\next
+            c.free(binding\route)
+            c.free(binding)
+            runtime\route_count: runtime\route_count - 1U
+        else:
+            slot: @binding\next
+        ---
+end: lm_native_message_thread_remove_pool_routes_locked
+
+external:
+    fn: lm_message_thread_pool_delete (LmMessageThreadPool: pool) int
+        LmMessageThread: thread
+        LmMessageThreadRuntime: runtime
+        int: lifecycle_active 0
+        int: join_failed 0
+        size_t: index
+
+        if: pool = 0
+            return: 0
+        if: lm_native_message_thread_pool_lifecycle_allowed(pool) = 0
+            return: 1
+        runtime: pool\runtime
+        if: runtime = 0 || lm_mutex_lock(runtime\route_mutex) != 0
+            return: 1
+        if: lm_mutex_lock(pool\mutex) != 0
+            lm_mutex_unlock(runtime\route_mutex)
+            return: 1
+        if: pool\deleting
+            lm_mutex_unlock(pool\mutex)
+            lm_mutex_unlock(runtime\route_mutex)
+            return: 1
+        lm_native_message_thread_pool_stop_locked(pool)
+        thread: pool\member_head
+        while: thread != 0
+            if: lm_native_message_thread_state_lock(thread) != 0
+                c.abort()
+            if: thread\executing || thread\joining
+                lifecycle_active: 1
+            lm_native_message_thread_state_unlock(thread)
+            thread: thread\pool_next
+        lm_condition_broadcast(pool\work_ready)
+        if: lifecycle_active
+            lm_mutex_unlock(pool\mutex)
+            lm_mutex_unlock(runtime\route_mutex)
+            return: 1
+        pool\deleting: 1
+        lm_native_message_thread_remove_pool_routes_locked(runtime, pool)
+        lm_mutex_unlock(pool\mutex)
+        lm_mutex_unlock(runtime\route_mutex)
+
+        if: pool\single_mode
+            while: lm_native_message_thread_pool_pump_one(pool) > 0
+                c.LM_UNUSED(pool)
+            ---
+        else:
+            index: 0U
+            while: index < pool\started_worker_count
+                if: pool\workers[index] != 0 && !pool\workers[index]\joined && lm_host_thread_join(pool\workers[index], 0) != 0
+                    join_failed: 1
+                index: index + 1U
+        ---
+        if: join_failed
+            if: lm_mutex_lock(pool\mutex) = 0
+                pool\deleting: 0
+                lm_mutex_unlock(pool\mutex)
+            return: 1
+        index: 0U
+        while: index < pool\worker_count
+            lm_host_thread_delete(pool\workers[index])
+            index: index + 1U
+        c.free(pool\workers)
+        pool\workers: 0
+
+        thread: pool\member_head
+        pool\member_head: 0
+        pool\member_tail: 0
+        pool\member_count: 0U
+        while: thread != 0
+            LmMessageThread: next thread\pool_next
+
+            thread\pool: 0
+            thread\runtime: 0
+            thread\pool_previous: 0
+            thread\pool_next: 0
+            thread\ready_next: 0
+            thread\scheduled: 0
+            thread\executing: 0
+            thread\execution_identity: 0
+            lm_message_thread_delete(thread)
+            thread: next
+
+        lm_condition_delete(pool\work_ready)
+        lm_mutex_delete(pool\mutex)
+        lm_native_message_thread_runtime_release_pool(runtime)
+        pool\runtime: 0
+        c.free(pool)
+        return: 0
+    end: lm_message_thread_pool_delete
+end: external
+include: "<stdlib.h>" "<string.h>"
+
+external:
+    fn: lm_own_new_zero (size_t: size) @: void
+    return: c.calloc(1U, size)
+end: external
+
+external:
+    fn: lm_own_resize (@: void object; size_t: size) @: void
+        if: size = 0U
+            c.free(object)
+            return: 0
+    return: c.realloc(object, size)
+end: external
+
+external:
+    fn: lm_own_copy_bytes (const: @(char source); size_t: length) @: char
+        @: char copy
+
+        if: length = (cast: size_t -1)
+            return: 0
+        copy: lm_own_new_zero(length + 1U)
+        if: copy = 0
+            return: 0
+        if: source != 0 && length > 0U
+            c.memcpy(copy, source, length)
+        copy[length]: '\0'
+    return: copy
+end: external
+
+external:
+    sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)
+        if: object != 0
+            if: destroy_fields != 0
+                c.destroy_fields(object)
+            c.free(object)
+    end: lm_own_delete
+end: external
+
+external:
+    sub: lm_own_delete_plain (@: void object)
+        lm_own_delete(object, 0)
+    end: lm_own_delete_plain
+end: external
+
+external:
+    sub: lm_own_pointer_array_delete (@@: void items; size_t: count; LmOwnDelete: delete_item)
+        size_t: index
+
+        if: items != 0
+            if: delete_item != 0
+                index: 0U
+                while: index < count
+                    if: items[index] != 0
+                        c.delete_item(items[index])
+                        items[index]: 0
+                    ---
+                    index: index + 1U
+                ---
+            c.free(items)
+    end: lm_own_pointer_array_delete
+end: external
+
+external:
+    sub: lm_own_ptr_stack_init (LmOwnPtrStack: stack; LmOwnDelete: delete_item)
+        if: stack != 0
+            stack\items: 0
+            stack\count: 0U
+            stack\capacity: 0U
+            stack\delete_item: delete_item
+    end: lm_own_ptr_stack_init
+end: external
+
+external:
+    sub: lm_own_ptr_stack_destroy (LmOwnPtrStack: stack)
+        if: stack != 0
+            lm_own_pointer_array_delete(stack\items, stack\count, stack\delete_item)
+            stack\items: 0
+            stack\count: 0U
+            stack\capacity: 0U
+            stack\delete_item: 0
+    end: lm_own_ptr_stack_destroy
+end: external
+
+external:
+    fn: lm_own_ptr_stack_push (LmOwnPtrStack: stack; @: void item) int
+        @@: void items
+        size_t: capacity
+
+        if: stack = 0
+            return: 1
+
+        if: stack\count = stack\capacity
+            if: stack\capacity = 0U
+                capacity: 8U
+            if: stack\capacity != 0U
+                capacity: stack\capacity * 2U
+            ---
+            items: c.realloc(stack\items, capacity * c.sizeof(items[0]))
+            if: items = 0
+                return: 1
+            stack\items: items
+            stack\capacity: capacity
+
+        stack\items[stack\count]: item
+        stack\count: stack\count + 1U
+    return: 0
+end: external
+
+external:
+    fn: lm_own_ptr_stack_pop (LmOwnPtrStack: stack) @: void
+        @: void item
+
+        if: stack = 0 || stack\count = 0U
+            return: 0
+
+        stack\count: stack\count - 1U
+        item: stack\items[stack\count]
+        stack\items[stack\count]: 0
+    return: item
+end: external
+
+external:
+    fn: lm_own_ptr_stack_at (const: (LmOwnPtrStack: stack); size_t: index) @: void
+        if: stack = 0 || index >= stack\count
+            return: 0
+
+    return: stack\items[index]
+end: external
+
+external:
+    fn: lm_own_ptr_stack_top (const: (LmOwnPtrStack: stack)) @: void
+        if: stack = 0 || stack\count = 0U
+            return: 0
+
+    return: stack\items[stack\count - 1U]
+end: external
+
+external:
+    sub: lm_own_ptr_stack_truncate (LmOwnPtrStack: stack; size_t: count)
+        @: void item
+
+        if: stack = 0
+            return
+
+        while: stack\count > count
+            item: lm_own_ptr_stack_pop(stack)
+            if: item != 0 && stack\delete_item != 0
+                c.stack->delete_item(item)
+    end: lm_own_ptr_stack_truncate
+end: external
+
+external:
+    sub: lm_own_value_stack_init (LmOwnValueStack: stack; size_t: item_size)
+        if: stack != 0
+            stack\items: 0
+            stack\count: 0U
+            stack\capacity: 0U
+            stack\item_size: item_size
+    end: lm_own_value_stack_init
+end: external
+
+external:
+    sub: lm_own_value_stack_destroy (LmOwnValueStack: stack)
+        if: stack != 0
+            c.free(stack\items)
+            stack\items: 0
+            stack\count: 0U
+            stack\capacity: 0U
+            stack\item_size: 0U
+    end: lm_own_value_stack_destroy
+end: external
+
+external:
+    sub: lm_own_value_stack_truncate (LmOwnValueStack: stack; size_t: count)
+        if: stack != 0 && count < stack\count
+            stack\count: count
+    end: lm_own_value_stack_truncate
+end: external
+
+fn: lm_message_thread_component_find (LmMessageThread: owner_thread; LmMessageThreadComponentDestroy: destroy; @: int out_valid) LmMessageThreadComponent
+    LmMessageThreadComponent: component
+    LmMessageThreadComponent: match
+    size_t: visited
+
+    if: out_valid != 0
+        out_valid[0]: 0
+    if: owner_thread = 0 || destroy = 0 || out_valid = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread
+        return: 0
+    if: owner_thread\component_count = 0U
+        if: owner_thread\component_head != 0
+            return: 0
+        out_valid[0]: 1
+        return: 0
+    if: owner_thread\component_head = 0
+        return: 0
+
+    component: owner_thread\component_head
+    match: 0
+    visited: 0U
+    while: component != 0
+        if: visited >= owner_thread\component_count || component\owner_thread != owner_thread || component\destroy = 0
+            return: 0
+        if: component\destroy = destroy
+            if: match != 0
+                return: 0
+            match: component
+        component: component\next
+        visited: visited + 1U
+    ---
+    if: visited != owner_thread\component_count
+        return: 0
+    out_valid[0]: 1
+return: match
+
+fn: lm_message_thread_component_detach (LmMessageThread: owner_thread; LmMessageThreadComponent: component) int
+    LmMessageThreadComponent: current
+    LmMessageThreadComponent: previous
+    LmMessageThreadComponent: found_previous
+    size_t: visited
+
+    if: owner_thread = 0 || component = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread || component\owner_thread != owner_thread || owner_thread\component_count = 0U
+        return: 1
+    current: owner_thread\component_head
+    previous: 0
+    found_previous: 0
+    visited: 0U
+    while: current != 0
+        if: visited >= owner_thread\component_count || current\owner_thread != owner_thread || current\destroy = 0
+            return: 1
+        if: current = component
+            found_previous: previous
+        previous: current
+        current: current\next
+        visited: visited + 1U
+    ---
+    if: visited != owner_thread\component_count || (component != owner_thread\component_head && found_previous = 0)
+        return: 1
+
+    if: found_previous != 0
+        found_previous\next: component\next
+    else:
+        owner_thread\component_head: component\next
+    ---
+    owner_thread\component_count: owner_thread\component_count - 1U
+    component\owner_thread: 0
+    component\next: 0
+return: 0
+
+fn: lm_message_thread_component_release (LmMessageThread: owner_thread; LmMessageThreadComponent: component) int
+    @: void value
+
+    if: owner_thread = 0 || component = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread || component\owner_thread != owner_thread || component\destroy = 0
+        return: 1
+    value: component\value
+    if: lm_message_thread_component_detach(owner_thread, component) != 0
+        return: 1
+    component\value: 0
+    if: component\destroy != 0
+        c.component->destroy(owner_thread, value)
+    component\destroy: 0
+    lm_own_delete(component, 0)
+return: 0
+
+external:
+    fn: lm_message_thread_component_attach (LmMessageThreadComponentDestroy: destroy; @: void component) int
+        LmMessageThreadComponent: entry
+        LmMessageThread: thread
+        int: valid
+
+        thread: c.lm_lmx_message_thread
+        if: thread = 0 || destroy = 0 || component = 0 || thread\state != c.LM_MESSAGE_THREAD_RUNNING || thread\component_destroying || thread\component_count = (cast: size_t -1)
+            return: 1
+        valid: 0
+        if: lm_message_thread_component_find(thread, destroy, @ valid) != 0 || valid = 0
+            return: 1
+
+        entry: lm_own_new_zero(c.sizeof(entry[0]))
+        if: entry = 0
+            return: 1
+        entry\owner_thread: thread
+        entry\value: component
+        entry\destroy: destroy
+        entry\next: thread\component_head
+        thread\component_head: entry
+        thread\component_count: thread\component_count + 1U
+    return: 0
+end: external
+
+external:
+    fn: lm_message_thread_component_get (LmMessageThreadComponentDestroy: destroy) @: void
+        LmMessageThreadComponent: component
+        LmMessageThread: thread
+        int: valid
+
+        thread: c.lm_lmx_message_thread
+        valid: 0
+        component: lm_message_thread_component_find(thread, destroy, @ valid)
+        if: valid = 0 || component = 0
+            return: 0
+    return: component\value
+end: external
+
+external:
+    fn: lm_message_thread_component_remove (LmMessageThreadComponentDestroy: destroy) int
+        LmMessageThreadComponent: component
+        LmMessageThread: thread
+        int: valid
+
+        thread: c.lm_lmx_message_thread
+        if: thread = 0 || destroy = 0 || thread\component_destroying
+            return: 1
+        valid: 0
+        component: lm_message_thread_component_find(thread, destroy, @ valid)
+        if: valid = 0 || component = 0
+            return: 1
+    return: lm_message_thread_component_release(thread, component)
+end: external
+
+external:
+    fn: lm_message_thread_component_count (const: (LmMessageThread: thread)) size_t
+        if: thread = 0
+            return: 0U
+    return: thread\component_count
+end: external
+
+fn: lm_own_arena_shell_is_zero (const: (LmOwnArena: arena)) int
+    if: arena = 0
+        return: 0
+return: arena\allocations = 0 && arena\allocation_descriptors = 0 && arena\lazy_edges = 0 && arena\frozen = 0 && arena\owner_thread = 0 && arena\registry_previous = 0 && arena\registry_next = 0 && arena\runtime_owned_shell = 0 && arena\roots = 0
+
+fn: lm_own_arena_register (LmMessageThread: owner_thread; LmOwnArena: arena) int
+    LmOwnArena: tail
+
+    if: owner_thread = 0 || arena = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread || owner_thread\arena_destroying
+        return: 1
+    if: arena\owner_thread != 0 || arena\registry_previous != 0 || arena\registry_next != 0
+        return: 1
+    if: owner_thread\arena_count = (cast: size_t -1)
+        return: 1
+
+    tail: owner_thread\arena_tail
+    if: owner_thread\arena_count = 0U
+        if: owner_thread\arena_head != 0 || tail != 0
+            return: 1
+        ---
+    else:
+        if: owner_thread\arena_head = 0 || tail = 0 || owner_thread\arena_head\registry_previous != 0 || tail\registry_next != 0 || owner_thread\arena_head\owner_thread != owner_thread || tail\owner_thread != owner_thread
+            return: 1
+    ---
+
+    arena\owner_thread: owner_thread
+    arena\registry_previous: tail
+    arena\registry_next: 0
+    if: tail != 0
+        tail\registry_next: arena
+    else:
+        owner_thread\arena_head: arena
+    ---
+    owner_thread\arena_tail: arena
+    owner_thread\arena_count: owner_thread\arena_count + 1U
+return: 0
+
+fn: lm_own_arena_detach (LmMessageThread: owner_thread; LmOwnArena: arena) int
+    LmOwnArena: previous
+    LmOwnArena: next
+
+    if: owner_thread = 0 || arena = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread || arena\owner_thread != owner_thread || owner_thread\arena_count = 0U
+        return: 1
+
+    previous: arena\registry_previous
+    next: arena\registry_next
+    if: previous = 0
+        if: owner_thread\arena_head != arena
+            return: 1
+        ---
+    else:
+        if: previous\owner_thread != owner_thread || previous\registry_next != arena
+            return: 1
+    ---
+    if: next = 0
+        if: owner_thread\arena_tail != arena
+            return: 1
+        ---
+    else:
+        if: next\owner_thread != owner_thread || next\registry_previous != arena
+            return: 1
+    ---
+
+    if: previous != 0
+        previous\registry_next: next
+    else:
+        owner_thread\arena_head: next
+    ---
+    if: next != 0
+        next\registry_previous: previous
+    else:
+        owner_thread\arena_tail: previous
+    ---
+    owner_thread\arena_count: owner_thread\arena_count - 1U
+    if: owner_thread\root_owner = arena
+        owner_thread\root_owner: 0
+    arena\registry_previous: 0
+    arena\registry_next: 0
+    arena\owner_thread: 0
+return: 0
+
+fn: lm_own_arena_init_registered (LmOwnArena: arena; LmMessageThread: owner_thread; int: runtime_owned_shell) int
+    LmOwnPtrStack: allocations
+    LmOwnPtrStack: allocation_descriptors
+    LmOwnPtrStack: lazy_edges
+    LmOwnPtrStack: roots
+
+    if: arena = 0 || owner_thread = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread || lm_own_arena_shell_is_zero(arena) = 0
+        return: 1
+
+    allocations: lm_own_new_zero(c.sizeof(allocations[0]))
+    allocation_descriptors: lm_own_new_zero(c.sizeof(allocation_descriptors[0]))
+    lazy_edges: lm_own_new_zero(c.sizeof(lazy_edges[0]))
+    roots: lm_own_new_zero(c.sizeof(roots[0]))
+    if: allocations = 0 || allocation_descriptors = 0 || lazy_edges = 0 || roots = 0
+        lm_own_delete(roots, 0)
+        lm_own_delete(lazy_edges, 0)
+        lm_own_delete(allocation_descriptors, 0)
+        lm_own_delete(allocations, 0)
+        return: 1
+
+    lm_own_ptr_stack_init(allocations, c.free)
+    lm_own_ptr_stack_init(allocation_descriptors, c.lm_own_delete_plain)
+    lm_own_ptr_stack_init(lazy_edges, c.lm_own_delete_plain)
+    lm_own_ptr_stack_init(roots, 0)
+    arena\allocations: allocations
+    arena\allocation_descriptors: allocation_descriptors
+    arena\lazy_edges: lazy_edges
+    arena\roots: roots
+    arena\frozen: 0
+    arena\runtime_owned_shell: runtime_owned_shell != 0
+    if: lm_own_arena_register(owner_thread, arena) != 0
+        lm_own_ptr_stack_destroy(arena\roots)
+        lm_own_delete(arena\roots, 0)
+        lm_own_ptr_stack_destroy(arena\lazy_edges)
+        lm_own_delete(arena\lazy_edges, 0)
+        lm_own_ptr_stack_destroy(arena\allocation_descriptors)
+        lm_own_delete(arena\allocation_descriptors, 0)
+        lm_own_ptr_stack_destroy(arena\allocations)
+        lm_own_delete(arena\allocations, 0)
+        c.memset(arena, 0, c.sizeof(arena[0]))
+        return: 1
+    ---
+return: 0
+
+fn: lm_own_arena_release (LmMessageThread: owner_thread; LmOwnArena: arena; int: delete_shell; int: teardown_mode) int
+    int: runtime_owned_shell
+
+    if: owner_thread = 0 || arena = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread || arena\owner_thread != owner_thread
+        return: 1
+    if: teardown_mode = 0
+        if: arena = owner_thread\root_owner
+            lm_message_thread_request_failure(owner_thread, 1)
+            return: 1
+        if: (delete_shell != 0) != (arena\runtime_owned_shell != 0)
+            return: 1
+    ---
+
+    runtime_owned_shell: arena\runtime_owned_shell
+    if: lm_own_arena_detach(owner_thread, arena) != 0
+        return: 1
+
+    lm_own_ptr_stack_destroy(arena\roots)
+    lm_own_delete(arena\roots, 0)
+    lm_own_ptr_stack_destroy(arena\lazy_edges)
+    lm_own_delete(arena\lazy_edges, 0)
+    lm_own_ptr_stack_destroy(arena\allocation_descriptors)
+    lm_own_delete(arena\allocation_descriptors, 0)
+    lm_own_ptr_stack_destroy(arena\allocations)
+    lm_own_delete(arena\allocations, 0)
+    c.memset(arena, 0, c.sizeof(arena[0]))
+    if: runtime_owned_shell
+        lm_own_delete(arena, 0)
+return: 0
+
+external:
+    fn: lm_own_arena_init (LmOwnArena: arena; LmMessageThread: owner_thread) int
+    return: lm_own_arena_init_registered(arena, owner_thread, 0)
+end: external
+
+external:
+    sub: lm_own_arena_destroy (LmOwnArena: arena)
+        if: arena != 0 && c.lm_lmx_message_thread != 0
+            lm_own_arena_release(c.lm_lmx_message_thread, arena, 0, 0)
+    end: lm_own_arena_destroy
+end: external
+
+external:
+    fn: lm_own_arena_new (LmMessageThread: owner_thread) LmOwnArena
+        LmOwnArena: arena
+
+        if: owner_thread = 0 || c.lm_lmx_message_thread = 0 || owner_thread != c.lm_lmx_message_thread
+            return: 0
+        arena: lm_own_new_zero(c.sizeof(arena[0]))
+        if: arena = 0
+            return: 0
+        if: lm_own_arena_init_registered(arena, owner_thread, 1) != 0
+            lm_own_delete(arena, 0)
+            return: 0
+    return: arena
+end: external
+
+external:
+    sub: lm_own_arena_delete (LmOwnArena: arena)
+        if: arena != 0 && c.lm_lmx_message_thread != 0
+            lm_own_arena_release(c.lm_lmx_message_thread, arena, 1, 0)
+    end: lm_own_arena_delete
+end: external
+
+external:
+    sub: lm_own_arena_freeze (LmOwnArena: arena)
+        if: arena != 0 && c.lm_lmx_message_thread != 0 && arena\owner_thread = c.lm_lmx_message_thread
+            arena\frozen: 1
+    end: lm_own_arena_freeze
+end: external
+
+external:
+    fn: lm_own_arena_is_frozen (const: (LmOwnArena: arena)) int
+    return: arena != 0 && c.lm_lmx_message_thread != 0 && arena\owner_thread = c.lm_lmx_message_thread && arena\frozen
+end: external
+
+external:
+    fn: lm_own_arena_owner_thread (const: (LmOwnArena: arena)) LmMessageThread
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread
+            return: 0
+    return: arena\owner_thread
+end: external
+
+external:
+    fn: lm_own_tree_cut (LmOwnArena: arena) int
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread
+            return: 1
+    return: lm_own_tree_cut_promote_lazy_edges(arena)
+end: external
+
+external:
+    fn: lm_own_tree_cut_promote_lazy_edges (LmOwnArena: arena) int
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread
+            return: 1
+    return: lm_own_arena_promote_lazy_edges(arena)
+end: external
+
+external:
+    fn: lm_thread_provider_name () const: @: char
+    return: c.lm_native_thread_provider_name()
+end: external
+
+external:
+    fn: lm_host_thread_new () LmHostThread
+        LmHostThread: thread
+
+        thread: lm_own_new_zero(c.sizeof(c.LmHostThread))
+        if: thread = 0
+            return: 0
+        thread\controller_identity: c.lm_native_thread_identity_new_current()
+        if: thread\controller_identity = 0
+            lm_own_delete(thread, 0)
+            return: 0
+    return: thread
+end: external
+
+external:
+    sub: lm_host_thread_delete (LmHostThread: thread)
+        @: void ignored_result
+
+        if: thread != 0 && c.lm_native_thread_identity_is_current(thread\controller_identity)
+            if: thread\starting
+                return:
+            ---
+            if: thread\started && thread\joined = 0 && thread\implementation != 0
+                if: c.lm_native_host_thread_join(thread\implementation, @ ignored_result) = 0
+                    thread\implementation: 0
+                    thread\joined: 1
+            ---
+            if: thread\implementation = 0
+                c.lm_native_thread_identity_delete(thread\controller_identity)
+                thread\controller_identity: 0
+                lm_own_delete(thread, 0)
+        ---
+    end: lm_host_thread_delete
+end: external
+
+external:
+    fn: lm_host_thread_start (LmHostThread: thread; LmHostThreadEntry: entry; @: void argument) int
+        int: status
+
+        if: thread = 0 || entry = 0
+            return: 1
+        if: c.lm_native_thread_identity_is_current(thread\controller_identity) = 0
+            return: 1
+        if: thread\starting || thread\started || thread\implementation != 0
+            return: 1
+        status: 1
+        thread\starting: 1
+        thread\implementation: c.lm_native_host_thread_start(entry, argument, @ status)
+        thread\starting: 0
+        if: status != 0 || thread\implementation = 0
+            thread\implementation: 0
+            return: 1
+        thread\started: 1
+        thread\joined: 0
+    return: 0
+end: external
+
+external:
+    fn: lm_host_thread_join (LmHostThread: thread; @@: void result) int
+        int: status
+
+        if: thread = 0
+            return: 1
+        if: c.lm_native_thread_identity_is_current(thread\controller_identity) = 0
+            return: 1
+        if: thread\starting || thread\started = 0 || thread\joined || thread\implementation = 0
+            return: 1
+        status: c.lm_native_host_thread_join(thread\implementation, result)
+        if: status != 0
+            return: status
+        thread\implementation: 0
+        thread\joined: 1
+    return: 0
+end: external
+
+external:
+    fn: lm_mutex_new () LmMutex
+        LmMutex: mutex
+
+        mutex: lm_own_new_zero(c.sizeof(c.LmMutex))
+        if: mutex = 0
+            return: 0
+        mutex\implementation: c.lm_native_mutex_new()
+        if: mutex\implementation = 0
+            lm_own_delete(mutex, 0)
+            return: 0
+    return: mutex
+end: external
+
+external:
+    sub: lm_mutex_delete (LmMutex: mutex)
+        if: mutex != 0 && c.lm_native_mutex_delete(mutex\implementation) = 0
+            mutex\implementation: 0
+            lm_own_delete(mutex, 0)
+    end: lm_mutex_delete
+end: external
+
+external:
+    fn: lm_mutex_lock (LmMutex: mutex) int
+        if: mutex = 0
+            return: 1
+    return: c.lm_native_mutex_lock(mutex\implementation)
+end: external
+
+external:
+    fn: lm_mutex_unlock (LmMutex: mutex) int
+        if: mutex = 0
+            return: 1
+    return: c.lm_native_mutex_unlock(mutex\implementation)
+end: external
+
+external:
+    fn: lm_condition_new () LmCondition
+        LmCondition: condition
+
+        condition: lm_own_new_zero(c.sizeof(c.LmCondition))
+        if: condition = 0
+            return: 0
+        condition\implementation: c.lm_native_condition_new()
+        if: condition\implementation = 0
+            lm_own_delete(condition, 0)
+            return: 0
+    return: condition
+end: external
+
+external:
+    sub: lm_condition_delete (LmCondition: condition)
+        if: condition != 0 && c.lm_native_condition_delete(condition\implementation) = 0
+            condition\implementation: 0
+            lm_own_delete(condition, 0)
+    end: lm_condition_delete
+end: external
+
+external:
+    fn: lm_condition_wait (LmCondition: condition; LmMutex: mutex) int
+        if: condition = 0 || mutex = 0
+            return: 1
+    return: c.lm_native_condition_wait(condition\implementation, mutex\implementation)
+end: external
+
+external:
+    fn: lm_condition_signal (LmCondition: condition) int
+        if: condition = 0
+            return: 1
+    return: c.lm_native_condition_signal(condition\implementation)
+end: external
+
+external:
+    fn: lm_condition_broadcast (LmCondition: condition) int
+        if: condition = 0
+            return: 1
+    return: c.lm_native_condition_broadcast(condition\implementation)
+end: external
+
+external:
+    fn: lm_own_value_stack_push (LmOwnValueStack: stack; const: @(void item)) int
+        @: uchar items
+        @: uchar target
+        size_t: capacity
+
+        if: stack = 0 || item = 0 || stack\item_size = 0U
+            return: 1
+
+        if: stack\count = stack\capacity
+            if: stack\capacity = 0U
+                capacity: 8U
+            if: stack\capacity != 0U
+                capacity: stack\capacity * 2U
+            ---
+            items: cast: (@: uchar) c.realloc(stack\items, capacity * stack\item_size)
+            if: items = 0
+                return: 1
+            stack\items: cast: (@: void) items
+            stack\capacity: capacity
+
+        target: (cast: (@: uchar) stack\items) + stack\count * stack\item_size
+        c.memcpy(target, item, stack\item_size)
+        stack\count: stack\count + 1U
+    return: 0
+end: external
+
+external:
+    fn: lm_own_value_stack_resize_zero (LmOwnValueStack: stack; size_t: count) int
+        @: uchar items
+        @: uchar target
+        size_t: capacity
+        size_t: previous_count
+
+        if: stack = 0 || stack\item_size = 0U
+            return: 1
+
+        if: count > stack\capacity
+            if: stack\capacity = 0U
+                capacity: 8U
+            if: stack\capacity != 0U
+                capacity: stack\capacity
+            ---
+            while: capacity < count
+                capacity: capacity * 2U
+            ---
+            items: cast: (@: uchar) c.realloc(stack\items, capacity * stack\item_size)
+            if: items = 0
+                return: 1
+            stack\items: cast: (@: void) items
+            stack\capacity: capacity
+
+        previous_count: stack\count
+        if: count > previous_count
+            target: (cast: (@: uchar) stack\items) + previous_count * stack\item_size
+            c.memset(target, 0, (count - previous_count) * stack\item_size)
+        stack\count: count
+    return: 0
+end: external
+
+external:
+    fn: lm_own_value_stack_pop (LmOwnValueStack: stack; @: void out_item) int
+        @: uchar source
+
+        if: stack = 0 || stack\count = 0U || stack\item_size = 0U
+            return: 1
+
+        stack\count: stack\count - 1U
+        source: (cast: (@: uchar) stack\items) + stack\count * stack\item_size
+        if: out_item != 0
+            c.memcpy(out_item, source, stack\item_size)
+    return: 0
+end: external
+
+external:
+    fn: lm_own_value_stack_at (const: (LmOwnValueStack: stack); size_t: index) @: void
+        @: uchar item
+
+        if: stack = 0 || index >= stack\count || stack\item_size = 0U
+            return: 0
+
+        item: (cast: (@: uchar) stack\items) + index * stack\item_size
+    return: item
+end: external
+
+external:
+    fn: lm_own_value_stack_top (const: (LmOwnValueStack: stack)) @: void
+        @: uchar item
+
+        if: stack = 0 || stack\count = 0U || stack\item_size = 0U
+            return: 0
+
+        item: (cast: (@: uchar) stack\items) + (stack\count - 1U) * stack\item_size
+    return: item
+end: external
+
+fn: lm_own_size_multiply (size_t: left; size_t: right; @: size_t out) int
+    if: out = 0
+        return: 1
+    if: left != 0U && right > (cast: size_t -1) / left
+        return: 1
+    out[0]: left * right
+return: 0
+
+fn: lm_own_allocation_descriptor_find (const: (LmOwnPtrStack: descriptors); const: @(void address)) const: LmOwnAllocationDescriptor
+    const: LmOwnAllocationDescriptor: descriptor
+    size_t: index
+
+    if: descriptors = 0 || address = 0
+        return: 0
+
+    index: descriptors\count
+    while: index > 0U
+        index: index - 1U
+        descriptor: lm_own_ptr_stack_at(descriptors, index)
+        if: descriptor != 0 && descriptor\address = address
+            return: descriptor
+    ---
+
+return: 0
+
+fn: lm_own_allocation_descriptor_push (LmOwnPtrStack: descriptors; @: void address; LmOwnArena: owner; size_t: bytes; size_t: element_size; size_t: count; size_t: rank; size_t: level) int
+    LmOwnAllocationDescriptor: descriptor
+    int: status
+
+    if: descriptors = 0 || address = 0
+        return: 1
+
+    descriptor: lm_own_new_zero(c.sizeof(c.LmOwnAllocationDescriptor))
+    if: descriptor = 0
+        return: 1
+    descriptor\address: address
+    descriptor\owner: owner
+    descriptor\bytes: bytes
+    descriptor\element_size: element_size
+    descriptor\count: count
+    descriptor\rank: rank
+    descriptor\level: level
+    descriptor\marked: 0
+    descriptor\pinned: 0
+    status: lm_own_ptr_stack_push(descriptors, descriptor)
+    if: status != 0
+        lm_own_delete(descriptor, 0)
+return: status
+
+external:
+    fn: lm_own_arena_new_zero (LmOwnArena: arena; size_t: size) @: void
+        @: void object
+
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\frozen || arena\allocations = 0 || arena\allocation_descriptors = 0
+            return: 0
+
+        object: c.calloc(1U, size)
+        if: object = 0
+            return: 0
+        if: lm_own_ptr_stack_push(arena\allocations, object) != 0
+            c.free(object)
+            return: 0
+        if: lm_own_allocation_descriptor_push(arena\allocation_descriptors, object, arena, size, size, 1U, 0U, 0U) != 0
+            lm_own_ptr_stack_pop(arena\allocations)
+            c.free(object)
+            return: 0
+    return: object
+end: external
+
+external:
+    fn: lm_own_arena_array_new_zero (LmOwnArena: arena; size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
+        @: void object
+        size_t: bytes
+
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\frozen || arena\allocations = 0 || arena\allocation_descriptors = 0
+            return: 0
+        if: lm_own_size_multiply(element_size, count, @ bytes) != 0
+            return: 0
+        if: bytes = 0U
+            return: 0
+
+        object: c.calloc(1U, bytes)
+        if: object = 0
+            return: 0
+        if: lm_own_ptr_stack_push(arena\allocations, object) != 0
+            c.free(object)
+            return: 0
+        if: lm_own_allocation_descriptor_push(arena\allocation_descriptors, object, arena, bytes, element_size, count, rank, level) != 0
+            lm_own_ptr_stack_pop(arena\allocations)
+            c.free(object)
+            return: 0
+
+    return: object
+end: external
+
+external:
+    fn: lm_own_arena_allocation_descriptor (const: (LmOwnArena: arena); const: @(void address)) const: LmOwnAllocationDescriptor
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\allocation_descriptors = 0
+            return: 0
+    return: lm_own_allocation_descriptor_find(arena\allocation_descriptors, address)
+end: external
+
+external:
+    fn: lm_own_arena_copy_bytes (LmOwnArena: arena; const: @(char source); size_t: length) @: char
+        @: char copy
+
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread
+            return: 0
+        copy: lm_own_arena_new_zero(arena, length + 1U)
+        if: copy = 0
+            return: 0
+        if: source != 0 && length > 0U
+            c.memcpy(copy, source, length)
+        copy[length]: '\0'
+    return: copy
+end: external
+
+external:
+    fn: lm_own_arena_add_lazy_edge (LmOwnArena: target; LmOwnArena: source; const: @(void source_ptr); size_t: size; const: @@(void patch_slot)) int
+        LmOwnLazyEdge: edge
+        int: status
+
+        if: target = 0 || source = 0 || patch_slot = 0 || c.lm_lmx_message_thread = 0 || target\owner_thread != c.lm_lmx_message_thread || source\owner_thread != c.lm_lmx_message_thread || target\frozen || target\lazy_edges = 0
+            return: 1
+        if: size = 0U
+            return: 0
+        if: source_ptr = 0
+            return: 1
+
+        edge: lm_own_new_zero(c.sizeof(c.LmOwnLazyEdge))
+        if: edge = 0
+            return: 1
+        edge\kind: c.LM_OWN_EDGE_LAZY_OWNED
+        edge\source_owner: source
+        edge\target_owner: target
+        edge\source: source_ptr
+        edge\size: size
+        edge\patch_slot: patch_slot
+        status: lm_own_ptr_stack_push(target\lazy_edges, edge)
+        if: status != 0
+            lm_own_delete(edge, 0)
+    return: status
+end: external
+
+external:
+    fn: lm_own_arena_promote_lazy_edges (LmOwnArena: arena) int
+        LmOwnLazyEdge: edge
+        @: void copy
+        size_t: i
+
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\frozen || arena\lazy_edges = 0
+            return: 1
+
+        i: 0U
+        while: i < arena\lazy_edges\count
+            edge: lm_own_ptr_stack_at(arena\lazy_edges, i)
+            if: edge = 0 || edge\kind != c.LM_OWN_EDGE_LAZY_OWNED
+                i: i + 1U
+                continue
+            if: edge\patch_slot = 0 || edge\source = 0 || edge\size = 0U
+                return: 1
+
+            copy: lm_own_arena_new_zero(arena, edge\size + 1U)
+            if: copy = 0
+                return: 1
+            c.memcpy(copy, edge\source, edge\size)
+            edge\patch_slot[0]: copy
+            edge\source: copy
+            edge\source_owner: arena
+            edge\target_owner: arena
+            edge\kind: c.LM_OWN_EDGE_OWNED
+            i: i + 1U
+
+    return: 0
+end: external
+
+fn: lm_own_copy_visit_find (const: (LmOwnPtrStack: sources); const: (LmOwnPtrStack: copies); @: void source) @: void
+    size_t: index
+
+    if: sources = 0 || copies = 0 || source = 0
+        return: 0
+    index: 0U
+    while: index < sources\count
+        if: lm_own_ptr_stack_at(sources, index) = source
+            return: lm_own_ptr_stack_at(copies, index)
+        index: index + 1U
+return: 0
+
+fn: lm_own_arena_copy_graph_into (LmOwnArena: arena; @: void source; LmOwnPtrStack: sources; LmOwnPtrStack: copies) @: void
+    const: LmOwnAllocationDescriptor: descriptor
+    @: void copy
+    @: void child
+    @: void copied
+    @: uchar raw
+    @: void slot
+    size_t: pointer_size
+    size_t: offset
+
+    if: arena = 0 || source = 0
+        return: source
+    copy: lm_own_copy_visit_find(sources, copies, source)
+    if: copy != 0
+        return: copy
+    descriptor: lm_own_allocation_descriptor_find(arena\allocation_descriptors, source)
+    if: descriptor = 0
+        return: source
+
+    copy: lm_own_arena_new_zero(arena, descriptor\bytes)
+    if: copy = 0
+        return: 0
+    c.memcpy(copy, source, descriptor\bytes)
+    if: lm_own_ptr_stack_push(sources, source) != 0 || lm_own_ptr_stack_push(copies, copy) != 0
+        return: 0
+
+    pointer_size: c.sizeof(slot)
+    if: pointer_size = 0U
+        return: copy
+    raw: cast: (@: uchar) copy
+    offset: 0U
+    while: offset + pointer_size <= descriptor\bytes
+        c.memcpy(@ child, raw + offset, pointer_size)
+        if: child != 0 && lm_own_allocation_descriptor_find(arena\allocation_descriptors, child) != 0
+            copied: lm_own_arena_copy_graph_into(arena, child, sources, copies)
+            c.memcpy(raw + offset, @ copied, pointer_size)
+        ---
+        offset: offset + pointer_size
+return: copy
+
+sub: lm_own_arena_mark (LmOwnArena: arena; @: void object)
+    LmOwnAllocationDescriptor: descriptor
+    @: void child
+    @: void slot
+    @: uchar raw
+    size_t: pointer_size
+    size_t: offset
+
+    if: arena = 0 || object = 0 || arena\allocation_descriptors = 0
+        return
+    descriptor: cast: (LmOwnAllocationDescriptor) lm_own_allocation_descriptor_find(arena\allocation_descriptors, object)
+    if: descriptor = 0 || descriptor\marked
+        return
+    descriptor\marked: 1
+    pointer_size: c.sizeof(slot)
+    if: pointer_size = 0U || descriptor\bytes < pointer_size
+        return
+    raw: cast: (@: uchar) object
+    offset: 0U
+    while: offset + pointer_size <= descriptor\bytes
+        c.memcpy(@ child, raw + offset, pointer_size)
+        if: child != 0
+            lm_own_arena_mark(arena, child)
+        ---
+        offset: offset + pointer_size
+end: lm_own_arena_mark
+
+external:
+    fn: lm_own_arena_pin (LmOwnArena: arena; @: void address) int
+        LmOwnAllocationDescriptor: descriptor
+
+        if: arena = 0 || address = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\allocation_descriptors = 0
+            return: 1
+        descriptor: cast: (LmOwnAllocationDescriptor) lm_own_allocation_descriptor_find(arena\allocation_descriptors, address)
+        if: descriptor = 0
+            return: 1
+        descriptor\pinned: 1
+    return: 0
+end: external
+
+external:
+    fn: lm_own_arena_root_add (LmOwnArena: arena; @: void address) int
+        size_t: index
+
+        if: arena = 0 || address = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\roots = 0
+            return: 1
+        index: 0U
+        while: index < arena\roots\count
+            if: lm_own_ptr_stack_at(arena\roots, index) = address
+                return: 0
+            index: index + 1U
+    return: lm_own_ptr_stack_push(arena\roots, address)
+end: external
+
+external:
+    fn: lm_own_arena_copy_graph (LmOwnArena: arena; const: @(void source)) @: void
+        LmOwnPtrStack: sources
+        LmOwnPtrStack: copies
+        @: void copy
+        @: void mutable_source
+
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\frozen
+            return: 0
+        if: source = 0
+            return: 0
+        mutable_source: cast: (@: void) source
+        sources: lm_own_new_zero(c.sizeof(sources[0]))
+        copies: lm_own_new_zero(c.sizeof(copies[0]))
+        if: sources = 0 || copies = 0
+            lm_own_delete(sources, 0)
+            lm_own_delete(copies, 0)
+            return: 0
+        lm_own_ptr_stack_init(sources, 0)
+        lm_own_ptr_stack_init(copies, 0)
+        copy: lm_own_arena_copy_graph_into(arena, mutable_source, sources, copies)
+        lm_own_ptr_stack_destroy(sources)
+        lm_own_ptr_stack_destroy(copies)
+        lm_own_delete(sources, 0)
+        lm_own_delete(copies, 0)
+    return: copy
+end: external
+
+external:
+    fn: lm_own_arena_reclaim (LmOwnArena: arena) int
+        LmOwnAllocationDescriptor: descriptor
+        @: void object
+        @: void item
+        size_t: index
+        size_t: keep
+
+        if: arena = 0 || c.lm_lmx_message_thread = 0 || arena\owner_thread != c.lm_lmx_message_thread || arena\frozen
+            return: 1
+        if: arena\allocations = 0 || arena\allocation_descriptors = 0
+            return: 1
+        if: lm_own_arena_promote_lazy_edges(arena) != 0
+            return: 1
+
+        index: 0U
+        while: index < arena\allocation_descriptors\count
+            descriptor: lm_own_ptr_stack_at(arena\allocation_descriptors, index)
+            if: descriptor != 0
+                descriptor\marked: 0
+            index: index + 1U
+
+        if: arena\roots != 0
+            index: 0U
+            while: index < arena\roots\count
+                lm_own_arena_mark(arena, lm_own_ptr_stack_at(arena\roots, index))
+                index: index + 1U
+            ---
+        ---
+
+        index: 0U
+        while: index < arena\allocation_descriptors\count
+            descriptor: lm_own_ptr_stack_at(arena\allocation_descriptors, index)
+            if: descriptor != 0 && descriptor\pinned
+                lm_own_arena_mark(arena, descriptor\address)
+            index: index + 1U
+
+        keep: 0U
+        index: 0U
+        while: index < arena\allocations\count
+            object: lm_own_ptr_stack_at(arena\allocations, index)
+            descriptor: lm_own_ptr_stack_at(arena\allocation_descriptors, index)
+            if: descriptor != 0 && (descriptor\marked != 0 || descriptor\pinned != 0)
+                arena\allocations\items[keep]: object
+                arena\allocation_descriptors\items[keep]: descriptor
+                keep: keep + 1U
+            else:
+                if: object != 0
+                    c.free(object)
+                if: descriptor != 0
+                    lm_own_delete(descriptor, 0)
+            ---
+            index: index + 1U
+        arena\allocations\count: keep
+        arena\allocation_descriptors\count: keep
+
+        if: arena\roots != 0
+            keep: 0U
+            index: 0U
+            while: index < arena\roots\count
+                item: lm_own_ptr_stack_at(arena\roots, index)
+                if: item != 0 && lm_own_allocation_descriptor_find(arena\allocation_descriptors, item) != 0
+                    arena\roots\items[keep]: item
+                    keep: keep + 1U
+                index: index + 1U
+            arena\roots\count: keep
+        ---
+    return: 0
+end: external
+
+external:
+    fn: lm_own_arena_absorb (LmOwnArena: target; LmOwnArena: source) int
+        @@: void items
+        size_t: descriptor_base
+        size_t: descriptor_new_count
+        size_t: new_count
+        size_t: capacity
+        size_t: lazy_base
+        size_t: lazy_new_count
+        size_t: i
+        LmOwnAllocationDescriptor: descriptor
+        LmOwnLazyEdge: edge
+
+        if: target = 0 || source = 0 || c.lm_lmx_message_thread = 0 || target\owner_thread != c.lm_lmx_message_thread || source\owner_thread != c.lm_lmx_message_thread || target\frozen
+            return: 1
+        if: target\allocations = 0 || target\allocation_descriptors = 0 || target\lazy_edges = 0
+            return: 1
+        if: source\allocations = 0 || source\allocation_descriptors = 0 || source\lazy_edges = 0
+            return: 1
+        if: source = target
+            return: 0
+
+        if: source\allocations\count > 0U
+            new_count: target\allocations\count + source\allocations\count
+            if: target\allocations\capacity = 0U
+                capacity: 8U
+            if: target\allocations\capacity != 0U
+                capacity: target\allocations\capacity
+            while: capacity < new_count
+                capacity: capacity * 2U
+            items: c.realloc(target\allocations\items, capacity * c.sizeof(items[0]))
+            if: items = 0
+                return: 1
+            target\allocations\items: items
+            target\allocations\capacity: capacity
+            c.memcpy(target\allocations\items + target\allocations\count, source\allocations\items, source\allocations\count * c.sizeof(source\allocations\items[0]))
+            target\allocations\count: new_count
+
+            c.free(source\allocations\items)
+            source\allocations\items: 0
+            source\allocations\count: 0U
+            source\allocations\capacity: 0U
+
+        descriptor_base: target\allocation_descriptors\count
+        descriptor_new_count: descriptor_base + source\allocation_descriptors\count
+        if: source\allocation_descriptors\count > 0U
+            if: target\allocation_descriptors\capacity = 0U
+                capacity: 8U
+            if: target\allocation_descriptors\capacity != 0U
+                capacity: target\allocation_descriptors\capacity
+            while: capacity < descriptor_new_count
+                capacity: capacity * 2U
+            items: c.realloc(target\allocation_descriptors\items, capacity * c.sizeof(items[0]))
+            if: items = 0
+                return: 1
+            target\allocation_descriptors\items: items
+            target\allocation_descriptors\capacity: capacity
+            c.memcpy(target\allocation_descriptors\items + descriptor_base, source\allocation_descriptors\items, source\allocation_descriptors\count * c.sizeof(source\allocation_descriptors\items[0]))
+            target\allocation_descriptors\count: descriptor_new_count
+            i: descriptor_base
+            while: i < target\allocation_descriptors\count
+                descriptor: lm_own_ptr_stack_at(target\allocation_descriptors, i)
+                if: descriptor != 0 && descriptor\owner = source
+                    descriptor\owner: target
+                i: i + 1U
+            c.free(source\allocation_descriptors\items)
+            source\allocation_descriptors\items: 0
+            source\allocation_descriptors\count: 0U
+            source\allocation_descriptors\capacity: 0U
+
+        lazy_base: target\lazy_edges\count
+        lazy_new_count: lazy_base + source\lazy_edges\count
+        if: source\lazy_edges\count > 0U
+            if: target\lazy_edges\capacity = 0U
+                capacity: 8U
+            if: target\lazy_edges\capacity != 0U
+                capacity: target\lazy_edges\capacity
+            while: capacity < lazy_new_count
+                capacity: capacity * 2U
+            items: c.realloc(target\lazy_edges\items, capacity * c.sizeof(items[0]))
+            if: items = 0
+                return: 1
+            target\lazy_edges\items: items
+            target\lazy_edges\capacity: capacity
+            c.memcpy(target\lazy_edges\items + lazy_base, source\lazy_edges\items, source\lazy_edges\count * c.sizeof(source\lazy_edges\items[0]))
+            target\lazy_edges\count: lazy_new_count
+            i: lazy_base
+            while: i < target\lazy_edges\count
+                edge: lm_own_ptr_stack_at(target\lazy_edges, i)
+                if: edge != 0 && edge\target_owner = source
+                    edge\target_owner: target
+                i: i + 1U
+            c.free(source\lazy_edges\items)
+            source\lazy_edges\items: 0
+            source\lazy_edges\count: 0U
+            source\lazy_edges\capacity: 0U
+
+    return: 0
+end: external
+
+external:
+    fn: lm_message_thread_init (LmMessageThread: thread) int
+        if: thread = 0 || thread\pool != 0 || thread\runtime != 0
+            return: 1
+        if: thread\state = c.LM_MESSAGE_THREAD_RUNNING || thread\state = c.LM_MESSAGE_THREAD_STOPPING || thread\root_owner != 0 || thread\arena_head != 0 || thread\arena_tail != 0 || thread\arena_count != 0U || thread\arena_destroying || thread\component_head != 0 || thread\component_count != 0U || thread\component_destroying || thread\inbox_head != 0 || thread\outbox_head != 0 || thread\current_message != 0 || thread\turn_active
+            return: 1
+
+        c.memset(thread, 0, c.sizeof(thread[0]))
+        thread\root_owner: c.lm_own_arena_new(thread, thread)
+        if: thread\root_owner = 0
+            thread\state: c.LM_MESSAGE_THREAD_STOPPED
+            thread\collector_failed: 1
+            thread\stop_status: 1
+            return: 1
+
+        thread\state: c.LM_MESSAGE_THREAD_RUNNING
+    return: 0
+end: external
+
+external:
+    sub: lm_message_thread_destroy (LmMessageThread: thread)
+        LmOwnArena: arena
+        LmMessageThreadComponent: component
+        int: components_released
+
+        if: thread != 0 && thread\pool = 0 && thread\runtime = 0
+            c.lm_native_message_thread_mailboxes_destroy(thread)
+            components_released: 1
+            thread\component_destroying: 1
+            while: thread\component_head != 0
+                component: thread\component_head
+                if: c.lm_message_thread_component_release(thread, thread, component) != 0
+                    thread\collector_failed: 1
+                    if: thread\stop_status = 0
+                        thread\stop_status: 1
+                    components_released: 0
+                    break
+            ---
+            if: thread\component_count = 0U
+                thread\component_head: 0
+            ---
+            thread\component_destroying: 0
+            if: components_released
+                thread\arena_destroying: 1
+                while: thread\arena_tail != 0
+                    arena: thread\arena_tail
+                    if: c.lm_own_arena_release(thread, thread, arena, arena\runtime_owned_shell, 1) != 0
+                        thread\collector_failed: 1
+                        if: thread\stop_status = 0
+                            thread\stop_status: 1
+                        break
+                ---
+                if: thread\arena_count = 0U
+                    thread\root_owner: 0
+                    thread\arena_head: 0
+                    thread\arena_tail: 0
+                ---
+                thread\arena_destroying: 0
+            ---
+            thread\execution_context: 0
+            thread\state: c.LM_MESSAGE_THREAD_STOPPED
+    end: lm_message_thread_destroy
+end: external
+
+external:
+    fn: lm_message_thread_new () LmMessageThread
+        LmMessageThread: thread
+
+        thread: lm_own_new_zero(c.sizeof(c.LmMessageThread))
+        if: thread = 0
+            return: 0
+        if: lm_message_thread_init(thread) != 0
+            lm_own_delete(thread, 0)
+            return: 0
+    return: thread
+end: external
+
+external:
+    sub: lm_message_thread_delete (LmMessageThread: thread)
+        if: thread != 0
+            if: thread\pool != 0
+                return
+            lm_message_thread_destroy(thread)
+            if: thread\arena_count = 0U && thread\arena_head = 0 && thread\arena_tail = 0 && thread\component_count = 0U && thread\component_head = 0
+                lm_condition_delete(thread\stopped_condition)
+                thread\stopped_condition: 0
+                lm_mutex_delete(thread\state_mutex)
+                thread\state_mutex: 0
+                lm_own_delete(thread, 0)
+    end: lm_message_thread_delete
+end: external
+
+external:
+    fn: lm_message_thread_is_running (const: (LmMessageThread: thread)) int
+        int: result
+
+        if: thread = 0 || c.lm_native_message_thread_state_lock(thread) != 0
+            return: 0
+        result: thread\state = c.LM_MESSAGE_THREAD_RUNNING
+        c.lm_native_message_thread_state_unlock(thread)
+    return: result
+end: external
+
+external:
+    fn: lm_message_thread_status (const: (LmMessageThread: thread)) int
+        int: result
+
+        if: thread = 0 || c.lm_native_message_thread_state_lock(thread) != 0
+            return: 1
+        result: thread\stop_status
+        c.lm_native_message_thread_state_unlock(thread)
+    return: result
+end: external
+
+external:
+    fn: lm_message_thread_owner (LmMessageThread: thread) LmOwnArena
+        if: thread = 0 || thread\root_owner = 0 || thread\root_owner\owner_thread != thread || thread\arena_head != thread\root_owner || thread\root_owner\registry_previous != 0 || thread\arena_count = 0U
+            return: 0
+    return: thread\root_owner
+end: external
+
+external:
+    fn: lm_message_thread_execution_context (LmMessageThread: thread) @: void
+        @: void result
+
+        if: thread = 0 || c.lm_native_message_thread_state_lock(thread) != 0
+            return: 0
+        result: thread\execution_context
+        c.lm_native_message_thread_state_unlock(thread)
+    return: result
+end: external
+
+external:
+    fn: lm_message_thread_set_execution_context (LmMessageThread: thread; @: void context) @: void
+        @: void previous
+
+        if: thread = 0 || c.lm_native_message_thread_state_lock(thread) != 0
+            return: 0
+        previous: thread\execution_context
+        thread\execution_context: context
+        c.lm_native_message_thread_state_unlock(thread)
+    return: previous
+end: external
+
+external:
+    fn: lm_message_thread_turn_count (const: (LmMessageThread: thread)) size_t
+        size_t: result
+
+        if: thread = 0 || c.lm_native_message_thread_state_lock(thread) != 0
+            return: 0U
+        result: thread\turn_count
+        c.lm_native_message_thread_state_unlock(thread)
+    return: result
+end: external
+
+external:
+    fn: lm_message_thread_collection_count (const: (LmMessageThread: thread)) size_t
+        size_t: result
+
+        if: thread = 0 || c.lm_native_message_thread_state_lock(thread) != 0
+            return: 0U
+        result: thread\collection_count
+        c.lm_native_message_thread_state_unlock(thread)
+    return: result
+end: external
+
+external:
+    fn: lm_message_thread_arena_count (const: (LmMessageThread: thread)) size_t
+        size_t: result
+
+        if: thread = 0 || c.lm_native_message_thread_state_lock(thread) != 0
+            return: 0U
+        result: thread\arena_count
+        c.lm_native_message_thread_state_unlock(thread)
+    return: result
+end: external
+
+external:
+    sub: lm_message_thread_request_stop (LmMessageThread: thread; int: status)
+        LmMessageThreadPool: pool
+
+        if: thread = 0
+            return
+        pool: thread\pool
+        if: pool != 0
+            if: lm_mutex_lock(pool\mutex) != 0
+                return
+            if: pool\deleting || c.lm_native_message_thread_control_allowed_locked(pool, thread) = 0
+                lm_mutex_unlock(pool\mutex)
+                return
+        ---
+        if: pool = 0 && thread\runtime != 0
+            if: thread\runtime\root_thread != thread || c.lm_native_thread_identity_is_current(thread\runtime\identity) = 0
+                return
+        ---
+        if: c.lm_native_message_thread_state_lock(thread) = 0
+            if: thread\state = c.LM_MESSAGE_THREAD_RUNNING
+                thread\stop_status: status
+                thread\state: c.LM_MESSAGE_THREAD_STOPPING
+                if: pool != 0
+                    c.lm_native_message_thread_schedule_stop_locked(pool, thread)
+                ---
+            if: thread\state = c.LM_MESSAGE_THREAD_NEW
+                thread\stop_status: status
+                thread\state: c.LM_MESSAGE_THREAD_STOPPED
+                if: thread\stopped_condition != 0
+                    lm_condition_broadcast(thread\stopped_condition)
+            ---
+            c.lm_native_message_thread_state_unlock(thread)
+        if: pool != 0
+            lm_mutex_unlock(pool\mutex)
+    end: lm_message_thread_request_stop
+end: external
+
+external:
+    sub: lm_message_thread_request_failure (LmMessageThread: thread; int: status)
+        LmMessageThreadPool: pool
+
+        if: status = 0
+            status: 1
+        if: thread = 0
+            return
+        pool: thread\pool
+        if: pool != 0
+            if: lm_mutex_lock(pool\mutex) != 0
+                return
+            if: pool\deleting || c.lm_native_message_thread_control_allowed_locked(pool, thread) = 0
+                lm_mutex_unlock(pool\mutex)
+                return
+        ---
+        if: pool = 0 && thread\runtime != 0
+            if: thread\runtime\root_thread != thread || c.lm_native_thread_identity_is_current(thread\runtime\identity) = 0
+                return
+        ---
+        if: c.lm_native_message_thread_state_lock(thread) = 0
+            thread\turn_failed: 1
+            if: thread\state = c.LM_MESSAGE_THREAD_RUNNING || thread\state = c.LM_MESSAGE_THREAD_STOPPING
+                thread\stop_status: status
+                thread\state: c.LM_MESSAGE_THREAD_STOPPING
+                if: pool != 0
+                    c.lm_native_message_thread_schedule_stop_locked(pool, thread)
+                ---
+            c.lm_native_message_thread_state_unlock(thread)
+        if: pool != 0
+            lm_mutex_unlock(pool\mutex)
+    end: lm_message_thread_request_failure
+end: external
+
+external:
+    fn: lm_message_thread_collect (LmMessageThread: thread) int
+        if: thread = 0 || thread\pool != 0
+            return: 1
+
+        if: c.lm_native_message_thread_state_lock(thread) != 0
+            return: 1
+        thread\collection_count: thread\collection_count + 1U
+        c.lm_native_message_thread_state_unlock(thread)
+        if: thread\root_owner = 0 || thread\root_owner\owner_thread != thread || thread\arena_head != thread\root_owner || thread\root_owner\registry_previous != 0 || thread\arena_tail = 0 || thread\arena_tail\registry_next != 0 || thread\arena_count = 0U
+            if: c.lm_native_message_thread_state_lock(thread) = 0
+                thread\collector_failed: 1
+                c.lm_native_message_thread_state_unlock(thread)
+            lm_message_thread_request_failure(thread, 1)
+            return: 1
+        if: c.lm_own_tree_cut(thread, thread\root_owner) != 0
+            if: c.lm_native_message_thread_state_lock(thread) = 0
+                thread\collector_failed: 1
+                c.lm_native_message_thread_state_unlock(thread)
+            lm_message_thread_request_failure(thread, 1)
+            return: 1
+        if: c.lm_own_arena_reclaim(thread, thread\root_owner) != 0
+            if: c.lm_native_message_thread_state_lock(thread) = 0
+                thread\collector_failed: 1
+                c.lm_native_message_thread_state_unlock(thread)
+            lm_message_thread_request_failure(thread, 1)
+            return: 1
+    return: 0
+end: external
+
+external:
+    fn: lm_message_thread_begin_turn (LmMessageThread: thread) int
+        if: thread = 0 || thread\pool != 0
+            return: 0
+        if: thread\runtime != 0 && (thread\runtime\root_thread != thread || c.lm_native_thread_identity_is_current(thread\runtime\identity) = 0)
+            return: 0
+        if: c.lm_native_message_thread_state_lock(thread) != 0
+            return: 0
+        if: thread\state != c.LM_MESSAGE_THREAD_RUNNING || thread\turn_active
+            c.lm_native_message_thread_state_unlock(thread)
+            return: 0
+        thread\turn_active: 1
+        thread\turn_failed: 0
+        thread\turn_count: thread\turn_count + 1U
+        c.lm_native_message_thread_state_unlock(thread)
+    return: 1
+end: external
+
+external:
+    fn: lm_message_thread_end_turn (LmMessageThread: thread) int
+        int: status
+        int: collect_status
+        int: failed_status
+
+        if: thread = 0 || thread\pool != 0
+            return: 1
+        if: thread\runtime != 0 && (thread\runtime\root_thread != thread || c.lm_native_thread_identity_is_current(thread\runtime\identity) = 0)
+            return: 1
+        if: c.lm_native_message_thread_state_lock(thread) != 0
+            return: 1
+        if: thread\turn_active = 0
+            c.lm_native_message_thread_state_unlock(thread)
+            return: 1
+        failed_status: 0
+        if: thread\turn_failed
+            failed_status: thread\stop_status
+            if: failed_status = 0
+                failed_status: 1
+        ---
+        c.lm_native_message_thread_state_unlock(thread)
+
+        status: c.lm_native_message_thread_outbox_finish(thread, failed_status = 0)
+        collect_status: lm_message_thread_collect(thread)
+        if: status = 0 && collect_status != 0
+            status: collect_status
+        if: status = 0 && failed_status != 0
+            status: failed_status
+        if: c.lm_native_message_thread_state_lock(thread) != 0
+            return: 1
+        thread\turn_active: 0
+        if: thread\state = c.LM_MESSAGE_THREAD_STOPPING
+            thread\state: c.LM_MESSAGE_THREAD_STOPPED
+        if: thread\state = c.LM_MESSAGE_THREAD_STOPPED && thread\stopped_condition != 0
+            lm_condition_broadcast(thread\stopped_condition)
+        c.lm_native_message_thread_state_unlock(thread)
+        c.lm_native_message_thread_mark_exit_ready(thread)
+    return: status
+end: external

@@ -1,0 +1,39 @@
+fn: take (const: @(char s)) const: @(char)
+    return: s
+end: take
+
+fn: eqbytes (const: @(char a); const: @(char b)) int
+    int: i 0
+    if: a = 0 || b = 0
+        return: 0
+    while: 1
+        if: a[i] != b[i]
+            return: 0
+        if: a[i] = 0
+            return: 1
+        i: i + 1
+    return: 0
+end: eqbytes
+
+external:
+    fn: main () int
+        const: @(char s) """double # not a comment
+colon: stays data
+paren ) stays data
+backslash is raw: \" \n
+same quote run: """"
+"""
+        const: @(char want) "double # not a comment\ncolon: stays data\nparen ) stays data\nbackslash is raw: \\\" \\n\nsame quote run: \"\"\"\"\n"
+        const: @(char t) """??="""
+        const: @(char u) """??/n"""
+        if: eqbytes(s, want) = 0
+            return: 1
+        if: take(s)[0] != 100
+            return: 2
+        if: t[0] != 63 || t[1] != 63 || t[2] != 61 || t[3] != 0
+            return: 3
+        if: u[0] != 63 || u[1] != 63 || u[2] != 47 || u[3] != 110 || u[4] != 0
+            return: 4
+        return: 0
+    end: main
+end: external

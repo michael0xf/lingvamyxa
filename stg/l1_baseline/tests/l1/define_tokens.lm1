@@ -1,0 +1,20 @@
+define: VALUE 7
+define: ALIAS VALUE
+define: MSG "ok"
+define: CH 'A'
+define: EQ =
+define: ADD `3 + 4`
+`ifndef-default`: UNUSED `(void)`
+external:
+    fn: main () int
+        if: MSG[0] != 111
+            return: 20
+        if: MSG[1] != 107
+            return: 21
+        if: MSG[2] != 0
+            return: 22
+        if: ADD != 7
+            return: 30
+        return: ALIAS + CH
+    end: main
+end: external

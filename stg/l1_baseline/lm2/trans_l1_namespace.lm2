@@ -1,0 +1,3690 @@
+fn: lm_trans_text_ref_new (const: (LmP0Text: text)) LmP0Text
+    LmP0Text: copy
+
+    copy: lm_own_new_zero(c.sizeof(copy[0]))
+    if: copy != 0 && text != 0
+        copy[0]: text[0]
+return: copy
+
+fn: lm_trans_text_ref_new_cstr (const: @(char text)) LmP0Text
+    LmP0Text: copy
+
+    copy: lm_own_new_zero(c.sizeof(copy[0]))
+    if: copy != 0 && text != 0
+        copy\data: text
+        copy\length: c.strlen(text)
+return: copy
+
+fn: lm_trans_text_ref_tail_new (const: (LmP0Text: text); size_t: offset) LmP0Text
+    LmP0Text: tail
+
+    if: text = 0 || offset > text\length
+        return: 0
+
+    tail: lm_own_new_zero(c.sizeof(tail[0]))
+    if: tail != 0
+        tail\data: text\data + offset
+        tail\length: text\length - offset
+return: tail
+
+sub: lm_trans_text_ref_destroy (@(LmP0Text text))
+    if: text != 0 && text[0] != 0
+        lm_own_delete(text[0], 0)
+        text[0]: 0
+end: lm_trans_text_ref_destroy
+
+sub: lm_trans_text_ref_delete_any (@: void object)
+    lm_own_delete(object, 0)
+end: lm_trans_text_ref_delete_any
+
+fn: lm_trans_function_header_init_fields (LmTransFunctionHeader: function) int
+    if: function = 0
+        return: 1
+    if: function\name = 0
+        function\name: lm_trans_text_ref_new_cstr("")
+    if: function\c_name = 0
+        function\c_name: lm_trans_text_ref_new_cstr("")
+    if: function\env_type_name = 0
+        function\env_type_name: lm_trans_text_ref_new_cstr("")
+return: function\name = 0 || function\c_name = 0 || function\env_type_name = 0
+
+fn: lm_trans_function_header_new () LmTransFunctionHeader
+    LmTransFunctionHeader: function
+
+    function: lm_own_new_zero(c.sizeof(function[0]))
+    if: function != 0 && lm_trans_function_header_init_fields(function) != 0
+        lm_trans_text_ref_destroy(@ function\name)
+        lm_trans_text_ref_destroy(@ function\c_name)
+        lm_trans_text_ref_destroy(@ function\env_type_name)
+        lm_own_delete(function, 0)
+        return: 0
+return: function
+
+sub: lm_trans_function_header_destroy_fields (LmTransFunctionHeader: function)
+    if: function != 0
+        lm_trans_text_ref_destroy(@ function\name)
+        lm_trans_text_ref_destroy(@ function\c_name)
+        lm_trans_text_ref_destroy(@ function\env_type_name)
+        lm_trans_formal_param_list_delete(function\params)
+        function\params: 0
+end: lm_trans_function_header_destroy_fields
+
+sub: lm_trans_function_header_destroy (LmTransFunctionHeader: function)
+    lm_trans_function_header_destroy_fields(function)
+    lm_own_delete(function, 0)
+end: lm_trans_function_header_destroy
+
+fn: lm_trans_function_header_copy (LmTransFunctionHeader: target; const: (LmTransFunctionHeader: source)) int
+    LmP0Text: name
+    LmP0Text: c_name
+    LmP0Text: env_type_name
+    LmTransFormalParamList: params
+
+    if: target = 0 || source = 0 || lm_trans_function_header_init_fields(target) != 0
+        return: 1
+
+    params: 0
+    if: source\params != 0
+        params: lm_trans_formal_param_list_from_node(source\params_node, source\is_descriptor_only || source\is_callable_descriptor, "function parameters")
+        if: params = 0
+            return: 1
+        ---
+    ---
+
+    lm_trans_formal_param_list_delete(target\params)
+    target\params: 0
+
+    name: target\name
+    c_name: target\c_name
+    env_type_name: target\env_type_name
+    target[0]: source[0]
+    target\name: name
+    target\c_name: c_name
+    target\env_type_name: env_type_name
+    target\params: params
+    if: source\name != 0
+        target\name[0]: source\name[0]
+    else:
+        target\name\data: ""
+        target\name\length: 0U
+    if: source\c_name != 0
+        target\c_name[0]: source\c_name[0]
+    else:
+        target\c_name\data: ""
+        target\c_name\length: 0U
+    if: source\env_type_name != 0
+        target\env_type_name[0]: source\env_type_name[0]
+    else:
+        target\env_type_name\data: ""
+        target\env_type_name\length: 0U
+return: 0
+
+fn: lm_trans_thread_declaration_new (const: (LmTransFunctionHeader: function)) LmTransThreadDeclaration
+    LmTransThreadDeclaration: declaration
+
+    if: function = 0 || function\name = 0 || function\c_name = 0 || function\thread_route_literal = 0
+        return: 0
+
+    declaration: lm_own_new_zero(c.sizeof(declaration[0]))
+    if: declaration = 0
+        return: 0
+    declaration\name: lm_trans_text_ref_new(function\name)
+    declaration\c_name: lm_trans_text_ref_new(function\c_name)
+    declaration\route_literal: lm_trans_text_ref_new(function\thread_route_literal)
+    if: declaration\name = 0 || declaration\c_name = 0 || declaration\route_literal = 0
+        lm_trans_text_ref_destroy(@ declaration\name)
+        lm_trans_text_ref_destroy(@ declaration\c_name)
+        lm_trans_text_ref_destroy(@ declaration\route_literal)
+        lm_own_delete(declaration, 0)
+        return: 0
+return: declaration
+
+sub: lm_trans_thread_declaration_delete_any (@: void object)
+    LmTransThreadDeclaration: declaration
+
+    declaration: cast: (LmTransThreadDeclaration) object
+    if: declaration != 0
+        lm_trans_text_ref_destroy(@ declaration\name)
+        lm_trans_text_ref_destroy(@ declaration\c_name)
+        lm_trans_text_ref_destroy(@ declaration\route_literal)
+    lm_own_delete(declaration, 0)
+end: lm_trans_thread_declaration_delete_any
+
+fn: lm_trans_namespace_add_thread_declaration (
+    LmTransNamespace: namespace_
+    const: LmTransFunctionHeader: function
+) int
+    LmTransThreadDeclaration: declaration
+    const: LmTransThreadDeclaration: existing
+    size_t: index
+
+    if: namespace_ = 0 || namespace_\thread_declarations = 0 || function = 0 || function\is_thread_handler = 0
+        return: 1
+
+    index: 0U
+    while: index < namespace_\thread_declarations\count
+        existing: (cast: (const: LmTransThreadDeclaration) lm_own_ptr_stack_at(namespace_\thread_declarations, index))
+        if: existing != 0 && lm_trans_text_same(existing\route_literal, function\thread_route_literal)
+            c.fprintf(c.stderr, "trans L2 error: duplicate local thread route %.*s\n", (cast: int function\thread_route_literal\length), function\thread_route_literal\data)
+            return: 1
+        index: index + 1U
+
+    declaration: lm_trans_thread_declaration_new(function)
+    if: declaration = 0
+        return: 1
+    if: lm_own_ptr_stack_push(namespace_\thread_declarations, declaration) != 0
+        lm_trans_thread_declaration_delete_any(declaration)
+        return: 1
+return: 0
+
+fn: lm_trans_ptr_stack_new (LmOwnDelete: delete_item) LmOwnPtrStack
+    LmOwnPtrStack: stack
+
+    stack: lm_own_new_zero(c.sizeof(stack[0]))
+    if: stack != 0
+        lm_own_ptr_stack_init(stack, delete_item)
+return: stack
+
+sub: lm_trans_ptr_stack_delete (@(LmOwnPtrStack stack))
+    if: stack != 0 && stack[0] != 0
+        lm_own_ptr_stack_destroy(stack[0])
+        lm_own_delete(stack[0], 0)
+        stack[0]: 0
+end: lm_trans_ptr_stack_delete
+
+fn: lm_trans_descriptor_name_copy (const: (LmP0Text: name)) @: char
+    LmP0Text: payload
+    @: char copy
+
+    if: name = 0 || name\data = 0 || name\length = 0U || name\data[0] = '"' || name\data[0] = '\''
+        return: 0
+
+    payload: lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 0
+    if: lm_trans_identifier_payload(name, payload) = 0 || payload\length = 0U
+        lm_trans_text_ref_destroy(@ payload)
+        return: 0
+    copy: lm_trans_text_copy_cstr(payload)
+    lm_trans_text_ref_destroy(@ payload)
+return: copy
+
+fn: lm_trans_descriptor_cstr_copy (const: @(char value)) @: char
+    @: char copy
+    size_t: value_length
+
+    if: value = 0 || value[0] = '\0'
+        return: 0
+
+    value_length: c.strlen(value)
+    copy: lm_own_new_zero(value_length + 1U)
+    if: copy = 0
+        return: 0
+    c.memcpy(copy, value, value_length + 1U)
+return: copy
+
+sub: lm_trans_descriptor_field_delete_any (@: void object)
+    LmTransDescriptorField: field
+
+    field: cast: (LmTransDescriptorField) object
+    if: field != 0
+        lm_own_delete(field\name, 0)
+        field\name: 0
+        lm_own_delete(field\descriptor_name, 0)
+        field\descriptor_name: 0
+    lm_own_delete(field, 0)
+end: lm_trans_descriptor_field_delete_any
+
+sub: lm_trans_descriptor_relation_delete_any (@: void object)
+    LmTransDescriptorRelation: relation
+
+    relation: cast: (LmTransDescriptorRelation) object
+    if: relation != 0
+        lm_own_delete(relation\relation, 0)
+        relation\relation: 0
+        lm_own_delete(relation\payload, 0)
+        relation\payload: 0
+    lm_own_delete(relation, 0)
+end: lm_trans_descriptor_relation_delete_any
+
+sub: lm_trans_descriptor_delete (LmTransDescriptor: descriptor)
+    if: descriptor != 0
+        lm_trans_ptr_stack_delete(@ descriptor\structural_fields)
+        lm_trans_ptr_stack_delete(@ descriptor\class_relations)
+        descriptor\has_structural_fields: 0
+    lm_own_delete(descriptor, 0)
+end: lm_trans_descriptor_delete
+
+sub: lm_trans_descriptor_delete_any (@: void object)
+    LmTransDescriptor: descriptor
+
+    descriptor: cast: (LmTransDescriptor) object
+    lm_trans_descriptor_delete(descriptor)
+end: lm_trans_descriptor_delete_any
+
+fn: lm_trans_descriptor_new () LmTransDescriptor
+    LmTransDescriptor: descriptor
+
+    descriptor: lm_own_new_zero(c.sizeof(descriptor[0]))
+    if: descriptor = 0
+        return: 0
+    descriptor\structural_fields: lm_trans_ptr_stack_new(lm_trans_descriptor_field_delete_any)
+    if: descriptor\structural_fields = 0
+        lm_trans_descriptor_delete(descriptor)
+        return: 0
+    descriptor\class_relations: lm_trans_ptr_stack_new(lm_trans_descriptor_relation_delete_any)
+    if: descriptor\class_relations = 0
+        lm_trans_descriptor_delete(descriptor)
+        return: 0
+return: descriptor
+
+fn: lm_trans_descriptor_mark_structural_fields (LmTransDescriptor: descriptor) int
+    if: descriptor = 0 || descriptor\structural_fields = 0
+        return: 1
+    descriptor\has_structural_fields: 1
+return: 0
+
+fn: lm_trans_descriptor_add_structural_field (
+    LmTransDescriptor: descriptor
+    const: LmP0Text: name
+    const: LmP0Text: descriptor_name
+    size_t: index
+    size_t: address_depth
+    size_t: array_count
+    int: has_array_count
+    int: is_const
+    int: is_union
+) int
+    LmTransDescriptorField: field
+
+    if: descriptor = 0 || descriptor\structural_fields = 0 || name = 0 || descriptor_name = 0
+        return: 1
+
+    field: lm_own_new_zero(c.sizeof(field[0]))
+    if: field = 0
+        return: 1
+    field\name: lm_trans_descriptor_name_copy(name)
+    field\descriptor_name: lm_trans_descriptor_name_copy(descriptor_name)
+    if: field\name = 0 || field\descriptor_name = 0
+        lm_trans_descriptor_field_delete_any(field)
+        return: 1
+
+    field\index: index
+    field\address_depth: address_depth
+    field\array_count: array_count
+    field\has_array_count: has_array_count != 0
+    field\is_const: is_const != 0
+    field\is_union: is_union != 0
+    if: lm_own_ptr_stack_push(descriptor\structural_fields, field) != 0
+        lm_trans_descriptor_field_delete_any(field)
+        return: 1
+    descriptor\has_structural_fields: 1
+return: 0
+
+fn: lm_trans_descriptor_add_callable_field (
+    LmTransDescriptor: descriptor
+    const: LmP0Text: name
+    size_t: index
+    const: LmP0Frame: callable_frame
+    const: LmP0Text: callable_owner
+    size_t: callable_index
+) int
+    LmP0Text: callable_type
+    LmTransDescriptorField: field
+
+    if: descriptor = 0 || name = 0 || callable_frame = 0 || callable_owner = 0
+        return: 1
+    callable_type: lm_trans_text_ref_new_cstr("lm.trans.callable")
+    if: callable_type = 0
+        return: 1
+    if: lm_trans_descriptor_add_structural_field(descriptor, name, callable_type, index, 1U, 0U, 0, 0, 0) != 0
+        lm_trans_text_ref_destroy(@ callable_type)
+        return: 1
+    lm_trans_text_ref_destroy(@ callable_type)
+
+    field: lm_own_ptr_stack_at(descriptor\structural_fields, descriptor\structural_fields\count - 1U)
+    if: field = 0
+        return: 1
+    field\callable_frame: callable_frame
+    field\callable_owner: callable_owner
+    field\callable_index: callable_index
+return: 0
+
+fn: lm_trans_descriptor_structural_field (
+    const: LmTransDescriptor: descriptor
+    const: @: char name
+) const: LmTransDescriptorField
+    size_t: i
+    const: LmTransDescriptorField: field
+
+    if: descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0 || name = 0
+        return: 0
+
+    i: descriptor\structural_fields\count
+    while: i != 0U
+        i: i - 1U
+        field: lm_own_ptr_stack_at(descriptor\structural_fields, i)
+        if: field != 0 && field\name != 0 && c.strcmp(field\name, name) = 0
+            return: field
+        ---
+return: 0
+
+fn: lm_trans_descriptor_structural_field_occurrence (
+    const: LmTransDescriptor: descriptor
+    const: @: char name
+    size_t: occurrence
+) const: LmTransDescriptorField
+    size_t: i
+    size_t: current_occurrence
+    const: LmTransDescriptorField: field
+
+    if: descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0 || name = 0
+        return: 0
+
+    current_occurrence: 0U
+    i: 0U
+    while: i < descriptor\structural_fields\count
+        field: lm_own_ptr_stack_at(descriptor\structural_fields, i)
+        if: field != 0 && field\name != 0 && c.strcmp(field\name, name) = 0
+            if: current_occurrence = occurrence
+                return: field
+            current_occurrence: current_occurrence + 1U
+        ---
+        i: i + 1U
+return: 0
+
+fn: lm_trans_descriptor_structural_field_by_index (
+    const: LmTransDescriptor: descriptor
+    size_t: field_index
+) const: LmTransDescriptorField
+    size_t: i
+    const: LmTransDescriptorField: field
+    const: LmTransDescriptorField: result
+
+    if: descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0
+        return: 0
+
+    result: 0
+    i: 0U
+    while: i < descriptor\structural_fields\count
+        field: lm_own_ptr_stack_at(descriptor\structural_fields, i)
+        if: field != 0 && field\index = field_index
+            if: result != 0
+                return: 0
+            result: field
+        ---
+        i: i + 1U
+return: result
+
+fn: lm_trans_descriptor_structural_field_occurrence_count (
+    const: LmTransDescriptor: descriptor
+    const: @: char name
+) size_t
+    size_t: i
+    size_t: count
+    const: LmTransDescriptorField: field
+
+    if: descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0 || name = 0
+        return: 0U
+
+    count: 0U
+    i: 0U
+    while: i < descriptor\structural_fields\count
+        field: lm_own_ptr_stack_at(descriptor\structural_fields, i)
+        if: field != 0 && field\name != 0 && c.strcmp(field\name, name) = 0
+            count: count + 1U
+        i: i + 1U
+return: count
+
+fn: lm_trans_descriptor_has_structural_field_name (
+    const: LmTransDescriptor: descriptor
+    const: @: char name
+) int
+return: lm_trans_descriptor_structural_field_occurrence_count(descriptor, name) != 0U
+
+fn: lm_trans_descriptor_projected_member_name_new (
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptorField: selected_field
+) @: char
+    c.array: [64]: char base_name
+    @: char projected_name
+    const: LmTransDescriptorField: newest_field
+    const: LmTransDescriptorField: field
+    size_t: i
+    size_t: suffix_count
+    size_t: base_length
+    size_t: capacity
+    int: selected_is_owned
+    int: indexed_members
+    int: written
+
+    if: descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0 || selected_field = 0 || selected_field\name = 0
+        return: 0
+
+    selected_is_owned: 0
+    i: 0U
+    while: i < descriptor\structural_fields\count
+        field: lm_own_ptr_stack_at(descriptor\structural_fields, i)
+        if: field = selected_field
+            selected_is_owned: 1
+            break
+        i: i + 1U
+    if: selected_is_owned = 0
+        return: 0
+
+    indexed_members: lm_trans_descriptor_class_relation_value(descriptor, "lm.trans.c.indexed-members") != 0
+    if: indexed_members
+        written: c.snprintf(base_name, c.sizeof(base_name), "lm__field_%zu", selected_field\index)
+    else:
+        newest_field: lm_trans_descriptor_structural_field(descriptor, selected_field\name)
+        if: newest_field = selected_field
+            return: lm_trans_descriptor_cstr_copy(selected_field\name)
+        written: c.snprintf(base_name, c.sizeof(base_name), "lm__occurrence_%zu", selected_field\index)
+    ---
+    if: written <= 0 || (cast: size_t written) >= c.sizeof(base_name)
+        return: 0
+
+    base_length: cast: size_t written
+    capacity: base_length + descriptor\structural_fields\count + 1U
+    projected_name: lm_own_new_zero(capacity)
+    if: projected_name = 0
+        return: 0
+    c.memcpy(projected_name, base_name, base_length)
+
+    suffix_count: 0U
+    while: lm_trans_descriptor_has_structural_field_name(descriptor, projected_name)
+        if: base_length + suffix_count + 1U >= capacity
+            lm_own_delete(projected_name, 0)
+            return: 0
+        projected_name[base_length + suffix_count]: '_'
+        suffix_count: suffix_count + 1U
+        projected_name[base_length + suffix_count]: '\0'
+return: projected_name
+
+fn: lm_trans_descriptor_has_exact_structural_field (
+    const: LmTransDescriptor: descriptor
+    const: LmP0Text: name
+    const: LmP0Text: descriptor_name
+    size_t: index
+    size_t: address_depth
+    size_t: array_count
+    int: has_array_count
+    int: is_const
+    int: is_union
+) int
+    const: LmTransDescriptorField: field
+    size_t: i
+
+    if: descriptor = 0 || descriptor\structural_fields = 0 || name = 0 || descriptor_name = 0
+        return: 0
+
+    i: 0U
+    while: i < descriptor\structural_fields\count
+        field: lm_own_ptr_stack_at(descriptor\structural_fields, i)
+        if: field != 0 && field\name != 0 && field\descriptor_name != 0 && lm_trans_text_equals(name, field\name) != 0 && lm_trans_text_equals(descriptor_name, field\descriptor_name) != 0 && field\index = index && field\address_depth = address_depth && field\array_count = array_count && field\has_array_count = (has_array_count != 0) && field\is_const = (is_const != 0) && field\is_union = (is_union != 0)
+            return: 1
+        i: i + 1U
+return: 0
+
+fn: lm_trans_descriptor_structural_same (
+    const: LmTransDescriptor: old_descriptor
+    const: LmTransDescriptor: new_descriptor
+) int
+    const: LmTransDescriptorField: old_field
+    const: LmTransDescriptorField: new_field
+    size_t: i
+
+    if: old_descriptor = 0 || new_descriptor = 0
+        return: 0
+    if: old_descriptor\has_structural_fields != new_descriptor\has_structural_fields
+        return: 0
+    if: old_descriptor\structural_fields = 0 || new_descriptor\structural_fields = 0
+        return: old_descriptor\structural_fields = new_descriptor\structural_fields && old_descriptor\has_structural_fields = 0
+    if: old_descriptor\structural_fields\count != new_descriptor\structural_fields\count
+        return: 0
+
+    i: 0U
+    while: i < old_descriptor\structural_fields\count
+        old_field: lm_own_ptr_stack_at(old_descriptor\structural_fields, i)
+        new_field: lm_own_ptr_stack_at(new_descriptor\structural_fields, i)
+        if: old_field = 0 || new_field = 0 || old_field\name = 0 || new_field\name = 0 || old_field\descriptor_name = 0 || new_field\descriptor_name = 0
+            return: 0
+        if: c.strcmp(old_field\name, new_field\name) != 0 || c.strcmp(old_field\descriptor_name, new_field\descriptor_name) != 0 || old_field\index != new_field\index || old_field\address_depth != new_field\address_depth || old_field\array_count != new_field\array_count || old_field\has_array_count != new_field\has_array_count || old_field\is_const != new_field\is_const || old_field\is_union != new_field\is_union
+            return: 0
+        i: i + 1U
+    ---
+
+return: 1
+
+fn: lm_trans_descriptor_implements (
+    const: LmTransDescriptor: candidate
+    const: LmTransDescriptor: required
+    const: LmTransDescriptor: consumer
+    @: int out_result
+) int
+    const: LmTransDescriptorField: used
+    size_t: i
+
+    if: out_result != 0
+        out_result[0]: 0
+    if: candidate = 0 || required = 0 || consumer = 0 || out_result = 0
+        return: 1
+    if: required\has_structural_fields = 0 || required\structural_fields = 0 || required\structural_fields\count = 0U
+        out_result[0]: 1
+        return: 0
+    if: consumer\has_structural_fields = 0 || consumer\structural_fields = 0 || consumer\structural_fields\count = 0U
+        out_result[0]: 1
+        return: 0
+    if: candidate\has_structural_fields = 0 || candidate\structural_fields = 0
+        out_result[0]: 0
+        return: 0
+
+    i: 0U
+    while: i < consumer\structural_fields\count
+        used: lm_own_ptr_stack_at(consumer\structural_fields, i)
+        if: used = 0 || used\name = 0
+            return: 1
+        if: lm_trans_descriptor_structural_field(required, used\name) != 0
+            if: lm_trans_descriptor_structural_field(candidate, used\name) = 0
+                out_result[0]: 0
+                return: 0
+            ---
+        ---
+        i: i + 1U
+    ---
+
+    out_result[0]: 1
+return: 0
+
+const: LmP0Frame: lm_trans_uses_fn_frame
+
+sub: lm_trans_uses_set_fn_frame (const: LmP0Frame: frame)
+    lm_trans_uses_fn_frame: frame
+end: lm_trans_uses_set_fn_frame
+
+fn: lm_trans_uses_get_fn_frame () const: LmP0Frame
+return: lm_trans_uses_fn_frame
+
+fn: lm_trans_uses_is_slash_atom (const: (LmP0Text: text)) int
+return: text != 0 && text\length = 1U && text\data != 0 && text\data[0] = '\\'
+
+fn: lm_trans_uses_is_control_head (const: (LmP0Text: head)) int
+    if: head = 0
+        return: 0
+    if: lm_trans_text_equals(head, "if") != 0 || lm_trans_text_equals(head, "else") != 0 || lm_trans_text_equals(head, "while") != 0 || lm_trans_text_equals(head, "for") != 0 || lm_trans_text_equals(head, "return") != 0 || lm_trans_text_equals(head, "throw") != 0 || lm_trans_text_equals(head, "catch") != 0 || lm_trans_text_equals(head, "assert") != 0 || lm_trans_text_equals(head, "fn") != 0 || lm_trans_text_equals(head, "sub") != 0 || lm_trans_text_equals(head, "external") != 0 || lm_trans_text_equals(head, "table") != 0 || lm_trans_text_equals(head, "finally") != 0 || lm_trans_text_equals(head, "L2") != 0
+        return: 1
+return: 0
+
+fn: lm_trans_uses_slash_offset (const: @(char data); size_t: length) size_t
+    size_t: i
+
+    i: 0U
+    while: i < length
+        if: data[i] = '\\'
+            return: i
+        i: i + 1U
+return: length
+
+sub: lm_trans_uses_path_add (@: char paths; @: size_t count; const: @(char path); size_t: length)
+    @: char slot
+    size_t: i
+    size_t: n
+
+    if: paths = 0 || count = 0 || path = 0 || length = 0U || length >= 128U
+        return
+    i: 0U
+    while: i < count[0]
+        slot: paths + (i * 128U)
+        n: c.strlen(slot)
+        if: n = length && c.memcmp(slot, path, n) = 0
+            return
+        i: i + 1U
+    if: count[0] >= 64U
+        return
+    slot: paths + (count[0] * 128U)
+    c.memcpy(slot, path, length)
+    slot[length]: '\0'
+    count[0]: count[0] + 1U
+end: lm_trans_uses_path_add
+
+fn: lm_trans_uses_name_eq (const: (LmP0Text: name); const: (LmP0Text: varb)) int
+    LmP0Text: payload
+    int: same
+
+    if: name = 0 || varb = 0
+        return: 0
+    payload: lm_own_new_zero(c.sizeof(payload[0]))
+    if: payload = 0
+        return: 0
+    same: 0
+    if: lm_trans_identifier_payload(name, payload)
+        same: lm_trans_text_same(payload, varb)
+        if: same = 0
+            same: lm_trans_identifier_same(name, varb)
+        ---
+    ---
+    lm_own_delete(payload, 0)
+return: same
+
+fn: lm_trans_uses_scan_follow (const: (LmP0Text: varb); @: char paths; @: size_t count; LmP0Field: start) LmP0Field
+    LmP0Field: field
+    LmP0Text: name
+    c.array: [128]: char path
+    size_t: used
+    int: tracked
+
+    if: start = 0 || start\value = 0 || start\value\kind != c.LM_P0_NODE_ATOM
+        return: start
+    name: start\value\as\atom
+    tracked: lm_trans_uses_name_eq(name, varb)
+    field: start\next
+    if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM || lm_trans_uses_is_slash_atom(field\value\as\atom) = 0
+        return: start
+    used: 0U
+    while: field != 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && lm_trans_uses_is_slash_atom(field\value\as\atom) != 0
+        field: field\next
+        if: field = 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM || field\value\as\atom = 0
+            return: start
+        name: field\value\as\atom
+        if: tracked != 0 && name\length > 0U
+            if: used != 0U && used + 1U < 128U
+                path[used]: '\\'
+                used: used + 1U
+            if: used + name\length < 128U
+                c.memcpy(path + used, name\data, name\length)
+                used: used + name\length
+            ---
+        ---
+        field: field\next
+    if: tracked != 0 && used > 0U
+        lm_trans_uses_path_add(paths, count, path, used)
+return: field
+
+fn: lm_trans_uses_walk_frame (const: (LmP0Text: varb); @: char paths; @: size_t count; const: (LmP0Frame: frame)) int
+    LmP0Text: head
+    size_t: slash
+    size_t: rest
+
+    if: varb = 0 || frame = 0
+        return: 0
+    head: frame\head
+    if: head != 0 && head\data != 0 && head\length > 0U
+        slash: lm_trans_uses_slash_offset(head\data, head\length)
+        if: slash < head\length
+            if: slash > 0U
+                head: lm_own_new_zero(c.sizeof(head[0]))
+                if: head != 0
+                    head\data: frame\head\data
+                    head\length: slash
+                    if: lm_trans_uses_name_eq(head, varb) != 0 && slash + 1U < frame\head\length
+                        rest: frame\head\length - slash - 1U
+                        lm_trans_uses_path_add(paths, count, frame\head\data + slash + 1U, rest)
+                    ---
+                    lm_own_delete(head, 0)
+                ---
+            ---
+            return: lm_trans_uses_walk_structure(varb, paths, count, frame\body)
+        ---
+    if: lm_trans_uses_is_control_head(frame\head) != 0
+        return: lm_trans_uses_walk_structure(varb, paths, count, frame\body)
+return: lm_trans_uses_walk_structure(varb, paths, count, frame\body)
+
+fn: lm_trans_uses_walk_structure (const: (LmP0Text: varb); @: char paths; @: size_t count; const: (LmP0Structure: body)) int
+    LmP0Field: field
+    LmP0Field: next
+
+    if: varb = 0 || body = 0
+        return: 0
+    field: body\first_field
+    while: field != 0
+        next: lm_trans_uses_scan_follow(varb, paths, count, field)
+        if: next != field
+            field: next
+        else:
+            if: lm_trans_uses_walk_node(varb, paths, count, field\value) != 0
+                return: 1
+            field: field\next
+        ---
+return: 0
+
+fn: lm_trans_uses_walk_node (const: (LmP0Text: varb); @: char paths; @: size_t count; const: (LmP0Node: node)) int
+    if: varb = 0 || node = 0
+        return: 0
+    if: node\kind = c.LM_P0_NODE_STRUCTURE
+        return: lm_trans_uses_walk_structure(varb, paths, count, node\as\structure)
+    if: node\kind = c.LM_P0_NODE_FRAME
+        return: lm_trans_uses_walk_frame(varb, paths, count, node\as\frame)
+return: 0
+
+fn: lm_trans_uses_path_on_descriptor (const: (LmTransDescriptor: candidate); const: @(char path)) int
+    c.array: [128]: char segment
+    size_t: i
+
+    if: candidate = 0 || path = 0 || path[0] = '\0'
+        return: 0
+    i: 0U
+    while: path[i] != '\0' && path[i] != '\\' && i < 127U
+        segment[i]: path[i]
+        i: i + 1U
+    segment[i]: '\0'
+    if: lm_trans_descriptor_structural_field(candidate, segment) = 0
+        return: 0
+return: 1
+
+fn: lm_trans_admit_consumer_uses (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: candidate_name
+    const: LmTransDescriptor: required_descriptor
+    const: LmP0Text: varb
+    const: LmP0Frame: consumer
+    const: @(char context)
+) int
+    const: LmTransDescriptor: candidate_descriptor
+    @: char paths
+    size_t: path_count
+
+    if: namespace_ = 0 || candidate_name = 0 || required_descriptor = 0 || varb = 0 || consumer = 0
+        return: lm_trans_guard_direct_structure_value_layout(namespace_, candidate_name, required_descriptor, context)
+    if: candidate_name\data = 0 || candidate_name\length = 0U || (candidate_name\data[0] >= '0' && candidate_name\data[0] <= '9')
+        return: 0
+    if: lm_trans_atom_is_void_primitive(namespace_, candidate_name)
+        return: 0
+
+    candidate_descriptor: lm_trans_effective_value_descriptor_from_atom(namespace_, candidate_name)
+    if: candidate_descriptor = 0
+        return: 0
+
+    paths: lm_own_new_zero(64U * 128U)
+    if: paths = 0
+        return: 1
+    path_count: 0U
+    if: lm_trans_uses_walk_frame(varb, paths, @ path_count, consumer) != 0
+        lm_own_delete(paths, 0)
+        return: 1
+    if: path_count = 0U
+        lm_own_delete(paths, 0)
+        if: lm_trans_descriptor_class_relation_value(candidate_descriptor, "lm.trans.c.indexed-members") = 0 && lm_trans_descriptor_class_relation_value(required_descriptor, "lm.trans.c.indexed-members") = 0
+            return: 0
+        c.fprintf(c.stderr, "trans hosted C backend limitation: \"%.*s\" implements the required descriptor in %s, but distinct hosted C layouts require an adapter/projection\n", (cast: int candidate_name\length), candidate_name\data, context)
+        return: 1
+    ---
+    lm_own_delete(paths, 0)
+return: lm_trans_admit_implements(namespace_, candidate_descriptor, required_descriptor, candidate_name, context)
+
+fn: lm_trans_descriptor_relation_find (
+    const: LmTransDescriptor: descriptor
+    const: @(char relation_name)
+) LmTransDescriptorRelation
+    size_t: i
+    LmTransDescriptorRelation: relation
+
+    if: descriptor = 0 || descriptor\class_relations = 0 || relation_name = 0 || relation_name[0] = '\0'
+        return: 0
+
+    i: descriptor\class_relations\count
+    while: i != 0U
+        i: i - 1U
+        relation: lm_own_ptr_stack_at(descriptor\class_relations, i)
+        if: relation != 0 && relation\relation != 0 && c.strcmp(relation\relation, relation_name) = 0
+            return: relation
+        ---
+return: 0
+
+fn: lm_trans_descriptor_set_class_relation (
+    LmTransDescriptor: descriptor
+    const: @(char relation_name)
+    const: @(char payload)
+) int
+    LmTransDescriptorRelation: relation
+    @: char relation_copy
+    @: char payload_copy
+
+    if: descriptor = 0 || descriptor\class_relations = 0 || relation_name = 0 || relation_name[0] = '\0' || payload = 0
+        return: 1
+
+    relation: lm_trans_descriptor_relation_find(descriptor, relation_name)
+    if: relation != 0
+        payload_copy: lm_trans_descriptor_cstr_copy(payload)
+        if: payload_copy = 0
+            return: 1
+        lm_own_delete(relation\payload, 0)
+        relation\payload: payload_copy
+        return: 0
+
+    relation: lm_own_new_zero(c.sizeof(relation[0]))
+    if: relation = 0
+        return: 1
+    relation_copy: lm_trans_descriptor_cstr_copy(relation_name)
+    payload_copy: lm_trans_descriptor_cstr_copy(payload)
+    if: relation_copy = 0 || payload_copy = 0
+        if: relation_copy != 0
+            lm_own_delete(relation_copy, 0)
+        if: payload_copy != 0
+            lm_own_delete(payload_copy, 0)
+        lm_trans_descriptor_relation_delete_any(cast: (@: void) relation)
+        return: 1
+    relation\relation: relation_copy
+    relation\payload: payload_copy
+    if: lm_own_ptr_stack_push(descriptor\class_relations, relation) != 0
+        lm_trans_descriptor_relation_delete_any(cast: (@: void) relation)
+        return: 1
+return: 0
+
+fn: lm_trans_descriptor_class_relation_value (
+    const: LmTransDescriptor: descriptor
+    const: @(char relation_name)
+) const: @: char
+    const: LmTransDescriptorRelation: relation
+
+    relation: lm_trans_descriptor_relation_find(descriptor, relation_name)
+    if: relation = 0 || relation\payload = 0
+        return: 0
+return: relation\payload
+
+fn: lm_trans_descriptor_uses_structure_graph (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransDescriptor: descriptor
+    const: @: char c_type
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, name)
+    if: descriptor = 0 || descriptor\has_structural_fields = 0
+        return: 0
+    c_type: lm_trans_descriptor_class_relation_value(descriptor, "lm.trans.c.type")
+return: c_type != 0 && c.strcmp(c_type, "LmLmxStructure") = 0
+
+fn: lm_trans_function_state_new () LmTransFunctionState
+    return: lm_own_new_zero(c.sizeof(c.LmTransFunctionState))
+
+sub: lm_trans_function_state_destroy (LmTransFunctionState: state)
+    if: state != 0
+        lm_trans_text_ref_destroy(@ state\current_return_type_name)
+        if: state\has_previous_control_stacks
+            lm_trans_ptr_stack_delete(@ state\previous_cleanups)
+            lm_trans_ptr_stack_delete(@ state\previous_loops)
+            lm_trans_ptr_stack_delete(@ state\previous_catches)
+            state\has_previous_control_stacks: 0
+end: lm_trans_function_state_destroy
+
+sub: lm_trans_function_state_destroy_any (@: void object)
+    lm_trans_function_state_destroy(cast: (LmTransFunctionState) object)
+end: lm_trans_function_state_destroy_any
+
+sub: lm_trans_function_state_delete (LmTransFunctionState: state)
+    lm_own_delete(state, lm_trans_function_state_destroy_any)
+end: lm_trans_function_state_delete
+
+fn: lm_trans_expr_source_path_value (
+    const: (LmP0Text: key)
+    const: @(char source_path)
+    const: @(char n2_value_column_name)
+    const: @(char value_descriptor)
+) const: @: char
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, key, source_path, "class", "class", n2_value_column_name, value_descriptor)
+
+fn: lm_trans_registry_has_expr_emitter_binding (const: (LmP0Text: key); const: @(char table)) int
+    const: @: char binding
+    LmTransBinding: resolved
+    const: @: char table_name
+
+    if: key = 0
+        return: 0
+
+    binding: lm_trans_expr_source_path_value(key, table, "emitter", "binding")
+    if: binding != 0
+        resolved: lm_own_new_zero(c.sizeof(resolved[0]))
+        if: resolved = 0
+            c.exit(2)
+        if: lm_trans_binding_resolve(binding, resolved) = 0 || resolved\expr_emit = 0 || resolved\expr_state = 0
+            table_name: table
+            if: table_name = 0
+                table_name: "<none>"
+            c.fprintf(c.stderr, "trans registry inconsistency: %s[\"%.*s\"] has unknown expression emitter binding %s\n", table_name, (cast: int key\length), key\data, binding)
+            lm_own_delete(resolved, 0)
+            c.exit(2)
+        lm_own_delete(resolved, 0)
+    ---
+return: binding != 0
+
+fn: lm_trans_expr_binding_view_row_matches (const: (LmRegistryViewRow: view_row); const: @(char mapping_table)) int
+    size_t: mapping_length
+    size_t: table_length
+
+    if: view_row = 0 || view_row\table = 0 || mapping_table = 0
+        return: 0
+    if: c.strcmp(view_row\table, mapping_table) = 0
+        return: 1
+    mapping_length: c.strlen(mapping_table)
+    table_length: c.strlen(view_row\table)
+return: table_length = mapping_length + 14U && c.strncmp(view_row\table, mapping_table, mapping_length) = 0 && c.strcmp(view_row\table + mapping_length, ".binding_table") = 0
+
+fn: lm_trans_expr_binding_view_row_is_meta (const: (LmRegistryViewRow: view_row)) int
+return: lm_trans_expr_binding_view_row_matches(view_row, "expr_emitter_binding") != 0 || lm_trans_expr_binding_view_row_matches(view_row, "expr_spelling_binding") != 0
+
+LmOwnPtrStack: lm_trans_expr_binding_view_rows
+const: LmRegistryView: lm_trans_expr_binding_cached_view
+size_t: lm_trans_expr_binding_cached_fact_count
+
+sub: lm_trans_expr_binding_view_cache_reset ()
+    lm_trans_ptr_stack_delete(@ lm_trans_expr_binding_view_rows)
+    lm_trans_expr_binding_cached_view: 0
+    lm_trans_expr_binding_cached_fact_count: 0U
+end: lm_trans_expr_binding_view_cache_reset
+
+fn: lm_trans_expr_binding_view_cached_rows (const: (LmRegistryView: view)) const: LmOwnPtrStack
+    const: LmRegistryViewRow: view_row
+    size_t: fact_count
+    size_t: i
+
+    if: view = 0
+        return: 0
+    fact_count: lm_registry_view_fact_count(view)
+    if: lm_trans_expr_binding_view_rows = 0 || lm_trans_expr_binding_cached_view != view || lm_trans_expr_binding_cached_fact_count > fact_count || (view\parent != 0 && lm_trans_expr_binding_cached_fact_count != fact_count)
+        lm_trans_expr_binding_view_cache_reset()
+        lm_trans_expr_binding_view_rows: lm_trans_ptr_stack_new(0)
+        if: lm_trans_expr_binding_view_rows = 0
+            return: 0
+        lm_trans_expr_binding_cached_view: view
+    ---
+
+    i: lm_trans_expr_binding_cached_fact_count
+    while: i < fact_count
+        view_row: lm_registry_view_fact_at(view, i)
+        if: lm_trans_expr_binding_view_row_is_meta(view_row) != 0
+            if: lm_own_ptr_stack_push(lm_trans_expr_binding_view_rows, cast: (@: void) view_row) != 0
+                lm_trans_expr_binding_view_cache_reset()
+                return: 0
+            ---
+        i: i + 1U
+    lm_trans_expr_binding_cached_fact_count: fact_count
+return: lm_trans_expr_binding_view_rows
+
+fn: lm_trans_expr_binding_view_row_facade_values (
+    const: (LmRegistryViewRow: view_row)
+    const: @(char mapping_table)
+    const: @@(char out_class_name)
+    const: @@(char out_binding_table)
+) int
+    const: LmTransRegistryFact: facade_row
+
+    if: out_class_name != 0
+        out_class_name[0]: 0
+    if: out_binding_table != 0
+        out_binding_table[0]: 0
+    if: out_class_name = 0 || out_binding_table = 0 || lm_trans_expr_binding_view_row_matches(view_row, mapping_table) = 0 || view_row\key = 0 || view_row\payload = 0
+        return: 0
+
+    out_class_name[0]: view_row\key
+    out_binding_table[0]: view_row\payload
+    facade_row: cast: (const: LmTransRegistryFact) view_row\source
+    if: facade_row != 0 && facade_row\key != 0 && facade_row\payload != 0
+        out_class_name[0]: facade_row\key
+        out_binding_table[0]: facade_row\payload
+return: 1
+
+fn: lm_trans_expr_binding_view_row_values (
+    const: (LmRegistryViewRow: view_row)
+    const: @(char mapping_table)
+    const: @@(char out_class_name)
+    const: @@(char out_binding_table)
+) int
+    const: LmTransRegistryFact: facade_row
+    const: LmTableCell: source_key_cell
+    const: LmTableCell: source_binding_cell
+
+    if: lm_trans_expr_binding_view_row_facade_values(view_row, mapping_table, out_class_name, out_binding_table) = 0
+        return: 0
+
+    facade_row: cast: (const: LmTransRegistryFact) view_row\source
+    if: lm_trans_registry_view_is_selected() = 0
+        return: 1
+
+    source_key_cell: 0
+    source_binding_cell: lm_trans_registry_source_path_typed_cell_kind(0, view_row\table, "class", "class", "class", "binding_table", facade_row, 0, @ source_key_cell)
+    if: source_key_cell != 0 && source_key_cell\value != 0 && source_binding_cell != 0 && source_binding_cell\value != 0
+        out_class_name[0]: source_key_cell\value
+        out_binding_table[0]: source_binding_cell\value
+    ---
+return: 1
+
+fn: lm_trans_expr_binding_view_lookup (const: @(char mapping_table); const: @(char class_name)) const: @: char
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
+    const: LmRegistryViewRow: fallback_row
+    const: LmOwnPtrStack: rows
+    const: @: char row_class_name
+    const: @: char binding_table
+    size_t: i
+
+    if: mapping_table = 0 || class_name = 0
+        return: 0
+    view: lm_trans_namespace_registry_view(0)
+    if: view = 0
+        return: 0
+    rows: lm_trans_expr_binding_view_cached_rows(view)
+    if: rows = 0
+        c.exit(2)
+
+    fallback_row: 0
+    i: rows\count
+    while: i > 0U
+        i: i - 1U
+        view_row: lm_own_ptr_stack_at(rows, i)
+        row_class_name: 0
+        binding_table: 0
+        if: lm_trans_expr_binding_view_row_facade_values(view_row, mapping_table, @ row_class_name, @ binding_table) != 0
+            if: c.strcmp(row_class_name, class_name) = 0
+                if: lm_trans_expr_binding_view_row_values(view_row, mapping_table, @ row_class_name, @ binding_table) != 0
+                    return: binding_table
+                return: 0
+            if: fallback_row = 0 && c.strcmp(row_class_name, "default") = 0
+                fallback_row: view_row
+        ---
+    ---
+    row_class_name: 0
+    binding_table: 0
+    if: lm_trans_expr_binding_view_row_values(fallback_row, mapping_table, @ row_class_name, @ binding_table) != 0
+        return: binding_table
+return: 0
+
+fn: lm_trans_expr_emitter_binding_view_lookup (const: @(char class_name)) const: @: char
+return: lm_trans_expr_binding_view_lookup("expr_emitter_binding", class_name)
+
+fn: lm_trans_expr_spelling_binding_view_lookup (const: @(char class_name)) const: @: char
+return: lm_trans_expr_binding_view_lookup("expr_spelling_binding", class_name)
+
+fn: lm_trans_expr_emitter_binding_table (const: @(char class_name)) const: @: char
+    LmP0Text: class_text
+    const: @: char table
+
+    class_text: lm_trans_text_ref_new_cstr(class_name)
+    if: class_text = 0
+        c.exit(2)
+    table: lm_trans_expr_emitter_binding_view_lookup(class_name)
+    if: table = 0
+        table: lm_trans_namespace_registry_source_n2_typed_value(0, class_text, "expr_emitter_binding", "class", "class", "binding_table", "class")
+    if: table != 0 && lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", class_text, table) != 0
+        lm_trans_text_ref_destroy(@ class_text)
+        c.exit(2)
+    lm_trans_text_ref_destroy(@ class_text)
+return: table
+
+fn: lm_trans_expr_spelling_binding_table (const: @(char class_name)) const: @: char
+    LmP0Text: class_text
+    const: @: char table
+
+    class_text: lm_trans_text_ref_new_cstr(class_name)
+    if: class_text = 0
+        c.exit(2)
+    table: lm_trans_expr_spelling_binding_view_lookup(class_name)
+    if: table = 0
+        table: lm_trans_namespace_registry_source_n2_typed_value(0, class_text, "expr_spelling_binding", "class", "class", "binding_table", "class")
+    if: table != 0 && lm_trans_registry_assert_payload_table_exists("expr_spelling_binding", class_text, table) != 0
+        lm_trans_text_ref_destroy(@ class_text)
+        c.exit(2)
+    lm_trans_text_ref_destroy(@ class_text)
+    if: table != 0
+        return: table
+return: class_name
+
+fn: lm_trans_registry_has_expr_emitter_class (const: (LmP0Text: key); const: @(char class_name)) int
+    const: @: char table
+
+    table: lm_trans_expr_emitter_binding_table(class_name)
+return: table != 0 && lm_trans_registry_has_expr_emitter_binding(key, table)
+
+fn: lm_trans_registry_has_expr_emitter_binding_class (const: (LmP0Text: key); const: @(char class_name)) int
+return: lm_trans_registry_has_expr_emitter_class(key, class_name)
+
+fn: lm_trans_registry_has_any_expr_emitter_binding (const: (LmP0Text: key)) int
+    size_t: i
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
+    const: @: char class_name
+    const: @: char binding_table
+    LmP0Text: class_text
+    int: found
+
+    view: lm_trans_namespace_registry_view(0)
+    if: view != 0
+        rows: lm_trans_expr_binding_view_cached_rows(view)
+        if: rows = 0
+            c.exit(2)
+        i: 0U
+        while: i < rows\count
+            view_row: lm_own_ptr_stack_at(rows, i)
+            class_name: 0
+            binding_table: 0
+            if: lm_trans_expr_binding_view_row_facade_values(view_row, "expr_emitter_binding", @ class_name, @ binding_table) != 0
+                class_text: lm_trans_text_ref_new_cstr(class_name)
+                if: class_text = 0
+                    c.exit(2)
+                if: lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", class_text, binding_table) != 0
+                    lm_trans_text_ref_destroy(@ class_text)
+                    c.exit(2)
+                found: lm_trans_registry_has_expr_emitter_binding(key, binding_table)
+                lm_trans_text_ref_destroy(@ class_text)
+                if: found
+                    class_name: 0
+                    binding_table: 0
+                    if: lm_trans_expr_binding_view_row_values(view_row, "expr_emitter_binding", @ class_name, @ binding_table) = 0
+                        return: 1
+                    if: lm_trans_registry_has_expr_emitter_binding(key, binding_table)
+                        return: 1
+                    ---
+                ---
+            ---
+            i: i + 1U
+        ---
+        return: 0
+    ---
+
+    rows: lm_trans_registry_relation_stack(lm_trans_text_from_cstr("expr_emitter_binding"), "row")
+    if: rows = 0
+        return: 0
+
+    i: 0U
+    while: i < rows\count
+        row: lm_own_ptr_stack_at(rows, i)
+        if: row != 0 && row\payload != 0 && row\key != 0
+            class_text: lm_trans_text_ref_new_cstr(row\key)
+            if: class_text = 0
+                c.exit(2)
+            if: lm_trans_registry_assert_payload_table_exists("expr_emitter_binding", class_text, row\payload) != 0
+                lm_trans_text_ref_destroy(@ class_text)
+                c.exit(2)
+            found: lm_trans_registry_has_expr_emitter_binding(key, row\payload)
+            lm_trans_text_ref_destroy(@ class_text)
+            if: found
+                return: 1
+            ---
+        i: i + 1U
+return: 0
+
+fn: lm_trans_text_is_operator_atom (const: (LmP0Text: text)) int
+return: lm_trans_registry_has_any_expr_emitter_binding(text)
+
+fn: lm_trans_copy_stream (FILE: target; FILE: source) int
+    c.array: [4096]: char buffer
+    size_t: count
+
+    if: target = 0 || source = 0
+        return: 1
+    if: c.fflush(source) != 0 || c.fseek(source, 0L, c.SEEK_SET) != 0
+        return: 1
+
+    count: c.fread(buffer, 1U, c.sizeof(buffer), source)
+    while: count != 0U
+        if: c.fwrite(buffer, 1U, count, target) != count
+            return: 1
+        count: c.fread(buffer, 1U, c.sizeof(buffer), source)
+
+    if: c.ferror(source)
+        return: 1
+return: 0
+
+fn: lm_trans_temp_output_path_new (const: @(char output_path); const: @(char suffix)) @: char
+    size_t: output_length
+    size_t: suffix_length
+    @: char result
+
+    if: output_path = 0 || suffix = 0
+        return: 0
+
+    output_length: c.strlen(output_path)
+    suffix_length: c.strlen(suffix)
+    result: lm_own_new_zero(output_length + suffix_length + 1U)
+    if: result = 0
+        return: 0
+    c.memcpy(result, output_path, output_length)
+    c.memcpy(result + output_length, suffix, suffix_length + 1U)
+return: result
+
+fn: lm_trans_unwrap_single_anonymous_structure (const: (LmP0Structure: structure)) const: LmP0Structure
+    const: LmP0Field: field
+    const: LmP0Structure: current
+
+    current: structure
+    while: current != 0
+        field: current\first_field
+        if: field = 0 || field\next != 0 || field\value = 0 || field\value\kind != c.LM_P0_NODE_STRUCTURE
+            break
+        current: field\value\as\structure
+return: current
+
+fn: lm_trans_hash_bytes (const: @(char data); size_t: length) ulong
+    ulong: hash
+    size_t: i
+
+    hash: 2166136261UL
+    i: 0U
+    while: i < length
+        hash: hash ^ (cast: uchar data[i])
+        hash: hash * 16777619UL
+        i: i + 1U
+return: hash
+
+fn: lm_trans_hash_cstr (const: @(char text)) ulong
+    if: text != 0
+        return: lm_trans_hash_bytes(text, c.strlen(text))
+return: 0UL
+
+sub: lm_trans_ptr_stack_remove_pointer (LmOwnPtrStack: stack; const: @(void item))
+    size_t: i
+
+    if: stack = 0 || item = 0
+        return
+
+    i: stack\count
+    while: i > 0U
+        i: i - 1U
+        if: stack\items[i] = item
+            while: i + 1U < stack\count
+                stack\items[i]: stack\items[i + 1U]
+                i: i + 1U
+            stack\count: stack\count - 1U
+            stack\items[stack\count]: 0
+            return
+end: lm_trans_ptr_stack_remove_pointer
+
+fn: lm_trans_ptr_stack_has_pointer (const: (LmOwnPtrStack: stack); const: @(void item)) int
+    size_t: index
+
+    if: stack = 0 || item = 0
+        return: 0
+    index: 0U
+    while: index < stack\count
+        if: stack\items[index] = item
+            return: 1
+        index: index + 1U
+return: 0
+
+sub: lm_trans_identifier_relation_destroy (LmTransIdentifierRelation: relation)
+    if: relation != 0
+        lm_trans_ptr_stack_delete(@ relation\symbols)
+    lm_own_delete(relation, 0)
+end: lm_trans_identifier_relation_destroy
+
+sub: lm_trans_identifier_card_destroy (LmTransIdentifierCard: card)
+    size_t: i
+    LmTransIdentifierRelation: relation
+    LmTransIdentifierRelation: next
+
+    if: card = 0
+        return
+
+    lm_trans_ptr_stack_delete(@ card\symbols)
+    if: card\relation_buckets != 0
+        i: 0U
+        while: i < card\relation_bucket_count
+            relation: card\relation_buckets[i]
+            while: relation != 0
+                next: relation\next
+                lm_trans_identifier_relation_destroy(relation)
+                relation: next
+            i: i + 1U
+        ---
+    lm_own_delete(card\relation_buckets, 0)
+    card\relation_buckets: 0
+    card\relation_bucket_count: 0U
+    lm_trans_text_ref_destroy(@ card\name)
+    lm_own_delete(card\name_storage, 0)
+    card\name_storage: 0
+    lm_own_delete(card, 0)
+end: lm_trans_identifier_card_destroy
+
+sub: lm_trans_identifier_table_init (LmTransIdentifierTable: table)
+    if: table != 0
+        table\buckets: 0
+        table\bucket_count: 0U
+        table\count: 0U
+end: lm_trans_identifier_table_init
+
+fn: lm_trans_identifier_table_ensure_buckets (LmTransIdentifierTable: table) int
+    size_t: bucket_count
+
+    if: table = 0
+        return: 1
+    if: table\buckets != 0
+        return: 0
+
+    bucket_count: 257U
+    table\buckets: lm_own_new_zero(bucket_count * c.sizeof(table\buckets[0]))
+    if: table\buckets = 0
+        return: 1
+    table\bucket_count: bucket_count
+return: 0
+
+sub: lm_trans_identifier_table_destroy (LmTransIdentifierTable: table)
+    size_t: i
+    LmTransIdentifierCard: card
+    LmTransIdentifierCard: next
+
+    if: table = 0
+        return
+
+    if: table\buckets != 0
+        i: 0U
+        while: i < table\bucket_count
+            card: table\buckets[i]
+            while: card != 0
+                next: card\next
+                lm_trans_identifier_card_destroy(card)
+                card: next
+            i: i + 1U
+        ---
+    lm_own_delete(table\buckets, 0)
+    table\buckets: 0
+    table\bucket_count: 0U
+    table\count: 0U
+end: lm_trans_identifier_table_destroy
+
+fn: lm_trans_identifier_table_new () LmTransIdentifierTable
+    LmTransIdentifierTable: table
+
+    table: lm_own_new_zero(c.sizeof(table[0]))
+    if: table != 0
+        lm_trans_identifier_table_init(table)
+return: table
+
+sub: lm_trans_identifier_table_delete (@(LmTransIdentifierTable table))
+    if: table != 0 && table[0] != 0
+        lm_trans_identifier_table_destroy(table[0])
+        lm_own_delete(table[0], 0)
+        table[0]: 0
+end: lm_trans_identifier_table_delete
+
+fn: lm_trans_identifier_table_find_card (const: (LmTransIdentifierTable: table); const: (LmP0Text: name)) LmTransIdentifierCard
+    LmP0Text: payload
+    ulong: hash
+    size_t: bucket
+    LmTransIdentifierCard: card
+
+    payload: lm_trans_text_ref_new(0)
+    if: payload = 0
+        return: 0
+    if: table = 0 || table\buckets = 0 || table\bucket_count = 0U || lm_trans_identifier_payload(name, payload) = 0
+        lm_trans_text_ref_destroy(@ payload)
+        return: 0
+
+    hash: lm_trans_hash_bytes(payload\data, payload\length)
+    bucket: hash % table\bucket_count
+    card: table\buckets[bucket]
+    while: card != 0
+        if: card\hash = hash && card\name != 0 && lm_trans_text_same(card\name, payload)
+            lm_trans_text_ref_destroy(@ payload)
+            return: card
+        card: card\next
+    lm_trans_text_ref_destroy(@ payload)
+return: 0
+
+fn: lm_trans_identifier_table_get_card (LmTransIdentifierTable: table; const: (LmP0Text: name)) LmTransIdentifierCard
+    LmP0Text: payload
+    ulong: hash
+    size_t: bucket
+    LmTransIdentifierCard: card
+    @: char copy
+
+    payload: lm_trans_text_ref_new(0)
+    if: payload = 0
+        return: 0
+    if: table = 0 || lm_trans_identifier_payload(name, payload) = 0 || lm_trans_identifier_table_ensure_buckets(table) != 0
+        lm_trans_text_ref_destroy(@ payload)
+        return: 0
+
+    card: lm_trans_identifier_table_find_card(table, name)
+    if: card != 0
+        lm_trans_text_ref_destroy(@ payload)
+        return: card
+
+    hash: lm_trans_hash_bytes(payload\data, payload\length)
+    bucket: hash % table\bucket_count
+    card: lm_own_new_zero(c.sizeof(card[0]))
+    if: card = 0
+        lm_trans_text_ref_destroy(@ payload)
+        return: 0
+
+    copy: lm_trans_text_copy_cstr(payload)
+    if: copy = 0
+        lm_trans_text_ref_destroy(@ payload)
+        lm_trans_identifier_card_destroy(card)
+        return: 0
+    card\name_storage: copy
+    card\name: lm_trans_text_ref_new_cstr(copy)
+    if: card\name = 0
+        lm_trans_text_ref_destroy(@ payload)
+        lm_trans_identifier_card_destroy(card)
+        return: 0
+
+    card\symbols: lm_trans_ptr_stack_new(0)
+    if: card\symbols = 0
+        lm_trans_text_ref_destroy(@ payload)
+        lm_trans_identifier_card_destroy(card)
+        return: 0
+    card\relation_bucket_count: 31U
+    card\relation_buckets: lm_own_new_zero(card\relation_bucket_count * c.sizeof(card\relation_buckets[0]))
+    if: card\relation_buckets = 0
+        lm_trans_text_ref_destroy(@ payload)
+        lm_trans_identifier_card_destroy(card)
+        return: 0
+
+    card\hash: hash
+    card\next: table\buckets[bucket]
+    table\buckets[bucket]: card
+    table\count: table\count + 1U
+    lm_trans_text_ref_destroy(@ payload)
+return: card
+
+fn: lm_trans_identifier_card_find_relation (const: (LmTransIdentifierCard: card); const: @(char relation_name)) LmTransIdentifierRelation
+    ulong: hash
+    size_t: bucket
+    LmTransIdentifierRelation: relation
+
+    if: card = 0 || relation_name = 0 || card\relation_buckets = 0 || card\relation_bucket_count = 0U
+        return: 0
+
+    hash: lm_trans_hash_cstr(relation_name)
+    bucket: hash % card\relation_bucket_count
+    relation: card\relation_buckets[bucket]
+    while: relation != 0
+        if: relation\name != 0 && c.strcmp(relation\name, relation_name) = 0
+            return: relation
+        relation: relation\next
+return: 0
+
+fn: lm_trans_identifier_card_get_relation (LmTransIdentifierCard: card; const: @(char relation_name)) LmTransIdentifierRelation
+    ulong: hash
+    size_t: bucket
+    LmTransIdentifierRelation: relation
+
+    if: card = 0 || relation_name = 0 || card\relation_buckets = 0 || card\relation_bucket_count = 0U
+        return: 0
+
+    hash: lm_trans_hash_cstr(relation_name)
+    bucket: hash % card\relation_bucket_count
+    relation: card\relation_buckets[bucket]
+    while: relation != 0
+        if: relation\name != 0 && c.strcmp(relation\name, relation_name) = 0
+            return: relation
+        relation: relation\next
+
+    relation: lm_own_new_zero(c.sizeof(relation[0]))
+    if: relation = 0
+        return: 0
+    relation\name: relation_name
+    relation\symbols: lm_trans_ptr_stack_new(0)
+    if: relation\symbols = 0
+        lm_own_delete(relation, 0)
+        return: 0
+    relation\next: card\relation_buckets[bucket]
+    card\relation_buckets[bucket]: relation
+return: relation
+
+fn: lm_trans_identifier_table_add_symbol (LmTransIdentifierTable: table; LmTransSymbol: symbol) int
+    LmTransIdentifierCard: card
+    LmTransIdentifierRelation: relation
+
+    if: table = 0 || symbol = 0 || symbol\name = 0
+        return: 1
+
+    card: lm_trans_identifier_table_get_card(table, symbol\name)
+    if: card = 0
+        return: 1
+    relation: lm_trans_identifier_card_get_relation(card, symbol\class_name)
+    if: relation = 0
+        return: 1
+    if: lm_own_ptr_stack_push(card\symbols, symbol) != 0
+        return: 1
+    if: lm_own_ptr_stack_push(relation\symbols, symbol) != 0
+        lm_trans_ptr_stack_remove_pointer(card\symbols, symbol)
+        return: 1
+return: 0
+
+fn: lm_trans_identifier_table_add_relation_symbol (LmTransIdentifierTable: table; LmTransSymbol: symbol) int
+    LmTransIdentifierCard: card
+    LmTransIdentifierRelation: relation
+
+    if: table = 0 || symbol = 0 || symbol\name = 0
+        return: 1
+
+    card: lm_trans_identifier_table_get_card(table, symbol\name)
+    if: card = 0
+        return: 1
+    relation: lm_trans_identifier_card_get_relation(card, symbol\class_name)
+    if: relation = 0
+        return: 1
+return: lm_own_ptr_stack_push(relation\symbols, symbol)
+
+sub: lm_trans_identifier_table_remove_symbol (LmTransIdentifierTable: table; const: (LmTransSymbol: symbol))
+    LmTransIdentifierCard: card
+    LmTransIdentifierRelation: relation
+
+    if: table = 0 || symbol = 0 || symbol\name = 0
+        return
+
+    card: lm_trans_identifier_table_find_card(table, symbol\name)
+    if: card = 0
+        return
+    lm_trans_ptr_stack_remove_pointer(card\symbols, symbol)
+    relation: lm_trans_identifier_card_get_relation(card, symbol\class_name)
+    if: relation != 0
+        lm_trans_ptr_stack_remove_pointer(relation\symbols, symbol)
+end: lm_trans_identifier_table_remove_symbol
+
+fn: lm_trans_identifier_table_find_latest_symbol (const: (LmTransIdentifierTable: table); const: (LmP0Text: name)) LmTransSymbol
+    LmTransIdentifierCard: card
+
+    card: lm_trans_identifier_table_find_card(table, name)
+    if: card = 0
+        return: 0
+return: lm_own_ptr_stack_top(card\symbols)
+
+fn: lm_trans_symbol_new (const: (LmP0Text: name); const: @(char kind); unsigned: depth) LmTransSymbol
+    LmTransSymbol: symbol
+    @: char name_copy
+
+    symbol: lm_own_new_zero(c.sizeof(symbol[0]))
+    if: symbol = 0
+        return: 0
+
+    symbol\name: lm_trans_text_ref_new(name)
+    if: symbol\name = 0
+        lm_trans_symbol_destroy(symbol)
+        return: 0
+    if: name != 0
+        name_copy: lm_trans_text_copy_cstr(name)
+        if: name_copy = 0
+            lm_trans_symbol_destroy(symbol)
+            return: 0
+        symbol\name_storage: name_copy
+        symbol\name\data: name_copy
+        symbol\name\length: name\length
+    ---
+    symbol\c_name: lm_trans_text_ref_new_cstr("")
+    symbol\env_arg: lm_trans_text_ref_new_cstr("")
+    symbol\closure_call_name: lm_trans_text_ref_new_cstr("")
+    if: symbol\c_name = 0 || symbol\env_arg = 0 || symbol\closure_call_name = 0
+        lm_trans_symbol_destroy(symbol)
+        return: 0
+
+    symbol\param_names: lm_trans_ptr_stack_new(lm_trans_text_ref_delete_any)
+    if: symbol\param_names = 0
+        lm_trans_symbol_destroy(symbol)
+        return: 0
+    symbol\class_name: kind
+    symbol\depth: depth
+return: symbol
+
+fn: lm_trans_symbol_set_owned_name (LmTransSymbol: symbol; const: (LmP0Text: name)) int
+    @: char copy
+
+    if: symbol = 0 || symbol\name = 0 || name = 0
+        return: 1
+
+    copy: lm_own_new_zero(name\length + 1U)
+    if: copy = 0
+        return: 1
+    c.memcpy(copy, name\data, name\length)
+    copy[name\length]: '\0'
+
+    lm_own_delete(symbol\name_storage, 0)
+    symbol\name_storage: copy
+    symbol\name\data: copy
+    symbol\name\length: name\length
+return: 0
+
+fn: lm_trans_symbol_set_c_name (LmTransSymbol: symbol; const: (LmP0Text: c_name)) int
+    @: char copy
+
+    if: symbol = 0 || symbol\c_name = 0 || c_name = 0
+        return: 1
+
+    copy: lm_own_new_zero(c_name\length + 1U)
+    if: copy = 0
+        return: 1
+    c.memcpy(copy, c_name\data, c_name\length)
+    copy[c_name\length]: '\0'
+
+    lm_own_delete(symbol\c_name_storage, 0)
+    symbol\c_name_storage: copy
+    symbol\c_name\data: copy
+    symbol\c_name\length: c_name\length
+    symbol\has_c_name: 1
+return: 0
+
+fn: lm_trans_symbol_set_env_arg (LmTransSymbol: symbol; const: (LmP0Text: env_arg)) int
+    @: char copy
+
+    if: symbol = 0 || symbol\env_arg = 0 || env_arg = 0
+        return: 1
+
+    copy: lm_own_new_zero(env_arg\length + 1U)
+    if: copy = 0
+        return: 1
+    c.memcpy(copy, env_arg\data, env_arg\length)
+    copy[env_arg\length]: '\0'
+
+    lm_own_delete(symbol\env_arg_storage, 0)
+    symbol\env_arg_storage: copy
+    symbol\env_arg\data: copy
+    symbol\env_arg\length: env_arg\length
+    symbol\has_env_arg: 1
+return: 0
+
+fn: lm_trans_symbol_set_closure_call_name (LmTransSymbol: symbol; const: (LmP0Text: closure_call_name)) int
+    @: char copy
+
+    if: symbol = 0 || symbol\closure_call_name = 0 || closure_call_name = 0
+        return: 1
+
+    copy: lm_own_new_zero(closure_call_name\length + 1U)
+    if: copy = 0
+        return: 1
+    c.memcpy(copy, closure_call_name\data, closure_call_name\length)
+    copy[closure_call_name\length]: '\0'
+
+    lm_own_delete(symbol\closure_call_name_storage, 0)
+    symbol\closure_call_name_storage: copy
+    symbol\closure_call_name\data: copy
+    symbol\closure_call_name\length: closure_call_name\length
+    symbol\has_closure_call_name: 1
+return: 0
+
+fn: lm_trans_capture_init_fields (LmTransCapture: capture) int
+    if: capture = 0
+        return: 1
+    if: capture\name = 0
+        capture\name: lm_trans_text_ref_new_cstr("")
+    if: capture\type_head = 0
+        capture\type_head: lm_trans_text_ref_new_cstr("")
+return: capture\name = 0 || capture\type_head = 0
+
+fn: lm_trans_capture_reset (LmTransCapture: capture) int
+    if: lm_trans_capture_init_fields(capture) != 0
+        return: 1
+    capture\name\data: ""
+    capture\name\length: 0U
+    capture\type_head\data: ""
+    capture\type_head\length: 0U
+    capture\type_node: 0
+    capture\pointer_depth: 0U
+    capture\type_is_head: 0
+return: 0
+
+fn: lm_trans_capture_new (const: (LmP0Text: name); const: (LmP0Text: type_head); const: (LmP0Node: type_node); size_t: pointer_depth; int: type_is_head) LmTransCapture
+    LmTransCapture: capture
+
+    if: name = 0 || type_head = 0
+        return: 0
+    capture: lm_own_new_zero(c.sizeof(capture[0]))
+    if: capture != 0
+        if: lm_trans_capture_init_fields(capture) != 0
+            lm_trans_text_ref_destroy(@ capture\name)
+            lm_trans_text_ref_destroy(@ capture\type_head)
+            lm_own_delete(capture, 0)
+            return: 0
+        capture\name[0]: name[0]
+        capture\type_head[0]: type_head[0]
+        capture\type_node: type_node
+        capture\pointer_depth: pointer_depth
+        capture\type_is_head: type_is_head
+return: capture
+
+sub: lm_trans_capture_destroy (LmTransCapture: capture)
+    if: capture != 0
+        lm_trans_text_ref_destroy(@ capture\name)
+        lm_trans_text_ref_destroy(@ capture\type_head)
+    lm_own_delete(capture, 0)
+end: lm_trans_capture_destroy
+
+sub: lm_trans_capture_delete_any (@: void object)
+    lm_trans_capture_destroy(cast: (LmTransCapture) object)
+end: lm_trans_capture_delete_any
+
+sub: lm_trans_hoisted_function_destroy (LmTransHoistedFunction: function)
+    if: function != 0
+        lm_trans_function_header_destroy(function\function)
+        function\function: 0
+        lm_trans_ptr_stack_delete(@ function\captures)
+        lm_own_delete(function\c_name_storage, 0)
+        function\c_name_storage: 0
+        lm_own_delete(function\env_type_storage, 0)
+        function\env_type_storage: 0
+        lm_own_delete(function\env_var_storage, 0)
+        function\env_var_storage: 0
+        lm_own_delete(function\closure_call_storage, 0)
+        function\closure_call_storage: 0
+        lm_trans_text_ref_destroy(@ function\env_var_name)
+        lm_trans_text_ref_destroy(@ function\closure_call_name)
+    lm_own_delete(function, 0)
+end: lm_trans_hoisted_function_destroy
+
+sub: lm_trans_hoisted_function_delete_any (@: void object)
+    lm_trans_hoisted_function_destroy(cast: (LmTransHoistedFunction) object)
+end: lm_trans_hoisted_function_delete_any
+
+fn: lm_trans_cleanup_new (unsigned: id; const: (LmP0Field: body); unsigned: scope_depth) LmTransCleanup
+    LmTransCleanup: cleanup
+
+    cleanup: lm_own_new_zero(c.sizeof(cleanup[0]))
+    if: cleanup != 0
+        cleanup\id: id
+        cleanup\scope_depth: scope_depth
+        cleanup\body: body
+return: cleanup
+
+sub: lm_trans_cleanup_destroy (LmTransCleanup: cleanup)
+    lm_own_delete(cleanup, 0)
+end: lm_trans_cleanup_destroy
+
+sub: lm_trans_cleanup_delete_any (@: void object)
+    lm_trans_cleanup_destroy(cast: (LmTransCleanup) object)
+end: lm_trans_cleanup_delete_any
+
+fn: lm_trans_loop_new (size_t: cleanup_base) LmTransLoop
+    LmTransLoop: loop
+
+    loop: lm_own_new_zero(c.sizeof(loop[0]))
+    if: loop != 0
+        loop\cleanup_base: cleanup_base
+return: loop
+
+fn: lm_trans_catch_pad_new (const: (LmP0Text: name); unsigned: id; unsigned: depth) LmTransCatchPad
+    LmTransCatchPad: pad
+
+    pad: lm_own_new_zero(c.sizeof(pad[0]))
+    if: pad != 0
+        pad\name: name
+        pad\id: id
+        pad\depth: depth
+return: pad
+
+sub: lm_trans_catch_pad_destroy (LmTransCatchPad: pad)
+    lm_own_delete(pad, 0)
+end: lm_trans_catch_pad_destroy
+
+sub: lm_trans_catch_pad_delete_any (@: void object)
+    lm_trans_catch_pad_destroy(cast: (LmTransCatchPad) object)
+end: lm_trans_catch_pad_delete_any
+
+sub: lm_trans_loop_destroy (LmTransLoop: loop)
+    lm_own_delete(loop, 0)
+end: lm_trans_loop_destroy
+
+sub: lm_trans_loop_delete_any (@: void object)
+    lm_trans_loop_destroy(cast: (LmTransLoop) object)
+end: lm_trans_loop_delete_any
+
+fn: lm_trans_namespace_new () LmTransNamespace
+    LmTransNamespace: namespace_
+
+    namespace_: lm_own_new_zero(c.sizeof(namespace_[0]))
+    if: namespace_ != 0
+        namespace_\items: lm_trans_ptr_stack_new(lm_trans_symbol_delete_any)
+        namespace_\identifiers: lm_trans_identifier_table_new()
+        namespace_\registry_identifiers: 0
+        namespace_\registry_view: 0
+        if: lm_trans_registry != 0
+            namespace_\registry_identifiers: lm_trans_registry\identifiers
+            namespace_\registry_view: lm_trans_registry\view
+        namespace_\cleanups: lm_trans_ptr_stack_new(lm_trans_cleanup_delete_any)
+        namespace_\loops: lm_trans_ptr_stack_new(lm_trans_loop_delete_any)
+        namespace_\catches: lm_trans_ptr_stack_new(lm_trans_catch_pad_delete_any)
+        namespace_\thread_declarations: lm_trans_ptr_stack_new(lm_trans_thread_declaration_delete_any)
+        if: namespace_\items = 0 || namespace_\identifiers = 0 || namespace_\cleanups = 0 || namespace_\loops = 0 || namespace_\catches = 0 || namespace_\thread_declarations = 0
+            lm_trans_identifier_table_delete(@ namespace_\identifiers)
+            lm_trans_ptr_stack_delete(@ namespace_\items)
+            lm_trans_ptr_stack_delete(@ namespace_\cleanups)
+            lm_trans_ptr_stack_delete(@ namespace_\loops)
+            lm_trans_ptr_stack_delete(@ namespace_\catches)
+            lm_trans_ptr_stack_delete(@ namespace_\thread_declarations)
+            lm_own_delete(namespace_, 0)
+            return: 0
+return: namespace_
+
+sub: lm_trans_namespace_destroy (LmTransNamespace: namespace_)
+    if: namespace_ != 0
+        lm_trans_identifier_table_delete(@ namespace_\identifiers)
+        namespace_\registry_identifiers: 0
+        namespace_\registry_view: 0
+        lm_trans_ptr_stack_delete(@ namespace_\items)
+        lm_trans_ptr_stack_delete(@ namespace_\cleanups)
+        lm_trans_ptr_stack_delete(@ namespace_\loops)
+        lm_trans_ptr_stack_delete(@ namespace_\catches)
+        lm_trans_ptr_stack_delete(@ namespace_\thread_declarations)
+        namespace_\throws_node: 0
+        namespace_\depth: 0U
+        namespace_\next_cleanup_id: 0U
+        namespace_\return_type_node: 0
+        namespace_\return_type_is_struct: 0
+        lm_trans_text_ref_destroy(@ namespace_\return_type_name)
+        namespace_\next_return_id: 0U
+        namespace_\hoisted_functions: 0
+        namespace_\message_thread_entry: 0
+        namespace_\managed_message_thread_context: 0
+        namespace_\source_item_limit: 0U
+        namespace_\source_item_limit_active: 0
+end: lm_trans_namespace_destroy
+
+sub: lm_trans_namespace_destroy_any (@: void object)
+    lm_trans_namespace_destroy(cast: (LmTransNamespace) object)
+end: lm_trans_namespace_destroy_any
+
+sub: lm_trans_namespace_delete (LmTransNamespace: namespace_)
+    lm_own_delete(namespace_, lm_trans_namespace_destroy_any)
+end: lm_trans_namespace_delete
+
+sub: lm_trans_namespace_enter_scope (LmTransNamespace: namespace_)
+    if: namespace_ != 0
+        namespace_\depth: namespace_\depth + 1U
+end: lm_trans_namespace_enter_scope
+
+sub: lm_trans_catch_pop_current (LmTransNamespace: namespace_)
+    LmTransCatchPad: pad
+
+    if: namespace_ = 0 || namespace_\catches = 0
+        return
+
+    while: namespace_\catches\count > 0U
+        pad: lm_own_ptr_stack_top(namespace_\catches)
+        if: pad = 0 || pad\depth != namespace_\depth
+            break
+        pad: lm_own_ptr_stack_pop(namespace_\catches)
+        lm_trans_catch_pad_destroy(pad)
+end: lm_trans_catch_pop_current
+
+fn: lm_trans_catch_find (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) LmTransCatchPad
+    size_t: index
+    LmTransCatchPad: pad
+
+    if: namespace_ = 0 || namespace_\catches = 0 || name = 0 || namespace_\catches\count = 0U
+        return: 0
+
+    index: namespace_\catches\count
+    while: index > 0U
+        index: index - 1U
+        pad: lm_own_ptr_stack_at(namespace_\catches, index)
+        if: pad != 0 && lm_trans_text_same(pad\name, name)
+            return: pad
+return: 0
+
+fn: lm_trans_catch_push (LmTransNamespace: namespace_; const: (LmP0Text: name); unsigned: id) int
+    LmTransCatchPad: existing
+    LmTransCatchPad: pad
+
+    if: namespace_ = 0 || name = 0
+        return: 1
+
+    existing: lm_trans_catch_find(namespace_, name)
+    if: existing != 0 && existing\depth = namespace_\depth
+        c.fprintf(c.stderr, "trans L2 error: duplicate catch \"%.*s\" in the same block\n", (cast: int name\length), name\data)
+        return: 1
+
+    if: namespace_\catches = 0
+        return: 1
+    pad: lm_trans_catch_pad_new(name, id, namespace_\depth)
+    if: pad = 0
+        return: 1
+    if: lm_own_ptr_stack_push(namespace_\catches, pad) != 0
+        lm_trans_catch_pad_destroy(pad)
+        return: 1
+return: 0
+
+sub: lm_trans_namespace_leave_scope (LmTransNamespace: namespace_)
+    LmTransSymbol: symbol
+
+    if: namespace_ = 0
+        return
+
+    lm_trans_catch_pop_current(namespace_)
+
+    while: namespace_\items != 0 && namespace_\items\count > 0U
+        symbol: lm_own_ptr_stack_top(namespace_\items)
+        if: symbol = 0 || symbol\depth != namespace_\depth
+            break
+        symbol: lm_own_ptr_stack_pop(namespace_\items)
+        lm_trans_identifier_table_remove_symbol(namespace_\identifiers, symbol)
+        lm_trans_symbol_destroy(symbol)
+
+    if: namespace_\depth > 0U
+        namespace_\depth: namespace_\depth - 1U
+end: lm_trans_namespace_leave_scope
+
+fn: lm_trans_cleanup_push (LmTransNamespace: namespace_; unsigned: id) int
+    LmTransCleanup: cleanup
+
+    if: namespace_ = 0
+        return: 1
+
+    cleanup: lm_trans_cleanup_new(id, 0, namespace_\depth)
+    if: cleanup = 0
+        return: 1
+    if: namespace_\cleanups = 0 || lm_own_ptr_stack_push(namespace_\cleanups, cleanup) != 0
+        lm_trans_cleanup_destroy(cleanup)
+        return: 1
+return: 0
+
+fn: lm_trans_finally_push (LmTransNamespace: namespace_; const: (LmP0Field: body)) int
+    LmTransCleanup: cleanup
+
+    if: namespace_ = 0 || body = 0
+        return: 1
+
+    cleanup: lm_trans_cleanup_new(0U, body, namespace_\depth)
+    if: cleanup = 0
+        return: 1
+    if: namespace_\cleanups = 0 || lm_own_ptr_stack_push(namespace_\cleanups, cleanup) != 0
+        lm_trans_cleanup_destroy(cleanup)
+        return: 1
+return: 0
+
+sub: lm_trans_cleanup_pop (LmTransNamespace: namespace_)
+    LmTransCleanup: cleanup
+
+    if: namespace_ != 0
+        cleanup: lm_own_ptr_stack_pop(namespace_\cleanups)
+        lm_trans_cleanup_destroy(cleanup)
+end: lm_trans_cleanup_pop
+
+fn: lm_trans_loop_push (LmTransNamespace: namespace_) int
+    LmTransLoop: loop
+
+    if: namespace_ = 0
+        return: 1
+
+    if: namespace_\cleanups = 0 || namespace_\loops = 0
+        return: 1
+    loop: lm_trans_loop_new(namespace_\cleanups\count)
+    if: loop = 0
+        return: 1
+    if: lm_own_ptr_stack_push(namespace_\loops, loop) != 0
+        lm_trans_loop_destroy(loop)
+        return: 1
+return: 0
+
+sub: lm_trans_loop_pop (LmTransNamespace: namespace_)
+    LmTransLoop: loop
+
+    if: namespace_ != 0
+        loop: lm_own_ptr_stack_pop(namespace_\loops)
+        lm_trans_loop_destroy(loop)
+end: lm_trans_loop_pop
+
+fn: lm_trans_loop_cleanup_base (const: (LmTransNamespace: namespace_)) size_t
+    const: LmTransLoop: loop
+
+    if: namespace_ = 0 || namespace_\loops = 0 || namespace_\loops\count = 0U
+        if: namespace_ != 0 && namespace_\cleanups != 0
+            return: namespace_\cleanups\count
+        return: 0U
+
+    loop: lm_own_ptr_stack_top(namespace_\loops)
+    if: loop != 0
+        return: loop\cleanup_base
+return: namespace_\cleanups\count
+
+fn: lm_trans_emit_sync_name (FILE: file; unsigned: id) int
+    if: c.fprintf(file, "lm_sync_%u", id) < 0
+        return: 1
+return: 0
+
+fn: lm_trans_emit_return_name (FILE: file; unsigned: id) int
+    if: c.fprintf(file, "lm_return_%u", id) < 0
+        return: 1
+return: 0
+
+fn: lm_trans_namespace_source_item_count (const: (LmTransNamespace: namespace_)) size_t
+    if: namespace_ = 0 || namespace_\items = 0
+        return: 0U
+return: namespace_\items\count
+
+fn: lm_trans_namespace_source_limit_enter (
+    LmTransNamespace: namespace_
+    size_t: item_limit
+    @: size_t previous_limit
+    @: int previous_active
+) int
+    if: previous_limit != 0
+        previous_limit[0]: 0U
+    if: previous_active != 0
+        previous_active[0]: 0
+    if: namespace_ = 0 || namespace_\items = 0 || previous_limit = 0 || previous_active = 0 || item_limit > namespace_\items\count
+        return: 1
+
+    previous_limit[0]: namespace_\source_item_limit
+    previous_active[0]: namespace_\source_item_limit_active
+    if: namespace_\source_item_limit_active && item_limit > namespace_\source_item_limit
+        item_limit: namespace_\source_item_limit
+    namespace_\source_item_limit: item_limit
+    namespace_\source_item_limit_active: 1
+return: 0
+
+sub: lm_trans_namespace_source_limit_restore (
+    LmTransNamespace: namespace_
+    size_t: previous_limit
+    int: previous_active
+)
+    if: namespace_ = 0
+        return
+    namespace_\source_item_limit: previous_limit
+    namespace_\source_item_limit_active: previous_active != 0
+end: lm_trans_namespace_source_limit_restore
+
+fn: lm_trans_namespace_effective_source_item_limit (const: (LmTransNamespace: namespace_)) size_t
+    size_t: item_count
+
+    item_count: lm_trans_namespace_source_item_count(namespace_)
+    if: namespace_ != 0 && namespace_\source_item_limit_active && namespace_\source_item_limit < item_count
+        return: namespace_\source_item_limit
+return: item_count
+
+fn: lm_trans_namespace_find_visible_symbol (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) LmTransSymbol
+    LmTransIdentifierCard: card
+    LmTransSymbol: symbol
+    size_t: index
+
+    if: namespace_ = 0 || namespace_\items = 0 || namespace_\identifiers = 0 || name = 0
+        return: 0
+    card: lm_trans_identifier_table_find_card(namespace_\identifiers, name)
+    if: card = 0 || card\symbols = 0
+        return: 0
+
+    index: lm_trans_namespace_effective_source_item_limit(namespace_)
+    while: index > 0U
+        index: index - 1U
+        symbol: cast: (LmTransSymbol) lm_own_ptr_stack_at(namespace_\items, index)
+        if: symbol != 0 && lm_trans_identifier_same(symbol\name, name) && lm_trans_ptr_stack_has_pointer(card\symbols, symbol)
+            return: symbol
+        ---
+return: 0
+
+fn: lm_trans_namespace_find (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: LmTransSymbol
+    if: namespace_ = 0
+        return: 0
+    if: namespace_\source_item_limit_active
+        return: lm_trans_namespace_find_visible_symbol(namespace_, name)
+return: lm_trans_identifier_table_find_latest_symbol(namespace_\identifiers, name)
+
+fn: lm_trans_namespace_find_mutable (LmTransNamespace: namespace_; const: (LmP0Text: name)) LmTransSymbol
+    if: namespace_ = 0
+        return: 0
+    if: namespace_\source_item_limit_active
+        return: lm_trans_namespace_find_visible_symbol(namespace_, name)
+return: lm_trans_identifier_table_find_latest_symbol(namespace_\identifiers, name)
+
+fn: lm_trans_namespace_descriptor (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: LmTransDescriptor
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: symbol = 0
+        return: 0
+return: symbol\descriptor
+
+fn: lm_trans_namespace_type_is_structural (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransDescriptor: descriptor
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, name)
+return: descriptor != 0 && descriptor\has_structural_fields
+
+fn: lm_trans_namespace_has_named_structure_binding (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+return: symbol != 0 && lm_trans_symbol_is(symbol, "structureConstructor") && symbol\descriptor != 0 && symbol\descriptor\has_structural_fields && symbol\descriptor\structural_fields != 0
+
+fn: lm_trans_namespace_relation_symbol_latest (const: (LmTransNamespace: namespace_); const: (LmP0Text: name); const: @(char relation_name)) const: LmTransSymbol
+    LmTransIdentifierCard: card
+    LmTransIdentifierRelation: relation
+    const: LmTransSymbol: symbol
+    size_t: index
+
+    if: namespace_ = 0 || namespace_\identifiers = 0 || name = 0 || relation_name = 0
+        return: 0
+    if: namespace_\source_item_limit_active
+        index: lm_trans_namespace_effective_source_item_limit(namespace_)
+        while: index > 0U
+            index: index - 1U
+            symbol: cast: (const: LmTransSymbol) lm_own_ptr_stack_at(namespace_\items, index)
+            if: symbol != 0 && lm_trans_identifier_same(symbol\name, name) && lm_trans_symbol_is(symbol, relation_name)
+                return: symbol
+            ---
+        return: 0
+    card: lm_trans_identifier_table_find_card(namespace_\identifiers, name)
+    if: card = 0
+        return: 0
+    relation: lm_trans_identifier_card_find_relation(card, relation_name)
+    if: relation = 0
+        return: 0
+return: lm_own_ptr_stack_top(relation\symbols)
+
+fn: lm_trans_namespace_relation_text_latest (const: (LmTransNamespace: namespace_); const: (LmP0Text: name); const: @(char relation_name); LmP0Text: out_text) int
+    const: LmTransSymbol: symbol
+
+    if: out_text != 0
+        out_text\data: ""
+        out_text\length: 0U
+    if: out_text = 0
+        return: 0
+
+    symbol: lm_trans_namespace_relation_symbol_latest(namespace_, name, relation_name)
+    if: symbol = 0 || symbol\has_c_name = 0 || symbol\c_name = 0
+        return: 0
+    out_text[0]: symbol\c_name[0]
+return: 1
+
+fn: lm_trans_namespace_relation_symbol_for_latest_binding (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @(char relation_name)
+) const: LmTransSymbol
+    const: LmTransSymbol: binding
+    const: LmTransSymbol: symbol
+    size_t: index
+
+    if: namespace_ = 0 || namespace_\items = 0 || name = 0 || relation_name = 0
+        return: 0
+    binding: lm_trans_namespace_find(namespace_, name)
+    if: binding = 0
+        return: 0
+
+    index: lm_trans_namespace_effective_source_item_limit(namespace_)
+    while: index > 0U
+        index: index - 1U
+        symbol: (cast: (LmTransSymbol) lm_own_ptr_stack_at(namespace_\items, index))
+        if: symbol = binding
+            return: 0
+        if: symbol != 0 && lm_trans_identifier_same(symbol\name, name) && lm_trans_symbol_is(symbol, relation_name)
+            return: symbol
+        ---
+return: 0
+
+fn: lm_trans_namespace_relation_text_for_latest_binding (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @(char relation_name)
+    LmP0Text: out_text
+) int
+    const: LmTransSymbol: symbol
+
+    if: out_text != 0
+        out_text\data: ""
+        out_text\length: 0U
+    if: out_text = 0
+        return: 0
+    symbol: lm_trans_namespace_relation_symbol_for_latest_binding(namespace_, name, relation_name)
+    if: symbol = 0 || symbol\has_c_name = 0 || symbol\c_name = 0
+        return: 0
+    out_text[0]: symbol\c_name[0]
+return: 1
+
+fn: lm_trans_namespace_mark_c_array_storage (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    size_t: rank
+    size_t: element_address_depth
+    int: element_is_const
+) int
+    LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0
+        return: 1
+    symbol\c_array_storage: 1
+    symbol\c_array_rank: rank
+    symbol\c_array_element_address_depth: element_address_depth
+    symbol\c_array_element_const: element_is_const
+    symbol\array_reference: 0
+    symbol\array_reference_rank: 0U
+    symbol\array_reference_element_address_depth: 0U
+    symbol\array_reference_element_const: 0
+    symbol\raw_pointer_depth: 0U
+    symbol\raw_pointer_base_const: 0
+return: 0
+
+fn: lm_trans_namespace_mark_array_reference (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    size_t: rank
+    size_t: element_address_depth
+    int: element_is_const
+) int
+    LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0 || rank = 0U
+        return: 1
+    symbol\array_reference: 1
+    symbol\array_reference_rank: rank
+    symbol\array_reference_element_address_depth: element_address_depth
+    symbol\array_reference_element_const: element_is_const
+    symbol\c_array_storage: 0
+    symbol\c_array_rank: 0U
+    symbol\c_array_element_address_depth: 0U
+    symbol\c_array_emitted: 0
+    symbol\c_array_element_const: 0
+    symbol\raw_pointer_depth: 0U
+    symbol\raw_pointer_base_const: 0
+return: 0
+
+fn: lm_trans_namespace_mark_raw_pointer (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    size_t: depth
+    int: base_is_const
+) int
+    LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0
+        return: 1
+    if: depth = 0U
+        return: 1
+    symbol\raw_pointer_depth: depth
+    symbol\raw_pointer_base_const: base_is_const
+    symbol\array_reference: 0
+    symbol\array_reference_rank: 0U
+    symbol\array_reference_element_address_depth: 0U
+    symbol\array_reference_element_const: 0
+    symbol\c_array_storage: 0
+    symbol\c_array_rank: 0U
+    symbol\c_array_element_address_depth: 0U
+    symbol\c_array_emitted: 0
+    symbol\c_array_element_const: 0
+return: 0
+
+fn: lm_trans_namespace_value_is_c_array_storage (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+return: symbol != 0 && symbol\c_array_storage
+
+fn: lm_trans_namespace_mark_c_array_emitted (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0 || symbol\c_array_storage = 0
+        return: 1
+    symbol\c_array_emitted: 1
+return: 0
+
+fn: lm_trans_namespace_value_is_emitted_c_array_storage (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+return: symbol != 0 && symbol\c_array_storage && symbol\c_array_emitted
+
+fn: lm_trans_namespace_value_is_array_reference (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+    const: LmTransSymbol: type_relation
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: symbol = 0 || symbol\c_array_storage || symbol\raw_pointer_depth != 0U
+        return: 0
+    if: symbol\array_reference
+        return: 1
+    type_relation: lm_trans_namespace_relation_symbol_for_latest_binding(namespace_, name, "variable.type")
+return: type_relation != 0 && type_relation\has_c_name && type_relation\c_name != 0 && lm_trans_text_equals(type_relation\c_name, "LmSlice")
+
+fn: lm_trans_namespace_value_array_reference_rank (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: symbol = 0 || symbol\array_reference = 0
+        return: 0U
+return: symbol\array_reference_rank
+
+fn: lm_trans_namespace_value_array_reference_element_address_depth (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: symbol = 0 || symbol\array_reference = 0
+        return: 0U
+return: symbol\array_reference_element_address_depth
+
+fn: lm_trans_namespace_value_array_reference_element_is_const (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+return: symbol != 0 && symbol\array_reference && symbol\array_reference_element_const
+
+fn: lm_trans_namespace_value_array_reference_element_type (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    LmP0Text: out_type
+) int
+    if: lm_trans_namespace_value_array_reference_rank(namespace_, name) = 0U
+        if: out_type != 0
+            out_type\data: ""
+            out_type\length: 0U
+        return: 0
+return: lm_trans_namespace_relation_text_for_latest_binding(namespace_, name, "variable.array-element-type", out_type)
+
+fn: lm_trans_namespace_declare_array_helper_id (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    unsigned: id
+) int
+    c.array: [32]: char buffer
+    LmP0Text: payload
+    int: written
+    int: status
+
+    written: c.snprintf(buffer, c.sizeof(buffer), "%u", id)
+    if: written < 0 || (cast: size_t written) >= c.sizeof(buffer)
+        return: 1
+    payload: lm_trans_text_ref_new_cstr(buffer)
+    if: payload = 0
+        return: 1
+    status: lm_trans_namespace_declare_relation_text(namespace_, name, "variable.array-helper-id", payload)
+    lm_trans_text_ref_destroy(@ payload)
+return: status
+
+fn: lm_trans_namespace_value_array_helper_id (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    @: unsigned out_id
+) int
+    LmP0Text: payload
+    size_t: i
+    unsigned: value
+
+    if: out_id != 0
+        out_id[0]: 0U
+    payload: lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 0
+    finally: lm_trans_text_ref_destroy(@ payload)
+    if: lm_trans_namespace_relation_text_for_latest_binding(namespace_, name, "variable.array-helper-id", payload) = 0
+        return: 0
+    if: payload\data = 0 || payload\length = 0U
+        return: 0
+    value: 0U
+    i: 0U
+    while: i < payload\length
+        if: payload\data[i] < '0' || payload\data[i] > '9'
+            return: 0
+        value: value * 10U + (cast: unsigned (payload\data[i] - '0'))
+        i: i + 1U
+    if: out_id != 0
+        out_id[0]: value
+return: 1
+
+fn: lm_trans_namespace_value_is_raw_pointer (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+return: symbol != 0 && (symbol\raw_pointer_depth != 0U || symbol\c_array_storage)
+
+fn: lm_trans_namespace_value_raw_pointer_depth (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: symbol = 0
+        return: 0U
+return: symbol\raw_pointer_depth
+
+fn: lm_trans_namespace_value_raw_pointer_base_is_const (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+return: symbol != 0 && symbol\raw_pointer_depth != 0U && symbol\raw_pointer_base_const
+
+fn: lm_trans_namespace_value_c_array_rank (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: symbol = 0 || symbol\c_array_storage = 0
+        return: 0U
+return: symbol\c_array_rank
+
+fn: lm_trans_namespace_value_c_array_element_address_depth (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+    if: symbol = 0 || symbol\c_array_storage = 0
+        return: 0U
+return: symbol\c_array_element_address_depth
+
+fn: lm_trans_namespace_value_c_array_element_is_const (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    const: LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find(namespace_, name)
+return: symbol != 0 && symbol\c_array_storage && symbol\c_array_element_const
+
+fn: lm_trans_effective_value_descriptor_from_atom (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) const: LmTransDescriptor
+    const: LmTransSymbol: candidate_symbol
+    const: LmTransSymbol: candidate_type
+    const: LmTransDescriptor: candidate_descriptor
+
+    if: namespace_ = 0 || name = 0
+        return: 0
+
+    candidate_symbol: lm_trans_namespace_find(namespace_, name)
+    candidate_descriptor: 0
+    if: candidate_symbol != 0
+        candidate_descriptor: candidate_symbol\descriptor
+    if: candidate_descriptor != 0
+        return: candidate_descriptor
+
+    candidate_type: lm_trans_namespace_relation_symbol_latest(namespace_, name, "variable.type")
+    if: candidate_type != 0 && candidate_type\has_c_name && candidate_type\c_name != 0
+        return: lm_trans_namespace_descriptor(namespace_, candidate_type\c_name)
+return: 0
+
+fn: lm_trans_atom_is_void_primitive (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    LmP0Text: type_name
+    int: is_void
+
+    if: name = 0
+        return: 0
+    if: lm_trans_text_equals(name, "void")
+        return: 1
+    if: namespace_ = 0
+        return: 0
+
+    type_name: lm_trans_text_ref_new_cstr("")
+    if: type_name = 0
+        return: 0
+    is_void: 0
+    if: lm_trans_namespace_relation_text_for_latest_binding(namespace_, name, "variable.type", type_name)
+        is_void: lm_trans_text_equals(type_name, "void")
+    ---
+    lm_trans_text_ref_destroy(@ type_name)
+return: is_void
+
+fn: lm_trans_primitive_description_key (
+    const: LmP0Text: name
+    LmP0Text: out_key
+) int
+    if: name = 0 || out_key = 0
+        return: 0
+return: lm_trans_identifier_payload(name, out_key)
+
+fn: lm_trans_name_has_primitive_description (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+    LmP0Text: key
+    int: found
+
+    if: name = 0
+        return: 0
+    key: lm_own_new_zero(c.sizeof(key[0]))
+    if: key = 0 || lm_trans_primitive_description_key(name, key) = 0
+        lm_own_delete(key, 0)
+        return: 0
+    found: lm_trans_namespace_registry_lookup(namespace_, key, "primitive.description") != 0
+    lm_own_delete(key, 0)
+return: found
+
+fn: lm_trans_primitive_description_column (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @(char column)
+    const: @(char value_descriptor)
+) const: @: char
+    LmP0Text: key
+    const: @: char value
+
+    if: name = 0 || column = 0 || value_descriptor = 0
+        return: 0
+    key: lm_own_new_zero(c.sizeof(key[0]))
+    if: key = 0 || lm_trans_primitive_description_key(name, key) = 0
+        lm_own_delete(key, 0)
+        return: 0
+    value: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, key, "primitive.description", "class", "class", column, value_descriptor)
+    lm_own_delete(key, 0)
+return: value
+
+fn: lm_trans_primitive_cell_is_present (const: @(char cell)) int
+    if: cell = 0
+        return: 0
+    if: c.strcmp(cell, "0") = 0
+        return: 0
+    if: c.strcmp(cell, "None") = 0
+        return: 0
+return: 1
+
+fn: lm_trans_primitive_convert_is_forbidden (const: @(char convert)) int
+    if: convert = 0
+        return: 0
+    if: c.strcmp(convert, "forbidden") = 0
+        return: 1
+    if: c.strcmp(convert, "none") = 0
+        return: 1
+return: 0
+
+fn: lm_trans_primitive_leaf_implements (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: candidate_name
+    const: LmP0Text: required_name
+    @: int out_result
+) int
+    const: @: char candidate_cell
+    const: @: char required_cell
+    const: @: char candidate_convert
+    const: @: char required_convert
+    LmP0Text: candidate_key
+    LmP0Text: required_key
+    int: no_cell
+
+    if: out_result != 0
+        out_result[0]: 0
+    if: namespace_ = 0 || candidate_name = 0 || required_name = 0 || out_result = 0
+        return: 1
+
+    candidate_key: lm_own_new_zero(c.sizeof(candidate_key[0]))
+    required_key: lm_own_new_zero(c.sizeof(required_key[0]))
+    if: candidate_key = 0 || required_key = 0 || lm_trans_primitive_description_key(candidate_name, candidate_key) = 0 || lm_trans_primitive_description_key(required_name, required_key) = 0
+        lm_own_delete(candidate_key, 0)
+        lm_own_delete(required_key, 0)
+        return: 1
+    no_cell: lm_trans_text_equals(candidate_key, "void") || lm_trans_text_equals(required_key, "void") || lm_trans_text_equals(candidate_key, "None") || lm_trans_text_equals(required_key, "None")
+    if: no_cell != 0
+        lm_own_delete(candidate_key, 0)
+        lm_own_delete(required_key, 0)
+        out_result[0]: 0
+        return: 0
+    if: lm_trans_text_same(candidate_key, required_key) && lm_trans_name_has_primitive_description(namespace_, candidate_name) != 0
+        lm_own_delete(candidate_key, 0)
+        lm_own_delete(required_key, 0)
+        out_result[0]: 1
+        return: 0
+    lm_own_delete(candidate_key, 0)
+    lm_own_delete(required_key, 0)
+
+    if: lm_trans_name_has_primitive_description(namespace_, candidate_name) = 0 || lm_trans_name_has_primitive_description(namespace_, required_name) = 0
+        return: 2
+
+    candidate_cell: lm_trans_primitive_description_column(namespace_, candidate_name, "cell", "categoryFlag")
+    required_cell: lm_trans_primitive_description_column(namespace_, required_name, "cell", "categoryFlag")
+    candidate_convert: lm_trans_primitive_description_column(namespace_, candidate_name, "convert", "class")
+    required_convert: lm_trans_primitive_description_column(namespace_, required_name, "convert", "class")
+    if: lm_trans_primitive_cell_is_present(candidate_cell) = 0 || lm_trans_primitive_cell_is_present(required_cell) = 0
+        out_result[0]: 0
+        return: 0
+    if: lm_trans_primitive_convert_is_forbidden(candidate_convert) != 0 || lm_trans_primitive_convert_is_forbidden(required_convert) != 0
+        out_result[0]: 0
+        return: 0
+    out_result[0]: 1
+return: 0
+
+fn: lm_trans_admit_implements (
+    const: LmTransNamespace: namespace_
+    const: LmTransDescriptor: candidate_descriptor
+    const: LmTransDescriptor: required_descriptor
+    const: LmP0Text: candidate_name
+    const: @(char context)
+) int
+    int: compatible
+    int: candidate_is_indexed
+    int: required_is_indexed
+
+    if: namespace_ = 0 || candidate_descriptor = 0 || required_descriptor = 0
+        return: 0
+    if: candidate_descriptor = required_descriptor
+        return: 0
+    if: lm_trans_atom_is_void_primitive(namespace_, candidate_name)
+        return: 0
+
+    if: lm_trans_descriptor_implements(candidate_descriptor, required_descriptor, required_descriptor, @ compatible) != 0
+        if: candidate_name != 0
+            c.fprintf(c.stderr, "trans internal error: malformed structural descriptor while checking \"%.*s\" in %s\n", (cast: int candidate_name\length), candidate_name\data, context)
+        else:
+            c.fprintf(c.stderr, "trans internal error: malformed structural descriptor in %s\n", context)
+        ---
+        return: 1
+    if: compatible = 0
+        if: candidate_name != 0
+            c.fprintf(c.stderr, "trans L2 type error: implements(varA varB Consumer) is false for \"%.*s\" in %s\n", (cast: int candidate_name\length), candidate_name\data, context)
+        else:
+            c.fprintf(c.stderr, "trans L2 type error: implements(varA varB Consumer) is false in %s\n", context)
+        ---
+        return: 1
+
+    candidate_is_indexed: lm_trans_descriptor_class_relation_value(candidate_descriptor, "lm.trans.c.indexed-members") != 0
+    required_is_indexed: lm_trans_descriptor_class_relation_value(required_descriptor, "lm.trans.c.indexed-members") != 0
+    if: candidate_is_indexed = 0 && required_is_indexed = 0
+        return: 0
+
+    if: candidate_name != 0
+        c.fprintf(c.stderr, "trans hosted C backend limitation: \"%.*s\" implements the required descriptor in %s, but distinct hosted C layouts require an adapter/projection\n", (cast: int candidate_name\length), candidate_name\data, context)
+    else:
+        c.fprintf(c.stderr, "trans hosted C backend limitation: value implements the required descriptor in %s, but distinct hosted C layouts require an adapter/projection\n", context)
+    ---
+return: 1
+
+fn: lm_trans_guard_direct_structure_value_layout (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: candidate_name
+    const: LmTransDescriptor: required_descriptor
+    const: @(char context)
+) int
+    const: LmTransDescriptor: candidate_descriptor
+
+    if: namespace_ = 0 || candidate_name = 0 || required_descriptor = 0
+        return: 0
+    if: candidate_name\data = 0 || candidate_name\length = 0U || (candidate_name\data[0] >= '0' && candidate_name\data[0] <= '9')
+        return: 0
+
+    candidate_descriptor: lm_trans_effective_value_descriptor_from_atom(namespace_, candidate_name)
+    if: candidate_descriptor = 0
+        return: 0
+return: lm_trans_admit_implements(namespace_, candidate_descriptor, required_descriptor, candidate_name, context)
+
+fn: lm_trans_is_c_reference_name (const: (LmP0Text: name)) int
+return: name != 0 && lm_trans_text_starts_with(name, "c.") && name\length > 2U
+
+fn: lm_trans_is_reserved_head_name (const: (LmP0Text: name)) int
+    const: @: char namespace_class
+
+    if: name = 0
+        return: 0
+    namespace_class: lm_trans_namespace_receiver_type_checked(0, name)
+return: namespace_class != 0
+
+fn: lm_trans_l3_receiver_is_excluded (const: (LmTransNamespace: namespace_); const: (LmP0Text: head)) int
+    if: lm_trans_l3_profile_depth = 0 || head = 0
+        return: 0
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, head, "receiver.l3.exclude", "class", "class", "value", "int") != 0
+
+fn: lm_trans_head_binding_resolve (const: (LmTransNamespace: namespace_); const: (LmP0Text: head); LmTransHeadBinding: out) int
+    LmTransBinding: resolved
+    int: receiver_status
+
+    if: head = 0 || out = 0
+        return: 1
+
+    resolved: lm_own_new_zero(c.sizeof(resolved[0]))
+    if: resolved = 0
+        return: 1
+    c.memset(out, 0, c.sizeof(out[0]))
+    out\symbol: lm_trans_namespace_find(namespace_, head)
+    if: lm_trans_l3_receiver_is_excluded(namespace_, head)
+        lm_own_delete(resolved, 0)
+        return: 0
+
+    out\receiver_type: lm_trans_namespace_receiver_type_checked(namespace_, head)
+
+    out\function_receiver_binding: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, head, "receiver.function", "class", "class", "receiver", "binding")
+    if: out\function_receiver_binding != 0
+        receiver_status: lm_trans_binding_resolve(out\function_receiver_binding, resolved)
+        if: receiver_status = 0 || resolved\function_receiver = 0
+            c.fprintf(c.stderr, "trans registry inconsistency: receiver.function[\"%.*s\"] has unknown function binding %s\n", (cast: int head\length), head\data, out\function_receiver_binding)
+            lm_own_delete(resolved, 0)
+            return: 1
+        out\function_receiver: resolved\function_receiver
+
+    out\statement_receiver_binding: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, head, "receiver.statement", "class", "class", "receiver", "binding")
+    if: out\statement_receiver_binding != 0
+        if: lm_trans_binding_resolve(out\statement_receiver_binding, resolved) = 0 || resolved\statement_frame = 0
+            c.fprintf(c.stderr, "trans registry inconsistency: receiver.statement[\"%.*s\"] has unknown statement binding %s\n", (cast: int head\length), head\data, out\statement_receiver_binding)
+            lm_own_delete(resolved, 0)
+            return: 1
+        out\statement_frame: resolved\statement_frame
+
+    lm_own_delete(resolved, 0)
+return: 0
+
+fn: lm_trans_namespace_take_symbol_with_c_name (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @(char kind)
+    const: LmP0Text: c_name
+    LmTransDescriptor: descriptor
+) int
+    LmTransSymbol: symbol
+
+    if: namespace_ = 0 || name = 0
+        return: 1
+
+    if: lm_trans_is_c_reference_name(name)
+        c.fprintf(c.stderr, "trans L2 error: C-surface spelling \"%.*s\" cannot be declared as a Lingvamyxa name\n", (cast: int name\length), name\data)
+        return: 1
+
+    symbol: lm_trans_symbol_new(name, kind, namespace_\depth)
+    if: symbol = 0
+        return: 1
+    symbol\descriptor: descriptor
+    if: c_name != 0 && lm_trans_symbol_set_c_name(symbol, c_name) != 0
+        symbol\descriptor: 0
+        lm_trans_symbol_destroy(symbol)
+        return: 1
+    if: namespace_\items = 0 || lm_own_ptr_stack_push(namespace_\items, symbol) != 0
+        symbol\descriptor: 0
+        lm_trans_symbol_destroy(symbol)
+        return: 1
+    if: lm_trans_identifier_table_add_symbol(namespace_\identifiers, symbol) != 0
+        symbol: lm_own_ptr_stack_pop(namespace_\items)
+        symbol\descriptor: 0
+        lm_trans_symbol_destroy(symbol)
+        return: 1
+return: 0
+
+fn: lm_trans_namespace_declare_with_c_name (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind); const: (LmP0Text: c_name)) int
+return: lm_trans_namespace_take_symbol_with_c_name(namespace_, name, kind, c_name, 0)
+
+fn: lm_trans_namespace_declare (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind)) int
+return: lm_trans_namespace_declare_with_c_name(namespace_, name, kind, 0)
+
+fn: lm_trans_namespace_bind_descriptor_with_c_name (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @(char kind)
+    const: LmP0Text: c_name
+    LmTransDescriptor: descriptor
+) int
+    const: LmTransSymbol: old_symbol
+    int: compatible
+
+    if: namespace_ = 0 || name = 0 || descriptor = 0
+        return: 1
+
+    old_symbol: lm_trans_namespace_find(namespace_, name)
+    if: old_symbol != 0
+        if: old_symbol\descriptor = 0
+            c.fprintf(c.stderr, "trans L2 redeclaration error: old binding \"%.*s\" has no structural descriptor\n", (cast: int name\length), name\data)
+            return: 1
+        if: old_symbol\descriptor = descriptor
+            c.fprintf(c.stderr, "trans L2 redeclaration error: pending descriptor for \"%.*s\" aliases the old binding\n", (cast: int name\length), name\data)
+            return: 1
+        if: lm_trans_descriptor_implements(old_symbol\descriptor, descriptor, descriptor, @ compatible) != 0
+            c.fprintf(c.stderr, "trans L2 redeclaration error: malformed descriptor for \"%.*s\"\n", (cast: int name\length), name\data)
+            return: 1
+        if: compatible = 0
+            c.fprintf(c.stderr, "trans L2 redeclaration error: implements(varA varB Consumer) is false for \"%.*s\"\n", (cast: int name\length), name\data)
+            return: 1
+        ---
+    ---
+
+return: lm_trans_namespace_take_symbol_with_c_name(namespace_, name, kind, c_name, descriptor)
+
+fn: lm_trans_namespace_bind_descriptor (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @(char kind)
+    LmTransDescriptor: descriptor
+) int
+return: lm_trans_namespace_bind_descriptor_with_c_name(namespace_, name, kind, 0, descriptor)
+
+fn: lm_trans_namespace_rollback_descriptor_binding (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    LmTransDescriptor: descriptor
+) int
+    LmTransSymbol: symbol
+    LmTransSymbol: removed
+
+    if: namespace_ = 0 || namespace_\items = 0 || name = 0 || descriptor = 0
+        return: 1
+
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0 || symbol\descriptor != descriptor || symbol\depth != namespace_\depth || lm_own_ptr_stack_top(namespace_\items) != symbol
+        return: 1
+
+    removed: lm_own_ptr_stack_pop(namespace_\items)
+    if: removed != symbol
+        return: 1
+    lm_trans_identifier_table_remove_symbol(namespace_\identifiers, symbol)
+    symbol\descriptor: 0
+    lm_trans_symbol_destroy(symbol)
+return: 0
+
+fn: lm_trans_namespace_attach_descriptor (LmTransNamespace: namespace_; const: (LmP0Text: name); LmTransDescriptor: descriptor) int
+    LmTransSymbol: symbol
+
+    if: namespace_ = 0 || name = 0 || descriptor = 0
+        return: 1
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0 || symbol\descriptor != 0
+        return: 1
+    symbol\descriptor: descriptor
+    if: lm_trans_namespace_descriptor(namespace_, name) != descriptor
+        symbol\descriptor: 0
+        return: 1
+return: 0
+
+fn: lm_trans_namespace_declare_generated (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind)) int
+    const: LmTransSymbol: existing
+    LmTransSymbol: symbol
+
+    if: namespace_ = 0 || name = 0
+        return: 1
+
+    existing: lm_trans_namespace_find(namespace_, name)
+    if: existing != 0
+        if: lm_trans_symbol_is(existing, kind)
+            return: 0
+        c.fprintf(c.stderr, "trans L2 error: generated name \"%.*s\" is already visible as %s\n", (cast: int name\length), name\data, lm_trans_symbol_class_name(existing\class_name))
+        return: 1
+
+    symbol: lm_trans_symbol_new(name, kind, namespace_\depth)
+    if: symbol = 0
+        return: 1
+    if: lm_trans_symbol_set_owned_name(symbol, name) != 0
+        lm_trans_symbol_destroy(symbol)
+        return: 1
+    if: namespace_\items = 0 || lm_own_ptr_stack_push(namespace_\items, symbol) != 0
+        lm_trans_symbol_destroy(symbol)
+        return: 1
+    if: lm_trans_identifier_table_add_symbol(namespace_\identifiers, symbol) != 0
+        symbol: lm_own_ptr_stack_pop(namespace_\items)
+        lm_trans_symbol_destroy(symbol)
+        return: 1
+return: 0
+
+fn: lm_trans_namespace_declare_visible_symbol_if_missing (
+    LmTransNamespace: namespace_
+    const: @(char name)
+    const: @(char kind)
+) int
+    LmP0Text: name_text
+    const: LmTransSymbol: existing
+    LmTransSymbol: symbol
+    int: status
+
+    if: namespace_ = 0 || name = 0 || kind = 0
+        return: 1
+
+    name_text: lm_trans_text_from_cstr(name)
+    if: name_text = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ name_text)
+
+    existing: lm_trans_namespace_find(namespace_, name_text)
+    if: existing != 0
+        return: 0
+
+    status: lm_trans_namespace_declare(namespace_, name_text, kind)
+    if: status = 0
+        symbol: lm_trans_namespace_find_mutable(namespace_, name_text)
+        if: symbol = 0
+            return: 1
+        symbol\registry_materialized: 1
+    ---
+return: status
+
+fn: lm_trans_registry_key_is_c_surface_name (const: @(char name)) int
+    LmP0Text: name_text
+    int: result
+
+    name_text: lm_trans_text_from_cstr(name)
+    if: name_text = 0
+        return: 0
+    finally: lm_trans_text_ref_destroy(@ name_text)
+
+    result: lm_trans_is_c_reference_name(name_text)
+return: result
+
+fn: lm_trans_namespace_declare_registry_receiver (LmTransNamespace: namespace_; const: @(char name); const: @(char receiver_type)) int
+    if: name = 0 || receiver_type = 0 || lm_trans_registry_key_is_c_surface_name(name) != 0
+        return: 0
+return: lm_trans_namespace_declare_visible_symbol_if_missing(namespace_, name, receiver_type)
+
+fn: lm_trans_namespace_materialize_registry_receiver_facade_rows (LmTransNamespace: namespace_; const: (LmOwnPtrStack: rows); const: @(char source_path)) int
+    size_t: i
+    LmTransRegistryFact: row
+    const: @: char receiver_type
+
+    if: rows = 0 || source_path = 0
+        return: 0
+
+    i: 0U
+    while: i < rows\count
+        row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(rows, i))
+        if: row != 0 && row\key != 0 && row\payload != 0
+            if: c.strcmp(source_path, "namespace") = 0
+                receiver_type: lm_trans_registry_source_n2_typed_value(namespace_, "namespace", "class", "class", "receiver.type", "class", row)
+            else:
+                receiver_type: lm_trans_registry_source_path_typed_value(namespace_, source_path, "class", "class", "class", row)
+            if: lm_trans_namespace_declare_registry_receiver(namespace_, row\key, receiver_type) != 0
+                return: 1
+            ---
+        ---
+        i: i + 1U
+return: 0
+
+fn: lm_trans_namespace_materialize_registry_receiver_source_path (LmTransNamespace: namespace_; const: (LmOwnPtrStack: facade_rows); const: @(char source_path); int: materialize) int
+    const: LmTableDescriptor: descriptor
+    const: LmTableRow: source_row
+    const: LmTableCell: key_cell
+    const: LmTableCell: receiver_cell
+    const: @: char receiver_type
+    LmTransRegistryFact: facade_row
+    LmTransRegistryFact: selected_facade_row
+    @: int facade_matched
+    size_t: descriptor_count
+    size_t: descriptor_index
+    size_t: source_path_length
+    size_t: column_count
+    size_t: column_index
+    size_t: row_count
+    size_t: row_index
+    size_t: facade_index
+
+    if: namespace_ = 0 || namespace_\registry_view = 0 || source_path = 0
+        return: 1
+
+    facade_matched: 0
+    finally: lm_own_delete(facade_matched, 0)
+    if: facade_rows != 0 && facade_rows\count != 0U
+        facade_matched: (cast: (@: int) lm_own_new_zero(facade_rows\count * c.sizeof(facade_matched[0])))
+        if: facade_matched = 0
+            return: 1
+        ---
+    ---
+
+    source_path_length: c.strlen(source_path)
+    descriptor_count: lm_registry_view_source_table_count(namespace_\registry_view)
+    descriptor_index: 0U
+    while: descriptor_index < descriptor_count
+        descriptor: lm_registry_view_source_table_at(namespace_\registry_view, descriptor_index)
+        column_count: lm_table_descriptor_column_count(descriptor)
+        row_count: lm_table_descriptor_materialized_row_count(descriptor)
+        row_index: 0U
+        while: row_index < row_count
+            source_row: lm_table_descriptor_materialized_row_at(descriptor, row_index)
+            key_cell: lm_table_row_cell_at(source_row, 0U)
+            column_index: 1U
+            while: column_index < column_count
+                if: lm_table_descriptor_source_path_column_matches(descriptor, column_index, source_path, source_path_length) != 0
+                    receiver_cell: lm_table_row_cell_at(source_row, column_index)
+                    if: key_cell != 0 && key_cell\value != 0 && receiver_cell != 0 && receiver_cell\value != 0
+                        facade_row: 0
+                        facade_index: 0U
+                        while: facade_rows != 0 && facade_index < facade_rows\count
+                            facade_row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(facade_rows, facade_index))
+                            if: facade_matched[facade_index] = 0 && facade_row != 0 && facade_row\key != 0 && facade_row\payload != 0 && c.strcmp(key_cell\value, facade_row\key) = 0 && c.strcmp(receiver_cell\value, facade_row\payload) = 0
+                                facade_matched[facade_index]: 1
+                                break
+                            facade_row: 0
+                            facade_index: facade_index + 1U
+                        ---
+                        if: facade_row = 0
+                            lm_trans_registry_view_parity_fail("namespace source row multiset", source_path)
+                            return: 1
+                        if: materialize
+                            selected_facade_row: 0
+                            facade_index: 0U
+                            while: facade_rows != 0 && facade_index < facade_rows\count
+                                selected_facade_row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(facade_rows, facade_index))
+                                if: selected_facade_row != 0 && selected_facade_row\key != 0 && selected_facade_row\payload != 0 && c.strcmp(key_cell\value, selected_facade_row\key) = 0
+                                    break
+                                selected_facade_row: 0
+                                facade_index: facade_index + 1U
+                            ---
+                            if: c.strcmp(source_path, "namespace") = 0
+                                receiver_type: lm_trans_registry_source_n2_typed_value(namespace_, "namespace", "class", "class", "receiver.type", "class", selected_facade_row)
+                            else:
+                                receiver_type: lm_trans_registry_source_path_typed_value(namespace_, source_path, "class", "class", "class", selected_facade_row)
+                            if: lm_trans_namespace_declare_registry_receiver(namespace_, key_cell\value, receiver_type) != 0
+                                return: 1
+                    ---
+                ---
+                column_index: column_index + 1U
+            row_index: row_index + 1U
+        descriptor_index: descriptor_index + 1U
+
+    facade_index: 0U
+    while: facade_rows != 0 && facade_index < facade_rows\count
+        facade_row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(facade_rows, facade_index))
+        if: facade_matched[facade_index] = 0 && facade_row != 0 && facade_row\key != 0 && facade_row\payload != 0
+            lm_trans_registry_view_parity_fail("namespace source row multiset", source_path)
+            return: 1
+        facade_index: facade_index + 1U
+    ---
+return: 0
+
+fn: lm_trans_namespace_materialize_class_relation_stack (LmTransNamespace: namespace_; const: (LmP0Text: owner); const: @(char relation_name)) const: LmOwnPtrStack
+    @: char relation_path
+    size_t: relation_path_length
+    const: LmOwnPtrStack: rows
+
+    if: owner = 0 || owner\data = 0 || relation_name = 0
+        return: 0
+
+    rows: lm_trans_namespace_registry_relation_stack(namespace_, owner, relation_name)
+    if: rows != 0
+        return: rows
+
+    relation_path: lm_trans_registry_source_relation_path_new(owner\data, relation_name, @ relation_path_length)
+    if: relation_path = 0
+        return: 0
+    rows: lm_trans_registry_relation_stack_for_table(relation_path)
+    lm_own_delete(relation_path, 0)
+return: rows
+
+fn: lm_trans_namespace_relation_name_is_class_metadata (const: @(char relation_name)) int
+    if: relation_name = 0
+        return: 0
+return: c.strncmp(relation_name, "class.", 6) = 0
+
+fn: lm_trans_namespace_materialize_class_descriptor_relations (
+    const: LmTransNamespace: namespace_
+    const: (LmP0Text: class_name)
+    LmTransDescriptor: descriptor
+) int
+    const: LmTransIdentifierTable: identifiers
+    LmTransIdentifierCard: class_card
+    LmTransIdentifierRelation: relation
+    const: LmOwnPtrStack: rows
+    const: LmTransRegistryFact: latest_row
+    size_t: relation_bucket_index
+    int: private_registry
+
+    if: namespace_ = 0 || class_name = 0 || class_name\data = 0 || descriptor = 0
+        return: 1
+    if: descriptor\class_relations = 0
+        descriptor\class_relations: lm_trans_ptr_stack_new(lm_trans_descriptor_relation_delete_any)
+        if: descriptor\class_relations = 0
+            return: 1
+        ---
+    ---
+
+    identifiers: namespace_\registry_identifiers
+    class_card: 0
+    if: identifiers != 0
+        class_card: lm_trans_identifier_table_find_card(identifiers, class_name)
+    if: class_card = 0 && c.lm_trans_registry != 0 && c.lm_trans_registry->identifiers != 0 && c.lm_trans_registry->identifiers != identifiers
+        class_card: lm_trans_identifier_table_find_card(c.lm_trans_registry->identifiers, class_name)
+
+    if: class_card = 0
+        return: 0
+
+    private_registry: identifiers != 0 && (c.lm_trans_registry = 0 || c.lm_trans_registry->identifiers != identifiers)
+    relation_bucket_index: 0U
+    while: relation_bucket_index < class_card\relation_bucket_count
+        relation: class_card\relation_buckets[relation_bucket_index]
+        while: relation != 0
+            if: lm_trans_namespace_relation_name_is_class_metadata(relation\name) != 0
+                rows: relation\symbols
+                if: private_registry = 0
+                    rows: lm_trans_registry_relation_stack_for_table(relation\name)
+                ---
+                if: rows != 0
+                    latest_row: lm_trans_registry_relation_stack_latest_row(rows, class_name)
+                    if: latest_row != 0 && latest_row\payload != 0
+                        if: lm_trans_descriptor_set_class_relation(descriptor, relation\name, latest_row\payload) != 0
+                            return: 1
+                        ---
+                    ---
+                ---
+            ---
+            relation: relation\next
+        ---
+        relation_bucket_index: relation_bucket_index + 1U
+    ---
+return: 0
+
+fn: lm_trans_namespace_materialize_class_typed_relation_value (
+    const: (LmTransNamespace: namespace_)
+    const: (LmP0Text: owner)
+    const: @(char relation_name)
+    const: @(char n2_value_column_name)
+    const: @(char value_descriptor)
+    const: (LmTransRegistryFact: facade_row)
+) const: @: char
+    @: char relation_path
+    size_t: relation_path_length
+    const: @: char value
+    const: @: char typed_value
+
+    if: owner = 0 || owner\data = 0 || relation_name = 0 || n2_value_column_name = 0 || value_descriptor = 0
+        return: 0
+
+    value: 0
+    if: facade_row != 0 && facade_row\payload != 0
+        value: facade_row\payload
+
+    relation_path: lm_trans_registry_source_relation_path_new(owner\data, relation_name, @ relation_path_length)
+    if: relation_path = 0
+        return: value
+    typed_value: lm_trans_registry_source_path_n2_named_typed_value(namespace_, relation_path, "class", "class", n2_value_column_name, value_descriptor, facade_row)
+    lm_own_delete(relation_path, 0)
+    if: typed_value != 0
+        return: typed_value
+return: value
+
+fn: lm_trans_namespace_materialize_class_descriptor_add_field (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: class_name
+    LmTransDescriptor: descriptor
+    const: LmP0Text: field_name
+    const: LmTransRegistryFact: field_row
+    const: LmOwnPtrStack: index_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: const_rows
+    const: LmOwnPtrStack: array_count_rows
+    const: @(char type_relation_name)
+    const: @(char type_n2_column_name)
+    int: is_union
+) int
+    const: @(char type_payload)
+    const: @(char index_payload)
+    const: @(char address_depth_payload)
+    const: @(char const_payload)
+    const: @(char array_count_payload)
+    LmP0Text: type_name
+    LmTransRegistryFact: index_row
+    LmTransRegistryFact: address_depth_row
+    LmTransRegistryFact: const_row
+    LmTransRegistryFact: array_count_row
+    size_t: field_index
+    size_t: field_address_depth
+    size_t: field_array_count
+    size_t: field_const_flag
+    int: field_is_const
+    int: has_array_count
+
+    if: class_name = 0 || descriptor = 0 || field_name = 0 || field_row = 0
+        return: 1
+
+    if: field_name\length = 0U || field_row\key = 0 || field_row\payload = 0
+        return: 1
+
+    type_payload: lm_trans_namespace_materialize_class_typed_relation_value(namespace_, class_name, type_relation_name, type_n2_column_name, "class", field_row)
+    if: type_payload = 0
+        return: 1
+    type_name: lm_trans_text_from_cstr(type_payload)
+    if: type_name = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ type_name)
+
+    index_row: lm_trans_registry_relation_stack_latest_row(index_rows, field_name)
+    address_depth_row: lm_trans_registry_relation_stack_latest_row(address_depth_rows, field_name)
+    const_row: lm_trans_registry_relation_stack_latest_row(const_rows, field_name)
+    array_count_row: lm_trans_registry_relation_stack_latest_row(array_count_rows, field_name)
+
+    index_payload: lm_trans_namespace_materialize_class_typed_relation_value(namespace_, class_name, "field.index", "index", "size_t", index_row)
+    if: index_payload = 0 || lm_trans_parse_size_payload(index_payload, @ field_index) = 0
+        c.fprintf(c.stderr, "trans L2 struct descriptor error: class %.*s.%.*s requires field.index\n", (cast: int class_name\length), class_name\data, (cast: int field_name\length), field_name\data)
+        return: 1
+
+    field_address_depth: 0U
+    field_array_count: 0U
+    field_const_flag: 0U
+    has_array_count: 0
+    field_is_const: 0
+
+    address_depth_payload: lm_trans_namespace_materialize_class_typed_relation_value(namespace_, class_name, "field.address-depth", "depth", "size_t", address_depth_row)
+    if: address_depth_payload != 0 && lm_trans_parse_size_payload(address_depth_payload, @ field_address_depth) = 0
+            c.fprintf(c.stderr, "trans L2 struct descriptor error: class %.*s.%.*s has invalid field.address-depth\n", (cast: int class_name\length), class_name\data, (cast: int field_name\length), field_name\data)
+            return: 1
+
+    const_payload: lm_trans_namespace_materialize_class_typed_relation_value(namespace_, class_name, "field.const", "value", "int", const_row)
+    if: const_payload != 0
+        if: lm_trans_parse_size_payload(const_payload, @ field_const_flag) = 0
+            c.fprintf(c.stderr, "trans L2 struct descriptor error: class %.*s.%.*s has invalid field.const\n", (cast: int class_name\length), class_name\data, (cast: int field_name\length), field_name\data)
+            return: 1
+        field_is_const: field_const_flag != 0U
+
+    array_count_payload: lm_trans_namespace_materialize_class_typed_relation_value(namespace_, class_name, "field.array-count", "count", "size_t", array_count_row)
+    if: array_count_payload != 0
+        if: lm_trans_parse_size_payload(array_count_payload, @ field_array_count) = 0
+            c.fprintf(c.stderr, "trans L2 struct descriptor error: class %.*s.%.*s has invalid field.array-count\n", (cast: int class_name\length), class_name\data, (cast: int field_name\length), field_name\data)
+            return: 1
+        has_array_count: 1
+
+    if: lm_trans_descriptor_has_exact_structural_field(descriptor, field_name, type_name, field_index, field_address_depth, field_array_count, has_array_count, field_is_const, is_union) != 0
+        return: 0
+    if: lm_trans_descriptor_add_structural_field(descriptor, field_name, type_name, field_index, field_address_depth, field_array_count, has_array_count, field_is_const, is_union) != 0
+        return: 1
+return: 0
+
+fn: lm_trans_namespace_materialize_class_descriptors (LmTransNamespace: namespace_) int
+    const: @(char class_present_table)
+    const: LmOwnPtrStack: class_rows
+    const: LmOwnPtrStack: class_rows_fields
+    const: LmOwnPtrStack: union_rows_fields
+    const: LmOwnPtrStack: index_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: const_rows
+    const: LmOwnPtrStack: array_count_rows
+    LmOwnPtrStack: processed_classes
+    size_t: class_index
+    size_t: field_index
+    LmTransRegistryFact: class_row
+    LmTransRegistryFact: field_row
+    @(char class_key)
+    @(char seen_name)
+    LmP0Text: class_name
+    LmP0Text: field_name
+    LmTransSymbol: class_symbol
+    LmTransDescriptor: descriptor
+    LmTransDescriptor: owned_descriptor
+    int: descriptor_is_new
+
+    class_present_table: "class.present"
+    class_rows: lm_trans_registry_relation_stack_for_table(class_present_table)
+    if: class_rows = 0
+        return: 0
+
+    processed_classes: lm_trans_ptr_stack_new(c.lm_own_delete_plain)
+    if: processed_classes = 0
+        return: 1
+    finally: lm_trans_ptr_stack_delete(@ processed_classes)
+
+    class_index: 0U
+    while: class_index < class_rows\count
+        class_row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(class_rows, class_index))
+        if: class_row = 0 || class_row\key = 0 || class_row\payload = 0
+            class_index: class_index + 1U
+            continue
+        class_key: class_row\key
+        class_name: lm_trans_text_from_cstr(class_key)
+        if: class_name = 0
+            return: 1
+        finally: lm_trans_text_ref_destroy(@ class_name)
+        if: lm_trans_is_c_reference_name(class_name) != 0
+            class_index: class_index + 1U
+            continue
+
+        seen_name: lm_trans_text_copy_cstr(class_name)
+        if: seen_name = 0
+            return: 1
+        if: lm_trans_string_stack_has(processed_classes, seen_name) != 0
+            lm_own_delete(seen_name, 0)
+            class_index: class_index + 1U
+            continue
+        if: lm_own_ptr_stack_push(processed_classes, seen_name) != 0
+            lm_own_delete(seen_name, 0)
+            return: 1
+
+        class_symbol: lm_trans_namespace_find_mutable(namespace_, class_name)
+        if: class_symbol = 0
+            if: lm_trans_namespace_declare(namespace_, class_name, "class") != 0
+                return: 1
+            class_symbol: lm_trans_namespace_find_mutable(namespace_, class_name)
+            if: class_symbol = 0
+                return: 1
+            class_symbol\registry_materialized: 1
+        ---
+
+        if: class_symbol\registry_materialized = 0
+            class_index: class_index + 1U
+            continue
+        ---
+
+        class_rows_fields: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, "field.class")
+        union_rows_fields: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, "field.union")
+        index_rows: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, "field.index")
+        address_depth_rows: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, "field.address-depth")
+        const_rows: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, "field.const")
+        array_count_rows: lm_trans_namespace_materialize_class_relation_stack(namespace_, class_name, "field.array-count")
+
+        descriptor: class_symbol\descriptor
+        owned_descriptor: 0
+        finally: lm_trans_descriptor_delete(owned_descriptor)
+        descriptor_is_new: 0
+        if: descriptor = 0
+            owned_descriptor: lm_trans_descriptor_new()
+            descriptor: owned_descriptor
+            if: descriptor = 0 || lm_trans_descriptor_mark_structural_fields(descriptor) != 0
+                return: 1
+            ---
+            descriptor\registry_materialized: 1
+            descriptor_is_new: 1
+        ---
+
+        if: descriptor_is_new = 0 && descriptor\registry_materialized = 0
+            class_index: class_index + 1U
+            continue
+        ---
+
+        if: lm_trans_namespace_materialize_class_descriptor_relations(namespace_, class_name, descriptor) != 0
+            return: 1
+
+        if: descriptor\has_structural_fields != 0 && descriptor\structural_fields != 0
+            if: class_rows_fields != 0
+                field_index: 0U
+                while: field_index < class_rows_fields\count
+                    field_row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(class_rows_fields, field_index))
+                    if: field_row != 0 && field_row\key != 0 && field_row\payload != 0
+                        field_name: lm_trans_text_from_cstr(field_row\key)
+                        if: field_name = 0
+                            return: 1
+                        finally: lm_trans_text_ref_destroy(@ field_name)
+
+                        if: lm_trans_namespace_materialize_class_descriptor_add_field(namespace_, class_name, descriptor, field_name, field_row, index_rows, address_depth_rows, const_rows, array_count_rows, "field.class", "field", 0) != 0
+                            return: 1
+                    ---
+                    field_index: field_index + 1U
+                ---
+            ---
+
+            if: union_rows_fields != 0
+                field_index: 0U
+                while: field_index < union_rows_fields\count
+                    field_row: (cast: (LmTransRegistryFact) lm_own_ptr_stack_at(union_rows_fields, field_index))
+                    if: field_row != 0 && field_row\key != 0 && field_row\payload != 0
+                        field_name: lm_trans_text_from_cstr(field_row\key)
+                        if: field_name = 0
+                            return: 1
+                        finally: lm_trans_text_ref_destroy(@ field_name)
+
+                        if: lm_trans_namespace_materialize_class_descriptor_add_field(namespace_, class_name, descriptor, field_name, field_row, index_rows, address_depth_rows, const_rows, array_count_rows, "field.union", "union", 1) != 0
+                            return: 1
+                    ---
+                    field_index: field_index + 1U
+                ---
+            ---
+        ---
+
+        if: descriptor_is_new != 0
+            if: lm_trans_namespace_attach_descriptor(namespace_, class_name, descriptor) != 0
+                return: 1
+            ---
+            descriptor: 0
+            owned_descriptor: 0
+        ---
+
+        class_index: class_index + 1U
+    ---
+return: 0
+
+fn: lm_trans_namespace_materialize_registry_receivers (LmTransNamespace: namespace_) int
+    LmP0Text: table_name
+    const: LmOwnPtrStack: direct_rows
+    const: LmOwnPtrStack: wide_rows
+    int: private_registry
+
+    if: namespace_ = 0
+        return: 1
+
+    table_name: lm_trans_text_from_cstr("namespace")
+    if: table_name = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ table_name)
+
+    direct_rows: lm_trans_namespace_registry_relation_stack(namespace_, table_name, "row")
+    wide_rows: lm_trans_namespace_registry_relation_stack(namespace_, table_name, "receiver.type")
+    if: direct_rows = 0 && wide_rows = 0
+        return: 0
+    private_registry: namespace_\registry_identifiers != 0 && (c.lm_trans_registry = 0 || namespace_\registry_identifiers != c.lm_trans_registry->identifiers)
+    if: private_registry = 0 && lm_trans_registry_view_parity_enabled() != 0
+        if: lm_trans_namespace_materialize_registry_receiver_source_path(namespace_, direct_rows, "namespace", lm_trans_registry_view_is_selected()) != 0
+            return: 1
+        if: lm_trans_namespace_materialize_registry_receiver_source_path(namespace_, wide_rows, "namespace.receiver.type", lm_trans_registry_view_is_selected()) != 0
+            return: 1
+        if: lm_trans_registry_view_is_selected() != 0
+            return: lm_trans_namespace_declare_visible_symbol_if_missing(namespace_, "@", "receiver.statement")
+    ---
+    if: lm_trans_namespace_materialize_registry_receiver_facade_rows(namespace_, direct_rows, "namespace") != 0
+        return: 1
+    if: lm_trans_namespace_materialize_registry_receiver_facade_rows(namespace_, wide_rows, "namespace.receiver.type") != 0
+        return: 1
+return: lm_trans_namespace_declare_visible_symbol_if_missing(namespace_, "@", "receiver.statement")
+
+fn: lm_trans_namespace_materialize_registry_heads (LmTransNamespace: namespace_) int
+    if: lm_trans_namespace_materialize_registry_receivers(namespace_) != 0
+        return: 1
+    if: lm_trans_declare_registry_fn_descriptors(namespace_) != 0
+        return: 1
+
+    return: lm_trans_namespace_materialize_class_descriptors(namespace_)
+
+fn: lm_trans_namespace_attach_registry (LmTransNamespace: namespace_) int
+    if: namespace_ = 0 || lm_trans_registry = 0 || lm_trans_registry\view = 0
+        return: 1
+    namespace_\registry_identifiers: lm_trans_registry\identifiers
+    namespace_\registry_view: lm_trans_registry\view
+return: lm_trans_namespace_materialize_registry_heads(namespace_)
+
+fn: lm_trans_namespace_declare_c_name (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind); const: (LmP0Text: c_name)) int
+return: lm_trans_namespace_declare_with_c_name(namespace_, name, kind, c_name)
+
+fn: lm_trans_namespace_declare_relation_text (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char relation_name); const: (LmP0Text: payload)) int
+    LmTransSymbol: symbol
+
+    if: namespace_ = 0 || name = 0 || relation_name = 0 || payload = 0
+        return: 1
+
+    symbol: lm_trans_symbol_new(name, relation_name, namespace_\depth)
+    if: symbol = 0
+        return: 1
+    if: lm_trans_symbol_set_c_name(symbol, payload) != 0
+        lm_trans_symbol_destroy(symbol)
+        return: 1
+    if: namespace_\items = 0 || lm_own_ptr_stack_push(namespace_\items, symbol) != 0
+        lm_trans_symbol_destroy(symbol)
+        return: 1
+    if: lm_trans_identifier_table_add_relation_symbol(namespace_\identifiers, symbol) != 0
+        symbol: lm_own_ptr_stack_pop(namespace_\items)
+        lm_trans_symbol_destroy(symbol)
+        return: 1
+return: 0
+
+fn: lm_trans_namespace_set_env_arg (LmTransNamespace: namespace_; const: (LmP0Text: name); const: (LmP0Text: env_arg)) int
+    LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0
+        return: 1
+return: lm_trans_symbol_set_env_arg(symbol, env_arg)
+
+fn: lm_trans_namespace_set_closure_call_name (LmTransNamespace: namespace_; const: (LmP0Text: name); const: (LmP0Text: closure_call_name)) int
+    LmTransSymbol: symbol
+
+    symbol: lm_trans_namespace_find_mutable(namespace_, name)
+    if: symbol = 0
+        return: 1
+return: lm_trans_symbol_set_closure_call_name(symbol, closure_call_name)
+
+fn: lm_trans_symbol_copy_signature (LmTransSymbol: target; const: (LmTransSymbol: source)) int
+    size_t: i
+    const: LmP0Text: source_name
+    LmP0Text: copy
+
+    if: target = 0 || source = 0
+        return: 1
+
+    if: target\param_names = 0
+        target\param_names: lm_trans_ptr_stack_new(lm_trans_text_ref_delete_any)
+        if: target\param_names = 0
+            return: 1
+        ---
+    else:
+        lm_own_ptr_stack_destroy(target\param_names)
+        lm_own_ptr_stack_init(target\param_names, lm_trans_text_ref_delete_any)
+    if: source\param_names = 0
+        return: 0
+    i: 0U
+    while: i < source\param_names\count
+        source_name: lm_own_ptr_stack_at(source\param_names, i)
+        if: source_name = 0
+            return: 1
+        copy: lm_trans_text_ref_new(source_name)
+        if: copy = 0
+            return: 1
+        if: lm_own_ptr_stack_push(target\param_names, copy) != 0
+            lm_trans_text_ref_delete_any(copy)
+            return: 1
+        i: i + 1U
+    ---
+    target\has_signature: source\has_signature
+    target\callable_params_node: source\callable_params_node
+    target\callable_return_node: source\callable_return_node
+    target\has_callable_shape: source\has_callable_shape
+    target\callable_returns_value: source\callable_returns_value
+    target\callable_is_struct_return: source\callable_is_struct_return
+    target\callable_is_external: source\callable_is_external
+    target\callable_has_thread_context: source\callable_has_thread_context
+    target\callable_is_thread_handler: source\callable_is_thread_handler
+    target\callable_throws_node: source\callable_throws_node
+    target\callable_frame: source\callable_frame
+return: 0
+
+fn: lm_trans_namespace_declare_compatible (LmTransNamespace: namespace_; const: (LmP0Text: name); const: @(char kind)) int
+    const: LmTransSymbol: existing
+
+    existing: lm_trans_namespace_find(namespace_, name)
+    if: existing != 0
+        if: lm_trans_symbol_is(existing, kind)
+            return: 0
+    ---
+
+return: lm_trans_namespace_declare(namespace_, name, kind)
+
+fn: lm_trans_class_c_projection (const: (LmP0Text: name)) const: @: char
+    if: name = 0
+        return: 0
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, name, "class.c.projection", "class", "class", "spelling", "char")
+
+fn: lm_trans_class_c_spelling (const: (LmP0Text: name)) const: @: char
+    const: @: char spelling
+
+    if: name = 0
+        return: 0
+    spelling: lm_trans_class_c_projection(name)
+    if: spelling != 0
+        return: spelling
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, name, "class.spelling", "class", "class", "spelling", "char")
+
+fn: lm_trans_class_c_tail_value (const: (LmP0Text: name)) const: @: char
+    if: name = 0
+        return: 0
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(0, name, "class.cTail", "class", "class", "spelling", "char")
+
+fn: lm_trans_class_is_reference_base (const: (LmP0Text: name)) int
+return: lm_trans_namespace_class_is_reference_base(0, name)
+
+fn: lm_trans_builtin_c_type_tail (const: (LmP0Text: name)) int
+    if: name = 0
+        return: 0
+    if: lm_trans_class_is_reference_base(name)
+        return: 0
+return: lm_trans_class_c_spelling(name) != 0 || lm_trans_class_c_tail_value(name) != 0
+
+fn: lm_trans_builtin_c_type_name (const: (LmP0Text: name)) int
+    LmP0Text: tail
+    int: result
+
+    if: name = 0
+        return: 0
+    if: lm_trans_text_starts_with(name, "c.") && name\length > 2U
+        tail: lm_trans_text_ref_tail_new(name, 2U)
+        if: tail = 0
+            return: 0
+        result: lm_trans_builtin_c_type_tail(tail)
+        lm_trans_text_ref_destroy(@ tail)
+        return: result
+
+return: lm_trans_builtin_c_type_tail(name)
+
+fn: lm_trans_emit_name (FILE: file; const: (LmP0Text: name)) int
+    const: @: char spelling
+    LmP0Text: tail
+    int: status
+
+    if: name = 0
+        return: 1
+    if: lm_trans_text_starts_with(name, "c.")
+        tail: lm_trans_text_ref_tail_new(name, 2U)
+        if: tail = 0
+            return: 1
+        spelling: lm_trans_class_c_spelling(tail)
+        if: spelling != 0
+            status: lm_trans_put(file, spelling)
+            lm_trans_text_ref_destroy(@ tail)
+            return: status
+        status: lm_trans_write_text(file, tail)
+        lm_trans_text_ref_destroy(@ tail)
+        return: status
+
+return: lm_trans_emit_identifier(file, name)
+
+fn: lm_trans_emit_type_name (FILE: file; const: (LmP0Text: name)) int
+    const: @: char spelling
+    LmP0Text: tail
+    int: status
+
+    if: name = 0
+        return: 1
+    if: lm_trans_text_starts_with(name, "c.") && name\length > 2U
+        tail: lm_trans_text_ref_tail_new(name, 2U)
+        if: tail = 0
+            return: 1
+        spelling: lm_trans_class_c_spelling(tail)
+        if: spelling != 0
+            status: lm_trans_put(file, spelling)
+            lm_trans_text_ref_destroy(@ tail)
+            return: status
+        status: lm_trans_write_text(file, tail)
+        lm_trans_text_ref_destroy(@ tail)
+        return: status
+
+    spelling: lm_trans_class_c_spelling(name)
+    if: spelling != 0
+        return: lm_trans_put(file, spelling)
+return: lm_trans_emit_identifier(file, name)
+
+fn: lm_trans_c_reference_has_path_dot (const: (LmP0Text: name)) int
+    size_t: i
+
+    if: lm_trans_is_c_reference_name(name) = 0
+        return: 0
+
+    i: 2U
+    while: i < name\length
+        if: name\data[i] = '.'
+            return: 1
+        i: i + 1U
+
+return: 0
+
+fn: lm_trans_node_is_c_reference_atom (const: (LmP0Node: node)) int
+return: node != 0 && node\kind = c.LM_P0_NODE_ATOM && lm_trans_is_c_reference_name(node\as\atom)

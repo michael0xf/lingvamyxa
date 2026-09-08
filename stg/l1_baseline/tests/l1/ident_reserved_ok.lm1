@@ -1,0 +1,8 @@
+external:
+    fn: main () int
+        int: C_value 1
+        int: L1State 2
+        int: _C 0
+        return: C_value + L1State + _C != 3
+    end: main
+end: external

@@ -1,0 +1,1098 @@
+table:
+    source
+    name: class
+    columns: (class: class) (class: kind)
+    rows:
+             c.struct                   descriptor
+             c.union                    descriptor
+             c.enum                     descriptor
+             function                   descriptor
+             procedure                  descriptor
+             functionPointer            descriptor
+             closure                    descriptor
+             callable                   descriptor
+             `callable.zero-arg.value`  descriptor
+             `callable.descriptor.value` descriptor
+             opaqueReference            class
+             FILE                       opaqueReference
+
+             emit                       relation
+             structure_value_alloc      relation
+             structure_value_fill       relation
+             receiver                   relation
+             dispatcher                 relation
+             argument                   relation
+             index                      relation
+             binding_table              relation
+             handler                    relation
+             materializer               relation
+             ansi_c                     relation
+             emitter                    relation
+             semantic                   class
+             range                      class
+             codec                      class
+             projection                 class
+             printfFormat               class
+             contextualLiteral          class
+
+             `class.spelling`           relation
+             `class.cTail`              relation
+             `printf.format`            relation
+             `printf.argument.class`    relation
+             `printf.conversion.rule.expected` relation
+             `printf.conversion.rule.profile` relation
+             `class.category.value`     relation
+             `class.category.numeric`   relation
+             `class.category.integer`   relation
+             `class.category.floating`  relation
+             `class.category.reference` relation
+             `class.category.opaque`    relation
+             `class.category.callable`  relation
+             `class.category.descriptor` relation
+             `class.category.fixedWidth` relation
+             `class.category.profileWidth` relation
+             `class.semantic`           relation
+             `class.range`              relation
+             `class.c.projection`       relation
+             `core.c.include`           relation
+             `None.cell`                relation
+             `serialization.codec`      relation
+             `contextual.literal.value` relation
+             `None.value`               relation
+             `OK.value`                 relation
+             `false.value`              relation
+             `true.value`               relation
+             `callable.projection`      relation
+             `c99.ub.policy`            relation
+             `profile.validator`        relation
+             `class.reference-base`      relation
+             `class.receiver`           relation
+             `receiver.type`            relation
+             `receiver.substrate`       relation
+             `receiver.level`           relation
+             `receiver.l3.exclude`      relation
+             `receiver.function`        relation
+             `receiver.statement`       relation
+             `receiver.atom.statement`  relation
+             `receiver.expr`            relation
+             `receiver.modifier`        relation
+             `receiver.trailer`         relation
+             `receiver.formal-param.unwrap` relation
+             `fn.receiver`             relation
+             `fn.external`             relation
+             `define.value`             relation
+             `namespace.l4.payload`     relation
+             `prelude.sequence`         relation
+             `receiver.positional-name` relation
+             expr_spelling_binding      relation
+             expr_emitter_binding       relation
+             `call.lowering`            relation
+             `materialize.argument`     relation
+             `callable.partial`         relation
+             `callable.capture`         relation
+             `callable.partial.form`    relation
+             method                     relation
+             `requires.method`          relation
+             `cast.target`              relation
+             `operator.prefix`          relation
+             `operator.postfix`         relation
+             `operator.infix`           relation
+             `operator.index`           relation
+             `expr.atom`                relation
+
+             `operator.prefix.ansi_c`   relation
+             `operator.postfix.ansi_c`  relation
+             `operator.infix.ansi_c`    relation
+             `operator.index.ansi_c`    relation
+             `expr.atom.ansi_c`         relation
+             `operator.prefix.emitter`  relation
+             `operator.postfix.emitter` relation
+             `operator.infix.emitter`   relation
+             `operator.index.emitter`   relation
+             `expr.atom.emitter`        relation
+
+             `column.table`             relation
+             `column.name`              relation
+             `column.index`             relation
+             `column.descriptor.count`  relation
+             `column.descriptor`        relation
+
+             ubPattern                  class
+             validatorPolicy            class
+             profileRule                class
+             decimal                    literal
+             boolean                    literal
+             serial                     decimal
+             diagnostic                 validatorPolicy
+             checked                    validatorPolicy
+             `profile-defined`          validatorPolicy
+             `c99.null-dereference`     ubPattern
+             `c99.signed-overflow`      ubPattern
+             `c99.shift-count-range`    ubPattern
+             `c99.format-mismatch`      ubPattern
+             `c99.invalid-pointer-cast` ubPattern
+             None                       contextualLiteral
+             OK                         contextualLiteral
+             false                      contextualLiteral
+             true                       contextualLiteral
+             `%d`                       printfFormat
+             `%i`                       printfFormat
+             `%u`                       printfFormat
+             `%o`                       printfFormat
+             `%x`                       printfFormat
+             `%X`                       printfFormat
+             `%ld`                      printfFormat
+             `%li`                      printfFormat
+             `%lu`                      printfFormat
+             `%lo`                      printfFormat
+             `%lx`                      printfFormat
+             `%lX`                      printfFormat
+             `%zu`                      printfFormat
+             `%zo`                      printfFormat
+             `%zx`                      printfFormat
+             `%zX`                      printfFormat
+             `%c`                       printfFormat
+             `%s`                       printfFormat
+             `%f`                       printfFormat
+             `%F`                       printfFormat
+             `%e`                       printfFormat
+             `%E`                       printfFormat
+             `%g`                       printfFormat
+             `%G`                       printfFormat
+             `%a`                       printfFormat
+             `%A`                       printfFormat
+             int8                      primitive
+             Boolean                   primitive
+end: class
+
+table:
+    source
+    name: `class.category`
+    columns: (class: class) (categoryFlag: value)  (categoryFlag: numeric)  (categoryFlag: integer)  (categoryFlag: floating)  (categoryFlag: reference)  (categoryFlag: opaque)  (categoryFlag: callable)  (categoryFlag: descriptor)  (categoryFlag: fixedWidth)  (categoryFlag: profileWidth)
+    rows:
+             int              1              1                1                0                 0                 0               0                0                  0                  1
+             u32              1              1                1                0                 0                 0               0                0                  1                  0
+             uint8            1              1                1                0                 0                 0               0                0                  1                  0
+             int8             1              1                1                0                 0                 0               0                0                  1                  0
+             Boolean          1              0                0                0                 0                 0               0                0                  1                  0
+             double           1              1                0                1                 0                 0               0                0                  0                  0
+             FILE             1              0                0                0                 1                 1               0                0                  0                  0
+             functionPointer  0              0                0                0                 1                 0               1                1                  0                  0
+             closure          0              0                0                0                 1                 0               1                1                  0                  0
+end: `class.category`
+
+table:
+    source
+    name: `class.semantic`
+    columns: (class: class) (@: char value)
+    rows:
+             void      none
+             char      integer
+             short     integer
+             int       integer
+             long      integer
+             float     floating
+             double    floating
+             signed    integer
+             unsigned  integer
+             uchar     integer
+             ulong     integer
+             size_t    count
+             categoryFlag flag
+             uint8     integer
+             int8      integer
+             Boolean   flag
+             u8        integer
+             u16       integer
+             u32       integer
+             u64       integer
+             i8        integer
+             i16       integer
+             i32       integer
+             i64       integer
+             FILE      opaqueHandle
+end: `class.semantic`
+
+table:
+    source
+    name: `class.range`
+    columns: (class: class) (@: char value)
+    rows:
+             char      "C99-char(profile)"
+             short     "C99-short(profile)"
+             int       "C99-int(profile)"
+             long      "C99-long(profile)"
+             float     "C99-float(profile)"
+             double    "C99-double(profile)"
+             signed    "C99-signed-int(profile)"
+             unsigned  "C99-unsigned-int(profile)"
+             uchar     "0..UCHAR_MAX(profile)"
+             ulong     "0..ULONG_MAX(profile)"
+             size_t    "0..SIZE_MAX(profile)"
+             categoryFlag "0..1"
+             uint8     "0..UINT8_MAX"
+             int8      "INT8_MIN..INT8_MAX"
+             Boolean   "-1..1"
+             u8        "0..UINT8_MAX"
+             u16       "0..UINT16_MAX"
+             u32       "0..UINT32_MAX"
+             u64       "0..UINT64_MAX"
+             i8        "INT8_MIN..INT8_MAX"
+             i16       "INT16_MIN..INT16_MAX"
+             i32       "INT32_MIN..INT32_MAX"
+             i64       "INT64_MIN..INT64_MAX"
+             FILE      opaque
+end: `class.range`
+
+table:
+    source
+    name: `class.spelling`
+    columns: (class: class) (@: char spelling)
+    rows:
+             categoryFlag uint8_t
+             uint8  uint8_t
+             int8   int8_t
+             Boolean int8_t
+             u8     uint8_t
+             u16    uint16_t
+             u32    uint32_t
+             u64    uint64_t
+             i8     int8_t
+             i16    int16_t
+             i32    int32_t
+             i64    int64_t
+             uchar  "unsigned char"
+             ulong  "unsigned long"
+end: `class.spelling`
+
+table:
+    source
+    name: `printf.format`
+    columns: (class: class) (@: char spelling)
+    rows:
+             int       "%d"
+             unsigned  "%u"
+             long      "%ld"
+             ulong     "%lu"
+             size_t    "%zu"
+             u64       PRIu64
+             i64       PRId64
+end: `printf.format`
+
+table:
+    source
+    name: `printf.argument.class`
+    columns: (class: class) (class: value)
+    rows:
+             `%d`   int
+             `%i`   int
+             `%u`   unsigned
+             `%o`   unsigned
+             `%x`   unsigned
+             `%X`   unsigned
+             `%ld`  long
+             `%li`  long
+             `%lu`  ulong
+             `%lo`  ulong
+             `%lx`  ulong
+             `%lX`  ulong
+             `%zu`  size_t
+             `%zo`  size_t
+             `%zx`  size_t
+             `%zX`  size_t
+             `%c`   int
+             `%s`   char
+             `%f`   double
+             `%F`   double
+             `%e`   double
+             `%E`   double
+             `%g`   double
+             `%G`   double
+             `%a`   double
+             `%A`   double
+end: `printf.argument.class`
+
+table:
+    source
+    name: `printf.conversion.rule`
+    columns: (class: class) (class: expected)  (profileRule: profile)
+    rows:
+             `%d`   int       `c99.format-mismatch`
+             `%i`   int       `c99.format-mismatch`
+             `%u`   unsigned  `c99.format-mismatch`
+             `%o`   unsigned  `c99.format-mismatch`
+             `%x`   unsigned  `c99.format-mismatch`
+             `%X`   unsigned  `c99.format-mismatch`
+             `%ld`  long      `c99.format-mismatch`
+             `%li`  long      `c99.format-mismatch`
+             `%lu`  ulong     `c99.format-mismatch`
+             `%lo`  ulong     `c99.format-mismatch`
+             `%lx`  ulong     `c99.format-mismatch`
+             `%lX`  ulong     `c99.format-mismatch`
+             `%zu`  size_t    `c99.format-mismatch`
+             `%zo`  size_t    `c99.format-mismatch`
+             `%zx`  size_t    `c99.format-mismatch`
+             `%zX`  size_t    `c99.format-mismatch`
+             `%c`   int       `c99.format-mismatch`
+             `%s`   char      `c99.format-mismatch`
+             `%f`   double    `c99.format-mismatch`
+             `%F`   double    `c99.format-mismatch`
+             `%e`   double    `c99.format-mismatch`
+             `%E`   double    `c99.format-mismatch`
+             `%g`   double    `c99.format-mismatch`
+             `%G`   double    `c99.format-mismatch`
+             `%a`   double    `c99.format-mismatch`
+             `%A`   double    `c99.format-mismatch`
+end: `printf.conversion.rule`
+
+table:
+    source
+    name: `class.c.projection`
+    columns: (class: class) (@: char spelling)
+    rows:
+             void      void
+             char      char
+             short     short
+             int       int
+             long      long
+             float     float
+             double    double
+             signed    signed
+             unsigned  unsigned
+             uchar     "unsigned char"
+             ulong     "unsigned long"
+             size_t    size_t
+             FILE      FILE
+             categoryFlag uint8_t
+             uint8     uint8_t
+             int8      int8_t
+             Boolean   int8_t
+             u8        uint8_t
+             u16       uint16_t
+             u32       uint32_t
+             u64       uint64_t
+             i8        int8_t
+             i16       int16_t
+             i32       int32_t
+             i64       int64_t
+end: `class.c.projection`
+
+table:
+    source
+    name: `core.c.include`
+    columns: (class: class) (@: char target)
+    rows:
+             core_stddef   "<stddef.h>"
+             core_stdint   "<stdint.h>"
+             core_inttypes "<inttypes.h>"
+             core_stdio    "<stdio.h>"
+             core_stdlib   "<stdlib.h>"
+             core_setjmp   "<setjmp.h>"
+end: `core.c.include`
+
+table:
+    source
+    name: `serialization.codec`
+    columns: (class: class) (@: char codec)
+    rows:
+             char      lmx.char
+             short     lmx.decimal-atom
+             int       lmx.decimal-atom
+             long      lmx.decimal-atom
+             float     lmx.decimal-atom
+             double    lmx.decimal-atom
+             signed    lmx.decimal-atom
+             unsigned  lmx.decimal-atom
+             uchar     lmx.decimal-atom
+             ulong     lmx.decimal-atom
+             size_t    lmx.decimal-atom
+             categoryFlag lmx.decimal-atom
+             uint8     lmx.decimal-atom
+             int8      lmx.decimal-atom
+             Boolean   lmx.decimal-atom
+             u8        lmx.decimal-atom
+             u16       lmx.decimal-atom
+             u32       lmx.decimal-atom
+             u64       lmx.decimal-atom
+             i8        lmx.decimal-atom
+             i16       lmx.decimal-atom
+             i32       lmx.decimal-atom
+             i64       lmx.decimal-atom
+             FILE      lmx.opaque-handle
+end: `serialization.codec`
+
+table:
+    source
+    name: int8
+    columns: (class: class) (int8: `context literal`)
+    rows:
+end: int8
+
+join: (int8) Boolean
+    source
+    columns: (class: class) (int8: `context literal`)
+    rows:
+             None    -1
+             false   0
+             true    1
+             OK      1
+end: Boolean
+
+table:
+    source
+    name: `contextual.literal.value`
+    columns: (class: class) (relation: value)
+    rows:
+             None    `None.value`
+             OK      `OK.value`
+             false   `false.value`
+             true    `true.value`
+end: `contextual.literal.value`
+
+table:
+    source
+    name: `None.value`
+    columns: (class: class) (@: char value)
+    rows:
+             int              0
+             u32              0
+             uint8            0
+             int8             0
+             Boolean          -1
+             categoryFlag     0
+             double           0
+             FILE             0
+             functionPointer  0
+             closure          0
+end: `None.value`
+
+table:
+    source
+    name: `OK.value`
+    columns: (class: class) (@: char value)
+    rows:
+             int              1
+             u32              1
+             uint8            1
+             int8             1
+             Boolean          1
+             categoryFlag     1
+             double           1
+end: `OK.value`
+
+table:
+    source
+    name: `false.value`
+    columns: (class: class) (@: char value)
+    rows:
+             Boolean          0
+             int8             0
+end: `false.value`
+
+table:
+    source
+    name: `true.value`
+    columns: (class: class) (@: char value)
+    rows:
+             Boolean          1
+             int8             1
+end: `true.value`
+
+table:
+    source
+    name: `callable.projection`
+    columns: (class: class) (projection: value)
+    rows:
+             fn                         c.function-symbol
+             function                   c.function-symbol
+             sub                        c.procedure-symbol
+             procedure                  c.procedure-symbol
+             functionPointerType        c.function-pointer
+             functionPointer            c.function-pointer
+             callableDescriptor         lmx.callable-descriptor
+             closureType                c.closure-struct
+             closure                    c.closure-struct
+             `callable.zero-arg.value`  lmx.callable-value
+             `callable.descriptor.value` lmx.callable-value
+end: `callable.projection`
+
+table:
+    source
+    name: `c99.ub.policy`
+    columns: (class: class) (class: policy)
+    rows:
+             `c99.null-dereference`     diagnostic
+             `c99.signed-overflow`      `profile-defined`
+             `c99.shift-count-range`    diagnostic
+             `c99.format-mismatch`      diagnostic
+             `c99.invalid-pointer-cast` diagnostic
+end: `c99.ub.policy`
+
+table:
+    source
+    name: `profile.validator`
+    columns: (class: class) (@: char binding)
+    rows:
+             `c99.format-mismatch`  lm_trans_validate_c_printf_call
+end: `profile.validator`
+
+table:
+    source
+    name: `class.cTail`
+    columns: (class: class) (@: char spelling)
+    rows:
+             void      void
+             char      char
+             short     short
+             int       int
+             long      long
+             float     float
+             double    double
+             signed    signed
+             unsigned  unsigned
+             size_t    size_t
+             FILE      FILE
+end: `class.cTail`
+
+table:
+    source
+    name: `class.reference-base`
+    columns: (class: class) (int: value)
+    rows:
+             FILE   1
+end: `class.reference-base`
+
+table:
+    source
+    name: `class.receiver`
+    columns: (class: class) (binding: emit)                     (binding: structure_value_alloc)                     (binding: structure_value_fill)
+    rows:
+             `[]`   lm_trans_type_receiver_array_emit  lm_trans_type_receiver_array_structure_value_alloc  lm_trans_type_receiver_array_structure_value_fill
+end: `class.receiver`
+
+table:
+    source
+    name: `receiver.function`
+    columns: (class: class) (binding: receiver)
+    rows:
+             fn     lm_trans_receiver_fn
+             callable lm_trans_receiver_callable
+             fm     lm_trans_receiver_fm
+             sub    lm_trans_receiver_sub
+             thread lm_trans_receiver_thread
+end: `receiver.function`
+
+table:
+    source
+    name: namespace
+    columns: (class: class) (class: `receiver.type`)
+    rows:
+             L1            `receiver.substrate`
+             L2            `receiver.level`
+             L3            `receiver.level`
+             fn            `receiver.function`
+             callable      `receiver.function`
+             fm            `receiver.function`
+             sub           `receiver.function`
+             thread        `receiver.function`
+             table         `receiver.statement`
+             if            `receiver.statement`
+             else          `receiver.statement`
+             while         `receiver.statement`
+             for           `receiver.statement`
+             throws        `receiver.statement`
+             throw         `receiver.statement`
+             catch         `receiver.statement`
+             `return`      `receiver.statement`
+             stop          `receiver.statement`
+             exit          `receiver.statement`
+             send          `receiver.statement`
+             break         `receiver.statement`
+             continue      `receiver.statement`
+             synchronized  `receiver.statement`
+             finally       `receiver.statement`
+             assert        `receiver.statement`
+             include       `receiver.statement`
+             define        `receiver.statement`
+             `ifndef-default` `receiver.statement`
+             import        `receiver.statement`
+             predef        `receiver.statement`
+             join          `receiver.statement`
+             merge         `receiver.statement`
+             os            `receiver.statement`
+             ifdef         `receiver.statement`
+             guard         `receiver.statement`
+             extern_c      `receiver.statement`
+             None          `receiver.statement`
+             OK            `receiver.statement`
+             false         `receiver.statement`
+             true          `receiver.statement`
+             const         `receiver.statement`
+             `()`          `receiver.statement`
+             `[]`          `receiver.statement`
+             c.array       `receiver.statement`
+             c.struct      `receiver.statement`
+             c.union       `receiver.statement`
+             c.enum        `receiver.statement`
+             external      `receiver.modifier`
+             `end`         `receiver.trailer`
+             `until`       `receiver.trailer`
+end: namespace
+
+table:
+    source
+    name: `receiver.type`
+    columns: (class: class) (binding: dispatcher)
+    rows:
+             `receiver.substrate`  lm_trans_dispatch_substrate_receiver
+             `receiver.level`      lm_trans_dispatch_level_receiver
+             `receiver.function`   lm_trans_dispatch_function_receiver
+             `receiver.statement`  lm_trans_dispatch_statement_receiver
+             `receiver.modifier`   lm_trans_dispatch_modifier_receiver
+             `receiver.trailer`    lm_trans_dispatch_trailer_receiver
+end: `receiver.type`
+
+table:
+    source
+    name: `receiver.substrate`
+    columns: (class: class) (binding: receiver)
+    rows:
+             L1     lm_trans_emit_l1_frame
+end: `receiver.substrate`
+
+table:
+    source
+    name: `receiver.level`
+    columns: (class: class) (binding: receiver)
+    rows:
+             L2     lm_trans_emit_l2_frame
+             L3     lm_trans_emit_l3_frame
+end: `receiver.level`
+
+table:
+    source
+    name: `receiver.l3.exclude`
+    columns: (class: class) (int: value)
+    rows:
+             c.array 1
+             c.struct 1
+             c.union 1
+             c.enum 1
+             include 1
+             define 1
+             `ifndef-default` 1
+             os 1
+             ifdef 1
+             guard 1
+             extern_c 1
+end: `receiver.l3.exclude`
+
+table:
+    source
+    name: `receiver.statement`
+    columns: (class: class) (binding: receiver)
+    rows:
+             table         lm_trans_statement_emit_table
+             if            lm_trans_statement_emit_if
+             else          lm_trans_statement_emit_else
+             while         lm_trans_statement_emit_while
+             for           lm_trans_statement_emit_for
+             throws        lm_trans_statement_emit_throws
+             throw         lm_trans_statement_emit_throw
+             catch         lm_trans_statement_emit_catch
+             `return`      lm_trans_statement_emit_return
+             stop          lm_trans_statement_emit_stop
+             exit          lm_trans_statement_emit_exit
+             send          lm_trans_statement_emit_send
+             break         lm_trans_statement_emit_loop_jump
+             continue      lm_trans_statement_emit_loop_jump
+             synchronized  lm_trans_statement_emit_synchronized
+             finally       lm_trans_statement_emit_finally
+             assert        lm_trans_statement_emit_assert
+             include       lm_trans_statement_emit_include_prelude
+             define        lm_trans_statement_emit_define_prelude
+             `ifndef-default` lm_trans_statement_emit_ifndef_default_prelude
+             import        lm_trans_statement_emit_import
+             predef        lm_trans_statement_emit_predef
+             join          lm_trans_statement_emit_join
+             merge         lm_trans_statement_emit_merge_named_structure
+             os            lm_trans_statement_emit_os_prelude
+             ifdef         lm_trans_statement_emit_ifdef_prelude
+             guard         lm_trans_statement_emit_guard_prelude
+             extern_c      lm_trans_statement_emit_extern_c_prelude
+             None          lm_trans_statement_emit_contextual_literal_assignment
+             OK            lm_trans_statement_emit_contextual_literal_assignment
+             false         lm_trans_statement_emit_contextual_literal_assignment
+             true          lm_trans_statement_emit_contextual_literal_assignment
+             const         lm_trans_statement_emit_const_declaration
+             `()`          lm_trans_statement_emit_structure_declaration
+             `[]`          lm_trans_statement_emit_array_declaration
+             c.array       lm_trans_statement_emit_c_array_declaration
+             c.struct      lm_trans_statement_emit_c_tagged_declaration
+             c.union       lm_trans_statement_emit_c_tagged_declaration
+             c.enum        lm_trans_statement_emit_c_tagged_declaration
+end: `receiver.statement`
+
+table:
+    source
+    name: `receiver.expr`
+    columns: (class: class) (binding: receiver)
+    rows:
+             cast   lm_trans_expr_emit_cast_frame
+             implements lm_trans_expr_emit_implements_frame
+             copy   lm_trans_expr_emit_copy_frame
+end: `receiver.expr`
+
+table:
+    source
+    name: `namespace.l4.payload`
+    columns: (class: class) (@: char L4)
+    rows:
+             import  `l4.payload`
+             L2      `l4.payload`
+             L3      `l4.payload`
+end: `namespace.l4.payload`
+
+table:
+    source
+    name: `receiver.atom.statement`
+    columns: (class: class) (binding: receiver)
+    rows:
+             include          lm_trans_atom_statement_emit_include_prelude
+             define           lm_trans_atom_statement_emit_define_prelude
+             os               lm_trans_atom_statement_emit_os_prelude
+             ifdef            lm_trans_atom_statement_emit_ifdef_prelude
+             fn               lm_trans_atom_statement_emit_fn_prelude
+             layout           lm_trans_atom_statement_emit_layout_prelude
+             constant         lm_trans_atom_statement_emit_constant_prelude
+             alias            lm_trans_atom_statement_emit_alias_prelude
+             forward          lm_trans_atom_statement_emit_forward_prelude
+             prototype        lm_trans_atom_statement_emit_prototype_prelude
+             guard            lm_trans_atom_statement_emit_guard_prelude
+             extern_c         lm_trans_atom_statement_emit_extern_c_prelude
+             unit             lm_trans_atom_statement_emit_unit_prelude
+end: `receiver.atom.statement`
+
+table:
+    source
+    name: `loadHeaders.item`
+    columns: (class: class) (size_t: index)
+    rows:
+             include    0
+             define     1
+             os         2
+             ifdef      3
+             forward    4
+             alias      5
+             constant   6
+             layout     7
+             fn         8
+             prototype  9
+             unit       10
+end: `loadHeaders.item`
+
+table:
+    source
+    name: `receiver.positional-name`
+    columns: (class: class) (class: argument)  (size_t: index)
+    rows:
+             fn            name              0
+             fm            name              0
+             sub           name              0
+             thread        name              0
+             synchronized  name              0
+             `()`          name              0
+             `@`           name              1
+             `[]`          name              1
+             entry         name              0
+end: `receiver.positional-name`
+
+table:
+    source
+    name: `receiver.formal-param.unwrap`
+    columns: (class: class) (size_t: index)
+    rows:
+             const  0
+end: `receiver.formal-param.unwrap`
+
+table:
+    source
+    name: `receiver.modifier`
+    columns: (class: class) (binding: receiver)
+    rows:
+             external  lm_trans_top_level_function_header
+end: `receiver.modifier`
+
+table:
+    source
+    name: `receiver.trailer`
+    columns: (class: class) (binding: receiver)
+    rows:
+             `end`  lm_trans_validate_end_trailer
+             `until`  lm_trans_validate_end_trailer
+end: `receiver.trailer`
+
+table:
+    source
+    name: `call.lowering`
+    columns: (class: class) (binding: handler)
+    rows:
+             function  lm_trans_call_lower_value
+             callable  lm_trans_call_lower_statement
+end: `call.lowering`
+
+table:
+    source
+    name: `materialize.argument`
+    columns: (class: class) (binding: materializer)
+    rows:
+             `callable.zero-arg.value`  lm_trans_materialize_zero_arg_callable
+             `callable.descriptor.value` lm_trans_materialize_callable_descriptor_value
+             `array.value`              lm_trans_materialize_array_value
+end: `materialize.argument`
+
+table:
+    source
+    name: `callable.partial.form`
+    columns: (class: class) (binding: materializer)
+    rows:
+             `call-frame` lm_trans_materialize_call_frame_partial
+             partial      lm_trans_materialize_partial_callable
+end: `callable.partial.form`
+
+table:
+    source
+    name: `cast.target`
+    columns: (class: class) (int: value)
+    rows:
+             char                     1
+             uchar                    1
+             short                    1
+             int                      1
+             signed                   1
+             unsigned                 1
+             long                     1
+             ulong                    1
+             float                    1
+             double                   1
+             size_t                   1
+             FILE                     1
+             categoryFlag             1
+             uint8                    1
+             int8                     1
+             Boolean                  1
+             u8                       1
+             u16                      1
+             u32                      1
+             u64                      1
+             i8                       1
+             i16                      1
+             i32                      1
+             i64                      1
+             void                     1
+             LmOwnAllocationDescriptor 1
+             LmOwnArena               1
+             LmOwnDelete              1
+             LmOwnDestroyFields       1
+             LmOwnLazyEdge            1
+             LmOwnPtrStack            1
+             LmOwnValueStack          1
+             LmRegistrySourceColumn               1
+             LmRegistrySourceLoader               1
+             LmP0DashFenceStatus      1
+             LmP0Diagnostic           1
+             LmP0DisabledState        1
+             LmP0Document             1
+             LmP0Dump                 1
+             LmP0DumpFrame            1
+             LmP0Field                1
+             LmP0FieldParseFlags      1
+             LmP0FieldParseLoopContinuation 1
+             LmP0FieldParseLoopFrame  1
+             LmP0FrameFlags           1
+             LmP0Frame                1
+             LmP0IndentStack          1
+             LmP0Node                 1
+             LmP0NodeAs               1
+             LmP0NodeFlags            1
+             LmP0NodeKind             1
+             LmP0PendingDelimiter     1
+             LmP0PendingMix           1
+             LmP0PostprocessFrame     1
+             LmP0Registry             1
+             LmP0Span                 1
+             LmP0Stack                1
+             LmP0StreamEvent          1
+             LmP0StreamEventKind      1
+             LmP0Structure            1
+             LmP0Text                 1
+             LmP0Trailer              1
+             LmP0TrailerFlags         1
+             LmP0TrailerRole          1
+             LmTransAbiParam          1
+             LmTransArrayStructureValueFillFrame 1
+             LmTransAtomStatementHandler 1
+             LmTransBinding           1
+             LmTransCallLowering      1
+             LmTransCallLoweringHandler 1
+             LmTransCallableProjectionCacheEntry 1
+             LmTransCapture           1
+             LmTransCDeclarator       1
+             LmTransCleanup           1
+             LmTransExprAtomEmitHandler 1
+             LmTransExprLoweredRange  1
+             LmTransExprAtomLowering  1
+             LmTransExprAtomStateHandler 1
+             LmTransExprCallArgsJob   1
+             LmTransExprFrameHandler  1
+             LmTransExprJob           1
+             LmTransExprJobDestroyHandler 1
+             LmTransExprJobHandler    1
+             LmTransExprPiece         1
+             LmTransExprPieceEmitHandler 1
+             LmTransExprRangeJob      1
+             LmTransExprSegment       1
+             LmTransExprSegmentMaterializer 1
+             LmTransExprStack         1
+             LmTransFormalParam       1
+             LmTransFormalParamList   1
+             LmTransFunctionEmitFrame 1
+             LmTransFunctionHeader    1
+             LmTransThreadDeclaration 1
+             LmTransFunctionHeaderReceiver 1
+             LmTransFunctionState     1
+             LmTransHeadBinding       1
+             LmTransHoistedFunction   1
+             LmTransIdentifierCard    1
+             LmTransIdentifierRelation 1
+             LmTransIdentifierTable   1
+             LmTransL4CallableType    1
+             LmTransL4PayloadFrameHandler 1
+             LmTransL4PayloadPointerBinding 1
+             LmTransLayoutField       1
+             LmTransLoop              1
+             LmTransCatchPad          1
+             LmTransNamespace         1
+             LmTransPointerBinding    1
+             LmTransRegistry          1
+             LmTransRegistryCloneFrame 1
+             LmTransRegistryFact      1
+             LmTransRegistryImportFrame 1
+             LmTransStatementFrameHandler 1
+             LmTransStatementFrameJob 1
+             LmTransStatementJob      1
+             LmTransStatementJobDestroyHandler 1
+             LmTransStatementJobHandler 1
+             LmTransStatementListJob  1
+             LmTransStatementLowering 1
+             LmTransStatementNodeJob  1
+             LmTransStatementStack    1
+             LmTransStatementTextJob  1
+             LmTransSymbol            1
+             LmTransStructReturnFieldValue 1
+             LmTransTopLevelDeclareHandler 1
+             LmTransTopLevelEmitHandler 1
+             LmTransTopLevelItem      1
+             LmTransTypedefProjectionEntry 1
+             LmTransTypedefProjectionOutput 1
+             LmTransTypedefProjectionPathStep 1
+             LmTransTypeEmitReceiver  1
+             LmTransTypePointerSuffix 1
+             LmTransTypeStructureValueAllocReceiver 1
+             LmTransTypeStructureValueFillReceiver 1
+end: `cast.target`
+
+table:
+    source
+    name: `operator.prefix`
+    columns: (class: class) (@: char ansi_c)  (binding: emitter)
+    rows:
+             `++`   "++"           lm_trans_expr_emit_operator
+             `--`   "--"           lm_trans_expr_emit_operator
+             `+`    "+"            lm_trans_expr_emit_operator
+             `-`    "-"            lm_trans_expr_emit_operator
+             `@`    "&"            lm_trans_expr_emit_operator
+             `\`    "*"            lm_trans_expr_emit_deref
+             `!`    "!"            lm_trans_expr_emit_operator
+             `~`    "~"            lm_trans_expr_emit_operator
+end: `operator.prefix`
+
+table:
+    source
+    name: `operator.postfix`
+    columns: (class: class) (@: char ansi_c)  (binding: emitter)
+    rows:
+             `++`   "++"           lm_trans_expr_emit_operator
+             `--`   "--"           lm_trans_expr_emit_operator
+end: `operator.postfix`
+
+table:
+    source
+    name: `operator.infix`
+    columns: (class: class) (@: char ansi_c)  (binding: emitter)
+    rows:
+             `+`    "+"            lm_trans_expr_emit_operator
+             `-`    "-"            lm_trans_expr_emit_operator
+             `*`    "*"            lm_trans_expr_emit_operator
+             `/`    "/"            lm_trans_expr_emit_operator
+             `%`    "%"            lm_trans_expr_emit_operator
+             `=`    "=="           lm_trans_expr_emit_operator
+             `!=`   "!="           lm_trans_expr_emit_operator
+             `<`    "<"            lm_trans_expr_emit_operator
+             `<=`   "<="           lm_trans_expr_emit_operator
+             `>`    ">"            lm_trans_expr_emit_operator
+             `>=`   ">="           lm_trans_expr_emit_operator
+             `&&`   "&&"           lm_trans_expr_emit_operator
+             `||`   "||"           lm_trans_expr_emit_operator
+             `&`    "&"            lm_trans_expr_emit_operator
+             `|`    "|"            lm_trans_expr_emit_operator
+             `^`    "^"            lm_trans_expr_emit_operator
+             `<<`   "<<"           lm_trans_expr_emit_operator
+             `>>`   ">>"           lm_trans_expr_emit_operator
+             `\`    "->"           lm_trans_expr_emit_pointer_follow
+end: `operator.infix`
+
+table:
+    source
+    name: `operator.index`
+    columns: (class: class) (@: char ansi_c)  (binding: emitter)
+    rows:
+             `[`    "["            lm_trans_expr_emit_operator
+             `]`    "]"            lm_trans_expr_emit_operator
+end: `operator.index`
+
+table:
+    source
+    name: `expr.atom`
+    columns: (class: class) (@: char ansi_c)  (binding: emitter)
+    rows:
+             `.`    "."            lm_trans_expr_emit_c_dot
+             None   "None"         lm_trans_expr_emit_contextual_literal
+             OK     "OK"           lm_trans_expr_emit_contextual_literal
+             false  "false"        lm_trans_expr_emit_contextual_literal
+             true   "true"         lm_trans_expr_emit_contextual_literal
+end: `expr.atom`
+
+table:
+    source
+    name: `expr_spelling_binding`
+    columns: (class: class) (class: binding_table)
+    rows:
+             `operator.prefix`   `operator.prefix.ansi_c`
+             `operator.postfix`  `operator.postfix.ansi_c`
+             `operator.infix`    `operator.infix.ansi_c`
+             `operator.index`    `operator.index.ansi_c`
+             `expr.atom`         `expr.atom.ansi_c`
+end: `expr_spelling_binding`
+
+table:
+    source
+    name: expr_emitter_binding
+    columns: (class: class) (class: binding_table)
+    rows:
+             `operator.prefix`   `operator.prefix.emitter`
+             `operator.postfix`  `operator.postfix.emitter`
+             `operator.infix`    `operator.infix.emitter`
+             `operator.index`    `operator.index.emitter`
+             `expr.atom`         `expr.atom.emitter`
+end: expr_emitter_binding

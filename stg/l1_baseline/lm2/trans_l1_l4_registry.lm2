@@ -1,0 +1,4459 @@
+fn: lm_trans_layout_backend_is_supported (const: @(char backend)) int
+return: backend != 0 && (c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, "c.named-struct") = 0 || c.strcmp(backend, "c.union") = 0 || c.strcmp(backend, "c.named-union") = 0)
+
+fn: lm_trans_layout_backend_value (const: (LmTransNamespace: namespace_); const: (LmP0Text: class_name)) const: @: char
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
+
+    if: class_name = 0
+        return: 0
+    view: lm_trans_namespace_registry_view(namespace_)
+    if: view != 0
+        view_row: lm_registry_view_lookup_text_slice(view, class_name\data, class_name\length, "layout.backend", 14U)
+        return: lm_trans_registry_layout_view_backend(namespace_, view_row)
+return: lm_trans_namespace_registry_source_n2_typed_value(namespace_, class_name, "layout.backend", "class", "class", "backend", "class")
+
+fn: lm_trans_namespace_layout_source_is_supported (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: class_name
+) int
+    const: @: char backend
+    const: @: char projection
+
+    if: class_name = 0
+        return: 0
+
+    backend: lm_trans_layout_backend_value(namespace_, class_name)
+    if: backend != 0
+        return: lm_trans_layout_backend_is_supported(backend)
+
+    projection: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, class_name, "class.c.projection", "class", "class", "spelling", "char")
+    if: projection != 0
+        return: lm_trans_layout_backend_is_supported(projection)
+
+return: lm_trans_namespace_has_named_structure_binding(namespace_, class_name)
+
+fn: lm_trans_fn_external_value (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: @: char
+    if: name = 0
+        return: 0
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "fn.external", "class", "class", "value", "int")
+
+fn: lm_trans_fn_is_external (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) int
+return: lm_trans_fn_external_value(namespace_, name) != 0
+
+fn: lm_trans_fn_receiver_value (const: (LmTransNamespace: namespace_); const: (LmP0Text: name)) const: @: char
+    if: name = 0
+        return: 0
+return: lm_trans_namespace_registry_source_path_n2_named_typed_value(namespace_, name, "fn.receiver", "class", "class", "value", "class")
+
+fn: lm_trans_l4_text_view_new (const: @(char text)) LmP0Text
+    if: text != 0
+        return: lm_trans_text_from_cstr(text)
+return: lm_trans_text_from_cstr("")
+
+sub: lm_trans_l4_text_view_delete (@: LmP0Text view)
+    lm_trans_text_ref_destroy(view)
+end: lm_trans_l4_text_view_delete
+
+fn: lm_trans_layout_class_requires_pointer_field (const: (LmTransNamespace: namespace_); const: @(char class_name)) int
+    LmP0Text: class_text
+    int: result
+
+    if: class_name = 0
+        return: 0
+
+    class_text: lm_trans_l4_text_view_new(class_name)
+    if: class_text = 0
+        return: 0
+    result: lm_trans_layout_type_implicit_address_depth(class_text, namespace_) != 0U
+    lm_trans_l4_text_view_delete(@ class_text)
+return: result
+
+fn: lm_trans_layout_field_effective_address_depth (const: (LmTransLayoutField: field); const: (LmTransNamespace: namespace_)) size_t
+    size_t: depth
+
+    if: field = 0
+        return: 0U
+    depth: field\address_depth
+    if: field\is_union
+        return: depth
+    if: lm_trans_layout_class_requires_pointer_field(namespace_, field\class_name)
+        return: depth + 1U
+return: depth
+
+fn: lm_trans_l4_abi_params_new (size_t: capacity) @: LmTransAbiParam
+    @: LmTransAbiParam params
+    size_t: i
+
+    if: capacity = 0U
+        return: 0
+    params: lm_own_new_zero(c.sizeof(params[0]) * capacity)
+    if: params = 0
+        return: 0
+
+    i: 0U
+    while: i < capacity
+        params[i]: lm_own_new_zero(c.sizeof(params[i][0]))
+        if: params[i] = 0
+            while: i != 0U
+                i: i - 1U
+                lm_own_delete(params[i], 0)
+            lm_own_delete(params, 0)
+            return: 0
+        i: i + 1U
+return: params
+
+sub: lm_trans_l4_abi_params_delete (@: LmTransAbiParam params; size_t: capacity)
+    size_t: i
+
+    if: params = 0
+        return
+    i: 0U
+    while: i < capacity
+        lm_own_delete(params[i], 0)
+        i: i + 1U
+    lm_own_delete(params, 0)
+end: lm_trans_l4_abi_params_delete
+
+fn: lm_trans_layout_fields_new (size_t: capacity) @: LmTransLayoutField
+    @: LmTransLayoutField fields
+    size_t: i
+
+    if: capacity = 0U
+        return: 0
+    fields: lm_own_new_zero(c.sizeof(fields[0]) * capacity)
+    if: fields = 0
+        return: 0
+
+    i: 0U
+    while: i < capacity
+        fields[i]: lm_own_new_zero(c.sizeof(fields[i][0]))
+        if: fields[i] = 0
+            while: i != 0U
+                i: i - 1U
+                lm_own_delete(fields[i], 0)
+            lm_own_delete(fields, 0)
+            return: 0
+        i: i + 1U
+return: fields
+
+sub: lm_trans_layout_fields_delete (@: LmTransLayoutField fields; size_t: capacity)
+    size_t: i
+
+    if: fields = 0
+        return
+    i: 0U
+    while: i < capacity
+        lm_own_delete(fields[i], 0)
+        i: i + 1U
+    lm_own_delete(fields, 0)
+end: lm_trans_layout_fields_delete
+
+fn: lm_trans_registry_layout_view_backend (const: (LmTransNamespace: namespace_); const: (LmRegistryViewRow: view_row)) const: @: char
+    LmTransRegistryFact: facade_row
+    const: @: char backend
+
+    if: view_row = 0 || view_row\payload = 0
+        return: 0
+    backend: view_row\payload
+    facade_row: cast: (LmTransRegistryFact) view_row\source
+    if: facade_row != 0 && facade_row\payload != 0
+        backend: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "layout.backend", "class", "class", "backend", "class", facade_row)
+    ---
+return: backend
+
+fn: lm_trans_registry_collect_layout_names (LmOwnPtrStack: names; const: (LmTransNamespace: namespace_)) int
+    size_t: i
+    size_t: row_count
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
+    const: @: char backend
+    @: char name
+    LmP0Text: key_text
+
+    if: names = 0
+        return: 1
+
+    key_text: lm_trans_l4_text_view_new("")
+    if: key_text = 0
+        return: 1
+
+    view: lm_trans_namespace_registry_view(namespace_)
+    if: view != 0
+        row_count: lm_registry_view_table_row_count(view, "layout.backend")
+        i: 0U
+        while: i < row_count
+            view_row: lm_registry_view_table_row_at(view, "layout.backend", i)
+            backend: lm_trans_registry_layout_view_backend(namespace_, view_row)
+            if: view_row != 0 && view_row\key != 0 && backend != 0 && lm_trans_layout_backend_is_supported(backend)
+                if: lm_trans_registry_append_relation_name(names, namespace_, "layout", "backend", "layout", 1, key_text, view_row\key) != 0
+                    lm_trans_l4_text_view_delete(@ key_text)
+                    return: 1
+            ---
+            i: i + 1U
+        lm_trans_l4_text_view_delete(@ key_text)
+        return: 0
+    ---
+
+    rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("layout"), "backend")
+    if: rows = 0
+        lm_trans_l4_text_view_delete(@ key_text)
+        return: 0
+    i: 0U
+    while: i < rows\count
+        row: lm_own_ptr_stack_at(rows, i)
+        if: row != 0 && row\key != 0 && row\payload != 0 && lm_trans_layout_backend_is_supported(row\payload)
+            lm_trans_text_assign_cstr(key_text, row\key)
+            if: lm_trans_namespace_class_has(namespace_, key_text) = 0
+                c.fprintf(c.stderr, "trans L4 layout error: layout.backend key %s is not a class\n", row\key)
+                lm_trans_l4_text_view_delete(@ key_text)
+                return: 1
+            name: lm_trans_text_copy_cstr(key_text)
+            if: name = 0
+                lm_trans_l4_text_view_delete(@ key_text)
+                return: 1
+            if: lm_trans_string_stack_has(names, name)
+                lm_own_delete(name, 0)
+            else:
+                if: lm_own_ptr_stack_push(names, name) != 0
+                    lm_own_delete(name, 0)
+                    lm_trans_l4_text_view_delete(@ key_text)
+                    return: 1
+        ---
+        i: i + 1U
+    lm_trans_l4_text_view_delete(@ key_text)
+return: 0
+
+fn: lm_trans_layout_field_source_value (
+    const: (LmTransNamespace: namespace_)
+    const: @(char layout_name)
+    const: @(char relation_name)
+    const: @(char n2_value_column_name)
+    const: @(char value_descriptor)
+    const: (LmTransRegistryFact: facade_row)
+    const: @(LmTableCell out_key_cell)
+) const: @: char
+    const: LmTableCell: source_key_cell
+    const: LmTableCell: source_value_cell
+    @: char source_path
+    size_t: source_path_length
+    const: @: char value
+
+    if: out_key_cell != 0
+        out_key_cell[0]: 0
+    if: layout_name = 0 || relation_name = 0 || n2_value_column_name = 0 || value_descriptor = 0 || facade_row = 0 || facade_row\payload = 0
+        return: 0
+
+    value: facade_row\payload
+    source_path: lm_trans_registry_source_relation_path_new(layout_name, relation_name, @ source_path_length)
+    if: source_path = 0
+        return: value
+    source_key_cell: 0
+    source_value_cell: lm_trans_registry_source_path_typed_cell_kind(namespace_, source_path, "class", "class", value_descriptor, n2_value_column_name, facade_row, 0, @ source_key_cell)
+    if: source_value_cell != 0 && lm_trans_registry_view_is_selected() != 0
+        value: source_value_cell\value
+        if: out_key_cell != 0
+            out_key_cell[0]: source_key_cell
+    ---
+    lm_own_delete(source_path, 0)
+return: value
+
+fn: lm_trans_collect_layout_field_common (
+    const: @(char layout_name)
+    const: (LmTransNamespace: namespace_)
+    const: @(char field_name)
+    const: (LmOwnPtrStack: index_rows)
+    const: (LmOwnPtrStack: address_depth_rows)
+    const: (LmOwnPtrStack: const_rows)
+    const: (LmOwnPtrStack: array_count_rows)
+    LmTransLayoutField: field
+) int
+    size_t: index
+    LmTransRegistryFact: index_row
+    LmTransRegistryFact: address_depth_row
+    LmTransRegistryFact: const_row
+    LmTransRegistryFact: array_count_row
+    const: @: char index_payload
+    const: @: char address_depth_payload
+    const: @: char const_payload
+    const: @: char array_count_payload
+    LmP0Text: field_text
+
+    if: layout_name = 0 || field_name = 0 || field = 0
+        return: 1
+
+    field_text: lm_trans_l4_text_view_new(field_name)
+    if: field_text = 0
+        return: 1
+    index_row: lm_trans_registry_relation_stack_latest_row(index_rows, field_text)
+    address_depth_row: lm_trans_registry_relation_stack_latest_row(address_depth_rows, field_text)
+    const_row: lm_trans_registry_relation_stack_latest_row(const_rows, field_text)
+    array_count_row: lm_trans_registry_relation_stack_latest_row(array_count_rows, field_text)
+    index_payload: lm_trans_layout_field_source_value(namespace_, layout_name, "field.index", "index", "size_t", index_row, 0)
+    address_depth_payload: lm_trans_layout_field_source_value(namespace_, layout_name, "field.address-depth", "depth", "size_t", address_depth_row, 0)
+    const_payload: lm_trans_layout_field_source_value(namespace_, layout_name, "field.const", "value", "int", const_row, 0)
+    array_count_payload: lm_trans_layout_field_source_value(namespace_, layout_name, "field.array-count", "count", "size_t", array_count_row, 0)
+
+    if: index_payload = 0 || lm_trans_parse_size_payload(index_payload, @ index) = 0
+        c.fprintf(c.stderr, "trans L4 layout error: field %s.%s requires field.index\n", layout_name, field_name)
+        lm_trans_l4_text_view_delete(@ field_text)
+        return: 1
+
+    c.memset(field, 0, c.sizeof(field[0]))
+    field\name: field_name
+    field\index: index
+
+    if: address_depth_payload != 0 && lm_trans_parse_size_payload(address_depth_payload, @ field\address_depth) = 0
+        c.fprintf(c.stderr, "trans L4 layout error: field %s.%s has invalid field.address-depth\n", layout_name, field_name)
+        lm_trans_l4_text_view_delete(@ field_text)
+        return: 1
+    if: const_payload != 0
+        if: lm_trans_parse_size_payload(const_payload, @ index) = 0
+            c.fprintf(c.stderr, "trans L4 layout error: field %s.%s has invalid field.const\n", layout_name, field_name)
+            lm_trans_l4_text_view_delete(@ field_text)
+            return: 1
+        field\is_const: index != 0U
+    if: array_count_payload != 0
+        if: lm_trans_parse_size_payload(array_count_payload, @ field\array_count) = 0
+            c.fprintf(c.stderr, "trans L4 layout error: field %s.%s has invalid field.array-count\n", layout_name, field_name)
+            lm_trans_l4_text_view_delete(@ field_text)
+            return: 1
+        field\has_array_count: 1
+    lm_trans_l4_text_view_delete(@ field_text)
+return: 0
+
+fn: lm_trans_collect_descriptor_layout_fields (
+    const: @(char layout_name)
+    const: LmTransDescriptor: descriptor
+    const: LmTransNamespace: namespace_
+    @: LmTransLayoutField fields
+    size_t: capacity
+    @: size_t out_count
+) int
+    size_t: i
+    size_t: field_count
+    const: LmTransDescriptorField: descriptor_field
+    LmTransLayoutField: field
+
+    if: out_count != 0
+        out_count[0]: 0U
+    if: layout_name = 0 || descriptor = 0 || descriptor\has_structural_fields = 0 || descriptor\structural_fields = 0 || fields = 0 || out_count = 0
+        return: 1
+
+    field_count: descriptor\structural_fields\count
+    if: field_count > capacity
+        c.fprintf(c.stderr, "trans L4 layout error: too many fields in %s\n", layout_name)
+        return: 1
+
+    i: 0U
+    while: i < field_count
+        descriptor_field: lm_own_ptr_stack_at(descriptor\structural_fields, i)
+        if: descriptor_field = 0 || descriptor_field\name = 0 || descriptor_field\descriptor_name = 0
+            c.fprintf(c.stderr, "trans L4 layout error: descriptor for %s has an invalid structural field\n", layout_name)
+            return: 1
+        field: fields[i]
+        c.memset(field, 0, c.sizeof(field[0]))
+        field\name: descriptor_field\name
+        field\index: descriptor_field\index
+        field\address_depth: descriptor_field\address_depth
+        field\array_count: descriptor_field\array_count
+        field\is_const: descriptor_field\is_const
+        field\has_array_count: descriptor_field\has_array_count
+        field\is_union: descriptor_field\is_union
+        if: descriptor_field\is_union
+            field\union_layout_name: descriptor_field\descriptor_name
+        else:
+            field\class_name: descriptor_field\descriptor_name
+            if: field\is_const && lm_trans_layout_field_effective_address_depth(field, namespace_) = 0U && field\has_array_count = 0
+                c.fprintf(c.stderr, "trans L4 layout error: field %s.%s const value fields are not supported yet\n", layout_name, field\name)
+                return: 1
+            ---
+        ---
+        i: i + 1U
+
+    out_count[0]: field_count
+return: 0
+
+
+fn: lm_trans_collect_layout_fields (const: @(char layout_name); const: (LmTransNamespace: namespace_); @: LmTransLayoutField fields; size_t: capacity; @: size_t out_count) int
+    size_t: i
+    size_t: field_count
+    LmTransRegistryFact: row
+    LmTransLayoutField: field
+    const: LmOwnPtrStack: class_rows
+    const: LmOwnPtrStack: union_rows
+    const: LmOwnPtrStack: index_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: const_rows
+    const: LmOwnPtrStack: array_count_rows
+    const: LmTableCell: source_key_cell
+    const: @: char field_class_name
+    const: @: char union_layout_name
+    const: LmTransDescriptor: descriptor
+    int: descriptor_status
+    LmP0Text: layout_text
+
+    if: layout_name = 0 || fields = 0 || out_count = 0
+        return: 1
+
+    layout_text: lm_trans_l4_text_view_new(layout_name)
+    if: layout_text = 0
+        return: 1
+    descriptor: lm_trans_namespace_descriptor(namespace_, layout_text)
+    if: descriptor != 0 && descriptor\has_structural_fields
+        descriptor_status: lm_trans_collect_descriptor_layout_fields(layout_name, descriptor, namespace_, fields, capacity, out_count)
+        lm_trans_l4_text_view_delete(@ layout_text)
+        return: descriptor_status
+    ---
+    class_rows: lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.class")
+    union_rows: lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.union")
+    index_rows: lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.index")
+    address_depth_rows: lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.address-depth")
+    const_rows: lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.const")
+    array_count_rows: lm_trans_namespace_registry_relation_stack(namespace_, layout_text, "field.array-count")
+
+    if: class_rows = 0 && union_rows = 0
+        c.fprintf(c.stderr, "trans L4 layout error: layout %s requires field.class or field.union facts\n", layout_name)
+        lm_trans_l4_text_view_delete(@ layout_text)
+        return: 1
+
+    field_count: 0U
+    if: class_rows != 0
+        i: 0U
+        while: i < class_rows\count
+            row: lm_own_ptr_stack_at(class_rows, i)
+            if: row != 0 && row\key != 0 && row\payload != 0
+                if: field_count >= capacity
+                    c.fprintf(c.stderr, "trans L4 layout error: too many fields in %s\n", layout_name)
+                    lm_trans_l4_text_view_delete(@ layout_text)
+                    return: 1
+                field: fields[field_count]
+                if: lm_trans_collect_layout_field_common(layout_name, namespace_, row\key, index_rows, address_depth_rows, const_rows, array_count_rows, field) != 0
+                    lm_trans_l4_text_view_delete(@ layout_text)
+                    return: 1
+                source_key_cell: 0
+                field_class_name: lm_trans_layout_field_source_value(namespace_, layout_name, "field.class", "field", "class", row, @ source_key_cell)
+                field\class_name: field_class_name
+                if: source_key_cell != 0 && source_key_cell\value != 0
+                    field\name: source_key_cell\value
+                if: field\is_const && lm_trans_layout_field_effective_address_depth(field, namespace_) = 0U && field\has_array_count = 0
+                    c.fprintf(c.stderr, "trans L4 layout error: field %s.%s const value fields are not supported yet\n", layout_name, row\key)
+                    lm_trans_l4_text_view_delete(@ layout_text)
+                    return: 1
+                field_count: field_count + 1U
+            ---
+            i: i + 1U
+        ---
+
+    if: union_rows != 0
+        i: 0U
+        while: i < union_rows\count
+            row: lm_own_ptr_stack_at(union_rows, i)
+            if: row != 0 && row\key != 0 && row\payload != 0
+                if: field_count >= capacity
+                    c.fprintf(c.stderr, "trans L4 layout error: too many fields in %s\n", layout_name)
+                    lm_trans_l4_text_view_delete(@ layout_text)
+                    return: 1
+                field: fields[field_count]
+                if: lm_trans_collect_layout_field_common(layout_name, namespace_, row\key, index_rows, address_depth_rows, const_rows, array_count_rows, field) != 0
+                    lm_trans_l4_text_view_delete(@ layout_text)
+                    return: 1
+                field\is_union: 1
+                source_key_cell: 0
+                union_layout_name: lm_trans_layout_field_source_value(namespace_, layout_name, "field.union", "union", "class", row, @ source_key_cell)
+                field\union_layout_name: union_layout_name
+                if: source_key_cell != 0 && source_key_cell\value != 0
+                    field\name: source_key_cell\value
+                field_count: field_count + 1U
+            ---
+            i: i + 1U
+        ---
+
+    out_count[0]: field_count
+    lm_trans_l4_text_view_delete(@ layout_text)
+return: 0
+
+fn: lm_trans_sort_layout_fields (@: LmTransLayoutField fields; size_t: field_count) int
+    size_t: i
+    size_t: j
+    LmTransLayoutField: swap
+
+    if: fields = 0
+        return: 1
+
+    i: 0U
+    while: i < field_count
+        j: i + 1U
+        while: j < field_count
+            if: fields[j]\index < fields[i]\index
+                swap: fields[i]
+                fields[i]: fields[j]
+                fields[j]: swap
+            j: j + 1U
+        i: i + 1U
+return: 0
+
+fn: lm_trans_registry_layout_row_field_name (
+    const: LmTransNamespace: namespace_
+    const: @: char layout_name
+    const: @: char relation_name
+    const: @: char value_column_name
+    const: LmTransRegistryFact: row
+) const: @: char
+    const: LmTableCell: source_key_cell
+
+    if: layout_name = 0 || relation_name = 0 || value_column_name = 0 || row = 0 || row\key = 0 || row\payload = 0
+        return: 0
+
+    source_key_cell: 0
+    lm_trans_layout_field_source_value(namespace_, layout_name, relation_name, value_column_name, "class", row, @ source_key_cell)
+    if: source_key_cell != 0 && source_key_cell\value != 0
+        return: source_key_cell\value
+return: row\key
+
+fn: lm_trans_registry_relation_rows_duplicate_field_name (
+    const: LmTransNamespace: namespace_
+    const: @: char layout_name
+    const: LmOwnPtrStack: left_rows
+    const: @: char left_relation_name
+    const: @: char left_value_column_name
+    const: LmOwnPtrStack: right_rows
+    const: @: char right_relation_name
+    const: @: char right_value_column_name
+    int: same_rows
+) const: @: char
+    size_t: i
+    size_t: j
+    const: LmTransRegistryFact: left
+    const: LmTransRegistryFact: right
+    const: @: char left_name
+    const: @: char right_name
+
+    if: left_rows = 0 || right_rows = 0
+        return: 0
+
+    i: 0U
+    while: i < left_rows\count
+        left: lm_own_ptr_stack_at(left_rows, i)
+        left_name: lm_trans_registry_layout_row_field_name(namespace_, layout_name, left_relation_name, left_value_column_name, left)
+        if: left_name != 0
+            j: 0U
+            if: same_rows
+                j: i + 1U
+            while: j < right_rows\count
+                right: lm_own_ptr_stack_at(right_rows, j)
+                right_name: lm_trans_registry_layout_row_field_name(namespace_, layout_name, right_relation_name, right_value_column_name, right)
+                if: right_name != 0 && c.strcmp(left_name, right_name) = 0
+                    return: left_name
+                j: j + 1U
+            ---
+        ---
+        i: i + 1U
+return: 0
+
+fn: lm_trans_registry_layout_duplicate_field_name (
+    const: LmP0Text: layout_name
+    const: LmTransNamespace: namespace_
+) const: @: char
+    const: LmOwnPtrStack: class_rows
+    const: LmOwnPtrStack: union_rows
+    const: @: char duplicate_name
+
+    if: layout_name = 0
+        return: 0
+
+    class_rows: lm_trans_namespace_registry_relation_stack(namespace_, layout_name, "field.class")
+    union_rows: lm_trans_namespace_registry_relation_stack(namespace_, layout_name, "field.union")
+
+    duplicate_name: lm_trans_registry_relation_rows_duplicate_field_name(namespace_, layout_name\data, class_rows, "field.class", "field", class_rows, "field.class", "field", 1)
+    if: duplicate_name != 0
+        return: duplicate_name
+    duplicate_name: lm_trans_registry_relation_rows_duplicate_field_name(namespace_, layout_name\data, union_rows, "field.union", "union", union_rows, "field.union", "union", 1)
+    if: duplicate_name != 0
+        return: duplicate_name
+return: lm_trans_registry_relation_rows_duplicate_field_name(namespace_, layout_name\data, class_rows, "field.class", "field", union_rows, "field.union", "union", 0)
+
+fn: lm_trans_validate_layout_occurrence_projection_source (
+    const: @(char layout_name)
+    const: LmTransNamespace: namespace_
+) int
+    @: LmTransLayoutField fields
+    LmP0Text: layout_text
+    const: LmTransDescriptor: descriptor
+    const: @: char duplicate_name
+    size_t: field_capacity
+    size_t: field_count
+    size_t: i
+    size_t: j
+
+    if: layout_name = 0
+        return: 1
+
+    layout_text: lm_trans_l4_text_view_new(layout_name)
+    if: layout_text = 0
+        return: 1
+    finally: lm_trans_l4_text_view_delete(@ layout_text)
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, layout_text)
+    if: descriptor != 0 && descriptor\has_structural_fields && descriptor\registry_materialized = 0
+        return: 0
+
+    duplicate_name: lm_trans_registry_layout_duplicate_field_name(layout_text, namespace_)
+    if: duplicate_name != 0
+        c.fprintf(c.stderr, "trans L4 layout error: registry-only layout %s has ambiguous duplicate field %s; occurrence-aware projection requires a source namespace descriptor\n", layout_name, duplicate_name)
+        return: 1
+
+    field_capacity: 256U
+    fields: lm_trans_layout_fields_new(field_capacity)
+    if: fields = 0
+        return: 1
+    finally: lm_trans_layout_fields_delete(fields, field_capacity)
+
+    if: lm_trans_collect_layout_fields(layout_name, namespace_, fields, field_capacity, @ field_count) != 0
+        return: 1
+
+    i: 0U
+    while: i < field_count
+        j: i + 1U
+        while: j < field_count
+            if: fields[i]\index = fields[j]\index
+                c.fprintf(c.stderr, "trans L4 layout error: registry-only layout %s has ambiguous duplicate field.index %zu\n", layout_name, fields[i]\index)
+                return: 1
+            j: j + 1U
+        i: i + 1U
+return: 0
+
+fn: lm_trans_emit_layout_field (
+    FILE: file
+    const: LmTransLayoutField: field
+    const: LmTransDescriptor: owner_descriptor
+    const: LmTransNamespace: namespace_
+    unsigned: indent
+) int
+    LmTransCDeclarator: declarator
+    const: LmTransDescriptorField: descriptor_field
+    @: char projected_member_name
+    const: @: char member_name
+    LmP0Text: member_name_text
+    size_t: effective_address_depth
+
+    if: file = 0 || field = 0
+        return: 1
+    declarator: 0
+    projected_member_name: 0
+    finally: lm_own_delete(projected_member_name, 0)
+    member_name: field\name
+    if: owner_descriptor != 0
+        descriptor_field: lm_trans_descriptor_structural_field_by_index(owner_descriptor, field\index)
+        if: descriptor_field = 0 || descriptor_field\name = 0 || field\name = 0 || c.strcmp(descriptor_field\name, field\name) != 0
+            c.fprintf(c.stderr, "trans L4 layout error: descriptor field index %zu is missing, ambiguous, or names a different field\n", field\index)
+            return: 1
+        projected_member_name: lm_trans_descriptor_projected_member_name_new(owner_descriptor, descriptor_field)
+        if: projected_member_name = 0
+            return: 1
+        member_name: projected_member_name
+    ---
+    if: member_name = 0
+        return: 1
+
+    member_name_text: lm_trans_text_from_cstr(member_name)
+    if: member_name_text = 0
+        return: 1
+    finally: lm_trans_text_ref_destroy(@ member_name_text)
+
+    effective_address_depth: lm_trans_layout_field_effective_address_depth(field, namespace_)
+
+    if: field\is_union
+        if: field\union_layout_name = 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "union {\n") != 0 || lm_trans_emit_layout_fields(file, field\union_layout_name, namespace_, indent + 1U) != 0 || lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "} ") != 0 || lm_trans_emit_identifier(file, member_name_text) != 0
+            return: 1
+        ---
+    else:
+        if: lm_trans_l4_is_function_pointer_type(namespace_, field\class_name)
+            if: field\is_const || effective_address_depth != 0U || field\has_array_count
+                c.fprintf(c.stderr, "trans L4 layout error: function pointer field %s cannot use const, pointer-depth, or array-count\n", field\name)
+                return: 1
+            if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_emit_l4_function_pointer_type_field(file, namespace_, field\class_name, member_name, "layout") != 0
+                return: 1
+            ---
+        else:
+            declarator: lm_trans_statement_c_declarator_new()
+            if: declarator = 0
+                return: 1
+            lm_trans_text_assign_cstr(declarator\type_head, field\class_name)
+            lm_trans_text_assign_cstr(declarator\name, member_name)
+            declarator\pointer_depth: field\address_depth
+            declarator\type_is_head: 1
+            if: field\has_array_count
+                declarator\literal_dimensions[0]: field\array_count
+                declarator\literal_dimension_count: 1U
+            if: lm_trans_emit_indent(file, indent) != 0 || (field\is_const && lm_trans_put(file, "const ") != 0) || lm_trans_emit_c_declarator(file, declarator, namespace_, "layout array dimension") != 0
+                lm_trans_statement_c_declarator_destroy(declarator)
+                return: 1
+            lm_trans_statement_c_declarator_destroy(declarator)
+            declarator: 0
+    ---
+
+    if: field\is_union && field\has_array_count
+        if: lm_trans_put(file, "[") != 0 || lm_trans_emit_size_literal(file, field\array_count) != 0 || lm_trans_put(file, "]") != 0
+            return: 1
+
+return: lm_trans_put(file, ";\n")
+
+fn: lm_trans_emit_layout_fields (FILE: file; const: @(char layout_name); const: (LmTransNamespace: namespace_); unsigned: indent) int
+    @: LmTransLayoutField fields
+    LmP0Text: layout_text
+    const: LmTransDescriptor: descriptor
+    const: LmTransDescriptor: owner_descriptor
+    size_t: field_capacity
+    size_t: field_count
+    size_t: i
+
+    if: layout_name = 0
+        return: 1
+
+    layout_text: lm_trans_l4_text_view_new(layout_name)
+    if: layout_text = 0
+        return: 1
+    finally: lm_trans_l4_text_view_delete(@ layout_text)
+
+    descriptor: lm_trans_namespace_descriptor(namespace_, layout_text)
+    owner_descriptor: 0
+    if: descriptor != 0 && descriptor\has_structural_fields
+        owner_descriptor: descriptor
+
+    if: lm_trans_validate_layout_occurrence_projection_source(layout_name, namespace_) != 0
+        return: 1
+
+    field_capacity: 256U
+    fields: lm_trans_layout_fields_new(field_capacity)
+    if: fields = 0
+        return: 1
+    if: lm_trans_collect_layout_fields(layout_name, namespace_, fields, field_capacity, @ field_count) != 0
+        lm_trans_layout_fields_delete(fields, field_capacity)
+        return: 1
+    if: lm_trans_sort_layout_fields(fields, field_count) != 0
+        lm_trans_layout_fields_delete(fields, field_capacity)
+        return: 1
+
+    if: field_count = 0U
+        if: lm_trans_emit_indent(file, indent) != 0 || lm_trans_put(file, "unsigned char lm_lmx_empty_structure;\n") != 0
+            lm_trans_layout_fields_delete(fields, field_capacity)
+            return: 1
+        ---
+    ---
+
+    i: 0U
+    while: i < field_count
+        if: lm_trans_emit_layout_field(file, fields[i], owner_descriptor, namespace_, indent) != 0
+            lm_trans_layout_fields_delete(fields, field_capacity)
+            return: 1
+        i: i + 1U
+
+    lm_trans_layout_fields_delete(fields, field_capacity)
+return: 0
+
+fn: lm_trans_registry_forward_view_backend (const: (LmTransNamespace: namespace_); const: (LmRegistryViewRow: view_row)) const: @: char
+    LmTransRegistryFact: facade_row
+    const: @: char backend
+
+    if: view_row = 0 || view_row\payload = 0
+        return: 0
+    backend: view_row\payload
+    facade_row: cast: (LmTransRegistryFact) view_row\source
+    if: facade_row != 0 && facade_row\payload != 0
+        backend: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "forward.backend", "class", "class", "backend", "class", facade_row)
+    ---
+return: backend
+
+fn: lm_trans_emit_layout_definition (FILE: file; const: @(char layout_name); const: (LmTransNamespace: namespace_)) int
+    LmTransRegistryFact: backend_row
+    LmTransRegistryFact: forward_row
+    const: LmOwnPtrStack: backend_rows
+    const: LmOwnPtrStack: forward_rows
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: backend_view_row
+    const: LmRegistryViewRow: forward_view_row
+    const: @: char backend
+    const: @: char forward_backend
+    const: @: char prefix
+    int: has_forward
+    int: emits_typedef
+    LmP0Text: layout_text
+    FILE: declaration_file
+    FILE: target_file
+    int: emitted
+    int: status
+
+    if: file = 0 || layout_name = 0
+        return: 1
+
+    layout_text: lm_trans_l4_text_view_new(layout_name)
+    if: layout_text = 0
+        return: 1
+    backend: 0
+    view: lm_trans_namespace_registry_view(namespace_)
+    if: view != 0
+        backend_view_row: lm_registry_view_lookup_exact(view, layout_name, "layout.backend")
+        backend: lm_trans_registry_layout_view_backend(namespace_, backend_view_row)
+    else:
+        backend_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("layout"), "backend")
+        backend_row: lm_trans_registry_relation_stack_latest_row(backend_rows, layout_text)
+        if: backend_row != 0 && backend_row\payload != 0
+            backend: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "layout.backend", "class", "class", "backend", "class", backend_row)
+    ---
+    if: lm_trans_layout_backend_is_supported(backend) = 0
+        c.fprintf(c.stderr, "trans L4 layout error: layout %s has unsupported layout.backend\n", layout_name)
+        lm_trans_l4_text_view_delete(@ layout_text)
+        return: 1
+
+    forward_backend: 0
+    if: view != 0
+        forward_view_row: lm_registry_view_lookup_exact(view, layout_name, "forward.backend")
+        forward_backend: lm_trans_registry_forward_view_backend(namespace_, forward_view_row)
+    else:
+        forward_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("forward"), "backend")
+        forward_row: lm_trans_registry_relation_stack_latest_row(forward_rows, layout_text)
+        forward_backend: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "forward.backend", "class", "class", "backend", "class", forward_row)
+    ---
+    has_forward: forward_backend != 0 && (c.strcmp(forward_backend, "c.struct") = 0 || c.strcmp(forward_backend, "c.union") = 0)
+    if: has_forward && ((c.strcmp(forward_backend, "c.struct") = 0 && (c.strcmp(backend, "c.union") = 0 || c.strcmp(backend, "c.named-union") = 0)) || (c.strcmp(forward_backend, "c.union") = 0 && (c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, "c.named-struct") = 0)))
+        c.fprintf(c.stderr, "trans L4 layout error: layout %s conflicts with its forward tag backend\n", layout_name)
+        lm_trans_l4_text_view_delete(@ layout_text)
+        return: 1
+
+    prefix: 0
+    if: c.strcmp(backend, "c.struct") = 0
+        if: has_forward
+            prefix: "struct "
+        else:
+            prefix: "typedef struct "
+    ---
+    if: prefix = 0 && c.strcmp(backend, "c.named-struct") = 0
+        prefix: "struct "
+    if: prefix = 0 && c.strcmp(backend, "c.union") = 0
+        if: has_forward
+            prefix: "union "
+        else:
+            prefix: "typedef union "
+    ---
+    if: prefix = 0 && c.strcmp(backend, "c.named-union") = 0
+        prefix: "union "
+
+    emits_typedef: has_forward = 0 && (c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, "c.union") = 0)
+    declaration_file: 0
+    target_file: file
+    if: emits_typedef
+        declaration_file: lm_trans_tmpfile()
+        target_file: declaration_file
+    ---
+    if: target_file = 0
+        lm_trans_l4_text_view_delete(@ layout_text)
+        return: 1
+    ---
+
+    if: prefix = 0 || lm_trans_put(target_file, prefix) != 0
+        if: declaration_file != 0
+            c.fclose(declaration_file)
+        ---
+        lm_trans_l4_text_view_delete(@ layout_text)
+        return: 1
+
+    if: lm_trans_emit_identifier(target_file, layout_text) != 0 || lm_trans_put(target_file, " {\n") != 0
+        if: declaration_file != 0
+            c.fclose(declaration_file)
+        ---
+        lm_trans_l4_text_view_delete(@ layout_text)
+        return: 1
+
+    if: lm_trans_emit_layout_fields(target_file, layout_name, namespace_, 1U) != 0
+        if: declaration_file != 0
+            c.fclose(declaration_file)
+        ---
+        lm_trans_l4_text_view_delete(@ layout_text)
+        return: 1
+
+    if: has_forward && (c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, "c.union") = 0)
+        status: lm_trans_put(target_file, "};\n")
+        lm_trans_l4_text_view_delete(@ layout_text)
+        return: status
+    if: c.strcmp(backend, "c.struct") = 0 || c.strcmp(backend, "c.union") = 0
+        if: lm_trans_put(target_file, "} ") != 0 || lm_trans_emit_identifier(target_file, layout_text) != 0 || lm_trans_put(target_file, ";\n") != 0
+            status: 1
+        else:
+            status: 0
+        if: status = 0 && emits_typedef
+            status: lm_trans_typedef_projection_emit_prepared_cstr(file, layout_name, declaration_file, @ emitted)
+        if: declaration_file != 0
+            c.fclose(declaration_file)
+        ---
+        lm_trans_l4_text_view_delete(@ layout_text)
+        return: status
+    status: lm_trans_put(target_file, "};\n")
+    if: declaration_file != 0
+        c.fclose(declaration_file)
+    ---
+    lm_trans_l4_text_view_delete(@ layout_text)
+return: status
+
+fn: lm_trans_emit_l4_layout_typedefs (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
+    size_t: i
+    const: @: char name
+
+    names: lm_trans_ptr_stack_new(lm_trans_free_any)
+    if: names = 0
+        return: 1
+    if: lm_trans_registry_collect_layout_names(names, namespace_) != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+
+    i: 0U
+    while: i < names\count
+        if: i = 0U && lm_trans_put(file, "#include <stddef.h>\n\n") != 0
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        name: lm_own_ptr_stack_at(names, i)
+        if: name != 0 && lm_trans_emit_layout_definition(file, name, namespace_) != 0
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        i: i + 1U
+
+    if: names\count != 0U && lm_trans_put(file, "\n") != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+
+    lm_trans_ptr_stack_delete(@ names)
+return: 0
+
+fn: lm_trans_registry_collect_constant_define_names (LmOwnPtrStack: names; const: (LmTransNamespace: namespace_)) int
+    size_t: i
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
+    const: @: char backend
+    @: char name
+    LmP0Text: key_text
+    size_t: row_count
+
+    if: names = 0
+        return: 1
+
+    view: lm_trans_namespace_registry_view(namespace_)
+    if: view != 0
+        key_text: lm_trans_l4_text_view_new("")
+        if: key_text = 0
+            return: 1
+        row_count: lm_registry_view_table_row_count(view, "constant.backend")
+        i: 0U
+        while: i < row_count
+            view_row: lm_registry_view_table_row_at(view, "constant.backend", i)
+            if: view_row != 0 && view_row\key != 0 && view_row\payload != 0
+                backend: view_row\payload
+                row: cast: (LmTransRegistryFact) view_row\source
+                if: row != 0 && row\payload != 0
+                    backend: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "constant.backend", "class", "class", "backend", "class", row)
+                ---
+                if: backend != 0 && c.strcmp(backend, "c.define") = 0 && lm_trans_registry_append_relation_name(names, namespace_, "constant", "backend", "constant", 1, key_text, view_row\key) != 0
+                    lm_trans_l4_text_view_delete(@ key_text)
+                    return: 1
+            ---
+            i: i + 1U
+        lm_trans_l4_text_view_delete(@ key_text)
+        return: 0
+    ---
+
+    rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("constant"), "backend")
+    if: rows = 0
+        return: 0
+    key_text: lm_trans_l4_text_view_new("")
+    if: key_text = 0
+        return: 1
+
+    i: 0U
+    while: i < rows\count
+        row: lm_own_ptr_stack_at(rows, i)
+        if: row != 0 && row\key != 0 && row\payload != 0 && c.strcmp(row\payload, "c.define") = 0
+            lm_trans_text_assign_cstr(key_text, row\key)
+            if: lm_trans_namespace_class_has(namespace_, key_text) = 0
+                c.fprintf(c.stderr, "trans L4 constant error: constant.backend key %s is not a class\n", row\key)
+                lm_trans_l4_text_view_delete(@ key_text)
+                return: 1
+            name: lm_trans_text_copy_cstr(key_text)
+            if: name = 0
+                lm_trans_l4_text_view_delete(@ key_text)
+                return: 1
+            if: lm_trans_string_stack_has(names, name)
+                lm_own_delete(name, 0)
+            else:
+                if: lm_own_ptr_stack_push(names, name) != 0
+                    lm_own_delete(name, 0)
+                    lm_trans_l4_text_view_delete(@ key_text)
+                    return: 1
+        ---
+        i: i + 1U
+    lm_trans_l4_text_view_delete(@ key_text)
+return: 0
+
+fn: lm_trans_emit_l4_constant_defines (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
+    size_t: i
+    const: @: char name
+    const: @: char value
+    LmTransRegistryFact: value_row
+    const: LmOwnPtrStack: value_rows
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: value_view_row
+
+    names: lm_trans_ptr_stack_new(lm_trans_free_any)
+    if: names = 0
+        return: 1
+    if: lm_trans_registry_collect_constant_define_names(names, namespace_) != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+
+    view: lm_trans_namespace_registry_view(namespace_)
+    value_rows: 0
+    if: view = 0
+        value_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("constant"), "value")
+
+    i: 0U
+    while: i < names\count
+        name: lm_own_ptr_stack_at(names, i)
+        value: 0
+        if: view != 0
+            value_view_row: lm_registry_view_lookup_exact(view, name, "constant.value")
+            if: value_view_row != 0 && value_view_row\payload != 0
+                value: value_view_row\payload
+                value_row: cast: (LmTransRegistryFact) value_view_row\source
+                if: value_row != 0 && value_row\payload != 0
+                    value: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "constant.value", "class", "class", "value", "int", value_row)
+            ---
+        else:
+            value_row: lm_trans_registry_relation_stack_latest_row(value_rows, lm_trans_text_from_cstr(name))
+            if: value_row != 0 && value_row\payload != 0
+                value: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "constant.value", "class", "class", "value", "int", value_row)
+        ---
+        if: value = 0
+            c.fprintf(c.stderr, "trans L4 constant error: %s requires constant.value\n", name)
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        if: lm_trans_put(file, "#define ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(file, " ") != 0 || lm_trans_put(file, value) != 0 || lm_trans_put(file, "\n") != 0
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        i: i + 1U
+
+    if: names\count != 0U && lm_trans_put(file, "\n") != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+
+    lm_trans_ptr_stack_delete(@ names)
+return: 0
+
+fn: lm_trans_emit_l4_define_table (FILE: file; const: (LmTransNamespace: namespace_)) int
+    const: LmOwnPtrStack: rows
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
+    LmTransRegistryFact: row
+    const: @: char value
+    size_t: i
+    size_t: row_count
+    int: emitted
+
+    emitted: 0
+    view: lm_trans_namespace_registry_view(namespace_)
+    if: view != 0
+        row_count: lm_registry_view_table_row_count(view, "define.value")
+        i: 0U
+        while: i < row_count
+            view_row: lm_registry_view_table_row_at(view, "define.value", i)
+            if: view_row != 0 && view_row\key != 0 && (view_row\payload != 0 || view_row\payload_node != 0)
+                value: view_row\payload
+                row: cast: (LmTransRegistryFact) view_row\source
+                if: row != 0 && row\payload != 0
+                    value: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "define.value", "class", "class", "value", "char", row)
+                ---
+                if: lm_trans_put(file, "#define ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(view_row\key)) != 0
+                    return: 1
+                if: value != 0 && value[0] != '\0' && (lm_trans_put(file, " ") != 0 || lm_trans_put(file, value) != 0)
+                    return: 1
+                if: lm_trans_put(file, "\n") != 0
+                    return: 1
+                emitted: 1
+            ---
+            i: i + 1U
+        if: emitted && lm_trans_put(file, "\n") != 0
+            return: 1
+        return: 0
+    ---
+
+    rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("define"), "value")
+    if: rows = 0
+        return: 0
+
+    i: 0U
+    while: i < rows\count
+        row: lm_own_ptr_stack_at(rows, i)
+        if: row != 0 && row\key != 0
+            if: lm_trans_put(file, "#define ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(row\key)) != 0
+                return: 1
+            value: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "define.value", "class", "class", "value", "char", row)
+            if: value != 0 && value[0] != '\0' && (lm_trans_put(file, " ") != 0 || lm_trans_put(file, value) != 0)
+                return: 1
+            if: lm_trans_put(file, "\n") != 0
+                return: 1
+            emitted: 1
+        ---
+        i: i + 1U
+
+    if: emitted && lm_trans_put(file, "\n") != 0
+        return: 1
+return: 0
+
+fn: lm_trans_registry_backend_view_value (
+    const: (LmTransNamespace: namespace_)
+    const: @(char source_path)
+    const: (LmRegistryViewRow: view_row)
+) const: @: char
+    LmTransRegistryFact: facade_row
+    const: @: char backend
+
+    if: view_row = 0 || view_row\payload = 0
+        return: 0
+    backend: view_row\payload
+    facade_row: cast: (LmTransRegistryFact) view_row\source
+    if: source_path != 0 && facade_row != 0 && facade_row\payload != 0
+        backend: lm_trans_registry_source_path_n2_named_typed_value(namespace_, source_path, "class", "class", "backend", "class", facade_row)
+    ---
+return: backend
+
+fn: lm_trans_registry_collect_backend_names (LmOwnPtrStack: names; const: (LmTransNamespace: namespace_); const: @(char receiver_name); const: @(char backend_payload); const: @(char error_name); int: require_class) int
+    size_t: i
+    size_t: row_count
+    size_t: source_path_length
+    LmTransRegistryFact: row
+    const: LmOwnPtrStack: rows
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
+    const: @: char backend
+    @: char source_path
+    @: char name
+    LmP0Text: key_text
+
+    if: names = 0 || receiver_name = 0 || backend_payload = 0 || error_name = 0
+        return: 1
+
+    view: lm_trans_namespace_registry_view(namespace_)
+    if: view != 0
+        source_path: lm_trans_registry_source_relation_path_new(receiver_name, "backend", @ source_path_length)
+        if: source_path = 0
+            return: 1
+        key_text: lm_trans_l4_text_view_new("")
+        if: key_text = 0
+            lm_own_delete(source_path, 0)
+            return: 1
+        row_count: lm_registry_view_table_row_count_slice(view, source_path, source_path_length)
+        i: 0U
+        while: i < row_count
+            view_row: lm_registry_view_table_row_at_slice(view, source_path, source_path_length, i)
+            backend: lm_trans_registry_backend_view_value(namespace_, source_path, view_row)
+            if: view_row != 0 && view_row\key != 0 && backend != 0 && c.strcmp(backend, backend_payload) = 0
+                if: lm_trans_registry_append_relation_name(names, namespace_, receiver_name, "backend", error_name, require_class, key_text, view_row\key) != 0
+                    lm_trans_l4_text_view_delete(@ key_text)
+                    lm_own_delete(source_path, 0)
+                    return: 1
+            ---
+            i: i + 1U
+        lm_trans_l4_text_view_delete(@ key_text)
+        lm_own_delete(source_path, 0)
+        return: 0
+    ---
+
+    rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr(receiver_name), "backend")
+    if: rows = 0
+        return: 0
+    key_text: lm_trans_l4_text_view_new("")
+    if: key_text = 0
+        return: 1
+
+    i: 0U
+    while: i < rows\count
+        row: lm_own_ptr_stack_at(rows, i)
+        if: row != 0 && row\key != 0 && row\payload != 0 && c.strcmp(row\payload, backend_payload) = 0
+            lm_trans_text_assign_cstr(key_text, row\key)
+            if: require_class && lm_trans_namespace_class_has(namespace_, key_text) = 0
+                c.fprintf(c.stderr, "trans L4 %s error: %s.backend key %s is not a class\n", error_name, receiver_name, row\key)
+                lm_trans_l4_text_view_delete(@ key_text)
+                return: 1
+            name: lm_trans_text_copy_cstr(key_text)
+            if: name = 0
+                lm_trans_l4_text_view_delete(@ key_text)
+                return: 1
+            if: lm_trans_string_stack_has(names, name)
+                lm_own_delete(name, 0)
+            else:
+                if: lm_own_ptr_stack_push(names, name) != 0
+                    lm_own_delete(name, 0)
+                    lm_trans_l4_text_view_delete(@ key_text)
+                    return: 1
+        ---
+        i: i + 1U
+
+    lm_trans_l4_text_view_delete(@ key_text)
+return: 0
+
+fn: lm_trans_registry_append_relation_name (
+    LmOwnPtrStack: names
+    const: (LmTransNamespace: namespace_)
+    const: @(char owner_name)
+    const: @(char relation_name)
+    const: @(char error_name)
+    int: require_class
+    LmP0Text: key_text
+    const: @(char key)
+) int
+    @: char name
+
+    if: names = 0 || owner_name = 0 || relation_name = 0 || error_name = 0 || key_text = 0 || key = 0
+        return: 1
+    lm_trans_text_assign_cstr(key_text, key)
+    if: require_class && lm_trans_namespace_class_has(namespace_, key_text) = 0
+        c.fprintf(c.stderr, "trans L4 %s error: %s.%s key %s is not a class\n", error_name, owner_name, relation_name, key)
+        return: 1
+    name: lm_trans_text_copy_cstr(key_text)
+    if: name = 0
+        return: 1
+    if: lm_trans_string_stack_has(names, name)
+        lm_own_delete(name, 0)
+        return: 0
+    if: lm_own_ptr_stack_push(names, name) != 0
+        lm_own_delete(name, 0)
+        return: 1
+return: 0
+
+fn: lm_trans_registry_collect_relation_rows (
+    LmOwnPtrStack: names
+    const: (LmTransNamespace: namespace_)
+    const: @(char owner_name)
+    const: @(char relation_name)
+    const: @(char error_name)
+    int: require_class
+    const: (LmOwnPtrStack: rows)
+) int
+    size_t: i
+    LmTransRegistryFact: row
+    LmP0Text: key_text
+
+    if: names = 0 || owner_name = 0 || relation_name = 0 || error_name = 0
+        return: 1
+    if: rows = 0
+        return: 0
+    key_text: lm_trans_l4_text_view_new("")
+    if: key_text = 0
+        return: 1
+
+    i: 0U
+    while: i < rows\count
+        row: lm_own_ptr_stack_at(rows, i)
+        if: row != 0 && row\key != 0 && row\payload != 0
+            if: lm_trans_registry_append_relation_name(names, namespace_, owner_name, relation_name, error_name, require_class, key_text, row\key) != 0
+                lm_trans_l4_text_view_delete(@ key_text)
+                return: 1
+        ---
+        i: i + 1U
+
+    lm_trans_l4_text_view_delete(@ key_text)
+return: 0
+
+fn: lm_trans_registry_collect_source_relation_names (LmOwnPtrStack: names; const: (LmTransNamespace: namespace_); const: @(char owner_name); const: @(char relation_name); const: @(char error_name); int: require_class) int
+    const: LmOwnPtrStack: rows
+    LmP0Text: owner_text
+    LmP0Text: key_text
+    LmTransRegistryFact: row
+    @: char source_path
+    const: @: char source_key
+    size_t: source_path_length
+    size_t: source_count
+    size_t: facade_count
+    size_t: facade_index
+    size_t: i
+    int: source_covered
+    int: source_row_found
+    int: status
+
+    if: names = 0 || owner_name = 0 || relation_name = 0 || error_name = 0
+        return: 1
+    owner_text: lm_trans_l4_text_view_new(owner_name)
+    if: owner_text = 0
+        return: 1
+    rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, relation_name)
+    lm_trans_l4_text_view_delete(@ owner_text)
+
+    if: lm_trans_registry_view_parity_enabled() = 0 || (namespace_ != 0 && namespace_\registry_identifiers != 0 && namespace_\registry_identifiers != c.lm_trans_registry->identifiers)
+        return: lm_trans_registry_collect_relation_rows(names, namespace_, owner_name, relation_name, error_name, require_class, rows)
+
+    source_path: lm_trans_registry_source_relation_path_new(owner_name, relation_name, @ source_path_length)
+    if: source_path = 0
+        return: lm_trans_registry_collect_relation_rows(names, namespace_, owner_name, relation_name, error_name, require_class, rows)
+
+    source_covered: 0
+    source_key: lm_registry_view_source_path_key_at_slice(c.lm_trans_registry->view, source_path, source_path_length, 0U, @ source_covered)
+    if: source_covered = 0
+        lm_own_delete(source_path, 0)
+        return: lm_trans_registry_collect_relation_rows(names, namespace_, owner_name, relation_name, error_name, require_class, rows)
+
+    facade_count: 0U
+    i: 0U
+    if: rows != 0
+        while: i < rows\count
+            row: lm_own_ptr_stack_at(rows, i)
+            if: row != 0 && row\key != 0 && row\payload != 0
+                facade_count: facade_count + 1U
+            i: i + 1U
+    ---
+
+    source_count: 0U
+    facade_index: 0U
+    while: source_key != 0
+        source_row_found: 0
+        while: rows != 0 && facade_index < rows\count
+            row: lm_own_ptr_stack_at(rows, facade_index)
+            facade_index: facade_index + 1U
+            if: row != 0 && row\key != 0 && row\payload != 0 && c.strcmp(row\key, source_key) = 0
+                source_row_found: 1
+                break
+        ---
+        if: source_row_found = 0
+            lm_own_delete(source_path, 0)
+            lm_trans_registry_view_parity_fail("source relation key order", owner_name)
+            return: 1
+        source_count: source_count + 1U
+        source_key: lm_registry_view_source_path_key_at_slice(c.lm_trans_registry->view, source_path, source_path_length, source_count, @ source_covered)
+
+    if: lm_trans_registry_view_is_selected() = 0 || source_count != facade_count
+        lm_own_delete(source_path, 0)
+        return: lm_trans_registry_collect_relation_rows(names, namespace_, owner_name, relation_name, error_name, require_class, rows)
+
+    key_text: lm_trans_l4_text_view_new("")
+    if: key_text = 0
+        lm_own_delete(source_path, 0)
+        return: 1
+    status: 0
+    i: 0U
+    source_key: lm_registry_view_source_path_key_at_slice(c.lm_trans_registry->view, source_path, source_path_length, i, @ source_covered)
+    while: status = 0 && source_key != 0
+        status: lm_trans_registry_append_relation_name(names, namespace_, owner_name, relation_name, error_name, require_class, key_text, source_key)
+        i: i + 1U
+        source_key: lm_registry_view_source_path_key_at_slice(c.lm_trans_registry->view, source_path, source_path_length, i, @ source_covered)
+    lm_trans_l4_text_view_delete(@ key_text)
+    lm_own_delete(source_path, 0)
+return: status
+
+fn: lm_trans_l4_is_function_pointer_type (const: (LmTransNamespace: namespace_); const: @(char name)) int
+    LmP0Text: name_text
+    int: found
+
+    if: name = 0
+        return: 0
+
+    name_text: lm_trans_l4_text_view_new(name)
+    if: name_text = 0
+        return: 0
+    if: lm_trans_namespace_registry_source_relation_has_key(namespace_, name_text, "functionPointerType", "value") != 0
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: 1
+
+    found: lm_trans_namespace_registry_source_relation_has_key(namespace_, name_text, "functionPointerType", "row")
+    lm_trans_l4_text_view_delete(@ name_text)
+return: found
+
+fn: lm_trans_emit_abi_typed_name (FILE: file; const: @(char class_name); size_t: address_depth; int: is_const; const: @(char name); const: (LmTransNamespace: namespace_)) int
+    size_t: i
+    size_t: effective_address_depth
+    LmP0Text: class_text
+
+    if: file = 0 || class_name = 0
+        return: 1
+
+    if: is_const && lm_trans_put(file, "const ") != 0
+        return: 1
+    class_text: lm_trans_l4_text_view_new(class_name)
+    if: class_text = 0
+        return: 1
+    effective_address_depth: lm_trans_effective_address_depth(class_text, address_depth, namespace_)
+    if: lm_trans_emit_type_name(file, class_text) != 0
+        lm_trans_l4_text_view_delete(@ class_text)
+        return: 1
+    if: (effective_address_depth != 0U || name != 0) && lm_trans_put(file, " ") != 0
+        lm_trans_l4_text_view_delete(@ class_text)
+        return: 1
+    i: 0U
+    while: i < effective_address_depth
+        if: lm_trans_put(file, "*") != 0
+            lm_trans_l4_text_view_delete(@ class_text)
+            return: 1
+        i: i + 1U
+    if: name != 0
+        if: lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0
+            lm_trans_l4_text_view_delete(@ class_text)
+            return: 1
+    ---
+    lm_trans_l4_text_view_delete(@ class_text)
+return: 0
+
+fn: lm_trans_registry_relation_stack_latest_any (const: (LmOwnPtrStack: stack)) LmTransRegistryFact
+    if: stack = 0 || stack\count = 0U
+        return: 0
+return: lm_own_ptr_stack_at(stack, stack\count - 1U)
+
+fn: lm_trans_registry_relation_stack_latest_return_row (const: (LmOwnPtrStack: stack)) LmTransRegistryFact
+    LmTransRegistryFact: row
+
+    row: lm_trans_registry_relation_stack_latest_row(stack, lm_trans_text_from_cstr("return"))
+    if: row != 0
+        return: row
+return: lm_trans_registry_relation_stack_latest_any(stack)
+
+fn: lm_trans_abi_source_text_cell (
+    const: (LmTransNamespace: namespace_)
+    const: @(char source_path)
+    const: @(char value_descriptor)
+    const: (LmTransRegistryFact: facade_row)
+    const: @(LmTableCell out_key_cell)
+) const: LmTableCell
+    const: LmTableCell: source_cell
+
+    if: out_key_cell != 0
+        out_key_cell[0]: 0
+    if: source_path = 0 || value_descriptor = 0 || facade_row = 0
+        return: 0
+
+    source_cell: lm_trans_registry_source_path_typed_cell_kind(namespace_, source_path, "name", "class", value_descriptor, 0, facade_row, 0, out_key_cell)
+    if: source_cell != 0
+        return: source_cell
+return: lm_trans_registry_source_path_typed_cell_kind(namespace_, source_path, "class", "class", value_descriptor, 0, facade_row, 0, out_key_cell)
+
+fn: lm_trans_abi_source_text_value (
+    const: (LmTransNamespace: namespace_)
+    const: @(char source_path)
+    const: @(char value_descriptor)
+    const: (LmTransRegistryFact: facade_row)
+    const: @(LmTableCell out_key_cell)
+) const: @: char
+    const: LmTableCell: source_cell
+
+    if: facade_row = 0 || facade_row\payload = 0
+        return: 0
+    source_cell: lm_trans_abi_source_text_cell(namespace_, source_path, value_descriptor, facade_row, out_key_cell)
+    if: source_cell != 0 && lm_trans_registry_view_is_selected() != 0
+        return: source_cell\value
+return: facade_row\payload
+
+fn: lm_trans_collect_abi_return (
+    const: (LmTransNamespace: namespace_)
+    const: @(char owner_name)
+    int: return_key_policy
+    const: @@(char out_class_name)
+    @: size_t out_address_depth
+    @: size_t out_array_rank
+    @: int out_is_const
+) int
+    const: LmOwnPtrStack: class_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: array_rank_rows
+    const: LmOwnPtrStack: const_rows
+    LmP0Text: owner_text
+    LmP0Text: return_key
+    LmTransRegistryFact: class_row
+    LmTransRegistryFact: address_depth_row
+    LmTransRegistryFact: array_rank_row
+    LmTransRegistryFact: const_row
+    const: @: char class_payload
+    const: @: char address_depth_payload
+    const: @: char array_rank_payload
+    const: @: char const_payload
+    @: char class_path
+    @: char address_depth_path
+    @: char array_rank_path
+    @: char const_path
+    size_t: source_path_length
+    size_t: address_depth
+    size_t: array_rank
+    size_t: const_flag
+    int: status
+
+    if: out_class_name != 0
+        out_class_name[0]: 0
+    if: out_address_depth != 0
+        out_address_depth[0]: 0U
+    if: out_array_rank != 0
+        out_array_rank[0]: 0U
+    if: out_is_const != 0
+        out_is_const[0]: 0
+    if: owner_name = 0 || out_class_name = 0 || out_address_depth = 0 || out_array_rank = 0 || out_is_const = 0 || return_key_policy < 0 || return_key_policy > 2
+        return: 3
+
+    owner_text: lm_trans_l4_text_view_new(owner_name)
+    return_key: lm_trans_l4_text_view_new("return")
+    if: owner_text = 0 || return_key = 0
+        lm_trans_l4_text_view_delete(@ owner_text)
+        lm_trans_l4_text_view_delete(@ return_key)
+        return: 3
+
+    class_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.class")
+    if: return_key_policy = 2
+        class_row: lm_trans_registry_relation_stack_latest_row(class_rows, return_key)
+    else:
+        class_row: lm_trans_registry_relation_stack_latest_return_row(class_rows)
+    if: class_row = 0 || class_row\payload = 0 || (class_row\key = 0 && return_key_policy != 1)
+        lm_trans_l4_text_view_delete(@ owner_text)
+        lm_trans_l4_text_view_delete(@ return_key)
+        return: 1
+    if: class_row\key != 0
+        lm_trans_text_assign_cstr(return_key, class_row\key)
+
+    class_path: 0
+    address_depth_path: 0
+    array_rank_path: 0
+    const_path: 0
+    status: 0
+    if: lm_trans_registry_view_parity_enabled() != 0
+        class_path: lm_trans_registry_source_relation_path_new(owner_name, "return.class", @ source_path_length)
+        address_depth_path: lm_trans_registry_source_relation_path_new(owner_name, "return.address-depth", @ source_path_length)
+        array_rank_path: lm_trans_registry_source_relation_path_new(owner_name, "return.array-rank", @ source_path_length)
+        const_path: lm_trans_registry_source_relation_path_new(owner_name, "return.const", @ source_path_length)
+        if: class_path = 0 || address_depth_path = 0 || array_rank_path = 0 || const_path = 0
+            status: 3
+    ---
+
+    class_payload: lm_trans_abi_source_text_value(namespace_, class_path, "class", class_row, 0)
+    address_depth_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.address-depth")
+    array_rank_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.array-rank")
+    const_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "return.const")
+    address_depth_row: lm_trans_registry_relation_stack_latest_row(address_depth_rows, return_key)
+    array_rank_row: lm_trans_registry_relation_stack_latest_row(array_rank_rows, return_key)
+    const_row: lm_trans_registry_relation_stack_latest_row(const_rows, return_key)
+    address_depth_payload: lm_trans_abi_source_text_value(namespace_, address_depth_path, "size_t", address_depth_row, 0)
+    array_rank_payload: lm_trans_abi_source_text_value(namespace_, array_rank_path, "size_t", array_rank_row, 0)
+    const_payload: lm_trans_abi_source_text_value(namespace_, const_path, "int", const_row, 0)
+    address_depth: 0U
+    array_rank: 0U
+    const_flag: 0U
+    if: status = 0 && (class_payload = 0 || (address_depth_row != 0 && (address_depth_payload = 0 || lm_trans_parse_size_payload(address_depth_payload, @ address_depth) = 0)) || (array_rank_row != 0 && (array_rank_payload = 0 || lm_trans_parse_size_payload(array_rank_payload, @ array_rank) = 0)) || (const_row != 0 && (const_payload = 0 || lm_trans_parse_size_payload(const_payload, @ const_flag) = 0)))
+        status: 2
+
+    if: status = 0
+        out_class_name[0]: class_payload
+        out_address_depth[0]: address_depth
+        out_array_rank[0]: array_rank
+        out_is_const[0]: const_flag != 0U
+
+    lm_own_delete(const_path, 0)
+    lm_own_delete(array_rank_path, 0)
+    lm_own_delete(address_depth_path, 0)
+    lm_own_delete(class_path, 0)
+    lm_trans_l4_text_view_delete(@ owner_text)
+    lm_trans_l4_text_view_delete(@ return_key)
+return: status
+
+fn: lm_trans_collect_abi_params (@: LmTransAbiParam params; size_t: capacity; @: size_t out_count; const: (LmTransNamespace: namespace_); const: @(char owner_name); const: @(char error_name)) int
+    const: LmOwnPtrStack: class_rows
+    const: LmOwnPtrStack: index_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: array_rank_rows
+    const: LmOwnPtrStack: const_rows
+    const: LmTableCell: source_key_cell
+    LmP0Text: owner_text
+    LmP0Text: param_text
+    LmTransRegistryFact: row
+    LmTransRegistryFact: index_row
+    LmTransRegistryFact: address_depth_row
+    LmTransRegistryFact: array_rank_row
+    LmTransRegistryFact: const_row
+    const: @: char class_payload
+    const: @: char index_payload
+    const: @: char address_depth_payload
+    const: @: char array_rank_payload
+    const: @: char const_payload
+    const: @: char param_name
+    @: char class_path
+    @: char index_path
+    @: char address_depth_path
+    @: char array_rank_path
+    @: char const_path
+    size_t: source_path_length
+    size_t: i
+    size_t: j
+    size_t: index
+    size_t: const_flag
+    LmTransAbiParam: swap
+    int: status
+
+    if: params = 0 || out_count = 0 || owner_name = 0 || error_name = 0
+        return: 1
+
+    owner_text: lm_trans_l4_text_view_new(owner_name)
+    param_text: lm_trans_l4_text_view_new("")
+    if: owner_text = 0 || param_text = 0
+        lm_trans_l4_text_view_delete(@ owner_text)
+        lm_trans_l4_text_view_delete(@ param_text)
+        return: 1
+
+    status: 0
+    out_count[0]: 0U
+    class_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "param.class")
+    index_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "param.index")
+    address_depth_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "param.address-depth")
+    array_rank_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "param.array-rank")
+    const_rows: lm_trans_namespace_registry_relation_stack(namespace_, owner_text, "param.const")
+    class_path: 0
+    index_path: 0
+    address_depth_path: 0
+    array_rank_path: 0
+    const_path: 0
+    if: lm_trans_registry_view_parity_enabled() != 0
+        class_path: lm_trans_registry_source_relation_path_new(owner_name, "param.class", @ source_path_length)
+        index_path: lm_trans_registry_source_relation_path_new(owner_name, "param.index", @ source_path_length)
+        address_depth_path: lm_trans_registry_source_relation_path_new(owner_name, "param.address-depth", @ source_path_length)
+        array_rank_path: lm_trans_registry_source_relation_path_new(owner_name, "param.array-rank", @ source_path_length)
+        const_path: lm_trans_registry_source_relation_path_new(owner_name, "param.const", @ source_path_length)
+        if: class_path = 0 || index_path = 0 || address_depth_path = 0 || array_rank_path = 0 || const_path = 0
+            status: 1
+    ---
+
+    if: class_rows != 0
+        i: 0U
+        while: status = 0 && i < class_rows\count
+            row: lm_own_ptr_stack_at(class_rows, i)
+            if: row != 0 && row\key != 0 && row\payload != 0
+                lm_trans_text_assign_cstr(param_text, row\key)
+                if: row != lm_trans_registry_relation_stack_latest_row(class_rows, param_text)
+                    i: i + 1U
+                    continue
+                source_key_cell: 0
+                class_payload: lm_trans_abi_source_text_value(namespace_, class_path, "class", row, @ source_key_cell)
+                param_name: row\key
+                if: source_key_cell != 0 && source_key_cell\value != 0 && lm_trans_registry_view_is_selected() != 0
+                    param_name: source_key_cell\value
+                if: out_count[0] >= capacity
+                    c.fprintf(c.stderr, "trans L4 %s error: too many parameters in %s\n", error_name, owner_name)
+                    status: 1
+                else:
+                    index_row: lm_trans_registry_relation_stack_latest_row(index_rows, param_text)
+                    index_payload: lm_trans_abi_source_text_value(namespace_, index_path, "size_t", index_row, 0)
+                    if: class_payload = 0 || index_payload = 0 || lm_trans_parse_size_payload(index_payload, @ index) = 0
+                        c.fprintf(c.stderr, "trans L4 %s error: parameter %s.%s requires param.index\n", error_name, owner_name, row\key)
+                        status: 1
+                    else:
+                        params[out_count[0]]\name: param_name
+                        params[out_count[0]]\class_name: class_payload
+                        params[out_count[0]]\index: index
+                        address_depth_row: lm_trans_registry_relation_stack_latest_row(address_depth_rows, param_text)
+                        address_depth_payload: lm_trans_abi_source_text_value(namespace_, address_depth_path, "size_t", address_depth_row, 0)
+                        params[out_count[0]]\address_depth: 0U
+                        if: address_depth_row != 0 && (address_depth_payload = 0 || lm_trans_parse_size_payload(address_depth_payload, @ params[out_count[0]]\address_depth) = 0)
+                            c.fprintf(c.stderr, "trans L4 %s error: parameter %s.%s has invalid param.address-depth\n", error_name, owner_name, row\key)
+                            status: 1
+                        array_rank_row: lm_trans_registry_relation_stack_latest_row(array_rank_rows, param_text)
+                        array_rank_payload: lm_trans_abi_source_text_value(namespace_, array_rank_path, "size_t", array_rank_row, 0)
+                        params[out_count[0]]\array_rank: 0U
+                        if: status = 0 && array_rank_row != 0 && (array_rank_payload = 0 || lm_trans_parse_size_payload(array_rank_payload, @ params[out_count[0]]\array_rank) = 0)
+                            c.fprintf(c.stderr, "trans L4 %s error: parameter %s.%s has invalid param.array-rank\n", error_name, owner_name, row\key)
+                            status: 1
+                        const_row: lm_trans_registry_relation_stack_latest_row(const_rows, param_text)
+                        const_payload: lm_trans_abi_source_text_value(namespace_, const_path, "int", const_row, 0)
+                        const_flag: 0U
+                        if: status = 0 && const_row != 0 && (const_payload = 0 || lm_trans_parse_size_payload(const_payload, @ const_flag) = 0)
+                            c.fprintf(c.stderr, "trans L4 %s error: parameter %s.%s has invalid param.const\n", error_name, owner_name, row\key)
+                            status: 1
+                        if: status = 0
+                            params[out_count[0]]\is_const: const_flag != 0U
+                            params[out_count[0]]\index: index
+                            out_count[0]: out_count[0] + 1U
+            ---
+            i: i + 1U
+        ---
+
+    if: status = 0
+        i: 0U
+        while: i < out_count[0]
+            j: i + 1U
+            while: j < out_count[0]
+                if: params[j]\index < params[i]\index
+                    swap: params[i]
+                    params[i]: params[j]
+                    params[j]: swap
+                j: j + 1U
+            i: i + 1U
+        ---
+
+    lm_own_delete(const_path, 0)
+    lm_own_delete(array_rank_path, 0)
+    lm_own_delete(address_depth_path, 0)
+    lm_own_delete(index_path, 0)
+    lm_own_delete(class_path, 0)
+    lm_trans_l4_text_view_delete(@ owner_text)
+    lm_trans_l4_text_view_delete(@ param_text)
+return: status
+
+fn: lm_trans_emit_abi_params (FILE: file; @: LmTransAbiParam params; size_t: count; const: (LmTransNamespace: namespace_)) int
+    size_t: i
+
+    if: file = 0 || (params = 0 && count != 0U)
+        return: 1
+
+    if: count = 0U
+        return: lm_trans_put(file, "void")
+
+    i: 0U
+    while: i < count
+        if: i != 0U && lm_trans_put(file, ", ") != 0
+            return: 1
+        if: params[i]\array_rank != 0U
+            if: lm_trans_put(file, "LmSlice *") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(params[i]\name)) != 0
+                return: 1
+            ---
+        else:
+            if: lm_trans_emit_abi_typed_name(file, params[i]\class_name, params[i]\address_depth, params[i]\is_const, params[i]\name, namespace_) != 0
+                return: 1
+            ---
+        ---
+        i: i + 1U
+return: 0
+
+fn: lm_trans_alias_source_target (
+    const: (LmTransNamespace: namespace_)
+    const: (LmTransRegistryFact: facade_target_row)
+) const: @: char
+    if: facade_target_row = 0 || facade_target_row\payload = 0
+        return: 0
+return: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "alias.target", "class", "class", "target", "class", facade_target_row)
+
+fn: lm_trans_alias_source_address_depth (
+    const: (LmTransNamespace: namespace_)
+    const: (LmTransRegistryFact: facade_address_depth_row)
+) const: @: char
+    if: facade_address_depth_row = 0 || facade_address_depth_row\payload = 0
+        return: 0
+return: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "alias.target.address-depth", "class", "class", "depth", "size_t", facade_address_depth_row)
+
+fn: lm_trans_alias_source_const (
+    const: (LmTransNamespace: namespace_)
+    const: (LmTransRegistryFact: facade_const_row)
+) const: @: char
+    if: facade_const_row = 0 || facade_const_row\payload = 0
+        return: 0
+return: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "alias.target.const", "class", "class", "value", "int", facade_const_row)
+
+fn: lm_trans_emit_l4_alias_typedefs (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
+    const: LmOwnPtrStack: target_rows
+    const: LmOwnPtrStack: address_depth_rows
+    const: LmOwnPtrStack: const_rows
+    LmTransRegistryFact: target_row
+    LmTransRegistryFact: address_depth_row
+    LmTransRegistryFact: const_row
+    const: @: char name
+    const: @: char target
+    const: @: char address_depth_payload
+    const: @: char const_payload
+    LmP0Text: name_text
+    size_t: i
+    size_t: address_depth
+    size_t: const_flag
+    FILE: declaration_file
+    int: emitted
+    int: emitted_any
+    int: status
+
+    names: lm_trans_ptr_stack_new(lm_trans_free_any)
+    if: names = 0
+        return: 1
+    name_text: lm_trans_l4_text_view_new("")
+    if: name_text = 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+    if: lm_trans_registry_collect_backend_names(names, namespace_, "alias", "c.typedef", "alias", 1) != 0
+        lm_trans_l4_text_view_delete(@ name_text)
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+
+    target_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "target")
+    address_depth_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "target.address-depth")
+    const_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("alias"), "target.const")
+
+    emitted_any: 0
+    i: 0U
+    while: i < names\count
+        name: lm_own_ptr_stack_at(names, i)
+        lm_trans_text_assign_cstr(name_text, name)
+        target_row: lm_trans_registry_relation_stack_latest_row(target_rows, name_text)
+        target: lm_trans_alias_source_target(namespace_, target_row)
+        if: target = 0
+            c.fprintf(c.stderr, "trans L4 alias error: %s requires alias.target\n", name)
+            lm_trans_l4_text_view_delete(@ name_text)
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        address_depth: 0U
+        const_flag: 0U
+        address_depth_row: lm_trans_registry_relation_stack_latest_row(address_depth_rows, name_text)
+        const_row: lm_trans_registry_relation_stack_latest_row(const_rows, name_text)
+        address_depth_payload: lm_trans_alias_source_address_depth(namespace_, address_depth_row)
+        const_payload: lm_trans_alias_source_const(namespace_, const_row)
+        if: (address_depth_row != 0 && (address_depth_payload = 0 || lm_trans_parse_size_payload(address_depth_payload, @ address_depth) = 0)) || (const_row != 0 && (const_payload = 0 || lm_trans_parse_size_payload(const_payload, @ const_flag) = 0))
+            c.fprintf(c.stderr, "trans L4 alias error: %s has invalid alias target flags\n", name)
+            lm_trans_l4_text_view_delete(@ name_text)
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        declaration_file: lm_trans_tmpfile()
+        if: declaration_file = 0
+            lm_trans_l4_text_view_delete(@ name_text)
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        emitted: 0
+        status: lm_trans_put(declaration_file, "typedef ") != 0 || lm_trans_emit_abi_typed_name(declaration_file, target, address_depth, const_flag != 0U, name, namespace_) != 0 || lm_trans_put(declaration_file, ";\n") != 0
+        if: status = 0
+            status: lm_trans_typedef_projection_emit_prepared_cstr(file, name, declaration_file, @ emitted)
+        c.fclose(declaration_file)
+        if: status != 0
+            lm_trans_l4_text_view_delete(@ name_text)
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        if: emitted
+            emitted_any: 1
+        i: i + 1U
+
+    if: emitted_any && lm_trans_put(file, "\n") != 0
+        lm_trans_l4_text_view_delete(@ name_text)
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+    lm_trans_l4_text_view_delete(@ name_text)
+    lm_trans_ptr_stack_delete(@ names)
+return: 0
+
+fn: lm_trans_registry_collect_forward_backend_names (LmOwnPtrStack: names; const: (LmTransNamespace: namespace_); const: @(char backend_payload)) int
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: view_row
+    const: @: char backend
+    LmP0Text: key_text
+    size_t: row_count
+    size_t: i
+
+    if: names = 0 || backend_payload = 0
+        return: 1
+    view: lm_trans_namespace_registry_view(namespace_)
+    if: view = 0
+        return: lm_trans_registry_collect_backend_names(names, namespace_, "forward", backend_payload, "forward", 1)
+
+    key_text: lm_trans_l4_text_view_new("")
+    if: key_text = 0
+        return: 1
+    row_count: lm_registry_view_table_row_count(view, "forward.backend")
+    i: 0U
+    while: i < row_count
+        view_row: lm_registry_view_table_row_at(view, "forward.backend", i)
+        backend: lm_trans_registry_forward_view_backend(namespace_, view_row)
+        if: view_row != 0 && view_row\key != 0 && backend != 0 && c.strcmp(backend, backend_payload) = 0
+            if: lm_trans_registry_append_relation_name(names, namespace_, "forward", "backend", "forward", 1, key_text, view_row\key) != 0
+                lm_trans_l4_text_view_delete(@ key_text)
+                return: 1
+        ---
+        i: i + 1U
+    lm_trans_l4_text_view_delete(@ key_text)
+return: 0
+
+fn: lm_trans_emit_l4_forward_typedefs (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
+    const: LmOwnPtrStack: backend_rows
+    LmTransRegistryFact: backend_row
+    const: LmRegistryView: view
+    const: LmRegistryViewRow: backend_view_row
+    const: @: char name
+    const: @: char backend
+    const: @: char tag
+    size_t: i
+    FILE: declaration_file
+    int: emitted
+    int: emitted_any
+    int: status
+
+    names: lm_trans_ptr_stack_new(lm_trans_free_any)
+    if: names = 0
+        return: 1
+    if: lm_trans_registry_collect_forward_backend_names(names, namespace_, "c.struct") != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+    if: lm_trans_registry_collect_forward_backend_names(names, namespace_, "c.union") != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+
+    view: lm_trans_namespace_registry_view(namespace_)
+    backend_rows: 0
+    if: view = 0
+        backend_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("forward"), "backend")
+    emitted_any: 0
+    i: 0U
+    while: i < names\count
+        name: lm_own_ptr_stack_at(names, i)
+        backend: 0
+        if: view != 0
+            backend_view_row: lm_registry_view_lookup_exact(view, name, "forward.backend")
+            backend: lm_trans_registry_forward_view_backend(namespace_, backend_view_row)
+        else:
+            backend_row: lm_trans_registry_relation_stack_latest_row(backend_rows, lm_trans_text_from_cstr(name))
+            if: backend_row != 0 && backend_row\payload != 0
+                backend: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "forward.backend", "class", "class", "backend", "class", backend_row)
+        ---
+        if: backend = 0
+            c.fprintf(c.stderr, "trans L4 forward error: %s requires forward.backend\n", name)
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        if: backend != 0 && c.strcmp(backend, "c.struct") = 0
+            tag: "struct"
+        else:
+            if: backend != 0 && c.strcmp(backend, "c.union") = 0
+                tag: "union"
+            else:
+                c.fprintf(c.stderr, "trans L4 forward error: unsupported backend %s for %s\n", backend, name)
+                lm_trans_ptr_stack_delete(@ names)
+                return: 1
+        ---
+        declaration_file: lm_trans_tmpfile()
+        if: declaration_file = 0
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        emitted: 0
+        status: lm_trans_put(declaration_file, "typedef ") != 0 || lm_trans_put(declaration_file, tag) != 0 || lm_trans_put(declaration_file, " ") != 0 || lm_trans_emit_identifier(declaration_file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(declaration_file, " ") != 0 || lm_trans_emit_identifier(declaration_file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(declaration_file, ";\n") != 0
+        if: status = 0
+            status: lm_trans_typedef_projection_emit_prepared_cstr(file, name, declaration_file, @ emitted)
+        c.fclose(declaration_file)
+        if: status != 0
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        if: emitted
+            emitted_any: 1
+        i: i + 1U
+
+    if: emitted_any && lm_trans_put(file, "\n") != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+    lm_trans_ptr_stack_delete(@ names)
+return: 0
+
+fn: lm_trans_emit_abi_return_type (FILE: file; const: (LmTransNamespace: namespace_); const: @(char owner_name); const: @(char error_name)) int
+    const: @: char class_name
+    size_t: address_depth
+    size_t: array_rank
+    int: is_const
+    int: status
+
+    if: file = 0 || owner_name = 0 || error_name = 0
+        return: 1
+
+    status: lm_trans_collect_abi_return(namespace_, owner_name, 0, @ class_name, @ address_depth, @ array_rank, @ is_const)
+    if: status = 1
+        c.fprintf(c.stderr, "trans L4 %s error: %s requires return.class\n", error_name, owner_name)
+        return: 1
+    if: status = 2
+        c.fprintf(c.stderr, "trans L4 %s error: %s has invalid return flags\n", error_name, owner_name)
+        return: 1
+    if: status != 0
+        return: 1
+
+    if: array_rank != 0U
+        return: lm_trans_put(file, "LmSlice *")
+return: lm_trans_emit_abi_typed_name(file, class_name, address_depth, is_const, 0, namespace_)
+
+fn: lm_trans_emit_l4_prototype_name (FILE: file; const: (LmTransNamespace: namespace_); const: @(char name); const: @(char error_name)) int
+    @: LmTransAbiParam params
+    size_t: param_capacity
+    size_t: param_count
+    const: @: char class_kind
+    int: is_sub
+    int: is_external
+    int: has_thread_context
+    int: status
+
+    if: name = 0 || error_name = 0
+        return: 1
+
+    class_kind: lm_trans_namespace_class_kind_value(namespace_, lm_trans_text_from_cstr(name))
+    is_sub: class_kind != 0 && c.strcmp(class_kind, "procedure") = 0
+    is_external: lm_trans_fn_is_external(namespace_, lm_trans_text_from_cstr(name))
+    if: lm_trans_function_thread_context_profile(namespace_, lm_trans_text_from_cstr(name), is_external, @ has_thread_context) != 0
+        return: 1
+    if: has_thread_context && lm_trans_emit_message_thread_runtime_prelude(lm_trans_prelude_file(file)) != 0
+        return: 1
+    if: lm_trans_prepare_function_c_calling_convention(file, namespace_, lm_trans_text_from_cstr(name), 0) != 0
+        return: 1
+
+    param_capacity: 256U
+    params: lm_trans_l4_abi_params_new(param_capacity)
+    if: params = 0
+        return: 1
+
+    status: 0
+    if: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, name, error_name) != 0
+        status: 1
+    if: status = 0 && is_external = 0 && lm_trans_put_file_scope_static(file) != 0
+        status: 1
+    if: status = 0 && is_sub && lm_trans_put(file, "void") != 0
+        status: 1
+    if: status = 0 && is_sub = 0 && lm_trans_emit_abi_return_type(file, namespace_, name, error_name) != 0
+        status: 1
+    if: status = 0 && lm_trans_put(file, " ") != 0
+        status: 1
+    if: status = 0 && lm_trans_emit_function_c_calling_convention(file, namespace_, lm_trans_text_from_cstr(name)) != 0
+        status: 1
+    if: status = 0 && is_external && lm_trans_put(file, "(") != 0
+        status: 1
+    if: status = 0 && lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0
+        status: 1
+    if: status = 0 && is_external && lm_trans_put(file, ")") != 0
+        status: 1
+    if: status = 0 && lm_trans_put(file, "(") != 0
+        status: 1
+    if: status = 0 && has_thread_context
+        if: lm_trans_put(file, "struct LmMessageThread *lm_lmx_message_thread") != 0
+            status: 1
+        if: status = 0 && param_count != 0U && lm_trans_put(file, ", ") != 0
+            status: 1
+        ---
+    if: status = 0 && (has_thread_context = 0 || param_count != 0U) && lm_trans_emit_abi_params(file, params, param_count, namespace_) != 0
+        status: 1
+    if: status = 0 && lm_trans_put(file, ");\n") != 0
+        status: 1
+
+    lm_trans_l4_abi_params_delete(params, param_capacity)
+return: status
+
+fn: lm_trans_emit_l4_prototypes (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
+    const: @: char name
+    size_t: i
+
+    names: lm_trans_ptr_stack_new(lm_trans_free_any)
+    if: names = 0
+        return: 1
+    if: lm_trans_registry_collect_source_relation_names(names, namespace_, "fn", "descriptor", "fn", 1) != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+
+    i: 0U
+    while: i < names\count
+        name: lm_own_ptr_stack_at(names, i)
+        if: lm_trans_l4_is_function_pointer_type(namespace_, name) = 0
+            if: lm_trans_emit_l4_prototype_name(file, namespace_, name, "fn") != 0
+                lm_trans_ptr_stack_delete(@ names)
+                return: 1
+        ---
+        i: i + 1U
+
+    if: names\count != 0U && lm_trans_put(file, "\n") != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+    lm_trans_ptr_stack_delete(@ names)
+return: 0
+
+fn: lm_trans_registry_synthetic_node (LmP0NodeKind: kind) LmP0Node
+    LmP0Node: node
+
+    node: lm_own_arena_new_zero(lm_trans_registry\value_arena, c.sizeof(node[0]))
+    if: node = 0
+        return: 0
+    node\as: lm_own_arena_new_zero(lm_trans_registry\value_arena, c.sizeof(node\as[0]))
+    if: node\as = 0
+        return: 0
+    node\kind: kind
+    if: kind = c.LM_P0_NODE_ATOM || kind = c.LM_P0_NODE_DISABLED
+        node\as\atom: lm_trans_registry_new_text()
+        if: node\as\atom = 0
+            return: 0
+    ---
+    if: kind = c.LM_P0_NODE_FRAME
+        node\as\frame: lm_trans_registry_new_frame()
+        if: node\as\frame = 0
+            return: 0
+    ---
+    if: kind = c.LM_P0_NODE_STRUCTURE
+        node\as\structure: lm_trans_registry_new_structure()
+        if: node\as\structure = 0
+            return: 0
+return: node
+
+fn: lm_trans_registry_synthetic_atom_node (const: (LmP0Text: text)) LmP0Node
+    LmP0Node: node
+
+    node: lm_trans_registry_synthetic_node(c.LM_P0_NODE_ATOM)
+    if: node = 0
+        return: 0
+    if: lm_trans_registry_clone_text(text, node\as\atom) != 0
+        return: 0
+return: node
+
+fn: lm_trans_registry_synthetic_atom_node_cstr (const: @(char text)) LmP0Node
+    return: lm_trans_registry_synthetic_atom_node(lm_trans_text_from_cstr(text))
+
+fn: lm_trans_registry_synthetic_append_node (LmP0Structure: structure; LmP0Node: value) LmP0Field
+    LmP0Field: field
+
+    if: structure = 0 || value = 0
+        return: 0
+
+    field: lm_own_arena_new_zero(lm_trans_registry\value_arena, c.sizeof(field[0]))
+    if: field = 0
+        return: 0
+    field\value: value
+
+    if: structure\last_field != 0
+        structure\last_field\next: field
+    else:
+        structure\first_field: field
+    ---
+    structure\last_field: field
+    structure\field_count: structure\field_count + 1U
+return: field
+
+fn: lm_trans_registry_synthetic_frame_node (const: (LmP0Text: head)) LmP0Node
+    LmP0Node: node
+
+    node: lm_trans_registry_synthetic_node(c.LM_P0_NODE_FRAME)
+    if: node = 0
+        return: 0
+    if: lm_trans_registry_clone_text(head, node\as\frame\head) != 0
+        return: 0
+return: node
+
+fn: lm_trans_registry_synthetic_frame_node_cstr (const: @(char head)) LmP0Node
+    return: lm_trans_registry_synthetic_frame_node(lm_trans_text_from_cstr(head))
+
+fn: lm_trans_registry_synthetic_structure_node () LmP0Node
+    return: lm_trans_registry_synthetic_node(c.LM_P0_NODE_STRUCTURE)
+
+fn: lm_trans_registry_synthetic_at_head (size_t: address_depth) @: char
+    @: char head
+
+    if: address_depth = 0U
+        return: 0
+
+    head: lm_own_arena_new_zero(lm_trans_registry\value_arena, address_depth + 1U)
+    if: head = 0
+        return: 0
+    c.memset(head, '@', address_depth)
+    head[address_depth]: '\0'
+return: head
+
+fn: lm_trans_registry_synthetic_array_head (size_t: array_rank) @: char
+    @: char head
+    size_t: index
+
+    if: array_rank = 0U || array_rank > (c.SIZE_MAX - 1U) / 2U
+        return: 0
+
+    head: lm_own_arena_new_zero(lm_trans_registry\value_arena, (array_rank * 2U) + 1U)
+    if: head = 0
+        return: 0
+    index: 0U
+    while: index < array_rank
+        head[index * 2U]: '['
+        head[(index * 2U) + 1U]: ']'
+        index: index + 1U
+    head[array_rank * 2U]: '\0'
+return: head
+
+fn: lm_trans_registry_synthetic_callable_type_node (const: @(char class_name); size_t: address_depth; size_t: array_rank; int: is_const; const: @(char name)) LmP0Node
+    LmP0Node: node
+    LmP0Node: element_node
+    LmP0Node: wrapper
+    @: char at_head
+    @: char array_head
+
+    if: class_name = 0
+        return: 0
+
+    node: 0
+    if: array_rank != 0U
+        if: address_depth = 0U
+            return: 0
+        array_head: lm_trans_registry_synthetic_array_head(array_rank)
+        if: array_head = 0
+            return: 0
+        node: lm_trans_registry_synthetic_frame_node_cstr(array_head)
+        if: node = 0
+            return: 0
+        if: address_depth > 1U
+            at_head: lm_trans_registry_synthetic_at_head(address_depth - 1U)
+            if: at_head = 0
+                return: 0
+            element_node: lm_trans_registry_synthetic_frame_node_cstr(at_head)
+            if: element_node = 0 || lm_trans_registry_synthetic_append_node(element_node\as\frame\body, lm_trans_registry_synthetic_atom_node_cstr(class_name)) = 0
+                return: 0
+            ---
+        else:
+            element_node: lm_trans_registry_synthetic_atom_node_cstr(class_name)
+        ---
+        if: element_node = 0 || lm_trans_registry_synthetic_append_node(node\as\frame\body, element_node) = 0 || (name != 0 && lm_trans_registry_synthetic_append_node(node\as\frame\body, lm_trans_registry_synthetic_atom_node_cstr(name)) = 0)
+            return: 0
+    ---
+    if: array_rank = 0U && address_depth != 0U
+        at_head: lm_trans_registry_synthetic_at_head(address_depth)
+        if: at_head = 0
+            return: 0
+        node: lm_trans_registry_synthetic_frame_node_cstr(at_head)
+        if: node = 0 || lm_trans_registry_synthetic_append_node(node\as\frame\body, lm_trans_registry_synthetic_atom_node_cstr(class_name)) = 0
+            return: 0
+        if: name != 0 && lm_trans_registry_synthetic_append_node(node\as\frame\body, lm_trans_registry_synthetic_atom_node_cstr(name)) = 0
+            return: 0
+    ---
+    if: array_rank = 0U && address_depth = 0U && name != 0
+        node: lm_trans_registry_synthetic_frame_node_cstr(class_name)
+        if: node = 0 || lm_trans_registry_synthetic_append_node(node\as\frame\body, lm_trans_registry_synthetic_atom_node_cstr(name)) = 0
+            return: 0
+    ---
+    if: array_rank = 0U && address_depth = 0U && name = 0
+        node: lm_trans_registry_synthetic_atom_node_cstr(class_name)
+        if: node = 0
+            return: 0
+    ---
+
+    if: is_const = 0
+        return: node
+
+    wrapper: lm_trans_registry_synthetic_frame_node_cstr("const")
+    if: wrapper = 0 || lm_trans_registry_synthetic_append_node(wrapper\as\frame\body, node) = 0
+        return: 0
+return: wrapper
+
+fn: lm_trans_registry_synthetic_return_node (const: (LmTransNamespace: namespace_); const: @(char name)) LmP0Node
+    const: @: char class_name
+    LmP0Node: return_node
+    size_t: address_depth
+    size_t: array_rank
+    int: is_const
+    int: status
+
+    if: name = 0
+        return: 0
+
+    status: lm_trans_collect_abi_return(namespace_, name, 1, @ class_name, @ address_depth, @ array_rank, @ is_const)
+    if: status = 1
+        c.fprintf(c.stderr, "trans L4 fn import error: %s requires return.class\n", name)
+        return: 0
+    if: status = 2
+        c.fprintf(c.stderr, "trans L4 fn import error: %s has invalid return flags\n", name)
+        return: 0
+    if: status != 0
+        return: 0
+
+    return_node: lm_trans_registry_synthetic_callable_type_node(class_name, address_depth, array_rank, is_const, 0)
+return: return_node
+
+fn: lm_trans_registry_synthetic_params_node (const: (LmTransNamespace: namespace_); const: @(char name)) LmP0Node
+    @: LmTransAbiParam params
+    LmP0Node: params_node
+    LmP0Node: param_node
+    size_t: param_capacity
+    size_t: param_count
+    size_t: i
+
+    if: name = 0
+        return: 0
+
+    param_capacity: 256U
+    params: lm_trans_l4_abi_params_new(param_capacity)
+    if: params = 0
+        return: 0
+    if: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, name, "fn import") != 0
+        lm_trans_l4_abi_params_delete(params, param_capacity)
+        return: 0
+
+    params_node: lm_trans_registry_synthetic_structure_node()
+    if: params_node = 0
+        lm_trans_l4_abi_params_delete(params, param_capacity)
+        return: 0
+
+    i: 0U
+    while: i < param_count
+        param_node: lm_trans_registry_synthetic_callable_type_node(params[i]\class_name, params[i]\address_depth, params[i]\array_rank, params[i]\is_const, params[i]\name)
+        if: param_node = 0 || lm_trans_registry_synthetic_append_node(params_node\as\structure, param_node) = 0
+            lm_trans_l4_abi_params_delete(params, param_capacity)
+            return: 0
+        i: i + 1U
+
+    lm_trans_l4_abi_params_delete(params, param_capacity)
+return: params_node
+
+fn: lm_trans_registry_synthetic_fn_frame_node (const: @(char name); LmP0Node: params_node; LmP0Node: return_node) LmP0Node
+    LmP0Node: frame_node
+
+    if: name = 0 || params_node = 0 || return_node = 0
+        return: 0
+
+    frame_node: lm_trans_registry_synthetic_frame_node_cstr("fn")
+    if: frame_node = 0
+        return: 0
+    if: lm_trans_registry_synthetic_append_node(frame_node\as\frame\body, lm_trans_registry_synthetic_atom_node_cstr(name)) = 0
+        return: 0
+    if: lm_trans_registry_synthetic_append_node(frame_node\as\frame\body, params_node) = 0
+        return: 0
+    if: lm_trans_registry_synthetic_append_node(frame_node\as\frame\body, return_node) = 0
+        return: 0
+return: frame_node
+
+fn: lm_trans_registry_synthetic_sub_frame_node (const: @(char name); LmP0Node: params_node) LmP0Node
+    LmP0Node: frame_node
+
+    if: name = 0 || params_node = 0
+        return: 0
+
+    frame_node: lm_trans_registry_synthetic_frame_node_cstr("sub")
+    if: frame_node = 0
+        return: 0
+    if: lm_trans_registry_synthetic_append_node(frame_node\as\frame\body, lm_trans_registry_synthetic_atom_node_cstr(name)) = 0
+        return: 0
+    if: lm_trans_registry_synthetic_append_node(frame_node\as\frame\body, params_node) = 0
+        return: 0
+return: frame_node
+
+fn: lm_trans_declare_registry_sub_descriptor (LmTransNamespace: namespace_; const: @(char name)) int
+    LmP0Node: params_node
+    LmP0Node: frame_node
+    LmTransFunctionHeader: function
+    LmTransSymbol: symbol
+    LmP0Text: name_text
+    int: status
+
+    if: namespace_ = 0 || name = 0
+        return: 1
+
+    function: lm_trans_function_header_new()
+    name_text: lm_trans_l4_text_view_new(name)
+    if: function = 0 || name_text = 0
+        lm_trans_function_header_destroy(function)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: 1
+    if: lm_trans_namespace_find(namespace_, name_text) != 0
+        lm_trans_function_header_destroy(function)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: 0
+
+    params_node: lm_trans_registry_synthetic_params_node(namespace_, name)
+    frame_node: lm_trans_registry_synthetic_sub_frame_node(name, params_node)
+    if: params_node = 0 || frame_node = 0
+        lm_trans_function_header_destroy(function)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: 1
+
+    function\frame: frame_node\as\frame
+    function\name[0]: frame_node\as\frame\body\first_field\value\as\atom[0]
+    function\c_name[0]: function\name[0]
+    function\params_node: params_node
+    function\return_node: 0
+    function\symbol_class: "procedure"
+    function\is_sub: 1
+    function\is_descriptor_only: 1
+    function\is_external: lm_trans_fn_is_external(namespace_, name_text)
+    if: lm_trans_function_thread_context_profile(namespace_, name_text, function\is_external, @ function\has_thread_context) != 0
+        lm_trans_function_header_destroy(function)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: 1
+
+    function\params: lm_trans_formal_param_list_from_node(function\params_node, 1, "function parameters")
+    if: function\params = 0
+        lm_trans_function_header_destroy(function)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: 1
+
+    status: lm_trans_namespace_publish_function_callable(namespace_, function, function\c_name) != 0
+    if: status = 0
+        symbol: lm_trans_namespace_find_mutable(namespace_, name_text)
+        if: symbol = 0
+            status: 1
+        else:
+            symbol\registry_materialized: 1
+        ---
+    ---
+
+    lm_trans_function_header_destroy(function)
+    lm_trans_l4_text_view_delete(@ name_text)
+return: status
+
+fn: lm_trans_declare_registry_fn_descriptor (LmTransNamespace: namespace_; const: @(char name)) int
+    LmP0Node: params_node
+    LmP0Node: return_node
+    LmP0Node: frame_node
+    LmTransFunctionHeader: function
+    LmTransSymbol: symbol
+    LmP0Text: name_text
+    int: has_thread_context
+    const: @: char receiver_name
+    int: status
+
+    if: namespace_ = 0 || name = 0
+        return: 1
+    name_text: lm_trans_l4_text_view_new(name)
+    if: name_text = 0
+        return: 1
+    if: lm_trans_l4_is_function_pointer_type(namespace_, name)
+        status: lm_trans_function_thread_context_profile(namespace_, name_text, 0, @ has_thread_context)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: status
+
+    function: lm_trans_function_header_new()
+    if: function = 0
+        lm_trans_function_header_destroy(function)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: 1
+    if: lm_trans_namespace_find(namespace_, name_text) != 0
+        lm_trans_function_header_destroy(function)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: 0
+
+    receiver_name: lm_trans_fn_receiver_value(namespace_, name_text)
+    if: receiver_name != 0 && c.strcmp(receiver_name, "sub") = 0
+        lm_trans_function_header_destroy(function)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: lm_trans_declare_registry_sub_descriptor(namespace_, name)
+
+    params_node: lm_trans_registry_synthetic_params_node(namespace_, name)
+    return_node: lm_trans_registry_synthetic_return_node(namespace_, name)
+    frame_node: lm_trans_registry_synthetic_fn_frame_node(name, params_node, return_node)
+    if: params_node = 0 || return_node = 0 || frame_node = 0
+        lm_trans_function_header_destroy(function)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: 1
+
+    function\frame: frame_node\as\frame
+    function\name[0]: frame_node\as\frame\body\first_field\value\as\atom[0]
+    function\c_name[0]: function\name[0]
+    function\params_node: params_node
+    function\return_node: return_node
+    function\symbol_class: "function"
+    function\is_external: lm_trans_fn_is_external(namespace_, name_text)
+    if: lm_trans_function_thread_context_profile(namespace_, name_text, function\is_external, @ function\has_thread_context) != 0
+        lm_trans_function_header_destroy(function)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: 1
+
+    function\params: lm_trans_formal_param_list_from_node(function\params_node, 1, "function parameters")
+    if: function\params = 0
+        lm_trans_function_header_destroy(function)
+        lm_trans_l4_text_view_delete(@ name_text)
+        return: 1
+
+    status: lm_trans_namespace_publish_function_callable(namespace_, function, function\c_name) != 0
+    if: status = 0
+        symbol: lm_trans_namespace_find_mutable(namespace_, name_text)
+        if: symbol = 0
+            status: 1
+        else:
+            symbol\registry_materialized: 1
+        ---
+    ---
+
+    lm_trans_function_header_destroy(function)
+    lm_trans_l4_text_view_delete(@ name_text)
+return: status
+
+fn: lm_trans_declare_registry_fn_descriptors (LmTransNamespace: namespace_) int
+    LmOwnPtrStack: names
+    const: @: char name
+    size_t: i
+
+    if: namespace_ = 0
+        return: 1
+
+    names: lm_trans_ptr_stack_new(lm_trans_free_any)
+    if: names = 0
+        return: 1
+    if: lm_trans_registry_collect_source_relation_names(names, namespace_, "fn", "descriptor", "fn", 1) != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+
+    i: 0U
+    while: i < names\count
+        name: lm_own_ptr_stack_at(names, i)
+        if: lm_trans_declare_registry_fn_descriptor(namespace_, name) != 0
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        i: i + 1U
+
+    lm_trans_ptr_stack_delete(@ names)
+return: 0
+
+fn: lm_trans_emit_l4_function_pointer_type_name (FILE: file; const: (LmTransNamespace: namespace_); const: @(char name); const: @(char error_name)) int
+    @: LmTransAbiParam params
+    LmP0Text: name_text
+    FILE: declaration_file
+    size_t: param_capacity
+    size_t: param_count
+    int: emitted
+    int: status
+
+    if: name = 0 || error_name = 0
+        return: 1
+
+    name_text: lm_trans_text_from_cstr(name)
+    if: name_text = 0
+        return: 1
+
+    param_capacity: 256U
+    params: lm_trans_l4_abi_params_new(param_capacity)
+    if: params = 0
+        lm_trans_text_ref_destroy(@ name_text)
+        return: 1
+
+    declaration_file: lm_trans_tmpfile()
+    if: declaration_file = 0
+        lm_trans_l4_abi_params_delete(params, param_capacity)
+        lm_trans_text_ref_destroy(@ name_text)
+        return: 1
+    status: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, name, error_name) != 0 || lm_trans_put(declaration_file, "typedef ") != 0 || lm_trans_emit_abi_return_type(declaration_file, namespace_, name, error_name) != 0 || lm_trans_put(declaration_file, " (*") != 0 || lm_trans_emit_identifier(declaration_file, name_text) != 0 || lm_trans_put(declaration_file, ")(") != 0 || lm_trans_emit_function_pointer_abi_params(declaration_file, namespace_, name_text, params, param_count) != 0 || lm_trans_put(declaration_file, ");\n") != 0
+    lm_trans_l4_abi_params_delete(params, param_capacity)
+    if: status = 0
+        status: lm_trans_typedef_projection_emit_prepared_cstr(file, name, declaration_file, @ emitted)
+    c.fclose(declaration_file)
+    lm_trans_text_ref_destroy(@ name_text)
+return: status
+
+fn: lm_trans_emit_l4_function_pointer_type_field (FILE: file; const: (LmTransNamespace: namespace_); const: @(char type_name); const: @(char field_name); const: @(char error_name)) int
+    @: LmTransAbiParam params
+    LmP0Text: type_text
+    size_t: param_capacity
+    size_t: param_count
+    int: status
+
+    if: type_name = 0 || field_name = 0 || error_name = 0
+        return: 1
+
+    param_capacity: 256U
+    params: lm_trans_l4_abi_params_new(param_capacity)
+    if: params = 0
+        return: 1
+    type_text: lm_trans_text_from_cstr(type_name)
+    if: type_text = 0
+        lm_trans_l4_abi_params_delete(params, param_capacity)
+        return: 1
+    status: lm_trans_collect_abi_params(params, param_capacity, @ param_count, namespace_, type_name, error_name) != 0 || lm_trans_emit_abi_return_type(file, namespace_, type_name, error_name) != 0 || lm_trans_put(file, " (*") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(field_name)) != 0 || lm_trans_put(file, ")(") != 0 || lm_trans_emit_function_pointer_abi_params(file, namespace_, type_text, params, param_count) != 0 || lm_trans_put(file, ")") != 0
+    lm_trans_text_ref_destroy(@ type_text)
+    lm_trans_l4_abi_params_delete(params, param_capacity)
+return: status
+
+fn: lm_trans_emit_l4_function_pointer_type_typedefs (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
+    const: @: char name
+    size_t: i
+
+    names: lm_trans_ptr_stack_new(lm_trans_free_any)
+    if: names = 0
+        return: 1
+    if: lm_trans_registry_collect_source_relation_names(names, namespace_, "functionPointerType", "value", "functionPointerType", 1) != 0 || lm_trans_registry_collect_source_relation_names(names, namespace_, "functionPointerType", "row", "functionPointerType", 1) != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+
+    i: 0U
+    while: i < names\count
+        name: lm_own_ptr_stack_at(names, i)
+        if: lm_trans_emit_l4_function_pointer_type_name(file, namespace_, name, "functionPointerType") != 0
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        i: i + 1U
+
+    if: names\count != 0U && lm_trans_put(file, "\n") != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+    lm_trans_ptr_stack_delete(@ names)
+return: 0
+
+fn: lm_trans_emit_l4_fn_descriptors (FILE: file; const: (LmTransNamespace: namespace_)) int
+return: lm_trans_emit_l4_function_pointer_type_typedefs(file, namespace_)
+
+fn: lm_trans_emit_l4_guard_markers (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
+    const: @: char name
+    size_t: i
+
+    names: lm_trans_ptr_stack_new(lm_trans_free_any)
+    if: names = 0
+        return: 1
+    if: lm_trans_registry_collect_backend_names(names, namespace_, "guard", "c.header-guard", "guard", 1) != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+
+    i: 0U
+    while: i < names\count
+        name: lm_own_ptr_stack_at(names, i)
+        if: lm_trans_put(file, "#ifndef ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(file, "\n#define ") != 0 || lm_trans_emit_identifier(file, lm_trans_text_from_cstr(name)) != 0 || lm_trans_put(file, "\n#endif\n") != 0
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        i: i + 1U
+
+    if: names\count != 0U && lm_trans_put(file, "\n") != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+    lm_trans_ptr_stack_delete(@ names)
+return: 0
+
+fn: lm_trans_emit_l4_extern_c_markers (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
+
+    names: lm_trans_ptr_stack_new(lm_trans_free_any)
+    if: names = 0
+        return: 1
+    if: lm_trans_registry_collect_backend_names(names, namespace_, "extern_c", "c.wrapper", "extern_c", 0) != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+
+    if: names\count != 0U && (lm_trans_put(file, "#ifdef __cplusplus\nextern \"C\" {\n#endif\n") != 0 || lm_trans_put(file, "#ifdef __cplusplus\n}\n#endif\n\n") != 0)
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+
+    lm_trans_ptr_stack_delete(@ names)
+return: 0
+
+fn: lm_trans_unit_source_payload_resolve (
+    const: (LmTransNamespace: namespace_)
+    const: (LmTransRegistryFact: facade_payload_row)
+    const: @@(char out_text)
+    const: @(LmP0Node out_node)
+) int
+    const: LmTableCell: source_payload_cell
+
+    if: out_text != 0
+        out_text[0]: 0
+    if: out_node != 0
+        out_node[0]: 0
+    if: facade_payload_row = 0
+        return: 0
+    if: facade_payload_row\payload != 0
+        if: out_text = 0
+            return: 0
+        out_text[0]: lm_trans_registry_source_path_n2_named_typed_value(namespace_, "unit.payload", "class", "class", "payload", "char", facade_payload_row)
+        return: out_text[0] != 0
+    ---
+    if: facade_payload_row\payload_node = 0 || out_node = 0
+        return: 0
+    source_payload_cell: lm_trans_registry_source_path_typed_node_cell(namespace_, "unit.payload", "class", "class", "node", "payload", facade_payload_row, 0)
+    out_node[0]: facade_payload_row\payload_node
+    if: source_payload_cell != 0 && lm_trans_registry_view_is_selected() != 0
+        out_node[0]: (cast: (const: LmP0Node) source_payload_cell\node)
+return: out_node[0] != 0
+
+fn: lm_trans_emit_l4_units (FILE: file; const: (LmTransNamespace: namespace_)) int
+    LmOwnPtrStack: names
+    LmTransNamespace: payload_namespace
+    LmOwnPtrStack: payload_declared_import_paths
+    LmOwnPtrStack: payload_declared_import_documents
+    LmOwnPtrStack: previous_declared_import_paths
+    LmOwnPtrStack: previous_declared_import_documents
+    const: LmOwnPtrStack: payload_rows
+    LmTransRegistryFact: payload_row
+    const: LmP0Node: payload_node
+    const: @: char payload_text
+    const: @: char name
+    size_t: i
+
+    payload_namespace: 0
+    payload_declared_import_paths: 0
+    payload_declared_import_documents: 0
+    previous_declared_import_paths: lm_trans_declared_import_paths
+    previous_declared_import_documents: lm_trans_declared_import_documents
+    finally:
+        lm_trans_declared_import_paths: previous_declared_import_paths
+        lm_trans_declared_import_documents: previous_declared_import_documents
+        lm_trans_namespace_delete(payload_namespace)
+        lm_trans_import_documents_drain(payload_declared_import_documents)
+        lm_trans_ptr_stack_delete(@ payload_declared_import_documents)
+        lm_trans_ptr_stack_delete(@ payload_declared_import_paths)
+
+    names: lm_trans_ptr_stack_new(lm_trans_free_any)
+    if: names = 0
+        return: 1
+    if: lm_trans_registry_collect_backend_names(names, namespace_, "unit", "c.static-unit", "unit", 1) != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+
+    payload_rows: lm_trans_namespace_registry_relation_stack(namespace_, lm_trans_text_from_cstr("unit"), "payload")
+    i: 0U
+    while: i < names\count
+        name: lm_own_ptr_stack_at(names, i)
+        payload_row: lm_trans_registry_relation_stack_latest_row(payload_rows, lm_trans_text_from_cstr(name))
+        if: lm_trans_unit_source_payload_resolve(namespace_, payload_row, @ payload_text, @ payload_node) = 0
+            c.fprintf(c.stderr, "trans L4 unit error: %s requires unit.payload\n", name)
+            lm_trans_ptr_stack_delete(@ names)
+            return: 1
+        if: payload_node != 0
+            if: payload_namespace = 0
+                payload_namespace: lm_trans_namespace_new()
+                payload_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
+                payload_declared_import_documents: lm_trans_ptr_stack_new(0)
+                if: payload_namespace = 0 || payload_declared_import_paths = 0 || payload_declared_import_documents = 0 || lm_trans_namespace_attach_registry(payload_namespace) != 0
+                    lm_trans_ptr_stack_delete(@ names)
+                    return: 1
+                lm_trans_declared_import_paths: payload_declared_import_paths
+                lm_trans_declared_import_documents: payload_declared_import_documents
+            ---
+            if: lm_trans_emit_l4_payload_node(file, payload_node, payload_namespace) != 0 || lm_trans_put(file, "\n") != 0
+                lm_trans_ptr_stack_delete(@ names)
+                return: 1
+        ---
+        else:
+            if: lm_trans_put(file, payload_text) != 0 || lm_trans_put(file, "\n") != 0
+                lm_trans_ptr_stack_delete(@ names)
+                return: 1
+        ---
+        i: i + 1U
+
+    if: names\count != 0U && lm_trans_put(file, "\n") != 0
+        lm_trans_ptr_stack_delete(@ names)
+        return: 1
+    lm_trans_ptr_stack_delete(@ names)
+return: 0
+
+fn: lm_trans_registry_init () int
+    if: lm_trans_registry != 0
+        return: 0
+    lm_trans_registry: lm_own_new_zero(c.sizeof(lm_trans_registry[0]))
+    if: lm_trans_registry = 0
+        return: 1
+    lm_trans_registry\view: lm_registry_view_new(0)
+    if: lm_trans_registry\view = 0
+        lm_own_delete(lm_trans_registry, 0)
+        lm_trans_registry: 0
+        return: 1
+return: 0
+
+sub: lm_trans_registry_destroy ()
+    if: lm_trans_registry != 0 && lm_trans_registry\value_arena != 0 && lm_trans_registry\value_arena\owner_thread != 0 && lm_trans_registry\value_arena\owner_thread != c.lm_lmx_message_thread
+        return
+    lm_trans_expr_binding_view_cache_reset()
+    lm_trans_callable_projection_cache_reset()
+    lm_trans_registry_source_path_cache_reset()
+    if: lm_trans_registry = 0
+        return
+    lm_trans_l4_payload_pointer_bindings_destroy()
+    lm_trans_ptr_stack_delete(@ lm_trans_registry\binding_pointer_bindings)
+    lm_registry_view_delete(lm_trans_registry\view)
+    lm_trans_registry\view: 0
+    if: lm_trans_registry\loaded
+        lm_trans_identifier_table_delete(@ lm_trans_registry\identifiers)
+        lm_own_arena_destroy(lm_trans_registry\value_arena)
+        lm_own_delete(lm_trans_registry\value_arena, 0)
+        lm_trans_ptr_stack_delete(@ lm_trans_registry\early_l2_source_sites)
+        lm_trans_ptr_stack_delete(@ lm_trans_registry\predefined_descriptor_sites)
+        lm_trans_ptr_stack_delete(@ lm_trans_registry\predefined_paths)
+        lm_trans_ptr_stack_delete(@ lm_trans_registry\loaded_paths)
+        lm_own_delete(lm_trans_registry\source_path, 0)
+        lm_trans_registry\value_arena: 0
+        lm_trans_registry\source_path: 0
+        lm_trans_registry\loaded_fact_count: 0U
+        lm_trans_registry\loaded: 0
+    ---
+    lm_own_delete(lm_trans_registry, 0)
+    lm_trans_registry: 0
+end: lm_trans_registry_destroy
+
+fn: lm_trans_registry_relation_name_new (const: (LmP0Text: owner); const: @(char suffix)) @: char
+    size_t: suffix_length
+    size_t: length
+    @: char result
+
+    if: owner = 0 || suffix = 0
+        return: 0
+
+    suffix_length: c.strlen(suffix)
+    length: owner\length + suffix_length
+    result: lm_own_new_zero(length + 1U)
+    if: result = 0
+        return: 0
+    if: owner\length != 0U
+        c.memcpy(result, owner\data, owner\length)
+    c.memcpy(result + owner\length, suffix, suffix_length)
+    result[length]: '\0'
+return: result
+
+fn: lm_trans_registry_push_owner_relation_text_with_fact (
+    const: (LmP0Text: owner)
+    const: @(char suffix)
+    const: (LmP0Text: key)
+    const: (LmP0Text: payload)
+    @: LmTransRegistryFact out_fact
+) int
+    @: char table_name
+    int: status
+
+    if: out_fact != 0
+        out_fact[0]: 0
+    if: owner = 0 || suffix = 0 || key = 0 || payload = 0 || out_fact = 0
+        return: 1
+
+    table_name: lm_trans_registry_relation_name_new(owner, suffix)
+    if: table_name = 0
+        return: 1
+    status: lm_trans_registry_push_row_values_with_fact(lm_trans_text_from_cstr(table_name), key, payload, out_fact)
+    lm_own_delete(table_name, 0)
+return: status
+
+fn: lm_trans_registry_push_owner_relation_size_with_fact (
+    const: (LmP0Text: owner)
+    const: @(char suffix)
+    const: (LmP0Text: key)
+    size_t: value
+    @: LmTransRegistryFact out_fact
+) int
+    c.array: [32]: char buffer
+
+    c.snprintf:
+        buffer c.sizeof(buffer)
+        "%zu"
+        value
+return: lm_trans_registry_push_owner_relation_text_with_fact(owner, suffix, key, lm_trans_text_from_cstr(buffer), out_fact)
+
+fn: lm_trans_registry_owner_relation_has_key (const: (LmP0Text: owner); const: @(char relation_name); const: (LmP0Text: key)) int
+    const: LmOwnPtrStack: rows
+
+    if: owner = 0 || relation_name = 0 || key = 0
+        return: 0
+    rows: lm_trans_namespace_registry_relation_stack(0, owner, relation_name)
+return: lm_trans_registry_relation_stack_latest_row(rows, key) != 0
+
+fn: lm_trans_table_descriptor_add_generated_column_shaped (
+    LmTableDescriptor: table
+    const: @(char name)
+    const: @(char type_name)
+    const: @(char descriptor)
+    size_t: address_depth
+    size_t: array_rank
+    int: is_const
+) int
+    c.array: const: [1]: @: char descriptor_data
+    c.array: [1]: size_t descriptor_lengths
+
+    if: table = 0 || name = 0 || type_name = 0 || descriptor = 0
+        return: 1
+    descriptor_data[0]: descriptor
+    descriptor_lengths[0]: c.strlen(descriptor)
+return: lm_table_descriptor_add_column_slices(table, name, c.strlen(name), type_name, c.strlen(type_name), descriptor_data, descriptor_lengths, 1U, address_depth, array_rank, is_const)
+
+fn: lm_trans_table_descriptor_add_generated_column (
+    LmTableDescriptor: table
+    const: @(char name)
+    const: @(char type_name)
+    const: @(char descriptor)
+) int
+return: lm_trans_table_descriptor_add_generated_column_shaped(table, name, type_name, descriptor, 0U, 0U, 0)
+
+fn: lm_trans_registry_push_generated_source_n2_row_values_shaped (
+    const: (LmP0Text: table_value)
+    const: (LmP0Text: key_value)
+    const: (LmP0Text: payload_value)
+    const: @(char key_column_name)
+    const: @(char key_descriptor)
+    size_t: key_address_depth
+    size_t: key_array_rank
+    int: key_is_const
+    const: @(char value_column_name)
+    const: @(char value_descriptor)
+    size_t: value_address_depth
+    size_t: value_array_rank
+    int: value_is_const
+) int
+    const: LmRegistryViewRow: view_row
+    LmTransRegistryFact: fact
+    LmTableDescriptor: descriptor
+    LmTableRow: row
+    LmTableCell: key_cell
+    LmTableCell: value_cell
+    size_t: fact_index
+    int: status
+
+    if: table_value = 0 || key_value = 0 || payload_value = 0 || key_column_name = 0 || key_descriptor = 0 || value_column_name = 0 || value_descriptor = 0 || c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
+        return: 1
+
+    fact_index: c.lm_trans_registry->loaded_fact_count
+    if: lm_trans_registry_push_row_values(table_value, key_value, payload_value) != 0
+        return: 1
+    if: c.lm_trans_registry->loaded_fact_count <= fact_index
+        return: 1
+    fact_index: c.lm_trans_registry->loaded_fact_count - 1U
+    view_row: lm_registry_view_fact_at(c.lm_trans_registry->view, fact_index)
+    if: view_row = 0 || view_row\source = 0
+        return: 1
+    fact: cast: (LmTransRegistryFact) view_row\source
+
+    descriptor: lm_table_descriptor_new_empty_slice(fact\table, c.strlen(fact\table))
+    row: 0
+    key_cell: 0
+    value_cell: 0
+    status: 0
+    if: descriptor = 0 || lm_trans_table_descriptor_add_generated_column_shaped(descriptor, key_column_name, key_descriptor, key_descriptor, key_address_depth, key_array_rank, key_is_const) != 0 || lm_trans_table_descriptor_add_generated_column_shaped(descriptor, value_column_name, value_descriptor, value_descriptor, value_address_depth, value_array_rank, value_is_const) != 0
+        status: 1
+
+    if: status = 0
+        row: lm_table_row_new(0)
+        key_cell: lm_table_cell_new_cstr(fact\key, fact\key, 0, 0, 0)
+        value_cell: lm_table_cell_new_cstr(fact\payload, fact\payload, 0, fact, 0)
+        if: row = 0 || key_cell = 0 || value_cell = 0
+            status: 1
+    ---
+
+    if: status = 0
+        if: lm_table_row_take_cell(row, key_cell) != 0
+            status: 1
+        else:
+            key_cell: 0
+    ---
+    if: status = 0
+        if: lm_table_row_take_cell(row, value_cell) != 0
+            status: 1
+        else:
+            value_cell: 0
+    ---
+    if: status = 0
+        if: lm_table_descriptor_take_materialized_row(descriptor, row) != 0
+            status: 1
+        else:
+            row: 0
+    ---
+    if: status = 0
+        if: lm_registry_view_take_local_source_table(c.lm_trans_registry->view, descriptor) != 0
+            status: 1
+        else:
+            descriptor: 0
+    ---
+
+    lm_table_cell_delete_any(key_cell)
+    lm_table_cell_delete_any(value_cell)
+    lm_table_row_delete_any(row)
+    lm_table_descriptor_delete_any(descriptor)
+return: status
+
+fn: lm_trans_registry_push_generated_source_n2_row_values (
+    const: (LmP0Text: table_value)
+    const: (LmP0Text: key_value)
+    const: (LmP0Text: payload_value)
+    const: @(char key_column_name)
+    const: @(char key_descriptor)
+    const: @(char value_column_name)
+    const: @(char value_descriptor)
+) int
+return: lm_trans_registry_push_generated_source_n2_row_values_shaped(table_value, key_value, payload_value, key_column_name, key_descriptor, 0U, 0U, 0, value_column_name, value_descriptor, 0U, 0U, 0)
+
+fn: lm_trans_registry_push_generated_source_n2_row_atoms (
+    const: (LmP0Text: table_atom)
+    const: (LmP0Text: key_atom)
+    const: (LmP0Text: payload_atom)
+    const: @(char key_column_name)
+    const: @(char key_descriptor)
+    const: @(char value_column_name)
+    const: @(char value_descriptor)
+) int
+    LmP0Text: table_value
+    LmP0Text: key_value
+    LmP0Text: payload_value
+    int: status
+
+    if: lm_trans_registry_payload_is_null(payload_atom) != 0
+        return: 0
+    table_value: lm_trans_text_ref_new_cstr("")
+    key_value: lm_trans_text_ref_new_cstr("")
+    payload_value: lm_trans_text_ref_new_cstr("")
+    if: table_value = 0 || key_value = 0 || payload_value = 0
+        lm_trans_text_ref_destroy(@ table_value)
+        lm_trans_text_ref_destroy(@ key_value)
+        lm_trans_text_ref_destroy(@ payload_value)
+        return: -1
+
+    status: -1
+    if: lm_trans_registry_identifier_value(table_atom, table_value) != 0 && lm_trans_registry_identifier_value(key_atom, key_value) != 0 && lm_trans_registry_literal_value(payload_atom, payload_value) != 0
+        status: lm_trans_registry_push_generated_source_n2_row_values(table_value, key_value, payload_value, key_column_name, key_descriptor, value_column_name, value_descriptor)
+    lm_trans_text_ref_destroy(@ table_value)
+    lm_trans_text_ref_destroy(@ key_value)
+    lm_trans_text_ref_destroy(@ payload_value)
+return: status
+
+fn: lm_trans_registry_materialize_generated_callable_source_rows (const: (LmP0Text: function_name)) int
+    if: function_name = 0
+        return: 1
+    if: lm_trans_registry_push_generated_source_n2_row_values(lm_trans_text_from_cstr("callable.partial"), function_name, lm_trans_text_from_cstr("1"), "class", "class", "value", "serial") != 0
+        return: 1
+    if: lm_trans_registry_push_generated_source_n2_row_values(lm_trans_text_from_cstr("callable.capture"), function_name, lm_trans_text_from_cstr("1"), "class", "class", "value", "serial") != 0
+        return: 1
+    if: lm_trans_registry_push_generated_source_n2_row_values(lm_trans_text_from_cstr("callable.projection"), function_name, lm_trans_text_from_cstr("c.closure-struct"), "class", "class", "value", "projection") != 0
+        return: 1
+return: 0
+
+fn: lm_trans_table_row_take_generated_fact_cell (LmTableRow: row; const: (LmTransRegistryFact: fact)) int
+    LmTableCell: cell
+
+    if: row = 0
+        return: 1
+    if: fact = 0
+        cell: lm_table_cell_new_cstr("None", 0, 0, 0, 1)
+    else:
+        if: fact\payload = 0 || fact\payload_node != 0
+            return: 1
+        cell: lm_table_cell_new_cstr(fact\payload, fact\payload, 0, fact, 0)
+    ---
+    if: cell = 0
+        return: 1
+    if: lm_table_row_take_cell(row, cell) != 0
+        lm_table_cell_delete_any(cell)
+        return: 1
+return: 0
+
+fn: lm_trans_registry_materialize_generated_fn_source_row (
+    const: (LmP0Text: function_name)
+    const: (LmTransRegistryFact: descriptor_fact)
+    const: (LmTransRegistryFact: receiver_fact)
+) int
+    LmTableDescriptor: descriptor
+    LmTableRow: row
+    LmTableCell: key_cell
+    int: status
+
+    if: function_name = 0 || descriptor_fact = 0 || receiver_fact = 0 || descriptor_fact\table = 0 || c.strcmp(descriptor_fact\table, "fn.descriptor") != 0 || receiver_fact\table = 0 || c.strcmp(receiver_fact\table, "fn.receiver") != 0 || descriptor_fact\key = 0 || descriptor_fact\payload = 0 || receiver_fact\key = 0 || receiver_fact\payload = 0 || c.strcmp(descriptor_fact\key, receiver_fact\key) != 0 || lm_trans_text_equals(function_name, descriptor_fact\key) = 0 || c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
+        return: 1
+
+    descriptor: lm_table_descriptor_new_empty_slice("fn", 2U)
+    row: 0
+    key_cell: 0
+    status: 0
+    if: descriptor = 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "class", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "descriptor", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "receiver", "class", "class") != 0
+        status: 1
+
+    if: status = 0
+        row: lm_table_row_new(0)
+        key_cell: lm_table_cell_new_cstr(descriptor_fact\key, descriptor_fact\key, 0, 0, 0)
+        if: row = 0 || key_cell = 0
+            status: 1
+    ---
+    if: status = 0
+        if: lm_table_row_take_cell(row, key_cell) != 0
+            status: 1
+        else:
+            key_cell: 0
+    ---
+    if: status = 0 && (lm_trans_table_row_take_generated_fact_cell(row, descriptor_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, receiver_fact) != 0)
+        status: 1
+    if: status = 0
+        if: lm_table_descriptor_take_materialized_row(descriptor, row) != 0
+            status: 1
+        else:
+            row: 0
+    ---
+    if: status = 0
+        if: lm_registry_view_take_local_source_table(c.lm_trans_registry->view, descriptor) != 0
+            status: 1
+        else:
+            descriptor: 0
+    ---
+
+    lm_table_cell_delete_any(key_cell)
+    lm_table_row_delete_any(row)
+    lm_table_descriptor_delete_any(descriptor)
+return: status
+
+fn: lm_trans_registry_materialize_generated_param_source_row (
+    const: (LmP0Text: function_name)
+    const: (LmTransRegistryFact: class_fact)
+    const: (LmTransRegistryFact: index_fact)
+    const: (LmTransRegistryFact: address_depth_fact)
+    const: (LmTransRegistryFact: array_rank_fact)
+    const: (LmTransRegistryFact: const_fact)
+) int
+    @: char table_name
+    LmTableDescriptor: descriptor
+    LmTableRow: row
+    LmTableCell: key_cell
+    int: status
+
+    if: function_name = 0 || class_fact = 0 || index_fact = 0 || class_fact\key = 0 || class_fact\payload = 0 || index_fact\key = 0 || index_fact\payload = 0 || c.strcmp(class_fact\key, index_fact\key) != 0 || (address_depth_fact != 0 && (address_depth_fact\key = 0 || c.strcmp(class_fact\key, address_depth_fact\key) != 0)) || (array_rank_fact != 0 && (array_rank_fact\key = 0 || c.strcmp(class_fact\key, array_rank_fact\key) != 0)) || (const_fact != 0 && (const_fact\key = 0 || c.strcmp(class_fact\key, const_fact\key) != 0)) || c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
+        return: 1
+
+    table_name: lm_trans_registry_relation_name_new(function_name, ".param")
+    descriptor: 0
+    row: 0
+    key_cell: 0
+    status: 0
+    if: table_name = 0
+        status: 1
+    if: status = 0
+        descriptor: lm_table_descriptor_new_empty_slice(table_name, c.strlen(table_name))
+        if: descriptor = 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "name", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "class", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "index", "size_t", "size_t") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "address-depth", "size_t", "size_t") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "array-rank", "size_t", "size_t") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "const", "int", "int") != 0
+            status: 1
+    ---
+    lm_own_delete(table_name, 0)
+
+    if: status = 0
+        row: lm_table_row_new(0)
+        key_cell: lm_table_cell_new_cstr(class_fact\key, class_fact\key, 0, 0, 0)
+        if: row = 0 || key_cell = 0
+            status: 1
+    ---
+    if: status = 0
+        if: lm_table_row_take_cell(row, key_cell) != 0
+            status: 1
+        else:
+            key_cell: 0
+    ---
+    if: status = 0 && (lm_trans_table_row_take_generated_fact_cell(row, class_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, index_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, address_depth_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, array_rank_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, const_fact) != 0)
+        status: 1
+    if: status = 0
+        if: lm_table_descriptor_take_materialized_row(descriptor, row) != 0
+            status: 1
+        else:
+            row: 0
+    ---
+    if: status = 0
+        if: lm_registry_view_take_local_source_table(c.lm_trans_registry->view, descriptor) != 0
+            status: 1
+        else:
+            descriptor: 0
+    ---
+
+    lm_table_cell_delete_any(key_cell)
+    lm_table_row_delete_any(row)
+    lm_table_descriptor_delete_any(descriptor)
+return: status
+
+fn: lm_trans_registry_materialize_generated_return_source_row (
+    const: (LmP0Text: function_name)
+    const: (LmTransRegistryFact: class_fact)
+    const: (LmTransRegistryFact: address_depth_fact)
+    const: (LmTransRegistryFact: array_rank_fact)
+    const: (LmTransRegistryFact: const_fact)
+) int
+    @: char table_name
+    LmTableDescriptor: descriptor
+    LmTableRow: row
+    LmTableCell: key_cell
+    int: status
+
+    if: function_name = 0 || class_fact = 0 || class_fact\key = 0 || class_fact\payload = 0 || (address_depth_fact != 0 && (address_depth_fact\key = 0 || c.strcmp(class_fact\key, address_depth_fact\key) != 0)) || (array_rank_fact != 0 && (array_rank_fact\key = 0 || c.strcmp(class_fact\key, array_rank_fact\key) != 0)) || (const_fact != 0 && (const_fact\key = 0 || c.strcmp(class_fact\key, const_fact\key) != 0)) || c.lm_trans_registry = 0 || c.lm_trans_registry->view = 0
+        return: 1
+
+    table_name: lm_trans_registry_relation_name_new(function_name, ".return")
+    descriptor: 0
+    row: 0
+    key_cell: 0
+    status: 0
+    if: table_name = 0
+        status: 1
+    if: status = 0
+        descriptor: lm_table_descriptor_new_empty_slice(table_name, c.strlen(table_name))
+        if: descriptor = 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "name", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "class", "class", "class") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "address-depth", "size_t", "size_t") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "array-rank", "size_t", "size_t") != 0 || lm_trans_table_descriptor_add_generated_column(descriptor, "const", "int", "int") != 0
+            status: 1
+    ---
+    lm_own_delete(table_name, 0)
+
+    if: status = 0
+        row: lm_table_row_new(0)
+        key_cell: lm_table_cell_new_cstr(class_fact\key, class_fact\key, 0, 0, 0)
+        if: row = 0 || key_cell = 0
+            status: 1
+    ---
+    if: status = 0
+        if: lm_table_row_take_cell(row, key_cell) != 0
+            status: 1
+        else:
+            key_cell: 0
+    ---
+    if: status = 0 && (lm_trans_table_row_take_generated_fact_cell(row, class_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, address_depth_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, array_rank_fact) != 0 || lm_trans_table_row_take_generated_fact_cell(row, const_fact) != 0)
+        status: 1
+    if: status = 0
+        if: lm_table_descriptor_take_materialized_row(descriptor, row) != 0
+            status: 1
+        else:
+            row: 0
+    ---
+    if: status = 0
+        if: lm_registry_view_take_local_source_table(c.lm_trans_registry->view, descriptor) != 0
+            status: 1
+        else:
+            descriptor: 0
+    ---
+
+    lm_table_cell_delete_any(key_cell)
+    lm_table_row_delete_any(row)
+    lm_table_descriptor_delete_any(descriptor)
+return: status
+
+fn: lm_trans_l4_callable_type_from_node (const: (LmP0Node: node); LmTransL4CallableType: out) int
+    const: LmP0Node: current
+    const: LmP0Frame: frame
+    const: LmP0Field: field
+    LmP0Text: dimension
+    size_t: dimension_index
+    size_t: rank
+
+    if: node = 0 || out = 0
+        return: 0
+
+    if: lm_trans_callable_type_reset(out) != 0
+        return: 0
+
+    current: node
+    while: current != 0
+        if: current\kind = c.LM_P0_NODE_STRUCTURE
+            field: current\as\structure\first_field
+            if: field = 0 || field\next != 0 || field\value = 0
+                return: 0
+            current: field\value
+            continue
+        ---
+
+        if: current\kind = c.LM_P0_NODE_ATOM
+            if: lm_trans_registry_identifier_value(current\as\atom, out\class_name) = 0
+                return: 0
+            return: 1
+        ---
+
+        if: current\kind != c.LM_P0_NODE_FRAME
+            return: 0
+
+        frame: current\as\frame
+        if: lm_trans_text_equals(frame\head, "const")
+            field: frame\body\first_field
+            if: field = 0 || field\next != 0 || field\value = 0
+                return: 0
+            out\is_const: 1
+            current: field\value
+            continue
+        ---
+
+        if: lm_trans_text_all_char(frame\head, '@')
+            field: frame\body\first_field
+            if: field = 0 || field\value = 0
+                return: 0
+            out\address_depth: out\address_depth + frame\head\length
+            current: field\value
+            continue
+        ---
+
+        if: lm_trans_text_is_array_receiver_head(frame\head)
+            field: frame\body\first_field
+            if: field = 0 || field\value = 0
+                return: 0
+            dimension: lm_trans_text_ref_new_cstr("")
+            if: dimension = 0
+                return: 0
+            dimension_index: 0U
+            rank: 0U
+            while: lm_trans_array_head_next_dimension(frame\head, @ dimension_index, dimension)
+                rank: rank + 1U
+            lm_trans_text_ref_destroy(@ dimension)
+            if: rank = 0U
+                return: 0
+            out\array_rank: out\array_rank + rank
+            out\address_depth: out\address_depth + 1U
+            while: field != 0 && field\value != 0 && field\value\kind = c.LM_P0_NODE_ATOM && field\value\as\atom\length != 0U && lm_trans_text_all_char(field\value\as\atom, '@')
+                if: field\value\as\atom\length > c.SIZE_MAX - out\address_depth
+                    return: 0
+                out\address_depth: out\address_depth + field\value\as\atom\length
+                field: field\next
+            if: field = 0 || field\value = 0
+                return: 0
+            current: field\value
+            continue
+        ---
+
+        if: lm_trans_registry_identifier_value(frame\head, out\class_name) = 0
+            return: 0
+        return: 1
+return: 0
+
+fn: lm_trans_registry_materialize_fn_descriptor_return (const: (LmP0Text: function_name); const: (LmTransL4CallableType: return_type)) int
+    LmP0Text: return_name
+    LmTransRegistryFact: class_fact
+    LmTransRegistryFact: address_depth_fact
+    LmTransRegistryFact: array_rank_fact
+    LmTransRegistryFact: const_fact
+    int: status
+
+    return_name: lm_trans_l4_text_view_new("return")
+    if: function_name = 0 || return_type = 0 || return_type\class_name = 0 || return_name = 0
+        lm_trans_l4_text_view_delete(@ return_name)
+        return: 1
+
+    class_fact: 0
+    address_depth_fact: 0
+    array_rank_fact: 0
+    const_fact: 0
+    status: 0
+    if: lm_trans_registry_push_owner_relation_text_with_fact(function_name, ".return.class", return_name, return_type\class_name, @ class_fact) != 0
+        status: 1
+    if: status = 0 && (return_type\address_depth != 0U || lm_trans_registry_owner_relation_has_key(function_name, "return.address-depth", return_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.address-depth", return_name, return_type\address_depth, @ address_depth_fact) != 0
+        status: 1
+    if: status = 0 && (return_type\array_rank != 0U || lm_trans_registry_owner_relation_has_key(function_name, "return.array-rank", return_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.array-rank", return_name, return_type\array_rank, @ array_rank_fact) != 0
+        status: 1
+    if: status = 0 && (return_type\is_const || lm_trans_registry_owner_relation_has_key(function_name, "return.const", return_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".return.const", return_name, (cast: size_t (return_type\is_const != 0)), @ const_fact) != 0
+        status: 1
+    if: status = 0 && lm_trans_registry_materialize_generated_return_source_row(function_name, class_fact, address_depth_fact, array_rank_fact, const_fact) != 0
+        status: 1
+
+    lm_trans_l4_text_view_delete(@ return_name)
+return: status
+
+fn: lm_trans_registry_materialize_fn_descriptor_param (const: (LmP0Text: function_name); const: (LmTransFormalParam: param); size_t: index) int
+    LmP0Text: param_name
+    LmTransRegistryFact: class_fact
+    LmTransRegistryFact: index_fact
+    LmTransRegistryFact: address_depth_fact
+    LmTransRegistryFact: array_rank_fact
+    LmTransRegistryFact: const_fact
+    c.array: [32]: char fallback_name
+    int: status
+
+    param_name: lm_trans_l4_text_view_new("")
+    if: param = 0 || param\type = 0 || param_name = 0
+        lm_trans_l4_text_view_delete(@ param_name)
+        return: 1
+
+    if: param\has_name
+        param_name[0]: param\name[0]
+    else:
+        c.snprintf:
+            fallback_name c.sizeof(fallback_name)
+            "arg%zu"
+            index
+        lm_trans_text_assign_cstr(param_name, fallback_name)
+    ---
+
+    class_fact: 0
+    index_fact: 0
+    address_depth_fact: 0
+    array_rank_fact: 0
+    const_fact: 0
+    status: 0
+    if: lm_trans_registry_push_owner_relation_text_with_fact(function_name, ".param.class", param_name, param\type\class_name, @ class_fact) != 0
+        status: 1
+    if: status = 0 && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.index", param_name, index, @ index_fact) != 0
+        status: 1
+    if: status = 0 && (param\type\address_depth != 0U || lm_trans_registry_owner_relation_has_key(function_name, "param.address-depth", param_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.address-depth", param_name, param\type\address_depth, @ address_depth_fact) != 0
+        status: 1
+    if: status = 0 && (param\type\array_rank != 0U || lm_trans_registry_owner_relation_has_key(function_name, "param.array-rank", param_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.array-rank", param_name, param\type\array_rank, @ array_rank_fact) != 0
+        status: 1
+    if: status = 0 && (param\type\is_const || lm_trans_registry_owner_relation_has_key(function_name, "param.const", param_name)) && lm_trans_registry_push_owner_relation_size_with_fact(function_name, ".param.const", param_name, (cast: size_t (param\type\is_const != 0)), @ const_fact) != 0
+        status: 1
+    if: status = 0 && lm_trans_registry_note_class_present(param\type\class_name) != 0
+        status: 1
+    if: status = 0 && lm_trans_registry_materialize_generated_param_source_row(function_name, class_fact, index_fact, address_depth_fact, array_rank_fact, const_fact) != 0
+        status: 1
+    lm_trans_l4_text_view_delete(@ param_name)
+return: status
+
+fn: lm_trans_registry_materialize_fn_descriptor_frame (const: (LmP0Frame: frame)) int
+    LmTransFunctionHeader: function
+    LmTransL4CallableType: return_type
+    size_t: index
+    LmP0Text: function_name
+    LmP0Text: receiver_name
+    LmTransRegistryFact: descriptor_fact
+    LmTransRegistryFact: receiver_fact
+    int: status
+
+    if: frame = 0
+        return: 1
+
+    function: lm_trans_function_header_new()
+    return_type: lm_trans_expr_callable_type_new()
+    function_name: lm_trans_l4_text_view_new("")
+    receiver_name: lm_trans_l4_text_view_new("")
+    descriptor_fact: 0
+    receiver_fact: 0
+    status: 0
+    if: function = 0 || return_type = 0 || function_name = 0 || receiver_name = 0
+        status: 1
+    if: status = 0 && lm_trans_identifier_payload(frame\head, receiver_name) = 0
+        status: 1
+
+    if: status = 0
+        if: lm_trans_text_equals(receiver_name, "callable")
+            if: lm_trans_receiver_callable(frame, 0, function) <= 0
+                status: 1
+        ---
+        else:
+            if: lm_trans_receiver_fn(frame, 0, function) <= 0
+                status: 1
+    ---
+    if: status != 0
+        c.fprintf(c.stderr, "trans fn descriptor error: malformed descriptor-only fn\n")
+    if: status = 0 && function\is_descriptor_only = 0
+        c.fprintf(c.stderr, "trans fn descriptor error: descriptor-only fn must not have a body\n")
+        status: 1
+    if: status = 0 && lm_trans_registry_identifier_value(function\name, function_name) = 0
+        status: 1
+    if: status = 0 && lm_trans_l4_callable_type_from_node(function\return_node, return_type) = 0
+        c.fprintf(c.stderr, "trans fn descriptor error: return descriptor expects a type\n")
+        status: 1
+
+    if: status = 0 && (lm_trans_registry_note_class_present(function_name) != 0 || lm_trans_registry_note_class_present(return_type\class_name) != 0 || lm_trans_registry_push_row_values_with_fact(lm_trans_text_from_cstr("fn.descriptor"), function_name, lm_trans_text_from_cstr("callableDescriptor"), @ descriptor_fact) != 0 || lm_trans_registry_push_row_values_with_fact(lm_trans_text_from_cstr("fn.receiver"), function_name, receiver_name, @ receiver_fact) != 0 || lm_trans_registry_materialize_generated_fn_source_row(function_name, descriptor_fact, receiver_fact) != 0)
+        status: 1
+    if: status = 0 && lm_trans_registry_materialize_fn_descriptor_return(function_name, return_type) != 0
+        status: 1
+    if: status = 0 && function\is_callable_descriptor && lm_trans_registry_materialize_generated_callable_source_rows(function_name) != 0
+        status: 1
+
+    if: status = 0 && function\params = 0
+        c.fprintf(c.stderr, "trans fn descriptor error: parameters must be a Structure\n")
+        status: 1
+
+    index: 0U
+    if: status = 0
+        while: status = 0 && index < function\params\count
+            if: lm_trans_registry_materialize_fn_descriptor_param(function_name, function\params\params[index], index) != 0
+                status: 1
+            index: index + 1U
+    ---
+
+    lm_trans_function_header_destroy(function)
+    lm_trans_expr_callable_type_delete(return_type)
+    lm_trans_l4_text_view_delete(@ function_name)
+    lm_trans_l4_text_view_delete(@ receiver_name)
+return: status
+
+fn: lm_trans_registry_materialize_sub_descriptor_frame (const: (LmP0Frame: frame)) int
+    LmTransFunctionHeader: function
+    size_t: index
+    LmP0Text: function_name
+    LmP0Text: receiver_name
+    LmTransRegistryFact: descriptor_fact
+    LmTransRegistryFact: receiver_fact
+    int: status
+
+    if: frame = 0
+        return: 1
+
+    function: lm_trans_function_header_new()
+    function_name: lm_trans_l4_text_view_new("")
+    receiver_name: lm_trans_l4_text_view_new("")
+    descriptor_fact: 0
+    receiver_fact: 0
+    status: 0
+    if: function = 0 || function_name = 0 || receiver_name = 0
+        status: 1
+    if: status = 0 && lm_trans_identifier_payload(frame\head, receiver_name) = 0
+        status: 1
+
+    if: status = 0 && lm_trans_receiver_sub(frame, 0, function) <= 0
+        c.fprintf(c.stderr, "trans sub descriptor error: malformed descriptor-only sub\n")
+        status: 1
+    if: status = 0 && function\is_descriptor_only = 0
+        c.fprintf(c.stderr, "trans sub descriptor error: descriptor-only sub must not have a body\n")
+        status: 1
+    if: status = 0 && lm_trans_registry_identifier_value(function\name, function_name) = 0
+        status: 1
+
+    if: status = 0 && (lm_trans_registry_note_class_present(function_name) != 0 || lm_trans_registry_note_class_kind(function_name, "procedure") != 0 || lm_trans_registry_push_row_values_with_fact(lm_trans_text_from_cstr("fn.descriptor"), function_name, lm_trans_text_from_cstr("procedure"), @ descriptor_fact) != 0 || lm_trans_registry_push_row_values_with_fact(lm_trans_text_from_cstr("fn.receiver"), function_name, receiver_name, @ receiver_fact) != 0 || lm_trans_registry_materialize_generated_fn_source_row(function_name, descriptor_fact, receiver_fact) != 0)
+        status: 1
+
+    if: status = 0 && function\params = 0
+        c.fprintf(c.stderr, "trans sub descriptor error: parameters must be a Structure\n")
+        status: 1
+
+    index: 0U
+    if: status = 0
+        while: status = 0 && index < function\params\count
+            if: lm_trans_registry_materialize_fn_descriptor_param(function_name, function\params\params[index], index) != 0
+                status: 1
+            index: index + 1U
+    ---
+
+    lm_trans_function_header_destroy(function)
+    lm_trans_l4_text_view_delete(@ function_name)
+    lm_trans_l4_text_view_delete(@ receiver_name)
+return: status
+
+fn: lm_trans_path_has_extension (const: @(char path); const: @(char extension)) int
+    size_t: path_length
+    size_t: extension_length
+    size_t: i
+    char: left
+    char: right
+
+    if: path = 0 || extension = 0
+        return: 0
+
+    path_length: c.strlen(path)
+    extension_length: c.strlen(extension)
+    if: path_length < extension_length
+        return: 0
+
+    i: 0U
+    while: i < extension_length
+        left: path[path_length - extension_length + i]
+        right: extension[i]
+        if: left >= 'A' && left <= 'Z'
+            left: cast: char (left - 'A' + 'a')
+        if: right >= 'A' && right <= 'Z'
+            right: cast: char (right - 'A' + 'a')
+        if: left != right
+            return: 0
+        i: i + 1U
+return: 1
+
+fn: lm_trans_registry_path_already_loaded (const: @(char registry_path)) int
+    size_t: i
+    const: @: char loaded_path
+
+    if: registry_path = 0 || lm_trans_registry = 0 || lm_trans_registry\loaded_paths = 0
+        return: 0
+
+    i: 0U
+    while: i < lm_trans_registry\loaded_paths\count
+        loaded_path: lm_own_ptr_stack_at(lm_trans_registry\loaded_paths, i)
+        if: loaded_path != 0 && c.strcmp(loaded_path, registry_path) = 0
+            return: 1
+        i: i + 1U
+return: 0
+
+fn: lm_trans_registry_path_is_predefined (const: @(char registry_path)) int
+    size_t: i
+    const: @: char predefined_path
+
+    if: registry_path = 0 || lm_trans_registry = 0 || lm_trans_registry\predefined_paths = 0
+        return: 0
+
+    i: 0U
+    while: i < lm_trans_registry\predefined_paths\count
+        predefined_path: lm_own_ptr_stack_at(lm_trans_registry\predefined_paths, i)
+        if: predefined_path != 0 && c.strcmp(predefined_path, registry_path) = 0
+            return: 1
+        i: i + 1U
+return: 0
+
+fn: lm_trans_registry_note_predefined_path (const: @(char registry_path)) int
+    @: char copy
+
+    if: registry_path = 0 || lm_trans_registry = 0 || lm_trans_registry\predefined_paths = 0
+        return: 1
+    if: lm_trans_registry_path_is_predefined(registry_path) != 0
+        return: 0
+
+    copy: lm_trans_text_copy_cstr_from_cstr(registry_path)
+    if: copy = 0
+        return: 1
+    if: lm_own_ptr_stack_push(lm_trans_registry\predefined_paths, copy) != 0
+        lm_own_delete(copy, 0)
+        return: 1
+return: 0
+
+fn: lm_trans_registry_source_site_new (const: @(char registry_path); const: (LmP0Node: node)) @: char
+    @: char site
+    int: needed
+
+    if: registry_path = 0 || node = 0 || node\span = 0
+        return: 0
+
+    needed: c.snprintf(0, 0, "%s#%zu", registry_path, node\span\offset)
+    if: needed < 0
+        return: 0
+    site: cast: (@: char) lm_own_new_zero((cast: size_t needed) + 1U)
+    if: site = 0
+        return: 0
+    if: c.snprintf(site, (cast: size_t needed) + 1U, "%s#%zu", registry_path, node\span\offset) != needed
+        lm_own_delete(site, 0)
+        return: 0
+return: site
+
+fn: lm_trans_registry_predefined_descriptor_site_is_hoisted (const: @(char registry_path); const: (LmP0Node: node)) int
+    const: @: char stored_site
+    @: char site
+    size_t: index
+    int: found
+
+    if: lm_trans_registry = 0 || lm_trans_registry\predefined_descriptor_sites = 0
+        return: 0
+    site: lm_trans_registry_source_site_new(registry_path, node)
+    if: site = 0
+        return: 0
+
+    found: 0
+    index: 0U
+    while: index < lm_trans_registry\predefined_descriptor_sites\count
+        stored_site: lm_own_ptr_stack_at(lm_trans_registry\predefined_descriptor_sites, index)
+        if: stored_site != 0 && c.strcmp(stored_site, site) = 0
+            found: 1
+            break
+        index: index + 1U
+
+    lm_own_delete(site, 0)
+return: found
+
+fn: lm_trans_registry_note_predefined_descriptor_site (const: @(char registry_path); const: (LmP0Node: node)) int
+    @: char site
+
+    if: registry_path = 0 || node = 0 || lm_trans_registry = 0 || lm_trans_registry\predefined_descriptor_sites = 0
+        return: 1
+    if: lm_trans_registry_predefined_descriptor_site_is_hoisted(registry_path, node)
+        return: 0
+
+    site: lm_trans_registry_source_site_new(registry_path, node)
+    if: site = 0
+        return: 1
+    if: lm_own_ptr_stack_push(lm_trans_registry\predefined_descriptor_sites, site) != 0
+        lm_own_delete(site, 0)
+        return: 1
+return: 0
+
+fn: lm_trans_registry_early_l2_source_site_is_materialized (const: @(char source_path); const: (LmP0Node: node)) int
+    const: @: char stored_site
+    @: char site
+    size_t: index
+    int: found
+
+    if: lm_trans_registry = 0 || lm_trans_registry\early_l2_source_sites = 0
+        return: 0
+    site: lm_trans_registry_source_site_new(source_path, node)
+    if: site = 0
+        return: 0
+
+    found: 0
+    index: 0U
+    while: index < lm_trans_registry\early_l2_source_sites\count
+        stored_site: lm_own_ptr_stack_at(lm_trans_registry\early_l2_source_sites, index)
+        if: stored_site != 0 && c.strcmp(stored_site, site) = 0
+            found: 1
+            break
+        index: index + 1U
+
+    lm_own_delete(site, 0)
+return: found
+
+fn: lm_trans_registry_note_early_l2_source_site (const: @(char source_path); const: (LmP0Node: node)) int
+    @: char site
+
+    if: source_path = 0 || node = 0 || lm_trans_registry = 0 || lm_trans_registry\early_l2_source_sites = 0
+        return: 1
+    if: lm_trans_registry_early_l2_source_site_is_materialized(source_path, node)
+        return: 0
+
+    site: lm_trans_registry_source_site_new(source_path, node)
+    if: site = 0
+        return: 1
+    if: lm_own_ptr_stack_push(lm_trans_registry\early_l2_source_sites, site) != 0
+        lm_own_delete(site, 0)
+        return: 1
+return: 0
+
+fn: lm_trans_registry_note_loaded_path (const: @(char registry_path)) int
+    @: char copy
+
+    if: registry_path = 0
+        return: 1
+    if: lm_trans_registry_path_already_loaded(registry_path) != 0
+        return: 0
+
+    copy: lm_trans_text_copy_cstr_from_cstr(registry_path)
+    if: copy = 0
+        return: 1
+    if: lm_own_ptr_stack_push(lm_trans_registry\loaded_paths, copy) != 0
+        lm_own_delete(copy, 0)
+        return: 1
+return: 0
+
+fn: lm_trans_registry_load_import_frame (const: (LmP0Frame: frame); const: @(char source_path)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmP0Text: path_value
+    @: char candidate_name
+    c.array: [4096]: char registry_path
+    int: loaded
+
+    if: frame = 0
+        return: 1
+
+    field: frame\body\first_field
+    if: field = 0
+        c.fprintf(c.stderr, "trans registry import error: import receiver expects at least one path\n")
+        return: 1
+
+    path_value: lm_trans_l4_text_view_new("")
+    if: path_value = 0
+        return: 1
+    while: field != 0
+        node: field\value
+        if: lm_trans_node_is_ignored(node) = 0
+            if: node = 0 || node\kind != c.LM_P0_NODE_ATOM || lm_trans_registry_literal_value(node\as\atom, path_value) = 0
+                c.fprintf(c.stderr, "trans registry import error: import path must be an atom/string\n")
+                lm_trans_l4_text_view_delete(@ path_value)
+                return: 1
+
+            candidate_name: lm_trans_text_copy_cstr(path_value)
+            if: candidate_name = 0
+                lm_trans_l4_text_view_delete(@ path_value)
+                return: 1
+            if: lm_trans_registry_candidate_path(source_path, candidate_name, registry_path, 4096U) != 0
+                lm_own_delete(candidate_name, 0)
+                c.fprintf(c.stderr, "trans registry import error: import path is too long\n")
+                lm_trans_l4_text_view_delete(@ path_value)
+                return: 1
+            lm_own_delete(candidate_name, 0)
+
+            if: lm_trans_path_has_extension(registry_path, ".lm4")
+                c.fprintf(c.stderr, "trans L2 import error: import does not accept legacy .lm4 registry targets; migrate the module to .lm2 and load it with predef: %s\n", registry_path)
+                lm_trans_l4_text_view_delete(@ path_value)
+                return: 1
+
+            if: lm_trans_registry_path_already_loaded(registry_path) = 0
+                if: lm_trans_registry_load_file_path(registry_path, 1, @ loaded) != 0
+                    lm_trans_l4_text_view_delete(@ path_value)
+                    return: 1
+                if: loaded = 0
+                    c.fprintf(c.stderr, "trans registry import error: cannot read %s\n", registry_path)
+                    lm_trans_l4_text_view_delete(@ path_value)
+                    return: 1
+        ---
+        field: field\next
+
+    lm_trans_l4_text_view_delete(@ path_value)
+return: 0
+
+fn: lm_trans_registry_materialize_predef_path (const: @(char registry_path)) int
+    LmP0Document: document
+    const: LmP0Diagnostic: diagnostic
+    int: loaded
+    int: status
+
+    if: registry_path = 0
+        c.fprintf(c.stderr, "trans registry predef error: predef target path is empty\n")
+        return: 1
+    if: lm_trans_path_has_extension(registry_path, ".lm2") = 0
+        c.fprintf(c.stderr, "trans registry predef error: predef target must be an .lm2 module: %s\n", registry_path)
+        return: 1
+    if: lm_trans_registry_path_is_predefined(registry_path) != 0
+        return: 0
+    if: lm_trans_registry_note_predefined_path(registry_path) != 0
+        return: 1
+
+    if: lm_trans_registry_load_file_path(registry_path, 1, @ loaded) != 0 || loaded = 0
+        return: 1
+
+    document: 0
+    status: lm_p0_parse_file(registry_path, @ document)
+    if: status != 0
+        diagnostic: lm_p0_document_diagnostic(document)
+        if: diagnostic != 0
+            c.fprintf:
+                c.stderr
+                "trans registry predef parse error %d at %zu:%zu in %s: %s\n"
+                diagnostic\code diagnostic\line diagnostic\column registry_path diagnostic\message
+            ---
+        else:
+            c.fprintf(c.stderr, "trans registry predef error: cannot read %s\n", registry_path)
+        ---
+        lm_p0_document_destroy(document)
+        return: 1
+    ---
+
+    status: lm_trans_materialize_l2_predef_root(lm_p0_document_root(document), registry_path)
+    lm_p0_document_destroy(document)
+return: status
+
+fn: lm_trans_registry_load_predef_frame (const: (LmP0Frame: frame); const: @(char source_path)) int
+    const: LmP0Field: field
+    const: LmP0Node: node
+    LmP0Text: path_value
+    @: char candidate_name
+    c.array: [4096]: char registry_path
+    int: found
+
+    if: frame = 0
+        return: 1
+
+    path_value: lm_trans_l4_text_view_new("")
+    if: path_value = 0
+        return: 1
+
+    found: 0
+    field: frame\body\first_field
+    while: field != 0
+        node: field\value
+        if: lm_trans_node_is_ignored(node) = 0
+            if: node = 0 || node\kind != c.LM_P0_NODE_ATOM || lm_trans_registry_literal_value(node\as\atom, path_value) = 0
+                c.fprintf(c.stderr, "trans registry predef error: predef path must be an atom/string\n")
+                lm_trans_l4_text_view_delete(@ path_value)
+                return: 1
+
+            candidate_name: lm_trans_text_copy_cstr(path_value)
+            if: candidate_name = 0
+                lm_trans_l4_text_view_delete(@ path_value)
+                return: 1
+            if: lm_trans_registry_candidate_path(source_path, candidate_name, registry_path, 4096U) != 0
+                lm_own_delete(candidate_name, 0)
+                c.fprintf(c.stderr, "trans registry predef error: predef path is too long\n")
+                lm_trans_l4_text_view_delete(@ path_value)
+                return: 1
+            lm_own_delete(candidate_name, 0)
+
+            if: lm_trans_registry_materialize_predef_path(registry_path) != 0
+                lm_trans_l4_text_view_delete(@ path_value)
+                return: 1
+            found: 1
+        ---
+        field: field\next
+
+    lm_trans_l4_text_view_delete(@ path_value)
+    if: found = 0
+        c.fprintf(c.stderr, "trans registry predef error: predef receiver expects at least one .lm2 path\n")
+        return: 1
+return: lm_trans_validate_end_trailer(frame)
+
+fn: lm_trans_registry_import_frame_new (const: (LmP0Field: field); int: descend_l2) LmTransRegistryImportFrame
+    LmTransRegistryImportFrame: frame
+
+    frame: lm_own_new_zero(c.sizeof(frame[0]))
+    if: frame != 0
+        frame\field: field
+        frame\descend_l2: descend_l2
+return: frame
+
+fn: lm_trans_registry_load_imports_from_structure (const: (LmP0Structure: structure); const: @(char source_path); int: descend_l2) int
+    LmOwnPtrStack: stack
+    LmTransRegistryImportFrame: frame
+    const: LmP0Node: node
+    LmTransHeadBinding: binding
+    @: void popped
+    int: child_descend_l2
+    int: previous_depth
+    int: status
+
+    binding: lm_own_new_zero(c.sizeof(binding[0]))
+    if: binding = 0
+        return: 1
+    if: structure = 0 || structure\first_field = 0
+        lm_own_delete(binding, 0)
+        return: 0
+
+    stack: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    if: stack = 0
+        lm_own_delete(binding, 0)
+        return: 1
+    frame: lm_trans_registry_import_frame_new(structure\first_field, descend_l2)
+    if: frame = 0
+        lm_trans_ptr_stack_delete(@ stack)
+        lm_own_delete(binding, 0)
+        return: 1
+    if: lm_own_ptr_stack_push(stack, frame) != 0
+        lm_own_delete(frame, 0)
+        lm_trans_ptr_stack_delete(@ stack)
+        lm_own_delete(binding, 0)
+        return: 1
+
+    status: 0
+    while: status = 0 && stack\count != 0U
+        frame: lm_own_ptr_stack_top(stack)
+        if: frame = 0 || frame\field = 0
+            popped: lm_own_ptr_stack_pop(stack)
+            lm_own_delete(popped, 0)
+            continue
+
+        node: frame\field\value
+        frame\field: frame\field\next
+        if: node != 0 && lm_trans_node_is_ignored(node) = 0 && node\kind = c.LM_P0_NODE_FRAME
+            if: lm_trans_head_binding_resolve(0, node\as\frame\head, binding) != 0
+                status: 1
+                break
+            if: binding\statement_frame = @ lm_trans_statement_emit_import
+                if: frame\descend_l2 != 2 && lm_trans_registry_load_import_frame(node\as\frame, source_path) != 0
+                    status: 1
+                    break
+                ---
+            ---
+            else:
+                if: binding\statement_frame = @ lm_trans_statement_emit_predef
+                    if: frame\descend_l2 != 2 && lm_trans_registry_load_predef_frame(node\as\frame, source_path) != 0
+                        status: 1
+                        break
+                    ---
+                ---
+                else:
+                    if: frame\descend_l2 != 0 && node\as\frame\body != 0 && node\as\frame\body\first_field != 0 && (lm_trans_frame_is_l1_substrate_receiver(node\as\frame) != 0 || lm_trans_frame_is_l2_or_l3_level_receiver(node\as\frame) != 0 || frame\descend_l2 = 2 || lm_trans_text_equals(node\as\frame\head, "os") || lm_trans_text_equals(node\as\frame\head, "ifdef"))
+                        if: lm_trans_frame_is_l3_level_receiver(node\as\frame)
+                            previous_depth: lm_trans_l3_profile_enter_frame(node\as\frame)
+                            status: lm_trans_registry_load_imports_from_structure(node\as\frame\body, source_path, 0)
+                            lm_trans_l3_profile_restore(previous_depth)
+                            if: status != 0
+                                break
+                        ---
+                        else:
+                            if: lm_trans_frame_is_l2_level_receiver(node\as\frame)
+                                child_descend_l2: 0
+                            else:
+                                child_descend_l2: 2
+                            ---
+                            frame: lm_trans_registry_import_frame_new(node\as\frame\body\first_field, child_descend_l2)
+                            if: frame = 0
+                                status: 1
+                                break
+                            if: lm_own_ptr_stack_push(stack, frame) != 0
+                                lm_own_delete(frame, 0)
+                                status: 1
+                                break
+                        ---
+                    ---
+                ---
+            ---
+        ---
+    lm_trans_ptr_stack_delete(@ stack)
+    lm_own_delete(binding, 0)
+return: status
+
+fn: lm_trans_registry_load_inline_root (const: (LmP0Node: root); const: @(char source_path)) int
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        return: 1
+return: lm_trans_registry_load_imports_from_structure(root\as\structure, source_path, 1)
+
+fn: lm_trans_path_separator (char: ch) int
+return: ch = '/' || ch = '\\'
+
+fn: lm_trans_path_is_absolute (const: @(char path)) int
+    if: path = 0 || path[0] = '\0'
+        return: 0
+    if: lm_trans_path_separator(path[0]) != 0
+        return: 1
+return: ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] = ':' && lm_trans_path_separator(path[2]) != 0
+
+fn: lm_trans_path_segment_equals (const: @(char path); size_t: offset; const: @(char segment)) int
+    size_t: i
+
+    if: path = 0 || segment = 0
+        return: 0
+    i: 0U
+    while: segment[i] != '\0'
+        if: path[offset + i] != segment[i]
+            return: 0
+        i: i + 1U
+return: path[offset + i] = '\0' || lm_trans_path_separator(path[offset + i]) != 0
+
+fn: lm_trans_project_root_length_from_source (const: @(char source_path)) size_t
+    size_t: length
+    size_t: i
+
+    if: source_path = 0 || lm_trans_path_is_absolute(source_path) = 0
+        return: 0U
+
+    length: c.strlen(source_path)
+    i: 0U
+    while: i < length
+        if: (i = 0U || lm_trans_path_separator(source_path[i - 1U]) != 0) && (lm_trans_path_segment_equals(source_path, i, "lm2") != 0 || lm_trans_path_segment_equals(source_path, i, "lm4") != 0 || lm_trans_path_segment_equals(source_path, i, "tests") != 0)
+            return: i
+        i: i + 1U
+return: 0U
+
+fn: lm_trans_registry_project_path_for_source (const: @(char source_path); const: @(char file_name); @: char buffer; size_t: size) int
+    size_t: root_length
+    size_t: file_length
+
+    if: buffer = 0 || file_name = 0 || size = 0U
+        return: 1
+
+    root_length: lm_trans_project_root_length_from_source(source_path)
+    file_length: c.strlen(file_name)
+    if: root_length = 0U
+        if: file_length >= size
+            return: 1
+        c.strcpy(buffer, file_name)
+        return: 0
+
+    if: root_length + file_length >= size
+        c.fprintf(c.stderr, "trans error: registry path is too long\n")
+        return: 1
+    c.memcpy(buffer, source_path, root_length)
+    c.strcpy(buffer + root_length, file_name)
+return: 0
+
+fn: lm_trans_registry_path_for_source (const: @(char source_path); const: @(char file_name); @: char buffer; size_t: size) int
+    size_t: length
+    size_t: i
+    size_t: slash
+
+    if: buffer = 0 || file_name = 0 || size = 0U
+        return: 1
+
+    if: source_path = 0 || source_path[0] = '\0'
+        if: c.strlen(file_name) >= size
+            return: 1
+        c.strcpy(buffer, file_name)
+        return: 0
+
+    length: c.strlen(source_path)
+    slash: 0U
+    i: 0U
+    while: i < length
+        if: lm_trans_path_separator(source_path[i]) != 0
+            slash: i + 1U
+        i: i + 1U
+
+    if: slash = 0U
+        if: c.strlen(file_name) >= size
+            return: 1
+        c.strcpy(buffer, file_name)
+        return: 0
+
+    if: slash + c.strlen(file_name) >= size
+        c.fprintf(c.stderr, "trans error: registry path is too long\n")
+        return: 1
+    c.memcpy(buffer, source_path, slash)
+    c.strcpy(buffer + slash, file_name)
+return: 0
+
+fn: lm_trans_registry_load_file_path_mode (const: @(char registry_path); int: required; int: bootstrap_l2; @: int out_loaded) int
+    LmP0Document: document
+    const: LmP0Diagnostic: diagnostic
+    int: status
+
+    if: out_loaded != 0
+        out_loaded[0]: 0
+    if: registry_path = 0 || registry_path[0] = '\0'
+        if: required != 0
+            c.fprintf(c.stderr, "trans registry error: empty registry path\n")
+            return: 1
+        return: 0
+    ---
+    if: lm_trans_path_has_extension(registry_path, ".lm4") != 0
+        c.fprintf(c.stderr, "trans registry error: .lm4 registry modules are not supported: %s\n", registry_path)
+        return: 1
+
+    if: lm_trans_registry_path_already_loaded(registry_path) != 0
+        if: out_loaded != 0
+            out_loaded[0]: 1
+        return: 0
+
+    document: 0
+    status: lm_p0_parse_file(registry_path, @ document)
+    if: status != 0
+        diagnostic: lm_p0_document_diagnostic(document)
+        if: diagnostic != 0
+            c.fprintf:
+                c.stderr
+                "trans registry parse error %d at %zu:%zu in %s: %s\n"
+                diagnostic\code diagnostic\line diagnostic\column registry_path diagnostic\message
+            lm_p0_document_destroy(document)
+            return: 1
+
+        lm_p0_document_destroy(document)
+        if: required != 0
+            c.fprintf(c.stderr, "trans registry error: cannot read %s\n", registry_path)
+            return: 1
+        return: 0
+    ---
+
+    if: bootstrap_l2 != 0 && lm_trans_path_has_extension(registry_path, ".lm2") != 0
+        status: lm_trans_materialize_l2_bootstrap_root(lm_p0_document_root(document), registry_path)
+    else:
+        status: lm_trans_registry_load_inline_root(lm_p0_document_root(document), registry_path)
+    ---
+    if: status != 0
+        lm_p0_document_destroy(document)
+        return: 1
+
+    lm_p0_document_destroy(document)
+    if: lm_trans_registry_note_loaded_path(registry_path) != 0
+        return: 1
+
+    if: out_loaded != 0
+        out_loaded[0]: 1
+return: 0
+
+fn: lm_trans_registry_load_file_path (const: @(char registry_path); int: required; @: int out_loaded) int
+return: lm_trans_registry_load_file_path_mode(registry_path, required, 0, out_loaded)
+
+fn: lm_trans_registry_load_bootstrap_file_path (const: @(char registry_path); int: required; @: int out_loaded) int
+return: lm_trans_registry_load_file_path_mode(registry_path, required, 1, out_loaded)
+
+fn: lm_trans_registry_candidate_path (const: @(char source_path); const: @(char candidate_name); @: char registry_path; size_t: registry_path_size) int
+    if: candidate_name = 0 || registry_path = 0 || registry_path_size = 0U
+        return: 1
+    if: c.strncmp(candidate_name, "lm2/", 4U) = 0
+        return: lm_trans_registry_project_path_for_source(source_path, candidate_name, registry_path, registry_path_size)
+return: lm_trans_registry_path_for_source(source_path, candidate_name, registry_path, registry_path_size)
+
+fn: lm_trans_registry_core_candidate_name (size_t: index) const: @: char
+    if: index = 0U
+        return: "lm2/core.lm2"
+    if: index = 1U
+        return: "core.lm2"
+return: 0
+
+fn: lm_trans_registry_primitive_candidate_name (size_t: index) const: @: char
+    if: index = 0U
+        return: "lm2/primitive.lm2"
+    if: index = 1U
+        return: "primitive.lm2"
+return: 0
+
+fn: lm_trans_registry_convert_candidate_name (size_t: index) const: @: char
+    if: index = 0U
+        return: "lm2/convert.lm2"
+    if: index = 1U
+        return: "convert.lm2"
+return: 0
+
+fn: lm_trans_registry_candidate_name (size_t: index) const: @: char
+    if: index = 0U
+        return: "lm2/trans_registry.lm2"
+    if: index = 1U
+        return: "trans_registry.lm2"
+    if: index = 2U
+        return: "trans_registry.lmx"
+    if: index = 3U
+        return: "lm2/trans_registry.lmx"
+return: 0
+
+fn: lm_trans_registry_load_for_source (const: @(char source_path)) int
+    c.array: [4096]: char registry_path
+    const: @: char candidate_name
+    const: @: char override_path
+    const: @: char view_mode
+    int: override_enabled
+    int: loaded
+    int: registry_loaded
+    size_t: candidate_index
+
+    lm_trans_registry_destroy()
+    if: lm_trans_registry_init() != 0
+        return: 1
+    lm_trans_registry\loaded: 1
+    view_mode: c.getenv("LM_TRANS_REGISTRY_VIEW")
+    if: view_mode = 0 || view_mode[0] = '\0' || c.strcmp(view_mode, "0") = 0 || c.strcmp(view_mode, "legacy") = 0
+        lm_trans_registry\view_mode: 0
+    else:
+        lm_trans_registry\view_mode: 1
+        if: c.strcmp(view_mode, "view") = 0
+            lm_trans_registry\view_mode: 2
+        ---
+    lm_trans_registry\identifiers: lm_trans_identifier_table_new()
+    lm_trans_registry\value_arena: lm_own_new_zero(c.sizeof(lm_trans_registry\value_arena[0]))
+    lm_trans_registry\loaded_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_registry\predefined_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_registry\predefined_descriptor_sites: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_registry\early_l2_source_sites: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    if: lm_trans_registry\identifiers = 0 || lm_trans_registry\value_arena = 0 || lm_own_arena_init(lm_trans_registry\value_arena, c.lm_lmx_message_thread) != 0 || lm_trans_registry\loaded_paths = 0 || lm_trans_registry\predefined_paths = 0 || lm_trans_registry\predefined_descriptor_sites = 0 || lm_trans_registry\early_l2_source_sites = 0
+        lm_trans_registry_destroy()
+        return: 1
+    lm_trans_registry\source_path: lm_trans_text_copy_cstr_from_cstr(source_path)
+    if: lm_trans_registry\source_path = 0
+        lm_trans_registry_destroy()
+        return: 1
+    lm_trans_registry\loaded_fact_count: 0U
+    if: lm_trans_l4_payload_pointer_bindings_init() != 0
+        lm_trans_registry_destroy()
+        return: 1
+
+    candidate_index: 0U
+    candidate_name: lm_trans_registry_core_candidate_name(candidate_index)
+    while: candidate_name != 0
+        if: lm_trans_registry_candidate_path(source_path, candidate_name, registry_path, 4096U) != 0
+            lm_trans_registry_destroy()
+            return: 1
+        if: lm_trans_registry_load_bootstrap_file_path(registry_path, 0, @ loaded) != 0
+            lm_trans_registry_destroy()
+            return: 1
+        if: loaded != 0
+            break
+        candidate_index: candidate_index + 1U
+        candidate_name: lm_trans_registry_core_candidate_name(candidate_index)
+
+    loaded: 0
+    candidate_index: 0U
+    candidate_name: lm_trans_registry_primitive_candidate_name(candidate_index)
+    while: candidate_name != 0
+        if: lm_trans_registry_candidate_path(source_path, candidate_name, registry_path, 4096U) != 0
+            lm_trans_registry_destroy()
+            return: 1
+        if: lm_trans_registry_load_bootstrap_file_path(registry_path, 0, @ loaded) != 0
+            lm_trans_registry_destroy()
+            return: 1
+        if: loaded != 0
+            break
+        candidate_index: candidate_index + 1U
+        candidate_name: lm_trans_registry_primitive_candidate_name(candidate_index)
+    if: loaded = 0
+        c.fprintf(c.stderr, "trans registry error: cannot read lm2/primitive.lm2 or primitive.lm2\n")
+        lm_trans_registry_destroy()
+        return: 1
+
+    loaded: 0
+    candidate_index: 0U
+    candidate_name: lm_trans_registry_convert_candidate_name(candidate_index)
+    while: candidate_name != 0
+        if: lm_trans_registry_candidate_path(source_path, candidate_name, registry_path, 4096U) != 0
+            lm_trans_registry_destroy()
+            return: 1
+        if: lm_trans_registry_load_bootstrap_file_path(registry_path, 0, @ loaded) != 0
+            lm_trans_registry_destroy()
+            return: 1
+        if: loaded != 0
+            break
+        candidate_index: candidate_index + 1U
+        candidate_name: lm_trans_registry_convert_candidate_name(candidate_index)
+    if: loaded = 0
+        c.fprintf(c.stderr, "trans registry error: cannot read lm2/convert.lm2 or convert.lm2\n")
+        lm_trans_registry_destroy()
+        return: 1
+
+    override_path: c.getenv("LM_TRANS_REGISTRY")
+    override_enabled: override_path != 0 && override_path[0] != '\0'
+    registry_loaded: 0
+    if: override_enabled != 0
+        if: c.strlen(override_path) >= 4096U
+            c.fprintf(c.stderr, "trans error: LM_TRANS_REGISTRY path is too long\n")
+            lm_trans_registry_destroy()
+            return: 1
+        c.strcpy(registry_path, override_path)
+        if: lm_trans_registry_load_bootstrap_file_path(registry_path, 1, @ loaded) != 0
+            lm_trans_registry_destroy()
+            return: 1
+        if: loaded != 0
+            registry_loaded: 1
+    ---
+    else:
+        candidate_index: 0U
+        candidate_name: lm_trans_registry_candidate_name(candidate_index)
+        while: candidate_name != 0
+            if: lm_trans_registry_candidate_path(source_path, candidate_name, registry_path, 4096U) != 0
+                lm_trans_registry_destroy()
+                return: 1
+            if: lm_trans_registry_load_bootstrap_file_path(registry_path, 0, @ loaded) != 0
+                lm_trans_registry_destroy()
+                return: 1
+            if: loaded != 0
+                registry_loaded: 1
+                break
+            candidate_index: candidate_index + 1U
+            candidate_name: lm_trans_registry_candidate_name(candidate_index)
+    ---
+
+    if: registry_loaded = 0
+        c.fprintf(c.stderr, "trans registry error: cannot read trans_registry.lm2 or trans_registry.lmx\n")
+        lm_trans_registry_destroy()
+        return: 1
+    if: lm_trans_registry_assert_view_parity() != 0
+        lm_trans_registry_destroy()
+        return: 1
+return: 0
+
+fn: lm_trans_emit_module_prelude_plan (FILE: file) int
+    LmTransNamespace: namespace_
+    int: emitted
+    int: status
+
+    namespace_: lm_trans_namespace_new()
+    if: namespace_ = 0
+        return: 1
+
+    emitted: 0
+    status: lm_trans_namespace_attach_registry(namespace_)
+    if: status = 0
+        status: lm_trans_emit_core_include_table(file, namespace_, @ emitted)
+    if: status = 0
+        status: lm_trans_emit_configured_prelude_sequences(file, namespace_, @ emitted)
+    if: status = 0 && emitted != 0
+        status: lm_trans_put(file, "\n")
+
+    lm_trans_namespace_delete(namespace_)
+return: status
+
+fn: lm_trans_emit_document (const: @(char source_path); const: @(char output_path)) int
+    LmP0Document: document
+    const: LmP0Diagnostic: diagnostic
+    const: LmP0Node: root
+    FILE: output
+    FILE: prelude_output
+    FILE: body_output
+    FILE: previous_prelude_output
+    @: char prelude_path
+    @: char body_path
+    int: status
+    int: close_status
+    int: projection_status
+    int: emitted
+    int: typedef_projection_entered
+    int: previous_conditional_emission_depth
+
+    document: 0
+    output: 0
+    prelude_output: 0
+    body_output: 0
+    previous_prelude_output: lm_trans_prelude_output
+    previous_conditional_emission_depth: lm_trans_l2_conditional_emission_depth
+    prelude_path: 0
+    body_path: 0
+    typedef_projection_entered: 0
+    if: lm_trans_path_has_extension(source_path, ".lm4") != 0
+        c.fprintf(c.stderr, "trans error: .lm4 source modules are not supported: %s\n", source_path)
+        return: 1
+
+    if: lm_trans_registry_load_for_source(source_path) != 0
+        return: 1
+
+    status: lm_p0_parse_file(source_path, @ document)
+    if: status != 0
+        diagnostic: lm_p0_document_diagnostic(document)
+        if: diagnostic != 0
+            c.fprintf:
+                c.stderr
+                "trans parse error %d at %zu:%zu: %s\n"
+                diagnostic\code diagnostic\line diagnostic\column diagnostic\message
+        ---
+        else:
+            c.fprintf(c.stderr, "trans parse error while reading %s\n", source_path)
+        ---
+        lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+
+    root: lm_p0_document_root(document)
+    if: lm_trans_registry_load_inline_root(root, source_path) != 0 || lm_trans_materialize_local_l2_source_root(root, source_path, lm_trans_path_has_extension(source_path, ".lm2")) != 0 || lm_trans_registry_assert_view_parity() != 0
+        lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+
+    prelude_path: lm_trans_temp_output_path_new(output_path, ".prelude.tmp")
+    body_path: lm_trans_temp_output_path_new(output_path, ".body.tmp")
+    if: prelude_path = 0 || body_path = 0
+        c.fprintf(c.stderr, "trans error: cannot allocate temporary output paths\n")
+        lm_own_delete(prelude_path, 0)
+        lm_own_delete(body_path, 0)
+        lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+
+    prelude_output: c.fopen(prelude_path, "w+b")
+    body_output: c.fopen(body_path, "w+b")
+    if: prelude_output = 0 || body_output = 0
+        c.fprintf(c.stderr, "trans error: cannot create temporary output streams\n")
+        if: prelude_output != 0
+            c.fclose(prelude_output)
+        if: body_output != 0
+            c.fclose(body_output)
+        c.remove(prelude_path)
+        c.remove(body_path)
+        lm_own_delete(prelude_path, 0)
+        lm_own_delete(body_path, 0)
+        lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+    ---
+
+    lm_trans_prelude_output: prelude_output
+    lm_trans_current_source_path: source_path
+    lm_trans_module_init_root_source_path: source_path
+    lm_trans_module_init_root_main_count: 0U
+    lm_trans_module_init_wrapped_main_seen: 0
+    lm_trans_next_array_value_helper_id: 0U
+    lm_trans_next_anonymous_structure_id: 0U
+    lm_trans_emitted_message_thread_runtime_prelude: 0
+    lm_trans_emitted_message_thread_main_helper: 0
+    lm_trans_emitted_message_thread_assert_helper: 0
+    lm_trans_emitted_c_calling_convention_prelude: 0
+    lm_trans_emitted_structure_graph_header: 0
+    lm_trans_l2_table_materialization_suppression_depth: 0
+    lm_trans_l2_conditional_import_depth: 0
+    lm_trans_l2_executable_statement_depth: 0
+    lm_trans_l2_conditional_emission_depth: 0
+    lm_trans_module_init_unsupported_wrapper_depth: 0
+    emitted: 0
+    status: 0
+    if: lm_trans_typedef_projection_output_enter(prelude_output, body_output) != 0
+        c.fprintf(c.stderr, "trans error: out of memory while creating typedef projection state\n")
+        status: 1
+    else:
+        typedef_projection_entered: 1
+    ---
+    lm_trans_declared_import_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_declared_import_documents: lm_trans_ptr_stack_new(0)
+    lm_trans_emitted_import_prelude_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_emitted_import_module_init_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_emitted_import_function_paths: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_emitted_callable_adapters: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_emitted_callable_binders: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_emitted_array_value_helpers: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    lm_trans_emitted_function_return_structs: lm_trans_ptr_stack_new(lm_own_delete_plain)
+    if: lm_trans_declared_import_paths = 0 || lm_trans_declared_import_documents = 0 || lm_trans_emitted_import_prelude_paths = 0 || lm_trans_emitted_import_module_init_paths = 0 || lm_trans_emitted_import_function_paths = 0 || lm_trans_emitted_callable_adapters = 0 || lm_trans_emitted_callable_binders = 0 || lm_trans_emitted_array_value_helpers = 0 || lm_trans_emitted_function_return_structs = 0 || lm_trans_module_init_registry_init() != 0
+        c.fprintf(c.stderr, "trans error: out of memory while creating module state stacks\n")
+        status: 1
+    if: status = 0 && (lm_trans_typedef_projection_reserve_loaded_source_paths() != 0 || lm_trans_typedef_projection_reserve_source_node(root) != 0 || lm_trans_module_init_names_prepare() != 0)
+        status: 1
+    if: status = 0
+        status: lm_trans_emit_module_prelude_plan(prelude_output)
+    ---
+    if: status = 0
+        status: lm_trans_emit_root_sequence(body_output, root, lm_trans_path_has_extension(source_path, ".lm2"), @ emitted)
+    if: status = 0 && lm_trans_module_init_entry_count() != 0U && lm_trans_module_init_wrapped_main_seen
+        c.fprintf(c.stderr, "trans hosted module-init limitation: a conditional or wrapped main cannot host module value initialization\n")
+        status: 1
+    if: status = 0 && lm_trans_module_init_entry_count() != 0U && lm_trans_module_init_root_main_count = 0U
+        c.fprintf(c.stderr, "trans hosted module-init limitation: top-level aggregate values require one root external main\n")
+        status: 1
+    if: status = 0 && lm_trans_module_init_root_main_count != 0U
+        status: lm_trans_emit_module_init_dispatcher(prelude_output)
+
+    lm_trans_module_init_registry_destroy()
+    lm_trans_ptr_stack_delete(@ lm_trans_emitted_function_return_structs)
+    lm_trans_ptr_stack_delete(@ lm_trans_emitted_array_value_helpers)
+    lm_trans_ptr_stack_delete(@ lm_trans_emitted_callable_binders)
+    lm_trans_ptr_stack_delete(@ lm_trans_emitted_callable_adapters)
+    lm_trans_ptr_stack_delete(@ lm_trans_emitted_import_function_paths)
+    lm_trans_ptr_stack_delete(@ lm_trans_emitted_import_module_init_paths)
+    lm_trans_ptr_stack_delete(@ lm_trans_emitted_import_prelude_paths)
+    lm_trans_import_documents_drain(lm_trans_declared_import_documents)
+    lm_trans_ptr_stack_delete(@ lm_trans_declared_import_documents)
+    lm_trans_ptr_stack_delete(@ lm_trans_declared_import_paths)
+    projection_status: 0
+    if: typedef_projection_entered
+        projection_status: lm_trans_typedef_projection_output_leave()
+    if: projection_status != 0
+        c.fprintf(c.stderr, "trans error: unbalanced typedef projection state\n")
+        status: 1
+    lm_trans_l2_table_materialization_suppression_depth: 0
+    lm_trans_l2_conditional_import_depth: 0
+    lm_trans_l2_executable_statement_depth: 0
+    lm_trans_l2_conditional_emission_depth: previous_conditional_emission_depth
+    lm_trans_module_init_unsupported_wrapper_depth: 0
+    lm_trans_module_init_root_main_count: 0U
+    lm_trans_module_init_wrapped_main_seen: 0
+    lm_trans_module_init_root_source_path: 0
+    lm_trans_current_source_path: 0
+    lm_trans_prelude_output: previous_prelude_output
+    if: status = 0 && emitted = 0
+        c.fprintf(c.stderr, "trans error: root L1 or L2 frame was not found\n")
+        status: 1
+
+    if: status = 0
+        output: c.fopen(output_path, "wb")
+        if: output = 0
+            c.fprintf(c.stderr, "trans error: cannot open output file %s\n", output_path)
+            status: 1
+    ---
+    if: status = 0 && (lm_trans_copy_stream(output, prelude_output) != 0 || lm_trans_copy_stream(output, body_output) != 0)
+        c.fprintf(c.stderr, "trans error: cannot write output file %s\n", output_path)
+        status: 1
+
+    close_status: 0
+    if: output != 0
+        close_status: c.fclose(output)
+    c.fclose(prelude_output)
+    c.fclose(body_output)
+    c.remove(prelude_path)
+    c.remove(body_path)
+    lm_own_delete(prelude_path, 0)
+    lm_own_delete(body_path, 0)
+    if: status != 0
+        lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+
+    if: close_status != 0
+        c.fprintf(c.stderr, "trans error: cannot write output file %s\n", output_path)
+        lm_p0_document_destroy(document)
+        lm_trans_registry_destroy()
+        return: 1
+
+    lm_p0_document_destroy(document)
+    lm_trans_registry_destroy()
+return: 0

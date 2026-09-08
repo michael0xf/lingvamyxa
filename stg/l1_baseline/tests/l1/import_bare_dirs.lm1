@@ -1,0 +1,11 @@
+predef: "tests/l1/bare_a/mod.lm1"
+predef: "tests/l1/bare_b/mod.lm1"
+external:
+    fn: main () int
+        if: va() != 11
+            return: 1
+        if: vb() != 22
+            return: 2
+        return: 0
+    end: main
+end: external

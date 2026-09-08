@@ -1,0 +1,10 @@
+external:
+    fn: main () int
+        return: 0
+    end: main
+    L1:
+        fn: hid () int
+            return: 1
+        end: hid
+    end: L1
+end: external

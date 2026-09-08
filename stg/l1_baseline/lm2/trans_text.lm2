@@ -1,0 +1,361 @@
+predef: "lm2/own_abi.lm2"
+
+size_t: lm_trans_tmpfile_seq
+
+fn: lm_trans_tmpfile () FILE
+    FILE: file
+    @: char dir
+    c.array: [512]: char path
+    @: char format
+
+    file: c.tmpfile()
+    if: file != 0
+        return: file
+
+    dir: c.getenv("TEMP")
+    if: dir = 0 || dir[0] = '\0'
+        dir: c.getenv("TMP")
+    if: dir = 0 || dir[0] = '\0'
+        dir: c.getenv("TMPDIR")
+    if: dir = 0 || dir[0] = '\0'
+        c.fprintf(c.stderr, "trans error: cannot create a temporary file\n")
+        return: 0
+
+    format: "%s/lmx-%p-%zu.tmp"
+    if: c.strchr(dir, '\\') != 0
+        format: "%s\\lmx-%p-%zu.tmp"
+
+    lm_trans_tmpfile_seq: lm_trans_tmpfile_seq + 1U
+    if: c.snprintf(path, 512, format, dir, @ path, lm_trans_tmpfile_seq) < 0
+        c.fprintf(c.stderr, "trans error: cannot create a temporary file\n")
+        return: 0
+    file: c.fopen(path, "w+bDx")
+    if: file != 0
+        return: file
+    file: c.fopen(path, "w+bx")
+    if: file != 0
+        return: file
+    file: c.fopen(path, "w+bD")
+    if: file != 0
+        return: file
+    file: c.fopen(path, "w+b")
+    if: file = 0
+        c.fprintf(c.stderr, "trans error: cannot create a temporary file\n")
+    return: file
+end: lm_trans_tmpfile
+
+fn: lm_trans_qualifier_is_const (const: @(char qualifier)) int
+    if: qualifier = 0
+        return: 0
+    if: c.strcmp(qualifier, "const ") = 0
+        return: 1
+    if: c.strcmp(qualifier, "static const ") = 0
+        return: 1
+    if: c.strcmp(qualifier, "extern const ") = 0
+        return: 1
+return: 0
+
+fn: lm_trans_text_equals (const: (LmP0Text: text); const: @(char value)) int
+    size_t: length
+
+    if: text = 0 || value = 0
+        return: 0
+    length: c.strlen(value)
+return: text\length = length && c.memcmp(text\data, value, length) = 0
+
+fn: lm_trans_text_same (const: (LmP0Text: left); const: (LmP0Text: right)) int
+    if: left = 0 || right = 0
+        return: 0
+    if: left\length != right\length
+        return: 0
+    if: left\length = 0U
+        return: 1
+return: c.memcmp(left\data, right\data, left\length) = 0
+
+fn: lm_trans_text_starts_with (const: (LmP0Text: text); const: @(char prefix)) int
+    size_t: length
+
+    if: text = 0 || prefix = 0
+        return: 0
+    length: c.strlen(prefix)
+return: text\length >= length && c.memcmp(text\data, prefix, length) = 0
+
+fn: lm_trans_identifier_payload (const: (LmP0Text: atom); LmP0Text: out_payload) int
+    if: atom = 0 || out_payload = 0 || atom\data = 0
+        return: 0
+
+    out_payload\data: atom\data
+    out_payload\length: atom\length
+    if: atom\length >= 2U && atom\data[0] = '`' && atom\data[atom\length - 1U] = '`'
+        out_payload\data: atom\data + 1U
+        out_payload\length: atom\length - 2U
+
+return: 1
+
+fn: lm_trans_identifier_same (const: (LmP0Text: left); const: (LmP0Text: right)) int
+    LmP0Text: left_payload
+    LmP0Text: right_payload
+    int: same
+
+    left_payload: c.lm_trans_text_ref_new_cstr("")
+    right_payload: c.lm_trans_text_ref_new_cstr("")
+    if: left_payload = 0 || right_payload = 0
+        c.lm_trans_text_ref_destroy(@ left_payload)
+        c.lm_trans_text_ref_destroy(@ right_payload)
+        return: 0
+
+    if: lm_trans_identifier_payload(left, left_payload) = 0 || lm_trans_identifier_payload(right, right_payload) = 0
+        c.lm_trans_text_ref_destroy(@ left_payload)
+        c.lm_trans_text_ref_destroy(@ right_payload)
+        return: 0
+
+    same: lm_trans_text_same(left_payload, right_payload)
+    c.lm_trans_text_ref_destroy(@ left_payload)
+    c.lm_trans_text_ref_destroy(@ right_payload)
+return: same
+
+fn: lm_trans_emit_identifier (FILE: file; const: (LmP0Text: name)) int
+    LmP0Text: payload
+    int: status
+
+    payload: c.lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 1
+
+    if: lm_trans_identifier_payload(name, payload) = 0
+        c.lm_trans_text_ref_destroy(@ payload)
+        return: 1
+    status: lm_trans_write_text(file, payload)
+    c.lm_trans_text_ref_destroy(@ payload)
+return: status
+
+fn: lm_trans_registry_identifier_value (const: (LmP0Text: atom); LmP0Text: out_payload) int
+    if: atom = 0 || out_payload = 0
+        return: 0
+    if: atom\length > 0U && (atom\data[0] = '"' || atom\data[0] = '\'')
+        return: 0
+return: lm_trans_identifier_payload(atom, out_payload)
+
+fn: lm_trans_registry_literal_value (const: (LmP0Text: atom); LmP0Text: out_payload) int
+    char: quote
+
+    if: atom = 0 || out_payload = 0 || atom\data = 0
+        return: 0
+
+    out_payload\data: atom\data
+    out_payload\length: atom\length
+    if: atom\length < 2U
+        return: 1
+
+    quote: atom\data[0]
+    if: (quote = '"' || quote = '\'') && atom\data[atom\length - 1U] = quote
+        out_payload\data: atom\data + 1U
+        out_payload\length: atom\length - 2U
+        return: 1
+
+return: lm_trans_identifier_payload(atom, out_payload)
+
+fn: lm_trans_registry_payload_is_null (const: (LmP0Text: atom)) int
+    LmP0Text: payload
+    int: is_null
+
+    payload: c.lm_trans_text_ref_new_cstr("")
+    if: payload = 0
+        return: 0
+    if: lm_trans_registry_identifier_value(atom, payload) = 0
+        c.lm_trans_text_ref_destroy(@ payload)
+        return: 0
+    is_null: payload\length = 4U && c.memcmp(payload\data, "None", 4U) = 0
+    c.lm_trans_text_ref_destroy(@ payload)
+return: is_null
+
+fn: lm_trans_text_copy_cstr (const: (LmP0Text: text)) @: char
+    if: text = 0
+        return: 0
+return: lm_own_copy_bytes(text\data, text\length)
+
+fn: lm_trans_text_copy_cstr_from_cstr (const: @(char text)) @: char
+    LmP0Text: view
+    @: char copy
+
+    view: lm_trans_text_from_cstr(text)
+    if: view = 0
+        return: 0
+    copy: lm_trans_text_copy_cstr(view)
+    c.lm_trans_text_ref_destroy(@ view)
+return: copy
+
+fn: lm_trans_registry_value_copy_cstr (const: (LmP0Text: value)) @: char
+    @: char copy
+    size_t: length
+
+    if: value = 0
+        return: 0
+
+    length: value\length
+    copy: lm_own_arena_new_zero(c.lm_trans_registry->value_arena, length + 1U)
+    if: copy = 0
+        return: 0
+    if: length != 0U
+        c.memcpy(copy, value\data, length)
+    copy[length]: '\0'
+return: copy
+
+fn: lm_trans_registry_clone_text (const: (LmP0Text: source); LmP0Text: out_text) int
+    @: char copy
+
+    if: out_text = 0
+        return: 1
+
+    out_text\data: ""
+    out_text\length: 0U
+    if: source = 0
+        return: 1
+    if: source\length = 0U
+        return: 0
+    if: source\data = 0
+        return: 1
+
+    copy: lm_own_arena_copy_bytes(c.lm_trans_registry->value_arena, source\data, source\length)
+    if: copy = 0
+        return: 1
+
+    out_text\data: copy
+    out_text\length: source\length
+return: 0
+
+fn: lm_trans_text_from_cstr (const: @(char text)) LmP0Text
+    return: c.lm_trans_text_ref_new_cstr(text)
+
+fn: lm_trans_text_assign_cstr (LmP0Text: out_text; const: @(char text)) int
+    if: out_text = 0
+        return: 0
+    if: text = 0
+        text: ""
+    out_text\data: text
+    out_text\length: c.strlen(text)
+return: 1
+
+fn: lm_trans_text_all_char (const: (LmP0Text: text); char: ch) int
+    size_t: i
+    size_t: length
+
+    if: text = 0
+        return: 0
+
+    length: text\length
+    if: length = 0U
+        return: 0
+
+    i: 0U
+    while: i < length
+        if: text\data[i] != ch
+            return: 0
+        i: i + 1U
+
+return: 1
+
+fn: lm_trans_write_all (FILE: file; const: @(char data); size_t: length) int
+    if: c.fwrite(data, 1U, length, file) = length
+        return: 0
+return: 1
+
+fn: lm_trans_main_scaffold_token_has_prefix (
+    const: @(char token)
+    size_t: token_length
+    const: @(char prefix)
+) int
+    size_t: prefix_length
+
+    if: token = 0 || prefix = 0
+        return: 0
+    prefix_length: c.strlen(prefix)
+return: token_length >= prefix_length && c.memcmp(token, prefix, prefix_length) = 0
+
+fn: lm_trans_main_scaffold_token_equals (
+    const: @(char token)
+    size_t: token_length
+    const: @(char expected)
+) int
+    if: token = 0 || expected = 0
+        return: 0
+return: token_length = c.strlen(expected) && c.memcmp(token, expected, token_length) = 0
+
+fn: lm_trans_main_scaffold_token_is_private (
+    const: @(char token)
+    size_t: token_length
+) int
+    if: lm_trans_main_scaffold_token_has_prefix(token, token_length, "lm_lmx_application_") || lm_trans_main_scaffold_token_has_prefix(token, token_length, "lm_lmx_thread_") || lm_trans_main_scaffold_token_has_prefix(token, token_length, "lm_lmx_declared_thread_")
+        return: 1
+    if: lm_trans_main_scaffold_token_equals(token, token_length, "lm_lmx_message_thread") || lm_trans_main_scaffold_token_equals(token, token_length, "lm_lmx_rest_lmx_http_server") || lm_trans_main_scaffold_token_equals(token, token_length, "lm_message_thread_main_context") || lm_trans_main_scaffold_token_equals(token, token_length, "lm_message_thread_exit_status") || lm_trans_main_scaffold_token_equals(token, token_length, "lm_message_thread_turn_end")
+        return: 1
+return: 0
+
+fn: lm_trans_put_main_scaffold_private (FILE: file; const: @(char text)) int
+    size_t: end
+    size_t: index
+
+    if: file = 0 || text = 0 || lm_trans_module_init_private_stem = 0
+        return: 1
+    index: 0U
+    while: text[index] != '\0'
+        if: (text[index] >= 'A' && text[index] <= 'Z') || (text[index] >= 'a' && text[index] <= 'z') || text[index] = '_'
+            end: index + 1U
+            while: (text[end] >= 'A' && text[end] <= 'Z') || (text[end] >= 'a' && text[end] <= 'z') || (text[end] >= '0' && text[end] <= '9') || text[end] = '_'
+                end: end + 1U
+            if: lm_trans_main_scaffold_token_is_private(text + index, end - index)
+                if: lm_trans_write_all(file, lm_trans_module_init_private_stem, c.strlen(lm_trans_module_init_private_stem)) != 0 || lm_trans_write_all(file, "main_", 5U) != 0
+                    return: 1
+            ---
+            if: lm_trans_write_all(file, text + index, end - index) != 0
+                return: 1
+            index: end
+        else:
+            if: lm_trans_write_all(file, text + index, 1U) != 0
+                return: 1
+            index: index + 1U
+        ---
+    ---
+return: 0
+
+fn: lm_trans_put (FILE: file; const: @(char text)) int
+    if: lm_trans_main_scaffold_private_emission_depth != 0U
+        return: lm_trans_put_main_scaffold_private(file, text)
+    if: c.fputs(text, file) < 0
+        return: 1
+return: 0
+
+fn: lm_trans_prelude_file (FILE: fallback) FILE
+    if: c.lm_trans_prelude_output != 0
+        return: c.lm_trans_prelude_output
+return: fallback
+
+fn: lm_trans_write_text (FILE: file; const: (LmP0Text: text)) int
+    if: text = 0
+        return: 1
+return: lm_trans_write_all(file, text\data, text\length)
+
+fn: lm_trans_emit_indent (FILE: file; unsigned: indent) int
+    unsigned: i
+
+    i: 0U
+    while: i < indent
+        if: lm_trans_put(file, "    ") != 0
+            return: 1
+        i: i + 1U
+    ---
+
+return: 0
+
+fn: lm_trans_nth_field (const: (LmP0Structure: structure); size_t: index) const: LmP0Field
+    const: LmP0Field: field
+    size_t: i
+
+    field: c.structure->first_field
+    i: 0U
+    while: field != 0 && i < index
+        field: field\next
+        i: i + 1U
+    ---
+
+return: field

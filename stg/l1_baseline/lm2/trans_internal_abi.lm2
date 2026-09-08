@@ -1,0 +1,1874 @@
+fn: lm_trans_identifier_table_find_card (
+    const: LmTransIdentifierTable: table
+    const: LmP0Text: name
+) LmTransIdentifierCard
+
+fn: lm_trans_identifier_table_get_card (
+    LmTransIdentifierTable: table
+    const: LmP0Text: name
+) LmTransIdentifierCard
+
+fn: lm_trans_identifier_card_find_relation (
+    const: LmTransIdentifierCard: card
+    const: @: char relation_name
+) LmTransIdentifierRelation
+
+fn: lm_trans_identifier_card_get_relation (
+    LmTransIdentifierCard: card
+    const: @: char relation_name
+) LmTransIdentifierRelation
+
+fn: lm_trans_binding_resolve (
+    const: @: char binding
+    LmTransBinding: out
+) int
+
+fn: lm_trans_qualifier_is_const (const: @(char qualifier)) int
+
+fn: lm_trans_text_equals (
+    const: LmP0Text: text
+    const: @: char value
+) int
+
+fn: lm_trans_text_same (
+    const: LmP0Text: left
+    const: LmP0Text: right
+) int
+
+fn: lm_trans_text_starts_with (
+    const: LmP0Text: text
+    const: @: char prefix
+) int
+
+fn: lm_trans_text_contains_char (
+    const: LmP0Text: text
+    char: ch
+) int
+
+fn: lm_trans_identifier_payload (
+    const: LmP0Text: atom
+    LmP0Text: out_payload
+) int
+
+fn: lm_trans_identifier_same (
+    const: LmP0Text: left
+    const: LmP0Text: right
+) int
+
+fn: lm_trans_registry_identifier_value (
+    const: LmP0Text: atom
+    LmP0Text: out_payload
+) int
+
+fn: lm_trans_registry_literal_value (
+    const: LmP0Text: atom
+    LmP0Text: out_payload
+) int
+
+fn: lm_trans_registry_payload_is_null (
+    const: LmP0Text: atom
+) int
+
+fn: lm_trans_text_copy_cstr (
+    const: LmP0Text: text
+) @: char
+
+fn: lm_trans_text_copy_cstr_from_cstr (
+    const: @: char text
+) @: char
+
+fn: lm_trans_function_return_struct_type_name_new (
+    const: LmP0Text: function_name
+) @: char
+
+fn: lm_trans_registry_value_copy_cstr (
+    const: LmP0Text: value
+) @: char
+
+fn: lm_trans_registry_clone_text (
+    const: LmP0Text: source
+    LmP0Text: out_text
+) int
+
+fn: lm_trans_text_ref_new (
+    const: LmP0Text: text
+) LmP0Text
+
+fn: lm_trans_text_ref_new_cstr (
+    const: @: char text
+) LmP0Text
+
+fn: lm_trans_text_ref_tail_new (
+    const: LmP0Text: text
+    size_t: offset
+) LmP0Text
+
+fn: lm_trans_text_ref_destroy (
+    @: LmP0Text text
+) void
+
+fn: lm_trans_text_from_cstr (
+    const: @: char text
+) LmP0Text
+
+fn: lm_trans_text_assign_cstr (
+    LmP0Text: out_text
+    const: @: char text
+) int
+
+fn: lm_trans_registry_init () int
+
+fn: lm_trans_source_site_new (
+    const: @: char source_path
+    size_t: source_offset
+) @: char
+
+sub: lm_trans_module_init_entry_delete_any (
+    @: void object
+)
+
+fn: lm_trans_module_init_registry_init () int
+
+fn: lm_trans_module_init_names_prepare () int
+
+fn: lm_trans_module_init_private_name_new (
+    const: @: char role
+    unsigned: id
+) @: char
+
+fn: lm_trans_module_init_dispatcher_name () const: @: char
+fn: lm_trans_module_init_thread_name () const: @: char
+fn: lm_trans_module_init_arena_name () const: @: char
+sub: lm_trans_module_init_emission_enter ()
+sub: lm_trans_module_init_emission_leave ()
+fn: lm_trans_current_thread_name () const: @: char
+
+sub: lm_trans_module_init_registry_destroy ()
+
+fn: lm_trans_module_init_entry_register (
+    const: @: char source_path
+    size_t: source_offset
+    int: kind
+    const: LmTransNamespace: namespace_owner
+    size_t: namespace_item_limit
+) LmTransModuleInitEntry
+
+fn: lm_trans_module_init_entry_find (
+    const: @: char source_path
+    size_t: source_offset
+) const: LmTransModuleInitEntry
+
+fn: lm_trans_module_init_entry_count () size_t
+
+fn: lm_trans_module_init_entry_at (
+    size_t: index
+) const: LmTransModuleInitEntry
+
+fn: lm_trans_module_init_entry_set_c_type_name (
+    LmTransModuleInitEntry: entry
+    const: @: char c_type_name
+) int
+
+fn: lm_trans_top_level_emit_import_module_initializers (
+    FILE: file
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+
+fn: lm_trans_emit_identifier (
+    FILE: file
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_l4_callable_type_from_node (
+    const: LmP0Node: node
+    LmTransL4CallableType: out
+) int
+
+fn: lm_trans_callable_type_reset (
+    LmTransL4CallableType: type
+) int
+
+fn: lm_trans_expr_callable_type_new () LmTransL4CallableType
+
+sub: lm_trans_expr_callable_type_delete (
+    LmTransL4CallableType: type
+)
+
+fn: lm_trans_formal_param_name (
+    const: LmP0Node: node
+    LmP0Text: out_name
+) int
+
+fn: lm_trans_formal_param_new () LmTransFormalParam
+
+sub: lm_trans_formal_param_delete (
+    LmTransFormalParam: param
+)
+
+fn: lm_trans_formal_param_read_into (
+    LmTransFormalParam: param
+    const: LmP0Node: node
+) int
+
+fn: lm_trans_receiver_fn (
+    const: LmP0Frame: frame
+    int: is_external
+    LmTransFunctionHeader: out
+) int
+
+fn: lm_trans_receiver_callable (
+    const: LmP0Frame: frame
+    int: is_external
+    LmTransFunctionHeader: out
+) int
+
+fn: lm_trans_receiver_fm (
+    const: LmP0Frame: frame
+    int: is_external
+    LmTransFunctionHeader: out
+) int
+
+fn: lm_trans_receiver_sub (
+    const: LmP0Frame: frame
+    int: is_external
+    LmTransFunctionHeader: out
+) int
+
+fn: lm_trans_receiver_thread (
+    const: LmP0Frame: frame
+    int: is_external
+    LmTransFunctionHeader: out
+) int
+
+fn: lm_trans_namespace_add_thread_declaration (
+    LmTransNamespace: namespace_
+    const: LmTransFunctionHeader: function
+) int
+
+sub: lm_trans_thread_declaration_delete_any (@: void object)
+
+fn: lm_trans_top_level_function_header (
+    const: LmP0Frame: frame
+    LmTransFunctionHeader: out
+) int
+
+table:
+    source
+    name: `layout.backend`
+    columns: (class: class) (class: backend)
+    rows:
+             LmTransRegistryImportFrame     c.struct
+end: `layout.backend`
+
+table:
+    source
+    name: `class.reference-base`
+    columns: (class: class) (int: value)
+    rows:
+             LmTransRegistryImportFrame     1
+end: `class.reference-base`
+
+table:
+    source
+    name: `LmTransRegistryImportFrame.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             field        LmP0Field
+             descend_l2   int
+end: `LmTransRegistryImportFrame.field.class`
+
+table:
+    source
+    name: `LmTransRegistryImportFrame.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             field        0
+             descend_l2   1
+end: `LmTransRegistryImportFrame.field.index`
+
+table:
+    source
+    name: `LmTransRegistryImportFrame.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             field        0
+end: `LmTransRegistryImportFrame.field.address-depth`
+
+table:
+    source
+    name: `LmTransRegistryImportFrame.field.const`
+    columns: (class: class) (int: value)
+    rows:
+             field        1
+end: `LmTransRegistryImportFrame.field.const`
+
+fn: lm_trans_collect_abi_params (
+    @: LmTransAbiParam params
+    size_t: capacity
+    @: size_t out_count
+    const: LmTransNamespace: namespace_
+    const: @: char owner_name
+    const: @: char error_name
+) int
+
+fn: lm_trans_collect_abi_return (
+    const: (LmTransNamespace: namespace_)
+    const: @(char owner_name)
+    int: return_key_policy
+    const: @@(char out_class_name)
+    @: size_t out_address_depth
+    @: size_t out_array_rank
+    @: int out_is_const
+) int
+
+fn: lm_trans_emit_abi_params (
+    FILE: file
+    @: LmTransAbiParam params
+    size_t: count
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_abi_return_type (
+    FILE: file
+    const: LmTransNamespace: namespace_
+    const: @: char owner_name
+    const: @: char error_name
+) int
+
+fn: lm_trans_expr_abi_params_new (
+    size_t: capacity
+) @: LmTransAbiParam
+
+sub: lm_trans_expr_abi_params_delete (
+    @: LmTransAbiParam params
+    size_t: capacity
+)
+
+fn: lm_trans_emit_type_name (
+    FILE: file
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_emit_projected_type_name (
+    FILE: file
+    const: LmP0Text: class_name
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_expr_segment_end (
+    const: LmP0Field: first
+) const: LmP0Field
+
+fn: lm_trans_c_surface_result_type (
+    const: LmP0Text: head
+    const: LmTransNamespace: namespace_
+    LmTransL4CallableType: out
+) int
+
+fn: lm_trans_node_result_type (
+    const: LmP0Node: node
+    const: LmTransNamespace: namespace_
+    LmTransL4CallableType: out
+) int
+
+fn: lm_trans_raw_pointer_type_compatible (
+    const: LmP0Text: source_class
+    size_t: source_address_depth
+    int: source_base_is_const
+    const: LmP0Text: target_class
+    size_t: target_address_depth
+    int: target_base_is_const
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_effective_address_depth (
+    const: LmP0Text: class_name
+    size_t: explicit_depth
+    const: LmTransNamespace: namespace_
+) size_t
+
+fn: lm_trans_range_has_direct_array_reference (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_c_array_postfix_index_count (
+    const: LmP0Field: storage_field
+    const: LmP0Field: stop
+    @: size_t out_count
+    const: @(LmP0Field out_end)
+) int
+
+fn: lm_trans_range_is_direct_array_reference_address (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_range_is_array_reference_data_pointer (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_range_has_direct_c_array_storage (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_guard_c_array_value_range (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: expected_class
+    size_t: expected_address_depth
+    int: expected_base_is_const
+    const: @(char context)
+) int
+
+fn: lm_trans_guard_array_reference_range (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+    int: required
+    const: @(char context)
+) int
+
+fn: lm_trans_guard_array_reference_shape_range (
+    const: LmP0Field: first
+    const: LmP0Field: stop
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: expected_element_class
+    size_t: expected_rank
+    size_t: expected_element_address_depth
+    int: expected_element_is_const
+    const: @(char context)
+) int
+
+fn: lm_trans_emit_array_reference_items_expression (
+    FILE: file
+    const: LmP0Text: name
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_array_param_c_name_new (
+    const: LmTransFormalParam: param
+) @: char
+
+fn: lm_trans_emit_type_node (
+    FILE: file
+    const: LmP0Node: type_node
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_head_can_declare_storage (
+    const: LmP0Text: head
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_frame_looks_storage_declaration (
+    const: LmP0Frame: frame
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_namespace_layout_source_is_supported (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: class_name
+) int
+
+fn: lm_trans_namespace_has_named_structure_binding (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_declare_storage_binding (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: LmP0Text: type_head
+) int
+
+fn: lm_trans_namespace_declare_node_storage_binding (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: LmP0Node: type_node
+) int
+
+fn: lm_trans_namespace_declare_c_name (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @: char kind
+    const: LmP0Text: c_name
+) int
+
+fn: lm_trans_namespace_declare_relation_text (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @: char relation_name
+    const: LmP0Text: payload
+) int
+
+fn: lm_trans_emit_declaration_with_qualifier (
+    FILE: file
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+    const: @: char qualifier
+) int
+
+fn: lm_trans_emit_pointer_declaration_with_qualifier (
+    FILE: file
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+    const: @: char qualifier
+) int
+
+fn: lm_trans_emit_array_declaration_with_qualifier (
+    FILE: file
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+    const: @: char qualifier
+) int
+
+fn: lm_trans_c_array_declaration_parts (
+    const: LmP0Frame: frame
+    const: @(LmP0Frame out_array_frame)
+    @: int out_is_const
+) int
+
+fn: lm_trans_c_array_declaration_name (
+    const: LmP0Frame: frame
+    const: LmTransNamespace: namespace_
+    LmP0Text: out_name
+    @: size_t out_rank
+    @: size_t out_element_address_depth
+) int
+
+fn: lm_trans_emit_c_array_declaration_with_qualifier (
+    FILE: file
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+    const: @: char qualifier
+) int
+
+fn: lm_trans_frame_is_structure_callable_field (
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_descriptor_field_is_callable (
+    const: LmTransDescriptorField: field
+) int
+
+fn: lm_trans_frame_looks_named_structure_layout_declaration (
+    const: LmP0Frame: frame
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_declare_named_structure_layout (
+    LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_descriptor_payload_is_empty (
+    const: LmTransDescriptor: descriptor
+) int
+
+fn: lm_trans_descriptor_payload_is_graph_primitives (
+    const: LmTransNamespace: namespace_
+    const: LmTransDescriptor: descriptor
+) int
+
+fn: lm_trans_descriptor_payload_is_graph_slots (
+    const: LmTransNamespace: namespace_
+    const: LmTransDescriptor: descriptor
+) int
+
+fn: lm_trans_descriptor_payload_is_graph_slots_for_owner (
+    const: LmTransNamespace: namespace_
+    const: LmTransDescriptor: descriptor
+    const: LmP0Text: pending_owner
+) int
+
+fn: lm_trans_named_structure_uses_graph_header (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_graph_layout_c_type_new (
+    const: LmP0Text: name
+) @: char
+
+fn: lm_trans_emit_structure_graph_header (
+    FILE: file
+) int
+
+fn: lm_trans_emit_graph_structure_new (
+    FILE: file
+    const: LmP0Text: descriptor_name
+    const: @: char thread_expr
+    const: @: char arena_expr
+    const: LmP0Text: instance_name
+) int
+
+fn: lm_trans_l2_c_identifier_new (
+    const: @: char prefix
+    const: LmP0Text: text
+    const: @: char suffix
+) @: char
+
+fn: lm_trans_emit_named_structure_field_declaration (
+    FILE: file
+    const: LmP0Frame: field_frame
+    const: LmTransDescriptor: descriptor
+    size_t: descriptor_index
+    unsigned: indent
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_named_structure_typedef (
+    FILE: file
+    const: LmP0Frame: frame
+    unsigned: indent
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_typedef_projection_output_enter (FILE: prelude_file; FILE: body_file) int
+fn: lm_trans_typedef_projection_output_leave () int
+fn: lm_trans_typedef_projection_is_registered_body_file (FILE: file) int
+fn: lm_trans_typedef_projection_prelude_alias_enter (FILE: file) int
+fn: lm_trans_typedef_projection_prelude_alias_leave (FILE: file) int
+fn: lm_trans_typedef_projection_reserve_source_node (const: LmP0Node: node) int
+fn: lm_trans_typedef_projection_reserve_loaded_source_paths () int
+fn: lm_trans_typedef_projection_source_name_has_prefix (const: @: char prefix) int
+fn: lm_trans_typedef_projection_scope_depth () size_t
+fn: lm_trans_typedef_projection_scope_enter () int
+fn: lm_trans_typedef_projection_scope_leave () int
+fn: lm_trans_typedef_projection_scope_restore (size_t: depth) int
+fn: lm_trans_typedef_projection_conditional_enter () int
+fn: lm_trans_typedef_projection_conditional_leave () int
+fn: lm_trans_typedef_projection_group_new (@: size_t out_group_id) int
+fn: lm_trans_typedef_projection_branch_enter (size_t: group_id; size_t: branch_id) int
+
+fn: lm_trans_typedef_projection_emit_prepared_text (
+    FILE: file
+    const: LmP0Text: name
+    FILE: declaration_file
+    @: int out_emitted
+) int
+
+fn: lm_trans_typedef_projection_emit_prepared_text_if_compatible (
+    FILE: file
+    const: LmP0Text: name
+    FILE: declaration_file
+    @: int out_emitted
+) int
+
+fn: lm_trans_typedef_projection_emit_prepared_cstr (
+    FILE: file
+    const: @: char name
+    FILE: declaration_file
+    @: int out_emitted
+) int
+
+fn: lm_trans_typedef_projection_claim_local_prepared_text (
+    FILE: file
+    const: LmP0Text: name
+    FILE: declaration_file
+    @: int out_suppress
+) int
+
+fn: lm_trans_typedef_projection_claim_local_prepared_cstr (
+    FILE: file
+    const: @: char name
+    FILE: declaration_file
+    @: int out_suppress
+) int
+
+fn: lm_trans_declare_merge_named_structure_layout (
+    LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_emit_merge_named_structure_typedef (
+    FILE: file
+    const: LmP0Frame: frame
+    unsigned: indent
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_text_all_char (
+    const: LmP0Text: text
+    char: ch
+) int
+
+fn: lm_trans_write_all (
+    FILE: file
+    const: @: char data
+    size_t: length
+) int
+
+fn: lm_trans_put (
+    FILE: file
+    const: @: char text
+) int
+
+fn: lm_trans_prelude_file (
+    FILE: fallback
+) FILE
+
+fn: lm_trans_write_text (
+    FILE: file
+    const: LmP0Text: text
+) int
+
+fn: lm_trans_emit_indent (
+    FILE: file
+    unsigned: indent
+) int
+
+fn: lm_trans_nth_field (
+    const: LmP0Structure: structure
+    size_t: index
+) const: LmP0Field
+
+fn: lm_trans_node_is_ignored (
+    const: LmP0Node: node
+) int
+
+fn: lm_trans_node_is_positional_skip (
+    const: LmP0Node: node
+) int
+
+fn: lm_trans_trailer_single_atom (
+    const: LmP0Trailer: trailer
+    LmP0Text: out_text
+) int
+
+fn: lm_trans_symbol_class_name (
+    const: @: char class_name
+) const: @: char
+
+fn: lm_trans_symbol_class_is (
+    const: @: char class_name
+    const: @: char expected
+) int
+
+fn: lm_trans_symbol_is (
+    const: LmTransSymbol: symbol
+    const: @: char class_name
+) int
+
+fn: lm_trans_symbol_is_executable_callable (
+    const: LmTransSymbol: symbol
+) int
+
+fn: lm_trans_symbol_is_value_callable (
+    const: LmTransSymbol: symbol
+) int
+
+fn: lm_trans_callable_value_new () LmTransCallableValue
+
+sub: lm_trans_callable_value_delete (
+    LmTransCallableValue: value
+)
+
+fn: lm_trans_callable_value_from_symbol (
+    const: LmTransSymbol: symbol
+    const: LmP0Text: fallback_name
+    LmTransCallableValue: out
+) int
+
+fn: lm_trans_callable_value_from_resolved_symbol (
+    const: LmTransSymbol: symbol
+    const: LmP0Text: fallback_name
+    LmTransCallableValue: out
+) int
+
+fn: lm_trans_callable_value_resolve (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    LmTransCallableValue: out
+) const: LmTransSymbol
+
+fn: lm_trans_descriptor_new () LmTransDescriptor
+
+sub: lm_trans_descriptor_field_delete_any (
+    @: void object
+)
+
+sub: lm_trans_descriptor_relation_delete_any (
+    @: void object
+)
+
+sub: lm_trans_descriptor_delete (
+    LmTransDescriptor: descriptor
+)
+
+sub: lm_trans_descriptor_delete_any (
+    @: void object
+)
+
+fn: lm_trans_descriptor_mark_structural_fields (
+    LmTransDescriptor: descriptor
+) int
+
+fn: lm_trans_descriptor_add_structural_field (
+    LmTransDescriptor: descriptor
+    const: LmP0Text: name
+    const: LmP0Text: descriptor_name
+    size_t: index
+    size_t: address_depth
+    size_t: array_count
+    int: has_array_count
+    int: is_const
+    int: is_union
+) int
+
+fn: lm_trans_descriptor_structural_field (
+    const: LmTransDescriptor: descriptor
+    const: @: char name
+) const: LmTransDescriptorField
+
+fn: lm_trans_descriptor_structural_same (
+    const: LmTransDescriptor: old_descriptor
+    const: LmTransDescriptor: new_descriptor
+) int
+
+fn: lm_trans_descriptor_implements (
+    const: LmTransDescriptor: candidate
+    const: LmTransDescriptor: required
+    const: LmTransDescriptor: consumer
+    @: int out_result
+) int
+
+fn: lm_trans_namespace_bind_descriptor_with_c_name (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @: char kind
+    const: LmP0Text: c_name
+    LmTransDescriptor: descriptor
+) int
+
+fn: lm_trans_namespace_bind_descriptor (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @: char kind
+    LmTransDescriptor: descriptor
+) int
+
+fn: lm_trans_namespace_rollback_descriptor_binding (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    LmTransDescriptor: descriptor
+) int
+
+fn: lm_trans_namespace_attach_descriptor (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    LmTransDescriptor: descriptor
+) int
+
+fn: lm_trans_namespace_descriptor (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) const: LmTransDescriptor
+
+fn: lm_trans_namespace_type_is_structural (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_mark_c_array_storage (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    size_t: rank
+    size_t: element_address_depth
+    int: element_is_const
+) int
+
+fn: lm_trans_namespace_mark_array_reference (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    size_t: rank
+    size_t: element_address_depth
+    int: element_is_const
+) int
+
+fn: lm_trans_namespace_mark_raw_pointer (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    size_t: depth
+    int: base_is_const
+) int
+
+fn: lm_trans_namespace_value_is_c_array_storage (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_mark_c_array_emitted (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_value_is_emitted_c_array_storage (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_value_is_array_reference (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_value_array_reference_rank (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+
+fn: lm_trans_namespace_value_array_reference_element_address_depth (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+
+fn: lm_trans_namespace_value_array_reference_element_is_const (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_value_array_reference_element_type (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    LmP0Text: out_type
+) int
+
+fn: lm_trans_namespace_declare_array_helper_id (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    unsigned: id
+) int
+
+fn: lm_trans_namespace_value_array_helper_id (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    @: unsigned out_id
+) int
+
+fn: lm_trans_namespace_value_is_raw_pointer (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_value_raw_pointer_depth (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+
+fn: lm_trans_namespace_value_raw_pointer_base_is_const (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_value_c_array_rank (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+
+fn: lm_trans_namespace_value_c_array_element_address_depth (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) size_t
+
+fn: lm_trans_namespace_value_c_array_element_is_const (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_namespace_source_item_count (
+    const: LmTransNamespace: namespace_
+) size_t
+
+fn: lm_trans_namespace_source_limit_enter (
+    LmTransNamespace: namespace_
+    size_t: item_limit
+    @: size_t previous_limit
+    @: int previous_active
+) int
+
+sub: lm_trans_namespace_source_limit_restore (
+    LmTransNamespace: namespace_
+    size_t: previous_limit
+    int: previous_active
+)
+
+fn: lm_trans_namespace_relation_text_for_latest_binding (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: @(char relation_name)
+    LmP0Text: out_text
+) int
+
+fn: lm_trans_effective_value_descriptor_from_atom (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) const: LmTransDescriptor
+
+fn: lm_trans_atom_is_void_primitive (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_name_has_primitive_description (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_primitive_leaf_implements (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: candidate_name
+    const: LmP0Text: required_name
+    @: int out_result
+) int
+
+fn: lm_trans_admit_implements (
+    const: LmTransNamespace: namespace_
+    const: LmTransDescriptor: candidate_descriptor
+    const: LmTransDescriptor: required_descriptor
+    const: LmP0Text: candidate_name
+    const: @(char context)
+) int
+
+fn: lm_trans_guard_direct_structure_value_layout (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: candidate_name
+    const: LmTransDescriptor: required_descriptor
+    const: @(char context)
+) int
+
+sub: lm_trans_uses_set_fn_frame (const: LmP0Frame: frame)
+
+fn: lm_trans_uses_get_fn_frame () const: LmP0Frame
+
+fn: lm_trans_admit_consumer_uses (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: candidate_name
+    const: LmTransDescriptor: required_descriptor
+    const: LmP0Text: varb
+    const: LmP0Frame: consumer
+    const: @(char context)
+) int
+
+fn: lm_trans_symbol_new (
+    const: LmP0Text: name
+    const: @: char kind
+    unsigned: depth
+) LmTransSymbol
+
+sub: lm_trans_symbol_destroy_fields (
+    LmTransSymbol: symbol
+)
+
+sub: lm_trans_symbol_destroy_fields_any (
+    @: void object
+)
+
+sub: lm_trans_symbol_destroy (
+    LmTransSymbol: symbol
+)
+
+sub: lm_trans_symbol_delete_any (
+    @: void object
+)
+
+sub: lm_trans_free_any (
+    @: void object
+)
+
+fn: lm_trans_string_stack_has (
+    const: LmOwnPtrStack: stack
+    const: @: char value
+) int
+
+fn: lm_trans_parse_size_payload (
+    const: @: char payload
+    @: size_t out_value
+) int
+
+fn: lm_trans_statement_c_declarator_new () LmTransCDeclarator
+
+sub: lm_trans_statement_c_declarator_destroy (
+    LmTransCDeclarator: declarator
+)
+
+fn: lm_trans_emit_c_declarator (
+    FILE: file
+    const: LmTransCDeclarator: declarator
+    const: LmTransNamespace: namespace_
+    const: @: char error_name
+) int
+
+fn: lm_trans_emit_size_literal (
+    FILE: file
+    size_t: value
+) int
+
+fn: lm_trans_l4_is_function_pointer_type (
+    const: LmTransNamespace: namespace_
+    const: @: char name
+) int
+
+fn: lm_trans_registry_is_function_pointer_type_name (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_callable_descriptor_allows_partial (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_callable_descriptor_allows_capture (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_callable_descriptor_uses_closure_struct (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_callable_descriptor_is_raw_function_reference (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_implements (
+    const: LmTransNamespace: namespace_
+    const: LmP0Text: candidate_name
+    const: LmP0Text: required_name
+    const: LmP0Text: consumer_name
+    @: int out_result
+) int
+
+fn: lm_trans_node_callable_descriptor_name (
+    const: LmP0Node: node
+    const: LmTransNamespace: namespace_
+    LmP0Text: out_name
+) int
+
+fn: lm_trans_formal_param_list_has_any (
+    const: LmTransFormalParamList: params
+) int
+
+sub: lm_trans_formal_param_list_delete (
+    LmTransFormalParamList: list
+)
+
+fn: lm_trans_formal_param_list_from_node (
+    const: LmP0Node: params
+    int: allow_unnamed
+    const: @: char error_name
+) LmTransFormalParamList
+
+fn: lm_trans_emit_callable_descriptor_param_type (
+    FILE: file
+    const: LmTransFormalParam: param
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_function_return_struct_type_name (
+    FILE: file
+    const: LmP0Text: function_name
+) int
+
+fn: lm_trans_emit_function_return_structure_once (
+    FILE: file
+    const: LmP0Text: function_name
+    const: LmP0Node: return_node
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_function_params (
+    FILE: file
+    const: LmTransFunctionHeader: function
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_throw_channel_prelude (FILE: file) int
+
+fn: lm_trans_emit_throwing_dispatch (
+    FILE: file
+    unsigned: indent
+    LmTransNamespace: namespace_
+    const: LmP0Node: throws_node
+) int
+
+fn: lm_trans_node_throws_node (const: (LmP0Node: node); const: (LmTransNamespace: namespace_)) const: LmP0Node
+
+fn: lm_trans_symbol_throws_node (const: (LmTransSymbol: symbol)) const: LmP0Node
+
+fn: lm_trans_function_header_take_throws (LmTransFunctionHeader: out) int
+
+sub: lm_trans_catch_pad_delete_any (@: void object)
+
+fn: lm_trans_emit_thread_handler_prologue (
+    FILE: file
+    const: LmTransFunctionHeader: function
+    unsigned: indent
+) int
+
+fn: lm_trans_emit_function (
+    FILE: file
+    const: LmTransFunctionHeader: function
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_function_prototype (
+    FILE: file
+    const: LmTransFunctionHeader: function
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_named_structure_graph_descriptor_forward (
+    FILE: file
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_emit_env_type (
+    FILE: file
+    const: LmTransFunctionHeader: function
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_statement_list (
+    FILE: file
+    const: LmP0Field: first
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_single_frame_node (
+    const: LmP0Node: node
+    const: @(LmP0Frame out_frame)
+) int
+
+fn: lm_trans_emit_cleanups_until (
+    FILE: file
+    unsigned: indent
+    const: LmTransNamespace: namespace_
+    size_t: cleanup_base
+) int
+
+fn: lm_trans_emit_trailer_statement (
+    FILE: file
+    const: LmP0Trailer: trailer
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_captured_expr_new (
+    const: LmP0Text: name
+) @: char
+
+fn: lm_trans_hoisted_c_name_new (
+    const: LmP0Text: parent_name
+    const: LmP0Text: child_name
+    unsigned: nested_level
+    size_t: index
+) @: char
+
+fn: lm_trans_hoisted_suffix_name_new (
+    const: LmP0Text: base_name
+    const: @: char suffix
+) @: char
+
+fn: lm_trans_capture_candidates_add_captures (
+    LmOwnPtrStack: candidates
+    const: LmOwnPtrStack: captures
+) int
+
+fn: lm_trans_capture_stack_find (
+    const: LmOwnPtrStack: captures
+    const: LmP0Text: name
+) const: LmTransCapture
+
+fn: lm_trans_capture_stack_add_copy (
+    LmOwnPtrStack: captures
+    const: LmTransCapture: source
+) int
+
+fn: lm_trans_head_next_field_chain_segment (
+    const: LmP0Text: head
+    @: size_t offset
+    LmP0Text: out_segment
+    @: int out_has_occurrence
+    @: size_t out_occurrence
+) int
+
+fn: lm_trans_local_name_stack_has (
+    const: LmOwnPtrStack: names
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_local_name_stack_add (
+    LmOwnPtrStack: names
+    const: LmP0Text: name
+) int
+
+fn: lm_trans_capture_from_decl_frame (
+    const: LmP0Frame: frame
+    const: LmTransNamespace: namespace_
+    LmTransCapture: out
+) int
+
+fn: lm_trans_capture_candidates_add_decl (
+    LmOwnPtrStack: candidates
+    const: LmP0Frame: frame
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_capture_candidates_add_params (
+    LmOwnPtrStack: candidates
+    const: LmTransFormalParamList: params
+) int
+
+fn: lm_trans_collect_hoisted_functions_from_fields (
+    LmOwnPtrStack: hoisted_functions
+    const: LmP0Text: parent_c_name
+    unsigned: nested_level
+    LmOwnPtrStack: candidates
+    const: LmTransNamespace: namespace_
+    const: LmP0Field: field
+) int
+
+fn: lm_trans_emit_closure_call_wrapper (
+    FILE: file
+    const: LmTransHoistedFunction: hoisted
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_validate_end_trailer (
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_emit_l4_function_pointer_type_field (
+    FILE: file
+    const: LmTransNamespace: namespace_
+    const: @: char type_name
+    const: @: char field_name
+    const: @: char error_name
+) int
+
+fn: lm_trans_emit_l4_function_pointer_type_name (
+    FILE: file
+    const: LmTransNamespace: namespace_
+    const: @: char name
+    const: @: char error_name
+) int
+
+fn: lm_trans_registry_synthetic_params_node (
+    const: LmTransNamespace: namespace_
+    const: @: char name
+) LmP0Node
+
+fn: lm_trans_registry_synthetic_atom_node (
+    const: LmP0Text: text
+) LmP0Node
+
+fn: lm_trans_registry_synthetic_return_node (
+    const: LmTransNamespace: namespace_
+    const: @: char name
+) LmP0Node
+
+fn: lm_trans_registry_relation_name_new (
+    const: LmP0Text: owner
+    const: @: char suffix
+) @: char
+
+fn: lm_trans_namespace_set_callable_shape (
+    LmTransNamespace: namespace_
+    const: LmTransFunctionHeader: function
+) int
+
+fn: lm_trans_emit_l4_payload_node (
+    FILE: output
+    const: LmP0Node: node
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_import (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_predef (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_send (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_exit (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_for (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_throws (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_throw (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_catch (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_registry_path_is_predefined (
+    const: @: char registry_path
+) int
+
+fn: lm_trans_materialize_l2_table_source (
+    LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+    int: require_facade
+) int
+
+fn: lm_trans_materialize_l2_join_source (
+    LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_materialize_l2_predef_root (
+    const: LmP0Node: root
+    const: @: char source_path
+) int
+
+fn: lm_trans_materialize_l2_bootstrap_root (
+    const: LmP0Node: root
+    const: @: char source_path
+) int
+
+fn: lm_trans_frame_is_l2_level_receiver (
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_registry_load_file_path (
+    const: @: char registry_path
+    int: required
+    @: int out_loaded
+) int
+
+fn: lm_trans_registry_load_bootstrap_file_path (
+    const: @: char registry_path
+    int: required
+    @: int out_loaded
+) int
+
+fn: lm_trans_registry_candidate_path (
+    const: @: char source_path
+    const: @: char candidate_name
+    @: char registry_path
+    size_t: registry_path_size
+) int
+
+fn: lm_trans_emit_configured_prelude_sequences (
+    FILE: file
+    LmTransNamespace: namespace_
+    @: int out_emitted
+) int
+
+fn: lm_trans_emit_l1_frame (
+    FILE: output
+    const: LmP0Frame: l1
+) int
+
+fn: lm_trans_emit_l2_frame (
+    FILE: file
+    const: LmP0Frame: l2
+) int
+
+fn: lm_trans_emit_l1_os_frame (
+    FILE: output
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_emit_l1_ifdef_frame (
+    FILE: output
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_emit_l1_include_frame (
+    FILE: output
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_emit_l2_os_frame (
+    FILE: output
+    const: LmP0Frame: frame
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l2_define_frame (
+    FILE: output
+    const: LmP0Frame: frame
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l2_ifndef_default_frame (
+    FILE: output
+    const: LmP0Frame: frame
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l2_ifdef_frame (
+    FILE: output
+    const: LmP0Frame: frame
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_declare_l2_guard_frame (
+    LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_emit_l2_guard_frame (
+    FILE: output
+    const: LmP0Frame: frame
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_declare_l2_extern_c_frame (
+    LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_emit_l2_extern_c_frame (
+    FILE: output
+    const: LmP0Frame: frame
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_declare_l2_import_frame (
+    LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+) int
+
+fn: lm_trans_emit_l2_import_prelude (
+    FILE: file
+    const: LmP0Frame: frame
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l2_import_functions (
+    FILE: file
+    const: LmP0Frame: frame
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_loop_jump_statement (
+    FILE: file
+    const: LmP0Text: spelling
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_table (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_module_init_declare_table (
+    const: LmP0Frame: frame
+    LmTransModuleInitEntry: entry
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_module_init_emit_table_initializer (
+    FILE: file
+    const: LmP0Frame: frame
+    const: LmTransModuleInitEntry: entry
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_join (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_emit_nested_function (
+    FILE: file
+    LmTransStatementStack: stack
+    const: LmP0Frame: frame
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_function_header_from_frame (
+    const: LmP0Frame: frame
+    int: is_external
+    LmTransFunctionHeader: out
+) int
+
+fn: lm_trans_namespace_set_signature (
+    LmTransNamespace: namespace_
+    const: LmP0Text: name
+    const: LmP0Frame: function_frame
+) int
+
+fn: lm_trans_namespace_find_hoisted_function (
+    const: LmTransNamespace: namespace_
+    const: LmP0Frame: frame
+) const: LmTransHoistedFunction
+
+fn: lm_trans_env_arg_new (
+    const: LmP0Text: env_var_name
+) @: char
+
+fn: lm_trans_statement_job_emit_list (
+    FILE: file
+    LmTransStatementStack: stack
+    LmTransStatementJob: job
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_job_emit_node (
+    FILE: file
+    LmTransStatementStack: stack
+    LmTransStatementJob: job
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_job_validate_end (
+    FILE: file
+    LmTransStatementStack: stack
+    LmTransStatementJob: job
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_job_emit_trailer (
+    FILE: file
+    LmTransStatementStack: stack
+    LmTransStatementJob: job
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_job_leave_scope (
+    FILE: file
+    LmTransStatementStack: stack
+    LmTransStatementJob: job
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_job_loop_pop (
+    FILE: file
+    LmTransStatementStack: stack
+    LmTransStatementJob: job
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_job_emit_scope_cleanups (
+    FILE: file
+    LmTransStatementStack: stack
+    LmTransStatementJob: job
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_statement_job_emit_indent_text (
+    FILE: file
+    LmTransStatementStack: stack
+    LmTransStatementJob: job
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_declare_l2_registry_os_table (
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_declare_l2_registry_ifdef_table (
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l2_registry_os_table (
+    FILE: output
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l2_registry_ifdef_table (
+    FILE: output
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_registry_include_table (
+    FILE: output
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l4_layout_typedefs (
+    FILE: file
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l4_constant_defines (
+    FILE: file
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l4_define_table (
+    FILE: file
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l4_alias_typedefs (
+    FILE: file
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l4_forward_typedefs (
+    FILE: file
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l4_prototypes (
+    FILE: file
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l4_fn_descriptors (
+    FILE: file
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l4_guard_markers (
+    FILE: file
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l4_extern_c_markers (
+    FILE: file
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_l4_units (
+    FILE: file
+    const: LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_atom_statement_sequence (
+    FILE: file
+    const: LmP0Text: sequence_name
+    unsigned: indent
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_top_level_declare_os (
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+
+fn: lm_trans_top_level_declare_ifdef (
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+
+fn: lm_trans_top_level_declare_merge_named_structure (
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+
+fn: lm_trans_top_level_declare_c_array (
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+
+fn: lm_trans_top_level_emit_c_array (
+    FILE: file
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+
+fn: lm_trans_top_level_emit_merge_named_structure_typedef (
+    FILE: file
+    LmTransNamespace: namespace_
+    const: LmTransTopLevelItem: item
+) int
+
+fn: lm_trans_first_active_field (
+    const: LmP0Structure: body
+) const: LmP0Field
+
+fn: lm_trans_path_has_extension (
+    const: @: char path
+    const: @: char extension
+) int
+
+fn: lm_trans_root_has_explicit_l2_frame (
+    const: LmP0Structure: root
+) int
+
+fn: lm_trans_declare_l2_structure_import (
+    LmTransNamespace: namespace_
+    const: LmP0Structure: body
+) int
+
+fn: lm_trans_declare_registry_fn_descriptors (
+    LmTransNamespace: namespace_
+) int
+
+fn: lm_trans_emit_root_sequence (
+    FILE: output
+    const: LmP0Node: root
+    int: implicit_l2
+    @: int emitted
+) int
+
+fn: lm_trans_l4_payload_pointer_bindings_init () int
+
+sub: lm_trans_l4_payload_pointer_bindings_destroy ()

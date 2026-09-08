@@ -1,0 +1,23 @@
+int: hits 0
+
+fn: pick (int: i) int
+    hits: hits + 1
+    return: i
+end: pick
+
+fn: add (int: a; int: b) int
+    return: a + b
+end: add
+
+external:
+    fn: main () int
+        c.array: []: int xs 2
+        xs[0]: 4
+        xs[1]: 5
+        if: add(xs[pick(1)], 1) != 6
+            return: 1
+        if: hits != 1
+            return: 2
+        return: 0
+    end: main
+end: external

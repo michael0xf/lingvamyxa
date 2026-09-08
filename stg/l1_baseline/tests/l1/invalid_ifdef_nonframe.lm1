@@ -1,0 +1,9 @@
+ifdef:
+    1
+end: ifdef
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

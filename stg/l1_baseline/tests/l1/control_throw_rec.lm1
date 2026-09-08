@@ -1,0 +1,18 @@
+fn: rec (int: n) int
+    throws: Stop
+    if: n <= 0
+        throw: Stop(n)
+    int: r 0
+    r: rec(n - 1)
+    return: r
+end: rec
+
+external:
+    fn: main () int
+        int: p 1
+        p: rec(3)
+        catch: Stop (int: bad)
+            p: bad
+        return: p != 0
+    end: main
+end: external

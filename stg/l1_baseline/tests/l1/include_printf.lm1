@@ -1,0 +1,7 @@
+include: "<stdio.h>"
+external:
+    fn: main () int
+        c.printf: "include-ok\n"
+        return: 0
+    end: main
+end: external

@@ -1,0 +1,16 @@
+ifdef:
+    default:
+        fn: v () int
+            return: 0
+        end: v
+    default:
+        fn: v () int
+            return: 1
+        end: v
+end: ifdef
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

@@ -1,0 +1,8 @@
+print: a # comment here
+print: "# not comment" `# exact`
+f(a # comment
+  b)
+block:
+. # dotted delimiter comment
+. item
+.

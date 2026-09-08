@@ -1,0 +1,3 @@
+fn: add_one () int
+    return: 7
+end: add_one

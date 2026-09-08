@@ -1,0 +1,25 @@
+int: g 0
+
+fn: helper () int
+    throws: Fail
+    g: g + 1
+    return: 0
+end: helper
+
+fn: boom () int
+    throws: Fail
+    finally:
+        helper()
+    throw: Fail(3)
+    return: 0
+end: boom
+
+external:
+    fn: main () int
+        int: p 0
+        p: boom()
+        catch: Fail (int: bad)
+            p: bad
+        return: p != 3 || g != 1
+    end: main
+end: external

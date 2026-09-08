@@ -1,0 +1,7 @@
+external:
+    fn: main () int
+        throws: Fail
+        throw: Fail(1)
+        return: 0
+    end: main
+end: external

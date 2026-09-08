@@ -1,0 +1,1116 @@
+import: "lm2/own.lm2"
+import: "lm2/mix/Array.lm2"
+predef: "Mix_model.lm2"
+
+external:
+    sub: lm_synchronized_enter (@: void object)
+        @: int depth
+
+        if: object != 0
+            depth: cast: (@: int) object
+            depth[0]: depth[0] + 1
+    end: lm_synchronized_enter
+end: external
+
+external:
+    sub: lm_synchronized_leave (@: void object)
+        @: int depth
+
+        if: object != 0
+            depth: cast: (@: int) object
+            depth[0]: depth[0] - 1
+    end: lm_synchronized_leave
+end: external
+
+external:
+    fn: lm_mix_default_length () size_t
+        return: 32U
+    end: lm_mix_default_length
+end: external
+
+external:
+    sub: lm_mix_cursor_clear (@: LmMixCursor cursor)
+        if: cursor != 0
+            cursor\page: 0
+            cursor\index: 0U
+            cursor\kind: 0
+            cursor\tag: 0
+            cursor\upper: 0
+    end: lm_mix_cursor_clear
+end: external
+
+external:
+    sub: lm_mix_cursor_place (@: LmMixCursor cursor; @: LmMixPage page; size_t: index)
+        if: cursor != 0
+            cursor\page: page
+            cursor\index: index
+    end: lm_mix_cursor_place
+end: external
+
+external:
+    fn: lm_mix_page_at (@: LmMixPage page; size_t: index) @: LmMixCursor
+        if: page = 0 || page\items = 0 || index >= page\amount
+            return: 0
+        return: cast: (@: LmMixCursor) page\items[index]
+    end: lm_mix_page_at
+end: external
+
+external:
+    sub: lm_mix_page_reindex (@: LmMixPage page; size_t: from)
+        size_t: i
+        @: LmMixCursor cursor
+
+        if: page = 0 || page\items = 0
+            return
+        i: from
+        while: i < page\amount
+            cursor: cast: (@: LmMixCursor) page\items[i]
+            if: cursor != 0
+                cursor\page: page
+                cursor\index: i
+            i: i + 1U
+    end: lm_mix_page_reindex
+end: external
+
+external:
+    fn: lm_mix_page_init (@: LmMixPage page; size_t: length) int
+        size_t: bytes
+        @@: void items
+
+        if: page = 0 || length = 0U
+            return: 1
+        if: lm_own_size_multiply(length, c.sizeof(items[0]), @ bytes) != 0
+            return: 1
+        items: cast: (@@: void) lm_own_new_zero(bytes)
+        if: items = 0
+            return: 1
+        page\items: items
+        page\amount: 0U
+        page\length: length
+        page\next: 0
+        page\prev: 0
+        page\parent: 0
+        page\index: 0U
+        page\lock: 0
+        return: 0
+    end: lm_mix_page_init
+end: external
+
+external:
+    sub: lm_mix_array_delete (@: LmArray array)
+        if: array != 0
+            lm_array_destroy(array)
+            lm_own_delete_plain(array)
+    end: lm_mix_array_delete
+end: external
+
+external:
+    fn: lm_mix_array_new (size_t: capacity) @: LmArray
+        @: LmArray array
+
+        array: cast: (@: LmArray) lm_own_new_zero(c.sizeof(array[0]))
+        if: array = 0
+            return: 0
+        if: lm_array_init(array, capacity) != 0
+            lm_own_delete_plain(array)
+            return: 0
+        return: array
+    end: lm_mix_array_new
+end: external
+
+external:
+    sub: lm_mix_key_dict_delete (@: LmMixKeyDict dict)
+        if: dict = 0
+            return
+        lm_mix_array_delete(dict\lets)
+        dict\lets: 0
+        lm_own_delete_plain(dict)
+    end: lm_mix_key_dict_delete
+end: external
+
+external:
+    sub: lm_mix_page_destroy (@: LmMixPage page)
+        @: LmMixKeyDict dict
+        size_t: i
+
+        if: page = 0
+            return
+        if: page\dicts != 0
+            i: 0U
+            while: i < page\dicts\amount
+                dict: cast: (@: LmMixKeyDict) page\dicts\items[i]
+                lm_mix_key_dict_delete(dict)
+                i: i + 1U
+            lm_mix_array_delete(page\dicts)
+            page\dicts: 0
+            ---
+        if: page\items != 0
+            lm_own_delete_plain(page\items)
+        page\items: 0
+        page\amount: 0U
+        page\length: 0U
+        page\next: 0
+        page\prev: 0
+        page\parent: 0
+        page\index: 0U
+        page\lock: 0
+    end: lm_mix_page_destroy
+end: external
+
+external:
+    fn: lm_mix_page_new (size_t: length) @: LmMixPage
+        @: LmMixPage page
+
+        page: cast: (@: LmMixPage) lm_own_new_zero(c.sizeof(page[0]))
+        if: page = 0
+            return: 0
+        if: lm_mix_page_init(page, length) != 0
+            lm_own_delete_plain(page)
+            return: 0
+        return: page
+    end: lm_mix_page_new
+end: external
+
+external:
+    sub: lm_mix_page_delete (@: LmMixPage page)
+        lm_mix_page_destroy(page)
+        lm_own_delete_plain(page)
+    end: lm_mix_page_delete
+end: external
+
+external:
+    fn: lm_mix_page_cut_after (@: LmMixPage page) int
+        @: LmMixPage n
+
+        if: page = 0
+            return: 1
+        n: page\next
+        if: n = 0
+            return: 0
+        synchronized: @ page\lock
+            synchronized: @ n\lock
+                if: page\next = n
+                    n\prev: 0
+                    page\next: 0
+                return: 0
+            ---
+        ---
+    end: lm_mix_page_cut_after
+end: external
+
+external:
+    fn: lm_mix_page_cut_before (@: LmMixPage page) int
+        @: LmMixPage p
+
+        if: page = 0
+            return: 1
+        p: page\prev
+        if: p = 0
+            return: 0
+        synchronized: @ p\lock
+            synchronized: @ page\lock
+                if: page\prev = p
+                    p\next: 0
+                    page\prev: 0
+                return: 0
+            ---
+        ---
+    end: lm_mix_page_cut_before
+end: external
+
+external:
+    fn: lm_mix_page_link_after (@: LmMixPage page; @: LmMixPage next) int
+        @: LmMixPage old
+
+        if: page = 0 || next = 0
+            return: 1
+        synchronized: @ page\lock
+            synchronized: @ next\lock
+                old: page\next
+                next\prev: page
+                next\next: old
+                page\next: next
+                if: old != 0
+                    old\prev: next
+                next\parent: page\parent
+                next\index: page\index + 1U
+                return: 0
+            ---
+        ---
+    end: lm_mix_page_link_after
+end: external
+
+external:
+    fn: lm_mix_page_new_next (@: LmMixPage page) @: LmMixPage
+        @: LmMixPage next
+        size_t: length
+
+        if: page = 0
+            return: 0
+        length: page\length
+        if: length = 0U
+            length: lm_mix_default_length()
+        next: lm_mix_page_new(length)
+        if: next = 0
+            return: 0
+        if: lm_mix_page_link_after(page, next) != 0
+            lm_mix_page_delete(next)
+            return: 0
+        return: next
+    end: lm_mix_page_new_next
+end: external
+
+external:
+    fn: lm_mix_page_insert (@: LmMixPage page; size_t: index; @: LmMixCursor cursor) int
+        size_t: i
+        @: LmMixPage next
+
+        if: page = 0 || cursor = 0 || page\items = 0
+            return: 1
+        synchronized: @ page\lock
+            if: index > page\amount
+                index: page\amount
+            if: page\amount = page\length
+                next: page\next
+                if: next = 0 || next\amount = next\length
+                    next: lm_mix_page_new_next(page)
+                if: next = 0
+                    return: 1
+                if: index = page\amount
+                    return: lm_mix_page_insert(next, 0U, cursor)
+                i: page\amount - 1U
+                if: lm_mix_page_insert(next, 0U, cast: (@: LmMixCursor) page\items[i]) != 0
+                    return: 1
+                page\items[i]: 0
+                page\amount: page\amount - 1U
+            i: page\amount
+            while: i > index
+                page\items[i]: page\items[i - 1U]
+                i: i - 1U
+            page\items[index]: cursor
+            page\amount: page\amount + 1U
+            lm_mix_page_reindex(page, index)
+            return: 0
+        ---
+    end: lm_mix_page_insert
+end: external
+
+external:
+    fn: lm_mix_page_remove_at (@: LmMixPage page; size_t: index) @: LmMixCursor
+        @: LmMixCursor cursor
+        size_t: i
+
+        if: page = 0 || page\items = 0 || index >= page\amount
+            return: 0
+        synchronized: @ page\lock
+            cursor: cast: (@: LmMixCursor) page\items[index]
+            i: index
+            while: i + 1U < page\amount
+                page\items[i]: page\items[i + 1U]
+                i: i + 1U
+            page\amount: page\amount - 1U
+            if: page\amount < page\length
+                page\items[page\amount]: 0
+            lm_mix_page_reindex(page, index)
+            if: cursor != 0
+                cursor\page: 0
+                cursor\index: 0U
+            return: cursor
+        ---
+    end: lm_mix_page_remove_at
+end: external
+
+external:
+    fn: lm_mix_cursor_address (@: LmMixCursor cursor) int
+        @: LmMixPage page
+        long: address
+
+        if: cursor = 0 || cursor\page = 0
+            return: -1
+        address: (cast: long cursor\index)
+        page: cursor\page\prev
+        while: page != 0
+            address: address + (cast: long page\length)
+            if: address > 2147483647
+                return: -1
+            page: page\prev
+        return: (cast: int address)
+    end: lm_mix_cursor_address
+end: external
+
+external:
+    fn: lm_mix_cursor_init (@: LmMixCursor cursor; @: LmMixPage page; size_t: index) int
+        if: cursor = 0
+            return: 1
+        lm_mix_cursor_clear(cursor)
+        cursor\kind: 1
+        return: lm_mix_page_insert(page, index, cursor)
+    end: lm_mix_cursor_init
+end: external
+
+external:
+    fn: lm_mix_key_dict_object_index (@: LmMixKeyDict dict; int: address) int
+        @: LmArray lets
+        @: LmMixCursor let
+        size_t: i
+        size_t: amount
+
+        if: dict = 0 || address < 0
+            return: -1
+        lets: dict\lets
+        if: lets = 0
+            return: -1
+        amount: lets\amount
+        if: amount = 0U
+            return: -1
+        i: lm_mix_lets_find_middle(lets, address)
+        if: i >= amount
+            return: -1
+        let: cast: (@: LmMixCursor) lets\items[i]
+        if: let = 0
+            return: -1
+        if: lm_mix_cursor_address(let) != address
+            return: -1
+        return: cast: int i
+    end: lm_mix_key_dict_object_index
+end: external
+
+external:
+    sub: lm_mix_key_dict_swap (@: LmMixKeyDict dict; size_t: left; size_t: right)
+        @: LmArray lets
+        @: void item
+
+        if: dict = 0
+            return
+        lets: dict\lets
+        if: lets = 0 || left >= lets\amount || right >= lets\amount || left = right
+            return
+        item: lets\items[left]
+        lets\items[left]: lets\items[right]
+        lets\items[right]: item
+    end: lm_mix_key_dict_swap
+end: external
+
+external:
+    sub: lm_mix_cursor_adjust_move (@: LmMixCursor moving; @: LmMixCursor other; int: going_prev)
+        @: LmMixKeyDict dict
+        @: LmMixCursor let
+        @: LmArray lets
+        @: LmArray moving_upper
+        @: LmArray let_upper
+        @: LmMixTag moving_tag
+        @: LmMixTag let_tag
+        size_t: at
+        size_t: other_at
+        int: index
+        int: sense
+
+        if: moving = 0 || other = 0
+            return
+        if: moving\kind != 2 && moving\kind != 3
+            return
+        if: moving\tag = 0 || moving\page = 0
+            return
+        dict: lm_mix_page_get_key_dict(moving\page, moving\tag\name)
+        if: dict = 0
+            return
+        index: lm_mix_key_dict_object_index(dict, lm_mix_cursor_address(other))
+        if: index < 0
+            return
+        lets: dict\lets
+        if: lets = 0
+            return
+        at: cast: size_t index
+        if: at >= lets\amount
+            return
+        let: cast: (@: LmMixCursor) lets\items[at]
+        if: let = 0
+            return
+        if: going_prev != 0
+            other_at: at + 1U
+            if: other_at >= lets\amount
+                return
+            lm_mix_key_dict_swap(dict, at, other_at)
+            ---
+        if: going_prev = 0
+            if: at = 0U
+                return
+            other_at: at - 1U
+            lm_mix_key_dict_swap(dict, other_at, at)
+            ---
+        moving_tag: moving\tag
+        let_tag: let\tag
+        moving_upper: moving\upper
+        let_upper: let\upper
+        if: moving_tag = 0 || let_tag = 0 || moving_upper = 0 || let_upper = 0
+            return
+        sense: 0
+        if: moving\kind = 2 && going_prev != 0
+            sense: 1
+        if: moving\kind = 3 && going_prev = 0
+            sense: 1
+        if: sense != 0
+            if: lm_array_contains(let_upper, moving_tag, 0) = 0
+                lm_array_add_element(let_upper, moving_tag)
+            if: let\kind = 3
+                lm_array_remove_element(moving_upper, let_tag, 0)
+            if: let\kind != 3
+                if: lm_array_contains(moving_upper, let_tag, 0) = 0
+                    lm_array_add_element(moving_upper, let_tag)
+                ---
+            ---
+        if: sense = 0
+            lm_array_remove_element(let_upper, moving_tag, 0)
+            if: let\kind = 3
+                if: lm_array_contains(moving_upper, let_tag, 0) = 0
+                    lm_array_add_element(moving_upper, let_tag)
+                ---
+            if: let\kind != 3
+                lm_array_remove_element(moving_upper, let_tag, 0)
+            ---
+    end: lm_mix_cursor_adjust_move
+end: external
+
+external:
+    fn: lm_mix_cursor_next (@: LmMixCursor cursor) int
+        @: LmMixPage page
+        @: LmMixPage next
+        @: LmMixCursor other
+        size_t: index
+
+        if: cursor = 0 || cursor\page = 0
+            return: 1
+        page: cursor\page
+        index: cursor\index
+        if: index + 1U < page\amount
+            synchronized: @ page\lock
+                other: lm_mix_page_at(page, index + 1U)
+                lm_mix_cursor_adjust_move(cursor, other, 0)
+                page\items[index]: other
+                page\items[index + 1U]: cursor
+                lm_mix_cursor_place(other, page, index)
+                lm_mix_cursor_place(cursor, page, index + 1U)
+                return: 0
+            ---
+        next: page\next
+        while: next != 0 && next\amount = 0U
+            next: next\next
+        if: next = 0 || next\items = 0
+            return: 1
+        synchronized: @ page\lock
+            synchronized: @ next\lock
+                other: lm_mix_page_at(next, 0U)
+                lm_mix_cursor_adjust_move(cursor, other, 0)
+                page\items[index]: other
+                next\items[0]: cursor
+                lm_mix_cursor_place(other, page, index)
+                lm_mix_cursor_place(cursor, next, 0U)
+                return: 0
+            ---
+        ---
+    end: lm_mix_cursor_next
+end: external
+
+external:
+    fn: lm_mix_cursor_prev (@: LmMixCursor cursor) int
+        @: LmMixPage page
+        @: LmMixPage prev
+        @: LmMixCursor other
+        size_t: index
+        size_t: last
+
+        if: cursor = 0 || cursor\page = 0
+            return: 1
+        page: cursor\page
+        index: cursor\index
+        if: index > 0U
+            synchronized: @ page\lock
+                other: lm_mix_page_at(page, index - 1U)
+                lm_mix_cursor_adjust_move(cursor, other, 1)
+                page\items[index]: other
+                page\items[index - 1U]: cursor
+                lm_mix_cursor_place(other, page, index)
+                lm_mix_cursor_place(cursor, page, index - 1U)
+                return: 0
+            ---
+        prev: page\prev
+        while: prev != 0 && prev\amount = 0U
+            prev: prev\prev
+        if: prev = 0 || prev\amount = 0U || prev\items = 0
+            return: 1
+        last: prev\amount - 1U
+        synchronized: @ prev\lock
+            synchronized: @ page\lock
+                other: lm_mix_page_at(prev, last)
+                lm_mix_cursor_adjust_move(cursor, other, 1)
+                page\items[index]: other
+                prev\items[last]: cursor
+                lm_mix_cursor_place(other, page, index)
+                lm_mix_cursor_place(cursor, prev, last)
+                return: 0
+            ---
+        ---
+    end: lm_mix_cursor_prev
+end: external
+
+external:
+    fn: lm_mix_tag_init (@: LmMixTag tag; @: char name; @: LmMixPage page; size_t: at) int
+        @: LmMixCursor head
+        @: LmMixCursor tail
+        @: LmMixKeyDict dict
+
+        if: tag = 0 || page = 0
+            return: 1
+        tag\name: name
+        head: @ tag\head
+        tail: @ tag\tail
+        lm_mix_cursor_clear(head)
+        lm_mix_cursor_clear(tail)
+        head\kind: 2
+        tail\kind: 3
+        head\tag: tag
+        tail\tag: tag
+        head\upper: lm_mix_array_new(2U)
+        tail\upper: lm_mix_array_new(2U)
+        if: head\upper = 0 || tail\upper = 0
+            lm_mix_array_delete(head\upper)
+            lm_mix_array_delete(tail\upper)
+            head\upper: 0
+            tail\upper: 0
+            return: 1
+        if: lm_mix_page_insert(page, at, head) != 0
+            lm_mix_array_delete(head\upper)
+            lm_mix_array_delete(tail\upper)
+            head\upper: 0
+            tail\upper: 0
+            return: 1
+        if: lm_mix_page_insert(head\page, head\index + 1U, tail) != 0
+            lm_mix_array_delete(head\upper)
+            lm_mix_array_delete(tail\upper)
+            head\upper: 0
+            tail\upper: 0
+            return: 1
+        dict: lm_mix_page_key_dict(head\page, name)
+        if: dict = 0
+            lm_mix_array_delete(head\upper)
+            lm_mix_array_delete(tail\upper)
+            head\upper: 0
+            tail\upper: 0
+            return: 1
+        if: lm_mix_key_dict_add(dict, head) != 0
+            return: 1
+        return: lm_mix_key_dict_add(dict, tail)
+    end: lm_mix_tag_init
+end: external
+
+external:
+    fn: lm_mix_tag_head (@: LmMixTag tag) @: LmMixCursor
+        if: tag = 0
+            return: 0
+        return: @ tag\head
+    end: lm_mix_tag_head
+end: external
+
+external:
+    fn: lm_mix_tag_tail (@: LmMixTag tag) @: LmMixCursor
+        if: tag = 0
+            return: 0
+        return: @ tag\tail
+    end: lm_mix_tag_tail
+end: external
+
+external:
+    fn: lm_mix_doc_root (@: LmMixDoc doc) @: LmMixPage
+        if: doc = 0
+            return: 0
+        return: doc\root
+    end: lm_mix_doc_root
+end: external
+
+external:
+    fn: lm_mix_tag_contains (@: LmMixTag tag; @: LmMixCursor cursor) int
+        int: head
+        int: tail
+        int: at
+
+        if: tag = 0 || cursor = 0
+            return: 0
+        head: lm_mix_cursor_address(@ tag\head)
+        tail: lm_mix_cursor_address(@ tag\tail)
+        at: lm_mix_cursor_address(cursor)
+        if: head < 0 || tail < 0 || at < 0
+            return: 0
+        if: head <= at && at <= tail
+            return: 1
+        return: 0
+    end: lm_mix_tag_contains
+end: external
+
+external:
+    fn: lm_mix_doc_init (@: LmMixDoc doc; size_t: length) int
+        if: doc = 0
+            return: 1
+        if: length = 0U
+            length: lm_mix_default_length()
+        doc\root: lm_mix_page_new(length)
+        if: doc\root = 0
+            return: 1
+        return: 0
+    end: lm_mix_doc_init
+end: external
+
+external:
+    sub: lm_mix_doc_destroy (@: LmMixDoc doc)
+        @: LmMixPage page
+        @: LmMixPage next
+
+        if: doc = 0
+            return
+        page: doc\root
+        while: page != 0
+            next: page\next
+            lm_mix_page_delete(page)
+            page: next
+        doc\root: 0
+    end: lm_mix_doc_destroy
+end: external
+
+external:
+    fn: lm_mix_page_bunch_first (@: LmMixPage page) @: LmMixPage
+        if: page = 0
+            return: 0
+        while: page\prev != 0
+            page: page\prev
+        return: page
+    end: lm_mix_page_bunch_first
+end: external
+
+external:
+    fn: lm_mix_cursor_open_tags (@: LmMixCursor at; @@: void out_tags; size_t: max) size_t
+        @@: void open
+        @: void moved
+        size_t: n
+        size_t: i
+        size_t: j
+        size_t: written
+        size_t: bytes
+        @: LmMixPage page
+        @: LmMixCursor slot
+        @: LmMixTag tag
+        int: here
+        int: drop
+
+        n: 0U
+        open: 0
+        if: at = 0 || at\page = 0
+            return: 0U
+        if: lm_own_size_multiply(64U, c.sizeof(open[0]), @ bytes) != 0
+            return: 0U
+        open: cast: (@@: void) lm_own_new_zero(bytes)
+        if: open = 0
+            return: 0U
+        page: lm_mix_page_bunch_first(at\page)
+        while: page != 0
+            i: 0U
+            while: i < page\amount
+                slot: lm_mix_page_at(page, i)
+                here: 0
+                if: slot = at
+                    here: 1
+                if: here = 0 && slot != 0 && at != 0 && slot\page = at\page && slot\index = at\index
+                    here: 1
+                if: here != 0
+                    if: slot != 0 && slot\kind = 2 && slot\tag != 0 && n < 64U
+                        open[n]: cast: (@: void) slot\tag
+                        n: n + 1U
+                    written: 0U
+                    while: written < n && written < max
+                        if: out_tags != 0
+                            out_tags[written]: open[written]
+                        written: written + 1U
+                    lm_own_delete_plain(open)
+                    return: n
+                    ---
+                if: slot != 0 && slot\kind = 2 && slot\tag != 0 && n < 64U
+                    open[n]: cast: (@: void) slot\tag
+                    n: n + 1U
+                if: slot != 0 && slot\kind = 3 && slot\tag != 0 && n > 0U
+                    tag: slot\tag
+                    drop: 0
+                    j: 0U
+                    while: j < n
+                        if: open[j] = cast: (@: void) tag
+                            drop: 1
+                        if: drop != 0 && j + 1U < n
+                            moved: open[j + 1U]
+                            open[j]: moved
+                        j: j + 1U
+                    if: drop != 0
+                        n: n - 1U
+                    ---
+                i: i + 1U
+            ---
+            page: page\next
+        written: 0U
+        while: written < n && written < max
+            if: out_tags != 0
+                out_tags[written]: open[written]
+            written: written + 1U
+        lm_own_delete_plain(open)
+        return: n
+    end: lm_mix_cursor_open_tags
+end: external
+
+external:
+    fn: lm_mix_tag_open_tags (@: LmMixTag tag; @@: void out_tags; size_t: max) size_t
+        if: tag = 0
+            return: 0U
+        return: lm_mix_cursor_open_tags(@ tag\head, out_tags, max)
+    end: lm_mix_tag_open_tags
+end: external
+
+external:
+    sub: lm_mix_tag_destroy (@: LmMixTag tag)
+        @: LmMixCursor head
+        @: LmMixCursor tail
+
+        if: tag = 0
+            return
+        head: lm_mix_tag_head(tag)
+        tail: lm_mix_tag_tail(tag)
+        if: head != 0
+            lm_mix_array_delete(head\upper)
+            head\upper: 0
+        if: tail != 0
+            lm_mix_array_delete(tail\upper)
+            tail\upper: 0
+    end: lm_mix_tag_destroy
+end: external
+
+external:
+    fn: lm_mix_cursor_get_upper (@: LmMixCursor cursor) @: LmArray
+        if: cursor = 0
+            return: 0
+        return: cursor\upper
+    end: lm_mix_cursor_get_upper
+end: external
+
+external:
+    fn: lm_mix_tag_get_upper (@: LmMixTag tag) @: LmArray
+        if: tag = 0
+            return: 0
+        return: lm_mix_cursor_get_upper(@ tag\head)
+    end: lm_mix_tag_get_upper
+end: external
+
+external:
+    fn: lm_mix_lets_find_middle (@: LmArray lets; int: address) size_t
+        size_t: min
+        size_t: count
+        size_t: middle
+        size_t: amount
+        @: LmMixCursor slot
+        int: hash
+
+        if: lets = 0
+            return: 0U
+        amount: lets\amount
+        min: 0U
+        count: amount
+        while: count > 0U
+            count: count / 2U
+            middle: min + count
+            if: middle < amount
+                slot: cast: (@: LmMixCursor) lets\items[middle]
+                hash: lm_mix_cursor_address(slot)
+                if: address > hash
+                    min: middle + 1U
+                if: address = hash
+                    return: middle
+                ---
+            if: middle >= amount
+                if: count = 0U
+                    return: amount
+                ---
+            ---
+        return: min
+    end: lm_mix_lets_find_middle
+end: external
+
+external:
+    sub: lm_mix_cursor_add_upper (@: LmMixCursor at; @: LmMixCursor prev)
+        @: LmArray v
+        @: LmArray all
+
+        if: at = 0 || prev = 0
+            return
+        v: at\upper
+        all: prev\upper
+        if: v = 0 || all = 0
+            return
+        lm_array_add_to(all, v)
+        if: prev\kind != 3 && prev\tag != 0
+            lm_array_add_element(v, prev\tag)
+        if: at\kind = 3 && at\tag != 0
+            lm_array_remove_element(v, at\tag, 0)
+    end: lm_mix_cursor_add_upper
+end: external
+
+external:
+    sub: lm_mix_key_dict_set_region (@: LmMixKeyDict dict; @: LmMixTag to; @: LmMixCursor from; @: LmMixCursor end)
+        @: LmArray lets
+        @: LmMixCursor let
+        @: LmMixTag tag
+        size_t: start
+        size_t: stop
+        size_t: i
+        int: address0
+        int: address1
+
+        if: dict = 0 || to = 0 || from = 0 || end = 0
+            return
+        lets: dict\lets
+        if: lets = 0 || lets\amount = 0U
+            return
+        address0: lm_mix_cursor_address(from)
+        address1: lm_mix_cursor_address(end)
+        start: lm_mix_lets_find_middle(lets, address0)
+        stop: lm_mix_lets_find_middle(lets, address1)
+        i: start
+        while: i < stop
+            let: cast: (@: LmMixCursor) lets\items[i]
+            if: let != 0 && let\upper != 0
+                tag: let\tag
+                if: tag != to
+                    lm_array_add_element(let\upper, to)
+                ---
+            i: i + 1U
+    end: lm_mix_key_dict_set_region
+end: external
+
+external:
+    fn: lm_mix_key_dict_add (@: LmMixKeyDict dict; @: LmMixCursor let) int
+        @: LmArray lets
+        @: LmMixCursor prev
+        size_t: i
+        int: address
+        int: found
+
+        if: dict = 0 || let = 0
+            return: 1
+        lets: dict\lets
+        if: lets = 0
+            return: 1
+        found: lm_array_index_of(lets, let, 0)
+        if: found >= 0
+            return: 0
+        if: lets\amount = 0U
+            if: lm_array_add_element(lets, let) < 0
+                return: 1
+            return: 0
+        address: lm_mix_cursor_address(let)
+        i: lm_mix_lets_find_middle(lets, address)
+        prev: 0
+        if: i > 0U
+            prev: cast: (@: LmMixCursor) lets\items[i - 1U]
+        if: prev != 0
+            lm_mix_cursor_add_upper(let, prev)
+        if: lm_array_insert_element_at(lets, let, i) != 0
+            return: 1
+        if: let\kind = 3 && let\tag != 0
+            lm_mix_key_dict_set_region(dict, let\tag, lm_mix_tag_head(let\tag), let)
+        return: 0
+    end: lm_mix_key_dict_add
+end: external
+
+external:
+    fn: lm_mix_page_get_key_dict (@: LmMixPage page; @: char name) @: LmMixKeyDict
+        @: LmMixPage first
+        @: LmMixKeyDict dict
+        @: char dict_name
+        size_t: i
+        int: same
+
+        if: page = 0
+            return: 0
+        first: lm_mix_page_bunch_first(page)
+        if: first = 0 || first\dicts = 0
+            return: 0
+        i: 0U
+        while: i < first\dicts\amount
+            dict: cast: (@: LmMixKeyDict) first\dicts\items[i]
+            if: dict != 0
+                dict_name: dict\name
+                same: 0
+                if: name = 0 && dict_name = 0
+                    same: 1
+                if: name != 0 && dict_name != 0
+                    if: c.strcmp(name, dict_name) = 0
+                        same: 1
+                    ---
+                if: same != 0
+                    return: dict
+                ---
+            i: i + 1U
+        return: 0
+    end: lm_mix_page_get_key_dict
+end: external
+
+external:
+    fn: lm_mix_page_key_dict (@: LmMixPage page; @: char name) @: LmMixKeyDict
+        @: LmMixPage first
+        @: LmMixKeyDict dict
+
+        dict: lm_mix_page_get_key_dict(page, name)
+        if: dict != 0
+            return: dict
+        first: lm_mix_page_bunch_first(page)
+        if: first = 0
+            return: 0
+        if: first\dicts = 0
+            first\dicts: lm_mix_array_new(4U)
+            if: first\dicts = 0
+                return: 0
+            ---
+        dict: cast: (@: LmMixKeyDict) lm_own_new_zero(c.sizeof(dict[0]))
+        if: dict = 0
+            return: 0
+        dict\name: name
+        dict\lets: lm_mix_array_new(4U)
+        if: dict\lets = 0
+            lm_own_delete_plain(dict)
+            return: 0
+        if: lm_array_add_element(first\dicts, dict) < 0
+            lm_mix_key_dict_delete(dict)
+            return: 0
+        return: dict
+    end: lm_mix_page_key_dict
+end: external
+
+external:
+    fn: lm_mix_key_dict_size (@: LmMixKeyDict dict) size_t
+        if: dict = 0
+            return: 0U
+        return: lm_array_size(dict\lets)
+    end: lm_mix_key_dict_size
+end: external
+
+external:
+    fn: lm_mix_key_dict_let_at (@: LmMixKeyDict dict; size_t: index) @: LmMixCursor
+        if: dict = 0
+            return: 0
+        return: cast: (@: LmMixCursor) lm_array_element_at(dict\lets, index)
+    end: lm_mix_key_dict_let_at
+end: external
+
+external:
+    fn: lm_mix_key_dict_let_for_address (@: LmMixKeyDict dict; int: address) @: LmMixCursor
+        @: LmArray lets
+        size_t: i
+        size_t: amount
+
+        if: dict = 0
+            return: 0
+        lets: dict\lets
+        if: lets = 0
+            return: 0
+        amount: lets\amount
+        if: amount = 0U
+            return: 0
+        i: lm_mix_lets_find_middle(lets, address)
+        if: i = 0U
+            return: 0
+        if: i >= amount
+            return: cast: (@: LmMixCursor) lm_array_last_element(lets)
+        return: cast: (@: LmMixCursor) lets\items[i - 1U]
+    end: lm_mix_key_dict_let_for_address
+end: external
+
+external:
+    fn: lm_mix_upper_value (@: LmArray upper; @: LmMixCursor at) @: LmMixTag
+        size_t: i
+        size_t: amount
+        @: LmMixTag tag
+        int: address
+
+        if: upper = 0 || at = 0
+            return: 0
+        amount: upper\amount
+        if: amount = 0U
+            return: 0
+        address: lm_mix_cursor_address(at)
+        i: 0U
+        while: i < amount
+            tag: cast: (@: LmMixTag) upper\items[i]
+            if: tag != 0
+                if: lm_mix_cursor_address(lm_mix_tag_head(tag)) >= address
+                    if: i = 0U
+                        return: 0
+                    return: cast: (@: LmMixTag) upper\items[i - 1U]
+                ---
+            i: i + 1U
+        return: cast: (@: LmMixTag) lm_array_last_element(upper)
+    end: lm_mix_upper_value
+end: external
+
+external:
+    fn: lm_mix_key_dict_get_prev (@: LmMixKeyDict dict; @: LmMixCursor before) @: LmMixCursor
+        @: LmArray lets
+        size_t: i
+        size_t: amount
+
+        if: dict = 0 || before = 0
+            return: 0
+        lets: dict\lets
+        if: lets = 0
+            return: 0
+        amount: lets\amount
+        if: amount < 2U
+            return: 0
+        i: lm_mix_lets_find_middle(lets, lm_mix_cursor_address(before))
+        if: i > 0U
+            return: cast: (@: LmMixCursor) lets\items[i - 1U]
+        return: cast: (@: LmMixCursor) lm_array_last_element(lets)
+    end: lm_mix_key_dict_get_prev
+end: external
+
+external:
+    fn: lm_mix_key_dict_get_prev_tag (@: LmMixKeyDict dict; int: address; @: LmMixTag stop) @: LmMixTag
+        @: LmArray lets
+        @: LmMixCursor let
+        size_t: i
+
+        if: dict = 0
+            return: 0
+        lets: dict\lets
+        if: lets = 0 || lets\amount = 0U
+            return: 0
+        i: lm_mix_lets_find_middle(lets, address - 1)
+        while: i > 0U
+            let: cast: (@: LmMixCursor) lets\items[i]
+            if: let != 0
+                if: stop != 0 && let\tag = stop
+                    return: 0
+                if: let\kind != 3 && lm_mix_cursor_address(let) != address
+                    return: let\tag
+                ---
+            i: i - 1U
+        return: 0
+    end: lm_mix_key_dict_get_prev_tag
+end: external
+
+external:
+    fn: lm_mix_tag_get_prev_tag (@: LmMixTag tag) @: LmMixTag
+        @: LmMixKeyDict dict
+        @: LmMixCursor head
+
+        if: tag = 0
+            return: 0
+        head: lm_mix_tag_head(tag)
+        if: head = 0 || head\page = 0
+            return: 0
+        dict: lm_mix_page_get_key_dict(head\page, tag\name)
+        return: lm_mix_key_dict_get_prev_tag(dict, lm_mix_cursor_address(head), tag)
+    end: lm_mix_tag_get_prev_tag
+end: external
+

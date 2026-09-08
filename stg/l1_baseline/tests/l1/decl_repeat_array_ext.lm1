@@ -1,0 +1,21 @@
+external:
+    fn: main () int
+        []: int a 2 1 2; b 4 9 8 7 6; c 3
+        c[0]: 3
+        c[1]: 2
+        c[2]: 1
+        if: c.sizeof(a) / c.sizeof(a[0]) != 2
+            return: 1
+        if: c.sizeof(b) / c.sizeof(b[0]) != 4
+            return: 2
+        if: c.sizeof(c) / c.sizeof(c[0]) != 3
+            return: 3
+        if: a[0] != 1 || a[1] != 2
+            return: 4
+        if: b[0] != 9 || b[3] != 6
+            return: 5
+        if: c[0] != 3 || c[2] != 1
+            return: 6
+        return: 0
+    end: main
+end: external

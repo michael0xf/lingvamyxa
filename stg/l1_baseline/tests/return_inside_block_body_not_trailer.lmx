@@ -1,0 +1,5 @@
+L2:
+. fn: test()(u16)
+. . return: 1
+.
+end: L2

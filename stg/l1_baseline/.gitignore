@@ -1,0 +1,23 @@
+# Local build root. Same policy as the repo root: no binaries in git.
+#
+# The repo-root .gitignore already ignores build/ and *.a/*.o at any depth;
+# these rules restate that locally and re-include the small set of generated
+# C that buildCore.lm0.bat / l1src\buildCore.lm1 compile.
+
+# All build output of this root (bootstrap tools, gen0..gen3, objects, logs).
+/build/
+
+# Frozen old-L2-chain seed prerequisites: binaries, not rebuildable from git.
+# Restore from repo build\tmp\ — see oldchain\README.txt.
+/oldchain/lib/
+
+# Tracked generated C snapshot, mirroring the repo-root whitelist.
+!/lm1/build/
+/lm1/build/*
+!/lm1/build/buildCore.lm1.c
+!/lm1/build/finalize.lm1.c
+!/lm1/build/l1trans.lm1.c
+!/lm1/build/make.lm1.c
+!/lm1/build/own.lm1.c
+!/lm1/build/parser.lm1.c
+!/lm1/build/printTree.lm1.c

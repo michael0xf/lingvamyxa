@@ -1,0 +1,160 @@
+table:
+    source
+    name: `define.value`
+    columns: (class: class) (@: char value)
+    rows:
+             LM_MIX_KIND_NONE     0
+             LM_MIX_KIND_CURSOR   1
+             LM_MIX_KIND_TAG_HEAD 2
+             LM_MIX_KIND_TAG_TAIL 3
+             LM_MIX_KIND_VALUE    4
+             LM_MIX_DEFAULT_LENGTH 32
+end: `define.value`
+
+table:
+    source
+    name: class
+    columns: (class: class) (class: kind)
+    rows:
+             LmMixPage      primitive
+             LmMixCursor  primitive
+             LmMixTag       primitive
+             LmMixDoc       primitive
+             LmMixKeyDict   primitive
+end: class
+
+table:
+    source
+    name: `cast.target`
+    columns: (class: class) (int: value)
+    rows:
+             LmMixPage      1
+             LmMixCursor  1
+             LmMixTag       1
+             LmMixDoc       1
+             LmMixKeyDict   1
+end: `cast.target`
+
+table:
+    source
+    name: `class.range`
+    columns: (class: class) (int: value)
+    rows:
+             LmMixPage      1
+             LmMixCursor  1
+             LmMixTag       1
+             LmMixDoc       1
+             LmMixKeyDict   1
+end: `class.range`
+
+table:
+    source
+    name: `forward.backend`
+    columns: (class: class) (class: backend)
+    rows:
+             LmMixPage      c.struct
+             LmMixCursor  c.struct
+             LmMixTag       c.struct
+             LmMixDoc       c.struct
+             LmMixKeyDict   c.struct
+end: `forward.backend`
+
+table:
+    source
+    name: `layout.backend`
+    columns: (class: class) (class: backend)
+    rows:
+             LmMixPage      c.named-struct
+             LmMixCursor  c.named-struct
+             LmMixTag       c.named-struct
+             LmMixDoc       c.named-struct
+             LmMixKeyDict   c.named-struct
+end: `layout.backend`
+
+table:
+    source
+    name: `fn.thread-context.none`
+    columns: (class: class) (int: value)
+    rows:
+             lm_synchronized_enter  1
+             lm_synchronized_leave  1
+end: `fn.thread-context.none`
+
+table:
+    source
+    name: LmMixPage
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
+    rows:
+             items   void          0  2
+             amount  size_t        1  0
+             length  size_t        2  0
+             next    LmMixPage     3  1
+             prev    LmMixPage     4  1
+             parent  LmMixPage     5  1
+             index   size_t        6  0
+             lock    int           7  0
+             dicts   LmArray       8  1
+end: LmMixPage
+
+table:
+    source
+    name: LmMixCursor
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
+    rows:
+             page   LmMixPage      0  1
+             index  size_t         1  0
+             kind   int            2  0
+             tag    LmMixTag       3  1
+             upper  LmArray        4  1
+end: LmMixCursor
+
+table:
+    source
+    name: LmMixTag
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
+    rows:
+             head  LmMixCursor   0  0
+             tail  LmMixCursor   1  0
+             name  char            2  1
+end: LmMixTag
+
+table:
+    source
+    name: LmMixDoc
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
+    rows:
+             root  LmMixPage       0  1
+end: LmMixDoc
+
+table:
+    source
+    name: LmMixKeyDict
+    columns: (class: class) (class: `field.class`) (size_t: `field.index`) (size_t: `field.address-depth`)
+    rows:
+             name  char            0  1
+             lets  LmArray         1  1
+end: LmMixKeyDict
+
+MixPosition:
+    int: address
+end: MixPosition
+
+MixCursorView:
+    int: address
+    int: index
+end: MixCursorView
+
+MixTagView:
+    int: address
+    int: index
+    int: name
+end: MixTagView
+
+MixAddressConsumer:
+    int: address
+end: MixAddressConsumer
+
+MixEditConsumer:
+    int: address
+    int: index
+end: MixEditConsumer

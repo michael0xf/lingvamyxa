@@ -1,0 +1,1126 @@
+table:
+    source
+    name: include
+    columns: (class: class) (@: char target)
+    rows:
+             own_stddef    "<stddef.h>"
+end: include
+
+table:
+    source
+    name: functionPointerType
+    columns: (class: class) (int: value)
+    rows:
+             LmOwnDestroyFields  1
+             LmOwnDelete         1
+             LmHostThreadEntry   1
+             LmMessageThreadEntry 1
+             LmMessageThreadComponentDestroy 1
+             LmRestLmxPost          1
+             LmRestLmxDestroy       1
+end: functionPointerType
+
+fn: LmOwnDestroyFields (@: void object) void
+fn: LmOwnDelete (@: void object) void
+fn: LmHostThreadEntry (@: void argument) @: void
+fn: LmMessageThreadEntry (@: void argument) void
+fn: LmMessageThreadComponentDestroy (@: void component) void
+fn: LmRestLmxPost (@: void context; const: @(char normalized_uri); const: @(char body); size_t: length; @: unsigned out_http_status) int
+fn: LmRestLmxDestroy (@: void context) void
+
+table:
+    source
+    name: class
+    columns: (class: class) (class: kind)
+    rows:
+             LmSlice  layout
+end: class
+
+table:
+    source
+    name: `alias.backend`
+    columns: (class: class) (class: backend)
+    rows:
+             LmOwnEdgeKind  c.typedef
+             LmMessageThreadState c.typedef
+end: `alias.backend`
+
+table:
+    source
+    name: `alias.target`
+    columns: (class: class) (class: target)
+    rows:
+             LmOwnEdgeKind  int
+             LmMessageThreadState int
+end: `alias.target`
+
+table:
+    source
+    name: `forward.backend`
+    columns: (class: class) (class: backend)
+    rows:
+             LmOwnPtrStack              c.struct
+             LmOwnValueStack            c.struct
+             LmOwnAllocationDescriptor  c.struct
+             LmOwnLazyEdge              c.struct
+             LmOwnArena                 c.struct
+             LmHostThread               c.struct
+             LmMutex                    c.struct
+             LmCondition                c.struct
+             LmMessage                  c.struct
+             LmMessageOutboxEntry       c.struct
+             LmMessageRoute             c.struct
+             LmMessageThreadRuntime  c.struct
+             LmRestLmxProviderOpsV1  c.struct
+             LmMessageThreadPool        c.struct
+             LmMessageThreadComponent   c.struct
+             LmMessageThread            c.struct
+end: `forward.backend`
+
+table:
+    source
+    name: `constant.backend`
+    columns: (class: class) (class: backend)
+    rows:
+             LM_OWN_EDGE_BORROWED    c.define
+             LM_OWN_EDGE_OWNED       c.define
+             LM_OWN_EDGE_LAZY_OWNED  c.define
+             LM_OWN_EDGE_EXTERNAL    c.define
+             LM_MESSAGE_THREAD_NEW       c.define
+             LM_MESSAGE_THREAD_RUNNING   c.define
+             LM_MESSAGE_THREAD_STOPPING  c.define
+             LM_MESSAGE_THREAD_STOPPED   c.define
+             LM_MESSAGE_STATUS_ROUTE_NOT_FOUND c.define
+             LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED c.define
+             LM_MESSAGE_STATUS_INVALID_ADDRESS c.define
+             LM_MESSAGE_STATUS_TRANSPORT_FAILED c.define
+             LM_MESSAGE_STATUS_HTTP_REJECTED c.define
+             LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR c.define
+             LM_MESSAGE_STATUS_APPLICATION_STOPPING c.define
+end: `constant.backend`
+
+table:
+    source
+    name: `constant.value`
+    columns: (class: class) (int: value)
+    rows:
+             LM_OWN_EDGE_BORROWED    1
+             LM_OWN_EDGE_OWNED       2
+             LM_OWN_EDGE_LAZY_OWNED  3
+             LM_OWN_EDGE_EXTERNAL    4
+             LM_MESSAGE_THREAD_NEW       0
+             LM_MESSAGE_THREAD_RUNNING   1
+             LM_MESSAGE_THREAD_STOPPING  2
+             LM_MESSAGE_THREAD_STOPPED   3
+             LM_MESSAGE_STATUS_ROUTE_NOT_FOUND 64
+             LM_MESSAGE_STATUS_TRANSPORT_PROVIDER_NOT_CONFIGURED 65
+             LM_MESSAGE_STATUS_INVALID_ADDRESS 66
+             LM_MESSAGE_STATUS_TRANSPORT_FAILED 67
+             LM_MESSAGE_STATUS_HTTP_REJECTED 68
+             LM_MESSAGE_STATUS_TRANSPORT_PROTOCOL_ERROR 69
+             LM_MESSAGE_STATUS_APPLICATION_STOPPING 70
+end: `constant.value`
+
+table:
+    source
+    name: `layout.backend`
+    columns: (class: class) (class: backend)
+    rows:
+             LmSlice                    c.struct
+             LmOwnPtrStack              c.struct
+             LmOwnValueStack            c.struct
+             LmOwnAllocationDescriptor  c.struct
+             LmOwnLazyEdge              c.struct
+             LmOwnArena                 c.named-struct
+             LmHostThread               c.named-struct
+             LmMutex                    c.named-struct
+             LmCondition                c.named-struct
+             LmMessage                  c.named-struct
+             LmMessageOutboxEntry       c.named-struct
+             LmMessageRoute             c.named-struct
+             LmMessageThreadRuntime  c.named-struct
+             LmRestLmxProviderOpsV1  c.named-struct
+             LmMessageThreadPool        c.named-struct
+             LmMessageThreadComponent   c.named-struct
+             LmMessageThread            c.named-struct
+end: `layout.backend`
+
+table:
+    source
+    name: `class.reference-base`
+    columns: (class: class) (int: value)
+    rows:
+             LmSlice                    1
+             LmOwnPtrStack              1
+             LmOwnValueStack            1
+             LmOwnAllocationDescriptor  1
+             LmOwnLazyEdge              1
+             LmOwnArena                 1
+             LmHostThread               1
+             LmMutex                    1
+             LmCondition                1
+             IncomingMessage            1
+             LmMessage                  1
+             LmMessageOutboxEntry       1
+             LmMessageRoute             1
+             LmMessageThreadRuntime  1
+             LmRestLmxProviderOpsV1  1
+             LmMessageThreadPool        1
+             LmMessageThreadComponent   1
+             LmMessageThread            1
+end: `class.reference-base`
+
+table:
+    source
+    name: `LmSlice.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             ptr     void
+             length  size_t
+end: `LmSlice.field.class`
+
+table:
+    source
+    name: `LmSlice.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             ptr     0
+             length  1
+end: `LmSlice.field.index`
+
+table:
+    source
+    name: `LmSlice.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             ptr    1
+end: `LmSlice.field.address-depth`
+
+table:
+    source
+    name: `LmOwnPtrStack.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             items        void
+             count        size_t
+             capacity     size_t
+             delete_item  LmOwnDelete
+end: `LmOwnPtrStack.field.class`
+
+table:
+    source
+    name: `LmOwnPtrStack.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             items        0
+             count        1
+             capacity     2
+             delete_item  3
+end: `LmOwnPtrStack.field.index`
+
+table:
+    source
+    name: `LmOwnPtrStack.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             items  2
+end: `LmOwnPtrStack.field.address-depth`
+
+table:
+    source
+    name: `LmOwnValueStack.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             items      void
+             count      size_t
+             capacity   size_t
+             item_size  size_t
+end: `LmOwnValueStack.field.class`
+
+table:
+    source
+    name: `LmOwnValueStack.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             items      0
+             count      1
+             capacity   2
+             item_size  3
+end: `LmOwnValueStack.field.index`
+
+table:
+    source
+    name: `LmOwnValueStack.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             items  1
+end: `LmOwnValueStack.field.address-depth`
+
+table:
+    source
+    name: `LmOwnAllocationDescriptor.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             address       void
+             owner         LmOwnArena
+             bytes         size_t
+             element_size  size_t
+             count         size_t
+             rank          size_t
+             level         size_t
+             marked        int
+             pinned        int
+end: `LmOwnAllocationDescriptor.field.class`
+
+table:
+    source
+    name: `LmOwnAllocationDescriptor.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             address       0
+             owner         1
+             bytes         2
+             element_size  3
+             count         4
+             rank          5
+             level         6
+             marked        7
+             pinned        8
+end: `LmOwnAllocationDescriptor.field.index`
+
+table:
+    source
+    name: `LmOwnAllocationDescriptor.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             address  1
+             owner    0
+end: `LmOwnAllocationDescriptor.field.address-depth`
+
+table:
+    source
+    name: `LmOwnLazyEdge.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             kind          LmOwnEdgeKind
+             source_owner  LmOwnArena
+             target_owner  LmOwnArena
+             source        void
+             size          size_t
+             patch_slot    void
+end: `LmOwnLazyEdge.field.class`
+
+table:
+    source
+    name: `LmOwnLazyEdge.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             kind          0
+             source_owner  1
+             target_owner  2
+             source        3
+             size          4
+             patch_slot    5
+end: `LmOwnLazyEdge.field.index`
+
+table:
+    source
+    name: `LmOwnLazyEdge.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             source_owner  0
+             target_owner  0
+             source        1
+             patch_slot    2
+end: `LmOwnLazyEdge.field.address-depth`
+
+table:
+    source
+    name: `LmOwnLazyEdge.field.const`
+    columns: (class: class) (int: value)
+    rows:
+             source      1
+             patch_slot  1
+end: `LmOwnLazyEdge.field.const`
+
+table:
+    source
+    name: `LmOwnArena.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             allocations             LmOwnPtrStack
+             allocation_descriptors  LmOwnPtrStack
+             lazy_edges              LmOwnPtrStack
+             frozen                  int
+             owner_thread            LmMessageThread
+             registry_previous       LmOwnArena
+             registry_next           LmOwnArena
+             runtime_owned_shell     int
+             roots                   LmOwnPtrStack
+end: `LmOwnArena.field.class`
+
+table:
+    source
+    name: `LmOwnArena.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             allocations             0
+             allocation_descriptors  1
+             lazy_edges              2
+             frozen                  3
+             owner_thread            4
+             registry_previous       5
+             registry_next           6
+             runtime_owned_shell     7
+             roots                   8
+end: `LmOwnArena.field.index`
+
+table:
+    source
+    name: `LmOwnArena.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             allocations             0
+             allocation_descriptors  0
+             lazy_edges              0
+             owner_thread            0
+             registry_previous       0
+             registry_next           0
+             roots                   0
+end: `LmOwnArena.field.address-depth`
+
+table:
+    source
+    name: `LmHostThread.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             implementation  void
+             started         int
+             joined          int
+             controller_identity void
+             starting        int
+end: `LmHostThread.field.class`
+
+table:
+    source
+    name: `LmHostThread.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             implementation  0
+             started         1
+             joined          2
+             controller_identity 3
+             starting        4
+end: `LmHostThread.field.index`
+
+table:
+    source
+    name: `LmHostThread.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             implementation  1
+             controller_identity 1
+end: `LmHostThread.field.address-depth`
+
+table:
+    source
+    name: `LmMutex.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             implementation  void
+end: `LmMutex.field.class`
+
+table:
+    source
+    name: `LmMutex.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             implementation  0
+end: `LmMutex.field.index`
+
+table:
+    source
+    name: `LmMutex.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             implementation  1
+end: `LmMutex.field.address-depth`
+
+table:
+    source
+    name: `LmCondition.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             implementation  void
+end: `LmCondition.field.class`
+
+table:
+    source
+    name: `LmCondition.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             implementation  0
+end: `LmCondition.field.index`
+
+table:
+    source
+    name: `LmCondition.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             implementation  1
+end: `LmCondition.field.address-depth`
+
+table:
+    source
+    name: `LmMessageThreadComponent.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             owner_thread  LmMessageThread
+             value         void
+             destroy       LmMessageThreadComponentDestroy
+             next          LmMessageThreadComponent
+end: `LmMessageThreadComponent.field.class`
+
+table:
+    source
+    name: `LmMessageThreadComponent.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             owner_thread  0
+             value         1
+             destroy       2
+             next          3
+end: `LmMessageThreadComponent.field.index`
+
+table:
+    source
+    name: `LmMessageThreadComponent.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             owner_thread  0
+             value         1
+             next          0
+end: `LmMessageThreadComponent.field.address-depth`
+
+table:
+    source
+    name: `IncomingMessage.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             lmx     char
+             length  size_t
+end: `IncomingMessage.field.class`
+
+table:
+    source
+    name: `IncomingMessage.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             lmx     0
+             length  1
+end: `IncomingMessage.field.index`
+
+table:
+    source
+    name: `IncomingMessage.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             lmx  1
+end: `IncomingMessage.field.address-depth`
+
+table:
+    source
+    name: `IncomingMessage.field.const`
+    columns: (class: class) (int: value)
+    rows:
+             lmx  1
+end: `IncomingMessage.field.const`
+
+table:
+    source
+    name: `LmMessage.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             lmx     char
+             length  size_t
+             next    LmMessage
+end: `LmMessage.field.class`
+
+table:
+    source
+    name: `LmMessage.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             lmx     0
+             length  1
+             next    2
+end: `LmMessage.field.index`
+
+table:
+    source
+    name: `LmMessage.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             lmx   1
+             next  0
+end: `LmMessage.field.address-depth`
+
+table:
+    source
+    name: `LmMessageOutboxEntry.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             endpoint  char
+             route     char
+             message   LmMessage
+             next      LmMessageOutboxEntry
+end: `LmMessageOutboxEntry.field.class`
+
+table:
+    source
+    name: `LmMessageOutboxEntry.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             endpoint  0
+             route     1
+             message   2
+             next      3
+end: `LmMessageOutboxEntry.field.index`
+
+table:
+    source
+    name: `LmMessageOutboxEntry.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             endpoint  1
+             route     1
+             message   0
+             next      0
+end: `LmMessageOutboxEntry.field.address-depth`
+
+table:
+    source
+    name: `LmMessageRoute.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             route   char
+             target  LmMessageThread
+             next    LmMessageRoute
+end: `LmMessageRoute.field.class`
+
+table:
+    source
+    name: `LmMessageRoute.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             route   0
+             target  1
+             next    2
+end: `LmMessageRoute.field.index`
+
+table:
+    source
+    name: `LmMessageRoute.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             route   1
+             target  0
+             next    0
+end: `LmMessageRoute.field.address-depth`
+
+table:
+    source
+    name: `LmRestLmxProviderOpsV1.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             abi_size  size_t
+             post      LmRestLmxPost
+             destroy   LmRestLmxDestroy
+end: `LmRestLmxProviderOpsV1.field.class`
+
+table:
+    source
+    name: `LmRestLmxProviderOpsV1.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             abi_size  0
+             post      1
+             destroy   2
+end: `LmRestLmxProviderOpsV1.field.index`
+
+table:
+    source
+    name: `LmMessageThreadRuntime.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             identity               void
+             pool_count             size_t
+             single_execution_depth size_t
+             single_active_thread   LmMessageThread
+             route_mutex            LmMutex
+             route_head             LmMessageRoute
+             route_count            size_t
+             root_thread            LmMessageThread
+             exit_requester         LmMessageThread
+             exit_requested         int
+             exit_ready             int
+             exit_status            int
+             rest_lmx_post          LmRestLmxPost
+             rest_lmx_destroy       LmRestLmxDestroy
+             rest_lmx_context       void
+             rest_lmx_provider_sealed int
+             rest_lmx_provider_transition int
+             deleting               int
+end: `LmMessageThreadRuntime.field.class`
+
+table:
+    source
+    name: `LmMessageThreadRuntime.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             identity               0
+             pool_count             1
+             single_execution_depth 2
+             single_active_thread   3
+             route_mutex            4
+             route_head             5
+             route_count            6
+             root_thread            7
+             exit_requester         8
+             exit_requested         9
+             exit_ready             10
+             exit_status            11
+             rest_lmx_post          12
+             rest_lmx_destroy       13
+             rest_lmx_context       14
+             rest_lmx_provider_sealed 15
+             rest_lmx_provider_transition 16
+             deleting               17
+end: `LmMessageThreadRuntime.field.index`
+
+table:
+    source
+    name: `LmMessageThreadRuntime.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             identity              1
+             single_active_thread  0
+             route_mutex           0
+             route_head            0
+             root_thread           0
+             exit_requester        0
+             rest_lmx_context      1
+end: `LmMessageThreadRuntime.field.address-depth`
+
+table:
+    source
+    name: `LmMessageThreadPool.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             workers               LmHostThread
+             worker_count          size_t
+             started_worker_count  size_t
+             mutex                 LmMutex
+             work_ready            LmCondition
+             ready_head            LmMessageThread
+             ready_tail            LmMessageThread
+             member_head           LmMessageThread
+             member_tail           LmMessageThread
+             member_count          size_t
+             stop_requested        int
+             drain_requested       int
+             deleting              int
+             single_mode           int
+             runtime               LmMessageThreadRuntime
+end: `LmMessageThreadPool.field.class`
+
+table:
+    source
+    name: `LmMessageThreadPool.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             workers               0
+             worker_count          1
+             started_worker_count  2
+             mutex                 3
+             work_ready            4
+             ready_head            5
+             ready_tail            6
+             member_head           7
+             member_tail           8
+             member_count          9
+             stop_requested        10
+             drain_requested       11
+             deleting              12
+             single_mode           13
+             runtime               14
+end: `LmMessageThreadPool.field.index`
+
+table:
+    source
+    name: `LmMessageThreadPool.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             workers     1
+             mutex       0
+             work_ready  0
+             ready_head  0
+             ready_tail  0
+             member_head 0
+             member_tail 0
+             runtime     0
+end: `LmMessageThreadPool.field.address-depth`
+
+table:
+    source
+    name: `LmMessageThread.field.class`
+    columns: (class: class) (class: field)
+    rows:
+             root_owner        LmOwnArena
+             state             LmMessageThreadState
+             stop_status       int
+             turn_count        size_t
+             collection_count  size_t
+             collector_failed  int
+             execution_context void
+             arena_head         LmOwnArena
+             arena_tail         LmOwnArena
+             arena_count        size_t
+             arena_destroying   int
+             component_head       LmMessageThreadComponent
+             component_count      size_t
+             component_destroying int
+             pool                 LmMessageThreadPool
+             runtime              LmMessageThreadRuntime
+             entry                LmMessageThreadEntry
+             entry_argument       void
+             state_mutex          LmMutex
+             stopped_condition    LmCondition
+             started              int
+             joining              int
+             joined               int
+             scheduled            int
+             executing            int
+             execution_identity   void
+             ready_next           LmMessageThread
+             pool_previous        LmMessageThread
+             pool_next            LmMessageThread
+             mailbox_mode         int
+             inbox_head           LmMessage
+             inbox_tail           LmMessage
+             inbox_count          size_t
+             outbox_head          LmMessageOutboxEntry
+             outbox_tail          LmMessageOutboxEntry
+             outbox_count         size_t
+             current_message      LmMessage
+             turn_active          int
+             turn_failed          int
+end: `LmMessageThread.field.class`
+
+table:
+    source
+    name: `LmMessageThread.field.index`
+    columns: (class: class) (size_t: index)
+    rows:
+             root_owner        0
+             state             1
+             stop_status       2
+             turn_count        3
+             collection_count  4
+             collector_failed  5
+             execution_context 6
+             arena_head         7
+             arena_tail         8
+             arena_count        9
+             arena_destroying   10
+             component_head       11
+             component_count      12
+             component_destroying 13
+             pool                 14
+             runtime              15
+             entry                16
+             entry_argument       17
+             state_mutex          18
+             stopped_condition    19
+             started              20
+             joining              21
+             joined               22
+             scheduled            23
+             executing            24
+             execution_identity   25
+             ready_next           26
+             pool_previous        27
+             pool_next            28
+             mailbox_mode         29
+             inbox_head           30
+             inbox_tail           31
+             inbox_count          32
+             outbox_head          33
+             outbox_tail          34
+             outbox_count         35
+             current_message      36
+             turn_active          37
+             turn_failed          38
+end: `LmMessageThread.field.index`
+
+table:
+    source
+    name: `LmMessageThread.field.address-depth`
+    columns: (class: class) (size_t: depth)
+    rows:
+             root_owner        0
+             execution_context 1
+             arena_head         0
+             arena_tail         0
+             component_head     0
+             pool               0
+             runtime            0
+             entry_argument     1
+             state_mutex        0
+             stopped_condition  0
+             execution_identity 1
+             ready_next         0
+             pool_previous      0
+             pool_next          0
+             inbox_head         0
+             inbox_tail         0
+             outbox_head        0
+             outbox_tail        0
+             current_message    0
+end: `LmMessageThread.field.address-depth`
+
+table:
+    source
+    name: `fn.external`
+    columns: (class: class) (int: value)
+    rows:
+             lm_own_new_zero           1
+             lm_own_resize             1
+             lm_own_copy_bytes         1
+             lm_own_delete             1
+             lm_own_delete_plain       1
+             lm_own_pointer_array_delete 1
+             lm_own_ptr_stack_init     1
+             lm_own_ptr_stack_destroy  1
+             lm_own_ptr_stack_push     1
+             lm_own_ptr_stack_pop      1
+             lm_own_ptr_stack_at       1
+             lm_own_ptr_stack_top      1
+             lm_own_ptr_stack_truncate 1
+             lm_own_value_stack_init   1
+             lm_own_value_stack_destroy 1
+             lm_own_value_stack_push   1
+             lm_own_value_stack_resize_zero 1
+             lm_own_value_stack_pop    1
+             lm_own_value_stack_at     1
+             lm_own_value_stack_top    1
+             lm_own_value_stack_truncate 1
+             lm_own_arena_new          1
+             lm_own_arena_delete       1
+             lm_own_arena_init         1
+             lm_own_arena_destroy      1
+             lm_own_arena_new_zero     1
+             lm_own_arena_array_new_zero 1
+             lm_own_arena_allocation_descriptor 1
+             lm_own_arena_copy_bytes   1
+             lm_own_arena_add_lazy_edge 1
+             lm_own_arena_promote_lazy_edges 1
+             lm_own_arena_absorb       1
+             lm_own_arena_freeze       1
+             lm_own_arena_is_frozen    1
+             lm_own_arena_owner_thread 1
+             lm_own_tree_cut           1
+             lm_own_tree_cut_promote_lazy_edges 1
+             lm_own_arena_pin          1
+             lm_own_arena_root_add     1
+             lm_own_arena_copy_graph   1
+             lm_own_arena_reclaim      1
+             lm_thread_provider_name         1
+             lm_host_thread_new              1
+             lm_host_thread_delete           1
+             lm_host_thread_start            1
+             lm_host_thread_join             1
+             lm_mutex_new                    1
+             lm_mutex_delete                 1
+             lm_mutex_lock                   1
+             lm_mutex_unlock                 1
+             lm_condition_new                1
+             lm_condition_delete             1
+             lm_condition_wait               1
+             lm_condition_signal             1
+             lm_condition_broadcast          1
+             lm_message_thread_runtime_new 1
+             lm_message_thread_runtime_delete 1
+             lm_message_thread_runtime_set_rest_lmx_provider 1
+             lm_message_thread_runtime_admit_lmx 1
+             lm_message_thread_runtime_attach_root 1
+             lm_message_thread_runtime_detach_root 1
+             lm_message_thread_runtime_exit_state 1
+             lm_message_thread_pool_new       1
+             lm_message_thread_pool_request_stop 1
+             lm_message_thread_pool_request_stop_when_idle 1
+             lm_message_thread_pool_pump       1
+             lm_message_thread_pool_delete    1
+             lm_message_thread_init          1
+             lm_message_thread_destroy       1
+             lm_message_thread_new           1
+             lm_message_thread_new_in        1
+             lm_message_thread_delete        1
+             lm_message_thread_start         1
+             lm_message_thread_start_mailbox 1
+             lm_message_thread_join          1
+             lm_message_thread_bind_route    1
+             lm_message_thread_send_lmx      1
+             lm_message_thread_current_lmx   1
+             lm_message_thread_inbox_count   1
+             lm_message_thread_outbox_count  1
+             lm_message_thread_begin_turn    1
+             lm_message_thread_end_turn      1
+             lm_message_thread_collect       1
+             lm_message_thread_request_stop  1
+             lm_message_thread_request_failure 1
+             lm_message_thread_request_exit  1
+             lm_message_thread_is_running    1
+             lm_message_thread_status        1
+             lm_message_thread_owner         1
+             lm_message_thread_execution_context 1
+             lm_message_thread_set_execution_context 1
+             lm_message_thread_turn_count        1
+             lm_message_thread_collection_count  1
+             lm_message_thread_arena_count       1
+             lm_message_thread_component_attach  1
+             lm_message_thread_component_get     1
+             lm_message_thread_component_remove  1
+             lm_message_thread_component_count   1
+end: `fn.external`
+
+table:
+    source
+    name: `fn.thread-context.managed`
+    columns: (class: class) (int: value)
+    rows:
+             LmMessageThreadEntry            1
+             LmMessageThreadComponentDestroy 1
+             lm_own_arena_new          1
+             lm_own_arena_delete       1
+             lm_own_arena_init         1
+             lm_own_arena_destroy      1
+             lm_own_arena_new_zero     1
+             lm_own_arena_array_new_zero 1
+             lm_own_arena_allocation_descriptor 1
+             lm_own_arena_copy_bytes   1
+             lm_own_arena_add_lazy_edge 1
+             lm_own_arena_promote_lazy_edges 1
+             lm_own_arena_absorb       1
+             lm_own_arena_freeze       1
+             lm_own_arena_is_frozen    1
+             lm_own_arena_owner_thread 1
+             lm_own_tree_cut           1
+             lm_own_tree_cut_promote_lazy_edges 1
+             lm_own_arena_pin          1
+             lm_own_arena_root_add     1
+             lm_own_arena_copy_graph   1
+             lm_own_arena_reclaim      1
+             lm_message_thread_component_attach 1
+             lm_message_thread_component_get    1
+             lm_message_thread_component_remove 1
+end: `fn.thread-context.managed`
+
+fn: lm_own_new_zero (size_t: size) @: void
+fn: lm_own_resize (@: void object; size_t: size) @: void
+fn: lm_own_copy_bytes (const: @(char source); size_t: length) @: char
+fn: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields) void
+fn: lm_own_delete_plain (@: void object) void
+fn: lm_own_pointer_array_delete (@@: void items; size_t: count; LmOwnDelete: delete_item) void
+fn: lm_own_ptr_stack_init (LmOwnPtrStack: stack; LmOwnDelete: delete_item) void
+fn: lm_own_ptr_stack_destroy (LmOwnPtrStack: stack) void
+fn: lm_own_ptr_stack_push (LmOwnPtrStack: stack; @: void item) int
+fn: lm_own_ptr_stack_pop (LmOwnPtrStack: stack) @: void
+fn: lm_own_ptr_stack_at (const: (LmOwnPtrStack: stack); size_t: index) @: void
+fn: lm_own_ptr_stack_top (const: (LmOwnPtrStack: stack)) @: void
+fn: lm_own_ptr_stack_truncate (LmOwnPtrStack: stack; size_t: count) void
+fn: lm_own_value_stack_init (LmOwnValueStack: stack; size_t: item_size) void
+fn: lm_own_value_stack_destroy (LmOwnValueStack: stack) void
+fn: lm_own_value_stack_push (LmOwnValueStack: stack; const: @(void item)) int
+fn: lm_own_value_stack_resize_zero (LmOwnValueStack: stack; size_t: count) int
+fn: lm_own_value_stack_pop (LmOwnValueStack: stack; @: void out_item) int
+fn: lm_own_value_stack_at (const: (LmOwnValueStack: stack); size_t: index) @: void
+fn: lm_own_value_stack_top (const: (LmOwnValueStack: stack)) @: void
+fn: lm_own_value_stack_truncate (LmOwnValueStack: stack; size_t: count) void
+fn: lm_own_arena_new (LmMessageThread: owner_thread) LmOwnArena
+fn: lm_own_arena_delete (LmOwnArena: arena) void
+fn: lm_own_arena_init (LmOwnArena: arena; LmMessageThread: owner_thread) int
+fn: lm_own_arena_destroy (LmOwnArena: arena) void
+fn: lm_own_arena_new_zero (LmOwnArena: arena; size_t: size) @: void
+fn: lm_own_arena_array_new_zero (LmOwnArena: arena; size_t: element_size; size_t: count; size_t: rank; size_t: level) @: void
+fn: lm_own_arena_allocation_descriptor (const: (LmOwnArena: arena); const: @(void address)) const: LmOwnAllocationDescriptor
+fn: lm_own_arena_copy_bytes (LmOwnArena: arena; const: @(char source); size_t: length) @: char
+fn: lm_own_arena_add_lazy_edge (LmOwnArena: target; LmOwnArena: source; const: @(void source_ptr); size_t: size; const: @@(void patch_slot)) int
+fn: lm_own_arena_promote_lazy_edges (LmOwnArena: arena) int
+fn: lm_own_arena_absorb (LmOwnArena: target; LmOwnArena: source) int
+fn: lm_own_arena_freeze (LmOwnArena: arena) void
+fn: lm_own_arena_is_frozen (const: (LmOwnArena: arena)) int
+fn: lm_own_arena_owner_thread (const: (LmOwnArena: arena)) LmMessageThread
+fn: lm_own_tree_cut (LmOwnArena: arena) int
+fn: lm_own_tree_cut_promote_lazy_edges (LmOwnArena: arena) int
+fn: lm_own_arena_pin (LmOwnArena: arena; @: void address) int
+fn: lm_own_arena_root_add (LmOwnArena: arena; @: void address) int
+fn: lm_own_arena_copy_graph (LmOwnArena: arena; const: @(void source)) @: void
+fn: lm_own_arena_reclaim (LmOwnArena: arena) int
+fn: lm_thread_provider_name () const: @: char
+fn: lm_host_thread_new () LmHostThread
+fn: lm_host_thread_delete (LmHostThread: thread) void
+fn: lm_host_thread_start (LmHostThread: thread; LmHostThreadEntry: entry; @: void argument) int
+fn: lm_host_thread_join (LmHostThread: thread; @@: void result) int
+fn: lm_mutex_new () LmMutex
+fn: lm_mutex_delete (LmMutex: mutex) void
+fn: lm_mutex_lock (LmMutex: mutex) int
+fn: lm_mutex_unlock (LmMutex: mutex) int
+fn: lm_condition_new () LmCondition
+fn: lm_condition_delete (LmCondition: condition) void
+fn: lm_condition_wait (LmCondition: condition; LmMutex: mutex) int
+fn: lm_condition_signal (LmCondition: condition) int
+fn: lm_condition_broadcast (LmCondition: condition) int
+fn: lm_message_thread_runtime_new () LmMessageThreadRuntime
+fn: lm_message_thread_runtime_delete (LmMessageThreadRuntime: runtime) int
+fn: lm_message_thread_runtime_set_rest_lmx_provider (LmMessageThreadRuntime: runtime; const: (LmRestLmxProviderOpsV1: ops); @: void context) int
+fn: lm_message_thread_runtime_admit_lmx (LmMessageThreadRuntime: runtime; const: @(char route); const: @(char lmx); size_t: length) int
+fn: lm_message_thread_runtime_attach_root (LmMessageThreadRuntime: runtime; LmMessageThread: thread) int
+fn: lm_message_thread_runtime_detach_root (LmMessageThreadRuntime: runtime; LmMessageThread: thread) int
+fn: lm_message_thread_runtime_exit_state (LmMessageThreadRuntime: runtime; @: int out_requested; @: int out_ready; @: int out_status) int
+fn: lm_message_thread_pool_new (LmMessageThreadRuntime: runtime; size_t: worker_count) LmMessageThreadPool
+fn: lm_message_thread_pool_request_stop (LmMessageThreadPool: pool) void
+fn: lm_message_thread_pool_request_stop_when_idle (LmMessageThreadPool: pool) void
+fn: lm_message_thread_pool_pump (LmMessageThreadPool: pool; size_t: max_turns) size_t
+fn: lm_message_thread_pool_delete (LmMessageThreadPool: pool) int
+fn: lm_message_thread_init (LmMessageThread: thread) int
+fn: lm_message_thread_destroy (LmMessageThread: thread) void
+fn: lm_message_thread_new () LmMessageThread
+fn: lm_message_thread_new_in (LmMessageThreadPool: pool) LmMessageThread
+fn: lm_message_thread_delete (LmMessageThread: thread) void
+fn: lm_message_thread_start (LmMessageThread: thread; LmMessageThreadEntry: entry; @: void argument) int
+fn: lm_message_thread_start_mailbox (LmMessageThread: thread; LmMessageThreadEntry: entry; @: void argument) int
+fn: lm_message_thread_join (LmMessageThread: thread; @: int result) int
+fn: lm_message_thread_bind_route (LmMessageThread: thread; const: @(char route)) int
+fn: lm_message_thread_send_lmx (LmMessageThread: sender; const: @(char endpoint); const: @(char route); const: @(char lmx); size_t: length) int
+fn: lm_message_thread_current_lmx (LmMessageThread: thread; const: @@(char out_lmx); @: size_t out_length) int
+fn: lm_message_thread_inbox_count (const: (LmMessageThread: thread)) size_t
+fn: lm_message_thread_outbox_count (const: (LmMessageThread: thread)) size_t
+fn: lm_message_thread_begin_turn (LmMessageThread: thread) int
+fn: lm_message_thread_end_turn (LmMessageThread: thread) int
+fn: lm_message_thread_collect (LmMessageThread: thread) int
+fn: lm_message_thread_request_stop (LmMessageThread: thread; int: status) void
+fn: lm_message_thread_request_failure (LmMessageThread: thread; int: status) void
+fn: lm_message_thread_request_exit (LmMessageThread: requester; int: status) int
+fn: lm_message_thread_is_running (const: (LmMessageThread: thread)) int
+fn: lm_message_thread_status (const: (LmMessageThread: thread)) int
+fn: lm_message_thread_owner (LmMessageThread: thread) LmOwnArena
+fn: lm_message_thread_execution_context (LmMessageThread: thread) @: void
+fn: lm_message_thread_set_execution_context (LmMessageThread: thread; @: void context) @: void
+fn: lm_message_thread_turn_count (const: (LmMessageThread: thread)) size_t
+fn: lm_message_thread_collection_count (const: (LmMessageThread: thread)) size_t
+fn: lm_message_thread_arena_count (const: (LmMessageThread: thread)) size_t
+fn: lm_message_thread_component_attach (LmMessageThreadComponentDestroy: destroy; @: void component) int
+fn: lm_message_thread_component_get (LmMessageThreadComponentDestroy: destroy) @: void
+fn: lm_message_thread_component_remove (LmMessageThreadComponentDestroy: destroy) int
+fn: lm_message_thread_component_count (const: (LmMessageThread: thread)) size_t

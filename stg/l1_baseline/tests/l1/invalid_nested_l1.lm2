@@ -1,0 +1,9 @@
+L2:
+    L1:
+        external:
+            fn: main () int
+                return: 0
+            end: main
+        end: external
+    end: L1
+end: L2

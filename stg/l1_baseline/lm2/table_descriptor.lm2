@@ -1,0 +1,1325 @@
+predef: "lm2/own_abi.lm2"
+
+predef: "table_descriptor_model.lm2"
+
+include: "<string.h>"
+
+table:
+    source
+    name: `fn.thread-context.none`
+    columns: (class: class) (int: value)
+    rows:
+             lm_registry_view_row_delete_any 1
+             lm_table_cell_delete_any 1
+             lm_table_column_descriptor_delete_any 1
+             lm_table_descriptor_delete_any 1
+             lm_table_row_delete_any 1
+end: `fn.thread-context.none`
+
+fn: lm_table_descriptor_copy_slice (const: @(char data); size_t: length) @: char
+    if: data = 0 && length != 0U
+        return: 0
+return: lm_own_copy_bytes(data, length)
+
+fn: lm_table_descriptor_copy_cstr (const: @(char value)) @: char
+    if: value = 0
+        return: 0
+return: lm_table_descriptor_copy_slice(value, c.strlen(value))
+
+fn: lm_table_descriptor_slice_equals (const: @(char left); size_t: left_length; const: @(char right); size_t: right_length) int
+    if: left_length != right_length
+        return: 0
+    if: left_length = 0U
+        return: 1
+    if: left = 0 || right = 0
+        return: 0
+return: c.memcmp(left, right, left_length) = 0
+
+fn: lm_table_descriptor_cstr_equals_slice (const: @(char left); const: @(char right); size_t: right_length) int
+    if: left = 0
+        return: 0
+return: lm_table_descriptor_slice_equals(left, c.strlen(left), right, right_length)
+
+fn: lm_table_descriptor_stack_new (LmOwnDelete: delete_item) LmOwnPtrStack
+    LmOwnPtrStack: stack
+
+    stack: lm_own_new_zero(c.sizeof(stack[0]))
+    if: stack != 0
+        lm_own_ptr_stack_init(stack, delete_item)
+return: stack
+
+sub: lm_table_column_descriptor_delete_any (@: void object)
+    LmTableColumnDescriptor: column
+
+    column: cast: (LmTableColumnDescriptor) object
+    if: column = 0
+        return
+    lm_own_delete(column\name, 0)
+    lm_own_delete(column\descriptor, 0)
+    if: column\descriptors != 0
+        lm_own_ptr_stack_destroy(column\descriptors)
+        lm_own_delete(column\descriptors, 0)
+        column\descriptors: 0
+    lm_own_delete(column\type_name, 0)
+    column\name: 0
+    column\descriptor: 0
+    column\type_name: 0
+    lm_own_delete(column, 0)
+end: lm_table_column_descriptor_delete_any
+
+sub: lm_table_cell_delete_any (@: void object)
+    LmTableCell: cell
+
+    cell: cast: (LmTableCell) object
+    if: cell = 0
+        return
+    lm_own_delete(cell\atom, 0)
+    lm_own_delete(cell\value, 0)
+    cell\atom: 0
+    cell\value: 0
+    cell\node: 0
+    cell\source: 0
+    lm_own_delete(cell, 0)
+end: lm_table_cell_delete_any
+
+sub: lm_table_row_delete_any (@: void object)
+    LmTableRow: row
+
+    row: cast: (LmTableRow) object
+    if: row = 0
+        return
+    if: row\cells != 0
+        lm_own_ptr_stack_destroy(row\cells)
+        lm_own_delete(row\cells, 0)
+        row\cells: 0
+    row\source: 0
+    row\source_native: 0
+    lm_own_delete(row, 0)
+end: lm_table_row_delete_any
+
+sub: lm_registry_view_row_delete_any (@: void object)
+    LmRegistryViewRow: row
+
+    row: cast: (LmRegistryViewRow) object
+    if: row = 0
+        return
+    lm_own_delete(row\table, 0)
+    lm_own_delete(row\key, 0)
+    lm_own_delete(row\payload, 0)
+    row\table: 0
+    row\key: 0
+    row\payload: 0
+    row\payload_node: 0
+    row\source: 0
+    lm_own_delete(row, 0)
+end: lm_registry_view_row_delete_any
+
+sub: lm_table_descriptor_delete_any (@: void object)
+    LmTableDescriptor: table
+
+    table: cast: (LmTableDescriptor) object
+    if: table = 0
+        return
+    if: table\columns != 0
+        lm_own_ptr_stack_destroy(table\columns)
+        lm_own_delete(table\columns, 0)
+        table\columns: 0
+    if: table\rows != 0
+        lm_own_ptr_stack_destroy(table\rows)
+        lm_own_delete(table\rows, 0)
+        table\rows: 0
+    if: table\materialized_rows != 0
+        lm_own_ptr_stack_destroy(table\materialized_rows)
+        lm_own_delete(table\materialized_rows, 0)
+        table\materialized_rows: 0
+    if: table\source_rows != 0
+        lm_own_ptr_stack_destroy(table\source_rows)
+        lm_own_delete(table\source_rows, 0)
+        table\source_rows: 0
+    lm_own_delete(table\name, 0)
+    table\name: 0
+    lm_own_delete(table, 0)
+end: lm_table_descriptor_delete_any
+
+fn: lm_table_column_descriptor_new_slice (
+    const: @(char name)
+    size_t: name_length
+    const: @(char type_name)
+    size_t: type_name_length
+    size_t: address_depth
+    size_t: array_rank
+    int: is_const
+) LmTableColumnDescriptor
+    LmTableColumnDescriptor: column
+
+    if: name = 0
+        return: 0
+    column: lm_own_new_zero(c.sizeof(column[0]))
+    if: column = 0
+        return: 0
+    column\name: lm_table_descriptor_copy_slice(name, name_length)
+    column\descriptors: lm_table_descriptor_stack_new(lm_own_delete_plain)
+    if: type_name != 0
+        column\type_name: lm_table_descriptor_copy_slice(type_name, type_name_length)
+    column\address_depth: address_depth
+    column\array_rank: array_rank
+    column\is_const: is_const
+    if: column\name = 0 || column\descriptors = 0 || (type_name != 0 && column\type_name = 0)
+        lm_table_column_descriptor_delete_any(column)
+        return: 0
+return: column
+
+fn: lm_table_column_descriptor_add_descriptor_slice (LmTableColumnDescriptor: column; const: @(char descriptor); size_t: descriptor_length) int
+    @: char copy
+
+    if: column = 0 || column\descriptors = 0 || descriptor = 0
+        return: 1
+    copy: lm_table_descriptor_copy_slice(descriptor, descriptor_length)
+    if: copy = 0
+        return: 1
+    if: column\descriptor = 0
+        column\descriptor: lm_table_descriptor_copy_slice(descriptor, descriptor_length)
+        if: column\descriptor = 0
+            lm_own_delete(copy, 0)
+            return: 1
+    ---
+    if: lm_own_ptr_stack_push(column\descriptors, copy) != 0
+        lm_own_delete(copy, 0)
+        return: 1
+return: 0
+
+fn: lm_table_column_descriptor_descriptor_count (const: (LmTableColumnDescriptor: column)) size_t
+    if: column = 0 || column\descriptors = 0
+        return: 0U
+return: column\descriptors\count
+
+fn: lm_table_column_descriptor_descriptor_at (const: (LmTableColumnDescriptor: column); size_t: index) const: @: char
+    if: column = 0 || column\descriptors = 0
+        return: 0
+return: lm_own_ptr_stack_at(column\descriptors, index)
+
+fn: lm_table_column_descriptor_has_descriptor (const: (LmTableColumnDescriptor: column); const: @(char descriptor)) int
+    const: @: char candidate
+    size_t: index
+
+    if: column = 0 || descriptor = 0
+        return: 0
+    index: 0U
+    while: index < lm_table_column_descriptor_descriptor_count(column)
+        candidate: lm_table_column_descriptor_descriptor_at(column, index)
+        if: candidate != 0 && c.strcmp(candidate, descriptor) = 0
+            return: 1
+        index: index + 1U
+return: 0
+
+fn: lm_table_descriptor_take_column (LmTableDescriptor: table; LmTableColumnDescriptor: column) int
+    if: table = 0 || table\columns = 0 || column = 0 || column\name = 0
+        return: 1
+    column\index: table\columns\count
+    if: lm_own_ptr_stack_push(table\columns, column) != 0
+        return: 1
+return: 0
+
+fn: lm_table_descriptor_add_column_slices (
+    LmTableDescriptor: table
+    const: @(char name)
+    size_t: name_length
+    const: @(char type_name)
+    size_t: type_name_length
+    const: @@(char descriptor_data)
+    const: @(size_t descriptor_lengths)
+    size_t: descriptor_count
+    size_t: address_depth
+    size_t: array_rank
+    int: is_const
+) int
+    LmTableColumnDescriptor: column
+    size_t: descriptor_index
+
+    if: table = 0 || name = 0 || (type_name = 0 && type_name_length != 0U) || (descriptor_count != 0U && (descriptor_data = 0 || descriptor_lengths = 0))
+        return: 1
+
+    column: lm_table_column_descriptor_new_slice(name, name_length, type_name, type_name_length, address_depth, array_rank, is_const)
+    if: column = 0
+        return: 1
+
+    descriptor_index: 0U
+    while: descriptor_index < descriptor_count
+        if: descriptor_data[descriptor_index] = 0 || lm_table_column_descriptor_add_descriptor_slice(column, descriptor_data[descriptor_index], descriptor_lengths[descriptor_index]) != 0
+            lm_table_column_descriptor_delete_any(column)
+            return: 1
+        descriptor_index: descriptor_index + 1U
+
+    if: lm_table_descriptor_take_column(table, column) != 0
+        lm_table_column_descriptor_delete_any(column)
+        return: 1
+return: 0
+
+fn: lm_table_descriptor_add_column (LmTableDescriptor: table; const: @(char name); const: @(char descriptor)) int
+    c.array: const: [1]: @: char descriptor_data
+    c.array: [1]: size_t descriptor_lengths
+
+    if: name = 0
+        return: 1
+    if: descriptor = 0
+        return: lm_table_descriptor_add_column_slices(table, name, c.strlen(name), 0, 0U, 0, 0, 0U, 0U, 0U, 0)
+
+    descriptor_data[0]: descriptor
+    descriptor_lengths[0]: c.strlen(descriptor)
+return: lm_table_descriptor_add_column_slices(table, name, c.strlen(name), 0, 0U, descriptor_data, descriptor_lengths, 1U, 0U, 0U, 0)
+
+fn: lm_table_descriptor_new_empty_slice (const: @(char name); size_t: name_length) LmTableDescriptor
+    LmTableDescriptor: table
+
+    if: name = 0
+        return: 0
+    table: lm_own_new_zero(c.sizeof(table[0]))
+    if: table = 0
+        return: 0
+    table\name: lm_table_descriptor_copy_slice(name, name_length)
+    table\columns: lm_table_descriptor_stack_new(lm_table_column_descriptor_delete_any)
+    table\rows: lm_table_descriptor_stack_new(lm_registry_view_row_delete_any)
+    table\materialized_rows: lm_table_descriptor_stack_new(lm_table_row_delete_any)
+    table\source_rows: lm_table_descriptor_stack_new(0)
+    if: table\name = 0 || table\columns = 0 || table\rows = 0 || table\materialized_rows = 0 || table\source_rows = 0
+        lm_table_descriptor_delete_any(table)
+        return: 0
+return: table
+
+fn: lm_table_descriptor_new_slice (const: @(char name); size_t: name_length) LmTableDescriptor
+    LmTableDescriptor: table
+
+    table: lm_table_descriptor_new_empty_slice(name, name_length)
+    if: table = 0
+        return: 0
+    if: lm_table_descriptor_add_column(table, "class", "key") != 0 || lm_table_descriptor_add_column(table, "value", "payload") != 0
+        lm_table_descriptor_delete_any(table)
+        return: 0
+return: table
+
+fn: lm_table_descriptor_column_count (const: (LmTableDescriptor: table)) size_t
+    if: table = 0 || table\columns = 0
+        return: 0U
+return: table\columns\count
+
+fn: lm_table_descriptor_column_at (const: (LmTableDescriptor: table); size_t: index) const: LmTableColumnDescriptor
+    if: table = 0 || table\columns = 0
+        return: 0
+return: lm_own_ptr_stack_at(table\columns, index)
+
+fn: lm_table_descriptor_row_count (const: (LmTableDescriptor: table)) size_t
+    if: table = 0 || table\rows = 0
+        return: 0U
+return: table\rows\count
+
+fn: lm_table_descriptor_row_at (const: (LmTableDescriptor: table); size_t: index) const: LmRegistryViewRow
+    if: table = 0 || table\rows = 0
+        return: 0
+return: lm_own_ptr_stack_at(table\rows, index)
+
+fn: lm_table_cell_new_slice (
+    const: @(char atom)
+    size_t: atom_length
+    const: @(char value)
+    size_t: value_length
+    const: @(void node)
+    const: @(void source)
+    int: explicit_none
+) LmTableCell
+    LmTableCell: cell
+
+    if: atom = 0 && value = 0 && node = 0 && explicit_none = 0
+        return: 0
+    cell: lm_own_new_zero(c.sizeof(cell[0]))
+    if: cell = 0
+        return: 0
+    if: atom != 0
+        cell\atom: lm_table_descriptor_copy_slice(atom, atom_length)
+    if: value != 0
+        cell\value: lm_table_descriptor_copy_slice(value, value_length)
+    cell\node: node
+    cell\source: source
+    cell\explicit_none: explicit_none
+    if: (atom != 0 && cell\atom = 0) || (value != 0 && cell\value = 0)
+        lm_table_cell_delete_any(cell)
+        return: 0
+return: cell
+
+fn: lm_table_cell_new_cstr (const: @(char atom); const: @(char value); const: @(void node); const: @(void source); int: explicit_none) LmTableCell
+    size_t: atom_length
+    size_t: value_length
+
+    atom_length: 0U
+    value_length: 0U
+    if: atom != 0
+        atom_length: c.strlen(atom)
+    if: value != 0
+        value_length: c.strlen(value)
+return: lm_table_cell_new_slice(atom, atom_length, value, value_length, node, source, explicit_none)
+
+fn: lm_table_row_new (const: (LmTableRow: source)) LmTableRow
+    LmTableRow: row
+
+    row: lm_own_new_zero(c.sizeof(row[0]))
+    if: row = 0
+        return: 0
+    row\cells: lm_table_descriptor_stack_new(lm_table_cell_delete_any)
+    row\source: source
+    if: source != 0
+        row\source_native: source\source_native
+    if: row\cells = 0
+        lm_table_row_delete_any(row)
+        return: 0
+return: row
+
+fn: lm_table_row_take_cell (LmTableRow: row; LmTableCell: cell) int
+    if: row = 0 || row\cells = 0 || cell = 0
+        return: 1
+return: lm_own_ptr_stack_push(row\cells, cell)
+
+fn: lm_table_row_take_cell_slice (
+    LmTableRow: row
+    const: @(char atom)
+    size_t: atom_length
+    const: @(char value)
+    size_t: value_length
+    const: @(void node)
+    const: @(void source)
+    int: explicit_none
+) int
+    LmTableCell: cell
+
+    cell: lm_table_cell_new_slice(atom, atom_length, value, value_length, node, source, explicit_none)
+    if: cell = 0
+        return: 1
+    if: lm_table_row_take_cell(row, cell) != 0
+        lm_table_cell_delete_any(cell)
+        return: 1
+return: 0
+
+fn: lm_table_row_cell_count (const: (LmTableRow: row)) size_t
+    if: row = 0 || row\cells = 0
+        return: 0U
+return: row\cells\count
+
+fn: lm_table_row_cell_at (const: (LmTableRow: row); size_t: index) const: LmTableCell
+    if: row = 0 || row\cells = 0
+        return: 0
+return: lm_own_ptr_stack_at(row\cells, index)
+
+fn: lm_table_descriptor_take_materialized_row (LmTableDescriptor: table; LmTableRow: row) int
+    if: table = 0 || table\materialized_rows = 0 || row = 0 || row\cells = 0
+        return: 1
+    if: row\cells\count != lm_table_descriptor_column_count(table)
+        return: 1
+    row\local_sequence: table\materialized_rows\count
+return: lm_own_ptr_stack_push(table\materialized_rows, row)
+
+fn: lm_table_descriptor_materialized_row_count (const: (LmTableDescriptor: table)) size_t
+    if: table = 0 || table\materialized_rows = 0
+        return: 0U
+return: table\materialized_rows\count
+
+fn: lm_table_descriptor_materialized_row_at (const: (LmTableDescriptor: table); size_t: index) const: LmTableRow
+    if: table = 0 || table\materialized_rows = 0
+        return: 0
+return: lm_own_ptr_stack_at(table\materialized_rows, index)
+
+fn: lm_table_descriptor_append_materialized_row_copy (LmTableDescriptor: table; const: (LmTableRow: source_row)) int
+    LmTableRow: row
+    const: LmTableCell: source_cell
+    LmTableCell: cell
+    size_t: atom_length
+    size_t: value_length
+    size_t: index
+
+    if: table = 0 || source_row = 0 || lm_table_row_cell_count(source_row) != lm_table_descriptor_column_count(table)
+        return: 1
+    row: lm_table_row_new(source_row)
+    if: row = 0
+        return: 1
+    index: 0U
+    while: index < lm_table_row_cell_count(source_row)
+        source_cell: lm_table_row_cell_at(source_row, index)
+        if: source_cell = 0
+            lm_table_row_delete_any(row)
+            return: 1
+        if: source_cell\atom = 0 && source_cell\value = 0
+            cell: lm_table_cell_new_cstr(0, 0, source_cell\node, source_cell\source, source_cell\explicit_none)
+            if: cell = 0 || lm_table_row_take_cell(row, cell) != 0
+                lm_table_cell_delete_any(cell)
+                lm_table_row_delete_any(row)
+                return: 1
+            ---
+        else:
+            atom_length: 0U
+            value_length: 0U
+            if: source_cell\atom != 0
+                atom_length: c.strlen(source_cell\atom)
+            if: source_cell\value != 0
+                value_length: c.strlen(source_cell\value)
+            if: lm_table_row_take_cell_slice(row, source_cell\atom, atom_length, source_cell\value, value_length, source_cell\node, source_cell\source, source_cell\explicit_none) != 0
+                lm_table_row_delete_any(row)
+                return: 1
+            ---
+        index: index + 1U
+    if: lm_table_descriptor_take_materialized_row(table, row) != 0
+        lm_table_row_delete_any(row)
+        return: 1
+return: 0
+
+fn: lm_table_descriptor_schema_same (const: (LmTableDescriptor: left); const: (LmTableDescriptor: right)) int
+    const: LmTableColumnDescriptor: left_column
+    const: LmTableColumnDescriptor: right_column
+    const: @: char left_descriptor
+    const: @: char right_descriptor
+    size_t: column_index
+    size_t: descriptor_index
+
+    if: left = 0 || right = 0 || lm_table_descriptor_column_count(left) != lm_table_descriptor_column_count(right)
+        return: 0
+    column_index: 0U
+    while: column_index < lm_table_descriptor_column_count(left)
+        left_column: lm_table_descriptor_column_at(left, column_index)
+        right_column: lm_table_descriptor_column_at(right, column_index)
+        if: left_column = 0 || right_column = 0 || left_column\name = 0 || right_column\name = 0 || c.strcmp(left_column\name, right_column\name) != 0 || left_column\address_depth != right_column\address_depth || left_column\array_rank != right_column\array_rank || left_column\is_const != right_column\is_const || lm_table_column_descriptor_descriptor_count(left_column) != lm_table_column_descriptor_descriptor_count(right_column)
+            return: 0
+        if: (left_column\type_name = 0) != (right_column\type_name = 0)
+            return: 0
+        if: left_column\type_name != 0 && c.strcmp(left_column\type_name, right_column\type_name) != 0
+            return: 0
+        descriptor_index: 0U
+        while: descriptor_index < lm_table_column_descriptor_descriptor_count(left_column)
+            left_descriptor: lm_table_column_descriptor_descriptor_at(left_column, descriptor_index)
+            right_descriptor: lm_table_column_descriptor_descriptor_at(right_column, descriptor_index)
+            if: left_descriptor = 0 || right_descriptor = 0 || lm_table_column_descriptor_has_descriptor(right_column, left_descriptor) = 0 || c.strcmp(left_descriptor, right_descriptor) != 0
+                return: 0
+            descriptor_index: descriptor_index + 1U
+        column_index: column_index + 1U
+return: 1
+
+fn: lm_table_descriptor_join_schema_compatible (const: (LmTableDescriptor: source); const: (LmTableDescriptor: target)) int
+    if: lm_table_descriptor_schema_same(source, target) != 0
+        return: 1
+return: lm_table_descriptor_column_count(source) = 2U && lm_table_descriptor_column_count(target) = 2U
+
+fn: lm_registry_view_new (const: (LmRegistryView: parent)) LmRegistryView
+    LmRegistryView: view
+
+    view: lm_own_new_zero(c.sizeof(view[0]))
+    if: view = 0
+        return: 0
+    view\parent: parent
+    view\tables: lm_table_descriptor_stack_new(lm_table_descriptor_delete_any)
+    view\source_tables: lm_table_descriptor_stack_new(lm_table_descriptor_delete_any)
+    view\facts: lm_table_descriptor_stack_new(0)
+    view\class_names: lm_table_descriptor_stack_new(lm_own_delete_plain)
+    if: view\tables = 0 || view\source_tables = 0 || view\facts = 0 || view\class_names = 0
+        if: view\tables != 0
+            lm_own_ptr_stack_destroy(view\tables)
+            lm_own_delete(view\tables, 0)
+        if: view\facts != 0
+            lm_own_ptr_stack_destroy(view\facts)
+            lm_own_delete(view\facts, 0)
+        if: view\source_tables != 0
+            lm_own_ptr_stack_destroy(view\source_tables)
+            lm_own_delete(view\source_tables, 0)
+        if: view\class_names != 0
+            lm_own_ptr_stack_destroy(view\class_names)
+            lm_own_delete(view\class_names, 0)
+        lm_own_delete(view, 0)
+        return: 0
+return: view
+
+sub: lm_registry_view_note_mutation (LmRegistryView: view)
+    if: view != 0
+        view\mutation_generation: view\mutation_generation + 1U
+end: lm_registry_view_note_mutation
+
+sub: lm_registry_view_delete (LmRegistryView: view)
+    if: view = 0
+        return
+    if: view\facts != 0
+        lm_own_ptr_stack_destroy(view\facts)
+        lm_own_delete(view\facts, 0)
+        view\facts: 0
+    if: view\tables != 0
+        lm_own_ptr_stack_destroy(view\tables)
+        lm_own_delete(view\tables, 0)
+        view\tables: 0
+    if: view\source_tables != 0
+        lm_own_ptr_stack_destroy(view\source_tables)
+        lm_own_delete(view\source_tables, 0)
+        view\source_tables: 0
+    if: view\class_names != 0
+        lm_own_ptr_stack_destroy(view\class_names)
+        lm_own_delete(view\class_names, 0)
+        view\class_names: 0
+    view\parent: 0
+    view\local_fact_count: 0U
+    lm_own_delete(view, 0)
+end: lm_registry_view_delete
+
+fn: lm_registry_view_class_has_slice (const: (LmRegistryView: view); const: @(char name); size_t: name_length) int
+    size_t: index
+    const: @: char candidate
+
+    if: view = 0 || name = 0
+        return: 0
+    if: view\class_names != 0
+        index: 0U
+        while: index < view\class_names\count
+            candidate: lm_own_ptr_stack_at(view\class_names, index)
+            if: candidate != 0 && lm_table_descriptor_cstr_equals_slice(candidate, name, name_length) != 0
+                return: 1
+            index: index + 1U
+    ---
+return: lm_registry_view_class_has_slice(view\parent, name, name_length)
+
+fn: lm_registry_view_class_has (const: (LmRegistryView: view); const: @(char name)) int
+    if: name = 0
+        return: 0
+return: lm_registry_view_class_has_slice(view, name, c.strlen(name))
+
+fn: lm_registry_view_class_add (LmRegistryView: view; const: @(char name)) int
+    @: char copy
+
+    if: view = 0 || view\class_names = 0 || name = 0
+        return: 1
+    if: lm_registry_view_class_has(view, name) != 0
+        return: 0
+    copy: lm_table_descriptor_copy_cstr(name)
+    if: copy = 0
+        return: 1
+    if: lm_own_ptr_stack_push(view\class_names, copy) != 0
+        lm_own_delete(copy, 0)
+        return: 1
+    lm_registry_view_note_mutation(view)
+return: 0
+
+fn: lm_registry_view_class_count (const: (LmRegistryView: view)) size_t
+    size_t: count
+    size_t: index
+    const: LmRegistryView: current
+    const: @: char candidate
+
+    count: 0U
+    current: view
+    while: current != 0
+        if: current\class_names != 0
+            index: 0U
+            while: index < current\class_names\count
+                candidate: lm_own_ptr_stack_at(current\class_names, index)
+                if: candidate != 0 && lm_registry_view_class_has(current\parent, candidate) = 0
+                    count: count + 1U
+                index: index + 1U
+        ---
+        current: current\parent
+return: count
+
+fn: lm_registry_view_class_at (const: (LmRegistryView: view); size_t: index) const: @: char
+    size_t: parent_count
+    size_t: local_index
+    const: LmRegistryView: current
+    const: @: char candidate
+
+    current: view
+    while: current != 0
+        parent_count: lm_registry_view_class_count(current\parent)
+        if: index < parent_count
+            current: current\parent
+            continue
+        ---
+        index: index - parent_count
+        if: current\class_names = 0
+            return: 0
+        local_index: 0U
+        while: local_index < current\class_names\count
+            candidate: lm_own_ptr_stack_at(current\class_names, local_index)
+            if: candidate != 0 && lm_registry_view_class_has(current\parent, candidate) = 0
+                if: index = 0U
+                    return: candidate
+                index: index - 1U
+            ---
+            local_index: local_index + 1U
+        return: 0
+return: 0
+
+fn: lm_registry_view_find_local_table_slice (const: (LmRegistryView: view); const: @(char table); size_t: table_length) LmTableDescriptor
+    size_t: index
+    LmTableDescriptor: descriptor
+
+    if: view = 0 || view\tables = 0 || table = 0
+        return: 0
+    index: 0U
+    while: index < view\tables\count
+        descriptor: lm_own_ptr_stack_at(view\tables, index)
+        if: descriptor != 0 && descriptor\name != 0 && lm_table_descriptor_cstr_equals_slice(descriptor\name, table, table_length) != 0
+            return: descriptor
+        index: index + 1U
+return: 0
+
+fn: lm_registry_view_ensure_local_table_slice (LmRegistryView: view; const: @(char table); size_t: table_length) LmTableDescriptor
+    LmTableDescriptor: descriptor
+
+    descriptor: lm_registry_view_find_local_table_slice(view, table, table_length)
+    if: descriptor != 0
+        return: descriptor
+    if: view = 0 || view\tables = 0
+        return: 0
+    descriptor: lm_table_descriptor_new_slice(table, table_length)
+    if: descriptor = 0
+        return: 0
+    if: lm_own_ptr_stack_push(view\tables, descriptor) != 0
+        lm_table_descriptor_delete_any(descriptor)
+        return: 0
+return: descriptor
+
+fn: lm_registry_view_find_local_source_table_slice (const: (LmRegistryView: view); const: @(char table); size_t: table_length) LmTableDescriptor
+    size_t: index
+    LmTableDescriptor: descriptor
+
+    if: view = 0 || view\source_tables = 0 || table = 0
+        return: 0
+    index: view\source_tables\count
+    while: index > 0U
+        index: index - 1U
+        descriptor: lm_own_ptr_stack_at(view\source_tables, index)
+        if: descriptor != 0 && descriptor\name != 0 && lm_table_descriptor_cstr_equals_slice(descriptor\name, table, table_length) != 0
+            return: descriptor
+return: 0
+
+fn: lm_registry_view_find_source_table_slice (const: (LmRegistryView: view); const: @(char table); size_t: table_length) LmTableDescriptor
+    LmTableDescriptor: descriptor
+
+    if: view = 0
+        return: 0
+    descriptor: lm_registry_view_find_local_source_table_slice(view, table, table_length)
+    if: descriptor != 0
+        return: descriptor
+return: lm_registry_view_find_source_table_slice(view\parent, table, table_length)
+
+fn: lm_registry_view_take_local_source_table (LmRegistryView: view; LmTableDescriptor: descriptor) int
+    if: view = 0 || view\source_tables = 0 || descriptor = 0 || descriptor\name = 0
+        return: 1
+    if: lm_own_ptr_stack_push(view\source_tables, descriptor) != 0
+        return: 1
+    lm_registry_view_note_mutation(view)
+return: 0
+
+fn: lm_registry_view_source_table_count (const: (LmRegistryView: view)) size_t
+    size_t: count
+
+    if: view = 0
+        return: 0U
+    count: 0U
+    if: view\source_tables != 0
+        count: view\source_tables\count
+    if: view\parent != 0
+        count: count + lm_registry_view_source_table_count(view\parent)
+return: count
+
+fn: lm_registry_view_source_table_at (const: (LmRegistryView: view); size_t: index) const: LmTableDescriptor
+    size_t: parent_count
+
+    if: view = 0
+        return: 0
+    parent_count: lm_registry_view_source_table_count(view\parent)
+    if: index < parent_count
+        return: lm_registry_view_source_table_at(view\parent, index)
+    if: view\source_tables = 0
+        return: 0
+return: lm_own_ptr_stack_at(view\source_tables, index - parent_count)
+
+fn: lm_table_descriptor_source_path_column_matches (
+    const: (LmTableDescriptor: descriptor)
+    size_t: column_index
+    const: @(char path)
+    size_t: path_length
+) int
+    const: LmTableColumnDescriptor: column
+    size_t: table_name_length
+    size_t: column_count
+    size_t: column_name_length
+
+    if: descriptor = 0 || descriptor\name = 0 || path = 0
+        return: 0
+    column_count: lm_table_descriptor_column_count(descriptor)
+    if: column_index = 0U || column_index >= column_count
+        return: 0
+    column: lm_table_descriptor_column_at(descriptor, column_index)
+    if: column = 0 || column\name = 0
+        return: 0
+    if: column_count = 2U
+        return: lm_table_descriptor_cstr_equals_slice(descriptor\name, path, path_length)
+
+    table_name_length: c.strlen(descriptor\name)
+    column_name_length: c.strlen(column\name)
+    if: path_length != table_name_length + 1U + column_name_length
+        return: 0
+    if: c.memcmp(path, descriptor\name, table_name_length) != 0 || path[table_name_length] != '.'
+        return: 0
+return: c.memcmp(path + table_name_length + 1U, column\name, column_name_length) = 0
+
+fn: lm_registry_view_source_path_has_rows_slice_mode (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    int: projected_only
+    @: int out_covered
+) int
+    const: LmTableDescriptor: descriptor
+    const: LmTableRow: row
+    const: LmTableCell: cell
+    size_t: table_count
+    size_t: table_index
+    size_t: column_count
+    size_t: column_index
+    size_t: row_count
+    size_t: row_index
+
+    if: out_covered != 0
+        out_covered[0]: 0
+    if: view = 0 || path = 0 || out_covered = 0
+        return: 0
+
+    table_count: lm_registry_view_source_table_count(view)
+    table_index: 0U
+    while: table_index < table_count
+        descriptor: lm_registry_view_source_table_at(view, table_index)
+        if: descriptor != 0 && descriptor\name != 0
+            column_count: lm_table_descriptor_column_count(descriptor)
+            column_index: 1U
+            while: column_index < column_count
+                if: lm_table_descriptor_source_path_column_matches(descriptor, column_index, path, path_length) != 0
+                    out_covered[0]: 1
+                    row_count: lm_table_descriptor_materialized_row_count(descriptor)
+                    row_index: 0U
+                    while: row_index < row_count
+                        row: lm_table_descriptor_materialized_row_at(descriptor, row_index)
+                        if: row != 0 && (projected_only = 0 || row\source_native = 0)
+                            cell: lm_table_row_cell_at(row, column_index)
+                            if: cell != 0 && (cell\value != 0 || cell\node != 0)
+                                return: 1
+                            ---
+                        row_index: row_index + 1U
+                ---
+                column_index: column_index + 1U
+        ---
+        table_index: table_index + 1U
+return: 0
+
+fn: lm_registry_view_source_path_has_rows_slice (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    @: int out_covered
+) int
+return: lm_registry_view_source_path_has_rows_slice_mode(view, path, path_length, 0, out_covered)
+
+fn: lm_registry_view_source_path_has_rows (const: (LmRegistryView: view); const: @(char path); @: int out_covered) int
+    if: path = 0
+        if: out_covered != 0
+            out_covered[0]: 0
+        return: 0
+return: lm_registry_view_source_path_has_rows_slice(view, path, c.strlen(path), out_covered)
+
+fn: lm_registry_view_source_path_has_key_slice_mode (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    const: @(char key)
+    size_t: key_length
+    int: projected_only
+    @: int out_covered
+) int
+    const: LmTableDescriptor: descriptor
+    const: LmTableRow: row
+    const: LmTableCell: key_cell
+    const: LmTableCell: payload_cell
+    size_t: table_count
+    size_t: table_index
+    size_t: column_count
+    size_t: column_index
+    size_t: row_count
+    size_t: row_index
+
+    if: out_covered != 0
+        out_covered[0]: 0
+    if: view = 0 || path = 0 || key = 0 || out_covered = 0
+        return: 0
+
+    table_count: lm_registry_view_source_table_count(view)
+    table_index: 0U
+    while: table_index < table_count
+        descriptor: lm_registry_view_source_table_at(view, table_index)
+        column_count: lm_table_descriptor_column_count(descriptor)
+        column_index: 1U
+        while: column_index < column_count
+            if: lm_table_descriptor_source_path_column_matches(descriptor, column_index, path, path_length) != 0
+                out_covered[0]: 1
+                row_count: lm_table_descriptor_materialized_row_count(descriptor)
+                row_index: 0U
+                while: row_index < row_count
+                    row: lm_table_descriptor_materialized_row_at(descriptor, row_index)
+                    if: row != 0 && (projected_only = 0 || row\source_native = 0)
+                        key_cell: lm_table_row_cell_at(row, 0U)
+                        payload_cell: lm_table_row_cell_at(row, column_index)
+                        if: key_cell != 0 && key_cell\value != 0 && lm_table_descriptor_cstr_equals_slice(key_cell\value, key, key_length) != 0 && payload_cell != 0 && (payload_cell\value != 0 || payload_cell\node != 0)
+                            return: 1
+                        ---
+                    row_index: row_index + 1U
+            ---
+            column_index: column_index + 1U
+        table_index: table_index + 1U
+return: 0
+
+fn: lm_registry_view_source_path_has_key_slice (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    const: @(char key)
+    size_t: key_length
+    @: int out_covered
+) int
+return: lm_registry_view_source_path_has_key_slice_mode(view, path, path_length, key, key_length, 0, out_covered)
+
+fn: lm_registry_view_source_path_cell_at_slice_mode (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    size_t: index
+    int: projected_only
+    const: @(LmTableDescriptor out_descriptor)
+    @: size_t out_column_index
+    const: @(LmTableCell out_key_cell)
+    @: int out_covered
+) const: LmTableCell
+    const: LmTableDescriptor: descriptor
+    const: LmTableRow: row
+    const: LmTableCell: key_cell
+    const: LmTableCell: payload_cell
+    size_t: table_count
+    size_t: table_index
+    size_t: column_count
+    size_t: column_index
+    size_t: row_count
+    size_t: row_index
+    size_t: fact_index
+    int: descriptor_covered
+
+    if: out_descriptor != 0
+        out_descriptor[0]: 0
+    if: out_column_index != 0
+        out_column_index[0]: 0U
+    if: out_key_cell != 0
+        out_key_cell[0]: 0
+    if: out_covered != 0
+        out_covered[0]: 0
+    if: view = 0 || path = 0 || out_covered = 0
+        return: 0
+
+    fact_index: 0U
+    table_count: lm_registry_view_source_table_count(view)
+    table_index: 0U
+    while: table_index < table_count
+        descriptor: lm_registry_view_source_table_at(view, table_index)
+        column_count: lm_table_descriptor_column_count(descriptor)
+        descriptor_covered: 0
+        column_index: 1U
+        while: column_index < column_count
+            if: lm_table_descriptor_source_path_column_matches(descriptor, column_index, path, path_length) != 0
+                descriptor_covered: 1
+                out_covered[0]: 1
+            column_index: column_index + 1U
+
+        if: descriptor_covered != 0
+            row_count: lm_table_descriptor_materialized_row_count(descriptor)
+            row_index: 0U
+            while: row_index < row_count
+                row: lm_table_descriptor_materialized_row_at(descriptor, row_index)
+                if: row != 0 && (projected_only = 0 || row\source_native = 0)
+                    key_cell: lm_table_row_cell_at(row, 0U)
+                    column_index: 1U
+                    while: column_index < column_count
+                        if: lm_table_descriptor_source_path_column_matches(descriptor, column_index, path, path_length) != 0
+                            payload_cell: lm_table_row_cell_at(row, column_index)
+                            if: key_cell != 0 && key_cell\value != 0 && payload_cell != 0 && (payload_cell\value != 0 || payload_cell\node != 0)
+                                if: fact_index = index
+                                    if: out_descriptor != 0
+                                        out_descriptor[0]: descriptor
+                                    if: out_column_index != 0
+                                        out_column_index[0]: column_index
+                                    if: out_key_cell != 0
+                                        out_key_cell[0]: key_cell
+                                    return: payload_cell
+                                fact_index: fact_index + 1U
+                        ---
+                        column_index: column_index + 1U
+                    ---
+                row_index: row_index + 1U
+        ---
+        table_index: table_index + 1U
+return: 0
+
+fn: lm_registry_view_source_path_cell_at_slice (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    size_t: index
+    const: @(LmTableDescriptor out_descriptor)
+    @: size_t out_column_index
+    const: @(LmTableCell out_key_cell)
+    @: int out_covered
+) const: LmTableCell
+return: lm_registry_view_source_path_cell_at_slice_mode(view, path, path_length, index, 0, out_descriptor, out_column_index, out_key_cell, out_covered)
+
+fn: lm_registry_view_source_path_key_at_slice_mode (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    size_t: index
+    int: projected_only
+    @: int out_covered
+) const: @: char
+    const: LmTableCell: key_cell
+
+    key_cell: 0
+    if: projected_only = 0
+        if: lm_registry_view_source_path_cell_at_slice(view, path, path_length, index, 0, 0, @ key_cell, out_covered) = 0 || key_cell = 0
+            return: 0
+        ---
+    else:
+        if: lm_registry_view_source_path_cell_at_slice_mode(view, path, path_length, index, 1, 0, 0, @ key_cell, out_covered) = 0 || key_cell = 0
+            return: 0
+        ---
+    ---
+return: key_cell\value
+
+fn: lm_registry_view_source_path_key_at_slice (
+    const: (LmRegistryView: view)
+    const: @(char path)
+    size_t: path_length
+    size_t: index
+    @: int out_covered
+) const: @: char
+return: lm_registry_view_source_path_key_at_slice_mode(view, path, path_length, index, 0, out_covered)
+
+fn: lm_registry_view_append_materialized_rows_mode (
+    LmRegistryView: view
+    LmTableDescriptor: target
+    const: @(char source_table)
+    size_t: source_table_length
+    int: note_mutation
+    int: require_compatible_source
+    size_t: snapshot_source_count
+    const: @(size_t snapshot_row_counts)
+) int
+    const: LmTableDescriptor: source
+    const: LmTableRow: row
+    size_t: source_count
+    size_t: row_count
+    size_t: original_row_count
+    size_t: source_index
+    size_t: index
+    int: matched
+    int: incompatible
+
+    if: view = 0 || target = 0 || source_table = 0
+        return: 1
+    source: lm_registry_view_find_source_table_slice(view, source_table, source_table_length)
+    if: source = 0
+        return: require_compatible_source != 0
+    original_row_count: lm_table_descriptor_materialized_row_count(target)
+    source_count: lm_registry_view_source_table_count(view)
+    if: snapshot_row_counts != 0
+        if: snapshot_source_count > source_count
+            return: 1
+        source_count: snapshot_source_count
+    source_index: 0U
+    matched: 0
+    incompatible: 0
+    while: source_index < source_count
+        source: lm_registry_view_source_table_at(view, source_index)
+        if: source != 0 && source\name != 0 && lm_table_descriptor_cstr_equals_slice(source\name, source_table, source_table_length) != 0
+            if: lm_table_descriptor_join_schema_compatible(source, target) = 0
+                incompatible: 1
+            else:
+                matched: 1
+                row_count: lm_table_descriptor_materialized_row_count(source)
+                if: snapshot_row_counts != 0
+                    if: snapshot_row_counts[source_index] > row_count
+                        lm_own_ptr_stack_truncate(target\materialized_rows, original_row_count)
+                        return: 1
+                    row_count: snapshot_row_counts[source_index]
+                else:
+                    if: source = target
+                        row_count: original_row_count
+                ---
+                index: 0U
+                while: index < row_count
+                    row: lm_table_descriptor_materialized_row_at(source, index)
+                    if: row = 0 || lm_table_descriptor_append_materialized_row_copy(target, row) != 0
+                        lm_own_ptr_stack_truncate(target\materialized_rows, original_row_count)
+                        return: 1
+                    index: index + 1U
+            ---
+        ---
+        source_index: source_index + 1U
+    if: require_compatible_source != 0 && (matched = 0 || incompatible != 0)
+        lm_own_ptr_stack_truncate(target\materialized_rows, original_row_count)
+        return: 1
+    if: note_mutation != 0 && lm_table_descriptor_materialized_row_count(target) != original_row_count
+        lm_registry_view_note_mutation(view)
+return: 0
+
+fn: lm_registry_view_append_materialized_rows (LmRegistryView: view; LmTableDescriptor: target; const: @(char source_table); size_t: source_table_length) int
+return: lm_registry_view_append_materialized_rows_mode(view, target, source_table, source_table_length, 1, 0, 0U, 0)
+
+fn: lm_registry_view_fact_count (const: (LmRegistryView: view)) size_t
+    size_t: count
+
+    if: view = 0
+        return: 0U
+    count: view\local_fact_count
+    if: view\parent != 0
+        count: count + lm_registry_view_fact_count(view\parent)
+return: count
+
+fn: lm_registry_view_fact_at (const: (LmRegistryView: view); size_t: index) const: LmRegistryViewRow
+    size_t: parent_count
+
+    if: view = 0
+        return: 0
+    parent_count: lm_registry_view_fact_count(view\parent)
+    if: index < parent_count
+        return: lm_registry_view_fact_at(view\parent, index)
+    if: view\facts = 0
+        return: 0
+return: lm_own_ptr_stack_at(view\facts, index - parent_count)
+
+fn: lm_registry_view_push_relation (
+    LmRegistryView: view
+    const: @(char table)
+    const: @(char key)
+    const: @(char payload)
+    const: @(void payload_node)
+    const: @(void source)
+) int
+    LmTableDescriptor: descriptor
+    LmRegistryViewRow: row
+    @: void popped
+
+    if: view = 0 || table = 0 || key = 0 || (payload = 0 && payload_node = 0)
+        return: 1
+    descriptor: lm_registry_view_ensure_local_table_slice(view, table, c.strlen(table))
+    if: descriptor = 0 || descriptor\rows = 0 || view\facts = 0
+        return: 1
+    row: lm_own_new_zero(c.sizeof(row[0]))
+    if: row = 0
+        return: 1
+    row\table: lm_table_descriptor_copy_cstr(table)
+    row\key: lm_table_descriptor_copy_cstr(key)
+    if: payload != 0
+        row\payload: lm_table_descriptor_copy_cstr(payload)
+    row\payload_node: payload_node
+    row\source: source
+    row\local_sequence: view\local_fact_count
+    if: row\table = 0 || row\key = 0 || (payload != 0 && row\payload = 0)
+        lm_registry_view_row_delete_any(row)
+        return: 1
+    if: lm_own_ptr_stack_push(descriptor\rows, row) != 0
+        lm_registry_view_row_delete_any(row)
+        return: 1
+    if: lm_own_ptr_stack_push(descriptor\source_rows, (cast: (@: void) source)) != 0
+        popped: lm_own_ptr_stack_pop(descriptor\rows)
+        lm_registry_view_row_delete_any(popped)
+        return: 1
+    if: lm_own_ptr_stack_push(view\facts, row) != 0
+        popped: lm_own_ptr_stack_pop(descriptor\source_rows)
+        popped: lm_own_ptr_stack_pop(descriptor\rows)
+        lm_registry_view_row_delete_any(popped)
+        return: 1
+    if: payload != 0 && c.strcmp(table, "class.present") = 0 && lm_registry_view_class_add(view, key) != 0
+        popped: lm_own_ptr_stack_pop(view\facts)
+        popped: lm_own_ptr_stack_pop(descriptor\source_rows)
+        popped: lm_own_ptr_stack_pop(descriptor\rows)
+        lm_registry_view_row_delete_any(popped)
+        return: 1
+    view\local_fact_count: view\local_fact_count + 1U
+    lm_registry_view_note_mutation(view)
+return: 0
+
+fn: lm_registry_view_lookup_local_exact_slice (const: (LmRegistryView: view); const: @(char key); size_t: key_length; const: @(char table); size_t: table_length) const: LmRegistryViewRow
+    LmTableDescriptor: descriptor
+    LmRegistryViewRow: row
+    size_t: index
+
+    descriptor: lm_registry_view_find_local_table_slice(view, table, table_length)
+    if: descriptor = 0 || descriptor\rows = 0
+        return: 0
+    index: descriptor\rows\count
+    while: index > 0U
+        index: index - 1U
+        row: lm_own_ptr_stack_at(descriptor\rows, index)
+        if: row != 0 && row\key != 0 && lm_table_descriptor_cstr_equals_slice(row\key, key, key_length) != 0
+            return: row
+return: 0
+
+fn: lm_registry_view_lookup_exact_slice (const: (LmRegistryView: view); const: @(char key); size_t: key_length; const: @(char table); size_t: table_length) const: LmRegistryViewRow
+    const: LmRegistryViewRow: row
+
+    if: view = 0 || key = 0 || table = 0
+        return: 0
+    row: lm_registry_view_lookup_local_exact_slice(view, key, key_length, table, table_length)
+    if: row != 0
+        return: row
+return: lm_registry_view_lookup_exact_slice(view\parent, key, key_length, table, table_length)
+
+fn: lm_registry_view_lookup_exact (const: (LmRegistryView: view); const: @(char key); const: @(char table)) const: LmRegistryViewRow
+    if: key = 0 || table = 0
+        return: 0
+return: lm_registry_view_lookup_exact_slice(view, key, c.strlen(key), table, c.strlen(table))
+
+fn: lm_registry_view_lookup_default_slice (const: (LmRegistryView: view); const: @(char table); size_t: table_length) const: LmRegistryViewRow
+return: lm_registry_view_lookup_exact_slice(view, "default", 7U, table, table_length)
+
+fn: lm_registry_view_lookup_default (const: (LmRegistryView: view); const: @(char table)) const: LmRegistryViewRow
+    if: table = 0
+        return: 0
+return: lm_registry_view_lookup_default_slice(view, table, c.strlen(table))
+
+fn: lm_registry_view_lookup_slice (const: (LmRegistryView: view); const: @(char key); size_t: key_length; const: @(char table); size_t: table_length) const: LmRegistryViewRow
+    const: LmRegistryViewRow: row
+
+    row: lm_registry_view_lookup_exact_slice(view, key, key_length, table, table_length)
+    if: row != 0
+        return: row
+return: lm_registry_view_lookup_default_slice(view, table, table_length)
+
+fn: lm_registry_view_lookup (const: (LmRegistryView: view); const: @(char key); const: @(char table)) const: LmRegistryViewRow
+    if: key = 0 || table = 0
+        return: 0
+return: lm_registry_view_lookup_slice(view, key, c.strlen(key), table, c.strlen(table))
+
+fn: lm_registry_view_lookup_text_slice (const: (LmRegistryView: view); const: @(char key); size_t: key_length; const: @(char table); size_t: table_length) const: LmRegistryViewRow
+    const: LmRegistryViewRow: row
+
+    row: lm_registry_view_lookup_exact_slice(view, key, key_length, table, table_length)
+    if: row != 0 && row\payload != 0
+        return: row
+return: lm_registry_view_lookup_default_slice(view, table, table_length)
+
+fn: lm_registry_view_lookup_text (const: (LmRegistryView: view); const: @(char key); const: @(char table)) const: LmRegistryViewRow
+    if: key = 0 || table = 0
+        return: 0
+return: lm_registry_view_lookup_text_slice(view, key, c.strlen(key), table, c.strlen(table))
+
+fn: lm_registry_view_local_table_row_count_slice (const: (LmRegistryView: view); const: @(char table); size_t: table_length) size_t
+    LmTableDescriptor: descriptor
+
+    descriptor: lm_registry_view_find_local_table_slice(view, table, table_length)
+return: lm_table_descriptor_row_count(descriptor)
+
+fn: lm_registry_view_table_row_count_slice (const: (LmRegistryView: view); const: @(char table); size_t: table_length) size_t
+    size_t: count
+
+    if: view = 0 || table = 0
+        return: 0U
+    count: lm_registry_view_local_table_row_count_slice(view, table, table_length)
+    if: view\parent != 0
+        count: count + lm_registry_view_table_row_count_slice(view\parent, table, table_length)
+return: count
+
+fn: lm_registry_view_table_row_count (const: (LmRegistryView: view); const: @(char table)) size_t
+    if: table = 0
+        return: 0U
+return: lm_registry_view_table_row_count_slice(view, table, c.strlen(table))
+
+fn: lm_registry_view_table_row_at_slice (const: (LmRegistryView: view); const: @(char table); size_t: table_length; size_t: index) const: LmRegistryViewRow
+    size_t: parent_count
+    LmTableDescriptor: descriptor
+
+    if: view = 0 || table = 0
+        return: 0
+    parent_count: lm_registry_view_table_row_count_slice(view\parent, table, table_length)
+    if: index < parent_count
+        return: lm_registry_view_table_row_at_slice(view\parent, table, table_length, index)
+    descriptor: lm_registry_view_find_local_table_slice(view, table, table_length)
+return: lm_table_descriptor_row_at(descriptor, index - parent_count)
+
+fn: lm_registry_view_table_row_at (const: (LmRegistryView: view); const: @(char table); size_t: index) const: LmRegistryViewRow
+    if: table = 0
+        return: 0
+return: lm_registry_view_table_row_at_slice(view, table, c.strlen(table), index)
+
+fn: lm_table_descriptor_matching_key_count_slice (const: (LmTableDescriptor: descriptor); const: @(char key); size_t: key_length) size_t
+    size_t: count
+    size_t: index
+    const: LmRegistryViewRow: row
+
+    count: 0U
+    index: 0U
+    while: index < lm_table_descriptor_row_count(descriptor)
+        row: lm_table_descriptor_row_at(descriptor, index)
+        if: row != 0 && row\key != 0 && lm_table_descriptor_cstr_equals_slice(row\key, key, key_length) != 0
+            count: count + 1U
+        index: index + 1U
+return: count
+
+fn: lm_table_descriptor_matching_key_at_slice (const: (LmTableDescriptor: descriptor); const: @(char key); size_t: key_length; size_t: match_index) const: LmRegistryViewRow
+    size_t: index
+    const: LmRegistryViewRow: row
+
+    index: 0U
+    while: index < lm_table_descriptor_row_count(descriptor)
+        row: lm_table_descriptor_row_at(descriptor, index)
+        if: row != 0 && row\key != 0 && lm_table_descriptor_cstr_equals_slice(row\key, key, key_length) != 0
+            if: match_index = 0U
+                return: row
+            match_index: match_index - 1U
+        index: index + 1U
+return: 0
+
+fn: lm_registry_view_matching_key_count_slice (const: (LmRegistryView: view); const: @(char table); size_t: table_length; const: @(char key); size_t: key_length) size_t
+    size_t: count
+    LmTableDescriptor: descriptor
+
+    if: view = 0
+        return: 0U
+    count: lm_registry_view_matching_key_count_slice(view\parent, table, table_length, key, key_length)
+    descriptor: lm_registry_view_find_local_table_slice(view, table, table_length)
+return: count + lm_table_descriptor_matching_key_count_slice(descriptor, key, key_length)
+
+fn: lm_registry_view_matching_key_count (const: (LmRegistryView: view); const: @(char table); const: @(char key)) size_t
+    if: table = 0 || key = 0
+        return: 0U
+return: lm_registry_view_matching_key_count_slice(view, table, c.strlen(table), key, c.strlen(key))
+
+fn: lm_registry_view_matching_key_at_slice (const: (LmRegistryView: view); const: @(char table); size_t: table_length; const: @(char key); size_t: key_length; size_t: match_index) const: LmRegistryViewRow
+    size_t: parent_count
+    LmTableDescriptor: descriptor
+
+    if: view = 0
+        return: 0
+    parent_count: lm_registry_view_matching_key_count_slice(view\parent, table, table_length, key, key_length)
+    if: match_index < parent_count
+        return: lm_registry_view_matching_key_at_slice(view\parent, table, table_length, key, key_length, match_index)
+    descriptor: lm_registry_view_find_local_table_slice(view, table, table_length)
+return: lm_table_descriptor_matching_key_at_slice(descriptor, key, key_length, match_index - parent_count)
+
+fn: lm_registry_view_matching_key_at (const: (LmRegistryView: view); const: @(char table); const: @(char key); size_t: match_index) const: LmRegistryViewRow
+    if: table = 0 || key = 0
+        return: 0
+return: lm_registry_view_matching_key_at_slice(view, table, c.strlen(table), key, c.strlen(key), match_index)
+
+fn: lm_registry_view_local_source_rows_slice (const: (LmRegistryView: view); const: @(char table); size_t: table_length) const: LmOwnPtrStack
+    LmTableDescriptor: descriptor
+
+    descriptor: lm_registry_view_find_local_table_slice(view, table, table_length)
+    if: descriptor = 0
+        return: 0
+return: descriptor\source_rows
+
+fn: lm_registry_view_table_has_rows (const: (LmRegistryView: view); const: @(char table)) int
+return: lm_registry_view_table_row_count(view, table) != 0U

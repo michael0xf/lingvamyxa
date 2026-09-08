@@ -1,0 +1,449 @@
+import: "lm2/mix/Array.lm2"
+predef: "HashArray_model.lm2"
+
+merge: (LmArray) LmHashArray
+    LmHashArrayHash: hash
+    LmArrayEquals: equals
+end: LmHashArray
+
+fn: lm_hash_array_nil () int
+    return: -2147483647 - 1
+end: lm_hash_array_nil
+
+fn: lm_hash_array_as_array (LmHashArray: array) @: LmArray
+    return: cast: (@: LmArray) array
+end: lm_hash_array_as_array
+
+fn: lm_hash_array_init (LmHashArray: array; size_t: capacity; LmHashArrayHash: hash; LmArrayEquals: equals) int
+    if: array = 0
+        return: 1
+    if: lm_array_init(lm_hash_array_as_array(array), capacity) != 0
+        return: 1
+    array\hash: hash
+    array\equals: equals
+    return: 0
+end: lm_hash_array_init
+
+sub: lm_hash_array_destroy (LmHashArray: array)
+    if: array != 0
+        lm_array_destroy(lm_hash_array_as_array(array))
+        array\hash: 0
+        array\equals: 0
+end: lm_hash_array_destroy
+
+fn: lm_hash_array_call_hash (LmHashArrayHash: hash_fn; @: void item) int
+    if: hash_fn = 0
+        return: 0
+    return: c.hash_fn(item)
+end: lm_hash_array_call_hash
+
+fn: lm_hash_array_call_equals (LmArrayEquals: equals_fn; @: void left; @: void right) int
+    if: equals_fn = 0
+        return: left = right
+    if: c.equals_fn(left, right) != 0
+        return: 1
+    if: c.equals_fn(right, left) != 0
+        return: 1
+    return: 0
+end: lm_hash_array_call_equals
+
+fn: lm_hash_array_hash (LmHashArray: array; @: void item) int
+    if: array = 0 || array\hash = 0
+        return: 0
+    return: lm_hash_array_call_hash(array\hash, item)
+end: lm_hash_array_hash
+
+fn: lm_hash_array_equals (LmHashArray: array; @: void left; @: void right) int
+    if: array = 0 || array\equals = 0
+        return: left = right
+    return: lm_hash_array_call_equals(array\equals, left, right)
+end: lm_hash_array_equals
+
+fn: lm_hash_array_item_at (LmHashArray: array; int: index) @: void
+    size_t: at
+
+    if: array = 0 || index < 0
+        return: 0
+    at: cast: size_t index
+    if: at >= array\amount
+        return: 0
+    return: array\items[at]
+end: lm_hash_array_item_at
+
+fn: lm_hash_array_find_middle (LmHashArray: array; int: code) int
+    int: min
+    int: count
+    int: middle
+    int: amount
+    int: hash
+    size_t: at
+    @: void item
+
+    if: array = 0
+        return: 0
+    amount: cast: int array\amount
+    min: 0
+    count: amount
+    while: count > 0
+        count: count >> 1
+        middle: min + count
+        if: middle < amount
+            at: cast: size_t middle
+            item: array\items[at]
+            hash: lm_hash_array_hash(array, item)
+            if: code > hash
+                min: middle + 1
+            if: code = hash
+                return: middle
+            ---
+        if: middle >= amount
+            if: count = 0
+                return: amount
+            ---
+        ---
+    return: min
+end: lm_hash_array_find_middle
+
+fn: lm_hash_array_find_begin_of_range (LmHashArray: array; int: index; int: code) int
+    @: void item
+    size_t: at
+    int: prev
+
+    if: array = 0
+        return: 0
+    while: index > 0
+        prev: index - 1
+        at: cast: size_t prev
+        item: array\items[at]
+        if: lm_hash_array_hash(array, item) != code
+            return: index
+        index: prev
+    return: index
+end: lm_hash_array_find_begin_of_range
+
+fn: lm_hash_array_find_last_index_of_range (LmHashArray: array; int: index; int: code) int
+    int: amount
+    int: next
+    @: void item
+    size_t: at
+
+    if: array = 0
+        return: 0
+    amount: cast: int array\amount
+    next: index + 1
+    while: next < amount
+        at: cast: size_t next
+        item: array\items[at]
+        if: lm_hash_array_hash(array, item) != code
+            return: index
+        index: next
+        next: index + 1
+    return: index
+end: lm_hash_array_find_last_index_of_range
+
+fn: lm_hash_array_first_index_of_range (LmHashArray: array; int: code) int
+    int: index
+    int: amount
+    @: void item
+    size_t: at
+
+    if: array = 0
+        return: 0
+    amount: cast: int array\amount
+    index: lm_hash_array_find_middle(array, code)
+    if: index < amount
+        at: cast: size_t index
+        item: array\items[at]
+        if: lm_hash_array_hash(array, item) = code
+            return: lm_hash_array_find_begin_of_range(array, index, code)
+        ---
+    return: index
+end: lm_hash_array_first_index_of_range
+
+fn: lm_hash_array_last_index_of_range (LmHashArray: array; int: code) int
+    int: index
+    int: amount
+    @: void item
+    size_t: at
+
+    if: array = 0
+        return: 0
+    amount: cast: int array\amount
+    index: lm_hash_array_find_middle(array, code)
+    if: index < amount
+        at: cast: size_t index
+        item: array\items[at]
+        if: lm_hash_array_hash(array, item) = code
+            return: lm_hash_array_find_last_index_of_range(array, index, code)
+        ---
+    return: index
+end: lm_hash_array_last_index_of_range
+
+fn: lm_hash_array_get_last_index (LmHashArray: array; int: code) int
+    int: index
+    int: amount
+
+    if: array = 0
+        return: lm_hash_array_nil()
+    amount: cast: int array\amount
+    index: lm_hash_array_find_middle(array, code)
+    if: code = amount
+        return: lm_hash_array_nil()
+    return: lm_hash_array_find_last_index_of_range(array, index, code)
+end: lm_hash_array_get_last_index
+
+fn: lm_hash_array_index_of_object (LmHashArray: array; @: void obj) int
+    int: code
+    int: index
+    int: amount
+    int: cursor
+    @: void item
+    size_t: at
+
+    if: array = 0
+        return: lm_hash_array_nil()
+    amount: cast: int array\amount
+    code: lm_hash_array_hash(array, obj)
+    index: lm_hash_array_find_middle(array, code)
+    if: index < 0 || index >= amount
+        return: lm_hash_array_nil()
+    cursor: index
+    while: cursor >= 0
+        at: cast: size_t cursor
+        item: array\items[at]
+        if: lm_hash_array_hash(array, item) != code
+            cursor: -1
+        if: cursor >= 0
+            if: lm_hash_array_equals(array, item, obj) != 0
+                return: cursor
+            cursor: cursor - 1
+        ---
+    cursor: index + 1
+    while: cursor < amount
+        at: cast: size_t cursor
+        item: array\items[at]
+        if: lm_hash_array_hash(array, item) != code
+            return: lm_hash_array_nil()
+        if: lm_hash_array_equals(array, item, obj) != 0
+            return: cursor
+        cursor: cursor + 1
+    return: lm_hash_array_nil()
+end: lm_hash_array_index_of_object
+
+fn: lm_hash_array_first_of_range (LmHashArray: array; int: code) @: void
+    int: index
+    size_t: at
+
+    if: array = 0 || array\amount = 0U
+        return: 0
+    index: lm_hash_array_first_index_of_range(array, code)
+    if: index < 0
+        return: 0
+    at: cast: size_t index
+    if: at >= array\amount
+        return: 0
+    return: array\items[at]
+end: lm_hash_array_first_of_range
+
+fn: lm_hash_array_last_of_range (LmHashArray: array; int: code) @: void
+    int: index
+    int: amount
+    @: void item
+    size_t: at
+
+    if: array = 0 || array\amount = 0U
+        return: 0
+    amount: cast: int array\amount
+    index: lm_hash_array_find_middle(array, code)
+    if: index < amount
+        at: cast: size_t index
+        item: array\items[at]
+        if: lm_hash_array_hash(array, item) = code
+            index: lm_hash_array_find_last_index_of_range(array, index, code)
+            return: lm_hash_array_item_at(array, index)
+        ---
+    return: 0
+end: lm_hash_array_last_of_range
+
+fn: lm_hash_array_get_by_code (LmHashArray: array; int: code) @: void
+    return: lm_hash_array_last_of_range(array, code)
+end: lm_hash_array_get_by_code
+
+fn: lm_hash_array_get (LmHashArray: array; @: void obj) @: void
+    int: index
+
+    index: lm_hash_array_index_of_object(array, obj)
+    if: index = lm_hash_array_nil()
+        return: 0
+    return: lm_hash_array_item_at(array, index)
+end: lm_hash_array_get
+
+fn: lm_hash_array_pop (LmHashArray: array; @: void obj) @: void
+    int: index
+    size_t: at
+
+    index: lm_hash_array_index_of_object(array, obj)
+    if: index = lm_hash_array_nil()
+        return: 0
+    at: cast: size_t index
+    return: lm_array_remove_element_at(lm_hash_array_as_array(array), at)
+end: lm_hash_array_pop
+
+fn: lm_hash_array_remove_element (LmHashArray: array; @: void obj) int
+    int: index
+    @: void item
+    size_t: at
+
+    index: lm_hash_array_index_of_object(array, obj)
+    if: index < 0
+        return: lm_hash_array_nil()
+    at: cast: size_t index
+    item: array\items[at]
+    if: index >= 0
+        if: lm_hash_array_equals(array, item, obj) != 0
+            lm_array_remove_element_at(lm_hash_array_as_array(array), at)
+        ---
+    return: index
+end: lm_hash_array_remove_element
+
+fn: lm_hash_array_pop_element (LmHashArray: array; int: code) @: void
+    int: index
+    int: amount
+    @: void item
+    size_t: at
+
+    if: array = 0
+        return: 0
+    amount: cast: int array\amount
+    index: lm_hash_array_last_index_of_range(array, code)
+    if: index < amount
+        at: cast: size_t index
+        item: array\items[at]
+        if: lm_hash_array_hash(array, item) = code
+            return: lm_array_remove_element_at(lm_hash_array_as_array(array), at)
+        ---
+    return: 0
+end: lm_hash_array_pop_element
+
+fn: lm_hash_array_add_element (LmHashArray: array; @: void obj) int
+    int: code
+    int: index
+    size_t: at
+
+    if: array = 0
+        return: lm_hash_array_nil()
+    code: lm_hash_array_hash(array, obj)
+    index: lm_hash_array_last_index_of_range(array, code)
+    if: index < 0
+        return: lm_hash_array_nil()
+    at: cast: size_t index
+    if: lm_array_insert_element_at(lm_hash_array_as_array(array), obj, at) != 0
+        return: lm_hash_array_nil()
+    return: index
+end: lm_hash_array_add_element
+
+fn: lm_hash_array_put (LmHashArray: array; @: void obj) int
+    int: index
+
+    index: lm_hash_array_index_of_object(array, obj)
+    if: index >= 0
+        return: index
+    return: lm_hash_array_add_element(array, obj)
+end: lm_hash_array_put
+
+fn: lm_hash_array_contains (LmHashArray: array; @: void obj) int
+    return: lm_hash_array_index_of_object(array, obj) >= 0
+end: lm_hash_array_contains
+
+fn: lm_hash_array_rehash (LmHashArray: array; @: void obj; int: newcode) int
+    int: index
+    int: newindex
+    size_t: from
+    size_t: to
+
+    index: lm_hash_array_index_of_object(array, obj)
+    if: index < 0
+        return: lm_hash_array_add_element(array, obj)
+    newindex: lm_hash_array_find_middle(array, newcode)
+    if: newindex = index
+        return: newindex
+    if: newindex < 0
+        return: newindex
+    from: cast: size_t index
+    to: cast: size_t newindex
+    lm_array_reverse(lm_hash_array_as_array(array), from, to)
+    return: newindex
+end: lm_hash_array_rehash
+
+fn: lm_hash_array_remove_elements (LmHashArray: array; int: code) int
+    int: index
+    int: amount
+    int: left
+    int: right
+    int: count
+    int: keep
+    int: start
+    @: void item
+    size_t: at
+    size_t: from
+    size_t: n
+
+    if: array = 0
+        return: 0
+    amount: cast: int array\amount
+    index: lm_hash_array_find_middle(array, code)
+    count: 0
+    if: index < amount
+        left: index
+        keep: 1
+        while: keep != 0 && left >= 0
+            at: cast: size_t left
+            item: array\items[at]
+            if: lm_hash_array_hash(array, item) != code
+                keep: 0
+            if: keep != 0
+                left: left - 1
+            ---
+        right: index + 1
+        keep: 1
+        while: keep != 0 && right < amount
+            at: cast: size_t right
+            item: array\items[at]
+            if: lm_hash_array_hash(array, item) != code
+                keep: 0
+            if: keep != 0
+                right: right + 1
+            ---
+        count: right - left - 1
+        if: count > 0
+            start: left + 1
+            from: cast: size_t start
+            n: cast: size_t count
+            lm_array_remove_elements_from(lm_hash_array_as_array(array), from, n)
+        ---
+    return: count
+end: lm_hash_array_remove_elements
+
+fn: lm_hash_array_remove_elements_range (LmHashArray: array; int: begincode; int: endcode) int
+    int: begin
+    int: end
+    int: count
+    int: amount
+    size_t: from
+    size_t: n
+
+    if: array = 0 || endcode <= begincode
+        return: 0
+    amount: cast: int array\amount
+    count: 0
+    begin: lm_hash_array_first_index_of_range(array, begincode)
+    if: begin < amount
+        end: lm_hash_array_first_index_of_range(array, endcode)
+        count: end - begin
+        if: count > 0
+            from: cast: size_t begin
+            n: cast: size_t count
+            lm_array_remove_elements_from(lm_hash_array_as_array(array), from, n)
+        ---
+    return: count
+end: lm_hash_array_remove_elements_range

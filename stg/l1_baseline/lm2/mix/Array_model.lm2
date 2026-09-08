@@ -1,0 +1,51 @@
+table:
+    source
+    name: class
+    columns: (class: class) (class: kind)
+    rows:
+             LmArray  primitive
+end: class
+
+table:
+    source
+    name: `cast.target`
+    columns: (class: class) (int: value)
+    rows:
+             LmArray  1
+end: `cast.target`
+
+table:
+    source
+    name: `class.range`
+    columns: (class: class) (int: value)
+    rows:
+             LmArray  1
+end: `class.range`
+
+table:
+    source
+    name: LmArray
+    columns: (class: class) (class: `field.class`)  (size_t: `field.index`)  (size_t: `field.address-depth`)
+    rows:
+             items     void    0  2
+             amount    size_t  1  0
+             capacity  size_t  2  0
+end: LmArray
+
+table:
+    source
+    name: `layout.backend`
+    columns: (class: class) (class: backend)
+    rows:
+             LmArray c.struct
+end: `layout.backend`
+
+table:
+    source
+    name: functionPointerType
+    columns: (class: class) (int: value)
+    rows:
+             LmArrayEquals 1
+end: functionPointerType
+
+fn: LmArrayEquals (@: void left; @: void right) int
