@@ -46,6 +46,7 @@ typedef enum LmxType {
     LMX_TYPE_NONE = 0,
     LMX_TYPE_CHAR,              /* primitive pool, 2's all_chars_array */
     LMX_TYPE_INT,               /* primitive pool of ints */
+    LMX_TYPE_SIZE_T,            /* mutable primitive pool of size_t */
     LMX_TYPE_METHOD,            /* 2's all_methods_array */
     LMX_TYPE_ARRAY_OF_CHAR,     /* 6.5's all_array_of_T for T = char */
     LMX_TYPE_ARRAY_OF_INT,      /* the same for T = int */

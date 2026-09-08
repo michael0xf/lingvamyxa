@@ -1,0 +1,57 @@
+predef: "l2src/lmx_size.lm1"
+include: "<stdio.h>"
+
+# Own size_t cells are unique mutable primitives, not interned shared values
+# and not narrowed to int.
+
+fn: main () int
+    @: void a
+    @: void b
+    int: failures 0
+    if: lmx_ranges_init(4U) != 0
+        c.printf("lmx: range table init failed\n")
+        return: 1
+    if: lmx_size_init() != 0
+        c.printf("lmx: size pool init failed\n")
+        return: 1
+    if: lmx_size_init() = 0
+        c.printf("lmx: size pool initialised twice\n")
+        failures: failures + 1
+    a: lmx_size_take()
+    b: lmx_size_take()
+    if: a = 0 || b = 0
+        c.printf("lmx: size cell missing\n")
+        return: 1
+    if: a = b
+        c.printf("lmx: two size_t takes shared one cell\n")
+        failures: failures + 1
+    if: lmx_type_of(a) != c.LMX_TYPE_SIZE_T
+        c.printf("lmx: size cell not TYPE_SIZE_T\n")
+        failures: failures + 1
+    if: lmx_classify(a) != c.LMX_KIND_PRIMITIVE
+        c.printf("lmx: size cell not primitive\n")
+        failures: failures + 1
+    if: lmx_size_value(a) != 0U
+        c.printf("lmx: new size cell not zero\n")
+        failures: failures + 1
+    if: lmx_size_store(a, 7U) != 0
+        c.printf("lmx: size store failed\n")
+        failures: failures + 1
+    if: lmx_size_value(a) != 7U
+        c.printf("lmx: size store did not read back\n")
+        failures: failures + 1
+    if: lmx_size_value(b) != 0U
+        c.printf("lmx: store mutated a sibling cell\n")
+        failures: failures + 1
+    if: lmx_size_store(a, 2147483648U) != 0
+        c.printf("lmx: size store of 2^31 failed\n")
+        failures: failures + 1
+    if: lmx_size_value(a) != 2147483648U
+        c.printf("lmx: size_t narrowed to int\n")
+        failures: failures + 1
+    if: lmx_size_store(0, 1U) = 0
+        c.printf("lmx: null size store succeeded\n")
+        failures: failures + 1
+    if: failures != 0
+        return: 1
+return: 0

@@ -752,4 +752,211 @@ end: external
 
 Invoke-StartsPython
 
+Invoke-Negative "l2src\tests\unit_unknown_c.lm2" "unit_unknown_c" "unknown method"
+Invoke-Negative "l2src\tests\unit_unknown_field.lm2" "unit_unknown_field" "unknown foreign field"
+Invoke-Negative "l2src\tests\unit_unknown_type.lm2" "unit_unknown_type" "unknown foreign type"
+Invoke-Negative "l2src\tests\unit_const_write.lm2" "unit_const_write" "const write"
+
+function Invoke-Views {
+    $refLm1 = Join-Path $out "views_ref.lm1"
+    $refC = Join-Path $out "views_ref.c"
+    $refExe = Join-Path $out "views_ref.exe"
+    $refOut = Join-Path $out "views_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser_text.lm1"
+include: "<stdio.h>" "<stdlib.h>"
+external:
+    fn: main () int
+        @: LmP0Text t 0
+        @: LmP0Text atom 0
+        @: LmP0Text pay 0
+        t: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        atom: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        pay: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        if: t = 0 || atom = 0 || pay = 0
+            return: 1
+        t\data: "hello"
+        t\length: 5U
+        c.printf("%d\n", lm_p0_text_equals(t, "hello"))
+        c.printf("%d\n", lm_p0_text_equals(t, "Hello"))
+        c.printf("%d\n", lm_p0_text_equals(t, "hell"))
+        c.printf("%d\n", lm_p0_text_equals(0, "hello"))
+        c.printf("%d\n", lm_p0_text_equals(t, 0))
+        t\data: ""
+        t\length: 0U
+        c.printf("%d\n", lm_p0_text_equals(t, ""))
+        t\data: "x"
+        t\length: 0U
+        c.printf("%d\n", lm_p0_text_equals(t, ""))
+        c.array: [4]: char nbuf
+        nbuf[0]: 97
+        nbuf[1]: 98
+        nbuf[2]: 0
+        nbuf[3]: 99
+        t\data: nbuf
+        t\length: 4U
+        c.printf("%d\n", lm_p0_text_equals(t, "ab"))
+        atom\data: "abc"
+        atom\length: 3U
+        c.printf("%d\n", lm_p0_identifier_payload(atom, pay))
+        c.printf("%d\n", pay\data = atom\data)
+        c.printf("%zu\n", pay\length)
+        atom\data: "`xy`"
+        atom\length: 4U
+        c.printf("%d\n", lm_p0_identifier_payload(atom, pay))
+        c.printf("%d\n", pay\data = atom\data + 1U)
+        c.printf("%zu\n", pay\length)
+        atom\data: "`x"
+        atom\length: 2U
+        c.printf("%d\n", lm_p0_identifier_payload(atom, pay))
+        c.printf("%zu\n", pay\length)
+        c.printf("%d\n", lm_p0_identifier_payload(0, pay))
+        c.printf("%d\n", lm_p0_identifier_payload(atom, 0))
+        atom\data: 0
+        atom\length: 1U
+        c.printf("%d\n", lm_p0_identifier_payload(atom, pay))
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed views_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "views_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'views_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "views_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_text_views.lm2" "parser_text_views" 0 "lm_p0_text_equals"
+    $lm1 = Join-Path $out "parser_text_views.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_text_equals') { throw "views must mangle method symbols" }
+    if ($text.IndexOf("const: @(LmP0Text") -lt 0) { throw "views missing const LmP0Text* formal" }
+    if ($text.IndexOf("@: LmP0Text") -lt 0) { throw "views missing mutable LmP0Text* formal" }
+    if ($text.IndexOf("size_t: l2_q0") -lt 0) { throw "views missing own size_t cache" }
+    if ($text.IndexOf("lmx_size_take") -lt 0) { throw "views missing size_t pool take" }
+    if ($text.IndexOf("l2_hash_eq") -lt 0) { throw "views missing hashed equals" }
+    if ($text.IndexOf("l2_hash_bind") -lt 0) { throw "views missing hash bind" }
+    if ($text.IndexOf("l1src/p0.h") -lt 0) { throw "views missing p0.h adapter include" }
+    if ($text.IndexOf("const-pointee") -lt 0) { throw "views intern comment must distinguish const pointee" }
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "views L1 missing generated main return" }
+    $drive = @"
+        @: LmP0Text t 0
+        @: LmP0Text atom 0
+        @: LmP0Text pay 0
+        @: Lmx f 0
+        c.array: [4]: char nbuf
+        c.array: [6]: char mut
+        t: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        atom: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        pay: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
+        if: t = 0 || atom = 0 || pay = 0
+            return: 1
+        t\data: "hello"
+        t\length: 5U
+        c.printf("%d\n", l2_m0(unit, t, "hello"))
+        c.printf("%d\n", l2_m0(unit, t, "Hello"))
+        c.printf("%d\n", l2_m0(unit, t, "hell"))
+        c.printf("%d\n", l2_m0(unit, 0, "hello"))
+        c.printf("%d\n", l2_m0(unit, t, 0))
+        t\data: ""
+        t\length: 0U
+        c.printf("%d\n", l2_m0(unit, t, ""))
+        t\data: "x"
+        t\length: 0U
+        c.printf("%d\n", l2_m0(unit, t, ""))
+        nbuf[0]: 97
+        nbuf[1]: 98
+        nbuf[2]: 0
+        nbuf[3]: 99
+        t\data: nbuf
+        t\length: 4U
+        c.printf("%d\n", l2_m0(unit, t, "ab"))
+        atom\data: "abc"
+        atom\length: 3U
+        c.printf("%d\n", l2_m1(unit, atom, pay))
+        c.printf("%d\n", pay\data = atom\data)
+        c.printf("%zu\n", pay\length)
+        atom\data: "`xy`"
+        atom\length: 4U
+        c.printf("%d\n", l2_m1(unit, atom, pay))
+        c.printf("%d\n", pay\data = atom\data + 1U)
+        c.printf("%zu\n", pay\length)
+        atom\data: "`x"
+        atom\length: 2U
+        c.printf("%d\n", l2_m1(unit, atom, pay))
+        c.printf("%zu\n", pay\length)
+        c.printf("%d\n", l2_m1(unit, 0, pay))
+        c.printf("%d\n", l2_m1(unit, atom, 0))
+        atom\data: 0
+        atom\length: 1U
+        c.printf("%d\n", l2_m1(unit, atom, pay))
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%zu\n", lmx_size_value(f\data))
+        t\data: "ab"
+        t\length: 2U
+        c.printf("%d\n", l2_m0(unit, t, "ab"))
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%zu\n", lmx_size_value(f\data))
+        c.printf("%d\n", l2_m0(unit, 0, "zzzz"))
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%zu\n", lmx_size_value(f\data))
+        atom\data: "bbb"
+        atom\length: 3U
+        c.printf("%d\n", l2_m1(unit, atom, pay))
+        c.printf("%d\n", l2_m0(unit, pay, "bbb"))
+        if: l2_hash_inject(pay, "aaa") != 0
+            return: 1
+        c.printf("%d\n", l2_m0(unit, pay, "aaa"))
+        mut[0]: 104
+        mut[1]: 101
+        mut[2]: 108
+        mut[3]: 108
+        mut[4]: 111
+        mut[5]: 0
+        t\data: mut
+        t\length: 5U
+        if: l2_hash_unbind(t) = 0
+            t\data: t\data
+        c.printf("%d\n", l2_m0(unit, t, "hello"))
+        mut[0]: 120
+        c.printf("%d\n", l2_m0(unit, t, "hello"))
+        c.printf("%d\n", l2_m0(unit, t, "xello"))
+        atom\data: "hello"
+        atom\length: 5U
+        c.printf("%d\n", l2_m1(unit, atom, pay))
+        pay\data: "zzz"
+        pay\length: 3U
+        c.printf("%d\n", l2_m0(unit, pay, "zzz"))
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "views_l2_drive.lm1"
+    $drvC = Join-Path $out "views_l2_drive.c"
+    $drvExe = Join-Path $out "views_l2_drive.exe"
+    $drvOut = Join-Path $out "views_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed views_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "views_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'views_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "views_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    $alines = $a.Split("`n") | Where-Object { $_ -ne "" }
+    $blines = $b.Split("`n") | Where-Object { $_ -ne "" }
+    if ($alines.Count -ne 19) { throw "views_ref expected 19 lines, got $($alines.Count) : $a" }
+    if ($blines.Count -lt 19) { throw "views_l2 shorter than L1 ref, got $($blines.Count) : $b" }
+    for ($i = 0; $i -lt 19; $i++) {
+        if ($alines[$i] -ne $blines[$i]) { throw "views mismatch vs parser_text.lm1 at $i ref=$($alines[$i]) l2=$($blines[$i])" }
+    }
+    $got = ($blines[19..($blines.Count - 1)] -join ",")
+    $want = "2,1,2,0,2,1,1,0,1,0,1,1,1"
+    if ($got -ne $want) { throw "views extra own/hash/mutation got=$got want=$want full=$b" }
+}
+
+Invoke-Views
+
 "l2trans $gen ok"

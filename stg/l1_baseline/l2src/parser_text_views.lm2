@@ -1,0 +1,23 @@
+fn: lm_p0_text_equals (const: @(LmP0Text text); const: @(char value)) int
+    size_t: value_length
+    if: text = 0 || value = 0
+        return: 0
+    value_length: c.strlen(value)
+    if: text\length != value_length
+        return: 0
+    return: l2_hash_eq(text, value, value_length)
+end: lm_p0_text_equals
+fn: lm_p0_identifier_payload (const: @(LmP0Text atom); @: LmP0Text out_payload) int
+    if: atom = 0 || out_payload = 0 || atom\data = 0
+        return: 0
+    out_payload\data: atom\data
+    out_payload\length: atom\length
+    if: atom\length >= 2U && atom\data[0] = 96 && atom\data[atom\length - 1U] = 96
+        out_payload\data: atom\data + 1U
+        out_payload\length: atom\length - 2U
+    l2_hash_bind(out_payload)
+    return: 1
+end: lm_p0_identifier_payload
+fn: main () int
+    return: 0
+end: main

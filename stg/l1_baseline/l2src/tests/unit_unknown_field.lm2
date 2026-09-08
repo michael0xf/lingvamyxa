@@ -1,0 +1,6 @@
+fn: m (const: @(LmP0Text t); int: z) int
+    return: t\foo = 0
+end: m
+fn: main () int
+    return: 0
+end: main
