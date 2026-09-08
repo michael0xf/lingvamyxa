@@ -376,6 +376,57 @@ gives the first outright. It does not give the second: whether the caller has
 dirty own fields across the call is a property of the CALLER, and const on the
 callee says nothing about it.
 
+
+Correction: a typed service array grows, and grows by chunking
+---------------------------------------------------------------
+Unit 2 refused to grow and recorded that as AVOIDED. That was wrong: a
+non-const variable LIVES in the big array of its C type, so the array has to
+grow. Corrected, and the growth mechanism is forced rather than chosen.
+
+What the spec permits. SPEC 2: "Live addresses are stable unless relocation
+atomically rewrites every affected reference/root/index key." ABI 14.9 repeats
+it: stability comes "either by not moving a live node or by atomically
+rewriting every reference and re-keying its side-table entry". So relocation is
+allowed on paper.
+
+Why it is not taken. To rewrite every reference you must first find them, which
+needs a back index from a cell to everything pointing at it. That is a second
+per-node side table, which SPEC 2 forbids - the reverse name index is the only
+one allowed - and it is the machinery NOTES section 5 warns accumulates around a
+correct architecture. So: never move.
+
+Growth therefore adds a CHUNK, and each chunk registers as one more range with
+the same kind and type. A typed service array is a SET of registered ranges, not
+one range. Every address handed out before a growth stays valid and still
+classifies, which the pool selftest asserts directly: after growth the earlier
+entries keep their type and their contents.
+
+Two disciplines share this machinery, and the contrast is the point:
+
+    interned immutable atoms   all_chars_array has its 256 cells from init,
+                               addressed by value, never grows (14.7 settled)
+    mutable variable cells     handed out one at a time, the array grows to fit
+
+What makes an entry a char is the range it sits in, not which discipline put it
+there.
+
+ABI 14.8  Pool block allocation, growth, range registration
+    Growth is now RESOLVED as chunking with per-chunk range registration. Still
+    open: how big a chunk should be, and whether chunk size should vary. The
+    code takes a chunk capacity at open and keeps it, which is a placeholder,
+    not an answer.
+
+ABI 14.9  Allocation and arenas
+    Unchanged and still ASK at the first Message. Chunks come from calloc
+    because no Message exists yet; 14.9 requires them to come from the owning
+    Message's one arena.
+
+Cost to watch, recorded now rather than discovered later. Classification scans
+ranges linearly, and chunking multiplies the number of ranges. That is fine
+while ranges are few and it is on the hot path, so it will need a real lookup
+before it is fine at scale. Not a correctness problem, and not solved by
+guessing at this stage.
+
 Carried forward, not yet touched
 --------------------------------
 ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).

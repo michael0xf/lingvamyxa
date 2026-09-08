@@ -85,34 +85,40 @@ typedef struct LmxRange {
     int type;
 } LmxRange;
 
-/* A typed service pool: one contiguous block of same-sized entries whose
- * address range is registered under one kind. 2 lists them - a primitive pool
- * such as all_chars_array, all_methods_array of {addr, sig} records, a typed
- * Array pool all_array_of_T of {len, data} descriptors. Pool storage and the
- * application storage an entry describes are different things (6.5).
+/* A typed service array. 2 lists them and 6.5 spells the Array one out: one per
+ * primitive C type, one of {addr, sig} method records, one of {len, data} Array
+ * descriptors per element type.
  *
- * The pool header is not an Lmx node and is never handed out; only entry
- * addresses are, and an entry's type is read from the range it lands in. */
-/* No name table lives here, and that is deliberate.
+ * A non-const variable LIVES in the big array of its type, so that array has to
+ * grow. It cannot grow by reallocating: 2 requires live addresses to be stable
+ * unless relocation atomically rewrites every affected reference, root and
+ * index key, and a service array full of live cells is the worst possible thing
+ * to relocate. So it grows by adding a CHUNK, and each chunk registers as one
+ * more range carrying the same kind and type.
  *
- * Field names are known at translation time. treeranch resolves to a fixed
- * index in the branch block, and the runtime does pointer arithmetic; the
- * generated C never sees a name. 2 says as much - "A resolved reference is used
- * directly and needs no name lookup" - and the type of a void * is read from the
- * address range it falls in, never from a lookup.
+ * A typed service array is therefore a set of registered ranges, not one range.
+ * Classification is unaffected - an address falls in exactly one chunk, and
+ * every chunk of the array answers with the same type.
  *
- * 2 does keep one name aid on the books, the reverse index Lmx * -> ShortNameId.
- * It is for runtime TEXTUAL lookup and for reconstructing a current full path
- * from sibling ordinals and node links - diagnostics and genuinely dynamic
- * access. It is not part of ordinary field resolution, and building it before
- * something needs those two things invites exactly the error this comment
- * replaces: resolving a compiled path by comparing names at runtime. */
+ * Two disciplines share this machinery, which is the point. Interned immutable
+ * atoms are laid out once and addressed by value - all_chars_array has its 256
+ * cells from the start and never grows (14.7's settled half). Mutable variable
+ * cells are handed out one at a time and the array grows to fit them. What makes
+ * an entry a char is the range it sits in, not which discipline produced it. */
+typedef struct LmxChunk LmxChunk;
 
-typedef struct LmxPool {
+struct LmxChunk {
     void *base;
-    size_t stride;
     size_t capacity;
     size_t count;
+    LmxChunk *next;
+};
+
+typedef struct LmxPool {
+    LmxChunk *head;
+    LmxChunk *tail;
+    size_t stride;
+    size_t chunk_capacity;
     int kind;
     int type;
 } LmxPool;

@@ -112,7 +112,7 @@ fn: main () int
         c.printf("lmx: repointed payload lost its classification\n")
         failures: failures + 1
 
-    c.free(arrays\base)
+    lmx_pool_release(arrays)
     c.free(arrays)
     c.free(node)
     c.free(other)

@@ -1,6 +1,6 @@
 predef: "l2src/lmx_pool.lm1"
 
-# The interned character pool. Lingvamyxa_spec.txt 2, 21.4; ABI 14.7.
+# The interned character array. Lingvamyxa_spec.txt 2, 21.4; ABI 14.7.
 #
 # 2 works the example out in full: a primitive field
 #
@@ -13,16 +13,14 @@ predef: "l2src/lmx_pool.lm1"
 # their primitive address" - and leaves mutable cells, large numbers, byte
 # buffers and foreign handles open. This unit implements only the settled half.
 #
-# Immutability is enforced by construction: the block is filled once at init and
-# this unit offers no mutator. A physically const pool would say it in the type
-# as well, but that ties into the per-range physical class policy 14.7 leaves
-# open, so it is not claimed here.
+# It uses the same pool machinery as the growable arrays but a different
+# discipline, and that contrast is the point. Here all 256 cells exist from init
+# and are addressed by the character value itself, so the array never grows. A
+# mutable variable of the same C type would live in a growing array instead.
+# What makes an entry a char is the range it sits in, not which discipline put
+# it there.
 #
-# Handout differs from the method and array pools on purpose. Those hand out the
-# next free entry; here every entry is live from init and is addressed by the
-# character value itself. Same pool primitive, different discipline - which is
-# the point, since what makes an entry a primitive is its range, not how it was
-# obtained.
+# Immutability is enforced by construction: filled once at init, no mutator.
 
 @: LmxPool lmx_chars_pool 0
 
@@ -38,7 +36,7 @@ fn: lmx_chars_init () int
         c.free(lmx_chars_pool)
         lmx_chars_pool: 0
         return: 1
-    cells: (cast: (@: char) lmx_chars_pool\base)
+    cells: (cast: (@: char) lmx_chars_pool\head\base)
     index: 0U
     while: index < 256U
         cells[index]: (cast: (char) index)
@@ -48,7 +46,7 @@ return: 0
 
 sub: lmx_chars_release ()
     if: lmx_chars_pool != 0
-        c.free(lmx_chars_pool\base)
+        lmx_pool_release(lmx_chars_pool)
         c.free(lmx_chars_pool)
     ---
     lmx_chars_pool: 0
@@ -65,23 +63,22 @@ fn: lmx_char_cell (int: value) @: void
         return: 0
     if: value > 255
         return: 0
-    cells: (cast: (@: char) lmx_chars_pool\base)
+    cells: (cast: (@: char) lmx_chars_pool\head\base)
 return: (cast: (@: void) (cells + value))
 
 # Reads the character back through its address. Refuses anything the classifier
-# does not call a primitive, so a wrong-range pointer cannot be read as a char.
+# does not call a char, so a pointer into another typed array cannot be read as
+# one.
 fn: lmx_char_value (@: void cell) int
     @: char p
     if: cell = 0
         return: -1
-    if: lmx_classify(cell) != c.LMX_KIND_PRIMITIVE
+    if: lmx_type_of(cell) != c.LMX_TYPE_CHAR
         return: -1
     p: (cast: (@: char) cell)
-    # Masked rather than cast through an unsigned char type, and deliberately.
-    # (cast: (unsigned char) x) is a real L1 defect - it splits the type and
-    # emits ((unsigned)charx). (cast: (uchar) x) is NOT a defect: L1 passes the
-    # alias through and l1src/p0.h typedefs it, which is why l1trans's own
-    # emitted C carries ((uchar)c) and compiles. This unit does not include
-    # p0.h and should not - that header belongs to the P0 parser, not to L2.
-    # The mask depends on neither, and is exact for every cell this pool holds.
+    # Masked rather than cast through an unsigned char type. (cast: (unsigned
+    # char) x) is a real L1 defect - it splits the type and emits
+    # ((unsigned)charx). (cast: (uchar) x) is not a defect: L1 passes the alias
+    # through and l1src/p0.h typedefs it, which this unit does not include and
+    # should not. The mask depends on neither.
 return: ((cast: (int) p[0]) & 255)

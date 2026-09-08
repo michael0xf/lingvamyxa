@@ -1,56 +1,128 @@
 predef: "l2src/lmx_range.lm1"
 include: "<stdlib.h>"
 
-# Typed service pools. Lingvamyxa_spec.txt 2, 6.5.
+# Typed service arrays. Lingvamyxa_spec.txt 2, 6.5; ABI 14.8, 14.9.
 #
-# 2 lists what the pools hold: a primitive pool, all_methods_array of
-# {addr, sig} method records, a typed Array pool all_array_of_T of {len, data}
-# descriptors. A pool is one contiguous block of same-sized entries whose whole
-# address range is registered under one kind, so handing out an entry hands out
-# its type at the same time, with nothing stored to say so.
+# 2 lists them and 6.5 spells the Array one out: one per primitive C type, one
+# of {addr, sig} method records, and one of {len, data} Array descriptors per
+# element type. A non-const variable lives in the big array of its type, so the
+# array must grow.
+#
+# It grows by adding a CHUNK, never by reallocating. 2 requires live addresses
+# to be stable unless relocation atomically rewrites every affected reference,
+# root and index key, and an array full of live cells is the worst thing to
+# relocate. Each chunk registers as one more range with the same kind and type,
+# so a typed service array is a SET of ranges. Classification is unaffected: an
+# address falls in exactly one chunk, and every chunk answers with the same type.
 #
 # The pool header is never handed out and is not an Lmx node. Entries are
 # addressed, never taken by value.
 
-fn: lmx_pool_open (@: LmxPool pool; size_t: stride; size_t: capacity; int: kind; int: type) int
+fn: lmx_pool_add_chunk (@: LmxPool pool) int
+    @: LmxChunk chunk
     @: void block
     size_t: bytes
     if: pool = 0
         return: 1
-    if: stride = 0U
+    if: pool\stride = 0U
         return: 1
-    if: capacity = 0U
+    if: pool\chunk_capacity = 0U
         return: 1
-    if: capacity > ((cast: (size_t) -1) / stride)
+    if: pool\chunk_capacity > ((cast: (size_t) -1) / pool\stride)
         return: 1
-    bytes: capacity * stride
-    block: c.calloc(capacity, stride)
+    bytes: pool\chunk_capacity * pool\stride
+    block: c.calloc(pool\chunk_capacity, pool\stride)
     if: block = 0
         return: 1
-    if: lmx_range_register(block, (cast: (@: void) ((cast: (@: char) block) + bytes)), stride, kind, type) != 0
+    chunk: (cast: (@: LmxChunk) c.calloc(1U, c.sizeof(c.LmxChunk)))
+    if: chunk = 0
         c.free(block)
         return: 1
-    pool\base: block
-    pool\stride: stride
-    pool\capacity: capacity
-    pool\count: 0U
-    pool\kind: kind
-    pool\type: type
+    if: lmx_range_register(block, (cast: (@: void) ((cast: (@: char) block) + bytes)), pool\stride, pool\kind, pool\type) != 0
+        c.free(chunk)
+        c.free(block)
+        return: 1
+    chunk\base: block
+    chunk\capacity: pool\chunk_capacity
+    chunk\count: 0U
+    chunk\next: 0
+    if: pool\head = 0
+        pool\head: chunk
+    ---
+    if: pool\tail != 0
+        pool\tail\next: chunk
+    ---
+    pool\tail: chunk
 return: 0
 
-# Hands out the next entry address. The caller learns nothing about the entry
-# from this call that lmx_classify would not tell it from the address alone.
+fn: lmx_pool_open (@: LmxPool pool; size_t: stride; size_t: chunk_capacity; int: kind; int: type) int
+    if: pool = 0
+        return: 1
+    if: stride = 0U
+        return: 1
+    if: chunk_capacity = 0U
+        return: 1
+    if: pool\head != 0
+        return: 1
+    pool\stride: stride
+    pool\chunk_capacity: chunk_capacity
+    pool\kind: kind
+    pool\type: type
+    pool\head: 0
+    pool\tail: 0
+return: lmx_pool_add_chunk(pool)
+
+sub: lmx_pool_release (@: LmxPool pool)
+    @: LmxChunk chunk
+    @: LmxChunk next
+    if: pool != 0
+        chunk: pool\head
+        while: chunk != 0
+            next: chunk\next
+            if: chunk\base != 0
+                c.free(chunk\base)
+            ---
+            c.free(chunk)
+            chunk: next
+        ---
+        pool\head: 0
+        pool\tail: 0
+    ---
+end: lmx_pool_release
+
+# Hands out the next entry address, adding a chunk when the last one is full.
+# The caller learns nothing from this call that lmx_classify and lmx_type_of
+# would not tell it from the address alone.
 fn: lmx_pool_take (@: LmxPool pool) @: void
+    @: LmxChunk chunk
     @: void entry
     if: pool = 0
         return: 0
-    if: pool\base = 0
+    if: pool\tail = 0
         return: 0
-    if: pool\count >= pool\capacity
-        return: 0
-    entry: (cast: (@: void) ((cast: (@: char) pool\base) + pool\count * pool\stride))
-    pool\count: pool\count + 1U
+    chunk: pool\tail
+    if: chunk\count >= chunk\capacity
+        if: lmx_pool_add_chunk(pool) != 0
+            return: 0
+        chunk: pool\tail
+    ---
+    entry: (cast: (@: void) ((cast: (@: char) chunk\base) + chunk\count * pool\stride))
+    chunk\count: chunk\count + 1U
 return: entry
+
+# Total entries handed out across every chunk.
+fn: lmx_pool_count (@: LmxPool pool) size_t
+    @: LmxChunk chunk
+    size_t: total
+    total: 0U
+    if: pool = 0
+        return: 0U
+    chunk: pool\head
+    while: chunk != 0
+        total: total + chunk\count
+        chunk: chunk\next
+    ---
+return: total
 
 # An immutable method record (2). addr is the generated C entry, sig fixes the
 # typed input list. Neither is interpreted here: this unit stores them and
