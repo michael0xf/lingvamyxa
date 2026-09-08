@@ -1,0 +1,8 @@
+L2:
+    fn: add (int: a; int: b) int
+        return: a + z
+    end: add
+    fn: main () int
+        return: add(1, 2) != 3
+    end: main
+end: L2

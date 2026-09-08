@@ -1,0 +1,6 @@
+fn: sum (int: x; int: y) int
+    return: x + y
+end: sum
+fn: main () int
+    return: sum(4, 5) != 9
+end: main

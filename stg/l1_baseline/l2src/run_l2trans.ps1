@@ -190,4 +190,44 @@ Invoke-Negative "l2src\tests\entry_puts_extra_arg.lm2" "entry_puts_extra_arg" "e
 Invoke-Negative "l2src\tests\entry_puts_after_return.lm2" "entry_puts_after_return" "unsupported body"
 Invoke-Negative "l2src\tests\entry_puts_nested.lm2" "entry_puts_nested" "unsupported argument"
 
+function Invoke-Leaf([string]$src, [string]$stem, [int]$expect, [string]$name) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $exe = Join-Path $out ($stem + ".exe")
+    $err = Join-Path $out ($stem + ".err")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $err
+        throw "l2trans failed: $src"
+    }
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
+    if ($text.IndexOf("fn: $name") -lt 0) { throw "$stem L1 missing fn: $name" }
+    if ($text.IndexOf("@: Lmx") -lt 0) { throw "$stem L1 missing Lmx node" }
+    if ($text.IndexOf("LmxMethod") -lt 0) { throw "$stem L1 missing method record" }
+    if ($text.IndexOf("lmx_classify") -lt 0) { throw "$stem L1 missing classify" }
+    if ($text.IndexOf("${name}(leaf") -lt 0 -and $text.IndexOf("${name}(leaf\") -lt 0) {
+        if ($text -notmatch [regex]::Escape($name) + "\(leaf") { throw "$stem L1 missing typed call" }
+    }
+    & $l1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
+    $ctext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $cpath))
+    if ($ctext.IndexOf("Lmx *node") -lt 0 -and $ctext.IndexOf("Lmx* node") -lt 0) {
+        if ($ctext -notmatch "Lmx\s*\*\s*node") { throw "$stem C missing node parameter" }
+    }
+    Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
+    & $exe
+    if ($LASTEXITCODE -ne $expect) {
+        throw "$stem exe exit $($LASTEXITCODE) expected $expect"
+    }
+}
+
+Invoke-Leaf "l2src\tests\add.lm2" "add" 0 "add"
+Invoke-Leaf "l2src\tests\entry_sum.lm2" "entry_sum" 0 "sum"
+Invoke-Leaf "l2src\tests\entry_add_ret.lm2" "entry_add_ret" 5 "add"
+Invoke-Negative "l2src\tests\entry_unknown_method.lm2" "entry_unknown_method" "unknown method"
+Invoke-Negative "l2src\tests\entry_bad_arity.lm2" "entry_bad_arity" "incompatible entry signature"
+Invoke-Negative "l2src\tests\entry_unresolved.lm2" "entry_unresolved" "unresolved name"
+Invoke-Negative "l2src\tests\entry_trailer.lm2" "entry_trailer" "unsupported trailer"
+
 "l2trans $gen ok"
