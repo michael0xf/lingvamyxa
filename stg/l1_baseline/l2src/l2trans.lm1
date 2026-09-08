@@ -1935,6 +1935,7 @@ fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char de
     int: fi
     int: t
     int: child
+    c.array: [32]: char deep
     if: dest = 0 || callee < 0 || k < 0 || k >= l2_m_dyn[callee]
         return: 1
     nm: l2_m_dn[callee * 4 + k]
@@ -1960,11 +1961,17 @@ fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char de
     child: l2_own_find(nm)
     if: child < 0 || l2_call_node = 0
         return: 1
+    if: l2_bump_ind(ind, deep) != 0
+        return: 1
     if: c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(%s, %uU)\n%sif: l2_xp = 0\n", ind, l2_call_node, (cast: (unsigned) child), ind) < 0
         return: 1
-    if: mi >= 0 && l2_m_ret[mi] = 2 && c.fprintf(l2_out, "%s    return: 0U\n", ind) < 0
+    if: l2_emit_checkpoint(mi, deep) != 0
         return: 1
-    if: (mi < 0 || l2_m_ret[mi] != 2) && c.fprintf(l2_out, "%s    return: 0\n", ind) < 0
+    if: mi >= 0 && l2_m_ret[mi] = 8 && c.fprintf(l2_out, "%sreturn\n", deep) < 0
+        return: 1
+    if: mi >= 0 && l2_m_ret[mi] = 2 && c.fprintf(l2_out, "%sreturn: 0U\n", deep) < 0
+        return: 1
+    if: (mi < 0 || (l2_m_ret[mi] != 2 && l2_m_ret[mi] != 8)) && c.fprintf(l2_out, "%sreturn: 0\n", deep) < 0
         return: 1
     t: l2_tn
     l2_tn: l2_tn + 1
@@ -2291,30 +2298,6 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: 1
 return: l2_tok_temp(t, dest)
 
-fn: l2_inline_call (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest) int
-    @: LmP0Field a0
-    int: cidx
-    c.array: [64]: char one
-    if: node = 0 || node\as = 0 || dest = 0
-        return: 1
-    cidx: l2_find_method(node\as\frame\head)
-    if: cidx < 0
-        return: 1
-    if: l2_tok_sym(cidx, one) != 0 || l2_cat(dest, one) != 0
-        return: 1
-    if: l2_cat(dest, "(") != 0 || l2_cat(dest, l2_call_node) != 0
-        return: 1
-    a0: l2_next_active(node\as\frame\body\first_field)
-    while: a0 != 0
-        if: l2_prep(a0\value, mi, ind, one) != 0
-            return: 1
-        if: l2_cat(dest, ", ") != 0 || l2_cat(dest, one) != 0
-            return: 1
-        a0: l2_next_active(a0\next)
-    if: l2_cat(dest, ")") != 0
-        return: 1
-return: 0
-
 fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
     @: LmP0Field f
     int: i
@@ -2360,7 +2343,7 @@ fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
                 return: 1
             ao: l2_is_andor(f\value\as\atom)
             fld: 2
-        if: fld = 0 && ao != 0 && f\value\kind = c.LM_P0_NODE_FRAME && l2_find_method(f\value\as\frame\head) >= 0 && l2_inline_call(f\value, mi, ind, buf) != 0
+        if: fld = 0 && ao != 0 && f\value\kind = c.LM_P0_NODE_FRAME && l2_find_method(f\value\as\frame\head) >= 0
             return: 1
         if: fld = 0 && (ao = 0 || f\value\kind != c.LM_P0_NODE_FRAME || l2_find_method(f\value\as\frame\head) < 0) && l2_prep(f\value, mi, ind, l2_rhs) != 0
             return: 1

@@ -1331,4 +1331,35 @@ Invoke-Negative "l2src\tests\unit_dyn_miss.lm2" "unit_dyn_miss" "unresolved name
 Invoke-Negative "l2src\tests\unit_dyn_type.lm2" "unit_dyn_type" "incompatible entry signature"
 Invoke-Negative "l2src\tests\unit_dyn_cap.lm2" "unit_dyn_cap" "unsupported body"
 
+Invoke-Leaf "l2src\tests\unit_dyn_bool.lm2" "unit_dyn_bool" 0 "m"
+$dbool = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_bool.lm1")))
+if ($dbool -match '&& l2_m' -or $dbool -match '\|\| l2_m') { throw "hidden &&/|| must not inline a method call into C &&/||" }
+if ($dbool -notmatch 'l2_m0\(node, l2_q0\)' -and $dbool -notmatch 'l2_m0\(node, l2_p') { throw "executed hidden &&/|| call must pass full ABI" }
+if ($dbool -notmatch 'if: l2_t') { throw "hidden &&/|| must use guarded if so skipped RHS does not prep" }
+$dbv = Invoke-SpliceDrive "unit_dyn_bool" @"
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", l2_m3(unit, 0))
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", l2_m3(unit, 1))
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", l2_m3(unit, 2))
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", l2_m3(unit, 3))
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", l2_m3(unit, 4))
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", l2_m3(unit, 5))
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", l2_m3(unit, 6))
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", l2_m3(unit, 7))
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+# skip, skip, run, run, mid run, mid skip, wrap(leaf) run, wrap skip
+if ($dbv -ne "0`n65`n1`n65`n1`n90`n1`n90`n1`n90`n0`n65`n1`n90`n0`n65`n") { throw "dyn bool hidden &&/||: $dbv" }
+
 "l2trans $gen ok"
