@@ -1,0 +1,7 @@
+include: "<stdio.h>"
+external:
+    fn: main () int
+        LmxRange: b
+        return: 0
+    end: main
+end: external

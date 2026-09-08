@@ -6450,6 +6450,25 @@ int l1_is_type_name(const LmP0Text * text)
     }
     return 0;
 }
+int l1_head_is_unknown_type(const LmP0Text * head)
+{
+    size_t start = 0U;
+    unsigned ch = 0U;
+    if (head == 0 || head -> data == 0 || head -> length == 0U) {
+    return 0;
+    }
+    if (l1_text_starts(head, "c.") && head -> length > 2U) {
+    start = 2U;
+    }
+    ch = (((unsigned)head -> data[start]));
+    if (ch < 65U || ch > 90U) {
+    return 0;
+    }
+    if (start == 0U && l1_is_type_name(head)) {
+    return 0;
+    }
+    return 1;
+}
 int l1_is_keyword(const LmP0Text * text)
 {
     if (l1_text_eq(text, "fn")) {
@@ -7721,12 +7740,24 @@ int l1_emit_cast(FILE * out, const LmP0Structure * body, const char * path)
     if (l1_emit_type_token(out, inner->value, path) != 0) {
     return 1;
     }
-    if (l1_write_cstr(out, ")") != 0) {
+    inner = inner -> next;
+    while (inner != 0 && l1_node_ignored(inner->value)) {
+    inner = inner -> next;
+    }
+    while (inner != 0 && inner -> value != 0 && inner -> value -> kind == LM_P0_NODE_ATOM && l1_is_type_name(inner->value->as->atom)) {
+    if (l1_write_cstr(out, " ") != 0) {
+    return 1;
+    }
+    if (l1_write_type_spelling(out, inner->value->as->atom, path, inner->value) != 0) {
     return 1;
     }
     inner = inner -> next;
     while (inner != 0 && l1_node_ignored(inner->value)) {
     inner = inner -> next;
+    }
+    }
+    if (l1_write_cstr(out, ")") != 0) {
+    return 1;
     }
     if (inner != 0) {
     if (l1_emit_expr_range(out, inner, 0, path, 0) != 0) {
@@ -9554,6 +9585,9 @@ int l1_emit_stmt(FILE * out, const LmP0Node * node, const char * path)
     }
     return l1_write_cstr(out, ";\n");
     }
+    if ((frame -> flags & LM_P0_FRAME_COLON) != 0U && l1_is_keyword(head) == 0 && l1_head_is_unknown_type(head)) {
+    return l1_error(path, node, "unknown type name");
+    }
     if (l1_text_starts(head, "c.") == 0 && l1_is_keyword(head) == 0 && (frame -> flags & LM_P0_FRAME_COLON) != 0U) {
     field = 0;
     if (frame -> body != 0) {
@@ -10085,7 +10119,7 @@ int l1_emit_fn(FILE * out, const LmP0Frame * frame, const char * path, int is_su
     if (l1_emit_param_list(out, params_node, path) != 0) {
     return 1;
     }
-    if ((body_node == 0 || only_throws != 0) && (frame -> trailer == 0 || frame -> trailer -> spelling == 0 || l1_text_eq(frame->trailer->spelling, "return") == 0)) {
+    if ((body_node == 0 || only_throws != 0) && (frame -> trailer == 0 || frame -> trailer -> spelling == 0 || (l1_text_eq(frame->trailer->spelling, "return") == 0 && l1_text_eq(frame->trailer->spelling, "end") == 0))) {
     return l1_write_cstr(out, ");\n");
     }
     if (l1_write_cstr(out, ")\n{\n") != 0) {
@@ -10776,6 +10810,9 @@ int l1_validate_implicit_node(const LmP0Node * node, const char * path, int top)
     return l1_error(path, node, "reserved L1 name");
     }
     if (top != 0 && l1_unit_item_ok(node->as->frame->head) == 0) {
+    if ((node -> as -> frame -> flags & LM_P0_FRAME_COLON) != 0U && l1_head_is_unknown_type(node->as->frame->head)) {
+    return l1_error(path, node, "unknown type name");
+    }
     return l1_error(path, node, "unsupported L1 form");
     }
     if (l1_text_eq(node->as->frame->head, "case")) {
@@ -11107,6 +11144,9 @@ int l1_emit_item(FILE * out, const LmP0Node * node, const char * path, int in_l1
     }
     if (l1_text_eq(node->as->frame->head, "L2") || l1_text_eq(node->as->frame->head, "L3")) {
     return 0;
+    }
+    if ((node -> as -> frame -> flags & LM_P0_FRAME_COLON) != 0U && l1_head_is_unknown_type(node->as->frame->head)) {
+    return l1_error(path, node, "unknown type name");
     }
     return l1_error(path, node, "unsupported L1 form");
 }
