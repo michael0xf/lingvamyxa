@@ -1,0 +1,285 @@
+predef: "l1src/parser.lm1"
+include: "<stdio.h>" "<string.h>"
+
+# Narrow L2 -> L1 frontend: one bootstrap main that returns a non-negative
+# decimal literal. P0 parse, subset check, emit L1. Not a general L2 method ABI.
+
+fn: l2_text_eq (const: @(LmP0Text text); const: @(char s)) int
+    size_t: n
+    if: text = 0 || s = 0
+        return: 0
+    n: c.strlen(s)
+    if: text\data = 0
+        return: n = 0U
+return: text\length = n && c.memcmp(text\data, s, n) = 0
+
+fn: l2_ignored (const: @(LmP0Node node)) int
+    if: node = 0
+        return: 1
+    if: node\kind = c.LM_P0_NODE_DISABLED
+        return: 1
+    if: (node\flags & c.LM_P0_NODE_INACTIVE) != 0U
+        return: 1
+return: 0
+
+fn: l2_error (const: @(char path); const: @(LmP0Node node); const: @(char msg)) int
+    size_t: line 1U
+    size_t: column 1U
+    if: node != 0 && node\span != 0
+        line: node\span\line
+        column: node\span\column
+    if: path = 0
+        path: ""
+    c.fprintf(c.stderr, "l2trans error: %s:%zu:%zu: %s\n", path, line, column, msg)
+return: 1
+
+fn: l2_path_is_lm2 (const: @(char path)) int
+    size_t: n
+    if: path = 0
+        return: 0
+    n: c.strlen(path)
+    if: n < 4U
+        return: 0
+    if: path[n - 4U] != 46
+        return: 0
+    if: path[n - 3U] != 108 && path[n - 3U] != 76
+        return: 0
+    if: path[n - 2U] != 109 && path[n - 2U] != 77
+        return: 0
+    if: path[n - 1U] != 50
+        return: 0
+return: 1
+
+fn: l2_next_active (@: LmP0Field field) @: LmP0Field
+    while: field != 0 && l2_ignored(field\value)
+        field: field\next
+return: field
+
+fn: l2_count_active (const: @(LmP0Structure body)) int
+    @: LmP0Field field
+    int: n 0
+    if: body = 0
+        return: 0
+    field: l2_next_active(body\first_field)
+    while: field != 0
+        n: n + 1
+        field: l2_next_active(field\next)
+return: n
+
+fn: l2_is_uint (const: @(LmP0Text text)) int
+    size_t: i
+    if: text = 0 || text\data = 0 || text\length = 0U
+        return: 0
+    if: text\length > 10U
+        return: 0
+    i: 0U
+    while: i < text\length
+        if: text\data[i] < 48 || text\data[i] > 57
+            return: 0
+        i: i + 1U
+    if: text\length > 1U && text\data[0] = 48
+        return: 0
+return: 1
+
+fn: l2_end_named (const: @(LmP0Frame frame); const: @(char name)) int
+    @: LmP0Field field
+    if: frame = 0 || frame\trailer = 0
+        return: 0
+    if: l2_text_eq(frame\trailer\spelling, "end") = 0
+        return: 0
+    if: frame\trailer\body = 0
+        return: 0
+    field: l2_next_active(frame\trailer\body\first_field)
+    if: field = 0 || l2_next_active(field\next) != 0
+        return: 0
+    if: field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM
+        return: 0
+return: l2_text_eq(field\value\as\atom, name)
+
+fn: l2_frame_head (const: @(LmP0Node node); const: @(char name)) int
+    if: node = 0 || node\kind != c.LM_P0_NODE_FRAME || node\as = 0 || node\as\frame = 0
+        return: 0
+return: l2_text_eq(node\as\frame\head, name)
+
+fn: l2_empty_struct (const: @(LmP0Node node)) int
+    if: node = 0 || node\kind != c.LM_P0_NODE_STRUCTURE || node\as = 0
+        return: 0
+return: l2_count_active(node\as\structure) = 0
+
+fn: l2_take_return_lit (const: @(LmP0Node body_node); const: @(char path); @@: LmP0Text out_lit) int
+    @: LmP0Field field
+    const: @: LmP0Node stmt
+    const: @: LmP0Frame ret
+    @: LmP0Field arg
+    if: out_lit = 0
+        return: l2_error(path, body_node, "internal: missing return slot")
+    out_lit[0]: 0
+    if: body_node = 0 || body_node\kind != c.LM_P0_NODE_STRUCTURE || body_node\as = 0
+        return: l2_error(path, body_node, "unsupported body")
+    if: l2_count_active(body_node\as\structure) != 1
+        return: l2_error(path, body_node, "unsupported body")
+    field: l2_next_active(body_node\as\structure\first_field)
+    stmt: field\value
+    if: l2_frame_head(stmt, "return") = 0
+        return: l2_error(path, stmt, "unsupported body")
+    ret: stmt\as\frame
+    if: ret\trailer != 0
+        return: l2_error(path, stmt, "unsupported body")
+    if: ret\body = 0 || l2_count_active(ret\body) != 1
+        return: l2_error(path, stmt, "unsupported body")
+    arg: l2_next_active(ret\body\first_field)
+    if: arg\value = 0 || arg\value\kind != c.LM_P0_NODE_ATOM
+        return: l2_error(path, stmt, "unsupported body")
+    if: l2_is_uint(arg\value\as\atom) = 0
+        return: l2_error(path, stmt, "unsupported body")
+    out_lit[0]: arg\value\as\atom
+return: 0
+
+fn: l2_take_main_lit (const: @(LmP0Node fn_node); const: @(char path); @@: LmP0Text out_lit) int
+    @: LmP0Field field
+    const: @: LmP0Frame fn_frame
+    const: @: LmP0Node name
+    const: @: LmP0Node params
+    const: @: LmP0Node resty
+    const: @: LmP0Node body
+    if: l2_frame_head(fn_node, "fn") = 0
+        return: l2_error(path, fn_node, "unsupported body")
+    fn_frame: fn_node\as\frame
+    if: l2_end_named(fn_frame, "main") = 0
+        return: l2_error(path, fn_node, "incompatible entry signature")
+    if: fn_frame\body = 0 || l2_count_active(fn_frame\body) != 4
+        return: l2_error(path, fn_node, "incompatible entry signature")
+    field: l2_next_active(fn_frame\body\first_field)
+    name: field\value
+    if: name = 0 || name\kind != c.LM_P0_NODE_ATOM || l2_text_eq(name\as\atom, "main") = 0
+        return: l2_error(path, fn_node, "incompatible entry signature")
+    field: l2_next_active(field\next)
+    params: field\value
+    if: l2_empty_struct(params) = 0
+        return: l2_error(path, fn_node, "incompatible entry signature")
+    field: l2_next_active(field\next)
+    resty: field\value
+    if: resty = 0 || resty\kind != c.LM_P0_NODE_ATOM || l2_text_eq(resty\as\atom, "int") = 0
+        return: l2_error(path, fn_node, "incompatible entry signature")
+    field: l2_next_active(field\next)
+    body: field\value
+return: l2_take_return_lit(body, path, out_lit)
+
+fn: l2_unit_from_root (const: @(LmP0Node root); const: @(char path); @@: LmP0Structure out_unit) int
+    @: LmP0Field field
+    const: @: LmP0Node item
+    if: out_unit = 0
+        return: l2_error(path, root, "internal: missing unit slot")
+    out_unit[0]: 0
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE || root\as = 0 || root\as\structure = 0
+        return: l2_error(path, root, "unsupported body")
+    field: l2_next_active(root\as\structure\first_field)
+    if: field = 0
+        return: l2_error(path, root, "missing main")
+    item: field\value
+    if: l2_next_active(field\next) = 0 && l2_frame_head(item, "L2")
+        if: l2_end_named(item\as\frame, "L2") = 0
+            return: l2_error(path, item, "unsupported body")
+        if: item\as\frame\body = 0
+            return: l2_error(path, item, "missing main")
+        out_unit[0]: item\as\frame\body
+        return: 0
+    if: l2_frame_head(item, "L1") || l2_frame_head(item, "L3")
+        return: l2_error(path, item, "unsupported body")
+    out_unit[0]: root\as\structure
+return: 0
+
+fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: LmP0Text out_lit) int
+    @: LmP0Field field
+    @: LmP0Field nf
+    @: LmP0Node item
+    int: mains 0
+    int: extras 0
+    @: LmP0Node main_node 0
+    if: out_lit = 0
+        return: l2_error(path, 0, "internal: missing return slot")
+    out_lit[0]: 0
+    if: unit = 0
+        return: l2_error(path, 0, "missing main")
+    field: l2_next_active(unit\first_field)
+    while: field != 0
+        item: field\value
+        nf: 0
+        if: l2_frame_head(item, "fn") != 0 && item\as\frame != 0 && item\as\frame\body != 0
+            nf: l2_next_active(item\as\frame\body\first_field)
+        if: nf != 0 && nf\value != 0 && nf\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(nf\value\as\atom, "main")
+            mains: mains + 1
+            main_node: item
+        else:
+            extras: extras + 1
+        field: l2_next_active(field\next)
+    if: mains > 1
+        return: l2_error(path, main_node, "several main")
+    if: mains = 0
+        return: l2_error(path, 0, "missing main")
+    if: extras != 0
+        return: l2_error(path, main_node, "unsupported body")
+return: l2_take_main_lit(main_node, path, out_lit)
+
+fn: l2_emit_l1 (const: @(char out_path); const: @(LmP0Text lit)) int
+    @: FILE out
+    if: out_path = 0 || lit = 0 || lit\data = 0 || lit\length = 0U
+        return: 1
+    out: c.fopen(out_path, "wb")
+    if: out = 0
+        c.fprintf(c.stderr, "l2trans error: cannot open %s\n", out_path)
+        return: 1
+    if: c.fputs("external:\n    fn: main () int\n        return: ", out) < 0
+        c.fclose(out)
+        return: 1
+    if: c.fwrite(lit\data, 1U, lit\length, out) != lit\length
+        c.fclose(out)
+        return: 1
+    if: c.fputs("\n    end: main\nend: external\n", out) < 0
+        c.fclose(out)
+        return: 1
+    if: c.fclose(out) != 0
+        return: 1
+return: 0
+
+fn: l2_translate (const: @(char in_path); const: @(char out_path)) int
+    @: LmP0Document document 0
+    const: @: LmP0Diagnostic diagnostic
+    const: @: LmP0Node root
+    @: LmP0Structure unit 0
+    @: LmP0Text lit 0
+    int: status
+    if: l2_path_is_lm2(in_path) = 0
+        c.fprintf(c.stderr, "l2trans error: %s:1:1: expected a .lm2 source\n", in_path)
+        return: 1
+    status: lm_p0_parse_file(in_path, @ document)
+    if: status != 0
+        diagnostic: lm_p0_document_diagnostic(document)
+        if: diagnostic != 0
+            c.fprintf(c.stderr, "l2trans parse error %d at %zu:%zu: %s\n", diagnostic\code, diagnostic\line, diagnostic\column, diagnostic\message)
+        else:
+            c.fprintf(c.stderr, "l2trans parse error: %s\n", in_path)
+        lm_p0_document_destroy(document)
+        return: 1
+    root: lm_p0_document_root(document)
+    if: l2_unit_from_root(root, in_path, @ unit) != 0
+        lm_p0_document_destroy(document)
+        return: 1
+    if: l2_translate_unit(unit, in_path, @ lit) != 0
+        lm_p0_document_destroy(document)
+        return: 1
+    status: l2_emit_l1(out_path, lit)
+    lm_p0_document_destroy(document)
+    if: status != 0
+        return: 1
+return: 0
+
+external:
+    fn: main (int: argc; @@: char argv) int
+        c.setvbuf(c.stdout, 0, c._IONBF, 0)
+        c.setvbuf(c.stderr, 0, c._IONBF, 0)
+        if: argc != 3
+            c.fputs("usage: l2trans.exe <source.lm2> <output.lm1>\n", c.stderr)
+            return: 1
+    return: l2_translate(argv[1], argv[2])
+end: external

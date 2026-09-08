@@ -1,0 +1,5 @@
+L2:
+    fn: main (int x) int
+        return: 0
+    end: main
+end: L2
