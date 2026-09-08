@@ -1,0 +1,9 @@
+sub: d (@: LmP0Text t)
+    lm_own_delete(t, 0)
+end: d
+fn: m (int: z) int
+    return: d(0)
+end: m
+fn: main () int
+    return: 0
+end: main

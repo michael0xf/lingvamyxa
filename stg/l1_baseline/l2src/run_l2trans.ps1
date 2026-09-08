@@ -982,4 +982,173 @@ end: external
 
 Invoke-Views
 
+Invoke-Negative "l2src\tests\unit_void_value.lm2" "unit_void_value" "incompatible entry signature"
+Invoke-Negative "l2src\tests\unit_bad_sizeof.lm2" "unit_bad_sizeof" "unknown foreign type"
+
+function Invoke-Heap {
+    $refLm1 = Join-Path $out "heap_ref.lm1"
+    $refC = Join-Path $out "heap_ref.c"
+    $refExe = Join-Path $out "heap_ref.exe"
+    $refOut = Join-Path $out "heap_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser_text.lm1"
+include: "<stdio.h>" "<string.h>"
+external:
+    fn: main () int
+        @: LmP0Text a 0
+        @: LmP0Text b 0
+        @: char p 0
+        @: char q 0
+        a: lm_p0_text_view_new_cstr("hello")
+        c.printf("%d\n", a != 0)
+        c.printf("%zu\n", a\length)
+        c.printf("%d\n", c.strcmp(a\data, "hello") = 0)
+        c.printf("%d\n", a\data = "hello")
+        b: lm_p0_text_from_cstr("hello")
+        c.printf("%d\n", b != 0)
+        c.printf("%d\n", b = a)
+        c.printf("%zu\n", b\length)
+        lm_p0_text_view_delete(a)
+        lm_p0_text_view_delete(b)
+        c.printf("%d\n", c.strcmp("hello", "hello") = 0)
+        a: lm_p0_text_view_new_cstr("")
+        c.printf("%zu\n", a\length)
+        c.printf("%d\n", a\data[0] = 0)
+        lm_p0_text_view_delete(a)
+        a: lm_p0_text_view_new_cstr(0)
+        c.printf("%zu\n", a\length)
+        c.printf("%d\n", a\data[0] = 0)
+        lm_p0_text_view_delete(a)
+        p: lm_p0_copy_bytes("ab", 2U)
+        c.printf("%d\n", p != 0)
+        c.printf("%d\n", p[0] = 97)
+        c.printf("%d\n", p[1] = 98)
+        c.printf("%d\n", p[2] = 0)
+        q: lm_p0_copy_bytes("ab", 2U)
+        c.printf("%d\n", q = p)
+        lm_own_delete(p, 0)
+        lm_own_delete(q, 0)
+        p: lm_p0_copy_bytes(0, 0U)
+        c.printf("%d\n", p != 0)
+        c.printf("%d\n", p[0] = 0)
+        lm_own_delete(p, 0)
+        c.array: [4]: char nbuf
+        nbuf[0]: 97
+        nbuf[1]: 0
+        nbuf[2]: 99
+        nbuf[3]: 0
+        p: lm_p0_copy_bytes(nbuf, 3U)
+        c.printf("%d\n", p[0] = 97)
+        c.printf("%d\n", p[1] = 0)
+        c.printf("%d\n", p[2] = 99)
+        c.printf("%d\n", p[3] = 0)
+        lm_own_delete(p, 0)
+        p: lm_p0_copy_bytes("x", (cast: (size_t) -1))
+        c.printf("%d\n", p = 0)
+        lm_own_alloc_fails: 1
+        a: lm_p0_text_view_new_cstr("z")
+        c.printf("%d\n", a = 0)
+        lm_own_alloc_fails: 0
+        lm_p0_text_view_delete(0)
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed heap_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "heap_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'heap_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "heap_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_text_heap.lm2" "parser_text_heap" 0 "lm_p0_copy_bytes"
+    $lm1 = Join-Path $out "parser_text_heap.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "heap must mangle method symbols" }
+    if ($text.IndexOf("@: LmP0Text l2_s") -lt 0) { throw "heap missing address slot, not own cache" }
+    if ($text.IndexOf("lmx_own_load") -ge 0) { throw "heap must not use lmx_own cache API" }
+    if ($text.IndexOf("sub: l2_m2") -lt 0) { throw "heap delete must be sub l2_m2" }
+    if ($text.IndexOf("c.sizeof(c.LmP0Text)") -lt 0) { throw "heap missing sizeof imported ABI" }
+    if ($text.IndexOf("return: @") -ge 0) { throw "heap must return pointer value, not @slot" }
+    if ($text.IndexOf("l1src/own.lm1") -lt 0) { throw "heap missing own.lm1 predef" }
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "heap L1 missing generated main return" }
+    $drive = @"
+        @: LmP0Text a 0
+        @: LmP0Text b 0
+        @: char p 0
+        @: char q 0
+        a: l2_m1(unit, "hello")
+        c.printf("%d\n", a != 0)
+        c.printf("%zu\n", a\length)
+        c.printf("%d\n", c.strcmp(a\data, "hello") = 0)
+        c.printf("%d\n", a\data = "hello")
+        b: l2_m3(unit, "hello")
+        c.printf("%d\n", b != 0)
+        c.printf("%d\n", b = a)
+        c.printf("%zu\n", b\length)
+        l2_m2(unit, a)
+        l2_m2(unit, b)
+        c.printf("%d\n", c.strcmp("hello", "hello") = 0)
+        a: l2_m1(unit, "")
+        c.printf("%zu\n", a\length)
+        c.printf("%d\n", a\data[0] = 0)
+        l2_m2(unit, a)
+        a: l2_m1(unit, 0)
+        c.printf("%zu\n", a\length)
+        c.printf("%d\n", a\data[0] = 0)
+        l2_m2(unit, a)
+        p: l2_m0(unit, "ab", 2U)
+        c.printf("%d\n", p != 0)
+        c.printf("%d\n", p[0] = 97)
+        c.printf("%d\n", p[1] = 98)
+        c.printf("%d\n", p[2] = 0)
+        q: l2_m0(unit, "ab", 2U)
+        c.printf("%d\n", q = p)
+        lm_own_delete(p, 0)
+        lm_own_delete(q, 0)
+        p: l2_m0(unit, 0, 0U)
+        c.printf("%d\n", p != 0)
+        c.printf("%d\n", p[0] = 0)
+        lm_own_delete(p, 0)
+        c.array: [4]: char nbuf
+        nbuf[0]: 97
+        nbuf[1]: 0
+        nbuf[2]: 99
+        nbuf[3]: 0
+        p: l2_m0(unit, nbuf, 3U)
+        c.printf("%d\n", p[0] = 97)
+        c.printf("%d\n", p[1] = 0)
+        c.printf("%d\n", p[2] = 99)
+        c.printf("%d\n", p[3] = 0)
+        lm_own_delete(p, 0)
+        p: l2_m0(unit, "x", (cast: (size_t) -1))
+        c.printf("%d\n", p = 0)
+        lm_own_alloc_fails: 1
+        a: l2_m1(unit, "z")
+        c.printf("%d\n", a = 0)
+        lm_own_alloc_fails: 0
+        l2_m2(unit, 0)
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "heap_l2_drive.lm1"
+    $drvC = Join-Path $out "heap_l2_drive.c"
+    $drvExe = Join-Path $out "heap_l2_drive.exe"
+    $drvOut = Join-Path $out "heap_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed heap_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "heap_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'heap_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "heap_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "heap mismatch vs parser_text.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-Heap
+
 "l2trans $gen ok"
