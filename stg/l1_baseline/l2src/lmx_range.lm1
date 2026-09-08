@@ -75,6 +75,13 @@ fn: lmx_classify (@: void p) int
     ---
 return: c.LMX_KIND_NONE
 
+# Sets the two fields the spec has decided: node is the containment parent (2),
+# data is the classified payload pointer (2, 6.5). len is zeroed as raw storage
+# hygiene and nothing more: its unit is open (struct_refactoring_version_2.txt
+# 14.2) and the encoding of an empty value is open with it (14.3). Writing 0 is
+# not a claim that len counts children, elements or bytes, and not a claim that
+# 0 denotes empty. Nothing in this unit reads len; see l2src\OPEN_POINTS.txt
+# before the first read.
 sub: lmx_cell_init (@: Lmx cell; @: Lmx parent; @: void data)
     if: cell != 0
         cell\node: parent

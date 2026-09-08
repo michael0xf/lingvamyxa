@@ -1,0 +1,100 @@
+L2 open points ledger
+=====================
+
+Why this file exists
+--------------------
+Lingvamyxa_handoff_notes.txt section 4: the spec has ~25 places that say
+"remains open" or "has not yet chosen". They are not all to be answered in
+advance - they stage. But an autonomous agent that meets one does not stop; it
+invents an answer silently, and that is how architecture nobody accepted gets
+built. So every unit of work must say which open points it touches and what it
+does about each.
+
+This file is that statement, kept per unit and mechanical. It is not a plan and
+not a decision record: a point leaves this file only when the decision is
+written into the spec, and then this file cites where.
+
+Rules
+-----
+R1. Before a unit is committed, every open point it touches gets a row here.
+R2. A row says exactly one of:
+      DECIDED   - the spec already answers it; cite section.
+      AVOIDED   - the unit is written so the point does not arise; say how,
+                  and name what would make it arise.
+      ASK       - the unit cannot proceed without an answer. Stop and ask the
+                  user (L2 semantics) or cursor (L1 capability). Do not guess.
+R3. No row may say "assumed", "for now" or "probably". If the honest answer is
+    a guess, it is ASK.
+R4. Writing a value into a field whose meaning is open is not a decision only
+    while nothing reads it. The moment a read appears, the row becomes ASK.
+
+Sources
+-------
+  SPEC  Lingvamyxa_spec.txt
+  ABI   struct_refactoring_version_2.txt section 14 ("Explicitly unresolved")
+  L1    L1_spec.txt section 6 (L1's own open points, they constrain the target)
+  NOTES Lingvamyxa_handoff_notes.txt
+
+
+Unit 1 - Lmx core and classification by registered address range
+----------------------------------------------------------------
+Files: lmx.h, lmx_range.lm1, lmx_selftest.lm1, run_lmx.ps1
+
+ABI 14.2  Unit and interpretation of len
+    AVOIDED. lmx_cell_init zeroes len as raw storage hygiene. The unit makes no
+    claim that len counts children, elements or bytes. Nothing reads len.
+    Arises the moment any code reads len, or any range registers a len rule.
+    Then: ASK.
+
+ABI 14.3  Empty representation
+    AVOIDED, and for the same write. Zero is not claimed to denote empty, and
+    the unit never distinguishes null data from zero len from an empty
+    Structure. Arises together with 14.2.
+
+ABI 14.8  Arrays: pool block allocation, growth, range registration
+    AVOIDED in part, touched in part. lmx_ranges_init takes a fixed capacity
+    and lmx_range_register refuses to grow past it, so no growth policy is
+    invented. Range registration itself is exercised, but only as half-open
+    [lo, hi) membership with a stride, which is the minimum 6.5 already states.
+    Arises when a pool must grow or be re-registered. Then: ASK.
+
+ABI 14.9  Allocation, arenas: physical subdivision into registered ranges
+    AVOIDED. The table is one flat global list of ranges. SPEC 6.5 grants that
+    range classification is globally available and that this shares no mutable
+    cell between Messages, so a global table of BOUNDS is in scope. What is not
+    settled is whether ranges are physically subdivided per arena. Arises the
+    moment a Message arena exists and wants its own subdivision. Then the flat
+    table is wrong and this becomes ASK.
+
+ABI 14.1  Exact structural layout behind data for a non-leaf
+    Not touched. Unit 1 classifies leaves and pool entries only; it builds no
+    branch storage. Arises at the first non-leaf construction (SPEC 19.20).
+
+L1 10.8   One C TU vs many; init-before-main
+    AVOIDED. The selftest composes with predef:, so everything stays one
+    translation unit. Arises when service pools must be initialised
+    program-wide across modules. Then: ASK cursor.
+
+L1 10.9   Field image \ vs . vs ->
+    DECIDED, and not by L1. SPEC 11.2 (around line 7133) keeps minimal
+    field-follow address-oriented: value\field is the direct form when the
+    binding is a typed address, and ANSI C value-member access goes through the
+    explicit C door c.value.field. So \ lowering to -> is correct, not a gap.
+    Recorded because this unit asked for it to change and was wrong; see
+    work_chat\cursor\inbox\20260908-004726.txt.
+
+
+Carried forward, not yet touched
+--------------------------------
+ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).
+ABI 14.5   Positional and anonymous occurrence naming. Arises with 14.4.
+ABI 14.6   Explicit graph references during merge. Arises at runtime merge.
+ABI 14.7   Primitive copy and mutation policies per physical range.
+ABI 14.10  Exact method result ABI.
+SPEC 21.13 p.4  Physical carrier of a declared throw and of runtime failure in
+           the generated C. NOTES section 4 calls this the most frequently hit
+           of all open points: any call generation touches it, and the payload
+           contract is part of the exact method signature. NOTES section 7 adds
+           the trap to avoid - L1 carries throw in two static globals, which is
+           fine for L1 and wrong for lm2, where each Message has its own arena
+           and Messages may run concurrently (SPEC 21.7). Do not transfer it.

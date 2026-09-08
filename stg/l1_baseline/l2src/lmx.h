@@ -15,9 +15,14 @@
 typedef struct Lmx Lmx;
 
 /* 2: the only universal node representation. node is the containment parent,
- * len is range-dependent (unit still open: struct_refactoring_version_2.txt
- * 14.2), data is classified by range. Nothing else per node - no name, no type
- * tag, no descriptor prefix, no vtable. */
+ * data is classified by range. Nothing else per node - no name, no type tag,
+ * no descriptor prefix, no vtable.
+ *
+ * len is DECLARED but not yet MEANT. Its unit is open
+ * (struct_refactoring_version_2.txt 14.2: child count, element count, byte
+ * count or another explicit unit, one rule per range), and the encoding of an
+ * empty value is open with it (14.3). No code here may read len until both
+ * close. See l2src/OPEN_POINTS.txt. */
 struct Lmx {
     Lmx *node;
     size_t len;
