@@ -174,6 +174,48 @@ SPEC 21.4  Primitives pass by semantic value
     by the C type. Saying it in the type belongs with the per-range physical
     class policy that 14.7 leaves open.
 
+
+Unit 4 - the reverse name index
+-------------------------------
+Files: lmx.h (LmxShortNameId, LmxNameSlot, LmxNames), lmx_names.lm1,
+lmx_names_selftest.lm1
+
+ABI 14.4  ShortNameId format
+    Split exactly the way 14.4 splits itself. What it calls settled is
+    implemented and asserted: equal short names compare equal (two nodes may
+    carry one id and each answers for itself), distinct names cannot silently
+    alias (a third id leaves the first two untouched), and a node keeps its own
+    identity across renaming and across another node being named.
+
+    What 14.4 leaves open is not touched. No id is derived from text, so
+    deterministic generation, byte encoding and path conversion stay open. The
+    bit width is a placeholder the table never inspects - only equality is used,
+    so widening it later changes nothing here. Reserved ids stay open because
+    absence is reported by the return status and the out parameter is left
+    untouched, rather than by a sentinel value. Collision handling stays open:
+    the probe is deliberately trivial, since a cleverer one would be inventing
+    the answer 14.4 defers.
+
+    Arises at the first interning of a textual name. Then: ASK.
+
+SPEC 2 / 19.29.4  The index is the only side table, and is not a root
+    DECIDED, and honoured by omission. 2 allows exactly one per-node aid, the
+    Lmx-pointer-to-ShortNameId table, and no second one is introduced. 19.29.4
+    says the index is not a root and that entries for dead occurrences are
+    removed, so lmx_name_drop exists and no walk over keyed nodes is offered -
+    such a walk would be the first step toward making the table a root.
+
+    Dropping tombstones the slot rather than freeing it, because freeing would
+    cut the probe chain of anything that collided past it; tombstones are
+    therefore reusable, or a table that had seen capacity drops would refuse
+    while standing empty. The selftest asserts both halves.
+
+ABI 14.5  Positional and anonymous occurrence naming
+    Not touched. Whether positional occurrences get reserved ids and take part
+    in this table, or are addressed only by structural position, is 14.5's
+    question, and nothing here assumes either. Arises with the first anonymous
+    or repeated occurrence, which is also where 14.1 branch storage arrives.
+
 Carried forward, not yet touched
 --------------------------------
 ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).

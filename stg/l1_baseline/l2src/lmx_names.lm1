@@ -1,0 +1,162 @@
+predef: "l2src/lmx_chars.lm1"
+
+# The reverse name index. Lingvamyxa_spec.txt 2, 19.20 step 5, 19.29.4;
+# ABI 14.4, 14.5.
+#
+# 2: "Names are absent from Lmx and its payload. The only mandatory per-node
+# name aid is the external reverse index: Lmx * -> ShortNameId." Construction
+# records each named occurrence in it (19.20 step 5), and it must be maintained
+# across creation, copying, movement and destruction, an inconsistent entry
+# being an integrity error rather than new value semantics.
+#
+# What this unit does NOT do, and why:
+#
+#   It does not derive an id from a name. 14.4 leaves deterministic generation,
+#   byte encoding and conversion from a textual path open. Ids come from the
+#   caller; the table only stores and compares them.
+#
+#   It does not reserve a "no name" id, because 14.4 leaves reserved ids open.
+#   Absence is a return status, never a sentinel value.
+#
+#   It does not enumerate its entries. 19.29.4 says the reverse-name index is
+#   not a root, so offering a walk over every keyed node would be the first
+#   step toward making it one. An entry is reached only from a node already
+#   held.
+#
+#   It does not grow. Refusal past capacity, like the other pools here.
+#
+# Open addressing on the node pointer. The probe is deliberately trivial: 14.4
+# leaves the collision-handling mechanism open, so a cleverer one would be
+# inventing an answer rather than implementing one.
+
+fn: lmx_names_open (@: LmxNames names; size_t: capacity) int
+    @: LmxNameSlot slots
+    if: names = 0
+        return: 1
+    if: capacity = 0U
+        return: 1
+    if: names\slots != 0
+        return: 1
+    if: capacity > ((cast: (size_t) -1) / c.sizeof(slots[0]))
+        return: 1
+    slots: (cast: (@: LmxNameSlot) c.calloc(capacity, c.sizeof(slots[0])))
+    if: slots = 0
+        return: 1
+    names\slots: slots
+    names\capacity: capacity
+    names\count: 0U
+return: 0
+
+sub: lmx_names_release (@: LmxNames names)
+    if: names != 0
+        if: names\slots != 0
+            c.free(names\slots)
+        ---
+        names\slots: 0
+        names\capacity: 0U
+        names\count: 0U
+    ---
+end: lmx_names_release
+
+# The node's own slot when it is present; otherwise the first slot that can take
+# it, which is a tombstone if one was passed on the way or the free slot that
+# ended the probe. Capacity means there is nowhere to put it.
+#
+# A dropped entry becomes a tombstone - used, with a null node - rather than a
+# free slot, because freeing it would cut the probe chain of every entry that
+# collided past it. Tombstones must therefore be reusable, or a table that had
+# seen capacity drops would refuse while standing empty.
+#
+# Slots are reached through a pointer into the block, never as slots[at] by
+# value: ordinary field-follow is address-oriented (11.2) and Valued aggregates
+# are out of bounds for L2 entirely.
+fn: lmx_names_slot (@: LmxNames names; @: Lmx node) size_t
+    @: LmxNameSlot slots
+    @: LmxNameSlot slot
+    size_t: start
+    size_t: step
+    size_t: at
+    size_t: spare
+    slots: names\slots
+    spare: names\capacity
+    start: ((cast: (size_t) node) / c.sizeof(c.Lmx)) % names\capacity
+    step: 0U
+    while: step < names\capacity
+        at: (start + step) % names\capacity
+        slot: slots + at
+        if: slot\used = 0
+            if: spare = names\capacity
+                spare: at
+            ---
+            return: spare
+        if: slot\node = node
+            return: at
+        if: slot\node = 0
+            if: spare = names\capacity
+                spare: at
+            ---
+        ---
+        step: step + 1U
+    ---
+return: spare
+
+fn: lmx_name_set (@: LmxNames names; @: Lmx node; LmxShortNameId: id) int
+    @: LmxNameSlot slot
+    size_t: at
+    if: names = 0 || node = 0
+        return: 1
+    if: names\slots = 0
+        return: 1
+    at: lmx_names_slot(names, node)
+    if: at >= names\capacity
+        return: 1
+    slot: names\slots + at
+    if: slot\node != node
+        slot\used: 1
+        slot\node: node
+        names\count: names\count + 1U
+    ---
+    slot\id: id
+return: 0
+
+# Absence is the return status, never a value of id. The out parameter is left
+# untouched when the node is not indexed, so no reserved id is needed - 14.4
+# leaves reserved ids open.
+fn: lmx_name_get (@: LmxNames names; @: Lmx node; @: LmxShortNameId out) int
+    @: LmxNameSlot slot
+    size_t: at
+    if: names = 0 || node = 0 || out = 0
+        return: 1
+    if: names\slots = 0
+        return: 1
+    at: lmx_names_slot(names, node)
+    if: at >= names\capacity
+        return: 1
+    slot: names\slots + at
+    if: slot\used = 0
+        return: 1
+    if: slot\node != node
+        return: 1
+    out[0]: slot\id
+return: 0
+
+# 19.29.4: remove entries for dead occurrences. The index is not a root, so an
+# entry outliving its node is an integrity error, not a way to keep it alive.
+fn: lmx_name_drop (@: LmxNames names; @: Lmx node) int
+    @: LmxNameSlot slot
+    size_t: at
+    if: names = 0 || node = 0
+        return: 1
+    if: names\slots = 0
+        return: 1
+    at: lmx_names_slot(names, node)
+    if: at >= names\capacity
+        return: 1
+    slot: names\slots + at
+    if: slot\used = 0
+        return: 1
+    if: slot\node != node
+        return: 1
+    slot\node: 0
+    names\count: names\count - 1U
+return: 0
