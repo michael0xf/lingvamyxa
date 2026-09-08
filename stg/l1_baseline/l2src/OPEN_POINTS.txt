@@ -661,17 +661,21 @@ diagnostics, not silent L1 copy and not a canned output.
 Unit 9 - first L2 method leaf (add)
 -----------------------------------
 Files: l2trans.lm1, tests/add.lm2, tests/entry_sum.lm2,
-tests/entry_add_ret.lm2, negatives unknown/arity/unresolved/trailer
+tests/entry_add_ret.lm2, tests/entry_plus.lm2,
+tests/entry_swap_formals.lm2, negatives unknown/arity/unresolved/trailer
 
 SPEC 21.8 / ABI 6.6  method record {addr, sig}, node first, typed invoke
     DECIDED for this throws-none two-int leaf. C `int name(Lmx *node,
-    int, int)`. rec.sig is schema L2_SIG_V0 (node, 2 required int
-    formals by value, int result, throws-none, no dyn/varargs). Exact
-    identity is that schema plus the two formal-name byte strings
-    (order matters). The callable's source name is not in the contract.
-    Equality is schema+memcmp of those names, not a hash; a hash would
-    be an accelerator only. This is the linked translation unit, not
-    inter-module canonicalization.
+    int, int)`. The translator interns the full canonical contract
+    (L2_SIG_V0 schema: node, 2 required int formals by value, int
+    result, throws-none, no dyn/varargs, plus exact ordered formal-name
+    bytes) with memcmp of those names. Method name is not interned.
+    rec.sig is the interned id. Mapping: id 1 := that intern entry
+    (emitted l2_sig_f0 / l2_sig_f1). Linked translation unit only, not
+    inter-module canonicalization. Runtime does not memcmp; closed-
+    singleton lowering. A PowerShell harness is not the intern proof:
+    l2_intern_prove aborts translation if intern is not idempotent,
+    fails swapped-formal distinction, or false-equals distinct names.
 
     Call `name(leaf->node, …)` is closed-singleton devirtualization:
     one leaf, no calls or graph mutations between construction and

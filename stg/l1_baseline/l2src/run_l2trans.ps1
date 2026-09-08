@@ -228,26 +228,47 @@ Invoke-Leaf "l2src\tests\entry_add_ret.lm2" "entry_add_ret" 5 "add"
 Invoke-Leaf "l2src\tests\entry_plus.lm2" "entry_plus" 0 "plus"
 Invoke-Leaf "l2src\tests\entry_swap_formals.lm2" "entry_swap_formals" 0 "add"
 
+# Intern algorithm is l2_intern_prove in l2trans.lm1 (translation fails if intern lies).
+# This harness only checks that the intern table was emitted; it is not the equality proof.
 function Get-LeafContract([string]$stem) {
     $t = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out ($stem + ".lm1"))))
-    if ($t.IndexOf("rec\sig: 1U") -lt 0) { throw "$stem missing L2_SIG_V0 rec\sig: 1U" }
-    $f0 = $null; $f1 = $null
-    if ($t -match 'l2_sig_f0\) "([^"]*)"') { $f0 = $Matches[1] }
-    if ($t -match 'l2_sig_f1\) "([^"]*)"') { $f1 = $Matches[1] }
-    if (-not $f0 -or -not $f1) { throw "$stem missing exact formal-name identity" }
+    if ($t.IndexOf("Runtime: no memcmp") -lt 0) { throw "$stem missing honest runtime no-memcmp" }
+    if ($t.IndexOf("id 1 :=") -lt 0) { throw "$stem missing intern mapping id 1 :=" }
     if ($t.IndexOf("Closed-singleton devirtualization") -lt 0) {
         throw "$stem missing devirtualization proof comment"
     }
-    "$f0|$f1"
+    $f0 = $null; $f1 = $null
+    if ($t -match 'l2_sig_f0\) "([^"]*)"') { $f0 = $Matches[1] }
+    if ($t -match 'l2_sig_f1\) "([^"]*)"') { $f1 = $Matches[1] }
+    if (-not $f0 -or -not $f1) { throw "$stem missing interned formal-name mapping" }
+    if ($t -notmatch 'l2_intern_id (\d+)U') { throw "$stem missing l2_intern_id" }
+    $id = [int]$Matches[1]
+    if ($t -notmatch 'l2_intern_again (\d+)U') { throw "$stem missing l2_intern_again" }
+    $again = [int]$Matches[1]
+    if ($again -ne $id) { throw "$stem intern again $again != id $id" }
+    if ($t -notmatch 'l2_intern_swap (\d+)U') { throw "$stem missing l2_intern_swap" }
+    $sw = [int]$Matches[1]
+    if ($t -notmatch 'l2_intern_probe (\d+)U') { throw "$stem missing l2_intern_probe" }
+    $probe = [int]$Matches[1]
+    if ($t -notmatch 'rec\\sig: (\d+)U') { throw "$stem missing rec.sig intern id" }
+    $rec = [int]$Matches[1]
+    if ($rec -ne $id) { throw "$stem rec.sig $rec != intern id $id" }
+    [pscustomobject]@{ Id = $id; Again = $again; Swap = $sw; Probe = $probe; Formals = "$f0|$f1" }
 }
 $cAdd = Get-LeafContract "add"
 $cPlus = Get-LeafContract "entry_plus"
 $cSum = Get-LeafContract "entry_sum"
-$cSwap = Get-LeafContract "entry_swap_formals"
-if ($cAdd -ne "a|b") { throw "add formals $cAdd" }
-if ($cPlus -ne $cAdd) { throw "renaming method changed contract: $cAdd vs $cPlus" }
-if ($cSum -eq $cAdd) { throw "sum x,y must differ from add a,b" }
-if ($cSwap -eq $cAdd) { throw "swapped formals must differ from a,b" }
+$cSwapF = Get-LeafContract "entry_swap_formals"
+if ($cAdd.Formals -ne "a|b") { throw "add formals $($cAdd.Formals)" }
+if ($cAdd.Probe -ne $cAdd.Id) { throw "add intern probe must memcmp-equal a|b" }
+if ($cAdd.Swap -eq $cAdd.Id) { throw "add intern must distinguish swapped formals" }
+if ($cPlus.Formals -ne $cAdd.Formals) { throw "renaming method changed contract" }
+if ($cPlus.Id -ne $cAdd.Id) { throw "plus intern id differed from add" }
+if ($cSum.Formals -eq $cAdd.Formals) { throw "sum x,y must differ from add a,b" }
+if ($cSum.Probe -eq $cSum.Id) { throw "sum intern must not equal probe a|b" }
+if ($cSwapF.Formals -ne "b|a") { throw "swap formals $($cSwapF.Formals)" }
+if ($cSwapF.Formals -eq $cAdd.Formals) { throw "swapped formals must differ from a,b" }
+if ($cSwapF.Probe -eq $cSwapF.Id) { throw "swap intern must not equal probe a|b" }
 Invoke-Negative "l2src\tests\entry_unknown_method.lm2" "entry_unknown_method" "unknown method"
 Invoke-Negative "l2src\tests\entry_bad_arity.lm2" "entry_bad_arity" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_unresolved.lm2" "entry_unresolved" "unresolved name"
