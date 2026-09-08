@@ -7,11 +7,12 @@ include: "l2src/lmx.h" "<stdio.h>" "<stdlib.h>" "<stddef.h>"
 # globally available and that this does not share any mutable cell between
 # Messages, so the table itself is unit state, not Message state.
 #
-# The table is addressed as a base pointer plus an index rather than declared
-# as an array member inside a Structure, because L1 lowers `\` unconditionally
-# to `->` and has no by-value member access (L1_spec.txt OPEN 10.9). Pointer
-# arithmetic keeps every entry access pointer-shaped, which needs no `.` and
-# adds neither indirection nor a per-entry allocation.
+# The table is addressed as a base pointer plus an index, so every entry access
+# stays a typed address. That is the form the spec prefers: 11.2 keeps minimal
+# field-follow address-oriented, `value\field` being the direct form when the
+# binding is a typed address, and reserves ANSI C value-member access for the
+# explicit C door `c.value.field`. Ordinary values here are references, so the
+# ordinary form applies and the C door is not needed.
 
 @: LmxRange lmx_range_table 0
 size_t: lmx_range_count 0U
