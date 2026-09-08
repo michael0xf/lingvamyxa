@@ -676,7 +676,11 @@ SPEC 21.8 / ABI 6.6  method record {addr, sig}, node first, typed invoke
     mutations after construction; actuals materialized left-to-right
     into temps before each call (not C argument order). Recursion and
     cycles are an implementation limit (`unsupported recursion`), not
-    a language ban. Max 8 methods / 16 intern slots. Mixed multi-op
+    a language ban. Max 8 methods (9th is `too many methods`).
+    Generated `lmx_ranges_init` is 1+N (children + method records).
+    Source `node` is reserved. Formals emit as `l2_p{i}_{j}`; intern
+    keeps source names. Long names / too-deep if are diagnosed before
+    dest is opened; emit writes tmp then rename. Mixed multi-op
     infix other than a + chain is unsupported in this slice.
 
     OwnUsed/DynRequired remain empty: only declared formals. Not

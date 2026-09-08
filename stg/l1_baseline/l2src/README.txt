@@ -31,7 +31,9 @@ calls including forward references (L1 prototype:). OwnUsed and
 DynRequired stay empty (declared formals only). rec.sig is the
 interned full L2_SIG_V0 + ordered formal-name contract. Runtime does
 not memcmp. Closed-unit devirtualization; actuals are temps before
-the call. Recursion is an implementation limit. `main` remains the
+the call. Recursion is an implementation limit. At most 8 methods;
+`lmx_ranges_init` is 1+N. Formals are hygienic `l2_p{i}_{j}`;
+intern keeps source names. `main` remains the
 §1.7 adapter. Not L2 self-build. Single emitter source: l2trans.lm1.
 
 Emit (L1), with `include: "<stdio.h>"` only when there is at least one puts:
