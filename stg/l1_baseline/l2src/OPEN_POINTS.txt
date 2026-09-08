@@ -624,10 +624,12 @@ SPEC 0.1.1  `.lm2` is an implicit L2 body; explicit `L2:` remains available.
     wrapperless.
 
 ABI 14.10 / SPEC 21.8 / SPEC 21.13 p.4  Method result, typed invocation, throw
-    AVOIDED. Return of a non-negative decimal literal is copied into the
-    bootstrap adapter. No generated method record, no throw channel, no
-    L1 static throw globals transferred. Arises at the first real L2 method
-    call or declared throw. Then: ASK.
+    AVOIDED. Return of a non-negative decimal literal in 0..INT_MAX of
+    the C99 target `int` (checked without overflow against limits.h
+    INT_MAX) is copied into the bootstrap adapter. Larger digit strings
+    are rejected as not representable. No generated method record, no
+    throw channel, no L1 static throw globals transferred. Arises at the
+    first real L2 method call or declared throw. Then: ASK.
 
 ABI 14.4  sig
     AVOIDED. No method record is emitted.

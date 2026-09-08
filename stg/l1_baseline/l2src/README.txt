@@ -15,7 +15,8 @@ Supported L2 input, and nothing else:
 
     L2:                          # optional; .lm2 is already implicit L2
         fn: main () int
-            return: N            # N = non-negative decimal, no leading zeros
+            return: N            # N = 0..INT_MAX of the C99 target int
+                                 # (no leading zeros; overflow is a diagnostic)
         end: main
     end: L2
 
@@ -33,9 +34,14 @@ Emit (L1):
 Then existing gen2 l1trans → C → gcc → exe. Artifacts: build\l2trans\
 (not build\lm0). Do not run native finalize on this shared baseline.
 
-Rejected with a diagnostic (old output is not a success):
+Rejected with a diagnostic (nonzero l2trans, no later stages, destination
+unchanged). Planted negative files named .exe are text markers, not a
+real executable and not a run of an old binary:
   unsupported body, incompatible entry signature, several main,
-  missing main, parse error, non-.lm2 path.
+  missing main, parse error, non-.lm2 path,
+  return literal not representable as int (e.g. 2147483648 on 32-bit int).
+INT_MAX (2147483647 here) is admitted and emitted; OS exit status is
+not the oracle for that value.
 
 Runner: powershell -File l2src\run_l2trans.ps1
 Open points for this unit: OPEN_POINTS.txt Unit 8.
