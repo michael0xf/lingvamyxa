@@ -13405,7 +13405,9 @@ ABI version. A profile may use canonical ShortNameId/name order or another
 link-stable algorithm; the choice is not source-visible, but all translation
 units and adapters using that ABI must agree. The signature has a versioned
 canonical linked identity. Every dynamic
-ShortNameId is program-wide after relocation, or is accompanied by canonical
+ShortNameId is program-wide after link-time relocation (the identity that
+exists once modules are linked, not a licence to move live records at
+runtime), or is accompanied by canonical
 name bytes/a collision-checked stable hash. Two translation-unit-local numeric
 intern IDs are never compared directly. The exact record layout remains a
 backend ABI choice, but exact signature equality must be deterministic across

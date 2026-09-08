@@ -52,13 +52,15 @@ ABI 14.3  Empty representation
     Structure. Arises together with 14.2.
 
 ABI 14.8  Arrays: pool block allocation, growth, range registration
-    AVOIDED in part, touched in part. lmx_ranges_init takes a fixed capacity
-    and lmx_range_register refuses to grow past it, so no growth policy is
-    invented. Range registration itself is exercised, but only as half-open
-    [lo, hi) membership with a stride, which is the minimum 6.5 already states.
-    Pool growth is now DECIDED as non-moving blocks with per-block registration
-    (SPEC 2 / 6.5; ABI 4.1 / 7.2 / 14.8). Registry capacity/allocation mechanics
-    remain separate from the settled pool-growth rule.
+    Range registry table: AVOIDED for growth. lmx_ranges_init takes a fixed
+    capacity and lmx_range_register refuses to grow past it, so no registry
+    growth policy is invented. Registration itself is half-open [lo, hi)
+    membership with a stride (the minimum 6.5 already states).
+
+    Pool blocks: DECIDED separately as non-moving chunks with per-block
+    registration (SPEC 2 / 6.5; ABI 4.1 / 7.2 / 14.8). Existing addresses
+    stay unchanged when a new chunk is added. Registry capacity is not
+    that pool-growth rule.
 
 ABI 14.9  Allocation, arenas: physical subdivision into registered ranges
     AVOIDED. The table is one flat global list of ranges. SPEC 6.5 grants that
@@ -75,7 +77,7 @@ ABI 14.1  Exact structural layout behind data for a non-leaf
 L1 10.8   One C TU vs many; init-before-main
     AVOIDED. The selftest composes with predef:, so everything stays one
     translation unit. Arises when service pools must be initialised
-    program-wide across modules. Then: ASK cursor.
+    program-wide across modules. Then: ASK work_chat/grok (L1 capability).
 
 L1 10.9   Field image \ vs . vs ->
     Not an open point, and not one this code may reopen. The user has ruled

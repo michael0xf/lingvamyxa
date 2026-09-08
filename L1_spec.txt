@@ -2,7 +2,9 @@ Lingvamyxa Translator-L1 — implementation fact sheet
 =====================================================
 
 Status: implementation reference reviewed 2026-09-08 against root L1
-        revision 840c414. The frozen stg\l1_baseline copy is older.
+        revision 840c414. stg\l1_baseline translator slice promoted in
+        9638523 (same l1trans.lm1 / l1trans.lm1.c / run_smoke + seven
+        gen1+ fixtures). Other baseline L1 files may still be older.
 
 Purpose
 -------
@@ -16,7 +18,7 @@ Evidence sources (in priority order)
   1. Live WIP:     l1src\  (especially l1trans.lm1, build_l1.lm1, parser.lm1,
                    own.lm1, buildCore.lm1, make.lm1, libc_abi.lm1)
   2. Frozen peer:  stg\l1_baseline\l1src\ and stg\l1_baseline\tests\l1\
-                   (byte copy of root trees at baseline date; not live input)
+                   (independent L2 build root; l1trans slice = 9638523)
   3. Suites:       tests\l1\run_*.ps1 + fixtures
   4. Orient only:  L1_language_and_translator_spec.txt, l1src\README.md
 
@@ -329,17 +331,20 @@ Gate vs standalone suites:
 
 stg/l1_baseline/gate.ps1 runs in that separate root: its C bootstrap,
 run_seed, run_gen, all eleven L1 suites and l2src/run_lmx.ps1 on both
-gen0 and gen2. It tests the frozen L1 plus that root's current L2 code,
-not the live root L1 compiler. It still needs the hosted prerequisites.
+gen0 and gen2. After 9638523 it tests the promoted 840c414 translator
+slice plus that root's current L2 code. It still needs hosted
+prerequisites (oldchain libs, pinned trans.lm0/printTree.lm0). It does
+not run native next/check/finalize.
 
-The ecf010e staged snapshot includes the OS-specific replacement helper
-and the deferred-finalize repair verified on Windows and Ubuntu WSL
-(20260907-173055 acceptance). It is not the earlier failing POSIX snapshot.
-The reviewed root 840c414 has Windows generation/smoke/parser evidence;
-that does not establish a fresh non-Windows pass for this revision.
-This documentation review did not rerun builds. Claims of source-only
-bootstrap, hosted fixed point and full-suite success must identify which
-route, build root and revision were actually checked.
+Source-only published-C bootstrap → native buildCore --tests full →
+next/check → second live self-build + deferred finalize was proven in
+isolated copies of the root tree (Windows and Ubuntu WSL;
+20260908-093900 / 095100). That path is not part of this hosted gate.
+
+The ecf010e staged snapshot already includes the OS-specific
+l1_replace_file helper. Claims of bootstrap, hosted fixed point and
+full-suite success must identify which route, build root and revision
+were actually checked.
 
 
 5. Implemented / partial / not implemented

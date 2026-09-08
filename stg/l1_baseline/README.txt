@@ -55,20 +55,30 @@ Layout
 
 Verified here (2026-09-08, gcc 13.1.0 MinGW, LM_THREAD_PROVIDER=single)
 -----------------------------------------------------------------------
-Last run was from scratch: build\ deleted entirely, only the two pinned
-binaries put back, then the three steps below in order.
+Translator slice promoted from root 840c414 by code commit 9638523
+(l1trans.lm1 + generated l1trans.lm1.c + run_smoke.ps1 + seven
+empty-sub / cast / unknown-type / size_t fixtures). gate.ps1 after
+that copy: all green. Fixed point:
 
-  buildCore.lm0.bat                                    exit 0
-  tests\l1\run_seed.ps1                                exit 0  gen0 seed ok
-  tests\l1\run_gen.ps1                                 exit 0
       gen1_c = gen2_c = gen3_c
-      = 35F9726E54D7ED18C3ED0E5B179341CEDCBBD2A84D342CD4EA62C663475955E7
-      build_l1 selftest 0, spaced-path route 0, gen3 bootstrap 0,
-      gen2 smoke ok, gen2 parser accept ok
-  gen0 standalone: expr ifdef define scalar decl_repeat ident c_array
-                   control import_bare                all exit 0
-  gen2 standalone: smoke parser expr ifdef define scalar decl_repeat ident
-                   c_array control import_bare        all exit 0
+      = E07849A6545D8194EA4C3097513DA9C89536833A1F2C03643D8567786DF6B262
+      (= root lm1\build\l1trans.lm1.c)
+
+  gen0 smoke skips those seven regressions (seed is still lm2\l1trans.lm2).
+  gen2 smoke runs them. A gen0 skip is not evidence of the new forms.
+
+This directory's permanent gate is still the hosted path:
+buildCore.lm0.bat, run_seed, run_gen, eleven L1 suites, l2src\run_lmx.ps1
+on gen0 and gen2. It does NOT include native next/check/finalize.
+Source-only published-C → next → check → deferred finalize was proven
+in isolated copies of the root tree (work_chat\grok\outbox\20260908-093900.txt
+and 095100.txt), not by this gate. Do not run native buildCore against
+this shared baseline: finalize would install parser/own .a and printTree
+over the pinned hosted oracle.
+
+Earlier from-scratch hosted numbers (pre-promote gen2 C 35F9726E…) are
+historical. Live-tree isolation after that older run is not a claim
+about 9638523.
 
 Live tree isolation was checked after the run: no file newer than 23:45 under
 repo build\l1trans, build\obj, build\lm0, lm1\build, l1src or tests.
@@ -120,9 +130,12 @@ binaries are put back by hand:
 
 Promotion
 ---------
-Agreed with cursor (work_chat\cursor\outbox\20260907-235829.txt): when an L1
-slice is accepted, cursor writes "промоут: коммит <sha>" into that channel and
-the copy into this directory is done from here. The self-contained set is:
+2026-09-08: 840c414 L1 translator slice copied as ten files and committed
+as 9638523. Cursor is off; that promote was assigned through work_chat\grok.
+
+Earlier agreement with cursor (work_chat\cursor\outbox\20260907-235829.txt):
+when an L1 slice is accepted, write "промоут: коммит <sha>" and copy from
+here. The self-contained set is:
 
     l1src\
     tests\l1\
