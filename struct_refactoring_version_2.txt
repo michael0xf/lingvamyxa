@@ -3487,13 +3487,36 @@ interfaces are frozen. They do not reopen the mandatory contracts in sections
 
 14.1. Exact structural layout behind data
 
-The Lmx header is fixed, but the exact memory layout addressed by data for a
-non-leaf is not yet fixed. Candidates include a contiguous sequence of Lmx
-nodes, a stable arena block, or another bounded representation compatible
-with data plus len. The chosen layout must support stable node addresses,
-ordered children, deep containment copying and range classification. This is
-only a payload-layout choice: every mutable representation chosen here belongs
-to the containing Message's one arena.
+RESOLVED. A non-leaf's data addresses one contiguous block of Lmx child
+occurrences, allocated at construction with exactly the child count that
+construction produces, and sealed: the number of children never grows in place.
+
+Admissible because nothing requires growth. An ordinary assignment changes the
+reference a non-const field holds, not the child count; const fixes that binding
+and does not reach through it (9.1.1). An explicit structural operation may
+append, replace, remove or move occurrences only where its receiver defines that
+mutation, and never reorders. merge does not extend an operand: it creates a
+fresh root and copies children into it, so a merged result is a new block of its
+own final size.
+
+Satisfies the four requirements this section states:
+
+  stable node addresses     nothing relocates, so no reference, root or
+                            reverse-index key ever needs rewriting
+  ordered children          order is the block index; [0] is entry zero, and an
+                            explicit append cannot move it
+  deep containment copying  a block copy followed by rewriting each copied
+                            child's node pointer
+  range classification      the block registers as one range, so a pointer into
+                            it classifies as branch storage
+
+The len unit for a branch range therefore is the child count. That settles 14.2
+for this range only; every other physical range still needs its own single rule.
+
+Open inside this choice and belonging to their own sections: how the block is
+carved out of the Message arena (14.9), and what distinguishes an empty branch
+(14.3). Every mutable representation chosen here still belongs to the containing
+Message's one arena.
 
 14.2. Unit and interpretation of len
 
