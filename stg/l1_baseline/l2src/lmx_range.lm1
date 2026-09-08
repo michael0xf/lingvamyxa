@@ -1,0 +1,83 @@
+include: "l2src/lmx.h" "<stdio.h>" "<stdlib.h>" "<stddef.h>"
+
+# Registered address ranges. Lingvamyxa_spec.txt 2, 6.5, 12.1.
+#
+# A field carries no type tag. `data` is a pointer, and its type is whichever
+# registered range the pointer falls into. 6.5 states the classification is
+# globally available and that this does not share any mutable cell between
+# Messages, so the table itself is unit state, not Message state.
+#
+# The table is addressed as a base pointer plus an index rather than declared
+# as an array member inside a Structure, because L1 lowers `\` unconditionally
+# to `->` and has no by-value member access (L1_spec.txt OPEN 10.9). Pointer
+# arithmetic keeps every entry access pointer-shaped, which needs no `.` and
+# adds neither indirection nor a per-entry allocation.
+
+@: LmxRange lmx_range_table 0
+size_t: lmx_range_count 0U
+size_t: lmx_range_capacity 0U
+
+fn: lmx_ranges_init (size_t: capacity) int
+    if: capacity = 0U
+        return: 1
+    if: lmx_range_table != 0
+        return: 1
+    lmx_range_table: (cast: (@: LmxRange) c.malloc(capacity * c.sizeof(lmx_range_table[0])))
+    if: lmx_range_table = 0
+        return: 1
+    lmx_range_count: 0U
+    lmx_range_capacity: capacity
+return: 0
+
+sub: lmx_ranges_release ()
+    if: lmx_range_table != 0
+        c.free(lmx_range_table)
+    ---
+    lmx_range_table: 0
+    lmx_range_count: 0U
+    lmx_range_capacity: 0U
+end: lmx_ranges_release
+
+fn: lmx_range_register (@: void lo; @: void hi; size_t: stride; int: kind) int
+    @: LmxRange entry
+    if: lmx_range_table = 0
+        return: 1
+    if: lmx_range_count >= lmx_range_capacity
+        return: 1
+    if: lo = 0
+        return: 1
+    if: hi <= lo
+        return: 1
+    if: stride = 0U
+        return: 1
+    entry: lmx_range_table + lmx_range_count
+    entry\lo: lo
+    entry\hi: hi
+    entry\stride: stride
+    entry\kind: kind
+    lmx_range_count: lmx_range_count + 1U
+return: 0
+
+# The whole mechanism: no tag is read, only membership is tested.
+fn: lmx_classify (@: void p) int
+    @: LmxRange entry
+    size_t: index
+    if: p = 0
+        return: c.LMX_KIND_NONE
+    index: 0U
+    while: index < lmx_range_count
+        entry: lmx_range_table + index
+        if: p >= entry\lo && p < entry\hi
+            return: entry\kind
+        ---
+        index: index + 1U
+    ---
+return: c.LMX_KIND_NONE
+
+sub: lmx_cell_init (@: Lmx cell; @: Lmx parent; @: void data)
+    if: cell != 0
+        cell\node: parent
+        cell\len: 0U
+        cell\data: data
+    ---
+end: lmx_cell_init

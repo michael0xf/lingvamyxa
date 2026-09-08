@@ -1,0 +1,70 @@
+predef: "l2src/lmx_range.lm1"
+
+# Exercises the one claim of this unit: the type of a `void *` field is decided
+# by the registered range the address falls into, and by nothing stored on the
+# node. Composed with `predef:` so this stays a single translation unit; L1 has
+# no settled multi-TU / init-before-main story yet (L1_spec.txt OPEN 10.8).
+
+[]: char chars_pool 4 65 66 67 68
+[]: int ints_pool 3 10 20 30
+
+fn: main () int
+    @: Lmx cell
+    int: failures
+    failures: 0
+    if: lmx_ranges_init(8U) != 0
+        c.printf("lmx: range table init failed\n")
+        return: 1
+    if: lmx_range_register((cast: (@: void) chars_pool), (cast: (@: void) (chars_pool + 4)), c.sizeof(chars_pool[0]), c.LMX_KIND_PRIMITIVE) != 0
+        c.printf("lmx: primitive pool registration failed\n")
+        return: 1
+    if: lmx_range_register((cast: (@: void) ints_pool), (cast: (@: void) (ints_pool + 3)), c.sizeof(ints_pool[0]), c.LMX_KIND_ARRAY) != 0
+        c.printf("lmx: array pool registration failed\n")
+        return: 1
+
+    # A range may not be registered twice past capacity, and a malformed one is
+    # refused rather than silently accepted.
+    if: lmx_range_register((cast: (@: void) chars_pool), (cast: (@: void) chars_pool), 1U, c.LMX_KIND_PRIMITIVE) = 0
+        c.printf("lmx: empty range was accepted\n")
+        failures: failures + 1
+    if: lmx_range_register((cast: (@: void) 0), (cast: (@: void) (chars_pool + 1)), 1U, c.LMX_KIND_PRIMITIVE) = 0
+        c.printf("lmx: null low bound was accepted\n")
+        failures: failures + 1
+
+    if: lmx_classify(cast: (@: void) (chars_pool + 1)) != c.LMX_KIND_PRIMITIVE
+        c.printf("lmx: char pool address not classified as primitive\n")
+        failures: failures + 1
+    if: lmx_classify(cast: (@: void) (ints_pool + 2)) != c.LMX_KIND_ARRAY
+        c.printf("lmx: int pool address not classified as array\n")
+        failures: failures + 1
+    if: lmx_classify(cast: (@: void) 0) != c.LMX_KIND_NONE
+        c.printf("lmx: null classified as a value\n")
+        failures: failures + 1
+
+    # An address one past the end of a pool belongs to no range: the bound is
+    # half-open, so adjacent pools cannot bleed into each other.
+    if: lmx_classify(cast: (@: void) (chars_pool + 4)) != c.LMX_KIND_NONE
+        c.printf("lmx: one-past-end address was classified\n")
+        failures: failures + 1
+
+    # The point of the whole unit: an Lmx cell carries no tag, and its data
+    # field is classified by exactly the same rule as a bare pointer.
+    cell: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))
+    if: cell = 0
+        c.printf("lmx: cell allocation failed\n")
+        return: 1
+    lmx_cell_init(cell, 0, (cast: (@: void) (chars_pool + 2)))
+    if: lmx_classify(cell\data) != c.LMX_KIND_PRIMITIVE
+        c.printf("lmx: cell data not classified as primitive\n")
+        failures: failures + 1
+    if: cell\node != 0
+        c.printf("lmx: root cell has a parent\n")
+        failures: failures + 1
+    c.free(cell)
+    lmx_ranges_release()
+
+    if: failures != 0
+        c.printf("lmx range selftest FAILED checks=%d\n", failures)
+        return: 1
+    c.printf("lmx range selftest ok\n")
+    return: 0
