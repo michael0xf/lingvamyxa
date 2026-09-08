@@ -36,7 +36,7 @@ if ($LASTEXITCODE -ne 0) { throw "l1trans failed: l2src\l2trans.lm1" }
 Invoke-Gcc $l2c $l2exe (Join-Path $log "l2trans.gcc.log")
 
 function Clear-Case([string]$stem) {
-    foreach ($ext in @(".lm1", ".c", ".exe", ".err")) {
+    foreach ($ext in @(".lm1", ".c", ".exe", ".err", ".stdout")) {
         $p = Join-Path $out ($stem + $ext)
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
     }
@@ -105,6 +105,39 @@ function Invoke-Negative([string]$src, [string]$stem, [string]$needle) {
     if ($egot -ne $marker) { throw "negative $stem mutated planted exe marker" }
 }
 
+function Invoke-Puts([string]$src, [string]$stem, [int]$expect, [string]$want) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $exe = Join-Path $out ($stem + ".exe")
+    $err = Join-Path $out ($stem + ".err")
+    $captured = Join-Path $out ($stem + ".stdout")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $err
+        throw "l2trans failed: $src"
+    }
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
+    if ($text.IndexOf("c.puts:") -lt 0) {
+        throw "generated L1 missing c.puts in $lm1"
+    }
+    if ($text.IndexOf("include:") -lt 0) {
+        throw "generated L1 missing include in $lm1"
+    }
+    & $l1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
+    Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
+    cmd /c "`"$exe`" > `"$captured`" 2> `"$err`""
+    if ($LASTEXITCODE -ne $expect) {
+        throw "$stem exe exit $($LASTEXITCODE) expected $expect"
+    }
+    $got = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $captured))
+    $got = $got -replace "`r`n", "`n"
+    if ($got -ne $want) {
+        throw "$stem stdout mismatch got=[$got] want=[$want]"
+    }
+}
+
 function Invoke-AdmitEmit([string]$src, [string]$stem, [string]$lit) {
     # Admission + emission only. Do not use OS exit status for large ints.
     Clear-Case $stem
@@ -146,5 +179,15 @@ Invoke-Negative "l2src\tests\entry_bad_sig.lm2" "entry_bad_sig" "incompatible en
 Invoke-Negative "l2src\tests\entry_two_main.lm2" "entry_two_main" "several main"
 Invoke-Negative "l2src\tests\entry_overflow.lm2" "entry_overflow" "return literal not representable as int"
 Invoke-AdmitEmit "l2src\tests\entry_int_max.lm2" "entry_int_max" "2147483647"
+
+Invoke-Puts "l2src\tests\entry_puts_hello.lm2" "entry_puts_hello" 0 "Hello`n"
+Invoke-Puts "l2src\tests\entry_puts_seq.lm2" "entry_puts_seq" 0 "one`ntwo`n"
+Invoke-Puts "l2src\tests\entry_puts_empty.lm2" "entry_puts_empty" 0 "`n"
+Invoke-Puts "l2src\tests\entry_puts_esc.lm2" "entry_puts_esc" 0 "a`"b\c`n"
+Invoke-Puts "l2src\tests\entry_puts_nl.lm2" "entry_puts_nl" 0 "x`ny`n"
+Invoke-Negative "l2src\tests\entry_puts_bad_arg.lm2" "entry_puts_bad_arg" "unsupported argument"
+Invoke-Negative "l2src\tests\entry_puts_extra_arg.lm2" "entry_puts_extra_arg" "extra argument"
+Invoke-Negative "l2src\tests\entry_puts_after_return.lm2" "entry_puts_after_return" "unsupported body"
+Invoke-Negative "l2src\tests\entry_puts_nested.lm2" "entry_puts_nested" "unsupported argument"
 
 "l2trans $gen ok"

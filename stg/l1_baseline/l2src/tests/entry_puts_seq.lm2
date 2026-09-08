@@ -1,6 +1,7 @@
 L2:
     fn: main () int
-        int: x 1
+        c.puts: "one"
+        c.puts: "two"
         return: 0
     end: main
 end: L2

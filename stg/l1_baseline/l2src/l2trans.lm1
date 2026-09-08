@@ -125,20 +125,53 @@ fn: l2_empty_struct (const: @(LmP0Node node)) int
         return: 0
 return: l2_count_active(node\as\structure) = 0
 
-fn: l2_take_return_lit (const: @(LmP0Node body_node); const: @(char path); @@: LmP0Text out_lit) int
-    @: LmP0Field field
-    const: @: LmP0Node stmt
+fn: l2_quoted (const: @(LmP0Text t)) int
+    if: t = 0 || t\data = 0 || t\length < 2U
+        return: 0
+    if: t\data[0] != 34 || t\data[t\length - 1U] != 34
+        return: 0
+    if: t\length >= 6U && t\data[1] = 34 && t\data[2] = 34
+        return: 0
+return: 1
+
+fn: l2_write_text (@: FILE out; const: @(LmP0Text t)) int
+    if: out = 0 || t = 0 || t\data = 0
+        return: 1
+    if: t\length = 0U
+        return: 0
+    if: c.fwrite(t\data, 1U, t\length, out) != t\length
+        return: 1
+return: 0
+
+fn: l2_check_puts (const: @(LmP0Node stmt); const: @(char path)) int
+    const: @: LmP0Frame fr
+    @: LmP0Field arg
+    int: n
+    if: l2_frame_head(stmt, "c.puts") = 0
+        return: l2_error(path, stmt, "unsupported body")
+    fr: stmt\as\frame
+    if: fr\trailer != 0
+        return: l2_error(path, stmt, "unsupported body")
+    if: fr\body = 0
+        return: l2_error(path, stmt, "unsupported argument")
+    n: l2_count_active(fr\body)
+    if: n = 0
+        return: l2_error(path, stmt, "unsupported argument")
+    if: n != 1
+        return: l2_error(path, stmt, "extra argument")
+    arg: l2_next_active(fr\body\first_field)
+    if: arg\value = 0 || arg\value\kind != c.LM_P0_NODE_ATOM
+        return: l2_error(path, stmt, "unsupported argument")
+    if: l2_quoted(arg\value\as\atom) = 0
+        return: l2_error(path, stmt, "unsupported argument")
+return: 0
+
+fn: l2_take_return_stmt (const: @(LmP0Node stmt); const: @(char path); @@: LmP0Text out_lit) int
     const: @: LmP0Frame ret
     @: LmP0Field arg
     if: out_lit = 0
-        return: l2_error(path, body_node, "internal: missing return slot")
+        return: l2_error(path, stmt, "internal: missing return slot")
     out_lit[0]: 0
-    if: body_node = 0 || body_node\kind != c.LM_P0_NODE_STRUCTURE || body_node\as = 0
-        return: l2_error(path, body_node, "unsupported body")
-    if: l2_count_active(body_node\as\structure) != 1
-        return: l2_error(path, body_node, "unsupported body")
-    field: l2_next_active(body_node\as\structure\first_field)
-    stmt: field\value
     if: l2_frame_head(stmt, "return") = 0
         return: l2_error(path, stmt, "unsupported body")
     ret: stmt\as\frame
@@ -156,13 +189,40 @@ fn: l2_take_return_lit (const: @(LmP0Node body_node); const: @(char path); @@: L
     out_lit[0]: arg\value\as\atom
 return: 0
 
-fn: l2_take_main_lit (const: @(LmP0Node fn_node); const: @(char path); @@: LmP0Text out_lit) int
+fn: l2_take_body (const: @(LmP0Node body_node); const: @(char path); @@: LmP0Text out_lit) int
+    @: LmP0Field field
+    @: LmP0Field nxt
+    const: @: LmP0Node stmt
+    if: out_lit = 0
+        return: l2_error(path, body_node, "internal: missing return slot")
+    out_lit[0]: 0
+    if: body_node = 0 || body_node\kind != c.LM_P0_NODE_STRUCTURE || body_node\as = 0
+        return: l2_error(path, body_node, "unsupported body")
+    field: l2_next_active(body_node\as\structure\first_field)
+    if: field = 0
+        return: l2_error(path, body_node, "unsupported body")
+    while: field != 0
+        stmt: field\value
+        nxt: l2_next_active(field\next)
+        if: nxt = 0
+            return: l2_take_return_stmt(stmt, path, out_lit)
+        if: l2_frame_head(stmt, "return")
+            return: l2_error(path, stmt, "unsupported body")
+        if: l2_check_puts(stmt, path) != 0
+            return: 1
+        field: nxt
+return: l2_error(path, body_node, "unsupported body")
+
+fn: l2_take_main_lit (const: @(LmP0Node fn_node); const: @(char path); @@: LmP0Text out_lit; @@: LmP0Structure out_body) int
     @: LmP0Field field
     const: @: LmP0Frame fn_frame
     const: @: LmP0Node name
     const: @: LmP0Node params
     const: @: LmP0Node resty
     const: @: LmP0Node body
+    if: out_body = 0
+        return: l2_error(path, fn_node, "internal: missing body slot")
+    out_body[0]: 0
     if: l2_frame_head(fn_node, "fn") = 0
         return: l2_error(path, fn_node, "unsupported body")
     fn_frame: fn_node\as\frame
@@ -184,7 +244,12 @@ fn: l2_take_main_lit (const: @(LmP0Node fn_node); const: @(char path); @@: LmP0T
         return: l2_error(path, fn_node, "incompatible entry signature")
     field: l2_next_active(field\next)
     body: field\value
-return: l2_take_return_lit(body, path, out_lit)
+    if: l2_take_body(body, path, out_lit) != 0
+        return: 1
+    if: body = 0 || body\kind != c.LM_P0_NODE_STRUCTURE || body\as = 0
+        return: l2_error(path, fn_node, "unsupported body")
+    out_body[0]: body\as\structure
+return: 0
 
 fn: l2_unit_from_root (const: @(LmP0Node root); const: @(char path); @@: LmP0Structure out_unit) int
     @: LmP0Field field
@@ -210,16 +275,17 @@ fn: l2_unit_from_root (const: @(LmP0Node root); const: @(char path); @@: LmP0Str
     out_unit[0]: root\as\structure
 return: 0
 
-fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: LmP0Text out_lit) int
+fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: LmP0Text out_lit; @@: LmP0Structure out_body) int
     @: LmP0Field field
     @: LmP0Field nf
     @: LmP0Node item
     int: mains 0
     int: extras 0
     @: LmP0Node main_node 0
-    if: out_lit = 0
+    if: out_lit = 0 || out_body = 0
         return: l2_error(path, 0, "internal: missing return slot")
     out_lit[0]: 0
+    out_body[0]: 0
     if: unit = 0
         return: l2_error(path, 0, "missing main")
     field: l2_next_active(unit\first_field)
@@ -240,20 +306,53 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
         return: l2_error(path, 0, "missing main")
     if: extras != 0
         return: l2_error(path, main_node, "unsupported body")
-return: l2_take_main_lit(main_node, path, out_lit)
+return: l2_take_main_lit(main_node, path, out_lit, out_body)
 
-fn: l2_emit_l1 (const: @(char out_path); const: @(LmP0Text lit)) int
-    @: FILE out
-    if: out_path = 0 || lit = 0 || lit\data = 0 || lit\length = 0U
+fn: l2_emit_puts_line (@: FILE out; const: @(LmP0Node stmt)) int
+    @: LmP0Field arg
+    arg: l2_next_active(stmt\as\frame\body\first_field)
+    if: c.fputs("        c.puts: ", out) < 0
         return: 1
+    if: l2_write_text(out, arg\value\as\atom) != 0
+        return: 1
+    if: c.fputs("\n", out) < 0
+        return: 1
+return: 0
+
+fn: l2_emit_l1 (const: @(char out_path); const: @(LmP0Structure body); const: @(LmP0Text lit)) int
+    @: FILE out
+    @: LmP0Field field
+    @: LmP0Field nxt
+    int: puts_n 0
+    if: out_path = 0 || body = 0 || lit = 0 || lit\data = 0 || lit\length = 0U
+        return: 1
+    field: l2_next_active(body\first_field)
+    while: field != 0
+        nxt: l2_next_active(field\next)
+        if: nxt != 0
+            puts_n: puts_n + 1
+        field: nxt
     out: c.fopen(out_path, "wb")
     if: out = 0
         c.fprintf(c.stderr, "l2trans error: cannot open %s\n", out_path)
         return: 1
-    if: c.fputs("external:\n    fn: main () int\n        return: ", out) < 0
+    if: puts_n != 0 && c.fputs("include: \"<stdio.h>\"\n", out) < 0
         c.fclose(out)
         return: 1
-    if: c.fwrite(lit\data, 1U, lit\length, out) != lit\length
+    if: c.fputs("external:\n    fn: main () int\n", out) < 0
+        c.fclose(out)
+        return: 1
+    field: l2_next_active(body\first_field)
+    while: field != 0
+        nxt: l2_next_active(field\next)
+        if: nxt != 0 && l2_emit_puts_line(out, field\value) != 0
+            c.fclose(out)
+            return: 1
+        field: nxt
+    if: c.fputs("        return: ", out) < 0
+        c.fclose(out)
+        return: 1
+    if: l2_write_text(out, lit) != 0
         c.fclose(out)
         return: 1
     if: c.fputs("\n    end: main\nend: external\n", out) < 0
@@ -268,6 +367,7 @@ fn: l2_translate (const: @(char in_path); const: @(char out_path)) int
     const: @: LmP0Diagnostic diagnostic
     const: @: LmP0Node root
     @: LmP0Structure unit 0
+    @: LmP0Structure body 0
     @: LmP0Text lit 0
     int: status
     if: l2_path_is_lm2(in_path) = 0
@@ -286,10 +386,10 @@ fn: l2_translate (const: @(char in_path); const: @(char out_path)) int
     if: l2_unit_from_root(root, in_path, @ unit) != 0
         lm_p0_document_destroy(document)
         return: 1
-    if: l2_translate_unit(unit, in_path, @ lit) != 0
+    if: l2_translate_unit(unit, in_path, @ lit, @ body) != 0
         lm_p0_document_destroy(document)
         return: 1
-    status: l2_emit_l1(out_path, lit)
+    status: l2_emit_l1(out_path, body, lit)
     lm_p0_document_destroy(document)
     if: status != 0
         return: 1
