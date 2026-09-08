@@ -1,0 +1,6 @@
+fn: plus (int: a; int: b) int
+    return: a + b
+end: plus
+fn: main () int
+    return: plus(1, 2) != 3
+end: main

@@ -660,15 +660,24 @@ diagnostics, not silent L1 copy and not a canned output.
 
 Unit 9 - first L2 method leaf (add)
 -----------------------------------
-Files: l2trans.lm1, l2trans_add.lm1, tests/add.lm2, tests/entry_sum.lm2,
+Files: l2trans.lm1, tests/add.lm2, tests/entry_sum.lm2,
 tests/entry_add_ret.lm2, negatives unknown/arity/unresolved/trailer
 
 SPEC 21.8 / ABI 6.6  method record {addr, sig}, node first, typed invoke
     DECIDED for this throws-none two-int leaf. C `int name(Lmx *node,
-    int, int)`. Call is exact-typed `name(leaf->node, …)` after
-    classify(data)==METHOD and sig match. addr is stored as LmxEntry
-    for the record domain; the call does not convert addr through
-    void(*)(void).
+    int, int)`. rec.sig is schema L2_SIG_V0 (node, 2 required int
+    formals by value, int result, throws-none, no dyn/varargs). Exact
+    identity is that schema plus the two formal-name byte strings
+    (order matters). The callable's source name is not in the contract.
+    Equality is schema+memcmp of those names, not a hash; a hash would
+    be an accelerator only. This is the linked translation unit, not
+    inter-module canonicalization.
+
+    Call `name(leaf->node, …)` is closed-singleton devirtualization:
+    one leaf, no calls or graph mutations between construction and
+    invoke, translator-bound occurrence. rec.addr is METHOD-domain
+    storage, not dispatch. Not general dynamic typed invocation from
+    the record.
 
 SPEC 21.13.4 / ABI 14.10  result carrier
     DECIDED as backend choice for this sig: int return, throws-none.

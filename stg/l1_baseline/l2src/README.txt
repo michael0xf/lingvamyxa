@@ -5,7 +5,7 @@ Layout
 ------
   units 1–7     runtime helpers written in L1 (range/pool/chars/ref/branch/own)
   run_lmx.ps1   L1→C selftests of those units (not L2→L1)
-  l2trans.lm1   first L2 frontend: P0 parse, subset check, emit .lm1
+  l2trans.lm1   L2 frontend: P0 parse, subset check, emit .lm1
   run_l2trans.ps1
   tests/entry_*.lm2
 
@@ -28,8 +28,10 @@ not. One additional two-int add leaf is a real §21.8 method: containing
 Structure + callable occurrence (`callable->node`), method record in the
 METHOD address domain, exact typed call `name(node, a, b)`. OwnUsed and
 DynRequired are empty for this leaf; the checkpoint is empty but the
-call order is still 21.8. `main` remains the §1.7 adapter. Not L2
-self-build.
+call order is still 21.8. `main` remains the §1.7 adapter. Method name
+is not in the signature identity (L2_SIG_V0 + exact formal names).
+The typed call is closed-singleton devirtualization, not dispatch
+through rec.addr. Not L2 self-build. Single emitter source: l2trans.lm1.
 
 Emit (L1), with `include: "<stdio.h>"` only when there is at least one puts:
 
