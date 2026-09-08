@@ -1,0 +1,6 @@
+fn: add (int: b; int: a) int
+    return: b + a
+end: add
+fn: main () int
+    return: add(1, 2) != 3
+end: main

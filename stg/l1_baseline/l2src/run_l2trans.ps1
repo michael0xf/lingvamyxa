@@ -225,6 +225,29 @@ function Invoke-Leaf([string]$src, [string]$stem, [int]$expect, [string]$name) {
 Invoke-Leaf "l2src\tests\add.lm2" "add" 0 "add"
 Invoke-Leaf "l2src\tests\entry_sum.lm2" "entry_sum" 0 "sum"
 Invoke-Leaf "l2src\tests\entry_add_ret.lm2" "entry_add_ret" 5 "add"
+Invoke-Leaf "l2src\tests\entry_plus.lm2" "entry_plus" 0 "plus"
+Invoke-Leaf "l2src\tests\entry_swap_formals.lm2" "entry_swap_formals" 0 "add"
+
+function Get-LeafContract([string]$stem) {
+    $t = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out ($stem + ".lm1"))))
+    if ($t.IndexOf("rec\sig: 1U") -lt 0) { throw "$stem missing L2_SIG_V0 rec\sig: 1U" }
+    $f0 = $null; $f1 = $null
+    if ($t -match 'l2_sig_f0\) "([^"]*)"') { $f0 = $Matches[1] }
+    if ($t -match 'l2_sig_f1\) "([^"]*)"') { $f1 = $Matches[1] }
+    if (-not $f0 -or -not $f1) { throw "$stem missing exact formal-name identity" }
+    if ($t.IndexOf("Closed-singleton devirtualization") -lt 0) {
+        throw "$stem missing devirtualization proof comment"
+    }
+    "$f0|$f1"
+}
+$cAdd = Get-LeafContract "add"
+$cPlus = Get-LeafContract "entry_plus"
+$cSum = Get-LeafContract "entry_sum"
+$cSwap = Get-LeafContract "entry_swap_formals"
+if ($cAdd -ne "a|b") { throw "add formals $cAdd" }
+if ($cPlus -ne $cAdd) { throw "renaming method changed contract: $cAdd vs $cPlus" }
+if ($cSum -eq $cAdd) { throw "sum x,y must differ from add a,b" }
+if ($cSwap -eq $cAdd) { throw "swapped formals must differ from a,b" }
 Invoke-Negative "l2src\tests\entry_unknown_method.lm2" "entry_unknown_method" "unknown method"
 Invoke-Negative "l2src\tests\entry_bad_arity.lm2" "entry_bad_arity" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_unresolved.lm2" "entry_unresolved" "unresolved name"

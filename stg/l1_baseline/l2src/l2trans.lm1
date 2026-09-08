@@ -468,17 +468,6 @@ fn: l2_end_text (const: @(LmP0Frame frame); const: @(LmP0Text name)) int
         return: 0
 return: l2_text_same(field\value\as\atom, name)
 
-fn: l2_mix (unsigned: h; const: @(LmP0Text t)) unsigned
-    size_t: i
-    if: t = 0 || t\data = 0
-        return: h
-    i: 0U
-    while: i < t\length
-        h: h * 131U + (cast: (unsigned) t\data[i])
-        i: i + 1U
-    h: h * 131U + 1U
-return: h
-
 fn: l2_int_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text out_name) int
     @: LmP0Field f
     if: out_name = 0
@@ -578,9 +567,6 @@ fn: l2_parse_add_fn (const: @(LmP0Node fn_node); const: @(char path)) int
     if: l2_text_same(r2\value\as\atom, l2_fb) = 0
         return: l2_error(path, r2\value, "unresolved name")
     l2_sigv: 1U
-    l2_sigv: l2_mix(l2_sigv, l2_nm)
-    l2_sigv: l2_mix(l2_sigv, l2_fa)
-    l2_sigv: l2_mix(l2_sigv, l2_fb)
 return: 0
 
 fn: l2_parse_main_call (const: @(LmP0Node main_node); const: @(char path)) int
@@ -694,10 +680,22 @@ fn: l2_emit_leaf (const: @(char out_path)) int
     if: out = 0
         c.fprintf(c.stderr, "l2trans error: cannot open %s\n", out_path)
         return: 1
-    if: c.fputs("predef: \"l2src/lmx_branch.lm1\"\ninclude: \"l2src/lmx.h\" \"<stdio.h>\" \"<stdlib.h>\"\n\n", out) < 0
+    if: c.fputs("predef: \"l2src/lmx_branch.lm1\"\ninclude: \"l2src/lmx.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"\n\n", out) < 0
         c.fclose(out)
         return: 1
-    if: c.fputs("fn: ", out) < 0
+    if: c.fputs("# L2_SIG_V0: node + 2 required int formals by value + int result + throws-none + no dyn/varargs.\n# Linked-program identity is this schema plus exact formal-name bytes. Method name is not in the contract.\n# Not inter-module canonicalization.\nconst: @(char l2_sig_f0) \"", out) < 0
+        c.fclose(out)
+        return: 1
+    if: l2_write_text(out, l2_fa) != 0
+        c.fclose(out)
+        return: 1
+    if: c.fputs("\"\nconst: @(char l2_sig_f1) \"", out) < 0
+        c.fclose(out)
+        return: 1
+    if: l2_write_text(out, l2_fb) != 0
+        c.fclose(out)
+        return: 1
+    if: c.fputs("\"\n\nfn: ", out) < 0
         c.fclose(out)
         return: 1
     if: l2_write_text(out, l2_nm) != 0
@@ -742,13 +740,10 @@ fn: l2_emit_leaf (const: @(char out_path)) int
     if: c.fputs(")\n", out) < 0
         c.fclose(out)
         return: 1
-    if: c.fprintf(out, "        rec\\sig: %uU\n", l2_sigv) < 0
+    if: c.fputs("        rec\\sig: 1U\n", out) < 0
         c.fclose(out)
         return: 1
-    if: c.fputs("        if: lmx_range_register((cast: (@: void) rec), (cast: (@: void) (rec + 1)), c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0\n            return: 1\n        unit: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))\n        if: unit = 0\n            return: 1\n        lmx_cell_init(unit, 0, 0)\n        if: lmx_branch_open(unit, 1U) != 0\n            return: 1\n        leaf: lmx_branch_child(unit, 0U)\n        if: leaf = 0\n            return: 1\n        leaf\\data: (cast: (@: void) rec)\n        if: lmx_classify(leaf\\data) != c.LMX_KIND_METHOD\n            return: 1\n        if: rec\\sig != ", out) < 0
-        c.fclose(out)
-        return: 1
-    if: c.fprintf(out, "%uU\n            return: 1\n        if: leaf\\node != unit\n            return: 1\n        got: ", l2_sigv) < 0
+    if: c.fputs("        if: lmx_range_register((cast: (@: void) rec), (cast: (@: void) (rec + 1)), c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0\n            return: 1\n        unit: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))\n        if: unit = 0\n            return: 1\n        lmx_cell_init(unit, 0, 0)\n        if: lmx_branch_open(unit, 1U) != 0\n            return: 1\n        leaf: lmx_branch_child(unit, 0U)\n        if: leaf = 0\n            return: 1\n        leaf\\data: (cast: (@: void) rec)\n        if: lmx_classify(leaf\\data) != c.LMX_KIND_METHOD\n            return: 1\n        if: rec\\sig != 1U\n            return: 1\n        if: l2_sig_f0[0] = 0 || l2_sig_f1[0] = 0\n            return: 1\n        if: leaf\\node != unit\n            return: 1\n        # Closed-singleton devirtualization: one leaf, no calls or graph mutations between construction and invoke; translator bound the occurrence. rec.addr is METHOD-domain storage, not the call. Not general dynamic dispatch from the record.\n        got: ", out) < 0
         c.fclose(out)
         return: 1
     if: l2_write_text(out, l2_nm) != 0
