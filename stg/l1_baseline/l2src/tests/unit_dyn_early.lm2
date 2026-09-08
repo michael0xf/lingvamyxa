@@ -1,0 +1,17 @@
+fn: leaf (int: flag) int
+    if: flag = 0
+        return: 0
+    quote: 1
+    char: quote
+    quote: 66
+    return: 0
+end: leaf
+fn: outer (int: z) int
+    char: quote
+    quote: 65
+    leaf(0)
+    return: 0
+end: outer
+fn: main () int
+    return: 0
+end: main

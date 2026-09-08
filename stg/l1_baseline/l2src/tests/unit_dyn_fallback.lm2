@@ -1,0 +1,18 @@
+fn: leaf () int
+    if: quote = 65
+        return: 1
+    return: 0
+end: leaf
+fn: holder () int
+    char: quote
+    return: 0
+end: holder
+fn: typed (char: quote) int
+    return: leaf()
+end: typed
+fn: caller () int
+    return: leaf()
+end: caller
+fn: main () int
+    return: 0
+end: main

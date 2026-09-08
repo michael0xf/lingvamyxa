@@ -1,0 +1,12 @@
+fn: leaf () int
+    quote: 1
+    char: quote
+    return: 0
+end: leaf
+fn: mid () int
+    size_t: quote
+    return: leaf()
+end: mid
+fn: main () int
+    return: 0
+end: main

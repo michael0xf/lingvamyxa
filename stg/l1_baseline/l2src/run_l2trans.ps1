@@ -1209,4 +1209,126 @@ end: external
 
 Invoke-Heap
 
+# Unit 12: hidden char/size_t through-args, closed direct calls.
+# Types come from own/formal/call-site supplier, not from literal 65/3U.
+# L2-to-L2 calls pass the shared unit pointer (l2_call_node). Distinct
+# graph instances are a 21.8 harness second Structure, not a shared cell.
+
+Invoke-Leaf "l2src\tests\unit_own_only.lm2" "unit_own_only" 0 "m"
+$oo = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own_only.lm1")))
+if ($oo -notmatch 'fn: l2_m0 \(@: Lmx node; int: l2_p0_0\) int') { throw "own-only must keep declared arity, no hidden param" }
+if ($oo -match 'char: l2_p0_1') { throw "own-only must not grow a hidden char parameter" }
+if ($oo.IndexOf("l2_q0") -lt 0) { throw "own-only missing entry graph load" }
+
+Invoke-Leaf "l2src\tests\unit_dyn_leaf.lm2" "unit_dyn_leaf" 0 "leaf"
+$dl = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_leaf.lm1")))
+if ($dl -notmatch 'fn: l2_m0 \(@: Lmx node; char: l2_p0_0\) int') { throw "leaf free-use must intern hidden char after declared arity 0" }
+if ($dl -notmatch 'fn: l2_m1 \(@: Lmx node; int: l2_p1_0\) int') { throw "outer own-only must not grow hidden" }
+if ($dl -notmatch 'l2_m0\(node, l2_q0\)') { throw "outer must pass own cache, not re-read graph at the call" }
+$dleaf = Invoke-SpliceDrive "unit_dyn_leaf" @"
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", l2_m0(unit, 65))
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", l2_m1(unit, 0))
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+# leaf native 65 -> 1, no source writeback (still 0); outer own publishes 65 then leaf reads it
+if ($dleaf -ne "1`n0`n1`n65`n") { throw "dyn leaf hidden read/writeback: $dleaf" }
+
+Invoke-Leaf "l2src\tests\unit_dyn_mid.lm2" "unit_dyn_mid" 0 "leaf"
+$dm = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_mid.lm1")))
+if ($dm -notmatch 'fn: l2_m1 \(@: Lmx node; char: l2_p1_0\) int') { throw "mid must forward hidden char without source mention" }
+if ($dm -notmatch 'l2_m0\(node, l2_p1_0\)') { throw "mid must pass hidden cache to leaf" }
+if ($dm -notmatch 'l2_m1\(node, l2_q0\)') { throw "outer must supply own cache through mid" }
+$dmid = Invoke-SpliceDrive "unit_dyn_mid" @"
+        c.printf("%d\n", l2_m2(unit, 0))
+        return: 0
+    end: main
+end: external
+"@
+if ($dmid -ne "1`n") { throw "dyn mid chain: $dmid" }
+
+Invoke-Leaf "l2src\tests\unit_dyn_predecl.lm2" "unit_dyn_predecl" 0 "leaf"
+$dp = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_predecl.lm1")))
+$leafFn = [regex]::Match($dp, 'fn: l2_m0[\s\S]*?end: l2_m0').Value
+if ($leafFn -notmatch 'l2_p0_0: 1') { throw "predecl assign before bind must write hidden param" }
+if ($leafFn -notmatch 'l2_p0_0: 66') { throw "predecl assign after bind must write the same param" }
+$dpre = Invoke-SpliceDrive "unit_dyn_predecl" @"
+        @: Lmx unit2 0
+        @: Lmx f 0
+        @: Lmx g 0
+        unit2: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))
+        if: unit2 = 0
+            return: 1
+        lmx_cell_init(unit2, 0, 0)
+        if: lmx_branch_open(unit2, 1U) != 0
+            return: 1
+        g: lmx_branch_child(unit2, 0U)
+        if: g = 0
+            return: 1
+        g\data: lmx_char_cell(0)
+        f: lmx_branch_child(unit, 0U)
+        l2_m0(unit2, 65)
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", lmx_char_value(g\data))
+        return: 0
+    end: main
+end: external
+"@
+# distinct 21.8 nodes: unit stays 0; unit2 publishes 66 from hidden->own bind
+if ($dpre -ne "0`n66`n") { throw "predecl distinct-instance publish: $dpre" }
+
+Invoke-Leaf "l2src\tests\unit_dyn_fallback.lm2" "unit_dyn_fallback" 0 "leaf"
+$dfb = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_fallback.lm1")))
+if ($dfb -notmatch 'fn: l2_m0 \(@: Lmx node; char: l2_p0_0\) int') { throw "fallback leaf must free-use hidden char" }
+if ($dfb -notmatch 'fn: l2_m1 \(@: Lmx node\) int') { throw "holder is own-only container, no hidden" }
+if ($dfb -notmatch 'fn: l2_m2 \(@: Lmx node; char: l2_p2_0\) int') { throw "typed formal is the char supplier, not holder name-guess" }
+if ($dfb -notmatch 'fn: l2_m3 \(@: Lmx node; char: l2_p3_0\) int') { throw "caller without source quote still has hidden ABI" }
+if ($dfb -notmatch 'l2_m0\(node, l2_p3_0\)') { throw "caller must pass hidden cache, not reload graph" }
+$dfall = Invoke-SpliceDrive "unit_dyn_fallback" @"
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        f\data: lmx_char_cell(65)
+        c.printf("%d\n", l2_m3(unit, (cast: (char) lmx_char_value(f\data))))
+        c.printf("%d\n", l2_m0(unit, 65))
+        return: 0
+    end: main
+end: external
+"@
+# adapter loads callee-node child, then native C actual; not silent zero
+if ($dfall -ne "1`n1`n") { throw "dyn fallback adapter+native: $dfall" }
+
+Invoke-Leaf "l2src\tests\unit_dyn_early.lm2" "unit_dyn_early" 0 "leaf"
+$dearly = Invoke-SpliceDrive "unit_dyn_early" @"
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", l2_m0(unit, 0, 65))
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", l2_m0(unit, 1, 65))
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($dearly -ne "0`n0`n0`n66`n") { throw "dyn early-return before bind: $dearly" }
+
+Invoke-Leaf "l2src\tests\unit_dyn_sz.lm2" "unit_dyn_sz" 0 "leaf"
+$dsz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_sz.lm1")))
+if ($dsz -notmatch 'fn: l2_m0 \(@: Lmx node; size_t: l2_p0_0\) int') { throw "size_t hidden must come from outer own, not from 3U as a language rule" }
+$dszv = Invoke-SpliceDrive "unit_dyn_sz" @"
+        c.printf("%d\n", l2_m1(unit, 0))
+        return: 0
+    end: main
+end: external
+"@
+if ($dszv -ne "1`n") { throw "dyn size_t chain: $dszv" }
+
+Invoke-Negative "l2src\tests\unit_dyn_miss.lm2" "unit_dyn_miss" "unresolved name"
+Invoke-Negative "l2src\tests\unit_dyn_type.lm2" "unit_dyn_type" "incompatible entry signature"
+Invoke-Negative "l2src\tests\unit_dyn_cap.lm2" "unit_dyn_cap" "unsupported body"
+
 "l2trans $gen ok"

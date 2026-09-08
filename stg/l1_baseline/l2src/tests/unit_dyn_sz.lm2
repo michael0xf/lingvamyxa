@@ -1,0 +1,13 @@
+fn: leaf () int
+    if: value_length = 3U
+        return: 1
+    return: 0
+end: leaf
+fn: outer (int: z) int
+    size_t: value_length
+    value_length: 3U
+    return: leaf()
+end: outer
+fn: main () int
+    return: 0
+end: main
