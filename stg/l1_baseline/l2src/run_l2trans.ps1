@@ -287,6 +287,19 @@ Invoke-Negative "l2src\tests\unit_dup_formal.lm2" "unit_dup_formal" "duplicate f
 Invoke-Negative "l2src\tests\unit_loop.lm2" "unit_loop" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_rec.lm2" "unit_rec" "unsupported recursion"
 Invoke-Negative "l2src\tests\unit_cycle.lm2" "unit_cycle" "unsupported recursion"
+Invoke-Leaf "l2src\tests\unit_eight.lm2" "unit_eight" 0 "m7"
+$e8 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_eight.lm1")))
+if ($e8.IndexOf("lmx_ranges_init(9U)") -lt 0) { throw "unit_eight must init 9 ranges (8 methods + children)" }
+if ($e8.IndexOf("l2_p0_0") -lt 0) { throw "unit_eight missing hygienic formal l2_p0_0" }
+Invoke-Negative "l2src\tests\unit_nine.lm2" "unit_nine" "too many methods"
+Invoke-Leaf "l2src\tests\unit_tempname.lm2" "unit_tempname" 0 "add"
+$tn = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_tempname.lm1")))
+if ($tn -match 'int: l2_t0;') { throw "unit_tempname leaked source formal l2_t0 into L1 params" }
+if ($tn.IndexOf("l2_p0_0") -lt 0) { throw "unit_tempname missing mangled formal" }
+if ($tn.IndexOf('l2_sig_f0) "l2_t0"') -lt 0) { throw "intern must keep source formal name l2_t0" }
+Invoke-Negative "l2src\tests\unit_longname.lm2" "unit_longname" "name too long"
+Invoke-Negative "l2src\tests\unit_deepif.lm2" "unit_deepif" "too deeply nested"
+Invoke-Negative "l2src\tests\unit_node_formal.lm2" "unit_node_formal" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_unknown_method.lm2" "entry_unknown_method" "unknown method"
 Invoke-Negative "l2src\tests\entry_bad_arity.lm2" "entry_bad_arity" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_unresolved.lm2" "entry_unresolved" "unresolved name"

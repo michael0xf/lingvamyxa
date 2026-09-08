@@ -1,0 +1,19 @@
+fn: add (int: a; int: b) int
+    if: a = a
+        if: a = a
+            if: a = a
+                if: a = a
+                    if: a = a
+                        if: a = a
+                            return: a + b
+                        end: if
+                    end: if
+                end: if
+            end: if
+        end: if
+    end: if
+    return: 0
+end: add
+fn: main () int
+    return: add(1, 2)
+end: main

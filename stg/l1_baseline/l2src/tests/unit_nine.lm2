@@ -1,0 +1,30 @@
+fn: m0 (int: a; int: b) int
+    return: a + b
+end: m0
+fn: m1 (int: a; int: b) int
+    return: a + b
+end: m1
+fn: m2 (int: a; int: b) int
+    return: a + b
+end: m2
+fn: m3 (int: a; int: b) int
+    return: a + b
+end: m3
+fn: m4 (int: a; int: b) int
+    return: a + b
+end: m4
+fn: m5 (int: a; int: b) int
+    return: a + b
+end: m5
+fn: m6 (int: a; int: b) int
+    return: a + b
+end: m6
+fn: m7 (int: a; int: b) int
+    return: a + b
+end: m7
+fn: m8 (int: a; int: b) int
+    return: a + b
+end: m8
+fn: main () int
+    return: m8(1, 2) != 3
+end: main
