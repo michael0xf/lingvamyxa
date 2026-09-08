@@ -11,6 +11,22 @@ include: "<stdio.h>" "<string.h>" "<limits.h>"
 @: LmP0Text l2_xr 0
 int: l2_leaf_mode 0
 unsigned: l2_sigv 0U
+unsigned: l2_intern_n 0U
+unsigned: l2_intern_again 0U
+unsigned: l2_intern_swap 0U
+unsigned: l2_intern_probe 0U
+const: @: char l2_s1a 0
+size_t: l2_s1na 0U
+const: @: char l2_s1b 0
+size_t: l2_s1nb 0U
+const: @: char l2_s2a 0
+size_t: l2_s2na 0U
+const: @: char l2_s2b 0
+size_t: l2_s2nb 0U
+const: @: char l2_s3a 0
+size_t: l2_s3na 0U
+const: @: char l2_s3b 0
+size_t: l2_s3nb 0U
 
 prototype:
     fn: l2_parse_leaf (const: @(LmP0Node add_node); const: @(LmP0Node main_node); const: @(char path)) int
@@ -453,6 +469,75 @@ fn: l2_text_same (const: @(LmP0Text a); const: @(LmP0Text b)) int
         return: 0
 return: c.memcmp(a\data, b\data, a\length) = 0
 
+# Translator intern of the full canonical contract: L2_SIG_V0 schema
+# plus exact ordered formal-name bytes. Method name is not interned.
+# IDs are linked-unit intern slots, not inter-module canonicalization.
+fn: l2_intern_pair (const: @(char a); size_t: na; const: @(char b); size_t: nb) unsigned
+    if: a = 0 || b = 0 || na = 0U || nb = 0U
+        return: 0U
+    if: l2_intern_n >= 1U && na = l2_s1na && nb = l2_s1nb && c.memcmp(a, l2_s1a, na) = 0 && c.memcmp(b, l2_s1b, nb) = 0
+        return: 1U
+    if: l2_intern_n >= 2U && na = l2_s2na && nb = l2_s2nb && c.memcmp(a, l2_s2a, na) = 0 && c.memcmp(b, l2_s2b, nb) = 0
+        return: 2U
+    if: l2_intern_n >= 3U && na = l2_s3na && nb = l2_s3nb && c.memcmp(a, l2_s3a, na) = 0 && c.memcmp(b, l2_s3b, nb) = 0
+        return: 3U
+    if: l2_intern_n >= 3U
+        return: 0U
+    l2_intern_n: l2_intern_n + 1U
+    if: l2_intern_n = 1U
+        l2_s1a: a
+        l2_s1na: na
+        l2_s1b: b
+        l2_s1nb: nb
+        return: 1U
+    if: l2_intern_n = 2U
+        l2_s2a: a
+        l2_s2na: na
+        l2_s2b: b
+        l2_s2nb: nb
+        return: 2U
+    l2_s3a: a
+    l2_s3na: na
+    l2_s3b: b
+    l2_s3nb: nb
+return: 3U
+
+fn: l2_intern_prove (const: @(char path); const: @(LmP0Node node)) int
+    unsigned: id
+    if: l2_fa = 0 || l2_fb = 0 || l2_fa\data = 0 || l2_fb\data = 0
+        return: l2_error(path, node, "intern missing formals")
+    l2_intern_n: 0U
+    l2_s1a: 0
+    l2_s1na: 0U
+    l2_s1b: 0
+    l2_s1nb: 0U
+    l2_s2a: 0
+    l2_s2na: 0U
+    l2_s2b: 0
+    l2_s2nb: 0U
+    l2_s3a: 0
+    l2_s3na: 0U
+    l2_s3b: 0
+    l2_s3nb: 0U
+    l2_intern_again: 0U
+    l2_intern_swap: 0U
+    l2_intern_probe: 0U
+    id: l2_intern_pair(l2_fa\data, l2_fa\length, l2_fb\data, l2_fb\length)
+    l2_intern_again: l2_intern_pair(l2_fa\data, l2_fa\length, l2_fb\data, l2_fb\length)
+    if: id = 0U || l2_intern_again != id
+        return: l2_error(path, node, "intern broken")
+    if: l2_text_same(l2_fa, l2_fb) = 0
+        l2_intern_swap: l2_intern_pair(l2_fb\data, l2_fb\length, l2_fa\data, l2_fa\length)
+    if: l2_text_same(l2_fa, l2_fb) = 0 && (l2_intern_swap = 0U || l2_intern_swap = id)
+        return: l2_error(path, node, "intern failed to distinguish swapped formals")
+    l2_intern_probe: l2_intern_pair("a", 1U, "b", 1U)
+    if: l2_text_eq(l2_fa, "a") && l2_text_eq(l2_fb, "b") && l2_intern_probe != id
+        return: l2_error(path, node, "intern failed memcmp of equal names")
+    if: (l2_text_eq(l2_fa, "a") = 0 || l2_text_eq(l2_fb, "b") = 0) && l2_intern_probe = id
+        return: l2_error(path, node, "intern false-equal distinct contracts")
+    l2_sigv: id
+return: 0
+
 fn: l2_end_text (const: @(LmP0Frame frame); const: @(LmP0Text name)) int
     @: LmP0Field field
     if: frame = 0 || frame\trailer = 0 || name = 0
@@ -566,7 +651,6 @@ fn: l2_parse_add_fn (const: @(LmP0Node fn_node); const: @(char path)) int
         return: l2_error(path, r0\value, "unresolved name")
     if: l2_text_same(r2\value\as\atom, l2_fb) = 0
         return: l2_error(path, r2\value, "unresolved name")
-    l2_sigv: 1U
 return: 0
 
 fn: l2_parse_main_call (const: @(LmP0Node main_node); const: @(char path)) int
@@ -670,6 +754,8 @@ fn: l2_parse_leaf (const: @(LmP0Node add_node); const: @(LmP0Node main_node); co
         return: 1
     if: l2_parse_main_call(main_node, path) != 0
         return: 1
+    if: l2_intern_prove(path, add_node) != 0
+        return: 1
 return: 0
 
 fn: l2_emit_leaf (const: @(char out_path)) int
@@ -683,7 +769,7 @@ fn: l2_emit_leaf (const: @(char out_path)) int
     if: c.fputs("predef: \"l2src/lmx_branch.lm1\"\ninclude: \"l2src/lmx.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"\n\n", out) < 0
         c.fclose(out)
         return: 1
-    if: c.fputs("# L2_SIG_V0: node + 2 required int formals by value + int result + throws-none + no dyn/varargs.\n# Linked-program identity is this schema plus exact formal-name bytes. Method name is not in the contract.\n# Not inter-module canonicalization.\nconst: @(char l2_sig_f0) \"", out) < 0
+    if: c.fputs("# interned contract: rec.sig is translator intern id of the full canonical contract.\n# L2_SIG_V0: node + 2 required int formals by value + int result + throws-none + no dyn/varargs.\n# Mapping: id 1 := L2_SIG_V0 + exact ordered formals l2_sig_f0, l2_sig_f1. Method name is not in the contract.\n# Linked-program intern only, not inter-module canonicalization.\n# Runtime: no memcmp; closed-singleton lowering. Formal names are the intern entry for rec.sig.\nconst: @(char l2_sig_f0) \"", out) < 0
         c.fclose(out)
         return: 1
     if: l2_write_text(out, l2_fa) != 0
@@ -695,7 +781,7 @@ fn: l2_emit_leaf (const: @(char out_path)) int
     if: l2_write_text(out, l2_fb) != 0
         c.fclose(out)
         return: 1
-    if: c.fputs("\"\n\nfn: ", out) < 0
+    if: c.fprintf(out, "\"\nunsigned: l2_intern_id %uU\nunsigned: l2_intern_again %uU\nunsigned: l2_intern_swap %uU\nunsigned: l2_intern_probe %uU\n\nfn: ", l2_sigv, l2_intern_again, l2_intern_swap, l2_intern_probe) < 0
         c.fclose(out)
         return: 1
     if: l2_write_text(out, l2_nm) != 0
@@ -740,10 +826,10 @@ fn: l2_emit_leaf (const: @(char out_path)) int
     if: c.fputs(")\n", out) < 0
         c.fclose(out)
         return: 1
-    if: c.fputs("        rec\\sig: 1U\n", out) < 0
+    if: c.fprintf(out, "        rec\\sig: %uU\n", l2_sigv) < 0
         c.fclose(out)
         return: 1
-    if: c.fputs("        if: lmx_range_register((cast: (@: void) rec), (cast: (@: void) (rec + 1)), c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0\n            return: 1\n        unit: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))\n        if: unit = 0\n            return: 1\n        lmx_cell_init(unit, 0, 0)\n        if: lmx_branch_open(unit, 1U) != 0\n            return: 1\n        leaf: lmx_branch_child(unit, 0U)\n        if: leaf = 0\n            return: 1\n        leaf\\data: (cast: (@: void) rec)\n        if: lmx_classify(leaf\\data) != c.LMX_KIND_METHOD\n            return: 1\n        if: rec\\sig != 1U\n            return: 1\n        if: l2_sig_f0[0] = 0 || l2_sig_f1[0] = 0\n            return: 1\n        if: leaf\\node != unit\n            return: 1\n        # Closed-singleton devirtualization: one leaf, no calls or graph mutations between construction and invoke; translator bound the occurrence. rec.addr is METHOD-domain storage, not the call. Not general dynamic dispatch from the record.\n        got: ", out) < 0
+    if: c.fputs("        if: lmx_range_register((cast: (@: void) rec), (cast: (@: void) (rec + 1)), c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0\n            return: 1\n        unit: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))\n        if: unit = 0\n            return: 1\n        lmx_cell_init(unit, 0, 0)\n        if: lmx_branch_open(unit, 1U) != 0\n            return: 1\n        leaf: lmx_branch_child(unit, 0U)\n        if: leaf = 0\n            return: 1\n        leaf\\data: (cast: (@: void) rec)\n        if: lmx_classify(leaf\\data) != c.LMX_KIND_METHOD\n            return: 1\n        if: rec\\sig != l2_intern_id\n            return: 1\n        if: l2_intern_again != l2_intern_id\n            return: 1\n        if: l2_sig_f0[0] = 0 || l2_sig_f1[0] = 0\n            return: 1\n        if: leaf\\node != unit\n            return: 1\n        # Closed-singleton devirtualization: one leaf, no calls or graph mutations between construction and invoke; translator bound the occurrence. rec.addr is METHOD-domain storage, not the call. Not general dynamic dispatch from the record. Runtime does not memcmp formals; rec.sig is the interned id of this unit's intern entry.\n        got: ", out) < 0
         c.fclose(out)
         return: 1
     if: l2_write_text(out, l2_nm) != 0
