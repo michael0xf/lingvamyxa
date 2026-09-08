@@ -1,0 +1,22 @@
+fn: boom (int: z) int
+    node\quote: 90
+    return: 1
+end: boom
+fn: wrap (int: x) int
+    return: x
+end: wrap
+fn: m (int: z) int
+    char: quote
+    if: z = 0
+        return: 0 && wrap(boom(0))
+    if: z = 1
+        return: 1 || wrap(boom(0))
+    if: z = 2
+        return: (0 && wrap(boom(0)))
+    if: z = 3
+        return: (1 || wrap(boom(0)))
+    return: 0 && wrap((boom(0)))
+end: m
+fn: main () int
+    return: 0
+end: main

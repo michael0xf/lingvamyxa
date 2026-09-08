@@ -50,7 +50,13 @@ prototype:
     fn: l2_dfs (int: u) int
     fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest) int
     fn: l2_cat (@: char dest; const: @(char src)) int
+    fn: l2_tok_temp (int: k; @: char dest) int
     fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
+    fn: l2_eval_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
+    fn: l2_eval_and (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
+    fn: l2_fields_has_call (@: LmP0Field field; int: n) int
+    fn: l2_node_has_call (const: @(LmP0Node node)) int
+    fn: l2_advance (@: LmP0Field f; int: k) @: LmP0Field
     fn: l2_emit_expr (const: @(LmP0Node node); int: mi; const: @(char ind)) int
     fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
@@ -698,6 +704,94 @@ fn: l2_is_binop (const: @(LmP0Text t)) int
         return: 1
 return: 0
 
+fn: l2_node_has_call (const: @(LmP0Node node)) int
+    @: LmP0Field f
+    if: node = 0
+        return: 0
+    if: node\kind = c.LM_P0_NODE_FRAME && node\as != 0 && node\as\frame != 0 && l2_find_method(node\as\frame\head) >= 0
+        return: 1
+    if: node\kind = c.LM_P0_NODE_FRAME && node\as != 0 && node\as\frame != 0 && node\as\frame\body != 0
+        return: l2_fields_has_call(node\as\frame\body\first_field, l2_count_active(node\as\frame\body))
+    if: node\kind = c.LM_P0_NODE_STRUCTURE && node\as != 0 && node\as\structure != 0
+        return: l2_fields_has_call(node\as\structure\first_field, l2_count_active(node\as\structure))
+return: 0
+
+fn: l2_fields_has_call (@: LmP0Field field; int: n) int
+    @: LmP0Field f
+    int: i
+    f: l2_next_active(field)
+    i: 0
+    while: i < n && f != 0
+        if: l2_node_has_call(f\value)
+            return: 1
+        f: l2_next_active(f\next)
+        i: i + 1
+return: 0
+
+fn: l2_is_or_atom (const: @(LmP0Node node)) int
+    if: node = 0 || node\kind != c.LM_P0_NODE_ATOM
+        return: 0
+return: l2_text_eq(node\as\atom, "||")
+
+fn: l2_is_and_atom (const: @(LmP0Node node)) int
+    if: node = 0 || node\kind != c.LM_P0_NODE_ATOM
+        return: 0
+return: l2_text_eq(node\as\atom, "&&")
+
+fn: l2_advance (@: LmP0Field f; int: k) @: LmP0Field
+    int: i 0
+    while: i < k && f != 0
+        f: l2_next_active(f\next)
+        i: i + 1
+return: f
+
+fn: l2_span_or (@: LmP0Field field; int: n) int
+    @: LmP0Field f
+    int: i 0
+    f: l2_next_active(field)
+    while: i < n && f != 0
+        if: i > 0 && l2_is_or_atom(f\value)
+            return: i
+        f: l2_next_active(f\next)
+        i: i + 1
+return: i
+
+fn: l2_span_and (@: LmP0Field field; int: n) int
+    @: LmP0Field f
+    int: i 0
+    f: l2_next_active(field)
+    while: i < n && f != 0
+        if: i > 0 && l2_is_and_atom(f\value)
+            return: i
+        f: l2_next_active(f\next)
+        i: i + 1
+return: i
+
+fn: l2_bump_ind (const: @(char ind); @: char dest) int
+    size_t: ln
+    if: dest = 0 || ind = 0
+        return: 1
+    ln: c.strlen(ind)
+    if: ln + 5U >= 32U
+        return: 1
+    c.memcpy(dest, ind, ln)
+    dest[ln]: 32
+    dest[ln + 1U]: 32
+    dest[ln + 2U]: 32
+    dest[ln + 3U]: 32
+    dest[ln + 4U]: 0
+return: 0
+
+fn: l2_new_temp (const: @(char ind); @: char dest) int
+    int: t
+    if: dest = 0
+        return: 1
+    t: l2_tn
+    l2_tn: l2_tn + 1
+    if: c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
+        return: 1
+return: l2_tok_temp(t, dest)
+
 fn: l2_intern_prove (const: @(char path); const: @(LmP0Node node)) int
     unsigned: id
     int: two
@@ -1177,6 +1271,8 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
             ---
         return: l2_tok_text(node\as\atom, dest)
     if: node\kind = c.LM_P0_NODE_STRUCTURE && node\as != 0
+        if: l2_fields_has_call(node\as\structure\first_field, l2_count_active(node\as\structure))
+            return: l2_eval_fields(node\as\structure\first_field, l2_count_active(node\as\structure), mi, ind, dest)
         if: l2_cat(dest, "(") != 0
             return: 1
         if: l2_emit_fields(node\as\structure\first_field, l2_count_active(node\as\structure), mi, ind, l2_lhs) != 0
@@ -1189,8 +1285,6 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     call: node\as\frame
     idx: l2_find_method(call\head)
     if: idx < 0
-        return: 1
-    if: l2_emit_checkpoint(mi, ind) != 0
         return: 1
     a0: l2_next_active(call\body\first_field)
     c.array: [64]: char s0
@@ -1213,6 +1307,8 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
             return: 1
         t: t + 1
         a0: l2_next_active(a0\next)
+    if: l2_emit_checkpoint(mi, ind) != 0
+        return: 1
     t: l2_tn
     l2_tn: l2_tn + 1
     if: l2_m_ret[idx] = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d\n", ind, t) < 0
@@ -1301,6 +1397,92 @@ fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
     c.memcpy(dest, buf, 256U)
 return: 0
 
+fn: l2_eval_and (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
+    @: LmP0Field f
+    @: LmP0Field nxt
+    int: span
+    int: rest
+    c.array: [32]: char deep
+    c.array: [256]: char rhs
+    if: dest = 0 || n <= 0
+        return: 1
+    if: l2_bump_ind(ind, deep) != 0
+        return: 1
+    span: l2_span_and(field, n)
+    if: span = n && l2_fields_has_call(field, n) = 0
+        return: l2_emit_fields(field, n, mi, ind, dest)
+    if: l2_new_temp(ind, dest) != 0
+        return: 1
+    f: l2_next_active(field)
+    if: l2_emit_fields(f, span, mi, ind, rhs) != 0
+        return: 1
+    if: c.fprintf(l2_out, "%s%s: %s\n", ind, dest, rhs) < 0
+        return: 1
+    rest: n - span
+    nxt: l2_advance(f, span)
+    if: rest > 0 && nxt != 0 && l2_is_and_atom(nxt\value)
+        rest: rest - 1
+        nxt: l2_next_active(nxt\next)
+    while: rest > 0 && nxt != 0
+        span: l2_span_and(nxt, rest)
+        if: c.fprintf(l2_out, "%sif: %s\n", ind, dest) < 0
+            return: 1
+        if: l2_emit_fields(nxt, span, mi, deep, rhs) != 0
+            return: 1
+        if: c.fprintf(l2_out, "%s%s: %s\n", deep, dest, rhs) < 0
+            return: 1
+        rest: rest - span
+        nxt: l2_advance(nxt, span)
+        if: rest > 0 && nxt != 0 && l2_is_and_atom(nxt\value)
+            rest: rest - 1
+            nxt: l2_next_active(nxt\next)
+        ---
+return: 0
+
+fn: l2_eval_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
+    @: LmP0Field f
+    @: LmP0Field nxt
+    int: span
+    int: rest
+    c.array: [32]: char deep
+    c.array: [256]: char rhs
+    if: dest = 0 || n <= 0
+        return: 1
+    if: l2_fields_has_call(field, n) = 0
+        return: l2_emit_fields(field, n, mi, ind, dest)
+    if: l2_bump_ind(ind, deep) != 0
+        return: 1
+    span: l2_span_or(field, n)
+    if: span = n
+        return: l2_eval_and(field, n, mi, ind, dest)
+    if: l2_new_temp(ind, dest) != 0
+        return: 1
+    f: l2_next_active(field)
+    if: l2_eval_and(f, span, mi, ind, rhs) != 0
+        return: 1
+    if: c.fprintf(l2_out, "%s%s: %s\n", ind, dest, rhs) < 0
+        return: 1
+    rest: n - span
+    nxt: l2_advance(f, span)
+    if: rest > 0 && nxt != 0 && l2_is_or_atom(nxt\value)
+        rest: rest - 1
+        nxt: l2_next_active(nxt\next)
+    while: rest > 0 && nxt != 0
+        span: l2_span_or(nxt, rest)
+        if: c.fprintf(l2_out, "%sif: %s = 0\n", ind, dest) < 0
+            return: 1
+        if: l2_eval_and(nxt, span, mi, deep, rhs) != 0
+            return: 1
+        if: c.fprintf(l2_out, "%s%s: %s\n", deep, dest, rhs) < 0
+            return: 1
+        rest: rest - span
+        nxt: l2_advance(nxt, span)
+        if: rest > 0 && nxt != 0 && l2_is_or_atom(nxt\value)
+            rest: rest - 1
+            nxt: l2_next_active(nxt\next)
+        ---
+return: 0
+
 fn: l2_emit_sig (int: mi) int
     int: j 0
     if: c.fputs(" (@: Lmx node", l2_out) < 0
@@ -1369,7 +1551,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             while: k < n
                 last: l2_next_active(last\next)
                 k: k + 1
-            if: l2_emit_fields(fr\body\first_field, n - 1, mi, ind, l2_tok) != 0
+            if: l2_eval_fields(fr\body\first_field, n - 1, mi, ind, l2_tok) != 0
                 return: 1
             if: c.fprintf(l2_out, "%sif: %s\n", ind, l2_tok) < 0
                 return: 1
@@ -1389,7 +1571,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             field: l2_next_active(field\next)
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             fr: stmt\as\frame
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && l2_emit_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && l2_emit_checkpoint(mi, ind) != 0
             return: 1
@@ -1399,7 +1581,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             field: l2_next_active(field\next)
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0
             oi: l2_own_find(fr\head)
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && l2_emit_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && c.fprintf(l2_out, "%sl2_q%d: %s\n", ind, oi, l2_tok) < 0
             return: 1
@@ -1415,7 +1597,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             oi: l2_slash_own(fr\head)
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_find_method(fr\head) < 0 && oi < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_emit_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_find_method(fr\head) < 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(node, %uU)\n", ind, (cast: (unsigned) oi)) < 0
             return: 1
@@ -1464,7 +1646,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: c.fputs("predef: \"l2src/lmx_branch.lm1\"\ninclude: \"l2src/lmx.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"\n\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: c.fputs("# interned contract: rec.sig is translator intern id of the full canonical contract.\n# L2_SIG_V0: node + 2 required int formals by value + int result + throws-none + no dyn/varargs.\n# Mapping: id 1 := L2_SIG_V0 + exact ordered formals l2_sig_f0, l2_sig_f1. Method name is not in the contract.\n# Linked-program intern only, not inter-module canonicalization. One intern table for the unit, not reset per method.\n# Runtime: no memcmp; closed-unit devirtualization. Formal names are the intern entry for rec.sig.\nconst: @(char l2_sig_f0) \"", l2_out) < 0
+    if: c.fputs("# interned contract: rec.sig is translator intern id of the full canonical contract.\n# L2_SIG_V0 schema plus arity and exact ordered source formal names/types (int, char, size_t, const char*). Throws-none, no dyn/varargs. Method name is not interned.\n# Mapping: id 1 := first interned contract of this unit. l2_sig_f0/f1 are method 0's first two source names (empty if arity is below that).\n# Linked-program intern only, not inter-module canonicalization. One intern table for the unit, not reset per method.\n# Runtime: no memcmp; closed-unit devirtualization. Formal names are the intern entry for rec.sig.\nconst: @(char l2_sig_f0) \"", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_write_text(l2_out, l2_m_f0[0]) != 0
@@ -1509,7 +1691,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         i: i + 1
-    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char fields are children of callable->node; C cache is typed char; graph data is all_chars cell. Dirty-only checkpoint before calls and return. Explicit node\\name writes the graph, not the cache. &&/|| stay L1 C &&/|| with RHS calls inlined (not prepped). Not for through/own compound other than char.\n\n", l2_out) < 0
+    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char fields are children of callable->node; C cache is typed char; graph data is all_chars cell. Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\\name writes the graph, not the cache. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.\n\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     i: 0

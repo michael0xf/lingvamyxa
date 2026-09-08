@@ -1,0 +1,18 @@
+fn: observe (int: z) int
+    char: quote
+    if: quote = 65
+        quote: 88
+    else:
+        quote: 11
+    return: 1
+end: observe
+fn: m (int: z) int
+    char: quote
+    quote: 65
+    if: 1 && observe(0)
+        return: 0
+    return: 0
+end: m
+fn: main () int
+    return: 0
+end: main

@@ -310,7 +310,7 @@ $pr = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "u
 if ($pr.IndexOf("||") -lt 0 -or $pr.IndexOf("&&") -lt 0) { throw "unit_prec missing &&/|| emission" }
 Invoke-Leaf "l2src\tests\unit_sc.lm2" "unit_sc" 1 "div0"
 $sc = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sc.lm1")))
-if ($sc -notmatch '1 \|\| l2_m\d+\(' -and $sc.IndexOf("1 || l2_m") -lt 0) { throw "unit_sc must inline right-hand call for short-circuit" }
+if ($sc -notmatch 'if: l2_t\d+ = 0' -and $sc -notmatch '1 \|\| l2_m\d+\(') { throw "unit_sc must skip RHS call via guarded if or C ||" }
 
 function Invoke-PredAscii {
     $refLm1 = Join-Path $out "pred_ref.lm1"
@@ -556,6 +556,68 @@ $d4 = Invoke-SpliceDrive "unit_own_lazy" @"
 end: external
 "@
 if ($d4 -ne "0`n") { throw "lazy && evaluated RHS call: $d4" }
+$lz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own_lazy.lm1")))
+if ($lz -match 'l2_m1\(node, \(0 && l2_m0') { throw "unit_own_lazy still inlines nested call into C && actual" }
+
+Invoke-Leaf "l2src\tests\unit_own_skip.lm2" "unit_own_skip" 0 "m"
+$skg = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own_skip.lm1")))
+if ($skg -notmatch 'if: l2_t\d+' ) { throw "unit_own_skip must emit guarded if for lazy &&/||" }
+$d5 = Invoke-SpliceDrive "unit_own_skip" @"
+        l2_m2(unit, 0)
+        l2_m2(unit, 1)
+        l2_m2(unit, 2)
+        l2_m2(unit, 3)
+        l2_m2(unit, 4)
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($d5 -ne "0`n") { throw "0 && wrap(boom) / 1 || wrap(boom) must skip boom: $d5" }
+
+Invoke-Leaf "l2src\tests\unit_own_dirty_rhs.lm2" "unit_own_dirty_rhs" 0 "m"
+$d6 = Invoke-SpliceDrive "unit_own_dirty_rhs" @"
+        l2_m1(unit, 0)
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($d6 -ne "88`n") { throw "dirty own must be published before executed RHS call: $d6" }
+
+Invoke-Leaf "l2src\tests\unit_own_twoact.lm2" "unit_own_twoact" 0 "m"
+$d7 = Invoke-SpliceDrive "unit_own_twoact" @"
+        l2_m3(unit, 0)
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($d7 -ne "50`n") { throw "two actuals must be LTR once (expect b's 50): $d7" }
+
+Invoke-Leaf "l2src\tests\unit_own_prec2.lm2" "unit_own_prec2" 0 "m"
+$d8 = Invoke-SpliceDrive "unit_own_prec2" @"
+        l2_m1(unit, 0)
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m1(unit, 1)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m1(unit, 2)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($d8 -ne "0`n0`n90`n") { throw "mixed &&/|| precedence skip/run: $d8" }
 
 function Invoke-StartsPython {
     $refLm1 = Join-Path $out "spy_ref.lm1"

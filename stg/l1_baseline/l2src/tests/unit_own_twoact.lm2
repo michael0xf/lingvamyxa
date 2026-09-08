@@ -1,0 +1,19 @@
+fn: a (int: z) int
+    node\quote: 49
+    return: 1
+end: a
+fn: b (int: z) int
+    char: quote
+    quote: 50
+    return: 2
+end: b
+fn: add2 (int: x; int: y) int
+    return: x + y
+end: add2
+fn: m (int: z) int
+    char: quote
+    return: add2(a(0), b(0))
+end: m
+fn: main () int
+    return: 0
+end: main
