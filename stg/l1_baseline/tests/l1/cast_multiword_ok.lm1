@@ -1,0 +1,10 @@
+external:
+    fn: main () int
+        char: ch 65
+        if: (cast: (int) (cast: (unsigned char) ch)) != 65
+            return: 1
+        if: (cast: (int) (cast: (unsigned long) 42)) != 42
+            return: 2
+        return: 0
+    end: main
+end: external

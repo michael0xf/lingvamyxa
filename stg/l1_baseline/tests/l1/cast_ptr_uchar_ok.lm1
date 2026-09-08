@@ -1,0 +1,12 @@
+include: "l1src/p0.h"
+
+external:
+    fn: main () int
+        uchar: x 7
+        @: uchar q
+        q: (cast: (@: uchar) @ x)
+        if: (cast: (int) q[0]) != 7
+            return: 1
+        return: 0
+    end: main
+end: external

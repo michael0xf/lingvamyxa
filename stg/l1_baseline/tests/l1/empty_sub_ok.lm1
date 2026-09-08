@@ -1,0 +1,9 @@
+sub: sample_entry ()
+end: sample_entry
+
+external:
+    fn: main () int
+        sample_entry()
+        return: 0
+    end: main
+end: external

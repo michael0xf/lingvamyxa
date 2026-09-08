@@ -313,7 +313,34 @@ Invoke-PreserveFail "tests\l1\invalid_unsupported.lm1" "$obj\invalid_unsupported
 Invoke-PreserveFail "tests\l1\invalid_import_missing.lm1" "$obj\invalid_import_missing.c" "$log\invalid_import_missing.err" "cannot read import"
 Invoke-PreserveFail "tests\l1\invalid_import_cycle.lm1" "$obj\invalid_import_cycle.c" "$log\invalid_import_cycle.err" "import cycle"
 Invoke-PreserveFail "tests\l1\invalid_array_extent.lm1" "$obj\invalid_array_extent.c" "$log\invalid_array_extent.err" "array missing extent"
-
+# Requires gen1+: fixtures for l1src fixes not in lm2 seed (TASK5 + empty_sub + cast path).
+# gen0 is built from lm2\l1trans.lm2 via run_seed; these checks would stay red forever on gen0.
+if ($gen -eq "gen0") {
+    Write-Log "skip requires-gen1+ on gen0: invalid_unknown_type, invalid_unknown_ctype, scalar_size_t_ok, empty_sub_ok, cast_multiword_ok, cast_uchar_alias_ok, cast_ptr_uchar_ok"
+} else {
+    Invoke-PreserveFail "tests\l1\invalid_unknown_type.lm1" "$obj\invalid_unknown_type.c" "$log\invalid_unknown_type.err" "unknown type name"
+    Invoke-PreserveFail "tests\l1\invalid_unknown_ctype.lm1" "$obj\invalid_unknown_ctype.c" "$log\invalid_unknown_ctype.err" "unknown type name"
+    Invoke-Translate "tests\l1\scalar_size_t_ok.lm1" "$obj\scalar_size_t_ok.c"
+    Assert-CHas "$obj\scalar_size_t_ok.c" "size_t x = 0;"
+    Invoke-CcRun "$obj\scalar_size_t_ok.c" "$bin\scalar_size_t_ok.exe" 0 $null
+    Invoke-Translate "tests\l1\empty_sub_ok.lm1" "$obj\empty_sub_ok.c"
+    Assert-CHas "$obj\empty_sub_ok.c" "void sample_entry(void)"
+    Assert-CHas "$obj\empty_sub_ok.c" "sample_entry();"
+    Assert-CLacks "$obj\empty_sub_ok.c" "void sample_entry(void);"
+    Invoke-CcRun "$obj\empty_sub_ok.c" "$bin\empty_sub_ok.exe" 0 $null
+    Invoke-Translate "tests\l1\cast_multiword_ok.lm1" "$obj\cast_multiword_ok.c"
+    Assert-CHas "$obj\cast_multiword_ok.c" "(unsigned char)"
+    Assert-CLacks "$obj\cast_multiword_ok.c" "charp"
+    Invoke-CcRun "$obj\cast_multiword_ok.c" "$bin\cast_multiword_ok.exe" 0 $null
+    Invoke-Translate "tests\l1\cast_uchar_alias_ok.lm1" "$obj\cast_uchar_alias_ok.c"
+    Assert-CHas "$obj\cast_uchar_alias_ok.c" "(uchar)"
+    Assert-CLacks "$obj\cast_uchar_alias_ok.c" "(unsigned char) ch"
+    Invoke-CcRun "$obj\cast_uchar_alias_ok.c" "$bin\cast_uchar_alias_ok.exe" 0 $null
+    Invoke-Translate "tests\l1\cast_ptr_uchar_ok.lm1" "$obj\cast_ptr_uchar_ok.c"
+    Assert-CHas "$obj\cast_ptr_uchar_ok.c" "uchar *"
+    Assert-CLacks "$obj\cast_ptr_uchar_ok.c" "unsigned char *"
+    Invoke-CcRun "$obj\cast_ptr_uchar_ok.c" "$bin\cast_ptr_uchar_ok.exe" 0 $null
+}
 $dirDest = Join-Path $obj "publish_fail.c"
 if (Test-Path -LiteralPath $dirDest) { Remove-Item -LiteralPath $dirDest -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $dirDest | Out-Null
