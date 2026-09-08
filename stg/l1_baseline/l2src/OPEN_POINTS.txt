@@ -515,6 +515,47 @@ C. The related case: values from the enclosing scope
   A forwarded dynamic name never becomes an own graph field merely by being
   forwarded.
 
+
+Unit 6 - branch storage
+-----------------------
+Files: lmx_branch.lm1, lmx_branch_selftest.lm1
+
+ABI 14.1  Exact structural layout behind data
+    RESOLVED, and implemented as resolved. A non-leaf's data addresses one
+    contiguous block of Lmx children, allocated at construction with exactly the
+    count construction produces, and sealed. There is deliberately NO append in
+    this unit; growing a Structure is not a thing that happens, and merge builds
+    a fresh root of its own final size (19.20).
+
+    The selftest asserts each of the four requirements 14.1 states, rather than
+    assuming them: stable addresses (a second lookup returns the same cell),
+    ordered children (the block index is the order, and [0] is entry zero), deep
+    containment copying (block copy, then each copied child's node rewritten to
+    the new parent), and range classification (an interior child classifies like
+    the first, because the block is one range).
+
+ABI 14.2  Unit and interpretation of len
+    SETTLED FOR THIS RANGE by 14.1's resolution: a branch node's len is its
+    child count. This unit is the first place the tree reads an Lmx header's
+    len, and rule R4 is what makes that legitimate - a write into a field of
+    open meaning stays a non-decision only while nothing reads it, and the read
+    became legal exactly when the decision landed.
+
+    Still open for every other physical range. Nothing here reads a leaf's len.
+
+ABI 14.6  Explicit graph references during merge
+    AVOIDED, deliberately and visibly. A copied child's payload reference is
+    carried across AS a reference and is not followed. 14.6 has not chosen
+    whether a reference into the copied subtree is remapped to its copy or keeps
+    its original target, so nothing here remaps one, and the selftest asserts
+    the copied payload is the same reference the source holds. Arises at the
+    first real merge. Then: ASK.
+
+ABI 14.3  Empty representation
+    Still open, and now visibly so. lmx_branch_open refuses a zero child count
+    rather than deciding what an empty branch looks like. Arises when an empty
+    Structure must be told from a null payload. Then: ASK.
+
 Carried forward, not yet touched
 --------------------------------
 ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).

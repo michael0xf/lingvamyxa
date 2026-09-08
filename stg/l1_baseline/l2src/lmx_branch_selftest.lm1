@@ -1,0 +1,134 @@
+predef: "l2src/lmx_branch.lm1"
+include: "<stdio.h>"
+
+# 14.1's four requirements, each asserted rather than assumed:
+# stable addresses, ordered children, deep containment copying, and range
+# classification. Plus the thing the resolution turns on - the block is sealed.
+
+fn: main () int
+    @: Lmx root
+    @: Lmx copy
+    @: Lmx a
+    @: Lmx b
+    @: Lmx c
+    @: Lmx again
+    @: Lmx copied
+    int: failures
+    failures: 0
+
+    if: lmx_ranges_init(8U) != 0
+        c.printf("lmx: range table init failed\n")
+        return: 1
+    if: lmx_chars_init() != 0
+        c.printf("lmx: char pool init failed\n")
+        return: 1
+    root: (cast: (@: Lmx) c.calloc(1U, c.sizeof(c.Lmx)))
+    copy: (cast: (@: Lmx) c.calloc(1U, c.sizeof(c.Lmx)))
+    if: root = 0 || copy = 0
+        c.printf("lmx: allocation failed\n")
+        return: 1
+
+    if: lmx_branch_open(root, 3U) != 0
+        c.printf("lmx: branch open failed\n")
+        return: 1
+
+    # 14.1 settles the len unit for a branch range: child count. This is the
+    # first read of an Lmx header's len in this tree, and it is legitimate only
+    # because that decision landed.
+    if: root\len != 3U
+        c.printf("lmx: branch len is not the child count\n")
+        failures: failures + 1
+    if: lmx_branch_count(root) != 3U
+        c.printf("lmx: child count disagrees with len\n")
+        failures: failures + 1
+
+    a: lmx_branch_child(root, 0U)
+    b: lmx_branch_child(root, 1U)
+    c: lmx_branch_child(root, 2U)
+    if: a = 0 || b = 0 || c = 0
+        c.printf("lmx: child by index missing\n")
+        return: 1
+
+    # Ordered children: order is the block index, and [0] is entry zero.
+    if: b != a + 1 || c != a + 2
+        c.printf("lmx: children are not contiguous in order\n")
+        failures: failures + 1
+    if: lmx_branch_child(root, 3U) != 0
+        c.printf("lmx: index past the child count returned a child\n")
+        failures: failures + 1
+
+    # Containment: each child's node is the actual parent (19.20 step 3).
+    if: a\node != root || b\node != root || c\node != root
+        c.printf("lmx: a child does not point at its parent\n")
+        failures: failures + 1
+
+    # Range classification: a pointer into the block is branch storage, and the
+    # block is one range, so an interior child classifies like the first.
+    if: lmx_type_of(cast: (@: void) a) != c.LMX_TYPE_BRANCH
+        c.printf("lmx: first child is not branch storage\n")
+        failures: failures + 1
+    if: lmx_type_of(cast: (@: void) c) != c.LMX_TYPE_BRANCH
+        c.printf("lmx: last child is not branch storage\n")
+        failures: failures + 1
+    if: lmx_classify(cast: (@: void) b) != c.LMX_KIND_CHILDREN
+        c.printf("lmx: child does not read as children storage\n")
+        failures: failures + 1
+
+    # Stable addresses: nothing relocates, so asking again gives the same cell.
+    again: lmx_branch_child(root, 1U)
+    if: again != b
+        c.printf("lmx: a child moved between two lookups\n")
+        failures: failures + 1
+
+    # A leaf payload keeps its own classification; the branch does not swallow
+    # the type of what its children point at.
+    a\data: lmx_char_cell(65)
+    if: lmx_type_of(a\data) != c.LMX_TYPE_CHAR
+        c.printf("lmx: a child's payload lost its own type\n")
+        failures: failures + 1
+    if: lmx_type_of(cast: (@: void) a) != c.LMX_TYPE_BRANCH
+        c.printf("lmx: giving a child a payload changed the child's own range\n")
+        failures: failures + 1
+
+    # Deep containment copying: block copy, then each copied child's node is
+    # rewritten to the new parent. Payload references are copied AS references
+    # and not followed - 14.6 has not chosen whether to remap them.
+    b\data: lmx_char_cell(66)
+    if: lmx_branch_copy(root, copy) != 0
+        c.printf("lmx: branch copy failed\n")
+        return: 1
+    if: copy\len != 3U
+        c.printf("lmx: copy has a different child count\n")
+        failures: failures + 1
+    copied: lmx_branch_child(copy, 1U)
+    if: copied = 0
+        c.printf("lmx: copied child missing\n")
+        return: 1
+    if: copied = b
+        c.printf("lmx: copy shares its children with the source\n")
+        failures: failures + 1
+    if: copied\node != copy
+        c.printf("lmx: copied child still points at the old parent\n")
+        failures: failures + 1
+    if: copied\data != b\data
+        c.printf("lmx: copy did not carry the payload reference across\n")
+        failures: failures + 1
+    if: lmx_type_of(copied\data) != c.LMX_TYPE_CHAR
+        c.printf("lmx: copied payload lost its type\n")
+        failures: failures + 1
+    if: b\node != root
+        c.printf("lmx: copying disturbed the source\n")
+        failures: failures + 1
+
+    lmx_branch_release(root)
+    lmx_branch_release(copy)
+    c.free(root)
+    c.free(copy)
+    lmx_chars_release()
+    lmx_ranges_release()
+
+    if: failures != 0
+        c.printf("lmx branch selftest FAILED checks=%d\n", failures)
+        return: 1
+    c.printf("lmx branch selftest ok\n")
+    return: 0

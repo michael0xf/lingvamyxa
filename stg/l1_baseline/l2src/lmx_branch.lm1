@@ -1,0 +1,117 @@
+predef: "l2src/lmx_chars.lm1"
+
+# Branch storage. Lingvamyxa_spec.txt 2, 19.20; ABI 14.1 (RESOLVED), 14.2.
+#
+# 14.1: a non-leaf's data addresses one contiguous block of Lmx child
+# occurrences, allocated at construction with exactly the child count that
+# construction produces, and SEALED - the number of children never grows in
+# place. There is deliberately no append here; growing a Structure is not a
+# thing that happens. merge builds a fresh root of its own final size (19.20).
+#
+# The block registers as one range of type BRANCH, so a pointer into it
+# classifies as branch storage the same way every other pointer is classified.
+#
+# 14.1 also settles the len unit FOR THIS RANGE: a branch node's len is its
+# child count. That is the first place this tree reads an Lmx header's len, and
+# it is legitimate exactly because the decision landed - the ledger's rule R4
+# said a write into a field of open meaning stays a non-decision only while
+# nothing reads it.
+#
+# 19.20 gives the construction order this follows: allocate the child
+# occurrences with stable live addresses, then set each child's node to its
+# actual containment parent. Names are not involved at any point; a field is
+# reached by its index, which the translator knows.
+
+fn: lmx_branch_open (@: Lmx parent; size_t: children) int
+    @: Lmx block
+    size_t: index
+    @: Lmx child
+    if: parent = 0
+        return: 1
+    if: children = 0U
+        return: 1
+    if: children > ((cast: (size_t) -1) / c.sizeof(c.Lmx))
+        return: 1
+    block: (cast: (@: Lmx) c.calloc(children, c.sizeof(c.Lmx)))
+    if: block = 0
+        return: 1
+    if: lmx_range_register((cast: (@: void) block), (cast: (@: void) (block + children)), c.sizeof(c.Lmx), c.LMX_KIND_CHILDREN, c.LMX_TYPE_BRANCH) != 0
+        c.free(block)
+        return: 1
+    index: 0U
+    while: index < children
+        child: block + index
+        child\node: parent
+        child\len: 0U
+        child\data: 0
+        index: index + 1U
+    ---
+    parent\data: (cast: (@: void) block)
+    parent\len: children
+return: 0
+
+sub: lmx_branch_release (@: Lmx parent)
+    if: parent != 0
+        if: parent\data != 0
+            c.free(parent\data)
+        ---
+        parent\data: 0
+        parent\len: 0U
+    ---
+end: lmx_branch_release
+
+# A child by index. The translator resolves a field name to this index; the
+# runtime never sees a name.
+fn: lmx_branch_child (@: Lmx parent; size_t: index) @: Lmx
+    @: Lmx block
+    if: parent = 0
+        return: 0
+    if: parent\data = 0
+        return: 0
+    if: lmx_type_of(parent\data) != c.LMX_TYPE_BRANCH
+        return: 0
+    if: index >= parent\len
+        return: 0
+    block: (cast: (@: Lmx) parent\data)
+return: block + index
+
+fn: lmx_branch_count (@: Lmx parent) size_t
+    if: parent = 0
+        return: 0U
+    if: parent\data = 0
+        return: 0U
+    if: lmx_type_of(parent\data) != c.LMX_TYPE_BRANCH
+        return: 0U
+return: parent\len
+
+# Deep containment copying, which 14.1 lists among the requirements the sealed
+# block has to satisfy: copy the block, then rewrite each copied child's node to
+# the new parent. Payload references are copied as references and are NOT
+# followed - 14.6 has not chosen whether a reference into the copied subtree is
+# remapped, so nothing here remaps one.
+fn: lmx_branch_copy (@: Lmx source; @: Lmx target) int
+    @: Lmx from
+    @: Lmx to
+    @: Lmx child
+    @: Lmx source_child
+    size_t: index
+    size_t: children
+    if: source = 0 || target = 0
+        return: 1
+    children: lmx_branch_count(source)
+    if: children = 0U
+        return: 1
+    if: lmx_branch_open(target, children) != 0
+        return: 1
+    from: (cast: (@: Lmx) source\data)
+    to: (cast: (@: Lmx) target\data)
+    index: 0U
+    while: index < children
+        source_child: from + index
+        child: to + index
+        child\len: source_child\len
+        child\data: source_child\data
+        child\node: target
+        index: index + 1U
+    ---
+return: 0
