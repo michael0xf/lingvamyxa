@@ -1,0 +1,127 @@
+predef: "mixa_manager/mixa_text_rect.lm1"
+include: "<stdio.h>" "<string.h>"
+
+# Milestone 1 TextRect contract: open, address, fill, put_text, dump.
+
+fn: main () int
+    @: MixaTextRect rect
+    @: MixaCell a
+    @: MixaCell b
+    @: MixaCell c
+    @: MixaCell p
+    []: char dump_buf 64
+    []: char tiny 4
+    size_t: n
+    size_t: i
+    int: failures
+    failures: 0
+
+    rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    if: rect = 0
+        c.printf("mixa: rect header allocation failed\n")
+        return: 1
+
+    if: mixa_rect_open(rect, 3U, 5U) != 0
+        c.printf("mixa: open 3x5 failed\n")
+        return: 1
+    if: rect\rows != 3U || rect\cols != 5U
+        c.printf("mixa: open 3x5 rows/cols mismatch\n")
+        failures: failures + 1
+
+    if: mixa_rect_open(rect, 0U, 5U) = 0
+        c.printf("mixa: open accepted 0 rows\n")
+        failures: failures + 1
+    if: mixa_rect_open(rect, 3U, 0U) = 0
+        c.printf("mixa: open accepted 0 cols\n")
+        failures: failures + 1
+
+    n: mixa_rect_dump(rect, dump_buf, 64U)
+    if: n != 18U
+        c.printf("mixa: fresh dump length wrong\n")
+        failures: failures + 1
+    if: c.strcmp(dump_buf, "     \n     \n     \n") != 0
+        c.printf("mixa: fresh dump not three lines of five spaces\n")
+        failures: failures + 1
+
+    a: mixa_cell_at(rect, 0U, 0U)
+    b: mixa_cell_at(rect, 0U, 1U)
+    c: mixa_cell_at(rect, 1U, 0U)
+    if: a = 0 || b = 0 || c = 0
+        c.printf("mixa: cell_at in bounds returned 0\n")
+        failures: failures + 1
+    if: b != a + 1
+        c.printf("mixa: cell_at not contiguous within row\n")
+        failures: failures + 1
+    if: c != a + 5
+        c.printf("mixa: cell_at not row-major across rows\n")
+        failures: failures + 1
+
+    if: mixa_cell_at(rect, 3U, 0U) != 0
+        c.printf("mixa: cell_at row OOB not 0\n")
+        failures: failures + 1
+    if: mixa_cell_at(rect, 0U, 5U) != 0
+        c.printf("mixa: cell_at col OOB not 0\n")
+        failures: failures + 1
+
+    mixa_rect_fill(rect, 65U, 1U, 2U, 0U)
+    n: mixa_rect_dump(rect, dump_buf, 64U)
+    if: n != 18U || c.strcmp(dump_buf, "AAAAA\nAAAAA\nAAAAA\n") != 0
+        c.printf("mixa: fill not visible in dump\n")
+        failures: failures + 1
+
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    n: mixa_rect_put_text(rect, 0U, 0U, "Hi", 3U, 4U, 0U)
+    if: n != 2U
+        c.printf("mixa: put_text return count wrong\n")
+        failures: failures + 1
+    n: mixa_rect_dump(rect, dump_buf, 64U)
+    if: c.strcmp(dump_buf, "Hi   \n     \n     \n") != 0
+        c.printf("mixa: put_text write not visible in dump\n")
+        failures: failures + 1
+
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    n: mixa_rect_put_text(rect, 0U, 3U, "HELLO", 0U, 0U, 0U)
+    if: n != 2U
+        c.printf("mixa: put_text right-edge clip count wrong\n")
+        failures: failures + 1
+    n: mixa_rect_dump(rect, dump_buf, 64U)
+    if: c.strcmp(dump_buf, "   HE\n     \n     \n") != 0
+        c.printf("mixa: put_text wrapped instead of clipping\n")
+        failures: failures + 1
+
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    p: mixa_cell_at(rect, 1U, 2U)
+    if: p = 0
+        c.printf("mixa: cell_at for pointer write failed\n")
+        failures: failures + 1
+    ---
+    if: p != 0
+        p\codepoint: 90U
+        p\width: 1U
+    ---
+    n: mixa_rect_dump(rect, dump_buf, 64U)
+    if: c.strcmp(dump_buf, "     \n  Z  \n     \n") != 0
+        c.printf("mixa: write via cell_at pointer not visible in dump\n")
+        failures: failures + 1
+
+    i: 0U
+    while: i < 4U
+        tiny[i]: (cast: (char) 88)
+        i: i + 1U
+    ---
+    n: mixa_rect_dump(rect, tiny, 4U)
+    if: n != 0U
+        c.printf("mixa: dump into tiny buffer did not return 0\n")
+        failures: failures + 1
+    if: tiny[0] != 88 || tiny[1] != 88 || tiny[2] != 88 || tiny[3] != 88
+        c.printf("mixa: dump into tiny buffer wrote past end\n")
+        failures: failures + 1
+
+    mixa_rect_release(rect)
+    c.free(rect)
+
+    if: failures != 0
+        c.printf("mixa core selftest FAILED checks=%d\n", failures)
+        return: 1
+    c.printf("mixa core selftest ok\n")
+    return: 0
