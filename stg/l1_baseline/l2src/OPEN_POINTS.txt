@@ -76,13 +76,27 @@ L1 10.8   One C TU vs many; init-before-main
     program-wide across modules. Then: ASK cursor.
 
 L1 10.9   Field image \ vs . vs ->
-    DECIDED, and not by L1. SPEC 11.2 (around line 7133) keeps minimal
-    field-follow address-oriented: value\field is the direct form when the
-    binding is a typed address, and ANSI C value-member access goes through the
-    explicit C door c.value.field. So \ lowering to -> is correct, not a gap.
-    Recorded because this unit asked for it to change and was wrong; see
-    work_chat\cursor\inbox\20260908-004726.txt.
+    Not an open point, and not one this code may reopen. The user has ruled
+    Valued member access out everywhere, L1 and L2 alike: if something is
+    written with it, it gets fixed. The single admitted route is the explicit
+    C door - c.value.field, which lowers to value.field and which l1trans
+    already supports today - reserved for extravagant exceptions.
 
+    So \ lowering unconditionally to -> is correct, and address forms here are
+    permanent, not a stage waiting on an L1 capability. SPEC 11.2 (around line
+    7133) says the same for L2 on its own terms: minimal field-follow is
+    address-oriented, value\field is the direct form when the binding is a
+    typed address. Taking a pool entry by value would discard the very address
+    that classification reads, so the rule and the mechanism agree.
+
+    History, kept because the mistake is instructive. This unit asked for the
+    dot and was wrong twice over: it was writing C-shaped records where the
+    spec keeps pool entries addressed, and it read an L1 capability question as
+    an L2 semantics question. The request was withdrawn in
+    work_chat\cursor\inbox\20260908-004726.txt. A grok_bot task to implement
+    the dot in L1 was raised off the back of it and had no consumer at all -
+    l1src itself never takes a member by value anywhere, and self-hosts to a
+    gen1=gen2=gen3 fixed point without it. The user cancelled it directly.
 
 Carried forward, not yet touched
 --------------------------------
