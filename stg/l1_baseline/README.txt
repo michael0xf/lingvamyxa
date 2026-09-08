@@ -2,7 +2,7 @@ l1_baseline — frozen L1 slice, and a self-contained build root
 ==============================================================
 
 Original snapshot note (2026-09-07 23:26) is kept as README.snapshot-origin.txt.
-This file describes the state after 2026-09-07 23:5x, when the tree was made
+This file describes the state after 2026-09-08, when the tree was made
 buildable on its own.
 
 What this directory is
@@ -27,18 +27,25 @@ build\l1trans, build\obj, build\lm0 or lm1\build.
 Invariant this depends on
 -------------------------
 No absolute paths and no "..\" escaping the build root, anywhere in l1src\
-or tests\l1\. If that breaks, the split breaks.
+or tests\l1\. Host-toolchain defaults are the one accepted exception:
+l1src\buildCore.lm1 hardcodes C:/Qt/Tools/... for cmake/gcc/ar/ranlib. Those
+are machine paths, not build-tree paths.
 
 Layout
 ------
   l1src\            frozen L1 sources (unchanged since the snapshot)
   tests\l1\         frozen fixtures + the 13 run_*.ps1 runners
-  tests\*.lmx       16 P0 fixtures run_parser.ps1 needs from the repo-root
-                    tests\ (11 positive, 5 malformed). Added 2026-09-07 23:5x;
+  tests\*.lmx       16 P0 fixtures run_parser.ps1 loads from the repo-root
+                    tests\ (11 positive, 5 malformed). Added 2026-09-08;
                     without them run_gen dies with
                     "missing fixture tests\block_string.lmx".
-  lm1\              copy of repo lm1\ — include dir for the seed gcc and the
-                    lm1\build\*.lm1.c inputs of buildCore.lm0.bat
+  lm1\build\        the seven generated C files the buildCore chain compiles:
+                    parser, own, l1trans, printTree, make, finalize, buildCore.
+                    The five unused old-chain ones (trans, trans_library,
+                    vcpkgFetch, rest_lmx_http_client, rest_lmx_http_server)
+                    are deliberately not copied. The lm1\ directory must also
+                    simply exist: run_seed.ps1 checks for it as the seed gcc
+                    -I include dir.
   lm2\              copy of repo lm2\ — l1trans.lm2 seed source, parser_abi.lm2,
                     and the five default registry files
   buildCore.lm0.bat copy of the repo script (C bootstrap)
@@ -46,8 +53,8 @@ Layout
   oldchain\         frozen old-L2-chain seed prerequisites; see its README.txt
   build\            local outputs only: lm0\, l1trans\, obj\
 
-Verified here (2026-09-07 23:49–00:0x, gcc 13.1.0 MinGW, LM_THREAD_PROVIDER=single)
------------------------------------------------------------------------------------
+Verified here (2026-09-08, gcc 13.1.0 MinGW, LM_THREAD_PROVIDER=single)
+-----------------------------------------------------------------------
   buildCore.lm0.bat                                    exit 0
   tests\l1\run_seed.ps1                                exit 0  gen0 seed ok
   tests\l1\run_gen.ps1                                 exit 0
@@ -72,19 +79,37 @@ needs. Restore them before run_seed:
     copy /Y oldchain\lib\libparser.lm0.a build\lm0\
     copy /Y oldchain\lib\libown.lm0.a    build\lm0\
 
-See oldchain\README.txt. Reported upstream as bug 1 in
-work_chat\cursor\inbox\20260907-235829.txt.
+See oldchain\README.txt. Reported upstream in
+work_chat\cursor\inbox\20260907-235829.txt; cursor accepted fix (a) —
+drop both ar/ranlib blocks from buildCore.lm0.bat and .sh, since nothing
+links those archives any more — and queued it as TASK3 for grok_bot.
+
+What git tracks here
+--------------------
+Same policy as the repo root: no binaries. See the .gitignore in this
+directory. Tracked: l1src\, tests\, lm2\, the seven generated C files under
+lm1\build\, the two buildCore scripts, the READMEs. Not tracked: build\
+(everything under it is regenerated) and oldchain\lib\*.a.
+
+So a fresh checkout of this directory does not build until the pinned
+binaries are put back by hand:
+
+    build\lm0\trans.lm0.exe, printTree.lm0.exe   from repo build\lm0\
+    oldchain\lib\libparser.lm0.a, libown.lm0.a   from repo build\tmp\
+    then copy oldchain\lib\*.a into build\lm0\
 
 Promotion
 ---------
-When an L1 slice is accepted upstream, the self-contained set to copy in is:
+Agreed with cursor (work_chat\cursor\outbox\20260907-235829.txt): when an L1
+slice is accepted, cursor writes "промоут: коммит <sha>" into that channel and
+the copy into this directory is done from here. The self-contained set is:
 
     l1src\
     tests\l1\
     tests\*.lmx                                (the 16 listed above)
-    lm1\build\*.lm1.c
+    lm1\build\*.lm1.c                          (the seven)
     lm2\
-    build\lm0\trans.lm0.exe, printTree.lm0.exe (not rebuildable here)
-    oldchain\lib\*.a                           (not rebuildable from git)
+    build\lm0\trans.lm0.exe, printTree.lm0.exe (pinned, not rebuilt)
+    oldchain\lib\*.a                           (old L2-profile, not the L1 ar)
 
 Nothing in this directory writes above itself.
