@@ -54,7 +54,12 @@ C cache; char graph data is an all_chars cell; size_t graph data
 is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned
 shared size_t, no int narrowing). Dirty-only publish before
 calls and return, no reload. Explicit `node\name` writes the
-graph child, not the cache. `const @(LmP0Text)` / `@: LmP0Text`
+graph child, not the cache. An explicit char/size_t argument
+with the same name as an own field shares that parameter from
+the own-decl line (not a second l2_q; no graph load over the
+incoming value). Without that bind the argument is never
+published. Own-decl inside if is rejected. Hidden through
+arguments are not yet lowered. `const @(LmP0Text)` / `@: LmP0Text`
 are the existing C ABI from l1src/p0.h (data, length), a limited
 migration adapter: include and typed schema only, not a general
 C header parser and not a silent C layout for new L2 Structures.
