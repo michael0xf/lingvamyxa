@@ -609,6 +609,45 @@ SPEC 21.5, 21.6  DECIDED, and pinned before anything generates it.
     re-resolution and rejection, and explicitly forbids turning the ambiguity
     into a silent [0] lookup. Nothing here moves an occurrence. Then: ASK.
 
+Unit 8 - L2 bootstrap main adapter (first vertical L2 -> L1 -> exe)
+-------------------------------------------------------------------
+Files: l2trans.lm1, run_l2trans.ps1, tests/entry_*.lm2
+
+SPEC 1.7  Default L2 executable entry is `main`, bootstrap adapter not the
+    universal source-method ABI.
+    DECIDED. This unit emits L1 `external: fn: main () int / return: N`
+    from a supported L2 `fn: main () int / return: N`. No `callable->node`,
+    no sig, no hidden dynamic values, no Message.
+
+SPEC 0.1.1  `.lm2` is an implicit L2 body; explicit `L2:` remains available.
+    DECIDED. entry_return0.lm2 uses the wrapper; entry_return7.lm2 is
+    wrapperless.
+
+ABI 14.10 / SPEC 21.8 / SPEC 21.13 p.4  Method result, typed invocation, throw
+    AVOIDED. Return of a non-negative decimal literal is copied into the
+    bootstrap adapter. No generated method record, no throw channel, no
+    L1 static throw globals transferred. Arises at the first real L2 method
+    call or declared throw. Then: ASK.
+
+ABI 14.4  sig
+    AVOIDED. No method record is emitted.
+
+ABI 14.9 / SPEC 19.28–19.29  Message arena
+    AVOIDED. Generated exe does not construct Lmx, pools or a Message.
+    Units 1–7 are not linked. Arises when a fixture needs Lmx. Then: ASK.
+
+SPEC 11.3.1  `@` of a graph-backed int
+    AVOIDED. `@` / raw payload / typed-address write are rejected as
+    unsupported body. Arises when a fixture uses them. Then: ASK.
+
+SPEC 14 / 21.5–21.6  own-field cache, dirty checkpoints
+    AVOIDED. No own fields, no unqualified locals besides the adapter.
+
+Unsupported forms (extra statements, c.puts, arguments, several main,
+L1/L3 wrappers, non-decimal return) are diagnostics, not silent L1 copy
+and not a canned output.
+
+
 Carried forward, not yet touched
 --------------------------------
 ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).
