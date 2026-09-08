@@ -98,6 +98,49 @@ L1 10.9   Field image \ vs . vs ->
     l1src itself never takes a member by value anywhere, and self-hosts to a
     gen1=gen2=gen3 fixed point without it. The user cancelled it directly.
 
+
+Unit 2 - typed service pools
+----------------------------
+Files: lmx.h (LmxPool), lmx_pool.lm1, lmx_pool_selftest.lm1
+
+SPEC 6.5  Array descriptor len
+    DECIDED, and by the spec, not by this code. 6.5 says the descriptor has
+    exactly two values, length and a pointer to element storage. So
+    LmxArrayDesc.len is element count and may be read. This is a DIFFERENT
+    field from the len in the Lmx header, which stays unread - SPEC 2 says so
+    outright ("Array-descriptor len is a different field").
+
+ABI 14.8  Arrays: pool block allocation, growth, range registration
+    AVOIDED. lmx_pool_open takes a fixed capacity, allocates one contiguous
+    block and registers its whole half-open range with a stride. When the pool
+    is exhausted lmx_pool_take returns 0; it never grows. The selftest asserts
+    that refusal, so growth cannot be added by accident without a test failing.
+    Arises the moment a pool must grow, be re-registered, or free a block whose
+    range is still registered. Then: ASK.
+
+ABI 14.4  ShortNameId format, and with it the encoding of sig
+    AVOIDED. SPEC 2 says no current use of sig specifies a ready-made binary or
+    module ABI. lmx_method_intern stores sig as an opaque unsigned, compares it
+    to nothing and derives nothing from it. Arises at the first dispatch that
+    reads sig - selecting a method by signature, or checking argument shape.
+    Then: ASK.
+
+ABI 14.9  Allocation and arenas
+    AVOIDED, and worth restating now that memory is actually allocated. Pools
+    call calloc directly because no Message exists yet. 14.9 fixes that every
+    Message owns exactly one logical arena and that all dynamic mutable
+    ordinary Lmx storage of that Message is allocated there. Arises at the first
+    Message. Then pool blocks must come from its arena, and the flat global
+    range table may need per-arena subdivision. Then: ASK.
+
+ABI 14.10 / SPEC 21.13 p.4  Method result and failure carrier
+    Not touched, deliberately. lmx_method_intern stores addr and this unit
+    never calls it; invocation is SPEC 21.8 and a later unit. NOTES section 4
+    names 21.13 p.4 the most frequently hit open point, and section 7 names the
+    trap: L1 carries throw in two static globals, which is right for L1 and
+    wrong for lm2, where each Message has its own arena and Messages may run
+    concurrently (SPEC 21.7). The first call generated here reaches ASK.
+
 Carried forward, not yet touched
 --------------------------------
 ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).

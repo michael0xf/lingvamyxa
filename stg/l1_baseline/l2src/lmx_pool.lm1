@@ -1,0 +1,78 @@
+predef: "l2src/lmx_range.lm1"
+include: "<stdlib.h>"
+
+# Typed service pools. Lingvamyxa_spec.txt 2, 6.5.
+#
+# 2 lists what the pools hold: a primitive pool, all_methods_array of
+# {addr, sig} method records, a typed Array pool all_array_of_T of {len, data}
+# descriptors. A pool is one contiguous block of same-sized entries whose whole
+# address range is registered under one kind, so handing out an entry hands out
+# its type at the same time, with nothing stored to say so.
+#
+# The pool header is never handed out and is not an Lmx node. Entries are
+# addressed, never taken by value.
+
+fn: lmx_pool_open (@: LmxPool pool; size_t: stride; size_t: capacity; int: kind) int
+    @: void block
+    size_t: bytes
+    if: pool = 0
+        return: 1
+    if: stride = 0U
+        return: 1
+    if: capacity = 0U
+        return: 1
+    if: capacity > ((cast: (size_t) -1) / stride)
+        return: 1
+    bytes: capacity * stride
+    block: c.calloc(capacity, stride)
+    if: block = 0
+        return: 1
+    if: lmx_range_register(block, (cast: (@: void) ((cast: (@: char) block) + bytes)), stride, kind) != 0
+        c.free(block)
+        return: 1
+    pool\base: block
+    pool\stride: stride
+    pool\capacity: capacity
+    pool\count: 0U
+    pool\kind: kind
+return: 0
+
+# Hands out the next entry address. The caller learns nothing about the entry
+# from this call that lmx_classify would not tell it from the address alone.
+fn: lmx_pool_take (@: LmxPool pool) @: void
+    @: void entry
+    if: pool = 0
+        return: 0
+    if: pool\base = 0
+        return: 0
+    if: pool\count >= pool\capacity
+        return: 0
+    entry: (cast: (@: void) ((cast: (@: char) pool\base) + pool\count * pool\stride))
+    pool\count: pool\count + 1U
+return: entry
+
+# An immutable method record (2). addr is the generated C entry, sig fixes the
+# typed input list. Neither is interpreted here: this unit stores them and
+# never calls addr. The encoding of sig is not settled (see OPEN_POINTS.txt).
+fn: lmx_method_intern (@: LmxPool pool; LmxEntry: addr; unsigned: sig) @: LmxMethod
+    @: LmxMethod record
+    if: addr = 0
+        return: 0
+    record: (cast: (@: LmxMethod) lmx_pool_take(pool))
+    if: record = 0
+        return: 0
+    record\addr: addr
+    record\sig: sig
+return: record
+
+# An Array descriptor: exactly length and a pointer to element storage, no
+# node, no name, no tag (6.5). Its len is element count and IS settled there,
+# unlike the len in the Lmx header.
+fn: lmx_array_desc_new (@: LmxPool pool; size_t: len; @: void data) @: LmxArrayDesc
+    @: LmxArrayDesc desc
+    desc: (cast: (@: LmxArrayDesc) lmx_pool_take(pool))
+    if: desc = 0
+        return: 0
+    desc\len: len
+    desc\data: data
+return: desc

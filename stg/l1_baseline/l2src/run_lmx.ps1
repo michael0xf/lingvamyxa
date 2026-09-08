@@ -1,4 +1,4 @@
-# L2 unit: Lmx core and registered-range classification.
+# L2 units: Lmx core, registered-range classification, typed service pools.
 # Build root is this file's parent, matching tests\l1\*.ps1 convention.
 # Picks the L1 generation with L1_GEN (default gen2).
 $ErrorActionPreference = "Stop"
@@ -19,20 +19,22 @@ $guards = @(
     "-Werror=implicit-function-declaration", "-Werror=implicit-int"
 )
 
-$src = "l2src\lmx_selftest.lm1"
-$c = Join-Path $out "lmx_selftest.c"
-$exe = Join-Path $out "lmx_selftest.exe"
+foreach ($unit in @("lmx_selftest", "lmx_pool_selftest")) {
+    $src = "l2src\$unit.lm1"
+    $c = Join-Path $out "$unit.c"
+    $exe = Join-Path $out "$unit.exe"
 
-& $trans $src $c
-if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: $src" }
+    & $trans $src $c
+    if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: $src" }
 
-& gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . $c -o $exe 2>&1 |
-    Tee-Object -FilePath (Join-Path $log "lmx_gcc.log") | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    Get-Content (Join-Path $log "lmx_gcc.log")
-    throw "$gen gcc failed: $c"
+    & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . $c -o $exe 2>&1 |
+        Tee-Object -FilePath (Join-Path $log "$unit.gcc.log") | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content (Join-Path $log "$unit.gcc.log")
+        throw "$gen gcc failed: $c"
+    }
+
+    & $exe
+    if ($LASTEXITCODE -ne 0) { throw "$gen $unit failed" }
 }
-
-& $exe
-if ($LASTEXITCODE -ne 0) { throw "$gen lmx selftest failed" }
-"l2 lmx range $gen ok"
+"l2 lmx $gen ok"

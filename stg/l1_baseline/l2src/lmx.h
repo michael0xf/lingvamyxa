@@ -63,6 +63,22 @@ typedef struct LmxRange {
     int kind;
 } LmxRange;
 
+/* A typed service pool: one contiguous block of same-sized entries whose
+ * address range is registered under one kind. 2 lists them - a primitive pool
+ * such as all_chars_array, all_methods_array of {addr, sig} records, a typed
+ * Array pool all_array_of_T of {len, data} descriptors. Pool storage and the
+ * application storage an entry describes are different things (6.5).
+ *
+ * The pool header is not an Lmx node and is never handed out; only entry
+ * addresses are, and an entry's type is read from the range it lands in. */
+typedef struct LmxPool {
+    void *base;
+    size_t stride;
+    size_t capacity;
+    size_t count;
+    int kind;
+} LmxPool;
+
 #define LMX_RANGE_MAX 16
 
 typedef struct LmxRanges {
