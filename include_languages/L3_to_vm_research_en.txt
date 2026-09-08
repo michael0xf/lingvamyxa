@@ -1,0 +1,381 @@
+L3 to virtual-machine backends -- research note (English)
+=========================================================
+
+Status
+
+Research snapshot 2026-09-08. Not a provisioning plan and not a
+commitment to an L3-specific backend. Companion to
+L2_to_vm_research_en.txt (full language including the machine
+surface), L1_to_vm_research_en.txt (C-machine targets),
+lingva_bindings.txt (embed catalog) and Lingvamyxa_spec.txt
+Revision 2 (L2/L3 contract).
+
+Russian text: L3_to_vm_research_ru.txt
+
+Question
+
+Which virtual machines are realistic compilation targets for L3
+sources (.lm3 / explicit `L3:`) so that a translator emits that
+machine's virtual code instead of, or besides, lowering L3 through
+L2/L1 to C99?
+
+Evidence for "what L3 is":
+
+  Lingvamyxa_spec.txt 1.4, 1.5, 1.7   L3 subset, shared receivers,
+                                      script/Message entry
+  Lingvamyxa_spec.txt 0.1, hello.lm3  tables, messages, fn/sub,
+                                      iterators, control
+  Lingvamyxa_spec.txt 19.28           Message Thread (shared L2/L3)
+  lm2/                                old hosted sources (not an L3 VM)
+  L2_to_vm_research_en.txt            what L2 adds and L3 must not
+                                      inherit as a ranking rule
+
+Method
+
+  1. Take L3 as specified: high-level subset of L2, no machine
+     surface (spec 1.4).
+  2. Score catalog runtimes as L3 bytecode targets, not as guest
+     embeds.
+  3. Look outside the catalog at managed and actor VMs.
+
+This file does not invent L3 features. Open ABI items stay open.
+
+Targets are listed from most suitable to least suitable. The first
+pile can represent L3 Structures, Arrays, tables and Messages
+without exposing raw machine addresses. After the separator, the
+rest cannot, ending with the worst fit.
+
+
+0. What this note does not use as a ranking criterion
+-----------------------------------------------------
+L2_to_vm_research_en.txt ranks WASM linear memory and MIR first
+partly because they do not relocate Lmx headers, and it sends JVM,
+BEAM and wasm-gc down because they move and tag objects. That
+criterion is for L2's machine surface (spec 1.3, 20): raw addresses,
+prefix `@`, `\`, address-depth slots, `c.array`, unchecked index.
+
+L3 has no address arithmetic and no raw machine-address syntax
+(spec 1.4). Prefix `@` is rejected on an L3 surface. Ordinary L3
+values are Structure/callable references, Array-descriptor
+references and primitives (sections 2, 6.5, 21 as *references*,
+not as C pointers the source can add, subtract or stash as
+integers).
+
+Therefore this note does **not** require:
+
+  - stable machine addresses of graph nodes
+  - a non-moving heap
+  - address-range classification of raw pointers
+  - interior pointers or `FILE*`
+  - `c.*`, `include`/`define`/`os`, atomics
+
+A VM may relocate its representation of a Structure. L3 source
+cannot observe that. Ranking here is: can a compiler map L3
+receivers onto that VM's values (objects, arrays, messages,
+tables) with automatic bounds checks.
+
+
+1. Catalog vs compiler-backend
+------------------------------
+include_languages/ catalogs foreign runtimes Lingvamyxa can bundle
+and call. That is the inverse of this note.
+
+  Catalog question:  Lingvamyxa hosts X and evaluates X source.
+  This note:         L3 compiles to X's virtual code and X runs it.
+
+L1_to_vm_research_en.txt is a C-machine question. L2 adds a
+non-moving Lmx + Message runtime on that machine. L3 is the
+algorithmic/script subset: same graph/Message/table receivers,
+without the machine ops. It does not collapse to either note.
+
+
+2. What L3 actually is
+----------------------
+L3 is the high-level algorithmic and computational subset of L2
+(spec 1.4). It is not a sandbox, authority boundary or effect
+restriction. L3 may mutate ordinary state, build Table/Registry
+values, compose modules, send messages and use services.
+
+Compilation, interpretation and mixed execution are backend
+choices, not the L2/L3 cut (spec 1.3). The second translator's
+L3 profile still *may* lower through L1 to C99; that route does
+not make C pointers part of L3 source.
+
+Selected translator route for the second translator remains
+P-L1text (L2/L3 -> L1 -> C99). Direct C99 from L2/L3 is rejected
+as a translator backend. A *different* L3-to-JVM / L3-to-wasm-gc
+printer would be a new profile, not the current gate.
+
+`.lm3` means the file root is an implicit L3 body. Default script
+entry may consume the root Python-style; `main` is not a
+source-semantic requirement. Message/service profiles may select
+`start`, `onStart` or an explicit send (spec 1.7). Example
+surface (spec 0.1 / hello.lm3): `print:`, `table:`/`join:`,
+`behavior:`/`message:`, `fn`/`sub`, `yield`, `each`, `for`,
+field-follow of Structures (`cfg\greeting`), iterators.
+
+Shared with L2, still in L3:
+
+  Structures as a graph of references (not C structs the source
+      addresses)
+  Arrays with automatic bounds checks (spec 1.4)
+  Tables, registries, join, query
+  merge as a graph copy (19.17)
+  implements() / RuntimeImplements() as consumer-relative
+      compatibility (2.1)
+  Message Thread: FIFO inbox, one turn at a time, concurrent
+      Messages (19.28)
+  Mix as overlay; target rewrite is cooperating Messages
+      (19.29.2.1). Current Mix is Java (com.mtk.map).
+
+L2-only, excluded from L3 (spec 1.4, `receiver.l3.exclude`):
+
+  raw storage/address operators, address-depth declarations
+  raw loads, address-producing forms, prefix `@`
+  physical layout allocation, `c.struct`/`c.union`/`c.enum`/`c.array`
+  direct `c.*` or raw L1 calls
+  unchecked array access
+  `include`, `define`, `ifndef-default`, `os`, `ifdef`, `guard`,
+  `extern_c`
+  low-level sync/atomics
+
+Two compiler jobs (lighter than L2):
+
+    Semantic ISA
+        Emit that VM's bytecode as L3 meaning: Structure graph,
+        bounds-checked arrays, table/query, merge, message send,
+        implements(). The VM's objects *are* the L3 values. Moving
+        GC is allowed.
+
+    Via L1
+        Keep P-L1text: L3 -> L1 -> C -> a C-machine VM from
+        L1_to_vm_research_en.txt. Always available. More machine
+        than L3 source needs.
+
+    Interpreter
+        Spec allows interpretation. A dedicated L3 bytecode
+        (graph, send, merge, no `@`/`c.array`) does not exist
+        yet. It would sit on a managed or C VM. Not a catalog
+        pick.
+
+
+3. Ranked targets (most suitable first)
+---------------------------------------
+
+1. JVM classfile  (include_openjdk.txt, com.mtk.map)
+        Best L3 fit in the catalog. Structures map to objects;
+        Arrays to bounds-checked JVM arrays; tables to ordinary
+        collections; Messages to objects-plus-queue (or an actor
+        library). The GC may move objects -- L3 cannot see
+        addresses. Mix already lives in Java (com.mtk.map) until
+        19.29.2.1. Compile-to-JVM is a well-trodden compiler
+        shape (Scala, Kotlin, Clojure). Catalog Tier 1 embed
+        (JNI / JRE tarball) is a bonus, not the reason.
+
+        Do not smuggle hosted Namespace/descriptor Java as L3
+        semantics (L1_language spec 4.1 still applies to the
+        second translator). The mapping is L3 receivers -> JVM
+        values, not "Lmx header words as Java fields that must
+        not move".
+
+2. WASM GC
+        Portable managed compilation target (reference types,
+        structs, arrays). Built as a backend for high-level
+        languages, not as a C heap. L3 has no need of wasm32
+        linear-memory pointers. Host can still be Wasmtime/
+        WAMR from include_wasm.txt. Bounds checks and a moving
+        GC are native. No Mix-in-Java heritage; Message FIFO is
+        library code in the guest.
+
+        Distinct from wasm32 linear memory (item 6) and from
+        wasm-gc-as-L2-heap (rejected in L2_to_vm_research_en.txt
+        because L2 observes addresses). For L3, wasm-gc is the
+        WASM to prefer.
+
+3. .NET CIL  (include_dotnet.txt)
+        Same managed story as the JVM: objects, GC, arrays,
+        real bytecode, catalog Tier 1 (nethost). Mix is Java,
+        not C#, so JVM stays ahead. Unsafe/unmanaged heaps are
+        unnecessary for L3 and should not be the mapping.
+
+4. BEAM (Erlang / Elixir)
+        Closest Message Thread analog: isolated heaps, FIFO
+        mailboxes, one turn at a time, many concurrent
+        processes. Catalog Removed it as an in-process embed
+        (C-node / sidecar). As an L3 *compiler target* the
+        copying per-process GC is acceptable -- L3 has no
+        address arithmetic. Mapping: Message -> process,
+        Structure graph -> maps/tuples, merge -> copy.
+        Still a language port, not a drop-in ISA, and there is
+        no Mix/Java story. Useful and realistic; not first.
+
+5. Lua 5.4  (include_lua.txt)
+        Tables can host Structure-like graphs; no pointers
+        required. PUC Lua's GC is irrelevant as a stability
+        rule here. Coroutines are not FIFO Message turns --
+        those stay library code. Compile-to-Lua-bytecode is
+        weaker than JVM/wasm-gc (Lua is usually an embed/eval
+        VM). Fine for an L3 sketch interpreter or a Lua
+        printer; not the first production ISA.
+
+6. WASM linear memory  (include_wasm.txt)
+        Still works: L3 -> L1 -> C -> wasi-sdk. Same limits as
+        the L1 note (4 GB, WASI grants). More machine than L3
+        source needs. Prefer wasm-gc (item 2) unless the
+        existing P-L1text pipeline is the point of the
+        experiment.
+
+7. MIR  (vnmakarov/mir)
+        Same via-L1 path: L3 -> L1 -> C -> c2m. Best dedicated
+        C VM, unnecessary C heap for L3-only code. Ranked here
+        because the selected translator can already feed it.
+
+8. LLVM bitcode + lli / ORC; TinyCC; QBE / sljit / Cranelift
+        Native/C backends from L1_to_vm_research_en.txt. TinyCC
+        is not a VM. They run lowered L1, including L3 that went
+        through P-L1text. Not L3-shaped ISAs.
+
+9. HashLink
+        Typed Haxe VM, GC, low-level bytes unused by L3. Possible
+        managed target, small ecosystem, no Mix/Message story.
+
+10. Dedicated L3 bytecode -- does not exist yet
+        Subset of the hypothetical L2 Layer-I opcodes without
+        `@`, `\`, `c.array`, unchecked index. Graph, bounds-
+        checked arrays, merge, FIFO send. Would run on items
+        1-8. Not JVM, Lua, BEAM or WASM GC themselves.
+
+
+================================================================
+not recommended
+================================================================
+
+11. LuaJIT  (include_luajit.txt)
+        Bytecode is still Lua values. The FFI is a C escape --
+        that is L2 machine surface, not L3. Do not compile L3 to
+        LuaJIT in order to poke pointers.
+
+12. AngelScript, Umka, Pawn / AMX  (include_angelscript.txt,
+    include_berry.txt)
+        Small typed or cell VMs. No Message Thread, no L3 table/
+        merge/implements() model. Pawn cells are not Structures.
+        At most a toy subset of L3 control/functions.
+
+13. QuickJS / Duktape / MuJS
+        JS objects could sketch Structures; no Message/table
+        contract, weak compiler-target story for this language.
+
+14. CPython, WASI-CPython, Pyodide  (include_python*.txt)
+        L3's default script entry is Python-style, which is
+        tempting and not a reason to emit `.pyc`. Python
+        bytecode is Python. An L3 interpreter written *in*
+        Python is a sidecar.
+
+15. PyPy
+        Same Python semantics. Moving GC would have been a
+        problem for L2; it is not the problem here. The problem
+        is still "not an L3 ISA".
+
+16. SWI-Prolog / Warren Abstract Machine
+        implements() is a predicate; Lingvamyxa calls itself a
+        logical language (catalog borderline). WAM is unification
+        and backtracking, not Message FIFO or table construction.
+        Sidecar for compatibility queries, not an L3 target.
+
+17. Janet, Wren, mruby, Tcl, Berry, Gravity, Pocketlang
+        Dynamic embed VMs. Catalog Tier 2 for hosting scripts,
+        not for compiling L3.
+
+18. GNU Guile / Scheme; Smalltalk / Self / Newspeak
+        Object/late-binding flavour. No Message arena rule, no
+        Mix, no catalog provisioning path that matches L3.
+
+19. Julia  (include_julia.txt)
+        Compiles to LLVM; no Julia-VM bytecode for L3.
+
+20. eBPF, SPIR-V, Knuth MIX / MMIX, Parrot
+        Wrong models (kernel filters, GPU, educational MIX
+        unrelated to Lingvamyxa Mix, dead VM).
+
+21. com.mtk.map as an L3 ISA
+        Java Mix sources, not a virtual machine. Mix-as-host is
+        item 1 (JVM), not a separate bytecode target.
+
+
+4. If an L3 VM backend is ever tried
+------------------------------------
+  1. Do not carry L2's "nodes never relocate" rule into an L3
+     mapping. L3 source has no address arithmetic.
+  2. First semantic experiment: L3 subset (hello.lm3: print,
+     fn/sub, each/for, Structure field-follow, table) -> JVM
+     classfiles or wasm-gc. Bounds-checked arrays required.
+  3. Message FIFO and Mix stay library/runtime on that VM; Mix
+     remains Java until 19.29.2.1.
+  4. Via-L1 check is free: L3 profile -> l2trans/L1 -> wasi-sdk
+     or c2m, same as L2_to_vm_research_en.txt item 2, but it
+     does not test an L3-shaped ISA.
+  5. Do not start with LuaJIT FFI, Pawn, Prolog, or Python
+     bytecode.
+
+Contrast with the sibling notes:
+
+  L1  needs a C memory model. Dynamic VMs fail (no pointers).
+  L2  needs that C model under non-moving Lmx identity. Dynamic
+      VMs fail twice.
+  L3  needs graph/table/Message semantics and bounds checks.
+      Dynamic *managed* VMs become the top of the list. C VMs
+      remain a valid lowering, not the best L3 ISA.
+
+
+5. Scoreboard (same order)
+--------------------------
+    Rank  Target              L3 semantic ISA      Via L1 / C machine
+    ----  ------------------  -------------------  ---------------------------
+    1     JVM classfile       yes (best catalog)   unnecessary
+    2     WASM GC             yes (portable)       no (different WASM)
+    3     .NET CIL managed    yes                  unnecessary
+    4     BEAM                yes (Messages)       no
+    5     Lua 5.4             sketch               no
+    6     WASM linear mem     no (C heap)          yes
+    7     MIR                 no                   yes (best C-VM)
+    8     LLVM / TinyCC /     no                   yes (native/C)
+          QBE / sljit
+    9     HashLink            weak                 no
+    10    dedicated L3 bc     would *be* it        would run on 1-8;
+                                                   does not exist
+
+    ---- not recommended ----
+
+    11    LuaJIT              no (FFI is L2)       embed only
+    12    AngelScript/Umka/   toy subset           no
+          Pawn
+    13    JS engines          sketch               no
+    14    CPython family      no                   sidecar interpreter
+    15    PyPy                no                   sidecar
+    16    SWI-Prolog / WAM    implements() only    sidecar
+    17    Janet/Wren/mruby/…  no                   embed
+    18    Guile / Smalltalk   no                   no
+    19    Julia               no                   no
+    20    eBPF / SPIR-V / MIX no                   no
+    21    com.mtk.map as ISA  no                   Mix sources; host is JVM
+
+
+6. References
+-------------
+    Lingvamyxa_spec.txt 1.4, 1.5, 1.7   L3 subset and entry
+    Lingvamyxa_spec.txt 0.1             L2/L3 table and Message smoke
+    Lingvamyxa_spec.txt 2, 6.5, 19, 21  references (not C pointers)
+    Lingvamyxa_spec.txt 19.28-19.29     Message Thread / Mix target
+    L1_language_and_translator_spec.txt Translator-L2/L3 boundary
+    L1_to_vm_research_en.txt            C-machine scoreboard
+    L2_to_vm_research_en.txt            full L2 including machine surface
+    L3_to_vm_research_ru.txt            Russian text of this note
+    include_languages/com.mtk.map/      Java Mix implementation
+    lingva_bindings.txt                 embed catalog; BEAM Removed
+    include_wasm.txt                    WASM host
+    include_openjdk.txt                 JVM host
+    include_dotnet.txt                  CoreCLR host
+    include_lua.txt                     Lua embed (not the first ISA)
+    WorldWideMix.txt                    Mix placement / Message target
+
+End of L3_to_vm_research_en.txt.
