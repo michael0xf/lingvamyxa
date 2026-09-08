@@ -4,7 +4,8 @@
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
-$gen = if ($env:L1_GEN) { $env:L1_GEN } else { "gen2" }
+$gen = "gen2"
+if ($env:L1_GEN -and $env:L1_GEN.Trim().Length -gt 0) { $gen = $env:L1_GEN.Trim() }
 $trans = "build\l1trans\$gen\l1trans.exe"
 if (-not (Test-Path -LiteralPath $trans)) {
     throw "missing L1 translator: $trans (run tests\l1\run_gen.ps1 first)"
