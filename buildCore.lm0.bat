@@ -6,8 +6,6 @@ cd /d "%PROJECT_ROOT%" || exit /b 1
 
 if not defined LM_CMAKE set "LM_CMAKE=C:\Qt\Tools\CMake_64\bin\cmake.exe"
 if not defined LM_CC set "LM_CC=C:\Qt\Tools\mingw1310_64\bin\gcc.exe"
-if not defined LM_AR set "LM_AR=C:\Qt\Tools\mingw1310_64\bin\ar.exe"
-if not defined LM_RANLIB set "LM_RANLIB=C:\Qt\Tools\mingw1310_64\bin\ranlib.exe"
 if not defined LM_THREAD_PROVIDER set "LM_THREAD_PROVIDER=single"
 
 set "THREAD_PROVIDER="
@@ -33,22 +31,10 @@ if "%THREAD_PROVIDER%"=="pthread" (
     set "THREAD_LINK_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE"
 )
 
-set "PARSER_SOURCE=lm1\build\parser.lm1.c"
-set "OWN_SOURCE=lm1\build\own.lm1.c"
 set "L1TRANS_SOURCE=lm1\build\l1trans.lm1.c"
 set "MAKE_SOURCE=lm1\build\make.lm1.c"
 set "FINALIZE_SOURCE=lm1\build\finalize.lm1.c"
 set "BUILD_CORE_SOURCE=lm1\build\buildCore.lm1.c"
-
-if not exist "%PARSER_SOURCE%" (
-    echo buildCore.lm0.bat: source file not found: %PARSER_SOURCE% 1>&2
-    exit /b 1
-)
-
-if not exist "%OWN_SOURCE%" (
-    echo buildCore.lm0.bat: source file not found: %OWN_SOURCE% 1>&2
-    exit /b 1
-)
 
 if not exist "%L1TRANS_SOURCE%" (
     echo buildCore.lm0.bat: source file not found: %L1TRANS_SOURCE% 1>&2
@@ -82,30 +68,8 @@ if not exist "%LM_CC%" (
     exit /b 1
 )
 
-if not exist "%LM_AR%" (
-    echo buildCore.lm0.bat: ar not found: %LM_AR% 1>&2
-    echo Set LM_AR to the ar.exe path and retry. 1>&2
-    exit /b 1
-)
-
-if not exist "%LM_RANLIB%" (
-    echo buildCore.lm0.bat: ranlib not found: %LM_RANLIB% 1>&2
-    echo Set LM_RANLIB to the ranlib.exe path and retry. 1>&2
-    exit /b 1
-)
-
 "%LM_CMAKE%" -E make_directory build\lm0 || exit /b 1
 "%LM_CMAKE%" -E make_directory build\obj || exit /b 1
-
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_COMPILE_FLAGS% -I. -c "%PARSER_SOURCE%" -o build\obj\parser.lm1.o || exit /b 1
-if exist build\lm0\libparser.lm0.a del /f /q build\lm0\libparser.lm0.a || exit /b 1
-"%LM_AR%" rcs build\lm0\libparser.lm0.a build\obj\parser.lm1.o || exit /b 1
-"%LM_RANLIB%" build\lm0\libparser.lm0.a || exit /b 1
-
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_COMPILE_FLAGS% -I. -c "%OWN_SOURCE%" -o build\obj\own.lm1.o || exit /b 1
-if exist build\lm0\libown.lm0.a del /f /q build\lm0\libown.lm0.a || exit /b 1
-"%LM_AR%" rcs build\lm0\libown.lm0.a build\obj\own.lm1.o || exit /b 1
-"%LM_RANLIB%" build\lm0\libown.lm0.a || exit /b 1
 
 "%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% -I. "%L1TRANS_SOURCE%" -o build\lm0\l1trans.lm0.exe || exit /b 1
 "%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% "%MAKE_SOURCE%" -o build\lm0\make.lm0.exe || exit /b 1
