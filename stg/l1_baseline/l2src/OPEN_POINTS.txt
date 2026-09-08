@@ -862,65 +862,97 @@ Unit 12 - hidden char/size_t through-args, closed direct calls
 Files (proposed, not started): l2trans.lm1, run_l2trans.ps1,
 tests/unit_dyn_*.lm2
 
-SPEC 21.3  DynRequired / caller-first / node\[0]x fallback
-    DECIDED in spec. This unit would implement a closed-unit
-    subset: char/size_t, known direct callees only. No runtime
-    Namespace, no new source syntax, no heap frames, no change
-    to `node\x`. `@` after bind is out of scope here.
+SPEC 21.3 / 21.5  membership — 192800 always-DynRequired WITHDRAWN
+    Not a user question: hidden intern order is deterministic
+    sorted source-name bytes; rec.sig includes the hidden
+    contract. 21.3 already says so.
 
-    Proposed physical ABI, not a source-declared formal:
-      C entry = node, then declared formals in source order,
-      then hidden params in intern order.
-      Source `fn: leaf () int` stays declared arity 0.
-      Hidden names are extra C parameters and extra interned
-      sig payload. rec.sig includes them because they are the
-      physical argument list (21.3). Methods with empty
-      DynRequired keep today's intern records.
+    21.3 excludes names satisfied by M's own binding. Own that
+    supplies a callee enters OwnUsed; otherwise the name enters
+    DynRequired. 21.5: own occurrence is materialized before
+    entry and must not be silently reclassified as dynamic.
+    `own-without-formal always DynRequired` is withdrawn. It
+    would make every ordinary own field a caller-overridable
+    input. The 11.3.1 bind is only when this method actually
+    has that argument.
 
-    Proposed intern order for hidden names: sorted by exact
-    source-name bytes, then type. Independent of body layout.
+    Declaration-point analysis (this slice):
+      - uses at/after `char: x` / `size_t: x`, no pre-decl
+        free use, no explicit formal: own-only. Entry loads
+        the materialized field. Not DynRequired.
+      - bare use or assignment of x BEFORE that declaration,
+        no explicit formal: those uses are not yet satisfied
+        by own binding. x is DynRequired. From the decl line
+        the same C variable is the own cache (11.3.1). The
+        field is still materialized before entry; entry does
+        not load it over the incoming hidden value.
+      - bare x, no own, no formal: DynRequired only; never
+        auto-published (21.3), unless a later bind exists.
+      - explicit formal x: not DynRequired (183000 alias if
+        own-decl follows).
+      - callee needs x: if this caller already has own, formal,
+        or hidden x, supply that; else x enters this caller's
+        DynRequired.
 
-    Proposed membership:
-      - bare ident that is not an explicit formal
-      - plus transitive DynRequired of known callees
-      - plus own-without-formal, even if the body also has
-        `char: quote`. Do not classify that method as
-        own-only graph-load: the incoming hidden value is
-        the working variable from entry, and the own-decl
-        line starts dirty tracking on that same variable.
-      An explicit formal of the same name is not DynRequired
-      (183000 already aliases it).
+    Types: not by matching the name across the unit. char vs
+    size_t from this method's own decl, its explicit formal,
+    a forwarded callee hidden type, or a free use against a
+    typed literal in the same shapes already used (`quote = 65`
+    as today's char own; `value_length = 3U` as size_t). Mixed
+    in one method is incompatible. Counterexample against
+    unit-wide name guess: `fn: leaf () int / return: quote`
+    beside `fn: holder () int / size_t: quote` must not make
+    leaf's hidden quote size_t.
 
     Call site, known callee, closed unit:
-      1. caller C variable for that name (formal, hidden, or
-         own-cache variable — one variable after 183000)
-      2. else load callee `node` child of that own name
-         (unit child index; not ancestor walk)
-      3. else translation rejects
-    Actuals LTR: declared then hidden; checkpoint; call.
+      1. caller C variable for that name if present
+      2. else load node\[0]x of the selected callee
+         `callable->node` (not ancestor walk, not main)
+      3. else reject that call
+    `fn: main` stays the §1.7 adapter and does not grow
+    DynRequired. Root value for a spliced first 21.8 call
+    comes from that callee-node field if materialized, or
+    from the test harness actuals. Do not push the need to
+    main and reject the unit.
 
-    Caps: 4 declared formals, 4 hidden, char/size_t only.
-    Recursion remains an implementation limit.
+    Fallback in this slice: the unit Structure is
+    `callable->node`. A quote child exists iff some method's
+    OwnUsed materializes it. The leaf under test must
+    free-use quote, not declare it. A sibling `holder` with
+    `char: quote` is container data, labelled as such, not
+    leaf's free use. `fn: leaf () int / char: quote / return: 0`
+    does not consume quote as a free name and is not a
+    fallback test.
 
-    Proposed fixtures (existing LMX, no new syntax):
-      unit_dyn_leaf.lm2     leaf uses bare quote, no formal;
-                            outer has `char: quote`; leaf does
-                            not write the caller's field
+    Physical ABI as 192800: node, declared formals, hidden
+    in intern order. Empty DynRequired keeps today's intern.
+    Caps: 4 declared, 4 hidden, char/size_t, direct calls.
+    Recursion remains an implementation limit. `@` after bind
+    out of scope.
+
+    Fixtures:
+      unit_own_only.lm2     ordinary `char: quote` then assign;
+                            no hidden; callers cannot override
+      unit_dyn_leaf.lm2     leaf free-uses quote; outer own
+                            quote supplies; leaf does not write
+                            caller
       unit_dyn_mid.lm2      outer -> mid -> leaf; mid does not
-                            mention quote and must still pass it
-      unit_dyn_fallback.lm2 no caller field; leaf has
-                            `char: quote`; call loads
-                            node\[0]quote of the unit
+                            mention quote; forwards hidden
       unit_dyn_predecl.lm2  leaf uses quote before `char: quote`;
-                            incoming hidden kept; bind then
-                            dirty-publish to leaf's field;
-                            caller source unchanged
-      unit_dyn_sz.lm2       size_t variant of leaf+outer
-      unit_dyn_miss.lm2     negative: no caller value and no
-                            unit child
+                            hidden then bind; leaf field
+                            published; caller source unchanged
+      unit_dyn_fallback.lm2 leaf free-uses quote; sibling holder
+                            materializes unit child; caller has
+                            no quote; generated call loads
+                            callee node\[0]quote
+      unit_dyn_sz.lm2       size_t free use typed by `3U`
+      unit_dyn_miss.lm2     negative: DynRequired, no caller
+                            value, no callee-node child
+      unit_dyn_type.lm2     negative: size_t own quote must not
+                            type a sibling's char free use
 
-    Not in this patch: runtime-selected callable, int hidden,
-    more than 4 hidden, `@` of the bound name.
+    Not started. Not in this patch: runtime-selected callable,
+    int hidden, >4 hidden, `@` of the bound name.
 
 P0-as-Lmx, parser.lm1 scanners, and L2 self-build
     Not touched. Frozen p0.h / l1src/own.lm1 / bootstrap / root L1

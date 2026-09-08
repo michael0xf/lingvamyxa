@@ -7457,11 +7457,19 @@ and 3. An argument without an own-field declaration/bind of this method remains
 a private C parameter: assignments stay in this activation, there is no
 automatic write-back, and `@` is C `&` of that parameter.
 
+Ordinary own-only fields remain 21.3 / 21.5: the name is satisfied by M's
+own binding, is excluded from `DynRequired(M)`, and entry loads the
+materialized field. This exception does not turn every own field into a
+caller-overridable input.
+
 When an explicit argument, or a hidden typed C parameter of the same method
 (the value resolved through the caller, or the 21.3 fallback when the caller
 has no field), has the same source name as an own graph-backed field of this
 method, generated C uses one working variable: that parameter, not a second
-independent cache local. The through-boundary is method nesting / activation,
+independent cache local. A hidden parameter exists only when 21.3 actually
+requires it — in particular a bare use or assignment of the name before this
+method's own-field declaration, with no explicit formal. It is not created
+merely because an own field of that name exists. The through-boundary is method nesting / activation,
 not Structure or `if` nesting. Do not invent a history table of names.
 
 Until the own-field declaration/bind line in this body, that variable is an
@@ -13469,10 +13477,13 @@ runtime Name-to-Binding lookup.
 An imported dynamic value is private to the receiving C activation. Rebinding or
 assigning bare `x` changes only that activation's C working value and the value
 it may pass farther down. It never writes back to the caller and never
-automatically writes `node\x`. `@x` of that hidden parameter is C `&x` of it
-(11.3.1); a store through that address is the same local rebind. To change
-external graph state the method must use an explicit path or explicit Message
-operation.
+automatically writes `node\x`, except the 11.3.1 same-name bind: from the
+own-field declaration line that same variable is this method's own cache, and
+dirty-only publication writes this method's field, never the caller and never
+the 21.3 source binding. Writes executed before that line do not publish.
+`@x` of an unbound hidden parameter is C `&x` of it (11.3.1); a store through
+that address is the same local rebind. To change external graph state without
+that bind the method must use an explicit path or explicit Message operation.
 
 21.4. Value and Reference Passing
 
@@ -13564,6 +13575,14 @@ runtime merge copies it with that Structure. If later structural mutation has
 removed a required own field, invocation/admission fails; the translator or
 runtime must not silently reclassify the missing own declaration as a dynamic
 input or `node` fallback.
+
+Materialization of that occurrence is independent of when a working alias
+starts. The field exists on `callable->node` before invocation. The 11.3.1
+bind line is only when an incoming explicit or hidden parameter of the same
+name becomes that field's dirty cache. It does not delay or skip
+materialization. Own-only names (no such parameter) still load the
+materialized field at entry. A parameter until the bind line is not loaded
+from the field over the incoming value.
 
 21.6. Dirty-Only Checkpoints
 
