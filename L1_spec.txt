@@ -41,6 +41,12 @@ Similar receiver names do not make the two translators interchangeable.
 L1's direct C member lowering is not the contract for resolving L2 paths
 through an Lmx graph. L2 helper code written in .lm1 is still L1 input.
 
+L1 prefix `@` is C address-of of that L1 binding (`tests/l1/expr_deref_read.lm1`,
+`expr_deref_assign.lm1`: `p: @ value` → `&value`). L1 has no Lmx graph
+payload and no typed-pool classification step. The L2 rule that `@x` of a
+graph-backed `int` field is the stored pool cell (Lingvamyxa_spec.txt 11.3.1)
+does not replace this L1 C-profile, and L1 `&local` does not define L2 `@`.
+
 P0 parser (parser.lm1 + p0.h + own.lm1) is reused; Translator-L1 owns
 precedence / grouping / C image after the flat P0 field stream.
 
@@ -217,6 +223,7 @@ Direct, local mapping — maximize straight ANSI C99:
   rectangular C arrays (contiguous row-major; not L2 Array ontology;
   not rank-1 flatten; not ragged row pointers) for the shapes that
   currently lower.
+  Prefix `@x` → `&x` of that L1 binding (not L2 11.3.1 pool-payload `@`).
   Prefix `\p` → `*p`; field-follow `p\field` → `p->field`.
   Ordinary aggregate traversal is by address: no Valued aggregates,
   no ordinary `.` member access, and no contextual choice of `.` or `->`.

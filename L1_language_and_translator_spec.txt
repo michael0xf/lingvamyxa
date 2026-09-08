@@ -30,11 +30,13 @@ Closed decisions (do not reopen)
     translator / runtime / bootstrap MUST NOT contain it and MUST NOT
     depend on raw-C payload.
   - Two separate translators: Translator-L1 and Translator-L2.
-  - Translator-L2 backend route is non-semantic: MAY emit L1 text,
-    MAY use a shared L1 emitter/IR API, MAY emit C99 directly. Same
+  - Translator-L2 backend route is L2 → L1 → C99
+    (`Lingvamyxa_handoff_notes.txt` section 6; Lingvamyxa_spec.txt
+    status guide). Direct C99 generation from L2 is rejected. Same
     L2 input ⇒ equivalent L2 semantics and ABI. None of these MAY
     reuse the hosted trans_l1_* semantic core as foundation.
-  - Do not lock “L2 must go through L1”.
+  - L1 prefix `@` is C `&` of the L1 binding. It is not the L2
+    graph-backed `int` payload address of Lingvamyxa_spec.txt 11.3.1.
   - Seed/self-host (was OPEN 10.6): Translator-L1 is **not** written
     by hand as raw C. Suitable C-like sources are moved with minimal
     semantic change to wrapperless `.lm1` and form the self-host spine.
@@ -788,11 +790,14 @@ and a test corpus, not a foundation.
 P0 parser. Optionally, if a backend profile uses it, Translator-L1’s
 C printer/IR as a **backend**, not as L2 semantics.
 
-4.3 Backend profiles (all allowed; equivalent)
+4.3 Backend profiles
+
+Selected route (Lingvamyxa_handoff_notes.txt section 6):
 
     P-L1text   emit L1 source, run Translator-L1
-    P-L1ir     call Translator-L1 emitter API
-    P-C99      emit C99 directly
+    P-L1ir     call Translator-L1 emitter API (optional equivalent)
+
+    P-C99      emit C99 directly — rejected as an L2 backend
 
 Same L2 input ⇒ same L2 semantics and ABI. Direct C99 does not
 license smuggling hosted trans_l1_* core. Receiver `C` is not a
@@ -801,10 +806,10 @@ profile.
 4.4 When
 
 A second, separate program, written against the published
-Lingvamyxa_spec.txt and struct_refactoring_version_2.txt. Which
-route of 4.3 it takes — through L1 text, through a shared emitter
-API, or straight to C99 — is an implementation choice, not a
-semantic one. MUST NOT start by editing lm2/trans_l1_*.lm2.
+Lingvamyxa_spec.txt and struct_refactoring_version_2.txt. The
+selected route of 4.3 is through L1 text or an equivalent L1
+emitter API, then Translator-L1 to C99. MUST NOT start by editing
+lm2/trans_l1_*.lm2.
 
 4.5 `fn:` in L2 ≠ `fn:` in L1
 
