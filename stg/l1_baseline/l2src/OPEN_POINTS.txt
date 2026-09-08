@@ -175,47 +175,28 @@ SPEC 21.4  Primitives pass by semantic value
     class policy that 14.7 leaves open.
 
 
-Unit 4 - the reverse name index
--------------------------------
-Files: lmx.h (LmxShortNameId, LmxNameSlot, LmxNames), lmx_names.lm1,
-lmx_names_selftest.lm1
+Unit 4 - WITHDRAWN. There is no name table.
+-------------------------------------------
+A reverse name index was built and then removed, because the model behind it
+was wrong. Kept as a row rather than deleted, so the error is not made twice.
 
-ABI 14.4  ShortNameId format
-    Split exactly the way 14.4 splits itself. What it calls settled is
-    implemented and asserted: equal short names compare equal (two nodes may
-    carry one id and each answers for itself), distinct names cannot silently
-    alias (a third id leaves the first two untouched), and a node keeps its own
-    identity across renaming and across another node being named.
+Field names are known at translation time. treeranch resolves to a fixed
+index in the branch block; the runtime does pointer arithmetic and the
+generated C never sees a name. SPEC 2 says it plainly - "A resolved reference
+is used directly and needs no name lookup" - and the type of a void * comes
+from the address range it falls in, never from a lookup. The plan this unit was
+built for, "enumerate children, ask the index for each short name, compare",
+was runtime work for a question already answered at translation time.
 
-    What 14.4 leaves open is not touched. No id is derived from text, so
-    deterministic generation, byte encoding and path conversion stay open. The
-    bit width is a placeholder the table never inspects - only equality is used,
-    so widening it later changes nothing here. Reserved ids stay open because
-    absence is reported by the return status and the out parameter is left
-    untouched, rather than by a sentinel value. Collision handling stays open:
-    the probe is deliberately trivial, since a cleverer one would be inventing
-    the answer 14.4 defers.
+SPEC 2 does keep one name aid on the books: the reverse index
+Lmx * -> ShortNameId, for runtime TEXTUAL lookup and for reconstructing a
+current full path from sibling ordinals and node links. That is diagnostics and
+genuinely dynamic access, not ordinary field resolution. If it returns, it
+returns for those two things, and its absence until then is what keeps the
+compiled path honest.
 
-    Arises at the first interning of a textual name. Then: ASK.
-
-SPEC 2 / 19.29.4  The index is the only side table, and is not a root
-    DECIDED, and honoured by omission. 2 allows exactly one per-node aid, the
-    Lmx-pointer-to-ShortNameId table, and no second one is introduced. 19.29.4
-    says the index is not a root and that entries for dead occurrences are
-    removed, so lmx_name_drop exists and no walk over keyed nodes is offered -
-    such a walk would be the first step toward making the table a root.
-
-    Dropping tombstones the slot rather than freeing it, because freeing would
-    cut the probe chain of anything that collided past it; tombstones are
-    therefore reusable, or a table that had seen capacity drops would refuse
-    while standing empty. The selftest asserts both halves.
-
-ABI 14.5  Positional and anonymous occurrence naming
-    Not touched. Whether positional occurrences get reserved ids and take part
-    in this table, or are addressed only by structural position, is 14.5's
-    question, and nothing here assumes either. Arises with the first anonymous
-    or repeated occurrence, which is also where 14.1 branch storage arrives.
-
+ABI 14.4 therefore blocks nothing here. It was recorded as blocking unit 6;
+that entry was wrong for the same reason.
 
 Constraint carried into unit 5 - occurrence ordinals are naming, not indexing
 -----------------------------------------------------------------------------
@@ -279,8 +260,10 @@ But the blocking half is narrower than feared. 14.4 lists five open things:
     NOT YET   bit width, byte encoding, reserved ids, collision handling -
               already recorded as untouched under unit 4.
 
-So unit 5 needs 14.1 for enumeration and the generation/agreement half of 14.4
-for the sought id. Both: ASK.
+Superseded. 14.1 is now RESOLVED - a non-leaf's data addresses one contiguous
+block of Lmx children, sealed at construction - and 14.4 blocks nothing, because
+there is no sought id: the translator resolves a field to a block index and the
+runtime never compares a name. See the withdrawn unit 4 row.
 
 
 Unit 5 - reference-value passing

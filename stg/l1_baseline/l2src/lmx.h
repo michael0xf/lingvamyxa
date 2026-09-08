@@ -71,37 +71,20 @@ typedef struct LmxRange {
  *
  * The pool header is not an Lmx node and is never handed out; only entry
  * addresses are, and an entry's type is read from the range it lands in. */
-/* The reverse name index of 2: the only mandatory per-node name aid, and the
- * only side table this design is allowed to require.
+/* No name table lives here, and that is deliberate.
  *
- *     Lmx * -> LmxShortNameId
+ * Field names are known at translation time. treeranch resolves to a fixed
+ * index in the branch block, and the runtime does pointer arithmetic; the
+ * generated C never sees a name. 2 says as much - "A resolved reference is used
+ * directly and needs no name lookup" - and the type of a void * is read from the
+ * address range it falls in, never from a lookup.
  *
- * It stores short-name identity, not full paths and not Name-to-Binding stacks.
- * Names never enter the Lmx header.
- *
- * ABI 14.4 leaves the id's bit width, byte encoding, deterministic generation,
- * inter-module agreement, collision handling, reserved values and derivation
- * from a textual path all open. What it fixes is the abstract identity: equal
- * short names compare equal, distinct names cannot silently alias, and copying
- * a named node preserves its name identity. So nothing here derives an id, and
- * nothing depends on the type beyond equality - the width below is a placeholder
- * that the table never inspects.
- *
- * There is no reserved "no name" value, because 14.4 leaves reserved ids open.
- * Absence is reported out of band, by the lookup's return status. */
-typedef unsigned long LmxShortNameId;
-
-typedef struct LmxNameSlot {
-    Lmx *node;
-    LmxShortNameId id;
-    int used;
-} LmxNameSlot;
-
-typedef struct LmxNames {
-    LmxNameSlot *slots;
-    size_t capacity;
-    size_t count;
-} LmxNames;
+ * 2 does keep one name aid on the books, the reverse index Lmx * -> ShortNameId.
+ * It is for runtime TEXTUAL lookup and for reconstructing a current full path
+ * from sibling ordinals and node links - diagnostics and genuinely dynamic
+ * access. It is not part of ordinary field resolution, and building it before
+ * something needs those two things invites exactly the error this comment
+ * replaces: resolving a compiled path by comparing names at runtime. */
 
 typedef struct LmxPool {
     void *base;

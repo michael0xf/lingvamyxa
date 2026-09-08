@@ -1,4 +1,4 @@
-predef: "l2src/lmx_names.lm1"
+predef: "l2src/lmx_chars.lm1"
 
 # Reference-value passing. Lingvamyxa_spec.txt 21.4.
 #
