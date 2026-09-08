@@ -682,6 +682,10 @@ SPEC 21.8 / ABI 6.6  method record {addr, sig}, node first, typed invoke
     keeps source names. Long names / too-deep if are diagnosed before
     dest is opened; emit writes tmp then rename. Mixed multi-op
     infix other than a + chain is unsupported in this slice.
+    Variable arity 1–4, char or int formals, int result. &&/|| keep
+    C precedence; right-hand calls are inlined so they short-circuit.
+    Partial port of parser_text predicates lives in
+    l2src/parser_text_predicates.lm2 and does not replace l1src.
 
     OwnUsed/DynRequired remain empty: only declared formals. Not
     Throws/Message/through/own. prototype: is emitted so forward
