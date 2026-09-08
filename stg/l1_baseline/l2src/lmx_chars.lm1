@@ -34,7 +34,7 @@ fn: lmx_chars_init () int
     lmx_chars_pool: (cast: (@: LmxPool) c.calloc(1U, c.sizeof(c.LmxPool)))
     if: lmx_chars_pool = 0
         return: 1
-    if: lmx_pool_open(lmx_chars_pool, c.sizeof(cells[0]), 256U, c.LMX_KIND_PRIMITIVE) != 0
+    if: lmx_pool_open(lmx_chars_pool, c.sizeof(cells[0]), 256U, c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_CHAR) != 0
         c.free(lmx_chars_pool)
         lmx_chars_pool: 0
         return: 1

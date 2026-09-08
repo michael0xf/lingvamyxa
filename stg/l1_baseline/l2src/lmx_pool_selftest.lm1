@@ -21,6 +21,8 @@ end: sample_entry
 fn: main () int
     @: LmxPool methods
     @: LmxPool arrays
+    @: LmxPool chars_of
+    @: LmxArrayDesc char_desc
     @: LmxMethod record
     @: LmxMethod second
     @: LmxArrayDesc desc
@@ -31,20 +33,27 @@ fn: main () int
     if: lmx_ranges_init(8U) != 0
         c.printf("lmx: range table init failed\n")
         return: 1
-    if: lmx_range_register((cast: (@: void) chars_pool), (cast: (@: void) (chars_pool + 4)), c.sizeof(chars_pool[0]), c.LMX_KIND_PRIMITIVE) != 0
+    if: lmx_range_register((cast: (@: void) chars_pool), (cast: (@: void) (chars_pool + 4)), c.sizeof(chars_pool[0]), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_CHAR) != 0
         c.printf("lmx: primitive pool registration failed\n")
         return: 1
 
     methods: (cast: (@: LmxPool) c.calloc(1U, c.sizeof(c.LmxPool)))
     arrays: (cast: (@: LmxPool) c.calloc(1U, c.sizeof(c.LmxPool)))
-    if: methods = 0 || arrays = 0
+    chars_of: (cast: (@: LmxPool) c.calloc(1U, c.sizeof(c.LmxPool)))
+    if: methods = 0 || arrays = 0 || chars_of = 0
         c.printf("lmx: pool header allocation failed\n")
         return: 1
-    if: lmx_pool_open(methods, c.sizeof(c.LmxMethod), 2U, c.LMX_KIND_METHOD) != 0
+    if: lmx_pool_open(methods, c.sizeof(c.LmxMethod), 2U, c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0
         c.printf("lmx: method pool open failed\n")
         return: 1
-    if: lmx_pool_open(arrays, c.sizeof(c.LmxArrayDesc), 2U, c.LMX_KIND_ARRAY) != 0
+    if: lmx_pool_open(arrays, c.sizeof(c.LmxArrayDesc), 2U, c.LMX_KIND_ARRAY, c.LMX_TYPE_ARRAY_OF_INT) != 0
         c.printf("lmx: array pool open failed\n")
+        return: 1
+
+    # 2 says N TYPED service arrays, and 6.5 spells out one per Array element
+    # type. A second descriptor pool, same shape, different element type.
+    if: lmx_pool_open(chars_of, c.sizeof(c.LmxArrayDesc), 2U, c.LMX_KIND_ARRAY, c.LMX_TYPE_ARRAY_OF_CHAR) != 0
+        c.printf("lmx: second array pool open failed\n")
         return: 1
 
     record: lmx_method_intern(methods, sample_entry, 1U)
@@ -62,6 +71,32 @@ fn: main () int
         failures: failures + 1
     if: lmx_classify(cast: (@: void) (chars_pool + 1)) != c.LMX_KIND_PRIMITIVE
         c.printf("lmx: adding pools disturbed primitive classification\n")
+        failures: failures + 1
+
+    # The point of N being per type. Both descriptors are array descriptors and
+    # read the same kind, yet the address alone tells which typed pool each came
+    # from, with nothing stored in either to say so.
+    char_desc: lmx_array_desc_new(chars_of, 2U, (cast: (@: void) chars_pool))
+    if: char_desc = 0
+        c.printf("lmx: char-array descriptor handout failed\n")
+        return: 1
+    if: lmx_classify(cast: (@: void) char_desc) != c.LMX_KIND_ARRAY
+        c.printf("lmx: char-array descriptor is not an array\n")
+        failures: failures + 1
+    if: lmx_type_of(cast: (@: void) desc) != c.LMX_TYPE_ARRAY_OF_INT
+        c.printf("lmx: int-array descriptor has the wrong type\n")
+        failures: failures + 1
+    if: lmx_type_of(cast: (@: void) char_desc) != c.LMX_TYPE_ARRAY_OF_CHAR
+        c.printf("lmx: char-array descriptor has the wrong type\n")
+        failures: failures + 1
+    if: lmx_type_of(cast: (@: void) record) != c.LMX_TYPE_METHOD
+        c.printf("lmx: method record has the wrong type\n")
+        failures: failures + 1
+    if: lmx_type_of(cast: (@: void) (chars_pool + 1)) != c.LMX_TYPE_CHAR
+        c.printf("lmx: primitive cell has the wrong type\n")
+        failures: failures + 1
+    if: lmx_type_of(cast: (@: void) 0) != c.LMX_TYPE_NONE
+        c.printf("lmx: null has a type\n")
         failures: failures + 1
 
     # A second entry from the same pool classifies the same and does not alias

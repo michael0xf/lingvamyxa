@@ -12,7 +12,7 @@ include: "<stdlib.h>"
 # The pool header is never handed out and is not an Lmx node. Entries are
 # addressed, never taken by value.
 
-fn: lmx_pool_open (@: LmxPool pool; size_t: stride; size_t: capacity; int: kind) int
+fn: lmx_pool_open (@: LmxPool pool; size_t: stride; size_t: capacity; int: kind; int: type) int
     @: void block
     size_t: bytes
     if: pool = 0
@@ -27,7 +27,7 @@ fn: lmx_pool_open (@: LmxPool pool; size_t: stride; size_t: capacity; int: kind)
     block: c.calloc(capacity, stride)
     if: block = 0
         return: 1
-    if: lmx_range_register(block, (cast: (@: void) ((cast: (@: char) block) + bytes)), stride, kind) != 0
+    if: lmx_range_register(block, (cast: (@: void) ((cast: (@: char) block) + bytes)), stride, kind, type) != 0
         c.free(block)
         return: 1
     pool\base: block
@@ -35,6 +35,7 @@ fn: lmx_pool_open (@: LmxPool pool; size_t: stride; size_t: capacity; int: kind)
     pool\capacity: capacity
     pool\count: 0U
     pool\kind: kind
+    pool\type: type
 return: 0
 
 # Hands out the next entry address. The caller learns nothing about the entry

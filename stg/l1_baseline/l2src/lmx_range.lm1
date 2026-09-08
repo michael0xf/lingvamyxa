@@ -39,7 +39,7 @@ sub: lmx_ranges_release ()
     lmx_range_capacity: 0U
 end: lmx_ranges_release
 
-fn: lmx_range_register (@: void lo; @: void hi; size_t: stride; int: kind) int
+fn: lmx_range_register (@: void lo; @: void hi; size_t: stride; int: kind; int: type) int
     @: LmxRange entry
     if: lmx_range_table = 0
         return: 1
@@ -56,10 +56,13 @@ fn: lmx_range_register (@: void lo; @: void hi; size_t: stride; int: kind) int
     entry\hi: hi
     entry\stride: stride
     entry\kind: kind
+    entry\type: type
     lmx_range_count: lmx_range_count + 1U
 return: 0
 
-# The whole mechanism: no tag is read, only membership is tested.
+# The whole mechanism: no tag is read, only membership is tested. Two calls,
+# because 2's table has two columns - how to read an entry, and which typed
+# service array it came from. Both are answered by the address alone.
 fn: lmx_classify (@: void p) int
     @: LmxRange entry
     size_t: index
@@ -74,6 +77,24 @@ fn: lmx_classify (@: void p) int
         index: index + 1U
     ---
 return: c.LMX_KIND_NONE
+
+# 6.5: for every used Array type T there is a pool all_array_of_T. So two
+# descriptors are told apart by which range they land in, not by anything held
+# in either of them.
+fn: lmx_type_of (@: void p) int
+    @: LmxRange entry
+    size_t: index
+    if: p = 0
+        return: c.LMX_TYPE_NONE
+    index: 0U
+    while: index < lmx_range_count
+        entry: lmx_range_table + index
+        if: p >= entry\lo && p < entry\hi
+            return: entry\type
+        ---
+        index: index + 1U
+    ---
+return: c.LMX_TYPE_NONE
 
 # Sets the two fields the spec has decided: node is the containment parent (2),
 # data is the classified payload pointer (2, 6.5). len is zeroed as raw storage

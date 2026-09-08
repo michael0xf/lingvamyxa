@@ -31,6 +31,27 @@ struct Lmx {
 
 /* What a registered range means. 2 lists the service-entry interpretations;
  * these are the ones this unit registers. */
+/* 2: "The implementation has N typed service arrays." N is per TYPE, not per
+ * category - 6.5 spells it out for one of them: "For every used Array type T the
+ * implementation provides a typed service pool, schematically all_array_of_T."
+ *
+ * So a range carries a concrete type, and the address gives that type outright.
+ * A descriptor from all_array_of_int and one from all_array_of_char are both
+ * array descriptors, and are told apart by which range they land in, with
+ * nothing stored on either.
+ *
+ * The kind below stays as the coarse reading of an entry - how to interpret its
+ * shape, which is the column 2's table gives. The type says which one it is. */
+typedef enum LmxType {
+    LMX_TYPE_NONE = 0,
+    LMX_TYPE_CHAR,              /* primitive pool, 2's all_chars_array */
+    LMX_TYPE_INT,               /* primitive pool of ints */
+    LMX_TYPE_METHOD,            /* 2's all_methods_array */
+    LMX_TYPE_ARRAY_OF_CHAR,     /* 6.5's all_array_of_T for T = char */
+    LMX_TYPE_ARRAY_OF_INT,      /* the same for T = int */
+    LMX_TYPE_BRANCH             /* a branch block of Lmx children, 14.1 */
+} LmxType;
+
 typedef enum LmxKind {
     LMX_KIND_NONE = 0,      /* not a classifiable high-level value */
     LMX_KIND_PRIMITIVE,     /* primitive pool entry, e.g. all_chars_array */
@@ -61,6 +82,7 @@ typedef struct LmxRange {
     void *hi;
     size_t stride;
     int kind;
+    int type;
 } LmxRange;
 
 /* A typed service pool: one contiguous block of same-sized entries whose
@@ -92,6 +114,7 @@ typedef struct LmxPool {
     size_t capacity;
     size_t count;
     int kind;
+    int type;
 } LmxPool;
 
 #define LMX_RANGE_MAX 16

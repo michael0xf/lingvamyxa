@@ -342,6 +342,40 @@ consequence, because I extrapolated from the passage instead of checking it
 against the requirement list that governs it. The list is the cheaper check and
 comes first.
 
+
+Correction: N typed service arrays means one per TYPE, not per category
+-----------------------------------------------------------------------
+Units 1 to 3 registered a range under a KIND - primitive, method, array - which
+is the column SPEC 2's table gives for how to read an entry. That is only half
+of it. 2 says the implementation has N TYPED service arrays, and 6.5 spells one
+of them out: "For every used Array type T the implementation provides a typed
+service pool, schematically all_array_of_T."
+
+So a range now carries a concrete type as well, and the address gives that type
+outright. A descriptor from all_array_of_int and one from all_array_of_char are
+both array descriptors, read alike, and are told apart by which range they land
+in - with nothing stored in either to say so. The pool selftest asserts exactly
+that pair.
+
+Kind and type are both kept because they answer different questions: kind is how
+to read the entry, type is which typed service array it came from.
+
+Not an open point - a misreading, corrected.
+
+Carried into the const rule
+---------------------------
+The user's rule, recorded before the unit that will need it: if a reference is
+const, everything is done WITHOUT touching the node the void * lives in. Not
+"the resolution may be cached" - the generated C does not load node->data at
+all, because the target is known at translation time. That is 21.8's direct
+invocation for callables, and the same for ordinary const fields.
+
+This is the sharp end of NOTES section 3.1, which insists devirtualisation and
+checkpoint elision are separate optimisations with separate preconditions. const
+gives the first outright. It does not give the second: whether the caller has
+dirty own fields across the call is a property of the CALLER, and const on the
+callee says nothing about it.
+
 Carried forward, not yet touched
 --------------------------------
 ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).
