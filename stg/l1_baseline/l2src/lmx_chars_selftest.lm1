@@ -1,0 +1,99 @@
+predef: "l2src/lmx_chars.lm1"
+include: "<stdio.h>"
+
+# Carries 2's worked example verbatim: assigning a primitive field changes its
+# reference and does not mutate the shared immutable cell.
+
+fn: main () int
+    @: Lmx first
+    @: Lmx second
+    @: void bang
+    @: void bang_again
+    @: void query
+    int: failures
+    failures: 0
+
+    if: lmx_ranges_init(8U) != 0
+        c.printf("lmx: range table init failed\n")
+        return: 1
+    if: lmx_chars_init() != 0
+        c.printf("lmx: char pool init failed\n")
+        return: 1
+    if: lmx_chars_init() = 0
+        c.printf("lmx: char pool initialised twice\n")
+        failures: failures + 1
+
+    bang: lmx_char_cell(33)
+    bang_again: lmx_char_cell(33)
+    query: lmx_char_cell(63)
+    if: bang = 0 || query = 0
+        c.printf("lmx: char cell missing\n")
+        return: 1
+
+    # Interned: the same character is the same cell, always.
+    if: bang != bang_again
+        c.printf("lmx: same character gave two cells\n")
+        failures: failures + 1
+    if: bang = query
+        c.printf("lmx: different characters share one cell\n")
+        failures: failures + 1
+    if: lmx_classify(bang) != c.LMX_KIND_PRIMITIVE
+        c.printf("lmx: char cell not classified as primitive\n")
+        failures: failures + 1
+    if: lmx_char_value(bang) != 33
+        c.printf("lmx: char cell does not read back as its own value\n")
+        failures: failures + 1
+    if: lmx_char_value(query) != 63
+        c.printf("lmx: second char cell does not read back\n")
+        failures: failures + 1
+
+    # Out of range yields nothing, not a neighbouring cell.
+    if: lmx_char_cell(-1) != 0
+        c.printf("lmx: negative character produced a cell\n")
+        failures: failures + 1
+    if: lmx_char_cell(256) != 0
+        c.printf("lmx: out of range character produced a cell\n")
+        failures: failures + 1
+
+    # A pointer outside every registered range is not readable as a char.
+    if: lmx_char_value(cast: (@: void) (@ failures)) != -1
+        c.printf("lmx: unregistered address read as a character\n")
+        failures: failures + 1
+
+    # The worked example. Two fields hold the same character, so they hold the
+    # same address. Reassigning one changes only that field's reference.
+    first: (cast: (@: Lmx) c.calloc(1U, c.sizeof(c.Lmx)))
+    second: (cast: (@: Lmx) c.calloc(1U, c.sizeof(c.Lmx)))
+    if: first = 0 || second = 0
+        c.printf("lmx: cell allocation failed\n")
+        return: 1
+    lmx_cell_init(first, 0, bang)
+    lmx_cell_init(second, 0, bang)
+    if: first\data != second\data
+        c.printf("lmx: two fields of one character do not share the cell\n")
+        failures: failures + 1
+
+    lmx_cell_init(first, 0, query)
+    if: first\data = second\data
+        c.printf("lmx: reassigning one field moved the other\n")
+        failures: failures + 1
+    if: lmx_char_value(second\data) != 33
+        c.printf("lmx: reassigning a field mutated the shared cell\n")
+        failures: failures + 1
+    if: lmx_char_value(bang) != 33
+        c.printf("lmx: the shared cell itself was mutated\n")
+        failures: failures + 1
+    if: lmx_classify(first\data) != c.LMX_KIND_PRIMITIVE
+        c.printf("lmx: reassigned field lost its classification\n")
+        failures: failures + 1
+
+    c.free(first)
+    c.free(second)
+    lmx_chars_release()
+    lmx_ranges_release()
+
+    if: failures != 0
+        c.printf("lmx chars selftest FAILED checks=%d\n", failures)
+        return: 1
+    c.printf("lmx chars selftest ok\n")
+    return: 0

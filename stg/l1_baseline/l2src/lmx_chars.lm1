@@ -1,0 +1,84 @@
+predef: "l2src/lmx_pool.lm1"
+
+# The interned character pool. Lingvamyxa_spec.txt 2, 21.4; ABI 14.7.
+#
+# 2 works the example out in full: a primitive field
+#
+#     char: '!'
+#
+# may hold data == &all_chars_array['!']. Assigning that field changes its
+# REFERENCE; it does not mutate the shared immutable character cell.
+#
+# 14.7 settles exactly this case - "interned immutable leaves naturally share
+# their primitive address" - and leaves mutable cells, large numbers, byte
+# buffers and foreign handles open. This unit implements only the settled half.
+#
+# Immutability is enforced by construction: the block is filled once at init and
+# this unit offers no mutator. A physically const pool would say it in the type
+# as well, but that ties into the per-range physical class policy 14.7 leaves
+# open, so it is not claimed here.
+#
+# Handout differs from the method and array pools on purpose. Those hand out the
+# next free entry; here every entry is live from init and is addressed by the
+# character value itself. Same pool primitive, different discipline - which is
+# the point, since what makes an entry a primitive is its range, not how it was
+# obtained.
+
+@: LmxPool lmx_chars_pool 0
+
+fn: lmx_chars_init () int
+    @: char cells
+    size_t: index
+    if: lmx_chars_pool != 0
+        return: 1
+    lmx_chars_pool: (cast: (@: LmxPool) c.calloc(1U, c.sizeof(c.LmxPool)))
+    if: lmx_chars_pool = 0
+        return: 1
+    if: lmx_pool_open(lmx_chars_pool, c.sizeof(cells[0]), 256U, c.LMX_KIND_PRIMITIVE) != 0
+        c.free(lmx_chars_pool)
+        lmx_chars_pool: 0
+        return: 1
+    cells: (cast: (@: char) lmx_chars_pool\base)
+    index: 0U
+    while: index < 256U
+        cells[index]: (cast: (char) index)
+        index: index + 1U
+    ---
+return: 0
+
+sub: lmx_chars_release ()
+    if: lmx_chars_pool != 0
+        c.free(lmx_chars_pool\base)
+        c.free(lmx_chars_pool)
+    ---
+    lmx_chars_pool: 0
+end: lmx_chars_release
+
+# The shared cell for a character value. Two fields holding the same character
+# hold the same address; that sharing is the whole content of 14.7's settled
+# half. Out of range yields nothing rather than a wrong cell.
+fn: lmx_char_cell (int: value) @: void
+    @: char cells
+    if: lmx_chars_pool = 0
+        return: 0
+    if: value < 0
+        return: 0
+    if: value > 255
+        return: 0
+    cells: (cast: (@: char) lmx_chars_pool\base)
+return: (cast: (@: void) (cells + value))
+
+# Reads the character back through its address. Refuses anything the classifier
+# does not call a primitive, so a wrong-range pointer cannot be read as a char.
+fn: lmx_char_value (@: void cell) int
+    @: char p
+    if: cell = 0
+        return: -1
+    if: lmx_classify(cell) != c.LMX_KIND_PRIMITIVE
+        return: -1
+    p: (cast: (@: char) cell)
+    # Masked rather than cast through unsigned char, because the L1 cast path
+    # mis-lowers both spellings: (cast: (unsigned char) x) emits ((unsigned)charx)
+    # and (cast: (uchar) x) emits ((uchar)x), each silently. Reported separately.
+    # The mask is exact for every cell this pool holds.
+return: ((cast: (int) p[0]) & 255)

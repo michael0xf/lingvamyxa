@@ -141,6 +141,39 @@ ABI 14.10 / SPEC 21.13 p.4  Method result and failure carrier
     wrong for lm2, where each Message has its own arena and Messages may run
     concurrently (SPEC 21.7). The first call generated here reaches ASK.
 
+
+Unit 3 - the interned character pool
+------------------------------------
+Files: lmx_chars.lm1, lmx_chars_selftest.lm1
+
+ABI 14.7  Primitive copy and mutation policies
+    Half DECIDED, half AVOIDED, and the split is 14.7's own. Its first sentence
+    settles this unit outright: "Interned immutable leaves naturally share their
+    primitive address." That is implemented and asserted - the same character is
+    the same cell, always. What 14.7 leaves open is everything else: mutable
+    cells, large numbers, byte buffers, opaque handles, foreign resources, each
+    to be specified by physical range. None of those is offered here. Arises at
+    the first mutable primitive cell, which 14.9 also requires to live in the
+    owning Message's arena. Then: ASK.
+
+SPEC 21.4  Primitives pass by semantic value
+    DECIDED, and demonstrated rather than assumed. 21.4 says the callee gets an
+    independent value "even when the source Lmx primitive is physically
+    represented by a pointer into a registered address range such as
+    all_chars_array", and that sharing an immutable atom is an implementation
+    detail. The selftest carries 2's worked example for it: two fields holding
+    one character hold one address, and reassigning one changes only that
+    field's reference while the shared cell and the other field stay put.
+
+    Not an open point, recorded because it is the claim most easily broken by a
+    later optimisation. If a field write ever reaches the cell instead of the
+    reference, this test fails.
+
+    Limitation stated rather than hidden: immutability is enforced by
+    construction - the block is filled once at init and no mutator exists - not
+    by the C type. Saying it in the type belongs with the per-range physical
+    class policy that 14.7 leaves open.
+
 Carried forward, not yet touched
 --------------------------------
 ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).
