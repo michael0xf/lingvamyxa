@@ -1,0 +1,88 @@
+Qt as the platform layer - assessment before development
+========================================================
+
+Asked for a second opinion on a choice already made. Conclusion first: the
+choice holds, on grounds narrower than "Qt is the main application framework",
+and with three conditions. Nothing here reopens it.
+
+The model states the choice without arguing it. Section 15 opens with "Qt is
+the main application framework" as a premise. The actual argument is in section
+16, the platform list.
+
+What Qt buys, ranked by how hard it is to replace
+-------------------------------------------------
+Only the hard-to-replace part is a reason.
+
+  HARD, and this is the whole case
+    Platform integration across section 16's nine classes, in particular iOS,
+    Android and WebAssembly. These are not alternative backends; they are
+    different execution models.
+    The text stack: font enumeration, fallback chains, monospace metrics,
+    per-monitor DPI. Section 14 makes this load-bearing - cell width and CJK.
+    Input: IME and composition, dead keys, key repeat, modifier normalisation.
+    Sections 8 and 9 are entirely this.
+    Clipboard: three genuinely different models across X11, Windows and macOS.
+
+  EASY, and therefore not a reason
+    Window, event loop, painting a cell grid. Any toolkit does this.
+    QProcess. Not needed at all for mode 0.1.1, marginal for 0.1.2. Section 18
+    lists it only as a 0.1.2 helper.
+
+What it costs
+-------------
+Deployment size, or static linking. Licensing, which for a distributed
+application is a decision to take before shipping rather than a footnote. A
+second and much heavier build world, CMake plus the Qt toolchain, on top of a
+chain that otherwise needs only gcc. And the C++ boundary: L1 emits C99, so
+every backend function is an extern "C" surface in a C++ translation unit that
+the L1 chain cannot build at all.
+
+The risk specific to this project
+---------------------------------
+This is the one that matters here and it is not generic Qt commentary.
+
+The project's identity is a self-hosting chain that needs only a C99 compiler.
+Qt introduces a second, far heavier build world. If the two ever merge - if the
+core starts depending on Qt types - the bootstrap story dies.
+
+The separation is currently accidental. The root buildCore.lm0.bat requires
+cmake for exactly two calls, both `cmake -E make_directory`. So the L1 gate
+formally depends on the Qt toolchain and substantively does not. This root's own
+buildCore dropped that dependency; the repository root should too.
+
+So the C ABI boundary is not hygiene. It protects the project's defining
+property.
+
+What would invalidate the choice
+--------------------------------
+  The platform list collapsing to Windows and Linux desktop. Then Qt is
+  overkill and a direct Win32/X11 or SDL backend is cheaper and lighter.
+  WebAssembly needing a different execution model anyway - and section 16 says
+  it does, since there are no child processes there. The one-codebase argument
+  weakens for that target specifically.
+  Licensing terms the project will not accept.
+
+Conclusion
+----------
+Keep Qt, on the strength of section 16 and the text/input stack. Three
+conditions:
+
+  1. Qt stays strictly behind the C ABI. Already decided, see README.
+  2. The core build must not depend on CMake or Qt at all. Today that
+     dependency is formal and false; remove it at the repository root.
+  3. Settle licensing before shipping, not after.
+
+And one practical consequence: milestone 1 does not depend on the backend by a
+single line, so it can be built now and the renderer decision deferred until the
+platform list is settled.
+
+Pending verification
+--------------------
+Facts requested from grok_bot (work_chat\grok_bot\inbox\20260908-191719.txt),
+not yet returned: which Qt versions and kits are actually installed on this
+machine, whether wasm and android kits exist here or only desktop mingw, what
+the repository's CMakeLists requires of Qt, what third_party and vcpkg-sources
+already carry, and whether the --full route depends on Qt or only on CMake.
+
+Those refine the cost side. They do not change the argument, which rests on the
+platform list.
