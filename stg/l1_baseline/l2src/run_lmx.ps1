@@ -20,7 +20,7 @@ $guards = @(
     "-Werror=implicit-function-declaration", "-Werror=implicit-int"
 )
 
-foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "lmx_ref_selftest", "lmx_branch_selftest")) {
+foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "lmx_ref_selftest", "lmx_branch_selftest", "lmx_own_selftest")) {
     $src = "l2src\$unit.lm1"
     $c = Join-Path $out "$unit.c"
     $exe = Join-Path $out "$unit.exe"

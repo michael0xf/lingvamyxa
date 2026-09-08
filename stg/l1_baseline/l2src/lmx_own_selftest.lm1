@@ -1,0 +1,150 @@
+predef: "l2src/lmx_own.lm1"
+include: "<stdio.h>"
+
+# Carries 21.6's worked case verbatim, because it is the case that makes
+# no-reload load-bearing rather than a nicety:
+#
+#     outer entry: C x = 1, clean
+#     outer calls inner
+#     inner explicitly writes outer's graph field x = 2
+#     outer returns without assigning its local x
+#
+# A flush-all implementation would wrongly overwrite 2 with its stale cached 1.
+# The conforming dirty-only implementation writes nothing on outer return.
+
+# The callee. It does what 21.6 says inner does: writes the caller's graph
+# field through an explicit path, which is not routed through anyone's cache.
+fn: inner_writes_graph (@: Lmx node; @: void value) int
+return: lmx_field_write(node, 0U, value)
+
+# The caller, written the way a generated body would be: load at entry, work in
+# the local, publish dirty before the outbound call, and NOT reload after it.
+fn: outer_calls_inner (@: Lmx node; @: void value) int
+    @: LmxOwnLocal x
+    x: (cast: (@: LmxOwnLocal) c.calloc(1U, c.sizeof(c.LmxOwnLocal)))
+    if: x = 0
+        return: 1
+    if: lmx_own_load(x, node, 0U) != 0
+        c.free(x)
+        return: 1
+    # No assignment to the local here, so it stays clean and the checkpoint
+    # before the call must publish nothing.
+    if: lmx_own_checkpoint(x) != 0
+        c.free(x)
+        return: 1
+    if: inner_writes_graph(node, value) != 0
+        c.free(x)
+        return: 1
+    # No reload. The local still carries its entry snapshot.
+    # Exit checkpoint: still clean, so still nothing is published.
+    if: lmx_own_checkpoint(x) != 0
+        c.free(x)
+        return: 1
+    c.free(x)
+return: 0
+
+fn: main () int
+    @: Lmx node
+    @: LmxOwnLocal local
+    @: void one
+    @: void two
+    @: void three
+    int: failures
+    failures: 0
+
+    if: lmx_ranges_init(8U) != 0
+        c.printf("lmx: range table init failed\n")
+        return: 1
+    if: lmx_chars_init() != 0
+        c.printf("lmx: char pool init failed\n")
+        return: 1
+    node: (cast: (@: Lmx) c.calloc(1U, c.sizeof(c.Lmx)))
+    local: (cast: (@: LmxOwnLocal) c.calloc(1U, c.sizeof(c.LmxOwnLocal)))
+    if: node = 0 || local = 0
+        c.printf("lmx: allocation failed\n")
+        return: 1
+    if: lmx_branch_open(node, 2U) != 0
+        c.printf("lmx: branch open failed\n")
+        return: 1
+    one: lmx_char_cell(49)
+    two: lmx_char_cell(50)
+    three: lmx_char_cell(51)
+
+    # 21.6's case, exactly. Field starts at 1.
+    if: lmx_field_write(node, 0U, one) != 0
+        c.printf("lmx: initial field write failed\n")
+        return: 1
+    if: outer_calls_inner(node, two) != 0
+        c.printf("lmx: outer failed\n")
+        return: 1
+    if: lmx_field_read(node, 0U) != two
+        c.printf("lmx: outer republished a clean local over the callee write\n")
+        failures: failures + 1
+    if: lmx_char_value(lmx_field_read(node, 0U)) != 50
+        c.printf("lmx: the graph does not hold what the callee wrote\n")
+        failures: failures + 1
+
+    # Dirty is set only by an executed write, and a clean local publishes
+    # nothing however many checkpoints it passes.
+    if: lmx_own_load(local, node, 0U) != 0
+        c.printf("lmx: load failed\n")
+        return: 1
+    if: local\dirty != 0
+        c.printf("lmx: a freshly loaded local is dirty\n")
+        failures: failures + 1
+    if: lmx_field_write(node, 0U, three) != 0
+        c.printf("lmx: explicit write failed\n")
+        return: 1
+    if: lmx_own_checkpoint(local) != 0 || lmx_own_checkpoint(local) != 0
+        c.printf("lmx: checkpoint failed\n")
+        return: 1
+    if: lmx_field_read(node, 0U) != three
+        c.printf("lmx: a clean local was published over an explicit write\n")
+        failures: failures + 1
+
+    # The local still carries its snapshot: reading it does not see the graph.
+    if: lmx_own_read(local) != two
+        c.printf("lmx: the local silently reloaded from the graph\n")
+        failures: failures + 1
+
+    # An executed write makes it dirty, and the next checkpoint publishes it.
+    lmx_own_write(local, one)
+    if: local\dirty = 0
+        c.printf("lmx: an executed write did not set dirty\n")
+        failures: failures + 1
+    if: lmx_field_read(node, 0U) != three
+        c.printf("lmx: writing the local reached the graph without a checkpoint\n")
+        failures: failures + 1
+    if: lmx_own_checkpoint(local) != 0
+        c.printf("lmx: publishing checkpoint failed\n")
+        return: 1
+    if: lmx_field_read(node, 0U) != one
+        c.printf("lmx: the checkpoint did not publish the dirty value\n")
+        failures: failures + 1
+    if: local\dirty != 0
+        c.printf("lmx: a successful store did not clear dirty\n")
+        failures: failures + 1
+
+    # 21.5: the local is aimed at the exact occurrence it was loaded from, and
+    # publishing does not go looking the field up again.
+    if: local\from != lmx_branch_child(node, 0U)
+        c.printf("lmx: the local is not bound to its own occurrence\n")
+        failures: failures + 1
+
+    # A sibling own field is untouched throughout: only OwnUsed fields are
+    # loaded or stored, and other node fields are neither.
+    if: lmx_field_read(node, 1U) != 0
+        c.printf("lmx: an unused sibling field was written\n")
+        failures: failures + 1
+
+    lmx_branch_release(node)
+    c.free(node)
+    c.free(local)
+    lmx_chars_release()
+    lmx_ranges_release()
+
+    if: failures != 0
+        c.printf("lmx own selftest FAILED checks=%d\n", failures)
+        return: 1
+    c.printf("lmx own selftest ok\n")
+    return: 0

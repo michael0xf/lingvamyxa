@@ -556,6 +556,52 @@ ABI 14.3  Empty representation
     rather than deciding what an empty branch looks like. Arises when an empty
     Structure must be told from a null payload. Then: ASK.
 
+
+Unit 7 - own fields as C working locals, with dirty-only checkpoints
+---------------------------------------------------------------------
+Files: lmx_own.h, lmx_own.lm1, lmx_own_selftest.lm1
+
+SPEC 21.5, 21.6  DECIDED, and pinned before anything generates it.
+    This is the machinery a generated method body carries, written by hand so
+    the contract is testable now. It has no open points; it is here because
+    both failure modes are SILENT. A flush-all checkpoint and an automatic
+    reload each keep every other test in this tree green while destroying the
+    semantics, so they get a test that fails on them specifically.
+
+    The selftest carries 21.6's worked case verbatim rather than paraphrasing
+    it: outer enters with the field at 1 and its local clean, calls inner,
+    inner writes the graph field to 2 through an explicit path, outer returns
+    without assigning its local. A flush-all implementation overwrites 2 with
+    a stale 1. Asserted directly.
+
+    Also asserted, each ruling out a plausible shortcut:
+      a freshly loaded local is clean
+      a clean local publishes nothing however many checkpoints it passes
+      reading the local after a call returns the entry snapshot, not the graph
+      an executed write sets dirty, and only an executed write does
+      a dirty local does not reach the graph until a checkpoint
+      a successful store clears dirty
+      the local is aimed at the exact occurrence it was loaded from
+      a sibling field, not being OwnUsed, is neither loaded nor stored
+
+    What is deliberately absent. No helper turns an explicit path into a cached
+    local - 21.5 says node\field, reference\field and array[index] read or
+    mutate their location on every execution and are not folded into the cache.
+    Declared arguments and dynamic inputs have no write-back target and do not
+    appear at all.
+
+    Not covered here, and reached later: the publication FAILURE policy. 21.6
+    leaves open whether stores are infallible, all-or-nothing after
+    prevalidation, or prefix-committing on failure. This unit's checkpoint
+    cannot fail on a well-formed local, so it does not choose. Arises when a
+    store can fail. Then: ASK.
+
+    Also not covered: 21.5's active-backing conflict policy, for when nested
+    code structurally moves, detaches or replaces the occurrence a local was
+    loaded from. 21.13 has not chosen between update-detached, checked
+    re-resolution and rejection, and explicitly forbids turning the ambiguity
+    into a silent [0] lookup. Nothing here moves an occurrence. Then: ASK.
+
 Carried forward, not yet touched
 --------------------------------
 ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).
