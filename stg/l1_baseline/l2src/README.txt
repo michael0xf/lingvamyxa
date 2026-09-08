@@ -4,6 +4,8 @@ l2src — L2 kernel on L1, plus the first L2→L1 frontend
 Layout
 ------
   units 1–7     runtime helpers written in L1 (range/pool/chars/ref/branch/own)
+  lmx_size.lm1  mutable size_t primitive pool (own size_t fields)
+  l2_text_hash.lm1  FNV-1a 64 adapter metadata for hashed text_equals
   run_lmx.ps1   L1→C selftests of those units (not L2→L1)
   l2trans.lm1   L2 frontend: P0 parse, subset check, emit .lm1
   run_l2trans.ps1
@@ -44,14 +46,31 @@ executed call; skipped RHS does not run nested actuals.
 Dest replace writes tmp, then a unique dest.bak / dest.bak.N so
 an existing foreign bak is kept; rollback failure reports the
 backup path and does not claim dest was restored. Not atomic.
-`char: quote` in a method body is an OwnUsed graph field of
-`callable->node` (SPEC 21.5–21.6): typed C cache, all_chars cell
-in the graph, dirty-only publish before calls and return, no
-reload. Explicit `node\quote` writes the graph child, not the
-cache. parser_text_predicates.lm2, parser_text_line_break.lm2
-and parser_text_starts_python.lm2 are partial ports, not
-replacements of l1src. `main` remains the §1.7 adapter. Not L2
-self-build. Single emitter source: l2trans.lm1.
+`char: quote` / `size_t: value_length` in a method body is an
+OwnUsed graph field of `callable->node` (SPEC 21.5–21.6): typed
+C cache; char graph data is an all_chars cell; size_t graph data
+is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned
+shared size_t, no int narrowing). Dirty-only publish before
+calls and return, no reload. Explicit `node\name` writes the
+graph child, not the cache. `const @(LmP0Text)` / `@: LmP0Text`
+are the existing C ABI from l1src/p0.h (data, length), a limited
+migration adapter: include and typed schema only, not a general
+C header parser and not a silent C layout for new L2 Structures.
+Lmx access stays child-index. Known C: c.strlen, c.memcmp;
+unknown c.* is rejected. Stores through const LmP0Text* are
+`const write`. parser_text_views.lm2 ports lm_p0_text_equals and
+lm_p0_identifier_payload. Equals uses FNV-1a 64-bit (u64,
+offset 0xcbf29ce484222325, prime 1099511628211) via L2-side
+bind metadata, not p0.h. Foreign views are unbound and use
+strlen+memcmp. Bound views (identifier_payload writes) hash
+`value` in one pass and fast-reject on hash mismatch; equal
+hashes still memcmp. In-place mutation of a bound view without
+rebind is outside the hashed contract; pointer/length change
+or unbind falls back. parser_text_predicates.lm2,
+parser_text_line_break.lm2, parser_text_starts_python.lm2 and
+parser_text_views.lm2 are partial ports, not replacements of
+l1src. `main` remains the §1.7 adapter. Not L2 self-build.
+Single emitter source: l2trans.lm1. Not the whole parser.
 
 Emit (L1), with `include: "<stdio.h>"` only when there is at least one puts:
 

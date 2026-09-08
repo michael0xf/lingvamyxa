@@ -758,6 +758,51 @@ SPEC 1.7  main
     exception. Puts-only main stays the no-method path.
 
 
+Unit 10 - parser_text views (text_equals, identifier_payload)
+------------------------------------------------------------
+Files: l2trans.lm1, lmx.h, lmx_size.lm1, lmx_size_selftest.lm1,
+l2_text_hash.lm1, parser_text_views.lm2, run_lmx.ps1,
+run_l2trans.ps1, tests/unit_unknown_*.lm2, tests/unit_const_write.lm2
+
+SPEC 21.5 / 21.6  own size_t field of callable->node
+    DECIDED same as own char: `size_t: value_length` is OwnUsed of
+    callable->node, typed size_t cache, unique LMX_TYPE_SIZE_T cell
+    (growable primitive pool, not interned shared size_t, not int).
+    Dirty-only store through that cell; no reload. ASK B (activation
+    scratch) is not implemented.
+
+SPEC 11.3.1  declared typed C-address parameter
+    DECIDED for this port: `const @(LmP0Text)` and `@: LmP0Text` are
+    the existing C ABI in l1src/p0.h. data/length are typed raw
+    projections (`->` in C, `\` in L1), not Lmx child indices.
+    Include of p0.h plus this closed schema is a limited migration
+    adapter, not a general C header parser. New L2 Structures do not
+    gain a silent C layout.
+
+SPEC 7487–7496 / variant 2  raw vs Lmx follow
+    DECIDED for this adapter only: lmxParent\child stays child index;
+    rawParent\child is -> for the declared foreign typed address.
+
+c.strlen / c.memcmp / l2_hash_bind / l2_hash_eq
+    DECIDED as known C-surface functions with exact signatures.
+    Unknown c.* is `unknown method`. const pointee forbids stores
+    (`const write`). Out-pointer stores address the referent field.
+
+FNV-1a 64 hashed equals (ticket 162200)
+    DECIDED as L2-side adapter metadata in l2_text_hash.lm1, not a
+    p0.h ABI change. Hash is FNV-1a 64-bit unsigned (u64), not an
+    intern id. Bind records (view*, data, length, hash) at
+    identifier_payload write. Lookup hits only if all three identity
+    fields still match. Foreign views never bind (original
+    strlen+memcmp). Bound path hashes `value` once and fast-rejects
+    on mismatch; equal hashes still memcmp. In-place byte mutation
+    of a bound view without rebind is outside the hashed contract;
+    pointer/length change or unbind uses fallback.
+
+Cluster B (copy_bytes / text_view_new_cstr / delete / from_cstr),
+P0-as-Lmx, and parser.lm1 scanners
+    Not touched. Frozen p0.h / bootstrap / root L1 unchanged.
+
 Carried forward, not yet touched
 --------------------------------
 ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).
