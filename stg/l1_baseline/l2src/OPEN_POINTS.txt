@@ -241,8 +241,19 @@ short-name identity, not full paths. Encoding the ordinal into the id would
 give three fields named branch three different ids, and [2]branch would stop
 being a name and become an address.
 
-Consequence for unit 5: resolution is enumerate children in order, ask the
-index for each child's short name, compare, count to n. That needs ordered
+Consequence for unit 5, as corrected by the user. In LMX code the field is
+simply branch, and priority belongs to the EARLIER occurrence. The [N] form is
+a translator-side extension of the name, used to address later duplicates; it
+is not how ordinary source spells a field.
+
+So the common path is enumerate children in order, ask the index for each
+child's short name, compare, and STOP AT THE FIRST MATCH. Counting to n is only
+for the translator's own disambiguated references. The distinction matters for
+cost: the ordinary lookup exits early, and only a disambiguated one pays for
+the whole branch.
+
+Recorded as it stands. The user notes the spelling is confusing but settled,
+and is not to be reopened. That needs ordered
 child enumeration, which is ABI 14.1 - the layout behind data for a non-leaf.
 Unit 5 therefore opens with an ASK, not with code.
 
