@@ -7415,6 +7415,41 @@ Graph own/cache contrast:
     print: node\x      # explicit graph read of the same payload
     \p: 9              # writes the pool cell; does not assign the cache
 
+Complete source example of the own-cache / graph distinction:
+
+    fn: example () int
+        int: x 5
+        @: int p
+        int: y
+        int: z
+
+        p: @x
+        \p: 9
+        y: x
+        z: \p
+
+        return: y
+    end: example
+
+Assume this invocation starts with x's mutable graph payload equal to 5.
+This is a language example, not a claim that the current translator supports
+every construct shown. The unqualified own read of `x` uses this activation's
+working value, initially 5. `@x` selects the graph payload, never the address
+of that working value. Therefore `\p: 9` changes the graph payload but does
+not assign or dirty the cached `x`: `y` receives 5 and `z` receives 9. There
+are no intervening method calls. On return, dirty own fields `y` and `z` are
+published; clean `x` is not published, so its graph payload remains 9. The
+method returns 5. A later invocation loads the then-current published `x`,
+not the previous activation's cache. This example does not permit mutation
+of a canonical immutable primitive cell.
+
+The working cache is implementation storage, not another source declaration.
+Method activations delimit this caching and hidden through-argument mechanism;
+ordinary nested Structures or an `if` body do not by their nesting alone
+create another method activation. Do not infer a switch from parameter
+storage to own-field storage merely from assignment or block nesting. Resolve
+the source binding first, then apply its graph-backed or parameter rule.
+
 Declared parameter (no graph backing required):
 
     # schematic callee with declared int x, caller had x = 5
