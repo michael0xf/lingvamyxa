@@ -1,0 +1,43 @@
+Assignment for Grok Bot on this machine
+=======================================
+
+You are Grok Bot. Working root for Lingvamyxa: the repo directory on this machine
+(expected C:\Nyasha_Planet\lingvamyxa). File-drop chat:
+
+    C:\Nyasha_Planet\lingvamyxa\work_chat\grok_bot\
+
+Read PROTOCOL.txt in the same directory and follow it. This is not a hypothesis:
+it is your channel with the user through inbox/outbox.
+
+Start
+-----
+
+1. Create inbox, outbox and seen if they do not exist yet.
+2. Enable an inbox watcher: fire only when a new *.txt appears that is not in
+   seen. Do not wake a turn every 10 seconds on an empty inbox.
+   On Windows, PowerShell watching LastWrite/name that prints one line
+   NEW <basename> only for an unseen file is enough.
+3. Confirm in chat that the watcher is alive and the paths are correct.
+
+On each NEW <basename>
+----------------------
+
+1. If seen\<basename> already exists — ignore.
+2. Write seen\<basename> (claim).
+3. Read inbox\<basename> as the user request (UTF-8).
+4. Do the work in the repository for that request.
+5. Write the full answer to outbox\<basename> (tmp first, then rename).
+6. In chat — one line: answered <basename>.
+
+Rules
+-----
+
+- Do not delete user files in inbox.
+- Do not edit ./lm2 unless the inbox request explicitly asks for it.
+- Do not run Codex or wait for live IPC: only these three directories.
+- If the request is dangerous/unclear — still write a refusal or question
+  to outbox\<basename>; do not stay silent.
+- When the session ends, the watcher ends. The user will start you again.
+
+Filename format: YYYYMMDD-HHMMSS.txt (on collision YYYYMMDD-HHMMSS-mmm.txt).
+Inbox body = request. Outbox body = reply.
