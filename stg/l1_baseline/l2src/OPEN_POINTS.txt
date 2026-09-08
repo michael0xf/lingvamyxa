@@ -658,48 +658,49 @@ return, several main, L1/L3 wrappers, non-decimal return) are
 diagnostics, not silent L1 copy and not a canned output.
 
 
-Unit 9 - first L2 method leaf (add)
------------------------------------
+Unit 9 - L2 two-int methods in one unit
+---------------------------------------
 Files: l2trans.lm1, tests/add.lm2, tests/entry_sum.lm2,
 tests/entry_add_ret.lm2, tests/entry_plus.lm2,
-tests/entry_swap_formals.lm2, negatives unknown/arity/unresolved/trailer
+tests/entry_swap_formals.lm2, tests/unit_*.lm2,
+negatives unknown/arity/unresolved/trailer/dup/loop/recursion
 
 SPEC 21.8 / ABI 6.6  method record {addr, sig}, node first, typed invoke
-    DECIDED for this throws-none two-int leaf. C `int name(Lmx *node,
-    int, int)`. The translator interns the full canonical contract
-    (L2_SIG_V0 schema: node, 2 required int formals by value, int
-    result, throws-none, no dyn/varargs, plus exact ordered formal-name
-    bytes) with memcmp of those names. Method name is not interned.
-    rec.sig is the interned id. Mapping: id 1 := that intern entry
-    (emitted l2_sig_f0 / l2_sig_f1). Linked translation unit only, not
-    inter-module canonicalization. Runtime does not memcmp; closed-
-    singleton lowering. A PowerShell harness is not the intern proof:
-    l2_intern_prove aborts translation if intern is not idempotent,
-    fails swapped-formal distinction, or false-equals distinct names.
+    DECIDED for throws-none two-int methods. C `int name(Lmx *node,
+    int, int)`. Two-pass: collect declarations+contracts, then validate
+    bodies. Intern table is one per translated unit (not reset per
+    method). Full contract = L2_SIG_V0 + exact ordered formal-name
+    bytes; method name is not interned. Matching contracts share an id.
+    rec.sig is that interned id. Runtime does not memcmp. Child index
+    is the callable path. Closed-unit devirtualization: no graph
+    mutations after construction; actuals materialized left-to-right
+    into temps before each call (not C argument order). Recursion and
+    cycles are an implementation limit (`unsupported recursion`), not
+    a language ban. Max 8 methods / 16 intern slots. Mixed multi-op
+    infix other than a + chain is unsupported in this slice.
 
-    Call `name(leaf->node, …)` is closed-singleton devirtualization:
-    one leaf, no calls or graph mutations between construction and
-    invoke, translator-bound occurrence. rec.addr is METHOD-domain
-    storage, not dispatch. Not general dynamic typed invocation from
-    the record.
+    OwnUsed/DynRequired remain empty: only declared formals. Not
+    Throws/Message/through/own. prototype: is emitted so forward
+    calls do not depend on C declaration order.
 
 SPEC 21.13.4 / ABI 14.10  result carrier
     DECIDED as backend choice for this sig: int return, throws-none.
 
 SPEC 21.13.5  record layout
-    DECIDED as backend: one malloc'd LmxMethod in a registered METHOD
-    range.
+    DECIDED as backend: one malloc'd LmxMethod per method in a
+    registered METHOD range; unit opened with that child count.
 
 SPEC 21.5–21.6  OwnUsed/DynRequired
-    AVOIDED as empty for this leaf (proven: only declared a,b and
-    return a+b). Checkpoint before the call is empty. node is still
-    passed; it is the unit Structure, not a dummy pointer.
+    AVOIDED as empty (proven: only declared formals and int
+    expressions). Checkpoint before the call is empty. node is the
+    unit Structure.
 
 ABI 14.9  Message arena
     AVOIDED. calloc/malloc like units 1–7. ASK at first Message.
 
 SPEC 1.7  main
-    Still the executable adapter only. add is not given that exception.
+    Still the executable adapter only. Methods are not given that
+    exception. Puts-only main stays the no-method path.
 
 
 Carried forward, not yet touched
