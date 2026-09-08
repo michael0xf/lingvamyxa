@@ -692,11 +692,14 @@ SPEC 21.8 / ABI 6.6  method record {addr, sig}, node first, typed invoke
     dest was restored. Not atomic. No recursive FS. Files not created
     by this run are not deleted.
     Variable arity 1–4; char, int, size_t, or const @(char) formals;
-    int or size_t result. &&/|| keep C precedence as one L1 C
-    expression. RHS is not prepped to temps (calls inlined; [] stay
-    in the expr). Proof: C99 6.5.13/6.5.14 short-circuit, so a
-    right-hand [] load or call is skipped. That is not a §21.8
-    materialized-order claim and is not transferred to through.
+    int or size_t result. Pure &&/|| (no calls) stay one L1 C
+    expression with C precedence. Expressions that contain calls
+    use guarded if/temps: || splits then &&; parenthesized
+    STRUCTURE is a subexpression. Actuals are prepared left-to-right
+    once; checkpoint runs after those actuals and immediately before
+    the executed call. A skipped &&/|| RHS does not prep nested
+    actuals or checkpoints. That is the 21.8 boundary for this
+    slice, not C argument order and not a hidden-cache address.
     Partial ports: parser_text_predicates.lm2,
     parser_text_line_break.lm2 (lm_p0_line_break_width_at),
     parser_text_starts_python.lm2 (lm_p0_starts_python_string).

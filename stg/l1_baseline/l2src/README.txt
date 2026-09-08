@@ -36,9 +36,10 @@ memcmp. Closed-unit devirtualization; actuals are temps before
 the call. Recursion is an implementation limit. At most 8 methods;
 `lmx_ranges_init` is 1+N. Formals are hygienic `l2_p{i}_{j}`.
 char/int/size_t and `const @(char)` formals, arity 1–4, int or
-size_t result. &&/|| stay L1 C &&/||; RHS is not prepped to temps
-(C99 6.5.13/6.5.14 short-circuit, including [] loads). That is not
-a §21.8 materialized-order claim and is not for own/through.
+size_t result. Pure &&/|| stay L1 C expressions. Calls inside
+&&/|| use guarded if/temps: actuals once left-to-right,
+checkpoint after actuals immediately before the executed call;
+skipped RHS does not run nested actuals.
 Dest replace writes tmp, then a unique dest.bak / dest.bak.N so
 an existing foreign bak is kept; rollback failure reports the
 backup path and does not claim dest was restored. Not atomic.
