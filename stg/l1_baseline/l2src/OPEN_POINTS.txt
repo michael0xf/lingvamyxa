@@ -246,12 +246,30 @@ index for each child's short name, compare, count to n. That needs ordered
 child enumeration, which is ABI 14.1 - the layout behind data for a non-leaf.
 Unit 5 therefore opens with an ASK, not with code.
 
-Second half of 14.4 may or may not be reached. Textual lookup needs the forward
-direction, name -> id, which is 14.4's open "conversion from an arbitrary
-runtime textual path". But SPEC 2 also says a resolved reference is used
-directly and needs no name lookup. If the translator resolves paths at
-translation time, runtime interning may never be needed and only 14.1 blocks.
-Open question for the user, asked and not yet answered.
+Forward direction of 14.4 IS reached, and the hope that it might not be was
+wrong. Asked whether paths could be resolved statically; the answer is that a
+static path needs a statically known root occurrence, and only const gives one -
+or the 21.11 analysis, which itself rests on an occurrence being replaceable
+only by an explicit structural operation with its defining receiver (21.12
+cached child positions; NOTES section 3.3). A path not rooted in const resolves
+at runtime, by enumeration and short-name comparison.
+
+But the blocking half is narrower than feared. 14.4 lists five open things:
+
+    NEEDED    deterministic generation, and inter-module agreement. In source
+              text like tree\[2]branch the name branch is a literal known at
+              translation time, so the translator can emit its id as a
+              CONSTANT and the runtime only compares.
+
+    NOT YET   conversion from an arbitrary runtime textual path. That is for
+              genuinely dynamic lookup, where the name arrives as a string at
+              runtime. SPEC 2 allows it; nothing here needs it.
+
+    NOT YET   bit width, byte encoding, reserved ids, collision handling -
+              already recorded as untouched under unit 4.
+
+So unit 5 needs 14.1 for enumeration and the generation/agreement half of 14.4
+for the sought id. Both: ASK.
 
 Carried forward, not yet touched
 --------------------------------
