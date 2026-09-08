@@ -981,8 +981,37 @@ SPEC 21.3 / 21.5  membership — 192800 always-DynRequired WITHDRAWN
     Not in this patch: runtime-selected callable, int hidden,
     `@` of the bound name, arbitrary recursion, self-build.
 
-P0-as-Lmx, parser.lm1 scanners, and L2 self-build
-    Not touched. Frozen p0.h / l1src/own.lm1 / bootstrap / root L1
+Unit 13 - physical line scanners (proposed, not started)
+--------------------------------------------------------
+Files (proposed): l2trans.lm1 (bounded `while`), 
+l2src/parser_physical_line.lm2, run_l2trans.ps1
+
+Frozen originals: stg/l1_baseline/l1src/parser.lm1
+    lm_p0_index_is_line_start
+    lm_p0_find_physical_line_end
+    lm_p0_line_rest_is_horizontal_space
+plus the two already-ported predicates they call
+    (lm_p0_is_line_break, lm_p0_is_horizontal_space)
+copied into the same closed unit (cap 8).
+
+Not this unit: count_line_breaks / visual_column / scan_indent
+(continue), find_python_string_end (nested while+continue+out),
+Document, indent stack, dash-fence enum, Array, `for`.
+
+Emitter: bounded `while: cond` / body, no continue/break/`for`.
+L1 already has while. unit_loop.lm2 today is a negative
+(`unsupported loop`); with while it becomes a positive, and
+`for` stays the loop negative.
+
+Oracle: frozen parser.lm1 reference vs L2 drive, same style as
+predicates/line_break. No native finalize, no bootstrap/oracle
+edits, no root L1.
+
+`return: 0` on a malformed native node stays the runtime
+adapter, not Type/throw admission. Not expanded here.
+
+P0-as-Lmx, remaining parser.lm1 scanners, and L2 self-build
+    Not started. Frozen p0.h / l1src/own.lm1 / bootstrap / root L1
     unchanged. parser_text_heap.lm2 does not replace l1src.
 
 Carried forward, not yet touched
