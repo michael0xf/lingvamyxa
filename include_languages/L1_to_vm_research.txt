@@ -1,0 +1,8 @@
+L1 to virtual-machine backends -- index
+=======================================
+
+This note is split by language. Ranked targets (most suitable first;
+unrecommended pile after the in-file separator) live in:
+
+    L1_to_vm_research_en.txt    English
+    L1_to_vm_research_ru.txt    Russian

@@ -1,0 +1,440 @@
+L2 to virtual-machine backends -- research note (English)
+=========================================================
+
+Status
+
+Research snapshot 2026-09-08. Not a provisioning plan and not a
+commitment to a second L2 backend. Companion to
+L1_to_vm_research_en.txt (machine-level C targets),
+lingva_bindings.txt (embed catalog) and Lingvamyxa_spec.txt
+Revision 2 (L2/L3 contract).
+
+Russian text: L2_to_vm_research_ru.txt
+
+Question
+
+Which virtual machines are realistic compilation targets for L2
+sources so that an L2 translator emits that machine's virtual code
+instead of, or besides, the selected L2 -> L1 -> C99 pipeline?
+
+Evidence for "what L2 is":
+
+  Lingvamyxa_spec.txt                 normative L2/L3
+  lm2/                                old hosted translator (L2 -> C via
+                                      tables, registries, trans_l1_*)
+  stg/l1_baseline/l2src/              live replacement kernel written in
+                                      L1 (Lmx units + first l2trans)
+  L1_language_and_translator_spec.txt Translator-L2 boundary (P-L1text
+                                      selected; P-C99 rejected)
+
+Method
+
+  1. Read the L2 ontology, Message/arena rules and machine surface.
+  2. Score every catalog runtime first as a *machine* for lowered L2
+     (same bar as L1_to_vm_research_en.txt, plus L2 runtime needs),
+     then as a *semantic ISA* (map Lmx / Messages / tables / merge
+     onto that VM's values).
+  3. Look outside the catalog at actor VMs, non-moving heaps and
+     graph machines.
+
+This file does not invent L2 features. Open ABI items stay open
+(l2src/OPEN_POINTS.txt).
+
+Targets are listed from most suitable to least suitable. The first
+pile can host the L2 kernel after L2->L1->C without rewriting the
+ontology. After the separator, the rest cannot, ending with the
+worst fit.
+
+
+0. Catalog vs compiler-backend (same split as L1)
+-------------------------------------------------
+include_languages/ catalogs foreign runtimes Lingvamyxa can bundle and
+call. That is the inverse of this note.
+
+  Catalog question:  Lingvamyxa hosts X and evaluates X source.
+  This note:         L2 compiles to X's virtual code and X runs it.
+
+L1_to_vm_research_en.txt answers the C-machine question. L2 does not
+collapse to that answer. L2 is a graph + Message runtime that *uses*
+an L1/C machine; it is not itself a C translation unit.
+
+
+1. What L2 actually is
+----------------------
+L2 is the complete Lingvamyxa level (spec 1.3). L3 is the same language
+minus the low-level machine surface (raw addresses, c.array, unchecked
+index, atomics, include/define/os, prefix @). Compilation,
+interpretation and mixed execution are backend choices, not the L2/L3
+cut (spec 1.3).
+
+Selected translator route (handoff notes §6, L1_language spec 4.3):
+
+    L2 source  ->  Translator-L2  ->  L1 text (P-L1text)
+               ->  Translator-L1  ->  C99
+    P-C99 (emit C99 directly from L2) is rejected as an L2 backend.
+
+Live replacement work matches that route: l2src/l2trans.lm1 emits .lm1
+for a §1.7 `main` adapter plus one §21.8 add leaf. Old lm2/trans.lm2
+emits .lm1.c through the hosted Namespace/descriptor core; that core
+MUST NOT be the new semantic foundation (L1_language spec 4.1).
+
+1.1 Ontology a VM must preserve
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Every Structure occurrence is one header (spec 2, l2src/lmx.h):
+
+    struct Lmx { Lmx *node; size_t len; void *data; };
+
+  - `node` is the containment parent (acyclic tree). Other references
+    may share or cycle.
+  - `data` is classified by *which registered address range the
+    pointer falls into*. No per-node type tag, name, vtable or
+    mandatory schema prefix.
+  - Typed service pools: primitives (all_chars_array, ...),
+    all_methods_array {addr, sig}, all_array_of_T descriptors
+    {len, data} with a separate contiguous rectangle of elements.
+  - Names are compiled out of ordinary execution. Runtime follows
+    addresses and child indices. Auxiliary map only: Lmx* -> ShortNameId.
+  - Live Lmx nodes and pool entries **never relocate**. Pools grow by
+    adding a new non-moving block. No pointer-patching collector
+    (spec 2, 19.29.1).
+  - Array `[]:` is a descriptor + backing, not a C array. `c.array`
+    is a distinct L2 machine-storage form.
+
+1.2 Runtime a VM must host
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+  Message
+      a root and its reachable Lmx graph. One logical arena per
+      Message (19.28, 19.29.2). Mutable graph is not raw-shared
+      across Messages. Immutable primitive atoms and method records
+      may be shared.
+
+  L3 Thread
+      an activated Message. FIFO inbox, at most one turn at a time.
+      Different Messages may run concurrently. Isolation is the
+      arena boundary, not a source-visible lock.
+
+  Call ABI (21 / 19.28.R2.3)
+      typed_entry(callable->node, declared_actuals...,
+                  dynamic_values_selected_by_sig...).
+      Generated source methods MUST NOT grow a hidden Arena /
+      MessageThread / Namespace / descriptor argument.
+
+  merge
+      lazy execution-time containment-tree copy: fresh Lmx
+      occurrences, rebased `node`, reused global method records.
+      Not descriptor composition and not Message delivery.
+
+  implements(varA varB Consumer) / RuntimeImplements(...)
+      consumer-relative compatibility, not a nominal class lattice
+      and not a runtime Namespace.
+
+  Mix
+      overlay markup; target rewrite is cooperating Messages
+      (19.29.2.1). Current implementation is Java
+      (include_languages/com.mtk.map), not the target model.
+
+  L2 machine surface (section 20)
+      @ / \ / field-follow, address-depth slots, c.array, unchecked
+      index, foreign calls, low-level sync. These are why full L2
+      still needs a C-like substrate even when L3 does not.
+
+1.3 Two different "compile L2 to a VM" jobs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Layer M -- machine
+        Run the L2 kernel and generated methods after L2->L1->C
+        (or L2->L1->VM). The ISA must fit L1 (pointers, goto, libc)
+        *and* a non-moving bump-pointer heap, function-pointer
+        method records, and preferably several isolated heaps
+        (one per Message). This is L1_to_vm_research_en.txt plus
+        arena isolation.
+
+    Layer S -- semantic ISA
+        Emit that VM's bytecode as the meaning of L2 receivers:
+        graph walk, merge, message send, table/query, implements().
+        The VM's values would *be* Lmx/Messages. This is a language
+        mapping, not a C backend. Spec identity rules (non-moving
+        nodes, range classification, no hidden args, no per-node
+        tags) fight typical object VMs.
+
+    Layer I -- L2 interpreter
+        Spec allows interpretation. A Lingvamyxa-owned bytecode
+        (dispatch receiver, merge, send, graph ops) does not exist
+        yet. It would sit *on* a Layer-M machine. It is not a
+        catalog pick.
+
+Old lm2/ is none of these as a VM: it is a hosted L2->C compiler
+driven by explicit tables (core.lm2, table.lm2, trans_registry.lm2).
+Useful as a corpus of receivers and layouts, not as a bytecode ISA.
+
+Ranking below is Layer M (can the current kernel run there). Layer S
+is noted where it changes the verdict. L3 drops the machine surface
+but not Lmx, arenas, merge, Messages or implements(); a high-level
+VM that cannot represent a non-moving three-word node still fails
+L3. Do not treat "L3 is like Python" as a compilation strategy
+(spec 1.4).
+
+
+2. Ranked targets (most suitable first)
+---------------------------------------
+
+1. WASM linear memory  (include_wasm.txt) -- best portable Layer-M image
+        Best catalog fit, slightly better than for L1. wasm32 linear
+        memory does not relocate -- the Lmx identity rule is native.
+        One module instance / one memory per Message is a plausible
+        isolation encoding of 19.29.2 (capability grants already
+        match inbox authority). Method records are funcref + table.
+        wasi-libc covers the L2 machine/C edge the same way as L1.
+
+        Limits: wasm32 4 GB per memory (one Message arena must fit);
+        WASI p1 has no network; wasi-threads are experimental if one
+        process hosts many concurrent Threads; guest/host pointers
+        still copy (include_wasm.txt §5.4).
+
+        Layer S: WASM is a C machine, not an Lmx ISA. Do not invent
+        wasm-gc Structures as the ontology (wasm-gc is in the
+        unrecommended pile).
+
+        Path: L2 -> L1 -> C -> wasi-sdk, or later L2 -> L1 -> wasm
+        printer. Direct L2 -> wasm is a third route the translator
+        boundary does not select (P-L1text is the L2 backend).
+
+2. MIR  (vnmakarov/mir) -- best dedicated C VM for the kernel
+        Host pointers, libc, JIT + interpreter, binary MIR. Message
+        arenas are ordinary C bump lists (spec 19.29.2 recommended
+        implementation). Path: L2 -> L1 -> C -> c2m, or later L1
+        printer -> MIR. No wasm-style isolation; isolation is by
+        not handing out cross-arena pointers, which is already the
+        language rule. Layer S: none -- C machine, not Lmx ISA.
+
+3. LLVM bitcode (.bc) + lli / ORC JIT
+        Same as L1, heavy. Fine as a developer backend for lowered
+        L1 that already carries the L2 kernel.
+
+4. TinyCC / libtcc  (include_tinycc.txt)
+        Not a VM. Shortest in-process native run of lowered L1/C,
+        including l2src kernel units. Fine for hosting Message
+        arenas in process memory. Layer S: none.
+
+5. RISC-V interpreter
+        Same as L1. Pointers and newlib are native. One hart / one
+        address space unless the runtime splits memories by
+        convention.
+
+6. .NET CIL unmanaged  (include_dotnet.txt)
+        Better Layer M than the JVM. unsafe structs, interior
+        pointers, `fixed`, unmanaged heaps. Lmx as a three-word
+        struct in an unmanaged arena is representable. Still a
+        moving GC for managed objects -- keep Lmx off the managed
+        heap. Layer S: CIL objects have types and a GC; same
+        identity fight. TPL Dataflow / Orleans are actor libraries,
+        not L2. Plausible unmanaged host; not a first ISA.
+
+7. QBE / sljit / Cranelift / libgccjit / asmjit / GNU Lightning /
+   DynASM / libjit / libfirm
+        Native/JIT, not portable VM images. sljit is already
+        vendored. QBE is a native backend, not an interpreter of
+        L2. Cranelift already sits inside Wasmtime.
+
+8. Dedicated L2 bytecode (Layer I) -- does not exist yet
+        If one is ever designed, the opcode surface that matches
+        the spec is roughly:
+
+            graph:     alloc-in-arena, set/get data, child enumerate,
+                       range-classify pointer, merge-copy, ShortNameId
+            call:      typed_entry(node, declared..., dynamic...)
+            message:   enqueue FIFO, one-turn, copy/adopt across arenas
+            machine:   L2-only @ \ c.array unchecked, or trap on L3
+
+        That bytecode would be generated by Translator-L2 beside or
+        instead of L1 text, and would run on items 1-7. It is not
+        JVM, Lua, BEAM or WASM GC. Until it exists, the only
+        realistic "L2 compiler to virtual code" is:
+
+            Translator-L2 -> L1 -> (Translator-L1 -> C -> Layer-M VM)
+
+
+================================================================
+not recommended
+================================================================
+
+9. JVM classfile  (include_openjdk.txt, com.mtk.map)
+        Layer M: poor as an Lmx heap. HotSpot moves objects and
+        stores a class word; spec 2 forbids both as the Lmx model.
+        Off-heap (Panama MemorySegment, Unsafe, direct ByteBuffer)
+        can host Lmx -- then the JVM is a process host, not the L2
+        ISA. Sulong would run LLVM bitcode of lowered C, Layer M
+        by detour.
+
+        Layer S: Mix heritage. com.mtk.map is the live Java Mix
+        container. Until Mix is rewritten into cooperating Messages
+        (19.29.2.1), JVM is the realistic Mix VM. Mapping Lmx to
+        java.lang.Object, implements() to interfaces, or merge to
+        clone() would smuggle the hosted descriptor/Namespace model
+        the replacement translator is forbidden to inherit.
+        Akka-style actors rhyme with Message Thread but share a
+        moving heap.
+
+        Keep JVM as Mix/embed (catalog Tier 1). Do not compile the
+        L2 kernel to classfiles. Least-bad unrecommended target
+        only because Mix already lives there.
+
+10. BEAM (Erlang / Elixir)
+        Closest Message Thread analog: isolated heaps, FIFO
+        mailboxes, one turn at a time, no shared mutable data.
+        Catalog Removed it as an in-process embed (C-node /
+        sidecar). As an L2 target it fails Layer M (no raw
+        addresses, no Lmx header, no C method records) and fails
+        spec identity: per-process GC moves terms. Compiling L2 to
+        BEAM is rewriting L2 as Erlang. Useful as a scheduler
+        metaphor, not as bytecode.
+
+11. Graal / Truffle / RPython
+        Toolkits for writing a Layer-I interpreter with a JIT.
+        Not an L2 opcode set. GraalVM Native Image is
+        catalog-Removed (per-target compile).
+
+12. HashLink
+        Typed Haxe VM with low-level bytes. GC and object model
+        are Haxe's. Not Lmx.
+
+13. Pawn / AMX, Umka, AngelScript  (include_berry.txt,
+    include_angelscript.txt)
+        Small typed or cell VMs. Pawn cells are not Lmx headers.
+        Umka has pointers and a GC -- subset-L3 sketch at most.
+        AngelScript registers objects, no C heap. Cannot host
+        l2src or Message isolation.
+
+14. Lua 5.4 / LuaJIT  (include_lua.txt, include_luajit.txt)
+        Layer M: Lua bytecode is not a C machine. LuaJIT FFI can
+        call the L1-lowered kernel; that is embed, not
+        compile-to-Lua. Layer S: PUC Lua's GC is incremental and
+        non-moving, closer than HotSpot, but tables are named and
+        tagged; Lmx is nameless and range-classified. Coroutines
+        are not FIFO Message turns.
+
+15. wasm-gc
+        Relocates and tags objects, against spec 2. The wrong WASM
+        heap for Lmx. Linear memory (item 1) is the WASM to use.
+
+16. QuickJS / Duktape / MuJS
+        JS values, moving or compacting heaps depending on engine,
+        no Lmx.
+
+17. CPython, WASI-CPython, Pyodide
+        Layer M: no. Layer S: CPython is mostly non-moving
+        (refcount + cycle GC) but every object is tagged and
+        named. Python bytecode is Python. An L2 interpreter
+        written in Python is a sidecar, not a compiler target.
+
+18. SWI-Prolog / Warren Abstract Machine
+        Borderline in lingva_bindings.txt because Lingvamyxa calls
+        itself a logical language and implements() is a predicate.
+        The WAM is unification and backtracking, not an Lmx graph,
+        not Message FIFO, not section-20 addresses. A Prolog
+        sidecar for compatibility queries is an embed question.
+
+19. Janet, Wren, mruby, Tcl, Berry, Gravity, Pocketlang
+        Dynamic embed VMs. Layer M no. Layer S would be a port of
+        L3 with a different identity model.
+
+20. PyPy
+        Python semantics plus a moving GC.
+
+21. GNU Guile / Scheme family; Smalltalk / Self / Newspeak
+        Moving or conservative GC, names/classes as runtime.
+        Receiver-dispatch flavour is not Message arenas.
+
+22. Julia
+        Compiles to LLVM; no Julia-VM bytecode for L2.
+
+23. com.mtk.map as an L2 ISA
+        Java Mix sources, not a virtual machine for the L2 kernel
+        (see item 9 for Mix-as-host).
+
+
+3. If a VM backend is ever tried
+--------------------------------
+Cheapest first; matches the selected translator boundary.
+
+  1. Do not write an L2->classfile / L2->Lua / L2->BEAM printer.
+     That fights spec 2 and L1_language spec 4.1.
+  2. Hypothesis check on Layer M, no new L2 printer: l2src Lmx
+     selftests and l2trans-emitted L1 through wasi-sdk and c2m.
+     First fixtures: l2src/tests/entry_*.lm2 and run_lmx.ps1.
+  3. WASM linear memory (not wasm-gc), one memory or instance per
+     Message if isolation is encoded at the VM boundary.
+  4. MIR, host libc, bump arenas as ordinary C.
+  5. TinyCC, already in the catalog.
+  6. Mix stays on JVM until 19.29.2.1 is done; that is embed /
+     port, not L2 bytecode.
+  7. A dedicated L2 bytecode (item 8) is a language-design
+     project. It would still execute on items 1-7.
+
+L1 needs a C memory model; dynamic VMs fail because they have no
+pointers. L2 needs that C model *under* stable Lmx identity, range
+classification, one non-moving arena per Message, FIFO turns, merge
+as graph copy, method records as {addr,sig}. Dynamic VMs fail
+twice. WASM and MIR stay at the top because linear / C heaps do
+not relocate. JVM rises relative to the L1 note only for Mix and
+falls for the L2 kernel. BEAM rises as a metaphor for 19.28 and
+stays off the compiler-target list.
+
+
+4. Scoreboard (same order)
+--------------------------
+    Rank  Target              Layer M (kernel)     Layer S (Lmx/Messages)
+    ----  ------------------  -------------------  ---------------------------
+    1     WASM linear mem     yes (best catalog)   no (use as C machine)
+    2     MIR                 yes (best C-VM)      no
+    3     LLVM bitcode        yes (heavy)          no
+    4     TinyCC              yes (native, not VM) none
+    5     RISC-V interp       yes                  no
+    6     .NET CIL unsafe     plausible unmanaged  no (managed objects)
+    7     QBE / sljit / JITs  native/JIT, not VM   no
+    8     dedicated L2 bc     n/a (would run on M) would *be* Layer I;
+                                                   does not exist
+
+    ---- not recommended ----
+
+    9     JVM classfile       no (unless off-heap  Mix heritage only;
+                              host)                not Lmx ISA
+    10    BEAM                no                   Message analog only
+    11    Graal/Truffle/      toolkit for Layer I  not an L2 opcode set
+          RPython
+    12    HashLink            no                   Haxe model
+    13    Pawn/Umka/          no                   subset L3 sketch only
+          AngelScript
+    14    Lua / LuaJIT        no                   no (named tables)
+    15    wasm-gc             no (relocates)       no (tags + GC)
+    16    JS engines          no                   no
+    17    CPython family      no                   no
+    18    SWI-Prolog / WAM    no                   implements() sidecar
+    19    Janet/Wren/mruby/…  no                   no
+    20    PyPy                no                   no (moves)
+    21    Guile / Smalltalk   no                   no
+    22    Julia               no                   no
+    23    com.mtk.map as ISA  no                   Mix sources, not a VM
+
+
+5. References
+-------------
+    Lingvamyxa_spec.txt                 L2/L3: 1.3-1.7, 2, 6.5,
+                                        11.3.1, 19.17, 19.28-19.29, 20, 21
+    L1_language_and_translator_spec.txt Translator-L2 boundary 4.1-4.5
+    L1_spec.txt                         L1 is not L2 (product shape)
+    L1_to_vm_research_en.txt            Layer-M C-VM scoreboard
+    L2_to_vm_research_ru.txt            Russian text of this note
+    lm2/                                old hosted L2->C (not a VM)
+    stg/l1_baseline/l2src/              Lmx kernel + first l2trans
+    stg/l1_baseline/l2src/lmx.h         three-word node, ranges
+    stg/l1_baseline/l2src/README.txt    current L2->L1 slice
+    include_languages/com.mtk.map/      Java Mix implementation
+    lingva_bindings.txt                 embed catalog; BEAM Removed;
+                                        Prolog borderline
+    include_wasm.txt                    WASM host; linear-memory bridge
+    WorldWideMix.txt                    Mix placement / Message target
+    struct_refactoring_version_2.txt    open physical ABI
+    https://github.com/vnmakarov/mir    MIR / c2mir
+    https://github.com/WebAssembly/wasi-sdk
+
+End of L2_to_vm_research_en.txt.

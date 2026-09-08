@@ -1,0 +1,339 @@
+L1 to virtual-machine backends -- research note (English)
+=========================================================
+
+Status
+
+Research snapshot 2026-09-08. Not a provisioning plan and not a
+commitment to implement a second L1 backend. Companion to
+lingva_bindings.txt (embed catalog) and L1_spec.txt (what Translator-L1
+actually lowers today).
+
+Russian text: L1_to_vm_research_ru.txt
+
+Question
+
+Which virtual machines are realistic compilation targets for
+Translator-L1 (.lm1 sources under l1src/ and stg/l1_baseline/l1src/)
+so that L1 emits that machine's virtual code instead of, or besides,
+ANSI C99?
+
+Method
+
+  1. Read L1_spec.txt, libc_abi.lm1, own.lm1 and the catalog in this
+     directory (what L1 is, what the catalog already knows).
+  2. Score every catalog runtime as an L1 bytecode target, not as a
+     guest-language embed (the catalog's original job).
+  3. Look outside the catalog at machines actually used as C-like
+     compiler backends.
+
+This file does not invent L1 features. Implemented L1 is the C99
+image in L1_spec.txt.
+
+Targets are listed from most suitable to least suitable. The first
+pile can host current L1 (l1trans, parser, own) without rewriting the
+language. After the separator, the rest cannot, ending with the worst
+fit.
+
+
+0. Catalog vs compiler-backend
+------------------------------
+include_languages/ catalogs foreign runtimes Lingvamyxa can bundle and
+call through a C ABI (Python, Lua, JVM, WASM host, ...). That is the
+inverse of this note.
+
+  Catalog question:  Lingvamyxa hosts X and evaluates X source.
+  This note:         L1 compiles to X's virtual code and X runs it.
+
+A runtime can be easy to embed and still be a bad L1 target. Lua and
+CPython are the type case.
+
+
+1. What L1 actually requires of a machine
+-----------------------------------------
+Translator-L1 is a compile-time, syntax-directed lowerer from
+wrapperless .lm1 to one ANSI C99 translation unit (L1_spec.txt §0, §3).
+The live corpus (l1trans, parser, own, make, libc_abi) is a C program
+in L1 spelling.
+
+Must map without rewriting the language:
+
+  Pointers and address-of
+      prefix @x -> &x of that L1 binding; prefix \p -> *p;
+      field-follow p\field -> p->field; @ / @@ depth -> * / **.
+      own.lm1 is malloc/calloc/realloc/free plus pointer stacks.
+  C integer and float widths
+      int, void, char, size_t, unsigned, long, short, uchar,
+      float, double, ulong, u8..u64, i8..i64, FILE, several LmP0*
+      typedefs.
+  Contiguous arrays
+      [] and [][] as rectangular C arrays, not ragged row pointers
+      and not L2 Array ontology.
+  Unstructured control
+      if/else, while, for, break, continue, switch/case/default
+      (C-like fall-through), labels + goto. throw/catch/finally
+      already lower to a static channel plus gotos, not setjmp
+      and not C++ exceptions.
+  C library
+      libc_abi.lm1: fopen/fclose/fread/fwrite, memcpy, strlen,
+      getenv, system, FILE*.
+  Separate compilation as known today
+      one output C path per CLI run; import inlines L1 units.
+
+A realistic VM therefore needs a C memory model (byte-addressable
+memory, pointers as addresses), integer/float widths, goto or an
+easy lowering of goto, and either libc or a WASI-class syscall
+layer. Tagged-value / object-ref machines fail this bar for the
+current self-host, not merely for taste.
+
+Two implementation shapes, in increasing cost:
+
+  A. Keep the C printer; feed the .c to a C-to-VM (wasi-sdk, c2mir,
+     clang -emit-llvm). Tests the target without touching l1trans.
+  B. Second printer in l1trans.lm1 that emits the VM's IR/bytecode
+     with the same local mapping the C printer uses.
+
+A is the cheap experiment. B is a real second backend.
+
+Canonical pipeline today (L1_spec.txt §4): L1 -> one C99 TU -> gcc.
+Any VM backend must either consume that C or duplicate the local
+mapping (@ -> *, \p -> *p, p\field -> p->field, include -> #include,
+throw -> static channel + labels).
+
+
+2. Ranked targets (most suitable first)
+---------------------------------------
+
+1. WASM  (include_wasm.txt) -- best portable VM image
+        The only catalog entry that is actually a C compilation
+        target. wasm32 linear memory is the C heap/stack; value
+        types are i32/i64/f32/f64; br / br_if / br_table cover
+        goto and switch; function pointers become table +
+        call_indirect. wasi-libc implements FILE* (host must
+        preopen dirs; wasmtime --dir=. is the usual grant).
+        Runtimes already named in the catalog: Wasmtime C-API,
+        Wasmer, WAMR, wasm3.
+
+        Limits: wasm32 4 GB ceiling (memory64 still immature); no
+        host FILE* identity; WASI preview 1 has no networking;
+        system() and arbitrary libc are not there; guest/host
+        pointers do not alias -- copy through linear memory as
+        include_wasm.txt §5.4 already describes. L1 throw-as-goto
+        does not need setjmp.
+
+        Cheapest path: l1trans -> .c -> wasi-sdk clang
+        (wasm32-wasip1) -> .wasm -> wasmtime/WAMR/wasm3.
+        Direct L1->wasm is only worth it if the C step is the
+        problem.
+
+2. MIR  (vnmakarov/mir) -- best dedicated C virtual machine
+        Not in the catalog. Typed C-like IR, text and binary
+        forms, interpreter, JIT, C API. c2mir compiles a C11
+        subset (no VLA/complex/atomics/TLS) plus several GNU
+        extensions. Memory operands are C-shaped (typed
+        load/store with base/index/scale). alloca, host printf,
+        goto, switch, label-as-value, setjmp/longjmp via C.
+        Binary MIR is up to ~10x smaller and faster to read than
+        the text form. JIT geomean about 91% of gcc -O2 on their
+        small C suite; interpreter ~6-10x slower than the JIT.
+        Tens of KLOC of C, not LLVM. Targets: x86_64, aarch64,
+        ppc64le, s390x, riscv64 Linux; x86_64/aarch64 macOS.
+
+        Path A: L1 -> C -> c2m -> .bmir (no l1trans change).
+        Path B: L1 -> MIR in the translator (same mapping as the
+        C printer).
+
+        Host libc and real pointers; no WASM sandbox. Inverse
+        trade of include_wasm: no capability isolation.
+
+3. LLVM bitcode (.bc) + lli / ORC JIT
+        Industrial IR. clang -emit-llvm already exists, so path A
+        is immediate once L1 C exists. A direct L1->LLVM printer
+        is a full compiler project; C ABI lowering is the
+        frontend's job (unlike QBE/MIR). Heavy to vendor as an
+        embed (fails the catalog's "no multi-gigabyte SDK" rule).
+        Fine as an optional developer backend.
+
+4. TinyCC / libtcc  (include_tinycc.txt)
+        Not a virtual machine. Compiles C to in-process native
+        code. Because L1 already emits C99 this is the shortest
+        "run L1 without gcc" path, already sketched as the tcc
+        receiver. Listed among the suitable targets so it is not
+        confused with a bytecode ISA -- it is the practical
+        in-process stand-in for a VM.
+
+5. RISC-V as a portable ISA
+        Not a scripting VM: compile L1 C with a riscv32/riscv64
+        toolchain, run on mini-rv32ima / Spike / QEMU user.
+        Pointers, newlib, goto are native. Useful if the desired
+        "virtual code" is a real machine encoding rather than SSA
+        IR. Educational and embeddable; not in the catalog.
+
+6. .NET CIL  (include_dotnet.txt)
+        Real bytecode. CIL has unmanaged pointers, localloc,
+        cpblk, initblk, calli, and goto. unsafe C# / ILAsm /
+        C++/CLI can express a C-like memory model. libc becomes
+        P/Invoke. One CoreCLR per process; JIT warmup; heavier
+        than WASM or MIR. NativeAOT is already in the catalog's
+        Removed list (full SDK, per-target compile).
+
+7. QBE
+        Small C99 SSA IL (~10-14 KLOC), C ABI in the backend,
+        asm via the system assembler. No interpreter -- native
+        backend, not a VM image. cproc uses it as a C compiler
+        backend. Geomean on MIR's suite about 65% of gcc -O2
+        (MIR JIT ~91%). Windows ABI in QBE 1.3.
+
+8. sljit  (already vendored: third_party zherczeg-sljit*.tar.gz)
+        Lightweight JIT assembler, used by PCRE2 in this tree.
+        No portable bytecode file. Sensible native-JIT lowering
+        if L1 grows a machine-code backend.
+
+9. Cranelift, libgccjit, asmjit, GNU Lightning, DynASM, libjit,
+   libfirm / cparser
+        Same family: code generators / JIT libraries, not
+        portable VM images. Cranelift already sits inside
+        Wasmtime. libfirm is large and LGPL2.
+
+
+================================================================
+not recommended
+================================================================
+
+10. JVM classfile  (include_openjdk.txt)
+        Java bytecode has no raw pointers. Panama MemorySegment,
+        sun.misc.Unsafe, or Graal Sulong (LLVM bitcode on Graal)
+        can fake a C heap; that is a different compiler than
+        "emit .class from L1". Historical C-to-JVM (NestedVM,
+        LLJVM, Cibyl) was painful. Not a first backend. OpenJDK
+        in this directory remains an embed of Maven libraries.
+        Least-bad of the unrecommended pile only because off-heap
+        hacks exist.
+
+11. HashLink
+        Typed Haxe bytecode with hl.Bytes / low-level refs. GC
+        and object model are Haxe's, not C's. Subset sketch only.
+
+12. Pawn / AMX  (include_berry.txt)
+        Documented P-code, C-like source, sandboxed cell machine.
+        Addresses are cell offsets into AMX data, not char* /
+        FILE*. Would require a cut-down L1 (no host malloc, no
+        libc FILE). Self-host l1trans.lm1 does not fit.
+
+13. Umka
+        Statically typed, compiles to bytecode, has its own
+        pointers and a GC. Own language, not a C ABI. Same
+        subset-only verdict as Pawn.
+
+14. AngelScript  (include_angelscript.txt)
+        Typed C++-like bytecode. Objects are registered with the
+        engine; no C heap.
+
+15. LuaJIT  (include_luajit.txt)
+        Lua bytecode is Lua values. LuaJIT FFI calls C; it is not
+        a C ISA you emit. Modelling L1 memory as a giant uint8
+        userdata is generating Lua, not compiling to LuaJIT
+        bytecode.
+
+16. Lua 5.4  (include_lua.txt)
+        Same tagged-value machine without the FFI escape hatch.
+
+17. QuickJS-ng, Duktape, MuJS
+        JavaScript values, no pointers.
+
+18. CPython, WASI-CPython, Pyodide  (include_python*.txt)
+        Python bytecode. You do not emit .pyc from L1.
+
+19. Janet, Wren, mruby, Tcl, Berry, Gravity, Pocketlang
+        Dynamic embed VMs. Wrong model.
+
+20. PyPy  (include_python_pypy.txt)
+        Python semantics plus a moving GC. RPython could
+        implement an L1 interpreter -- that is writing a VM, not
+        targeting PyPy.
+
+21. Julia  (include_julia.txt)
+        Julia itself compiles to LLVM. There is no Julia-VM
+        bytecode for L1 to target.
+
+22. BEAM / MoarVM / YARV; eBPF; SPIR-V; Knuth MIX / MMIX; Parrot
+        Wrong models (actors/Perl/Ruby, kernel filters, GPU,
+        educational MIX unrelated to Lingvamyxa Mix,
+        Lingvamyxa_MIX_design_note.txt). Parrot is dead.
+
+23. com.mtk.map (Java Mix container sources)
+        Not a VM.
+
+
+3. If a second backend is ever tried
+------------------------------------
+Cheapest first among the recommended pile:
+
+  1. Hypothesis check, no new printer: generated C from l1trans
+     through wasi-sdk and through c2m. If parser.lm1 / own.lm1
+     survive, the target is real. First fixtures: baseline smoke
+     under stg/l1_baseline/tests/l1, then libc_abi users
+     (fopen/memcpy), then own.lm1 pointer traffic.
+  2. WASM (portable image).
+  3. MIR (small C VM, host libc).
+  4. TinyCC (in-process native).
+  5. sljit (own JIT, no portable bytecode).
+
+Do not start with items after the separator. Path A (C as the IR)
+reuses the self-host. Path B is a second printer inside
+l1trans.lm1, not a new language.
+
+
+4. Scoreboard (same order)
+--------------------------
+    Rank  Target              In catalog    VM bytecode    Fits current L1
+    ----  ------------------  ------------  -------------  ---------------------
+    1     WASM                yes           yes            yes (WASI limits)
+    2     MIR                 no            yes            yes (best C-VM fit)
+    3     LLVM bitcode        no            yes            yes (heavy)
+    4     TinyCC              yes           no             yes (native, not VM)
+    5     RISC-V interpreter  no            ISA            yes
+    6     .NET CIL            yes           yes            plausible, heavy
+    7     QBE                 no            no (asm)       yes as native backend
+    8     sljit               vendored      no             yes as native JIT
+    9     Cranelift / JITs    no            no             native/JIT only
+
+    ---- not recommended ----
+
+    10    JVM classfile       yes           yes            no (without Sulong/
+                                                           Unsafe/Panama)
+    11    HashLink            no            yes            subset / Haxe model
+    12    Pawn AMX            yes           yes            subset L1 only
+    13    Umka                yes           yes            subset L1 only
+    14    AngelScript         yes           yes            subset L1 only
+    15    LuaJIT              yes           yes            no
+    16    Lua 5.4             yes           yes            no
+    17    JS engines          yes           yes            no
+    18    CPython family      yes           yes            no
+    19    Janet/Wren/mruby/…  yes           yes            no
+    20    PyPy                yes           yes            no
+    21    Julia               yes           no             no
+    22    BEAM / eBPF / MIX   no/Removed    n/a            no
+    23    com.mtk.map         sources       no             not a VM
+
+
+5. References
+-------------
+    L1_spec.txt                         implemented L1 / C99 image
+    L1_language_and_translator_spec.txt draft contract (orient only)
+    stg/l1_baseline/l1src/              frozen L1 sources
+    stg/l1_baseline/l1src/libc_abi.lm1  FILE* / libc surface
+    stg/l1_baseline/l1src/own.lm1       malloc / pointer stacks
+    lingva_bindings.txt                 embed catalog (inverse question)
+    include_wasm.txt                    WASM host plan
+    include_tinycc.txt                  in-process C JIT plan
+    include_dotnet.txt                  CoreCLR host plan
+    include_openjdk.txt                 JVM host plan
+    include_berry.txt                   Pawn / Umka / Gravity cluster
+    include_luajit.txt, include_lua.txt Lua family (embed, not target)
+    L1_to_vm_research_ru.txt            Russian text of this note
+    https://github.com/vnmakarov/mir    MIR / c2mir
+    https://c9x.me/compile/             QBE
+    https://github.com/WebAssembly/wasi-sdk
+    third_party/vcpkg.txt               sljit tarball already listed
+
+End of L1_to_vm_research_en.txt.
