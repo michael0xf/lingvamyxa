@@ -783,21 +783,24 @@ SPEC 7487–7496 / variant 2  raw vs Lmx follow
     DECIDED for this adapter only: lmxParent\child stays child index;
     rawParent\child is -> for the declared foreign typed address.
 
-c.strlen / c.memcmp / l2_hash_eq
+c.strlen / c.memcmp / l2_immut_query_fill / l2_hash_compare_q
     DECIDED as known C-surface functions with exact signatures.
-    Unknown c.* is `unknown method`. const pointee forbids stores
-    (`const write`). Out-pointer stores address the referent field.
+    fill and compare_q are temporary L1 adapters behind real
+    §21.8 L2 methods make and equals_query. Unknown c.* is
+    `unknown method`. const pointee forbids stores (`const write`).
+    Out-pointer stores address the referent fields.
 
-FNV-1a 64 hashed equals (ticket 162200, corrected 165600)
-    DECIDED in l2_text_hash.lm1, not a p0.h ABI change. Hash is
-    FNV-1a 64-bit unsigned (u64), not an intern id. There is no
-    view bind table and no process-global registry. identifier_payload
-    aliases the caller buffer as the L1 original does. At each
-    equals call: query hash = FNV of value[0..n) (n from the original
-    strlen); text hash = FNV of the current text->data bytes;
-    mismatch -> false; equal hashes still memcmp. Mutable alias
-    updates are visible. Test-only l2_hash_eq_forced proves equal
-    hashes are not equality. Nothing is retained across calls.
+L2ImmutQuery borrowed adapter (ticket 171600)
+    DECIDED as an explicit l2src C header, not p0.h and not an
+    Lmx Structure with a silent C layout. Constructor contract:
+    backing stays immutable and alive; a program-lifetime literal
+    satisfies it; const formals do not prove that for an arbitrary
+    buffer. make computes FNV-1a 64 once. equals_query hashes
+    current foreign text bytes against that prepared hash, then
+    memcmp. live==0 after failed/incomplete fill; compare does
+    not read data/hash. text_equals remains strlen+memcmp fallback.
+    No pointer cache. All-L2 debt: fill/compare_q stay L1 helpers
+    until L2 has u64 stores; the methods themselves are L2.
 
 Cluster B (copy_bytes / text_view_new_cstr / delete / from_cstr),
 P0-as-Lmx, and parser.lm1 scanners

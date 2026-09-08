@@ -5,7 +5,8 @@ Layout
 ------
   units 1–7     runtime helpers written in L1 (range/pool/chars/ref/branch/own)
   lmx_size.lm1  mutable size_t primitive pool (own size_t fields)
-  l2_text_hash.lm1  FNV-1a 64 adapter metadata for hashed text_equals
+  l2_text_hash.lm1  FNV-1a 64 + L2ImmutQuery fill/compare seam
+  l2_immut_query.h  borrowed immutable-query adapter (not p0.h)
   run_lmx.ps1   L1→C selftests of those units (not L2→L1)
   l2trans.lm1   L2 frontend: P0 parse, subset check, emit .lm1
   run_l2trans.ps1
@@ -59,14 +60,16 @@ C header parser and not a silent C layout for new L2 Structures.
 Lmx access stays child-index. Known C: c.strlen, c.memcmp;
 unknown c.* is rejected. Stores through const LmP0Text* are
 `const write`. parser_text_views.lm2 ports lm_p0_text_equals and
-lm_p0_identifier_payload. Equals uses FNV-1a 64-bit (u64,
-offset 0xcbf29ce484222325, prime 1099511628211) without a
-view cache and without changing p0.h. At each call the query
-hash is FNV of value[0..n) (n from the original strlen) and
-the text hash is FNV of the bytes currently at text->data;
-mismatch is false; equal hashes still memcmp. identifier_payload
-keeps aliasing the caller buffer; in-place mutation of that
-buffer is visible to equals. No process-global bind table.
+lm_p0_identifier_payload. `lm_p0_text_equals` is the mutable
+fallback: strlen + length + memcmp, no extra FNV. Prepared
+hashes use explicit borrowed `L2ImmutQuery` (l2src header, not
+p0.h, not an Lmx Structure): `lm_p0_immut_query_make` fills
+data/length/FNV-1a 64 once; `lm_p0_text_equals_query` hashes
+current text bytes against that hash then memcmp. Backing of
+the query must stay alive and unchanged; a C literal satisfies
+that, a const formal does not prove it. Failed fill leaves
+live=0; compare does not read garbage. identifier_payload
+keeps aliasing. No process-global bind table.
 parser_text_predicates.lm2,
 parser_text_line_break.lm2, parser_text_starts_python.lm2 and
 parser_text_views.lm2 are partial ports, not replacements of
