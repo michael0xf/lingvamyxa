@@ -275,6 +275,10 @@ are published snapshots, not disposable outputs to omit from that release.
 The implementation is l1src/buildCore.lm1 + finalize.lm1. Staged builds
 also produce local parser/own libraries; root bootstrap scripts no longer
 overwrite the old hosted archives in build/lm0 (d2dc0b3).
+However, native finalize installs its new parser/own archives and printTree
+into build/lm0. Preserve the independent hosted parser oracle separately;
+restore the pinned hosted-ABI prerequisites before returning to run_seed.
+Do not mistake the newly installed L1 archives/oracle for the old hosted ones.
 The optional --full Qt/CMake route is separate from the basic L1 gate.
 
 4.2 Hosted seed and generation regression route

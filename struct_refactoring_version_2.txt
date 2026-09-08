@@ -410,12 +410,12 @@ version 2.
 The new core consumes the parser tree and emits:
 
 1. runtime construction operations for Lmx trees;
-2. runtime lookup operations based on root and ShortNameId;
+2. name-free address/index operations for translated structural paths;
+   auxiliary root/ShortNameId lookup only for runtime string-path arguments;
 3. runtime merge calls at the original execution sites;
 4. one global C implementation symbol for every executable source method,
    including methods nested in named Structures;
-5. registration/construction operations that associate every live named node
-   with its ShortNameId;
+5. auxiliary name registration for nodes exposed to runtime textual services;
 6. calls whose exact ABI is taken from the selected method's
    `all_methods_array` signature, including reserved `node` and hidden
    dynamic-caller values;
@@ -438,12 +438,12 @@ compile-time merge не являются основой версии 2.
 Новое ядро принимает дерево parser-а и выдаёт:
 
 1. runtime-операции построения деревьев Lmx;
-2. runtime-поиск на основе корня и ShortNameId;
+2. адресные/индексные операции для путей, разрешённых транслятором;
+   вспомогательный поиск root/ShortNameId только для runtime-строковых путей;
 3. runtime-вызовы merge в исходных местах исполнения;
 4. один глобальный C-символ реализации для каждого исполняемого метода
    исходника, включая методы внутри именованных Structure;
-5. операции регистрации/построения, связывающие каждый живой именованный
-   узел с его ShortNameId;
+5. вспомогательную регистрацию имён для узлов, доступных текстовым runtime-сервисам;
 6. вызовы, точный ABI которых берётся из сигнатуры выбранного метода в
    `all_methods_array`, включая зарезервированный `node` и скрытые
    dynamic-caller значения;
@@ -891,8 +891,11 @@ resources, are the stated exceptions.
 
 Range tests MUST be deterministic for the complete lifetime of every live
 payload. Overlapping ranges with ambiguous interpretation are forbidden.
-Moving a live allocation between ranges without updating all references to it
-is forbidden, including direct references to array descriptor entries.
+Live nodes and typed service-pool entries never relocate, including Array
+descriptors. A typed pool grows by adding non-moving blocks, each registered
+as a separate range of the same type. Domains are per used type, not merely
+per physical category: category determines how a record is read; type identifies
+which typed service pool it belongs to. This is range metadata, not a node tag.
 
 RU
 
@@ -924,8 +927,11 @@ blocks и многими непересекающимися диапазонам
 
 Проверка диапазона обязана быть детерминированной всё время жизни каждого
 живого payload. Пересекающиеся диапазоны с неоднозначной интерпретацией
-запрещены. Перемещение живого allocation между диапазонами без обновления
-всех ссылок на него запрещено, включая прямые ссылки на записи descriptor Array.
+запрещены. Живые узлы и записи служебных пулов, включая descriptor Array,
+не релокируются. Пул растёт добавлением неподвижных блоков; каждый блок
+регистрируется отдельным диапазоном того же типа. Пулы разделены по
+используемым типам, не просто категориям: категория задаёт чтение записи,
+тип — её типизированный пул. Это metadata диапазона, не tag узла.
 
 
 4.2. Range information is not a second node table
@@ -1001,8 +1007,8 @@ ABI. Ссылка идентифицирует запись `all_methods_array`,
 
 EN
 
-The runtime maintains exactly one auxiliary mapping associated with Lmx
-nodes:
+For runtime string paths and textual diagnostics, the sole auxiliary mapping
+associated with Lmx nodes is:
 
     Lmx address  ->  ShortNameId
 
@@ -1010,7 +1016,12 @@ This table supplies the short name of a node. It does not supply a descriptor,
 type, complete path, C layout, lexical depth, callable signature or namespace
 frame.
 
-Whenever a named runtime node is constructed, the implementation registers
+Ordinary compiled LMX execution knows no names and does not need this mapping.
+The translator resolves source paths to Lmx addresses or child-block indices;
+runtime follows those addresses/indices, including own fields, callable
+selection and node fallback. This is the baseline, not optional optimization.
+
+When maintaining textual services, construction of a named runtime node registers
 its address and ShortNameId. Whenever merge copies a named node, it registers
 the new address with the same ShortNameId. Positional or anonymous occurrences
 must either receive a reserved positional ShortNameId under the selected ABI or
@@ -1031,15 +1042,20 @@ namespace or cached full path.
 
 RU
 
-Runtime поддерживает ровно одно вспомогательное отображение, связанное с
-узлами Lmx:
+Для runtime-строковых путей и текстовой диагностики допускается единственное
+вспомогательное отображение узлов Lmx:
 
     адрес Lmx  ->  ShortNameId
 
 Таблица сообщает короткое имя узла. Она не сообщает descriptor, type, полный
 путь, C layout, lexical depth, callable signature или frame namespace.
 
-При создании каждого именованного runtime-узла реализация регистрирует его
+Обычный скомпилированный runtime LMX имён не знает и в этой таблице не
+нуждается. Транслятор разрешает пути в адреса/индексы блока Lmx; runtime
+использует их, включая own-поля, выбор callable и fallback node. Это базовое
+правило, не необязательная оптимизация.
+
+При поддержке текстовых сервисов создание именованного узла регистрирует его
 адрес и ShortNameId. Когда merge копирует именованный узел, он регистрирует
 новый адрес с тем же ShortNameId. Позиционные или анонимные occurrences
 должны либо получать зарезервированный positional ShortNameId в выбранном
@@ -1125,7 +1141,8 @@ answer after a runtime merge.
 
 If code already holds an Lmx pointer, that pointer is the resolved value and is
 used directly. An explicit relative path `base\field` starts from the resolved
-`base`. Reserved `node\field` starts from `callable->node` and selects its
+`base` and uses a translator-resolved child index, without the name table.
+Reserved `node\field` starts from `callable->node` and selects its
 immediate child; it does not follow another parent link. None of these
 operations resets the start point to root.
 
@@ -1160,7 +1177,8 @@ RU
 
 Если код уже имеет Lmx-указатель, этот указатель является разрешённым
 значением и используется прямо. Явный относительный путь `base\field`
-начинается от разрешённого `base`. Reserved-путь `node\field` начинается
+начинается от разрешённого `base` и использует индекс ребёнка, определённый
+транслятором, без таблицы имён. Reserved-путь `node\field` начинается
 от `callable->node` и выбирает его непосредственного ребёнка; второго перехода к
 родителю нет. Ни одна из этих операций не сбрасывает начальную точку к root.
 
@@ -1576,8 +1594,8 @@ moves, detaches or replaces the occurrence while the activation is suspended,
 however, the later publication target is an unresolved conflict policy in
 section 14.22. A bootstrap may forbid/reject that structural mutation; it MUST
 NOT silently re-resolve a different `[0]` child, reinsert the old occurrence or
-pretend that writing a detached occurrence still writes "into its node". A
-moving collector must patch or pin every retained active reference.
+pretend that writing a detached occurrence still writes "into its node".
+Every retained active reference roots its referent; live storage is non-moving.
 
 Every loaded own local has a runtime dirty state, initially clear. An actual
 execution-time write or rebind of that local marks it dirty. Static
@@ -1662,7 +1680,8 @@ suspension структурно переместил, отсоединил ил�
 Bootstrap может запретить/отклонить такую structural mutation; он не вправе
 молча заново выбрать другой `[0]` child, вставить старый occurrence назад или
 делать вид, что запись detached occurrence всё ещё происходит «себе в узел».
-Moving collector обязан patch-ить либо pin-ить каждую active-reference.
+Каждая удерживаемая active-reference сохраняет referent живым; живое хранилище
+не перемещается.
 
 Каждый загруженный own local имеет runtime dirty-state, изначально clear.
 Фактически исполнившаяся запись или rebind этого local ставит dirty. Статическое
@@ -2236,27 +2255,24 @@ runtime-Structure не материализуется только потому,
 
 EN
 
-The node parent link and the ShortNameId side table make the Lmx address part
-of live runtime identity. Therefore a live node MUST NOT move without
-rewriting all references and its side-table key.
-
-In particular, growing a child sequence with an ordinary realloc that moves
-embedded Lmx nodes is invalid unless no reference can observe the old
-addresses and every node relationship and table key is rebuilt atomically.
-Allocation occurs in the owning Message's arena. The initial implementation
-SHOULD prefer stable blocks in that arena or fresh tree construction.
+An Lmx address is live runtime identity. Live nodes and service-pool entries
+MUST NOT relocate. A moving realloc or collector is not an alternative profile.
+Growth adds blocks in the owning Message's one logical arena and registers
+each block as a separate range of the same type. No inventory of all referrers
+or pointer-patching pass is required. A live Structure's child block is sealed;
+merge/copy constructs a new result rather than growing or moving that block.
+This pool rule is distinct from explicit application-Array backing replacement.
 
 RU
 
-Родительская ссылка node и side table ShortNameId делают адрес Lmx частью
-живой runtime identity. Поэтому живой узел нельзя перемещать без
-переписывания всех ссылок и его ключа в side table.
-
-В частности, увеличение последовательности детей обычным realloc, который
-перемещает встроенные Lmx-узлы, недопустимо, если старые адреса могут
-наблюдаться и все отношения node и ключи таблицы не перестраиваются атомарно.
-Allocation происходит в arena Message-владельца. Начальная реализация должна
-предпочесть стабильные блоки этой arena или построение нового дерева.
+Адрес Lmx — живая runtime identity. Живые узлы и записи служебных пулов
+релокировать НЕЛЬЗЯ. Перемещающий realloc/collector не является вариантом
+профиля. Рост добавляет блоки в единственной логической arena Message;
+каждый блок регистрируется отдельным диапазоном того же типа. Не нужны
+обратный список держателей ссылок и проход исправления указателей. Блок детей
+живой Structure запечатан; merge/copy строит новый результат, а не растит
+и не перемещает старый блок. Это правило пула не тождественно явной замене
+backing массива языка.
 
 
 7.3. Primitive leaves
@@ -2744,17 +2760,18 @@ equivalent of these operations:
 
 1. Allocate a stable Lmx node or bounded Lmx subtree.
 2. Establish and validate the `node` parent relation.
-3. Register `Lmx * -> ShortNameId` and remove or invalidate that registration at
-   the end of the node lifetime.
+3. For textual services, register `Lmx * -> ShortNameId` and invalidate dead
+   entries; ordinary execution neither requires nor consults this mapping.
 4. Derive the owning Message and its one arena from the reserved `node` address
    or equivalent allocation-range metadata, without an ambient generated-method
    argument.
 5. Find a root by following `node`.
 6. Classify `data` by address range.
 7. Enumerate structural children using `data` and `len`.
-8. Find a child occurrence by ShortNameId, including indexed repeated names.
-9. Resolve an arbitrary textual absolute path from an explicit root and an
-   explicit relative path from its supplied Structure.
+8. Access a child by its resolved address/block index, including computed
+   occurrence selection, without runtime name comparison.
+9. Resolve an arbitrary runtime string path from an explicit root using the
+   auxiliary name mapping; compiled relative paths use operation 8 instead.
 10. Interpret reserved `node\field` from the callable occurrence's immediate
     parent and use it as fallback for a required unqualified name absent from
     the current caller.
@@ -2792,18 +2809,18 @@ RU
 
 1. Выделить стабильный Lmx-узел или ограниченное поддерево Lmx.
 2. Установить и проверить родительское отношение `node`.
-3. Зарегистрировать `Lmx * -> ShortNameId` и удалить либо инвалидировать эту
-   регистрацию в конце lifetime узла.
+3. Для текстовых сервисов регистрировать `Lmx * -> ShortNameId` и удалять
+   мёртвые записи; обычное исполнение не требует и не читает эту таблицу.
 4. Определить Message-владельца и его единственную arena по адресу
    зарезервированного `node` либо эквивалентным metadata диапазона allocation,
    не добавляя ambient-аргумент сгенерированного метода.
 5. Найти root последовательным переходом `node`.
 6. Классифицировать `data` по диапазону адреса.
 7. Перечислить структурных детей с помощью `data` и `len`.
-8. Найти occurrence ребёнка по ShortNameId, включая индексированные повторные
-   имена.
-9. Разрешить произвольный текстовый абсолютный путь от явно переданного root и
-   явный относительный путь от переданной Structure.
+8. Обратиться к ребёнку по разрешённому адресу/индексу блока, включая
+   вычисляемый выбор occurrence, без runtime-сравнения имён.
+9. Разрешить runtime-строковый путь от явного root через вспомогательную
+   таблицу имён; скомпилированный относительный путь использует операцию 8.
 10. Интерпретировать зарезервированный `node\field` от непосредственного
     родителя occurrence callable и использовать его как fallback требуемого
     неквалифицированного имени, отсутствующего у текущего вызывающего.
@@ -3033,7 +3050,7 @@ EN
 The detailed prohibitions belong to their defining contracts. Review shortcuts
 against these boundaries:
 
-* Representation (3–5): no per-Structure C schema, fixed source-field offset,
+* Representation (3–5): no per-Structure C schema or source-name-specific C member,
   extra node metadata, second per-node table or type classification by generated
   Structure type. Approved domain references in `data` remain values.
 * Methods (6.1–6.3, 6.6–6.8): no omitted nested body, substitute stub, colliding
@@ -3058,8 +3075,8 @@ RU
 Подробные запреты находятся в определяющих контрактах. При проверке сокращений
 реализации использовать следующие границы:
 
-* Представление (3–5): нет per-Structure C-схемы, фиксированных source-field
-  offsets, дополнительных метаданных узла, второй per-node таблицы или
+* Представление (3–5): нет per-Structure C-схемы, C-members по именам полей
+  исходника, дополнительных метаданных узла, второй per-node таблицы или
   классификации по generated типу Structure. Допустимые ссылки доменов в `data`
   остаются значениями.
 * Методы (6.1–6.3, 6.6–6.8): нельзя пропускать вложенное тело, заменять его
@@ -3578,8 +3595,10 @@ operand copies its reference value as-is.
 
 14.8. Arrays
 
-The Array ABI in 3.6 is fixed. Remaining choices are pool block allocation and
-growth, range registration and machine encoding. Source view/resize policies
+The Array ABI in 3.6 is fixed. Pool growth is fixed too: add non-moving blocks,
+registering each as a separate range of the same type (4.1, 7.2); never relocate
+live entries. Block sizing, allocator mechanics and range encoding remain open.
+Source view/resize policies
 must be specified when offered; they cannot add descriptor metadata, create
 per-row allocation trees or clone ordinary reference arguments. Old hosted
 `ArrayReference` and `LmSlice` layouts do not override this contract.
@@ -3590,16 +3609,16 @@ Arena ownership is not open: every Message owns exactly one logical arena, and
 all dynamic mutable ordinary Lmx storage of that Message is allocated there.
 That arena remains with the Message across L3 turns and host-worker migration.
 Open details are its block/slab/bump implementation, physical subdivision into
-registered ranges, collector/tracer/compactor algorithm, bulk-destruction
+registered ranges, non-moving collector/tracer algorithm, bulk-destruction
 mechanics, side-table cleanup, out-of-memory behavior and address reuse. Memory
 pressure may request failure/termination or influence work at the next boundary,
 but it does not add another graph-collection point. Local collection at the
 common end-turn boundary,
 after successful FIFO outbox publication or failed-turn rollback, is fixed.
-Live address
-identity must remain stable, either by not moving a live node or by atomically
-rewriting every reference and re-keying its side-table entry as specified in
-section 7.2.
+Live node and pool-entry addresses must remain stable: relocation is forbidden
+by 7.2. On allocation/OS resource failure the affected Message may terminate,
+release its arena and be replaced by a fresh Message. This does not resume the
+old activation or roll back external effects.
 
 14.10. Exact method return ABI
 
@@ -3822,8 +3841,10 @@ Structure/Array копирует значение ссылки как есть.
 
 14.8. Массивы
 
-Array ABI закреплён в 3.6. Открыты allocation/growth блоков пула, регистрация
-диапазонов и машинное кодирование. Source-политики views/resize задаются при
+Array ABI закреплён в 3.6. Рост пула тоже закреплён: добавление неподвижных
+блоков с регистрацией отдельного диапазона того же типа (4.1, 7.2), без
+релокации живых записей. Открыты размеры блоков, механика allocator и
+кодирование диапазонов. Source-политики views/resize задаются при
 предоставлении этих операций; они не могут добавлять метаданные в descriptor,
 выделять дерево строк или клонировать обычный аргумент-ссылку. Старые hosted-
 layouts `ArrayReference` и `LmSlice` не отменяют этот контракт.
@@ -3834,15 +3855,16 @@ Arena ownership не открыт: каждый Message владеет ровн�
 arena, и всё dynamic mutable обычное Lmx-хранилище этого Message выделяется в
 ней. Эта arena остаётся с Message между L3 turns и при миграции между host
 workers. Открыты block/slab/bump реализация arena, физическое разбиение на
-зарегистрированные диапазоны, алгоритм collector/tracer/compactor, механика
+зарегистрированные диапазоны, алгоритм non-moving collector/tracer, механика
 bulk destruction, cleanup side table, out-of-memory и повторное использование
 адресов. Memory pressure может запросить failure/termination либо повлиять на
 работу на следующей границе, но не добавляет другой graph-collection point.
 Локальная collection
 на общей границе end-turn после успешной публикации FIFO outbox либо rollback
-failed turn закреплена. Identity живого адреса обязана оставаться стабильной: узел либо не
-перемещается, либо реализация атомарно переписывает все ссылки и re-key его
-записи side table по разделу 7.2.
+failed turn закреплена. Адреса живых узлов и записей пулов стабильны: релокация
+запрещена по 7.2. При ресурсном отказе allocation/ОС допустимо завершить Message,
+освободить его arena и запустить новый. Это не продолжение старой активации
+и не откат внешних эффектов.
 
 14.10. Точный ABI результата метода
 

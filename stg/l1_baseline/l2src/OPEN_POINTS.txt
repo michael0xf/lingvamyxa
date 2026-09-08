@@ -56,7 +56,9 @@ ABI 14.8  Arrays: pool block allocation, growth, range registration
     and lmx_range_register refuses to grow past it, so no growth policy is
     invented. Range registration itself is exercised, but only as half-open
     [lo, hi) membership with a stride, which is the minimum 6.5 already states.
-    Arises when a pool must grow or be re-registered. Then: ASK.
+    Pool growth is now DECIDED as non-moving blocks with per-block registration
+    (SPEC 2 / 6.5; ABI 4.1 / 7.2 / 14.8). Registry capacity/allocation mechanics
+    remain separate from the settled pool-growth rule.
 
 ABI 14.9  Allocation, arenas: physical subdivision into registered ranges
     AVOIDED. The table is one flat global list of ranges. SPEC 6.5 grants that
@@ -111,12 +113,11 @@ SPEC 6.5  Array descriptor len
     outright ("Array-descriptor len is a different field").
 
 ABI 14.8  Arrays: pool block allocation, growth, range registration
-    AVOIDED. lmx_pool_open takes a fixed capacity, allocates one contiguous
-    block and registers its whole half-open range with a stride. When the pool
-    is exhausted lmx_pool_take returns 0; it never grows. The selftest asserts
-    that refusal, so growth cannot be added by accident without a test failing.
-    Arises the moment a pool must grow, be re-registered, or free a block whose
-    range is still registered. Then: ASK.
+    DECIDED. lmx_pool_open takes a chunk capacity; lmx_pool_take adds chunks
+    when needed, each with its own registered range and the same kind/type.
+    Existing addresses stay unchanged. The original fixed-capacity-only unit
+    has been superseded; see the chunking correction below and SPEC 2 / 6.5,
+    ABI 4.1 / 7.2 / 14.8. Chunk-sizing policy remains open.
 
 ABI 14.4  ShortNameId format, and with it the encoding of sig
     AVOIDED. SPEC 2 says no current use of sig specifies a ready-made binary or
@@ -383,17 +384,12 @@ Unit 2 refused to grow and recorded that as AVOIDED. That was wrong: a
 non-const variable LIVES in the big array of its C type, so the array has to
 grow. Corrected, and the growth mechanism is forced rather than chosen.
 
-What the spec permits. SPEC 2: "Live addresses are stable unless relocation
-atomically rewrites every affected reference/root/index key." ABI 14.9 repeats
-it: stability comes "either by not moving a live node or by atomically
-rewriting every reference and re-keying its side-table entry". So relocation is
-allowed on paper.
-
-Why it is not taken. To rewrite every reference you must first find them, which
-needs a back index from a cell to everything pointing at it. That is a second
-per-node side table, which SPEC 2 forbids - the reverse name index is the only
-one allowed - and it is the machinery NOTES section 5 warns accumulates around a
-correct architecture. So: never move.
+DECIDED, confirmed by the user on 2026-09-08 and reflected in SPEC 2 / 19.29
+and ABI 4.1 / 7.2 / 14.8–14.9: live nodes and service-pool entries never relocate.
+The older permission to move after patching all references was a documentation
+error, not a supported alternative. Growth needs no reverse-reference inventory
+or pointer-patching pass. Allocation failure may terminate the owning Message
+and release its arena before a fresh Message is started.
 
 Growth therefore adds a CHUNK, and each chunk registers as one more range with
 the same kind and type. A typed service array is a SET of registered ranges, not
@@ -411,7 +407,8 @@ What makes an entry a char is the range it sits in, not which discipline put it
 there.
 
 ABI 14.8  Pool block allocation, growth, range registration
-    Growth is now RESOLVED as chunking with per-chunk range registration. Still
+    DECIDED in SPEC 2 / 6.5 and ABI 4.1 / 7.2 / 14.8:
+    growth is chunking with per-chunk range registration. Still
     open: how big a chunk should be, and whether chunk size should vary. The
     code takes a chunk capacity at open and keeps it, which is a placeholder,
     not an answer.

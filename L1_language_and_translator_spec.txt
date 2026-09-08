@@ -774,7 +774,8 @@ lowering), not S1.
 A **separate** semantic core. Consumes L2/L3 according to
 Lingvamyxa_spec.txt Revision 2 and
 struct_refactoring_version_2.txt: generic Lmx {node, len, data},
-address domains, ShortNameId index, all_methods_array {addr, sig},
+stable address domains, auxiliary ShortNameId index for runtime string paths,
+name-free compiled field access, all_methods_array {addr, sig},
 reserved `node` argument, through-variables, dirty checkpoints,
 runtime merge copy, Message arena and FIFO turns.
 

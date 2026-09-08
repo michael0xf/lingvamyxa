@@ -1045,8 +1045,11 @@ its containing Structure `callable->node`. Merge can copy/reparent the occurrenc
 while reusing the record. "Method Structure" means that containing Structure,
 not the callable leaf or a per-invocation frame. Invocation is specified in 21.
 
-Names are absent from Lmx and its payload. The only mandatory per-node name aid
-is the external reverse index:
+Names are absent from ordinary LMX execution, from Lmx and from its payload.
+Source field names are resolved by the translator into addresses or child-block
+indices; runtime follows these addresses and evaluates indices, not names.
+This is the baseline rule, not a later optional optimization. The sole auxiliary
+name mapping, for runtime string-path arguments and textual diagnostics, is:
 
     Lmx * -> ShortNameId
 
@@ -1062,10 +1065,18 @@ A current full path is reconstructed from the reverse index, sibling ordinals
 and `node` links. Graph mutation can change textual lookup results. A resolved
 reference is used directly and needs no name lookup.
 
-Live addresses are stable unless relocation atomically rewrites every affected
-reference/root/index key. Maintain the reverse index across creation, copying,
-movement and destruction; an inconsistent entry is an integrity error, not new
-value semantics.
+The mapping is not required to execute ordinary compiled paths, own-field
+access, dynamic-value forwarding or callable selection. Where textual services
+maintain it, registrations must follow creation, explicit copying and
+destruction; stale entries are integrity errors, not value semantics.
+
+Live Lmx nodes and typed service-pool entries never relocate. A pool grows by
+adding a new non-moving block, registered as a separate address range of the
+same type. One logical Message arena may own many such blocks. No reverse
+reference inventory, pointer-patching pass or moving collector is needed.
+Explicit copying/merge constructs a distinct result; it does not move existing
+identities. Array backing replacement is a separate explicit operation, not
+relocation of the Array descriptor or the service pool.
 
 Structures/Arrays pass and return reference values without copying referents.
 Explicit copy, serialization and runtime `merge` may allocate. C activations
@@ -4257,6 +4268,12 @@ backing must not be confused. Mutable descriptors and backing belong to the
 owning Message's one arena; globally available range classification does not
 share those mutable cells between Messages.
 
+Each typed service pool may contain several non-moving blocks. Growth allocates
+another block and registers its own address range with the same type; addresses
+in earlier blocks remain valid. Range metadata distinguishes the concrete type
+from its physical category (for example, Array-of-char versus Array-of-int).
+This never splits an individual language Array's contiguous backing into rows.
+
 A language Array's owning backing is a rectangular contiguous block. In
 Russian: "ровный (прямоугольный) многомерный массив с единым непрерывным блоком
 памяти". One-dimensional and multidimensional C-style arrays have the same
@@ -5008,8 +5025,8 @@ tree.branch
 ---ANSI C---
 
 This is intentionally separate from ordinary Lingvamyxa field-follow. For an
-ordinary Lmx referent, `x\field` enumerates current children and selects the
-ShortNameId/occurrence described by sections 13 and 21; it does not lower to a
+ordinary Lmx referent, `x\field` follows the translator-resolved child address
+or block index described by sections 13 and 21; it does not lower to a
 source-name-specific C member. Only an explicitly typed raw-L2 machine/foreign
 referent may define `x\field` as a direct `x->field` projection. `c.x.field` is
 always the explicit direct C value-structure/member spelling. In head/update
@@ -7254,9 +7271,9 @@ to raw/profile storage; it is not the Structure header used for `User`.
 The hosted C99 profile distinguishes three operations without changing the
 universal value ontology:
 
-1. Ordinary Structure field-follow enumerates real Lmx children, compares their
-   ShortNameId values in the sole reverse index and selects `[0]` or an explicit
-   occurrence. It uses no attached description and no named C member layout.
+1. Ordinary Structure field-follow accesses real Lmx children by resolved
+   address/block index, including repeated occurrences. No runtime name lookup,
+   attached description or source-name-specific C member layout is involved.
 
 2. An imported primitive opaque payload such as `FILE` may be stored and passed
    without exposing Structure children. A C spelling such as `FILE *` belongs
@@ -7304,9 +7321,9 @@ The field-follow form:
 
     a\field
 
-when `a` is an ordinary Lmx reference, enumerates the ordered children of `a`
-and compares each child's ShortNameId through the reverse name index. It does
-not require known C layout/type metadata. When `a` is an explicitly declared
+when `a` is an ordinary Lmx reference, accesses the child by the address or
+block index resolved by the translator, without runtime name comparison.
+It does not require a source-name-specific C layout. When `a` is an explicitly declared
 raw L2 `c.struct`/foreign typed address, the selected raw profile may instead
 use its declared C layout. These are distinct operations even when they share a
 surface spelling.
@@ -7323,7 +7340,7 @@ C-profile mnemonic table:
     const: @: T p    # C declarator role: const T *p
     @c               # C expression role: &c
 
-    lmxParent\child  # generic Lmx child traversal by ShortNameId
+    lmxParent\child  # resolved address/index in an Lmx child block
     rawParent\child  # rawParent->child only for explicit c.struct/foreign type
     c.parent.child   # explicit C expression role: parent.child
     \rawParent\child # parsed as \(rawParent\child); raw role: *(rawParent->child)
@@ -7544,9 +7561,10 @@ traversable referent, not a dotted external name. A missing, empty/sentinel or
 otherwise non-traversable left side is the same field-access error as a missing
 name: a translation diagnostic when statically known, `throw: Type` (2.5.6)
 at runtime otherwise. There is no second traversal policy for unknown models, dynamic
-Structures or nullable handles. Field-follow walks the current ordered children
-and the reverse name index; `merge` may change those children, and the next
-follow uses the tree as it is then.
+Structures or nullable handles. Field-follow uses resolved addresses/indices
+in the current referent. A live branch has a sealed child block; `merge`
+constructs a distinct result. Neither reference rebinding nor runtime merge
+turns an ordinary source path into a runtime string-name lookup.
 
 When the referent contains repeated exact short names, an unqualified
 `value\field` selects the first matching occurrence, exactly `[0]field`. A particular
@@ -7590,22 +7608,30 @@ The baseline lowering of:
 
     result\harvest
 
-is generic child traversal. It enumerates the branch's current ordered children,
-obtains each candidate's ShortNameId from the sole reverse side table and
-selects occurrence zero (or the requested explicit occurrence). A constant
-source name may lower to a constant ShortNameId. The runtime tree may have been
-changed or produced by `merge`, so the translator must not assume a fixed
-per-name C member offset.
+is address/index traversal of the Lmx child block. The translator resolves
+`harvest` and its occurrence to the corresponding child position; generated
+execution computes/follows that address and never compares ShortNameIds.
+This is an index into universal Lmx storage, not a generated C member named
+`harvest` or a per-Structure C type. A runtime-selected occurrence may require
+index calculation and bounds checks, but not runtime source-name comparison.
 
 When the left value is already a resolved direct reference, traversal starts at
 that value. When the source supplies an arbitrary textual complete path, the
-operation additionally requires an explicit root and resolves every segment
-against the current tree. Full paths are never cached in Lmx nodes.
+operation additionally requires an explicit root and uses the auxiliary name
+mapping to resolve its string segments against the current tree. Only this
+textual route needs names. Full paths are never cached in Lmx nodes.
 
-A later optimizer may replace a generic traversal with a direct Lmx pointer or
-validated offset only when it proves equivalence across every mutation and
-runtime merge observable at that site. Failure of that proof selects generic
-traversal; it is not a source error.
+Validation/translation must establish the address/index access for the admitted
+referent, including results of merge. An unresolved structural requirement is
+not permission to insert a hidden name-table fallback into ordinary execution.
+Reference values may change; the selected referent and bounds still matter.
+
+Example (translation schematic, not extra source syntax): a constructed branch
+has source children `apple, pear, apple` at Lmx block indices `0, 1, 2`.
+`branch\pear` resolves to index 1; `branch\[1]apple` resolves to index 2.
+Generated execution uses those indices, with no names in the access operation.
+A runtime string argument asking for `pear` instead uses the auxiliary textual
+resolver from its supplied branch/root. The two routes must not be conflated.
 
 The language permits the occurrence selector to be an arbitrary expression and
 therefore permits runtime occurrence selection. The current hosted C bootstrap
@@ -9727,7 +9753,7 @@ The default merge is ordered, copying and append-only:
        repeated short names.
     6. Rewrite each copied child's `node` to its corresponding parent in the
        new tree.
-    7. Register every named copied occurrence in the sole
+    7. For runtime textual services, register named copied occurrences in the sole
        `Lmx * -> ShortNameId` table; apply the selected ABI convention to
        positional/anonymous occurrences.
     8. Copy immutable primitive and callable payload references according to
@@ -9822,7 +9848,7 @@ root-relative structural traversal or a call-capable value/record. The first two
 implement active bare-name semantics; explicit Structure paths use graph
 traversal, and a callable value may be selected from either channel before exact
 `sig` validation. Dynamic textual lookup receives an explicit root, enumerates that root's
-ordered children and compares their ShortNameIds through the mandatory
+ordered children and compares their ShortNameIds through the auxiliary
 `Lmx * -> ShortNameId` reverse index. A Registry is never searched merely
 because it exists.
 
@@ -9995,7 +10021,8 @@ expression, the builder:
        addresses;
     3. sets each child's `node` to its actual containment parent;
     4. constructs `len` and `data` according to the registered payload domain;
-    5. records each named occurrence in `Lmx * -> ShortNameId`;
+    5. supplies auxiliary `Lmx * -> ShortNameId` registration for occurrences
+       exposed to runtime textual services (not for ordinary field execution);
     6. evaluates child initializers in source order;
     7. creates callable occurrences whose payloads resolve to already linked
        program-wide method entries;
@@ -10043,7 +10070,9 @@ Revision-2 item; eager translation-time materialization is prohibited.
 
 Direct C field access may later be emitted only as a proven optimization whose
 behaviour is identical under every observable mutation and runtime merge.
-Generic child traversal and root-relative textual lookup remain the baseline.
+Ordinary paths use resolved indices/addresses in universal Lmx storage; only
+runtime string paths use root-relative textual lookup. Direct C-member layout
+is not the ordinary L2 path representation.
 
 Anonymous construction examples
 
@@ -10093,9 +10122,10 @@ Callable selection begins from one of three explicit values:
     a relative Structure path beginning at the current containing Structure;
     an arbitrary textual absolute path together with an explicit root.
 
-The first is used directly. The second enumerates current children and resolves
-ShortNameId occurrences from its supplied start node. The third walks from the
-explicit root. This selects the callable occurrence; it is distinct from
+The first is used directly. The second follows translator-resolved addresses
+or child-block indices from its supplied start node. Only the third uses the
+auxiliary name mapping to walk a runtime string path from the explicit root.
+This selects the callable occurrence; it is distinct from
 selecting the dynamic values required by that callable's `sig`.
 
 After selecting a callable occurrence, runtime classifies its `data` in the
@@ -10309,12 +10339,14 @@ Infrastructure and foreign-ABI adapters may have their required C parameters,
 but an adapter calling a source method forms the typed call above.
 
 Ordinary Structures are projected through the universal `Lmx { node, len,
-data }` representation and structural traversal. A backend must not generate
-an ordinary per-source-name C struct, fixed field offset, attached descriptor
+data }` representation and resolved address/index traversal. A backend must not
+generate an ordinary per-source-name C struct, C member layout, attached descriptor
 or vtable merely because it knows a source spelling. Direct C struct fields,
 unions, native signatures, pointers and inline operators are admitted only for
 explicit raw `c.*`/L1 artifacts or as a separately proven optimization whose
-observable behavior remains generic Lmx traversal. Ordinary Arrays use typed service-pool descriptors; an Lmx field may store
+observable behavior preserves Lmx semantics. Resolved child-block indices are
+ordinary lowering, not prohibited per-name C fields. Ordinary Arrays use typed
+service-pool descriptors; an Lmx field may store
 that reference, as defined in 6.5.
 
 A provider, device profile, codec, validator or lowering rule is explicit Lmx
@@ -11269,10 +11301,10 @@ classification, reverse-name index and reference identity. Section 6.5 defines
 direct Array-descriptor references and their separate contiguous backing.
 Section 21 defines C activation values and method publication.
 
-Memory management must preserve these identities. Lmx nodes and live descriptor
-entries stay at stable addresses unless relocation updates every affected
-reference, root and side-table key atomically. A direct reference is used
-directly, not resolved again by name.
+Memory management must preserve these identities. Live Lmx nodes and descriptor
+entries have stable addresses and must not relocate. Typed pools grow by adding
+separately registered non-moving blocks of the same type (2, 6.5). A direct
+reference is used directly, not resolved again by name.
 
 Every Message owns one arena (19.29.2). Mutable graph data cannot be raw-shared
 between Messages; immutable primitive atoms and method records may be shared.
@@ -11379,9 +11411,8 @@ references, Array-descriptor-to-backing links, and reference-valued Array cells.
 Primitive cells and immutable method records follow their domain's policy.
 
 The reverse-name index is not a root; remove entries for dead occurrences.
-Moving storage must patch every graph/root/handle reference and atomically
-re-key that index. Live descriptor references need the same stability or
-complete relocation. Non-moving storage is permitted.
+Collection is non-moving: live nodes and descriptor entries keep their addresses.
+It does not introduce pointer patching or a reverse-reference inventory.
 
 19.29.4.1. Mandatory End-Turn Collection Boundary
 
@@ -11404,12 +11435,13 @@ allocation.
 
 Completed handler C frames are gone. A suspended native/continuation frame that
 survives end-turn retains every Structure/Array reference as a root until
-resume, close or cancellation. A moving collector patches or pins them.
+resume, close or cancellation. Their live referents are not relocated.
 
 Own fields and constructed Structures are Lmx occurrences; Arrays have separate
 descriptor/backing allocations. Returning either reference is legal because its
-lifetime follows reachability, not C automatic storage duration. A raw L2 address
-surviving relocation requires a pin or patchable handle. Sending/transfer must
+lifetime follows reachability, not C automatic storage duration. A live raw L2
+address still requires a retained referent; non-moving storage does not prevent
+use-after-free. Sending/transfer must
 establish the receiving ownership under 19.29.7, never leave an implicit pointer
 into another Message's reclaimable mutable arena.
 
@@ -11514,19 +11546,19 @@ Historical text and examples: `Lingvamyxa_spec_history.txt`, section 19.29.7.H.
 The physical collector algorithm, region/block layout and Message-destruction
 mechanics are open Revision-2 runtime choices. The local collection schedule is
 not open: it runs at the common end-turn boundary fixed by section 19.29.4. A
-profile may compact only if it rewrites
-every affected Lmx pointer and atomically re-keys the
-`Lmx * -> ShortNameId` index. This includes `node`, ordered child storage,
-graph-reference payloads, call/result roots, scheduler handles and every other
-reference declared by an address-domain scanner. A stable-address non-moving
-collector is the simpler conforming first profile.
+profile must keep live nodes and service-pool entries at stable addresses.
+Compaction by relocating them is forbidden, not an optional first-profile choice.
+Pool growth adds blocks in the Message's one arena, registering each new range.
 
-Objects with a live L2 raw address or foreign view must be pinned, represented
-by a stable handle, or relocated only by a profile that can patch every such
-reference. Destroying a Message releases/reclaims its one arena after preserving
+Objects with a live L2 raw address or foreign view must remain reachable and
+stationary for the admitted view's lifetime. Destroying a Message releases/reclaims
+its one arena after preserving
 any explicitly transferred result and completing required resource cleanup;
 external/raw resources follow their own contracts. The operation must also
-remove or re-key all affected reverse-name entries.
+remove affected auxiliary reverse-name entries. Allocation/OS resource failure
+may terminate the affected Message and reclaim its arena; a supervisor may
+start a fresh Message afterwards. This is not transparent resumption, rollback
+of external effects or a promise to recover from every OS/process failure.
 
 Compaction and destruction cannot manufacture an alternative Structure value
 merely to preserve an old generated C layout. Return identity, result roots and
@@ -12487,18 +12519,18 @@ runtime merge call at the original execution site. A module may compile/link an
 explicit dependency, but it does not inspect a whole directory or flatten the
 dependency's Structure shape into the current C translation unit.
 
-Ordinary field traversal lowers to generic Lmx operations:
+Ordinary field traversal lowers to name-free Lmx address/index operations:
 
     direct pointer                 -> use directly
     relative path                  -> start at supplied Structure
-    node\field                     -> first child lookup on the already supplied
+    node\field                     -> resolved child index on the already supplied
                                       `callable->node`; no extra parent hop
     arbitrary textual absolute path -> require explicit root and traverse
 
-Short-name comparison uses the sole `Lmx * -> ShortNameId` reverse index.
-Full paths are reconstructed, not stored. A later optimizer may replace these
-operations only after proving equivalent behaviour across mutation, runtime
-merge, repeated occurrences, recursion and concurrency.
+Only arbitrary runtime string paths use the auxiliary `Lmx * -> ShortNameId`
+mapping. Full diagnostic paths are reconstructed, not stored. Ordinary compiled
+field access, including own fields and callable selection, never probes it.
+Address/index lowering must preserve repeated-occurrence and referent semantics.
 
 Raw L2 C constructs remain distinct. An explicit `c.struct`, `c.union`, foreign
 function declaration or ABI record may and usually must emit the requested C
@@ -12739,8 +12771,8 @@ activation and invokes the typed entry beginning with `callable->node`.
 Source `implements(new old Consumer)` validates known update requirements;
 generated guards may enforce those requirements on supplied values (2.1).
 This does not implicitly select RuntimeImplements or create visibility.
-The reverse name index is updated for every created,
-moved or removed occurrence. A backend may reuse physical storage only when it
+Where textual services maintain the auxiliary name index, it is updated for
+created, copied or removed occurrences. A backend may reuse physical storage only when it
 proves that node identity, graph references, occurrence order and arbitrary
 textual lookup in a mutated tree remain observationally identical.
 
@@ -13029,17 +13061,20 @@ Namespace object` does not mean `no dynamic visibility`. It means that the
 program's already-required C activations carry the values directly instead of
 consulting another runtime name container.
 
-21.1. The Only Runtime Node-to-Name Index
+21.1. Auxiliary Names for Runtime String Paths
 
-The only mandatory per-node auxiliary name mapping is:
+The sole auxiliary per-node name mapping for textual services is:
 
     Lmx * -> ShortNameId
 
 It is a reverse index from a concrete Lmx occurrence address to one short path
 component. It does not answer a name with a value, store full paths, select a
 type, describe a method signature, record lexical depth or track active calls.
-Creating, copying, moving and destroying a named occurrence must update the
-index consistently with node lifetime.
+Ordinary LMX execution knows no names: translated paths, own fields, callable
+selection and dynamic-value passing use resolved addresses/indices and typed
+activation values. They neither require nor consult this mapping. Where runtime
+string lookup or textual diagnostics maintain it, creating, copying and destroying
+a named occurrence must update it consistently with node lifetime.
 
 A full current path for a known occurrence is reconstructed by reading its short
 name, enumerating the current parent's ordered children to compute its
@@ -13072,10 +13107,11 @@ reserved `node` argument.
 
 Consequently source `node\field` means exactly:
 
-    result = child_named(implicit_node, ShortNameId(field), occurrence 0)
+    result = child_at(implicit_node, resolved_child_index(field, occurrence 0))
 
-There is no additional `implicit_node->node` hop. It selects a directly
-enumerated field of the Structure containing the callable occurrence.
+Here `resolved_child_index` is translation/admission notation, not a runtime
+name-taking helper. There is no additional `implicit_node->node` hop. It selects
+the addressed field of the Structure containing the callable occurrence.
 Traversal farther through containment or another graph link must be written
 explicitly. `node\field` never consults dynamic visibility and cannot be
 overridden by a same-named caller value.
@@ -13438,8 +13474,8 @@ a call site's selected callable occurrence is reached through a const-qualified
 path, steps 1, 2 and 6 of the evaluation order above are resolved at translation
 or link time and emit no runtime work:
 
-1. no child enumeration and no reverse-name-index probing to select the
-   occurrence (21.1--21.2); the resolved `Lmx *` and its `node` are constants;
+1. the already name-free occurrence access (21.1--21.2) folds to constant
+   `Lmx *` and `node` values for the statically established const path;
 2. no runtime `all_methods_array[MethodId]` indexing and no per-call signature
    comparison, because exact `sig` equality is discharged once at translation
    (21.9);
@@ -13451,7 +13487,8 @@ This is the intended lowering for repeatedly executed internal methods,
 including calls inside nested loops, where the descriptor walk through the node
 would otherwise repeat on every iteration. It is a permitted optimization under
 21.12, not a second calling semantics: an unqualified callable occurrence keeps
-the full runtime resolution because it may legitimately be replaced.
+runtime payload/record selection because its reference may legitimately be
+rebound. This is address-based selection, never a source-name-table lookup.
 
 Const on the callable changes nothing else at the boundary. The caller's
 dirty-only checkpoint at step 5 still occurs, because that boundary is a
@@ -13468,16 +13505,17 @@ Other const occurrences
 The same reasoning extends to every other const occurrence, because the
 qualification rather than the payload kind is what licenses the shortcut
 (9.1.1). An implementation should resolve each const-qualified access once and
-thereafter reach the value without enumerating children or probing the reverse
-name index. How much can be folded depends on when the value is established:
+thereafter reuse its resolved value/address. Ordinary non-const access already
+does not probe the name index; const permits further folding, not removal of a
+mandatory name lookup. How much folds depends on when the value is established:
 
 * A const occurrence whose initializer is evaluable at translation, including a
   callable occurrence and a literal primitive, folds into the generated
-  instruction stream. Neither a lookup nor a load remains.
+  instruction stream. No runtime load remains.
 * A const occurrence whose initializer runs during construction holds a value
   established once and unchanged afterwards. Its address is resolved once and
-  generated code loads through that address directly. The lookup disappears;
-  the load does not. `const` alone does not move runtime-produced data to build
+  generated code loads through that address directly. The load remains;
+  `const` alone does not move runtime-produced data to build
   time (2.5.3).
 
 A Message builds its graph before its first turn and is torn down as a unit
