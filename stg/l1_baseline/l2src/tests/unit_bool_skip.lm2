@@ -1,0 +1,15 @@
+fn: boom (int: z) int
+    node\quote: 90
+    return: 7
+end: boom
+fn: m (int: z) int
+    char: quote
+    if: z = 0
+        return: 7 || boom(0)
+    if: z = 1
+        return: 0 - 1 || boom(0)
+    return: 0 && boom(0)
+end: m
+fn: main () int
+    return: 0
+end: main

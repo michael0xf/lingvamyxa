@@ -619,6 +619,57 @@ end: external
 "@
 if ($d8 -ne "0`n0`n90`n") { throw "mixed &&/|| precedence skip/run: $d8" }
 
+# C99 &&/|| yield int 0/1. Oracle is C, not this emitter.
+Invoke-Leaf "l2src\tests\unit_bool_and.lm2" "unit_bool_and" 1 "f"
+$ba = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_bool_and.lm1")))
+if ($ba -notmatch '!= 0') { throw "unit_bool_and must normalize && to 0/1" }
+Invoke-Leaf "l2src\tests\unit_bool_or.lm2" "unit_bool_or" 1 "f"
+
+Invoke-Leaf "l2src\tests\unit_bool_skip.lm2" "unit_bool_skip" 0 "m"
+$d9 = Invoke-SpliceDrive "unit_bool_skip" @"
+        @: Lmx f 0
+        c.printf("%d\n", l2_m1(unit, 0))
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", l2_m1(unit, 1))
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", l2_m1(unit, 2))
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($d9 -ne "1`n0`n1`n0`n0`n0`n") { throw "7||boom / -1||boom / 0&&boom return/sideeffect: $d9" }
+
+Invoke-Leaf "l2src\tests\unit_bool_mix.lm2" "unit_bool_mix" 0 "m"
+$d10 = Invoke-SpliceDrive "unit_bool_mix" @"
+        c.printf("%d\n", l2_m1(unit, 0))
+        c.printf("%d\n", l2_m1(unit, 1))
+        c.printf("%d\n", l2_m1(unit, 2))
+        c.printf("%d\n", l2_m1(unit, 3))
+        return: 0
+    end: main
+end: external
+"@
+# C: 1||0&&7 -> 1; 0||1&&7 -> 1; 1&&7 -> 1; 0&&7 -> 0
+if ($d10 -ne "1`n1`n1`n0`n") { throw "nested mixed &&/|| C 0/1 results: $d10" }
+
+Invoke-Leaf "l2src\tests\unit_sz_id.lm2" "unit_sz_id" 0 "id"
+$sz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_id.lm1")))
+if ($sz -notmatch 'size_t: l2_t') { throw "unit_sz_id wrap/id must keep size_t call temp" }
+$wrapFn = [regex]::Match($sz, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
+if ($wrapFn -match 'int: l2_t') { throw "parenthesized size_t wrap must not copy into int temp:`n$wrapFn" }
+$d11 = Invoke-SpliceDrive "unit_sz_id" @"
+        c.printf("%zu\n", l2_m0(unit, 2147483648U))
+        c.printf("%zu\n", l2_m1(unit, 2147483648U))
+        return: 0
+    end: main
+end: external
+"@
+if ($d11 -ne "2147483648`n2147483648`n") { throw "size_t id/wrap lost high bits: $d11" }
+
 function Invoke-StartsPython {
     $refLm1 = Join-Path $out "spy_ref.lm1"
     $refC = Join-Path $out "spy_ref.c"

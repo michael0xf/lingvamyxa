@@ -1,0 +1,17 @@
+fn: f (int: z) int
+    return: 7
+end: f
+fn: m (int: z) int
+    if: z = 0
+        return: 1 || 0 && f(0)
+    if: z = 1
+        return: 0 || 1 && f(0)
+    if: z = 2
+        return: 1 && f(0)
+    if: z = 3
+        return: 0 && f(0)
+    return: 9
+end: m
+fn: main () int
+    return: 0
+end: main

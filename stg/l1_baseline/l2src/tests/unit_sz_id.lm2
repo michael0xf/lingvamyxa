@@ -1,0 +1,9 @@
+fn: id (size_t: n) size_t
+    return: n
+end: id
+fn: wrap (size_t: n) size_t
+    return: (id(n))
+end: wrap
+fn: main () int
+    return: 0
+end: main

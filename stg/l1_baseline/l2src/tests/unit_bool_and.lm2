@@ -1,0 +1,6 @@
+fn: f (int: z) int
+    return: 7
+end: f
+fn: main () int
+    return: 1 && f(0)
+end: main

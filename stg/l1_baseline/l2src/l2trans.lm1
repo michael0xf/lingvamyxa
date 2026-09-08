@@ -680,7 +680,7 @@ fn: l2_is_char_decl (const: @(LmP0Node stmt)) int
 return: 1
 
 fn: l2_is_plus (const: @(LmP0Text t)) int
-    if: l2_text_eq(t, "+") || l2_text_eq(t, "/")
+    if: l2_text_eq(t, "+") || l2_text_eq(t, "/") || l2_text_eq(t, "-")
         return: 1
 return: 0
 
@@ -791,6 +791,13 @@ fn: l2_new_temp (const: @(char ind); @: char dest) int
     if: c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
         return: 1
 return: l2_tok_temp(t, dest)
+
+fn: l2_bool_set (const: @(char ind); const: @(char dest); const: @(char rhs)) int
+    if: dest = 0 || rhs = 0 || ind = 0
+        return: 1
+    if: c.fprintf(l2_out, "%s%s: (%s) != 0\n", ind, dest, rhs) < 0
+        return: 1
+return: 0
 
 fn: l2_intern_prove (const: @(char path); const: @(LmP0Node node)) int
     unsigned: id
@@ -1409,14 +1416,14 @@ fn: l2_eval_and (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: cha
     if: l2_bump_ind(ind, deep) != 0
         return: 1
     span: l2_span_and(field, n)
-    if: span = n && l2_fields_has_call(field, n) = 0
+    if: span = n
         return: l2_emit_fields(field, n, mi, ind, dest)
     if: l2_new_temp(ind, dest) != 0
         return: 1
     f: l2_next_active(field)
     if: l2_emit_fields(f, span, mi, ind, rhs) != 0
         return: 1
-    if: c.fprintf(l2_out, "%s%s: %s\n", ind, dest, rhs) < 0
+    if: l2_bool_set(ind, dest, rhs) != 0
         return: 1
     rest: n - span
     nxt: l2_advance(f, span)
@@ -1429,7 +1436,7 @@ fn: l2_eval_and (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: cha
             return: 1
         if: l2_emit_fields(nxt, span, mi, deep, rhs) != 0
             return: 1
-        if: c.fprintf(l2_out, "%s%s: %s\n", deep, dest, rhs) < 0
+        if: l2_bool_set(deep, dest, rhs) != 0
             return: 1
         rest: rest - span
         nxt: l2_advance(nxt, span)
@@ -1460,7 +1467,7 @@ fn: l2_eval_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
     f: l2_next_active(field)
     if: l2_eval_and(f, span, mi, ind, rhs) != 0
         return: 1
-    if: c.fprintf(l2_out, "%s%s: %s\n", ind, dest, rhs) < 0
+    if: l2_bool_set(ind, dest, rhs) != 0
         return: 1
     rest: n - span
     nxt: l2_advance(f, span)
@@ -1473,7 +1480,7 @@ fn: l2_eval_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
             return: 1
         if: l2_eval_and(nxt, span, mi, deep, rhs) != 0
             return: 1
-        if: c.fprintf(l2_out, "%s%s: %s\n", deep, dest, rhs) < 0
+        if: l2_bool_set(deep, dest, rhs) != 0
             return: 1
         rest: rest - span
         nxt: l2_advance(nxt, span)
