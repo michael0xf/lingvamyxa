@@ -695,11 +695,13 @@ SPEC 21.8 / ABI 6.6  method record {addr, sig}, node first, typed invoke
     int or size_t result. Pure &&/|| (no calls) stay one L1 C
     expression with C precedence. Expressions that contain calls
     use guarded if/temps: || splits then &&; parenthesized
-    STRUCTURE is a subexpression. Actuals are prepared left-to-right
-    once; checkpoint runs after those actuals and immediately before
-    the executed call. A skipped &&/|| RHS does not prep nested
-    actuals or checkpoints. That is the 21.8 boundary for this
-    slice, not C argument order and not a hidden-cache address.
+    STRUCTURE is a subexpression. The value of &&/|| is int 0 or 1
+    (`(x) != 0`), not a raw operand, matching C even when a call
+    is added to a previously pure expression. Non-logical size_t
+    calls keep a size_t temp; they are not copied into int.
+    Actuals are prepared left-to-right once; checkpoint runs after
+    those actuals and immediately before the executed call. A
+    skipped &&/|| RHS does not prep nested actuals or checkpoints.
     Partial ports: parser_text_predicates.lm2,
     parser_text_line_break.lm2 (lm_p0_line_break_width_at),
     parser_text_starts_python.lm2 (lm_p0_starts_python_string).

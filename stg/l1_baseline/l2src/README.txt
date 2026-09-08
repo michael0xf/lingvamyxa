@@ -37,9 +37,10 @@ the call. Recursion is an implementation limit. At most 8 methods;
 `lmx_ranges_init` is 1+N. Formals are hygienic `l2_p{i}_{j}`.
 char/int/size_t and `const @(char)` formals, arity 1–4, int or
 size_t result. Pure &&/|| stay L1 C expressions. Calls inside
-&&/|| use guarded if/temps: actuals once left-to-right,
-checkpoint after actuals immediately before the executed call;
-skipped RHS does not run nested actuals.
+&&/|| use guarded if/temps and yield int 0/1, not an operand.
+Non-logical size_t results stay size_t. Actuals once
+left-to-right, checkpoint after actuals immediately before the
+executed call; skipped RHS does not run nested actuals.
 Dest replace writes tmp, then a unique dest.bak / dest.bak.N so
 an existing foreign bak is kept; rollback failure reports the
 backup path and does not claim dest was restored. Not atomic.
