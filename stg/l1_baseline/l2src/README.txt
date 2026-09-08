@@ -24,7 +24,12 @@ Supported L2 input, and nothing else:
 That is the SPEC 1.7 bootstrap `main` adapter. String atoms are copied as
 P0 source spelling into L1 (quotes and escapes kept; not decoded then
 re-escaped). `c.puts` sequences are allowed; anything after `return` is
-not. It is not a general L2 method, not L2 self-build, and not units 1–7.
+not. One additional two-int add leaf is a real §21.8 method: containing
+Structure + callable occurrence (`callable->node`), method record in the
+METHOD address domain, exact typed call `name(node, a, b)`. OwnUsed and
+DynRequired are empty for this leaf; the checkpoint is empty but the
+call order is still 21.8. `main` remains the §1.7 adapter. Not L2
+self-build.
 
 Emit (L1), with `include: "<stdio.h>"` only when there is at least one puts:
 
