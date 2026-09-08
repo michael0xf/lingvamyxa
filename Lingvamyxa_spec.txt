@@ -7432,6 +7432,42 @@ Hidden through parameter (same C operations; source binding unchanged):
                        # the source binding (caller or 21.3 fallback) is not written
                        # explicit node\x or reference\field is the graph path
 
+Returning an address: graph field versus activation-local parameter
+
+The placement of a declaration, not the spelling `int`, determines its storage.
+These are schematic L2 method-body examples with an address-valued result:
+
+    # a is declared in the method body: an own graph-backed field (21.5)
+    int: a 5
+    return: @a         # typed graph-payload address, NOT & of the C cache
+
+Leaving this method does not by itself invalidate that address. The ordinary
+dirty-only exit checkpoint still applies. The address remains usable only
+while its actual graph payload remains alive and access is permitted; taking
+or returning it does not extend lifetime. Non-moving storage is not immortal
+storage. This example is not a way to expose the hidden working-local cache.
+
+    # a is instead a declared int formal of this method
+    a: 7
+    p: @a              # C &a of this activation's parameter
+    \p: 9              # direct C store; a is now 9, source binding unchanged
+    return: @a         # escapes this activation's C parameter: unsafe to use
+
+In the second example the addressed parameter ceases to exist when the method
+returns. A caller cannot dereference the returned address. The same rule
+applies to a hidden through parameter, even if its source was a long-lived
+graph field: `@a` names this activation's parameter, not that source. No
+implicit boxing, heap promotion or substitution of the source address occurs.
+
+Prefix `\p` on an already typed parameter address is ordinary C dereference;
+it does not resolve `node` or require the stack address to belong to an Lmx
+service pool. Address-range classification selects a graph payload's type;
+it is not a universal prerequisite for dereferencing a typed raw pointer.
+
+L1 contrast: an ordinary automatic `int: a` in an L1 function is a C local,
+not an L2 own graph field. Returning its address has the same lifetime defect
+as returning the address of the L2 parameter above.
+
 Caller-first / fallback / no writeback:
 
     # 21.3 order: caller activation-local x, else inherited dynamic x,
