@@ -7493,8 +7493,14 @@ parameter, and a 21.3-fallback hidden parameter. It is not an exception by
 how the argument was obtained.
 
 LMX example (schematic; `char` is the worked type, `size_t` is the same rule).
-This is a language example, not a claim that a given translator already
-lowers every line:
+The closed-unit l2trans slice now lowers hidden `char`/`size_t` through-args
+on direct calls (own-only stays out of `DynRequired`; pre-decl free use
+aliases the hidden parameter from the own-decl line; types come from this
+method's own/formal or a call-site supplier, not from literal `65`/`3U`
+or a sibling field name). L2-to-L2 calls still pass the shared unit as
+`node`. This example is not a claim that the translator already lowers
+`@` after bind, inlined `&&`/`||` hidden actuals, runtime-selected
+callees, or a per-method graph:
 
     fn: m (char: quote) int
         quote: 65            # before bind: local argument, not published

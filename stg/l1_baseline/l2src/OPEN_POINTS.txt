@@ -859,7 +859,7 @@ Same-name formal + own bind (ticket 183000 / 183740)
 
 Unit 12 - hidden char/size_t through-args, closed direct calls
 --------------------------------------------------------------
-Files (proposed, not started): l2trans.lm1, run_l2trans.ps1,
+Files: l2trans.lm1, run_l2trans.ps1, tests/unit_own_only.lm2,
 tests/unit_dyn_*.lm2
 
 SPEC 21.3 / 21.5  membership — 192800 always-DynRequired WITHDRAWN
@@ -896,13 +896,14 @@ SPEC 21.3 / 21.5  membership — 192800 always-DynRequired WITHDRAWN
 
     Types: not by matching the name across the unit. char vs
     size_t from this method's own decl, its explicit formal,
-    a forwarded callee hidden type, or a free use against a
-    typed literal in the same shapes already used (`quote = 65`
-    as today's char own; `value_length = 3U` as size_t). Mixed
+    a forwarded callee hidden type, or an existing typed
+    context at that call-site. Literal 65 does not prove char
+    and 3U does not prove size_t as a language rule. Mixed
     in one method is incompatible. Counterexample against
     unit-wide name guess: `fn: leaf () int / return: quote`
     beside `fn: holder () int / size_t: quote` must not make
-    leaf's hidden quote size_t.
+    leaf's hidden quote size_t. Insufficient type info is
+    `unresolved name`.
 
     Call site, known callee, closed unit:
       1. caller C variable for that name if present
@@ -942,17 +943,35 @@ SPEC 21.3 / 21.5  membership — 192800 always-DynRequired WITHDRAWN
                             hidden then bind; leaf field
                             published; caller source unchanged
       unit_dyn_fallback.lm2 leaf free-uses quote; sibling holder
-                            materializes unit child; caller has
-                            no quote; generated call loads
-                            callee node\[0]quote
-      unit_dyn_sz.lm2       size_t free use typed by `3U`
+                            materializes unit child; `typed`
+                            (char formal) is the type supplier
+                            at a real call-site; caller has no
+                            source quote; adapter loads the
+                            callee-node child then passes the
+                            native C actual, not silent zero
+      unit_dyn_sz.lm2       size_t free use typed by outer own
+                            `size_t: value_length`, not by 3U
       unit_dyn_miss.lm2     negative: DynRequired, no caller
                             value, no callee-node child
       unit_dyn_type.lm2     negative: size_t own quote must not
                             type a sibling's char free use
+      unit_dyn_cap.lm2      negative: fifth hidden name
+      unit_dyn_early.lm2    return before own-decl does not publish
 
-    Not started. Not in this patch: runtime-selected callable,
-    int hidden, >4 hidden, `@` of the bound name.
+    Implemented in this slice (194400). Closed-unit direct calls;
+    char/size_t; 4 declared + 4 hidden; intern includes hidden
+    names sorted by source-name bytes then type; declared arity
+    unchanged. L2-to-L2 calls still pass the shared unit as
+    `l2_call_node`. Distinct graph publish is a 21.8 second
+    Structure (the `node` parameter), not two values on one
+    shared cell. `fn: main` stays §1.7. Fallback type for a
+    free name is a real call-site formal/own supplier, not
+    holder as a type oracle and not literal 65.
+
+    Not in this patch: runtime-selected callable, int hidden,
+    `l2_inline_call` hidden actuals (`&&`/`||` inlined calls),
+    per-method graph layout, ancestor walk, `@` of the bound
+    name, arbitrary recursion, self-build.
 
 P0-as-Lmx, parser.lm1 scanners, and L2 self-build
     Not touched. Frozen p0.h / l1src/own.lm1 / bootstrap / root L1
