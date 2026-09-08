@@ -1,0 +1,6 @@
+fn: add (int: a; int: b) int
+    return: add(a, b)
+end: add
+fn: main () int
+    return: add(1, 2)
+end: main

@@ -1,0 +1,9 @@
+fn: max (int: a; int: b) int
+    if: a < b
+        return: b
+    else:
+        return: a
+end: max
+fn: main () int
+    return: max(1, 2) + max(5, 3)
+end: main

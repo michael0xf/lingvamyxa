@@ -1,0 +1,9 @@
+fn: left (int: a; int: b) int
+    return: right(a, b)
+end: left
+fn: right (int: a; int: b) int
+    return: left(a, b)
+end: right
+fn: main () int
+    return: left(1, 2)
+end: main

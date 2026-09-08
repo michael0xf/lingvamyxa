@@ -1,0 +1,15 @@
+fn: add (int: a; int: b) int
+    return: a + b
+end: add
+fn: plus (int: a; int: b) int
+    return: a + b
+end: plus
+fn: sum (int: x; int: y) int
+    return: x + y
+end: sum
+fn: swap (int: b; int: a) int
+    return: b + a
+end: swap
+fn: main () int
+    return: plus(1, 2) != add(1, 2)
+end: main

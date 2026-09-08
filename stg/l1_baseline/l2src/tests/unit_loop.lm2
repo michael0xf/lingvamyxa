@@ -1,0 +1,8 @@
+fn: add (int: a; int: b) int
+    while: a < b
+        return: a
+    return: b
+end: add
+fn: main () int
+    return: add(1, 2)
+end: main

@@ -206,8 +206,8 @@ function Invoke-Leaf([string]$src, [string]$stem, [int]$expect, [string]$name) {
     if ($text.IndexOf("@: Lmx") -lt 0) { throw "$stem L1 missing Lmx node" }
     if ($text.IndexOf("LmxMethod") -lt 0) { throw "$stem L1 missing method record" }
     if ($text.IndexOf("lmx_classify") -lt 0) { throw "$stem L1 missing classify" }
-    if ($text.IndexOf("${name}(leaf") -lt 0 -and $text.IndexOf("${name}(leaf\") -lt 0) {
-        if ($text -notmatch [regex]::Escape($name) + "\(leaf") { throw "$stem L1 missing typed call" }
+    if ($text -notmatch ([regex]::Escape($name) + "\((leaf|unit|node)")) {
+        throw "$stem L1 missing typed call"
     }
     & $l1trans $lm1 $cpath
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
@@ -234,7 +234,7 @@ function Get-LeafContract([string]$stem) {
     $t = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out ($stem + ".lm1"))))
     if ($t.IndexOf("Runtime: no memcmp") -lt 0) { throw "$stem missing honest runtime no-memcmp" }
     if ($t.IndexOf("id 1 :=") -lt 0) { throw "$stem missing intern mapping id 1 :=" }
-    if ($t.IndexOf("Closed-singleton devirtualization") -lt 0) {
+    if ($t.IndexOf("Closed-unit devirtualization") -lt 0 -and $t.IndexOf("Closed-singleton devirtualization") -lt 0) {
         throw "$stem missing devirtualization proof comment"
     }
     $f0 = $null; $f1 = $null
@@ -269,6 +269,24 @@ if ($cSum.Probe -eq $cSum.Id) { throw "sum intern must not equal probe a|b" }
 if ($cSwapF.Formals -ne "b|a") { throw "swap formals $($cSwapF.Formals)" }
 if ($cSwapF.Formals -eq $cAdd.Formals) { throw "swapped formals must differ from a,b" }
 if ($cSwapF.Probe -eq $cSwapF.Id) { throw "swap intern must not equal probe a|b" }
+
+Invoke-Leaf "l2src\tests\unit_chain.lm2" "unit_chain" 0 "wrap"
+Invoke-Leaf "l2src\tests\unit_forward.lm2" "unit_forward" 0 "wrap"
+Invoke-Leaf "l2src\tests\unit_if.lm2" "unit_if" 7 "max"
+Invoke-Leaf "l2src\tests\unit_contracts.lm2" "unit_contracts" 0 "add"
+$uc = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_contracts.lm1")))
+$sigs = [regex]::Matches($uc, 'rec\\sig: (\d+)U') | ForEach-Object { [int]$_.Groups[1].Value }
+if ($sigs.Count -lt 4) { throw "unit_contracts expected 4 rec.sig intern ids, got $($sigs.Count)" }
+if ($sigs[0] -ne $sigs[1]) { throw "add and plus same formals must share intern id" }
+if ($sigs[2] -eq $sigs[0]) { throw "sum x,y must intern differently from add a,b" }
+if ($sigs[3] -eq $sigs[0]) { throw "swap b,a must intern differently from add a,b" }
+if ($uc.IndexOf("plus(unit") -lt 0 -and $uc -notmatch 'plus\(unit') { throw "unit_contracts missing plus call" }
+
+Invoke-Negative "l2src\tests\unit_dup_def.lm2" "unit_dup_def" "duplicate definition"
+Invoke-Negative "l2src\tests\unit_dup_formal.lm2" "unit_dup_formal" "duplicate formal"
+Invoke-Negative "l2src\tests\unit_loop.lm2" "unit_loop" "unsupported loop"
+Invoke-Negative "l2src\tests\unit_rec.lm2" "unit_rec" "unsupported recursion"
+Invoke-Negative "l2src\tests\unit_cycle.lm2" "unit_cycle" "unsupported recursion"
 Invoke-Negative "l2src\tests\entry_unknown_method.lm2" "entry_unknown_method" "unknown method"
 Invoke-Negative "l2src\tests\entry_bad_arity.lm2" "entry_bad_arity" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_unresolved.lm2" "entry_unresolved" "unresolved name"

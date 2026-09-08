@@ -1,0 +1,9 @@
+fn: add (int: a; int: b) int
+    return: a + b
+end: add
+fn: wrap (int: a; int: b) int
+    return: add(a, b)
+end: wrap
+fn: main () int
+    return: wrap(add(1, 2), 3) != 6
+end: main
