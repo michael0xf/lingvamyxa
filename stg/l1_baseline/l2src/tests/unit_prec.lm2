@@ -1,0 +1,6 @@
+fn: prec (int: a; int: b; int: c) int
+    return: a || b && c
+end: prec
+fn: main () int
+    return: prec(1, 0, 0)
+end: main

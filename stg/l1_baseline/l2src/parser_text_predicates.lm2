@@ -1,0 +1,24 @@
+fn: lm_p0_is_horizontal_space (char: value) int
+    return: value = 32 || value = 9
+end: lm_p0_is_horizontal_space
+fn: lm_p0_is_line_break (char: value) int
+    return: value = 10 || value = 13
+end: lm_p0_is_line_break
+fn: lm_p0_is_field_space (char: value) int
+    return: lm_p0_is_horizontal_space(value) || lm_p0_is_line_break(value)
+end: lm_p0_is_field_space
+fn: lm_p0_is_field_separator (char: value) int
+    return: value = 44 || value = 59
+end: lm_p0_is_field_separator
+fn: lm_p0_is_short_form_separator (char: value) int
+    return: value = 59
+end: lm_p0_is_short_form_separator
+fn: lm_p0_is_quoted_token_boundary (char: value) int
+    return: lm_p0_is_field_space(value) || lm_p0_is_field_separator(value) || value = 40 || value = 41 || value = 35
+end: lm_p0_is_quoted_token_boundary
+fn: lm_p0_is_decimal_digit (char: value) int
+    return: value >= 48 && value <= 57
+end: lm_p0_is_decimal_digit
+fn: main () int
+    return: 0
+end: main

@@ -1,0 +1,6 @@
+fn: div0 (int: a; int: b) int
+    return: a / b
+end: div0
+fn: main () int
+    return: 1 || div0(1, 0)
+end: main

@@ -305,4 +305,92 @@ Invoke-Negative "l2src\tests\entry_bad_arity.lm2" "entry_bad_arity" "incompatibl
 Invoke-Negative "l2src\tests\entry_unresolved.lm2" "entry_unresolved" "unresolved name"
 Invoke-Negative "l2src\tests\entry_trailer.lm2" "entry_trailer" "unsupported trailer"
 
+Invoke-Leaf "l2src\tests\unit_prec.lm2" "unit_prec" 1 "prec"
+$pr = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_prec.lm1")))
+if ($pr.IndexOf("||") -lt 0 -or $pr.IndexOf("&&") -lt 0) { throw "unit_prec missing &&/|| emission" }
+Invoke-Leaf "l2src\tests\unit_sc.lm2" "unit_sc" 1 "div0"
+$sc = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sc.lm1")))
+if ($sc -notmatch '1 \|\| div0\(' -and $sc.IndexOf("1 || div0(") -lt 0) { throw "unit_sc must inline right-hand call for short-circuit" }
+
+function Invoke-PredAscii {
+    $refLm1 = Join-Path $out "pred_ref.lm1"
+    $refC = Join-Path $out "pred_ref.c"
+    $refExe = Join-Path $out "pred_ref.exe"
+    $refOut = Join-Path $out "pred_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser_text.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+        int: v 0
+        while: v < 128
+            c.printf("%d%d%d%d%d%d%d\n", lm_p0_is_horizontal_space((cast: (char) v)), lm_p0_is_line_break((cast: (char) v)), lm_p0_is_field_space((cast: (char) v)), lm_p0_is_field_separator((cast: (char) v)), lm_p0_is_short_form_separator((cast: (char) v)), lm_p0_is_quoted_token_boundary((cast: (char) v)), lm_p0_is_decimal_digit((cast: (char) v)))
+            v: v + 1
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pred_ref (parser_text excerpt)" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "pred_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'pred_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pred_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_text_predicates.lm2" "parser_text_predicates" 0 "lm_p0_is_horizontal_space"
+    $lm1 = Join-Path $out "parser_text_predicates.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
+    $cut = $text.LastIndexOf("external:")
+    if ($cut -lt 0) { throw "predicates L1 missing external main" }
+    $head = $text.Substring(0, $cut)
+    $drive = @"
+external:
+    fn: main () int
+        @: Lmx unit 0
+        @: Lmx leaf 0
+        @: LmxMethod rec 0
+        int: v 0
+        if: lmx_ranges_init(8U) != 0
+            return: 1
+        unit: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))
+        if: unit = 0
+            return: 1
+        lmx_cell_init(unit, 0, 0)
+        if: lmx_branch_open(unit, 7U) != 0
+            return: 1
+        rec: (cast: (@: LmxMethod) c.malloc(c.sizeof(c.LmxMethod)))
+        if: rec = 0
+            return: 1
+        rec\addr: (cast: (LmxEntry) lm_p0_is_horizontal_space)
+        rec\sig: 1U
+        if: lmx_range_register((cast: (@: void) rec), (cast: (@: void) (rec + 1)), c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0
+            return: 1
+        leaf: lmx_branch_child(unit, 0U)
+        leaf\data: (cast: (@: void) rec)
+        while: v < 128
+            c.printf("%d%d%d%d%d%d%d\n", lm_p0_is_horizontal_space(unit, (cast: (char) v)), lm_p0_is_line_break(unit, (cast: (char) v)), lm_p0_is_field_space(unit, (cast: (char) v)), lm_p0_is_field_separator(unit, (cast: (char) v)), lm_p0_is_short_form_separator(unit, (cast: (char) v)), lm_p0_is_quoted_token_boundary(unit, (cast: (char) v)), lm_p0_is_decimal_digit(unit, (cast: (char) v)))
+            v: v + 1
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "pred_l2_drive.lm1"
+    $drvC = Join-Path $out "pred_l2_drive.c"
+    $drvExe = Join-Path $out "pred_l2_drive.exe"
+    $drvOut = Join-Path $out "pred_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($head + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pred_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "pred_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'pred_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pred_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "predicate 128-ASCII mismatch vs parser_text.lm1 reference" }
+    $lines = $a.Split("`n") | Where-Object { $_ -ne "" }
+    if ($lines.Count -ne 128) { throw "expected 128 ASCII lines, got $($lines.Count)" }
+}
+
+Invoke-PredAscii
+
 "l2trans $gen ok"
