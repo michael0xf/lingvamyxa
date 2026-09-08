@@ -28,9 +28,10 @@ not. One additional two-int add leaf is a real §21.8 method: containing
 Structure + callable occurrence (`callable->node`), method record in the
 METHOD address domain, exact typed call `name(node, a, b)`. OwnUsed and
 DynRequired are empty for this leaf; the checkpoint is empty but the
-call order is still 21.8. `main` remains the §1.7 adapter. Method name
-is not in the signature identity (L2_SIG_V0 + exact formal names).
-The typed call is closed-singleton devirtualization, not dispatch
+call order is still 21.8. `main` remains the §1.7 adapter. Method name is not interned. rec.sig is the translator intern id of
+the full L2_SIG_V0 + ordered formal-name contract (memcmp in
+l2_intern_pair). Mapping id 1 := emitted l2_sig_f0 / l2_sig_f1.
+Runtime does not memcmp; closed-singleton lowering, not dispatch
 through rec.addr. Not L2 self-build. Single emitter source: l2trans.lm1.
 
 Emit (L1), with `include: "<stdio.h>"` only when there is at least one puts:
