@@ -1,0 +1,222 @@
+Mixa Manager
+Distribution model: minimal L3 base, extensions on demand, no framework
+Version: draft 1.0
+
+Replaces Old_Mixa_Manager_Qt_model.txt as the architectural model. That
+document is not obsolete as a description of the VISUAL model: its sections 1
+to 14 - TextRect, OverlayRect, Cell, producers, input, keys, clipboard, mouse,
+resize, Unicode - carry over unchanged. What this document replaces is its
+answer to "what do we ship, and what draws it": Qt as the main application
+framework, and a distribution that implies a toolchain.
+
+
+0. The property this serves
+
+The defining property is HERMETICITY: everything is written in Lingvamyxa,
+except one deliberate seam per platform.
+
+That is not the same property as "the chain self-hosts on a C99 compiler".
+Self-hosting is the mechanism; hermeticity is the point. Confusing the two
+produces wrong conclusions - for instance, writing a second interpreter in the
+host language of each platform because it is cheaper. It is cheaper, and it
+ends the project: two implementations of one semantics diverge, and the
+language stops being one language.
+
+The seam is a normal recurring element, not a concession. The produced
+executable is not Lingvamyxa either. The cross-platform C core that builds the
+Lingvamyxa core is not Lingvamyxa. A JVM class loader would not be. Each level
+has exactly one such seam, kept as small as it can be, and everything above it
+is the language.
+
+
+1. What is distributed
+
+1.1. Base distribution
+
+    L3 interpreter
+    own UI: file manager, IDE, extension installer
+    one platform backend
+    one bitmap font
+
+The base BUILDS NOTHING. It carries no C compiler, no CMake, no linker. L1 and
+L2 do not build in it; only L3 runs.
+
+That split is what makes the base small. Measured on the development machine, a
+C toolchain is 39 MB of binaries plus 179 MB of headers and libraries, while the
+entire language - sources and tools together - is about 16 MB. The compiler, not
+the language, is what makes a developer package heavy.
+
+1.2. Extensions
+
+Everything else is installed on demand, next to the base, for a platform that is
+known by then:
+
+    the L1 and L2 translators and the C bootstrap, for those who build
+    additional backends, codecs, protocol adapters
+    third-party libraries, fetched rather than bundled
+
+Nothing prevents an extension from being a native binary. On a JVM host, a
+second Mixa Manager built as a platform binary may be installed alongside; the
+operating system is known at install time.
+
+1.3. Size budget
+
+Target: about 5 MB for the base. The benchmark is ClearShell, an existing shell
+of that size. A comparable program is the right scale for something that has to
+travel to a phone.
+
+    interpreter core, Lmx runtime and evaluator     0.3 - 0.8 MB
+    TextRect and one platform backend               0.1 - 0.2 MB
+    bitmap font, Latin and box drawing              tens of KB
+    own UI as L3 source                             hundreds of KB
+                                                    ------------
+    base without CJK coverage                       2 - 5 MB
+    with a CJK bitmap font                          about 10 MB
+
+For comparison, a minimal Qt Widgets runtime on Windows, measured on this
+machine: Qt6Core 10.77 MB, Qt6Gui 10.93 MB, Qt6Widgets 6.84 MB, the platform
+plugin 1.21 MB, the MinGW runtime 2.29 MB. About 32 MB before any of our own
+code, and it still supplies no font.
+
+
+2. Why there is no framework
+
+Qt was assessed separately, with measurements, in
+mixa_manager\QT_ASSESSMENT.txt. Under this distribution model the question
+resolves itself rather than needing a verdict.
+
+The base draws a strict cell grid. It has no buttons, no layouts, no widgets:
+Old_Mixa_Manager_Qt_model.txt section 17 puts panels, menus, dialogs, the
+command line, the viewer and the editor into TextRect, not into widgets. The
+widget stack - the bulk of any GUI framework - is unused by construction.
+
+What remains is the small surface in section 5. A framework is not the right
+shape for six functions.
+
+The font question resolves the same way and in the opposite direction from what
+a framework offers. Old_Mixa_Manager_Qt_model.txt section 14 states what is
+critical: "For a file-manager style UI, box drawing and exact cell alignment are
+critical." A system font stack with fallback chains is precisely what breaks
+cell alignment - it substitutes a face of different metrics and the box drawing
+shifts. A bundled bitmap font is deterministic, identical on every platform, and
+its metrics are known at compile time. Terminals shipped fixed fonts for decades
+for this reason.
+
+
+3. What is in the C base
+
+The C base is the one seam. It is kept minimal, stable and portable, because it
+is the entire porting surface.
+
+    the L3 interpreter, as generated C
+    the platform backend of section 5
+    the bitmap font, as data
+
+The interpreter is not hand-written C. It is Lingvamyxa, translated down the
+existing lineage:
+
+    C base  ->  L1  ->  L2  ->  L3
+
+L1 self-hosts today to a fixed point, gen1 == gen2 == gen3. L2 is being built
+the same way. The interpreter's runtime is what is under construction in
+stg\l1_baseline\l2src now: the Lmx header, classification by registered address
+range, typed service pools with non-moving growth, branch storage, reference
+passing, and own fields with dirty-only checkpoints. That work is not separate
+from this model - it is its foundation.
+
+
+4. What is in Lingvamyxa
+
+Everything above the seam, and it is the same source on every platform:
+
+    file manager: panels, viewer, editor, command line, menus, status line
+    IDE
+    extension installer
+    input normalisation, key mapping, mouse mapping
+    terminal profiles and key tables
+    overlay command list
+
+These are L3 sources, shipped as source or in a compiled form. They are not
+rewritten per platform, and that is what makes each additional platform cheap.
+
+
+5. The backend surface
+
+One seam per platform, six operations, declared in L1 with external: against a
+hand-written header:
+
+    open a window or surface of a given cell geometry
+    present an RGBA buffer
+    deliver key events as codepoint plus modifiers
+    deliver mouse events as cell coordinates plus buttons
+    get and set clipboard text as UTF-8
+    deliver resize notifications
+
+Near-term backends: Windows, Linux, macOS. The first two are plain C of a few
+hundred lines each - CreateWindowEx with StretchDIBits and WM_KEYDOWN/WM_CHAR;
+XCreateWindow with XPutImage and XLookupString. macOS needs Objective-C and is
+of the same order.
+
+The extension installer additionally needs HTTP. Use the platform's own -
+WinHTTP, NSURLSession, whatever the target provides - rather than bundling a
+library. One more function behind the same seam.
+
+Clipboard carries more weight here than its size suggests, and is called out for
+that reason. It is the practical path for entering text a keyboard cannot easily
+produce: copy a CJK filename from the panel, paste it into the rename dialog.
+Which is why clipboard must work well, and why full IME integration can be
+deferred - on Windows a plain window that handles WM_CHAR receives composed text
+from DefWindowProc, losing only the composition preview.
+
+
+6. Platform reach
+
+Reach comes from porting the interpreter, not from a framework and not from a
+per-host reimplementation.
+
+Each target is reached by writing its backend IN LINGVAMYXA, self-hosting, the
+way L1 lowers to C today:
+
+    desktop     the C base plus a platform backend
+    JVM         an L3 to bytecode compiler, written in Lingvamyxa, compiling
+                itself, exactly as L1 to C and L2 to L1 do now
+    browser     the same shape, targeting wasm or JS
+
+Writing those in Java or JavaScript would be cheaper and is rejected: it
+produces a second implementation of the semantics, and two implementations
+diverge. The fixed-point discipline L1 already passes is what proves there is
+one implementation, and it transfers to every new backend.
+
+Each such target keeps its own small seam - a class loader, a page shell - of
+the same shape and for the same reason as the C base.
+
+
+7. Consequences for work in progress
+
+The two lines converge rather than running in parallel.
+
+    l2src        becomes the interpreter's runtime, not only a dependency of an
+                 L2 translator. It is already the right work.
+    mixa_manager keeps what belongs below the seam: the TextRect core and the
+                 platform backends. Panels, viewer, editor and installer move up
+                 into L3 once the interpreter runs.
+
+Milestone 1 - the TextRect core with a synthetic producer - is unaffected. It
+has no backend dependency and no framework dependency, and a dumped screen is
+plain text, so it is verified by string comparison with no window and no font.
+
+
+8. Open points
+
+    The L3 interpreter does not exist yet. L1 self-hosts; L2 has just begun.
+    This is the largest unbuilt piece of this model, and the rest waits on it.
+
+    CJK display is required for a file manager in those locales, since files are
+    routinely named in those scripts. It is a font coverage question, not a
+    framework question. Which coverage ships in the base and which arrives as an
+    extension is not decided here.
+
+    The root buildCore.lm0.bat still requires cmake, for exactly two
+    make_directory calls. That is the whole dependency of the L1 gate on the Qt
+    toolchain, and it should be removed. This project's own baseline buildCore
+    already has.
