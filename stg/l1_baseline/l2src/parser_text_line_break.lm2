@@ -1,0 +1,14 @@
+fn: lm_p0_line_break_width_at (const: @(char source); size_t: length; size_t: index) size_t
+    if: index >= length
+        return: 0U
+    if: source[index] = 13
+        if: index + 1U < length && source[index + 1U] = 10
+            return: 2U
+        return: 1U
+    if: source[index] = 10
+        return: 1U
+    return: 0U
+end: lm_p0_line_break_width_at
+fn: main () int
+    return: 0
+end: main

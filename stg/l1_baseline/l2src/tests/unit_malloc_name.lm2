@@ -1,0 +1,9 @@
+fn: malloc (int: a; int: b) int
+    return: a + b
+end: malloc
+fn: lmx_cell_init (int: a; int: b) int
+    return: a + b
+end: lmx_cell_init
+fn: main () int
+    return: malloc(1, 2) + lmx_cell_init(3, 4)
+end: main

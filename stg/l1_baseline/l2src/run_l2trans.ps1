@@ -202,12 +202,12 @@ function Invoke-Leaf([string]$src, [string]$stem, [int]$expect, [string]$name) {
         throw "l2trans failed: $src"
     }
     $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
-    if ($text.IndexOf("fn: $name") -lt 0) { throw "$stem L1 missing fn: $name" }
+    if ($text -notmatch 'fn: l2_m\d+') { throw "$stem L1 missing mangled method symbol" }
     if ($text.IndexOf("@: Lmx") -lt 0) { throw "$stem L1 missing Lmx node" }
     if ($text.IndexOf("LmxMethod") -lt 0) { throw "$stem L1 missing method record" }
     if ($text.IndexOf("lmx_classify") -lt 0) { throw "$stem L1 missing classify" }
-    if ($text -notmatch ([regex]::Escape($name) + "\((leaf|unit|node)")) {
-        throw "$stem L1 missing typed call"
+    if ($text -notmatch 'fn: l2_m\d+ \(@: Lmx node' -and $text -notmatch 'l2_m\d+\((leaf|unit|node)') {
+        throw "$stem L1 missing typed entry"
     }
     & $l1trans $lm1 $cpath
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
@@ -280,7 +280,7 @@ if ($sigs.Count -lt 4) { throw "unit_contracts expected 4 rec.sig intern ids, go
 if ($sigs[0] -ne $sigs[1]) { throw "add and plus same formals must share intern id" }
 if ($sigs[2] -eq $sigs[0]) { throw "sum x,y must intern differently from add a,b" }
 if ($sigs[3] -eq $sigs[0]) { throw "swap b,a must intern differently from add a,b" }
-if ($uc.IndexOf("plus(unit") -lt 0 -and $uc -notmatch 'plus\(unit') { throw "unit_contracts missing plus call" }
+if ($uc -notmatch 'l2_m\d+\(unit') { throw "unit_contracts missing mangled typed call" }
 
 Invoke-Negative "l2src\tests\unit_dup_def.lm2" "unit_dup_def" "duplicate definition"
 Invoke-Negative "l2src\tests\unit_dup_formal.lm2" "unit_dup_formal" "duplicate formal"
@@ -310,7 +310,7 @@ $pr = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "u
 if ($pr.IndexOf("||") -lt 0 -or $pr.IndexOf("&&") -lt 0) { throw "unit_prec missing &&/|| emission" }
 Invoke-Leaf "l2src\tests\unit_sc.lm2" "unit_sc" 1 "div0"
 $sc = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sc.lm1")))
-if ($sc -notmatch '1 \|\| div0\(' -and $sc.IndexOf("1 || div0(") -lt 0) { throw "unit_sc must inline right-hand call for short-circuit" }
+if ($sc -notmatch '1 \|\| l2_m\d+\(' -and $sc.IndexOf("1 || l2_m") -lt 0) { throw "unit_sc must inline right-hand call for short-circuit" }
 
 function Invoke-PredAscii {
     $refLm1 = Join-Path $out "pred_ref.lm1"
@@ -339,36 +339,18 @@ end: external
 
     Invoke-Leaf "l2src\parser_text_predicates.lm2" "parser_text_predicates" 0 "lm_p0_is_horizontal_space"
     $lm1 = Join-Path $out "parser_text_predicates.lm1"
-    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
-    $cut = $text.LastIndexOf("external:")
-    if ($cut -lt 0) { throw "predicates L1 missing external main" }
-    $head = $text.Substring(0, $cut)
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_is_') { throw "predicates must mangle method symbols, not emit source names as C symbols" }
+    if ($text -notmatch 'rec\\addr: \(cast: \(LmxEntry\) l2_m0\)') { throw "predicates missing rec.addr l2_m0" }
+    if ($text -notmatch 'rec\\addr: \(cast: \(LmxEntry\) l2_m6\)') { throw "predicates missing full 7-method graph" }
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "predicates L1 missing generated main return" }
+    $head = $text.Substring(0, $pos)
     $drive = @"
-external:
-    fn: main () int
-        @: Lmx unit 0
-        @: Lmx leaf 0
-        @: LmxMethod rec 0
         int: v 0
-        if: lmx_ranges_init(8U) != 0
-            return: 1
-        unit: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))
-        if: unit = 0
-            return: 1
-        lmx_cell_init(unit, 0, 0)
-        if: lmx_branch_open(unit, 7U) != 0
-            return: 1
-        rec: (cast: (@: LmxMethod) c.malloc(c.sizeof(c.LmxMethod)))
-        if: rec = 0
-            return: 1
-        rec\addr: (cast: (LmxEntry) lm_p0_is_horizontal_space)
-        rec\sig: 1U
-        if: lmx_range_register((cast: (@: void) rec), (cast: (@: void) (rec + 1)), c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0
-            return: 1
-        leaf: lmx_branch_child(unit, 0U)
-        leaf\data: (cast: (@: void) rec)
         while: v < 128
-            c.printf("%d%d%d%d%d%d%d\n", lm_p0_is_horizontal_space(unit, (cast: (char) v)), lm_p0_is_line_break(unit, (cast: (char) v)), lm_p0_is_field_space(unit, (cast: (char) v)), lm_p0_is_field_separator(unit, (cast: (char) v)), lm_p0_is_short_form_separator(unit, (cast: (char) v)), lm_p0_is_quoted_token_boundary(unit, (cast: (char) v)), lm_p0_is_decimal_digit(unit, (cast: (char) v)))
+            c.printf("%d%d%d%d%d%d%d\n", l2_m0(unit, (cast: (char) v)), l2_m1(unit, (cast: (char) v)), l2_m2(unit, (cast: (char) v)), l2_m3(unit, (cast: (char) v)), l2_m4(unit, (cast: (char) v)), l2_m5(unit, (cast: (char) v)), l2_m6(unit, (cast: (char) v)))
             v: v + 1
         return: 0
     end: main
@@ -392,5 +374,98 @@ end: external
 }
 
 Invoke-PredAscii
+
+Invoke-Leaf "l2src\tests\unit_malloc_name.lm2" "unit_malloc_name" 10 "malloc"
+$mn = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_malloc_name.lm1")))
+if ($mn -match 'fn: malloc \(') { throw "source name malloc must not be the C symbol" }
+if ($mn -notmatch 'fn: l2_m0 ') { throw "malloc should be l2_m0" }
+
+function Invoke-PublishFail {
+    $dest = Join-Path $out "publish_fail.lm1"
+    $bak = $dest + ".bak"
+    $marker = "KEEP-THESE-BYTES-ON-FAILED-PUBLISH`n"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $dest), $marker)
+    if (Test-Path -LiteralPath $bak) { Remove-Item -LiteralPath $bak -Recurse -Force }
+    New-Item -ItemType Directory -Path (Join-Path (Get-Location) $bak) | Out-Null
+    cmd /c "`"$l2exe`" `"l2src\tests\add.lm2`" `"$dest`" 2> `"$(Join-Path $out 'publish_fail.err')`""
+    if ($LASTEXITCODE -eq 0) { throw "publish_fail expected replace failure when .bak is a directory" }
+    $got = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $dest))
+    if ($got -ne $marker) { throw "failed publication mutated dest: $got" }
+    Remove-Item -LiteralPath $bak -Recurse -Force
+}
+
+Invoke-PublishFail
+
+function Invoke-LineBreakWidth {
+    $refLm1 = Join-Path $out "lbw_ref.lm1"
+    $refC = Join-Path $out "lbw_ref.c"
+    $refExe = Join-Path $out "lbw_ref.exe"
+    $refOut = Join-Path $out "lbw_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser_text.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+        c.printf("%zu\n", lm_p0_line_break_width_at("\n", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r\n", 2U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("x", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r\n", 2U, 2U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("", 0U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at(0, 0U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("ab", 2U, 2U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("a\r\nb", 4U, 1U))
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed lbw_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "lbw_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'lbw_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "lbw_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_text_line_break.lm2" "parser_text_line_break" 0 "lm_p0_line_break_width_at"
+    $lm1 = Join-Path $out "parser_text_line_break.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_line_break_width_at') { throw "line_break must mangle method symbols" }
+    if ($text.IndexOf("const: @(char l2_p0_0)") -lt 0) { throw "line_break missing const char* formal" }
+    if ($text.IndexOf("size_t: l2_p0_1") -lt 0) { throw "line_break missing size_t formal" }
+    if ($text.IndexOf(") size_t") -lt 0) { throw "line_break missing size_t result" }
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "line_break L1 missing generated main return" }
+    $head = $text.Substring(0, $pos)
+    $drive = @"
+        c.printf("%zu\n", l2_m0(unit, "\n", 1U, 0U))
+        c.printf("%zu\n", l2_m0(unit, "\r", 1U, 0U))
+        c.printf("%zu\n", l2_m0(unit, "\r\n", 2U, 0U))
+        c.printf("%zu\n", l2_m0(unit, "x", 1U, 0U))
+        c.printf("%zu\n", l2_m0(unit, "\r\n", 2U, 2U))
+        c.printf("%zu\n", l2_m0(unit, "", 0U, 0U))
+        c.printf("%zu\n", l2_m0(unit, 0, 0U, 0U))
+        c.printf("%zu\n", l2_m0(unit, "ab", 2U, 2U))
+        c.printf("%zu\n", l2_m0(unit, "a\r\nb", 4U, 1U))
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "lbw_l2_drive.lm1"
+    $drvC = Join-Path $out "lbw_l2_drive.c"
+    $drvExe = Join-Path $out "lbw_l2_drive.exe"
+    $drvOut = Join-Path $out "lbw_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($head + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed lbw_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "lbw_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'lbw_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "lbw_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "line_break_width_at mismatch vs parser_text.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-LineBreakWidth
 
 "l2trans $gen ok"
