@@ -834,10 +834,19 @@ end: external
     if ($text.IndexOf("@: LmP0Text") -lt 0) { throw "views missing mutable LmP0Text* formal" }
     if ($text.IndexOf("size_t: l2_q0") -lt 0) { throw "views missing own size_t cache" }
     if ($text.IndexOf("lmx_size_take") -lt 0) { throw "views missing size_t pool take" }
-    if ($text.IndexOf("l2_hash_eq") -lt 0) { throw "views missing hashed equals" }
+    if ($text.IndexOf("l2_hash_eq_forced") -ge 0) { throw "views must not ship l2_hash_eq_forced in production helper" }
+    if ($text.IndexOf("l2_immut_query_fill") -lt 0) { throw "views missing L2 make helper fill" }
+    if ($text.IndexOf("l2_hash_compare_q") -lt 0) { throw "views missing production compare seam" }
+    if ($text.IndexOf("const: @(L2ImmutQuery") -lt 0) { throw "views missing const L2ImmutQuery* formal" }
+    if ($text.IndexOf("@: L2ImmutQuery") -lt 0) { throw "views missing mutable L2ImmutQuery* formal" }
+    if ($text.IndexOf("l2src/l2_immut_query.h") -lt 0) { throw "views missing L2ImmutQuery header include" }
     if ($text.IndexOf("l2_hash_bind") -ge 0) { throw "views must not auto-bind a mutable payload" }
     if ($text.IndexOf("l1src/p0.h") -lt 0) { throw "views missing p0.h adapter include" }
     if ($text.IndexOf("const-pointee") -lt 0) { throw "views intern comment must distinguish const pointee" }
+    $m2 = [regex]::Match($text, 'fn: l2_m2[\s\S]*?end: l2_m2').Value
+    $m3 = [regex]::Match($text, 'fn: l2_m3[\s\S]*?end: l2_m3').Value
+    if ($m2.IndexOf("l2_immut_query_fill") -lt 0) { throw "make method must call l2_immut_query_fill" }
+    if ($m3.IndexOf("l2_hash_compare_q") -lt 0) { throw "equals_query must call production l2_hash_compare_q" }
     $tail = "        return: 0`n    end: main`nend: external"
     $pos = $text.LastIndexOf($tail)
     if ($pos -lt 0) { throw "views L1 missing generated main return" }
@@ -845,13 +854,15 @@ end: external
         @: LmP0Text t 0
         @: LmP0Text atom 0
         @: LmP0Text pay 0
+        @: L2ImmutQuery q 0
         @: Lmx f 0
         c.array: [4]: char nbuf
         c.array: [6]: char mut
         t: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
         atom: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
         pay: (cast: (@: LmP0Text) c.malloc(c.sizeof(c.LmP0Text)))
-        if: t = 0 || atom = 0 || pay = 0
+        q: (cast: (@: L2ImmutQuery) c.malloc(c.sizeof(c.L2ImmutQuery)))
+        if: t = 0 || atom = 0 || pay = 0 || q = 0
             return: 1
         t\data: "hello"
         t\length: 5U
@@ -902,6 +913,20 @@ end: external
         c.printf("%d\n", l2_m0(unit, 0, "zzzz"))
         f: lmx_branch_child(unit, 0U)
         c.printf("%zu\n", lmx_size_value(f\data))
+        c.printf("%d\n", l2_m3(unit, t, 0))
+        c.printf("%d\n", l2_m2(unit, 0, q))
+        c.printf("%d\n", l2_m3(unit, t, q))
+        c.printf("%d\n", l2_m2(unit, "fn", q))
+        t\data: "fn"
+        t\length: 2U
+        c.printf("%d\n", l2_m3(unit, t, q))
+        t\data: "table"
+        t\length: 5U
+        c.printf("%d\n", l2_m3(unit, t, q))
+        t\data: "fn"
+        t\length: 2U
+        c.printf("%d\n", l2_m3(unit, t, q))
+        c.printf("%d\n", l2_m2(unit, "bbb", q))
         mut[0]: 97
         mut[1]: 97
         mut[2]: 97
@@ -909,22 +934,19 @@ end: external
         atom\data: mut
         atom\length: 3U
         c.printf("%d\n", l2_m1(unit, atom, pay))
-        c.printf("%d\n", l2_m0(unit, pay, "aaa"))
+        c.printf("%d\n", l2_m3(unit, pay, q))
         mut[0]: 98
         mut[1]: 98
         mut[2]: 98
+        c.printf("%d\n", l2_m3(unit, pay, q))
         c.printf("%d\n", l2_m0(unit, pay, "bbb"))
         c.printf("%d\n", l2_m0(unit, pay, "aaa"))
-        mut[0]: 99
-        mut[1]: 99
-        mut[2]: 99
-        c.printf("%d\n", l2_m0(unit, pay, "ccc"))
-        atom\data: "xyz"
-        atom\length: 3U
-        c.printf("%d\n", l2_m1(unit, atom, pay))
-        c.printf("%d\n", l2_m0(unit, pay, "xyz"))
-        c.printf("%d\n", l2_m0(unit, pay, "ccc"))
-        c.printf("%d\n", l2_hash_eq_forced(pay, "aaa", 3U, 1ULL, 1ULL))
+        c.printf("%d\n", l2_m2(unit, "aaa", q))
+        c.printf("%d\n", l2_m3(unit, pay, q))
+        q\hash: l2_fnv1a64("bbb", 3U)
+        t\data: "bbb"
+        t\length: 3U
+        c.printf("%d\n", l2_m3(unit, t, q))
         return: 0
     end: main
 end: external
@@ -949,8 +971,13 @@ end: external
         if ($alines[$i] -ne $blines[$i]) { throw "views mismatch vs parser_text.lm1 at $i ref=$($alines[$i]) l2=$($blines[$i])" }
     }
     $got = ($blines[19..($blines.Count - 1)] -join ",")
-    $want = "2,1,2,0,2,1,1,1,0,1,1,1,0,0"
-    if ($got -ne $want) { throw "views extra own/hash/mutation got=$got want=$want full=$b" }
+    $want = "2,1,2,0,2,0,0,0,1,1,0,1,1,1,0,1,1,0,1,0,0"
+    if ($got -ne $want) { throw "views extra own/query/mutation got=$got want=$want full=$b" }
+    $drvText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvLm1))
+    $fnMake = [regex]::Matches($drvText, 'l2_m2\(unit, "fn"')
+    $qCalls = [regex]::Matches($drvText, 'l2_m3\(unit,')
+    if ($fnMake.Count -ne 1) { throw "prepared query 'fn' must be made once, got $($fnMake.Count)" }
+    if ($qCalls.Count -lt 3) { throw "equals_query must be reused on the prepared query, got $($qCalls.Count)" }
 }
 
 Invoke-Views

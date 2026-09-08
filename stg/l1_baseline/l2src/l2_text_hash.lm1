@@ -1,19 +1,15 @@
 predef: "l2src/lmx_size.lm1"
-include: "<stdint.h>" "<string.h>" "l1src/p0.h"
+include: "<stdint.h>" "<string.h>" "l1src/p0.h" "l2src/l2_immut_query.h"
 
 # FNV-1a 64-bit (Fowler-Noll-Vo), width u64, unsigned wrap.
 # offset 0xcbf29ce484222325, prime 1099511628211ULL.
 # Not crypto. Not intern id. Not a runtime name table.
 #
-# No view cache and no process-global bind table. Frozen p0.h stays
-# {data, length}. identifier_payload keeps aliasing; a mutable
-# LmP0Text is not treated as immutable.
-#
-# l2_hash_eq at each call:
-#   query hash = FNV of value[0..n) (n already from the original strlen)
-#   text hash  = FNV of the bytes currently at text->data[0..n)
-#   mismatch -> false; equal hashes still memcmp.
-# Nothing is retained across calls, so nothing is released.
+# Temporary L1 adapter behind L2 methods lm_p0_immut_query_make and
+# lm_p0_text_equals_query (those stay real §21.8 entries with node+sig).
+# No process-global pointer cache. Fill computes the query hash once.
+# Compare hashes current text bytes against that prepared hash, then
+# memcmp. live==0 is invalid; compare does not read data/hash.
 
 fn: l2_fnv1a64 (const: @(char p); size_t: n) u64
     u64: h
@@ -27,24 +23,35 @@ fn: l2_fnv1a64 (const: @(char p); size_t: n) u64
         i: i + 1U
 return: h
 
-fn: l2_hash_eq (const: @(LmP0Text text); const: @(char value); size_t: n) int
-    u64: th
-    u64: vh
-    if: text = 0 || value = 0
+fn: l2_immut_query_fill (const: @(char s); @: L2ImmutQuery out) int
+    size_t: n
+    if: out = 0
         return: 0
-    if: text\length != n
+    out\data: 0
+    out\length: 0U
+    out\hash: 0ULL
+    out\live: 0
+    if: s = 0
         return: 0
-    vh: l2_fnv1a64(value, n)
-    th: l2_fnv1a64(text\data, n)
-    if: th != vh
-        return: 0
-return: c.memcmp(text\data, value, n) = 0
+    n: c.strlen(s)
+    out\data: s
+    out\length: n
+    out\hash: l2_fnv1a64(s, n)
+    out\live: 1
+return: 1
 
-fn: l2_hash_eq_forced (const: @(LmP0Text text); const: @(char value); size_t: n; u64: th; u64: vh) int
-    if: text = 0 || value = 0
+fn: l2_hash_compare (const: @(LmP0Text text); const: @(char data); size_t: n; u64: prepared) int
+    u64: th
+    if: text = 0 || data = 0
         return: 0
     if: text\length != n
         return: 0
-    if: th != vh
+    th: l2_fnv1a64(text\data, n)
+    if: th != prepared
         return: 0
-return: c.memcmp(text\data, value, n) = 0
+return: c.memcmp(text\data, data, n) = 0
+
+fn: l2_hash_compare_q (const: @(LmP0Text text); const: @(L2ImmutQuery q)) int
+    if: q = 0 || q\live = 0
+        return: 0
+    return: l2_hash_compare(text, q\data, q\length, q\hash)
