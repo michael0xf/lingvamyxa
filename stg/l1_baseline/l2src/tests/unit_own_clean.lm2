@@ -1,0 +1,11 @@
+fn: inner (char: v) int
+    node\quote: v
+    return: 0
+end: inner
+fn: outer (int: z) int
+    char: quote
+    return: inner(66)
+end: outer
+fn: main () int
+    return: 0
+end: main

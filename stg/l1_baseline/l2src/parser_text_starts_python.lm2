@@ -1,0 +1,12 @@
+fn: lm_p0_starts_python_string (const: @(char text); size_t: length; size_t: index) int
+    char: quote
+    if: index + 2U >= length
+        return: 0
+    quote: text[index]
+    if: quote != 34 && quote != 39
+        return: 0
+    return: text[index + 1U] = quote && text[index + 2U] = quote
+end: lm_p0_starts_python_string
+fn: main () int
+    return: 0
+end: main

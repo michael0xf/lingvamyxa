@@ -1,0 +1,10 @@
+fn: m (int: c) int
+    char: quote
+    if: c = 0
+        return: 0
+    quote: 65
+    return: 0
+end: m
+fn: main () int
+    return: 0
+end: main

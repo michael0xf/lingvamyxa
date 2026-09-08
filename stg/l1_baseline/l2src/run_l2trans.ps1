@@ -392,6 +392,22 @@ function Invoke-PublishFail {
     $got = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $dest))
     if ($got -ne $marker) { throw "failed publication mutated dest: $got" }
     Remove-Item -LiteralPath $bak -Recurse -Force
+
+    $dest2 = Join-Path $out "publish_bak_file.lm1"
+    $bak2 = $dest2 + ".bak"
+    $sentinel = "FOREIGN-BAK-SENTINEL`n"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $dest2), $marker)
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $bak2), $sentinel)
+    cmd /c "`"$l2exe`" `"l2src\tests\add.lm2`" `"$dest2`" 2> `"$(Join-Path $out 'publish_bak_file.err')`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content (Join-Path $out 'publish_bak_file.err')
+        throw "existing regular dest.bak must not block unique-backup publication"
+    }
+    $kept = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $bak2))
+    if ($kept -ne $sentinel) { throw "foreign dest.bak sentinel was mutated" }
+    $newd = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $dest2))
+    if ($newd -eq $marker) { throw "unique-backup publication left dest unchanged" }
+    if ($newd.IndexOf("fn: l2_m") -lt 0) { throw "unique-backup dest is not generated L1" }
 }
 
 Invoke-PublishFail
@@ -467,5 +483,160 @@ end: external
 }
 
 Invoke-LineBreakWidth
+
+function Invoke-SpliceDrive([string]$stem, [string]$driveBody) {
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "$stem L1 missing generated main return" }
+    $drvLm1 = Join-Path $out ($stem + "_drive.lm1")
+    $drvC = Join-Path $out ($stem + "_drive.c")
+    $drvExe = Join-Path $out ($stem + "_drive.exe")
+    $drvOut = Join-Path $out ($stem + "_drive.stdout")
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $driveBody.Replace("`r`n", "`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed $stem drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "$stem.drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out ($stem + '_drive.err'))`""
+    if ($LASTEXITCODE -ne 0) { throw "$stem drive exe failed" }
+    return [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n", "`n")
+}
+
+Invoke-Leaf "l2src\tests\unit_own_early.lm2" "unit_own_early" 0 "m"
+$oe = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own_early.lm1")))
+if ($oe.IndexOf("l2_q0_dirty") -lt 0) { throw "unit_own_early missing typed own cache" }
+if ($oe.IndexOf("lmx_char_cell") -lt 0) { throw "unit_own_early missing all_chars publish" }
+$d1 = Invoke-SpliceDrive "unit_own_early" @"
+        l2_m0(unit, 0)
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m0(unit, 1)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($d1 -ne "0`n65`n") { throw "own early-return/assign published $d1" }
+
+Invoke-Leaf "l2src\tests\unit_own_clean.lm2" "unit_own_clean" 0 "outer"
+$d2 = Invoke-SpliceDrive "unit_own_clean" @"
+        l2_m1(unit, 0)
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($d2 -ne "66`n") { throw "clean caller republished over explicit path write: $d2" }
+
+Invoke-Leaf "l2src\tests\unit_own_eq.lm2" "unit_own_eq" 0 "outer"
+$d3 = Invoke-SpliceDrive "unit_own_eq" @"
+        l2_m1(unit, 0)
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($d3 -ne "0`n") { throw "equal assign must dirty and publish: $d3" }
+
+Invoke-Leaf "l2src\tests\unit_own_lazy.lm2" "unit_own_lazy" 0 "m"
+$d4 = Invoke-SpliceDrive "unit_own_lazy" @"
+        l2_m2(unit, 0)
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($d4 -ne "0`n") { throw "lazy && evaluated RHS call: $d4" }
+
+function Invoke-StartsPython {
+    $refLm1 = Join-Path $out "spy_ref.lm1"
+    $refC = Join-Path $out "spy_ref.c"
+    $refExe = Join-Path $out "spy_ref.exe"
+    $refOut = Join-Path $out "spy_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser_text.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+        c.printf("%d\n", lm_p0_starts_python_string("'''", 3U, 0U))
+        c.printf("%d\n", lm_p0_starts_python_string("\x22\x22\x22", 3U, 0U))
+        c.printf("%d\n", lm_p0_starts_python_string("'", 1U, 0U))
+        c.printf("%d\n", lm_p0_starts_python_string("''x", 3U, 0U))
+        c.printf("%d\n", lm_p0_starts_python_string("x'''", 4U, 1U))
+        c.printf("%d\n", lm_p0_starts_python_string("'''", 3U, 1U))
+        c.printf("%d\n", lm_p0_starts_python_string("'''", 3U, 3U))
+        c.printf("%d\n", lm_p0_starts_python_string("", 0U, 0U))
+        c.printf("%d\n", lm_p0_starts_python_string("'\x22\x22", 3U, 0U))
+        c.printf("%d\n", lm_p0_starts_python_string("abc", 3U, 0U))
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed spy_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "spy_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'spy_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "spy_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_text_starts_python.lm2" "parser_text_starts_python" 0 "lm_p0_starts_python_string"
+    $lm1 = Join-Path $out "parser_text_starts_python.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_starts_python_string') { throw "starts_python must mangle method symbols" }
+    if ($text.IndexOf("l2_q0") -lt 0) { throw "starts_python missing own char cache" }
+    if ($text.IndexOf('l2_own0) "quote"') -lt 0) { throw "starts_python OwnUsed must keep source name quote" }
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "starts_python L1 missing generated main return" }
+    $drive = @"
+        c.printf("%d\n", l2_m0(unit, "'''", 3U, 0U))
+        c.printf("%d\n", l2_m0(unit, "\x22\x22\x22", 3U, 0U))
+        c.printf("%d\n", l2_m0(unit, "'", 1U, 0U))
+        c.printf("%d\n", l2_m0(unit, "''x", 3U, 0U))
+        c.printf("%d\n", l2_m0(unit, "x'''", 4U, 1U))
+        c.printf("%d\n", l2_m0(unit, "'''", 3U, 1U))
+        c.printf("%d\n", l2_m0(unit, "'''", 3U, 3U))
+        c.printf("%d\n", l2_m0(unit, "", 0U, 0U))
+        c.printf("%d\n", l2_m0(unit, "'\x22\x22", 3U, 0U))
+        c.printf("%d\n", l2_m0(unit, "abc", 3U, 0U))
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "spy_l2_drive.lm1"
+    $drvC = Join-Path $out "spy_l2_drive.c"
+    $drvExe = Join-Path $out "spy_l2_drive.exe"
+    $drvOut = Join-Path $out "spy_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed spy_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "spy_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'spy_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "spy_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    $alines = $a.Split("`n") | Where-Object { $_ -ne "" }
+    $blines = $b.Split("`n") | Where-Object { $_ -ne "" }
+    if ($alines.Count -ne 10) { throw "spy_ref expected 10 lines, got $($alines.Count)" }
+    if ($blines.Count -ne 11) { throw "spy_l2 expected 10 cases + published field, got $($blines.Count)" }
+    for ($i = 0; $i -lt 10; $i++) {
+        if ($alines[$i] -ne $blines[$i]) { throw "starts_python_string mismatch vs parser_text.lm1 at case $i ref=$($alines[$i]) l2=$($blines[$i])" }
+    }
+    if ($blines[10] -ne "97") { throw "published own field via generated child 0 must be last assigned quote (abc -> 97), got $($blines[10])" }
+}
+
+Invoke-StartsPython
 
 "l2trans $gen ok"

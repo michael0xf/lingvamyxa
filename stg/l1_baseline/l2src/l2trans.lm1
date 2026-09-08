@@ -10,6 +10,7 @@ unsigned: l2_intern_again 0U
 unsigned: l2_intern_swap 0U
 unsigned: l2_intern_probe 0U
 int: l2_m_n 0
+int: l2_own_n 0
 int: l2_tn 0
 const: @: char l2_call_node 0
 @: FILE l2_out 0
@@ -25,6 +26,9 @@ c.array: [8]: unsigned l2_m_sig
 c.array: [8]: int l2_m_mark
 c.array: [8]: int l2_m_arity
 c.array: [8]: int l2_m_ret
+c.array: [8]: int l2_m_own
+c.array: [32]: int l2_m_uses
+c.array: [4]: @: LmP0Text l2_own_name
 c.array: [32]: @: LmP0Text l2_m_fn
 c.array: [32]: int l2_m_ft
 c.array: [64]: int l2_m_edge
@@ -49,6 +53,11 @@ prototype:
     fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
     fn: l2_emit_expr (const: @(LmP0Node node); int: mi; const: @(char ind)) int
     fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
+    fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
+    fn: l2_own_find (const: @(LmP0Text t)) int
+    fn: l2_own_add (const: @(LmP0Text t); const: @(char path); const: @(LmP0Node at)) int
+    fn: l2_slash_own (const: @(LmP0Text t)) int
+    fn: l2_is_char_decl (const: @(LmP0Node stmt)) int
 end: prototype
 
 fn: l2_text_eq (const: @(LmP0Text text); const: @(char s)) int
@@ -374,11 +383,16 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
     out_body[0]: 0
     l2_leaf_mode: 0
     l2_m_n: 0
+    l2_own_n: 0
     l2_intern_n: 0U
     l2_src: path
     i: 0
     while: i < 64
         l2_m_edge[i]: 0
+        i: i + 1
+    i: 0
+    while: i < 32
+        l2_m_uses[i]: 0
         i: i + 1
     if: unit = 0
         return: l2_error(path, 0, "missing main")
@@ -609,6 +623,56 @@ fn: l2_find_method (const: @(LmP0Text name)) int
         i: i + 1
 return: -1
 
+fn: l2_own_find (const: @(LmP0Text t)) int
+    int: i 0
+    while: i < l2_own_n
+        if: l2_text_same(l2_own_name[i], t)
+            return: i
+        i: i + 1
+return: -1
+
+fn: l2_own_add (const: @(LmP0Text t); const: @(char path); const: @(LmP0Node at)) int
+    int: i
+    if: t = 0 || l2_ident(t) = 0
+        return: l2_error(path, at, "incompatible entry signature")
+    i: l2_own_find(t)
+    if: i >= 0
+        return: i
+    if: l2_own_n >= 4
+        return: l2_error(path, at, "unsupported body")
+    l2_own_name[l2_own_n]: (cast: (@: LmP0Text) t)
+    l2_own_n: l2_own_n + 1
+return: l2_own_n - 1
+
+fn: l2_slash_own (const: @(LmP0Text t)) int
+    int: i 0
+    size_t: n
+    if: t = 0 || t\data = 0 || t\length < 6U
+        return: -1
+    if: t\data[0] != 110 || t\data[1] != 111 || t\data[2] != 100 || t\data[3] != 101 || t\data[4] != 92
+        return: -1
+    n: t\length - 5U
+    while: i < l2_own_n
+        if: l2_own_name[i] != 0 && l2_own_name[i]\length = n && c.memcmp(l2_own_name[i]\data, t\data + 5, n) = 0
+            return: i
+        i: i + 1
+return: -1
+
+fn: l2_is_char_decl (const: @(LmP0Node stmt)) int
+    @: LmP0Field f
+    if: l2_frame_head(stmt, "char") = 0
+        return: 0
+    if: stmt\as\frame\body = 0
+        return: 0
+    if: l2_count_active(stmt\as\frame\body) != 1
+        return: 0
+    f: l2_next_active(stmt\as\frame\body\first_field)
+    if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM
+        return: 0
+    if: l2_ident(f\value\as\atom) = 0
+        return: 0
+return: 1
+
 fn: l2_is_plus (const: @(LmP0Text t)) int
     if: l2_text_eq(t, "+") || l2_text_eq(t, "/")
         return: 1
@@ -823,6 +887,18 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
     l2_m_node[l2_m_n]: (cast: (@: LmP0Node) fn_node)
     l2_m_body[l2_m_n]: (cast: (@: LmP0Node) body)
     l2_m_sig[l2_m_n]: id
+    l2_m_own[l2_m_n]: 0
+    p: l2_next_active(body\as\structure\first_field)
+    while: p != 0 && l2_is_char_decl(p\value)
+        fa: 0
+        fa: l2_next_active(p\value\as\frame\body\first_field)\value\as\atom
+        j: l2_own_add(fa, path, p\value)
+        if: j < 0
+            return: 1
+        l2_m_uses[l2_m_n * 4 + j]: 1
+        l2_m_own[l2_m_n]: l2_m_own[l2_m_n] + 1
+        p: l2_next_active(p\next)
+    ---
     l2_m_n: l2_m_n + 1
 return: 0
 
@@ -842,6 +918,13 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
             idx: 0
             while: idx < l2_m_arity[mi]
                 if: l2_text_same(node\as\atom, l2_m_fn[mi * 4 + idx])
+                    return: 0
+                idx: idx + 1
+            ---
+        if: mi >= 0
+            idx: 0
+            while: idx < l2_own_n
+                if: l2_m_uses[mi * 4 + idx] != 0 && l2_text_same(node\as\atom, l2_own_name[idx])
                     return: 0
                 idx: idx + 1
             ---
@@ -951,17 +1034,21 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
                 field: nxt
             ---
-        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "return") = 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt)
+            field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || (l2_own_find(stmt\as\frame\head) < 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_find_method(stmt\as\frame\head) < 0))
             return: l2_error(path, stmt, "unsupported body")
-        if: l2_frame_head(stmt, "if") = 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             fr: stmt\as\frame
-        if: l2_frame_head(stmt, "if") = 0 && fr\trailer != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && fr\trailer != 0
             return: l2_error(path, stmt, "unsupported trailer")
-        if: l2_frame_head(stmt, "if") = 0 && (fr\body = 0 || fr\body\trailer != 0)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && (fr\body = 0 || fr\body\trailer != 0)
             return: l2_error(path, stmt, "unsupported trailer")
-        if: l2_frame_head(stmt, "if") = 0 && l2_check_fields(fr\body\first_field, l2_count_active(fr\body), mi, path, stmt) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_find_method(fr\head) >= 0 && l2_check_primary(stmt, mi, path) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_find_method(fr\head) < 0 && l2_check_fields(fr\body\first_field, l2_count_active(fr\body), mi, path, stmt) != 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             field: l2_next_active(field\next)
 return: 0
 
@@ -1079,6 +1166,15 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
                     return: l2_tok_formal(mi, idx, dest)
                 idx: idx + 1
             ---
+        if: mi >= 0
+            idx: 0
+            while: idx < l2_own_n
+                if: l2_m_uses[mi * 4 + idx] != 0 && l2_text_same(node\as\atom, l2_own_name[idx])
+                    if: c.sprintf(dest, "l2_q%d", idx) < 0
+                        return: 1
+                    return: 0
+                idx: idx + 1
+            ---
         return: l2_tok_text(node\as\atom, dest)
     if: node\kind = c.LM_P0_NODE_STRUCTURE && node\as != 0
         if: l2_cat(dest, "(") != 0
@@ -1093,6 +1189,8 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     call: node\as\frame
     idx: l2_find_method(call\head)
     if: idx < 0
+        return: 1
+    if: l2_emit_checkpoint(mi, ind) != 0
         return: 1
     a0: l2_next_active(call\body\first_field)
     c.array: [64]: char s0
@@ -1226,6 +1324,20 @@ return: 0
 fn: l2_emit_expr (const: @(LmP0Node node); int: mi; const: @(char ind)) int
 return: l2_prep(node, mi, ind, l2_tok)
 
+fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
+    int: i 0
+    if: mi < 0 || ind = 0
+        return: 0
+    while: i < l2_own_n
+        if: l2_m_uses[mi * 4 + i] != 0 && c.fprintf(l2_out, "%sif: l2_q%d_dirty != 0\n", ind, i) < 0
+            return: 1
+        if: l2_m_uses[mi * 4 + i] != 0 && c.fprintf(l2_out, "%s    l2_q%d_from\\data: lmx_char_cell((cast: (int) l2_q%d))\n", ind, i, i) < 0
+            return: 1
+        if: l2_m_uses[mi * 4 + i] != 0 && c.fprintf(l2_out, "%s    l2_q%d_dirty: 0\n", ind, i) < 0
+            return: 1
+        i: i + 1
+return: 0
+
 fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     @: LmP0Field field
     @: LmP0Field nxt
@@ -1234,6 +1346,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     @: LmP0Field last
     int: n
     int: k
+    int: oi
     size_t: ln
     c.array: [32]: char deep
     ln: c.strlen(ind)
@@ -1272,19 +1385,61 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
                 field: nxt
             ---
-        if: l2_frame_head(stmt, "if") = 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt)
+            field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             fr: stmt\as\frame
-        if: l2_frame_head(stmt, "if") = 0 && l2_emit_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && l2_emit_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && c.fprintf(l2_out, "%sreturn: %s\n", ind, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && l2_emit_checkpoint(mi, ind) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && c.fprintf(l2_out, "%sreturn: %s\n", ind, l2_tok) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return")
+            field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0
+            oi: l2_own_find(fr\head)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && l2_emit_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && c.fprintf(l2_out, "%sl2_q%d: %s\n", ind, oi, l2_tok) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && c.fprintf(l2_out, "%sl2_q%d_dirty: 1\n", ind, oi) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0
+            field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && l2_find_method(fr\head) >= 0 && l2_prep(stmt, mi, ind, l2_tok) != 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && l2_find_method(fr\head) >= 0
+            field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && l2_find_method(fr\head) < 0
+            oi: l2_slash_own(fr\head)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_find_method(fr\head) < 0 && oi < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_emit_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_find_method(fr\head) < 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(node, %uU)\n", ind, (cast: (unsigned) oi)) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_find_method(fr\head) < 0 && c.fprintf(l2_out, "%sif: l2_xp = 0\n", ind) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_emit_checkpoint(mi, deep) != 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_m_ret[mi] = 2 && c.fprintf(l2_out, "%s    return: 0U\n", ind) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_m_ret[mi] != 2 && c.fprintf(l2_out, "%s    return: 0\n", ind) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_find_method(fr\head) < 0 && c.fprintf(l2_out, "%sl2_xp\\data: lmx_char_cell((cast: (int) %s))\n", ind, l2_tok) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_find_method(fr\head) < 0
             field: l2_next_active(field\next)
 return: 0
 
 fn: l2_emit_unit (const: @(char out_path)) int
     int: i 0
+    int: k
     unsigned: n
+    unsigned: cap
+    unsigned: kids
+    int: bseq
     size_t: pn
     c.array: [512]: char tmp
     c.array: [512]: char bak
@@ -1321,7 +1476,23 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_m_f1[0] != 0 && l2_write_text(l2_out, l2_m_f1[0]) != 0
         c.fclose(l2_out)
         return: 1
-    if: c.fprintf(l2_out, "\"\nunsigned: l2_intern_id %uU\nunsigned: l2_intern_again %uU\nunsigned: l2_intern_swap %uU\nunsigned: l2_intern_probe %uU\n\nprototype:\n", l2_sigv, l2_intern_again, l2_intern_swap, l2_intern_probe) < 0
+    if: c.fprintf(l2_out, "\"\nunsigned: l2_intern_id %uU\nunsigned: l2_intern_again %uU\nunsigned: l2_intern_swap %uU\nunsigned: l2_intern_probe %uU\n", l2_sigv, l2_intern_again, l2_intern_swap, l2_intern_probe) < 0
+        c.fclose(l2_out)
+        return: 1
+    k: 0
+    while: k < l2_own_n
+        if: c.fprintf(l2_out, "const: @(char l2_own%d) \"", k) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_write_text(l2_out, l2_own_name[k]) != 0
+            c.fclose(l2_out)
+            return: 1
+        if: c.fputs("\"\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
+        k: k + 1
+    ---
+    if: c.fputs("\nprototype:\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     while: i < l2_m_n
@@ -1338,7 +1509,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         i: i + 1
-    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest exists rename dest to dest.bak; rename tmp to dest; on fail restore bak; on success remove bak. Not atomic. No recursive FS.\n# &&/|| stay L1 C &&/||. RHS is not prepped to temps (calls inlined; [] stay in the expr). C99 6.5.13/6.5.14 short-circuit is the proof that a right-hand [] load or call is skipped. Not a 21.8 materialized-order claim. Not for own/through.\n\n", l2_out) < 0
+    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char fields are children of callable->node; C cache is typed char; graph data is all_chars cell. Dirty-only checkpoint before calls and return. Explicit node\\name writes the graph, not the cache. &&/|| stay L1 C &&/|| with RHS calls inlined (not prepped). Not for through/own compound other than char.\n\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     i: 0
@@ -1358,6 +1529,19 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: l2_m_ret[i] != 2 && c.fputs("\n    if: node = 0\n        return: 0\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
+        k: 0
+        while: k < l2_own_n
+            if: l2_m_uses[i * 4 + k] != 0 && c.fprintf(l2_out, "    char: l2_q%d\n    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_m_uses[i * 4 + k] != 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child(node, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n    l2_q%d: (cast: (char) lmx_char_value(l2_q%d_from\\data))\n", k, (cast: (unsigned) k), k, k, k) < 0
+                c.fclose(l2_out)
+                return: 1
+            k: k + 1
+        ---
+        if: l2_own_n != 0 && c.fputs("    @: Lmx l2_xp 0\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
         l2_tn: 0
         l2_call_node: "node"
         if: l2_emit_body(l2_m_body[i]\as\structure, i, "    ") != 0
@@ -1373,9 +1557,26 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         i: i + 1
-    if: c.fprintf(l2_out, "external:\n    fn: main () int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @: LmxMethod rec 0\n        if: lmx_ranges_init(%uU) != 0\n            return: 1\n        unit: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))\n        if: unit = 0\n            return: 1\n        lmx_cell_init(unit, 0, 0)\n        if: lmx_branch_open(unit, %uU) != 0\n            return: 1\n", n + 1U, n) < 0
+    cap: n + 1U
+    if: l2_own_n != 0
+        cap: n + 2U
+    kids: n + (cast: (unsigned) l2_own_n)
+    if: c.fprintf(l2_out, "external:\n    fn: main () int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @: LmxMethod rec 0\n        if: lmx_ranges_init(%uU) != 0\n            return: 1\n", cap) < 0
         c.fclose(l2_out)
         return: 1
+    if: l2_own_n != 0 && c.fputs("        if: lmx_chars_init() != 0\n            return: 1\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: c.fprintf(l2_out, "        unit: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))\n        if: unit = 0\n            return: 1\n        lmx_cell_init(unit, 0, 0)\n        if: lmx_branch_open(unit, %uU) != 0\n            return: 1\n", kids) < 0
+        c.fclose(l2_out)
+        return: 1
+    k: 0
+    while: k < l2_own_n
+        if: c.fprintf(l2_out, "        leaf: lmx_branch_child(unit, %uU)\n        if: leaf = 0\n            return: 1\n        leaf\\data: lmx_char_cell(0)\n        if: lmx_type_of(leaf\\data) != c.LMX_TYPE_CHAR\n            return: 1\n", (cast: (unsigned) k)) < 0
+            c.fclose(l2_out)
+            return: 1
+        k: k + 1
+    ---
     i: 0
     while: i < l2_m_n
         if: c.fputs("        rec: (cast: (@: LmxMethod) c.malloc(c.sizeof(c.LmxMethod)))\n        if: rec = 0\n            return: 1\n        rec\\addr: (cast: (LmxEntry) ", l2_out) < 0
@@ -1384,7 +1585,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: l2_write_sym(l2_out, i) != 0
             c.fclose(l2_out)
             return: 1
-        if: c.fprintf(l2_out, ")\n        rec\\sig: %uU\n        if: lmx_range_register((cast: (@: void) rec), (cast: (@: void) (rec + 1)), c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0\n            return: 1\n        leaf: lmx_branch_child(unit, %uU)\n        if: leaf = 0\n            return: 1\n        leaf\\data: (cast: (@: void) rec)\n        if: lmx_classify(leaf\\data) != c.LMX_KIND_METHOD\n            return: 1\n        if: rec\\sig != %uU\n            return: 1\n        if: leaf\\node != unit\n            return: 1\n", l2_m_sig[i], (cast: (unsigned) i), l2_m_sig[i]) < 0
+        if: c.fprintf(l2_out, ")\n        rec\\sig: %uU\n        if: lmx_range_register((cast: (@: void) rec), (cast: (@: void) (rec + 1)), c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0\n            return: 1\n        leaf: lmx_branch_child(unit, %uU)\n        if: leaf = 0\n            return: 1\n        leaf\\data: (cast: (@: void) rec)\n        if: lmx_classify(leaf\\data) != c.LMX_KIND_METHOD\n            return: 1\n        if: rec\\sig != %uU\n            return: 1\n        if: leaf\\node != unit\n            return: 1\n", l2_m_sig[i], (cast: (unsigned) (l2_own_n + i)), l2_m_sig[i]) < 0
             c.fclose(l2_out)
             return: 1
         i: i + 1
@@ -1402,7 +1603,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: c.fclose(l2_out) != 0
         c.remove(tmp)
         return: 1
-    if: pn + 5U >= 512U
+    if: pn + 8U >= 512U
         c.remove(tmp)
         return: 1
     c.memcpy(bak, out_path, pn)
@@ -1411,6 +1612,19 @@ fn: l2_emit_unit (const: @(char out_path)) int
     bak[pn + 2U]: 97
     bak[pn + 3U]: 107
     bak[pn + 4U]: 0
+    bseq: 0
+    chk: c.fopen(bak, "rb")
+    while: chk != 0
+        c.fclose(chk)
+        bseq: bseq + 1
+        if: bseq > 99
+            c.remove(tmp)
+            return: 1
+        if: c.sprintf(bak, "%s.bak.%d", out_path, bseq) < 0
+            c.remove(tmp)
+            return: 1
+        chk: c.fopen(bak, "rb")
+    ---
     chk: c.fopen(out_path, "rb")
     if: chk != 0
         had: 1
@@ -1419,8 +1633,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
         c.remove(tmp)
         return: 1
     if: c.rename(tmp, out_path) != 0
-        if: had != 0
-            c.rename(bak, out_path)
+        if: had != 0 && c.rename(bak, out_path) != 0
+            c.fprintf(c.stderr, "l2trans error: publication failed; dest unrestored; backup at %s\n", bak)
+            return: 1
         return: 1
     if: had != 0
         c.remove(bak)
