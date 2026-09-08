@@ -958,20 +958,28 @@ SPEC 21.3 / 21.5  membership — 192800 always-DynRequired WITHDRAWN
       unit_dyn_cap.lm2      negative: fifth hidden name
       unit_dyn_early.lm2    return before own-decl does not publish
 
-    Implemented in this slice (194400). Closed-unit direct calls;
-    char/size_t; 4 declared + 4 hidden; intern includes hidden
-    names sorted by source-name bytes then type; declared arity
-    unchanged. L2-to-L2 calls still pass the shared unit as
-    `l2_call_node`. Distinct graph publish is a 21.8 second
-    Structure (the `node` parameter), not two values on one
-    shared cell. `fn: main` stays §1.7. Fallback type for a
-    free name is a real call-site formal/own supplier, not
-    holder as a type oracle and not literal 65.
+    Implemented in this slice (194400/203100). Closed-unit
+    direct calls; char/size_t; 4 declared + 4 hidden; intern
+    includes hidden names sorted by source-name bytes then type;
+    declared arity unchanged. `&&`/`||` with calls use the same
+    l2_prep lowering as a statement call (hidden actuals,
+    checkpoint after prep). Skipped RHS is a guarded if, not a
+    C &&/|| with an inlined call. The old l2_inline_call path
+    (node+declared only) is removed; emit_fields refuses to
+    splice a method call into a C &&/|| expression.
+
+    L2-to-L2 calls still pass the shared containing unit as
+    `node`. That is allowed. Distinct-instance publish is a
+    21.8 harness second Structure, not an ordinary source
+    call and not a per-method graph layout. 21.3 fallback is
+    the immediate callee-node child, by design, not an
+    ancestor walk (not a remaining gap). `fn: main` stays
+    §1.7. Fallback type for a free name is a real call-site
+    formal/own supplier, not holder as a type oracle and not
+    literal 65.
 
     Not in this patch: runtime-selected callable, int hidden,
-    `l2_inline_call` hidden actuals (`&&`/`||` inlined calls),
-    per-method graph layout, ancestor walk, `@` of the bound
-    name, arbitrary recursion, self-build.
+    `@` of the bound name, arbitrary recursion, self-build.
 
 P0-as-Lmx, parser.lm1 scanners, and L2 self-build
     Not touched. Frozen p0.h / l1src/own.lm1 / bootstrap / root L1

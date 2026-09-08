@@ -7497,9 +7497,12 @@ The closed-unit l2trans slice now lowers hidden `char`/`size_t` through-args
 on direct calls (own-only stays out of `DynRequired`; pre-decl free use
 aliases the hidden parameter from the own-decl line; types come from this
 method's own/formal or a call-site supplier, not from literal `65`/`3U`
-or a sibling field name). L2-to-L2 calls still pass the shared unit as
-`node`. This example is not a claim that the translator already lowers
-`@` after bind, inlined `&&`/`||` hidden actuals, runtime-selected
+or a sibling field name). `&&`/`||` with calls use the same actuals-then-
+checkpoint lowering as a statement call; skipped RHS is a guarded if.
+L2-to-L2 calls still pass the shared containing unit as `node` (allowed;
+distinct instances are a 21.8 harness Structure). 21.3 fallback is the
+immediate callee-node child, not an ancestor walk. This example is not a
+claim that the translator already lowers `@` after bind, runtime-selected
 callees, or a per-method graph:
 
     fn: m (char: quote) int
