@@ -7450,6 +7450,73 @@ create another method activation. Do not infer a switch from parameter
 storage to own-field storage merely from assignment or block nesting. Resolve
 the source binding first, then apply its graph-backed or parameter rule.
 
+Same-name argument and own field: one C variable from the declaration line
+
+This is a precise exception, not a Namespace and not a withdrawal of cases 2
+and 3. An argument without an own-field declaration/bind of this method remains
+a private C parameter: assignments stay in this activation, there is no
+automatic write-back, and `@` is C `&` of that parameter.
+
+When an explicit argument, or a hidden typed C parameter of the same method
+(the value resolved through the caller, or the 21.3 fallback when the caller
+has no field), has the same source name as an own graph-backed field of this
+method, generated C uses one working variable: that parameter, not a second
+independent cache local. The through-boundary is method nesting / activation,
+not Structure or `if` nesting. Do not invent a history table of names.
+
+Until the own-field declaration/bind line in this body, that variable is an
+ordinary activation-local argument. Writes to it are not published. The old
+graph field is not loaded over the incoming value merely because the names
+coincide.
+
+From that declaration line onward, the same variable is this method's own
+cache. An assignment to the field dirties, including an assignment of an
+equal value. Subsequent bare reads and writes share that variable. Dirty-only
+publication writes this method's own node field before call/exit; dirty
+clears after a successful publish; there is no reload; the caller's argument
+and the 21.3 source binding are not mutated. A copied reference copies the
+reference, not the graph (21.4); explicit paths and indexing may change the
+referent by the ordinary rules. Without the own-field declaration/bind, do
+not publish the argument automatically and do not treat every argument or
+through-value as a field.
+
+The rule is the same for an explicit parameter, a caller-supplied hidden
+parameter, and a 21.3-fallback hidden parameter. It is not an exception by
+how the argument was obtained.
+
+LMX example (schematic; `char` is the worked type, `size_t` is the same rule).
+This is a language example, not a claim that a given translator already
+lowers every line:
+
+    fn: m (char: quote) int
+        quote: 65            # before bind: local argument, not published
+        char: quote          # from here: same C variable is this method's own cache
+        quote: 66            # dirty, including when the graph already holds 66
+        return: 0            # publishes 66 to this method's quote field;
+                             # caller quote is unchanged
+    end: m
+
+    fn: pass (char: quote) int
+        return: 0            # no own bind: never published
+    end: pass
+
+Prefix `@` of an unbound parameter remains C `&` of that parameter. Prefix
+`@` of an own graph field remains the classified graph payload, not the
+cache. When the same source name is both, those two readings collide after
+the bind line, because the working value lives in the parameter variable and
+own-field `@` is forbidden from naming the cache:
+
+    fn: ask (char: quote) int
+        @: char p
+        p: @quote            # before bind: C & of the parameter
+        char: quote
+        p: @quote            # after bind: graph payload, or still &quote?
+        return: 0
+    end: ask
+
+This subsection does not pick. Do not silently change `@` or lifetime to
+paper over that collision.
+
 Declared parameter (no graph backing required):
 
     # schematic callee with declared int x, caller had x = 5
@@ -13452,7 +13519,13 @@ An own working local has graph backing in a directly selected field of
 `callable->node`. Declared arguments and dynamic imported values are
 activation-local inputs and have no automatic write-back target. Their
 assignment/rebinding never mutates the caller. To publish one as method state the
-program must assign an own field or use an explicit graph path. Generated C may
+program must assign an own field or use an explicit graph path. The 11.3.1
+same-name exception is the one way an argument becomes that own working local:
+from the own-field declaration/bind line, the parameter variable itself is the
+cache of this method's field. That does not load the old graph value over the
+incoming argument, does not publish writes that executed before that line, and
+does not mutate the caller. Arguments without that bind stay private inputs.
+Generated C may
 use further service temporaries for address
 classification, child lookup, dirty state, bounds checks and outcome
 propagation; those temporaries are not additional source entities.
@@ -13517,7 +13590,10 @@ corresponding node field. It does the same before every method exit,
 including fallthrough, `return`, `throw`, failing `assert`, `stop` and
 cancellation, and before `yield` suspension. After a successful write that local
 becomes clean. Declared and dynamic input values are never included in this
-automatic publication.
+automatic publication unless the 11.3.1 same-name exception has already bound
+that variable as this method's own cache. Then dirty-only publication writes
+this method's own node field, never the caller's argument or the 21.3 source
+binding. Writes executed before that bind line do not set dirty.
 
 Dirty fields are considered in the forward source/child-occurrence order of
 their backing fields in the selected containing Structure. The intended

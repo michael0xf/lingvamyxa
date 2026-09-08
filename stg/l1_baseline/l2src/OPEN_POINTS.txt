@@ -843,9 +843,22 @@ SPEC 21.5–21.6  checkpoint with empty OwnUsed
     executed call and before exit even when OwnUsed is empty.
 
 Same-name formal + own bind (ticket 183000 / 183740)
-    Not implemented in this unit. Current emitter still loads a
-    separate l2_q cache from the graph at entry. That is a later
-    sequential stage, not a silent change here.
+    DECIDED in SPEC 11.3.1 / 21.5 / 21.6: explicit or hidden
+    typed C parameter and own field of the same name share one
+    working variable — the parameter — from the own-field
+    declaration/bind line. Dirty-only publish is to this method's
+    own node, never back to the caller. Nested if/Structure do not
+    start the bind. An argument without that bind is still a
+    private parameter. Not implemented in this unit's emitter:
+    l2trans still emits a separate l2_q and loads the graph at
+    entry. A later sequential stage must not claim the spec rule
+    as already lowered.
+
+    ASK, not silently answered: after the bind line, `@quote` of
+    the shared name is both own-field graph payload and C `&` of
+    the parameter. SPEC 11.3.1 records the collision and does not
+    pick. Do not change `@` / lifetime in the emitter until that
+    is answered.
 
 P0-as-Lmx, parser.lm1 scanners, and L2 self-build
     Not touched. Frozen p0.h / l1src/own.lm1 / bootstrap / root L1
