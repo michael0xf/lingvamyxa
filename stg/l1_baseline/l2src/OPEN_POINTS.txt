@@ -102,13 +102,13 @@ L1 10.9   Field image \ vs . vs ->
     l1src itself never takes a member by value anywhere, and self-hosts to a
     gen1=gen2=gen3 fixed point without it. The user cancelled it directly.
 
-SPEC 11.3.1  `@` of a graph-backed `int` field
-    DECIDED (docs 20260908-111800). After range classification, `@x` is the
-    address of the stored `int` in the typed pool, not `&Lmx.data` and not
-    the C working local. Prefix `\` follows the typed-address value. Not a
-    general `@` table for references / Array / callable, and not `@` of
-    declared copies without graph backing. L1 `p: @ value` remains C `&value`
-    (L1_spec.txt); do not import either rule across profiles.
+SPEC 11.3.1  `@` of graph payload, declared parameter, hidden through
+    DECIDED (docs 20260908-111800, corrected 20260908-115700). After range
+    classification, `@x` of an own graph field is the stored payload, not
+    `&Lmx.data` and not the C cache. `int` is the example, not the only
+    kind. Declared and through parameters are ordinary C parameters: `@x`
+    is `&x`, no graph-materialization, no writeback. L1 `p: @ value` remains
+    C `&value` (L1_spec.txt) and matches L2 parameter `@`, not L2 own-field `@`.
 
 
 Unit 2 - typed service pools
@@ -638,9 +638,10 @@ ABI 14.9 / SPEC 19.28–19.29  Message arena
     AVOIDED. Generated exe does not construct Lmx, pools or a Message.
     Units 1–7 are not linked. Arises when a fixture needs Lmx. Then: ASK.
 
-SPEC 11.3.1  `@` of a graph-backed int
+SPEC 11.3.1  `@` of graph payload / parameter
     AVOIDED. `@` / raw payload / typed-address write are rejected as
-    unsupported body. Arises when a fixture uses them. Then: ASK.
+    unsupported body in this adapter. Arises when a fixture uses them.
+    Then: ASK.
 
 SPEC 14 / 21.5–21.6  own-field cache, dirty checkpoints
     AVOIDED. No own fields, no unqualified locals besides the adapter.

@@ -19,7 +19,7 @@ not a selected route.
 | Control, exceptions and receiver families | 19.1–19.27 |
 | Message/Thread, memory and end-turn collection | 19.28–19.29 |
 | L2 machine surface | 20 |
-| L2 `@` of a graph-backed `int` field | 11.3.1 |
+| L2 `@` of graph payload, declared parameter, hidden through | 11.3.1 |
 | Dynamic arguments, typed calls, dirty-only checkpoints and recursion | 21 |
 
 The parser/P0 tree remains the source front end. The semantic/lowering core must
@@ -7137,7 +7137,7 @@ Meanings:
     p       address-depth-1 slot whose base type is `int`
     pp      address-depth-2 slot whose base type is `int`
     ppp     address-depth-3 slot whose base type is `int`
-    p: @x   for graph-backed `int` `x`, stores the typed payload address (11.3.1)
+    p: @x   typed payload address, or C `&x` of a parameter (11.3.1)
     pp: @p  stores the address of address-slot `p` into `pp`
     ppp: @pp stores the address of address-slot `pp` into `ppp`
 
@@ -7224,10 +7224,10 @@ property of Lmx source values.
 A Primitive binding (`int: x`) is a graph-backed cell whose payload lives in a
 typed pool after address-range classification (section 2). `@: int p` is an L2
 machine slot that stores a typed address of such a cell. `@@:` / `@@@:` nest
-those slots. For a graph-backed `int` field, prefix `@x` is the address of the
-stored `int` itself (11.3.1), not the `Lmx.data` void* header cell and not a C
-working local. If `x` already holds an address slot, `@x` is address-of-address
-of that slot.
+those slots. Prefix `@x` follows 11.3.1: graph payload after classification,
+or C `&x` of a declared/through parameter, never `Lmx.data` and never the
+own-field cache. If `x` already holds an address slot, `@x` is
+address-of-address of that slot.
 
 An Lmx child occurrence (`User: u`) *is* the source reference. It is not a C
 pointer category that "starts at depth 1". `@: User slot` is an L2 address of a
@@ -7319,102 +7319,136 @@ The prefix form:
 
 is specified for two already distinct kinds of operand.
 
-If `x` is a graph-backed `int` field, `@x` is the typed address of the stored
-`int` in its pool (11.3.1). If `x` is already an explicit L2 address slot,
+If `x` is a graph-backed field, `@x` is the typed address of that field's
+stored payload after address-range classification (11.3.1). If `x` is a
+declared argument or a hidden through parameter, `@x` is C `&x` of that
+activation parameter (11.3.1). If `x` is already an explicit L2 address slot,
 `@x` is the address of that slot (address-of-address), not the address of the
-target object. This second case is the expression-side companion of the
+target object. This last case is the expression-side companion of the
 declaration-side `@ⁿ:` family: `@@: int pp` declares an address-depth-2 slot,
 while `pp: @p` fills that slot with the address of the depth-1 slot `p`.
 
-Do not read either case as "address of the `Lmx.data` void* header cell" or
-"address of a hidden C working local". That older universal law is withdrawn.
+Do not read any of these as "address of the `Lmx.data` void* header cell" or
+"address of a hidden own-field C cache". That older universal law is withdrawn.
 
-11.3.1. Confirmed L2 `@` for a graph-backed `int` field
+11.3.1. Confirmed L2 `@`: graph payload, declared parameter, hidden through
 
-This subsection is the canonical contract for prefix `@` on an `int` field
-that has graph backing: an own or node field whose payload lives in a typed
-primitive pool. L3 has no such raw operations. L2 is the dangerous low level:
-data are classified by registered address ranges; the operation does not
-return names, a runtime Namespace, Valued, or ordinary `.`.
+This subsection is canonical. L3 has no such raw operations. L2 is the
+dangerous low level: graph data are classified by registered address ranges;
+the operation does not return names, a runtime Namespace, Valued, or ordinary
+`.`. Historical hosted wording in `Lingvamyxa_spec_history.txt` is archive.
 
-It does not invent a general `@` table for Structure references, Array
-descriptors, callable records, or declared arguments / through copies that
-have no graph backing. Those cases remain unspecified here. Historical hosted
-wording in `Lingvamyxa_spec_history.txt` is archive, not this contract.
+Three cases, not to be mixed.
 
-Classification first, then address of the payload:
+1. Own graph-backed field, with an optional C cache.
 
-1. The field occurrence is an Lmx leaf. Its `data` word is a `void *`
-   classified by a registered address range (section 2).
-2. After that classification shows an `int` in a typed primitive pool, `@x`
-   yields the typed address of the stored `int` itself in that pool.
-3. `@x` is not `&leaf->data` (the header slot that holds the `void *`).
-4. `@x` is not the address of the method's C working-local cache of `x`
-   (21.5). An own field has both a graph payload and, when used unqualified,
-   a C cache; `@` does not open the cache.
-5. Prefix raw-load `\p` follows the *value* of the typed address in `p`.
-   If `p: @x`, then `\p` reads the pool `int`.
+After the leaf's `data` word is classified by a registered address range
+(section 2), `@x` is the typed address of the stored payload itself. `int`
+in the 2026-09-08 confirmation was the worked example of this principle, not
+the only admitted payload kind. Other classified graph payloads are not left
+unspecified merely because they are not `int`.
 
-Taking `@x` is not a dirty-write and does not extend lifetime. Direct write
-through an allowed mutable typed address changes the graph payload, not a
-hidden local. A clean caller local is not published; a separately dirty local
-may later publish under 21.6. There is no inserted reload and no new
-recursion ban. Writes to canonical immutable primitive cells, `const` /
-`immutable` bindings, and dangling addresses remain rejected by the existing
-contracts (9.1, 21.5). Optimizations may come later if they preserve this
-meaning.
+`@x` is not `&leaf->data` (the header void* slot). `@x` is not the address of
+the method's C working-local cache of `x` (21.5). An own field has both a
+graph payload and, when used unqualified, a C cache; `@` does not open the
+cache. Prefix raw-load `\p` follows the *value* of the typed address.
+
+An Array-bearing field's payload is the descriptor (or the cell that stores
+the descriptor reference), not the element backing. A callable leaf's payload
+is the method record `{addr, sig}`, not the executable C entry. Do not invent
+further profile-specific ABI adapters here.
+
+Taking `@x` of a graph field is not a dirty-write and does not extend graph
+lifetime. Direct write through an allowed mutable typed address changes the
+graph payload, not the cache. A clean caller local is not published; a
+separately dirty local may later publish under 21.6. There is no inserted
+reload and no new recursion ban. Writes to canonical immutable primitive
+cells, `const` / `immutable` bindings, and dangling addresses remain rejected
+by 9.1 / 21.5. Optimizations may come later if they preserve this meaning.
+
+2. Declared argument: an ordinary C parameter.
+
+There is no second hidden copy of the argument and no requirement to find
+graph backing. Ordinary primitive passing is by semantic value into that C
+parameter (21.4); that is not a second invented 'argument copy'. `@x` is C
+`&x` of this parameter. Raw load/store through the resulting address are
+direct C operations on that parameter. No extra snapshot, boxing,
+heapification of the activation, or graph-materialization. No automatic own
+dirty/writeback. The address lives for the ordinary C activation lifetime.
+
+3. Hidden through / dynamic parameter: also an ordinary C parameter, obtained
+by the established resolution order of 21.3, then passed as a hidden argument.
+
+`@` / raw ops are the same direct C operations as for a declared parameter.
+Rebinding that parameter, including through its address, is local to this
+activation and does not change the source binding. Source selection is
+caller-first, then the 21.3 fallback; it is not 'if the caller has no x,
+error' and not 'fallback is impossible'. A method that needs the structural
+field regardless of the caller writes `node\x` explicitly (21.2–21.3).
+Reference values are still Java-style: copying the binding does not clone
+the referent and does not forbid an explicit mutation of that referent.
+No automatic own dirty/writeback for through parameters.
+
+| Kind | `@x` names | Write through that address | Writeback / dirty |
+| --- | --- | --- | --- |
+| own graph field + cache | typed graph payload, not cache, not `Lmx.data` | graph payload | cache dirty only on actual local write (21.6) |
+| declared parameter | C `&` of that parameter | that C parameter | none |
+| hidden through parameter | C `&` of that hidden parameter | that C parameter | none; source binding unchanged |
 
 The following examples are schematic L2 illustrations, not compiled L2
-fixtures. Names follow 11.2. The L1 contrast cites existing `tests/l1`
-fixtures; those are tested L1, not L2.
+fixtures. L1 contrast cites existing `tests/l1` fixtures; those are tested
+L1, not L2.
 
-Three distinct locations for an own `int` field `x`:
+Graph own/cache contrast:
 
-    graph payload     typed-pool int cell          <- `@x` names this
+    graph payload     typed-pool cell              <- `@x` names this
     header slot       `Lmx.data` void* of the leaf <- not `@x`
     C cache           automatic working local      <- not `@x`; 21.5
 
-Typed address and raw read:
-
     int: x 5
     @: int p
-    p: @x          # p holds the typed address of the stored int
-    print: \p      # raw-load by p's value; observes 5
-    print: x       # unqualified own read; may use the C cache
-    print: node\x  # explicit graph read of the same payload
+    p: @x
+    print: \p          # 5, from the pool cell
+    print: x           # unqualified own read; may use the cache
+    print: node\x      # explicit graph read of the same payload
+    \p: 9              # writes the pool cell; does not assign the cache
 
-Allowed mutable payload write:
+Declared parameter (no graph backing required):
 
-    \p: 9          # writes the pool int; graph payload becomes 9
-                   # does not assign the C cache
-    print: node\x  # 9
-    # if the caller local was clean, it is not published and may still
-    # hold the earlier snapshot until an actual local write (21.6)
+    # schematic callee with declared int x, caller had x = 5
+    x: 7               # local parameter is 7; caller x unchanged
+    @: int p
+    p: @x              # & of this C parameter
+    \p: 9              # local parameter is 9; caller x still 5
 
-Clean caller local versus dirty publication (state trace, not extra syntax):
+Hidden through parameter (same C operations; source binding unchanged):
 
-    outer entry loaded x = 1, clean
-    @x / p: @x / \p do not dirty the local
-    inner writes the graph field through an explicit path or typed address
-    outer returns without assigning its local: published graph keeps the
-    inner/payload write; the clean cache is not flushed (21.6)
+    # schematic callee using bare x supplied as a hidden parameter
+    x: 7
+    p: @x
+    \p: 9              # this activation's x is 9
+                       # the source binding (caller or 21.3 fallback) is not written
+                       # explicit node\x or reference\field is the graph path
 
-C out-parameter adapter:
+Caller-first / fallback / no writeback:
+
+    # 21.3 order: caller activation-local x, else inherited dynamic x,
+    # else immediate node\[0]x, else admission failure.
+    # Fallback is the immediate supplied node, not a walk of node->node.
+    # Bare x: 9 in the callee does not write the source; node\x: 9 would.
+
+Reference binding rebind versus explicit target mutation:
+
+    # Structure/Array argument is a copied reference value (21.4).
+    r: other           # rebinds this activation's reference; caller r unchanged
+    r\f: 1             # mutates the shared referent; visible through every
+                       # reference to that same node inside the Message
+
+C out-parameter adapter (graph payload address, not a hidden local):
 
     # foreign C: int try_parse_int(const char *text, int *result)
-    # L2 may pass the typed address of graph int storage:
     c.try_parse_int(text, p)
-    # A private C temporary inside the adapter is backend state. It does
-    # not justify source `@` of a hidden local. Justification is not
-    # allocation/free, Valued, or array-element addresses.
-
-`const` / `immutable` / dangling remain rejected for writes:
-
-    const: int: c 3
-    # Address-of a const `int` cell is not a newly confirmed general table.
-    # A write `\q: 4` through such an address is rejected by 9.1 / 21.5.
-    # Canonical interned immutable primitive cells are not mutated.
-    # A dangling typed address is not a write target.
+    # A private C temporary inside the adapter is backend state, not source `@`.
 
 L1 contrast (tested L1, not L2), from `tests/l1/expr_deref_read.lm1`:
 
@@ -7424,21 +7458,23 @@ L1 contrast (tested L1, not L2), from `tests/l1/expr_deref_read.lm1`:
     \p
 
 L1 `@ value` is C `&value` of that L1 binding. L1 has no Lmx graph payload
-and no typed-pool classification step. Do not import 11.3.1 into L1, and do
-not import L1 `&local` into L2 `@` of an `int` field. The matching L1 write
-forms are in `tests/l1/expr_deref_assign.lm1`.
+and no own-field cache. L2 declared/through `@` matches that C-parameter
+rule. L2 own-field `@` does not: it names the classified graph payload, not
+the cache. Do not import either direction as a universal law. Matching L1
+writes: `tests/l1/expr_deref_assign.lm1`.
 
 Explicit raw L2 address slots (`@: int p`) remain machine slots that store a
-typed address. `@p` is address-of that slot, as already specified above.
-That slot is not an `Lmx.data` header cell and is not a graph `int` payload.
-The two are different kinds of storage; this subsection does not collapse
-them.
+typed address. `@p` is address-of that slot. That slot is not an `Lmx.data`
+header cell and is not a graph payload.
 
-Unresolved here, and not answered by analogy:
+Residual, not answered here and not a reason to delay the three cases:
 
-* `@` of a Structure reference, Array descriptor, or callable occurrence
-  as a general table;
-* `@` of a declared argument or through copy with no graph backing.
+* 21.3 fallback is the immediate `node\[0]x`, not a lexical walk of
+  `node->node` ancestors. A later 'lexical visibility' phrasing that
+  meant ancestor walk would need an explicit decision; this subsection
+  does not change 21.3's distance.
+* Writes through `@` of `const` / `immutable` / dangling remain the
+  existing 9.1 / 21.5 rejections; they are not a new `@` table.
 
 The prefix form:
 
@@ -7541,9 +7577,8 @@ Meanings under the declarations in section 11.2:
         render the whole subtree reached by that occurrence.
 
     print: @tree\branch
-        Parsed as `print: @(tree\branch)`. If the selected field is a
-        graph-backed `int`, 11.3.1 applies. `@` of a Structure-reference
-        field is not specified by 11.3.1.
+        Parsed as `print: @(tree\branch)`. 11.3.1: classified payload of
+        that field (the stored reference cell, not the referent Structure).
 
     print: root\branch\branch
         Follow `root\branch` to its selected Lmx child/reference, then follow
@@ -7567,8 +7602,9 @@ is parsed as:
 
     @(tree\branch)
 
-If the selected field is a graph-backed `int`, that means the typed payload
-address (11.3.1). `@` of a Structure-reference field is not specified by 11.3.1.
+That is the classified payload address of the selected field (11.3.1). For a
+Structure-reference field the payload is the stored reference cell, not the
+referent.
 
 Prefix raw-load is valid only when its operand is an explicit typed-address
 primitive. It does not reinterpret an Lmx Structure reference or Array descriptor
@@ -7733,8 +7769,9 @@ explicitly resolved reference or a separately specified parent-navigation
 receiver; Revision 2 does not reinterpret repeated field segments as an
 automatic lexical climb. The exact source spelling for that explicit ancestor
 operation remains open; only immediate `node\field` is fixed here.
-Explicit `node\x` reads the graph payload. It is not `@x`; `@x` is the
-typed-pool address of that payload when `x` is a graph-backed `int` (11.3.1).
+Explicit `node\x` reads the graph payload. It is not `@x`. `@x` of an own
+graph field is the classified payload address; `@x` of a parameter is C `&x`
+(11.3.1).
 
 13.2. Lowering
 
@@ -12439,7 +12476,7 @@ Consequences:
 L2 address and field forms are:
 
     @ⁿ: T x     reserved address-depth declaration head, for example `@@@: int ppp`
-    @x          typed address of graph-backed `int` payload `x` (11.3.1);
+    @x          graph payload address, or C `&x` of a parameter (11.3.1);
                 address-of-address if `x` is already an address slot
     \x          raw load from address expression `x`
     x\field     typed field-follow through address/reference `x`
@@ -12818,7 +12855,7 @@ The entry adapter obeys the source-method boundary. C declarator qualifiers
 remain explicit receiver composition; for example `const: @: LmP0Node p`
 projects to `const LmP0Node *p` in a machine declaration.
 
-    @count              typed address of the stored `int` count (11.3.1)
+    @count              payload address of graph `count`, or `&count` if a parameter (11.3.1)
     p: @count           store that payload address in an address-depth-1 slot
     pp: @p              store the address of slot `p` in an address-depth-2 slot
     \p                  raw load through typed address p
@@ -13292,8 +13329,10 @@ runtime Name-to-Binding lookup.
 An imported dynamic value is private to the receiving C activation. Rebinding or
 assigning bare `x` changes only that activation's C working value and the value
 it may pass farther down. It never writes back to the caller and never
-automatically writes `node\x`. To change external graph state the method must use
-an explicit path or explicit Message operation.
+automatically writes `node\x`. `@x` of that hidden parameter is C `&x` of it
+(11.3.1); a store through that address is the same local rebind. To change
+external graph state the method must use an explicit path or explicit Message
+operation.
 
 21.4. Value and Reference Passing
 
@@ -13302,6 +13341,8 @@ callee receives an independent C value even when the source Lmx primitive is
 physically represented by a pointer into a registered address range such as
 `all_chars_array`. Sharing an immutable primitive atom is an implementation
 detail; assignment in the callee never changes the caller's variable.
+`@x` of that C parameter is `&x`; it is not a second copy of the argument
+and not a graph-materialization (11.3.1).
 
 Structure and Array arguments are Java-style reference values. The reference is
 copied into the callee's C activation; the referenced graph/storage is not
@@ -13342,9 +13383,10 @@ program must assign an own field or use an explicit graph path. Generated C may
 use further service temporaries for address
 classification, child lookup, dirty state, bounds checks and outcome
 propagation; those temporaries are not additional source entities.
-Prefix `@` of a graph-backed `int` own field names the typed-pool payload
-address (11.3.1). It does not yield the C working local, does not dirty that
-local, and does not extend lifetime.
+Prefix `@` of an own graph field names the classified payload, not the C
+working local (11.3.1). It does not dirty that local and does not extend
+lifetime. Prefix `@` of a declared or hidden through parameter is C `&` of
+that parameter; it has no own cache and no automatic writeback.
 
 Const qualification of that backing, including a successful `RuntimeImmutable`
 while this activation is suspended in a call, remains binding on the cache.

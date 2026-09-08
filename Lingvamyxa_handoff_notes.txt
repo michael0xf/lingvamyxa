@@ -71,25 +71,29 @@ const: fn:, const: sub:, const: fm: фиксируют callable-occurrence, чт
 позволяет звать C-символ напрямую, без прохода по дескриптору через узел.
 Рядом описано, что даёт const на прочих occurrence.
 
-1.4. §11.3.1: `@` у graph-backed `int`.
+1.4. §11.3.1: `@` — graph payload, declared parameter, hidden through.
 
-Подтверждено пользователем 2026-09-08. Сначала тип по зарегистрированному
-адресному диапазону, затем `@x` — адрес САМОГО хранимого `int` в
-типизированном пуле. Не `&Lmx.data` (void* слот заголовка) и не адрес
-скрытой C-локали. Own-поле имеет graph payload и C-cache; `@` cache не
-открывает. Префиксный raw-load идёт по значению типизированного адреса.
-Запись через допустимый mutable typed address меняет payload/graph, не
-скрытую локаль. Взятие адреса — не dirty-write и не продлевает lifetime.
-Канон и схематические примеры — Lingvamyxa_spec.txt 11.3.1; обе языковые
-части struct_refactoring_version_2.txt §3.3 / §6.5 только ссылаются туда.
+Три случая, не смешивать. Канон — Lingvamyxa_spec.txt 11.3.1.
 
-Не подтверждена общая таблица `@` для Structure/Array/callable и `@`
-declared-аргументов / сквозных копий без graph backing. Исторический
-`tableKey` живёт только в Lingvamyxa_spec_history.txt: это навигация
-резолвера, не physical method/Array descriptor. Обычная конструкция без
-неявной регистрации в registry не запрещает явно заданному receiver
-менять explicit table; это не основание возвращать автоматические
-fn return-class rows.
+Own graph field: после классификации диапазона `@x` — адрес хранимого
+typed payload. `int` был примером общего принципа, не единственным
+типом. Не `&Lmx.data` и не C-cache. Array descriptor ≠ element backing;
+method record ≠ C entry. `@` cache не открывает; dirty/writeback только
+у own cache по §21.6.
+
+Объявленный аргумент: обычный C parameter, `@x` = `&x`. Нет второй
+скрытой копии и нет требования найти graph backing.
+
+Сквозная: обычный скрытый C parameter по §21.3. `@`/raw как в Си.
+Изменение binding, в том числе через адрес, локально активации и не
+меняет источник. Ссылочные значения: локальность binding не клонирует
+referent и не запрещает явную мутацию адресата. Нет own dirty/writeback.
+
+Fallback — caller-first, затем immediate `node\[0]x` как в §21.3, не
+ошибка «нет у caller». Дальность обхода `node->node` здесь не меняется.
+
+Исторический `tableKey` живёт только в Lingvamyxa_spec_history.txt:
+навигация резолвера, не physical method/Array descriptor.
 
 
 2. Механика, которую надо понимать перед оптимизацией

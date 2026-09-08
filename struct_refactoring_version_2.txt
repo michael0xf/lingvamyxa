@@ -653,13 +653,12 @@ the payload of the char leaf points to the address of the corresponding
 element in the global C array all_chars.
 
 The same classification-then-payload rule is the confirmed L2 meaning of
-prefix `@` on a graph-backed `int` field: after the address range identifies
-the typed pool, `@x` is the address of the stored `int` itself, not
-`&leaf->data` and not a C working local. Prefix raw-load follows that typed
-address value. Canonical language text and schematic examples:
-`Lingvamyxa_spec.txt` 11.3.1. This does not invent a general `@` table for
-references, Array descriptors, callables, or declared copies without graph
-backing.
+prefix `@` on an own graph-backed field: after the address range identifies
+the typed pool, `@x` is the address of the stored payload itself, not
+`&leaf->data` and not a C working local. `int` is the worked example, not
+the only payload kind. Declared and hidden through parameters are ordinary
+C parameters: `@x` is `&x`, with no own cache and no writeback. Canonical
+text and schematic examples: `Lingvamyxa_spec.txt` 11.3.1.
 
 For a non-leaf structural payload, len supplies the bounded extent needed to
 walk its contained data. For a leaf, any use of the enclosing Lmx `len` follows
@@ -690,12 +689,12 @@ payload листа char указывает на адрес соответств�
 C-массива all_chars.
 
 То же правило «сначала классификация диапазона, затем адрес payload»
-подтверждено для L2-префикса `@` у graph-backed поля `int`: после того как
-диапазон указывает типизированный пул, `@x` — адрес самого хранимого `int`,
-а не `&leaf->data` и не рабочей C-локали. Префиксный raw-load идёт по
-значению этого типизированного адреса. Канон и схематические примеры:
-`Lingvamyxa_spec.txt` 11.3.1. Это не общая таблица `@` для ссылок,
-descriptor массивов, callable и declared-копий без graph backing.
+подтверждено для L2-префикса `@` у own graph-backed поля: после того как
+диапазон указывает типизированный пул, `@x` — адрес самого хранимого
+payload, а не `&leaf->data` и не рабочей C-локали. `int` — разобранный
+пример, не единственный тип. Объявленный и сквозной параметры — обычные
+C-параметры: `@x` это `&x`, без own cache и без writeback. Канон:
+`Lingvamyxa_spec.txt` 11.3.1.
 
 Для нелистового структурного payload поле len задаёт ограниченный размер,
 необходимый для обхода вложенных данных. Для листа применение внешнего Lmx
@@ -1594,10 +1593,10 @@ It loads their current values from the selected `callable->node`. A
 `DynRequired(M)` value is instead a hidden activation input and never becomes an
 own backed field merely because M forwards it. An explicit structural path
 reads or mutates the current graph/referent on every execution and is not
-silently converted into a no-reload own-field cache. Prefix `@` of a
-graph-backed `int` own field names the typed-pool payload (Lingvamyxa_spec.txt
-11.3.1); it does not open this C cache, is not a dirty-write, and does not
-extend lifetime. An unused field is neither
+silently converted into a no-reload own-field cache. Prefix `@` of an own graph field names the classified payload
+(Lingvamyxa_spec.txt 11.3.1); it does not open this C cache, is not a
+dirty-write, and does not extend lifetime. `@` of a declared or through
+parameter is C `&` of that parameter, with no writeback. An unused field is neither
 loaded nor later stored merely because it exists in that Structure.
 
 Every binding classified as an own graph-backed field must resolve to its
@@ -1682,10 +1681,11 @@ RU
 `DynRequired(M)` вместо этого является hidden input activation и не становится
 own-backed field лишь потому, что M передаёт его дальше. Явный
 структурный путь при каждом исполнении читает или меняет текущий graph/referent и
-не превращается молча в no-reload cache own-field. Префикс `@` у graph-backed
-поля `int` именует payload в типизированном пуле (Lingvamyxa_spec.txt 11.3.1);
+не превращается молча в no-reload cache own-field. Префикс `@` у own graph-backed
+поля именует классифицированный payload (Lingvamyxa_spec.txt 11.3.1);
 он не открывает этот C-cache, не является dirty-write и не продлевает
-lifetime. Неиспользуемое поле не
+lifetime. `@` объявленного или сквозного параметра — C `&` этого параметра,
+без writeback. Неиспользуемое поле не
 загружается и не записывается позже лишь потому, что оно есть в Structure.
 
 Каждый binding, классифицированный как own graph-backed field, обязан до entry

@@ -35,8 +35,9 @@ Closed decisions (do not reopen)
     status guide). Direct C99 generation from L2 is rejected. Same
     L2 input ⇒ equivalent L2 semantics and ABI. None of these MAY
     reuse the hosted trans_l1_* semantic core as foundation.
-  - L1 prefix `@` is C `&` of the L1 binding. It is not the L2
-    graph-backed `int` payload address of Lingvamyxa_spec.txt 11.3.1.
+  - L1 prefix `@` is C `&` of the L1 binding. That matches L2
+    declared/through `@`. It is not L2 own-field payload `@`
+    (Lingvamyxa_spec.txt 11.3.1).
   - Seed/self-host (was OPEN 10.6): Translator-L1 is **not** written
     by hand as raw C. Suitable C-like sources are moved with minimal
     semantic change to wrapperless `.lm1` and form the self-host spine.
