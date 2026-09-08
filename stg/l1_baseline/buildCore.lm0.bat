@@ -1,13 +1,20 @@
 @echo off
+rem buildCore.lm0.bat for the stg\l1_baseline build root.
+rem
+rem Own script, not a copy of the repo-root one. The root script serves the live
+rem L1 chain and changes with it; this root has different needs:
+rem   - it must never touch the pinned old-L2-chain seed archives, and in fact
+rem     restores them, so that buildCore -> run_seed works with no manual step;
+rem   - it needs no cmake;
+rem   - it builds only the four tools this root actually uses.
+rem
+rem Anchors at its own directory, like every runner here.
+
 setlocal
+set "BUILD_ROOT=%~dp0"
+cd /d "%BUILD_ROOT%" || exit /b 1
 
-set "PROJECT_ROOT=%~dp0"
-cd /d "%PROJECT_ROOT%" || exit /b 1
-
-if not defined LM_CMAKE set "LM_CMAKE=C:\Qt\Tools\CMake_64\bin\cmake.exe"
 if not defined LM_CC set "LM_CC=C:\Qt\Tools\mingw1310_64\bin\gcc.exe"
-if not defined LM_AR set "LM_AR=C:\Qt\Tools\mingw1310_64\bin\ar.exe"
-if not defined LM_RANLIB set "LM_RANLIB=C:\Qt\Tools\mingw1310_64\bin\ranlib.exe"
 if not defined LM_THREAD_PROVIDER set "LM_THREAD_PROVIDER=single"
 
 set "THREAD_PROVIDER="
@@ -23,57 +30,11 @@ if not defined THREAD_PROVIDER (
 )
 
 if "%THREAD_PROVIDER%"=="pthread" (
-    set "THREAD_COMPILE_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_PTHREAD -pthread"
-    set "THREAD_LINK_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_PTHREAD -pthread"
+    set "THREAD_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_PTHREAD -pthread"
 ) else if "%THREAD_PROVIDER%"=="win32" (
-    set "THREAD_COMPILE_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_WIN32"
-    set "THREAD_LINK_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_WIN32"
+    set "THREAD_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_WIN32"
 ) else (
-    set "THREAD_COMPILE_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE"
-    set "THREAD_LINK_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE"
-)
-
-set "PARSER_SOURCE=lm1\build\parser.lm1.c"
-set "OWN_SOURCE=lm1\build\own.lm1.c"
-set "L1TRANS_SOURCE=lm1\build\l1trans.lm1.c"
-set "MAKE_SOURCE=lm1\build\make.lm1.c"
-set "FINALIZE_SOURCE=lm1\build\finalize.lm1.c"
-set "BUILD_CORE_SOURCE=lm1\build\buildCore.lm1.c"
-
-if not exist "%PARSER_SOURCE%" (
-    echo buildCore.lm0.bat: source file not found: %PARSER_SOURCE% 1>&2
-    exit /b 1
-)
-
-if not exist "%OWN_SOURCE%" (
-    echo buildCore.lm0.bat: source file not found: %OWN_SOURCE% 1>&2
-    exit /b 1
-)
-
-if not exist "%L1TRANS_SOURCE%" (
-    echo buildCore.lm0.bat: source file not found: %L1TRANS_SOURCE% 1>&2
-    exit /b 1
-)
-
-if not exist "%MAKE_SOURCE%" (
-    echo buildCore.lm0.bat: source file not found: %MAKE_SOURCE% 1>&2
-    exit /b 1
-)
-
-if not exist "%FINALIZE_SOURCE%" (
-    echo buildCore.lm0.bat: source file not found: %FINALIZE_SOURCE% 1>&2
-    exit /b 1
-)
-
-if not exist "%BUILD_CORE_SOURCE%" (
-    echo buildCore.lm0.bat: source file not found: %BUILD_CORE_SOURCE% 1>&2
-    exit /b 1
-)
-
-if not exist "%LM_CMAKE%" (
-    echo buildCore.lm0.bat: cmake not found: %LM_CMAKE% 1>&2
-    echo Set LM_CMAKE to the cmake.exe path and retry. 1>&2
-    exit /b 1
+    set "THREAD_FLAGS=-DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE"
 )
 
 if not exist "%LM_CC%" (
@@ -82,34 +43,43 @@ if not exist "%LM_CC%" (
     exit /b 1
 )
 
-if not exist "%LM_AR%" (
-    echo buildCore.lm0.bat: ar not found: %LM_AR% 1>&2
-    echo Set LM_AR to the ar.exe path and retry. 1>&2
-    exit /b 1
+for %%S in (l1trans make finalize buildCore) do (
+    if not exist "lm1\build\%%S.lm1.c" (
+        echo buildCore.lm0.bat: source file not found: lm1\build\%%S.lm1.c 1>&2
+        exit /b 1
+    )
 )
 
-if not exist "%LM_RANLIB%" (
-    echo buildCore.lm0.bat: ranlib not found: %LM_RANLIB% 1>&2
-    echo Set LM_RANLIB to the ranlib.exe path and retry. 1>&2
-    exit /b 1
+if not exist build\lm0 mkdir build\lm0 || exit /b 1
+if not exist build\obj mkdir build\obj || exit /b 1
+
+set "CFLAGS=-std=c99 -Wall -Wextra -Wpedantic %THREAD_FLAGS%"
+
+"%LM_CC%" %CFLAGS% -I. "lm1\build\l1trans.lm1.c"   -o build\lm0\l1trans.lm0.exe   || exit /b 1
+"%LM_CC%" %CFLAGS%     "lm1\build\make.lm1.c"      -o build\lm0\make.lm0.exe      || exit /b 1
+"%LM_CC%" %CFLAGS%     "lm1\build\finalize.lm1.c"  -o build\lm0\finalize.lm0.exe  || exit /b 1
+"%LM_CC%" %CFLAGS% -I. "lm1\build\buildCore.lm1.c" -o build\lm0\buildCore.lm0.exe || exit /b 1
+
+rem Pinned old-L2-chain prerequisites of the gen0 seed. libparser/libown must be
+rem the L2-profile archives that define lm_message_thread_*; the L1-profile ones
+rem this chain could produce do not, and run_seed then fails at link. They are
+rem restored, never rebuilt. See oldchain\README.txt.
+
+for %%A in (libparser.lm0.a libown.lm0.a) do (
+    if not exist "oldchain\lib\%%A" (
+        echo buildCore.lm0.bat: pinned seed prerequisite missing: oldchain\lib\%%A 1>&2
+        echo Restore it from the repo build\tmp\ - see oldchain\README.txt. 1>&2
+        exit /b 1
+    )
+    copy /Y "oldchain\lib\%%A" "build\lm0\%%A" >nul || exit /b 1
 )
 
-"%LM_CMAKE%" -E make_directory build\lm0 || exit /b 1
-"%LM_CMAKE%" -E make_directory build\obj || exit /b 1
+for %%E in (trans.lm0.exe printTree.lm0.exe) do (
+    if not exist "build\lm0\%%E" (
+        echo buildCore.lm0.bat: pinned old-chain binary missing: build\lm0\%%E 1>&2
+        echo It is not built here. Copy it from the repo build\lm0\. 1>&2
+        exit /b 1
+    )
+)
 
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_COMPILE_FLAGS% -I. -c "%PARSER_SOURCE%" -o build\obj\parser.lm1.o || exit /b 1
-if exist build\lm0\libparser.lm0.a del /f /q build\lm0\libparser.lm0.a || exit /b 1
-"%LM_AR%" rcs build\lm0\libparser.lm0.a build\obj\parser.lm1.o || exit /b 1
-"%LM_RANLIB%" build\lm0\libparser.lm0.a || exit /b 1
-
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_COMPILE_FLAGS% -I. -c "%OWN_SOURCE%" -o build\obj\own.lm1.o || exit /b 1
-if exist build\lm0\libown.lm0.a del /f /q build\lm0\libown.lm0.a || exit /b 1
-"%LM_AR%" rcs build\lm0\libown.lm0.a build\obj\own.lm1.o || exit /b 1
-"%LM_RANLIB%" build\lm0\libown.lm0.a || exit /b 1
-
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% -I. "%L1TRANS_SOURCE%" -o build\lm0\l1trans.lm0.exe || exit /b 1
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% "%MAKE_SOURCE%" -o build\lm0\make.lm0.exe || exit /b 1
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% "%FINALIZE_SOURCE%" -o build\lm0\finalize.lm0.exe || exit /b 1
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% -I. "%BUILD_CORE_SOURCE%" -o build\lm0\buildCore.lm0.exe || exit /b 1
-
-echo built build\lm0 bootstrap tools
+echo built build\lm0 bootstrap tools; pinned seed prerequisites restored

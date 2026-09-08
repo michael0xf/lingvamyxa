@@ -48,13 +48,16 @@ Layout
                     -I include dir.
   lm2\              copy of repo lm2\ — l1trans.lm2 seed source, parser_abi.lm2,
                     and the five default registry files
-  buildCore.lm0.bat copy of the repo script (C bootstrap)
-  buildCore.lm0.sh  copy
+  buildCore.lm0.bat this root's OWN C bootstrap - not a copy of the repo-root
+                    script. See "Why its own build script" below.
   oldchain\         frozen old-L2-chain seed prerequisites; see its README.txt
   build\            local outputs only: lm0\, l1trans\, obj\
 
 Verified here (2026-09-08, gcc 13.1.0 MinGW, LM_THREAD_PROVIDER=single)
 -----------------------------------------------------------------------
+Last run was from scratch: build\ deleted entirely, only the two pinned
+binaries put back, then the three steps below in order.
+
   buildCore.lm0.bat                                    exit 0
   tests\l1\run_seed.ps1                                exit 0  gen0 seed ok
   tests\l1\run_gen.ps1                                 exit 0
@@ -70,25 +73,42 @@ Verified here (2026-09-08, gcc 13.1.0 MinGW, LM_THREAD_PROVIDER=single)
 Live tree isolation was checked after the run: no file newer than 23:45 under
 repo build\l1trans, build\obj, build\lm0, lm1\build, l1src or tests.
 
-One manual step after buildCore.lm0.bat
----------------------------------------
-buildCore.lm0.bat overwrites build\lm0\libparser.lm0.a and libown.lm0.a with
-L1-profile archives that carry no lm_message_thread_*, which the gen0 seed
-needs. Restore them before run_seed:
+Why its own build script
+------------------------
+The build here is fully parallel to the repo root's: separate sources, separate
+inputs, separate outputs, separate script. Sharing the root's buildCore.lm0.bat
+was wrong - that script serves the live L1 chain and changes with it (grok_bot
+rewrote it under TASK3), so this root would have to chase it forever.
 
-    copy /Y oldchain\lib\libparser.lm0.a build\lm0\
-    copy /Y oldchain\lib\libown.lm0.a    build\lm0\
+This root's buildCore.lm0.bat differs on purpose:
 
-See oldchain\README.txt. Reported upstream in
-work_chat\cursor\inbox\20260907-235829.txt; cursor accepted fix (a) —
-drop both ar/ranlib blocks from buildCore.lm0.bat and .sh, since nothing
-links those archives any more — and queued it as TASK3 for grok_bot.
+  - it never rebuilds build\lm0\libparser.lm0.a / libown.lm0.a. The gen0 seed
+    needs the L2-profile archives that define lm_message_thread_*; the archives
+    this chain can produce are L1-profile and do not, so run_seed would fail at
+    link. The script RESTORES them from oldchain\lib\ instead, which removes
+    the manual step this root used to need between buildCore and run_seed.
+  - it verifies the two pinned old-chain binaries (trans.lm0.exe,
+    printTree.lm0.exe) are present and names the missing one if not.
+  - it needs no cmake: plain mkdir is enough.
+  - it builds only the four tools this root uses: l1trans, make, finalize,
+    buildCore.
+
+buildCore.lm0.sh was a copy too and nothing here used it; it was removed rather
+than left to rot.
+
+The only thing shared with the repo root is the host toolchain (C:\Qt\Tools\...,
+also hardcoded inside l1srcuildCore.lm1). Audited: no other absolute path and
+no "..\" escaping this root appears in the runners or the script.
+
+The underlying defect in the repo-root script was reported in
+work_chat\cursor\inbox60907-235829.txt; cursor accepted fix (a) and
+grok_bot closed it as TASK3.
 
 What git tracks here
 --------------------
 Same policy as the repo root: no binaries. See the .gitignore in this
 directory. Tracked: l1src\, tests\, lm2\, the seven generated C files under
-lm1\build\, the two buildCore scripts, the READMEs. Not tracked: build\
+lm1\build\, buildCore.lm0.bat, the READMEs. Not tracked: build\
 (everything under it is regenerated) and oldchain\lib\*.a.
 
 So a fresh checkout of this directory does not build until the pinned
