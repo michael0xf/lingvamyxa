@@ -212,12 +212,14 @@ map **locally** to C99. They are not a runtime protocol.
     Field-follow in body atoms (P0 splits to "a" "\\" "b"):
 
     Syntax-directed C99 member access, not an Lmx path protocol.
-    Draft 1 does **not** pick a fixed `\\` → `->` (Claude 162853 /
-    user 163452). Type-directed `a.b` vs `p->b` and a single `->`
-    are observably different. Choose after a compatibility census on
-    the proven GOOD baseline (ticket 160432): count by-value vs
-    pointer uses of `\`. Until then OPEN (10.9). MUST NOT mass-rewrite
-    sources to force one spelling.
+    Field-follow `p\field` emits C `p->field`. No Valued aggregates
+    or ordinary `.` member access, including in L1: traversal is by
+    address, not an implicit aggregate-by-value route. The
+    translator does not choose `.` versus `->` from contextual types.
+    Explicit C projection `c.value.field` emits `value.field` and is
+    distinct from ordinary field-follow and the reserved receiver `C:`.
+    This settles the former question 10.9; see L1_spec.txt for current
+    implementation evidence and the root/frozen-baseline distinction.
 
     Frame **head** `a\b:` keeps `\` inside the head spelling (1.8).
 
@@ -534,7 +536,8 @@ The following are **OPEN implementation/language choices**, not
 decisions of this draft (Claude 20260906-161922 listed them as
 forks; do not treat as accepted):
 
-  - canonical member access `.` versus `\` versus `c.`
+  - member access is no longer open: see the address-based rule in 1.3
+    and closed item 10.9; `c.` is an explicit C exception
   - whether L1 includes C ternary `?:` (P0 `:` is a level-A stop)
   - whether to extend parser registry table `p0.compact-token` so
     that `==` `<<` `>>` `->` arrive whole from P0, versus keeping
@@ -1123,8 +1126,9 @@ What this checkpoint is **not**:
   - not a defect-free claim. Review findings stay open until a new
     snapshot is presented and re-reviewed.
 
-Still open at this checkpoint: custom `LM_P0_REGISTRY`; the by-value
-`.` versus `->` question (10.9). The Windows builder now passes both
+At this historical checkpoint, custom `LM_P0_REGISTRY` and field access
+were still open; field access was subsequently settled in 10.9.
+The Windows builder at that checkpoint passes both
 rounds with spaces in seed, object and binary paths, rejects truncated
 path joins, and records stdout/stderr and stage exit codes. This
 checkpoint does not establish a working non-Windows build runner.
@@ -1150,9 +1154,9 @@ Language/spelling (do not pretend decided):
        compatibility wins: Translator-L1 MAY emit C identifier /
        `T name[N]` syntax-directed from those forms. New code still
        uses include + declared/imported names.
-  10.9 Field/member: body `\` vs `.` vs `c.`; C image `.` vs `->`.
-       Do not lock `\\` → `->`. Census by-value vs pointer on the
-       proven GOOD baseline (160432) first.
+  10.9 CLOSED: ordinary field-follow uses `->` and address-based
+       traversal. Explicit `c.value.field` is a C projection, not an
+       implicit aggregate-by-value route. See the lowering rule above.
   10.10 Whether L1 includes `?:` (P0 `:` stops the chunk).
   10.11 Whether to extend `p0.compact-token` so `==` `<<` `>>` `->`
         are whole P0 atoms, versus span-adjacent reconstruction in

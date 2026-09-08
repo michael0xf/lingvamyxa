@@ -1,0 +1,431 @@
+Lingvamyxa Translator-L1 — implementation fact sheet
+=====================================================
+
+Status: implementation reference reviewed 2026-09-08 against root L1
+        revision 840c414. The frozen stg\l1_baseline copy is older.
+
+Purpose
+-------
+This file describes what Translator-L1 **actually does today**: accept /
+reject rules, C99 lowering behaviour, and the two build routes below.
+It is not a syntax textbook (see Lingvamyxa_spec.txt) and not a wishlist
+(see L1_language_and_translator_spec.txt for the broader draft contract).
+
+Evidence sources (in priority order)
+------------------------------------
+  1. Live WIP:     l1src\  (especially l1trans.lm1, build_l1.lm1, parser.lm1,
+                   own.lm1, buildCore.lm1, make.lm1, libc_abi.lm1)
+  2. Frozen peer:  stg\l1_baseline\l1src\ and stg\l1_baseline\tests\l1\
+                   (byte copy of root trees at baseline date; not live input)
+  3. Suites:       tests\l1\run_*.ps1 + fixtures
+  4. Orient only:  L1_language_and_translator_spec.txt, l1src\README.md
+
+Historical checkpoint notes describe their own revisions, not necessarily
+the current root compiler. A fixture is evidence for its tested form,
+not proof that every related form is supported.
+
+
+0. Product shape (fact)
+-----------------------
+Translator-L1 is a compile-time, syntax-directed lowerer from wrapperless
+`.lm1` (and a temporary explicit-`L1:` `.lm2` compatibility route) to one
+ANSI C99 translation unit per invocation.
+
+It is **not** L2: no Lmx ontology, Message arena, runtime merge,
+implements() predicate, hosted Namespace/descriptor tables, or
+receiver.function / receiver.statement dispatch tables.
+
+Similar receiver names do not make the two translators interchangeable.
+L1's direct C member lowering is not the contract for resolving L2 paths
+through an Lmx graph. L2 helper code written in .lm1 is still L1 input.
+
+P0 parser (parser.lm1 + p0.h + own.lm1) is reused; Translator-L1 owns
+precedence / grouping / C image after the flat P0 field stream.
+
+Build roots (current layout; staging is temporary isolation):
+  l1src\            — WIP L1 sources (truth for ongoing work)
+  lm1\build\        — tracked generated C for portable bootstrap
+  stg\l1_baseline\  — independent build root with a frozen L1 copy
+  stg\l1_baseline\l2src\ — live L2 kernel development written in L1
+
+There is no root l2src\ in this layout. Root L1 changes do not automatically
+reach the baseline compiler; tests and build outputs belong to their own
+build root. Moving the L2 tree later is a separate decision.
+
+The accepted second-translator pipeline is L2 → L1 → C. L2 is initially
+implemented in L1; the target is L2-authored kernel sources and self-build.
+L1 remains for its own intermediate translator, tests and generated
+intermediate output, not as the permanent source language of the L2 kernel.
+An expanded root L1 must pass self-build before promotion into the L2
+build baseline; promotion must preserve the live L2 sources.
+
+
+1. What the translator accepts
+------------------------------
+1.1 Source selection
+  - Primary: file whose final extension is `.lm1` (case-insensitive).
+    The P0 document root **is** the unit body: no outer `L1:` / `end: L1`.
+  - Compatibility: `.lm2` only when an explicit `L1:` body is present
+    (temporary bridge for the new translator; not L1 surface syntax).
+  - Other extensions: rejected (`l1trans expects a .lm1 or .lm2 source`).
+  - Empty / missing L1 body: rejected (`empty implicit L1 body` /
+    `missing L1 body`).
+
+1.2 Unit-level items (l1_unit_item_ok)
+  Top-level frames allowed in an implicit `.lm1` unit:
+    include, import, predef, os, ifdef, define / ifndef-default,
+    prototype, external, fn, sub, end,
+    declarations headed by @, @@, const, a known type name, c.array,
+    or a head starting with `[]`.
+
+1.3 Keywords / statement heads handled in lowering (l1_is_keyword + emit)
+  fn, sub, external, include, import, predef, os, prototype,
+  return, end, if, else, while, for, break, continue,
+  switch, case, default, goto, throw, catch, finally, throws,
+  plus L1/L2/L3 as reserved level names (not user identifiers).
+
+  `do` is **not** implemented and is not reintroduced.
+
+1.4 Declarations and types (implemented spelling)
+  Known type atoms (l1_is_type_name / l1_write_type_spelling):
+    int, void, char, size_t, unsigned, long, short, const, FILE, uchar,
+    float, double, ulong → `unsigned long`,
+    u8/u16/u32/u64 → uintN_t, i8/i16/i32/i64 → intN_t,
+    plus several LmP0* typedef names used by the parser port.
+  `uchar` is emitted unchanged, not rewritten to `unsigned char`:
+  include a header defining it (cast_uchar_alias_ok uses l1src/p0.h).
+  Fixed-width C names likewise require their C declarations/headers.
+  Pointer forms: `@:` / `@@:` (and deeper `@` chains in tests).
+  Array forms:
+    - `[]: T name N …` one-dimensional extent + initializer (decl-repeat
+      and scalar suites).
+    - `[][]: int matrix 2 2` declares a rectangular two-dimensional
+      C array (array_2d.lm1). This is one contiguous block, not an
+      array of separately allocated rows. Broader declaration forms
+      remain bounded by the fixtures; see draft 10.15.
+    - Bootstrap `c.array:` / `const: … c.array:` (run_c_array.ps1).
+  Declaration repeat: `int: x, 5; y, 10` and paren / pointer / `[]`
+  repeats (run_decl_repeat.ps1). Explicit type override is per-item.
+  Identifiers: optional outer backticks strip to the C name
+  (run_ident.ps1); quoted string backticks stay data.
+  `const` on declarations / parameters / c.array elements as covered
+  by scalar and c_array suites.
+  `prototype:` and `external:` (external body must contain fn/sub).
+  `sub:` — function without return-type slot (diagnostics distinguish
+  it from `fn`). An empty sub is a definition, not just a prototype:
+
+    sub: sample_entry ()
+    end: sample_entry
+
+  This gen1+ regression is exercised by empty_sub_ok.lm1.
+
+1.5 Control and expressions (covered by runners)
+  if / else, while, for (C-style three-slot header as in for_loop.lm1;
+  compact hosted for-sugar is established in the draft; L1 for-init
+  rejects unsupported forms).
+  break, continue.
+  switch / case / default with end: matching; cases lower with a null
+  statement after the label so a following declaration is C99-legal;
+  no implicit break between cases (fall-through is C-like).
+  Labels + goto (C99 labels); label/target names may not be reserved
+  level heads (goto: L1 → `reserved L1 name`).
+  throw / catch / finally / throws:
+    - static `l1_throw_code` + `long l1_throw_payload[8]` channel
+      (not a union);
+    - catch pads via goto labels; handled catch clears the code;
+    - payload arity ≤ 8; accepted types: int, unsigned, long, short,
+      size_t, char. Other types, including uchar, float and pointers,
+      are rejected (`unsupported throw payload type`);
+    - main cannot declare throws; uncaught throw must be in throws set;
+    - throwing call only as statement or entire assignment RHS.
+  Expressions: nested calls, binary/unary ops, parentheses, casts
+  (`cast: (T) e` and related), prefix `\` dereference, prefix/postfix
+  ++/-- , indexing, field-follow, string forms (quoted, triple, fence)
+  as exercised by run_expr.ps1. Infix / relational context, bare `=`
+  in the hosted/L1 operator path emits C `==` (see emit sites writing
+  "=="). Shift operators covered by shift_ops.lm1.
+  `os: win: / default:` selects a Windows branch on this host
+  (os_select.lm1).
+
+  Multiword cast targets are supported in the reviewed root compiler:
+    (cast: (unsigned char) ch)
+    (cast: (unsigned long) 42)
+  See cast_multiword_ok.lm1; cast_ptr_uchar_ok.lm1 covers pointer casts.
+  These fixes are not in the old hosted gen0 or the frozen baseline.
+
+1.6 Modules / import / include / define / ifdef
+  include: string header → C `#include <…>` or `#include "…"` (decoded
+  P0 string; never `#include "<stdio.h>"`).
+  import / predef: string path(s); diamond and repeat OK; cycles and
+  missing files diagnosed; bare-directory import covered by
+  run_import_bare.ps1 (incl. paths with spaces).
+  define: object-like macros (empty / token / string / char / arithmetic
+  replacement); ifndef-default preserves command-line -D including 0.
+  ifdef: condition / default branches, nesting, unit and function
+  contexts, matching end:; undefined FLAG and -DFLAG=0 take default;
+  -DFLAG=1 takes first branch (run_ifdef.ps1).
+  Function-like macros, hosted table commands, and define inside
+  function body are outside the current define checkpoint.
+
+
+2. What the translator rejects (by fact of diagnostics)
+-------------------------------------------------------
+Representative diagnostics from l1trans.lm1 (non-exhaustive; full set is
+the unique l1_error string list in that file):
+
+  Profile / structure
+    unsupported L1 form; unsupported statement atom; unsupported
+    expression node; unsupported type; unsupported initializer;
+    unsupported for-init; implicit L1 expects a statement frame;
+    empty implicit L1 body; expects a .lm1 or .lm2 source; missing L1
+    body; reserved L1 name (C / L1 / L2 / L3 heads as identifiers or
+    explicit level frames inside `.lm1`, e.g. invalid_lm1_explicit_l1,
+    invalid_control_goto_l1); nested / wrong-level fixtures under
+    invalid_lm1_*, invalid_nested_l1.lm2, invalid_no_l1.lm2.
+
+  Declarations
+    missing / empty type or name; unknown type name (unrecognised
+    Capitalized declaration head, including c.Capitalized); array
+    missing extent; c.array shape
+    errors; repeated-declaration reset / disabled / missing-extent;
+    const missing type; pointer / array parameter shape errors;
+    external without fn.
+
+  Control / throw
+    switch without body; duplicate default; case/default outside
+    switch; case expects an expression; end target mismatch;
+    goto arity/name errors; throw/catch/finally/throws rule set as in
+    run_control.ps1 negatives.
+
+  Import / define / ifdef
+    import cycle / cannot read / path issues; define / ifndef-default
+    name and token errors; ifdef branch/end/default placement errors.
+
+Failed translations must not publish a new output `.c` or overwrite an
+existing output (negative/preserve-output checks in the runners).
+The unknown-head guard is not a complete C type checker.
+
+
+3. Lowering model (C99 image)
+-----------------------------
+Direct, local mapping — maximize straight ANSI C99:
+
+  Frame head → construct (fn → function def, if → if, …).
+  Declarators → C declarators; `@` depth → `*`; `[]` / c.array →
+  rectangular C arrays (contiguous row-major; not L2 Array ontology;
+  not rank-1 flatten; not ragged row pointers) for the shapes that
+  currently lower.
+  Prefix `\p` → `*p`; field-follow `p\field` → `p->field`.
+  Ordinary aggregate traversal is by address: no Valued aggregates,
+  no ordinary `.` member access, and no contextual choice of `.` or `->`.
+  Explicit C projection `c.value.field` emits `value.field`; it is
+  distinct from the reserved receiver `C:` and from ordinary `\`.
+  include → `#include`.
+  define → `#define` object-like; ifdef → `#if` / `#elif` / `#else`
+  family as emitted by the current path.
+  import/predef → parse and inline/merge imported L1 units into the
+  translation (cycle-checked); exact multi-TU emit policy is OPEN
+  (draft 10.8) — current CLI writes one output path per run.
+  throw/catch/finally → internal static channel + gotos/labels, not
+  C++ exceptions and not setjmp in the checked fixtures.
+  Strings: deterministic C string/character literals from P0 spans;
+  fences keep provenance across imports; full ordinary-string
+  recanonicalization and byte-blob decls are **not** claimed
+  (README / draft 10.19).
+
+Strict consumer compile flags used by new-gen runners:
+  -std=c99 -Wall -Wextra -Wpedantic plus
+  -Werror=incompatible-pointer-types -Werror=discarded-qualifiers
+  -Werror=implicit-function-declaration -Werror=implicit-int
+  (control suite also enables int↔pointer cast errors).
+
+From tests/l1/array_2d.lm1 (inside main):
+
+  [][]: int matrix 2 2
+      []: 1 2
+      []: 3 4
+  matrix[1][1]: 9
+
+The fixture checks both dimensions with sizeof and reads/writes elements.
+
+
+4. Self-build / generations (fact)
+----------------------------------
+4.1 Published-C bootstrap and native staged self-build
+
+From the repository root, buildCore.lm0.bat (Windows) or
+buildCore.lm0.sh (POSIX) compiles the tracked lm1/build/*.lm1.c snapshot
+into build/lm0 tools: l1trans, make, finalize and buildCore. This bootstrap
+does not require the old hosted translator or its parser/own archives.
+It does require a C99 compiler; the root Windows script also uses CMake
+for directory creation (LM_CC / LM_CMAKE select the tools).
+
+Run build/lm0/buildCore.lm0.exe (suffixless on POSIX) for native self-build:
+  - translate l1src and regenerate the seven published C sources;
+  - build replacement tools under build/lm0/next;
+  - run the next builder with --next, producing next/check;
+  - run the selected staged tests and defer installation to finalize.
+
+The seven sources regenerated by this route are buildCore, finalize,
+l1trans, make, own, parser and printTree. Other tracked C files in
+lm1/build (such as trans and REST examples) are not in that set.
+Only the first four tool sources named above are direct bat/sh inputs;
+own, parser and printTree belong to the later staged build. All seven
+are published snapshots, not disposable outputs to omit from that release.
+The implementation is l1src/buildCore.lm1 + finalize.lm1. Staged builds
+also produce local parser/own libraries; root bootstrap scripts no longer
+overwrite the old hosted archives in build/lm0 (d2dc0b3).
+The optional --full Qt/CMake route is separate from the basic L1 gate.
+
+4.2 Hosted seed and generation regression route
+
+This is a second route, not a prerequisite of the published-C bootstrap:
+
+  1) tests\l1\run_seed.ps1
+       stage-0: build\lm0\trans.lm0.exe on lm2\l1trans.lm2 → seed C,
+       link with libparser/libown → published build\l1trans\gen0\l1trans.exe
+       after translating/compiling/running tests\l1\integer_add.lm1.
+       Does not treat a pre-existing gen0 exe as success.
+
+  2) tests\l1\run_gen.ps1
+       gen0 → gen1 → gen2 → gen3; requires gen1 C == gen2 C == gen3 C;
+       L1 builder selftest; bootstrap gen3 tools; re-runs smoke + parser
+       with L1_GEN=gen2.
+
+Layout:
+  build\l1trans\gen0|gen1|gen2|gen3\   executables
+  build\obj\l1trans\gen<N>\            generated C / objects
+  build\l1trans\logs\                  seed/gen/suite logs
+  build\l1trans\oracles\               printTree.lm0 dumps
+
+Real L1 source of the translator: l1src\l1trans.lm1.
+lm2\l1trans.lm2 is only the explicit stage-0 mirror.
+port_*.py are manual migration helpers, not part of native self-build.
+
+Hosted-route prerequisites: gcc; PowerShell;
+build\lm0\trans.lm0.exe + libparser/libown; lm2 registry/predef files;
+lm1\ includes for the seed gcc line; printTree.lm0.exe for parser oracle.
+The archives must match the old hosted ABI, not the new standalone L1
+parser/own ABI. A clean Git checkout does not supply all these hosted
+binaries. The baseline keeps a local oldchain copy for its own gate.
+
+gen0 is built from lm2/l1trans.lm2, not l1src/l1trans.lm1. It therefore
+does not acquire new root fixes automatically. run_smoke explicitly skips
+the new unknown-type, size_t, empty-sub and cast fixtures on gen0; gen1+
+runs them. A gen0 skip is not evidence of implementation support.
+
+Gate vs standalone suites:
+  Driven by run_gen (with L1_GEN=gen2 for smoke/parser): run_smoke,
+  run_parser (plus the gen fixed-point itself).
+  Standalone (documented, not automatic run_gen gate): run_expr,
+  run_ifdef, run_define, run_scalar, run_decl_repeat, run_ident,
+  run_c_array; also present: run_control, run_import_bare.
+
+4.3 Frozen-baseline gate and verification scope
+
+stg/l1_baseline/gate.ps1 runs in that separate root: its C bootstrap,
+run_seed, run_gen, all eleven L1 suites and l2src/run_lmx.ps1 on both
+gen0 and gen2. It tests the frozen L1 plus that root's current L2 code,
+not the live root L1 compiler. It still needs the hosted prerequisites.
+
+The ecf010e staged snapshot includes the OS-specific replacement helper
+and the deferred-finalize repair verified on Windows and Ubuntu WSL
+(20260907-173055 acceptance). It is not the earlier failing POSIX snapshot.
+The reviewed root 840c414 has Windows generation/smoke/parser evidence;
+that does not establish a fresh non-Windows pass for this revision.
+This documentation review did not rerun builds. Claims of source-only
+bootstrap, hosted fixed point and full-suite success must identify which
+route, build root and revision were actually checked.
+
+
+5. Implemented / partial / not implemented
+------------------------------------------
+IMPLEMENTED (exercised by code + suites named above)
+  Wrapperless `.lm1` unit profile; reject explicit C/L1/L2/L3 as user
+  level/idents inside that profile; `.lm2`+explicit L1 compat route.
+  Core decls (scalars, pointers, [] and [][] fixtures, c.array, const,
+  repeats); address-based field-follow and prefix dereference.
+  fn / sub / external / prototype / include / import / predef / os.
+  Control: if/else/while/for/break/continue/switch/goto/labels.
+  throw/catch/finally/throws channel lowering.
+  define (object-like) + ifdef family as in define/ifdef runners.
+  Expression cluster in run_expr (incl. cast, deref, inc, index, strings).
+  Fixed-width / float / ulong scalar spellings in run_scalar.
+  Identifier backtick stripping in run_ident.
+  Parser oracle parity (run_parser) and smoke path.
+  Self-host fixed point gen1=gen2=gen3 C text on the documented gate.
+
+PARTIAL / LIMITED
+  Multidimensional arrays: rectangular [][] declaration and indexing
+  are exercised; broader declarator combinations are not all established
+  (draft 10.15).
+  decl_repeat for arrays: 1-D `[]:` only (README).
+  String lowering: fences/quotes/triples covered; full recanonicalization
+  and byte-blob decls not claimed.
+  Module emit: one output C path per CLI run; multi-TU / init-before-main
+  mechanics OPEN (10.8).
+  Conditional-import policy outside ifdef checkpoint.
+  Platform and clean-checkout coverage depend on the build route (§4).
+  Full draft-contract coverage is not claimed.
+
+NOT IMPLEMENTED (do not invent)
+  `do` loops.
+  Receiver `C:` in the current self-host/bootstrap profile. It is reserved
+  for an exceptional low-level hatch, not ordinary L1 authoring.
+  L2 ontology / Message / implements-as-predicate / runtime receiver ABI.
+  Authoring ABI for user-defined new receiver lowerings (OPEN 10.3).
+  Function-like macros; hosted trans table commands as L1 mechanism.
+  Guaranteed struct/union/enum/typedef **heads** as decided L1 spelling
+  (OPEN 10.4) — C aggregate *meaning* is in the draft contract; this
+  translator fact sheet does not claim a closed surface for them beyond
+  what concrete fixtures prove.
+  Variadic `...` direct spelling (OPEN 10.17).
+  Direct function-pointer type spelling (OPEN 10.16).
+  Ternary `?:` (OPEN 10.10).
+  Qt/CMake buildCore gate as part of this L1 checkpoint.
+  A complete second Translator-L2 (the separate L2 kernel is in progress).
+
+
+6. OPEN / UNKNOWN (carry from evidence, not invented answers)
+-------------------------------------------------------------
+The broader draft's §10 is a design backlog, not a list of features that
+all fail today. Implemented forms above take precedence over its older
+checkpoint descriptions. Remaining questions include:
+
+  10.3  new receiver-authoring ABI
+  10.4  C aggregate heads
+  10.5 / 10.14  c.name / c.array vs ordinary non-c array spelling
+  10.8  one C TU vs many; path identity; init-before-main
+  10.10 ?:
+  10.11 multi-char operator atoms vs reconstruction
+  10.12 leading `[` as bounded STRUCTURE
+  10.13 const pointer spelling order
+  10.15 multi-dim declaration spelling / array-of-pointer
+  10.16 function-pointer type spelling
+  10.17 variadic spelling
+  10.18 named vs abstract parameters
+  10.19 byte-blob declaration form
+
+Implementation-local UNKNOWN (mark, do not guess):
+  - Exact complete census of every c.* ident lowering path in l1trans
+    beyond c.array / sizeof uses seen in fixtures.
+  - Whether every draft-contract prelude receiver is bound in the
+    current prelude vs only the heads listed in §1.3–1.6.
+  - Full non-Windows regression coverage of the reviewed revision (§4).
+
+
+7. References
+-------------
+  stg\l1_baseline\README.txt     — frozen baseline date and contents
+  stg\l1_baseline\l1src\         — frozen sources peer
+  stg\l1_baseline\tests\l1\      — frozen fixtures/runners peer
+  l1src\                         — live WIP (do not treat baseline as
+                                   live build input)
+  l1src\README.md                — commands, suite scope, status claims
+  l1src\l1trans.lm1              — translator implementation
+  tests\l1\run_*.ps1             — behavioural contract-by-test
+  L1_language_and_translator_spec.txt — draft normative contract (orient)
+  Lingvamyxa_spec.txt            — language syntax reference (do not
+                                   duplicate here)
+
+End of L1_spec.txt (implementation fact sheet).
