@@ -28,6 +28,8 @@ c.array: [8]: int l2_m_arity
 c.array: [8]: int l2_m_ret
 c.array: [8]: int l2_m_own
 c.array: [32]: int l2_m_uses
+c.array: [32]: int l2_m_alias
+c.array: [4]: int l2_own_live
 c.array: [4]: @: LmP0Text l2_own_name
 c.array: [4]: int l2_own_ty
 int: l2_need_p0 0
@@ -69,9 +71,14 @@ prototype:
     fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
     fn: l2_own_find (const: @(LmP0Text t)) int
     fn: l2_own_add (const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP0Node at)) int
+    fn: l2_formal_find (int: mi; const: @(LmP0Text t)) int
+    fn: l2_bind_own (int: mi; int: oi; const: @(char path); const: @(LmP0Node at)) int
+    fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path); int: depth; @: int sn) int
     fn: l2_slash_own (const: @(LmP0Text t)) int
     fn: l2_is_char_decl (const: @(LmP0Node stmt)) int
     fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
+    fn: l2_slot_decl_ty (const: @(LmP0Node stmt)) int
+    fn: l2_slot_find (int: mi; const: @(LmP0Text t)) int
     fn: l2_is_known (const: @(LmP0Text t)) int
     fn: l2_raw_head (const: @(LmP0Text t); int: mi; @: int out_j; @: int out_fld) int
 end: prototype
@@ -412,6 +419,7 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
     i: 0
     while: i < 32
         l2_m_uses[i]: 0
+        l2_m_alias[i]: -1
         i: i + 1
     if: unit = 0
         return: l2_error(path, 0, "missing main")
@@ -665,6 +673,77 @@ fn: l2_own_add (const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP
     l2_own_ty[l2_own_n]: ty
     l2_own_n: l2_own_n + 1
 return: l2_own_n - 1
+
+fn: l2_formal_find (int: mi; const: @(LmP0Text t)) int
+    int: i 0
+    if: mi < 0 || t = 0
+        return: -1
+    while: i < l2_m_arity[mi]
+        if: l2_text_same(l2_m_fn[mi * 4 + i], t)
+            return: i
+        i: i + 1
+return: -1
+
+fn: l2_bind_own (int: mi; int: oi; const: @(char path); const: @(LmP0Node at)) int
+    int: fi 0
+    if: mi < 0 || oi < 0
+        return: 0
+    while: fi < l2_m_arity[mi]
+        if: l2_text_same(l2_m_fn[mi * 4 + fi], l2_own_name[oi])
+            if: l2_m_ft[mi * 4 + fi] != l2_own_ty[oi]
+                return: l2_error(path, at, "incompatible entry signature")
+            l2_m_alias[mi * 4 + oi]: fi
+        fi: fi + 1
+return: 0
+
+fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path); int: depth; @: int sn) int
+    @: LmP0Field field
+    @: LmP0Field nxt
+    @: LmP0Node stmt
+    @: LmP0Text fa
+    int: j
+    int: ty
+    if: body = 0 || sn = 0
+        return: 0
+    field: l2_next_active(body\first_field)
+    while: field != 0
+        stmt: field\value
+        if: l2_frame_head(stmt, "if")
+            nxt: l2_next_active(field\next)
+            if: nxt != 0 && l2_frame_head(nxt\value, "else")
+                field: l2_next_active(nxt\next)
+            if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
+                field: nxt
+            ---
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && depth > 0
+            return: l2_error(path, stmt, "unsupported own declaration")
+        if: l2_frame_head(stmt, "if") = 0 && l2_slot_decl_ty(stmt) != 0 && depth > 0
+            return: l2_error(path, stmt, "unsupported body")
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && depth = 0
+            ty: l2_own_decl_ty(stmt)
+            fa: l2_next_active(stmt\as\frame\body\first_field)\value\as\atom
+            j: l2_own_add(fa, ty, path, stmt)
+            if: j < 0
+                return: 1
+            l2_m_uses[mi * 4 + j]: 1
+            l2_m_own[mi]: l2_m_own[mi] + 1
+            if: l2_bind_own(mi, j, path, stmt) != 0
+                return: 1
+            field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) = 0 && l2_slot_decl_ty(stmt) != 0 && depth = 0
+            ty: l2_slot_decl_ty(stmt)
+            fa: l2_next_active(l2_next_active(stmt\as\frame\body\first_field)\next)\value\as\atom
+            if: sn[0] >= 4
+                return: l2_error(path, stmt, "unsupported body")
+            l2_sn[mi * 4 + sn[0]]: fa
+            l2_st[mi * 4 + sn[0]]: ty
+            if: ty = 5
+                l2_need_p0: 1
+            sn[0]: sn[0] + 1
+            field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) = 0 && l2_slot_decl_ty(stmt) = 0
+            field: l2_next_active(field\next)
+return: 0
 
 fn: l2_raw_head (const: @(LmP0Text t); int: mi; @: int out_j; @: int out_fld) int
     size_t: i 0U
@@ -1160,29 +1239,8 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
     l2_m_sig[l2_m_n]: id
     l2_m_own[l2_m_n]: 0
     l2_m_sn[l2_m_n]: 0
-    p: l2_next_active(body\as\structure\first_field)
-    while: p != 0 && (l2_own_decl_ty(p\value) != 0 || l2_slot_decl_ty(p\value) != 0)
-        if: l2_own_decl_ty(p\value) != 0
-            fa: 0
-            ty: l2_own_decl_ty(p\value)
-            fa: l2_next_active(p\value\as\frame\body\first_field)\value\as\atom
-            j: l2_own_add(fa, ty, path, p\value)
-            if: j < 0
-                return: 1
-            l2_m_uses[l2_m_n * 4 + j]: 1
-            l2_m_own[l2_m_n]: l2_m_own[l2_m_n] + 1
-        if: l2_slot_decl_ty(p\value) != 0
-            ty: l2_slot_decl_ty(p\value)
-            fa: l2_next_active(l2_next_active(p\value\as\frame\body\first_field)\next)\value\as\atom
-            if: sn >= 4
-                return: l2_error(path, p\value, "unsupported body")
-            l2_sn[l2_m_n * 4 + sn]: fa
-            l2_st[l2_m_n * 4 + sn]: ty
-            if: ty = 5
-                l2_need_p0: 1
-            sn: sn + 1
-        p: l2_next_active(p\next)
-    ---
+    if: l2_collect_decls(body\as\structure, l2_m_n, path, 0, @ sn) != 0
+        return: 1
     l2_m_sn[l2_m_n]: sn
     l2_m_n: l2_m_n + 1
 return: 0
@@ -1349,6 +1407,8 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
                 field: nxt
             ---
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && depth > 0
+            return: l2_error(path, stmt, "unsupported own declaration")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt)
             field: l2_next_active(field\next)
         raw: 1
@@ -1362,7 +1422,7 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             return: l2_error(path, stmt, "unsupported body")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj >= 8 && l2_st[mi * 4 + rj - 8] != 5
             return: l2_error(path, stmt, "unknown foreign field")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || (l2_own_find(stmt\as\frame\head) < 0 && l2_slot_find(mi, stmt\as\frame\head) < 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_find_method(stmt\as\frame\head) < 0 && raw != 0 && l2_is_known(stmt\as\frame\head) = 0))
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || (l2_own_find(stmt\as\frame\head) < 0 && l2_slot_find(mi, stmt\as\frame\head) < 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_find_method(stmt\as\frame\head) < 0 && l2_formal_find(mi, stmt\as\frame\head) < 0 && raw != 0 && l2_is_known(stmt\as\frame\head) = 0))
             return: l2_error(path, stmt, "unsupported body")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             fr: stmt\as\frame
@@ -1978,14 +2038,20 @@ return: 0
 
 fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
     int: i 0
+    int: fi
     if: mi < 0 || ind = 0
         return: 0
     while: i < l2_own_n
+        fi: l2_m_alias[mi * 4 + i]
         if: l2_m_uses[mi * 4 + i] != 0 && c.fprintf(l2_out, "%sif: l2_q%d_dirty != 0\n", ind, i) < 0
             return: 1
-        if: l2_m_uses[mi * 4 + i] != 0 && l2_own_ty[i] = 1 && c.fprintf(l2_out, "%s    l2_q%d_from\\data: lmx_char_cell((cast: (int) l2_q%d))\n", ind, i, i) < 0
+        if: l2_m_uses[mi * 4 + i] != 0 && l2_own_ty[i] = 1 && fi < 0 && c.fprintf(l2_out, "%s    l2_q%d_from\\data: lmx_char_cell((cast: (int) l2_q%d))\n", ind, i, i) < 0
             return: 1
-        if: l2_m_uses[mi * 4 + i] != 0 && l2_own_ty[i] = 2 && c.fprintf(l2_out, "%s    if: lmx_size_store(l2_q%d_from\\data, l2_q%d) != 0\n%s        return: 0\n", ind, i, i, ind) < 0
+        if: l2_m_uses[mi * 4 + i] != 0 && l2_own_ty[i] = 1 && fi >= 0 && c.fprintf(l2_out, "%s    l2_q%d_from\\data: lmx_char_cell((cast: (int) l2_p%d_%d))\n", ind, i, mi, fi) < 0
+            return: 1
+        if: l2_m_uses[mi * 4 + i] != 0 && l2_own_ty[i] = 2 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_size_store(l2_q%d_from\\data, l2_q%d) != 0\n%s        return: 0\n", ind, i, i, ind) < 0
+            return: 1
+        if: l2_m_uses[mi * 4 + i] != 0 && l2_own_ty[i] = 2 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_size_store(l2_q%d_from\\data, l2_p%d_%d) != 0\n%s        return: 0\n", ind, i, mi, fi, ind) < 0
             return: 1
         if: l2_m_uses[mi * 4 + i] != 0 && c.fprintf(l2_out, "%s    l2_q%d_dirty: 0\n", ind, i) < 0
             return: 1
@@ -2002,6 +2068,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     int: k
     int: oi
     int: si
+    int: fi
+    int: sl
     int: rj 0
     int: rf 0
     int: raw 1
@@ -2019,6 +2087,10 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     field: l2_next_active(body\first_field)
     while: field != 0
         stmt: field\value
+        oi: -1
+        si: -1
+        fi: -1
+        sl: -1
         if: l2_frame_head(stmt, "if")
             fr: stmt\as\frame
             n: l2_count_active(fr\body)
@@ -2043,8 +2115,16 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
                 field: nxt
             ---
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0
+            oi: l2_own_find(l2_next_active(stmt\as\frame\body\first_field)\value\as\atom)
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0
+            l2_own_live[oi]: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[mi * 4 + oi] >= 0 && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_child(node, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, (cast: (unsigned) oi), ind, oi, ind) < 0
+            return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt)
             field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && (stmt = 0 || stmt\as = 0 || stmt\as\frame = 0)
+            return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             fr: stmt\as\frame
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
@@ -2057,13 +2137,23 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             field: l2_next_active(field\next)
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0
             oi: l2_own_find(fr\head)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && mi >= 0 && oi >= 0 && l2_m_uses[mi * 4 + oi] = 0
+            oi: -1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0
             si: l2_slot_find(mi, fr\head)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0
+            fi: l2_formal_find(mi, fr\head)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && mi >= 0
+            fi: l2_m_alias[mi * 4 + oi]
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && c.fprintf(l2_out, "%sl2_q%d: %s\n", ind, oi, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi < 0 && c.fprintf(l2_out, "%sl2_q%d: %s\n", ind, oi, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && c.fprintf(l2_out, "%sl2_q%d_dirty: 1\n", ind, oi) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && c.fprintf(l2_out, "%sl2_p%d_%d: %s\n", ind, mi, fi, l2_tok) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi < 0 && c.fprintf(l2_out, "%sl2_q%d_dirty: 1\n", ind, oi) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && l2_own_live[oi] != 0 && c.fprintf(l2_out, "%sl2_q%d_dirty: 1\n", ind, oi) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0
             field: l2_next_active(field\next)
@@ -2073,7 +2163,13 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si >= 0
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) >= 0 && l2_prep(stmt, mi, ind, l2_tok) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi >= 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi >= 0 && c.fprintf(l2_out, "%sl2_p%d_%d: %s\n", ind, mi, fi, l2_tok) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi >= 0
+            field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_find_method(fr\head) >= 0 && l2_prep(stmt, mi, ind, l2_tok) != 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) >= 0
             field: l2_next_active(field\next)
@@ -2096,25 +2192,25 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && raw = 0
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0
-            oi: l2_slash_own(fr\head)
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_slot_find(mi, fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0 && oi < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0
+            sl: l2_slash_own(fr\head)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0 && sl < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_slot_find(mi, fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_slot_find(mi, fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(node, %uU)\n", ind, (cast: (unsigned) oi)) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(node, %uU)\n", ind, (cast: (unsigned) sl)) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_slot_find(mi, fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0 && c.fprintf(l2_out, "%sif: l2_xp = 0\n", ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && c.fprintf(l2_out, "%sif: l2_xp = 0\n", ind) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_slot_find(mi, fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0 && l2_emit_checkpoint(mi, deep) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_emit_checkpoint(mi, deep) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_slot_find(mi, fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0 && l2_m_ret[mi] = 2 && c.fprintf(l2_out, "%s    return: 0U\n", ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_m_ret[mi] = 2 && c.fprintf(l2_out, "%s    return: 0U\n", ind) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_slot_find(mi, fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0 && l2_m_ret[mi] != 2 && c.fprintf(l2_out, "%s    return: 0\n", ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_m_ret[mi] != 2 && c.fprintf(l2_out, "%s    return: 0\n", ind) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_slot_find(mi, fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0 && c.fprintf(l2_out, "%sl2_xp\\data: lmx_char_cell((cast: (int) %s))\n", ind, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && c.fprintf(l2_out, "%sl2_xp\\data: lmx_char_cell((cast: (int) %s))\n", ind, l2_tok) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_own_find(fr\head) < 0 && l2_slot_find(mi, fr\head) < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0
             field: l2_next_active(field\next)
 return: 0
 
@@ -2215,7 +2311,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         i: i + 1
-    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char/size_t fields are children of callable->node. Char cache is typed char; graph data is all_chars cell. size_t cache is typed size_t; graph data is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned shared size_t, no int narrowing). Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\\name writes the graph, not the cache.\n# LmP0Text is the existing C ABI from l1src/p0.h (data, length), a limited migration adapter, not a general C header parser and not a silent layout for new L2 Structures. Lmx structural access stays child-index. Known C: c.strlen, c.memcmp, l2_immut_query_fill, l2_hash_compare_q, c.sizeof(c.LmP0Text), lm_own_new_zero, lm_own_copy_bytes, lm_own_delete. Unknown c.* is rejected. Body @: LmP0Text is an 11.2.1 address slot l2_s, not OwnUsed and not lmx_own. Pointer results @: char / @: LmP0Text; sub: is void. return: slot is the pointer value, not @slot. Checkpoint even if OwnUsed is empty. L2ImmutQuery is a borrowed immutable-query adapter (not LmP0Text); fill is a temporary L1 helper behind the L2 make method. text_equals is the mutable fallback (strlen+memcmp). equals_query hashes current text bytes against a prepared query hash. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.\n\n", l2_out) < 0
+    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char/size_t fields are children of callable->node. Char cache is typed char; graph data is all_chars cell. size_t cache is typed size_t; graph data is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned shared size_t, no int narrowing). Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\\name writes the graph, not the cache.\n# LmP0Text is the existing C ABI from l1src/p0.h (data, length), a limited migration adapter, not a general C header parser and not a silent layout for new L2 Structures. Lmx structural access stays child-index. Known C: c.strlen, c.memcmp, l2_immut_query_fill, l2_hash_compare_q, c.sizeof(c.LmP0Text), lm_own_new_zero, lm_own_copy_bytes, lm_own_delete. Unknown c.* is rejected. Body @: LmP0Text is an 11.2.1 address slot l2_s, not OwnUsed and not lmx_own. Pointer results @: char / @: LmP0Text; sub: is void. return: slot is the pointer value, not @slot. Checkpoint even if OwnUsed is empty. Same-name char/size_t argument and own field share the parameter from the own-decl line; dirty-only publish is to this method's node, not the caller. An argument without that bind is never published. Nested if own-decl is unsupported own declaration. L2ImmutQuery is a borrowed immutable-query adapter (not LmP0Text); fill is a temporary L1 helper behind the L2 make method. text_equals is the mutable fallback (strlen+memcmp). equals_query hashes current text bytes against a prepared query hash. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.\n\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     i: 0
@@ -2243,19 +2339,25 @@ fn: l2_emit_unit (const: @(char out_path)) int
             return: 1
         k: 0
         while: k < l2_own_n
-            if: l2_m_uses[i * 4 + k] != 0 && l2_own_ty[k] = 1 && c.fprintf(l2_out, "    char: l2_q%d\n    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
+            l2_own_live[k]: 0
+            if: l2_m_uses[i * 4 + k] != 0 && l2_m_alias[i * 4 + k] < 0
+                l2_own_live[k]: 1
+            if: l2_m_uses[i * 4 + k] != 0 && l2_m_alias[i * 4 + k] < 0 && l2_own_ty[k] = 1 && c.fprintf(l2_out, "    char: l2_q%d\n    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[i * 4 + k] != 0 && l2_own_ty[k] = 2 && c.fprintf(l2_out, "    size_t: l2_q%d\n    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
+            if: l2_m_uses[i * 4 + k] != 0 && l2_m_alias[i * 4 + k] < 0 && l2_own_ty[k] = 2 && c.fprintf(l2_out, "    size_t: l2_q%d\n    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[i * 4 + k] != 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child(node, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, (cast: (unsigned) k), k) < 0
+            if: l2_m_uses[i * 4 + k] != 0 && l2_m_alias[i * 4 + k] < 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child(node, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, (cast: (unsigned) k), k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[i * 4 + k] != 0 && l2_own_ty[k] = 1 && c.fprintf(l2_out, "    l2_q%d: (cast: (char) lmx_char_value(l2_q%d_from\\data))\n", k, k) < 0
+            if: l2_m_uses[i * 4 + k] != 0 && l2_m_alias[i * 4 + k] < 0 && l2_own_ty[k] = 1 && c.fprintf(l2_out, "    l2_q%d: (cast: (char) lmx_char_value(l2_q%d_from\\data))\n", k, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[i * 4 + k] != 0 && l2_own_ty[k] = 2 && c.fprintf(l2_out, "    l2_q%d: lmx_size_value(l2_q%d_from\\data)\n", k, k) < 0
+            if: l2_m_uses[i * 4 + k] != 0 && l2_m_alias[i * 4 + k] < 0 && l2_own_ty[k] = 2 && c.fprintf(l2_out, "    l2_q%d: lmx_size_value(l2_q%d_from\\data)\n", k, k) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_m_uses[i * 4 + k] != 0 && l2_m_alias[i * 4 + k] >= 0 && c.fprintf(l2_out, "    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k) < 0
                 c.fclose(l2_out)
                 return: 1
             k: k + 1

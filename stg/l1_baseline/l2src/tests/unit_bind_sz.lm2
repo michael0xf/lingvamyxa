@@ -1,0 +1,8 @@
+fn: m (size_t: value_length) size_t
+    size_t: value_length
+    value_length: 3U
+    return: value_length
+end: m
+fn: main () int
+    return: 0
+end: main

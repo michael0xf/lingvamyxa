@@ -619,6 +619,64 @@ end: external
 "@
 if ($d8 -ne "0`n0`n90`n") { throw "mixed &&/|| precedence skip/run: $d8" }
 
+Invoke-Leaf "l2src\tests\unit_bind.lm2" "unit_bind" 0 "bind"
+$bg = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_bind.lm1"))).Replace("`r`n", "`n")
+$bindFn = [regex]::Match($bg, 'fn: l2_m2[\s\S]*?end: l2_m2').Value
+if ($bindFn.Length -lt 20) { throw "unit_bind missing mangled bind l2_m2" }
+if ($bindFn -match 'char: l2_q') { throw "aliased own must not emit a separate l2_q value" }
+if ($bindFn.IndexOf("lmx_char_value") -ge 0) { throw "aliased own must not load graph over the incoming argument" }
+if ($bindFn.IndexOf("l2_p2_0") -lt 0) { throw "aliased own must use the parameter l2_p2_0" }
+if ($bindFn.IndexOf("l2_q0_dirty: 1") -lt 0) { throw "aliased own assign after bind must dirty" }
+if ($bindFn -notmatch 'l2_p2_0: 1') { throw "assign before own-decl must write the parameter" }
+$passFn = [regex]::Match($bg, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
+if ($passFn.IndexOf("l2_q0_dirty") -ge 0) { throw "parameter without own bind must never dirty" }
+if ($passFn.IndexOf("l2_p1_0: 65") -lt 0) { throw "parameter without own bind must still accept local assign" }
+$dBind = Invoke-SpliceDrive "unit_bind" @"
+        @: Lmx f 0
+        l2_m1(unit, 90)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m6(unit, 90, 0)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m6(unit, 90, 1)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m2(unit, 90)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m3(unit, 77)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m4(unit, 1)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m5(unit, 1)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($dBind -ne "0`n0`n65`n66`n77`n66`n65`n") { throw "same-name bind graph got $dBind" }
+
+Invoke-Leaf "l2src\tests\unit_bind_sz.lm2" "unit_bind_sz" 0 "m"
+$szg = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_bind_sz.lm1")))
+if ($szg.IndexOf("size_t: l2_q0") -ge 0) { throw "aliased size_t must not emit a separate l2_q value" }
+if ($szg.IndexOf("lmx_size_value") -ge 0) { throw "aliased size_t must not load graph over the incoming argument" }
+$dSz = Invoke-SpliceDrive "unit_bind_sz" @"
+        @: Lmx f 0
+        c.printf("%zu\n", l2_m0(unit, 9U))
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%zu\n", lmx_size_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($dSz -ne "3`n3`n") { throw "size_t same-name bind got $dSz" }
+
+Invoke-Negative "l2src\tests\unit_bind_ifdecl.lm2" "unit_bind_ifdecl" "unsupported own declaration"
+
 # C99 &&/|| yield int 0/1. Oracle is C, not this emitter.
 Invoke-Leaf "l2src\tests\unit_bool_and.lm2" "unit_bool_and" 1 "f"
 $ba = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_bool_and.lm1")))

@@ -1,0 +1,9 @@
+fn: m (char: quote; int: flag) int
+    if: flag != 0
+        char: quote
+        quote: 65
+    return: 0
+end: m
+fn: main () int
+    return: 0
+end: main
