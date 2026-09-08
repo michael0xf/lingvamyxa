@@ -802,9 +802,54 @@ L2ImmutQuery borrowed adapter (ticket 171600)
     No pointer cache. All-L2 debt: fill/compare_q stay L1 helpers
     until L2 has u64 stores; the methods themselves are L2.
 
-Cluster B (copy_bytes / text_view_new_cstr / delete / from_cstr),
-P0-as-Lmx, and parser.lm1 scanners
-    Not touched. Frozen p0.h / bootstrap / root L1 unchanged.
+Cluster B (copy_bytes / text_view_new_cstr / delete / from_cstr)
+    Implemented as Unit 11. P0-as-Lmx and parser.lm1 scanners
+    remain not touched. Frozen p0.h / bootstrap / root L1 unchanged.
+
+Unit 11 - parser_text heap views (copy_bytes, new_cstr, delete, from_cstr)
+-------------------------------------------------------------------------
+Files: l2trans.lm1, parser_text_heap.lm2, run_l2trans.ps1,
+tests/unit_void_value.lm2, tests/unit_bad_sizeof.lm2
+
+SPEC 11.2.1 / 11.3.1  body `@: Foreign result` address slot
+    DECIDED for this port. `@: LmP0Text result` in a method body
+    is an explicit address-depth-1 machine slot, emitted as C
+    `LmP0Text *` / L1 `@: LmP0Text l2_s{i}_{j}`, not OwnUsed, not
+    an Lmx Structure/Array child, and not the lmx_own cache.
+    `return: result` is the pointer VALUE. `return: @result` would
+    be the address of the slot (dangling) and is not used.
+    `result\data` / `result\length` are raw foreign follow of the
+    frozen p0.h ABI (SPEC 7529–7532). ASK only if a later fixture
+    needs a storage rule 11.2.1 / 11.3.1 do not settle.
+
+SPEC 21.8  pointer and void results; sub:
+    DECIDED as backend for this slice: result types
+    `@: char` (3), `@: LmP0Text` (5), void (8, `sub:`).
+    node==0 on a sub is `return`, not `return: 0`.
+    Void used as a value is `incompatible entry signature`.
+
+c.sizeof / lm_own_*
+    DECIDED as known C-surface with exact signatures.
+    `c.sizeof` admits `LmP0Text` / `c.LmP0Text` only; any other
+    atom is `unknown foreign type`. lm_own_new_zero,
+    lm_own_copy_bytes, lm_own_delete come from frozen
+    `l1src/own.lm1` (new_zero / copy_bytes / delete / alloc_fails),
+    imported as-is. That is heap allocation, not the lmx_own
+    field-cache API. No implicit boxing or own promotion of the
+    slot.
+
+SPEC 21.5–21.6  checkpoint with empty OwnUsed
+    DECIDED: actuals still checkpoint immediately before the
+    executed call and before exit even when OwnUsed is empty.
+
+Same-name formal + own bind (ticket 183000 / 183740)
+    Not implemented in this unit. Current emitter still loads a
+    separate l2_q cache from the graph at entry. That is a later
+    sequential stage, not a silent change here.
+
+P0-as-Lmx, parser.lm1 scanners, and L2 self-build
+    Not touched. Frozen p0.h / l1src/own.lm1 / bootstrap / root L1
+    unchanged. parser_text_heap.lm2 does not replace l1src.
 
 Carried forward, not yet touched
 --------------------------------

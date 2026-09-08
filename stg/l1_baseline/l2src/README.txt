@@ -38,8 +38,9 @@ L2_SIG_V0 + ordered source-name/type contract. Runtime does not
 memcmp. Closed-unit devirtualization; actuals are temps before
 the call. Recursion is an implementation limit. At most 8 methods;
 `lmx_ranges_init` is 1+N. Formals are hygienic `l2_p{i}_{j}`.
-char/int/size_t and `const @(char)` formals, arity 1–4, int or
-size_t result. Pure &&/|| stay L1 C expressions. Calls inside
+char/int/size_t and `const @(char)` formals, arity 1–4, int,
+size_t, `@: char`, `@: LmP0Text`, or void (`sub:`) result.
+At most 4 address slots `l2_s{i}_{j}` per method. Pure &&/|| stay L1 C expressions. Calls inside
 &&/|| use guarded if/temps and yield int 0/1, not an operand.
 Non-logical size_t results stay size_t. Actuals once
 left-to-right, checkpoint after actuals immediately before the
@@ -57,8 +58,10 @@ graph child, not the cache. `const @(LmP0Text)` / `@: LmP0Text`
 are the existing C ABI from l1src/p0.h (data, length), a limited
 migration adapter: include and typed schema only, not a general
 C header parser and not a silent C layout for new L2 Structures.
-Lmx access stays child-index. Known C: c.strlen, c.memcmp;
-unknown c.* is rejected. Stores through const LmP0Text* are
+Lmx access stays child-index. Known C: c.strlen, c.memcmp,
+l2_immut_query_fill, l2_hash_compare_q, c.sizeof(c.LmP0Text),
+lm_own_new_zero, lm_own_copy_bytes, lm_own_delete; unknown c.*
+is rejected. Stores through const LmP0Text* are
 `const write`. parser_text_views.lm2 ports lm_p0_text_equals and
 lm_p0_identifier_payload. `lm_p0_text_equals` is the mutable
 fallback: strlen + length + memcmp, no extra FNV. Prepared
@@ -70,10 +73,24 @@ the query must stay alive and unchanged; a C literal satisfies
 that, a const formal does not prove it. Failed fill leaves
 live=0; compare does not read garbage. identifier_payload
 keeps aliasing. No process-global bind table.
+Body `@: LmP0Text result` is an explicit 11.2.1 address-depth-1
+slot (C `LmP0Text *`, symbol `l2_s`), not OwnUsed, not an Lmx
+child, and not the lmx_own cache. `return: result` is the pointer
+VALUE; `return: @result` would be the address of the slot
+(dangling) and is not emitted. `result\data` / `result\length`
+are raw foreign follow of the frozen p0.h ABI. `lm_own_*` comes
+from frozen `l1src/own.lm1` (new_zero / copy_bytes / delete /
+alloc_fails), imported as-is; that is heap allocation, not
+lmx_own field cache. `c.sizeof` admits `LmP0Text` /
+`c.LmP0Text` only. parser_text_heap.lm2 ports
+lm_p0_copy_bytes, lm_p0_text_view_new_cstr,
+lm_p0_text_view_delete (sub), and lm_p0_text_from_cstr.
+Checkpoint still runs before call/exit when OwnUsed is empty.
 parser_text_predicates.lm2,
-parser_text_line_break.lm2, parser_text_starts_python.lm2 and
-parser_text_views.lm2 are partial ports, not replacements of
-l1src. `main` remains the §1.7 adapter. Not L2 self-build.
+parser_text_line_break.lm2, parser_text_starts_python.lm2,
+parser_text_views.lm2 and parser_text_heap.lm2 are partial
+ports, not replacements of l1src. `main` remains the §1.7
+adapter. Not L2 self-build.
 Single emitter source: l2trans.lm1. Not the whole parser.
 
 Emit (L1), with `include: "<stdio.h>"` only when there is at least one puts:
@@ -99,4 +116,4 @@ INT_MAX (2147483647 here) is admitted and emitted; OS exit status is
 not the oracle for that value.
 
 Runner: powershell -File l2src\run_l2trans.ps1
-Open points for this unit: OPEN_POINTS.txt Unit 8.
+Open points for this unit: OPEN_POINTS.txt Units 8–11.
