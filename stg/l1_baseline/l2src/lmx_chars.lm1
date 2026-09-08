@@ -77,8 +77,11 @@ fn: lmx_char_value (@: void cell) int
     if: lmx_classify(cell) != c.LMX_KIND_PRIMITIVE
         return: -1
     p: (cast: (@: char) cell)
-    # Masked rather than cast through unsigned char, because the L1 cast path
-    # mis-lowers both spellings: (cast: (unsigned char) x) emits ((unsigned)charx)
-    # and (cast: (uchar) x) emits ((uchar)x), each silently. Reported separately.
-    # The mask is exact for every cell this pool holds.
+    # Masked rather than cast through an unsigned char type, and deliberately.
+    # (cast: (unsigned char) x) is a real L1 defect - it splits the type and
+    # emits ((unsigned)charx). (cast: (uchar) x) is NOT a defect: L1 passes the
+    # alias through and l1src/p0.h typedefs it, which is why l1trans's own
+    # emitted C carries ((uchar)c) and compiles. This unit does not include
+    # p0.h and should not - that header belongs to the P0 parser, not to L2.
+    # The mask depends on neither, and is exact for every cell this pool holds.
 return: ((cast: (int) p[0]) & 255)
