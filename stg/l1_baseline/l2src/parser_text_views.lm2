@@ -15,7 +15,6 @@ fn: lm_p0_identifier_payload (const: @(LmP0Text atom); @: LmP0Text out_payload) 
     if: atom\length >= 2U && atom\data[0] = 96 && atom\data[atom\length - 1U] = 96
         out_payload\data: atom\data + 1U
         out_payload\length: atom\length - 2U
-    l2_hash_bind(out_payload)
     return: 1
 end: lm_p0_identifier_payload
 fn: main () int

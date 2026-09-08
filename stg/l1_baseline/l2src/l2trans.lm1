@@ -753,7 +753,7 @@ fn: l2_is_slash (const: @(LmP0Text t)) int
 return: 1
 
 fn: l2_is_known (const: @(LmP0Text t)) int
-    if: l2_text_eq(t, "c.strlen") || l2_text_eq(t, "c.memcmp") || l2_text_eq(t, "l2_hash_bind") || l2_text_eq(t, "l2_hash_eq")
+    if: l2_text_eq(t, "c.strlen") || l2_text_eq(t, "c.memcmp") || l2_text_eq(t, "l2_hash_eq")
         return: 1
 return: 0
 
@@ -1444,18 +1444,6 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         if: c.fprintf(l2_out, "%sint: l2_t%d\n%sl2_t%d: c.memcmp(%s, %s, %s)\n", ind, t, ind, t, s0, s1, s2) < 0
             return: 1
         return: l2_tok_temp(t, dest)
-    if: idx < 0 && l2_text_eq(call\head, "l2_hash_bind")
-        if: call\body = 0
-            return: 1
-        if: l2_emit_fields(call\body\first_field, l2_count_active(call\body), mi, ind, l2_rhs) != 0
-            return: 1
-        if: l2_emit_checkpoint(mi, ind) != 0
-            return: 1
-        t: l2_tn
-        l2_tn: l2_tn + 1
-        if: c.fprintf(l2_out, "%sint: l2_t%d\n%sl2_t%d: l2_hash_bind(%s)\n", ind, t, ind, t, l2_rhs) < 0
-            return: 1
-        return: l2_tok_temp(t, dest)
     if: idx < 0 && l2_text_eq(call\head, "l2_hash_eq")
         if: call\body = 0
             return: 1
@@ -1952,7 +1940,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         i: i + 1
-    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char/size_t fields are children of callable->node. Char cache is typed char; graph data is all_chars cell. size_t cache is typed size_t; graph data is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned shared size_t, no int narrowing). Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\\name writes the graph, not the cache.\n# LmP0Text is the existing C ABI from l1src/p0.h (data, length), a limited migration adapter, not a general C header parser and not a silent layout for new L2 Structures. Lmx structural access stays child-index. Known C: c.strlen, c.memcmp, l2_hash_bind, l2_hash_eq. Unknown c.* is rejected. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.\n\n", l2_out) < 0
+    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char/size_t fields are children of callable->node. Char cache is typed char; graph data is all_chars cell. size_t cache is typed size_t; graph data is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned shared size_t, no int narrowing). Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\\name writes the graph, not the cache.\n# LmP0Text is the existing C ABI from l1src/p0.h (data, length), a limited migration adapter, not a general C header parser and not a silent layout for new L2 Structures. Lmx structural access stays child-index. Known C: c.strlen, c.memcmp, l2_hash_eq. Unknown c.* is rejected. l2_hash_eq hashes current text bytes against this-call query bytes; it does not cache a mutable view. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.\n\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     i: 0

@@ -5,19 +5,15 @@ include: "<stdint.h>" "<string.h>" "l1src/p0.h"
 # offset 0xcbf29ce484222325, prime 1099511628211ULL.
 # Not crypto. Not intern id. Not a runtime name table.
 #
-# Frozen p0.h is still {data, length}. Hash metadata lives here:
-# one slot per bound LmP0Text object, keyed by (view*, data, length)
-# recorded at bind. Lookup hits only if all three still match.
-# Foreign views are never bound: text_equals falls back to memcmp.
-# In-place byte mutation of a bound view without rebind is outside
-# the hashed contract; unbind or a different LmP0Text* uses fallback.
-# Equal hashes are not equality; memcmp still runs.
-
-c.array: [8]: @: LmP0Text l2_hash_view
-c.array: [8]: @: char l2_hash_data
-c.array: [8]: size_t l2_hash_len
-c.array: [8]: u64 l2_hash_val
-c.array: [8]: int l2_hash_live
+# No view cache and no process-global bind table. Frozen p0.h stays
+# {data, length}. identifier_payload keeps aliasing; a mutable
+# LmP0Text is not treated as immutable.
+#
+# l2_hash_eq at each call:
+#   query hash = FNV of value[0..n) (n already from the original strlen)
+#   text hash  = FNV of the bytes currently at text->data[0..n)
+#   mismatch -> false; equal hashes still memcmp.
+# Nothing is retained across calls, so nothing is released.
 
 fn: l2_fnv1a64 (const: @(char p); size_t: n) u64
     u64: h
@@ -31,84 +27,24 @@ fn: l2_fnv1a64 (const: @(char p); size_t: n) u64
         i: i + 1U
 return: h
 
-fn: l2_hash_slot (const: @(LmP0Text view)) int
-    int: i 0
-    if: view = 0
-        return: -1
-    while: i < 8
-        if: l2_hash_live[i] != 0 && l2_hash_view[i] = view
-            return: i
-        i: i + 1
-return: -1
-
-fn: l2_hash_bind (const: @(LmP0Text view)) int
-    int: i
-    if: view = 0
-        return: 1
-    i: l2_hash_slot(view)
-    if: i < 0
-        i: 0
-        while: i < 8 && l2_hash_live[i] != 0
-            i: i + 1
-        ---
-    if: i >= 8
-        i: 0
-    l2_hash_view[i]: (cast: (@: LmP0Text) view)
-    l2_hash_data[i]: (cast: (@: char) view\data)
-    l2_hash_len[i]: view\length
-    l2_hash_val[i]: l2_fnv1a64(view\data, view\length)
-    l2_hash_live[i]: 1
-return: 0
-
-fn: l2_hash_lookup (const: @(LmP0Text view); @: u64 out) int
-    int: i
-    if: view = 0 || out = 0
-        return: 0
-    i: l2_hash_slot(view)
-    if: i < 0
-        return: 0
-    if: l2_hash_data[i] != view\data
-        return: 0
-    if: l2_hash_len[i] != view\length
-        return: 0
-    out[0]: l2_hash_val[i]
-return: 1
-
 fn: l2_hash_eq (const: @(LmP0Text text); const: @(char value); size_t: n) int
-    u64: th 0ULL
+    u64: th
     u64: vh
     if: text = 0 || value = 0
         return: 0
     if: text\length != n
         return: 0
-    if: l2_hash_lookup(text, @ th)
-        vh: l2_fnv1a64(value, n)
-    if: l2_hash_lookup(text, @ th) != 0 && vh != th
+    vh: l2_fnv1a64(value, n)
+    th: l2_fnv1a64(text\data, n)
+    if: th != vh
         return: 0
 return: c.memcmp(text\data, value, n) = 0
 
-fn: l2_hash_inject (const: @(LmP0Text view); const: @(char value)) int
-    int: i
-    size_t: n
-    if: view = 0 || value = 0
-        return: 1
-    n: c.strlen(value)
-    if: l2_hash_bind(view) != 0
-        return: 1
-    i: l2_hash_slot(view)
-    if: i < 0
-        return: 1
-    l2_hash_val[i]: l2_fnv1a64(value, n)
-return: 0
-
-fn: l2_hash_unbind (const: @(LmP0Text view)) int
-    int: i
-    i: l2_hash_slot(view)
-    if: i < 0
-        return: 1
-    l2_hash_live[i]: 0
-    l2_hash_view[i]: 0
-    l2_hash_data[i]: 0
-    l2_hash_len[i]: 0U
-    l2_hash_val[i]: 0ULL
-return: 0
+fn: l2_hash_eq_forced (const: @(LmP0Text text); const: @(char value); size_t: n; u64: th; u64: vh) int
+    if: text = 0 || value = 0
+        return: 0
+    if: text\length != n
+        return: 0
+    if: th != vh
+        return: 0
+return: c.memcmp(text\data, value, n) = 0

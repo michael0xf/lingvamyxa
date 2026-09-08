@@ -835,7 +835,7 @@ end: external
     if ($text.IndexOf("size_t: l2_q0") -lt 0) { throw "views missing own size_t cache" }
     if ($text.IndexOf("lmx_size_take") -lt 0) { throw "views missing size_t pool take" }
     if ($text.IndexOf("l2_hash_eq") -lt 0) { throw "views missing hashed equals" }
-    if ($text.IndexOf("l2_hash_bind") -lt 0) { throw "views missing hash bind" }
+    if ($text.IndexOf("l2_hash_bind") -ge 0) { throw "views must not auto-bind a mutable payload" }
     if ($text.IndexOf("l1src/p0.h") -lt 0) { throw "views missing p0.h adapter include" }
     if ($text.IndexOf("const-pointee") -lt 0) { throw "views intern comment must distinguish const pointee" }
     $tail = "        return: 0`n    end: main`nend: external"
@@ -902,33 +902,29 @@ end: external
         c.printf("%d\n", l2_m0(unit, 0, "zzzz"))
         f: lmx_branch_child(unit, 0U)
         c.printf("%zu\n", lmx_size_value(f\data))
-        atom\data: "bbb"
+        mut[0]: 97
+        mut[1]: 97
+        mut[2]: 97
+        mut[3]: 0
+        atom\data: mut
         atom\length: 3U
         c.printf("%d\n", l2_m1(unit, atom, pay))
-        c.printf("%d\n", l2_m0(unit, pay, "bbb"))
-        if: l2_hash_inject(pay, "aaa") != 0
-            return: 1
         c.printf("%d\n", l2_m0(unit, pay, "aaa"))
-        mut[0]: 104
-        mut[1]: 101
-        mut[2]: 108
-        mut[3]: 108
-        mut[4]: 111
-        mut[5]: 0
-        t\data: mut
-        t\length: 5U
-        if: l2_hash_unbind(t) = 0
-            t\data: t\data
-        c.printf("%d\n", l2_m0(unit, t, "hello"))
-        mut[0]: 120
-        c.printf("%d\n", l2_m0(unit, t, "hello"))
-        c.printf("%d\n", l2_m0(unit, t, "xello"))
-        atom\data: "hello"
-        atom\length: 5U
+        mut[0]: 98
+        mut[1]: 98
+        mut[2]: 98
+        c.printf("%d\n", l2_m0(unit, pay, "bbb"))
+        c.printf("%d\n", l2_m0(unit, pay, "aaa"))
+        mut[0]: 99
+        mut[1]: 99
+        mut[2]: 99
+        c.printf("%d\n", l2_m0(unit, pay, "ccc"))
+        atom\data: "xyz"
+        atom\length: 3U
         c.printf("%d\n", l2_m1(unit, atom, pay))
-        pay\data: "zzz"
-        pay\length: 3U
-        c.printf("%d\n", l2_m0(unit, pay, "zzz"))
+        c.printf("%d\n", l2_m0(unit, pay, "xyz"))
+        c.printf("%d\n", l2_m0(unit, pay, "ccc"))
+        c.printf("%d\n", l2_hash_eq_forced(pay, "aaa", 3U, 1ULL, 1ULL))
         return: 0
     end: main
 end: external
@@ -953,7 +949,7 @@ end: external
         if ($alines[$i] -ne $blines[$i]) { throw "views mismatch vs parser_text.lm1 at $i ref=$($alines[$i]) l2=$($blines[$i])" }
     }
     $got = ($blines[19..($blines.Count - 1)] -join ",")
-    $want = "2,1,2,0,2,1,1,0,1,0,1,1,1"
+    $want = "2,1,2,0,2,1,1,1,0,1,1,1,0,0"
     if ($got -ne $want) { throw "views extra own/hash/mutation got=$got want=$want full=$b" }
 }
 
