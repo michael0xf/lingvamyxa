@@ -1,0 +1,126 @@
+predef: "l2src/lmx_ref.lm1"
+include: "<stdio.h>"
+
+[]: int backing_a 3 10 20 30
+[]: int backing_b 3 70 80 90
+
+fn: main () int
+    @: LmxPool arrays
+    @: LmxArrayDesc first
+    @: LmxArrayDesc second
+    @: LmxArrayDesc alias
+    @: LmxArrayDesc handed_back
+    @: Lmx node
+    @: Lmx other
+    @: Lmx returned
+    @: int got
+    int: failures
+    failures: 0
+
+    got: (cast: (@: int) c.calloc(1U, c.sizeof(got[0])))
+    arrays: (cast: (@: LmxPool) c.calloc(1U, c.sizeof(c.LmxPool)))
+    node: (cast: (@: Lmx) c.calloc(1U, c.sizeof(c.Lmx)))
+    other: (cast: (@: Lmx) c.calloc(1U, c.sizeof(c.Lmx)))
+    if: got = 0 || arrays = 0 || node = 0 || other = 0
+        c.printf("lmx: allocation failed\n")
+        return: 1
+    if: lmx_ranges_init(8U) != 0
+        c.printf("lmx: range table init failed\n")
+        return: 1
+    if: lmx_pool_open(arrays, c.sizeof(c.LmxArrayDesc), 4U, c.LMX_KIND_ARRAY) != 0
+        c.printf("lmx: array pool open failed\n")
+        return: 1
+
+    first: lmx_array_desc_new(arrays, 3U, (cast: (@: void) backing_a))
+    second: lmx_array_desc_new(arrays, 3U, (cast: (@: void) backing_b))
+    if: first = 0 || second = 0
+        c.printf("lmx: descriptor handout failed\n")
+        return: 1
+
+    # Passing copies the reference, not the referent. The callee sees the very
+    # same descriptor, so no clone happened on the way in.
+    handed_back: lmx_ref_rebind_local(first, first)
+    if: handed_back != first
+        c.printf("lmx: passing a descriptor cloned it\n")
+        failures: failures + 1
+
+    # Rebinding the callee's local reference does not reach the caller.
+    handed_back: lmx_ref_rebind_local(first, second)
+    if: handed_back != second
+        c.printf("lmx: callee could not rebind its own reference\n")
+        failures: failures + 1
+    if: first = second
+        c.printf("lmx: callee rebinding moved the caller's reference\n")
+        failures: failures + 1
+    if: first\data != (cast: (@: void) backing_a)
+        c.printf("lmx: callee rebinding changed the caller's referent\n")
+        failures: failures + 1
+
+    # A write through the reference reaches the shared referent, and is visible
+    # through every other reference to the same storage.
+    alias: first
+    if: lmx_ref_write_through(first, 1U, 99) != 0
+        c.printf("lmx: write through the reference failed\n")
+        failures: failures + 1
+    if: lmx_ref_read(alias, 1U, got) != 0 || got[0] != 99
+        c.printf("lmx: write not visible through a second reference\n")
+        failures: failures + 1
+    if: backing_a[1] != 99
+        c.printf("lmx: write did not reach the actual element storage\n")
+        failures: failures + 1
+    if: backing_b[1] != 80
+        c.printf("lmx: write reached the wrong array\n")
+        failures: failures + 1
+
+    # Bounds are refused rather than wrapped or clamped.
+    if: lmx_ref_write_through(first, 3U, 1) = 0
+        c.printf("lmx: out of range write accepted\n")
+        failures: failures + 1
+
+    # An operation that replaces the descriptor's own storage mutates the
+    # REFERENT, so it is visible through every holder - the opposite case to
+    # rebinding a local reference.
+    if: lmx_ref_restore_storage(first, 3U, (cast: (@: void) backing_b)) != 0
+        c.printf("lmx: storage replacement failed\n")
+        failures: failures + 1
+    if: alias\data != (cast: (@: void) backing_b)
+        c.printf("lmx: referent mutation not seen through the alias\n")
+        failures: failures + 1
+    if: lmx_ref_restore_storage(first, 3U, (cast: (@: void) backing_a)) != 0
+        c.printf("lmx: storage restore failed\n")
+        failures: failures + 1
+
+    # The same two rules for a Structure occurrence.
+    lmx_cell_init(node, 0, (cast: (@: void) first))
+    lmx_cell_init(other, 0, (cast: (@: void) second))
+    returned: lmx_ref_repoint_local(node, other)
+    if: returned != other
+        c.printf("lmx: callee could not repoint its own node reference\n")
+        failures: failures + 1
+    if: node = other
+        c.printf("lmx: callee repointing moved the caller's node reference\n")
+        failures: failures + 1
+    if: node\data != (cast: (@: void) first)
+        c.printf("lmx: callee repointing changed the caller's node payload\n")
+        failures: failures + 1
+
+    lmx_ref_set_data(node, (cast: (@: void) second))
+    if: node\data != (cast: (@: void) second)
+        c.printf("lmx: field write through the reference did not reach the node\n")
+        failures: failures + 1
+    if: lmx_classify(node\data) != c.LMX_KIND_ARRAY
+        c.printf("lmx: repointed payload lost its classification\n")
+        failures: failures + 1
+
+    c.free(arrays\base)
+    c.free(arrays)
+    c.free(node)
+    c.free(other)
+    c.free(got)
+    lmx_ranges_release()
+
+    if: failures != 0
+        c.printf("lmx ref selftest FAILED checks=%d\n", failures)
+        return: 1
+    c.printf("lmx ref selftest ok\n")
+    return: 0

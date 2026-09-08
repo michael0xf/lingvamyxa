@@ -282,6 +282,83 @@ But the blocking half is narrower than feared. 14.4 lists five open things:
 So unit 5 needs 14.1 for enumeration and the generation/agreement half of 14.4
 for the sought id. Both: ASK.
 
+
+Unit 5 - reference-value passing
+--------------------------------
+Files: lmx_ref.lm1, lmx_ref_selftest.lm1
+
+SPEC 21.4  Structure and Array arguments are reference values
+    DECIDED, and pinned rather than assumed. 21.4 fixes both halves: the
+    reference is copied into the callee's activation and the referent is not
+    cloned; rebinding the callee's local reference changes only that local
+    reference; a write through the reference mutates the shared referent and is
+    visible through every reference and path to it.
+
+    This unit has no open points. It exists because both halves are exactly
+    what a later change would break quietly - by cloning on the way in, or by
+    passing a reference to the reference so a callee's rebinding escapes. Either
+    would still pass every other test in this tree. The helpers therefore do the
+    tempting wrong thing locally, rebind and reassign, so the selftest can show
+    it does not get out.
+
+    The array case covers the distinction 21.4 draws for Array operations:
+    replacing a descriptor's own storage mutates the referent and every holder
+    sees it, while assigning a local reference to another Array does not rebind
+    the caller. Both are asserted against the same descriptor.
+
+    Not covered, and not by omission: 21.4's last paragraph forbids passing a
+    raw Structure or Array pointer as is between Messages, requiring a clone,
+    serialization or ownership-transfer boundary. No Message exists yet. Arises
+    with the first one, alongside 14.9.
+
+
+Audit: what may change in a Structure, and what it gives 14.1
+--------------------------------------------------------------
+Asked to check whether the rule had drifted. It has not, but the first reading
+of this audit drew the wrong consequence and is corrected here.
+
+The rule, as the user states it and as the spec bears out: THE NUMBER OF
+CHILDREN DOES NOT CHANGE. What may change is the REFERENCE a field holds, and
+only where that field is not const - 9.1.1's const fixes the binding, the cell
+or reference, and does not reach through it. Unit 3 already carries the worked
+example: assigning a primitive field changes its reference and leaves the
+shared cell alone.
+
+Every site that mentions appending is consistent with that once merge is read
+correctly:
+
+  19.20   construction and merge are distinct operations; merge CREATES A FRESH
+          ROOT and copies operand children into it. It does not grow an
+          existing structure.
+  ~11089  merge appends copied children in operand/body order - into that fresh
+          root
+  ~11728  the result appends body children, rewrites all copied node pointers
+          and re-registers - again the result being built
+  21.11   an explicit operation may append, replace, remove or move occurrences
+          only when its receiver defines that mutation, and it never reorders
+  ~6063   an ordinary assignment neither updates node\[0]i nor appends a child
+  ~7684   an explicit append never moves the existing first child from [0]
+
+Corroboration I should have noticed before extrapolating: 14.1's own
+requirement list is "stable node addresses, ordered children, deep containment
+copying and range classification". GROWTH IS NOT IN IT. Had branches been able
+to grow in place, 14.1 would have had to say so.
+
+What this GIVES 14.1, rather than costs it. A contiguous block of Lmx sealed at
+construction satisfies every requirement 14.1 states: addresses are stable
+because nothing relocates, order is the index, containment copying is a block
+copy plus a node rewrite, and the block registers as one range. The candidate
+14.1 lists first is therefore viable, and the segmentation the earlier version
+of this entry argued for is not needed.
+
+Not a decision - 14.1 remains the user's. Recorded so the contiguous candidate
+is not passed over for a cost it does not have.
+
+Method note to self. Twice now a correct local reading produced a wrong
+consequence, because I extrapolated from the passage instead of checking it
+against the requirement list that governs it. The list is the cheaper check and
+comes first.
+
 Carried forward, not yet touched
 --------------------------------
 ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).

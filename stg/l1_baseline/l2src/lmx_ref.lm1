@@ -1,0 +1,76 @@
+predef: "l2src/lmx_names.lm1"
+
+# Reference-value passing. Lingvamyxa_spec.txt 21.4.
+#
+# 21.4: "Structure and Array arguments are Java-style reference values. The
+# reference is copied into the callee's C activation; the referenced
+# graph/storage is not cloned. Rebinding the callee's local reference changes
+# only that local reference. An explicit reference\field write or array[index]
+# write mutates the shared referent and is visible through every reference/path
+# to that same node or Array storage inside the Message."
+#
+# This unit exists to pin that down where an implementation would most easily
+# drift. Nothing here is hard; the risk is that a later change starts cloning
+# on the way in, or starts passing a reference to the reference so that a
+# callee's rebinding reaches the caller. Both would still pass every other test
+# in this tree, so they get their own.
+#
+# The helpers below are written to DO the tempting wrong thing locally - rebind,
+# reassign - so the selftest can show it does not escape.
+
+# Rebinds its own local reference and returns it. The caller's reference must
+# not follow. 21.4: "Rebinding the callee's local reference changes only that
+# local reference."
+fn: lmx_ref_rebind_local (@: LmxArrayDesc desc; @: LmxArrayDesc other) @: LmxArrayDesc
+    desc: other
+return: desc
+
+# Writes through the reference into the shared backing. 21.4: visible through
+# every reference and path to that same Array storage.
+fn: lmx_ref_write_through (@: LmxArrayDesc desc; size_t: index; int: value) int
+    @: int cells
+    if: desc = 0
+        return: 1
+    if: desc\data = 0
+        return: 1
+    if: index >= desc\len
+        return: 1
+    cells: (cast: (@: int) desc\data)
+    cells[index]: value
+return: 0
+
+fn: lmx_ref_read (@: LmxArrayDesc desc; size_t: index; @: int out) int
+    @: int cells
+    if: desc = 0 || out = 0
+        return: 1
+    if: desc\data = 0
+        return: 1
+    if: index >= desc\len
+        return: 1
+    cells: (cast: (@: int) desc\data)
+    out[0]: cells[index]
+return: 0
+
+# The same distinction for a Structure occurrence. Repointing a local Lmx
+# reference must not move the caller's; writing a field through it must.
+fn: lmx_ref_repoint_local (@: Lmx cell; @: Lmx other) @: Lmx
+    cell: other
+return: cell
+
+sub: lmx_ref_set_data (@: Lmx cell; @: void data)
+    if: cell != 0
+        cell\data: data
+    ---
+end: lmx_ref_set_data
+
+# An Array operation that replaces the descriptor's own storage pointer. 21.4:
+# "Resizing or other Array operations follow the same distinction: mutation
+# through the reference affects the referent; assigning the local reference to
+# another Array does not rebind the caller." This one mutates the referent, so
+# every holder of that descriptor sees it.
+fn: lmx_ref_restore_storage (@: LmxArrayDesc desc; size_t: len; @: void data) int
+    if: desc = 0
+        return: 1
+    desc\len: len
+    desc\data: data
+return: 0
