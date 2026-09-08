@@ -427,6 +427,94 @@ while ranges are few and it is on the hot path, so it will need a real lookup
 before it is fine at scale. Not a correctness problem, and not solved by
 guessing at this stage.
 
+
+Standing contract: the two optimisations, kept verbatim
+--------------------------------------------------------
+Not open points. This is the performance model of 21 and the part most easily
+lost by a later change that looks locally reasonable. Recorded so that a unit
+which generates calls can be checked against it line by line.
+
+A. const, and the internal consequence of immutable
+
+  const fixes the BINDING - the cell, the reference - and is shallow; it does
+  not reach through the reference. immutable fixes the VALUE and is deep. They
+  are two orthogonal axes, neither a stronger form of the other (9.1.1, 9.1.2).
+
+  If a reference is const, the generated C does not touch the node the void *
+  lives in at all: the target is known at translation time. For callables that
+  is 21.8's direct invocation - a direct C symbol call, with no walk through the
+  descriptor via the node.
+
+  21.5 adds the part that survives suspension: const qualification of an own
+  field's backing, INCLUDING a RuntimeImmutable that succeeds while this
+  activation is suspended in a call, stays binding on the cache. Neither a later
+  own-local assignment nor a checkpoint may bypass it.
+
+  What const does NOT give: checkpoint elision. Whether the CALLER has dirty own
+  fields across a call is a property of the caller, and const on the callee says
+  nothing about it. NOTES 3.1 insists these are two optimisations with separate
+  preconditions and that they fail independently.
+
+B. Own fields as C working locals, with dirty-only checkpoints
+
+  Entry.     Load only OwnUsed(M) - the own fields this body actually reads or
+             writes unqualified, or uses to supply an outgoing callee's dynamic
+             value - into typed automatic C locals. Each local records and roots
+             the exact Lmx occurrence it came from. Other node fields are
+             neither loaded nor stored.
+
+             Explicit node\field, reference\field and array[index] are NOT
+             folded into this cache. They read or mutate their selected location
+             on every execution. Mentioning a field through an explicit path
+             does not make it a cached own local.
+
+  Body.      Work in the locals.
+
+  Dirty.     A local becomes dirty only when this activation actually executes
+             an assignment or rebind to it since its last successful checkpoint.
+             Not inferred by comparing against the graph. Not set because a
+             branch might have assigned. Not set by capability: making writable
+             access available is not a write, and an outlined helper must report
+             the write it actually executed.
+
+  Publish.   Immediately before every outbound call, before every external,
+             re-entrant or publishing boundary, and before every exit -
+             fallthrough, return, throw, failing assert, stop, cancellation, and
+             before yield suspension - write each DIRTY local to its node field,
+             in forward source order of the backing fields. A successful store
+             clears only its own dirty state. Clean values must not be
+             re-published. Declared arguments and dynamic inputs are never
+             published automatically.
+
+  Return.    NO RELOAD. The caller continues with its C snapshot; only explicit
+             graph paths see the current graph.
+
+  Why no reload, and why not flush-all. 21.6 gives the case outright: outer
+  enters with x = 1 clean, calls inner, inner explicitly writes the graph field
+  x = 2, outer returns without assigning its local. Flush-all would overwrite 2
+  with a stale 1. Dirty-only writes nothing. If outer then executes x = 3, x is
+  dirty and the next checkpoint publishes 3.
+
+  NOTES 1.1 derives this from the ontology rather than postulating it: all
+  Structure, one sequential thread per Message, a small C stack, and activation
+  state living in callable->node rather than in a frame slot. A bare name LOOKS
+  like an Algol-60 local and LIVES as an instance field; spill/no-reload is the
+  seam between those two natures. Thread safety comes from the same single
+  sequential thread - a suspended caller's snapshot cannot be raced, and other
+  Messages have disjoint arenas.
+
+C. The related case: values from the enclosing scope
+
+  DynRequired(M) is a separate set from OwnUsed(M). Declared arguments and
+  dynamic imported values are activation-local inputs with NO write-back target.
+  Assigning or rebinding one changes only this activation and the value it may
+  pass further down; it never writes back to the caller and never automatically
+  writes node\x. To publish one as method state the program must assign an own
+  field or use an explicit graph path.
+
+  A forwarded dynamic name never becomes an own graph field merely by being
+  forwarded.
+
 Carried forward, not yet touched
 --------------------------------
 ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).
