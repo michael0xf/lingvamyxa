@@ -648,9 +648,14 @@ SPEC 11.3.1  `@` of graph payload / parameter
 SPEC 14 / 21.5–21.6  own-field cache, dirty checkpoints
     AVOIDED. No own fields, no unqualified locals besides the adapter.
 
-Unsupported forms (extra statements, c.puts, arguments, several main,
-L1/L3 wrappers, non-decimal return) are diagnostics, not silent L1 copy
-and not a canned output.
+SPEC 1.7 / 6.6.6  `c.puts` of a quoted string before `return`
+    DECIDED for this adapter. Zero or more `c.puts` with one ordinary
+    double-quoted atom; P0 spelling is copied into L1. Not a general
+    `c.` call ABI and not a C: text hatch.
+
+Unsupported forms (extra statements, bad/extra puts args, code after
+return, several main, L1/L3 wrappers, non-decimal return) are
+diagnostics, not silent L1 copy and not a canned output.
 
 
 Carried forward, not yet touched

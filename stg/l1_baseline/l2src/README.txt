@@ -15,18 +15,23 @@ Supported L2 input, and nothing else:
 
     L2:                          # optional; .lm2 is already implicit L2
         fn: main () int
+            c.puts: "..."        # optional, zero or more, quoted source spelling
             return: N            # N = 0..INT_MAX of the C99 target int
                                  # (no leading zeros; overflow is a diagnostic)
         end: main
     end: L2
 
-That is the SPEC 1.7 bootstrap `main` adapter, with c.puts removed.
-It is not a general L2 method, not L2 self-build, and not units 1–7.
+That is the SPEC 1.7 bootstrap `main` adapter. String atoms are copied as
+P0 source spelling into L1 (quotes and escapes kept; not decoded then
+re-escaped). `c.puts` sequences are allowed; anything after `return` is
+not. It is not a general L2 method, not L2 self-build, and not units 1–7.
 
-Emit (L1):
+Emit (L1), with `include: "<stdio.h>"` only when there is at least one puts:
 
+    include: "<stdio.h>"
     external:
         fn: main () int
+            c.puts: "..."
             return: N
         end: main
     end: external
