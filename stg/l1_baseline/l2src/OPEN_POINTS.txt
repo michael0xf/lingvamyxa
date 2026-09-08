@@ -216,6 +216,43 @@ ABI 14.5  Positional and anonymous occurrence naming
     question, and nothing here assumes either. Arises with the first anonymous
     or repeated occurrence, which is also where 14.1 branch storage arrives.
 
+
+Constraint carried into unit 5 - occurrence ordinals are naming, not indexing
+-----------------------------------------------------------------------------
+Recorded because getting it wrong would have shaped unit 4's id and could not
+have been undone quietly.
+
+Two brackets that look alike are grammatically different (SPEC 12.3, and 21
+states it outright: the bracket in target\[occurrence]field is not the postfix
+operator).
+
+    field\[2]field    the third occurrence among children whose SHORT NAME is
+                      field. The leading bracket is part of the NAME. Bare
+                      field is shorthand for [0]field (SPEC 2).
+
+    field\field[2]    element 2 of the array held by [0]field. The trailing
+                      bracket is postfix indexing of the VALUE (SPEC 12.3),
+                      which explicitly does not select the nth repeated field.
+
+Consequence for unit 4, which it already satisfies: the ordinal is POSITIONAL.
+It comes from the order children are enumerated in, and is not stored. So one
+ShortNameId serves every occurrence of a name - SPEC 2 says the index stores
+short-name identity, not full paths. Encoding the ordinal into the id would
+give three fields named branch three different ids, and [2]branch would stop
+being a name and become an address.
+
+Consequence for unit 5: resolution is enumerate children in order, ask the
+index for each child's short name, compare, count to n. That needs ordered
+child enumeration, which is ABI 14.1 - the layout behind data for a non-leaf.
+Unit 5 therefore opens with an ASK, not with code.
+
+Second half of 14.4 may or may not be reached. Textual lookup needs the forward
+direction, name -> id, which is 14.4's open "conversion from an arbitrary
+runtime textual path". But SPEC 2 also says a resolved reference is used
+directly and needs no name lookup. If the translator resolves paths at
+translation time, runtime interning may never be needed and only 14.1 blocks.
+Open question for the user, asked and not yet answered.
+
 Carried forward, not yet touched
 --------------------------------
 ABI 14.4   ShortNameId format. Arises with the reverse name index (SPEC 2, 21.1).
