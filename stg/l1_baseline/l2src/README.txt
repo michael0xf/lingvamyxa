@@ -60,13 +60,14 @@ Lmx access stays child-index. Known C: c.strlen, c.memcmp;
 unknown c.* is rejected. Stores through const LmP0Text* are
 `const write`. parser_text_views.lm2 ports lm_p0_text_equals and
 lm_p0_identifier_payload. Equals uses FNV-1a 64-bit (u64,
-offset 0xcbf29ce484222325, prime 1099511628211) via L2-side
-bind metadata, not p0.h. Foreign views are unbound and use
-strlen+memcmp. Bound views (identifier_payload writes) hash
-`value` in one pass and fast-reject on hash mismatch; equal
-hashes still memcmp. In-place mutation of a bound view without
-rebind is outside the hashed contract; pointer/length change
-or unbind falls back. parser_text_predicates.lm2,
+offset 0xcbf29ce484222325, prime 1099511628211) without a
+view cache and without changing p0.h. At each call the query
+hash is FNV of value[0..n) (n from the original strlen) and
+the text hash is FNV of the bytes currently at text->data;
+mismatch is false; equal hashes still memcmp. identifier_payload
+keeps aliasing the caller buffer; in-place mutation of that
+buffer is visible to equals. No process-global bind table.
+parser_text_predicates.lm2,
 parser_text_line_break.lm2, parser_text_starts_python.lm2 and
 parser_text_views.lm2 are partial ports, not replacements of
 l1src. `main` remains the §1.7 adapter. Not L2 self-build.

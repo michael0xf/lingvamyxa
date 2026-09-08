@@ -783,21 +783,21 @@ SPEC 7487–7496 / variant 2  raw vs Lmx follow
     DECIDED for this adapter only: lmxParent\child stays child index;
     rawParent\child is -> for the declared foreign typed address.
 
-c.strlen / c.memcmp / l2_hash_bind / l2_hash_eq
+c.strlen / c.memcmp / l2_hash_eq
     DECIDED as known C-surface functions with exact signatures.
     Unknown c.* is `unknown method`. const pointee forbids stores
     (`const write`). Out-pointer stores address the referent field.
 
-FNV-1a 64 hashed equals (ticket 162200)
-    DECIDED as L2-side adapter metadata in l2_text_hash.lm1, not a
-    p0.h ABI change. Hash is FNV-1a 64-bit unsigned (u64), not an
-    intern id. Bind records (view*, data, length, hash) at
-    identifier_payload write. Lookup hits only if all three identity
-    fields still match. Foreign views never bind (original
-    strlen+memcmp). Bound path hashes `value` once and fast-rejects
-    on mismatch; equal hashes still memcmp. In-place byte mutation
-    of a bound view without rebind is outside the hashed contract;
-    pointer/length change or unbind uses fallback.
+FNV-1a 64 hashed equals (ticket 162200, corrected 165600)
+    DECIDED in l2_text_hash.lm1, not a p0.h ABI change. Hash is
+    FNV-1a 64-bit unsigned (u64), not an intern id. There is no
+    view bind table and no process-global registry. identifier_payload
+    aliases the caller buffer as the L1 original does. At each
+    equals call: query hash = FNV of value[0..n) (n from the original
+    strlen); text hash = FNV of the current text->data bytes;
+    mismatch -> false; equal hashes still memcmp. Mutable alias
+    updates are visible. Test-only l2_hash_eq_forced proves equal
+    hashes are not equality. Nothing is retained across calls.
 
 Cluster B (copy_bytes / text_view_new_cstr / delete / from_cstr),
 P0-as-Lmx, and parser.lm1 scanners
