@@ -24,18 +24,24 @@ Supported L2 input, and nothing else:
 That is the SPEC 1.7 bootstrap `main` adapter. String atoms are copied as
 P0 source spelling into L1 (quotes and escapes kept; not decoded then
 re-escaped). `c.puts` sequences are allowed; anything after `return` is
-not. Several two-int no-throw methods in one .lm2 are real §21.8
+not. Several no-throw methods in one .lm2 are real §21.8
 callables of one unit Structure: intern table shared across the
-unit, child-index paths, typed `name(node, a, b)`, if/else, direct
-calls including forward references (L1 prototype:). OwnUsed and
-DynRequired stay empty (declared formals only). rec.sig is the
-interned full L2_SIG_V0 + ordered formal-name contract. Runtime does
-not memcmp. Closed-unit devirtualization; actuals are temps before
+unit, child-index paths, typed `l2_m{i}(node, ...)`, if/else, direct
+calls including forward references (L1 prototype:). Backend method
+symbols are `l2_m{i}`; intern and source lookup keep original names.
+`c.malloc` stays the foreign door. OwnUsed and DynRequired stay
+empty (declared formals only). rec.sig is the interned full
+L2_SIG_V0 + ordered source-name/type contract. Runtime does not
+memcmp. Closed-unit devirtualization; actuals are temps before
 the call. Recursion is an implementation limit. At most 8 methods;
-`lmx_ranges_init` is 1+N. Formals are hygienic `l2_p{i}_{j}`;
-intern keeps source names. char/int formals, arity 1–4,
-&&/|| short-circuit via L1. parser_text_predicates.lm2 is a
-partial port, not a replacement of l1src. `main` remains the
+`lmx_ranges_init` is 1+N. Formals are hygienic `l2_p{i}_{j}`.
+char/int/size_t and `const @(char)` formals, arity 1–4, int or
+size_t result. &&/|| stay L1 C &&/||; RHS is not prepped to temps
+(C99 6.5.13/6.5.14 short-circuit, including [] loads). That is not
+a §21.8 materialized-order claim and is not for own/through.
+Dest replace writes tmp, then dest.bak + rollback; not atomic.
+parser_text_predicates.lm2 and parser_text_line_break.lm2 are
+partial ports, not replacements of l1src. `main` remains the
 §1.7 adapter. Not L2 self-build. Single emitter source: l2trans.lm1.
 
 Emit (L1), with `include: "<stdio.h>"` only when there is at least one puts:

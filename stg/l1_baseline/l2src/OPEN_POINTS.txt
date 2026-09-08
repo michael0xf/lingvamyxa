@@ -666,33 +666,52 @@ tests/entry_swap_formals.lm2, tests/unit_*.lm2,
 negatives unknown/arity/unresolved/trailer/dup/loop/recursion
 
 SPEC 21.8 / ABI 6.6  method record {addr, sig}, node first, typed invoke
-    DECIDED for throws-none two-int methods. C `int name(Lmx *node,
-    int, int)`. Two-pass: collect declarations+contracts, then validate
+    DECIDED for throws-none methods in this slice. C entry is
+    `T l2_m{i}(Lmx *node, ...)` with backend symbols mangled by
+    unit index; intern and find_method keep source names, so a
+    source method named malloc does not collide with c.malloc.
+    Two-pass: collect declarations+contracts, then validate
     bodies. Intern table is one per translated unit (not reset per
-    method). Full contract = L2_SIG_V0 + exact ordered formal-name
-    bytes; method name is not interned. Matching contracts share an id.
-    rec.sig is that interned id. Runtime does not memcmp. Child index
-    is the callable path. Closed-unit devirtualization: no graph
-    mutations after construction; actuals materialized left-to-right
-    into temps before each call (not C argument order). Recursion and
+    method). Full contract = L2_SIG_V0 + exact ordered source
+    formal-name bytes and types; method name is not interned.
+    Matching contracts share an id. rec.sig is that interned id.
+    Runtime does not memcmp. Child index is the callable path.
+    Closed-unit devirtualization: no graph mutations after
+    construction; actuals materialized left-to-right into temps
+    before each call (not C argument order). Recursion and
     cycles are an implementation limit (`unsupported recursion`), not
     a language ban. Max 8 methods (9th is `too many methods`).
     Generated `lmx_ranges_init` is 1+N (children + method records).
     Source `node` is reserved. Formals emit as `l2_p{i}_{j}`; intern
     keeps source names. Long names / too-deep if are diagnosed before
-    dest is opened; emit writes tmp then rename. Mixed multi-op
-    infix other than a + chain is unsupported in this slice.
-    Variable arity 1–4, char or int formals, int result. &&/|| keep
-    C precedence; right-hand calls are inlined so they short-circuit.
-    Partial port of parser_text predicates lives in
-    l2src/parser_text_predicates.lm2 and does not replace l1src.
+    dest is opened. Publication: write tmp; if dest exists rename
+    dest to dest.bak; rename tmp to dest; on fail restore bak; on
+    success remove bak. Not atomic. No recursive FS.
+    Variable arity 1–4; char, int, size_t, or const @(char) formals;
+    int or size_t result. &&/|| keep C precedence as one L1 C
+    expression. RHS is not prepped to temps (calls inlined; [] stay
+    in the expr). Proof: C99 6.5.13/6.5.14 short-circuit, so a
+    right-hand [] load or call is skipped. That is not a §21.8
+    materialized-order claim and is not transferred to own/through.
+    Partial ports: parser_text_predicates.lm2 and
+    parser_text_line_break.lm2 (lm_p0_line_break_width_at). They
+    do not replace l1src. const @(char) is a declared typed C-address
+    parameter (SPEC 11.3.1), not an LMX Array descriptor.
 
     OwnUsed/DynRequired remain empty: only declared formals. Not
     Throws/Message/through/own. prototype: is emitted so forward
     calls do not depend on C declaration order.
 
+SPEC 11.3.1  declared typed C-address parameter
+    DECIDED for this port: `const: @(char source)` is the C
+    `const char *` formal of lm_p0_line_break_width_at. No L2
+    protection, cloning, or Array descriptor is added. Null source
+    with length 0 is the original guard (index >= length) and must
+    not dereference.
+
 SPEC 21.13.4 / ABI 14.10  result carrier
-    DECIDED as backend choice for this sig: int return, throws-none.
+    DECIDED as backend choice for this slice: int or size_t return,
+    throws-none.
 
 SPEC 21.13.5  record layout
     DECIDED as backend: one malloc'd LmxMethod per method in a
