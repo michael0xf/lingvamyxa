@@ -639,9 +639,11 @@ ABI 14.9 / SPEC 19.28–19.29  Message arena
     Units 1–7 are not linked. Arises when a fixture needs Lmx. Then: ASK.
 
 SPEC 11.3.1  `@` of graph payload / parameter
-    AVOIDED. `@` / raw payload / typed-address write are rejected as
-    unsupported body in this adapter. Arises when a fixture uses them.
-    Then: ASK.
+    DECIDED. Semantics are settled in SPEC 11.3.1. This adapter's
+    implemented subset currently rejects `@` as unsupported body.
+    A later fixture that uses `@` follows 11.3.1. ASK only if that
+    fixture needs a contract 11.3.1 does not settle. An implementation
+    gap is not a new user question.
 
 SPEC 14 / 21.5–21.6  own-field cache, dirty checkpoints
     AVOIDED. No own fields, no unqualified locals besides the adapter.

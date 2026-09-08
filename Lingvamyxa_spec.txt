@@ -7317,7 +7317,8 @@ The prefix form:
 
     @x
 
-is specified for two already distinct kinds of operand.
+is specified for the operand kinds in 11.3.1, and for address-of-address
+of an explicit L2 address slot.
 
 If `x` is a graph-backed field, `@x` is the typed address of that field's
 stored payload after address-range classification (11.3.1). If `x` is a
@@ -7353,10 +7354,11 @@ the method's C working-local cache of `x` (21.5). An own field has both a
 graph payload and, when used unqualified, a C cache; `@` does not open the
 cache. Prefix raw-load `\p` follows the *value* of the typed address.
 
-An Array-bearing field's payload is the descriptor (or the cell that stores
-the descriptor reference), not the element backing. A callable leaf's payload
-is the method record `{addr, sig}`, not the executable C entry. Do not invent
-further profile-specific ABI adapters here.
+An Array field uses the direct descriptor reference of sections 2 / 6.5:
+`@` names those classified descriptor data, not `Lmx.data`, not the own
+cache, not a pointer-to-pointer layer, and not the element backing. A
+callable leaf is classified as the method record `{addr, sig}`, not the
+executable C entry. Do not invent further profile-specific ABI adapters.
 
 Taking `@x` of a graph field is not a dirty-write and does not extend graph
 lifetime. Direct write through an allowed mutable typed address changes the
@@ -7577,8 +7579,9 @@ Meanings under the declarations in section 11.2:
         render the whole subtree reached by that occurrence.
 
     print: @tree\branch
-        Parsed as `print: @(tree\branch)`. 11.3.1: classified payload of
-        that field (the stored reference cell, not the referent Structure).
+        Parsed as `print: @(tree\branch)`. 11.3.1: address of the typed
+        data selected by classifying that field; not `Lmx.data`, not the
+        own-cache.
 
     print: root\branch\branch
         Follow `root\branch` to its selected Lmx child/reference, then follow
@@ -7602,9 +7605,8 @@ is parsed as:
 
     @(tree\branch)
 
-That is the classified payload address of the selected field (11.3.1). For a
-Structure-reference field the payload is the stored reference cell, not the
-referent.
+That is the address of the typed data selected by classifying the field
+(11.3.1): not the header void*, not the own-cache.
 
 Prefix raw-load is valid only when its operand is an explicit typed-address
 primitive. It does not reinterpret an Lmx Structure reference or Array descriptor
