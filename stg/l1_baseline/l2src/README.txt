@@ -121,4 +121,6 @@ INT_MAX (2147483647 here) is admitted and emitted; OS exit status is
 not the oracle for that value.
 
 Runner: powershell -File l2src\run_l2trans.ps1
-Open points for this unit: OPEN_POINTS.txt Units 8–11.
+Hidden through-args (DynRequired) are the next bounded patch,
+not implemented: OPEN_POINTS.txt Unit 12. Open points for this
+unit: OPEN_POINTS.txt Units 8–12.

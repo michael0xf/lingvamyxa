@@ -850,14 +850,77 @@ Same-name formal + own bind (ticket 183000 / 183740)
     method's node. Writes before the decl do not dirty. A formal
     without that bind is never published. Own-decl inside if is
     `unsupported own declaration`. Hidden / lexical-fallback
-    parameters are not yet a frontend feature; explicit-only
+    parameters: next bounded patch, Unit 12. Explicit-only
     tests are not the completed general rule.
 
-    ASK, not silently answered: after the bind line, `@quote` of
-    the shared name is both own-field graph payload and C `&` of
-    the parameter. SPEC 11.3.1 records the collision and does not
-    pick. Do not change `@` / lifetime in the emitter until that
-    is answered.
+    `@` after bind: already asked of the user 2026-09-08 18:51.
+    No answer yet. Do not duplicate that question and do not
+    change `@` / lifetime in the emitter.
+
+Unit 12 - hidden char/size_t through-args, closed direct calls
+--------------------------------------------------------------
+Files (proposed, not started): l2trans.lm1, run_l2trans.ps1,
+tests/unit_dyn_*.lm2
+
+SPEC 21.3  DynRequired / caller-first / node\[0]x fallback
+    DECIDED in spec. This unit would implement a closed-unit
+    subset: char/size_t, known direct callees only. No runtime
+    Namespace, no new source syntax, no heap frames, no change
+    to `node\x`. `@` after bind is out of scope here.
+
+    Proposed physical ABI, not a source-declared formal:
+      C entry = node, then declared formals in source order,
+      then hidden params in intern order.
+      Source `fn: leaf () int` stays declared arity 0.
+      Hidden names are extra C parameters and extra interned
+      sig payload. rec.sig includes them because they are the
+      physical argument list (21.3). Methods with empty
+      DynRequired keep today's intern records.
+
+    Proposed intern order for hidden names: sorted by exact
+    source-name bytes, then type. Independent of body layout.
+
+    Proposed membership:
+      - bare ident that is not an explicit formal
+      - plus transitive DynRequired of known callees
+      - plus own-without-formal, even if the body also has
+        `char: quote`. Do not classify that method as
+        own-only graph-load: the incoming hidden value is
+        the working variable from entry, and the own-decl
+        line starts dirty tracking on that same variable.
+      An explicit formal of the same name is not DynRequired
+      (183000 already aliases it).
+
+    Call site, known callee, closed unit:
+      1. caller C variable for that name (formal, hidden, or
+         own-cache variable — one variable after 183000)
+      2. else load callee `node` child of that own name
+         (unit child index; not ancestor walk)
+      3. else translation rejects
+    Actuals LTR: declared then hidden; checkpoint; call.
+
+    Caps: 4 declared formals, 4 hidden, char/size_t only.
+    Recursion remains an implementation limit.
+
+    Proposed fixtures (existing LMX, no new syntax):
+      unit_dyn_leaf.lm2     leaf uses bare quote, no formal;
+                            outer has `char: quote`; leaf does
+                            not write the caller's field
+      unit_dyn_mid.lm2      outer -> mid -> leaf; mid does not
+                            mention quote and must still pass it
+      unit_dyn_fallback.lm2 no caller field; leaf has
+                            `char: quote`; call loads
+                            node\[0]quote of the unit
+      unit_dyn_predecl.lm2  leaf uses quote before `char: quote`;
+                            incoming hidden kept; bind then
+                            dirty-publish to leaf's field;
+                            caller source unchanged
+      unit_dyn_sz.lm2       size_t variant of leaf+outer
+      unit_dyn_miss.lm2     negative: no caller value and no
+                            unit child
+
+    Not in this patch: runtime-selected callable, int hidden,
+    more than 4 hidden, `@` of the bound name.
 
 P0-as-Lmx, parser.lm1 scanners, and L2 self-build
     Not touched. Frozen p0.h / l1src/own.lm1 / bootstrap / root L1
