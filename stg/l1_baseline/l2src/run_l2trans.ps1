@@ -74,6 +74,9 @@ function Invoke-Positive([string]$src, [string]$stem, [int]$expect, [string]$lit
 }
 
 function Invoke-Negative([string]$src, [string]$stem, [string]$needle) {
+    # Planted .lm1/.c/.exe are text markers, not a real executable.
+    # This checks nonzero l2trans, no later stages, destination unchanged.
+    # It does not run or clear a previous real exe.
     $lm1 = Join-Path $out ($stem + ".lm1")
     $cpath = Join-Path $out ($stem + ".c")
     $exe = Join-Path $out ($stem + ".exe")
@@ -99,7 +102,33 @@ function Invoke-Negative([string]$src, [string]$stem, [string]$needle) {
     $cgot = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $cpath))
     if ($cgot -ne $marker) { throw "negative $stem mutated planted c" }
     $egot = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $exe))
-    if ($egot -ne $marker) { throw "negative $stem mutated planted exe" }
+    if ($egot -ne $marker) { throw "negative $stem mutated planted exe marker" }
+}
+
+function Invoke-AdmitEmit([string]$src, [string]$stem, [string]$lit) {
+    # Admission + emission only. Do not use OS exit status for large ints.
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $exe = Join-Path $out ($stem + ".exe")
+    $err = Join-Path $out ($stem + ".err")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $err
+        throw "l2trans failed: $src"
+    }
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
+    $needle = "return: $lit"
+    if ($text.IndexOf($needle) -lt 0) {
+        throw "generated L1 missing '$needle' in $lm1"
+    }
+    & $l1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
+    $ctext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $cpath))
+    if ($ctext -notmatch ("return\s+" + [regex]::Escape($lit) + "\s*;")) {
+        throw "generated C missing return $lit in $cpath"
+    }
+    Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
 }
 
 Invoke-Positive "l2src\tests\entry_return0.lm2" "entry_return0" 0 "0"
@@ -115,5 +144,7 @@ if ($c0 -eq $c7) { throw "return 0 and return 7 produced identical C" }
 Invoke-Negative "l2src\tests\entry_bad_body.lm2" "entry_bad_body" "unsupported body"
 Invoke-Negative "l2src\tests\entry_bad_sig.lm2" "entry_bad_sig" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_two_main.lm2" "entry_two_main" "several main"
+Invoke-Negative "l2src\tests\entry_overflow.lm2" "entry_overflow" "return literal not representable as int"
+Invoke-AdmitEmit "l2src\tests\entry_int_max.lm2" "entry_int_max" "2147483647"
 
 "l2trans $gen ok"

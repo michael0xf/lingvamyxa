@@ -1,0 +1,5 @@
+L2:
+    fn: main () int
+        return: 2147483647
+    end: main
+end: L2

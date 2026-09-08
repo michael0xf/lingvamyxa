@@ -1,5 +1,5 @@
 predef: "l1src/parser.lm1"
-include: "<stdio.h>" "<string.h>"
+include: "<stdio.h>" "<string.h>" "<limits.h>"
 
 # Narrow L2 -> L1 frontend: one bootstrap main that returns a non-negative
 # decimal literal. P0 parse, subset check, emit L1. Not a general L2 method ABI.
@@ -66,19 +66,38 @@ fn: l2_count_active (const: @(LmP0Structure body)) int
         field: l2_next_active(field\next)
 return: n
 
-fn: l2_is_uint (const: @(LmP0Text text)) int
+fn: l2_digits (const: @(LmP0Text text)) int
     size_t: i
     if: text = 0 || text\data = 0 || text\length = 0U
         return: 0
-    if: text\length > 10U
+    if: text\length > 1U && text\data[0] = 48
         return: 0
     i: 0U
     while: i < text\length
         if: text\data[i] < 48 || text\data[i] > 57
             return: 0
         i: i + 1U
-    if: text\length > 1U && text\data[0] = 48
+return: 1
+
+fn: l2_int_fits (const: @(LmP0Text text)) int
+    size_t: i
+    int: acc 0
+    int: d 0
+    int: q
+    int: r
+    if: l2_digits(text) = 0
         return: 0
+    q: c.INT_MAX / 10
+    r: c.INT_MAX % 10
+    i: 0U
+    while: i < text\length
+        d: text\data[i] - 48
+        if: acc > q
+            return: 0
+        if: acc = q && d > r
+            return: 0
+        acc: acc * 10 + d
+        i: i + 1U
 return: 1
 
 fn: l2_end_named (const: @(LmP0Frame frame); const: @(char name)) int
@@ -130,8 +149,10 @@ fn: l2_take_return_lit (const: @(LmP0Node body_node); const: @(char path); @@: L
     arg: l2_next_active(ret\body\first_field)
     if: arg\value = 0 || arg\value\kind != c.LM_P0_NODE_ATOM
         return: l2_error(path, stmt, "unsupported body")
-    if: l2_is_uint(arg\value\as\atom) = 0
+    if: l2_digits(arg\value\as\atom) = 0
         return: l2_error(path, stmt, "unsupported body")
+    if: l2_int_fits(arg\value\as\atom) = 0
+        return: l2_error(path, stmt, "return literal not representable as int")
     out_lit[0]: arg\value\as\atom
 return: 0
 
