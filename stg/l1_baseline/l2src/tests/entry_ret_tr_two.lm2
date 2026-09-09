@@ -1,0 +1,4 @@
+fn: main () int
+    c.puts: "one"
+    c.puts: "two"
+return: 0

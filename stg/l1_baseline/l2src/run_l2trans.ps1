@@ -167,6 +167,9 @@ function Invoke-AdmitEmit([string]$src, [string]$stem, [string]$lit) {
 Invoke-Positive "l2src\tests\entry_return0.lm2" "entry_return0" 0 "0"
 Invoke-Positive "l2src\tests\entry_return7.lm2" "entry_return7" 7 "7"
 Invoke-Positive "l2src\tests\entry_ret_tr.lm2" "entry_ret_tr" 0 "0"
+Invoke-Puts "l2src\tests\entry_ret_tr_puts.lm2" "entry_ret_tr_puts" 0 "MUST PRINT`n"
+Invoke-Puts "l2src\tests\entry_ret_tr_two.lm2" "entry_ret_tr_two" 0 "one`ntwo`n"
+Invoke-Negative "l2src\tests\entry_ret_tr_bad.lm2" "entry_ret_tr_bad" "unsupported"
 
 $lm0 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "entry_return0.lm1")))
 $lm7 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "entry_return7.lm1")))
@@ -182,6 +185,7 @@ Invoke-Negative "l2src\tests\entry_overflow.lm2" "entry_overflow" "return litera
 Invoke-AdmitEmit "l2src\tests\entry_int_max.lm2" "entry_int_max" "2147483647"
 
 Invoke-Puts "l2src\tests\entry_puts_hello.lm2" "entry_puts_hello" 0 "Hello`n"
+Invoke-Puts "l2src\tests\entry_puts_triple.lm2" "entry_puts_triple" 0 ('a"""b' + "`n")
 Invoke-Puts "l2src\tests\entry_puts_seq.lm2" "entry_puts_seq" 0 "one`ntwo`n"
 Invoke-Puts "l2src\tests\entry_puts_empty.lm2" "entry_puts_empty" 0 "`n"
 Invoke-Puts "l2src\tests\entry_puts_esc.lm2" "entry_puts_esc" 0 "a`"b\c`n"

@@ -1296,8 +1296,37 @@ Legacy parse gate: tests/l1/run_legacy_p0.ps1 vs printTree.lm0
 oracle, root gen2 and STG gen2. Parse only; consumer omissions
 are the L1/L2 tests above. Inline `prototype:` drop and const:
 qualifier-distribution remain pending (not this unit).
-advance_layout_line remains queued. Triple-quote A+1 decode is
-Unit 26 / 110600.
+advance_layout_line remains queued.
+
+Unit 26 - triple-quote A+1 value decode
+--------------------------------------
+Files: l1src/l1trans.lm1, lm2/l1trans.lm2, lm1/build/l1trans.lm1.c,
+l2trans.lm1, run_l2trans.ps1, tests/l1/quote_run.lm1,
+tests/entry_puts_triple.lm2, tests/entry_ret_tr_puts.lm2,
+tests/entry_ret_tr_two.lm2, tests/entry_ret_tr_bad.lm2,
+OPEN_POINTS.txt
+
+Triple-quoted literals (N=3, both " and ') decode body runs of the
+opening quote: source run R>=4 means value R-1 (A>=3 encoded as
+A+1). R=1,2,3 stay as written. Opposite quote, backslash, and
+equals/star fences are not shortened. P0 spelling is unchanged.
+Root L1 l1_emit_atom_node uses l1_emit_triple_body then
+l1_emit_c99_string. L2 admits """...""" where ordinary "..." was
+already allowed and lowers by decoding once to an ordinary L1
+string (no double decode; frozen STG L1 still works).
+
+Main-only return-trailer with nonempty puts body now validates all
+body puts and emits them; last-field-is-return only when the
+return lives in the body. Invalid sole body + trailer still
+rejected.
+
+quote_run.lm1 runtime: a"""b / a'''b / x"y / x""y / x""""y /
+x"""""y / a'b / a\b. entry_puts_triple: a"""b. entry_ret_tr_puts:
+MUST PRINT then return 0.
+
+STG L1 source still frozen. Full run_seed/next/check not the
+whole-project gate this window. 111200 common P0 tree-contract
+suite is next, then advance_layout_line.
 
 Unit 16 - nested expression emit scratch
 ----------------------------------------

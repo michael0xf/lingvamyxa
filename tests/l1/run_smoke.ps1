@@ -195,6 +195,9 @@ Assert-CHas "$obj\fn_close_dash.c" "int add("
 Invoke-CcRun "$obj\fn_close_dash.c" "$bin\fn_close_dash.exe" 0 $null
 Invoke-TranslateFail "tests\l1\invalid_fn_end_wrong.lm1" "$obj\invalid_fn_end_wrong.c" "$log\invalid_fn_end_wrong.err" "end target does not match close target"
 Invoke-TranslateFail "tests\l1\invalid_fn_end_empty.lm1" "$obj\invalid_fn_end_empty.c" "$log\invalid_fn_end_empty.err" "end trailer expects exactly one target name"
+Invoke-Translate "tests\l1\quote_run.lm1" "$obj\quote_run.c"
+$quoteRunOut = (@('a"""b', "a'''b", 'x"y', 'x""y', 'x""""y', 'x"""""y', "a'b", 'a\b') -join "`n") + "`n"
+Invoke-CcRun "$obj\quote_run.c" "$bin\quote_run.exe" 0 $quoteRunOut
 Invoke-Translate "tests\l1\lm1_unit.lm1" "$obj\lm1_unit.c"
 Assert-CHas "$obj\lm1_unit.c" "int main(void)"
 Invoke-CcRun "$obj\lm1_unit.c" "$bin\lm1_unit.exe" 0 $null

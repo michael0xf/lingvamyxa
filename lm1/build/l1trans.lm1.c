@@ -6341,6 +6341,7 @@ int l1_count_catch_params(const LmP0Structure * params);
 int l1_is_payload_int(const LmP0Text * text);
 int l1_emit_atom_c(FILE * out, const LmP0Text * t, const char * path, const LmP0Node * node);
 int l1_emit_atom_node(FILE * out, const LmP0Node * node, const char * path);
+int l1_emit_triple_body(FILE * out, const char * data, size_t n, int q);
 int l1_is_unary_prefix_atom(const LmP0Text * text);
 int l1_is_infix_atom(const LmP0Text * text);
 int l1_is_incdec_atom(const LmP0Text * text);
@@ -7205,6 +7206,55 @@ int l1_python_triple_quote(const LmP0Text * text)
     }
     return (((int)text -> data[0]));
 }
+int l1_emit_triple_body(FILE * out, const char * data, size_t n, int q)
+{
+    char * buf = 0;
+    size_t i = 0U;
+    size_t o = 0U;
+    size_t run;
+    size_t emitn;
+    size_t k;
+    unsigned qc;
+    int err;
+    if (n == 0U) {
+    return l1_emit_c99_string(out, "", 0U);
+    }
+    if (data == 0) {
+    return 1;
+    }
+    buf = (((char *)malloc(n + 1U)));
+    if (buf == 0) {
+    return 1;
+    }
+    qc = (((unsigned)q));
+    while (i < n) {
+    if ((((unsigned)(((uchar)data[i])))) == qc) {
+    run = 0U;
+    while (i + run < n && (((unsigned)(((uchar)data[i + run])))) == qc) {
+    run = run + 1U;
+    }
+    emitn = run;
+    if (run >= 4U) {
+    emitn = run - 1U;
+    }
+    k = 0U;
+    while (k < emitn) {
+    buf[o] = (((char)q));
+    o = o + 1U;
+    k = k + 1U;
+    }
+    i = i + run;
+    continue;
+    }
+    buf[o] = data[i];
+    o = o + 1U;
+    i = i + 1U;
+    }
+    buf[o] = 0;
+    err = l1_emit_c99_string(out, buf, o);
+    free((((void *)buf)));
+    return err;
+}
 int l1_source_is_eq_fence(const char * src, size_t n, size_t off)
 {
     size_t i;
@@ -7315,7 +7365,7 @@ int l1_emit_atom_node(FILE * out, const LmP0Node * node, const char * path)
     }
     q = l1_python_triple_quote(text);
     if (q != 0) {
-    return l1_emit_c99_string(out, text->data + 3U, text->length - 6U);
+    return l1_emit_triple_body(out, text->data + 3U, text->length - 6U, q);
     }
     return l1_emit_atom_c(out, text, path, node);
 }

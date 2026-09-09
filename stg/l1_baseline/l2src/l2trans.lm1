@@ -1291,8 +1291,87 @@ fn: l2_quoted (const: @(LmP0Text t)) int
     if: t\data[0] != 34 || t\data[t\length - 1U] != 34
         return: 0
     if: t\length >= 6U && t\data[1] = 34 && t\data[2] = 34
+        if: t\data[t\length - 3U] = 34 && t\data[t\length - 2U] = 34
+            return: 1
         return: 0
 return: 1
+
+fn: l2_write_l1_string (@: FILE out; const: @(char data); size_t: n) int
+    size_t: i 0U
+    int: ch
+    if: out = 0
+        return: 1
+    if: c.fputc(34, out) < 0
+        return: 1
+    while: i < n
+        ch: (cast: (int) data[i])
+        if: ch < 0
+            ch: ch + 256
+        if: ch = 34 && c.fputs("\\\"", out) < 0
+            return: 1
+        if: ch = 34
+            i: i + 1U
+            continue
+        if: ch = 92 && c.fputs("\\\\", out) < 0
+            return: 1
+        if: ch = 92
+            i: i + 1U
+            continue
+        if: ch = 10 && c.fputs("\\n", out) < 0
+            return: 1
+        if: ch = 10
+            i: i + 1U
+            continue
+        if: ch = 13 && c.fputs("\\r", out) < 0
+            return: 1
+        if: ch = 13
+            i: i + 1U
+            continue
+        if: c.fputc(ch, out) < 0
+            return: 1
+        i: i + 1U
+    if: c.fputc(34, out) < 0
+        return: 1
+return: 0
+
+fn: l2_write_triple_as_l1 (@: FILE out; const: @(LmP0Text t)) int
+    @: char buf 0
+    size_t: n
+    size_t: i 0U
+    size_t: o 0U
+    size_t: run
+    size_t: emitn
+    size_t: k
+    if: t = 0 || t\data = 0 || t\length < 6U
+        return: 1
+    n: t\length - 6U
+    if: n = 0U
+        return: l2_write_l1_string(out, "", 0U)
+    buf: (cast: (@: char) l2_xmalloc(n + 1U))
+    if: buf = 0
+        return: 1
+    while: i < n
+        if: t\data[3U + i] = 34
+            run: 0U
+            while: i + run < n && t\data[3U + i + run] = 34
+                run: run + 1U
+            emitn: run
+            if: run >= 4U
+                emitn: run - 1U
+            k: 0U
+            while: k < emitn
+                buf[o]: 34
+                o: o + 1U
+                k: k + 1U
+            i: i + run
+            continue
+        buf[o]: t\data[3U + i]
+        o: o + 1U
+        i: i + 1U
+    buf[o]: 0
+    i: l2_write_l1_string(out, buf, o)
+    l2_xfree((cast: (@: void) buf))
+return: i
 
 fn: l2_write_text (@: FILE out; const: @(LmP0Text t)) int
     if: out = 0 || t = 0 || t\data = 0
@@ -1372,6 +1451,21 @@ fn: l2_take_return_fields (const: @(LmP0Structure body); const: @(char path); co
     out_lit[0]: arg\value\as\atom
 return: 0
 
+fn: l2_take_puts_body (const: @(LmP0Node body_node); const: @(char path)) int
+    @: LmP0Field field
+    if: body_node = 0
+        return: 0
+    if: body_node\kind != c.LM_P0_NODE_STRUCTURE || body_node\as = 0
+        return: l2_error(path, body_node, "unsupported body")
+    if: body_node\as\structure\trailer != 0
+        return: l2_error(path, body_node, "unsupported trailer")
+    field: l2_next_active(body_node\as\structure\first_field)
+    while: field != 0
+        if: l2_check_puts(field\value, path) != 0
+            return: 1
+        field: l2_next_active(field\next)
+return: 0
+
 fn: l2_take_body (const: @(LmP0Node body_node); const: @(char path); @@: LmP0Text out_lit) int
     @: LmP0Field field
     @: LmP0Field nxt
@@ -1433,6 +1527,8 @@ fn: l2_take_main_lit (const: @(LmP0Node fn_node); const: @(char path); @@: LmP0T
     body: 0
     if: field != 0
         body: field\value
+    if: l2_ret_tr(fn_frame) != 0 && l2_take_puts_body(body, path) != 0
+        return: 1
     if: l2_ret_tr(fn_frame) != 0 && l2_take_return_fields(l2_ret_tr(fn_frame), path, fn_node, out_lit) != 0
         return: 1
     if: l2_ret_tr(fn_frame) = 0 && l2_take_body(body, path, out_lit) != 0
@@ -1528,10 +1624,14 @@ return: l2_take_main_lit(main_node, path, out_lit, out_body)
 
 fn: l2_emit_puts_line (@: FILE out; const: @(LmP0Node stmt)) int
     @: LmP0Field arg
+    @: LmP0Text t
     arg: l2_next_active(stmt\as\frame\body\first_field)
     if: c.fputs("        c.puts: ", out) < 0
         return: 1
-    if: l2_write_text(out, arg\value\as\atom) != 0
+    t: arg\value\as\atom
+    if: t != 0 && t\length >= 6U && t\data[0] = 34 && t\data[1] = 34 && t\data[2] = 34 && l2_write_triple_as_l1(out, t) != 0
+        return: 1
+    if: (t = 0 || t\length < 6U || t\data[0] != 34 || t\data[1] != 34 || t\data[2] != 34) && l2_write_text(out, t) != 0
         return: 1
     if: c.fputs("\n", out) < 0
         return: 1
@@ -1549,7 +1649,7 @@ fn: l2_emit_l1 (const: @(char out_path); const: @(LmP0Structure body); const: @(
         field: l2_next_active(body\first_field)
     while: field != 0
         nxt: l2_next_active(field\next)
-        if: nxt != 0
+        if: nxt != 0 || l2_frame_head(field\value, "return") = 0
             puts_n: puts_n + 1
         field: nxt
     out: c.fopen(out_path, "wb")
@@ -1567,7 +1667,7 @@ fn: l2_emit_l1 (const: @(char out_path); const: @(LmP0Structure body); const: @(
         field: l2_next_active(body\first_field)
     while: field != 0
         nxt: l2_next_active(field\next)
-        if: nxt != 0 && l2_emit_puts_line(out, field\value) != 0
+        if: (nxt != 0 || l2_frame_head(field\value, "return") = 0) && l2_emit_puts_line(out, field\value) != 0
             c.fclose(out)
             return: 1
         field: nxt

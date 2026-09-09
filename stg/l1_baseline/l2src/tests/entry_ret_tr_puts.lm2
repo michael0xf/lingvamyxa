@@ -1,0 +1,3 @@
+fn: main () int
+    c.puts: "MUST PRINT"
+return: 0
