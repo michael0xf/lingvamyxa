@@ -171,9 +171,37 @@ fn: lmx_msg_grow (@: LmxMsgRuntime rt) int
     rt\cap: cap
 return: 0
 
+fn: lmx_msg_assign_path (@: LmxMsgRuntime rt; @: LmxMsg slot; LmxMsgAddr: parent) int
+    @: LmxMsg p
+    int: i 0
+    if: rt = 0 || slot = 0
+        return: c.LMX_MSG_INVALID
+    if: parent = 0U
+        if: rt\root_seq + 1U = 0U
+            return: c.LMX_MSG_NOMEM
+        rt\root_seq: rt\root_seq + 1U
+        slot\path[0]: rt\root_seq
+        slot\path_n: 1
+        return: c.LMX_MSG_OK
+    p: lmx_msg_find(rt, parent)
+    if: p = 0
+        return: c.LMX_MSG_INVALID
+    if: p\path_n < 1 || p\path_n >= c.LMX_MSG_PATH_CAP
+        return: c.LMX_MSG_NOMEM
+    if: p\child_seq + 1U = 0U
+        return: c.LMX_MSG_NOMEM
+    p\child_seq: p\child_seq + 1U
+    while: i < p\path_n
+        slot\path[i]: p\path[i]
+        i: i + 1
+    slot\path[p\path_n]: p\child_seq
+    slot\path_n: p\path_n + 1
+return: c.LMX_MSG_OK
+
 fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
     @: LmxMsg m
     @: LmxMsg slot
+    int: st
     if: rt = 0 || out = 0 || create_id = 0U
         return: c.LMX_MSG_INVALID
     m: lmx_msg_find_create(rt, parent, create_id)
@@ -186,6 +214,9 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
         return: c.LMX_MSG_NOMEM
     slot: rt\tab + rt\n
     c.memset((cast: (@: void) slot), 0, c.sizeof(c.LmxMsg))
+    st: lmx_msg_assign_path(rt, slot, parent)
+    if: st != c.LMX_MSG_OK
+        return: st
     slot\addr: rt\next_addr
     rt\next_addr: rt\next_addr + 1U
     slot\parent: parent
@@ -598,6 +629,23 @@ fn: lmx_msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         cnt: cnt + 1
         n: n\next
 return: cnt
+
+fn: lmx_msg_path_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    m: lmx_msg_find(rt, who)
+    if: m = 0
+        return: -1
+return: m\path_n
+
+fn: lmx_msg_path_seg (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i; @: unsigned out) int
+    @: LmxMsg m
+    if: rt = 0 || out = 0 || i < 0
+        return: c.LMX_MSG_INVALID
+    m: lmx_msg_find(rt, who)
+    if: m = 0 || i >= m\path_n
+        return: c.LMX_MSG_INVALID
+    out[0]: m\path[i]
+return: c.LMX_MSG_OK
 
 fn: lmx_msg_init_copy (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     @: LmxMsg m

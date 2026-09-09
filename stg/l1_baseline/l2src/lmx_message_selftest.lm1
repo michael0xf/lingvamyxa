@@ -40,6 +40,29 @@ fn: main () int
     if: st != c.LMX_MSG_OK || child2 != child
         c.printf("create retry must reuse child identity\n")
         fail: fail + 1
+    unsigned: seg 0U
+    if: lmx_msg_path_n(rt, parent) != 1
+        c.printf("root path depth\n")
+        fail: fail + 1
+    st: lmx_msg_path_seg(rt, parent, 0, @ seg)
+    if: st != c.LMX_MSG_OK || seg != 1U
+        c.printf("root path not 1\n")
+        fail: fail + 1
+    if: lmx_msg_path_n(rt, child) != 2
+        c.printf("child path depth\n")
+        fail: fail + 1
+    st: lmx_msg_path_seg(rt, child, 0, @ seg)
+    if: st != c.LMX_MSG_OK || seg != 1U
+        c.printf("child path prefix\n")
+        fail: fail + 1
+    st: lmx_msg_path_seg(rt, child, 1, @ seg)
+    if: st != c.LMX_MSG_OK || seg != 1U
+        c.printf("child path not 1.1\n")
+        fail: fail + 1
+    st: lmx_msg_path_seg(rt, child2, 1, @ seg)
+    if: child2 != child || seg != 1U
+        c.printf("retry consumed a new path segment\n")
+        fail: fail + 1
     env\id: 1U
     env\correlation: 11U
     env\reply_to: parent
@@ -367,6 +390,85 @@ fn: main () int
     if: lmx_msg_state(rt, idle) != c.LMX_MSG_STATE_STOPPED
         c.printf("child did not self-close at end_turn after parent death\n")
         fail: fail + 1
+    @: LmxMsgRuntime rt2
+    unsigned: p0 0U
+    unsigned: c1 0U
+    unsigned: c2 0U
+    unsigned: g1 0U
+    unsigned: c10 0U
+    unsigned: retr 0U
+    unsigned: stale_p 0U
+    unsigned: retried_p 0U
+    int: k
+    rt2: lmx_msg_runtime_new()
+    if: rt2 = 0
+        fail: fail + 1
+    else:
+        st: lmx_msg_create(rt2, 0U, 1U, payload, 4U, @ p0)
+        st: lmx_msg_create(rt2, p0, 1U, payload, 4U, @ c1)
+        st: lmx_msg_create(rt2, p0, 2U, payload, 4U, @ c2)
+        st: lmx_msg_create(rt2, c1, 1U, payload, 4U, @ g1)
+        if: lmx_msg_path_n(rt2, c1) != 2 || lmx_msg_path_n(rt2, c2) != 2 || lmx_msg_path_n(rt2, g1) != 3
+            c.printf("sibling/grandchild depth\n")
+            fail: fail + 1
+        st: lmx_msg_path_seg(rt2, c1, 1, @ seg)
+        if: seg != 1U
+            c.printf("first sibling not .1\n")
+            fail: fail + 1
+        st: lmx_msg_path_seg(rt2, c2, 1, @ seg)
+        if: seg != 2U
+            c.printf("second sibling not .2\n")
+            fail: fail + 1
+        st: lmx_msg_path_seg(rt2, g1, 0, @ seg)
+        if: seg != 1U
+            c.printf("grandchild root seg\n")
+            fail: fail + 1
+        st: lmx_msg_path_seg(rt2, g1, 1, @ seg)
+        if: seg != 1U
+            c.printf("grandchild mid seg\n")
+            fail: fail + 1
+        st: lmx_msg_path_seg(rt2, g1, 2, @ seg)
+        if: seg != 1U
+            c.printf("grandchild not 1.1.1\n")
+            fail: fail + 1
+        k: 3
+        while: k < 11
+            st: lmx_msg_create(rt2, p0, (cast: (unsigned) k), payload, 4U, @ c10)
+            k: k + 1
+        if: lmx_msg_path_n(rt2, c10) != 2
+            c.printf("tenth sibling depth\n")
+            fail: fail + 1
+        st: lmx_msg_path_seg(rt2, c10, 1, @ seg)
+        if: seg != 10U
+            c.printf("multi-digit segment not 10\n")
+            fail: fail + 1
+        st: lmx_msg_create(rt2, p0, 2U, payload, 4U, @ retr)
+        if: retr != c2
+            c.printf("idempotent create changed sibling\n")
+            fail: fail + 1
+        st: lmx_msg_path_seg(rt2, retr, 1, @ seg)
+        if: seg != 2U
+            c.printf("idempotent create changed path\n")
+            fail: fail + 1
+        if: lmx_msg_path_seg(rt2, g1, 3, @ seg) != c.LMX_MSG_INVALID
+            c.printf("path_seg accepted past depth\n")
+            fail: fail + 1
+        st: lmx_msg_create(rt2, p0, 20U, payload, 4U, @ stale_p)
+        st: lmx_msg_end_turn(rt2, p0, 0)
+        if: lmx_msg_state(rt2, stale_p) != -1
+            c.printf("aborted path child still findable\n")
+            fail: fail + 1
+        st: lmx_msg_create(rt2, p0, 20U, payload, 4U, @ retried_p)
+        if: retried_p = 0U || retried_p = stale_p
+            c.printf("retry after abort reused slot\n")
+            fail: fail + 1
+        st: lmx_msg_path_seg(rt2, retried_p, 1, @ seg)
+        if: seg != 12U
+            c.printf("retry after abort reused path segment\n")
+            fail: fail + 1
+        ---
+        lmx_msg_runtime_delete(rt2)
+    ---
     c.free((cast: (@: void) payload))
     c.free((cast: (@: void) env))
     c.free((cast: (@: void) got))

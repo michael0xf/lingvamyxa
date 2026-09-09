@@ -1298,7 +1298,10 @@ end_turn + pump. Instant stop_descendants is gone. KIND_DEAD is
 runtime-posted, not dying outbox. AVOIDED: graph-copy, OS thread
 per Message, durable dedup, remote silence as death,
 KIND_REJECTED emission, done[32] silent forget. SPEC 21.13 throw
-payload not this unit.
+payload not this unit. Mix placement path is parent
+counter + append (not LmxMsgAddr, not packed Java int).
+Prototype PATH_CAP 16 refuses rather than wrap. Not
+routing/rights. Not every Mix cell is a running Message.
 
 Unit 29 - fence line matchers (block-string = / raw-comment *)
 -------------------------------------------------------------

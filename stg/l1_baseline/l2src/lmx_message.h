@@ -38,6 +38,9 @@ typedef unsigned char uchar;
 #define LMX_MSG_STATE_DEAD 3
 #define LMX_MSG_STATE_RELEASED 4
 
+/* Prototype path storage. Not a language-level depth or width limit. */
+#define LMX_MSG_PATH_CAP 16
+
 typedef unsigned LmxMsgAddr;
 
 typedef struct LmxMsgEnv {
@@ -85,6 +88,9 @@ typedef struct LmxMsg {
     LmxMsgAddr exec_reply;
     int exec_live;
     unsigned last_beat;
+    unsigned path[LMX_MSG_PATH_CAP];
+    int path_n;
+    unsigned child_seq;
 } LmxMsg;
 
 typedef struct LmxMsgRuntime {
@@ -95,6 +101,7 @@ typedef struct LmxMsgRuntime {
     LmxMsgCopy *transport_tail;
     unsigned next_addr;
     unsigned clock;
+    unsigned root_seq;
 } LmxMsgRuntime;
 
 LmxMsgRuntime *lmx_msg_runtime_new(void);
@@ -114,5 +121,7 @@ int lmx_msg_init_copy(LmxMsgRuntime *rt, LmxMsgAddr who, LmxMsgEnv *out);
 int lmx_msg_set_now(LmxMsgRuntime *rt, unsigned now);
 int lmx_msg_poll(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now, unsigned threshold, LmxMsgAddr *out, int cap);
 int lmx_msg_drive(LmxMsgRuntime *rt, unsigned now, unsigned threshold);
+int lmx_msg_path_n(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_path_seg(LmxMsgRuntime *rt, LmxMsgAddr who, int i, unsigned *out);
 
 #endif
