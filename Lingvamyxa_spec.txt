@@ -11963,9 +11963,9 @@ contracts; `spawn` here is English, not a new parser intrinsic):
         and, after publication, admitted in FIFO order with first
         activation of the inactive child. Every ordinary running
         Message has an accountable parent (root is an explicit host
-        supervisor). Parent fail() recursively stops descendants.
-        Create records poll/status/stop authority, not content
-        rights (19.32.4).
+        supervisor). Create records the child's authority to observe
+        parent liveness and the parent's authority to request stop;
+        it does not grant content rights (19.32.4).
 
     send(destination, envelope) -> staging status
         Stage a transport-owned copy of the envelope (numbers and
@@ -11991,15 +11991,17 @@ contracts; `spawn` here is English, not a new parser intrinsic):
         destination.
 
     stop(destination) -> staging status
-        Cooperative stop request of that Message. Admission marks it
-        STOPPED and the runtime recursively stops every descendant.
-        Ordinary end_turn is not Message termination and leaves
-        children alive. Request acceptance is not completed
-        reclamation of an active handler. Parent fail() also
-        cascades. Default: no orphan continuation. Jobs meant to
-        outlive a UI must be created under an explicitly longer-lived
-        controller; the UI is only a reply target. Partial external
-        effects are not rolled back.
+        Cooperative close request. Admission sets a closing flag; it
+        does not mark STOPPED and does not free an executing arena.
+        The target finishes the current turn under ordinary
+        success/failure publication, then at end_turn exits its loop
+        and requests the same orderly close of its children.
+        Ordinary end_turn without a close request does not terminate
+        the Message. Jobs meant to outlive a UI are created under an
+        explicitly longer-lived controller; the UI is only a reply
+        target. Partial external effects are not rolled back.
+        Recorded progress may survive separately; there is no
+        orphan-continuation exception for copy jobs.
 
 Envelope fields for this slice: id (stable logical request identity
 across transport attempts), correlation (19.31.4: semantic
@@ -12081,27 +12083,32 @@ Per-item progress/failure is KIND_PROGRESS / KIND_ITEM payload data
 (bytes + number); continue-vs-stop is application policy in the
 request, not a core intrinsic.
 
-Parent poll (simple, like a watcher): every parent SHALL periodically
-call `lmx_msg_poll`. The host SHALL call `lmx_msg_poll(rt, 0, now,
-threshold, out, cap)` to oversee create(parent=0) roots. This
-serialized prototype does not start a timer; the host owns the
-clock (`lmx_msg_set_now`) and the cadence. Automatic scheduler
-integration is pending. Interval and threshold are host settings,
-not language constants (not Codex's 30-minute mail poll).
+Child liveness poll (ordinary shutdown): each non-root Message
+periodically checks its parent. If the parent is absent, DEAD, or
+sustained-nonresponsive while in a handler, the child requests its
+own orderly close (same end_turn path as stop). A live idle parent
+keeps children alive. Host/system parent anchors roots. Cadence and
+timeout are host settings, not language constants. This prototype
+does not start a timer; the host must call
+`lmx_msg_poll(rt, child, now, threshold, out, cap)` (or walk
+children) on its clock (`lmx_msg_set_now`). Scheduler integration
+is pending. Child observation of parent liveness is not access to
+the parent's protected data.
 
-Actual C: `int lmx_msg_poll(LmxMsgRuntime *rt, LmxMsgAddr parent,
-unsigned now, unsigned threshold, LmxMsgAddr *out, int cap)`
-returns the count of unresponsive addresses written to out
-(up to cap). Unresponsive means RUNNING and currently in a
-handler (`exec_live`) whose last recv beat is older than
-threshold. A healthy idle child with no work is not unresponsive.
-Parent poll does not update a child's beat. Non-response is not
-remote death. The parent then stop()s or fail()s by policy.
+Parent abrupt death does not run parent cleanup and does not
+instantaneously mark executing descendants STOPPED. Children
+converge by their timer/self-close, recursively, so no permanently
+orphaned running descendants remain. A child stuck before a turn
+boundary cannot poll or honor stop; that is the exceptional
+supervisor/host `fail()` path, not the normal loop-exit model, and
+must not be reported as a completed safe reclaim.
 
 This is a trusted serialized in-process prototype, not the completed
 language security/supervision boundary. Header:
 `stg/l1_baseline/l2src/lmx_message.h`
 (create/send/stop/end_turn/pump/recv/fail/poll/set_now).
+Normal close is child loop-exit after a close flag; parent->child
+mandatory poll is not the lifetime mechanism.
 Selftest: `lmx_message_selftest.lm1`. mixa must not rebuild default
 gen2. Graph-copy and other 19.29.7.2 operations are not implemented.
 
@@ -12768,8 +12775,9 @@ A protected object may require:
     creator-parent tracking.
 
 Parent/creator rows do not grant content rights by themselves.
-Message create (19.29.7.1) records lifecycle authority to
-poll/status/stop that child; it is not a content-rights grant.
+Message create (19.29.7.1) records the child's parent-liveness
+observation and the parent's stop-request authority; it is not a
+content-rights grant.
 
 19.32.5. Delegated Ticket
 
