@@ -71,7 +71,7 @@ if not exist "%LM_CC%" (
 "%LM_CMAKE%" -E make_directory build\lm0 || exit /b 1
 "%LM_CMAKE%" -E make_directory build\obj || exit /b 1
 
-"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% -I. "%L1TRANS_SOURCE%" -o build\lm0\l1trans.lm0.exe || exit /b 1
+"%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% -I. -I lm1/build "%L1TRANS_SOURCE%" -o build\lm0\l1trans.lm0.exe || exit /b 1
 "%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% "%MAKE_SOURCE%" -o build\lm0\make.lm0.exe || exit /b 1
 "%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% "%FINALIZE_SOURCE%" -o build\lm0\finalize.lm0.exe || exit /b 1
 "%LM_CC%" -std=c99 -Wall -Wextra -Wpedantic %THREAD_LINK_FLAGS% -I. "%BUILD_CORE_SOURCE%" -o build\lm0\buildCore.lm0.exe || exit /b 1

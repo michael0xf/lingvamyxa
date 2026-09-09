@@ -57,14 +57,14 @@ Write-G "ENV effective default hosted P0/trans registry for gen0 and nested run_
 Write-G "BEGIN gen1 translate"
 & $seed "l1src\l1trans.lm1" "build\obj\l1trans\gen1\l1trans.c"
 if ($LASTEXITCODE -ne 0) { throw "gen1 translate failed" }
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o build\l1trans\gen1\l1trans.exe build\obj\l1trans\gen1\l1trans.c > $log\gcc_gen1.log 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o build\l1trans\gen1\l1trans.exe build\obj\l1trans\gen1\l1trans.c > $log\gcc_gen1.log 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "gen1 gcc failed" }
 Write-G "gen1 exe ok hash=$((Get-FileHash build\l1trans\gen1\l1trans.exe).Hash)"
 
 Write-G "BEGIN gen2 translate"
 & "build\l1trans\gen1\l1trans.exe" "l1src\l1trans.lm1" "build\obj\l1trans\gen2\l1trans.c"
 if ($LASTEXITCODE -ne 0) { throw "gen2 translate failed" }
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o build\l1trans\gen2\l1trans.exe build\obj\l1trans\gen2\l1trans.c > $log\gcc_gen2.log 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o build\l1trans\gen2\l1trans.exe build\obj\l1trans\gen2\l1trans.c > $log\gcc_gen2.log 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "gen2 gcc failed" }
 Write-G "gen2 exe ok hash=$((Get-FileHash build\l1trans\gen2\l1trans.exe).Hash)"
 
@@ -80,7 +80,7 @@ if ($LASTEXITCODE -ne 0) { throw "gen3 translate failed" }
 $h3 = (Get-FileHash "build\obj\l1trans\gen3\l1trans.c").Hash
 Write-G "gen3_c=$h3"
 if ($h3 -ne $h2) { throw "gen2/gen3 C differ" }
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o build\l1trans\gen3\l1trans.exe build\obj\l1trans\gen3\l1trans.c > $log\gcc_gen3.log 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o build\l1trans\gen3\l1trans.exe build\obj\l1trans\gen3\l1trans.c > $log\gcc_gen3.log 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "gen3 gcc failed" }
 & "build\l1trans\gen3\l1trans.exe" "tests\l1\integer_add.lm1" "build\obj\l1trans\gen3\integer_add.c"
 if ($LASTEXITCODE -ne 0) { throw "gen3 integer_add translate failed" }
@@ -93,7 +93,7 @@ Write-G "gen3 integer_add run exit 0"
 Write-G "BEGIN L1 builder selftest + bootstrap gen3 tools"
 & "build\l1trans\gen2\l1trans.exe" "l1src\build_l1.lm1" "build\obj\l1trans\gen2\build_l1.c"
 if ($LASTEXITCODE -ne 0) { throw "build_l1 translate failed" }
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o build\l1trans\gen2\build_l1.exe build\obj\l1trans\gen2\build_l1.c > $log\gcc_build_l1.log 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o build\l1trans\gen2\build_l1.exe build\obj\l1trans\gen2\build_l1.c > $log\gcc_build_l1.log 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "build_l1 gcc failed" }
 Invoke-LoggedExe "build_l1_selftest" "build\l1trans\gen2\build_l1.exe" @("selftest")
 

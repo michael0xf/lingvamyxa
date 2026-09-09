@@ -70,7 +70,7 @@ posix_feature_define="-D_POSIX_C_SOURCE=200809L"
 "$LM_CMAKE" -E make_directory build/lm0
 "$LM_CMAKE" -E make_directory build/obj
 
-"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} -I. "$l1trans_source" -o build/lm0/l1trans.lm0
+"$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} -I. -I lm1/build "$l1trans_source" -o build/lm0/l1trans.lm0
 "$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} "$make_source" -o build/lm0/make.lm0
 "$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} "$finalize_source" -o build/lm0/finalize.lm0
 "$LM_CC" -std=c99 -Wall -Wextra -Wpedantic "$thread_provider_define" "$posix_feature_define" ${thread_native_flag:+"$thread_native_flag"} -I. "$build_core_source" -o build/lm0/buildCore.lm0

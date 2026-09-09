@@ -164,7 +164,7 @@ int lm_build_write_platform_tests_script(FILE * file, const char * output_dir, c
     fputs("    Write-Host ('translate ' + $Src)\n", file);
     fputs("    & $trans $Src $cPath\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw ('translate failed: ' + $Src) }\n", file);
-    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-I.' '-Werror=incompatible-pointer-types' '-Werror=discarded-qualifiers' '-Werror=implicit-function-declaration' '-Werror=implicit-int' $cPath '-o' $exePath\n", file);
+    fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-I.' '-I' 'lm1/build' '-Werror=incompatible-pointer-types' '-Werror=discarded-qualifiers' '-Werror=implicit-function-declaration' '-Werror=implicit-int' $cPath '-o' $exePath\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw ('link failed: ' + $Src) }\n", file);
     fputs("    & $exePath\n", file);
     fputs("    if ($LASTEXITCODE -ne 0) { throw ('run failed: ' + $Src + ' exit ' + $LASTEXITCODE) }\n", file);
@@ -309,7 +309,7 @@ int lm_build_write_platform_tests_script(FILE * file, const char * output_dir, c
     fputs("    exepath=build/obj/tests/${name}\n", file);
     fputs("    echo \"translate $src\"\n", file);
     fputs("    \"$trans\" \"$src\" \"$cpath\"\n", file);
-    fputs("    \"$make\" link -std=c99 -Wall -Wextra -Wpedantic -I. -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int \"$cpath\" -o \"$exepath\"\n", file);
+    fputs("    \"$make\" link -std=c99 -Wall -Wextra -Wpedantic -I. -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int \"$cpath\" -o \"$exepath\"\n", file);
     fputs("    \"$exepath\"\n", file);
     fputs("}\n", file);
     fputs("lm1_neg() {\n", file);
@@ -673,8 +673,18 @@ int lm_build_trans(const char * trans_tool, const char * source_path, const char
     }
     return lm_build_run(command);
 }
+int lm_build_generate_headers(const char * trans_tool)
+{
+    if (lm_build_trans(trans_tool, "l1src/p0.h.lm1", "lm1/build/l1src/p0.lm1.h") != 0) {
+    return 1;
+    }
+    return 0;
+}
 int lm_build_generate_all(const char * trans_tool)
 {
+    if (lm_build_generate_headers(trans_tool) != 0) {
+    return 1;
+    }
     if (lm_build_trans(trans_tool, "l1src/own.lm1", "lm1/build/own.lm1.c") != 0) {
     return 1;
     }
@@ -703,7 +713,7 @@ int lm_build_parser_library(const char * make_tool, const char * output_dir)
     char library_path[512];
     char command[4096];
     snprintf(library_path, sizeof(library_path), "%s/libparser.lm0.a", output_dir);
-    if (lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I. -c \"lm1/build/parser.lm1.c\" -o \"build/obj/parser.lm1.o\"") != 0) {
+    if (lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I. -I lm1/build -c \"lm1/build/parser.lm1.c\" -o \"build/obj/parser.lm1.o\"") != 0) {
     return 1;
     }
     remove(library_path);
@@ -719,7 +729,7 @@ int lm_build_own_library(const char * make_tool, const char * output_dir)
     char library_path[512];
     char command[4096];
     snprintf(library_path, sizeof(library_path), "%s/libown.lm0.a", output_dir);
-    if (lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I. -c \"lm1/build/own.lm1.c\" -o \"build/obj/own.lm1.o\"") != 0) {
+    if (lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I. -I lm1/build -c \"lm1/build/own.lm1.c\" -o \"build/obj/own.lm1.o\"") != 0) {
     return 1;
     }
     remove(library_path);
@@ -733,7 +743,7 @@ int lm_build_own_library(const char * make_tool, const char * output_dir)
 int lm_build_compile_l1trans(const char * make_tool, const char * output_dir)
 {
     char command[4096];
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I. \"lm1/build/l1trans.lm1.c\" -o \"%s/l1trans.lm0%s\"", output_dir, lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I. -I lm1/build \"lm1/build/l1trans.lm1.c\" -o \"%s/l1trans.lm0%s\"", output_dir, lm_build_exe_suffix());
     return lm_build_make(make_tool, "link", command);
 }
 int lm_build_compile_generated_tools(const char * make_tool, const char * output_dir)
@@ -747,7 +757,7 @@ int lm_build_compile_generated_tools(const char * make_tool, const char * output
     if (lm_build_make(make_tool, "link", command) != 0) {
     return 1;
     }
-    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I. \"lm1/build/printTree.lm1.c\" -o \"%s/printTree.lm0%s\"", output_dir, lm_build_exe_suffix());
+    snprintf(command, sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I. -I lm1/build \"lm1/build/printTree.lm1.c\" -o \"%s/printTree.lm0%s\"", output_dir, lm_build_exe_suffix());
     if (lm_build_make(make_tool, "link", command) != 0) {
     return 1;
     }
@@ -1051,7 +1061,7 @@ int lm_build_run_bootstrap(const char * trusted_make, const char * built_trans)
     output_dir = lm_build_output_dir();
     snprintf(parser_library, sizeof(parser_library), "%s/libparser.lm0.a", output_dir);
     snprintf(own_library, sizeof(own_library), "%s/libown.lm0.a", output_dir);
-    if (lm_build_make(trusted_make, "mkdir", "\"lm1/build\" \"build/obj\" \"build/lm0\" \"build/lm0/next\" \"build/lm0/next/check\"") != 0) {
+    if (lm_build_make(trusted_make, "mkdir", "\"lm1/build\" \"lm1/build/l1src\" \"build/obj\" \"build/lm0\" \"build/lm0/next\" \"build/lm0/next/check\"") != 0) {
     return 1;
     }
     if (lm_build_generate_all(built_trans) != 0) {

@@ -1,6 +1,6 @@
 predef: "l1src/own.lm1"
 predef: "l1src/parser_text.lm1"
-include: "l1src/p0.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<ctype.h>" "<limits.h>"
+include: "l1src/p0.lm1.h" "<stdio.h>" "<stdlib.h>" "<string.h>" "<ctype.h>" "<limits.h>"
 
 prototype:
 

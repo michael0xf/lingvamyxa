@@ -99,7 +99,7 @@ os:
             c.fputs("    Write-Host ('translate ' + $Src)\n", file)
             c.fputs("    & $trans $Src $cPath\n", file)
             c.fputs("    if ($LASTEXITCODE -ne 0) { throw ('translate failed: ' + $Src) }\n", file)
-            c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-I.' '-Werror=incompatible-pointer-types' '-Werror=discarded-qualifiers' '-Werror=implicit-function-declaration' '-Werror=implicit-int' $cPath '-o' $exePath\n", file)
+            c.fputs("    & $make 'link' '-std=c99' '-Wall' '-Wextra' '-Wpedantic' '-I.' '-I' 'lm1/build' '-Werror=incompatible-pointer-types' '-Werror=discarded-qualifiers' '-Werror=implicit-function-declaration' '-Werror=implicit-int' $cPath '-o' $exePath\n", file)
             c.fputs("    if ($LASTEXITCODE -ne 0) { throw ('link failed: ' + $Src) }\n", file)
             c.fputs("    & $exePath\n", file)
             c.fputs("    if ($LASTEXITCODE -ne 0) { throw ('run failed: ' + $Src + ' exit ' + $LASTEXITCODE) }\n", file)
@@ -202,7 +202,7 @@ os:
             c.fputs("    exepath=build/obj/tests/${name}\n", file)
             c.fputs("    echo \"translate $src\"\n", file)
             c.fputs("    \"$trans\" \"$src\" \"$cpath\"\n", file)
-            c.fputs("    \"$make\" link -std=c99 -Wall -Wextra -Wpedantic -I. -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int \"$cpath\" -o \"$exepath\"\n", file)
+            c.fputs("    \"$make\" link -std=c99 -Wall -Wextra -Wpedantic -I. -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int \"$cpath\" -o \"$exepath\"\n", file)
             c.fputs("    \"$exepath\"\n", file)
             c.fputs("}\n", file)
             c.fputs("lm1_neg() {\n", file)
@@ -510,7 +510,14 @@ fn: lm_build_trans (const: @(char trans_tool); const: @(char source_path); const
         return: 1
 return: lm_build_run(command)
 
+fn: lm_build_generate_headers (const: @(char trans_tool)) int
+    if: lm_build_trans(trans_tool, "l1src/p0.h.lm1", "lm1/build/l1src/p0.lm1.h") != 0
+        return: 1
+return: 0
+
 fn: lm_build_generate_all (const: @(char trans_tool)) int
+    if: lm_build_generate_headers(trans_tool) != 0
+        return: 1
     if: lm_build_trans(trans_tool, "l1src/own.lm1", "lm1/build/own.lm1.c") != 0
         return: 1
     if: lm_build_trans(trans_tool, "l1src/parser.lm1", "lm1/build/parser.lm1.c") != 0
@@ -531,7 +538,7 @@ fn: lm_build_parser_library (const: @(char make_tool); const: @(char output_dir)
     c.array: []: char library_path 512
     c.array: []: char command 4096
     c.snprintf(library_path, c.sizeof(library_path), "%s/libparser.lm0.a", output_dir)
-    if: lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I. -c \"lm1/build/parser.lm1.c\" -o \"build/obj/parser.lm1.o\"") != 0
+    if: lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I. -I lm1/build -c \"lm1/build/parser.lm1.c\" -o \"build/obj/parser.lm1.o\"") != 0
         return: 1
     c.remove(library_path)
     c.snprintf(command, c.sizeof(command), "rcs \"%s\" \"build/obj/parser.lm1.o\"", library_path)
@@ -544,7 +551,7 @@ fn: lm_build_own_library (const: @(char make_tool); const: @(char output_dir)) i
     c.array: []: char library_path 512
     c.array: []: char command 4096
     c.snprintf(library_path, c.sizeof(library_path), "%s/libown.lm0.a", output_dir)
-    if: lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I. -c \"lm1/build/own.lm1.c\" -o \"build/obj/own.lm1.o\"") != 0
+    if: lm_build_make(make_tool, "cc", "-std=c99 -Wall -Wextra -Wpedantic -I. -I lm1/build -c \"lm1/build/own.lm1.c\" -o \"build/obj/own.lm1.o\"") != 0
         return: 1
     c.remove(library_path)
     c.snprintf(command, c.sizeof(command), "rcs \"%s\" \"build/obj/own.lm1.o\"", library_path)
@@ -555,7 +562,7 @@ return: lm_build_make(make_tool, "ranlib", command)
 
 fn: lm_build_compile_l1trans (const: @(char make_tool); const: @(char output_dir)) int
     c.array: []: char command 4096
-    c.snprintf(command, c.sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I. \"lm1/build/l1trans.lm1.c\" -o \"%s/l1trans.lm0%s\"", output_dir, lm_build_exe_suffix())
+    c.snprintf(command, c.sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I. -I lm1/build \"lm1/build/l1trans.lm1.c\" -o \"%s/l1trans.lm0%s\"", output_dir, lm_build_exe_suffix())
 return: lm_build_make(make_tool, "link", command)
 
 fn: lm_build_compile_generated_tools (const: @(char make_tool); const: @(char output_dir)) int
@@ -566,7 +573,7 @@ fn: lm_build_compile_generated_tools (const: @(char make_tool); const: @(char ou
     c.snprintf(command, c.sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L \"lm1/build/finalize.lm1.c\" -o \"%s/finalize.lm0%s\"", output_dir, lm_build_exe_suffix())
     if: lm_build_make(make_tool, "link", command) != 0
         return: 1
-    c.snprintf(command, c.sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I. \"lm1/build/printTree.lm1.c\" -o \"%s/printTree.lm0%s\"", output_dir, lm_build_exe_suffix())
+    c.snprintf(command, c.sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -I. -I lm1/build \"lm1/build/printTree.lm1.c\" -o \"%s/printTree.lm0%s\"", output_dir, lm_build_exe_suffix())
     if: lm_build_make(make_tool, "link", command) != 0
         return: 1
     c.snprintf(command, c.sizeof(command), "-std=c99 -Wall -Wextra -Wpedantic -D_POSIX_C_SOURCE=200809L -I. \"lm1/build/buildCore.lm1.c\" -o \"%s/buildCore.lm0%s\"", output_dir, lm_build_exe_suffix())
@@ -813,7 +820,7 @@ fn: lm_build_run_bootstrap (const: @(char trusted_make); const: @(char built_tra
     output_dir: lm_build_output_dir()
     c.snprintf(parser_library, c.sizeof(parser_library), "%s/libparser.lm0.a", output_dir)
     c.snprintf(own_library, c.sizeof(own_library), "%s/libown.lm0.a", output_dir)
-    if: lm_build_make(trusted_make, "mkdir", "\"lm1/build\" \"build/obj\" \"build/lm0\" \"build/lm0/next\" \"build/lm0/next/check\"") != 0
+    if: lm_build_make(trusted_make, "mkdir", "\"lm1/build\" \"lm1/build/l1src\" \"build/obj\" \"build/lm0\" \"build/lm0/next\" \"build/lm0/next/check\"") != 0
         return: 1
     if: lm_build_generate_all(built_trans) != 0
         return: 1
