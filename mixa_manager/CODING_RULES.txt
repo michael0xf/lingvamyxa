@@ -19,19 +19,30 @@ discretion, and is NOT in the translator yet. Do not invent a spelling for it
 here and do not use one until his lands - a second spelling would have to be
 unpicked later.
 
-1.1. Use the PARENTHESISED form. This one bites.
+1.1. Use the PARENTHESISED form
 
-    const: @(MixaEvent ev)          correct
-    const: @: MixaEvent ev          SILENTLY LOSES THE REST OF THE LIST
+    const: @(MixaEvent ev)          use this
+    const: @: MixaEvent ev          refused, with a diagnostic
 
-L1_spec section 5 records it: `(const: @: char text; unsigned: fg)` emits
-`(const char * text)`. The tree is correct per P0 - the `;` closes the nested
-`@:` frame rather than the qualifier - and the emitter drops the tail. So a
-careless const can delete a parameter with no diagnostic.
+The current translator refuses the second form when more fields follow, and the
+diagnostic tells you the fix:
 
-Adding const widely is exactly the activity that walks into this. Use the paren
-form everywhere and the defect cannot be reached.
+    qualifier parameter has extra fields; write `const: @(type name)` or place
+    the qualifier last
 
+So the paren form is the spelling to use, and nothing silently breaks if you
+forget - the build stops and tells you.
+
+An earlier version of this section said the non-paren form SILENTLY LOSES THE
+REST OF THE PARAMETER LIST. That WAS true once and is not now: L1_spec section 5
+records both parameter defects as fixed in c8ceb67, and the fix was exactly this
+diagnostic rather than a wider parse. I had read that sentence the same day and
+still carried the vivid description of the defect forward instead of the line
+saying it was repaired. Verified by probe on the current translator before
+correcting.
+
+Keep checking parameter counts in the generated C after a wide const change -
+but as ordinary care, not because something is lying to you.
 
 2. Never edit .lm1 through a tool that processes backslashes
 
