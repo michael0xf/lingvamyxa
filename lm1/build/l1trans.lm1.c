@@ -6344,6 +6344,7 @@ int l1_path_is_absolute(const char * path)
     char l1_fn_names[2048];
     int l1_fn_th[256];
     int l1_fn_thn[32];
+    int l1_fn_ar[32];
     int l1_fnn = 0;
     char l1_ca_names[2048];
     int l1_ca_ids[32];
@@ -6832,6 +6833,7 @@ int l1_fn_ensure(const LmP0Text * text)
     }
     strcpy(l1_fn_names + l1_fnn * 64, buf);
     l1_fn_thn[l1_fnn] = 0;
+    l1_fn_ar[l1_fnn] = -1;
     i = l1_fnn;
     l1_fnn = l1_fnn + 1;
     return i;
@@ -9982,6 +9984,7 @@ int l1_emit_stmt(FILE * out, const LmP0Node * node, const char * path)
     const LmP0Node * name_node;
     const LmP0Text * head;
     LmP0Field * const_init = 0;
+    int i;
     if (l1_node_ignored(node)) {
     return 0;
     }
@@ -10003,6 +10006,22 @@ int l1_emit_stmt(FILE * out, const LmP0Node * node, const char * path)
     return 1;
     }
     return l1_write_cstr(out, "    return;\n");
+    }
+    i = l1_fn_find(node->as->atom);
+    if (i >= 0 && l1_fn_ar[i] == 0) {
+    if (l1_ident_is_reserved(node->as->atom) != 0) {
+    return l1_error(path, node, "reserved L1 name");
+    }
+    if (l1_write_cstr(out, "    ") != 0) {
+    return 1;
+    }
+    if (l1_write_ident(out, node->as->atom, path, node) != 0) {
+    return 1;
+    }
+    if (l1_write_cstr(out, "();\n") != 0) {
+    return 1;
+    }
+    return l1_emit_throw_dispatch(out, node->as->atom, path, node);
     }
     return l1_error(path, node, "unsupported statement atom");
     }
@@ -10614,7 +10633,10 @@ int l1_emit_fn(FILE * out, const LmP0Frame * frame, const char * path, int is_su
     const LmP0Text * fn_name;
     LmP0Field * throws_field;
     LmP0Field * rest_field;
+    LmP0Field * pf;
     int only_throws = 0;
+    int ar;
+    int fn_i;
     if (frame == 0 || frame -> body == 0) {
     return l1_error(path, 0, "fn without body");
     }
@@ -10672,6 +10694,21 @@ int l1_emit_fn(FILE * out, const LmP0Frame * frame, const char * path, int is_su
     }
     if (fn_name == 0) {
     return l1_error(path, name_node, "fn name is not an identifier");
+    }
+    ar = 0;
+    pf = 0;
+    if (params_node != 0 && params_node -> kind == LM_P0_NODE_STRUCTURE && params_node -> as -> structure != 0) {
+    pf = params_node -> as -> structure -> first_field;
+    while (pf != 0) {
+    if (l1_node_ignored(pf->value) == 0) {
+    ar = ar + 1;
+    }
+    pf = pf -> next;
+    }
+    }
+    fn_i = l1_fn_ensure(fn_name);
+    if (fn_i >= 0) {
+    l1_fn_ar[fn_i] = ar;
     }
     ret_node = 0;
     body_node = 0;

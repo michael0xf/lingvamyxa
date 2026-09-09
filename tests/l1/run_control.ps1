@@ -84,13 +84,15 @@ if ($mid.IndexOf("break;") -ge 0) { throw "implicit break between case 1 and cas
 if ($swT.IndexOf("switch (2)") -lt 0) { throw "missing nested switch (2)" }
 Build-Run "control_switch" $swC 0
 
-$gC = Translate "control_goto"
-$gT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $gC))
-if ($gT.IndexOf("goto done;") -lt 0) { throw "missing forward goto done" }
-if ($gT.IndexOf("done: ;") -lt 0) { throw "missing C99 label done" }
-if ($gT.IndexOf("goto loop;") -lt 0) { throw "missing backward goto loop" }
-if ($gT.IndexOf("loop: ;") -lt 0) { throw "missing C99 label loop" }
-Build-Run "control_goto" $gC 0
+$nC = Translate "control_nullary"
+$nT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $nC))
+if ($nT.IndexOf("ping();") -lt 0) { throw "missing compact ping() call" }
+if (($nT.Split("ping();").Count - 1) -lt 2) { throw "missing bare ping nullary call" }
+if ($nT.IndexOf("pong();") -lt 0) { throw "missing pong() call" }
+if ($nT.IndexOf("done: ;") -ge 0) { throw "must not emit C label from empty colon" }
+if ($nT.IndexOf("goto ping;") -ge 0) { throw "nullary call must not become goto" }
+Build-Run "control_nullary" $nC 0
+Negative "control_goto" "empty colon Frame is not allowed"
 
 $sdC = Translate "control_switch_decl"
 $sdT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $sdC))
@@ -105,7 +107,7 @@ Negative "invalid_switch_case_out" "case/default outside switch"
 Negative "invalid_switch_default_out" "case/default outside switch"
 Negative "invalid_switch_end" "end target does not match close target"
 Negative "invalid_switch_case_empty" "case expects an expression"
-Negative "invalid_control_label_c" "reserved L1 name"
+Negative "invalid_control_label_c" "empty colon Frame is not allowed"
 Negative "invalid_control_goto_l1" "reserved L1 name"
 
 $thC = Translate "control_throw"
