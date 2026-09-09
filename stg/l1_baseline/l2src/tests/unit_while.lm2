@@ -1,0 +1,53 @@
+fn: bump () int
+    char: hits
+    hits: hits + 1
+    return: 1
+end: bump
+fn: zero (int: z) int
+    while: 0
+        return: 7
+    return: 0
+end: zero
+fn: once (int: z) int
+    size_t: i
+    i: 0U
+    while: i = 0U
+        i: 1U
+    return: 1
+end: once
+fn: many (size_t: n) int
+    size_t: i
+    i: 0U
+    while: i < n
+        i: i + 1U
+    if: i = n
+        return: 1
+    return: 0
+end: many
+fn: guarded (const: @(char source); size_t: length) int
+    size_t: i
+    i: 0U
+    while: i < length && bump() != 0
+        i: i + 1U
+    return: 0
+end: guarded
+fn: early (int: z) int
+    size_t: i
+    i: 0U
+    while: i < 4U
+        if: z != 0
+            return: 3
+        i: i + 1U
+    return: 0
+end: early
+fn: until () int
+    size_t: i
+    i: 0U
+    while: bump() != 0 && i < 3U
+        i: i + 1U
+    return: 0
+end: until
+fn: main () int
+    return: 0
+end: main
+

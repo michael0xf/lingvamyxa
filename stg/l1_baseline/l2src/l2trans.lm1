@@ -73,6 +73,7 @@ prototype:
     fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
     fn: l2_eval_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
     fn: l2_eval_and (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
+    fn: l2_eval_cond (@: LmP0Field field; int: n; int: mi; const: @(char ind); const: @(char dest)) int
     fn: l2_fields_has_call (@: LmP0Field field; int: n) int
     fn: l2_node_has_call (const: @(LmP0Node node)) int
     fn: l2_advance (@: LmP0Field f; int: k) @: LmP0Field
@@ -939,7 +940,7 @@ fn: l2_scan_ident (int: mi; const: @(LmP0Text t); int: seen) int
         return: 0
     if: l2_is_known(t)
         return: 0
-    if: l2_text_eq(t, "return") || l2_text_eq(t, "if") || l2_text_eq(t, "else") || l2_text_eq(t, "while") || l2_text_eq(t, "for") || l2_text_eq(t, "fn") || l2_text_eq(t, "sub") || l2_text_eq(t, "end") || l2_text_eq(t, "node") || l2_text_eq(t, "int") || l2_text_eq(t, "char") || l2_text_eq(t, "size_t") || l2_text_eq(t, "data") || l2_text_eq(t, "length")
+    if: l2_text_eq(t, "return") || l2_text_eq(t, "if") || l2_text_eq(t, "else") || l2_text_eq(t, "while") || l2_text_eq(t, "for") || l2_text_eq(t, "continue") || l2_text_eq(t, "break") || l2_text_eq(t, "fn") || l2_text_eq(t, "sub") || l2_text_eq(t, "end") || l2_text_eq(t, "node") || l2_text_eq(t, "int") || l2_text_eq(t, "char") || l2_text_eq(t, "size_t") || l2_text_eq(t, "data") || l2_text_eq(t, "length")
         return: 0
     if: t\length >= 2U && t\data[0] = 99 && t\data[1] = 46
         return: 0
@@ -1025,16 +1026,30 @@ fn: l2_scan_body (const: @(LmP0Structure body); int: mi; @: int seen) int
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
                 field: nxt
             ---
-        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0
+        if: l2_frame_head(stmt, "while")
+            fr: stmt\as\frame
+            n: l2_count_active(fr\body)
+            last: l2_next_active(fr\body\first_field)
+            k: 1
+            while: k < n
+                last: l2_next_active(last\next)
+                k: k + 1
+            if: n >= 2 && l2_scan_fields(fr\body\first_field, n - 1, mi, sv) != 0
+                return: 1
+            if: n >= 2 && last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE && l2_scan_body(last\value\as\structure, mi, seen) != 0
+                return: 1
+            sv: seen[0]
+            field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_own_decl_ty(stmt) != 0
             fa: l2_next_active(stmt\as\frame\body\first_field)\value\as\atom
             oi: l2_own_find(fa)
             if: oi >= 0
                 seen[0]: seen[0] | (1 << oi)
                 sv: seen[0]
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) = 0 && l2_is_char_decl(stmt)
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_own_decl_ty(stmt) = 0 && l2_is_char_decl(stmt)
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_char_decl(stmt) = 0
             if: stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && l2_scan_ident(mi, stmt\as\frame\head, sv) != 0
                 return: 1
             if: stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\body != 0 && l2_scan_fields(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), mi, sv) != 0
@@ -1384,6 +1399,15 @@ fn: l2_bool_set (const: @(char ind); const: @(char dest); const: @(char rhs)) in
         return: 1
 return: 0
 
+fn: l2_eval_cond (@: LmP0Field field; int: n; int: mi; const: @(char ind); const: @(char dest)) int
+    c.array: [256]: char scratch
+    if: dest = 0
+        return: 1
+    scratch[0]: 0
+    if: l2_eval_fields(field, n, mi, ind, scratch) != 0
+        return: 1
+return: l2_bool_set(ind, dest, scratch)
+
 fn: l2_intern_prove (const: @(char path); const: @(LmP0Node node)) int
     unsigned: id
     int: two
@@ -1665,7 +1689,7 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
         return: l2_check_fields(node\as\structure\first_field, l2_count_active(node\as\structure), mi, path, node)
     if: node\kind != c.LM_P0_NODE_FRAME || node\as = 0 || node\as\frame = 0
         return: l2_error(path, node, "unsupported body")
-    if: l2_frame_head(node, "while") || l2_frame_head(node, "for")
+    if: l2_frame_head(node, "while") || l2_frame_head(node, "for") || l2_frame_head(node, "continue") || l2_frame_head(node, "break")
         return: l2_error(path, node, "unsupported loop")
     if: l2_frame_head(node, "if") || l2_frame_head(node, "else") || l2_frame_head(node, "return") || l2_frame_head(node, "fn")
         return: l2_error(path, node, "unsupported body")
@@ -1758,7 +1782,9 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
         return: l2_error(path, 0, "unsupported body")
     while: field != 0
         stmt: field\value
-        if: l2_frame_head(stmt, "while") || l2_frame_head(stmt, "for")
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && (l2_text_eq(stmt\as\atom, "continue") || l2_text_eq(stmt\as\atom, "break"))
+            return: l2_error(path, stmt, "unsupported loop")
+        if: l2_frame_head(stmt, "for") || l2_frame_head(stmt, "continue") || l2_frame_head(stmt, "break")
             return: l2_error(path, stmt, "unsupported loop")
         if: l2_frame_head(stmt, "if")
             fr: stmt\as\frame
@@ -1792,6 +1818,28 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
                 field: nxt
             ---
+        if: l2_frame_head(stmt, "while")
+            fr: stmt\as\frame
+            if: fr\body = 0
+                return: l2_error(path, stmt, "unsupported body")
+            if: fr\trailer != 0 && l2_end_named(fr, "while") = 0
+                return: l2_error(path, stmt, "unsupported trailer")
+            n: l2_count_active(fr\body)
+            if: n < 2
+                return: l2_error(path, stmt, "unsupported body")
+            last: l2_next_active(fr\body\first_field)
+            k: 1
+            while: k < n
+                last: l2_next_active(last\next)
+                k: k + 1
+            if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
+                return: l2_error(path, stmt, "unsupported body")
+            if: l2_check_fields(fr\body\first_field, n - 1, mi, path, stmt) != 0
+                return: 1
+            if: l2_check_body(last\value\as\structure, mi, path, depth + 1) != 0
+                return: 1
+            field: l2_next_active(field\next)
+            continue
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && depth > 0
             return: l2_error(path, stmt, "unsupported own declaration")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt)
@@ -2534,6 +2582,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     int: raw 1
     size_t: ln
     c.array: [32]: char deep
+    c.array: [64]: char wcond
     ln: c.strlen(ind)
     if: ln + 5U >= 32U
         return: 1
@@ -2574,6 +2623,27 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
                 field: nxt
             ---
+        if: l2_frame_head(stmt, "while")
+            fr: stmt\as\frame
+            n: l2_count_active(fr\body)
+            last: l2_next_active(fr\body\first_field)
+            k: 1
+            while: k < n
+                last: l2_next_active(last\next)
+                k: k + 1
+            wcond[0]: 0
+            if: l2_new_temp(ind, wcond) != 0
+                return: 1
+            if: l2_eval_cond(fr\body\first_field, n - 1, mi, ind, wcond) != 0
+                return: 1
+            if: c.fprintf(l2_out, "%swhile: %s\n", ind, wcond) < 0
+                return: 1
+            if: l2_emit_body(last\value\as\structure, mi, deep) != 0
+                return: 1
+            if: l2_eval_cond(fr\body\first_field, n - 1, mi, deep, wcond) != 0
+                return: 1
+            field: l2_next_active(field\next)
+            continue
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0
             oi: l2_own_find(l2_next_active(stmt\as\frame\body\first_field)\value\as\atom)
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0

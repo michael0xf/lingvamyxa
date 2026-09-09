@@ -284,7 +284,10 @@ if ($uc -notmatch 'l2_m\d+\(unit') { throw "unit_contracts missing mangled typed
 
 Invoke-Negative "l2src\tests\unit_dup_def.lm2" "unit_dup_def" "duplicate definition"
 Invoke-Negative "l2src\tests\unit_dup_formal.lm2" "unit_dup_formal" "duplicate formal"
-Invoke-Negative "l2src\tests\unit_loop.lm2" "unit_loop" "unsupported loop"
+Invoke-Leaf "l2src\tests\unit_loop.lm2" "unit_loop" 1 "add"
+Invoke-Negative "l2src\tests\unit_for.lm2" "unit_for" "unsupported loop"
+Invoke-Negative "l2src\tests\unit_continue.lm2" "unit_continue" "unsupported loop"
+Invoke-Negative "l2src\tests\unit_break.lm2" "unit_break" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_rec.lm2" "unit_rec" "unsupported recursion"
 Invoke-Negative "l2src\tests\unit_cycle.lm2" "unit_cycle" "unsupported recursion"
 Invoke-Leaf "l2src\tests\unit_eight.lm2" "unit_eight" 0 "m7"
@@ -1361,5 +1364,152 @@ end: external
 "@
 # skip, skip, run, run, mid run, mid skip, wrap(leaf) run, wrap skip
 if ($dbv -ne "0`n65`n1`n65`n1`n90`n1`n90`n1`n90`n0`n65`n1`n90`n0`n65`n") { throw "dyn bool hidden &&/||: $dbv" }
+
+Invoke-Leaf "l2src\tests\unit_while.lm2" "unit_while" 0 "zero"
+$wh = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_while.lm1")))
+if ($wh -notmatch 'while: l2_t') { throw "unit_while must emit L1 while of a re-evaluated cond temp" }
+$dwh = Invoke-SpliceDrive "unit_while" @"
+        @: Lmx f 0
+        c.printf("%d\n", l2_m1(unit, 0))
+        c.printf("%d\n", l2_m2(unit, 0))
+        c.printf("%d\n", l2_m3(unit, 3U))
+        c.printf("%d\n", l2_m3(unit, 0U))
+        c.printf("%d\n", l2_m5(unit, 1))
+        c.printf("%d\n", l2_m5(unit, 0))
+        return: 0
+    end: main
+end: external
+"@
+if ($dwh -ne "0`n1`n1`n1`n3`n0`n") { throw "unit_while zero/once/many/early: $dwh" }
+$dhit = Invoke-SpliceDrive "unit_while" @"
+        @: Lmx f 0
+        l2_m6(unit)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($dhit -ne "4`n") { throw "unit_while last-false still calls bump: $dhit" }
+$dgd = Invoke-SpliceDrive "unit_while" @"
+        @: Lmx f 0
+        l2_m4(unit, "abc", 3U)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m4(unit, "ab", 2U)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+# first guarded 3 calls; second adds 2 more on the same unit
+if ($dgd -ne "3`n5`n") { throw "unit_while shortcircuit bump vs length: $dgd" }
+
+function Invoke-PhysicalLine {
+    $pred = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_text_predicates.lm2")).Replace("`r`n", "`n")
+    $phys = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_physical_line.lm2")).Replace("`r`n", "`n")
+    $h = ($pred -split "fn: lm_p0_is_horizontal_space")[1]
+    $h = "fn: lm_p0_is_horizontal_space" + ($h -split "fn: lm_p0_is_line_break")[0]
+    $b = ($pred -split "fn: lm_p0_is_line_break")[1]
+    $b = "fn: lm_p0_is_line_break" + ($b -split "fn: lm_p0_is_field_space")[0]
+    $ph = ($phys -split "fn: lm_p0_is_horizontal_space")[1]
+    $ph = "fn: lm_p0_is_horizontal_space" + ($ph -split "fn: lm_p0_is_line_break")[0]
+    $pb = ($phys -split "fn: lm_p0_is_line_break")[1]
+    $pb = "fn: lm_p0_is_line_break" + ($pb -split "fn: lm_p0_index_is_line_start")[0]
+    if ($h.Trim() -ne $ph.Trim()) { throw "physical_line is_horizontal_space must match parser_text_predicates.lm2" }
+    if ($b.Trim() -ne $pb.Trim()) { throw "physical_line is_line_break must match parser_text_predicates.lm2" }
+
+    $refLm1 = Join-Path $out "pline_ref.lm1"
+    $refC = Join-Path $out "pline_ref.c"
+    $refExe = Join-Path $out "pline_ref.exe"
+    $refOut = Join-Path $out "pline_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+        c.printf("%d\n", lm_p0_index_is_line_start("x", 0U))
+        c.printf("%d\n", lm_p0_index_is_line_start("x\ny", 0U))
+        c.printf("%d\n", lm_p0_index_is_line_start("x\ny", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("x\ny", 2U))
+        c.printf("%d\n", lm_p0_index_is_line_start("x\ry", 2U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("", 0U, 0U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("abc", 3U, 0U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("abc", 3U, 3U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("abc", 3U, 4U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("ab\ncd", 5U, 0U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("ab\ncd", 5U, 3U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("ab\rcd", 5U, 0U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("ab\r\ncd", 6U, 0U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("a\0b\n", 4U, 0U))
+        c.printf("%zu\n", lm_p0_find_physical_line_end("ab\ncd", 5U, 2U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("", 0U, 0U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("   ", 0U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space(" \t ", 0U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space(" a", 0U, 2U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("x  ", 1U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("x", 1U, 1U))
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pline_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "pline_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'pline_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pline_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_physical_line.lm2" "parser_physical_line" 0 "lm_p0_index_is_line_start"
+    $lm1 = Join-Path $out "parser_physical_line.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "physical_line must mangle method symbols" }
+    if ($text -notmatch 'while: l2_t') { throw "physical_line must re-evaluate while cond each check" }
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "physical_line L1 missing generated main return" }
+    $drive = @"
+        c.printf("%d\n", l2_m2(unit, "x", 0U))
+        c.printf("%d\n", l2_m2(unit, "x\ny", 0U))
+        c.printf("%d\n", l2_m2(unit, "x\ny", 1U))
+        c.printf("%d\n", l2_m2(unit, "x\ny", 2U))
+        c.printf("%d\n", l2_m2(unit, "x\ry", 2U))
+        c.printf("%zu\n", l2_m3(unit, "", 0U, 0U))
+        c.printf("%zu\n", l2_m3(unit, "abc", 3U, 0U))
+        c.printf("%zu\n", l2_m3(unit, "abc", 3U, 3U))
+        c.printf("%zu\n", l2_m3(unit, "abc", 3U, 4U))
+        c.printf("%zu\n", l2_m3(unit, "ab\ncd", 5U, 0U))
+        c.printf("%zu\n", l2_m3(unit, "ab\ncd", 5U, 3U))
+        c.printf("%zu\n", l2_m3(unit, "ab\rcd", 5U, 0U))
+        c.printf("%zu\n", l2_m3(unit, "ab\r\ncd", 6U, 0U))
+        c.printf("%zu\n", l2_m3(unit, "a\0b\n", 4U, 0U))
+        c.printf("%zu\n", l2_m3(unit, "ab\ncd", 5U, 2U))
+        c.printf("%d\n", l2_m4(unit, "", 0U, 0U))
+        c.printf("%d\n", l2_m4(unit, "   ", 0U, 3U))
+        c.printf("%d\n", l2_m4(unit, " \t ", 0U, 3U))
+        c.printf("%d\n", l2_m4(unit, " a", 0U, 2U))
+        c.printf("%d\n", l2_m4(unit, "x  ", 1U, 3U))
+        c.printf("%d\n", l2_m4(unit, "x", 1U, 1U))
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "pline_l2_drive.lm1"
+    $drvC = Join-Path $out "pline_l2_drive.c"
+    $drvExe = Join-Path $out "pline_l2_drive.exe"
+    $drvOut = Join-Path $out "pline_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pline_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "pline_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'pline_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pline_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "physical_line mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-PhysicalLine
 
 "l2trans $gen ok"

@@ -1,0 +1,36 @@
+fn: lm_p0_is_horizontal_space (char: value) int
+    return: value = 32 || value = 9
+end: lm_p0_is_horizontal_space
+fn: lm_p0_is_line_break (char: value) int
+    return: value = 10 || value = 13
+end: lm_p0_is_line_break
+fn: lm_p0_index_is_line_start (const: @(char text); size_t: index) int
+    if: index = 0U
+        return: 1
+    return: text[index - 1U] = 10 || text[index - 1U] = 13
+end: lm_p0_index_is_line_start
+fn: lm_p0_find_physical_line_end (const: @(char source); size_t: length; size_t: start) size_t
+    size_t: i
+    char: ch
+    i: start
+    while: i < length
+        ch: source[i]
+        if: lm_p0_is_line_break(ch) != 0
+            return: i
+        i: i + 1U
+    return: i
+end: lm_p0_find_physical_line_end
+fn: lm_p0_line_rest_is_horizontal_space (const: @(char source); size_t: start; size_t: end) int
+    size_t: i
+    char: ch
+    i: start
+    while: i < end
+        ch: source[i]
+        if: lm_p0_is_horizontal_space(ch) = 0
+            return: 0
+        i: i + 1U
+    return: 1
+end: lm_p0_line_rest_is_horizontal_space
+fn: main () int
+    return: 0
+end: main
