@@ -67,10 +67,11 @@ asked to be preserved from the start. Writing const now is not tidiness ahead of
 a compiler that will use it - it is recording, while the author still knows, the
 fact the optimisation will need.
 
-immutable is being added to L1 by Codex, in a free semantic form at his
-discretion, and is NOT in the translator yet. Do not invent a spelling for it
-here and do not use one until his lands - a second spelling would have to be
-unpicked later.
+immutable is being added to L1 by Codex in a free semantic form. Availability is
+TOOL-VERSION-SPECIFIC and that distinction matters here: the root implementation
+is published, but the STG default translator - the one this subtree builds with -
+has not been promoted to it yet. So it exists, and we cannot use it. Do not
+invent a spelling in the meantime; a second one would have to be unpicked.
 
 1.1. Use the PARENTHESISED form
 
@@ -116,3 +117,52 @@ run_mixa.ps1, and that is all. Do NOT run stg/l1_baseline/gate.ps1 for
 mixa_manager work: it rebuilds the shared translator, which cannot be affected
 by anything in this subtree, and doing so has already collided with someone
 else's integration. The gate is for L1.
+
+
+5. What writing the selection model in L1 actually cost
+
+Kept because this subtree is where L2's requirements are found, and because the
+evidence is worthless if it is not written down while it is fresh.
+
+CLASSIFIED RATHER THAN LISTED, at Codex's insistence and he is right: I sent
+these as one list and they are three different kinds of thing. "We needed a
+linear scan here" is not "L2 must provide a hash map", and a manual L1
+allocation pattern is not the L2 storage model. Conflating them turns an
+observation into an unearned mandate.
+
+5.1. Library convenience - wants a library, not a language change
+
+    no strdup, no strrchr surface; the parent path is cut by scanning for '/'
+    growable arrays are hand-rolled each time
+
+These are answered by an L1 library unit, the way mixa_event_fifo.lm1 already
+answers one. Nothing about the language needs to change.
+
+5.2. L1 limitations - real, and expected of an intermediate representation
+
+    no map or set, so linear scans with manual shift-compaction
+    no valued or dot access, so struct shuffling goes through c.memcpy
+    `[]: size_t cap 1` as a one-slot out-parameter works but is easy to misuse
+
+L1 is a thin lowering to C and is not supposed to have these. Recorded so nobody
+re-derives them, not as complaints.
+
+5.3. The two worth L2's attention
+
+    PARALLEL GROWABLE ARRAYS. Growing one array and bumping a shared capacity
+      before growing the other leaves the second null, because the next call
+      takes the count < cap early-out. Nothing detects it.
+
+    ALIASED POINTERS WITH SINGLE OWNERSHIP. The reverse index holds pointers
+      that also live in the exception list. Correct behaviour depends on freeing
+      exactly one of them, and nothing expresses which.
+
+These two are different in kind from 5.1 and 5.2: the language offers nothing at
+all, and the programmer simply must not make a mistake. That is the shape of
+thing a higher level exists to remove - but it is EVIDENCE for the L2 design
+discussion, not a requirement already granted.
+
+One more, not about the language: appending to a .ps1 through a PowerShell
+here-string injected a U+FEFF mid-file. Twice today, from two different agents,
+so it is not one person's slip. Cause not established. Prefer anchored patches,
+and check the diff for U+FEFF after writing a .ps1.
