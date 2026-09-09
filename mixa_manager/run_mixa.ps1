@@ -12,35 +12,37 @@ if (-not (Test-Path -LiteralPath $trans)) {
     throw "missing stable L1 translator: $trans (produce via stg\l1_baseline\gate.ps1)"
 }
 
-# Record what produced this run. mixa_manager builds against a translator it
-# does not own and cannot pin, so any change to that floor arrives here as a
-# suite result. Two DIFFERENT facts are printed and neither implies the other:
+# Record what produced this run, and say when the record cannot be trusted.
 #
-#   binary       SHA256 of the executable actually invoked. This is the
-#                identity of that concrete binary. Measured 2026-09-09: a
-#                rebuild from identical source gives a different hash every
-#                time, so it does not survive rebuilds and is not a behaviour
-#                comparison.
+# The BINARY HASH is the only reliable identity: it is the file actually
+# invoked. Everything else is inference.
 #
-#   source       SHA256 of the generated gen2 l1trans.c, a GENERATED-SOURCE
-#                FINGERPRINT. It is not a behavioural hash: formatting can move
-#                it without changing behaviour, and compiler version or flags
-#                can change behaviour without moving it. It also does not prove
-#                the binary above was built from it - it only sits beside it in
-#                the same build tree. Its presence is not evidence that a fixed
-#                point was verified in this run; the gate proves that, not this
-#                script.
+# The generated-source fingerprint was reporting a build-tree intermediate, and
+# on 2026-09-09 that went stale and LIED: a promotion replaced the .exe while
+# leaving the intermediate three hours old, so the line reported "unchanged"
+# across a translator swap. Worse than absent - it was confidently wrong.
 #
-# Use them as breadcrumbs for "did the floor move", not as proof of identity.
-$genSource = "stg/l1_baseline/build/obj/l1trans/gen2/l1trans.c"
+# Sources and binaries are promoted SEPARATELY into this build root, so nothing
+# here is guaranteed to correspond to the installed binary. The line therefore
+# reports the tracked source AND whether it is older than the binary, which is
+# the condition that makes it meaningless.
+$trackedC = "stg/l1_baseline/lm1/build/l1trans.lm1.c"
 "translator: $trans"
 "translator binary sha256: " + (Get-FileHash -LiteralPath $trans -Algorithm SHA256).Hash
 if ($env:MIXA_L1TRANS -and $env:MIXA_L1TRANS.Trim().Length -gt 0) {
-    "generated-source fingerprint: (not applicable - MIXA_L1TRANS override in use)"
-} elseif (Test-Path -LiteralPath $genSource) {
-    "generated-source fingerprint: " + (Get-FileHash -LiteralPath $genSource -Algorithm SHA256).Hash
+    "tracked source: (not checked - MIXA_L1TRANS override in use)"
+} elseif (Test-Path -LiteralPath $trackedC) {
+    $tHash = (Get-FileHash -LiteralPath $trackedC -Algorithm SHA256).Hash
+    $tTime = (Get-Item -LiteralPath $trackedC).LastWriteTime
+    $bTime = (Get-Item -LiteralPath $trans).LastWriteTime
+    "tracked source sha256: $tHash"
+    if ($bTime -gt $tTime) {
+        "  WARNING: the binary is NEWER than the tracked source in this build"
+        "  root, so it was not built from it. The source hash above identifies"
+        "  nothing about the translator that just ran."
+    }
 } else {
-    "generated-source fingerprint: (absent - produce via the baseline gate)"
+    "tracked source: (absent)"
 }
 
 $out = "build\mixa"
