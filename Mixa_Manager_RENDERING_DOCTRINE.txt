@@ -1,0 +1,83 @@
+Mixa Manager - the rendering doctrine
+Application-wide. Not a preference, not a default to be overridden locally.
+
+Fixed by the language owner on 2026-09-09. It lives in its own document rather
+than inside BACKEND_SEAM.txt because it governs the WHOLE application: whoever
+later writes image output, a zoom control, a DPI path or a new layer must find
+this without having to read a document about backends. Burying it in the seam
+would guarantee it is violated by the first person who never read the seam.
+
+
+1. The law
+
+    A fraction is how you ARRIVE at an answer. It is never the answer.
+
+Compute in fractional arithmetic - sizes, spacings, factors, ratios - and then
+SNAP. What leaves the computation and reaches the screen is always an integer.
+
+
+2. Why it is a prohibition and not advice
+
+Most text windows today look wrong: smeared glyphs, uneven stems, box-drawing
+that does not meet. This is not incompetence. It is what standard scaling
+machinery does BY DEFAULT when nobody forbids it. Fractional scaling, sub-pixel
+positioning and smoothing are the defaults almost everywhere, so a project that
+merely prefers sharpness will drift into blur one reasonable-looking call at a
+time.
+
+Hence a prohibition. There is no local exemption, and "just this one control"
+is exactly how it is lost.
+
+
+3. Where it applies
+
+Everywhere. Explicitly including, but not limited to:
+
+    glyph rendering        never scale a font. Take it at its native pixel size
+                           and use it pixel for pixel
+    cell positions         computed fractionally, drawn at integers
+    grid ratios            the upper layer's cell is an integer ratio to the
+                           text cell - see 5
+    window resize          lazy and discrete: cell size fixed, cell COUNT
+                           changes. A bigger window shows more letters, not
+                           larger ones
+    images                 integer zoom only - see 4
+    any future zoom, DPI or scaling path
+
+
+4. Images: integer ZOOM, which is stricter than integer ratio
+
+Do not confuse these two. They are different rules and conflating them
+reintroduces exactly the blur this document forbids.
+
+    integer RATIO      3:2 is fine BETWEEN GRIDS, because each grid is drawn
+                       independently at its own native size. No pixel is ever
+                       resampled; the ratio only decides where boundaries fall.
+
+    integer ZOOM       3:2 is NOT fine for an IMAGE. Three output pixels per two
+                       input pixels cannot be produced by replication - it needs
+                       resampling, which is the blur.
+
+So for image content only n:1 and 1:n are permitted: whole-pixel replication, or
+whole-pixel decimation. Nearest neighbour, never interpolation.
+
+If an image does not fit at any permitted zoom, it is CROPPED, letterboxed,
+panned or paged - it is not fractionally scaled to fit. Fitting is a layout
+problem, and solving a layout problem by resampling is the mistake.
+
+
+5. The rule always has an answer
+
+1:1 is an integer ratio and an integer zoom. So the doctrine can never force a
+fractional case: a platform with no usable larger font degrades to one font for
+both layers, and an image with no fitting zoom is shown at 1:1 and clipped.
+
+There is no situation in which the correct move is a fraction. If one appears to
+exist, the layout is wrong, not the doctrine.
+
+
+6. Relation to other documents
+
+BACKEND_SEAM.txt sections 9 and 10 apply this to the backend seam - the in/out
+cell metrics on open, glyph rasterization at native size, and the two cell
+grids. Those are instances. This document is the rule.

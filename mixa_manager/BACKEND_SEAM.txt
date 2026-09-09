@@ -297,6 +297,17 @@ for its copy semantics and manually verified for its display.
 
 9. Glyphs: the rendering doctrine, and what it does to the seam
 
+THE DOCTRINE ITSELF NOW LIVES IN Mixa_Manager_RENDERING_DOCTRINE.txt, because it
+governs the whole application and not merely this seam - image zoom, DPI and any
+future scaling path are bound by it too, and whoever writes those will not be
+reading a document about backends. What follows here is its consequence for the
+six operations.
+
+Note one distinction made there and easy to lose: an integer RATIO between two
+grids is not the same rule as an integer ZOOM of an image. 3:2 is fine between
+grids, where nothing is resampled, and forbidden for image content, where it
+would be.
+
 Fixed by the language owner on 2026-09-09, in response to the observation that
 most text windows today look wrong. The cause is not incompetence; it is
 accepting the default behaviour of standard scaling machinery. So this is stated
