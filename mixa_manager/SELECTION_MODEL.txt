@@ -12,6 +12,17 @@ That history is the reason for the standing instruction: PORT IT AS IT IS. If a
 piece of it looks unnecessary, the burden is on the reader to explain seven
 clean years, not on the code to justify itself.
 
+But weigh the evidence correctly, because the owner is explicit about its
+limits: this was PHONE use, and not heavy. Seven years without a failure is
+strong evidence about the EVERYDAY paths - select some files, deselect one,
+copy. It says very little about the deep ones, which on a phone may simply never
+have been reached.
+
+So both halves hold at once, and the port must honour both: port the model
+unchanged, AND test it properly rather than treating it as already
+battle-hardened. A desktop manager will do heavier file work in a week than a
+phone did in seven years, and it will be the first thing to reach the corners.
+
 
 2. The principle
 
@@ -76,7 +87,7 @@ The lower-selection-wins rule is not a detail. It is what lets a user select a
 tree, exclude a subtree, and then re-select something inside the excluded part.
 
 
-4. One thing I did not understand, offered as a question rather than a defect
+4. One thing I did not understand, and it needs a test rather than deference
 
 In FSync.isSelect2 the consolidation loop is `while (excessSelects.size() > 1)`.
 With three nested selected ancestors that leaves the middle one in `selected`,
@@ -84,16 +95,22 @@ unconsolidated, still holding its own exceptions.
 
 I traced the queries and it does NOT produce a wrong answer: isSelect3 finds
 either the topmost or the middle one, and the middle one's exceptions still
-point at it and still apply. So it is a redundancy in the representation rather
-than an error in the result - which is consistent with seven years of clean
-operation, since nothing observable goes wrong.
+point at it and still apply. So on that reading it is redundancy in the
+representation rather than an error in the result.
 
-I am recording it as a question because I cannot tell whether it is deliberate.
-It is NOT a reported bug: it is a reading of the code against seven years of
-production evidence, and the evidence outranks the reading. If the port
-reproduces `> 1` it will behave identically; if someone decides it should be
-`> 0`, that is a tidiness change and must be tested as one.
+I first wrote that seven years of clean operation outranked my reading. That was
+too strong, and the owner corrected the premise: the usage was light phone usage.
+THREE NESTED SELECTED ANCESTORS IS EXACTLY THE KIND OF CASE THAT MAY NEVER HAVE
+OCCURRED THERE. Absence of failure is not evidence about a path that was never
+walked.
 
+So this is unresolved, not settled. The port must cover it with a real test:
+select a deep chain of three or more nested directories, put exceptions under
+the middle ones, then query and deselect across them. If the behaviour matches
+the original, reproduce `> 1` and record why. If it does not, we have found
+something the phone never could.
+
+Do not change it to `> 0` on the strength of my reading alone. Test first.
 
 5. What the port must not do
 
