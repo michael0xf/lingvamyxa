@@ -12164,12 +12164,18 @@ boundary cannot poll or honor stop; that is the exceptional
 supervisor/host `fail()` path, not the normal loop-exit model, and
 must not be reported as a completed safe reclaim.
 
-There is one ordinary liveness direction: child to parent. The
-child's end_turn is the check/send opportunity; a host timer/cadence
-may throttle it to less often. Do not add a second mandatory
-parent-to-child liveness probe at the parent's end_turn. If the
-parent is absent or unresponsive past the configured policy, the
-child requests its own orderly close. The parent may still
+Automatic parent-liveness polling has one direction: child to
+parent. The child's end_turn is the check/send opportunity; a host
+timer/cadence may throttle it to less often. A parent does not
+automatically poll its children. This is only the automatic
+lifecycle/liveness mechanism. It does not restrict ordinary
+Messages: any participant may send to any recipient, including an
+explicit parent-to-child status query or peer-to-peer traffic, with
+any payload; the receiver still determines validation,
+interpretation and execution. Do not add a second mandatory
+automatic parent-to-child liveness probe at the parent's end_turn.
+If the parent is absent or unresponsive past the configured policy,
+the child requests its own orderly close. The parent may still
 explicitly stop a child, honored at that child's end_turn. A stuck
 child is exceptional `fail()`.
 
@@ -12184,8 +12190,8 @@ A delivery-only child is not required to finish unrelated downstream
 execution that was not its assignment. A liveness response (alive)
 is not completion and does not end the parent's result tracking.
 Failure and cancellation remain distinct outcomes, not fabricated
-success. The parent tracks results; it is not an active liveness
-poller and there is no parent-polls-until-completed protocol.
+success. The parent tracks results; it does not automatically poll
+its children and there is no parent-polls-until-completed protocol.
 
 Those protocol Messages are ordinary LMX text, not a new parser
 intrinsic. The number/bytes prototype implements child-side parent
