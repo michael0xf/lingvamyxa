@@ -2197,4 +2197,89 @@ end: external
 
 Invoke-ScanIndent
 
+function Invoke-LineStart {
+    $cases = @'
+        c.printf("%d\n", lm_p0_index_is_line_start(0, 0U))
+        c.printf("%d\n", lm_p0_index_is_line_start("", 0U))
+        c.printf("%d\n", lm_p0_index_is_line_start("a", 0U))
+        c.printf("%d\n", lm_p0_index_is_line_start("a", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("\na", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("\ra", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("\r\na", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("\r\na", 2U))
+        c.printf("%d\n", lm_p0_index_is_line_start("a\nb", 2U))
+        c.printf("%d\n", lm_p0_index_is_line_start("ab", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("a\0b", 1U))
+        c.printf("%d\n", lm_p0_index_is_line_start("\n", 1U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space(0, 0U, 0U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("", 0U, 0U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("abc", 3U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("abc", 4U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("   ", 0U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("\t\t", 0U, 2U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("  x", 0U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("  x", 0U, 2U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("x  ", 1U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("x y", 1U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space(" \0 ", 0U, 3U))
+        c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("\n  ", 0U, 3U))
+'@
+
+    $refLm1 = Join-Path $out "lstart_ref.lm1"
+    $refC = Join-Path $out "lstart_ref.c"
+    $refExe = Join-Path $out "lstart_ref.exe"
+    $refOut = Join-Path $out "lstart_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed lstart_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "lstart_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'lstart_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "lstart_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_line_start.lm2" "parser_line_start" 0 "lm_p0_index_is_line_start"
+    $lm1 = Join-Path $out "parser_line_start.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "line_start must mangle method symbols" }
+    if ($text -notmatch 'fn: l2_m1') { throw "line_start missing index_is_line_start" }
+    if ($text -notmatch 'fn: l2_m2') { throw "line_start missing line_rest_is_horizontal_space" }
+    if ($text -notmatch 'if: l2_p1_1 = 0U') { throw "index_is_line_start must return before any index-1 read" }
+
+    $l2cases = $cases.Replace("lm_p0_index_is_line_start(", "l2_m1(unit, ").Replace("lm_p0_line_rest_is_horizontal_space(", "l2_m2(unit, ")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "line_start L1 missing generated main return" }
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "lstart_l2_drive.lm1"
+    $drvC = Join-Path $out "lstart_l2_drive.c"
+    $drvExe = Join-Path $out "lstart_l2_drive.exe"
+    $drvOut = Join-Path $out "lstart_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed lstart_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "lstart_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'lstart_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "lstart_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "line_start mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-LineStart
+
 "l2trans $gen ok"
+
