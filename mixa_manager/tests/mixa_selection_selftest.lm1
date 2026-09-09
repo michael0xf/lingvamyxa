@@ -1,0 +1,161 @@
+predef: "mixa_manager/mixa_selection.lm1"
+include: "<stdio.h>" "<string.h>"
+
+# Selection model selftest: four cases from SELECTION_MODEL 4.2 / prior contract.
+
+fn: main () int
+    @: MixaSelection sel
+    int: failures
+    int: rc
+    failures: 0
+
+    sel: (cast: (@: MixaSelection) c.calloc(1U, c.sizeof(c.MixaSelection)))
+    if: sel = 0
+        c.printf("mixa selection: alloc failed\n")
+        return: 1
+
+    # --- t1: four-op; deselect top keeps prior nested selection ---
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection: t1 init failed\n")
+        return: 1
+    if: mixa_selection_select(sel, "/a/b") != MIXA_SEL_OK
+        c.printf("mixa selection: t1 select /a/b failed\n")
+        failures: failures + 1
+    if: mixa_selection_select(sel, "/a") != MIXA_SEL_OK
+        c.printf("mixa selection: t1 select /a failed\n")
+        failures: failures + 1
+    rc: mixa_selection_select(sel, "/a/b/c")
+    if: rc != MIXA_SEL_CONFLICT
+        c.printf("mixa selection: t1 select /a/b/c expected CONFLICT got %d\n", rc)
+        failures: failures + 1
+    if: mixa_selection_deselect(sel, "/a") != MIXA_SEL_OK
+        c.printf("mixa selection: t1 deselect /a failed\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/b") = 0
+        c.printf("mixa selection: t1 /a/b should be selected\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/b/c") = 0
+        c.printf("mixa selection: t1 /a/b/c should be selected\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/b/x") = 0
+        c.printf("mixa selection: t1 /a/b/x should be selected\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a") != 0
+        c.printf("mixa selection: t1 /a should NOT be selected\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/z") != 0
+        c.printf("mixa selection: t1 /a/z should NOT be selected\n")
+        failures: failures + 1
+    mixa_selection_release(sel)
+
+    # --- t2: four nested child-first; query consolidates to 2; deselect top ---
+    c.memset(sel, 0, c.sizeof(c.MixaSelection))
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection: t2 init failed\n")
+        return: 1
+    if: mixa_selection_select(sel, "/a/b/c/d") != MIXA_SEL_OK
+        c.printf("mixa selection: t2 select d failed\n")
+        failures: failures + 1
+    if: mixa_selection_select(sel, "/a/b/c") != MIXA_SEL_OK
+        c.printf("mixa selection: t2 select c failed\n")
+        failures: failures + 1
+    if: mixa_selection_select(sel, "/a/b") != MIXA_SEL_OK
+        c.printf("mixa selection: t2 select b failed\n")
+        failures: failures + 1
+    if: mixa_selection_select(sel, "/a") != MIXA_SEL_OK
+        c.printf("mixa selection: t2 select a failed\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/b/c/d") = 0
+        c.printf("mixa selection: t2 query d failed\n")
+        failures: failures + 1
+    if: sel\selected_count != 2U
+        c.printf("mixa selection: t2 after consolidate selected_count=%u want 2\n", (cast: (unsigned) sel\selected_count))
+        failures: failures + 1
+    if: mixa_selection_deselect(sel, "/a") != MIXA_SEL_OK
+        c.printf("mixa selection: t2 deselect /a failed\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/b") = 0
+        c.printf("mixa selection: t2 /a/b should be selected\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/b/c") = 0
+        c.printf("mixa selection: t2 /a/b/c should be selected\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/b/c/d") = 0
+        c.printf("mixa selection: t2 /a/b/c/d should be selected\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a") != 0
+        c.printf("mixa selection: t2 /a should NOT be selected\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/x") != 0
+        c.printf("mixa selection: t2 /a/x should NOT be selected\n")
+        failures: failures + 1
+    mixa_selection_release(sel)
+
+    # --- t3: select child of already-selected directory is CONFLICT no-op ---
+    c.memset(sel, 0, c.sizeof(c.MixaSelection))
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection: t3 init failed\n")
+        return: 1
+    if: mixa_selection_select(sel, "/a") != MIXA_SEL_OK
+        c.printf("mixa selection: t3 select /a failed\n")
+        failures: failures + 1
+    rc: mixa_selection_select(sel, "/a/b")
+    if: rc != MIXA_SEL_CONFLICT
+        c.printf("mixa selection: t3 select /a/b expected CONFLICT got %d\n", rc)
+        failures: failures + 1
+    if: sel\selected_count != 1U
+        c.printf("mixa selection: t3 selected_count=%u want 1\n", (cast: (unsigned) sel\selected_count))
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/b") = 0
+        c.printf("mixa selection: t3 /a/b should inherit\n")
+        failures: failures + 1
+    mixa_selection_release(sel)
+
+    # --- t4: exception then re-select inside; lower wins; deselect missing ---
+    c.memset(sel, 0, c.sizeof(c.MixaSelection))
+    if: mixa_selection_init(sel) != MIXA_SEL_OK
+        c.printf("mixa selection: t4 init failed\n")
+        return: 1
+    if: mixa_selection_select(sel, "/a") != MIXA_SEL_OK
+        c.printf("mixa selection: t4 select /a failed\n")
+        failures: failures + 1
+    if: mixa_selection_deselect(sel, "/a/b") != MIXA_SEL_OK
+        c.printf("mixa selection: t4 deselect /a/b failed\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/b") != 0
+        c.printf("mixa selection: t4 /a/b should be excluded\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/b/c") != 0
+        c.printf("mixa selection: t4 /a/b/c should be excluded\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/x") = 0
+        c.printf("mixa selection: t4 /a/x should be selected\n")
+        failures: failures + 1
+    if: mixa_selection_select(sel, "/a/b/c") != MIXA_SEL_OK
+        c.printf("mixa selection: t4 select /a/b/c failed\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/b/c") = 0
+        c.printf("mixa selection: t4 /a/b/c should be selected\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/b/c/d") = 0
+        c.printf("mixa selection: t4 /a/b/c/d should be selected\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a/b") != 0
+        c.printf("mixa selection: t4 /a/b should still be excluded\n")
+        failures: failures + 1
+    if: mixa_selection_query(sel, "/a") = 0
+        c.printf("mixa selection: t4 /a should be selected\n")
+        failures: failures + 1
+    rc: mixa_selection_deselect(sel, "/nope")
+    if: rc != MIXA_SEL_NOTHING
+        c.printf("mixa selection: t4 deselect /nope expected NOTHING got %d\n", rc)
+        failures: failures + 1
+    mixa_selection_release(sel)
+
+    c.free(sel)
+
+    if: failures != 0
+        c.printf("mixa selection selftest FAILED checks=%d\n", failures)
+        return: 1
+    c.printf("mixa selection selftest ok\n")
+    return: 0

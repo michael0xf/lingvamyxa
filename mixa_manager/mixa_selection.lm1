@@ -1,0 +1,751 @@
+include: "mixa_manager/mixa_selection.h" "<stdlib.h>" "<string.h>"
+
+# Selection model (SELECTION_MODEL.txt). Growable string arrays; seed 8, double.
+# Overflow guards: addition, doubling, sizeof product (as mixa_event_fifo).
+
+fn: mixa_sel_strdup (const: @(char s)) @: char
+    @: char d
+    size_t: n
+    if: s = 0
+        return: 0
+    n: c.strlen(s)
+    if: n > ((cast: (size_t) -1) - 1U)
+        return: 0
+    d: (cast: (@: char) c.malloc(n + 1U))
+    if: d = 0
+        return: 0
+    c.memcpy(d, s, n + 1U)
+return: d
+
+fn: mixa_sel_grow_ptrs (@@: char slots; size_t: count; size_t: cap; @: size_t out_cap) @@: char
+    @@: char fresh
+    @@: char probe
+    size_t: new_cap
+    size_t: ptr_sz
+    if: out_cap = 0
+        return: 0
+    if: count < cap
+        out_cap[0]: cap
+        return: slots
+    probe: 0
+    ptr_sz: c.sizeof(probe[0])
+    if: ptr_sz = 0U
+        return: 0
+    if: cap = 0U
+        new_cap: 8U
+    else:
+        if: cap > ((cast: (size_t) -1) / 2U)
+            return: 0
+        ---
+        new_cap: cap * 2U
+    ---
+    if: new_cap > ((cast: (size_t) -1) / ptr_sz)
+        return: 0
+    fresh: (cast: (@@: char) c.calloc(new_cap, ptr_sz))
+    if: fresh = 0
+        return: 0
+    if: slots != 0
+        if: count != 0U
+            c.memcpy(fresh, slots, count * ptr_sz)
+        ---
+        c.free(slots)
+    ---
+    out_cap[0]: new_cap
+return: fresh
+
+fn: mixa_sel_find_selected (const: @(MixaSelection sel); const: @(char path)) int
+    size_t: i
+    if: sel = 0 || path = 0
+        return: -1
+    i: 0U
+    while: i < sel\selected_count
+        if: sel\selected[i] != 0
+            if: c.strcmp(sel\selected[i], path) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+fn: mixa_sel_find_exc (const: @(MixaSelection sel); const: @(char path)) int
+    size_t: i
+    if: sel = 0 || path = 0
+        return: -1
+    i: 0U
+    while: i < sel\exc_count
+        if: sel\exc_paths[i] != 0
+            if: c.strcmp(sel\exc_paths[i], path) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+fn: mixa_sel_find_rev (const: @(MixaSelection sel); const: @(char ancestor)) int
+    size_t: i
+    @: MixaSelRev r
+    if: sel = 0 || ancestor = 0
+        return: -1
+    i: 0U
+    while: i < sel\rev_count
+        r: sel\revs + i
+        if: r\ancestor != 0
+            if: c.strcmp(r\ancestor, ancestor) = 0
+                return: (cast: (int) i)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: -1
+
+fn: mixa_sel_cut_parent (@: char path) int
+    size_t: i
+    size_t: last
+    size_t: n
+    if: path = 0
+        return: 1
+    n: c.strlen(path)
+    if: n = 0U
+        return: 1
+    last: n
+    i: 0U
+    while: i < n
+        if: path[i] = (cast: (char) 47)
+            last: i
+        ---
+        i: i + 1U
+    ---
+    if: last = n
+        return: 1
+    if: last = 0U
+        path[0]: (cast: (char) 0)
+        return: 1
+    path[last]: (cast: (char) 0)
+return: 0
+
+fn: mixa_sel_add_selected (@: MixaSelection sel; const: @(char path)) int
+    @@: char slots
+    @: char dup
+    []: size_t new_cap 1
+    if: sel = 0 || path = 0
+        return: MIXA_SEL_ERR
+    if: sel\selected_count > ((cast: (size_t) -1) - 1U)
+        return: MIXA_SEL_ERR
+    slots: mixa_sel_grow_ptrs(sel\selected, sel\selected_count, sel\selected_cap, new_cap)
+    if: slots = 0
+        return: MIXA_SEL_ERR
+    sel\selected: slots
+    sel\selected_cap: new_cap[0]
+    dup: mixa_sel_strdup(path)
+    if: dup = 0
+        return: MIXA_SEL_ERR
+    sel\selected[sel\selected_count]: dup
+    sel\selected_count: sel\selected_count + 1U
+return: MIXA_SEL_OK
+
+fn: mixa_sel_remove_selected_at (@: MixaSelection sel; size_t: idx) int
+    size_t: j
+    if: sel = 0
+        return: MIXA_SEL_ERR
+    if: idx >= sel\selected_count
+        return: MIXA_SEL_ERR
+    if: sel\selected[idx] != 0
+        c.free(sel\selected[idx])
+    ---
+    j: idx
+    while: j + 1U < sel\selected_count
+        sel\selected[j]: sel\selected[j + 1U]
+        j: j + 1U
+    ---
+    sel\selected_count: sel\selected_count - 1U
+    if: sel\selected_count != 0U
+        sel\selected[sel\selected_count]: 0
+    ---
+return: MIXA_SEL_OK
+
+fn: mixa_sel_rev_ensure (@: MixaSelection sel; const: @(char ancestor)) @: MixaSelRev
+    int: ri
+    @: MixaSelRev r
+    @: MixaSelRev fresh
+    @: char adup
+    size_t: new_cap
+    size_t: sz
+    ri: mixa_sel_find_rev(sel, ancestor)
+    if: ri >= 0
+        return: sel\revs + (cast: (size_t) ri)
+    if: sel\rev_count > ((cast: (size_t) -1) - 1U)
+        return: 0
+    if: sel\rev_count >= sel\rev_cap
+        if: sel\rev_cap = 0U
+            new_cap: 8U
+        else:
+            if: sel\rev_cap > ((cast: (size_t) -1) / 2U)
+                return: 0
+            ---
+            new_cap: sel\rev_cap * 2U
+        ---
+        sz: c.sizeof(c.MixaSelRev)
+        if: sz = 0U || new_cap > ((cast: (size_t) -1) / sz)
+            return: 0
+        fresh: (cast: (@: MixaSelRev) c.calloc(new_cap, sz))
+        if: fresh = 0
+            return: 0
+        if: sel\revs != 0
+            if: sel\rev_count != 0U
+                c.memcpy(fresh, sel\revs, sel\rev_count * sz)
+            ---
+            c.free(sel\revs)
+        ---
+        sel\revs: fresh
+        sel\rev_cap: new_cap
+    ---
+    adup: mixa_sel_strdup(ancestor)
+    if: adup = 0
+        return: 0
+    r: sel\revs + sel\rev_count
+    r\ancestor: adup
+    r\paths: 0
+    r\count: 0U
+    r\capacity: 0U
+    sel\rev_count: sel\rev_count + 1U
+return: r
+
+fn: mixa_sel_rev_add_path (@: MixaSelRev r; @: char path) int
+    @@: char slots
+    []: size_t new_cap 1
+    if: r = 0 || path = 0
+        return: MIXA_SEL_ERR
+    if: r\count > ((cast: (size_t) -1) - 1U)
+        return: MIXA_SEL_ERR
+    slots: mixa_sel_grow_ptrs(r\paths, r\count, r\capacity, new_cap)
+    if: slots = 0
+        return: MIXA_SEL_ERR
+    r\paths: slots
+    r\capacity: new_cap[0]
+    r\paths[r\count]: path
+    r\count: r\count + 1U
+return: MIXA_SEL_OK
+
+fn: mixa_sel_rev_remove_path (@: MixaSelRev r; const: @(char path)) int
+    size_t: i
+    size_t: j
+    if: r = 0 || path = 0
+        return: MIXA_SEL_ERR
+    i: 0U
+    while: i < r\count
+        if: r\paths[i] != 0
+            if: c.strcmp(r\paths[i], path) = 0
+                j: i
+                while: j + 1U < r\count
+                    r\paths[j]: r\paths[j + 1U]
+                    j: j + 1U
+                ---
+                r\count: r\count - 1U
+                if: r\count != 0U
+                    r\paths[r\count]: 0
+                ---
+                return: MIXA_SEL_OK
+            ---
+        ---
+        i: i + 1U
+    ---
+return: MIXA_SEL_NOTHING
+
+fn: mixa_sel_add_exception (@: MixaSelection sel; const: @(char path); const: @(char ancestor)) int
+    @@: char pslots
+    @@: char aslots
+    @@: char probe
+    @: char pdup
+    @: char adup
+    @: MixaSelRev r
+    size_t: new_cap
+    size_t: ptr_sz
+    if: sel = 0 || path = 0 || ancestor = 0
+        return: MIXA_SEL_ERR
+    if: mixa_sel_find_exc(sel, path) >= 0
+        return: MIXA_SEL_OK
+    if: sel\exc_count > ((cast: (size_t) -1) - 1U)
+        return: MIXA_SEL_ERR
+    if: sel\exc_count >= sel\exc_cap
+        probe: 0
+        ptr_sz: c.sizeof(probe[0])
+        if: ptr_sz = 0U
+            return: MIXA_SEL_ERR
+        if: sel\exc_cap = 0U
+            new_cap: 8U
+        else:
+            if: sel\exc_cap > ((cast: (size_t) -1) / 2U)
+                return: MIXA_SEL_ERR
+            ---
+            new_cap: sel\exc_cap * 2U
+        ---
+        if: new_cap > ((cast: (size_t) -1) / ptr_sz)
+            return: MIXA_SEL_ERR
+        pslots: (cast: (@@: char) c.calloc(new_cap, ptr_sz))
+        if: pslots = 0
+            return: MIXA_SEL_ERR
+        aslots: (cast: (@@: char) c.calloc(new_cap, ptr_sz))
+        if: aslots = 0
+            c.free(pslots)
+            return: MIXA_SEL_ERR
+        if: sel\exc_paths != 0
+            if: sel\exc_count != 0U
+                c.memcpy(pslots, sel\exc_paths, sel\exc_count * ptr_sz)
+            ---
+            c.free(sel\exc_paths)
+        ---
+        if: sel\exc_from != 0
+            if: sel\exc_count != 0U
+                c.memcpy(aslots, sel\exc_from, sel\exc_count * ptr_sz)
+            ---
+            c.free(sel\exc_from)
+        ---
+        sel\exc_paths: pslots
+        sel\exc_from: aslots
+        sel\exc_cap: new_cap
+    ---
+    pdup: mixa_sel_strdup(path)
+    if: pdup = 0
+        return: MIXA_SEL_ERR
+    adup: mixa_sel_strdup(ancestor)
+    if: adup = 0
+        c.free(pdup)
+        return: MIXA_SEL_ERR
+    r: mixa_sel_rev_ensure(sel, ancestor)
+    if: r = 0
+        c.free(pdup)
+        c.free(adup)
+        return: MIXA_SEL_ERR
+    if: mixa_sel_rev_add_path(r, pdup) != MIXA_SEL_OK
+        c.free(pdup)
+        c.free(adup)
+        return: MIXA_SEL_ERR
+    sel\exc_paths[sel\exc_count]: pdup
+    sel\exc_from[sel\exc_count]: adup
+    sel\exc_count: sel\exc_count + 1U
+return: MIXA_SEL_OK
+
+fn: mixa_sel_remove_exception_at (@: MixaSelection sel; size_t: idx) int
+    @: char path
+    @: char from
+    int: ri
+    @: MixaSelRev r
+    size_t: j
+    if: sel = 0
+        return: MIXA_SEL_ERR
+    if: idx >= sel\exc_count
+        return: MIXA_SEL_ERR
+    path: sel\exc_paths[idx]
+    from: sel\exc_from[idx]
+    if: from != 0
+        ri: mixa_sel_find_rev(sel, from)
+        if: ri >= 0
+            r: sel\revs + (cast: (size_t) ri)
+            mixa_sel_rev_remove_path(r, path)
+        ---
+    ---
+    if: path != 0
+        c.free(path)
+    ---
+    if: from != 0
+        c.free(from)
+    ---
+    j: idx
+    while: j + 1U < sel\exc_count
+        sel\exc_paths[j]: sel\exc_paths[j + 1U]
+        sel\exc_from[j]: sel\exc_from[j + 1U]
+        j: j + 1U
+    ---
+    sel\exc_count: sel\exc_count - 1U
+    if: sel\exc_count != 0U
+        sel\exc_paths[sel\exc_count]: 0
+        sel\exc_from[sel\exc_count]: 0
+    ---
+return: MIXA_SEL_OK
+
+fn: mixa_sel_remove_exception (@: MixaSelection sel; const: @(char path)) int
+    int: ei
+    if: sel = 0 || path = 0
+        return: MIXA_SEL_ERR
+    ei: mixa_sel_find_exc(sel, path)
+    if: ei < 0
+        return: MIXA_SEL_NOTHING
+return: mixa_sel_remove_exception_at(sel, (cast: (size_t) ei))
+
+fn: mixa_sel_drop_exceptions_under (@: MixaSelection sel; const: @(char ancestor)) int
+    int: ri
+    @: MixaSelRev r
+    size_t: i
+    @: char p
+    int: ei
+    if: sel = 0 || ancestor = 0
+        return: MIXA_SEL_ERR
+    ri: mixa_sel_find_rev(sel, ancestor)
+    if: ri < 0
+        return: MIXA_SEL_OK
+    r: sel\revs + (cast: (size_t) ri)
+    while: r\count != 0U
+        p: r\paths[0]
+        ei: mixa_sel_find_exc(sel, p)
+        if: ei >= 0
+            mixa_sel_remove_exception_at(sel, (cast: (size_t) ei))
+        else:
+            mixa_sel_rev_remove_path(r, p)
+        ---
+        ri: mixa_sel_find_rev(sel, ancestor)
+        if: ri < 0
+            return: MIXA_SEL_OK
+        ---
+        r: sel\revs + (cast: (size_t) ri)
+    ---
+    if: r\ancestor != 0
+        c.free(r\ancestor)
+    ---
+    if: r\paths != 0
+        c.free(r\paths)
+    ---
+    i: (cast: (size_t) ri)
+    while: i + 1U < sel\rev_count
+        sel\revs[i]: sel\revs[i + 1U]
+        i: i + 1U
+    ---
+    sel\rev_count: sel\rev_count - 1U
+return: MIXA_SEL_OK
+
+fn: mixa_sel_fold_into (@: MixaSelection sel; const: @(char lower); const: @(char top)) int
+    int: ri
+    int: si
+    @: MixaSelRev rlo
+    @: MixaSelRev rhi
+    @: char p
+    @: char anew
+    size_t: ei
+    size_t: i
+    if: sel = 0 || lower = 0 || top = 0
+        return: MIXA_SEL_ERR
+    if: c.strcmp(lower, top) = 0
+        return: MIXA_SEL_OK
+    ri: mixa_sel_find_rev(sel, lower)
+    if: ri >= 0
+        rlo: sel\revs + (cast: (size_t) ri)
+        while: rlo\count != 0U
+            p: rlo\paths[0]
+            rhi: mixa_sel_rev_ensure(sel, top)
+            if: rhi = 0
+                return: MIXA_SEL_ERR
+            mixa_sel_rev_remove_path(rlo, p)
+            if: mixa_sel_rev_add_path(rhi, p) != MIXA_SEL_OK
+                return: MIXA_SEL_ERR
+            ei: 0U
+            while: ei < sel\exc_count
+                if: sel\exc_paths[ei] = p
+                    if: sel\exc_from[ei] != 0
+                        c.free(sel\exc_from[ei])
+                    ---
+                    anew: mixa_sel_strdup(top)
+                    if: anew = 0
+                        return: MIXA_SEL_ERR
+                    sel\exc_from[ei]: anew
+                ---
+                ei: ei + 1U
+            ---
+            ri: mixa_sel_find_rev(sel, lower)
+            if: ri < 0
+                rlo: 0
+            else:
+                rlo: sel\revs + (cast: (size_t) ri)
+            ---
+            if: rlo = 0
+                break
+            ---
+        ---
+        ri: mixa_sel_find_rev(sel, lower)
+        if: ri >= 0
+            rlo: sel\revs + (cast: (size_t) ri)
+            if: rlo\ancestor != 0
+                c.free(rlo\ancestor)
+            ---
+            if: rlo\paths != 0
+                c.free(rlo\paths)
+            ---
+            i: (cast: (size_t) ri)
+            while: i + 1U < sel\rev_count
+                c.memcpy(sel\revs + i, sel\revs + (i + 1U), c.sizeof(c.MixaSelRev))
+                i: i + 1U
+            ---
+            sel\rev_count: sel\rev_count - 1U
+        ---
+    ---
+    si: mixa_sel_find_selected(sel, lower)
+    if: si >= 0
+        mixa_sel_remove_selected_at(sel, (cast: (size_t) si))
+    ---
+return: MIXA_SEL_OK
+
+fn: mixa_sel_consolidate (@: MixaSelection sel; @@: char excess; size_t: excess_count) int
+    @: char top
+    @: char lower
+    size_t: j
+    if: sel = 0 || excess = 0
+        return: MIXA_SEL_ERR
+    if: excess_count <= 1U
+        return: MIXA_SEL_OK
+    top: excess[excess_count - 1U]
+    while: excess_count > 2U
+        lower: excess[0]
+        if: mixa_sel_fold_into(sel, lower, top) != MIXA_SEL_OK
+            return: MIXA_SEL_ERR
+        j: 0U
+        while: j + 1U < excess_count
+            excess[j]: excess[j + 1U]
+            j: j + 1U
+        ---
+        excess_count: excess_count - 1U
+    ---
+return: MIXA_SEL_OK
+
+fn: mixa_sel_find_covering (@: MixaSelection sel; const: @(char path)) @: char
+    @: char cur
+    @: char found
+    size_t: n
+    int: si
+    int: cut_rc
+    if: sel = 0 || path = 0
+        return: 0
+    n: c.strlen(path)
+    cur: (cast: (@: char) c.malloc(n + 1U))
+    if: cur = 0
+        return: 0
+    c.memcpy(cur, path, n + 1U)
+    if: mixa_sel_cut_parent(cur) != 0
+        c.free(cur)
+        return: 0
+    ---
+    found: 0
+    cut_rc: 0
+    while: cut_rc = 0 && cur[0] != 0 && found = 0
+        si: mixa_sel_find_selected(sel, cur)
+        if: si >= 0
+            found: sel\selected[(cast: (size_t) si)]
+        else:
+            cut_rc: mixa_sel_cut_parent(cur)
+        ---
+    ---
+    c.free(cur)
+return: found
+
+fn: mixa_selection_query (@: MixaSelection sel; const: @(char path)) int
+    @: char cur
+    @@: char excess
+    @@: char probe
+    size_t: excess_count
+    size_t: excess_cap
+    size_t: n
+    size_t: ptr_sz
+    int: is_file
+    int: found
+    int: ei
+    int: si
+    int: cut_rc
+    if: sel = 0
+        return: 0
+    if: path = 0
+        return: 0
+    if: sel\is_open = 0
+        return: 0
+    n: c.strlen(path)
+    cur: (cast: (@: char) c.malloc(n + 1U))
+    if: cur = 0
+        return: 0
+    c.memcpy(cur, path, n + 1U)
+    probe: 0
+    ptr_sz: c.sizeof(probe[0])
+    excess_cap: sel\selected_count + 1U
+    if: excess_cap < 8U
+        excess_cap: 8U
+    ---
+    if: ptr_sz = 0U || excess_cap > ((cast: (size_t) -1) / ptr_sz)
+        c.free(cur)
+        return: 0
+    excess: (cast: (@@: char) c.calloc(excess_cap, ptr_sz))
+    if: excess = 0
+        c.free(cur)
+        return: 0
+    excess_count: 0U
+    is_file: 1
+    found: 0
+    while: cur[0] != 0
+        ei: mixa_sel_find_exc(sel, cur)
+        if: ei >= 0
+            if: is_file != 0
+                c.free(cur)
+                c.free(excess)
+                return: 0
+            ---
+            if: found != 0
+                mixa_sel_consolidate(sel, excess, excess_count)
+                c.free(cur)
+                c.free(excess)
+                return: 1
+            ---
+            c.free(cur)
+            c.free(excess)
+            return: 0
+        ---
+        si: mixa_sel_find_selected(sel, cur)
+        if: si >= 0
+            if: excess_count >= excess_cap
+                c.free(cur)
+                c.free(excess)
+                return: 0
+            ---
+            excess[excess_count]: sel\selected[(cast: (size_t) si)]
+            excess_count: excess_count + 1U
+            found: 1
+        ---
+        is_file: 0
+        cut_rc: mixa_sel_cut_parent(cur)
+        if: cut_rc != 0
+            break
+        ---
+    ---
+    if: found != 0
+        mixa_sel_consolidate(sel, excess, excess_count)
+        c.free(cur)
+        c.free(excess)
+        return: 1
+    ---
+    c.free(cur)
+    c.free(excess)
+return: 0
+
+fn: mixa_selection_select (@: MixaSelection sel; const: @(char path)) int
+    int: rc
+    if: sel = 0 || path = 0
+        return: MIXA_SEL_ERR
+    if: sel\is_open = 0
+        return: MIXA_SEL_ERR
+    if: mixa_selection_query(sel, path) != 0
+        return: MIXA_SEL_CONFLICT
+    if: mixa_sel_find_exc(sel, path) >= 0
+        mixa_sel_remove_exception(sel, path)
+        if: mixa_selection_query(sel, path) != 0
+            return: MIXA_SEL_OK
+        ---
+        rc: mixa_sel_add_selected(sel, path)
+        return: rc
+    ---
+    rc: mixa_sel_add_selected(sel, path)
+return: rc
+
+fn: mixa_selection_deselect (@: MixaSelection sel; const: @(char path)) int
+    int: si
+    int: had
+    @: char cover
+    @: char cover_copy
+    int: rc
+    if: sel = 0 || path = 0
+        return: MIXA_SEL_ERR
+    if: sel\is_open = 0
+        return: MIXA_SEL_ERR
+    had: 0
+    si: mixa_sel_find_selected(sel, path)
+    if: si >= 0
+        mixa_sel_drop_exceptions_under(sel, path)
+        mixa_sel_remove_selected_at(sel, (cast: (size_t) si))
+        had: 1
+    ---
+    if: mixa_selection_query(sel, path) != 0
+        cover: mixa_sel_find_covering(sel, path)
+        if: cover = 0
+            return: MIXA_SEL_ERR
+        cover_copy: mixa_sel_strdup(cover)
+        if: cover_copy = 0
+            return: MIXA_SEL_ERR
+        rc: mixa_sel_add_exception(sel, path, cover_copy)
+        c.free(cover_copy)
+        if: rc != MIXA_SEL_OK
+            return: rc
+        return: MIXA_SEL_OK
+    ---
+    if: had != 0
+        return: MIXA_SEL_OK
+return: MIXA_SEL_NOTHING
+
+fn: mixa_selection_init (@: MixaSelection sel) int
+    if: sel = 0
+        return: MIXA_SEL_ERR
+    if: sel\is_open != 0
+        return: MIXA_SEL_ERR
+    sel\selected: 0
+    sel\selected_count: 0U
+    sel\selected_cap: 0U
+    sel\exc_paths: 0
+    sel\exc_from: 0
+    sel\exc_count: 0U
+    sel\exc_cap: 0U
+    sel\revs: 0
+    sel\rev_count: 0U
+    sel\rev_cap: 0U
+    sel\is_open: 1
+return: MIXA_SEL_OK
+
+sub: mixa_selection_release (@: MixaSelection sel)
+    size_t: i
+    @: MixaSelRev r
+    if: sel != 0
+        i: 0U
+        while: i < sel\selected_count
+            if: sel\selected[i] != 0
+                c.free(sel\selected[i])
+            ---
+            i: i + 1U
+        ---
+        if: sel\selected != 0
+            c.free(sel\selected)
+        ---
+        i: 0U
+        while: i < sel\exc_count
+            if: sel\exc_paths[i] != 0
+                c.free(sel\exc_paths[i])
+            ---
+            if: sel\exc_from[i] != 0
+                c.free(sel\exc_from[i])
+            ---
+            i: i + 1U
+        ---
+        if: sel\exc_paths != 0
+            c.free(sel\exc_paths)
+        ---
+        if: sel\exc_from != 0
+            c.free(sel\exc_from)
+        ---
+        i: 0U
+        while: i < sel\rev_count
+            r: sel\revs + i
+            if: r\ancestor != 0
+                c.free(r\ancestor)
+            ---
+            if: r\paths != 0
+                c.free(r\paths)
+            ---
+            i: i + 1U
+        ---
+        if: sel\revs != 0
+            c.free(sel\revs)
+        ---
+        sel\selected: 0
+        sel\selected_count: 0U
+        sel\selected_cap: 0U
+        sel\exc_paths: 0
+        sel\exc_from: 0
+        sel\exc_count: 0U
+        sel\exc_cap: 0U
+        sel\revs: 0
+        sel\rev_count: 0U
+        sel\rev_cap: 0U
+        sel\is_open: 0
+    ---
+end: mixa_selection_release
