@@ -81,7 +81,7 @@ fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
         return: 0
     while: i < rt\n
         m: rt\tab + i
-        if: m\addr = addr
+        if: m\addr = addr && m\state != c.LMX_MSG_STATE_RELEASED
             return: m
         i: i + 1
 return: 0
@@ -93,7 +93,7 @@ fn: lmx_msg_find_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: crea
         return: 0
     while: i < rt\n
         m: rt\tab + i
-        if: m\parent = parent && m\create_id = create_id
+        if: m\parent = parent && m\create_id = create_id && m\state != c.LMX_MSG_STATE_RELEASED
             return: m
         i: i + 1
 return: 0
@@ -187,6 +187,11 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
     slot\parent: parent
     slot\create_id: create_id
     slot\state: c.LMX_MSG_STATE_INACTIVE
+    slot\committed: 0
+    if: parent = 0U
+        slot\committed: 1
+        slot\state: c.LMX_MSG_STATE_RUNNING
+    ---
     slot\init_n: n
     slot\init: lmx_msg_copy_bytes(init, n)
     if: n != 0U && slot\init = 0
@@ -239,9 +244,29 @@ fn: lmx_msg_stop (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to) int
     c.free((cast: (@: void) env))
 return: st
 
+sub: lmx_msg_release_slot (@: LmxMsg m)
+    if: m = 0
+        return
+    lmx_msg_copy_free(m\inbox)
+    lmx_msg_copy_free(m\outbox)
+    m\inbox: 0
+    m\inbox_tail: 0
+    m\outbox: 0
+    m\outbox_tail: 0
+    if: m\init != 0
+        c.free((cast: (@: void) m\init))
+    ---
+    m\init: 0
+    m\init_n: 0U
+    m\state: c.LMX_MSG_STATE_RELEASED
+    m\committed: 0
+end: lmx_msg_release_slot
+
 fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     @: LmxMsg m
+    @: LmxMsg ch
     @: LmxMsgCopy n
+    int: i
     if: rt = 0
         return: c.LMX_MSG_INVALID
     m: lmx_msg_find(rt, who)
@@ -256,7 +281,21 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         lmx_msg_copy_free(m\outbox)
         m\outbox: 0
         m\outbox_tail: 0
+        i: 0
+        while: i < rt\n
+            ch: rt\tab + i
+            if: ch\parent = who && ch\committed = 0 && ch\state = c.LMX_MSG_STATE_INACTIVE
+                lmx_msg_release_slot(ch)
+            ---
+            i: i + 1
         return: c.LMX_MSG_OK
+    i: 0
+    while: i < rt\n
+        ch: rt\tab + i
+        if: ch\parent = who && ch\state = c.LMX_MSG_STATE_INACTIVE
+            ch\committed: 1
+        ---
+        i: i + 1
     while: m\outbox != 0
         n: lmx_msg_q_pop(@ m\outbox, @ m\outbox_tail)
         lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, n)
@@ -270,7 +309,10 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_INVALID
     dest: lmx_msg_find(rt, node\to)
-    if: dest = 0 || dest\state = c.LMX_MSG_STATE_DEAD || dest\state = c.LMX_MSG_STATE_STOPPED
+    if: dest = 0 || dest\state = c.LMX_MSG_STATE_DEAD || dest\state = c.LMX_MSG_STATE_STOPPED || dest\state = c.LMX_MSG_STATE_RELEASED
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_GONE
+    if: dest\state = c.LMX_MSG_STATE_INACTIVE && dest\committed = 0
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_GONE
     if: node\id != 0U && lmx_msg_done_has(dest, node\from, node\id) != 0
@@ -325,6 +367,12 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     out\n: n\n
     out\bytes: n\bytes
     n\bytes: 0
+    m\exec_id: n\id
+    m\exec_corr: n\correlation
+    m\exec_from: n\from
+    m\exec_reply: n\reply_to
+    m\exec_live: 1
+    m\last_beat: rt\clock
     c.free((cast: (@: void) n))
 return: c.LMX_MSG_OK
 
@@ -350,16 +398,34 @@ fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; un
     node\from: from
     node\to: to
     node\kind: c.LMX_MSG_KIND_DEAD
+    node\id: correlation
     node\correlation: correlation
+    node\number: (cast: (int) from)
     lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, node)
 return: c.LMX_MSG_OK
 
+sub: lmx_msg_stop_descendants (@: LmxMsgRuntime rt; LmxMsgAddr: who)
+    @: LmxMsg ch
+    int: i 0
+    if: rt = 0
+        return
+    while: i < rt\n
+        ch: rt\tab + i
+        if: ch\parent = who && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED
+            lmx_msg_stop_descendants(rt, ch\addr)
+            ch\state: c.LMX_MSG_STATE_STOPPED
+            lmx_msg_copy_free(ch\outbox)
+            ch\outbox: 0
+            ch\outbox_tail: 0
+        ---
+        i: i + 1
+end: lmx_msg_stop_descendants
+
 fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
-    @: LmxMsg ch
     @: LmxMsgCopy n
     unsigned: parent
-    int: i
+    unsigned: req
     if: rt = 0
         return: c.LMX_MSG_INVALID
     m: lmx_msg_find(rt, who)
@@ -370,10 +436,17 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     m\outbox: 0
     m\outbox_tail: 0
     parent: m\parent
+    req: m\exec_id
+    if: m\exec_live != 0 && m\exec_reply != 0U && m\exec_reply != parent
+        if: lmx_msg_post_dead(rt, who, m\exec_reply, req) = c.LMX_MSG_NOMEM
+            return: c.LMX_MSG_NOMEM
+        ---
+    ---
     n: m\inbox
     while: n != 0
-        if: n\reply_to != 0U
-            if: lmx_msg_post_dead(rt, who, n\reply_to, n\correlation) = c.LMX_MSG_NOMEM
+        if: n\reply_to != 0U && n\reply_to != parent && (m\exec_live = 0 || n\reply_to != m\exec_reply)
+            req: n\id
+            if: lmx_msg_post_dead(rt, who, n\reply_to, req) = c.LMX_MSG_NOMEM
                 return: c.LMX_MSG_NOMEM
             ---
         ---
@@ -381,22 +454,47 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     lmx_msg_copy_free(m\inbox)
     m\inbox: 0
     m\inbox_tail: 0
-    i: 0
-    while: i < rt\n
-        ch: rt\tab + i
-        if: ch\parent = who && ch\state != c.LMX_MSG_STATE_DEAD
-            ch\state: c.LMX_MSG_STATE_STOPPED
-            lmx_msg_copy_free(ch\outbox)
-            ch\outbox: 0
-            ch\outbox_tail: 0
-        ---
-        i: i + 1
+    m\exec_live: 0
+    lmx_msg_stop_descendants(rt, who)
     if: parent != 0U
-        if: lmx_msg_post_dead(rt, who, parent, 0U) = c.LMX_MSG_NOMEM
+        if: lmx_msg_post_dead(rt, who, parent, m\exec_id) = c.LMX_MSG_NOMEM
             return: c.LMX_MSG_NOMEM
         ---
     ---
 return: lmx_msg_pump(rt)
+
+fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap) int
+    @: LmxMsg ch
+    @: LmxMsg p
+    int: i 0
+    int: n 0
+    unsigned: idle
+    p: lmx_msg_find(rt, parent)
+    if: p = 0
+        return: -1
+    while: i < rt\n
+        ch: rt\tab + i
+        if: ch\parent = parent && ch\state = c.LMX_MSG_STATE_RUNNING
+            idle: now
+            if: now >= ch\last_beat
+                idle: now - ch\last_beat
+            ---
+            if: threshold != 0U && idle > threshold
+                if: out != 0 && n < cap
+                    out[n]: ch\addr
+                ---
+                n: n + 1
+            ---
+        ---
+        i: i + 1
+    p\last_beat: now
+return: n
+
+fn: lmx_msg_set_now (@: LmxMsgRuntime rt; unsigned: now) int
+    if: rt = 0
+        return: c.LMX_MSG_INVALID
+    rt\clock: now
+return: c.LMX_MSG_OK
 
 fn: lmx_msg_state (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m

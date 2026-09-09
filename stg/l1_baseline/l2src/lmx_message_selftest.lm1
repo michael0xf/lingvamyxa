@@ -133,6 +133,84 @@ fn: main () int
         c.printf("cancel not a distinct outcome\n")
         fail: fail + 1
     lmx_msg_env_release(got)
+    unsigned: stale 0U
+    unsigned: retried 0U
+    unsigned: req 0U
+    unsigned: mid 0U
+    unsigned: leaf 0U
+    unsigned: seen 0U
+    st: lmx_msg_create(rt, parent, 20U, payload, 4U, @ stale)
+    st: lmx_msg_end_turn(rt, parent, 0)
+    if: lmx_msg_state(rt, stale) != -1
+        c.printf("aborted reservation still findable\n")
+        fail: fail + 1
+    st: lmx_msg_create(rt, parent, 20U, payload, 4U, @ retried)
+    if: retried = 0U || retried = stale
+        c.printf("retry after abort must not reuse freed addr\n")
+        fail: fail + 1
+    st: lmx_msg_create(rt, parent, 21U, payload, 4U, @ req)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_create(rt, parent, 22U, payload, 4U, @ mid)
+    env\id: 42U
+    env\correlation: 0U
+    env\reply_to: req
+    env\kind: c.LMX_MSG_KIND_BYTES
+    env\bytes: payload
+    env\n: 4U
+    st: lmx_msg_send(rt, req, mid, env)
+    st: lmx_msg_end_turn(rt, req, 1)
+    st: lmx_msg_pump(rt)
+    if: lmx_msg_inbox_n(rt, mid) != 0 || lmx_msg_state(rt, mid) = c.LMX_MSG_STATE_RUNNING
+        c.printf("third-party send activated uncommitted child\n")
+        fail: fail + 1
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_pump(rt)
+    env\id: 42U
+    env\correlation: 0U
+    env\reply_to: req
+    st: lmx_msg_send(rt, req, mid, env)
+    st: lmx_msg_end_turn(rt, req, 1)
+    st: lmx_msg_pump(rt)
+    st: lmx_msg_recv(rt, mid, got)
+    if: st != c.LMX_MSG_OK || got\id != 42U
+        c.printf("committed recv of requester work failed\n")
+        fail: fail + 1
+    lmx_msg_env_release(got)
+    st: lmx_msg_fail(rt, mid)
+    st: lmx_msg_recv(rt, req, got)
+    if: st != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_DEAD || got\id != 42U || got\correlation != 42U
+        c.printf("executing requester not told correlated DEAD\n")
+        fail: fail + 1
+    if: (cast: (unsigned) got\number) != mid
+        c.printf("DEAD missing worker identity\n")
+        fail: fail + 1
+    lmx_msg_env_release(got)
+    st: lmx_msg_create(rt, parent, 23U, payload, 4U, @ mid)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_create(rt, mid, 24U, payload, 4U, @ leaf)
+    st: lmx_msg_end_turn(rt, mid, 1)
+    st: lmx_msg_fail(rt, mid)
+    if: lmx_msg_state(rt, leaf) != c.LMX_MSG_STATE_STOPPED
+        c.printf("grandchild not stopped when mid died\n")
+        fail: fail + 1
+    st: lmx_msg_set_now(rt, 10U)
+    st: lmx_msg_create(rt, parent, 25U, payload, 4U, @ mid)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    env\id: 50U
+    env\reply_to: parent
+    st: lmx_msg_send(rt, parent, mid, env)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_pump(rt)
+    st: lmx_msg_recv(rt, mid, got)
+    lmx_msg_env_release(got)
+    st: lmx_msg_poll(rt, parent, 10U, 50U, @ seen, 1)
+    if: st != 0
+        c.printf("fresh child marked unresponsive\n")
+        fail: fail + 1
+    st: lmx_msg_poll(rt, parent, 100U, 50U, @ seen, 1)
+    if: st < 1
+        c.printf("parent poll missed unresponsive child\n")
+        fail: fail + 1
     c.free((cast: (@: void) payload))
     c.free((cast: (@: void) env))
     c.free((cast: (@: void) got))

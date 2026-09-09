@@ -28,11 +28,13 @@ typedef unsigned char uchar;
 #define LMX_MSG_KIND_CANCELLED 4
 #define LMX_MSG_KIND_DEAD 5
 #define LMX_MSG_KIND_DONE 6
+#define LMX_MSG_KIND_REJECTED 7
 
 #define LMX_MSG_STATE_INACTIVE 0
 #define LMX_MSG_STATE_RUNNING 1
 #define LMX_MSG_STATE_STOPPED 2
 #define LMX_MSG_STATE_DEAD 3
+#define LMX_MSG_STATE_RELEASED 4
 
 typedef unsigned LmxMsgAddr;
 
@@ -64,6 +66,7 @@ typedef struct LmxMsg {
     LmxMsgAddr parent;
     unsigned create_id;
     int state;
+    int committed;
     uchar *init;
     size_t init_n;
     LmxMsgCopy *inbox;
@@ -73,6 +76,12 @@ typedef struct LmxMsg {
     unsigned done_from[32];
     unsigned done_id[32];
     int done_n;
+    unsigned exec_id;
+    unsigned exec_corr;
+    LmxMsgAddr exec_from;
+    LmxMsgAddr exec_reply;
+    int exec_live;
+    unsigned last_beat;
 } LmxMsg;
 
 typedef struct LmxMsgRuntime {
@@ -82,6 +91,7 @@ typedef struct LmxMsgRuntime {
     LmxMsgCopy *transport;
     LmxMsgCopy *transport_tail;
     unsigned next_addr;
+    unsigned clock;
 } LmxMsgRuntime;
 
 LmxMsgRuntime *lmx_msg_runtime_new(void);
@@ -98,5 +108,7 @@ int lmx_msg_fail(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_state(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_inbox_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_init_copy(LmxMsgRuntime *rt, LmxMsgAddr who, LmxMsgEnv *out);
+int lmx_msg_set_now(LmxMsgRuntime *rt, unsigned now);
+int lmx_msg_poll(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned now, unsigned threshold, LmxMsgAddr *out, int cap);
 
 #endif
