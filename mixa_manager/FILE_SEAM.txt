@@ -18,20 +18,38 @@ So: two seams, each small, each portable on its own.
 The console does not hold its scrollback in memory. Its scrollback IS a file,
 appended to as output arrives and read back for display.
 
-ClearShell keeps output in a StringBuilder with a head limit, a line limit and a
-tail limit, and drops the middle when a command is noisy. That is a reasonable
-choice for a phone and it is not ours: a file manager whose console silently
-discards the middle of a build log is failing at the moment it is most needed.
+The reason is architectural, not a judgement about limits. ClearShell keeps its
+output in memory because there is a SYSTEM EDITING WIDGET behind it holding the
+text; memory is the natural place for it, and saving is a button the user
+presses. We have no such widget. There is no ready-made one in the system that
+would suit a strict cell grid, and if there were we would not want it - the
+whole point of TextRect is that we draw the cells ourselves.
 
-Backing the scrollback with a file buys, in one move:
+So the file is not primarily a safety measure. It is simply the only place the
+text lives, and we render it from there because we were going to render it
+ourselves regardless.
 
-    nothing is ever discarded - no head/tail/middle truncation
-    the display reads a window of it, so memory is bounded by the VIEW rather
-      than by the output
-    it survives the process, so a crashed build is still inspectable
+What follows from that is nevertheless worth having:
+
+    nothing is discarded - no head, tail or middle truncation, which matters
+      the first time someone needs the middle of a long build log
+    memory is bounded by the VIEW rather than by the output
+    it survives the process, so a crashed build stays inspectable
     it is an ordinary file, so the manager's own viewer, search, copy and open
-      all work on it with no special case
+      work on it with no special case
     a child in delegation mode can be pointed straight at it
+
+2.0. What this is right now
+
+Not a terminal host. There is no PTY or ConPTY yet, no terminal emulation and
+no child screen. For now the console is IMITATED: lines are written to the file
+and drawn from it.
+
+That is deliberate and it is the useful order. The file, the writing, the
+reading window and the drawing are all needed no matter which producer fills
+the file later - own UI, a real embedded terminal, or a delegated child - so
+they are built first and the producer is swapped in behind them. Nothing built
+now has to be undone to host a real shell.
 
 2.1. Naming
 
