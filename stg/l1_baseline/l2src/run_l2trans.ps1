@@ -290,6 +290,9 @@ Invoke-Negative "l2src\tests\unit_cont_out.lm2" "unit_cont_out" "unsupported loo
 Invoke-Negative "l2src\tests\unit_cont_frame.lm2" "unit_cont_frame" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_cont_colon.lm2" "unit_cont_colon" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_break.lm2" "unit_break" "unsupported loop"
+Invoke-Negative "l2src\tests\unit_sz_idx.lm2" "unit_sz_idx" "unsupported index"
+Invoke-Negative "l2src\tests\unit_sz_np.lm2" "unit_sz_np" "unsupported index"
+Invoke-Negative "l2src\tests\unit_sz_intp.lm2" "unit_sz_intp" "incompatible entry signature"
 Invoke-Negative "l2src\tests\unit_rec.lm2" "unit_rec" "unsupported recursion"
 Invoke-Negative "l2src\tests\unit_cycle.lm2" "unit_cycle" "unsupported recursion"
 Invoke-Leaf "l2src\tests\unit_eight.lm2" "unit_eight" 0 "m7"
@@ -1561,5 +1564,234 @@ end: external
 }
 
 Invoke-PhysicalLine
+
+function Invoke-PythonString {
+    $startsRef = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_text_starts_python.lm2")).Replace("`r`n", "`n")
+    $py = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_python_string.lm2")).Replace("`r`n", "`n")
+    $sr = ($startsRef -split "fn: lm_p0_starts_python_string")[1]
+    $sr = "fn: lm_p0_starts_python_string" + ($sr -split "fn: main")[0]
+    $sg = ($py -split "fn: lm_p0_starts_python_string")[1]
+    $sg = "fn: lm_p0_starts_python_string" + ($sg -split "fn: lm_p0_find_python_string_end")[0]
+    if ($sr.Trim() -ne $sg.Trim()) { throw "python_string starts_python_string must match parser_text_starts_python.lm2" }
+
+    $cases = @'
+        size_t: cell
+        int: r
+        cell: 99U
+        r: lm_p0_find_python_string_end("", 0U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("x", 1U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("''", 2U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"abc\"", 5U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"abc\"\"\"", 9U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("'''abc'''", 9U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"abc", 6U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"a\"b\"\"\"", 9U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"a\"\"b\"\"\"", 10U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"a\"\"\"\"", 8U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"", 3U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"\"\"\"", 6U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"\"\"\"\"", 7U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("xx\"\"\"abc\"\"\"", 11U, 2U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: lm_p0_find_python_string_end("\"\"\"a\0b\"\"\"", 9U, 0U, @ cell)
+        c.printf("%d %zu\n", r, cell)
+'@
+
+    $refLm1 = Join-Path $out "pystr_ref.lm1"
+    $refC = Join-Path $out "pystr_ref.c"
+    $refExe = Join-Path $out "pystr_ref.exe"
+    $refOut = Join-Path $out "pystr_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pystr_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "pystr_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'pystr_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pystr_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_python_string.lm2" "parser_python_string" 0 "lm_p0_find_python_string_end"
+    $lm1 = Join-Path $out "parser_python_string.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "python_string must mangle method symbols" }
+    if ($text -notmatch 'l2_p\d+_\d+\[0\]:') { throw "find must store through size_t* [0]" }
+    if ($text -notmatch '@: size_t l2_p') { throw "find must emit @: size_t formal" }
+    if ($text -notmatch '(?m)^\s+continue$') { throw "find must emit continue" }
+    $cpath = Join-Path $out "parser_python_string.c"
+    $ctext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $cpath)).Replace("`r`n", "`n")
+    if ($ctext -notmatch '&&') { throw "inner while cond must keep C && short-circuit" }
+    if ($ctext -match 'text\[i \+ run_length\]' -and $ctext -notmatch '&&') {
+        throw "indexed inner load without &&"
+    }
+
+    $l2cases = $cases.Replace("lm_p0_find_python_string_end(", "l2_m1(unit, ")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "python_string L1 missing generated main return" }
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "pystr_l2_drive.lm1"
+    $drvC = Join-Path $out "pystr_l2_drive.c"
+    $drvExe = Join-Path $out "pystr_l2_drive.exe"
+    $drvOut = Join-Path $out "pystr_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pystr_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "pystr_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'pystr_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pystr_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "python_string find mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+
+    $fwdcases = $cases.Replace("lm_p0_find_python_string_end(", "l2_m2(unit, ")
+    $fwdDrive = @"
+$fwdcases
+        return: 0
+    end: main
+end: external
+"@
+    $fwdLm1 = Join-Path $out "pystr_fwd_drive.lm1"
+    $fwdC = Join-Path $out "pystr_fwd_drive.c"
+    $fwdExe = Join-Path $out "pystr_fwd_drive.exe"
+    $fwdOut = Join-Path $out "pystr_fwd_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $fwdLm1), ($text.Substring(0, $pos) + $fwdDrive.Replace("`r`n","`n")))
+    & $l1trans $fwdLm1 $fwdC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pystr_fwd_drive" }
+    Invoke-Gcc $fwdC $fwdExe (Join-Path $log "pystr_fwd_drive.gcc.log")
+    cmd /c "`"$fwdExe`" > `"$fwdOut`" 2> `"$(Join-Path $out 'pystr_fwd_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pystr_fwd_drive exe failed" }
+    $c = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $fwdOut)).Replace("`r`n","`n")
+    if ($b -ne $c) { throw "python_string fwd must match find`nFIND:`n$b`nFWD:`n$c" }
+
+    $drvCtext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvC)).Replace("`r`n", "`n")
+    if ($drvCtext -notmatch '&&') { throw "pystr_l2_drive.c missing && short-circuit" }
+}
+
+Invoke-PythonString
+
+function Invoke-VisualColumn {
+    $cases = @'
+        c.printf("%zu\n", lm_p0_indent_tab_column(0U))
+        c.printf("%zu\n", lm_p0_indent_tab_column(1U))
+        c.printf("%zu\n", lm_p0_indent_tab_column(7U))
+        c.printf("%zu\n", lm_p0_indent_tab_column(8U))
+        c.printf("%zu\n", lm_p0_indent_tab_column(9U))
+        c.printf("%zu\n", lm_p0_visual_column_between("", 0U, 0U))
+        c.printf("%zu\n", lm_p0_visual_column_between("abc", 0U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("abc", 3U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("abc", 4U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\nb", 0U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\rb", 0U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\r\nb", 0U, 4U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\r", 0U, 2U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\r\n", 0U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("\t", 0U, 1U))
+        c.printf("%zu\n", lm_p0_visual_column_between("x\t", 0U, 2U))
+        c.printf("%zu\n", lm_p0_visual_column_between("xxxxxxx\t", 0U, 8U))
+        c.printf("%zu\n", lm_p0_visual_column_between("xxxxxxxx\t", 0U, 9U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\tb\nc", 0U, 5U))
+        c.printf("%zu\n", lm_p0_visual_column_between("ab\tcd", 2U, 5U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\0b", 0U, 3U))
+'@
+
+    $refLm1 = Join-Path $out "vcol_ref.lm1"
+    $refC = Join-Path $out "vcol_ref.c"
+    $refExe = Join-Path $out "vcol_ref.exe"
+    $refOut = Join-Path $out "vcol_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed vcol_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "vcol_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'vcol_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "vcol_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_visual_column.lm2" "parser_visual_column" 0 "lm_p0_visual_column_between"
+    $lm1 = Join-Path $out "parser_visual_column.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "visual_column must mangle method symbols" }
+    if ($text -notmatch '(?m)^\s+continue$') { throw "visual_column must emit continue" }
+    if ($text -notmatch 'l2_m0\(') { throw "visual_column must call tab helper" }
+    if ($text -notmatch 'l2_q\d+_dirty: 1') { throw "column own must dirty after assign" }
+    if ($text -notmatch 'lmx_size_store') { throw "column own must checkpoint before tab helper call" }
+
+    $l2cases = $cases.Replace("lm_p0_indent_tab_column(", "l2_m0(unit, ").Replace("lm_p0_visual_column_between(", "l2_m1(unit, ")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "visual_column L1 missing generated main return" }
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "vcol_l2_drive.lm1"
+    $drvC = Join-Path $out "vcol_l2_drive.c"
+    $drvExe = Join-Path $out "vcol_l2_drive.exe"
+    $drvOut = Join-Path $out "vcol_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed vcol_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "vcol_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'vcol_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "vcol_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "visual_column mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+
+    $ctext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "parser_visual_column.c"))).Replace("`r`n", "`n")
+    if ($ctext -notmatch '&&') { throw "CRLF p+1 bound guard must stay C &&" }
+}
+
+Invoke-VisualColumn
 
 "l2trans $gen ok"

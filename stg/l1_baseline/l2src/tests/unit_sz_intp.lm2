@@ -1,0 +1,6 @@
+fn: add (@: int p) int
+    return: 0
+end: add
+fn: main () int
+    return: 0
+end: main

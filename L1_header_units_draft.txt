@@ -1,9 +1,16 @@
-L1 header units - bounded design draft
+L1 header units - bounded design draft, revision 3
 Status: proposal for agreement. Nothing implemented, no test covers any of it.
 
-Requested by Codex before implementation: a minimal real source, the exact
-generated header, both consumers, the build flow, the list of files to change,
-and the list of decisions taken. This is that.
+Revision 2 answered four corrections. All four were right, and one of them -
+that the ordinary *.lm1 glob would also match *.h.lm1 - was a genuine hole in
+revision 1, not a matter of detail.
+
+Revision 3 answers five more. One of those corrected a claim I had not checked:
+revision 1 and 2 wrote an inline `prototype: name (...) type` and called it
+reuse of an existing form. It is not. The inline head translates with exit 0 and
+emits nothing; the working form is the wrapper with fn:/sub: inside. Verified
+against the translator, not assumed, and section 6.1 now records both the check
+and the result.
 
 
 1. Naming, already decided
@@ -33,43 +40,108 @@ Counted across the three real headers in the tree:
     union                    0          0       0
     prototypes               0          1      21
 
-Two results settle open questions Codex raised:
-
-  UNION IS NOT NEEDED. Zero occurrences anywhere. Excluded from the MVP, and
-  not to be added speculatively.
-
+  UNION IS NOT NEEDED. Zero occurrences anywhere. Excluded from the MVP.
   FUNCTION-LIKE MACROS ARE ALMOST NOT NEEDED. Exactly one in the whole tree:
-  LM_UNUSED(x) ((void)(x)) in p0.h. Every other #define is either an include
-  guard, which becomes automatic, or an integer constant. Excluded from the
-  MVP; p0.h keeps that one by hand until there is a second consumer.
+  LM_UNUSED(x) in p0.h. Every other #define is an include guard, which becomes
+  automatic, or an integer constant. Excluded; p0.h keeps that one by hand.
 
-So the MVP is: struct, enum, function-pointer typedef, integer constant,
-prototype, and an automatic include guard. Six things.
+Anything outside the MVP is DIAGNOSED, never silently dropped. A header unit
+containing a union, a function-like macro or an executable body is an error
+naming the construct, not a quietly smaller header.
 
 
 3. Spelling, reusing existing forms wherever one exists
 
-Only THREE new receivers. The rest already exist in L1 and are reused rather
-than reinvented, which is also what keeps this from becoming a second C surface.
-
-  NEW      struct:     aggregate definition
-  NEW      enum:       enumeration
-  NEW      fnptr:      function-pointer typedef
-  EXISTS   define:     object-like macro, already an L1 unit-level item (1.2)
-  EXISTS   prototype:  already an L1 unit-level item (1.2)
-  none     forward declaration - emitted automatically, see 4.3
+    NEW      struct:     aggregate definition
+    NEW      enum:       enumeration
+    NEW      fnptr:      function-pointer typedef
+    EXISTS   define:     object-like macro, already an L1 unit-level item (1.2)
+    EXISTS   prototype:  the WRAPPER form only, with fn:/sub: inside; see 6.1
+                         for the check. The inline head emits nothing.
+    none     forward declaration - emitted automatically, see 5
 
 Field spelling inside struct: is ordinary L1 declaration spelling, unchanged.
-That is the point: a struct body is a list of declarations, and L1 already
-knows how to spell those.
+No P0 syntax is added: the three new heads are ordinary frames the parser
+already handles, so parser.lm1 and p0.h are untouched.
 
 
-4. Worked example: the real mixa_core
+4. Guard identity - revised, the previous scheme was not injective
 
-4.1. Source - mixa_manager\mixa_core.h.lm1
+Rejected: uppercase the relative path and replace every non-alphanumeric with an
+underscore. That collides. `a-b` and `a_b` both become `A_B`, and case folding
+makes `Foo` and `foo` collide as well. The revision-1 example also silently
+dropped the `.h.lm1` suffix that its own formula included.
 
-    # Cell and TextRect for the Mixa Manager visual model, sections 1 and 14 of
-    # Old_Mixa_Manager_Qt_model.txt.
+Replacement, injective by construction and case-preserving:
+
+    guard = "LM_H_" + escape(unit_id)
+
+    unit_id  the source path relative to the UNIT ROOT, NORMALIZED, with '/'
+             separators, suffix included: mixa_manager/mixa_core.h.lm1
+
+    escape   over the UTF-8 BYTES of unit_id, each byte b:
+               [A-Za-z0-9]  -> that character
+               '_'          -> "_5F"
+               anything else -> "_" + two uppercase hex digits of b
+
+Byte-wise, so a non-ASCII path escapes deterministically rather than depending
+on any locale or wide-character handling.
+
+NORMALIZED means: separators folded to '/', repeated separators collapsed, and
+'.' and '..' segments resolved before escaping. Two spellings of one path must
+not produce two guards for one file. A '..' that would escape the unit root is
+the same error as a source outside the root, not a guard with '..' encoded in
+it.
+
+So mixa_manager/mixa_core.h.lm1 becomes
+
+    LM_H_mixa_5Fmanager_2Fmixa_5Fcore_2Eh_2Elm1
+
+Ugly and unambiguous. The escape is a bijection on the byte string, so two
+distinct paths cannot produce one guard, and no collision check is needed at
+all - which is the point, since a hash would have required one.
+
+UNIT ROOT outside a checkout. Not derived from git. It is the build root - the
+directory the runner makes current, the same anchor every tests\l1 runner
+already establishes with Set-Location $PSScriptRoot\..\.. and every path inside
+a .lm1 is already relative to. An explicit override is available for callers
+that are not run from it; absent both, translating a source that is not under
+the build root is an error rather than a guess.
+
+
+5. Forward declarations - revised, per-struct was not enough
+
+Rejected: emit each struct's forward typedef immediately before its own
+definition. That covers self-reference and nothing else.
+
+Replacement, three rules:
+
+  5.1  ALL forward typedefs for structs owned by this unit are emitted FIRST,
+       before any definition. That makes mutual pointer reference work with no
+       ordering requirement on the author:
+
+           struct A { B *b; };   struct B { A *a; };
+
+  5.2  A field held BY VALUE is a real dependency: the definition of its type
+       must precede. Definitions are therefore emitted in dependency order, not
+       source order.
+
+  5.3  A by-value CYCLE is impossible in C and is diagnosed by name, not
+       reordered into something that happens to compile:
+
+           by-value cycle between struct A and struct B; make one a pointer
+
+This does not claim to cover opaque types declared elsewhere. A type this unit
+does not own is not forward-declared automatically; that stays the author's
+business through include: of the owning header.
+
+Fixtures required: self-pointer, mutual pointer, by-value dependency that needs
+reordering, and by-value cycle as a negative.
+
+
+6. Worked example, with the generated C for both consumers
+
+6.1. Source - mixa_manager\mixa_core.h.lm1
 
     include: "<stddef.h>"
 
@@ -93,13 +165,35 @@ knows how to spell those.
         @: MixaCell cells
     end: MixaTextRect
 
-4.2. Generated - build\mixa\mixa_core.lm1.h
+    fnptr: MixaCellVisitor (@: MixaCell cell; size_t: row; size_t: col) int
+
+    prototype:
+        fn: mixa_rect_open (@: MixaTextRect rect; size_t: rows; size_t: cols) int
+    end: prototype
+
+The prototype form is the WRAPPER with fn:/sub: declarations inside, verified
+against the translator rather than assumed. Revision 1 wrote an inline
+`prototype: name (...) type` and called it reuse; that was wrong. Checked on
+build\l1trans\gen2\l1trans.exe:
+
+    prototype: proto (int: n) int          exit 0 and emits NOTHING
+    prototype: + fn: inside + end:         emits  int proto(int n);
+    a bodiless fn: at unit level           emits  int proto(int n);
+
+Both working forms already exist; the wrapper is the one this draft uses. The
+inline head being silently empty is a separate observation, recorded here and
+not addressed by this MVP.
+
+6.2. Generated header - build\obj\headers\mixa_manager\mixa_core.lm1.h
 
     /* generated by l1trans from mixa_manager/mixa_core.h.lm1 */
-    #ifndef LM_H_MIXA_MANAGER_MIXA_CORE
-    #define LM_H_MIXA_MANAGER_MIXA_CORE
+    #ifndef LM_H_mixa_5Fmanager_2Fmixa_5Fcore_2Eh_2Elm1
+    #define LM_H_mixa_5Fmanager_2Fmixa_5Fcore_2Eh_2Elm1
 
     #include <stddef.h>
+
+    typedef struct MixaCell MixaCell;
+    typedef struct MixaTextRect MixaTextRect;
 
     typedef enum MixaStyle {
         MIXA_STYLE_BOLD = 1,
@@ -107,7 +201,6 @@ knows how to spell those.
         MIXA_STYLE_REVERSE = 4
     } MixaStyle;
 
-    typedef struct MixaCell MixaCell;
     struct MixaCell {
         unsigned int codepoint;
         unsigned char fg;
@@ -116,119 +209,242 @@ knows how to spell those.
         unsigned char width;
     };
 
-    typedef struct MixaTextRect MixaTextRect;
     struct MixaTextRect {
         size_t rows;
         size_t cols;
         MixaCell * cells;
     };
 
+    typedef int (*MixaCellVisitor)(MixaCell * cell, size_t row, size_t col);
+
+    int mixa_rect_open(MixaTextRect * rect, size_t rows, size_t cols);
+
     #endif
 
-4.3. Why the forward typedef is emitted for every struct
+Both forwards stand before any definition, per 5.1.
 
-Every struct definition is preceded by its own typedef struct X X;. That is not
-decoration: it makes a self-referential field work with no extra spelling. lmx.h
-needs exactly this today -
-
-    struct LmxChunk { ... LmxChunk *next; };
-
-and with the typedef emitted first, the source writes @: LmxChunk next and
-nothing else is required. Emitting it unconditionally also removes the need for
-any explicit forward-declaration form, which is why the table in section 3 has
-none.
-
-4.4. Guard identity
-
-    LM_H_ + unit path relative to the repository root, uppercased, every
-    non-alphanumeric character replaced by an underscore.
-
-Derived from the path, not the basename, so mixa_manager/mixa_core.h.lm1 and
-some_other_dir/mixa_core.h.lm1 cannot collide. Deterministic and portable: it
-carries no absolute machine path.
-
-
-5. Both consumers
-
-5.1. External C - a platform backend, hand-written C
+6.3. External C consumer - a platform backend, hand-written
 
     #include "mixa_core.lm1.h"
 
     void mixa_backend_present(const MixaTextRect *rect) { ... }
 
-Ordinary #include of the GENERATED header. Nothing special.
-
-5.2. Internal L1 - another unit in the same chain
+6.4. Internal L1 consumer - mixa_manager\mixa_text_rect.lm1
 
     predef: "mixa_manager/mixa_core.h.lm1"
 
-predef on the SOURCE. It makes the same declarations visible with no duplicate
-definition: the header unit is the single owner of those types, and a unit that
-predefs it does not re-emit them into its own C.
+    fn: mixa_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
+        ...
 
-The existing raw form include: "some_handwritten.h" is untouched and remains a
-separate case, for headers this mechanism does not own.
+and its generated C, build\mixa\mixa_text_rect.lm1.c:
+
+    /* generated by l1trans from mixa_manager/mixa_text_rect.lm1 */
+    #include "mixa_core.lm1.h"
+
+    MixaCell * mixa_cell_at(MixaTextRect * rect, size_t row, size_t col)
+    {
+        ...
+    }
+
+Exactly one include of the generated header, emitted because the unit predefs
+the header source. Two rules make that exact:
+
+  a predef of a HEADER source contributes an #include of its generated header
+    and nothing else - no re-emission of the declarations into this .c;
+
+  a predef reached more than once through a diamond contributes one include,
+    the same de-duplication predef already performs for ordinary units.
+
+How the emitter learns the types. It parses the predefed header source as it
+already parses any predefed unit, and registers the struct, enum and fnptr
+names it declares as type names for THIS translation. That is the same
+mechanism l1_is_type_name serves today, sourced from the unit instead of from a
+literal list - which is also what closes draft point 10.4.
 
 
-6. Build flow
+7. Build flow - revised, the glob was wrong
 
-    1. translate every *.h.lm1 to its .lm1.h in the build output directory
-    2. translate every *.lm1 to its .lm1.c
+The hole in revision 1: the ordinary source pass globs *.lm1, and *.h.lm1 ends
+in .lm1, so header sources would have been translated a second time into .c
+files nobody wants.
+
+    1. header pass    every *.h.lm1  ->  its .lm1.h
+    2. source pass    every *.lm1 THAT IS NOT *.h.lm1  ->  its .lm1.c
     3. compile
 
-Headers first, because step 3's consumers include them. Generated output never
-lands on top of a source: mixa_core.h.lm1 is a source and is never written to.
+Header sources are excluded from step 2 by that explicit predicate, not by
+ordering luck. A header-only unit emits no .c.
 
-A header-only unit does not have to produce an empty .c, and should not.
+7.1. Concrete output mapping, after inspecting buildCore
 
-One emitter, one pipeline. The header mode is a mode of the existing emitter,
-not a second parser - the declaration spelling inside is the same L1 the
-emitter already lowers.
+Existing output roots, unchanged and not added to:
 
-Failure must not leave a mismatched pair. If translation of a unit fails, its
-previous .lm1.h stays untouched or is removed, but a half-written one is never
-published - the same discipline run_seed already uses when it stages into a
-unique directory and only then publishes.
+    lm1/build/          tracked published generated C, the portable set
+    build/lm0/next[/check]   staged tools; lm_build_output_dir() returns these
+    build/obj/          untracked intermediates
 
-Staleness: a .lm1.h older than its source is a build error, not a silent reuse.
+MVP headers are not bootstrap dependencies, so they are untracked intermediates
+and belong under build/obj/. Mirrored by source path, so two units of the same
+basename in different directories cannot collide:
+
+    mixa_manager/mixa_core.h.lm1  ->  build/obj/headers/mixa_manager/mixa_core.lm1.h
+    l2src/mixa_core.h.lm1         ->  build/obj/headers/l2src/mixa_core.lm1.h
+
+Revision 1 was inconsistent here - section 6 showed a flattened path and
+section 7 a mirrored one. Mirrored is the rule; section 6 now agrees.
+
+The tracked case is deliberately deferred with p0.h itself, per D10. When a
+header does become a bootstrap dependency it must additionally appear in
+lm1/build/ and on the whitelist, exactly as the generated C does. Whether that
+copy is flat like lm1/build/parser.lm1.c or mirrored is a question for that
+change, not this one, and it does not arise while the MVP converts mixa_core
+only.
+
+Unit root as an argument. The translator takes the unit root explicitly rather
+than inferring it. Default: the current directory, which is the build root every
+tests\l1 runner already establishes with Set-Location $PSScriptRoot\..\.. and
+which every path inside a .lm1 is already relative to. buildCore passes it
+explicitly so the mapping does not depend on where the process was started.
+
+Transitive dependencies: a header source may predef another header source, and
+step 1 orders by that dependency. A cycle among header units is an error.
+
+Generated output never lands on a source.
 
 
-7. Files this touches
+8. Staleness and failure - revised, mtime is not evidence
+
+Rejected: treat a generated header older than its source as stale. After a
+clone or a copy, mtimes carry no information about content, so this proves
+nothing and can silently pass.
+
+Replacement:
+
+  8.1  FOR THE MVP the build REGENERATES every required header, unconditionally.
+       Cheap at this size, and it removes the question entirely.
+
+  8.2  A content signature over source, transitive header dependencies and
+       translator identity is the eventual optimisation if regeneration ever
+       becomes expensive. DEFERRED, not part of the MVP - an unused cache is a
+       second source of truth about staleness.
+
+  8.3  Two different guarantees, and revision 2 ran them together:
+
+       ATOMIC PER FILE. Each header is written to a staging name and moved into
+       place, so a half-written header is never visible to a compiler.
+
+       TRANSACTIONAL PER SET. The compile step does not begin until the WHOLE
+       required header set has been generated successfully. A run that fails on
+       the third of five headers must not have the first two consumed, even
+       though each of those two was individually published atomically.
+
+       On failure the consuming build fails and reports the ORIGINAL error.
+       Staging must not convert a failure into a success. The last good outputs
+       are kept on disk but are not consumed by that build.
+
+
+9. Bootstrap must not become circular
+
+Raised in review and it is the sharpest point in the design.
+
+If p0.h became p0.h.lm1, then compiling the tracked lm1/build/parser.lm1.c
+would need p0.lm1.h, which only l1trans can produce - and l1trans is what the
+bootstrap is trying to build. Circular.
+
+Resolution, and it needs no new mechanism: GENERATED HEADERS JOIN THE TRACKED
+PORTABLE SET, exactly as the generated C already has. The repository .gitignore
+already whitelists the ten lm1/build/*.lm1.c that survive the disappearance of
+every executable; the generated .lm1.h files for headers the bootstrap needs
+join that whitelist on the same terms.
+
+Then the portable bootstrap compiles tracked C against tracked headers with a
+C99 compiler and nothing else, which is the property the whole project rests
+on. A header unit is regenerated by the chain afterwards, like its C.
+
+Consequence for sequencing: converting p0.h is NOT part of this MVP. The MVP
+converts mixa_core.h, which no bootstrap depends on. p0.h and lmx.h follow once
+the mechanism is proven, and p0.h only together with its whitelist entry.
+
+
+10. Files this touches
 
     l1src\l1trans.lm1        header output mode; struct: / enum: / fnptr:
-                             emission; automatic forward typedef; guard
-                             derivation; prototype: and define: already exist
-    l1src\buildCore.lm1      header pass before the C pass
-    tests\l1\                new fixtures, positive and negative
+                             emission; forward-first ordering and by-value
+                             dependency order; guard encoding; predef of a
+                             header source contributing an include and type
+                             names; diagnostics for the excluded constructs
+    l1src\buildCore.lm1      header pass before the source pass, and the
+                             not-*.h.lm1 predicate on the source pass
+    tests\l1\                fixtures, positive and negative
     tests\l1\run_smoke.ps1   wire them, gated by generation
-    L1_spec.txt              1.1 already records the naming; 5 and 6 to follow
-                             implementation, not precede it
+    L1_spec.txt              1.1 already records the naming; 5 and 6 follow
+                             implementation rather than preceding it
 
-Not touched: parser.lm1 and p0.h. This adds no P0 syntax - struct:, enum: and
-fnptr: are ordinary frames that P0 already parses. That is the main reason to
-prefer this shape over anything resembling a C parser.
+Not touched: parser.lm1, p0.h.
 
 
-8. Decisions taken, listed so they can be rejected individually
+11. Test plan
 
-    D1  union excluded from the MVP. Evidence: zero occurrences.
+  positive
+    minimal header: enum, two structs, fnptr, prototype; exact generated text
+    self-pointer struct
+    mutually referencing pointers across two structs
+    by-value field forcing dependency order different from source order
+    two same-basename header units in different directories: distinct guards,
+      distinct output paths, both included from one consumer
+    header predefing another header; one include each, no duplication
+    external C compiles against the generated header
+    internal L1 unit predefs the header and compiles with exactly one include
+
+  negative, each requiring the diagnostic text and no published output
+    by-value cycle between two structs
+    union in a header unit
+    function-like macro in a header unit
+    executable body in a header unit
+    source outside the unit root with no explicit root given
+    cycle among header units
+
+  invariants
+    a *.h.lm1 produces no .c
+    generated header is byte-identical across two consecutive runs
+    fixed point gen1 == gen2 == gen3 unaffected
+
+
+12. Decisions, listed so each can be rejected on its own
+
+    D1  union excluded. Evidence: zero occurrences.
     D2  function-like macros excluded. Evidence: exactly one, LM_UNUSED.
-    D3  three new receivers only: struct:, enum:, fnptr:. define: and
-        prototype: reused as-is.
+    D3  three new receivers only; define: and prototype: reused as-is.
     D4  struct fields use ordinary L1 declaration spelling, unchanged.
-    D5  forward typedef emitted automatically for every struct; no explicit
-        forward-declaration form.
-    D6  guard derived from the repository-relative path, not the basename.
-    D7  header-only units emit no .c.
-    D8  predef on the source is the internal consumer; include: of the
-        generated header is the external one.
-    D9  a stale generated header is an error, not a silent reuse.
+    D5  ALL owned forwards first, then definitions in by-value dependency
+        order; by-value cycles diagnosed by name.        [revised]
+    D6  guard is an injective escape of the unit-root-relative path including
+        the suffix, case preserved, no hash and no collision check. [revised]
+    D7  header-only units emit no .c, and *.h.lm1 is excluded from the source
+        pass by an explicit predicate.                    [revised]
+    D8  predef of a header source contributes exactly one include of the
+        generated header and registers its type names; it does not re-emit
+        declarations.                                     [revised]
+    D9  headers are always regenerated for the MVP; never compared by mtime.
+        The content-signature cache is deferred rather than specified, since
+        an unused cache is a second source of truth.       [revised r3]
+    D9a per-file publication is atomic; the compile step additionally waits for
+        the WHOLE required set to succeed. Two different guarantees, and
+        revision 2 ran them together.                      [new r3]
+    D10 generated headers join the tracked portable set, which is what keeps
+        the bootstrap non-circular; p0.h is therefore out of the MVP. [new]
+    D11 anything outside the MVP is diagnosed, never silently dropped. [new]
+    D12 prototypes use the existing WRAPPER form, prototype: with fn:/sub:
+        inside. Verified, not assumed; the inline head emits nothing. [new r3]
+    D13 guard escape operates on UTF-8 bytes of a normalized relative path;
+        dot segments are resolved before escaping, and a path escaping the
+        unit root is an error.                             [new r3]
+    D14 the unit root is an explicit argument defaulting to the current
+        directory, which is the build root the runners already establish;
+        buildCore passes it rather than letting it be inferred. [new r3]
 
     OPEN, deliberately not decided here:
-      - whether a header unit may contain anything executable at all. The MVP
-        says no, but the rule is not written into 1.2 yet.
-      - where the build output directory for headers is, exactly. Section 6
-        says "the build output directory"; the concrete path belongs with
-        buildCore, not with this draft.
-      - the .lm2.h analogue. That is the next L2 contract and is deliberately
-        absent here.
+      - whether a TRACKED header, once one exists, lands flat in lm1/build/
+        like parser.lm1.c or mirrored by source path. Does not arise while the
+        MVP converts mixa_core only; belongs with the p0.h change.
+      - the .lm2.h analogue, deferred as the next L2 contract

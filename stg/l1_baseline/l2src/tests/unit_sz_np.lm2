@@ -1,0 +1,7 @@
+fn: add (size_t: p) int
+    p[0]: 1U
+    return: 0
+end: add
+fn: main () int
+    return: 0
+end: main
