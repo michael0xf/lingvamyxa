@@ -115,11 +115,51 @@ the concurrent half of 19.29.6 has never been exercised by anything. This is the
 first place two Messages exist at once, the same way mixa_manager was the first
 application code in L1.
 
-6.1. The mapping, which is one to one
+6.1. The mapping, and it is NOT one to one
+
+I first wrote "one to one". That is wrong and the language owner said so:
+ClearShell has no Messages. What carries over is the RHYTHM - where it posts per
+directory, we take a turn per directory. The MECHANISM is entirely different,
+and the difference is the whole cost of the port.
 
     each background job          a Message with its own arena
     runOnUiThread                a send to the UI Message's inbox
     the UI's drain-and-process   the pump, which already exists and is tested
+
+A Java thread SHARES THE HEAP with the UI thread. A Message does not: it has its
+own arena and nothing crosses without an explicit copy. So a posted closure and
+a sent message are not the same thing wearing different clothes.
+
+6.1.1. What that actually costs, from a real closure
+
+FolderCalculator's post, in FSync.java:
+
+    if (item.adapter.closed)      { sizes().remove(directory); run = false; }
+    else if (!isSelect(item))     { sizes().remove(directory); run = false; }
+    item.format();
+    item.panel.invalidate();
+
+That is not "post a result". It READS UI state to decide whether the job should
+continue, WRITES run = false INTO THE BACKGROUND JOB to stop it, mutates a
+shared table, and triggers a redraw.
+
+Under the Message model none of it works directly. The job cannot hold a
+reference to item - that is another Message's graph. The UI cannot set a flag
+inside the job's arena. The shared table cannot be shared.
+
+So the port INVERTS THE CONTROL FLOW: the job sends a RESULT, the UI decides for
+itself, and if it wants the job stopped it sends a CANCEL to the job's inbox.
+One shared closure becomes two messages travelling in opposite directions.
+
+Which is why the inbox/outbox pair is needed per job in BOTH directions, not
+only job to UI.
+
+6.1.2. And it closes the loop on chunking
+
+A job can only notice a cancel BETWEEN CHUNKS. So turn-per-chunk is not only
+about not losing progress to a failed turn - it is the only place cancellation
+can be observed at all. Two independent reasons for the same structure, which is
+usually a sign the structure is right.
 
 Four jobs, from clearshell_reference: FSync (copy, move, overwrite),
 FolderCalculator (directory sizes), FileNameFinder (search by name), and command
@@ -132,9 +172,9 @@ per turn rather than accumulate - computing a whole tree in one turn and staging
 every result means a failure at the end discards all of them. That is
 structural, not a performance choice.
 
-CHECKED, AND CLEARSHELL ALREADY DOES THIS. FolderCalculator posts inside its
-loop, one directory at a time, not at the end. So the port is direct and the
-chunking already present IS the turn boundary. The answer was in the source and
+CHECKED, AND CLEARSHELL ALREADY CHUNKS THIS WAY. FolderCalculator posts inside
+its loop, one directory at a time, not at the end. So the GRANULARITY carries
+over and we do not have to invent it - but only the granularity, see 6.1. The answer was in the source and
 I derived it from the spec instead - the same answer, but PORT_OF_CLEARSHELL
 section 4 says to look at the source first for a reason.
 
