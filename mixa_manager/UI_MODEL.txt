@@ -11,7 +11,31 @@ The console and the upper layer are where the Norton/FAR likeness stops.
     each list scrolls UP AND DOWN on its own, with its OWN vertical scrollbar
     the whole row scrolls LEFT AND RIGHT together, with ONE shared horizontal
       scrollbar for the set
-    a button panel at the top and another at the bottom
+
+1.1. Two KINDS of button panel, not two positions
+
+An earlier version of this section said "a button panel at the top and another
+at the bottom". That was wrong: the two panels differ in KIND, not in where
+they happen to sit. ClearShell has one panel belonging to the LIST and one
+belonging to the APPLICATION, and the distinction is what decides where each
+goes.
+
+    the APPLICATION panel is glued to the very bottom of the screen, BELOW the
+      console input line and its cursor. In ClearShell this one is at the top;
+      here it moves down, because the bottom is where a Norton-style command
+      line already lives and the application's buttons belong beside it.
+
+    a LIST panel belongs to its list and is drawn as that list's HEADER. There
+      is one per list, so N lists have N of them.
+
+The header is STICKY: scrolling the list up and down does not carry it away.
+That is already true in ClearShell and it is kept deliberately - a list whose
+own buttons scroll out of reach is a list you have to scroll back to before you
+can act on it.
+
+So, bottom of the screen upward: the application panel, then the console input
+line, then console output scrolling upward - and over all of it,
+semi-transparently, the lists, each carrying its own header.
 
 ClearShell moves the whole panel vertically instead of scrolling a list inside
 its own frame. That is a concession to a narrow phone screen, and it is
