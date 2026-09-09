@@ -1069,8 +1069,8 @@ Frozen `((column / 8U) + 1U) * 8U` is restored. Nested groups used
 to clobber global l2_lhs/l2_rhs; emit now uses per-call inner/piece
 buffers. Overflow is `expression too long`, dest unchanged.
 
-scan_indent still deferred; not blocked by parameter count. break
-not required. skip / L2 `@` of own still deferred.
+scan_indent is Unit 18. break not required. skip / L2 `@` of own
+still deferred.
 
 Frozen original: stg/l1_baseline/l1src/parser.lm1
     lm_p0_indent_tab_column
@@ -1101,7 +1101,29 @@ c.INT_MAX, not a hardcoded 32-bit literal.
 
 Remaining implementation debt, not this slice: 8 methods, 4
 OwnUsed, 4 address slots, 16 intern contracts, 256-byte per-actual
-spelling, unsupported recursion. scan_indent not in this unit.
+spelling, unsupported recursion. scan_indent is Unit 18, not this unit.
+
+Unit 18 - scan_indent_column parser port
+----------------------------------------
+Files: parser_scan_indent.lm2, run_l2trans.ps1, OPEN_POINTS.txt
+Frozen ref: l1src/parser.lm1:442-457 (read-only)
+
+Closed unit:
+    lm_p0_is_horizontal_space
+    lm_p0_indent_tab_column
+    lm_p0_scan_indent_column   sub; two @: size_t outs
+    main
+
+Load ch after p<end. Both outs stored on the non-space stop and on
+run-to-end. continue after the early stores (sub `return` is
+unsupported body today; not widened in this slice). Tab helper is
+the frozen parenthesized form. Numeric 9 for tab.
+
+OwnUsed: p, column, ch, keep (4). size_t* formals are not OwnUsed.
+Test cells are harness-owned C addresses.
+
+Not this unit: indent stack, dash-fence, Document, @own, break,
+void-return-in-sub as a translator feature.
 
 Unit 16 - nested expression emit scratch
 ----------------------------------------
