@@ -82,3 +82,44 @@ tests assert cell contents - this position holds this codepoint with these
 attributes - so they are exact, they need no font, they run headless, and they
 stay valid unchanged when real glyphs arrive. Tests written against pixels
 would have to be rewritten the moment the font appears.
+
+
+5. Tiles: cell content that is not a glyph
+
+Buttons in ClearShell have NO BORDER. What separates them is a MICRO-GAP - the
+margin, hb >> 5, about one pixel. There is no frame to draw, and box-drawing
+characters cannot express "a solid block inset by one pixel on two sides".
+
+So buttons need a different material: NINE TILES per colour - four corners, four
+sides, one solid fill - each a cell-sized block of the button colour with the
+gap left TRANSPARENT on whichever sides face outward. A button of any size is
+then covered by them exactly as a nine-slice.
+
+5.1. How they reach a cell without changing MixaCell
+
+A PRIVATE-USE CODEPOINT RANGE. The nine tiles get codepoints in U+E000..; the
+compositor recognises that range and draws the tile procedurally instead of
+asking the backend for a glyph.
+
+Chosen over adding a tile field to MixaCell because it changes nothing:
+
+    the drawer places them with the existing fill - it never learns they are
+      special, so the single-API property survives untouched
+    the colour comes from the cell's own fg and bg, like everything else, so
+      the nine tiles serve EVERY button colour rather than needing nine per
+      colour
+    the alpha comes from the cell's bg alpha, which is how a translucent button
+      body is already expressed
+
+5.2. The gap is derived, not chosen
+
+Per the doctrine: an integer number of pixels, derived from the cell, never a
+fraction and never a constant. ClearShell uses hb >> 5 of a button height; ours
+is the same shift of the CELL height, floored at one pixel - a gap that rounds
+to zero is not a gap, and at that point the buttons touch and the design is lost.
+
+5.3. What this does NOT replace
+
+Frames and line junctions stay. Buttons do not use them, but panels, list
+headers and dividers do - and those are ClearShell's own borders around
+containers, not around buttons. Section 3.1 stands unchanged.
