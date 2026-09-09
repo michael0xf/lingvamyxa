@@ -79,8 +79,9 @@ build baseline; promotion must preserve the live L2 sources.
   - Empty / missing L1 body: rejected (`empty implicit L1 body` /
     `missing L1 body`).
 
-  AGREED, NOT YET IMPLEMENTED - header source units. Decided by the user,
-  confirmed with Codex; nothing of it is built yet and no test covers it.
+  Header source units. IMPLEMENTED as of 8db63ee, by direct invocation only -
+  see the scope note at the end of this entry, which is narrower than the
+  feature sounds.
 
       source           name.h.lm1
       generated header name.lm1.h        (in the build output directory)
@@ -98,8 +99,41 @@ build baseline; promotion must preserve the live L2 sources.
     changing the final-extension rule and would have broken the invariant
     that `.lm1.` marks an output rather than a source.
 
-    Content, consumers, guard identity and build ordering are a bounded
-    design draft, not settled here. This entry records the naming only.
+    Body content admitted: `struct:`, `enum:`, `fnptr:`, the `prototype:`
+    WRAPPER form with `fn:`/`sub:` inside, a bodiless unit-level `fn:`/`sub:`,
+    object-like `define:`, and `include:`. Field spelling inside `struct:` is
+    ordinary L1 declaration spelling, unchanged.
+
+    Emission order: includes and object-like defines in source order, then ALL
+    struct forward typedefs, then enums, then struct definitions in by-value
+    DEPENDENCY order, then fnptrs, then prototypes, then bodiless fn/sub. Only
+    structs are reordered. Forwards-first is what makes mutual pointer
+    reference work with no ordering required from the author; a by-value field
+    is a real dependency, and a by-value cycle is diagnosed by name rather than
+    reordered into something that happens to compile.
+
+    Guard: `LM_H_` plus an escape over the UTF-8 bytes of the source path
+    relative to the unit root, normalized first and suffix included -
+    `[A-Za-z0-9]` kept, `_` as `_5F`, anything else as `_` plus two hex digits.
+    The escape is injective, so no collision check is needed. A path escaping
+    the unit root is an error. Unit root defaults to the current directory;
+    `--unit-root DIR` overrides it and is additive - two-argument invocation is
+    unchanged.
+
+    Rejected with a diagnostic naming the construct, publishing nothing:
+    `union`, function-like `define:`, and an executable body. No P0 syntax was
+    added; `parser.lm1` and `p0.h` are untouched.
+
+    A rejected alternative is recorded so it is not revived: source
+    `name.lm1.h` with a compound-suffix classifier. It would have required
+    changing the final-extension rule and would have broken the invariant
+    that `.lm1.` marks an output rather than a source.
+
+    SCOPE, and it is narrower than the feature sounds. Only direct invocation
+    works. `predef:` of a header source, a header pass in buildCore, and the
+    conversion of any existing hand-written header are NOT implemented and are
+    not claimed. No .h in the tree has been replaced. Design for the rest is in
+    L1_header_units_draft.txt.
 
 1.2 Unit-level items (l1_unit_item_ok)
   Top-level frames allowed in an implicit `.lm1` unit:
@@ -404,7 +438,11 @@ PARTIAL / LIMITED
   Module emit: one output C path per CLI run; multi-TU / init-before-main
   mechanics OPEN (10.8).
   Conditional-import policy outside ifdef checkpoint.
-  Parameter declarations, two confirmed defects, both silent with exit 0:
+  Header units: direct invocation only. predef: of a header source, a
+  buildCore header pass, and conversion of any existing .h are not implemented
+  (1.1 scope note). No hand-written header in the tree has been replaced.
+  Parameter declarations, two confirmed defects, BOTH FIXED in c8ceb67 and no
+  longer reproducible; retained here only as the record of what they were:
     - a multiword type after `@:` yields a mangled type and DROPS the
       parameter name. `@: unsigned char p` emits `unsigned * char`; the same
       for `unsigned long` and `const char`. A single-token alias is fine:
@@ -448,7 +486,9 @@ all fail today. Implemented forms above take precedence over its older
 checkpoint descriptions. Remaining questions include:
 
   10.3  new receiver-authoring ABI
-  10.4  C aggregate heads
+  10.4  C aggregate heads - CLOSED for the declarative subset by header units
+        (1.1). struct:, enum: and fnptr: are the spelling; the remaining open
+        part is anything a header does not need.
   10.5 / 10.14  c.name / c.array vs ordinary non-c array spelling
   10.8  one C TU vs many; path identity; init-before-main
   10.10 ?:
