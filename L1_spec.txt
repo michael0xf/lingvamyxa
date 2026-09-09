@@ -180,7 +180,7 @@ build baseline; promotion must preserve the live L2 sources.
     u8/u16/u32/u64 → uintN_t, i8/i16/i32/i64 → intN_t,
     plus several LmP0* typedef names used by the parser port.
   `uchar` is emitted unchanged, not rewritten to `unsigned char`:
-  include a header defining it (cast_uchar_alias_ok uses l1src/p0.h).
+  include a header defining it (cast_uchar_alias_ok uses l1src/p0.lm1.h).
   Fixed-width C names likewise require their C declarations/headers.
   Pointer forms: `@:` / `@@:` (and deeper `@` chains in tests).
   Array forms:

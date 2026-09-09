@@ -14,8 +14,11 @@ uses of a predefed header are ready (5604bd8, holder.h.lm1); they are not
 treated as a local pending cycle. The buildCore header pass and tracked bootstrap
 `lm1/build/l1src/p0.lm1.h` landed in 7c2a8e2 (ordinary generate_all does
 not compile `*.h.lm1` to `.c`; compile uses `-I lm1/build`). Isolated
-POSIX next/check and STG promotion remain. Live parser/bootstrap still include handwritten p0.h. This
-file is not a claim that the whole draft is done.
+Live parser/own/parser_text include the generated
+`l1src/p0.lm1.h` (tracked at `lm1/build/l1src/p0.lm1.h`). Handwritten
+`l1src/p0.h` is not the live core ABI. Unrun as of this status line:
+Windows/full `run_gen` gen1=gen2=gen3, isolated POSIX next/check, and
+STG promotion. This file is not a claim that the whole draft is done.
 
 Revision 2 answered four corrections. All four were right, and one of them -
 that the ordinary *.lm1 glob would also match *.h.lm1 - was a genuine hole in
