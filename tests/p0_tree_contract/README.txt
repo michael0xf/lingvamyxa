@@ -1,6 +1,28 @@
 P0 tree-contract, initial block/short-form batch
 ================================================
 
+Metadata oracle (p0_meta)
+-------------------------
+Pretty printTree omits flags, spans and null field slots. The inspection
+driver is tests/p0_tree_contract/p0_meta_dump.c. It is compiled twice:
+
+  620:  tracked parser.lm1.c + own.lm1.c from
+        C:\Nyasha_Planet\lingvamyxa_old_worked_version at 620db861
+        (hashes pinned in run_p0_meta.ps1). That checkout is not modified.
+  current: repo lm1/build/parser.lm1.c (own is already inlined).
+
+Goldens are *.meta.txt from the 620 dump (kinds, flags, spans,
+spelling bytes/length, null vs empty). run_p0_meta.ps1 rebuilds both
+exes, checks 620 dump against those goldens, then compares current
+after masking LM_P0_TRAILER_COLON (bit 2) into a separate colon_bit
+field. Current must REJECT return_colon_empty_trailer and
+return_colon_comment_trailer (P0 error 32). C_nested_short stays the
+negative 13@2:5. C_nested_short_ok.lmx is the vertical positive
+counterpart. Comparator is ordinal; a mutated golden is required to fail.
+
+Run: powershell -File tests/p0_tree_contract/run_p0_meta.ps1
+
+
 Provenance
 ----------
 Old parser reference: git 620db8612c32569c8dd507cca135d5d076144e9f
