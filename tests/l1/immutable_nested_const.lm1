@@ -1,0 +1,16 @@
+external:
+    fn: main () int
+        immutable:
+            const: const: int: a 4
+            const: @(char p) "ab"
+            c.array: const: [2]: int: vals 8 9
+            c.array: [1]: int: one 7
+        if: a != 4
+            return: 1
+        if: p[1] != 98
+            return: 2
+        if: vals[1] != 9 || one[0] != 7
+            return: 3
+        return: 0
+    end: main
+end: external

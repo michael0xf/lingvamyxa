@@ -1,0 +1,8 @@
+external:
+    fn: main () int
+        immutable:
+            int: a 1
+        end: other
+        return: 0
+    end: main
+end: external

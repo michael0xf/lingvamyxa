@@ -1,0 +1,9 @@
+external:
+    fn: main () int
+        int: cell 3
+        immutable:
+            @: int p @ cell
+        p[0]: 1
+        return: p[0]
+    end: main
+end: external

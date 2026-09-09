@@ -6422,6 +6422,12 @@ int l1_emit_item(FILE * out, const LmP0Node * node, const char * path, int in_l1
 int l1_emit_stmt(FILE * out, const LmP0Node * node, const char * path);
 int l1_emit_data_decl(FILE * out, const LmP0Node * node, const char * path, int force_const);
 int l1_emit_immutable(FILE * out, const LmP0Frame * frame, const char * path, const LmP0Node * node);
+int l1_frame_is_repeatable(const LmP0Frame * frame);
+int l1_emit_repeat_scalar(FILE * out, const LmP0Text * head, const LmP0Structure * body, const char * path, const LmP0Node * node, int force_const);
+int l1_emit_repeat_pointer(FILE * out, const LmP0Frame * template, const LmP0Structure * body, const char * path, const LmP0Node * node, int force_const);
+int l1_emit_repeat_array(FILE * out, const LmP0Frame * template, const LmP0Structure * body, const char * path, const LmP0Node * node, int force_const);
+int l1_emit_bracket_array(FILE * out, const LmP0Frame * frame, const char * path, int force_const);
+int l1_emit_c_array(FILE * out, const LmP0Frame * frame, const char * path, int force_const);
 int l1_emit_switch(FILE * out, const LmP0Frame * frame, const char * path, const LmP0Node * node);
 int l1_emit_goto(FILE * out, const LmP0Frame * frame, const char * path, const LmP0Node * node);
 int l1_validate_end_trailer(const LmP0Frame * frame, const char * path, const LmP0Node * node);
@@ -8895,7 +8901,7 @@ int l1_emit_c_array(FILE * out, const LmP0Frame * frame, const char * path, int 
     }
     return l1_write_cstr(out, ";\n");
 }
-int l1_emit_bracket_array(FILE * out, const LmP0Frame * frame, const char * path)
+int l1_emit_bracket_array(FILE * out, const LmP0Frame * frame, const char * path, int force_const)
 {
     LmP0Field * field;
     const LmP0Node * type_node;
@@ -8923,6 +8929,11 @@ int l1_emit_bracket_array(FILE * out, const LmP0Frame * frame, const char * path
     field = field -> next;
     while (field != 0 && l1_node_ignored(field->value)) {
     field = field -> next;
+    }
+    if (force_const != 0) {
+    if (l1_write_cstr(out, "const ") != 0) {
+    return 1;
+    }
     }
     if (l1_emit_type_token(out, type_node, path) != 0) {
     return 1;
@@ -9601,24 +9612,23 @@ int l1_emit_data_decl(FILE * out, const LmP0Node * node, const char * path, int 
     head = frame -> head;
     field = 0;
     const_init = 0;
-    if (l1_text_eq(head, "const")) {
-    if (l1_write_cstr(out, "    const ") != 0) {
-    return 1;
-    }
+    while (l1_text_eq(head, "const")) {
     if (frame -> body == 0 || frame -> body -> first_field == 0 || frame -> body -> first_field -> value == 0 || frame -> body -> first_field -> value -> kind != LM_P0_NODE_FRAME) {
     return l1_error(path, node, "const declaration missing type");
     }
+    if (const_init == 0) {
     const_init = frame -> body -> first_field -> next;
     while (const_init != 0 && l1_node_ignored(const_init->value)) {
     const_init = const_init -> next;
+    }
     }
     frame = frame -> body -> first_field -> value -> as -> frame;
     if (frame == 0) {
     return l1_error(path, node, "const declaration missing type");
     }
     head = frame -> head;
+    force_const = 1;
     }
-    else {
     if (force_const != 0) {
     if (l1_write_cstr(out, "    const ") != 0) {
     return 1;
@@ -9627,7 +9637,6 @@ int l1_emit_data_decl(FILE * out, const LmP0Node * node, const char * path, int 
     else {
     if (l1_write_cstr(out, "    ") != 0) {
     return 1;
-    }
     }
     }
     if (frame -> body != 0) {
@@ -9692,17 +9701,58 @@ int l1_emit_immutable(FILE * out, const LmP0Frame * frame, const char * path, co
     LmP0Field * field;
     const LmP0Node * child;
     const LmP0Text * ch;
+    LmP0Frame * inherit;
+    LmP0Frame * current;
+    LmP0Frame * nextf;
     int saw = 0;
     if (frame == 0) {
     return l1_error(path, node, "immutable expects declarations");
     }
+    if (l1_validate_end_trailer(frame, path, node) != 0) {
+    return 1;
+    }
     field = 0;
+    inherit = 0;
     if (frame -> body != 0) {
     field = frame -> body -> first_field;
     }
     while (field != 0) {
     child = field -> value;
+    current = 0;
+    if (inherit != 0 && child != 0 && child -> kind == LM_P0_NODE_STRUCTURE) {
+    current = inherit;
+    }
+    nextf = 0;
+    if (child != 0 && child -> kind == LM_P0_NODE_FRAME && l1_frame_is_repeatable(child->as->frame)) {
+    nextf = child -> as -> frame;
+    }
+    else {
+    if (current != 0) {
+    nextf = current;
+    }
+    }
     if (l1_node_ignored(child) == 0) {
+    if (current != 0) {
+    if (l1_text_eq(current->head, "@") || l1_text_eq(current->head, "@@")) {
+    if (l1_emit_repeat_pointer(out, current, child->as->structure, path, child, 1) != 0) {
+    return 1;
+    }
+    }
+    else {
+    if (l1_text_eq(current->head, "[]")) {
+    if (l1_emit_repeat_array(out, current, child->as->structure, path, child, 1) != 0) {
+    return 1;
+    }
+    }
+    else {
+    if (l1_emit_repeat_scalar(out, current->head, child->as->structure, path, child, 1) != 0) {
+    return 1;
+    }
+    }
+    }
+    saw = 1;
+    }
+    else {
     if (child == 0 || child -> kind != LM_P0_NODE_FRAME) {
     return l1_error(path, child, "immutable expects declarations");
     }
@@ -9722,7 +9772,16 @@ int l1_emit_immutable(FILE * out, const LmP0Frame * frame, const char * path, co
     }
     }
     else {
-    if (l1_text_eq(ch, "const") || l1_text_eq(ch, "@") || l1_text_eq(ch, "@@") || l1_is_type_name(ch) || l1_text_eq(ch, "[]") || l1_text_starts(ch, "[]")) {
+    if (l1_text_eq(ch, "[]") || l1_text_starts(ch, "[]")) {
+    if (l1_write_cstr(out, "    ") != 0) {
+    return 1;
+    }
+    if (l1_emit_bracket_array(out, child->as->frame, path, 1) != 0) {
+    return 1;
+    }
+    }
+    else {
+    if (l1_text_eq(ch, "const") || l1_text_eq(ch, "@") || l1_text_eq(ch, "@@") || l1_is_type_name(ch)) {
     if (l1_emit_data_decl(out, child, path, 1) != 0) {
     return 1;
     }
@@ -9732,8 +9791,11 @@ int l1_emit_immutable(FILE * out, const LmP0Frame * frame, const char * path, co
     }
     }
     }
+    }
     saw = 1;
     }
+    }
+    inherit = nextf;
     field = field -> next;
     }
     if (saw == 0) {
@@ -9946,7 +10008,7 @@ int l1_emit_stmt(FILE * out, const LmP0Node * node, const char * path)
     if (l1_write_cstr(out, "    ") != 0) {
     return 1;
     }
-    return l1_emit_bracket_array(out, frame, path);
+    return l1_emit_bracket_array(out, frame, path, 0);
     }
     if (l1_text_eq(head, "ifdef")) {
     return l1_emit_ifdef(out, frame, path, 1, 0, node);
@@ -10076,12 +10138,19 @@ int l1_frame_is_repeatable(const LmP0Frame * frame)
     }
     return 1;
 }
-int l1_emit_repeat_scalar(FILE * out, const LmP0Text * head, const LmP0Structure * body, const char * path, const LmP0Node * node)
+int l1_emit_repeat_scalar(FILE * out, const LmP0Text * head, const LmP0Structure * body, const char * path, const LmP0Node * node, int force_const)
 {
     LmP0Field * field;
     const LmP0Node * name_node;
+    if (force_const != 0) {
+    if (l1_write_cstr(out, "    const ") != 0) {
+    return 1;
+    }
+    }
+    else {
     if (l1_write_cstr(out, "    ") != 0) {
     return 1;
+    }
     }
     if (l1_write_type_spelling(out, head, path, node) != 0) {
     return 1;
@@ -10117,7 +10186,7 @@ int l1_emit_repeat_scalar(FILE * out, const LmP0Text * head, const LmP0Structure
     }
     return l1_write_cstr(out, ";\n");
 }
-int l1_emit_repeat_pointer(FILE * out, const LmP0Frame * template, const LmP0Structure * body, const char * path, const LmP0Node * node)
+int l1_emit_repeat_pointer(FILE * out, const LmP0Frame * template, const LmP0Structure * body, const char * path, const LmP0Node * node, int force_const)
 {
     LmP0Field * tfield;
     LmP0Field * nfield;
@@ -10152,8 +10221,15 @@ int l1_emit_repeat_pointer(FILE * out, const LmP0Frame * template, const LmP0Str
     }
     }
     name_node = nfield -> value;
+    if (force_const != 0) {
+    if (l1_write_cstr(out, "    const ") != 0) {
+    return 1;
+    }
+    }
+    else {
     if (l1_write_cstr(out, "    ") != 0) {
     return 1;
+    }
     }
     if (l1_emit_type_token(out, type_node, path) != 0) {
     return 1;
@@ -10188,7 +10264,7 @@ int l1_emit_repeat_pointer(FILE * out, const LmP0Frame * template, const LmP0Str
     }
     return l1_write_cstr(out, ";\n");
 }
-int l1_emit_repeat_array(FILE * out, const LmP0Frame * template, const LmP0Structure * body, const char * path, const LmP0Node * node)
+int l1_emit_repeat_array(FILE * out, const LmP0Frame * template, const LmP0Structure * body, const char * path, const LmP0Node * node, int force_const)
 {
     LmP0Field * tfield;
     LmP0Field * nfield;
@@ -10231,8 +10307,15 @@ int l1_emit_repeat_array(FILE * out, const LmP0Frame * template, const LmP0Struc
     if (efield == 0 || efield -> value == 0 || efield -> value -> kind != LM_P0_NODE_ATOM || l1_text_eq(efield->value->as->atom, "[]")) {
     return l1_error(path, node, "repeated [] declaration expects an extent");
     }
+    if (force_const != 0) {
+    if (l1_write_cstr(out, "    const ") != 0) {
+    return 1;
+    }
+    }
+    else {
     if (l1_write_cstr(out, "    ") != 0) {
     return 1;
+    }
     }
     if (l1_emit_type_token(out, type_node, path) != 0) {
     return 1;
@@ -10314,18 +10397,18 @@ int l1_emit_block(FILE * out, const LmP0Structure * body, const char * path)
     if (l1_node_ignored(node) == 0) {
     if (current != 0) {
     if (l1_text_eq(current->head, "@") || l1_text_eq(current->head, "@@")) {
-    if (l1_emit_repeat_pointer(out, current, node->as->structure, path, node) != 0) {
+    if (l1_emit_repeat_pointer(out, current, node->as->structure, path, node, 0) != 0) {
     return 1;
     }
     }
     else {
     if (l1_text_eq(current->head, "[]")) {
-    if (l1_emit_repeat_array(out, current, node->as->structure, path, node) != 0) {
+    if (l1_emit_repeat_array(out, current, node->as->structure, path, node, 0) != 0) {
     return 1;
     }
     }
     else {
-    if (l1_emit_repeat_scalar(out, current->head, node->as->structure, path, node) != 0) {
+    if (l1_emit_repeat_scalar(out, current->head, node->as->structure, path, node, 0) != 0) {
     return 1;
     }
     }
@@ -12355,16 +12438,18 @@ int l1_hdr_field_byval_name(const LmP0Node * node, char * buf, size_t cap)
     }
     return 1;
 }
-int l1_emit_hdr_field_decl(FILE * out, const LmP0Node * node, const char * path, int with_indent)
+int l1_emit_hdr_field_decl(FILE * out, const LmP0Node * node, const char * path, int with_indent, int force_const)
 {
     LmP0Field * field;
     LmP0Field * extra;
     LmP0Frame * frame;
     const LmP0Text * head;
     const LmP0Node * name_node;
+    const LmP0Node * child;
     int rank = 0;
     size_t hi = 0U;
     int i = 0;
+    int saw = 0;
     if (node == 0 || node -> kind != LM_P0_NODE_FRAME) {
     return l1_error(path, node, "struct field expects a declaration frame");
     }
@@ -12372,6 +12457,32 @@ int l1_emit_hdr_field_decl(FILE * out, const LmP0Node * node, const char * path,
     head = frame -> head;
     if (l1_text_eq(head, "union")) {
     return l1_error(path, node, "union");
+    }
+    if (l1_text_eq(head, "immutable")) {
+    if (l1_validate_end_trailer(frame, path, node) != 0) {
+    return 1;
+    }
+    field = 0;
+    if (frame -> body != 0) {
+    field = frame -> body -> first_field;
+    }
+    while (field != 0) {
+    child = field -> value;
+    if (l1_node_ignored(child) == 0) {
+    if (child == 0 || child -> kind != LM_P0_NODE_FRAME) {
+    return l1_error(path, child, "immutable expects declarations");
+    }
+    if (l1_emit_hdr_field_decl(out, child, path, 1, 1) != 0) {
+    return 1;
+    }
+    saw = 1;
+    }
+    field = field -> next;
+    }
+    if (saw == 0) {
+    return l1_error(path, node, "immutable expects declarations");
+    }
+    return 0;
     }
     if (with_indent != 0) {
     if (l1_write_cstr(out, "    ") != 0) {
@@ -12392,7 +12503,12 @@ int l1_emit_hdr_field_decl(FILE * out, const LmP0Node * node, const char * path,
     if (field == 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_FRAME) {
     return l1_error(path, node, "const declaration missing type");
     }
-    return l1_emit_hdr_field_decl(out, field->value, path, 0);
+    return l1_emit_hdr_field_decl(out, field->value, path, 0, 0);
+    }
+    if (force_const != 0) {
+    if (l1_write_cstr(out, "const ") != 0) {
+    return 1;
+    }
     }
     if (l1_text_eq(head, "[]") || l1_text_starts(head, "[]")) {
     rank = 0;
@@ -12420,7 +12536,7 @@ int l1_emit_hdr_field_decl(FILE * out, const LmP0Node * node, const char * path,
     if (extra != 0) {
     return l1_error(path, extra->value, "struct field array cannot have initializer");
     }
-    return l1_emit_bracket_array(out, frame, path);
+    return l1_emit_bracket_array(out, frame, path, 0);
     }
     if (l1_text_eq(head, "@") || l1_text_eq(head, "@@")) {
     if (field == 0 || field -> value == 0) {
@@ -12518,7 +12634,7 @@ int l1_emit_hdr_struct_def(FILE * out, const LmP0Frame * frame, const char * pat
     field = fields -> first_field;
     while (field != 0) {
     if (l1_node_ignored(field->value) == 0) {
-    if (l1_emit_hdr_field_decl(out, field->value, path, 1) != 0) {
+    if (l1_emit_hdr_field_decl(out, field->value, path, 1, 0) != 0) {
     return 1;
     }
     }
@@ -12725,23 +12841,77 @@ int l1_hdr_fnptr_parts(const LmP0Frame * frame, LmP0Node ** name_out, LmP0Node *
     }
     return 0;
 }
+int l1_hdr_field_node_deps_ready(const LmP0Node * node)
+{
+    LmP0Field * field;
+    char dep[64];
+    if (node == 0 || l1_node_ignored(node)) {
+    return 1;
+    }
+    if (node -> kind != LM_P0_NODE_FRAME) {
+    return 1;
+    }
+    if (l1_text_eq(node->as->frame->head, "immutable")) {
+    field = 0;
+    if (node -> as -> frame -> body != 0) {
+    field = node -> as -> frame -> body -> first_field;
+    }
+    while (field != 0) {
+    if (l1_hdr_field_node_deps_ready(field->value) == 0) {
+    return 0;
+    }
+    field = field -> next;
+    }
+    return 1;
+    }
+    if (l1_hdr_field_byval_name(node, dep, 64U) != 0) {
+    if (l1_hdr_name_list_has(l1_hdr_emitted, l1_hdr_emittedn, dep) == 0) {
+    return 0;
+    }
+    }
+    return 1;
+}
+int l1_hdr_field_first_unready(const LmP0Node * node, char * dep, size_t cap)
+{
+    LmP0Field * field;
+    if (node == 0 || l1_node_ignored(node) || dep == 0) {
+    return 0;
+    }
+    if (node -> kind != LM_P0_NODE_FRAME) {
+    return 0;
+    }
+    if (l1_text_eq(node->as->frame->head, "immutable")) {
+    field = 0;
+    if (node -> as -> frame -> body != 0) {
+    field = node -> as -> frame -> body -> first_field;
+    }
+    while (field != 0) {
+    if (l1_hdr_field_first_unready(field->value, dep, cap) != 0) {
+    return 1;
+    }
+    field = field -> next;
+    }
+    return 0;
+    }
+    if (l1_hdr_field_byval_name(node, dep, cap) != 0) {
+    if (l1_hdr_name_list_has(l1_hdr_emitted, l1_hdr_emittedn, dep) == 0) {
+    return 1;
+    }
+    }
+    return 0;
+}
 int l1_hdr_struct_deps_ready(const LmP0Frame * frame, const char * path)
 {
     LmP0Structure * fields;
     LmP0Field * field;
-    char dep[64];
     fields = l1_hdr_fields_structure(frame);
     if (fields == 0) {
     return 1;
     }
     field = fields -> first_field;
     while (field != 0) {
-    if (l1_node_ignored(field->value) == 0) {
-    if (l1_hdr_field_byval_name(field->value, dep, 64U) != 0) {
-    if (l1_hdr_name_list_has(l1_hdr_emitted, l1_hdr_emittedn, dep) == 0) {
+    if (l1_hdr_field_node_deps_ready(field->value) == 0) {
     return 0;
-    }
-    }
     }
     field = field -> next;
     }
@@ -12820,11 +12990,9 @@ int l1_hdr_diagnose_cycle(const LmP0Node * root, const char * path)
     if (fields != 0) {
     f2 = fields -> first_field;
     while (f2 != 0) {
-    if (l1_node_ignored(f2->value) == 0 && l1_hdr_field_byval_name(f2->value, dep, 64U) != 0) {
-    if (l1_hdr_name_list_has(l1_hdr_emitted, l1_hdr_emittedn, dep) == 0) {
+    if (l1_hdr_field_first_unready(f2->value, dep, 64U) != 0) {
     l1_hdr_cycle_msg(msg, 256U, a, dep);
     return l1_error(path, node, msg);
-    }
     }
     f2 = f2 -> next;
     }

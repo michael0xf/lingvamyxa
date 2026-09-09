@@ -355,6 +355,45 @@ if ($gen -eq "gen0") {
     Assert-CHas "$obj\invalid_immutable_write.c" "const int a = 1;"
     cmd /c "gcc $cflagsStr -o $bin\invalid_immutable_write.exe $obj\invalid_immutable_write.c > $log\gcc_invalid_immutable_write.log 2>&1"
     if ($LASTEXITCODE -eq 0) { throw "expected gcc failure writing immutable int" }
+    $immWriteLog = [IO.File]::ReadAllText((Join-Path (Get-Location) "$log\gcc_invalid_immutable_write.log"))
+    if ($immWriteLog.IndexOf("read-only variable") -lt 0) { throw "expected read-only variable diagnostic: $immWriteLog" }
+    Invoke-Translate "tests\l1\immutable_array.lm1" "$obj\immutable_array.c"
+    Assert-CHas "$obj\immutable_array.c" "const int xs[3] = {1, 2, 3}"
+    Assert-CHas "$obj\immutable_array.c" "const int matrix[2][2] = {{1, 2}, {3, 4}}"
+    Invoke-CcRun "$obj\immutable_array.c" "$bin\immutable_array.exe" 0 $null
+    Invoke-Translate "tests\l1\invalid_immutable_array_write.lm1" "$obj\invalid_immutable_array_write.c"
+    cmd /c "gcc $cflagsStr -o $bin\invalid_immutable_array_write.exe $obj\invalid_immutable_array_write.c > $log\gcc_invalid_immutable_array_write.log 2>&1"
+    if ($LASTEXITCODE -eq 0) { throw "expected gcc failure writing immutable array" }
+    $immArrLog = [IO.File]::ReadAllText((Join-Path (Get-Location) "$log\gcc_invalid_immutable_array_write.log"))
+    if ($immArrLog.IndexOf("read-only") -lt 0) { throw "expected read-only diagnostic for array: $immArrLog" }
+    Invoke-Translate "tests\l1\immutable_repeat.lm1" "$obj\immutable_repeat.c"
+    Assert-CHas "$obj\immutable_repeat.c" "const int x = 1;"
+    Assert-CHas "$obj\immutable_repeat.c" "const int y = 2;"
+    Assert-CHas "$obj\immutable_repeat.c" "const int z = 3;"
+    Invoke-CcRun "$obj\immutable_repeat.c" "$bin\immutable_repeat.exe" 0 $null
+    Invoke-Translate "tests\l1\immutable_nested_const.lm1" "$obj\immutable_nested_const.c"
+    Assert-CHas "$obj\immutable_nested_const.c" "const int a = 4;"
+    Assert-CLacks "$obj\immutable_nested_const.c" "const const"
+    Assert-CHas "$obj\immutable_nested_const.c" "const int vals[2] = {8, 9}"
+    Assert-CHas "$obj\immutable_nested_const.c" "const int one[1] = {7}"
+    Invoke-CcRun "$obj\immutable_nested_const.c" "$bin\immutable_nested_const.exe" 0 $null
+    Invoke-Translate "tests\l1\immutable_ptr.lm1" "$obj\immutable_ptr.c"
+    Assert-CHas "$obj\immutable_ptr.c" "const int * p ="
+    Assert-CLacks "$obj\immutable_ptr.c" "int *const p"
+    Invoke-CcRun "$obj\immutable_ptr.c" "$bin\immutable_ptr.exe" 0 $null
+    Invoke-Translate "tests\l1\invalid_immutable_ptr_write.lm1" "$obj\invalid_immutable_ptr_write.c"
+    cmd /c "gcc $cflagsStr -o $bin\invalid_immutable_ptr_write.exe $obj\invalid_immutable_ptr_write.c > $log\gcc_invalid_immutable_ptr_write.log 2>&1"
+    if ($LASTEXITCODE -eq 0) { throw "expected gcc failure writing through const int *" }
+    $immPtrLog = [IO.File]::ReadAllText((Join-Path (Get-Location) "$log\gcc_invalid_immutable_ptr_write.log"))
+    if ($immPtrLog.IndexOf("read-only") -lt 0 -and $immPtrLog.IndexOf("assignment of read-only location") -lt 0) { throw "expected read-only pointee diagnostic: $immPtrLog" }
+    Invoke-Translate "tests\l1\immutable_end.lm1" "$obj\immutable_end.c"
+    Invoke-CcRun "$obj\immutable_end.c" "$bin\immutable_end.exe" 0 $null
+    Invoke-PreserveFail "tests\l1\invalid_immutable_end.lm1" "$obj\invalid_immutable_end.c" "$log\invalid_immutable_end.err" "end target does not match close target"
+    Invoke-Translate "tests\l1\immutable_file.lm1" "$obj\immutable_file.c"
+    Assert-CHas "$obj\immutable_file.c" "const int g = 11;"
+    Invoke-CcRun "$obj\immutable_file.c" "$bin\immutable_file.exe" 0 $null
+    Invoke-Translate "tests\l1\immutable_order.lm1" "$obj\immutable_order.c"
+    Invoke-CcRun "$obj\immutable_order.c" "$bin\immutable_order.exe" 0 $null
     Invoke-PreserveFail "tests\l1\invalid_unknown_type.lm1" "$obj\invalid_unknown_type.c" "$log\invalid_unknown_type.err" "unknown type name"
     Invoke-PreserveFail "tests\l1\invalid_unknown_ctype.lm1" "$obj\invalid_unknown_ctype.c" "$log\invalid_unknown_ctype.err" "unknown type name"
     Invoke-Translate "tests\l1\scalar_size_t_ok.lm1" "$obj\scalar_size_t_ok.c"
@@ -450,6 +489,25 @@ if ($gen -eq "gen0") {
     Assert-CHas "$obj\headers\hdr_alias.lm1.h" "#define LM_UNUSED(x)"
     cmd /c "gcc $cflagsStr -c -o $obj\headers\hdr_alias_compile.o -x c $obj\headers\hdr_alias.lm1.h > $log\hdr_alias_compile.log 2>&1"
     if ($LASTEXITCODE -ne 0) { throw "generated hdr_alias.lm1.h failed to compile (see $log\hdr_alias_compile.log)" }
+
+    Invoke-Translate "tests\l1\hdr_immutable.h.lm1" "$obj\headers\hdr_immutable.lm1.h"
+    Assert-CHas "$obj\headers\hdr_immutable.lm1.h" "const int n;"
+    Assert-CHas "$obj\headers\hdr_immutable.lm1.h" "const char * name;"
+    Assert-CHas "$obj\headers\hdr_immutable.lm1.h" "const int xs[2];"
+    Assert-CHas "$obj\headers\hdr_immutable.lm1.h" "const char * data;"
+    Assert-CHas "$obj\headers\hdr_immutable.lm1.h" "int mut;"
+    Assert-CLacks "$obj\headers\hdr_immutable.lm1.h" "const int mut"
+    Assert-CLacks "$obj\headers\hdr_immutable.lm1.h" "const const"
+    cmd /c "gcc $cflagsStr -c -o $obj\headers\hdr_immutable_compile.o -x c $obj\headers\hdr_immutable.lm1.h > $log\hdr_immutable_compile.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "generated hdr_immutable.lm1.h failed to compile (see $log\hdr_immutable_compile.log)" }
+    Copy-Item -LiteralPath "$obj\headers\hdr_immutable.lm1.h" -Destination "$obj\hdr_immutable.lm1.h" -Force
+    cmd /c "gcc $cflagsStr -I $obj -o $bin\hdr_immutable_consumer.exe tests\l1\hdr_immutable_consumer.c > $log\hdr_immutable_consumer_gcc.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "hdr_immutable_consumer.c failed to compile (see $log\hdr_immutable_consumer_gcc.log)" }
+    Write-Log "hdr_immutable_consumer compile ok"
+    cmd /c "gcc $cflagsStr -I $obj -o $bin\invalid_hdr_immutable_write.exe tests\l1\invalid_hdr_immutable_write.c > $log\gcc_invalid_hdr_immutable_write.log 2>&1"
+    if ($LASTEXITCODE -eq 0) { throw "expected gcc failure writing immutable struct field" }
+    $immHdrLog = [IO.File]::ReadAllText((Join-Path (Get-Location) "$log\gcc_invalid_hdr_immutable_write.log"))
+    if ($immHdrLog.IndexOf("read-only") -lt 0) { throw "expected read-only diagnostic for immutable struct field: $immHdrLog" }
 
     Invoke-Translate "l1src\p0.h.lm1" "$obj\headers\p0.lm1.h"
     Assert-CHas "$obj\headers\p0.lm1.h" "#ifndef LM_H_l1src_2Fp0_2Eh_2Elm1"

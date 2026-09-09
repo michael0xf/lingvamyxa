@@ -1,0 +1,10 @@
+include: "<stddef.h>"
+
+struct: Box
+    immutable:
+        int: n
+        @: char name
+        []: int xs 2
+        const: @: char data
+    int: mut
+end: Box
