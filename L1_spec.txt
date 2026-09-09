@@ -322,8 +322,18 @@ build baseline; promotion must preserve the live L2 sources.
   switch / case / default with end: matching; cases lower with a null
   statement after the label so a following declaration is C99-legal;
   no implicit break between cases (fall-through is C-like).
-  Labels + goto (C99 labels); label/target names may not be reserved
-  level heads (goto: L1 → `reserved L1 name`).
+  Ordinary zero-argument calls in statement position: visible 0-arg
+  fn/sub as bare identifier `done` or compact `done()`. Both emit
+  `done();`. They are not C labels. `goto: done` still emits
+  `goto done;` (transfer). Empty `done:` remains P0 error 32
+  (generic empty colon), not a label declaration. L1 C99 currently
+  has no admitted source spelling for a goto *target* under that
+  empty-colon rule; do not invent `done:()` or bare-name-to-label
+  detection. Tests: control_nullary.lm1; obsolete control_goto.lm1
+  is the empty-colon negative. `goto: L1` is still `reserved L1
+  name`.
+  Labels + goto (C99 labels) as previously documented; empty-colon
+  `name:` is not a legal label form on current P0.
   throw / catch / finally / throws:
     - static `l1_throw_code` + `long l1_throw_payload[8]` channel
       (not a union);
