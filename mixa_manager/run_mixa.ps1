@@ -12,35 +12,31 @@ if (-not (Test-Path -LiteralPath $trans)) {
     throw "missing stable L1 translator: $trans (produce via stg\l1_baseline\gate.ps1)"
 }
 
-# Record what produced this run, and say when the record cannot be trusted.
+# Record what produced this run. TWO SEPARATE IDENTITIES, and no conclusion
+# drawn from them - the link between them is not something this script can
+# establish.
 #
-# The BINARY HASH is the only reliable identity: it is the file actually
-# invoked. Everything else is inference.
+# Three versions of these lines have now been wrong, each in the same way: I
+# made them CONCLUDE something. First a "generated-source fingerprint" that went
+# stale and reported "unchanged" across a translator swap. Then a warning that a
+# binary newer than its source meant it was not built from it - which is
+# backwards, since compiling a source is exactly what makes a binary newer than
+# it, so that would fire on every normal build.
 #
-# The generated-source fingerprint was reporting a build-tree intermediate, and
-# on 2026-09-09 that went stale and LIED: a promotion replaced the .exe while
-# leaving the intermediate three hours old, so the line reported "unchanged"
-# across a translator swap. Worse than absent - it was confidently wrong.
-#
-# Sources and binaries are promoted SEPARATELY into this build root, so nothing
-# here is guaranteed to correspond to the installed binary. The line therefore
-# reports the tracked source AND whether it is older than the binary, which is
-# the condition that makes it meaningless.
+# Provenance needs a build manifest linking a binary to a source. There is none
+# here, so the honest output is two hashes and the timestamps as plain facts.
+# Whether they correspond is decided elsewhere, from the promoted revision, not
+# inferred in a test runner.
 $trackedC = "stg/l1_baseline/lm1/build/l1trans.lm1.c"
 "translator: $trans"
 "translator binary sha256: " + (Get-FileHash -LiteralPath $trans -Algorithm SHA256).Hash
+"translator binary mtime:  " + (Get-Item -LiteralPath $trans).LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
 if ($env:MIXA_L1TRANS -and $env:MIXA_L1TRANS.Trim().Length -gt 0) {
     "tracked source: (not checked - MIXA_L1TRANS override in use)"
 } elseif (Test-Path -LiteralPath $trackedC) {
-    $tHash = (Get-FileHash -LiteralPath $trackedC -Algorithm SHA256).Hash
-    $tTime = (Get-Item -LiteralPath $trackedC).LastWriteTime
-    $bTime = (Get-Item -LiteralPath $trans).LastWriteTime
-    "tracked source sha256: $tHash"
-    if ($bTime -gt $tTime) {
-        "  WARNING: the binary is NEWER than the tracked source in this build"
-        "  root, so it was not built from it. The source hash above identifies"
-        "  nothing about the translator that just ran."
-    }
+    "tracked source sha256:    " + (Get-FileHash -LiteralPath $trackedC -Algorithm SHA256).Hash
+    "tracked source mtime:     " + (Get-Item -LiteralPath $trackedC).LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')
+    "  (two identities; this runner does not establish that one produced the other)"
 } else {
     "tracked source: (absent)"
 }
