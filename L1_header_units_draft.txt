@@ -56,7 +56,8 @@ naming the construct, not a quietly smaller header.
     NEW      enum:       enumeration
     NEW      fnptr:      function-pointer typedef
     EXISTS   define:     object-like macro, already an L1 unit-level item (1.2)
-    EXISTS   prototype:  already an L1 unit-level item (1.2)
+    EXISTS   prototype:  the WRAPPER form only, with fn:/sub: inside; see 6.1
+                         for the check. The inline head emits nothing.
     none     forward declaration - emitted automatically, see 5
 
 Field spelling inside struct: is ordinary L1 declaration spelling, unchanged.
