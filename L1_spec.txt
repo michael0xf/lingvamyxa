@@ -149,10 +149,12 @@ build baseline; promotion must preserve the live L2 sources.
     valid included header count as already emitted for by-value
     dependency checks (5604bd8, hdr_diamond/holder.h.lm1); genuine local
     by-value cycles still fail. Repeated predef of one header is
-    de-duplicated; a true diamond is root -> two headers -> common. A
-    header pass in buildCore (*.h.lm1 vs ordinary *.lm1), switching live
-    consumers off handwritten `p0.h`, and committed generated bootstrap
-    `p0.lm1.h` are still part of 125700 and are not claimed done. System/vendor includes, qt_app, and mixa headers stay out
+    de-duplicated; a true diamond is root -> two headers -> common.
+    7c2a8e2: buildCore header pass writes tracked `lm1/build/l1src/p0.lm1.h`;
+    generate_all does not translate `*.h.lm1` to `.c`; live parser/own/
+    parser_text `include:` `l1src/p0.lm1.h`; bootstrap compiles with
+    `-I lm1/build`. Isolated POSIX next/check and STG promotion are still
+    not claimed. System/vendor includes, qt_app, and mixa headers stay out
     of scope. Design inventory remains L1_header_units_draft.txt.
 
 1.2 Unit-level items (l1_unit_item_ok)
@@ -501,9 +503,10 @@ PARTIAL / LIMITED
   (489d3f5, cc4f511; hdr_predef_consumer, hdr_dir_both,
   hdr_diamond_root). Repeated predef is de-duplication, not diamond
   coverage. `l1src/p0.h.lm1` exists as L1 source; live parser/bootstrap
-  still include handwritten `p0.h`. A buildCore header pass and a
-  committed generated bootstrap `p0.lm1.h` are not implemented
-  (1.1 scope note).
+  still include handwritten `p0.h` only where tests name it. 7c2a8e2
+  added the buildCore header pass and tracked `lm1/build/l1src/p0.lm1.h`;
+  live parser/own/parser_text include that generated header. Isolated
+  POSIX next/check and STG promotion are not claimed.
   Parameter declarations, two confirmed defects, BOTH FIXED in c8ceb67 and no
   longer reproducible; retained here only as the record of what they were:
     - a multiword type after `@:` yields a mangled type and DROPS the
