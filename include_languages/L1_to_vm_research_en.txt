@@ -260,7 +260,7 @@ not recommended
         educational MIX unrelated to Lingvamyxa Mix,
         Lingvamyxa_MIX_design_note.txt). Parrot is dead.
 
-23. com.mtk.map (Java Mix container sources)
+23. com.mtk.map (Java overlapping-tree template, not Mix)
         Not a VM.
 
 

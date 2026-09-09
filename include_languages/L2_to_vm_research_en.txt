@@ -130,8 +130,8 @@ Every Structure occurrence is one header (spec 2, l2src/lmx.h):
 
   Mix
       overlay markup; target rewrite is cooperating Messages
-      (19.29.2.1). Current implementation is Java
-      (include_languages/com.mtk.map), not the target model.
+      in a Smalltalk-style model (19.29.2.1). com.mtk.map is
+      a Java template of overlapping trees, not Mix.
 
   L2 machine surface (section 20)
       @ / \ / field-follow, address-depth slots, c.array, unchecked
@@ -257,7 +257,7 @@ L3. Do not treat "L3 is like Python" as a compilation strategy
 not recommended
 ================================================================
 
-9. JVM classfile  (include_openjdk.txt, com.mtk.map)
+9. JVM classfile  (include_openjdk.txt)
         Layer M: poor as an Lmx heap. HotSpot moves objects and
         stores a class word; spec 2 forbids both as the Lmx model.
         Off-heap (Panama MemorySegment, Unsafe, direct ByteBuffer)
@@ -265,18 +265,18 @@ not recommended
         ISA. Sulong would run LLVM bitcode of lowered C, Layer M
         by detour.
 
-        Layer S: Mix heritage. com.mtk.map is the live Java Mix
-        container. Until Mix is rewritten into cooperating Messages
-        (19.29.2.1), JVM is the realistic Mix VM. Mapping Lmx to
-        java.lang.Object, implements() to interfaces, or merge to
-        clone() would smuggle the hosted descriptor/Namespace model
-        the replacement translator is forbidden to inherit.
-        Akka-style actors rhyme with Message Thread but share a
-        moving heap.
+        Layer S: com.mtk.map is a Java template of overlapping
+        trees, not Mix. Mix's target is cooperating Messages in
+        a Smalltalk-style model (19.29.2.1), not a JVM ISA.
+        Mapping Lmx to java.lang.Object, implements() to
+        interfaces, or merge to clone() would smuggle the hosted
+        descriptor/Namespace model the replacement translator is
+        forbidden to inherit. Akka-style actors rhyme with
+        Message Thread but share a moving heap.
 
-        Keep JVM as Mix/embed (catalog Tier 1). Do not compile the
-        L2 kernel to classfiles. Least-bad unrecommended target
-        only because Mix already lives there.
+        Keep JVM as a catalog Tier 1 embed if Java libraries are
+        the guest. Do not compile the L2 kernel to classfiles
+        and do not treat the template as Mix.
 
 10. BEAM (Erlang / Elixir)
         Closest Message Thread analog: isolated heaps, FIFO
@@ -348,8 +348,8 @@ not recommended
         Compiles to LLVM; no Julia-VM bytecode for L2.
 
 23. com.mtk.map as an L2 ISA
-        Java Mix sources, not a virtual machine for the L2 kernel
-        (see item 9 for Mix-as-host).
+        Java overlapping-tree template, not Mix and not a
+        virtual machine for the L2 kernel.
 
 
 3. If a VM backend is ever tried
@@ -365,8 +365,9 @@ Cheapest first; matches the selected translator boundary.
      Message if isolation is encoded at the VM boundary.
   4. MIR, host libc, bump arenas as ordinary C.
   5. TinyCC, already in the catalog.
-  6. Mix stays on JVM until 19.29.2.1 is done; that is embed /
-     port, not L2 bytecode.
+  6. Mix is not on the JVM. Rewrite it as cooperating Messages
+     (Smalltalk-style, 19.29.2.1). That is language work, not
+     L2 bytecode. com.mtk.map remains a template.
   7. A dedicated L2 bytecode (item 8) is a language-design
      project. It would still execute on items 1-7.
 
@@ -375,9 +376,10 @@ pointers. L2 needs that C model *under* stable Lmx identity, range
 classification, one non-moving arena per Message, FIFO turns, merge
 as graph copy, method records as {addr,sig}. Dynamic VMs fail
 twice. WASM and MIR stay at the top because linear / C heaps do
-not relocate. JVM rises relative to the L1 note only for Mix and
-falls for the L2 kernel. BEAM rises as a metaphor for 19.28 and
-stays off the compiler-target list.
+not relocate. JVM does not rise for Mix: Mix is a Message-model
+rewrite, not a Java leftover. BEAM rises as a metaphor for 19.28
+and for Mix's Smalltalk-style target, and stays off the
+compiler-target list.
 
 
 4. Scoreboard (same order)
@@ -396,7 +398,7 @@ stays off the compiler-target list.
 
     ---- not recommended ----
 
-    9     JVM classfile       no (unless off-heap  Mix heritage only;
+    9     JVM classfile       no (unless off-heap  template is not Mix;
                               host)                not Lmx ISA
     10    BEAM                no                   Message analog only
     11    Graal/Truffle/      toolkit for Layer I  not an L2 opcode set
@@ -413,7 +415,7 @@ stays off the compiler-target list.
     20    PyPy                no                   no (moves)
     21    Guile / Smalltalk   no                   no
     22    Julia               no                   no
-    23    com.mtk.map as ISA  no                   Mix sources, not a VM
+    23    com.mtk.map as ISA  no                   template, not Mix; not a VM
 
 
 5. References
@@ -428,7 +430,7 @@ stays off the compiler-target list.
     stg/l1_baseline/l2src/              Lmx kernel + first l2trans
     stg/l1_baseline/l2src/lmx.h         three-word node, ranges
     stg/l1_baseline/l2src/README.txt    current L2->L1 slice
-    include_languages/com.mtk.map/      Java Mix implementation
+    include_languages/com.mtk.map/      Java overlapping-tree template, not Mix
     lingva_bindings.txt                 embed catalog; BEAM Removed;
                                         Prolog borderline
     include_wasm.txt                    WASM host; linear-memory bridge

@@ -130,7 +130,8 @@ hello.lm3): `print:`, `table:`/`join:`, `behavior:`/`message:`,
   Message Thread: FIFO-inbox, не больше одного хода, параллельные
       Message (19.28)
   Mix как оверлей; целевая перепись -- сотрудничающие Message
-      (19.29.2.1). Текущий Mix -- Java (com.mtk.map).
+      в модели стиля Smalltalk (19.29.2.1). com.mtk.map --
+      Java-шаблон пересекающихся деревьев, не Mix.
 
 Только L2, из L3 исключено (спека 1.4, `receiver.l3.exclude`):
 
@@ -165,16 +166,16 @@ hello.lm3): `print:`, `table:`/`join:`, `behavior:`/`message:`,
 3. Ранжированные цели (самая подходящая первая)
 -----------------------------------------------
 
-1. JVM classfile  (include_openjdk.txt, com.mtk.map)
+1. JVM classfile  (include_openjdk.txt)
         Лучшее совпадение L3 в каталоге. Structure отображаются
         на объекты; Array -- на JVM-массивы с проверкой границ;
         таблицы -- на обычные коллекции; Message -- на объекты
         плюс очередь (или акторную библиотеку). GC может двигать
-        объекты -- L3 адресов не видит. Mix уже живёт в Java
-        (com.mtk.map), пока нет 19.29.2.1. Компиляция в JVM --
-        проторенная форма компилятора (Scala, Kotlin, Clojure).
-        Встраивание каталога Tier 1 (JNI / tarball JRE) -- бонус,
-        не причина.
+        объекты -- L3 адресов не видит. com.mtk.map --
+        Java-шаблон, не Mix и не причина выбирать эту ISA.
+        Компиляция в JVM -- проторенная форма компилятора
+        (Scala, Kotlin, Clojure). Встраивание каталога Tier 1
+        (JNI / tarball JRE) -- бонус, не причина.
 
         Не протаскивать hosted Namespace/дескрипторы Java как
         семантику L3 (L1_language spec 4.1 по-прежнему про второй
@@ -188,8 +189,8 @@ hello.lm3): `print:`, `table:`/`join:`, `behavior:`/`message:`,
         языков, не как куча C. L3 не нуждается в указателях
         линейной памяти wasm32. Хост по-прежнему может быть
         Wasmtime/WAMR из include_wasm.txt. Проверка границ и
-        перемещающий GC родные. Нет наследия Mix-на-Java; FIFO
-        Message -- библиотечный код в госте.
+        перемещающий GC родные. Mix -- библиотека/рантайм
+        Message-модели в госте, не остаток Java.
 
         Это не линейная память wasm32 (пункт 6) и не wasm-gc как
         куча L2 (отвергнута в L2_to_vm_research_ru.txt, потому
@@ -199,8 +200,11 @@ hello.lm3): `print:`, `table:`/`join:`, `behavior:`/`message:`,
 3. .NET CIL  (include_dotnet.txt)
         Та же управляемая история, что у JVM: объекты, GC,
         массивы, настоящий bytecode, каталог Tier 1 (nethost).
-        Mix -- Java, не C#, поэтому JVM впереди. Unsafe/
-        unmanaged-кучи L3 не нужны и не должны быть отображением.
+        Mix не выбирает Java или C# -- это перепись Message
+        в стиле Smalltalk (19.29.2.1). JVM впереди как
+        отображение объектов, не потому что Mix живёт на JVM.
+        Unsafe/unmanaged-кучи L3 не нужны и не должны быть
+        отображением.
 
 4. BEAM (Erlang / Elixir)
         Ближайший аналог Message Thread: изолированные кучи,
@@ -210,8 +214,9 @@ hello.lm3): `print:`, `table:`/`join:`, `behavior:`/`message:`,
         GC процесса приемлем -- в L3 нет адресной арифметики.
         Отображение: Message -> процесс, граф Structure ->
         maps/tuples, merge -> копия. Всё ещё порт языка, не
-        готовая ISA, и нет истории Mix/Java. Полезно и
-        реалистично; не первое.
+        готовая ISA. Цель Mix -- Message в стиле Smalltalk,
+        поэтому BEAM Mix-образный. Полезно и реалистично; не
+        первое.
 
 5. Lua 5.4  (include_lua.txt)
         Таблицы могут нести графы в духе Structure; указатели не
@@ -292,8 +297,9 @@ hello.lm3): `print:`, `table:`/`join:`, `behavior:`/`message:`,
         скриптов, не для компиляции L3.
 
 18. GNU Guile / Scheme; Smalltalk / Self / Newspeak
-        Привкус объектов/позднего связывания. Нет правила арен
-        Message, нет Mix, нет пути поставки из каталога под L3.
+        Привкус объектов/позднего связывания. Цель Mix --
+        Message в стиле Smalltalk; это не делает Smalltalk-VM
+        целью bytecode L3. Нет пути поставки из каталога под L3.
 
 19. Julia  (include_julia.txt)
         Компилируется в LLVM; bytecode Julia-VM для L3 нет.
@@ -303,8 +309,9 @@ hello.lm3): `print:`, `table:`/`join:`, `behavior:`/`message:`,
         с Lingvamyxa Mix, мёртвая VM).
 
 21. com.mtk.map как ISA L3
-        Исходники Java Mix, не виртуальная машина. Mix-как-хост --
-        пункт 1 (JVM), не отдельная цель bytecode.
+        Java-шаблон пересекающихся деревьев, не Mix и не
+        виртуальная машина. Mix -- сотрудничающие Message
+        (19.29.2.1), не хост JVM.
 
 
 4. Если когда-нибудь пробовать VM-бэкенд L3
@@ -315,8 +322,9 @@ hello.lm3): `print:`, `table:`/`join:`, `behavior:`/`message:`,
      print, fn/sub, each/for, field-follow Structure, table) ->
      classfile JVM или wasm-gc. Массивы с проверкой границ
      обязательны.
-  3. FIFO Message и Mix остаются библиотекой/рантаймом на этой VM;
-     Mix остаётся Java, пока нет 19.29.2.1.
+  3. FIFO Message и Mix остаются библиотекой/рантаймом на этой VM.
+     Mix не Java: переписать как сотрудничающие Message
+     (стиль Smalltalk, 19.29.2.1), независимо от JVM/CIL.
   4. Проверка через L1 бесплатна: профиль L3 -> l2trans/L1 ->
      wasi-sdk или c2m, как пункт 2 в L2_to_vm_research_ru.txt, но
      это не проверяет ISA формы L3.
@@ -362,7 +370,7 @@ hello.lm3): `print:`, `table:`/`join:`, `behavior:`/`message:`,
     18    Guile / Smalltalk   нет                  нет
     19    Julia               нет                  нет
     20    eBPF / SPIR-V / MIX нет                  нет
-    21    com.mtk.map как ISA нет                  исходники Mix; хост -- JVM
+    21    com.mtk.map как ISA нет                  шаблон, не Mix; не VM
 
 
 6. Ссылки
@@ -375,7 +383,7 @@ hello.lm3): `print:`, `table:`/`join:`, `behavior:`/`message:`,
     L1_to_vm_research_ru.txt            таблица C-машин
     L2_to_vm_research_ru.txt            полный L2 с машинной поверхностью
     L3_to_vm_research_en.txt            английский текст этой заметки
-    include_languages/com.mtk.map/      реализация Mix на Java
+    include_languages/com.mtk.map/      Java-шаблон пересекающихся деревьев, не Mix
     lingva_bindings.txt                 каталог встраивания; BEAM Removed
     include_wasm.txt                    хост WASM
     include_openjdk.txt                 хост JVM

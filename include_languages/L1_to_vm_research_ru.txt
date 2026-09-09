@@ -264,7 +264,7 @@ include -> #include, throw -> static-канал + метки).
         учебный MIX, не связанный с Lingvamyxa Mix,
         Lingvamyxa_MIX_design_note.txt). Parrot мёртв.
 
-23. com.mtk.map (исходники Java-контейнера Mix)
+23. com.mtk.map (Java-шаблон пересекающихся деревьев, не Mix)
         Это не VM.
 
 
