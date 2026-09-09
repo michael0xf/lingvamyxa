@@ -31,6 +31,33 @@ fn: lm_p0_line_rest_is_horizontal_space (const: @(char source); size_t: start; s
         i: i + 1U
     return: 1
 end: lm_p0_line_rest_is_horizontal_space
+fn: lm_p0_line_break_width_at (const: @(char source); size_t: length; size_t: index) size_t
+    if: index >= length
+        return: 0U
+    if: source[index] = 13
+        if: index + 1U < length && source[index + 1U] = 10
+            return: 2U
+        return: 1U
+    if: source[index] = 10
+        return: 1U
+    return: 0U
+end: lm_p0_line_break_width_at
+fn: lm_p0_count_line_breaks (const: @(char source); size_t: start; size_t: end) size_t
+    size_t: count
+    size_t: i
+    size_t: width
+    count: 0U
+    i: start
+    while: i < end
+        width: lm_p0_line_break_width_at(source, end, i)
+        if: width != 0U
+            count: count + 1U
+            i: i + width
+            continue
+        i: i + 1U
+    return: count
+end: lm_p0_count_line_breaks
 fn: main () int
     return: 0
 end: main
+

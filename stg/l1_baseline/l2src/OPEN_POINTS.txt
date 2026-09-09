@@ -987,14 +987,20 @@ Files: l2trans.lm1 (bounded `while`), l2src/parser_physical_line.lm2,
 run_l2trans.ps1, tests/unit_while.lm2, tests/unit_for.lm2,
 tests/unit_continue.lm2, tests/unit_break.lm2
 
-Implemented (205600). `while: cond` re-evaluates the full condition
-on every check (first, each backedge, last false) via l2_eval_cond;
-l2_prep is not hoisted before the loop. `i < length && pred(ch)`
-does not index when i >= length. Executed calls in the condition
-keep hidden ABI and dirty checkpoint. A call-free backedge is not
-a new checkpoint. Return from the body publishes dirty. Nested
-own-decl stays `unsupported own declaration`. `for` / `continue` /
-`break` are `unsupported loop`. unit_loop.lm2 is a positive.
+Implemented (205600 / 212200 / 213701). While is a keep-flag loop: each
+iteration starts with full eval_cond (first, backedge, continue,
+last false). Source atom `continue` is L1 continue of that while, so
+it re-enters eval_cond; it is not a C continue of a cond-temp
+header and not a checkpoint. Nested continue is innermost (two
+whiles in one body, not a callee while). Frame `continue:` with
+or without payload is `unsupported loop`, not a silent skip.
+Continue outside while / `break` / `for` stay `unsupported loop`.
+Keep/cond temps are backend locals, not LMX fields.
+
+`count_line_breaks` plus a closed-unit copy of
+`line_break_width_at` live in parser_physical_line.lm2 (7
+methods, 4 OwnUsed: i, ch, count, width). unit_continue.lm2 is
+a positive.
 
 Frozen originals: stg/l1_baseline/l1src/parser.lm1
     lm_p0_index_is_line_start
@@ -1004,14 +1010,12 @@ plus the two already-ported predicates they call
     (lm_p0_is_line_break, lm_p0_is_horizontal_space)
 copied into the same closed unit (cap 8).
 
-Not this unit: count_line_breaks / visual_column / scan_indent
-(need `continue`), find_python_string_end (nested while+continue+out),
-Document, indent stack, dash-fence enum, Array.
+Not this unit: visual_column / scan_indent, find_python_string_end
+(out-param size_t + nested while), Document, indent stack,
+dash-fence enum, Array, `break`.
 
-Oracle: frozen parser.lm1 reference vs L2 drive, same style as
-predicates/line_break. No native finalize, no bootstrap/oracle
-edits, no root L1. Next parser prerequisite: `continue` (for
-count_line_breaks) or an out-param size_t for find_python_string_end.
+Oracle: frozen parser.lm1 vs L2 drive. Next parser prerequisite:
+size_t out-param, or `break`.
 
 `return: 0` on a malformed native node stays the runtime
 adapter, not Type/throw admission. Not expanded here.
