@@ -18,20 +18,26 @@
  *      not implement the conversion - they are separate gaps.
  *
  * Codex confirmed on 2026-09-09 that the promotion is intended, in a scoped
- * integration window once the root L1 settles. Do not read "once the root L1
- * settles" as soon: also on 2026-09-09 the new parser turned out not to match
- * the old working version, and Codex began writing a parity corpus against
- * lingvamyxa_old_worked_version to port forward. The baseline promotion now
- * queues behind that, and it is not expected to be quick.
+ * integration window once the root L1 settles, and that the timing is
+ * coordinated rather than promised. An earlier revision of this comment said
+ * the new parser had been found not to match the old one and that the
+ * translator would be wholesale REPLACED; Codex corrected both, and the
+ * correction is recorded here rather than quietly dropped. What is actually
+ * established as of 2026-09-09: a parity effort is running against
+ * lingvamyxa_old_worked_version, the 119 historical fixtures AGREE across the
+ * available runners, coverage is incomplete rather than proof of equivalence,
+ * and some divergence from the old parser is a DELIBERATE grammar change by
+ * the language owner - empty colon frames must now fail - not a regression.
  *
- * So this file stays hand-written for a while yet - a known exception to the
- * hermeticity the distribution model asks for, not the final shape.
+ * So this file stays hand-written until both parts above land, which is a known
+ * exception to the hermeticity the distribution model asks for, not the final
+ * shape.
  *
- * The same news makes run_mixa.ps1 more than a convenience. mixa_manager builds
- * against a translator it does not own, and that translator will be REPLACED,
- * not merely updated. The suite is what will say whether the replacement broke
- * anything here, so it has to stay fast, complete, and honest about which
- * translator produced a green run.
+ * What does follow, and is the reason run_mixa.ps1 reports translator identity:
+ * mixa_manager builds against a translator it does not own and cannot pin. Any
+ * change to that floor, coordinated or not, lands here as a suite result, so
+ * the suite has to stay fast, complete, and explicit about what produced a
+ * green run.
  */
 #ifndef MIXA_BACKEND_H
 #define MIXA_BACKEND_H

@@ -12,26 +12,35 @@ if (-not (Test-Path -LiteralPath $trans)) {
     throw "missing stable L1 translator: $trans (produce via stg\l1_baseline\gate.ps1)"
 }
 
-# Record WHICH translator produced this run. mixa_manager builds against a
-# translator it does not own, and that translator is going to be REPLACED rather
-# than merely updated: the new parser did not match the old working version, so
-# a parity corpus is being built against lingvamyxa_old_worked_version and
-# ported forward. When the floor moves, a green run says nothing unless we can
-# see that it moved.
+# Record what produced this run. mixa_manager builds against a translator it
+# does not own and cannot pin, so any change to that floor arrives here as a
+# suite result. Two DIFFERENT facts are printed and neither implies the other:
 #
-# Hash the GENERATED C, not the .exe. Measured 2026-09-09: rebuilding from
-# identical source gives a different .exe hash every time, so the binary is
-# noise. The gen2 C is the self-hosting fixed point the gate proves - gen1, gen2
-# and gen3 are byte-identical - so it changes when the translator's BEHAVIOUR
-# changes and not merely when someone rebuilt it.
-$fixedPoint = "stg/l1_baseline/build/obj/l1trans/gen2/l1trans.c"
+#   binary       SHA256 of the executable actually invoked. This is the
+#                identity of that concrete binary. Measured 2026-09-09: a
+#                rebuild from identical source gives a different hash every
+#                time, so it does not survive rebuilds and is not a behaviour
+#                comparison.
+#
+#   source       SHA256 of the generated gen2 l1trans.c, a GENERATED-SOURCE
+#                FINGERPRINT. It is not a behavioural hash: formatting can move
+#                it without changing behaviour, and compiler version or flags
+#                can change behaviour without moving it. It also does not prove
+#                the binary above was built from it - it only sits beside it in
+#                the same build tree. Its presence is not evidence that a fixed
+#                point was verified in this run; the gate proves that, not this
+#                script.
+#
+# Use them as breadcrumbs for "did the floor move", not as proof of identity.
+$genSource = "stg/l1_baseline/build/obj/l1trans/gen2/l1trans.c"
 "translator: $trans"
+"translator binary sha256: " + (Get-FileHash -LiteralPath $trans -Algorithm SHA256).Hash
 if ($env:MIXA_L1TRANS -and $env:MIXA_L1TRANS.Trim().Length -gt 0) {
-    "translator fixed point: (not checked - MIXA_L1TRANS override in use)"
-} elseif (Test-Path -LiteralPath $fixedPoint) {
-    "translator fixed point: " + (Get-FileHash -LiteralPath $fixedPoint -Algorithm SHA256).Hash
+    "generated-source fingerprint: (not applicable - MIXA_L1TRANS override in use)"
+} elseif (Test-Path -LiteralPath $genSource) {
+    "generated-source fingerprint: " + (Get-FileHash -LiteralPath $genSource -Algorithm SHA256).Hash
 } else {
-    "translator fixed point: (absent - run stg\l1_baseline\gate.ps1)"
+    "generated-source fingerprint: (absent - produce via the baseline gate)"
 }
 
 $out = "build\mixa"
