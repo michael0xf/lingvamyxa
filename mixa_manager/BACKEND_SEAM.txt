@@ -499,9 +499,20 @@ The real case is SEVERAL BACKENDS ON THE SAME OS:
 Plus falling back when a backend cannot start - no display available - which
 today would be a crash rather than a fallback.
 
-The honest weight: the argument for doing it NOW is that retrofitting means
-touching every call site and there are few of them yet. That is an argument
-about timing, not about necessity, and it is weaker than I first presented it.
+11.0.1. And it is not hypothetical: three platforms are already live
+
+The project has run on MAC, UBUNTU AND WINDOWS for a long time. So backends for
+Cocoa and for X11 or Wayland are near-term work, not a possibility to keep in
+mind - which is what settles the timing.
+
+That also promotes the headless backend. It is not only a test fixture: it is
+the PORTABLE FALLBACK, the one implementation that exists everywhere and needs
+nothing from the system. A binary that can select it is a binary that starts on
+a machine with no display at all.
+
+So the table is the shape to build with, not a refinement to add later. Doing it
+now costs a few call sites; doing it after three platform backends exist costs
+three backends and every consumer.
 
 11.1. Where we actually stand
 
