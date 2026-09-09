@@ -197,6 +197,26 @@ build baseline; promotion must preserve the live L2 sources.
   (run_ident.ps1); quoted string backticks stay data.
   `const` on declarations / parameters / c.array elements as covered
   by scalar and c_array suites.
+  `immutable:` compile-time grouping receiver (not L2 RuntimeImmutable).
+  Each declaration in its vertical (or compact) body is emitted as the
+  existing L1 `const:` qualifier would emit that declaration. Pointer
+  depth matches `const: @(T p)` → `const T *p` (referent, not a const
+  slot). Nested `immutable:` / `const:` is idempotent (one `const` in C).
+  Siblings outside the body stay mutable. Unsupported children
+  (control flow, assignments, `fn`/`sub`) diagnose
+  `immutable does not qualify this form`. Does not distribute over
+  parameter lists (that ambiguity stays OPEN). Example:
+
+    immutable:
+        int: a 2
+        const: @(char s) "hi"
+        immutable: int: d 5
+    int: e 6
+
+  emits `const int a = 2; const char * s = "hi"; const int d = 5; int e = 6;`.
+  Tests: immutable_group.lm1, invalid_immutable_if.lm1,
+  invalid_immutable_write.lm1 (gcc discarded-qualifiers). Header-field
+  and broad l1src adoption are later checkpoints.
   `prototype:` and `external:` (external body must contain fn/sub).
   `sub:` — function without return-type slot (diagnostics distinguish
   it from `fn`). An empty sub is a definition, not just a prototype:
