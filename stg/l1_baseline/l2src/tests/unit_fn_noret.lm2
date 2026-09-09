@@ -1,0 +1,6 @@
+fn: bad () int
+    return
+end: bad
+fn: main () int
+    return: 0
+end: main

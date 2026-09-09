@@ -2251,6 +2251,11 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "continue")
             field: l2_next_active(field\next)
             continue
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "return") && (mi < 0 || l2_m_ret[mi] != 8)
+            return: l2_error(path, stmt, "unsupported body")
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "return")
+            field: l2_next_active(field\next)
+            continue
         if: l2_frame_head(stmt, "for") || l2_frame_head(stmt, "break") || l2_frame_head(stmt, "continue")
             return: l2_error(path, stmt, "unsupported loop")
         if: l2_frame_head(stmt, "if")
@@ -2336,15 +2341,21 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             fr: stmt\as\frame
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && fr\trailer != 0
             return: l2_error(path, stmt, "unsupported trailer")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && (fr\body = 0 || fr\body\trailer != 0)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && (fr\body = 0 || fr\body\trailer != 0)
             return: l2_error(path, stmt, "unsupported trailer")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && fr\body != 0 && fr\body\trailer != 0
+            return: l2_error(path, stmt, "unsupported trailer")
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8 && l2_count_active(fr\body) != 0
+            return: l2_error(path, stmt, "unsupported body")
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && (mi < 0 || l2_m_ret[mi] != 8) && l2_count_active(fr\body) = 0
             return: l2_error(path, stmt, "unsupported body")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && l2_count_active(fr\body) = 1 && l2_next_active(fr\body\first_field)\value != 0 && l2_next_active(fr\body\first_field)\value\kind = c.LM_P0_NODE_FRAME && l2_find_method(l2_next_active(fr\body\first_field)\value\as\frame\head) >= 0 && l2_m_ret[l2_find_method(l2_next_active(fr\body\first_field)\value\as\frame\head)] = 8
             return: l2_error(path, stmt, "incompatible entry signature")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_find_method(fr\head) >= 0 && l2_check_primary(stmt, mi, path) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_find_method(fr\head) < 0 && l2_check_fields(fr\body\first_field, l2_count_active(fr\body), mi, path, stmt) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && l2_find_method(fr\head) < 0 && l2_check_fields(fr\body\first_field, l2_count_active(fr\body), mi, path, stmt) != 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && l2_count_active(fr\body) != 0 && l2_find_method(fr\head) < 0 && l2_check_fields(fr\body\first_field, l2_count_active(fr\body), mi, path, stmt) != 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             field: l2_next_active(field\next)
@@ -3163,6 +3174,15 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 return: 1
             field: l2_next_active(field\next)
             continue
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "return") && mi >= 0 && l2_m_ret[mi] = 8
+            if: l2_emit_checkpoint(mi, ind) != 0
+                return: 1
+            if: c.fprintf(l2_out, "%sreturn\n", ind) < 0
+                return: 1
+            field: l2_next_active(field\next)
+            continue
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "return")
+            return: 1
         ix: 1
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_FRAME && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\head != 0
             ix: l2_index_head(stmt\as\frame\head, mi, @ rj)
@@ -3191,13 +3211,19 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             fr: stmt\as\frame
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8 && l2_emit_checkpoint(mi, ind) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && l2_emit_checkpoint(mi, ind) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8 && c.fprintf(l2_out, "%sreturn\n", ind) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && c.fprintf(l2_out, "%sreturn: %s\n", ind, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8
+            field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && (mi < 0 || l2_m_ret[mi] != 8) && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return")
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && (mi < 0 || l2_m_ret[mi] != 8) && l2_emit_checkpoint(mi, ind) != 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && (mi < 0 || l2_m_ret[mi] != 8) && c.fprintf(l2_out, "%sreturn: %s\n", ind, l2_tok) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && (mi < 0 || l2_m_ret[mi] != 8)
             field: l2_next_active(field\next)
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0
             oi: l2_own_find(fr\head)
@@ -3442,6 +3468,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
         l2_tn: 0
         l2_call_node: "node"
         if: l2_emit_body(l2_m_body[i]\as\structure, i, "    ") != 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_m_ret[i] = 8 && l2_emit_checkpoint(i, "    ") != 0
             c.fclose(l2_out)
             return: 1
         if: c.fputs("end: ", l2_out) < 0

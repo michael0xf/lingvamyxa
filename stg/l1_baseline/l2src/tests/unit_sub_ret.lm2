@@ -1,0 +1,25 @@
+sub: bump ()
+    char: hits
+    hits: hits + 1
+    return
+    hits: hits + 1
+end: bump
+sub: setq ()
+    char: quote
+    quote: 65
+    return
+    quote: 66
+end: setq
+sub: maybe (int: z)
+    char: quote
+    if: z != 0
+        quote: 65
+        return
+    quote: 66
+end: maybe
+fn: ping () int
+    return: 0
+end: ping
+fn: main () int
+    return: 0
+end: main

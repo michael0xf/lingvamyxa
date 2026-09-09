@@ -529,6 +529,33 @@ end: external
 "@
 if ($d1 -ne "0`n65`n") { throw "own early-return/assign published $d1" }
 
+Invoke-Leaf "l2src\tests\unit_sub_ret.lm2" "unit_sub_ret" 0 "bump"
+$sr = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sub_ret.lm1")))
+if ($sr -notmatch '(?m)^\s+return$') { throw "unit_sub_ret missing void return" }
+if ($sr.IndexOf("l2_q0_dirty") -lt 0) { throw "unit_sub_ret missing dirty checkpoint before void return" }
+$dsr = Invoke-SpliceDrive "unit_sub_ret" @"
+        @: Lmx f 0
+        l2_m0(unit)
+        l2_m0(unit)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m1(unit)
+        f: lmx_branch_child(unit, 1U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m2(unit, 1)
+        f: lmx_branch_child(unit, 1U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m2(unit, 0)
+        f: lmx_branch_child(unit, 1U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($dsr -ne "2`n65`n65`n66`n") { throw "sub void return publish/skip: $dsr" }
+Invoke-Negative "l2src\tests\unit_sub_retval.lm2" "unit_sub_retval" "unsupported body"
+Invoke-Negative "l2src\tests\unit_fn_noret.lm2" "unit_fn_noret" "unsupported body"
+
 Invoke-Leaf "l2src\tests\unit_own_clean.lm2" "unit_own_clean" 0 "outer"
 $d2 = Invoke-SpliceDrive "unit_own_clean" @"
         l2_m1(unit, 0)

@@ -8,27 +8,22 @@ sub: lm_p0_scan_indent_column (const: @(char source); size_t: start; size_t: end
     size_t: p
     size_t: column
     char: ch
-    size_t: keep
     p: start
     column: 0U
-    keep: 1U
     while: p < end
         ch: source[p]
         if: lm_p0_is_horizontal_space(ch) = 0
             out_offset[0]: p
             out_column[0]: column
-            keep: 0U
-            p: end
-            continue
+            return
         if: ch = 9
             column: lm_p0_indent_tab_column(column)
             p: p + 1U
             continue
         column: column + 1U
         p: p + 1U
-    if: keep != 0U
-        out_offset[0]: p
-        out_column[0]: column
+    out_offset[0]: p
+    out_column[0]: column
 end: lm_p0_scan_indent_column
 fn: main () int
     return: 0
