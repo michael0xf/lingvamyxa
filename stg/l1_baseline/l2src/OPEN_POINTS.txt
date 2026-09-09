@@ -1010,9 +1010,9 @@ plus the two already-ported predicates they call
     (lm_p0_is_line_break, lm_p0_is_horizontal_space)
 copied into the same closed unit (cap 8).
 
-Not this unit: visual_column / scan_indent, Document, indent stack,
-dash-fence enum, Array, `break`. find_python_string_end moved to
-Unit 14.
+Not this unit: scan_indent, Document, indent stack, dash-fence enum,
+Array, `break`. find_python_string_end moved to Unit 14.
+visual_column moved to Unit 15.
 
 Oracle: frozen parser.lm1 vs L2 drive.
 
@@ -1045,8 +1045,37 @@ Frozen original: stg/l1_baseline/l1src/parser.lm1
     lm_p0_starts_python_string
     lm_p0_find_python_string_end
 
-Next parser leftover: `break`, or scan_indent_column once two
-out-params and sub-with-out exist.
+Next parser leftover after Unit 14: visual_column (Unit 15).
+
+Unit 15 - visual column and indent tab
+--------------------------------------
+Files: parser_visual_column.lm2, run_l2trans.ps1, OPEN_POINTS.txt
+No l2trans.lm1 change.
+
+Implemented (000211 follow-on). Closed unit:
+    lm_p0_indent_tab_column
+    lm_p0_visual_column_between
+    main
+
+Numeric 9/13/10 for tab/CR/LF. Sequential CRLF: bound-guarded
+`p+1` then the CR/LF ifs. continue already supported.
+OwnUsed: p, column (2). Tab helper call checkpoints dirty
+column then assigns and dirties again.
+
+Frozen `((column / 8U) + 1U) * 8U` uses nested paren groups.
+l2trans emit of those clobbers global l2_lhs (minimal repro:
+`return: ((column / 8U) + 1U) * 8U` → `1U8Ul2_p0_0 / 8U) + 1U) * 8U`).
+Not fixed here. Port uses the integer-identical flat form
+`column / 8U * 8U + 8U`.
+
+scan_indent still blocked by arity 5 vs cap 4. break not required.
+skip / L2 `@` of own still deferred.
+
+Frozen original: stg/l1_baseline/l1src/parser.lm1
+    lm_p0_indent_tab_column
+    lm_p0_visual_column_between
+
+Next leftover: arity>4 (scan_indent), or `break`.
 
 `return: 0` on a malformed native node stays the runtime
 adapter, not Type/throw admission. Not expanded here.
