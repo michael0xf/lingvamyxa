@@ -11926,9 +11926,67 @@ address-domain payloads involved. A raw mutable pointer into reclaimable storage
 must not silently cross the boundary. Copy/deserialize allocates fresh mutable
 state in the destination or new Message arena; activation preserves the
 activated Message's existing arena; adoption is legal only when it leaves one
-logical owning arena and no concurrently active source owner. The exact
-copy/join/activate/serialization operation set and graph-reference retargeting
-remain unresolved.
+logical owning arena and no concurrently active source owner.
+
+19.29.7.1. First copy-only participant slice (numbers and exact bytes)
+
+This slice is the first explicit operation set for 19.29.7. It does not
+close graph-copy, adoption, join/splice, live-graph activation, or
+wire serialization; those remain individually deferred.
+
+Language-facing operations (names follow existing thread/send/stop
+contracts; `spawn` here is English, not a new parser intrinsic):
+
+    create/spawn(handler, initialData) -> MessageAddress
+        Reserve a child identity and distinct arena during the parent
+        turn. Copy initialData (numbers and exact byte/text payloads)
+        into that arena. The child does not run before successful
+        publication of the spawning turn. A failed parent turn releases
+        the unactivated child. Send to that reserved address in the
+        same turn is admitted in FIFO order with activation.
+
+    send(destination, envelope) -> staging status
+        Copy the envelope payload into the destination arena. No raw
+        mutable pointer, caller closure, or UI object crosses. Staging
+        is not admission; admission is FIFO at the receiver; execution
+        is a later serial receiver turn.
+
+    stop(destination) -> staging status
+        Explicit cooperative stop. Parent termination does not
+        implicitly kill children.
+
+Envelope fields for this slice: id (stable logical request identity),
+correlation (19.31.4: semantic result/failure is an ordinary Message
+whose correlation equals the request id), replyTo. Delivery-policy
+fields may be added later without positional churn.
+
+A Message may create further Messages from any tree position. No OS
+thread per Message; physical workers are a mapping, not lexical
+nesting. Duplicate create/send attempts use the same id/dedup/retry
+policy so a retried create cannot silently spawn a second child.
+
+Turn vs yield: 21.10 yield is an activation dirty-only checkpoint, not
+automatic end-turn or outbox publication. Staging then yield in one
+turn does not commit. Successful end-turn publishes the staged
+outbox. An uncaught failed turn discards uncommitted outbox and does
+not undo already performed external/graph effects (19.29.14). A caught
+expected I/O failure may be encoded as a semantic partial-result
+Message on a successful reporting turn. An assert-terminated Message
+cannot be resumed to send a discarded report. Transport retransmission
+is not semantic replay and not local retry.
+
+This slice is specified here so application code can target it. The
+L2 mailbox implementation and header are the following source commits,
+not this prose. Until that header exists, mixa must not bind to a
+callable spawn/send/stop C API.
+
+19.29.7.2. Still deferred after 19.29.7.1
+
+Graph-copy and graph-reference retargeting; adoption; join/splice of
+live arenas; activation of an already-running graph; codec/wire
+serialization; multi-owner split/link as an atomic FIFO illusion;
+durable/exactly-once external side effects from an in-memory dedup
+table.
 
 19.29.7.H. Historical Hosted Join/Activate/Serialize Profile
 
