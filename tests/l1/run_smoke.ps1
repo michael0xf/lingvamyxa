@@ -396,6 +396,14 @@ if ($gen -eq "gen0") {
     Invoke-CcRun "$obj\immutable_order.c" "$bin\immutable_order.exe" 0 $null
     Invoke-PreserveFail "tests\l1\invalid_unknown_type.lm1" "$obj\invalid_unknown_type.c" "$log\invalid_unknown_type.err" "unknown type name"
     Invoke-PreserveFail "tests\l1\invalid_unknown_ctype.lm1" "$obj\invalid_unknown_ctype.c" "$log\invalid_unknown_ctype.err" "unknown type name"
+    Invoke-Translate "tests\l1\sizeof_ptr_type.lm1" "$obj\sizeof_ptr_type.c"
+    Assert-CHas "$obj\sizeof_ptr_type.c" "sizeof(char *)"
+    Assert-CLacks "$obj\sizeof_ptr_type.c" "sizeof(&char)"
+    Assert-CLacks "$obj\sizeof_ptr_type.c" "sizeof(& char)"
+    Invoke-CcRun "$obj\sizeof_ptr_type.c" "$bin\sizeof_ptr_type.exe" 0 $null
+    Invoke-Translate "tests\l1\sizeof_addr.lm1" "$obj\sizeof_addr.c"
+    Assert-CHas "$obj\sizeof_addr.c" "sizeof(&"
+    Invoke-CcRun "$obj\sizeof_addr.c" "$bin\sizeof_addr.exe" 0 $null
     Invoke-Translate "tests\l1\scalar_size_t_ok.lm1" "$obj\scalar_size_t_ok.c"
     Assert-CHas "$obj\scalar_size_t_ok.c" "size_t x = 0;"
     Invoke-CcRun "$obj\scalar_size_t_ok.c" "$bin\scalar_size_t_ok.exe" 0 $null

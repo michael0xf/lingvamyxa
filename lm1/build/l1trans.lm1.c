@@ -7987,6 +7987,32 @@ int l1_emit_cast(FILE * out, const LmP0Structure * body, const char * path)
     }
     return l1_write_cstr(out, ")");
 }
+int l1_at_frame_is_type(const LmP0Frame * frame)
+{
+    LmP0Field * field;
+    const LmP0Node * n;
+    if (frame == 0 || frame -> body == 0) {
+    return 0;
+    }
+    field = frame -> body -> first_field;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    if (field == 0 || field -> value == 0) {
+    return 0;
+    }
+    n = field -> value;
+    if (n -> kind == LM_P0_NODE_ATOM) {
+    return l1_is_type_name(n->as->atom);
+    }
+    if (n -> kind != LM_P0_NODE_FRAME || n -> as -> frame == 0) {
+    return 0;
+    }
+    if (l1_text_eq(n->as->frame->head, "@") || l1_text_eq(n->as->frame->head, "@@") || l1_text_eq(n->as->frame->head, "const")) {
+    return 1;
+    }
+    return l1_is_type_name(n->as->frame->head);
+}
 int l1_emit_one_expr(FILE * out, LmP0Field ** cursor, LmP0Field * stop, const char * path)
 {
     LmP0Field * field;
@@ -8093,6 +8119,12 @@ int l1_emit_one_expr(FILE * out, LmP0Field ** cursor, LmP0Field * stop, const ch
     }
     }
     else {
+    if ((l1_text_eq(node->as->frame->head, "@") || l1_text_eq(node->as->frame->head, "@@")) && l1_at_frame_is_type(node->as->frame) != 0) {
+    if (l1_emit_type_token(out, node, path) != 0) {
+    return 1;
+    }
+    }
+    else {
     if (l1_text_eq(node->as->frame->head, "@")) {
     if (l1_write_cstr(out, "&") != 0) {
     return 1;
@@ -8104,6 +8136,7 @@ int l1_emit_one_expr(FILE * out, LmP0Field ** cursor, LmP0Field * stop, const ch
     else {
     if (l1_emit_call_frame(out, node->as->frame, path, node) != 0) {
     return 1;
+    }
     }
     }
     }
