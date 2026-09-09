@@ -11742,7 +11742,13 @@ Growth factors, block sizes, free lists and collector algorithms are physical
 choices; the one logical arena and end-turn collection boundary are fixed.
 Frames, handlers, attempts, transactions, branches and leaves do not introduce
 separate source-semantic arenas. Parser P0 nodes and derived runtime Structures
-allocate in the owning Message arena like other Structures.
+allocate in the owning Message arena like other Structures. A microscopic
+Message whose payload is a string still owns one logical arena. Eliding a
+full Message allocation or control wrapper is a representation
+optimization only where no independent Message identity or lifecycle is
+observable. The observable value, lifetime and ownership stay the same; a
+borrowed string must not outlive its owner. That is not a second
+small-payload semantics.
 
 
 19.29.2.1. Target Rewrite of Mix into Cooperating Messages
@@ -11943,6 +11949,17 @@ logical owning arena and no concurrently active source owner.
 This slice is the first explicit operation set for 19.29.7. It does not
 close graph-copy, adoption, join/splice, live-graph activation, or
 wire serialization; those remain individually deferred.
+
+The implemented mailbox copies numbers and exact bytes with
+transport-owned malloc copies, then a fresh inbox copy, then recv
+materialization into the handler. That is not graph delivery, not
+adoption, and not a replacement of the one-arena model. It does not
+require universal deep clone of every Message, and it does not settle
+how a whole arriving Message's arena is added. Whether those blocks
+are adopted into the recipient's one logical arena, or the incoming
+Message remains a separate arena owner while consumed, is not chosen
+here (both keep one arena per Message; they differ in reclamation).
+Do not infer either from this copy-only prototype.
 
 Language-facing operations (names follow existing thread/send/stop
 contracts; `spawn` here is English, not a new parser intrinsic):
