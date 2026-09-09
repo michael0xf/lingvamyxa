@@ -1,0 +1,28 @@
+include: "l1src/p0.h"
+
+fn: mix (@: unsigned char p; unsigned: long n; @: const char s) int
+    if: p = 0
+        return: 10
+    if: s = 0
+        return: 11
+    if: (cast: (int) p[0]) != 65
+        return: 1
+    if: n != 1000
+        return: 2
+    if: (cast: (int) s[0]) != 90
+        return: 3
+    return: (cast: (int) p[0]) + (cast: (int) n) - (cast: (int) s[0])
+end: mix
+
+external:
+    fn: main () int
+        uchar: b 65
+        @: uchar pb
+        int: got
+        pb: @ b
+        got: mix(pb, 1000, "Z")
+        if: got != 975
+            return: 4
+        return: 0
+    end: main
+end: external

@@ -316,7 +316,7 @@ Invoke-PreserveFail "tests\l1\invalid_array_extent.lm1" "$obj\invalid_array_exte
 # Requires gen1+: fixtures for l1src fixes not in lm2 seed (TASK5 + empty_sub + cast path).
 # gen0 is built from lm2\l1trans.lm2 via run_seed; these checks would stay red forever on gen0.
 if ($gen -eq "gen0") {
-    Write-Log "skip requires-gen1+ on gen0: invalid_unknown_type, invalid_unknown_ctype, scalar_size_t_ok, empty_sub_ok, cast_multiword_ok, cast_uchar_alias_ok, cast_ptr_uchar_ok"
+    Write-Log "skip requires-gen1+ on gen0: invalid_unknown_type, invalid_unknown_ctype, scalar_size_t_ok, empty_sub_ok, cast_multiword_ok, cast_uchar_alias_ok, cast_ptr_uchar_ok, param_multiword_ok, invalid_param_qualifier_extra"
 } else {
     Invoke-PreserveFail "tests\l1\invalid_unknown_type.lm1" "$obj\invalid_unknown_type.c" "$log\invalid_unknown_type.err" "unknown type name"
     Invoke-PreserveFail "tests\l1\invalid_unknown_ctype.lm1" "$obj\invalid_unknown_ctype.c" "$log\invalid_unknown_ctype.err" "unknown type name"
@@ -340,6 +340,12 @@ if ($gen -eq "gen0") {
     Assert-CHas "$obj\cast_ptr_uchar_ok.c" "uchar *"
     Assert-CLacks "$obj\cast_ptr_uchar_ok.c" "unsigned char *"
     Invoke-CcRun "$obj\cast_ptr_uchar_ok.c" "$bin\cast_ptr_uchar_ok.exe" 0 $null
+    Invoke-PreserveFail "tests\l1\invalid_param_qualifier_extra.lm1" "$obj\invalid_param_qualifier_extra.c" "$log\invalid_param_qualifier_extra.err" "qualifier parameter has extra fields"
+    Invoke-Translate "tests\l1\param_multiword_ok.lm1" "$obj\param_multiword_ok.c"
+    Assert-CHas "$obj\param_multiword_ok.c" "int mix(unsigned char * p, unsigned long n, const char * s)"
+    Assert-CLacks "$obj\param_multiword_ok.c" "unsigned *char"
+    Assert-CLacks "$obj\param_multiword_ok.c" "int mix(unsigned long"
+    Invoke-CcRun "$obj\param_multiword_ok.c" "$bin\param_multiword_ok.exe" 0 $null
 }
 $dirDest = Join-Path $obj "publish_fail.c"
 if (Test-Path -LiteralPath $dirDest) { Remove-Item -LiteralPath $dirDest -Recurse -Force }
