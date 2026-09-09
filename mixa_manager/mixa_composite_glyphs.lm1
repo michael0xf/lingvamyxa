@@ -1,0 +1,281 @@
+predef: "mixa_manager/mixa_text_rect.lm1"
+include: "mixa_manager/mixa_backend.h" "<string.h>"
+
+# Composite with real glyphs from a backend. Stub path stays in mixa_composite.lm1
+# so overlay/headless selftests keep their full-cell placeholder and link without
+# a glyph provider. This unit asks mixa_backend_glyph per cell, blends 8-bit
+# coverage over the cell background at integer positions, clips to the cell.
+
+fn: mixa_composite_blend_cov (@: MixaU8 p; unsigned: sr; unsigned: sg; unsigned: sb; unsigned: cov) int
+    unsigned: inv
+    unsigned: dr
+    unsigned: dg
+    unsigned: db
+    if: p = 0
+        return: 1
+    if: cov = 0U
+        return: 0
+    if: cov = 255U
+        p[0]: (cast: (MixaU8) sr)
+        p[1]: (cast: (MixaU8) sg)
+        p[2]: (cast: (MixaU8) sb)
+        p[3]: (cast: (MixaU8) 255)
+        return: 0
+    ---
+    inv: 255U - cov
+    dr: p[0]
+    dg: p[1]
+    db: p[2]
+    p[0]: (cast: (MixaU8) ((sr * cov + dr * inv) / 255U))
+    p[1]: (cast: (MixaU8) ((sg * cov + dg * inv) / 255U))
+    p[2]: (cast: (MixaU8) ((sb * cov + db * inv) / 255U))
+    p[3]: (cast: (MixaU8) 255)
+return: 0
+
+fn: mixa_composite_paint_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint; unsigned: fg; size_t: cell_x; size_t: cell_y; size_t: cell_w; size_t: cell_h; @: MixaU8 out_rgba; size_t: width; size_t: height) int
+    @: MixaGlyph g
+    @: MixaU8 p
+    []: MixaU8 pr 1
+    []: MixaU8 pg 1
+    []: MixaU8 pb 1
+    size_t: gx
+    size_t: gy
+    size_t: px
+    size_t: py
+    int: ox
+    int: oy
+    unsigned: cov
+    if: backend = 0 || out_rgba = 0
+        return: 1
+    if: codepoint = 0U
+        return: 0
+    g: (cast: (@: MixaGlyph) c.calloc(1U, c.sizeof(c.MixaGlyph)))
+    if: g = 0
+        return: 1
+    if: mixa_backend_glyph(backend, layer, codepoint, g) != 0
+        c.free(g)
+        return: 1
+    ---
+    if: g\missing != 0 || g\coverage = 0 || g\width = 0U || g\height = 0U
+        c.free(g)
+        return: 0
+    ---
+    c.mixa_palette_rgb(fg, pr, pg, pb)
+    gy: 0U
+    while: gy < g\height
+        gx: 0U
+        while: gx < g\width
+            ox: (cast: (int) cell_x) + g\bearing_x + (cast: (int) gx)
+            oy: (cast: (int) cell_y) + g\bearing_y + (cast: (int) gy)
+            # Clip to the cell — catches bearing off-by-ones that bleed out.
+            if: ox >= (cast: (int) cell_x) && oy >= (cast: (int) cell_y)
+                if: ox < (cast: (int) (cell_x + cell_w)) && oy < (cast: (int) (cell_y + cell_h))
+                    if: ox >= 0 && oy >= 0
+                        px: (cast: (size_t) ox)
+                        py: (cast: (size_t) oy)
+                        if: px < width && py < height
+                            cov: g\coverage[gy * g\width + gx]
+                            if: cov != 0U
+                                p: out_rgba + ((py * width + px) * 4U)
+                                mixa_composite_blend_cov(p, pr[0], pg[0], pb[0], cov)
+                            ---
+                        ---
+                    ---
+                ---
+            ---
+            gx: gx + 1U
+        ---
+        gy: gy + 1U
+    ---
+    c.free(g)
+return: 0
+
+fn: mixa_composite_glyphs (@: MixaBackend backend; const: @(MixaTextRect text_rect); size_t: text_cw; size_t: text_ch; const: @(MixaTextRect upper_rect); size_t: upper_cw; size_t: upper_ch; @: MixaU8 out_rgba; size_t: out_size; size_t: width; size_t: height) int
+    size_t: need
+    size_t: x
+    size_t: y
+    size_t: col
+    size_t: row
+    size_t: i
+    size_t: n
+    size_t: cell_x
+    size_t: cell_y
+    const: @(MixaCell cell)
+    @: MixaU8 p
+    unsigned: cp
+    unsigned: bg
+    unsigned: fg
+    unsigned: sa
+    unsigned: inv
+    unsigned: dr
+    unsigned: dg
+    unsigned: db
+    unsigned: sr
+    unsigned: sg
+    unsigned: sb
+    []: MixaU8 pr 1
+    []: MixaU8 pg 1
+    []: MixaU8 pb 1
+
+    if: backend = 0
+        return: 1
+    if: text_rect = 0
+        return: 1
+    if: upper_rect = 0
+        return: 1
+    if: out_rgba = 0
+        return: 1
+    if: text_rect\cells = 0
+        return: 1
+    if: upper_rect\cells = 0
+        return: 1
+    if: text_cw = 0U
+        return: 1
+    if: text_ch = 0U
+        return: 1
+    if: upper_cw = 0U
+        return: 1
+    if: upper_ch = 0U
+        return: 1
+    if: width = 0U
+        return: 1
+    if: height = 0U
+        return: 1
+    if: (width * height) > ((cast: (size_t) -1) / 4U)
+        return: 1
+    need: width * height * 4U
+    if: out_size < need
+        return: 1
+
+    c.mixa_palette_rgb(0U, pr, pg, pb)
+    i: 0U
+    n: width * height
+    while: i < n
+        p: out_rgba + (i * 4U)
+        p[0]: pr[0]
+        p[1]: pg[0]
+        p[2]: pb[0]
+        p[3]: (cast: (MixaU8) 255)
+        i: i + 1U
+    ---
+
+    # Text layer: backgrounds first (cell-local), then glyphs.
+    row: 0U
+    while: row < text_rect\rows
+        col: 0U
+        while: col < text_rect\cols
+            cell_x: col * text_cw
+            cell_y: row * text_ch
+            if: cell_x < width && cell_y < height
+                cell: mixa_cell_at_const(text_rect, row, col)
+                sa: cell\alpha
+                if: sa != 0U
+                    bg: cell\bg
+                    c.mixa_palette_rgb(bg, pr, pg, pb)
+                    y: 0U
+                    while: y < text_ch
+                        if: (cell_y + y) >= height
+                            y: text_ch
+                        else:
+                            x: 0U
+                            while: x < text_cw
+                                if: (cell_x + x) >= width
+                                    x: text_cw
+                                else:
+                                    p: out_rgba + (((cell_y + y) * width + (cell_x + x)) * 4U)
+                                    if: sa = 255U
+                                        p[0]: pr[0]
+                                        p[1]: pg[0]
+                                        p[2]: pb[0]
+                                        p[3]: (cast: (MixaU8) 255)
+                                    else:
+                                        inv: 255U - sa
+                                        sr: pr[0]
+                                        sg: pg[0]
+                                        sb: pb[0]
+                                        dr: p[0]
+                                        dg: p[1]
+                                        db: p[2]
+                                        p[0]: (cast: (MixaU8) ((sr * sa + dr * inv) / 255U))
+                                        p[1]: (cast: (MixaU8) ((sg * sa + dg * inv) / 255U))
+                                        p[2]: (cast: (MixaU8) ((sb * sa + db * inv) / 255U))
+                                        p[3]: (cast: (MixaU8) 255)
+                                    ---
+                                    x: x + 1U
+                                ---
+                            ---
+                            y: y + 1U
+                        ---
+                    ---
+                ---
+                cp: cell\codepoint
+                fg: cell\fg
+                if: cp != 0U
+                    mixa_composite_paint_glyph(backend, MIXA_LAYER_TEXT, cp, fg, cell_x, cell_y, text_cw, text_ch, out_rgba, width, height)
+                ---
+            ---
+            col: col + 1U
+        ---
+        row: row + 1U
+    ---
+
+    # Upper layer: same shape, semi-transparent backgrounds + glyphs.
+    row: 0U
+    while: row < upper_rect\rows
+        col: 0U
+        while: col < upper_rect\cols
+            cell_x: col * upper_cw
+            cell_y: row * upper_ch
+            if: cell_x < width && cell_y < height
+                cell: mixa_cell_at_const(upper_rect, row, col)
+                sa: cell\alpha
+                if: sa != 0U
+                    bg: cell\bg
+                    c.mixa_palette_rgb(bg, pr, pg, pb)
+                    y: 0U
+                    while: y < upper_ch
+                        if: (cell_y + y) >= height
+                            y: upper_ch
+                        else:
+                            x: 0U
+                            while: x < upper_cw
+                                if: (cell_x + x) >= width
+                                    x: upper_cw
+                                else:
+                                    p: out_rgba + (((cell_y + y) * width + (cell_x + x)) * 4U)
+                                    if: sa = 255U
+                                        p[0]: pr[0]
+                                        p[1]: pg[0]
+                                        p[2]: pb[0]
+                                        p[3]: (cast: (MixaU8) 255)
+                                    else:
+                                        inv: 255U - sa
+                                        sr: pr[0]
+                                        sg: pg[0]
+                                        sb: pb[0]
+                                        dr: p[0]
+                                        dg: p[1]
+                                        db: p[2]
+                                        p[0]: (cast: (MixaU8) ((sr * sa + dr * inv) / 255U))
+                                        p[1]: (cast: (MixaU8) ((sg * sa + dg * inv) / 255U))
+                                        p[2]: (cast: (MixaU8) ((sb * sa + db * inv) / 255U))
+                                        p[3]: (cast: (MixaU8) 255)
+                                    ---
+                                    x: x + 1U
+                                ---
+                            ---
+                            y: y + 1U
+                        ---
+                    ---
+                ---
+                cp: cell\codepoint
+                fg: cell\fg
+                if: cp != 0U
+                    mixa_composite_paint_glyph(backend, MIXA_LAYER_UPPER, cp, fg, cell_x, cell_y, upper_cw, upper_ch, out_rgba, width, height)
+                ---
+            ---
+            col: col + 1U
+        ---
+        row: row + 1U
+    ---
+return: 0

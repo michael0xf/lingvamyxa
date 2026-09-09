@@ -121,8 +121,8 @@ typedef struct MixaEvent {
     size_t rows;
 } MixaEvent;
 
-/* The six operations. Resize is deliberately not a seventh - it arrives as an
- * event, because that is how every platform delivers it. See poll. */
+/* Seam operations. Resize arrives as an event (not a function). Glyph is the
+ * seventh operation - see MixaGlyph below / BACKEND_SEAM 9.4. */
 
 /* Cell metrics for every layer, reported by open.
  *
@@ -213,5 +213,40 @@ size_t mixa_backend_clipboard_get(const MixaBackend *backend, char *out, size_t 
 int mixa_backend_clipboard_set(MixaBackend *backend, const char *text);
 
 void mixa_backend_close(MixaBackend *backend);
+
+/* Seventh seam operation: one glyph at the font's NATIVE size.
+ *
+ * Design: BACKEND_SEAM.txt section 9.4 / Mixa_Manager_RENDERING_DOCTRINE.txt.
+ * Returns an 8-bit alpha COVERAGE bitmap - never scaled - plus bearing to place
+ * it in the cell and advance width so the application can detect a WIDE glyph
+ * (two cells). The backend reports; the application decides.
+ *
+ * layer selects which cell-grid font (text vs upper). Cache is per-backend and
+ * keyed by (codepoint, layer); coverage storage is owned by the backend.
+ *
+ * A codepoint the platform cannot render is reported missing (out->missing != 0)
+ * rather than silently substituted - font fallback stays an application choice.
+ */
+typedef enum MixaGlyphLayer {
+    MIXA_LAYER_TEXT = 0,
+    MIXA_LAYER_UPPER = 1
+} MixaGlyphLayer;
+
+typedef struct MixaGlyph {
+    size_t width;           /* bitmap width in pixels */
+    size_t height;          /* bitmap height in pixels */
+    int bearing_x;          /* offset from cell left to bitmap left */
+    int bearing_y;          /* offset from cell top to bitmap top */
+    size_t advance;         /* pen advance in pixels */
+    const MixaU8 *coverage; /* width*height bytes, backend-owned; NULL if missing */
+    int missing;            /* non-zero: platform has no glyph for this codepoint */
+} MixaGlyph;
+
+/* Rasterize one codepoint for the given layer into out. out may be stack-
+ * allocated; coverage points into the backend cache and must not be freed by
+ * the caller. Returns non-zero on hard failure (null args / not open); a
+ * missing codepoint is a successful call with out->missing set. */
+int mixa_backend_glyph(MixaBackend *backend, int layer, unsigned int codepoint,
+                       MixaGlyph *out);
 
 #endif

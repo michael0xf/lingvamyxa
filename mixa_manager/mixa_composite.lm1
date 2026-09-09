@@ -5,7 +5,8 @@ include: "mixa_manager/mixa_overlay.h" "<string.h>"
 # Layers may differ in cell size and cols/rows; they share pixel extent
 # (width, height). Per pixel: base palette[0], then text cell, then upper cell.
 # Cell background uses cell.alpha (src-over non-premultiplied); glyphs are
-# always opaque full-cell stub fills with palette[fg].
+# always opaque full-cell stub fills with palette[fg]. Real glyphs live in
+# mixa_composite_glyphs.lm1 (Win32); this stub keeps headless/overlay byte-exact.
 #
 # Blend: out = (src * sa + dst * (255 - sa)) / 255; destination alpha stays 255.
 
