@@ -22,6 +22,19 @@ counterpart. Comparator is ordinal; a mutated golden is required to fail.
 
 Run: powershell -File tests/p0_tree_contract/run_p0_meta.ps1
 
+Harness (153600): child ExitCode is asserted (0 accept vs 1 expected
+reject vs crash). Status files persist under build/p0_tree_contract.
+TRAILER_COLON is not globally erased: only listed fixtures may have
+current colon_bit=1 with counts taken from 620 trailer identities
+(A_header_then_body 1, F_eq_fence 1, F_eq_inner_longer 1,
+G_fn_nested_cut 1, G_fn_nested_end 2, return_colon_vertical_body 1).
+Sensitivity injects kind/flags/span/bytes/order/null/colon-bit faults
+without editing committed goldens. Quote/fence fixtures: Q_triple_*
+(A+1 is value-layer; P0 keeps source spelling), F_eq_fence,
+F_eq_inner_longer (==== inside ===), F_star_fence (620 does not
+treat *** as a block fence; current empty-colon rejects empty doc:),
+invalid_eq_unclosed (20), invalid_triple_unclosed (4).
+
 
 Provenance
 ----------
