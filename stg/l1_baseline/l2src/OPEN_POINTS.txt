@@ -1100,8 +1100,9 @@ while need still fits is clamped to need. int narrowing uses
 c.INT_MAX, not a hardcoded 32-bit literal.
 
 Remaining implementation debt, not this slice: 8 methods, 4
-OwnUsed, 4 address slots, 16 intern contracts, 256-byte per-actual
-spelling, unsupported recursion. scan_indent is Unit 18, not this unit.
+address slots, 16 intern contracts, 256-byte per-actual
+spelling, unsupported recursion. OwnUsed is source-sized (Unit 22).
+scan_indent is Unit 18, not this unit.
 
 Unit 18 - scan_indent_column parser port
 ----------------------------------------
@@ -1184,7 +1185,26 @@ above length, before/inside/after CRLF, standalone CR/LF, multiple
 lines, non-default base, ordinary/NUL/tab, trailing lone CR, and
 a CRLF cut between CR and LF. Suite: l2trans gen2 ok.
 
-Not this unit: Document, indent stack, L2 module import, cap lift.
+Not this unit: Document, indent stack, L2 module import, method-cap lift.
+position_in_slice is also in parser_physical_line.lm2 (Unit 22 merge).
+
+Unit 22 - source-sized OwnUsed and layout merge
+----------------------------------------------
+Files: l2trans.lm1, run_l2trans.ps1, parser_physical_line.lm2,
+tests/unit_own5.lm2, tests/unit_own6.lm2, tests/unit_own_clash.lm2,
+OPEN_POINTS.txt, README.txt
+
+OwnUsed name/type/live and per-method uses/alias/pre grow to the
+source count (malloc, kind 5). seen membership is a source-sized
+int vector, not `int` bits (`1 << oi`). Address-slot stride stays 4.
+Zero OwnUsed is valid. Aliases init -1; uses/pre/live init 0.
+Overflow vs OOM distinct. l2_release frees the tables.
+
+parser_physical_line.lm2 now holds position_in_slice as the 8th
+non-main helper (OwnUsed union i,ch,count,width,line,column).
+Isolated parser_position.lm2 kept. unit_nine still too many methods.
+
+Not this unit: method 8, intern 16, address 4, recursion, predef.
 
 Unit 16 - nested expression emit scratch
 ----------------------------------------
