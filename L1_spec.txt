@@ -329,9 +329,14 @@ build baseline; promotion must preserve the live L2 sources.
   (generic empty colon), not a label declaration. L1 C99 currently
   has no admitted source spelling for a goto *target* under that
   empty-colon rule; do not invent `done:()` or bare-name-to-label
-  detection. Tests: control_nullary.lm1; obsolete control_goto.lm1
-  is the empty-colon negative. `goto: L1` is still `reserved L1
-  name`.
+  detection. Visibility/arity/throw lookup is a source-sized table
+  (grows; not a fixed 32-entry cap), filled by a declaration prepass
+  so a later or forward 0-arg name matches compact `f()`. A bare
+  name of a visible nonzero-arity fn stays `unsupported statement
+  atom`; compact `f(...)` is still a call. Tests: control_nullary.lm1,
+  control_nullary_many.lm1, invalid_nullary_arity.lm1; obsolete
+  control_goto.lm1 is the empty-colon negative. `goto: L1` is still
+  `reserved L1 name`.
   Labels + goto (C99 labels) as previously documented; empty-colon
   `name:` is not a legal label form on current P0.
   throw / catch / finally / throws:
