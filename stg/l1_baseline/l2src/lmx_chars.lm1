@@ -79,6 +79,6 @@ fn: lmx_char_value (@: void cell) int
     # Masked rather than cast through an unsigned char type. (cast: (unsigned
     # char) x) is a real L1 defect - it splits the type and emits
     # ((unsigned)charx). (cast: (uchar) x) is not a defect: L1 passes the alias
-    # through and l1src/p0.h typedefs it, which this unit does not include and
+    # through and l1src/p0.lm1.h typedefs it, which this unit does not include and
     # should not. The mask depends on neither.
 return: ((cast: (int) p[0]) & 255)

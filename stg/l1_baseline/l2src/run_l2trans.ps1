@@ -28,9 +28,7 @@ function Invoke-Gcc([string]$cpath, [string]$exe, [string]$glog) {
         $src = [IO.File]::ReadAllText((Join-Path (Get-Location) $cpath))
     }
     $wantGen = $src.IndexOf("l1src/p0.lm1.h") -ge 0
-    $wantOld = $src.IndexOf("l1src/p0.h`"") -ge 0 -or $src.IndexOf("l1src/p0.h>") -ge 0
     if ($wantGen) { [void]$flags.Add("-I"); [void]$flags.Add("lm1/build") }
-    if ($wantGen -and $wantOld) { [void]$flags.Add("-DLM_H_l1src_2Fp0_2Eh_2Elm1") }
     $flagStr = ($flags -join " ")
     cmd /c "gcc $flagStr `"$cpath`" -o `"$exe`" > `"$glog`" 2>&1"
     if ($LASTEXITCODE -ne 0) {
@@ -44,6 +42,32 @@ $l2exe = Join-Path $out "l2trans.exe"
 & $l1trans "l2src\l2trans.lm1" $l2c
 if ($LASTEXITCODE -ne 0) { throw "l1trans failed: l2src\l2trans.lm1" }
 Invoke-Gcc $l2c $l2exe (Join-Path $log "l2trans.gcc.log")
+
+function Invoke-FmtBuf {
+    $obj = Join-Path $out "l2trans_nomain.o"
+    $src = "l2src\tests\fmt_buf.c"
+    $exe = Join-Path $out "fmt_buf.exe"
+    $clog = Join-Path $log "fmt_buf_l2trans.gcc.log"
+    $tlog = Join-Path $log "fmt_buf.gcc.log"
+    $flags = [System.Collections.Generic.List[string]]::new()
+    foreach ($f in $cflags) { [void]$flags.Add($f) }
+    [void]$flags.Add("-I"); [void]$flags.Add("lm1/build")
+    $flagStr = ($flags -join " ")
+    cmd /c "gcc $flagStr -Dmain=l2trans_main -c `"$l2c`" -o `"$obj`" > `"$clog`" 2>&1"
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $clog
+        throw "gcc failed: l2trans nomain object"
+    }
+    cmd /c "gcc $flagStr `"$src`" `"$obj`" -o `"$exe`" > `"$tlog`" 2>&1"
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $tlog
+        throw "gcc failed: $src"
+    }
+    & $exe
+    if ($LASTEXITCODE -ne 0) { throw "fmt_buf failed" }
+}
+Invoke-FmtBuf
+
 
 function Clear-Case([string]$stem) {
     foreach ($ext in @(".lm1", ".c", ".exe", ".err", ".stdout")) {
@@ -1209,7 +1233,8 @@ end: external
     if ($text.IndexOf("@: L2ImmutQuery") -lt 0) { throw "views missing mutable L2ImmutQuery* formal" }
     if ($text.IndexOf("l2src/l2_immut_query.h") -lt 0) { throw "views missing L2ImmutQuery header include" }
     if ($text.IndexOf("l2_hash_bind") -ge 0) { throw "views must not auto-bind a mutable payload" }
-    if ($text.IndexOf("l1src/p0.h") -lt 0) { throw "views missing p0.h adapter include" }
+    if ($text.IndexOf("l1src/p0.lm1.h") -lt 0) { throw "views missing p0.lm1.h adapter include" }
+    if ($text.IndexOf("l1src/p0.h`"") -ge 0 -or $text.IndexOf("l1src/p0.h>") -ge 0) { throw "views must not include leftover p0.h" }
     if ($text.IndexOf("const-pointee") -lt 0) { throw "views intern comment must distinguish const pointee" }
     $m2 = [regex]::Match($text, 'fn: l2_m2[\s\S]*?end: l2_m2').Value
     $m3 = [regex]::Match($text, 'fn: l2_m3[\s\S]*?end: l2_m3').Value
@@ -2770,4 +2795,14 @@ end: external
 Invoke-Position
 
 "l2trans $gen ok"
+$suiteLog = Join-Path $log "l2trans_suite.log"
+$toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $l1trans)).Hash
+@(
+    "cmd=l2src\run_l2trans.ps1"
+    "L1_GEN=$gen"
+    "l1trans=$l1trans"
+    "l1trans_sha256=$toolHash"
+    "banner=l2trans $gen ok"
+    "exit=0"
+) | Set-Content -LiteralPath $suiteLog -Encoding utf8
 

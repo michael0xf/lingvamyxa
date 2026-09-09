@@ -1,7 +1,7 @@
 /* lmx.h - the one Lmx header and the registered address ranges.
  *
  * Lingvamyxa_spec.txt 2, 6.5, 12.1, 19.20. Aggregates come from a hand-written
- * C header pulled in with L1 `include:`, the same route l1src/p0.h uses; L1 has
+ * C header pulled in with L1 `include:`, the same route l1src/p0.lm1.h uses; L1 has
  * no decided spelling for aggregate heads of its own (L1_spec.txt OPEN 10.4).
  *
  * The whole point: a field carries no type tag. `data` is a pointer, and its

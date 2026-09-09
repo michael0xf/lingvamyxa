@@ -39,3 +39,13 @@ foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "
     if ($LASTEXITCODE -ne 0) { throw "$gen $unit failed" }
 }
 "l2 lmx $gen ok"
+$suiteLog = Join-Path $log "lmx_suite.log"
+$toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $trans)).Hash
+@(
+    "cmd=l2src\run_lmx.ps1"
+    "L1_GEN=$gen"
+    "l1trans=$trans"
+    "l1trans_sha256=$toolHash"
+    "banner=l2 lmx $gen ok"
+    "exit=0"
+) | Set-Content -LiteralPath $suiteLog -Encoding utf8
