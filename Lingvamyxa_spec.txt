@@ -11205,8 +11205,10 @@ Delivery between Message roots must select an explicit policy such as copying
 an admitted graph fragment into the destination/new Message arena,
 transferring/adopting compatible storage from an inactive Message, serializing
 through a codec, following an explicit immutable-pool link or passing an
-explicit foreign handle. The final operation set and identity/retargeting rules
-remain open. Every live Message still has exactly one logical arena: an
+explicit foreign handle. The first copy-only participant slice is
+section 19.29.7.1. Graph-copy, adoption, join/splice, live-graph
+activation and codec/wire serialization remain individually open
+(19.29.7.2); they are not implied by completing 19.29.7.1. Every live Message still has exactly one logical arena: an
 adoption/splice operation must merge ownership and retire the conflicting
 source identity, while activation preserves the activated Message's own arena.
 An accidental raw mutable cross-Message pointer is never permitted merely
@@ -11758,6 +11760,14 @@ supports many participants without requiring a separate Message per page,
 cell, listener or cursor, or one serial Message for the whole document.
 Participants do not implicitly share mutable storage.
 
+A Message may create further Messages from any tree position
+(19.29.7.1): a controller may spawn a worker, that worker a child,
+that child a grandchild. Growth is by explicit create plus copied
+initial state, not by sharing a tree lock or a single document
+Message. Physical worker mapping and grouping are not lexical nesting
+and must not restrict that arbitrary-node growth. Role-to-Message
+grouping remains open; Message-per-node is possible, not required.
+
 Placement paths identify sparse slots; value/reference links express content
 and relationships. A slot may hold serialized text/blob bytes. A receiver
 materializes live content under an owning Message when needed; stored bytes
@@ -11938,55 +11948,115 @@ Language-facing operations (names follow existing thread/send/stop
 contracts; `spawn` here is English, not a new parser intrinsic):
 
     create/spawn(handler, initialData) -> MessageAddress
-        Reserve a child identity and distinct arena during the parent
-        turn. Copy initialData (numbers and exact byte/text payloads)
-        into that arena. The child does not run before successful
-        publication of the spawning turn. A failed parent turn releases
-        the unactivated child. Send to that reserved address in the
-        same turn is admitted in FIFO order with activation.
+        Reserve a child identity and a distinct INACTIVE arena during
+        the parent turn. Copy initialData (numbers and exact byte/text
+        payloads) into that reserved child's arena. This is not a send
+        into a running recipient. The child does not run before
+        successful publication of the spawning turn. A failed parent
+        turn releases the unactivated child. Send to that reserved
+        address in the same turn is staged with other outgoing work
+        and, after publication, admitted in FIFO order with first
+        activation of the inactive child.
 
     send(destination, envelope) -> staging status
-        Copy the envelope payload into the destination arena. No raw
-        mutable pointer, caller closure, or UI object crosses. Staging
-        is not admission; admission is FIFO at the receiver; execution
-        is a later serial receiver turn.
+        Stage a transport-owned copy of the envelope (numbers and
+        exact byte/text payloads). The sender does not allocate or
+        mutate the live recipient arena. No raw mutable pointer,
+        caller closure, or UI object crosses. Staging status means
+        only that the sending turn accepted the envelope for its
+        outbox; it is not receiver admission and not execution.
+        Ownership of that copy: the sending turn until successful
+        end-turn publication, then the transport until the receiver
+        admits it, then the receiver materializes a fresh copy in
+        its arena at admission (serialized receiving-side
+        materialization). If the recipient disappears or is stopped
+        before admission, the transport copy is dropped; there is
+        no live recipient graph to write. A newly reserved inactive
+        child's initial-state arena (create, above) is a different
+        case and must not be generalized to send-into-running.
 
     stop(destination) -> staging status
         Explicit cooperative stop. Parent termination does not
         implicitly kill children.
 
-Envelope fields for this slice: id (stable logical request identity),
-correlation (19.31.4: semantic result/failure is an ordinary Message
-whose correlation equals the request id), replyTo. Delivery-policy
-fields may be added later without positional churn.
+Envelope fields for this slice: id (stable logical request identity
+across transport attempts), correlation (19.31.4: semantic
+result/failure is an ordinary Message whose correlation equals the
+request id), replyTo. Delivery-policy fields may be added later
+without positional churn.
+
+Activation of an existing inactive Message (first publication of a
+reserved child, or start of a constructed inactive Message) is this
+slice. Reactivating an already-running Message is not; that remains
+deferred with live-graph activation.
 
 A Message may create further Messages from any tree position. No OS
 thread per Message; physical workers are a mapping, not lexical
-nesting. Duplicate create/send attempts use the same id/dedup/retry
-policy so a retried create cannot silently spawn a second child.
+nesting.
+
+Reliability profile for this in-memory slice (selected from
+historical 19.28.7.1; not Namespace/descriptor policy-merge):
+
+    id/dedup scope: envelope.id is the logical request identity.
+        Dedup is per (recipient, id) in that recipient's in-memory
+        table for the recipient Message's lifetime.
+    in-flight: a second envelope with the same id while the first
+        is staged, in transport, or executing is a duplicate attempt,
+        not a new request.
+    finished: a duplicate after a semantic result/failure is not
+        re-executed; the already produced correlated result may be
+        reused if still held, otherwise the attempt is rejected as
+        late.
+    admission receipt vs semantic result: FIFO admission is not
+        the application result. The semantic result/failure is a
+        later correlated Message (19.31.4).
+    expiry / attempt budget / backoff: explicit on the envelope or
+        the profile; exhausted budget fails the attempt without
+        further local retry. Backoff is sender/transport policy.
+    queue pressure: admission may refuse; that is a staging/admission
+        failure, not a semantic application failure unless the
+        sender encodes it as one.
+    late reply: after stop or recipient disappearance, admission
+        of a reply is rejected.
+    memory vs restart: the in-memory dedup/outbox does not survive
+        sender, receiver or process restart. A durable/idempotent
+        profile would add explicit durable identity storage; it is
+        not this slice.
+
+Transport retransmission is not semantic replay and not local retry.
+FIFO is admission order only. Success publishes the staged outbox;
+a failed turn discards uncommitted outbox and does not undo already
+performed external/graph effects (19.29.14). A caught expected I/O
+failure may be encoded as a semantic partial-result Message on a
+successful reporting turn. An assert-terminated Message cannot be
+resumed to send a discarded report.
 
 Turn vs yield: 21.10 yield is an activation dirty-only checkpoint, not
 automatic end-turn or outbox publication. Staging then yield in one
-turn does not commit. Successful end-turn publishes the staged
-outbox. An uncaught failed turn discards uncommitted outbox and does
-not undo already performed external/graph effects (19.29.14). A caught
-expected I/O failure may be encoded as a semantic partial-result
-Message on a successful reporting turn. An assert-terminated Message
-cannot be resumed to send a discarded report. Transport retransmission
-is not semantic replay and not local retry.
+turn does not commit.
+
+Duplicate create/send attempts use the same id/dedup/retry policy so
+a retried create cannot silently spawn a second child.
 
 This slice is specified here so application code can target it. The
 L2 mailbox implementation and header are the following source commits,
 not this prose. Until that header exists, mixa must not bind to a
 callable spawn/send/stop C API.
 
-19.29.7.2. Still deferred after 19.29.7.1
+19.29.7.2. Deferred operations versus guarantees this slice does not
+provide
 
-Graph-copy and graph-reference retargeting; adoption; join/splice of
-live arenas; activation of an already-running graph; codec/wire
-serialization; multi-owner split/link as an atomic FIFO illusion;
-durable/exactly-once external side effects from an in-memory dedup
-table.
+Deferred operations (later slices, not implied by finishing 19.29.7.1):
+graph-copy and graph-reference retargeting; adoption; join/splice of
+live arenas; codec/wire serialization; multi-owner split/link as
+addressed request/result (not as FIFO atomicity); activation of an
+already-running Message.
+
+Not provided by FIFO or by an in-memory dedup table, and not a
+promised later result of this slice: durable/exactly-once external
+side effects; global send order beyond per-recipient FIFO admission;
+implicit rollback of already performed external effects; recovery
+across process restart from memory-only identity.
 
 19.29.7.H. Historical Hosted Join/Activate/Serialize Profile
 
