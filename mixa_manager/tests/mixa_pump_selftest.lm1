@@ -1,4 +1,4 @@
-predef: "mixa_manager/mixa_pump.lm1"
+predef: "mixa_manager/mixa_backend_headless.lm1" "mixa_manager/mixa_pump.lm1"
 include: "<stdio.h>" "<string.h>"
 
 # mixa_event_fifo + mixa_pump. Milestone 3 groundwork (BACKEND_SEAM 7.1).

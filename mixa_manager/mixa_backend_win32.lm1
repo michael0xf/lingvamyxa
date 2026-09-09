@@ -363,7 +363,10 @@ fn: mixa_backend_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t:
     hdc_win: (cast: (@: void) c.GetDC(backend\hwnd))
     if: hdc_win = 0
         return: 1
-    c.BitBlt((cast: (HDC) hdc_win), 0, 0, (cast: (int) backend\frame_w), (cast: (int) backend\frame_h), backend\hdc_mem, 0, 0, 0x00CC0020)
+    if: c.BitBlt((cast: (HDC) hdc_win), 0, 0, (cast: (int) backend\frame_w), (cast: (int) backend\frame_h), backend\hdc_mem, 0, 0, 0x00CC0020) = 0
+        c.ReleaseDC(backend\hwnd, (cast: (HDC) hdc_win))
+        return: 1
+    ---
     c.ReleaseDC(backend\hwnd, (cast: (HDC) hdc_win))
 return: 0
 

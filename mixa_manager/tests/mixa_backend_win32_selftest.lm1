@@ -1,4 +1,4 @@
-predef: "mixa_manager/mixa_backend_win32.lm1" "mixa_manager/mixa_composite.lm1"
+predef: "mixa_manager/mixa_backend_win32.lm1" "mixa_manager/mixa_composite.lm1" "mixa_manager/mixa_pump.lm1"
 include: "<stdio.h>" "<string.h>"
 
 # Win32 backend seam selftest. Drives input with PostMessage; window closes itself.
@@ -21,6 +21,7 @@ fn: main () int
     @: MixaTextRect rect
     @: MixaOverlayRect overlay
     @: MixaEvent got
+    @: MixaPump pump
     @: MixaU8 out
     @: MixaU8 first_bits
     @: MixaU8 old_bits
@@ -43,7 +44,8 @@ fn: main () int
     rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
     overlay: (cast: (@: MixaOverlayRect) c.calloc(1U, c.sizeof(c.MixaOverlayRect)))
     got: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
-    if: be = 0 || rect = 0 || overlay = 0 || got = 0
+    pump: (cast: (@: MixaPump) c.calloc(1U, c.sizeof(c.MixaPump)))
+    if: be = 0 || rect = 0 || overlay = 0 || got = 0 || pump = 0
         c.printf("mixa win32: alloc failed\n")
         return: 1
 
@@ -389,6 +391,91 @@ fn: main () int
         c.printf("mixa win32: old pixels lost after zero-cell resize\n")
         failures: failures + 1
 
+    # --- pump driven from Win32: burst PostMessage, single drain, turn boundary ---
+    # Geometry here is 2x1 cell 4x5 after shrink + failed zero-cell adopt.
+    # Clear any leftover queue noise before the burst.
+    if: mixa_win32_drain(be, got, 64) != 0
+        c.printf("mixa win32: pre-pump drain stuck\n")
+        failures: failures + 1
+    c.memset(pump, 0, c.sizeof(c.MixaPump))
+    if: mixa_pump_open(pump) != 0
+        c.printf("mixa win32: pump open failed\n")
+        failures: failures + 1
+
+    # Burst: WM_CHAR, WM_KEYDOWN F5, WM_LBUTTONDOWN, WM_SIZE grow 2x1 -> 5x4 (20x20 px)
+    c.PostMessageA(be\hwnd, 258U, 1041U, 0)
+    c.PostMessageA(be\hwnd, 256U, 116U, 0)
+    c.PostMessageA(be\hwnd, 513U, 1U, 0)
+    c.PostMessageA(be\hwnd, 5U, 0U, (cast: (LPARAM) (20U | (20U << 16U))))
+
+    # Single drain only -- do not loop drain-until-empty if the burst fragments.
+    if: mixa_pump_drain(pump, be) != 0
+        c.printf("mixa win32: pump drain burst failed\n")
+        failures: failures + 1
+    if: mixa_pump_pending(pump) != 4U
+        c.printf("mixa win32: pump burst pending not 4 (got %u) -- single-drain may not take full PostMessage burst\n", (cast: (unsigned int) mixa_pump_pending(pump)))
+        failures: failures + 1
+    got\kind: MIXA_EVENT_KEY
+    if: mixa_backend_poll(be, got) != 0 || got\kind != MIXA_EVENT_NONE
+        c.printf("mixa win32: backend not empty after pump drain\n")
+        failures: failures + 1
+
+    if: mixa_pump_next(pump, got) != 0 || got\kind != MIXA_EVENT_KEY || got\codepoint != 1041U || got\keycode != MIXA_KEY_NONE
+        c.printf("mixa win32: pump next burst[0] CHAR wrong\n")
+        failures: failures + 1
+    if: mixa_pump_next(pump, got) != 0 || got\kind != MIXA_EVENT_KEY || got\codepoint != 0U || got\keycode != MIXA_KEY_F5
+        c.printf("mixa win32: pump next burst[1] F5 wrong\n")
+        failures: failures + 1
+    if: mixa_pump_next(pump, got) != 0 || got\kind != MIXA_EVENT_MOUSE || got\col != 0U || got\row != 0U
+        c.printf("mixa win32: pump next burst[2] mouse wrong\n")
+        failures: failures + 1
+    if: mixa_pump_next(pump, got) != 0 || got\kind != MIXA_EVENT_RESIZE || got\cols != 5U || got\rows != 4U
+        c.printf("mixa win32: pump next burst[3] resize wrong\n")
+        failures: failures + 1
+    if: be\cols != 5U || be\rows != 4U
+        c.printf("mixa win32: pump burst resize did not adopt via poll-in-drain\n")
+        failures: failures + 1
+    if: be\frame_w != 20U || be\frame_h != 20U || be\frame_bytes != 1600U
+        c.printf("mixa win32: pump burst resize frame size wrong\n")
+        failures: failures + 1
+    if: mixa_pump_next(pump, got) = 0
+        c.printf("mixa win32: pump next after burst still had events\n")
+        failures: failures + 1
+
+    # Turn boundary against real Win32 source: post AFTER drain; not in this inbox.
+    c.PostMessageA(be\hwnd, 258U, 66U, 0)
+    c.PostMessageA(be\hwnd, 258U, 67U, 0)
+    if: mixa_pump_drain(pump, be) != 0
+        c.printf("mixa win32: pump turn drain failed\n")
+        failures: failures + 1
+    if: mixa_pump_pending(pump) != 2U
+        c.printf("mixa win32: pump turn pending not 2\n")
+        failures: failures + 1
+    if: mixa_pump_next(pump, got) != 0 || got\codepoint != 66U
+        c.printf("mixa win32: pump process 66 failed\n")
+        failures: failures + 1
+    c.PostMessageA(be\hwnd, 258U, 99U, 0)
+    if: mixa_pump_pending(pump) != 1U
+        c.printf("mixa win32: mid-turn PostMessage leaked into inbox\n")
+        failures: failures + 1
+    if: mixa_pump_next(pump, got) != 0 || got\codepoint != 67U
+        c.printf("mixa win32: pump process 67 failed\n")
+        failures: failures + 1
+    if: mixa_pump_next(pump, got) = 0
+        c.printf("mixa win32: mid-turn event wrongly available\n")
+        failures: failures + 1
+    if: mixa_pump_drain(pump, be) != 0
+        c.printf("mixa win32: pump second drain failed\n")
+        failures: failures + 1
+    if: mixa_pump_pending(pump) != 1U
+        c.printf("mixa win32: pump second drain pending not 1\n")
+        failures: failures + 1
+    if: mixa_pump_next(pump, got) != 0 || got\codepoint != 99U
+        c.printf("mixa win32: mid-turn event not taken by next drain\n")
+        failures: failures + 1
+
+    mixa_pump_release(pump)
+
     # WM_CLOSE
     c.PostMessageA(be\hwnd, 16U, 0U, 0)
     if: mixa_backend_poll(be, got) != 0
@@ -427,6 +514,7 @@ fn: main () int
     c.free(overlay)
     c.free(rect)
     c.free(got)
+    c.free(pump)
     c.free(be)
 
     if: failures != 0
