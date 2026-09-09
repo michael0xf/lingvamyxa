@@ -10,7 +10,7 @@ $obj = "build\obj\l1trans\$gen"
 $bin = "build\l1trans\$gen"
 $log = Join-Path "build\l1trans\logs" $gen
 $script:ctlLog = Join-Path $log "control.log"
-$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -pedantic-errors -I . -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -Werror=int-to-pointer-cast -Werror=pointer-to-int-cast"
+$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -pedantic-errors -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -Werror=int-to-pointer-cast -Werror=pointer-to-int-cast"
 
 New-Item -ItemType Directory -Force -Path $obj, $bin, $log | Out-Null
 Set-Content -LiteralPath $script:ctlLog -Value "$(Get-Date -Format o) control start gen=$gen"
@@ -84,13 +84,31 @@ if ($mid.IndexOf("break;") -ge 0) { throw "implicit break between case 1 and cas
 if ($swT.IndexOf("switch (2)") -lt 0) { throw "missing nested switch (2)" }
 Build-Run "control_switch" $swC 0
 
-$gC = Translate "control_goto"
-$gT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $gC))
-if ($gT.IndexOf("goto done;") -lt 0) { throw "missing forward goto done" }
-if ($gT.IndexOf("done: ;") -lt 0) { throw "missing C99 label done" }
-if ($gT.IndexOf("goto loop;") -lt 0) { throw "missing backward goto loop" }
-if ($gT.IndexOf("loop: ;") -lt 0) { throw "missing C99 label loop" }
-Build-Run "control_goto" $gC 0
+$nC = Translate "control_nullary"
+$nT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $nC))
+if ($nT.IndexOf("ping();") -lt 0) { throw "missing compact ping() call" }
+if (($nT.Split("ping();").Count - 1) -lt 2) { throw "missing bare ping nullary call" }
+if ($nT.IndexOf("pong();") -lt 0) { throw "missing pong() call" }
+if ($nT.IndexOf("done: ;") -ge 0) { throw "must not emit C label from empty colon" }
+if ($nT.IndexOf("goto ping;") -ge 0) { throw "nullary call must not become goto" }
+Build-Run "control_nullary" $nC 0
+Negative "control_goto" "empty colon Frame is not allowed"
+
+$manyC = Translate "control_nullary_many"
+$manyT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $manyC))
+if ($manyT.IndexOf("n00();") -lt 0) { throw "missing n00 nullary call" }
+if (($manyT.Length - $manyT.Replace("n00();","").Length) / "n00();".Length -lt 2) { throw "missing bare n00 nullary call" }
+if ($manyT.IndexOf("n32();") -lt 0) { throw "missing n32 nullary call past old 32-entry cap" }
+if (($manyT.Length - $manyT.Replace("n32();","").Length) / "n32();".Length -lt 2) { throw "missing bare n32 nullary call" }
+if ($manyT.IndexOf("n38();") -lt 0) { throw "missing n38 nullary call past old 32-entry cap" }
+if (($manyT.Length - $manyT.Replace("n38();","").Length) / "n38();".Length -lt 2) { throw "missing bare n38 nullary call" }
+if ($manyT.IndexOf("n39();") -lt 0) { throw "missing n39 nullary call" }
+if (($manyT.Length - $manyT.Replace("n39();","").Length) / "n39();".Length -lt 3) { throw "missing forward/late n39 nullary calls" }
+if ($manyT.IndexOf("boom();") -lt 0) { throw "missing late throwing boom call" }
+if ($manyT.IndexOf("l1_throw_code") -lt 0) { throw "missing throw dispatch after late boom" }
+if ($manyT.IndexOf("unsupported") -ge 0) { throw "capacity lookup leaked into generated C" }
+Build-Run "control_nullary_many" $manyC 0
+Negative "invalid_nullary_arity" "unsupported statement atom"
 
 $sdC = Translate "control_switch_decl"
 $sdT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $sdC))
@@ -105,7 +123,7 @@ Negative "invalid_switch_case_out" "case/default outside switch"
 Negative "invalid_switch_default_out" "case/default outside switch"
 Negative "invalid_switch_end" "end target does not match close target"
 Negative "invalid_switch_case_empty" "case expects an expression"
-Negative "invalid_control_label_c" "reserved L1 name"
+Negative "invalid_control_label_c" "empty colon Frame is not allowed"
 Negative "invalid_control_goto_l1" "reserved L1 name"
 
 $thC = Translate "control_throw"

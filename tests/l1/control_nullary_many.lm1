@@ -1,0 +1,192 @@
+prototype:
+    fn: n39 () int
+    fn: boom () int
+end: prototype
+
+fn: n00 () int
+    n39
+    n39()
+    return: 0
+end: n00
+
+fn: n01 () int
+    return: 1
+end: n01
+
+fn: n02 () int
+    return: 2
+end: n02
+
+fn: n03 () int
+    return: 3
+end: n03
+
+fn: n04 () int
+    return: 4
+end: n04
+
+fn: n05 () int
+    return: 5
+end: n05
+
+fn: n06 () int
+    return: 6
+end: n06
+
+fn: n07 () int
+    return: 7
+end: n07
+
+fn: n08 () int
+    return: 8
+end: n08
+
+fn: n09 () int
+    return: 9
+end: n09
+
+fn: n10 () int
+    return: 10
+end: n10
+
+fn: n11 () int
+    return: 11
+end: n11
+
+fn: n12 () int
+    return: 12
+end: n12
+
+fn: n13 () int
+    return: 13
+end: n13
+
+fn: n14 () int
+    return: 14
+end: n14
+
+fn: n15 () int
+    return: 15
+end: n15
+
+fn: n16 () int
+    return: 16
+end: n16
+
+fn: n17 () int
+    return: 17
+end: n17
+
+fn: n18 () int
+    return: 18
+end: n18
+
+fn: n19 () int
+    return: 19
+end: n19
+
+fn: n20 () int
+    return: 20
+end: n20
+
+fn: n21 () int
+    return: 21
+end: n21
+
+fn: n22 () int
+    return: 22
+end: n22
+
+fn: n23 () int
+    return: 23
+end: n23
+
+fn: n24 () int
+    return: 24
+end: n24
+
+fn: n25 () int
+    return: 25
+end: n25
+
+fn: n26 () int
+    return: 26
+end: n26
+
+fn: n27 () int
+    return: 27
+end: n27
+
+fn: n28 () int
+    return: 28
+end: n28
+
+fn: n29 () int
+    return: 29
+end: n29
+
+fn: n30 () int
+    return: 30
+end: n30
+
+fn: n31 () int
+    return: 31
+end: n31
+
+fn: n32 () int
+    return: 32
+end: n32
+
+fn: n33 () int
+    return: 33
+end: n33
+
+fn: n34 () int
+    return: 34
+end: n34
+
+fn: n35 () int
+    return: 35
+end: n35
+
+fn: n36 () int
+    return: 36
+end: n36
+
+fn: n37 () int
+    return: 37
+end: n37
+
+fn: n38 () int
+    return: 38
+end: n38
+
+fn: n39 () int
+    return: 39
+end: n39
+
+fn: boom () int
+    throws: Boom
+    throw: Boom()
+end: boom
+
+external:
+    fn: main () int
+        int: n 0
+        n00
+        n00()
+        n32
+        n32()
+        n38
+        n38()
+        n39
+        n39()
+        catch: Boom ()
+            n: 1
+        if: n = 0
+            boom
+        if: n != 1
+            return: 1
+        return: 0
+    end: main
+end: external

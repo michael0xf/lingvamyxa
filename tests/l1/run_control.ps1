@@ -94,6 +94,22 @@ if ($nT.IndexOf("goto ping;") -ge 0) { throw "nullary call must not become goto"
 Build-Run "control_nullary" $nC 0
 Negative "control_goto" "empty colon Frame is not allowed"
 
+$manyC = Translate "control_nullary_many"
+$manyT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $manyC))
+if ($manyT.IndexOf("n00();") -lt 0) { throw "missing n00 nullary call" }
+if (($manyT.Length - $manyT.Replace("n00();","").Length) / "n00();".Length -lt 2) { throw "missing bare n00 nullary call" }
+if ($manyT.IndexOf("n32();") -lt 0) { throw "missing n32 nullary call past old 32-entry cap" }
+if (($manyT.Length - $manyT.Replace("n32();","").Length) / "n32();".Length -lt 2) { throw "missing bare n32 nullary call" }
+if ($manyT.IndexOf("n38();") -lt 0) { throw "missing n38 nullary call past old 32-entry cap" }
+if (($manyT.Length - $manyT.Replace("n38();","").Length) / "n38();".Length -lt 2) { throw "missing bare n38 nullary call" }
+if ($manyT.IndexOf("n39();") -lt 0) { throw "missing n39 nullary call" }
+if (($manyT.Length - $manyT.Replace("n39();","").Length) / "n39();".Length -lt 3) { throw "missing forward/late n39 nullary calls" }
+if ($manyT.IndexOf("boom();") -lt 0) { throw "missing late throwing boom call" }
+if ($manyT.IndexOf("l1_throw_code") -lt 0) { throw "missing throw dispatch after late boom" }
+if ($manyT.IndexOf("unsupported") -ge 0) { throw "capacity lookup leaked into generated C" }
+Build-Run "control_nullary_many" $manyC 0
+Negative "invalid_nullary_arity" "unsupported statement atom"
+
 $sdC = Translate "control_switch_decl"
 $sdT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $sdC))
 if ($sdT.IndexOf("case 1: ;") -lt 0) { throw "missing case 1 before declaration" }

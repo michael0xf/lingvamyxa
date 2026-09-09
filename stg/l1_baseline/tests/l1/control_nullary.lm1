@@ -1,0 +1,22 @@
+fn: ping () int
+    return: 1
+end: ping
+
+fn: pong () int
+    return: 2
+end: pong
+
+external:
+    fn: main () int
+        int: n 0
+        ping()
+        ping
+        pong()
+        n: 0
+        while: n < 2
+            n: n + 1
+        if: n != 2
+            return: 1
+        return: 0
+    end: main
+end: external

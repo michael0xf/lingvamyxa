@@ -1,0 +1,10 @@
+fn: take (int: n) int
+    return: n
+end: take
+
+external:
+    fn: main () int
+        take
+        return: 0
+    end: main
+end: external

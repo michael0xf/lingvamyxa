@@ -6341,11 +6341,12 @@ int l1_path_is_absolute(const char * path)
     int l1_th_ar[32];
     int l1_th_n = 0;
     int l1_in_finally = 0;
-    char l1_fn_names[2048];
-    int l1_fn_th[256];
-    int l1_fn_thn[32];
-    int l1_fn_ar[32];
+    char * l1_fn_names = 0;
+    int * l1_fn_th = 0;
+    int * l1_fn_thn = 0;
+    int * l1_fn_ar = 0;
     int l1_fnn = 0;
+    int l1_fn_cap = 0;
     char l1_ca_names[2048];
     int l1_ca_ids[32];
     int l1_ca_d[32];
@@ -6447,6 +6448,9 @@ int l1_emit_throw_dispatch(FILE * out, const LmP0Text * name, const char * path,
 int l1_emit_finallies(FILE * out, const char * path, int until_depth);
 int l1_register_catches(LmP0Field * field, const char * path);
 int l1_catch_find_code(int code);
+int l1_fn_grow(void);
+int l1_fn_register_frame(const LmP0Frame * frame, const char * path, const LmP0Node * node);
+int l1_fn_register_node(const LmP0Node * node, const char * path);
 int l1_text_eq(const LmP0Text * text, const char * s)
 {
     size_t n;
@@ -6817,6 +6821,48 @@ int l1_fn_find(const LmP0Text * text)
     }
     return -1;
 }
+int l1_fn_grow(void)
+{
+    int cap;
+    int probe = 0;
+    size_t intsz;
+    char * names;
+    int * th;
+    int * thn;
+    int * ar;
+    intsz = sizeof(probe);
+    if (l1_fn_cap == 0) {
+    cap = 8;
+    }
+    else {
+    if (l1_fn_cap > 1073741823) {
+    return 1;
+    }
+    cap = l1_fn_cap * 2;
+    }
+    names = (((char *)realloc((((void *)l1_fn_names)), (((size_t)cap)) * 64U)));
+    if (names == 0) {
+    return 1;
+    }
+    l1_fn_names = names;
+    th = (((int *)realloc((((void *)l1_fn_th)), (((size_t)cap)) * 8U * intsz)));
+    if (th == 0) {
+    return 1;
+    }
+    l1_fn_th = th;
+    thn = (((int *)realloc((((void *)l1_fn_thn)), (((size_t)cap)) * intsz)));
+    if (thn == 0) {
+    return 1;
+    }
+    l1_fn_thn = thn;
+    ar = (((int *)realloc((((void *)l1_fn_ar)), (((size_t)cap)) * intsz)));
+    if (ar == 0) {
+    return 1;
+    }
+    l1_fn_ar = ar;
+    l1_fn_cap = cap;
+    return 0;
+}
 int l1_fn_ensure(const LmP0Text * text)
 {
     char buf[64];
@@ -6828,8 +6874,10 @@ int l1_fn_ensure(const LmP0Text * text)
     if (l1_ident_to_buf(buf, 64U, text) != 0) {
     return -1;
     }
-    if (l1_fnn >= 32) {
+    if (l1_fnn >= l1_fn_cap) {
+    if (l1_fn_grow() != 0) {
     return -1;
+    }
     }
     strcpy(l1_fn_names + l1_fnn * 64, buf);
     l1_fn_thn[l1_fnn] = 0;
@@ -6867,6 +6915,163 @@ int l1_fn_is_throwing(const LmP0Text * text)
     return 0;
     }
     return l1_fn_thn[i] != 0;
+}
+int l1_fn_register_frame(const LmP0Frame * frame, const char * path, const LmP0Node * node)
+{
+    LmP0Field * field;
+    const LmP0Node * name_node;
+    const LmP0Node * params_node;
+    const LmP0Node * third;
+    const LmP0Node * fourth;
+    const LmP0Text * fn_name;
+    LmP0Field * pf;
+    LmP0Field * throws_field;
+    const LmP0Node * body_node;
+    int ar;
+    int fn_i;
+    int code;
+    if (frame == 0 || frame -> body == 0) {
+    return 0;
+    }
+    field = frame -> body -> first_field;
+    name_node = 0;
+    params_node = 0;
+    third = 0;
+    fourth = 0;
+    while (field != 0) {
+    if (l1_node_ignored(field->value) == 0) {
+    if (name_node == 0) {
+    name_node = field -> value;
+    }
+    else {
+    if (params_node == 0) {
+    params_node = field -> value;
+    }
+    else {
+    if (third == 0) {
+    third = field -> value;
+    }
+    else {
+    if (fourth == 0) {
+    fourth = field -> value;
+    }
+    }
+    }
+    }
+    }
+    field = field -> next;
+    }
+    if (name_node == 0) {
+    return 0;
+    }
+    fn_name = 0;
+    if (name_node -> kind == LM_P0_NODE_ATOM) {
+    fn_name = name_node -> as -> atom;
+    }
+    else {
+    if (name_node -> kind == LM_P0_NODE_FRAME) {
+    fn_name = name_node -> as -> frame -> head;
+    if (params_node == 0) {
+    params_node = name_node;
+    third = 0;
+    fourth = 0;
+    }
+    }
+    }
+    if (fn_name == 0) {
+    return 0;
+    }
+    ar = 0;
+    pf = 0;
+    if (params_node != 0 && params_node -> kind == LM_P0_NODE_STRUCTURE && params_node -> as -> structure != 0) {
+    pf = params_node -> as -> structure -> first_field;
+    while (pf != 0) {
+    if (l1_node_ignored(pf->value) == 0) {
+    ar = ar + 1;
+    }
+    pf = pf -> next;
+    }
+    }
+    fn_i = l1_fn_ensure(fn_name);
+    if (fn_i < 0) {
+    return l1_error(path, node, "too many functions");
+    }
+    l1_fn_ar[fn_i] = ar;
+    body_node = 0;
+    if (l1_text_eq(frame->head, "sub")) {
+    body_node = third;
+    }
+    else {
+    body_node = fourth;
+    }
+    throws_field = 0;
+    if (body_node != 0 && body_node -> kind == LM_P0_NODE_STRUCTURE && body_node -> as -> structure != 0) {
+    throws_field = body_node -> as -> structure -> first_field;
+    while (throws_field != 0 && l1_node_ignored(throws_field->value)) {
+    throws_field = throws_field -> next;
+    }
+    if (throws_field != 0 && throws_field -> value != 0 && throws_field -> value -> kind == LM_P0_NODE_FRAME && l1_text_eq(throws_field->value->as->frame->head, "throws")) {
+    field = 0;
+    if (throws_field -> value -> as -> frame -> body != 0) {
+    field = throws_field -> value -> as -> frame -> body -> first_field;
+    }
+    while (field != 0) {
+    if (l1_node_ignored(field->value) == 0) {
+    if (field -> value != 0 && field -> value -> kind == LM_P0_NODE_ATOM) {
+    code = l1_throw_intern(field->value->as->atom);
+    if (code == 0) {
+    return l1_error(path, field->value, "too many throw names");
+    }
+    if (l1_fn_add_throw(fn_i, code) != 0) {
+    return 1;
+    }
+    }
+    }
+    field = field -> next;
+    }
+    }
+    }
+    return 0;
+}
+int l1_fn_register_node(const LmP0Node * node, const char * path)
+{
+    LmP0Field * field;
+    if (node == 0 || l1_node_ignored(node) != 0) {
+    return 0;
+    }
+    if (node -> kind == LM_P0_NODE_STRUCTURE) {
+    if (node -> as -> structure == 0) {
+    return 0;
+    }
+    field = node -> as -> structure -> first_field;
+    while (field != 0) {
+    if (l1_fn_register_node(field->value, path) != 0) {
+    return 1;
+    }
+    field = field -> next;
+    }
+    return 0;
+    }
+    if (node -> kind != LM_P0_NODE_FRAME || node -> as -> frame == 0) {
+    return 0;
+    }
+    if (l1_text_eq(node->as->frame->head, "fn") || l1_text_eq(node->as->frame->head, "sub")) {
+    return l1_fn_register_frame(node->as->frame, path, node);
+    }
+    if (l1_text_eq(node->as->frame->head, "prototype") || l1_text_eq(node->as->frame->head, "external") || l1_text_eq(node->as->frame->head, "os") || l1_text_eq(node->as->frame->head, "win") || l1_text_eq(node->as->frame->head, "default") || l1_text_eq(node->as->frame->head, "ifdef") || l1_text_eq(node->as->frame->head, "L1")) {
+    if (node -> as -> frame -> body == 0) {
+    return 0;
+    }
+    field = node -> as -> frame -> body -> first_field;
+    while (field != 0) {
+    if (l1_fn_register_node(field->value, path) != 0) {
+    return 1;
+    }
+    field = field -> next;
+    }
+    return 0;
+    }
+    return 0;
 }
 int l1_cur_has_throw(int code)
 {
@@ -11733,6 +11938,13 @@ int l1_emit_l1_body(FILE * out, const LmP0Structure * body, const char * path, i
     }
     field = body -> first_field;
     while (field != 0) {
+    if (l1_fn_register_node(field->value, path) != 0) {
+    return 1;
+    }
+    field = field -> next;
+    }
+    field = body -> first_field;
+    while (field != 0) {
     if (l1_node_ignored(field->value) == 0 && field -> value != 0 && field -> value -> kind == LM_P0_NODE_FRAME && l1_text_eq(field->value->as->frame->head, "predef")) {
     if (l1_emit_import(out, field->value->as->frame, path, depth) != 0) {
     return 1;
@@ -11755,6 +11967,9 @@ int l1_emit_implicit_l1(FILE * out, const LmP0Node * root, const char * path, in
 {
     if (root == 0) {
     return l1_error(path, 0, "empty implicit L1 body");
+    }
+    if (l1_fn_register_node(root, path) != 0) {
+    return 1;
     }
     if (l1_validate_implicit_node(root, path, 1) != 0) {
     return 1;
@@ -13471,6 +13686,9 @@ int l1_emit_header_unit(FILE * out, const LmP0Node * root, const char * in_path,
     int remaining = 0;
     if (root == 0 || root -> kind != LM_P0_NODE_STRUCTURE) {
     return l1_error(in_path, root, "header unit expects a structure body");
+    }
+    if (l1_fn_register_node(root, in_path) != 0) {
+    return 1;
     }
     l1_hdr_type_reset();
     l1_hdr_emitting = 1;
