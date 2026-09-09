@@ -455,27 +455,52 @@ if ($gen -eq "gen0") {
     if ($LASTEXITCODE -ne 0) { throw "translate failed ($LASTEXITCODE): p0.h.lm1 --unit-root" }
     Assert-ByteIdentical "$obj\headers\p0.lm1.h" "$obj\headers\p0_unitroot.lm1.h"
 
+    New-Item -ItemType Directory -Force -Path "$obj\headers\tests\l1\hdr_dir_a", "$obj\headers\tests\l1\hdr_dir_b", "$obj\headers\tests\l1\hdr_diamond" | Out-Null
+    Copy-Item -LiteralPath "$obj\headers\hdr_combo.lm1.h" -Destination "$obj\headers\tests\l1\hdr_combo.lm1.h" -Force
+
     Invoke-Translate "tests\l1\hdr_predef_consumer.lm1" "$obj\hdr_predef_consumer.c"
-    Assert-CHas "$obj\hdr_predef_consumer.c" "#include `"hdr_combo.lm1.h`""
+    Assert-CHas "$obj\hdr_predef_consumer.c" "#include `"tests/l1/hdr_combo.lm1.h`""
     Assert-CLacks "$obj\hdr_predef_consumer.c" "struct Rect"
     Assert-CHas "$obj\hdr_predef_consumer.c" "int use_rect(Rect * rect)"
-    Copy-Item -LiteralPath "$obj\headers\hdr_combo.lm1.h" -Destination "$obj\hdr_combo.lm1.h" -Force
-    cmd /c "gcc $cflagsStr -I $obj -o $bin\hdr_predef_consumer.exe $obj\hdr_predef_consumer.c > $log\hdr_predef_consumer_gcc.log 2>&1"
+    cmd /c "gcc $cflagsStr -I $obj\headers -o $bin\hdr_predef_consumer.exe $obj\hdr_predef_consumer.c > $log\hdr_predef_consumer_gcc.log 2>&1"
     if ($LASTEXITCODE -ne 0) { throw "hdr_predef_consumer.c failed to compile (see $log\hdr_predef_consumer_gcc.log)" }
 
-    Invoke-Translate "tests\l1\hdr_predef_diamond.lm1" "$obj\hdr_predef_diamond.c"
-    $pd = Get-Content "$obj\hdr_predef_diamond.c" -Raw
-    $incCount = ([regex]::Matches($pd, '#include "hdr_combo.lm1.h"')).Count
-    if ($incCount -ne 1) { throw "diamond predef must emit exactly one include, got $incCount" }
-    cmd /c "gcc $cflagsStr -I $obj -o $bin\hdr_predef_diamond.exe $obj\hdr_predef_diamond.c > $log\hdr_predef_diamond_gcc.log 2>&1"
-    if ($LASTEXITCODE -ne 0) { throw "hdr_predef_diamond.c failed to compile (see $log\hdr_predef_diamond_gcc.log)" }
+    # repeated predef of the same header (not a diamond)
+    Invoke-Translate "tests\l1\hdr_predef_diamond.lm1" "$obj\hdr_predef_repeat.c"
+    $pr = Get-Content "$obj\hdr_predef_repeat.c" -Raw
+    $incCount = ([regex]::Matches($pr, '#include "tests/l1/hdr_combo.lm1.h"')).Count
+    if ($incCount -ne 1) { throw "repeated predef must emit exactly one include, got $incCount" }
+    cmd /c "gcc $cflagsStr -I $obj\headers -o $bin\hdr_predef_repeat.exe $obj\hdr_predef_repeat.c > $log\hdr_predef_repeat_gcc.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "hdr_predef_repeat.c failed to compile (see $log\hdr_predef_repeat_gcc.log)" }
 
-    Invoke-Translate "tests\l1\hdr_dir_a\core.h.lm1" "$obj\headers\hdr_dir_a\core.lm1.h"
-    Invoke-Translate "tests\l1\hdr_dir_b\core.h.lm1" "$obj\headers\hdr_dir_b\core.lm1.h"
-    Assert-CHas "$obj\headers\hdr_dir_a\core.lm1.h" "LM_H_tests_2Fl1_2Fhdr_5Fdir_5Fa_2Fcore_2Eh_2Elm1"
-    Assert-CHas "$obj\headers\hdr_dir_b\core.lm1.h" "LM_H_tests_2Fl1_2Fhdr_5Fdir_5Fb_2Fcore_2Eh_2Elm1"
-    Assert-CHas "$obj\headers\hdr_dir_a\core.lm1.h" "struct CoreA"
-    Assert-CHas "$obj\headers\hdr_dir_b\core.lm1.h" "struct CoreB"
+    Invoke-Translate "tests/l1/hdr_dir_a/core.h.lm1" "$obj\headers\tests\l1\hdr_dir_a\core.lm1.h"
+    Invoke-Translate "tests/l1/hdr_dir_b/core.h.lm1" "$obj\headers\tests\l1\hdr_dir_b\core.lm1.h"
+    Assert-CHas "$obj\headers\tests\l1\hdr_dir_a\core.lm1.h" "LM_H_tests_2Fl1_2Fhdr_5Fdir_5Fa_2Fcore_2Eh_2Elm1"
+    Assert-CHas "$obj\headers\tests\l1\hdr_dir_b\core.lm1.h" "LM_H_tests_2Fl1_2Fhdr_5Fdir_5Fb_2Fcore_2Eh_2Elm1"
+    Assert-CHas "$obj\headers\tests\l1\hdr_dir_a\core.lm1.h" "struct CoreA"
+    Assert-CHas "$obj\headers\tests\l1\hdr_dir_b\core.lm1.h" "struct CoreB"
+
+    Invoke-Translate "tests\l1\hdr_dir_both.lm1" "$obj\hdr_dir_both.c"
+    Assert-CHas "$obj\hdr_dir_both.c" "#include `"tests/l1/hdr_dir_a/core.lm1.h`""
+    Assert-CHas "$obj\hdr_dir_both.c" "#include `"tests/l1/hdr_dir_b/core.lm1.h`""
+    Assert-CLacks "$obj\hdr_dir_both.c" "#include `"core.lm1.h`""
+    cmd /c "gcc $cflagsStr -I $obj\headers -o $bin\hdr_dir_both.exe $obj\hdr_dir_both.c > $log\hdr_dir_both_gcc.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "hdr_dir_both.c failed to compile (see $log\hdr_dir_both_gcc.log)" }
+
+    Invoke-Translate "tests/l1/hdr_diamond/common.h.lm1" "$obj\headers\tests\l1\hdr_diamond\common.lm1.h"
+    Invoke-Translate "tests/l1/hdr_diamond/left.h.lm1" "$obj\headers\tests\l1\hdr_diamond\left.lm1.h"
+    Invoke-Translate "tests/l1/hdr_diamond/right.h.lm1" "$obj\headers\tests\l1\hdr_diamond\right.lm1.h"
+    Assert-CHas "$obj\headers\tests\l1\hdr_diamond\left.lm1.h" "#include `"tests/l1/hdr_diamond/common.lm1.h`""
+    Assert-CHas "$obj\headers\tests\l1\hdr_diamond\right.lm1.h" "#include `"tests/l1/hdr_diamond/common.lm1.h`""
+    Invoke-Translate "tests\l1\hdr_diamond_root.lm1" "$obj\hdr_diamond_root.c"
+    Assert-CHas "$obj\hdr_diamond_root.c" "#include `"tests/l1/hdr_diamond/left.lm1.h`""
+    Assert-CHas "$obj\hdr_diamond_root.c" "#include `"tests/l1/hdr_diamond/right.lm1.h`""
+    Assert-CLacks "$obj\hdr_diamond_root.c" "hdr_diamond/common.lm1.h"
+    Assert-CHas "$obj\hdr_diamond_root.c" "Shared *"
+    cmd /c "gcc $cflagsStr -I $obj\headers -o $bin\hdr_diamond_root.exe $obj\hdr_diamond_root.c > $log\hdr_diamond_root_gcc.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "hdr_diamond_root.c failed to compile (see $log\hdr_diamond_root_gcc.log)" }
+
+    Invoke-PreserveFail "tests/l1/hdr_cycle_a.h.lm1" "$obj\headers\hdr_cycle_a.lm1.h" "$log\hdr_cycle.err" "import cycle"
 
     Invoke-Translate "tests\l1\hdr_aggregate.h.lm1" "$obj\headers\hdr_aggregate_b.lm1.h"
     Assert-ByteIdentical "$obj\headers\hdr_aggregate.lm1.h" "$obj\headers\hdr_aggregate_b.lm1.h"

@@ -1,0 +1,16 @@
+predef: "tests/l1/hdr_dir_a/core.h.lm1"
+predef: "tests/l1/hdr_dir_b/core.h.lm1"
+
+fn: use_both (@: CoreA a; @: CoreB b) int
+    if: a = 0
+        return: 1
+    if: b = 0
+        return: 2
+    return: 0
+end: use_both
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external
