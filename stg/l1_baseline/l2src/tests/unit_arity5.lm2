@@ -1,0 +1,9 @@
+fn: sum5 (int: a; int: b; int: c; int: d; int: e) int
+    return: a + b + c + d + e
+end: sum5
+fn: sum5b (int: a; int: b; int: c; int: d; int: x) int
+    return: a + b + c + d + x
+end: sum5b
+fn: main () int
+    return: 0
+end: main

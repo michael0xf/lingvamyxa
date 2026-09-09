@@ -1,0 +1,14 @@
+fn: bump () int
+    char: hits
+    hits: hits + 1
+    return: hits
+end: bump
+fn: pack8 (int: a; int: b; int: c; int: d; int: e; int: f; int: g; int: h) int
+    return: a + b * 2 + c * 4 + d * 8 + e * 16 + f * 32 + g * 64 + h * 128
+end: pack8
+fn: order8 () int
+    return: pack8(bump(), bump(), bump(), bump(), bump(), bump(), bump(), bump())
+end: order8
+fn: main () int
+    return: 0
+end: main

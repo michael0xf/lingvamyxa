@@ -1337,7 +1337,18 @@ if ($dszv -ne "1`n") { throw "dyn size_t chain: $dszv" }
 
 Invoke-Negative "l2src\tests\unit_dyn_miss.lm2" "unit_dyn_miss" "unresolved name"
 Invoke-Negative "l2src\tests\unit_dyn_type.lm2" "unit_dyn_type" "incompatible entry signature"
-Invoke-Negative "l2src\tests\unit_dyn_cap.lm2" "unit_dyn_cap" "unsupported body"
+Invoke-Leaf "l2src\tests\unit_dyn_cap.lm2" "unit_dyn_cap" 0 "outer"
+$dcap = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_cap.lm1")))
+if ($dcap -notmatch 'fn: l2_m0 \(@: Lmx node; char: l2_p0_0; char: l2_p0_1; char: l2_p0_2; char: l2_p0_3; char: l2_p0_4\) int') {
+    throw "unit_dyn_cap leaf must intern five hidden char params"
+}
+$dcapv = Invoke-SpliceDrive "unit_dyn_cap" @"
+        c.printf("%d\n", l2_m1(unit, 1))
+        return: 0
+    end: main
+end: external
+"@
+if ($dcapv -ne "5`n") { throw "five hidden through-args: $dcapv" }
 
 Invoke-Leaf "l2src\tests\unit_dyn_bool.lm2" "unit_dyn_bool" 0 "m"
 $dbool = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_bool.lm1")))
@@ -1784,6 +1795,165 @@ $oct = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "
 if ($oct -notmatch 'l2_q\d+_dirty') { throw "paren call missing dirty checkpoint" }
 
 Invoke-Negative "l2src\tests\unit_paren_long.lm2" "unit_paren_long" "expression too long"
+
+Invoke-Leaf "l2src\tests\unit_arity5.lm2" "unit_arity5" 0 "sum5"
+$da5 = Invoke-SpliceDrive "unit_arity5" @"
+        c.printf("%d\n", l2_m0(unit, 1, 2, 3, 4, 5))
+        c.printf("%d\n", l2_m0(unit, 5, 4, 3, 2, 1))
+        c.printf("%d\n", l2_m1(unit, 1, 2, 3, 4, 5))
+        return: 0
+    end: main
+end: external
+"@
+if ($da5 -ne "15`n15`n15`n") { throw "arity5 sum: $da5" }
+$c5 = Get-LeafContract "unit_arity5"
+if ($c5.Formals -ne "a|b") { throw "arity5 intern f0/f1 $($c5.Formals)" }
+$t5 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_arity5.lm1")))
+if ($t5 -notmatch 'l2_p0_4') { throw "arity5 missing fifth formal" }
+if ($t5 -notmatch 'l2_p1_4') { throw "arity5b missing fifth formal x" }
+if ($t5.IndexOf("l2_p0_4") -lt 0) { throw "arity5 intern/emit fifth name" }
+$sigs5 = [regex]::Matches($t5, 'rec\\sig: (\d+)U') | ForEach-Object { [int]$_.Groups[1].Value }
+if ($sigs5.Count -lt 2) { throw "arity5 expected 2 rec.sig intern ids, got $($sigs5.Count)" }
+if ($sigs5[0] -eq $sigs5[1]) { throw "arity5 late name e vs x must intern differently" }
+
+Invoke-Leaf "l2src\tests\unit_arity8.lm2" "unit_arity8" 0 "order8"
+$da8 = Invoke-SpliceDrive "unit_arity8" @"
+        c.printf("%d\n", l2_m2(unit))
+        c.printf("%d\n", l2_m1(unit, 1, 2, 3, 4, 5, 6, 7, 8))
+        return: 0
+    end: main
+end: external
+"@
+if ($da8 -ne "1793`n1793`n") { throw "arity8 LTR pack: $da8" }
+$t8 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_arity8.lm1")))
+if ($t8 -notmatch 'l2_p1_7') { throw "arity8 missing eighth formal" }
+
+Invoke-Leaf "l2src\tests\unit_arity9.lm2" "unit_arity9" 0 "nine"
+$da9 = Invoke-SpliceDrive "unit_arity9" @"
+        c.printf("%d\n", l2_m0(unit, 1, 2, 3, 4, 5, 6, 7, 8, 9))
+        c.printf("%d\n", l2_m1(unit, 1, 2, 3, 4, 5, 6, 7, 8, 9))
+        return: 0
+    end: main
+end: external
+"@
+if ($da9 -ne "45`n10`n") { throw "arity9 sum/late-name: $da9" }
+$t9 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_arity9.lm1")))
+if ($t9 -notmatch 'l2_p0_8') { throw "arity9 missing ninth formal" }
+if ($t9 -notmatch 'l2_p1_8') { throw "arity9b missing ninth formal z" }
+$sigs9 = [regex]::Matches($t9, 'rec\\sig: (\d+)U') | ForEach-Object { [int]$_.Groups[1].Value }
+if ($sigs9.Count -lt 2) { throw "arity9 expected 2 rec.sig intern ids, got $($sigs9.Count)" }
+if ($sigs9[0] -eq $sigs9[1]) { throw "arity9 late name i vs z must intern differently" }
+
+Invoke-Leaf "l2src\tests\unit_arity5p.lm2" "unit_arity5p" 0 "write5"
+$dp = Invoke-SpliceDrive "unit_arity5p" @"
+        size_t: cell
+        int: r
+        cell: 99U
+        r: l2_m0(unit, 1, 2, 3, 4, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        r: l2_m1(unit, 1, 2, 3, 4, @ cell)
+        c.printf("%d %zu\n", r, cell)
+        cell: 99U
+        l2_m2(unit, 2, 3, 4, 5, @ cell)
+        c.printf("%zu\n", cell)
+        return: 0
+    end: main
+end: external
+"@
+if ($dp -ne "1 10`n1 10`n14`n") { throw "arity5 pointer/sub: $dp" }
+
+Invoke-Leaf "l2src\tests\unit_arity5h.lm2" "unit_arity5h" 0 "outer"
+$dh = Invoke-SpliceDrive "unit_arity5h" @"
+        c.printf("%d\n", l2_m1(unit))
+        return: 0
+    end: main
+end: external
+"@
+if ($dh -ne "9`n") { throw "arity5 plus hidden: $dh" }
+
+function New-Arity127Source([string]$path) {
+    $names = 0..126 | ForEach-Object { "int: p$_" }
+    $plist = [string]::Join("; ", $names)
+    $acts = New-Object string[] 127
+    for ($i = 0; $i -lt 127; $i++) { $acts[$i] = "0" }
+    $acts[0] = "1"
+    $acts[63] = "2"
+    $acts[126] = "4"
+    $call = "sum127(" + [string]::Join(", ", $acts) + ")"
+    $src = "fn: sum127 ($plist) int`n    return: p0 + p63 + p126`nend: sum127`nfn: call127 () int`n    return: $call`nend: call127`nfn: main () int`n    return: 0`nend: main`n"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $path), $src.Replace("`r`n", "`n"))
+}
+
+$ar127 = Join-Path $out "unit_arity127.lm2"
+New-Arity127Source $ar127
+Invoke-Leaf $ar127 "unit_arity127" 0 "call127"
+$t127 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_arity127.lm1")))
+if ($t127 -notmatch 'l2_p0_126') { throw "arity127 missing 127th formal" }
+if ($t127 -notmatch 'l2_m0\(node, 1') { throw "arity127 missing L2-source call with 127 actuals" }
+$d127 = Invoke-SpliceDrive "unit_arity127" @"
+        c.printf("%d\n", l2_m1(unit))
+        return: 0
+    end: main
+end: external
+"@
+if ($d127 -ne "7`n") { throw "arity127 L2 call p0+p63+p126: $d127" }
+
+function Invoke-FailMallocSrc([string]$src, [string]$tag, [int]$maxN) {
+    $dir = Join-Path $out "fail_malloc"
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $kinds = @{}
+    $n = 1
+    while ($n -le $maxN) {
+        $case = Join-Path $dir ($tag + "_" + $n)
+        $lm1 = $case + ".lm1"
+        $cpath = $case + ".c"
+        $exe = $case + ".exe"
+        $err = $case + ".err"
+        $alog = $case + ".alloc"
+        $marker = "OLD-OUTPUT-MUST-NOT-BECOME-SUCCESS`n"
+        [System.IO.File]::WriteAllText((Join-Path (Get-Location) $lm1), $marker)
+        [System.IO.File]::WriteAllText((Join-Path (Get-Location) $cpath), $marker)
+        [System.IO.File]::WriteAllText((Join-Path (Get-Location) $exe), $marker)
+        $env:L2_FAIL_MALLOC = [string]$n
+        $env:L2_ALLOC_LOG = [string]$alog
+        cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+        $code = $LASTEXITCODE
+        Remove-Item Env:L2_FAIL_MALLOC
+        Remove-Item Env:L2_ALLOC_LOG
+        if ($code -eq 0) {
+            $n = $n + 1
+            continue
+        }
+        $etext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $err))
+        if ($etext.IndexOf("out of memory") -lt 0 -and $etext.IndexOf("size overflow") -lt 0) {
+            throw "fail-malloc $tag $n missing oom/overflow in $err : $etext"
+        }
+        $got = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
+        if ($got -ne $marker) { throw "fail-malloc $tag $n mutated dest lm1" }
+        if (-not (Test-Path -LiteralPath $alog)) { throw "fail-malloc $tag $n missing alloc log" }
+        $astat = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $alog)).Trim()
+        if ($astat -notmatch 'live=(\d+).*fail_kind=(\d+)') { throw "fail-malloc $tag $n bad alloc log: $astat" }
+        $live = [int]$Matches[1]
+        $kind = [int]$Matches[2]
+        if ($live -ne 0) { throw "fail-malloc $tag $n live=$live (partial row not freed) log=$astat" }
+        if ($kind -lt 1) { throw "fail-malloc $tag $n fail_kind unset: $astat" }
+        $kinds[$kind] = $n
+        $n = $n + 1
+    }
+    return $kinds
+}
+
+$kDyn = Invoke-FailMallocSrc "l2src\tests\unit_dyn_cap.lm2" "dyn_cap" 48
+$k127 = Invoke-FailMallocSrc (Join-Path $out "unit_arity127.lm2") "arity127" 64
+if (-not $kDyn.ContainsKey(1)) { throw "fail-malloc dyn_cap never hit formals (kind 1); got $($kDyn.Keys -join ',')" }
+if (-not $kDyn.ContainsKey(2)) { throw "fail-malloc dyn_cap never hit hidden growth (kind 2); got $($kDyn.Keys -join ',')" }
+if (-not $kDyn.ContainsKey(3)) { throw "fail-malloc dyn_cap never hit intern rows (kind 3); got $($kDyn.Keys -join ',')" }
+if (-not $kDyn.ContainsKey(4) -and -not $k127.ContainsKey(4)) { throw "fail-malloc never hit call-actual vectors (kind 4)" }
+$ev = Join-Path $out "fail_malloc\summary.txt"
+$lines = @("dyn_cap kinds: " + (($kDyn.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " "))
+$lines += "arity127 kinds: " + (($k127.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
+[System.IO.File]::WriteAllLines((Join-Path (Get-Location) $ev), $lines)
 
 function Invoke-VisualColumn {
     $cases = @'

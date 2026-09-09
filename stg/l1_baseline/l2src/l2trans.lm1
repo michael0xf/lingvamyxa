@@ -32,8 +32,9 @@ c.array: [8]: int l2_m_own
 c.array: [32]: int l2_m_uses
 c.array: [32]: int l2_m_alias
 c.array: [32]: int l2_m_pre
-c.array: [32]: @: LmP0Text l2_m_dn
-c.array: [32]: int l2_m_dt
+c.array: [8]: @@: LmP0Text l2_m_dn
+c.array: [8]: @: int l2_m_dt
+c.array: [8]: int l2_m_hcap
 c.array: [4]: int l2_own_live
 c.array: [4]: @: LmP0Text l2_own_name
 c.array: [4]: int l2_own_ty
@@ -43,17 +44,27 @@ int: l2_need_own 0
 c.array: [8]: int l2_m_sn
 c.array: [32]: @: LmP0Text l2_sn
 c.array: [32]: int l2_st
-c.array: [32]: @: LmP0Text l2_m_fn
-c.array: [32]: int l2_m_ft
+c.array: [8]: @@: LmP0Text l2_m_fn
+c.array: [8]: @: int l2_m_ft
+c.array: [8]: int l2_m_fcap
+int: l2_fail_left 0
+int: l2_alloc_err 0
+int: l2_alloc_n 0
+int: l2_free_n 0
+int: l2_alloc_live 0
+int: l2_alloc_fail_at 0
+int: l2_alloc_fail_kind 0
+int: l2_alloc_kind 0
+@: char l2_ptr_probe 0
 c.array: [64]: int l2_m_edge
 c.array: [16]: int l2_it_ar
 c.array: [16]: int l2_it_dyn
-c.array: [64]: @: char l2_it_n
-c.array: [64]: size_t l2_it_nl
-c.array: [64]: int l2_it_ty
-c.array: [64]: @: char l2_it_hn
-c.array: [64]: size_t l2_it_hnl
-c.array: [64]: int l2_it_hty
+c.array: [16]: @: char l2_it_n
+c.array: [16]: @: size_t l2_it_nl
+c.array: [16]: @: int l2_it_ty
+c.array: [16]: @: char l2_it_hn
+c.array: [16]: @: size_t l2_it_hnl
+c.array: [16]: @: int l2_it_hty
 c.array: [256]: char l2_tok
 
 prototype:
@@ -103,6 +114,22 @@ prototype:
     fn: l2_is_known (const: @(LmP0Text t)) int
     fn: l2_raw_head (const: @(LmP0Text t); int: mi; @: int out_j; @: int out_fld) int
     fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
+    fn: l2_fn (int: mi; int: k) @: LmP0Text
+    fn: l2_ft (int: mi; int: k) int
+    fn: l2_dn (int: mi; int: k) @: LmP0Text
+    fn: l2_dt (int: mi; int: k) int
+    fn: l2_fn_set (int: mi; int: k; @: LmP0Text v) int
+    fn: l2_ft_set (int: mi; int: k; int: v) int
+    fn: l2_dn_set (int: mi; int: k; @: LmP0Text v) int
+    fn: l2_dt_set (int: mi; int: k; int: v) int
+    fn: l2_formals_alloc (int: mi; int: ar) int
+    fn: l2_hidden_reserve (int: mi; int: need) int
+    fn: l2_free_method (int: mi) int
+    fn: l2_xmalloc (size_t: n) @: void
+    fn: l2_xfree (@: void p) int
+    fn: l2_prep_drop (@: char acts; @: char hides) int
+    fn: l2_act_at (@: char base; int: i) @: char
+    fn: l2_release () int
 end: prototype
 
 fn: l2_text_eq (const: @(LmP0Text text); const: @(char s)) int
@@ -133,6 +160,270 @@ fn: l2_error (const: @(char path); const: @(LmP0Node node); const: @(char msg)) 
         path: ""
     c.fprintf(c.stderr, "l2trans error: %s:%zu:%zu: %s\n", path, line, column, msg)
 return: 1
+
+fn: l2_alloc_or (const: @(char path); const: @(LmP0Node at); const: @(char fallback)) int
+    if: l2_alloc_err = 2
+        return: l2_error(path, at, "size overflow")
+    if: l2_alloc_err != 0
+        return: l2_error(path, at, "out of memory")
+return: l2_error(path, at, fallback)
+
+fn: l2_xmalloc (size_t: n) @: void
+    @: void p
+    if: n = 0U
+        return: 0
+    if: l2_fail_left > 0
+        l2_fail_left: l2_fail_left - 1
+        if: l2_fail_left = 0
+            l2_alloc_err: 1
+            l2_alloc_fail_at: l2_alloc_n + 1
+            l2_alloc_fail_kind: l2_alloc_kind
+            return: 0
+        ---
+    p: c.malloc(n)
+    if: p = 0
+        l2_alloc_err: 1
+        l2_alloc_fail_at: l2_alloc_n + 1
+        l2_alloc_fail_kind: l2_alloc_kind
+        return: 0
+    l2_alloc_n: l2_alloc_n + 1
+    l2_alloc_live: l2_alloc_live + 1
+return: p
+
+fn: l2_xfree (@: void p) int
+    if: p = 0
+        return: 0
+    c.free(p)
+    l2_free_n: l2_free_n + 1
+    if: l2_alloc_live > 0
+        l2_alloc_live: l2_alloc_live - 1
+return: 0
+
+fn: l2_prep_drop (@: char acts; @: char hides) int
+    if: acts != 0
+        l2_xfree((cast: (@: void) acts))
+    if: hides != 0
+        l2_xfree((cast: (@: void) hides))
+return: 1
+
+fn: l2_act_at (@: char base; int: i) @: char
+    if: base = 0 || i < 0
+        return: 0
+return: base + (cast: (size_t) i) * 256U
+
+fn: l2_release () int
+    int: i 0
+    unsigned: s 0U
+    while: i < 8
+        l2_free_method(i)
+        i: i + 1
+    while: s < l2_intern_n
+        if: l2_it_n[s] != 0
+            l2_xfree((cast: (@: void) l2_it_n[s]))
+        if: l2_it_nl[s] != 0
+            l2_xfree((cast: (@: void) l2_it_nl[s]))
+        if: l2_it_ty[s] != 0
+            l2_xfree((cast: (@: void) l2_it_ty[s]))
+        if: l2_it_hn[s] != 0
+            l2_xfree((cast: (@: void) l2_it_hn[s]))
+        if: l2_it_hnl[s] != 0
+            l2_xfree((cast: (@: void) l2_it_hnl[s]))
+        if: l2_it_hty[s] != 0
+            l2_xfree((cast: (@: void) l2_it_hty[s]))
+        l2_it_n[s]: 0
+        l2_it_nl[s]: 0
+        l2_it_ty[s]: 0
+        l2_it_hn[s]: 0
+        l2_it_hnl[s]: 0
+        l2_it_hty[s]: 0
+        s: s + 1U
+    l2_intern_n: 0U
+return: 0
+
+fn: l2_mul_ok (size_t: n; size_t: sz) int
+    if: sz = 0U
+        return: 1
+    if: n > ((cast: (size_t) -1) / sz)
+        return: 0
+return: 1
+
+fn: l2_free_method (int: mi) int
+    if: mi < 0 || mi >= 8
+        return: 0
+    if: l2_m_fn[mi] != 0
+        l2_xfree((cast: (@: void) l2_m_fn[mi]))
+    if: l2_m_ft[mi] != 0
+        l2_xfree((cast: (@: void) l2_m_ft[mi]))
+    if: l2_m_dn[mi] != 0
+        l2_xfree((cast: (@: void) l2_m_dn[mi]))
+    if: l2_m_dt[mi] != 0
+        l2_xfree((cast: (@: void) l2_m_dt[mi]))
+    l2_m_fn[mi]: 0
+    l2_m_ft[mi]: 0
+    l2_m_dn[mi]: 0
+    l2_m_dt[mi]: 0
+    l2_m_fcap[mi]: 0
+    l2_m_hcap[mi]: 0
+    l2_m_arity[mi]: 0
+    l2_m_dyn[mi]: 0
+return: 0
+
+fn: l2_formals_alloc (int: mi; int: ar) int
+    size_t: nb
+    size_t: ni
+    size_t: psz
+    if: mi < 0 || ar < 0
+        return: 1
+    psz: c.sizeof(l2_ptr_probe)
+    if: l2_mul_ok((cast: (size_t) ar), psz) = 0
+        l2_alloc_err: 2
+        return: 1
+    if: l2_mul_ok((cast: (size_t) ar), c.sizeof(c.int)) = 0
+        l2_alloc_err: 2
+        return: 1
+    nb: (cast: (size_t) ar) * psz
+    ni: (cast: (size_t) ar) * c.sizeof(c.int)
+    l2_m_fn[mi]: 0
+    l2_m_ft[mi]: 0
+    l2_m_fcap[mi]: 0
+    if: ar = 0
+        return: 0
+    l2_alloc_kind: 1
+    l2_m_fn[mi]: (cast: (@@: LmP0Text) l2_xmalloc(nb))
+    l2_m_ft[mi]: (cast: (@: int) l2_xmalloc(ni))
+    if: l2_m_fn[mi] = 0 || l2_m_ft[mi] = 0
+        l2_free_method(mi)
+        return: 1
+    c.memset((cast: (@: void) l2_m_fn[mi]), 0, nb)
+    c.memset((cast: (@: void) l2_m_ft[mi]), 0, ni)
+    l2_m_fcap[mi]: ar
+return: 0
+
+fn: l2_hidden_reserve (int: mi; int: need) int
+    size_t: cap
+    size_t: need_u
+    int: i
+    size_t: nb
+    size_t: ni
+    size_t: psz
+    @@: LmP0Text nn 0
+    @: int nt 0
+    @@: LmP0Text on
+    @: int ot
+    if: mi < 0 || need < 0
+        return: 1
+    if: need <= l2_m_hcap[mi]
+        return: 0
+    need_u: (cast: (size_t) need)
+    cap: (cast: (size_t) l2_m_hcap[mi])
+    if: cap < 1U
+        cap: 4U
+    while: cap < need_u
+        if: cap > ((cast: (size_t) -1) / 2U)
+            l2_alloc_err: 2
+            return: 1
+        cap: cap * 2U
+    if: cap > (cast: (size_t) c.INT_MAX) && need_u > (cast: (size_t) c.INT_MAX)
+        l2_alloc_err: 2
+        return: 1
+    if: cap > (cast: (size_t) c.INT_MAX)
+        cap: need_u
+        ---
+    psz: c.sizeof(l2_ptr_probe)
+    if: l2_mul_ok((cast: (size_t) cap), psz) = 0
+        l2_alloc_err: 2
+        return: 1
+    if: l2_mul_ok((cast: (size_t) cap), c.sizeof(c.int)) = 0
+        l2_alloc_err: 2
+        return: 1
+    nb: cap * psz
+    ni: cap * c.sizeof(c.int)
+    l2_alloc_kind: 2
+    nn: (cast: (@@: LmP0Text) l2_xmalloc(nb))
+    nt: (cast: (@: int) l2_xmalloc(ni))
+    if: nn = 0 || nt = 0
+        if: nn != 0
+            l2_xfree((cast: (@: void) nn))
+        if: nt != 0
+            l2_xfree((cast: (@: void) nt))
+        return: 1
+    c.memset((cast: (@: void) nn), 0, nb)
+    c.memset((cast: (@: void) nt), 0, ni)
+    on: l2_m_dn[mi]
+    ot: l2_m_dt[mi]
+    i: 0
+    while: i < l2_m_dyn[mi]
+        nn[i]: on[i]
+        nt[i]: ot[i]
+        i: i + 1
+    if: on != 0
+        l2_xfree((cast: (@: void) on))
+    if: ot != 0
+        l2_xfree((cast: (@: void) ot))
+    l2_m_dn[mi]: nn
+    l2_m_dt[mi]: nt
+    l2_m_hcap[mi]: (cast: (int) cap)
+return: 0
+
+fn: l2_fn (int: mi; int: k) @: LmP0Text
+    @@: LmP0Text row
+    if: mi < 0 || k < 0 || l2_m_fn[mi] = 0
+        return: 0
+    row: l2_m_fn[mi]
+return: row[k]
+
+fn: l2_ft (int: mi; int: k) int
+    @: int row
+    if: mi < 0 || k < 0 || l2_m_ft[mi] = 0
+        return: 0
+    row: l2_m_ft[mi]
+return: row[k]
+
+fn: l2_dn (int: mi; int: k) @: LmP0Text
+    @@: LmP0Text row
+    if: mi < 0 || k < 0 || l2_m_dn[mi] = 0
+        return: 0
+    row: l2_m_dn[mi]
+return: row[k]
+
+fn: l2_dt (int: mi; int: k) int
+    @: int row
+    if: mi < 0 || k < 0 || l2_m_dt[mi] = 0
+        return: 0
+    row: l2_m_dt[mi]
+return: row[k]
+
+fn: l2_fn_set (int: mi; int: k; @: LmP0Text v) int
+    @@: LmP0Text row
+    if: mi < 0 || k < 0 || l2_m_fn[mi] = 0
+        return: 1
+    row: l2_m_fn[mi]
+    row[k]: v
+return: 0
+
+fn: l2_ft_set (int: mi; int: k; int: v) int
+    @: int row
+    if: mi < 0 || k < 0 || l2_m_ft[mi] = 0
+        return: 1
+    row: l2_m_ft[mi]
+    row[k]: v
+return: 0
+
+fn: l2_dn_set (int: mi; int: k; @: LmP0Text v) int
+    @@: LmP0Text row
+    if: mi < 0 || k < 0 || l2_m_dn[mi] = 0
+        return: 1
+    row: l2_m_dn[mi]
+    row[k]: v
+return: 0
+
+fn: l2_dt_set (int: mi; int: k; int: v) int
+    @: int row
+    if: mi < 0 || k < 0 || l2_m_dt[mi] = 0
+        return: 1
+    row: l2_m_dt[mi]
+    row[k]: v
+return: 0
 
 fn: l2_path_is_lm2 (const: @(char path)) int
     size_t: n
@@ -444,12 +735,10 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
         l2_m_uses[i]: 0
         l2_m_alias[i]: -1
         l2_m_pre[i]: 0
-        l2_m_dt[i]: 0
-        l2_m_dn[i]: 0
         i: i + 1
     i: 0
     while: i < 8
-        l2_m_dyn[i]: 0
+        l2_free_method(i)
         i: i + 1
     if: unit = 0
         return: l2_error(path, 0, "missing main")
@@ -599,51 +888,81 @@ fn: l2_text_same (const: @(LmP0Text a); const: @(LmP0Text b)) int
 return: c.memcmp(a\data, b\data, a\length) = 0
 
 # Translator intern of the full canonical contract: L2_SIG_V0 schema
-# plus exact ordered formal-name bytes. Method name is not interned.
+# plus exact ordered formal-name bytes (declared cap 8, hidden cap 4). Method name is not interned.
 # One table for the linked unit; not reset per method.
 fn: l2_intern_match (unsigned: s; int: ar; const: @(char n0); size_t: l0; int: t0; const: @(char n1); size_t: l1; int: t1; const: @(char n2); size_t: l2n; int: t2; const: @(char n3); size_t: l3; int: t3) int
-    unsigned: b
+    @@: char ns
+    @: size_t nl
+    @: int nt
     if: s >= l2_intern_n || l2_it_ar[s] != ar || l2_it_dyn[s] != 0
         return: 0
-    b: s * 4U
-    if: ar >= 1 && (t0 != l2_it_ty[b] || l0 != l2_it_nl[b] || c.memcmp(n0, l2_it_n[b], l0) != 0)
+    ns: (cast: (@@: char) l2_it_n[s])
+    nl: l2_it_nl[s]
+    nt: l2_it_ty[s]
+    if: ar >= 1 && (ns = 0 || nl = 0 || nt = 0 || t0 != nt[0] || l0 != nl[0] || c.memcmp(n0, ns[0], l0) != 0)
         return: 0
-    if: ar >= 2 && (t1 != l2_it_ty[b + 1U] || l1 != l2_it_nl[b + 1U] || c.memcmp(n1, l2_it_n[b + 1U], l1) != 0)
+    if: ar >= 2 && (t1 != nt[1] || l1 != nl[1] || c.memcmp(n1, ns[1], l1) != 0)
         return: 0
-    if: ar >= 3 && (t2 != l2_it_ty[b + 2U] || l2n != l2_it_nl[b + 2U] || c.memcmp(n2, l2_it_n[b + 2U], l2n) != 0)
+    if: ar >= 3 && (t2 != nt[2] || l2n != nl[2] || c.memcmp(n2, ns[2], l2n) != 0)
         return: 0
-    if: ar >= 4 && (t3 != l2_it_ty[b + 3U] || l3 != l2_it_nl[b + 3U] || c.memcmp(n3, l2_it_n[b + 3U], l3) != 0)
+    if: ar >= 4 && (t3 != nt[3] || l3 != nl[3] || c.memcmp(n3, ns[3], l3) != 0)
         return: 0
 return: 1
 
 fn: l2_intern_store (int: ar; const: @(char n0); size_t: l0; int: t0; const: @(char n1); size_t: l1; int: t1; const: @(char n2); size_t: l2n; int: t2; const: @(char n3); size_t: l3; int: t3) unsigned
     unsigned: i 0U
-    unsigned: b
+    unsigned: s
+    size_t: psz
+    @@: char ns 0
+    @: size_t nl 0
+    @: int nt 0
     while: i < l2_intern_n
         if: l2_intern_match(i, ar, n0, l0, t0, n1, l1, t1, n2, l2n, t2, n3, l3, t3)
             return: i + 1U
         i: i + 1U
-    if: l2_intern_n >= 16U || ar < 0 || ar > 4
+    if: l2_intern_n >= 16U || ar < 1 || ar > 4
         return: 0U
-    b: l2_intern_n * 4U
-    l2_it_ar[l2_intern_n]: ar
-    l2_it_dyn[l2_intern_n]: 0
+    psz: c.sizeof(l2_ptr_probe)
+    if: l2_mul_ok((cast: (size_t) ar), psz) = 0 || l2_mul_ok((cast: (size_t) ar), c.sizeof(c.size_t)) = 0 || l2_mul_ok((cast: (size_t) ar), c.sizeof(c.int)) = 0
+        l2_alloc_err: 2
+        return: 0U
+    l2_alloc_kind: 3
+    ns: (cast: (@@: char) l2_xmalloc((cast: (size_t) ar) * psz))
+    nl: (cast: (@: size_t) l2_xmalloc((cast: (size_t) ar) * c.sizeof(c.size_t)))
+    nt: (cast: (@: int) l2_xmalloc((cast: (size_t) ar) * c.sizeof(c.int)))
+    if: ns = 0 || nl = 0 || nt = 0
+        if: ns != 0
+            l2_xfree((cast: (@: void) ns))
+        if: nl != 0
+            l2_xfree((cast: (@: void) nl))
+        if: nt != 0
+            l2_xfree((cast: (@: void) nt))
+        return: 0U
     if: ar >= 1
-        l2_it_n[b]: (cast: (@: char) n0)
-        l2_it_nl[b]: l0
-        l2_it_ty[b]: t0
+        ns[0]: (cast: (@: char) n0)
+        nl[0]: l0
+        nt[0]: t0
     if: ar >= 2
-        l2_it_n[b + 1U]: (cast: (@: char) n1)
-        l2_it_nl[b + 1U]: l1
-        l2_it_ty[b + 1U]: t1
+        ns[1]: (cast: (@: char) n1)
+        nl[1]: l1
+        nt[1]: t1
     if: ar >= 3
-        l2_it_n[b + 2U]: (cast: (@: char) n2)
-        l2_it_nl[b + 2U]: l2n
-        l2_it_ty[b + 2U]: t2
+        ns[2]: (cast: (@: char) n2)
+        nl[2]: l2n
+        nt[2]: t2
     if: ar >= 4
-        l2_it_n[b + 3U]: (cast: (@: char) n3)
-        l2_it_nl[b + 3U]: l3
-        l2_it_ty[b + 3U]: t3
+        ns[3]: (cast: (@: char) n3)
+        nl[3]: l3
+        nt[3]: t3
+    s: l2_intern_n
+    l2_it_ar[s]: ar
+    l2_it_dyn[s]: 0
+    l2_it_n[s]: (cast: (@: char) ns)
+    l2_it_nl[s]: nl
+    l2_it_ty[s]: nt
+    l2_it_hn[s]: 0
+    l2_it_hnl[s]: 0
+    l2_it_hty[s]: 0
     l2_intern_n: l2_intern_n + 1U
 return: l2_intern_n
 
@@ -651,103 +970,164 @@ fn: l2_intern_pair (const: @(char a); size_t: na; const: @(char b); size_t: nb) 
 return: l2_intern_store(2, a, na, 0, b, nb, 0, 0, 0U, 0, 0, 0U, 0)
 
 fn: l2_intern_eq_mi (unsigned: s; int: mi) int
-    unsigned: b
-    unsigned: uk
     int: k
     @: LmP0Text nm
+    @@: char ns
+    @: size_t nl
+    @: int nt
+    @@: char hs
+    @: size_t hl
+    @: int ht
     if: s >= l2_intern_n || mi < 0
         return: 0
     if: l2_it_ar[s] != l2_m_arity[mi] || l2_it_dyn[s] != l2_m_dyn[mi]
         return: 0
-    b: s * 4U
+    ns: (cast: (@@: char) l2_it_n[s])
+    nl: l2_it_nl[s]
+    nt: l2_it_ty[s]
+    hs: (cast: (@@: char) l2_it_hn[s])
+    hl: l2_it_hnl[s]
+    ht: l2_it_hty[s]
     k: 0
     while: k < l2_m_arity[mi]
-        nm: l2_m_fn[mi * 4 + k]
-        if: nm = 0 || nm\data = 0
+        nm: l2_fn(mi, k)
+        if: nm = 0 || nm\data = 0 || ns = 0 || nl = 0 || nt = 0
             return: 0
-        uk: (cast: (unsigned) k)
-        if: l2_m_ft[mi * 4 + k] != l2_it_ty[b + uk]
+        if: l2_ft(mi, k) != nt[k]
             return: 0
-        if: nm\length != l2_it_nl[b + uk] || c.memcmp(nm\data, l2_it_n[b + uk], nm\length) != 0
+        if: nm\length != nl[k] || c.memcmp(nm\data, ns[k], nl[k]) != 0
             return: 0
         k: k + 1
     k: 0
     while: k < l2_m_dyn[mi]
-        nm: l2_m_dn[mi * 4 + k]
-        if: nm = 0 || nm\data = 0
+        nm: l2_dn(mi, k)
+        if: nm = 0 || nm\data = 0 || hs = 0 || hl = 0 || ht = 0
             return: 0
-        uk: (cast: (unsigned) k)
-        if: l2_m_dt[mi * 4 + k] != l2_it_hty[b + uk]
+        if: l2_dt(mi, k) != ht[k]
             return: 0
-        if: nm\length != l2_it_hnl[b + uk] || c.memcmp(nm\data, l2_it_hn[b + uk], nm\length) != 0
+        if: nm\length != hl[k] || c.memcmp(nm\data, hs[k], hl[k]) != 0
             return: 0
         k: k + 1
 return: 1
 
 fn: l2_intern_store_mi (int: mi) unsigned
     unsigned: i 0U
-    unsigned: b
-    unsigned: uk
+    unsigned: s
     int: k
+    int: ar
+    int: dyn
+    size_t: psz
     @: LmP0Text nm
+    @@: char ns 0
+    @: size_t nl 0
+    @: int nt 0
+    @@: char hs 0
+    @: size_t hl 0
+    @: int ht 0
     while: i < l2_intern_n
         if: l2_intern_eq_mi(i, mi)
             return: i + 1U
         i: i + 1U
     if: l2_intern_n >= 16U
         return: 0U
-    b: l2_intern_n * 4U
-    l2_it_ar[l2_intern_n]: l2_m_arity[mi]
-    l2_it_dyn[l2_intern_n]: l2_m_dyn[mi]
-    k: 0
-    while: k < l2_m_arity[mi]
-        nm: l2_m_fn[mi * 4 + k]
-        if: nm = 0 || nm\data = 0
+    ar: l2_m_arity[mi]
+    dyn: l2_m_dyn[mi]
+    psz: c.sizeof(l2_ptr_probe)
+    s: l2_intern_n
+    l2_it_n[s]: 0
+    l2_it_nl[s]: 0
+    l2_it_ty[s]: 0
+    l2_it_hn[s]: 0
+    l2_it_hnl[s]: 0
+    l2_it_hty[s]: 0
+    if: ar > 0
+        if: l2_mul_ok((cast: (size_t) ar), psz) = 0 || l2_mul_ok((cast: (size_t) ar), c.sizeof(c.size_t)) = 0 || l2_mul_ok((cast: (size_t) ar), c.sizeof(c.int)) = 0
+            l2_alloc_err: 2
             return: 0U
-        uk: (cast: (unsigned) k)
-        l2_it_n[b + uk]: (cast: (@: char) nm\data)
-        l2_it_nl[b + uk]: nm\length
-        l2_it_ty[b + uk]: l2_m_ft[mi * 4 + k]
-        k: k + 1
-    k: 0
-    while: k < l2_m_dyn[mi]
-        nm: l2_m_dn[mi * 4 + k]
-        if: nm = 0 || nm\data = 0
+        l2_alloc_kind: 3
+        ns: (cast: (@@: char) l2_xmalloc((cast: (size_t) ar) * psz))
+        nl: (cast: (@: size_t) l2_xmalloc((cast: (size_t) ar) * c.sizeof(c.size_t)))
+        nt: (cast: (@: int) l2_xmalloc((cast: (size_t) ar) * c.sizeof(c.int)))
+        if: ns = 0 || nl = 0 || nt = 0
+            if: ns != 0
+                l2_xfree((cast: (@: void) ns))
+            if: nl != 0
+                l2_xfree((cast: (@: void) nl))
+            if: nt != 0
+                l2_xfree((cast: (@: void) nt))
             return: 0U
-        uk: (cast: (unsigned) k)
-        l2_it_hn[b + uk]: (cast: (@: char) nm\data)
-        l2_it_hnl[b + uk]: nm\length
-        l2_it_hty[b + uk]: l2_m_dt[mi * 4 + k]
-        k: k + 1
+        k: 0
+        while: k < ar
+            nm: l2_fn(mi, k)
+            if: nm = 0 || nm\data = 0
+                l2_xfree((cast: (@: void) ns))
+                l2_xfree((cast: (@: void) nl))
+                l2_xfree((cast: (@: void) nt))
+                return: 0U
+            ns[k]: (cast: (@: char) nm\data)
+            nl[k]: nm\length
+            nt[k]: l2_ft(mi, k)
+            k: k + 1
+        ---
+    if: dyn > 0
+        if: l2_mul_ok((cast: (size_t) dyn), psz) = 0 || l2_mul_ok((cast: (size_t) dyn), c.sizeof(c.size_t)) = 0 || l2_mul_ok((cast: (size_t) dyn), c.sizeof(c.int)) = 0
+            l2_alloc_err: 2
+            if: ns != 0
+                l2_xfree((cast: (@: void) ns))
+            if: nl != 0
+                l2_xfree((cast: (@: void) nl))
+            if: nt != 0
+                l2_xfree((cast: (@: void) nt))
+            return: 0U
+        l2_alloc_kind: 3
+        hs: (cast: (@@: char) l2_xmalloc((cast: (size_t) dyn) * psz))
+        hl: (cast: (@: size_t) l2_xmalloc((cast: (size_t) dyn) * c.sizeof(c.size_t)))
+        ht: (cast: (@: int) l2_xmalloc((cast: (size_t) dyn) * c.sizeof(c.int)))
+        if: hs = 0 || hl = 0 || ht = 0
+            if: ns != 0
+                l2_xfree((cast: (@: void) ns))
+            if: nl != 0
+                l2_xfree((cast: (@: void) nl))
+            if: nt != 0
+                l2_xfree((cast: (@: void) nt))
+            if: hs != 0
+                l2_xfree((cast: (@: void) hs))
+            if: hl != 0
+                l2_xfree((cast: (@: void) hl))
+            if: ht != 0
+                l2_xfree((cast: (@: void) ht))
+            return: 0U
+        k: 0
+        while: k < dyn
+            nm: l2_dn(mi, k)
+            if: nm = 0 || nm\data = 0
+                l2_xfree((cast: (@: void) ns))
+                l2_xfree((cast: (@: void) nl))
+                l2_xfree((cast: (@: void) nt))
+                l2_xfree((cast: (@: void) hs))
+                l2_xfree((cast: (@: void) hl))
+                l2_xfree((cast: (@: void) ht))
+                return: 0U
+            hs[k]: (cast: (@: char) nm\data)
+            hl[k]: nm\length
+            ht[k]: l2_dt(mi, k)
+            k: k + 1
+        ---
+    l2_it_ar[s]: ar
+    l2_it_dyn[s]: dyn
+    l2_it_n[s]: (cast: (@: char) ns)
+    l2_it_nl[s]: nl
+    l2_it_ty[s]: nt
+    l2_it_hn[s]: (cast: (@: char) hs)
+    l2_it_hnl[s]: hl
+    l2_it_hty[s]: ht
     l2_intern_n: l2_intern_n + 1U
 return: l2_intern_n
 
 fn: l2_intern_mi (int: mi) unsigned
-    @: LmP0Text a0 0
-    @: LmP0Text a1 0
-    @: LmP0Text a2 0
-    @: LmP0Text a3 0
-    int: ar
     if: mi < 0
         return: 0U
-    if: l2_m_dyn[mi] != 0 || l2_m_arity[mi] = 0
-        return: l2_intern_store_mi(mi)
-    ar: l2_m_arity[mi]
-    if: ar >= 1
-        a0: l2_m_fn[mi * 4]
-    if: ar >= 2
-        a1: l2_m_fn[mi * 4 + 1]
-    if: ar >= 3
-        a2: l2_m_fn[mi * 4 + 2]
-    if: ar >= 4
-        a3: l2_m_fn[mi * 4 + 3]
-    if: ar = 1
-        return: l2_intern_store(1, a0\data, a0\length, l2_m_ft[mi * 4], 0, 0U, 0, 0, 0U, 0, 0, 0U, 0)
-    if: ar = 2
-        return: l2_intern_store(2, a0\data, a0\length, l2_m_ft[mi * 4], a1\data, a1\length, l2_m_ft[mi * 4 + 1], 0, 0U, 0, 0, 0U, 0)
-    if: ar = 3
-        return: l2_intern_store(3, a0\data, a0\length, l2_m_ft[mi * 4], a1\data, a1\length, l2_m_ft[mi * 4 + 1], a2\data, a2\length, l2_m_ft[mi * 4 + 2], 0, 0U, 0)
-return: l2_intern_store(4, a0\data, a0\length, l2_m_ft[mi * 4], a1\data, a1\length, l2_m_ft[mi * 4 + 1], a2\data, a2\length, l2_m_ft[mi * 4 + 2], a3\data, a3\length, l2_m_ft[mi * 4 + 3])
+return: l2_intern_store_mi(mi)
 
 fn: l2_find_method (const: @(LmP0Text name)) int
     int: i 0
@@ -792,7 +1172,7 @@ fn: l2_formal_find (int: mi; const: @(LmP0Text t)) int
     if: mi < 0 || t = 0
         return: -1
     while: i < l2_m_arity[mi]
-        if: l2_text_same(l2_m_fn[mi * 4 + i], t)
+        if: l2_text_same(l2_fn(mi, i), t)
             return: i
         i: i + 1
 return: -1
@@ -802,7 +1182,7 @@ fn: l2_dyn_find (int: mi; const: @(LmP0Text t)) int
     if: mi < 0 || t = 0
         return: -1
     while: i < l2_m_dyn[mi]
-        if: l2_text_same(l2_m_dn[mi * 4 + i], t)
+        if: l2_text_same(l2_dn(mi, i), t)
             return: i
         i: i + 1
 return: -1
@@ -823,17 +1203,18 @@ fn: l2_bind_own (int: mi; int: oi; const: @(char path); const: @(LmP0Node at)) i
     if: mi < 0 || oi < 0
         return: 0
     while: fi < l2_m_arity[mi]
-        if: l2_text_same(l2_m_fn[mi * 4 + fi], l2_own_name[oi])
-            if: l2_m_ft[mi * 4 + fi] != l2_own_ty[oi]
+        if: l2_text_same(l2_fn(mi, fi), l2_own_name[oi])
+            if: l2_ft(mi, fi) != l2_own_ty[oi]
                 return: l2_error(path, at, "incompatible entry signature")
             l2_m_alias[mi * 4 + oi]: fi
         fi: fi + 1
     fi: 0
     while: fi < l2_m_dyn[mi]
-        if: l2_text_same(l2_m_dn[mi * 4 + fi], l2_own_name[oi])
-            if: l2_m_dt[mi * 4 + fi] != 0 && l2_m_dt[mi * 4 + fi] != l2_own_ty[oi]
+        if: l2_text_same(l2_dn(mi, fi), l2_own_name[oi])
+            if: l2_dt(mi, fi) != 0 && l2_dt(mi, fi) != l2_own_ty[oi]
                 return: l2_error(path, at, "incompatible entry signature")
-            l2_m_dt[mi * 4 + fi]: l2_own_ty[oi]
+            if: l2_dt_set(mi, fi, l2_own_ty[oi]) != 0
+                return: 1
             l2_m_alias[mi * 4 + oi]: l2_m_arity[mi] + fi
         fi: fi + 1
 return: 0
@@ -911,20 +1292,27 @@ fn: l2_dyn_add (int: mi; const: @(LmP0Text t); int: ty) int
         return: 0
     k: l2_dyn_find(mi, t)
     if: k >= 0
-        if: ty != 0 && l2_m_dt[mi * 4 + k] != 0 && l2_m_dt[mi * 4 + k] != ty
+        if: ty != 0 && l2_dt(mi, k) != 0 && l2_dt(mi, k) != ty
             return: 1
-        if: ty != 0
-            l2_m_dt[mi * 4 + k]: ty
+        if: ty != 0 && l2_dt_set(mi, k, ty) != 0
+            return: 1
         return: 0
-    if: l2_m_dyn[mi] >= 4
+    if: l2_m_dyn[mi] >= c.INT_MAX
+        l2_alloc_err: 2
+        return: 1
+    if: l2_hidden_reserve(mi, l2_m_dyn[mi] + 1) != 0
         return: 1
     i: l2_m_dyn[mi]
-    while: i > 0 && l2_name_before(t, l2_m_dn[mi * 4 + i - 1])
-        l2_m_dn[mi * 4 + i]: l2_m_dn[mi * 4 + i - 1]
-        l2_m_dt[mi * 4 + i]: l2_m_dt[mi * 4 + i - 1]
+    while: i > 0 && l2_name_before(t, l2_dn(mi, i - 1))
+        if: l2_dn_set(mi, i, l2_dn(mi, i - 1)) != 0
+            return: 1
+        if: l2_dt_set(mi, i, l2_dt(mi, i - 1)) != 0
+            return: 1
         i: i - 1
-    l2_m_dn[mi * 4 + i]: (cast: (@: LmP0Text) t)
-    l2_m_dt[mi * 4 + i]: ty
+    if: l2_dn_set(mi, i, (cast: (@: LmP0Text) t)) != 0
+        return: 1
+    if: l2_dt_set(mi, i, ty) != 0
+        return: 1
     l2_m_dyn[mi]: l2_m_dyn[mi] + 1
 return: 0
 
@@ -1066,11 +1454,11 @@ fn: l2_dyn_local (const: @(char path)) int
     while: i < l2_m_n
         seen: 0
         if: l2_m_body[i] != 0 && l2_m_body[i]\as != 0 && l2_scan_body(l2_m_body[i]\as\structure, i, @ seen) != 0
-            return: l2_error(path, l2_m_node[i], "unsupported body")
+            return: l2_alloc_or(path, l2_m_node[i], "unsupported body")
         oi: 0
         while: oi < l2_own_n
             if: l2_m_uses[i * 4 + oi] != 0 && l2_m_pre[i * 4 + oi] != 0 && l2_dyn_add(i, l2_own_name[oi], l2_own_ty[oi]) != 0
-                return: l2_error(path, l2_m_node[i], "unsupported body")
+                return: l2_alloc_or(path, l2_m_node[i], "unsupported body")
             if: l2_m_uses[i * 4 + oi] != 0 && l2_bind_own(i, oi, path, l2_m_node[i]) != 0
                 return: 1
             oi: oi + 1
@@ -1090,34 +1478,38 @@ fn: l2_dyn_step (const: @(char path); @: int changed) int
         while: cidx < l2_m_n
             k: 0
             while: l2_m_edge[m * 8 + cidx] != 0 && k < l2_m_dyn[cidx]
-                nm: l2_m_dn[cidx * 4 + k]
-                ty: l2_m_dt[cidx * 4 + k]
+                nm: l2_dn(cidx, k)
+                ty: l2_dt(cidx, k)
                 src: l2_param_find(m, nm)
                 if: src < 0
                     src: l2_own_find(nm)
                 if: src >= 0 && l2_param_find(m, nm) < 0 && l2_m_uses[m * 4 + src] != 0 && ty != 0 && l2_own_ty[src] != ty
                     return: l2_error(path, l2_m_node[m], "incompatible entry signature")
+                if: src >= 0 && l2_param_find(m, nm) < 0 && l2_m_uses[m * 4 + src] != 0 && ty = 0 && l2_dt_set(cidx, k, l2_own_ty[src]) != 0
+                    return: 1
                 if: src >= 0 && l2_param_find(m, nm) < 0 && l2_m_uses[m * 4 + src] != 0 && ty = 0
-                    l2_m_dt[cidx * 4 + k]: l2_own_ty[src]
                     changed[0]: 1
                 before: l2_m_dyn[m]
                 if: l2_param_find(m, nm) < 0 && (src < 0 || l2_m_uses[m * 4 + src] = 0) && l2_dyn_add(m, nm, ty) != 0
-                    return: l2_error(path, l2_m_node[m], "unsupported body")
+                    return: l2_alloc_or(path, l2_m_node[m], "unsupported body")
                 if: l2_m_dyn[m] != before
                     changed[0]: 1
                 src: l2_param_find(m, nm)
-                if: src >= 0 && src < l2_m_arity[m] && ty != 0 && l2_m_ft[m * 4 + src] != ty
+                if: src >= 0 && src < l2_m_arity[m] && ty != 0 && l2_ft(m, src) != ty
                     return: l2_error(path, l2_m_node[m], "incompatible entry signature")
-                if: src >= 0 && src < l2_m_arity[m] && ty = 0 && (l2_m_ft[m * 4 + src] = 1 || l2_m_ft[m * 4 + src] = 2)
-                    l2_m_dt[cidx * 4 + k]: l2_m_ft[m * 4 + src]
+                if: src >= 0 && src < l2_m_arity[m] && ty = 0 && (l2_ft(m, src) = 1 || l2_ft(m, src) = 2) && l2_dt_set(cidx, k, l2_ft(m, src)) != 0
+                    return: 1
+                if: src >= 0 && src < l2_m_arity[m] && ty = 0 && (l2_ft(m, src) = 1 || l2_ft(m, src) = 2)
                     changed[0]: 1
-                if: src >= l2_m_arity[m] && ty != 0 && l2_m_dt[m * 4 + (src - l2_m_arity[m])] != 0 && l2_m_dt[m * 4 + (src - l2_m_arity[m])] != ty
+                if: src >= l2_m_arity[m] && ty != 0 && l2_dt(m, src - l2_m_arity[m]) != 0 && l2_dt(m, src - l2_m_arity[m]) != ty
                     return: l2_error(path, l2_m_node[m], "incompatible entry signature")
-                if: src >= l2_m_arity[m] && ty != 0 && l2_m_dt[m * 4 + (src - l2_m_arity[m])] = 0
-                    l2_m_dt[m * 4 + (src - l2_m_arity[m])]: ty
+                if: src >= l2_m_arity[m] && ty != 0 && l2_dt(m, src - l2_m_arity[m]) = 0 && l2_dt_set(m, src - l2_m_arity[m], ty) != 0
+                    return: 1
+                if: src >= l2_m_arity[m] && ty != 0 && l2_dt(m, src - l2_m_arity[m]) = 0
                     changed[0]: 1
-                if: src >= l2_m_arity[m] && ty = 0 && l2_m_dt[m * 4 + (src - l2_m_arity[m])] != 0
-                    l2_m_dt[cidx * 4 + k]: l2_m_dt[m * 4 + (src - l2_m_arity[m])]
+                if: src >= l2_m_arity[m] && ty = 0 && l2_dt(m, src - l2_m_arity[m]) != 0 && l2_dt_set(cidx, k, l2_dt(m, src - l2_m_arity[m])) != 0
+                    return: 1
+                if: src >= l2_m_arity[m] && ty = 0 && l2_dt(m, src - l2_m_arity[m]) != 0
                     changed[0]: 1
                 k: k + 1
             cidx: cidx + 1
@@ -1130,7 +1522,7 @@ fn: l2_dyn_typed (const: @(char path)) int
     while: m < l2_m_n
         k: 0
         while: k < l2_m_dyn[m]
-            if: l2_m_dt[m * 4 + k] != 1 && l2_m_dt[m * 4 + k] != 2
+            if: l2_dt(m, k) != 1 && l2_dt(m, k) != 2
                 return: l2_error(path, l2_m_node[m], "unresolved name")
             k: k + 1
         m: m + 1
@@ -1166,7 +1558,7 @@ fn: l2_raw_head (const: @(LmP0Text t); int: mi; @: int out_j; @: int out_fld) in
         return: 1
     j: 0
     while: j < l2_m_arity[mi]
-        if: l2_m_fn[mi * 4 + j] != 0 && l2_m_fn[mi * 4 + j]\length = sl && c.memcmp(l2_m_fn[mi * 4 + j]\data, t\data, sl) = 0
+        if: l2_fn(mi, j) != 0 && l2_fn(mi, j)\length = sl && c.memcmp(l2_fn(mi, j)\data, t\data, sl) = 0
             out_j[0]: j
             if: t\length - sl - 1U = 4U && c.memcmp(t\data + sl + 1U, "data", 4U) = 0
                 out_fld[0]: 0
@@ -1225,8 +1617,8 @@ fn: l2_index_head (const: @(LmP0Text t); int: mi; @: int out_j) int
         return: 3
     j: 0
     while: j < l2_m_arity[mi]
-        if: l2_m_fn[mi * 4 + j] != 0 && l2_m_fn[mi * 4 + j]\length = lb && c.memcmp(l2_m_fn[mi * 4 + j]\data, t\data, lb) = 0
-            if: l2_m_ft[mi * 4 + j] != 9
+        if: l2_fn(mi, j) != 0 && l2_fn(mi, j)\length = lb && c.memcmp(l2_fn(mi, j)\data, t\data, lb) = 0
+            if: l2_ft(mi, j) != 9
                 return: 3
             out_j[0]: j
             return: 0
@@ -1458,6 +1850,10 @@ fn: l2_intern_prove (const: @(char path); const: @(LmP0Node node)) int
         return: 0
     id: l2_m_sig[0]
     l2_intern_again: l2_intern_mi(0)
+    if: l2_intern_again = 0U && l2_alloc_err = 2
+        return: l2_error(path, node, "size overflow")
+    if: l2_intern_again = 0U && l2_alloc_err != 0
+        return: l2_error(path, node, "out of memory")
     if: id = 0U || l2_intern_again != id
         return: l2_error(path, node, "intern broken")
     l2_intern_swap: 0U
@@ -1466,14 +1862,22 @@ fn: l2_intern_prove (const: @(char path); const: @(LmP0Node node)) int
         two: 1
     if: two != 0 && l2_text_same(l2_m_f0[0], l2_m_f1[0]) = 0
         l2_intern_swap: l2_intern_pair(l2_m_f1[0]\data, l2_m_f1[0]\length, l2_m_f0[0]\data, l2_m_f0[0]\length)
+    if: two != 0 && l2_intern_swap = 0U && l2_alloc_err = 2
+        return: l2_error(path, node, "size overflow")
+    if: two != 0 && l2_intern_swap = 0U && l2_alloc_err != 0
+        return: l2_error(path, node, "out of memory")
     if: two != 0 && l2_text_same(l2_m_f0[0], l2_m_f1[0]) = 0 && (l2_intern_swap = 0U || l2_intern_swap = id)
         return: l2_error(path, node, "intern failed to distinguish swapped formals")
     l2_intern_probe: l2_intern_pair("a", 1U, "b", 1U)
+    if: l2_intern_probe = 0U && l2_alloc_err = 2
+        return: l2_error(path, node, "size overflow")
+    if: l2_intern_probe = 0U && l2_alloc_err != 0
+        return: l2_error(path, node, "out of memory")
     if: l2_intern_probe = 0U
         return: l2_error(path, node, "intern table full")
-    if: two != 0 && l2_text_eq(l2_m_f0[0], "a") && l2_text_eq(l2_m_f1[0], "b") && l2_m_ft[0] = 0 && l2_intern_probe != id
+    if: two != 0 && l2_text_eq(l2_m_f0[0], "a") && l2_text_eq(l2_m_f1[0], "b") && l2_ft(0, 0) = 0 && l2_intern_probe != id
         return: l2_error(path, node, "intern failed memcmp of equal names")
-    if: two != 0 && (l2_text_eq(l2_m_f0[0], "a") = 0 || l2_text_eq(l2_m_f1[0], "b") = 0 || l2_m_ft[0] != 0) && l2_intern_probe = id
+    if: two != 0 && (l2_text_eq(l2_m_f0[0], "a") = 0 || l2_text_eq(l2_m_f1[0], "b") = 0 || l2_ft(0, 0) != 0) && l2_intern_probe = id
         return: l2_error(path, node, "intern false-equal distinct contracts")
     l2_sigv: id
 return: 0
@@ -1634,24 +2038,32 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
     if: params\as\structure\trailer != 0
         return: l2_error(path, fn_node, "unsupported trailer")
     ar: l2_count_active(params\as\structure)
-    if: ar < 0 || ar > 4
+    if: ar < 0
         return: l2_error(path, fn_node, "incompatible entry signature")
+    if: l2_formals_alloc(l2_m_n, ar) != 0
+        if: l2_alloc_err = 2
+            return: l2_error(path, fn_node, "size overflow")
+        return: l2_error(path, fn_node, "out of memory")
     p: l2_next_active(params\as\structure\first_field)
     j: 0
     while: j < ar
         ty: 0
         fa: 0
         if: p = 0 || l2_typed_formal(p\value, path, @ fa, @ ty) != 0
+            l2_free_method(l2_m_n)
             return: 1
         if: fa = 0 || fa\length >= 63U
+            l2_free_method(l2_m_n)
             return: l2_error(path, fn_node, "name too long")
         k: 0
         while: k < j
-            if: l2_text_same(fa, l2_m_fn[l2_m_n * 4 + k])
+            if: l2_text_same(fa, l2_fn(l2_m_n, k))
+                l2_free_method(l2_m_n)
                 return: l2_error(path, p\value, "duplicate formal")
             k: k + 1
-        l2_m_fn[l2_m_n * 4 + j]: fa
-        l2_m_ft[l2_m_n * 4 + j]: ty
+        if: l2_fn_set(l2_m_n, j, fa) != 0 || l2_ft_set(l2_m_n, j, ty) != 0
+            l2_free_method(l2_m_n)
+            return: l2_error(path, fn_node, "out of memory")
         p: l2_next_active(p\next)
         j: j + 1
     l2_m_arity[l2_m_n]: ar
@@ -1659,9 +2071,9 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
     l2_m_f0[l2_m_n]: 0
     l2_m_f1[l2_m_n]: 0
     if: ar >= 1
-        l2_m_f0[l2_m_n]: l2_m_fn[l2_m_n * 4]
+        l2_m_f0[l2_m_n]: l2_fn(l2_m_n, 0)
     if: ar >= 2
-        l2_m_f1[l2_m_n]: l2_m_fn[l2_m_n * 4 + 1]
+        l2_m_f1[l2_m_n]: l2_fn(l2_m_n, 1)
     field: l2_next_active(field\next)
     if: is_sub != 0
         l2_m_ret[l2_m_n]: 8
@@ -1912,9 +2324,9 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             raw: l2_raw_head(stmt\as\frame\head, mi, @ rj, @ rf)
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 2
             return: l2_error(path, stmt, "unknown foreign field")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj < 8 && (l2_m_ft[mi * 4 + rj] = 4 || l2_m_ft[mi * 4 + rj] = 6)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj < 8 && (l2_ft(mi, rj) = 4 || l2_ft(mi, rj) = 6)
             return: l2_error(path, stmt, "const write")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj < 8 && l2_m_ft[mi * 4 + rj] != 5 && l2_m_ft[mi * 4 + rj] != 7
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj < 8 && l2_ft(mi, rj) != 5 && l2_ft(mi, rj) != 7
             return: l2_error(path, stmt, "unsupported body")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj >= 8 && l2_st[mi * 4 + rj - 8] != 5
             return: l2_error(path, stmt, "unknown foreign field")
@@ -1995,8 +2407,12 @@ fn: l2_parse_unit (const: @(LmP0Node main_node); const: @(char path)) int
     i: 0
     while: i < l2_m_n
         l2_m_sig[i]: l2_intern_mi(i)
-        if: l2_m_sig[i] = 0U
+        if: l2_m_sig[i] = 0U && l2_intern_n >= 16U
             return: l2_error(path, l2_m_node[i], "intern table full")
+        if: l2_m_sig[i] = 0U && l2_alloc_err = 2
+            return: l2_error(path, l2_m_node[i], "size overflow")
+        if: l2_m_sig[i] = 0U
+            return: l2_error(path, l2_m_node[i], "out of memory")
         i: i + 1
     if: l2_m_n != 0 && l2_intern_prove(path, l2_m_node[0]) != 0
         return: 1
@@ -2049,8 +2465,8 @@ fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char de
     c.array: [32]: char deep
     if: dest = 0 || callee < 0 || k < 0 || k >= l2_m_dyn[callee]
         return: 1
-    nm: l2_m_dn[callee * 4 + k]
-    ty: l2_m_dt[callee * 4 + k]
+    nm: l2_dn(callee, k)
+    ty: l2_dt(callee, k)
     dest[0]: 0
     pi: -1
     if: mi >= 0
@@ -2120,16 +2536,13 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     c.array: [256]: char s1
     c.array: [256]: char s2
     c.array: [256]: char s3
-    c.array: [256]: char h0
-    c.array: [256]: char h1
-    c.array: [256]: char h2
-    c.array: [256]: char h3
+    @: char acts 0
+    @: char hides 0
+    int: nact 0
+    int: nhid 0
+    int: ai
     if: node = 0 || dest = 0
         return: 1
-    h0[0]: 0
-    h1[0]: 0
-    h2[0]: 0
-    h3[0]: 0
     if: node\kind = c.LM_P0_NODE_ATOM
         if: mi >= 0
             idx: l2_param_find(mi, node\as\atom)
@@ -2348,69 +2761,76 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: 1
     a0: l2_next_active(call\body\first_field)
     t: 0
-    s0[0]: 0
-    s1[0]: 0
-    s2[0]: 0
-    s3[0]: 0
+    nact: l2_m_arity[idx]
+    nhid: l2_m_dyn[idx]
+    acts: 0
+    hides: 0
+    l2_alloc_kind: 4
+    if: nact > 0
+        if: l2_mul_ok((cast: (size_t) nact), 256U) = 0
+            l2_alloc_err: 2
+            return: l2_error(l2_src, node, "size overflow")
+        acts: (cast: (@: char) l2_xmalloc((cast: (size_t) nact) * 256U))
+        if: acts = 0
+            return: l2_error(l2_src, node, "out of memory")
+        c.memset((cast: (@: void) acts), 0, (cast: (size_t) nact) * 256U)
+        ---
     while: a0 != 0
-        if: t = 0 && l2_prep(a0\value, mi, ind, s0) != 0
-            return: 1
-        if: t = 1 && l2_prep(a0\value, mi, ind, s1) != 0
-            return: 1
-        if: t = 2 && l2_prep(a0\value, mi, ind, s2) != 0
-            return: 1
-        if: t = 3 && l2_prep(a0\value, mi, ind, s3) != 0
-            return: 1
+        if: t >= nact
+            return: l2_prep_drop(acts, hides)
+        if: l2_prep(a0\value, mi, ind, l2_act_at(acts, t)) != 0
+            return: l2_prep_drop(acts, hides)
         t: t + 1
         a0: l2_next_active(a0\next)
-    h0[0]: 0
-    h1[0]: 0
-    h2[0]: 0
-    h3[0]: 0
-    if: l2_m_dyn[idx] > 0 && l2_hidden_from(mi, idx, 0, ind, h0) != 0
-        return: 1
-    if: l2_m_dyn[idx] > 1 && l2_hidden_from(mi, idx, 1, ind, h1) != 0
-        return: 1
-    if: l2_m_dyn[idx] > 2 && l2_hidden_from(mi, idx, 2, ind, h2) != 0
-        return: 1
-    if: l2_m_dyn[idx] > 3 && l2_hidden_from(mi, idx, 3, ind, h3) != 0
-        return: 1
+    if: t != nact
+        return: l2_prep_drop(acts, hides)
+    if: nhid > 0
+        if: l2_mul_ok((cast: (size_t) nhid), 256U) = 0
+            l2_alloc_err: 2
+            l2_prep_drop(acts, hides)
+            return: l2_error(l2_src, node, "size overflow")
+        hides: (cast: (@: char) l2_xmalloc((cast: (size_t) nhid) * 256U))
+        if: hides = 0
+            l2_prep_drop(acts, hides)
+            return: l2_error(l2_src, node, "out of memory")
+        c.memset((cast: (@: void) hides), 0, (cast: (size_t) nhid) * 256U)
+        ai: 0
+        while: ai < nhid
+            if: l2_hidden_from(mi, idx, ai, ind, l2_act_at(hides, ai)) != 0
+                return: l2_prep_drop(acts, hides)
+            ai: ai + 1
+        ---
     if: l2_emit_checkpoint(mi, ind) != 0
-        return: 1
+        return: l2_prep_drop(acts, hides)
     t: l2_tn
     l2_tn: l2_tn + 1
     if: l2_m_ret[idx] = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d\n", ind, t) < 0
-        return: 1
+        return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 3 && c.fprintf(l2_out, "%s@: char l2_t%d\n", ind, t) < 0
-        return: 1
+        return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 5 && c.fprintf(l2_out, "%s@: LmP0Text l2_t%d\n", ind, t) < 0
-        return: 1
+        return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] != 2 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
-        return: 1
+        return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 8 && c.fprintf(l2_out, "%s", ind) < 0
-        return: 1
+        return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] != 8 && c.fprintf(l2_out, "%sl2_t%d: ", ind, t) < 0
-        return: 1
+        return: l2_prep_drop(acts, hides)
     if: l2_write_sym(l2_out, idx) != 0
-        return: 1
+        return: l2_prep_drop(acts, hides)
     if: c.fprintf(l2_out, "(%s", l2_call_node) < 0
-        return: 1
-    if: s0[0] != 0 && c.fprintf(l2_out, ", %s", s0) < 0
-        return: 1
-    if: s1[0] != 0 && c.fprintf(l2_out, ", %s", s1) < 0
-        return: 1
-    if: s2[0] != 0 && c.fprintf(l2_out, ", %s", s2) < 0
-        return: 1
-    if: s3[0] != 0 && c.fprintf(l2_out, ", %s", s3) < 0
-        return: 1
-    if: h0[0] != 0 && c.fprintf(l2_out, ", %s", h0) < 0
-        return: 1
-    if: h1[0] != 0 && c.fprintf(l2_out, ", %s", h1) < 0
-        return: 1
-    if: h2[0] != 0 && c.fprintf(l2_out, ", %s", h2) < 0
-        return: 1
-    if: h3[0] != 0 && c.fprintf(l2_out, ", %s", h3) < 0
-        return: 1
+        return: l2_prep_drop(acts, hides)
+    ai: 0
+    while: ai < nact
+        if: c.fprintf(l2_out, ", %s", l2_act_at(acts, ai)) < 0
+            return: l2_prep_drop(acts, hides)
+        ai: ai + 1
+    ai: 0
+    while: ai < nhid
+        if: c.fprintf(l2_out, ", %s", l2_act_at(hides, ai)) < 0
+            return: l2_prep_drop(acts, hides)
+        ai: ai + 1
+    l2_prep_drop(acts, hides)
     if: c.fputs(")\n", l2_out) < 0
         return: 1
 return: l2_tok_temp(t, dest)
@@ -2568,30 +2988,30 @@ fn: l2_emit_sig (int: mi) int
     if: c.fputs(" (@: Lmx node", l2_out) < 0
         return: 1
     while: j < l2_m_arity[mi]
-        if: l2_m_ft[mi * 4 + j] = 0 && c.fprintf(l2_out, "; int: l2_p%d_%d", mi, j) < 0
+        if: l2_ft(mi, j) = 0 && c.fprintf(l2_out, "; int: l2_p%d_%d", mi, j) < 0
             return: 1
-        if: l2_m_ft[mi * 4 + j] = 1 && c.fprintf(l2_out, "; char: l2_p%d_%d", mi, j) < 0
+        if: l2_ft(mi, j) = 1 && c.fprintf(l2_out, "; char: l2_p%d_%d", mi, j) < 0
             return: 1
-        if: l2_m_ft[mi * 4 + j] = 2 && c.fprintf(l2_out, "; size_t: l2_p%d_%d", mi, j) < 0
+        if: l2_ft(mi, j) = 2 && c.fprintf(l2_out, "; size_t: l2_p%d_%d", mi, j) < 0
             return: 1
-        if: l2_m_ft[mi * 4 + j] = 3 && c.fprintf(l2_out, "; const: @(char l2_p%d_%d)", mi, j) < 0
+        if: l2_ft(mi, j) = 3 && c.fprintf(l2_out, "; const: @(char l2_p%d_%d)", mi, j) < 0
             return: 1
-        if: l2_m_ft[mi * 4 + j] = 4 && c.fprintf(l2_out, "; const: @(LmP0Text l2_p%d_%d)", mi, j) < 0
+        if: l2_ft(mi, j) = 4 && c.fprintf(l2_out, "; const: @(LmP0Text l2_p%d_%d)", mi, j) < 0
             return: 1
-        if: l2_m_ft[mi * 4 + j] = 5 && c.fprintf(l2_out, "; @: LmP0Text l2_p%d_%d", mi, j) < 0
+        if: l2_ft(mi, j) = 5 && c.fprintf(l2_out, "; @: LmP0Text l2_p%d_%d", mi, j) < 0
             return: 1
-        if: l2_m_ft[mi * 4 + j] = 6 && c.fprintf(l2_out, "; const: @(L2ImmutQuery l2_p%d_%d)", mi, j) < 0
+        if: l2_ft(mi, j) = 6 && c.fprintf(l2_out, "; const: @(L2ImmutQuery l2_p%d_%d)", mi, j) < 0
             return: 1
-        if: l2_m_ft[mi * 4 + j] = 7 && c.fprintf(l2_out, "; @: L2ImmutQuery l2_p%d_%d", mi, j) < 0
+        if: l2_ft(mi, j) = 7 && c.fprintf(l2_out, "; @: L2ImmutQuery l2_p%d_%d", mi, j) < 0
             return: 1
-        if: l2_m_ft[mi * 4 + j] = 9 && c.fprintf(l2_out, "; @: size_t l2_p%d_%d", mi, j) < 0
+        if: l2_ft(mi, j) = 9 && c.fprintf(l2_out, "; @: size_t l2_p%d_%d", mi, j) < 0
             return: 1
         j: j + 1
     j: 0
     while: j < l2_m_dyn[mi]
-        if: l2_m_dt[mi * 4 + j] = 1 && c.fprintf(l2_out, "; char: l2_p%d_%d", mi, l2_m_arity[mi] + j) < 0
+        if: l2_dt(mi, j) = 1 && c.fprintf(l2_out, "; char: l2_p%d_%d", mi, l2_m_arity[mi] + j) < 0
             return: 1
-        if: l2_m_dt[mi * 4 + j] = 2 && c.fprintf(l2_out, "; size_t: l2_p%d_%d", mi, l2_m_arity[mi] + j) < 0
+        if: l2_dt(mi, j) = 2 && c.fprintf(l2_out, "; size_t: l2_p%d_%d", mi, l2_m_arity[mi] + j) < 0
             return: 1
         j: j + 1
     if: l2_m_ret[mi] = 2 && c.fputs(") size_t", l2_out) < 0
@@ -3139,10 +3559,25 @@ return: 0
 
 external:
     fn: main (int: argc; @@: char argv) int
+        int: r
+        @: FILE af
+        const: @: char lg
         c.setvbuf(c.stdout, 0, c._IONBF, 0)
         c.setvbuf(c.stderr, 0, c._IONBF, 0)
         if: argc != 3
             c.fputs("usage: l2trans.exe <source.lm2> <output.lm1>\n", c.stderr)
             return: 1
-    return: l2_translate(argv[1], argv[2])
+        if: c.getenv("L2_FAIL_MALLOC") != 0
+            l2_fail_left: c.atoi(c.getenv("L2_FAIL_MALLOC"))
+        r: l2_translate(argv[1], argv[2])
+        l2_release()
+        lg: c.getenv("L2_ALLOC_LOG")
+        if: lg != 0
+            af: c.fopen(lg, "wb")
+            if: af != 0
+                c.fprintf(af, "n=%d free=%d live=%d fail_at=%d fail_kind=%d err=%d\n", l2_alloc_n, l2_free_n, l2_alloc_live, l2_alloc_fail_at, l2_alloc_fail_kind, l2_alloc_err)
+                c.fclose(af)
+            ---
+        ---
+    return: r
 end: external

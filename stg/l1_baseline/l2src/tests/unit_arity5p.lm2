@@ -1,0 +1,13 @@
+fn: write5 (int: a; int: b; int: c; int: d; @: size_t p) int
+    p[0]: a + b + c + d
+    return: 1
+end: write5
+fn: fwd5 (int: a; int: b; int: c; int: d; @: size_t p) int
+    return: write5(a, b, c, d, p)
+end: fwd5
+sub: set5 (int: a; int: b; int: c; int: d; @: size_t p)
+    p[0]: a + b + c + d
+end: set5
+fn: main () int
+    return: 0
+end: main

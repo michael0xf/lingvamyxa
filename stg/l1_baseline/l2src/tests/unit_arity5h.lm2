@@ -1,0 +1,11 @@
+fn: leaf (int: a; int: b; int: c; int: d; int: e) int
+    return: a + e + quote
+end: leaf
+fn: outer () int
+    char: quote
+    quote: 3
+    return: leaf(1, 2, 3, 4, 5)
+end: outer
+fn: main () int
+    return: 0
+end: main

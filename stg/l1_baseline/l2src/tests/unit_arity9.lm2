@@ -1,0 +1,9 @@
+fn: nine (int: a; int: b; int: c; int: d; int: e; int: f; int: g; int: h; int: i) int
+    return: a + b + c + d + e + f + g + h + i
+end: nine
+fn: nineb (int: a; int: b; int: c; int: d; int: e; int: f; int: g; int: h; int: z) int
+    return: a + z
+end: nineb
+fn: main () int
+    return: 0
+end: main
