@@ -1,0 +1,11 @@
+external:
+    fn: main () int
+        int: a 1
+        int: b 2
+        if: c.sizeof((1 ? 2 : 3)) != c.sizeof(1)
+            return: 1
+        if: c.sizeof((1 ? a : b)) != c.sizeof(a)
+            return: 2
+        return: 0
+    end: main
+end: external
