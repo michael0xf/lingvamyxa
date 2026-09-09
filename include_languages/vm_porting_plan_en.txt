@@ -1,3 +1,24 @@
+Проще всего -- загнал generated-C и собрал стандартным иснтрументом:
+    1    MIR            L1        MIR.md + C API           L1/L2 №2 #как первый опыт
+    2    WASM linear    L1        W3C core + binary        L1/L2 №1 #в каждом браузере
+    3    RISC-V ISA     L1        unprivileged spec        L1/L2 №5 
+Популярней всего, JVM в каждом устройства = реальная польза, но надо написать компилятор:
+    4    JVM classfile  L3        JVMS                     L3 №1
+Много браузеров, связан с 2 но тоже надо писать компилятор:
+    5    WASM GC        L3        W3C GC (Wasm 3.0)        L3 №2
+Игровая индустрия громадная:
+    6    Lua 5.4        L3        lopcodes / manual        L3 №5
+Много VM, но там где уже заведомо есть EXE и JVM, Lua по охвату больше Unity:
+    7    .NET CIL       L3        ECMA-335 III             L1 №6 / L3 №3
+
+Вычеркиваем:
+Больше похож на мультиплатформенный язык чем на платформу для языков, 
+ломает герметичность:
+* BEAM           L3        формат OTP beam          L3 №4
+"Годность L1: да, тяжело." -- не катит для команды из нескольких ИИ-агентов:
+* LLVM IR / bitcode  (.bc) + lli / ORC JIT  [L1]  
+
+
 VM porting plan -- open bytecode targets (English)
 =================================================
 
@@ -90,9 +111,12 @@ L3 is a different *surface*, not a different ranking file. L3
 has no address arithmetic (spec 1.4). Its recommended bytecode
 VMs -- JVM classfile, wasm-gc, managed CIL, BEAM, Lua 5.4 --
 are listed here in the same popularity order as the L1
-machines. Mix stays a Java embed (com.mtk.map) until spec
-19.29.2.1; that is not L1 bytecode, and it is a reason JVM
-ranks as the L3 ISA, not a reason to emit classfiles from L1.
+machines. Mix is not a Java ISA. com.mtk.map is a template
+of overlapping trees, not Mix. The target rewrite is
+cooperating Messages in a Smalltalk-style model (spec
+19.29.2.1, WorldWideMix.txt). That is not L1 bytecode and
+not a reason to prefer JVM over CIL, nor to emit classfiles
+from L1.
 
 Do not collapse the two mappings. WASM linear memory is the L1
 heap; wasm-gc is the L3 heap. CIL unmanaged pointers are the L1
@@ -178,8 +202,8 @@ surfaces.
         Scala, Clojure, Groovy) are public writers. This is not
         a closed HotSpot IR: the classfile is the supported
         compiler contract. Android ART runs DEX derived from
-        that classfile. Mix already lives in Java (com.mtk.map)
-        until spec 19.29.2.1.
+        that classfile. com.mtk.map in this directory is a
+        Java template, not Mix and not a reason for this rank.
 
         Why this rank: Java is TIOBE Sep 2026 #4 at 7.54%;
         SlashData Q1 2025 23.2M Java developers -- more than
@@ -296,8 +320,11 @@ surfaces.
         moving GC is for managed objects. L3 fit: yes (L3
         note #3). Same bytecode, managed mapping: objects, GC,
         arrays. Unsafe heaps are unnecessary for L3 and should
-        not be the L3 mapping. Mix is Java, not C#, so JVM
-        stays ahead of CIL as an L3 ISA.
+        not be the L3 mapping. Mix does not pick Java or C#:
+        it is a Message-model rewrite, not a CLR/JVM leftover.
+        JVM stays ahead of CIL on L3 fit as an object mapping
+        and on popularity (larger developer counts), not
+        because Mix lives on the JVM.
 
         Bytecode docs:
             ECMA-335 (6th edition): Partition III (CIL),
@@ -324,9 +351,9 @@ surfaces.
         software-VM because the feature is in every browser.
 
         L3 fit: yes, portable (L3 note #2). Bounds checks and a
-        moving GC are native. No Mix-in-Java heritage; Message
-        FIFO is library code in the guest. L1/L2 fit: no --
-        relocates and tags; wrong WASM heap for Lmx.
+        moving GC are native. Mix is a Message-model library/
+        runtime on the guest, not a Java leftover. L1/L2 fit:
+        no -- relocates and tags; wrong WASM heap for Lmx.
 
         Bytecode docs:
             https://webassembly.github.io/spec/
@@ -398,7 +425,9 @@ surfaces.
         acceptable -- L3 has no address arithmetic. Mapping:
         Message -> process, Structure graph -> maps/tuples,
         merge -> copy. Still a language port, not a drop-in
-        ISA, and there is no Mix/Java story.
+        ISA. Mix's target is Smalltalk-style Messages
+        (19.29.2.1), so BEAM is Mix-shaped; that is fit, not
+        this popularity rank.
 
         Why this rank: Elixir and Erlang sit in TIOBE 51-100.
         Admired (SO 2025) more than they are used. Telecom and
@@ -544,8 +573,9 @@ surfaces, do not mix them.
      (print, fn/sub, each/for, Structure field-follow, table)
      -> JVM classfiles (rank 1, L3 fit #1) or wasm-gc
      (rank 5, L3 fit #2). Bounds-checked arrays required.
-  8. Message FIFO and Mix stay library/runtime on that VM;
-     Mix remains Java until 19.29.2.1.
+  8. Message FIFO and Mix stay library/runtime on that VM.
+     Mix is not Java: rewrite it as cooperating Messages
+     (Smalltalk-style, 19.29.2.1), independent of JVM/CIL.
   9. Via-L1 check is free (L3 -> L1 -> wasi-sdk / c2m) and
      does not test an L3-shaped ISA.
   10. Do not start L3 with Lua, BEAM, LuaJIT FFI, Pawn,
