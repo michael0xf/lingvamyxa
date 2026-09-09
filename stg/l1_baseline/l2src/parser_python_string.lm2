@@ -1,0 +1,38 @@
+fn: lm_p0_starts_python_string (const: @(char text); size_t: length; size_t: index) int
+    char: quote
+    if: index + 2U >= length
+        return: 0
+    quote: text[index]
+    if: quote != 34 && quote != 39
+        return: 0
+    return: text[index + 1U] = quote && text[index + 2U] = quote
+end: lm_p0_starts_python_string
+fn: lm_p0_find_python_string_end (const: @(char text); size_t: length; size_t: start; @: size_t out_end) int
+    char: quote
+    size_t: i
+    size_t: run_length
+    if: lm_p0_starts_python_string(text, length, start) = 0
+        out_end[0]: start
+        return: 0
+    quote: text[start]
+    i: start + 3U
+    while: i < length
+        if: text[i] = quote
+            run_length: 1U
+            while: i + run_length < length && text[i + run_length] = quote
+                run_length: run_length + 1U
+            if: run_length = 3U
+                out_end[0]: i + 3U
+                return: 1
+            i: i + run_length
+            continue
+        i: i + 1U
+    out_end[0]: length
+    return: 0
+end: lm_p0_find_python_string_end
+fn: lm_p0_find_python_string_end_fwd (const: @(char text); size_t: length; size_t: start; @: size_t out_end) int
+    return: lm_p0_find_python_string_end(text, length, start, out_end)
+end: lm_p0_find_python_string_end_fwd
+fn: main () int
+    return: 0
+end: main
