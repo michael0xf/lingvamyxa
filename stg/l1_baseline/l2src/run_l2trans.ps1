@@ -166,6 +166,7 @@ function Invoke-AdmitEmit([string]$src, [string]$stem, [string]$lit) {
 
 Invoke-Positive "l2src\tests\entry_return0.lm2" "entry_return0" 0 "0"
 Invoke-Positive "l2src\tests\entry_return7.lm2" "entry_return7" 7 "7"
+Invoke-Positive "l2src\tests\entry_ret_tr.lm2" "entry_ret_tr" 0 "0"
 
 $lm0 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "entry_return0.lm1")))
 $lm7 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "entry_return7.lm1")))
@@ -447,6 +448,34 @@ Invoke-Negative "l2src\tests\entry_unknown_method.lm2" "entry_unknown_method" "u
 Invoke-Negative "l2src\tests\entry_bad_arity.lm2" "entry_bad_arity" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_unresolved.lm2" "entry_unresolved" "unresolved name"
 Invoke-Negative "l2src\tests\entry_trailer.lm2" "entry_trailer" "unsupported trailer"
+Invoke-Leaf "l2src\tests\unit_ret_tr.lm2" "unit_ret_tr" 0 "add"
+Invoke-Leaf "l2src\tests\unit_end_fn.lm2" "unit_end_fn" 0 "add"
+Invoke-Leaf "l2src\tests\unit_end_dash.lm2" "unit_end_dash" 0 "add"
+Invoke-Negative "l2src\tests\unit_end_wrong.lm2" "unit_end_wrong" "end target does not match close target"
+Invoke-Leaf "l2src\tests\unit_ret_tr_own.lm2" "unit_ret_tr_own" 0 "m"
+$rto = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_ret_tr_own.lm1"))).Replace("`r`n", "`n")
+$callRto = Get-L2Call $rto 0 @()
+$drto = Invoke-SpliceDrive "unit_ret_tr_own" @"
+        c.printf("%d\n", $callRto)
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($drto -ne "65`n65`n") { throw "return-trailer must publish own: $drto" }
+Invoke-Leaf "l2src\tests\unit_ret_tr_hid.lm2" "unit_ret_tr_hid" 0 "outer"
+$rth = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_ret_tr_hid.lm1"))).Replace("`r`n", "`n")
+$callRth = Get-L2Call $rth 1 @()
+$drth = Invoke-SpliceDrive "unit_ret_tr_hid" @"
+        c.printf("%d\n", $callRth)
+        return: 0
+    end: main
+end: external
+"@
+if ($drth -ne "65`n") { throw "return-trailer must discover hidden: $drth" }
+Invoke-Leaf "l2src\tests\unit_main_ret_tr.lm2" "unit_main_ret_tr" 0 "add"
 
 Invoke-Leaf "l2src\tests\unit_prec.lm2" "unit_prec" 1 "prec"
 $pr = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_prec.lm1")))

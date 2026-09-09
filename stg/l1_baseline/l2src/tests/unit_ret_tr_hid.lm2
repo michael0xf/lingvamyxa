@@ -1,0 +1,10 @@
+fn: leaf () int
+return: quote
+fn: outer () int
+    char: quote
+    quote: 65
+    return: leaf()
+end: outer
+fn: main () int
+    return: 0
+end: main

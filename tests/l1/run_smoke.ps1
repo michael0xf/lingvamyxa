@@ -181,6 +181,20 @@ Invoke-Translate "tests\l1\integer_add.lm1" "$obj\integer_add.c"
 Invoke-Translate "tests\l1\integer_add.lm1" "$obj\integer_add_b.c"
 Assert-ByteIdentical "$obj\integer_add.c" "$obj\integer_add_b.c"
 Invoke-CcRun "$obj\integer_add.c" "$bin\integer_add.exe" 0 $null
+Invoke-Translate "tests\l1\fn_close_name.lm1" "$obj\fn_close_name.c"
+Assert-CHas "$obj\fn_close_name.c" "int add("
+Invoke-CcRun "$obj\fn_close_name.c" "$bin\fn_close_name.exe" 0 $null
+Invoke-Translate "tests\l1\fn_close_fn.lm1" "$obj\fn_close_fn.c"
+Assert-CHas "$obj\fn_close_fn.c" "int add("
+Invoke-CcRun "$obj\fn_close_fn.c" "$bin\fn_close_fn.exe" 0 $null
+Invoke-Translate "tests\l1\fn_close_ret.lm1" "$obj\fn_close_ret.c"
+Assert-CHas "$obj\fn_close_ret.c" "return a;"
+Invoke-CcRun "$obj\fn_close_ret.c" "$bin\fn_close_ret.exe" 0 $null
+Invoke-Translate "tests\l1\fn_close_dash.lm1" "$obj\fn_close_dash.c"
+Assert-CHas "$obj\fn_close_dash.c" "int add("
+Invoke-CcRun "$obj\fn_close_dash.c" "$bin\fn_close_dash.exe" 0 $null
+Invoke-TranslateFail "tests\l1\invalid_fn_end_wrong.lm1" "$obj\invalid_fn_end_wrong.c" "$log\invalid_fn_end_wrong.err" "end target does not match close target"
+Invoke-TranslateFail "tests\l1\invalid_fn_end_empty.lm1" "$obj\invalid_fn_end_empty.c" "$log\invalid_fn_end_empty.err" "end trailer expects exactly one target name"
 Invoke-Translate "tests\l1\lm1_unit.lm1" "$obj\lm1_unit.c"
 Assert-CHas "$obj\lm1_unit.c" "int main(void)"
 Invoke-CcRun "$obj\lm1_unit.c" "$bin\lm1_unit.exe" 0 $null

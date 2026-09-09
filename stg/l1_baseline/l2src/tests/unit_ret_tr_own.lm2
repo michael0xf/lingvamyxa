@@ -1,0 +1,7 @@
+fn: m () int
+    char: quote
+    quote: 65
+return: quote
+fn: main () int
+    return: 0
+end: main

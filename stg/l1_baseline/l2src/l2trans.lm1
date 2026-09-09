@@ -19,6 +19,7 @@ const: @: char l2_call_node 0
 @: FILE l2_out 0
 const: @: char l2_src 0
 @: LmP0Structure l2_main_body 0
+const: @: LmP0Node l2_main_node 0
 
 @@: LmP0Text l2_m_name 0
 @@: LmP0Text l2_m_f0 0
@@ -92,6 +93,11 @@ prototype:
     fn: l2_emit_expr (const: @(LmP0Node node); int: mi; const: @(char ind)) int
     fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
+    fn: l2_fn_close (const: @(LmP0Frame frame); const: @(LmP0Text name); const: @(char head)) int
+    fn: l2_ret_tr (const: @(LmP0Frame frame)) @: LmP0Structure
+    fn: l2_emit_ret_tr (int: mi; const: @(char ind); const: @(LmP0Structure body)) int
+    fn: l2_check_ret_tr (int: mi; const: @(char path); const: @(LmP0Structure body); const: @(LmP0Node at)) int
+    fn: l2_text_same (const: @(LmP0Text a); const: @(LmP0Text b)) int
     fn: l2_own_find (const: @(LmP0Text t)) int
     fn: l2_own_add (const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP0Node at)) int
     fn: l2_formal_find (int: mi; const: @(LmP0Text t)) int
@@ -1199,6 +1205,76 @@ fn: l2_end_named (const: @(LmP0Frame frame); const: @(char name)) int
         return: 0
 return: l2_text_eq(field\value\as\atom, name)
 
+fn: l2_fn_close (const: @(LmP0Frame frame); const: @(LmP0Text name); const: @(char head)) int
+    @: LmP0Field field
+    @: LmP0Text actual
+    if: frame = 0
+        return: 1
+    if: frame\trailer = 0
+        return: 0
+    if: l2_text_eq(frame\trailer\spelling, "return")
+        return: 0
+    if: l2_text_eq(frame\trailer\spelling, "end") = 0
+        return: 1
+    if: frame\trailer\body = 0
+        return: 1
+    field: l2_next_active(frame\trailer\body\first_field)
+    if: field = 0 || l2_next_active(field\next) != 0
+        return: 1
+    if: field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM
+        return: 1
+    actual: field\value\as\atom
+    if: name != 0 && l2_text_same(actual, name)
+        return: 0
+    if: head != 0 && l2_text_eq(actual, head)
+        return: 0
+return: 1
+
+fn: l2_ret_tr (const: @(LmP0Frame frame)) @: LmP0Structure
+    if: frame = 0 || frame\trailer = 0 || frame\trailer\spelling = 0
+        return: 0
+    if: l2_text_eq(frame\trailer\spelling, "return") = 0
+        return: 0
+return: frame\trailer\body
+
+fn: l2_check_ret_tr (int: mi; const: @(char path); const: @(LmP0Structure body); const: @(LmP0Node at)) int
+    int: n
+    if: body = 0
+        return: 0
+    n: l2_count_active(body)
+    if: body\trailer != 0
+        return: l2_error(path, at, "unsupported trailer")
+    if: mi >= 0 && l2_m_ret[mi] = 8 && n != 0
+        return: l2_error(path, at, "unsupported body")
+    if: (mi < 0 || l2_m_ret[mi] != 8) && n = 0
+        return: l2_error(path, at, "unsupported body")
+    if: n != 0 && l2_check_fields(body\first_field, n, mi, path, at) != 0
+        return: 1
+return: 0
+
+fn: l2_emit_ret_tr (int: mi; const: @(char ind); const: @(LmP0Structure body)) int
+    int: n
+    if: body = 0 || ind = 0
+        return: 0
+    n: l2_count_active(body)
+    if: mi >= 0 && l2_m_ret[mi] = 8
+        if: n != 0
+            return: 1
+        if: l2_emit_checkpoint(mi, ind) != 0
+            return: 1
+        if: c.fprintf(l2_out, "%sreturn\n", ind) < 0
+            return: 1
+        return: 0
+    if: n = 0
+        return: 1
+    if: l2_eval_fields(body\first_field, n, mi, ind, l2_tok) != 0
+        return: 1
+    if: l2_emit_checkpoint(mi, ind) != 0
+        return: 1
+    if: c.fprintf(l2_out, "%sreturn: %s\n", ind, l2_tok) < 0
+        return: 1
+return: 0
+
 fn: l2_frame_head (const: @(LmP0Node node); const: @(char name)) int
     if: node = 0 || node\kind != c.LM_P0_NODE_FRAME || node\as = 0 || node\as\frame = 0
         return: 0
@@ -1277,6 +1353,25 @@ fn: l2_take_return_stmt (const: @(LmP0Node stmt); const: @(char path); @@: LmP0T
     out_lit[0]: arg\value\as\atom
 return: 0
 
+fn: l2_take_return_fields (const: @(LmP0Structure body); const: @(char path); const: @(LmP0Node at); @@: LmP0Text out_lit) int
+    @: LmP0Field arg
+    if: out_lit = 0
+        return: l2_error(path, at, "internal: missing return slot")
+    out_lit[0]: 0
+    if: body = 0 || l2_count_active(body) != 1
+        return: l2_error(path, at, "unsupported body")
+    if: body\trailer != 0
+        return: l2_error(path, at, "unsupported trailer")
+    arg: l2_next_active(body\first_field)
+    if: arg\value = 0 || arg\value\kind != c.LM_P0_NODE_ATOM
+        return: l2_error(path, at, "unsupported body")
+    if: l2_digits(arg\value\as\atom) = 0
+        return: l2_error(path, at, "unsupported body")
+    if: l2_int_fits(arg\value\as\atom) = 0
+        return: l2_error(path, at, "return literal not representable as int")
+    out_lit[0]: arg\value\as\atom
+return: 0
+
 fn: l2_take_body (const: @(LmP0Node body_node); const: @(char path); @@: LmP0Text out_lit) int
     @: LmP0Field field
     @: LmP0Field nxt
@@ -1314,14 +1409,18 @@ fn: l2_take_main_lit (const: @(LmP0Node fn_node); const: @(char path); @@: LmP0T
     if: l2_frame_head(fn_node, "fn") = 0
         return: l2_error(path, fn_node, "unsupported body")
     fn_frame: fn_node\as\frame
-    if: l2_end_named(fn_frame, "main") = 0
+    if: fn_frame\trailer != 0 && l2_text_eq(fn_frame\trailer\spelling, "end") = 0 && l2_text_eq(fn_frame\trailer\spelling, "return") = 0
+        return: l2_error(path, fn_node, "unsupported trailer")
+    if: fn_frame\body = 0
         return: l2_error(path, fn_node, "incompatible entry signature")
-    if: fn_frame\body = 0 || l2_count_active(fn_frame\body) != 4
+    if: l2_count_active(fn_frame\body) != 4 && (l2_count_active(fn_frame\body) != 3 || l2_ret_tr(fn_frame) = 0)
         return: l2_error(path, fn_node, "incompatible entry signature")
     field: l2_next_active(fn_frame\body\first_field)
     name: field\value
     if: name = 0 || name\kind != c.LM_P0_NODE_ATOM || l2_text_eq(name\as\atom, "main") = 0
         return: l2_error(path, fn_node, "incompatible entry signature")
+    if: l2_fn_close(fn_frame, name\as\atom, "fn") != 0
+        return: l2_error(path, fn_node, "end target does not match close target")
     field: l2_next_active(field\next)
     params: field\value
     if: l2_empty_struct(params) = 0
@@ -1331,12 +1430,17 @@ fn: l2_take_main_lit (const: @(LmP0Node fn_node); const: @(char path); @@: LmP0T
     if: resty = 0 || resty\kind != c.LM_P0_NODE_ATOM || l2_text_eq(resty\as\atom, "int") = 0
         return: l2_error(path, fn_node, "incompatible entry signature")
     field: l2_next_active(field\next)
-    body: field\value
-    if: l2_take_body(body, path, out_lit) != 0
+    body: 0
+    if: field != 0
+        body: field\value
+    if: l2_ret_tr(fn_frame) != 0 && l2_take_return_fields(l2_ret_tr(fn_frame), path, fn_node, out_lit) != 0
         return: 1
-    if: body = 0 || body\kind != c.LM_P0_NODE_STRUCTURE || body\as = 0
+    if: l2_ret_tr(fn_frame) = 0 && l2_take_body(body, path, out_lit) != 0
+        return: 1
+    if: body != 0 && (body\kind != c.LM_P0_NODE_STRUCTURE || body\as = 0)
         return: l2_error(path, fn_node, "unsupported body")
-    out_body[0]: body\as\structure
+    if: body != 0
+        out_body[0]: body\as\structure
 return: 0
 
 fn: l2_unit_from_root (const: @(LmP0Node root); const: @(char path); @@: LmP0Structure out_unit) int
@@ -1386,6 +1490,7 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
     l2_need_own: 0
     l2_intern_n: 0U
     l2_src: path
+    l2_main_node: 0
     i: 0
     while: i < l2_m_cap
         l2_free_method(i)
@@ -1437,9 +1542,11 @@ fn: l2_emit_l1 (const: @(char out_path); const: @(LmP0Structure body); const: @(
     @: LmP0Field field
     @: LmP0Field nxt
     int: puts_n 0
-    if: out_path = 0 || body = 0 || lit = 0 || lit\data = 0 || lit\length = 0U
+    if: out_path = 0 || lit = 0 || lit\data = 0 || lit\length = 0U
         return: 1
-    field: l2_next_active(body\first_field)
+    field: 0
+    if: body != 0
+        field: l2_next_active(body\first_field)
     while: field != 0
         nxt: l2_next_active(field\next)
         if: nxt != 0
@@ -1455,7 +1562,9 @@ fn: l2_emit_l1 (const: @(char out_path); const: @(LmP0Structure body); const: @(
     if: c.fputs("external:\n    fn: main () int\n", out) < 0
         c.fclose(out)
         return: 1
-    field: l2_next_active(body\first_field)
+    field: 0
+    if: body != 0
+        field: l2_next_active(body\first_field)
     while: field != 0
         nxt: l2_next_active(field\next)
         if: nxt != 0 && l2_emit_puts_line(out, field\value) != 0
@@ -2131,6 +2240,10 @@ fn: l2_dyn_local (const: @(char path)) int
             if: heap != 0
                 l2_xfree((cast: (@: void) seen))
             return: l2_alloc_or(path, l2_m_node[i], "unsupported body")
+        if: l2_m_node[i] != 0 && l2_m_node[i]\as != 0 && l2_ret_tr(l2_m_node[i]\as\frame) != 0 && l2_scan_fields(l2_ret_tr(l2_m_node[i]\as\frame)\first_field, l2_count_active(l2_ret_tr(l2_m_node[i]\as\frame)), i, seen) != 0
+            if: heap != 0
+                l2_xfree((cast: (@: void) seen))
+            return: l2_alloc_or(path, l2_m_node[i], "unsupported body")
         oi: 0
         while: oi < l2_own_n
             if: l2_m_uses[l2_own_off(i, oi)] != 0 && l2_m_pre[l2_own_off(i, oi)] != 0 && l2_dyn_add(i, l2_own_name[oi], l2_own_ty[oi]) != 0
@@ -2704,9 +2817,12 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
     fr: fn_node\as\frame
     if: l2_frame_head(fn_node, "sub")
         is_sub: 1
-    if: is_sub = 0 && (fr\body = 0 || l2_count_active(fr\body) != 4)
+    k: 0
+    if: fr\body != 0
+        k: l2_count_active(fr\body)
+    if: is_sub = 0 && k != 4 && (k != 3 || l2_ret_tr(fr) = 0)
         return: l2_error(path, fn_node, "incompatible entry signature")
-    if: is_sub != 0 && (fr\body = 0 || l2_count_active(fr\body) != 3)
+    if: is_sub != 0 && k != 3 && (k != 2 || l2_ret_tr(fr) = 0)
         return: l2_error(path, fn_node, "incompatible entry signature")
     if: fr\body\trailer != 0
         return: l2_error(path, fn_node, "unsupported trailer")
@@ -2716,8 +2832,12 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
     if: l2_ident(field\value\as\atom) = 0
         return: l2_error(path, fn_node, "incompatible entry signature")
     nm: field\value\as\atom
-    if: l2_end_text(fr, nm) = 0
-        return: l2_error(path, fn_node, "incompatible entry signature")
+    if: fr\trailer != 0 && l2_text_eq(fr\trailer\spelling, "end") = 0 && l2_text_eq(fr\trailer\spelling, "return") = 0
+        return: l2_error(path, fn_node, "unsupported trailer")
+    if: is_sub = 0 && l2_fn_close(fr, nm, "fn") != 0
+        return: l2_error(path, fn_node, "end target does not match close target")
+    if: is_sub != 0 && l2_fn_close(fr, nm, "sub") != 0
+        return: l2_error(path, fn_node, "end target does not match close target")
     if: l2_find_method(nm) >= 0
         return: l2_error(path, fn_node, "duplicate definition")
     if: nm\length >= 63U
@@ -2794,10 +2914,14 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
         return: l2_error(path, fn_node, "incompatible entry signature")
     if: is_sub = 0
         field: l2_next_active(field\next)
-    body: field\value
-    if: body = 0 || body\kind != c.LM_P0_NODE_STRUCTURE || body\as = 0
+    body: 0
+    if: field != 0
+        body: field\value
+    if: body = 0 && l2_ret_tr(fr) = 0
         return: l2_error(path, fn_node, "unsupported body")
-    if: body\as\structure\trailer != 0
+    if: body != 0 && (body\kind != c.LM_P0_NODE_STRUCTURE || body\as = 0)
+        return: l2_error(path, fn_node, "unsupported body")
+    if: body != 0 && body\as\structure\trailer != 0
         return: l2_error(path, fn_node, "unsupported trailer")
     l2_m_name[l2_m_n]: nm
     l2_m_node[l2_m_n]: (cast: (@: LmP0Node) fn_node)
@@ -2805,7 +2929,7 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
     l2_m_sig[l2_m_n]: 0U
     l2_m_own[l2_m_n]: 0
     l2_m_sn[l2_m_n]: 0
-    if: l2_collect_decls(body\as\structure, l2_m_n, path, 0, @ sn) != 0
+    if: body != 0 && l2_collect_decls(body\as\structure, l2_m_n, path, 0, @ sn) != 0
         return: 1
     l2_m_sn[l2_m_n]: sn
     l2_m_n: l2_m_n + 1
@@ -3074,15 +3198,20 @@ fn: l2_parse_unit (const: @(LmP0Node main_node); const: @(char path)) int
     if: main_node = 0 || main_node\as = 0 || main_node\as\frame = 0
         return: l2_error(path, main_node, "unsupported body")
     fr: main_node\as\frame
-    if: l2_end_named(fr, "main") = 0
+    l2_main_node: main_node
+    if: fr\trailer != 0 && l2_text_eq(fr\trailer\spelling, "end") = 0 && l2_text_eq(fr\trailer\spelling, "return") = 0
+        return: l2_error(path, main_node, "unsupported trailer")
+    if: fr\body = 0
         return: l2_error(path, main_node, "incompatible entry signature")
-    if: fr\body = 0 || l2_count_active(fr\body) != 4
+    if: l2_count_active(fr\body) != 4 && (l2_count_active(fr\body) != 3 || l2_ret_tr(fr) = 0)
         return: l2_error(path, main_node, "incompatible entry signature")
     if: fr\body\trailer != 0
         return: l2_error(path, main_node, "unsupported trailer")
     field: l2_next_active(fr\body\first_field)
     if: field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM || l2_text_eq(field\value\as\atom, "main") = 0
         return: l2_error(path, main_node, "incompatible entry signature")
+    if: l2_fn_close(fr, field\value\as\atom, "fn") != 0
+        return: l2_error(path, main_node, "end target does not match close target")
     field: l2_next_active(field\next)
     if: l2_empty_struct(field\value) = 0
         return: l2_error(path, main_node, "incompatible entry signature")
@@ -3090,19 +3219,29 @@ fn: l2_parse_unit (const: @(LmP0Node main_node); const: @(char path)) int
     if: field\value = 0 || field\value\kind != c.LM_P0_NODE_ATOM || l2_text_eq(field\value\as\atom, "int") = 0
         return: l2_error(path, main_node, "incompatible entry signature")
     field: l2_next_active(field\next)
-    body: field\value
-    if: body = 0 || body\kind != c.LM_P0_NODE_STRUCTURE || body\as = 0
+    body: 0
+    if: field != 0
+        body: field\value
+    if: body = 0 && l2_ret_tr(fr) = 0
         return: l2_error(path, main_node, "unsupported body")
-    if: body\as\structure\trailer != 0
+    if: body != 0 && (body\kind != c.LM_P0_NODE_STRUCTURE || body\as = 0)
+        return: l2_error(path, main_node, "unsupported body")
+    if: body != 0 && body\as\structure\trailer != 0
         return: l2_error(path, main_node, "unsupported trailer")
-    l2_main_body: body\as\structure
+    l2_main_body: 0
+    if: body != 0
+        l2_main_body: body\as\structure
     if: l2_dyn_local(path) != 0
         return: 1
     while: i < l2_m_n
-        if: l2_check_body(l2_m_body[i]\as\structure, i, path, 0) != 0
+        if: l2_m_body[i] != 0 && l2_m_body[i]\as != 0 && l2_check_body(l2_m_body[i]\as\structure, i, path, 0) != 0
+            return: 1
+        if: l2_m_node[i] != 0 && l2_m_node[i]\as != 0 && l2_check_ret_tr(i, path, l2_ret_tr(l2_m_node[i]\as\frame), l2_m_node[i]) != 0
             return: 1
         i: i + 1
-    if: l2_check_body(body\as\structure, -1, path, 0) != 0
+    if: body != 0 && body\as != 0 && l2_check_body(body\as\structure, -1, path, 0) != 0
+        return: 1
+    if: l2_check_ret_tr(-1, path, l2_ret_tr(fr), main_node) != 0
         return: 1
     if: l2_dyn_close(path) != 0
         return: 1
@@ -3782,6 +3921,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     c.array: [32]: char wdeep
     c.array: [64]: char wcond
     c.array: [64]: char wkeep
+    if: body = 0
+        return: 0
     ln: c.strlen(ind)
     if: ln + 5U >= 32U
         return: 1
@@ -4007,7 +4148,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     c.array: [512]: char bak
     @: FILE chk
     int: had 0
-    if: out_path = 0 || l2_m_n = 0 || l2_main_body = 0
+    if: out_path = 0 || l2_m_n = 0 || (l2_main_body = 0 && (l2_main_node = 0 || l2_main_node\as = 0 || l2_ret_tr(l2_main_node\as\frame) = 0))
         return: 1
     n: (cast: (unsigned) l2_m_n)
     pn: c.strlen(out_path)
@@ -4158,7 +4299,13 @@ fn: l2_emit_unit (const: @(char out_path)) int
             return: 1
         l2_tn: 0
         l2_call_node: "node"
-        if: l2_emit_body(l2_m_body[i]\as\structure, i, "    ") != 0
+        if: l2_m_body[i] != 0 && l2_m_body[i]\as != 0 && l2_emit_body(l2_m_body[i]\as\structure, i, "    ") != 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_m_body[i] = 0 && l2_emit_body(0, i, "    ") != 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_m_node[i] != 0 && l2_m_node[i]\as != 0 && l2_emit_ret_tr(i, "    ", l2_ret_tr(l2_m_node[i]\as\frame)) != 0
             c.fclose(l2_out)
             return: 1
         if: l2_m_ret[i] = 8 && l2_emit_checkpoint(i, "    ") != 0
@@ -4231,6 +4378,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
     l2_tn: 0
     l2_call_node: "unit"
     if: l2_emit_body(l2_main_body, -1, "        ") != 0
+        c.fclose(l2_out)
+        return: 1
+    if: l2_main_node != 0 && l2_main_node\as != 0 && l2_emit_ret_tr(-1, "        ", l2_ret_tr(l2_main_node\as\frame)) != 0
         c.fclose(l2_out)
         return: 1
     if: c.fputs("    end: main\nend: external\n", l2_out) < 0

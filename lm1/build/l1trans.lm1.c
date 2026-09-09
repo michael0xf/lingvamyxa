@@ -6355,6 +6355,8 @@ int l1_emit_stmt(FILE * out, const LmP0Node * node, const char * path);
 int l1_emit_switch(FILE * out, const LmP0Frame * frame, const char * path, const LmP0Node * node);
 int l1_emit_goto(FILE * out, const LmP0Frame * frame, const char * path, const LmP0Node * node);
 int l1_validate_end_trailer(const LmP0Frame * frame, const char * path, const LmP0Node * node);
+int l1_validate_fn_close(const LmP0Frame * frame, const LmP0Text * name, const char * head, const char * path, const LmP0Node * node);
+int l1_ident_same(const LmP0Text * a, const LmP0Text * b);
 int l1_emit_block(FILE * out, const LmP0Structure * body, const char * path);
 int l1_emit_l1_body(FILE * out, const LmP0Structure * body, const char * path, int depth);
 int l1_emit_implicit_l1(FILE * out, const LmP0Node * root, const char * path, int depth);
@@ -10320,6 +10322,12 @@ int l1_emit_fn(FILE * out, const LmP0Frame * frame, const char * path, int is_su
     if (l1_write_cstr(out, "}\n") != 0) {
     return 1;
     }
+    if (is_sub == 0 && l1_validate_fn_close(frame, fn_name, "fn", path, name_node) != 0) {
+    return 1;
+    }
+    if (is_sub != 0 && l1_validate_fn_close(frame, fn_name, "sub", path, name_node) != 0) {
+    return 1;
+    }
     return 0;
 }
 int l1_copy_quoted(const LmP0Text * atom, char * buf, size_t cap)
@@ -10518,6 +10526,46 @@ int l1_ident_same(const LmP0Text * a, const LmP0Text * b)
     return 1;
     }
     return memcmp(a->data + sa, b->data + sb, na) == 0;
+}
+int l1_validate_fn_close(const LmP0Frame * frame, const LmP0Text * name, const char * head, const char * path, const LmP0Node * node)
+{
+    LmP0Field * field;
+    LmP0Field * nxt;
+    const LmP0Text * actual;
+    if (frame == 0 || frame -> trailer == 0) {
+    return 0;
+    }
+    if (l1_text_eq(frame->trailer->spelling, "return")) {
+    return 0;
+    }
+    if (l1_text_eq(frame->trailer->spelling, "end") == 0) {
+    return 0;
+    }
+    if (frame -> trailer -> body == 0) {
+    return l1_error(path, node, "end trailer expects exactly one target name");
+    }
+    field = frame -> trailer -> body -> first_field;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    if (field == 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_ATOM) {
+    return l1_error(path, node, "end trailer expects exactly one target name");
+    }
+    nxt = field -> next;
+    while (nxt != 0 && l1_node_ignored(nxt->value)) {
+    nxt = nxt -> next;
+    }
+    if (nxt != 0) {
+    return l1_error(path, node, "end trailer expects exactly one target name");
+    }
+    actual = field -> value -> as -> atom;
+    if (name != 0 && l1_ident_same(actual, name)) {
+    return 0;
+    }
+    if (head != 0 && l1_text_eq(actual, head)) {
+    return 0;
+    }
+    return l1_error(path, node, "end target does not match close target");
 }
 int l1_validate_end_trailer(const LmP0Frame * frame, const char * path, const LmP0Node * node)
 {
