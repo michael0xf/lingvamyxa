@@ -63,16 +63,40 @@ the one that becomes last - StorageList around line 185. Descending pushes a
 list. Scrolling the row left is therefore not a separate navigation mechanism;
 it is looking at where you already are.
 
-THERE IS NO ".." ENTRY, and this is why. The string does not occur anywhere in
-ClearShell's source. Norton and FAR need a parent entry because a pane shows one
-directory and the parent is off-screen; here the parent is the list to the left,
-already drawn and already scrolled to the entry you came through. Adding ".."
-to the port would be adding a mechanism to solve a problem this layout does not
-have.
+1.0.1. Each list BEGINS with its ancestor chain, in a different colour
 
-Verified by reading initParent, the up operation and the absence of the string.
-That descending pushes a list is the obvious complement and was not separately
-traced.
+There is no ".." entry - but do not conclude from that, as I first did, that the
+parent concept is absent. It is present and richer than "..". I searched for the
+literal string, did not find it, and concluded the mechanism did not exist. The
+string is absent; the mechanism is not.
+
+Every list opens with a block of ANCESTOR ROWS before its own contents, drawn in
+a different colour from ordinary entries. From ClearShell: a row is an ancestor
+row when its index is below dirsSize(), and row i shows dirs[i], where dirs is
+[null, disk root, ..., immediate parent].
+
+So, top of a list downward:
+
+    row 0                *** LIST OF ROOTS ***   (the null entry)
+    row 1                the disk root
+    ...                  descending the tree
+    row dirsSize() - 1   the immediate parent
+    then                 the directory's own contents
+
+Read the other way - upward from the contents, which is how it is used - the
+first ancestor you meet is the immediate parent, then the whole chain, and at
+the very top the list of roots.
+
+So the parent is reachable in TWO ways, and that is the point: as the list to
+the LEFT, already scrolled to the entry you came through, and as a row at the
+top of THIS list. Norton's ".." offers one entry; this offers the whole path,
+addressable at any depth, from inside any list.
+
+Verified by reading initParent, the up operation, getView's isParent test and
+StorageList's dirs indexing. That descending pushes a list is the obvious
+complement and was not separately traced. The gradient that once shaded ancestor
+rows by depth is present but COMMENTED OUT in ClearShell - do not port it as
+live behaviour without asking.
 
 
 2. Take the layout method from ClearShell, not just its numbers
