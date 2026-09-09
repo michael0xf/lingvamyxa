@@ -66,11 +66,12 @@ $cases = @(
     @{ Name = "expr_str_triple_double"; Has = @(
         'double # not a comment\ncolon: stays data',
         'backslash is raw: \\\" \\n',
+        'same quote run: \"\"\"\n";',
         'const char * t = "\?\?="'
     )},
     @{ Name = "expr_str_triple_single"; Has = @(
         "single # not a comment",
-        'four \"\"\"\" five'
+        'four \"\"\" five \"\"\"\"'
     )},
     @{ Name = "expr_str_triple_args"; Has = @(
         ") # not syntax",
