@@ -2342,6 +2342,12 @@ Examples:
     four quotes produce three: ''''
     still text'''
 
+Runtime fixtures tests/l1/expr_str_triple_double.lm1,
+expr_str_triple_single.lm1 and expr_str_triple_args.lm1 assert that
+decoded value, not the source spelling of the body run. A source run
+of four opening quotes remains A+1 encoding of three value quotes.
+Escaped, trigraph and newline assertions in those fixtures stay.
+
 The opening and closing triple delimiters are part of the preserved source spelling at P0. Value decoding belongs to the literal/value layer above P0 and uses the quote-run rule above. After the closing triple delimiter, the next source character must be a field boundary: horizontal whitespace, a physical line break, comma/semicolon, `(`, `)`, `[`, `]`, or the end of the source item.
 
 This form is different from the column-0 block string fence below. It does not create or close a source-level block by itself. For example, as a child of a frame it still needs an ordinary child level:
