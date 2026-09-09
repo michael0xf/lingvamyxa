@@ -11248,8 +11248,12 @@ The document/addressing model below remains current; execution follows 19.29.2.1
 This section is a document and addressing model. It is not a replacement for
 the P0 parser, Mix overlay markup in section 0.0.2, or
 the compatibility operations in sections 2.1 through 2.4 and 19.21.3. The
-current hosted bootstrap does not implement World Wide Mix paths, prefix locks
-or mirrors.
+Message mailbox prototype records a Mix placement path by parent
+counter and append (19.29.7.1). It does not implement prefix locks,
+mirrors, routing, or packed mixed-radix ints. A placement path is
+not a language-level depth or byte-width limit; the prototype stores
+a bounded segment array and refuses rather than wrap. This does not
+make every Mix cell a running Message.
 
 The `implements` examples below describe a known Consumer's requirements, not
 an automatic runtime walk or retained reader body. RuntimeImplements currently
@@ -11984,10 +11988,24 @@ contracts; `spawn` here is English, not a new parser intrinsic):
         Reserve a child identity and a distinct INACTIVE arena during
         the parent turn. Copy initialData (numbers and exact byte/text
         payloads) into that reserved child's arena. This is not a send
-        into a running recipient. Retry of the same (parent, create_id)
-        while the child is still live returns that child (no second
-        committed child). An aborted uncommitted reservation is
-        released (tombstone); retry must not return the freed handle.
+        into a running recipient. The child's Mix placement path is
+        the parent's path with one new nonnegative integer appended
+        from that parent's child-allocation counter (host counter
+        when parent is the host root). Concatenation, not arithmetic
+        on the whole address: parent `34.3` yields `34.3.1`, then
+        `34.3.2`; that child's first child is `34.3.1.1`. First
+        allocated child is 1. Retry of the same (parent, create_id)
+        returns the same child and the same path and does not consume
+        another counter value. An aborted reservation is not reused;
+        a later retry of that create_id gets a new slot and a new
+        path segment. The internal mailbox slot (`LmxMsgAddr`) is
+        not the Mix path. This path names Message placement; it does
+        not make every Mix cell a running Message. Externally issued
+        addresses and packed mixed-radix ints are not this allocator.
+        While the child is still live, retry of the same
+        (parent, create_id) returns that child (no second committed
+        child). An aborted uncommitted reservation is released
+        (tombstone); retry must not return the freed handle.
         The child does not run before the creator's successful
         end-turn publication. Third-party send cannot activate an
         uncommitted reservation. A failed parent turn releases
