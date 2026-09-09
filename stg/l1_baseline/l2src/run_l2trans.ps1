@@ -1709,4 +1709,89 @@ end: external
 
 Invoke-PythonString
 
+function Invoke-VisualColumn {
+    $cases = @'
+        c.printf("%zu\n", lm_p0_indent_tab_column(0U))
+        c.printf("%zu\n", lm_p0_indent_tab_column(1U))
+        c.printf("%zu\n", lm_p0_indent_tab_column(7U))
+        c.printf("%zu\n", lm_p0_indent_tab_column(8U))
+        c.printf("%zu\n", lm_p0_indent_tab_column(9U))
+        c.printf("%zu\n", lm_p0_visual_column_between("", 0U, 0U))
+        c.printf("%zu\n", lm_p0_visual_column_between("abc", 0U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("abc", 3U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("abc", 4U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\nb", 0U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\rb", 0U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\r\nb", 0U, 4U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\r", 0U, 2U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\r\n", 0U, 3U))
+        c.printf("%zu\n", lm_p0_visual_column_between("\t", 0U, 1U))
+        c.printf("%zu\n", lm_p0_visual_column_between("x\t", 0U, 2U))
+        c.printf("%zu\n", lm_p0_visual_column_between("xxxxxxx\t", 0U, 8U))
+        c.printf("%zu\n", lm_p0_visual_column_between("xxxxxxxx\t", 0U, 9U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\tb\nc", 0U, 5U))
+        c.printf("%zu\n", lm_p0_visual_column_between("ab\tcd", 2U, 5U))
+        c.printf("%zu\n", lm_p0_visual_column_between("a\0b", 0U, 3U))
+'@
+
+    $refLm1 = Join-Path $out "vcol_ref.lm1"
+    $refC = Join-Path $out "vcol_ref.c"
+    $refExe = Join-Path $out "vcol_ref.exe"
+    $refOut = Join-Path $out "vcol_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed vcol_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "vcol_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'vcol_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "vcol_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_visual_column.lm2" "parser_visual_column" 0 "lm_p0_visual_column_between"
+    $lm1 = Join-Path $out "parser_visual_column.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "visual_column must mangle method symbols" }
+    if ($text -notmatch '(?m)^\s+continue$') { throw "visual_column must emit continue" }
+    if ($text -notmatch 'l2_m0\(') { throw "visual_column must call tab helper" }
+    if ($text -notmatch 'l2_q\d+_dirty: 1') { throw "column own must dirty after assign" }
+    if ($text -notmatch 'lmx_size_store') { throw "column own must checkpoint before tab helper call" }
+
+    $l2cases = $cases.Replace("lm_p0_indent_tab_column(", "l2_m0(unit, ").Replace("lm_p0_visual_column_between(", "l2_m1(unit, ")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "visual_column L1 missing generated main return" }
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "vcol_l2_drive.lm1"
+    $drvC = Join-Path $out "vcol_l2_drive.c"
+    $drvExe = Join-Path $out "vcol_l2_drive.exe"
+    $drvOut = Join-Path $out "vcol_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed vcol_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "vcol_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'vcol_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "vcol_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "visual_column mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+
+    $ctext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "parser_visual_column.c"))).Replace("`r`n", "`n")
+    if ($ctext -notmatch '&&') { throw "CRLF p+1 bound guard must stay C &&" }
+}
+
+Invoke-VisualColumn
+
 "l2trans $gen ok"
