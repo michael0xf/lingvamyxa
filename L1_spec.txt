@@ -189,14 +189,18 @@ build baseline; promotion must preserve the live L2 sources.
   `sizeof(&char)`. Unary `@ x` remains address-of (`sizeof(@ x)` →
   `sizeof(&x)`). Tests: sizeof_ptr_type.lm1, sizeof_addr.lm1.
   Compact `c.foo(...)` is one P0 ATOM. A nested L1 receiver inside
-  that atom (a `:` after the `c.` prefix, e.g. `cast:`) is not a
-  frame and is rejected: `compact c. call cannot contain a nested
-  L1 receiver`. `c.sizeof((cast: (unsigned) 0))` is that form; it is
-  not lowered into C. Ordinary compact calls without `:` still emit
-  after stripping `c.` and mapping `\` (`c.sizeof(x\field)` →
-  `sizeof(x->field)`). Vertical `c.sizeof:` with an empty colon is
-  P0 error 32, not this diagnostic. Test:
-  invalid_sizeof_cast_compact.lm1.
+  that atom is rejected (`compact c. call cannot contain a nested
+  L1 receiver`) when `:` is not inside a string/character literal
+  and is not a C ternary colon matched to `?` at the same paren
+  depth. `c.sizeof((cast: (unsigned) 0))` is that form; it is not
+  lowered into C. Colons in ordinary compact C stay accepted:
+  `c.sizeof(("x:y"))`, `c.sizeof(("cast:"))`, `c.sizeof((':'))`,
+  `c.sizeof((1 ? 2 : 3))` / `c.sizeof((1 ? a : b))`. Other compact
+  calls without a nested receiver still emit after stripping `c.`
+  and mapping `\` (`c.sizeof(x\field)` → `sizeof(x->field)`).
+  Vertical `c.sizeof:` with an empty colon is P0 error 32, not this
+  diagnostic. Tests: invalid_sizeof_cast_compact.lm1,
+  sizeof_str_colon.lm1, sizeof_char_colon.lm1, sizeof_ternary.lm1.
   Array forms:
     - `[]: T name N …` one-dimensional extent + initializer (decl-repeat
       and scalar suites).
