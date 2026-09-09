@@ -182,6 +182,11 @@ build baseline; promotion must preserve the live L2 sources.
     end: sample_entry
 
   This gen1+ regression is exercised by empty_sub_ok.lm1.
+  Function close admits `end:<name>` (canonical), `end:fn`/`end:sub`
+  (receiver/head), a terminal `return:` trailer, or `---` as a
+  multi-level tail cutter. Bare `end` and empty `end:` are rejected.
+  Wrong target/arity remain diagnostics. Tests: fn_close_*.lm1,
+  invalid_fn_end_wrong.lm1, invalid_fn_end_empty.lm1.
 
 1.5 Control and expressions (covered by runners)
   if / else, while, for (C-style three-slot header as in for_loop.lm1;

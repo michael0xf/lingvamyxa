@@ -3445,9 +3445,12 @@ at source level K is an explicit source-level marker. The dash fence is a run of
 It makes an otherwise empty structural step visible, without calling a receiver:
 
     1. If the parser is currently inside a deeper level, the move to the dash fence at
-       level K performs the ordinary one-step source-level cut/trailer for the
-       open Structure above K. A dash-fence line is not a general multi-level
-       tail cutter.
+       level K is an admitted tail-cutter close: it may skip N open levels down
+       to K (unlike an ordinary source item, which may decrease by only one
+       level). Bare `end` and empty `end:` are not this marker. Named `end:
+       <target>` remains the readable closer; `---` is the short explicit
+       multi-level alternative. A following item at K+1 still opens an
+       anonymous Structure at K.
 
     2. If the following non-empty source item is at level K + 1, the dash-fence line
        acts as the visible head of an anonymous positional Structure at level
@@ -3701,7 +3704,7 @@ opening form, but that is an opt-out from named close, not the default.
 
 `end:` is not the default close mechanism for all named frames. The default structural close is the ordinary source-level cut. `end:` is the explicit named form of that close. It is useful when the source wants to identify the close target directly, close across a long nested tail, or improve diagnostics and readability in long blocks.
 
-A standalone dash-fence source line is an explicit source-level marker used primarily by relaxed indentation notation as the counterpart of a canonical source-level delimiter line. It does not consume a target and performs no receiver call by itself. When followed by source items at the next deeper level, it materializes the head of an anonymous positional Structure at its own source level. Otherwise it separates or closes the current open anonymous/implicit section at that level by ordinary source-level rules. When the current named frame allows nameless close and there is no ambiguity, a dash-fence line may close that frame as a shorter alternative to `end: name`.
+A standalone dash-fence source line is an explicit source-level marker used primarily by relaxed indentation notation as the counterpart of a canonical source-level delimiter line. It does not consume a target and performs no receiver call by itself. When followed by source items at the next deeper level, it materializes the head of an anonymous positional Structure at its own source level. Otherwise it is an admitted multi-level tail cutter: from a valid close position it may skip N open levels down to its own level. An ordinary downward transition without an admitted trailer (`end:<target>`, terminal `return:`, or `---`) may decrease by only one level. Bare `end` and empty `end:` are forbidden (they invite Pascal-style stacks of redundant closers). Named `end:` and terminal `return:` remain the readable closers; `---` is the short explicit alternative. When the current named frame allows nameless close and there is no ambiguity, a dash-fence line may close that frame as a shorter alternative to `end: name`.
 
 Example named close:
 
