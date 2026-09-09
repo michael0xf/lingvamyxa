@@ -19,7 +19,6 @@ return: d
 
 fn: mixa_sel_grow_ptrs (@@: char slots; size_t: count; size_t: cap; @: size_t out_cap) @@: char
     @@: char fresh
-    @@: char probe
     size_t: new_cap
     size_t: ptr_sz
     if: out_cap = 0
@@ -27,8 +26,7 @@ fn: mixa_sel_grow_ptrs (@@: char slots; size_t: count; size_t: cap; @: size_t ou
     if: count < cap
         out_cap[0]: cap
         return: slots
-    probe: 0
-    ptr_sz: c.sizeof(probe[0])
+    ptr_sz: c.sizeof(@: char)
     if: ptr_sz = 0U
         return: 0
     if: cap = 0U
@@ -256,7 +254,6 @@ return: MIXA_SEL_NOTHING
 fn: mixa_sel_add_exception (@: MixaSelection sel; const: @(char path); const: @(char ancestor)) int
     @@: char pslots
     @@: char aslots
-    @@: char probe
     @: char pdup
     @: char adup
     @: MixaSelRev r
@@ -269,8 +266,7 @@ fn: mixa_sel_add_exception (@: MixaSelection sel; const: @(char path); const: @(
     if: sel\exc_count > ((cast: (size_t) -1) - 1U)
         return: MIXA_SEL_ERR
     if: sel\exc_count >= sel\exc_cap
-        probe: 0
-        ptr_sz: c.sizeof(probe[0])
+        ptr_sz: c.sizeof(@: char)
         if: ptr_sz = 0U
             return: MIXA_SEL_ERR
         if: sel\exc_cap = 0U
@@ -539,7 +535,6 @@ return: found
 fn: mixa_selection_query (@: MixaSelection sel; const: @(char path)) int
     @: char cur
     @@: char excess
-    @@: char probe
     size_t: excess_count
     size_t: excess_cap
     size_t: n
@@ -560,8 +555,7 @@ fn: mixa_selection_query (@: MixaSelection sel; const: @(char path)) int
     if: cur = 0
         return: 0
     c.memcpy(cur, path, n + 1U)
-    probe: 0
-    ptr_sz: c.sizeof(probe[0])
+    ptr_sz: c.sizeof(@: char)
     excess_cap: sel\selected_count + 1U
     if: excess_cap < 8U
         excess_cap: 8U

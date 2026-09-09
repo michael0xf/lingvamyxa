@@ -183,47 +183,37 @@ so it is not one person's slip. Cause not established. Prefer anchored patches,
 and check the diff for U+FEFF after writing a .ps1.
 
 
-6. Workarounds to REMOVE when the baseline is promoted
+6. Former L1 workarounds - REMOVED (baseline promoted)
 
-A promotion of the stable L1 is imminent. Two defects this subtree reported were
-fixed in root and are waiting on it, and the code currently works around both.
-Listed here because a workaround that outlives its cause is worse than the
-defect: in a month nobody remembers why the code is shaped that way, and it
-becomes a convention.
+Two defects this subtree reported were fixed in root and are now in the
+promoted stable translator. The workarounds have been removed from the L1;
+do not reintroduce them.
 
-The mark to compare against - the baseline in use while these were written:
+Current promoted baseline mark (run_mixa.ps1 prints both every run):
 
-    translator binary        8C69F4ED
-    generated-source         2D194908
+    translator binary        C05E6E5F
+    generated-source         09A06E45
 
-run_mixa.ps1 prints both on every run, so a promotion is visible immediately and
-the fingerprint is what says whether behaviour changed rather than just the
-build.
+6.1. c.sizeof of a pointer type - DONE
 
-6.1. c.sizeof of a pointer type
+Fixed in root 56e4b2d. `c.sizeof(@: char)` now emits `sizeof(char *)`
+(correct), not `sizeof(&char)`.
 
-Reported by us; fixed in root 56e4b2d. `c.sizeof(@: char)` emitted
-`sizeof(&char)` - accepted with exit 0, invalid C.
+Sites now use the type directly (no probe array):
 
-Worked around with a one-slot probe array:
+    mixa_selection.lm1  mixa_sel_grow_ptrs / mixa_sel_add_exception /
+                        mixa_selection_query
+                        ptr_sz: c.sizeof(@: char)
 
-    mixa_selection.lm1:31, :273, :564     ptr_sz: c.sizeof(probe[0])
+6.2. multiword element types in [] declarations - DONE
 
-After promotion these can take the type directly. Check the emitted C once, not
-just that it compiles.
+Fixed in root 6b58e51. `[]: WORD gi 1` now emits a valid stack array, not
+the broken `unsigned short[arr] = {2}` form.
 
-6.2. multiword element types in [] declarations
+Site now uses a stack array (no calloc/free):
 
-Reported by us; fixed in root 6b58e51. `[]: unsigned short arr 2` emitted
-`unsigned short[arr] = {2}` - again accepted with exit 0, invalid C, with
-`short` taken as the name.
-
-Worked around by allocating instead of declaring:
-
-    mixa_backend_win32.lm1:946, :1013     @: WORD gi_ptr, calloc'd
-
-After promotion this can be a plain `[]: WORD gi 1`, which also removes an
-allocation and its free.
+    mixa_backend_win32.lm1  mixa_backend_glyph
+                            []: WORD gi 1
 
 6.3. What is NOT a workaround and must stay
 
