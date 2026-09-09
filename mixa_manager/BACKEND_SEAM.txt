@@ -303,10 +303,9 @@ future scaling path are bound by it too, and whoever writes those will not be
 reading a document about backends. What follows here is its consequence for the
 six operations.
 
-Note one distinction made there and easy to lose: an integer RATIO between two
-grids is not the same rule as an integer ZOOM of an image. 3:2 is fine between
-grids, where nothing is resampled, and forbidden for image content, where it
-would be.
+Note the scope stated there: the rule fixes integer POSITIONS AND VALUES. It
+does not require the RATIO between the two grids to be a whole number - I
+invented that requirement and it is not part of the doctrine.
 
 Fixed by the language owner on 2026-09-09, in response to the observation that
 most text windows today look wrong. The cause is not incompetence; it is
@@ -318,13 +317,6 @@ as a prohibition, not a preference.
     Compute fractionally, then SNAP. Sizes and spacings are worked out in
       fractional arithmetic, then reduced to integer positions and integer
       values, and every text thing is drawn at those integers.
-
-      This applies to RELATIONSHIPS, not only to positions. Wherever a
-      fractional relation appears - a resize factor, a ratio between two grids,
-      a spacing derived from another - the fraction is a way of arriving at the
-      answer, never the answer itself. What survives is an integer. This is the
-      general rule; the grid ratio in section 10.3 and the resize behaviour are
-      both instances of it, not separate decisions.
 
     NEVER RESIZE THE FONT. Take the glyph at whatever native pixel size the
       system gives, and use it pixel for pixel. No scaling, no blur, no
@@ -441,28 +433,28 @@ designed here. The point of naming it is to keep it OUT of the drawer: the
 moment the drawer grows a "draw a picture" call, the single-API property is
 gone and the two layers stop being interchangeable to it.
 
-10.3. Choosing the upper font: nearest INTEGER RATIO, not nearest 1.5
+10.3. Choosing the upper font: the available size NEAREST to 1.5x
 
-Section 9 forbids scaling a font, so "1.5x" cannot be computed - it is whatever
-the system actually provides near that. That leaves a choice, and it is decided:
+Decided by the language owner on 2026-09-09:
 
-    take the nearest available size that yields an INTEGER RATIO to the text
-    cell in BOTH dimensions, not the nearest size to 1.5.
+    the upper layer wants roughly 1.5x the text cell, so take the AVAILABLE
+    system size nearest to that, and use it as it comes.
 
-Decided by the language owner on 2026-09-09, and it is not a separate ruling -
-it is 9.1 applied to a ratio. The 1.5 is the fractional computation; the integer
-ratio is the snap. Treating the two as different questions was my error.
+8x16 might pair with 11x22, a factor of 1.375. That is the finished answer. The
+discreteness the doctrine asks for is that the size is a REAL one the system
+offers rather than one we computed - not that any ratio comes out whole.
 
-So 8x16 pairs with 12x24, exactly 3:2, and two upper cells cover three text
-cells exactly. The actual factor may sit further from 1.5 than some other
-available size would - that is accepted, and it is the whole point. What is
-bought is that upper-layer frames land on text-cell boundaries instead of
-cutting through the middle of characters underneath.
+So the two grids do NOT generally align, and upper cell boundaries will fall
+inside text cells rather than on their edges. Accepted deliberately. Forcing
+alignment would mean either scaling a font, which is forbidden, or rejecting
+sizes closer to what is wanted in exchange for a property we do not need.
 
-The rule always has an answer: 1:1 is an integer ratio and the same font is
-always available for both layers. So a platform offering no useful larger size
-degrades to one font for both layers rather than to a fractional ratio. There is
-no case where the doctrine forces a fraction.
+Recorded plainly because this section was twice wrong before it was right, and
+both times the error was mine rather than a change of direction: I generalised
+"integer positions and values" into "integer ratios", then offered the language
+owner a choice between two readings of my own invention, then wrote the answer
+up as "nearest integer multiple". The doctrine never asked for any of that. If
+this section looks over-explained, that is why.
 
 10.4. Seam consequence
 
