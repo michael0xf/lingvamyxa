@@ -192,13 +192,41 @@ command, viewers, links, help. This document does not restate it - it names
 where it lives.
 
 
-4. Standing instruction
+4. Standing instruction: the ORDER to consult
 
-When a question arises that these documents do not answer, the answer is
-ClearShell's behaviour. Go and read it. Only when its answer is unsuitable for
-a desktop does a delta get added here - and then it gets WRITTEN DOWN here,
-because an unrecorded delta is indistinguishable from a bug.
+Stated by the language owner after I invented a cursor rule that the old
+document already answered differently. There are several sources now, and
+without an explicit precedence I will keep inventing where an answer already
+exists.
 
+Consult in this order, and stop at the first that answers:
+
+    1. THE NEW DOCUMENTS in this directory - BACKEND_SEAM, UI_MODEL, DRAWING,
+       FILE_SEAM, SELECTION_MODEL, CODING_RULES - and
+       Mixa_Manager_RENDERING_DOCTRINE.txt at the root.
+
+    2. Old_Mixa_Manager_Qt_model.txt. IF IT IS NOT IN THE NEW DOCS, LOOK IN THE
+       OLD ONE. Its sections 1 to 14 remain authoritative for the visual model,
+       and it answers more than it looks like it does - composition order, glyph
+       and Unicode requirements, input levels, resize, clipboard, mouse.
+       Everything about Qt as the renderer is superseded; the model is not.
+
+    3. ClearShell's source, in clearshell_reference/, for behaviour and features.
+
+    4. FAR Manager, for key bindings.
+
+    5. Only then invent - and WRITE IT DOWN HERE, because an unrecorded
+       invention is indistinguishable from a bug.
+
+4.1. And when you diverge, say that you diverged
+
+Finding an answer in an older source and choosing differently is legitimate -
+the layers have changed since, so some of it no longer fits. What is not
+legitimate is diverging silently, which leaves two documents contradicting each
+other and no way to tell which was considered.
+
+UI_MODEL 1.0.3 is the worked example: the old model draws the cursor above the
+overlay, we now put it in the lower layer, and the section says so and says why.
 
 5. Observations from reading the source
 
