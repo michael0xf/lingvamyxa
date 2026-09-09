@@ -18,9 +18,20 @@
  *      not implement the conversion - they are separate gaps.
  *
  * Codex confirmed on 2026-09-09 that the promotion is intended, in a scoped
- * integration window once the root L1 settles. Until both parts land, this file
- * stays hand-written, and that is a known exception to the hermeticity the
- * distribution model asks for, not the final shape.
+ * integration window once the root L1 settles. Do not read "once the root L1
+ * settles" as soon: also on 2026-09-09 the new parser turned out not to match
+ * the old working version, and Codex began writing a parity corpus against
+ * lingvamyxa_old_worked_version to port forward. The baseline promotion now
+ * queues behind that, and it is not expected to be quick.
+ *
+ * So this file stays hand-written for a while yet - a known exception to the
+ * hermeticity the distribution model asks for, not the final shape.
+ *
+ * The same news makes run_mixa.ps1 more than a convenience. mixa_manager builds
+ * against a translator it does not own, and that translator will be REPLACED,
+ * not merely updated. The suite is what will say whether the replacement broke
+ * anything here, so it has to stay fast, complete, and honest about which
+ * translator produced a green run.
  */
 #ifndef MIXA_BACKEND_H
 #define MIXA_BACKEND_H

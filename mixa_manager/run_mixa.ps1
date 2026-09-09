@@ -12,6 +12,28 @@ if (-not (Test-Path -LiteralPath $trans)) {
     throw "missing stable L1 translator: $trans (produce via stg\l1_baseline\gate.ps1)"
 }
 
+# Record WHICH translator produced this run. mixa_manager builds against a
+# translator it does not own, and that translator is going to be REPLACED rather
+# than merely updated: the new parser did not match the old working version, so
+# a parity corpus is being built against lingvamyxa_old_worked_version and
+# ported forward. When the floor moves, a green run says nothing unless we can
+# see that it moved.
+#
+# Hash the GENERATED C, not the .exe. Measured 2026-09-09: rebuilding from
+# identical source gives a different .exe hash every time, so the binary is
+# noise. The gen2 C is the self-hosting fixed point the gate proves - gen1, gen2
+# and gen3 are byte-identical - so it changes when the translator's BEHAVIOUR
+# changes and not merely when someone rebuilt it.
+$fixedPoint = "stg/l1_baseline/build/obj/l1trans/gen2/l1trans.c"
+"translator: $trans"
+if ($env:MIXA_L1TRANS -and $env:MIXA_L1TRANS.Trim().Length -gt 0) {
+    "translator fixed point: (not checked - MIXA_L1TRANS override in use)"
+} elseif (Test-Path -LiteralPath $fixedPoint) {
+    "translator fixed point: " + (Get-FileHash -LiteralPath $fixedPoint -Algorithm SHA256).Hash
+} else {
+    "translator fixed point: (absent - run stg\l1_baseline\gate.ps1)"
+}
+
 $out = "build\mixa"
 $log = "build\mixa\logs"
 New-Item -ItemType Directory -Force -Path $out, $log | Out-Null
