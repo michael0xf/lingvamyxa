@@ -8150,8 +8150,31 @@ int l1_emit_type_token(FILE * out, const LmP0Node * node, const char * path)
     if (node -> as -> frame -> body == 0 || node -> as -> frame -> body -> first_field == 0) {
     return l1_error(path, node, "missing pointer type");
     }
-    if (l1_emit_type_token(out, node->as->frame->body->first_field->value, path) != 0) {
+    field = node -> as -> frame -> body -> first_field;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    if (field == 0 || field -> value == 0) {
+    return l1_error(path, node, "missing pointer type");
+    }
+    if (l1_emit_type_token(out, field->value, path) != 0) {
     return 1;
+    }
+    field = field -> next;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    while (field != 0 && field -> value != 0 && field -> value -> kind == LM_P0_NODE_ATOM && l1_is_type_name(field->value->as->atom)) {
+    if (l1_write_cstr(out, " ") != 0) {
+    return 1;
+    }
+    if (l1_write_type_spelling(out, field->value->as->atom, path, field->value) != 0) {
+    return 1;
+    }
+    field = field -> next;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
     }
     return l1_write_cstr(out, " *");
     }
@@ -8159,8 +8182,31 @@ int l1_emit_type_token(FILE * out, const LmP0Node * node, const char * path)
     if (node -> as -> frame -> body == 0 || node -> as -> frame -> body -> first_field == 0) {
     return l1_error(path, node, "missing pointer type");
     }
-    if (l1_emit_type_token(out, node->as->frame->body->first_field->value, path) != 0) {
+    field = node -> as -> frame -> body -> first_field;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    if (field == 0 || field -> value == 0) {
+    return l1_error(path, node, "missing pointer type");
+    }
+    if (l1_emit_type_token(out, field->value, path) != 0) {
     return 1;
+    }
+    field = field -> next;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    while (field != 0 && field -> value != 0 && field -> value -> kind == LM_P0_NODE_ATOM && l1_is_type_name(field->value->as->atom)) {
+    if (l1_write_cstr(out, " ") != 0) {
+    return 1;
+    }
+    if (l1_write_type_spelling(out, field->value->as->atom, path, field->value) != 0) {
+    return 1;
+    }
+    field = field -> next;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
     }
     return l1_write_cstr(out, " **");
     }
@@ -8170,13 +8216,40 @@ int l1_emit_type_token(FILE * out, const LmP0Node * node, const char * path)
     if (node -> as -> structure -> first_field == 0) {
     return l1_error(path, node, "empty type");
     }
-    return l1_emit_type_token(out, node->as->structure->first_field->value, path);
+    field = node -> as -> structure -> first_field;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    if (field == 0 || field -> value == 0) {
+    return l1_error(path, node, "empty type");
+    }
+    if (l1_emit_type_token(out, field->value, path) != 0) {
+    return 1;
+    }
+    field = field -> next;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    while (field != 0 && field -> value != 0 && field -> value -> kind == LM_P0_NODE_ATOM && l1_is_type_name(field->value->as->atom)) {
+    if (l1_write_cstr(out, " ") != 0) {
+    return 1;
+    }
+    if (l1_write_type_spelling(out, field->value->as->atom, path, field->value) != 0) {
+    return 1;
+    }
+    field = field -> next;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    }
+    return 0;
     }
     return l1_error(path, node, "unsupported type");
 }
 int l1_emit_param(FILE * out, const LmP0Node * node, const char * path)
 {
     LmP0Field * field;
+    LmP0Field * extra;
     const LmP0Node * name_node;
     const LmP0Text * head;
     if (node == 0) {
@@ -8193,6 +8266,13 @@ int l1_emit_param(FILE * out, const LmP0Node * node, const char * path)
     if (l1_text_eq(head, "const")) {
     if (field == 0 || field -> value == 0) {
     return l1_error(path, node, "const parameter missing type");
+    }
+    extra = field -> next;
+    while (extra != 0 && l1_node_ignored(extra->value)) {
+    extra = extra -> next;
+    }
+    if (extra != 0) {
+    return l1_error(path, node, "qualifier parameter has extra fields; write `const: @(type name)` or place the qualifier last");
     }
     if (l1_write_cstr(out, "const ") != 0) {
     return 1;
@@ -8228,6 +8308,22 @@ int l1_emit_param(FILE * out, const LmP0Node * node, const char * path)
     if (l1_emit_type_token(out, field->value, path) != 0) {
     return 1;
     }
+    field = field -> next;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    while (field != 0 && field -> value != 0 && field -> value -> kind == LM_P0_NODE_ATOM && l1_is_type_name(field->value->as->atom)) {
+    if (l1_write_cstr(out, " ") != 0) {
+    return 1;
+    }
+    if (l1_write_type_spelling(out, field->value->as->atom, path, field->value) != 0) {
+    return 1;
+    }
+    field = field -> next;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    }
     if (l1_text_eq(head, "@")) {
     if (l1_write_cstr(out, " *") != 0) {
     return 1;
@@ -8237,10 +8333,6 @@ int l1_emit_param(FILE * out, const LmP0Node * node, const char * path)
     if (l1_write_cstr(out, " **") != 0) {
     return 1;
     }
-    }
-    field = field -> next;
-    while (field != 0 && l1_node_ignored(field->value)) {
-    field = field -> next;
     }
     if (field == 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_ATOM) {
     return l1_error(path, node, "pointer parameter missing name");
@@ -8252,6 +8344,21 @@ int l1_emit_param(FILE * out, const LmP0Node * node, const char * path)
     }
     if (l1_emit_type_token(out, node, path) != 0) {
     return 1;
+    }
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    while (field != 0 && field -> value != 0 && field -> value -> kind == LM_P0_NODE_ATOM && l1_is_type_name(field->value->as->atom)) {
+    if (l1_write_cstr(out, " ") != 0) {
+    return 1;
+    }
+    if (l1_write_type_spelling(out, field->value->as->atom, path, field->value) != 0) {
+    return 1;
+    }
+    field = field -> next;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
     }
     if (field == 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_ATOM) {
     return 0;
