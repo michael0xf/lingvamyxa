@@ -295,6 +295,10 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
                 lmx_msg_release_slot(ch)
             ---
             i: i + 1
+        if: m\closing != 0
+            m\state: c.LMX_MSG_STATE_STOPPED
+            m\exec_live: 0
+        ---
         return: c.LMX_MSG_OK
     i: 0
     while: i < rt\n
@@ -306,6 +310,10 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     while: m\outbox != 0
         n: lmx_msg_q_pop(@ m\outbox, @ m\outbox_tail)
         lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, n)
+    ---
+    if: m\closing != 0
+        m\state: c.LMX_MSG_STATE_STOPPED
+        m\exec_live: 0
     ---
 return: c.LMX_MSG_OK
 
@@ -346,14 +354,7 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
         dest\state: c.LMX_MSG_STATE_RUNNING
     ---
     if: node\kind = c.LMX_MSG_KIND_CANCELLED
-        dest\state: c.LMX_MSG_STATE_STOPPED
-        lmx_msg_stop_descendants(rt, dest\addr)
-        if: dest\exec_live != 0 && dest\exec_reply != 0U && dest\exec_reply != dest\addr && dest\exec_reply != node\from
-            if: lmx_msg_post_dead(rt, dest\addr, dest\exec_reply, dest\exec_id) = c.LMX_MSG_NOMEM
-                lmx_msg_copy_free(node)
-                return: c.LMX_MSG_NOMEM
-            ---
-        ---
+        dest\closing: 1
     ---
     fresh: lmx_msg_copy_dup(node)
     lmx_msg_copy_free(node)
@@ -469,7 +470,6 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     m\inbox: 0
     m\inbox_tail: 0
     m\exec_live: 0
-    lmx_msg_stop_descendants(rt, who)
     if: parent != 0U
         if: lmx_msg_post_dead(rt, who, parent, m\exec_id) = c.LMX_MSG_NOMEM
             return: c.LMX_MSG_NOMEM
@@ -477,39 +477,44 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     ---
 return: lmx_msg_pump(rt)
 
-fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap) int
-    @: LmxMsg ch
+fn: lmx_msg_parent_gone (@: LmxMsgRuntime rt; @: LmxMsg child; unsigned: now; unsigned: threshold) int
     @: LmxMsg p
-    int: i 0
-    int: n 0
     unsigned: idle
-    int: match
-    if: rt = 0
-        return: -1
-    if: parent != 0U
-        p: lmx_msg_find(rt, parent)
-        if: p = 0
-            return: -1
+    if: child = 0 || child\parent = 0U
+        return: 0
+    p: lmx_msg_find(rt, child\parent)
+    if: p = 0
+        return: 1
+    if: p\state = c.LMX_MSG_STATE_DEAD || p\state = c.LMX_MSG_STATE_STOPPED || p\state = c.LMX_MSG_STATE_RELEASED
+        return: 1
+    if: p\exec_live != 0 && threshold != 0U
+        idle: now
+        if: now >= p\last_beat
+            idle: now - p\last_beat
+        ---
+        if: idle > threshold
+            return: 1
         ---
     ---
+return: 0
+
+fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap) int
+    @: LmxMsg ch
+    int: i 0
+    int: n 0
+    if: rt = 0
+        return: -1
     while: i < rt\n
         ch: rt\tab + i
-        match: 0
-        if: parent = 0U && ch\parent = 0U
-            match: 1
-        if: parent != 0U && ch\parent = parent
-            match: 1
-        ---
-        if: match != 0 && ch\state = c.LMX_MSG_STATE_RUNNING && ch\exec_live != 0
-            idle: now
-            if: now >= ch\last_beat
-                idle: now - ch\last_beat
-            ---
-            if: threshold != 0U && idle > threshold
-                if: out != 0 && n < cap
-                    out[n]: ch\addr
+        if: ch\parent != 0U && (ch\state = c.LMX_MSG_STATE_RUNNING || (ch\state = c.LMX_MSG_STATE_INACTIVE && ch\committed != 0))
+            if: who = 0U || ch\addr = who
+                if: lmx_msg_parent_gone(rt, ch, now, threshold) != 0
+                    ch\closing: 1
+                    if: out != 0 && n < cap
+                        out[n]: ch\addr
+                    ---
+                    n: n + 1
                 ---
-                n: n + 1
             ---
         ---
         i: i + 1

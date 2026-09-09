@@ -67,6 +67,7 @@ typedef struct LmxMsg {
     unsigned create_id;
     int state;
     int committed;
+    int closing;
     uchar *init;
     size_t init_n;
     LmxMsgCopy *inbox;
