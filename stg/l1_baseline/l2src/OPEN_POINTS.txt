@@ -1285,13 +1285,22 @@ Unit 28 - copy-only Message mailbox (19.29.7.1)
 Files: l2src/lmx_message.h, lmx_message.lm1, lmx_message_selftest.lm1,
 run_lmx.ps1, Lingvamyxa_spec.txt 19.29.7.1
 
-Create/send/stop/end_turn/pump/recv/fail. Transport-owned copy;
-admission enqueues inbox; recv materializes at turn entry. Dedup
-(recipient, sender, id). Create key (parent, create_id). Parent
-death stops children. KIND_DEAD is runtime-posted, not dying
-outbox. AVOIDED: graph-copy, OS thread per Message, durable
-dedup, remote silence as death. SPEC 21.13 throw payload not
-this unit.
+Create/send/stop/end_turn/pump/recv/fail/poll/set_now/drive.
+Transport-owned copy; admission enqueues inbox; recv materializes
+at turn entry. Dedup (recipient, sender, id). Create key
+(parent, create_id). KIND_STOP is internal close control (not
+enqueued). KIND_CANCELLED is ordinary result data and does not
+close the recipient. Normal closing end_turn requests children
+close (flag only, not STOPPED, child outbox kept). Poll is the
+abrupt-parent fallback (`who` is the child; 0 walks non-roots).
+Drive is the host loop: set_now + poll(0) + idle closing
+end_turn + pump. Instant stop_descendants is gone. KIND_DEAD is
+runtime-posted, not dying outbox. AVOIDED: graph-copy, OS thread
+per Message, durable dedup, remote silence as death,
+KIND_REJECTED emission, done[32] silent forget. SPEC 21.13 throw
+payload not this unit. Next L2 selfhost after this slice:
+Document / indent stack, then remaining parser.lm1 scanners
+(dash-fence / brace-mark still leaf-sized, Document-free).
 
 Unit 25 - P0 close consumption (return trailer, end:name/fn, ---)
 ----------------------------------------------------------------
