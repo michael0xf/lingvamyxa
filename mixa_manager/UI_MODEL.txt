@@ -46,6 +46,34 @@ Lists are the universal element. Panels are lists, menus are lists. There is no
 second mechanism for "a menu" - if it looks like a menu it is a list drawn in
 the upper layer.
 
+1.0. The row of lists IS THE PATH
+
+This is the navigation model, and it explains why there is any number of lists
+rather than two. Read out of ClearShell's StorageList rather than designed:
+
+    dirs        the chain of directories from the disk root to the current one
+    positions   for each level, the index of the entry the user descended
+                THROUGH
+
+So list i shows directory i, and its cursor already sits on the child that list
+i+1 is showing. The number of lists is the depth of the path.
+
+Going up pops the rightmost list and RESTORES the remembered cursor position in
+the one that becomes last - StorageList around line 185. Descending pushes a
+list. Scrolling the row left is therefore not a separate navigation mechanism;
+it is looking at where you already are.
+
+THERE IS NO ".." ENTRY, and this is why. The string does not occur anywhere in
+ClearShell's source. Norton and FAR need a parent entry because a pane shows one
+directory and the parent is off-screen; here the parent is the list to the left,
+already drawn and already scrolled to the entry you came through. Adding ".."
+to the port would be adding a mechanism to solve a problem this layout does not
+have.
+
+Verified by reading initParent, the up operation and the absence of the string.
+That descending pushes a list is the obvious complement and was not separately
+traced.
+
 
 2. Take the layout method from ClearShell, not just its numbers
 
