@@ -2281,5 +2281,145 @@ end: external
 
 Invoke-LineStart
 
+function Invoke-Position {
+    $cases = @'
+        size_t: line
+        size_t: col
+        c.printf("%zu\n", lm_p0_line_break_width_at(0, 0U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("", 0U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("x", 1U, 1U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\n", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r\n", 2U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r\n", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\r\n", 2U, 1U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("a\r\nb", 4U, 1U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\t", 1U, 0U))
+        c.printf("%zu\n", lm_p0_line_break_width_at("\0", 1U, 0U))
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice(0, 0U, 0U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("", 0U, 0U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("ab", 2U, 5U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r\nb", 4U, 0U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r\nb", 4U, 1U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r\nb", 4U, 2U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r\nb", 4U, 3U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r\nb", 4U, 4U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\nb", 3U, 2U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\rb", 3U, 2U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r", 2U, 2U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\r\nb", 4U, 3U, 10U, 20U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("\t", 1U, 1U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("a\0b", 3U, 2U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+        line: 99U
+        col: 99U
+        lm_p0_position_in_slice("\r\n", 1U, 1U, 1U, 1U, @ line, @ col)
+        c.printf("%zu %zu\n", line, col)
+'@
+
+    $refLm1 = Join-Path $out "pos_ref.lm1"
+    $refC = Join-Path $out "pos_ref.c"
+    $refExe = Join-Path $out "pos_ref.exe"
+    $refOut = Join-Path $out "pos_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pos_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "pos_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'pos_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pos_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_position.lm2" "parser_position" 0 "lm_p0_position_in_slice"
+    $lm1 = Join-Path $out "parser_position.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_' -or $text -match 'sub: lm_p0_') { throw "position must mangle method symbols" }
+    if ($text -notmatch 'fn: l2_m0') { throw "position missing line_break_width_at" }
+    if ($text -notmatch 'sub: l2_m1') { throw "position missing mangled sub" }
+    if ($text -notmatch '@: size_t l2_p1_5') { throw "position missing out_line" }
+    if ($text -notmatch '@: size_t l2_p1_6') { throw "position missing out_column" }
+    if ($text -notmatch 'l2_p1_5\[0\]:') { throw "position missing out_line[0] store" }
+    if ($text -notmatch 'l2_p1_6\[0\]:') { throw "position missing out_column[0] store" }
+    if ($text -notmatch '(?m)^\s+continue$') { throw "position must emit continue" }
+    if ($text -notmatch 'l2_p1_2: l2_p1_1') { throw "position must clamp index to length" }
+    if ($text -notmatch 'l2_m0\(node, l2_p1_0, l2_p1_2') { throw "position must pass clamped index as helper length, not full text length" }
+    if ($text -match 'l2_m0\(node, l2_p1_0, l2_p1_1') { throw "position must not pass full text length to helper" }
+
+    $l2cases = $cases.Replace("lm_p0_line_break_width_at(", "l2_m0(unit, ").Replace("lm_p0_position_in_slice(", "l2_m1(unit, ")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "position L1 missing generated main return" }
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "pos_l2_drive.lm1"
+    $drvC = Join-Path $out "pos_l2_drive.c"
+    $drvExe = Join-Path $out "pos_l2_drive.exe"
+    $drvOut = Join-Path $out "pos_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pos_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "pos_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'pos_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pos_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "position mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-Position
+
 "l2trans $gen ok"
 
