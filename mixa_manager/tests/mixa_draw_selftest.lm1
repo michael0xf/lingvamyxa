@@ -1,0 +1,300 @@
+predef: "mixa_manager/mixa_draw.lm1"
+include: "<stdio.h>" "<string.h>"
+
+# Drawing API selftest: assert CELLS (DRAWING.txt / TASK 21). Never pixels.
+
+fn: cell_cp (const: @(MixaTextRect rect); size_t: row; size_t: col) unsigned
+    const: @(MixaCell p)
+    p: mixa_cell_at((cast: (@: MixaTextRect) rect), row, col)
+    if: p = 0
+        return: 0U
+return: p\codepoint
+
+fn: cell_fg (const: @(MixaTextRect rect); size_t: row; size_t: col) unsigned
+    const: @(MixaCell p)
+    p: mixa_cell_at((cast: (@: MixaTextRect) rect), row, col)
+    if: p = 0
+        return: 0U
+return: (cast: (unsigned) p\fg)
+
+fn: cell_bg (const: @(MixaTextRect rect); size_t: row; size_t: col) unsigned
+    const: @(MixaCell p)
+    p: mixa_cell_at((cast: (@: MixaTextRect) rect), row, col)
+    if: p = 0
+        return: 0U
+return: (cast: (unsigned) p\bg)
+
+fn: cell_flags (const: @(MixaTextRect rect); size_t: row; size_t: col) unsigned
+    const: @(MixaCell p)
+    p: mixa_cell_at((cast: (@: MixaTextRect) rect), row, col)
+    if: p = 0
+        return: 0U
+return: (cast: (unsigned) p\flags)
+
+fn: cell_alpha (const: @(MixaTextRect rect); size_t: row; size_t: col) unsigned
+    const: @(MixaCell p)
+    p: mixa_cell_at((cast: (@: MixaTextRect) rect), row, col)
+    if: p = 0
+        return: 0U
+return: (cast: (unsigned) p\alpha)
+
+fn: snapshot_rect (const: @(MixaTextRect rect); @: unsigned out; size_t: n) int
+    size_t: i
+    size_t: need
+    const: @(MixaCell p)
+    if: rect = 0 || out = 0 || rect\cells = 0
+        return: 1
+    need: rect\rows * rect\cols
+    if: n < need
+        return: 1
+    i: 0U
+    while: i < need
+        p: rect\cells + i
+        out[i]: p\codepoint
+        i: i + 1U
+    ---
+return: 0
+
+fn: main () int
+    @: MixaTextRect rect
+    @: unsigned snap1
+    @: unsigned snap2
+    []: unsigned usz 1
+    size_t: n
+    size_t: i
+    size_t: unsigned_sz
+    int: failures
+    int: rc
+    failures: 0
+
+    rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    if: rect = 0
+        c.printf("mixa draw: alloc failed\n")
+        return: 1
+    if: mixa_rect_open(rect, 8U, 10U) != 0
+        c.printf("mixa draw: open failed\n")
+        return: 1
+
+    # --- text at position with attrs, clipped at edges ---
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    rc: mixa_draw_text(rect, 1U, 2U, "Hi", 3U, 4U, MIXA_STYLE_BOLD, 200U)
+    if: rc != MIXA_DRAW_OK
+        c.printf("mixa draw: text write failed\n")
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 2U) != 72U || cell_cp(rect, 1U, 3U) != 105U
+        c.printf("mixa draw: text codepoints wrong\n")
+        failures: failures + 1
+    if: cell_fg(rect, 1U, 2U) != 3U || cell_bg(rect, 1U, 2U) != 4U
+        c.printf("mixa draw: text colors wrong\n")
+        failures: failures + 1
+    if: cell_flags(rect, 1U, 2U) != (cast: (unsigned) MIXA_STYLE_BOLD)
+        c.printf("mixa draw: text flags wrong\n")
+        failures: failures + 1
+    if: cell_alpha(rect, 1U, 2U) != 200U
+        c.printf("mixa draw: text alpha wrong\n")
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 1U) != 32U || cell_cp(rect, 1U, 4U) != 32U
+        c.printf("mixa draw: text wrote outside span\n")
+        failures: failures + 1
+
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    rc: mixa_draw_text(rect, 0U, 8U, "ABCDE", 1U, 2U, 0U, 255U)
+    if: rc != MIXA_DRAW_OK
+        c.printf("mixa draw: clip text failed\n")
+        failures: failures + 1
+    if: cell_cp(rect, 0U, 8U) != 65U || cell_cp(rect, 0U, 9U) != 66U
+        c.printf("mixa draw: clip text cells wrong\n")
+        failures: failures + 1
+    # cols=10, start col 8 -> only 2 cells; nothing past edge (no wrap)
+    if: cell_cp(rect, 1U, 0U) != 32U
+        c.printf("mixa draw: clip text wrapped to next row\n")
+        failures: failures + 1
+
+    # --- fill covers exact rect, nothing outside ---
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    rc: mixa_draw_fill(rect, 2U, 3U, 2U, 3U, 88U, 5U, 6U, 0U, 128U)
+    if: rc != MIXA_DRAW_OK
+        c.printf("mixa draw: fill failed\n")
+        failures: failures + 1
+    if: cell_cp(rect, 2U, 3U) != 88U || cell_cp(rect, 2U, 5U) != 88U
+        c.printf("mixa draw: fill missing corner\n")
+        failures: failures + 1
+    if: cell_cp(rect, 3U, 3U) != 88U || cell_cp(rect, 3U, 5U) != 88U
+        c.printf("mixa draw: fill missing bottom\n")
+        failures: failures + 1
+    if: cell_alpha(rect, 2U, 4U) != 128U
+        c.printf("mixa draw: fill alpha wrong\n")
+        failures: failures + 1
+    if: cell_cp(rect, 2U, 2U) != 32U || cell_cp(rect, 2U, 6U) != 32U
+        c.printf("mixa draw: fill bled horizontally\n")
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 3U) != 32U || cell_cp(rect, 4U, 3U) != 32U
+        c.printf("mixa draw: fill bled vertically\n")
+        failures: failures + 1
+
+    # --- frame: four corners, four edges, hollow interior ---
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    rc: mixa_draw_frame(rect, 1U, 1U, 5U, 6U, MIXA_DRAW_SINGLE, 7U, 0U, 0U, 255U)
+    if: rc != MIXA_DRAW_OK
+        c.printf("mixa draw: frame failed\n")
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 1U) != 0x250CU
+        c.printf("mixa draw: frame TL want U+250C got U+%04X\n", cell_cp(rect, 1U, 1U))
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 6U) != 0x2510U
+        c.printf("mixa draw: frame TR wrong\n")
+        failures: failures + 1
+    if: cell_cp(rect, 5U, 1U) != 0x2514U
+        c.printf("mixa draw: frame BL wrong\n")
+        failures: failures + 1
+    if: cell_cp(rect, 5U, 6U) != 0x2518U
+        c.printf("mixa draw: frame BR wrong\n")
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 3U) != 0x2500U || cell_cp(rect, 5U, 3U) != 0x2500U
+        c.printf("mixa draw: frame H edges wrong\n")
+        failures: failures + 1
+    if: cell_cp(rect, 3U, 1U) != 0x2502U || cell_cp(rect, 3U, 6U) != 0x2502U
+        c.printf("mixa draw: frame V edges wrong\n")
+        failures: failures + 1
+    if: cell_cp(rect, 2U, 2U) != 32U || cell_cp(rect, 3U, 3U) != 32U || cell_cp(rect, 4U, 4U) != 32U
+        c.printf("mixa draw: frame interior not hollow\n")
+        failures: failures + 1
+
+    # --- divider crossing a rule produces CROSS ---
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    rc: mixa_draw_line(rect, 3U, 1U, 8U, MIXA_DRAW_HORIZ, MIXA_DRAW_SINGLE, 1U, 0U, 0U, 255U)
+    if: rc != MIXA_DRAW_OK
+        c.printf("mixa draw: hrule failed\n")
+        failures: failures + 1
+    rc: mixa_draw_line(rect, 1U, 4U, 5U, MIXA_DRAW_VERT, MIXA_DRAW_SINGLE, 1U, 0U, 0U, 255U)
+    if: rc != MIXA_DRAW_OK
+        c.printf("mixa draw: vdivider failed\n")
+        failures: failures + 1
+    if: cell_cp(rect, 3U, 4U) != 0x253CU
+        c.printf("mixa draw: cross want U+253C got U+%04X\n", cell_cp(rect, 3U, 4U))
+        failures: failures + 1
+
+    # --- divider ending on frame edge produces T on correct side ---
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    rc: mixa_draw_frame(rect, 0U, 0U, 6U, 8U, MIXA_DRAW_SINGLE, 1U, 0U, 0U, 255U)
+    if: rc != MIXA_DRAW_OK
+        c.printf("mixa draw: T-frame failed\n")
+        failures: failures + 1
+    # vertical divider from top edge (row 0) down into interior, length 4
+    rc: mixa_draw_line(rect, 0U, 3U, 4U, MIXA_DRAW_VERT, MIXA_DRAW_SINGLE, 1U, 0U, 0U, 255U)
+    if: rc != MIXA_DRAW_OK
+        c.printf("mixa draw: T-divider failed\n")
+        failures: failures + 1
+    # top edge + DOWN stub => U+252C TDOWN (┬)
+    if: cell_cp(rect, 0U, 3U) != 0x252CU
+        c.printf("mixa draw: T-top want U+252C got U+%04X\n", cell_cp(rect, 0U, 3U))
+        failures: failures + 1
+
+    # bottom T: divider ending upward onto bottom edge
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    mixa_draw_frame(rect, 0U, 0U, 6U, 8U, MIXA_DRAW_SINGLE, 1U, 0U, 0U, 255U)
+    rc: mixa_draw_line(rect, 2U, 3U, 4U, MIXA_DRAW_VERT, MIXA_DRAW_SINGLE, 1U, 0U, 0U, 255U)
+    if: rc != MIXA_DRAW_OK
+        c.printf("mixa draw: T-bottom divider failed\n")
+        failures: failures + 1
+    # bottom edge row 5 + UP stub => U+2534 TUP (┴)
+    if: cell_cp(rect, 5U, 3U) != 0x2534U
+        c.printf("mixa draw: T-bottom want U+2534 got U+%04X\n", cell_cp(rect, 5U, 3U))
+        failures: failures + 1
+
+    # --- two frames sharing an edge JOIN rather than overwrite ---
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    mixa_draw_frame(rect, 0U, 0U, 5U, 5U, MIXA_DRAW_SINGLE, 1U, 0U, 0U, 255U)
+    mixa_draw_frame(rect, 0U, 4U, 5U, 5U, MIXA_DRAW_SINGLE, 1U, 0U, 0U, 255U)
+    # shared top corner join at (0,4): A's TR (DOWN|LEFT) U B's TL (DOWN|RIGHT) => DOWN|LEFT|RIGHT = ┬
+    if: cell_cp(rect, 0U, 4U) != 0x252CU
+        c.printf("mixa draw: join top want U+252C got U+%04X\n", cell_cp(rect, 0U, 4U))
+        failures: failures + 1
+    # shared bottom (4,4): A's BR (UP|LEFT) U B's BL (UP|RIGHT) => UP|LEFT|RIGHT = ┴
+    if: cell_cp(rect, 4U, 4U) != 0x2534U
+        c.printf("mixa draw: join bottom want U+2534 got U+%04X\n", cell_cp(rect, 4U, 4U))
+        failures: failures + 1
+    # mid shared vertical edge stays │
+    if: cell_cp(rect, 2U, 4U) != 0x2502U
+        c.printf("mixa draw: join mid edge want U+2502 got U+%04X\n", cell_cp(rect, 2U, 4U))
+        failures: failures + 1
+
+    # --- line drawn twice identical to once ---
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    mixa_draw_line(rect, 2U, 1U, 6U, MIXA_DRAW_HORIZ, MIXA_DRAW_SINGLE, 1U, 0U, 0U, 255U)
+    n: rect\rows * rect\cols
+    unsigned_sz: c.sizeof(usz[0])
+    snap1: (cast: (@: unsigned) c.calloc(n, unsigned_sz))
+    snap2: (cast: (@: unsigned) c.calloc(n, unsigned_sz))
+    if: snap1 = 0 || snap2 = 0
+        c.printf("mixa draw: snapshot alloc failed\n")
+        return: 1
+    if: snapshot_rect(rect, snap1, n) != 0
+        c.printf("mixa draw: snapshot1 failed\n")
+        failures: failures + 1
+    mixa_draw_line(rect, 2U, 1U, 6U, MIXA_DRAW_HORIZ, MIXA_DRAW_SINGLE, 1U, 0U, 0U, 255U)
+    if: snapshot_rect(rect, snap2, n) != 0
+        c.printf("mixa draw: snapshot2 failed\n")
+        failures: failures + 1
+    i: 0U
+    while: i < n
+        if: snap1[i] != snap2[i]
+            c.printf("mixa draw: line twice != once at %u (%u vs %u)\n", (cast: (unsigned) i), snap1[i], snap2[i])
+            failures: failures + 1
+            i: n
+        else:
+            i: i + 1U
+        ---
+    ---
+
+    # --- line over letter overwrites letter ---
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    mixa_draw_text(rect, 4U, 4U, "Z", 2U, 0U, 0U, 255U)
+    if: cell_cp(rect, 4U, 4U) != 90U
+        c.printf("mixa draw: letter seed failed\n")
+        failures: failures + 1
+    mixa_draw_line(rect, 4U, 2U, 5U, MIXA_DRAW_HORIZ, MIXA_DRAW_SINGLE, 1U, 0U, 0U, 255U)
+    if: cell_cp(rect, 4U, 4U) = 90U
+        c.printf("mixa draw: line did not overwrite letter\n")
+        failures: failures + 1
+    if: cell_cp(rect, 4U, 4U) != 0x2500U
+        c.printf("mixa draw: overwrite want U+2500 got U+%04X\n", cell_cp(rect, 4U, 4U))
+        failures: failures + 1
+
+    # --- OOB refused, not clamped ---
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    rc: mixa_draw_text(rect, 8U, 0U, "X", 1U, 0U, 0U, 255U)
+    if: rc != MIXA_DRAW_ERR
+        c.printf("mixa draw: text OOB row not refused\n")
+        failures: failures + 1
+    rc: mixa_draw_text(rect, 0U, 10U, "X", 1U, 0U, 0U, 255U)
+    if: rc != MIXA_DRAW_ERR
+        c.printf("mixa draw: text OOB col not refused\n")
+        failures: failures + 1
+    rc: mixa_draw_fill(rect, 6U, 0U, 4U, 2U, 65U, 0U, 0U, 0U, 255U)
+    if: rc != MIXA_DRAW_ERR
+        c.printf("mixa draw: fill OOB extent not refused\n")
+        failures: failures + 1
+    rc: mixa_draw_line(rect, 0U, 8U, 5U, MIXA_DRAW_HORIZ, MIXA_DRAW_SINGLE, 1U, 0U, 0U, 255U)
+    if: rc != MIXA_DRAW_ERR
+        c.printf("mixa draw: line OOB extent not refused\n")
+        failures: failures + 1
+    rc: mixa_draw_frame(rect, 5U, 5U, 5U, 5U, MIXA_DRAW_SINGLE, 1U, 0U, 0U, 255U)
+    if: rc != MIXA_DRAW_ERR
+        c.printf("mixa draw: frame OOB not refused\n")
+        failures: failures + 1
+    # ensure nothing was clamped-written into the grid for those OOB calls
+    if: cell_cp(rect, 0U, 0U) != 32U || cell_cp(rect, 7U, 9U) != 32U
+        c.printf("mixa draw: OOB calls mutated cells\n")
+        failures: failures + 1
+
+    c.free(snap1)
+    c.free(snap2)
+    mixa_rect_release(rect)
+    c.free(rect)
+
+    if: failures != 0
+        c.printf("mixa draw selftest FAILED checks=%d\n", failures)
+        return: 1
+    c.printf("mixa draw selftest ok\n")
+    return: 0

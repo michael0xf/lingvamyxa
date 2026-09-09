@@ -1,0 +1,504 @@
+predef: "mixa_manager/mixa_text_rect.lm1"
+include: "mixa_manager/mixa_draw.h"
+
+# Single drawing API (DRAWING.txt). Cell surface only; no layer knowledge.
+# Box char = four stubs (UP/DOWN/LEFT/RIGHT). Merge = stub union per style.
+
+# Stub bits: UP=1 DOWN=2 LEFT=4 RIGHT=8 (used as literals below).
+
+# --- codepoint <-> stub mask (single) ---
+
+fn: mixa_draw_cp_to_mask_single (unsigned: cp) unsigned
+    if: cp = 0x2500U
+        return: 12U
+    if: cp = 0x2502U
+        return: 3U
+    if: cp = 0x250CU
+        return: 10U
+    if: cp = 0x2510U
+        return: 6U
+    if: cp = 0x2514U
+        return: 9U
+    if: cp = 0x2518U
+        return: 5U
+    if: cp = 0x251CU
+        return: 11U
+    if: cp = 0x2524U
+        return: 7U
+    if: cp = 0x252CU
+        return: 14U
+    if: cp = 0x2534U
+        return: 13U
+    if: cp = 0x253CU
+        return: 15U
+return: 0U
+
+fn: mixa_draw_mask_to_cp_single (unsigned: mask) unsigned
+    if: mask = 12U
+        return: 0x2500U
+    if: mask = 3U
+        return: 0x2502U
+    if: mask = 10U
+        return: 0x250CU
+    if: mask = 6U
+        return: 0x2510U
+    if: mask = 9U
+        return: 0x2514U
+    if: mask = 5U
+        return: 0x2518U
+    if: mask = 11U
+        return: 0x251CU
+    if: mask = 7U
+        return: 0x2524U
+    if: mask = 14U
+        return: 0x252CU
+    if: mask = 13U
+        return: 0x2534U
+    if: mask = 15U
+        return: 0x253CU
+return: 0U
+
+# --- codepoint <-> stub mask (double) ---
+
+fn: mixa_draw_cp_to_mask_double (unsigned: cp) unsigned
+    if: cp = 0x2550U
+        return: 12U
+    if: cp = 0x2551U
+        return: 3U
+    if: cp = 0x2554U
+        return: 10U
+    if: cp = 0x2557U
+        return: 6U
+    if: cp = 0x255AU
+        return: 9U
+    if: cp = 0x255DU
+        return: 5U
+    if: cp = 0x2560U
+        return: 11U
+    if: cp = 0x2563U
+        return: 7U
+    if: cp = 0x2566U
+        return: 14U
+    if: cp = 0x2569U
+        return: 13U
+    if: cp = 0x256CU
+        return: 15U
+return: 0U
+
+fn: mixa_draw_mask_to_cp_double (unsigned: mask) unsigned
+    if: mask = 12U
+        return: 0x2550U
+    if: mask = 3U
+        return: 0x2551U
+    if: mask = 10U
+        return: 0x2554U
+    if: mask = 6U
+        return: 0x2557U
+    if: mask = 9U
+        return: 0x255AU
+    if: mask = 5U
+        return: 0x255DU
+    if: mask = 11U
+        return: 0x2560U
+    if: mask = 7U
+        return: 0x2563U
+    if: mask = 14U
+        return: 0x2566U
+    if: mask = 13U
+        return: 0x2569U
+    if: mask = 15U
+        return: 0x256CU
+return: 0U
+
+# Lookup: returns mask; style_out[0] = SINGLE or DOUBLE; 0 mask = not a box char.
+fn: mixa_draw_lookup (unsigned: cp; @: int style_out) unsigned
+    unsigned: m
+    m: mixa_draw_cp_to_mask_single(cp)
+    if: m != 0U
+        if: style_out != 0
+            style_out[0]: MIXA_DRAW_SINGLE
+        ---
+        return: m
+    ---
+    m: mixa_draw_cp_to_mask_double(cp)
+    if: m != 0U
+        if: style_out != 0
+            style_out[0]: MIXA_DRAW_DOUBLE
+        ---
+        return: m
+    ---
+return: 0U
+
+fn: mixa_draw_mask_to_cp (unsigned: mask; int: style) unsigned
+    if: style = MIXA_DRAW_DOUBLE
+        return: mixa_draw_mask_to_cp_double(mask)
+return: mixa_draw_mask_to_cp_single(mask)
+
+# Expand a lone stub to a full axis segment (for overwrite onto non-box).
+fn: mixa_draw_expand_singles (unsigned: mask) unsigned
+    if: mask = 1U
+        return: 3U
+    if: mask = 2U
+        return: 3U
+    if: mask = 4U
+        return: 12U
+    if: mask = 8U
+        return: 12U
+return: mask
+
+# Merge add_stubs into cell. Non-box -> overwrite. Different style -> keep cell style.
+sub: mixa_draw_merge_cell (@: MixaCell p; unsigned: add_stubs; int: add_style; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha)
+    unsigned: old_mask
+    unsigned: new_mask
+    unsigned: new_cp
+    []: int old_style 1
+    if: p = 0
+        return
+    ---
+    if: add_stubs = 0U
+        return
+    ---
+    old_style[0]: MIXA_DRAW_SINGLE
+    old_mask: mixa_draw_lookup(p\codepoint, old_style)
+    if: old_mask = 0U
+        new_mask: mixa_draw_expand_singles(add_stubs)
+        new_cp: mixa_draw_mask_to_cp(new_mask, add_style)
+        if: new_cp = 0U
+            return
+        ---
+        p\codepoint: new_cp
+        p\fg: fg
+        p\bg: bg
+        p\flags: flags
+        p\width: 1U
+        p\alpha: alpha
+        return
+    ---
+    new_mask: old_mask | add_stubs
+    new_cp: mixa_draw_mask_to_cp(new_mask, old_style[0])
+    if: new_cp = 0U
+        return
+    ---
+    p\codepoint: new_cp
+    p\fg: fg
+    p\bg: bg
+    p\flags: flags
+    p\width: 1U
+    p\alpha: alpha
+end: mixa_draw_merge_cell
+
+# Decode one UTF-8 scalar at s; writes codepoint to out_cp[0]; returns advanced pointer.
+# Invalid/incomplete sequences skip 1 byte and write 0.
+fn: mixa_draw_utf8_next (@: char s; @: unsigned out_cp) @: char
+    unsigned: c0
+    unsigned: c1
+    unsigned: c2
+    unsigned: c3
+    unsigned: cp
+    if: out_cp = 0
+        return: s
+    if: s = 0
+        out_cp[0]: 0U
+        return: 0
+    if: s[0] = 0
+        out_cp[0]: 0U
+        return: s
+    c0: (cast: (unsigned) s[0]) & 255U
+    if: c0 < 0x80U
+        out_cp[0]: c0
+        return: s + 1
+    ---
+    if: (c0 & 0xE0U) = 0xC0U
+        if: s[1] = 0
+            out_cp[0]: 0U
+            return: s + 1
+        ---
+        c1: (cast: (unsigned) s[1]) & 255U
+        if: (c1 & 0xC0U) != 0x80U
+            out_cp[0]: 0U
+            return: s + 1
+        ---
+        cp: ((c0 & 0x1FU) << 6U) | (c1 & 0x3FU)
+        out_cp[0]: cp
+        return: s + 2
+    ---
+    if: (c0 & 0xF0U) = 0xE0U
+        if: s[1] = 0 || s[2] = 0
+            out_cp[0]: 0U
+            return: s + 1
+        ---
+        c1: (cast: (unsigned) s[1]) & 255U
+        c2: (cast: (unsigned) s[2]) & 255U
+        if: (c1 & 0xC0U) != 0x80U || (c2 & 0xC0U) != 0x80U
+            out_cp[0]: 0U
+            return: s + 1
+        ---
+        cp: ((c0 & 0x0FU) << 12U) | ((c1 & 0x3FU) << 6U) | (c2 & 0x3FU)
+        out_cp[0]: cp
+        return: s + 3
+    ---
+    if: (c0 & 0xF8U) = 0xF0U
+        if: s[1] = 0 || s[2] = 0 || s[3] = 0
+            out_cp[0]: 0U
+            return: s + 1
+        ---
+        c1: (cast: (unsigned) s[1]) & 255U
+        c2: (cast: (unsigned) s[2]) & 255U
+        c3: (cast: (unsigned) s[3]) & 255U
+        if: (c1 & 0xC0U) != 0x80U || (c2 & 0xC0U) != 0x80U || (c3 & 0xC0U) != 0x80U
+            out_cp[0]: 0U
+            return: s + 1
+        ---
+        cp: ((c0 & 0x07U) << 18U) | ((c1 & 0x3FU) << 12U) | ((c2 & 0x3FU) << 6U) | (c3 & 0x3FU)
+        out_cp[0]: cp
+        return: s + 4
+    ---
+    out_cp[0]: 0U
+return: s + 1
+
+fn: mixa_draw_text (@: MixaTextRect rect; size_t: row; size_t: col; const: @(char text); unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+    size_t: ccol
+    @: MixaCell p
+    @: char s
+    []: unsigned cp_slot 1
+    unsigned: cp
+    if: rect = 0
+        return: MIXA_DRAW_ERR
+    if: text = 0
+        return: MIXA_DRAW_ERR
+    if: rect\cells = 0
+        return: MIXA_DRAW_ERR
+    if: row >= rect\rows
+        return: MIXA_DRAW_ERR
+    if: col >= rect\cols
+        return: MIXA_DRAW_ERR
+    s: (cast: (@: char) text)
+    ccol: col
+    while: s != 0
+        if: s[0] = 0
+            return: MIXA_DRAW_OK
+        ---
+        if: ccol >= rect\cols
+            return: MIXA_DRAW_OK
+        ---
+        s: mixa_draw_utf8_next(s, cp_slot)
+        cp: cp_slot[0]
+        if: cp != 0U
+            p: mixa_cell_at(rect, row, ccol)
+            if: p = 0
+                return: MIXA_DRAW_ERR
+            ---
+            p\codepoint: cp
+            p\fg: fg
+            p\bg: bg
+            p\flags: flags
+            p\width: 1U
+            p\alpha: alpha
+            ccol: ccol + 1U
+        ---
+    ---
+return: MIXA_DRAW_OK
+
+fn: mixa_draw_fill (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; unsigned: codepoint; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+    size_t: r
+    size_t: ccol
+    size_t: r2
+    size_t: c2
+    @: MixaCell p
+    if: rect = 0
+        return: MIXA_DRAW_ERR
+    if: rect\cells = 0
+        return: MIXA_DRAW_ERR
+    if: nrows = 0U
+        return: MIXA_DRAW_ERR
+    if: ncols = 0U
+        return: MIXA_DRAW_ERR
+    if: row >= rect\rows
+        return: MIXA_DRAW_ERR
+    if: col >= rect\cols
+        return: MIXA_DRAW_ERR
+    if: nrows > (rect\rows - row)
+        return: MIXA_DRAW_ERR
+    if: ncols > (rect\cols - col)
+        return: MIXA_DRAW_ERR
+    r2: row + nrows
+    c2: col + ncols
+    r: row
+    while: r < r2
+        ccol: col
+        while: ccol < c2
+            p: mixa_cell_at(rect, r, ccol)
+            if: p = 0
+                return: MIXA_DRAW_ERR
+            ---
+            p\codepoint: codepoint
+            p\fg: fg
+            p\bg: bg
+            p\flags: flags
+            p\width: 1U
+            p\alpha: alpha
+            ccol: ccol + 1U
+        ---
+        r: r + 1U
+    ---
+return: MIXA_DRAW_OK
+
+fn: mixa_draw_line (@: MixaTextRect rect; size_t: row; size_t: col; size_t: len; int: orient; int: style; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+    size_t: i
+    size_t: r
+    size_t: ccol
+    unsigned: stubs
+    @: MixaCell p
+    if: rect = 0
+        return: MIXA_DRAW_ERR
+    if: rect\cells = 0
+        return: MIXA_DRAW_ERR
+    if: len = 0U
+        return: MIXA_DRAW_ERR
+    if: style != MIXA_DRAW_SINGLE
+        if: style != MIXA_DRAW_DOUBLE
+            return: MIXA_DRAW_ERR
+        ---
+    ---
+    if: orient != MIXA_DRAW_HORIZ
+        if: orient != MIXA_DRAW_VERT
+            return: MIXA_DRAW_ERR
+        ---
+    ---
+    if: row >= rect\rows
+        return: MIXA_DRAW_ERR
+    if: col >= rect\cols
+        return: MIXA_DRAW_ERR
+    if: orient = MIXA_DRAW_HORIZ
+        if: len > (rect\cols - col)
+            return: MIXA_DRAW_ERR
+        ---
+    else:
+        if: len > (rect\rows - row)
+            return: MIXA_DRAW_ERR
+        ---
+    ---
+    i: 0U
+    while: i < len
+        if: orient = MIXA_DRAW_HORIZ
+            r: row
+            ccol: col + i
+            if: len = 1U
+                stubs: 12U
+            else:
+                stubs: 0U
+                if: i != 0U
+                    stubs: stubs | 4U
+                ---
+                if: i != (len - 1U)
+                    stubs: stubs | 8U
+                ---
+            ---
+        else:
+            r: row + i
+            ccol: col
+            if: len = 1U
+                stubs: 3U
+            else:
+                stubs: 0U
+                if: i != 0U
+                    stubs: stubs | 1U
+                ---
+                if: i != (len - 1U)
+                    stubs: stubs | 2U
+                ---
+            ---
+        ---
+        p: mixa_cell_at(rect, r, ccol)
+        if: p = 0
+            return: MIXA_DRAW_ERR
+        ---
+        mixa_draw_merge_cell(p, stubs, style, fg, bg, flags, alpha)
+        i: i + 1U
+    ---
+return: MIXA_DRAW_OK
+
+fn: mixa_draw_frame (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; int: style; unsigned: fg; unsigned: bg; unsigned: flags; unsigned: alpha) int
+    size_t: r
+    size_t: ccol
+    size_t: r_last
+    size_t: c_last
+    @: MixaCell p
+    if: rect = 0
+        return: MIXA_DRAW_ERR
+    if: rect\cells = 0
+        return: MIXA_DRAW_ERR
+    if: nrows < 2U
+        return: MIXA_DRAW_ERR
+    if: ncols < 2U
+        return: MIXA_DRAW_ERR
+    if: style != MIXA_DRAW_SINGLE
+        if: style != MIXA_DRAW_DOUBLE
+            return: MIXA_DRAW_ERR
+        ---
+    ---
+    if: row >= rect\rows
+        return: MIXA_DRAW_ERR
+    if: col >= rect\cols
+        return: MIXA_DRAW_ERR
+    if: nrows > (rect\rows - row)
+        return: MIXA_DRAW_ERR
+    if: ncols > (rect\cols - col)
+        return: MIXA_DRAW_ERR
+    r_last: row + nrows - 1U
+    c_last: col + ncols - 1U
+
+    # corners
+    p: mixa_cell_at(rect, row, col)
+    if: p = 0
+        return: MIXA_DRAW_ERR
+    ---
+    mixa_draw_merge_cell(p, 10U, style, fg, bg, flags, alpha)
+    p: mixa_cell_at(rect, row, c_last)
+    if: p = 0
+        return: MIXA_DRAW_ERR
+    ---
+    mixa_draw_merge_cell(p, 6U, style, fg, bg, flags, alpha)
+    p: mixa_cell_at(rect, r_last, col)
+    if: p = 0
+        return: MIXA_DRAW_ERR
+    ---
+    mixa_draw_merge_cell(p, 9U, style, fg, bg, flags, alpha)
+    p: mixa_cell_at(rect, r_last, c_last)
+    if: p = 0
+        return: MIXA_DRAW_ERR
+    ---
+    mixa_draw_merge_cell(p, 5U, style, fg, bg, flags, alpha)
+
+    # top and bottom edges (between corners)
+    ccol: col + 1U
+    while: ccol < c_last
+        p: mixa_cell_at(rect, row, ccol)
+        if: p = 0
+            return: MIXA_DRAW_ERR
+        ---
+        mixa_draw_merge_cell(p, 12U, style, fg, bg, flags, alpha)
+        p: mixa_cell_at(rect, r_last, ccol)
+        if: p = 0
+            return: MIXA_DRAW_ERR
+        ---
+        mixa_draw_merge_cell(p, 12U, style, fg, bg, flags, alpha)
+        ccol: ccol + 1U
+    ---
+
+    # left and right edges (between corners)
+    r: row + 1U
+    while: r < r_last
+        p: mixa_cell_at(rect, r, col)
+        if: p = 0
+            return: MIXA_DRAW_ERR
+        ---
+        mixa_draw_merge_cell(p, 3U, style, fg, bg, flags, alpha)
+        p: mixa_cell_at(rect, r, c_last)
+        if: p = 0
+            return: MIXA_DRAW_ERR
+        ---
+        mixa_draw_merge_cell(p, 3U, style, fg, bg, flags, alpha)
+        r: r + 1U
+    ---
+return: MIXA_DRAW_OK

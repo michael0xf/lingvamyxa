@@ -1,4 +1,4 @@
-# Mixa Manager: TextRect + OverlayRect/composite + headless backend + pump + selection + Win32 backend selftests.
+# Mixa Manager: TextRect + OverlayRect/composite + headless backend + pump + selection + draw + Win32 backend selftests.
 # Build root is the repository root (parent of mixa_manager).
 # Translator is the STABLE L1 under stg\l1_baseline, not the live tree.
 $ErrorActionPreference = "Stop"
@@ -58,6 +58,7 @@ $units = @(
     "mixa_backend_selftest",
     "mixa_pump_selftest",
     "mixa_selection_selftest",
+    "mixa_draw_selftest",
     "mixa_backend_win32_selftest"
 )
 
@@ -108,6 +109,7 @@ foreach ($unit in $units) {
 "mixa backend ok"
 "mixa pump ok"
 "mixa selection ok"
+"mixa draw ok"
 if ($win32Ok) {
     "mixa win32 backend ok"
 } elseif ($win32Skipped) {
