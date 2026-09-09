@@ -8177,6 +8177,23 @@ abstract tree. Parentheses, index brackets and Mix braces all enter nested P0
 contexts; their difference is the channel where the resulting Structure is
 used.
 
+Source-location diagnostics (line/column) scan the original source bytes.
+CRLF is recognized on demand as one logical line break: the pair advances the
+cursor by two bytes, increments the line once, and the LF contributes neither
+a second line break nor an extra column. Bytes are not deleted, replaced, or
+copied into a newline-normalized buffer; raw offsets remain byte offsets into
+that original buffer. Example: `a`, CR, LF, `b` is four bytes; `b` is at
+zero-based offset 3 and at line 2, column 1 when the base is 1/1. A leading
+lone LF is a line break; a trailing or standalone CR is a line break of width
+one. A requested position on the LF of a CRLF pair has the same logical
+coordinates as the position after that pair's CR. Slice bounds are exclusive:
+a helper that measures a break at index I must not read past the requested
+end, so a CRLF cut between CR and LF is a lone CR. Literal/exact-identifier
+payload decoding is a separate layer and is not a whole-file rewrite of LF
+after CR. Newly generated source and text files use LF (Unix) line endings on
+every platform. Accepted input may retain LF, CRLF, or lone CR; that is
+separate from the output default.
+
 State:
 
     S.position
