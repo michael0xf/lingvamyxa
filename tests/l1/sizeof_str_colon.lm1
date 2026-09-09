@@ -1,0 +1,9 @@
+external:
+    fn: main () int
+        if: c.sizeof(("x:y")) != c.sizeof("x:y")
+            return: 1
+        if: c.sizeof(("cast:")) != c.sizeof("cast:")
+            return: 2
+        return: 0
+    end: main
+end: external
