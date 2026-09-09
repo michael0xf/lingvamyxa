@@ -1277,23 +1277,27 @@ Wrong end target: "end target does not match close target".
 Nested `end: return` on a return statement stays unsupported trailer
 (entry_trailer). Trailer expression is scanned, checked, evaluated
 and checkpointed like a body return (own publish, hidden discovery).
-Bare `end` stays banned (v15). Empty `end:` is NOT newly admitted
-(L1 currently emits it; L2 still rejects; pending language decision).
---- is a multi-level tail cutter in P0 (not one-step); parser source
-is unchanged.
+Bare `end` stays banned (v15). Empty `end:` is a settled language
+ban: root L1 l1_emit_fn now rejects it (`end trailer expects
+exactly one target name`) and wrong targets (`end target does not
+match close target`). L2 still rejects empty end:. Frozen STG L1
+source was not updated; it still emits empty/wrong end. Full
+self-build/next/check was not rerun in the Unit 25 window.
+Main-only nonempty body + return trailer dropped the last body
+puts (110800); that is a remaining L2 leaf-path bug, not a
+completed gate. --- is a multi-level tail cutter in P0; parser
+source is unchanged.
 
-L1 already emitted return-trailer and did not check end targets.
-Paired positives: fn_close_name/fn/ret/dash execute. Repro for the
-L1 gap: tests/l1/invalid_fn_end_wrong.lm1 currently translates
-(end:other). Intended fix before expanding: lm2/l1trans.lm2 and
-l1src/l1trans.lm1 l1_emit_fn should reject unless the end atom is
-the function name or fn/sub. Not edited in this unit.
+Paired positives: tests/l1/fn_close_name/fn/ret/dash and L2
+unit_ret_tr / unit_end_*. invalid_fn_end_wrong and
+invalid_fn_end_empty are root negatives.
 
 Legacy parse gate: tests/l1/run_legacy_p0.ps1 vs printTree.lm0
 oracle, root gen2 and STG gen2. Parse only; consumer omissions
 are the L1/L2 tests above. Inline `prototype:` drop and const:
 qualifier-distribution remain pending (not this unit).
-advance_layout_line remains queued.
+advance_layout_line remains queued. Triple-quote A+1 decode is
+Unit 26 / 110600.
 
 Unit 16 - nested expression emit scratch
 ----------------------------------------
