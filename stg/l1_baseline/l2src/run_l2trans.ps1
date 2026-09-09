@@ -18,7 +18,7 @@ $guards = @(
     "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",
     "-Werror=implicit-function-declaration", "-Werror=implicit-int"
 )
-$cflags = @("-std=c99", "-Wall", "-Wextra", "-Wpedantic", "-I", ".") + $guards
+$cflags = @("-std=c99", "-Wall", "-Wextra", "-Wpedantic", "-I", ".", "-I", "lm1/build") + $guards
 
 function Invoke-Gcc([string]$cpath, [string]$exe, [string]$glog) {
     $flagStr = ($cflags -join " ")
@@ -186,6 +186,9 @@ Invoke-AdmitEmit "l2src\tests\entry_int_max.lm2" "entry_int_max" "2147483647"
 
 Invoke-Puts "l2src\tests\entry_puts_hello.lm2" "entry_puts_hello" 0 "Hello`n"
 Invoke-Puts "l2src\tests\entry_puts_triple.lm2" "entry_puts_triple" 0 ('a"""b' + "`n")
+Invoke-Puts "l2src\tests\entry_puts_triple_single.lm2" "entry_puts_triple_single" 0 ("a'''b" + "`n")
+Invoke-Puts "l2src\tests\entry_puts_triple_runs.lm2" "entry_puts_triple_runs" 0 ('a"b""c"""d' + "`n")
+Invoke-Negative "l2src\tests\entry_puts_triple_fence4.lm2" "entry_puts_triple_fence4" "unterminated python-like string"
 Invoke-Puts "l2src\tests\entry_puts_seq.lm2" "entry_puts_seq" 0 "one`ntwo`n"
 Invoke-Puts "l2src\tests\entry_puts_empty.lm2" "entry_puts_empty" 0 "`n"
 Invoke-Puts "l2src\tests\entry_puts_esc.lm2" "entry_puts_esc" 0 "a`"b\c`n"

@@ -1,0 +1,4 @@
+fn: main () int
+    c.puts("""a"b""c""""d""")
+    return: 0
+end: main

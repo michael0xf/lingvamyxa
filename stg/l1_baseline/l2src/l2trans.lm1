@@ -144,6 +144,10 @@ prototype:
     fn: l2_free_method (int: mi) int
     fn: l2_xmalloc (size_t: n) @: void
     fn: l2_xfree (@: void p) int
+    fn: l2_triple_fence_n (const: @(LmP0Text t)) size_t
+    fn: l2_decode_triple_body (const: @(LmP0Text t); @@: char outp; @: size_t outn) int
+    fn: l2_fmt_l1_string (@: char dest; size_t: cap; const: @(char data); size_t: n) int
+    fn: l2_tok_text (const: @(LmP0Text t); @: char dest; size_t: cap) int
     fn: l2_prep_drop (@: char acts; @: char hides) int
     fn: l2_act_at (@: char base; int: i) @: char
     fn: l2_release () int
@@ -1285,14 +1289,43 @@ fn: l2_empty_struct (const: @(LmP0Node node)) int
         return: 0
 return: l2_count_active(node\as\structure) = 0
 
+fn: l2_triple_fence_n (const: @(LmP0Text t)) size_t
+    size_t: n 0U
+    size_t: i 0U
+    int: q
+    if: t = 0 || t\data = 0 || t\length < 6U
+        return: 0U
+    q: (cast: (int) t\data[0])
+    if: q != 34 && q != 39
+        return: 0U
+    while: n < t\length && (cast: (int) t\data[n]) = q
+        n: n + 1U
+    if: n < 3U
+        return: 0U
+    if: n = t\length
+        return: 3U
+    if: t\length < n + n
+        return: 0U
+    i: 0U
+    while: i < n
+        if: (cast: (int) t\data[t\length - n + i]) != q
+            return: 0U
+        i: i + 1U
+return: n
+
+fn: l2_triple_q (const: @(LmP0Text t)) int
+    if: l2_triple_fence_n(t) = 0U
+        return: 0
+return: (cast: (int) t\data[0])
+
 fn: l2_quoted (const: @(LmP0Text t)) int
     if: t = 0 || t\data = 0 || t\length < 2U
         return: 0
+    if: l2_triple_q(t) != 0
+        return: 1
     if: t\data[0] != 34 || t\data[t\length - 1U] != 34
         return: 0
     if: t\length >= 6U && t\data[1] = 34 && t\data[2] = 34
-        if: t\data[t\length - 3U] = 34 && t\data[t\length - 2U] = 34
-            return: 1
         return: 0
 return: 1
 
@@ -1334,44 +1367,115 @@ fn: l2_write_l1_string (@: FILE out; const: @(char data); size_t: n) int
         return: 1
 return: 0
 
-fn: l2_write_triple_as_l1 (@: FILE out; const: @(LmP0Text t)) int
+fn: l2_decode_triple_body (const: @(LmP0Text t); @@: char outp; @: size_t outn) int
     @: char buf 0
+    size_t: nfen
     size_t: n
     size_t: i 0U
     size_t: o 0U
     size_t: run
     size_t: emitn
     size_t: k
-    if: t = 0 || t\data = 0 || t\length < 6U
+    char: qch
+    if: outp = 0 || outn = 0
         return: 1
-    n: t\length - 6U
+    outp[0]: 0
+    outn[0]: 0U
+    nfen: l2_triple_fence_n(t)
+    if: nfen = 0U || t = 0 || t\data = 0
+        return: 1
+    n: t\length - nfen - nfen
     if: n = 0U
-        return: l2_write_l1_string(out, "", 0U)
+        return: 0
     buf: (cast: (@: char) l2_xmalloc(n + 1U))
     if: buf = 0
         return: 1
+    qch: t\data[0]
     while: i < n
-        if: t\data[3U + i] = 34
+        if: t\data[nfen + i] = qch
             run: 0U
-            while: i + run < n && t\data[3U + i + run] = 34
+            while: i + run < n && t\data[nfen + i + run] = qch
                 run: run + 1U
             emitn: run
-            if: run >= 4U
+            if: run >= nfen + 1U
                 emitn: run - 1U
             k: 0U
             while: k < emitn
-                buf[o]: 34
+                buf[o]: qch
                 o: o + 1U
                 k: k + 1U
             i: i + run
             continue
-        buf[o]: t\data[3U + i]
+        buf[o]: t\data[nfen + i]
         o: o + 1U
         i: i + 1U
     buf[o]: 0
-    i: l2_write_l1_string(out, buf, o)
+    outp[0]: buf
+    outn[0]: o
+return: 0
+
+fn: l2_fmt_l1_string (@: char dest; size_t: cap; const: @(char data); size_t: n) int
+    size_t: i 0U
+    size_t: o 0U
+    int: ch
+    size_t: need
+    if: dest = 0 || cap < 3U
+        return: 1
+    dest[o]: 34
+    o: o + 1U
+    while: i < n
+        if: data = 0
+            return: 1
+        ch: (cast: (int) data[i])
+        if: ch < 0
+            ch: ch + 256
+        need: 1U
+        if: ch = 34 || ch = 92 || ch = 10 || ch = 13
+            need: 2U
+        if: o + need + 2U > cap
+            return: 1
+        if: ch = 34
+            dest[o]: 92
+            dest[o + 1U]: 34
+            o: o + 2U
+            i: i + 1U
+            continue
+        if: ch = 92
+            dest[o]: 92
+            dest[o + 1U]: 92
+            o: o + 2U
+            i: i + 1U
+            continue
+        if: ch = 10
+            dest[o]: 92
+            dest[o + 1U]: 110
+            o: o + 2U
+            i: i + 1U
+            continue
+        if: ch = 13
+            dest[o]: 92
+            dest[o + 1U]: 114
+            o: o + 2U
+            i: i + 1U
+            continue
+        dest[o]: (cast: (char) ch)
+        o: o + 1U
+        i: i + 1U
+    dest[o]: 34
+    dest[o + 1U]: 0
+return: 0
+
+fn: l2_write_triple_as_l1 (@: FILE out; const: @(LmP0Text t)) int
+    @: char buf 0
+    size_t: n 0U
+    int: rc
+    if: l2_decode_triple_body(t, @ buf, @ n) != 0
+        return: 1
+    if: buf = 0
+        return: l2_write_l1_string(out, "", 0U)
+    rc: l2_write_l1_string(out, buf, n)
     l2_xfree((cast: (@: void) buf))
-return: i
+return: rc
 
 fn: l2_write_text (@: FILE out; const: @(LmP0Text t)) int
     if: out = 0 || t = 0 || t\data = 0
@@ -1629,9 +1733,9 @@ fn: l2_emit_puts_line (@: FILE out; const: @(LmP0Node stmt)) int
     if: c.fputs("        c.puts: ", out) < 0
         return: 1
     t: arg\value\as\atom
-    if: t != 0 && t\length >= 6U && t\data[0] = 34 && t\data[1] = 34 && t\data[2] = 34 && l2_write_triple_as_l1(out, t) != 0
+    if: l2_triple_q(t) != 0 && l2_write_triple_as_l1(out, t) != 0
         return: 1
-    if: (t = 0 || t\length < 6U || t\data[0] != 34 || t\data[1] != 34 || t\data[2] != 34) && l2_write_text(out, t) != 0
+    if: l2_triple_q(t) = 0 && l2_write_text(out, t) != 0
         return: 1
     if: c.fputs("\n", out) < 0
         return: 1
@@ -3369,8 +3473,21 @@ fn: l2_parse_unit (const: @(LmP0Node main_node); const: @(char path)) int
     l2_leaf_mode: 1
 return: 0
 
-fn: l2_tok_text (const: @(LmP0Text t); @: char dest) int
-    if: t = 0 || t\data = 0 || dest = 0 || t\length >= 63U
+fn: l2_tok_text (const: @(LmP0Text t); @: char dest; size_t: cap) int
+    @: char buf 0
+    size_t: n 0U
+    int: rc
+    if: t = 0 || t\data = 0 || dest = 0 || cap = 0U
+        return: 1
+    if: l2_triple_q(t) != 0
+        if: l2_decode_triple_body(t, @ buf, @ n) != 0
+            return: 1
+        if: buf = 0
+            return: l2_fmt_l1_string(dest, cap, "", 0U)
+        rc: l2_fmt_l1_string(dest, cap, buf, n)
+        l2_xfree((cast: (@: void) buf))
+        return: rc
+    if: t\length + 1U > cap
         return: 1
     c.memcpy(dest, t\data, t\length)
     dest[t\length]: 0
@@ -3504,7 +3621,7 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
             if: idx >= 0
                 return: l2_tok_slot(mi, idx, dest)
             ---
-        return: l2_tok_text(node\as\atom, dest)
+        return: l2_tok_text(node\as\atom, dest, 256U)
     if: node\kind = c.LM_P0_NODE_STRUCTURE && node\as != 0
         if: l2_fields_has_call(node\as\structure\first_field, l2_count_active(node\as\structure))
             return: l2_eval_fields(node\as\structure\first_field, l2_count_active(node\as\structure), mi, ind, dest)
@@ -3806,19 +3923,19 @@ fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
             after: 1
             fld: 2
         if: fld = 1
-            if: l2_tok_text(f\value\as\atom, piece) != 0 || l2_cat(buf, piece) != 0
+            if: l2_tok_text(f\value\as\atom, piece, 256U) != 0 || l2_cat(buf, piece) != 0
                 return: l2_error(l2_src, at, "expression too long")
             ao: 0
             after: 0
         if: fld = 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_is_brack(f\value\as\atom)
-            if: l2_tok_text(f\value\as\atom, piece) != 0 || l2_cat(buf, piece) != 0
+            if: l2_tok_text(f\value\as\atom, piece, 256U) != 0 || l2_cat(buf, piece) != 0
                 return: l2_error(l2_src, at, "expression too long")
             ao: 0
             fld: 2
         if: fld = 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_is_binop(f\value\as\atom)
             if: l2_cat(buf, " ") != 0
                 return: l2_error(l2_src, at, "expression too long")
-            if: l2_tok_text(f\value\as\atom, piece) != 0 || l2_cat(buf, piece) != 0
+            if: l2_tok_text(f\value\as\atom, piece, 256U) != 0 || l2_cat(buf, piece) != 0
                 return: l2_error(l2_src, at, "expression too long")
             if: l2_cat(buf, " ") != 0
                 return: l2_error(l2_src, at, "expression too long")
