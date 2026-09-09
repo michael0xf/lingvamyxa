@@ -490,6 +490,13 @@ if ($gen -eq "gen0") {
     Invoke-Translate "tests/l1/hdr_diamond/common.h.lm1" "$obj\headers\tests\l1\hdr_diamond\common.lm1.h"
     Invoke-Translate "tests/l1/hdr_diamond/left.h.lm1" "$obj\headers\tests\l1\hdr_diamond\left.lm1.h"
     Invoke-Translate "tests/l1/hdr_diamond/right.h.lm1" "$obj\headers\tests\l1\hdr_diamond\right.lm1.h"
+    Invoke-Translate "tests/l1/hdr_diamond/holder.h.lm1" "$obj\headers\tests\l1\hdr_diamond\holder.lm1.h"
+    Assert-CHas "$obj\headers\tests\l1\hdr_diamond\holder.lm1.h" "Shared s;"
+    Assert-CHas "$obj\headers\tests\l1\hdr_diamond\holder.lm1.h" "HoldFn fn;"
+    Assert-CHas "$obj\headers\tests\l1\hdr_diamond\holder.lm1.h" "typedef int (*HoldFn)(Shared s);"
+    Assert-CLacks "$obj\headers\tests\l1\hdr_diamond\holder.lm1.h" "by-value cycle"
+    cmd /c "gcc $cflagsStr -I $obj\headers -c -o $obj\headers\tests\l1\hdr_diamond\holder_compile.o -x c $obj\headers\tests\l1\hdr_diamond\holder.lm1.h > $log\hdr_holder_compile.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "generated holder.lm1.h failed to compile (see $log\hdr_holder_compile.log)" }
     Assert-CHas "$obj\headers\tests\l1\hdr_diamond\left.lm1.h" "#include `"tests/l1/hdr_diamond/common.lm1.h`""
     Assert-CHas "$obj\headers\tests\l1\hdr_diamond\right.lm1.h" "#include `"tests/l1/hdr_diamond/common.lm1.h`""
     Invoke-Translate "tests\l1\hdr_diamond_root.lm1" "$obj\hdr_diamond_root.c"

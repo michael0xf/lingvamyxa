@@ -1,0 +1,8 @@
+predef: "tests/l1/hdr_diamond/common.h.lm1"
+
+fnptr: HoldFn (Shared: s) int
+
+struct: Holder
+    Shared: s
+    HoldFn: fn
+end: Holder

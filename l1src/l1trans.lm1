@@ -74,6 +74,8 @@ int: l1_hdr_emitting 0
 prototype:
     fn: l1_hdr_type_has (const: @(LmP0Text text)) int
     fn: l1_hdr_check_item (const: @(LmP0Node node); const: @(char path)) int
+    fn: l1_hdr_frame_name (const: @(LmP0Frame frame)) @: LmP0Text
+    fn: l1_hdr_name_list_add (@: char tab; @: int n; size_t: cap; const: @(char name)) int
     fn: l1_path_is_lm1 (const: @(char path)) int
     fn: l1_path_is_h_lm1 (const: @(char path)) int
     fn: l1_unit_id_from_source (@: char dst; size_t: cap; const: @(char in_path); const: @(char path); const: @(LmP0Node node)) int
@@ -4126,6 +4128,35 @@ fn: l1_hdr_register_unit (const: @(LmP0Node root); const: @(char path); int: dep
         field: field\next
 return: 0
 
+fn: l1_hdr_mark_unit_emitted (const: @(LmP0Node root); const: @(char path)) int
+    @: LmP0Field field
+    const: @: LmP0Node node
+    const: @: LmP0Text name
+    c.array: []: char nbuf 64
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        return: 0
+    field: root\as\structure\first_field
+    while: field != 0
+        node: field\value
+        if: l1_node_ignored(node) = 0 && node != 0 && node\kind = c.LM_P0_NODE_FRAME
+            name: 0
+            if: l1_text_eq(node\as\frame\head, "struct") || l1_text_eq(node\as\frame\head, "enum") || l1_text_eq(node\as\frame\head, "fnptr")
+                name: l1_hdr_frame_name(node\as\frame)
+            ---
+            if: l1_text_eq(node\as\frame\head, "type")
+                name: l1_hdr_frame_name(node\as\frame)
+            ---
+            if: name != 0
+                if: l1_ident_to_buf(nbuf, 64U, name) != 0
+                    return: l1_error(path, node, "type name too long")
+                if: l1_hdr_name_list_add(l1_hdr_emitted, @ l1_hdr_emittedn, 2048U, nbuf) != 0
+                    return: l1_error(path, node, "too many header types")
+                ---
+            ---
+        ---
+        field: field\next
+return: 0
+
 fn: l1_hdr_register_path (const: @(char in_path); int: depth) int
     @: LmP0Document document 0
     const: @: LmP0Node root
@@ -4154,6 +4185,10 @@ fn: l1_hdr_register_path (const: @(char in_path); int: depth) int
         l1_imp_actn: l1_imp_actn - 1
         return: 1
     if: l1_hdr_register_unit(root, in_path, depth) != 0
+        lm_p0_document_destroy(document)
+        l1_imp_actn: l1_imp_actn - 1
+        return: 1
+    if: l1_hdr_mark_unit_emitted(root, in_path) != 0
         lm_p0_document_destroy(document)
         l1_imp_actn: l1_imp_actn - 1
         return: 1
