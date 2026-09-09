@@ -139,12 +139,15 @@ build baseline; promotion must preserve the live L2 sources.
     SCOPE. Direct invocation is implemented. 3f0e09d landed the first
     125700 source slice: `l1src/p0.h.lm1` as L1 declaration source, plus
     `type:` aliases and header-unit function-like `define:` so that
-    inventory is not dropped. `predef:` of a header source, a header pass
-    in buildCore (*.h.lm1 vs ordinary *.lm1), switching live consumers off
-    handwritten `p0.h`, and committed generated bootstrap `p0.lm1.h` are
-    still part of 125700 and are not claimed done. System/vendor includes,
-    qt_app, and mixa headers stay out of scope. Design inventory remains
-    L1_header_units_draft.txt.
+    inventory is not dropped. 489d3f5 landed `predef:` of a header source
+    from an ordinary `.lm1` unit: exactly one `#include` of the generated
+    `name.lm1.h`, types registered for this translation, diamond repeats
+    de-duplicated; declarations are not re-emitted into the `.c`. A header
+    pass in buildCore (*.h.lm1 vs ordinary *.lm1), header-to-header `predef:`
+    cycles, switching live consumers off handwritten `p0.h`, and committed
+    generated bootstrap `p0.lm1.h` are still part of 125700 and are not
+    claimed done. System/vendor includes, qt_app, and mixa headers stay out
+    of scope. Design inventory remains L1_header_units_draft.txt.
 
 1.2 Unit-level items (l1_unit_item_ok)
   Top-level frames allowed in an implicit `.lm1` unit:
@@ -486,11 +489,13 @@ PARTIAL / LIMITED
   mechanics OPEN (10.8).
   Conditional-import policy outside ifdef checkpoint.
   Header units: direct invocation, including `type:` aliases and
-  function-like `define:` in header units (3f0e09d). `l1src/p0.h.lm1`
-  exists as L1 source; live parser/bootstrap still include handwritten
-  `p0.h`. `predef:` of a header source, a buildCore header pass, and a
-  committed generated bootstrap `p0.lm1.h` are not implemented (1.1
-  scope note).
+  function-like `define:` in header units (3f0e09d). Ordinary-unit
+  `predef:` of a `*.h.lm1` source emits one include of the generated
+  header and registers its type names (489d3f5; hdr_predef_consumer /
+  hdr_predef_diamond). `l1src/p0.h.lm1` exists as L1 source; live
+  parser/bootstrap still include handwritten `p0.h`. A buildCore header
+  pass and a committed generated bootstrap `p0.lm1.h` are not implemented
+  (1.1 scope note).
   Parameter declarations, two confirmed defects, BOTH FIXED in c8ceb67 and no
   longer reproducible; retained here only as the record of what they were:
     - a multiword type after `@:` yields a mangled type and DROPS the
