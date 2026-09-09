@@ -339,8 +339,22 @@ Invoke-PreserveFail "tests\l1\invalid_array_extent.lm1" "$obj\invalid_array_exte
 # Requires gen1+: fixtures for l1src fixes not in lm2 seed (TASK5 + empty_sub + cast path).
 # gen0 is built from lm2\l1trans.lm2 via run_seed; these checks would stay red forever on gen0.
 if ($gen -eq "gen0") {
-    Write-Log "skip requires-gen1+ on gen0: invalid_unknown_type, invalid_unknown_ctype, scalar_size_t_ok, empty_sub_ok, cast_multiword_ok, cast_uchar_alias_ok, cast_ptr_uchar_ok, param_multiword_ok, invalid_param_qualifier_extra, header units H1"
+    Write-Log "skip requires-gen1+ on gen0: immutable, invalid_unknown_type, invalid_unknown_ctype, scalar_size_t_ok, empty_sub_ok, cast_multiword_ok, cast_uchar_alias_ok, cast_ptr_uchar_ok, param_multiword_ok, invalid_param_qualifier_extra, header units H1"
 } else {
+    Invoke-Translate "tests\l1\immutable_group.lm1" "$obj\immutable_group.c"
+    Assert-CHas "$obj\immutable_group.c" "const int a = 2;"
+    Assert-CHas "$obj\immutable_group.c" "const int b = 3;"
+    Assert-CHas "$obj\immutable_group.c" "const char * s = "
+    Assert-CHas "$obj\immutable_group.c" "const int c = 4;"
+    Assert-CHas "$obj\immutable_group.c" "const int d = 5;"
+    Assert-CLacks "$obj\immutable_group.c" "const int mut"
+    Assert-CLacks "$obj\immutable_group.c" "const int e"
+    Invoke-CcRun "$obj\immutable_group.c" "$bin\immutable_group.exe" 0 $null
+    Invoke-PreserveFail "tests\l1\invalid_immutable_if.lm1" "$obj\invalid_immutable_if.c" "$log\invalid_immutable_if.err" "immutable does not qualify this form"
+    Invoke-Translate "tests\l1\invalid_immutable_write.lm1" "$obj\invalid_immutable_write.c"
+    Assert-CHas "$obj\invalid_immutable_write.c" "const int a = 1;"
+    cmd /c "gcc $cflagsStr -o $bin\invalid_immutable_write.exe $obj\invalid_immutable_write.c > $log\gcc_invalid_immutable_write.log 2>&1"
+    if ($LASTEXITCODE -eq 0) { throw "expected gcc failure writing immutable int" }
     Invoke-PreserveFail "tests\l1\invalid_unknown_type.lm1" "$obj\invalid_unknown_type.c" "$log\invalid_unknown_type.err" "unknown type name"
     Invoke-PreserveFail "tests\l1\invalid_unknown_ctype.lm1" "$obj\invalid_unknown_ctype.c" "$log\invalid_unknown_ctype.err" "unknown type name"
     Invoke-Translate "tests\l1\scalar_size_t_ok.lm1" "$obj\scalar_size_t_ok.c"

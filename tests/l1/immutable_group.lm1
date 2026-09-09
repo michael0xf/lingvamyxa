@@ -1,0 +1,27 @@
+fn: take_mut (@: int p) int
+    p[0]: 7
+return: p[0]
+
+external:
+    fn: main () int
+        int: mut 1
+        immutable:
+            int: a 2
+            int: b 3
+            const: @(char s) "hi"
+            const: int: c 4
+            immutable: int: d 5
+        int: e 6
+        if: a + b + c + d != 14
+            return: 1
+        mut: 9
+        e: 8
+        if: take_mut(@ mut) != 7
+            return: 2
+        if: e != 8
+            return: 3
+        if: s[0] != 104
+            return: 4
+        return: 0
+    end: main
+end: external
