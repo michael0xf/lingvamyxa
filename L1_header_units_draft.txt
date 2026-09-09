@@ -117,14 +117,17 @@ definition. That covers self-reference and nothing else.
 Replacement, three rules:
 
   5.1  ALL forward typedefs for structs owned by this unit are emitted FIRST,
-       before any definition. That makes mutual pointer reference work with no
-       ordering requirement on the author:
+       before any definition. Forward struct declarations suffice for pointer
+       references. That makes mutual pointer reference work with no ordering
+       requirement on the author:
 
            struct A { B *b; };   struct B { A *a; };
 
-  5.2  A field held BY VALUE is a real dependency: the definition of its type
-       must precede. Definitions are therefore emitted in dependency order, not
-       source order.
+  5.2  A field held BY VALUE, or a typedef used by value (including an owned
+       fnptr typedef used as a struct field), is a real dependency: the
+       definition of its type must precede. Struct definitions and fnptr
+       typedefs are therefore emitted in a JOINT dependency order, not source
+       order and not as "all structs then all fnptrs".
 
   5.3  A by-value CYCLE is impossible in C and is diagnosed by name, not
        reordered into something that happens to compile:
@@ -136,7 +139,11 @@ does not own is not forward-declared automatically; that stays the author's
 business through include: of the owning header.
 
 Fixtures required: self-pointer, mutual pointer, by-value dependency that needs
-reordering, and by-value cycle as a negative.
+reordering, and by-value cycle as a negative. Coverage is those four H1
+fixtures plus existing H1 tests; not a claim beyond that set. Remaining
+implementation debt, not language decisions: an inline prototype is silently
+ignored; lowercase unknown heads; fnptr-to-fnptr coverage; uchar header
+spelling.
 
 
 6. Worked example, with the generated C for both consumers
@@ -369,10 +376,11 @@ the mechanism is proven, and p0.h only together with its whitelist entry.
 10. Files this touches
 
     l1src\l1trans.lm1        header output mode; struct: / enum: / fnptr:
-                             emission; forward-first ordering and by-value
-                             dependency order; guard encoding; predef of a
-                             header source contributing an include and type
-                             names; diagnostics for the excluded constructs
+                             emission; forward-first struct typedefs then
+                             joint struct/fnptr dependency order; guard
+                             encoding; predef of a header source contributing
+                             an include and type names; diagnostics for the
+                             excluded constructs
     l1src\buildCore.lm1      header pass before the source pass, and the
                              not-*.h.lm1 predicate on the source pass
     tests\l1\                fixtures, positive and negative
