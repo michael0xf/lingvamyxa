@@ -1325,6 +1325,14 @@ Arises when those scanners are ported.
 
 Differential vs parser.lm1 on empty, short, exact, extra-char,
 wrong rune, indented start, tab/space trailer, 80 vs 81.
+
+Unit 30 - layout_prefix_is_deeper
+---------------------------------
+Files: parser_layout_deeper.lm2, run_l2trans.ps1, OPEN_POINTS.txt
+Frozen ref: l1src/parser.lm1:768-771 (read-only)
+
+If either dot_level is nonzero, compare only dots; else compare
+indent columns. AVOIDED: scan_layout_prefix, Document, indent stack.
 Next: dash-fence status / brace-mark unchecked, then Document.
 
 Unit 25 - P0 close consumption (return trailer, end:name/fn, ---)

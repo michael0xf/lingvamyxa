@@ -3141,6 +3141,76 @@ end: external
 
 Invoke-FenceLine
 
+function Invoke-LayoutDeeper {
+    $cases = @'
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 0U, 0U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(1U, 0U, 0U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 0U, 1U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(4U, 0U, 4U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(8U, 0U, 4U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(4U, 0U, 8U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 1U, 0U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 0U, 0U, 1U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 2U, 0U, 1U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 1U, 0U, 2U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(8U, 1U, 0U, 0U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(0U, 0U, 8U, 1U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(8U, 1U, 4U, 1U))
+        c.printf("%d\n", lm_p0_layout_prefix_is_deeper(4U, 2U, 8U, 1U))
+'@
+    $refLm1 = Join-Path $out "layout_ref.lm1"
+    $refC = Join-Path $out "layout_ref.c"
+    $refExe = Join-Path $out "layout_ref.exe"
+    $refOut = Join-Path $out "layout_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed layout_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "layout_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'layout_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "layout_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_layout_deeper.lm2" "parser_layout_deeper" 0 "lm_p0_layout_prefix_is_deeper"
+    $lm1 = Join-Path $out "parser_layout_deeper.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "layout_deeper must mangle method symbols" }
+    if ($text -notmatch 'fn: l2_m0') { throw "layout_deeper missing mangled method" }
+    $l2cases = $cases.Replace("lm_p0_layout_prefix_is_deeper(", "l2_m0(unit, ")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "layout_deeper L1 missing generated main return" }
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "layout_l2_drive.lm1"
+    $drvC = Join-Path $out "layout_l2_drive.c"
+    $drvExe = Join-Path $out "layout_l2_drive.exe"
+    $drvOut = Join-Path $out "layout_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed layout_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "layout_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'layout_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "layout_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "layout_deeper mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-LayoutDeeper
+
 "l2trans $gen ok"
 $suiteLog = Join-Path $log "l2trans_suite.log"
 $toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $l1trans)).Hash

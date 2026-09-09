@@ -1,0 +1,8 @@
+fn: lm_p0_layout_prefix_is_deeper (size_t: indent_column; size_t: dot_level; size_t: base_indent_column; size_t: base_dot_level) int
+    if: dot_level > 0U || base_dot_level > 0U
+        return: dot_level > base_dot_level
+    return: indent_column > base_indent_column
+end: lm_p0_layout_prefix_is_deeper
+fn: main () int
+    return: 0
+end: main
