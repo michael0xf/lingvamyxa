@@ -3,7 +3,8 @@
  * 620:  gcc -std=c99 -DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE -DP0_META_ABI_620
  *         p0_meta_dump.c <620>/lm1/build/parser.lm1.c <620>/lm1/build/own.lm1.c
  * current: gcc -std=c99 -DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE
- *         p0_meta_dump.c lm1/build/parser.lm1.c lm1/build/own.lm1.c
+ *         p0_meta_dump.c lm1/build/parser.lm1.c
+ *         (do not also link own.lm1.c; own is already inlined in current parser)
  *
  * Output is pointer-free: kinds, flags, spans, spelling bytes/length, null/empty.
  */

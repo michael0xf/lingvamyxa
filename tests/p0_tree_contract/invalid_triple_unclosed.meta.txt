@@ -1,0 +1,2 @@
+# p0-meta v1
+REJECT code=4 line=1 col=4 msg=unterminated python-like string literal

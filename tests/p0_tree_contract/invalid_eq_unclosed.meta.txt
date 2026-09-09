@@ -1,0 +1,2 @@
+# p0-meta v1
+REJECT code=20 line=2 col=1 msg=unterminated block string literal

@@ -1,0 +1,23 @@
+# p0-meta v1
+document source_len=25 frozen=1 root=yes diagnostic_slot=yes
+node kind=structure flags=0x0 as=yes span=0:0+0:25
+  struct field_count=2 trailer=null
+  [0] value=node
+    node kind=frame flags=0x0 as=yes span=1:1+0:15
+      frame flags=0x5 body=struct trailer=null head_len=1 bytes=78
+        struct field_count=1 trailer=null
+        [0] value=node
+          node kind=atom flags=0x0 as=yes span=1:4+3:12
+             atom_len=12 bytes=222222612222222262222222
+        trailer=null
+        trailer=null
+  [1] value=node
+    node kind=frame flags=0x0 as=yes span=2:1+16:8
+      frame flags=0x5 body=struct trailer=null head_len=4 bytes=6E657874
+        struct field_count=1 trailer=null
+        [0] value=node
+          node kind=atom flags=0x0 as=yes span=2:7+22:2
+             atom_len=2 bytes=6F6B
+        trailer=null
+        trailer=null
+  trailer=null
