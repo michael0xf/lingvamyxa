@@ -21,3 +21,5 @@
 !/lm1/build/own.lm1.c
 !/lm1/build/parser.lm1.c
 !/lm1/build/printTree.lm1.c
+!/lm1/build/l1src/
+!/lm1/build/l1src/p0.lm1.h

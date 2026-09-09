@@ -116,43 +116,63 @@ return: lm_build_run(command)
 fn: lm_build_cc (const: @(char c_path); const: @(char exe_path)) int
     c.array: []: char command 4096
     size_t: used 0U
+    immutable:
+        @: char cc "gcc"
+        @: char flag_std "-std=c99"
+        @: char flag_wall "-Wall"
+        @: char flag_extra "-Wextra"
+        @: char flag_pedantic "-Wpedantic"
+        @: char flag_I "-I"
+        @: char dir_dot "."
+        @: char dir_lm1 "lm1/build"
+        @: char err_ptr "-Werror=incompatible-pointer-types"
+        @: char err_qual "-Werror=discarded-qualifiers"
+        @: char err_implfn "-Werror=implicit-function-declaration"
+        @: char err_implint "-Werror=implicit-int"
+        @: char flag_o "-o"
     if: c_path = 0 || exe_path = 0
         return: 1
     command[0]: 0
-    used: lm_build_append_arg(command, c.sizeof(command), used, "gcc")
+    used: lm_build_append_arg(command, c.sizeof(command), used, cc)
     if: used = c.sizeof(command)
         return: 1
-    used: lm_build_append_arg(command, c.sizeof(command), used, "-std=c99")
+    used: lm_build_append_arg(command, c.sizeof(command), used, flag_std)
     if: used = c.sizeof(command)
         return: 1
-    used: lm_build_append_arg(command, c.sizeof(command), used, "-Wall")
+    used: lm_build_append_arg(command, c.sizeof(command), used, flag_wall)
     if: used = c.sizeof(command)
         return: 1
-    used: lm_build_append_arg(command, c.sizeof(command), used, "-Wextra")
+    used: lm_build_append_arg(command, c.sizeof(command), used, flag_extra)
     if: used = c.sizeof(command)
         return: 1
-    used: lm_build_append_arg(command, c.sizeof(command), used, "-Wpedantic")
+    used: lm_build_append_arg(command, c.sizeof(command), used, flag_pedantic)
     if: used = c.sizeof(command)
         return: 1
-    used: lm_build_append_arg(command, c.sizeof(command), used, "-I")
+    used: lm_build_append_arg(command, c.sizeof(command), used, flag_I)
     if: used = c.sizeof(command)
         return: 1
-    used: lm_build_append_arg(command, c.sizeof(command), used, ".")
+    used: lm_build_append_arg(command, c.sizeof(command), used, dir_dot)
     if: used = c.sizeof(command)
         return: 1
-    used: lm_build_append_arg(command, c.sizeof(command), used, "-Werror=incompatible-pointer-types")
+    used: lm_build_append_arg(command, c.sizeof(command), used, flag_I)
     if: used = c.sizeof(command)
         return: 1
-    used: lm_build_append_arg(command, c.sizeof(command), used, "-Werror=discarded-qualifiers")
+    used: lm_build_append_arg(command, c.sizeof(command), used, dir_lm1)
     if: used = c.sizeof(command)
         return: 1
-    used: lm_build_append_arg(command, c.sizeof(command), used, "-Werror=implicit-function-declaration")
+    used: lm_build_append_arg(command, c.sizeof(command), used, err_ptr)
     if: used = c.sizeof(command)
         return: 1
-    used: lm_build_append_arg(command, c.sizeof(command), used, "-Werror=implicit-int")
+    used: lm_build_append_arg(command, c.sizeof(command), used, err_qual)
     if: used = c.sizeof(command)
         return: 1
-    used: lm_build_append_arg(command, c.sizeof(command), used, "-o")
+    used: lm_build_append_arg(command, c.sizeof(command), used, err_implfn)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, err_implint)
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, flag_o)
     if: used = c.sizeof(command)
         return: 1
     used: lm_build_append_arg(command, c.sizeof(command), used, exe_path)

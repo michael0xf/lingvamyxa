@@ -50,7 +50,7 @@ if ($LASTEXITCODE -ne 0) { throw "translate printTree failed $LASTEXITCODE" }
 Write-PLog "translate $ptSrc -> $ptC exit 0"
 
 $gccLog = Join-Path $log "gcc_printTree.log"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o $ptExe $ptC > $gccLog 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o $ptExe $ptC > $gccLog 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content $gccLog | Select-Object -Last 30
     throw "gcc printTree failed (see $gccLog)"

@@ -1,0 +1,15 @@
+external:
+    fn: main () int
+        immutable:
+            []: int xs 3 1 2 3
+            [][]: int matrix 2 2
+                []: 1 2
+                []: 3 4
+            ---
+        if: xs[2] != 3
+            return: 1
+        if: matrix[1][0] != 3
+            return: 2
+        return: 0
+    end: main
+end: external

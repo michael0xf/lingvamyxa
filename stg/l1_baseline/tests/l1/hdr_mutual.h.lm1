@@ -1,0 +1,7 @@
+struct: Left
+    @: Right right
+end: Left
+
+struct: Right
+    @: Left left
+end: Right

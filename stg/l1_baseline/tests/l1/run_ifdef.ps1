@@ -10,7 +10,7 @@ $obj = "build\obj\l1trans\$gen"
 $bin = "build\l1trans\$gen"
 $log = Join-Path "build\l1trans\logs" $gen
 $script:ifdefLog = Join-Path $log "ifdef.log"
-$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -I . -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int"
+$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int"
 
 New-Item -ItemType Directory -Force -Path $obj, $bin, $log | Out-Null
 Set-Content -LiteralPath $script:ifdefLog -Value "$(Get-Date -Format o) ifdef start gen=$gen"
@@ -105,7 +105,12 @@ Negative "invalid_ifdef_empty_cond" "ifdef branch expects a non-empty condition"
 Negative "invalid_ifdef_end_outer" "end target does not match close target"
 Negative "invalid_ifdef_end_branch" "end target does not match close target"
 Negative "invalid_ifdef_end_count" "end trailer expects exactly one target name"
-Negative "invalid_ifdef_end_empty" "end target does not match close target"
+# Frozen STG gen0 is lm2 seed (old P0). Promoted gen2 has empty-colon P0.
+if ($gen -eq "gen0") {
+    Negative "invalid_ifdef_end_empty" "end target does not match close target"
+} else {
+    Negative "invalid_ifdef_end_empty" "empty colon Frame is not allowed"
+}
 Negative "invalid_lm1_ifdef_l3" "reserved L1 name"
 
 Write-I "ifdef ok"

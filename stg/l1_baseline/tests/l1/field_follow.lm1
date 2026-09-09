@@ -1,4 +1,4 @@
-include: "l1src/p0.h" "<stdlib.h>"
+include: "l1src/p0.lm1.h" "<stdlib.h>"
 
 fn: take (@: LmP0Text p) size_t
     if: p = 0

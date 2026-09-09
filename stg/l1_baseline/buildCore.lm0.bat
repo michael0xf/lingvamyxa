@@ -55,7 +55,7 @@ if not exist build\obj mkdir build\obj || exit /b 1
 
 set "CFLAGS=-std=c99 -Wall -Wextra -Wpedantic %THREAD_FLAGS%"
 
-"%LM_CC%" %CFLAGS% -I. "lm1\build\l1trans.lm1.c"   -o build\lm0\l1trans.lm0.exe   || exit /b 1
+"%LM_CC%" %CFLAGS% -I. -I lm1/build "lm1\build\l1trans.lm1.c"   -o build\lm0\l1trans.lm0.exe   || exit /b 1
 "%LM_CC%" %CFLAGS%     "lm1\build\make.lm1.c"      -o build\lm0\make.lm0.exe      || exit /b 1
 "%LM_CC%" %CFLAGS%     "lm1\build\finalize.lm1.c"  -o build\lm0\finalize.lm0.exe  || exit /b 1
 "%LM_CC%" %CFLAGS% -I. "lm1\build\buildCore.lm1.c" -o build\lm0\buildCore.lm0.exe || exit /b 1

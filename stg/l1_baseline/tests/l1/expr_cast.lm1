@@ -1,4 +1,4 @@
-include: "l1src/p0.h"
+include: "l1src/p0.lm1.h"
 
 fn: id (int: x) int
     return: x

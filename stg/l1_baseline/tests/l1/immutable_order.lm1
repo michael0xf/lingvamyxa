@@ -1,0 +1,15 @@
+fn: bump (@: int n) int
+    n[0]: n[0] + 1
+return: n[0]
+
+external:
+    fn: main () int
+        int: t 0
+        immutable:
+            int: a bump(@ t)
+            int: b bump(@ t)
+        if: a != 1 || b != 2 || t != 2
+            return: 1
+        return: 0
+    end: main
+end: external

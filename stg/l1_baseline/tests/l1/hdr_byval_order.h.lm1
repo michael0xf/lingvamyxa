@@ -1,0 +1,7 @@
+struct: Outer
+    Inner: inner
+end: Outer
+
+struct: Inner
+    int: x
+end: Inner

@@ -7,10 +7,12 @@ external:
         const: @(LmP0Diagnostic diagnostic)
         @: char dump
         int: status
+        immutable:
+            @: char usage "usage: printTree <source>\n"
         c.setvbuf(c.stdout, 0, c._IONBF, 0)
         c.setvbuf(c.stderr, 0, c._IONBF, 0)
         if: argc != 2
-            c.fputs("usage: printTree <source>\n", c.stdout)
+            c.fputs(usage, c.stdout)
             return: 0
         status: lm_p0_parse_file(argv[1], @ document)
         if: status != 0

@@ -1,4 +1,4 @@
-include: "l1src/p0.h" "<stdlib.h>" "<string.h>"
+include: "l1src/p0.lm1.h" "<stdlib.h>" "<string.h>"
 
 int: lm_own_alloc_fails 0
 int: lm_own_ok_left -1

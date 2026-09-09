@@ -1,0 +1,18 @@
+predef: "tests/l1/hdr_diamond/left.h.lm1"
+predef: "tests/l1/hdr_diamond/right.h.lm1"
+
+fn: use_shared (@: Shared s; @: Left l; @: Right r) int
+    if: s = 0
+        return: 1
+    if: l = 0
+        return: 2
+    if: r = 0
+        return: 3
+    return: 0
+end: use_shared
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

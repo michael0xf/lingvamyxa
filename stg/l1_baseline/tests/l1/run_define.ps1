@@ -10,7 +10,7 @@ $obj = "build\obj\l1trans\$gen"
 $bin = "build\l1trans\$gen"
 $log = Join-Path "build\l1trans\logs" $gen
 $script:defineLog = Join-Path $log "define.log"
-$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -I . -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int"
+$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int"
 
 New-Item -ItemType Directory -Force -Path $obj, $bin, $log | Out-Null
 Set-Content -LiteralPath $script:defineLog -Value "$(Get-Date -Format o) define start gen=$gen"
@@ -106,7 +106,12 @@ function Negative([string]$name, [string]$diag) {
     Write-D "EXIT negative $src $LASTEXITCODE diagnostic ok"
 }
 
-Negative "invalid_define_noname" "define receiver expects macro name as first atom"
+# Frozen STG gen0 is lm2 seed (old P0). Promoted gen2 has empty-colon P0.
+if ($gen -eq "gen0") {
+    Negative "invalid_define_noname" "define receiver expects macro name as first atom"
+} else {
+    Negative "invalid_define_noname" "empty colon Frame is not allowed"
+}
 Negative "invalid_define_quoted_name" "define receiver expects macro name as identifier atom"
 Negative "invalid_define_nonatom" "define receiver expects atom tokens"
 Negative "invalid_define_end" "end target does not match close target"

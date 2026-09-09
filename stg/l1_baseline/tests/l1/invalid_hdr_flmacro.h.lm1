@@ -1,0 +1,2 @@
+ifndef-default: LM_UNUSED(x) 1
+end: ifndef-default

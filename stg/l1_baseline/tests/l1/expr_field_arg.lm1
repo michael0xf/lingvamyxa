@@ -1,4 +1,4 @@
-include: "l1src/p0.h" "<stdlib.h>"
+include: "l1src/p0.lm1.h" "<stdlib.h>"
 
 fn: add_sz (size_t: a; size_t: b) size_t
     return: a + b

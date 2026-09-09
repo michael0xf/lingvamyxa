@@ -1,5 +1,5 @@
 predef: "l1src/own.lm1"
-include: "l1src/p0.h" "<string.h>"
+include: "l1src/p0.lm1.h" "<string.h>"
 
 fn: lm_p0_text_equals (const: @(LmP0Text text); const: @(char value)) int
     size_t: value_length

@@ -1,0 +1,7 @@
+include: "<stddef.h>"
+
+struct: Point
+    int: x
+    int: y
+    size_t: n
+end: Point

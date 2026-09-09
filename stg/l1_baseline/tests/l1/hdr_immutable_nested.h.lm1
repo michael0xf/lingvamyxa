@@ -1,0 +1,22 @@
+include: "<stddef.h>"
+
+struct: Outer
+    immutable:
+        Inner: inner
+        immutable:
+            int: deep
+        int: after_nested
+    int: mut
+end: Outer
+
+struct: Inner
+    int: v
+end: Inner
+
+struct: Tail
+    immutable:
+        const: @: char data
+        int: after_const
+        @: char tail
+    int: mut
+end: Tail

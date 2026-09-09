@@ -11,7 +11,7 @@ $obj = "build\obj\l1trans\$gen"
 $bin = "build\l1trans\$gen"
 $log = Join-Path "build\l1trans\logs" $gen
 $script:exprLog = Join-Path $log "expr.log"
-$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -I . -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int"
+$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int"
 
 New-Item -ItemType Directory -Force -Path $obj, $bin, $log | Out-Null
 Set-Content -LiteralPath $script:exprLog -Value "$(Get-Date -Format o) expr start gen=$gen"
@@ -66,11 +66,12 @@ $cases = @(
     @{ Name = "expr_str_triple_double"; Has = @(
         'double # not a comment\ncolon: stays data',
         'backslash is raw: \\\" \\n',
+        'same quote run: \"\"\"\n";',
         'const char * t = "\?\?="'
     )},
     @{ Name = "expr_str_triple_single"; Has = @(
         "single # not a comment",
-        'four \"\"\"\" five'
+        'four \"\"\" five \"\"\"\"'
     )},
     @{ Name = "expr_str_triple_args"; Has = @(
         ") # not syntax",
@@ -94,6 +95,10 @@ $cases = @(
 )
 
 foreach ($c in $cases) {
+    if ($gen -eq "gen0" -and $c.Name -like "expr_str_triple_*") {
+        Write-E "skip $($c.Name) on gen0 (lm2 seed has no A+1 decode)"
+        continue
+    }
     $src = "tests\l1\$($c.Name).lm1"
     $cpath = Join-Path $obj ($c.Name + ".c")
     $cpathB = Join-Path $obj ($c.Name + "_b.c")

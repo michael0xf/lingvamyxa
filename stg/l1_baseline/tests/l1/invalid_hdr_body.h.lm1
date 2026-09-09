@@ -1,0 +1,3 @@
+fn: with_body () int
+    return: 1
+end: with_body

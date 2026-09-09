@@ -23,7 +23,7 @@ paren ) stays data
 backslash is raw: \" \n
 same quote run: """"
 """
-        const: @(char want) "double # not a comment\ncolon: stays data\nparen ) stays data\nbackslash is raw: \\\" \\n\nsame quote run: \"\"\"\"\n"
+        const: @(char want) "double # not a comment\ncolon: stays data\nparen ) stays data\nbackslash is raw: \\\" \\n\nsame quote run: \"\"\"\n"
         const: @(char t) """??="""
         const: @(char u) """??/n"""
         if: eqbytes(s, want) = 0

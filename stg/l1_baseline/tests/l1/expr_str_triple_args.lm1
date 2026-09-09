@@ -12,7 +12,7 @@ fn: eqbytes (const: @(char a); const: @(char b)) int
 end: eqbytes
 
 fn: pair (const: @(char a); const: @(char b)) int
-    const: @(char want_a) "a\n) # not syntax\n\"\"\"\" stays data\nb"
+    const: @(char want_a) "a\n) # not syntax\n\"\"\" stays data\nb"
     const: @(char want_b) "c"
     if: eqbytes(a, want_a) = 0
         return: 1

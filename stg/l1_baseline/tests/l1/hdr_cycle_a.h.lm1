@@ -1,0 +1,5 @@
+predef: "tests/l1/hdr_cycle_b.h.lm1"
+
+struct: CycleA
+    int: a
+end: CycleA

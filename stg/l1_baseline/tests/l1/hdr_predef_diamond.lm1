@@ -1,0 +1,12 @@
+predef: "tests/l1/hdr_combo.h.lm1"
+predef: "tests/l1/hdr_combo.h.lm1"
+
+fn: use_style (Style: s) int
+    return: s
+end: use_style
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external

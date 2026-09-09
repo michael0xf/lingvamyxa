@@ -1,0 +1,5 @@
+struct: A
+    Bfn: cb
+end: A
+
+fnptr: Bfn (A: a) int

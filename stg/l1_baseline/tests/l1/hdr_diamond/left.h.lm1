@@ -1,0 +1,5 @@
+predef: "tests/l1/hdr_diamond/common.h.lm1"
+
+struct: Left
+    @: Shared s
+end: Left
