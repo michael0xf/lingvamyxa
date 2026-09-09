@@ -225,15 +225,28 @@ build baseline; promotion must preserve the live L2 sources.
   Write-negatives fail gcc with `read-only variable` / `read-only`
   (not discarded-qualifiers). Header-field grouping: `immutable:`
   inside a `struct:` body emits `const` fields; siblings stay mutable
-  (hdr_immutable.h.lm1 + C consumer). Tests: immutable_group.lm1,
-  immutable_array.lm1, immutable_repeat.lm1, immutable_nested_const.lm1,
-  immutable_ptr.lm1, immutable_end.lm1, immutable_file.lm1,
-  immutable_order.lm1, invalid_immutable_if.lm1,
+  (hdr_immutable.h.lm1 + initialized/runnable C consumer). Header
+  pointer fields follow the same referent contract: `immutable: @: char
+  name` → `const char * name` (slot may be rebound; contents are
+  const). Nested header coverage: hdr_immutable_nested.h.lm1 (by-value
+  Inner before Outer despite source order; nested immutable sibling
+  stays qualified; const-wrapper not last in the block). Tests also:
+  immutable_group.lm1, immutable_array.lm1, immutable_repeat.lm1,
+  immutable_nested_const.lm1, immutable_ptr.lm1, immutable_end.lm1,
+  immutable_file.lm1, immutable_order.lm1, invalid_immutable_if.lm1,
   invalid_immutable_write.lm1, invalid_immutable_array_write.lm1,
   invalid_immutable_ptr_write.lm1, invalid_immutable_end.lm1.
-  `immutable:` is not introduced into sources the gen0 seed must parse
-  (`l1src/l1trans.lm1`). Parser / allocator / out-parameter state stays
-  mutable. STG final promotion and label syntax remain pending.
+  Core adoption (actual `immutable:` use, not tests only):
+  l1src/l1trans.lm1 (usage / --unit-root strings), l1src/printTree.lm1
+  (usage string), l1src/build_l1.lm1 (gcc flag table). Reviewed and
+  left mutable: parser.lm1 / own.lm1 allocator and parse state;
+  p0.h.lm1 struct fields (counts, pointers, flags); make.lm1 /
+  finalize.lm1 / buildCore.lm1 command buffers, env lookups and
+  counters; libc_abi.lm1 / add.lm1 (parameter lists only — immutable
+  does not distribute over parameters). Current l1src is translated
+  from the tracked portable C bootstrap (`gcc lm1/build/l1trans.lm1.c`),
+  not from the historical lm2 gen0 seed. STG final promotion and label
+  syntax remain pending.
   `prototype:` and `external:` (external body must contain fn/sub).
   `sub:` — function without return-type slot (diagnostics distinguish
   it from `fn`). An empty sub is a definition, not just a prototype:
@@ -453,9 +466,11 @@ This is a second route, not a prerequisite of the published-C bootstrap:
        Does not treat a pre-existing gen0 exe as success.
 
   2) tests\l1\run_gen.ps1
-       gen0 → gen1 → gen2 → gen3; requires gen1 C == gen2 C == gen3 C;
-       L1 builder selftest; bootstrap gen3 tools; re-runs smoke + parser
-       with L1_GEN=gen2.
+       gcc tracked lm1/build/l1trans.lm1.c → boot exe (no preexisting
+       L1 binary); boot → gen1 → gen2 → gen3; requires gen1 C == gen2 C
+       == gen3 C; L1 builder selftest; bootstrap gen3 tools; re-runs
+       smoke + parser with L1_GEN=gen2. Hosted gen0 from run_seed is
+       not used to parse current l1src.
 
 Layout:
   build\l1trans\gen0|gen1|gen2|gen3\   executables
