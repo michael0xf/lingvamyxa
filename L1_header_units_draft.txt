@@ -9,7 +9,9 @@ rejects them. Ordinary-unit `predef:` of a header source is implemented
 by unit-root-relative source so same-basename headers do not flatten to
 one include name, types registered, repeated predef de-duplicated, no
 re-emission of declarations. Header-to-header predef and cycles are
-implemented (hdr_diamond_root, hdr_cycle_*). The buildCore header pass
+implemented (hdr_diamond_root, hdr_cycle_*). Imported by-value struct/fnptr
+uses of a predefed header are ready (5604bd8, holder.h.lm1); they are not
+treated as a local pending cycle. The buildCore header pass
 and committed bootstrap p0.lm1.h remain unimplemented. Live parser/bootstrap still include handwritten p0.h. This
 file is not a claim that the whole draft is done.
 

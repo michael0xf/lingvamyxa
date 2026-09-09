@@ -145,7 +145,10 @@ build baseline; promotion must preserve the live L2 sources.
     (`tests/l1/hdr_dir_a/core.h.lm1` -> `#include "tests/l1/hdr_dir_a/core.lm1.h"`),
     so same-basename headers in different directories do not collide.
     Header-to-header `predef:` and header cycles are implemented
-    (hdr_diamond_root, hdr_cycle_*). Repeated predef of one header is
+    (hdr_diamond_root, hdr_cycle_*). Imported struct/fnptr names from a
+    valid included header count as already emitted for by-value
+    dependency checks (5604bd8, hdr_diamond/holder.h.lm1); genuine local
+    by-value cycles still fail. Repeated predef of one header is
     de-duplicated; a true diamond is root -> two headers -> common. A
     header pass in buildCore (*.h.lm1 vs ordinary *.lm1), switching live
     consumers off handwritten `p0.h`, and committed generated bootstrap
