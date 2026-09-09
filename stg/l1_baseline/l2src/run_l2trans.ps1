@@ -3037,6 +3037,110 @@ end: external
 
 Invoke-TrailerRole
 
+function Invoke-FenceLine {
+    $pred = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_text_predicates.lm2")).Replace("`r`n", "`n")
+    $ls = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_line_start.lm2")).Replace("`r`n", "`n")
+    $fl = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_fence_line.lm2")).Replace("`r`n", "`n")
+    $h = ($pred -split "fn: lm_p0_is_horizontal_space")[1]
+    $h = "fn: lm_p0_is_horizontal_space" + ($h -split "fn: lm_p0_is_line_break")[0]
+    $fh = ($fl -split "fn: lm_p0_is_horizontal_space")[1]
+    $fh = "fn: lm_p0_is_horizontal_space" + ($fh -split "fn: lm_p0_line_rest_is_horizontal_space")[0]
+    if ($h.Trim() -ne $fh.Trim()) { throw "fence_line is_horizontal_space must match parser_text_predicates.lm2" }
+    $lr = ($ls -split "fn: lm_p0_line_rest_is_horizontal_space")[1]
+    $lr = "fn: lm_p0_line_rest_is_horizontal_space" + ($lr -split "fn: main")[0]
+    $flr = ($fl -split "fn: lm_p0_line_rest_is_horizontal_space")[1]
+    $flr = "fn: lm_p0_line_rest_is_horizontal_space" + ($flr -split "fn: lm_p0_match_block_string_fence_line")[0]
+    if ($lr.Trim() -ne $flr.Trim()) { throw "fence_line line_rest must match parser_line_start.lm2" }
+
+    $eq80 = "=" * 80
+    $eq81 = "=" * 81
+    $st80 = "*" * 80
+    $st81 = "*" * 81
+    $cases = @"
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("===", 0U, 3U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("===  ", 0U, 5U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("===\t", 0U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("===x", 0U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("====", 0U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("==", 0U, 2U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("===", 0U, 3U, 2U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line(" ===", 1U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("", 0U, 0U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("***", 0U, 3U, 3U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("$eq80", 0U, 80U, 80U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("$eq81", 0U, 81U, 81U))
+        c.printf("%d\n", lm_p0_match_block_string_fence_line("$eq80", 0U, 80U, 79U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("***", 0U, 3U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("***  ", 0U, 5U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("***\t", 0U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("***x", 0U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("****", 0U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("**", 0U, 2U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("***", 0U, 3U, 2U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line(" ***", 1U, 4U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("", 0U, 0U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("===", 0U, 3U, 3U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("$st80", 0U, 80U, 80U))
+        c.printf("%d\n", lm_p0_match_raw_comment_fence_line("$st81", 0U, 81U, 81U))
+"@
+
+    $refLm1 = Join-Path $out "fence_ref.lm1"
+    $refC = Join-Path $out "fence_ref.c"
+    $refExe = Join-Path $out "fence_ref.exe"
+    $refOut = Join-Path $out "fence_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed fence_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "fence_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'fence_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "fence_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_fence_line.lm2" "parser_fence_line" 0 "lm_p0_is_horizontal_space"
+    $lm1 = Join-Path $out "parser_fence_line.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_' -or $text -match 'sub: lm_p0_') { throw "fence_line must mangle method symbols" }
+    if ($text -notmatch 'fn: l2_m2') { throw "fence_line missing match_block_string_fence_line" }
+    if ($text -notmatch 'fn: l2_m3') { throw "fence_line missing match_raw_comment_fence_line" }
+
+    $l2cases = $cases.
+        Replace("lm_p0_match_block_string_fence_line(", "l2_m2(unit, ").
+        Replace("lm_p0_match_raw_comment_fence_line(", "l2_m3(unit, ")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "fence_line L1 missing generated main return" }
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "fence_l2_drive.lm1"
+    $drvC = Join-Path $out "fence_l2_drive.c"
+    $drvExe = Join-Path $out "fence_l2_drive.exe"
+    $drvOut = Join-Path $out "fence_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed fence_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "fence_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'fence_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "fence_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "fence_line mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-FenceLine
+
 "l2trans $gen ok"
 $suiteLog = Join-Path $log "l2trans_suite.log"
 $toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $l1trans)).Hash

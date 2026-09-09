@@ -1,0 +1,51 @@
+fn: lm_p0_is_horizontal_space (char: value) int
+    return: value = 32 || value = 9
+end: lm_p0_is_horizontal_space
+fn: lm_p0_line_rest_is_horizontal_space (const: @(char source); size_t: start; size_t: end) int
+    size_t: i
+    char: ch
+    i: start
+    while: i < end
+        ch: source[i]
+        if: lm_p0_is_horizontal_space(ch) = 0
+            return: 0
+        i: i + 1U
+    return: 1
+end: lm_p0_line_rest_is_horizontal_space
+fn: lm_p0_match_block_string_fence_line (const: @(char source); size_t: line_start; size_t: line_end; size_t: eq_count) int
+    size_t: i
+    char: ch
+    if: eq_count < 3U || eq_count > 80U || line_start + eq_count > line_end
+        return: 0
+    i: 0U
+    while: i < eq_count
+        ch: source[line_start + i]
+        if: ch != 61
+            return: 0
+        i: i + 1U
+    i: line_start + eq_count
+    while: i < line_end
+        ch: source[i]
+        if: lm_p0_is_horizontal_space(ch) = 0
+            return: 0
+        i: i + 1U
+    return: 1
+end: lm_p0_match_block_string_fence_line
+fn: lm_p0_match_raw_comment_fence_line (const: @(char source); size_t: line_start; size_t: line_end; size_t: star_count) int
+    size_t: i
+    size_t: rest
+    char: ch
+    if: star_count < 3U || star_count > 80U || line_start + star_count > line_end
+        return: 0
+    i: 0U
+    while: i < star_count
+        ch: source[line_start + i]
+        if: ch != 42
+            return: 0
+        i: i + 1U
+    rest: line_start + star_count
+    return: lm_p0_line_rest_is_horizontal_space(source, rest, line_end)
+end: lm_p0_match_raw_comment_fence_line
+fn: main () int
+    return: 0
+end: main

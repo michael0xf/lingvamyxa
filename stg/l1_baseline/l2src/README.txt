@@ -98,7 +98,9 @@ lm_p0_text_view_delete (sub), and lm_p0_text_from_cstr.
 Checkpoint still runs before call/exit when OwnUsed is empty.
 parser_text_predicates.lm2,
 parser_text_line_break.lm2, parser_text_starts_python.lm2,
-parser_text_views.lm2 and parser_text_heap.lm2 are partial
+parser_text_views.lm2, parser_text_heap.lm2 and
+parser_fence_line.lm2 (block-string `=` / raw-comment `*`
+line matchers; not Document, not dash-fence status) are partial
 ports, not replacements of l1src. `main` remains the §1.7
 adapter. Not L2 self-build.
 Single emitter source: l2trans.lm1. Not the whole parser.

@@ -1298,9 +1298,31 @@ end_turn + pump. Instant stop_descendants is gone. KIND_DEAD is
 runtime-posted, not dying outbox. AVOIDED: graph-copy, OS thread
 per Message, durable dedup, remote silence as death,
 KIND_REJECTED emission, done[32] silent forget. SPEC 21.13 throw
-payload not this unit. Next L2 selfhost after this slice:
-Document / indent stack, then remaining parser.lm1 scanners
-(dash-fence / brace-mark still leaf-sized, Document-free).
+payload not this unit.
+
+Unit 29 - fence line matchers (block-string = / raw-comment *)
+-------------------------------------------------------------
+Files: parser_fence_line.lm2, run_l2trans.ps1, OPEN_POINTS.txt,
+README.txt
+Frozen ref: l1src/parser.lm1:820-858 (read-only)
+
+Closed unit:
+    lm_p0_is_horizontal_space
+    lm_p0_line_rest_is_horizontal_space
+    lm_p0_match_block_string_fence_line
+    lm_p0_match_raw_comment_fence_line
+    main
+
+80U is LM_P0_MAX_FENCE_LENGTH. Indexed source bytes are loaded
+into `ch` (L2 rejects indexed actuals). Extra fence char after
+the counted run rejects. Trailing horizontal space is admitted;
+any other trailer rejects. AVOIDED: Document, indent stack,
+dash-fence status enum, brace-mark (`--- { }`), skip_fence_block.
+Arises when those scanners are ported.
+
+Differential vs parser.lm1 on empty, short, exact, extra-char,
+wrong rune, indented start, tab/space trailer, 80 vs 81.
+Next: dash-fence status / brace-mark unchecked, then Document.
 
 Unit 25 - P0 close consumption (return trailer, end:name/fn, ---)
 ----------------------------------------------------------------
