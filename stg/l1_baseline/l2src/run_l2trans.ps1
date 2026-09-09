@@ -654,6 +654,50 @@ end: external
 "@
 if ($d8 -ne "0`n0`n90`n") { throw "mixed &&/|| precedence skip/run: $d8" }
 
+Invoke-Leaf "l2src\tests\unit_own5.lm2" "unit_own5" 0 "m"
+$o5 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own5.lm1")))
+if ($o5 -notmatch 'const: @\(char l2_own4\)') { throw "unit_own5 missing 5th OwnUsed" }
+Invoke-Leaf "l2src\tests\unit_own6.lm2" "unit_own6" 0 "m"
+$o6 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own6.lm1")))
+if ($o6 -notmatch 'const: @\(char l2_own5\)') { throw "unit_own6 missing 6th OwnUsed" }
+Invoke-Negative "l2src\tests\unit_own_clash.lm2" "unit_own_clash" "incompatible entry signature"
+
+function New-Own33Source([string]$path) {
+    $decls = @()
+    $after = @()
+    $i = 0
+    while ($i -lt 33) {
+        $n = "n" + $i.ToString("00")
+        $decls += "    char: $n"
+        $after += "    ${n}: 0"
+        $i = $i + 1
+    }
+    $src = @"
+fn: m (char: z) int
+    z: n00
+$($decls -join "`n")
+    if: z != 0
+        z: n00
+    while: z != 0
+        z: n15
+        ---
+$($after -join "`n")
+    return: 0
+end: m
+fn: main () int
+    return: 0
+end: main
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $path), $src.Replace("`r`n", "`n"))
+}
+
+$own33 = Join-Path $out "unit_own33.lm2"
+New-Own33Source $own33
+Invoke-Leaf $own33 "unit_own33" 0 "m"
+$o33 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own33.lm1")))
+if ($o33 -notmatch 'const: @\(char l2_own32\)') { throw "unit_own33 missing 33rd OwnUsed" }
+if ($o33 -notmatch 'l2_q32') { throw "unit_own33 missing 33rd own cache" }
+
 Invoke-Leaf "l2src\tests\unit_bind.lm2" "unit_bind" 0 "bind"
 $bg = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_bind.lm1"))).Replace("`r`n", "`n")
 $bindFn = [regex]::Match($bg, 'fn: l2_m2[\s\S]*?end: l2_m2').Value
@@ -1973,13 +2017,16 @@ function Invoke-FailMallocSrc([string]$src, [string]$tag, [int]$maxN) {
 
 $kDyn = Invoke-FailMallocSrc "l2src\tests\unit_dyn_cap.lm2" "dyn_cap" 48
 $k127 = Invoke-FailMallocSrc (Join-Path $out "unit_arity127.lm2") "arity127" 64
+$kOwn = Invoke-FailMallocSrc "l2src\tests\unit_own6.lm2" "own6" 48
 if (-not $kDyn.ContainsKey(1)) { throw "fail-malloc dyn_cap never hit formals (kind 1); got $($kDyn.Keys -join ',')" }
 if (-not $kDyn.ContainsKey(2)) { throw "fail-malloc dyn_cap never hit hidden growth (kind 2); got $($kDyn.Keys -join ',')" }
 if (-not $kDyn.ContainsKey(3)) { throw "fail-malloc dyn_cap never hit intern rows (kind 3); got $($kDyn.Keys -join ',')" }
 if (-not $kDyn.ContainsKey(4) -and -not $k127.ContainsKey(4)) { throw "fail-malloc never hit call-actual vectors (kind 4)" }
+if (-not $kOwn.ContainsKey(5)) { throw "fail-malloc own6 never hit OwnUsed growth (kind 5); got $($kOwn.Keys -join ',')" }
 $ev = Join-Path $out "fail_malloc\summary.txt"
 $lines = @("dyn_cap kinds: " + (($kDyn.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " "))
 $lines += "arity127 kinds: " + (($k127.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
+$lines += "own6 kinds: " + (($kOwn.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
 [System.IO.File]::WriteAllLines((Join-Path (Get-Location) $ev), $lines)
 
 function Invoke-VisualColumn {
@@ -2417,6 +2464,30 @@ end: external
     $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
     $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
     if ($a -ne $b) { throw "position mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+
+    Invoke-Leaf "l2src\parser_physical_line.lm2" "parser_physical_line" 0 "lm_p0_index_is_line_start"
+    $mlm1 = Join-Path $out "parser_physical_line.lm1"
+    $mtext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $mlm1)).Replace("`r`n", "`n")
+    if ($mtext -notmatch 'sub: l2_m7') { throw "merged physical_line missing position_in_slice" }
+    if ($mtext -notmatch 'l2_p7_2: l2_p7_1') { throw "merged position must clamp index to length" }
+    if ($mtext -notmatch 'l2_m5\(node, l2_p7_0, l2_p7_2') { throw "merged position must pass clamped index as helper length" }
+    if ($mtext -match 'l2_m5\(node, l2_p7_0, l2_p7_1') { throw "merged position must not pass full text length to helper" }
+    if ($mtext -notmatch 'const: @\(char l2_own5\)') { throw "merged physical_line missing 6th OwnUsed" }
+    $ml2cases = $cases.Replace("lm_p0_line_break_width_at(", "l2_m5(unit, ").Replace("lm_p0_position_in_slice(", "l2_m7(unit, ")
+    $mpos = $mtext.LastIndexOf($tail)
+    if ($mpos -lt 0) { throw "merged physical_line L1 missing generated main return" }
+    $mdrvLm1 = Join-Path $out "pos_merged_drive.lm1"
+    $mdrvC = Join-Path $out "pos_merged_drive.c"
+    $mdrvExe = Join-Path $out "pos_merged_drive.exe"
+    $mdrvOut = Join-Path $out "pos_merged_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $mdrvLm1), ($mtext.Substring(0, $mpos) + ($ml2cases + "`n        return: 0`n    end: main`nend: external").Replace("`r`n","`n")))
+    & $l1trans $mdrvLm1 $mdrvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed pos_merged_drive" }
+    Invoke-Gcc $mdrvC $mdrvExe (Join-Path $log "pos_merged_drive.gcc.log")
+    cmd /c "`"$mdrvExe`" > `"$mdrvOut`" 2> `"$(Join-Path $out 'pos_merged_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "pos_merged_drive exe failed" }
+    $c = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $mdrvOut)).Replace("`r`n","`n")
+    if ($a -ne $c) { throw "merged physical_line position mismatch vs parser.lm1`nREF:`n$a`nL2:`n$c" }
 }
 
 Invoke-Position

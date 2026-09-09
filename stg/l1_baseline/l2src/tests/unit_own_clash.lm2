@@ -1,0 +1,8 @@
+fn: m () int
+    size_t: x
+    char: x
+    return: 0
+end: m
+fn: main () int
+    return: 0
+end: main

@@ -57,6 +57,28 @@ fn: lm_p0_count_line_breaks (const: @(char source); size_t: start; size_t: end) 
         i: i + 1U
     return: count
 end: lm_p0_count_line_breaks
+sub: lm_p0_position_in_slice (const: @(char text); size_t: length; size_t: index; size_t: base_line; size_t: base_column; @: size_t out_line; @: size_t out_column)
+    size_t: i
+    size_t: line
+    size_t: column
+    size_t: width
+    line: base_line
+    column: base_column
+    if: index > length
+        index: length
+    i: 0U
+    while: i < index
+        width: lm_p0_line_break_width_at(text, index, i)
+        if: width != 0U
+            line: line + 1U
+            column: 1U
+            i: i + width
+            continue
+        column: column + 1U
+        i: i + 1U
+    out_line[0]: line
+    out_column[0]: column
+end: lm_p0_position_in_slice
 fn: main () int
     return: 0
 end: main

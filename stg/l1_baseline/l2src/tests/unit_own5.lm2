@@ -1,0 +1,16 @@
+fn: m () int
+    size_t: a
+    size_t: b
+    size_t: c
+    size_t: d
+    size_t: e
+    a: 1U
+    b: 2U
+    c: 3U
+    d: 4U
+    e: 5U
+    return: 0
+end: m
+fn: main () int
+    return: 0
+end: main
