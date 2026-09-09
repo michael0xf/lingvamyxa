@@ -203,7 +203,14 @@ build baseline; promotion must preserve the live L2 sources.
   sizeof_str_colon.lm1, sizeof_char_colon.lm1, sizeof_ternary.lm1.
   Array forms:
     - `[]: T name N …` one-dimensional extent + initializer (decl-repeat
-      and scalar suites).
+      and scalar suites). Consecutive type-name atoms are gathered as
+      the element type, same rule as casts/pointer parameters:
+      `[]: unsigned short arr 2` → `unsigned short arr[2]`, not
+      `unsigned short[arr]`. Array parameters `[]: unsigned short
+      values` gather the same way. Single-token aliases (`[]: int`,
+      `[]: uchar`) unchanged. Scalar `unsigned short: v` remains
+      unsupported (`unsupported statement atom`). Test:
+      array_multiword.lm1.
     - `[][]: int matrix 2 2` declares a rectangular two-dimensional
       C array (array_2d.lm1). This is one contiguous block, not an
       array of separately allocated rows. Broader declaration forms
@@ -585,6 +592,10 @@ PARTIAL / LIMITED
       `@: uchar p` emits `uchar * p`. The emitter takes one type atom and
       treats the next as the name. Same shape as the cast defect already
       fixed in l1_emit_cast, which gathers consecutive type-name atoms.
+      `[]:` declarations had the same one-type-atom hole
+      (`[]: unsigned short arr 2` → `unsigned short[arr] = {2};`,
+      EXIT 0, invalid C); l1_emit_bracket_array and `[]` parameters
+      now gather consecutive type-name atoms (array_multiword.lm1).
     - a qualifier parameter that is not last silently loses the rest of the
       list. `(const: @: char text; unsigned: fg)` emits
       `(const char * text)`. This one is NOT a parse defect: printTree shows
