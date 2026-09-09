@@ -1,0 +1,128 @@
+Mixa Manager - a desktop port of ClearShell
+Framing document. Read this before the others.
+
+
+1. What this project is
+
+Mixa Manager is a DESKTOP PORT OF CLEARSHELL, with its functionality, its
+layout and its behaviour. The differences are details, and this document is
+where they are listed.
+
+Stated by the language owner on 2026-09-09, and it changes how the other
+documents should be read. They are not an independent design that happens to
+cite ClearShell; they are a DELTA against it. Where they are silent, ClearShell's
+behaviour is the answer - not "undefined", not "our choice later".
+
+    reference source:
+    C:\Nyasha_Planet\git\clear_shell\ClearShell\app\src\main\
+
+The practical rule that follows: before designing anything, look at how
+ClearShell does it. Reinventing something it already solves is the error mode
+here, and inventing a DIFFERENT solution to a problem it solved is worse than
+copying the solution badly.
+
+
+2. The deltas established so far
+
+INCOMPLETE. The language owner began listing differences and the list is not
+finished; these are the ones fixed so far. Add to it rather than deducing new
+differences from silence.
+
+2.1. Rendering
+
+  ClearShell    Android widgets draw the text; the output lives in a system
+                editing widget and is saved by a button
+  here          two CELL GRIDS drawn by us, one drawer for both, glyphs from
+                the system font used pixel for pixel and never scaled.
+                See Mixa_Manager_RENDERING_DOCTRINE.txt
+
+2.2. The console
+
+  ClearShell    output kept in memory with head, line and tail limits; the
+                middle is dropped when a command is noisy; there is an editing
+                widget behind it
+  here          the scrollback IS A FILE. There is no editing widget to hold
+                it and we render it ourselves anyway. See FILE_SEAM.txt
+
+2.3. Layer arrangement
+
+  ClearShell    text input attached at the TOP; beneath it, the camera image
+  here          Norton-style: input on the BOTTOM line, output scrolling
+                upward, and the panel layer semi-transparent OVER the console
+                so the output stays readable beneath it
+
+2.4. The button panels
+
+  ClearShell    the application panel is at the top
+  here          the application panel is glued to the BOTTOM, below the console
+                input line, because that is where a Norton-style command line
+                already is
+
+  unchanged     the per-list panel is that list's header, and the header is
+                STICKY - scrolling the list does not carry it away
+
+2.5. Vertical scrolling
+
+  ClearShell    the whole panel moves vertically - a concession to a narrow
+                phone screen
+  here          each list scrolls inside its own bounds and keeps its own
+                position, with its own vertical scrollbar; one shared
+                horizontal scrollbar for the row of lists
+
+2.6. Graphics
+
+  ClearShell    Android views, images, a camera preview
+  here          NO graphical elements at all. Everything is pseudographics in
+                cells. Images are a future third layer, a plain buffer, and are
+                kept out of the drawer on purpose. See DRAWING.txt
+
+
+3. What is ported unchanged, and must not be redesigned
+
+3.1. The layout METHOD
+
+One quantity is MEASURED - the height of real text in the real font - and
+everything else is an integer shift of it: button height, width at 1.75 of the
+height, margin at a thirty-second. No pixel constants and no fractions.
+ClearShell.java, init(), around line 697.
+
+Our measured unit is the CELL, so the translation is direct: every dimension is
+an integer number of cells.
+
+3.2. The button panel algorithm
+
+ClearShell.java, freshLayout(), around line 1772:
+
+    buttons are arranged in EXPLICIT LINES, not auto-wrapped
+    within a line   x += button width + margin
+    between lines   y += button height + margin
+    a null entry is a SEPARATOR, advancing x by half a button height
+    panel height is max(y + button height), width is max(x + button width)
+    the panel sits inside a HORIZONTAL SCROLL
+
+The last point is the one to port carefully, because it is the reason the
+interface survives any screen. When the buttons do not fit, they are NOT
+shrunk, NOT re-wrapped and NOT dropped - the panel SCROLLS. Overflow is a
+scrolling problem, never a scaling problem, which is the rendering doctrine
+appearing again in a place that has nothing to do with fonts.
+
+3.3. Colours
+
+Taken as-is. ClearShell.java: panel backgrounds at alpha 240, translucent
+highlights at alpha 96, opaque foreground text. See UI_MODEL.txt section 3.
+
+3.4. Functionality
+
+The feature set is ClearShell's and is to be read from its source rather than
+guessed: roots list, name filter, sorts including by time, zip archives browsed
+as directories, rename, remove selected, create, save and save-as, load, run OS
+command, viewers, links, help. This document does not restate it - it names
+where it lives.
+
+
+4. Standing instruction
+
+When a question arises that these documents do not answer, the answer is
+ClearShell's behaviour. Go and read it. Only when its answer is unsuitable for
+a desktop does a delta get added here - and then it gets WRITTEN DOWN here,
+because an unrecorded delta is indistinguishable from a bug.
