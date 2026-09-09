@@ -87,30 +87,62 @@ The lower-selection-wins rule is not a detail. It is what lets a user select a
 tree, exclude a subtree, and then re-select something inside the excluded part.
 
 
-4. One thing I did not understand, and it needs a test rather than deference
+4. The consolidation loop: RESOLVED by test. There is no bug.
 
-In FSync.isSelect2 the consolidation loop is `while (excessSelects.size() > 1)`.
-With three nested selected ancestors that leaves the middle one in `selected`,
-unconsolidated, still holding its own exceptions.
+I flagged `while (excessSelects.size() > 1)` in FSync.isSelect2 as possibly an
+off-by-one, on the grounds that it leaves one nested selection unconsolidated. I
+then said it produced no wrong answer, then said that was unproven. It is now
+settled by running the algorithm rather than reading it: THE ORIGINAL IS
+CORRECT, and the "tidier" > 0 would be a data-loss bug.
 
-I traced the queries and it does NOT produce a wrong answer: isSelect3 finds
-either the topmost or the middle one, and the middle one's exceptions still
-point at it and still apply. So on that reading it is redundancy in the
-representation rather than an error in the result.
+Method: the algorithm was transcribed faithfully - select, removeSelect,
+isSelect2, isSelect3, with Array.pop taking from the end - and the two variants
+were run against each other on random operation sequences, comparing the ANSWER
+at every node after every operation.
 
-I first wrote that seven years of clean operation outranked my reading. That was
-too strong, and the owner corrected the premise: the usage was light phone usage.
-THREE NESTED SELECTED ANCESTORS IS EXACTLY THE KIND OF CASE THAT MAY NEVER HAVE
-OCCURRED THERE. Absence of failure is not evidence about a path that was never
-walked.
+They diverge. Shortest case, four operations:
 
-So this is unresolved, not settled. The port must cover it with a real test:
-select a deep chain of three or more nested directories, put exceptions under
-the middle ones, then query and deselect across them. If the behaviour matches
-the original, reproduce `> 1` and record why. If it does not, we have found
-something the phone never could.
+    select   /a/b
+    select   /a
+    select   /a/b/c
+    deselect /a
 
-Do not change it to `> 0` on the strength of my reading alone. Test first.
+    original (> 1):  /a/b and everything under it REMAIN SELECTED
+    variant  (> 0):  everything is deselected
+
+The original is right. The user explicitly selected /a/b before selecting /a,
+and deselecting /a must not destroy that earlier, independent choice.
+
+Why one level is exactly enough, which is the part that makes it principled
+rather than lucky. With four nested explicit selections a single query
+consolidates the original to {/a, /a/b} and the variant to {/a}. Deselecting /a
+then leaves the original covering everything under /a/b - which is precisely
+what /a/b, /a/b/c and /a/b/c/d covered between them. Keeping the second-topmost
+preserves the COVERAGE, because the deeper selections are subsumed by it.
+Keeping none loses it. So `> 1` is the minimal representation that survives
+losing the top, and that is not an off-by-one.
+
+Ported code must therefore reproduce `> 1`. Changing it to `> 0` silently
+discards a user's selection.
+
+4.1. Why nested explicit selections are rare, which is why this never showed
+
+select() on a child of an already-selected directory is a NO-OP - it reports a
+conflict and adds nothing. So nested explicit selections arise ONLY when the
+child is selected BEFORE the ancestor. That is an uncommon order on a phone,
+which is consistent with seven years of light use never reaching it.
+
+4.2. The tests the port owes
+
+These are the cases, and they are not optional - they are the ones that
+distinguish a correct port from a plausible one:
+
+    the four-operation sequence above, asserting /a/b stays selected
+    four nested explicit selections child-first, one query, deselect the top,
+      assert the coverage of the survivor equals the union of what was lost
+    select a child of an already-selected directory: assert it is a no-op
+    deselect inside a selected tree, then re-select something inside the
+      excluded part: the lower selection must win over the higher exception
 
 5. What the port must not do
 
