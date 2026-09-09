@@ -1228,6 +1228,37 @@ Remaining blockers for full parser migration: intern contracts
 recursion, unimplemented L2 predef, size_t cell pool 16
 (lmx_size_init).
 
+Unit 24 - OwnUsed/method growth corrections
+------------------------------------------
+Files: l2trans.lm1, run_l2trans.ps1, tests/unit_own32_pub.lm2,
+tests/unit_own_grow_alias.lm2, tests/unit_own_meth.lm2,
+OPEN_POINTS.txt, README.txt
+
+OwnUsed copy on grow walks allocated method rows (mi < l2_m_cap),
+including the under-construction collect_decls row (l2_m_n not
+yet incremented). Method reserve restripe of OwnUsed is
+fail-atomic: cap*own_cap*sizeof(int) via l2_mul3_ok, else overflow
+and the old tables stay; l2_m_cap is not bumped. l2_m_n is checked
+against INT_MAX before l2_m_n+1. OwnUsed seed is 4.
+
+Executed: m16/m32 via splice-drive of generated prototypes
+(Get-L2Call); m16↔m32 cycle rejected; bind32 writes n32=3 before
+own-decl then n32:n32 after so the graph checkpoint is 3, then
+set32 publishes 65; n00 stays 1. Formal alias on the first method
+survives OwnUsed 4→8 (n00..n08). Hidden quote through m16/m32
+(shared intern on m0 = int a,b; intern_prove is coupled to that
+shape). fail-malloc kind 6 while own rows exist (unit_own_meth).
+README arity 1–4 claim removed (Unit 17 already source-sized
+params). scan_ident does not re-mark uses.
+
+Next bounded parser stage: lm_p0_advance_layout_line
+(parser.lm1:529) into parser_physical_line.lm2. It only needs
+count_line_breaks + line_break_width_at already in that unit.
+@: size_t[0] load and store already emit (line[0]: line[0] + n).
+physical_line currently uses 8 intern contracts of 16. After
+that, frozen trailer_role / Document / indent stack need
+LmP0TrailerRole and L2 predef, not intern16 yet.
+
 Unit 16 - nested expression emit scratch
 ----------------------------------------
 Files: l2trans.lm1, run_l2trans.ps1, parser_visual_column.lm2,

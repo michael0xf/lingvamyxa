@@ -39,7 +39,8 @@ memcmp. Closed-unit devirtualization; actuals are temps before
 the call. Recursion is an implementation limit. Method tables and
 OwnUsed tables grow to the source count. Address slots stay at most
 4 per method. `lmx_ranges_init` is 1+N. Formals are hygienic `l2_p{i}_{j}`.
-char/int/size_t and `const @(char)` formals, arity 1–4, int,
+char/int/size_t and `const @(char)` formals, declared arity grown to the
+source count, int,
 size_t, `@: char`, `@: LmP0Text`, or void (`sub:`) result.
 At most 4 address slots `l2_s{i}_{j}` per method. Pure &&/|| stay L1 C expressions. Calls inside
 &&/|| use guarded if/temps and yield int 0/1, not an operand.
