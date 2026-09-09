@@ -183,6 +183,11 @@ build baseline; promotion must preserve the live L2 sources.
   include a header defining it (cast_uchar_alias_ok uses l1src/p0.lm1.h).
   Fixed-width C names likewise require their C declarations/headers.
   Pointer forms: `@:` / `@@:` (and deeper `@` chains in tests).
+  In expression position, a `@:` / `@@:` frame whose body is a type
+  spelling lowers through `l1_emit_type_token` (`char *` / `char **`).
+  `c.sizeof(@: char)` therefore emits `sizeof(char *)`, not
+  `sizeof(&char)`. Unary `@ x` remains address-of (`sizeof(@ x)` →
+  `sizeof(&x)`). Tests: sizeof_ptr_type.lm1, sizeof_addr.lm1.
   Array forms:
     - `[]: T name N …` one-dimensional extent + initializer (decl-repeat
       and scalar suites).
