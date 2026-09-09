@@ -10,6 +10,7 @@ unsigned: l2_intern_again 0U
 unsigned: l2_intern_swap 0U
 unsigned: l2_intern_probe 0U
 int: l2_m_n 0
+int: l2_m_cap 0
 int: l2_own_n 0
 int: l2_own_cap 0
 int: l2_tn 0
@@ -19,35 +20,35 @@ const: @: char l2_call_node 0
 const: @: char l2_src 0
 @: LmP0Structure l2_main_body 0
 
-c.array: [8]: @: LmP0Text l2_m_name
-c.array: [8]: @: LmP0Text l2_m_f0
-c.array: [8]: @: LmP0Text l2_m_f1
-c.array: [8]: @: LmP0Node l2_m_node
-c.array: [8]: @: LmP0Node l2_m_body
-c.array: [8]: unsigned l2_m_sig
-c.array: [8]: int l2_m_mark
-c.array: [8]: int l2_m_arity
-c.array: [8]: int l2_m_dyn
-c.array: [8]: int l2_m_ret
-c.array: [8]: int l2_m_own
+@@: LmP0Text l2_m_name 0
+@@: LmP0Text l2_m_f0 0
+@@: LmP0Text l2_m_f1 0
+@@: LmP0Node l2_m_node 0
+@@: LmP0Node l2_m_body 0
+@: unsigned l2_m_sig 0
+@: int l2_m_mark 0
+@: int l2_m_arity 0
+@: int l2_m_dyn 0
+@: int l2_m_ret 0
+@: int l2_m_own 0
 @: int l2_m_uses 0
 @: int l2_m_alias 0
 @: int l2_m_pre 0
-c.array: [8]: @@: LmP0Text l2_m_dn
-c.array: [8]: @: int l2_m_dt
-c.array: [8]: int l2_m_hcap
+@@: void l2_m_dn 0
+@@: int l2_m_dt 0
+@: int l2_m_hcap 0
 @: int l2_own_live 0
 @@: LmP0Text l2_own_name 0
 @: int l2_own_ty 0
 int: l2_need_p0 0
 int: l2_need_query 0
 int: l2_need_own 0
-c.array: [8]: int l2_m_sn
-c.array: [32]: @: LmP0Text l2_sn
-c.array: [32]: int l2_st
-c.array: [8]: @@: LmP0Text l2_m_fn
-c.array: [8]: @: int l2_m_ft
-c.array: [8]: int l2_m_fcap
+@: int l2_m_sn 0
+@@: LmP0Text l2_sn 0
+@: int l2_st 0
+@@: void l2_m_fn 0
+@@: int l2_m_ft 0
+@: int l2_m_fcap 0
 int: l2_fail_left 0
 int: l2_alloc_err 0
 int: l2_alloc_n 0
@@ -57,7 +58,7 @@ int: l2_alloc_fail_at 0
 int: l2_alloc_fail_kind 0
 int: l2_alloc_kind 0
 @: char l2_ptr_probe 0
-c.array: [64]: int l2_m_edge
+@: int l2_m_edge 0
 c.array: [16]: int l2_it_ar
 c.array: [16]: int l2_it_dyn
 c.array: [16]: @: char l2_it_n
@@ -109,6 +110,10 @@ prototype:
     fn: l2_own_off (int: mi; int: oi) size_t
     fn: l2_own_reserve (int: need) int
     fn: l2_own_free () int
+    fn: l2_meth_reserve (int: need) int
+    fn: l2_meth_free () int
+    fn: l2_edge_off (int: a; int: b) size_t
+    fn: l2_slot_off (int: mi; int: si) size_t
     fn: l2_dyn_add (int: mi; const: @(LmP0Text t); int: ty) int
     fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path); int: depth; @: int sn) int
     fn: l2_slash_own (const: @(LmP0Text t)) int
@@ -219,9 +224,10 @@ return: base + (cast: (size_t) i) * 256U
 fn: l2_release () int
     int: i 0
     unsigned: s 0U
-    while: i < 8
+    while: i < l2_m_cap
         l2_free_method(i)
         i: i + 1
+    l2_meth_free()
     while: s < l2_intern_n
         if: l2_it_n[s] != 0
             l2_xfree((cast: (@: void) l2_it_n[s]))
@@ -257,7 +263,7 @@ fn: l2_own_off (int: mi; int: oi) size_t
     size_t: base
     size_t: cap
     size_t: idx
-    if: mi < 0 || oi < 0 || l2_own_cap <= 0 || mi >= 8 || oi >= l2_own_cap
+    if: mi < 0 || oi < 0 || l2_own_cap <= 0 || l2_m_cap <= 0 || mi >= l2_m_cap || oi >= l2_own_cap
         return: (cast: (size_t) -1)
     cap: (cast: (size_t) l2_own_cap)
     if: l2_mul_ok((cast: (size_t) mi), cap) = 0
@@ -320,7 +326,7 @@ fn: l2_own_reserve (int: need) int
     need_u: (cast: (size_t) need)
     cap: (cast: (size_t) l2_own_cap)
     if: cap < 1U
-        cap: 4U
+        cap: 8U
     while: cap < need_u
         if: cap > ((cast: (size_t) -1) / 2U)
             l2_alloc_err: 2
@@ -331,7 +337,9 @@ fn: l2_own_reserve (int: need) int
         return: 1
     if: cap > (cast: (size_t) c.INT_MAX)
         cap: need_u
-    rows: 8U
+    rows: 1U
+    if: l2_m_cap > 0
+        rows: (cast: (size_t) l2_m_cap)
     if: l2_mul_ok(rows, cap) = 0
         l2_alloc_err: 2
         return: 1
@@ -375,7 +383,7 @@ fn: l2_own_reserve (int: need) int
     c.memset((cast: (@: void) nu), 0, nmeta * c.sizeof(c.int))
     c.memset((cast: (@: void) np), 0, nmeta * c.sizeof(c.int))
     mi: 0
-    while: mi < 8
+    while: mi < (cast: (int) rows)
         oi: 0
         while: oi < (cast: (int) cap)
             off: (cast: (size_t) mi) * cap
@@ -392,11 +400,13 @@ fn: l2_own_reserve (int: need) int
             nl[oi]: l2_own_live[oi]
             oi: oi + 1
         mi: 0
-        while: mi < 8
+        while: mi < l2_m_n
             oi: 0
             while: oi < l2_own_n
-                off: (cast: (size_t) mi) * oldcap + (cast: (size_t) oi)
-                noff: (cast: (size_t) mi) * cap + (cast: (size_t) oi)
+                off: (cast: (size_t) mi) * oldcap
+                off: off + (cast: (size_t) oi)
+                noff: (cast: (size_t) mi) * cap
+                noff: noff + (cast: (size_t) oi)
                 nu[noff]: l2_m_uses[off]
                 na[noff]: l2_m_alias[off]
                 np[noff]: l2_m_pre[off]
@@ -417,8 +427,453 @@ fn: l2_own_reserve (int: need) int
     l2_own_cap: (cast: (int) cap)
 return: 0
 
+fn: l2_edge_off (int: a; int: b) size_t
+    size_t: cap
+    size_t: base
+    if: a < 0 || b < 0 || l2_m_cap <= 0 || a >= l2_m_cap || b >= l2_m_cap
+        return: (cast: (size_t) -1)
+    cap: (cast: (size_t) l2_m_cap)
+    if: l2_mul_ok((cast: (size_t) a), cap) = 0
+        return: (cast: (size_t) -1)
+    base: (cast: (size_t) a) * cap
+    if: base + (cast: (size_t) b) < base
+        return: (cast: (size_t) -1)
+return: base + (cast: (size_t) b)
+
+fn: l2_slot_off (int: mi; int: si) size_t
+    size_t: base
+    if: mi < 0 || si < 0 || si >= 4 || l2_m_cap <= 0 || mi >= l2_m_cap
+        return: (cast: (size_t) -1)
+    if: l2_mul_ok((cast: (size_t) mi), 4U) = 0
+        return: (cast: (size_t) -1)
+    base: (cast: (size_t) mi) * 4U
+    if: base + (cast: (size_t) si) < base
+        return: (cast: (size_t) -1)
+return: base + (cast: (size_t) si)
+
+fn: l2_meth_free () int
+    if: l2_m_name != 0
+        l2_xfree((cast: (@: void) l2_m_name))
+    if: l2_m_f0 != 0
+        l2_xfree((cast: (@: void) l2_m_f0))
+    if: l2_m_f1 != 0
+        l2_xfree((cast: (@: void) l2_m_f1))
+    if: l2_m_node != 0
+        l2_xfree((cast: (@: void) l2_m_node))
+    if: l2_m_body != 0
+        l2_xfree((cast: (@: void) l2_m_body))
+    if: l2_m_sig != 0
+        l2_xfree((cast: (@: void) l2_m_sig))
+    if: l2_m_mark != 0
+        l2_xfree((cast: (@: void) l2_m_mark))
+    if: l2_m_arity != 0
+        l2_xfree((cast: (@: void) l2_m_arity))
+    if: l2_m_dyn != 0
+        l2_xfree((cast: (@: void) l2_m_dyn))
+    if: l2_m_ret != 0
+        l2_xfree((cast: (@: void) l2_m_ret))
+    if: l2_m_own != 0
+        l2_xfree((cast: (@: void) l2_m_own))
+    if: l2_m_sn != 0
+        l2_xfree((cast: (@: void) l2_m_sn))
+    if: l2_m_hcap != 0
+        l2_xfree((cast: (@: void) l2_m_hcap))
+    if: l2_m_fcap != 0
+        l2_xfree((cast: (@: void) l2_m_fcap))
+    if: l2_m_dn != 0
+        l2_xfree((cast: (@: void) l2_m_dn))
+    if: l2_m_dt != 0
+        l2_xfree((cast: (@: void) l2_m_dt))
+    if: l2_m_fn != 0
+        l2_xfree((cast: (@: void) l2_m_fn))
+    if: l2_m_ft != 0
+        l2_xfree((cast: (@: void) l2_m_ft))
+    if: l2_m_edge != 0
+        l2_xfree((cast: (@: void) l2_m_edge))
+    if: l2_sn != 0
+        l2_xfree((cast: (@: void) l2_sn))
+    if: l2_st != 0
+        l2_xfree((cast: (@: void) l2_st))
+    l2_m_name: 0
+    l2_m_f0: 0
+    l2_m_f1: 0
+    l2_m_node: 0
+    l2_m_body: 0
+    l2_m_sig: 0
+    l2_m_mark: 0
+    l2_m_arity: 0
+    l2_m_dyn: 0
+    l2_m_ret: 0
+    l2_m_own: 0
+    l2_m_sn: 0
+    l2_m_hcap: 0
+    l2_m_fcap: 0
+    l2_m_dn: 0
+    l2_m_dt: 0
+    l2_m_fn: 0
+    l2_m_ft: 0
+    l2_m_edge: 0
+    l2_sn: 0
+    l2_st: 0
+    l2_m_n: 0
+    l2_m_cap: 0
+return: 0
+
+fn: l2_meth_reserve (int: need) int
+    size_t: cap
+    size_t: need_u
+    size_t: psz
+    size_t: nb
+    size_t: ni
+    size_t: nu
+    size_t: nedge_n
+    size_t: nslot
+    size_t: oldcap
+    size_t: off
+    size_t: noff
+    size_t: oc
+    int: i
+    int: j
+    @@: LmP0Text nname 0
+    @@: LmP0Text nf0 0
+    @@: LmP0Text nf1 0
+    @@: LmP0Node nnode 0
+    @@: LmP0Node nbody 0
+    @: unsigned nsig 0
+    @: int nmark 0
+    @: int narity 0
+    @: int ndyn 0
+    @: int nret 0
+    @: int nown 0
+    @: int nsn 0
+    @: int nhcap 0
+    @: int nfcap 0
+    @@: void ndn 0
+    @@: int ndt 0
+    @@: void nfn 0
+    @@: int nft 0
+    @: int nedge 0
+    @@: LmP0Text nslots 0
+    @: int nst 0
+    @: int nuses 0
+    @: int nalias 0
+    @: int npre 0
+    if: need < 0
+        return: 1
+    if: need <= l2_m_cap
+        return: 0
+    if: need > c.INT_MAX
+        l2_alloc_err: 2
+        return: 1
+    need_u: (cast: (size_t) need)
+    cap: (cast: (size_t) l2_m_cap)
+    if: cap < 1U
+        cap: 4U
+    while: cap < need_u
+        if: cap > ((cast: (size_t) -1) / 2U)
+            l2_alloc_err: 2
+            return: 1
+        cap: cap * 2U
+    if: cap > (cast: (size_t) c.INT_MAX) && need_u > (cast: (size_t) c.INT_MAX)
+        l2_alloc_err: 2
+        return: 1
+    if: cap > (cast: (size_t) c.INT_MAX)
+        cap: need_u
+    psz: c.sizeof(l2_ptr_probe)
+    if: l2_mul_ok(cap, psz) = 0
+        l2_alloc_err: 2
+        return: 1
+    if: l2_mul_ok(cap, c.sizeof(c.int)) = 0
+        l2_alloc_err: 2
+        return: 1
+    if: l2_mul_ok(cap, c.sizeof(c.unsigned)) = 0
+        l2_alloc_err: 2
+        return: 1
+    if: l2_mul_ok(cap, cap) = 0
+        l2_alloc_err: 2
+        return: 1
+    nedge_n: cap * cap
+    if: l2_mul_ok(nedge_n, c.sizeof(c.int)) = 0
+        l2_alloc_err: 2
+        return: 1
+    if: l2_mul_ok(cap, 4U) = 0
+        l2_alloc_err: 2
+        return: 1
+    nslot: cap * 4U
+    if: l2_mul_ok(nslot, psz) = 0
+        l2_alloc_err: 2
+        return: 1
+    if: l2_mul_ok(nslot, c.sizeof(c.int)) = 0
+        l2_alloc_err: 2
+        return: 1
+    nb: cap * psz
+    ni: cap * c.sizeof(c.int)
+    nu: cap * c.sizeof(c.unsigned)
+    l2_alloc_kind: 6
+    nname: (cast: (@@: LmP0Text) l2_xmalloc(nb))
+    nf0: (cast: (@@: LmP0Text) l2_xmalloc(nb))
+    nf1: (cast: (@@: LmP0Text) l2_xmalloc(nb))
+    nnode: (cast: (@@: LmP0Node) l2_xmalloc(nb))
+    nbody: (cast: (@@: LmP0Node) l2_xmalloc(nb))
+    nsig: (cast: (@: unsigned) l2_xmalloc(nu))
+    nmark: (cast: (@: int) l2_xmalloc(ni))
+    narity: (cast: (@: int) l2_xmalloc(ni))
+    ndyn: (cast: (@: int) l2_xmalloc(ni))
+    nret: (cast: (@: int) l2_xmalloc(ni))
+    nown: (cast: (@: int) l2_xmalloc(ni))
+    nsn: (cast: (@: int) l2_xmalloc(ni))
+    nhcap: (cast: (@: int) l2_xmalloc(ni))
+    nfcap: (cast: (@: int) l2_xmalloc(ni))
+    ndn: (cast: (@@: void) l2_xmalloc(nb))
+    ndt: (cast: (@@: int) l2_xmalloc(nb))
+    nfn: (cast: (@@: void) l2_xmalloc(nb))
+    nft: (cast: (@@: int) l2_xmalloc(nb))
+    nedge: (cast: (@: int) l2_xmalloc(nedge_n * c.sizeof(c.int)))
+    nslots: (cast: (@@: LmP0Text) l2_xmalloc(nslot * psz))
+    nst: (cast: (@: int) l2_xmalloc(nslot * c.sizeof(c.int)))
+    if: nname = 0 || nf0 = 0 || nf1 = 0 || nnode = 0 || nbody = 0 || nsig = 0 || nmark = 0 || narity = 0 || ndyn = 0 || nret = 0 || nown = 0 || nsn = 0 || nhcap = 0 || nfcap = 0 || ndn = 0 || ndt = 0 || nfn = 0 || nft = 0 || nedge = 0 || nslots = 0 || nst = 0
+        if: nname != 0
+            l2_xfree((cast: (@: void) nname))
+        if: nf0 != 0
+            l2_xfree((cast: (@: void) nf0))
+        if: nf1 != 0
+            l2_xfree((cast: (@: void) nf1))
+        if: nnode != 0
+            l2_xfree((cast: (@: void) nnode))
+        if: nbody != 0
+            l2_xfree((cast: (@: void) nbody))
+        if: nsig != 0
+            l2_xfree((cast: (@: void) nsig))
+        if: nmark != 0
+            l2_xfree((cast: (@: void) nmark))
+        if: narity != 0
+            l2_xfree((cast: (@: void) narity))
+        if: ndyn != 0
+            l2_xfree((cast: (@: void) ndyn))
+        if: nret != 0
+            l2_xfree((cast: (@: void) nret))
+        if: nown != 0
+            l2_xfree((cast: (@: void) nown))
+        if: nsn != 0
+            l2_xfree((cast: (@: void) nsn))
+        if: nhcap != 0
+            l2_xfree((cast: (@: void) nhcap))
+        if: nfcap != 0
+            l2_xfree((cast: (@: void) nfcap))
+        if: ndn != 0
+            l2_xfree((cast: (@: void) ndn))
+        if: ndt != 0
+            l2_xfree((cast: (@: void) ndt))
+        if: nfn != 0
+            l2_xfree((cast: (@: void) nfn))
+        if: nft != 0
+            l2_xfree((cast: (@: void) nft))
+        if: nedge != 0
+            l2_xfree((cast: (@: void) nedge))
+        if: nslots != 0
+            l2_xfree((cast: (@: void) nslots))
+        if: nst != 0
+            l2_xfree((cast: (@: void) nst))
+        return: 1
+    c.memset((cast: (@: void) nname), 0, nb)
+    c.memset((cast: (@: void) nf0), 0, nb)
+    c.memset((cast: (@: void) nf1), 0, nb)
+    c.memset((cast: (@: void) nnode), 0, nb)
+    c.memset((cast: (@: void) nbody), 0, nb)
+    c.memset((cast: (@: void) nsig), 0, nu)
+    c.memset((cast: (@: void) nmark), 0, ni)
+    c.memset((cast: (@: void) narity), 0, ni)
+    c.memset((cast: (@: void) ndyn), 0, ni)
+    c.memset((cast: (@: void) nret), 0, ni)
+    c.memset((cast: (@: void) nown), 0, ni)
+    c.memset((cast: (@: void) nsn), 0, ni)
+    c.memset((cast: (@: void) nhcap), 0, ni)
+    c.memset((cast: (@: void) nfcap), 0, ni)
+    c.memset((cast: (@: void) ndn), 0, nb)
+    c.memset((cast: (@: void) ndt), 0, nb)
+    c.memset((cast: (@: void) nfn), 0, nb)
+    c.memset((cast: (@: void) nft), 0, nb)
+    c.memset((cast: (@: void) nedge), 0, nedge_n * c.sizeof(c.int))
+    c.memset((cast: (@: void) nslots), 0, nslot * psz)
+    c.memset((cast: (@: void) nst), 0, nslot * c.sizeof(c.int))
+    oldcap: (cast: (size_t) l2_m_cap)
+    i: 0
+    while: i < l2_m_n
+        nname[i]: l2_m_name[i]
+        nf0[i]: l2_m_f0[i]
+        nf1[i]: l2_m_f1[i]
+        nnode[i]: l2_m_node[i]
+        nbody[i]: l2_m_body[i]
+        nsig[i]: l2_m_sig[i]
+        nmark[i]: l2_m_mark[i]
+        narity[i]: l2_m_arity[i]
+        ndyn[i]: l2_m_dyn[i]
+        nret[i]: l2_m_ret[i]
+        nown[i]: l2_m_own[i]
+        nsn[i]: l2_m_sn[i]
+        nhcap[i]: l2_m_hcap[i]
+        nfcap[i]: l2_m_fcap[i]
+        ndn[i]: l2_m_dn[i]
+        ndt[i]: l2_m_dt[i]
+        nfn[i]: l2_m_fn[i]
+        nft[i]: l2_m_ft[i]
+        i: i + 1
+    i: 0
+    while: i < l2_m_n
+        j: 0
+        while: j < l2_m_n
+            off: (cast: (size_t) i) * oldcap
+            off: off + (cast: (size_t) j)
+            noff: (cast: (size_t) i) * cap
+            noff: noff + (cast: (size_t) j)
+            nedge[noff]: l2_m_edge[off]
+            j: j + 1
+        i: i + 1
+    i: 0
+    while: i < l2_m_n
+        j: 0
+        while: j < 4
+            off: (cast: (size_t) i) * 4U
+            off: off + (cast: (size_t) j)
+            noff: (cast: (size_t) i) * 4U
+            noff: noff + (cast: (size_t) j)
+            nslots[noff]: l2_sn[off]
+            nst[noff]: l2_st[off]
+            j: j + 1
+        i: i + 1
+    oc: (cast: (size_t) l2_own_cap)
+    if: oc != 0U && l2_m_uses != 0 && l2_mul_ok(cap, oc) != 0
+        nuses: (cast: (@: int) l2_xmalloc(cap * oc * c.sizeof(c.int)))
+        nalias: (cast: (@: int) l2_xmalloc(cap * oc * c.sizeof(c.int)))
+        npre: (cast: (@: int) l2_xmalloc(cap * oc * c.sizeof(c.int)))
+        if: nuses = 0 || nalias = 0 || npre = 0
+            if: nuses != 0
+                l2_xfree((cast: (@: void) nuses))
+            if: nalias != 0
+                l2_xfree((cast: (@: void) nalias))
+            if: npre != 0
+                l2_xfree((cast: (@: void) npre))
+            l2_xfree((cast: (@: void) nname))
+            l2_xfree((cast: (@: void) nf0))
+            l2_xfree((cast: (@: void) nf1))
+            l2_xfree((cast: (@: void) nnode))
+            l2_xfree((cast: (@: void) nbody))
+            l2_xfree((cast: (@: void) nsig))
+            l2_xfree((cast: (@: void) nmark))
+            l2_xfree((cast: (@: void) narity))
+            l2_xfree((cast: (@: void) ndyn))
+            l2_xfree((cast: (@: void) nret))
+            l2_xfree((cast: (@: void) nown))
+            l2_xfree((cast: (@: void) nsn))
+            l2_xfree((cast: (@: void) nhcap))
+            l2_xfree((cast: (@: void) nfcap))
+            l2_xfree((cast: (@: void) ndn))
+            l2_xfree((cast: (@: void) ndt))
+            l2_xfree((cast: (@: void) nfn))
+            l2_xfree((cast: (@: void) nft))
+            l2_xfree((cast: (@: void) nedge))
+            l2_xfree((cast: (@: void) nslots))
+            l2_xfree((cast: (@: void) nst))
+            return: 1
+        c.memset((cast: (@: void) nuses), 0, cap * oc * c.sizeof(c.int))
+        c.memset((cast: (@: void) npre), 0, cap * oc * c.sizeof(c.int))
+        i: 0
+        while: i < (cast: (int) cap)
+            j: 0
+            while: j < l2_own_cap
+                noff: (cast: (size_t) i) * oc
+                noff: noff + (cast: (size_t) j)
+                nalias[noff]: -1
+                j: j + 1
+            i: i + 1
+        i: 0
+        while: i < l2_m_n
+            j: 0
+            while: j < l2_own_n
+                off: (cast: (size_t) i) * oc
+                off: off + (cast: (size_t) j)
+                noff: (cast: (size_t) i) * oc
+                noff: noff + (cast: (size_t) j)
+                nuses[noff]: l2_m_uses[off]
+                nalias[noff]: l2_m_alias[off]
+                npre[noff]: l2_m_pre[off]
+                j: j + 1
+            i: i + 1
+        l2_xfree((cast: (@: void) l2_m_uses))
+        l2_xfree((cast: (@: void) l2_m_alias))
+        l2_xfree((cast: (@: void) l2_m_pre))
+        l2_m_uses: nuses
+        l2_m_alias: nalias
+        l2_m_pre: npre
+        ---
+    if: l2_m_name != 0
+        l2_xfree((cast: (@: void) l2_m_name))
+    if: l2_m_f0 != 0
+        l2_xfree((cast: (@: void) l2_m_f0))
+    if: l2_m_f1 != 0
+        l2_xfree((cast: (@: void) l2_m_f1))
+    if: l2_m_node != 0
+        l2_xfree((cast: (@: void) l2_m_node))
+    if: l2_m_body != 0
+        l2_xfree((cast: (@: void) l2_m_body))
+    if: l2_m_sig != 0
+        l2_xfree((cast: (@: void) l2_m_sig))
+    if: l2_m_mark != 0
+        l2_xfree((cast: (@: void) l2_m_mark))
+    if: l2_m_arity != 0
+        l2_xfree((cast: (@: void) l2_m_arity))
+    if: l2_m_dyn != 0
+        l2_xfree((cast: (@: void) l2_m_dyn))
+    if: l2_m_ret != 0
+        l2_xfree((cast: (@: void) l2_m_ret))
+    if: l2_m_own != 0
+        l2_xfree((cast: (@: void) l2_m_own))
+    if: l2_m_sn != 0
+        l2_xfree((cast: (@: void) l2_m_sn))
+    if: l2_m_hcap != 0
+        l2_xfree((cast: (@: void) l2_m_hcap))
+    if: l2_m_fcap != 0
+        l2_xfree((cast: (@: void) l2_m_fcap))
+    if: l2_m_dn != 0
+        l2_xfree((cast: (@: void) l2_m_dn))
+    if: l2_m_dt != 0
+        l2_xfree((cast: (@: void) l2_m_dt))
+    if: l2_m_fn != 0
+        l2_xfree((cast: (@: void) l2_m_fn))
+    if: l2_m_ft != 0
+        l2_xfree((cast: (@: void) l2_m_ft))
+    if: l2_m_edge != 0
+        l2_xfree((cast: (@: void) l2_m_edge))
+    if: l2_sn != 0
+        l2_xfree((cast: (@: void) l2_sn))
+    if: l2_st != 0
+        l2_xfree((cast: (@: void) l2_st))
+    l2_m_name: nname
+    l2_m_f0: nf0
+    l2_m_f1: nf1
+    l2_m_node: nnode
+    l2_m_body: nbody
+    l2_m_sig: nsig
+    l2_m_mark: nmark
+    l2_m_arity: narity
+    l2_m_dyn: ndyn
+    l2_m_ret: nret
+    l2_m_own: nown
+    l2_m_sn: nsn
+    l2_m_hcap: nhcap
+    l2_m_fcap: nfcap
+    l2_m_dn: ndn
+    l2_m_dt: ndt
+    l2_m_fn: nfn
+    l2_m_ft: nft
+    l2_m_edge: nedge
+    l2_sn: nslots
+    l2_st: nst
+    l2_m_cap: (cast: (int) cap)
+return: 0
+
 fn: l2_free_method (int: mi) int
-    if: mi < 0 || mi >= 8
+    if: mi < 0 || l2_m_cap <= 0 || mi >= l2_m_cap
         return: 0
     if: l2_m_fn[mi] != 0
         l2_xfree((cast: (@: void) l2_m_fn[mi]))
@@ -539,7 +994,7 @@ fn: l2_fn (int: mi; int: k) @: LmP0Text
     @@: LmP0Text row
     if: mi < 0 || k < 0 || l2_m_fn[mi] = 0
         return: 0
-    row: l2_m_fn[mi]
+    row: (cast: (@@: LmP0Text) l2_m_fn[mi])
 return: row[k]
 
 fn: l2_ft (int: mi; int: k) int
@@ -553,7 +1008,7 @@ fn: l2_dn (int: mi; int: k) @: LmP0Text
     @@: LmP0Text row
     if: mi < 0 || k < 0 || l2_m_dn[mi] = 0
         return: 0
-    row: l2_m_dn[mi]
+    row: (cast: (@@: LmP0Text) l2_m_dn[mi])
 return: row[k]
 
 fn: l2_dt (int: mi; int: k) int
@@ -567,7 +1022,7 @@ fn: l2_fn_set (int: mi; int: k; @: LmP0Text v) int
     @@: LmP0Text row
     if: mi < 0 || k < 0 || l2_m_fn[mi] = 0
         return: 1
-    row: l2_m_fn[mi]
+    row: (cast: (@@: LmP0Text) l2_m_fn[mi])
     row[k]: v
 return: 0
 
@@ -583,7 +1038,7 @@ fn: l2_dn_set (int: mi; int: k; @: LmP0Text v) int
     @@: LmP0Text row
     if: mi < 0 || k < 0 || l2_m_dn[mi] = 0
         return: 1
-    row: l2_m_dn[mi]
+    row: (cast: (@@: LmP0Text) l2_m_dn[mi])
     row[k]: v
 return: 0
 
@@ -898,13 +1353,10 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
     l2_intern_n: 0U
     l2_src: path
     i: 0
-    while: i < 64
-        l2_m_edge[i]: 0
-        i: i + 1
-    i: 0
-    while: i < 8
+    while: i < l2_m_cap
         l2_free_method(i)
         i: i + 1
+    l2_meth_free()
     if: unit = 0
         return: l2_error(path, 0, "missing main")
     if: unit\trailer != 0
@@ -1332,6 +1784,11 @@ fn: l2_own_add (const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP
         if: l2_alloc_or(path, at, "unsupported body") != 0
             return: -1
         return: -1
+    if: l2_own_n >= l2_own_cap
+        l2_alloc_err: 2
+        if: l2_alloc_or(path, at, "unsupported body") != 0
+            return: -1
+        return: -1
     l2_own_name[l2_own_n]: (cast: (@: LmP0Text) t)
     l2_own_ty[l2_own_n]: ty
     l2_own_live[l2_own_n]: 0
@@ -1419,6 +1876,8 @@ fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path)
             j: l2_own_add(fa, ty, path, stmt)
             if: j < 0
                 return: 1
+            if: l2_own_off(mi, j) = (cast: (size_t) -1)
+                return: l2_error(path, stmt, "size overflow")
             l2_m_uses[l2_own_off(mi, j)]: 1
             l2_m_own[mi]: l2_m_own[mi] + 1
             if: l2_bind_own(mi, j, path, stmt) != 0
@@ -1429,8 +1888,8 @@ fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path)
             fa: l2_next_active(l2_next_active(stmt\as\frame\body\first_field)\next)\value\as\atom
             if: sn[0] >= 4
                 return: l2_error(path, stmt, "unsupported body")
-            l2_sn[mi * 4 + sn[0]]: fa
-            l2_st[mi * 4 + sn[0]]: ty
+            l2_sn[l2_slot_off(mi, sn[0])]: fa
+            l2_st[l2_slot_off(mi, sn[0])]: ty
             if: ty = 5
                 l2_need_p0: 1
             sn[0]: sn[0] + 1
@@ -1505,11 +1964,15 @@ fn: l2_scan_ident (int: mi; const: @(LmP0Text t); @: int seen) int
     if: t\length >= 2U && t\data[0] = 99 && t\data[1] = 46
         return: 0
     oi: l2_own_find(t)
-    if: oi >= 0 && seen != 0 && l2_m_uses[l2_own_off(mi, oi)] != 0 && seen[oi] = 0
-        l2_m_pre[l2_own_off(mi, oi)]: 1
-        ty: l2_own_ty[oi]
-        return: l2_dyn_add(mi, t, ty)
-    if: oi >= 0 && l2_m_uses[l2_own_off(mi, oi)] != 0
+    if: oi >= 0
+        if: l2_own_off(mi, oi) = (cast: (size_t) -1)
+            return: 1
+        if: l2_m_uses[l2_own_off(mi, oi)] = 0
+            l2_m_uses[l2_own_off(mi, oi)]: 1
+        if: seen = 0 || seen[oi] = 0
+            l2_m_pre[l2_own_off(mi, oi)]: 1
+            ty: l2_own_ty[oi]
+            return: l2_dyn_add(mi, t, ty)
         return: 0
     if: l2_dyn_add(mi, t, 0) != 0
         return: 1
@@ -1666,7 +2129,7 @@ fn: l2_dyn_step (const: @(char path); @: int changed) int
         cidx: 0
         while: cidx < l2_m_n
             k: 0
-            while: l2_m_edge[m * 8 + cidx] != 0 && k < l2_m_dyn[cidx]
+            while: l2_m_edge[l2_edge_off(m, cidx)] != 0 && k < l2_m_dyn[cidx]
                 nm: l2_dn(cidx, k)
                 ty: l2_dt(cidx, k)
                 src: l2_param_find(m, nm)
@@ -1761,7 +2224,7 @@ fn: l2_raw_head (const: @(LmP0Text t); int: mi; @: int out_j; @: int out_fld) in
         return: 1
     j: 0
     while: j < l2_m_sn[mi]
-        if: l2_sn[mi * 4 + j] != 0 && l2_sn[mi * 4 + j]\length = sl && c.memcmp(l2_sn[mi * 4 + j]\data, t\data, sl) = 0
+        if: l2_sn[l2_slot_off(mi, j)] != 0 && l2_sn[l2_slot_off(mi, j)]\length = sl && c.memcmp(l2_sn[l2_slot_off(mi, j)]\data, t\data, sl) = 0
             out_j[0]: j + 8
             if: t\length - sl - 1U = 4U && c.memcmp(t\data + sl + 1U, "data", 4U) = 0
                 out_fld[0]: 0
@@ -1877,7 +2340,7 @@ fn: l2_slot_find (int: mi; const: @(LmP0Text t)) int
     if: mi < 0 || t = 0
         return: -1
     while: i < l2_m_sn[mi]
-        if: l2_text_same(l2_sn[mi * 4 + i], t)
+        if: l2_text_same(l2_sn[l2_slot_off(mi, i)], t)
             return: i
         i: i + 1
 return: -1
@@ -2197,8 +2660,10 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
     const: @: LmP0Node rty
     if: fn_node = 0 || fn_node\as = 0 || fn_node\as\frame = 0
         return: l2_error(path, fn_node, "unsupported body")
-    if: l2_m_n >= 8
-        return: l2_error(path, fn_node, "too many methods")
+    if: l2_meth_reserve(l2_m_n + 1) != 0
+        if: l2_alloc_err = 2
+            return: l2_error(path, fn_node, "size overflow")
+        return: l2_error(path, fn_node, "out of memory")
     fr: fn_node\as\frame
     if: l2_frame_head(fn_node, "sub")
         is_sub: 1
@@ -2371,7 +2836,7 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
     if: l2_count_active(call\body) != l2_m_arity[idx]
         return: l2_error(path, node, "incompatible entry signature")
     if: mi >= 0
-        l2_m_edge[mi * 8 + idx]: 1
+        l2_m_edge[l2_edge_off(mi, idx)]: 1
     a0: l2_next_active(call\body\first_field)
     while: a0 != 0
         if: a0\value = 0 || l2_check_primary(a0\value, mi, path) != 0
@@ -2522,7 +2987,7 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             return: l2_error(path, stmt, "const write")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj < 8 && l2_ft(mi, rj) != 5 && l2_ft(mi, rj) != 7
             return: l2_error(path, stmt, "unsupported body")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj >= 8 && l2_st[mi * 4 + rj - 8] != 5
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj >= 8 && l2_st[l2_slot_off(mi, rj - 8)] != 5
             return: l2_error(path, stmt, "unknown foreign field")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && ix != 0 && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || (l2_own_find(stmt\as\frame\head) < 0 && l2_slot_find(mi, stmt\as\frame\head) < 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_find_method(stmt\as\frame\head) < 0 && l2_param_find(mi, stmt\as\frame\head) < 0 && raw != 0 && l2_is_known(stmt\as\frame\head) = 0))
             return: l2_error(path, stmt, "unsupported body")
@@ -2558,7 +3023,7 @@ fn: l2_dfs (int: u) int
         return: 0
     l2_m_mark[u]: 1
     while: v < l2_m_n
-        if: l2_m_edge[u * 8 + v] != 0 && l2_dfs(v) != 0
+        if: l2_m_edge[l2_edge_off(u, v)] != 0 && l2_dfs(v) != 0
             return: 1
         v: v + 1
     l2_m_mark[u]: 2
@@ -3643,10 +4108,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
         ---
         k: 0
         while: k < l2_m_sn[i]
-            if: l2_st[i * 4 + k] = 3 && c.fprintf(l2_out, "    @: char l2_s%d_%d 0\n", i, k) < 0
+            if: l2_st[l2_slot_off(i, k)] = 3 && c.fprintf(l2_out, "    @: char l2_s%d_%d 0\n", i, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_st[i * 4 + k] = 5 && c.fprintf(l2_out, "    @: LmP0Text l2_s%d_%d 0\n", i, k) < 0
+            if: l2_st[l2_slot_off(i, k)] = 5 && c.fprintf(l2_out, "    @: LmP0Text l2_s%d_%d 0\n", i, k) < 0
                 c.fclose(l2_out)
                 return: 1
             k: k + 1

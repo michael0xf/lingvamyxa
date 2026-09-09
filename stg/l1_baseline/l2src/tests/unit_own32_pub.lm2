@@ -1,0 +1,50 @@
+fn: m (char: z) int
+    z: n00
+    char: n00
+    char: n01
+    char: n02
+    char: n03
+    char: n04
+    char: n05
+    char: n06
+    char: n07
+    char: n08
+    char: n09
+    char: n10
+    char: n11
+    char: n12
+    char: n13
+    char: n14
+    char: n15
+    char: n16
+    char: n17
+    char: n18
+    char: n19
+    char: n20
+    char: n21
+    char: n22
+    char: n23
+    char: n24
+    char: n25
+    char: n26
+    char: n27
+    char: n28
+    char: n29
+    char: n30
+    char: n31
+    char: n32
+    if: z = 0
+        n32: 77
+        n15: 15
+    n00: 1
+    return: 0
+end: m
+fn: bind32 (char: n32) int
+    n32: 3
+    char: n32
+    n32: 65
+    return: 0
+end: bind32
+fn: main () int
+    return: 0
+end: main

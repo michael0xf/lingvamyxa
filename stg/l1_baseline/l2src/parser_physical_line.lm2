@@ -79,6 +79,54 @@ sub: lm_p0_position_in_slice (const: @(char text); size_t: length; size_t: index
     out_line[0]: line
     out_column[0]: column
 end: lm_p0_position_in_slice
+fn: lm_p0_indent_tab_column (size_t: column) size_t
+    return: ((column / 8U) + 1U) * 8U
+end: lm_p0_indent_tab_column
+fn: lm_p0_visual_column_between (const: @(char source); size_t: start; size_t: end) size_t
+    size_t: p
+    size_t: column
+    p: start
+    column: 0U
+    while: p < end
+        if: source[p] = 13 && p + 1U < end && source[p + 1U] = 10
+            p: p + 1U
+        if: source[p] = 13
+            column: 0U
+            p: p + 1U
+            continue
+        if: source[p] = 10
+            column: 0U
+            p: p + 1U
+            continue
+        if: source[p] = 9
+            column: lm_p0_indent_tab_column(column)
+            p: p + 1U
+            continue
+        column: column + 1U
+        p: p + 1U
+    return: column
+end: lm_p0_visual_column_between
+sub: lm_p0_scan_indent_column (const: @(char source); size_t: start; size_t: end; @: size_t out_offset; @: size_t out_column)
+    size_t: p
+    size_t: column
+    char: ch
+    p: start
+    column: 0U
+    while: p < end
+        ch: source[p]
+        if: lm_p0_is_horizontal_space(ch) = 0
+            out_offset[0]: p
+            out_column[0]: column
+            return
+        if: ch = 9
+            column: lm_p0_indent_tab_column(column)
+            p: p + 1U
+            continue
+        column: column + 1U
+        p: p + 1U
+    out_offset[0]: p
+    out_column[0]: column
+end: lm_p0_scan_indent_column
 fn: main () int
     return: 0
 end: main
