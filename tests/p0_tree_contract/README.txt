@@ -31,8 +31,12 @@ G_fn_nested_cut 1, G_fn_nested_end 2, return_colon_vertical_body 1).
 Sensitivity injects kind/flags/span/bytes/order/null/colon-bit faults
 without editing committed goldens. Quote/fence fixtures: Q_triple_*
 (A+1 is value-layer; P0 keeps source spelling), F_eq_fence,
-F_eq_inner_longer (==== inside ===), F_star_fence (620 does not
-treat *** as a block fence; current empty-colon rejects empty doc:),
+F_eq_inner_longer (==== inside ===). F_star_fence is a raw ***
+comment (spec ~3948, 3/4/5-star matching fences) wrapped in empty
+`doc:`; 620 field_count=0 because the comment consumed the body,
+not because 620 lacks *** comments. Current P0 empty-colon rejects
+that empty `doc:`. Keep it as the empty-colon case; a nonempty
+long-star comment fixture is a later checkpoint.
 invalid_eq_unclosed (20), invalid_triple_unclosed (4).
 
 
