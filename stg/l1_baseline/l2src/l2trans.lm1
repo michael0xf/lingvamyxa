@@ -1290,28 +1290,17 @@ fn: l2_empty_struct (const: @(LmP0Node node)) int
 return: l2_count_active(node\as\structure) = 0
 
 fn: l2_triple_fence_n (const: @(LmP0Text t)) size_t
-    size_t: n 0U
-    size_t: i 0U
     int: q
     if: t = 0 || t\data = 0 || t\length < 6U
         return: 0U
     q: (cast: (int) t\data[0])
     if: q != 34 && q != 39
         return: 0U
-    while: n < t\length && (cast: (int) t\data[n]) = q
-        n: n + 1U
-    if: n < 3U
+    if: t\data[1] != t\data[0] || t\data[2] != t\data[0]
         return: 0U
-    if: n = t\length
-        return: 3U
-    if: t\length < n + n
+    if: t\data[t\length - 1U] != t\data[0] || t\data[t\length - 2U] != t\data[0] || t\data[t\length - 3U] != t\data[0]
         return: 0U
-    i: 0U
-    while: i < n
-        if: (cast: (int) t\data[t\length - n + i]) != q
-            return: 0U
-        i: i + 1U
-return: n
+return: 3U
 
 fn: l2_triple_q (const: @(LmP0Text t)) int
     if: l2_triple_fence_n(t) = 0U
@@ -1332,6 +1321,7 @@ return: 1
 fn: l2_write_l1_string (@: FILE out; const: @(char data); size_t: n) int
     size_t: i 0U
     int: ch
+    c.array: []: char oct 5
     if: out = 0
         return: 1
     if: c.fputc(34, out) < 0
@@ -1358,6 +1348,21 @@ fn: l2_write_l1_string (@: FILE out; const: @(char data); size_t: n) int
         if: ch = 13 && c.fputs("\\r", out) < 0
             return: 1
         if: ch = 13
+            i: i + 1U
+            continue
+        if: ch = 63 && c.fputs("\\?", out) < 0
+            return: 1
+        if: ch = 63
+            i: i + 1U
+            continue
+        if: ch < 32 || ch > 126
+            oct[0]: 92
+            oct[1]: (cast: (char) (48 + (ch / 64)))
+            oct[2]: (cast: (char) (48 + ((ch / 8) % 8)))
+            oct[3]: (cast: (char) (48 + (ch % 8)))
+            oct[4]: 0
+            if: c.fputs(oct, out) < 0
+                return: 1
             i: i + 1U
             continue
         if: c.fputc(ch, out) < 0
@@ -1397,7 +1402,7 @@ fn: l2_decode_triple_body (const: @(LmP0Text t); @@: char outp; @: size_t outn) 
             while: i + run < n && t\data[nfen + i + run] = qch
                 run: run + 1U
             emitn: run
-            if: run >= nfen + 1U
+            if: run >= 4U
                 emitn: run - 1U
             k: 0U
             while: k < emitn
@@ -1430,8 +1435,13 @@ fn: l2_fmt_l1_string (@: char dest; size_t: cap; const: @(char data); size_t: n)
         if: ch < 0
             ch: ch + 256
         need: 1U
-        if: ch = 34 || ch = 92 || ch = 10 || ch = 13
+        if: ch = 34 || ch = 92 || ch = 10 || ch = 13 || ch = 63
             need: 2U
+        else:
+            if: ch < 32 || ch > 126
+                need: 4U
+            ---
+        ---
         if: o + need + 2U > cap
             return: 1
         if: ch = 34
@@ -1456,6 +1466,20 @@ fn: l2_fmt_l1_string (@: char dest; size_t: cap; const: @(char data); size_t: n)
             dest[o]: 92
             dest[o + 1U]: 114
             o: o + 2U
+            i: i + 1U
+            continue
+        if: ch = 63
+            dest[o]: 92
+            dest[o + 1U]: 63
+            o: o + 2U
+            i: i + 1U
+            continue
+        if: ch < 32 || ch > 126
+            dest[o]: 92
+            dest[o + 1U]: (cast: (char) (48 + (ch / 64)))
+            dest[o + 2U]: (cast: (char) (48 + ((ch / 8) % 8)))
+            dest[o + 3U]: (cast: (char) (48 + (ch % 8)))
+            o: o + 4U
             i: i + 1U
             continue
         dest[o]: (cast: (char) ch)

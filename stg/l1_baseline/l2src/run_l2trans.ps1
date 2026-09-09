@@ -18,10 +18,20 @@ $guards = @(
     "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",
     "-Werror=implicit-function-declaration", "-Werror=implicit-int"
 )
-$cflags = @("-std=c99", "-Wall", "-Wextra", "-Wpedantic", "-I", ".", "-I", "lm1/build") + $guards
+$cflags = @("-std=c99", "-Wall", "-Wextra", "-Wpedantic", "-I", ".") + $guards
 
 function Invoke-Gcc([string]$cpath, [string]$exe, [string]$glog) {
-    $flagStr = ($cflags -join " ")
+    $flags = [System.Collections.Generic.List[string]]::new()
+    foreach ($f in $cflags) { [void]$flags.Add($f) }
+    $src = ""
+    if (Test-Path -LiteralPath $cpath) {
+        $src = [IO.File]::ReadAllText((Join-Path (Get-Location) $cpath))
+    }
+    $wantGen = $src.IndexOf("l1src/p0.lm1.h") -ge 0
+    $wantOld = $src.IndexOf("l1src/p0.h`"") -ge 0 -or $src.IndexOf("l1src/p0.h>") -ge 0
+    if ($wantGen) { [void]$flags.Add("-I"); [void]$flags.Add("lm1/build") }
+    if ($wantGen -and $wantOld) { [void]$flags.Add("-DLM_H_l1src_2Fp0_2Eh_2Elm1") }
+    $flagStr = ($flags -join " ")
     cmd /c "gcc $flagStr `"$cpath`" -o `"$exe`" > `"$glog`" 2>&1"
     if ($LASTEXITCODE -ne 0) {
         Get-Content $glog
@@ -188,6 +198,14 @@ Invoke-Puts "l2src\tests\entry_puts_hello.lm2" "entry_puts_hello" 0 "Hello`n"
 Invoke-Puts "l2src\tests\entry_puts_triple.lm2" "entry_puts_triple" 0 ('a"""b' + "`n")
 Invoke-Puts "l2src\tests\entry_puts_triple_single.lm2" "entry_puts_triple_single" 0 ("a'''b" + "`n")
 Invoke-Puts "l2src\tests\entry_puts_triple_runs.lm2" "entry_puts_triple_runs" 0 ('a"b""c"""d' + "`n")
+Invoke-Puts "l2src\tests\entry_puts_triple_lead.lm2" "entry_puts_triple_lead" 0 ('"hello' + "`n")
+Invoke-Puts "l2src\tests\entry_puts_triple_seven.lm2" "entry_puts_triple_seven" 0 ('"""x' + "`n")
+Invoke-Puts "l2src\tests\entry_puts_triple_lead_sq.lm2" "entry_puts_triple_lead_sq" 0 ("'hello" + "`n")
+Invoke-Puts "l2src\tests\entry_puts_triple_seven_sq.lm2" "entry_puts_triple_seven_sq" 0 ("'''x" + "`n")
+$longXs = "x" * 100
+Invoke-Puts "l2src\tests\entry_puts_triple_long.lm2" "entry_puts_triple_long" 0 ($longXs + "`n")
+$longLm1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "build\l2trans\entry_puts_triple_long.lm1"))
+if ($longLm1.IndexOf($longXs) -lt 0) { throw "triple_long L1 truncated: missing 100 x payload" }
 Invoke-Negative "l2src\tests\entry_puts_triple_fence4.lm2" "entry_puts_triple_fence4" "unterminated python-like string"
 Invoke-Puts "l2src\tests\entry_puts_seq.lm2" "entry_puts_seq" 0 "one`ntwo`n"
 Invoke-Puts "l2src\tests\entry_puts_empty.lm2" "entry_puts_empty" 0 "`n"
@@ -329,7 +347,7 @@ Invoke-Leaf "l2src\tests\unit_loop.lm2" "unit_loop" 1 "add"
 Invoke-Negative "l2src\tests\unit_for.lm2" "unit_for" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_cont_out.lm2" "unit_cont_out" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_cont_frame.lm2" "unit_cont_frame" "unsupported loop"
-Invoke-Negative "l2src\tests\unit_cont_colon.lm2" "unit_cont_colon" "unsupported loop"
+Invoke-Negative "l2src\tests\unit_cont_colon.lm2" "unit_cont_colon" "empty colon Frame is not allowed"
 Invoke-Negative "l2src\tests\unit_break.lm2" "unit_break" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_sz_idx.lm2" "unit_sz_idx" "unsupported index"
 Invoke-Negative "l2src\tests\unit_sz_np.lm2" "unit_sz_np" "unsupported index"
