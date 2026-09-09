@@ -1,0 +1,102 @@
+/* lmx_message.h - first copy-only Message participant slice (19.29.7.1).
+ *
+ * Language names: create / send / stop. English "spawn" is not a parser
+ * intrinsic. Send stages a transport-owned copy; the receiver materializes
+ * a fresh copy at FIFO admission. Staging is not admission or execution.
+ */
+#ifndef LMX_MESSAGE_H
+#define LMX_MESSAGE_H
+
+#include <stddef.h>
+
+typedef unsigned char uchar;
+
+#define LMX_MSG_OK 0
+#define LMX_MSG_STAGED 1
+#define LMX_MSG_INVALID 2
+#define LMX_MSG_NOMEM 3
+#define LMX_MSG_STOPPED 4
+#define LMX_MSG_DEAD 5
+#define LMX_MSG_DUPLICATE 6
+#define LMX_MSG_GONE 7
+#define LMX_MSG_EMPTY 8
+
+#define LMX_MSG_KIND_NUMBER 0
+#define LMX_MSG_KIND_BYTES 1
+#define LMX_MSG_KIND_PROGRESS 2
+#define LMX_MSG_KIND_ITEM 3
+#define LMX_MSG_KIND_CANCELLED 4
+#define LMX_MSG_KIND_DEAD 5
+#define LMX_MSG_KIND_DONE 6
+
+#define LMX_MSG_STATE_INACTIVE 0
+#define LMX_MSG_STATE_RUNNING 1
+#define LMX_MSG_STATE_STOPPED 2
+#define LMX_MSG_STATE_DEAD 3
+
+typedef unsigned LmxMsgAddr;
+
+typedef struct LmxMsgEnv {
+    unsigned id;
+    unsigned correlation;
+    LmxMsgAddr reply_to;
+    int kind;
+    int number;
+    const uchar *bytes;
+    size_t n;
+} LmxMsgEnv;
+
+typedef struct LmxMsgCopy {
+    unsigned id;
+    unsigned correlation;
+    LmxMsgAddr reply_to;
+    LmxMsgAddr from;
+    LmxMsgAddr to;
+    int kind;
+    int number;
+    uchar *bytes;
+    size_t n;
+    struct LmxMsgCopy *next;
+} LmxMsgCopy;
+
+typedef struct LmxMsg {
+    LmxMsgAddr addr;
+    LmxMsgAddr parent;
+    unsigned create_id;
+    int state;
+    uchar *init;
+    size_t init_n;
+    LmxMsgCopy *inbox;
+    LmxMsgCopy *inbox_tail;
+    LmxMsgCopy *outbox;
+    LmxMsgCopy *outbox_tail;
+    unsigned done_from[32];
+    unsigned done_id[32];
+    int done_n;
+} LmxMsg;
+
+typedef struct LmxMsgRuntime {
+    LmxMsg *tab;
+    int n;
+    int cap;
+    LmxMsgCopy *transport;
+    LmxMsgCopy *transport_tail;
+    unsigned next_addr;
+} LmxMsgRuntime;
+
+LmxMsgRuntime *lmx_msg_runtime_new(void);
+void lmx_msg_runtime_delete(LmxMsgRuntime *rt);
+
+int lmx_msg_create(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned create_id, const uchar *init, size_t n, LmxMsgAddr *out);
+int lmx_msg_send(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, const LmxMsgEnv *env);
+int lmx_msg_stop(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to);
+int lmx_msg_end_turn(LmxMsgRuntime *rt, LmxMsgAddr who, int success);
+int lmx_msg_pump(LmxMsgRuntime *rt);
+int lmx_msg_recv(LmxMsgRuntime *rt, LmxMsgAddr who, LmxMsgEnv *out);
+void lmx_msg_env_release(LmxMsgEnv *env);
+int lmx_msg_fail(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_state(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_inbox_n(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_init_copy(LmxMsgRuntime *rt, LmxMsgAddr who, LmxMsgEnv *out);
+
+#endif

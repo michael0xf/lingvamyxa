@@ -1,0 +1,437 @@
+include: "l2src/lmx_message.h" "<stdlib.h>" "<string.h>"
+
+# Copy-only Message mailbox. Spec 19.29.7.1.
+# Send stages a transport-owned copy. Admission enqueues a fresh copy on the
+# recipient inbox. Handler materialization is recv at turn entry.
+
+fn: lmx_msg_copy_bytes (const: @(uchar src); size_t: n) @: uchar
+    @: uchar p
+    if: n = 0U
+        return: 0
+    if: src = 0
+        return: 0
+    p: (cast: (@: uchar) c.malloc(n))
+    if: p = 0
+        return: 0
+    c.memcpy(p, src, n)
+return: p
+
+sub: lmx_msg_copy_free (@: LmxMsgCopy node)
+    @: LmxMsgCopy next
+    while: node != 0
+        next: node\next
+        if: node\bytes != 0
+            c.free((cast: (@: void) node\bytes))
+        ---
+        c.free((cast: (@: void) node))
+        node: next
+    ---
+end: lmx_msg_copy_free
+
+fn: lmx_msg_copy_dup (const: @(LmxMsgCopy src)) @: LmxMsgCopy
+    @: LmxMsgCopy n
+    if: src = 0
+        return: 0
+    n: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: n = 0
+        return: 0
+    n\id: src\id
+    n\correlation: src\correlation
+    n\reply_to: src\reply_to
+    n\from: src\from
+    n\to: src\to
+    n\kind: src\kind
+    n\number: src\number
+    n\n: src\n
+    n\next: 0
+    n\bytes: lmx_msg_copy_bytes(src\bytes, src\n)
+    if: src\n != 0U && n\bytes = 0
+        c.free((cast: (@: void) n))
+        return: 0
+return: n
+
+sub: lmx_msg_q_push (@@: LmxMsgCopy head; @@: LmxMsgCopy tail; @: LmxMsgCopy node)
+    if: node = 0
+        return
+    node\next: 0
+    if: head[0] = 0
+        head[0]: node
+        tail[0]: node
+        return
+    tail[0]\next: node
+    tail[0]: node
+end: lmx_msg_q_push
+
+fn: lmx_msg_q_pop (@@: LmxMsgCopy head; @@: LmxMsgCopy tail) @: LmxMsgCopy
+    @: LmxMsgCopy n
+    n: head[0]
+    if: n = 0
+        return: 0
+    head[0]: n\next
+    if: head[0] = 0
+        tail[0]: 0
+    ---
+    n\next: 0
+return: n
+
+fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
+    @: LmxMsg m
+    int: i 0
+    if: rt = 0 || addr = 0U
+        return: 0
+    while: i < rt\n
+        m: rt\tab + i
+        if: m\addr = addr
+            return: m
+        i: i + 1
+return: 0
+
+fn: lmx_msg_find_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id) @: LmxMsg
+    @: LmxMsg m
+    int: i 0
+    if: rt = 0 || create_id = 0U
+        return: 0
+    while: i < rt\n
+        m: rt\tab + i
+        if: m\parent = parent && m\create_id = create_id
+            return: m
+        i: i + 1
+return: 0
+
+fn: lmx_msg_done_has (@: LmxMsg m; LmxMsgAddr: from; unsigned: id) int
+    int: i 0
+    if: m = 0
+        return: 0
+    while: i < m\done_n
+        if: m\done_from[i] = from && m\done_id[i] = id
+            return: 1
+        i: i + 1
+return: 0
+
+fn: lmx_msg_done_add (@: LmxMsg m; LmxMsgAddr: from; unsigned: id) int
+    if: m = 0
+        return: 1
+    if: lmx_msg_done_has(m, from, id) != 0
+        return: 0
+    if: m\done_n >= 32
+        return: 1
+    m\done_from[m\done_n]: from
+    m\done_id[m\done_n]: id
+    m\done_n: m\done_n + 1
+return: 0
+
+fn: lmx_msg_runtime_new () @: LmxMsgRuntime
+    @: LmxMsgRuntime rt
+    rt: (cast: (@: LmxMsgRuntime) c.calloc(1U, c.sizeof(c.LmxMsgRuntime)))
+    if: rt = 0
+        return: 0
+    rt\next_addr: 1U
+return: rt
+
+sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
+    @: LmxMsg m
+    int: i 0
+    if: rt = 0
+        return
+    while: i < rt\n
+        m: rt\tab + i
+        lmx_msg_copy_free(m\inbox)
+        lmx_msg_copy_free(m\outbox)
+        if: m\init != 0
+            c.free((cast: (@: void) m\init))
+        ---
+        i: i + 1
+    lmx_msg_copy_free(rt\transport)
+    if: rt\tab != 0
+        c.free((cast: (@: void) rt\tab))
+    ---
+    c.free((cast: (@: void) rt))
+end: lmx_msg_runtime_delete
+
+fn: lmx_msg_grow (@: LmxMsgRuntime rt) int
+    int: cap
+    @: LmxMsg tab
+    if: rt = 0
+        return: 1
+    if: rt\n < rt\cap
+        return: 0
+    if: rt\cap = 0
+        cap: 8
+    else:
+        cap: rt\cap * 2
+    ---
+    tab: (cast: (@: LmxMsg) c.realloc((cast: (@: void) rt\tab), (cast: (size_t) cap) * c.sizeof(c.LmxMsg)))
+    if: tab = 0
+        return: 1
+    rt\tab: tab
+    rt\cap: cap
+return: 0
+
+fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+    @: LmxMsg m
+    @: LmxMsg slot
+    if: rt = 0 || out = 0 || create_id = 0U
+        return: c.LMX_MSG_INVALID
+    m: lmx_msg_find_create(rt, parent, create_id)
+    if: m != 0
+        out[0]: m\addr
+        return: c.LMX_MSG_OK
+    if: parent != 0U && lmx_msg_find(rt, parent) = 0
+        return: c.LMX_MSG_INVALID
+    if: lmx_msg_grow(rt) != 0
+        return: c.LMX_MSG_NOMEM
+    slot: rt\tab + rt\n
+    c.memset((cast: (@: void) slot), 0, c.sizeof(c.LmxMsg))
+    slot\addr: rt\next_addr
+    rt\next_addr: rt\next_addr + 1U
+    slot\parent: parent
+    slot\create_id: create_id
+    slot\state: c.LMX_MSG_STATE_INACTIVE
+    slot\init_n: n
+    slot\init: lmx_msg_copy_bytes(init, n)
+    if: n != 0U && slot\init = 0
+        return: c.LMX_MSG_NOMEM
+    rt\n: rt\n + 1
+    out[0]: slot\addr
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: @(LmxMsgEnv env)) int
+    @: LmxMsg src
+    @: LmxMsgCopy node
+    if: rt = 0 || env = 0 || from = 0U || to = 0U
+        return: c.LMX_MSG_INVALID
+    src: lmx_msg_find(rt, from)
+    if: src = 0
+        return: c.LMX_MSG_INVALID
+    if: src\state = c.LMX_MSG_STATE_DEAD
+        return: c.LMX_MSG_DEAD
+    if: src\state = c.LMX_MSG_STATE_STOPPED
+        return: c.LMX_MSG_STOPPED
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        return: c.LMX_MSG_NOMEM
+    node\id: env\id
+    node\correlation: env\correlation
+    node\reply_to: env\reply_to
+    node\from: from
+    node\to: to
+    node\kind: env\kind
+    node\number: env\number
+    node\n: env\n
+    node\bytes: lmx_msg_copy_bytes(env\bytes, env\n)
+    if: env\n != 0U && node\bytes = 0
+        c.free((cast: (@: void) node))
+        return: c.LMX_MSG_NOMEM
+    lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
+return: c.LMX_MSG_STAGED
+
+fn: lmx_msg_stop (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to) int
+    @: LmxMsgEnv env
+    int: st
+    if: rt = 0
+        return: c.LMX_MSG_INVALID
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: env = 0
+        return: c.LMX_MSG_NOMEM
+    env\kind: c.LMX_MSG_KIND_CANCELLED
+    env\reply_to: from
+    st: lmx_msg_send(rt, from, to, env)
+    c.free((cast: (@: void) env))
+return: st
+
+fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
+    @: LmxMsg m
+    @: LmxMsgCopy n
+    if: rt = 0
+        return: c.LMX_MSG_INVALID
+    m: lmx_msg_find(rt, who)
+    if: m = 0
+        return: c.LMX_MSG_INVALID
+    if: m\state = c.LMX_MSG_STATE_DEAD
+        lmx_msg_copy_free(m\outbox)
+        m\outbox: 0
+        m\outbox_tail: 0
+        return: c.LMX_MSG_DEAD
+    if: success = 0
+        lmx_msg_copy_free(m\outbox)
+        m\outbox: 0
+        m\outbox_tail: 0
+        return: c.LMX_MSG_OK
+    while: m\outbox != 0
+        n: lmx_msg_q_pop(@ m\outbox, @ m\outbox_tail)
+        lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, n)
+    ---
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
+    @: LmxMsg dest
+    @: LmxMsgCopy fresh
+    if: rt = 0 || node = 0
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_INVALID
+    dest: lmx_msg_find(rt, node\to)
+    if: dest = 0 || dest\state = c.LMX_MSG_STATE_DEAD || dest\state = c.LMX_MSG_STATE_STOPPED
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_GONE
+    if: node\id != 0U && lmx_msg_done_has(dest, node\from, node\id) != 0
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_DUPLICATE
+    if: dest\state = c.LMX_MSG_STATE_INACTIVE
+        dest\state: c.LMX_MSG_STATE_RUNNING
+    ---
+    if: node\kind = c.LMX_MSG_KIND_CANCELLED
+        dest\state: c.LMX_MSG_STATE_STOPPED
+    ---
+    fresh: lmx_msg_copy_dup(node)
+    lmx_msg_copy_free(node)
+    if: fresh = 0
+        return: c.LMX_MSG_NOMEM
+    if: fresh\id != 0U && lmx_msg_done_add(dest, fresh\from, fresh\id) != 0
+        lmx_msg_copy_free(fresh)
+        return: c.LMX_MSG_NOMEM
+    lmx_msg_q_push(@ dest\inbox, @ dest\inbox_tail, fresh)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
+    @: LmxMsgCopy n
+    int: st
+    if: rt = 0
+        return: c.LMX_MSG_INVALID
+    while: rt\transport != 0
+        n: lmx_msg_q_pop(@ rt\transport, @ rt\transport_tail)
+        st: lmx_msg_admit_one(rt, n)
+        if: st = c.LMX_MSG_NOMEM
+            return: st
+        ---
+    ---
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
+    @: LmxMsg m
+    @: LmxMsgCopy n
+    if: rt = 0 || out = 0
+        return: c.LMX_MSG_INVALID
+    m: lmx_msg_find(rt, who)
+    if: m = 0
+        return: c.LMX_MSG_INVALID
+    n: lmx_msg_q_pop(@ m\inbox, @ m\inbox_tail)
+    if: n = 0
+        return: c.LMX_MSG_EMPTY
+    out\id: n\id
+    out\correlation: n\correlation
+    out\reply_to: n\reply_to
+    out\kind: n\kind
+    out\number: n\number
+    out\n: n\n
+    out\bytes: n\bytes
+    n\bytes: 0
+    c.free((cast: (@: void) n))
+return: c.LMX_MSG_OK
+
+sub: lmx_msg_env_release (@: LmxMsgEnv env)
+    if: env = 0
+        return
+    if: env\bytes != 0
+        c.free((cast: (@: void) env\bytes))
+    ---
+    env\bytes: 0
+    env\n: 0U
+end: lmx_msg_env_release
+
+fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
+    @: LmxMsgCopy node
+    if: rt = 0 || to = 0U || to = from
+        return: c.LMX_MSG_OK
+    if: lmx_msg_find(rt, to) = 0
+        return: c.LMX_MSG_GONE
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        return: c.LMX_MSG_NOMEM
+    node\from: from
+    node\to: to
+    node\kind: c.LMX_MSG_KIND_DEAD
+    node\correlation: correlation
+    lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, node)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    @: LmxMsg ch
+    @: LmxMsgCopy n
+    unsigned: parent
+    int: i
+    if: rt = 0
+        return: c.LMX_MSG_INVALID
+    m: lmx_msg_find(rt, who)
+    if: m = 0
+        return: c.LMX_MSG_INVALID
+    m\state: c.LMX_MSG_STATE_DEAD
+    lmx_msg_copy_free(m\outbox)
+    m\outbox: 0
+    m\outbox_tail: 0
+    parent: m\parent
+    n: m\inbox
+    while: n != 0
+        if: n\reply_to != 0U
+            if: lmx_msg_post_dead(rt, who, n\reply_to, n\correlation) = c.LMX_MSG_NOMEM
+                return: c.LMX_MSG_NOMEM
+            ---
+        ---
+        n: n\next
+    lmx_msg_copy_free(m\inbox)
+    m\inbox: 0
+    m\inbox_tail: 0
+    i: 0
+    while: i < rt\n
+        ch: rt\tab + i
+        if: ch\parent = who && ch\state != c.LMX_MSG_STATE_DEAD
+            ch\state: c.LMX_MSG_STATE_STOPPED
+            lmx_msg_copy_free(ch\outbox)
+            ch\outbox: 0
+            ch\outbox_tail: 0
+        ---
+        i: i + 1
+    if: parent != 0U
+        if: lmx_msg_post_dead(rt, who, parent, 0U) = c.LMX_MSG_NOMEM
+            return: c.LMX_MSG_NOMEM
+        ---
+    ---
+return: lmx_msg_pump(rt)
+
+fn: lmx_msg_state (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    m: lmx_msg_find(rt, who)
+    if: m = 0
+        return: -1
+return: m\state
+
+fn: lmx_msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    @: LmxMsgCopy n
+    int: cnt 0
+    m: lmx_msg_find(rt, who)
+    if: m = 0
+        return: -1
+    n: m\inbox
+    while: n != 0
+        cnt: cnt + 1
+        n: n\next
+return: cnt
+
+fn: lmx_msg_init_copy (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
+    @: LmxMsg m
+    if: rt = 0 || out = 0
+        return: c.LMX_MSG_INVALID
+    m: lmx_msg_find(rt, who)
+    if: m = 0
+        return: c.LMX_MSG_INVALID
+    out\id: 0U
+    out\correlation: 0U
+    out\reply_to: m\parent
+    out\kind: c.LMX_MSG_KIND_BYTES
+    out\number: 0
+    out\n: m\init_n
+    out\bytes: lmx_msg_copy_bytes(m\init, m\init_n)
+    if: m\init_n != 0U && out\bytes = 0
+        return: c.LMX_MSG_NOMEM
+return: c.LMX_MSG_OK

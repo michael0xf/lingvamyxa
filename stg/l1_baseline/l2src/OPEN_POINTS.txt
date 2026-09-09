@@ -1280,6 +1280,19 @@ Differential vs parser.lm1 on prefix/legacy/role/from_payload/
 payload/is_tail_cutter plus `---` / `--- #` / 81-dash too-long.
 Next: Document / indent stack, then remaining parser.lm1 scanners.
 
+Unit 28 - copy-only Message mailbox (19.29.7.1)
+----------------------------------------------
+Files: l2src/lmx_message.h, lmx_message.lm1, lmx_message_selftest.lm1,
+run_lmx.ps1, Lingvamyxa_spec.txt 19.29.7.1
+
+Create/send/stop/end_turn/pump/recv/fail. Transport-owned copy;
+admission enqueues inbox; recv materializes at turn entry. Dedup
+(recipient, sender, id). Create key (parent, create_id). Parent
+death stops children. KIND_DEAD is runtime-posted, not dying
+outbox. AVOIDED: graph-copy, OS thread per Message, durable
+dedup, remote silence as death. SPEC 21.13 throw payload not
+this unit.
+
 Unit 25 - P0 close consumption (return trailer, end:name/fn, ---)
 ----------------------------------------------------------------
 Files: l2trans.lm1, run_l2trans.ps1, tests/unit_ret_tr*.lm2,

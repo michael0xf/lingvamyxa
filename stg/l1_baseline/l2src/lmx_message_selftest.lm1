@@ -1,0 +1,143 @@
+predef: "l2src/lmx_message.lm1"
+include: "<stdio.h>"
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    unsigned: parent 0U
+    unsigned: child 0U
+    unsigned: child2 0U
+    @: LmxMsgEnv env
+    @: LmxMsgEnv got
+    @: uchar payload
+    int: st
+    int: fail 0
+    payload: (cast: (@: uchar) c.malloc(4U))
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    if: payload = 0 || env = 0 || got = 0
+        return: 1
+    payload[0]: 65
+    payload[1]: 0
+    payload[2]: 255
+    payload[3]: 66
+    rt: lmx_msg_runtime_new()
+    if: rt = 0
+        return: 1
+    st: lmx_msg_create(rt, 0U, 1U, payload, 4U, @ parent)
+    if: st != c.LMX_MSG_OK || parent = 0U
+        c.printf("create parent failed\n")
+        fail: fail + 1
+    st: lmx_msg_create(rt, parent, 7U, payload, 4U, @ child)
+    if: st != c.LMX_MSG_OK || child = 0U
+        c.printf("create child failed\n")
+        fail: fail + 1
+    if: lmx_msg_state(rt, child) != c.LMX_MSG_STATE_INACTIVE
+        c.printf("child not inactive at create\n")
+        fail: fail + 1
+    st: lmx_msg_create(rt, parent, 7U, payload, 4U, @ child2)
+    if: st != c.LMX_MSG_OK || child2 != child
+        c.printf("create retry must reuse child identity\n")
+        fail: fail + 1
+    env\id: 1U
+    env\correlation: 11U
+    env\reply_to: parent
+    env\kind: c.LMX_MSG_KIND_BYTES
+    env\number: 0
+    env\bytes: payload
+    env\n: 4U
+    st: lmx_msg_send(rt, parent, child, env)
+    if: st != c.LMX_MSG_STAGED
+        c.printf("send staging failed\n")
+        fail: fail + 1
+    if: lmx_msg_inbox_n(rt, child) != 0
+        c.printf("staging must not admit\n")
+        fail: fail + 1
+    payload[0]: 91
+    st: lmx_msg_end_turn(rt, parent, 1)
+    if: st != c.LMX_MSG_OK
+        c.printf("end_turn publish failed\n")
+        fail: fail + 1
+    st: lmx_msg_pump(rt)
+    if: st != c.LMX_MSG_OK
+        c.printf("pump failed\n")
+        fail: fail + 1
+    if: lmx_msg_state(rt, child) != c.LMX_MSG_STATE_RUNNING
+        c.printf("child not activated by admission\n")
+        fail: fail + 1
+    st: lmx_msg_recv(rt, child, got)
+    if: st != c.LMX_MSG_OK
+        c.printf("recv failed\n")
+        fail: fail + 1
+    if: got\n != 4U || got\bytes = 0 || got\bytes[0] != 65 || got\bytes[2] != 255
+        c.printf("payload copy not independent\n")
+        fail: fail + 1
+    if: got\correlation != 11U
+        c.printf("correlation lost\n")
+        fail: fail + 1
+    lmx_msg_env_release(got)
+    st: lmx_msg_send(rt, parent, child, env)
+    st: lmx_msg_end_turn(rt, parent, 0)
+    st: lmx_msg_pump(rt)
+    if: lmx_msg_inbox_n(rt, child) != 0
+        c.printf("failed turn must discard outbox\n")
+        fail: fail + 1
+    env\id: 1U
+    st: lmx_msg_send(rt, parent, child, env)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_pump(rt)
+    if: lmx_msg_inbox_n(rt, child) != 0
+        c.printf("duplicate (from,id) must not re-admit\n")
+        fail: fail + 1
+    env\id: 2U
+    env\correlation: 22U
+    st: lmx_msg_send(rt, parent, child, env)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_pump(rt)
+    st: lmx_msg_fail(rt, child)
+    if: lmx_msg_state(rt, child) != c.LMX_MSG_STATE_DEAD
+        c.printf("fail did not mark dead\n")
+        fail: fail + 1
+    st: lmx_msg_recv(rt, parent, got)
+    if: st != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_DEAD
+        c.printf("parent not told of child death\n")
+        fail: fail + 1
+    lmx_msg_env_release(got)
+    env\id: 3U
+    st: lmx_msg_send(rt, parent, child, env)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_pump(rt)
+    if: lmx_msg_inbox_n(rt, child) != 0
+        c.printf("dead child admitted late send\n")
+        fail: fail + 1
+    child2: 0U
+    st: lmx_msg_create(rt, parent, 8U, payload, 4U, @ child2)
+    env\id: 9U
+    env\kind: c.LMX_MSG_KIND_NUMBER
+    env\number: 7
+    env\bytes: 0
+    env\n: 0U
+    st: lmx_msg_send(rt, parent, child2, env)
+    st: lmx_msg_stop(rt, parent, child2)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_pump(rt)
+    if: lmx_msg_state(rt, child2) != c.LMX_MSG_STATE_STOPPED
+        c.printf("stop did not mark stopped\n")
+        fail: fail + 1
+    st: lmx_msg_recv(rt, child2, got)
+    if: st != c.LMX_MSG_OK
+        c.printf("stopped child lost admitted work\n")
+        fail: fail + 1
+    lmx_msg_env_release(got)
+    st: lmx_msg_recv(rt, child2, got)
+    if: st != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_CANCELLED
+        c.printf("cancel not a distinct outcome\n")
+        fail: fail + 1
+    lmx_msg_env_release(got)
+    c.free((cast: (@: void) payload))
+    c.free((cast: (@: void) env))
+    c.free((cast: (@: void) got))
+    lmx_msg_runtime_delete(rt)
+    if: fail != 0
+        return: 1
+    c.printf("lmx_message ok\n")
+return: 0
