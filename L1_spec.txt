@@ -129,11 +129,14 @@ build baseline; promotion must preserve the live L2 sources.
     changing the final-extension rule and would have broken the invariant
     that `.lm1.` marks an output rather than a source.
 
-    SCOPE, and it is narrower than the feature sounds. Only direct invocation
-    works. `predef:` of a header source, a header pass in buildCore, and the
-    conversion of any existing hand-written header are NOT implemented and are
-    not claimed. No .h in the tree has been replaced. Design for the rest is in
-    L1_header_units_draft.txt.
+    SCOPE. Direct invocation is implemented. The next authorized stage
+    (125700) is header-unit *build integration* and migration of L1's own
+    headers, starting with `l1src/p0.h` -> `l1src/p0.h.lm1` (generated
+    `p0.lm1.h`). `predef:` of a header source, a header pass in buildCore
+    (*.h.lm1 vs ordinary *.lm1), and committed generated bootstrap headers
+    are part of that stage and are not claimed done until they land.
+    System/vendor includes, qt_app, and mixa headers stay out of scope.
+    Design inventory remains L1_header_units_draft.txt.
 
 1.2 Unit-level items (l1_unit_item_ok)
   Top-level frames allowed in an implicit `.lm1` unit:
