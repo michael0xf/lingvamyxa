@@ -6303,6 +6303,7 @@ int l1_path_is_absolute(const char * path)
     int l1_allow_throws = 0;
     char l1_hdr_types[4096];
     int l1_hdr_typen = 0;
+    char l1_hdr_kinds[64];
     char l1_unit_root[1040];
     int l1_unit_root_set = 0;
     char l1_hdr_emitted[2048];
@@ -11352,7 +11353,33 @@ int l1_hdr_type_has(const LmP0Text * text)
     }
     return 0;
 }
-int l1_hdr_type_add(const LmP0Text * text, const char * path, const LmP0Node * node)
+int l1_hdr_kind_of_cstr(const char * name)
+{
+    int i = 0;
+    size_t off = 0U;
+    if (name == 0) {
+    return 0;
+    }
+    while (i < l1_hdr_typen) {
+    if (strcmp(l1_hdr_types + off, name) == 0) {
+    return l1_hdr_kinds[i];
+    }
+    off = off + strlen(l1_hdr_types + off) + 1U;
+    i = i + 1;
+    }
+    return 0;
+}
+char * l1_hdr_kind_label(int kind)
+{
+    if (kind == 102) {
+    return "typedef";
+    }
+    if (kind == 101) {
+    return "enum";
+    }
+    return "struct";
+}
+int l1_hdr_type_add(const LmP0Text * text, const char * path, const LmP0Node * node, int kind)
 {
     char buf[64];
     size_t used = 0U;
@@ -11373,6 +11400,7 @@ int l1_hdr_type_add(const LmP0Text * text, const char * path, const LmP0Node * n
     return l1_error(path, node, "too many header type names");
     }
     memcpy(l1_hdr_types + used, buf, n + 1U);
+    l1_hdr_kinds[l1_hdr_typen] = kind;
     l1_hdr_typen = l1_hdr_typen + 1;
     return 0;
 }
@@ -12010,6 +12038,61 @@ int l1_emit_hdr_fnptr(FILE * out, const LmP0Frame * frame, const char * path, co
     }
     return 0;
 }
+int l1_hdr_type_node_byval_name(const LmP0Node * node, char * buf, size_t cap)
+{
+    if (node == 0 || buf == 0) {
+    return 0;
+    }
+    if (node -> kind == LM_P0_NODE_FRAME) {
+    return l1_hdr_field_byval_name(node, buf, cap);
+    }
+    if (node -> kind != LM_P0_NODE_ATOM) {
+    return 0;
+    }
+    if (l1_hdr_type_has(node->as->atom) == 0) {
+    return 0;
+    }
+    if (l1_ident_to_buf(buf, cap, node->as->atom) != 0) {
+    return 0;
+    }
+    return 1;
+}
+int l1_hdr_fnptr_parts(const LmP0Frame * frame, LmP0Node ** name_out, LmP0Node ** params_out, LmP0Node ** ret_out)
+{
+    LmP0Field * field;
+    if (frame == 0 || frame -> body == 0 || name_out == 0 || params_out == 0 || ret_out == 0) {
+    return 1;
+    }
+    name_out[0] = 0;
+    params_out[0] = 0;
+    ret_out[0] = 0;
+    field = frame -> body -> first_field;
+    while (field != 0) {
+    if (l1_node_ignored(field->value) == 0) {
+    if (name_out[0] == 0) {
+    name_out[0] = field -> value;
+    }
+    else {
+    if (params_out[0] == 0) {
+    params_out[0] = field -> value;
+    }
+    else {
+    if (ret_out[0] == 0) {
+    ret_out[0] = field -> value;
+    }
+    else {
+    return 1;
+    }
+    }
+    }
+    }
+    field = field -> next;
+    }
+    if (name_out[0] == 0 || params_out[0] == 0 || ret_out[0] == 0) {
+    return 1;
+    }
+    return 0;
+}
 int l1_hdr_struct_deps_ready(const LmP0Frame * frame, const char * path)
 {
     LmP0Structure * fields;
@@ -12032,6 +12115,50 @@ int l1_hdr_struct_deps_ready(const LmP0Frame * frame, const char * path)
     }
     return 1;
 }
+int l1_hdr_fnptr_deps_ready(const LmP0Frame * frame, const char * path)
+{
+    LmP0Node * name_node;
+    LmP0Node * params_node;
+    LmP0Node * ret_node;
+    LmP0Field * field;
+    char dep[64];
+    if (l1_hdr_fnptr_parts(frame, &name_node, &params_node, &ret_node) != 0) {
+    return 0;
+    }
+    if (params_node -> kind == LM_P0_NODE_STRUCTURE) {
+    field = params_node -> as -> structure -> first_field;
+    while (field != 0) {
+    if (l1_node_ignored(field->value) == 0) {
+    if (l1_hdr_field_byval_name(field->value, dep, 64U) != 0) {
+    if (l1_hdr_name_list_has(l1_hdr_emitted, l1_hdr_emittedn, dep) == 0) {
+    return 0;
+    }
+    }
+    }
+    field = field -> next;
+    }
+    }
+    if (l1_hdr_type_node_byval_name(ret_node, dep, 64U) != 0) {
+    if (l1_hdr_name_list_has(l1_hdr_emitted, l1_hdr_emittedn, dep) == 0) {
+    return 0;
+    }
+    }
+    return 1;
+}
+void l1_hdr_cycle_msg(char * msg, size_t cap, const char * a, const char * dep)
+{
+    int ka = 0;
+    int kd = 0;
+    ka = l1_hdr_kind_of_cstr(a);
+    kd = l1_hdr_kind_of_cstr(dep);
+    if (ka == 102 || kd == 102) {
+    snprintf(msg, cap, "by-value cycle between %s %s and %s %s; make one a pointer", l1_hdr_kind_label(ka), a, l1_hdr_kind_label(kd), dep);
+    }
+    else {
+    snprintf(msg, cap, "by-value cycle between struct %s and struct %s; make one a pointer", a, dep);
+    }
+    return ;
+}
 int l1_hdr_diagnose_cycle(const LmP0Node * root, const char * path)
 {
     LmP0Field * field;
@@ -12039,8 +12166,10 @@ int l1_hdr_diagnose_cycle(const LmP0Node * root, const char * path)
     const LmP0Node * node;
     const LmP0Frame * frame;
     const LmP0Text * name;
+    LmP0Node * name_node;
+    LmP0Node * params_node;
+    LmP0Node * ret_node;
     char a[64];
-    char b[64];
     char msg[256];
     char dep[64];
     LmP0Structure * fields;
@@ -12061,11 +12190,38 @@ int l1_hdr_diagnose_cycle(const LmP0Node * root, const char * path)
     while (f2 != 0) {
     if (l1_node_ignored(f2->value) == 0 && l1_hdr_field_byval_name(f2->value, dep, 64U) != 0) {
     if (l1_hdr_name_list_has(l1_hdr_emitted, l1_hdr_emittedn, dep) == 0) {
-    snprintf(msg, 256U, "by-value cycle between struct %s and struct %s; make one a pointer", a, dep);
+    l1_hdr_cycle_msg(msg, 256U, a, dep);
     return l1_error(path, node, msg);
     }
     }
     f2 = f2 -> next;
+    }
+    }
+    }
+    }
+    }
+    if (l1_node_ignored(node) == 0 && node != 0 && node -> kind == LM_P0_NODE_FRAME && l1_text_eq(node->as->frame->head, "fnptr")) {
+    frame = node -> as -> frame;
+    if (l1_hdr_fnptr_parts(frame, &name_node, &params_node, &ret_node) == 0) {
+    if (name_node -> kind == LM_P0_NODE_ATOM && l1_ident_to_buf(a, 64U, name_node->as->atom) == 0) {
+    if (l1_hdr_name_list_has(l1_hdr_emitted, l1_hdr_emittedn, a) == 0) {
+    if (params_node -> kind == LM_P0_NODE_STRUCTURE) {
+    f2 = params_node -> as -> structure -> first_field;
+    while (f2 != 0) {
+    if (l1_node_ignored(f2->value) == 0 && l1_hdr_field_byval_name(f2->value, dep, 64U) != 0) {
+    if (l1_hdr_name_list_has(l1_hdr_emitted, l1_hdr_emittedn, dep) == 0) {
+    l1_hdr_cycle_msg(msg, 256U, a, dep);
+    return l1_error(path, node, msg);
+    }
+    }
+    f2 = f2 -> next;
+    }
+    }
+    if (l1_hdr_type_node_byval_name(ret_node, dep, 64U) != 0) {
+    if (l1_hdr_name_list_has(l1_hdr_emitted, l1_hdr_emittedn, dep) == 0) {
+    l1_hdr_cycle_msg(msg, 256U, a, dep);
+    return l1_error(path, node, msg);
+    }
     }
     }
     }
@@ -12109,7 +12265,13 @@ int l1_hdr_check_item(const LmP0Node * node, const char * path)
     if (name == 0) {
     return l1_error(path, node, "type missing name");
     }
-    return l1_hdr_type_add(name, path, node);
+    if (l1_text_eq(frame->head, "struct")) {
+    return l1_hdr_type_add(name, path, node, 115);
+    }
+    if (l1_text_eq(frame->head, "enum")) {
+    return l1_hdr_type_add(name, path, node, 101);
+    }
+    return l1_hdr_type_add(name, path, node, 102);
     }
     if (l1_text_eq(frame->head, "include") || l1_text_eq(frame->head, "prototype") || l1_head_is(frame->head, "ifndef-default")) {
     return 0;
@@ -12249,13 +12411,19 @@ int l1_emit_header_unit(FILE * out, const LmP0Node * root, const char * in_path,
     while (field != 0) {
     node = field -> value;
     if (l1_node_ignored(node) == 0 && node != 0 && node -> kind == LM_P0_NODE_FRAME && l1_text_eq(node->as->frame->head, "enum")) {
+    name = l1_hdr_frame_name(node->as->frame);
+    if (name == 0 || l1_ident_to_buf(nbuf, 64U, name) != 0) {
+    return l1_error(in_path, node, "enum missing name");
+    }
     if (l1_emit_hdr_enum(out, node->as->frame, in_path, node) != 0) {
     return 1;
+    }
+    if (l1_hdr_name_list_add(l1_hdr_emitted, &l1_hdr_emittedn, 2048U, nbuf) != 0) {
+    return l1_error(in_path, node, "too many header types");
     }
     }
     field = field -> next;
     }
-    l1_hdr_emittedn = 0;
     progress = 1;
     while (progress != 0) {
     progress = 0;
@@ -12281,21 +12449,29 @@ int l1_emit_header_unit(FILE * out, const LmP0Node * root, const char * in_path,
     }
     }
     }
+    if (l1_node_ignored(node) == 0 && node != 0 && node -> kind == LM_P0_NODE_FRAME && l1_text_eq(node->as->frame->head, "fnptr")) {
+    name = l1_hdr_frame_name(node->as->frame);
+    if (name == 0 || l1_ident_to_buf(nbuf, 64U, name) != 0) {
+    return l1_error(in_path, node, "fnptr missing name");
+    }
+    if (l1_hdr_name_list_has(l1_hdr_emitted, l1_hdr_emittedn, nbuf) == 0) {
+    remaining = remaining + 1;
+    if (l1_hdr_fnptr_deps_ready(node->as->frame, in_path) != 0) {
+    if (l1_emit_hdr_fnptr(out, node->as->frame, in_path, node) != 0) {
+    return 1;
+    }
+    if (l1_hdr_name_list_add(l1_hdr_emitted, &l1_hdr_emittedn, 2048U, nbuf) != 0) {
+    return l1_error(in_path, node, "too many header types");
+    }
+    progress = 1;
+    }
+    }
+    }
     field = field -> next;
     }
     }
     if (remaining != 0) {
     return l1_hdr_diagnose_cycle(root, in_path);
-    }
-    field = root -> as -> structure -> first_field;
-    while (field != 0) {
-    node = field -> value;
-    if (l1_node_ignored(node) == 0 && node != 0 && node -> kind == LM_P0_NODE_FRAME && l1_text_eq(node->as->frame->head, "fnptr")) {
-    if (l1_emit_hdr_fnptr(out, node->as->frame, in_path, node) != 0) {
-    return 1;
-    }
-    }
-    field = field -> next;
     }
     field = root -> as -> structure -> first_field;
     while (field != 0) {

@@ -1,0 +1,10 @@
+struct: Node
+    int: value
+end: Node
+
+fnptr: Visitor (@: Node node; int: depth) int
+
+struct: Walker
+    Visitor: visit
+    @: Node root
+end: Walker

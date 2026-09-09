@@ -403,6 +403,42 @@ if ($gen -eq "gen0") {
 
     Invoke-Translate "tests\l1\hdr_aggregate.h.lm1" "$obj\headers\hdr_aggregate_b.lm1.h"
     Assert-ByteIdentical "$obj\headers\hdr_aggregate.lm1.h" "$obj\headers\hdr_aggregate_b.lm1.h"
+
+    # H1 correction: owned fnptr as struct field joins dependency ordering
+    Invoke-Translate "tests\l1\hdr_fnptr_field.h.lm1" "$obj\headers\hdr_fnptr_field.lm1.h"
+    $ff = Get-Content "$obj\headers\hdr_fnptr_field.lm1.h" -Raw
+    $visitorAt = $ff.IndexOf("typedef int (*Visitor)")
+    $walkerAt = $ff.IndexOf("struct Walker {")
+    if ($visitorAt -lt 0 -or $walkerAt -lt 0 -or $visitorAt -gt $walkerAt) {
+        throw "fnptr field order: Visitor typedef must precede Walker in hdr_fnptr_field.lm1.h"
+    }
+    Assert-CHas "$obj\headers\hdr_fnptr_field.lm1.h" "Visitor visit;"
+    cmd /c "gcc $cflagsStr -c -o $obj\headers\hdr_fnptr_field_compile.o -x c $obj\headers\hdr_fnptr_field.lm1.h > $log\hdr_fnptr_field_compile.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "generated hdr_fnptr_field.lm1.h failed to compile (see $log\hdr_fnptr_field_compile.log)" }
+
+    Invoke-Translate "tests\l1\hdr_fnptr_field_before.h.lm1" "$obj\headers\hdr_fnptr_field_before.lm1.h"
+    $fb = Get-Content "$obj\headers\hdr_fnptr_field_before.lm1.h" -Raw
+    $visitorAt2 = $fb.IndexOf("typedef int (*Visitor)")
+    $walkerAt2 = $fb.IndexOf("struct Walker {")
+    if ($visitorAt2 -lt 0 -or $walkerAt2 -lt 0 -or $visitorAt2 -gt $walkerAt2) {
+        throw "fnptr field order: Visitor typedef must precede Walker in hdr_fnptr_field_before.lm1.h"
+    }
+    cmd /c "gcc $cflagsStr -c -o $obj\headers\hdr_fnptr_field_before_compile.o -x c $obj\headers\hdr_fnptr_field_before.lm1.h > $log\hdr_fnptr_field_before_compile.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "generated hdr_fnptr_field_before.lm1.h failed to compile (see $log\hdr_fnptr_field_before_compile.log)" }
+
+    Invoke-Translate "tests\l1\hdr_fnptr_byval_arg.h.lm1" "$obj\headers\hdr_fnptr_byval_arg.lm1.h"
+    $ba = Get-Content "$obj\headers\hdr_fnptr_byval_arg.lm1.h" -Raw
+    $payloadAt = $ba.IndexOf("struct Payload {")
+    $takeAt = $ba.IndexOf("typedef int (*TakePayload)")
+    if ($payloadAt -lt 0 -or $takeAt -lt 0 -or $payloadAt -gt $takeAt) {
+        throw "fnptr by-value arg: Payload definition must precede TakePayload typedef"
+    }
+    cmd /c "gcc $cflagsStr -c -o $obj\headers\hdr_fnptr_byval_arg_compile.o -x c $obj\headers\hdr_fnptr_byval_arg.lm1.h > $log\hdr_fnptr_byval_arg_compile.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "generated hdr_fnptr_byval_arg.lm1.h failed to compile (see $log\hdr_fnptr_byval_arg_compile.log)" }
+
+    Invoke-PreserveFail "tests\l1\invalid_hdr_fnptr_cycle.h.lm1" "$obj\headers\invalid_hdr_fnptr_cycle.lm1.h" "$log\invalid_hdr_fnptr_cycle.err" "typedef"
+    $cyc = Get-Content "$log\invalid_hdr_fnptr_cycle.err" -Raw
+    if ($cyc -match "struct Bfn") { throw "fnptr cycle diagnostic must not call typedef Bfn a struct" }
 }
 $dirDest = Join-Path $obj "publish_fail.c"
 if (Test-Path -LiteralPath $dirDest) { Remove-Item -LiteralPath $dirDest -Recurse -Force }
