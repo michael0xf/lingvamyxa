@@ -104,3 +104,58 @@ does with it is the shell's business.
 No output limits. ClearShell keeps head, line and tail limits and drops the
 middle of noisy output because it holds the text in memory. Ours goes to a file,
 so there is nothing to drop; see FILE_SEAM section 2.
+
+
+6. Background jobs become MESSAGES, and ClearShell already has the right shape
+
+Instruction from the language owner: shape ClearShell's threads as separate
+Messages with inbox and outbox. Worth knowing why that is a first: the
+translator - parser, trans, make, finalize, buildCore - is ONE root Message, so
+the concurrent half of 19.29.6 has never been exercised by anything. This is the
+first place two Messages exist at once, the same way mixa_manager was the first
+application code in L1.
+
+6.1. The mapping, which is one to one
+
+    each background job          a Message with its own arena
+    runOnUiThread                a send to the UI Message's inbox
+    the UI's drain-and-process   the pump, which already exists and is tested
+
+Four jobs, from clearshell_reference: FSync (copy, move, overwrite),
+FolderCalculator (directory sizes), FileNameFinder (search by name), and command
+execution.
+
+6.2. Two rules from the spec that a file manager must not get wrong
+
+19.29.14: a FAILED TURN DISCARDS ITS STAGED OUTBOX. So a long job must publish
+per turn rather than accumulate - computing a whole tree in one turn and staging
+every result means a failure at the end discards all of them. That is
+structural, not a performance choice.
+
+CHECKED, AND CLEARSHELL ALREADY DOES THIS. FolderCalculator posts inside its
+loop, one directory at a time, not at the end. So the port is direct and the
+chunking already present IS the turn boundary. The answer was in the source and
+I derived it from the spec instead - the same answer, but PORT_OF_CLEARSHELL
+section 4 says to look at the source first for a reason.
+
+19.29.14 again: "Outbox rollback does not roll back previously published
+own-field or explicit graph mutations." A FAILED COPY LEAVES FILES COPIED - they
+cannot be uncopied - so the protocol must report WHAT WAS DONE rather than
+present the operation as all or nothing. For a manager that is not a detail:
+"the copy failed" without "900 of 1000 arrived" is the difference between a
+recoverable situation and a mess.
+
+6.3. Message shape, already decided elsewhere
+
+19.31.4: "the semantic result/failure is an ordinary LMX Message with
+correlation equal to the request id". So request/reply correlation is settled
+and does not need inventing.
+
+6.4. What still needs agreement
+
+19.29.7 leaves the cross-Message operation set unresolved. Proposed to Codex and
+awaiting his view: COPY ONLY, of numbers and UTF-8 byte strings, which covers
+all four jobs - a size is a number, a search hit is a path, progress is a count
+and a path, output is bytes. None hands over a graph. Join, activation,
+adoption and graph-reference retargeting stay deferred, which is exactly the
+part 19.29.7 calls unresolved.
