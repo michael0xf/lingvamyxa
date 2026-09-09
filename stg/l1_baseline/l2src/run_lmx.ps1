@@ -28,7 +28,7 @@ foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "
     & $trans $src $c
     if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: $src" }
 
-    & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . $c -o $exe 2>&1 |
+    & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build $c -o $exe 2>&1 |
         Tee-Object -FilePath (Join-Path $log "$unit.gcc.log") | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Get-Content (Join-Path $log "$unit.gcc.log")
