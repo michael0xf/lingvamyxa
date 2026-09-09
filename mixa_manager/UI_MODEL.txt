@@ -75,17 +75,39 @@ a different colour from ordinary entries. From ClearShell: a row is an ancestor
 row when its index is below dirsSize(), and row i shows dirs[i], where dirs is
 [null, disk root, ..., immediate parent].
 
-So, top of a list downward:
+So, top of a list downward - confirmed against a screenshot of the running app,
+not only from the source:
 
-    row 0                *** LIST OF ROOTS ***   (the null entry)
-    row 1                the disk root
-    ...                  descending the tree
-    row dirsSize() - 1   the immediate parent
-    then                 the directory's own contents
+    *** LIST OF ROOTS ***      the null entry, no row number
+    <parent> 0                 the disk root
+    <parent> Music             descending the tree
+    <parent> Download          THE CURRENT DIRECTORY ITSELF
+    <dir> ...                  subdirectories
+    <dir> ...
+    file ...                   files last
+    file ...
 
-Read the other way - upward from the contents, which is how it is used - the
-first ancestor you meet is the immediate parent, then the whole chain, and at
-the very top the list of roots.
+Two corrections to what I first wrote, both from the screenshot.
+
+The last ancestor row is THE CURRENT DIRECTORY, not its parent. The code agrees:
+dirs.get(dirs.size() - 1) is used elsewhere as the current path. So the block is
+the full path INCLUDING where you are, which is why the owner describes it as
+running "up to the native one".
+
+And the ordering below the ancestors is DIRECTORIES THEN FILES, not a single
+mixed list.
+
+Row anatomy, also from the screenshot:
+
+    a number in the left gutter, continuous across ancestors, directories and
+      files, starting at 1 on the first ancestor - the roots row has none
+    a kind tag drawn as literal text: <parent>, <dir>, or a type glyph for a
+      file
+    the name, then the metadata - date for a directory, size and date for a
+      file
+    a "..." button at the right edge of every row, opening that row's own menu
+
+Ancestors, directories and files are each drawn in their own colour band.
 
 So the parent is reachable in TWO ways, and that is the point: as the list to
 the LEFT, already scrolled to the entry you came through, and as a row at the
