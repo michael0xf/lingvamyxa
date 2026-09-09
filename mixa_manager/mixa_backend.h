@@ -7,7 +7,34 @@
  * this file is the whole porting cost. Keep it small.
  *
  * Written as a hand-written C header for now. Converting it to a .h.lm1 header
- * unit is H2 and is not started.
+ * unit is H2, and it is blocked on two separate things rather than one:
+ *
+ *   1. the header-unit L1 lives in l1src and has not been promoted into
+ *      stg/l1_baseline, which is the translator mixa_manager builds against on
+ *      purpose. Probed 2026-09-09: the baseline rejects "struct:" outright,
+ *      while the l1src build emits a correct .lm1.h for the same fixture.
+ *   2. after that promotion, run_mixa.ps1 still has to translate .h.lm1 into
+ *      .lm1.h before compiling the units that include it. Promotion alone does
+ *      not implement the conversion - they are separate gaps.
+ *
+ * Codex confirmed on 2026-09-09 that the promotion is intended, in a scoped
+ * integration window once the root L1 settles. Until both parts land, this file
+ * stays hand-written, and that is a known exception to the hermeticity the
+ * distribution model asks for, not the final shape.
+ *
+ * STATUS - two contracts below are specified here but NOT yet implemented by
+ * mixa_backend_headless, which is the only backend that exists today:
+ *
+ *   - poll adopting the geometry on a resize event. It currently queues and
+ *     delivers the event without resizing the frame, so present goes on
+ *     validating against the old size.
+ *   - clipboard_get returning the length needed. It currently returns the
+ *     number of bytes written, so an empty clipboard and a short buffer are
+ *     indistinguishable.
+ *
+ * Both are in flight as task 20260909-091253. Do not write a new backend
+ * against those two paragraphs until this note is gone; everything else here
+ * is implemented and tested.
  */
 #ifndef MIXA_BACKEND_H
 #define MIXA_BACKEND_H
@@ -92,20 +119,50 @@ typedef struct MixaEvent {
 } MixaEvent;
 
 /* The six operations. Resize is deliberately not a seventh - it arrives as an
- * event, because that is how every platform delivers it. */
+ * event, because that is how every platform delivers it. See poll. */
 
+/* Creates the surface. Cell geometry in, pixels derived.
+ *
+ * The caller owns the MixaBackend storage and MUST zero it before the first
+ * open: open refuses a backend that is already open, but it cannot tell a
+ * never-opened backend from uninitialised memory, and it does not initialise
+ * the fields it has no value for yet. Sizing the struct needs the concrete
+ * backend's own header, which is where the type is completed. */
 int mixa_backend_open(MixaBackend *backend, size_t cols, size_t rows,
                       size_t cell_width, size_t cell_height);
 
-/* One composited frame. The buffer is borrowed for the call and not retained. */
+/* One composited frame. The buffer is borrowed for the call and not retained.
+ * Refused unless it holds at least a whole frame at the CURRENT geometry - see
+ * poll, which is where the geometry can change. */
 int mixa_backend_present(MixaBackend *backend, const MixaU8 *rgba, size_t bytes);
 
 /* Next pending event, or MIXA_EVENT_NONE. Never blocks. Who owns the event loop
- * is a question for the first real backend, not for the seam. */
+ * is a question for the first real backend, not for the seam.
+ *
+ * Delivering MIXA_EVENT_RESIZE also ADOPTS the new geometry, because by the
+ * time a platform tells you it resized, its surface already has. poll re-derives
+ * the frame from the event's cols/rows and the cell size fixed at open, so from
+ * this call onward present validates against the new size. Frame contents after
+ * an adoption are undefined: composite and present a full frame.
+ *
+ * This is what keeps resize from needing a seventh function - the event is the
+ * resize, not a notification that one should be requested.
+ *
+ * Returns non-zero if the new size could not be adopted (it overflows, or the
+ * allocation failed). The event is still written to out and the old surface is
+ * left intact, so a caller that ignores the result keeps a working surface at
+ * the old size rather than a half-resized one. */
 int mixa_backend_poll(MixaBackend *backend, MixaEvent *out);
 
-/* UTF-8 both ways. Returns bytes written, excluding the terminator; 0 when the
- * buffer is too small - never a silent truncation.
+/* UTF-8 both ways.
+ *
+ * clipboard_get returns the clipboard length in bytes, excluding the
+ * terminator, whether or not it fit. It writes out only when cap is at least
+ * that length plus one, and leaves out untouched otherwise - never a silent
+ * truncation. Returning the length needed rather than the number written is
+ * what lets a caller tell an empty clipboard (0) from a buffer that was too
+ * small (result + 1 > cap); both are ordinary conditions and they call for
+ * opposite reactions.
  *
  * This carries more weight than its size suggests. It is the practical path for
  * entering text a keyboard cannot easily produce - copy a name from the panel,

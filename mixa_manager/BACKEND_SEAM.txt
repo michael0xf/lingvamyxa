@@ -38,17 +38,30 @@ addressed by an opaque pointer.
 
     poll      (@: MixaBackend backend; @: MixaEvent out) int
               returns the next pending event or reports empty. Never blocks.
+              Delivering a resize event also ADOPTS the new geometry - see
+              section 3.
 
     clipboard_get (@: MixaBackend backend; @: char out; size_t cap) size_t
     clipboard_set (@: MixaBackend backend; const: @(char text)) int
-              UTF-8 text both ways. Carries more weight than its size suggests:
-              it is the practical path for entering text a keyboard cannot
-              easily produce, which is why full IME integration can be deferred.
+              UTF-8 text both ways. get returns the length NEEDED, excluding the
+              terminator, whether or not it fit, and writes out only when it
+              fits. Returning the need rather than the count written is what
+              separates an empty clipboard (0) from a buffer that was too small
+              (result + 1 > cap): both are ordinary, and they call for opposite
+              reactions. Carries more weight than its size suggests: it is the
+              practical path for entering text a keyboard cannot easily produce,
+              which is why full IME integration can be deferred.
 
     close     (@: MixaBackend backend)
 
 Resize is not a seventh function. It arrives as an event, because that is how
 every platform actually delivers it.
+
+open takes an already-allocated MixaBackend and the caller must zero it before
+the first open. open refuses a backend that is already open, but it cannot tell
+a never-opened one from uninitialised memory. Sizing the struct needs the
+concrete backend's own header, which is where the opaque type is completed -
+so a program links exactly one backend and includes that backend's header.
 
 
 3. The event
@@ -76,12 +89,32 @@ Mouse arrives in CELL coordinates, not pixels. The backend knows the cell
 geometry from open, so it converts once; otherwise every consumer repeats the
 division and they drift.
 
+A resize event is ADOPTED as it is delivered, not merely reported. This is the
+half that makes "resize is not a seventh function" actually true. Without it the
+event is inert: the frame keeps its old dimensions, so present goes on
+validating against the old byte count and silently refuses a correctly sized
+new frame, or copies only a prefix of a larger one. So poll re-derives the frame
+from the event's cols/rows and the cell size fixed at open, and present agrees
+with the event from that call onward. Contents after an adoption are undefined -
+composite and present a whole frame.
+
+Adoption reuses open's overflow guards; a resize that would overflow is refused
+exactly as open refuses it. When adoption fails, poll returns non-zero, still
+writes the event to out, and leaves the old surface intact - a caller that
+ignores the result keeps a working surface at the old size rather than a
+half-resized one.
+
+By the time a real platform hands you a resize event its surface has already
+changed, so adopting on delivery is not a headless convenience; it is the
+behaviour a Win32 or X11 backend has to reproduce anyway.
+
 
 4. What the headless backend does
 
     open       allocates a frame buffer of the derived pixel size
     present    copies the frame into it and counts the call
-    poll       returns events from a queue the test fills directly
+    poll       returns events from a queue the test fills directly, and
+               adopts the new geometry when it delivers a resize
     clipboard  an in-memory string
     close      frees
 
@@ -101,14 +134,23 @@ of the seam and no real backend implements them.
     present with a buffer smaller than the frame refused, nothing copied
     present twice: the second frame replaces the first, not blended
     poll on an empty queue reports empty rather than returning a stale event
-    close then use refused rather than crashing
+    close then use refused rather than crashing - every entry point, poll
+      included
 
   path, end to end and byte-exact
     build a TextRect, put text, composite with a cleared overlay, present,
       and read back the pixels that the compositor's own selftest already
       pins - so the two agree rather than each being self-consistent
     an opaque overlay covers the text underneath, verified through present
-    resize event changes the geometry a consumer reads
+
+  resize
+    a resize event changes the geometry a consumer reads
+    after that event, present accepts a frame of the NEW size
+    after that event, present refuses a frame of the OLD size - the check
+      that would have caught the inert-resize defect
+    frame_at addresses the new extent, and refuses coordinates outside it
+    a resize whose derived size overflows is refused, poll reports the
+      failure, and the old surface still works
 
   input
     a text key arrives with a codepoint and no keycode
@@ -119,16 +161,70 @@ of the seam and no real backend implements them.
 
   clipboard
     set then get round-trips UTF-8 unchanged, including a multi-byte character
-    get into a buffer that is too small refuses rather than truncating silently
+    get into a buffer that is too small returns the needed length and leaves
+      the buffer untouched
+    an empty clipboard returns 0, and is therefore distinguishable from the
+      too-small case above
 
 
 6. What this milestone does NOT do
 
 No Win32, no X11, no Cocoa. No font: present takes pixels, and what draws
 glyphs into them is the compositor, which still uses the placeholder from
-milestone 1. No IME. No blocking event loop - poll never blocks, and who owns
-the loop is a question for the first real backend, not for the seam.
+milestone 1. No IME. No message pump: poll never blocks, and this milestone
+calls it in a straight line rather than from a turn loop.
 
 A real backend is the next milestone and inherits these tests unchanged. If a
 platform cannot satisfy one of them, that is a finding about the seam, and the
 seam changes here rather than the platform being special-cased.
+
+
+7. Who owns the loop
+
+This was written down as an open question for the first real backend. It is not
+open; the language already answers it, and the answer is why poll must not
+block.
+
+Lingvamyxa_spec.txt section 19.29.6: a running Message IS an L3 Thread. It owns
+one arena, a FIFO inbox and outbox, and one serial execution lane, and no more
+than one of its turns runs at a time. Whether turns run on a dedicated OS
+thread, an actor in a pool or a cooperative host loop is explicitly an
+implementation choice, section 19.28.
+
+So the loop is not something a backend introduces. Any Mix Manager that is not a
+one-shot utility exchanges LMX Messages, and a message exchange has a turn loop
+by construction. The backend is an EVENT SOURCE feeding that loop's inbox, and
+poll is the drain. A blocking poll would put the wait inside the event source,
+where it would own scheduling it has no business owning - it would have to
+decide how long to wait on behalf of a Message whose other work it cannot see.
+
+What we do today is what the spec already describes for the bootstrap: "the
+current hosted standalone bootstrap begins as one root Message and runs its
+external process entry in that Message's turn loop", and it names parser, trans,
+make, finalize and buildCore as exactly that. L3 Thread is not implemented yet,
+so Mix Manager runs as if inside one Message, one turn.
+
+7.1. The groundwork to lay now
+
+Cheap now, expensive to retrofit, so it goes in before the first real backend:
+
+    drain, do not consume. The loop drains poll into a FIFO inbox and then
+      runs a turn over that inbox, rather than acting on each event where it
+      is polled. When L3 Thread lands, the inbox becomes the Message's inbox
+      and the backend does not change at all - only its consumer does.
+    one turn, no scheduler. Do not build scheduling, priorities or fairness.
+      One root Message, one lane, turns taken in FIFO order, exactly as
+      19.29.6 fixes it.
+    stage the outbox even though nothing reads it, so that outbound work is
+      already expressed as staged messages rather than as direct calls.
+
+7.2. Still open: how the loop idles
+
+A cooperative loop that never blocks burns a core. Resolving that is a
+SCHEDULER question under 19.28, not a seam question - which is the useful part
+of the distinction, because it means the six operations do not grow a seventh
+for it. Two shapes look plausible and neither needs deciding until a real
+backend exists: the backend exposes a waitable handle the scheduler waits on
+along with its other sources, or the scheduler owns the platform wait outright
+and the backend stays purely a drain. Do not add a blocking wait to the seam to
+paper over this.
