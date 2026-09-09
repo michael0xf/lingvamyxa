@@ -1,0 +1,3 @@
+struct: CoreA
+    int: a
+end: CoreA

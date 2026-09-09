@@ -1,0 +1,23 @@
+include: "<stddef.h>"
+
+enum: Style
+    STYLE_BOLD 1
+    STYLE_UNDERLINE 2
+end: Style
+
+struct: Cell
+    unsigned: codepoint
+    char: flags
+end: Cell
+
+struct: Rect
+    size_t: rows
+    size_t: cols
+    @: Cell cells
+end: Rect
+
+fnptr: CellVisitor (@: Cell cell; size_t: row; size_t: col) int
+
+prototype:
+    fn: rect_open (@: Rect rect; size_t: rows; size_t: cols) int
+end: prototype

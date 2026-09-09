@@ -316,7 +316,7 @@ Invoke-PreserveFail "tests\l1\invalid_array_extent.lm1" "$obj\invalid_array_exte
 # Requires gen1+: fixtures for l1src fixes not in lm2 seed (TASK5 + empty_sub + cast path).
 # gen0 is built from lm2\l1trans.lm2 via run_seed; these checks would stay red forever on gen0.
 if ($gen -eq "gen0") {
-    Write-Log "skip requires-gen1+ on gen0: invalid_unknown_type, invalid_unknown_ctype, scalar_size_t_ok, empty_sub_ok, cast_multiword_ok, cast_uchar_alias_ok, cast_ptr_uchar_ok, param_multiword_ok, invalid_param_qualifier_extra"
+    Write-Log "skip requires-gen1+ on gen0: invalid_unknown_type, invalid_unknown_ctype, scalar_size_t_ok, empty_sub_ok, cast_multiword_ok, cast_uchar_alias_ok, cast_ptr_uchar_ok, param_multiword_ok, invalid_param_qualifier_extra, header units H1"
 } else {
     Invoke-PreserveFail "tests\l1\invalid_unknown_type.lm1" "$obj\invalid_unknown_type.c" "$log\invalid_unknown_type.err" "unknown type name"
     Invoke-PreserveFail "tests\l1\invalid_unknown_ctype.lm1" "$obj\invalid_unknown_ctype.c" "$log\invalid_unknown_ctype.err" "unknown type name"
@@ -346,6 +346,63 @@ if ($gen -eq "gen0") {
     Assert-CLacks "$obj\param_multiword_ok.c" "unsigned *char"
     Assert-CLacks "$obj\param_multiword_ok.c" "int mix(unsigned long"
     Invoke-CcRun "$obj\param_multiword_ok.c" "$bin\param_multiword_ok.exe" 0 $null
+
+    # H1 header units (*.h.lm1) — gated gen1+
+    New-Item -ItemType Directory -Force -Path "$obj\headers\hdr_dir_a", "$obj\headers\hdr_dir_b" | Out-Null
+    Invoke-Translate "tests\l1\hdr_aggregate.h.lm1" "$obj\headers\hdr_aggregate.lm1.h"
+    Assert-CHas "$obj\headers\hdr_aggregate.lm1.h" "typedef struct Point Point;"
+    Assert-CHas "$obj\headers\hdr_aggregate.lm1.h" "struct Point {"
+    Assert-CHas "$obj\headers\hdr_aggregate.lm1.h" "int x;"
+    Assert-CHas "$obj\headers\hdr_aggregate.lm1.h" "size_t n;"
+    Assert-CHas "$obj\headers\hdr_aggregate.lm1.h" "#ifndef LM_H_tests_2Fl1_2Fhdr_5Faggregate_2Eh_2Elm1"
+
+    Invoke-Translate "tests\l1\hdr_selfptr.h.lm1" "$obj\headers\hdr_selfptr.lm1.h"
+    Assert-CHas "$obj\headers\hdr_selfptr.lm1.h" "typedef struct Node Node;"
+    Assert-CHas "$obj\headers\hdr_selfptr.lm1.h" "Node * next;"
+
+    Invoke-Translate "tests\l1\hdr_mutual.h.lm1" "$obj\headers\hdr_mutual.lm1.h"
+    Assert-CHas "$obj\headers\hdr_mutual.lm1.h" "typedef struct Left Left;"
+    Assert-CHas "$obj\headers\hdr_mutual.lm1.h" "typedef struct Right Right;"
+    Assert-CHas "$obj\headers\hdr_mutual.lm1.h" "Right * right;"
+    Assert-CHas "$obj\headers\hdr_mutual.lm1.h" "Left * left;"
+
+    Invoke-Translate "tests\l1\hdr_byval_order.h.lm1" "$obj\headers\hdr_byval_order.lm1.h"
+    $byval = Get-Content "$obj\headers\hdr_byval_order.lm1.h" -Raw
+    $innerAt = $byval.IndexOf("struct Inner {")
+    $outerAt = $byval.IndexOf("struct Outer {")
+    if ($innerAt -lt 0 -or $outerAt -lt 0 -or $innerAt -gt $outerAt) {
+        throw "by-value dependency order not applied in hdr_byval_order.lm1.h"
+    }
+
+    Invoke-PreserveFail "tests\l1\invalid_hdr_byval_cycle.h.lm1" "$obj\headers\invalid_hdr_byval_cycle.lm1.h" "$log\invalid_hdr_byval_cycle.err" "by-value cycle between struct"
+
+    Invoke-Translate "tests\l1\hdr_combo.h.lm1" "$obj\headers\hdr_combo.lm1.h"
+    Assert-CHas "$obj\headers\hdr_combo.lm1.h" "typedef enum Style"
+    Assert-CHas "$obj\headers\hdr_combo.lm1.h" "typedef int (*CellVisitor)"
+    Assert-CHas "$obj\headers\hdr_combo.lm1.h" "int rect_open(Rect * rect, size_t rows, size_t cols);"
+    # generated header compiles under C99 (project cflags)
+    cmd /c "gcc $cflagsStr -c -o $obj\headers\hdr_combo_compile.o -x c $obj\headers\hdr_combo.lm1.h > $log\hdr_combo_compile.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "generated hdr_combo.lm1.h failed to compile (see $log\hdr_combo_compile.log)" }
+
+    # external C consumer includes generated header and compiles
+    Copy-Item -LiteralPath "$obj\headers\hdr_combo.lm1.h" -Destination "$obj\hdr_combo.lm1.h" -Force
+    cmd /c "gcc $cflagsStr -I $obj -o $bin\hdr_consumer.exe tests\l1\hdr_consumer.c > $log\hdr_consumer_gcc.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "hdr_consumer.c failed to compile (see $log\hdr_consumer_gcc.log)" }
+    Write-Log "hdr_consumer compile ok"
+
+    Invoke-PreserveFail "tests\l1\invalid_hdr_union.h.lm1" "$obj\headers\invalid_hdr_union.lm1.h" "$log\invalid_hdr_union.err" "union"
+    Invoke-PreserveFail "tests\l1\invalid_hdr_flmacro.h.lm1" "$obj\headers\invalid_hdr_flmacro.lm1.h" "$log\invalid_hdr_flmacro.err" "function-like macro"
+    Invoke-PreserveFail "tests\l1\invalid_hdr_body.h.lm1" "$obj\headers\invalid_hdr_body.lm1.h" "$log\invalid_hdr_body.err" "executable body"
+
+    Invoke-Translate "tests\l1\hdr_dir_a\core.h.lm1" "$obj\headers\hdr_dir_a\core.lm1.h"
+    Invoke-Translate "tests\l1\hdr_dir_b\core.h.lm1" "$obj\headers\hdr_dir_b\core.lm1.h"
+    Assert-CHas "$obj\headers\hdr_dir_a\core.lm1.h" "LM_H_tests_2Fl1_2Fhdr_5Fdir_5Fa_2Fcore_2Eh_2Elm1"
+    Assert-CHas "$obj\headers\hdr_dir_b\core.lm1.h" "LM_H_tests_2Fl1_2Fhdr_5Fdir_5Fb_2Fcore_2Eh_2Elm1"
+    Assert-CHas "$obj\headers\hdr_dir_a\core.lm1.h" "struct CoreA"
+    Assert-CHas "$obj\headers\hdr_dir_b\core.lm1.h" "struct CoreB"
+
+    Invoke-Translate "tests\l1\hdr_aggregate.h.lm1" "$obj\headers\hdr_aggregate_b.lm1.h"
+    Assert-ByteIdentical "$obj\headers\hdr_aggregate.lm1.h" "$obj\headers\hdr_aggregate_b.lm1.h"
 }
 $dirDest = Join-Path $obj "publish_fail.c"
 if (Test-Path -LiteralPath $dirDest) { Remove-Item -LiteralPath $dirDest -Recurse -Force }
