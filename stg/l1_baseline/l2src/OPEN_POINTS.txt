@@ -1137,6 +1137,30 @@ emit_body path. Fallthrough off the end of a sub also checkpoints.
 `return: value` in sub and empty `return` in a value-returning fn
 stay unsupported body.
 
+Unit 20 - line_start / line_rest
+--------------------------------
+Files: parser_line_start.lm2, run_l2trans.ps1, OPEN_POINTS.txt
+Frozen ref: l1src/parser.lm1:545-560 (read-only)
+
+Closed unit:
+    lm_p0_is_horizontal_space
+    lm_p0_index_is_line_start
+    lm_p0_line_rest_is_horizontal_space
+    main
+
+index=0 returns 1 before any index-1 read. Out-of-range positive
+indexes are not given invented behavior. line_rest loads `ch:
+source[i]` then calls the helper (L2 rejects indexed actuals).
+Numeric 32/9/10/13. OwnUsed: i, ch (2).
+
+24-case differential vs frozen parser.lm1: empty/null zero index,
+first byte, LF/CR/CRLF positions, ordinary chars/NUL, empty or
+reversed start/end, spaces/tabs/all-whitespace/nonspace boundary
+and nonzero start. Suite: l2trans gen2 ok.
+
+Not this unit: position_in_slice (proposed next, not started),
+find_physical_line_end (parser_physical_line.lm2), Document.
+
 Unit 16 - nested expression emit scratch
 ----------------------------------------
 Files: l2trans.lm1, run_l2trans.ps1, parser_visual_column.lm2,
