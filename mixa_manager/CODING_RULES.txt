@@ -1,0 +1,54 @@
+Mixa Manager - rules for writing the L1 in this subtree
+Short, and each one earned rather than assumed.
+
+
+1. const on everything that only reads
+
+Put const: on every pointer parameter the function does not modify. Maximally,
+not selectively.
+
+This is NOT style here. Lingvamyxa_spec makes const load-bearing: a const
+reference is what lets the runtime work WITHOUT going through the node holding
+the void * pointers, which is one of the two optimisations the language owner
+asked to be preserved from the start. Writing const now is not tidiness ahead of
+a compiler that will use it - it is recording, while the author still knows, the
+fact the optimisation will need.
+
+immutable is being added to L1 by Codex, in a free semantic form at his
+discretion, and is NOT in the translator yet. Do not invent a spelling for it
+here and do not use one until his lands - a second spelling would have to be
+unpicked later.
+
+1.1. Use the PARENTHESISED form. This one bites.
+
+    const: @(MixaEvent ev)          correct
+    const: @: MixaEvent ev          SILENTLY LOSES THE REST OF THE LIST
+
+L1_spec section 5 records it: `(const: @: char text; unsigned: fg)` emits
+`(const char * text)`. The tree is correct per P0 - the `;` closes the nested
+`@:` frame rather than the qualifier - and the emitter drops the tail. So a
+careless const can delete a parameter with no diagnostic.
+
+Adding const widely is exactly the activity that walks into this. Use the paren
+form everywhere and the defect cannot be reached.
+
+
+2. Never edit .lm1 through a tool that processes backslashes
+
+`\` is the field-follow operator, and layered escaping eats it silently: `\type`
+has become a TAB and `\b` a backspace byte, with nothing reported. Use a quoted
+heredoc, or an anchored edit. After any bulk change, grep for a literal tab and
+for the backspace byte.
+
+
+3. No valued or dot member access
+
+Banned project-wide. The only door is the explicit C one, `c.value.field`.
+
+
+4. What verifies a change here
+
+run_mixa.ps1, and that is all. Do NOT run stg/l1_baseline/gate.ps1 for
+mixa_manager work: it rebuilds the shared translator, which cannot be affected
+by anything in this subtree, and doing so has already collided with someone
+else's integration. The gate is for L1.
