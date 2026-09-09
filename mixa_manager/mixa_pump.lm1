@@ -1,33 +1,22 @@
+
 predef: "mixa_manager/mixa_backend_headless.lm1"
 include: "mixa_manager/mixa_pump.h" "<stdlib.h>" "<string.h>"
 
 # Pump: drain poll into an inbox FIFO, then yield via next. One turn boundary.
 
 fn: mixa_pump_open (@: MixaPump pump) int
-    @: MixaEventFifo inbox
     if: pump = 0
         return: 1
     if: pump\is_open != 0
         return: 1
-    if: pump\inbox != 0
+    if: mixa_event_fifo_init(@ pump\inbox) != 0
         return: 1
-    inbox: (cast: (@: MixaEventFifo) c.calloc(1U, c.sizeof(c.MixaEventFifo)))
-    if: inbox = 0
-        return: 1
-    if: mixa_event_fifo_init(inbox) != 0
-        c.free(inbox)
-        return: 1
-    pump\inbox: inbox
     pump\is_open: 1
 return: 0
 
 sub: mixa_pump_release (@: MixaPump pump)
     if: pump != 0
-        if: pump\inbox != 0
-            mixa_event_fifo_release(pump\inbox)
-            c.free(pump\inbox)
-        ---
-        pump\inbox: 0
+        mixa_event_fifo_release(@ pump\inbox)
         pump\is_open: 0
     ---
 end: mixa_pump_release
@@ -42,8 +31,6 @@ fn: mixa_pump_drain (@: MixaPump pump; @: MixaBackend backend) int
     if: backend = 0
         return: 1
     if: pump\is_open = 0
-        return: 1
-    if: pump\inbox = 0
         return: 1
     ev: (cast: (@: MixaEvent) c.malloc(c.sizeof(c.MixaEvent)))
     if: ev = 0
@@ -60,7 +47,7 @@ fn: mixa_pump_drain (@: MixaPump pump; @: MixaBackend backend) int
             done: 1
         else:
             # Non-NONE: push even when poll reported adoption failure.
-            if: mixa_event_fifo_push(pump\inbox, ev) != 0
+            if: mixa_event_fifo_push(@ pump\inbox, ev) != 0
                 c.free(ev)
                 return: 1
             ---
@@ -81,9 +68,7 @@ fn: mixa_pump_next (@: MixaPump pump; @: MixaEvent out) int
         return: 1
     if: pump\is_open = 0
         return: 1
-    if: pump\inbox = 0
-        return: 1
-    if: mixa_event_fifo_pop(pump\inbox, out) != 0
+    if: mixa_event_fifo_pop(@ pump\inbox, out) != 0
         return: 1
 return: 0
 
@@ -92,6 +77,4 @@ fn: mixa_pump_pending (const: @(MixaPump pump)) size_t
         return: 0U
     if: pump\is_open = 0
         return: 0U
-    if: pump\inbox = 0
-        return: 0U
-return: mixa_event_fifo_count(pump\inbox)
+return: mixa_event_fifo_count(@ pump\inbox)

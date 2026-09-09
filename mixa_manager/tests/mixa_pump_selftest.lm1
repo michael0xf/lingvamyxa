@@ -81,7 +81,7 @@ fn: main () int
     while: i < 10U
         c.memset(ev, 0, c.sizeof(c.MixaEvent))
         ev\kind: MIXA_EVENT_KEY
-        ev\codepoint: (1000U + i)
+        ev\codepoint: (cast: (unsigned) (1000U + i))
         if: mixa_event_fifo_push(fifo, ev) != 0
             c.printf("mixa fifo: growth push failed\n")
             failures: failures + 1
@@ -107,7 +107,7 @@ fn: main () int
     while: i < 5U
         c.memset(ev, 0, c.sizeof(c.MixaEvent))
         ev\kind: MIXA_EVENT_KEY
-        ev\codepoint: (2000U + i)
+        ev\codepoint: (cast: (unsigned) (2000U + i))
         if: mixa_event_fifo_push(fifo, ev) != 0
             c.printf("mixa fifo: post-wrap push failed\n")
             failures: failures + 1

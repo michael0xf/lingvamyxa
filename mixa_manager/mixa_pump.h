@@ -12,7 +12,7 @@
 #include "mixa_manager/mixa_event_fifo.h"
 
 typedef struct MixaPump {
-    MixaEventFifo *inbox;
+    MixaEventFifo inbox;
     int is_open;
 } MixaPump;
 
