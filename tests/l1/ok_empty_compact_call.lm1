@@ -1,0 +1,8 @@
+external:
+    fn: f () int
+        return: 1
+    end: f
+    fn: main () int
+        return: f()
+    end: main
+end: external

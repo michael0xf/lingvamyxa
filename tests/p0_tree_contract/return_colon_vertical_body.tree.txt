@@ -1,0 +1,9 @@
+structure fields=1
+  frame head="fn" body=structure fields=3
+    atom "test"
+    structure fields=0
+    atom "int"
+    Tail cutter trailer spelling="return" fields=3
+      atom "5"
+      atom "+"
+      atom "5"

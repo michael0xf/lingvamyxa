@@ -626,6 +626,8 @@ void lm_p0_postprocess_stack_delete(LmOwnPtrStack ** stack);
 int lm_p0_postprocess_run(LmP0Document * document, LmOwnPtrStack * stack);
 int lm_p0_postprocess_node(LmP0Document * document, LmP0Node * node);
 int lm_p0_wrap_fields_from_line(LmP0Document * document, LmP0Structure * structure, size_t head_line, size_t inline_event_end_offset);
+int lm_p0_colon_frame_empty(const LmP0Frame * frame);
+int lm_p0_colon_trailer_empty(const LmP0Trailer * trailer);
 int lm_p0_validate_nonempty_colon_frames_in_trailer(LmP0Document * document, const LmP0Trailer * trailer);
 int lm_p0_validate_nonempty_colon_frames_in_node(LmP0Document * document, const LmP0Node * node);
 int lm_p0_validate_nonempty_colon_frames_in_structure(LmP0Document * document, const LmP0Structure * structure);
@@ -4470,6 +4472,9 @@ int lm_p0_parse_trailer_item(LmP0Document * document, LmP0Node * target, const c
     lm_p0_set_diagnostic(document, 12, line, column, "trailer spelling is empty");
     return 0;
     }
+    if (colon_index < length) {
+    flags = flags | LM_P0_TRAILER_COLON;
+    }
     trailer = lm_p0_attach_trailer(document, target, text, spelling_length, flags, line, column);
     if ((trailer == 0)) {
     return 0;
@@ -5694,17 +5699,71 @@ int lm_p0_wrap_fields_from_line(LmP0Document * document, LmP0Structure * structu
     lm_p0_structure_recount(structure);
     return 1;
 }
+int lm_p0_colon_frame_empty(const LmP0Frame * frame)
+{
+    if (frame == 0) {
+    return 0;
+    }
+    if ((frame -> flags & LM_P0_FRAME_COLON) == 0U) {
+    return 0;
+    }
+    if (frame -> body == 0) {
+    return 1;
+    }
+    if (frame -> body -> field_count != 0U) {
+    return 0;
+    }
+    return 1;
+}
+int lm_p0_colon_trailer_empty(const LmP0Trailer * trailer)
+{
+    if (trailer == 0) {
+    return 0;
+    }
+    if ((trailer -> flags & LM_P0_TRAILER_COLON) == 0U) {
+    return 0;
+    }
+    if (trailer -> body == 0) {
+    return 1;
+    }
+    if (trailer -> body -> field_count != 0U) {
+    return 0;
+    }
+    return 1;
+}
 int lm_p0_validate_nonempty_colon_frames_in_trailer(LmP0Document * document, const LmP0Trailer * trailer)
 {
     if ((trailer == 0)) {
     return 1;
     }
+    if (lm_p0_colon_trailer_empty(trailer) != 0) {
+    lm_p0_set_diagnostic(document, 32, 1U, 1U, "empty colon Frame is not allowed");
+    return 0;
+    }
     return lm_p0_validate_nonempty_colon_frames_in_structure(document, trailer->body);
 }
 int lm_p0_validate_nonempty_colon_frames_in_node(LmP0Document * document, const LmP0Node * node)
 {
+    size_t line = 1U;
+    size_t column = 1U;
     if ((node == 0)) {
     return 1;
+    }
+    if (node -> span != 0) {
+    line = node -> span -> line;
+    column = node -> span -> column;
+    }
+    if (node -> kind == LM_P0_NODE_FRAME && node -> as != 0 && lm_p0_colon_frame_empty(node->as->frame) != 0) {
+    lm_p0_set_diagnostic(document, 32, line, column, "empty colon Frame is not allowed");
+    return 0;
+    }
+    if (node -> kind == LM_P0_NODE_FRAME && node -> as != 0 && lm_p0_colon_trailer_empty(node->as->frame->trailer) != 0) {
+    lm_p0_set_diagnostic(document, 32, line, column, "empty colon Frame is not allowed");
+    return 0;
+    }
+    if (node -> kind == LM_P0_NODE_STRUCTURE && node -> as != 0 && lm_p0_colon_trailer_empty(node->as->structure->trailer) != 0) {
+    lm_p0_set_diagnostic(document, 32, line, column, "empty colon Frame is not allowed");
+    return 0;
     }
     if ((node -> kind == LM_P0_NODE_FRAME)) {
     if ((lm_p0_validate_nonempty_colon_frames_in_structure(document, node->as->frame->body) == 0)) {

@@ -71,6 +71,10 @@ Get-Content -LiteralPath $manifest | ForEach-Object {
     $expect = [int]$parts[1]
     $note = ""
     if ($parts.Count -ge 3) { $note = $parts[2] }
+    $rootExpect = $expect
+    if ($note -match "root_exit=(\d+)") { $rootExpect = [int]$Matches[1] }
+    $rootDiag = ""
+    if ($note -match "root_diag=(\d+@\d+:\d+)") { $rootDiag = $Matches[1] }
     if (-not (Test-Path -LiteralPath $src)) { throw "missing fixture $src" }
     $base = ($src -replace "[\\/]", "_")
     $o0 = Join-Path $outDir "$base.lm0.out"
@@ -83,9 +87,24 @@ Get-Content -LiteralPath $manifest | ForEach-Object {
     $ecR = Invoke-Dump $rootPt $src $oR $eR
     $ecS = Invoke-Dump $stgPt $src $oS $eS
     if ($ec0 -ne $expect) { throw "$src oracle exit $ec0 expected $expect ($note)" }
-    if ($ecR -ne $expect) { throw "$src root printTree exit $ecR expected $expect" }
+    if ($ecR -ne $rootExpect) { throw "$src root printTree exit $ecR expected $rootExpect" }
     if ($ecS -ne $expect) { throw "$src STG printTree exit $ecS expected $expect" }
-    if ($expect -eq 0) {
+    if ($rootExpect -ne $expect) {
+        if ($rootExpect -eq 0) { throw "$src root_exit override must be a reject" }
+        $dR = Get-Diag $eR
+        $locR = Get-P0Loc $dR
+        if ($rootDiag.Length -gt 0) {
+            if ($locR -ne $rootDiag) { throw "$src root diag $locR expected $rootDiag : $dR" }
+        } elseif ($locR -notmatch "^32@") {
+            throw "$src root empty-colon diag expected code 32: $dR"
+        }
+        if ($expect -eq 0) {
+            $h0 = (Get-FileHash $o0).Hash
+            $hS = (Get-FileHash $oS).Hash
+            if ($hS -ne $h0) { throw "stdout mismatch STG vs lm0: $src" }
+        }
+        $reject++
+    } elseif ($expect -eq 0) {
         $h0 = (Get-FileHash $o0).Hash
         $hR = (Get-FileHash $oR).Hash
         $hS = (Get-FileHash $oS).Hash

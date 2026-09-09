@@ -137,11 +137,13 @@ function Invoke-CcRun([string]$cpath, [string]$exepath, [int]$expectExit, [strin
     } else {
         $expectBytes = [System.Text.Encoding]::ASCII.GetBytes($expectOut)
         $expectCrlf = $null
+        $expectAllCrlf = $null
         if ($expectOut.EndsWith("`n") -and -not $expectOut.EndsWith("`r`n")) {
             $expectCrlf = [System.Text.Encoding]::ASCII.GetBytes($expectOut.Substring(0, $expectOut.Length - 1) + "`r`n")
+            $expectAllCrlf = [System.Text.Encoding]::ASCII.GetBytes($expectOut.Replace("`n", "`r`n"))
         }
         $match = $false
-        foreach ($exp in @($expectBytes, $expectCrlf)) {
+        foreach ($exp in @($expectBytes, $expectCrlf, $expectAllCrlf)) {
             if ($null -eq $exp) { continue }
             if ($bytes.Length -ne $exp.Length) { continue }
             $same = $true
@@ -194,7 +196,11 @@ Invoke-Translate "tests\l1\fn_close_dash.lm1" "$obj\fn_close_dash.c"
 Assert-CHas "$obj\fn_close_dash.c" "int add("
 Invoke-CcRun "$obj\fn_close_dash.c" "$bin\fn_close_dash.exe" 0 $null
 Invoke-TranslateFail "tests\l1\invalid_fn_end_wrong.lm1" "$obj\invalid_fn_end_wrong.c" "$log\invalid_fn_end_wrong.err" "end target does not match close target"
-Invoke-TranslateFail "tests\l1\invalid_fn_end_empty.lm1" "$obj\invalid_fn_end_empty.c" "$log\invalid_fn_end_empty.err" "end trailer expects exactly one target name"
+Invoke-TranslateFail "tests\l1\invalid_fn_end_empty.lm1" "$obj\invalid_fn_end_empty.c" "$log\invalid_fn_end_empty.err" "empty colon Frame is not allowed"
+Invoke-TranslateFail "tests\l1\invalid_empty_colon_noop.lm1" "$obj\invalid_empty_colon_noop.c" "$log\invalid_empty_colon_noop.err" "empty colon Frame is not allowed"
+Invoke-Translate "tests\l1\fn_ret_tr_vertical.lm1" "$obj\fn_ret_tr_vertical.c"
+Assert-CHas "$obj\fn_ret_tr_vertical.c" "return 5 + 5;"
+Invoke-CcRun "$obj\fn_ret_tr_vertical.c" "$bin\fn_ret_tr_vertical.exe" 10 $null
 Invoke-Translate "tests\l1\quote_run.lm1" "$obj\quote_run.c"
 $quoteRunOut = (@('a"""b', "a'''b", 'x"y', 'x""y', 'x""""y', 'x"""""y', "a'b", 'a\b') -join "`n") + "`n"
 Invoke-CcRun "$obj\quote_run.c" "$bin\quote_run.exe" 0 $quoteRunOut

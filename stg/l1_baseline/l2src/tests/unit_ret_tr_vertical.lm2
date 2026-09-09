@@ -1,0 +1,6 @@
+fn: test () int
+return:
+. 5 + 5
+fn: main () int
+    return: test()
+end: main

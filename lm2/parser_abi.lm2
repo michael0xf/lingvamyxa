@@ -45,6 +45,7 @@ table:
              LM_P0_NODE_MIX                c.define
              LM_P0_NODE_POSITIONAL_SKIP    c.define
              LM_P0_TRAILER_TAIL_CUTTER     c.define
+             LM_P0_TRAILER_COLON           c.define
 end: `constant.backend`
 
 table:
@@ -64,6 +65,7 @@ table:
              LM_P0_NODE_MIX                2U
              LM_P0_NODE_POSITIONAL_SKIP    4U
              LM_P0_TRAILER_TAIL_CUTTER     1U
+             LM_P0_TRAILER_COLON           2U
 end: `constant.value`
 
 table:

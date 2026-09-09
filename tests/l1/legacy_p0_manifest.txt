@@ -35,7 +35,16 @@ tests\disabled_python_string.lmx 0 parse
 tests\disabled_raw_comment.lmx 0 parse
 tests\empty_bounded_structure_body.lmx 0 parse
 tests\empty_bounded_structure_compact.lmx 0 parse
-tests\empty_colon_frames.lmx 0 parse
+tests\empty_colon_frames.lmx 0 parse root_exit=1 root_diag=32@1:1
+tests\invalid_empty_colon_standalone.lmx 0 parse root_exit=1 root_diag=32@1:1
+tests\invalid_empty_colon_nested.lmx 0 parse root_exit=1 root_diag=32@1:7
+tests\ok_colon_vertical_body.lmx 0 parse
+tests\ok_empty_compact_frame.lmx 0 parse
+tests\p0_tree_contract\return_bare_trailer.lmx 0 parse
+tests\p0_tree_contract\return_bare_comment_trailer.lmx 0 parse
+tests\p0_tree_contract\return_colon_empty_trailer.lmx 0 parse root_exit=1 root_diag=32@1:1
+tests\p0_tree_contract\return_colon_comment_trailer.lmx 0 parse root_exit=1 root_diag=32@1:1
+tests\p0_tree_contract\return_colon_vertical_body.lmx 0 parse
 tests\exact_identifier_multiline.lmx 0 parse
 tests\hash_comment.lmx 0 parse
 tests\if_else_blank_line_probe.lmx 0 parse
@@ -119,10 +128,10 @@ tests\trailer_word.lmx 0 parse
 tests\trans_contextual_literal_none_ok.lmx 0 semantic/registry-fixture-parse-only
 tests\trans_l4_generic_table_key.lmx 0 semantic/registry-fixture-parse-only
 tests\trans_registry_default_lookup.lmx 0 semantic/registry-fixture-parse-only
-tests\trans_registry_empty_join.lmx 0 semantic/registry-fixture-parse-only
+tests\trans_registry_empty_join.lmx 0 semantic/registry-fixture-parse-only root_exit=1 root_diag=32@6:9
 tests\trans_registry_multicolumn.lmx 0 semantic/registry-fixture-parse-only
 tests\trans_registry_none_cell.lmx 0 semantic/registry-fixture-parse-only
-tests\trans_registry_view_parity.lmx 0 semantic/registry-fixture-parse-only
+tests\trans_registry_view_parity.lmx 0 semantic/registry-fixture-parse-only root_exit=1 root_diag=32@74:9
 tests\whitespace_tabs.lmx 0 parse
 tests\fixtures\predef_non_lm2.lmx 0 parse
 tests\fixtures\serializer_source_marker_roundtrip.lmx 0 parse
