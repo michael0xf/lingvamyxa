@@ -709,12 +709,21 @@ return: l1_write_span(out, text\data + from, stop - from)
 
 fn: l1_c_ident (@: FILE out; const: @(LmP0Text text); const: @(char path); const: @(LmP0Node node)) int
     size_t: start 0U
+    size_t: i 0U
     if: text = 0 || text\data = 0
         return: 0
     if: l1_text_starts(text, "c.") && text\length > 2U
         start: 2U
     if: start < text\length && (text\data[start] = 34 || text\data[start] = 39)
         return: l1_write_span(out, text\data + start, text\length - start)
+    if: start = 2U
+        i: 2U
+        while: i < text\length
+            if: text\data[i] = 58
+                return: l1_error(path, node, "compact c. call cannot contain a nested L1 receiver")
+            i: i + 1U
+        ---
+    ---
     if: start = 0U && l1_ident_is_reserved(text) != 0
         return: l1_error(path, node, "reserved L1 name")
     ---

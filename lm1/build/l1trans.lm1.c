@@ -7190,6 +7190,7 @@ int l1_c_ident_from(FILE * out, const LmP0Text * text, size_t start, const char 
 int l1_c_ident(FILE * out, const LmP0Text * text, const char * path, const LmP0Node * node)
 {
     size_t start = 0U;
+    size_t i = 0U;
     if (text == 0 || text -> data == 0) {
     return 0;
     }
@@ -7198,6 +7199,15 @@ int l1_c_ident(FILE * out, const LmP0Text * text, const char * path, const LmP0N
     }
     if (start < text -> length && (text -> data[start] == 34 || text -> data[start] == 39)) {
     return l1_write_span(out, text->data + start, text->length - start);
+    }
+    if (start == 2U) {
+    i = 2U;
+    while (i < text -> length) {
+    if (text -> data[i] == 58) {
+    return l1_error(path, node, "compact c. call cannot contain a nested L1 receiver");
+    }
+    i = i + 1U;
+    }
     }
     if (start == 0U && l1_ident_is_reserved(text) != 0) {
     return l1_error(path, node, "reserved L1 name");

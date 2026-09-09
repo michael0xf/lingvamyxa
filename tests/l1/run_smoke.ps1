@@ -404,6 +404,7 @@ if ($gen -eq "gen0") {
     Invoke-Translate "tests\l1\sizeof_addr.lm1" "$obj\sizeof_addr.c"
     Assert-CHas "$obj\sizeof_addr.c" "sizeof(&"
     Invoke-CcRun "$obj\sizeof_addr.c" "$bin\sizeof_addr.exe" 0 $null
+    Invoke-PreserveFail "tests\l1\invalid_sizeof_cast_compact.lm1" "$obj\invalid_sizeof_cast_compact.c" "$log\invalid_sizeof_cast_compact.err" "compact c. call cannot contain a nested L1 receiver"
     Invoke-Translate "tests\l1\scalar_size_t_ok.lm1" "$obj\scalar_size_t_ok.c"
     Assert-CHas "$obj\scalar_size_t_ok.c" "size_t x = 0;"
     Invoke-CcRun "$obj\scalar_size_t_ok.c" "$bin\scalar_size_t_ok.exe" 0 $null

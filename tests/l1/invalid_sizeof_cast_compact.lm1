@@ -1,0 +1,5 @@
+external:
+    fn: main () int
+        return: c.sizeof((cast: (unsigned) 0))
+    end: main
+end: external
