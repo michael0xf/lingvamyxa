@@ -308,6 +308,13 @@ as a prohibition, not a preference.
       fractional arithmetic, then reduced to integer positions and integer
       values, and every text thing is drawn at those integers.
 
+      This applies to RELATIONSHIPS, not only to positions. Wherever a
+      fractional relation appears - a resize factor, a ratio between two grids,
+      a spacing derived from another - the fraction is a way of arriving at the
+      answer, never the answer itself. What survives is an integer. This is the
+      general rule; the grid ratio in section 10.3 and the resize behaviour are
+      both instances of it, not separate decisions.
+
     NEVER RESIZE THE FONT. Take the glyph at whatever native pixel size the
       system gives, and use it pixel for pixel. No scaling, no blur, no
       sub-pixel positioning, no fractional resize.
@@ -390,3 +397,68 @@ to do about it; the backend only reports.
 A codepoint the platform cannot render must be reported as missing rather than
 silently substituted, so font fallback stays a decision of the application
 rather than a surprise from the platform.
+
+
+10. Both layers are cellular, and one drawer serves both
+
+Revised by the language owner on 2026-09-09, after section 9. This supersedes
+the old model's description of OverlayRect as a transparent raster/vector
+rectangle.
+
+10.1. What changes
+
+The upper layer is a CELL GRID, not a raster. Two cell grids share the same
+pixel extent:
+
+    text layer     small cells, as close as a full-screen console would give
+    upper layer    a larger monospace font, roughly 1.5x in both directions,
+                   drawn semi-transparently over the text layer
+
+Both are strictly monospace. Both are drawn by ONE pseudographics drawer through
+one API - the drawer does not know which layer it is drawing, and believes it is
+drawing pseudographics in both cases.
+
+10.2. What this rules out, deliberately
+
+There are NO graphical elements in the interface. Not "few" - none. Anything
+that looks like a frame, a panel, a divider or a control is pseudographics in a
+cell.
+
+Images are not an exception to this; they are a future THIRD layer, a plain
+buffer blitted into a window prepared in advance. That is not built and is not
+designed here. The point of naming it is to keep it OUT of the drawer: the
+moment the drawer grows a "draw a picture" call, the single-API property is
+gone and the two layers stop being interchangeable to it.
+
+10.3. Choosing the upper font: nearest INTEGER RATIO, not nearest 1.5
+
+Section 9 forbids scaling a font, so "1.5x" cannot be computed - it is whatever
+the system actually provides near that. That leaves a choice, and it is decided:
+
+    take the nearest available size that yields an INTEGER RATIO to the text
+    cell in BOTH dimensions, not the nearest size to 1.5.
+
+Decided by the language owner on 2026-09-09, and it is not a separate ruling -
+it is 9.1 applied to a ratio. The 1.5 is the fractional computation; the integer
+ratio is the snap. Treating the two as different questions was my error.
+
+So 8x16 pairs with 12x24, exactly 3:2, and two upper cells cover three text
+cells exactly. The actual factor may sit further from 1.5 than some other
+available size would - that is accepted, and it is the whole point. What is
+bought is that upper-layer frames land on text-cell boundaries instead of
+cutting through the middle of characters underneath.
+
+The rule always has an answer: 1:1 is an integer ratio and the same font is
+always available for both layers. So a platform offering no useful larger size
+degrades to one font for both layers rather than to a fractional ratio. There is
+no case where the doctrine forces a fraction.
+
+10.4. Seam consequence
+
+open must report the metrics of BOTH layers, not one cell size, and it must
+report them rather than accept them - section 9.2. A backend that has only one
+font reports the same metrics twice; that is a legitimate answer, not a failure.
+
+This is why open's out-parameter is a STRUCT rather than two size_t pointers:
+the third layer in 10.2 is explicitly anticipated, and a struct grows without
+breaking the signature again.
