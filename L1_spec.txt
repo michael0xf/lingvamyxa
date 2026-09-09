@@ -198,8 +198,15 @@ build baseline; promotion must preserve the live L2 sources.
 
   Bare `f` is an identifier. Compact `f()` is an allowed empty compact
   Frame. `()` is an allowed empty bounded Structure. `f:` plus a
-  nonempty vertical body is not empty. A colon Frame whose body
-  contains an explicit `()` has a Structure field, not zero P0 fields.
+  nonempty vertical body is not empty. Empty same-line tail is not
+  emptiness when vertical children exist. Exact valid spelling:
+
+    fn: test () int
+    return:
+    . 5 + 5
+
+  A colon Frame whose body contains an explicit `()` has a Structure
+  field, not zero P0 fields.
   Colon-empty specialized trailers (`return:`, `end:`) are the same
   P0 error. Bare `return` / `break` / `continue` remain admitted in
   their existing contexts. Bare `end` stays separately forbidden.

@@ -8648,6 +8648,12 @@ bounded Structure. Do not reject empty parentheses or conflate
 compact/noncolon Frames with colon Frames. `f:` followed by a nonempty
 vertical body is not empty. A colon Frame whose body contains an
 explicitly written `()` has a Structure field, not zero P0 fields.
+Empty same-line tail is not emptiness if vertical children exist after
+complete body assembly. This exact spelling is valid:
+
+    fn: test () int
+    return:
+    . 5 + 5
 
 Colon-empty specialized trailers such as `return:` and `end:` are the
 same P0 error. Bare `return` remains valid in its existing contexts.
