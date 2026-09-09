@@ -12164,33 +12164,33 @@ boundary cannot poll or honor stop; that is the exceptional
 supervisor/host `fail()` path, not the normal loop-exit model, and
 must not be reported as a completed safe reclaim.
 
-Delivery-completion tracking is separate from that lifetime fallback.
-At every parent end_turn, the parent sends a short ordinary LMX
-Message to each child still responsible for an outstanding assigned
-operation, asking whether that child is alive. Those protocol
-Messages are ordinary LMX text, not a new parser intrinsic. A
-liveness reply (alive) does not end tracking. When the child has
-completed the assigned operation, it sends an ordinary correlated
-reply whose acknowledgement is completed (выполнено) relative to
-that assignment. The parent's pending-task identity/correlation
-names the assignment; one completed reply does not silently
-acknowledge other outstanding work. After that completed reply the
-parent stops polling that delivery. Failure and cancellation remain
-distinct outcomes, not fabricated success.
+There is one ordinary liveness direction: child to parent. The
+child's end_turn is the check/send opportunity; a host timer/cadence
+may throttle it to less often. Do not add a second mandatory
+parent-to-child liveness probe at the parent's end_turn. If the
+parent is absent or unresponsive past the configured policy, the
+child requests its own orderly close. The parent may still
+explicitly stop a child, honored at that child's end_turn. A stuck
+child is exceptional `fail()`.
 
-Completed is operation-relative, not a generic transport stage.
+Completion is a separate ordinary Message from a liveness query.
+When the child finishes its assigned operation, it sends completed
+(выполнено) to the parent, correlated to that assignment.
 Explanatory notation, not invented source syntax:
 Deliver(Message, target) completes when that delivery finishes;
 CopyFile(source, target) completes when that file copy finishes.
 Enqueueing or staging a copy request is not completion of CopyFile.
 A delivery-only child is not required to finish unrelated downstream
-execution that was not its assignment.
+execution that was not its assignment. A liveness response (alive)
+is not completion and does not end the parent's result tracking.
+Failure and cancellation remain distinct outcomes, not fabricated
+success. The parent tracks results; it is not an active liveness
+poller and there is no parent-polls-until-completed protocol.
 
-This tracking is not the 19.29.7.1 child-side parent-liveness poll
-and does not reintroduce instant descendant STOPPED. It applies
-only while a delivery assignment is pending, not perpetually after
-acknowledgement. The number/bytes prototype does not yet emit these
-tracking Messages.
+Those protocol Messages are ordinary LMX text, not a new parser
+intrinsic. The number/bytes prototype implements child-side parent
+poll as a helper (`lmx_msg_poll` / `lmx_msg_drive`); it does not
+yet emit short liveness or completed Messages.
 
 This is a trusted serialized in-process prototype, not the completed
 language security/supervision boundary. Header:
