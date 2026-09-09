@@ -1,5 +1,5 @@
 predef: "l1src/parser.lm1"
-include: "l1src/p0.h"
+include: "l1src/p0.lm1.h"
 
 external:
     fn: main () int

@@ -11,7 +11,7 @@ $obj = Join-Path $root "build\obj\l1trans\$gen"
 $bin = Join-Path $root "build\l1trans\$gen"
 $log = Join-Path $root "build\l1trans\logs\$gen"
 $script:impLog = Join-Path $log "import_bare.log"
-$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -I . -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int"
+$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int"
 
 New-Item -ItemType Directory -Force -Path $obj, $bin, $log | Out-Null
 Set-Content -LiteralPath $script:impLog -Value "$(Get-Date -Format o) import_bare start gen=$gen"

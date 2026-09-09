@@ -140,6 +140,12 @@ fn: lm_build_cc (const: @(char c_path); const: @(char exe_path)) int
     used: lm_build_append_arg(command, c.sizeof(command), used, ".")
     if: used = c.sizeof(command)
         return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "-I")
+    if: used = c.sizeof(command)
+        return: 1
+    used: lm_build_append_arg(command, c.sizeof(command), used, "lm1/build")
+    if: used = c.sizeof(command)
+        return: 1
     used: lm_build_append_arg(command, c.sizeof(command), used, "-Werror=incompatible-pointer-types")
     if: used = c.sizeof(command)
         return: 1

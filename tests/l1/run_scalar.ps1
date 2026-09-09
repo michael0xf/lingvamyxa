@@ -10,7 +10,7 @@ $obj = "build\obj\l1trans\$gen"
 $bin = "build\l1trans\$gen"
 $log = Join-Path "build\l1trans\logs" $gen
 $script:scalarLog = Join-Path $log "scalar.log"
-$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -I . -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int"
+$cflagsStr = "-std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int"
 
 New-Item -ItemType Directory -Force -Path $obj, $bin, $log | Out-Null
 Set-Content -LiteralPath $script:scalarLog -Value "$(Get-Date -Format o) scalar start gen=$gen"
