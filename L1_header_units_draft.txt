@@ -1,5 +1,13 @@
 L1 header units - bounded design draft, revision 3
-Status: proposal for agreement. Nothing implemented, no test covers any of it.
+Status: historical design record. Direct invocation of *.h.lm1 is implemented
+(8db63ee). 3f0e09d (125700 first source slice) additionally admits `type:`
+scalar aliases and function-like `define:` in header units, and adds
+l1src/p0.h.lm1 as L1 declaration source. D2 below (function-like macros
+excluded) is overridden for header units by that slice; ordinary .lm1 still
+rejects them. `predef:` of a header source, the buildCore header pass, and
+committed bootstrap p0.lm1.h remain unimplemented. Live parser/bootstrap
+still include handwritten p0.h. This file is not a claim that the whole
+draft is done.
 
 Revision 2 answered four corrections. All four were right, and one of them -
 that the ordinary *.lm1 glob would also match *.h.lm1 - was a genuine hole in

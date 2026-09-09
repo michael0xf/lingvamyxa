@@ -1,10 +1,11 @@
 Lingvamyxa Translator-L1 — implementation fact sheet
 =====================================================
 
-Status: implementation reference reviewed 2026-09-08 against root L1
-        revision 840c414. stg\l1_baseline translator slice promoted in
-        9638523 (same l1trans.lm1 / l1trans.lm1.c / run_smoke + seven
-        gen1+ fixtures). Other baseline L1 files may still be older.
+Status: implementation reference reviewed 2026-09-09 against root L1
+        3f0e09d (header-unit type aliases, function-like define, p0.h.lm1
+        source). stg\l1_baseline translator slice promoted in 9638523
+        (older than this header slice). Other baseline L1 files may still
+        be older.
 
 Purpose
 -------
@@ -94,23 +95,26 @@ build baseline; promotion must preserve the live L2 sources.
     The body is ordinary L1 with no wrapper receiver, by the same principle
     that makes a `.lm1` document root the unit body: no `h:` and no `L1:`.
 
-    Body content admitted: `struct:`, `enum:`, `fnptr:`, the `prototype:`
-    WRAPPER form with `fn:`/`sub:` inside, a bodiless unit-level `fn:`/`sub:`,
-    object-like `define:`, and `include:`. Field spelling inside `struct:` is
-    ordinary L1 declaration spelling, unchanged.
+    Body content admitted: `struct:`, `enum:`, `fnptr:`, `type:` scalar
+    aliases, the `prototype:` WRAPPER form with `fn:`/`sub:` inside, a
+    bodiless unit-level `fn:`/`sub:`, object-like `define:`, function-like
+    `define:` (header units only; compact `NAME(params)` plus replacement),
+    `include:`, and `[]` / `[][]` struct fields without initializer. Field
+    spelling inside `struct:` is ordinary L1 declaration spelling, unchanged.
 
-    Emission order: includes and object-like defines in source order, then ALL
-    struct forward typedefs, then enums, then struct definitions and fnptr
-    typedefs in a JOINT dependency order, then prototypes, then bodiless
-    fn/sub. Forward struct declarations suffice for pointer references.
-    Actual by-value fields and typedef dependencies must precede use; a
-    by-value cycle is diagnosed by name rather than reordered into something
-    that happens to compile. Covered by the four H1 fixtures plus existing
-    H1 tests; not a claim beyond that set.
+    Emission order: includes and defines in source order, then `type:`
+    aliases, then ALL struct forward typedefs, then enums, then struct
+    definitions and fnptr typedefs in a JOINT dependency order, then
+    prototypes, then bodiless fn/sub. Forward struct declarations suffice
+    for pointer references. Actual by-value fields and typedef dependencies
+    must precede use; a by-value cycle is diagnosed by name rather than
+    reordered into something that happens to compile. Scalar `type:` aliases
+    are not joint-order dependencies. Covered by the H1 fixtures including
+    hdr_alias / hdr_flmacro / p0.h.lm1; not a claim beyond that set.
 
     Remaining implementation debt, not language decisions: an inline
     prototype is silently ignored; lowercase unknown heads; fnptr-to-fnptr
-    coverage; uchar header spelling.
+    coverage.
 
     Guard: `LM_H_` plus an escape over the UTF-8 bytes of the source path
     relative to the unit root, normalized first and suffix included -
@@ -121,27 +125,32 @@ build baseline; promotion must preserve the live L2 sources.
     unchanged.
 
     Rejected with a diagnostic naming the construct, publishing nothing:
-    `union`, function-like `define:`, and an executable body. No P0 syntax was
-    added; `parser.lm1` and `p0.h` are untouched.
+    `union`, an executable body, leftover unit items that would otherwise be
+    dropped (`unsupported header unit form`), and function-like `define:`
+    in ordinary `.lm1` / `ifndef-default:`. Header units admit function-like
+    `define:` as of 3f0e09d. No P0 syntax was added; live parser/bootstrap
+    consumers still include handwritten `p0.h`.
 
     A rejected alternative is recorded so it is not revived: source
     `name.lm1.h` with a compound-suffix classifier. It would have required
     changing the final-extension rule and would have broken the invariant
     that `.lm1.` marks an output rather than a source.
 
-    SCOPE. Direct invocation is implemented. The next authorized stage
-    (125700) is header-unit *build integration* and migration of L1's own
-    headers, starting with `l1src/p0.h` -> `l1src/p0.h.lm1` (generated
-    `p0.lm1.h`). `predef:` of a header source, a header pass in buildCore
-    (*.h.lm1 vs ordinary *.lm1), and committed generated bootstrap headers
-    are part of that stage and are not claimed done until they land.
-    System/vendor includes, qt_app, and mixa headers stay out of scope.
-    Design inventory remains L1_header_units_draft.txt.
+    SCOPE. Direct invocation is implemented. 3f0e09d landed the first
+    125700 source slice: `l1src/p0.h.lm1` as L1 declaration source, plus
+    `type:` aliases and header-unit function-like `define:` so that
+    inventory is not dropped. `predef:` of a header source, a header pass
+    in buildCore (*.h.lm1 vs ordinary *.lm1), switching live consumers off
+    handwritten `p0.h`, and committed generated bootstrap `p0.lm1.h` are
+    still part of 125700 and are not claimed done. System/vendor includes,
+    qt_app, and mixa headers stay out of scope. Design inventory remains
+    L1_header_units_draft.txt.
 
 1.2 Unit-level items (l1_unit_item_ok)
   Top-level frames allowed in an implicit `.lm1` unit:
     include, import, predef, os, ifdef, define / ifndef-default,
-    prototype, external, fn, sub, end,
+    prototype, external, fn, sub, end, type,
+    struct, enum, fnptr, union,
     declarations headed by @, @@, const, a known type name, c.array,
     or a head starting with `[]`.
 
@@ -264,8 +273,10 @@ build baseline; promotion must preserve the live L2 sources.
   ifdef: condition / default branches, nesting, unit and function
   contexts, matching end:; undefined FLAG and -DFLAG=0 take default;
   -DFLAG=1 takes first branch (run_ifdef.ps1).
-  Function-like macros, hosted table commands, and define inside
-  function body are outside the current define checkpoint.
+  Function-like macros in ordinary `.lm1` units, hosted table commands,
+  and define inside function body are outside the current ordinary-unit
+  define checkpoint. Header units admit function-like `define:`
+  (`hdr_flmacro.h.lm1`, `p0.h.lm1` `LM_UNUSED`).
 
 
 2. What the translator rejects (by fact of diagnostics)
@@ -474,9 +485,12 @@ PARTIAL / LIMITED
   Module emit: one output C path per CLI run; multi-TU / init-before-main
   mechanics OPEN (10.8).
   Conditional-import policy outside ifdef checkpoint.
-  Header units: direct invocation only. predef: of a header source, a
-  buildCore header pass, and conversion of any existing .h are not implemented
-  (1.1 scope note). No hand-written header in the tree has been replaced.
+  Header units: direct invocation, including `type:` aliases and
+  function-like `define:` in header units (3f0e09d). `l1src/p0.h.lm1`
+  exists as L1 source; live parser/bootstrap still include handwritten
+  `p0.h`. `predef:` of a header source, a buildCore header pass, and a
+  committed generated bootstrap `p0.lm1.h` are not implemented (1.1
+  scope note).
   Parameter declarations, two confirmed defects, BOTH FIXED in c8ceb67 and no
   longer reproducible; retained here only as the record of what they were:
     - a multiword type after `@:` yields a mangled type and DROPS the
@@ -503,11 +517,13 @@ NOT IMPLEMENTED (do not invent)
   for an exceptional low-level hatch, not ordinary L1 authoring.
   L2 ontology / Message / implements-as-predicate / runtime receiver ABI.
   Authoring ABI for user-defined new receiver lowerings (OPEN 10.3).
-  Function-like macros; hosted trans table commands as L1 mechanism.
+  Function-like macros in ordinary `.lm1` units; hosted trans table
+  commands as L1 mechanism. Header-unit function-like `define:` is
+  implemented (3f0e09d).
   Guaranteed struct/union/enum/typedef **heads** as decided L1 spelling
-  (OPEN 10.4) — C aggregate *meaning* is in the draft contract; this
-  translator fact sheet does not claim a closed surface for them beyond
-  what concrete fixtures prove.
+  (OPEN 10.4) — header-unit `struct:` / `enum:` / `fnptr:` / `type:`
+  cover the declarative subset that fixtures prove; this translator fact
+  sheet does not claim a closed surface beyond those fixtures.
   Variadic `...` direct spelling (OPEN 10.17).
   Direct function-pointer type spelling (OPEN 10.16).
   Ternary `?:` (OPEN 10.10).
