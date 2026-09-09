@@ -4,10 +4,21 @@ P0 tree-contract, initial block/short-form batch
 Provenance
 ----------
 Old parser reference: git 620db8612c32569c8dd507cca135d5d076144e9f
-Rebuilt isolated from tracked C (not current lm0, not a whole old selfbuild):
+Isolated checkout: C:\Nyasha_Planet\lingvamyxa_old_worked_version
+Rebuilt isolated (not current main build\lm0, not a whole old selfbuild).
+Tracked 620 inputs are parser.lm1.c and own.lm1.c only. printTree.lm1.c is
+an untracked gitignored driver; do not call the three-file gcc line a
+tracked-C rebuild:
 
   gcc -std=c99 -I . -DLM_THREAD_PROVIDER=LM_THREAD_PROVIDER_SINGLE
     lm1/build/printTree.lm1.c lm1/build/parser.lm1.c lm1/build/own.lm1.c
+
+SHA-256 of that isolated rebuild (do not substitute main build\lm0):
+  printTree_620db86.exe  CB564AD6FF52F35E918FFBAE6A6E2E166147DADCAAE445F9D5A2526A77801EF3  292976 bytes
+  parser.lm1.c          A344B975BD541757AB1CCA89FDC04DD9467C17D041B9A42BC3BE09205E254DDE
+  own.lm1.c             8EF21B1AB0561916762829C07B6AD45B7E3A98BC42CA1E1F48D830B6B2C783FA
+  printTree.lm1.c       ECC9E9FBFE52E8DEFBACA0F47796167DB36E8B67830D764B4F735F996DB5729D
+                        (NOT tracked at 620db86; gitignored 36440-byte Sep6 driver)
 
 Example catalogue (not the behavior oracle): spec c999038270ae0d342f912fb95e03f2b26fc6551d
 sections 3.4/4/16, especially 4.2-4.5. Fixtures were first authored and dumped
@@ -47,6 +58,18 @@ B 2038 call int a; b            B_call_int_a_semi_b               call(int(a), b
 B 2048 print a b; c             B_print_ab_semi_c                 print(a,b) then {c}
 B 1973 int x,5; y,10            B_repeat_decl_p0                  int(x,5) then {y,10}
 C nested short (invalid)        C_nested_short                    REJECT code13 @2:5 (resolved prose error)
+return bare trailer             return_bare_trailer               620 accepts; dump spelling=return fields=0
+return: empty trailer           return_colon_empty_trailer        620 accepts same dump; current P0 rejects 32
+return # comment trailer        return_bare_comment_trailer       620 accepts; same dump as bare
+return: # comment trailer       return_colon_comment_trailer      620 accepts same dump; current P0 rejects 32
+return: vertical 5 + 5          return_colon_vertical_body        620 and current P0 accept; trailer fields=3
+
+620 printTree dumps of the four return-trailer fixtures are byte-identical
+(tree SHA-256 1FC5520614309842BBC5C2309A653E09CC8619E55BE6BFDB91EFD10BCFCD9D09).
+The dump cannot show colon vs bare. New parser stores LM_P0_TRAILER_COLON (2U)
+in existing trailer flags; that bit is versioned new metadata and must be
+asserted separately. Do not mask all flags in the shared walker. Main
+build\lm0 is additional evidence, not the 620 oracle.
 D 1936 L1: utf8: fence          D_utf8_inline / D_utf8_vertical   utf8 owns "raw text"
 E 2456 dotted pair              E_dotted_anon_pair                {body1} {body2}
 E dash pair                     E_dash_anon_pair                  same two anons
