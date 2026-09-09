@@ -2931,7 +2931,7 @@ fn: l2_int_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text ou
     out_name[0]: 0
     if: node = 0 || node\as = 0
         return: l2_error(path, node, "incompatible entry signature")
-    if: l2_frame_head(node, "int") = 0 && l2_frame_head(node, "char") = 0 && l2_frame_head(node, "size_t") = 0
+    if: l2_frame_head(node, "int") = 0 && l2_frame_head(node, "char") = 0 && l2_frame_head(node, "size_t") = 0 && l2_frame_head(node, "LmP0TrailerRole") = 0
         return: l2_error(path, node, "incompatible entry signature")
     if: node\as\frame\trailer != 0
         return: l2_error(path, node, "unsupported trailer")
@@ -2963,6 +2963,10 @@ fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text 
         return: l2_int_formal(node, path, out_name)
     if: l2_frame_head(node, "size_t")
         out_ty[0]: 2
+        return: l2_int_formal(node, path, out_name)
+    if: l2_frame_head(node, "LmP0TrailerRole")
+        out_ty[0]: 10
+        l2_need_p0: 1
         return: l2_int_formal(node, path, out_name)
     if: l2_frame_head(node, "@")
         if: node\as\frame\body = 0 || l2_count_active(node\as\frame\body) != 2
@@ -3122,6 +3126,9 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
         l2_m_ret[l2_m_n]: 0
     if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "size_t")
         l2_m_ret[l2_m_n]: 2
+    if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "LmP0TrailerRole")
+        l2_m_ret[l2_m_n]: 10
+        l2_need_p0: 1
     if: is_sub = 0 && l2_frame_head(field\value, "@")
         if: field\value\as\frame\body = 0 || l2_count_active(field\value\as\frame\body) != 1
             return: l2_error(path, fn_node, "incompatible entry signature")
@@ -3136,7 +3143,7 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
         if: l2_text_eq(rty\as\atom, "char") = 0 && l2_text_eq(rty\as\atom, "LmP0Text") = 0
             return: l2_error(path, fn_node, "unknown foreign type")
         ---
-    if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "int") = 0 && l2_text_eq(field\value\as\atom, "size_t") = 0
+    if: is_sub = 0 && field\value\kind = c.LM_P0_NODE_ATOM && l2_text_eq(field\value\as\atom, "int") = 0 && l2_text_eq(field\value\as\atom, "size_t") = 0 && l2_text_eq(field\value\as\atom, "LmP0TrailerRole") = 0
         return: l2_error(path, fn_node, "incompatible entry signature")
     if: is_sub = 0 && field\value\kind != c.LM_P0_NODE_ATOM && l2_frame_head(field\value, "@") = 0
         return: l2_error(path, fn_node, "incompatible entry signature")
@@ -3892,7 +3899,9 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 5 && c.fprintf(l2_out, "%s@: LmP0Text l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
-    if: l2_m_ret[idx] != 2 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
+    if: l2_m_ret[idx] = 10 && c.fprintf(l2_out, "%sLmP0TrailerRole: l2_t%d\n", ind, t) < 0
+        return: l2_prep_drop(acts, hides)
+    if: l2_m_ret[idx] != 2 && l2_m_ret[idx] != 3 && l2_m_ret[idx] != 5 && l2_m_ret[idx] != 8 && l2_m_ret[idx] != 10 && c.fprintf(l2_out, "%sint: l2_t%d\n", ind, t) < 0
         return: l2_prep_drop(acts, hides)
     if: l2_m_ret[idx] = 8 && c.fprintf(l2_out, "%s", ind) < 0
         return: l2_prep_drop(acts, hides)
@@ -4088,6 +4097,8 @@ fn: l2_emit_sig (int: mi) int
             return: 1
         if: l2_ft(mi, j) = 9 && c.fprintf(l2_out, "; @: size_t l2_p%d_%d", mi, j) < 0
             return: 1
+        if: l2_ft(mi, j) = 10 && c.fprintf(l2_out, "; LmP0TrailerRole: l2_p%d_%d", mi, j) < 0
+            return: 1
         j: j + 1
     j: 0
     while: j < l2_m_dyn[mi]
@@ -4104,7 +4115,9 @@ fn: l2_emit_sig (int: mi) int
         return: 1
     if: l2_m_ret[mi] = 8 && c.fputs(")", l2_out) < 0
         return: 1
-    if: l2_m_ret[mi] != 2 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && c.fputs(") int", l2_out) < 0
+    if: l2_m_ret[mi] = 10 && c.fputs(") LmP0TrailerRole", l2_out) < 0
+        return: 1
+    if: l2_m_ret[mi] != 2 && l2_m_ret[mi] != 3 && l2_m_ret[mi] != 5 && l2_m_ret[mi] != 8 && l2_m_ret[mi] != 10 && c.fputs(") int", l2_out) < 0
         return: 1
 return: 0
 
@@ -4474,7 +4487,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         i: i + 1
-    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char/size_t fields are children of callable->node. Char cache is typed char; graph data is all_chars cell. size_t cache is typed size_t; graph data is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned shared size_t, no int narrowing). Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\\name writes the graph, not the cache.\n# LmP0Text is the existing C ABI from l1src/p0.lm1.h (data, length), a limited migration adapter, not a general C header parser and not a silent layout for new L2 Structures. Lmx structural access stays child-index. Known C: c.strlen, c.memcmp, l2_immut_query_fill, l2_hash_compare_q, c.sizeof(c.LmP0Text), lm_own_new_zero, lm_own_copy_bytes, lm_own_delete. Unknown c.* is rejected. Body @: LmP0Text is an 11.2.1 address slot l2_s, not OwnUsed and not lmx_own. Pointer results @: char / @: LmP0Text; sub: is void. return: slot is the pointer value, not @slot. @: size_t is a typed out-param; name[0]: stores through it (literal 0 only). L2 @ actuals are not emitted; a type-9 actual is the pointer value forwarded. Checkpoint even if OwnUsed is empty. Same-name char/size_t argument and own field share the parameter from the own-decl line; dirty-only publish is to this method's node, not the caller. An argument without that bind is never published. Nested if own-decl is unsupported own declaration. L2ImmutQuery is a borrowed immutable-query adapter (not LmP0Text); fill is a temporary L1 helper behind the L2 make method. text_equals is the mutable fallback (strlen+memcmp). equals_query hashes current text bytes against a prepared query hash. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.\n\n", l2_out) < 0
+    if: c.fputs("end: prototype\n\n# Backend method symbols are l2_m{i}; intern and find_method keep source names. c.malloc stays the foreign door.\n# Publication: write tmp; if dest.bak exists pick dest.bak.N; rename dest to that bak; rename tmp to dest; on fail restore bak or report its path. Not atomic. No recursive FS. Foreign bak is not deleted.\n# OwnUsed char/size_t fields are children of callable->node. Char cache is typed char; graph data is all_chars cell. size_t cache is typed size_t; graph data is a unique LMX_TYPE_SIZE_T cell mutated in place (no interned shared size_t, no int narrowing). Dirty-only checkpoint after actuals, immediately before the executed call, and before return. Explicit node\\name writes the graph, not the cache.\n# LmP0Text is the existing C ABI from l1src/p0.lm1.h (data, length), a limited migration adapter, not a general C header parser and not a silent layout for new L2 Structures. LmP0TrailerRole is that same header's typedef int (NONE/DASH_CUTTER/END/RETURN/UNTIL), not intern16. Lmx structural access stays child-index. Known C: c.strlen, c.memcmp, l2_immut_query_fill, l2_hash_compare_q, c.sizeof(c.LmP0Text), lm_own_new_zero, lm_own_copy_bytes, lm_own_delete. Unknown c.* is rejected. Body @: LmP0Text is an 11.2.1 address slot l2_s, not OwnUsed and not lmx_own. Pointer results @: char / @: LmP0Text; sub: is void. return: slot is the pointer value, not @slot. @: size_t is a typed out-param; name[0]: stores through it (literal 0 only). L2 @ actuals are not emitted; a type-9 actual is the pointer value forwarded. Checkpoint even if OwnUsed is empty. Same-name char/size_t argument and own field share the parameter from the own-decl line; dirty-only publish is to this method's node, not the caller. An argument without that bind is never published. Nested if own-decl is unsupported own declaration. L2ImmutQuery is a borrowed immutable-query adapter (not LmP0Text); fill is a temporary L1 helper behind the L2 make method. text_equals is the mutable fallback (strlen+memcmp). equals_query hashes current text bytes against a prepared query hash. &&/|| with calls use guarded if/temps; skipped RHS does not prep nested actuals. Pure &&/|| stay L1 C expressions.\n\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     i: 0

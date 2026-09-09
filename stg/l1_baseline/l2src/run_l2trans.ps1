@@ -2930,6 +2930,113 @@ end: external
 
 Invoke-Position
 
+function Invoke-TrailerRole {
+    $pred = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_text_predicates.lm2")).Replace("`r`n", "`n")
+    $tr = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_trailer_role.lm2")).Replace("`r`n", "`n")
+    $h = ($pred -split "fn: lm_p0_is_horizontal_space")[1]
+    $h = "fn: lm_p0_is_horizontal_space" + ($h -split "fn: lm_p0_is_line_break")[0]
+    $th = ($tr -split "fn: lm_p0_is_horizontal_space")[1]
+    $th = "fn: lm_p0_is_horizontal_space" + ($th -split "fn: lm_p0_text_has_prefix_name")[0]
+    if ($h.Trim() -ne $th.Trim()) { throw "trailer_role is_horizontal_space must match parser_text_predicates.lm2" }
+
+    $dash81 = "-" * 81
+    $cases = @"
+        c.printf("%d\n", lm_p0_text_has_prefix_name("end:", 4U, "end", 0))
+        c.printf("%d\n", lm_p0_text_has_prefix_name("end", 3U, "end", 0))
+        c.printf("%d\n", lm_p0_text_has_prefix_name("endif", 5U, "end", 0))
+        c.printf("%d\n", lm_p0_text_has_prefix_name("return", 6U, "return", 1))
+        c.printf("%d\n", lm_p0_text_has_prefix_name("return x", 8U, "return", 1))
+        c.printf("%d\n", lm_p0_legacy_trailer_role("end:", 4U))
+        c.printf("%d\n", lm_p0_legacy_trailer_role("end", 3U))
+        c.printf("%d\n", lm_p0_legacy_trailer_role("return", 6U))
+        c.printf("%d\n", lm_p0_legacy_trailer_role("until:", 6U))
+        c.printf("%d\n", lm_p0_legacy_trailer_role("---", 3U))
+        c.printf("%d\n", lm_p0_trailer_role("end:", 4U))
+        c.printf("%d\n", lm_p0_trailer_role("end", 3U))
+        c.printf("%d\n", lm_p0_trailer_role("return", 6U))
+        c.printf("%d\n", lm_p0_trailer_role("return:", 7U))
+        c.printf("%d\n", lm_p0_trailer_role("until:", 6U))
+        c.printf("%d\n", lm_p0_trailer_role("---", 3U))
+        c.printf("%d\n", lm_p0_trailer_role("----", 4U))
+        c.printf("%d\n", lm_p0_trailer_role("--- ", 4U))
+        c.printf("%d\n", lm_p0_trailer_role("--- #c", 6U))
+        c.printf("%d\n", lm_p0_trailer_role("--", 2U))
+        c.printf("%d\n", lm_p0_trailer_role("foo", 3U))
+        c.printf("%d\n", lm_p0_trailer_role("", 0U))
+        c.printf("%d\n", lm_p0_trailer_role("$dash81", 81U))
+        c.printf("%d\n", lm_p0_trailer_role_from_payload("trailer.end"))
+        c.printf("%d\n", lm_p0_trailer_role_from_payload("LM_P0_TRAILER_ROLE_RETURN"))
+        c.printf("%d\n", lm_p0_trailer_role_from_payload("trailer.dash-cutter"))
+        c.printf("%d\n", lm_p0_trailer_role_from_payload(0))
+        c.printf("%d\n", lm_p0_trailer_role_is_tail_cutter(0))
+        c.printf("%d\n", lm_p0_trailer_role_is_tail_cutter(2))
+        c.printf("%s\n", lm_p0_trailer_role_payload(2))
+        c.printf("%s\n", lm_p0_trailer_role_payload(1))
+        c.printf("%d\n", lm_p0_trailer_role_payload(0) = 0)
+"@
+
+    $refLm1 = Join-Path $out "tr_ref.lm1"
+    $refC = Join-Path $out "tr_ref.c"
+    $refExe = Join-Path $out "tr_ref.exe"
+    $refOut = Join-Path $out "tr_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed tr_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "tr_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'tr_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "tr_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_trailer_role.lm2" "parser_trailer_role" 0 "lm_p0_is_horizontal_space"
+    $lm1 = Join-Path $out "parser_trailer_role.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_' -or $text -match 'sub: lm_p0_') { throw "trailer_role must mangle method symbols" }
+    if ($text -notmatch 'fn: l2_m6') { throw "trailer_role missing mangled lm_p0_trailer_role" }
+    if ($text -notmatch 'LmP0TrailerRole') { throw "trailer_role L1 missing LmP0TrailerRole" }
+    if ($text -notmatch 'predef: "l1src/p0.lm1.h"' -and $text -notmatch 'l1src/p0.lm1.h') { throw "trailer_role must predef p0.lm1.h" }
+
+    $l2cases = $cases.
+        Replace("lm_p0_text_has_prefix_name(", "l2_m1(unit, ").
+        Replace("lm_p0_legacy_trailer_role(", "l2_m2(unit, ").
+        Replace("lm_p0_trailer_role_from_payload(", "l2_m3(unit, ").
+        Replace("lm_p0_trailer_role_payload(", "l2_m4(unit, ").
+        Replace("lm_p0_trailer_role_is_tail_cutter(", "l2_m5(unit, ").
+        Replace("lm_p0_trailer_role(", "l2_m6(unit, ")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "trailer_role L1 missing generated main return" }
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "tr_l2_drive.lm1"
+    $drvC = Join-Path $out "tr_l2_drive.c"
+    $drvExe = Join-Path $out "tr_l2_drive.exe"
+    $drvOut = Join-Path $out "tr_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed tr_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "tr_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'tr_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "tr_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "trailer_role mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-TrailerRole
+
 "l2trans $gen ok"
 $suiteLog = Join-Path $log "l2trans_suite.log"
 $toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $l1trans)).Hash

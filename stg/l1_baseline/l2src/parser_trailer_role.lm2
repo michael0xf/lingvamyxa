@@ -1,0 +1,87 @@
+fn: lm_p0_is_horizontal_space (char: value) int
+    return: value = 32 || value = 9
+end: lm_p0_is_horizontal_space
+fn: lm_p0_text_has_prefix_name (const: @(char text); size_t: length; const: @(char name); int: allow_bare) int
+    size_t: name_length
+    char: ch
+    name_length: c.strlen(name)
+    if: length < name_length
+        return: 0
+    if: c.memcmp(text, name, name_length) != 0
+        return: 0
+    if: length = name_length
+        return: allow_bare
+    ch: text[name_length]
+    if: allow_bare != 0 && (lm_p0_is_horizontal_space(ch) != 0 || ch = 35)
+        return: 1
+    return: ch = 58
+end: lm_p0_text_has_prefix_name
+fn: lm_p0_legacy_trailer_role (const: @(char text); size_t: length) LmP0TrailerRole
+    if: lm_p0_text_has_prefix_name(text, length, "end", 0) != 0
+        return: 2
+    if: lm_p0_text_has_prefix_name(text, length, "return", 1) != 0
+        return: 3
+    if: lm_p0_text_has_prefix_name(text, length, "until", 0) != 0
+        return: 4
+    return: 0
+end: lm_p0_legacy_trailer_role
+fn: lm_p0_trailer_role_from_payload (const: @(char payload)) LmP0TrailerRole
+    size_t: n
+    if: payload = 0
+        return: 0
+    n: c.strlen(payload)
+    if: n = 22U && c.memcmp(payload, "LM_P0_TRAILER_ROLE_END", 22U) = 0
+        return: 2
+    if: n = 11U && c.memcmp(payload, "trailer.end", 11U) = 0
+        return: 2
+    if: n = 25U && c.memcmp(payload, "LM_P0_TRAILER_ROLE_RETURN", 25U) = 0
+        return: 3
+    if: n = 14U && c.memcmp(payload, "trailer.return", 14U) = 0
+        return: 3
+    if: n = 24U && c.memcmp(payload, "LM_P0_TRAILER_ROLE_UNTIL", 24U) = 0
+        return: 4
+    if: n = 13U && c.memcmp(payload, "trailer.until", 13U) = 0
+        return: 4
+    if: n = 30U && c.memcmp(payload, "LM_P0_TRAILER_ROLE_DASH_CUTTER", 30U) = 0
+        return: 1
+    if: n = 19U && c.memcmp(payload, "trailer.dash-cutter", 19U) = 0
+        return: 1
+    return: 0
+end: lm_p0_trailer_role_from_payload
+fn: lm_p0_trailer_role_payload (LmP0TrailerRole: role) @: char
+    if: role = 2
+        return: "trailer.end"
+    if: role = 3
+        return: "trailer.return"
+    if: role = 4
+        return: "trailer.until"
+    if: role = 1
+        return: "trailer.dash-cutter"
+    return: 0
+end: lm_p0_trailer_role_payload
+fn: lm_p0_trailer_role_is_tail_cutter (LmP0TrailerRole: role) int
+    return: role != 0
+end: lm_p0_trailer_role_is_tail_cutter
+fn: lm_p0_trailer_role (const: @(char text); size_t: length) LmP0TrailerRole
+    size_t: dash_count
+    size_t: i
+    char: ch
+    dash_count: 0U
+    while: dash_count < length && text[dash_count] = 45
+        dash_count: dash_count + 1U
+    if: dash_count >= 3U && dash_count <= 80U
+        i: dash_count
+        while: i < length
+            ch: text[i]
+            if: lm_p0_is_horizontal_space(ch) != 0
+                i: i + 1U
+                continue
+            if: ch = 35
+                return: 1
+            return: lm_p0_legacy_trailer_role(text, length)
+        return: 1
+    return: lm_p0_legacy_trailer_role(text, length)
+end: lm_p0_trailer_role
+fn: main () int
+    return: 0
+end: main

@@ -1258,8 +1258,27 @@ line[0]: line[0] + n. Nested helper calls stay in-unit.
 Differential vs parser.lm1: no final newline, LF, CRLF, lone CR,
 embedded breaks, zero-width, empty, NUL, sequential advances.
 physical_line intern contracts now include this sub (l2_m11).
-Next: frozen trailer_role / Document / indent stack need
-LmP0TrailerRole and L2 predef, not intern16 yet.
+
+Unit 27 - trailer_role classification (LmP0TrailerRole)
+------------------------------------------------------
+Files: l2trans.lm1, parser_trailer_role.lm2, run_l2trans.ps1,
+OPEN_POINTS.txt, README.txt
+
+LmP0TrailerRole is admitted as L2 formal/result type 10 from
+l1src/p0.lm1.h (typedef int; NONE=0 DASH_CUTTER=1 END=2 RETURN=3
+UNTIL=4). Not intern16. l2_need_p0 includes the generated header.
+
+Leaf ports: text_has_prefix_name, legacy_trailer_role,
+from_payload, payload, is_tail_cutter, trailer_role.
+Dash cutter is the leading-dashes + space/# path only.
+AVOIDED: brace-mark dash lines (`--- { ... }`) need
+lm_p0_scan_brace_mark_unchecked and are not this unit.
+AVOIDED: Document / indent stack; trailer_role_accepts_target
+(registry + LmP0Node). Arises when those scanners are ported.
+
+Differential vs parser.lm1 on prefix/legacy/role/from_payload/
+payload/is_tail_cutter plus `---` / `--- #` / 81-dash too-long.
+Next: Document / indent stack, then remaining parser.lm1 scanners.
 
 Unit 25 - P0 close consumption (return trailer, end:name/fn, ---)
 ----------------------------------------------------------------
