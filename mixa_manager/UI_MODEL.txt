@@ -34,6 +34,34 @@ Neither needs anything new from the drawer: both are attribute changes on cells
 the drawer already writes, so it never learns about either. A blinking cursor is
 a timer in the turn loop, not a drawing capability.
 
+1.0.3. This DIVERGES from the old model, deliberately
+
+I wrote the rule above without checking the old document, which says something
+different. Old_Mixa_Manager_Qt_model.txt section 1 gives a composition order:
+
+    1. background
+    2. text cell backgrounds
+    3. glyphs / text
+    4. transparent raster/vector overlay
+    5. optional cursor / selection / UI decorations
+
+There the cursor belongs to NEITHER layer - it is drawn LAST, on top of the
+overlay, as a decoration over everything.
+
+Putting the cursor in the lower layer changes the visible result, so it is worth
+stating rather than leaving as a contradiction between two documents. A panel
+covering the command line now DIMS the cursor along with the console text
+beneath it, where the old order would have kept it crisp on top.
+
+That follows from the layer roles: the upper layer is in FRONT and the console
+is BEHIND it. A caret that stayed sharp through an overlapping panel would be
+claiming a foreground position the console does not have. The old order was
+written when the overlay was a raster for decorations rather than the panel
+layer of the interface.
+
+Selection and UI decorations at step 5 are not settled by this - only the
+cursor. They are still open.
+
 1.1. Two KINDS of button panel, not two positions
 
 An earlier version of this section said "a button panel at the top and another
