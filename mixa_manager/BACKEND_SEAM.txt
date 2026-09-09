@@ -293,3 +293,100 @@ Checking the blit call's own result closes the API-failure half and is worth
 doing. The other half - that a human would have seen it - is not assertable in
 an unattended suite, and no test design changes that. Treat present as covered
 for its copy semantics and manually verified for its display.
+
+
+9. Glyphs: the rendering doctrine, and what it does to the seam
+
+Fixed by the language owner on 2026-09-09, in response to the observation that
+most text windows today look wrong. The cause is not incompetence; it is
+accepting the default behaviour of standard scaling machinery. So this is stated
+as a prohibition, not a preference.
+
+9.1. The doctrine
+
+    Compute fractionally, then SNAP. Sizes and spacings are worked out in
+      fractional arithmetic, then reduced to integer positions and integer
+      values, and every text thing is drawn at those integers.
+
+    NEVER RESIZE THE FONT. Take the glyph at whatever native pixel size the
+      system gives, and use it pixel for pixel. No scaling, no blur, no
+      sub-pixel positioning, no fractional resize.
+
+    If only one size is available, use it. A larger window does not mean larger
+      letters - it means MORE letters.
+
+    Resize is lazy and discrete.
+
+9.2. The seam consequence: open's contract inverts
+
+open currently takes cell_width and cell_height from the caller, so the caller
+dictates the cell and the backend must fit the font to it. Under 9.1 that is
+backwards: if the font may not be scaled, the cell size is a CONSEQUENCE of the
+font's native metrics, not an input.
+
+So the flow becomes: ask the backend what cell the available font actually
+gives, then derive cols and rows from the window size. The caller chooses how
+many cells fit; it does not choose how big a cell is.
+
+Resize needs no change and already obeys 9.1: a resize event carries cols and
+rows while the cell size stays fixed from open, which is exactly "a bigger
+window shows more letters". That was already implemented and tested in both
+directions before this section existed.
+
+9.3. Why glyph rasterization belongs behind the seam
+
+Section 14 of the old model requires font fallback, wide characters, combining
+marks, ambiguous width and box drawing. A small embedded bitmap font fails all
+of them, so embedding one is the wrong instinct - the system rasterizer supplies
+this for free and is the whole reason not to ship our own.
+
+But present takes finished RGBA, so the six operations have no way to obtain a
+glyph. Three shapes were considered:
+
+  the compositor rasterizes    needs font data of our own - rejected by 9.3
+  the backend draws text       the seam grows "draw a string" and the
+                               application loses cell-exact layout - rejected,
+                               it hands the platform the one thing 9.1 exists
+                               to protect
+  the backend rasterizes ONE   the platform returns an alpha bitmap for a
+  GLYPH                        codepoint at its native size; the application
+                               places it. Layout stays with the application,
+                               present is untouched
+
+The third is adopted. It is a SEVENTH operation, after this document twice
+refused one - and that is the correct outcome rather than an embarrassment:
+section 6 says a platform requirement the six cannot meet is evidence about the
+seam, and the seam changes here rather than the platform being special-cased.
+The two earlier refusals stand, because both were about moving the WAIT or the
+LOOP into the seam. This moves neither.
+
+9.4. The shape, exactly
+
+open's cell size becomes IN/OUT rather than gaining a second query operation:
+
+    open (backend; cols; rows; size_t *cell_width; size_t *cell_height)
+
+The caller passes what it would like; the backend writes back what it actually
+has. A backend WITH a font overwrites the request with its font's native
+metrics, because 9.1 forbids scaling to fit a request. A backend WITHOUT a font
+- headless - honours the request exactly, which is what keeps it usable as a
+fixture with no font on the machine.
+
+This is deliberate: it makes ignoring the answer awkward. A caller that passes
+its wish and never reads back is the exact mistake that produces stretched text.
+
+Then one genuinely new operation:
+
+    glyph (backend; codepoint; MixaGlyph *out)
+
+returning an 8-bit alpha coverage bitmap at the font's NATIVE size, plus the
+bitmap's width and height and the bearing needed to place it in the cell. Never
+scaled, per 9.1. The application blends it into TextRect at integer positions.
+
+Advance width is reported so the application can detect a WIDE character - two
+cells - which section 14 of the old model requires. The application decides what
+to do about it; the backend only reports.
+
+A codepoint the platform cannot render must be reported as missing rather than
+silently substituted, so font fallback stays a decision of the application
+rather than a surprise from the platform.
