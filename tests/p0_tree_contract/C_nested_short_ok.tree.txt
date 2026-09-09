@@ -1,0 +1,9 @@
+structure fields=1
+  frame head="ShortForm1" body=structure fields=2
+    atom "1"
+    structure fields=2
+      frame head="ShortForm2" body=structure fields=2
+        atom "2"
+        structure fields=1
+          atom "ShortForm2_arg2"
+      atom "ShortForm1_arg3"

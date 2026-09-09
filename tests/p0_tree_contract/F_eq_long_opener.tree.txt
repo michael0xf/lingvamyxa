@@ -1,0 +1,17 @@
+structure fields=1
+  frame head="fn" body=structure fields=4
+    atom "f"
+    structure fields=0
+    atom "int"
+    structure fields=2
+      frame head="int" body=structure fields=3
+        atom "x"
+        atom "1"
+        structure fields=1
+          atom "alpha
+===
+still"
+      frame head="return" body=structure fields=1
+        atom "x"
+    Tail cutter trailer spelling="end" fields=1
+      atom "f"

@@ -1,0 +1,6 @@
+fn: a
+    x
+return
+fn: b
+    y
+end: b

@@ -1,0 +1,9 @@
+fn: f () int
+    int: x 1
+====
+alpha
+===
+still
+====
+    return: x
+end: f

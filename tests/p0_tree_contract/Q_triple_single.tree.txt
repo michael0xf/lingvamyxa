@@ -1,0 +1,5 @@
+structure fields=2
+  frame head="x" body=structure fields=1
+    atom "'''a''''b'''"
+  frame head="next" body=structure fields=1
+    atom "ok"

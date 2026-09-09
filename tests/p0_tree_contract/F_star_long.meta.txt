@@ -1,0 +1,51 @@
+# p0-meta v1
+document source_len=79 frozen=1 root=yes diagnostic_slot=yes
+node kind=structure flags=0x0 as=yes span=0:0+0:79
+  struct field_count=1 trailer=null
+  [0] value=node
+    node kind=frame flags=0x0 as=yes span=1:1+0:12
+      frame flags=0x5 body=struct trailer=yes head_len=2 bytes=666E
+        struct field_count=4 trailer=null
+        [0] value=node
+          node kind=atom flags=0x0 as=yes span=1:5+4:1
+             atom_len=1 bytes=66
+        [1] value=node
+          node kind=structure flags=0x0 as=yes span=1:7+6:2
+            struct field_count=0 trailer=null
+            trailer=null
+        [2] value=node
+          node kind=atom flags=0x0 as=yes span=1:10+9:3
+             atom_len=3 bytes=696E74
+        [3] value=node
+          node kind=structure flags=0x0 as=yes span=2:5+17:8
+            struct field_count=2 trailer=null
+            [0] value=node
+              node kind=frame flags=0x0 as=yes span=2:5+17:8
+                frame flags=0x5 body=struct trailer=null head_len=3 bytes=696E74
+                  struct field_count=2 trailer=null
+                  [0] value=node
+                    node kind=atom flags=0x0 as=yes span=2:10+22:1
+                       atom_len=1 bytes=78
+                  [1] value=node
+                    node kind=atom flags=0x0 as=yes span=2:12+24:1
+                       atom_len=1 bytes=31
+                  trailer=null
+                  trailer=null
+            [1] value=node
+              node kind=frame flags=0x0 as=yes span=9:5+62:9
+                frame flags=0x5 body=struct trailer=null head_len=6 bytes=72657475726E
+                  struct field_count=1 trailer=null
+                  [0] value=node
+                    node kind=atom flags=0x0 as=yes span=9:13+70:1
+                       atom_len=1 bytes=78
+                  trailer=null
+                  trailer=null
+            trailer=null
+        trailer=null
+        trailer flags=0x1 colon_bit=0 body=struct spelling_len=3 bytes=656E64
+          trailer_body field_count=1
+          [0] value=node
+            node kind=atom flags=0x0 as=yes span=10:6+77:1
+               atom_len=1 bytes=66
+          trailer=null
+  trailer=null

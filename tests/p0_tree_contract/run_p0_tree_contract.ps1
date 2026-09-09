@@ -37,6 +37,18 @@ $expectReject = @{
         Exit = 1
         Diag = "P0 parse error 32 at 1:1: empty colon Frame is not allowed"
     }
+    "F_star_fence" = @{
+        Exit = 1
+        Diag = "P0 parse error 32 at 1:1: empty colon Frame is not allowed"
+    }
+    "invalid_eq_unclosed" = @{
+        Exit = 1
+        Diag = "P0 parse error 20 at 2:1: unterminated block string literal"
+    }
+    "invalid_triple_unclosed" = @{
+        Exit = 1
+        Diag = "P0 parse error 4 at 1:4: unterminated python-like string literal"
+    }
 }
 
 function Test-OrdinalEq([string]$a, [string]$b) {

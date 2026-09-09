@@ -39,14 +39,18 @@ function Test-OrdinalEq([string]$a, [string]$b) {
     return [string]::Compare($a, $b, [System.StringComparison]::Ordinal) -eq 0
 }
 
-# Current-only TRAILER_COLON bit, counted from 620 trailer identities (not from current dumps).
-$expectCurColonBit1 = @{
-    "A_header_then_body" = 1
-    "F_eq_fence" = 1
-    "F_eq_inner_longer" = 1
-    "G_fn_nested_cut" = 1
-    "G_fn_nested_end" = 2
-    "return_colon_vertical_body" = 1
+# Current-only TRAILER_COLON bit, by exact trailer order (colon_bit= fields in dump order).
+# Count alone is not identity: F_mixed_trailer is 0,1 (bare return then colon end).
+$expectCurColonSeq = @{
+    "A_header_then_body" = "1"
+    "F_eq_fence" = "1"
+    "F_eq_inner_longer" = "1"
+    "F_eq_long_opener" = "1"
+    "F_mixed_trailer" = "0,1"
+    "F_star_long" = "1"
+    "G_fn_nested_cut" = "1"
+    "G_fn_nested_end" = "1,1"
+    "return_colon_vertical_body" = "1"
 }
 $expect620Reject = @{
     "C_nested_short" = "REJECT code=13 line=2 col=5 msg=source level increase must be one step"
@@ -85,17 +89,23 @@ function Assert-DumpShape([string]$stem, [string]$side, [int]$exit, [string]$std
     }
 }
 
+function Get-ColonSeq([string]$dump) {
+    $bits = [regex]::Matches($dump, "colon_bit=([01])") | ForEach-Object { $_.Groups[1].Value }
+    return [string]($bits -join ",")
+}
+
 function Assert-CurrentVs620([string]$stem, [string]$got620, [string]$gotCur) {
     if ($expectCurReject.ContainsKey($stem)) { return }
+    $seq = Get-ColonSeq $gotCur
     $n1 = ([regex]::Matches($gotCur, "colon_bit=1")).Count
     $n620_1 = ([regex]::Matches($got620, "colon_bit=1")).Count
     if ($n620_1 -ne 0) { throw "$stem 620 golden unexpectedly has colon_bit=1" }
-    if ($expectCurColonBit1.ContainsKey($stem)) {
-        $wantN = [int]$expectCurColonBit1[$stem]
-        if ($n1 -ne $wantN) { throw "$stem current colon_bit=1 count $n1 expected $wantN" }
+    if ($expectCurColonSeq.ContainsKey($stem)) {
+        $wantSeq = [string]$expectCurColonSeq[$stem]
+        if ($seq -ne $wantSeq) { throw "$stem current colon_bit seq '$seq' expected '$wantSeq'" }
         $norm = $gotCur.Replace("colon_bit=1", "colon_bit=0")
         if (-not (Test-OrdinalEq $norm $got620)) {
-            throw "$stem current != 620 after versioned colon_bit=$wantN`n--- 620 ---`n$got620`n--- cur ---`n$gotCur"
+            throw "$stem current != 620 after versioned colon_bit seq $wantSeq`n--- 620 ---`n$got620`n--- cur ---`n$gotCur"
         }
     } else {
         if ($n1 -ne 0) { throw "$stem spurious current colon_bit=1" }
@@ -172,5 +182,21 @@ if (-not $threw) { throw "sensitivity missed missing colon_bit on A_header_then_
 $threw = $false
 try { Assert-CurrentVs620 "A_header_then_body" $hdr ($hdr + "trailer flags=0x0 colon_bit=1 body=null`n") } catch { $threw = $true }
 if (-not $threw) { throw "sensitivity missed extra colon_bit count on A_header_then_body" }
+$mixedGold = [IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $here "F_mixed_trailer.meta.txt"))).Replace("`r`n","`n")
+# Current identity is colon_bit seq 0,1 (bare return, then colon end). Build that dump from the 620 golden.
+$mixedCur = $mixedGold
+$endAt = $mixedCur.LastIndexOf("colon_bit=0")
+if ($endAt -lt 0) { throw "F_mixed_trailer golden missing colon_bit=0" }
+$mixedCur = $mixedCur.Remove($endAt, "colon_bit=0".Length).Insert($endAt, "colon_bit=1")
+if ((Get-ColonSeq $mixedCur) -ne "0,1") { throw "relocation setup expected seq 0,1 got $(Get-ColonSeq $mixedCur)" }
+$threw = $false
+try { Assert-CurrentVs620 "F_mixed_trailer" $mixedGold $mixedCur } catch { $threw = $true }
+if ($threw) { throw "F_mixed_trailer seq 0,1 must be admitted" }
+$reloc = $mixedCur.Replace("colon_bit=0", "colon_bit=X").Replace("colon_bit=1", "colon_bit=0").Replace("colon_bit=X", "colon_bit=1")
+if ((Get-ColonSeq $reloc) -ne "1,0") { throw "relocation mutation expected seq 1,0 got $(Get-ColonSeq $reloc)" }
+if (([regex]::Matches($reloc, "colon_bit=1")).Count -ne 1) { throw "relocation must keep colon_bit=1 count 1" }
+$threw = $false
+try { Assert-CurrentVs620 "F_mixed_trailer" $mixedGold $reloc } catch { $threw = $true }
+if (-not $threw) { throw "sensitivity missed same-count colon_bit relocation on F_mixed_trailer" }
 
 Write-Output "p0_meta ok n=$n compared=$ok goldens_written=$wrote"
