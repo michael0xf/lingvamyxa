@@ -1,0 +1,184 @@
+predef: "mixa_manager/mixa_text_rect.lm1" "mixa_manager/mixa_overlay.lm1"
+include: "<string.h>"
+
+# Composite TextRect + OverlayRect into an opaque RGBA framebuffer (model section 1).
+# Order: background, cell backgrounds, glyphs (STUB), transparent overlay.
+# Cursor/selection (step 5) is intentionally not implemented yet.
+#
+# Blend formula for non-premultiplied src-over (per channel):
+#   out = (src * sa + dst * (255 - sa)) / 255
+# Destination framebuffer alpha is kept at 255 (opaque).
+
+fn: mixa_composite (@: MixaTextRect text_rect; @: MixaOverlayRect overlay; @: MixaU8 out_rgba; size_t: out_size) int
+    size_t: need
+    size_t: width
+    size_t: height
+    size_t: cw
+    size_t: ch
+    size_t: cols
+    size_t: rows
+    size_t: row
+    size_t: col
+    size_t: x
+    size_t: y
+    size_t: x0
+    size_t: y0
+    size_t: x1
+    size_t: y1
+    size_t: i
+    size_t: n
+    @: MixaCell cell
+    @: MixaU8 p
+    @: MixaU8 src
+    unsigned: cp
+    unsigned: bg
+    unsigned: fg
+    unsigned: sa
+    unsigned: inv
+    unsigned: dr
+    unsigned: dg
+    unsigned: db
+    unsigned: sr
+    unsigned: sg
+    unsigned: sb
+    []: MixaU8 pr 1
+    []: MixaU8 pg 1
+    []: MixaU8 pb 1
+
+    if: text_rect = 0
+        return: 1
+    if: overlay = 0
+        return: 1
+    if: out_rgba = 0
+        return: 1
+    if: text_rect\cells = 0
+        return: 1
+    if: overlay\pixels = 0
+        return: 1
+    if: text_rect\cols != overlay\cols
+        return: 1
+    if: text_rect\rows != overlay\rows
+        return: 1
+    width: overlay\width
+    height: overlay\height
+    cw: overlay\cell_width
+    ch: overlay\cell_height
+    cols: overlay\cols
+    rows: overlay\rows
+    if: width = 0U
+        return: 1
+    if: height = 0U
+        return: 1
+    if: (width * height) > ((cast: (size_t) -1) / 4U)
+        return: 1
+    need: width * height * 4U
+    if: out_size < need
+        return: 1
+
+    # 1. background = palette[0] opaque
+    c.mixa_palette_rgb(0U, pr, pg, pb)
+    i: 0U
+    n: width * height
+    while: i < n
+        p: out_rgba + (i * 4U)
+        p[0]: pr[0]
+        p[1]: pg[0]
+        p[2]: pb[0]
+        p[3]: (cast: (MixaU8) 255)
+        i: i + 1U
+    ---
+
+    # 2. cell backgrounds (palette[bg], opaque)
+    row: 0U
+    while: row < rows
+        col: 0U
+        while: col < cols
+            cell: text_rect\cells + (row * cols + col)
+            bg: cell\bg
+            c.mixa_palette_rgb(bg, pr, pg, pb)
+            x0: col * cw
+            y0: row * ch
+            x1: x0 + cw
+            y1: y0 + ch
+            y: y0
+            while: y < y1
+                x: x0
+                while: x < x1
+                    p: out_rgba + ((y * width + x) * 4U)
+                    p[0]: pr[0]
+                    p[1]: pg[0]
+                    p[2]: pb[0]
+                    p[3]: (cast: (MixaU8) 255)
+                    x: x + 1U
+                ---
+                y: y + 1U
+            ---
+            col: col + 1U
+        ---
+        row: row + 1U
+    ---
+
+    # 3. glyphs STUB: non-empty codepoint fills the whole cell with palette[fg].
+    # Replace this block with a bitmap-font glyph blit when a font exists.
+    row: 0U
+    while: row < rows
+        col: 0U
+        while: col < cols
+            cell: text_rect\cells + (row * cols + col)
+            cp: cell\codepoint
+            if: cp != 0U
+                fg: cell\fg
+                c.mixa_palette_rgb(fg, pr, pg, pb)
+                x0: col * cw
+                y0: row * ch
+                x1: x0 + cw
+                y1: y0 + ch
+                y: y0
+                while: y < y1
+                    x: x0
+                    while: x < x1
+                        p: out_rgba + ((y * width + x) * 4U)
+                        p[0]: pr[0]
+                        p[1]: pg[0]
+                        p[2]: pb[0]
+                        p[3]: (cast: (MixaU8) 255)
+                        x: x + 1U
+                    ---
+                    y: y + 1U
+                ---
+            ---
+            col: col + 1U
+        ---
+        row: row + 1U
+    ---
+
+    # 4. transparent overlay src-over (non-premultiplied)
+    i: 0U
+    n: width * height
+    while: i < n
+        src: overlay\pixels + (i * 4U)
+        sa: src[3]
+        if: sa != 0U
+            p: out_rgba + (i * 4U)
+            if: sa = 255U
+                p[0]: src[0]
+                p[1]: src[1]
+                p[2]: src[2]
+                p[3]: (cast: (MixaU8) 255)
+            else:
+                inv: 255U - sa
+                sr: src[0]
+                sg: src[1]
+                sb: src[2]
+                dr: p[0]
+                dg: p[1]
+                db: p[2]
+                p[0]: (cast: (MixaU8) ((sr * sa + dr * inv) / 255U))
+                p[1]: (cast: (MixaU8) ((sg * sa + dg * inv) / 255U))
+                p[2]: (cast: (MixaU8) ((sb * sa + db * inv) / 255U))
+                p[3]: (cast: (MixaU8) 255)
+            ---
+        ---
+        i: i + 1U
+    ---
+return: 0

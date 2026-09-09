@@ -1,0 +1,141 @@
+include: "mixa_manager/mixa_overlay.h" "<stdlib.h>" "<string.h>"
+
+# OverlayRect: transparent RGBA raster paired with TextRect (model section 1).
+
+fn: mixa_overlay_open (@: MixaOverlayRect overlay; size_t: cols; size_t: rows; size_t: cell_width; size_t: cell_height) int
+    size_t: width
+    size_t: height
+    size_t: nbytes
+    @: MixaU8 block
+    if: overlay = 0
+        return: 1
+    if: cols = 0U
+        return: 1
+    if: rows = 0U
+        return: 1
+    if: cell_width = 0U
+        return: 1
+    if: cell_height = 0U
+        return: 1
+    if: overlay\pixels != 0
+        return: 1
+    if: cols > ((cast: (size_t) -1) / cell_width)
+        return: 1
+    if: rows > ((cast: (size_t) -1) / cell_height)
+        return: 1
+    width: cols * cell_width
+    height: rows * cell_height
+    if: width = 0U
+        return: 1
+    if: height > ((cast: (size_t) -1) / width)
+        return: 1
+    if: (width * height) > ((cast: (size_t) -1) / 4U)
+        return: 1
+    nbytes: width * height * 4U
+    block: (cast: (@: MixaU8) c.calloc(nbytes, 1U))
+    if: block = 0
+        return: 1
+    overlay\width: width
+    overlay\height: height
+    overlay\cell_width: cell_width
+    overlay\cell_height: cell_height
+    overlay\cols: cols
+    overlay\rows: rows
+    overlay\pixels: block
+return: 0
+
+sub: mixa_overlay_release (@: MixaOverlayRect overlay)
+    if: overlay != 0
+        if: overlay\pixels != 0
+            c.free(overlay\pixels)
+        ---
+        overlay\pixels: 0
+        overlay\width: 0U
+        overlay\height: 0U
+        overlay\cell_width: 0U
+        overlay\cell_height: 0U
+        overlay\cols: 0U
+        overlay\rows: 0U
+    ---
+end: mixa_overlay_release
+
+fn: mixa_overlay_pixel_at (@: MixaOverlayRect overlay; size_t: x; size_t: y) @: MixaU8
+    if: overlay = 0
+        return: 0
+    if: overlay\pixels = 0
+        return: 0
+    if: x >= overlay\width
+        return: 0
+    if: y >= overlay\height
+        return: 0
+return: overlay\pixels + ((y * overlay\width + x) * 4U)
+
+fn: mixa_overlay_cell_origin (@: MixaOverlayRect overlay; size_t: row; size_t: col; @: size_t out_x; @: size_t out_y) int
+    if: overlay = 0
+        return: 1
+    if: out_x = 0
+        return: 1
+    if: out_y = 0
+        return: 1
+    if: overlay\pixels = 0
+        return: 1
+    if: row >= overlay\rows
+        return: 1
+    if: col >= overlay\cols
+        return: 1
+    out_x[0]: col * overlay\cell_width
+    out_y[0]: row * overlay\cell_height
+return: 0
+
+fn: mixa_overlay_fill_cell_block (@: MixaOverlayRect overlay; size_t: row; size_t: col; size_t: rows_n; size_t: cols_n; unsigned: r; unsigned: g; unsigned: b; unsigned: a) int
+    size_t: x0
+    size_t: y0
+    size_t: x1
+    size_t: y1
+    size_t: x
+    size_t: y
+    @: MixaU8 p
+    if: overlay = 0
+        return: 1
+    if: overlay\pixels = 0
+        return: 1
+    if: rows_n = 0U
+        return: 1
+    if: cols_n = 0U
+        return: 1
+    if: row >= overlay\rows
+        return: 1
+    if: col >= overlay\cols
+        return: 1
+    if: rows_n > (overlay\rows - row)
+        return: 1
+    if: cols_n > (overlay\cols - col)
+        return: 1
+    x0: col * overlay\cell_width
+    y0: row * overlay\cell_height
+    x1: (col + cols_n) * overlay\cell_width
+    y1: (row + rows_n) * overlay\cell_height
+    y: y0
+    while: y < y1
+        x: x0
+        while: x < x1
+            p: overlay\pixels + ((y * overlay\width + x) * 4U)
+            p[0]: (cast: (MixaU8) r)
+            p[1]: (cast: (MixaU8) g)
+            p[2]: (cast: (MixaU8) b)
+            p[3]: (cast: (MixaU8) a)
+            x: x + 1U
+        ---
+        y: y + 1U
+    ---
+return: 0
+
+sub: mixa_overlay_clear (@: MixaOverlayRect overlay)
+    size_t: nbytes
+    if: overlay != 0
+        if: overlay\pixels != 0
+            nbytes: overlay\width * overlay\height * 4U
+            c.memset(overlay\pixels, 0, nbytes)
+        ---
+    ---
+end: mixa_overlay_clear

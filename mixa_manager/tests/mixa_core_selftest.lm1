@@ -9,11 +9,13 @@ fn: main () int
     @: MixaCell b
     @: MixaCell c
     @: MixaCell p
+    @: MixaCell first_cells
     []: char dump_buf 64
     []: char tiny 4
     size_t: n
     size_t: i
     int: failures
+    int: reopen_rc
     failures: 0
 
     rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
@@ -77,6 +79,23 @@ fn: main () int
     n: mixa_rect_dump(rect, dump_buf, 64U)
     if: c.strcmp(dump_buf, "Hi   \n     \n     \n") != 0
         c.printf("mixa: put_text write not visible in dump\n")
+        failures: failures + 1
+
+    # Re-open must refuse and keep the first block + content (no leak/replace).
+    first_cells: rect\cells
+    reopen_rc: mixa_rect_open(rect, 4U, 6U)
+    if: reopen_rc = 0
+        c.printf("mixa: re-open accepted on already-open rect\n")
+        failures: failures + 1
+    if: rect\cells != first_cells
+        c.printf("mixa: re-open replaced cells pointer\n")
+        failures: failures + 1
+    if: rect\rows != 3U || rect\cols != 5U
+        c.printf("mixa: re-open changed rows/cols\n")
+        failures: failures + 1
+    n: mixa_rect_dump(rect, dump_buf, 64U)
+    if: c.strcmp(dump_buf, "Hi   \n     \n     \n") != 0
+        c.printf("mixa: re-open lost prior content\n")
         failures: failures + 1
 
     mixa_rect_fill(rect, 32U, 0U, 0U, 0U)

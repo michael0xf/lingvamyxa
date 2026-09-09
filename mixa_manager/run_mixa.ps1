@@ -1,4 +1,4 @@
-# Mixa Manager core: TextRect selftest.
+# Mixa Manager core: TextRect + OverlayRect/composite selftests.
 # Build root is the repository root (parent of mixa_manager).
 # Translator is the STABLE L1 under stg\l1_baseline, not the live tree.
 $ErrorActionPreference = "Stop"
@@ -21,21 +21,29 @@ $guards = @(
     "-Werror=implicit-function-declaration", "-Werror=implicit-int"
 )
 
-$unit = "mixa_core_selftest"
-$src = "mixa_manager\tests\$unit.lm1"
-$c = Join-Path $out "$unit.c"
-$exe = Join-Path $out "$unit.exe"
+$units = @(
+    "mixa_core_selftest",
+    "mixa_overlay_selftest"
+)
 
-& $trans $src $c
-if ($LASTEXITCODE -ne 0) { throw "translate failed: $src" }
+foreach ($unit in $units) {
+    $src = "mixa_manager\tests\$unit.lm1"
+    $c = Join-Path $out "$unit.c"
+    $exe = Join-Path $out "$unit.exe"
 
-& gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . $c -o $exe 2>&1 |
-    Tee-Object -FilePath (Join-Path $log "$unit.gcc.log") | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    Get-Content (Join-Path $log "$unit.gcc.log")
-    throw "gcc failed: $c"
+    & $trans $src $c
+    if ($LASTEXITCODE -ne 0) { throw "translate failed: $src" }
+
+    & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . $c -o $exe 2>&1 |
+        Tee-Object -FilePath (Join-Path $log "$unit.gcc.log") | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content (Join-Path $log "$unit.gcc.log")
+        throw "gcc failed: $c"
+    }
+
+    & $exe
+    if ($LASTEXITCODE -ne 0) { throw "$unit failed" }
 }
 
-& $exe
-if ($LASTEXITCODE -ne 0) { throw "$unit failed" }
 "mixa core ok"
+"mixa overlay ok"
