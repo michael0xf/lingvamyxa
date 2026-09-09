@@ -479,8 +479,29 @@ breaking the signature again.
 
 11. Choosing a backend AT RUNTIME, not at link time
 
-Required by the language owner: a cross-platform arrangement that can be swapped
-in SETTINGS. Do not bind hard to Win32.
+Required by the language owner: an arrangement that can be swapped in SETTINGS.
+
+11.0. What this is NOT for, since I got that wrong first
+
+I justified this as "not being bound to Win32". That is not a justification, and
+the language owner said so: we build binaries per OS by rebuilding, which is how
+cross-platform software works. A Windows binary carries the Win32 backend and a
+Linux one carries X11, and swapping those at runtime is meaningless because the
+other platform's code is not there.
+
+The real case is SEVERAL BACKENDS ON THE SAME OS:
+
+    Linux      X11 or WAYLAND - a live choice today, not a future one
+    Windows    GDI, which is what we have, or Direct2D later
+    anywhere   headless ALONGSIDE the real one, so a shipping binary can be
+               driven headlessly in a test rather than needing a separate build
+
+Plus falling back when a backend cannot start - no display available - which
+today would be a crash rather than a fallback.
+
+The honest weight: the argument for doing it NOW is that retrofitting means
+touching every call site and there are few of them yet. That is an argument
+about timing, not about necessity, and it is weaker than I first presented it.
 
 11.1. Where we actually stand
 
