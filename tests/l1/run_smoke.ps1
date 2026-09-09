@@ -416,6 +416,44 @@ if ($gen -eq "gen0") {
     Invoke-PreserveFail "tests\l1\invalid_hdr_union.h.lm1" "$obj\headers\invalid_hdr_union.lm1.h" "$log\invalid_hdr_union.err" "union"
     Invoke-PreserveFail "tests\l1\invalid_hdr_flmacro.h.lm1" "$obj\headers\invalid_hdr_flmacro.lm1.h" "$log\invalid_hdr_flmacro.err" "function-like macro"
     Invoke-PreserveFail "tests\l1\invalid_hdr_body.h.lm1" "$obj\headers\invalid_hdr_body.lm1.h" "$log\invalid_hdr_body.err" "executable body"
+    Invoke-PreserveFail "tests\l1\invalid_hdr_unknown.h.lm1" "$obj\headers\invalid_hdr_unknown.lm1.h" "$log\invalid_hdr_unknown.err" "unsupported header unit form"
+
+    Invoke-Translate "tests\l1\hdr_flmacro.h.lm1" "$obj\headers\hdr_flmacro.lm1.h"
+    Assert-CHas "$obj\headers\hdr_flmacro.lm1.h" "#define LM_UNUSED(x)"
+    Assert-CHas "$obj\headers\hdr_flmacro.lm1.h" "((void) (x))"
+    cmd /c "gcc $cflagsStr -c -o $obj\headers\hdr_flmacro_compile.o -x c $obj\headers\hdr_flmacro.lm1.h > $log\hdr_flmacro_compile.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "generated hdr_flmacro.lm1.h failed to compile (see $log\hdr_flmacro_compile.log)" }
+
+    Invoke-Translate "tests\l1\hdr_alias.h.lm1" "$obj\headers\hdr_alias.lm1.h"
+    Assert-CHas "$obj\headers\hdr_alias.lm1.h" "typedef unsigned char uchar;"
+    Assert-CHas "$obj\headers\hdr_alias.lm1.h" "typedef int Kind;"
+    Assert-CHas "$obj\headers\hdr_alias.lm1.h" "typedef unsigned Flags;"
+    Assert-CHas "$obj\headers\hdr_alias.lm1.h" "Kind kind;"
+    Assert-CHas "$obj\headers\hdr_alias.lm1.h" "char message[8];"
+    Assert-CHas "$obj\headers\hdr_alias.lm1.h" "const char * data;"
+    Assert-CHas "$obj\headers\hdr_alias.lm1.h" "uchar * bytes;"
+    Assert-CHas "$obj\headers\hdr_alias.lm1.h" "void ** items;"
+    Assert-CHas "$obj\headers\hdr_alias.lm1.h" "#define LM_UNUSED(x)"
+    cmd /c "gcc $cflagsStr -c -o $obj\headers\hdr_alias_compile.o -x c $obj\headers\hdr_alias.lm1.h > $log\hdr_alias_compile.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "generated hdr_alias.lm1.h failed to compile (see $log\hdr_alias_compile.log)" }
+
+    Invoke-Translate "l1src\p0.h.lm1" "$obj\headers\p0.lm1.h"
+    Assert-CHas "$obj\headers\p0.lm1.h" "#ifndef LM_H_l1src_2Fp0_2Eh_2Elm1"
+    Assert-CHas "$obj\headers\p0.lm1.h" "#define LM_UNUSED(x)"
+    Assert-CHas "$obj\headers\p0.lm1.h" "#define LM_P0_TRAILER_COLON 2U"
+    Assert-CHas "$obj\headers\p0.lm1.h" "typedef unsigned char uchar;"
+    Assert-CHas "$obj\headers\p0.lm1.h" "typedef int LmP0NodeKind;"
+    Assert-CHas "$obj\headers\p0.lm1.h" "typedef unsigned LmP0TrailerFlags;"
+    Assert-CHas "$obj\headers\p0.lm1.h" "char message[256];"
+    Assert-CHas "$obj\headers\p0.lm1.h" "LmP0FieldParseLoopContinuation continuation;"
+    Assert-CHas "$obj\headers\p0.lm1.h" "typedef void (*LmOwnDelete)"
+    Assert-CHas "$obj\headers\p0.lm1.h" "int lm_p0_parse_string("
+    cmd /c "gcc $cflagsStr -c -o $obj\headers\p0_compile.o -x c $obj\headers\p0.lm1.h > $log\p0_compile.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "generated p0.lm1.h failed to compile (see $log\p0_compile.log)" }
+    # same unit-root as cwd must not change guard/identity
+    & $l1trans "--unit-root" (Get-Location).Path "l1src\p0.h.lm1" "$obj\headers\p0_unitroot.lm1.h"
+    if ($LASTEXITCODE -ne 0) { throw "translate failed ($LASTEXITCODE): p0.h.lm1 --unit-root" }
+    Assert-ByteIdentical "$obj\headers\p0.lm1.h" "$obj\headers\p0_unitroot.lm1.h"
 
     Invoke-Translate "tests\l1\hdr_dir_a\core.h.lm1" "$obj\headers\hdr_dir_a\core.lm1.h"
     Invoke-Translate "tests\l1\hdr_dir_b\core.h.lm1" "$obj\headers\hdr_dir_b\core.lm1.h"

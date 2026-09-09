@@ -1,0 +1,25 @@
+include: "<stddef.h>"
+
+define: LM_UNUSED(x) ((void)(x))
+end: define
+
+type: uchar unsigned char
+type: Kind int
+type: Flags unsigned
+
+fnptr: Deleter (@: void object) void
+
+struct: Box
+    Kind: kind
+    Flags: flags
+    []: char message 8
+    const: @: char data
+    @: uchar bytes
+    Deleter: del
+    @@: void items
+end: Box
+
+prototype:
+    fn: box_open (@: Box box; const: @: char name) int
+    fn: box_name (const: @(Box box)) const: @: char
+end: prototype

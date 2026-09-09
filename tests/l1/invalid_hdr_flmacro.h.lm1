@@ -1,2 +1,2 @@
-define: LM_UNUSED(x) ((void)(x))
-end: define
+ifndef-default: LM_UNUSED(x) 1
+end: ifndef-default
