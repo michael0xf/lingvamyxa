@@ -131,10 +131,9 @@ fn: main () int
         fail: fail + 1
     lmx_msg_env_release(got)
     st: lmx_msg_recv(rt, child2, got)
-    if: st != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_CANCELLED
-        c.printf("cancel not a distinct outcome\n")
+    if: st != c.LMX_MSG_EMPTY
+        c.printf("stop control must not be cancelled-result work\n")
         fail: fail + 1
-    lmx_msg_env_release(got)
     st: lmx_msg_end_turn(rt, child2, 1)
     if: lmx_msg_state(rt, child2) != c.LMX_MSG_STATE_STOPPED
         c.printf("close flag not applied at end_turn\n")
@@ -223,12 +222,11 @@ fn: main () int
         c.printf("mid did not close at end_turn\n")
         fail: fail + 1
     if: lmx_msg_state(rt, leaf2) = c.LMX_MSG_STATE_STOPPED
-        c.printf("leaf reclaimed before its poll/end_turn\n")
+        c.printf("leaf reclaimed before its end_turn\n")
         fail: fail + 1
-    st: lmx_msg_poll(rt, leaf2, 0U, 0U, lmx_poll_buf, 8)
     st: lmx_msg_end_turn(rt, leaf2, 1)
     if: lmx_msg_state(rt, leaf2) != c.LMX_MSG_STATE_STOPPED
-        c.printf("three-generation close did not reach leaf\n")
+        c.printf("normal parent close did not reach leaf at its end_turn\n")
         fail: fail + 1
     st: lmx_msg_set_now(rt, 10U)
     st: lmx_msg_create(rt, parent, 25U, payload, 4U, @ mid)
@@ -246,6 +244,116 @@ fn: main () int
     st: lmx_msg_poll(rt, idle, 1000U, 1U, lmx_poll_buf, 8)
     if: st != 0
         c.printf("live idle parent did not keep child alive\n")
+        fail: fail + 1
+    st: lmx_msg_drive(rt, 1000U, 1U)
+    if: lmx_msg_state(rt, idle) = c.LMX_MSG_STATE_STOPPED
+        c.printf("drive timed out child of live idle parent\n")
+        fail: fail + 1
+    unsigned: ui 0U
+    unsigned: worker 0U
+    unsigned: w2 0U
+    unsigned: log 0U
+    unsigned: ctrl 0U
+    unsigned: idle2 0U
+    st: lmx_msg_create(rt, parent, 40U, payload, 4U, @ ui)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_create(rt, ui, 41U, payload, 4U, @ worker)
+    st: lmx_msg_end_turn(rt, ui, 1)
+    env\id: 60U
+    env\kind: c.LMX_MSG_KIND_CANCELLED
+    env\reply_to: worker
+    env\bytes: 0
+    env\n: 0U
+    st: lmx_msg_send(rt, worker, ui, env)
+    st: lmx_msg_end_turn(rt, worker, 1)
+    st: lmx_msg_pump(rt)
+    if: lmx_msg_state(rt, ui) = c.LMX_MSG_STATE_STOPPED
+        c.printf("cancelled result shut down UI\n")
+        fail: fail + 1
+    st: lmx_msg_recv(rt, ui, got)
+    if: st != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_CANCELLED
+        c.printf("UI did not receive cancelled result\n")
+        fail: fail + 1
+    lmx_msg_env_release(got)
+    st: lmx_msg_end_turn(rt, ui, 1)
+    if: lmx_msg_state(rt, ui) = c.LMX_MSG_STATE_STOPPED
+        c.printf("UI closed after cancelled-result turn\n")
+        fail: fail + 1
+    st: lmx_msg_stop(rt, ui, worker)
+    st: lmx_msg_end_turn(rt, ui, 1)
+    st: lmx_msg_pump(rt)
+    if: lmx_msg_state(rt, worker) = c.LMX_MSG_STATE_STOPPED
+        c.printf("stop reclaimed worker before end_turn\n")
+        fail: fail + 1
+    if: lmx_msg_state(rt, ui) = c.LMX_MSG_STATE_STOPPED
+        c.printf("stop(worker) closed UI\n")
+        fail: fail + 1
+    st: lmx_msg_end_turn(rt, worker, 1)
+    if: lmx_msg_state(rt, worker) != c.LMX_MSG_STATE_STOPPED
+        c.printf("worker did not close at boundary\n")
+        fail: fail + 1
+    if: lmx_msg_state(rt, ui) = c.LMX_MSG_STATE_STOPPED
+        c.printf("worker close stopped UI\n")
+        fail: fail + 1
+    st: lmx_msg_create(rt, parent, 42U, payload, 4U, @ w2)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_create(rt, parent, 45U, payload, 4U, @ log)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    env\id: 70U
+    env\kind: c.LMX_MSG_KIND_BYTES
+    env\reply_to: parent
+    env\bytes: payload
+    env\n: 4U
+    st: lmx_msg_send(rt, parent, w2, env)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_pump(rt)
+    st: lmx_msg_recv(rt, w2, got)
+    lmx_msg_env_release(got)
+    env\id: 71U
+    env\kind: c.LMX_MSG_KIND_PROGRESS
+    env\number: 50
+    env\reply_to: log
+    env\bytes: 0
+    env\n: 0U
+    st: lmx_msg_send(rt, w2, log, env)
+    st: lmx_msg_stop(rt, parent, w2)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_pump(rt)
+    st: lmx_msg_end_turn(rt, w2, 1)
+    st: lmx_msg_pump(rt)
+    if: lmx_msg_state(rt, w2) != c.LMX_MSG_STATE_STOPPED
+        c.printf("progress worker did not close at end_turn\n")
+        fail: fail + 1
+    st: lmx_msg_recv(rt, log, got)
+    if: st != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_PROGRESS || got\number != 50
+        c.printf("progress staged before close was not published\n")
+        fail: fail + 1
+    lmx_msg_env_release(got)
+    env\id: 72U
+    env\kind: c.LMX_MSG_KIND_BYTES
+    env\reply_to: parent
+    env\bytes: payload
+    env\n: 4U
+    st: lmx_msg_send(rt, parent, w2, env)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_pump(rt)
+    if: lmx_msg_inbox_n(rt, w2) != 0
+        c.printf("ordinary work after STOPPED\n")
+        fail: fail + 1
+    st: lmx_msg_create(rt, parent, 43U, payload, 4U, @ ctrl)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_create(rt, ctrl, 44U, payload, 4U, @ idle2)
+    st: lmx_msg_end_turn(rt, ctrl, 1)
+    st: lmx_msg_stop(rt, parent, ctrl)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_pump(rt)
+    st: lmx_msg_end_turn(rt, ctrl, 1)
+    if: lmx_msg_state(rt, idle2) = c.LMX_MSG_STATE_STOPPED
+        c.printf("drive child instantly STOPPED\n")
+        fail: fail + 1
+    st: lmx_msg_drive(rt, 0U, 0U)
+    if: lmx_msg_state(rt, idle2) != c.LMX_MSG_STATE_STOPPED
+        c.printf("drive did not close idle child\n")
         fail: fail + 1
     st: lmx_msg_fail(rt, parent)
     st: lmx_msg_poll(rt, idle, 0U, 0U, lmx_poll_buf, 8)

@@ -2,7 +2,6 @@ include: "l2src/lmx_message.h" "<stdlib.h>" "<string.h>"
 
 prototype:
     fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
-    sub: lmx_msg_stop_descendants (@: LmxMsgRuntime rt; LmxMsgAddr: who)
 end: prototype
 
 # Copy-only Message mailbox. Spec 19.29.7.1.
@@ -243,7 +242,7 @@ fn: lmx_msg_stop (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to) int
     env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: env = 0
         return: c.LMX_MSG_NOMEM
-    env\kind: c.LMX_MSG_KIND_CANCELLED
+    env\kind: c.LMX_MSG_KIND_STOP
     env\reply_to: from
     st: lmx_msg_send(rt, from, to, env)
     c.free((cast: (@: void) env))
@@ -266,6 +265,19 @@ sub: lmx_msg_release_slot (@: LmxMsg m)
     m\state: c.LMX_MSG_STATE_RELEASED
     m\committed: 0
 end: lmx_msg_release_slot
+
+sub: lmx_msg_request_children_close (@: LmxMsgRuntime rt; LmxMsgAddr: who)
+    @: LmxMsg ch
+    int: i 0
+    if: rt = 0
+        return
+    while: i < rt\n
+        ch: rt\tab + i
+        if: ch\parent = who && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED && ch\state != c.LMX_MSG_STATE_STOPPED
+            ch\closing: 1
+        ---
+        i: i + 1
+end: lmx_msg_request_children_close
 
 fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     @: LmxMsg m
@@ -298,6 +310,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         if: m\closing != 0
             m\state: c.LMX_MSG_STATE_STOPPED
             m\exec_live: 0
+            lmx_msg_request_children_close(rt, who)
         ---
         return: c.LMX_MSG_OK
     i: 0
@@ -314,25 +327,9 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     if: m\closing != 0
         m\state: c.LMX_MSG_STATE_STOPPED
         m\exec_live: 0
+        lmx_msg_request_children_close(rt, who)
     ---
 return: c.LMX_MSG_OK
-
-sub: lmx_msg_stop_descendants (@: LmxMsgRuntime rt; LmxMsgAddr: who)
-    @: LmxMsg ch
-    int: i 0
-    if: rt = 0
-        return
-    while: i < rt\n
-        ch: rt\tab + i
-        if: ch\parent = who && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED
-            lmx_msg_stop_descendants(rt, ch\addr)
-            ch\state: c.LMX_MSG_STATE_STOPPED
-            lmx_msg_copy_free(ch\outbox)
-            ch\outbox: 0
-            ch\outbox_tail: 0
-        ---
-        i: i + 1
-end: lmx_msg_stop_descendants
 
 fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
     @: LmxMsg dest
@@ -353,8 +350,10 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
     if: dest\state = c.LMX_MSG_STATE_INACTIVE
         dest\state: c.LMX_MSG_STATE_RUNNING
     ---
-    if: node\kind = c.LMX_MSG_KIND_CANCELLED
+    if: node\kind = c.LMX_MSG_KIND_STOP
         dest\closing: 1
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_OK
     ---
     fresh: lmx_msg_copy_dup(node)
     lmx_msg_copy_free(node)
@@ -524,6 +523,60 @@ fn: lmx_msg_set_now (@: LmxMsgRuntime rt; unsigned: now) int
     if: rt = 0
         return: c.LMX_MSG_INVALID
     rt\clock: now
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_drive_should_close (@: LmxMsg m) int
+    if: m = 0
+        return: 0
+    if: m\closing = 0 || m\exec_live != 0 || m\inbox != 0
+        return: 0
+    if: m\state = c.LMX_MSG_STATE_RUNNING
+        return: 1
+    if: m\state = c.LMX_MSG_STATE_INACTIVE && m\committed != 0
+        return: 1
+return: 0
+
+fn: lmx_msg_drive (@: LmxMsgRuntime rt; unsigned: now; unsigned: threshold) int
+    @: LmxMsg m
+    @: LmxMsgAddr none
+    int: i
+    int: more 1
+    int: st
+    if: rt = 0
+        return: c.LMX_MSG_INVALID
+    st: lmx_msg_set_now(rt, now)
+    if: st != c.LMX_MSG_OK
+        return: st
+    none: 0
+    st: lmx_msg_poll(rt, 0U, now, threshold, none, 0)
+    if: st < 0
+        return: c.LMX_MSG_INVALID
+    ---
+    while: more != 0
+        more: 0
+        i: 0
+        while: i < rt\n
+            m: rt\tab + i
+            if: lmx_msg_drive_should_close(m) != 0
+                st: lmx_msg_end_turn(rt, m\addr, 1)
+                if: st != c.LMX_MSG_OK
+                    return: st
+                ---
+                more: 1
+            ---
+            i: i + 1
+        st: lmx_msg_pump(rt)
+        if: st != c.LMX_MSG_OK
+            return: st
+        ---
+        i: 0
+        while: i < rt\n
+            m: rt\tab + i
+            if: lmx_msg_drive_should_close(m) != 0
+                more: 1
+            ---
+            i: i + 1
+        ---
 return: c.LMX_MSG_OK
 
 fn: lmx_msg_state (@: LmxMsgRuntime rt; LmxMsgAddr: who) int

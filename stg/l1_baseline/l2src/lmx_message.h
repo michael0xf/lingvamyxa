@@ -29,6 +29,8 @@ typedef unsigned char uchar;
 #define LMX_MSG_KIND_DEAD 5
 #define LMX_MSG_KIND_DONE 6
 #define LMX_MSG_KIND_REJECTED 7
+#define LMX_MSG_KIND_STOP 8
+/* KIND_STOP is internal close control. KIND_CANCELLED is ordinary result data. */
 
 #define LMX_MSG_STATE_INACTIVE 0
 #define LMX_MSG_STATE_RUNNING 1
@@ -110,6 +112,7 @@ int lmx_msg_state(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_inbox_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_init_copy(LmxMsgRuntime *rt, LmxMsgAddr who, LmxMsgEnv *out);
 int lmx_msg_set_now(LmxMsgRuntime *rt, unsigned now);
-int lmx_msg_poll(LmxMsgRuntime *rt, LmxMsgAddr parent, unsigned now, unsigned threshold, LmxMsgAddr *out, int cap);
+int lmx_msg_poll(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now, unsigned threshold, LmxMsgAddr *out, int cap);
+int lmx_msg_drive(LmxMsgRuntime *rt, unsigned now, unsigned threshold);
 
 #endif
