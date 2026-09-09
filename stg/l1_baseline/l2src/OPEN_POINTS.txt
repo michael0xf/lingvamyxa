@@ -1325,8 +1325,9 @@ x"""""y / a'b / a\b. entry_puts_triple: a"""b. entry_ret_tr_puts:
 MUST PRINT then return 0.
 
 STG L1 source still frozen. Full run_seed/next/check not the
-whole-project gate this window. 111200 common P0 tree-contract
-suite is next, then advance_layout_line.
+whole-project gate this window. 111200 common P0 tree-contract initial batch is in
+tests/p0_tree_contract (620db86 goldens; root printTree match 19/19
+plus C_nested_short reject). Then advance_layout_line.
 
 Unit 16 - nested expression emit scratch
 ----------------------------------------
