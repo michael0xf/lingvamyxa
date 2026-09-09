@@ -1,5 +1,19 @@
 # Full gate for this build root, in one command.
 #
+# WHEN NOT TO RUN THIS. It REBUILDS the translator - buildCore, the gen0 seed,
+# then gen1..gen3 - so it regenerates a tool other people are using. Run it only
+# when something could affect L1 ITSELF.
+#
+# Working on mixa_manager is NOT such a case, and I ran it before every
+# mixa_manager commit anyway, for weeks, out of a rule that was about a
+# different situation. mixa_manager cannot affect the L1 self-build: it only
+# needs a translator that already EXISTS, and run_mixa.ps1 merely READS the
+# binary. So the gate cost four minutes each time and, worse, rewrote a shared
+# tool underneath an integration in progress - which is exactly how I walked
+# into Grok's uncommitted candidate on 2026-09-09.
+#
+# Rule: mixa_manager work is verified by run_mixa.ps1. This gate is for L1.
+#
 # The order matters and is the reason this script exists: C bootstrap, then the
 # gen0 seed, then the self-build to its fixed point, then every suite on both
 # gen0 and gen2.
