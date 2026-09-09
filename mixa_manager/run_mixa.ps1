@@ -1,4 +1,4 @@
-# Mixa Manager core: TextRect + OverlayRect/composite selftests.
+# Mixa Manager: TextRect + OverlayRect/composite + headless backend selftests.
 # Build root is the repository root (parent of mixa_manager).
 # Translator is the STABLE L1 under stg\l1_baseline, not the live tree.
 $ErrorActionPreference = "Stop"
@@ -23,7 +23,8 @@ $guards = @(
 
 $units = @(
     "mixa_core_selftest",
-    "mixa_overlay_selftest"
+    "mixa_overlay_selftest",
+    "mixa_backend_selftest"
 )
 
 foreach ($unit in $units) {
@@ -47,3 +48,4 @@ foreach ($unit in $units) {
 
 "mixa core ok"
 "mixa overlay ok"
+"mixa backend ok"

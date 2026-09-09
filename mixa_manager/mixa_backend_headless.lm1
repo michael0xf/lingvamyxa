@@ -1,0 +1,247 @@
+include: "mixa_manager/mixa_backend_headless.h" "<stdlib.h>" "<string.h>"
+
+# Headless MixaBackend: no window, no font, no platform. Seam ops plus
+# push_event / frame_at for tests. Design: BACKEND_SEAM.txt.
+
+fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; size_t: cell_width; size_t: cell_height) int
+    size_t: width
+    size_t: height
+    size_t: nbytes
+    @: MixaU8 block
+    if: backend = 0
+        return: 1
+    if: cols = 0U
+        return: 1
+    if: rows = 0U
+        return: 1
+    if: cell_width = 0U
+        return: 1
+    if: cell_height = 0U
+        return: 1
+    if: backend\is_open != 0
+        return: 1
+    if: backend\frame != 0
+        return: 1
+    if: cols > ((cast: (size_t) -1) / cell_width)
+        return: 1
+    if: rows > ((cast: (size_t) -1) / cell_height)
+        return: 1
+    width: cols * cell_width
+    height: rows * cell_height
+    if: width = 0U
+        return: 1
+    if: height = 0U
+        return: 1
+    if: height > ((cast: (size_t) -1) / width)
+        return: 1
+    if: (width * height) > ((cast: (size_t) -1) / 4U)
+        return: 1
+    nbytes: width * height * 4U
+    block: (cast: (@: MixaU8) c.calloc(nbytes, 1U))
+    if: block = 0
+        return: 1
+    backend\is_open: 1
+    backend\cols: cols
+    backend\rows: rows
+    backend\cell_width: cell_width
+    backend\cell_height: cell_height
+    backend\frame_w: width
+    backend\frame_h: height
+    backend\frame_bytes: nbytes
+    backend\frame: block
+    backend\queue_head: 0U
+    backend\queue_count: 0U
+return: 0
+
+fn: mixa_backend_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t: bytes) int
+    if: backend = 0
+        return: 1
+    if: backend\is_open = 0
+        return: 1
+    if: backend\frame = 0
+        return: 1
+    if: rgba = 0
+        return: 1
+    if: bytes < backend\frame_bytes
+        return: 1
+    c.memcpy(backend\frame, rgba, backend\frame_bytes)
+return: 0
+
+fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
+    @: MixaEvent slot
+    size_t: idx
+    if: backend = 0
+        return: 1
+    if: out = 0
+        return: 1
+    if: backend\is_open = 0
+        out\kind: MIXA_EVENT_NONE
+        return: 1
+    if: backend\queue_count = 0U
+        out\kind: MIXA_EVENT_NONE
+        return: 0
+    idx: backend\queue_head
+    slot: backend\queue + idx
+    c.memcpy(out, slot, c.sizeof(c.MixaEvent))
+    backend\queue_head: (idx + 1U)
+    if: backend\queue_cap != 0U
+        if: backend\queue_head >= backend\queue_cap
+            backend\queue_head: 0U
+        ---
+    ---
+    backend\queue_count: backend\queue_count - 1U
+return: 0
+
+fn: mixa_backend_clipboard_get (@: MixaBackend backend; @: char out; size_t: cap) size_t
+    size_t: n
+    if: backend = 0
+        return: 0U
+    if: out = 0
+        return: 0U
+    if: backend\is_open = 0
+        return: 0U
+    if: backend\clipboard = 0
+        if: cap < 1U
+            return: 0U
+        out[0]: (cast: (char) 0)
+        return: 0U
+    n: backend\clipboard_len
+    if: cap < (n + 1U)
+        return: 0U
+    c.memcpy(out, backend\clipboard, n)
+    out[n]: (cast: (char) 0)
+return: n
+
+fn: mixa_backend_clipboard_set (@: MixaBackend backend; const: @(char text)) int
+    size_t: n
+    @: char block
+    if: backend = 0
+        return: 1
+    if: backend\is_open = 0
+        return: 1
+    if: text = 0
+        return: 1
+    n: c.strlen(text)
+    block: (cast: (@: char) c.malloc(n + 1U))
+    if: block = 0
+        return: 1
+    c.memcpy(block, text, n + 1U)
+    if: backend\clipboard != 0
+        c.free(backend\clipboard)
+    ---
+    backend\clipboard: block
+    backend\clipboard_len: n
+return: 0
+
+sub: mixa_backend_close (@: MixaBackend backend)
+    if: backend != 0
+        if: backend\frame != 0
+            c.free(backend\frame)
+        ---
+        if: backend\clipboard != 0
+            c.free(backend\clipboard)
+        ---
+        if: backend\queue != 0
+            c.free(backend\queue)
+        ---
+        backend\frame: 0
+        backend\clipboard: 0
+        backend\queue: 0
+        backend\frame_w: 0U
+        backend\frame_h: 0U
+        backend\frame_bytes: 0U
+        backend\cols: 0U
+        backend\rows: 0U
+        backend\cell_width: 0U
+        backend\cell_height: 0U
+        backend\clipboard_len: 0U
+        backend\queue_cap: 0U
+        backend\queue_head: 0U
+        backend\queue_count: 0U
+        backend\is_open: 0
+    ---
+end: mixa_backend_close
+
+fn: mixa_backend_push_event (@: MixaBackend backend; const: @(MixaEvent ev)) int
+    @: MixaEvent fresh
+    @: MixaEvent slot
+    size_t: new_cap
+    size_t: i
+    size_t: src
+    size_t: dst
+    if: backend = 0
+        return: 1
+    if: ev = 0
+        return: 1
+    if: backend\is_open = 0
+        return: 1
+    if: backend\queue_count >= backend\queue_cap
+        if: backend\queue_cap = 0U
+            new_cap: 8U
+        else:
+            if: backend\queue_cap > ((cast: (size_t) -1) / 2U)
+                return: 1
+            ---
+            new_cap: backend\queue_cap * 2U
+        ---
+        fresh: (cast: (@: MixaEvent) c.calloc(new_cap, c.sizeof(c.MixaEvent)))
+        if: fresh = 0
+            return: 1
+        i: 0U
+        while: i < backend\queue_count
+            src: backend\queue_head + i
+            if: backend\queue_cap != 0U
+                if: src >= backend\queue_cap
+                    src: src - backend\queue_cap
+                ---
+            ---
+            dst: i
+            c.memcpy(fresh + dst, backend\queue + src, c.sizeof(c.MixaEvent))
+            i: i + 1U
+        ---
+        if: backend\queue != 0
+            c.free(backend\queue)
+        ---
+        backend\queue: fresh
+        backend\queue_cap: new_cap
+        backend\queue_head: 0U
+    ---
+    dst: backend\queue_head + backend\queue_count
+    if: backend\queue_cap != 0U
+        if: dst >= backend\queue_cap
+            dst: dst - backend\queue_cap
+        ---
+    ---
+    slot: backend\queue + dst
+    c.memcpy(slot, ev, c.sizeof(c.MixaEvent))
+    # Mouse: incoming col/row are pixels; convert once to cells.
+    if: slot\kind = MIXA_EVENT_MOUSE
+        if: backend\cell_width = 0U || backend\cell_height = 0U
+            return: 1
+        ---
+        slot\col: slot\col / backend\cell_width
+        slot\row: slot\row / backend\cell_height
+    ---
+    backend\queue_count: backend\queue_count + 1U
+return: 0
+
+fn: mixa_backend_frame_at (@: MixaBackend backend; size_t: x; size_t: y; @: MixaU8 out) int
+    @: MixaU8 px
+    if: backend = 0
+        return: 1
+    if: out = 0
+        return: 1
+    if: backend\is_open = 0
+        return: 1
+    if: backend\frame = 0
+        return: 1
+    if: x >= backend\frame_w
+        return: 1
+    if: y >= backend\frame_h
+        return: 1
+    px: backend\frame + ((y * backend\frame_w + x) * 4U)
+    out[0]: px[0]
+    out[1]: px[1]
+    out[2]: px[2]
+    out[3]: px[3]
+return: 0
