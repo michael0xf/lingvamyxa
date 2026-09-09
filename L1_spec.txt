@@ -201,11 +201,19 @@ build baseline; promotion must preserve the live L2 sources.
   Each declaration in its vertical (or compact) body is emitted as the
   existing L1 `const:` qualifier would emit that declaration. Pointer
   depth matches `const: @(T p)` → `const T *p` (referent, not a const
-  slot). Nested `immutable:` / `const:` is idempotent (one `const` in C).
-  Siblings outside the body stay mutable. Unsupported children
+  slot): rebinding `p` is allowed, writing through `*p` is not.
+  Nested `immutable:` / `const:` / `c.array:` unwrap to one C `const`
+  (`const const` is not emitted). Siblings outside the body stay
+  mutable. `[]:` / `[][]:` use `l1_emit_bracket_array` (not a type-
+  spelling data_decl). Repeated names reuse the ordinary block inherit
+  loop so tails and initializer order survive. `end:immutable` is
+  validated; a mismatched `end:` is an error. Unsupported children
   (control flow, assignments, `fn`/`sub`) diagnose
   `immutable does not qualify this form`. Does not distribute over
-  parameter lists (that ambiguity stays OPEN). Example:
+  parameter lists (that ambiguity stays OPEN). Compact
+  `@(int p) @ cell` as two sibling fields is not a pointer declaration
+  with initializer; spell `@: int p @ cell` so the initializer stays
+  in the declaration frame. Example:
 
     immutable:
         int: a 2
@@ -214,9 +222,18 @@ build baseline; promotion must preserve the live L2 sources.
     int: e 6
 
   emits `const int a = 2; const char * s = "hi"; const int d = 5; int e = 6;`.
-  Tests: immutable_group.lm1, invalid_immutable_if.lm1,
-  invalid_immutable_write.lm1 (gcc discarded-qualifiers). Header-field
-  and broad l1src adoption are later checkpoints.
+  Write-negatives fail gcc with `read-only variable` / `read-only`
+  (not discarded-qualifiers). Header-field grouping: `immutable:`
+  inside a `struct:` body emits `const` fields; siblings stay mutable
+  (hdr_immutable.h.lm1 + C consumer). Tests: immutable_group.lm1,
+  immutable_array.lm1, immutable_repeat.lm1, immutable_nested_const.lm1,
+  immutable_ptr.lm1, immutable_end.lm1, immutable_file.lm1,
+  immutable_order.lm1, invalid_immutable_if.lm1,
+  invalid_immutable_write.lm1, invalid_immutable_array_write.lm1,
+  invalid_immutable_ptr_write.lm1, invalid_immutable_end.lm1.
+  `immutable:` is not introduced into sources the gen0 seed must parse
+  (`l1src/l1trans.lm1`). Parser / allocator / out-parameter state stays
+  mutable. STG final promotion and label syntax remain pending.
   `prototype:` and `external:` (external body must contain fn/sub).
   `sub:` — function without return-type slot (diagnostics distinguish
   it from `fn`). An empty sub is a definition, not just a prototype:
