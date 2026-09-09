@@ -6287,10 +6287,11 @@ int main(int argc, char ** argv)
     const LmP0Diagnostic * diagnostic;
     char * dump;
     int status;
+    const char * usage = "usage: printTree <source>\n";
     setvbuf(stdout, 0, _IONBF, 0);
     setvbuf(stderr, 0, _IONBF, 0);
     if (argc != 2) {
-    fputs("usage: printTree <source>\n", stdout);
+    fputs(usage, stdout);
     return 0;
     }
     status = lm_p0_parse_file(argv[1], &document);

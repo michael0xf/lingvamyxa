@@ -503,7 +503,30 @@ if ($gen -eq "gen0") {
     Copy-Item -LiteralPath "$obj\headers\hdr_immutable.lm1.h" -Destination "$obj\hdr_immutable.lm1.h" -Force
     cmd /c "gcc $cflagsStr -I $obj -o $bin\hdr_immutable_consumer.exe tests\l1\hdr_immutable_consumer.c > $log\hdr_immutable_consumer_gcc.log 2>&1"
     if ($LASTEXITCODE -ne 0) { throw "hdr_immutable_consumer.c failed to compile (see $log\hdr_immutable_consumer_gcc.log)" }
+    $immConsLog = [IO.File]::ReadAllText((Join-Path (Get-Location) "$log\hdr_immutable_consumer_gcc.log"))
+    if ($immConsLog.IndexOf("uninitialized") -ge 0) { throw "hdr_immutable_consumer.c gcc uninitialized warning: $immConsLog" }
     Write-Log "hdr_immutable_consumer compile ok"
+    $immCons = Join-Path (Get-Location) "$bin\hdr_immutable_consumer.exe"
+    & $immCons
+    if ($LASTEXITCODE -ne 0) { throw "hdr_immutable_consumer run failed $LASTEXITCODE" }
+    Write-Log "hdr_immutable_consumer run ok"
+    Invoke-Translate "tests\l1\hdr_immutable_nested.h.lm1" "$obj\headers\hdr_immutable_nested.lm1.h"
+    $immNest = Get-Content "$obj\headers\hdr_immutable_nested.lm1.h" -Raw
+    $innerAt = $immNest.IndexOf("struct Inner {")
+    $outerAt = $immNest.IndexOf("struct Outer {")
+    if ($innerAt -lt 0 -or $outerAt -lt 0 -or $innerAt -ge $outerAt) {
+        throw "by-value Inner must precede Outer in hdr_immutable_nested.lm1.h"
+    }
+    Assert-CHas "$obj\headers\hdr_immutable_nested.lm1.h" "const Inner inner;"
+    Assert-CHas "$obj\headers\hdr_immutable_nested.lm1.h" "const int deep;"
+    Assert-CHas "$obj\headers\hdr_immutable_nested.lm1.h" "const int after_nested;"
+    Assert-CHas "$obj\headers\hdr_immutable_nested.lm1.h" "const char * data;"
+    Assert-CHas "$obj\headers\hdr_immutable_nested.lm1.h" "const int after_const;"
+    Assert-CHas "$obj\headers\hdr_immutable_nested.lm1.h" "const char * tail;"
+    Assert-CLacks "$obj\headers\hdr_immutable_nested.lm1.h" "const int mut"
+    Assert-CLacks "$obj\headers\hdr_immutable_nested.lm1.h" "const const"
+    cmd /c "gcc $cflagsStr -c -o $obj\headers\hdr_immutable_nested_compile.o -x c $obj\headers\hdr_immutable_nested.lm1.h > $log\hdr_immutable_nested_compile.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "generated hdr_immutable_nested.lm1.h failed to compile (see $log\hdr_immutable_nested_compile.log)" }
     cmd /c "gcc $cflagsStr -I $obj -o $bin\invalid_hdr_immutable_write.exe tests\l1\invalid_hdr_immutable_write.c > $log\gcc_invalid_hdr_immutable_write.log 2>&1"
     if ($LASTEXITCODE -eq 0) { throw "expected gcc failure writing immutable struct field" }
     $immHdrLog = [IO.File]::ReadAllText((Join-Path (Get-Location) "$log\gcc_invalid_hdr_immutable_write.log"))

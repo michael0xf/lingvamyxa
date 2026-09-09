@@ -13621,6 +13621,8 @@ int main(int argc, char ** argv)
     int npos = 0;
     char * src_arg = 0;
     char * out_arg = 0;
+    const char * usage = "usage: l1trans.exe [--unit-root DIR] <source.lm1> <output>\n";
+    const char * unit_root_flag = "--unit-root";
     setvbuf(stdout, 0, _IONBF, 0);
     setvbuf(stderr, 0, _IONBF, 0);
     l1_unit_root_set = 0;
@@ -13628,9 +13630,9 @@ int main(int argc, char ** argv)
     src_arg = 0;
     out_arg = 0;
     while (i < argc) {
-    if (strcmp(argv[i], "--unit-root") == 0) {
+    if (strcmp(argv[i], unit_root_flag) == 0) {
     if (i + 1 >= argc) {
-    fputs("usage: l1trans.exe [--unit-root DIR] <source.lm1> <output>\n", stderr);
+    fputs(usage, stderr);
     return 1;
     }
     if (strlen(argv[i + 1]) >= 1040U) {
@@ -13643,7 +13645,7 @@ int main(int argc, char ** argv)
     }
     else {
     if (npos >= 2) {
-    fputs("usage: l1trans.exe [--unit-root DIR] <source.lm1> <output>\n", stderr);
+    fputs(usage, stderr);
     return 1;
     }
     if (npos == 0) {
@@ -13657,7 +13659,7 @@ int main(int argc, char ** argv)
     }
     }
     if (npos != 2) {
-    fputs("usage: l1trans.exe [--unit-root DIR] <source.lm1> <output>\n", stderr);
+    fputs(usage, stderr);
     return 1;
     }
     return l1_translate(src_arg, out_arg);

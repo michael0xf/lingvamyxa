@@ -33,8 +33,17 @@ function Invoke-LoggedExe([string]$title, [string]$exe, [string[]]$argv) {
     }
 }
 
-$seed = "build\l1trans\gen0\l1trans.exe"
-if (-not (Test-Path $seed)) { throw "missing seed $seed — run tests\l1\run_seed.ps1 first (does not fall back to a stale exe)" }
+# Native published-C bootstrap: compile the tracked l1trans.lm1.c with gcc.
+# This is the supported route for current l1src (including immutable:).
+# Hosted gen0 from run_seed.ps1 / lm2 remains a separate historical seed;
+# it is not used to parse current l1src and is not required here.
+New-Item -ItemType Directory -Force -Path "build\l1trans\boot" | Out-Null
+$bootC = "lm1\build\l1trans.lm1.c"
+if (-not (Test-Path $bootC)) { throw "missing tracked bootstrap $bootC" }
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic -I . -I lm1/build -Werror=incompatible-pointer-types -Werror=discarded-qualifiers -Werror=implicit-function-declaration -Werror=implicit-int -o build\l1trans\boot\l1trans.exe $bootC > $log\gcc_boot.log 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "native bootstrap gcc failed (see $log\gcc_boot.log)" }
+$seed = "build\l1trans\boot\l1trans.exe"
+Write-G "native boot exe ok hash=$((Get-FileHash $seed).Hash) from $bootC"
 
 $savedHosted = @{
     LM_TRANS_REGISTRY = $env:LM_TRANS_REGISTRY

@@ -5883,6 +5883,9 @@ external:
         int: npos 0
         @: char src_arg 0
         @: char out_arg 0
+        immutable:
+            @: char usage "usage: l1trans.exe [--unit-root DIR] <source.lm1> <output>\n"
+            @: char unit_root_flag "--unit-root"
         c.setvbuf(c.stdout, 0, c._IONBF, 0)
         c.setvbuf(c.stderr, 0, c._IONBF, 0)
         l1_unit_root_set: 0
@@ -5890,9 +5893,9 @@ external:
         src_arg: 0
         out_arg: 0
         while: i < argc
-            if: c.strcmp(argv[i], "--unit-root") = 0
+            if: c.strcmp(argv[i], unit_root_flag) = 0
                 if: i + 1 >= argc
-                    c.fputs("usage: l1trans.exe [--unit-root DIR] <source.lm1> <output>\n", c.stderr)
+                    c.fputs(usage, c.stderr)
                     return: 1
                 if: c.strlen(argv[i + 1]) >= 1040U
                     c.fputs("l1trans error: unit root path too long\n", c.stderr)
@@ -5902,7 +5905,7 @@ external:
                 i: i + 2
             else:
                 if: npos >= 2
-                    c.fputs("usage: l1trans.exe [--unit-root DIR] <source.lm1> <output>\n", c.stderr)
+                    c.fputs(usage, c.stderr)
                     return: 1
                 if: npos = 0
                     src_arg: argv[i]
@@ -5914,7 +5917,7 @@ external:
             ---
         ---
         if: npos != 2
-            c.fputs("usage: l1trans.exe [--unit-root DIR] <source.lm1> <output>\n", c.stderr)
+            c.fputs(usage, c.stderr)
             return: 1
     return: l1_translate(src_arg, out_arg)
 end: external
