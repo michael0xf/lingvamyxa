@@ -28,6 +28,40 @@ INCOMPLETE. The language owner began listing differences and the list is not
 finished; these are the ones fixed so far. Add to it rather than deducing new
 differences from silence.
 
+2.0. The general rule: port the PRESENTATION, not the IMPLEMENTATION
+
+Stated by the language owner with the calculator as the worked example.
+
+The calculator's INSIDES are not worth porting: we will have a whole language of
+our own, and it is what will do the calculating. Its APPEARANCE is ported in
+full.
+
+So the split runs through every feature, not around them:
+
+    presentation, layout, behaviour, wording, colours   ported, in full
+    internals that our own language or platform supersedes   not ported;
+                                                             reimplemented
+
+The trap this avoids is porting an implementation because it came attached to a
+look we wanted, and then being stuck maintaining a second-rate copy of something
+our own language does better.
+
+2.0.1. Everything visible becomes pseudographics - "pseudo-pseudographics"
+
+In ClearShell a button IS a system widget. Here it is DRAWN: characters in
+cells, through the one drawing API. So what ports is the button's appearance and
+geometry, never the widget.
+
+That needs no new drawer primitive - a button is a framed label, which is text
+plus pseudographics - and it must not be allowed to grow one. See DRAWING.txt:
+if the text layer could not accept the call, it does not belong in the drawer.
+
+It does have one consequence that is easy to miss. Android gives ClearShell
+hit-testing for free: a view knows it was touched. A DRAWN button knows nothing.
+So mapping a click to a button is OUR work, and it is why the backend seam
+reports mouse position in CELL coordinates rather than pixels - the backend
+converts once and every consumer agrees.
+
 2.1. Rendering
 
   ClearShell    Android widgets draw the text; the output lives in a system
