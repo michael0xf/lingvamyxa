@@ -1,0 +1,134 @@
+Mixa Manager - the backend seam
+Milestone 2 design. Six functions, one headless implementation, no window.
+
+Follows Mixa_Manager_DISTRIBUTION_MODEL.txt section 5. This document fixes the
+exact surface before any platform code is written, because the seam is the whole
+porting cost: every target reimplements this and nothing else.
+
+
+1. Why a headless backend comes first
+
+The old model already names it: DummyBackend, "tests, demos, non-desktop and
+0.1.2-light targets" (Old_Mixa_Manager_Qt_model.txt section 18).
+
+It is not a stub for convenience. It is what makes the seam TESTABLE. With a
+headless backend the whole path - build a TextRect, composite with an overlay,
+present, feed input, resize - runs with no window, no font and no platform, and
+is verified by comparing bytes. A Win32 or X11 backend then has to satisfy tests
+that already exist, rather than being the thing that defines correctness.
+
+It is also the honest order for the distribution model: the base must run where
+there is no window at all.
+
+
+2. The six operations, exactly
+
+Declared in L1 with external: against a hand-written header. Nothing here
+returns a platform handle to the caller; the backend owns its own state and is
+addressed by an opaque pointer.
+
+    open      (@: MixaBackend backend; size_t cols; size_t rows;
+               size_t cell_width; size_t cell_height) int
+              creates the surface. Cell geometry in, pixels derived, exactly as
+              section 1 of the old model defines them.
+
+    present   (@: MixaBackend backend; @: MixaU8 rgba; size_t bytes) int
+              hands over one composited frame. The buffer is borrowed for the
+              call and not retained.
+
+    poll      (@: MixaBackend backend; @: MixaEvent out) int
+              returns the next pending event or reports empty. Never blocks.
+
+    clipboard_get (@: MixaBackend backend; @: char out; size_t cap) size_t
+    clipboard_set (@: MixaBackend backend; const: @(char text)) int
+              UTF-8 text both ways. Carries more weight than its size suggests:
+              it is the practical path for entering text a keyboard cannot
+              easily produce, which is why full IME integration can be deferred.
+
+    close     (@: MixaBackend backend)
+
+Resize is not a seventh function. It arrives as an event, because that is how
+every platform actually delivers it.
+
+
+3. The event
+
+One shape for every kind, so the seam does not grow a variant per platform.
+
+    MixaEvent
+        kind        none / key / mouse / resize / close
+        codepoint   Unicode scalar for a key event, 0 otherwise
+        keycode     non-text key identity; see below
+        modifiers   bit set: shift, ctrl, alt, meta
+        row, col    cell coordinates for mouse events
+        buttons     bit set for mouse events
+        cols, rows  new geometry for resize events
+
+Two deliberate decisions.
+
+Keys arrive as a CODEPOINT plus a separate KEYCODE, not as one merged token.
+Text input is a codepoint; F5, Home and the arrows are not text and have no
+codepoint. Merging them forces every platform to invent private values for the
+non-text keys, which is the private protocol the old model's section 0.2 warns
+against. Section 9 of that model is exactly this problem.
+
+Mouse arrives in CELL coordinates, not pixels. The backend knows the cell
+geometry from open, so it converts once; otherwise every consumer repeats the
+division and they drift.
+
+
+4. What the headless backend does
+
+    open       allocates a frame buffer of the derived pixel size
+    present    copies the frame into it and counts the call
+    poll       returns events from a queue the test fills directly
+    clipboard  an in-memory string
+    close      frees
+
+Plus two functions that exist only in the headless build, for tests:
+
+    push_event   append a synthetic event to the queue
+    frame_at     read a pixel of the last presented frame
+
+Those two are the reason this milestone is checkable at all. They are not part
+of the seam and no real backend implements them.
+
+
+5. Test plan
+
+  seam
+    open with zero cols or rows refused; overflow refused
+    present with a buffer smaller than the frame refused, nothing copied
+    present twice: the second frame replaces the first, not blended
+    poll on an empty queue reports empty rather than returning a stale event
+    close then use refused rather than crashing
+
+  path, end to end and byte-exact
+    build a TextRect, put text, composite with a cleared overlay, present,
+      and read back the pixels that the compositor's own selftest already
+      pins - so the two agree rather than each being self-consistent
+    an opaque overlay covers the text underneath, verified through present
+    resize event changes the geometry a consumer reads
+
+  input
+    a text key arrives with a codepoint and no keycode
+    a non-text key arrives with a keycode and codepoint zero
+    modifiers survive both
+    a mouse event lands on the cell containing the pixel, and the pixel one
+      column to the right lands on the next cell
+
+  clipboard
+    set then get round-trips UTF-8 unchanged, including a multi-byte character
+    get into a buffer that is too small refuses rather than truncating silently
+
+
+6. What this milestone does NOT do
+
+No Win32, no X11, no Cocoa. No font: present takes pixels, and what draws
+glyphs into them is the compositor, which still uses the placeholder from
+milestone 1. No IME. No blocking event loop - poll never blocks, and who owns
+the loop is a question for the first real backend, not for the seam.
+
+A real backend is the next milestone and inherits these tests unchanged. If a
+platform cannot satisfy one of them, that is a finding about the seam, and the
+seam changes here rather than the platform being special-cased.
