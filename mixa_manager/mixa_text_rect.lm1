@@ -105,12 +105,12 @@ fn: mixa_rect_put_text (@: MixaTextRect rect; size_t: row; size_t: col; const: @
     ---
 return: written
 
-fn: mixa_rect_dump (@: MixaTextRect rect; @: char out; size_t: out_size) size_t
+fn: mixa_rect_dump (const: @(MixaTextRect rect); @: char out; size_t: out_size) size_t
     size_t: need
     size_t: r
     size_t: ccol
     size_t: o
-    @: MixaCell p
+    const: @(MixaCell p)
     unsigned: cp
     if: rect = 0
         return: 0U

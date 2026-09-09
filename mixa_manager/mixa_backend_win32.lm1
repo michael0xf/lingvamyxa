@@ -543,7 +543,7 @@ fn: mixa_win32_open_clip (@: void hwnd) int
     ---
 return: 1
 
-fn: mixa_backend_clipboard_get (@: MixaBackend backend; @: char out; size_t: cap) size_t
+fn: mixa_backend_clipboard_get (const: @(MixaBackend backend); @: char out; size_t: cap) size_t
     @: void h
     @: void p
     @: wchar_t wbuf
@@ -649,8 +649,8 @@ sub: mixa_backend_close (@: MixaBackend backend)
     ---
 end: mixa_backend_close
 
-fn: mixa_backend_frame_at (@: MixaBackend backend; size_t: x; size_t: y; @: MixaU8 out) int
-    @: MixaU8 px
+fn: mixa_backend_frame_at (const: @(MixaBackend backend); size_t: x; size_t: y; @: MixaU8 out) int
+    const: @(MixaU8 px)
     if: backend = 0
         return: 1
     if: out = 0

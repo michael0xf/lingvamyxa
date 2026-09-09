@@ -9,7 +9,7 @@ include: "mixa_manager/mixa_overlay.h" "<string.h>"
 #
 # Blend: out = (src * sa + dst * (255 - sa)) / 255; destination alpha stays 255.
 
-fn: mixa_composite (@: MixaTextRect text_rect; size_t: text_cw; size_t: text_ch; @: MixaTextRect upper_rect; size_t: upper_cw; size_t: upper_ch; @: MixaU8 out_rgba; size_t: out_size; size_t: width; size_t: height) int
+fn: mixa_composite (const: @(MixaTextRect text_rect); size_t: text_cw; size_t: text_ch; const: @(MixaTextRect upper_rect); size_t: upper_cw; size_t: upper_ch; @: MixaU8 out_rgba; size_t: out_size; size_t: width; size_t: height) int
     size_t: need
     size_t: x
     size_t: y
@@ -17,7 +17,7 @@ fn: mixa_composite (@: MixaTextRect text_rect; size_t: text_cw; size_t: text_ch;
     size_t: row
     size_t: i
     size_t: n
-    @: MixaCell cell
+    const: @(MixaCell cell)
     @: MixaU8 p
     unsigned: cp
     unsigned: bg

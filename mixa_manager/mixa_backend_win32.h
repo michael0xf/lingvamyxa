@@ -26,6 +26,6 @@ struct MixaBackend {
 };
 
 /* Win32-only test helper: copy one RGBA pixel of the last presented frame. */
-int mixa_backend_frame_at(MixaBackend *backend, size_t x, size_t y, MixaU8 *out);
+int mixa_backend_frame_at(const MixaBackend *backend, size_t x, size_t y, MixaU8 *out);
 
 #endif

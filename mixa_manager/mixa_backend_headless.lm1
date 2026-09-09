@@ -177,7 +177,7 @@ fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
     ---
 return: 0
 
-fn: mixa_backend_clipboard_get (@: MixaBackend backend; @: char out; size_t: cap) size_t
+fn: mixa_backend_clipboard_get (const: @(MixaBackend backend); @: char out; size_t: cap) size_t
     size_t: n
     if: backend = 0
         return: 0U
@@ -274,8 +274,8 @@ fn: mixa_backend_push_event (@: MixaBackend backend; const: @(MixaEvent ev)) int
     c.free(local)
 return: 0
 
-fn: mixa_backend_frame_at (@: MixaBackend backend; size_t: x; size_t: y; @: MixaU8 out) int
-    @: MixaU8 px
+fn: mixa_backend_frame_at (const: @(MixaBackend backend); size_t: x; size_t: y; @: MixaU8 out) int
+    const: @(MixaU8 px)
     if: backend = 0
         return: 1
     if: out = 0

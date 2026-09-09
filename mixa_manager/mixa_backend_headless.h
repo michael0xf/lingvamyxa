@@ -31,6 +31,6 @@ struct MixaBackend {
 int mixa_backend_push_event(MixaBackend *backend, const MixaEvent *ev);
 
 /* Headless-only: copy one RGBA pixel of the last presented frame into out[4]. */
-int mixa_backend_frame_at(MixaBackend *backend, size_t x, size_t y, MixaU8 *out);
+int mixa_backend_frame_at(const MixaBackend *backend, size_t x, size_t y, MixaU8 *out);
 
 #endif

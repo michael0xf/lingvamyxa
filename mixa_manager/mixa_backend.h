@@ -209,7 +209,7 @@ int mixa_backend_poll(MixaBackend *backend, MixaEvent *out);
  * entering text a keyboard cannot easily produce - copy a name from the panel,
  * paste it into the rename dialog - which is why full IME integration can be
  * deferred without making those locales unusable. */
-size_t mixa_backend_clipboard_get(MixaBackend *backend, char *out, size_t cap);
+size_t mixa_backend_clipboard_get(const MixaBackend *backend, char *out, size_t cap);
 int mixa_backend_clipboard_set(MixaBackend *backend, const char *text);
 
 void mixa_backend_close(MixaBackend *backend);
