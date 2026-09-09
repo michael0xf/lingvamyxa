@@ -65,7 +65,7 @@ the own-decl line (not a second l2_q; no graph load over the
 incoming value). Without that bind the argument is never
 published. Own-decl inside if is rejected. Hidden through
 arguments are not yet lowered. `const @(LmP0Text)` / `@: LmP0Text`
-are the existing C ABI from l1src/p0.h (data, length), a limited
+are the existing C ABI from generated l1src/p0.lm1.h (data, length), a limited
 migration adapter: include and typed schema only, not a general
 C header parser and not a silent C layout for new L2 Structures.
 Lmx access stays child-index. Known C: c.strlen, c.memcmp,
@@ -76,7 +76,7 @@ is rejected. Stores through const LmP0Text* are
 lm_p0_identifier_payload. `lm_p0_text_equals` is the mutable
 fallback: strlen + length + memcmp, no extra FNV. Prepared
 hashes use explicit borrowed `L2ImmutQuery` (l2src header, not
-p0.h, not an Lmx Structure): `lm_p0_immut_query_make` fills
+p0.lm1.h, not an Lmx Structure): `lm_p0_immut_query_make` fills
 data/length/FNV-1a 64 once; `lm_p0_text_equals_query` hashes
 current text bytes against that hash then memcmp. Backing of
 the query must stay alive and unchanged; a C literal satisfies

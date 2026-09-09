@@ -773,9 +773,9 @@ SPEC 21.5 / 21.6  own size_t field of callable->node
 
 SPEC 11.3.1  declared typed C-address parameter
     DECIDED for this port: `const @(LmP0Text)` and `@: LmP0Text` are
-    the existing C ABI in l1src/p0.h. data/length are typed raw
+    the existing C ABI in generated l1src/p0.lm1.h. data/length are typed raw
     projections (`->` in C, `\` in L1), not Lmx child indices.
-    Include of p0.h plus this closed schema is a limited migration
+    Include of p0.lm1.h plus this closed schema is a limited migration
     adapter, not a general C header parser. New L2 Structures do not
     gain a silent C layout.
 
@@ -1393,3 +1393,11 @@ SPEC 3.4.4.1 / old lm2 parser / current P0: inline Python-like
     quotes plus closer encode three body quotes. Both quote kinds.
     l2_tok_text dest is 256 in every caller (l2_tok, piece, s0-s3,
     l2_act_at slots). ===/*** comment fences untouched.
+    171100: producers include generated l1src/p0.lm1.h (l2_text_hash,
+    l2trans emit). run_l2trans no longer predefines LM_H_… when a TU
+    also named leftover l1src/p0.h. fmt_buf.c links l2trans.c with
+    main renamed and calls l2_fmt_l1_string / l2_tok_text: empty,
+    exact fit, one-byte overflow including escape expansion, NUL /
+    control / high bytes, both quote kinds, decoded bytes checked,
+    overflow rejected without writing past cap. Puts stream tests
+    remain; they are not this buffer contract.
