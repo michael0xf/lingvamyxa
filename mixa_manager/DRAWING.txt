@@ -1,0 +1,84 @@
+Mixa Manager - the single drawing API
+One drawer. Text and pseudographics. Both layers. No third case.
+
+
+1. The rule
+
+There is ONE drawing API. It draws text and pseudographics into a CELL SURFACE,
+and it does not know which layer the surface belongs to.
+
+Fixed by the language owner on 2026-09-09, as the deliberate simplification
+away from ClearShell: simpler and more discrete, one API that draws into the
+graphical window and the text window alike.
+
+The consequence to guard is the interesting one. If the drawer ever learns which
+layer it is drawing into - a special case for the panel, a graphics call that
+only the upper layer has - the property is gone and the two layers stop being
+interchangeable. Every future addition is measured against that: can the text
+layer accept this call too? If not, it does not belong in the drawer.
+
+
+2. What this means for the two surfaces
+
+Today TextRect is a cell grid and OverlayRect is an RGBA raster with some cell
+helpers bolted on. That asymmetry is the thing to remove: the upper layer
+becomes a cell grid of the SAME TYPE, and the raster disappears.
+
+They then differ in exactly two ways, neither of which the drawer sees:
+
+    cell size    each layer has its own, from its own font - section 10.3 of
+                 BACKEND_SEAM
+    alpha        the upper layer is drawn semi-transparently so the console
+                 stays readable underneath. The text layer simply uses opaque
+                 everywhere
+
+So MixaCell gains a background alpha. One byte, per cell rather than per
+surface, because a panel is a translucent background carrying OPAQUE text and a
+selected row may be opaque while the rest is not. A per-surface constant cannot
+express that; a per-cell byte expresses it without any special case.
+
+Glyphs are always drawn opaque. Translucency belongs to the background, not to
+the letters - text that fades into whatever lies beneath is the unreadable
+result this whole design is avoiding.
+
+
+3. What the drawer draws
+
+Text, and pseudographics. Nothing else, ever - the old model's section 14 asks
+for box drawing that aligns exactly with the cell grid, and the interface has no
+graphical elements at all.
+
+    text        a UTF-8 string from a cell position, with colours and style
+    fill        a rectangle of cells with a codepoint and attributes
+    line        horizontal or vertical, in cells
+    frame       a rectangle border
+
+Line style is single or double, because Norton-style interfaces use both and
+choosing between them is not the caller's business to spell out per character.
+
+3.1. Junctions are the actual work
+
+Drawing a line is trivial. What makes pseudographics look right or wrong is what
+happens where lines MEET: a T where a divider joins a frame, a cross where two
+dividers cross, a corner that must not overwrite the edge it lands on.
+
+So a line or frame does not blindly overwrite. Where it lands on a cell that
+already holds a box-drawing character, it MERGES: the result is the character
+carrying the union of the two sets of stubs. Drawing a vertical divider across a
+horizontal rule produces a cross; ending it on a frame edge produces a T.
+
+This is the difference between an interface that looks made and one that looks
+assembled, and it is cheap to do once in the drawer and impossible to fix later
+in every caller.
+
+
+4. Why this comes before glyph rasterization
+
+The drawer writes CELLS. Whether a cell later becomes a real glyph from the
+system font or the current placeholder is downstream of it.
+
+That ordering is not only the instruction; it is what keeps the tests. Drawer
+tests assert cell contents - this position holds this codepoint with these
+attributes - so they are exact, they need no font, they run headless, and they
+stay valid unchanged when real glyphs arrive. Tests written against pixels
+would have to be rewritten the moment the font appears.
