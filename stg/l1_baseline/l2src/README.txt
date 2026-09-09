@@ -36,9 +36,9 @@ symbols are `l2_m{i}`; intern and source lookup keep original names.
 empty (declared formals only). rec.sig is the interned full
 L2_SIG_V0 + ordered source-name/type contract. Runtime does not
 memcmp. Closed-unit devirtualization; actuals are temps before
-the call. Recursion is an implementation limit. At most 8 methods
-(non-main). OwnUsed tables grow to the source count. Address slots
-stay at most 4 per method. `lmx_ranges_init` is 1+N. Formals are hygienic `l2_p{i}_{j}`.
+the call. Recursion is an implementation limit. Method tables and
+OwnUsed tables grow to the source count. Address slots stay at most
+4 per method. `lmx_ranges_init` is 1+N. Formals are hygienic `l2_p{i}_{j}`.
 char/int/size_t and `const @(char)` formals, arity 1–4, int,
 size_t, `@: char`, `@: LmP0Text`, or void (`sub:`) result.
 At most 4 address slots `l2_s{i}_{j}` per method. Pure &&/|| stay L1 C expressions. Calls inside

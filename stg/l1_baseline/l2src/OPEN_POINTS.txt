@@ -1099,9 +1099,9 @@ checked against size_t overflow; cap that overshoots c.INT_MAX
 while need still fits is clamped to need. int narrowing uses
 c.INT_MAX, not a hardcoded 32-bit literal.
 
-Remaining implementation debt, not this slice: 8 methods, 4
-address slots, 16 intern contracts, 256-byte per-actual
-spelling, unsupported recursion. OwnUsed is source-sized (Unit 22).
+Remaining implementation debt, not this slice: 4 address slots,
+16 intern contracts, 256-byte per-actual spelling, unsupported
+recursion. OwnUsed and method tables are source-sized (Units 22–23).
 scan_indent is Unit 18, not this unit.
 
 Unit 18 - scan_indent_column parser port
@@ -1202,9 +1202,31 @@ Overflow vs OOM distinct. l2_release frees the tables.
 
 parser_physical_line.lm2 now holds position_in_slice as the 8th
 non-main helper (OwnUsed union i,ch,count,width,line,column).
-Isolated parser_position.lm2 kept. unit_nine still too many methods.
+Isolated parser_position.lm2 kept.
 
-Not this unit: method 8, intern 16, address 4, recursion, predef.
+Not this unit: intern 16, address 4, recursion, predef.
+Method tables are source-sized (Unit 23).
+
+Unit 23 - source-sized methods and layout helper merge
+------------------------------------------------------
+Files: l2trans.lm1, run_l2trans.ps1, parser_physical_line.lm2,
+tests/unit_own32_pub.lm2, OPEN_POINTS.txt, README.txt
+
+Method metadata, call-graph, and address-slot rows (stride 4)
+grow to the source method count (alloc kind 6). Main is not
+counted. unit_nine is a passing 9-method test. 17 and 33
+methods share one intern contract so intern16 cannot mask the
+method test. Recursion/cycle diagnostics unchanged.
+
+parser_physical_line.lm2 also holds indent_tab_column,
+visual_column_between, and scan_indent_column. Isolated
+parser_visual_column.lm2 / parser_scan_indent.lm2 kept; their
+differentials also run against the merged unit.
+
+Remaining blockers for full parser migration: intern contracts
+16, address slots 4, 256-byte actual spelling, unsupported
+recursion, unimplemented L2 predef, size_t cell pool 16
+(lmx_size_init).
 
 Unit 16 - nested expression emit scratch
 ----------------------------------------
