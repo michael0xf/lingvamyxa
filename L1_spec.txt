@@ -94,11 +94,6 @@ build baseline; promotion must preserve the live L2 sources.
     The body is ordinary L1 with no wrapper receiver, by the same principle
     that makes a `.lm1` document root the unit body: no `h:` and no `L1:`.
 
-    A rejected alternative is recorded so it is not revived: source
-    `name.lm1.h` with a compound-suffix classifier. It would have required
-    changing the final-extension rule and would have broken the invariant
-    that `.lm1.` marks an output rather than a source.
-
     Body content admitted: `struct:`, `enum:`, `fnptr:`, the `prototype:`
     WRAPPER form with `fn:`/`sub:` inside, a bodiless unit-level `fn:`/`sub:`,
     object-like `define:`, and `include:`. Field spelling inside `struct:` is
