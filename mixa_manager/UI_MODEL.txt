@@ -12,6 +12,28 @@ The console and the upper layer are where the Norton/FAR likeness stops.
     the whole row scrolls LEFT AND RIGHT together, with ONE shared horizontal
       scrollbar for the set
 
+1.0.2. The cursor belongs to the LOWER layer only
+
+Two things that are easy to conflate, because both mark "where you are" and both
+are drawn as cell attributes:
+
+    CURSOR      the text caret. LOWER layer only - the console, at its command
+                input line. The lower layer is a full text surface and this is
+                what a text surface has.
+
+    HIGHLIGHT   the current element in a list, a button, a panel. UPPER layer.
+                Keyboard interfaces always have a current element; see
+                PORT_OF_CLEARSHELL 2.8, where this had to be invented because a
+                touch interface has no such notion.
+
+THERE IS NO CURSOR IN THE UPPER LAYER. Not "not yet" - it is not wanted. Panels
+are navigated by moving the highlight, not by placing a caret, and adding one
+would give the user two competing indications of where they are.
+
+Neither needs anything new from the drawer: both are attribute changes on cells
+the drawer already writes, so it never learns about either. A blinking cursor is
+a timer in the turn loop, not a drawing capability.
+
 1.1. Two KINDS of button panel, not two positions
 
 An earlier version of this section said "a button panel at the top and another
