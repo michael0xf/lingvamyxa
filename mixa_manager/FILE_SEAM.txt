@@ -92,6 +92,25 @@ is the console, which is why the upper layer's transparency is functional rather
 than decorative.
 
 
+3.5. What the FIRST version needs, which is almost none of section 4
+
+Section 4 lists the operations THE MANAGER will need. It is not a list of things
+to implement now, and reading it as one would build panels' machinery before
+there are panels.
+
+The first runnable version needs exactly this much:
+
+    append to a file
+    read it back
+    its size
+
+Nothing else. No listing, no stat, no mkdir, remove or rename - those exist for
+the file panels, and there are no panels yet.
+
+So implement the SLICE, not the seam. The rest arrives when something needs it,
+which is how it stays possible to tell whether an operation is right: an
+operation with a caller can be judged, and one without can only be guessed at.
+
 4. Operations
 
 Deliberately small, and deliberately not a POSIX wrapper. Each is something the
