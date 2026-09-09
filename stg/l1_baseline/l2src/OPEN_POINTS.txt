@@ -1251,12 +1251,14 @@ shape). fail-malloc kind 6 while own rows exist (unit_own_meth).
 README arity 1–4 claim removed (Unit 17 already source-sized
 params). scan_ident does not re-mark uses.
 
-Next bounded parser stage: lm_p0_advance_layout_line
-(parser.lm1:529) into parser_physical_line.lm2. It only needs
-count_line_breaks + line_break_width_at already in that unit.
-@: size_t[0] load and store already emit (line[0]: line[0] + n).
-physical_line currently uses 8 intern contracts of 16. After
-that, frozen trailer_role / Document / indent stack need
+lm_p0_advance_layout_line is in parser_physical_line.lm2 (181710).
+It reuses count_line_breaks + line_break_width_at; @: size_t
+offset/line are the two explicit pointer outputs, including
+line[0]: line[0] + n. Nested helper calls stay in-unit.
+Differential vs parser.lm1: no final newline, LF, CRLF, lone CR,
+embedded breaks, zero-width, empty, NUL, sequential advances.
+physical_line intern contracts now include this sub (l2_m11).
+Next: frozen trailer_role / Document / indent stack need
 LmP0TrailerRole and L2 predef, not intern16 yet.
 
 Unit 25 - P0 close consumption (return trailer, end:name/fn, ---)
@@ -1306,7 +1308,7 @@ Legacy parse gate: tests/l1/run_legacy_p0.ps1 vs printTree.lm0
 oracle, root gen2 and STG gen2. Parse only; consumer omissions
 are the L1/L2 tests above. Inline `prototype:` drop and const:
 qualifier-distribution remain pending (not this unit).
-advance_layout_line remains queued.
+advance_layout_line landed in parser_physical_line.lm2 (181710).
 
 Unit 26 - triple-quote A+1 value decode
 --------------------------------------
