@@ -85,7 +85,7 @@ fn: mixa_composite (const: @(MixaTextRect text_rect); size_t: text_cw; size_t: t
             col: x / text_cw
             row: y / text_ch
             if: row < text_rect\rows && col < text_rect\cols
-                cell: text_rect\cells + (row * text_rect\cols + col)
+                cell: mixa_cell_at_const(text_rect, row, col)
                 sa: cell\alpha
                 if: sa != 0U
                     bg: cell\bg
@@ -124,7 +124,7 @@ fn: mixa_composite (const: @(MixaTextRect text_rect); size_t: text_cw; size_t: t
             col: x / upper_cw
             row: y / upper_ch
             if: row < upper_rect\rows && col < upper_rect\cols
-                cell: upper_rect\cells + (row * upper_rect\cols + col)
+                cell: mixa_cell_at_const(upper_rect, row, col)
                 sa: cell\alpha
                 if: sa != 0U
                     bg: cell\bg

@@ -47,6 +47,19 @@ fn: mixa_cell_at (@: MixaTextRect rect; size_t: row; size_t: col) @: MixaCell
         return: 0
 return: rect\cells + (row * rect\cols + col)
 
+# Const reader: same bounds checks, for callers that only read. Keeps
+# mixa_cell_at mutable for writers so const need not be cast away to peek.
+fn: mixa_cell_at_const (const: @(MixaTextRect rect); size_t: row; size_t: col) const: @(MixaCell)
+    if: rect = 0
+        return: 0
+    if: rect\cells = 0
+        return: 0
+    if: row >= rect\rows
+        return: 0
+    if: col >= rect\cols
+        return: 0
+return: rect\cells + (row * rect\cols + col)
+
 sub: mixa_rect_fill (@: MixaTextRect rect; unsigned: codepoint; unsigned: fg; unsigned: bg; unsigned: flags)
     size_t: i
     size_t: n
@@ -126,7 +139,7 @@ fn: mixa_rect_dump (const: @(MixaTextRect rect); @: char out; size_t: out_size) 
     while: r < rect\rows
         ccol: 0U
         while: ccol < rect\cols
-            p: rect\cells + (r * rect\cols + ccol)
+            p: mixa_cell_at_const(rect, r, ccol)
             cp: p\codepoint
             if: cp = 0U
                 out[o]: (cast: (char) 32)
