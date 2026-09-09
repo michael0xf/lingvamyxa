@@ -1,4 +1,4 @@
-# Mixa Manager: TextRect + OverlayRect/composite + headless backend selftests.
+# Mixa Manager: TextRect + OverlayRect/composite + headless backend + pump selftests.
 # Build root is the repository root (parent of mixa_manager).
 # Translator is the STABLE L1 under stg\l1_baseline, not the live tree.
 $ErrorActionPreference = "Stop"
@@ -24,7 +24,8 @@ $guards = @(
 $units = @(
     "mixa_core_selftest",
     "mixa_overlay_selftest",
-    "mixa_backend_selftest"
+    "mixa_backend_selftest",
+    "mixa_pump_selftest"
 )
 
 foreach ($unit in $units) {
@@ -35,9 +36,14 @@ foreach ($unit in $units) {
     & $trans $src $c
     if ($LASTEXITCODE -ne 0) { throw "translate failed: $src" }
 
+    # Native gcc warnings on stderr must not trip $ErrorActionPreference Stop.
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . $c -o $exe 2>&1 |
         Tee-Object -FilePath (Join-Path $log "$unit.gcc.log") | Out-Null
-    if ($LASTEXITCODE -ne 0) {
+    $gccRc = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    if ($gccRc -ne 0) {
         Get-Content (Join-Path $log "$unit.gcc.log")
         throw "gcc failed: $c"
     }
@@ -49,3 +55,4 @@ foreach ($unit in $units) {
 "mixa core ok"
 "mixa overlay ok"
 "mixa backend ok"
+"mixa pump ok"

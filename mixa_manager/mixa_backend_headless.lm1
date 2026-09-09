@@ -1,13 +1,16 @@
+predef: "mixa_manager/mixa_event_fifo.lm1"
 include: "mixa_manager/mixa_backend_headless.h" "<stdlib.h>" "<string.h>"
 
 # Headless MixaBackend: no window, no font, no platform. Seam ops plus
 # push_event / frame_at for tests. Design: BACKEND_SEAM.txt.
+# Event queue is mixa_event_fifo (Milestone 3 groundwork).
 
 fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; size_t: cell_width; size_t: cell_height) int
     size_t: width
     size_t: height
     size_t: nbytes
     @: MixaU8 block
+    @: MixaEventFifo inbox
     if: backend = 0
         return: 1
     if: cols = 0U
@@ -40,6 +43,14 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; size_
     block: (cast: (@: MixaU8) c.calloc(nbytes, 1U))
     if: block = 0
         return: 1
+    inbox: (cast: (@: MixaEventFifo) c.calloc(1U, c.sizeof(c.MixaEventFifo)))
+    if: inbox = 0
+        c.free(block)
+        return: 1
+    if: mixa_event_fifo_init(inbox) != 0
+        c.free(inbox)
+        c.free(block)
+        return: 1
     backend\is_open: 1
     backend\cols: cols
     backend\rows: rows
@@ -49,8 +60,7 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; size_
     backend\frame_h: height
     backend\frame_bytes: nbytes
     backend\frame: block
-    backend\queue_head: 0U
-    backend\queue_count: 0U
+    backend\inbox: inbox
 return: 0
 
 fn: mixa_backend_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t: bytes) int
@@ -68,10 +78,8 @@ fn: mixa_backend_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t:
 return: 0
 
 fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
-    @: MixaEvent slot
     @: MixaU8 block
     @: MixaU8 old_frame
-    size_t: idx
     size_t: new_cols
     size_t: new_rows
     size_t: cw
@@ -86,19 +94,13 @@ fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
     if: backend\is_open = 0
         out\kind: MIXA_EVENT_NONE
         return: 1
-    if: backend\queue_count = 0U
+    if: backend\inbox = 0
+        out\kind: MIXA_EVENT_NONE
+        return: 1
+    if: mixa_event_fifo_pop(backend\inbox, out) != 0
         out\kind: MIXA_EVENT_NONE
         return: 0
-    idx: backend\queue_head
-    slot: backend\queue + idx
-    c.memcpy(out, slot, c.sizeof(c.MixaEvent))
-    backend\queue_head: (idx + 1U)
-    if: backend\queue_cap != 0U
-        if: backend\queue_head >= backend\queue_cap
-            backend\queue_head: 0U
-        ---
     ---
-    backend\queue_count: backend\queue_count - 1U
     # Delivering RESIZE also adopts the new geometry (BACKEND_SEAM / F1).
     if: out\kind = MIXA_EVENT_RESIZE
         new_cols: out\cols
@@ -205,12 +207,13 @@ sub: mixa_backend_close (@: MixaBackend backend)
         if: backend\clipboard != 0
             c.free(backend\clipboard)
         ---
-        if: backend\queue != 0
-            c.free(backend\queue)
+        if: backend\inbox != 0
+            mixa_event_fifo_release(backend\inbox)
+            c.free(backend\inbox)
         ---
         backend\frame: 0
         backend\clipboard: 0
-        backend\queue: 0
+        backend\inbox: 0
         backend\frame_w: 0U
         backend\frame_h: 0U
         backend\frame_bytes: 0U
@@ -219,74 +222,37 @@ sub: mixa_backend_close (@: MixaBackend backend)
         backend\cell_width: 0U
         backend\cell_height: 0U
         backend\clipboard_len: 0U
-        backend\queue_cap: 0U
-        backend\queue_head: 0U
-        backend\queue_count: 0U
         backend\is_open: 0
     ---
 end: mixa_backend_close
 
 fn: mixa_backend_push_event (@: MixaBackend backend; const: @(MixaEvent ev)) int
-    @: MixaEvent fresh
-    @: MixaEvent slot
-    size_t: new_cap
-    size_t: i
-    size_t: src
-    size_t: dst
+    @: MixaEvent local
     if: backend = 0
         return: 1
     if: ev = 0
         return: 1
     if: backend\is_open = 0
         return: 1
-    if: backend\queue_count >= backend\queue_cap
-        if: backend\queue_cap = 0U
-            new_cap: 8U
-        else:
-            if: backend\queue_cap > ((cast: (size_t) -1) / 2U)
-                return: 1
-            ---
-            new_cap: backend\queue_cap * 2U
-        ---
-        fresh: (cast: (@: MixaEvent) c.calloc(new_cap, c.sizeof(c.MixaEvent)))
-        if: fresh = 0
-            return: 1
-        i: 0U
-        while: i < backend\queue_count
-            src: backend\queue_head + i
-            if: backend\queue_cap != 0U
-                if: src >= backend\queue_cap
-                    src: src - backend\queue_cap
-                ---
-            ---
-            dst: i
-            c.memcpy(fresh + dst, backend\queue + src, c.sizeof(c.MixaEvent))
-            i: i + 1U
-        ---
-        if: backend\queue != 0
-            c.free(backend\queue)
-        ---
-        backend\queue: fresh
-        backend\queue_cap: new_cap
-        backend\queue_head: 0U
-    ---
-    dst: backend\queue_head + backend\queue_count
-    if: backend\queue_cap != 0U
-        if: dst >= backend\queue_cap
-            dst: dst - backend\queue_cap
-        ---
-    ---
-    slot: backend\queue + dst
-    c.memcpy(slot, ev, c.sizeof(c.MixaEvent))
-    # Mouse: incoming col/row are pixels; convert once to cells.
-    if: slot\kind = MIXA_EVENT_MOUSE
+    if: backend\inbox = 0
+        return: 1
+    local: (cast: (@: MixaEvent) c.malloc(c.sizeof(c.MixaEvent)))
+    if: local = 0
+        return: 1
+    c.memcpy(local, ev, c.sizeof(c.MixaEvent))
+    # Mouse: incoming col/row are pixels; convert once to cells before push.
+    if: local\kind = MIXA_EVENT_MOUSE
         if: backend\cell_width = 0U || backend\cell_height = 0U
+            c.free(local)
             return: 1
         ---
-        slot\col: slot\col / backend\cell_width
-        slot\row: slot\row / backend\cell_height
+        local\col: local\col / backend\cell_width
+        local\row: local\row / backend\cell_height
     ---
-    backend\queue_count: backend\queue_count + 1U
+    if: mixa_event_fifo_push(backend\inbox, local) != 0
+        c.free(local)
+        return: 1
+    c.free(local)
 return: 0
 
 fn: mixa_backend_frame_at (@: MixaBackend backend; size_t: x; size_t: y; @: MixaU8 out) int

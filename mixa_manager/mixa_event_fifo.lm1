@@ -1,0 +1,122 @@
+include: "mixa_manager/mixa_event_fifo.h" "<stdlib.h>" "<string.h>"
+
+# Concrete FIFO of MixaEvent. Growable buffer with head+count (may wrap).
+# On grow, linearize to index 0 in FIFO order. Growth guards match own.lm1.
+
+fn: mixa_event_fifo_init (@: MixaEventFifo fifo) int
+    if: fifo = 0
+        return: 1
+    if: fifo\is_open != 0
+        return: 1
+    if: fifo\items != 0
+        return: 1
+    fifo\items: 0
+    fifo\capacity: 0U
+    fifo\head: 0U
+    fifo\count: 0U
+    fifo\is_open: 1
+return: 0
+
+sub: mixa_event_fifo_release (@: MixaEventFifo fifo)
+    if: fifo != 0
+        if: fifo\items != 0
+            c.free(fifo\items)
+        ---
+        fifo\items: 0
+        fifo\capacity: 0U
+        fifo\head: 0U
+        fifo\count: 0U
+        fifo\is_open: 0
+    ---
+end: mixa_event_fifo_release
+
+fn: mixa_event_fifo_push (@: MixaEventFifo fifo; const: @(MixaEvent ev)) int
+    @: MixaEvent fresh
+    @: MixaEvent slot
+    size_t: new_cap
+    size_t: i
+    size_t: src
+    size_t: dst
+    if: fifo = 0
+        return: 1
+    if: ev = 0
+        return: 1
+    if: fifo\is_open = 0
+        return: 1
+    # Guard addition overflow before count grows by one.
+    if: fifo\count > ((cast: (size_t) -1) - 1U)
+        return: 1
+    if: fifo\count >= fifo\capacity
+        if: fifo\capacity = 0U
+            new_cap: 8U
+        else:
+            if: fifo\capacity > ((cast: (size_t) -1) / 2U)
+                return: 1
+            ---
+            new_cap: fifo\capacity * 2U
+        ---
+        if: c.sizeof(c.MixaEvent) != 0U && new_cap > ((cast: (size_t) -1) / c.sizeof(c.MixaEvent))
+            return: 1
+        ---
+        fresh: (cast: (@: MixaEvent) c.calloc(new_cap, c.sizeof(c.MixaEvent)))
+        if: fresh = 0
+            return: 1
+        i: 0U
+        while: i < fifo\count
+            src: fifo\head + i
+            if: fifo\capacity != 0U
+                if: src >= fifo\capacity
+                    src: src - fifo\capacity
+                ---
+            ---
+            dst: i
+            c.memcpy(fresh + dst, fifo\items + src, c.sizeof(c.MixaEvent))
+            i: i + 1U
+        ---
+        if: fifo\items != 0
+            c.free(fifo\items)
+        ---
+        fifo\items: fresh
+        fifo\capacity: new_cap
+        fifo\head: 0U
+    ---
+    dst: fifo\head + fifo\count
+    if: fifo\capacity != 0U
+        if: dst >= fifo\capacity
+            dst: dst - fifo\capacity
+        ---
+    ---
+    slot: fifo\items + dst
+    c.memcpy(slot, ev, c.sizeof(c.MixaEvent))
+    fifo\count: fifo\count + 1U
+return: 0
+
+fn: mixa_event_fifo_pop (@: MixaEventFifo fifo; @: MixaEvent out) int
+    @: MixaEvent slot
+    size_t: idx
+    if: fifo = 0
+        return: 1
+    if: out = 0
+        return: 1
+    if: fifo\is_open = 0
+        return: 1
+    if: fifo\count = 0U
+        return: 1
+    idx: fifo\head
+    slot: fifo\items + idx
+    c.memcpy(out, slot, c.sizeof(c.MixaEvent))
+    fifo\head: (idx + 1U)
+    if: fifo\capacity != 0U
+        if: fifo\head >= fifo\capacity
+            fifo\head: 0U
+        ---
+    ---
+    fifo\count: fifo\count - 1U
+return: 0
+
+fn: mixa_event_fifo_count (const: @(MixaEventFifo fifo)) size_t
+    if: fifo = 0
+        return: 0U
+    if: fifo\is_open = 0
+        return: 0U
+return: fifo\count

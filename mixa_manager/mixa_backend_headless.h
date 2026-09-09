@@ -7,6 +7,7 @@
 #define MIXA_BACKEND_HEADLESS_H
 
 #include "mixa_manager/mixa_backend.h"
+#include "mixa_manager/mixa_event_fifo.h"
 
 struct MixaBackend {
     int is_open;
@@ -20,10 +21,9 @@ struct MixaBackend {
     MixaU8 *frame;
     char *clipboard;
     size_t clipboard_len; /* bytes, excluding NUL */
-    MixaEvent *queue;
-    size_t queue_cap;
-    size_t queue_head;
-    size_t queue_count;
+    /* Heap fifo so L1 can pass it without taking & of an embedded field.
+     * Allocated and inited in open; released in close. */
+    MixaEventFifo *inbox;
 };
 
 /* Headless-only: append a synthetic event. For MIXA_EVENT_MOUSE, incoming
