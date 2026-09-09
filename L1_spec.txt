@@ -190,11 +190,11 @@ build baseline; promotion must preserve the live L2 sources.
   diagnostics. Tests: fn_close_*.lm1, invalid_fn_end_wrong.lm1,
   invalid_fn_end_empty.lm1.
 
-1.4.1 Colon vs nullary (current P0 syntax, 112600)
+1.4.1 Colon vs nullary (current P0 syntax)
   A colon Frame with no argument fields after complete inline/vertical
   body assembly is a P0 syntax error, independent of receiver name.
-  L1 inherits this from the new parser; it is not a translator-only
-  workaround. 112500's L1/L2-only placement is superseded.
+  L1 inherits this from the current parser; it is not a translator-only
+  workaround.
 
   Bare `f` is an identifier. Compact `f()` is an allowed empty compact
   Frame. `()` is an allowed empty bounded Structure. `f:` plus a

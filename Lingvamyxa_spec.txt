@@ -2932,36 +2932,42 @@ normalizes as two neighboring items at the current scan depth:
 
 Here `c` is not an argument of `print`. Its later validity depends on the surrounding receiver/profile and statement/value position.
 
-Physical newline alone does not close a short form. In a short form, the
-newline separator changes the current short-form level from N + 1 back to N,
-but the visible completion is caused by the following source item/trailer at N
-or below, not by the newline character itself. If the following source item is
-again at N + 1, the short form continues and the atomic N -> N + 1 step opens
-a new Structure field in the same argument sequence. Semicolon closes the
+Physical newline alone does not close a short form. N in this newline
+discussion is the physical source-line level, not the deepest inline nested
+head. A physical newline resets the source-level counter to the level on
+which that physical line was written. Inline short-form nesting does not
+carry its implicit argument level across a newline; that is why it is short.
+The visible completion of a still-open short form is caused by the following
+source item/trailer at N or below, not by the newline character itself. If
+the following source item is again at N + 1, the short form continues and the
+one-step N -> N + 1 increase opens a new Structure field in the same argument
+sequence. A following line whose written level is more than one above the
+physical line that just ended is a P0 syntax error. Semicolon closes the
 current open short form immediately. A matching `)` or `]` closes the current
 bounded/compact form; if a short form is still open inside that bounded form,
 the short form is completed as part of closing the bounded context. Comma
 remains an ordinary field separator inside the short form.
 
-Example of continuation by implicit argument level:
+INVALID. Expected P0 parse error 13 at 2:5: source level increase must be one
+step. A physical newline after `ShortForm1: 1 ShortForm2: 2` resets to
+ShortForm1 at level 0, not to the deeper inline ShortForm2. The next line
+starts at level 2, so P0 sees a forbidden two-level increase. The later `---`
+does not repair an earlier invalid increase.
 
 ShortForm1: 1 ShortForm2: 2
 . . ShortForm2_arg2
 . ShortForm1_arg3
 ---
 
-normalizes structurally as:
+Correct spelling. Consecutive physical source levels are 0 -> 1 -> 2 -> 1.
+Each increase is one step and the decrease is one step. There is no need to
+carry inline short-form nesting across a newline.
 
-ShortForm1(
-    1,
-    ShortForm2(
-        2,
-        ShortForm2_arg2
-    ),
-    ShortForm1_arg3
-)
+ShortForm1: 1
+. ShortForm2: 2
+. . ShortForm2_arg2
+. ShortForm1_arg3
 
-This is valid but intentionally hard to read. Prefer clearer vertical or bounded spelling when nested short forms are not visually obvious.
 
 4.2.2. Operator Tokens and Compact Operator-Looking Spellings
 
@@ -3705,7 +3711,7 @@ opening form, but that is an opt-out from named close, not the default.
 
 `end:` is not the default close mechanism for all named frames. The default structural close is the ordinary source-level cut. `end:` is the explicit named form of that close. It is useful when the source wants to identify the close target directly, close across a long nested tail, or improve diagnostics and readability in long blocks.
 
-A standalone dash-fence source line is an explicit source-level marker used primarily by relaxed indentation notation as the counterpart of a canonical source-level delimiter line. It does not consume a target and performs no receiver call by itself. When followed by source items at the next deeper level, it materializes the head of an anonymous positional Structure at its own source level. Otherwise it is an admitted multi-level tail cutter: from a valid close position it may skip N open levels down to its own level. An ordinary downward transition without an admitted trailer (`end:<target>`, terminal `return:`, or `---`) may decrease by only one level. Bare `end` is separately forbidden everywhere; it is not a nullary operation and is not restored by the empty-colon rule. Empty `end:` is a current-P0 syntax error: one instance of the general rule that a colon Frame with no argument fields after body assembly is invalid; a valid nullary operation is written without `:`. Compact `f()` and `()` stay allowed. Together they invite Pascal-style stacks of redundant closers. Named `end:<target>` and terminal `return:` remain the readable closers; `---` is the short explicit alternative. When the current named frame allows nameless close and there is no ambiguity, a dash-fence line may close that frame as a shorter alternative to `end: name`. The prior end-only restriction is not the complete general colon/nullary rule. 112500's translator-only placement is superseded.
+A standalone dash-fence source line is an explicit source-level marker used primarily by relaxed indentation notation as the counterpart of a canonical source-level delimiter line. It does not consume a target and performs no receiver call by itself. When followed by source items at the next deeper level, it materializes the head of an anonymous positional Structure at its own source level. Otherwise it is an admitted multi-level tail cutter: from a valid close position it may skip N open levels down to its own level. An ordinary downward transition without an admitted trailer (`end:<target>`, terminal `return:`, or `---`) may decrease by only one level. Bare `end` is separately forbidden everywhere; it is not a nullary operation and is not restored by the empty-colon rule. Empty `end:` is a current-P0 syntax error: one instance of the general rule that a colon Frame with no argument fields after body assembly is invalid; a valid nullary operation is written without `:`. Compact `f()` and `()` stay allowed and are not closers. Bare `end` and empty `end:` invite Pascal-style stacks of redundant closers; named `end:<target>` and terminal `return:` remain the readable closers; `---` is the short explicit alternative. When the current named frame allows nameless close and there is no ambiguity, a dash-fence line may close that frame as a shorter alternative to `end: name`. The prior end-only restriction is not the complete general colon/nullary rule.
 
 Example named close:
 
@@ -8498,11 +8504,13 @@ Output invariants:
                           | nullary_line_body
                           | structural_value
 
-    colon_frame_body    ::= head ":" ( line_arguments | vertical_body )
-                            empty `head:` after complete body assembly is a
-                            current-P0 syntax error; compact `name()` and `()`
-                            are not this production. Historical 620db86 P0
-                            allowed the empty form.
+    colon_frame_body    ::= head ":" [ line_arguments ]
+                            inline tail and following vertical children at
+                            N+1 together form the assembled body; a colon
+                            Frame with zero argument fields after that
+                            assembly is a current-P0 syntax error. Compact
+                            `name()` and `()` are not this production.
+                            Historical 620db86 P0 allowed the empty form.
 
     semicolon_segment_separator
                          ::= ";"
@@ -8645,9 +8653,8 @@ Colon-empty specialized trailers such as `return:` and `end:` are the
 same P0 error. Bare `return` remains valid in its existing contexts.
 Bare `end` stays separately forbidden and is not restored as a nullary
 operation. Empty `end:` is one consequence of this general P0 rule, not
-a complete special-case substitute for it. The 112500 translator-only
-placement is superseded: the check lives in the new parser, not as a
-translator workaround.
+a complete special-case substitute for it. The check lives in the
+current parser after body assembly, not as a translator workaround.
 
 This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls or a built-in `case` form. The standalone dash-fence line is part of vertical structure syntax as a nameless delimiter: it may open an anonymous positional Structure when followed by a deeper item, separate sibling anonymous Structures, or close/cut an anonymous/implicit section.
 

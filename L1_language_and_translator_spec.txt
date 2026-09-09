@@ -475,14 +475,15 @@ P0 is already unambiguous for:
     string, L-prefix, exact quoted identifiers — raw spelling in the
     atom
   - field separators comma/semicolon; closers --- / end:
-  - current P0 rejects a colon Frame with no argument fields after
-    body assembly (`f:`, `outer(inner:)`, empty `end:` / `return:`).
-    Compact `f()` and `()` stay allowed. Historical 620db86 P0 kept
-    the zero-field colon shape. 112500 translator-only placement is
-    superseded by 112600.
   - name(...) is always a Frame; (...) is always an anonymous Structure
   - `c.`-surface chunks (`c.printf`, `c.a.b`) as one atom in compact
     split (parser.lm2:2646–2729)
+
+Required grammar (not a claim that every gate already ships it): a
+colon Frame with no argument fields after complete inline and vertical
+body assembly is a P0 syntax error. Compact `f()` and `()` stay
+allowed. Historical 620db86 P0 kept the zero-field colon shape.
+Shipped parser/gate status belongs in OPEN_POINTS.
 
 Bootstrap compact-token pairs that P0 keeps **whole**
 (lm_p0_scan_builtin_compact_atom_piece, parser.lm2:2757–2767):

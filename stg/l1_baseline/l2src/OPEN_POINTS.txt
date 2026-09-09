@@ -1337,7 +1337,14 @@ MUST PRINT then return 0.
 STG L1 source still frozen. Full run_seed/next/check not the
 whole-project gate this window. 111200 common P0 tree-contract initial batch is in
 tests/p0_tree_contract (620db86 goldens; root printTree match 19/19
-plus C_nested_short reject). Then advance_layout_line.
+plus C_nested_short reject). C_nested_short is a resolved historical
+prose error: the two-dot line after inline ShortForm1/ShortForm2 is
+an expected P0 error 13 at 2:5; keep the negative fixture. The
+corrected vertical spelling is a pending positive counterpart
+(reference-first in old tests/p0_tree_contract). Empty-colon is a
+current-parser P0 syntax error; 620db86 still accepts
+tests/empty_colon_frames.lmx. Ticket 112500 translator-only
+placement is superseded. Then advance_layout_line.
 
 Unit 16 - nested expression emit scratch
 ----------------------------------------

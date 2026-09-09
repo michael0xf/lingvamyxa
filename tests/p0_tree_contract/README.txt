@@ -19,15 +19,19 @@ skips null field values; a later walker must assert those consumer fields on
 the SAME source. Do not regenerate goldens from root/STG on mismatch.
 
 Known prose vs 620db86 disagreements (do not "fix" the old parser):
-- C_nested_short (spec ~2070): `. . ShortForm2_arg2` is a two-step increase;
-  620db86 rejects P0 parse error 13 at 2:5.
 - F_trailer_word (spec ~2500): prose wants 3 root fields (anon, atom, anon).
   620db86 printTree: 2 root fields; trailer_word sits inside the second
   structure with nested block1, not as a root-level atom.
 - B_call_int_a_semi_b: prose `call(int(a), (b))`; actual second field is atom
   "b", not an anonymous Structure wrapping b.
-- B_repeat_decl_p0: P0 does not repeat head `int` onto `y, 10`; second item is
-  a headless Structure. Repeat-head is a consumer profile, not P0.
+
+Resolved historical prose error, not a parser/spec discrepancy:
+- C_nested_short: the two-dot line after inline `ShortForm1: 1 ShortForm2: 2`
+  is INVALID. 620db86 and current P0 reject `P0 parse error 13 at 2:5`.
+  Keep this negative fixture and diagnostic. Correct spelling is vertical
+  `ShortForm1: 1` then `. ShortForm2: 2` (physical levels 0 -> 1 -> 2 -> 1).
+  Repeat-head on `B_repeat_decl_p0` is a consumer profile, not P0, and is
+  not itself a prose disagreement.
 
 Case table (spec c999038 -> fixture -> 620db86)
 ----------------------------------------------
@@ -42,7 +46,7 @@ B 2030 call int a b; ret        B_call_int_ab_ret                 call(int(a,b),
 B 2038 call int a; b            B_call_int_a_semi_b               call(int(a), b)  [atom b]
 B 2048 print a b; c             B_print_ab_semi_c                 print(a,b) then {c}
 B 1973 int x,5; y,10            B_repeat_decl_p0                  int(x,5) then {y,10}
-C 2070 nested short             C_nested_short                    REJECT code13 @2:5
+C nested short (invalid)        C_nested_short                    REJECT code13 @2:5 (resolved prose error)
 D 1936 L1: utf8: fence          D_utf8_inline / D_utf8_vertical   utf8 owns "raw text"
 E 2456 dotted pair              E_dotted_anon_pair                {body1} {body2}
 E dash pair                     E_dash_anon_pair                  same two anons
