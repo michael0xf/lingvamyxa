@@ -1158,8 +1158,33 @@ first byte, LF/CR/CRLF positions, ordinary chars/NUL, empty or
 reversed start/end, spaces/tabs/all-whitespace/nonspace boundary
 and nonzero start. Suite: l2trans gen2 ok.
 
-Not this unit: position_in_slice (proposed next, not started),
+Not this unit: position_in_slice (Unit 21),
 find_physical_line_end (parser_physical_line.lm2), Document.
+
+Unit 21 - position_in_slice / line_break_width_at
+------------------------------------------------
+Files: parser_position.lm2, run_l2trans.ps1, OPEN_POINTS.txt
+Frozen ref: l1src/parser.lm1:503-527 and parser_text.lm1:27-36
+(read-only)
+
+Closed unit:
+    lm_p0_line_break_width_at
+    lm_p0_position_in_slice   sub; two @: size_t outs
+    main
+
+CRLF width is 2; a slice that ends on CR is width 1 (helper length
+is the clamped index, not the full text length). Position assigns
+the size_t formal `index: length` then walks i < index, passing
+that clamped index as helper length. continue on a break. Tab/NUL
+increment the byte column, not visual_column. OwnUsed: i, line,
+column, width (4). size_t* formals are not OwnUsed.
+
+Differential vs frozen parser.lm1 includes empty/null-zero, clamp
+above length, before/inside/after CRLF, standalone CR/LF, multiple
+lines, non-default base, ordinary/NUL/tab, trailing lone CR, and
+a CRLF cut between CR and LF. Suite: l2trans gen2 ok.
+
+Not this unit: Document, indent stack, L2 module import, cap lift.
 
 Unit 16 - nested expression emit scratch
 ----------------------------------------
