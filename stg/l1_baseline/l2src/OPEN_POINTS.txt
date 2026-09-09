@@ -1379,13 +1379,17 @@ SPEC 21.13 p.4  Physical carrier of a declared throw and of runtime failure in
            fine for L1 and wrong for lm2, where each Message has its own arena
            and Messages may run concurrently (SPEC 21.7). Do not transfer it.
 
-Unit l2_tok_text triple lowering (163500)
+Unit l2_tok_text triple lowering (164650)
 ----------------------------------------
-L1  P0 python-string closer matches run_length=3 only
-    (l1src/parser.lm1 lm_p0_find_python_string_end). N>=4 fences
-    (`""""hello""""`) are unterminated at parse. AVOIDED for L2
-    lowering: compute fence N from the atom, A+1 when run>=N+1,
-    emit L1 escaped strings. Longer-fence admission is a missing
-    P0 scan, not an L2 C bypass. Negative:
-    tests/entry_puts_triple_fence4.lm2.
-    ===/*** comment fences untouched.
+SPEC 3.4.4.1 / old lm2 parser / current P0: inline Python-like
+    strings use EXACTLY THREE opening and closing quotes. Variable
+    exact-match fence length is for ===/*** blocks, not these
+    literals. AVOIDED: L2 lowering uses fixed N=3; body runs >=4
+    lose one quote. `""""hello""""` is specified-unterminated
+    (opener takes three; a four-quote trailing run is body, not a
+    closer) — tests/entry_puts_triple_fence4.lm2. Instruction
+    error in 163500 called that a P0 gap; it is not.
+    Body-leading quotes: `""""hello"""` → `"hello`; seven opening
+    quotes plus closer encode three body quotes. Both quote kinds.
+    l2_tok_text dest is 256 in every caller (l2_tok, piece, s0-s3,
+    l2_act_at slots). ===/*** comment fences untouched.
