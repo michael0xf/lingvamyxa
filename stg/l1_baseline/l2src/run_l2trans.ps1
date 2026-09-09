@@ -2546,6 +2546,142 @@ end: external
 
 Invoke-ScanIndent
 
+function Invoke-AdvanceLayout {
+    $cases = @'
+        size_t: off
+        size_t: ln
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("abc", 3U, 0U, 3U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("ab\ncd", 5U, 0U, 2U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("ab\r\ncd", 6U, 0U, 2U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("ab\rcd", 5U, 0U, 2U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 5U
+        lm_p0_advance_layout_line("a\nb\nc", 5U, 0U, 5U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 3U
+        lm_p0_advance_layout_line("abc", 3U, 1U, 1U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("", 0U, 0U, 0U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("a\0b\n", 4U, 0U, 3U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 2U
+        lm_p0_advance_layout_line("ab\ncd\n", 6U, 3U, 5U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 0U
+        ln: 1U
+        lm_p0_advance_layout_line("a\nb\n", 4U, 0U, 1U, @ off, @ ln)
+        lm_p0_advance_layout_line("a\nb\n", 4U, 2U, 3U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("\r\n", 2U, 0U, 0U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+        off: 99U
+        ln: 1U
+        lm_p0_advance_layout_line("\r\n", 1U, 0U, 0U, @ off, @ ln)
+        c.printf("%zu %zu\n", off, ln)
+'@
+
+    $refLm1 = Join-Path $out "adv_ref.lm1"
+    $refC = Join-Path $out "adv_ref.c"
+    $refExe = Join-Path $out "adv_ref.exe"
+    $refOut = Join-Path $out "adv_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed adv_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "adv_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'adv_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "adv_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_physical_line.lm2" "parser_physical_line" 0 "lm_p0_index_is_line_start"
+    $lm1 = Join-Path $out "parser_physical_line.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_' -or $text -match 'sub: lm_p0_') { throw "advance_layout must mangle method symbols" }
+    if ($text -notmatch 'sub: l2_m11') { throw "advance_layout missing mangled sub" }
+    if ($text -notmatch '@: size_t l2_p11_4') { throw "advance_layout missing size_t* offset" }
+    if ($text -notmatch '@: size_t l2_p11_5') { throw "advance_layout missing size_t* line" }
+    if ($text -notmatch 'l2_p11_4\[0\]:') { throw "advance_layout missing offset[0] store" }
+    if ($text -notmatch 'l2_p11_5\[0\]:') { throw "advance_layout missing line[0] store" }
+    if ($text -notmatch 'l2_m6\(') { throw "advance_layout must call count_line_breaks" }
+    if ($text -notmatch 'l2_m5\(') { throw "advance_layout must call line_break_width_at" }
+
+    $l2cases = $cases.Replace("lm_p0_advance_layout_line(", "l2_m11(unit, ")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "advance_layout L1 missing generated main return" }
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "adv_l2_drive.lm1"
+    $drvC = Join-Path $out "adv_l2_drive.c"
+    $drvExe = Join-Path $out "adv_l2_drive.exe"
+    $drvOut = Join-Path $out "adv_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed adv_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "adv_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'adv_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "adv_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "advance_layout mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+
+    Invoke-Leaf "l2src\parser_physical_line.lm2" "parser_physical_line" 0 "lm_p0_index_is_line_start"
+    $mtext = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "parser_physical_line.lm1"))).Replace("`r`n", "`n")
+    if ($mtext -notmatch 'sub: l2_m11') { throw "merged physical_line missing advance_layout" }
+    $ml2 = $cases.Replace("lm_p0_advance_layout_line(", "l2_m11(unit, ")
+    $mtail = "        return: 0`n    end: main`nend: external"
+    $mpos = $mtext.LastIndexOf($mtail)
+    if ($mpos -lt 0) { throw "merged physical_line L1 missing main return for advance" }
+    $mdrv = Join-Path $out "adv_merged_drive.lm1"
+    $mdrvC = Join-Path $out "adv_merged_drive.c"
+    $mdrvExe = Join-Path $out "adv_merged_drive.exe"
+    $mdrvOut = Join-Path $out "adv_merged_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $mdrv), ($mtext.Substring(0, $mpos) + ($ml2 + "`n        return: 0`n    end: main`nend: external").Replace("`r`n","`n")))
+    & $l1trans $mdrv $mdrvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed adv_merged_drive" }
+    Invoke-Gcc $mdrvC $mdrvExe (Join-Path $log "adv_merged_drive.gcc.log")
+    cmd /c "`"$mdrvExe`" > `"$mdrvOut`" 2> `"$(Join-Path $out 'adv_merged_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "adv_merged_drive exe failed" }
+    $mc = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $mdrvOut)).Replace("`r`n","`n")
+    if ($a -ne $mc) { throw "merged physical_line advance_layout mismatch vs parser.lm1`nREF:`n$a`nL2:`n$mc" }
+}
+
+Invoke-AdvanceLayout
+
+
 function Invoke-LineStart {
     $cases = @'
         c.printf("%d\n", lm_p0_index_is_line_start(0, 0U))

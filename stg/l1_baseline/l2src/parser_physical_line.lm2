@@ -127,6 +127,19 @@ sub: lm_p0_scan_indent_column (const: @(char source); size_t: start; size_t: end
     out_offset[0]: p
     out_column[0]: column
 end: lm_p0_scan_indent_column
+sub: lm_p0_advance_layout_line (const: @(char source); size_t: length; size_t: line_start; size_t: line_end; @: size_t offset; @: size_t line)
+    size_t: next_offset
+    size_t: line_breaks
+    size_t: width
+    next_offset: line_end
+    line_breaks: lm_p0_count_line_breaks(source, line_start, line_end)
+    width: lm_p0_line_break_width_at(source, length, next_offset)
+    if: width != 0U
+        line_breaks: line_breaks + 1U
+        next_offset: next_offset + width
+    offset[0]: next_offset
+    line[0]: line[0] + line_breaks
+end: lm_p0_advance_layout_line
 fn: main () int
     return: 0
 end: main
