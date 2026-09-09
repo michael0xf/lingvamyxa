@@ -61,6 +61,7 @@ $accept = 0
 $reject = 0
 $old = 0
 $extra = 0
+$added = 0
 try {
 Get-Content -LiteralPath $manifest | ForEach-Object {
     $line = $_.Trim()
@@ -124,11 +125,16 @@ Get-Content -LiteralPath $manifest | ForEach-Object {
         if ((Get-P0Loc $dS) -ne $loc0) { throw "STG diag parity: $src oracle=$d0 stg=$dS" }
         $reject++
     }
-    if ($src.StartsWith("tests\l1\")) { $extra++ } else { $old++ }
+    if ($src.StartsWith("tests\l1\")) { $extra++ }
+    $isAdded = 0
+    if ($src.StartsWith("tests\l1\")) { $isAdded = 1 }
+    if ($src.StartsWith("tests\p0_tree_contract\")) { $isAdded = 1 }
+    if ($src -eq "tests\invalid_empty_colon_standalone.lmx" -or $src -eq "tests\invalid_empty_colon_nested.lmx" -or $src -eq "tests\ok_colon_vertical_body.lmx" -or $src -eq "tests\ok_empty_compact_frame.lmx") { $isAdded = 1 }
+    if ($isAdded -ne 0) { $added++ } else { $old++ }
     $n++
 }
 
-Write-Output "legacy P0 corpus ok n=$n old=$old extra=$extra accept=$accept reject=$reject oracle=printTree.lm0 root=$gen stg=$gen"
+Write-Output "legacy P0 corpus ok n=$n old119=$old added=$added extra_l1=$extra accept=$accept reject=$reject oracle=printTree.lm0 root=$gen stg=$gen"
 } finally {
     Restore-HostedRegistryEnv
 }
