@@ -1115,15 +1115,27 @@ Closed unit:
     main
 
 Load ch after p<end. Both outs stored on the non-space stop and on
-run-to-end. continue after the early stores (sub `return` is
-unsupported body today; not widened in this slice). Tab helper is
-the frozen parenthesized form. Numeric 9 for tab.
+run-to-end. Early stop is a void `return` after the two [0]: stores
+(Unit 19). Tab helper is the frozen parenthesized form. Numeric 9
+for tab.
 
-OwnUsed: p, column, ch, keep (4). size_t* formals are not OwnUsed.
+OwnUsed: p, column, ch (3). size_t* formals are not OwnUsed.
 Test cells are harness-owned C addresses.
 
-Not this unit: indent stack, dash-fence, Document, @own, break,
-void-return-in-sub as a translator feature.
+Not this unit: indent stack, dash-fence, Document, @own, break.
+
+Unit 19 - void return in sub
+----------------------------
+Files: l2trans.lm1, run_l2trans.ps1, tests/unit_sub_ret.lm2,
+tests/unit_sub_retval.lm2, tests/unit_fn_noret.lm2,
+parser_scan_indent.lm2
+
+Bare `return` (atom) is admitted only when the current method is
+sub (l2_m_ret=8). Emit dirty-only checkpoint then `return`, so
+own fields publish before exit; nested if/while use the same
+emit_body path. Fallthrough off the end of a sub also checkpoints.
+`return: value` in sub and empty `return` in a value-returning fn
+stay unsupported body.
 
 Unit 16 - nested expression emit scratch
 ----------------------------------------
