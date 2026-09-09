@@ -122,8 +122,14 @@ int mixa_backend_open(MixaBackend *backend, size_t cols, size_t rows,
  * poll, which is where the geometry can change. */
 int mixa_backend_present(MixaBackend *backend, const MixaU8 *rgba, size_t bytes);
 
-/* Next pending event, or MIXA_EVENT_NONE. Never blocks. Who owns the event loop
- * is a question for the first real backend, not for the seam.
+/* Next pending event, or MIXA_EVENT_NONE. Never blocks.
+ *
+ * Not blocking is the contract, not an omission. The loop belongs to the
+ * Message: a running Message is an L3 Thread with a FIFO inbox and one serial
+ * lane (Lingvamyxa_spec.txt 19.29.6), and the backend is an event source
+ * feeding it, so poll is a drain. A blocking poll would move the wait inside
+ * the event source, which would then be deciding how long to wait on behalf of
+ * a Message whose other work it cannot see. BACKEND_SEAM.txt section 7.
  *
  * Delivering MIXA_EVENT_RESIZE also ADOPTS the new geometry, because by the
  * time a platform tells you it resized, its surface already has. poll re-derives
