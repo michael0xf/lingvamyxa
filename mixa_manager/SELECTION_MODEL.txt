@@ -24,7 +24,32 @@ battle-hardened. A desktop manager will do heavier file work in a week than a
 phone did in seven years, and it will be the first thing to reach the corners.
 
 
-2. The principle
+2. The intent, which explains the shape
+
+Stated by the language owner: this is used INSTEAD OF "select all" and then
+excluding what is not wanted - and the same mechanism works on the DIRECTORY
+TREE, at any depth. He has not met it in any other manager.
+
+Read that before the mechanism, because it changes what the mechanism is. It is
+not a compact encoding of a selection. It is a different OPERATION:
+
+    "everything under here, except these"
+
+expressed directly, composably, and at any depth of the tree.
+
+A flat list of paths cannot do this at all - not slowly, but not at all. "Select
+all" in a flat model means enumerating, and enumerating a large tree is exactly
+what nobody can afford. So other managers offer "select all" only within one
+visible directory, and excluding from a whole tree is not on the menu because
+their representation cannot hold the answer.
+
+It also explains, in hindsight, why the consolidation keeps one level below the
+top. If the everyday use is "select a subtree, then select a bigger tree around
+it, then drop the bigger one", the inner selection is not redundant bookkeeping
+- it is the user's earlier, still-wanted answer, and losing it would be losing
+work.
+
+2.1. The mechanism
 
 Selection is NOT a list of selected files. It is:
 
