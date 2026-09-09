@@ -475,3 +475,54 @@ font reports the same metrics twice; that is a legitimate answer, not a failure.
 This is why open's out-parameter is a STRUCT rather than two size_t pointers:
 the third layer in 10.2 is explicitly anticipated, and a struct grows without
 breaking the signature again.
+
+
+11. Choosing a backend AT RUNTIME, not at link time
+
+Required by the language owner: a cross-platform arrangement that can be swapped
+in SETTINGS. Do not bind hard to Win32.
+
+11.1. Where we actually stand
+
+Checked rather than assumed. The seam HOLDS: nothing Win32-specific -
+windows.h, HWND, HDC, WM_ - appears anywhere outside mixa_backend_win32. The
+pump calls mixa_backend_poll and the glyph compositor calls mixa_backend_glyph,
+and neither knows what is behind them.
+
+So the code is not bound to Win32. The BUILD is. A translation unit picks its
+backend with a predef line, and both backends define the SAME SYMBOL NAMES -
+mixa_backend_open and the rest - so the two cannot even be linked into one
+binary. Swapping means rebuilding, which is not a setting.
+
+11.2. The change: a dispatch table
+
+The operations keep their shape. What changes is how a consumer reaches them:
+
+    a struct of function pointers, one field per operation
+    each backend exports a constructor returning ITS table, under a name of its
+      own - mixa_backend_win32_table, mixa_backend_headless_table
+    the application selects a table at startup and passes it where it now
+      passes a backend
+
+Then both backends link into one binary, and which one runs is a decision rather
+than a build. The seam's operation list, its contracts and its tests are all
+unchanged - this is about dispatch, not about what is dispatched.
+
+11.3. Cost, stated honestly
+
+One indirection per call. present is once a frame, poll is once an event, and
+glyph is cached - so it is not a rendering cost. The real cost is that a table
+can be null or half-filled where a link error used to be impossible, so
+constructing one must be all-or-nothing and validated once at selection.
+
+11.4. Do it now, and what it buys later
+
+Now, because the call sites are few and retrofitting means touching every one of
+them. Later it is also the prerequisite for the distribution model's shape,
+where backends are EXTENSIONS to be installed rather than built in: dynamic
+loading needs a table to fill, so this is the half of that work which is cheap
+today.
+
+Dynamic loading is NOT part of this. A table selected from a fixed set is enough
+to satisfy "swappable in settings", and loading code from disk is a decision
+with its own consequences.
