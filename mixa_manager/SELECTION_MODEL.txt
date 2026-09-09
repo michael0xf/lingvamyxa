@@ -1,0 +1,107 @@
+Mixa Manager - the selection model
+Ported from ClearShell FSync.java. Port it whole; do not simplify it.
+
+
+1. Why this document exists
+
+File operations are the most dangerous feature in a manager, and this selection
+model is the part of ClearShell the language owner singles out as unlike
+anything he has met elsewhere. It has run for seven years without a failure.
+
+That history is the reason for the standing instruction: PORT IT AS IT IS. If a
+piece of it looks unnecessary, the burden is on the reader to explain seven
+clean years, not on the code to justify itself.
+
+
+2. The principle
+
+Selection is NOT a list of selected files. It is:
+
+    selected      a set of explicitly selected paths
+    exceptions    path -> the selected ancestor it is excluded FROM
+    reverse index ancestor -> the set of paths excluded under it
+
+A path counts as selected if it is in `selected`, OR if some ancestor is in
+`selected` and nothing between them excludes it.
+
+So selecting a directory selects everything beneath it WITHOUT enumerating
+anything. Deselecting one file inside a million-file tree stores ONE exception.
+The cost of a selection is the number of user gestures, not the number of files
+- which is the whole point, and why nothing gets materialised before an
+operation can start.
+
+3. The operations
+
+3.1. select(file)
+
+    already selected            -> log a conflict, do nothing
+    currently an exception      -> remove the exception; then add an explicit
+                                   selection ONLY if it is still not selected
+                                   by inheritance
+    otherwise                   -> add an explicit selection
+
+The middle case is the one to get right: after cancelling an exception the file
+may already be covered by an ancestor, and adding an explicit entry as well
+would leave a redundant one behind.
+
+3.2. removeSelect(file)
+
+    remove any explicit selection; if there was one, DROP every exception
+      registered under it - they are meaningless once it is gone
+    then, if it is still selected by inheritance, record an exception against
+      the ancestor that selects it
+    if neither applied, the call did nothing - report that
+
+3.3. The query, and the consolidation inside it
+
+Walking up from the file:
+
+    the file itself is an exception          -> not selected
+    a parent is an exception                 -> stop. If a lower selected
+                                                ancestor was already found,
+                                                that one wins; otherwise not
+                                                selected
+    a parent is selected                     -> remember it, keep walking
+
+Remembering while walking up gives the ancestors ordered topmost-first. The
+topmost wins.
+
+The query also CONSOLIDATES: when several nested ancestors are selected, the
+lower ones are folded into the topmost and their exceptions are re-pointed at
+it. A read operation mutating the structure is unusual and is deliberate here -
+it is what keeps the representation from accumulating redundant nested
+selections over a long session.
+
+The lower-selection-wins rule is not a detail. It is what lets a user select a
+tree, exclude a subtree, and then re-select something inside the excluded part.
+
+
+4. One thing I did not understand, offered as a question rather than a defect
+
+In FSync.isSelect2 the consolidation loop is `while (excessSelects.size() > 1)`.
+With three nested selected ancestors that leaves the middle one in `selected`,
+unconsolidated, still holding its own exceptions.
+
+I traced the queries and it does NOT produce a wrong answer: isSelect3 finds
+either the topmost or the middle one, and the middle one's exceptions still
+point at it and still apply. So it is a redundancy in the representation rather
+than an error in the result - which is consistent with seven years of clean
+operation, since nothing observable goes wrong.
+
+I am recording it as a question because I cannot tell whether it is deliberate.
+It is NOT a reported bug: it is a reading of the code against seven years of
+production evidence, and the evidence outranks the reading. If the port
+reproduces `> 1` it will behave identically; if someone decides it should be
+`> 0`, that is a tidiness change and must be tested as one.
+
+
+5. What the port must not do
+
+Do not "simplify" this into a flat set of paths. The flat version is what every
+other manager does, it is what makes selecting a large tree slow or impossible,
+and it is precisely what this model avoids.
+
+Do not materialise a selection into a list before an operation. Copy, move and
+overwrite take the SELECTION, and walk it lazily - FSync's own copy, move,
+overwrite and moveOverwrite all take the current directory and the selection
+rather than an array of files.
