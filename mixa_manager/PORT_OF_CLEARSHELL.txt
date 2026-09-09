@@ -198,3 +198,86 @@ When a question arises that these documents do not answer, the answer is
 ClearShell's behaviour. Go and read it. Only when its answer is unsuitable for
 a desktop does a delta get added here - and then it gets WRITTEN DOWN here,
 because an unrecorded delta is indistinguishable from a bug.
+
+
+5. Observations from reading the source
+
+The source is now in the repository at mixa_manager/clearshell_reference/ - Java
+only, Android manifest and res/ deliberately omitted. Line numbers below are
+from that copy and were correct when written; if one has drifted, the name is
+what to search for.
+
+Recorded here at the END of this document, and appended to rather than
+rewritten, so the reasoning stays with the port that used it.
+
+5.1. Layout is derived, never constant
+    com/mtk/shell/ClearShell.java  init(), ~697
+
+One quantity is MEASURED - a real Button, real font, real text, then
+getMeasuredHeight(). Everything else is an integer shift of it: height plus a
+quarter, width (h<<1)-(h>>2), margin h>>5, and 1.5 of the longer screen side.
+There is no pixel constant and no fraction anywhere in it. This is the reason it
+works from a tablet to an mp3 player, and it is the rendering doctrine written
+before we wrote it down.
+
+5.2. Overflow is a SCROLLING problem, never a scaling one
+    com/mtk/shell/ClearShell.java  freshLayout(), ~1772
+
+Buttons sit in EXPLICIT LINES, not auto-wrap. Inside a line x += width + margin;
+between lines y += height + margin; a null entry is a separator advancing
+h>>1. Panel height and width come from the maxima. The panel then sits inside a
+horizontal scroll - so when buttons do not fit they are not shrunk, not
+re-wrapped and not dropped. They scroll.
+
+5.3. The row of lists IS the path
+    com/mtk/shell/StorageList.java  initParent() ~287, up-operation ~185,
+    dirs.get(position) ~468
+
+dirs holds the chain from the disk root to the CURRENT directory - the last
+element is where you are, not the parent - and positions holds, per level, the
+index of the entry descended through. Going up pops the rightmost list and
+restores its remembered cursor.
+
+5.4. There is no ".." and the parent concept is still richer than ".."
+    com/mtk/shell/ClearShell.java  getView() ~4889
+
+The literal string does not occur anywhere in the source. Instead every list
+opens with an ancestor block: isParent is position < dirsSize(), so the first
+rows are the whole path - roots entry, disk root, down to the current directory
+- before the directory's own contents. Directories then files.
+
+I searched for the string, failed to find it, and concluded the mechanism was
+absent. It was not. Do not repeat that: absence of a spelling is not absence of
+a concept.
+
+5.5. The ancestor gradient is COMMENTED OUT
+    com/mtk/shell/ClearShell.java  ~9452
+
+A scale factor shading ancestor rows by depth exists but is disabled. Do not
+port it as live behaviour without asking - "fixing" a deliberate omission is a
+way to make the port wrong while looking careful.
+
+5.6. Command execution, and what the console log needs
+    com/mtk/shell/ClearShell.java  ~13700 and ShellOutputCapture ~13464
+
+The command is wrapped in a script that prints a MARKER line carrying exit
+status and working directory, tab separated. stderr is merged into stdout, and
+stdin is closed so that a command like cat does not wait forever. Output is then
+captured with head, line and tail limits, and the MIDDLE IS DROPPED when a
+command is noisy - which is what we do not port, because our scrollback is a
+file. The marker line we do port; see FILE_SEAM.txt.
+
+5.7. mtk/map and com/mtk/map are a LIBRARY, not shell code
+
+They are a published one - OverlappingTreesPlainMap, shipped as mtkmap-*.jar.
+Item, Tag, Array and the tables live there. Item is worth reading for its own
+sake: Named, IValue, IPointer, ISrc, IStorage, children addressed by name,
+pointers, tags - which is recognisably the same ontology as Lmx, arrived at
+independently in Java.
+
+5.8. The selection model
+    com/mtk/shell/FSync.java
+
+Documented separately and at length in SELECTION_MODEL.txt, including the
+consolidation loop that I twice suspected of being a defect and which testing
+showed to be correct and load-bearing.

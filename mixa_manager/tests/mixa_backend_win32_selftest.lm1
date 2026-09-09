@@ -19,9 +19,10 @@ return: 1
 fn: main () int
     @: MixaBackend be
     @: MixaTextRect rect
-    @: MixaOverlayRect overlay
+    @: MixaTextRect upper
     @: MixaEvent got
     @: MixaCellMetrics m
+    @: MixaCell ucell
     @: MixaPump pump
     @: MixaU8 out
     @: MixaU8 first_bits
@@ -43,11 +44,11 @@ fn: main () int
 
     be: (cast: (@: MixaBackend) c.calloc(1U, c.sizeof(c.MixaBackend)))
     rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
-    overlay: (cast: (@: MixaOverlayRect) c.calloc(1U, c.sizeof(c.MixaOverlayRect)))
+    upper: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
     got: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
     pump: (cast: (@: MixaPump) c.calloc(1U, c.sizeof(c.MixaPump)))
     m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
-    if: be = 0 || rect = 0 || overlay = 0 || got = 0 || pump = 0 || m = 0
+    if: be = 0 || rect = 0 || upper = 0 || got = 0 || pump = 0 || m = 0
         c.printf("mixa win32: alloc failed\n")
         return: 1
 
@@ -229,22 +230,21 @@ fn: main () int
         c.printf("mixa win32: reopen for e2e failed\n")
         return: 1
     mixa_win32_drain(be, got, 64)
-    if: mixa_overlay_open(overlay, 3U, 2U, 4U, 5U) != 0
-        c.printf("mixa win32: overlay open failed\n")
-        return: 1
     if: mixa_rect_open(rect, 2U, 3U) != 0
         c.printf("mixa win32: text rect open failed\n")
         return: 1
+    if: mixa_rect_open(upper, 2U, 3U) != 0
+        c.printf("mixa win32: upper rect open failed\n")
+        return: 1
     mixa_rect_fill(rect, 0U, 15U, 1U, 0U)
     mixa_rect_put_text(rect, 0U, 1U, "A", 15U, 1U, 0U)
-    need: overlay\width * overlay\height * 4U
+    need: (3U * 4U) * (2U * 5U) * 4U
     c.free(out)
     out: (cast: (@: MixaU8) c.malloc(need))
     if: out = 0
         c.printf("mixa win32: e2e out alloc failed\n")
         return: 1
-    mixa_overlay_clear(overlay)
-    if: mixa_composite(rect, overlay, out, need) != 0
+    if: mixa_composite(rect, 4U, 5U, upper, 4U, 5U, out, need, 12U, 10U) != 0
         c.printf("mixa win32: composite clear failed\n")
         failures: failures + 1
     if: mixa_backend_present(be, out, need) != 0
@@ -263,11 +263,16 @@ fn: main () int
         c.printf("mixa win32: e2e glyph not palette[fg]\n")
         failures: failures + 1
 
-    mixa_overlay_clear(overlay)
-    if: mixa_overlay_fill_cell_block(overlay, 0U, 1U, 1U, 1U, 0U, 0U, 255U, 255U) != 0
-        c.printf("mixa win32: opaque fill failed\n")
-        failures: failures + 1
-    if: mixa_composite(rect, overlay, out, need) != 0
+    # opaque upper cell: palette[4]={0,0,170} (cell model has no raw RGB)
+    c.memset(upper\cells, 0, upper\rows * upper\cols * c.sizeof(c.MixaCell))
+    ucell: mixa_cell_at(upper, 0U, 1U)
+    if: ucell = 0
+        c.printf("mixa win32: upper cell_at failed\n")
+        return: 1
+    ucell\codepoint: 0U
+    ucell\bg: 4U
+    ucell\alpha: 255U
+    if: mixa_composite(rect, 4U, 5U, upper, 4U, 5U, out, need, 12U, 10U) != 0
         c.printf("mixa win32: composite opaque failed\n")
         failures: failures + 1
     if: mixa_backend_present(be, out, need) != 0
@@ -276,7 +281,7 @@ fn: main () int
     if: mixa_backend_frame_at(be, 4U, 0U, pix) != 0
         c.printf("mixa win32: opaque frame_at failed\n")
         failures: failures + 1
-    if: pix[0] != 0 || pix[1] != 0 || pix[2] != 255 || pix[3] != 255
+    if: pix[0] != 0 || pix[1] != 0 || pix[2] != 170 || pix[3] != 255
         c.printf("mixa win32: opaque overlay did not cover glyph\n")
         failures: failures + 1
 
@@ -556,9 +561,9 @@ fn: main () int
         failures: failures + 1
 
     c.free(out)
-    mixa_overlay_release(overlay)
+    mixa_rect_release(upper)
     mixa_rect_release(rect)
-    c.free(overlay)
+    c.free(upper)
     c.free(rect)
     c.free(got)
     c.free(pump)

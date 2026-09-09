@@ -1,167 +1,136 @@
 predef: "mixa_manager/mixa_composite.lm1"
 include: "<stdio.h>" "<string.h>"
 
-# OverlayRect + composite pixel contract. No window.
+# Cell-grid composite contract. Upper layer is MixaTextRect (no raster).
 
 fn: main () int
-    @: MixaOverlayRect overlay
-    @: MixaTextRect rect
-    @: MixaU8 px
+    @: MixaTextRect text
+    @: MixaTextRect upper
+    @: MixaCell ucell
     @: MixaU8 out
-    @: MixaU8 edge
-    []: size_t ox 1
-    []: size_t oy 1
+    @: MixaU8 px
     []: MixaU8 tiny 4
     size_t: need
-    size_t: i
-    size_t: n
+    size_t: width
+    size_t: height
+    size_t: text_cw
+    size_t: text_ch
+    size_t: upper_cw
+    size_t: upper_ch
+    size_t: ox
+    size_t: oy
     int: failures
     int: rc
     unsigned: v
     failures: 0
 
-    overlay: (cast: (@: MixaOverlayRect) c.calloc(1U, c.sizeof(c.MixaOverlayRect)))
-    rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
-    if: overlay = 0 || rect = 0
+    text: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    upper: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    if: text = 0 || upper = 0
         c.printf("mixa overlay: header allocation failed\n")
         return: 1
 
-    if: mixa_overlay_open(overlay, 3U, 2U, 4U, 5U) != 0
-        c.printf("mixa overlay: open 3x2 cell 4x5 failed\n")
-        return: 1
-    if: overlay\width != 12U || overlay\height != 10U
-        c.printf("mixa overlay: open pixel size mismatch\n")
-        failures: failures + 1
-    if: overlay\cols != 3U || overlay\rows != 2U
-        c.printf("mixa overlay: open cell grid mismatch\n")
-        failures: failures + 1
-
-    # Fresh overlay: all alpha 0
-    i: 0U
-    n: overlay\width * overlay\height
-    while: i < n
-        px: overlay\pixels + (i * 4U)
-        if: px[3] != 0
-            c.printf("mixa overlay: fresh pixel alpha not 0\n")
-            failures: failures + 1
-            i: n
-        ---
-        i: i + 1U
-    ---
-
-    # pixel_at OOB by x and by y separately
-    if: mixa_overlay_pixel_at(overlay, 12U, 0U) != 0
-        c.printf("mixa overlay: pixel_at x OOB not 0\n")
-        failures: failures + 1
-    if: mixa_overlay_pixel_at(overlay, 0U, 10U) != 0
-        c.printf("mixa overlay: pixel_at y OOB not 0\n")
-        failures: failures + 1
-    px: mixa_overlay_pixel_at(overlay, 0U, 0U)
-    if: px = 0
-        c.printf("mixa overlay: pixel_at in bounds returned 0\n")
-        failures: failures + 1
-
-    # cell_origin matches section 1: x=col*cw, y=row*ch
-    if: mixa_overlay_cell_origin(overlay, 1U, 2U, ox, oy) != 0
-        c.printf("mixa overlay: cell_origin failed\n")
-        failures: failures + 1
-    if: ox[0] != 8U || oy[0] != 5U
-        c.printf("mixa overlay: cell_origin values wrong\n")
-        failures: failures + 1
-
-    # fill_cell_block paints exactly its rect
-    if: mixa_overlay_fill_cell_block(overlay, 0U, 1U, 1U, 1U, 10U, 20U, 30U, 255U) != 0
-        c.printf("mixa overlay: fill_cell_block failed\n")
-        failures: failures + 1
-    px: mixa_overlay_pixel_at(overlay, 4U, 0U)
-    if: px = 0 || px[0] != 10 || px[1] != 20 || px[2] != 30 || px[3] != 255
-        c.printf("mixa overlay: fill_cell_block inside not painted\n")
-        failures: failures + 1
-    edge: mixa_overlay_pixel_at(overlay, 8U, 0U)
-    if: edge = 0 || edge[0] != 0 || edge[1] != 0 || edge[2] != 0 || edge[3] != 0
-        c.printf("mixa overlay: fill_cell_block spilled one column right\n")
-        failures: failures + 1
-    edge: mixa_overlay_pixel_at(overlay, 3U, 0U)
-    if: edge = 0 || edge[3] != 0
-        c.printf("mixa overlay: fill_cell_block spilled one column left\n")
-        failures: failures + 1
-
-    # reopen refuse
-    if: mixa_overlay_open(overlay, 3U, 2U, 4U, 5U) = 0
-        c.printf("mixa overlay: re-open accepted\n")
-        failures: failures + 1
-
-    mixa_overlay_clear(overlay)
-    i: 0U
-    n: overlay\width * overlay\height
-    while: i < n
-        px: overlay\pixels + (i * 4U)
-        if: px[3] != 0
-            c.printf("mixa overlay: clear left non-zero alpha\n")
-            failures: failures + 1
-            i: n
-        ---
-        i: i + 1U
-    ---
-
-    if: mixa_rect_open(rect, 2U, 3U) != 0
+    # --- same-size grid: text 8x16, upper 8x16, extent 24x32 (3x2 cells) ---
+    text_cw: 8U
+    text_ch: 16U
+    upper_cw: 8U
+    upper_ch: 16U
+    width: 24U
+    height: 32U
+    if: mixa_rect_open(text, 2U, 3U) != 0
         c.printf("mixa overlay: text rect open failed\n")
         return: 1
-    mixa_rect_fill(rect, 0U, 15U, 1U, 0U)
-    # cell (0,0) empty bg=1 (red 170,0,0); cell (0,1) glyph 'A' fg=15 bg=1
-    mixa_rect_put_text(rect, 0U, 1U, "A", 15U, 1U, 0U)
+    if: mixa_rect_open(upper, 2U, 3U) != 0
+        c.printf("mixa overlay: upper rect open failed\n")
+        return: 1
 
-    need: overlay\width * overlay\height * 4U
+    mixa_rect_fill(text, 0U, 15U, 1U, 0U)
+    mixa_rect_put_text(text, 0U, 1U, "A", 15U, 1U, 0U)
+    # upper starts calloc-zero = transparent empty
+    need: width * height * 4U
     out: (cast: (@: MixaU8) c.malloc(need))
     if: out = 0
         c.printf("mixa overlay: out buffer alloc failed\n")
         return: 1
 
-    # composite with clear overlay -> cell backgrounds (and stub glyph)
-    mixa_overlay_clear(overlay)
-    if: mixa_composite(rect, overlay, out, need) != 0
+    # transparent upper (alpha=0, no glyph) leaves lower unchanged
+    if: mixa_composite(text, text_cw, text_ch, upper, upper_cw, upper_ch, out, need, width, height) != 0
         c.printf("mixa overlay: composite clear failed\n")
         failures: failures + 1
     # cell (0,0) empty: bg palette[1] = 170,0,0 at pixel (0,0)
     if: out[0] != 170 || out[1] != 0 || out[2] != 0 || out[3] != 255
         c.printf("mixa overlay: composite bg not palette[1]\n")
         failures: failures + 1
-    # cell (0,1) has glyph: stub fills with fg palette[15] = 255,255,255 at (4,0)
-    px: out + ((0U * overlay\width + 4U) * 4U)
+    # cell (0,1) glyph stub fg palette[15] at (8,0)
+    px: out + ((0U * width + 8U) * 4U)
     if: px[0] != 255 || px[1] != 255 || px[2] != 255 || px[3] != 255
         c.printf("mixa overlay: composite glyph stub not palette[fg]\n")
         failures: failures + 1
 
-    # opaque overlay covers text underneath
-    mixa_overlay_clear(overlay)
-    if: mixa_overlay_fill_cell_block(overlay, 0U, 1U, 1U, 1U, 0U, 0U, 255U, 255U) != 0
-        c.printf("mixa overlay: opaque fill failed\n")
-        failures: failures + 1
-    if: mixa_composite(rect, overlay, out, need) != 0
+    # fully opaque upper cell (alpha=255, no glyph) replaces exactly
+    # palette[4] = {0,0,170} over text glyph cell (0,1)
+    ucell: mixa_cell_at(upper, 0U, 1U)
+    if: ucell = 0
+        c.printf("mixa overlay: upper cell_at failed\n")
+        return: 1
+    ucell\codepoint: 0U
+    ucell\fg: 0U
+    ucell\bg: 4U
+    ucell\flags: 0U
+    ucell\width: 1U
+    ucell\alpha: 255U
+    if: mixa_composite(text, text_cw, text_ch, upper, upper_cw, upper_ch, out, need, width, height) != 0
         c.printf("mixa overlay: composite opaque failed\n")
         failures: failures + 1
-    px: out + ((0U * overlay\width + 4U) * 4U)
-    if: px[0] != 0 || px[1] != 0 || px[2] != 255 || px[3] != 255
-        c.printf("mixa overlay: opaque overlay did not cover glyph\n")
+    px: out + ((0U * width + 8U) * 4U)
+    if: px[0] != 0 || px[1] != 0 || px[2] != 170 || px[3] != 255
+        c.printf("mixa overlay: opaque upper did not replace exactly\n")
         failures: failures + 1
 
-    # a=128 blend: dst R=0 (from bg after clear glyph cell? use empty cell)
-    # Prepare: fill text all empty bg=0 (black), overlay half-red a=128 over cell 0,0
-    mixa_rect_fill(rect, 0U, 0U, 0U, 0U)
-    mixa_overlay_clear(overlay)
-    if: mixa_overlay_fill_cell_block(overlay, 0U, 0U, 1U, 1U, 255U, 0U, 0U, 128U) != 0
-        c.printf("mixa overlay: blend fill failed\n")
-        failures: failures + 1
-    if: mixa_composite(rect, overlay, out, need) != 0
+    # half-transparent alpha=128 over black text bg (palette[0])
+    # dst R=0, src R=255 (palette[9]={255,85,85} wait - use bg=9 red-ish)
+    # Use bg palette index with R=255: index 9 = {255,85,85}
+    # Expected R: (255*128 + 0*127)/255 = 128
+    # Expected G: (85*128 + 0*127)/255 = 42 (85*128=10880; 10880/255=42)
+    # Expected B: (85*128 + 0*127)/255 = 42
+    mixa_rect_fill(text, 0U, 0U, 0U, 0U)
+    c.memset(upper\cells, 0, upper\rows * upper\cols * c.sizeof(c.MixaCell))
+    ucell: mixa_cell_at(upper, 0U, 0U)
+    ucell\codepoint: 0U
+    ucell\bg: 9U
+    ucell\alpha: 128U
+    if: mixa_composite(text, text_cw, text_ch, upper, upper_cw, upper_ch, out, need, width, height) != 0
         c.printf("mixa overlay: composite blend failed\n")
         failures: failures + 1
-    # dst R=0 (palette[0]), src R=255, sa=128 -> (255*128 + 0*127)/255 = 128
     v: out[0]
     if: v != 128U
         c.printf("mixa overlay: blend R expected 128 got %u\n", v)
         failures: failures + 1
-    if: out[1] != 0 || out[2] != 0 || out[3] != 255
-        c.printf("mixa overlay: blend G/B/A wrong\n")
+    v: out[1]
+    if: v != 42U
+        c.printf("mixa overlay: blend G expected 42 got %u\n", v)
+        failures: failures + 1
+    v: out[2]
+    if: v != 42U
+        c.printf("mixa overlay: blend B expected 42 got %u\n", v)
+        failures: failures + 1
+    if: out[3] != 255
+        c.printf("mixa overlay: blend A wrong\n")
+        failures: failures + 1
+
+    # upper glyph is opaque even when cell background alpha is not
+    # alpha=128 bg + glyph -> pixel is palette[fg] fully
+    c.memset(upper\cells, 0, upper\rows * upper\cols * c.sizeof(c.MixaCell))
+    ucell: mixa_cell_at(upper, 0U, 0U)
+    ucell\codepoint: 66U
+    ucell\fg: 15U
+    ucell\bg: 9U
+    ucell\alpha: 128U
+    if: mixa_composite(text, text_cw, text_ch, upper, upper_cw, upper_ch, out, need, width, height) != 0
+        c.printf("mixa overlay: composite glyph-over-alpha failed\n")
+        failures: failures + 1
+    if: out[0] != 255 || out[1] != 255 || out[2] != 255 || out[3] != 255
+        c.printf("mixa overlay: glyph not opaque over translucent bg\n")
         failures: failures + 1
 
     # out_size too small -> refuse
@@ -169,7 +138,7 @@ fn: main () int
     tiny[1]: (cast: (MixaU8) 9)
     tiny[2]: (cast: (MixaU8) 9)
     tiny[3]: (cast: (MixaU8) 9)
-    rc: mixa_composite(rect, overlay, tiny, 4U)
+    rc: mixa_composite(text, text_cw, text_ch, upper, upper_cw, upper_ch, tiny, 4U, width, height)
     if: rc = 0
         c.printf("mixa overlay: composite accepted tiny out_size\n")
         failures: failures + 1
@@ -178,10 +147,84 @@ fn: main () int
         failures: failures + 1
 
     c.free(out)
-    mixa_overlay_release(overlay)
-    mixa_rect_release(rect)
-    c.free(overlay)
-    c.free(rect)
+    mixa_rect_release(text)
+    mixa_rect_release(upper)
+
+    # --- CRITICAL: different non-dividing cell sizes ---
+    # text 8x16 under upper 11x22. Extent large enough for several cells of both.
+    # width=44 (=4*11), height=66 (=3*22) covers 5.5x4.125 text cells and 4x3 upper.
+    text_cw: 8U
+    text_ch: 16U
+    upper_cw: 11U
+    upper_ch: 22U
+    width: 44U
+    height: 66U
+    c.memset(text, 0, c.sizeof(c.MixaTextRect))
+    c.memset(upper, 0, c.sizeof(c.MixaTextRect))
+    if: mixa_rect_open(text, 5U, 6U) != 0
+        c.printf("mixa overlay: diff text open failed\n")
+        return: 1
+    if: mixa_rect_open(upper, 4U, 5U) != 0
+        c.printf("mixa overlay: diff upper open failed\n")
+        return: 1
+    mixa_rect_fill(text, 0U, 0U, 1U, 0U)
+    # upper transparent by default (calloc); paint one upper cell opaque palette[2]
+    ucell: mixa_cell_at(upper, 1U, 1U)
+    ucell\codepoint: 0U
+    ucell\bg: 2U
+    ucell\alpha: 255U
+    need: width * height * 4U
+    out: (cast: (@: MixaU8) c.malloc(need))
+    if: out = 0
+        c.printf("mixa overlay: diff out alloc failed\n")
+        return: 1
+    if: mixa_composite(text, text_cw, text_ch, upper, upper_cw, upper_ch, out, need, width, height) != 0
+        c.printf("mixa overlay: diff composite failed\n")
+        failures: failures + 1
+
+    # Upper cell (1,1) covers pixels x in [11,22), y in [22,44).
+    # Pick pixel (15, 30) — inside that upper cell.
+    # Text cell at (15/8, 30/16) = (1, 1) — interior of a text cell, not on its edge.
+    # Upper boundary x=11 falls inside text cell col 1 (x 8..15); assert both sides.
+    ox: 15U
+    oy: 30U
+    px: out + ((oy * width + ox) * 4U)
+    # palette[2] = {0,170,0}
+    if: px[0] != 0 || px[1] != 170 || px[2] != 0 || px[3] != 255
+        c.printf("mixa overlay: diff-size upper interior wrong\n")
+        failures: failures + 1
+
+    # Just left of upper cell boundary x=11: still text-only palette[1]={170,0,0}
+    # at (10, 30): upper col = 10/11 = 0, upper row = 30/22 = 1 -> upper cell (1,0)
+    # which is transparent -> text bg shows.
+    ox: 10U
+    oy: 30U
+    px: out + ((oy * width + ox) * 4U)
+    if: px[0] != 170 || px[1] != 0 || px[2] != 0 || px[3] != 255
+        c.printf("mixa overlay: diff-size left of upper boundary wrong\n")
+        failures: failures + 1
+
+    # At upper boundary x=11 (first pixel of upper cell 1,1), inside text cell:
+    # text col = 11/8 = 1 (same text cell as x=10 which was col 1... wait 10/8=1, 11/8=1)
+    # Actually x=8 is start of text col 1; upper boundary 11 is INSIDE text cell col 1.
+    ox: 11U
+    oy: 30U
+    px: out + ((oy * width + ox) * 4U)
+    if: px[0] != 0 || px[1] != 170 || px[2] != 0 || px[3] != 255
+        c.printf("mixa overlay: diff-size on upper boundary inside text cell wrong\n")
+        failures: failures + 1
+
+    # refuse zero cell size
+    rc: mixa_composite(text, 0U, text_ch, upper, upper_cw, upper_ch, out, need, width, height)
+    if: rc = 0
+        c.printf("mixa overlay: composite accepted zero text_cw\n")
+        failures: failures + 1
+
+    c.free(out)
+    mixa_rect_release(text)
+    mixa_rect_release(upper)
+    c.free(text)
+    c.free(upper)
 
     if: failures != 0
         c.printf("mixa overlay selftest FAILED checks=%d\n", failures)

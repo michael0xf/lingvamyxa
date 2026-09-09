@@ -3,19 +3,11 @@
 
 #include <stddef.h>
 
-/* Pixel format: 4-byte RGBA, one byte per channel, NOT premultiplied. */
+/* Shared pixel byte type + classic 16-color VGA-style palette.
+ * OverlayRect raster unit removed (TASK17): upper layer is a MixaTextRect.
+ * This header remains so mixa_backend.h can keep #include for MixaU8. */
 
 typedef unsigned char MixaU8;
-
-typedef struct MixaOverlayRect {
-    size_t width;        /* pixels = cols * cell_width */
-    size_t height;       /* pixels = rows * cell_height */
-    size_t cell_width;
-    size_t cell_height;
-    size_t cols;
-    size_t rows;
-    MixaU8 *pixels; /* RGBA, 4 bytes/pixel, NOT premultiplied */
-} MixaOverlayRect;
 
 /* Classic 16-color VGA-style palette: index 0..15 -> RGB. */
 static const unsigned char MIXA_PALETTE[16][3] = {

@@ -62,6 +62,7 @@ sub: mixa_rect_fill (@: MixaTextRect rect; unsigned: codepoint; unsigned: fg; un
                 p\bg: bg
                 p\flags: flags
                 p\width: 1U
+                p\alpha: 255U
                 i: i + 1U
             ---
         ---
@@ -96,6 +97,7 @@ fn: mixa_rect_put_text (@: MixaTextRect rect; size_t: row; size_t: col; const: @
             p\bg: bg
             p\flags: flags
             p\width: 1U
+            p\alpha: 255U
             written: written + 1U
         ---
         ccol: ccol + 1U

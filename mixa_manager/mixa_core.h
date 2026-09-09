@@ -20,6 +20,7 @@ typedef struct MixaCell {
     unsigned char bg;         /* palette index */
     unsigned char flags;      /* MixaStyle bits */
     unsigned char width;      /* 1 or 2, see model section 14 */
+    unsigned char alpha;      /* background alpha: 0=transparent, 255=opaque */
 } MixaCell;
 
 typedef struct MixaTextRect {
