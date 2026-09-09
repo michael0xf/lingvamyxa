@@ -188,6 +188,15 @@ build baseline; promotion must preserve the live L2 sources.
   `c.sizeof(@: char)` therefore emits `sizeof(char *)`, not
   `sizeof(&char)`. Unary `@ x` remains address-of (`sizeof(@ x)` →
   `sizeof(&x)`). Tests: sizeof_ptr_type.lm1, sizeof_addr.lm1.
+  Compact `c.foo(...)` is one P0 ATOM. A nested L1 receiver inside
+  that atom (a `:` after the `c.` prefix, e.g. `cast:`) is not a
+  frame and is rejected: `compact c. call cannot contain a nested
+  L1 receiver`. `c.sizeof((cast: (unsigned) 0))` is that form; it is
+  not lowered into C. Ordinary compact calls without `:` still emit
+  after stripping `c.` and mapping `\` (`c.sizeof(x\field)` →
+  `sizeof(x->field)`). Vertical `c.sizeof:` with an empty colon is
+  P0 error 32, not this diagnostic. Test:
+  invalid_sizeof_cast_compact.lm1.
   Array forms:
     - `[]: T name N …` one-dimensional extent + initializer (decl-repeat
       and scalar suites).
