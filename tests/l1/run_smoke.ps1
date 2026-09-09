@@ -1,4 +1,4 @@
-# l1trans gen0 smoke. CWD = repo root.
+# l1trans smoke. CWD = repo root. L1_GEN selects the translator.
 # Does not rewrite tests/trans_* harness. Generated C/binaries stay under
 # build\obj\l1trans\gen0 and build\l1trans\gen0 (already gitignored).
 
@@ -610,7 +610,7 @@ Assert-CLacks "$obj\repro_call_binop.c" "buffer[] = {32}"
 Invoke-CcRun "$obj\repro_call_binop.c" "$bin\repro_call_binop.exe" 0 $null
 
 Write-Log "smoke ok"
-Write-Output "l1trans gen0 smoke ok"
+Write-Output "l1trans $gen smoke ok"
 } finally {
     Restore-HostedRegistryEnv
 }

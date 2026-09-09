@@ -1,0 +1,105 @@
+# p0-meta v1
+document source_len=121 frozen=1 root=yes diagnostic_slot=yes
+node kind=structure flags=0x0 as=yes span=0:0+0:121
+  struct field_count=1 trailer=null
+  [0] value=node
+    node kind=frame flags=0x0 as=yes span=1:1+0:18
+      frame flags=0x5 body=struct trailer=yes head_len=2 bytes=666E
+        struct field_count=4 trailer=null
+        [0] value=node
+          node kind=atom flags=0x0 as=yes span=1:5+4:5
+             atom_len=5 bytes=6F75746572
+        [1] value=node
+          node kind=structure flags=0x0 as=yes span=1:11+10:2
+            struct field_count=0 trailer=null
+            trailer=null
+        [2] value=node
+          node kind=structure flags=0x0 as=yes span=1:14+13:5
+            struct field_count=1 trailer=null
+            [0] value=node
+              node kind=atom flags=0x0 as=yes span=1:15+14:3
+                 atom_len=3 bytes=696E74
+            trailer=null
+        [3] value=node
+          node kind=structure flags=0x0 as=yes span=2:5+24:24
+            struct field_count=2 trailer=null
+            [0] value=node
+              node kind=frame flags=0x0 as=yes span=2:5+24:24
+                frame flags=0x5 body=struct trailer=yes head_len=2 bytes=666E
+                  struct field_count=4 trailer=null
+                  [0] value=node
+                    node kind=atom flags=0x0 as=yes span=2:9+28:5
+                       atom_len=5 bytes=696E6E6572
+                  [1] value=node
+                    node kind=structure flags=0x0 as=yes span=2:15+34:8
+                      struct field_count=1 trailer=null
+                      [0] value=node
+                        node kind=frame flags=0x0 as=yes span=2:16+35:6
+                          frame flags=0x5 body=struct trailer=null head_len=3 bytes=696E74
+                            struct field_count=1 trailer=null
+                            [0] value=node
+                              node kind=atom flags=0x0 as=yes span=2:21+40:1
+                                 atom_len=1 bytes=61
+                            trailer=null
+                            trailer=null
+                      trailer=null
+                  [2] value=node
+                    node kind=structure flags=0x0 as=yes span=2:24+43:5
+                      struct field_count=1 trailer=null
+                      [0] value=node
+                        node kind=atom flags=0x0 as=yes span=2:25+44:3
+                           atom_len=3 bytes=696E74
+                      trailer=null
+                  [3] value=node
+                    node kind=structure flags=0x0 as=yes span=3:9+58:13
+                      struct field_count=1 trailer=null
+                      [0] value=node
+                        node kind=frame flags=0x0 as=yes span=3:9+58:13
+                          frame flags=0x5 body=struct trailer=null head_len=6 bytes=72657475726E
+                            struct field_count=3 trailer=null
+                            [0] value=node
+                              node kind=atom flags=0x0 as=yes span=3:17+66:1
+                                 atom_len=1 bytes=61
+                            [1] value=node
+                              node kind=atom flags=0x0 as=yes span=3:19+68:1
+                                 atom_len=1 bytes=2B
+                            [2] value=node
+                              node kind=atom flags=0x0 as=yes span=3:21+70:1
+                                 atom_len=1 bytes=31
+                            trailer=null
+                            trailer=null
+                      trailer=null
+                  trailer=null
+                  trailer flags=0x1 colon_bit=0 body=struct spelling_len=3 bytes=656E64
+                    trailer_body field_count=1
+                    [0] value=node
+                      node kind=atom flags=0x0 as=yes span=4:10+82:5
+                         atom_len=5 bytes=696E6E6572
+                    trailer=null
+            [1] value=node
+              node kind=frame flags=0x0 as=yes span=5:5+93:8
+                frame flags=0x5 body=struct trailer=null head_len=3 bytes=696E74
+                  struct field_count=2 trailer=null
+                  [0] value=node
+                    node kind=atom flags=0x0 as=yes span=5:10+98:1
+                       atom_len=1 bytes=61
+                  [1] value=node
+                    node kind=atom flags=0x0 as=yes span=5:12+100:1
+                       atom_len=1 bytes=31
+                  trailer=null
+                  trailer=null
+            trailer=null
+        trailer=null
+        trailer flags=0x1 colon_bit=0 body=struct spelling_len=6 bytes=72657475726E
+          trailer_body field_count=1
+          [0] value=node
+            node kind=frame flags=0x0 as=yes span=6:9+111:8
+              frame flags=0x2 body=struct trailer=null head_len=5 bytes=696E6E6572
+                struct field_count=1 trailer=null
+                [0] value=node
+                  node kind=atom flags=0x0 as=yes span=6:15+117:1
+                     atom_len=1 bytes=61
+                trailer=null
+                trailer=null
+          trailer=null
+  trailer=null

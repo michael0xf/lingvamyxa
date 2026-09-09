@@ -1,0 +1,2 @@
+# p0-meta v1
+REJECT code=13 line=2 col=5 msg=source level increase must be one step
