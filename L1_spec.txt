@@ -79,6 +79,28 @@ build baseline; promotion must preserve the live L2 sources.
   - Empty / missing L1 body: rejected (`empty implicit L1 body` /
     `missing L1 body`).
 
+  AGREED, NOT YET IMPLEMENTED - header source units. Decided by the user,
+  confirmed with Codex; nothing of it is built yet and no test covers it.
+
+      source           name.h.lm1
+      generated header name.lm1.h        (in the build output directory)
+
+    The final extension stays `.lm1`, so the rule above is unchanged and the
+    extension dispatch does not move. The `.h.` infix on the SOURCE selects
+    header output mode. The `.lm1.` infix on the GENERATED file keeps its
+    existing meaning - it marks an output, exactly as `name.lm1.c` does.
+
+    The body is ordinary L1 with no wrapper receiver, by the same principle
+    that makes a `.lm1` document root the unit body: no `h:` and no `L1:`.
+
+    A rejected alternative is recorded so it is not revived: source
+    `name.lm1.h` with a compound-suffix classifier. It would have required
+    changing the final-extension rule and would have broken the invariant
+    that `.lm1.` marks an output rather than a source.
+
+    Content, consumers, guard identity and build ordering are a bounded
+    design draft, not settled here. This entry records the naming only.
+
 1.2 Unit-level items (l1_unit_item_ok)
   Top-level frames allowed in an implicit `.lm1` unit:
     include, import, predef, os, ifdef, define / ifndef-default,
@@ -382,6 +404,22 @@ PARTIAL / LIMITED
   Module emit: one output C path per CLI run; multi-TU / init-before-main
   mechanics OPEN (10.8).
   Conditional-import policy outside ifdef checkpoint.
+  Parameter declarations, two confirmed defects, both silent with exit 0:
+    - a multiword type after `@:` yields a mangled type and DROPS the
+      parameter name. `@: unsigned char p` emits `unsigned * char`; the same
+      for `unsigned long` and `const char`. A single-token alias is fine:
+      `@: uchar p` emits `uchar * p`. The emitter takes one type atom and
+      treats the next as the name. Same shape as the cast defect already
+      fixed in l1_emit_cast, which gathers consecutive type-name atoms.
+    - a qualifier parameter that is not last silently loses the rest of the
+      list. `(const: @: char text; unsigned: fg)` emits
+      `(const char * text)`. This one is NOT a parse defect: printTree shows
+      the list holds one field and `unsigned: fg` is the second field of the
+      `const:` body, because the `;` closes the nested `@:` frame rather than
+      the qualifier. The tree is correct per P0; the emitter drops the tail.
+      The paren form `const: @(char text); unsigned: fg` is unaffected.
+      Emitting the tail as further parameters would silently change what the
+      source means, so the fix is a diagnostic, not a wider parse.
   Platform and clean-checkout coverage depend on the build route (§4).
   Full draft-contract coverage is not claimed.
 
@@ -417,6 +455,14 @@ checkpoint descriptions. Remaining questions include:
   10.11 multi-char operator atoms vs reconstruction
   10.12 leading `[` as bounded STRUCTURE
   10.13 const pointer spelling order
+  NEW  whether a qualifier distributes over a parameter list. The language
+       already distributes a type head over a list: run_decl_repeat covers
+       `int: x, 5; y, 10` as two declarations from one head. By the same
+       reading `const: @: char text; unsigned: fg` could legitimately mean
+       both parameters are const, rather than being an error. Raised while
+       fixing the silent-loss defect above and deliberately kept out of that
+       fix: a bug fix must refuse, not pick one reading. Decision belongs to
+       the language owner.
   10.15 multi-dim declaration spelling / array-of-pointer
   10.16 function-pointer type spelling
   10.17 variadic spelling
