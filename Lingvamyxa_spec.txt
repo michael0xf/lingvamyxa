@@ -11991,17 +11991,26 @@ contracts; `spawn` here is English, not a new parser intrinsic):
         destination.
 
     stop(destination) -> staging status
-        Cooperative close request. Admission sets a closing flag; it
-        does not mark STOPPED and does not free an executing arena.
-        The target finishes the current turn under ordinary
-        success/failure publication, then at end_turn exits its loop
-        and requests the same orderly close of its children.
-        Ordinary end_turn without a close request does not terminate
-        the Message. Jobs meant to outlive a UI are created under an
-        explicitly longer-lived controller; the UI is only a reply
-        target. Partial external effects are not rolled back.
-        Recorded progress may survive separately; there is no
-        orphan-continuation exception for copy jobs.
+        Cooperative close request, transported as KIND_STOP. That
+        kind is internal close control, not KIND_CANCELLED outcome
+        data. Admission sets a closing flag and does not enqueue
+        KIND_STOP as handler-visible work. It does not mark STOPPED
+        and does not free an executing arena. The target finishes
+        the current turn under ordinary success/failure publication,
+        then at end_turn exits its loop and requests the same
+        orderly close of its children (closing flag only; children
+        are not marked STOPPED and a child's outbox is not
+        discarded). Ordinary end_turn without a close request does
+        not terminate the Message. Jobs meant to outlive a UI are
+        created under an explicitly longer-lived controller; the UI
+        is only a reply target. A worker may send KIND_CANCELLED to
+        a UI without shutting the UI down. Explicit stop(worker)
+        closes that worker only, at its end_turn boundary. Partial
+        external effects are not rolled back. Recorded progress may
+        survive separately and a valid envelope staged before close
+        is published under ordinary end_turn rules; there is no
+        orphan-continuation exception for copy jobs. Send after
+        STOPPED is not admitted.
 
 Envelope fields for this slice: id (stable logical request identity
 across transport attempts), correlation (19.31.4: semantic
@@ -12079,25 +12088,44 @@ in-memory supervisor cannot deliver across process crash.
 
 Cancellation is KIND_CANCELLED, a normal outcome with whatever was
 already published, not KIND_DEAD and not an application failure.
+Admitting KIND_CANCELLED does not set the recipient's closing flag.
 Per-item progress/failure is KIND_PROGRESS / KIND_ITEM payload data
 (bytes + number); continue-vs-stop is application policy in the
 request, not a core intrinsic.
 
-Child liveness poll (ordinary shutdown): each non-root Message
-periodically checks its parent. If the parent is absent, DEAD, or
-sustained-nonresponsive while in a handler, the child requests its
-own orderly close (same end_turn path as stop). A live idle parent
-keeps children alive. Host/system parent anchors roots. Cadence and
-timeout are host settings, not language constants. This prototype
-does not start a timer; the host must call
-`lmx_msg_poll(rt, child, now, threshold, out, cap)` (or walk
-children) on its clock (`lmx_msg_set_now`). Scheduler integration
-is pending. Child observation of parent liveness is not access to
-the parent's protected data.
+Child liveness poll (abrupt-parent fallback): each non-root Message
+periodically checks its parent. If the parent is absent, DEAD,
+STOPPED, RELEASED, or sustained-nonresponsive while in a handler,
+the child requests its own orderly close (same end_turn path as
+stop). A live idle parent keeps children alive. Host/system parent
+anchors roots. Cadence and timeout are host settings, not language
+constants and not the mail-watcher interval. The host calls
+`lmx_msg_poll(rt, who, now, threshold, out, cap)` (`who` is the
+child to inspect, or 0 to walk all non-roots) on its clock
+(`lmx_msg_set_now`). Child observation of parent liveness is not
+access to the parent's protected data.
+
+Normal parent close already requests children close at the parent's
+end_turn. Poll is only the fallback when the parent died abruptly
+and could not run that request. A child then closes at its own
+end_turn without waiting for the poll timeout.
+
+Host-driven loop: `lmx_msg_drive(rt, now, threshold)` is set_now +
+poll(who=0) + successful end_turn of idle closing Messages (not
+exec_live, empty inbox, RUNNING or committed INACTIVE), then pump.
+It is one host loop with configurable cadence, not a thread per
+Message. Automatic: applying an already-requested close to idle
+empty-inbox participants, and poll-fallback close when a parent is
+gone. Not automatic: starting a timer, interrupting exec_live,
+inventing work after STOPPED, or treating KIND_CANCELLED as stop.
+A Message with remaining inbox is not idle; the host still recvs.
+A root is not closed by parent-poll (it has no parent); a root
+with an explicit closing flag and empty inbox is driven to exit
+like any other idle closer.
 
 Parent abrupt death does not run parent cleanup and does not
 instantaneously mark executing descendants STOPPED. Children
-converge by their timer/self-close, recursively, so no permanently
+converge by drive/poll/self-close, recursively, so no permanently
 orphaned running descendants remain. A child stuck before a turn
 boundary cannot poll or honor stop; that is the exceptional
 supervisor/host `fail()` path, not the normal loop-exit model, and
@@ -12106,11 +12134,13 @@ must not be reported as a completed safe reclaim.
 This is a trusted serialized in-process prototype, not the completed
 language security/supervision boundary. Header:
 `stg/l1_baseline/l2src/lmx_message.h`
-(create/send/stop/end_turn/pump/recv/fail/poll/set_now).
+(create/send/stop/end_turn/pump/recv/fail/poll/set_now/drive).
 Normal close is child loop-exit after a close flag; parent->child
 mandatory poll is not the lifetime mechanism.
 Selftest: `lmx_message_selftest.lm1`. mixa must not rebuild default
 gen2. Graph-copy and other 19.29.7.2 operations are not implemented.
+KIND_REJECTED is not an emitted API. The done[32] table is a cap
+(NOMEM), not silent forget. Rejection-to-sender is pending.
 
 19.29.7.2. Deferred operations versus guarantees this slice does not
 provide
