@@ -2,6 +2,35 @@ Mixa Manager - rules for writing the L1 in this subtree
 Short, and each one earned rather than assumed.
 
 
+0. Why L1 and not C, since L1 is awkward and C is not
+
+Written down because the awkwardness is real, the temptation is obvious, and
+someone has already given in to it: 620 lines of the selection model arrived as
+C inside a header, with a five-line .lm1 wrapper.
+
+L1 is a TEMPORARY AUXILIARY TOOL that becomes a PERMANENT INTERMEDIATE LINK. It
+looks strange because it is a thin, syntax-directed lowering to C - an
+intermediate representation, not a language designed to be pleasant to write.
+Today we author in it because L2 and L3 do not exist yet; later they will, and
+they will translate DOWN THROUGH L1 into C.
+
+That is the whole argument, and it is not about purity:
+
+    L2 translates to L1, not to C.
+
+So L1 written today already sits where the chain passes. When it is rewritten
+in L2 it lowers to the same L1, and nothing is thrown away. C written today sits
+BESIDE the chain: it has to be rewritten to get onto it, and until it is, the
+part of the program written in C is the part the language cannot see, optimise
+or reason about - including the const and immutable optimisations section 1 is
+about.
+
+So the awkwardness is not a reason to escape into C. It is the shape of the
+thing we are standing on. If L1 genuinely cannot express something, that is a
+finding worth reporting - it is how L1 gets fixed, and several have been fixed
+that way already. Writing C instead reports nothing and fixes nothing.
+
+
 1. const on everything that only reads
 
 Put const: on every pointer parameter the function does not modify. Maximally,
