@@ -1062,11 +1062,9 @@ Numeric 9/13/10 for tab/CR/LF. Sequential CRLF: bound-guarded
 OwnUsed: p, column (2). Tab helper call checkpoints dirty
 column then assigns and dirties again.
 
-Frozen `((column / 8U) + 1U) * 8U` uses nested paren groups.
-l2trans emit of those clobbers global l2_lhs (minimal repro:
-`return: ((column / 8U) + 1U) * 8U` → `1U8Ul2_p0_0 / 8U) + 1U) * 8U`).
-Not fixed here. Port uses the integer-identical flat form
-`column / 8U * 8U + 8U`.
+Frozen `((column / 8U) + 1U) * 8U` is restored. Nested groups used
+to clobber global l2_lhs/l2_rhs; emit now uses per-call inner/piece
+buffers. Overflow is `expression too long`, dest unchanged.
 
 scan_indent still blocked by arity 5 vs cap 4. break not required.
 skip / L2 `@` of own still deferred.
@@ -1076,6 +1074,17 @@ Frozen original: stg/l1_baseline/l1src/parser.lm1
     lm_p0_visual_column_between
 
 Next leftover: arity>4 (scan_indent), or `break`.
+
+Unit 16 - nested expression emit scratch
+----------------------------------------
+Files: l2trans.lm1, run_l2trans.ps1, parser_visual_column.lm2,
+tests/unit_paren_*.lm2
+
+l2_prep/l2_emit_fields no longer write l2_lhs/l2_rhs. Each
+recursive emit uses a local 256-byte piece/inner. l2_tok remains
+emit_body's statement dest. l2_cat overflow → expression too long
+at the source node; dest not published. Tab helper spelling is
+the frozen parenthesized form again.
 
 `return: 0` on a malformed native node stays the runtime
 adapter, not Type/throw admission. Not expanded here.
