@@ -1378,3 +1378,14 @@ SPEC 21.13 p.4  Physical carrier of a declared throw and of runtime failure in
            the trap to avoid - L1 carries throw in two static globals, which is
            fine for L1 and wrong for lm2, where each Message has its own arena
            and Messages may run concurrently (SPEC 21.7). Do not transfer it.
+
+Unit l2_tok_text triple lowering (163500)
+----------------------------------------
+L1  P0 python-string closer matches run_length=3 only
+    (l1src/parser.lm1 lm_p0_find_python_string_end). N>=4 fences
+    (`""""hello""""`) are unterminated at parse. AVOIDED for L2
+    lowering: compute fence N from the atom, A+1 when run>=N+1,
+    emit L1 escaped strings. Longer-fence admission is a missing
+    P0 scan, not an L2 C bypass. Negative:
+    tests/entry_puts_triple_fence4.lm2.
+    ===/*** comment fences untouched.
