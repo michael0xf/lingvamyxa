@@ -411,11 +411,21 @@ rectangle.
 10.1. What changes
 
 The upper layer is a CELL GRID, not a raster. Two cell grids share the same
-pixel extent:
+pixel extent, and each has a ROLE - the transparency is functional, not
+decorative:
 
-    text layer     small cells, as close as a full-screen console would give
-    upper layer    a larger monospace font, roughly 1.5x in both directions,
-                   drawn semi-transparently over the text layer
+    text layer     small cells, as close as a full-screen console would give.
+                   This is the CONSOLE: input on the bottom line, output
+                   scrolling upward above it, Norton-style.
+    upper layer    a larger monospace font, roughly 1.5x, drawn
+                   SEMI-TRANSPARENTLY over the text layer. This is the PANELS
+                   AND MENUS, and it is transparent so that the console output
+                   underneath stays readable while a panel covers it.
+
+ClearShell is arranged differently - its text input sits at the top and what
+lies beneath is the camera image rather than the console - which is worth
+knowing when reading it as a reference, because the transparency there is doing
+a different job.
 
 Both are strictly monospace. Both are drawn by ONE pseudographics drawer through
 one API - the drawer does not know which layer it is drawing, and believes it is

@@ -1,0 +1,111 @@
+Mixa Manager - the file seam
+Second seam. Separate from the backend seam on purpose.
+
+
+1. Why this is not part of the backend seam
+
+BACKEND_SEAM.txt is the display and input boundary: pixels out, events in, six
+operations plus glyphs. Files are a different platform boundary - names and
+bytes - and they change for different reasons. Folding them together would make
+each port carry the other's problems, and would mean a headless test backend had
+to pretend to have a filesystem.
+
+So: two seams, each small, each portable on its own.
+
+
+2. The console is never in the void: it writes to a file
+
+The console does not hold its scrollback in memory. Its scrollback IS a file,
+appended to as output arrives and read back for display.
+
+ClearShell keeps output in a StringBuilder with a head limit, a line limit and a
+tail limit, and drops the middle when a command is noisy. That is a reasonable
+choice for a phone and it is not ours: a file manager whose console silently
+discards the middle of a build log is failing at the moment it is most needed.
+
+Backing the scrollback with a file buys, in one move:
+
+    nothing is ever discarded - no head/tail/middle truncation
+    the display reads a window of it, so memory is bounded by the VIEW rather
+      than by the output
+    it survives the process, so a crashed build is still inspectable
+    it is an ordinary file, so the manager's own viewer, search, copy and open
+      all work on it with no special case
+    a child in delegation mode can be pointed straight at it
+
+2.1. Naming
+
+Following ClearShell's shape - a lowercase hyphenated role, then a unique
+suffix after an underscore, as in its shell-process-<generation>_<hex>.pid:
+
+    mixa-console_<yyyymmdd-hhmmss>-<hex>.log
+
+The timestamp first so a directory listing sorts chronologically without
+parsing; the hex tail so two sessions started in the same second do not collide.
+One per session, in the session directory. Older ones are ordinary files and are
+the user's to keep or delete - the manager does not silently reap them.
+
+2.2. What is written
+
+Output bytes exactly as produced, stdout and stderr merged in arrival order -
+splitting them reorders them, and for reading a build log the order is the
+information.
+
+Command boundaries are marked in-band, the way ClearShell does it, with a marker
+line carrying exit status and working directory separated by tabs. In-band means
+the log stays a plain readable file with no sidecar index, and the marker is
+what lets the display fold a command, jump between commands, or colour a failed
+one without re-parsing shell semantics.
+
+
+3. Layer roles, which this serves
+
+Fixed by the language owner on 2026-09-09. Norton-style, not ClearShell-style:
+
+    lower layer, small font    the console. Input on the BOTTOM line, output
+                               scrolling UPWARD above it
+    upper layer, larger font   the panels and menus, SEMI-TRANSPARENT, so the
+                               console output continues to be readable beneath
+                               them
+
+ClearShell differs: there the text input is attached at the top and what lies
+beneath is the camera image, not the console. Here the thing beneath the panel
+is the console, which is why the upper layer's transparency is functional rather
+than decorative.
+
+
+4. Operations
+
+Deliberately small, and deliberately not a POSIX wrapper. Each is something the
+manager actually does.
+
+    open      by path, for read, write or append; returns an opaque handle
+    close
+    read      into a caller's buffer at the current position
+    write     from a caller's buffer
+    seek      absolute position, plus a way to ask the current one
+    size
+
+    list      a directory, yielding one entry at a time rather than an array,
+              so a directory with a million entries does not have to be
+              materialised before the first line can be drawn
+    stat      name, size, modification time, and whether it is a directory
+    mkdir
+    remove
+    rename
+
+Encoding: paths cross the seam as UTF-8 bytes. Platforms that use something else
+convert inside their own implementation, exactly as the display backend
+converts to CF_UNICODETEXT for the clipboard - the seam does not learn about
+UTF-16 because one platform has it.
+
+Errors: every operation reports failure, and failure is never a silent
+substitution. A missing file is a missing file, not an empty one.
+
+
+5. What is NOT here
+
+No globbing, no recursive walk, no copy, no move-across-devices, no permissions
+model, no watching. Those are built ON this seam in Lingvamyxa, not behind it -
+each of them is policy, and policy belongs where it can be read, not inside a
+per-platform implementation that must be rewritten to change it.
