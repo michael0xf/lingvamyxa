@@ -11947,16 +11947,21 @@ wire serialization; those remain individually deferred.
 Language-facing operations (names follow existing thread/send/stop
 contracts; `spawn` here is English, not a new parser intrinsic):
 
-    create/spawn(handler, initialData) -> MessageAddress
+    create/spawn(handler, initialData, create_id) -> MessageAddress
         Reserve a child identity and a distinct INACTIVE arena during
         the parent turn. Copy initialData (numbers and exact byte/text
         payloads) into that reserved child's arena. This is not a send
-        into a running recipient. The child does not run before
+        into a running recipient. Retry of the same (parent, create_id)
+        returns the same reserved/committed child; a new address is not
+        assigned on every retry. The child does not run before
         successful publication of the spawning turn. A failed parent
         turn releases the unactivated child. Send to that reserved
         address in the same turn is staged with other outgoing work
         and, after publication, admitted in FIFO order with first
-        activation of the inactive child.
+        activation of the inactive child. Every ordinary running
+        Message has an accountable parent (root is an explicit host
+        supervisor). Parent death completes child shutdown in this
+        slice (children stop); it does not leave unmonitored orphans.
 
     send(destination, envelope) -> staging status
         Stage a transport-owned copy of the envelope (numbers and
@@ -11966,14 +11971,20 @@ contracts; `spawn` here is English, not a new parser intrinsic):
         only that the sending turn accepted the envelope for its
         outbox; it is not receiver admission and not execution.
         Ownership of that copy: the sending turn until successful
-        end-turn publication, then the transport until the receiver
-        admits it, then the receiver materializes a fresh copy in
-        its arena at admission (serialized receiving-side
-        materialization). If the recipient disappears or is stopped
-        before admission, the transport copy is dropped; there is
-        no live recipient graph to write. A newly reserved inactive
-        child's initial-state arena (create, above) is a different
-        case and must not be generalized to send-into-running.
+        end-turn publication, then the transport. Admission enqueues
+        a fresh copy on the recipient inbox (mailbox), serialized
+        against other admissions; it does not write the handler's
+        working graph. Recv at turn entry is receiving-side
+        materialization into the handler, serialized against that
+        recipient's active turn. If the recipient disappears or is
+        stopped before admission, the transport copy is dropped.
+        A newly reserved inactive child's initial-state arena
+        (create, above) is a different case and must not be
+        generalized to send-into-running. Dedup key is
+        (recipient, sender, id) so two senders' local id=1 do not
+        collide. Sender staging is not visible to the receiver;
+        unpublished staged requests cannot be deduped by the
+        destination.
 
     stop(destination) -> staging status
         Explicit cooperative stop. Parent termination does not
@@ -12038,10 +12049,25 @@ turn does not commit.
 Duplicate create/send attempts use the same id/dedup/retry policy so
 a retried create cannot silently spawn a second child.
 
-This slice is specified here so application code can target it. The
-L2 mailbox implementation and header are the following source commits,
-not this prose. Until that header exists, mixa must not bind to a
-callable spawn/send/stop C API.
+Worker death: the terminated Message must not resume and must not
+publish its discarded outbox to announce death. The runtime posts a
+KIND_DEAD envelope onto the transport (supervisor channel) to the
+accountable parent and to reply_to of admitted-but-unanswered work.
+That diagnostic lives in the survivor, not in the dying arena
+(historical 19.29.14.7/10). It reports termination, not proof of
+every external effect. A partition cannot prove remote death; an
+in-memory supervisor cannot deliver across process crash.
+
+Cancellation is KIND_CANCELLED, a normal outcome with whatever was
+already published, not KIND_DEAD and not an application failure.
+Per-item progress/failure is KIND_PROGRESS / KIND_ITEM payload data
+(bytes + number); continue-vs-stop is application policy in the
+request, not a core intrinsic.
+
+First implementation header: `stg/l1_baseline/l2src/lmx_message.h`
+(create/send/stop/end_turn/pump/recv/fail). Isolated selftest:
+`lmx_message_selftest.lm1`. mixa must not rebuild default gen2 for
+this.
 
 19.29.7.2. Deferred operations versus guarantees this slice does not
 provide
