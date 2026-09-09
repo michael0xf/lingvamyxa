@@ -41,6 +41,27 @@ Glyphs are always drawn opaque. Translucency belongs to the background, not to
 the letters - text that fades into whatever lies beneath is the unreadable
 result this whole design is avoiding.
 
+2.1. This is the terminal model, and it answers the question people ask
+
+"How does a symbol on the graphics layer get its background - do we skip drawing
+it, or pass a colour?" is a question that comes up because the two look like
+different mechanisms. They are the same one, at different values, and it is
+exactly how a terminal works: EVERY CELL CARRIES FOREGROUND AND BACKGROUND. The
+renderer fills the cell with the background, then draws the glyph in the
+foreground.
+
+We add one thing to that: the background has an ALPHA.
+
+    alpha 0     the background is not painted at all - whatever is beneath
+                shows through, and only the glyph is drawn
+    alpha 96    a translucent body, which is ClearShell's button
+    alpha 255   opaque, which is the text layer everywhere
+
+So "do not draw the background" and "use this background" are not two APIs to
+choose between. They are one field. All four cases are covered by tests in the
+overlay selftest, including the one that matters most for a button: a
+translucent background carrying an opaque glyph.
+
 
 3. What the drawer draws
 
