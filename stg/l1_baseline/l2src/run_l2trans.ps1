@@ -286,7 +286,9 @@ Invoke-Negative "l2src\tests\unit_dup_def.lm2" "unit_dup_def" "duplicate definit
 Invoke-Negative "l2src\tests\unit_dup_formal.lm2" "unit_dup_formal" "duplicate formal"
 Invoke-Leaf "l2src\tests\unit_loop.lm2" "unit_loop" 1 "add"
 Invoke-Negative "l2src\tests\unit_for.lm2" "unit_for" "unsupported loop"
-Invoke-Negative "l2src\tests\unit_continue.lm2" "unit_continue" "unsupported loop"
+Invoke-Negative "l2src\tests\unit_cont_out.lm2" "unit_cont_out" "unsupported loop"
+Invoke-Negative "l2src\tests\unit_cont_frame.lm2" "unit_cont_frame" "unsupported loop"
+Invoke-Negative "l2src\tests\unit_cont_colon.lm2" "unit_cont_colon" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_break.lm2" "unit_break" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_rec.lm2" "unit_rec" "unsupported recursion"
 Invoke-Negative "l2src\tests\unit_cycle.lm2" "unit_cycle" "unsupported recursion"
@@ -1406,6 +1408,27 @@ end: external
 # first guarded 3 calls; second adds 2 more on the same unit
 if ($dgd -ne "3`n5`n") { throw "unit_while shortcircuit bump vs length: $dgd" }
 
+Invoke-Leaf "l2src\tests\unit_continue.lm2" "unit_continue" 0 "skip_tail"
+$ct = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_continue.lm1")))
+if ($ct -notmatch '(?m)^\s+continue$') { throw "unit_continue L1 must emit continue" }
+$dct = Invoke-SpliceDrive "unit_continue" @"
+        @: Lmx f 0
+        c.printf("%d\n", l2_m1(unit, 1, 3))
+        c.printf("%d\n", l2_m2(unit, 1, 3))
+        c.printf("%d\n", l2_m3(unit))
+        l2_m4(unit)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", l2_m5(unit, 1))
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+# skip_tail 3, nested_if 3, nested_while 4 (inner continue, outer still bumps), until hits 4, early 3 and hits 65
+if ($dct -ne "3`n3`n4`n4`n3`n65`n") { throw "unit_continue skip/nested/until/early: $dct" }
+
 function Invoke-PhysicalLine {
     $pred = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_text_predicates.lm2")).Replace("`r`n", "`n")
     $phys = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_physical_line.lm2")).Replace("`r`n", "`n")
@@ -1419,6 +1442,12 @@ function Invoke-PhysicalLine {
     $pb = "fn: lm_p0_is_line_break" + ($pb -split "fn: lm_p0_index_is_line_start")[0]
     if ($h.Trim() -ne $ph.Trim()) { throw "physical_line is_horizontal_space must match parser_text_predicates.lm2" }
     if ($b.Trim() -ne $pb.Trim()) { throw "physical_line is_line_break must match parser_text_predicates.lm2" }
+    $wref = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_text_line_break.lm2")).Replace("`r`n", "`n")
+    $wref = ($wref -split "fn: lm_p0_line_break_width_at")[1]
+    $wref = "fn: lm_p0_line_break_width_at" + ($wref -split "fn: main")[0]
+    $wgot = ($phys -split "fn: lm_p0_line_break_width_at")[1]
+    $wgot = "fn: lm_p0_line_break_width_at" + ($wgot -split "fn: lm_p0_count_line_breaks")[0]
+    if ($wref.Trim() -ne $wgot.Trim()) { throw "physical_line line_break_width_at must match parser_text_line_break.lm2" }
 
     $refLm1 = Join-Path $out "pline_ref.lm1"
     $refC = Join-Path $out "pline_ref.c"
@@ -1450,6 +1479,16 @@ external:
         c.printf("%d\n", lm_p0_line_rest_is_horizontal_space(" a", 0U, 2U))
         c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("x  ", 1U, 3U))
         c.printf("%d\n", lm_p0_line_rest_is_horizontal_space("x", 1U, 1U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("", 0U, 0U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("abc", 0U, 3U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("abc", 3U, 3U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("abc", 4U, 3U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("a\nb", 0U, 3U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("a\rb", 0U, 3U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("a\r\nb", 0U, 4U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("a\n\nb", 0U, 4U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("a\0b\n", 0U, 4U))
+        c.printf("%zu\n", lm_p0_count_line_breaks("ab\ncd\n", 2U, 6U))
         return: 0
     end: main
 end: external
@@ -1466,6 +1505,7 @@ end: external
     $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
     if ($text -match 'fn: lm_p0_') { throw "physical_line must mangle method symbols" }
     if ($text -notmatch 'while: l2_t') { throw "physical_line must re-evaluate while cond each check" }
+    if ($text -notmatch '(?m)^\s+continue$') { throw "count_line_breaks must emit continue" }
     $tail = "        return: 0`n    end: main`nend: external"
     $pos = $text.LastIndexOf($tail)
     if ($pos -lt 0) { throw "physical_line L1 missing generated main return" }
@@ -1491,6 +1531,16 @@ end: external
         c.printf("%d\n", l2_m4(unit, " a", 0U, 2U))
         c.printf("%d\n", l2_m4(unit, "x  ", 1U, 3U))
         c.printf("%d\n", l2_m4(unit, "x", 1U, 1U))
+        c.printf("%zu\n", l2_m6(unit, "", 0U, 0U))
+        c.printf("%zu\n", l2_m6(unit, "abc", 0U, 3U))
+        c.printf("%zu\n", l2_m6(unit, "abc", 3U, 3U))
+        c.printf("%zu\n", l2_m6(unit, "abc", 4U, 3U))
+        c.printf("%zu\n", l2_m6(unit, "a\nb", 0U, 3U))
+        c.printf("%zu\n", l2_m6(unit, "a\rb", 0U, 3U))
+        c.printf("%zu\n", l2_m6(unit, "a\r\nb", 0U, 4U))
+        c.printf("%zu\n", l2_m6(unit, "a\n\nb", 0U, 4U))
+        c.printf("%zu\n", l2_m6(unit, "a\0b\n", 0U, 4U))
+        c.printf("%zu\n", l2_m6(unit, "ab\ncd\n", 2U, 6U))
         return: 0
     end: main
 end: external

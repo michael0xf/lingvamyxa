@@ -1,9 +1,58 @@
-fn: add (int: a; int: b) int
+fn: bump () int
+    char: hits
+    hits: hits + 1
+    return: 1
+end: bump
+fn: skip_tail (int: a; int: b) int
     while: a < b
+        a: a + 1
         continue
+        a: a + 10
+    return: a
+end: skip_tail
+fn: nested_if (int: a; int: b) int
+    while: a < b
+        if: a = 1
+            a: a + 1
+            continue
         a: a + 1
     return: a
-end: add
+end: nested_if
+fn: nested_while () int
+    size_t: o
+    size_t: i
+    o: 0U
+    while: o < 2U
+        i: 0U
+        while: i < 2U
+            i: i + 1U
+            continue
+            i: i + 10U
+        o: o + 1U
+    if: o = 2U && i = 2U
+        return: 4
+    return: 0
+end: nested_while
+fn: until () int
+    size_t: i
+    i: 0U
+    while: bump() != 0 && i < 3U
+        i: i + 1U
+        continue
+    return: 0
+end: until
+fn: early (int: z) int
+    size_t: i
+    char: hits
+    i: 0U
+    while: i < 4U
+        hits: 65
+        if: z != 0
+            return: 3
+        i: i + 1U
+        continue
+    return: 0
+end: early
 fn: main () int
-    return: add(1, 2)
+    return: 0
 end: main

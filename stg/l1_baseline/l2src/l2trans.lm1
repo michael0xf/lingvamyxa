@@ -12,6 +12,7 @@ unsigned: l2_intern_probe 0U
 int: l2_m_n 0
 int: l2_own_n 0
 int: l2_tn 0
+int: l2_loop_depth 0
 const: @: char l2_call_node 0
 @: FILE l2_out 0
 const: @: char l2_src 0
@@ -429,6 +430,7 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
     l2_leaf_mode: 0
     l2_m_n: 0
     l2_own_n: 0
+    l2_loop_depth: 0
     l2_need_p0: 0
     l2_need_query: 0
     l2_need_own: 0
@@ -1782,9 +1784,14 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
         return: l2_error(path, 0, "unsupported body")
     while: field != 0
         stmt: field\value
-        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && (l2_text_eq(stmt\as\atom, "continue") || l2_text_eq(stmt\as\atom, "break"))
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "break")
             return: l2_error(path, stmt, "unsupported loop")
-        if: l2_frame_head(stmt, "for") || l2_frame_head(stmt, "continue") || l2_frame_head(stmt, "break")
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "continue") && l2_loop_depth = 0
+            return: l2_error(path, stmt, "unsupported loop")
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "continue")
+            field: l2_next_active(field\next)
+            continue
+        if: l2_frame_head(stmt, "for") || l2_frame_head(stmt, "break") || l2_frame_head(stmt, "continue")
             return: l2_error(path, stmt, "unsupported loop")
         if: l2_frame_head(stmt, "if")
             fr: stmt\as\frame
@@ -1836,8 +1843,11 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
                 return: l2_error(path, stmt, "unsupported body")
             if: l2_check_fields(fr\body\first_field, n - 1, mi, path, stmt) != 0
                 return: 1
+            l2_loop_depth: l2_loop_depth + 1
             if: l2_check_body(last\value\as\structure, mi, path, depth + 1) != 0
+                l2_loop_depth: l2_loop_depth - 1
                 return: 1
+            l2_loop_depth: l2_loop_depth - 1
             field: l2_next_active(field\next)
             continue
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && depth > 0
@@ -2582,7 +2592,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     int: raw 1
     size_t: ln
     c.array: [32]: char deep
+    c.array: [32]: char wdeep
     c.array: [64]: char wcond
+    c.array: [64]: char wkeep
     ln: c.strlen(ind)
     if: ln + 5U >= 32U
         return: 1
@@ -2631,19 +2643,43 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             while: k < n
                 last: l2_next_active(last\next)
                 k: k + 1
+            wkeep[0]: 0
             wcond[0]: 0
+            wdeep[0]: 0
+            if: l2_bump_ind(deep, wdeep) != 0
+                return: 1
+            if: l2_new_temp(ind, wkeep) != 0
+                return: 1
+            if: c.fprintf(l2_out, "%s%s: 1\n", ind, wkeep) < 0
+                return: 1
             if: l2_new_temp(ind, wcond) != 0
                 return: 1
-            if: l2_eval_cond(fr\body\first_field, n - 1, mi, ind, wcond) != 0
-                return: 1
-            if: c.fprintf(l2_out, "%swhile: %s\n", ind, wcond) < 0
-                return: 1
-            if: l2_emit_body(last\value\as\structure, mi, deep) != 0
+            if: c.fprintf(l2_out, "%swhile: %s\n", ind, wkeep) < 0
                 return: 1
             if: l2_eval_cond(fr\body\first_field, n - 1, mi, deep, wcond) != 0
                 return: 1
+            if: c.fprintf(l2_out, "%sif: %s = 0\n", deep, wcond) < 0
+                return: 1
+            if: c.fprintf(l2_out, "%s    %s: 0\n", deep, wkeep) < 0
+                return: 1
+            if: c.fprintf(l2_out, "%sif: %s\n", deep, wkeep) < 0
+                return: 1
+            l2_loop_depth: l2_loop_depth + 1
+            if: l2_emit_body(last\value\as\structure, mi, wdeep) != 0
+                l2_loop_depth: l2_loop_depth - 1
+                return: 1
+            l2_loop_depth: l2_loop_depth - 1
+            if: c.fprintf(l2_out, "%send: while\n", ind) < 0
+                return: 1
             field: l2_next_active(field\next)
             continue
+        if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "continue")
+            if: c.fprintf(l2_out, "%scontinue\n", ind) < 0
+                return: 1
+            field: l2_next_active(field\next)
+            continue
+        if: l2_frame_head(stmt, "continue") || l2_frame_head(stmt, "break") || l2_frame_head(stmt, "for")
+            return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0
             oi: l2_own_find(l2_next_active(stmt\as\frame\body\first_field)\value\as\atom)
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0
