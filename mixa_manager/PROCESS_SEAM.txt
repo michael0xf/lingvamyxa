@@ -1,0 +1,106 @@
+Mixa Manager - the process seam
+Third seam. Display, files, processes: three boundaries, three small surfaces.
+
+
+1. Why a third seam rather than a corner of an existing one
+
+BACKEND_SEAM is pixels out and events in. FILE_SEAM is names and bytes. Running
+a program is neither: it is a child with its own lifetime, two streams and an
+exit status, and it fails in ways neither of the others has - a command that does
+not exist, one that never terminates, one that waits on input nobody will send.
+
+Folding it into either would make both harder to port and would force a headless
+display backend to know about processes.
+
+
+2. What it is for, exactly
+
+The first user of this is deliberately small, from the language owner:
+
+    the console holds text. Pressing Enter takes the line from its start up to
+    the CURSOR, sends it plus a newline to the OS, and the child's output
+    arrives at the same place - as if the cursor itself were writing. All of it
+    lands in the file.
+
+That is ClearShell's "Run OS Command" and it is mode 0.1.2 from the old model -
+delegation, not terminal hosting. There is no PTY, no terminal emulation and no
+child screen. The child gets a command and a place to write.
+
+Which settles a design question before it is asked: THE CONSOLE IS NOT A
+TERMINAL. It is a text file being edited, into which a child's output is
+appended. Everything a terminal implies - cursor addressing, colour escapes,
+alternate screens - is out of scope until mode 0.1.1, and this seam is not the
+place it will arrive.
+
+
+3. Operations
+
+    spawn      a command line, a working directory. Returns a handle, or
+               reports that it could not start - which is DIFFERENT from a
+               command that started and failed, and callers need to tell them
+               apart
+
+    read       drain available output into a caller's buffer. NEVER BLOCKS,
+               for the same reason poll does not: the loop belongs to the
+               Message, and a read that waits puts the wait inside a source
+               that cannot see the Message's other work
+
+    write      send bytes to the child's input
+
+    status     running, or exited with a code
+
+    kill       terminate it, and mean it - the child and its children
+
+    close      release the handle
+
+Six again, and not by imitation: the same lifetime shape produces the same
+count. If a seventh is needed it will be because something here cannot be
+expressed, and that is evidence rather than an inconvenience.
+
+
+4. Rules taken from ClearShell, which has run this for years
+
+Read out of its ProcessBuilder use rather than invented:
+
+    STDERR IS MERGED INTO STDOUT, in arrival order. Splitting them reorders
+      them, and for reading a build log the order IS the information.
+
+    STDIN IS CLOSED unless the caller means to write. ClearShell closes it
+      explicitly, with the comment that otherwise a command like `cat` waits
+      forever for input nobody will send. That is a real hang, not a theoretical
+      one.
+
+    THE CHILD RUNS IN A PROCESS GROUP where the platform supports it, so that
+      kill reaches its descendants. A shell that spawns a compiler must not
+      leave the compiler running.
+
+    THE WORKING DIRECTORY IS EXPLICIT, and the command may change it. ClearShell
+      recovers the new one by having the script print it after the command,
+      alongside the exit status.
+
+4.1. The marker line
+
+The child's exit status and final directory come back IN BAND, printed after the
+command as a marker line carrying both, tab separated - ClearShell's approach,
+and we keep it.
+
+In band looks like a hack and is not. The console's scrollback is an ordinary
+file that the user can open, search and copy; a sidecar index of command
+boundaries would have to be kept in step with it, and would be wrong the moment
+someone edited the file. A marker line travels with the text it describes.
+
+It follows that the marker must be unguessable enough not to occur in real
+output - ClearShell derives one per command from a counter and a high-resolution
+time - and that a caller which finds no marker must treat the command as having
+produced no status rather than inventing one.
+
+
+5. What this seam does NOT do
+
+No PTY, no ConPTY, no terminal emulation, no job control, no shell parsing - the
+command line goes to the platform's shell as one string, and what that shell
+does with it is the shell's business.
+
+No output limits. ClearShell keeps head, line and tail limits and drops the
+middle of noisy output because it holds the text in memory. Ours goes to a file,
+so there is nothing to drop; see FILE_SEAM section 2.
