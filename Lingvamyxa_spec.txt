@@ -11952,16 +11952,20 @@ contracts; `spawn` here is English, not a new parser intrinsic):
         the parent turn. Copy initialData (numbers and exact byte/text
         payloads) into that reserved child's arena. This is not a send
         into a running recipient. Retry of the same (parent, create_id)
-        returns the same reserved/committed child; a new address is not
-        assigned on every retry. The child does not run before
-        successful publication of the spawning turn. A failed parent
-        turn releases the unactivated child. Send to that reserved
+        while the child is still live returns that child (no second
+        committed child). An aborted uncommitted reservation is
+        released (tombstone); retry must not return the freed handle.
+        The child does not run before the creator's successful
+        end-turn publication. Third-party send cannot activate an
+        uncommitted reservation. A failed parent turn releases
+        uncommitted children. Send to that reserved
         address in the same turn is staged with other outgoing work
         and, after publication, admitted in FIFO order with first
         activation of the inactive child. Every ordinary running
         Message has an accountable parent (root is an explicit host
-        supervisor). Parent death completes child shutdown in this
-        slice (children stop); it does not leave unmonitored orphans.
+        supervisor). Parent fail() recursively stops descendants.
+        Create records poll/status/stop authority, not content
+        rights (19.32.4).
 
     send(destination, envelope) -> staging status
         Stage a transport-owned copy of the envelope (numbers and
@@ -11987,8 +11991,9 @@ contracts; `spawn` here is English, not a new parser intrinsic):
         destination.
 
     stop(destination) -> staging status
-        Explicit cooperative stop. Parent termination does not
-        implicitly kill children.
+        Cooperative stop request. It is not completion and not
+        reclaim. Parent fail() is the cascade-shutdown path
+        (descendants stop). Do not confuse the two.
 
 Envelope fields for this slice: id (stable logical request identity
 across transport attempts), correlation (19.31.4: semantic
@@ -12008,12 +12013,16 @@ nesting.
 Reliability profile for this in-memory slice (selected from
 historical 19.28.7.1; not Namespace/descriptor policy-merge):
 
-    id/dedup scope: envelope.id is the logical request identity.
-        Dedup is per (recipient, id) in that recipient's in-memory
-        table for the recipient Message's lifetime.
-    in-flight: a second envelope with the same id while the first
-        is staged, in transport, or executing is a duplicate attempt,
-        not a new request.
+    id/dedup scope: admission/execution dedup is
+        (recipient, sender, id) in the recipient table. Sender
+        staging is a separate unpublished outbox; the destination
+        cannot see or dedup it. Two senders' local id=1 do not
+        collide. Sender identity here is the runtime-bound `from`
+        of this trusted serialized prototype, not a forgeable
+        language security boundary.
+    in-flight: a second envelope with the same (sender, id) after
+        admission or while executing is a duplicate, not a new
+        request. Unpublished staging is only on the sender.
     finished: a duplicate after a semantic result/failure is not
         re-executed; the already produced correlated result may be
         reused if still held, otherwise the attempt is rejected as
@@ -12052,7 +12061,9 @@ a retried create cannot silently spawn a second child.
 Worker death: the terminated Message must not resume and must not
 publish its discarded outbox to announce death. The runtime posts a
 KIND_DEAD envelope onto the transport (supervisor channel) to the
-accountable parent and to reply_to of admitted-but-unanswered work.
+accountable parent and to the executing request's reply_to (retained
+through recv; correlated to request.id, 19.31.4) plus remaining
+inbox reply_to. `from`/number identify the dead worker.
 That diagnostic lives in the survivor, not in the dying arena
 (historical 19.29.14.7/10). It reports termination, not proof of
 every external effect. A partition cannot prove remote death; an
@@ -12064,10 +12075,20 @@ Per-item progress/failure is KIND_PROGRESS / KIND_ITEM payload data
 (bytes + number); continue-vs-stop is application policy in the
 request, not a core intrinsic.
 
-First implementation header: `stg/l1_baseline/l2src/lmx_message.h`
-(create/send/stop/end_turn/pump/recv/fail). Isolated selftest:
-`lmx_message_selftest.lm1`. mixa must not rebuild default gen2 for
-this.
+Parent poll (simple, like a watcher): `lmx_msg_poll(parent, now,
+threshold)` lists RUNNING children whose last beat (recv/turn) is
+older than threshold. Interval and threshold are settings, not
+language constants. Poll can run while a child handler is stuck.
+Non-response is not remote death. The parent then stop()s or
+fail()s by policy. Root poll covers root's children; fail of a
+mid-level parent stops grandchildren.
+
+This is a trusted serialized in-process prototype, not the completed
+language security/supervision boundary. Header:
+`stg/l1_baseline/l2src/lmx_message.h`
+(create/send/stop/end_turn/pump/recv/fail/poll/set_now).
+Selftest: `lmx_message_selftest.lm1`. mixa must not rebuild default
+gen2. Graph-copy and other 19.29.7.2 operations are not implemented.
 
 19.29.7.2. Deferred operations versus guarantees this slice does not
 provide
@@ -12732,6 +12753,8 @@ A protected object may require:
     creator-parent tracking.
 
 Parent/creator rows do not grant content rights by themselves.
+Message create (19.29.7.1) records lifecycle authority to
+poll/status/stop that child; it is not a content-rights grant.
 
 19.32.5. Delegated Ticket
 
