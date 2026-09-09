@@ -30,6 +30,30 @@ thing we are standing on. If L1 genuinely cannot express something, that is a
 finding worth reporting - it is how L1 gets fixed, and several have been fixed
 that way already. Writing C instead reports nothing and fixes nothing.
 
+0.1. This subtree is not just an application
+
+Worth knowing before deciding that a shortcut is harmless.
+
+mixa_manager is the first substantial body of REAL APPLICATION CODE written in
+L1. Everything before it was the translator writing itself, which exercises a
+narrow and self-selected slice of the language: l1trans only needs what l1trans
+happens to use.
+
+So this subtree is where we find out what L2 must actually provide. The L2
+translator is being built RIGHT NOW, in parallel, by other people - and what we
+write here is what it will have to translate when L1 is rewritten into L2 and
+L3 blocks are lifted out of it. At L3 the language may be interpreted outright,
+which constrains further what has to lower cleanly.
+
+That gives every awkward moment a second value. A place where L1 makes something
+hard is not lost time: it is a REQUIREMENT DISCOVERED, found by real use rather
+than guessed at in a specification. Report it and it becomes an input to the
+translator being written this week.
+
+Which sharpens the objection to C past "it is off the chain": C teaches the L2
+translator NOTHING. It produces no requirement, no evidence, no pressure on the
+design. It is invisible to the very effort this code exists to inform.
+
 
 1. const on everything that only reads
 
