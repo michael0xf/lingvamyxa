@@ -1277,11 +1277,21 @@ Wrong end target: "end target does not match close target".
 Nested `end: return` on a return statement stays unsupported trailer
 (entry_trailer). Trailer expression is scanned, checked, evaluated
 and checkpointed like a body return (own publish, hidden discovery).
-Bare `end` stays banned (v15). Empty `end:` is a settled language
-ban: root L1 l1_emit_fn now rejects it (`end trailer expects
-exactly one target name`) and wrong targets (`end target does not
-match close target`). L2 still rejects empty end:. Frozen STG L1
-source was not updated; it still emits empty/wrong end. Full
+Bare `end` stays banned (v15) as a separate rule; it is not a
+nullary operation. Empty `end:` is one instance of the general
+P0 empty-colon syntax rule (112600, superseding 112500's
+translator-only placement): a colon Frame with no argument
+fields after body assembly is a current-parser P0 error;
+valid nullary is written without ':'; compact `f()` and `()`
+stay allowed. Historical 620db86 P0 still accepts
+tests/empty_colon_frames.lmx (versioned old acceptance, not a
+port regression). Root L1 l1_emit_fn already rejects empty end:
+(`end trailer expects exactly one target name`) and wrong
+targets (`end target does not match close target`). Making
+lm_p0_validate_nonempty_colon_frames actually reject in the
+new parser is the remaining implementation. Frozen STG P0 is
+not silently edited. L2 may keep a marked temporary defensive
+check until coordinated STG promotion. Full
 self-build/next/check was not rerun in the Unit 25 window.
 Main-only nonempty body + return trailer dropped the last body
 puts (110800); that is a remaining L2 leaf-path bug, not a

@@ -184,9 +184,30 @@ build baseline; promotion must preserve the live L2 sources.
   This gen1+ regression is exercised by empty_sub_ok.lm1.
   Function close admits `end:<name>` (canonical), `end:fn`/`end:sub`
   (receiver/head), a terminal `return:` trailer, or `---` as a
-  multi-level tail cutter. Bare `end` and empty `end:` are rejected.
-  Wrong target/arity remain diagnostics. Tests: fn_close_*.lm1,
-  invalid_fn_end_wrong.lm1, invalid_fn_end_empty.lm1.
+  multi-level tail cutter. Bare `end` is separately forbidden. Empty
+  `end:` is a current-P0 syntax error (general empty-colon rule
+  below), not a complete special case. Wrong target/arity remain
+  diagnostics. Tests: fn_close_*.lm1, invalid_fn_end_wrong.lm1,
+  invalid_fn_end_empty.lm1.
+
+1.4.1 Colon vs nullary (current P0 syntax, 112600)
+  A colon Frame with no argument fields after complete inline/vertical
+  body assembly is a P0 syntax error, independent of receiver name.
+  L1 inherits this from the new parser; it is not a translator-only
+  workaround. 112500's L1/L2-only placement is superseded.
+
+  Bare `f` is an identifier. Compact `f()` is an allowed empty compact
+  Frame. `()` is an allowed empty bounded Structure. `f:` plus a
+  nonempty vertical body is not empty. A colon Frame whose body
+  contains an explicit `()` has a Structure field, not zero P0 fields.
+  Colon-empty specialized trailers (`return:`, `end:`) are the same
+  P0 error. Bare `return` / `break` / `continue` remain admitted in
+  their existing contexts. Bare `end` stays separately forbidden.
+  Quoted or commented ':' is not an executable Frame. Historical
+  620db86 P0 still accepts `tests/empty_colon_frames.lmx`; that is
+  versioned old-P0 acceptance, not current admission and not a port
+  regression. Frozen STG P0 is not silently edited; root first, then
+  a narrow coordinated promotion so L2 consumes the same rule.
 
 1.5 Control and expressions (covered by runners)
   if / else, while, for (C-style three-slot header as in for_loop.lm1;

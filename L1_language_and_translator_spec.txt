@@ -475,6 +475,11 @@ P0 is already unambiguous for:
     string, L-prefix, exact quoted identifiers — raw spelling in the
     atom
   - field separators comma/semicolon; closers --- / end:
+  - current P0 rejects a colon Frame with no argument fields after
+    body assembly (`f:`, `outer(inner:)`, empty `end:` / `return:`).
+    Compact `f()` and `()` stay allowed. Historical 620db86 P0 kept
+    the zero-field colon shape. 112500 translator-only placement is
+    superseded by 112600.
   - name(...) is always a Frame; (...) is always an anonymous Structure
   - `c.`-surface chunks (`c.printf`, `c.a.b`) as one atom in compact
     split (parser.lm2:2646–2729)

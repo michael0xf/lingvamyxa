@@ -3447,10 +3447,11 @@ It makes an otherwise empty structural step visible, without calling a receiver:
     1. If the parser is currently inside a deeper level, the move to the dash fence at
        level K is an admitted tail-cutter close: it may skip N open levels down
        to K (unlike an ordinary source item, which may decrease by only one
-       level). Bare `end` and empty `end:` are not this marker. Named `end:
-       <target>` remains the readable closer; `---` is the short explicit
-       multi-level alternative. A following item at K+1 still opens an
-       anonymous Structure at K.
+       level). Bare `end` and empty `end:` are not this marker. Empty `end:`
+       is the general empty-colon rejection, not a dash-fence substitute.
+       Named `end: <target>` remains the readable closer; `---` is the short
+       explicit multi-level alternative. A following item at K+1 still opens
+       an anonymous Structure at K.
 
     2. If the following non-empty source item is at level K + 1, the dash-fence line
        acts as the visible head of an anonymous positional Structure at level
@@ -3704,7 +3705,7 @@ opening form, but that is an opt-out from named close, not the default.
 
 `end:` is not the default close mechanism for all named frames. The default structural close is the ordinary source-level cut. `end:` is the explicit named form of that close. It is useful when the source wants to identify the close target directly, close across a long nested tail, or improve diagnostics and readability in long blocks.
 
-A standalone dash-fence source line is an explicit source-level marker used primarily by relaxed indentation notation as the counterpart of a canonical source-level delimiter line. It does not consume a target and performs no receiver call by itself. When followed by source items at the next deeper level, it materializes the head of an anonymous positional Structure at its own source level. Otherwise it is an admitted multi-level tail cutter: from a valid close position it may skip N open levels down to its own level. An ordinary downward transition without an admitted trailer (`end:<target>`, terminal `return:`, or `---`) may decrease by only one level. Bare `end` and empty `end:` are forbidden (they invite Pascal-style stacks of redundant closers). Named `end:` and terminal `return:` remain the readable closers; `---` is the short explicit alternative. When the current named frame allows nameless close and there is no ambiguity, a dash-fence line may close that frame as a shorter alternative to `end: name`.
+A standalone dash-fence source line is an explicit source-level marker used primarily by relaxed indentation notation as the counterpart of a canonical source-level delimiter line. It does not consume a target and performs no receiver call by itself. When followed by source items at the next deeper level, it materializes the head of an anonymous positional Structure at its own source level. Otherwise it is an admitted multi-level tail cutter: from a valid close position it may skip N open levels down to its own level. An ordinary downward transition without an admitted trailer (`end:<target>`, terminal `return:`, or `---`) may decrease by only one level. Bare `end` is separately forbidden everywhere; it is not a nullary operation and is not restored by the empty-colon rule. Empty `end:` is a current-P0 syntax error: one instance of the general rule that a colon Frame with no argument fields after body assembly is invalid; a valid nullary operation is written without `:`. Compact `f()` and `()` stay allowed. Together they invite Pascal-style stacks of redundant closers. Named `end:<target>` and terminal `return:` remain the readable closers; `---` is the short explicit alternative. When the current named frame allows nameless close and there is no ambiguity, a dash-fence line may close that frame as a shorter alternative to `end: name`. The prior end-only restriction is not the complete general colon/nullary rule. 112500's translator-only placement is superseded.
 
 Example named close:
 
@@ -8497,7 +8498,11 @@ Output invariants:
                           | nullary_line_body
                           | structural_value
 
-    colon_frame_body    ::= head ":" [ line_arguments ]
+    colon_frame_body    ::= head ":" ( line_arguments | vertical_body )
+                            empty `head:` after complete body assembly is a
+                            current-P0 syntax error; compact `name()` and `()`
+                            are not this production. Historical 620db86 P0
+                            allowed the empty form.
 
     semicolon_segment_separator
                          ::= ";"
@@ -8614,13 +8619,35 @@ For a source item at level N, vertical child arguments are written at level N + 
 
 A canonical dotted delimiter line or relaxed dash-fence line at level K may delimit an anonymous positional Structure at level K. If it is followed by source items at level K + 1, it opens such an anonymous Structure. The next delimiter at level K closes the previous anonymous Structure and may open another one when followed by deeper items. A following source item at level K - 1 closes that anonymous Structure by the ordinary one-step cut. A larger cut is not ordinary P0 syntax and requires an admitted tail-cutter layer.
 
-An empty colon Frame is not rejected by P0 merely because its body has zero
-fields. It is still a structural item. The active receiver, validator,
-translator or profile decides whether a nullary colon Frame is meaningful in
-that position. For example, a profile may reject `level0:` followed by sibling
-`level1:` when `level0` requires a body, or reject `level0(level1:)` when the
-inner empty Frame is not an admitted argument. Those are receiver/profile
-diagnostics, not a separate P0 grammar category.
+A colon Frame with no argument fields, after the complete inline and
+vertical body has been assembled, is a P0 syntax error. The check is
+independent of receiver name. EOF, a next sibling, a semicolon, or a
+bounded close must not silently accept the empty form. Nested
+`outer(inner:)` likewise fails. Validation runs after body
+assembly/postprocessing, using colon/form flags and original spelling
+metadata, not a regex over source text. ':' inside strings or comments
+is not an executable Frame.
+
+This is a current-parser P0 rule. Historical 620db86 P0 retains
+zero-field colon Frames (`standalone:`, `next:`, `outer(inner:)` in
+`tests/empty_colon_frames.lmx`); those dumps remain versioned old-P0
+acceptance, not a port regression and not current admission.
+
+A valid nullary operation is written without `:`: bare `f` is an
+identifier, later resolved by a consumer. Compact `f()` is an allowed
+empty compact Frame (`LM_P0_FRAME_COMPACT`). `()` is an allowed empty
+bounded Structure. Do not reject empty parentheses or conflate
+compact/noncolon Frames with colon Frames. `f:` followed by a nonempty
+vertical body is not empty. A colon Frame whose body contains an
+explicitly written `()` has a Structure field, not zero P0 fields.
+
+Colon-empty specialized trailers such as `return:` and `end:` are the
+same P0 error. Bare `return` remains valid in its existing contexts.
+Bare `end` stays separately forbidden and is not restored as a nullary
+operation. Empty `end:` is one consequence of this general P0 rule, not
+a complete special-case substitute for it. The 112500 translator-only
+placement is superseded: the check lives in the new parser, not as a
+translator workaround.
 
 This grammar is intentionally incomplete around full update semantics, full indexing, full field-follow access, type constructors, literals and relation forms because those areas require final design decisions. Native structural grammar does not include `=` assignment, `=` named-field syntax, bare `end`, `end <target>`, bare non-nullary receiver/callable calls or a built-in `case` form. The standalone dash-fence line is part of vertical structure syntax as a nameless delimiter: it may open an anonymous positional Structure when followed by a deeper item, separate sibling anonymous Structures, or close/cut an anonymous/implicit section.
 
@@ -9028,7 +9055,7 @@ prelude is not required or adopted by this excerpt.
     (a b), (a, b)              bounded Structure; comma is optional conventional notation
     ()                         present empty bounded Structure; not a positional skip
     name: value                ordinary nested Structure, often consumed as a setting/semantic field by receiver
-    name:                      empty colon Frame; P0 keeps it, receiver/profile decides whether it is valid
+    name:                      empty colon Frame; current P0 syntax error. Valid nullary is `name` without ':'. Compact `name()` and `()` stay allowed. Historical 620db86 P0 kept the zero-field shape.
     leading dots               canonical visible source level units in the leading indentation zone
     indentation                relaxed source level units before ordinary source items
     dotted delimiter line      canonical anonymous Structure delimiter; may open, separate or close at its source level
