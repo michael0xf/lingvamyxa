@@ -107,6 +107,7 @@ prototype:
     fn: l2_scan_node (const: @(LmP0Node node); int: mi; @: int seen) int
     fn: l2_scan_body (const: @(LmP0Structure body); int: mi; @: int seen) int
     fn: l2_scan_ident (int: mi; const: @(LmP0Text t); @: int seen) int
+    fn: l2_mul3_ok (size_t: a; size_t: b; size_t: c) int
     fn: l2_own_off (int: mi; int: oi) size_t
     fn: l2_own_reserve (int: need) int
     fn: l2_own_free () int
@@ -259,6 +260,15 @@ fn: l2_mul_ok (size_t: n; size_t: sz) int
         return: 0
 return: 1
 
+fn: l2_mul3_ok (size_t: a; size_t: b; size_t: c) int
+    size_t: p
+    if: l2_mul_ok(a, b) = 0
+        return: 0
+    p: a * b
+    if: l2_mul_ok(p, c) = 0
+        return: 0
+return: 1
+
 fn: l2_own_off (int: mi; int: oi) size_t
     size_t: base
     size_t: cap
@@ -326,7 +336,7 @@ fn: l2_own_reserve (int: need) int
     need_u: (cast: (size_t) need)
     cap: (cast: (size_t) l2_own_cap)
     if: cap < 1U
-        cap: 8U
+        cap: 4U
     while: cap < need_u
         if: cap > ((cast: (size_t) -1) / 2U)
             l2_alloc_err: 2
@@ -400,7 +410,7 @@ fn: l2_own_reserve (int: need) int
             nl[oi]: l2_own_live[oi]
             oi: oi + 1
         mi: 0
-        while: mi < l2_m_n
+        while: mi < l2_m_cap
             oi: 0
             while: oi < l2_own_n
                 off: (cast: (size_t) mi) * oldcap
@@ -742,7 +752,31 @@ fn: l2_meth_reserve (int: need) int
             j: j + 1
         i: i + 1
     oc: (cast: (size_t) l2_own_cap)
-    if: oc != 0U && l2_m_uses != 0 && l2_mul_ok(cap, oc) != 0
+    if: oc != 0U && l2_m_uses != 0
+        if: l2_mul3_ok(cap, oc, c.sizeof(c.int)) = 0
+            l2_alloc_err: 2
+            l2_xfree((cast: (@: void) nname))
+            l2_xfree((cast: (@: void) nf0))
+            l2_xfree((cast: (@: void) nf1))
+            l2_xfree((cast: (@: void) nnode))
+            l2_xfree((cast: (@: void) nbody))
+            l2_xfree((cast: (@: void) nsig))
+            l2_xfree((cast: (@: void) nmark))
+            l2_xfree((cast: (@: void) narity))
+            l2_xfree((cast: (@: void) ndyn))
+            l2_xfree((cast: (@: void) nret))
+            l2_xfree((cast: (@: void) nown))
+            l2_xfree((cast: (@: void) nsn))
+            l2_xfree((cast: (@: void) nhcap))
+            l2_xfree((cast: (@: void) nfcap))
+            l2_xfree((cast: (@: void) ndn))
+            l2_xfree((cast: (@: void) ndt))
+            l2_xfree((cast: (@: void) nfn))
+            l2_xfree((cast: (@: void) nft))
+            l2_xfree((cast: (@: void) nedge))
+            l2_xfree((cast: (@: void) nslots))
+            l2_xfree((cast: (@: void) nst))
+            return: 1
         nuses: (cast: (@: int) l2_xmalloc(cap * oc * c.sizeof(c.int)))
         nalias: (cast: (@: int) l2_xmalloc(cap * oc * c.sizeof(c.int)))
         npre: (cast: (@: int) l2_xmalloc(cap * oc * c.sizeof(c.int)))
@@ -787,7 +821,7 @@ fn: l2_meth_reserve (int: need) int
                 j: j + 1
             i: i + 1
         i: 0
-        while: i < l2_m_n
+        while: i < (cast: (int) oldcap)
             j: 0
             while: j < l2_own_n
                 off: (cast: (size_t) i) * oc
@@ -1964,15 +1998,11 @@ fn: l2_scan_ident (int: mi; const: @(LmP0Text t); @: int seen) int
     if: t\length >= 2U && t\data[0] = 99 && t\data[1] = 46
         return: 0
     oi: l2_own_find(t)
-    if: oi >= 0
-        if: l2_own_off(mi, oi) = (cast: (size_t) -1)
-            return: 1
-        if: l2_m_uses[l2_own_off(mi, oi)] = 0
-            l2_m_uses[l2_own_off(mi, oi)]: 1
-        if: seen = 0 || seen[oi] = 0
-            l2_m_pre[l2_own_off(mi, oi)]: 1
-            ty: l2_own_ty[oi]
-            return: l2_dyn_add(mi, t, ty)
+    if: oi >= 0 && l2_m_uses[l2_own_off(mi, oi)] != 0 && (seen = 0 || seen[oi] = 0)
+        l2_m_pre[l2_own_off(mi, oi)]: 1
+        ty: l2_own_ty[oi]
+        return: l2_dyn_add(mi, t, ty)
+    if: oi >= 0 && l2_m_uses[l2_own_off(mi, oi)] != 0
         return: 0
     if: l2_dyn_add(mi, t, 0) != 0
         return: 1
@@ -2498,6 +2528,10 @@ return: l2_bool_set(ind, dest, scratch)
 fn: l2_intern_prove (const: @(char path); const: @(LmP0Node node)) int
     unsigned: id
     int: two
+    if: l2_mul3_ok(2U, 3U, 4U) = 0
+        return: l2_error(path, node, "intern broken")
+    if: l2_mul3_ok((cast: (size_t) -1), 2U, 1U) != 0
+        return: l2_error(path, node, "intern broken")
     if: l2_m_n = 0
         return: 0
     id: l2_m_sig[0]
@@ -2660,6 +2694,9 @@ fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
     const: @: LmP0Node rty
     if: fn_node = 0 || fn_node\as = 0 || fn_node\as\frame = 0
         return: l2_error(path, fn_node, "unsupported body")
+    if: l2_m_n >= c.INT_MAX
+        l2_alloc_err: 2
+        return: l2_error(path, fn_node, "size overflow")
     if: l2_meth_reserve(l2_m_n + 1) != 0
         if: l2_alloc_err = 2
             return: l2_error(path, fn_node, "size overflow")

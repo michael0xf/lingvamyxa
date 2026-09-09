@@ -42,9 +42,14 @@ end: m
 fn: bind32 (char: n32) int
     n32: 3
     char: n32
-    n32: 65
-    return: 0
+    n32: n32
+    return: n32
 end: bind32
+fn: set32 (char: n32) int
+    char: n32
+    n32: 65
+    return: n32
+end: set32
 fn: main () int
     return: 0
 end: main

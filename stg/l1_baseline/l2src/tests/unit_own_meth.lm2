@@ -1,0 +1,20 @@
+fn: m0 () int
+    char: n00
+    n00: 1
+    return: 0
+end: m0
+fn: m1 () int
+    return: 0
+end: m1
+fn: m2 () int
+    return: 0
+end: m2
+fn: m3 () int
+    return: 0
+end: m3
+fn: m4 () int
+    return: 0
+end: m4
+fn: main () int
+    return: 0
+end: main

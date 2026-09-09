@@ -1,0 +1,21 @@
+fn: m (char: n00) int
+    char: n00
+    char: n01
+    char: n02
+    char: n03
+    char: n04
+    char: n05
+    char: n06
+    char: n07
+    char: n08
+    n00: 65
+    return: n00
+end: m
+fn: later (char: n00) int
+    char: n00
+    n00: 66
+    return: n00
+end: later
+fn: main () int
+    return: 0
+end: main

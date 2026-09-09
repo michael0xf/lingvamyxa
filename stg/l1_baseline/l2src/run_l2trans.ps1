@@ -222,6 +222,39 @@ function Invoke-Leaf([string]$src, [string]$stem, [int]$expect, [string]$name) {
     }
 }
 
+function Get-L2Call([string]$text, [int]$mi, [string[]]$vals) {
+    $m = [regex]::Match($text, "fn: l2_m$mi \(@: Lmx node([^)]*)\)")
+    if (-not $m.Success) { throw "missing prototype l2_m$mi" }
+    $rest = $m.Groups[1].Value
+    $n = @($rest.Split(';') | Where-Object { $_.Trim().Length -gt 0 }).Count
+    $args = @("unit")
+    $i = 0
+    while ($i -lt $n) {
+        if ($i -lt $vals.Count) { $args += $vals[$i] } else { $args += "0" }
+        $i++
+    }
+    return "l2_m$mi(" + ($args -join ", ") + ")"
+}
+
+function Invoke-SpliceDrive([string]$stem, [string]$driveBody) {
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "$stem L1 missing generated main return" }
+    $drvLm1 = Join-Path $out ($stem + "_drive.lm1")
+    $drvC = Join-Path $out ($stem + "_drive.c")
+    $drvExe = Join-Path $out ($stem + "_drive.exe")
+    $drvOut = Join-Path $out ($stem + "_drive.stdout")
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $driveBody.Replace("`r`n", "`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed $stem drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "$stem.drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out ($stem + '_drive.err'))`""
+    if ($LASTEXITCODE -ne 0) { throw "$stem drive exe failed" }
+    return [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n", "`n")
+}
+
 Invoke-Leaf "l2src\tests\add.lm2" "add" 0 "add"
 Invoke-Leaf "l2src\tests\entry_sum.lm2" "entry_sum" 0 "sum"
 Invoke-Leaf "l2src\tests\entry_add_ret.lm2" "entry_add_ret" 5 "add"
@@ -315,19 +348,92 @@ function New-MethodNSource([string]$path, [int]$n) {
         }
         $i = $i + 1
     }
-    $src = $body + "fn: main () int`n    return: m0(1, 2) != 3`nend: main`n"
+    $src = $body + "fn: main () int`n    return: 0`nend: main`n"
     [System.IO.File]::WriteAllText((Join-Path (Get-Location) $path), $src.Replace("`r`n", "`n"))
+}
+function New-HiddenNSource([string]$path, [int]$n) {
+    $i = 0
+    $last = $n - 1
+    $body = ""
+    while ($i -lt $n) {
+        if ($i -eq 1) {
+            $body += "fn: m$i (int: a; int: b) int`n    return: a + b + quote`nend: m$i`n"
+        } elseif ($i -eq $last) {
+            $body += "fn: m$i (int: a; int: b) int`n    return: m1(a, b)`nend: m$i`n"
+        } else {
+            $body += "fn: m$i (int: a; int: b) int`n    return: a + b`nend: m$i`n"
+        }
+        $i = $i + 1
+    }
+    $body += "fn: holder () int`n    char: quote`n    quote: 3`n    return: m$last(1, 2)`nend: holder`n"
+    $body += "fn: main () int`n    return: 0`nend: main`n"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $path), $body.Replace("`r`n", "`n"))
 }
 $m17 = Join-Path $out "unit_m17.lm2"
 New-MethodNSource $m17 17
 Invoke-Leaf $m17 "unit_m17" 0 "m16"
 $t17 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_m17.lm1")))
 if ($t17 -notmatch 'fn: l2_m16') { throw "unit_m17 missing method 16" }
+$c16 = Get-L2Call $t17 16 @("1", "2")
+$d17 = Invoke-SpliceDrive "unit_m17" @"
+        c.printf("%d\n", $c16)
+        return: 0
+    end: main
+end: external
+"@
+if ($d17 -ne "3`n") { throw "unit_m17 must execute m16->m0: $d17" }
 $m33 = Join-Path $out "unit_m33.lm2"
 New-MethodNSource $m33 33
 Invoke-Leaf $m33 "unit_m33" 0 "m32"
 $t33 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_m33.lm1")))
 if ($t33 -notmatch 'fn: l2_m32') { throw "unit_m33 missing method 32" }
+$c32 = Get-L2Call $t33 32 @("1", "2")
+$d33 = Invoke-SpliceDrive "unit_m33" @"
+        c.printf("%d\n", $c32)
+        return: 0
+    end: main
+end: external
+"@
+if ($d33 -ne "3`n") { throw "unit_m33 must execute m32->m0: $d33" }
+
+$cyc = Join-Path $out "unit_cycle32.lm2"
+$cb = ""
+$ci = 0
+while ($ci -lt 33) {
+    if ($ci -eq 16) { $cb += "fn: m16 (int: a; int: b) int`n    return: m32(a, b)`nend: m16`n" }
+    elseif ($ci -eq 32) { $cb += "fn: m32 (int: a; int: b) int`n    return: m16(a, b)`nend: m32`n" }
+    else { $cb += "fn: m$ci (int: a; int: b) int`n    return: a + b`nend: m$ci`n" }
+    $ci++
+}
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $cyc), ($cb + "fn: main () int`n    return: 0`nend: main`n").Replace("`r`n", "`n"))
+Invoke-Negative $cyc "unit_cycle32" "unsupported recursion"
+
+$h17 = Join-Path $out "unit_hidden17.lm2"
+New-HiddenNSource $h17 17
+Invoke-Leaf $h17 "unit_hidden17" 0 "holder"
+$th17 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_hidden17.lm1"))).Replace("`r`n", "`n")
+if ($th17 -notmatch 'fn: l2_m16') { throw "unit_hidden17 missing method 16" }
+$hold17 = Get-L2Call $th17 17 @()
+$dh17 = Invoke-SpliceDrive "unit_hidden17" @"
+        c.printf("%d\n", $hold17)
+        return: 0
+    end: main
+end: external
+"@
+if ($dh17 -ne "6`n") { throw "unit_hidden17 m16 must through-quote across 16: $dh17" }
+$h33 = Join-Path $out "unit_hidden33.lm2"
+New-HiddenNSource $h33 33
+Invoke-Leaf $h33 "unit_hidden33" 0 "holder"
+$th33 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_hidden33.lm1"))).Replace("`r`n", "`n")
+if ($th33 -notmatch 'fn: l2_m32') { throw "unit_hidden33 missing method 32" }
+$hold33 = Get-L2Call $th33 33 @()
+$dh33 = Invoke-SpliceDrive "unit_hidden33" @"
+        c.printf("%d\n", $hold33)
+        return: 0
+    end: main
+end: external
+"@
+if ($dh33 -ne "6`n") { throw "unit_hidden33 m32 must through-quote across 32: $dh33" }
 
 Invoke-Leaf "l2src\tests\unit_tempname.lm2" "unit_tempname" 0 "add"
 $tn = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_tempname.lm1")))
@@ -521,25 +627,6 @@ end: external
 
 Invoke-LineBreakWidth
 
-function Invoke-SpliceDrive([string]$stem, [string]$driveBody) {
-    $lm1 = Join-Path $out ($stem + ".lm1")
-    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
-    $tail = "        return: 0`n    end: main`nend: external"
-    $pos = $text.LastIndexOf($tail)
-    if ($pos -lt 0) { throw "$stem L1 missing generated main return" }
-    $drvLm1 = Join-Path $out ($stem + "_drive.lm1")
-    $drvC = Join-Path $out ($stem + "_drive.c")
-    $drvExe = Join-Path $out ($stem + "_drive.exe")
-    $drvOut = Join-Path $out ($stem + "_drive.stdout")
-    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $driveBody.Replace("`r`n", "`n")))
-    & $l1trans $drvLm1 $drvC
-    if ($LASTEXITCODE -ne 0) { throw "l1trans failed $stem drive" }
-    Invoke-Gcc $drvC $drvExe (Join-Path $log "$stem.drive.gcc.log")
-    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out ($stem + '_drive.err'))`""
-    if ($LASTEXITCODE -ne 0) { throw "$stem drive exe failed" }
-    return [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n", "`n")
-}
-
 Invoke-Leaf "l2src\tests\unit_own_early.lm2" "unit_own_early" 0 "m"
 $oe = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own_early.lm1")))
 if ($oe.IndexOf("l2_q0_dirty") -lt 0) { throw "unit_own_early missing typed own cache" }
@@ -728,23 +815,65 @@ if ($o33 -notmatch 'const: @\(char l2_own32\)') { throw "unit_own33 missing 33rd
 if ($o33 -notmatch 'l2_q32') { throw "unit_own33 missing 33rd own cache" }
 
 Invoke-Leaf "l2src\tests\unit_own32_pub.lm2" "unit_own32_pub" 0 "m"
+$p32 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own32_pub.lm1"))).Replace("`r`n", "`n")
+$callM = Get-L2Call $p32 0 @("0")
+$callB = Get-L2Call $p32 1 @("9")
+$callS = Get-L2Call $p32 2 @("0")
 $d32 = Invoke-SpliceDrive "unit_own32_pub" @"
-        l2_m0(unit, 0, 0)
+        c.printf("%d\n", $callM)
         @: Lmx f 0
         f: lmx_branch_child(unit, 0U)
         c.printf("%d\n", lmx_char_value(f\data))
         f: lmx_branch_child(unit, 32U)
         c.printf("%d\n", lmx_char_value(f\data))
-        l2_m1(unit, 9)
+        c.printf("%d\n", $callB)
+        f: lmx_branch_child(unit, 32U)
+        c.printf("%d\n", lmx_char_value(f\data))
         f: lmx_branch_child(unit, 0U)
         c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", $callS)
         f: lmx_branch_child(unit, 32U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        f: lmx_branch_child(unit, 0U)
         c.printf("%d\n", lmx_char_value(f\data))
         return: 0
     end: main
 end: external
 "@
-if ($d32 -ne "1`n77`n1`n65`n") { throw "n32 must publish 77 then 65 and not alias n00=1: $d32" }
+if ($d32 -ne "0`n1`n77`n3`n3`n1`n65`n65`n1`n") { throw "n32 before/after decl and n00 unaliased: $d32" }
+
+Invoke-Leaf "l2src\tests\unit_own_grow_alias.lm2" "unit_own_grow_alias" 0 "m"
+$ga = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own_grow_alias.lm1"))).Replace("`r`n", "`n")
+$callG = Get-L2Call $ga 0 @("1")
+$callL = Get-L2Call $ga 1 @("2")
+$dga = Invoke-SpliceDrive "unit_own_grow_alias" @"
+        c.printf("%d\n", $callG)
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", $callL)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($dga -ne "65`n65`n66`n66`n") { throw "grow must keep n00 alias on under-construction row: $dga" }
+
+Invoke-Leaf "l2src\tests\unit_own_meth.lm2" "unit_own_meth" 0 "m0"
+$om = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own_meth.lm1"))).Replace("`r`n", "`n")
+if ($om -notmatch 'fn: l2_m4') { throw "unit_own_meth missing 5th method" }
+$callOm = Get-L2Call $om 0 @()
+$dom = Invoke-SpliceDrive "unit_own_meth" @"
+        c.printf("%d\n", $callOm)
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($dom -ne "0`n1`n") { throw "method growth must keep first-method OwnUsed: $dom" }
 
 Invoke-Leaf "l2src\tests\unit_bind.lm2" "unit_bind" 0 "bind"
 $bg = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_bind.lm1"))).Replace("`r`n", "`n")
@@ -2067,17 +2196,20 @@ $kDyn = Invoke-FailMallocSrc "l2src\tests\unit_dyn_cap.lm2" "dyn_cap" 48
 $k127 = Invoke-FailMallocSrc (Join-Path $out "unit_arity127.lm2") "arity127" 64
 $kOwn = Invoke-FailMallocSrc "l2src\tests\unit_own6.lm2" "own6" 48
 $kMeth = Invoke-FailMallocSrc "l2src\tests\unit_nine.lm2" "nine" 48
+$kOwnMeth = Invoke-FailMallocSrc "l2src\tests\unit_own_meth.lm2" "own_meth" 64
 if (-not $kDyn.ContainsKey(1)) { throw "fail-malloc dyn_cap never hit formals (kind 1); got $($kDyn.Keys -join ',')" }
 if (-not $kDyn.ContainsKey(2)) { throw "fail-malloc dyn_cap never hit hidden growth (kind 2); got $($kDyn.Keys -join ',')" }
 if (-not $kDyn.ContainsKey(3)) { throw "fail-malloc dyn_cap never hit intern rows (kind 3); got $($kDyn.Keys -join ',')" }
 if (-not $kDyn.ContainsKey(4) -and -not $k127.ContainsKey(4)) { throw "fail-malloc never hit call-actual vectors (kind 4)" }
 if (-not $kOwn.ContainsKey(5)) { throw "fail-malloc own6 never hit OwnUsed growth (kind 5); got $($kOwn.Keys -join ',')" }
 if (-not $kMeth.ContainsKey(6)) { throw "fail-malloc nine never hit method growth (kind 6); got $($kMeth.Keys -join ',')" }
+if (-not $kOwnMeth.ContainsKey(6)) { throw "fail-malloc own_meth never hit method growth (kind 6) with own rows; got $($kOwnMeth.Keys -join ',')" }
 $ev = Join-Path $out "fail_malloc\summary.txt"
 $lines = @("dyn_cap kinds: " + (($kDyn.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " "))
 $lines += "arity127 kinds: " + (($k127.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
 $lines += "own6 kinds: " + (($kOwn.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
 $lines += "nine kinds: " + (($kMeth.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
+$lines += "own_meth kinds: " + (($kOwnMeth.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join " ")
 [System.IO.File]::WriteAllLines((Join-Path (Get-Location) $ev), $lines)
 
 function Invoke-VisualColumn {
