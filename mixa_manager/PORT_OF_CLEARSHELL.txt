@@ -111,6 +111,44 @@ converts once and every consumer agrees.
                 kept out of the drawer on purpose. See DRAWING.txt
 
 
+2.7. Keyboard: FAR Manager, not ClearShell
+
+Take as many hot keys from FAR Manager as apply, and invent the rest.
+
+So there are TWO reference sources and they do not overlap:
+
+    ClearShell    appearance, layout, behaviour, feature set
+    FAR Manager   key bindings
+
+Where they conflict, that split decides it: the keys come from FAR, the look
+from ClearShell. Where a FAR key implies a feature ClearShell does not have,
+that is one of the things we invent - and it gets written down here, like every
+other delta.
+
+2.8. Focus and highlighting: absent from the source, must be built
+
+ClearShell has no highlighting, and that is not an omission - it is a touch
+interface, where there is no "current element" to show. FAR and Norton are
+KEYBOARD interfaces: something is always current, and focus moves between
+elements. That difference is not a detail; it is a whole mechanism the port
+cannot copy because the source does not contain it.
+
+So we build:
+
+    a focus model - which element is current, and how focus moves between
+      lists, items, buttons and panels
+    a highlighted rendering for ANY element, not only list rows
+
+What this does NOT need is any new drawing capability, and that is worth
+checking rather than assuming. Highlighting is a change of ATTRIBUTES, and
+MixaCell already carries fg, bg and MIXA_STYLE_REVERSE. So a highlighted button
+is the same cells with different attributes - the drawer does not learn about
+focus, and the single-API property survives.
+
+Colours for it come from ClearShell's palette, which already distinguishes a
+translucent highlight at alpha 96 from a panel body at 240.
+
+
 3. What is ported unchanged, and must not be redesigned
 
 3.1. The layout METHOD
