@@ -140,13 +140,16 @@ build baseline; promotion must preserve the live L2 sources.
     125700 source slice: `l1src/p0.h.lm1` as L1 declaration source, plus
     `type:` aliases and header-unit function-like `define:` so that
     inventory is not dropped. 489d3f5 landed `predef:` of a header source
-    from an ordinary `.lm1` unit: exactly one `#include` of the generated
-    `name.lm1.h`, types registered for this translation, diamond repeats
-    de-duplicated; declarations are not re-emitted into the `.c`. A header
-    pass in buildCore (*.h.lm1 vs ordinary *.lm1), header-to-header `predef:`
-    cycles, switching live consumers off handwritten `p0.h`, and committed
-    generated bootstrap `p0.lm1.h` are still part of 125700 and are not
-    claimed done. System/vendor includes, qt_app, and mixa headers stay out
+    from an ordinary `.lm1` unit. cc4f511 keeps the generated include
+    identity mirrored by the unit-root-relative source path
+    (`tests/l1/hdr_dir_a/core.h.lm1` -> `#include "tests/l1/hdr_dir_a/core.lm1.h"`),
+    so same-basename headers in different directories do not collide.
+    Header-to-header `predef:` and header cycles are implemented
+    (hdr_diamond_root, hdr_cycle_*). Repeated predef of one header is
+    de-duplicated; a true diamond is root -> two headers -> common. A
+    header pass in buildCore (*.h.lm1 vs ordinary *.lm1), switching live
+    consumers off handwritten `p0.h`, and committed generated bootstrap
+    `p0.lm1.h` are still part of 125700 and are not claimed done. System/vendor includes, qt_app, and mixa headers stay out
     of scope. Design inventory remains L1_header_units_draft.txt.
 
 1.2 Unit-level items (l1_unit_item_ok)
@@ -491,10 +494,12 @@ PARTIAL / LIMITED
   Header units: direct invocation, including `type:` aliases and
   function-like `define:` in header units (3f0e09d). Ordinary-unit
   `predef:` of a `*.h.lm1` source emits one include of the generated
-  header and registers its type names (489d3f5; hdr_predef_consumer /
-  hdr_predef_diamond). `l1src/p0.h.lm1` exists as L1 source; live
-  parser/bootstrap still include handwritten `p0.h`. A buildCore header
-  pass and a committed generated bootstrap `p0.lm1.h` are not implemented
+  header, mirrored by source path, and registers its type names
+  (489d3f5, cc4f511; hdr_predef_consumer, hdr_dir_both,
+  hdr_diamond_root). Repeated predef is de-duplication, not diamond
+  coverage. `l1src/p0.h.lm1` exists as L1 source; live parser/bootstrap
+  still include handwritten `p0.h`. A buildCore header pass and a
+  committed generated bootstrap `p0.lm1.h` are not implemented
   (1.1 scope note).
   Parameter declarations, two confirmed defects, BOTH FIXED in c8ceb67 and no
   longer reproducible; retained here only as the record of what they were:

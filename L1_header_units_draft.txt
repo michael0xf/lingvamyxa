@@ -5,10 +5,12 @@ scalar aliases and function-like `define:` in header units, and adds
 l1src/p0.h.lm1 as L1 declaration source. D2 below (function-like macros
 excluded) is overridden for header units by that slice; ordinary .lm1 still
 rejects them. Ordinary-unit `predef:` of a header source is implemented
-(489d3f5): one include of the generated header, types registered, diamond
-de-duplicated, no re-emission of declarations. The buildCore header pass,
-header-to-header predef cycles, and committed bootstrap p0.lm1.h remain
-unimplemented. Live parser/bootstrap still include handwritten p0.h. This
+(489d3f5 / cc4f511): one include of the generated header, path mirrored
+by unit-root-relative source so same-basename headers do not flatten to
+one include name, types registered, repeated predef de-duplicated, no
+re-emission of declarations. Header-to-header predef and cycles are
+implemented (hdr_diamond_root, hdr_cycle_*). The buildCore header pass
+and committed bootstrap p0.lm1.h remain unimplemented. Live parser/bootstrap still include handwritten p0.h. This
 file is not a claim that the whole draft is done.
 
 Revision 2 answered four corrections. All four were right, and one of them -
