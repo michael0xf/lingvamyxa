@@ -1,0 +1,6 @@
+fn: outer () (int)
+    fn: inner (int: a) (int)
+        return: a + 1
+    end: inner
+    int: a 1
+return: inner(a)

@@ -1,0 +1,7 @@
+structure fields=2
+  frame head="int" body=structure fields=2
+    atom "x"
+    atom "5"
+  structure fields=2
+    atom "y"
+    atom "10"

@@ -1,0 +1,5 @@
+structure fields=1
+  frame head="receiver" body=structure fields=3
+    atom "arg0"
+    atom "arg1"
+    atom "arg2"

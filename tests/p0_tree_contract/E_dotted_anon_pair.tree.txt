@@ -1,0 +1,5 @@
+structure fields=2
+  structure fields=1
+    atom "body1"
+  structure fields=1
+    atom "body2"

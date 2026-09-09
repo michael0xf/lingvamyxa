@@ -1,0 +1,6 @@
+structure fields=2
+  frame head="print" body=structure fields=2
+    atom "a"
+    atom "b"
+  structure fields=1
+    atom "c"

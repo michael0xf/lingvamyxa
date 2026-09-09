@@ -1,0 +1,7 @@
+structure fields=1
+  frame head="printf" body=structure fields=2
+    atom "a"
+    structure fields=3
+      atom "b"
+      atom "c"
+      atom "d"

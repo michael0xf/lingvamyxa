@@ -1,0 +1,4 @@
+fn: test (int: arg) (int)
+. body
+. body
+end: test
