@@ -927,7 +927,9 @@ SPEC 21.3 / 21.5  membership — 192800 always-DynRequired WITHDRAWN
 
     Physical ABI as 192800: node, declared formals, hidden
     in intern order. Empty DynRequired keeps today's intern.
-    Caps: 4 declared, 4 hidden, char/size_t, direct calls.
+    Caps at the time of this slice were 4 declared + 4 hidden.
+    Unit 17 removes those as language/parameter limits; OwnUsed 4,
+    method-count 8, intern-contract 16 remain implementation debt.
     Recursion remains an implementation limit. `@` after bind
     out of scope.
 
@@ -955,11 +957,12 @@ SPEC 21.3 / 21.5  membership — 192800 always-DynRequired WITHDRAWN
                             value, no callee-node child
       unit_dyn_type.lm2     negative: size_t own quote must not
                             type a sibling's char free use
-      unit_dyn_cap.lm2      negative: fifth hidden name
+      unit_dyn_cap.lm2      positive: five hidden names (4 own +
+                            1 forwarded char formal); not a cap
       unit_dyn_early.lm2    return before own-decl does not publish
 
     Implemented in this slice (194400/203100). Closed-unit
-    direct calls; char/size_t; 4 declared + 4 hidden; intern
+    direct calls; char/size_t; intern
     includes hidden names sorted by source-name bytes then type;
     declared arity unchanged. `&&`/`||` with calls use the same
     l2_prep lowering as a statement call (hidden actuals,
@@ -1066,14 +1069,39 @@ Frozen `((column / 8U) + 1U) * 8U` is restored. Nested groups used
 to clobber global l2_lhs/l2_rhs; emit now uses per-call inner/piece
 buffers. Overflow is `expression too long`, dest unchanged.
 
-scan_indent still blocked by arity 5 vs cap 4. break not required.
-skip / L2 `@` of own still deferred.
+scan_indent still deferred; not blocked by parameter count. break
+not required. skip / L2 `@` of own still deferred.
 
 Frozen original: stg/l1_baseline/l1src/parser.lm1
     lm_p0_indent_tab_column
     lm_p0_visual_column_between
 
-Next leftover: arity>4 (scan_indent), or `break`.
+Unit 17 - source-sized declared and hidden arity
+-----------------------------------------------
+Files: l2trans.lm1, run_l2trans.ps1, tests/unit_arity*.lm2,
+tests/unit_dyn_cap.lm2
+
+Declared and hidden metadata are per-method malloc vectors, grown
+to the source count (hidden grows during transitive analysis, then
+canonical intern order). intern_store_mi copies name/length/type
+rows without a fixed stride. Call actuals are malloc nact*256 and
+nhid*256, streamed; no aggregate 256-byte call string. intern_pair
+remains a 2-name probe. L2_FAIL_MALLOC injects the Nth malloc
+failure; dest is unpublished. size overflow vs out of memory are
+distinct diagnostics.
+
+Not a language parameter cap: 9 and 127 are tests, not limits.
+L2_FAIL_MALLOC injects the Nth l2_xmalloc; L2_ALLOC_LOG records
+n/free/live/fail_at/fail_kind (1 formals, 2 hidden, 3 intern,
+4 call-actuals). l2_release frees method and intern rows so live=0
+after each process. Call-actual offsets use size_t. Hidden growth doubling is
+checked against size_t overflow; cap that overshoots c.INT_MAX
+while need still fits is clamped to need. int narrowing uses
+c.INT_MAX, not a hardcoded 32-bit literal.
+
+Remaining implementation debt, not this slice: 8 methods, 4
+OwnUsed, 4 address slots, 16 intern contracts, 256-byte per-actual
+spelling, unsupported recursion. scan_indent not in this unit.
 
 Unit 16 - nested expression emit scratch
 ----------------------------------------
