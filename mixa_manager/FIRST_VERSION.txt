@@ -1,0 +1,63 @@
+Mixa Manager - the first runnable version
+Mode 0.1.2. Scope, and what is deliberately outside it.
+
+
+1. The mode is chosen, not defaulted
+
+The first version is MODE 0.1.2, Norton Commander DELEGATION - the light mode
+from Old_Mixa_Manager_Qt_model.txt section 5. Decided by the language owner
+after establishing what a terminal actually is.
+
+The distinction is not a technicality. A terminal is a PROTOCOL OVER A BYTE
+STREAM: the child sends characters, and some of them are commands - move the
+cursor, clear the screen, set a colour, switch to an alternate screen. The
+screen is ADDRESSABLE and STATEFUL, and emulating a terminal means writing the
+interpreter for that protocol.
+
+We are not writing one. In 0.1.2 the console appends text to a file and shows
+the file. The child gets a command and a place to write, and that is all.
+
+The consequence, stated so it is not reported later as a bug: a program that
+EXPECTS a terminal - vim, htop, anything full-screen - will emit escape
+sequences and we will display them as garbage. That is correct behaviour for
+0.1.2. Mode 0.1.1, with PTY or ConPTY and a terminal core, exists precisely for
+those programs, and it is a later milestone.
+
+
+2. What the first version does
+
+    opens a text file and shows it in the LOWER layer
+    edits lines, wrapping BY CHARACTER, never by word - as a console does
+    a cursor in the lower layer, which is where a cursor belongs
+    Enter takes the line from its start UP TO THE CURSOR, sends it plus a
+      newline to the OS, and the child's output arrives at the same place, as if
+      the cursor were writing it
+    all of it lands in the FILE - the scrollback is not a buffer, see FILE_SEAM
+    the UPPER layer draws, semi-transparently, over the console
+    one button on it: F1 help, which writes its text into the console, ending
+      with a newline
+
+
+3. What is outside it
+
+    no PTY, no ConPTY, no escape-sequence interpretation - that is 0.1.1
+    no panels, no directory listing, no file operations beyond the console's
+      own file. FILE_SEAM 3.5 cuts that down to append, read and size
+    no word wrap
+    no selection model in the UI - the model exists and is tested, but nothing
+      selects anything yet
+    no menus
+
+
+4. Order of work
+
+    glyphs, so anything is visible at all
+    the process seam - spawn, read, write, status, kill, close
+    the console: file-backed text, cursor, character wrap, editing
+    Enter: line start to cursor, to the OS, output appended
+    the F1 button on the overlay
+
+The button can be built EARLIER than the process work and independently of it -
+it needs the drawer, input routing and a write to the console, none of which
+depend on running a child. It is a good early proof that the whole path is
+connected.
