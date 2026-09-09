@@ -1,5 +1,10 @@
 include: "l2src/lmx_message.h" "<stdlib.h>" "<string.h>"
 
+prototype:
+    fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
+    sub: lmx_msg_stop_descendants (@: LmxMsgRuntime rt; LmxMsgAddr: who)
+end: prototype
+
 # Copy-only Message mailbox. Spec 19.29.7.1.
 # Send stages a transport-owned copy. Admission enqueues a fresh copy on the
 # recipient inbox. Handler materialization is recv at turn entry.
@@ -277,6 +282,8 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         m\outbox: 0
         m\outbox_tail: 0
         return: c.LMX_MSG_DEAD
+    m\exec_live: 0
+    m\last_beat: rt\clock
     if: success = 0
         lmx_msg_copy_free(m\outbox)
         m\outbox: 0
@@ -302,6 +309,23 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     ---
 return: c.LMX_MSG_OK
 
+sub: lmx_msg_stop_descendants (@: LmxMsgRuntime rt; LmxMsgAddr: who)
+    @: LmxMsg ch
+    int: i 0
+    if: rt = 0
+        return
+    while: i < rt\n
+        ch: rt\tab + i
+        if: ch\parent = who && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED
+            lmx_msg_stop_descendants(rt, ch\addr)
+            ch\state: c.LMX_MSG_STATE_STOPPED
+            lmx_msg_copy_free(ch\outbox)
+            ch\outbox: 0
+            ch\outbox_tail: 0
+        ---
+        i: i + 1
+end: lmx_msg_stop_descendants
+
 fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
     @: LmxMsg dest
     @: LmxMsgCopy fresh
@@ -323,6 +347,13 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
     ---
     if: node\kind = c.LMX_MSG_KIND_CANCELLED
         dest\state: c.LMX_MSG_STATE_STOPPED
+        lmx_msg_stop_descendants(rt, dest\addr)
+        if: dest\exec_live != 0 && dest\exec_reply != 0U && dest\exec_reply != dest\addr && dest\exec_reply != node\from
+            if: lmx_msg_post_dead(rt, dest\addr, dest\exec_reply, dest\exec_id) = c.LMX_MSG_NOMEM
+                lmx_msg_copy_free(node)
+                return: c.LMX_MSG_NOMEM
+            ---
+        ---
     ---
     fresh: lmx_msg_copy_dup(node)
     lmx_msg_copy_free(node)
@@ -404,23 +435,6 @@ fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; un
     lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, node)
 return: c.LMX_MSG_OK
 
-sub: lmx_msg_stop_descendants (@: LmxMsgRuntime rt; LmxMsgAddr: who)
-    @: LmxMsg ch
-    int: i 0
-    if: rt = 0
-        return
-    while: i < rt\n
-        ch: rt\tab + i
-        if: ch\parent = who && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED
-            lmx_msg_stop_descendants(rt, ch\addr)
-            ch\state: c.LMX_MSG_STATE_STOPPED
-            lmx_msg_copy_free(ch\outbox)
-            ch\outbox: 0
-            ch\outbox_tail: 0
-        ---
-        i: i + 1
-end: lmx_msg_stop_descendants
-
 fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     @: LmxMsgCopy n
@@ -469,12 +483,24 @@ fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: now; unsign
     int: i 0
     int: n 0
     unsigned: idle
-    p: lmx_msg_find(rt, parent)
-    if: p = 0
+    int: match
+    if: rt = 0
         return: -1
+    if: parent != 0U
+        p: lmx_msg_find(rt, parent)
+        if: p = 0
+            return: -1
+        ---
+    ---
     while: i < rt\n
         ch: rt\tab + i
-        if: ch\parent = parent && ch\state = c.LMX_MSG_STATE_RUNNING
+        match: 0
+        if: parent = 0U && ch\parent = 0U
+            match: 1
+        if: parent != 0U && ch\parent = parent
+            match: 1
+        ---
+        if: match != 0 && ch\state = c.LMX_MSG_STATE_RUNNING && ch\exec_live != 0
             idle: now
             if: now >= ch\last_beat
                 idle: now - ch\last_beat
@@ -487,7 +513,6 @@ fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: now; unsign
             ---
         ---
         i: i + 1
-    p\last_beat: now
 return: n
 
 fn: lmx_msg_set_now (@: LmxMsgRuntime rt; unsigned: now) int

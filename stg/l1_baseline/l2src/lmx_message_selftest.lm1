@@ -1,6 +1,8 @@
 predef: "l2src/lmx_message.lm1"
 include: "<stdio.h>"
 
+c.array: []: unsigned lmx_poll_buf 8
+
 fn: main () int
     @: LmxMsgRuntime rt
     unsigned: parent 0U
@@ -138,7 +140,8 @@ fn: main () int
     unsigned: req 0U
     unsigned: mid 0U
     unsigned: leaf 0U
-    unsigned: seen 0U
+    int: k 0
+    unsigned: hits 0
     st: lmx_msg_create(rt, parent, 20U, payload, 4U, @ stale)
     st: lmx_msg_end_turn(rt, parent, 0)
     if: lmx_msg_state(rt, stale) != -1
@@ -193,6 +196,21 @@ fn: main () int
     if: lmx_msg_state(rt, leaf) != c.LMX_MSG_STATE_STOPPED
         c.printf("grandchild not stopped when mid died\n")
         fail: fail + 1
+    unsigned: mid2 0U
+    unsigned: leaf2 0U
+    st: lmx_msg_create(rt, parent, 30U, payload, 4U, @ mid2)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_create(rt, mid2, 31U, payload, 4U, @ leaf2)
+    st: lmx_msg_end_turn(rt, mid2, 1)
+    if: lmx_msg_state(rt, leaf2) = c.LMX_MSG_STATE_STOPPED
+        c.printf("end_turn must leave children alive\n")
+        fail: fail + 1
+    st: lmx_msg_stop(rt, parent, mid2)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_pump(rt)
+    if: lmx_msg_state(rt, mid2) != c.LMX_MSG_STATE_STOPPED || lmx_msg_state(rt, leaf2) != c.LMX_MSG_STATE_STOPPED
+        c.printf("normal parent stop did not cascade\n")
+        fail: fail + 1
     st: lmx_msg_set_now(rt, 10U)
     st: lmx_msg_create(rt, parent, 25U, payload, 4U, @ mid)
     st: lmx_msg_end_turn(rt, parent, 1)
@@ -203,13 +221,65 @@ fn: main () int
     st: lmx_msg_pump(rt)
     st: lmx_msg_recv(rt, mid, got)
     lmx_msg_env_release(got)
-    st: lmx_msg_poll(rt, parent, 10U, 50U, @ seen, 1)
-    if: st != 0
-        c.printf("fresh child marked unresponsive\n")
+    unsigned: idle 0U
+    st: lmx_msg_create(rt, parent, 26U, payload, 4U, @ idle)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_poll(rt, parent, 10U, 50U, lmx_poll_buf, 8)
+    if: st < 0
+        c.printf("poll failed\n")
         fail: fail + 1
-    st: lmx_msg_poll(rt, parent, 100U, 50U, @ seen, 1)
-    if: st < 1
-        c.printf("parent poll missed unresponsive child\n")
+    st: lmx_msg_poll(rt, parent, 1000U, 1U, lmx_poll_buf, 8)
+    k: 0
+    hits: 0
+    while: k < st
+        if: lmx_poll_buf[k] = idle
+            hits: 1
+        k: k + 1
+    if: hits != 0
+        c.printf("idle child declared unresponsive\n")
+        fail: fail + 1
+    st: lmx_msg_poll(rt, parent, 100U, 50U, lmx_poll_buf, 8)
+    k: 0
+    hits: 0
+    while: k < st
+        if: lmx_poll_buf[k] = mid
+            hits: 1
+        k: k + 1
+    if: hits = 0
+        c.printf("parent poll missed stuck handler\n")
+        fail: fail + 1
+    st: lmx_msg_end_turn(rt, mid, 1)
+    st: lmx_msg_poll(rt, parent, 200U, 50U, lmx_poll_buf, 8)
+    k: 0
+    hits: 0
+    while: k < st
+        if: lmx_poll_buf[k] = mid
+            hits: 1
+        k: k + 1
+    if: hits != 0
+        c.printf("finished handler still stuck after end_turn\n")
+        fail: fail + 1
+    env\id: 60U
+    env\reply_to: mid
+    st: lmx_msg_send(rt, mid, parent, env)
+    st: lmx_msg_end_turn(rt, mid, 1)
+    st: lmx_msg_pump(rt)
+    st: lmx_msg_set_now(rt, 10U)
+    st: lmx_msg_recv(rt, parent, got)
+    lmx_msg_env_release(got)
+    st: lmx_msg_poll(rt, 0U, 10U, 50U, lmx_poll_buf, 8)
+    if: st != 0
+        c.printf("root poll flagged a fresh handler\n")
+        fail: fail + 1
+    st: lmx_msg_poll(rt, 0U, 100U, 50U, lmx_poll_buf, 8)
+    k: 0
+    hits: 0
+    while: k < st
+        if: lmx_poll_buf[k] = parent
+            hits: 1
+        k: k + 1
+    if: hits = 0
+        c.printf("host-root poll missed stuck root\n")
         fail: fail + 1
     c.free((cast: (@: void) payload))
     c.free((cast: (@: void) env))
