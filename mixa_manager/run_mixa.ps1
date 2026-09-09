@@ -1,4 +1,4 @@
-# Mixa Manager: TextRect + OverlayRect/composite + headless backend + pump selftests.
+# Mixa Manager: TextRect + OverlayRect/composite + headless backend + pump + Win32 backend selftests.
 # Build root is the repository root (parent of mixa_manager).
 # Translator is the STABLE L1 under stg\l1_baseline, not the live tree.
 $ErrorActionPreference = "Stop"
@@ -56,10 +56,22 @@ $units = @(
     "mixa_core_selftest",
     "mixa_overlay_selftest",
     "mixa_backend_selftest",
-    "mixa_pump_selftest"
+    "mixa_pump_selftest",
+    "mixa_backend_win32_selftest"
 )
 
+$win32Ok = $false
+$win32Skipped = $false
+
 foreach ($unit in $units) {
+    if ($unit -eq "mixa_backend_win32_selftest") {
+        if ($env:OS -ne "Windows_NT") {
+            "mixa win32 backend skipped (not Windows)"
+            $win32Skipped = $true
+            continue
+        }
+    }
+
     $src = "mixa_manager\tests\$unit.lm1"
     $c = Join-Path $out "$unit.c"
     $exe = Join-Path $out "$unit.exe"
@@ -70,7 +82,11 @@ foreach ($unit in $units) {
     # Native gcc warnings on stderr must not trip $ErrorActionPreference Stop.
     $prev = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . $c -o $exe 2>&1 |
+    $linkLibs = @()
+    if ($unit -eq "mixa_backend_win32_selftest") {
+        $linkLibs = @("-lgdi32", "-luser32", "-lkernel32")
+    }
+    & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . $c -o $exe @linkLibs 2>&1 |
         Tee-Object -FilePath (Join-Path $log "$unit.gcc.log") | Out-Null
     $gccRc = $LASTEXITCODE
     $ErrorActionPreference = $prev
@@ -81,9 +97,19 @@ foreach ($unit in $units) {
 
     & $exe
     if ($LASTEXITCODE -ne 0) { throw "$unit failed" }
+    if ($unit -eq "mixa_backend_win32_selftest") {
+        $win32Ok = $true
+    }
 }
 
 "mixa core ok"
 "mixa overlay ok"
 "mixa backend ok"
 "mixa pump ok"
+if ($win32Ok) {
+    "mixa win32 backend ok"
+} elseif ($win32Skipped) {
+    # already printed skip line
+} else {
+    throw "mixa win32 backend unit did not run"
+}

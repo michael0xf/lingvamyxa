@@ -1,0 +1,650 @@
+include: "mixa_manager/mixa_backend_win32.h" "<stdlib.h>" "<string.h>"
+
+# Win32 MixaBackend: HWND + DIB frame, PeekMessage poll. Design: BACKEND_SEAM.txt.
+# PeekMessage (not GetMessage) keeps poll a drain - section 7 / 7.2.
+
+fn: mixa_win32_vk_to_key (size_t: vk) int
+    if: vk = 38U
+        return: MIXA_KEY_UP
+    if: vk = 40U
+        return: MIXA_KEY_DOWN
+    if: vk = 37U
+        return: MIXA_KEY_LEFT
+    if: vk = 39U
+        return: MIXA_KEY_RIGHT
+    if: vk = 36U
+        return: MIXA_KEY_HOME
+    if: vk = 35U
+        return: MIXA_KEY_END
+    if: vk = 33U
+        return: MIXA_KEY_PAGE_UP
+    if: vk = 34U
+        return: MIXA_KEY_PAGE_DOWN
+    if: vk = 45U
+        return: MIXA_KEY_INSERT
+    if: vk = 46U
+        return: MIXA_KEY_DELETE
+    if: vk = 8U
+        return: MIXA_KEY_BACKSPACE
+    if: vk = 9U
+        return: MIXA_KEY_TAB
+    if: vk = 13U
+        return: MIXA_KEY_ENTER
+    if: vk = 27U
+        return: MIXA_KEY_ESCAPE
+    if: vk = 112U
+        return: MIXA_KEY_F1
+    if: vk = 113U
+        return: MIXA_KEY_F2
+    if: vk = 114U
+        return: MIXA_KEY_F3
+    if: vk = 115U
+        return: MIXA_KEY_F4
+    if: vk = 116U
+        return: MIXA_KEY_F5
+    if: vk = 117U
+        return: MIXA_KEY_F6
+    if: vk = 118U
+        return: MIXA_KEY_F7
+    if: vk = 119U
+        return: MIXA_KEY_F8
+    if: vk = 120U
+        return: MIXA_KEY_F9
+    if: vk = 121U
+        return: MIXA_KEY_F10
+    if: vk = 122U
+        return: MIXA_KEY_F11
+    if: vk = 123U
+        return: MIXA_KEY_F12
+return: MIXA_KEY_NONE
+
+fn: mixa_win32_key_mods () size_t
+    size_t: m
+    m: 0U
+    if: (c.GetKeyState(16) & 0x8000) != 0
+        m: m | (cast: (size_t) MIXA_MOD_SHIFT)
+    ---
+    if: (c.GetKeyState(17) & 0x8000) != 0
+        m: m | (cast: (size_t) MIXA_MOD_CTRL)
+    ---
+    if: (c.GetKeyState(18) & 0x8000) != 0
+        m: m | (cast: (size_t) MIXA_MOD_ALT)
+    ---
+return: m
+
+fn: mixa_win32_mouse_mods (size_t: wp) size_t
+    size_t: m
+    m: mixa_win32_key_mods()
+    if: (wp & 4U) != 0U
+        m: m | (cast: (size_t) MIXA_MOD_SHIFT)
+    ---
+    if: (wp & 8U) != 0U
+        m: m | (cast: (size_t) MIXA_MOD_CTRL)
+    ---
+return: m
+
+fn: mixa_win32_mouse_buttons (size_t: wp) size_t
+    size_t: b
+    b: 0U
+    if: (wp & 1U) != 0U
+        b: b | (cast: (size_t) MIXA_BUTTON_LEFT)
+    ---
+    if: (wp & 16U) != 0U
+        b: b | (cast: (size_t) MIXA_BUTTON_MIDDLE)
+    ---
+    if: (wp & 2U) != 0U
+        b: b | (cast: (size_t) MIXA_BUTTON_RIGHT)
+    ---
+return: b
+
+fn: mixa_win32_destroy_dib (@: MixaBackend backend) int
+    if: backend = 0
+        return: 1
+    if: backend\hdc_mem != 0
+        if: backend\hbmp_old != 0
+            c.SelectObject(backend\hdc_mem, backend\hbmp_old)
+        ---
+        c.DeleteDC(backend\hdc_mem)
+    ---
+    if: backend\hbmp != 0
+        c.DeleteObject(backend\hbmp)
+    ---
+    backend\hdc_mem: 0
+    backend\hbmp: 0
+    backend\hbmp_old: 0
+    backend\bits: 0
+return: 0
+
+fn: mixa_win32_create_dib (@: MixaBackend backend; size_t: width; size_t: height) int
+    @: BITMAPINFO bmi
+    @: BITMAPINFOHEADER hdr
+    @: void hdc_win
+    @: void hdc_mem
+    @: void hbmp
+    @: void old
+    @: void ppv
+    @: void bits
+    size_t: nbytes
+    if: backend = 0
+        return: 1
+    if: width = 0U || height = 0U
+        return: 1
+    if: height > ((cast: (size_t) -1) / width)
+        return: 1
+    if: (width * height) > ((cast: (size_t) -1) / 4U)
+        return: 1
+    nbytes: width * height * 4U
+    bmi: (cast: (@: BITMAPINFO) c.calloc(1U, c.sizeof(c.BITMAPINFO)))
+    if: bmi = 0
+        return: 1
+    hdr: (@ bmi\bmiHeader)
+    hdr\biSize: (cast: (DWORD) c.sizeof(c.BITMAPINFOHEADER))
+    hdr\biWidth: (cast: (LONG) width)
+    hdr\biHeight: (cast: (LONG) (0 - (cast: (int) height)))
+    hdr\biPlanes: (cast: (WORD) 1)
+    hdr\biBitCount: (cast: (WORD) 32)
+    hdr\biCompression: (cast: (DWORD) 0)
+    hdc_win: (cast: (@: void) c.GetDC(backend\hwnd))
+    if: hdc_win = 0
+        c.free(bmi)
+        return: 1
+    hdc_mem: (cast: (@: void) c.CreateCompatibleDC((cast: (HDC) hdc_win)))
+    c.ReleaseDC(backend\hwnd, (cast: (HDC) hdc_win))
+    if: hdc_mem = 0
+        c.free(bmi)
+        return: 1
+    ppv: 0
+    hbmp: (cast: (@: void) c.CreateDIBSection((cast: (HDC) hdc_mem), bmi, 0U, (cast: (@: (@: void)) (@ ppv)), 0, 0U))
+    c.free(bmi)
+    if: hbmp = 0 || ppv = 0
+        c.DeleteDC((cast: (HDC) hdc_mem))
+        return: 1
+    old: (cast: (@: void) c.SelectObject((cast: (HDC) hdc_mem), (cast: (HGDIOBJ) hbmp)))
+    bits: ppv
+    c.memset(bits, 0, nbytes)
+    backend\hdc_mem: (cast: (HDC) hdc_mem)
+    backend\hbmp: (cast: (HBITMAP) hbmp)
+    backend\hbmp_old: (cast: (HBITMAP) old)
+    backend\bits: (cast: (@: MixaU8) bits)
+    backend\frame_w: width
+    backend\frame_h: height
+    backend\frame_bytes: nbytes
+return: 0
+
+fn: mixa_win32_adopt (@: MixaBackend backend; size_t: new_cols; size_t: new_rows) int
+    size_t: cw
+    size_t: ch
+    size_t: width
+    size_t: height
+    @: void old_hdc
+    @: void old_bmp
+    @: void old_old
+    @: MixaU8 old_bits
+    size_t: old_w
+    size_t: old_h
+    size_t: old_bytes
+    if: backend = 0
+        return: 1
+    cw: backend\cell_width
+    ch: backend\cell_height
+    if: new_cols = 0U
+        return: 1
+    if: new_rows = 0U
+        return: 1
+    if: cw = 0U
+        return: 1
+    if: ch = 0U
+        return: 1
+    if: new_cols > ((cast: (size_t) -1) / cw)
+        return: 1
+    if: new_rows > ((cast: (size_t) -1) / ch)
+        return: 1
+    width: new_cols * cw
+    height: new_rows * ch
+    if: width = 0U
+        return: 1
+    if: height = 0U
+        return: 1
+    if: height > ((cast: (size_t) -1) / width)
+        return: 1
+    if: (width * height) > ((cast: (size_t) -1) / 4U)
+        return: 1
+    # Hold old surface until the new DIB is secured.
+    old_hdc: (cast: (@: void) backend\hdc_mem)
+    old_bmp: (cast: (@: void) backend\hbmp)
+    old_old: (cast: (@: void) backend\hbmp_old)
+    old_bits: backend\bits
+    old_w: backend\frame_w
+    old_h: backend\frame_h
+    old_bytes: backend\frame_bytes
+    backend\hdc_mem: 0
+    backend\hbmp: 0
+    backend\hbmp_old: 0
+    backend\bits: 0
+    if: mixa_win32_create_dib(backend, width, height) != 0
+        backend\hdc_mem: (cast: (HDC) old_hdc)
+        backend\hbmp: (cast: (HBITMAP) old_bmp)
+        backend\hbmp_old: (cast: (HBITMAP) old_old)
+        backend\bits: old_bits
+        backend\frame_w: old_w
+        backend\frame_h: old_h
+        backend\frame_bytes: old_bytes
+        return: 1
+    ---
+    if: old_hdc != 0
+        if: old_old != 0
+            c.SelectObject((cast: (HDC) old_hdc), (cast: (HGDIOBJ) old_old))
+        ---
+        c.DeleteDC((cast: (HDC) old_hdc))
+    ---
+    if: old_bmp != 0
+        c.DeleteObject((cast: (HGDIOBJ) old_bmp))
+    ---
+    backend\cols: new_cols
+    backend\rows: new_rows
+return: 0
+
+fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; size_t: cell_width; size_t: cell_height) int
+    size_t: width
+    size_t: height
+    @: WNDCLASSA wc
+    @: RECT rc
+    @: void hinst
+    @: void hwnd
+    int: style
+    int: atom
+    if: backend = 0
+        return: 1
+    if: cols = 0U
+        return: 1
+    if: rows = 0U
+        return: 1
+    if: cell_width = 0U
+        return: 1
+    if: cell_height = 0U
+        return: 1
+    if: backend\is_open != 0
+        return: 1
+    if: backend\hwnd != 0
+        return: 1
+    if: backend\bits != 0
+        return: 1
+    if: cols > ((cast: (size_t) -1) / cell_width)
+        return: 1
+    if: rows > ((cast: (size_t) -1) / cell_height)
+        return: 1
+    width: cols * cell_width
+    height: rows * cell_height
+    if: width = 0U
+        return: 1
+    if: height = 0U
+        return: 1
+    if: height > ((cast: (size_t) -1) / width)
+        return: 1
+    if: (width * height) > ((cast: (size_t) -1) / 4U)
+        return: 1
+    # WS_OVERLAPPEDWINDOW
+    style: 0x00CF0000
+    rc: (cast: (@: RECT) c.calloc(1U, c.sizeof(c.RECT)))
+    if: rc = 0
+        return: 1
+    rc\left: 0
+    rc\top: 0
+    rc\right: (cast: (LONG) width)
+    rc\bottom: (cast: (LONG) height)
+    c.AdjustWindowRect(rc, style, 0)
+    hinst: (cast: (@: void) c.GetModuleHandleA(0))
+    wc: (cast: (@: WNDCLASSA) c.calloc(1U, c.sizeof(c.WNDCLASSA)))
+    if: wc = 0
+        c.free(rc)
+        return: 1
+    wc\lpfnWndProc: c.DefWindowProcA
+    wc\hInstance: (cast: (HINSTANCE) hinst)
+    wc\lpszClassName: "MixaBackendWin32"
+    wc\hCursor: c.LoadCursorA(0, (cast: (@: char) 32512))
+    wc\hbrBackground: (cast: (HBRUSH) (5 + 1))
+    atom: (cast: (int) c.RegisterClassA(wc))
+    if: atom = 0
+        if: c.GetLastError() != 1410U
+            c.free(wc)
+            c.free(rc)
+            return: 1
+        ---
+    ---
+    hwnd: (cast: (@: void) c.CreateWindowExA(0U, "MixaBackendWin32", "Mixa", style, 64, 64, rc\right - rc\left, rc\bottom - rc\top, 0, 0, (cast: (HINSTANCE) hinst), 0))
+    c.free(wc)
+    c.free(rc)
+    if: hwnd = 0
+        return: 1
+    # Hidden: suite stays unattended; DC and messages still work.
+    c.ShowWindow((cast: (HWND) hwnd), 0)
+    backend\hwnd: (cast: (HWND) hwnd)
+    backend\cols: cols
+    backend\rows: rows
+    backend\cell_width: cell_width
+    backend\cell_height: cell_height
+    if: mixa_win32_create_dib(backend, width, height) != 0
+        c.DestroyWindow((cast: (HWND) hwnd))
+        backend\hwnd: 0
+        return: 1
+    ---
+    backend\is_open: 1
+return: 0
+fn: mixa_backend_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t: bytes) int
+    @: void hdc_win
+    @: MixaU8 dst
+    size_t: i
+    size_t: n
+    if: backend = 0
+        return: 1
+    if: backend\is_open = 0
+        return: 1
+    if: backend\bits = 0
+        return: 1
+    if: backend\hdc_mem = 0
+        return: 1
+    if: rgba = 0
+        return: 1
+    if: bytes < backend\frame_bytes
+        return: 1
+    # RGBA caller -> BGRA DIB
+    n: backend\frame_w * backend\frame_h
+    dst: backend\bits
+    i: 0U
+    while: i < n
+        dst[0]: rgba[2]
+        dst[1]: rgba[1]
+        dst[2]: rgba[0]
+        dst[3]: rgba[3]
+        dst: dst + 4U
+        rgba: rgba + 4U
+        i: i + 1U
+    ---
+    hdc_win: (cast: (@: void) c.GetDC(backend\hwnd))
+    if: hdc_win = 0
+        return: 1
+    c.BitBlt((cast: (HDC) hdc_win), 0, 0, (cast: (int) backend\frame_w), (cast: (int) backend\frame_h), backend\hdc_mem, 0, 0, 0x00CC0020)
+    c.ReleaseDC(backend\hwnd, (cast: (HDC) hdc_win))
+return: 0
+
+fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
+    @: MSG msg
+    size_t: wp
+    size_t: lp
+    size_t: cx
+    size_t: cy
+    size_t: new_cols
+    size_t: new_rows
+    size_t: vk
+    size_t: cp
+    int: kc
+    int: got
+    int: adopt_rc
+    if: backend = 0
+        return: 1
+    if: out = 0
+        return: 1
+    if: backend\is_open = 0
+        out\kind: MIXA_EVENT_NONE
+        return: 1
+    if: backend\hwnd = 0
+        out\kind: MIXA_EVENT_NONE
+        return: 1
+    msg: (cast: (@: MSG) c.calloc(1U, c.sizeof(c.MSG)))
+    if: msg = 0
+        out\kind: MIXA_EVENT_NONE
+        return: 1
+    got: c.PeekMessageA(msg, 0, 0U, 0U, 1U)
+    while: got != 0
+        # Skip foreign windows; still dispatch so the thread stays healthy.
+        if: msg\hwnd != backend\hwnd
+            if: msg\message = 18U
+                c.free(msg)
+                out\kind: MIXA_EVENT_CLOSE
+                out\codepoint: 0U
+                out\keycode: MIXA_KEY_NONE
+                return: 0
+            ---
+            c.TranslateMessage(msg)
+            c.DispatchMessageA(msg)
+            got: c.PeekMessageA(msg, 0, 0U, 0U, 1U)
+        else:
+            c.TranslateMessage(msg)
+            wp: (cast: (size_t) msg\wParam)
+            lp: (cast: (size_t) msg\lParam)
+            # WM_CLOSE = 16: report, do not DefWindowProc-destroy.
+            if: msg\message = 16U
+                c.free(msg)
+                out\kind: MIXA_EVENT_CLOSE
+                out\codepoint: 0U
+                out\keycode: MIXA_KEY_NONE
+                return: 0
+            ---
+            # WM_SIZE = 5; SIZE_MINIMIZED = 1 ignored for adoption.
+            if: msg\message = 5U
+                c.DispatchMessageA(msg)
+                if: wp = 1U
+                    got: c.PeekMessageA(msg, 0, 0U, 0U, 1U)
+                else:
+                    cx: lp & 0xFFFFU
+                    cy: (lp >> 16U) & 0xFFFFU
+                    if: backend\cell_width = 0U || backend\cell_height = 0U
+                        c.free(msg)
+                        out\kind: MIXA_EVENT_NONE
+                        return: 1
+                    ---
+                    new_cols: cx / backend\cell_width
+                    new_rows: cy / backend\cell_height
+                    out\kind: MIXA_EVENT_RESIZE
+                    out\cols: new_cols
+                    out\rows: new_rows
+                    out\codepoint: 0U
+                    out\keycode: MIXA_KEY_NONE
+                    adopt_rc: mixa_win32_adopt(backend, new_cols, new_rows)
+                    c.free(msg)
+                    return: adopt_rc
+                ---
+            else:
+                # WM_CHAR = 258
+                if: msg\message = 258U
+                    c.DispatchMessageA(msg)
+                    cp: wp
+                    # Drop controls that arrive as KEYCODE via WM_KEYDOWN.
+                    if: cp = 8U || cp = 9U || cp = 13U || cp = 27U || cp = 10U
+                        got: c.PeekMessageA(msg, 0, 0U, 0U, 1U)
+                    else:
+                        out\kind: MIXA_EVENT_KEY
+                        out\codepoint: (cast: (unsigned int) cp)
+                        out\keycode: MIXA_KEY_NONE
+                        out\modifiers: (cast: (unsigned int) mixa_win32_key_mods())
+                        c.free(msg)
+                        return: 0
+                    ---
+                else:
+                    # WM_KEYDOWN = 256
+                    if: msg\message = 256U
+                        c.DispatchMessageA(msg)
+                        vk: wp
+                        kc: mixa_win32_vk_to_key(vk)
+                        if: kc = MIXA_KEY_NONE
+                            got: c.PeekMessageA(msg, 0, 0U, 0U, 1U)
+                        else:
+                            out\kind: MIXA_EVENT_KEY
+                            out\codepoint: 0U
+                            out\keycode: kc
+                            out\modifiers: (cast: (unsigned int) mixa_win32_key_mods())
+                            c.free(msg)
+                            return: 0
+                        ---
+                    else:
+                        # WM_LBUTTONDOWN=513 UP=514 RDOWN=516 RUP=517 MDOWN=519 MUP=520 MOVE=512
+                        if: msg\message = 513U || msg\message = 514U || msg\message = 516U || msg\message = 517U || msg\message = 519U || msg\message = 520U || msg\message = 512U
+                            c.DispatchMessageA(msg)
+                            if: backend\cell_width = 0U || backend\cell_height = 0U
+                                c.free(msg)
+                                out\kind: MIXA_EVENT_NONE
+                                return: 1
+                            ---
+                            cx: lp & 0xFFFFU
+                            cy: (lp >> 16U) & 0xFFFFU
+                            out\kind: MIXA_EVENT_MOUSE
+                            out\col: cx / backend\cell_width
+                            out\row: cy / backend\cell_height
+                            out\buttons: (cast: (unsigned int) mixa_win32_mouse_buttons(wp))
+                            out\modifiers: (cast: (unsigned int) mixa_win32_mouse_mods(wp))
+                            out\codepoint: 0U
+                            out\keycode: MIXA_KEY_NONE
+                            c.free(msg)
+                            return: 0
+                        else:
+                            c.DispatchMessageA(msg)
+                            got: c.PeekMessageA(msg, 0, 0U, 0U, 1U)
+                        ---
+                    ---
+                ---
+            ---
+        ---
+    ---
+    c.free(msg)
+    out\kind: MIXA_EVENT_NONE
+return: 0
+
+fn: mixa_win32_open_clip (@: void hwnd) int
+    int: i
+    i: 0
+    while: i < 50
+        if: c.OpenClipboard((cast: (HWND) hwnd)) != 0
+            return: 0
+        ---
+        c.Sleep(10U)
+        i: i + 1
+    ---
+return: 1
+
+fn: mixa_backend_clipboard_get (@: MixaBackend backend; @: char out; size_t: cap) size_t
+    @: void h
+    @: void p
+    @: wchar_t wbuf
+    int: nbytes
+    size_t: n
+    if: backend = 0
+        return: 0U
+    if: out = 0
+        return: 0U
+    if: backend\is_open = 0
+        return: 0U
+    if: mixa_win32_open_clip((cast: (@: void) backend\hwnd)) != 0
+        return: 0U
+    h: (cast: (@: void) c.GetClipboardData(13U))
+    if: h = 0
+        c.CloseClipboard()
+        if: cap < 1U
+            return: 0U
+        out[0]: (cast: (char) 0)
+        return: 0U
+    ---
+    p: (cast: (@: void) c.GlobalLock(h))
+    if: p = 0
+        c.CloseClipboard()
+        return: 0U
+    wbuf: (cast: (@: wchar_t) p)
+    nbytes: c.WideCharToMultiByte(65001, 0U, wbuf, -1, 0, 0, 0, 0)
+    if: nbytes <= 0
+        c.GlobalUnlock(h)
+        c.CloseClipboard()
+        return: 0U
+    ---
+    # nbytes includes the trailing NUL
+    n: (cast: (size_t) (nbytes - 1))
+    if: cap < (n + 1U)
+        c.GlobalUnlock(h)
+        c.CloseClipboard()
+        return: n
+    ---
+    c.WideCharToMultiByte(65001, 0U, wbuf, -1, out, (cast: (int) cap), 0, 0)
+    c.GlobalUnlock(h)
+    c.CloseClipboard()
+return: n
+
+fn: mixa_backend_clipboard_set (@: MixaBackend backend; const: @(char text)) int
+    @: void h
+    @: void p
+    @: wchar_t wbuf
+    int: nwide
+    size_t: bytes
+    if: backend = 0
+        return: 1
+    if: backend\is_open = 0
+        return: 1
+    if: text = 0
+        return: 1
+    nwide: c.MultiByteToWideChar(65001, 0U, text, -1, 0, 0)
+    if: nwide <= 0
+        return: 1
+    bytes: (cast: (size_t) nwide) * c.sizeof(c.wchar_t)
+    h: (cast: (@: void) c.GlobalAlloc(2U, bytes))
+    if: h = 0
+        return: 1
+    p: (cast: (@: void) c.GlobalLock(h))
+    if: p = 0
+        c.GlobalFree(h)
+        return: 1
+    wbuf: (cast: (@: wchar_t) p)
+    if: c.MultiByteToWideChar(65001, 0U, text, -1, wbuf, nwide) = 0
+        c.GlobalUnlock(h)
+        c.GlobalFree(h)
+        return: 1
+    ---
+    c.GlobalUnlock(h)
+    if: mixa_win32_open_clip((cast: (@: void) backend\hwnd)) != 0
+        c.GlobalFree(h)
+        return: 1
+    ---
+    c.EmptyClipboard()
+    if: c.SetClipboardData(13U, h) = 0
+        c.CloseClipboard()
+        c.GlobalFree(h)
+        return: 1
+    ---
+    c.CloseClipboard()
+return: 0
+
+sub: mixa_backend_close (@: MixaBackend backend)
+    if: backend != 0
+        mixa_win32_destroy_dib(backend)
+        if: backend\hwnd != 0
+            c.DestroyWindow(backend\hwnd)
+        ---
+        backend\hwnd: 0
+        backend\frame_w: 0U
+        backend\frame_h: 0U
+        backend\frame_bytes: 0U
+        backend\cols: 0U
+        backend\rows: 0U
+        backend\cell_width: 0U
+        backend\cell_height: 0U
+        backend\is_open: 0
+    ---
+end: mixa_backend_close
+
+fn: mixa_backend_frame_at (@: MixaBackend backend; size_t: x; size_t: y; @: MixaU8 out) int
+    @: MixaU8 px
+    if: backend = 0
+        return: 1
+    if: out = 0
+        return: 1
+    if: backend\is_open = 0
+        return: 1
+    if: backend\bits = 0
+        return: 1
+    if: x >= backend\frame_w
+        return: 1
+    if: y >= backend\frame_h
+        return: 1
+    px: backend\bits + ((y * backend\frame_w + x) * 4U)
+    # BGRA DIB -> RGBA out
+    out[0]: px[2]
+    out[1]: px[1]
+    out[2]: px[0]
+    out[3]: px[3]
+return: 0

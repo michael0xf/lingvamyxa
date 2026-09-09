@@ -235,3 +235,61 @@ backend exists: the backend exposes a waitable handle the scheduler waits on
 along with its other sources, or the scheduler owns the platform wait outright
 and the backend stays purely a drain. Do not add a blocking wait to the seam to
 paper over this.
+
+
+8. What the first real backend found
+
+Section 6 said a real backend inherits these tests unchanged, and that a
+platform which cannot satisfy one is evidence about the seam rather than a
+special case. Win32 is the first implementation able to test that claim - with
+one implementation it was unfalsifiable - so what it found is recorded here.
+
+THE SEAM DID NOT CHANGE. All six operations are implementable on Win32 as
+specified: open sizes the CLIENT area, present swizzles RGBA into a BGRA DIB and
+blits, poll drains with PeekMessage, clipboard goes through CF_UNICODETEXT, and
+close tears down. No seventh operation was needed and none of the six was found
+wrong.
+
+8.1. poll and the message pump
+
+PeekMessage with PM_REMOVE is the drain, and it fits: poll returns one event or
+NONE and never waits, exactly as section 7 requires.
+
+7.2 is not closed by this, and Win32 sharpens it. A cooperative caller spinning
+on an empty queue burns a core here just as it does headless, and Win32's
+natural idle - MsgWaitForMultipleObjects, or a blocking GetMessage - is
+precisely what the seam refuses to expose. A platform can feed the drain but
+cannot honestly solve idling inside the six operations. Still a scheduler
+question under 19.28. Do not add a blocking wait to the seam for it.
+
+8.2. Two guarantees a real platform cannot be made to assert
+
+Not seam mismatches. Limits on what a platform's own message surface can
+express, worth knowing before a green Win32 run is read as covering more than
+it does.
+
+  resize overflow. WM_SIZE packs the client size into a 16-bit LOWORD and
+    HIWORD, so a size_t-overflowing geometry cannot be injected at all - not by
+    PostMessage and not by a real resize. Headless can push cols = SIZE_MAX/4+1
+    and headless therefore still must. Win32 substitutes a 1x1 client yielding
+    zero cells, which exercises the same failure path: adoption fails, the event
+    is still delivered, the old surface survives.
+
+  key modifiers. GetKeyState does not reflect messages delivered by
+    PostMessage, so a synthetic WM_CHAR carries no Shift or Ctrl. Mouse
+    modifiers arrive in wParam as MK_ bits and ARE assertable. The Win32 suite
+    pins mouse modifiers and does not claim keyboard ones; real input reports
+    them.
+
+8.3. present is the one operation this style of test cannot fully check
+
+frame_at reads the backing store, so the suite verifies what present COPIED,
+not what it displayed. On Win32 the copy and the blit are separate steps and
+only the first is observable this way; the suite also runs with the window
+hidden so it stays unattended, which means there is nothing on screen to observe
+even in principle.
+
+Checking the blit call's own result closes the API-failure half and is worth
+doing. The other half - that a human would have seen it - is not assertable in
+an unattended suite, and no test design changes that. Treat present as covered
+for its copy semantics and manually verified for its display.
