@@ -124,7 +124,39 @@ typedef struct MixaEvent {
 /* The six operations. Resize is deliberately not a seventh - it arrives as an
  * event, because that is how every platform delivers it. See poll. */
 
-/* Creates the surface. Cell geometry in, pixels derived.
+/* Cell metrics for every layer, reported by open.
+ *
+ * Both layers are CELL GRIDS - see BACKEND_SEAM.txt section 10. The upper layer
+ * is not a raster: it is a second grid with a larger monospace font, drawn
+ * semi-transparently over the text layer by the same pseudographics drawer.
+ *
+ * A struct rather than out-parameters because a third layer for images is
+ * explicitly anticipated, and a struct grows without breaking this signature
+ * again.
+ *
+ * A backend with only one font reports the same metrics twice. That is a
+ * legitimate answer, not a failure. */
+typedef struct MixaCellMetrics {
+    size_t text_cell_width;
+    size_t text_cell_height;
+    size_t upper_cell_width;
+    size_t upper_cell_height;
+} MixaCellMetrics;
+
+/* Creates the surface. Cols and rows in; the CELL METRICS ARE IN/OUT.
+ *
+ * The caller fills in the cells it would like and the backend writes back the
+ * cells it actually has. A backend with a font overwrites the request with that
+ * font's native metrics, because the rendering doctrine forbids scaling a font
+ * to fit a request - see BACKEND_SEAM.txt section 9. A backend without a font,
+ * such as the headless one, honours the request exactly, which is what keeps it
+ * usable as a fixture on a machine with no font at all.
+ *
+ * In/out rather than a separate metrics query, so that ignoring the answer is
+ * awkward: a caller that states a wish and never reads back what it got is
+ * precisely the mistake that produces stretched, blurred text.
+ *
+ * The pointer is required and no value in it may be zero.
  *
  * The caller owns the MixaBackend storage and MUST zero it before the first
  * open: open refuses a backend that is already open, but it cannot tell a
@@ -132,7 +164,7 @@ typedef struct MixaEvent {
  * the fields it has no value for yet. Sizing the struct needs the concrete
  * backend's own header, which is where the type is completed. */
 int mixa_backend_open(MixaBackend *backend, size_t cols, size_t rows,
-                      size_t cell_width, size_t cell_height);
+                      MixaCellMetrics *metrics);
 
 /* One composited frame. The buffer is borrowed for the call and not retained.
  * Refused unless it holds at least a whole frame at the CURRENT geometry - see

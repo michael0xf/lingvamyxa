@@ -5,22 +5,37 @@ include: "mixa_manager/mixa_backend_headless.h" "<stdlib.h>" "<string.h>"
 # push_event / frame_at for tests. Design: BACKEND_SEAM.txt.
 # Event queue is mixa_event_fifo (Milestone 3 groundwork).
 
-fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; size_t: cell_width; size_t: cell_height) int
+fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
     size_t: width
     size_t: height
     size_t: nbytes
+    size_t: cell_width
+    size_t: cell_height
+    size_t: upper_cell_width
+    size_t: upper_cell_height
     @: MixaU8 block
     @: MixaEventFifo inbox
     if: backend = 0
+        return: 1
+    if: metrics = 0
         return: 1
     if: cols = 0U
         return: 1
     if: rows = 0U
         return: 1
-    if: cell_width = 0U
+    if: metrics\text_cell_width = 0U
         return: 1
-    if: cell_height = 0U
+    if: metrics\text_cell_height = 0U
         return: 1
+    if: metrics\upper_cell_width = 0U
+        return: 1
+    if: metrics\upper_cell_height = 0U
+        return: 1
+    # Honour the request for both layers; geometry uses the TEXT cell only.
+    cell_width: metrics\text_cell_width
+    cell_height: metrics\text_cell_height
+    upper_cell_width: metrics\upper_cell_width
+    upper_cell_height: metrics\upper_cell_height
     if: backend\is_open != 0
         return: 1
     if: backend\frame != 0
@@ -61,8 +76,12 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; size_
     backend\frame_bytes: nbytes
     backend\frame: block
     backend\inbox: inbox
+    # Write back what we actually used (honour request for both layers).
+    metrics\text_cell_width: cell_width
+    metrics\text_cell_height: cell_height
+    metrics\upper_cell_width: upper_cell_width
+    metrics\upper_cell_height: upper_cell_height
 return: 0
-
 fn: mixa_backend_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t: bytes) int
     if: backend = 0
         return: 1

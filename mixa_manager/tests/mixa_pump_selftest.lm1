@@ -7,6 +7,7 @@ fn: main () int
     @: MixaEventFifo fifo
     @: MixaPump pump
     @: MixaBackend be
+    @: MixaCellMetrics m
     @: MixaEvent ev
     @: MixaEvent got
     []: MixaU8 pr 1
@@ -153,7 +154,15 @@ fn: main () int
     c.memset(fifo, 0, c.sizeof(c.MixaEventFifo))
     c.memset(pump, 0, c.sizeof(c.MixaPump))
     c.memset(be, 0, c.sizeof(c.MixaBackend))
-    if: mixa_backend_open(be, 3U, 2U, 4U, 5U) != 0
+    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    if: m = 0
+        c.printf("mixa pump: metrics alloc failed\n")
+        return: 1
+    m\text_cell_width: 4U
+    m\text_cell_height: 5U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    if: mixa_backend_open(be, 3U, 2U, m) != 0
         c.printf("mixa pump: backend open failed\n")
         return: 1
     if: mixa_pump_open(pump) != 0
@@ -284,6 +293,7 @@ fn: main () int
 
     mixa_pump_release(pump)
     mixa_backend_close(be)
+    c.free(m)
     c.free(got)
     c.free(ev)
     c.free(be)

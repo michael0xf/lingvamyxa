@@ -244,9 +244,13 @@ fn: mixa_win32_adopt (@: MixaBackend backend; size_t: new_cols; size_t: new_rows
     backend\rows: new_rows
 return: 0
 
-fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; size_t: cell_width; size_t: cell_height) int
+fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
     size_t: width
     size_t: height
+    size_t: cell_width
+    size_t: cell_height
+    size_t: upper_cell_width
+    size_t: upper_cell_height
     @: WNDCLASSA wc
     @: RECT rc
     @: void hinst
@@ -255,14 +259,25 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; size_
     int: atom
     if: backend = 0
         return: 1
+    if: metrics = 0
+        return: 1
     if: cols = 0U
         return: 1
     if: rows = 0U
         return: 1
-    if: cell_width = 0U
+    if: metrics\text_cell_width = 0U
         return: 1
-    if: cell_height = 0U
+    if: metrics\text_cell_height = 0U
         return: 1
+    if: metrics\upper_cell_width = 0U
+        return: 1
+    if: metrics\upper_cell_height = 0U
+        return: 1
+    # Honour the request for both layers for now (font query is a later ticket).
+    cell_width: metrics\text_cell_width
+    cell_height: metrics\text_cell_height
+    upper_cell_width: metrics\upper_cell_width
+    upper_cell_height: metrics\upper_cell_height
     if: backend\is_open != 0
         return: 1
     if: backend\hwnd != 0
@@ -329,6 +344,10 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; size_
         return: 1
     ---
     backend\is_open: 1
+    metrics\text_cell_width: cell_width
+    metrics\text_cell_height: cell_height
+    metrics\upper_cell_width: upper_cell_width
+    metrics\upper_cell_height: upper_cell_height
 return: 0
 fn: mixa_backend_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t: bytes) int
     @: void hdc_win

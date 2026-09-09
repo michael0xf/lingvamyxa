@@ -21,6 +21,7 @@ fn: main () int
     @: MixaTextRect rect
     @: MixaOverlayRect overlay
     @: MixaEvent got
+    @: MixaCellMetrics m
     @: MixaPump pump
     @: MixaU8 out
     @: MixaU8 first_bits
@@ -45,26 +46,64 @@ fn: main () int
     overlay: (cast: (@: MixaOverlayRect) c.calloc(1U, c.sizeof(c.MixaOverlayRect)))
     got: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
     pump: (cast: (@: MixaPump) c.calloc(1U, c.sizeof(c.MixaPump)))
-    if: be = 0 || rect = 0 || overlay = 0 || got = 0 || pump = 0
+    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    if: be = 0 || rect = 0 || overlay = 0 || got = 0 || pump = 0 || m = 0
         c.printf("mixa win32: alloc failed\n")
         return: 1
 
     # --- open refusals ---
-    if: mixa_backend_open(be, 0U, 2U, 4U, 5U) = 0
+    if: mixa_backend_open(be, 3U, 2U, 0) = 0
+        c.printf("mixa win32: open accepted null metrics\n")
+        failures: failures + 1
+    m\text_cell_width: 0U
+    m\text_cell_height: 5U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    if: mixa_backend_open(be, 3U, 2U, m) = 0
+        c.printf("mixa win32: open accepted zero text_cell_width\n")
+        failures: failures + 1
+    m\text_cell_width: 4U
+    m\text_cell_height: 0U
+    if: mixa_backend_open(be, 3U, 2U, m) = 0
+        c.printf("mixa win32: open accepted zero text_cell_height\n")
+        failures: failures + 1
+    m\text_cell_height: 5U
+    m\upper_cell_width: 0U
+    if: mixa_backend_open(be, 3U, 2U, m) = 0
+        c.printf("mixa win32: open accepted zero upper_cell_width\n")
+        failures: failures + 1
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 0U
+    if: mixa_backend_open(be, 3U, 2U, m) = 0
+        c.printf("mixa win32: open accepted zero upper_cell_height\n")
+        failures: failures + 1
+    m\upper_cell_height: 10U
+    if: mixa_backend_open(be, 0U, 2U, m) = 0
         c.printf("mixa win32: open accepted zero cols\n")
         failures: failures + 1
-    if: mixa_backend_open(be, 2U, 0U, 4U, 5U) = 0
+    if: mixa_backend_open(be, 2U, 0U, m) = 0
         c.printf("mixa win32: open accepted zero rows\n")
         failures: failures + 1
-    if: mixa_backend_open(be, ((cast: (size_t) -1) / 2U) + 1U, 1U, 2U, 1U) = 0
+    m\text_cell_width: 2U
+    m\text_cell_height: 1U
+    m\upper_cell_width: 2U
+    m\upper_cell_height: 1U
+    if: mixa_backend_open(be, ((cast: (size_t) -1) / 2U) + 1U, 1U, m) = 0
         c.printf("mixa win32: open accepted overflow dims\n")
         failures: failures + 1
 
-    if: mixa_backend_open(be, 3U, 2U, 4U, 5U) != 0
+    m\text_cell_width: 4U
+    m\text_cell_height: 5U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    if: mixa_backend_open(be, 3U, 2U, m) != 0
         c.printf("mixa win32: open 3x2 cell 4x5 failed\n")
         return: 1
-    if: be\frame_w != 12U || be\frame_h != 10U || be\frame_bytes != 480U
-        c.printf("mixa win32: open frame size mismatch\n")
+    if: m\text_cell_width != 4U || m\text_cell_height != 5U || m\upper_cell_width != 8U || m\upper_cell_height != 10U
+        c.printf("mixa win32: open did not write metrics\n")
+        failures: failures + 1
+    if: be\frame_w != (3U * m\text_cell_width) || be\frame_h != (2U * m\text_cell_height) || be\frame_bytes != 480U
+        c.printf("mixa win32: open frame not derived from returned text cell\n")
         failures: failures + 1
     if: be\hwnd = 0
         c.printf("mixa win32: open left hwnd null\n")
@@ -76,7 +115,11 @@ fn: main () int
         failures: failures + 1
 
     first_bits: be\bits
-    rc: mixa_backend_open(be, 4U, 4U, 4U, 5U)
+    m\text_cell_width: 4U
+    m\text_cell_height: 5U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    rc: mixa_backend_open(be, 4U, 4U, m)
     if: rc = 0
         c.printf("mixa win32: re-open accepted\n")
         failures: failures + 1
@@ -178,7 +221,11 @@ fn: main () int
     # --- e2e composite + present ---
     mixa_backend_close(be)
     c.memset(be, 0, c.sizeof(c.MixaBackend))
-    if: mixa_backend_open(be, 3U, 2U, 4U, 5U) != 0
+    m\text_cell_width: 4U
+    m\text_cell_height: 5U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    if: mixa_backend_open(be, 3U, 2U, m) != 0
         c.printf("mixa win32: reopen for e2e failed\n")
         return: 1
     mixa_win32_drain(be, got, 64)
@@ -515,6 +562,7 @@ fn: main () int
     c.free(rect)
     c.free(got)
     c.free(pump)
+    c.free(m)
     c.free(be)
 
     if: failures != 0

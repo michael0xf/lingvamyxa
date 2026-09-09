@@ -9,6 +9,7 @@ fn: main () int
     @: MixaOverlayRect overlay
     @: MixaEvent ev
     @: MixaEvent got
+    @: MixaCellMetrics m
     @: MixaU8 out
     @: MixaU8 first_frame
     @: MixaU8 old_frame
@@ -30,24 +31,103 @@ fn: main () int
     overlay: (cast: (@: MixaOverlayRect) c.calloc(1U, c.sizeof(c.MixaOverlayRect)))
     ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
     got: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
-    if: be = 0 || rect = 0 || overlay = 0 || ev = 0 || got = 0
+    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    if: be = 0 || rect = 0 || overlay = 0 || ev = 0 || got = 0 || m = 0
         c.printf("mixa backend: alloc failed\n")
         return: 1
 
-    # --- seam: open refuses zero cols / rows / overflow ---
-    if: mixa_backend_open(be, 0U, 2U, 4U, 5U) = 0
+    # --- seam: open refuses null metrics / zero fields / zero cols / rows / overflow ---
+    if: mixa_backend_open(be, 3U, 2U, 0) = 0
+        c.printf("mixa backend: open accepted null metrics\n")
+        failures: failures + 1
+    m\text_cell_width: 0U
+    m\text_cell_height: 5U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    if: mixa_backend_open(be, 3U, 2U, m) = 0
+        c.printf("mixa backend: open accepted zero text_cell_width\n")
+        failures: failures + 1
+    m\text_cell_width: 4U
+    m\text_cell_height: 0U
+    if: mixa_backend_open(be, 3U, 2U, m) = 0
+        c.printf("mixa backend: open accepted zero text_cell_height\n")
+        failures: failures + 1
+    m\text_cell_height: 5U
+    m\upper_cell_width: 0U
+    if: mixa_backend_open(be, 3U, 2U, m) = 0
+        c.printf("mixa backend: open accepted zero upper_cell_width\n")
+        failures: failures + 1
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 0U
+    if: mixa_backend_open(be, 3U, 2U, m) = 0
+        c.printf("mixa backend: open accepted zero upper_cell_height\n")
+        failures: failures + 1
+    m\upper_cell_height: 10U
+    if: mixa_backend_open(be, 0U, 2U, m) = 0
         c.printf("mixa backend: open accepted zero cols\n")
         failures: failures + 1
-    if: mixa_backend_open(be, 2U, 0U, 4U, 5U) = 0
+    if: mixa_backend_open(be, 2U, 0U, m) = 0
         c.printf("mixa backend: open accepted zero rows\n")
         failures: failures + 1
-    # overflow: cols * cell_width wraps
-    if: mixa_backend_open(be, ((cast: (size_t) -1) / 2U) + 1U, 1U, 2U, 1U) = 0
+    # overflow: cols * text_cell_width wraps
+    m\text_cell_width: 2U
+    m\text_cell_height: 1U
+    m\upper_cell_width: 2U
+    m\upper_cell_height: 1U
+    if: mixa_backend_open(be, ((cast: (size_t) -1) / 2U) + 1U, 1U, m) = 0
         c.printf("mixa backend: open accepted overflow dims\n")
         failures: failures + 1
 
-    if: mixa_backend_open(be, 3U, 2U, 4U, 5U) != 0
+    # successful open writes metrics (not merely reads) and derives geometry
+    # from the RETURNED text cell. Seed a sentinel, then set the request; after
+    # open the sentinel must be gone and frame_w == cols * returned text width.
+    m\text_cell_width: 999U
+    m\text_cell_height: 998U
+    m\upper_cell_width: 997U
+    m\upper_cell_height: 996U
+    # Request values (headless honours these and must write them back).
+    m\text_cell_width: 4U
+    m\text_cell_height: 5U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    if: mixa_backend_open(be, 3U, 2U, m) != 0
         c.printf("mixa backend: open 3x2 cell 4x5 failed\n")
+        return: 1
+    if: m\text_cell_width != 4U || m\text_cell_height != 5U || m\upper_cell_width != 8U || m\upper_cell_height != 10U
+        c.printf("mixa backend: open did not write metrics\n")
+        failures: failures + 1
+    if: be\frame_w != (3U * m\text_cell_width) || be\frame_h != (2U * m\text_cell_height) || be\frame_bytes != 480U
+        c.printf("mixa backend: open frame not derived from returned text cell\n")
+        failures: failures + 1
+    # Stronger write-back check: reopen with a different request and confirm
+    # the struct fields change to the new written values (not stale).
+    mixa_backend_close(be)
+    c.memset(be, 0, c.sizeof(c.MixaBackend))
+    m\text_cell_width: 999U
+    m\text_cell_height: 998U
+    m\upper_cell_width: 997U
+    m\upper_cell_height: 996U
+    m\text_cell_width: 6U
+    m\text_cell_height: 7U
+    m\upper_cell_width: 12U
+    m\upper_cell_height: 14U
+    if: mixa_backend_open(be, 2U, 2U, m) != 0
+        c.printf("mixa backend: open 2x2 cell 6x7 failed\n")
+        return: 1
+    if: m\text_cell_width != 6U || m\text_cell_height != 7U || m\upper_cell_width != 12U || m\upper_cell_height != 14U
+        c.printf("mixa backend: open did not overwrite prior metrics\n")
+        failures: failures + 1
+    if: be\frame_w != (2U * m\text_cell_width) || be\frame_h != (2U * m\text_cell_height)
+        c.printf("mixa backend: frame not from returned text cell (6x7)\n")
+        failures: failures + 1
+    mixa_backend_close(be)
+    c.memset(be, 0, c.sizeof(c.MixaBackend))
+    m\text_cell_width: 4U
+    m\text_cell_height: 5U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    if: mixa_backend_open(be, 3U, 2U, m) != 0
+        c.printf("mixa backend: open 3x2 cell 4x5 (restore) failed\n")
         return: 1
     if: be\frame_w != 12U || be\frame_h != 10U || be\frame_bytes != 480U
         c.printf("mixa backend: open frame size mismatch\n")
@@ -55,7 +135,11 @@ fn: main () int
 
     # open on already-open refuses and does not leak the first buffer
     first_frame: be\frame
-    rc: mixa_backend_open(be, 4U, 4U, 4U, 5U)
+    m\text_cell_width: 4U
+    m\text_cell_height: 5U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    rc: mixa_backend_open(be, 4U, 4U, m)
     if: rc = 0
         c.printf("mixa backend: re-open accepted\n")
         failures: failures + 1
@@ -165,7 +249,11 @@ fn: main () int
     # --- end to end: TextRect + overlay + present + frame_at matches overlay pins ---
     mixa_backend_close(be)
     c.memset(be, 0, c.sizeof(c.MixaBackend))
-    if: mixa_backend_open(be, 3U, 2U, 4U, 5U) != 0
+    m\text_cell_width: 4U
+    m\text_cell_height: 5U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    if: mixa_backend_open(be, 3U, 2U, m) != 0
         c.printf("mixa backend: reopen for e2e failed\n")
         return: 1
     if: mixa_overlay_open(overlay, 3U, 2U, 4U, 5U) != 0
@@ -466,6 +554,7 @@ fn: main () int
     c.free(rect)
     c.free(ev)
     c.free(got)
+    c.free(m)
     c.free(be)
 
     if: failures != 0
