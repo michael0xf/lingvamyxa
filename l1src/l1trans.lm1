@@ -73,7 +73,9 @@ int: l1_hdr_emitting 0
 
 prototype:
     fn: l1_hdr_type_has (const: @(LmP0Text text)) int
+    fn: l1_hdr_check_item (const: @(LmP0Node node); const: @(char path)) int
     fn: l1_path_is_lm1 (const: @(char path)) int
+    fn: l1_path_is_h_lm1 (const: @(char path)) int
     fn: l1_path_is_absolute (const: @(char path)) int
     fn: l1_getcwd (@: char buffer; size_t: size) @: char
     fn: l1_ident_to_buf (@: char dst; size_t: cap; const: @(LmP0Text text)) int
@@ -4061,6 +4063,41 @@ fn: l1_imp_push (@: char tab; @: int n; const: @(char path)) int
     n[0]: n[0] + 1
 return: 0
 
+fn: l1_hdr_output_basename (@: char dst; size_t: cap; const: @(char path)) int
+    size_t: n 0U
+    size_t: start 0U
+    size_t: i 0U
+    size_t: base 0U
+    if: dst = 0 || cap < 8U || path = 0 || l1_path_is_h_lm1(path) = 0
+        return: 1
+    n: c.strlen(path)
+    while: i < n
+        if: path[i] = 47 || path[i] = 92
+            start: i + 1U
+        ---
+        i: i + 1U
+    ---
+    if: n - start < 6U
+        return: 1
+    base: n - start - 6U
+    if: base + 6U >= cap
+        return: 1
+    c.memcpy(dst, path + start, base)
+    c.memcpy(dst + base, ".lm1.h", 6U)
+    dst[base + 6U]: 0
+return: 0
+
+fn: l1_hdr_register_unit (const: @(LmP0Node root); const: @(char path)) int
+    @: LmP0Field field
+    if: root = 0 || root\kind != c.LM_P0_NODE_STRUCTURE
+        return: l1_error(path, root, "header unit expects a structure body")
+    field: root\as\structure\first_field
+    while: field != 0
+        if: l1_hdr_check_item(field\value, path) != 0
+            return: 1
+        field: field\next
+return: 0
+
 fn: l1_emit_imported (@: FILE out; const: @(char in_path); int: depth) int
     @: LmP0Document document 0
     const: @: char saved_src
@@ -4068,6 +4105,7 @@ fn: l1_emit_imported (@: FILE out; const: @(char in_path); int: depth) int
     const: @: LmP0Node root
     @: LmP0Field field
     int: status
+    c.array: []: char hdr_name 1040
     if: l1_imp_find(l1_imp_act, l1_imp_actn, in_path) >= 0
         c.fprintf(c.stderr, "l1trans error: import cycle %s\n", in_path)
         return: 1
@@ -4103,6 +4141,33 @@ fn: l1_emit_imported (@: FILE out; const: @(char in_path); int: depth) int
             l1_imp_actn: l1_imp_actn - 1
             return: 1
         ---
+    ---
+    if: l1_path_is_h_lm1(in_path) != 0
+        if: l1_hdr_output_basename(hdr_name, 1040U, in_path) != 0
+            lm_p0_document_destroy(document)
+            l1_imp_actn: l1_imp_actn - 1
+            return: l1_error(in_path, root, "generated header name too long")
+        if: l1_hdr_register_unit(root, in_path) != 0
+            lm_p0_document_destroy(document)
+            l1_imp_actn: l1_imp_actn - 1
+            return: 1
+        if: l1_write_cstr(out, "#include \"") != 0
+            lm_p0_document_destroy(document)
+            l1_imp_actn: l1_imp_actn - 1
+            return: 1
+        if: l1_write_cstr(out, hdr_name) != 0
+            lm_p0_document_destroy(document)
+            l1_imp_actn: l1_imp_actn - 1
+            return: 1
+        if: l1_write_cstr(out, "\"\n") != 0
+            lm_p0_document_destroy(document)
+            l1_imp_actn: l1_imp_actn - 1
+            return: 1
+        lm_p0_document_destroy(document)
+        l1_imp_actn: l1_imp_actn - 1
+        if: l1_imp_push(l1_imp_done, @ l1_imp_donen, in_path) != 0
+            return: l1_error(in_path, 0, "import path table full")
+        return: 0
     ---
     saved_src: l1_src
     saved_n: l1_srcn

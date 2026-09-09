@@ -455,6 +455,21 @@ if ($gen -eq "gen0") {
     if ($LASTEXITCODE -ne 0) { throw "translate failed ($LASTEXITCODE): p0.h.lm1 --unit-root" }
     Assert-ByteIdentical "$obj\headers\p0.lm1.h" "$obj\headers\p0_unitroot.lm1.h"
 
+    Invoke-Translate "tests\l1\hdr_predef_consumer.lm1" "$obj\hdr_predef_consumer.c"
+    Assert-CHas "$obj\hdr_predef_consumer.c" "#include `"hdr_combo.lm1.h`""
+    Assert-CLacks "$obj\hdr_predef_consumer.c" "struct Rect"
+    Assert-CHas "$obj\hdr_predef_consumer.c" "int use_rect(Rect * rect)"
+    Copy-Item -LiteralPath "$obj\headers\hdr_combo.lm1.h" -Destination "$obj\hdr_combo.lm1.h" -Force
+    cmd /c "gcc $cflagsStr -I $obj -o $bin\hdr_predef_consumer.exe $obj\hdr_predef_consumer.c > $log\hdr_predef_consumer_gcc.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "hdr_predef_consumer.c failed to compile (see $log\hdr_predef_consumer_gcc.log)" }
+
+    Invoke-Translate "tests\l1\hdr_predef_diamond.lm1" "$obj\hdr_predef_diamond.c"
+    $pd = Get-Content "$obj\hdr_predef_diamond.c" -Raw
+    $incCount = ([regex]::Matches($pd, '#include "hdr_combo.lm1.h"')).Count
+    if ($incCount -ne 1) { throw "diamond predef must emit exactly one include, got $incCount" }
+    cmd /c "gcc $cflagsStr -I $obj -o $bin\hdr_predef_diamond.exe $obj\hdr_predef_diamond.c > $log\hdr_predef_diamond_gcc.log 2>&1"
+    if ($LASTEXITCODE -ne 0) { throw "hdr_predef_diamond.c failed to compile (see $log\hdr_predef_diamond_gcc.log)" }
+
     Invoke-Translate "tests\l1\hdr_dir_a\core.h.lm1" "$obj\headers\hdr_dir_a\core.lm1.h"
     Invoke-Translate "tests\l1\hdr_dir_b\core.h.lm1" "$obj\headers\hdr_dir_b\core.lm1.h"
     Assert-CHas "$obj\headers\hdr_dir_a\core.lm1.h" "LM_H_tests_2Fl1_2Fhdr_5Fdir_5Fa_2Fcore_2Eh_2Elm1"

@@ -1,0 +1,13 @@
+predef: "tests/l1/hdr_combo.h.lm1"
+
+fn: use_rect (@: Rect rect) int
+    if: rect = 0
+        return: 1
+    return: 0
+end: use_rect
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external
