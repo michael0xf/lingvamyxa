@@ -1,0 +1,9 @@
+fn: left (int: a; int: b; int: c) int
+    return: (a - b) - c
+end: left
+fn: right (int: a; int: b; int: c) int
+    return: a - (b - c)
+end: right
+fn: main () int
+    return: 0
+end: main

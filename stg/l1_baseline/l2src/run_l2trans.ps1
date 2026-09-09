@@ -1709,6 +1709,82 @@ end: external
 
 Invoke-PythonString
 
+Invoke-Leaf "l2src\tests\unit_paren_prec.lm2" "unit_paren_prec" 0 "grouped"
+$dpp = Invoke-SpliceDrive "unit_paren_prec" @"
+        c.printf("%d\n", l2_m0(unit, 2, 3, 4))
+        c.printf("%d\n", l2_m1(unit, 2, 3, 4))
+        return: 0
+    end: main
+end: external
+"@
+if ($dpp -ne "20`n14`n") { throw "paren prec grouped vs raw: $dpp" }
+
+Invoke-Leaf "l2src\tests\unit_paren_sub.lm2" "unit_paren_sub" 0 "left"
+$dps = Invoke-SpliceDrive "unit_paren_sub" @"
+        c.printf("%d\n", l2_m0(unit, 10, 3, 2))
+        c.printf("%d\n", l2_m1(unit, 10, 3, 2))
+        return: 0
+    end: main
+end: external
+"@
+if ($dps -ne "5`n9`n") { throw "paren sub left vs right: $dps" }
+
+Invoke-Leaf "l2src\tests\unit_paren_sib.lm2" "unit_paren_sib" 0 "sib"
+$dsi = Invoke-SpliceDrive "unit_paren_sib" @"
+        c.printf("%d\n", l2_m0(unit, 2, 3))
+        return: 0
+    end: main
+end: external
+"@
+if ($dsi -ne "12`n") { throw "paren siblings: $dsi" }
+
+Invoke-Leaf "l2src\tests\unit_paren_nest.lm2" "unit_paren_nest" 0 "nest"
+$dn = Invoke-SpliceDrive "unit_paren_nest" @"
+        c.printf("%d\n", l2_m0(unit, 4))
+        return: 0
+    end: main
+end: external
+"@
+if ($dn -ne "13`n") { throw "paren nested: $dn" }
+
+Invoke-Leaf "l2src\tests\unit_paren_rel.lm2" "unit_paren_rel" 0 "rel"
+$dr = Invoke-SpliceDrive "unit_paren_rel" @"
+        c.printf("%d\n", l2_m0(unit, 2, 4))
+        c.printf("%d\n", l2_m0(unit, 3, 4))
+        return: 0
+    end: main
+end: external
+"@
+if ($dr -ne "1`n0`n") { throw "paren relational: $dr" }
+
+Invoke-Leaf "l2src\tests\unit_paren_and.lm2" "unit_paren_and" 0 "gated"
+$da0 = Invoke-SpliceDrive "unit_paren_and" @"
+        @: Lmx f 0
+        l2_m1(unit, 5, 3)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        l2_m1(unit, 0, 3)
+        f: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($da0 -ne "0`n2`n") { throw "paren shortcircuit bump: $da0" }
+
+Invoke-Leaf "l2src\tests\unit_paren_call.lm2" "unit_paren_call" 0 "order"
+$dc = Invoke-SpliceDrive "unit_paren_call" @"
+        c.printf("%d\n", l2_m2(unit))
+        return: 0
+    end: main
+end: external
+"@
+if ($dc -ne "12`n") { throw "paren call actual order: $dc" }
+$oct = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_paren_call.lm1")))
+if ($oct -notmatch 'l2_q\d+_dirty') { throw "paren call missing dirty checkpoint" }
+
+Invoke-Negative "l2src\tests\unit_paren_long.lm2" "unit_paren_long" "expression too long"
+
 function Invoke-VisualColumn {
     $cases = @'
         c.printf("%zu\n", lm_p0_indent_tab_column(0U))

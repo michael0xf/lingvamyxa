@@ -1,0 +1,6 @@
+fn: nest (int: a) int
+    return: ((a + 1) * 2) + 3
+end: nest
+fn: main () int
+    return: 0
+end: main

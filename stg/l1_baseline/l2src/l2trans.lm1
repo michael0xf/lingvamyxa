@@ -55,8 +55,6 @@ c.array: [64]: @: char l2_it_hn
 c.array: [64]: size_t l2_it_hnl
 c.array: [64]: int l2_it_hty
 c.array: [256]: char l2_tok
-c.array: [256]: char l2_lhs
-c.array: [256]: char l2_rhs
 
 prototype:
     fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
@@ -2156,13 +2154,18 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     if: node\kind = c.LM_P0_NODE_STRUCTURE && node\as != 0
         if: l2_fields_has_call(node\as\structure\first_field, l2_count_active(node\as\structure))
             return: l2_eval_fields(node\as\structure\first_field, l2_count_active(node\as\structure), mi, ind, dest)
-        if: l2_cat(dest, "(") != 0
+        s2[0]: 0
+        s3[0]: 0
+        if: l2_emit_fields(node\as\structure\first_field, l2_count_active(node\as\structure), mi, ind, s2) != 0
             return: 1
-        if: l2_emit_fields(node\as\structure\first_field, l2_count_active(node\as\structure), mi, ind, l2_lhs) != 0
-            return: 1
-        if: l2_cat(dest, l2_lhs) != 0
-            return: 1
-        return: l2_cat(dest, ")")
+        if: l2_cat(s3, "(") != 0
+            return: l2_error(l2_src, node, "expression too long")
+        if: l2_cat(s3, s2) != 0
+            return: l2_error(l2_src, node, "expression too long")
+        if: l2_cat(s3, ")") != 0
+            return: l2_error(l2_src, node, "expression too long")
+        c.memcpy(dest, s3, 256U)
+        return: 0
     if: node\kind != c.LM_P0_NODE_FRAME || node\as = 0 || node\as\frame = 0
         return: 1
     call: node\as\frame
@@ -2238,13 +2241,14 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     if: idx < 0 && l2_text_eq(call\head, "c.strlen")
         if: call\body = 0
             return: 1
-        if: l2_emit_fields(call\body\first_field, l2_count_active(call\body), mi, ind, l2_rhs) != 0
+        s0[0]: 0
+        if: l2_emit_fields(call\body\first_field, l2_count_active(call\body), mi, ind, s0) != 0
             return: 1
         if: l2_emit_checkpoint(mi, ind) != 0
             return: 1
         t: l2_tn
         l2_tn: l2_tn + 1
-        if: c.fprintf(l2_out, "%ssize_t: l2_t%d\n%sl2_t%d: c.strlen(%s)\n", ind, t, ind, t, l2_rhs) < 0
+        if: c.fprintf(l2_out, "%ssize_t: l2_t%d\n%sl2_t%d: c.strlen(%s)\n", ind, t, ind, t, s0) < 0
             return: 1
         return: l2_tok_temp(t, dest)
     if: idx < 0 && l2_text_eq(call\head, "c.memcmp")
@@ -2413,14 +2417,15 @@ return: l2_tok_temp(t, dest)
 
 fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
     @: LmP0Field f
+    @: LmP0Node at 0
     int: i
     int: ao
     int: after 0
     int: fld
     c.array: [256]: char buf
+    c.array: [256]: char piece
     if: dest = 0
         return: 1
-    dest[0]: 0
     buf[0]: 0
     if: n = 1
         return: l2_prep(l2_next_active(field)\value, mi, ind, dest)
@@ -2428,40 +2433,42 @@ fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
     i: 0
     ao: 0
     while: i < n && f != 0 && f\value != 0
+        at: f\value
         fld: 0
+        piece[0]: 0
         if: after != 0 && f\value\kind = c.LM_P0_NODE_ATOM && (l2_text_eq(f\value\as\atom, "data") || l2_text_eq(f\value\as\atom, "length"))
             fld: 1
         if: f\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(f\value\as\atom)
             if: l2_cat(buf, "\\") != 0
-                return: 1
+                return: l2_error(l2_src, at, "expression too long")
             ao: 0
             after: 1
             fld: 2
         if: fld = 1
-            if: l2_tok_text(f\value\as\atom, l2_lhs) != 0 || l2_cat(buf, l2_lhs) != 0
-                return: 1
+            if: l2_tok_text(f\value\as\atom, piece) != 0 || l2_cat(buf, piece) != 0
+                return: l2_error(l2_src, at, "expression too long")
             ao: 0
             after: 0
         if: fld = 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_is_brack(f\value\as\atom)
-            if: l2_tok_text(f\value\as\atom, l2_lhs) != 0 || l2_cat(buf, l2_lhs) != 0
-                return: 1
+            if: l2_tok_text(f\value\as\atom, piece) != 0 || l2_cat(buf, piece) != 0
+                return: l2_error(l2_src, at, "expression too long")
             ao: 0
             fld: 2
         if: fld = 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_is_binop(f\value\as\atom)
             if: l2_cat(buf, " ") != 0
-                return: 1
-            if: l2_tok_text(f\value\as\atom, l2_lhs) != 0 || l2_cat(buf, l2_lhs) != 0
-                return: 1
+                return: l2_error(l2_src, at, "expression too long")
+            if: l2_tok_text(f\value\as\atom, piece) != 0 || l2_cat(buf, piece) != 0
+                return: l2_error(l2_src, at, "expression too long")
             if: l2_cat(buf, " ") != 0
-                return: 1
+                return: l2_error(l2_src, at, "expression too long")
             ao: l2_is_andor(f\value\as\atom)
             fld: 2
         if: fld = 0 && ao != 0 && f\value\kind = c.LM_P0_NODE_FRAME && l2_find_method(f\value\as\frame\head) >= 0
             return: 1
-        if: fld = 0 && (ao = 0 || f\value\kind != c.LM_P0_NODE_FRAME || l2_find_method(f\value\as\frame\head) < 0) && l2_prep(f\value, mi, ind, l2_rhs) != 0
+        if: fld = 0 && (ao = 0 || f\value\kind != c.LM_P0_NODE_FRAME || l2_find_method(f\value\as\frame\head) < 0) && l2_prep(f\value, mi, ind, piece) != 0
             return: 1
-        if: fld = 0 && (ao = 0 || f\value\kind != c.LM_P0_NODE_FRAME || l2_find_method(f\value\as\frame\head) < 0) && l2_cat(buf, l2_rhs) != 0
-            return: 1
+        if: fld = 0 && (ao = 0 || f\value\kind != c.LM_P0_NODE_FRAME || l2_find_method(f\value\as\frame\head) < 0) && l2_cat(buf, piece) != 0
+            return: l2_error(l2_src, at, "expression too long")
         if: fld = 0
             ao: 0
             after: 0

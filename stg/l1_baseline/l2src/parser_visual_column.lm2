@@ -1,5 +1,5 @@
 fn: lm_p0_indent_tab_column (size_t: column) size_t
-    return: column / 8U * 8U + 8U
+    return: ((column / 8U) + 1U) * 8U
 end: lm_p0_indent_tab_column
 fn: lm_p0_visual_column_between (const: @(char source); size_t: start; size_t: end) size_t
     size_t: p

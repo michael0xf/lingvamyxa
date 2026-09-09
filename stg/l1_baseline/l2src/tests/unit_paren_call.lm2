@@ -1,0 +1,14 @@
+fn: bump () int
+    char: hits
+    hits: hits + 1
+    return: hits
+end: bump
+fn: take (int: a; int: b) int
+    return: a * 10 + b
+end: take
+fn: order () int
+    return: take((bump() + 0), bump())
+end: order
+fn: main () int
+    return: 0
+end: main
