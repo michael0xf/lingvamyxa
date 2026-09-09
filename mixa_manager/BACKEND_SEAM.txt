@@ -146,8 +146,15 @@ of the seam and no real backend implements them.
   resize
     a resize event changes the geometry a consumer reads
     after that event, present accepts a frame of the NEW size
-    after that event, present refuses a frame of the OLD size - the check
-      that would have caught the inert-resize defect
+    cover BOTH directions, because the assertion that catches an inert resize
+      is not the same one in each:
+        after a GROW, present refuses a frame of the OLD size. The old size is
+          smaller than the new frame, so the minimum-size check rejects it.
+        after a SHRINK, "refuses OLD" proves nothing. The old size is LARGER
+          than the new frame, and present only requires at least a whole frame,
+          so it accepts either way. There the decisive assertion is that
+          present accepts the NEW size - an inert resize would refuse it as too
+          small for the geometry it still believed in.
     frame_at addresses the new extent, and refuses coordinates outside it
     a resize whose derived size overflows is refused, poll reports the
       failure, and the old surface still works

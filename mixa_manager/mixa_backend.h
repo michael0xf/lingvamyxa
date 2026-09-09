@@ -21,20 +21,6 @@
  * integration window once the root L1 settles. Until both parts land, this file
  * stays hand-written, and that is a known exception to the hermeticity the
  * distribution model asks for, not the final shape.
- *
- * STATUS - two contracts below are specified here but NOT yet implemented by
- * mixa_backend_headless, which is the only backend that exists today:
- *
- *   - poll adopting the geometry on a resize event. It currently queues and
- *     delivers the event without resizing the frame, so present goes on
- *     validating against the old size.
- *   - clipboard_get returning the length needed. It currently returns the
- *     number of bytes written, so an empty clipboard and a short buffer are
- *     indistinguishable.
- *
- * Both are in flight as task 20260909-091253. Do not write a new backend
- * against those two paragraphs until this note is gone; everything else here
- * is implemented and tested.
  */
 #ifndef MIXA_BACKEND_H
 #define MIXA_BACKEND_H

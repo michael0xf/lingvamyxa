@@ -11,6 +11,7 @@ fn: main () int
     @: MixaEvent got
     @: MixaU8 out
     @: MixaU8 first_frame
+    @: MixaU8 old_frame
     []: MixaU8 pix 4
     []: MixaU8 shortbuf 4
     []: char clip_out 64
@@ -18,6 +19,8 @@ fn: main () int
     size_t: need
     size_t: i
     size_t: n
+    size_t: old_bytes
+    size_t: new_bytes
     int: failures
     int: rc
     failures: 0
@@ -134,18 +137,29 @@ fn: main () int
     if: c.strcmp(clip_out, "ok\xD0\xA9") != 0
         c.printf("mixa backend: clipboard UTF-8 mismatch\n")
         failures: failures + 1
-    # too-small get returns 0 and writes nothing
+    # too-small get returns needed length (4) and writes nothing
     i: 0U
     while: i < 4U
         clip_tiny[i]: (cast: (char) 88)
         i: i + 1U
     ---
     n: mixa_backend_clipboard_get(be, clip_tiny, 4U)
-    if: n != 0U
-        c.printf("mixa backend: clipboard tiny did not return 0\n")
+    if: n != 4U
+        c.printf("mixa backend: clipboard tiny did not return needed 4\n")
         failures: failures + 1
     if: clip_tiny[0] != 88 || clip_tiny[1] != 88 || clip_tiny[2] != 88 || clip_tiny[3] != 88
         c.printf("mixa backend: clipboard tiny wrote buffer\n")
+        failures: failures + 1
+    # empty clipboard returns 0 (distinguishable from too-small above)
+    if: mixa_backend_clipboard_set(be, "") != 0
+        c.printf("mixa backend: clipboard_set empty failed\n")
+        failures: failures + 1
+    n: mixa_backend_clipboard_get(be, clip_out, 64U)
+    if: n != 0U
+        c.printf("mixa backend: empty clipboard did not return 0\n")
+        failures: failures + 1
+    if: clip_out[0] != (cast: (char) 0)
+        c.printf("mixa backend: empty clipboard did not write NUL\n")
         failures: failures + 1
 
     # --- end to end: TextRect + overlay + present + frame_at matches overlay pins ---
@@ -280,21 +294,146 @@ fn: main () int
         c.printf("mixa backend: mouse1 cell wrong (expected col 1)\n")
         failures: failures + 1
 
+    # --- resize: grow (3x2 -> 5x4), cell size fixed at open 4x5 ---
+    old_bytes: be\frame_bytes
+    old_frame: be\frame
     c.memset(ev, 0, c.sizeof(c.MixaEvent))
     ev\kind: MIXA_EVENT_RESIZE
-    ev\cols: 9U
-    ev\rows: 7U
+    ev\cols: 5U
+    ev\rows: 4U
     if: mixa_backend_push_event(be, ev) != 0
-        c.printf("mixa backend: push resize failed\n")
+        c.printf("mixa backend: push grow resize failed\n")
         failures: failures + 1
     if: mixa_backend_poll(be, got) != 0
-        c.printf("mixa backend: poll resize failed\n")
+        c.printf("mixa backend: poll grow resize failed\n")
         failures: failures + 1
-    if: got\kind != MIXA_EVENT_RESIZE || got\cols != 9U || got\rows != 7U
-        c.printf("mixa backend: resize geometry wrong\n")
+    if: got\kind != MIXA_EVENT_RESIZE || got\cols != 5U || got\rows != 4U
+        c.printf("mixa backend: grow resize event fields wrong\n")
+        failures: failures + 1
+    if: be\cols != 5U || be\rows != 4U
+        c.printf("mixa backend: grow did not adopt cell geometry\n")
+        failures: failures + 1
+    if: be\frame_w != 20U || be\frame_h != 20U || be\frame_bytes != 1600U
+        c.printf("mixa backend: grow frame size wrong\n")
+        failures: failures + 1
+    if: be\cell_width != 4U || be\cell_height != 5U
+        c.printf("mixa backend: grow changed cell size\n")
+        failures: failures + 1
+    if: be\frame = 0 || be\frame = old_frame
+        c.printf("mixa backend: grow did not replace frame buffer\n")
+        failures: failures + 1
+    # present accepts NEW size
+    c.free(out)
+    new_bytes: be\frame_bytes
+    out: (cast: (@: MixaU8) c.malloc(new_bytes))
+    if: out = 0
+        c.printf("mixa backend: grow out alloc failed\n")
+        return: 1
+    i: 0U
+    while: i < new_bytes
+        out[i]: (cast: (MixaU8) 9)
+        i: i + 1U
+    ---
+    if: mixa_backend_present(be, out, new_bytes) != 0
+        c.printf("mixa backend: present NEW size after grow refused\n")
+        failures: failures + 1
+    if: mixa_backend_frame_at(be, 19U, 19U, pix) != 0 || pix[0] != 9
+        c.printf("mixa backend: frame_at new extent after grow failed\n")
+        failures: failures + 1
+    if: mixa_backend_frame_at(be, 20U, 0U, pix) = 0
+        c.printf("mixa backend: frame_at outside new w accepted\n")
+        failures: failures + 1
+    if: mixa_backend_frame_at(be, 0U, 20U, pix) = 0
+        c.printf("mixa backend: frame_at outside new h accepted\n")
+        failures: failures + 1
+    # present refuses OLD size
+    if: mixa_backend_present(be, out, old_bytes) = 0
+        c.printf("mixa backend: present OLD size after grow accepted\n")
         failures: failures + 1
 
-    # close then use refused
+    # --- resize: shrink (5x4 -> 2x1) ---
+    old_bytes: be\frame_bytes
+    old_frame: be\frame
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_RESIZE
+    ev\cols: 2U
+    ev\rows: 1U
+    if: mixa_backend_push_event(be, ev) != 0
+        c.printf("mixa backend: push shrink resize failed\n")
+        failures: failures + 1
+    if: mixa_backend_poll(be, got) != 0
+        c.printf("mixa backend: poll shrink resize failed\n")
+        failures: failures + 1
+    if: got\kind != MIXA_EVENT_RESIZE || got\cols != 2U || got\rows != 1U
+        c.printf("mixa backend: shrink resize event fields wrong\n")
+        failures: failures + 1
+    if: be\cols != 2U || be\rows != 1U
+        c.printf("mixa backend: shrink did not adopt cell geometry\n")
+        failures: failures + 1
+    if: be\frame_w != 8U || be\frame_h != 5U || be\frame_bytes != 160U
+        c.printf("mixa backend: shrink frame size wrong\n")
+        failures: failures + 1
+    if: be\frame = 0 || be\frame = old_frame
+        c.printf("mixa backend: shrink did not replace frame buffer\n")
+        failures: failures + 1
+    c.free(out)
+    new_bytes: be\frame_bytes
+    out: (cast: (@: MixaU8) c.malloc(new_bytes))
+    if: out = 0
+        c.printf("mixa backend: shrink out alloc failed\n")
+        return: 1
+    i: 0U
+    while: i < new_bytes
+        out[i]: (cast: (MixaU8) 11)
+        i: i + 1U
+    ---
+    if: mixa_backend_present(be, out, new_bytes) != 0
+        c.printf("mixa backend: present NEW size after shrink refused\n")
+        failures: failures + 1
+    if: mixa_backend_frame_at(be, 7U, 4U, pix) != 0 || pix[0] != 11
+        c.printf("mixa backend: frame_at new extent after shrink failed\n")
+        failures: failures + 1
+    if: mixa_backend_frame_at(be, 8U, 0U, pix) = 0
+        c.printf("mixa backend: frame_at outside shrink w accepted\n")
+        failures: failures + 1
+    # After shrink, OLD byte count is larger than the new frame, so present's
+    # minimum-size check still accepts it; the shrink catch is accepting NEW
+    # (inert resize would have refused NEW as too small for the old geometry).
+
+    # --- resize overflow: poll fails, event still written, old surface intact ---
+    old_bytes: be\frame_bytes
+    old_frame: be\frame
+    c.memset(ev, 0, c.sizeof(c.MixaEvent))
+    ev\kind: MIXA_EVENT_RESIZE
+    ev\cols: ((cast: (size_t) -1) / 4U) + 1U
+    ev\rows: 1U
+    if: mixa_backend_push_event(be, ev) != 0
+        c.printf("mixa backend: push overflow resize failed\n")
+        failures: failures + 1
+    got\kind: MIXA_EVENT_NONE
+    got\cols: 0U
+    got\rows: 0U
+    rc: mixa_backend_poll(be, got)
+    if: rc = 0
+        c.printf("mixa backend: overflow resize poll succeeded\n")
+        failures: failures + 1
+    if: got\kind != MIXA_EVENT_RESIZE || got\cols != (((cast: (size_t) -1) / 4U) + 1U) || got\rows != 1U
+        c.printf("mixa backend: overflow resize did not write event\n")
+        failures: failures + 1
+    if: be\frame != old_frame
+        c.printf("mixa backend: overflow resize freed/replaced old frame\n")
+        failures: failures + 1
+    if: be\cols != 2U || be\rows != 1U || be\frame_bytes != old_bytes
+        c.printf("mixa backend: overflow resize mutated geometry\n")
+        failures: failures + 1
+    if: mixa_backend_present(be, out, old_bytes) != 0
+        c.printf("mixa backend: old surface unusable after overflow resize\n")
+        failures: failures + 1
+    if: mixa_backend_frame_at(be, 0U, 0U, pix) != 0 || pix[0] != 11
+        c.printf("mixa backend: old pixels lost after overflow resize\n")
+        failures: failures + 1
+
+    # close then use refused - every entry point, poll included
     mixa_backend_close(be)
     if: mixa_backend_present(be, out, need) = 0
         c.printf("mixa backend: present after close accepted\n")
@@ -311,6 +450,13 @@ fn: main () int
     n: mixa_backend_clipboard_get(be, clip_out, 64U)
     if: n != 0U
         c.printf("mixa backend: clipboard_get after close returned data\n")
+        failures: failures + 1
+    got\kind: MIXA_EVENT_KEY
+    if: mixa_backend_poll(be, got) = 0
+        c.printf("mixa backend: poll after close accepted\n")
+        failures: failures + 1
+    if: got\kind != MIXA_EVENT_NONE
+        c.printf("mixa backend: poll after close did not write NONE\n")
         failures: failures + 1
 
     c.free(out)

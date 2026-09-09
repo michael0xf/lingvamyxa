@@ -69,7 +69,16 @@ return: 0
 
 fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
     @: MixaEvent slot
+    @: MixaU8 block
+    @: MixaU8 old_frame
     size_t: idx
+    size_t: new_cols
+    size_t: new_rows
+    size_t: cw
+    size_t: ch
+    size_t: width
+    size_t: height
+    size_t: nbytes
     if: backend = 0
         return: 1
     if: out = 0
@@ -90,6 +99,61 @@ fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
         ---
     ---
     backend\queue_count: backend\queue_count - 1U
+    # Delivering RESIZE also adopts the new geometry (BACKEND_SEAM / F1).
+    if: out\kind = MIXA_EVENT_RESIZE
+        new_cols: out\cols
+        new_rows: out\rows
+        cw: backend\cell_width
+        ch: backend\cell_height
+        if: new_cols = 0U
+            return: 1
+        ---
+        if: new_rows = 0U
+            return: 1
+        ---
+        if: cw = 0U
+            return: 1
+        ---
+        if: ch = 0U
+            return: 1
+        ---
+        if: new_cols > ((cast: (size_t) -1) / cw)
+            return: 1
+        ---
+        if: new_rows > ((cast: (size_t) -1) / ch)
+            return: 1
+        ---
+        width: new_cols * cw
+        height: new_rows * ch
+        if: width = 0U
+            return: 1
+        ---
+        if: height = 0U
+            return: 1
+        ---
+        if: height > ((cast: (size_t) -1) / width)
+            return: 1
+        ---
+        if: (width * height) > ((cast: (size_t) -1) / 4U)
+            return: 1
+        ---
+        nbytes: width * height * 4U
+        block: (cast: (@: MixaU8) c.calloc(nbytes, 1U))
+        if: block = 0
+            return: 1
+        ---
+        # New buffer secured; only then replace the old surface.
+        old_frame: backend\frame
+        backend\frame: block
+        backend\cols: new_cols
+        backend\rows: new_rows
+        backend\frame_w: width
+        backend\frame_h: height
+        backend\frame_bytes: nbytes
+        if: old_frame != 0
+            c.free(old_frame)
+        ---
+    ---
 return: 0
 
 fn: mixa_backend_clipboard_get (@: MixaBackend backend; @: char out; size_t: cap) size_t
@@ -107,7 +171,7 @@ fn: mixa_backend_clipboard_get (@: MixaBackend backend; @: char out; size_t: cap
         return: 0U
     n: backend\clipboard_len
     if: cap < (n + 1U)
-        return: 0U
+        return: n
     c.memcpy(out, backend\clipboard, n)
     out[n]: (cast: (char) 0)
 return: n
