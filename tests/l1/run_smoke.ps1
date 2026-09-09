@@ -339,7 +339,7 @@ Invoke-PreserveFail "tests\l1\invalid_array_extent.lm1" "$obj\invalid_array_exte
 # Requires gen1+: fixtures for l1src fixes not in lm2 seed (TASK5 + empty_sub + cast path).
 # gen0 is built from lm2\l1trans.lm2 via run_seed; these checks would stay red forever on gen0.
 if ($gen -eq "gen0") {
-    Write-Log "skip requires-gen1+ on gen0: immutable, invalid_unknown_type, invalid_unknown_ctype, scalar_size_t_ok, empty_sub_ok, cast_multiword_ok, cast_uchar_alias_ok, cast_ptr_uchar_ok, param_multiword_ok, invalid_param_qualifier_extra, header units H1"
+    Write-Log "skip requires-gen1+ on gen0: immutable, invalid_unknown_type, invalid_unknown_ctype, scalar_size_t_ok, empty_sub_ok, cast_multiword_ok, cast_uchar_alias_ok, cast_ptr_uchar_ok, param_multiword_ok, array_multiword, invalid_param_qualifier_extra, header units H1"
 } else {
     Invoke-Translate "tests\l1\immutable_group.lm1" "$obj\immutable_group.c"
     Assert-CHas "$obj\immutable_group.c" "const int a = 2;"
@@ -442,6 +442,13 @@ if ($gen -eq "gen0") {
     Assert-CLacks "$obj\param_multiword_ok.c" "unsigned *char"
     Assert-CLacks "$obj\param_multiword_ok.c" "int mix(unsigned long"
     Invoke-CcRun "$obj\param_multiword_ok.c" "$bin\param_multiword_ok.exe" 0 $null
+    Invoke-Translate "tests\l1\array_multiword.lm1" "$obj\array_multiword.c"
+    Assert-CHas "$obj\array_multiword.c" "unsigned short arr[2]"
+    Assert-CHas "$obj\array_multiword.c" "unsigned long big[1]"
+    Assert-CHas "$obj\array_multiword.c" "int first(unsigned short values[], int count)"
+    Assert-CLacks "$obj\array_multiword.c" "short[arr]"
+    Assert-CLacks "$obj\array_multiword.c" "long[big]"
+    Invoke-CcRun "$obj\array_multiword.c" "$bin\array_multiword.exe" 0 $null
 
     # H1 header units (*.h.lm1) — gated gen1+
     New-Item -ItemType Directory -Force -Path "$obj\headers\hdr_dir_a", "$obj\headers\hdr_dir_b" | Out-Null

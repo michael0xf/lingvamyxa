@@ -8622,6 +8622,18 @@ int l1_emit_param(FILE * out, const LmP0Node * node, const char * path)
     while (field != 0 && l1_node_ignored(field->value)) {
     field = field -> next;
     }
+    while (field != 0 && field -> value != 0 && field -> value -> kind == LM_P0_NODE_ATOM && l1_is_type_name(field->value->as->atom)) {
+    if (l1_write_cstr(out, " ") != 0) {
+    return 1;
+    }
+    if (l1_write_type_spelling(out, field->value->as->atom, path, field->value) != 0) {
+    return 1;
+    }
+    field = field -> next;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    }
     if (field == 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_ATOM) {
     return l1_error(path, node, "array parameter missing name");
     }
@@ -9040,6 +9052,8 @@ int l1_emit_c_array(FILE * out, const LmP0Frame * frame, const char * path, int 
 int l1_emit_bracket_array(FILE * out, const LmP0Frame * frame, const char * path, int force_const)
 {
     LmP0Field * field;
+    LmP0Field * extra;
+    LmP0Field * walk;
     const LmP0Node * type_node;
     const LmP0Node * name_node;
     LmP0Field * extent_field;
@@ -9058,8 +9072,15 @@ int l1_emit_bracket_array(FILE * out, const LmP0Frame * frame, const char * path
     while (field != 0 && l1_node_ignored(field->value)) {
     field = field -> next;
     }
+    extra = field;
+    while (field != 0 && field -> value != 0 && field -> value -> kind == LM_P0_NODE_ATOM && l1_is_type_name(field->value->as->atom)) {
+    field = field -> next;
+    while (field != 0 && l1_node_ignored(field->value)) {
+    field = field -> next;
+    }
+    }
     if (field == 0 || field -> value == 0 || field -> value -> kind != LM_P0_NODE_ATOM) {
-    return l1_error(path, 0, "array missing name");
+    return l1_error(path, type_node, "array missing name");
     }
     name_node = field -> value;
     field = field -> next;
@@ -9073,6 +9094,18 @@ int l1_emit_bracket_array(FILE * out, const LmP0Frame * frame, const char * path
     }
     if (l1_emit_type_token(out, type_node, path) != 0) {
     return 1;
+    }
+    walk = extra;
+    while (walk != 0 && walk -> value != name_node) {
+    if (l1_node_ignored(walk->value) == 0 && walk -> value != 0 && walk -> value -> kind == LM_P0_NODE_ATOM) {
+    if (l1_write_cstr(out, " ") != 0) {
+    return 1;
+    }
+    if (l1_write_type_spelling(out, walk->value->as->atom, path, walk->value) != 0) {
+    return 1;
+    }
+    }
+    walk = walk -> next;
     }
     if (l1_write_cstr(out, " ") != 0) {
     return 1;

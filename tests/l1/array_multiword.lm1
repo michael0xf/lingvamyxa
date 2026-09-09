@@ -1,0 +1,34 @@
+include: "l1src/p0.lm1.h"
+
+fn: first ([]: unsigned short values; int: count) int
+    if: count < 1
+        return: 0
+    return: (cast: (int) values[0])
+end: first
+
+external:
+    fn: main () int
+        []: unsigned short arr 2 7 9
+        []: unsigned long big 1 1000
+        []: uchar alias 1 65
+        []: int plain 2 3 4
+        immutable:
+            []: unsigned short frozen 2 1 2
+            ---
+        if: arr[0] != 7
+            return: 1
+        if: arr[1] != 9
+            return: 2
+        if: big[0] != 1000
+            return: 3
+        if: (cast: (int) alias[0]) != 65
+            return: 4
+        if: plain[1] != 4
+            return: 5
+        if: frozen[1] != 2
+            return: 6
+        if: first(arr, 2) != 7
+            return: 7
+        return: 0
+    end: main
+end: external
