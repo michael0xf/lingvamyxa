@@ -24,20 +24,27 @@ Run: powershell -File tests/p0_tree_contract/run_p0_meta.ps1
 
 Harness (153600): child ExitCode is asserted (0 accept vs 1 expected
 reject vs crash). Status files persist under build/p0_tree_contract.
-TRAILER_COLON is not globally erased: only listed fixtures may have
-current colon_bit=1 with counts taken from 620 trailer identities
-(A_header_then_body 1, F_eq_fence 1, F_eq_inner_longer 1,
-G_fn_nested_cut 1, G_fn_nested_end 2, return_colon_vertical_body 1).
+TRAILER_COLON is not globally erased: listed fixtures pin current
+colon_bit identity as an ordered sequence of colon_bit= fields, not
+a count. F_mixed_trailer is 0,1 (bare `return` then `end: b`); a
+same-count relocation to 1,0 must fail. Other versioned seqs:
+A_header_then_body 1, F_eq_fence 1, F_eq_inner_longer 1,
+F_eq_long_opener 1, F_star_long 1, G_fn_nested_cut 1,
+G_fn_nested_end 1,1, return_colon_vertical_body 1.
 Sensitivity injects kind/flags/span/bytes/order/null/colon-bit faults
-without editing committed goldens. Quote/fence fixtures: Q_triple_*
-(A+1 is value-layer; P0 keeps source spelling), F_eq_fence,
-F_eq_inner_longer (==== inside ===). F_star_fence is a raw ***
-comment (spec ~3948, 3/4/5-star matching fences) wrapped in empty
-`doc:`; 620 field_count=0 because the comment consumed the body,
-not because 620 lacks *** comments. Current P0 empty-colon rejects
-that empty `doc:`. Keep it as the empty-colon case; a nonempty
-long-star comment fixture is a later checkpoint.
-invalid_eq_unclosed (20), invalid_triple_unclosed (4).
+without editing committed goldens, including that relocation.
+Quote/fence fixtures: Q_triple_* (A+1 is value-layer; P0 keeps
+source spelling; exact-3 inline quotes unchanged). F_eq_fence;
+F_eq_inner_longer (=== opener, ==== inside as payload);
+F_eq_long_opener (==== opener, === inside as payload, nonempty fn).
+F_star_fence is a raw *** comment (spec ~3948, 3/4/5-star matching
+fences) wrapped in empty `doc:`; 620 field_count=0 because the
+comment consumed the body, not because 620 lacks *** comments.
+Current P0 empty-colon rejects that empty `doc:`. Keep it as the
+empty-colon case. F_star_long is the nonempty long-star comment:
+**** opener, shorter *** and longer ***** inside as comment,
+int/return survive. invalid_eq_unclosed (20),
+invalid_triple_unclosed (4).
 
 
 Provenance
