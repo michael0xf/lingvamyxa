@@ -2040,4 +2040,134 @@ end: external
 
 Invoke-VisualColumn
 
+function Invoke-ScanIndent {
+    $cases = @'
+        size_t: off
+        size_t: col
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("", 0U, 0U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("abc", 0U, 3U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("abc", 3U, 3U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("abc", 4U, 3U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("  x", 0U, 3U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("\tx", 0U, 2U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column(" \tx", 0U, 3U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("       \ty", 0U, 9U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("        \ty", 0U, 10U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("   ", 0U, 3U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("x  y", 1U, 4U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("\n  x", 0U, 4U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("\r  x", 0U, 4U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column(" \0 x", 0U, 4U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column(0, 0U, 0U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+        off: 99U
+        col: 99U
+        lm_p0_scan_indent_column("\t\t", 0U, 2U, @ off, @ col)
+        c.printf("%zu %zu\n", off, col)
+'@
+
+    $refLm1 = Join-Path $out "sind_ref.lm1"
+    $refC = Join-Path $out "sind_ref.c"
+    $refExe = Join-Path $out "sind_ref.exe"
+    $refOut = Join-Path $out "sind_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed sind_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "sind_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'sind_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "sind_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_scan_indent.lm2" "parser_scan_indent" 0 "lm_p0_scan_indent_column"
+    $lm1 = Join-Path $out "parser_scan_indent.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_' -or $text -match 'sub: lm_p0_') { throw "scan_indent must mangle method symbols" }
+    if ($text -notmatch 'sub: l2_m2') { throw "scan_indent missing mangled sub" }
+    if ($text -notmatch '@: size_t l2_p2_3') { throw "scan_indent missing size_t* out_offset" }
+    if ($text -notmatch '@: size_t l2_p2_4') { throw "scan_indent missing size_t* out_column" }
+    if ($text -notmatch 'l2_p2_3\[0\]:') { throw "scan_indent missing out_offset[0] store" }
+    if ($text -notmatch 'l2_p2_4\[0\]:') { throw "scan_indent missing out_column[0] store" }
+    if ($text -notmatch '(?m)^\s+continue$') { throw "scan_indent must emit continue" }
+    if ($text -notmatch 'l2_m1\(') { throw "scan_indent must call tab helper" }
+
+    $l2cases = $cases.Replace("lm_p0_scan_indent_column(", "l2_m2(unit, ")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "scan_indent L1 missing generated main return" }
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "sind_l2_drive.lm1"
+    $drvC = Join-Path $out "sind_l2_drive.c"
+    $drvExe = Join-Path $out "sind_l2_drive.exe"
+    $drvOut = Join-Path $out "sind_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed sind_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "sind_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'sind_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "sind_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "scan_indent mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-ScanIndent
+
 "l2trans $gen ok"
