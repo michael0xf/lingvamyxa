@@ -1,0 +1,85 @@
+Mixa Manager - the UI model
+Where the resemblance to Norton and FAR ends.
+
+
+1. Lists, and there are not two of them
+
+The console and the upper layer are where the Norton/FAR likeness stops.
+
+    ANY NUMBER of lists, running horizontally one after another. Not two
+      panels. Two is a special case of the model, not the model.
+    each list scrolls UP AND DOWN on its own, with its OWN vertical scrollbar
+    the whole row scrolls LEFT AND RIGHT together, with ONE shared horizontal
+      scrollbar for the set
+    a button panel at the top and another at the bottom
+
+ClearShell moves the whole panel vertically instead of scrolling a list inside
+its own frame. That is a concession to a narrow phone screen, and it is
+explicitly NOT what we do: here a list scrolls within its own bounds and keeps
+its own position, so the other lists do not move when one of them does.
+
+Lists are the universal element. Panels are lists, menus are lists. There is no
+second mechanism for "a menu" - if it looks like a menu it is a list drawn in
+the upper layer.
+
+
+2. Take the layout method from ClearShell, not just its numbers
+
+ClearShell computes its geometry correctly on any screen from a tablet to an
+mp3 player, and the reason is worth stating because it is the same rule this
+project already adopted for rendering.
+
+ClearShell.java, init(), around line 697:
+
+    button.setTextAppearance(...); button.setText("Hello world!");
+    button.measure(...);
+    hb = button.getMeasuredHeight() + (hb >> 2);   button height
+    wb = (hb << 1) - (hb >> 2);                    width = 1.75 * hb
+    margin = hb >> 5;                              margin = hb / 32
+    max = longer + (longer >> 1);                  1.5 * the longer side
+    listW = shorter - hb;
+
+Note what is absent: any pixel constant, and any fraction. ONE quantity is
+MEASURED - the height of real text in the real font - and everything else is
+derived from it by integer shifts. That is exactly
+Mixa_Manager_RENDERING_DOCTRINE.txt: compute from something real, arrive at
+integers, never scale.
+
+So ClearShell's layout is not a thing to copy numerically; it is an existing
+instance of the doctrine, and the translation to our case is direct. Our
+measured unit is already there by construction: THE CELL. Button heights,
+margins, scrollbar widths and list widths are integer multiples of a cell, and
+nothing in the interface is expressed in pixels.
+
+Where a concrete proportion is wanted rather than derived, ClearShell's are
+sound and there is no reason to invent others: a button 1.75 times its height
+wide, a margin at a thirty-second of it.
+
+
+3. Colours, and what they confirm
+
+From ClearShell.java, used directly:
+
+    argb(240, 32, 32, 0)     panel background - nearly opaque
+    argb(96, 255, 255, 192)  highlight - clearly translucent
+    argb(96, 255, 192, 0), argb(96, 128, 255, 128), argb(96, 64, 255, 255)
+                             further translucent accents
+    0xFFFFFF40               foreground text, fully opaque
+    0xFF000060               dark foreground on light
+
+Two things follow.
+
+Alpha varies BY ELEMENT: 240 for a panel body, 96 for a highlight. That is the
+evidence for putting alpha on the CELL rather than on the surface - a per-surface
+constant could not express a translucent panel carrying an opaque selected row.
+
+Text is always fully opaque, 0xFF. Translucency is a property of backgrounds
+only, exactly as DRAWING.txt requires.
+
+
+4. What is deliberately not decided here
+
+Scrollbar appearance, key bindings, which buttons the two panels carry, and how
+a list is populated. Those are content. This document fixes the SHAPE: any
+number of lists, independent vertical scrolling, one shared horizontal scroll,
+two button panels, everything sized in cells.
