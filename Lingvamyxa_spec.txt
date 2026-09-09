@@ -11178,6 +11178,13 @@ An incoming Message is processed by the Revision-2 pipeline of section 19.19:
                        dynamic_values_selected_by_sig...)
         -> explicit result/outgoing Message handling
 
+The incoming item of this pipeline is LMX text, not another already-running
+L3 Thread. The receiver decides what the text means, validates it, and
+executes the resulting work in the receiver's own serial turn. Receiving
+text does not spawn a thread, import a foreign running frame, or add an OS
+worker. Only an explicit later decision to launch that work as a separate
+L3 execution creates a child Message with its own arena.
+
 This policy-combination stage is not core `merge`. It cannot install a
 Namespace, attach descriptors or copy method bodies. Core `merge` remains only
 the lazy execution-time containment-tree copy of section 19.17; if a Message
@@ -11201,18 +11208,19 @@ by scanning a directory or eagerly constructing every imported declaration
 before `main`. A template instance is an ordinary Message/Lmx graph and may
 itself be input to later runtime `merge`.
 
-Delivery between Message roots must select an explicit policy such as copying
-an admitted graph fragment into the destination/new Message arena,
-transferring/adopting compatible storage from an inactive Message, serializing
-through a codec, following an explicit immutable-pool link or passing an
-explicit foreign handle. The first copy-only participant slice is
-section 19.29.7.1. Graph-copy, adoption, join/splice, live-graph
-activation and codec/wire serialization remain individually open
-(19.29.7.2); they are not implied by completing 19.29.7.1. Every live Message still has exactly one logical arena: an
-adoption/splice operation must merge ownership and retire the conflicting
-source identity, while activation preserves the activated Message's own arena.
-An accidental raw mutable cross-Message pointer is never permitted merely
-because both Messages are in one process.
+Ordinary delivery of incoming LMX text adds that text's arena/storage to
+the receiver's one logical arena with ownership transfer (19.29.2,
+19.29.7). It does not remain a second independent live Message arena
+merely because data arrived. Addresses of transferred blocks stay
+stable. Transport buffers are not the source ontology. Codec, immutable-pool
+link and explicit foreign handle remain explicit alternative policies.
+The first copy-only number/bytes participant slice is section 19.29.7.1;
+it does not implement this full LMX-text/arena path and does not imply
+universal deep clone. Graph-copy, join/splice of already-running
+Messages, live-graph activation and codec/wire serialization remain
+individually open (19.29.7.2). Every live Message still has exactly one
+logical arena. An accidental raw mutable cross-Message pointer is never
+permitted merely because both Messages are in one process.
 
 Delivery/adoption/policy combination must not be named or specified as core
 `merge`. A requested structural `merge` always makes fresh Lmx occurrences,
@@ -11939,10 +11947,14 @@ implement the fixed Revision-2 semantics.
 Revision 2 requires every cross-Message graph transfer, sharing or serialization
 to be an explicit operation whose lifetime policy covers all Lmx pointers and
 address-domain payloads involved. A raw mutable pointer into reclaimable storage
-must not silently cross the boundary. Copy/deserialize allocates fresh mutable
-state in the destination or new Message arena; activation preserves the
-activated Message's existing arena; adoption is legal only when it leaves one
-logical owning arena and no concurrently active source owner.
+must not silently cross the boundary. Ordinary incoming LMX text is
+added to the receiver's one logical arena with ownership transfer.
+Copy/deserialize of a graph fragment still allocates fresh mutable
+state in the destination or new Message arena. Activation preserves
+the activated Message's existing arena. Explicit launch of received
+text as a separate L3 child gives that child its own arena. Joining
+an already-running Message's live arena is legal only when it leaves
+one logical owning arena and no concurrently active source owner.
 
 19.29.7.1. First copy-only participant slice (numbers and exact bytes)
 
@@ -11950,16 +11962,20 @@ This slice is the first explicit operation set for 19.29.7. It does not
 close graph-copy, adoption, join/splice, live-graph activation, or
 wire serialization; those remain individually deferred.
 
+Normative ordinary delivery (selected, not this prototype): incoming
+LMX text is added to the receiver's one logical arena with ownership
+transfer. The receiver validates and executes it in its own serial
+turn. Receiving text does not automatically spawn a child. Only an
+explicit launch makes a child with its own arena. A microscopic
+string Message may reduce to reading the string when that preserves
+value, lifetime and ownership; a borrowed string must not outlive
+its owner. There is no universal full-graph deep-copy mandate.
+
 The implemented mailbox copies numbers and exact bytes with
 transport-owned malloc copies, then a fresh inbox copy, then recv
-materialization into the handler. That is not graph delivery, not
-adoption, and not a replacement of the one-arena model. It does not
-require universal deep clone of every Message, and it does not settle
-how a whole arriving Message's arena is added. Whether those blocks
-are adopted into the recipient's one logical arena, or the incoming
-Message remains a separate arena owner while consumed, is not chosen
-here (both keep one arena per Message; they differ in reclamation).
-Do not infer either from this copy-only prototype.
+materialization into the handler. That is not full LMX-text/arena
+delivery and not a replacement of the one-arena model. Do not
+generalize those malloc copies into the source ontology.
 
 Language-facing operations (names follow existing thread/send/stop
 contracts; `spawn` here is English, not a new parser intrinsic):
@@ -12148,6 +12164,34 @@ boundary cannot poll or honor stop; that is the exceptional
 supervisor/host `fail()` path, not the normal loop-exit model, and
 must not be reported as a completed safe reclaim.
 
+Delivery-completion tracking is separate from that lifetime fallback.
+At every parent end_turn, the parent sends a short ordinary LMX
+Message to each child still responsible for an outstanding assigned
+operation, asking whether that child is alive. Those protocol
+Messages are ordinary LMX text, not a new parser intrinsic. A
+liveness reply (alive) does not end tracking. When the child has
+completed the assigned operation, it sends an ordinary correlated
+reply whose acknowledgement is completed (выполнено) relative to
+that assignment. The parent's pending-task identity/correlation
+names the assignment; one completed reply does not silently
+acknowledge other outstanding work. After that completed reply the
+parent stops polling that delivery. Failure and cancellation remain
+distinct outcomes, not fabricated success.
+
+Completed is operation-relative, not a generic transport stage.
+Explanatory notation, not invented source syntax:
+Deliver(Message, target) completes when that delivery finishes;
+CopyFile(source, target) completes when that file copy finishes.
+Enqueueing or staging a copy request is not completion of CopyFile.
+A delivery-only child is not required to finish unrelated downstream
+execution that was not its assignment.
+
+This tracking is not the 19.29.7.1 child-side parent-liveness poll
+and does not reintroduce instant descendant STOPPED. It applies
+only while a delivery assignment is pending, not perpetually after
+acknowledgement. The number/bytes prototype does not yet emit these
+tracking Messages.
+
 This is a trusted serialized in-process prototype, not the completed
 language security/supervision boundary. Header:
 `stg/l1_baseline/l2src/lmx_message.h`
@@ -12163,10 +12207,12 @@ KIND_REJECTED is not an emitted API. The done[32] table is a cap
 provide
 
 Deferred operations (later slices, not implied by finishing 19.29.7.1):
-graph-copy and graph-reference retargeting; adoption; join/splice of
+graph-copy and graph-reference retargeting; join/splice of already-running
 live arenas; codec/wire serialization; multi-owner split/link as
 addressed request/result (not as FIFO atomicity); activation of an
-already-running Message.
+already-running Message; full incoming LMX-text/arena ownership
+transfer (selected in 19.28.R2.4/5 and 19.29.7, not implemented by
+the number/bytes mailbox).
 
 Not provided by FIFO or by an in-memory dedup table, and not a
 promised later result of this slice: durable/exactly-once external
