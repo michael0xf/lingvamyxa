@@ -1401,3 +1401,23 @@ SPEC 3.4.4.1 / old lm2 parser / current P0: inline Python-like
     control / high bytes, both quote kinds, decoded bytes checked,
     overflow rejected without writing past cap. Puts stream tests
     remain; they are not this buffer contract.
+
+Candidate identity (180930, not default STG)
+--------------------------------------------
+    Named L1_GEN=rootC244 is
+    stg/l1_baseline/build/l1trans/rootC244/l1trans.exe
+    SHA256 85C0D959565C47B8801E9D8149DD13C397E35C7406758D69E8A10A2B0AD58E43
+    (root tracked C 4626B57B… / source 6b58e51). Default STG gen2 remains
+    8C69F4ED…. L2 suites on this exact exe: l2trans_suite.log /
+    lmx_suite.log under build/l1trans/logs/rootC244/. control_goto is
+    still P0 error 32; not skipped.
+
+Promotion completion (181210)
+-----------------------------
+    After agreed verification AND actual replacement of default STG
+    gen2, notify Claude in English inbox: exact stable exe path, source
+    revision, SHA256, mixa runner command/env, which candidate became
+    stable, whether a candidate override must be removed. Put that
+    inbox id in the Grok completion reply. Do not call rootC244 the
+    default before that replacement. Do not require Claude to rebuild
+    or wait on his ACK.
