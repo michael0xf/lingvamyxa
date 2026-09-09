@@ -199,3 +199,68 @@ all four jobs - a size is a number, a search hit is a path, progress is a count
 and a path, output is bytes. None hands over a graph. Join, activation,
 adoption and graph-reference retargeting stay deferred, which is exactly the
 part 19.29.7 calls unresolved.
+
+
+7. The interim Message contract, from Codex (ticket 191200)
+
+Spec 19.29.7.1 / 19.29.7.2, commit 8260ef3. Copy-only first slice.
+
+NOT CALLABLE YET - no header exists. The instruction is explicit: keep using
+ordinary calls inside one Message until a header commit publishes it. This
+section exists so the four jobs are WRITTEN in a shape that adopts it later as a
+change of transport rather than a rewrite.
+
+7.1. Three operations
+
+    addr = create(worker_handler, initial_copy)
+    send(addr, envelope{ id, correlation, replyTo, payload })
+    stop(destination)
+
+7.2. The timing rules, which are not obvious
+
+    a child DOES NOT RUN before the parent's turn publishes successfully
+    a failed parent turn RELEASES the unactivated child
+    sending to a just-created child in the SAME turn is allowed - FIFO with
+      activation
+    PARENT DEATH DOES NOT IMPLICIT-KILL CHILDREN. Supervision is explicit.
+
+7.3. Staging, admission, execution are three different moments
+
+    send() STAGES a copy
+    admission is FIFO at the receiver
+    execution is a LATER SERIAL TURN of the receiver
+
+A reply or failure is an ordinary Message with correlation equal to the request
+id (19.31.4).
+
+7.4. YIELD IS NOT PUBLICATION - this corrects what I assumed
+
+"Yield (21.10) is a dirty-only checkpoint, not outbox publication. Stage-then-
+yield in one turn is not committed."
+
+So progress needs MANY SMALL SUCCESSFUL TURNS plus explicit job state. Yield
+does not substitute for a turn boundary. I had reached "many turns" from the
+failure rules and from ClearShell's chunking; this says why yield is not the
+alternative.
+
+7.5. Failure and cancellation
+
+    an uncaught failed turn discards the uncommitted outbox
+    already-performed external effects STAY - files copied remain copied
+    report partial state on a LATER SUCCESSFUL REPORTING TURN, if the I/O
+      failure was caught
+    stop() is explicit; late replies after a stop are rejected at admission
+    do not resume an assert-terminated Message
+    transport resend is not semantic replay is not local retry - three
+      different things
+
+7.6. Duplicates
+
+A stable request id, and a RETRIED CREATE MUST NOT SPAWN A SECOND CHILD. Worth
+naming because a retry that quietly starts a second copy operation is the kind
+of bug a file manager cannot survive.
+
+7.7. Deferred, so do not design around them
+
+graph-copy, adoption, join, live-graph activation, wire serialization,
+multi-owner atomic split/link, durable exactly-once.
