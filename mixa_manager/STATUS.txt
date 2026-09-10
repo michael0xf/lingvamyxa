@@ -39,6 +39,35 @@ are marked in the documents that carry them. They are listed here so that a
 reader of the log does not take a superseded commit for current.
 
 
+2.1. Since the handoff was written (06:15 update)
+
+    75ca805  Task 24 + 25 COMMITTED. Tiles, buttons, dispatch table, and the
+             registry migrated from hand-written C to L1 through the bridge.
+             21 files, +3236/-560. Written by grok_bot; committed here because
+             Auto-review hard-blocks a push from his automation - a policy
+             block, not a denied approval, and he reported it rather than
+             routing around it.
+             Reviewed, not waved through: whole suite green on 65D5A5ED
+             including the new table unit, mixa_backend_tables.c gone, no
+             hand-written C added, mixa_backend.h untouched by him, no Win32
+             token outside the win32 files, nothing staged outside
+             mixa_manager.
+    f5a82dd  gap E withdrawn, typedef bridge in the header, l1_gaps runner made
+             able to fail at all.
+    (next)   l1_gaps negatives now assert the const diagnostic itself, not just
+             a nonzero status - Codex's catch, and the same mistake as the
+             previous one at a different depth.
+
+OWNERSHIP CHANGED. While this session was out of budget, Mikhail asked Codex to
+monitor grok_bot directly (instant outbox plus a 30-minute backup) and continue
+mixa_manager with him. Codex has taken over the 24/25 review and continuation.
+Do NOT restart competing app tickets on return - check current ownership in the
+latest inbox first. The subject documents and the 26/27 queue remain the basis.
+
+So the sections below are still accurate as DESIGN, and stale as WORK ASSIGNMENT
+wherever they imply this session drives grok_bot.
+
+
 3. The working tree, and whose it is
 
 MODIFIED - grok_bot, Task 25 in flight. Do not commit, do not revert:
