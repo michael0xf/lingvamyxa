@@ -23,8 +23,18 @@ int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr);
  * Not a per-request supervisor/result channel. */
 int lmx_msg_exec_last_status(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_is_runnable(LmxMsgRuntime *rt, LmxMsgAddr addr);
+int lmx_msg_exec_ready_has_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
+int lmx_msg_exec_ready_try_push_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
+void lmx_msg_exec_set_scan_locked(LmxMsgRuntime *rt, int v);
+int lmx_msg_exec_get_scan_locked(LmxMsgRuntime *rt);
+void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt);
+int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt);
+LmxMsgAddr lmx_msg_exec_tab_addr_locked(LmxMsgRuntime *rt, int i);
+void lmx_msg_exec_scan_ready(LmxMsgRuntime *rt);
 #if defined(LMX_MSG_EXEC_TEST)
-extern int lmx_msg_exec_test_fail_grow;
+void lmx_msg_exec_test_set_fail_grow(LmxMsgRuntime *rt, int v);
+int lmx_msg_exec_ready_cap(LmxMsgRuntime *rt);
+int lmx_msg_exec_nready(LmxMsgRuntime *rt);
 #endif
 #if defined(LMX_MSG_EXEC_TEST)
 extern void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);

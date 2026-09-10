@@ -114,6 +114,46 @@ fn: lmx_msg_exec_is_runnable (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
     c.lmx_msg_exec_unlock(rt)
 return: r
 
+sub: lmx_msg_exec_scan_ready (@: LmxMsgRuntime rt)
+    int: i 0
+    int: n
+    unsigned: a
+    if: rt = 0
+        return
+    if: c.lmx_msg_exec_get_scan_locked(rt) = 0
+        return
+    c.lmx_msg_exec_set_scan_locked(rt, 0)
+    n: c.lmx_msg_exec_tab_n_locked(rt)
+    while: i < n
+        a: c.lmx_msg_exec_tab_addr_locked(rt, i)
+        if: a != 0U && lmx_msg_exec_is_runnable(rt, a) != 0
+            if: c.lmx_msg_exec_ready_has_locked(rt, a) = 0
+                if: c.lmx_msg_exec_ready_try_push_locked(rt, a) != 0
+                    c.lmx_msg_exec_set_scan_locked(rt, 1)
+                    return
+                ---
+            ---
+        ---
+        i: i + 1
+end: lmx_msg_exec_scan_ready
+
+sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
+    if: rt = 0 || addr = 0U
+        return
+    c.lmx_msg_exec_lock(rt)
+    if: c.lmx_msg_exec_ready_has_locked(rt, addr) != 0
+        c.lmx_msg_exec_unlock(rt)
+        return
+    ---
+    if: c.lmx_msg_exec_ready_try_push_locked(rt, addr) != 0
+        c.lmx_msg_exec_set_scan_locked(rt, 1)
+        c.lmx_msg_exec_unlock(rt)
+        return
+    ---
+    c.lmx_msg_exec_wake_locked(rt)
+    c.lmx_msg_exec_unlock(rt)
+end: lmx_msg_exec_ready
+
 fn: lmx_msg_find_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id) @: LmxMsg
     @: LmxMsg m
     int: i 0
