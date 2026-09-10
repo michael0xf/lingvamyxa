@@ -645,3 +645,59 @@ actually used was build/l1trans/gen2 - the ROOT build - not the STG baseline
 this project builds against. Every finding above reproduces on 65D5A5ED; the
 attribution was the error, not the result. Recorded rather than quietly fixed,
 because "verified" is worth nothing if it does not say verified against WHAT.
+
+10.5. The upper layer is INSET by half a cell, and one cell smaller
+
+Decided by the language owner on 2026-09-10. The upper grid is (cols-1) by
+(rows-1) cells with its origin at half a text cell down and right, so it floats
+inside the text screen with an even half-cell border all round.
+
+The purpose is stated plainly and is not layout: "so that the document text and
+the UI do not quite coincide." Two grids that nearly match read as one grid
+drawn badly; two grids offset by half a cell read as two things.
+
+10.3 had already accepted that the grids do not align when the fonts differ.
+This makes the offset DELIBERATE and CONSTANT rather than a by-product of which
+sizes the system happened to offer - and it survives point 2 of the same
+decision, one font on both layers, where without it the two grids would coincide
+exactly.
+
+Seam consequence: none for the metrics. The offset and the shrink are the
+application's layout, computed from metrics the seam already reports. The seam
+is not told where the upper layer sits, because it does not composite - it
+presents one finished frame.
+
+10.6. The pointer: a third GLYPH layer, not a third grid
+
+MixaGlyphLayer grows MIXA_LAYER_POINTER and MixaCellMetrics grows
+pointer_cell_width / pointer_cell_height.
+
+That is a font size, not a surface. The pointer is one glyph at a position on a
+half-cell lattice (UI_MODEL 7), so there is nothing to lay out and no third grid
+to composite. A pointer glyph LARGER than its half step is explicitly allowed -
+it belongs to no surface, so it has no box to overflow.
+
+Target size is the text size or slightly above, chosen by 10.3's rule: the
+available system size nearest the target, used as it comes.
+
+10.7. Mouse events change unit: HALF-cells
+
+The header said, and still says, that mouse coordinates are converted once in
+the backend so consumers cannot drift. The unit becomes half a TEXT cell.
+
+    text cell  = half >> 1
+    upper cell = (half - 1) >> 1, and half == 0 lies outside the upper layer
+
+Both grids are therefore addressable from the same integer with a shift, which
+is the reason the half step is the right one rather than a third or a quarter:
+it is the finest step at which BOTH grids have defined positions, and the
+coarsest at which the offset grid has any at all.
+
+The unit is the TEXT layer's cell even when the upper layer runs a different
+font. The text layer is the full screen; the upper one is inset and derived from
+it, so anchoring to the derived grid would make the pointer's coordinate system
+depend on a font choice that has nothing to do with pointing.
+
+This IS a breaking change to the seam - every consumer of MixaEvent row/col
+doubles - and it is worth taking now rather than later, while the consumers are
+few and are all ours.

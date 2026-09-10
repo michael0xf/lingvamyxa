@@ -120,15 +120,30 @@ typedef enum MixaButton {
 /* One shape for every kind, so the seam does not grow a variant per platform.
  *
  * A key event carries EITHER a codepoint (text) OR a keycode (not text), never
- * both. Mouse coordinates are CELLS, not pixels: the backend knows the geometry
- * from open and converts once, so consumers cannot drift. */
+ * both.
+ *
+ * Mouse coordinates are HALF-CELLS of the TEXT layer, not pixels: the backend
+ * knows the geometry from open and converts once, so consumers cannot drift.
+ *
+ * Half, rather than whole, because the pointer moves on a lattice of half a
+ * text cell (UI_MODEL 7). That is the finest step at which BOTH grids have
+ * defined positions - a text cell is two steps, an upper cell is also two,
+ * offset by one - so the mapping is arithmetic with no rounding and no floating
+ * point anywhere:
+ *
+ *     text cell  = half >> 1
+ *     upper cell = (half - 1) >> 1, and half == 0 lies outside the upper layer
+ *
+ * The unit is the TEXT layer's cell even when the upper layer runs a different
+ * font, because the text layer is the full screen and the upper one is inset
+ * and derived from it. */
 typedef struct MixaEvent {
     int kind;               /* MixaEventKind */
     unsigned int codepoint; /* key: Unicode scalar, 0 when not text */
     int keycode;            /* key: MixaKeyCode, MIXA_KEY_NONE when text */
     unsigned int modifiers; /* key and mouse: MixaModifier bits */
-    size_t row;             /* mouse: cell row */
-    size_t col;             /* mouse: cell column */
+    size_t row;             /* mouse: HALF-cell row, see below */
+    size_t col;             /* mouse: HALF-cell column */
     unsigned int buttons;   /* mouse: MixaButton bits */
     size_t cols;            /* resize: new geometry */
     size_t rows;
@@ -154,6 +169,14 @@ typedef struct MixaCellMetrics {
     size_t text_cell_height;
     size_t upper_cell_width;
     size_t upper_cell_height;
+    /* The mouse pointer's font. Not a third cell grid - see UI_MODEL 7.3. The
+     * pointer is one glyph at a position on a half-cell lattice, so this sizes
+     * the glyph and nothing else; a pointer larger than its half step is
+     * allowed and expected. Target is the text size or slightly above, chosen
+     * by the rule in BACKEND_SEAM 10.3 - the available system size nearest the
+     * target, used as it comes. */
+    size_t pointer_cell_width;
+    size_t pointer_cell_height;
 } MixaCellMetrics;
 
 /* Creates the surface. Cols and rows in; the CELL METRICS ARE IN/OUT.
@@ -253,7 +276,8 @@ void mixa_backend_close(MixaBackend *backend);
  */
 typedef enum MixaGlyphLayer {
     MIXA_LAYER_TEXT = 0,
-    MIXA_LAYER_UPPER = 1
+    MIXA_LAYER_UPPER = 1,
+    MIXA_LAYER_POINTER = 2
 } MixaGlyphLayer;
 
 typedef struct MixaGlyph {

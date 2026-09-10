@@ -485,3 +485,105 @@ means, and it is why there are four pictures and not nine.
       (MixaGlyph.missing) instead of substituting. If a font lacks these, the
       pointer must not silently vanish - fall back to something present and say
       so. Not designed here; noted so it is not discovered as a blank screen.
+
+
+7. The three grids: text, UI, and the mouse's half step
+
+Mikhail, 2026-09-10, four points:
+
+    1  keep the ABILITY to run a different font on each layer
+    2  for now use ONE font on both
+    3  make the upper layer one character SHORTER in height and width, and
+       start drawing it half a character down and right
+    4  add a third VIRTUAL cellular layer for the mouse alone, step exactly
+       1/2 - not a third screen, only its coordinates - and choose a font for
+       it by the same algorithm, the same size or slightly larger, its glyphs
+       placed strictly on the half step. A larger pointer glyph is fine.
+
+    "So that the document text and the UI do not quite coincide."
+
+That last line is the reason and it is worth keeping in front of the other four.
+The point is NOT alignment. It is deliberate MISalignment: two grids that nearly
+match are read as one grid drawn badly, while two grids offset by half a cell
+are read as two things. 10.3 of BACKEND_SEAM had already accepted that the
+grids do not generally align when the fonts differ; this makes the offset
+deliberate and constant instead of a by-product of font sizes.
+
+7.1. The geometry
+
+Let the text cell be cw by ch, and the screen cols by rows.
+
+    LOWER   the text screen. cols x rows, origin at 0,0. Unchanged - it is the
+            full screen and everything else is measured against it.
+
+    UPPER   the UI. (cols-1) x (rows-1) cells, origin at +cw/2, +ch/2.
+
+            Shrinking by one is what makes the offset fit: pushed half a cell
+            right and down, a full-width grid would hang half a cell off the
+            far edge. One cell narrower leaves half a cell of margin on each
+            side, so the UI floats centred inside the text screen with an even
+            border of half a cell all round.
+
+    MOUSE   a coordinate lattice, not a surface. Step cw/2 by ch/2, so
+            (2*cols) x (2*rows) positions over the same area.
+
+7.2. Why the half step is the natural one
+
+It is the finest step at which BOTH grids have well-defined positions. A text
+cell is two mouse steps; an upper cell is also two mouse steps, offset by one.
+So every mouse position lands either on a shared boundary or exactly at the
+centre of one cell and the boundary of the other. There is no third case, and
+no rounding anywhere.
+
+That is what makes the pointer twice as precise as the text grid while staying
+discrete. Mikhail dislikes smooth motion on logical grounds (section 6); this
+gives resolution without giving up the grid.
+
+7.3. What I am deciding, since the description does not say
+
+    ANCHOR. The half step is half of the LOWER cell. With one font on both
+      layers this is moot; with two fonts it is not, and the lower layer is the
+      right anchor because it is the full screen and always exists, while the
+      upper one is inset and derived from it.
+
+    COORDINATE UNIT AT THE SEAM. Mouse events already arrive in CELLS, converted
+      once in the backend so consumers cannot drift (mixa_backend.h). They now
+      arrive in HALF-CELLS of the lower layer, which keeps that property exactly
+      - one conversion, in the one place that knows the geometry.
+
+      Mapping is then arithmetic and needs no floating point:
+          text cell   = half >> 1
+          upper cell  = (half - 1) >> 1, and half = 0 is outside the upper layer
+      A pointer at an odd half-coordinate is at the centre of a text cell and on
+      an upper-cell boundary; at an even one, the reverse.
+
+    A THIRD GLYPH LAYER, NOT A THIRD SCREEN. The pointer needs its own font
+      size, so the seam grows MIXA_LAYER_POINTER for rasterising and metrics for
+      it. It does NOT grow a third cell grid to composite: there is nothing to
+      lay out, only one glyph to place.
+
+7.4. The pointer glyph may be bigger than its step, and that is allowed
+
+"If the mouse symbol is larger, that is fine too." Explicitly so. The pointer is
+one glyph at a POSITION, not content in a cell, so it has no box to overflow.
+The half step governs where it is placed, never how large it is drawn.
+
+Which also means the pointer is the only element in the interface whose size is
+not a cell. That is consistent rather than an exception: section 6 established
+it belongs to no surface, and something belonging to no surface has no cell.
+
+7.5. One font today, two tomorrow
+
+Point 2 says one font on both layers for now, and point 1 says keep the
+ability. Both are already true of the seam: MixaCellMetrics carries separate
+metrics per layer, mixa_backend_glyph takes a layer, and "a backend with only
+one font reports the same metrics twice" is written into the header as a
+legitimate answer rather than a failure.
+
+So today upper_cell equals text_cell and the offset of 7.1 is the ONLY thing
+distinguishing the two grids. That is the interesting case to look at, because
+it is the one where the misalignment is doing all the work by itself.
+
+The pointer font follows 10.3's rule - the available system size NEAREST the
+target, used as it comes - with the target being the text size or slightly
+above, rather than 1.5x.
