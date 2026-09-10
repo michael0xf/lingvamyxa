@@ -304,41 +304,29 @@ regularising: it is what makes a selection read as selected.
 The application panel was at the TOP in ClearShell and is glued to the BOTTOM
 here, below the console input line. So F1, its first button, lands BOTTOM LEFT.
 
-
-5.6. The wide button is EIGHT CELLS. Stated by the owner, replaces the 1.75 rule.
+5.6. The eight characters are the BORDER, not the width
 
 Mikhail, 2026-09-10: the application panel sits at the bottom, "8 characters
 with a micro-gap and the button fill".
 
-That is a direct value, and it supersedes the derived one for the WIDE button.
-Section 2 keeps its point - one measured quantity, integer shifts, no pixel
-constants - but 1.75 * hb was never reachable as a whole number of cells. hb of
-4 gives 7, hb of 5 gives 9; eight is not in the sequence at all. A pixel layout
-can carry 1.75 exactly and a cell layout cannot, so a derived proportion here
-would mean rounding a value nobody chose. Eight is chosen.
+The eight are the pseudographic BORDER of the button - the nine-slice minus its
+centre. Four corners and four sides, drawn as cells; the ninth is the fill named
+in the same sentence, and the micro-gap of 5.1 is what stands in for a border
+line. That is exactly what mixa_tiles.h already provides at U+E000..U+E00F:
+FILL, N, S, W, E, NW, NE, SW, SE.
 
-So, for our port:
+So nothing about WIDTH changes. ClearShell's values stand as section 2 has them:
 
-    wide button      8 cells
-    square button    hb cells, unchanged - a label under four characters
-    micro-gap        unchanged, cell_h >> 5 floored at 1 pixel (5.1)
-    fill             unchanged, the button's own translucent background (5.4)
+    wide button      (hb << 1) - (hb >> 2)      1.75 * hb
+    square button    hb, for a label under four characters
+    micro-gap        cell_h >> 5, floored at 1 pixel
+    fill             the button's own translucent background
 
-ClearShell's normalize still decides WHICH of the two a label gets, and it is
-still read from the source rather than from a ticket: under four characters is
-square, angle brackets only suppress the enlargement. Only the wide value
-changes.
-
-This is a DELTA against ClearShell, in the sense PORT_OF_CLEARSHELL section 2.0
-requires: the presentation is ported in full, and where our medium cannot carry
-the original's arithmetic, the difference is written down rather than absorbed
-silently.
-
-5.6.1. One reading recorded, so a wrong one is cheap to correct
-
-"8 characters" is read here as the WIDTH OF A BUTTON, not as a count of eight
-buttons in the panel. Reasons: the sentence is about button geometry throughout,
-it sits beside the gap and the fill, and eight characters is the ordinary width
-of a bottom-bar button in FAR, whose key layout this project follows. If the
-intended meaning was eight buttons per row, the correction is this paragraph and
-one constant - nothing else in the section depends on it.
+An earlier revision of this section read the eight as a WIDTH IN CELLS and
+replaced the 1.75 rule with a constant. That was wrong, and it was wrong in an
+instructive way: the derivation I built on top of it - that 1.75 * hb has no
+whole-cell solution at eight, so the proportion had to give way - was sound
+arithmetic resting on a misread sentence, and sound reasoning downstream of a
+bad premise is the hardest kind to catch from the inside. The sentence never
+mentioned width; it listed the three things a button is DRAWN from. Committed as
+a696d0c, corrected here.
