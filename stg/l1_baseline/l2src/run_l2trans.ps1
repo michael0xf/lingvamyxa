@@ -381,13 +381,32 @@ if ($szintp -notmatch '@: int l2_p0_0') { throw "unit_sz_intp missing @: int for
 Invoke-Leaf "l2src\tests\unit_addr_take.lm2" "unit_addr_take" 0 "set_one"
 $addrTake = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_addr_take.lm1")))
 if ($addrTake.IndexOf("&l2_q") -ge 0) { throw "unit_addr_take must not take address of own cache" }
+if ($addrTake -notmatch 'cast: \(@: size_t\) l2_q0_from') { throw "unit_addr_take must pass graph cell, not cache" }
+$callPos = $addrTake.LastIndexOf("l2_m0(")
+if ($callPos -lt 0) { throw "unit_addr_take missing set_one call" }
+$afterCall = $addrTake.Substring($callPos)
+if ($afterCall -match 'l2_q\d+\s*:\s*lmx_size_value') { throw "unit_addr_take must not reload own cache after call" }
+if ($afterCall -match 'l2_q\d+\s*:\s*\(cast:') { throw "unit_addr_take must not reload own cache after call" }
 $addrGot = Invoke-SpliceDrive "unit_addr_take" @"
         c.printf("%d\n", l2_m1(unit))
+        c.printf("%d\n", (cast: int (lmx_size_value(lmx_branch_child(unit, 0U)\data))))
         return: 0
     end: main
 end: external
 "@
-if ($addrGot -ne "1`n") { throw "unit_addr_take go expected 1 got=$addrGot" }
+if ($addrGot -ne "0`n1`n") { throw "unit_addr_take expected bare 0 and graph 1 got=$addrGot" }
+Invoke-Leaf "l2src\tests\unit_addr_arg.lm2" "unit_addr_arg" 0 "set_one"
+$addrArg = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_addr_arg.lm1")))
+if ($addrArg.IndexOf("&l2_q") -ge 0) { throw "unit_addr_arg must not take address of own cache" }
+if ($addrArg -notmatch '@ l2_p1_0') { throw "unit_addr_arg must take address of the C argument cell" }
+$addrArgGot = Invoke-SpliceDrive "unit_addr_arg" @"
+        c.printf("%d\n", l2_m1(unit, 0U))
+        return: 0
+    end: main
+end: external
+"@
+if ($addrArgGot -ne "1`n") { throw "unit_addr_arg go expected 1 got=$addrArgGot" }
+Invoke-Negative "l2src\tests\unit_addr_depth.lm2" "unit_addr_depth" "unsupported address depth"
 Invoke-Leaf "l2src\tests\unit_dash_emit.lm2" "unit_dash_emit" 0 "go"
 $dashGot = Invoke-SpliceDrive "unit_dash_emit" @"
         c.printf("%d\n", l2_m0(unit, 3))

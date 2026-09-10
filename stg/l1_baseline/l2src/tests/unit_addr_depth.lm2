@@ -1,0 +1,11 @@
+fn: set_one (@: size_t p) int
+    p[0]: 1U
+    return: 0
+end: set_one
+fn: go (@: size_t p) int
+    set_one(@: p)
+    return: 0
+end: go
+fn: main () int
+    return: 0
+end: main

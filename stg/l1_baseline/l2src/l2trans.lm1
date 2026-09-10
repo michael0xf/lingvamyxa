@@ -95,7 +95,6 @@ prototype:
     fn: l2_emit_expr (const: @(LmP0Node node); int: mi; const: @(char ind)) int
     fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
-    fn: l2_emit_reload (int: mi; const: @(char ind)) int
     fn: l2_fn_close (const: @(LmP0Frame frame); const: @(LmP0Text name); const: @(char head)) int
     fn: l2_ret_tr (const: @(LmP0Frame frame)) @: LmP0Structure
     fn: l2_emit_ret_tr (int: mi; const: @(char ind); const: @(LmP0Structure body)) int
@@ -3640,7 +3639,9 @@ fn: l2_check_addr (const: @(LmP0Node node); int: mi; const: @(char path)) int
     idx: -1
     if: mi >= 0
         idx: l2_param_find(mi, t)
-    if: idx >= 0 && (l2_ft(mi, idx) = 0 || l2_ft(mi, idx) = 1 || l2_ft(mi, idx) = 2 || l2_ft(mi, idx) = 9 || l2_ft(mi, idx) = 11 || l2_ft(mi, idx) = 12)
+    if: idx >= 0 && (l2_ft(mi, idx) = 9 || l2_ft(mi, idx) = 11 || l2_ft(mi, idx) = 12)
+        return: l2_error(path, node, "unsupported address depth")
+    if: idx >= 0 && (l2_ft(mi, idx) = 0 || l2_ft(mi, idx) = 1 || l2_ft(mi, idx) = 2)
         return: 0
     oi: -1
     if: mi >= 0
@@ -3666,7 +3667,7 @@ fn: l2_prep_addr (const: @(LmP0Node node); int: mi; @: char dest) int
     if: mi >= 0
         idx: l2_param_find(mi, t)
     if: idx >= 0 && (l2_ft(mi, idx) = 9 || l2_ft(mi, idx) = 11 || l2_ft(mi, idx) = 12)
-        return: l2_tok_formal(mi, idx, dest)
+        return: 1
     if: idx >= 0 && (l2_ft(mi, idx) = 0 || l2_ft(mi, idx) = 1 || l2_ft(mi, idx) = 2)
         if: c.sprintf(dest, "@ l2_p%d_%d", mi, idx) < 0
             return: 1
@@ -3999,8 +4000,6 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
     l2_prep_drop(acts, hides)
     if: c.fputs(")\n", l2_out) < 0
         return: 1
-    if: l2_emit_reload(mi, ind) != 0
-        return: 1
 return: l2_tok_temp(t, dest)
 
 fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
@@ -4209,20 +4208,6 @@ fn: l2_has_own_ty (int: ty) int
     int: i 0
     while: i < l2_own_n
         if: l2_own_ty[i] = ty
-            return: 1
-        i: i + 1
-return: 0
-
-fn: l2_emit_reload (int: mi; const: @(char ind)) int
-    int: i 0
-    int: fi
-    if: mi < 0 || ind = 0
-        return: 0
-    while: i < l2_own_n
-        fi: l2_m_alias[l2_own_off(mi, i)]
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && fi < 0 && l2_own_ty[i] = 2 && c.fprintf(l2_out, "%sl2_q%d: lmx_size_value(l2_q%d_from\\data)\n", ind, i, i) < 0
-            return: 1
-        if: l2_m_uses[l2_own_off(mi, i)] != 0 && fi < 0 && l2_own_ty[i] = 1 && c.fprintf(l2_out, "%sl2_q%d: (cast: (char) lmx_char_value(l2_q%d_from\\data))\n", ind, i, i) < 0
             return: 1
         i: i + 1
 return: 0
