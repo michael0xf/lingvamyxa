@@ -1,5 +1,6 @@
 fn: add (@: int p) int
-    return: 0
+    p[0]: 7
+    return: p[0]
 end: add
 fn: main () int
     return: 0

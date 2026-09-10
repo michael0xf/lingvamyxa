@@ -375,7 +375,28 @@ Invoke-Negative "l2src\tests\unit_cont_colon.lm2" "unit_cont_colon" "empty colon
 Invoke-Negative "l2src\tests\unit_break.lm2" "unit_break" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_sz_idx.lm2" "unit_sz_idx" "unsupported index"
 Invoke-Negative "l2src\tests\unit_sz_np.lm2" "unit_sz_np" "unsupported index"
-Invoke-Negative "l2src\tests\unit_sz_intp.lm2" "unit_sz_intp" "incompatible entry signature"
+Invoke-Leaf "l2src\tests\unit_sz_intp.lm2" "unit_sz_intp" 0 "add"
+$szintp = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_sz_intp.lm1")))
+if ($szintp -notmatch '@: int l2_p0_0') { throw "unit_sz_intp missing @: int formal" }
+Invoke-Leaf "l2src\tests\unit_addr_take.lm2" "unit_addr_take" 0 "set_one"
+$addrTake = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_addr_take.lm1")))
+if ($addrTake.IndexOf("&l2_q") -ge 0) { throw "unit_addr_take must not take address of own cache" }
+$addrGot = Invoke-SpliceDrive "unit_addr_take" @"
+        c.printf("%d\n", l2_m1(unit))
+        return: 0
+    end: main
+end: external
+"@
+if ($addrGot -ne "1`n") { throw "unit_addr_take go expected 1 got=$addrGot" }
+Invoke-Leaf "l2src\tests\unit_dash_emit.lm2" "unit_dash_emit" 0 "go"
+$dashGot = Invoke-SpliceDrive "unit_dash_emit" @"
+        c.printf("%d\n", l2_m0(unit, 3))
+        c.printf("%d\n", l2_m0(unit, 0))
+        return: 0
+    end: main
+end: external
+"@
+if ($dashGot -ne "4`n0`n") { throw "unit_dash_emit go expected 4 then 0 got=$dashGot" }
 Invoke-Negative "l2src\tests\unit_rec.lm2" "unit_rec" "unsupported recursion"
 Invoke-Negative "l2src\tests\unit_cycle.lm2" "unit_cycle" "unsupported recursion"
 Invoke-Leaf "l2src\tests\unit_eight.lm2" "unit_eight" 0 "m7"
