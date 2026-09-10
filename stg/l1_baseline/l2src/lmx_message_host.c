@@ -3,6 +3,7 @@
 #include "l2src/lmx_message_host.h"
 #include <stdlib.h>
 
+#if defined(LMX_MSG_HOST_TEST)
 int lmx_msg_host_test_nomem;
 int lmx_msg_host_test_nowake;
 
@@ -17,6 +18,11 @@ void lmx_msg_host_test_set_nomem(int v) {
 void lmx_msg_host_test_set_nowake(int v) {
     lmx_msg_host_test_nowake = v;
 }
+#else
+int lmx_msg_host_test_get_nomem(void) {
+    return 0;
+}
+#endif
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -144,9 +150,11 @@ int lmx_msg_host_wake(LmxMsgRuntime *rt) {
     if (rt == 0 || rt->host_sync == 0) {
         return 1;
     }
+#if defined(LMX_MSG_HOST_TEST)
     if (lmx_msg_host_test_nowake != 0) {
         return 1;
     }
+#endif
     h = (LmxMsgHostSync *)rt->host_sync;
 #if defined(_WIN32)
     if (SetEvent(h->wake) == 0) {

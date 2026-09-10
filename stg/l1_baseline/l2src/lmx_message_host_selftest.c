@@ -10,6 +10,7 @@
 #include <windows.h>
 #else
 #include <pthread.h>
+#include <sched.h>
 #endif
 
 #define NPROD 4
@@ -17,6 +18,15 @@
 
 static LmxMsgRuntime *g_rt;
 static LmxMsgAddr g_dest;
+#if defined(_WIN32)
+static HANDLE g_go;
+static volatile LONG g_ready;
+#else
+static pthread_mutex_t g_go_mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_go_cv = PTHREAD_COND_INITIALIZER;
+static int g_go;
+static int g_ready;
+#endif
 
 typedef struct ProdArg {
     unsigned id;
@@ -44,6 +54,15 @@ static void *producer(void *arg)
     env.kind = LMX_MSG_KIND_BYTES;
     env.n = sizeof(payload);
     env.bytes = (const uchar *)&payload;
+#if defined(_WIN32)
+    WaitForSingleObject(g_go, INFINITE);
+#else
+    pthread_mutex_lock(&g_go_mu);
+    while (g_go == 0) {
+        pthread_cond_wait(&g_go_cv, &g_go_mu);
+    }
+    pthread_mutex_unlock(&g_go_mu);
+#endif
     for (seq = 0; seq < 20000U; seq++) {
         payload = pack(p->id, seq);
         env.id = 0;
@@ -51,6 +70,15 @@ static void *producer(void *arg)
         payload = 0xFFFFFFFFu;
         if (st == LMX_MSG_STAGED) {
             p->posted_ok += 1;
+            if (p->posted_ok == 1U) {
+#if defined(_WIN32)
+                InterlockedIncrement(&g_ready);
+#else
+                pthread_mutex_lock(&g_go_mu);
+                g_ready += 1;
+                pthread_mutex_unlock(&g_go_mu);
+#endif
+            }
         } else if (st == LMX_MSG_STOPPED) {
             p->posted_stopped += 1;
             break;
@@ -171,6 +199,13 @@ int main(void) {
         owner_fail = 1;
     }
 
+#if defined(_WIN32)
+    g_go = CreateEventA(0, 1, 0, 0);
+    if (g_go == 0) {
+        return 1;
+    }
+    g_ready = 0;
+#endif
     for (i = 0; i < NPROD; i++) {
         args[i].id = (unsigned)i;
 #if defined(_WIN32)
@@ -184,12 +219,21 @@ int main(void) {
         }
 #endif
     }
-
-    /* Drain while producers still run, then shutdown with callbacks in flight. */
 #if defined(_WIN32)
-    Sleep(5);
+    SetEvent(g_go);
+    while (g_ready < NPROD) {
+        Sleep(0);
+    }
 #else
-    { struct timespec ts; ts.tv_sec = 0; ts.tv_nsec = 5000000L; nanosleep(&ts, 0); }
+    pthread_mutex_lock(&g_go_mu);
+    g_go = 1;
+    pthread_cond_broadcast(&g_go_cv);
+    while (g_ready < NPROD) {
+        pthread_mutex_unlock(&g_go_mu);
+        sched_yield();
+        pthread_mutex_lock(&g_go_mu);
+    }
+    pthread_mutex_unlock(&g_go_mu);
 #endif
     st = lmx_msg_host_wait(g_rt, 20);
     if (st != LMX_MSG_OK && st != LMX_MSG_EMPTY) {
@@ -230,8 +274,15 @@ int main(void) {
         seq = v & 0xFFFFu;
         if (prod >= NPROD) {
             owner_fail = 1;
-        } else if (last[prod] != 0xFFFFFFFFu && seq <= last[prod]) {
-            fprintf(stderr, "producer %u fifo broke seq %u after %u\n", prod, seq, last[prod]);
+        } else if (last[prod] == 0xFFFFFFFFu) {
+            if (seq != 0U) {
+                fprintf(stderr, "producer %u first seq %u not 0\n", prod, seq);
+                owner_fail = 1;
+            }
+            last[prod] = seq;
+            seen[prod] += 1;
+        } else if (seq != last[prod] + 1U) {
+            fprintf(stderr, "producer %u gap seq %u after %u\n", prod, seq, last[prod]);
             owner_fail = 1;
         } else {
             last[prod] = seq;
@@ -276,13 +327,26 @@ int main(void) {
         fprintf(stderr, "no staged/recv work\n");
         return 1;
     }
-    if (stopped == 0) {
-        fprintf(stderr, "shutdown did not overlap in-flight posts\n");
+    if (stopped != (unsigned)NPROD) {
+        fprintf(stderr, "shutdown did not stop all producers stopped=%u\n", stopped);
         return 1;
     }
-    if (total > staged) {
-        fprintf(stderr, "recv %u > staged %u\n", total, staged);
+    if (total != staged) {
+        fprintf(stderr, "recv %u != staged %u\n", total, staged);
         return 1;
     }
+    for (i = 0; i < NPROD; i++) {
+        if (seen[i] != args[i].posted_ok) {
+            fprintf(stderr, "prod %u seen %u != posted_ok %u\n", i, seen[i], args[i].posted_ok);
+            return 1;
+        }
+        if (args[i].posted_ok > 0U && last[i] != args[i].posted_ok - 1U) {
+            fprintf(stderr, "prod %u last %u != ok-1\n", i, last[i]);
+            return 1;
+        }
+    }
+#if defined(_WIN32)
+    CloseHandle(g_go);
+#endif
     return 0;
 }

@@ -29,8 +29,12 @@ foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "
     if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: $src" }
 
     $extra = @()
-    if ($unit -eq "lmx_message_selftest") { $extra = @("l2src\lmx_message_host.c") }
-    & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build $c @extra -o $exe 2>&1 |
+    $defs = @()
+    if ($unit -eq "lmx_message_selftest") {
+        $extra = @("l2src\lmx_message_host.c")
+        $defs = @("-DLMX_MSG_HOST_TEST")
+    }
+    & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build @defs $c @extra -o $exe 2>&1 |
         Tee-Object -FilePath (Join-Path $log "$unit.gcc.log") | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Get-Content (Join-Path $log "$unit.gcc.log")
@@ -43,8 +47,15 @@ foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "
 $msgC = Join-Path $out "lmx_message.c"
 & $trans "l2src\lmx_message.lm1" $msgC
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: l2src\lmx_message.lm1" }
+$prodHostO = Join-Path $out "lmx_message_host_prod.o"
+& gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build -c "l2src\lmx_message_host.c" -o $prodHostO 2>&1 |
+    Tee-Object -FilePath (Join-Path $log "lmx_message_host_prod.gcc.log") | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "$gen gcc failed: production host.o" }
+$prodNm = & nm --defined-only $prodHostO 2>&1 | Out-String
+if ($prodNm -match 'lmx_msg_host_test_set_') { throw "production host.o exports test setters" }
+if ($prodNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_host_test_nomem\s*$') { throw "production host.o has mutable test_nomem" }
 $hostExe = Join-Path $out "lmx_message_host_selftest.exe"
-& gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build "l2src\lmx_message_host_selftest.c" $msgC "l2src\lmx_message_host.c" -o $hostExe 2>&1 |
+& gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build -DLMX_MSG_HOST_TEST "l2src\lmx_message_host_selftest.c" $msgC "l2src\lmx_message_host.c" -o $hostExe 2>&1 |
     Tee-Object -FilePath (Join-Path $log "lmx_message_host_selftest.gcc.log") | Out-Null
 if ($LASTEXITCODE -ne 0) {
     Get-Content (Join-Path $log "lmx_message_host_selftest.gcc.log")

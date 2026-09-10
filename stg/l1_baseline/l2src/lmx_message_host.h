@@ -13,11 +13,14 @@ int lmx_msg_host_is_shutdown(LmxMsgRuntime *rt);
 int lmx_msg_host_wake(LmxMsgRuntime *rt);
 int lmx_msg_host_shutdown(LmxMsgRuntime *rt);
 
-/* Test-only injectors. Not app API. */
+/* Production: get_nomem is an immutable 0 stub. Setters exist only
+ * in -DLMX_MSG_HOST_TEST builds. */
+int lmx_msg_host_test_get_nomem(void);
+#if defined(LMX_MSG_HOST_TEST)
 extern int lmx_msg_host_test_nomem;
 extern int lmx_msg_host_test_nowake;
-int lmx_msg_host_test_get_nomem(void);
 void lmx_msg_host_test_set_nomem(int v);
 void lmx_msg_host_test_set_nowake(int v);
+#endif
 
 #endif

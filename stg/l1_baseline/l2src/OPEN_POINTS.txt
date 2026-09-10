@@ -1367,7 +1367,8 @@ in-flight producer/callback, then delete; rt stays valid until
 that join barrier. path_n returns -1 off-owner; path_seg/init_copy
 return INVALID; delete off-owner is a void no-op.
 Win32 concurrent test run here. POSIX primitives written, not
-executed on this machine.
+executed on this machine. Test injectors are -DLMX_MSG_HOST_TEST
+only; production host.o has get_nomem==0 and no setters.
 Remaining limitation: create/send/pump/recv still owner-only;
 not concurrent Message execution. done[32] still exists; host
 events use id=0. AVOIDED: app C locks; new KIND enums. ASK none.
