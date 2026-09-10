@@ -1,0 +1,139 @@
+# L2 indent stack + indent_level_from_column (parse entry that uses it).
+# Frozen REF: l1src/parser.lm1 indent stack family and indent_level_from_column.
+# Field actuals are parenthesized so `stack\columns` is one argument, not three.
+sub: lm_p0_indent_stack_free (@: LmP0IndentStack stack)
+    if: stack = 0
+        return
+    lm_own_delete((stack\columns), 0)
+    stack\columns: 0
+    stack\count: 0U
+    stack\capacity: 0U
+end: lm_p0_indent_stack_free
+fn: lm_p0_indent_store (@: size_t p; size_t: v) int
+    p[0]: v
+    return: 0
+end: lm_p0_indent_store
+fn: lm_p0_indent_load (@: size_t p) size_t
+    return: p[0]
+end: lm_p0_indent_load
+fn: lm_p0_indent_stack_push (@: LmP0Document document; @: LmP0IndentStack stack; size_t: column; size_t: line; size_t: source_column) int
+    @: size_t columns
+    @: size_t cell
+    if: stack\count != stack\capacity
+        cell: stack\columns + stack\count
+        lm_p0_indent_store(cell, column)
+        stack\count: stack\count + 1U
+        return: 1
+    size_t: bytes
+    if: stack\capacity = 0U
+        bytes: 8U * c.sizeof(c.size_t)
+        columns: lm_own_resize((stack\columns), bytes)
+        if: columns = 0
+            c.lm_p0_set_diagnostic(document, 1, line, source_column, "out of memory while storing indentation levels")
+            return: 0
+        stack\columns: columns
+        stack\capacity: 8U
+        cell: stack\columns + stack\count
+        lm_p0_indent_store(cell, column)
+        stack\count: stack\count + 1U
+        return: 1
+    bytes: (stack\capacity * 2U) * c.sizeof(c.size_t)
+    columns: lm_own_resize((stack\columns), bytes)
+    if: columns = 0
+        c.lm_p0_set_diagnostic(document, 1, line, source_column, "out of memory while storing indentation levels")
+        return: 0
+    stack\columns: columns
+    stack\capacity: stack\capacity * 2U
+    cell: stack\columns + stack\count
+    lm_p0_indent_store(cell, column)
+    stack\count: stack\count + 1U
+    return: 1
+end: lm_p0_indent_stack_push
+fn: lm_p0_indent_stack_init (@: LmP0Document document; @: LmP0IndentStack stack) int
+    c.memset(stack, 0, c.sizeof(c.LmP0IndentStack))
+    return: lm_p0_indent_stack_push(document, stack, 0U, 0U, 0U)
+end: lm_p0_indent_stack_init
+fn: lm_p0_indent_stack_new_empty () @: LmP0IndentStack
+    return: lm_own_new_zero(c.sizeof(c.LmP0IndentStack))
+end: lm_p0_indent_stack_new_empty
+fn: lm_p0_indent_stack_new (@: LmP0Document document) @: LmP0IndentStack
+    @: LmP0IndentStack stack
+    stack: lm_p0_indent_stack_new_empty()
+    if: stack = 0
+        c.lm_p0_set_diagnostic(document, 1, 0U, 0U, "out of memory while creating indentation stack")
+        return: 0
+    if: lm_p0_indent_stack_init(document, stack) = 0
+        lm_own_delete(stack, 0)
+        return: 0
+    return: stack
+end: lm_p0_indent_stack_new
+sub: lm_p0_indent_stack_delete (@: LmP0IndentStack stack)
+    if: stack = 0
+        return
+    lm_p0_indent_stack_free(stack)
+    lm_own_delete(stack, 0)
+end: lm_p0_indent_stack_delete
+fn: lm_p0_indent_stack_copy (@: LmP0Document document; @: LmP0IndentStack target; const: @(LmP0IndentStack source); size_t: line; size_t: column) int
+    size_t: capacity
+    size_t: bytes
+    c.memset(target, 0, c.sizeof(c.LmP0IndentStack))
+    capacity: source\count
+    if: source\capacity > source\count
+        capacity: source\capacity
+    if: capacity = 0U
+        return: 1
+    target\columns: lm_own_new_zero(capacity * c.sizeof(c.size_t))
+    if: target\columns = 0
+        c.lm_p0_set_diagnostic(document, 1, line, column, "out of memory while copying indentation levels")
+        return: 0
+    bytes: source\count * c.sizeof(c.size_t)
+    c.memcpy((target\columns), (source\columns), bytes)
+    target\count: source\count
+    target\capacity: capacity
+    return: 1
+end: lm_p0_indent_stack_copy
+fn: lm_p0_indent_stack_clone (@: LmP0Document document; const: @(LmP0IndentStack source); size_t: line; size_t: column) @: LmP0IndentStack
+    @: LmP0IndentStack target
+    target: lm_p0_indent_stack_new_empty()
+    if: target = 0
+        c.lm_p0_set_diagnostic(document, 1, line, column, "out of memory while copying indentation levels")
+        return: 0
+    if: lm_p0_indent_stack_copy(document, target, source, line, column) = 0
+        lm_p0_indent_stack_delete(target)
+        return: 0
+    return: target
+end: lm_p0_indent_stack_clone
+fn: lm_p0_indent_level_from_column (@: LmP0Document document; @: LmP0IndentStack stack; size_t: column; size_t: line; size_t: source_column; @: size_t out_level) int
+    size_t: top
+    size_t: n
+    @: size_t cell
+    n: stack\count
+    cell: stack\columns + (n - 1U)
+    top: lm_p0_indent_load(cell)
+    if: column = top
+        out_level[0]: n - 1U
+        return: 1
+    if: column > top
+        if: lm_p0_indent_stack_push(document, stack, column, line, source_column) = 0
+            return: 0
+        n: stack\count
+        out_level[0]: n - 1U
+        return: 1
+    while: stack\count > 0U
+        n: stack\count
+        cell: stack\columns + (n - 1U)
+        top: lm_p0_indent_load(cell)
+        if: top > column
+            stack\count: n - 1U
+            continue
+        if: top != column
+            c.lm_p0_set_diagnostic(document, 17, line, source_column, "unindent does not match any outer indentation level")
+            return: 0
+        out_level[0]: n - 1U
+        return: 1
+    c.lm_p0_set_diagnostic(document, 17, line, source_column, "unindent does not match any outer indentation level")
+    return: 0
+end: lm_p0_indent_level_from_column
+fn: main () int
+    return: 0
+end: main

@@ -3942,6 +3942,107 @@ end: external
 
 Invoke-DashFence
 
+function Invoke-IndentStack {
+    Invoke-Leaf "l2src\parser_indent_stack.lm2" "parser_indent_stack" 0 "lm_p0_indent_stack_push"
+    $lm1 = Join-Path $out "parser_indent_stack.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_indent_stack_push') { throw "indent_stack must mangle method symbols" }
+    if ($text -notmatch '@: LmP0Document l2_p') { throw "indent_stack missing @: LmP0Document formal" }
+    if ($text -notmatch '@: LmP0IndentStack l2_p') { throw "indent_stack missing @: LmP0IndentStack formal" }
+    if ($text -notmatch '\\columns') { throw "indent_stack missing columns field" }
+    if ($text -notmatch 'lm_own_resize') { throw "indent_stack missing lm_own_resize" }
+    if ($text -notmatch 'fn: l2_m10 ') { throw "indent_stack missing mangled indent_level_from_column" }
+
+    $cases = @"
+        @: LmP0Document d
+        @: LmP0Diagnostic diag
+        @: LmP0IndentStack st
+        size_t: level
+        int: ok
+        d: (cast: (@: LmP0Document) lm_own_new_zero(c.sizeof(c.LmP0Document)))
+        diag: (cast: (@: LmP0Diagnostic) lm_own_new_zero(c.sizeof(c.LmP0Diagnostic)))
+        if: d = 0 || diag = 0
+            return: 1
+        d\diagnostic: diag
+        st: lm_p0_indent_stack_new(d)
+        if: st = 0
+            return: 1
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 0U, 1U, 1U, @ level)
+        c.printf("%d %zu %d\n", ok, level, diag\code)
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 4U, 2U, 1U, @ level)
+        c.printf("%d %zu %d\n", ok, level, diag\code)
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 4U, 3U, 1U, @ level)
+        c.printf("%d %zu %d\n", ok, level, diag\code)
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 0U, 4U, 1U, @ level)
+        c.printf("%d %zu %d\n", ok, level, diag\code)
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 2U, 5U, 1U, @ level)
+        c.printf("%d %zu %d\n", ok, level, diag\code)
+        lm_p0_indent_stack_delete(st)
+        st: lm_p0_indent_stack_new(d)
+        if: st = 0
+            return: 1
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 0U, 1U, 1U, @ level)
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 4U, 2U, 1U, @ level)
+        level: 99U
+        ok: lm_p0_indent_level_from_column(d, st, 2U, 3U, 1U, @ level)
+        c.printf("%d %zu %d\n", ok, level, diag\code)
+        lm_p0_indent_stack_delete(st)
+"@
+    $refLm1 = Join-Path $out "indent_ref.lm1"
+    $refC = Join-Path $out "indent_ref.c"
+    $refExe = Join-Path $out "indent_ref.exe"
+    $refOut = Join-Path $out "indent_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed indent_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "indent_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'indent_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "indent_ref exe failed" }
+
+    $l2cases = $cases.Replace("lm_p0_indent_stack_new(", "l2_m6(unit, ").Replace("lm_p0_indent_level_from_column(", "l2_m10(unit, ").Replace("lm_p0_indent_stack_delete(", "l2_m7(unit, ")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "indent_stack L1 missing generated main return" }
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "indent_l2_drive.lm1"
+    $drvC = Join-Path $out "indent_l2_drive.c"
+    $drvExe = Join-Path $out "indent_l2_drive.exe"
+    $drvOut = Join-Path $out "indent_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed indent_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "indent_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'indent_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "indent_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "indent_stack mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-IndentStack
+
 "l2trans $gen ok"
 $suiteLog = Join-Path $log "l2trans_suite.log"
 $toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $l1trans)).Hash

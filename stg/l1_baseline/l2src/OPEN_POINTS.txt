@@ -1564,3 +1564,27 @@ ABI / remaining brace-mark scanner
     `@: int` formals already lower (unit_sz_intp). `@: local` actuals
     already lower (unit_addr_take / unit_addr_arg).
     Next: Document / indent stack. Live gen2 l1trans/printTree stay L1.
+
+Unit indent stack / indent_level_from_column (074800)
+-----------------------------------------------------
+Files: parser_indent_stack.lm2, l2trans.lm1, run_l2trans.ps1, OPEN_POINTS.txt
+Frozen REF: l1src/parser.lm1 indent stack family + indent_level_from_column
+(read-only).
+
+L2 now admits @: LmP0Document, @: LmP0IndentStack, const @(LmP0IndentStack)
+as p0.lm1.h migration types (13/14/15), @: void (16), IndentStack result,
+fields columns/count/capacity, lm_own_resize, c.memset/c.memcpy,
+c.sizeof(c.LmP0IndentStack)/c.size_t, and c.lm_p0_set_diagnostic (leaf
+definition emitted; candidate link must use parser's).
+
+Parse entry that uses this stack: lm_p0_indent_level_from_column
+(parser.lm1:1030), called from field/layout parse inside lm_p0_parse_bytes.
+Differential indent_l2_drive vs parser.lm1: col 0/4/4/0/2 then a second
+stack 0/4/2 unindent mismatch (diag 17). Live gen2 printTree/l1trans stay L1.
+
+Remaining L1 on the candidate parse path: lm_p0_parse_bytes / parse_file,
+document_init/destroy, scan_layout_prefix, field parse loop, empty-colon
+error 32, dump. Next bounded removal: candidate parser.lm1 copy with
+indent stack + indent_level_from_column defs stripped, linked to this L2
+unit so parse_bytes calls L2 indent_level_from_column. Frozen REF
+unmodified. Empty-colon vs old printTree.lm0 distinction stays.
