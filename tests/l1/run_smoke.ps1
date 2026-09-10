@@ -192,6 +192,13 @@ Invoke-CcRun "$obj\fn_close_fn.c" "$bin\fn_close_fn.exe" 0 $null
 Invoke-Translate "tests\l1\fn_close_ret.lm1" "$obj\fn_close_ret.c"
 Assert-CHas "$obj\fn_close_ret.c" "return a;"
 Invoke-CcRun "$obj\fn_close_ret.c" "$bin\fn_close_ret.exe" 0 $null
+Invoke-Translate "tests\l1\fn_close_ret_nested_if.lm1" "$obj\fn_close_ret_nested_if.c"
+Assert-CHas "$obj\fn_close_ret_nested_if.c" "return a;"
+Assert-CHas "$obj\fn_close_ret_nested_if.c" "if (a > 0)"
+Assert-CHas "$obj\fn_close_ret_nested_if.c" "if (a < 9)"
+Invoke-CcRun "$obj\fn_close_ret_nested_if.c" "$bin\fn_close_ret_nested_if.exe" 0 $null
+Invoke-TranslateFail "tests\l1\invalid_fn_ret_if_target.lm1" "$obj\invalid_fn_ret_if_target.c" "$log\invalid_fn_ret_if_target.err" "tail-cutter target is not valid for this receiver"
+Invoke-TranslateFail "tests\l1\invalid_layout_dedent_two_if.lm1" "$obj\invalid_layout_dedent_two_if.c" "$log\invalid_layout_dedent_two_if.err" "source level decrease must be one step unless a tail cutter is used"
 Invoke-Translate "tests\l1\fn_close_dash.lm1" "$obj\fn_close_dash.c"
 Assert-CHas "$obj\fn_close_dash.c" "int add("
 Invoke-CcRun "$obj\fn_close_dash.c" "$bin\fn_close_dash.exe" 0 $null

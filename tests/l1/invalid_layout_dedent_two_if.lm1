@@ -1,0 +1,6 @@
+fn: f (int: a) int
+    if: a > 0
+        if: a < 9
+            a: a + 1
+    a: a + 2
+return: a
