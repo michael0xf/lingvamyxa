@@ -3738,9 +3738,7 @@ fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char de
         return: 1
     if: mi >= 0 && oi >= 0 && l2_m_uses[l2_own_off(mi, oi)] != 0
         return: 0
-    child: l2_own_find(callee, nm)
-    if: child < 0
-        child: l2_own_first(nm)
+    child: l2_own_first(nm)
     if: child < 0 || l2_call_node = 0
         return: 1
     if: l2_bump_ind(ind, deep) != 0
@@ -4879,6 +4877,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
         return: 1
     l2_tn: 0
     l2_call_node: "unit"
+    if: l2_own_n != 0 && c.fputs("        @: Lmx l2_xp 0\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
     if: l2_emit_body(l2_main_body, -1, "        ") != 0
         c.fclose(l2_out)
         return: 1

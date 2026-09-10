@@ -1261,6 +1261,30 @@ end: external
 # supply source 10; asgn/typed/pre receiving 11 each. node\x first occurrence is inc_typed [0]=11, not source [2].
 if ($dTs -ne "0`n10`n11`n11`n11`n") { throw "typed vs asgn vs hidden-pre source isolation got $dTs" }
 
+Invoke-Leaf "l2src\tests\unit_asgn_fallback.lm2" "unit_asgn_fallback" 0 "inc"
+$fb = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_asgn_fallback.lm1"))).Replace("`r`n", "`n")
+$mainFb = [regex]::Match($fb, 'fn: main[\s\S]*?end: main').Value
+if ($mainFb -notmatch 'l2_m0\(') { throw "generated main must call first_x" }
+if ($mainFb -notmatch 'l2_m1\(') { throw "generated main must call inc with generated fallback" }
+if ($mainFb -notmatch 'lmx_branch_child\(unit, 0U\)') { throw "21.3 fallback must load node\[0]x, not the private destination" }
+$dFb = Invoke-SpliceDrive "unit_asgn_fallback" @"
+        @: Lmx f0 0
+        @: Lmx f1 0
+        f0: lmx_branch_child(unit, 0U)
+        f1: lmx_branch_child(unit, 1U)
+        c.printf("%d\n", lmx_char_value(f0\data))
+        c.printf("%d\n", lmx_char_value(f1\data))
+        f1\data: lmx_char_cell(30)
+        l2_m2(unit, 10)
+        c.printf("%d\n", lmx_char_value(f0\data))
+        c.printf("%d\n", lmx_char_value(f1\data))
+        return: 0
+    end: main
+end: external
+"@
+# generated first_x(); inc(): [0]x stays 20, private dest 21. caller 10 overrides: [0] stays 20, dest 11.
+if ($dFb -ne "20`n21`n20`n11`n") { throw "21.3 node[0]x fallback vs private dest got $dFb" }
+
 # C99 &&/|| yield int 0/1. Oracle is C, not this emitter.
 Invoke-Leaf "l2src\tests\unit_bool_and.lm2" "unit_bool_and" 1 "f"
 $ba = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_bool_and.lm1")))
