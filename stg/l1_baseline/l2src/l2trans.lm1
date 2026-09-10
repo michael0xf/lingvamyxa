@@ -2832,7 +2832,7 @@ fn: l2_bump_ind (const: @(char ind); @: char dest) int
     if: dest = 0 || ind = 0
         return: 1
     ln: c.strlen(ind)
-    if: ln + 5U >= 32U
+    if: ln + 5U >= 64U
         return: 1
     c.memcpy(dest, ind, ln)
     dest[ln]: 32
@@ -3561,7 +3561,7 @@ fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char de
     int: fi
     int: t
     int: child
-    c.array: [32]: char deep
+    c.array: [64]: char deep
     if: dest = 0 || callee < 0 || k < 0 || k >= l2_m_dyn[callee]
         return: 1
     nm: l2_dn(callee, k)
@@ -4069,7 +4069,7 @@ fn: l2_eval_and (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: cha
     @: LmP0Field nxt
     int: span
     int: rest
-    c.array: [32]: char deep
+    c.array: [64]: char deep
     c.array: [256]: char rhs
     if: dest = 0 || n <= 0
         return: 1
@@ -4111,7 +4111,7 @@ fn: l2_eval_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
     @: LmP0Field nxt
     int: span
     int: rest
-    c.array: [32]: char deep
+    c.array: [64]: char deep
     c.array: [256]: char rhs
     if: dest = 0 || n <= 0
         return: 1
@@ -4252,14 +4252,14 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     int: ix 1
     int: need_cut 0
     size_t: ln
-    c.array: [32]: char deep
-    c.array: [32]: char wdeep
+    c.array: [64]: char deep
+    c.array: [64]: char wdeep
     c.array: [64]: char wcond
     c.array: [64]: char wkeep
     if: body = 0
         return: 0
     ln: c.strlen(ind)
-    if: ln + 5U >= 32U
+    if: ln + 5U >= 64U
         return: 1
     c.memcpy(deep, ind, ln)
     deep[ln]: 32

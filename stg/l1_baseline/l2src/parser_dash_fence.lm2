@@ -7,24 +7,86 @@ end: lm_p0_is_line_break
 fn: lm_p0_scan_brace_mark_unchecked (const: @(char text); size_t: length; size_t: start) size_t
     size_t: i
     size_t: depth
+    size_t: prefixed_end
+    size_t: fence_end
+    size_t: line_break_width
+    size_t: step
+    size_t: qdone
+    char: ch
+    char: quote
+    char: fence_char
+    char: nxt
     i: start
     depth: 0U
     while: i < length
-        if: text[i] = 35
+        ch: text[i]
+        fence_end: i
+        if: lm_p0_index_is_line_start(text, i) != 0 && (ch = 61 || ch = 42)
+            fence_char: ch
+            fence_end: lm_p0_skip_fence_block_unchecked(text, length, i, fence_char)
+        if: fence_end > i
+            i: fence_end
+            continue
+        if: lm_p0_starts_python_string(text, length, i) != 0
+            fence_end: i
+            i: lm_p0_skip_python_string_unchecked(text, length, i)
+            if: i = fence_end
+                i: i + 1U
+            continue
+        prefixed_end: lm_p0_scan_c_prefixed_quote_token(text, length, i)
+        if: prefixed_end > i
+            i: prefixed_end
+            continue
+        if: ch = 39 && lm_p0_starts_python_string(text, length, i) = 0
+            fence_end: i
+            i: lm_p0_scan_c_char_token(text, length, i)
+            if: i = fence_end
+                i: i + 1U
+            continue
+        if: ch = 34 || ch = 96
+            quote: ch
+            i: i + 1U
+            qdone: 0U
+            while: i < length && qdone = 0U
+                ch: text[i]
+                line_break_width: 0U
+                step: 1U
+                fence_end: i + 1U
+                if: quote = 34 && ch = 92 && i + 1U < length
+                    line_break_width: lm_p0_line_break_width_at(text, length, fence_end)
+                if: quote = 34 && ch = 92 && line_break_width > 0U
+                    step: 1U + line_break_width
+                if: quote = 34 && ch = 92 && line_break_width = 0U && i + 1U < length
+                    step: 2U
+                if: quote = 34 && ch = 92
+                    i: i + step
+                    continue
+                nxt: 0
+                if: quote = 96 && ch = 96 && i + 1U < length
+                    nxt: text[i + 1U]
+                if: quote = 96 && ch = 96 && nxt = 96
+                    i: i + 2U
+                    continue
+                i: i + 1U
+                qdone: 0U
+                if: ch = quote
+                    qdone: 1U
+                qdone: qdone
+            continue
+        if: ch = 35
             while: i < length && text[i] != 10 && text[i] != 13
                 i: i + 1U
             continue
-        if: text[i] = 123
+        if: ch = 123
             depth: depth + 1U
             i: i + 1U
             continue
-        if: text[i] = 125
+        if: ch = 125
             i: i + 1U
-            if: depth = 0U
-                continue
-            depth: depth - 1U
-            if: depth = 0U
+            if: depth = 1U
                 return: i
+            if: depth > 1U
+                depth: depth - 1U
             continue
         i: i + 1U
     return: 0U
@@ -60,6 +122,222 @@ fn: lm_p0_dash_fence_status (const: @(char text); size_t: length; @: size_t out_
         return: 3
     return: 1
 end: lm_p0_dash_fence_status
+fn: lm_p0_index_is_line_start (const: @(char text); size_t: index) int
+    if: index = 0U
+        return: 1
+    return: text[index - 1U] = 10 || text[index - 1U] = 13
+end: lm_p0_index_is_line_start
+fn: lm_p0_find_physical_line_end (const: @(char source); size_t: length; size_t: start) size_t
+    size_t: i
+    char: ch
+    i: start
+    while: i < length
+        ch: source[i]
+        if: lm_p0_is_line_break(ch) != 0
+            return: i
+        i: i + 1U
+    return: i
+end: lm_p0_find_physical_line_end
+fn: lm_p0_line_rest_is_horizontal_space (const: @(char source); size_t: start; size_t: end) int
+    size_t: i
+    char: ch
+    i: start
+    while: i < end
+        ch: source[i]
+        if: lm_p0_is_horizontal_space(ch) = 0
+            return: 0
+        i: i + 1U
+    return: 1
+end: lm_p0_line_rest_is_horizontal_space
+fn: lm_p0_line_break_width_at (const: @(char source); size_t: length; size_t: index) size_t
+    if: index >= length
+        return: 0U
+    if: source[index] = 13
+        if: index + 1U < length && source[index + 1U] = 10
+            return: 2U
+        return: 1U
+    if: source[index] = 10
+        return: 1U
+    return: 0U
+end: lm_p0_line_break_width_at
+fn: lm_p0_match_block_string_fence_line (const: @(char source); size_t: line_start; size_t: line_end; size_t: eq_count) int
+    size_t: i
+    char: ch
+    if: eq_count < 3U || eq_count > 80U || line_start + eq_count > line_end
+        return: 0
+    i: 0U
+    while: i < eq_count
+        ch: source[line_start + i]
+        if: ch != 61
+            return: 0
+        i: i + 1U
+    i: line_start + eq_count
+    while: i < line_end
+        ch: source[i]
+        if: lm_p0_is_horizontal_space(ch) = 0
+            return: 0
+        i: i + 1U
+    return: 1
+end: lm_p0_match_block_string_fence_line
+fn: lm_p0_match_raw_comment_fence_line (const: @(char source); size_t: line_start; size_t: line_end; size_t: star_count) int
+    size_t: i
+    size_t: rest
+    char: ch
+    if: star_count < 3U || star_count > 80U || line_start + star_count > line_end
+        return: 0
+    i: 0U
+    while: i < star_count
+        ch: source[line_start + i]
+        if: ch != 42
+            return: 0
+        i: i + 1U
+    rest: line_start + star_count
+    return: lm_p0_line_rest_is_horizontal_space(source, rest, line_end)
+end: lm_p0_match_raw_comment_fence_line
+fn: lm_p0_skip_fence_block_unchecked (const: @(char text); size_t: length; size_t: start; char: fence_char) size_t
+    size_t: fence_count
+    size_t: line_end
+    size_t: scan_start
+    size_t: current_end
+    size_t: width
+    size_t: hit
+    size_t: eq_ok
+    size_t: star_ok
+    char: ch
+    line_end: lm_p0_find_physical_line_end(text, length, start)
+    fence_count: 0U
+    while: start + fence_count < line_end && text[start + fence_count] = fence_char
+        fence_count: fence_count + 1U
+    if: fence_count < 3U || fence_count > 80U
+        return: start
+    eq_ok: 0U
+    star_ok: 0U
+    if: fence_char = 61 && lm_p0_match_block_string_fence_line(text, start, line_end, fence_count) != 0
+        eq_ok: 1U
+    if: fence_char = 61 && eq_ok = 0U
+        return: start
+    if: fence_char != 61 && fence_char != 42
+        return: start
+    if: fence_char = 42 && lm_p0_match_raw_comment_fence_line(text, start, line_end, fence_count) != 0
+        star_ok: 1U
+    if: fence_char = 42 && star_ok = 0U
+        return: start
+    scan_start: line_end
+    if: scan_start < length
+        scan_start: scan_start + lm_p0_line_break_width_at(text, length, scan_start)
+    while: scan_start <= length
+        current_end: lm_p0_find_physical_line_end(text, length, scan_start)
+        hit: 0U
+        width: 0U
+        if: fence_char = 61 && lm_p0_match_block_string_fence_line(text, scan_start, current_end, fence_count) != 0
+            hit: 1U
+        if: fence_char = 42 && lm_p0_match_raw_comment_fence_line(text, scan_start, current_end, fence_count) != 0
+            hit: 1U
+        if: hit != 0U && current_end < length
+            width: lm_p0_line_break_width_at(text, length, current_end)
+        if: hit != 0U
+            return: current_end + width
+        if: current_end = length
+            return: length
+        scan_start: current_end + lm_p0_line_break_width_at(text, length, current_end)
+    return: length
+end: lm_p0_skip_fence_block_unchecked
+fn: lm_p0_starts_python_string (const: @(char text); size_t: length; size_t: index) int
+    char: py_q
+    if: index + 2U >= length
+        return: 0
+    py_q: text[index]
+    if: py_q != 34 && py_q != 39
+        return: 0
+    return: text[index + 1U] = py_q && text[index + 2U] = py_q
+end: lm_p0_starts_python_string
+fn: lm_p0_find_python_string_end (const: @(char text); size_t: length; size_t: start) size_t
+    char: py_q
+    size_t: py_i
+    size_t: py_run
+    if: lm_p0_starts_python_string(text, length, start) = 0
+        return: start
+    py_q: text[start]
+    py_i: start + 3U
+    while: py_i < length
+        if: text[py_i] = py_q
+            py_run: 1U
+            while: py_i + py_run < length && text[py_i + py_run] = py_q
+                py_run: py_run + 1U
+            if: py_run = 3U
+                return: py_i + 3U
+            py_i: py_i + py_run
+            continue
+        py_i: py_i + 1U
+    return: length
+end: lm_p0_find_python_string_end
+fn: lm_p0_skip_python_string_unchecked (const: @(char text); size_t: length; size_t: start) size_t
+    return: lm_p0_find_python_string_end(text, length, start)
+end: lm_p0_skip_python_string_unchecked
+fn: lm_p0_scan_c_quoted_token (const: @(char text); size_t: end_index; size_t: quote_index) size_t
+    size_t: cq_i
+    size_t: cq_w
+    size_t: cq_n
+    char: cq_q
+    char: cq_ch
+    if: quote_index >= end_index
+        return: quote_index
+    cq_ch: text[quote_index]
+    if: cq_ch != 39 && cq_ch != 34
+        return: quote_index
+    cq_q: cq_ch
+    cq_i: quote_index + 1U
+    while: cq_i < end_index
+        cq_ch: text[cq_i]
+        cq_w: 0U
+        cq_n: cq_i + 1U
+        if: cq_ch = 92 && cq_i + 1U < end_index
+            cq_w: lm_p0_line_break_width_at(text, end_index, cq_n)
+        if: cq_ch = 92 && cq_i + 1U < end_index && cq_w > 0U
+            cq_i: cq_i + (1U + cq_w)
+            continue
+        if: cq_ch = 92 && cq_i + 1U < end_index
+            cq_i: cq_i + 2U
+            continue
+        if: cq_ch = 92
+            cq_i: cq_i + 1U
+            continue
+        if: cq_ch = cq_q
+            return: cq_i + 1U
+        if: lm_p0_is_line_break(cq_ch) != 0
+            return: quote_index + 1U
+        cq_i: cq_i + 1U
+    return: quote_index + 1U
+end: lm_p0_scan_c_quoted_token
+fn: lm_p0_starts_c_prefixed_quote (const: @(char text); size_t: end_index; size_t: start) int
+    char: q
+    if: start + 1U >= end_index
+        return: 0
+    if: text[start] != 76
+        return: 0
+    q: text[start + 1U]
+    return: q = 39 || q = 34
+end: lm_p0_starts_c_prefixed_quote
+fn: lm_p0_scan_c_char_token (const: @(char text); size_t: end_index; size_t: start) size_t
+    char: cc_ch
+    if: start >= end_index
+        return: start
+    cc_ch: text[start]
+    if: cc_ch != 39
+        return: start
+    return: lm_p0_scan_c_quoted_token(text, end_index, start)
+end: lm_p0_scan_c_char_token
+fn: lm_p0_scan_c_prefixed_quote_token (const: @(char text); size_t: end_index; size_t: start) size_t
+    size_t: quoted_end
+    size_t: qstart
+    if: lm_p0_starts_c_prefixed_quote(text, end_index, start) = 0
+        return: start
+    qstart: start + 1U
+    quoted_end: lm_p0_scan_c_quoted_token(text, end_index, qstart)
+    if: quoted_end > start + 2U
+        return: quoted_end
+    return: start + 1U
+end: lm_p0_scan_c_prefixed_quote_token
 fn: main () int
     return: 0
 end: main

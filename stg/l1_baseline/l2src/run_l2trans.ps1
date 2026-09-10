@@ -978,6 +978,10 @@ end: external
 "@
 if ($dga -ne "65`n65`n66`n66`n") { throw "grow must keep n00 alias on under-construction row: $dga" }
 
+Invoke-Leaf "l2src\tests\unit_own_same_name.lm2" "unit_own_same_name" 0 "left"
+$ownSame = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own_same_name.lm1")))
+if ($ownSame.IndexOf("l2_q0: 1U") -lt 0) { throw "unit_own_same_name left missing i=1" }
+if ($ownSame.IndexOf("l2_q0: 2U") -lt 0) { throw "unit_own_same_name right missing i=2" }
 Invoke-Leaf "l2src\tests\unit_own_meth.lm2" "unit_own_meth" 0 "m0"
 $om = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own_meth.lm1"))).Replace("`r`n", "`n")
 if ($om -notmatch 'fn: l2_m4') { throw "unit_own_meth missing 5th method" }
@@ -3274,60 +3278,124 @@ function Invoke-DashFence {
         n: 0U
         st: lm_p0_dash_fence_status("---", 3U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("----", 4U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("--", 2U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("-", 1U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("", 0U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("$d80", 80U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("$d81", 81U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("---   ", 6U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("---`t", 4U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("---#", 4U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("--- # x", 7U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("---x", 4U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("--- x", 5U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("--- {x}", 7U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("--- {x} y", 9U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("--- {x", 6U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("--- {}", 6U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
         n: 0U
         st: lm_p0_dash_fence_status("--- {a {b}}", 11U, @ n)
         c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("""--- {"{"}""", 9U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("""--- {"}"}""", 9U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status('''--- {"""{"""}''', 13U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {'''{'''}", 13U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {'}'}", 9U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("""--- {#}`n}""", 8U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("""--- {
+===
+}
+===
+}""", 16U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("""--- {
+***
+}
+***
+}""", 16U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
+        n: 0U
+        st: lm_p0_dash_fence_status("""--- {`r`n}""", 8U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        c.fflush(c.stdout)
 "@
     # NONE=0 VALID=1 TOO_LONG=2 TRAILING=3 ; count is dash run length
-    $want = "1 3`n1 4`n0 2`n0 1`n0 0`n1 80`n2 81`n1 3`n1 3`n1 3`n1 3`n3 3`n3 3`n1 3`n3 3`n3 3`n1 3`n1 3`n"
+    # Trailing 9 lines: quoted/triple/char/comment/fence/newline vs parser.lm1 REF.
+    $want = "1 3`n1 4`n0 2`n0 1`n0 0`n1 80`n2 81`n1 3`n1 3`n1 3`n1 3`n3 3`n3 3`n1 3`n3 3`n3 3`n1 3`n1 3`n1 3`n1 3`n1 3`n1 3`n1 3`n3 3`n3 3`n3 3`n3 3`n"
 
     $refLm1 = Join-Path $out "dash_ref.lm1"
     $refC = Join-Path $out "dash_ref.c"
@@ -3374,8 +3442,36 @@ end: external
     & $l1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed dash_l2_drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "dash_l2_drive.gcc.log")
-    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'dash_l2_drive.err')`""
-    if ($LASTEXITCODE -ne 0) { throw "dash_l2_drive exe failed" }
+    $drvErr = Join-Path $out "dash_l2_drive.err"
+    $drvEcFile = Join-Path $out "dash_l2_drive.exitcode"
+    $drvFull = Join-Path (Get-Location) $drvExe
+    $drvOutFull = Join-Path (Get-Location) $drvOut
+    $drvErrFull = Join-Path (Get-Location) $drvErr
+    $drvEcFull = Join-Path (Get-Location) $drvEcFile
+    Remove-Item -LiteralPath $drvEcFile -Force -ErrorAction SilentlyContinue
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $drvFull
+    $psi.WorkingDirectory = (Get-Location).Path
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $drvProc = New-Object System.Diagnostics.Process
+    $drvProc.StartInfo = $psi
+    [void]$drvProc.Start()
+    $outTask = $drvProc.StandardOutput.ReadToEndAsync()
+    $errTask = $drvProc.StandardError.ReadToEndAsync()
+    if (-not $drvProc.WaitForExit(20000)) {
+        try { $drvProc.Kill() } catch { }
+        [void]$drvProc.WaitForExit(5000)
+        throw "dash_l2_drive timed out after 20s pid=$($drvProc.Id). preserved hang_042800/"
+    }
+    $drvProc.WaitForExit()
+    $drvEc = $drvProc.ExitCode
+    Set-Content -LiteralPath $drvEcFile -Value "$drvEc" -Encoding ascii
+    [System.IO.File]::WriteAllText($drvOutFull, $outTask.Result.Replace("`r`n", "`n"))
+    [System.IO.File]::WriteAllText($drvErrFull, $errTask.Result)
+    if ($null -eq $drvEc) { throw "dash_l2_drive finished but ExitCode was not available pid=$($drvProc.Id)" }
+    if ($drvEc -ne 0) { throw "dash_l2_drive exe failed exit=$drvEc" }
     $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
     $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
     if ($a -ne $want) { throw "dash_fence REF unexpected`nREF:`n$a`nWANT:`n$want" }

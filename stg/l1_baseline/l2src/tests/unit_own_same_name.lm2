@@ -1,0 +1,13 @@
+fn: left () int
+    size_t: i
+    i: 1U
+    return: 0
+end: left
+fn: right () int
+    size_t: i
+    i: 2U
+    return: 0
+end: right
+fn: main () int
+    return: 0
+end: main
