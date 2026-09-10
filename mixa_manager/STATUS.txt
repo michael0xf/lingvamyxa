@@ -64,6 +64,11 @@ without inventing replacements. Then implement the PROCESS_SEAM for FIRST_VERSIO
 mode0.1.2: command execution with nonblocking output into a file-backed console,
 cursor/character wrap/editing and one F1 Help button. No terminal emulation.
 Independent process work need not wait for a pointer-font product decision.
+Concurrency is not deferred: implement jobs and asynchronous system-event
+handoffs through the Message boundary (PROCESS_SEAM6). Review the current
+prototype's ingress/host gaps before enabling parallel work; do not bridge them
+with private synchronization in C. Pure single-owner operations can proceed
+independently while that boundary is integrated.
 
 Full file-manager features come later under the ClearShell contract, including
 lazy selection-aware copy/move and original path navigation. They are not an

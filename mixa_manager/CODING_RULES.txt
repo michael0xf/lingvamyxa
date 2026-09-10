@@ -55,6 +55,15 @@ translator NOTHING. It produces no requirement, no evidence, no pressure on the
 design. It is invisible to the very effort this code exists to inform.
 
 
+0.2. Concurrency stays visible as Message
+
+All application cross-thread coordination is through Message (PROCESS_SEAM6).
+Isolate C/OS fragments; no private mutex/atomic/shared-flag synchronization or
+parallel application state hidden there. Include system callbacks and timers
+in the ownership review, not just explicit worker creation. A required host
+ingress capability belongs at the Message runtime boundary and must be reported
+if missing. This rule applies to L1 now, not only to the future L2 version.
+
 1. const on everything that only reads
 
 Qualify pointer parameters wherever their referenced data is only read. Apply

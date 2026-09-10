@@ -108,6 +108,31 @@ so there is nothing to drop; see FILE_SEAM section 2.
 
 6. Background jobs become MESSAGES, and ClearShell already has the right shape
 
+Mandatory application architecture, reconfirmed2026-09-10: concurrent work and
+cross-thread coordination use Message, not private synchronization inside C
+fragments. Each live Message owns its arena and executes its turns serially;
+different Messages may run concurrently. C/OS adapters are isolated boundaries,
+not owners of a parallel shared-mutable application model.
+
+No application mutexes, atomics, shared cancellation flags or custom synchronized
+queues hidden in C headers/adapters. The Message runtime/host boundary owns
+cross-thread delivery; app adapters use that boundary instead of recreating it.
+Ordinary calls within one Message remain ordinary calls. They must not smuggle
+another worker's mutable state into the caller's arena.
+
+Inventory SYSTEM event sources as well as explicitly started workers: window
+and input callbacks, timers, filesystem notifications, process I/O/completion,
+and other platform callbacks used by the port. Record each source's execution
+context, owning Message, payload lifetime and close/late-event policy. A foreign
+callback hands off an owned/copyable event through Message ingress; it does not
+mutate the UI graph concurrently. Keep thread-affine OS handles with their owner.
+An OS callback is not automatically a new Message or a new native thread.
+
+This is required NOW for the L1 application so the later L2 port preserves the
+architecture. A serialized prototype is useful for tests but is not evidence
+that concurrent ingress is implemented safely. Missing Message host operations
+are explicit integration tasks, not permission to add a temporary C lock scheme.
+
 Instruction from the language owner: shape ClearShell's threads as separate
 Messages with inbox and outbox. Worth knowing why that is a first: the
 translator - parser, trans, make, finalize, buildCore - is ONE root Message, so
@@ -208,8 +233,9 @@ stg/l1_baseline/l2src/lmx_message.h. It exposes lmx_msg_create/send/stop,
 poll/drive and other participant operations. It is a serialized in-process
 number/bytes prototype, not proof that this app uses it or that the full L2
 pipeline is self-hosted. Do not make the app build depend on the mutable core
-checkout without a reviewed, versioned integration seam. Ordinary calls in
-the current app remain an implementation stage, not the final job model.
+checkout without a reviewed, versioned integration seam. Existing ordinary calls
+describe the current single-owner stage only. New concurrent jobs must use the
+Message boundary in section6; do not postpone it until after the L2 rewrite.
 
 7.1. Conceptual operations (not literal source syntax or exact C prototypes)
 

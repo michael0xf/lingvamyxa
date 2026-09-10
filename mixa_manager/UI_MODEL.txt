@@ -117,6 +117,10 @@ goes.
       is one per list, so N lists have N of them.
 
 The header is STICKY: scrolling the list up and down does not carry it away.
+Confirmed2026-09-10: neither application nor per-list button panels leave their
+vertical anchor when list contents scroll. EVERY button panel has its OWN
+horizontal scroll position, including each list's header. Scrolling one panel's
+buttons does not scroll another panel or the shared row of list-windows.
 That is already true in ClearShell and it is kept deliberately - a list whose
 own buttons scroll out of reach is a list you have to scroll back to before you
 can act on it.
@@ -282,11 +286,11 @@ bSel uses 255. The c* text colours generally use 240, not panel bodies. This is
 evidence for putting alpha on the CELL rather than on the surface - a per-surface
 constant could not express a translucent panel carrying an opaque selected row.
 
-The CURRENT PORT renderer draws glyphs fully opaque, as DRAWING.txt requires.
-That is distinct from ClearShell's ordinary text alpha240 (pairs in5.4): do not
-claim opaque text is an exact copy of the source. Owner confirmation on whether
-to retain this glyph-only difference was requested on2026-09-10. Background
-colours and their individual opacity are to be preserved, not made uniform.
+The owner CONFIRMED on2026-09-10: glyphs are fully opaque (alpha255); only
+backgrounds may be translucent, as DRAWING.txt requires. Preserve source text
+RGB but use alpha255 instead of ordinary ClearShell text alpha240. The source
+pairs in5.4 are reference values, not an instruction to make letters translucent.
+Background colours and their individual opacity are preserved, not made uniform.
 
 
 4. What is deliberately not decided here
@@ -438,7 +442,7 @@ back the instant you release it.
 
 This is one rule and it applies wherever there is a highlight and a viewport:
 
-    the button panel      horizontally, as above
+    EACH button panel     horizontally, in its OWN independent viewport
     a single list         vertically, in its own bounds and its own scrollbar
     the ROW of lists      horizontally, on the one shared scrollbar - moving the
                           highlight into a list that is off to the side scrolls

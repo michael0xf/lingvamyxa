@@ -9,6 +9,11 @@ is the implemented ABI; STATUS.txt records verified versions and remaining work.
 Sections1-8 retain the earlier milestone rationale, not alternate current
 signatures: caller-owned open storage and the no-window milestone are obsolete.
 
+Concurrency contract: PROCESS_SEAM6 applies to system callbacks as well as jobs.
+The single-root pump described below is a prototype stage, not authorization for
+private C synchronization. Foreign events cross Message ingress; adapters do not
+concurrently modify another Message's arena. OS thread affinity stays explicit.
+
 Follows Mixa_Manager_DISTRIBUTION_MODEL.txt section 5. The initial design fixed
 the surface before platform code was written, because the seam is the whole
 porting cost: every target reimplements this and nothing else.
