@@ -1,0 +1,136 @@
+Mixa Manager - where the work stands
+====================================
+Written 2026-09-10 03:20 local, at the end of a long design session. Read this
+first; it is the handoff, not a summary of the design. The design is in the
+other documents and README.txt says which one owns what.
+
+
+1. The state in one paragraph
+
+The specification moved a long way today and the code has not caught up. Every
+decision below is committed and pushed. The working tree is RED and that is
+expected: mixa_backend.h changed under an implementation that is mid-flight.
+grok_bot is writing Task 25 and has acknowledged every change since. Nothing is
+blocked on Mikhail.
+
+
+2. What is committed, newest first
+
+    95381df  mouse: eight arrows, chosen by angle, it spins
+    8d68c4b  everything discussed goes into the specification (standing rule)
+    04398cf  the cell is not the font - ours, and always EVEN
+    6dec287  three grids: text, UI inset by half a cell, mouse on the half step
+    caf559e  highlight section trimmed to the character set
+    8a63ca0  highlight is the double box frame, which mixa_draw already emits
+    ae6b335  mouse pointer, first version (superseded by 95381df)
+    f33dea4  highlight as a tile family (WRONG, superseded by 8a63ca0)
+    8f0f52c  panel-scroll driver recorded as a delta
+    f30e68e  the highlight is what scrolls the button panel
+    398e7ec  the cursor lives UNDER the panel
+    e3b8d4e  the console is file-anchored
+    eced32e  what the first run looks like
+    f2295ec  the two layers do not share a layout
+    a696d0c  wide button = 8 cells (WRONG, superseded by 3540886)
+    3540886  the eight characters are the drawing set, not a width
+    6b75c35  backend dispatch table design + mixa_manager/bin
+
+Two of those are recorded mistakes rather than history to be proud of, and both
+are marked in the documents that carry them. They are listed here so that a
+reader of the log does not take a superseded commit for current.
+
+
+3. The working tree, and whose it is
+
+MODIFIED - grok_bot, Task 25 in flight. Do not commit, do not revert:
+    mixa_backend_headless.{h,lm1}   mixa_backend_win32.{h,lm1}
+    mixa_composite.lm1  mixa_composite_glyphs.lm1  mixa_pump.lm1
+    run_mixa.ps1
+    tests/mixa_backend_selftest.lm1  tests/mixa_backend_win32_selftest.lm1
+    tests/mixa_pump_selftest.lm1
+
+NEW - grok_bot, Tasks 24 and 25:
+    mixa_backend_table.lm1   mixa_backend_tables.c
+    mixa_tiles.{h,lm1}       mixa_buttons.{h,lm1}
+    tests/mixa_backend_table_selftest.lm1
+    tests/mixa_tiles_selftest.lm1  tests/mixa_buttons_selftest.lm1
+
+Outside mixa_manager and NOT ours: stg/l1_baseline/l2src/*, tests/return_*.lmx.
+
+Task 24 (tiles and buttons) was green before the seam changed. It is not
+committed because it is entangled with Task 25 in the same files. The first
+green run of Task 25 is the acceptance point for both.
+
+
+4. The ticket queue with grok_bot
+
+    Task 25  dispatch table            IN FLIGHT
+             plus: fold the half-cell mouse unit into the poll path while he is
+             in it. He was told to say so if that turns out to be the wrong call.
+    Task 26  highlight = one moving double box frame over the element, keeping
+             cell backgrounds. The real work is a general glyph-only draw
+             primitive; every other part already exists.
+    Task 27  the spinning eight-arrow pointer.
+
+Then: the process seam, then the first version (FIRST_VERSION.txt, mode 0.1.2).
+
+He has acknowledged 24, 25, 26 twice over, 27, the seam change and the even-cell
+rule. His heartbeat was alive at 03:04.
+
+
+5. Open, deliberately - do NOT close these in code
+
+    POINTER CONTRAST. A filled white arrow over a light panel is invisible and
+      these glyphs have no outline. Build it, look at it, then ask. UI_MODEL 6.3.
+    MISSING GLYPH, and U+2B95 specifically - the rightwards arrow was added to
+      Unicode later than its three siblings and is the likeliest of the eight to
+      be absent. Report per platform before designing a fallback. UI_MODEL 6.3.
+    TWO VIEWPORTS AT ONCE. Moving the highlight into a list that is off to the
+      side must scroll the ROW horizontally and the LIST vertically. Both follow
+      from one rule but they are two scrolls and the order is visible to the
+      user. UI_MODEL 5.7.2.
+    WHICH CELLS a highlight frame costs on a SQUARE button. Answered in
+      principle - it overlays, nothing is displaced - but it wants looking at.
+      DRAWING 5.4.2.
+
+
+6. Found today and not yet reported upstream
+
+L1 cannot spell `const T *const *` as a return type: nested const in the paren
+form yields `const const T **`. grok_bot worked around it with a 34-line
+hand-written C file, mixa_backend_tables.c, holding the registry array, and
+documented the reason at the top of it.
+
+Two things follow and neither is done:
+    the workaround is hand-written C inside mixa_manager, where until now only
+      HEADERS were hand-written. That is a real exception to the hermeticity the
+      distribution model asks for and it should be either accepted in writing or
+      removed once L1 can express the type.
+    it may be an L1 defect worth reporting - but verify against l1src before
+      reporting anything, because a "defect" the self-hosted translator relies on
+      is load-bearing.
+
+
+7. Standing constraints, unchanged
+
+    the specification is mixa_manager/. Everything discussed goes into it,
+      immediately, and is committed before it is ticketed. README.txt has the
+      file list and the standing rule.
+    do not rebuild or replace gen2, do not run stg/l1_baseline/gate.ps1 for
+      app-only work, do not touch l1src, tests/l1, L1_spec, stg/l1_baseline
+      sources, or another agent's working files.
+    never edit mixa_manager/clearshell_reference/ - it is a snapshot of
+      Mikhail's other project and the source of truth for the port.
+    binaries are not committed. A runnable artefact is COPIED to
+      mixa_manager/bin, whose contents are untracked.
+    the stable translator is stg/l1_baseline/build/l1trans/gen2/l1trans.exe,
+      SHA256 65D5A5ED as of 01:37 today. It is NOT the same binary as
+      build/l1trans/gen2 in the root tree - probing the wrong one cost a set of
+      wrong attributions earlier today.
+
+
+8. If you are the next session
+
+Read README.txt, then this file, then the document that owns whatever you are
+about to touch. Check work_chat/claude/inbox for Codex and
+work_chat/grok_bot/outbox for grok_bot before assuming anything here is current
+- both were live when this was written.
