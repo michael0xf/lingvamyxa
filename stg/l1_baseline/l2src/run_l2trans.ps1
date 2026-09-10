@@ -986,6 +986,7 @@ if ($dga -ne "65`n65`n66`n66`n") { throw "grow must keep n00 alias on under-cons
 
 Invoke-Leaf "l2src\tests\unit_own_same_name.lm2" "unit_own_same_name" 0 "left"
 $ownSame = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own_same_name.lm1")))
+# Typed own decls of the same name on one unit share occurrence [0] (deliberate shared field).
 if ($ownSame.IndexOf("l2_q0: 1U") -lt 0) { throw "unit_own_same_name left missing i=1" }
 if ($ownSame.IndexOf("l2_q0: 2U") -lt 0) { throw "unit_own_same_name right missing i=2" }
 Invoke-Leaf "l2src\tests\unit_own_meth.lm2" "unit_own_meth" 0 "m0"
@@ -1013,7 +1014,7 @@ if ($bindFn.IndexOf("l2_p2_0") -lt 0) { throw "aliased own must use the paramete
 if ($bindFn.IndexOf("l2_q0_dirty: 1") -lt 0) { throw "aliased own assign after bind must dirty" }
 if ($bindFn -notmatch 'l2_p2_0: 1') { throw "assign before own-decl must write the parameter" }
 $passFn = [regex]::Match($bg, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
-if ($passFn.IndexOf("l2_q0_dirty") -lt 0) { throw "assignment-as-declaration of a known-type param must dirty" }
+if ($passFn -notmatch 'l2_q1_dirty') { throw "pass assignment-bind is this method's field, not the unit-shared quote" }
 if ($passFn.IndexOf("l2_p1_0: 65") -lt 0) { throw "parameter assignment-as-declaration must still write the parameter" }
 $dBind = Invoke-SpliceDrive "unit_bind" @"
         @: Lmx f 0
@@ -1042,7 +1043,7 @@ $dBind = Invoke-SpliceDrive "unit_bind" @"
     end: main
 end: external
 "@
-if ($dBind -ne "65`n65`n65`n66`n77`n66`n65`n") { throw "same-name bind graph got $dBind" }
+if ($dBind -ne "0`n0`n65`n66`n77`n66`n65`n") { throw "same-name bind graph got $dBind" }
 
 Invoke-Leaf "l2src\tests\unit_bind_sz.lm2" "unit_bind_sz" 0 "m"
 $szg = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_bind_sz.lm1")))
@@ -1068,11 +1069,13 @@ if ($incFn.IndexOf("l2_q0_dirty: 1") -lt 0) { throw "inc x: x+1 must dirty after
 if ($incFn -notmatch 'l2_p0_0:') { throw "inc must write the known-type parameter, not a renamed local" }
 if ($incFn.IndexOf("&l2_q") -ge 0) { throw "inc must not take address of own cache" }
 $passA = [regex]::Match($ag, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
-if ($passA.IndexOf("l2_q0_dirty") -lt 0) { throw "pass x: 65 must bind/dirty without a prior char: x" }
+if ($passA -notmatch 'l2_q1_dirty') { throw "pass x: 65 must bind/dirty its own field, not inc's" }
 $dAsgn = Invoke-SpliceDrive "unit_asgn_bind" @"
         @: Lmx src 0
         @: Lmx fs 0
-        @: Lmx fr 0
+        @: Lmx fi 0
+        @: Lmx fp 0
+        @: Lmx fh 0
         src: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))
         if: src = 0
             return: 1
@@ -1080,24 +1083,24 @@ $dAsgn = Invoke-SpliceDrive "unit_asgn_bind" @"
         if: lmx_branch_open(src, 1U) != 0
             return: 1
         fs: lmx_branch_child(src, 0U)
-        fr: lmx_branch_child(unit, 0U)
-        if: fs = 0 || fr = 0
+        fi: lmx_branch_child(unit, 0U)
+        fp: lmx_branch_child(unit, 1U)
+        fh: lmx_branch_child(unit, 2U)
+        if: fs = 0 || fi = 0 || fp = 0 || fh = 0
             return: 1
         fs\data: lmx_char_cell(10)
         l2_m0(unit, 10)
-        c.printf("%d\n", lmx_char_value(fr\data))
+        c.printf("%d\n", lmx_char_value(fi\data))
         c.printf("%d\n", lmx_char_value(fs\data))
-        fr\data: lmx_char_cell(0)
         l2_m1(unit, 65)
-        c.printf("%d\n", lmx_char_value(fr\data))
+        c.printf("%d\n", lmx_char_value(fp\data))
         c.printf("%d\n", lmx_char_value(fs\data))
-        fr\data: lmx_char_cell(0)
         l2_m3(unit, 10)
-        c.printf("%d\n", lmx_char_value(fr\data))
+        c.printf("%d\n", lmx_char_value(fh\data))
         c.printf("%d\n", lmx_char_value(fs\data))
-        fr\data: lmx_char_cell(20)
-        c.printf("%d\n", l2_m2(unit, (cast: (char) lmx_char_value(fr\data))))
-        c.printf("%d\n", lmx_char_value(fr\data))
+        fh\data: lmx_char_cell(20)
+        c.printf("%d\n", l2_m2(unit, (cast: (char) lmx_char_value(fh\data))))
+        c.printf("%d\n", lmx_char_value(fh\data))
         c.printf("%d\n", lmx_char_value(fs\data))
         return: 0
     end: main
@@ -1140,26 +1143,30 @@ $br = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "u
 $afterIf = [regex]::Match($br, 'fn: l2_m0[\s\S]*?end: l2_m0').Value
 if ($afterIf -notmatch 'if: l2_q0_from = 0') { throw "branched bind must acquire backing at runtime, not only at first linear assignment" }
 $dBr = Invoke-SpliceDrive "unit_asgn_branch" @"
-        @: Lmx f 0
-        f: lmx_branch_child(unit, 0U)
-        f\data: lmx_char_cell(0)
+        @: Lmx f0 0
+        @: Lmx f1 0
+        @: Lmx f2 0
+        f0: lmx_branch_child(unit, 0U)
+        f1: lmx_branch_child(unit, 1U)
+        f2: lmx_branch_child(unit, 2U)
+        f0\data: lmx_char_cell(0)
         l2_m0(unit, 0, 0)
-        c.printf("%d\n", lmx_char_value(f\data))
-        f\data: lmx_char_cell(0)
+        c.printf("%d\n", lmx_char_value(f0\data))
+        f0\data: lmx_char_cell(0)
         l2_m0(unit, 0, 1)
-        c.printf("%d\n", lmx_char_value(f\data))
-        f\data: lmx_char_cell(0)
+        c.printf("%d\n", lmx_char_value(f0\data))
+        f1\data: lmx_char_cell(0)
         l2_m1(unit, 0, 0)
-        c.printf("%d\n", lmx_char_value(f\data))
-        f\data: lmx_char_cell(0)
+        c.printf("%d\n", lmx_char_value(f1\data))
+        f1\data: lmx_char_cell(0)
         l2_m1(unit, 0, 1)
-        c.printf("%d\n", lmx_char_value(f\data))
-        f\data: lmx_char_cell(0)
+        c.printf("%d\n", lmx_char_value(f1\data))
+        f2\data: lmx_char_cell(0)
         l2_m2(unit, 0, 0)
-        c.printf("%d\n", lmx_char_value(f\data))
-        f\data: lmx_char_cell(0)
+        c.printf("%d\n", lmx_char_value(f2\data))
+        f2\data: lmx_char_cell(0)
         l2_m2(unit, 0, 1)
-        c.printf("%d\n", lmx_char_value(f\data))
+        c.printf("%d\n", lmx_char_value(f2\data))
         return: 0
     end: main
 end: external
@@ -1186,6 +1193,41 @@ end: external
 "@
 # different spellings: supply s stays 10; inc x publishes 11 on a distinct child
 if ($dLp -ne "10`n11`n") { throw "l2path distinct backing got $dLp" }
+
+Invoke-Leaf "l2src\tests\unit_asgn_samename.lm2" "unit_asgn_samename" 0 "inc"
+$sn = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_asgn_samename.lm1"))).Replace("`r`n", "`n")
+$incSn = [regex]::Match($sn, 'fn: l2_m0[\s\S]*?end: l2_m0').Value
+$supSn = [regex]::Match($sn, 'fn: l2_m3[\s\S]*?end: l2_m3').Value
+if ($incSn -notmatch 'l2_q1_from' -and $incSn -notmatch 'l2_q1_dirty') { throw "inc own x must not reuse supply's child 0" }
+if ($supSn.IndexOf("l2_q0_dirty") -lt 0) { throw "supply own x stays child 0" }
+if ($sn -notmatch 'l2_m0\(node, l2_p2_0\)') { throw "fwd must pass hidden x into generated inc" }
+$dSn = Invoke-SpliceDrive "unit_asgn_samename" @"
+        @: Lmx fs 0
+        @: Lmx fi 0
+        @: Lmx fne 0
+        fs: lmx_branch_child(unit, 0U)
+        fi: lmx_branch_child(unit, 1U)
+        fne: lmx_branch_child(unit, 2U)
+        l2_m3(unit)
+        c.printf("%d\n", lmx_char_value(fs\data))
+        c.printf("%d\n", lmx_char_value(fi\data))
+        fi\data: lmx_char_cell(20)
+        l2_m0(unit, (cast: (char) lmx_char_value(fi\data)))
+        c.printf("%d\n", lmx_char_value(fs\data))
+        c.printf("%d\n", lmx_char_value(fi\data))
+        fne\data: lmx_char_cell(0)
+        l2_m4(unit, 10, 0)
+        c.printf("%d\n", lmx_char_value(fne\data))
+        fne\data: lmx_char_cell(0)
+        l2_m4(unit, 10, 1)
+        c.printf("%d\n", lmx_char_value(fne\data))
+        return: 0
+    end: main
+end: external
+"@
+# supply x=10 stays 10; inc receiving 11. no-src fallback 20 -> 21, supply still 10.
+# nest same-method: flag0 x: x+1 from 10 -> 11; flag1 x:30 then +1 -> 31 (one binding).
+if ($dSn -ne "10`n11`n10`n21`n11`n31`n") { throw "same-name source vs receiving got $dSn" }
 
 # C99 &&/|| yield int 0/1. Oracle is C, not this emitter.
 Invoke-Leaf "l2src\tests\unit_bool_and.lm2" "unit_bool_and" 1 "f"

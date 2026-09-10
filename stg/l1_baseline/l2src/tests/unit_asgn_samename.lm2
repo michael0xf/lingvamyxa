@@ -1,0 +1,24 @@
+fn: inc () int
+    x: x + 1
+    return: 0
+end: inc
+fn: no_src () int
+    return: inc()
+end: no_src
+fn: fwd () int
+    return: inc()
+end: fwd
+fn: supply () int
+    char: x
+    x: 10
+    return: fwd()
+end: supply
+fn: nest (char: x; int: flag) int
+    if: flag != 0
+        x: 30
+    x: x + 1
+    return: 0
+end: nest
+fn: main () int
+    return: 0
+end: main
