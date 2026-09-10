@@ -191,26 +191,27 @@ recoverable situation and a mess.
 correlation equal to the request id". So request/reply correlation is settled
 and does not need inventing.
 
-6.4. What still needs agreement
+6.4. Selected first transport slice
 
-19.29.7 leaves the cross-Message operation set unresolved. Proposed to Codex and
-awaiting his view: COPY ONLY, of numbers and UTF-8 byte strings, which covers
-all four jobs - a size is a number, a search hit is a path, progress is a count
-and a path, output is bytes. None hands over a graph. Join, activation,
-adoption and graph-reference retargeting stay deferred, which is exactly the
-part 19.29.7 calls unresolved.
+Lingvamyxa_spec19.29.7.1 defines the initial number/exact-byte-copy participant
+slice. It is not awaiting selection. General graph operations remain separately
+deferred under19.29.7.2. Each live Message owns one arena; cross-Message work
+does not share mutable UI objects. Section7 distinguishes the prototype API
+from its still-pending integration into this application.
 
 
-7. The interim Message contract, from Codex (ticket 191200)
+7. Current Message contract and application integration
 
-Spec 19.29.7.1 / 19.29.7.2, commit 8260ef3. Copy-only first slice.
+Follow the CURRENT Lingvamyxa_spec19.29.7.1/19.29.7.2 and19.31.4, not the
+superseded initial ticket191200. A prototype header DOES exist:
+stg/l1_baseline/l2src/lmx_message.h. It exposes lmx_msg_create/send/stop,
+poll/drive and other participant operations. It is a serialized in-process
+number/bytes prototype, not proof that this app uses it or that the full L2
+pipeline is self-hosted. Do not make the app build depend on the mutable core
+checkout without a reviewed, versioned integration seam. Ordinary calls in
+the current app remain an implementation stage, not the final job model.
 
-NOT CALLABLE YET - no header exists. The instruction is explicit: keep using
-ordinary calls inside one Message until a header commit publishes it. This
-section exists so the four jobs are WRITTEN in a shape that adopts it later as a
-change of transport rather than a rewrite.
-
-7.1. Three operations
+7.1. Conceptual operations (not literal source syntax or exact C prototypes)
 
     addr = create(worker_handler, initial_copy)
     send(addr, envelope{ id, correlation, replyTo, payload })
@@ -222,7 +223,18 @@ change of transport rather than a rewrite.
     a failed parent turn RELEASES the unactivated child
     sending to a just-created child in the SAME turn is allowed - FIFO with
       activation
-    PARENT DEATH DOES NOT IMPLICIT-KILL CHILDREN. Supervision is explicit.
+    normal parent close requests its children close at the parent's end_turn;
+      each child exits normally at its own end_turn
+    after abrupt parent death, child-to-parent liveness checks trigger child
+      self-close after the configured policy; no permanently orphaned workers
+    an unresponsive child unable to reach end_turn requires the exceptional
+      host/supervisor failure path, not a claim of completed safe cleanup
+
+Automatic polling is CHILD TO PARENT, at end_turn or a host-timer cadence.
+A live idle parent is not a failed parent. This does not restrict ordinary
+messages in either direction. Do not add a mandatory parent-to-child poll.
+Prototype lmx_msg_poll/drive needs a host-driven clock/loop; there is no
+automatic timer or one-native-thread-per-Message guarantee in that prototype.
 
 7.3. Staging, admission, execution are three different moments
 
@@ -232,6 +244,11 @@ change of transport rather than a rewrite.
 
 A reply or failure is an ordinary Message with correlation equal to the request
 id (19.31.4).
+
+Completion means the assigned operation finished: a copy worker completed the
+file copy, a delivery worker completed delivery. Admission is not completion,
+and a liveness response is not completion. Failure/cancellation remain distinct.
+The parent tracks correlated results rather than polling until 'completed'.
 
 7.4. YIELD IS NOT PUBLICATION - this corrects what I assumed
 

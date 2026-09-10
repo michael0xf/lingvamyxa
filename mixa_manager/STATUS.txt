@@ -1,307 +1,112 @@
-Mixa Manager - where the work stands
-====================================
-Written 2026-09-10 03:20 local, at the end of a long design session. Read this
-first; it is the handoff, not a summary of the design. The design is in the
-other documents and README.txt says which one owns what.
-
-
-1. The state in one paragraph
-
-The specification moved a long way today and the code has not caught up. Every
-decision below is committed and pushed. The working tree is RED and that is
-expected: mixa_backend.h changed under an implementation that is mid-flight.
-grok_bot is writing Task 25 and has acknowledged every change since. Nothing is
-blocked on Mikhail.
-
-
-2. What is committed, newest first
-
-    95381df  mouse: eight arrows, chosen by angle, it spins
-    8d68c4b  everything discussed goes into the specification (standing rule)
-    04398cf  the cell is not the font - ours, and always EVEN
-    6dec287  three grids: text, UI inset by half a cell, mouse on the half step
-    caf559e  highlight section trimmed to the character set
-    8a63ca0  highlight is the double box frame, which mixa_draw already emits
-    ae6b335  mouse pointer, first version (superseded by 95381df)
-    f33dea4  highlight as a tile family (WRONG, superseded by 8a63ca0)
-    8f0f52c  panel-scroll driver recorded as a delta
-    f30e68e  the highlight is what scrolls the button panel
-    398e7ec  the cursor lives UNDER the panel
-    e3b8d4e  the console is file-anchored
-    eced32e  what the first run looks like
-    f2295ec  the two layers do not share a layout
-    a696d0c  wide button = 8 cells (WRONG, superseded by 3540886)
-    3540886  the eight characters are the drawing set, not a width
-    6b75c35  backend dispatch table design + mixa_manager/bin
-
-Two of those are recorded mistakes rather than history to be proud of, and both
-are marked in the documents that carry them. They are listed here so that a
-reader of the log does not take a superseded commit for current.
-
-
-2.1. Since the handoff was written (06:15 update)
-
-    75ca805  Task 24 + 25 COMMITTED. Tiles, buttons, dispatch table, and the
-             registry migrated from hand-written C to L1 through the bridge.
-             21 files, +3236/-560. Written by grok_bot; committed here because
-             Auto-review hard-blocks a push from his automation - a policy
-             block, not a denied approval, and he reported it rather than
-             routing around it.
-             Reviewed, not waved through: whole suite green on 65D5A5ED
-             including the new table unit, mixa_backend_tables.c gone, no
-             hand-written C added, mixa_backend.h untouched by him, no Win32
-             token outside the win32 files, nothing staged outside
-             mixa_manager.
-    f5a82dd  gap E withdrawn, typedef bridge in the header, l1_gaps runner made
-             able to fail at all.
-    (next)   l1_gaps negatives now assert the const diagnostic itself, not just
-             a nonzero status - Codex's catch, and the same mistake as the
-             previous one at a different depth.
-
-OWNERSHIP CHANGED. While this session was out of budget, Mikhail asked Codex to
-monitor grok_bot directly (instant outbox plus a 30-minute backup) and continue
-mixa_manager with him. Codex has taken over the 24/25 review and continuation.
-Do NOT restart competing app tickets on return - check current ownership in the
-latest inbox first. The subject documents and the 26/27 queue remain the basis.
-
-So the sections below are still accurate as DESIGN, and stale as WORK ASSIGNMENT
-wherever they imply this session drives grok_bot.
-
-
-3. The working tree, and whose it is
-
-MODIFIED - grok_bot, Task 25 in flight. Do not commit, do not revert:
-    mixa_backend_headless.{h,lm1}   mixa_backend_win32.{h,lm1}
-    mixa_composite.lm1  mixa_composite_glyphs.lm1  mixa_pump.lm1
-    run_mixa.ps1
-    tests/mixa_backend_selftest.lm1  tests/mixa_backend_win32_selftest.lm1
-    tests/mixa_pump_selftest.lm1
-
-NEW - grok_bot, Tasks 24 and 25:
-    mixa_backend_table.lm1   mixa_backend_tables.c
-    mixa_tiles.{h,lm1}       mixa_buttons.{h,lm1}
-    tests/mixa_backend_table_selftest.lm1
-    tests/mixa_tiles_selftest.lm1  tests/mixa_buttons_selftest.lm1
-
-Outside mixa_manager and NOT ours: stg/l1_baseline/l2src/*, tests/return_*.lmx.
-
-Task 24 (tiles and buttons) was green before the seam changed. It is not
-committed because it is entangled with Task 25 in the same files. The first
-green run of Task 25 is the acceptance point for both.
-
-
-4. The ticket queue with grok_bot
-
-    Task 25  dispatch table            IN FLIGHT
-             plus: fold the half-cell mouse unit into the poll path while he is
-             in it. He was told to say so if that turns out to be the wrong call.
-    Task 26  highlight = one moving double box frame over the element, keeping
-             cell backgrounds. The real work is a general glyph-only draw
-             primitive; every other part already exists.
-    Task 27  the spinning eight-arrow pointer.
-
-Then: the process seam, then the first version (FIRST_VERSION.txt, mode 0.1.2).
-
-He has acknowledged 24, 25, 26 twice over, 27, the seam change and the even-cell
-rule. His heartbeat was alive at 03:04.
-
-
-5. Open, deliberately - do NOT close these in code
-
-    POINTER CONTRAST. A filled white arrow over a light panel is invisible and
-      these glyphs have no outline. Build it, look at it, then ask. UI_MODEL 6.3.
-    MISSING GLYPH, and U+2B95 specifically - the rightwards arrow was added to
-      Unicode later than its three siblings and is the likeliest of the eight to
-      be absent. Report per platform before designing a fallback. UI_MODEL 6.3.
-    TWO VIEWPORTS AT ONCE. Moving the highlight into a list that is off to the
-      side must scroll the ROW horizontally and the LIST vertically. Both follow
-      from one rule but they are two scrolls and the order is visible to the
-      user. UI_MODEL 5.7.2.
-    WHICH CELLS a highlight frame costs on a SQUARE button. Answered in
-      principle - it overlays, nothing is displaced - but it wants looking at.
-      DRAWING 5.4.2.
-
-
-6. Found today and not yet reported upstream
-
-L1 cannot spell `const T *const *` as a return type: nested const in the paren
-form yields `const const T **`. grok_bot worked around it with a 34-line
-hand-written C file, mixa_backend_tables.c, holding the registry array, and
-documented the reason at the top of it.
-
-Probed on 65D5A5ED rather than taken on report. Four spellings, none reaching
-`const VT *const *`, and TWO of them compile while giving a type the source does
-not say:
-
-    const: @(const: @(VT))  -> const const VT **   warns, compiles, inner const
-                                                   collapses; effective type is
-                                                   const VT **
-    @@: const VT            -> const **            TYPE NAME DROPPED, gcc falls
-                                                   back to implicit int
-    const: @@(VT)           -> const VT **         valid C, wrong type
-    const: @(VT)            -> const VT *          single pointer
-
-This is L1_spec OPEN POINT 10.13, "const pointer spelling order", which was
-already listed as open - so it is a decision waiting rather than a defect. The
-two silent-wrong-code cases are worth a diagnostic whichever way 10.13 goes.
-
-PRIORITY: URGENT, by Mikhail - "L1 has to be finished, in priority." My first
-message called it not urgent; that was my judgement and he overruled it. I had
-priced it as one hand-written C file in one application, which is what it is for
-us today - but the shape that cannot be spelled is A READ-ONLY TABLE OF READ-ONLY
-THINGS, which is what every dispatch table, registry and lookup array wants to
-be, and each one that cannot say it becomes either a mutable global or another
-hand-written C source.
-
-Three messages to Codex, 2026-09-10, work_chat/claude/outbox/:
-    032534  the case, the four return-position spellings, the workaround
-    032706  priority correction, at Mikhail's instruction
-    032804  the full matrix across parameter / local / return
-
-The matrix adds a sharper statement of 10.13: NO position expresses a
-const-qualified POINTER. Every const: spelling reaches the referent, none
-reaches the slot - so L1 has no way to say "this pointer will not be rebound",
-which L1_spec 9.1.2 says is exactly what const is for. And three spellings
-someone would reach for BECAUSE no correct one exists emit garbage that
-compiles: const const VT **, const ** (implicit int), and const * VT (name and
-type transposed). None is refused.
-
-No rebuild, gate run or promotion asked for. Not verified against l1src,
-deliberately: the observation was handed over rather than a diagnosis.
-
-RESOLVED for the application, 03:34, by a bridge Codex proposed and I verified.
-Name the inner pointer type in the ABI header and qualify the ALIAS:
-
-    typedef const MixaBackendVTable *MixaBackendTableRef;
-    fn: mixa_backend_tables (@: size_t count) const: @(MixaBackendTableRef)
-
-generates `const MixaBackendTableRef *`, which by C typedef qualification IS
-`const MixaBackendVTable *const *` - qualifying a typedef'd pointer type
-qualifies the POINTER. Ran on 65D5A5ED: compatible with the exact prototype
-under -Werror, writes to the slot AND to the pointee both rejected, reads clean.
-
-So the hand-written C registry goes away and the registry becomes ordinary L1;
-only the typedef stays in the already-permitted ABI header. Ticketed to
-grok_bot, to land before his Task 25 report.
-
-The language gap is NOT closed by this and must not be recorded as closed. The
-bridge NAMES a type to get a qualifier onto a pointer; L1 still cannot SAY
-"const pointer", and every future case needs another alias in a handwritten
-header. Codex has passed both reports to Grok for a priority bounded L1 source
-review. Full matrix with complete input files sent to both at 033409.
-
-Still open from the same probing:
-    a module-level `@: T x` emits without STATIC and indented, so a registry
-      slot leaks a name out of its unit. Asked grok_bot whether L1 can spell
-      static at all; if not, that is a separate report.
-    the three silent-output spellings in section B of the matrix - const const
-      VT **, const ** on implicit int, and const * VT with name and type
-      transposed. Codex agrees these are a diagnostic issue independent of
-      10.13. Not ours to fix.
-    10.13 itself. Urgent by Mikhail's instruction: "L1 has to be finished, in
-      priority."
-
-
-6.1. Every L1 gap we know of - all reported, priority by the owner
-
-Mikhail, 2026-09-10: pass all the language holes to Codex to be fixed in
-priority. Sent as one list at 033812 to Codex and Grok, with the reproducible
-fixtures at mixa_manager/tests/l1_gaps.
-
-    A  no spelling for a const-qualified POINTER. 10.13. Bridged by naming a
-       type in a handwritten header; every future case needs another alias.
-    B  three spellings emitted compiling garbage instead of diagnosing:
-       const const VT **, const ** on implicit int, const * VT transposed.
-       FIXED by Grok, root l1src commit 5f03a70, candidate binary
-       build/l1trans/iso_033430/l1trans.exe (D328DD1D). NOT promoted - STG
-       stays 65D5A5ED.
-
-       Verified here independently rather than taken on report: all three now
-       diagnose, the five valid spellings generate BYTE-IDENTICAL C on both
-       translators, and - the one that mattered - the typedef bridge survives.
-       His rule rejects const: wrapping a visible const: form, and a foreign
-       typedef name is not one, so const: @(VTRef) still yields
-       const VTRef * and still matches const VT *const * under -Werror. Asked
-       him to confirm that is deliberate: if it is incidental it could regress
-       the day the translator learns more about foreign headers, and the
-       registry migration depends on it.
-    C  NO INTERNAL LINKAGE. `static:` is refused, "unsupported L1 form", and
-       every module-level object is a global. So the lazily built singleton -
-       the only way to have a table, given D - is a name in the program's
-       namespace, and two units naming their cache alike collide at link time.
-       No workaround FOUND inside L1 - stated that way deliberately. Only
-       `static:` and `external:` were probed; `prototype:` and header units
-       were not.
-    D  no struct-typed LOCAL, so anything value-shaped becomes calloc + free.
-    E  WITHDRAWN, and it was wrong when I sent it. Header units ARE in the
-       promoted STG compiler - Codex corrected me and I re-probed: 65D5A5ED
-       accepts a header unit with fnptr: (emits a function-pointer typedef) AND
-       with struct: (emits a full definition), and the STG source carries
-       l1_emit_hdr_fnptr with p0.h.lm1 beside it.
-
-       The real gap is narrower and is L1_spec 10.16: a function-pointer
-       spelling in an ORDINARY unit. Header units have one; ordinary units do
-       not.
-
-       Consequence worth acting on: mixa_backend.h could become a .h.lm1 header
-       unit. The comment at the top of it claimed the baseline rejects struct:
-       outright, dated 2026-09-09 - that is now false and was discouraging work
-       that is possible. Corrected in the header. One blocker remains and it is
-       ours, not the language's: run_mixa.ps1 does not translate .h.lm1 into
-       .lm1.h before compiling units that include it.
-
-`external:` is NOT L1's static - checked, not assumed. It is a grouping receiver
-for PROTOTYPES: `external: fn: h (int: a) int` emits `int h(int a);` and
-`external: @: int g` is refused with "external without fn". Declare-elsewhere,
-the opposite direction from confine-to-here.
-
-Four of the five end the same way: something cannot be said in L1, so it moves
-into a handwritten C file. Individually small; together they are why
-mixa_manager now contains hand-written C SOURCE and not only headers.
-
-
-7. Standing constraints, unchanged
-
-    the specification is mixa_manager/. Everything discussed goes into it,
-      immediately, and is committed before it is ticketed. README.txt has the
-      file list and the standing rule.
-    do not rebuild or replace gen2, do not run stg/l1_baseline/gate.ps1 for
-      app-only work, do not touch l1src, tests/l1, L1_spec, stg/l1_baseline
-      sources, or another agent's working files.
-    never edit mixa_manager/clearshell_reference/ - it is a snapshot of
-      Mikhail's other project and the source of truth for the port.
-    binaries are not committed. A runnable artefact is COPIED to
-      mixa_manager/bin, whose contents are untracked.
-    the stable translator is stg/l1_baseline/build/l1trans/gen2/l1trans.exe,
-      SHA256 65D5A5ED as of 01:37 today. It is NOT the same binary as
-      build/l1trans/gen2 in the root tree - probing the wrong one cost a set of
-      wrong attributions earlier today.
-
-
-7.1. The watcher, and a hole in it that was mine
-
-It watches work_chat/claude/inbox and work_chat/grok_bot/outbox. I began writing
-to GROK directly today and never added work_chat/grok/outbox, so two of his
-replies - including the one saying he had already fixed gap B - sat unread and
-no watcher would ever have woken me for them. Now armed with all three:
-
-    -Dirs "work_chat\claude\inbox;work_chat\grok_bot\outbox;work_chat\grok\outbox"
-
-Passed as a parameter rather than edited into the script, because
-`powershell -File` hands every argument through as a plain string and the script
-splits on ";" - which is the designed usage.
-
-It also needs -ExecutionPolicy Bypass on this machine; without it the relaunch
-dies instantly with "running scripts is disabled" and looks like a clean exit.
-That is how it died at 01:49 and stayed dead for 100 minutes.
-
-The watcher is ONE-SHOT: it fires and exits. Read the mail and re-arm in the
-same breath, every time.
-
-
-8. If you are the next session
-
-Read README.txt, then this file, then the document that owns whatever you are
-about to touch. Check work_chat/claude/inbox for Codex and
-work_chat/grok_bot/outbox for grok_bot before assuming anything here is current
-- both were live when this was written.
+Mixa Manager — current handoff
+=============================
+Updated 2026-09-10, morning, America/Sao_Paulo. This replaces the old Task25
+in-flight handoff; earlier decisions and investigations remain in Git and the
+subject documents. Recheck Git, latest inbox/outbox and saved logs before acting.
+
+1. Goal and owners
+------------------
+Port ClearShell functionality/appearance with the owner's per-element deltas.
+PORT_OF_CLEARSHELL.txt is the framing document; subject docs own the details.
+Do not simplify the unusual navigation or FSync selection model by analogy.
+
+Codex coordinates grok_bot on this app. Grok owns the independent core L2 lane.
+Claude's reference investigation remains important evidence; no active app
+ticket is assigned to him and app progress does not depend on his availability.
+Colleague messages are English. The user's discussion is Russian.
+
+Codex monitors grok/outbox and grok_bot/outbox with a FileSystemWatcher and a
+30-minute backup poll. Current ticket state comes from matching inbox/seen/
+outbox, not merely an old reply timestamp. Watcher state is outside the repo.
+
+2. Verified implementation checkpoints
+--------------------------------------
+Task24/25 COMMITTED AND PUSHED: 75ca805.
+  Tiles/buttons, per-handle backend dispatch, L1 constructor registries,
+  concurrent backend handles, even physical cells and shared text/UI font.
+  The handwritten C registry was removed; its typedef bridge remains in the
+  permitted ABI header. 2a70b34 strengthens negative L1 diagnostic fixtures.
+
+Task26 REVIEWED, NOT YET COMMITTED at this snapshot.
+  One moving double-box frame, general MIXA_DRAW_KEEP_BG, snapshot restoration.
+  Snapshot is bound to its target rectangle/storage/geometry; mismatched
+  clear/move fails before writes. Clear before underlying redraw or resize.
+  Same-target overlap and two-target rejection tests are saved in:
+    build/mixa/logs/task26_bind_20260910.log
+    build/mixa/logs/task26_bind_headless_only_20260910.log
+  Both contain successful app/highlight test results. This is logic/testing
+  acceptance, not proof of the complete visual application.
+
+Task27 LOGIC REVIEWED; corrective checkpoint 080500 accepted, not committed.
+  Eight last-displacement octants; no smoothing/latch; initial down-right.
+  Mixed-axis failure now computes both coordinates before publishing either.
+  Coordinate publication and mixed-axis failure tests were inspected together
+  with both saved logs. This is not visual completion. Saved test logs:
+    build/mixa/logs/task27_windows_full.log
+    build/mixa/logs/task27_headless_only_full.log
+  The current selected Windows pointer font was measured as MS Gothic,
+  tmHeight18/ascent15. All eight arrow glyph indices were absent (0xFFFF),
+  while ASCII A in the same font rasterized. This is a finding about that
+  selected font, not Windows in general. No fallback has been chosen.
+  A private glyph probe also exposed incorrect backend error-sentinel checks;
+  these are not the cause of the measured absent arrow indices.
+
+Shared unfinished app work belongs to grok_bot: highlight/draw, pointer and
+their tests, plus run_mixa.ps1 integration. Preserve it. Core stg/l1_baseline/
+l2src and root tests/return_*.lmx belong to other work. Never stage them with
+an app checkpoint. A previous automation policy blocked grok_bot's Git push;
+report any current block accurately and do not retry or route around it.
+
+3. Next work
+------------
+Correct the bounded backend error checks and report glyph/fallback choices,
+without inventing replacements. Then implement the PROCESS_SEAM for FIRST_VERSION
+mode0.1.2: command execution with nonblocking output into a file-backed console,
+cursor/character wrap/editing and one F1 Help button. No terminal emulation.
+Independent process work need not wait for a pointer-font product decision.
+
+Full file-manager features come later under the ClearShell contract, including
+lazy selection-aware copy/move and original path navigation. They are not an
+excuse to expand the first runnable milestone.
+
+4. Toolchain and known limits
+----------------------------
+App compiler: stg/l1_baseline/build/l1trans/gen2/l1trans.exe
+  binary SHA256: 65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936
+  recorded generated-source SHA256:
+    09A06E450083825A92D201179D5F23D6E896077DC66420DD614877BCF4BBAB51
+Use run_mixa.ps1; no shared gate or promotion for app-only changes.
+
+L1 immutable grouping is available on this compiler: a direct translation
+probe emits const int and const char*. It is not L2 runtime graph freezing.
+See CODING_RULES section1 and L1_spec section5 for the actual C qualifiers.
+
+const-qualified pointer spelling remains L1_spec open point10.13. The verified
+app bridge is typedef const MixaBackendVTable *MixaBackendTableRef, qualified
+through the alias. Do not resurrect mixa_backend_tables.c. Bad-spelling
+diagnostics were fixed in root5f03a70/candidateD328DD1D; do not assume that
+candidate has replaced stable65D5 without an explicit promotion record.
+
+Header units ARE supported by stable65D5 (struct and fnptr included).
+Migrating app *.h to *.h.lm1 still needs the app runner's ordered generation of
+*.lm1.h and consumer includes. Ordinary-unit function-pointer spelling is a
+separate limitation (10.16). No by-value header-struct local, and static linkage
+support must not be invented from external:, which declares prototypes.
+Reproducers are tests/l1_gaps; check against the actual chosen compiler.
+
+5. Explicitly open product/integration choices
+----------------------------------------------
+- Pointer contrast and missing-glyph fallback: UI_MODEL6.3. Report the measured
+  font and glyphs; do not silently change the eight-arrow specification.
+- Focus-driven simultaneous horizontal/vertical scrolling: UI_MODEL5.7.2.
+- Visual inspection of the overlay on square buttons; tests do not settle taste.
+- App integration of the current Message prototype: PROCESS_SEAM7. Core API
+  existence is not app adoption or a stable self-hosted L2 implementation.
+
+6. Starting a session
+--------------------
+Read README and PORT_OF_CLEARSHELL, then the relevant subject doc. Read the
+latest assigned ticket and reply, inspect the shared worktree, and preserve
+ownership. Keep one current status rather than appending contradictory updates.
+Keep agreed examples and source evidence. Commit/push documentation separately
+after review; source checkpoints require their own relevant verification.

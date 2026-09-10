@@ -1,99 +1,81 @@
-Mixa Manager - implementation on the stable L1
-==============================================
+Mixa Manager — ClearShell desktop port in Lingvamyxa
+===================================================
 
-Source model: Mixa_Manager_model.txt (draft 0.4) at the repository root.
+Purpose
+-------
+Port ClearShell's functionality and appearance, applying the owner's recorded
+changes to individual UI elements and to desktop execution. This is not a new
+file-manager design inspired by ClearShell. The changes are substantial even
+where they preserve the source's user-visible intent; do not dismiss them as
+cosmetic, or copy Android widgets and Java shared-heap internals literally.
 
-Standing instruction from Mikhail, 2026-09-10: EVERYTHING WE DISCUSS GOES INTO
-THE SPECIFICATION. Not a summary of it, not a ticket about it - the decision
-itself, written down where the work will look for it, and committed as soon as
-it is written rather than held back for the code it describes.
+The checked-in, read-only reference is clearshell_reference/. In particular,
+the original path/list navigation and recursive selection-with-exceptions model
+must not be replaced by a conventional '..' row or a flat selected-path set.
+Claude's investigation and the tests that vindicated the consolidation loop are
+recorded in PORT_OF_CLEARSHELL.txt and SELECTION_MODEL.txt. They are evidence for
+preserving that algorithm, not proof that every possible file operation is bug-free.
 
-    STATUS.txt          READ FIRST. Where the work stands, what is in the
-                        working tree and whose it is, the ticket queue, and what
-                        is deliberately left open. Not design - handoff.
+Reading order and authority
+---------------------------
+1. PORT_OF_CLEARSHELL.txt: port contract, agreed deltas, reference-source map.
+2. The subject document below: current decisions for that element or interface.
+3. STATUS.txt: dated implementation evidence, active owners and next work.
 
-The specification is this directory. Which file follows the subject:
+Latest explicit owner decisions override older notes. If a recorded delta is
+silent, consult ClearShell for its functionality/behaviour; FAR is the keyboard
+reference, not a replacement UI. Old_Mixa_Manager_Qt_model.txt preserves useful
+visual requirements only where not superseded; its Qt/PTY implementation plan
+is not the current architecture. Ask about a genuine conflict before changing
+behaviour. An unfamiliar algorithm is not itself a defect.
 
-    UI_MODEL.txt        what the interface IS - layers, grids, lists, panels,
-                        the highlight, the pointer
-    DRAWING.txt         how a cell gets its content - tiles, frames, glyphs
-    BACKEND_SEAM.txt    what a platform must provide, and why each thing is in
-                        the seam rather than above it
-    FILE_SEAM.txt       files
-    PROCESS_SEAM.txt    child processes
-    SELECTION_MODEL.txt selected sets and their exceptions
-    CODING_RULES.txt    how to write the L1, including what the language
-                        actually accepts
-    FIRST_VERSION.txt   mode 0.1.2 - the scope of the first runnable thing
-    PORT_OF_CLEARSHELL.txt
-                        the delta list: where we differ from the source and why.
-                        Anything decided here that ClearShell does otherwise
-                        belongs in section 2 as a two-column entry.
+    UI_MODEL.txt          layers, grids, lists, panels, focus and pointer
+    DRAWING.txt           cells, glyphs, tiles and double-line frames
+    BACKEND_SEAM.txt      current platform dispatch/glyph/input contract
+    FILE_SEAM.txt         file-backed console and filesystem boundary
+    PROCESS_SEAM.txt      OS commands, job lifetime and Message integration
+    SELECTION_MODEL.txt   original recursive selection and required tests
+    FIRST_VERSION.txt     first runnable milestone: mode 0.1.2
+    CODING_RULES.txt      L1 spelling, qualification, tests and ownership rules
+    PORT_OF_CLEARSHELL.txt deltas and source evidence; not a second status log
+    STATUS.txt            current checkpoint and remaining implementation
 
-A decision that spans two of them goes in the one that owns the subject, with a
-one-line cross-reference from the other. It is not duplicated.
+A decision belongs in its subject document; other documents link to it.
+Do not append a new current rule below a contradictory old current rule.
+Keep useful examples and explanations; superseded work assignments belong in
+Git history, not in startup instructions. Record new decisions promptly
+and commit/push documentation separately from implementation.
 
-The one architectural decision, and why
----------------------------------------
-The model is written in Qt/C++ terms: classes, signals, QProcess, a Qt
-renderer. L1 emits ANSI C99. So the boundary is not a matter of taste, it is
-fixed by what L1 can express:
+Architecture and first runnable scope
+------------------------------------
+App logic is authored in L1 now and will move to L2. The chain is L2 -> L1 -> C.
+L1 is the lasting intermediate language, not permission to move application
+logic into hand-written C. Narrow platform ABI headers/adapters are identified
+exceptions; header-unit migration is tracked separately in STATUS.txt.
 
-  IN L1, because it is pure data and logic with no OS and no Qt:
-      core/      Cell, Style, Palette, TextRect, OverlayRect, VisualRect,
-                 Selection
-      input/     InputNormalizer, InputEvent, OwnCommandMapper,
-                 TerminalInputEncoder, MouseEncoder
-      terminal/  TerminalProfile, TerminalKey, TerminalModes - tables and rules
-      overlay/   OverlayCommands - a command list, not a rasteriser
-      ui/        panel, viewer, editor and command-line LOGIC over TextRect
+Rendering uses our cell grids, pseudographics and native backend glyphs, not
+Qt widgets. Platform backends coexist through a per-handle dispatch table.
+FIRST_VERSION.txt is the current milestone boundary: file-backed editable
+console, command execution and one F1 Help button. No terminal-emulator/PTY/
+ConPTY behaviour in this milestone. Later file-manager features remain part
+of the ClearShell port; they are deferred, not removed from the product.
 
-  BEHIND A C ABI, declared here with external: and a hand-written header:
-      render/    QtTextRenderer, OverlayRenderer, Compositor, FontMetrics,
-                 GlyphCache
-      backend/   UnixPtyBackend, WindowsConptyBackend, PipeProcessBackend
-      input/     QtEventCollector, ClipboardAdapter - the collection side only
-      terminal/  VtermAdapter - libvterm itself
+Build and ownership
+-------------------
+Run from the repository root:
 
-Section 0.3 is what makes this work: every producer ends at the same
-TextRect + OverlayRect, and "the renderer does not need to know which producer
-created the text screen". So the renderer can be the last thing built, and
-everything above it is testable without it.
+    ./mixa_manager/run_mixa.ps1
 
-Build
------
-Translated by the STABLE L1, not the live one:
+This uses stg/l1_baseline/build/l1trans/gen2/l1trans.exe read-only. The runner
+prints binary and generated-source identities; neither identity alone proves
+they correspond. Do not confuse this tool with build/l1trans/gen2 in the root.
+Never run the shared STG gate for app-only changes or replace its compiler.
 
-    stg\l1_baseline\build\l1trans\gen2\l1trans.exe
+Codex coordinates grok_bot's app work; Grok develops core L2 independently.
+No waiting on the core lane for app work that can use the installed compiler.
+Compiler defects go to Codex/Grok with a reproducer. File ownership and current
+tickets are in STATUS.txt and work_chat; do not overwrite another active task.
 
-That binary is not in git; it is produced by stg\l1_baseline\gate.ps1.
-
-This directory is deliberately SELF-CONTAINED: no predef of l1src, only its own
-headers and libc. That is what lets it sit at the repository root while being
-built by a translator from the frozen tree, and it keeps it independent of which
-L1 tree happens to be live. Paths inside .lm1 are written relative to the
-repository root, which is the build root here.
-
-Milestone 1 - core, with no Qt at all
--------------------------------------
-Model section 2 lists TestProducer: synthetic text screens for tests, demos and
-renderer debugging. That is the first thing to build, because it needs nothing
-from the platform and it pins the contract every other producer must meet.
-
-    mixa_core.h          Cell, TextRect
-    mixa_text_rect.lm1   allocate, address a cell, fill, write text, dump
-    tests\               selftest over a dumped screen
-
-A dumped screen is plain text, so the whole of milestone 1 is verifiable by
-string comparison and needs neither a window nor a font.
-
-House rules inherited from the project
---------------------------------------
-Valued aggregates are banned, L1 and L2 alike. Cells are reached by pointer:
-mixa_cell_at(rect, row, col) returns an address, never a cell by value. The
-explicit C door c. is for extravagant exceptions only.
-
-Cells live in one contiguous row-major block for the same reason branch storage
-does (ABI 14.1): stable addresses, order is the index, and a copy is a block
-copy. The block is sized at open and does not grow; a resize builds a new rect,
-which is also what model section 13 describes.
+No Valued aggregates or ordinary dot member access. Use pointer-based structs
+and backslash paths; c. is the explicit foreign door. Reference Java is read-only.
+Runnable app artefacts go in untracked mixa_manager/bin, not in source commits.

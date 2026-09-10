@@ -5,15 +5,20 @@ Framing document. Read this before the others.
 1. What this project is
 
 Mixa Manager is a DESKTOP PORT OF CLEARSHELL, with its functionality, its
-layout and its behaviour. The differences are details, and this document is
-where they are listed.
+layout and its behaviour, with the owner's original changes to individual
+interface elements and desktop execution. These deltas can change every
+element; they are not merely cosmetic. This document maps them to their
+current subject specifications.
 
 Stated by the language owner on 2026-09-09, and it changes how the other
 documents should be read. They are not an independent design that happens to
 cite ClearShell; they are a DELTA against it. Where they are silent, ClearShell's
 behaviour is the answer - not "undefined", not "our choice later".
 
-    reference source:
+    reference used for this port (read-only, in this repository):
+    mixa_manager/clearshell_reference/
+
+    upstream origin of that snapshot:
     C:\Nyasha_Planet\git\clear_shell\ClearShell\app\src\main\
 
 The practical rule that follows: before designing anything, look at how
@@ -27,6 +32,19 @@ copying the solution badly.
 INCOMPLETE. The language owner began listing differences and the list is not
 finished; these are the ones fixed so far. Add to it rather than deducing new
 differences from silence.
+
+Current cross-element map (details have one owner, not duplicate definitions):
+  UI_MODEL7 / BACKEND_SEAM10.5-10.8: even physical cells, shared text/UI font,
+    upper grid inset by half a text cell; mouse coordinates in half-cells.
+  DRAWING5.4 / UI_MODEL5: one moving double-box focus frame, preserving
+    underlying colour/alpha; not a second tile family or per-button decoration.
+  UI_MODEL6: eight pointer arrows from last nonzero displacement, initial
+    down-right; no smoothing/latch. Font fallback and contrast remain open.
+  FIRST_VERSION: file-backed console, cursor below the overlay, F1 Help first;
+    mode0.1.2 is a milestone, not removal of the full file-manager feature set.
+  PROCESS_SEAM6-7: jobs become isolated Message participants rather than shared
+    Java closures; current parent/child close and completion rules follow the
+    current Lingvamyxa specification, not the superseded initial API ticket.
 
 2.0. The general rule: port the PRESENTATION, not the IMPLEMENTATION
 
@@ -241,8 +259,9 @@ Consult in this order, and stop at the first that answers:
 
     4. FAR Manager, for key bindings.
 
-    5. Only then invent - and WRITE IT DOWN HERE, because an unrecorded
-       invention is indistinguishable from a bug.
+    5. If no source answers a behaviour/product choice, ask the owner. Once
+       agreed, write the delta in its subject document and link it here.
+       Implementation choices within that contract need no new UI semantics.
 
 4.1. And when you diverge, say that you diverged
 

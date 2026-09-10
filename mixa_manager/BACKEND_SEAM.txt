@@ -1,8 +1,16 @@
 Mixa Manager - the backend seam
-Milestone 2 design. Six functions, one headless implementation, no window.
+Current platform contract plus design rationale.
 
-Follows Mixa_Manager_DISTRIBUTION_MODEL.txt section 5. This document fixes the
-exact surface before any platform code is written, because the seam is the whole
+READ CURRENT CONTRACT FIRST: sections11.2/11.5 define per-handle backend
+dispatch, backend allocation through open(vt, out, cols, rows, metrics), and
+coexisting platform implementations. Sections9.4 and10.5-10.8 define glyphs,
+the half-cell input lattice and even physical cell geometry. mixa_backend.h
+is the implemented ABI; STATUS.txt records verified versions and remaining work.
+Sections1-8 retain the earlier milestone rationale, not alternate current
+signatures: caller-owned open storage and the no-window milestone are obsolete.
+
+Follows Mixa_Manager_DISTRIBUTION_MODEL.txt section 5. The initial design fixed
+the surface before platform code was written, because the seam is the whole
 porting cost: every target reimplements this and nothing else.
 
 
@@ -21,7 +29,7 @@ It is also the honest order for the distribution model: the base must run where
 there is no window at all.
 
 
-2. The six operations, exactly
+2. Initial six-operation sketch (historical; current ABI is 11.5)
 
 Declared in L1 with external: against a hand-written header. Nothing here
 returns a platform handle to the caller; the backend owns its own state and is

@@ -11,8 +11,8 @@ C inside a header, with a five-line .lm1 wrapper.
 L1 is a TEMPORARY AUXILIARY TOOL that becomes a PERMANENT INTERMEDIATE LINK. It
 looks strange because it is a thin, syntax-directed lowering to C - an
 intermediate representation, not a language designed to be pleasant to write.
-Today we author in it because L2 and L3 do not exist yet; later they will, and
-they will translate DOWN THROUGH L1 into C.
+Today we author the app in L1 while the independent L2 implementation is still
+being completed. L2 translates DOWN THROUGH L1 into C; L3 may also be interpreted.
 
 That is the whole argument, and it is not about purity:
 
@@ -57,36 +57,32 @@ design. It is invisible to the very effort this code exists to inform.
 
 1. const on everything that only reads
 
-Put const: on every pointer parameter the function does not modify. Maximally,
-not selectively.
+Qualify pointer parameters wherever their referenced data is only read. Apply
+this consistently, while checking what the actual L1 spelling qualifies.
 
-This is NOT style here, and the reason is narrower and more precise than I first
-wrote it. Lingvamyxa_spec 9.1.2 and the optimisation section, lines 13964-13969:
+Use the CURRENT L1 contract, not an inferred L2 qualifier rule. For example,
+const: @(MixaEvent ev) generates const MixaEvent *ev: the referent is read-only
+through that pointer; this does not make the pointer variable itself const.
+L1_spec open point10.13 covers pointer-qualification spelling. The typedef
+bridge used by the backend registry is documented in STATUS.txt.
 
-    `const: @` pins the ADDRESS SLOT, so generated code dereferences it directly
-    instead of re-selecting the field on every use. "Const does not extend past
-    the reference. The referent keeps whatever contract it was built under."
+immutable: is AVAILABLE in stable65D5, verified by direct translation on
+2026-09-10. It groups declarations under the L1 C-const qualification rules:
 
-So the payoff is eliminating repeated SELECTION OF THAT REFERENCE - not
-anything about the graph reachable through it. A child access needs its own
-qualification to fold further.
+    immutable:
+        int: frozen_value 7
+        @: char frozen_text "abc"
+    end: immutable
 
-I previously wrote that this optimisation REQUIRES const to be deep, and used
-C's shallow const as evidence of a gap in L2's model. That was wrong, and Codex
-corrected it from the spec. const and immutable are independent qualifications on
-different things and neither is a deeper version of the other: const fixes a
-BINDING and says nothing about the referent; immutable fixes CONTENTS through
-all aliases and says nothing about the binding. Only their composition freezes
-both. Shallow const is therefore not a defect to be repaired - it is the
-definition. Writing const now is not tidiness ahead of
-a compiler that will use it - it is recording, while the author still knows, the
-fact the optimisation will need.
+emits const int frozen_value = 7 and const char *frozen_text = "abc".
+The second pointer can be reassigned; the pointed-to characters are const.
+Use it where the declarations really are read-only, not around arbitrary
+control-flow bodies. L1_spec section5 defines admitted forms and diagnostics.
 
-immutable is being added to L1 by Codex in a free semantic form. Availability is
-TOOL-VERSION-SPECIFIC and that distinction matters here: the root implementation
-is published, but the STG default translator - the one this subtree builds with -
-has not been promoted to it yet. So it exists, and we cannot use it. Do not
-invent a spelling in the meantime; a second one would have to be unpicked.
+L2 const (binding) and immutable (contents) remain separate concepts. Do not
+claim this L1 grouping performs runtime graph freezing, freezes every alias,
+or implements every future L2 optimisation. Recording actual read-only intent
+now helps the later port, but the emitted C type is the present guarantee.
 
 1.1. Use the PARENTHESISED form
 
@@ -191,7 +187,7 @@ do not reintroduce them.
 
 Current promoted baseline mark (run_mixa.ps1 prints both every run):
 
-    translator binary        C05E6E5F
+    translator binary        65D5A5ED
     generated-source         09A06E45
 
 6.1. c.sizeof of a pointer type - DONE
