@@ -1,0 +1,8 @@
+# Current user compact-header sketch with corrected for\j spelling.
+# Header grammar for (...) vs for(...) is a separate syntax question, not field visibility.
+fn: test () int
+    for (int i: 0; i < 10; i++)
+        int: j i
+    end: for
+    c.printf: "%d\n" for\j
+return: 0

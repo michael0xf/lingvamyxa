@@ -104,6 +104,10 @@ prototype:
     fn: l2_own_add (const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP0Node at)) int
     fn: l2_formal_find (int: mi; const: @(LmP0Text t)) int
     fn: l2_param_find (int: mi; const: @(LmP0Text t)) int
+    fn: l2_param_ty (int: mi; const: @(LmP0Text t)) int
+    fn: l2_is_asgn (const: @(LmP0Node stmt)) int
+    fn: l2_collect_asgn_body (const: @(LmP0Structure body); int: mi; const: @(char path)) int
+    fn: l2_collect_asgn_binds (const: @(char path)) int
     fn: l2_dyn_find (int: mi; const: @(LmP0Text t)) int
     fn: l2_bind_own (int: mi; int: oi; const: @(char path); const: @(LmP0Node at)) int
     fn: l2_dyn_analyze (const: @(char path)) int
@@ -2199,6 +2203,114 @@ fn: l2_param_find (int: mi; const: @(LmP0Text t)) int
         return: l2_m_arity[mi] + di
 return: -1
 
+fn: l2_param_ty (int: mi; const: @(LmP0Text t)) int
+    int: fi
+    int: di
+    if: mi < 0 || t = 0
+        return: 0
+    fi: l2_formal_find(mi, t)
+    if: fi >= 0
+        return: l2_ft(mi, fi)
+    di: l2_dyn_find(mi, t)
+    if: di >= 0
+        return: l2_dt(mi, di)
+return: 0
+
+fn: l2_is_asgn (const: @(LmP0Node stmt)) int
+    const: @: LmP0Text h
+    if: stmt = 0 || stmt\kind != c.LM_P0_NODE_FRAME || stmt\as = 0 || stmt\as\frame = 0
+        return: 0
+    h: stmt\as\frame\head
+    if: h = 0 || l2_ident(h) = 0
+        return: 0
+    if: l2_frame_head(stmt, "if") || l2_frame_head(stmt, "else") || l2_frame_head(stmt, "while") || l2_frame_head(stmt, "for") || l2_frame_head(stmt, "return") || l2_frame_head(stmt, "fn") || l2_frame_head(stmt, "sub") || l2_frame_head(stmt, "end") || l2_frame_head(stmt, "char") || l2_frame_head(stmt, "size_t") || l2_frame_head(stmt, "@")
+        return: 0
+    if: l2_find_method(h) >= 0 || l2_is_known(h)
+        return: 0
+    if: h\length >= 2U && h\data[0] = 99 && h\data[1] = 46
+        return: 0
+    if: stmt\as\frame\body = 0
+        return: 0
+return: 1
+
+fn: l2_collect_asgn_body (const: @(LmP0Structure body); int: mi; const: @(char path)) int
+    @: LmP0Field field
+    @: LmP0Field nxt
+    @: LmP0Field last
+    @: LmP0Node stmt
+    const: @: LmP0Frame fr
+    @: LmP0Text fa
+    int: n
+    int: k
+    int: j
+    int: ty
+    int: used
+    if: body = 0 || mi < 0
+        return: 0
+    field: l2_next_active(body\first_field)
+    while: field != 0
+        stmt: field\value
+        if: l2_frame_head(stmt, "if")
+            fr: stmt\as\frame
+            n: l2_count_active(fr\body)
+            last: l2_next_active(fr\body\first_field)
+            k: 1
+            while: k < n
+                last: l2_next_active(last\next)
+                k: k + 1
+            if: last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE && l2_collect_asgn_body(last\value\as\structure, mi, path) != 0
+                return: 1
+            nxt: l2_next_active(field\next)
+            if: nxt != 0 && l2_frame_head(nxt\value, "else") && nxt\value\as != 0 && nxt\value\as\frame != 0 && l2_collect_asgn_body(nxt\value\as\frame\body, mi, path) != 0
+                return: 1
+            if: nxt != 0 && l2_frame_head(nxt\value, "else")
+                field: l2_next_active(nxt\next)
+            if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
+                field: nxt
+            ---
+        if: l2_frame_head(stmt, "while")
+            fr: stmt\as\frame
+            n: l2_count_active(fr\body)
+            last: l2_next_active(fr\body\first_field)
+            k: 1
+            while: k < n
+                last: l2_next_active(last\next)
+                k: k + 1
+            if: n >= 2 && last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE && l2_collect_asgn_body(last\value\as\structure, mi, path) != 0
+                return: 1
+            field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_asgn(stmt)
+            fa: stmt\as\frame\head
+            ty: l2_param_ty(mi, fa)
+            j: -1
+            used: 0
+            if: ty = 1 || ty = 2
+                j: l2_own_add(fa, ty, path, stmt)
+            if: (ty = 1 || ty = 2) && j < 0
+                return: 1
+            if: (ty = 1 || ty = 2) && l2_own_off(mi, j) = (cast: (size_t) -1)
+                return: l2_error(path, stmt, "size overflow")
+            if: ty = 1 || ty = 2
+                used: l2_m_uses[l2_own_off(mi, j)]
+            if: ty = 1 || ty = 2
+                l2_m_uses[l2_own_off(mi, j)]: 1
+            if: (ty = 1 || ty = 2) && used = 0
+                l2_m_own[mi]: l2_m_own[mi] + 1
+            if: (ty = 1 || ty = 2) && l2_bind_own(mi, j, path, stmt) != 0
+                return: 1
+            field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_asgn(stmt) = 0
+            field: l2_next_active(field\next)
+return: 0
+
+fn: l2_collect_asgn_binds (const: @(char path)) int
+    int: i 0
+    while: i < l2_m_n
+        if: l2_m_body[i] != 0 && l2_m_body[i]\as != 0 && l2_collect_asgn_body(l2_m_body[i]\as\structure, i, path) != 0
+            return: 1
+        i: i + 1
+return: 0
+
 fn: l2_bind_own (int: mi; int: oi; const: @(char path); const: @(LmP0Node at)) int
     int: fi 0
     if: mi < 0 || oi < 0
@@ -2427,15 +2539,22 @@ fn: l2_scan_body (const: @(LmP0Structure body); int: mi; @: int seen) int
             if: n >= 2 && last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE && l2_scan_body(last\value\as\structure, mi, seen) != 0
                 return: 1
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_own_decl_ty(stmt) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_asgn(stmt)
+            if: stmt\as\frame\body != 0 && l2_scan_fields(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), mi, seen) != 0
+                return: 1
+            oi: l2_own_find(stmt\as\frame\head)
+            if: oi >= 0 && seen != 0
+                seen[oi]: 1
+            field: l2_next_active(field\next)
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_asgn(stmt) = 0 && l2_own_decl_ty(stmt) != 0
             fa: l2_next_active(stmt\as\frame\body\first_field)\value\as\atom
             oi: l2_own_find(fa)
             if: oi >= 0 && seen != 0
                 seen[oi]: 1
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_own_decl_ty(stmt) = 0 && l2_is_char_decl(stmt)
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_asgn(stmt) = 0 && l2_own_decl_ty(stmt) = 0 && l2_is_char_decl(stmt)
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_char_decl(stmt) = 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_asgn(stmt) = 0 && l2_is_char_decl(stmt) = 0
             if: stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && l2_scan_ident(mi, stmt\as\frame\head, seen) != 0
                 return: 1
             if: stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\body != 0 && l2_scan_fields(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), mi, seen) != 0
@@ -3490,6 +3609,8 @@ fn: l2_parse_unit (const: @(LmP0Node main_node); const: @(char path)) int
         return: 1
     if: l2_dyn_close(path) != 0
         return: 1
+    if: l2_collect_asgn_binds(path) != 0
+        return: 1
     i: 0
     while: i < l2_m_n
         l2_m_sig[i]: l2_intern_mi(i)
@@ -4411,6 +4532,10 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             fi: l2_m_alias[l2_own_off(mi, oi)]
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && l2_own_live[oi] = 0 && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_child(node, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, (cast: (unsigned) oi), ind, oi, ind) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && l2_own_live[oi] = 0
+            l2_own_live[oi]: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi < 0 && c.fprintf(l2_out, "%sl2_q%d: %s\n", ind, oi, l2_tok) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && c.fprintf(l2_out, "%sl2_p%d_%d: %s\n", ind, mi, fi, l2_tok) < 0

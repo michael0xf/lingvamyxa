@@ -1013,8 +1013,8 @@ if ($bindFn.IndexOf("l2_p2_0") -lt 0) { throw "aliased own must use the paramete
 if ($bindFn.IndexOf("l2_q0_dirty: 1") -lt 0) { throw "aliased own assign after bind must dirty" }
 if ($bindFn -notmatch 'l2_p2_0: 1') { throw "assign before own-decl must write the parameter" }
 $passFn = [regex]::Match($bg, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
-if ($passFn.IndexOf("l2_q0_dirty") -ge 0) { throw "parameter without own bind must never dirty" }
-if ($passFn.IndexOf("l2_p1_0: 65") -lt 0) { throw "parameter without own bind must still accept local assign" }
+if ($passFn.IndexOf("l2_q0_dirty") -lt 0) { throw "assignment-as-declaration of a known-type param must dirty" }
+if ($passFn.IndexOf("l2_p1_0: 65") -lt 0) { throw "parameter assignment-as-declaration must still write the parameter" }
 $dBind = Invoke-SpliceDrive "unit_bind" @"
         @: Lmx f 0
         l2_m1(unit, 90)
@@ -1042,7 +1042,7 @@ $dBind = Invoke-SpliceDrive "unit_bind" @"
     end: main
 end: external
 "@
-if ($dBind -ne "0`n0`n65`n66`n77`n66`n65`n") { throw "same-name bind graph got $dBind" }
+if ($dBind -ne "65`n65`n65`n66`n77`n66`n65`n") { throw "same-name bind graph got $dBind" }
 
 Invoke-Leaf "l2src\tests\unit_bind_sz.lm2" "unit_bind_sz" 0 "m"
 $szg = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_bind_sz.lm1")))
@@ -1060,6 +1060,80 @@ end: external
 if ($dSz -ne "3`n3`n") { throw "size_t same-name bind got $dSz" }
 
 Invoke-Negative "l2src\tests\unit_bind_ifdecl.lm2" "unit_bind_ifdecl" "unsupported own declaration"
+
+Invoke-Leaf "l2src\tests\unit_asgn_bind.lm2" "unit_asgn_bind" 0 "inc"
+$ag = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_asgn_bind.lm1"))).Replace("`r`n", "`n")
+$incFn = [regex]::Match($ag, 'fn: l2_m0[\s\S]*?end: l2_m0').Value
+if ($incFn.IndexOf("l2_q0_dirty: 1") -lt 0) { throw "inc x: x+1 must dirty after assignment-as-declaration" }
+if ($incFn -notmatch 'l2_p0_0:') { throw "inc must write the known-type parameter, not a renamed local" }
+if ($incFn.IndexOf("&l2_q") -ge 0) { throw "inc must not take address of own cache" }
+$passA = [regex]::Match($ag, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
+if ($passA.IndexOf("l2_q0_dirty") -lt 0) { throw "pass x: 65 must bind/dirty without a prior char: x" }
+$dAsgn = Invoke-SpliceDrive "unit_asgn_bind" @"
+        @: Lmx src 0
+        @: Lmx fs 0
+        @: Lmx fr 0
+        src: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))
+        if: src = 0
+            return: 1
+        lmx_cell_init(src, 0, 0)
+        if: lmx_branch_open(src, 1U) != 0
+            return: 1
+        fs: lmx_branch_child(src, 0U)
+        fr: lmx_branch_child(unit, 0U)
+        if: fs = 0 || fr = 0
+            return: 1
+        fs\data: lmx_char_cell(10)
+        l2_m0(unit, 10)
+        c.printf("%d\n", lmx_char_value(fr\data))
+        c.printf("%d\n", lmx_char_value(fs\data))
+        fr\data: lmx_char_cell(0)
+        l2_m1(unit, 65)
+        c.printf("%d\n", lmx_char_value(fr\data))
+        c.printf("%d\n", lmx_char_value(fs\data))
+        fr\data: lmx_char_cell(0)
+        l2_m3(unit, 10)
+        c.printf("%d\n", lmx_char_value(fr\data))
+        c.printf("%d\n", lmx_char_value(fs\data))
+        fr\data: lmx_char_cell(20)
+        c.printf("%d\n", l2_m2(unit, (cast: (char) lmx_char_value(fr\data))))
+        c.printf("%d\n", lmx_char_value(fr\data))
+        c.printf("%d\n", lmx_char_value(fs\data))
+        return: 0
+    end: main
+end: external
+"@
+# inc/pass/wrap publish receiving graph only; src stays 10. fallback hid reads recv 20 then publishes 21.
+if ($dAsgn -ne "11`n10`n65`n10`n11`n10`n0`n21`n10`n") { throw "asgn-bind caller vs fallback graphs got $dAsgn" }
+
+Invoke-Leaf "l2src\tests\unit_asgn_bind_sz.lm2" "unit_asgn_bind_sz" 0 "inc"
+$dAsz = Invoke-SpliceDrive "unit_asgn_bind_sz" @"
+        @: Lmx src 0
+        @: Lmx fs 0
+        @: Lmx fr 0
+        src: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))
+        if: src = 0
+            return: 1
+        lmx_cell_init(src, 0, 0)
+        if: lmx_branch_open(src, 1U) != 0
+            return: 1
+        fs: lmx_branch_child(src, 0U)
+        fr: lmx_branch_child(unit, 0U)
+        if: fs = 0 || fr = 0
+            return: 1
+        fs\data: lmx_size_take()
+        if: fs\data = 0
+            return: 1
+        if: lmx_size_store(fs\data, 9U) != 0
+            return: 1
+        l2_m0(unit, 9U)
+        c.printf("%zu\n", lmx_size_value(fr\data))
+        c.printf("%zu\n", lmx_size_value(fs\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($dAsz -ne "10`n9`n") { throw "size_t asgn-bind graphs got $dAsz" }
 
 # C99 &&/|| yield int 0/1. Oracle is C, not this emitter.
 Invoke-Leaf "l2src\tests\unit_bool_and.lm2" "unit_bool_and" 1 "f"
@@ -1640,8 +1714,9 @@ if ($dmid -ne "1`n") { throw "dyn mid chain: $dmid" }
 Invoke-Leaf "l2src\tests\unit_dyn_predecl.lm2" "unit_dyn_predecl" 0 "leaf"
 $dp = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_predecl.lm1")))
 $leafFn = [regex]::Match($dp, 'fn: l2_m0[\s\S]*?end: l2_m0').Value
-if ($leafFn -notmatch 'l2_p0_0: 1') { throw "predecl assign before bind must write hidden param" }
-if ($leafFn -notmatch 'l2_p0_0: 66') { throw "predecl assign after bind must write the same param" }
+if ($leafFn -match 'char: l2_p0_0') { throw "predecl quote: 1 is not a hidden-param use; typed char: quote is own-only" }
+if ($leafFn -notmatch 'l2_q0: 1') { throw "predecl quote: 1 must write own cache" }
+if ($leafFn -notmatch 'l2_q0: 66') { throw "predecl quote: 66 must write the same own cache" }
 $dpre = Invoke-SpliceDrive "unit_dyn_predecl" @"
         @: Lmx unit2 0
         @: Lmx f 0
@@ -1657,14 +1732,14 @@ $dpre = Invoke-SpliceDrive "unit_dyn_predecl" @"
             return: 1
         g\data: lmx_char_cell(0)
         f: lmx_branch_child(unit, 0U)
-        l2_m0(unit2, 65)
+        l2_m0(unit2)
         c.printf("%d\n", lmx_char_value(f\data))
         c.printf("%d\n", lmx_char_value(g\data))
         return: 0
     end: main
 end: external
 "@
-# distinct 21.8 nodes: unit stays 0; unit2 publishes 66 from hidden->own bind
+# distinct 21.8 nodes: unit stays 0; unit2 publishes 66 from own bind, not source writeback
 if ($dpre -ne "0`n66`n") { throw "predecl distinct-instance publish: $dpre" }
 
 Invoke-Leaf "l2src\tests\unit_dyn_fallback.lm2" "unit_dyn_fallback" 0 "leaf"
@@ -1691,9 +1766,9 @@ Invoke-Leaf "l2src\tests\unit_dyn_early.lm2" "unit_dyn_early" 0 "leaf"
 $dearly = Invoke-SpliceDrive "unit_dyn_early" @"
         @: Lmx f 0
         f: lmx_branch_child(unit, 0U)
-        c.printf("%d\n", l2_m0(unit, 0, 65))
+        c.printf("%d\n", l2_m0(unit, 0))
         c.printf("%d\n", lmx_char_value(f\data))
-        c.printf("%d\n", l2_m0(unit, 1, 65))
+        c.printf("%d\n", l2_m0(unit, 1))
         c.printf("%d\n", lmx_char_value(f\data))
         return: 0
     end: main

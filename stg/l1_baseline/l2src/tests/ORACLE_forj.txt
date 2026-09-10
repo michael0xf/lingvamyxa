@@ -16,3 +16,9 @@ Keep separate:
   1. old 620db86 reference trees
   2. current P0 dumps (these *.lm0.tree)
   3. semantic receiver (for\j as L2 field) — intended, currently unsupported
+
+Compact-header sketches (not the established for: int(i, 0)... probe):
+  unit_forj_compact.lmx       historical dotted-invalid for.j
+  unit_forj_compact_path.lmx  current user compact header + for\j
+  unit_forj_compact_adj.lmx   adjacent for(...) header; independent of whitespace
+  Header grammar and field visibility are separate questions.
