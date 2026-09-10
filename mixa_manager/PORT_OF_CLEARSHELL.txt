@@ -80,6 +80,7 @@ converts once and every consumer agrees.
 
 2.3. Layer arrangement
 
+  ClearShell    text input attached at the TOP; beneath it, the camera image
   here          Norton-style: input on the BOTTOM line, output scrolling
                 upward, and the panel layer semi-transparent OVER the console
                 so the output stays readable beneath it.
@@ -87,7 +88,6 @@ converts once and every consumer agrees.
                 is drawn at the top and the view follows the cursor, so an empty
                 file puts the cursor at the TOP and nothing is pinned to the
                 bottom row until the file outgrows the screen - FIRST_VERSION 5
-                so the output stays readable beneath it
 
 2.4. The button panels
 
