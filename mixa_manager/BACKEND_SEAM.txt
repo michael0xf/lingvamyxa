@@ -558,3 +558,90 @@ today.
 Dynamic loading is NOT part of this. A table selected from a fixed set is enough
 to satisfy "swappable in settings", and loading code from disk is a decision
 with its own consequences.
+
+11.5. The resolved shape
+
+Section 11.2 said "a dispatch table" without saying where the HANDLE comes from,
+and that turned out to be the whole design. Two implementations were written
+from that sentence and they disagreed on exactly this. Settled 2026-09-10:
+
+  struct MixaBackend { const MixaBackendVTable *vt; };
+
+MixaBackend becomes COMPLETE and carries exactly one field. Each concrete
+backend declares its own struct whose FIRST member is the same pointer, and
+casts between the two. The six non-open operations forward through
+backend->vt, so THEY DID NOT CHANGE and neither did their call sites.
+
+open did change, and had to:
+
+  int mixa_backend_open(const MixaBackendVTable *vt, MixaBackend **out,
+                        size_t cols, size_t rows, MixaCellMetrics *metrics);
+
+The backend allocates. The caller cannot own the storage any more, and this is
+the load-bearing part of the section rather than a detail: owning the storage
+means knowing the concrete size, knowing the concrete size means including one
+concrete backend's header, and that include is the hard binding 11.0 exists to
+remove. A table laid over a caller-allocated handle does not remove it - the
+#ifdef moves from the call to the allocation and the port still edits a call
+site, which 11.2 says it must not.
+
+That is also why "the operation functions no longer share global symbol names"
+is not by itself the goal. Decoupling the NAMES is necessary and not
+sufficient; what the section asks for is a build where two backends coexist and
+one is chosen, and only backend-allocated handles get there.
+
+It is not a regression against the old contract either: that contract asked the
+caller to zero the struct before first open and admitted in its own comment that
+open could not tell a never-opened backend from uninitialised memory.
+Backend-allocated has nothing to mistake, and close frees.
+
+Two shapes were rejected:
+
+  - A GLOBAL selected table, with the free functions reading it. Fewer edits,
+    but it makes the choice process-wide, and a Message is a thread with its own
+    lane (Lingvamyxa_spec.txt 19.29.6) - a per-process backend is a shared
+    mutable the model does not otherwise have. Per-handle costs one pointer.
+  - A size field in the table, so the caller keeps allocating. Preserves open's
+    signature, but every allocation site changes anyway (sizeof of an incomplete
+    type is not available), so it buys nothing and keeps the footgun.
+
+Symbol names follow from the above: two backends in one binary cannot both
+export mixa_backend_open. The concrete implementations take the backend's own
+prefix (mixa_headless_*, mixa_win32_*) and only the table constructor is public.
+
+One typedef per operation (MixaBackendOpenFn and the rest) rather than inline
+function-pointer syntax in the struct - adopted from the competing draft, which
+had it and was right. The table then reads as a list of operations.
+
+11.6. That it is expressible in L1, verified rather than assumed
+
+Probed against the stable STG translator 65D5A5ED (the promoted default of
+2026-09-10 01:37, not the root build tree), compiled with -Wall -Wextra
+-Wpedantic, run:
+
+  - a struct field of function-pointer type, assigned a function by name and
+    called through: t\open: a_open, then t\open(...)
+  - chained follow through the table: b\vt\get(b), b\vt\name
+  - the base/concrete cast both ways: (cast: (@: Base) s) and (cast: (@: ImplA) b)
+  - the out-parameter: parameter @@: Base out, written as out[0], passed as @ b
+  - a function returning const: @(VT3), and a body-less prototype line ahead of
+    its definition so the constructor can be named inside the functions it holds
+  - a module-level `@: VT3 g_table` as the singleton slot, returning the same
+    pointer on the second call
+  - an all-or-nothing validator over name plus every slot
+
+None of it needed a workaround. The one thing that does NOT work is a
+struct-typed LOCAL: L1 handles structs through pointers, so the table is
+allocated once and returned, not declared as a static initialiser. A constructor
+returning a validated singleton is the L1-shaped way to write it anyway.
+
+Spellings, since three of them cost a probe each: pointer-to-pointer is @@: T x
+(not @: @:), address-of is the prefix @ x (not &x), and a const pointer LOCAL
+puts the name inside the parens - const: @(VT3 t), matching the parameter form.
+
+An earlier revision of this section credited these probes to C05E6E5F. That was
+wrong in two ways: C05E6E5F was no longer the default by then, and the binary
+actually used was build/l1trans/gen2 - the ROOT build - not the STG baseline
+this project builds against. Every finding above reproduces on 65D5A5ED; the
+attribution was the error, not the result. Recorded rather than quietly fixed,
+because "verified" is worth nothing if it does not say verified against WHAT.

@@ -224,3 +224,41 @@ Site now uses a stack array (no calloc/free):
     the empty-colon rule is a deliberate grammar change. We have NO bare
       `receiver:` without a following block anywhere - checked across every
       .lm1 in this subtree - so it costs us nothing.
+
+7. Closing blocks: when `---` is actually needed
+
+Verified on the stable stg translator 65D5A5ED, 2026-09-10, all four cases run.
+Written down because I got it wrong twice and cost grok_bot a correction each
+time.
+
+`---` is required in EXACTLY ONE situation: a dedent of two or more levels in
+the middle of a body. Everywhere else it is noise.
+
+  a) dedent by ONE level, no cutter          accepted
+  b) dedent by TWO OR MORE, no cutter        parse error 13, "source level
+                                             decrease must be one step unless a
+                                             tail cutter is used"
+  c) end of unit, any depth, no cutter       accepted, all braces emitted
+  d) a trailer at an admitted position       cuts ANY number of levels
+
+(d) is the one that removes most of the `---`. A `return` written at the level
+of its own `fn:` opening closes the whole nest under it:
+
+    fn: f (int: a) int
+        if: a > 0
+            if: a < 9
+                a: a + 1
+    return: a          -> closes both ifs and the function
+
+7.1. The two refusals look alike and are not
+
+    "source level decrease must be one step unless a tail cutter is used"
+        -> you stepped out too far with nothing to do it. Add `---`.
+
+    "tail-cutter target is not valid for this receiver"
+        -> your trailer is at a level whose construct it may not close - a
+           `return` indented into an `if`, typically. MOVE IT OUT. Adding `---`
+           does not fix this one, and reading it as a depth limit is what led me
+           to report a nonexistent one-level restriction to Codex.
+
+Position selects the trailer's target. That is the whole rule; the rest follows.

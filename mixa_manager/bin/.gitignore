@@ -1,0 +1,4 @@
+# Binaries are not tracked. Keep the directory and its README, nothing else.
+*
+!.gitignore
+!README.txt

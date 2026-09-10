@@ -45,9 +45,22 @@
 #include <stddef.h>
 #include "mixa_manager/mixa_overlay.h"   /* MixaU8 */
 
-/* The backend owns its own state. Callers hold an opaque pointer and never see
- * a platform handle. */
+/* The backend owns its own state, including its own allocation. Callers hold a
+ * pointer to this base and never see a platform handle.
+ *
+ * MixaBackend is COMPLETE and carries exactly one field: the dispatch table the
+ * handle was opened with. Every concrete backend declares its own struct with
+ * the same pointer as its FIRST member and casts between the two, which is what
+ * lets several backends link into one binary and be chosen at startup - see
+ * BACKEND_SEAM.txt section 11. The six non-open operations below are plain
+ * forwards through this field, so their call sites did not have to change when
+ * dispatch arrived; they read backend->vt and nothing else. */
+typedef struct MixaBackendVTable MixaBackendVTable;
 typedef struct MixaBackend MixaBackend;
+
+struct MixaBackend {
+    const MixaBackendVTable *vt; /* never null between open and close */
+};
 
 typedef enum MixaEventKind {
     MIXA_EVENT_NONE = 0,
@@ -156,15 +169,26 @@ typedef struct MixaCellMetrics {
  * awkward: a caller that states a wish and never reads back what it got is
  * precisely the mistake that produces stretched, blurred text.
  *
- * The pointer is required and no value in it may be zero.
+ * The metrics pointer is required and no value in it may be zero.
  *
- * The caller owns the MixaBackend storage and MUST zero it before the first
- * open: open refuses a backend that is already open, but it cannot tell a
- * never-opened backend from uninitialised memory, and it does not initialise
- * the fields it has no value for yet. Sizing the struct needs the concrete
- * backend's own header, which is where the type is completed. */
-int mixa_backend_open(MixaBackend *backend, size_t cols, size_t rows,
-                      MixaCellMetrics *metrics);
+ * THE BACKEND ALLOCATES. vt selects which one; out receives the handle and is
+ * written only on success.
+ *
+ * An earlier revision had the CALLER own the storage and zero it before the
+ * first open. That cannot survive dispatch: owning the storage means knowing
+ * the concrete size, knowing the concrete size means including one concrete
+ * backend's header, and that include is exactly the hard binding to a platform
+ * that section 11 exists to remove. A table cannot undo it - the #ifdef simply
+ * moves from the call to the allocation.
+ *
+ * It also retires a footgun that revision documented against itself: open could
+ * not tell a never-opened backend from uninitialised memory. Now there is
+ * nothing to mistake.
+ *
+ * close frees the handle. Every successful open is paired with exactly one
+ * close, and close is a no-op on a null pointer. */
+int mixa_backend_open(const MixaBackendVTable *vt, MixaBackend **out,
+                      size_t cols, size_t rows, MixaCellMetrics *metrics);
 
 /* One composited frame. The buffer is borrowed for the call and not retained.
  * Refused unless it holds at least a whole frame at the CURRENT geometry - see
@@ -248,5 +272,82 @@ typedef struct MixaGlyph {
  * missing codepoint is a successful call with out->missing set. */
 int mixa_backend_glyph(MixaBackend *backend, int layer, unsigned int codepoint,
                        MixaGlyph *out);
+
+
+/* ---- Dispatch: one table per backend, chosen at startup ----------------- *
+ *
+ * Design: BACKEND_SEAM.txt section 11. The seam already said a target
+ * reimplements what mixa_backend.h declares and nothing else; the table is that
+ * sentence made checkable. A new platform adds a unit and a constructor. It
+ * does not edit a call site, an #ifdef, or this header.
+ *
+ * One typedef per operation rather than inline function-pointer syntax: the
+ * table then reads as a list of operations, and a reviewer can hold it beside
+ * the declarations above and see a missing one. Slot order matches declaration
+ * order for the same reason. */
+typedef int    (*MixaBackendOpenFn)(MixaBackend **out, size_t cols, size_t rows,
+                                    MixaCellMetrics *metrics);
+typedef int    (*MixaBackendPresentFn)(MixaBackend *backend, const MixaU8 *rgba,
+                                       size_t bytes);
+typedef int    (*MixaBackendPollFn)(MixaBackend *backend, MixaEvent *out);
+typedef size_t (*MixaBackendClipboardGetFn)(const MixaBackend *backend,
+                                            char *out, size_t cap);
+typedef int    (*MixaBackendClipboardSetFn)(MixaBackend *backend,
+                                            const char *text);
+typedef int    (*MixaBackendGlyphFn)(MixaBackend *backend, int layer,
+                                     unsigned int codepoint, MixaGlyph *out);
+typedef void   (*MixaBackendCloseFn)(MixaBackend *backend);
+
+/* name is for selection and diagnostics: short, lowercase, stable ("headless",
+ * "win32"). It is compared, so it is part of the contract, not a comment. */
+struct MixaBackendVTable {
+    const char *name;
+    MixaBackendOpenFn open;
+    MixaBackendPresentFn present;
+    MixaBackendPollFn poll;
+    MixaBackendClipboardGetFn clipboard_get;
+    MixaBackendClipboardSetFn clipboard_set;
+    MixaBackendGlyphFn glyph;
+    MixaBackendCloseFn close;
+};
+
+/* All-or-nothing. Non-zero when name is present and non-empty AND every slot is
+ * filled; zero otherwise, with no attempt to say WHICH slot is missing.
+ *
+ * Partial tables are the failure this exists to stop, and they are a
+ * PORTING-TIME mistake, not a runtime condition: someone adds an operation to
+ * the seam and one backend does not grow it. A table that half works fails
+ * later, in whatever feature happened to reach the empty slot, and the port
+ * looks finished until then. Validated once at selection, it fails at startup
+ * with the backend named.
+ *
+ * Non-zero means VALID. A predicate named _valid that returns 0 for valid is a
+ * trap for every call site that reads like English. */
+int mixa_backend_table_valid(const MixaBackendVTable *vt);
+
+/* The tables compiled into THIS build, in the order the build listed them.
+ * count is required; the array is static and outlives every caller. */
+const MixaBackendVTable *const *mixa_backend_tables(size_t *count);
+
+/* Selection at startup. Both return NULL rather than a partial or unknown
+ * table, and neither ever returns one that mixa_backend_table_valid rejects.
+ *
+ * by_name is the explicit choice - a command line flag, or a test picking the
+ * headless fixture on a machine that also has a real window. default_table is
+ * the first valid entry, which is why the build lists the real backend before
+ * the fixture. */
+const MixaBackendVTable *mixa_backend_table_by_name(const char *name);
+const MixaBackendVTable *mixa_backend_default_table(void);
+
+/* Each backend exports exactly one public symbol. Declared in the backend's own
+ * concrete header, not here, so that adding a platform does not touch the seam:
+ *
+ *     const MixaBackendVTable *mixa_backend_headless_table(void);
+ *     const MixaBackendVTable *mixa_backend_win32_table(void);
+ *
+ * A constructor returns a validated singleton. It does not fill a caller's
+ * table: a table is immutable once built, and handing out a pointer to the one
+ * copy is both cheaper and harder to corrupt than copying seven pointers into
+ * whatever storage the caller happened to provide. */
 
 #endif
