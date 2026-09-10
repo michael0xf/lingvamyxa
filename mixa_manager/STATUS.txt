@@ -173,6 +173,36 @@ Still open from the same probing:
       priority."
 
 
+6.1. Every L1 gap we know of - all reported, priority by the owner
+
+Mikhail, 2026-09-10: pass all the language holes to Codex to be fixed in
+priority. Sent as one list at 033812 to Codex and Grok, with the reproducible
+fixtures at mixa_manager/tests/l1_gaps.
+
+    A  no spelling for a const-qualified POINTER. 10.13. Bridged by naming a
+       type in a handwritten header; every future case needs another alias.
+    B  three spellings emit compiling garbage instead of diagnosing:
+       const const VT **, const ** on implicit int, const * VT transposed.
+       Codex agrees this is separate from A.
+    C  NO INTERNAL LINKAGE. `static:` is refused, "unsupported L1 form", and
+       every module-level object is a global. So the lazily built singleton -
+       the only way to have a table, given D - is a name in the program's
+       namespace, and two units naming their cache alike collide at link time.
+       This is the one with NO workaround inside L1 at all.
+    D  no struct-typed LOCAL, so anything value-shaped becomes calloc + free.
+    E  fnptr: exists only in header units, which are not promoted to STG, so
+       the vtable's types live in a handwritten C header.
+
+`external:` is NOT L1's static - checked, not assumed. It is a grouping receiver
+for PROTOTYPES: `external: fn: h (int: a) int` emits `int h(int a);` and
+`external: @: int g` is refused with "external without fn". Declare-elsewhere,
+the opposite direction from confine-to-here.
+
+Four of the five end the same way: something cannot be said in L1, so it moves
+into a handwritten C file. Individually small; together they are why
+mixa_manager now contains hand-written C SOURCE and not only headers.
+
+
 7. Standing constraints, unchanged
 
     the specification is mixa_manager/. Everything discussed goes into it,
