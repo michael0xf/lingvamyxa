@@ -10,26 +10,35 @@ Portable drain: lmx_msg_host_drain in lmx_message.lm1
 Owner / affinity
 ----------------
 The thread that calls lmx_msg_runtime_new owns the runtime.
-create / send / stop / end_turn / pump / recv / fail / poll / drive /
-set_now / state / inbox_n / host_drain / shutdown / delete are
-INVALID off that thread. Do not call them from Win32/proc callbacks.
+host_post may run on any thread. Do not call owner APIs from
+Win32/proc callbacks.
 
-host_post may run on any thread, including those callbacks.
+Off-owner returns (precise, not a blanket INVALID):
+  create/send/stop/end_turn/pump/recv/fail/set_now/drive/host_drain/
+  shutdown/init_copy/path_seg/host_wait -> LMX_MSG_INVALID
+  state/inbox_n/path_n/poll -> -1 (count/state forms)
+  runtime_delete -> void no-op (does not free)
+  env_release -> void, no runtime, any thread that owns the env
 
 Wake / drain
 ------------
-host_post copies the envelope (one malloc of bytes) onto the host
-ingress FIFO under a host mutex, then wakes. Linearization is mutex
-acquisition: one global FIFO; each producer is FIFO with itself.
+host_post (L1) copies the envelope once under the host mutex, enqueues,
+then wakes. Linearization is mutex acquisition: one global FIFO; each
+producer is FIFO with itself.
 
-The owner loop must drain:
-    lmx_msg_host_wait(rt, timeout_ms);   /* optional */
-    lmx_msg_host_drain(rt);              /* steal queue -> transport -> pump */
-    lmx_msg_recv(...)                    /* handler, owner thread only */
+Owner loop, bounded tick (never INFINITE):
+    st = lmx_msg_host_wait(rt, timeout_ms);
+        OK     = woken
+        EMPTY  = timeout or poll-0 with no signal
+        INVALID = not owner, missing rt, or timeout_ms==0xFFFFFFFF
+    lmx_msg_host_drain(rt);   /* steal queue -> transport -> pump */
+    lmx_msg_recv(...);        /* handler, owner thread only */
 
-Wake failure after enqueue does not un-accept the post. Drain on the
-ordinary host tick is sufficient. No destination arena mutation and
-no handler on the callback thread.
+Drain on every tick even if wait returned EMPTY. Wake failure after
+enqueue does not un-accept the post. No destination arena mutation
+and no handler on the callback thread.
+
+nonzero n with null bytes -> INVALID (malformed), not NOMEM.
 
 Acceptance vs admission
 -----------------------
@@ -46,17 +55,23 @@ must not malloc an extra copy to pass in; the seam copies once.
 
 Shutdown / quiescence
 ---------------------
-lmx_msg_runtime_shutdown sets shutting_down under the host mutex and
-wakes waiters. In-flight host_post either completes STAGED or sees
-the flag and returns STOPPED. Unregister callbacks, then shutdown,
-then delete. Addresses are not reused until the runtime is deleted.
-Late posts after STOPPED dest: still STAGED, then GONE at drain.
+Enforceable host lifetime (this API does not join foreign threads):
+  1. stop registering/admitting new callbacks
+  2. lmx_msg_runtime_shutdown  (future host_post -> STOPPED)
+  3. join EVERY in-flight callback/producer that may still call host_post
+  4. then lmx_msg_runtime_delete
+
+The runtime pointer remains valid through step 3. There is no
+registration handle in V0; if a callback source cannot be joined,
+do not delete. Late host_post after shutdown returns STOPPED.
+Late STAGED copies for a STOPPED dest are GONE at owner drain.
 
 Platform choice
 ---------------
-Win32: CRITICAL_SECTION + auto-reset Event.
-POSIX: pthread_mutex + pthread_cond.
-Not LM_THREAD_PROVIDER=single-safe for concurrent producers.
+Win32: CRITICAL_SECTION + auto-reset Event. Concurrent selftest
+executed on this machine.
+POSIX: pthread_mutex + pthread_cond. Written, not executed here.
+timeout_ms==0 is a poll. timeout_ms==0xFFFFFFFF is refused.
 
 Still not this version
 ----------------------
