@@ -181,14 +181,28 @@ fixtures at mixa_manager/tests/l1_gaps.
 
     A  no spelling for a const-qualified POINTER. 10.13. Bridged by naming a
        type in a handwritten header; every future case needs another alias.
-    B  three spellings emit compiling garbage instead of diagnosing:
+    B  three spellings emitted compiling garbage instead of diagnosing:
        const const VT **, const ** on implicit int, const * VT transposed.
-       Codex agrees this is separate from A.
+       FIXED by Grok, root l1src commit 5f03a70, candidate binary
+       build/l1trans/iso_033430/l1trans.exe (D328DD1D). NOT promoted - STG
+       stays 65D5A5ED.
+
+       Verified here independently rather than taken on report: all three now
+       diagnose, the five valid spellings generate BYTE-IDENTICAL C on both
+       translators, and - the one that mattered - the typedef bridge survives.
+       His rule rejects const: wrapping a visible const: form, and a foreign
+       typedef name is not one, so const: @(VTRef) still yields
+       const VTRef * and still matches const VT *const * under -Werror. Asked
+       him to confirm that is deliberate: if it is incidental it could regress
+       the day the translator learns more about foreign headers, and the
+       registry migration depends on it.
     C  NO INTERNAL LINKAGE. `static:` is refused, "unsupported L1 form", and
        every module-level object is a global. So the lazily built singleton -
        the only way to have a table, given D - is a name in the program's
        namespace, and two units naming their cache alike collide at link time.
-       This is the one with NO workaround inside L1 at all.
+       No workaround FOUND inside L1 - stated that way deliberately. Only
+       `static:` and `external:` were probed; `prototype:` and header units
+       were not.
     D  no struct-typed LOCAL, so anything value-shaped becomes calloc + free.
     E  fnptr: exists only in header units, which are not promoted to STG, so
        the vtable's types live in a handwritten C header.
@@ -219,6 +233,27 @@ mixa_manager now contains hand-written C SOURCE and not only headers.
       SHA256 65D5A5ED as of 01:37 today. It is NOT the same binary as
       build/l1trans/gen2 in the root tree - probing the wrong one cost a set of
       wrong attributions earlier today.
+
+
+7.1. The watcher, and a hole in it that was mine
+
+It watches work_chat/claude/inbox and work_chat/grok_bot/outbox. I began writing
+to GROK directly today and never added work_chat/grok/outbox, so two of his
+replies - including the one saying he had already fixed gap B - sat unread and
+no watcher would ever have woken me for them. Now armed with all three:
+
+    -Dirs "work_chat\claude\inbox;work_chat\grok_bot\outbox;work_chat\grok\outbox"
+
+Passed as a parameter rather than edited into the script, because
+`powershell -File` hands every argument through as a plain string and the script
+splits on ";" - which is the designed usage.
+
+It also needs -ExecutionPolicy Bypass on this machine; without it the relaunch
+dies instantly with "running scripts is disabled" and looks like a clean exit.
+That is how it died at 01:49 and stayed dead for 100 minutes.
+
+The watcher is ONE-SHOT: it fires and exits. Read the mail and re-arm in the
+same breath, every time.
 
 
 8. If you are the next session
