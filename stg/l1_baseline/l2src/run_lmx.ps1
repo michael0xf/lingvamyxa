@@ -28,7 +28,9 @@ foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "
     & $trans $src $c
     if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: $src" }
 
-    & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build $c -o $exe 2>&1 |
+    $extra = @()
+    if ($unit -eq "lmx_message_selftest") { $extra = @("l2src\lmx_message_host.c") }
+    & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build $c @extra -o $exe 2>&1 |
         Tee-Object -FilePath (Join-Path $log "$unit.gcc.log") | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Get-Content (Join-Path $log "$unit.gcc.log")
@@ -38,6 +40,18 @@ foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "
     & $exe
     if ($LASTEXITCODE -ne 0) { throw "$gen $unit failed" }
 }
+$msgC = Join-Path $out "lmx_message.c"
+& $trans "l2src\lmx_message.lm1" $msgC
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: l2src\lmx_message.lm1" }
+$hostExe = Join-Path $out "lmx_message_host_selftest.exe"
+& gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build "l2src\lmx_message_host_selftest.c" $msgC "l2src\lmx_message_host.c" -o $hostExe 2>&1 |
+    Tee-Object -FilePath (Join-Path $log "lmx_message_host_selftest.gcc.log") | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Get-Content (Join-Path $log "lmx_message_host_selftest.gcc.log")
+    throw "$gen gcc failed: lmx_message_host_selftest"
+}
+& $hostExe
+if ($LASTEXITCODE -ne 0) { throw "$gen lmx_message_host_selftest failed" }
 "l2 lmx $gen ok"
 $suiteLog = Join-Path $log "lmx_suite.log"
 $toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $trans)).Hash

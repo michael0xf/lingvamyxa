@@ -469,6 +469,57 @@ fn: main () int
         ---
         lmx_msg_runtime_delete(rt2)
     ---
+    @: LmxMsgRuntime hrt
+    unsigned: host_parent 0U
+    unsigned: host_child 0U
+    hrt: lmx_msg_runtime_new()
+    if: hrt = 0
+        c.printf("host runtime\n")
+        fail: fail + 1
+    st: lmx_msg_create(hrt, 0U, 1U, payload, 4U, @ host_parent)
+    st: lmx_msg_create(hrt, host_parent, 90U, payload, 4U, @ host_child)
+    st: lmx_msg_end_turn(hrt, host_parent, 1)
+    payload[0]: 77
+    env\id: 80U
+    env\correlation: 8U
+    env\reply_to: parent
+    env\kind: c.LMX_MSG_KIND_BYTES
+    env\bytes: payload
+    env\n: 4U
+    st: c.lmx_msg_host_post(hrt, host_child, env)
+    if: st != c.LMX_MSG_STAGED
+        c.printf("host_post did not accept\n")
+        fail: fail + 1
+    payload[0]: 1
+    if: lmx_msg_inbox_n(hrt, host_child) != 0
+        c.printf("host_post admitted without drain\n")
+        fail: fail + 1
+    st: lmx_msg_host_drain(hrt)
+    st: lmx_msg_recv(hrt, host_child, got)
+    if: st != c.LMX_MSG_OK || got\id != 80U || got\n != 4U || got\bytes[0] != 77
+        c.printf("host drain/recv lost copy\n")
+        fail: fail + 1
+    lmx_msg_env_release(got)
+    st: lmx_msg_stop(hrt, host_parent, host_child)
+    st: lmx_msg_end_turn(hrt, host_parent, 1)
+    st: lmx_msg_pump(hrt)
+    st: lmx_msg_end_turn(hrt, host_child, 1)
+    env\id: 81U
+    payload[0]: 9
+    st: c.lmx_msg_host_post(hrt, host_child, env)
+    if: st != c.LMX_MSG_STAGED
+        c.printf("host_post after stop must still accept\n")
+        fail: fail + 1
+    st: lmx_msg_host_drain(hrt)
+    if: lmx_msg_inbox_n(hrt, host_child) != 0
+        c.printf("stopped dest admitted host post\n")
+        fail: fail + 1
+    st: lmx_msg_runtime_shutdown(hrt)
+    st: c.lmx_msg_host_post(hrt, host_child, env)
+    if: st != c.LMX_MSG_STOPPED
+        c.printf("host_post after shutdown\n")
+        fail: fail + 1
+    lmx_msg_runtime_delete(hrt)
     c.free((cast: (@: void) payload))
     c.free((cast: (@: void) env))
     c.free((cast: (@: void) got))

@@ -1347,6 +1347,25 @@ counter + append (not LmxMsgAddr, not packed Java int).
 Prototype PATH_CAP 16 refuses rather than wrap. Not
 routing/rights. Not every Mix cell is a running Message.
 
+Unit 28b - host ingress V0 (092900)
+-----------------------------------
+Files: lmx_message.h, lmx_message.lm1, lmx_message_host.h,
+lmx_message_host.c, lmx_message_selftest.lm1,
+lmx_message_host_selftest.c, run_lmx.ps1, LMX_MSG_HOST_INGRESS_V0.txt
+
+DECIDED: owner thread is the caller of runtime_new. Foreign threads
+may only host_post. Mutex+wake protect the host queue only
+(Win32 CRITICAL_SECTION+auto-reset Event; POSIX mutex+cond).
+No OS thread per Message. host_post copies once under the mutex
+and returns STAGED (acceptance). dest lookup is owner drain/admit
+(GONE if stopped/dead). Caller may overwrite/free env->bytes after
+return. Shutdown sets a flag under the same mutex so post does not
+read rt->tab. Remaining limitation: create/send/pump/recv are still
+serialized owner-only; concurrent Message *execution* is not this
+slice. done[32] is an existing prototype cap; high-volume host
+events use id=0. AVOIDED: app C locks; new language kinds (BYTES
+envelopes). ASK none.
+
 Unit 29 - fence line matchers (block-string = / raw-comment *)
 -------------------------------------------------------------
 Files: parser_fence_line.lm2, run_l2trans.ps1, OPEN_POINTS.txt,

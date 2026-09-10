@@ -41,6 +41,11 @@ typedef unsigned char uchar;
 /* Prototype path storage. Not a language-level depth or width limit. */
 #define LMX_MSG_PATH_CAP 16
 
+/* Versioned host-ingress seam. Not a promise that create/send/pump/recv
+ * are multi-thread safe. Only lmx_msg_host_post may run off the owner thread. */
+#define LMX_MSG_HOST_INGRESS_VERSION 0
+#define LMX_MSG_HOST_FROM 0U
+
 typedef unsigned LmxMsgAddr;
 
 typedef struct LmxMsgEnv {
@@ -99,6 +104,9 @@ typedef struct LmxMsgRuntime {
     int cap;
     LmxMsgCopy *transport;
     LmxMsgCopy *transport_tail;
+    LmxMsgCopy *host_head;
+    LmxMsgCopy *host_tail;
+    void *host_sync;
     unsigned next_addr;
     unsigned clock;
     unsigned root_seq;
@@ -123,5 +131,10 @@ int lmx_msg_poll(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now, unsigned thres
 int lmx_msg_drive(LmxMsgRuntime *rt, unsigned now, unsigned threshold);
 int lmx_msg_path_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_path_seg(LmxMsgRuntime *rt, LmxMsgAddr who, int i, unsigned *out);
+
+int lmx_msg_runtime_shutdown(LmxMsgRuntime *rt);
+int lmx_msg_host_post(LmxMsgRuntime *rt, LmxMsgAddr dest, const LmxMsgEnv *env);
+int lmx_msg_host_drain(LmxMsgRuntime *rt);
+int lmx_msg_host_wait(LmxMsgRuntime *rt, unsigned timeout_ms);
 
 #endif
