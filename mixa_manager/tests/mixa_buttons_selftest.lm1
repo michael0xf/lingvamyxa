@@ -1,0 +1,198 @@
+predef: "mixa_manager/mixa_buttons.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# TASK 24: label-driven width, panel maxima, hit-test (incl. gap -> none).
+
+fn: main () int
+    @: MixaButtonPanel panel
+    @: MixaTextRect rect
+    size_t: w
+    size_t: hb
+    size_t: wb
+    size_t: failures
+    int: hit
+    const: @(MixaCell cell)
+    unsigned: cp
+    failures: 0U
+    hb: 4U
+    wb: (hb << 1U) - (hb >> 2U)
+
+    panel: (cast: (@: MixaButtonPanel) c.calloc(1U, c.sizeof(c.MixaButtonPanel)))
+    rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    if: panel = 0 || rect = 0
+        c.printf("mixa buttons: header alloc failed\n")
+        return: 1
+    ---
+
+    # --- label-driven width ---
+    w: mixa_button_width(hb, wb, "F1")
+    if: w != hb
+        c.printf("mixa buttons: F1 expected square %u got %u\n", (cast: (unsigned) hb), (cast: (unsigned) w))
+        failures: failures + 1U
+    ---
+    w: mixa_button_width(hb, wb, "Find filename")
+    if: w = hb
+        c.printf("mixa buttons: long label should not be square\n")
+        failures: failures + 1U
+    ---
+    if: w != (wb - (wb >> 2U))
+        c.printf("mixa buttons: long label expected wide %u got %u\n", (cast: (unsigned) (wb - (wb >> 2U))), (cast: (unsigned) w))
+        failures: failures + 1U
+    ---
+    # ClearShell: angle brackets keep square; they only skip enlarge.
+    w: mixa_button_width(hb, wb, "x>")
+    if: w != hb
+        c.printf("mixa buttons: label with > should stay square got %u\n", (cast: (unsigned) w))
+        failures: failures + 1U
+    ---
+    w: mixa_button_width(hb, wb, "<x")
+    if: w != hb
+        c.printf("mixa buttons: label with < should stay square got %u\n", (cast: (unsigned) w))
+        failures: failures + 1U
+    ---
+
+    # --- panel height/width = maxima; separator; two lines ---
+    if: mixa_button_panel_init(panel, hb) != MIXA_BUTTONS_OK
+        c.printf("mixa buttons: init failed\n")
+        return: 1
+    ---
+    if: mixa_button_panel_add(panel, 0U, "F1", 15U, 10U, 96U) != MIXA_BUTTONS_OK
+        c.printf("mixa buttons: add F1 failed\n")
+        return: 1
+    ---
+    if: mixa_button_panel_add_sep(panel, 0U) != MIXA_BUTTONS_OK
+        c.printf("mixa buttons: add sep failed\n")
+        return: 1
+    ---
+    if: mixa_button_panel_add(panel, 0U, "Find filename", 15U, 10U, 96U) != MIXA_BUTTONS_OK
+        c.printf("mixa buttons: add Find failed\n")
+        return: 1
+    ---
+    if: mixa_button_panel_add(panel, 1U, "Ab", 15U, 10U, 96U) != MIXA_BUTTONS_OK
+        c.printf("mixa buttons: add Ab failed\n")
+        return: 1
+    ---
+    if: mixa_button_panel_layout(panel) != MIXA_BUTTONS_OK
+        c.printf("mixa buttons: layout failed\n")
+        return: 1
+    ---
+    # line0: F1 (w=hb=4) + sep (hb>>1=2) + Find (w=wb-(wb>>2))
+    # x after F1+margin: 4+0=4 (margin=hb>>5=0), then sep +2 -> 6, then Find
+    # right = 6 + wide
+    # line1: Ab square at y = hb+margin = 4
+    # h_buttons = 4+4 = 8
+    if: panel\panel_h != (hb + hb)
+        c.printf("mixa buttons: panel_h expected %u got %u\n", (cast: (unsigned) (hb + hb)), (cast: (unsigned) panel\panel_h))
+        failures: failures + 1U
+    ---
+    if: panel\panel_w != (6U + (wb - (wb >> 2U)))
+        c.printf("mixa buttons: panel_w expected %u got %u\n", (cast: (unsigned) (6U + (wb - (wb >> 2U)))), (cast: (unsigned) panel\panel_w))
+        failures: failures + 1U
+    ---
+    if: mixa_button_panel_count(panel) != 3U
+        c.printf("mixa buttons: count expected 3 got %u\n", (cast: (unsigned) mixa_button_panel_count(panel)))
+        failures: failures + 1U
+    ---
+
+    # --- hit-test: in button / in gap (separator zone) / none ---
+    panel\origin_row: 10U
+    panel\origin_col: 0U
+    panel\view_w: panel\panel_w
+    panel\scroll_x: 0U
+    # F1 occupies content (0..3, 0..3) -> surface row 10..13, col 0..3
+    hit: mixa_button_panel_hit(panel, 10U, 0U)
+    if: hit != 0
+        c.printf("mixa buttons: hit F1 expected 0 got %d\n", hit)
+        failures: failures + 1U
+    ---
+    hit: mixa_button_panel_hit(panel, 12U, 3U)
+    if: hit != 0
+        c.printf("mixa buttons: hit F1 edge expected 0 got %d\n", hit)
+        failures: failures + 1U
+    ---
+    # separator zone: after F1, cols 4..5 (sep advance hb>>1=2, no margin)
+    hit: mixa_button_panel_hit(panel, 10U, 4U)
+    if: hit != MIXA_BUTTON_NONE
+        c.printf("mixa buttons: sep gap expected NONE got %d\n", hit)
+        failures: failures + 1U
+    ---
+    hit: mixa_button_panel_hit(panel, 10U, 5U)
+    if: hit != MIXA_BUTTON_NONE
+        c.printf("mixa buttons: sep gap2 expected NONE got %d\n", hit)
+        failures: failures + 1U
+    ---
+    # Find starts at col 6
+    hit: mixa_button_panel_hit(panel, 10U, 6U)
+    if: hit != 1
+        c.printf("mixa buttons: hit Find expected 1 got %d\n", hit)
+        failures: failures + 1U
+    ---
+    # Ab on line 1 at row 10+4=14, col 0
+    hit: mixa_button_panel_hit(panel, 14U, 0U)
+    if: hit != 2
+        c.printf("mixa buttons: hit Ab expected 2 got %d\n", hit)
+        failures: failures + 1U
+    ---
+    # between lines: row 10+hb = 14 is Ab start; row just before if margin>0
+    # margin=0 so lines abut. Outside panel:
+    hit: mixa_button_panel_hit(panel, 9U, 0U)
+    if: hit != MIXA_BUTTON_NONE
+        c.printf("mixa buttons: above panel expected NONE got %d\n", hit)
+        failures: failures + 1U
+    ---
+    hit: mixa_button_panel_hit(panel, 10U, 100U)
+    if: hit != MIXA_BUTTON_NONE
+        c.printf("mixa buttons: far right expected NONE got %d\n", hit)
+        failures: failures + 1U
+    ---
+
+    # --- draw tiles into a rect; F1 is 4x4 ALL-edge gaps on corners ---
+    if: mixa_rect_open(rect, 20U, 40U) != 0
+        c.printf("mixa buttons: rect open failed\n")
+        return: 1
+    ---
+    mixa_rect_fill(rect, 0U, 0U, 0U, 0U)
+    if: mixa_button_panel_draw(panel, rect) != MIXA_BUTTONS_OK
+        c.printf("mixa buttons: draw failed\n")
+        return: 1
+    ---
+    cell: mixa_cell_at_const(rect, 10U, 0U)
+    if: cell = 0
+        c.printf("mixa buttons: cell null\n")
+        return: 1
+    ---
+    cp: cell\codepoint
+    if: cp != MIXA_TILE_NW
+        c.printf("mixa buttons: F1 NW expected U+%04X got U+%04X\n", MIXA_TILE_NW, cp)
+        failures: failures + 1U
+    ---
+    cell: mixa_cell_at_const(rect, 10U, 3U)
+    cp: cell\codepoint
+    if: cp != MIXA_TILE_NE
+        c.printf("mixa buttons: F1 NE expected U+%04X got U+%04X\n", MIXA_TILE_NE, cp)
+        failures: failures + 1U
+    ---
+    cell: mixa_cell_at_const(rect, 13U, 0U)
+    cp: cell\codepoint
+    if: cp != MIXA_TILE_SW
+        c.printf("mixa buttons: F1 SW expected U+%04X got U+%04X\n", MIXA_TILE_SW, cp)
+        failures: failures + 1U
+    ---
+    cell: mixa_cell_at_const(rect, 11U, 1U)
+    cp: cell\codepoint
+    if: cp != MIXA_TILE_FILL
+        c.printf("mixa buttons: F1 fill expected U+%04X got U+%04X\n", MIXA_TILE_FILL, cp)
+        failures: failures + 1U
+    ---
+
+    mixa_rect_release(rect)
+    mixa_button_panel_release(panel)
+    c.free(rect)
+    c.free(panel)
+
+    if: failures != 0U
+        c.printf("mixa buttons: %u failure(s)\n", (cast: (unsigned) failures))
+        return: 1
+    ---
+    c.printf("mixa buttons ok\n")
+return: 0

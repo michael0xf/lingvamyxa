@@ -1,0 +1,386 @@
+predef: "mixa_manager/mixa_tiles.lm1"
+include: "mixa_manager/mixa_buttons.h" "<stdlib.h>" "<string.h>"
+
+# Application button panel. Layout from ClearShell freshLayout / normalize.
+# Sizes in cells. Hit-test in cell coordinates (UI_MODEL section 5).
+
+fn: mixa_button_width (size_t: hb; size_t: wb; const: @(char label)) size_t
+    size_t: len
+    size_t: wide
+    wide: wb - (wb >> 2U)
+    if: label = 0
+        return: hb
+    len: c.strlen(label)
+    # ClearShell normalize: length < 4 -> square always. Angle brackets
+    # only suppress <big> enlarge (handled in mixa_button_panel_add).
+    if: len < 4U
+        return: hb
+    ---
+return: wide
+
+fn: mixa_button_panel_init (@: MixaButtonPanel panel; size_t: hb) int
+    if: panel = 0
+        return: MIXA_BUTTONS_ERR
+    if: hb = 0U
+        return: MIXA_BUTTONS_ERR
+    if: panel\is_open != 0
+        return: MIXA_BUTTONS_ERR
+    panel\lines: 0
+    panel\line_count: 0U
+    panel\line_cap: 0U
+    panel\hb: hb
+    panel\wb: (hb << 1U) - (hb >> 2U)
+    panel\margin: hb >> 5U
+    panel\panel_w: 0U
+    panel\panel_h: 0U
+    panel\origin_row: 0U
+    panel\origin_col: 0U
+    panel\view_w: 0U
+    panel\scroll_x: 0U
+    panel\is_open: 1
+return: MIXA_BUTTONS_OK
+
+sub: mixa_button_line_release (@: MixaButtonLine line)
+    size_t: i
+    @: MixaButton b
+    if: line != 0
+        if: line\items != 0
+            i: 0U
+            while: i < line\count
+                b: line\items + i
+                if: b\label != 0
+                    c.free(b\label)
+                ---
+                i: i + 1U
+            ---
+            c.free(line\items)
+        ---
+        line\items: 0
+        line\count: 0U
+        line\cap: 0U
+    ---
+end: mixa_button_line_release
+
+sub: mixa_button_panel_release (@: MixaButtonPanel panel)
+    size_t: i
+    if: panel != 0
+        if: panel\lines != 0
+            i: 0U
+            while: i < panel\line_count
+                mixa_button_line_release(panel\lines + i)
+                i: i + 1U
+            ---
+            c.free(panel\lines)
+        ---
+        panel\lines: 0
+        panel\line_count: 0U
+        panel\line_cap: 0U
+        panel\is_open: 0
+    ---
+end: mixa_button_panel_release
+
+fn: mixa_button_panel_ensure_line (@: MixaButtonPanel panel; size_t: line) int
+    size_t: need
+    size_t: ncap
+    @: MixaButtonLine nl
+    @: MixaButtonLine p
+    if: panel = 0 || panel\is_open = 0
+        return: MIXA_BUTTONS_ERR
+    need: line + 1U
+    if: need <= panel\line_count
+        return: MIXA_BUTTONS_OK
+    if: need > panel\line_cap
+        ncap: panel\line_cap
+        if: ncap = 0U
+            ncap: 4U
+        ---
+        while: ncap < need
+            if: ncap > ((cast: (size_t) -1) / 2U)
+                return: MIXA_BUTTONS_ERR
+            ---
+            ncap: ncap * 2U
+        ---
+        nl: (cast: (@: MixaButtonLine) c.realloc(panel\lines, ncap * c.sizeof(c.MixaButtonLine)))
+        if: nl = 0
+            return: MIXA_BUTTONS_ERR
+        ---
+        c.memset(nl + panel\line_cap, 0, (ncap - panel\line_cap) * c.sizeof(c.MixaButtonLine))
+        panel\lines: nl
+        panel\line_cap: ncap
+    ---
+    while: panel\line_count < need
+        p: panel\lines + panel\line_count
+        p\items: 0
+        p\count: 0U
+        p\cap: 0U
+        panel\line_count: panel\line_count + 1U
+    ---
+return: MIXA_BUTTONS_OK
+
+fn: mixa_button_line_grow (@: MixaButtonLine line) int
+    size_t: ncap
+    @: MixaButton ni
+    if: line = 0
+        return: MIXA_BUTTONS_ERR
+    if: line\count < line\cap
+        return: MIXA_BUTTONS_OK
+    ncap: line\cap
+    if: ncap = 0U
+        ncap: 4U
+    else:
+        if: ncap > ((cast: (size_t) -1) / 2U)
+            return: MIXA_BUTTONS_ERR
+        ---
+        ncap: ncap * 2U
+    ---
+    if: ncap > ((cast: (size_t) -1) / c.sizeof(c.MixaButton))
+        return: MIXA_BUTTONS_ERR
+    ---
+    ni: (cast: (@: MixaButton) c.realloc(line\items, ncap * c.sizeof(c.MixaButton)))
+    if: ni = 0
+        return: MIXA_BUTTONS_ERR
+    ---
+    c.memset(ni + line\cap, 0, (ncap - line\cap) * c.sizeof(c.MixaButton))
+    line\items: ni
+    line\cap: ncap
+return: MIXA_BUTTONS_OK
+
+fn: mixa_button_panel_add (@: MixaButtonPanel panel; size_t: line; const: @(char label); unsigned: fg; unsigned: bg; unsigned: alpha) int
+    @: MixaButtonLine ln
+    @: MixaButton b
+    size_t: len
+    @: char copy
+    size_t: w
+    size_t: ei
+    int: enlarge
+    int: has_angle
+    if: panel = 0 || label = 0
+        return: MIXA_BUTTONS_ERR
+    if: mixa_button_panel_ensure_line(panel, line) != MIXA_BUTTONS_OK
+        return: MIXA_BUTTONS_ERR
+    ---
+    ln: panel\lines + line
+    if: mixa_button_line_grow(ln) != MIXA_BUTTONS_OK
+        return: MIXA_BUTTONS_ERR
+    ---
+    len: c.strlen(label)
+    copy: (cast: (@: char) c.malloc(len + 1U))
+    if: copy = 0
+        return: MIXA_BUTTONS_ERR
+    ---
+    c.memcpy(copy, label, len + 1U)
+    w: mixa_button_width(panel\hb, panel\wb, label)
+    enlarge: 0
+    # ClearShell: enlarge only when square path AND len < 3 AND no < or >
+    if: len < 3U
+        if: w = panel\hb
+            has_angle: 0
+            ei: 0U
+            while: ei < len
+                if: label[ei] = (cast: (char) 60)
+                    has_angle: 1
+                ---
+                if: label[ei] = (cast: (char) 62)
+                    has_angle: 1
+                ---
+                ei: ei + 1U
+            ---
+            if: has_angle = 0
+                enlarge: 1
+            ---
+        ---
+    ---
+    b: ln\items + ln\count
+    b\label: copy
+    b\row: 0U
+    b\col: 0U
+    b\nrows: panel\hb
+    b\ncols: w
+    b\fg: fg
+    b\bg: bg
+    b\alpha: alpha
+    b\is_sep: 0
+    b\enlarge: enlarge
+    ln\count: ln\count + 1U
+return: MIXA_BUTTONS_OK
+
+fn: mixa_button_panel_add_sep (@: MixaButtonPanel panel; size_t: line) int
+    @: MixaButtonLine ln
+    @: MixaButton b
+    if: panel = 0
+        return: MIXA_BUTTONS_ERR
+    if: mixa_button_panel_ensure_line(panel, line) != MIXA_BUTTONS_OK
+        return: MIXA_BUTTONS_ERR
+    ---
+    ln: panel\lines + line
+    if: mixa_button_line_grow(ln) != MIXA_BUTTONS_OK
+        return: MIXA_BUTTONS_ERR
+    ---
+    b: ln\items + ln\count
+    b\label: 0
+    b\row: 0U
+    b\col: 0U
+    b\nrows: panel\hb
+    b\ncols: 0U
+    b\fg: 0U
+    b\bg: 0U
+    b\alpha: 0U
+    b\is_sep: 1
+    b\enlarge: 0
+    ln\count: ln\count + 1U
+return: MIXA_BUTTONS_OK
+
+fn: mixa_button_panel_layout (@: MixaButtonPanel panel) int
+    size_t: li
+    size_t: j
+    size_t: x
+    size_t: y
+    size_t: right
+    size_t: h_buttons
+    size_t: wb_btn
+    @: MixaButtonLine ln
+    @: MixaButton action
+    if: panel = 0 || panel\is_open = 0
+        return: MIXA_BUTTONS_ERR
+    y: 0U
+    right: 0U
+    h_buttons: 0U
+    li: 0U
+    while: li < panel\line_count
+        ln: panel\lines + li
+        if: ln\count = 0U
+            li: li + 1U
+        else:
+            if: h_buttons < (y + panel\hb)
+                h_buttons: y + panel\hb
+            ---
+            x: 0U
+            j: 0U
+            while: j < ln\count
+                action: ln\items + j
+                if: action\is_sep != 0
+                    if: j < (ln\count - 1U)
+                        x: x + (panel\hb >> 1U)
+                    ---
+                else:
+                    wb_btn: action\ncols
+                    if: (x + wb_btn) > right
+                        right: x + wb_btn
+                    ---
+                    action\col: x
+                    action\row: y
+                    if: j < (ln\count - 1U)
+                        x: x + wb_btn + panel\margin
+                    ---
+                ---
+                j: j + 1U
+            ---
+            y: y + panel\hb + panel\margin
+            li: li + 1U
+        ---
+    ---
+    panel\panel_w: right
+    panel\panel_h: h_buttons
+return: MIXA_BUTTONS_OK
+
+fn: mixa_button_panel_count (const: @(MixaButtonPanel panel)) size_t
+    size_t: n
+    size_t: li
+    size_t: j
+    const: @(MixaButtonLine ln)
+    const: @(MixaButton action)
+    n: 0U
+    if: panel = 0
+        return: 0U
+    li: 0U
+    while: li < panel\line_count
+        ln: panel\lines + li
+        j: 0U
+        while: j < ln\count
+            action: ln\items + j
+            if: action\is_sep = 0
+                n: n + 1U
+            ---
+            j: j + 1U
+        ---
+        li: li + 1U
+    ---
+return: n
+
+fn: mixa_button_panel_hit (const: @(MixaButtonPanel panel); size_t: cell_row; size_t: cell_col) int
+    size_t: content_r
+    size_t: content_c
+    size_t: li
+    size_t: j
+    int: idx
+    const: @(MixaButtonLine ln)
+    const: @(MixaButton action)
+    if: panel = 0 || panel\is_open = 0
+        return: MIXA_BUTTON_NONE
+    if: cell_row < panel\origin_row
+        return: MIXA_BUTTON_NONE
+    content_r: cell_row - panel\origin_row
+    if: cell_col < panel\origin_col
+        return: MIXA_BUTTON_NONE
+    content_c: cell_col - panel\origin_col + panel\scroll_x
+    if: panel\view_w != 0U
+        if: (cell_col - panel\origin_col) >= panel\view_w
+            return: MIXA_BUTTON_NONE
+        ---
+    ---
+    idx: 0
+    li: 0U
+    while: li < panel\line_count
+        ln: panel\lines + li
+        j: 0U
+        while: j < ln\count
+            action: ln\items + j
+            if: action\is_sep != 0
+                j: j + 1U
+            else:
+                if: content_r >= action\row && content_r < (action\row + action\nrows)
+                    if: content_c >= action\col && content_c < (action\col + action\ncols)
+                        return: idx
+                    ---
+                ---
+                idx: idx + 1
+                j: j + 1U
+            ---
+        ---
+        li: li + 1U
+    ---
+return: MIXA_BUTTON_NONE
+
+fn: mixa_button_panel_draw (const: @(MixaButtonPanel panel); @: MixaTextRect rect) int
+    size_t: li
+    size_t: j
+    size_t: draw_row
+    size_t: draw_col
+    const: @(MixaButtonLine ln)
+    const: @(MixaButton action)
+    if: panel = 0 || rect = 0 || panel\is_open = 0
+        return: MIXA_BUTTONS_ERR
+    li: 0U
+    while: li < panel\line_count
+        ln: panel\lines + li
+        j: 0U
+        while: j < ln\count
+            action: ln\items + j
+            if: action\is_sep = 0
+                if: action\col >= panel\scroll_x
+                    draw_col: panel\origin_col + (action\col - panel\scroll_x)
+                    draw_row: panel\origin_row + action\row
+                    if: draw_row < rect\rows && draw_col < rect\cols
+                        if: (draw_row + action\nrows) <= rect\rows && (draw_col + action\ncols) <= rect\cols
+                            if: mixa_tile_fill_button(rect, draw_row, draw_col, action\nrows, action\ncols, action\fg, action\bg, action\alpha) != 0
+                                return: MIXA_BUTTONS_ERR
+                            ---
+                        ---
+                    ---
+                ---
+            ---
+            j: j + 1U
+        ---
+        li: li + 1U
+    ---
+return: MIXA_BUTTONS_OK

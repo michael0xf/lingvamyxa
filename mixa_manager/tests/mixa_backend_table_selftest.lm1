@@ -1,0 +1,438 @@
+include: "mixa_manager/mixa_backend.h" "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# Task 25 review: registry, valid-slot holes, dual live handles, vt identity.
+
+fn: mixa_backend_headless_table () const: @(MixaBackendVTable)
+
+# Deliberately mis-stamped backend: open succeeds but leaves vt null / wrong.
+# Proves mixa_backend_open rejects instead of silently repairing the stamp.
+
+fn: mixa_mistamp_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t: bytes) int
+    if: backend = 0
+        return: 1
+    if: rgba = 0
+        return: 1
+    if: bytes = 0U
+        return: 1
+return: 0
+
+fn: mixa_mistamp_poll (@: MixaBackend backend; @: MixaEvent out) int
+    if: out = 0
+        return: 1
+    out\kind: MIXA_EVENT_NONE
+    if: backend = 0
+        return: 1
+return: 0
+
+fn: mixa_mistamp_clipboard_get (const: @(MixaBackend backend); @: char out; size_t: cap) size_t
+    if: backend = 0
+        return: 0U
+    if: out = 0
+        return: 0U
+    if: cap < 1U
+        return: 0U
+    out[0]: (cast: (char) 0)
+return: 0U
+
+fn: mixa_mistamp_clipboard_set (@: MixaBackend backend; const: @(char text)) int
+    if: backend = 0
+        return: 1
+    if: text = 0
+        return: 1
+return: 0
+
+fn: mixa_mistamp_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint; @: MixaGlyph out) int
+    if: backend = 0
+        return: 1
+    if: out = 0
+        return: 1
+    out\missing: 1
+    out\coverage: 0
+return: 0
+
+sub: mixa_mistamp_close (@: MixaBackend backend)
+    if: backend != 0
+        c.free(backend)
+    ---
+end: mixa_mistamp_close
+
+fn: mixa_mistamp_open_null_vt (@@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+    @: MixaBackend be
+    if: out = 0
+        return: 1
+    if: metrics = 0
+        return: 1
+    if: cols = 0U
+        return: 1
+    if: rows = 0U
+        return: 1
+    be: (cast: (@: MixaBackend) c.calloc(1U, c.sizeof(c.MixaBackend)))
+    if: be = 0
+        return: 1
+    be\vt: 0
+    out[0]: be
+return: 0
+
+fn: mixa_mistamp_open_wrong_vt (@@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+    @: MixaBackend be
+    if: out = 0
+        return: 1
+    if: metrics = 0
+        return: 1
+    if: cols = 0U
+        return: 1
+    if: rows = 0U
+        return: 1
+    be: (cast: (@: MixaBackend) c.calloc(1U, c.sizeof(c.MixaBackend)))
+    if: be = 0
+        return: 1
+    # Stamp a DIFFERENT valid table (headless) instead of the mistamp table.
+    be\vt: mixa_backend_headless_table()
+    out[0]: be
+return: 0
+
+fn: main () int
+    const: @(MixaBackendVTable headless_t)
+    const: @(MixaBackendVTable win32_t)
+    const: @(MixaBackendVTable def_t)
+    const: @(MixaBackendVTable by_h)
+    const: @(MixaBackendVTable by_w)
+    @: MixaBackendVTable mistamp_null
+    @: MixaBackendVTable mistamp_wrong
+    @: MixaBackendVTable hole
+    @: MixaBackendVTable complete
+    @: MixaBackend be_h
+    @: MixaBackend be_h2
+    @: MixaBackend be_w
+    @: MixaBackend be_bad
+    @: MixaBackend sentinel
+    @: MixaCellMetrics m
+    @: MixaU8 frame
+    @: MixaU8 frame2
+    []: size_t count_slot 1
+    const: @(MixaBackendTableRef list)
+    size_t: n
+    size_t: bytes
+    size_t: bytes2
+    int: failures
+    int: rc
+    int: has_win32
+    failures: 0
+    has_win32: 0
+    sentinel: (cast: (@: MixaBackend) 1)
+
+    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    hole: (cast: (@: MixaBackendVTable) c.calloc(1U, c.sizeof(c.MixaBackendVTable)))
+    complete: (cast: (@: MixaBackendVTable) c.calloc(1U, c.sizeof(c.MixaBackendVTable)))
+    mistamp_null: (cast: (@: MixaBackendVTable) c.calloc(1U, c.sizeof(c.MixaBackendVTable)))
+    mistamp_wrong: (cast: (@: MixaBackendVTable) c.calloc(1U, c.sizeof(c.MixaBackendVTable)))
+    if: m = 0 || hole = 0 || complete = 0 || mistamp_null = 0 || mistamp_wrong = 0
+        c.printf("mixa table: alloc failed\n")
+        return: 1
+
+    # --- null / empty name / EACH required slot nulled in turn ---
+    if: mixa_backend_table_valid(0) != 0
+        c.printf("mixa table: valid accepted null table\n")
+        failures: failures + 1
+    c.memset(hole, 0, c.sizeof(c.MixaBackendVTable))
+    if: mixa_backend_table_valid(hole) != 0
+        c.printf("mixa table: valid accepted all-zero table\n")
+        failures: failures + 1
+
+    headless_t: mixa_backend_headless_table()
+    if: headless_t = 0 || mixa_backend_table_valid(headless_t) = 0
+        c.printf("mixa table: headless constructor/valid failed\n")
+        return: 1
+
+    # Start from a COMPLETE valid copy, then null each slot.
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    if: mixa_backend_table_valid(complete) = 0
+        c.printf("mixa table: complete copy not valid\n")
+        failures: failures + 1
+    complete\name: 0
+    if: mixa_backend_table_valid(complete) != 0
+        c.printf("mixa table: valid accepted null name\n")
+        failures: failures + 1
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\name: ""
+    if: mixa_backend_table_valid(complete) != 0
+        c.printf("mixa table: valid accepted empty name\n")
+        failures: failures + 1
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\open: 0
+    if: mixa_backend_table_valid(complete) != 0
+        c.printf("mixa table: valid accepted open hole\n")
+        failures: failures + 1
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\present: 0
+    if: mixa_backend_table_valid(complete) != 0
+        c.printf("mixa table: valid accepted present hole\n")
+        failures: failures + 1
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\poll: 0
+    if: mixa_backend_table_valid(complete) != 0
+        c.printf("mixa table: valid accepted poll hole\n")
+        failures: failures + 1
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\clipboard_get: 0
+    if: mixa_backend_table_valid(complete) != 0
+        c.printf("mixa table: valid accepted clipboard_get hole\n")
+        failures: failures + 1
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\clipboard_set: 0
+    if: mixa_backend_table_valid(complete) != 0
+        c.printf("mixa table: valid accepted clipboard_set hole\n")
+        failures: failures + 1
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\glyph: 0
+    if: mixa_backend_table_valid(complete) != 0
+        c.printf("mixa table: valid accepted glyph hole\n")
+        failures: failures + 1
+    c.memcpy(complete, headless_t, c.sizeof(c.MixaBackendVTable))
+    complete\close: 0
+    if: mixa_backend_table_valid(complete) != 0
+        c.printf("mixa table: valid accepted close hole\n")
+        failures: failures + 1
+
+    # --- mis-stamp: null vt after successful concrete open ---
+    mistamp_null\name: "mistamp_null"
+    mistamp_null\open: mixa_mistamp_open_null_vt
+    mistamp_null\present: mixa_mistamp_present
+    mistamp_null\poll: mixa_mistamp_poll
+    mistamp_null\clipboard_get: mixa_mistamp_clipboard_get
+    mistamp_null\clipboard_set: mixa_mistamp_clipboard_set
+    mistamp_null\glyph: mixa_mistamp_glyph
+    mistamp_null\close: mixa_mistamp_close
+    if: mixa_backend_table_valid(mistamp_null) = 0
+        c.printf("mixa table: mistamp_null table not valid\n")
+        failures: failures + 1
+    be_bad: sentinel
+    m\text_cell_width: 4U
+    m\text_cell_height: 6U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    m\pointer_cell_width: 6U
+    m\pointer_cell_height: 8U
+    rc: mixa_backend_open(mistamp_null, @ be_bad, 2U, 2U, m)
+    if: rc = 0
+        c.printf("mixa table: open accepted null stamp\n")
+        failures: failures + 1
+        mixa_backend_close(be_bad)
+    ---
+    if: be_bad != sentinel
+        c.printf("mixa table: null-stamp open mutated out\n")
+        failures: failures + 1
+
+    # --- mis-stamp: wrong vt pointer ---
+    mistamp_wrong\name: "mistamp_wrong"
+    mistamp_wrong\open: mixa_mistamp_open_wrong_vt
+    mistamp_wrong\present: mixa_mistamp_present
+    mistamp_wrong\poll: mixa_mistamp_poll
+    mistamp_wrong\clipboard_get: mixa_mistamp_clipboard_get
+    mistamp_wrong\clipboard_set: mixa_mistamp_clipboard_set
+    mistamp_wrong\glyph: mixa_mistamp_glyph
+    mistamp_wrong\close: mixa_mistamp_close
+    be_bad: sentinel
+    rc: mixa_backend_open(mistamp_wrong, @ be_bad, 2U, 2U, m)
+    if: rc = 0
+        c.printf("mixa table: open accepted wrong stamp\n")
+        failures: failures + 1
+        mixa_backend_close(be_bad)
+    ---
+    if: be_bad != sentinel
+        c.printf("mixa table: wrong-stamp open mutated out\n")
+        failures: failures + 1
+
+    # --- dual headless handles live: interleave, exact vt identity ---
+    be_h: 0
+    be_h2: 0
+    m\text_cell_width: 4U
+    m\text_cell_height: 6U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    m\pointer_cell_width: 6U
+    m\pointer_cell_height: 8U
+    if: mixa_backend_open(headless_t, @ be_h, 2U, 2U, m) != 0
+        c.printf("mixa table: headless open1 failed\n")
+        return: 1
+    if: be_h = 0 || be_h\vt != headless_t
+        c.printf("mixa table: headless open1 vt identity wrong\n")
+        failures: failures + 1
+    m\text_cell_width: 6U
+    m\text_cell_height: 8U
+    m\upper_cell_width: 10U
+    m\upper_cell_height: 12U
+    m\pointer_cell_width: 8U
+    m\pointer_cell_height: 10U
+    if: mixa_backend_open(headless_t, @ be_h2, 3U, 3U, m) != 0
+        c.printf("mixa table: headless open2 failed\n")
+        return: 1
+    if: be_h2 = 0 || be_h2 = be_h || be_h2\vt != headless_t
+        c.printf("mixa table: headless open2 handle/vt wrong\n")
+        failures: failures + 1
+    bytes: 2U * 2U * 4U * 6U * 4U
+    bytes2: 3U * 3U * 6U * 8U * 4U
+    frame: (cast: (@: MixaU8) c.calloc(bytes, 1U))
+    frame2: (cast: (@: MixaU8) c.calloc(bytes2, 1U))
+    if: frame = 0 || frame2 = 0
+        c.printf("mixa table: frame alloc failed\n")
+        return: 1
+    if: mixa_backend_present(be_h, frame, bytes) != 0
+        c.printf("mixa table: present on h1 failed\n")
+        failures: failures + 1
+    if: mixa_backend_present(be_h2, frame2, bytes2) != 0
+        c.printf("mixa table: present on h2 failed\n")
+        failures: failures + 1
+    if: mixa_backend_clipboard_set(be_h, "one") != 0
+        c.printf("mixa table: clipboard_set h1 failed\n")
+        failures: failures + 1
+    if: mixa_backend_clipboard_set(be_h2, "two") != 0
+        c.printf("mixa table: clipboard_set h2 failed\n")
+        failures: failures + 1
+    # Close ONE; the other must still work.
+    mixa_backend_close(be_h)
+    be_h: 0
+    if: mixa_backend_present(be_h2, frame2, bytes2) != 0
+        c.printf("mixa table: h2 present after h1 close failed\n")
+        failures: failures + 1
+    if: be_h2\vt != headless_t
+        c.printf("mixa table: h2 vt changed after h1 close\n")
+        failures: failures + 1
+    mixa_backend_close(be_h2)
+    be_h2: 0
+    c.free(frame)
+    c.free(frame2)
+
+    # --- registry ---
+    count_slot[0]: 0U
+    list: mixa_backend_tables(count_slot)
+    n: count_slot[0]
+    if: list = 0 || n < 1U
+        c.printf("mixa table: tables() empty\n")
+        failures: failures + 1
+    else:
+        if: list[0] = 0 || mixa_backend_table_valid(list[0]) = 0
+            c.printf("mixa table: first registry entry invalid\n")
+            failures: failures + 1
+        ---
+    ---
+    by_h: mixa_backend_table_by_name("headless")
+    if: by_h != headless_t
+        c.printf("mixa table: by_name headless mismatch\n")
+        failures: failures + 1
+    if: mixa_backend_table_by_name(0) != 0
+        c.printf("mixa table: by_name null not rejected\n")
+        failures: failures + 1
+    if: mixa_backend_table_by_name("") != 0
+        c.printf("mixa table: by_name empty not rejected\n")
+        failures: failures + 1
+    if: mixa_backend_table_by_name("nope") != 0
+        c.printf("mixa table: by_name unknown not null\n")
+        failures: failures + 1
+
+    win32_t: mixa_backend_table_by_name("win32")
+    if: win32_t != 0
+        has_win32: 1
+        if: mixa_backend_table_valid(win32_t) = 0
+            c.printf("mixa table: win32 by_name invalid\n")
+            failures: failures + 1
+        ---
+        if: n < 2U
+            c.printf("mixa table: win32 build expected >=2 registry entries\n")
+            failures: failures + 1
+        ---
+        if: c.strcmp(list[0]\name, "win32") != 0
+            c.printf("mixa table: first table not win32\n")
+            failures: failures + 1
+        ---
+        if: n >= 2U
+            if: c.strcmp(list[1]\name, "headless") != 0
+                c.printf("mixa table: second table not headless\n")
+                failures: failures + 1
+            ---
+        ---
+        def_t: mixa_backend_default_table()
+        if: def_t != win32_t
+            c.printf("mixa table: default_table not win32\n")
+            failures: failures + 1
+        ---
+        # Dual DIFFERENT backends live simultaneously.
+        be_h: 0
+        be_w: 0
+        m\text_cell_width: 4U
+        m\text_cell_height: 6U
+        m\upper_cell_width: 8U
+        m\upper_cell_height: 10U
+        m\pointer_cell_width: 6U
+        m\pointer_cell_height: 8U
+        if: mixa_backend_open(headless_t, @ be_h, 2U, 2U, m) != 0
+            c.printf("mixa table: dual headless open failed\n")
+            failures: failures + 1
+        ---
+        m\text_cell_width: 8U
+        m\text_cell_height: 16U
+        m\upper_cell_width: 8U
+        m\upper_cell_height: 16U
+        m\pointer_cell_width: 6U
+        m\pointer_cell_height: 8U
+        rc: mixa_backend_open(win32_t, @ be_w, 2U, 2U, m)
+        if: rc != 0
+            c.printf("mixa table: dual win32 open failed\n")
+            failures: failures + 1
+        else:
+            if: be_w = 0 || be_w\vt != win32_t
+                c.printf("mixa table: dual win32 vt identity wrong\n")
+                failures: failures + 1
+            ---
+            if: be_h = 0 || be_h\vt != headless_t
+                c.printf("mixa table: dual headless vt lost while win32 open\n")
+                failures: failures + 1
+            ---
+            bytes: 2U * 2U * 4U * 6U * 4U
+            frame: (cast: (@: MixaU8) c.calloc(bytes, 1U))
+            if: frame = 0
+                c.printf("mixa table: dual frame alloc failed\n")
+                return: 1
+            if: mixa_backend_present(be_h, frame, bytes) != 0
+                c.printf("mixa table: dual headless present failed\n")
+                failures: failures + 1
+            ---
+            mixa_backend_close(be_w)
+            be_w: 0
+            if: mixa_backend_present(be_h, frame, bytes) != 0
+                c.printf("mixa table: headless failed after win32 close\n")
+                failures: failures + 1
+            ---
+            if: be_h\vt != headless_t
+                c.printf("mixa table: headless vt wrong after win32 close\n")
+                failures: failures + 1
+            ---
+            c.free(frame)
+        ---
+        if: be_h != 0
+            mixa_backend_close(be_h)
+            be_h: 0
+        ---
+    else:
+        def_t: mixa_backend_default_table()
+        if: def_t != headless_t
+            c.printf("mixa table: headless-only default not headless\n")
+            failures: failures + 1
+        ---
+        if: c.strcmp(list[0]\name, "headless") != 0
+            c.printf("mixa table: headless-only first not headless\n")
+            failures: failures + 1
+        ---
+    ---
+
+    c.free(hole)
+    c.free(complete)
+    c.free(mistamp_null)
+    c.free(mistamp_wrong)
+    c.free(m)
+
+    if: failures != 0
+        c.printf("mixa table: %d failure(s)\n", failures)
+        return: 1
+    c.printf("mixa table: ok\n")
+return: 0

@@ -104,6 +104,14 @@ fn: mixa_win32_abs_diff (size_t: a; size_t: b) size_t
     ---
 return: b - a
 
+# Round font extent UP to an even cell size (BACKEND_SEAM 10.8). Odd cells
+# make half-steps land on fractional pixels; trailing +1 keeps glyph origin.
+fn: mixa_win32_even_up (size_t: n) size_t
+    if: (n & 1U) != 0U
+        return: n + 1U
+    ---
+return: n
+
 fn: mixa_win32_measure_font (@: void hdc; @: void font; @: size_t out_cw; @: size_t out_ch; @: int out_ascent) int
     @: void old
     @: TEXTMETRICW tm
@@ -269,7 +277,7 @@ fn: mixa_win32_glyph_cache_find (@: MixaWin32GlyphEntry head; unsigned: codepoin
     ---
 return: 0
 
-fn: mixa_win32_destroy_dib (@: MixaBackend backend) int
+fn: mixa_win32_destroy_dib (@: MixaWin32 backend) int
     if: backend = 0
         return: 1
     if: backend\hdc_mem != 0
@@ -287,7 +295,7 @@ fn: mixa_win32_destroy_dib (@: MixaBackend backend) int
     backend\bits: 0
 return: 0
 
-fn: mixa_win32_create_dib (@: MixaBackend backend; size_t: width; size_t: height) int
+fn: mixa_win32_create_dib (@: MixaWin32 backend; size_t: width; size_t: height) int
     @: BITMAPINFO bmi
     @: BITMAPINFOHEADER hdr
     @: void hdc_win
@@ -343,7 +351,7 @@ fn: mixa_win32_create_dib (@: MixaBackend backend; size_t: width; size_t: height
     backend\frame_bytes: nbytes
 return: 0
 
-fn: mixa_win32_adopt (@: MixaBackend backend; size_t: new_cols; size_t: new_rows) int
+fn: mixa_win32_adopt (@: MixaWin32 backend; size_t: new_cols; size_t: new_rows) int
     size_t: cw
     size_t: ch
     size_t: width
@@ -416,14 +424,19 @@ fn: mixa_win32_adopt (@: MixaBackend backend; size_t: new_cols; size_t: new_rows
     backend\rows: new_rows
 return: 0
 
-fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+fn: mixa_backend_win32_table () const: @(MixaBackendVTable)
+
+fn: mixa_win32_open (@@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+    @: MixaWin32 backend
     size_t: width
     size_t: height
     size_t: cell_width
     size_t: cell_height
     size_t: upper_cell_width
     size_t: upper_cell_height
-    size_t: upper_target
+    size_t: pointer_cell_width
+    size_t: pointer_cell_height
+    size_t: pointer_target
     @: WNDCLASSA wc
     @: RECT rc
     @: void hinst
@@ -431,14 +444,16 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: Mi
     @: void hdc_glyph
     @: void font_text
     @: void font_upper
+    @: void font_pointer
     int: style
     int: atom
     int: text_ascent
     int: upper_ascent
+    int: pointer_ascent
     []: size_t cw_slot 1
     []: size_t ch_slot 1
     []: int ascent_slot 1
-    if: backend = 0
+    if: out = 0
         return: 1
     if: metrics = 0
         return: 1
@@ -456,80 +471,151 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: Mi
         return: 1
     if: metrics\upper_cell_height = 0U
         return: 1
-    if: backend\is_open != 0
+    if: metrics\pointer_cell_width = 0U
         return: 1
-    if: backend\hwnd != 0
+    if: metrics\pointer_cell_height = 0U
         return: 1
-    if: backend\bits != 0
+    backend: (cast: (@: MixaWin32) c.calloc(1U, c.sizeof(c.MixaWin32)))
+    if: backend = 0
         return: 1
+    font_text: 0
+    font_upper: 0
+    font_pointer: 0
     hdc_glyph: (cast: (@: void) c.CreateCompatibleDC(0))
     if: hdc_glyph = 0
+        c.free(backend)
         return: 1
-    # Text layer: available size nearest a console-like small font (~16px).
+    # One font size on text+upper for now (even-cell note). Cell is OURS: font
+    # extent rounded UP to even so half-cell mouse steps are whole pixels.
+    # Share the SAME HFONT for text and upper: do not re-pick at the rounded
+    # cell height (that can select a different face/size when the measured
+    # extent was odd). Distinct upper fonts arrive later as further screens.
     cw_slot[0]: 0U
     ch_slot[0]: 0U
     ascent_slot[0]: 0
     font_text: mixa_win32_pick_font(hdc_glyph, 16U, cw_slot, ch_slot, ascent_slot)
     if: font_text = 0
         c.DeleteDC((cast: (HDC) hdc_glyph))
+        c.free(backend)
         return: 1
     ---
-    cell_width: cw_slot[0]
-    cell_height: ch_slot[0]
+    cell_width: mixa_win32_even_up(cw_slot[0])
+    cell_height: mixa_win32_even_up(ch_slot[0])
     text_ascent: ascent_slot[0]
-    # Upper layer: available size nearest 1.5x the text cell (10.3).
-    upper_target: (cell_height * 3U) / 2U
-    if: upper_target = 0U
-        upper_target: cell_height
+    font_upper: font_text
+    upper_cell_width: cell_width
+    upper_cell_height: cell_height
+    upper_ascent: text_ascent
+    # Pointer: third FONT SIZE (text or slightly above), not a third grid.
+    pointer_target: cell_height + 2U
+    if: pointer_target = 0U
+        pointer_target: cell_height
     ---
     cw_slot[0]: 0U
     ch_slot[0]: 0U
     ascent_slot[0]: 0
-    font_upper: mixa_win32_pick_font(hdc_glyph, upper_target, cw_slot, ch_slot, ascent_slot)
-    if: font_upper = 0
+    font_pointer: mixa_win32_pick_font(hdc_glyph, pointer_target, cw_slot, ch_slot, ascent_slot)
+    if: font_pointer = 0
         c.DeleteObject((cast: (HGDIOBJ) font_text))
+        if: font_upper != 0
+            if: font_upper != font_text
+                c.DeleteObject((cast: (HGDIOBJ) font_upper))
+            ---
+        ---
+        if: font_pointer != 0
+            c.DeleteObject((cast: (HGDIOBJ) font_pointer))
+        ---
         c.DeleteDC((cast: (HDC) hdc_glyph))
+        c.free(backend)
         return: 1
     ---
-    upper_cell_width: cw_slot[0]
-    upper_cell_height: ch_slot[0]
-    upper_ascent: ascent_slot[0]
+    pointer_cell_width: mixa_win32_even_up(cw_slot[0])
+    pointer_cell_height: mixa_win32_even_up(ch_slot[0])
+    pointer_ascent: ascent_slot[0]
     if: cols > ((cast: (size_t) -1) / cell_width)
         c.DeleteObject((cast: (HGDIOBJ) font_text))
-        c.DeleteObject((cast: (HGDIOBJ) font_upper))
+        if: font_upper != 0
+            if: font_upper != font_text
+                c.DeleteObject((cast: (HGDIOBJ) font_upper))
+            ---
+        ---
+        if: font_pointer != 0
+            c.DeleteObject((cast: (HGDIOBJ) font_pointer))
+        ---
         c.DeleteDC((cast: (HDC) hdc_glyph))
+        c.free(backend)
         return: 1
     ---
     if: rows > ((cast: (size_t) -1) / cell_height)
         c.DeleteObject((cast: (HGDIOBJ) font_text))
-        c.DeleteObject((cast: (HGDIOBJ) font_upper))
+        if: font_upper != 0
+            if: font_upper != font_text
+                c.DeleteObject((cast: (HGDIOBJ) font_upper))
+            ---
+        ---
+        if: font_pointer != 0
+            c.DeleteObject((cast: (HGDIOBJ) font_pointer))
+        ---
         c.DeleteDC((cast: (HDC) hdc_glyph))
+        c.free(backend)
         return: 1
     ---
     width: cols * cell_width
     height: rows * cell_height
     if: width = 0U
         c.DeleteObject((cast: (HGDIOBJ) font_text))
-        c.DeleteObject((cast: (HGDIOBJ) font_upper))
+        if: font_upper != 0
+            if: font_upper != font_text
+                c.DeleteObject((cast: (HGDIOBJ) font_upper))
+            ---
+        ---
+        if: font_pointer != 0
+            c.DeleteObject((cast: (HGDIOBJ) font_pointer))
+        ---
         c.DeleteDC((cast: (HDC) hdc_glyph))
+        c.free(backend)
         return: 1
     ---
     if: height = 0U
         c.DeleteObject((cast: (HGDIOBJ) font_text))
-        c.DeleteObject((cast: (HGDIOBJ) font_upper))
+        if: font_upper != 0
+            if: font_upper != font_text
+                c.DeleteObject((cast: (HGDIOBJ) font_upper))
+            ---
+        ---
+        if: font_pointer != 0
+            c.DeleteObject((cast: (HGDIOBJ) font_pointer))
+        ---
         c.DeleteDC((cast: (HDC) hdc_glyph))
+        c.free(backend)
         return: 1
     ---
     if: height > ((cast: (size_t) -1) / width)
         c.DeleteObject((cast: (HGDIOBJ) font_text))
-        c.DeleteObject((cast: (HGDIOBJ) font_upper))
+        if: font_upper != 0
+            if: font_upper != font_text
+                c.DeleteObject((cast: (HGDIOBJ) font_upper))
+            ---
+        ---
+        if: font_pointer != 0
+            c.DeleteObject((cast: (HGDIOBJ) font_pointer))
+        ---
         c.DeleteDC((cast: (HDC) hdc_glyph))
+        c.free(backend)
         return: 1
     ---
     if: (width * height) > ((cast: (size_t) -1) / 4U)
         c.DeleteObject((cast: (HGDIOBJ) font_text))
-        c.DeleteObject((cast: (HGDIOBJ) font_upper))
+        if: font_upper != 0
+            if: font_upper != font_text
+                c.DeleteObject((cast: (HGDIOBJ) font_upper))
+            ---
+        ---
+        if: font_pointer != 0
+            c.DeleteObject((cast: (HGDIOBJ) font_pointer))
+        ---
         c.DeleteDC((cast: (HDC) hdc_glyph))
+        c.free(backend)
         return: 1
     ---
     # WS_OVERLAPPEDWINDOW
@@ -537,8 +623,16 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: Mi
     rc: (cast: (@: RECT) c.calloc(1U, c.sizeof(c.RECT)))
     if: rc = 0
         c.DeleteObject((cast: (HGDIOBJ) font_text))
-        c.DeleteObject((cast: (HGDIOBJ) font_upper))
+        if: font_upper != 0
+            if: font_upper != font_text
+                c.DeleteObject((cast: (HGDIOBJ) font_upper))
+            ---
+        ---
+        if: font_pointer != 0
+            c.DeleteObject((cast: (HGDIOBJ) font_pointer))
+        ---
         c.DeleteDC((cast: (HDC) hdc_glyph))
+        c.free(backend)
         return: 1
     ---
     rc\left: 0
@@ -551,8 +645,16 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: Mi
     if: wc = 0
         c.free(rc)
         c.DeleteObject((cast: (HGDIOBJ) font_text))
-        c.DeleteObject((cast: (HGDIOBJ) font_upper))
+        if: font_upper != 0
+            if: font_upper != font_text
+                c.DeleteObject((cast: (HGDIOBJ) font_upper))
+            ---
+        ---
+        if: font_pointer != 0
+            c.DeleteObject((cast: (HGDIOBJ) font_pointer))
+        ---
         c.DeleteDC((cast: (HDC) hdc_glyph))
+        c.free(backend)
         return: 1
     ---
     wc\lpfnWndProc: c.DefWindowProcA
@@ -566,8 +668,16 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: Mi
             c.free(wc)
             c.free(rc)
             c.DeleteObject((cast: (HGDIOBJ) font_text))
-            c.DeleteObject((cast: (HGDIOBJ) font_upper))
+            if: font_upper != 0
+                if: font_upper != font_text
+                    c.DeleteObject((cast: (HGDIOBJ) font_upper))
+                ---
+            ---
+            if: font_pointer != 0
+                c.DeleteObject((cast: (HGDIOBJ) font_pointer))
+            ---
             c.DeleteDC((cast: (HDC) hdc_glyph))
+            c.free(backend)
             return: 1
         ---
     ---
@@ -576,8 +686,16 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: Mi
     c.free(rc)
     if: hwnd = 0
         c.DeleteObject((cast: (HGDIOBJ) font_text))
-        c.DeleteObject((cast: (HGDIOBJ) font_upper))
+        if: font_upper != 0
+            if: font_upper != font_text
+                c.DeleteObject((cast: (HGDIOBJ) font_upper))
+            ---
+        ---
+        if: font_pointer != 0
+            c.DeleteObject((cast: (HGDIOBJ) font_pointer))
+        ---
         c.DeleteDC((cast: (HDC) hdc_glyph))
+        c.free(backend)
         return: 1
     ---
     # Hidden: suite stays unattended; DC and messages still work.
@@ -589,32 +707,50 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: Mi
     backend\cell_height: cell_height
     backend\upper_cell_width: upper_cell_width
     backend\upper_cell_height: upper_cell_height
+    backend\pointer_cell_width: pointer_cell_width
+    backend\pointer_cell_height: pointer_cell_height
     backend\hfont_text: (cast: (HFONT) font_text)
     backend\hfont_upper: (cast: (HFONT) font_upper)
+    backend\hfont_pointer: (cast: (HFONT) font_pointer)
     backend\hdc_glyph: (cast: (HDC) hdc_glyph)
     backend\text_ascent: text_ascent
     backend\upper_ascent: upper_ascent
+    backend\pointer_ascent: pointer_ascent
     backend\glyph_cache: 0
     if: mixa_win32_create_dib(backend, width, height) != 0
         c.DestroyWindow((cast: (HWND) hwnd))
         backend\hwnd: 0
         c.DeleteObject((cast: (HGDIOBJ) font_text))
-        c.DeleteObject((cast: (HGDIOBJ) font_upper))
+        if: font_upper != 0
+            if: font_upper != font_text
+                c.DeleteObject((cast: (HGDIOBJ) font_upper))
+            ---
+        ---
+        if: font_pointer != 0
+            c.DeleteObject((cast: (HGDIOBJ) font_pointer))
+        ---
         c.DeleteDC((cast: (HDC) hdc_glyph))
-        backend\hfont_text: 0
-        backend\hfont_upper: 0
-        backend\hdc_glyph: 0
+        c.free(backend)
         return: 1
     ---
+    backend\vt: mixa_backend_win32_table()
     backend\is_open: 1
-    # Write back the font's OWN metrics, not the request.
+    # Write back CELLS (even), not raw font extents.
     metrics\text_cell_width: cell_width
     metrics\text_cell_height: cell_height
     metrics\upper_cell_width: upper_cell_width
     metrics\upper_cell_height: upper_cell_height
+    metrics\pointer_cell_width: pointer_cell_width
+    metrics\pointer_cell_height: pointer_cell_height
+    out[0]: (cast: (@: MixaBackend) backend)
 return: 0
 
-fn: mixa_backend_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t: bytes) int
+
+fn: mixa_win32_present (@: MixaBackend be_raw; const: @(MixaU8 rgba); size_t: bytes) int
+    @: MixaWin32 backend
+    if: be_raw = 0
+        return: 1
+    backend: (cast: (@: MixaWin32) be_raw)
     @: void hdc_win
     @: MixaU8 dst
     size_t: i
@@ -654,7 +790,11 @@ fn: mixa_backend_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t:
     c.ReleaseDC(backend\hwnd, (cast: (HDC) hdc_win))
 return: 0
 
-fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
+fn: mixa_win32_poll (@: MixaBackend be_raw; @: MixaEvent out) int
+    @: MixaWin32 backend
+    if: be_raw = 0
+        return: 1
+    backend: (cast: (@: MixaWin32) be_raw)
     @: MSG msg
     size_t: wp
     size_t: lp
@@ -775,8 +915,8 @@ fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
                             cx: lp & 0xFFFFU
                             cy: (lp >> 16U) & 0xFFFFU
                             out\kind: MIXA_EVENT_MOUSE
-                            out\col: cx / backend\cell_width
-                            out\row: cy / backend\cell_height
+                            out\col: (cx * 2U) / backend\cell_width
+                            out\row: (cy * 2U) / backend\cell_height
                             out\buttons: (cast: (unsigned int) mixa_win32_mouse_buttons(wp))
                             out\modifiers: (cast: (unsigned int) mixa_win32_mouse_mods(wp))
                             out\codepoint: 0U
@@ -808,7 +948,11 @@ fn: mixa_win32_open_clip (@: void hwnd) int
     ---
 return: 1
 
-fn: mixa_backend_clipboard_get (const: @(MixaBackend backend); @: char out; size_t: cap) size_t
+fn: mixa_win32_clipboard_get (const: @(MixaBackend be_raw); @: char out; size_t: cap) size_t
+    @: MixaWin32 backend
+    if: be_raw = 0
+        return: 0U
+    backend: (cast: (@: MixaWin32) be_raw)
     @: void h
     @: void p
     @: wchar_t wbuf
@@ -853,7 +997,11 @@ fn: mixa_backend_clipboard_get (const: @(MixaBackend backend); @: char out; size
     c.CloseClipboard()
 return: n
 
-fn: mixa_backend_clipboard_set (@: MixaBackend backend; const: @(char text)) int
+fn: mixa_win32_clipboard_set (@: MixaBackend be_raw; const: @(char text)) int
+    @: MixaWin32 backend
+    if: be_raw = 0
+        return: 1
+    backend: (cast: (@: MixaWin32) be_raw)
     @: void h
     @: void p
     @: wchar_t wbuf
@@ -896,8 +1044,10 @@ fn: mixa_backend_clipboard_set (@: MixaBackend backend; const: @(char text)) int
     c.CloseClipboard()
 return: 0
 
-sub: mixa_backend_close (@: MixaBackend backend)
-    if: backend != 0
+sub: mixa_win32_close (@: MixaBackend be_raw)
+    @: MixaWin32 backend
+    if: be_raw != 0
+        backend: (cast: (@: MixaWin32) be_raw)
         mixa_win32_glyph_cache_free(backend\glyph_cache)
         backend\glyph_cache: 0
         mixa_win32_destroy_dib(backend)
@@ -908,32 +1058,26 @@ sub: mixa_backend_close (@: MixaBackend backend)
             c.DeleteObject(backend\hfont_text)
         ---
         if: backend\hfont_upper != 0
-            c.DeleteObject(backend\hfont_upper)
+            if: backend\hfont_upper != backend\hfont_text
+                c.DeleteObject(backend\hfont_upper)
+            ---
+        ---
+        if: backend\hfont_pointer != 0
+            c.DeleteObject(backend\hfont_pointer)
         ---
         if: backend\hdc_glyph != 0
             c.DeleteDC(backend\hdc_glyph)
         ---
-        backend\hwnd: 0
-        backend\hfont_text: 0
-        backend\hfont_upper: 0
-        backend\hdc_glyph: 0
-        backend\text_ascent: 0
-        backend\upper_ascent: 0
-        backend\frame_w: 0U
-        backend\frame_h: 0U
-        backend\frame_bytes: 0U
-        backend\cols: 0U
-        backend\rows: 0U
-        backend\cell_width: 0U
-        backend\cell_height: 0U
-        backend\upper_cell_width: 0U
-        backend\upper_cell_height: 0U
-        backend\is_open: 0
+        c.free(backend)
     ---
-end: mixa_backend_close
+end: mixa_win32_close
 
 
-fn: mixa_backend_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint; @: MixaGlyph out) int
+fn: mixa_win32_glyph (@: MixaBackend be_raw; int: layer; unsigned: codepoint; @: MixaGlyph out) int
+    @: MixaWin32 backend
+    if: be_raw = 0
+        return: 1
+    backend: (cast: (@: MixaWin32) be_raw)
     @: MixaWin32GlyphEntry hit
     @: MixaWin32GlyphEntry ent
     @: void font
@@ -971,7 +1115,12 @@ fn: mixa_backend_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint;
             font: (cast: (@: void) backend\hfont_upper)
             ascent: backend\upper_ascent
         else:
-            return: 1
+            if: layer = MIXA_LAYER_POINTER
+                font: (cast: (@: void) backend\hfont_pointer)
+                ascent: backend\pointer_ascent
+            else:
+                return: 1
+            ---
         ---
     ---
     if: font = 0 || backend\hdc_glyph = 0
@@ -1168,7 +1317,11 @@ fn: mixa_backend_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint;
     out\missing: 0
 return: 0
 
-fn: mixa_backend_frame_at (const: @(MixaBackend backend); size_t: x; size_t: y; @: MixaU8 out) int
+fn: mixa_win32_frame_at (const: @(MixaBackend be_raw); size_t: x; size_t: y; @: MixaU8 out) int
+    @: MixaWin32 backend
+    if: be_raw = 0
+        return: 1
+    backend: (cast: (@: MixaWin32) be_raw)
     const: @(MixaU8 px)
     if: backend = 0
         return: 1
@@ -1189,3 +1342,25 @@ fn: mixa_backend_frame_at (const: @(MixaBackend backend); size_t: x; size_t: y; 
     out[2]: px[0]
     out[3]: px[3]
 return: 0
+
+@: MixaBackendVTable g_mixa_win32_vtable
+int: g_mixa_win32_vtable_ready
+
+fn: mixa_backend_win32_table () const: @(MixaBackendVTable)
+    if: g_mixa_win32_vtable_ready != 0
+        return: g_mixa_win32_vtable
+    ---
+    g_mixa_win32_vtable: (cast: (@: MixaBackendVTable) c.calloc(1U, c.sizeof(c.MixaBackendVTable)))
+    if: g_mixa_win32_vtable = 0
+        return: 0
+    ---
+    g_mixa_win32_vtable\name: "win32"
+    g_mixa_win32_vtable\open: mixa_win32_open
+    g_mixa_win32_vtable\present: mixa_win32_present
+    g_mixa_win32_vtable\poll: mixa_win32_poll
+    g_mixa_win32_vtable\clipboard_get: mixa_win32_clipboard_get
+    g_mixa_win32_vtable\clipboard_set: mixa_win32_clipboard_set
+    g_mixa_win32_vtable\glyph: mixa_win32_glyph
+    g_mixa_win32_vtable\close: mixa_win32_close
+    g_mixa_win32_vtable_ready: 1
+return: g_mixa_win32_vtable

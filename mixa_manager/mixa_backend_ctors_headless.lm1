@@ -1,0 +1,14 @@
+include: "mixa_manager/mixa_backend.h"
+
+# Per-build constructor list: headless only (no Win32 link requirement).
+
+fn: mixa_backend_headless_table () const: @(MixaBackendVTable)
+
+fn: mixa_backend_ctors_count () size_t
+return: 1U
+
+fn: mixa_backend_ctors_get (size_t: i) const: @(MixaBackendVTable)
+    if: i = 0U
+        return: mixa_backend_headless_table()
+    ---
+return: 0

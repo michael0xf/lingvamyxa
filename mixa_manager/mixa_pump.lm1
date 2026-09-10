@@ -1,5 +1,4 @@
 
-predef: "mixa_manager/mixa_event_fifo.lm1"
 include: "mixa_manager/mixa_pump.h" "<stdlib.h>" "<string.h>"
 
 # Pump: drain poll into an inbox FIFO, then yield via next. One turn boundary.

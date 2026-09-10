@@ -1,12 +1,17 @@
-predef: "mixa_manager/mixa_backend_headless.lm1" "mixa_manager/mixa_pump.lm1"
-include: "<stdio.h>" "<string.h>"
+predef: "mixa_manager/mixa_pump.lm1"
+include: "mixa_manager/mixa_backend_headless.h" "<stdio.h>" "<string.h>"
+
+fn: mixa_backend_headless_table () const: @(MixaBackendVTable)
+fn: mixa_headless_push_event (@: MixaBackend backend; const: @(MixaEvent ev)) int
 
 # mixa_event_fifo + mixa_pump. Milestone 3 groundwork (BACKEND_SEAM 7.1).
 
 fn: main () int
     @: MixaEventFifo fifo
     @: MixaPump pump
+    const: @(MixaBackendVTable vt)
     @: MixaBackend be
+    @: MixaHeadless h
     @: MixaCellMetrics m
     @: MixaEvent ev
     @: MixaEvent got
@@ -20,11 +25,16 @@ fn: main () int
 
     fifo: (cast: (@: MixaEventFifo) c.calloc(1U, c.sizeof(c.MixaEventFifo)))
     pump: (cast: (@: MixaPump) c.calloc(1U, c.sizeof(c.MixaPump)))
-    be: (cast: (@: MixaBackend) c.calloc(1U, c.sizeof(c.MixaBackend)))
+    be: 0
     ev: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
     got: (cast: (@: MixaEvent) c.calloc(1U, c.sizeof(c.MixaEvent)))
-    if: fifo = 0 || pump = 0 || be = 0 || ev = 0 || got = 0
+    if: fifo = 0 || pump = 0 || ev = 0 || got = 0
         c.printf("mixa pump: alloc failed\n")
+        return: 1
+
+    vt: mixa_backend_headless_table()
+    if: vt = 0 || mixa_backend_table_valid(vt) = 0
+        c.printf("mixa pump: headless table missing/invalid\n")
         return: 1
     # Reference mixa_palette_rgb so -Wunused-function stays quiet in this TU
     # (overlay.h arrives via mixa_backend.h for MixaU8).
@@ -153,16 +163,18 @@ fn: main () int
     # --- pump: drain takes every queued event and leaves backend poll empty ---
     c.memset(fifo, 0, c.sizeof(c.MixaEventFifo))
     c.memset(pump, 0, c.sizeof(c.MixaPump))
-    c.memset(be, 0, c.sizeof(c.MixaBackend))
+    be: 0
     m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
     if: m = 0
         c.printf("mixa pump: metrics alloc failed\n")
         return: 1
     m\text_cell_width: 4U
-    m\text_cell_height: 5U
+    m\text_cell_height: 6U
     m\upper_cell_width: 8U
     m\upper_cell_height: 10U
-    if: mixa_backend_open(be, 3U, 2U, m) != 0
+    m\pointer_cell_width: 6U
+    m\pointer_cell_height: 8U
+    if: mixa_backend_open(vt, @ be, 3U, 2U, m) != 0
         c.printf("mixa pump: backend open failed\n")
         return: 1
     if: mixa_pump_open(pump) != 0
@@ -171,19 +183,19 @@ fn: main () int
     c.memset(ev, 0, c.sizeof(c.MixaEvent))
     ev\kind: MIXA_EVENT_KEY
     ev\codepoint: 10U
-    if: mixa_backend_push_event(be, ev) != 0
+    if: mixa_headless_push_event(be, ev) != 0
         c.printf("mixa pump: backend push 10 failed\n")
         failures: failures + 1
     c.memset(ev, 0, c.sizeof(c.MixaEvent))
     ev\kind: MIXA_EVENT_KEY
     ev\codepoint: 11U
-    if: mixa_backend_push_event(be, ev) != 0
+    if: mixa_headless_push_event(be, ev) != 0
         c.printf("mixa pump: backend push 11 failed\n")
         failures: failures + 1
     c.memset(ev, 0, c.sizeof(c.MixaEvent))
     ev\kind: MIXA_EVENT_KEY
     ev\codepoint: 12U
-    if: mixa_backend_push_event(be, ev) != 0
+    if: mixa_headless_push_event(be, ev) != 0
         c.printf("mixa pump: backend push 12 failed\n")
         failures: failures + 1
     if: mixa_pump_drain(pump, be) != 0
@@ -224,13 +236,13 @@ fn: main () int
     c.memset(ev, 0, c.sizeof(c.MixaEvent))
     ev\kind: MIXA_EVENT_KEY
     ev\codepoint: 20U
-    if: mixa_backend_push_event(be, ev) != 0
+    if: mixa_headless_push_event(be, ev) != 0
         c.printf("mixa pump: push 20 failed\n")
         failures: failures + 1
     c.memset(ev, 0, c.sizeof(c.MixaEvent))
     ev\kind: MIXA_EVENT_KEY
     ev\codepoint: 21U
-    if: mixa_backend_push_event(be, ev) != 0
+    if: mixa_headless_push_event(be, ev) != 0
         c.printf("mixa pump: push 21 failed\n")
         failures: failures + 1
     if: mixa_pump_drain(pump, be) != 0
@@ -245,7 +257,7 @@ fn: main () int
     c.memset(ev, 0, c.sizeof(c.MixaEvent))
     ev\kind: MIXA_EVENT_KEY
     ev\codepoint: 99U
-    if: mixa_backend_push_event(be, ev) != 0
+    if: mixa_headless_push_event(be, ev) != 0
         c.printf("mixa pump: mid-turn push failed\n")
         failures: failures + 1
     if: mixa_pump_pending(pump) != 1U
@@ -272,16 +284,17 @@ fn: main () int
     ev\kind: MIXA_EVENT_RESIZE
     ev\cols: 5U
     ev\rows: 4U
-    if: mixa_backend_push_event(be, ev) != 0
+    if: mixa_headless_push_event(be, ev) != 0
         c.printf("mixa pump: push resize failed\n")
         failures: failures + 1
     if: mixa_pump_drain(pump, be) != 0
         c.printf("mixa pump: drain resize failed\n")
         failures: failures + 1
-    if: be\cols != 5U || be\rows != 4U
+    h: (cast: (@: MixaHeadless) be)
+    if: h\cols != 5U || h\rows != 4U
         c.printf("mixa pump: resize did not adopt via poll-in-drain\n")
         failures: failures + 1
-    if: be\frame_w != 20U || be\frame_h != 20U || be\frame_bytes != 1600U
+    if: h\frame_w != 20U || h\frame_h != 24U || h\frame_bytes != 1920U
         c.printf("mixa pump: resize frame size wrong\n")
         failures: failures + 1
     if: mixa_pump_next(pump, got) != 0
@@ -293,10 +306,10 @@ fn: main () int
 
     mixa_pump_release(pump)
     mixa_backend_close(be)
+    be: 0
     c.free(m)
     c.free(got)
     c.free(ev)
-    c.free(be)
     c.free(pump)
     c.free(fifo)
 

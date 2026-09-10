@@ -1,0 +1,208 @@
+include: "mixa_manager/mixa_backend.h" "<stdlib.h>" "<string.h>"
+
+# Dispatch forwards + registry (BACKEND_SEAM 11.5 / 11.6).
+# Constructors are listed per-build via mixa_backend_ctors_*; this unit never
+# names a platform backend, so a headless-only link stays free of Win32.
+
+fn: mixa_backend_ctors_count () size_t
+fn: mixa_backend_ctors_get (size_t: i) const: @(MixaBackendVTable)
+
+# Registry cache. L1 has no internal linkage (static: refused); these names are
+# private-by-convention (mixa_backend_table_ unit prefix) - STATUS 6.1 C.
+@: MixaBackendTableRef g_mixa_backend_table_registry
+size_t: g_mixa_backend_table_registry_count
+int: g_mixa_backend_table_registry_ready
+
+fn: mixa_backend_tables (@: size_t count) const: @(MixaBackendTableRef)
+    const: @(MixaBackendVTable ctor)
+    size_t: n
+    size_t: i
+    size_t: cap
+    if: count = 0
+        return: 0
+    if: g_mixa_backend_table_registry_ready != 0
+        count[0]: g_mixa_backend_table_registry_count
+        return: g_mixa_backend_table_registry
+    ---
+    cap: mixa_backend_ctors_count()
+    if: cap = 0U
+        count[0]: 0U
+        return: 0
+    ---
+    if: g_mixa_backend_table_registry = 0
+        g_mixa_backend_table_registry: (cast: (@: MixaBackendTableRef) c.calloc(cap, c.sizeof(c.MixaBackendTableRef)))
+        if: g_mixa_backend_table_registry = 0
+            count[0]: 0U
+            return: 0
+        ---
+    ---
+    n: 0U
+    i: 0U
+    while: i < cap
+        ctor: mixa_backend_ctors_get(i)
+        if: ctor != 0
+            if: mixa_backend_table_valid(ctor) != 0
+                g_mixa_backend_table_registry[n]: ctor
+                n: n + 1U
+            ---
+        ---
+        i: i + 1U
+    ---
+    g_mixa_backend_table_registry_count: n
+    g_mixa_backend_table_registry_ready: 1
+    count[0]: n
+return: g_mixa_backend_table_registry
+
+fn: mixa_backend_table_valid (const: @(MixaBackendVTable vt)) int
+    if: vt = 0
+        return: 0
+    if: vt\name = 0
+        return: 0
+    if: vt\name[0] = (cast: (char) 0)
+        return: 0
+    if: vt\open = 0
+        return: 0
+    if: vt\present = 0
+        return: 0
+    if: vt\poll = 0
+        return: 0
+    if: vt\clipboard_get = 0
+        return: 0
+    if: vt\clipboard_set = 0
+        return: 0
+    if: vt\glyph = 0
+        return: 0
+    if: vt\close = 0
+        return: 0
+return: 1
+
+fn: mixa_backend_open (const: @(MixaBackendVTable vt); @@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+    @: MixaBackend be
+    int: rc
+    if: vt = 0
+        return: 1
+    if: out = 0
+        return: 1
+    if: metrics = 0
+        return: 1
+    if: mixa_backend_table_valid(vt) = 0
+        return: 1
+    be: 0
+    rc: vt\open(@ be, cols, rows, metrics)
+    if: rc != 0
+        return: rc
+    if: be = 0
+        return: 1
+    # Stamp check (015447): concrete open must leave be->vt == requested vt.
+    # Do not silently repair. Leave caller out unchanged; free via requested close.
+    if: be\vt != vt
+        if: vt\close != 0
+            vt\close(be)
+        ---
+        return: 1
+    ---
+    out[0]: be
+return: 0
+
+fn: mixa_backend_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t: bytes) int
+    if: backend = 0
+        return: 1
+    if: backend\vt = 0
+        return: 1
+    if: backend\vt\present = 0
+        return: 1
+return: backend\vt\present(backend, rgba, bytes)
+
+fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
+    if: out = 0
+        return: 1
+    if: backend = 0
+        out\kind: MIXA_EVENT_NONE
+        return: 1
+    if: backend\vt = 0
+        out\kind: MIXA_EVENT_NONE
+        return: 1
+    if: backend\vt\poll = 0
+        out\kind: MIXA_EVENT_NONE
+        return: 1
+return: backend\vt\poll(backend, out)
+
+fn: mixa_backend_clipboard_get (const: @(MixaBackend backend); @: char out; size_t: cap) size_t
+    if: backend = 0
+        return: 0U
+    if: backend\vt = 0
+        return: 0U
+    if: backend\vt\clipboard_get = 0
+        return: 0U
+return: backend\vt\clipboard_get(backend, out, cap)
+
+fn: mixa_backend_clipboard_set (@: MixaBackend backend; const: @(char text)) int
+    if: backend = 0
+        return: 1
+    if: backend\vt = 0
+        return: 1
+    if: backend\vt\clipboard_set = 0
+        return: 1
+return: backend\vt\clipboard_set(backend, text)
+
+fn: mixa_backend_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint; @: MixaGlyph out) int
+    if: backend = 0
+        return: 1
+    if: out = 0
+        return: 1
+    if: backend\vt = 0
+        return: 1
+    if: backend\vt\glyph = 0
+        return: 1
+return: backend\vt\glyph(backend, layer, codepoint, out)
+
+sub: mixa_backend_close (@: MixaBackend backend)
+    if: backend != 0
+        if: backend\vt != 0
+            if: backend\vt\close != 0
+                backend\vt\close(backend)
+            ---
+        ---
+    ---
+end: mixa_backend_close
+
+fn: mixa_backend_table_by_name (const: @(char name)) const: @(MixaBackendVTable)
+    []: size_t count_slot 1
+    const: @(MixaBackendTableRef list)
+    size_t: n
+    size_t: i
+    const: @(MixaBackendVTable vt)
+    if: name = 0
+        return: 0
+    if: name[0] = (cast: (char) 0)
+        return: 0
+    count_slot[0]: 0U
+    list: mixa_backend_tables(count_slot)
+    n: count_slot[0]
+    if: list = 0
+        return: 0
+    ---
+    i: 0U
+    while: i < n
+        vt: list[i]
+        if: vt != 0
+            if: c.strcmp(vt\name, name) = 0
+                return: vt
+            ---
+        ---
+        i: i + 1U
+    ---
+return: 0
+
+fn: mixa_backend_default_table () const: @(MixaBackendVTable)
+    []: size_t count_slot 1
+    const: @(MixaBackendTableRef list)
+    count_slot[0]: 0U
+    list: mixa_backend_tables(count_slot)
+    if: list = 0
+        return: 0
+    ---
+    if: count_slot[0] = 0U
+        return: 0
+    ---
+return: list[0]

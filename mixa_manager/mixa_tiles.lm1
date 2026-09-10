@@ -1,0 +1,177 @@
+predef: "mixa_manager/mixa_text_rect.lm1"
+include: "mixa_manager/mixa_tiles.h" "<string.h>"
+
+# Private-use button tiles (DRAWING.txt section 5). Gap = cell_h >> 5, floor 1.
+# Colour from cell bg + alpha; gaps left transparent. No MixaCell change.
+
+fn: mixa_tile_gap_px (size_t: cell_h) size_t
+    size_t: g
+    g: cell_h >> 5U
+    if: g = 0U
+        g: 1U
+    ---
+return: g
+
+fn: mixa_tile_is (unsigned: codepoint) int
+    if: codepoint >= MIXA_TILE_BASE && codepoint <= MIXA_TILE_LAST
+        return: 1
+return: 0
+
+fn: mixa_tile_gaps (unsigned: codepoint) unsigned
+    if: mixa_tile_is(codepoint) = 0
+        return: 0U
+return: codepoint & 0xFU
+
+fn: mixa_tile_from_gaps (unsigned: gaps) unsigned
+return: MIXA_TILE_BASE | (gaps & 0xFU)
+
+fn: mixa_tile_pixel_solid (unsigned: codepoint; size_t: lx; size_t: ly; size_t: cell_w; size_t: cell_h) int
+    unsigned: gaps
+    size_t: g
+    if: mixa_tile_is(codepoint) = 0
+        return: 0
+    if: cell_w = 0U || cell_h = 0U
+        return: 0
+    if: lx >= cell_w || ly >= cell_h
+        return: 0
+    gaps: mixa_tile_gaps(codepoint)
+    g: mixa_tile_gap_px(cell_h)
+    if: (gaps & MIXA_TILE_GAP_L) != 0U
+        if: lx < g
+            return: 0
+        ---
+    ---
+    if: (gaps & MIXA_TILE_GAP_R) != 0U
+        if: cell_w <= g
+            return: 0
+        ---
+        if: lx >= (cell_w - g)
+            return: 0
+        ---
+    ---
+    if: (gaps & MIXA_TILE_GAP_T) != 0U
+        if: ly < g
+            return: 0
+        ---
+    ---
+    if: (gaps & MIXA_TILE_GAP_B) != 0U
+        if: cell_h <= g
+            return: 0
+        ---
+        if: ly >= (cell_h - g)
+            return: 0
+        ---
+    ---
+return: 1
+
+fn: mixa_tile_paint_cell (unsigned: codepoint; unsigned: bg; unsigned: alpha; size_t: cell_x; size_t: cell_y; size_t: cell_w; size_t: cell_h; @: MixaU8 out_rgba; size_t: width; size_t: height) int
+    @: MixaU8 p
+    []: MixaU8 pr 1
+    []: MixaU8 pg 1
+    []: MixaU8 pb 1
+    size_t: lx
+    size_t: ly
+    size_t: px
+    size_t: py
+    unsigned: sa
+    unsigned: inv
+    unsigned: sr
+    unsigned: sg
+    unsigned: sb
+    unsigned: dr
+    unsigned: dg
+    unsigned: db
+    if: out_rgba = 0
+        return: 1
+    if: mixa_tile_is(codepoint) = 0
+        return: 0
+    if: cell_w = 0U || cell_h = 0U
+        return: 0
+    sa: alpha
+    if: sa = 0U
+        return: 0
+    c.mixa_palette_rgb(bg, pr, pg, pb)
+    ly: 0U
+    while: ly < cell_h
+        lx: 0U
+        while: lx < cell_w
+            if: mixa_tile_pixel_solid(codepoint, lx, ly, cell_w, cell_h) != 0
+                px: cell_x + lx
+                py: cell_y + ly
+                if: px < width && py < height
+                    p: out_rgba + ((py * width + px) * 4U)
+                    if: sa = 255U
+                        p[0]: pr[0]
+                        p[1]: pg[0]
+                        p[2]: pb[0]
+                        p[3]: (cast: (MixaU8) 255)
+                    else:
+                        inv: 255U - sa
+                        sr: pr[0]
+                        sg: pg[0]
+                        sb: pb[0]
+                        dr: p[0]
+                        dg: p[1]
+                        db: p[2]
+                        p[0]: (cast: (MixaU8) ((sr * sa + dr * inv) / 255U))
+                        p[1]: (cast: (MixaU8) ((sg * sa + dg * inv) / 255U))
+                        p[2]: (cast: (MixaU8) ((sb * sa + db * inv) / 255U))
+                        p[3]: (cast: (MixaU8) 255)
+                    ---
+                ---
+            ---
+            lx: lx + 1U
+        ---
+        ly: ly + 1U
+    ---
+return: 0
+
+fn: mixa_tile_fill_button (@: MixaTextRect rect; size_t: row; size_t: col; size_t: nrows; size_t: ncols; unsigned: fg; unsigned: bg; unsigned: alpha) int
+    size_t: i
+    size_t: j
+    size_t: r
+    size_t: ccol
+    unsigned: gaps
+    @: MixaCell p
+    if: rect = 0 || rect\cells = 0
+        return: 1
+    if: nrows = 0U || ncols = 0U
+        return: 1
+    if: row >= rect\rows || col >= rect\cols
+        return: 1
+    if: (row + nrows) > rect\rows || (col + ncols) > rect\cols
+        return: 1
+    i: 0U
+    while: i < nrows
+        j: 0U
+        while: j < ncols
+            gaps: 0U
+            if: i = 0U
+                gaps: gaps | MIXA_TILE_GAP_T
+            ---
+            if: i = (nrows - 1U)
+                gaps: gaps | MIXA_TILE_GAP_B
+            ---
+            if: j = 0U
+                gaps: gaps | MIXA_TILE_GAP_L
+            ---
+            if: j = (ncols - 1U)
+                gaps: gaps | MIXA_TILE_GAP_R
+            ---
+            r: row + i
+            ccol: col + j
+            p: mixa_cell_at(rect, r, ccol)
+            if: p = 0
+                return: 1
+            ---
+            p\codepoint: mixa_tile_from_gaps(gaps)
+            p\fg: fg
+            p\bg: bg
+            p\flags: 0U
+            p\width: 1U
+            p\alpha: alpha
+            j: j + 1U
+        ---
+        i: i + 1U
+    ---
+return: 0

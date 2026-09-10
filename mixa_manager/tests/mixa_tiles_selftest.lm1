@@ -1,0 +1,430 @@
+predef: "mixa_manager/mixa_composite.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# TASK 24: tile pixel assertions — gaps transparent, floor-at-1, nine-slice,
+# 1x1 all-gaps, adjacent buttons show a visible gap.
+
+fn: px_at (@: MixaU8 out; size_t: width; size_t: x; size_t: y) @: MixaU8
+return: out + ((y * width + x) * 4U)
+
+fn: is_black (const: @(MixaU8 p)) int
+    if: p = 0
+        return: 0
+    if: p[0] = 0 && p[1] = 0 && p[2] = 0 && p[3] = 255
+        return: 1
+return: 0
+
+fn: is_white (const: @(MixaU8 p)) int
+    if: p = 0
+        return: 0
+    if: p[0] = 255 && p[1] = 255 && p[2] = 255 && p[3] = 255
+        return: 1
+return: 0
+
+
+fn: cell_cp (const: @(MixaTextRect rect); size_t: row; size_t: col) unsigned
+    const: @(MixaCell p)
+    p: mixa_cell_at_const(rect, row, col)
+    if: p = 0
+        return: 0U
+return: p\codepoint
+
+fn: main () int
+    @: MixaTextRect text
+    @: MixaTextRect upper
+    @: MixaU8 out
+    @: MixaU8 p
+    @: MixaCell cell
+    size_t: cw
+    size_t: ch
+    size_t: width
+    size_t: height
+    size_t: need
+    size_t: g
+    size_t: failures
+    unsigned: cp
+    failures: 0U
+
+    text: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    upper: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    if: text = 0 || upper = 0
+        c.printf("mixa tiles: header alloc failed\n")
+        return: 1
+    ---
+
+    # --- gap floor: cell_h where >>5 is 0 still yields 1 ---
+    g: mixa_tile_gap_px(1U)
+    if: g != 1U
+        c.printf("mixa tiles: gap_px(1) expected 1 got %u\n", (cast: (unsigned) g))
+        failures: failures + 1U
+    ---
+    g: mixa_tile_gap_px(16U)
+    if: g != 1U
+        c.printf("mixa tiles: gap_px(16) expected 1 got %u\n", (cast: (unsigned) g))
+        failures: failures + 1U
+    ---
+    g: mixa_tile_gap_px(32U)
+    if: g != 1U
+        c.printf("mixa tiles: gap_px(32) expected 1 got %u\n", (cast: (unsigned) g))
+        failures: failures + 1U
+    ---
+    g: mixa_tile_gap_px(64U)
+    if: g != 2U
+        c.printf("mixa tiles: gap_px(64) expected 2 got %u\n", (cast: (unsigned) g))
+        failures: failures + 1U
+    ---
+
+    # --- each of nine (+ ALL) paints interior, leaves gap sides transparent ---
+    cw: 8U
+    ch: 8U
+    width: 8U
+    height: 8U
+    need: width * height * 4U
+    if: mixa_rect_open(text, 1U, 1U) != 0
+        c.printf("mixa tiles: text open failed\n")
+        return: 1
+    ---
+    if: mixa_rect_open(upper, 1U, 1U) != 0
+        c.printf("mixa tiles: upper open failed\n")
+        return: 1
+    ---
+    out: (cast: (@: MixaU8) c.malloc(need))
+    if: out = 0
+        c.printf("mixa tiles: out alloc failed\n")
+        return: 1
+    ---
+
+    # Helper macro-like: for a tile cp, composite one upper cell over black,
+    # assert gap pixel stays black and solid is white (bg=15 alpha=255).
+    # NW: gap top+left
+    mixa_rect_fill(text, 0U, 0U, 0U, 0U)
+    c.memset(upper\cells, 0, upper\rows * upper\cols * c.sizeof(c.MixaCell))
+    cell: mixa_cell_at(upper, 0U, 0U)
+    cell\codepoint: MIXA_TILE_NW
+    cell\fg: 15U
+    cell\bg: 15U
+    cell\alpha: 255U
+    cell\width: 1U
+    if: mixa_composite(text, cw, ch, upper, cw, ch, out, need, width, height) != 0
+        c.printf("mixa tiles: composite NW failed\n")
+        return: 1
+    ---
+    p: px_at(out, width, 0U, 0U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: NW gap (0,0) not transparent\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 2U, 2U)
+    if: is_white(p) = 0
+        c.printf("mixa tiles: NW interior not solid\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 7U, 7U)
+    if: is_white(p) = 0
+        c.printf("mixa tiles: NW far corner should be solid\n")
+        failures: failures + 1U
+    ---
+
+    # N: gap top only
+    cell\codepoint: MIXA_TILE_N
+    if: mixa_composite(text, cw, ch, upper, cw, ch, out, need, width, height) != 0
+        c.printf("mixa tiles: composite N failed\n")
+        return: 1
+    ---
+    p: px_at(out, width, 4U, 0U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: N top gap not transparent\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 0U, 4U)
+    if: is_white(p) = 0
+        c.printf("mixa tiles: N left should be solid\n")
+        failures: failures + 1U
+    ---
+
+    # NE
+    cell\codepoint: MIXA_TILE_NE
+    if: mixa_composite(text, cw, ch, upper, cw, ch, out, need, width, height) != 0
+        c.printf("mixa tiles: composite NE failed\n")
+        return: 1
+    ---
+    p: px_at(out, width, 7U, 0U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: NE gap not transparent\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 0U, 7U)
+    if: is_white(p) = 0
+        c.printf("mixa tiles: NE interior not solid\n")
+        failures: failures + 1U
+    ---
+
+    # W
+    cell\codepoint: MIXA_TILE_W
+    if: mixa_composite(text, cw, ch, upper, cw, ch, out, need, width, height) != 0
+        c.printf("mixa tiles: composite W failed\n")
+        return: 1
+    ---
+    p: px_at(out, width, 0U, 4U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: W left gap not transparent\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 4U, 0U)
+    if: is_white(p) = 0
+        c.printf("mixa tiles: W top should be solid\n")
+        failures: failures + 1U
+    ---
+
+    # FILL
+    cell\codepoint: MIXA_TILE_FILL
+    if: mixa_composite(text, cw, ch, upper, cw, ch, out, need, width, height) != 0
+        c.printf("mixa tiles: composite FILL failed\n")
+        return: 1
+    ---
+    p: px_at(out, width, 0U, 0U)
+    if: is_white(p) = 0
+        c.printf("mixa tiles: FILL (0,0) should be solid\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 7U, 7U)
+    if: is_white(p) = 0
+        c.printf("mixa tiles: FILL far should be solid\n")
+        failures: failures + 1U
+    ---
+
+    # E
+    cell\codepoint: MIXA_TILE_E
+    if: mixa_composite(text, cw, ch, upper, cw, ch, out, need, width, height) != 0
+        c.printf("mixa tiles: composite E failed\n")
+        return: 1
+    ---
+    p: px_at(out, width, 7U, 4U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: E right gap not transparent\n")
+        failures: failures + 1U
+    ---
+
+    # SW
+    cell\codepoint: MIXA_TILE_SW
+    if: mixa_composite(text, cw, ch, upper, cw, ch, out, need, width, height) != 0
+        c.printf("mixa tiles: composite SW failed\n")
+        return: 1
+    ---
+    p: px_at(out, width, 0U, 7U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: SW gap not transparent\n")
+        failures: failures + 1U
+    ---
+
+    # S
+    cell\codepoint: MIXA_TILE_S
+    if: mixa_composite(text, cw, ch, upper, cw, ch, out, need, width, height) != 0
+        c.printf("mixa tiles: composite S failed\n")
+        return: 1
+    ---
+    p: px_at(out, width, 4U, 7U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: S bottom gap not transparent\n")
+        failures: failures + 1U
+    ---
+
+    # SE
+    cell\codepoint: MIXA_TILE_SE
+    if: mixa_composite(text, cw, ch, upper, cw, ch, out, need, width, height) != 0
+        c.printf("mixa tiles: composite SE failed\n")
+        return: 1
+    ---
+    p: px_at(out, width, 7U, 7U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: SE gap not transparent\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 0U, 0U)
+    if: is_white(p) = 0
+        c.printf("mixa tiles: SE opposite corner not solid\n")
+        failures: failures + 1U
+    ---
+
+    # --- 1x1 button: all four gaps in one cell ---
+    mixa_rect_release(text)
+    mixa_rect_release(upper)
+    c.free(out)
+    if: mixa_rect_open(text, 1U, 1U) != 0 || mixa_rect_open(upper, 1U, 1U) != 0
+        c.printf("mixa tiles: reopen 1x1 failed\n")
+        return: 1
+    ---
+    out: (cast: (@: MixaU8) c.malloc(need))
+    if: out = 0
+        return: 1
+    ---
+    mixa_rect_fill(text, 0U, 0U, 0U, 0U)
+    c.memset(upper\cells, 0, c.sizeof(c.MixaCell))
+    if: mixa_tile_fill_button(upper, 0U, 0U, 1U, 1U, 15U, 15U, 255U) != 0
+        c.printf("mixa tiles: fill_button 1x1 failed\n")
+        return: 1
+    ---
+    cp: cell_cp(upper, 0U, 0U)
+    if: cp != MIXA_TILE_ALL
+        c.printf("mixa tiles: 1x1 expected ALL tile got U+%04X\n", cp)
+        failures: failures + 1U
+    ---
+    if: mixa_composite(text, cw, ch, upper, cw, ch, out, need, width, height) != 0
+        c.printf("mixa tiles: composite 1x1 failed\n")
+        return: 1
+    ---
+    p: px_at(out, width, 0U, 0U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: 1x1 top-left gap not transparent\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 7U, 0U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: 1x1 top-right gap not transparent\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 0U, 7U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: 1x1 bottom-left gap not transparent\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 7U, 7U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: 1x1 bottom-right gap not transparent\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 4U, 4U)
+    if: is_white(p) = 0
+        c.printf("mixa tiles: 1x1 interior not solid\n")
+        failures: failures + 1U
+    ---
+
+    # --- nine-slice over 3x3 cells ---
+    mixa_rect_release(text)
+    mixa_rect_release(upper)
+    c.free(out)
+    cw: 8U
+    ch: 8U
+    width: 24U
+    height: 24U
+    need: width * height * 4U
+    if: mixa_rect_open(text, 3U, 3U) != 0 || mixa_rect_open(upper, 3U, 3U) != 0
+        c.printf("mixa tiles: 3x3 open failed\n")
+        return: 1
+    ---
+    out: (cast: (@: MixaU8) c.malloc(need))
+    mixa_rect_fill(text, 0U, 0U, 0U, 0U)
+    c.memset(upper\cells, 0, upper\rows * upper\cols * c.sizeof(c.MixaCell))
+    if: mixa_tile_fill_button(upper, 0U, 0U, 3U, 3U, 15U, 15U, 255U) != 0
+        c.printf("mixa tiles: fill_button 3x3 failed\n")
+        return: 1
+    ---
+    if: cell_cp(upper, 0U, 0U) != MIXA_TILE_NW
+        c.printf("mixa tiles: 3x3 NW wrong\n")
+        failures: failures + 1U
+    ---
+    if: cell_cp(upper, 0U, 1U) != MIXA_TILE_N
+        c.printf("mixa tiles: 3x3 N wrong\n")
+        failures: failures + 1U
+    ---
+    if: cell_cp(upper, 0U, 2U) != MIXA_TILE_NE
+        c.printf("mixa tiles: 3x3 NE wrong\n")
+        failures: failures + 1U
+    ---
+    if: cell_cp(upper, 1U, 0U) != MIXA_TILE_W
+        c.printf("mixa tiles: 3x3 W wrong\n")
+        failures: failures + 1U
+    ---
+    if: cell_cp(upper, 1U, 1U) != MIXA_TILE_FILL
+        c.printf("mixa tiles: 3x3 FILL wrong\n")
+        failures: failures + 1U
+    ---
+    if: cell_cp(upper, 1U, 2U) != MIXA_TILE_E
+        c.printf("mixa tiles: 3x3 E wrong\n")
+        failures: failures + 1U
+    ---
+    if: cell_cp(upper, 2U, 0U) != MIXA_TILE_SW
+        c.printf("mixa tiles: 3x3 SW wrong\n")
+        failures: failures + 1U
+    ---
+    if: cell_cp(upper, 2U, 1U) != MIXA_TILE_S
+        c.printf("mixa tiles: 3x3 S wrong\n")
+        failures: failures + 1U
+    ---
+    if: cell_cp(upper, 2U, 2U) != MIXA_TILE_SE
+        c.printf("mixa tiles: 3x3 SE wrong\n")
+        failures: failures + 1U
+    ---
+    if: mixa_composite(text, cw, ch, upper, cw, ch, out, need, width, height) != 0
+        c.printf("mixa tiles: composite 3x3 failed\n")
+        return: 1
+    ---
+    # outer corner gap transparent; centre of fill solid
+    p: px_at(out, width, 0U, 0U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: 3x3 outer gap not transparent\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 12U, 12U)
+    if: is_white(p) = 0
+        c.printf("mixa tiles: 3x3 fill centre not solid\n")
+        failures: failures + 1U
+    ---
+
+    # --- two adjacent 1x1 buttons: visible gap between solid bodies ---
+    mixa_rect_release(text)
+    mixa_rect_release(upper)
+    c.free(out)
+    cw: 8U
+    ch: 8U
+    width: 16U
+    height: 8U
+    need: width * height * 4U
+    if: mixa_rect_open(text, 1U, 2U) != 0 || mixa_rect_open(upper, 1U, 2U) != 0
+        c.printf("mixa tiles: adj open failed\n")
+        return: 1
+    ---
+    out: (cast: (@: MixaU8) c.malloc(need))
+    mixa_rect_fill(text, 0U, 0U, 0U, 0U)
+    c.memset(upper\cells, 0, upper\rows * upper\cols * c.sizeof(c.MixaCell))
+    mixa_tile_fill_button(upper, 0U, 0U, 1U, 1U, 15U, 15U, 255U)
+    mixa_tile_fill_button(upper, 0U, 1U, 1U, 1U, 15U, 15U, 255U)
+    if: mixa_composite(text, cw, ch, upper, cw, ch, out, need, width, height) != 0
+        c.printf("mixa tiles: composite adj failed\n")
+        return: 1
+    ---
+    # Rightmost solid of left button is at x = cw-1-g = 6; leftmost solid of
+    # right button at x = cw+g = 9. Pixel x=7 and x=8 are gaps (black).
+    p: px_at(out, width, 7U, 4U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: adjacent gap pixel 7 not transparent\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 8U, 4U)
+    if: is_black(p) = 0
+        c.printf("mixa tiles: adjacent gap pixel 8 not transparent\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 6U, 4U)
+    if: is_white(p) = 0
+        c.printf("mixa tiles: left button solid missing at 6\n")
+        failures: failures + 1U
+    ---
+    p: px_at(out, width, 9U, 4U)
+    if: is_white(p) = 0
+        c.printf("mixa tiles: right button solid missing at 9\n")
+        failures: failures + 1U
+    ---
+
+    mixa_rect_release(text)
+    mixa_rect_release(upper)
+    c.free(out)
+    c.free(text)
+    c.free(upper)
+
+    if: failures != 0U
+        c.printf("mixa tiles: %u failure(s)\n", (cast: (unsigned) failures))
+        return: 1
+    ---
+    c.printf("mixa tiles ok\n")
+return: 0

@@ -1,0 +1,18 @@
+include: "mixa_manager/mixa_backend.h"
+
+# Per-build constructor list: Win32 first (default), then headless fixture.
+
+fn: mixa_backend_win32_table () const: @(MixaBackendVTable)
+fn: mixa_backend_headless_table () const: @(MixaBackendVTable)
+
+fn: mixa_backend_ctors_count () size_t
+return: 2U
+
+fn: mixa_backend_ctors_get (size_t: i) const: @(MixaBackendVTable)
+    if: i = 0U
+        return: mixa_backend_win32_table()
+    ---
+    if: i = 1U
+        return: mixa_backend_headless_table()
+    ---
+return: 0

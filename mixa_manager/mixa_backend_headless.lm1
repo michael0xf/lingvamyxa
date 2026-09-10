@@ -1,11 +1,15 @@
-predef: "mixa_manager/mixa_event_fifo.lm1"
 include: "mixa_manager/mixa_backend_headless.h" "<stdlib.h>" "<string.h>"
 
-# Headless MixaBackend: no window, no font, no platform. Seam ops plus
-# push_event / frame_at for tests. Design: BACKEND_SEAM.txt.
-# Event queue is mixa_event_fifo (Milestone 3 groundwork).
+# Headless backend: no window, no font. Concrete ops are mixa_headless_*;
+# the public seam forwards through the singleton table (BACKEND_SEAM 11.5).
 
-fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+fn: mixa_backend_headless_table () const: @(MixaBackendVTable)
+
+@: MixaBackendVTable g_mixa_headless_vtable
+int: g_mixa_headless_vtable_ready
+
+fn: mixa_headless_open (@@: MixaBackend out; size_t: cols; size_t: rows; @: MixaCellMetrics metrics) int
+    @: MixaHeadless h
     size_t: width
     size_t: height
     size_t: nbytes
@@ -13,9 +17,11 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: Mi
     size_t: cell_height
     size_t: upper_cell_width
     size_t: upper_cell_height
+    size_t: pointer_cell_width
+    size_t: pointer_cell_height
     @: MixaU8 block
     @: MixaEventFifo inbox
-    if: backend = 0
+    if: out = 0
         return: 1
     if: metrics = 0
         return: 1
@@ -31,14 +37,29 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: Mi
         return: 1
     if: metrics\upper_cell_height = 0U
         return: 1
-    # Honour the request for both layers; geometry uses the TEXT cell only.
+    if: metrics\pointer_cell_width = 0U
+        return: 1
+    if: metrics\pointer_cell_height = 0U
+        return: 1
+    # Fixture: honour the request exactly, but refuse ODD cells. Half-cell mouse
+    # needs cw/2 and ch/2 as whole pixels (BACKEND_SEAM 10.8 / even-cell rule).
     cell_width: metrics\text_cell_width
     cell_height: metrics\text_cell_height
     upper_cell_width: metrics\upper_cell_width
     upper_cell_height: metrics\upper_cell_height
-    if: backend\is_open != 0
+    pointer_cell_width: metrics\pointer_cell_width
+    pointer_cell_height: metrics\pointer_cell_height
+    if: (cell_width & 1U) != 0U
         return: 1
-    if: backend\frame != 0
+    if: (cell_height & 1U) != 0U
+        return: 1
+    if: (upper_cell_width & 1U) != 0U
+        return: 1
+    if: (upper_cell_height & 1U) != 0U
+        return: 1
+    if: (pointer_cell_width & 1U) != 0U
+        return: 1
+    if: (pointer_cell_height & 1U) != 0U
         return: 1
     if: cols > ((cast: (size_t) -1) / cell_width)
         return: 1
@@ -55,48 +76,61 @@ fn: mixa_backend_open (@: MixaBackend backend; size_t: cols; size_t: rows; @: Mi
     if: (width * height) > ((cast: (size_t) -1) / 4U)
         return: 1
     nbytes: width * height * 4U
+    h: (cast: (@: MixaHeadless) c.calloc(1U, c.sizeof(c.MixaHeadless)))
+    if: h = 0
+        return: 1
     block: (cast: (@: MixaU8) c.calloc(nbytes, 1U))
     if: block = 0
+        c.free(h)
         return: 1
     inbox: (cast: (@: MixaEventFifo) c.calloc(1U, c.sizeof(c.MixaEventFifo)))
     if: inbox = 0
         c.free(block)
+        c.free(h)
         return: 1
     if: mixa_event_fifo_init(inbox) != 0
         c.free(inbox)
         c.free(block)
+        c.free(h)
         return: 1
-    backend\is_open: 1
-    backend\cols: cols
-    backend\rows: rows
-    backend\cell_width: cell_width
-    backend\cell_height: cell_height
-    backend\frame_w: width
-    backend\frame_h: height
-    backend\frame_bytes: nbytes
-    backend\frame: block
-    backend\inbox: inbox
-    # Write back what we actually used (honour request for both layers).
+    h\vt: mixa_backend_headless_table()
+    h\is_open: 1
+    h\cols: cols
+    h\rows: rows
+    h\cell_width: cell_width
+    h\cell_height: cell_height
+    h\frame_w: width
+    h\frame_h: height
+    h\frame_bytes: nbytes
+    h\frame: block
+    h\inbox: inbox
     metrics\text_cell_width: cell_width
     metrics\text_cell_height: cell_height
     metrics\upper_cell_width: upper_cell_width
     metrics\upper_cell_height: upper_cell_height
+    metrics\pointer_cell_width: pointer_cell_width
+    metrics\pointer_cell_height: pointer_cell_height
+    out[0]: (cast: (@: MixaBackend) h)
 return: 0
-fn: mixa_backend_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t: bytes) int
+
+fn: mixa_headless_present (@: MixaBackend backend; const: @(MixaU8 rgba); size_t: bytes) int
+    @: MixaHeadless h
     if: backend = 0
         return: 1
-    if: backend\is_open = 0
+    h: (cast: (@: MixaHeadless) backend)
+    if: h\is_open = 0
         return: 1
-    if: backend\frame = 0
+    if: h\frame = 0
         return: 1
     if: rgba = 0
         return: 1
-    if: bytes < backend\frame_bytes
+    if: bytes < h\frame_bytes
         return: 1
-    c.memcpy(backend\frame, rgba, backend\frame_bytes)
+    c.memcpy(h\frame, rgba, h\frame_bytes)
 return: 0
 
-fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
+fn: mixa_headless_poll (@: MixaBackend backend; @: MixaEvent out) int
+    @: MixaHeadless h
     @: MixaU8 block
     @: MixaU8 old_frame
     size_t: new_cols
@@ -110,13 +144,14 @@ fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
         return: 1
     if: out = 0
         return: 1
-    if: backend\is_open = 0
+    h: (cast: (@: MixaHeadless) backend)
+    if: h\is_open = 0
         out\kind: MIXA_EVENT_NONE
         return: 1
-    if: backend\inbox = 0
+    if: h\inbox = 0
         out\kind: MIXA_EVENT_NONE
         return: 1
-    if: mixa_event_fifo_pop(backend\inbox, out) != 0
+    if: mixa_event_fifo_pop(h\inbox, out) != 0
         out\kind: MIXA_EVENT_NONE
         return: 0
     ---
@@ -124,8 +159,8 @@ fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
     if: out\kind = MIXA_EVENT_RESIZE
         new_cols: out\cols
         new_rows: out\rows
-        cw: backend\cell_width
-        ch: backend\cell_height
+        cw: h\cell_width
+        ch: h\cell_height
         if: new_cols = 0U
             return: 1
         ---
@@ -163,46 +198,49 @@ fn: mixa_backend_poll (@: MixaBackend backend; @: MixaEvent out) int
         if: block = 0
             return: 1
         ---
-        # New buffer secured; only then replace the old surface.
-        old_frame: backend\frame
-        backend\frame: block
-        backend\cols: new_cols
-        backend\rows: new_rows
-        backend\frame_w: width
-        backend\frame_h: height
-        backend\frame_bytes: nbytes
+        old_frame: h\frame
+        h\frame: block
+        h\cols: new_cols
+        h\rows: new_rows
+        h\frame_w: width
+        h\frame_h: height
+        h\frame_bytes: nbytes
         if: old_frame != 0
             c.free(old_frame)
         ---
     ---
 return: 0
 
-fn: mixa_backend_clipboard_get (const: @(MixaBackend backend); @: char out; size_t: cap) size_t
+fn: mixa_headless_clipboard_get (const: @(MixaBackend backend); @: char out; size_t: cap) size_t
+    @: MixaHeadless h
     size_t: n
     if: backend = 0
         return: 0U
     if: out = 0
         return: 0U
-    if: backend\is_open = 0
+    h: (cast: (@: MixaHeadless) backend)
+    if: h\is_open = 0
         return: 0U
-    if: backend\clipboard = 0
+    if: h\clipboard = 0
         if: cap < 1U
             return: 0U
         out[0]: (cast: (char) 0)
         return: 0U
-    n: backend\clipboard_len
+    n: h\clipboard_len
     if: cap < (n + 1U)
         return: n
-    c.memcpy(out, backend\clipboard, n)
+    c.memcpy(out, h\clipboard, n)
     out[n]: (cast: (char) 0)
 return: n
 
-fn: mixa_backend_clipboard_set (@: MixaBackend backend; const: @(char text)) int
+fn: mixa_headless_clipboard_set (@: MixaBackend backend; const: @(char text)) int
+    @: MixaHeadless h
     size_t: n
     @: char block
     if: backend = 0
         return: 1
-    if: backend\is_open = 0
+    h: (cast: (@: MixaHeadless) backend)
+    if: h\is_open = 0
         return: 1
     if: text = 0
         return: 1
@@ -211,102 +249,101 @@ fn: mixa_backend_clipboard_set (@: MixaBackend backend; const: @(char text)) int
     if: block = 0
         return: 1
     c.memcpy(block, text, n + 1U)
-    if: backend\clipboard != 0
-        c.free(backend\clipboard)
+    if: h\clipboard != 0
+        c.free(h\clipboard)
     ---
-    backend\clipboard: block
-    backend\clipboard_len: n
+    h\clipboard: block
+    h\clipboard_len: n
 return: 0
 
-sub: mixa_backend_close (@: MixaBackend backend)
+sub: mixa_headless_close (@: MixaBackend backend)
+    @: MixaHeadless h
     if: backend != 0
-        if: backend\frame != 0
-            c.free(backend\frame)
+        h: (cast: (@: MixaHeadless) backend)
+        if: h\frame != 0
+            c.free(h\frame)
         ---
-        if: backend\clipboard != 0
-            c.free(backend\clipboard)
+        if: h\clipboard != 0
+            c.free(h\clipboard)
         ---
-        if: backend\inbox != 0
-            mixa_event_fifo_release(backend\inbox)
-            c.free(backend\inbox)
+        if: h\inbox != 0
+            mixa_event_fifo_release(h\inbox)
+            c.free(h\inbox)
         ---
-        backend\frame: 0
-        backend\clipboard: 0
-        backend\inbox: 0
-        backend\frame_w: 0U
-        backend\frame_h: 0U
-        backend\frame_bytes: 0U
-        backend\cols: 0U
-        backend\rows: 0U
-        backend\cell_width: 0U
-        backend\cell_height: 0U
-        backend\clipboard_len: 0U
-        backend\is_open: 0
+        c.free(h)
     ---
-end: mixa_backend_close
+end: mixa_headless_close
 
-fn: mixa_backend_push_event (@: MixaBackend backend; const: @(MixaEvent ev)) int
+fn: mixa_headless_push_event (@: MixaBackend backend; const: @(MixaEvent ev)) int
+    @: MixaHeadless h
     @: MixaEvent local
     if: backend = 0
         return: 1
     if: ev = 0
         return: 1
-    if: backend\is_open = 0
+    h: (cast: (@: MixaHeadless) backend)
+    if: h\is_open = 0
         return: 1
-    if: backend\inbox = 0
+    if: h\inbox = 0
         return: 1
     local: (cast: (@: MixaEvent) c.malloc(c.sizeof(c.MixaEvent)))
     if: local = 0
         return: 1
     c.memcpy(local, ev, c.sizeof(c.MixaEvent))
-    # Mouse: incoming col/row are pixels; convert once to cells before push.
+    # Mouse: incoming col/row are pixels; convert once to HALF-cells of the
+    # TEXT layer (BACKEND_SEAM 10.5). Even cells make cw/2 and ch/2 exact.
     if: local\kind = MIXA_EVENT_MOUSE
-        if: backend\cell_width = 0U || backend\cell_height = 0U
+        if: h\cell_width = 0U || h\cell_height = 0U
             c.free(local)
             return: 1
         ---
-        local\col: local\col / backend\cell_width
-        local\row: local\row / backend\cell_height
+        local\col: (local\col * 2U) / h\cell_width
+        local\row: (local\row * 2U) / h\cell_height
     ---
-    if: mixa_event_fifo_push(backend\inbox, local) != 0
+    if: mixa_event_fifo_push(h\inbox, local) != 0
         c.free(local)
         return: 1
     c.free(local)
 return: 0
 
-fn: mixa_backend_frame_at (const: @(MixaBackend backend); size_t: x; size_t: y; @: MixaU8 out) int
+fn: mixa_headless_frame_at (const: @(MixaBackend backend); size_t: x; size_t: y; @: MixaU8 out) int
+    @: MixaHeadless h
     const: @(MixaU8 px)
     if: backend = 0
         return: 1
     if: out = 0
         return: 1
-    if: backend\is_open = 0
+    h: (cast: (@: MixaHeadless) backend)
+    if: h\is_open = 0
         return: 1
-    if: backend\frame = 0
+    if: h\frame = 0
         return: 1
-    if: x >= backend\frame_w
+    if: x >= h\frame_w
         return: 1
-    if: y >= backend\frame_h
+    if: y >= h\frame_h
         return: 1
-    px: backend\frame + ((y * backend\frame_w + x) * 4U)
+    px: h\frame + ((y * h\frame_w + x) * 4U)
     out[0]: px[0]
     out[1]: px[1]
     out[2]: px[2]
     out[3]: px[3]
 return: 0
 
-fn: mixa_backend_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint; @: MixaGlyph out) int
+fn: mixa_headless_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint; @: MixaGlyph out) int
+    @: MixaHeadless h
     if: backend = 0
         return: 1
     if: out = 0
         return: 1
-    if: backend\is_open = 0
+    h: (cast: (@: MixaHeadless) backend)
+    if: h\is_open = 0
         return: 1
     # Headless has no font. Report MISSING rather than inventing coverage.
-    # layer is accepted so the seam signature matches Win32; unused here.
     if: layer != MIXA_LAYER_TEXT
         if: layer != MIXA_LAYER_UPPER
-            return: 1
+            if: layer != MIXA_LAYER_POINTER
+                return: 1
+            ---
         ---
     ---
     out\width: 0U
@@ -316,8 +353,26 @@ fn: mixa_backend_glyph (@: MixaBackend backend; int: layer; unsigned: codepoint;
     out\advance: 0U
     out\coverage: 0
     out\missing: 1
-    # silence unused-parameter style on codepoint: mention it.
     if: codepoint = 0U
         out\missing: 1
     ---
 return: 0
+
+fn: mixa_backend_headless_table () const: @(MixaBackendVTable)
+    if: g_mixa_headless_vtable_ready != 0
+        return: g_mixa_headless_vtable
+    ---
+    g_mixa_headless_vtable: (cast: (@: MixaBackendVTable) c.calloc(1U, c.sizeof(c.MixaBackendVTable)))
+    if: g_mixa_headless_vtable = 0
+        return: 0
+    ---
+    g_mixa_headless_vtable\name: "headless"
+    g_mixa_headless_vtable\open: mixa_headless_open
+    g_mixa_headless_vtable\present: mixa_headless_present
+    g_mixa_headless_vtable\poll: mixa_headless_poll
+    g_mixa_headless_vtable\clipboard_get: mixa_headless_clipboard_get
+    g_mixa_headless_vtable\clipboard_set: mixa_headless_clipboard_set
+    g_mixa_headless_vtable\glyph: mixa_headless_glyph
+    g_mixa_headless_vtable\close: mixa_headless_close
+    g_mixa_headless_vtable_ready: 1
+return: g_mixa_headless_vtable
