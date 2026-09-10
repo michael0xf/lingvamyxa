@@ -356,3 +356,63 @@ arithmetic resting on a misread sentence, and sound reasoning downstream of a
 bad premise is the hardest kind to catch from the inside. The sentence never
 mentioned width; it listed the three things a button is DRAWN from. Committed as
 a696d0c, corrected here.
+
+
+5.7. The panel scrolls HORIZONTALLY, and the highlight is what scrolls it
+
+Mikhail, 2026-09-10: "the button panel scrolls horizontally. On Android that is
+easy, here it will have to be scrolled jointly with moving the highlight."
+
+5.3 already had the mechanism - buttons that do not fit SCROLL, they do not
+shrink and do not re-wrap. What was missing is what DRIVES the scroll, and it is
+not the same thing on the two platforms.
+
+    ClearShell   a touch gesture. Independent of anything else, because there is
+                 no highlight to be independent OF - a finger lands directly on
+                 the button it wants, and the scroll exists only to bring that
+                 button under the finger.
+
+    here         moving the HIGHLIGHT. Panels are navigated by moving it (1.0),
+                 so a keyboard has no separate "scroll the panel" action and
+                 should not grow one. The highlight moves to the next button;
+                 if that button is past the visible edge, the panel scrolls to
+                 bring it in. One action, not two.
+
+So the panel never scrolls by itself. Its horizontal position is a FUNCTION of
+where the highlight is, and the only input that changes it is the same keystroke
+that moves the highlight.
+
+5.7.1. What happens when the mouse scrolls it instead
+
+We do have mouse events in the seam, so the view can be moved without the
+highlight moving. The rule, and this is my call rather than something read out
+of ClearShell - there is nothing to read, the original has no highlight:
+
+    the VIEW may leave the highlight. A mouse scroll moves the view alone, and
+      the highlight is allowed to go off-screen. Forcing it to follow would mean
+      the mouse silently changing what Enter acts on.
+
+    any HIGHLIGHT movement brings the view back, so that the highlight is
+      visible again before it moves. Keyboard navigation is therefore always
+      coherent: you never move a highlight you cannot see.
+
+That asymmetry is the ordinary behaviour of every keyboard-and-mouse list, and
+it is worth stating because the symmetric version - view always follows
+highlight - looks tidier and is wrong: it makes a scroll gesture jump the view
+back the instant you release it.
+
+5.7.2. The same rule, in three places
+
+This is one rule and it applies wherever there is a highlight and a viewport:
+
+    the button panel      horizontally, as above
+    a single list         vertically, in its own bounds and its own scrollbar
+    the ROW of lists      horizontally, on the one shared scrollbar - moving the
+                          highlight into a list that is off to the side scrolls
+                          the row to bring that list into view
+
+The third is the one with a wrinkle: a highlight move can require scrolling TWO
+viewports at once - the row horizontally to reach the list, and that list
+vertically to reach the element. Both follow from the same rule, but they are
+separate scrolls and the order they are applied in is visible to the user.
+Not settled here; noted so it is not discovered late.
