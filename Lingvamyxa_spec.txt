@@ -12030,6 +12030,14 @@ been joined; the runtime stays valid until that barrier.
 is not concurrent Message execution. Contract file:
 `stg/l1_baseline/l2src/LMX_MSG_HOST_INGRESS_V0.txt`.
 
+Overlapping execution of different Messages is a separate host
+slice (`LMX_MSG_EXEC_HOST_V0.txt`): one serial turn lane per
+Message, worker pool for ANY affinity, UI affinity on the owner
+thread, a narrow runtime mutex never held across user work, and
+stable per-Message heap storage. The creator thread does not bypass
+another Message's turn latch. This is not a source-language
+thread-count or depth cap.
+
 Language-facing operations (names follow existing thread/send/stop
 contracts; `spawn` here is English, not a new parser intrinsic):
 
