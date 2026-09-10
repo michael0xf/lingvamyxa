@@ -86,9 +86,12 @@ converts once and every consumer agrees.
                 so the output stays readable beneath it
 
 2.4. The button panels
-
   ClearShell    the application panel is at the top
-  here          the application panel is glued to the BOTTOM, below the console
+  here          the application panel LIES AT THE BOTTOM, on the upper layer,
+                because that is where a Norton-style command line already is.
+                It is not a band below the console: the console's text screen
+                runs full height underneath it and the cursor can pass beneath
+                the panel - UI_MODEL 1.1
                 input line, because that is where a Norton-style command line
                 already is
 

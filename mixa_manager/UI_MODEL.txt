@@ -80,10 +80,10 @@ they happen to sit. ClearShell has one panel belonging to the LIST and one
 belonging to the APPLICATION, and the distinction is what decides where each
 goes.
 
-    the APPLICATION panel is glued to the very bottom of the screen, BELOW the
-      console input line and its cursor. In ClearShell this one is at the top;
-      here it moves down, because the bottom is where a Norton-style command
-      line already lives and the application's buttons belong beside it.
+    the APPLICATION panel LIES AT THE BOTTOM of the upper layer. In ClearShell
+      it is at the top; here it moves down, because the bottom is where a
+      Norton-style command line already lives and the application's buttons
+      belong beside it.
 
     a LIST panel belongs to its list and is drawn as that list's HEADER. There
       is one per list, so N lists have N of them.
@@ -93,9 +93,31 @@ That is already true in ClearShell and it is kept deliberately - a list whose
 own buttons scroll out of reach is a list you have to scroll back to before you
 can act on it.
 
-So, bottom of the screen upward: the application panel, then the console input
-line, then console output scrolling upward - and over all of it,
-semi-transparently, the lists, each carrying its own header.
+The two layers do not share a layout. The LOWER layer is a FULL TEXT SCREEN,
+edge to edge: the console owns every cell of it, including the cells beneath the
+panel, and the cursor may travel under the panel like anywhere else. The UPPER
+layer is the UI system, floating over that screen semi-transparently - the
+application panel at the bottom, the lists, each with its own header.
+
+That is a correction, and the thing it corrects is worth naming because it is
+the sort of mistake that quietly shapes code. An earlier revision said the
+application panel is glued to the bottom "BELOW the console input line", and
+listed the screen bottom-upward as panel, then input line, then output. That
+describes one layout in stacked bands, which is what a single-layer terminal
+would have to do. We have two layers and there is nothing to stack: the panel
+does not reserve rows, does not push the console up, and does not shorten it.
+
+The consequences are all simplifications:
+
+    console geometry is the whole screen. A resize does not subtract panel rows
+      from it, and there is no arithmetic tying one layer's height to the other.
+    text under the panel stays readable - that is what the translucency is FOR,
+      and it stops being decoration once something is actually underneath it.
+    nothing reflows when the panel changes. Adding a button, or hiding the panel
+      entirely, does not move a single console cell.
+    hit-testing is by layer and not by region: the upper layer gets the event
+      first wherever it has something at that cell, and the console gets it
+      otherwise.
 
 ClearShell moves the whole panel vertically instead of scrolling a list inside
 its own frame. That is a concession to a narrow phone screen, and it is
@@ -301,8 +323,12 @@ regularising: it is what makes a selection read as selected.
 
 5.5. Where the panel sits
 
-The application panel was at the TOP in ClearShell and is glued to the BOTTOM
-here, below the console input line. So F1, its first button, lands BOTTOM LEFT.
+The application panel was at the TOP in ClearShell and lies at the BOTTOM here.
+So F1, its first button, lands BOTTOM LEFT.
+
+It lies there on the UPPER layer - see 1.1. It is not a band at the bottom of
+one screen: the console's text screen runs full height underneath it, and the
+cursor can pass beneath the panel.
 
 5.6. The eight characters are the BORDER, not the width
 
