@@ -714,6 +714,7 @@ fn: lmx_msg_drive (@: LmxMsgRuntime rt; unsigned: now; unsigned: threshold) int
     @: LmxMsg m
     @: LmxMsgAddr none
     int: i
+    int: n0
     int: st
     unsigned: a
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
@@ -728,7 +729,8 @@ fn: lmx_msg_drive (@: LmxMsgRuntime rt; unsigned: now; unsigned: threshold) int
     ---
     c.lmx_msg_exec_lock(rt)
     i: 0
-    while: i < rt\n
+    n0: rt\n
+    while: i < n0 && i < rt\n
         m: rt\tab[i]
         a: 0U
         if: lmx_msg_drive_should_close(m) != 0

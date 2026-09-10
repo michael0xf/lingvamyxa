@@ -16,10 +16,19 @@ typedef struct TurnCtx {
     unsigned recvd;
     unsigned ui_recvd;
     unsigned fifo[2];
-    volatile LONG mass;
-    volatile LONG turns;
     LmxMsgRuntime *rt;
 } TurnCtx;
+
+typedef struct MassRec {
+    uchar expect;
+    LONG in_turn;
+    LONG done;
+    int recv_st;
+    int end_st;
+    unsigned got;
+} MassRec;
+
+static MassRec g_mass[70];
 
 static int turn_slow(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     TurnCtx *c = (TurnCtx *)ctx;
@@ -82,20 +91,25 @@ static int turn_fast(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
 }
 
 static int turn_mass(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
-    TurnCtx *c = (TurnCtx *)ctx;
+    MassRec *m = (MassRec *)ctx;
     LmxMsgEnv got;
     memset(&got, 0, sizeof(got));
-    if (lmx_msg_recv(rt, who, &got) != LMX_MSG_OK || got.n != 1 || got.bytes == 0) {
+    if (InterlockedIncrement(&m->in_turn) != 1) {
+        m->recv_st = 1;
+        return 1;
+    }
+    m->recv_st = lmx_msg_recv(rt, who, &got);
+    if (m->recv_st != LMX_MSG_OK || got.n != 1 || got.bytes == 0 || got.bytes[0] != m->expect) {
         lmx_msg_env_release(&got);
+        InterlockedDecrement(&m->in_turn);
         return 1;
     }
-    InterlockedIncrement(&c->mass);
+    m->got = got.bytes[0];
     lmx_msg_env_release(&got);
-    InterlockedIncrement(&c->turns);
-    if (c->turns > 1) {
-        return 1;
-    }
-    return lmx_msg_end_turn(rt, who, 1);
+    m->end_st = lmx_msg_end_turn(rt, who, 1);
+    InterlockedDecrement(&m->in_turn);
+    InterlockedIncrement(&m->done);
+    return m->end_st == LMX_MSG_OK ? 0 : 1;
 }
 
 int main(void) {
@@ -165,13 +179,15 @@ int main(void) {
         int k;
         LmxMsgAddr extra = 0;
         uchar payload[70];
+        memset(g_mass, 0, sizeof(g_mass));
         for (k = 0; k < 70; k++) {
             extra = 0;
             payload[k] = (uchar)(k + 1);
+            g_mass[k].expect = payload[k];
             if (lmx_msg_create(rt, parent, (unsigned)(100 + k), init, 1, &extra) != LMX_MSG_OK) {
                 return 1;
             }
-            if (lmx_msg_exec_bind(rt, extra, turn_mass, &fast, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            if (lmx_msg_exec_bind(rt, extra, turn_mass, &g_mass[k], LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
                 return 1;
             }
             env.bytes = &payload[k];
@@ -216,26 +232,34 @@ int main(void) {
     }
     {
         DWORD deadline = GetTickCount() + 3000;
-        while ((slow.done == 0 || fast.done < 2 || fast.mass < 70) && GetTickCount() < deadline) {
+        while ((slow.done == 0 || fast.done < 2) && GetTickCount() < deadline) {
             Sleep(10);
         }
-        if (slow.done == 0 || fast.done < 2 || fast.mass < 70) {
-            fprintf(stderr, "timeout slow=%ld fast=%ld mass=%ld\n",
-                (long)slow.done, (long)fast.done, (long)fast.mass);
-            return 1;
+        {
+            int k;
+            int mass_done = 0;
+            for (k = 0; k < 70; k++) {
+                if (g_mass[k].done != 0) {
+                    mass_done += 1;
+                }
+            }
+            while (mass_done < 70 && GetTickCount() < deadline) {
+                Sleep(10);
+                mass_done = 0;
+                for (k = 0; k < 70; k++) {
+                    if (g_mass[k].done != 0) {
+                        mass_done += 1;
+                    }
+                }
+            }
+            if (slow.done == 0 || fast.done < 2 || mass_done < 70) {
+                fprintf(stderr, "timeout slow=%ld fast=%ld mass_done=%d\n",
+                    (long)slow.done, (long)fast.done, mass_done);
+                return 1;
+            }
         }
     }
     lmx_msg_exec_stop(rt);
-    ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
-    if (ev) {
-        fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);
-        fprintf(ev, "fast t2=%lu recvd=%u\n", (unsigned long)fast.t2, fast.recvd);
-        fprintf(ev, "ui_step_ms=%lu extra_created=20\n", (unsigned long)tui);
-        fclose(ev);
-    }
-    printf("lmx_message_exec ok slow=%lu..%lu fast=%lu ui_ms=%lu recvd=%u/%u\n",
-        (unsigned long)slow.t0, (unsigned long)slow.t1, (unsigned long)fast.t2,
-        (unsigned long)tui, slow.recvd, fast.recvd);
     if (slow.t1 - slow.t0 < 50) {
         fprintf(stderr, "slow turn did not block\n");
         lmx_msg_runtime_delete(rt);
@@ -252,11 +276,28 @@ int main(void) {
         lmx_msg_runtime_delete(rt);
         return 1;
     }
-    if (fast.mass != 70) {
-        fprintf(stderr, "mass recipients %ld\n", (long)fast.mass);
-        lmx_msg_runtime_delete(rt);
-        return 1;
+    {
+        int k;
+        for (k = 0; k < 70; k++) {
+            if (g_mass[k].done != 1 || g_mass[k].recv_st != LMX_MSG_OK || g_mass[k].end_st != LMX_MSG_OK || g_mass[k].got != g_mass[k].expect || g_mass[k].in_turn != 0) {
+                fprintf(stderr, "mass[%d] done=%ld recv=%d end=%d got=%u expect=%u in_turn=%ld\n",
+                    k, (long)g_mass[k].done, g_mass[k].recv_st, g_mass[k].end_st,
+                    g_mass[k].got, g_mass[k].expect, (long)g_mass[k].in_turn);
+                lmx_msg_runtime_delete(rt);
+                return 1;
+            }
+        }
     }
+    ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
+    if (ev) {
+        fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);
+        fprintf(ev, "fast t2=%lu recvd=%u fifo=%u,%u\n", (unsigned long)fast.t2, fast.recvd, fast.fifo[0], fast.fifo[1]);
+        fprintf(ev, "ui_step_ms=%lu mass_complete=70\n", (unsigned long)tui);
+        fclose(ev);
+    }
+    printf("lmx_message_exec ok fifo=%u,%u mass=70 ui_ms=%lu slow=%lu..%lu\n",
+        fast.fifo[0], fast.fifo[1], (unsigned long)tui,
+        (unsigned long)slow.t0, (unsigned long)slow.t1);
     lmx_msg_runtime_delete(rt);
     CloseHandle(slow.unblock);
     CloseHandle(slow.started);

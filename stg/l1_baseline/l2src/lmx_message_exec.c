@@ -53,6 +53,7 @@ typedef struct LmxMsgExec {
     int nready;
     int ready_cap;
     int scan;
+    LmxMsgAddr unbound_held;
 } LmxMsgExec;
 
 static LmxMsgExec *exof(LmxMsgRuntime *rt) {
@@ -204,6 +205,14 @@ int lmx_msg_exec_holding_turn(LmxMsgRuntime *rt, LmxMsgAddr who) {
     return cur == who;
 }
 
+static LmxMsgAddr get_tls(LmxMsgExec *e) {
+#if defined(_WIN32)
+    return (LmxMsgAddr)(uintptr_t)TlsGetValue(e->tls);
+#else
+    return (LmxMsgAddr)(uintptr_t)pthread_getspecific(e->tls);
+#endif
+}
+
 static void set_tls(LmxMsgExec *e, LmxMsgAddr who) {
 #if defined(_WIN32)
     TlsSetValue(e->tls, (void *)(uintptr_t)who);
@@ -282,6 +291,10 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
+    if (e->unbound_held == addr) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
     for (i = 0; i < e->nbind; i++) {
         if (e->bind[i].addr == addr) {
             if (e->bind[i].held != 0) {
@@ -421,12 +434,19 @@ static void requeue_if_runnable(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 
 static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     LmxMsgExec *e = exof(rt);
+    LmxMsgAddr old;
+    LmxMsg *m;
     int i;
     int st;
+    int live = 0;
+    old = get_tls(e);
     set_tls(e, snap->addr);
     st = snap->turn(rt, snap->addr, snap->ctx);
-    set_tls(e, 0);
     lmx_msg_exec_lock(rt);
+    m = msg_at_addr(rt, snap->addr);
+    if (m != 0) {
+        live = m->exec_live;
+    }
     for (i = 0; i < e->nbind; i++) {
         if (e->bind[i].addr == snap->addr) {
             e->bind[i].held = 0;
@@ -434,6 +454,10 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         }
     }
     lmx_msg_exec_unlock(rt);
+    if (live != 0) {
+        st = lmx_msg_end_turn(rt, snap->addr, 0);
+    }
+    set_tls(e, old);
     requeue_if_runnable(rt, snap->addr);
     return st;
 }
@@ -577,19 +601,35 @@ int lmx_msg_exec_is_bound(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsgExec *e = exof(rt);
     int st;
+    int i;
+    LmxMsgAddr old;
     if (e == 0 || addr == 0U) {
         return LMX_MSG_INVALID;
     }
     if (lmx_msg_host_is_owner(rt) == 0) {
         return LMX_MSG_INVALID;
     }
-    if (lmx_msg_exec_is_bound(rt, addr) != 0) {
-        lmx_msg_exec_ready(rt, addr);
-        return LMX_MSG_OK;
+    lmx_msg_exec_lock(rt);
+    for (i = 0; i < e->nbind; i++) {
+        if (e->bind[i].addr == addr) {
+            lmx_msg_exec_unlock(rt);
+            lmx_msg_exec_ready(rt, addr);
+            return LMX_MSG_OK;
+        }
     }
+    if (e->unbound_held != 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    e->unbound_held = addr;
+    old = get_tls(e);
     set_tls(e, addr);
+    lmx_msg_exec_unlock(rt);
     st = lmx_msg_end_turn(rt, addr, 1);
-    set_tls(e, 0);
+    lmx_msg_exec_lock(rt);
+    e->unbound_held = 0;
+    set_tls(e, old);
+    lmx_msg_exec_unlock(rt);
     return st;
 }
 
