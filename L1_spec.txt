@@ -226,8 +226,9 @@ build baseline; promotion must preserve the live L2 sources.
   tokens and after a pointer parameter name are diagnosed
   (`pointer type has extra fields` / `pointer parameter has extra
   fields`), not dropped or stolen as the name. `const: @(const: @(T))`
-  is `duplicate const qualifier`. Existing `const: @(char)`, `@: T p`,
-  `@@: char`, `@: const char s` stay pointee-const (`const T *`).
+  is `duplicate const qualifier`. Existing mappings unchanged:
+  `const: @(char)` → `const char *`; `@: T p` → `T *p`; `@@: char` →
+  `char **`; parameter `@: const char s` → `const char *s`.
   Tests: const_ptr_ok.lm1, invalid_nested_const_ptr.lm1,
   invalid_at_at_const_drop.lm1, invalid_at_const_foreign.lm1.
   Slot-const spelling remains OPEN 10.13.
