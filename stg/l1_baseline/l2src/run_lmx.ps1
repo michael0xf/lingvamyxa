@@ -54,6 +54,12 @@ if ($LASTEXITCODE -ne 0) { throw "$gen gcc failed: production host.o" }
 $prodNm = & nm --defined-only $prodHostO 2>&1 | Out-String
 if ($prodNm -match 'lmx_msg_host_test_set_') { throw "production host.o exports test setters" }
 if ($prodNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_host_test_nomem\s*$') { throw "production host.o has mutable test_nomem" }
+$prodExecO = Join-Path $out "lmx_message_exec_prod.o"
+& gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build -c "l2src\lmx_message_exec.c" -o $prodExecO 2>&1 |
+    Tee-Object -FilePath (Join-Path $log "lmx_message_exec_prod.gcc.log") | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "$gen gcc failed: production exec.o" }
+$prodExecNm = & nm --defined-only $prodExecO 2>&1 | Out-String
+if ($prodExecNm -match 'lmx_msg_exec_test_after_cleanup') { throw "production exec.o exports test cleanup hook" }
 $hostExe = Join-Path $out "lmx_message_host_selftest.exe"
 & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build -DLMX_MSG_HOST_TEST "l2src\lmx_message_host_selftest.c" $msgC "l2src\lmx_message_host.c" "l2src\lmx_message_exec.c" -o $hostExe 2>&1 |
     Tee-Object -FilePath (Join-Path $log "lmx_message_host_selftest.gcc.log") | Out-Null
@@ -64,7 +70,7 @@ if ($LASTEXITCODE -ne 0) {
 & $hostExe
 if ($LASTEXITCODE -ne 0) { throw "$gen lmx_message_host_selftest failed" }
 $execExe = Join-Path $out "lmx_message_exec_selftest.exe"
-& gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build "l2src\lmx_message_exec_selftest.c" $msgC "l2src\lmx_message_host.c" "l2src\lmx_message_exec.c" -o $execExe 2>&1 |
+& gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build -DLMX_MSG_EXEC_TEST "l2src\lmx_message_exec_selftest.c" $msgC "l2src\lmx_message_host.c" "l2src\lmx_message_exec.c" -o $execExe 2>&1 |
     Tee-Object -FilePath (Join-Path $log "lmx_message_exec_selftest.gcc.log") | Out-Null
 if ($LASTEXITCODE -ne 0) {
     Get-Content (Join-Path $log "lmx_message_exec_selftest.gcc.log")

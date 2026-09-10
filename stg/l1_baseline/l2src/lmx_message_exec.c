@@ -29,7 +29,11 @@ typedef struct LmxMsgExecBind {
     int last_st;
 } LmxMsgExecBind;
 
+#if defined(LMX_MSG_EXEC_TEST)
+#if defined(LMX_MSG_EXEC_TEST)
 void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
+#endif
+#endif
 
 typedef struct LmxMsgExec {
 #if defined(_WIN32)
@@ -458,9 +462,13 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
             st = clean == LMX_MSG_OK ? 1 : clean;
         }
     }
+#if defined(LMX_MSG_EXEC_TEST)
+#if defined(LMX_MSG_EXEC_TEST)
     if (lmx_msg_exec_test_after_cleanup != 0) {
         lmx_msg_exec_test_after_cleanup(snap->addr, live, st);
     }
+#endif
+#endif
     lmx_msg_exec_lock(rt);
     for (i = 0; i < e->nbind; i++) {
         if (e->bind[i].addr == snap->addr) {
