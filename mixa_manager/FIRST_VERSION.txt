@@ -61,3 +61,33 @@ The button can be built EARLIER than the process work and independently of it -
 it needs the drawer, input routing and a write to the console, none of which
 depend on running a child. It is a good early proof that the whole path is
 connected.
+
+
+5. What the first run LOOKS like, so nobody 'fixes' it
+
+Mikhail, 2026-09-10: the first run will look odd - one F1 Help button, and the
+cursor below it.
+
+It will, and that is correct. Written down because it looks like three separate
+bugs and is none of them.
+
+    ONE button at the BOTTOM LEFT. ClearShell places buttons by construction
+      order only - freshLayout does x += width + margin within a line, and
+      nothing right-anchors or centres anything. Checked in the source: About
+      sits where it sits because of the buttons declared before it, not because
+      it is aligned to an edge. With a single button there is nothing before it,
+      so x is 0 and it lands bottom left. No algorithm moves it, and none should
+      be added to.
+
+    THE CURSOR UNDER THE PANEL. The lower layer is a full text screen and the
+      panel floats over it on the upper layer - UI_MODEL 1.1. The cursor
+      travelling beneath the button is the model working, not a collision.
+
+    A NEARLY EMPTY SCREEN. One button and a file is the whole of 0.1.2. The
+      lists, the second panel kind and the horizontal scroll all exist in the
+      model and none of them are in this version.
+
+F1 here corresponds to ClearShell's About, which calls mainHelp. Ours writes its
+help text into the console rather than opening a dialog, because in 0.1.2 the
+console IS the output surface and a dialog would be the first thing invented
+rather than ported.
