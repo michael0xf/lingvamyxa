@@ -222,6 +222,15 @@ build baseline; promotion must preserve the live L2 sources.
   (run_ident.ps1); quoted string backticks stay data.
   `const` on declarations / parameters / c.array elements as covered
   by scalar and c_array suites.
+  Pointer type tails (5f03a70): leftover fields after `@`/`@@` type
+  tokens and after a pointer parameter name are diagnosed
+  (`pointer type has extra fields` / `pointer parameter has extra
+  fields`), not dropped or stolen as the name. `const: @(const: @(T))`
+  is `duplicate const qualifier`. Existing `const: @(char)`, `@: T p`,
+  `@@: char`, `@: const char s` stay pointee-const (`const T *`).
+  Tests: const_ptr_ok.lm1, invalid_nested_const_ptr.lm1,
+  invalid_at_at_const_drop.lm1, invalid_at_const_foreign.lm1.
+  Slot-const spelling remains OPEN 10.13.
   `immutable:` compile-time grouping receiver (not L2 RuntimeImmutable).
   Each declaration in its vertical (or compact) body is emitted as the
   existing L1 `const:` qualifier would emit that declaration. Pointer
@@ -668,7 +677,9 @@ checkpoint descriptions. Remaining questions include:
        fix: a bug fix must refuse, not pick one reading. Decision belongs to
        the language owner.
   10.15 multi-dim declaration spelling / array-of-pointer
-  10.16 function-pointer type spelling
+  10.16 function-pointer type spelling — header-unit `fnptr:` is
+        implemented (promoted STG includes l1_emit_hdr_fnptr / p0.h.lm1);
+        ordinary-unit / general-scope spelling remains open.
   10.17 variadic spelling
   10.18 named vs abstract parameters
   10.19 byte-blob declaration form
