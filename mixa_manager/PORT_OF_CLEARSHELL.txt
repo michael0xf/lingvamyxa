@@ -154,11 +154,18 @@ So we build:
       lists, items, buttons and panels
     a highlighted rendering for ANY element, not only list rows
 
-What this does NOT need is any new drawing capability, and that is worth
-checking rather than assuming. Highlighting is a change of ATTRIBUTES, and
-MixaCell already carries fg, bg and MIXA_STYLE_REVERSE. So a highlighted button
-is the same cells with different attributes - the drawer does not learn about
-focus, and the single-API property survives.
+What it looks like was settled on 2026-09-10 by the language owner: the
+highlight is its OWN BORDER - no micro-gap, thicker than one, white to begin
+with. A button's edge is normally a gap; highlighted, that same edge is a drawn
+line. See DRAWING.txt 5.4.
+
+An earlier revision of this paragraph said highlighting needs "no new drawing
+capability", being only a change of attributes over fg, bg and
+MIXA_STYLE_REVERSE. Half right, and the half that is wrong matters. The DRAWER
+still does not learn about focus - it places a codepoint, as it always did, so
+the single-API property does survive. But the COMPOSITOR does grow something: a
+second tile family with its own geometry, solid where the first is transparent
+and twice as thick. Claiming otherwise would have made the work look free.
 
 Colours for it come from ClearShell's palette, which already distinguishes a
 translucent highlight at alpha 96 from a panel body at 240.

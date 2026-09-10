@@ -144,3 +144,53 @@ to zero is not a gap, and at that point the buttons touch and the design is lost
 Frames and line junctions stay. Buttons do not use them, but panels, list
 headers and dividers do - and those are ClearShell's own borders around
 containers, not around buttons. Section 3.1 stands unchanged.
+
+
+5.4. A SECOND tile family: the highlight border
+
+Mikhail, 2026-09-10: "make the highlight simply with its own border - it has no
+micro-gap and it is thicker; pick the colour yourself, I would start with plain
+white."
+
+That is the neatest possible answer to what a highlight looks like here, because
+it reuses the boundary the button already has. A button's edge is normally a
+GAP - nothing drawn, one pixel of transparency (5.2). Highlighted, that same
+edge is a drawn LINE, thicker than the gap was. Nothing moves, nothing resizes,
+and the two states differ only in what the boundary pixels contain.
+
+    ordinary button    outward edge = gap, transparent, cell_h >> 5 floored at 1
+    highlighted        outward edge = solid line, cell_h >> 4 floored at 2
+
+The thickness is derived, not chosen, exactly as 5.2 requires: the same shift
+one place further, so it is always at least twice the minimum gap and it scales
+with the cell. Two pixels is the floor for the same reason one is the gap's - a
+line that rounds to a single pixel stops reading as a border and starts reading
+as the gap it replaced.
+
+5.4.1. Encoding: one more base, the same four bits
+
+    button tiles       U+E000..U+E00F   low 4 bits = which edges are GAP
+    highlight tiles    U+E010..U+E01F   low 4 bits = which edges carry BORDER
+
+The bit positions are identical, and deliberately so. An outward-facing edge is
+the one that gets a gap on an ordinary button and a line on a highlighted one,
+so the placement code computes the same four flags either way and only chooses a
+different base. Highlighting a button is then one addition, not a second layout.
+
+Colour comes from the cell's FG, as the gap version takes its colour from BG.
+That keeps the rule of 5.1 - tiles carry no colour of their own, they take the
+cell's - and it gives the border a channel the fill is not already using.
+
+Default is opaque white. Foreground elements are always fully opaque here
+(UI_MODEL 3), so the border does not vary alpha; only backgrounds do.
+
+5.4.2. What I decided rather than read
+
+The picture Mikhail attached is a white frame on black, offered for the COLOUR -
+"plain white as in the picture". I have read the geometry from his words, not
+from the image: ONE solid line of the derived thickness.
+
+The image can also be read as two thin concentric lines with a dark space
+between them. If that is what is wanted, it is a change to the painter and to
+nothing else - the codepoints, the flags, the placement and the colour rule are
+all unaffected. Recorded here so the correction costs a sentence.
