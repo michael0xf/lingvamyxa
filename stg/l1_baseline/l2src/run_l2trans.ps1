@@ -783,10 +783,10 @@ $dsr = Invoke-SpliceDrive "unit_sub_ret" @"
         f: lmx_branch_child(unit, 1U)
         c.printf("%d\n", lmx_char_value(f\data))
         l2_m2(unit, 1)
-        f: lmx_branch_child(unit, 1U)
+        f: lmx_branch_child(unit, 2U)
         c.printf("%d\n", lmx_char_value(f\data))
         l2_m2(unit, 0)
-        f: lmx_branch_child(unit, 1U)
+        f: lmx_branch_child(unit, 2U)
         c.printf("%d\n", lmx_char_value(f\data))
         return: 0
     end: main
@@ -855,14 +855,17 @@ if ($d5 -ne "0`n") { throw "0 && wrap(boom) / 1 || wrap(boom) must skip boom: $d
 Invoke-Leaf "l2src\tests\unit_own_dirty_rhs.lm2" "unit_own_dirty_rhs" 0 "m"
 $d6 = Invoke-SpliceDrive "unit_own_dirty_rhs" @"
         l2_m1(unit, 0)
-        @: Lmx f 0
-        f: lmx_branch_child(unit, 0U)
-        c.printf("%d\n", lmx_char_value(f\data))
+        @: Lmx fm 0
+        @: Lmx fo 0
+        fm: lmx_branch_child(unit, 0U)
+        fo: lmx_branch_child(unit, 1U)
+        c.printf("%d\n", lmx_char_value(fm\data))
+        c.printf("%d\n", lmx_char_value(fo\data))
         return: 0
     end: main
 end: external
 "@
-if ($d6 -ne "88`n") { throw "dirty own must be published before executed RHS call: $d6" }
+if ($d6 -ne "65`n88`n") { throw "observe must see published 65 through hidden and not write m's quote: $d6" }
 
 Invoke-Leaf "l2src\tests\unit_own_twoact.lm2" "unit_own_twoact" 0 "m"
 $d7 = Invoke-SpliceDrive "unit_own_twoact" @"
@@ -964,7 +967,7 @@ $d32 = Invoke-SpliceDrive "unit_own32_pub" @"
     end: main
 end: external
 "@
-if ($d32 -ne "0`n1`n77`n3`n3`n1`n65`n65`n1`n") { throw "n32 before/after decl and n00 unaliased: $d32" }
+if ($d32 -ne "0`n1`n77`n3`n77`n1`n65`n77`n1`n") { throw "n32 before/after decl and n00 unaliased: $d32" }
 
 Invoke-Leaf "l2src\tests\unit_own_grow_alias.lm2" "unit_own_grow_alias" 0 "m"
 $ga = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own_grow_alias.lm1"))).Replace("`r`n", "`n")
@@ -982,13 +985,13 @@ $dga = Invoke-SpliceDrive "unit_own_grow_alias" @"
     end: main
 end: external
 "@
-if ($dga -ne "65`n65`n66`n66`n") { throw "grow must keep n00 alias on under-construction row: $dga" }
+if ($dga -ne "65`n65`n66`n65`n") { throw "grow must keep n00 alias on under-construction row: $dga" }
 
 Invoke-Leaf "l2src\tests\unit_own_same_name.lm2" "unit_own_same_name" 0 "left"
 $ownSame = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own_same_name.lm1")))
-# Typed own decls of the same name on one unit share occurrence [0] (deliberate shared field).
+# Typed own decls are per-method occurrences; spelling does not share a cell.
 if ($ownSame.IndexOf("l2_q0: 1U") -lt 0) { throw "unit_own_same_name left missing i=1" }
-if ($ownSame.IndexOf("l2_q0: 2U") -lt 0) { throw "unit_own_same_name right missing i=2" }
+if ($ownSame.IndexOf("l2_q1: 2U") -lt 0) { throw "unit_own_same_name right must not reuse left's l2_q0" }
 Invoke-Leaf "l2src\tests\unit_own_meth.lm2" "unit_own_meth" 0 "m0"
 $om = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_own_meth.lm1"))).Replace("`r`n", "`n")
 if ($om -notmatch 'fn: l2_m4') { throw "unit_own_meth missing 5th method" }
@@ -1014,7 +1017,7 @@ if ($bindFn.IndexOf("l2_p2_0") -lt 0) { throw "aliased own must use the paramete
 if ($bindFn.IndexOf("l2_q0_dirty: 1") -lt 0) { throw "aliased own assign after bind must dirty" }
 if ($bindFn -notmatch 'l2_p2_0: 1') { throw "assign before own-decl must write the parameter" }
 $passFn = [regex]::Match($bg, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
-if ($passFn -notmatch 'l2_q1_dirty') { throw "pass assignment-bind is this method's field, not the unit-shared quote" }
+if ($passFn -notmatch 'l2_q\d+_dirty') { throw "pass assignment-bind is this method's field, not the unit-shared quote" }
 if ($passFn.IndexOf("l2_p1_0: 65") -lt 0) { throw "parameter assignment-as-declaration must still write the parameter" }
 $dBind = Invoke-SpliceDrive "unit_bind" @"
         @: Lmx f 0
@@ -1043,7 +1046,7 @@ $dBind = Invoke-SpliceDrive "unit_bind" @"
     end: main
 end: external
 "@
-if ($dBind -ne "0`n0`n65`n66`n77`n66`n65`n") { throw "same-name bind graph got $dBind" }
+if ($dBind -ne "0`n0`n0`n66`n66`n66`n66`n") { throw "same-name bind graph got $dBind" }
 
 Invoke-Leaf "l2src\tests\unit_bind_sz.lm2" "unit_bind_sz" 0 "m"
 $szg = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_bind_sz.lm1")))
@@ -1228,6 +1231,35 @@ end: external
 # supply x=10 stays 10; inc receiving 11. no-src fallback 20 -> 21, supply still 10.
 # nest same-method: flag0 x: x+1 from 10 -> 11; flag1 x:30 then +1 -> 31 (one binding).
 if ($dSn -ne "10`n11`n10`n21`n11`n31`n") { throw "same-name source vs receiving got $dSn" }
+
+Invoke-Leaf "l2src\tests\unit_asgn_typed_src.lm2" "unit_asgn_typed_src" 0 "inc_asgn"
+$ts = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_asgn_typed_src.lm1"))).Replace("`r`n", "`n")
+$typedFn = [regex]::Match($ts, 'fn: l2_m1[\s\S]*?end: l2_m1').Value
+$asgnFn = [regex]::Match($ts, 'fn: l2_m0[\s\S]*?end: l2_m0').Value
+$supFn = [regex]::Match($ts, 'fn: l2_m3[\s\S]*?end: l2_m3').Value
+if ($typedFn -notmatch 'l2_q0_dirty') { throw "inc_typed own x must be this method's slot" }
+if ($asgnFn -notmatch 'l2_q3_dirty' -and $asgnFn -notmatch 'l2_q3_from') { throw "inc_asgn bind must not reuse inc_typed's q0" }
+if ($supFn -notmatch 'l2_q2_dirty') { throw "supply own x must be a distinct source slot" }
+$dTs = Invoke-SpliceDrive "unit_asgn_typed_src" @"
+        @: Lmx fs 0
+        @: Lmx ft 0
+        @: Lmx fp 0
+        @: Lmx fa 0
+        fs: lmx_branch_child(unit, 2U)
+        ft: lmx_branch_child(unit, 0U)
+        fp: lmx_branch_child(unit, 1U)
+        fa: lmx_branch_child(unit, 3U)
+        c.printf("%d\n", l2_m3(unit))
+        c.printf("%d\n", lmx_char_value(fs\data))
+        c.printf("%d\n", lmx_char_value(fa\data))
+        c.printf("%d\n", lmx_char_value(ft\data))
+        c.printf("%d\n", lmx_char_value(fp\data))
+        return: 0
+    end: main
+end: external
+"@
+# supply source 10; asgn/typed/pre receiving 11 each. node\x first occurrence is inc_typed [0]=11, not source [2].
+if ($dTs -ne "0`n10`n11`n11`n11`n") { throw "typed vs asgn vs hidden-pre source isolation got $dTs" }
 
 # C99 &&/|| yield int 0/1. Oracle is C, not this emitter.
 Invoke-Leaf "l2src\tests\unit_bool_and.lm2" "unit_bool_and" 1 "f"
@@ -1882,7 +1914,10 @@ end: external
 if ($dszv -ne "1`n") { throw "dyn size_t chain: $dszv" }
 
 Invoke-Negative "l2src\tests\unit_dyn_miss.lm2" "unit_dyn_miss" "unresolved name"
-Invoke-Negative "l2src\tests\unit_dyn_type.lm2" "unit_dyn_type" "incompatible entry signature"
+Invoke-Leaf "l2src\tests\unit_dyn_type.lm2" "unit_dyn_type" 0 "leaf"
+$dty = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_type.lm1")))
+if ($dty -notmatch 'char: l2_q0') { throw "unit_dyn_type leaf quote is this method's char slot" }
+if ($dty -notmatch 'size_t: l2_q1') { throw "unit_dyn_type mid quote must not share leaf's char slot" }
 Invoke-Leaf "l2src\tests\unit_dyn_cap.lm2" "unit_dyn_cap" 0 "outer"
 $dcap = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_dyn_cap.lm1")))
 if ($dcap -notmatch 'fn: l2_m0 \(@: Lmx node; char: l2_p0_0; char: l2_p0_1; char: l2_p0_2; char: l2_p0_3; char: l2_p0_4\) int') {
@@ -1980,7 +2015,7 @@ $dct = Invoke-SpliceDrive "unit_continue" @"
         f: lmx_branch_child(unit, 0U)
         c.printf("%d\n", lmx_char_value(f\data))
         c.printf("%d\n", l2_m5(unit, 1))
-        f: lmx_branch_child(unit, 0U)
+        f: lmx_branch_child(unit, 5U)
         c.printf("%d\n", lmx_char_value(f\data))
         return: 0
     end: main

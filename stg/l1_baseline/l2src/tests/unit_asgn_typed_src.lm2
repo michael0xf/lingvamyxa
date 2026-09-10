@@ -1,0 +1,26 @@
+fn: inc_asgn (char: x) int
+    x: x + 1
+    return: 0
+end: inc_asgn
+fn: inc_typed (char: x) int
+    char: x
+    x: x + 1
+    return: 0
+end: inc_typed
+fn: inc_pre () int
+    if: x != 10
+        return: 1
+    char: x
+    x: x + 1
+    return: 0
+end: inc_pre
+fn: supply () int
+    char: x
+    x: 10
+    inc_asgn(x)
+    inc_typed(x)
+    return: inc_pre()
+end: supply
+fn: main () int
+    return: 0
+end: main

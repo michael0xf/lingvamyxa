@@ -1,5 +1,4 @@
 fn: observe (int: z) int
-    char: quote
     if: quote = 65
         quote: 88
     else:

@@ -2155,11 +2155,6 @@ fn: l2_own_find (int: mi; const: @(LmP0Text t)) int
         if: l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], t)
             return: i
         i: i + 1
-    i: 0
-    while: i < l2_own_n
-        if: l2_own_mi[i] < 0 && l2_text_same(l2_own_name[i], t) && l2_own_off(mi, i) != (cast: (size_t) -1) && l2_m_uses[l2_own_off(mi, i)] != 0
-            return: i
-        i: i + 1
 return: -1
 
 fn: l2_own_first (const: @(LmP0Text t)) int
@@ -2396,7 +2391,7 @@ fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path)
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && depth = 0
             ty: l2_own_decl_ty(stmt)
             fa: l2_next_active(stmt\as\frame\body\first_field)\value\as\atom
-            j: l2_own_add(mi, fa, ty, path, stmt, 1)
+            j: l2_own_add(mi, fa, ty, path, stmt, 0)
             if: j < 0
                 return: 1
             if: l2_own_off(mi, j) = (cast: (size_t) -1)
