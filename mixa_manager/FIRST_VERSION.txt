@@ -79,10 +79,9 @@ bugs and is none of them.
       so x is 0 and it lands bottom left. No algorithm moves it, and none should
       be added to.
 
-    THE CURSOR AT THE TOP, THE BUTTON AT THE BOTTOM, AND NOTHING BETWEEN THEM.
+    THE CURSOR STARTS AT THE TOP, THE BUTTON IS AT THE BOTTOM.
       Mikhail, correcting himself a minute later: the file is empty, so the
-      cursor is at the TOP of the screen and the button is at the bottom - they
-      do not meet at all on the first run.
+      cursor is at the TOP of the screen and the button is at the bottom.
 
       Which settles a question the documents had been carrying loosely. The
       console is FILE-ANCHORED, not bottom-anchored: line one is drawn at the
@@ -93,10 +92,27 @@ bugs and is none of them.
       the top before it ever scrolls. Nothing pins the input line to the bottom
       row.
 
-      The cursor meets the panel only later, when the file has grown past the
-      screen, and then it simply passes beneath it - the lower layer is a full
-      text screen and the panel floats over it (UI_MODEL 1.1). That is the model
-      working, not a collision.
+      They separate only at the START, and only briefly. As output accumulates
+      the cursor DESCENDS line by line, reaches the panel's rows, and once the
+      file outgrows the screen the view follows the cursor - which parks the
+      cursor at the bottom and keeps it there. So the cursor spends almost its
+      whole life UNDER THE PANEL.
+
+      An earlier revision of this paragraph said the two "do not meet at all",
+      which was true of the first frame and of nothing after it. The steady
+      state is the opposite of the opening one, and taking the opening state for
+      the rule is the same mistake in miniature that section 5 exists to
+      forestall.
+
+      That makes one thing a REQUIREMENT rather than a curiosity: the cursor and
+      the console line under the panel must stay legible through it. The panel
+      background is alpha 96 for exactly this reason (UI_MODEL 5.4) - it is not
+      decoration, and it is not an occasional overlap to tolerate. The normal
+      position of the input line is beneath the buttons.
+
+      Nothing about that is a collision. The lower layer is a full text screen
+      and the panel floats over it (UI_MODEL 1.1); the console neither stops at
+      the panel nor scrolls around it.
 
     A NEARLY EMPTY SCREEN. One button and a file is the whole of 0.1.2. The
       lists, the second panel kind and the horizontal scroll all exist in the
