@@ -1,0 +1,40 @@
+structure fields=2
+  frame head="fn" body=structure fields=4
+    atom "test"
+    structure fields=0
+    atom "int"
+    structure fields=3
+      frame head="for" body=structure fields=5
+        frame head="int" body=structure fields=2
+          atom "i"
+          atom "0"
+        structure fields=3
+          atom "i"
+          atom "<"
+          atom "10"
+        atom "i"
+        atom "++"
+        structure fields=1
+          frame head="int" body=structure fields=2
+            atom "j"
+            atom "i"
+        Tail cutter trailer spelling="end" fields=1
+          atom "for"
+      frame head="c.printf" body=structure fields=4
+        atom ""%d\n""
+        atom "for"
+        atom "\"
+        atom "j"
+      frame head="return" body=structure fields=1
+        atom "0"
+    Tail cutter trailer spelling="end" fields=1
+      atom "test"
+  frame head="fn" body=structure fields=4
+    atom "main"
+    structure fields=0
+    atom "int"
+    structure fields=1
+      frame head="return" body=structure fields=1
+        frame head="test" body=structure fields=0
+    Tail cutter trailer spelling="end" fields=1
+      atom "main"

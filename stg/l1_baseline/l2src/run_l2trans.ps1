@@ -369,6 +369,12 @@ Invoke-Negative "l2src\tests\unit_dup_def.lm2" "unit_dup_def" "duplicate definit
 Invoke-Negative "l2src\tests\unit_dup_formal.lm2" "unit_dup_formal" "duplicate formal"
 Invoke-Leaf "l2src\tests\unit_loop.lm2" "unit_loop" 1 "add"
 Invoke-Negative "l2src\tests\unit_for.lm2" "unit_for" "unsupported loop"
+# 044514/045200: ordinary nested for fields. CURRENT status only; intended
+# positives (for\j last 9, parent acc last 9, bare j not flattened) are not
+# claimed. Compact for(...) is a separate unproved spelling (unit_forj_compact.lmx).
+Invoke-Negative "l2src\tests\unit_forj_path.lm2" "unit_forj_path" "unsupported loop"
+Invoke-Negative "l2src\tests\unit_forj_bare.lm2" "unit_forj_bare" "unsupported loop"
+Invoke-Negative "l2src\tests\unit_forj_parent.lm2" "unit_forj_parent" "unsupported body"
 Invoke-Negative "l2src\tests\unit_cont_out.lm2" "unit_cont_out" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_cont_frame.lm2" "unit_cont_frame" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_cont_colon.lm2" "unit_cont_colon" "empty colon Frame is not allowed"

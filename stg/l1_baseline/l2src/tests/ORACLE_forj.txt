@@ -1,0 +1,18 @@
+044514/045200 oracle identity for unit_forj_* trees.
+
+Current-P0 dumps: *.lm0.tree from repo-root build/lm0/printTree.lm0.exe
+  sha256=8FA2A40396ED7A4DE1262D76DA3EA1244AF9F68F5E707D970155963E29D37717
+  size=505210 mtime=2026-09-05T19:59:15-03:00
+  not in git; not automatically the pinned 620db86 printTree.
+
+Same sources dumped with build/l1trans/gen2/printTree.exe
+  sha256 prefix 074E1E0B5BBFBA59... (different binary from lm0).
+  newline-normalized trees matched lm0 for all four fixtures this turn.
+
+tests/p0_tree_contract goldens are 620db86 trees compared against
+build/l1trans/gen2/printTree.exe, not printTree.lm0.exe.
+
+Keep separate:
+  1. old 620db86 reference trees
+  2. current P0 dumps (these *.lm0.tree)
+  3. semantic receiver (for\j as L2 field) — intended, currently unsupported

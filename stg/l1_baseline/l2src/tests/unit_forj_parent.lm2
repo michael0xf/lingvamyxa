@@ -1,0 +1,15 @@
+# CURRENT l2trans: unsupported body (int: acc is not a closed-unit own; the
+# for is not reached). INTENDED L2: body may assign parent field acc
+# directly; last assigned 9. Not an L1 C-block claim.
+fn: test () int
+    int: acc 0
+    for: int(i, 0) (i < 10) i++
+        int: j i
+        acc: j
+    end: for
+    c.printf: "%d\n" acc
+    return: 0
+end: test
+fn: main () int
+    return: test()
+end: main

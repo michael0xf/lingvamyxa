@@ -1,0 +1,28 @@
+structure fields=1
+  frame head="fn" body=structure fields=4
+    atom "test"
+    structure fields=0
+    atom "int"
+    structure fields=4
+      atom "for"
+      structure fields=7
+        atom "int"
+        frame head="i" body=structure fields=1
+          atom "0"
+        atom "i"
+        atom "<"
+        atom "10"
+        atom "i"
+        atom "++"
+      structure fields=1
+        frame head="int" body=structure fields=2
+          atom "j"
+          atom "i"
+        Tail cutter trailer spelling="end" fields=1
+          atom "for"
+      frame head="c.printf" body=structure fields=3
+        atom "for"
+        atom "."
+        atom "j"
+    Tail cutter trailer spelling="return" fields=1
+      atom "0"

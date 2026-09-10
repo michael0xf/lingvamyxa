@@ -1,0 +1,6 @@
+fn: test () int
+    for (int i: 0; i < 10; i++)
+        int: j i
+    end: for
+    c.printf: for.j
+return: 0

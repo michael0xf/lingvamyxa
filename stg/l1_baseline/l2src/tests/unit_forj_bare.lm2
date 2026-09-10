@@ -1,0 +1,12 @@
+# CURRENT l2trans: unsupported loop.
+# INTENDED L2 negative: bare j in the parent is not the child field (no flatten).
+fn: test () int
+    for: int(i, 0) (i < 10) i++
+        int: j i
+    end: for
+    c.printf: "%d\n" j
+    return: 0
+end: test
+fn: main () int
+    return: test()
+end: main
