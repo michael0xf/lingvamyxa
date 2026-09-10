@@ -28,6 +28,15 @@ end_turn from a turn also pumps (admits published outbox in the
 same scheduling phase). Serial tests still pump explicitly; a
 second empty pump is a no-op. Ingress host_drain still pumps.
 
+Owner-serial vs concurrent
+--------------------------
+nworkers==0: owner is the single lane (recv/fail/drive). UI closer
+and post-stop parent-fail tests are owner-serial.
+Concurrent: owner fail of a bound live Message is INVALID. Timer
+parent-loss is poll+threshold while parent exec_live and the child
+turn is held. path/init_copy from that held child concurrent with
+factory create. Runnable policy: L1 lmx_msg_exec_is_runnable.
+
 Choice
 ------
 Each Message has one arena and one serial turn lane. Different
