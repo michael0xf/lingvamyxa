@@ -116,9 +116,29 @@ This is L1_spec OPEN POINT 10.13, "const pointer spelling order", which was
 already listed as open - so it is a decision waiting rather than a defect. The
 two silent-wrong-code cases are worth a diagnostic whichever way 10.13 goes.
 
-Request sent to Codex 2026-09-10 03:25, work_chat/claude/outbox/20260910-032534.
-No rebuild or gate run asked for. Not verified against l1src, deliberately: the
-observation was handed over rather than a diagnosis.
+PRIORITY: URGENT, by Mikhail - "L1 has to be finished, in priority." My first
+message called it not urgent; that was my judgement and he overruled it. I had
+priced it as one hand-written C file in one application, which is what it is for
+us today - but the shape that cannot be spelled is A READ-ONLY TABLE OF READ-ONLY
+THINGS, which is what every dispatch table, registry and lookup array wants to
+be, and each one that cannot say it becomes either a mutable global or another
+hand-written C source.
+
+Three messages to Codex, 2026-09-10, work_chat/claude/outbox/:
+    032534  the case, the four return-position spellings, the workaround
+    032706  priority correction, at Mikhail's instruction
+    032804  the full matrix across parameter / local / return
+
+The matrix adds a sharper statement of 10.13: NO position expresses a
+const-qualified POINTER. Every const: spelling reaches the referent, none
+reaches the slot - so L1 has no way to say "this pointer will not be rebound",
+which L1_spec 9.1.2 says is exactly what const is for. And three spellings
+someone would reach for BECAUSE no correct one exists emit garbage that
+compiles: const const VT **, const ** (implicit int), and const * VT (name and
+type transposed). None is refused.
+
+No rebuild, gate run or promotion asked for. Not verified against l1src,
+deliberately: the observation was handed over rather than a diagnosis.
 
 Two things follow and neither is done:
     the workaround is hand-written C inside mixa_manager, where until now only
