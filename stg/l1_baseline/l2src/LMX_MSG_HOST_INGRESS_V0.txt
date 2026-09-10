@@ -73,10 +73,17 @@ executed on this machine.
 POSIX: pthread_mutex + pthread_cond. Written, not executed here.
 timeout_ms==0 is a poll. timeout_ms==0xFFFFFFFF is refused.
 
+Test injectors
+--------------
+-DLMX_MSG_HOST_TEST enables mutable nomem/nowake hooks. Production
+builds (no flag) export only immutable get_nomem()==0. No production
+setter or mutable global.
+
 Still not this version
 ----------------------
 Concurrent Message execution (two handlers at once). Graph-copy
 (19.29.7.2). New KIND enums (UI/timer/fs/proc use KIND_BYTES).
 done[32] dedup cap (use id=0 for high-volume host events).
 App-side locks/queues. mixa_manager must pin this versioned pair,
-not track live l2src.
+not track live l2src. This milestone is foreign ingress into one
+serial owner runtime, not the multithreaded Message-handler model.
