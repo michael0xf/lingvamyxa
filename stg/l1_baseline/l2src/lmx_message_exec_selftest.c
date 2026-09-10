@@ -14,6 +14,7 @@ typedef struct TurnCtx {
     DWORD t1;
     DWORD t2;
     unsigned recvd;
+    unsigned ui_recvd;
     LmxMsgRuntime *rt;
 } TurnCtx;
 
@@ -23,12 +24,39 @@ static int turn_slow(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     memset(&got, 0, sizeof(got));
     c->t0 = GetTickCount();
     SetEvent(c->started);
-    lmx_msg_recv(rt, who, &got);
+    if (lmx_msg_recv(rt, who, &got) != LMX_MSG_OK || got.n != 1 || got.bytes == 0 || got.bytes[0] != 1) {
+        lmx_msg_env_release(&got);
+        return 1;
+    }
     c->recvd += 1;
     lmx_msg_env_release(&got);
+    {
+        int k;
+        LmxMsgAddr ch = 0;
+        uchar b = 1;
+        for (k = 0; k < 20; k++) {
+            ch = 0;
+            if (lmx_msg_create(rt, who, (unsigned)(40 + k), &b, 1, &ch) != LMX_MSG_OK) {
+                return 1;
+            }
+        }
+    }
     Sleep(80);
     c->t1 = GetTickCount();
     InterlockedIncrement(&c->done);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
+static int turn_ui(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    TurnCtx *c = (TurnCtx *)ctx;
+    LmxMsgEnv got;
+    memset(&got, 0, sizeof(got));
+    if (lmx_msg_recv(rt, who, &got) != LMX_MSG_OK || got.n != 1 || got.bytes == 0 || got.bytes[0] != 7) {
+        lmx_msg_env_release(&got);
+        return 1;
+    }
+    c->ui_recvd += 1;
+    lmx_msg_env_release(&got);
     return lmx_msg_end_turn(rt, who, 1);
 }
 
@@ -37,7 +65,10 @@ static int turn_fast(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     LmxMsgEnv got;
     memset(&got, 0, sizeof(got));
     c->t2 = GetTickCount();
-    lmx_msg_recv(rt, who, &got);
+    if (lmx_msg_recv(rt, who, &got) != LMX_MSG_OK || got.n != 1 || got.bytes == 0 || got.bytes[0] != 1) {
+        lmx_msg_env_release(&got);
+        return 1;
+    }
     c->recvd += 1;
     lmx_msg_env_release(&got);
     InterlockedIncrement(&c->done);
@@ -46,12 +77,11 @@ static int turn_fast(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
 
 int main(void) {
     LmxMsgRuntime *rt;
-    LmxMsgAddr parent = 0, w1 = 0, w2 = 0, extra = 0;
+    LmxMsgAddr parent = 0, w1 = 0, w2 = 0, ui = 0;
     LmxMsgEnv env;
     uchar init[1];
     TurnCtx slow;
     TurnCtx fast;
-    int i;
     DWORD tui;
     FILE *ev;
 
@@ -78,6 +108,9 @@ int main(void) {
     if (lmx_msg_create(rt, parent, 3, init, 1, &w2) != LMX_MSG_OK) {
         return 1;
     }
+    if (lmx_msg_create(rt, parent, 4, init, 1, &ui) != LMX_MSG_OK) {
+        return 1;
+    }
     if (lmx_msg_end_turn(rt, parent, 1) != LMX_MSG_OK) {
         return 1;
     }
@@ -85,6 +118,9 @@ int main(void) {
         return 1;
     }
     if (lmx_msg_exec_bind(rt, w2, turn_fast, &fast, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+        return 1;
+    }
+    if (lmx_msg_exec_bind(rt, ui, turn_ui, &slow, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK) {
         return 1;
     }
     env.kind = LMX_MSG_KIND_BYTES;
@@ -102,17 +138,31 @@ int main(void) {
         fprintf(stderr, "slow turn did not start\n");
         return 1;
     }
-    /* growth while slow handler is in its wait */
-    for (i = 0; i < 20; i++) {
-        extra = 0;
-        if (lmx_msg_create(rt, parent, (unsigned)(10 + i), init, 1, &extra) != LMX_MSG_OK) {
-            fprintf(stderr, "create during turn failed\n");
+    {
+        LmxMsgEnv hin;
+        uchar hb = 7;
+        memset(&hin, 0, sizeof(hin));
+        hin.kind = LMX_MSG_KIND_BYTES;
+        hin.n = 1;
+        hin.bytes = &hb;
+        if (lmx_msg_host_post(rt, ui, &hin) != LMX_MSG_STAGED) {
             return 1;
         }
     }
     tui = GetTickCount();
-    lmx_msg_exec_ui_step(rt);
+    if (lmx_msg_exec_ui_step(rt) != LMX_MSG_OK) {
+        fprintf(stderr, "ui_step failed while slow active\n");
+        return 1;
+    }
     tui = GetTickCount() - tui;
+    if (slow.ui_recvd != 1) {
+        fprintf(stderr, "UI handler did not recv host_post\n");
+        return 1;
+    }
+    if (tui > 50) {
+        fprintf(stderr, "ui_step blocked on slow worker ms=%lu\n", (unsigned long)tui);
+        return 1;
+    }
     while (slow.done == 0 || fast.done == 0) {
         Sleep(10);
     }
