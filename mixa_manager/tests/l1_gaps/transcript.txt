@@ -1,5 +1,5 @@
 L1 gaps probe transcript
-generated  2026-09-10 03:46:29 -0300
+generated  2026-09-10 06:13:28 -0300
 translator stg/l1_baseline/build/l1trans/gen2/l1trans.exe
 sha256     65d5a5ed127ca1baebdd1d500a5b74ceea63ec1985eac52edef28efeb261c936
 
@@ -11,11 +11,13 @@ sha256     65d5a5ed127ca1baebdd1d500a5b74ceea63ec1985eac52edef28efeb261c936
      const VTRef * reg_tables(size_t * count)
    ok:   bridge matches const VT *const * under -Werror (ok, status 0)
 
-== 2. NEGATIVE WRITES - must NOT compile ==
+== 2. NEGATIVE WRITES - must NOT compile, and for the RIGHT reason ==
      assignment of read-only location '*t'
-   ok:   neg_slot (fail, status 1)
+   ok:   neg_slot rejected (fail, status 1)
+   ok:   neg_slot diagnostic is the const one ("read-only location")
      assignment of member 'x' in read-only object
-   ok:   neg_pointee (fail, status 1)
+   ok:   neg_pointee rejected (fail, status 1)
+   ok:   neg_pointee diagnostic is the const one ("read-only object")
 
 == 3. POSITIVE READ - must compile clean ==
    ok:   pos_read (ok, status 0)

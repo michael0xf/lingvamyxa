@@ -49,11 +49,22 @@ sed 's/^/     /' $O/bridge.cc >> $O/t.txt
 expect "bridge matches const VT *const * under -Werror" "$(inv bridge ok)" $st
 say ""
 
-say "== 2. NEGATIVE WRITES - must NOT compile =="
+say "== 2. NEGATIVE WRITES - must NOT compile, and for the RIGHT reason =="
+# Codex, 035000: a nonzero status alone is not proof of const enforcement - a
+# missing header or an unrelated syntax error would also be nonzero. So the
+# expected diagnostic is asserted too.
+neg_expect_slot="read-only location"
+neg_expect_pointee="read-only object"
 for f in neg_slot neg_pointee; do
     $CC -o $O/$f.o $D/$f.c > $O/$f.cc 2>&1; st=$?
+    eval "want=\$neg_expect_$(echo $f | sed 's/neg_//')"
     grep -m1 "error:" $O/$f.cc | sed 's/.*error: /     /' >> $O/t.txt
-    expect "$f" "$(inv $f fail)" $st
+    expect "$f rejected" "$(inv $f fail)" $st
+    if grep -q "$want" $O/$f.cc; then
+        say "   ok:   $f diagnostic is the const one (\"$want\")"
+    else
+        say "   FAIL: $f failed, but NOT for const - expected \"$want\""; rc=1
+    fi
 done
 say ""
 
