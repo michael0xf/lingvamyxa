@@ -100,6 +100,26 @@ form yields `const const T **`. grok_bot worked around it with a 34-line
 hand-written C file, mixa_backend_tables.c, holding the registry array, and
 documented the reason at the top of it.
 
+Probed on 65D5A5ED rather than taken on report. Four spellings, none reaching
+`const VT *const *`, and TWO of them compile while giving a type the source does
+not say:
+
+    const: @(const: @(VT))  -> const const VT **   warns, compiles, inner const
+                                                   collapses; effective type is
+                                                   const VT **
+    @@: const VT            -> const **            TYPE NAME DROPPED, gcc falls
+                                                   back to implicit int
+    const: @@(VT)           -> const VT **         valid C, wrong type
+    const: @(VT)            -> const VT *          single pointer
+
+This is L1_spec OPEN POINT 10.13, "const pointer spelling order", which was
+already listed as open - so it is a decision waiting rather than a defect. The
+two silent-wrong-code cases are worth a diagnostic whichever way 10.13 goes.
+
+Request sent to Codex 2026-09-10 03:25, work_chat/claude/outbox/20260910-032534.
+No rebuild or gate run asked for. Not verified against l1src, deliberately: the
+observation was handed over rather than a diagnosis.
+
 Two things follow and neither is done:
     the workaround is hand-written C inside mixa_manager, where until now only
       HEADERS were hand-written. That is a real exception to the hermeticity the
