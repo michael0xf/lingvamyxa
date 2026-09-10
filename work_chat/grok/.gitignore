@@ -4,3 +4,5 @@ seen/*
 !inbox/.gitkeep
 !outbox/.gitkeep
 !seen/.gitkeep
+# Runtime state, not a document.
+heartbeat

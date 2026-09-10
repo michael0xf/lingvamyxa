@@ -1,0 +1,151 @@
+Supervisor brief (Cursor Auto → Grok Bot)
+=========================================
+
+Channels this supervisor owns
+-----------------------------
+1) work_chat\grok_bot\  — lead Grok Bot: tasks in inbox, replies in outbox.
+   Watcher: FileSystemWatcher on outbox (+ 15m heartbeat). Track handled
+   replies in supervisor_seen\. Grok Bot itself must be started separately.
+2) work_chat\cursor\    — sync with Claude (L2): messages in inbox\; this
+   agent replies in outbox\. FileSystemWatcher + 15m quiet poll (wake only
+   when unseen mail). Claim via seen\ per PROTOCOL.txt.
+
+Delegation: Claude asks to grow / fix / polish L1
+-----------------------------------------------
+Claude owns L2 (`l2src` / `stg\l1_baseline` sandbox). He MUST NOT edit live
+`l1src` / `tests\l1`. If he needs L1 grown:
+
+  1. Read his ask in cursor\inbox; answer coordination in cursor\outbox.
+  2. Do NOT implement L1 yourself unless trivial one-liner and user asked.
+  3. Reformulate a focused TASK for Grok into work_chat\grok_bot\inbox\:
+     - one concrete change (or small related set)
+     - paths: WIP = l1src\ / tests\l1\; do not touch stg\l1_baseline
+       (promote is Claude's job after we announce it)
+     - cite Claude's evidence (file:line, failing gate) when available
+     - keep syntax/semantics rules from this brief
+  4. When Grok finishes: verify briefly, tell Claude in cursor\outbox
+     (status / what landed / whether promote is appropriate).
+  5. Sync/agree-only questions (build roots, promote protocol, prereqs) —
+     answer yourself in cursor\outbox; no Grok ticket.
+
+Hard ban: Valued aggregates (not primitives)
+-------------------------------------------
+**Forbidden:** Valued C for structures, arrays, and similar aggregates —
+no C `.` member access on structs, no struct/array by-value as the normal
+model. Ordinary `\` field-follow → `->` only.
+
+**Allowed:** primitives (char, int, size_t, floats, …) may be valued —
+pass/store/return by value is fine.
+
+If aggregate code is written that needs `.` / struct-by-value, fix it
+(pointers / address forms). Extravagant aggregate exceptions only via
+explicit C door: `c.` or `C:`.
+
+TASK4 (OPEN 10.9 contextual `.` for aggregates) is STOPPED permanently.
+Claude must not design L2 around valued struct/array pools.
+
+Claude / L2
+-----------
+Claude owns L2 sandbox. He MUST NOT edit live l1src / tests\l1.
+Valued forbidden for him too (same ban). User may correct him directly.
+
+Paths (truth)
+-------------
+- L1 polish (WIP):   C:\Nyasha_Planet\lingvamyxa\l1src
+- L1 baseline freeze: stg\l1_baseline\  (do not disturb stg\lm2-prev, stg\implementsABC)
+- L1 tests:          C:\Nyasha_Planet\lingvamyxa\tests\l1
+- Trusted tools:     C:\Nyasha_Planet\lingvamyxa\build\lm0\
+- L2 work:           C:\Nyasha_Planet\lingvamyxa\l2src
+Specs (do not conflate)
+-----------------------
+- Lingvamyxa_spec.txt — L2 contract. Into L1 take **syntax only**.
+- L1_spec.txt — fact sheet of Translator-L1 as implemented (not a L2 digest).
+- L1_language_and_translator_spec.txt — draft / OPEN list; orient only.
+
+L2 vs L1
+--------
+From Lingvamyxa_spec into L1: **syntax only**. L1 semantics stay C-near and
+address-oriented for field-follow (`\` → `->`). Valued `.` is banned (see
+Hard ban above), except `c.` / `C:` door.
+
+Where L2 lives (fixed rule)
+---------------------------
+L2 MUST depend on the frozen working L1 (`stg\l1_baseline` + its gate / tools
+inside THAT sandbox), not on the in-progress polish tree `l1src`.
+
+Therefore all Translator-L2 / L2L3 work goes in repo-root `l2src\` (parallel
+to `l1src`) and/or the sandbox under `stg\l1_baseline\`.
+
+Parallel builds (do not conflate)
+---------------------------------
+Two independent build roots — never one shared buildCore:
+
+  A) Live L1:  repo root. Root buildCore.lm0.bat/.sh serves WIP L1 tools
+     only. Edited by grok_bot when tasked. After TASK3 it must not rewrite
+     seed libparser.lm0.a / libown.lm0.a.
+  B) L2 sandbox: stg\l1_baseline\ as build root. Claude owns a SEPARATE
+     buildCore (or equivalent) + local build\, lm1\, lm2\, pinned oldchain
+     libs. Must NOT track/copy live root buildCore — parallel forever.
+
+Do not polish L1 inside Claude's L2-only files under the sandbox. On **our**
+successful gate + commit/push we refresh `stg\l1_baseline` sources ourselves
+(see Cadence). Claude may still sync his local build artifacts; we mark
+stg README / note that the promote commit was by cursor+grok_bot.
+
+Cadence with grok_bot (user)
+---------------------------
+Break L1 work into **steps** — not tiny one-liners, not endless epics.
+Each step should be a coherent slice; **periodically** (every few steps,
+or when the slice touches emit/bootstrap) run a **full self-build gate**:
+
+    powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_seed.ps1
+    powershell -NoProfile -ExecutionPolicy Bypass -File tests\l1\run_gen.ps1
+  (+ relevant suites if the slice needs them)
+
+- **Gate green:** commit + push (conventional commits). Before any promote,
+  run the full root gate including `tests\l1\run_seed.ps1` (not only
+  suites). Then, if we are the ones mirroring into `stg\l1_baseline\`,
+  write ONLY to this allowlist (inbox 20260908-043405 / Claude L2):
+      stg\l1_baseline\l1src\
+      stg\l1_baseline\tests\l1\
+      stg\l1_baseline\lm1\build\   — only the 7 files already there
+        (buildCore, finalize, l1trans, make, own, parser, printTree).lm1.c
+  Never touch / restore / "complete":
+      buildCore.lm0.bat/.sh, buildCore.lm0.sh (deleted on purpose),
+      extra lm1\build\*.lm1.c, tests\*.lmx outside tests\l1\,
+      l2src\, oldchain\, build\, .gitignore, README.txt
+  Who copies (us vs Claude) is still a supervisor (cursor) call; until
+  resolved, this allowlist binds any write we do. Announce every promote
+  in a separate channel message with the commit sha so Claude can re-run
+  his sandbox gate (buildCore → run_seed → run_gen + suites) before
+  treating the slice as L2-ready. Mark commit/README: **cursor + grok_bot**.
+- **Gate red:** do not commit/push; fix in the next step until green.
+- Do not leave allowlisted L1 sources stale after a successful live commit
+  we own — but never widen the mirror past the allowlist.
+- Still never force-push; no secrets; user may override.
+
+Polish principle (user)
+-----------------------
+- Syntax: max fidelity to l1src + Lingvamyxa_spec spellings/shapes.
+- Semantics: C-near, look like Lingvamyxa where useful; field-follow `\` → `->`
+  only for aggregates. Primitives may be valued; structs/arrays must not
+  (except `c.` / `C:` extravagance).
+- Baseline = self-hosting l1src / L1_spec facts. No cancelled ops (e.g. do).
+- Old lm2 translator arch obsolete; its syntax remains a portability guide.
+- Future L2L3 targets frozen L1 baseline, not WIP l1src.
+
+Task queue (supervisor-owned)
+-----------------------------
+1. Freeze baseline → stg\l1_baseline\ (inbox TASK 1) — done
+2. Write root L1_spec.txt from implemented Translator-L1 behavior — done
+3. buildCore stop clobbering seed libs (TASK 3) — done
+4. Further L1 polish in stepped slices + periodic full self-build
+   (TASK4 OPEN 10.9 / valued aggregate `.` — STOPPED; do not revive)
+5. When L1 polish queue is empty (no open bugs from Claude, no planned slices,
+   gates green, nothing useful left for grok_bot on l1src/tests\l1):
+   **offer services to Claude** via work_chat\cursor\outbox — same channel.
+   Propose helping on L2 / l2src / stg\l1_baseline sandbox under his lead
+   (coordination still here; heavy L2 impl he may keep or split). Do not
+   sit idle waiting for L1 ghosts.
+
+Do not delete inbox files. Do not edit lm2 unless an inbox task explicitly asks.

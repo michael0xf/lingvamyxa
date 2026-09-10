@@ -4,3 +4,7 @@ seen/*
 !inbox/.gitkeep
 !outbox/.gitkeep
 !seen/.gitkeep
+# Runtime state, not documents: rewritten every cycle, no value in history.
+HEARTBEAT.txt
+alive.txt
+supervisor_seen/
