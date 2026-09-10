@@ -62,6 +62,7 @@ if ($LASTEXITCODE -ne 0) { throw "$gen gcc failed: production exec.o" }
 $prodExecNm = & nm --defined-only $prodExecO 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { throw "nm failed on production exec.o" }
 if ($prodExecNm -match 'lmx_msg_exec_test_after_cleanup') { throw "production exec.o exports test cleanup hook" }
+if ($prodExecNm -match 'lmx_msg_exec_test_fail_grow') { throw "production exec.o exports test fail_grow" }
 $hostExe = Join-Path $out "lmx_message_host_selftest.exe"
 & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build -DLMX_MSG_HOST_TEST "l2src\lmx_message_host_selftest.c" $msgC "l2src\lmx_message_host.c" "l2src\lmx_message_exec.c" -o $hostExe 2>&1 |
     Tee-Object -FilePath (Join-Path $log "lmx_message_host_selftest.gcc.log") | Out-Null

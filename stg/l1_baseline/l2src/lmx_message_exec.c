@@ -30,9 +30,8 @@ typedef struct LmxMsgExecBind {
 } LmxMsgExecBind;
 
 #if defined(LMX_MSG_EXEC_TEST)
-#if defined(LMX_MSG_EXEC_TEST)
 void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
-#endif
+int lmx_msg_exec_test_fail_grow;
 #endif
 
 typedef struct LmxMsgExec {
@@ -231,6 +230,11 @@ static void set_tls(LmxMsgExec *e, LmxMsgAddr who) {
 static int ready_grow(LmxMsgExec *e) {
     int cap;
     LmxMsgAddr *p;
+#if defined(LMX_MSG_EXEC_TEST)
+    if (lmx_msg_exec_test_fail_grow != 0) {
+        return 1;
+    }
+#endif
     if (e->nready < e->ready_cap) {
         return 0;
     }
@@ -351,22 +355,6 @@ static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     return 0;
 }
 
-static int msg_runnable(LmxMsg *m) {
-    if (m == 0) {
-        return 0;
-    }
-    if (m->state == LMX_MSG_STATE_STOPPED || m->state == LMX_MSG_STATE_DEAD || m->state == LMX_MSG_STATE_RELEASED) {
-        return 0;
-    }
-    if (m->inbox != 0) {
-        return 1;
-    }
-    if (m->closing != 0 && m->state != LMX_MSG_STATE_STOPPED) {
-        return 1;
-    }
-    return 0;
-}
-
 static void scan_runnable(LmxMsgRuntime *rt, LmxMsgExec *e) {
     int i;
     LmxMsg *m;
@@ -376,7 +364,7 @@ static void scan_runnable(LmxMsgRuntime *rt, LmxMsgExec *e) {
     e->scan = 0;
     for (i = 0; i < rt->n; i++) {
         m = rt->tab[i];
-        if (msg_runnable(m) == 0 || ready_has(e, m->addr) != 0) {
+        if (m == 0 || lmx_msg_exec_is_runnable(rt, m->addr) == 0 || ready_has(e, m->addr) != 0) {
             continue;
         }
         if (ready_grow(e) != 0) {
@@ -407,7 +395,7 @@ static int take_ready(LmxMsgExec *e, int want_ui, LmxMsgExecBind *snap) {
             if (e->bind[j].held != 0) {
                 continue;
             }
-            if (msg_runnable(msg_at_addr(e->rt, addr)) == 0) {
+            if (lmx_msg_exec_is_runnable(e->rt, addr) == 0) {
                 e->nready -= 1;
                 memmove(&e->ready[i], &e->ready[i + 1], (size_t)(e->nready - i) * sizeof(LmxMsgAddr));
                 i -= 1;
@@ -430,7 +418,7 @@ static void requeue_if_runnable(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     lmx_msg_exec_lock(rt);
     for (i = 0; i < rt->n; i++) {
         m = rt->tab[i];
-        if (m != 0 && m->addr == addr && m->state != LMX_MSG_STATE_STOPPED && m->state != LMX_MSG_STATE_DEAD && m->state != LMX_MSG_STATE_RELEASED && (m->inbox != 0 || m->closing != 0)) {
+        if (m != 0 && m->addr == addr && lmx_msg_exec_is_runnable(rt, addr) != 0) {
             lmx_msg_exec_unlock(rt);
             lmx_msg_exec_ready(rt, addr);
             return;
@@ -463,11 +451,9 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         }
     }
 #if defined(LMX_MSG_EXEC_TEST)
-#if defined(LMX_MSG_EXEC_TEST)
     if (lmx_msg_exec_test_after_cleanup != 0) {
         lmx_msg_exec_test_after_cleanup(snap->addr, live, st);
     }
-#endif
 #endif
     lmx_msg_exec_lock(rt);
     for (i = 0; i < e->nbind; i++) {

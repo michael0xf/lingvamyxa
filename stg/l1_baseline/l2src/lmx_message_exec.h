@@ -19,7 +19,13 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt);
 void lmx_msg_exec_ready(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_is_bound(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr);
+/* Last run_one status for this binding. A later turn overwrites it.
+ * Not a per-request supervisor/result channel. */
 int lmx_msg_exec_last_status(LmxMsgRuntime *rt, LmxMsgAddr addr);
+int lmx_msg_exec_is_runnable(LmxMsgRuntime *rt, LmxMsgAddr addr);
+#if defined(LMX_MSG_EXEC_TEST)
+extern int lmx_msg_exec_test_fail_grow;
+#endif
 #if defined(LMX_MSG_EXEC_TEST)
 extern void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
 #endif

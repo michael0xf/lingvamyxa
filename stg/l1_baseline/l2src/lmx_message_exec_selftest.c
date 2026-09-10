@@ -101,6 +101,53 @@ static int turn_ui(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return lmx_msg_end_turn(rt, who, 1);
 }
 
+static int turn_held_live(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    TurnCtx *c = (TurnCtx *)ctx;
+    LmxMsgEnv got;
+    LmxMsgEnv init;
+    unsigned seg = 0;
+    memset(&got, 0, sizeof(got));
+    memset(&init, 0, sizeof(init));
+    if (lmx_msg_recv(rt, who, &got) != LMX_MSG_OK) {
+        lmx_msg_env_release(&got);
+        return 1;
+    }
+    lmx_msg_env_release(&got);
+    SetEvent(c->started);
+    if (lmx_msg_path_n(rt, who) < 1 || lmx_msg_path_seg(rt, who, 0, &seg) != LMX_MSG_OK || lmx_msg_init_copy(rt, who, &init) != LMX_MSG_OK) {
+        lmx_msg_env_release(&init);
+        return 1;
+    }
+    lmx_msg_env_release(&init);
+    c->t0 = GetTickCount();
+    while (InterlockedCompareExchange(&g_cpu_stop, 0, 0) == 0) {
+    }
+    InterlockedIncrement(&c->done);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
+static int turn_factory(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    TurnCtx *c = (TurnCtx *)ctx;
+    LmxMsgEnv got;
+    uchar b = 1;
+    int k;
+    LmxMsgAddr extra = 0;
+    memset(&got, 0, sizeof(got));
+    if (lmx_msg_recv(rt, who, &got) != LMX_MSG_OK) {
+        lmx_msg_env_release(&got);
+        return 1;
+    }
+    lmx_msg_env_release(&got);
+    for (k = 0; k < 8; k++) {
+        extra = 0;
+        if (lmx_msg_create(rt, who, (unsigned)(200 + k), &b, 1, &extra) != LMX_MSG_OK || extra == 0) {
+            return 1;
+        }
+    }
+    InterlockedIncrement(&c->done);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
 static int turn_just_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     TurnCtx *c = (TurnCtx *)ctx;
     InterlockedIncrement(&c->done);
@@ -740,6 +787,167 @@ int main(void) {
         }
         lmx_msg_runtime_delete(rtc);
     }
+    {
+        LmxMsgRuntime *rtl;
+        LmxMsgAddr rl = 0, pl = 0, cl = 0, gl = 0, ul = 0, fl = 0;
+        LmxMsgEnv el;
+        uchar ini = 1, hb = 7;
+        TurnCtx pctx, cctx, uctx, fctx;
+        unsigned seg = 0;
+        int pn;
+        int nclose;
+        DWORD dl;
+        InterlockedExchange(&g_cpu_stop, 0);
+        memset(&pctx, 0, sizeof(pctx));
+        memset(&cctx, 0, sizeof(cctx));
+        memset(&uctx, 0, sizeof(uctx));
+        memset(&fctx, 0, sizeof(fctx));
+        pctx.started = CreateEventA(0, 1, 0, 0);
+        cctx.started = CreateEventA(0, 1, 0, 0);
+        rtl = lmx_msg_runtime_new();
+        if (rtl == 0 || pctx.started == 0 || cctx.started == 0) {
+            fprintf(stderr, "live-cascade setup runtime\n");
+            return 1;
+        }
+        if (lmx_msg_create(rtl, 0, 1, &ini, 1, &rl) != LMX_MSG_OK || rl == 0) {
+            fprintf(stderr, "live-cascade create root\n");
+            return 1;
+        }
+        if (lmx_msg_create(rtl, rl, 2, &ini, 1, &pl) != LMX_MSG_OK || pl == 0) {
+            fprintf(stderr, "live-cascade create parent\n");
+            return 1;
+        }
+        if (lmx_msg_create(rtl, pl, 3, &ini, 1, &cl) != LMX_MSG_OK || cl == 0) {
+            fprintf(stderr, "live-cascade create child\n");
+            return 1;
+        }
+        if (lmx_msg_create(rtl, cl, 4, &ini, 1, &gl) != LMX_MSG_OK || gl == 0) {
+            fprintf(stderr, "live-cascade create grandchild\n");
+            return 1;
+        }
+        if (lmx_msg_create(rtl, rl, 5, &ini, 1, &ul) != LMX_MSG_OK || ul == 0) {
+            fprintf(stderr, "live-cascade create ui\n");
+            return 1;
+        }
+        if (lmx_msg_create(rtl, rl, 6, &ini, 1, &fl) != LMX_MSG_OK || fl == 0) {
+            fprintf(stderr, "live-cascade create factory\n");
+            return 1;
+        }
+        if (lmx_msg_end_turn(rtl, rl, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_end_turn(rtl, pl, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_end_turn(rtl, cl, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_exec_bind(rtl, pl, turn_held_live, &pctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_exec_bind(rtl, cl, turn_held_live, &cctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_exec_bind(rtl, ul, turn_ui, &uctx, LMX_MSG_AFFINITY_UI) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_exec_bind(rtl, fl, turn_factory, &fctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            return 1;
+        }
+        memset(&el, 0, sizeof(el));
+        el.kind = LMX_MSG_KIND_BYTES;
+        el.n = 1;
+        el.bytes = &ini;
+        if (lmx_msg_send(rtl, rl, pl, &el) != LMX_MSG_STAGED) {
+            return 1;
+        }
+        if (lmx_msg_send(rtl, rl, cl, &el) != LMX_MSG_STAGED) {
+            return 1;
+        }
+        if (lmx_msg_send(rtl, rl, fl, &el) != LMX_MSG_STAGED) {
+            return 1;
+        }
+        if (lmx_msg_end_turn(rtl, rl, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        lmx_msg_pump(rtl);
+        if (lmx_msg_inbox_n(rtl, pl) < 1 || lmx_msg_inbox_n(rtl, cl) < 1 || lmx_msg_inbox_n(rtl, fl) < 1) {
+            fprintf(stderr, "live-cascade inbox p=%d c=%d f=%d state p=%d c=%d\n",
+                lmx_msg_inbox_n(rtl, pl), lmx_msg_inbox_n(rtl, cl), lmx_msg_inbox_n(rtl, fl),
+                lmx_msg_state(rtl, pl), lmx_msg_state(rtl, cl));
+            return 1;
+        }
+        if (lmx_msg_exec_start(rtl, 3) != LMX_MSG_OK) {
+            fprintf(stderr, "live-cascade start\n");
+            return 1;
+        }
+        if (WaitForSingleObject(pctx.started, 2000) != WAIT_OBJECT_0 || WaitForSingleObject(cctx.started, 2000) != WAIT_OBJECT_0) {
+            fprintf(stderr, "live-cascade turns not started inbox p=%d c=%d runnable p=%d c=%d\n",
+                lmx_msg_inbox_n(rtl, pl), lmx_msg_inbox_n(rtl, cl),
+                lmx_msg_exec_is_runnable(rtl, pl), lmx_msg_exec_is_runnable(rtl, cl));
+            return 1;
+        }
+        pn = lmx_msg_path_n(rtl, cl);
+        if (pn < 1 || lmx_msg_path_seg(rtl, cl, 0, &seg) != LMX_MSG_OK || lmx_msg_init_copy(rtl, cl, &el) != LMX_MSG_OK) {
+            fprintf(stderr, "concurrent path/init_copy while child held\n");
+            return 1;
+        }
+        lmx_msg_env_release(&el);
+        if (lmx_msg_state(rtl, cl) != LMX_MSG_STATE_RUNNING || lmx_msg_state(rtl, gl) == LMX_MSG_STATE_RELEASED) {
+            fprintf(stderr, "arena invalid while child held state=%d g=%d\n", lmx_msg_state(rtl, cl), lmx_msg_state(rtl, gl));
+            return 1;
+        }
+        lmx_msg_set_now(rtl, 10000);
+        nclose = lmx_msg_poll(rtl, 0, 10000, 1, 0, 0);
+        if (nclose < 1) {
+            fprintf(stderr, "timer parent-loss poll n=%d\n", nclose);
+            return 1;
+        }
+        el.kind = LMX_MSG_KIND_BYTES;
+        el.n = 1;
+        el.bytes = &hb;
+        if (lmx_msg_host_post(rtl, ul, &el) != LMX_MSG_STAGED) {
+            return 1;
+        }
+        if (lmx_msg_exec_ui_step(rtl) != LMX_MSG_OK || uctx.ui_recvd != 1) {
+            fprintf(stderr, "UI did not continue during live parent-loss recvd=%u\n", uctx.ui_recvd);
+            return 1;
+        }
+        if (InterlockedCompareExchange(&cctx.done, 0, 0) != 0) {
+            fprintf(stderr, "child finished before release\n");
+            return 1;
+        }
+        InterlockedExchange(&g_cpu_stop, 1);
+        dl = GetTickCount() + 3000;
+        while ((InterlockedCompareExchange(&cctx.done, 0, 0) == 0 || InterlockedCompareExchange(&pctx.done, 0, 0) == 0) && GetTickCount() < dl) {
+            Sleep(10);
+        }
+        lmx_msg_drive(rtl, 10000, 1);
+        dl = GetTickCount() + 2000;
+        while (lmx_msg_state(rtl, cl) == LMX_MSG_STATE_RUNNING && GetTickCount() < dl) {
+            lmx_msg_drive(rtl, 10000, 1);
+            Sleep(10);
+        }
+        if (lmx_msg_state(rtl, cl) != LMX_MSG_STATE_STOPPED) {
+            fprintf(stderr, "live child not stopped at boundary state=%d\n", lmx_msg_state(rtl, cl));
+            lmx_msg_runtime_delete(rtl);
+            return 1;
+        }
+        lmx_msg_drive(rtl, 10000, 1);
+        if (lmx_msg_state(rtl, gl) != LMX_MSG_STATE_STOPPED && lmx_msg_state(rtl, gl) != LMX_MSG_STATE_DEAD) {
+            fprintf(stderr, "grandchild not terminated state=%d\n", lmx_msg_state(rtl, gl));
+            lmx_msg_runtime_delete(rtl);
+            return 1;
+        }
+        lmx_msg_exec_test_fail_grow = 1;
+        lmx_msg_exec_ready(rtl, ul);
+        lmx_msg_exec_test_fail_grow = 0;
+        lmx_msg_exec_ready(rtl, ul);
+        lmx_msg_exec_stop(rtl);
+        CloseHandle(pctx.started);
+        CloseHandle(cctx.started);
+        lmx_msg_runtime_delete(rtl);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);
@@ -750,7 +958,7 @@ int main(void) {
             (unsigned long)tui, (unsigned long)tbusy_ui, slow.ui_recvd);
         fclose(ev);
     }
-    printf("lmx_message_exec ok fifo=%u,%u mass=70 fail=31,32 err_after=1 omit_end=1 xsend_ui=%d xsend_peer=%d peer=%u ui_from_worker=%u ui_ms=%lu cpu_busy_ui_ms=%lu\n",
+    printf("lmx_message_exec ok fifo=%u,%u mass=70 fail=31,32 err_after=1 omit_end=1 xsend_ui=%d xsend_peer=%d peer=%u ui_from_worker=%u ui_ms=%lu cpu_busy_ui_ms=%lu live_cascade=1\n",
         fast.fifo[0], fast.fifo[1], fast.send_ui_st, fast.send_peer_st, peerrec.got,
         slow.ui_recvd, (unsigned long)tui, (unsigned long)tbusy_ui);
     return 0;

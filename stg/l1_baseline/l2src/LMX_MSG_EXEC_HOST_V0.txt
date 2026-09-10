@@ -93,3 +93,17 @@ lmx_msg_exec_stop(rt)
 
 App fragments stay isolated: they implement turn() and host_post
 adapters only.
+
+last_status
+-----------
+lmx_msg_exec_last_status is the last run_one return stored on the
+binding. A later success overwrites a prior failure. It is not
+per-request supervisor delivery and is not the Message
+result/error contract (send/recv/end_turn returns, KIND_CANCELLED
+as ordinary result data).
+
+Test injectors
+--------------
+-DLMX_MSG_EXEC_TEST enables lmx_msg_exec_test_after_cleanup
+(declaration, storage, invocation). Production exec.o must not
+export that symbol. Same split as -DLMX_MSG_HOST_TEST.
