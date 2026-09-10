@@ -3994,6 +3994,31 @@ function Invoke-IndentStack {
         ok: lm_p0_indent_level_from_column(d, st, 2U, 3U, 1U, @ level)
         c.printf("%d %zu %d\n", ok, level, diag\code)
         lm_p0_indent_stack_delete(st)
+        int: i
+        size_t: col
+        @: LmP0IndentStack cl
+        st: lm_p0_indent_stack_new(d)
+        if: st = 0
+            return: 1
+        i: 1
+        while: i <= 40
+            col: (cast: (size_t) (i * 2))
+            ok: lm_p0_indent_level_from_column(d, st, col, 1U, 1U, @ level)
+            if: ok = 0
+                return: 1
+            ---
+            i: i + 1
+        c.printf("grow %zu %zu %zu\n", st\count, st\capacity, level)
+        cl: lm_p0_indent_stack_clone(d, st, 1U, 1U)
+        if: cl = 0
+            return: 1
+        c.printf("clone %zu %zu\n", cl\count, cl\capacity)
+        ok: lm_p0_indent_level_from_column(d, st, 200U, 1U, 1U, @ level)
+        c.printf("mut %zu %zu\n", st\count, cl\count)
+        ok: lm_p0_indent_level_from_column(d, st, 0U, 1U, 1U, @ level)
+        c.printf("pop %zu %zu\n", st\count, level)
+        lm_p0_indent_stack_delete(cl)
+        lm_p0_indent_stack_delete(st)
 "@
     $refLm1 = Join-Path $out "indent_ref.lm1"
     $refC = Join-Path $out "indent_ref.c"
@@ -4016,7 +4041,7 @@ end: external
     cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'indent_ref.err')`""
     if ($LASTEXITCODE -ne 0) { throw "indent_ref exe failed" }
 
-    $l2cases = $cases.Replace("lm_p0_indent_stack_new(", "l2_m6(unit, ").Replace("lm_p0_indent_level_from_column(", "l2_m10(unit, ").Replace("lm_p0_indent_stack_delete(", "l2_m7(unit, ")
+    $l2cases = $cases.Replace("lm_p0_indent_stack_new(", "l2_m6(unit, ").Replace("lm_p0_indent_level_from_column(", "l2_m10(unit, ").Replace("lm_p0_indent_stack_delete(", "l2_m7(unit, ").Replace("lm_p0_indent_stack_clone(", "l2_m9(unit, ")
     $tail = "        return: 0`n    end: main`nend: external"
     $pos = $text.LastIndexOf($tail)
     if ($pos -lt 0) { throw "indent_stack L1 missing generated main return" }
@@ -4042,6 +4067,7 @@ end: external
 }
 
 Invoke-IndentStack
+& (Join-Path $PSScriptRoot "run_candidate_indent.ps1") -l1trans $l1trans -out $out -log $log
 
 "l2trans $gen ok"
 $suiteLog = Join-Path $log "l2trans_suite.log"

@@ -1584,7 +1584,40 @@ stack 0/4/2 unindent mismatch (diag 17). Live gen2 printTree/l1trans stay L1.
 
 Remaining L1 on the candidate parse path: lm_p0_parse_bytes / parse_file,
 document_init/destroy, scan_layout_prefix, field parse loop, empty-colon
-error 32, dump. Next bounded removal: candidate parser.lm1 copy with
-indent stack + indent_level_from_column defs stripped, linked to this L2
-unit so parse_bytes calls L2 indent_level_from_column. Frozen REF
-unmodified. Empty-colon vs old printTree.lm0 distinction stays.
+error 32, dump. Frozen REF unmodified. Empty-colon vs 620db86 distinction
+stays (error 32).
+
+Unit candidate parse_bytes uses L2 indent (082500)
+-------------------------------------------------
+Files: run_candidate_indent.ps1, indent_stack_abi.c, indent_parse_probe.c,
+run_l2trans.ps1, OPEN_POINTS.txt
+Frozen REF: stg/l1_baseline/l1src/parser.lm1 unmodified.
+Installed gen2 printTree / l1trans not rebuilt.
+
+A candidate parser.lm1 copy has the ten indent-stack / indent_level
+definitions stripped (fail if missing, duplicated, or a definition
+survives; prototypes remain). Generated L2 exports are objcopy-kept
+(l2_*, lmx_*, l2_indent_boot) and C ABI adapters in indent_stack_abi.c
+provide the frozen symbol names so L1 parse_bytes calls l2_m10 for
+indent_level_from_column. indent_parse_probe: parse=0 hits>=1.
+
+Growth/clone/pop (indent_l2_drive vs parser.lm1): grow 41 64 40,
+clone 41 64, mut 42 41, pop 1 0.
+
+Pinned old parser: git 620db8612c32569c8dd507cca135d5d076144e9f
+printTree_620db86.exe SHA-256
+CB564AD6FF52F35E918FFBAE6A6E2E166147DADCAAE445F9D5A2526A77801EF3.
+build/lm0/printTree.lm0.exe is a different hash and is not the oracle.
+Trees: candidate == STG gen2 on the p0_tree_contract corpus plus
+tests/arr.lmx and tests/tail_cutters.lmx. Accept fixtures still matching
+620 goldens must keep matching (no new tree deltas absorbed). Tracked
+rejects: C_nested_short (13), empty-colon 32
+(return_colon_empty_trailer, return_colon_comment_trailer, F_star_fence),
+invalid_eq_unclosed (20), invalid_triple_unclosed (4).
+
+DECIDED: empty-colon rejection is the agreed current-vs-620 delta.
+AVOIDED: live gen2 / frozen parser.lm1 rewrite.
+
+Next bounded removal: candidate strip of lm_p0_scan_layout_prefix,
+wired to an L2 port (parser_scan_indent already has
+scan_indent_column). parse_bytes / parse_file / dump stay L1.
