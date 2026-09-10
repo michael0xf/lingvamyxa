@@ -148,12 +148,55 @@ fn: lmx_msg_runtime_shutdown (@: LmxMsgRuntime rt) int
         return: c.LMX_MSG_INVALID
     return: c.lmx_msg_host_shutdown(rt)
 
+fn: lmx_msg_host_post (@: LmxMsgRuntime rt; LmxMsgAddr: dest; const: @(LmxMsgEnv env)) int
+    @: LmxMsgCopy node
+    @: uchar bytes
+    if: rt = 0 || env = 0 || dest = 0U
+        return: c.LMX_MSG_INVALID
+    if: env\n != 0U && env\bytes = 0
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_host_lock(rt) != 0
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_host_is_shutdown(rt) != 0
+        c.lmx_msg_host_unlock(rt)
+        return: c.LMX_MSG_STOPPED
+    if: c.lmx_msg_host_test_get_nomem() != 0
+        c.lmx_msg_host_unlock(rt)
+        return: c.LMX_MSG_NOMEM
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        c.lmx_msg_host_unlock(rt)
+        return: c.LMX_MSG_NOMEM
+    bytes: lmx_msg_copy_bytes(env\bytes, env\n)
+    if: env\n != 0U && bytes = 0
+        c.free((cast: (@: void) node))
+        c.lmx_msg_host_unlock(rt)
+        return: c.LMX_MSG_NOMEM
+    node\id: env\id
+    node\correlation: env\correlation
+    node\reply_to: env\reply_to
+    node\from: c.LMX_MSG_HOST_FROM
+    node\to: dest
+    node\kind: env\kind
+    node\number: env\number
+    node\bytes: bytes
+    node\n: env\n
+    lmx_msg_q_push(@ rt\host_head, @ rt\host_tail, node)
+    c.lmx_msg_host_wake(rt)
+    c.lmx_msg_host_unlock(rt)
+return: c.LMX_MSG_STAGED
+
 fn: lmx_msg_host_drain (@: LmxMsgRuntime rt) int
     @: LmxMsgCopy n
     @: LmxMsgCopy nxt
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
-    n: c.lmx_msg_host_steal(rt)
+    if: c.lmx_msg_host_lock(rt) != 0
+        return: c.LMX_MSG_INVALID
+    n: rt\host_head
+    rt\host_head: 0
+    rt\host_tail: 0
+    c.lmx_msg_host_unlock(rt)
     while: n != 0
         nxt: n\next
         n\next: 0
@@ -171,7 +214,11 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     if: c.lmx_msg_host_is_owner(rt) = 0
         return
     c.lmx_msg_host_shutdown(rt)
-    leftover: c.lmx_msg_host_steal(rt)
+    c.lmx_msg_host_lock(rt)
+    leftover: rt\host_head
+    rt\host_head: 0
+    rt\host_tail: 0
+    c.lmx_msg_host_unlock(rt)
     lmx_msg_copy_free(leftover)
     while: i < rt\n
         m: rt\tab + i
@@ -673,6 +720,8 @@ return: cnt
 
 fn: lmx_msg_path_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: -1
     m: lmx_msg_find(rt, who)
     if: m = 0
         return: -1
@@ -680,7 +729,7 @@ return: m\path_n
 
 fn: lmx_msg_path_seg (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i; @: unsigned out) int
     @: LmxMsg m
-    if: rt = 0 || out = 0 || i < 0
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK || out = 0 || i < 0
         return: c.LMX_MSG_INVALID
     m: lmx_msg_find(rt, who)
     if: m = 0 || i >= m\path_n
@@ -690,7 +739,7 @@ return: c.LMX_MSG_OK
 
 fn: lmx_msg_init_copy (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     @: LmxMsg m
-    if: rt = 0 || out = 0
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK || out = 0
         return: c.LMX_MSG_INVALID
     m: lmx_msg_find(rt, who)
     if: m = 0

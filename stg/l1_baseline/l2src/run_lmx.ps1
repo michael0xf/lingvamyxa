@@ -55,6 +55,9 @@ if ($LASTEXITCODE -ne 0) { throw "$gen lmx_message_host_selftest failed" }
 "l2 lmx $gen ok"
 $suiteLog = Join-Path $log "lmx_suite.log"
 $toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $trans)).Hash
+$evPath = Join-Path $log "lmx_message_host_selftest.evidence.txt"
+$ev = @()
+if (Test-Path -LiteralPath $evPath) { $ev = Get-Content -LiteralPath $evPath }
 @(
     "cmd=l2src\run_lmx.ps1"
     "L1_GEN=$gen"
@@ -62,4 +65,5 @@ $toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $trans)).H
     "l1trans_sha256=$toolHash"
     "banner=l2 lmx $gen ok"
     "exit=0"
-) | Set-Content -LiteralPath $suiteLog -Encoding utf8
+    "host_selftest_stdout=lmx_message_host ok (see evidence)"
+) + $ev | Set-Content -LiteralPath $suiteLog -Encoding utf8

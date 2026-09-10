@@ -486,7 +486,7 @@ fn: main () int
     env\kind: c.LMX_MSG_KIND_BYTES
     env\bytes: payload
     env\n: 4U
-    st: c.lmx_msg_host_post(hrt, host_child, env)
+    st: lmx_msg_host_post(hrt, host_child, env)
     if: st != c.LMX_MSG_STAGED
         c.printf("host_post did not accept\n")
         fail: fail + 1
@@ -506,7 +506,7 @@ fn: main () int
     st: lmx_msg_end_turn(hrt, host_child, 1)
     env\id: 81U
     payload[0]: 9
-    st: c.lmx_msg_host_post(hrt, host_child, env)
+    st: lmx_msg_host_post(hrt, host_child, env)
     if: st != c.LMX_MSG_STAGED
         c.printf("host_post after stop must still accept\n")
         fail: fail + 1
@@ -514,8 +514,41 @@ fn: main () int
     if: lmx_msg_inbox_n(hrt, host_child) != 0
         c.printf("stopped dest admitted host post\n")
         fail: fail + 1
+    env\n: 4U
+    env\bytes: 0
+    st: lmx_msg_host_post(hrt, host_child, env)
+    if: st != c.LMX_MSG_INVALID
+        c.printf("nonzero n null bytes\n")
+        fail: fail + 1
+    env\bytes: payload
+    c.lmx_msg_host_test_set_nomem(1)
+    st: lmx_msg_host_post(hrt, host_child, env)
+    c.lmx_msg_host_test_set_nomem(0)
+    if: st != c.LMX_MSG_NOMEM
+        c.printf("inject nomem\n")
+        fail: fail + 1
+    c.lmx_msg_host_test_set_nowake(1)
+    env\id: 82U
+    payload[0]: 55
+    st: lmx_msg_host_post(hrt, host_child, env)
+    c.lmx_msg_host_test_set_nowake(0)
+    if: st != c.LMX_MSG_STAGED
+        c.printf("nowake must still stage\n")
+        fail: fail + 1
+    st: c.lmx_msg_host_wait(hrt, 0U)
+    if: st != c.LMX_MSG_EMPTY && st != c.LMX_MSG_OK
+        c.printf("bounded wait 0\n")
+        fail: fail + 1
+    st: c.lmx_msg_host_wait(hrt, 4294967295U)
+    if: st != c.LMX_MSG_INVALID
+        c.printf("infinite wait refused\n")
+        fail: fail + 1
+    st: lmx_msg_host_drain(hrt)
+    if: lmx_msg_inbox_n(hrt, host_child) != 0
+        c.printf("nowake drain admitted to stopped dest\n")
+        fail: fail + 1
     st: lmx_msg_runtime_shutdown(hrt)
-    st: c.lmx_msg_host_post(hrt, host_child, env)
+    st: lmx_msg_host_post(hrt, host_child, env)
     if: st != c.LMX_MSG_STOPPED
         c.printf("host_post after shutdown\n")
         fail: fail + 1
