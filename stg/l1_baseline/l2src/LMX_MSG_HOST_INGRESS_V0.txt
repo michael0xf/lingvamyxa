@@ -1,0 +1,67 @@
+LMX_MSG_HOST_INGRESS_V0
+=======================
+
+Pinned seam, not a live-header moving target.
+Header: stg/l1_baseline/l2src/lmx_message.h
+  LMX_MSG_HOST_INGRESS_VERSION 0
+Platform: lmx_message_host.c / lmx_message_host.h
+Portable drain: lmx_msg_host_drain in lmx_message.lm1
+
+Owner / affinity
+----------------
+The thread that calls lmx_msg_runtime_new owns the runtime.
+create / send / stop / end_turn / pump / recv / fail / poll / drive /
+set_now / state / inbox_n / host_drain / shutdown / delete are
+INVALID off that thread. Do not call them from Win32/proc callbacks.
+
+host_post may run on any thread, including those callbacks.
+
+Wake / drain
+------------
+host_post copies the envelope (one malloc of bytes) onto the host
+ingress FIFO under a host mutex, then wakes. Linearization is mutex
+acquisition: one global FIFO; each producer is FIFO with itself.
+
+The owner loop must drain:
+    lmx_msg_host_wait(rt, timeout_ms);   /* optional */
+    lmx_msg_host_drain(rt);              /* steal queue -> transport -> pump */
+    lmx_msg_recv(...)                    /* handler, owner thread only */
+
+Wake failure after enqueue does not un-accept the post. Drain on the
+ordinary host tick is sufficient. No destination arena mutation and
+no handler on the callback thread.
+
+Acceptance vs admission
+-----------------------
+host_post STAGED  = copied into the host queue. Not inbox. Not execution.
+host_post STOPPED = runtime shutdown; no copy kept.
+host_post NOMEM   = no enqueue; caller still owns its buffer.
+host_post INVALID = null rt/env/dest.
+
+Later owner drain/admit may drop the copy as GONE if dest is
+STOPPED/DEAD/RELEASED. host_post does not read rt->tab to guess GONE.
+
+env->bytes is borrowed for the duration of host_post only. Adapters
+must not malloc an extra copy to pass in; the seam copies once.
+
+Shutdown / quiescence
+---------------------
+lmx_msg_runtime_shutdown sets shutting_down under the host mutex and
+wakes waiters. In-flight host_post either completes STAGED or sees
+the flag and returns STOPPED. Unregister callbacks, then shutdown,
+then delete. Addresses are not reused until the runtime is deleted.
+Late posts after STOPPED dest: still STAGED, then GONE at drain.
+
+Platform choice
+---------------
+Win32: CRITICAL_SECTION + auto-reset Event.
+POSIX: pthread_mutex + pthread_cond.
+Not LM_THREAD_PROVIDER=single-safe for concurrent producers.
+
+Still not this version
+----------------------
+Concurrent Message execution (two handlers at once). Graph-copy
+(19.29.7.2). New KIND enums (UI/timer/fs/proc use KIND_BYTES).
+done[32] dedup cap (use id=0 for high-volume host events).
+App-side locks/queues. mixa_manager must pin this versioned pair,
+not track live l2src.

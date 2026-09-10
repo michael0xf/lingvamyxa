@@ -12017,6 +12017,17 @@ materialization into the handler. That is not full LMX-text/arena
 delivery and not a replacement of the one-arena model. Do not
 generalize those malloc copies into the source ontology.
 
+Host ingress V0 (`LMX_MSG_HOST_INGRESS_VERSION` 0): a foreign
+callback may `host_post` a number/bytes envelope. The runtime owner
+is the thread that created the runtime. `host_post` copies once
+under a host-queue mutex and returns staging status (acceptance).
+It does not look up the destination table, run a turn, or mutate
+the destination arena. The owner drains that queue into the existing
+transport/pump/recv path. Shutdown is a flag on the same mutex.
+`create`/`send`/`pump`/`recv` remain owner-thread only; this slice
+is not concurrent Message execution. Contract file:
+`stg/l1_baseline/l2src/LMX_MSG_HOST_INGRESS_V0.txt`.
+
 Language-facing operations (names follow existing thread/send/stop
 contracts; `spawn` here is English, not a new parser intrinsic):
 
