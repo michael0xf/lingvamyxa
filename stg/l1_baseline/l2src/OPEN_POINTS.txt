@@ -1369,9 +1369,22 @@ return INVALID; delete off-owner is a void no-op.
 Win32 concurrent test run here. POSIX primitives written, not
 executed on this machine. Test injectors are -DLMX_MSG_HOST_TEST
 only; production host.o has get_nomem==0 and no setters.
-Remaining limitation: create/send/pump/recv still owner-only;
-not concurrent Message execution. done[32] still exists; host
-events use id=0. AVOIDED: app C locks; new KIND enums. ASK none.
+Remaining limitation of ingress V0: not concurrent Message
+execution. done[32] still exists; host events use id=0.
+AVOIDED: app C locks; new KIND enums. ASK none.
+
+Unit 28c - overlapping Message turns (100400)
+---------------------------------------------
+Files: lmx_message_exec.c/.h, lmx_message.h/.lm1,
+lmx_message_exec_selftest.c, LMX_MSG_EXEC_HOST_V0.txt, run_lmx.ps1
+DECIDED: per-Message turn latch; workers for ANY affinity; UI
+affinity on owner thread; runtime mutex not held during turn_fn.
+Table is LmxMsg** (stable Message addresses). recv/send/end_turn
+require the latch once workers are started; serial owner fallback
+when nworkers==0. Win32 overlap: slow Sleep(80) and fast recv in
+the same window; 20 creates during the slow turn. POSIX workers
+written, not run here. V0 ingress unchanged. AVOIDED: global
+handler mutex; creator bypass of another Message's latch.
 
 Unit 29 - fence line matchers (block-string = / raw-comment *)
 -------------------------------------------------------------

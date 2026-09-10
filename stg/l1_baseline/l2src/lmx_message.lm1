@@ -1,4 +1,4 @@
-include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "<stdlib.h>" "<string.h>"
+include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exec.h" "<stdlib.h>" "<string.h>"
 
 prototype:
     fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
@@ -85,7 +85,7 @@ fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     if: rt = 0 || addr = 0U
         return: 0
     while: i < rt\n
-        m: rt\tab + i
+        m: rt\tab[i]
         if: m\addr = addr && m\state != c.LMX_MSG_STATE_RELEASED
             return: m
         i: i + 1
@@ -97,7 +97,7 @@ fn: lmx_msg_find_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: crea
     if: rt = 0 || create_id = 0U
         return: 0
     while: i < rt\n
-        m: rt\tab + i
+        m: rt\tab[i]
         if: m\parent = parent && m\create_id = create_id && m\state != c.LMX_MSG_STATE_RELEASED
             return: m
         i: i + 1
@@ -132,6 +132,15 @@ fn: lmx_msg_require_owner (@: LmxMsgRuntime rt) int
         return: c.LMX_MSG_INVALID
     return: c.LMX_MSG_OK
 
+fn: lmx_msg_require_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    if: rt = 0 || who = 0U
+        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_exec_holding_turn(rt, who) != 0
+        return: c.LMX_MSG_OK
+    if: c.lmx_msg_host_is_owner(rt) != 0 && c.lmx_msg_exec_workers(rt) = 0
+        return: c.LMX_MSG_OK
+    return: c.LMX_MSG_INVALID
+
 fn: lmx_msg_runtime_new () @: LmxMsgRuntime
     @: LmxMsgRuntime rt
     rt: (cast: (@: LmxMsgRuntime) c.calloc(1U, c.sizeof(c.LmxMsgRuntime)))
@@ -139,6 +148,10 @@ fn: lmx_msg_runtime_new () @: LmxMsgRuntime
         return: 0
     rt\next_addr: 1U
     if: c.lmx_msg_host_attach(rt) != 0
+        c.free((cast: (@: void) rt))
+        return: 0
+    if: c.lmx_msg_exec_attach(rt) != 0
+        c.lmx_msg_host_detach(rt)
         c.free((cast: (@: void) rt))
         return: 0
 return: rt
@@ -220,40 +233,29 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     rt\host_tail: 0
     c.lmx_msg_host_unlock(rt)
     lmx_msg_copy_free(leftover)
+    c.lmx_msg_exec_stop(rt)
     while: i < rt\n
-        m: rt\tab + i
+        m: rt\tab[i]
         lmx_msg_copy_free(m\inbox)
         lmx_msg_copy_free(m\outbox)
         if: m\init != 0
             c.free((cast: (@: void) m\init))
         ---
+        c.free((cast: (@: void) m))
         i: i + 1
     lmx_msg_copy_free(rt\transport)
     if: rt\tab != 0
         c.free((cast: (@: void) rt\tab))
     ---
+    c.lmx_msg_exec_detach(rt)
     c.lmx_msg_host_detach(rt)
     c.free((cast: (@: void) rt))
 end: lmx_msg_runtime_delete
 
 fn: lmx_msg_grow (@: LmxMsgRuntime rt) int
-    int: cap
-    @: LmxMsg tab
     if: rt = 0
         return: 1
-    if: rt\n < rt\cap
-        return: 0
-    if: rt\cap = 0
-        cap: 8
-    else:
-        cap: rt\cap * 2
-    ---
-    tab: (cast: (@: LmxMsg) c.realloc((cast: (@: void) rt\tab), (cast: (size_t) cap) * c.sizeof(c.LmxMsg)))
-    if: tab = 0
-        return: 1
-    rt\tab: tab
-    rt\cap: cap
-return: 0
+    return: c.lmx_msg_tab_grow(rt)
 
 fn: lmx_msg_assign_path (@: LmxMsgRuntime rt; @: LmxMsg slot; LmxMsgAddr: parent) int
     @: LmxMsg p
@@ -296,8 +298,10 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
         return: c.LMX_MSG_INVALID
     if: lmx_msg_grow(rt) != 0
         return: c.LMX_MSG_NOMEM
-    slot: rt\tab + rt\n
-    c.memset((cast: (@: void) slot), 0, c.sizeof(c.LmxMsg))
+    slot: c.lmx_msg_slot_new()
+    if: slot = 0
+        return: c.LMX_MSG_NOMEM
+    rt\tab[rt\n]: slot
     st: lmx_msg_assign_path(rt, slot, parent)
     if: st != c.LMX_MSG_OK
         return: st
@@ -322,7 +326,7 @@ return: c.LMX_MSG_OK
 fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: @(LmxMsgEnv env)) int
     @: LmxMsg src
     @: LmxMsgCopy node
-    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK || env = 0 || from = 0U || to = 0U
+    if: lmx_msg_require_turn(rt, from) != c.LMX_MSG_OK || env = 0 || from = 0U || to = 0U
         return: c.LMX_MSG_INVALID
     src: lmx_msg_find(rt, from)
     if: src = 0
@@ -387,7 +391,7 @@ sub: lmx_msg_request_children_close (@: LmxMsgRuntime rt; LmxMsgAddr: who)
     if: rt = 0
         return
     while: i < rt\n
-        ch: rt\tab + i
+        ch: rt\tab[i]
         if: ch\parent = who && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED && ch\state != c.LMX_MSG_STATE_STOPPED
             ch\closing: 1
         ---
@@ -399,7 +403,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     @: LmxMsg ch
     @: LmxMsgCopy n
     int: i
-    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+    if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
     m: lmx_msg_find(rt, who)
     if: m = 0
@@ -417,7 +421,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         m\outbox_tail: 0
         i: 0
         while: i < rt\n
-            ch: rt\tab + i
+            ch: rt\tab[i]
             if: ch\parent = who && ch\committed = 0 && ch\state = c.LMX_MSG_STATE_INACTIVE
                 lmx_msg_release_slot(ch)
             ---
@@ -430,7 +434,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         return: c.LMX_MSG_OK
     i: 0
     while: i < rt\n
-        ch: rt\tab + i
+        ch: rt\tab[i]
         if: ch\parent = who && ch\state = c.LMX_MSG_STATE_INACTIVE
             ch\committed: 1
         ---
@@ -478,26 +482,33 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
         lmx_msg_copy_free(fresh)
         return: c.LMX_MSG_NOMEM
     lmx_msg_q_push(@ dest\inbox, @ dest\inbox_tail, fresh)
+    c.lmx_msg_exec_ready(rt, dest\addr)
 return: c.LMX_MSG_OK
 
 fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
     @: LmxMsgCopy n
     int: st
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
-        return: c.LMX_MSG_INVALID
+        if: c.lmx_msg_exec_holding_any(rt) = 0
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
     while: rt\transport != 0
         n: lmx_msg_q_pop(@ rt\transport, @ rt\transport_tail)
         st: lmx_msg_admit_one(rt, n)
         if: st = c.LMX_MSG_NOMEM
+            c.lmx_msg_exec_unlock(rt)
             return: st
         ---
     ---
+    c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK
 
 fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     @: LmxMsg m
     @: LmxMsgCopy n
-    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK || out = 0
+    if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK || out = 0
         return: c.LMX_MSG_INVALID
     m: lmx_msg_find(rt, who)
     if: m = 0
@@ -619,7 +630,7 @@ fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned:
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
         return: -1
     while: i < rt\n
-        ch: rt\tab + i
+        ch: rt\tab[i]
         if: ch\parent != 0U && (ch\state = c.LMX_MSG_STATE_RUNNING || (ch\state = c.LMX_MSG_STATE_INACTIVE && ch\committed != 0))
             if: who = 0U || ch\addr = who
                 if: lmx_msg_parent_gone(rt, ch, now, threshold) != 0
@@ -671,7 +682,7 @@ fn: lmx_msg_drive (@: LmxMsgRuntime rt; unsigned: now; unsigned: threshold) int
         more: 0
         i: 0
         while: i < rt\n
-            m: rt\tab + i
+            m: rt\tab[i]
             if: lmx_msg_drive_should_close(m) != 0
                 st: lmx_msg_end_turn(rt, m\addr, 1)
                 if: st != c.LMX_MSG_OK
@@ -686,7 +697,7 @@ fn: lmx_msg_drive (@: LmxMsgRuntime rt; unsigned: now; unsigned: threshold) int
         ---
         i: 0
         while: i < rt\n
-            m: rt\tab + i
+            m: rt\tab[i]
             if: lmx_msg_drive_should_close(m) != 0
                 more: 1
             ---

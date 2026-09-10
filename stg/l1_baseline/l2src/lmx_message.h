@@ -99,7 +99,7 @@ typedef struct LmxMsg {
 } LmxMsg;
 
 typedef struct LmxMsgRuntime {
-    LmxMsg *tab;
+    LmxMsg **tab;
     int n;
     int cap;
     LmxMsgCopy *transport;
@@ -107,6 +107,7 @@ typedef struct LmxMsgRuntime {
     LmxMsgCopy *host_head;
     LmxMsgCopy *host_tail;
     void *host_sync;
+    void *exec;
     unsigned next_addr;
     unsigned clock;
     unsigned root_seq;
@@ -136,5 +137,13 @@ int lmx_msg_runtime_shutdown(LmxMsgRuntime *rt);
 int lmx_msg_host_post(LmxMsgRuntime *rt, LmxMsgAddr dest, const LmxMsgEnv *env);
 int lmx_msg_host_drain(LmxMsgRuntime *rt);
 int lmx_msg_host_wait(LmxMsgRuntime *rt, unsigned timeout_ms);
+
+#define LMX_MSG_AFFINITY_ANY 0
+#define LMX_MSG_AFFINITY_UI 1
+typedef int (*LmxMsgTurn)(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx);
+int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity);
+int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers);
+int lmx_msg_exec_ui_step(LmxMsgRuntime *rt);
+int lmx_msg_exec_stop(LmxMsgRuntime *rt);
 
 #endif
