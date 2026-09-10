@@ -32,6 +32,19 @@ typedef struct MassRec {
 } MassRec;
 
 static MassRec g_mass[70];
+static HANDLE g_cleanup_seen;
+static HANDLE g_cleanup_go;
+static volatile LONG g_cleanup_hits;
+
+static void after_cleanup_gate(LmxMsgAddr who, int live, int st) {
+    (void)who;
+    (void)live;
+    (void)st;
+    if (InterlockedIncrement(&g_cleanup_hits) == 1) {
+        SetEvent(g_cleanup_seen);
+        WaitForSingleObject(g_cleanup_go, 2000);
+    }
+}
 
 static int turn_slow(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     TurnCtx *c = (TurnCtx *)ctx;
@@ -91,6 +104,17 @@ static int turn_fast(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     lmx_msg_env_release(&got);
     InterlockedIncrement(&c->done);
     return lmx_msg_end_turn(rt, who, 1);
+}
+
+static int turn_err_after_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    MassRec *m = (MassRec *)ctx;
+    LmxMsgEnv got;
+    memset(&got, 0, sizeof(got));
+    m->recv_st = lmx_msg_recv(rt, who, &got);
+    lmx_msg_env_release(&got);
+    m->end_st = lmx_msg_end_turn(rt, who, 1);
+    InterlockedIncrement(&m->done);
+    return 1;
 }
 
 static int turn_fail_no_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
@@ -313,16 +337,6 @@ int main(void) {
             }
         }
     }
-    ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
-    if (ev) {
-        fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);
-        fprintf(ev, "fast t2=%lu recvd=%u fifo=%u,%u\n", (unsigned long)fast.t2, fast.recvd, fast.fifo[0], fast.fifo[1]);
-        fprintf(ev, "ui_step_ms=%lu mass_complete=70\n", (unsigned long)tui);
-        fclose(ev);
-    }
-    printf("lmx_message_exec ok fifo=%u,%u mass=70 ui_ms=%lu slow=%lu..%lu\n",
-        fast.fifo[0], fast.fifo[1], (unsigned long)tui,
-        (unsigned long)slow.t0, (unsigned long)slow.t1);
     lmx_msg_runtime_delete(rt);
     CloseHandle(slow.unblock);
     CloseHandle(slow.started);
@@ -363,22 +377,85 @@ int main(void) {
         if (lmx_msg_exec_bind(rtf, wf, turn_fail_no_end, &failrec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
             return 1;
         }
+        g_cleanup_seen = CreateEventA(0, 1, 0, 0);
+        g_cleanup_go = CreateEventA(0, 1, 0, 0);
+        g_cleanup_hits = 0;
+        lmx_msg_exec_test_after_cleanup = after_cleanup_gate;
         if (lmx_msg_exec_start(rtf, 2) != LMX_MSG_OK) {
             return 1;
         }
+        if (WaitForSingleObject(g_cleanup_seen, 2000) != WAIT_OBJECT_0) {
+            fprintf(stderr, "cleanup gate not reached\n");
+            return 1;
+        }
+        if (InterlockedCompareExchange(&failrec.done, 0, 0) != 1) {
+            fprintf(stderr, "next turn started during cleanup done=%ld\n",
+                (long)InterlockedCompareExchange(&failrec.done, 0, 0));
+            return 1;
+        }
+        SetEvent(g_cleanup_go);
         dl = GetTickCount() + 3000;
         while (InterlockedCompareExchange(&failrec.done, 0, 0) < 2 && GetTickCount() < dl) {
             Sleep(10);
         }
         lmx_msg_exec_stop(rtf);
-        if (InterlockedCompareExchange(&failrec.done, 0, 0) != 2 || failrec.fifo_a != 31 || failrec.fifo_b != 32 || InterlockedCompareExchange(&failrec.in_turn, 0, 0) != 0 || failrec.overlap != 0) {
-            fprintf(stderr, "fail-handler race done=%ld got=%u,%u overlap=%d in_turn=%ld\n",
+        lmx_msg_exec_test_after_cleanup = 0;
+        if (InterlockedCompareExchange(&failrec.done, 0, 0) != 2 || failrec.fifo_a != 31 || failrec.fifo_b != 32 || InterlockedCompareExchange(&failrec.in_turn, 0, 0) != 0 || failrec.overlap != 0 || lmx_msg_exec_last_status(rtf, wf) != 1) {
+            fprintf(stderr, "fail-handler race done=%ld got=%u,%u overlap=%d in_turn=%ld last=%d\n",
                 (long)InterlockedCompareExchange(&failrec.done, 0, 0), failrec.fifo_a, failrec.fifo_b,
-                failrec.overlap, (long)InterlockedCompareExchange(&failrec.in_turn, 0, 0));
+                failrec.overlap, (long)InterlockedCompareExchange(&failrec.in_turn, 0, 0),
+                lmx_msg_exec_last_status(rtf, wf));
             lmx_msg_runtime_delete(rtf);
             return 1;
         }
         lmx_msg_runtime_delete(rtf);
+        CloseHandle(g_cleanup_seen);
+        CloseHandle(g_cleanup_go);
     }
+    {
+        LmxMsgRuntime *rte;
+        LmxMsgAddr pe = 0, we = 0;
+        LmxMsgEnv ee;
+        uchar ini = 1, b = 9;
+        static MassRec err_after;
+        memset(&err_after, 0, sizeof(err_after));
+        rte = lmx_msg_runtime_new();
+        lmx_msg_create(rte, 0, 1, &ini, 1, &pe);
+        lmx_msg_create(rte, pe, 2, &ini, 1, &we);
+        lmx_msg_end_turn(rte, pe, 1);
+        memset(&ee, 0, sizeof(ee));
+        ee.kind = LMX_MSG_KIND_BYTES;
+        ee.n = 1;
+        ee.bytes = &b;
+        lmx_msg_send(rte, pe, we, &ee);
+        lmx_msg_end_turn(rte, pe, 1);
+        lmx_msg_pump(rte);
+        lmx_msg_exec_bind(rte, we, turn_err_after_end, &err_after, LMX_MSG_AFFINITY_ANY);
+        lmx_msg_exec_start(rte, 1);
+        {
+            DWORD dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&err_after.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+        }
+        lmx_msg_exec_stop(rte);
+        if (InterlockedCompareExchange(&err_after.done, 0, 0) != 1 || lmx_msg_exec_last_status(rte, we) != 1 || err_after.end_st != LMX_MSG_OK) {
+            fprintf(stderr, "error-after-end_turn done=%ld last=%d end_st=%d\n",
+                (long)InterlockedCompareExchange(&err_after.done, 0, 0),
+                lmx_msg_exec_last_status(rte, we), err_after.end_st);
+            lmx_msg_runtime_delete(rte);
+            return 1;
+        }
+        lmx_msg_runtime_delete(rte);
+    }
+    ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
+    if (ev) {
+        fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);
+        fprintf(ev, "fast t2=%lu recvd=%u fifo=%u,%u\n", (unsigned long)fast.t2, fast.recvd, fast.fifo[0], fast.fifo[1]);
+        fprintf(ev, "ui_step_ms=%lu mass_complete=70 fail_fifo=31,32 last_st=1 err_after_end=1\n", (unsigned long)tui);
+        fclose(ev);
+    }
+    printf("lmx_message_exec ok fifo=%u,%u mass=70 fail=31,32 last_st=1 err_after=1 ui_ms=%lu\n",
+        fast.fifo[0], fast.fifo[1], (unsigned long)tui);
     return 0;
 }

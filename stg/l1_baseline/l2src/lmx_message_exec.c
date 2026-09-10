@@ -26,7 +26,10 @@ typedef struct LmxMsgExecBind {
     int affinity;
     LmxTid held_by;
     int held;
+    int last_st;
 } LmxMsgExecBind;
+
+void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
 
 typedef struct LmxMsgExec {
 #if defined(_WIN32)
@@ -455,11 +458,15 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
             st = clean == LMX_MSG_OK ? 1 : clean;
         }
     }
+    if (lmx_msg_exec_test_after_cleanup != 0) {
+        lmx_msg_exec_test_after_cleanup(snap->addr, live, st);
+    }
     lmx_msg_exec_lock(rt);
     for (i = 0; i < e->nbind; i++) {
         if (e->bind[i].addr == snap->addr) {
             e->bind[i].held = 0;
             e->bind[i].held_by = 0;
+            e->bind[i].last_st = st;
         }
     }
     lmx_msg_exec_unlock(rt);
@@ -584,6 +591,24 @@ int lmx_msg_exec_ui_step(LmxMsgRuntime *rt) {
     lmx_msg_exec_unlock(rt);
     run_one(rt, &snap);
     return LMX_MSG_OK;
+}
+
+int lmx_msg_exec_last_status(LmxMsgRuntime *rt, LmxMsgAddr addr) {
+    LmxMsgExec *e = exof(rt);
+    int i;
+    int st = LMX_MSG_INVALID;
+    if (e == 0 || addr == 0U) {
+        return LMX_MSG_INVALID;
+    }
+    lmx_msg_exec_lock(rt);
+    for (i = 0; i < e->nbind; i++) {
+        if (e->bind[i].addr == addr) {
+            st = e->bind[i].last_st;
+            break;
+        }
+    }
+    lmx_msg_exec_unlock(rt);
+    return st;
 }
 
 int lmx_msg_exec_is_bound(LmxMsgRuntime *rt, LmxMsgAddr addr) {

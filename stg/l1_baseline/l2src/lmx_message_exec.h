@@ -19,5 +19,7 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt);
 void lmx_msg_exec_ready(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_is_bound(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr);
+int lmx_msg_exec_last_status(LmxMsgRuntime *rt, LmxMsgAddr addr);
+extern void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
 
 #endif
