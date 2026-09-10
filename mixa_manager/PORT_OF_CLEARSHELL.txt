@@ -189,8 +189,9 @@ of the cells it covers and must leave their background alone, so the button
 keeps its colour under the frame. Every other drawing call in the API sets both.
 DRAWING.txt 5.4.2.
 
-Colours for it come from ClearShell's palette, which already distinguishes a
-translucent highlight at alpha 96 from a panel body at 240.
+Preserve the underlying ClearShell fill when drawing the new focus frame.
+Do not confuse ordinary c* text alpha240 with b* background alpha96; the
+colour-role mapping and actual selected-state exceptions are in UI_MODEL3/5.4.
 
 
 3. What is ported unchanged, and must not be redesigned
@@ -224,8 +225,12 @@ appearing again in a place that has nothing to do with fonts.
 
 3.3. Colours
 
-Taken as-is. ClearShell.java: panel backgrounds at alpha 240, translucent
-highlights at alpha 96, opaque foreground text. See UI_MODEL.txt section 3.
+Preserve the source palette and per-element background opacity, as reconfirmed
+with Android screenshot Screenshot_20260909-151047.png on2026-09-10. Ordinary
+backgrounds are alpha96, not240; the latter is generally TEXT alpha. See
+UI_MODEL3/5.4 for exact pairs and the separately identified current opaque-glyph
+renderer difference. The screenshot's camera-composited pixels are not RGBA
+constants. UI_MODEL's visual-reference note maps the panel/scroll/layer deltas.
 
 3.4. Functionality
 

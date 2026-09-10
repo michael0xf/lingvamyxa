@@ -1,6 +1,27 @@
 Mixa Manager - the UI model
 Where the resemblance to Norton and FAR ends.
 
+Visual reference confirmed by the owner, 2026-09-10
+-------------------------------------------------
+The supplied Android screenshot Screenshot_20260909-151047.png illustrates
+the ClearShell appearance to preserve: its colour families, translucent fills,
+and the distinction between application buttons and each list's own buttons.
+Use the checked-in source for colour/alpha values, not pixels sampled from a
+screenshot already composited over a camera image. This is a visual reference,
+not a request to reproduce Android system bars, camera integration or dimensions.
+
+The desktop deltas remain exactly those in sections1/1.1: the top APPLICATION
+button panel moves to the bottom of layer2; each list-window has its own vertical
+scrollbar; one horizontal scrollbar moves the entire row of list-windows.
+This shared list-row scroll is not the button panel's own overflow scroll (5.7).
+Per-list button headers retain their separate role; not all buttons move down.
+
+Layer1 carries the text/input surface UNDER layer2, in the depth position
+occupied by the camera background in the Android reference. It is not an input
+strip beside the lists on the same layer. The overlay neither reserves console
+rows nor reduces its height. Existing first-version cursor/scrollback rules
+remain unchanged. These are confirmations, not a new layout design.
+
 
 1. Lists, and there are not two of them
 
@@ -247,27 +268,32 @@ wide, a margin at a thirty-second of it.
 
 From ClearShell.java, used directly:
 
-    argb(240, 32, 32, 0)     panel background - nearly opaque
-    argb(96, 255, 255, 192)  highlight - clearly translucent
+    argb(240, 32, 32, 0)     c0 text colour - nearly opaque
+    argb(96, 255, 255, 192)  b0 background - clearly translucent
     argb(96, 255, 192, 0), argb(96, 128, 255, 128), argb(96, 64, 255, 255)
                              further translucent accents
-    0xFFFFFF40               foreground text, fully opaque
-    0xFF000060               dark foreground on light
+    0xFFFFFF40               cSel selected foreground, fully opaque
+    0xFF000060               bSel selected background, fully opaque
 
 Two things follow.
 
-Alpha varies BY ELEMENT: 240 for a panel body, 96 for a highlight. That is the
+Alpha varies BY ELEMENT: ordinary b* fills use 96, bPleaseWait uses 64, and
+bSel uses 255. The c* text colours generally use 240, not panel bodies. This is
 evidence for putting alpha on the CELL rather than on the surface - a per-surface
 constant could not express a translucent panel carrying an opaque selected row.
 
-Text is always fully opaque, 0xFF. Translucency is a property of backgrounds
-only, exactly as DRAWING.txt requires.
+The CURRENT PORT renderer draws glyphs fully opaque, as DRAWING.txt requires.
+That is distinct from ClearShell's ordinary text alpha240 (pairs in5.4): do not
+claim opaque text is an exact copy of the source. Owner confirmation on whether
+to retain this glyph-only difference was requested on2026-09-10. Background
+colours and their individual opacity are to be preserved, not made uniform.
 
 
 4. What is deliberately not decided here
 
-Scrollbar appearance, key bindings, which buttons the two panels carry, and how
-a list is populated. Those are content. This document fixes the SHAPE: any
+This section does not enumerate scrollbar styling, keys or panel/list content.
+Consult the later sections and PORT_OF_CLEARSHELL for the recorded decisions
+and reference behaviour; omission here is not permission to redesign. The shape is: any
 number of lists, independent vertical scrolling, one shared horizontal scroll,
 two button panels, everything sized in cells.
 
