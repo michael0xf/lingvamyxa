@@ -14146,6 +14146,33 @@ Dynamically resolved through-values are different: they are copied into the
 callee’s activation and are not published anywhere unless the program uses an 
 explicit path.
 
+Worked foreign-call example (cache vs graph actuals; not additional source
+syntax). Established `for:` spelling. The fixture’s graph cell for `j` starts
+at 0; that is a fixture condition, not a language rule that every
+uninitialized int is 0.
+
+    fn: test () int
+        int: acc
+        acc: 0
+        for: int(i, 0) (i < 10) i++
+            int: j i
+            acc: j
+        end: for
+        c.printf: "%d %d\n" acc for\j
+        return: 0
+    end: test
+
+After the loop, cache `acc` is 9. `end: for` is not a checkpoint. An explicit
+path read is not a publish boundary. The call evaluates declared actuals into
+typed C temporaries first (21.8 steps 3–4): `acc` contributes 9 from the
+cache; `for\j` is a path read of the previously published graph (0 in this
+fixture). The dirty-only checkpoint then publishes 9 into the graph (21.8
+step 5). The call receives the already-selected temporaries, so the printed
+pair is `9 0`. A later path read of `for\j` in a subsequent statement sees
+the published 9. The checkpoint cannot retroactively change actuals already
+selected for this call. A same-activation write `for\j: 42` writes the graph
+cell, not the cache.
+
 One serial execution thread per Message makes this safe without locks or
 memory barriers. A suspended caller’s C locals cannot be raced, and other 
 Messages operate on disjoint arenas.
