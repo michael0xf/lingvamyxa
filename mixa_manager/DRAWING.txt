@@ -146,51 +146,76 @@ headers and dividers do - and those are ClearShell's own borders around
 containers, not around buttons. Section 3.1 stands unchanged.
 
 
-5.4. A SECOND tile family: the highlight border
+5.4. The highlight border is the DOUBLE box frame, and it already exists
 
-Mikhail, 2026-09-10: "make the highlight simply with its own border - it has no
-micro-gap and it is thicker; pick the colour yourself, I would start with plain
-white."
+Mikhail, 2026-09-10, settling this in one line:
 
-That is the neatest possible answer to what a highlight looks like here, because
-it reuses the boundary the button already has. A button's edge is normally a
-GAP - nothing drawn, one pixel of transparency (5.2). Highlighted, that same
-edge is a drawn LINE, thicker than the gap was. Nothing moves, nothing resizes,
-and the two states differ only in what the boundary pixels contain.
+    corners  U+2554 U+2557 U+255A U+255D      double-line box drawing
+    lines    U+2550 U+2551
 
-    ordinary button    outward edge = gap, transparent, cell_h >> 5 floored at 1
-    highlighted        outward edge = solid line, cell_h >> 4 floored at 2
+So the highlight is drawn with ORDINARY box-drawing characters, in the double
+set. "No micro-gap and thicker" was never about a new material: a box character
+runs edge to edge in its cell with no gap, and the double set is two strokes
+where the single set is one. Both properties are the glyphs', not something to
+derive.
 
-The thickness is derived, not chosen, exactly as 5.2 requires: the same shift
-one place further, so it is always at least twice the minimum gap and it scales
-with the cell. Two pixels is the floor for the same reason one is the gap's - a
-line that rounds to a single pixel stops reading as a border and starts reading
-as the gap it replaced.
+It costs nothing at all, which is worth stating precisely because a previous
+revision of this section cost a great deal:
 
-5.4.1. Encoding: one more base, the same four bits
+    mixa_draw_frame already takes a style and already emits exactly these six
+      codepoints - checked in mixa_draw.lm1, the DOUBLE branch of
+      mixa_draw_mask_to_cp
+    junction merging already covers them. Two highlighted things sharing an edge
+      already produce the right character.
+    the drawer places them like any other glyph, so section 3.1 carries the
+      whole feature. There is no new painter and no new codepoint range.
 
-    button tiles       U+E000..U+E00F   low 4 bits = which edges are GAP
-    highlight tiles    U+E010..U+E01F   low 4 bits = which edges carry BORDER
+Colour is the cell's fg, white to begin with. Foreground elements here are
+always fully opaque (UI_MODEL 3).
 
-The bit positions are identical, and deliberately so. An outward-facing edge is
-the one that gets a gap on an ordinary button and a line on a highlighted one,
-so the placement code computes the same four flags either way and only chooses a
-different base. Highlighting a button is then one addition, not a second layout.
+5.4.1. What the previous revision got wrong, and what it cost
 
-Colour comes from the cell's FG, as the gap version takes its colour from BG.
-That keeps the rule of 5.1 - tiles carry no colour of their own, they take the
-cell's - and it gives the border a channel the fill is not already using.
+It read the border as a second procedural TILE family at U+E010..U+E01F, with a
+thickness derived as cell_h >> 4 floored at 2, painted by an extension of
+mixa_tile_paint_cell. All of that is deleted. None of it was needed.
 
-Default is opaque white. Foreground elements are always fully opaque here
-(UI_MODEL 3), so the border does not vary alpha; only backgrounds do.
+The mistake: I was told the highlight has "no micro-gap and is thicker" while
+looking at the tile code that owns the micro-gap, so I read the sentence as a
+variation on tiles. It was a description of the pseudographic border - the other
+material, already implemented, one section above. A picture of a double-ruled
+frame was attached and I recorded my reading of it as "one solid line", flagging
+that it might be two concentric lines. It was two concentric lines: that is what
+a double box frame IS.
 
-5.4.2. What I decided rather than read
+Flagging the alternative reading is what made this cost one sentence to correct
+instead of a shipped tile family. That is the practice working, not a
+consolation - but the flag would not have been needed if I had checked whether
+the drawing code could already do what was described BEFORE designing something
+that could.
 
-The picture Mikhail attached is a white frame on black, offered for the COLOUR -
-"plain white as in the picture". I have read the geometry from his words, not
-from the image: ONE solid line of the derived thickness.
+5.4.2. The frame goes OVER the element, and takes only the foreground
 
-The image can also be read as two thin concentric lines with a dark space
-between them. If that is what is wanted, it is a change to the painter and to
-nothing else - the codepoints, the flags, the placement and the colour rule are
-all unaffected. Recorded here so the correction costs a sentence.
+Answered by Mikhail before it could be asked: the centre of the button stays the
+coloured fill as it is, and the border runs over the top in black and white.
+That is all.
+
+So there is ONE frame and it MOVES - "runs" - from element to element as focus
+does. It is not a decoration each button owns and it is not a second widget.
+
+    the frame overlays the OUTERMOST CELLS of the highlighted element
+    the element's own background stays: colour, alpha, everything
+    only the FOREGROUND of those cells changes - the box glyph, monochrome
+
+The last line is the mechanical requirement, and it is easy to get wrong.
+mixa_draw_frame takes bg and alpha like every other drawing call, and passing a
+background here would repaint the button's body along its edge and lose the
+colour that is supposed to stay. Drawing the highlight needs a way to say KEEP
+THE CELL'S BACKGROUND and write the glyph only. That is the one piece of work
+this feature actually has.
+
+It also disposes of the cost objection the previous revision raised against
+overlaying - that a frame eats two rows and two columns of content. It eats
+none: nothing is displaced, the glyph replaces whatever character occupied those
+edge cells, and on a button those are the border cells of the nine-slice rather
+than label. A square button is the case to look at, and looking is the method -
+first version, then judge.

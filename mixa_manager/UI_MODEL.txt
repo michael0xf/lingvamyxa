@@ -24,8 +24,9 @@ are drawn as cell attributes:
     HIGHLIGHT   the current element in a list, a button, a panel. UPPER layer.
                 Keyboard interfaces always have a current element; see
                 PORT_OF_CLEARSHELL 2.8, where this had to be invented because a
-                touch interface has no such notion. It is drawn as a BORDER, not
-                as a tint - DRAWING.txt 5.4.
+                touch interface has no such notion. It is drawn as a double-line box
+                FRAME over the element, monochrome, leaving the element's own
+                background intact - DRAWING.txt 5.4.
 
     POINTER     the mouse. UPPER layer, one cell, four diagonal arrows chosen
                 by the last direction of travel. A different thing from the

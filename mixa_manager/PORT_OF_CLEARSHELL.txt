@@ -159,13 +159,17 @@ highlight is its OWN BORDER - no micro-gap, thicker than one, white to begin
 with. A button's edge is normally a gap; highlighted, that same edge is a drawn
 line. See DRAWING.txt 5.4.
 
-An earlier revision of this paragraph said highlighting needs "no new drawing
-capability", being only a change of attributes over fg, bg and
-MIXA_STYLE_REVERSE. Half right, and the half that is wrong matters. The DRAWER
-still does not learn about focus - it places a codepoint, as it always did, so
-the single-API property does survive. But the COMPOSITOR does grow something: a
-second tile family with its own geometry, solid where the first is transparent
-and twice as thick. Claiming otherwise would have made the work look free.
+It needs NO new drawing capability, which this paragraph said originally, then
+retracted, and now says again. The retraction was mine and it was wrong: I had
+designed a procedural tile family for the border and duly recorded that the
+compositor would have to grow. The owner then named the six double-line box
+characters, all of which mixa_draw already emits and already merges at
+junctions, and the capability turned out to have been there the whole time.
+
+One thing genuinely is new, and it is small: the highlight writes the FOREGROUND
+of the cells it covers and must leave their background alone, so the button
+keeps its colour under the frame. Every other drawing call in the API sets both.
+DRAWING.txt 5.4.2.
 
 Colours for it come from ClearShell's palette, which already distinguishes a
 translucent highlight at alpha 96 from a panel body at 240.
