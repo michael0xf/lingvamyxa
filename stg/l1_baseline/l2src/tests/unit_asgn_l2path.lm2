@@ -1,0 +1,15 @@
+fn: inc () int
+    x: x + 1
+    return: 0
+end: inc
+fn: fwd (char: x) int
+    return: inc()
+end: fwd
+fn: supply () int
+    char: s
+    s: 10
+    return: fwd(s)
+end: supply
+fn: main () int
+    return: 0
+end: main

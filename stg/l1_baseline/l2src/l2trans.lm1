@@ -4532,9 +4532,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             fi: l2_m_alias[l2_own_off(mi, oi)]
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && l2_own_live[oi] = 0 && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_child(node, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, (cast: (unsigned) oi), ind, oi, ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && c.fprintf(l2_out, "%sif: l2_q%d_from = 0\n%s    l2_q%d_from: lmx_branch_child(node, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, ind, oi, (cast: (unsigned) oi), ind, oi, ind) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && l2_own_live[oi] = 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0
             l2_own_live[oi]: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi < 0 && c.fprintf(l2_out, "%sl2_q%d: %s\n", ind, oi, l2_tok) < 0
             return: 1
@@ -4542,7 +4542,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi < 0 && c.fprintf(l2_out, "%sl2_q%d_dirty: 1\n", ind, oi) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && l2_own_live[oi] != 0 && c.fprintf(l2_out, "%sl2_q%d_dirty: 1\n", ind, oi) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && c.fprintf(l2_out, "%sl2_q%d_dirty: 1\n", ind, oi) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0
             field: l2_next_active(field\next)

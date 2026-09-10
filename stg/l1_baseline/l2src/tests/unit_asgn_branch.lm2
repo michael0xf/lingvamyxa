@@ -1,0 +1,21 @@
+fn: after_if (char: x; int: flag) int
+    if: flag != 0
+        x: 65
+    x: 66
+    return: 0
+end: after_if
+fn: only_if (char: x; int: flag) int
+    if: flag != 0
+        x: 65
+    return: 0
+end: only_if
+fn: after_while (char: x; int: n) int
+    while: n != 0
+        x: 65
+        n: 0
+    x: 66
+    return: 0
+end: after_while
+fn: main () int
+    return: 0
+end: main

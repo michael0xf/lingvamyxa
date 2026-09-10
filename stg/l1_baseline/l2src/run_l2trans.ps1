@@ -1135,6 +1135,58 @@ end: external
 "@
 if ($dAsz -ne "10`n9`n") { throw "size_t asgn-bind graphs got $dAsz" }
 
+Invoke-Leaf "l2src\tests\unit_asgn_branch.lm2" "unit_asgn_branch" 0 "after_if"
+$br = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_asgn_branch.lm1"))).Replace("`r`n", "`n")
+$afterIf = [regex]::Match($br, 'fn: l2_m0[\s\S]*?end: l2_m0').Value
+if ($afterIf -notmatch 'if: l2_q0_from = 0') { throw "branched bind must acquire backing at runtime, not only at first linear assignment" }
+$dBr = Invoke-SpliceDrive "unit_asgn_branch" @"
+        @: Lmx f 0
+        f: lmx_branch_child(unit, 0U)
+        f\data: lmx_char_cell(0)
+        l2_m0(unit, 0, 0)
+        c.printf("%d\n", lmx_char_value(f\data))
+        f\data: lmx_char_cell(0)
+        l2_m0(unit, 0, 1)
+        c.printf("%d\n", lmx_char_value(f\data))
+        f\data: lmx_char_cell(0)
+        l2_m1(unit, 0, 0)
+        c.printf("%d\n", lmx_char_value(f\data))
+        f\data: lmx_char_cell(0)
+        l2_m1(unit, 0, 1)
+        c.printf("%d\n", lmx_char_value(f\data))
+        f\data: lmx_char_cell(0)
+        l2_m2(unit, 0, 0)
+        c.printf("%d\n", lmx_char_value(f\data))
+        f\data: lmx_char_cell(0)
+        l2_m2(unit, 0, 1)
+        c.printf("%d\n", lmx_char_value(f\data))
+        return: 0
+    end: main
+end: external
+"@
+# flag0 after-if publishes 66; flag1 publishes 66 (not leftover 65); skipped only_if stays 0;
+# taken only_if publishes 65; zero-iter while then assign publishes 66; taken while then assign 66.
+if ($dBr -ne "66`n66`n0`n65`n66`n66`n") { throw "asgn-branch skipped/taken bind got $dBr" }
+
+Invoke-Leaf "l2src\tests\unit_asgn_l2path.lm2" "unit_asgn_l2path" 0 "inc"
+$lp = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_asgn_l2path.lm1"))).Replace("`r`n", "`n")
+if ($lp -notmatch 'l2_m0\(node, l2_p1_0\)') { throw "fwd must pass its x into generated inc, not an L1 literal" }
+if ($lp -notmatch 'l2_m1\(node, l2_q0\)') { throw "supply must pass own s into generated fwd" }
+$dLp = Invoke-SpliceDrive "unit_asgn_l2path" @"
+        @: Lmx fs 0
+        @: Lmx fx 0
+        fs: lmx_branch_child(unit, 0U)
+        fx: lmx_branch_child(unit, 1U)
+        l2_m2(unit)
+        c.printf("%d\n", lmx_char_value(fs\data))
+        c.printf("%d\n", lmx_char_value(fx\data))
+        return: 0
+    end: main
+end: external
+"@
+# different spellings: supply s stays 10; inc x publishes 11 on a distinct child
+if ($dLp -ne "10`n11`n") { throw "l2path distinct backing got $dLp" }
+
 # C99 &&/|| yield int 0/1. Oracle is C, not this emitter.
 Invoke-Leaf "l2src\tests\unit_bool_and.lm2" "unit_bool_and" 1 "f"
 $ba = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_bool_and.lm1")))
