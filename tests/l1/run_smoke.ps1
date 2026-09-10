@@ -444,6 +444,17 @@ if ($gen -eq "gen0") {
     Assert-CLacks "$obj\cast_ptr_uchar_ok.c" "unsigned char *"
     Invoke-CcRun "$obj\cast_ptr_uchar_ok.c" "$bin\cast_ptr_uchar_ok.exe" 0 $null
     Invoke-PreserveFail "tests\l1\invalid_param_qualifier_extra.lm1" "$obj\invalid_param_qualifier_extra.c" "$log\invalid_param_qualifier_extra.err" "qualifier parameter has extra fields"
+    Invoke-Translate "tests\l1\const_ptr_ok.lm1" "$obj\const_ptr_ok.c"
+    Assert-CHas "$obj\const_ptr_ok.c" "const char * ret_c(void)"
+    Assert-CHas "$obj\const_ptr_ok.c" "int take_p(int * p)"
+    Assert-CHas "$obj\const_ptr_ok.c" "int take_pp(char ** s)"
+    Assert-CHas "$obj\const_ptr_ok.c" "int take_named(const char * text)"
+    Assert-CLacks "$obj\const_ptr_ok.c" "const const"
+    Assert-CLacks "$obj\const_ptr_ok.c" "const **"
+    Invoke-CcRun "$obj\const_ptr_ok.c" "$bin\const_ptr_ok.exe" 0 $null
+    Invoke-PreserveFail "tests\l1\invalid_nested_const_ptr.lm1" "$obj\invalid_nested_const_ptr.c" "$log\invalid_nested_const_ptr.err" "duplicate const qualifier"
+    Invoke-PreserveFail "tests\l1\invalid_at_at_const_drop.lm1" "$obj\invalid_at_at_const_drop.c" "$log\invalid_at_at_const_drop.err" "pointer type has extra fields"
+    Invoke-PreserveFail "tests\l1\invalid_at_const_foreign.lm1" "$obj\invalid_at_const_foreign.c" "$log\invalid_at_const_foreign.err" "pointer parameter has extra fields"
     Invoke-Translate "tests\l1\param_multiword_ok.lm1" "$obj\param_multiword_ok.c"
     Assert-CHas "$obj\param_multiword_ok.c" "int mix(unsigned char * p, unsigned long n, const char * s)"
     Assert-CLacks "$obj\param_multiword_ok.c" "unsigned *char"

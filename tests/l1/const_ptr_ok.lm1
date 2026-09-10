@@ -1,0 +1,26 @@
+include: "<stddef.h>"
+
+fn: ret_c () const: @(char)
+    return: 0
+end: ret_c
+fn: take_p (@: int p) int
+    if: p = 0
+        return: 0
+    return: p[0]
+end: take_p
+fn: take_pp (@@: char s) int
+    if: s = 0
+        return: 0
+    return: 1
+end: take_pp
+fn: take_named (const: @(char text)) int
+    if: text = 0
+        return: 0
+    return: 1
+end: take_named
+
+external:
+    fn: main () int
+        return: 0
+    end: main
+end: external
