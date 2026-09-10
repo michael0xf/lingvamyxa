@@ -154,6 +154,25 @@ typedef struct MixaEvent {
 
 /* Cell metrics for every layer, reported by open.
  *
+ * THESE ARE CELLS, NOT FONT SIZES. The two are different things and the
+ * distinction is load-bearing - see BACKEND_SEAM.txt 10.8. The font is the
+ * system's, taken at a size the system offers and never scaled. The cell is
+ * OURS: at least large enough for that font, and rounded UP to an EVEN number
+ * of pixels in both dimensions.
+ *
+ * Even because the mouse lattice is half a cell. Half an odd number of pixels
+ * is not a number of pixels, so an odd cell would put every second pointer
+ * position on a fraction. With an even cell, cw/2 and ch/2 are whole pixels and
+ * all four pointer positions per character are exact.
+ *
+ * The odd pixel from rounding goes at the RIGHT and BOTTOM, so the cell origin
+ * stays coincident with the glyph origin and the bearings from
+ * mixa_backend_glyph remain valid unchanged.
+ *
+ * The rounding belongs here, in the backend, for the same reason the
+ * pixel-to-half-cell conversion does: this is the one place that knows the
+ * font, so it is the one place that can round without a second party guessing.
+ *
  * Both layers are CELL GRIDS - see BACKEND_SEAM.txt section 10. The upper layer
  * is not a raster: it is a second grid with a larger monospace font, drawn
  * semi-transparently over the text layer by the same pseudographics drawer.

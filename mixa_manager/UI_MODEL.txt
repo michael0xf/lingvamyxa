@@ -572,10 +572,30 @@ Which also means the pointer is the only element in the interface whose size is
 not a cell. That is consistent rather than an exception: section 6 established
 it belongs to no surface, and something belonging to no surface has no cell.
 
-7.5. One font today, two tomorrow
+7.5. The cell is not the font, and it is even
 
-Point 2 says one font on both layers for now, and point 1 says keep the
-ability. Both are already true of the seam: MixaCellMetrics carries separate
+Added by Mikhail once the half step existed: decouple the cell size from the
+font size for all the screens; for the first two, fit the cell to the font. If
+the system hands us an odd width or height, make the cell one pixel larger so it
+is even, and leave the font exactly as the system gave it.
+
+That is what makes 7.2 true rather than approximately true. Half of an odd
+number of pixels is not a number of pixels, so an odd cell would put every
+second pointer position on a fraction. With an even cell all four positions per
+character are exact. BACKEND_SEAM 10.8.
+
+The font stays untouchable and the cell becomes ours - which is the doctrine
+finally saying what the cell IS, rather than assuming it equals the font.
+
+7.6. One font, and where the second one would really come from
+
+Mikhail expects one font to stay. If different fonts are ever wanted they
+arrive as further VIRTUAL SCREENS laid over the top, not as a second font on an
+existing layer - which is the same growth direction the seam already anticipates
+for images.
+
+So the per-layer metrics are a mechanism held open rather than a case about to
+be exercised. Both points are already true of the seam: MixaCellMetrics carries separate
 metrics per layer, mixa_backend_glyph takes a layer, and "a backend with only
 one font reports the same metrics twice" is written into the header as a
 legitimate answer rather than a failure.

@@ -701,3 +701,69 @@ depend on a font choice that has nothing to do with pointing.
 This IS a breaking change to the seam - every consumer of MixaEvent row/col
 doubles - and it is worth taking now rather than later, while the consumers are
 few and are all ours.
+
+10.8. THE CELL IS NOT THE FONT. It is ours, and it is always EVEN.
+
+Mikhail, 2026-09-10: "you can decouple the cell size from the font size
+altogether, for all the screens - for the first two just fit the cell to the
+font. That also solves the problem: if the system hands us an odd height or
+width, we make the cell height and width even, one pixel larger, and leave the
+font as the system gave it."
+
+This is the missing half of the doctrine, and it arrived as the answer to a
+question I had not yet noticed I was going to have.
+
+The doctrine has always said: take a REAL system font size, never scale it. What
+it did not say is what the CELL is. Until now the two were treated as the same
+number, and they are not. The FONT is the system's and is untouchable. The CELL
+is OURS.
+
+    the font    taken from the system at a size the system offers, drawn at
+                that size, never scaled. Unchanged.
+    the cell    chosen by us. At least large enough for the font, and rounded UP
+                to an EVEN number of pixels in both dimensions.
+
+10.8.1. Why even, and why this is not a nicety
+
+The mouse lattice is a HALF cell (10.7). Half of an odd number of pixels is not
+a number of pixels. An odd cell would put every second pointer position on a
+fractional pixel, and "compute fractionally, then snap to integers" would have
+to snap - which means two adjacent half-steps landing on the same pixel, or
+drifting apart by one across the screen depending on how the rounding fell.
+
+So the half step is exactly what makes evenness necessary, and Mikhail spotted
+it before it could become a bug. With an even cell, cw/2 and ch/2 are whole
+pixels and every one of the four positions per character is exact.
+
+10.8.2. Where the extra pixel goes
+
+Rounding 11 up to 12 leaves one pixel that cannot be split evenly. It goes at
+the RIGHT and at the BOTTOM - trailing, not leading.
+
+That keeps the cell origin coincident with the glyph origin, so bearings
+reported by mixa_backend_glyph stay valid exactly as they are and no placement
+arithmetic changes. Visually it is one pixel of extra tracking and leading,
+which at these sizes is not visible and is in any case the direction type
+already errs in.
+
+10.8.3. Seam consequence
+
+The metrics the backend writes back are the CELL, not the font. They are always
+even in both dimensions and always at least the font's own extent.
+
+That belongs in the backend rather than the application for the same reason the
+pixel-to-half-cell conversion does: the backend is the one place that knows the
+font, so it is the one place that can round without a second party guessing. A
+caller that states a wish and reads back what it got now gets an answer it can
+divide by two.
+
+10.8.4. Where this is going
+
+Point 1 of the same decision: one font stays, and different fonts, if they are
+ever wanted, arrive as further VIRTUAL SCREENS laid over the top rather than as
+a second font on an existing layer. That matches what the header already
+anticipates for images, and it means the per-layer metrics in MixaCellMetrics
+are a mechanism kept open rather than a case we are about to exercise.
+
+Which makes 10.5's half-cell offset carry the whole distinction between the text
+grid and the UI grid, since with one font they would otherwise coincide exactly.
