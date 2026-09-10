@@ -69,6 +69,11 @@ handoffs through the Message boundary (PROCESS_SEAM6). Review the current
 prototype's ingress/host gaps before enabling parallel work; do not bridge them
 with private synchronization in C. Pure single-owner operations can proceed
 independently while that boundary is integrated.
+Owner priority2026-09-10: complete parallel execution of different Message
+handlers, not just foreign ingress into a serial runtime. Grok owns that core
+step; grok_bot integrates the verified version and proves UI responsiveness
+under active jobs. Ingress-only harnesses are intermediate tests, not the final
+process-worker architecture. Preserve one serial execution lane per Message.
 
 Full file-manager features come later under the ClearShell contract, including
 lazy selection-aware copy/move and original path navigation. They are not an

@@ -114,6 +114,20 @@ fragments. Each live Message owns its arena and executes its turns serially;
 different Messages may run concurrently. C/OS adapters are isolated boundaries,
 not owners of a parallel shared-mutable application model.
 
+Required runnable milestone, explicitly confirmed2026-09-10: actual parallel
+execution of DIFFERENT Message handlers, not merely concurrent producers feeding
+one serial dispatcher. A long-running job must not occupy the UI execution lane
+or prevent unrelated Messages from progressing. Each individual Message remains
+serial and owns one arena; UI-affine work remains on the UI owner thread.
+Host ingress V0 is a prerequisite, not completion of this requirement.
+
+Acceptance must show two independently executing job Messages and responsive
+UI event handling while work is still active, ordered turns without simultaneous
+entry of one Message, copied/owned cross-Message data, and parent/child close
+and late-event handling. A long CPU task or blocked job must not monopolize a
+global dispatcher lock. Cancellation takes effect at the specified safe turn
+boundaries; parallelism is not permission to forcibly free an active arena.
+
 No application mutexes, atomics, shared cancellation flags or custom synchronized
 queues hidden in C headers/adapters. The Message runtime/host boundary owns
 cross-thread delivery; app adapters use that boundary instead of recreating it.
