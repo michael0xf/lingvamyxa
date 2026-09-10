@@ -1553,8 +1553,14 @@ SPEC 3.4 dash delimiter line / P0 fence length 80.
     must match parser_text_predicates.lm2.
 
 ABI / remaining brace-mark scanner
-    AVOIDED / ACTIVE next: string/fence/quote-aware brace marks are NOT
-    in this slice. Depth + `#`-to-EOL only; unclosed returns 0U.
-    Do not call this old-P0 brace parity. Next unit replaces this helper.
-    L2 cannot pass `@ local` as an actual (incompatible entry signature);
-    `@: int` address formals are rejected (unit_sz_intp).
+    DONE (072100): helper is frozen-parity `lm_p0_scan_brace_mark_unchecked`
+    with `@: int closed`. Unclosed returns i and closed=0; matching `}`
+    returns i and closed=1. dash_fence_status observes the callee write
+    via explicit `node\closed` (21.7: @: own passes the graph cell; the
+    caller cache is not reloaded). Hang guards kept: if skip_python /
+    scan_c_char does not advance, i += 1 (042800). Differential vs
+    parser.lm1 is brace_l2_drive plus the existing dash_l2_drive.
+    `node\field` expression path loads are admitted (unit_node_path).
+    `@: int` formals already lower (unit_sz_intp). `@: local` actuals
+    already lower (unit_addr_take / unit_addr_arg).
+    Next: Document / indent stack. Live gen2 l1trans/printTree stay L1.

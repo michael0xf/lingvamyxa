@@ -3320,15 +3320,27 @@ return: 1
 fn: l2_path_own (int: mi; const: @(LmP0Text left); const: @(LmP0Text right)) int
     int: i 0
     int: hit
+    int: for_path
+    int: node_path
     hit: -1
+    for_path: 0
+    node_path: 0
     if: mi < 0 || left = 0 || right = 0
         return: -1
-    if: l2_text_eq(left, "for") = 0
+    if: l2_text_eq(left, "for") != 0
+        for_path: 1
+    if: l2_text_eq(left, "node") != 0
+        node_path: 1
+    if: for_path = 0 && node_path = 0
         return: -1
     while: i < l2_own_n
-        if: l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], right) && l2_own_host[i] != 0 && l2_frame_head(l2_own_host[i], "for") && hit >= 0
+        if: for_path != 0 && l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], right) && l2_own_host[i] != 0 && l2_frame_head(l2_own_host[i], "for") && hit >= 0
             return: -1
-        if: l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], right) && l2_own_host[i] != 0 && l2_frame_head(l2_own_host[i], "for")
+        if: for_path != 0 && l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], right) && l2_own_host[i] != 0 && l2_frame_head(l2_own_host[i], "for")
+            hit: i
+        if: node_path != 0 && l2_own_mi[i] = mi && l2_own_host[i] = 0 && l2_text_same(l2_own_name[i], right) && hit >= 0
+            return: -1
+        if: node_path != 0 && l2_own_mi[i] = mi && l2_own_host[i] = 0 && l2_text_same(l2_own_name[i], right)
             hit: i
         i: i + 1
 return: hit
@@ -3926,7 +3938,7 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
             p2: l2_next_active(p1\next)
         if: p2 != 0 && p2\value != 0 && p2\value\kind = c.LM_P0_NODE_ATOM
             po: l2_path_own(mi, f\value\as\atom, p2\value\as\atom)
-        if: p2 != 0 && p2\value != 0 && p2\value\kind = c.LM_P0_NODE_ATOM && po < 0 && l2_text_eq(f\value\as\atom, "for")
+        if: p2 != 0 && p2\value != 0 && p2\value\kind = c.LM_P0_NODE_ATOM && po < 0 && (l2_text_eq(f\value\as\atom, "for") || l2_text_eq(f\value\as\atom, "node"))
             return: l2_error(path, p2\value, "unresolved name")
         if: po >= 0
             i: i + 3

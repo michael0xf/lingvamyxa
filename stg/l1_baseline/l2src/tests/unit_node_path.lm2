@@ -1,0 +1,16 @@
+# 21.7: @: own passes the graph cell; after the call the cache is not reloaded.
+# node\n is an explicit path read of the published graph.
+fn: set_one (@: int p) int
+    p[0]: 1
+    return: 0
+end: set_one
+fn: test () int
+    int: n
+    n: 0
+    set_one(@: n)
+    c.printf: "%d %d\n" n node\n
+    return: 0
+end: test
+fn: main () int
+    return: test()
+end: main

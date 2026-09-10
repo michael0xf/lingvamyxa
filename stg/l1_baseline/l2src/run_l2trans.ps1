@@ -508,6 +508,14 @@ end: external
 "@
 if ($addrArgGot -ne "1`n") { throw "unit_addr_arg go expected 1 got=$addrArgGot" }
 Invoke-Negative "l2src\tests\unit_addr_depth.lm2" "unit_addr_depth" "unsupported address depth"
+Invoke-LeafOut "l2src\tests\unit_node_path.lm2" "unit_node_path" 0 "test" "0 1`n"
+$nodePath = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_node_path.lm1")))
+if ($nodePath.IndexOf("&l2_q") -ge 0) { throw "unit_node_path must not take address of own cache" }
+if ($nodePath -notmatch 'lmx_int_value') { throw "unit_node_path must path-load node\\n from the graph" }
+$npCall = $nodePath.LastIndexOf("l2_m0(")
+if ($npCall -lt 0) { throw "unit_node_path missing set_one call" }
+$npAfter = $nodePath.Substring($npCall)
+if ($npAfter -match 'l2_q\d+\s*:\s*lmx_int_value') { throw "unit_node_path must not reload own cache after call" }
 Invoke-Leaf "l2src\tests\unit_dash_emit.lm2" "unit_dash_emit" 0 "go"
 $dashGot = Invoke-SpliceDrive "unit_dash_emit" @"
         c.printf("%d\n", l2_m0(unit, 3))
@@ -3806,6 +3814,130 @@ end: external
     if ($a -ne $want) { throw "dash_fence REF unexpected`nREF:`n$a`nWANT:`n$want" }
     if ($b -ne $want) { throw "dash_fence L2 unexpected`nL2:`n$b`nWANT:`n$want" }
     if ($a -ne $b) { throw "dash_fence mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+
+    if ($text -notmatch '@: int l2_p2_') { throw "scan_brace must emit @: int closed formal" }
+    if ($text -notmatch 'l2_p2_\d+\[0\]:') { throw "scan_brace must store through closed[0]" }
+    if ($text -notmatch 'lmx_int_value') { throw "dash_fence must path-load node\\closed after scan" }
+
+    $bcases = @"
+        int: closed
+        size_t: e
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{}", 2U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{x}", 3U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{", 1U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("", 0U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("x", 1U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("}", 1U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{a {b}}", 7U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{x", 2U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{{}", 3U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("{}x", 3U, 0U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("xx{y}", 5U, 2U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("""--- {"{"}""", 9U, 4U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("""--- {"}"}""", 9U, 4U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("--- {'}'}", 9U, 4U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("""--- {#}`n}""", 8U, 4U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+        closed: 0
+        e: lm_p0_scan_brace_mark_unchecked("""--- {
+===
+}
+===
+}""", 16U, 4U, @ closed)
+        c.printf("%d %d\n", (cast: int (e)), closed)
+"@
+
+    $brefLm1 = Join-Path $out "brace_ref.lm1"
+    $brefC = Join-Path $out "brace_ref.c"
+    $brefExe = Join-Path $out "brace_ref.exe"
+    $brefOut = Join-Path $out "brace_ref.stdout"
+    $brefSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$bcases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $brefLm1), $brefSrc.Replace("`r`n","`n"))
+    & $l1trans $brefLm1 $brefC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed brace_ref" }
+    Invoke-Gcc $brefC $brefExe (Join-Path $log "brace_ref.gcc.log")
+    cmd /c "`"$brefExe`" > `"$brefOut`" 2> `"$(Join-Path $out 'brace_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "brace_ref exe failed" }
+
+    $l2bcases = $bcases.Replace("lm_p0_scan_brace_mark_unchecked(", "l2_m2(unit, ")
+    $bpos = $text.LastIndexOf($tail)
+    if ($bpos -lt 0) { throw "brace_mark L1 missing generated main return" }
+    $bdrive = @"
+$l2bcases
+        return: 0
+    end: main
+end: external
+"@
+    $bdrvLm1 = Join-Path $out "brace_l2_drive.lm1"
+    $bdrvC = Join-Path $out "brace_l2_drive.c"
+    $bdrvExe = Join-Path $out "brace_l2_drive.exe"
+    $bdrvOut = Join-Path $out "brace_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $bdrvLm1), ($text.Substring(0, $bpos) + $bdrive.Replace("`r`n","`n")))
+    & $l1trans $bdrvLm1 $bdrvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed brace_l2_drive" }
+    Invoke-Gcc $bdrvC $bdrvExe (Join-Path $log "brace_l2_drive.gcc.log")
+    $bdrvErr = Join-Path $out "brace_l2_drive.err"
+    $bpsi = New-Object System.Diagnostics.ProcessStartInfo
+    $bpsi.FileName = (Join-Path (Get-Location) $bdrvExe)
+    $bpsi.WorkingDirectory = (Get-Location).Path
+    $bpsi.UseShellExecute = $false
+    $bpsi.RedirectStandardOutput = $true
+    $bpsi.RedirectStandardError = $true
+    $bdrvProc = New-Object System.Diagnostics.Process
+    $bdrvProc.StartInfo = $bpsi
+    [void]$bdrvProc.Start()
+    $boutTask = $bdrvProc.StandardOutput.ReadToEndAsync()
+    $berrTask = $bdrvProc.StandardError.ReadToEndAsync()
+    if (-not $bdrvProc.WaitForExit(20000)) {
+        try { $bdrvProc.Kill() } catch { }
+        [void]$bdrvProc.WaitForExit(5000)
+        throw "brace_l2_drive timed out after 20s pid=$($bdrvProc.Id)"
+    }
+    $bdrvProc.WaitForExit()
+    if ($bdrvProc.ExitCode -ne 0) { throw "brace_l2_drive exe failed exit=$($bdrvProc.ExitCode)" }
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $bdrvOut), $boutTask.Result.Replace("`r`n", "`n"))
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $bdrvErr), $berrTask.Result)
+    $ba = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $brefOut)).Replace("`r`n","`n")
+    $bb = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $bdrvOut)).Replace("`r`n","`n")
+    if ($ba -ne $bb) { throw "brace_mark mismatch vs parser.lm1`nREF:`n$ba`nL2:`n$bb" }
 }
 
 Invoke-DashFence
