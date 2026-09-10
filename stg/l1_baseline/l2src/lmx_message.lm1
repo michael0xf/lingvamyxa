@@ -672,12 +672,14 @@ fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned:
     int: n 0
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
         return: -1
+    c.lmx_msg_exec_lock(rt)
     while: i < rt\n
         ch: rt\tab[i]
         if: ch\parent != 0U && (ch\state = c.LMX_MSG_STATE_RUNNING || (ch\state = c.LMX_MSG_STATE_INACTIVE && ch\committed != 0))
             if: who = 0U || ch\addr = who
                 if: lmx_msg_parent_gone(rt, ch, now, threshold) != 0
                     ch\closing: 1
+                    c.lmx_msg_exec_ready(rt, ch\addr)
                     if: out != 0 && n < cap
                         out[n]: ch\addr
                     ---
@@ -686,6 +688,7 @@ fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned:
             ---
         ---
         i: i + 1
+    c.lmx_msg_exec_unlock(rt)
 return: n
 
 fn: lmx_msg_set_now (@: LmxMsgRuntime rt; unsigned: now) int
@@ -711,8 +714,8 @@ fn: lmx_msg_drive (@: LmxMsgRuntime rt; unsigned: now; unsigned: threshold) int
     @: LmxMsg m
     @: LmxMsgAddr none
     int: i
-    int: more 1
     int: st
+    unsigned: a
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
     st: lmx_msg_set_now(rt, now)
@@ -723,37 +726,32 @@ fn: lmx_msg_drive (@: LmxMsgRuntime rt; unsigned: now; unsigned: threshold) int
     if: st < 0
         return: c.LMX_MSG_INVALID
     ---
-    while: more != 0
-        more: 0
-        i: 0
-        while: i < rt\n
-            m: rt\tab[i]
-            if: lmx_msg_drive_should_close(m) != 0
-                if: c.lmx_msg_exec_workers(rt) != 0
-                    c.lmx_msg_exec_ready(rt, m\addr)
-                    more: 1
-                ---
-                if: c.lmx_msg_exec_workers(rt) = 0
-                    st: lmx_msg_end_turn(rt, m\addr, 1)
-                    if: st != c.LMX_MSG_OK
-                        return: st
-                    ---
-                    more: 1
+    c.lmx_msg_exec_lock(rt)
+    i: 0
+    while: i < rt\n
+        m: rt\tab[i]
+        a: 0U
+        if: lmx_msg_drive_should_close(m) != 0
+            a: m\addr
+        ---
+        i: i + 1
+        if: a != 0U
+            c.lmx_msg_exec_unlock(rt)
+            if: c.lmx_msg_exec_is_bound(rt, a) != 0
+                c.lmx_msg_exec_ready(rt, a)
+            ---
+            if: c.lmx_msg_exec_is_bound(rt, a) = 0
+                st: c.lmx_msg_exec_unbound_close(rt, a)
+                if: st != c.LMX_MSG_OK
+                    return: st
                 ---
             ---
-            i: i + 1
-        st: lmx_msg_pump(rt)
-        if: st != c.LMX_MSG_OK
-            return: st
+            c.lmx_msg_exec_lock(rt)
         ---
-        i: 0
-        while: i < rt\n
-            m: rt\tab[i]
-            if: lmx_msg_drive_should_close(m) != 0
-                more: 1
-            ---
-            i: i + 1
-        ---
+    c.lmx_msg_exec_unlock(rt)
+    st: lmx_msg_pump(rt)
+    if: st != c.LMX_MSG_OK
+        return: st
 return: c.LMX_MSG_OK
 
 fn: lmx_msg_state (@: LmxMsgRuntime rt; LmxMsgAddr: who) int

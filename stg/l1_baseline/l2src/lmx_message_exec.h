@@ -17,5 +17,7 @@ int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers);
 int lmx_msg_exec_ui_step(LmxMsgRuntime *rt);
 int lmx_msg_exec_stop(LmxMsgRuntime *rt);
 void lmx_msg_exec_ready(LmxMsgRuntime *rt, LmxMsgAddr addr);
+int lmx_msg_exec_is_bound(LmxMsgRuntime *rt, LmxMsgAddr addr);
+int lmx_msg_exec_unbound_close(LmxMsgRuntime *rt, LmxMsgAddr addr);
 
 #endif

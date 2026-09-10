@@ -15,6 +15,9 @@ typedef struct TurnCtx {
     DWORD t2;
     unsigned recvd;
     unsigned ui_recvd;
+    unsigned fifo[2];
+    volatile LONG mass;
+    volatile LONG turns;
     LmxMsgRuntime *rt;
 } TurnCtx;
 
@@ -65,13 +68,33 @@ static int turn_fast(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     LmxMsgEnv got;
     memset(&got, 0, sizeof(got));
     c->t2 = GetTickCount();
-    if (lmx_msg_recv(rt, who, &got) != LMX_MSG_OK || got.n != 1 || got.bytes == 0 || got.bytes[0] != 1) {
+    if (lmx_msg_recv(rt, who, &got) != LMX_MSG_OK || got.n != 1 || got.bytes == 0) {
         lmx_msg_env_release(&got);
         return 1;
+    }
+    if (c->recvd < 2) {
+        c->fifo[c->recvd] = got.bytes[0];
     }
     c->recvd += 1;
     lmx_msg_env_release(&got);
     InterlockedIncrement(&c->done);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
+static int turn_mass(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    TurnCtx *c = (TurnCtx *)ctx;
+    LmxMsgEnv got;
+    memset(&got, 0, sizeof(got));
+    if (lmx_msg_recv(rt, who, &got) != LMX_MSG_OK || got.n != 1 || got.bytes == 0) {
+        lmx_msg_env_release(&got);
+        return 1;
+    }
+    InterlockedIncrement(&c->mass);
+    lmx_msg_env_release(&got);
+    InterlockedIncrement(&c->turns);
+    if (c->turns > 1) {
+        return 1;
+    }
     return lmx_msg_end_turn(rt, who, 1);
 }
 
@@ -128,23 +151,36 @@ int main(void) {
     env.bytes = init;
     env.id = 0;
     lmx_msg_send(rt, parent, w1, &env);
-    lmx_msg_send(rt, parent, w2, &env);
-    env.bytes = init;
-    lmx_msg_send(rt, parent, w2, &env);
+    {
+        uchar a = 10, b = 20;
+        env.bytes = &a;
+        lmx_msg_send(rt, parent, w2, &env);
+        env.bytes = &b;
+        lmx_msg_send(rt, parent, w2, &env);
+        env.bytes = init;
+    }
     lmx_msg_end_turn(rt, parent, 1);
     lmx_msg_pump(rt);
     {
         int k;
         LmxMsgAddr extra = 0;
+        uchar payload[70];
         for (k = 0; k < 70; k++) {
             extra = 0;
+            payload[k] = (uchar)(k + 1);
             if (lmx_msg_create(rt, parent, (unsigned)(100 + k), init, 1, &extra) != LMX_MSG_OK) {
                 return 1;
             }
-            if (lmx_msg_exec_bind(rt, extra, turn_fast, &fast, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            if (lmx_msg_exec_bind(rt, extra, turn_mass, &fast, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                return 1;
+            }
+            env.bytes = &payload[k];
+            if (lmx_msg_send(rt, parent, extra, &env) != LMX_MSG_STAGED) {
                 return 1;
             }
         }
+        lmx_msg_end_turn(rt, parent, 1);
+        lmx_msg_pump(rt);
     }
     if (lmx_msg_exec_start(rt, 2) != LMX_MSG_OK) {
         return 1;
@@ -180,12 +216,12 @@ int main(void) {
     }
     {
         DWORD deadline = GetTickCount() + 3000;
-        while ((slow.done == 0 || fast.done < 2) && GetTickCount() < deadline) {
+        while ((slow.done == 0 || fast.done < 2 || fast.mass < 70) && GetTickCount() < deadline) {
             Sleep(10);
         }
-        if (slow.done == 0 || fast.done < 2) {
-            fprintf(stderr, "timeout waiting turns slow=%ld fast=%ld\n",
-                (long)slow.done, (long)fast.done);
+        if (slow.done == 0 || fast.done < 2 || fast.mass < 70) {
+            fprintf(stderr, "timeout slow=%ld fast=%ld mass=%ld\n",
+                (long)slow.done, (long)fast.done, (long)fast.mass);
             return 1;
         }
     }
@@ -210,8 +246,14 @@ int main(void) {
         lmx_msg_runtime_delete(rt);
         return 1;
     }
-    if (slow.recvd != 1 || fast.recvd != 2) {
-        fprintf(stderr, "payload recv mismatch slow=%u fast=%u\n", slow.recvd, fast.recvd);
+    if (slow.recvd != 1 || fast.recvd != 2 || fast.fifo[0] != 10 || fast.fifo[1] != 20) {
+        fprintf(stderr, "FIFO mismatch slow=%u fast=%u %u,%u\n",
+            slow.recvd, fast.recvd, fast.fifo[0], fast.fifo[1]);
+        lmx_msg_runtime_delete(rt);
+        return 1;
+    }
+    if (fast.mass != 70) {
+        fprintf(stderr, "mass recipients %ld\n", (long)fast.mass);
         lmx_msg_runtime_delete(rt);
         return 1;
     }
