@@ -389,6 +389,76 @@ Invoke-Negative "l2src\tests\unit_forj_bare.lm2" "unit_forj_bare" "unresolved na
 Invoke-LeafOut "l2src\tests\unit_forj_parent.lm2" "unit_forj_parent" 0 "test" "9`n"
 Invoke-LeafOut "l2src\tests\unit_forj_nest.lm2" "unit_forj_nest" 0 "test" "9`n9`n"
 Invoke-LeafOut "l2src\tests\unit_forj_again.lm2" "unit_forj_again" 0 "test" "9`n9`n"
+Invoke-Leaf "l2src\tests\unit_forj_graph.lm2" "unit_forj_graph" 0 "test"
+$gpath = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_forj_graph.lm1")))
+if ($gpath.IndexOf("for->") -ge 0) { throw "unit_forj_graph must not emit C for->" }
+if ($gpath -notmatch 'lmx_int_value') { throw "unit_forj_graph path must load graph int" }
+if ($gpath -notmatch 'lmx_int_store') { throw "unit_forj_graph must store dirty int" }
+if ($gpath -notmatch 'lmx_branch_open') { throw "unit_forj_graph must open for Structure" }
+$gprintf = $gpath.LastIndexOf("c.printf")
+if ($gprintf -lt 0) { throw "unit_forj_graph missing c.printf" }
+$gbefore = $gpath.Substring(0, $gprintf)
+if ($gbefore -notmatch 'l2_q\d+_dirty') { throw "unit_forj_graph c.printf must follow dirty checkpoint" }
+$gg = Invoke-SpliceDrive "unit_forj_graph" @"
+        l2_m0(unit, 10)
+        leaf: lmx_branch_child(unit, 0U)
+        if: leaf = 0
+            return: 1
+        kid: lmx_branch_child(leaf, 1U)
+        if: kid = 0
+            return: 1
+        c.printf("%d\n", lmx_int_value(kid\data))
+        if: lmx_int_store(kid\data, 42) != 0
+            return: 1
+        l2_m0(unit, 0)
+        c.printf("%d\n", lmx_int_value(kid\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($gg -ne "9`n9`n42`n42`n") { throw "unit_forj_graph persist/write: $gg" }
+Invoke-Leaf "l2src\tests\unit_forj_sib.lm2" "unit_forj_sib" 0 "test"
+$sib = Invoke-SpliceDrive "unit_forj_sib" @"
+        l2_m0(unit)
+        leaf: lmx_branch_child(unit, 0U)
+        kid: lmx_branch_child(leaf, 1U)
+        c.printf("%d\n", lmx_int_value(kid\data))
+        leaf: lmx_branch_child(unit, 1U)
+        kid: lmx_branch_child(leaf, 1U)
+        c.printf("%d\n", lmx_int_value(kid\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($sib -ne "9`n2`n") { throw "unit_forj_sib distinct j: $sib" }
+Invoke-Leaf "l2src\tests\unit_printf_char.lm2" "unit_printf_char" 0 "test"
+$pc = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_printf_char.lm1")))
+$pp = $pc.LastIndexOf("c.printf")
+if ($pp -lt 0) { throw "unit_printf_char missing c.printf" }
+if ($pc.Substring(0, $pp) -notmatch 'l2_q\d+_dirty') { throw "unit_printf_char c.printf must follow dirty checkpoint" }
+$pcg = Invoke-SpliceDrive "unit_printf_char" @"
+        l2_m0(unit)
+        leaf: lmx_branch_child(unit, 0U)
+        c.printf("%d\n", lmx_char_value(leaf\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($pcg -ne "65`n65`n") { throw "unit_printf_char graph: $pcg" }
+Invoke-Leaf "l2src\tests\unit_printf_sz.lm2" "unit_printf_sz" 0 "test"
+$psz = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_printf_sz.lm1")))
+$psp = $psz.LastIndexOf("c.printf")
+if ($psp -lt 0) { throw "unit_printf_sz missing c.printf" }
+if ($psz.Substring(0, $psp) -notmatch 'l2_q\d+_dirty') { throw "unit_printf_sz c.printf must follow dirty checkpoint" }
+$psg = Invoke-SpliceDrive "unit_printf_sz" @"
+        l2_m0(unit)
+        leaf: lmx_branch_child(unit, 0U)
+        c.printf("%zu\n", lmx_size_value(leaf\data))
+        return: 0
+    end: main
+end: external
+"@
+if ($psg -ne "7`n7`n") { throw "unit_printf_sz graph: $psg" }
 Invoke-Negative "l2src\tests\unit_cont_out.lm2" "unit_cont_out" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_cont_frame.lm2" "unit_cont_frame" "unsupported loop"
 Invoke-Negative "l2src\tests\unit_cont_colon.lm2" "unit_cont_colon" "empty colon Frame is not allowed"
@@ -2563,11 +2633,11 @@ function Invoke-FailMallocSrc([string]$src, [string]$tag, [int]$maxN) {
     return $kinds
 }
 
-$kDyn = Invoke-FailMallocSrc "l2src\tests\unit_dyn_cap.lm2" "dyn_cap" 48
-$k127 = Invoke-FailMallocSrc (Join-Path $out "unit_arity127.lm2") "arity127" 64
-$kOwn = Invoke-FailMallocSrc "l2src\tests\unit_own6.lm2" "own6" 48
-$kMeth = Invoke-FailMallocSrc "l2src\tests\unit_nine.lm2" "nine" 48
-$kOwnMeth = Invoke-FailMallocSrc "l2src\tests\unit_own_meth.lm2" "own_meth" 64
+$kDyn = Invoke-FailMallocSrc "l2src\tests\unit_dyn_cap.lm2" "dyn_cap" 80
+$k127 = Invoke-FailMallocSrc (Join-Path $out "unit_arity127.lm2") "arity127" 80
+$kOwn = Invoke-FailMallocSrc "l2src\tests\unit_own6.lm2" "own6" 80
+$kMeth = Invoke-FailMallocSrc "l2src\tests\unit_nine.lm2" "nine" 80
+$kOwnMeth = Invoke-FailMallocSrc "l2src\tests\unit_own_meth.lm2" "own_meth" 80
 if (-not $kDyn.ContainsKey(1)) { throw "fail-malloc dyn_cap never hit formals (kind 1); got $($kDyn.Keys -join ',')" }
 if (-not $kDyn.ContainsKey(2)) { throw "fail-malloc dyn_cap never hit hidden growth (kind 2); got $($kDyn.Keys -join ',')" }
 if (-not $kDyn.ContainsKey(3)) { throw "fail-malloc dyn_cap never hit intern rows (kind 3); got $($kDyn.Keys -join ',')" }

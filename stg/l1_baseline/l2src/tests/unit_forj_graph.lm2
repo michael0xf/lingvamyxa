@@ -1,0 +1,12 @@
+# Graph-backed for Structure: path for\j after loop; bound n so a later
+# zero-iteration call can observe the published j.
+fn: test (int: n) int
+    for: int(i, 0) (i < n) i++
+        int: j i
+    end: for
+    c.printf: "%d\n" for\j
+    return: 0
+end: test
+fn: main () int
+    return: 0
+end: main

@@ -1022,21 +1022,29 @@ Oracle: frozen parser.lm1 vs L2 drive.
 
 Unit 13b - ordinary for Structure and int fields
 ------------------------------------------------
-Files: l2trans.lm1, run_l2trans.ps1, tests/unit_forj_path.lm2,
-tests/unit_forj_bare.lm2, tests/unit_forj_parent.lm2,
-tests/unit_forj_nest.lm2, tests/unit_forj_again.lm2
+Files: l2trans.lm1, lmx_int.lm1, run_l2trans.ps1,
+tests/unit_forj_path.lm2, tests/unit_forj_bare.lm2,
+tests/unit_forj_parent.lm2, tests/unit_forj_nest.lm2,
+tests/unit_forj_again.lm2, tests/unit_forj_graph.lm2,
+tests/unit_forj_sib.lm2, tests/unit_printf_char.lm2,
+tests/unit_printf_sz.lm2
+
+Implemented (060900 lowering, 064800 graph publication).
 
 SPEC  ordinary nested Structure fields / explicit path
-    DECIDED by 044514/045200/060900 tickets. The P0 tree of
+    DECIDED by 044514/045200/060900/064800. The P0 tree of
     `for: int(i, 0) (i < 10) i++` is a 5-field frame; `int: j i`
     is `frame int(j, i)` inside the anonymous body; `for\j` is
-    atoms for, \, j. Receiver interpretation: the for occurrence
-    is a same-method Structure; header/body `int:` decls are
-    fields of that occurrence (host = the for node). Parent reads
-    child j only as path `for\j`. Bare parent `j` is
-    `unresolved name` (not flattened). Body may update a parent
-    `int` field (inward). No new method activation, no per-iteration
-    history, no C `for->j`.
+    atoms for, \, j. Receiver: the for occurrence is a same-method
+    Structure materialized as a unit-child BRANCH; header/body
+    `int:` decls are typed children of that occurrence. Parent
+    reads child j only as path `for\j` (graph load after dirty
+    checkpoint). Bare parent `j` is `unresolved name`. Body may
+    update a parent `int` field (inward). No new method activation,
+    no per-iteration history, no C `for->j`. Sibling fors with the
+    same field spelling have distinct Structures. Translator
+    scope/for tables grow like existing own vectors; eight nested
+    structures is not a language limit.
 
 L1  compact `for(...)` header
     AVOIDED. Compact-header grammar is a separate unproved
@@ -1045,12 +1053,12 @@ L1  compact `for(...)` header
     `unsupported loop`.
 
 ABI  LMX_TYPE_INT primitive pool
-    AVOIDED. lmx.h names LMX_TYPE_INT but has no take/value/store
-    API. int OwnUsed in this unit is a same-method typed cache
-    (formal ty=0), last-assigned across iterations. Graph children
-    and dirty checkpoint stores stay char/size_t. Arises when an
-    int field must publish through `node` like char/size_t. Then:
-    ASK, do not invent lmx_int here.
+    DECIDED as the size_t pool discipline for this already-authorized
+    own-int publication: unique mutable cells, stable addresses,
+    no relocation. lmx_int_init/take/value/store. No new user
+    semantic choice. Dirty-only store on checkpoint; prologue
+    loads the graph payload. Foreign c.printf checkpoints before
+    the call, same as LMX calls.
 
 Unit 14 - size_t* out-param and python string end
 -------------------------------------------------

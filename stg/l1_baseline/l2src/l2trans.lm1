@@ -16,7 +16,14 @@ int: l2_own_cap 0
 int: l2_tn 0
 int: l2_loop_depth 0
 int: l2_scope_n 0
-c.array: [8]: @: LmP0Node l2_scope_at
+int: l2_scope_cap 0
+@@: LmP0Node l2_scope_at 0
+int: l2_for_n 0
+int: l2_for_cap 0
+@@: LmP0Node l2_for_node 0
+@: int l2_for_uchild 0
+@: int l2_for_nkid 0
+int: l2_unit_base 0
 const: @: char l2_call_node 0
 @: FILE l2_out 0
 const: @: char l2_src 0
@@ -45,6 +52,9 @@ const: @: LmP0Node l2_main_node 0
 @: int l2_own_ty 0
 @: int l2_own_mi 0
 @@: LmP0Node l2_own_host 0
+@: int l2_own_fid 0
+@: int l2_own_fchild 0
+@: int l2_own_uchild 0
 int: l2_need_p0 0
 int: l2_need_query 0
 int: l2_need_own 0
@@ -143,6 +153,14 @@ prototype:
     fn: l2_scope_pop () int
     fn: l2_scope_has (const: @(LmP0Node node)) int
     fn: l2_scope_host () @: LmP0Node
+    fn: l2_scope_reserve (int: need) int
+    fn: l2_scope_free () int
+    fn: l2_for_add (const: @(LmP0Node node)) int
+    fn: l2_for_find (const: @(LmP0Node node)) int
+    fn: l2_for_reserve (int: need) int
+    fn: l2_for_free () int
+    fn: l2_layout_owns () int
+    fn: l2_emit_path_load (int: mi; int: oi; const: @(char ind); @: char dest) int
     fn: l2_own_find_host (int: mi; const: @(LmP0Text t); const: @(LmP0Node host)) int
     fn: l2_own_any (int: mi; const: @(LmP0Text t)) int
     fn: l2_path_own (int: mi; const: @(LmP0Text left); const: @(LmP0Text right)) int
@@ -326,6 +344,12 @@ fn: l2_own_free () int
         l2_xfree((cast: (@: void) l2_own_mi))
     if: l2_own_host != 0
         l2_xfree((cast: (@: void) l2_own_host))
+    if: l2_own_fid != 0
+        l2_xfree((cast: (@: void) l2_own_fid))
+    if: l2_own_fchild != 0
+        l2_xfree((cast: (@: void) l2_own_fchild))
+    if: l2_own_uchild != 0
+        l2_xfree((cast: (@: void) l2_own_uchild))
     if: l2_m_uses != 0
         l2_xfree((cast: (@: void) l2_m_uses))
     if: l2_m_alias != 0
@@ -337,6 +361,9 @@ fn: l2_own_free () int
     l2_own_live: 0
     l2_own_mi: 0
     l2_own_host: 0
+    l2_own_fid: 0
+    l2_own_fchild: 0
+    l2_own_uchild: 0
     l2_m_uses: 0
     l2_m_alias: 0
     l2_m_pre: 0
@@ -362,6 +389,9 @@ fn: l2_own_reserve (int: need) int
     @: int nl 0
     @: int nmi 0
     @@: LmP0Node nh 0
+    @: int nfid 0
+    @: int nfch 0
+    @: int nuch 0
     @: int nu 0
     @: int na 0
     @: int np 0
@@ -411,10 +441,13 @@ fn: l2_own_reserve (int: need) int
     nl: (cast: (@: int) l2_xmalloc(ni))
     nmi: (cast: (@: int) l2_xmalloc(ni))
     nh: (cast: (@@: LmP0Node) l2_xmalloc(nb))
+    nfid: (cast: (@: int) l2_xmalloc(ni))
+    nfch: (cast: (@: int) l2_xmalloc(ni))
+    nuch: (cast: (@: int) l2_xmalloc(ni))
     nu: (cast: (@: int) l2_xmalloc(nmeta * c.sizeof(c.int)))
     na: (cast: (@: int) l2_xmalloc(nmeta * c.sizeof(c.int)))
     np: (cast: (@: int) l2_xmalloc(nmeta * c.sizeof(c.int)))
-    if: nn = 0 || nt = 0 || nl = 0 || nmi = 0 || nh = 0 || nu = 0 || na = 0 || np = 0
+    if: nn = 0 || nt = 0 || nl = 0 || nmi = 0 || nh = 0 || nfid = 0 || nfch = 0 || nuch = 0 || nu = 0 || na = 0 || np = 0
         if: nn != 0
             l2_xfree((cast: (@: void) nn))
         if: nt != 0
@@ -425,6 +458,12 @@ fn: l2_own_reserve (int: need) int
             l2_xfree((cast: (@: void) nmi))
         if: nh != 0
             l2_xfree((cast: (@: void) nh))
+        if: nfid != 0
+            l2_xfree((cast: (@: void) nfid))
+        if: nfch != 0
+            l2_xfree((cast: (@: void) nfch))
+        if: nuch != 0
+            l2_xfree((cast: (@: void) nuch))
         if: nu != 0
             l2_xfree((cast: (@: void) nu))
         if: na != 0
@@ -439,6 +478,9 @@ fn: l2_own_reserve (int: need) int
     oi: 0
     while: oi < (cast: (int) cap)
         nmi[oi]: -1
+        nfid[oi]: -1
+        nfch[oi]: -1
+        nuch[oi]: -1
         oi: oi + 1
     c.memset((cast: (@: void) nu), 0, nmeta * c.sizeof(c.int))
     c.memset((cast: (@: void) np), 0, nmeta * c.sizeof(c.int))
@@ -460,6 +502,9 @@ fn: l2_own_reserve (int: need) int
             nl[oi]: l2_own_live[oi]
             nmi[oi]: l2_own_mi[oi]
             nh[oi]: l2_own_host[oi]
+            nfid[oi]: l2_own_fid[oi]
+            nfch[oi]: l2_own_fchild[oi]
+            nuch[oi]: l2_own_uchild[oi]
             oi: oi + 1
         mi: 0
         while: mi < l2_m_cap
@@ -479,6 +524,9 @@ fn: l2_own_reserve (int: need) int
         l2_xfree((cast: (@: void) l2_own_live))
         l2_xfree((cast: (@: void) l2_own_mi))
         l2_xfree((cast: (@: void) l2_own_host))
+        l2_xfree((cast: (@: void) l2_own_fid))
+        l2_xfree((cast: (@: void) l2_own_fchild))
+        l2_xfree((cast: (@: void) l2_own_uchild))
         l2_xfree((cast: (@: void) l2_m_uses))
         l2_xfree((cast: (@: void) l2_m_alias))
         l2_xfree((cast: (@: void) l2_m_pre))
@@ -487,6 +535,9 @@ fn: l2_own_reserve (int: need) int
     l2_own_live: nl
     l2_own_mi: nmi
     l2_own_host: nh
+    l2_own_fid: nfid
+    l2_own_fchild: nfch
+    l2_own_uchild: nuch
     l2_m_uses: nu
     l2_m_alias: na
     l2_m_pre: np
@@ -1756,6 +1807,9 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
     l2_own_free()
     l2_loop_depth: 0
     l2_scope_n: 0
+    l2_scope_free()
+    l2_for_free()
+    l2_unit_base: 0
     l2_need_p0: 0
     l2_need_query: 0
     l2_need_own: 0
@@ -2207,7 +2261,7 @@ return: -1
 fn: l2_own_first (const: @(LmP0Text t)) int
     int: i 0
     while: i < l2_own_n
-        if: l2_text_same(l2_own_name[i], t)
+        if: l2_own_host[i] = 0 && l2_text_same(l2_own_name[i], t)
             return: i
         i: i + 1
 return: -1
@@ -2248,6 +2302,9 @@ fn: l2_own_add (int: mi; const: @(LmP0Text t); int: ty; const: @(char path); con
     l2_own_live[l2_own_n]: 0
     l2_own_mi[l2_own_n]: mi
     l2_own_host[l2_own_n]: l2_scope_host()
+    l2_own_fid[l2_own_n]: -1
+    l2_own_fchild[l2_own_n]: -1
+    l2_own_uchild[l2_own_n]: -1
     if: shared != 0
         l2_own_mi[l2_own_n]: -1
         l2_own_host[l2_own_n]: 0
@@ -2454,6 +2511,8 @@ fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path)
             if: l2_for_cstyle(stmt) = 0
                 field: l2_next_active(field\next)
                 continue
+            if: l2_for_add(stmt) < 0
+                return: l2_error(path, stmt, "out of memory")
             if: l2_scope_push(stmt) != 0
                 return: l2_error(path, stmt, "too deeply nested")
             nxt: l2_next_active(stmt\as\frame\body\first_field)
@@ -2939,7 +2998,7 @@ fn: l2_slash_own (const: @(LmP0Text t)) int
         return: -1
     n: t\length - 5U
     while: i < l2_own_n
-        if: l2_own_name[i] != 0 && l2_own_name[i]\length = n && c.memcmp(l2_own_name[i]\data, t\data + 5, n) = 0
+        if: l2_own_host[i] = 0 && l2_own_name[i] != 0 && l2_own_name[i]\length = n && c.memcmp(l2_own_name[i]\data, t\data + 5, n) = 0
             return: i
         i: i + 1
 return: -1
@@ -2975,8 +3034,61 @@ fn: l2_own_store_ty (int: dty) int
         return: 0
 return: dty
 
+fn: l2_scope_free () int
+    if: l2_scope_at != 0
+        l2_xfree((cast: (@: void) l2_scope_at))
+    l2_scope_at: 0
+    l2_scope_n: 0
+    l2_scope_cap: 0
+return: 0
+
+fn: l2_scope_reserve (int: need) int
+    size_t: cap
+    size_t: need_u
+    size_t: psz
+    size_t: nb
+    @@: LmP0Node nn 0
+    int: i
+    if: need < 0
+        return: 1
+    if: need <= l2_scope_cap
+        return: 0
+    if: need > c.INT_MAX
+        l2_alloc_err: 2
+        return: 1
+    need_u: (cast: (size_t) need)
+    cap: (cast: (size_t) l2_scope_cap)
+    if: cap < 1U
+        cap: 4U
+    while: cap < need_u
+        if: cap > ((cast: (size_t) -1) / 2U)
+            l2_alloc_err: 2
+            return: 1
+        cap: cap * 2U
+    psz: c.sizeof(l2_ptr_probe)
+    if: l2_mul_ok(cap, psz) = 0
+        l2_alloc_err: 2
+        return: 1
+    nb: cap * psz
+    l2_alloc_kind: 5
+    nn: (cast: (@@: LmP0Node) l2_xmalloc(nb))
+    if: nn = 0
+        return: 1
+    c.memset((cast: (@: void) nn), 0, nb)
+    i: 0
+    while: i < l2_scope_n
+        nn[i]: l2_scope_at[i]
+        i: i + 1
+    if: l2_scope_at != 0
+        l2_xfree((cast: (@: void) l2_scope_at))
+    l2_scope_at: nn
+    l2_scope_cap: (cast: (int) cap)
+return: 0
+
 fn: l2_scope_push (const: @(LmP0Node node)) int
-    if: node = 0 || l2_scope_n >= 8
+    if: node = 0
+        return: 1
+    if: l2_scope_reserve(l2_scope_n + 1) != 0
         return: 1
     l2_scope_at[l2_scope_n]: (cast: (@: LmP0Node) node)
     l2_scope_n: l2_scope_n + 1
@@ -3003,6 +3115,147 @@ fn: l2_scope_host () @: LmP0Node
     if: l2_scope_n <= 0
         return: 0
 return: l2_scope_at[l2_scope_n - 1]
+
+fn: l2_for_free () int
+    if: l2_for_node != 0
+        l2_xfree((cast: (@: void) l2_for_node))
+    if: l2_for_uchild != 0
+        l2_xfree((cast: (@: void) l2_for_uchild))
+    if: l2_for_nkid != 0
+        l2_xfree((cast: (@: void) l2_for_nkid))
+    l2_for_node: 0
+    l2_for_uchild: 0
+    l2_for_nkid: 0
+    l2_for_n: 0
+    l2_for_cap: 0
+return: 0
+
+fn: l2_for_reserve (int: need) int
+    size_t: cap
+    size_t: need_u
+    size_t: psz
+    size_t: nb
+    size_t: ni
+    @@: LmP0Node nn 0
+    @: int nu 0
+    @: int nk 0
+    int: i
+    if: need < 0
+        return: 1
+    if: need <= l2_for_cap
+        return: 0
+    if: need > c.INT_MAX
+        l2_alloc_err: 2
+        return: 1
+    need_u: (cast: (size_t) need)
+    cap: (cast: (size_t) l2_for_cap)
+    if: cap < 1U
+        cap: 4U
+    while: cap < need_u
+        if: cap > ((cast: (size_t) -1) / 2U)
+            l2_alloc_err: 2
+            return: 1
+        cap: cap * 2U
+    psz: c.sizeof(l2_ptr_probe)
+    if: l2_mul_ok(cap, psz) = 0
+        l2_alloc_err: 2
+        return: 1
+    if: l2_mul_ok(cap, c.sizeof(c.int)) = 0
+        l2_alloc_err: 2
+        return: 1
+    nb: cap * psz
+    ni: cap * c.sizeof(c.int)
+    l2_alloc_kind: 5
+    nn: (cast: (@@: LmP0Node) l2_xmalloc(nb))
+    nu: (cast: (@: int) l2_xmalloc(ni))
+    nk: (cast: (@: int) l2_xmalloc(ni))
+    if: nn = 0 || nu = 0 || nk = 0
+        if: nn != 0
+            l2_xfree((cast: (@: void) nn))
+        if: nu != 0
+            l2_xfree((cast: (@: void) nu))
+        if: nk != 0
+            l2_xfree((cast: (@: void) nk))
+        return: 1
+    c.memset((cast: (@: void) nn), 0, nb)
+    i: 0
+    while: i < (cast: (int) cap)
+        nu[i]: -1
+        nk[i]: 0
+        i: i + 1
+    i: 0
+    while: i < l2_for_n
+        nn[i]: l2_for_node[i]
+        nu[i]: l2_for_uchild[i]
+        nk[i]: l2_for_nkid[i]
+        i: i + 1
+    if: l2_for_node != 0
+        l2_xfree((cast: (@: void) l2_for_node))
+        l2_xfree((cast: (@: void) l2_for_uchild))
+        l2_xfree((cast: (@: void) l2_for_nkid))
+    l2_for_node: nn
+    l2_for_uchild: nu
+    l2_for_nkid: nk
+    l2_for_cap: (cast: (int) cap)
+return: 0
+
+fn: l2_for_find (const: @(LmP0Node node)) int
+    int: i 0
+    if: node = 0
+        return: -1
+    while: i < l2_for_n
+        if: l2_for_node[i] = node
+            return: i
+        i: i + 1
+return: -1
+
+fn: l2_for_add (const: @(LmP0Node node)) int
+    int: i
+    if: node = 0
+        return: -1
+    i: l2_for_find(node)
+    if: i >= 0
+        return: i
+    if: l2_for_reserve(l2_for_n + 1) != 0
+        return: -1
+    l2_for_node[l2_for_n]: (cast: (@: LmP0Node) node)
+    l2_for_uchild[l2_for_n]: -1
+    l2_for_nkid[l2_for_n]: 0
+    l2_for_n: l2_for_n + 1
+return: l2_for_n - 1
+
+fn: l2_layout_owns () int
+    int: oi 0
+    int: fid
+    int: uch 0
+    while: oi < l2_for_n
+        l2_for_nkid[oi]: 0
+        oi: oi + 1
+    oi: 0
+    while: oi < l2_own_n
+        if: l2_own_host[oi] = 0
+            l2_own_fid[oi]: -1
+            l2_own_fchild[oi]: -1
+            l2_own_uchild[oi]: uch
+            uch: uch + 1
+        if: l2_own_host[oi] != 0
+            fid: l2_for_find(l2_own_host[oi])
+            if: fid < 0
+                fid: l2_for_add(l2_own_host[oi])
+            if: fid < 0
+                return: 1
+            l2_own_fid[oi]: fid
+            l2_own_fchild[oi]: l2_for_nkid[fid]
+            l2_for_nkid[fid]: l2_for_nkid[fid] + 1
+            l2_own_uchild[oi]: -1
+        oi: oi + 1
+    oi: 0
+    while: oi < l2_for_n
+        l2_for_uchild[oi]: uch
+        uch: uch + 1
+        oi: oi + 1
+    l2_unit_base: uch
+return: 0
 
 fn: l2_for_cstyle (const: @(LmP0Node stmt)) int
     @: LmP0Field f0
@@ -4020,11 +4273,11 @@ fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char de
     if: mi >= 0 && oi >= 0 && l2_m_uses[l2_own_off(mi, oi)] != 0
         return: 0
     child: l2_own_first(nm)
-    if: child < 0 || l2_call_node = 0
+    if: child < 0 || l2_own_uchild[child] < 0 || l2_call_node = 0
         return: 1
     if: l2_bump_ind(ind, deep) != 0
         return: 1
-    if: c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(%s, %uU)\n%sif: l2_xp = 0\n", ind, l2_call_node, (cast: (unsigned) child), ind) < 0
+    if: c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(%s, %uU)\n%sif: l2_xp = 0\n", ind, l2_call_node, (cast: (unsigned) l2_own_uchild[child]), ind) < 0
         return: 1
     if: l2_emit_checkpoint(mi, deep) != 0
         return: 1
@@ -4469,7 +4722,9 @@ fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
         if: p2 != 0 && p2\value != 0 && p2\value\kind = c.LM_P0_NODE_ATOM
             po: l2_path_own(mi, f\value\as\atom, p2\value\as\atom)
         if: po >= 0
-            if: c.sprintf(piece, "l2_q%d", po) < 0
+            if: l2_emit_checkpoint(mi, ind) != 0
+                return: 1
+            if: l2_emit_path_load(mi, po, ind, piece) != 0
                 return: 1
             if: l2_cat(buf, piece) != 0
                 return: l2_error(l2_src, at, "expression too long")
@@ -4684,9 +4939,50 @@ fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
             return: 1
         if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 2 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_size_store(l2_q%d_from\\data, l2_p%d_%d) != 0\n%s        return: 0\n", ind, i, mi, fi, ind) < 0
             return: 1
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 0 && fi < 0 && c.fprintf(l2_out, "%s    if: lmx_int_store(l2_q%d_from\\data, l2_q%d) != 0\n%s        return: 0\n", ind, i, i, ind) < 0
+            return: 1
+        if: l2_m_uses[l2_own_off(mi, i)] != 0 && l2_own_ty[i] = 0 && fi >= 0 && c.fprintf(l2_out, "%s    if: lmx_int_store(l2_q%d_from\\data, l2_p%d_%d) != 0\n%s        return: 0\n", ind, i, mi, fi, ind) < 0
+            return: 1
         if: l2_m_uses[l2_own_off(mi, i)] != 0 && c.fprintf(l2_out, "%s    l2_q%d_dirty: 0\n", ind, i) < 0
             return: 1
         i: i + 1
+return: 0
+
+fn: l2_emit_path_load (int: mi; int: oi; const: @(char ind); @: char dest) int
+    int: t
+    int: fid
+    c.array: [64]: char deep
+    if: dest = 0 || oi < 0 || ind = 0
+        return: 1
+    if: l2_bump_ind(ind, deep) != 0
+        return: 1
+    fid: l2_own_fid[oi]
+    if: fid >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(l2_h%d, %uU)\n", ind, fid, (cast: (unsigned) l2_own_fchild[oi])) < 0
+        return: 1
+    if: fid < 0 && l2_own_uchild[oi] < 0
+        return: 1
+    if: fid < 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(node, %uU)\n", ind, (cast: (unsigned) l2_own_uchild[oi])) < 0
+        return: 1
+    if: c.fprintf(l2_out, "%sif: l2_xp = 0\n", ind) < 0
+        return: 1
+    if: l2_emit_checkpoint(mi, deep) != 0
+        return: 1
+    if: mi >= 0 && l2_m_ret[mi] = 8 && c.fprintf(l2_out, "%sreturn\n", deep) < 0
+        return: 1
+    if: mi >= 0 && l2_m_ret[mi] = 2 && c.fprintf(l2_out, "%sreturn: 0U\n", deep) < 0
+        return: 1
+    if: (mi < 0 || (l2_m_ret[mi] != 2 && l2_m_ret[mi] != 8)) && c.fprintf(l2_out, "%sreturn: 0\n", deep) < 0
+        return: 1
+    t: l2_tn
+    l2_tn: l2_tn + 1
+    if: l2_own_ty[oi] = 0 && c.fprintf(l2_out, "%sint: l2_t%d\n%sl2_t%d: lmx_int_value(l2_xp\\data)\n", ind, t, ind, t) < 0
+        return: 1
+    if: l2_own_ty[oi] = 1 && c.fprintf(l2_out, "%schar: l2_t%d\n%sl2_t%d: (cast: (char) lmx_char_value(l2_xp\\data))\n", ind, t, ind, t) < 0
+        return: 1
+    if: l2_own_ty[oi] = 2 && c.fprintf(l2_out, "%ssize_t: l2_t%d\n%sl2_t%d: lmx_size_value(l2_xp\\data)\n", ind, t, ind, t) < 0
+        return: 1
+    if: c.sprintf(dest, "l2_t%d", t) < 0
+        return: 1
 return: 0
 
 fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
@@ -4707,6 +5003,8 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     if: l2_cat(buf, "(") != 0
         return: 1
     n: l2_count_active(stmt\as\frame\body)
+    if: l2_emit_checkpoint(mi, ind) != 0
+        return: 1
     f: l2_next_active(stmt\as\frame\body\first_field)
     i: 0
     while: i < n && f != 0 && f\value != 0
@@ -4721,7 +5019,7 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         if: p2 != 0 && p2\value != 0 && p2\value\kind = c.LM_P0_NODE_ATOM
             po: l2_path_own(mi, f\value\as\atom, p2\value\as\atom)
         if: po >= 0
-            if: c.sprintf(piece, "l2_q%d", po) < 0
+            if: l2_emit_path_load(mi, po, ind, piece) != 0
                 return: 1
             i: i + 2
             f: p2
@@ -5078,7 +5376,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(node, %uU)\n", ind, (cast: (unsigned) sl)) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_uchild[sl] < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(node, %uU)\n", ind, (cast: (unsigned) l2_own_uchild[sl])) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && c.fprintf(l2_out, "%sif: l2_xp = 0\n", ind) < 0
             return: 1
@@ -5097,6 +5397,8 @@ return: 0
 fn: l2_emit_unit (const: @(char out_path)) int
     int: i 0
     int: k
+    int: oi
+    int: hu
     unsigned: n
     unsigned: cap
     unsigned: kids
@@ -5107,6 +5409,8 @@ fn: l2_emit_unit (const: @(char out_path)) int
     @: FILE chk
     int: had 0
     if: out_path = 0 || l2_m_n = 0 || (l2_main_body = 0 && (l2_main_node = 0 || l2_main_node\as = 0 || l2_ret_tr(l2_main_node\as\frame) = 0))
+        return: 1
+    if: l2_layout_owns() != 0
         return: 1
     n: (cast: (unsigned) l2_m_n)
     pn: c.strlen(out_path)
@@ -5125,7 +5429,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: (l2_need_p0 != 0 || l2_need_query != 0) && c.fputs("predef: \"l2src/l2_text_hash.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: l2_need_p0 = 0 && l2_need_query = 0 && c.fputs("predef: \"l2src/lmx_size.lm1\"\n", l2_out) < 0
+    if: l2_need_p0 = 0 && l2_need_query = 0 && l2_has_own_ty(0) != 0 && c.fputs("predef: \"l2src/lmx_int.lm1\"\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: l2_need_p0 = 0 && l2_need_query = 0 && l2_has_own_ty(0) = 0 && c.fputs("predef: \"l2src/lmx_size.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_need_own != 0 && c.fputs("predef: \"l1src/own.lm1\"\n", l2_out) < 0
@@ -5218,6 +5525,20 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         k: 0
+        while: k < l2_for_n
+            hu: 0
+            oi: 0
+            while: oi < l2_own_n
+                if: l2_m_uses[l2_own_off(i, oi)] != 0 && l2_own_fid[oi] = k
+                    hu: 1
+                oi: oi + 1
+            ---
+            if: hu != 0 && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_child(node, %uU)\n    if: l2_h%d = 0\n        return: 0\n", k, k, (cast: (unsigned) l2_for_uchild[k]), k) < 0
+                c.fclose(l2_out)
+                return: 1
+            k: k + 1
+        ---
+        k: 0
         while: k < l2_own_n
             l2_own_live[k]: 0
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0
@@ -5228,16 +5549,22 @@ fn: l2_emit_unit (const: @(char out_path)) int
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 2 && c.fprintf(l2_out, "    size_t: l2_q%d\n    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 0 && c.fprintf(l2_out, "    int: l2_q%d 0\n    int: l2_q%d_dirty 0\n", k, k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 0 && c.fprintf(l2_out, "    int: l2_q%d\n    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && (l2_own_ty[k] = 1 || l2_own_ty[k] = 2) && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child(node, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, (cast: (unsigned) k), k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_fid[k] >= 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child(l2_h%d, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, l2_own_fid[k], (cast: (unsigned) l2_own_fchild[k]), k) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child(node, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, (cast: (unsigned) l2_own_uchild[k]), k) < 0
                 c.fclose(l2_out)
                 return: 1
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 1 && c.fprintf(l2_out, "    l2_q%d: (cast: (char) lmx_char_value(l2_q%d_from\\data))\n", k, k) < 0
                 c.fclose(l2_out)
                 return: 1
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 2 && c.fprintf(l2_out, "    l2_q%d: lmx_size_value(l2_q%d_from\\data)\n", k, k) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 0 && c.fprintf(l2_out, "    l2_q%d: lmx_int_value(l2_q%d_from\\data)\n", k, k) < 0
                 c.fclose(l2_out)
                 return: 1
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] >= 0 && c.fprintf(l2_out, "    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k) < 0
@@ -5255,7 +5582,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
                 return: 1
             k: k + 1
         ---
-        if: (l2_own_n != 0 || l2_m_dyn[i] != 0) && c.fputs("    @: Lmx l2_xp 0\n", l2_out) < 0
+        if: (l2_own_n != 0 || l2_m_dyn[i] != 0 || l2_for_n != 0) && c.fputs("    @: Lmx l2_xp 0\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
         l2_tn: 0
@@ -5287,10 +5614,13 @@ fn: l2_emit_unit (const: @(char out_path)) int
         cap: cap + 1U
     if: l2_has_own_ty(2) != 0
         cap: cap + 1U
-    if: l2_own_n != 0
+    if: l2_has_own_ty(0) != 0
         cap: cap + 1U
-    kids: n + (cast: (unsigned) l2_own_n)
-    if: c.fprintf(l2_out, "external:\n    fn: main () int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @: LmxMethod rec 0\n        if: lmx_ranges_init(%uU) != 0\n            return: 1\n", cap) < 0
+    if: l2_own_n != 0 || l2_for_n != 0
+        cap: cap + 1U
+    cap: cap + (cast: (unsigned) l2_for_n)
+    kids: n + (cast: (unsigned) l2_unit_base)
+    if: c.fprintf(l2_out, "external:\n    fn: main () int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @: Lmx kid 0\n        @: LmxMethod rec 0\n        if: lmx_ranges_init(%uU) != 0\n            return: 1\n", cap) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_has_own_ty(1) != 0 && c.fputs("        if: lmx_chars_init() != 0\n            return: 1\n", l2_out) < 0
@@ -5299,20 +5629,52 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_has_own_ty(2) != 0 && c.fputs("        if: lmx_size_init() != 0\n            return: 1\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
+    if: l2_has_own_ty(0) != 0 && c.fputs("        if: lmx_int_init() != 0\n            return: 1\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
     if: c.fprintf(l2_out, "        unit: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))\n        if: unit = 0\n            return: 1\n        lmx_cell_init(unit, 0, 0)\n        if: lmx_branch_open(unit, %uU) != 0\n            return: 1\n", kids) < 0
         c.fclose(l2_out)
         return: 1
     k: 0
     while: k < l2_own_n
-        if: c.fprintf(l2_out, "        leaf: lmx_branch_child(unit, %uU)\n        if: leaf = 0\n            return: 1\n", (cast: (unsigned) k)) < 0
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && c.fprintf(l2_out, "        leaf: lmx_branch_child(unit, %uU)\n        if: leaf = 0\n            return: 1\n", (cast: (unsigned) l2_own_uchild[k])) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_own_ty[k] = 1 && c.fputs("        leaf\\data: lmx_char_cell(0)\n        if: lmx_type_of(leaf\\data) != c.LMX_TYPE_CHAR\n            return: 1\n", l2_out) < 0
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 1 && c.fputs("        leaf\\data: lmx_char_cell(0)\n        if: lmx_type_of(leaf\\data) != c.LMX_TYPE_CHAR\n            return: 1\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
-        if: l2_own_ty[k] = 2 && c.fputs("        leaf\\data: lmx_size_take()\n        if: lmx_type_of(leaf\\data) != c.LMX_TYPE_SIZE_T\n            return: 1\n", l2_out) < 0
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 2 && c.fputs("        leaf\\data: lmx_size_take()\n        if: lmx_type_of(leaf\\data) != c.LMX_TYPE_SIZE_T\n            return: 1\n", l2_out) < 0
             c.fclose(l2_out)
             return: 1
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 0 && c.fputs("        leaf\\data: lmx_int_take()\n        if: lmx_type_of(leaf\\data) != c.LMX_TYPE_INT\n            return: 1\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
+        k: k + 1
+    ---
+    k: 0
+    while: k < l2_for_n
+        if: l2_for_nkid[k] = 0
+            k: k + 1
+            continue
+        if: c.fprintf(l2_out, "        leaf: lmx_branch_child(unit, %uU)\n        if: leaf = 0\n            return: 1\n        if: lmx_branch_open(leaf, %uU) != 0\n            return: 1\n", (cast: (unsigned) l2_for_uchild[k]), (cast: (unsigned) l2_for_nkid[k])) < 0
+            c.fclose(l2_out)
+            return: 1
+        oi: 0
+        while: oi < l2_own_n
+            if: l2_own_fid[oi] = k && c.fprintf(l2_out, "        kid: lmx_branch_child(leaf, %uU)\n        if: kid = 0\n            return: 1\n", (cast: (unsigned) l2_own_fchild[oi])) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_own_fid[oi] = k && l2_own_ty[oi] = 1 && c.fputs("        kid\\data: lmx_char_cell(0)\n        if: lmx_type_of(kid\\data) != c.LMX_TYPE_CHAR\n            return: 1\n", l2_out) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_own_fid[oi] = k && l2_own_ty[oi] = 2 && c.fputs("        kid\\data: lmx_size_take()\n        if: lmx_type_of(kid\\data) != c.LMX_TYPE_SIZE_T\n            return: 1\n", l2_out) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_own_fid[oi] = k && l2_own_ty[oi] = 0 && c.fputs("        kid\\data: lmx_int_take()\n        if: lmx_type_of(kid\\data) != c.LMX_TYPE_INT\n            return: 1\n", l2_out) < 0
+                c.fclose(l2_out)
+                return: 1
+            oi: oi + 1
+        ---
         k: k + 1
     ---
     i: 0
@@ -5323,7 +5685,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: l2_write_sym(l2_out, i) != 0
             c.fclose(l2_out)
             return: 1
-        if: c.fprintf(l2_out, ")\n        rec\\sig: %uU\n        if: lmx_range_register((cast: (@: void) rec), (cast: (@: void) (rec + 1)), c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0\n            return: 1\n        leaf: lmx_branch_child(unit, %uU)\n        if: leaf = 0\n            return: 1\n        leaf\\data: (cast: (@: void) rec)\n        if: lmx_classify(leaf\\data) != c.LMX_KIND_METHOD\n            return: 1\n        if: rec\\sig != %uU\n            return: 1\n        if: leaf\\node != unit\n            return: 1\n", l2_m_sig[i], (cast: (unsigned) (l2_own_n + i)), l2_m_sig[i]) < 0
+        if: c.fprintf(l2_out, ")\n        rec\\sig: %uU\n        if: lmx_range_register((cast: (@: void) rec), (cast: (@: void) (rec + 1)), c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0\n            return: 1\n        leaf: lmx_branch_child(unit, %uU)\n        if: leaf = 0\n            return: 1\n        leaf\\data: (cast: (@: void) rec)\n        if: lmx_classify(leaf\\data) != c.LMX_KIND_METHOD\n            return: 1\n        if: rec\\sig != %uU\n            return: 1\n        if: leaf\\node != unit\n            return: 1\n", l2_m_sig[i], (cast: (unsigned) (l2_unit_base + i)), l2_m_sig[i]) < 0
             c.fclose(l2_out)
             return: 1
         i: i + 1

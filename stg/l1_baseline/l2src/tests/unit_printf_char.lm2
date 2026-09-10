@@ -1,0 +1,10 @@
+# Foreign c.printf must dirty-only checkpoint before the call.
+fn: test () int
+    char: x
+    x: 65
+    c.printf: "%d\n" x
+    return: 0
+end: test
+fn: main () int
+    return: 0
+end: main

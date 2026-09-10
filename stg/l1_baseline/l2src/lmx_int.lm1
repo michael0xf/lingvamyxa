@@ -1,0 +1,54 @@
+predef: "l2src/lmx_size.lm1"
+
+# Mutable int cells. Same discipline as lmx_size: interned chars share an
+# address by value; mutable primitives need their own registered domain.
+# Each own int field gets one cell from this pool at construction; assignment
+# stores through that cell (unique backing, stable live addresses, no
+# relocation). LMX_TYPE_INT is the existing range type; this is not a new
+# user-semantic choice.
+
+@: LmxPool lmx_int_pool 0
+
+fn: lmx_int_init () int
+    int: z 0
+    if: lmx_int_pool != 0
+        return: 1
+    lmx_int_pool: (cast: (@: LmxPool) c.calloc(1U, c.sizeof(c.LmxPool)))
+    if: lmx_int_pool = 0
+        return: 1
+    if: lmx_pool_open(lmx_int_pool, c.sizeof(z), 16U, c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_INT) != 0
+        c.free(lmx_int_pool)
+        lmx_int_pool: 0
+        return: 1
+return: 0
+
+fn: lmx_int_take () @: void
+    @: void cell
+    @: int p
+    if: lmx_int_pool = 0
+        return: 0
+    cell: lmx_pool_take(lmx_int_pool)
+    if: cell = 0
+        return: 0
+    p: (cast: (@: int) cell)
+    p[0]: 0
+return: cell
+
+fn: lmx_int_value (@: void cell) int
+    @: int p
+    if: cell = 0
+        return: 0
+    if: lmx_type_of(cell) != c.LMX_TYPE_INT
+        return: 0
+    p: (cast: (@: int) cell)
+return: p[0]
+
+fn: lmx_int_store (@: void cell; int: v) int
+    @: int p
+    if: cell = 0
+        return: 1
+    if: lmx_type_of(cell) != c.LMX_TYPE_INT
+        return: 1
+    p: (cast: (@: int) cell)
+    p[0]: v
+return: 0

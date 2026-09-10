@@ -1,0 +1,10 @@
+# size_t own must publish before c.printf as well.
+fn: test () int
+    size_t: n
+    n: 7
+    c.printf: "%zu\n" n
+    return: 0
+end: test
+fn: main () int
+    return: 0
+end: main
