@@ -1,5 +1,4 @@
-# CURRENT l2trans: unsupported loop.
-# INTENDED L2: ordinary for Structure field j; parent reads for\j; last assigned 9.
+# Ordinary for Structure field j; parent reads for\j; last assigned 9.
 # Probe surface is the established for: int(i, 0) (i < 10) i++ form, not compact for(...).
 # P0 tree of int: j i is frame int(j, i); that is syntax/receiver separation, not a
 # parser defect and not a rejection of the field model.

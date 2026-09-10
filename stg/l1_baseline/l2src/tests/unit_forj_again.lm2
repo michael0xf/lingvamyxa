@@ -1,11 +1,12 @@
-# Negative: bare j in the parent is not the child field (no flatten).
+# Repeated invocation: each call last-assigns for\j to 9; no per-iteration history.
 fn: test () int
     for: int(i, 0) (i < 10) i++
         int: j i
     end: for
-    c.printf: "%d\n" j
+    c.printf: "%d\n" for\j
     return: 0
 end: test
 fn: main () int
+    test()
     return: test()
 end: main

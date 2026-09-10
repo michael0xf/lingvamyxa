@@ -15,6 +15,8 @@ int: l2_own_n 0
 int: l2_own_cap 0
 int: l2_tn 0
 int: l2_loop_depth 0
+int: l2_scope_n 0
+c.array: [8]: @: LmP0Node l2_scope_at
 const: @: char l2_call_node 0
 @: FILE l2_out 0
 const: @: char l2_src 0
@@ -42,6 +44,7 @@ const: @: LmP0Node l2_main_node 0
 @@: LmP0Text l2_own_name 0
 @: int l2_own_ty 0
 @: int l2_own_mi 0
+@@: LmP0Node l2_own_host 0
 int: l2_need_p0 0
 int: l2_need_query 0
 int: l2_need_own 0
@@ -134,6 +137,16 @@ prototype:
     fn: l2_slash_own (const: @(LmP0Text t)) int
     fn: l2_is_char_decl (const: @(LmP0Node stmt)) int
     fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
+    fn: l2_own_store_ty (int: dty) int
+    fn: l2_for_cstyle (const: @(LmP0Node stmt)) int
+    fn: l2_scope_push (const: @(LmP0Node node)) int
+    fn: l2_scope_pop () int
+    fn: l2_scope_has (const: @(LmP0Node node)) int
+    fn: l2_scope_host () @: LmP0Node
+    fn: l2_own_find_host (int: mi; const: @(LmP0Text t); const: @(LmP0Node host)) int
+    fn: l2_own_any (int: mi; const: @(LmP0Text t)) int
+    fn: l2_path_own (int: mi; const: @(LmP0Text left); const: @(LmP0Text right)) int
+    fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     fn: l2_slot_decl_ty (const: @(LmP0Node stmt)) int
     fn: l2_slot_find (int: mi; const: @(LmP0Text t)) int
     fn: l2_is_known (const: @(LmP0Text t)) int
@@ -311,6 +324,8 @@ fn: l2_own_free () int
         l2_xfree((cast: (@: void) l2_own_live))
     if: l2_own_mi != 0
         l2_xfree((cast: (@: void) l2_own_mi))
+    if: l2_own_host != 0
+        l2_xfree((cast: (@: void) l2_own_host))
     if: l2_m_uses != 0
         l2_xfree((cast: (@: void) l2_m_uses))
     if: l2_m_alias != 0
@@ -321,6 +336,7 @@ fn: l2_own_free () int
     l2_own_ty: 0
     l2_own_live: 0
     l2_own_mi: 0
+    l2_own_host: 0
     l2_m_uses: 0
     l2_m_alias: 0
     l2_m_pre: 0
@@ -345,6 +361,7 @@ fn: l2_own_reserve (int: need) int
     @: int nt 0
     @: int nl 0
     @: int nmi 0
+    @@: LmP0Node nh 0
     @: int nu 0
     @: int na 0
     @: int np 0
@@ -393,10 +410,11 @@ fn: l2_own_reserve (int: need) int
     nt: (cast: (@: int) l2_xmalloc(ni))
     nl: (cast: (@: int) l2_xmalloc(ni))
     nmi: (cast: (@: int) l2_xmalloc(ni))
+    nh: (cast: (@@: LmP0Node) l2_xmalloc(nb))
     nu: (cast: (@: int) l2_xmalloc(nmeta * c.sizeof(c.int)))
     na: (cast: (@: int) l2_xmalloc(nmeta * c.sizeof(c.int)))
     np: (cast: (@: int) l2_xmalloc(nmeta * c.sizeof(c.int)))
-    if: nn = 0 || nt = 0 || nl = 0 || nmi = 0 || nu = 0 || na = 0 || np = 0
+    if: nn = 0 || nt = 0 || nl = 0 || nmi = 0 || nh = 0 || nu = 0 || na = 0 || np = 0
         if: nn != 0
             l2_xfree((cast: (@: void) nn))
         if: nt != 0
@@ -405,6 +423,8 @@ fn: l2_own_reserve (int: need) int
             l2_xfree((cast: (@: void) nl))
         if: nmi != 0
             l2_xfree((cast: (@: void) nmi))
+        if: nh != 0
+            l2_xfree((cast: (@: void) nh))
         if: nu != 0
             l2_xfree((cast: (@: void) nu))
         if: na != 0
@@ -415,6 +435,7 @@ fn: l2_own_reserve (int: need) int
     c.memset((cast: (@: void) nn), 0, nb)
     c.memset((cast: (@: void) nt), 0, ni)
     c.memset((cast: (@: void) nl), 0, ni)
+    c.memset((cast: (@: void) nh), 0, nb)
     oi: 0
     while: oi < (cast: (int) cap)
         nmi[oi]: -1
@@ -438,6 +459,7 @@ fn: l2_own_reserve (int: need) int
             nt[oi]: l2_own_ty[oi]
             nl[oi]: l2_own_live[oi]
             nmi[oi]: l2_own_mi[oi]
+            nh[oi]: l2_own_host[oi]
             oi: oi + 1
         mi: 0
         while: mi < l2_m_cap
@@ -456,6 +478,7 @@ fn: l2_own_reserve (int: need) int
         l2_xfree((cast: (@: void) l2_own_ty))
         l2_xfree((cast: (@: void) l2_own_live))
         l2_xfree((cast: (@: void) l2_own_mi))
+        l2_xfree((cast: (@: void) l2_own_host))
         l2_xfree((cast: (@: void) l2_m_uses))
         l2_xfree((cast: (@: void) l2_m_alias))
         l2_xfree((cast: (@: void) l2_m_pre))
@@ -463,6 +486,7 @@ fn: l2_own_reserve (int: need) int
     l2_own_ty: nt
     l2_own_live: nl
     l2_own_mi: nmi
+    l2_own_host: nh
     l2_m_uses: nu
     l2_m_alias: na
     l2_m_pre: np
@@ -1731,6 +1755,7 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
     l2_own_n: 0
     l2_own_free()
     l2_loop_depth: 0
+    l2_scope_n: 0
     l2_need_p0: 0
     l2_need_query: 0
     l2_need_own: 0
@@ -2152,6 +2177,28 @@ fn: l2_own_find (int: mi; const: @(LmP0Text t)) int
     if: mi < 0 || t = 0
         return: -1
     while: i < l2_own_n
+        if: l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], t) && l2_own_host[i] = 0
+            return: i
+        if: l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], t) && l2_scope_has(l2_own_host[i])
+            return: i
+        i: i + 1
+return: -1
+
+fn: l2_own_find_host (int: mi; const: @(LmP0Text t); const: @(LmP0Node host)) int
+    int: i 0
+    if: mi < 0 || t = 0
+        return: -1
+    while: i < l2_own_n
+        if: l2_own_mi[i] = mi && l2_own_host[i] = host && l2_text_same(l2_own_name[i], t)
+            return: i
+        i: i + 1
+return: -1
+
+fn: l2_own_any (int: mi; const: @(LmP0Text t)) int
+    int: i 0
+    if: mi < 0 || t = 0
+        return: -1
+    while: i < l2_own_n
         if: l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], t)
             return: i
         i: i + 1
@@ -2175,7 +2222,7 @@ fn: l2_own_add (int: mi; const: @(LmP0Text t); int: ty; const: @(char path); con
     if: shared != 0
         i: l2_own_first(t)
     if: shared = 0
-        i: l2_own_find(mi, t)
+        i: l2_own_find_host(mi, t, l2_scope_host())
     if: i >= 0 && l2_own_ty[i] != ty
         if: l2_error(path, at, "incompatible entry signature") != 0
             return: -1
@@ -2200,8 +2247,10 @@ fn: l2_own_add (int: mi; const: @(LmP0Text t); int: ty; const: @(char path); con
     l2_own_ty[l2_own_n]: ty
     l2_own_live[l2_own_n]: 0
     l2_own_mi[l2_own_n]: mi
+    l2_own_host[l2_own_n]: l2_scope_host()
     if: shared != 0
         l2_own_mi[l2_own_n]: -1
+        l2_own_host[l2_own_n]: 0
     l2_own_n: l2_own_n + 1
 return: l2_own_n - 1
 
@@ -2312,7 +2361,24 @@ fn: l2_collect_asgn_body (const: @(LmP0Structure body); int: mi; const: @(char p
             if: n >= 2 && last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE && l2_collect_asgn_body(last\value\as\structure, mi, path) != 0
                 return: 1
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_asgn(stmt)
+        if: l2_frame_head(stmt, "for")
+            if: l2_for_cstyle(stmt) = 0
+                field: l2_next_active(field\next)
+                continue
+            if: l2_scope_push(stmt) != 0
+                return: l2_error(path, stmt, "too deeply nested")
+            last: l2_next_active(stmt\as\frame\body\first_field)
+            k: 1
+            while: k < 5
+                last: l2_next_active(last\next)
+                k: k + 1
+            if: last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE && l2_collect_asgn_body(last\value\as\structure, mi, path) != 0
+                l2_scope_pop()
+                return: 1
+            l2_scope_pop()
+            field: l2_next_active(field\next)
+            continue
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_frame_head(stmt, "for") = 0 && l2_is_asgn(stmt)
             fa: stmt\as\frame\head
             ty: l2_param_ty(mi, fa)
             j: -1
@@ -2332,7 +2398,7 @@ fn: l2_collect_asgn_body (const: @(LmP0Structure body); int: mi; const: @(char p
             if: (ty = 1 || ty = 2) && l2_bind_own(mi, j, path, stmt) != 0
                 return: 1
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_asgn(stmt) = 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_frame_head(stmt, "for") = 0 && l2_is_asgn(stmt) = 0
             field: l2_next_active(field\next)
 return: 0
 
@@ -2384,14 +2450,47 @@ fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path)
             if: nxt = 0 || l2_frame_head(nxt\value, "else") = 0
                 field: nxt
             ---
-        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && depth > 0
+        if: l2_frame_head(stmt, "for")
+            if: l2_for_cstyle(stmt) = 0
+                field: l2_next_active(field\next)
+                continue
+            if: l2_scope_push(stmt) != 0
+                return: l2_error(path, stmt, "too deeply nested")
+            nxt: l2_next_active(stmt\as\frame\body\first_field)
+            if: nxt != 0 && l2_own_decl_ty(nxt\value) != 0
+                ty: l2_own_decl_ty(nxt\value)
+                fa: l2_next_active(nxt\value\as\frame\body\first_field)\value\as\atom
+                j: l2_own_add(mi, fa, l2_own_store_ty(ty), path, nxt\value, 0)
+                if: j < 0
+                    l2_scope_pop()
+                    return: 1
+                if: l2_own_off(mi, j) = (cast: (size_t) -1)
+                    l2_scope_pop()
+                    return: l2_error(path, nxt\value, "size overflow")
+                l2_m_uses[l2_own_off(mi, j)]: 1
+                l2_m_own[mi]: l2_m_own[mi] + 1
+                if: l2_bind_own(mi, j, path, nxt\value) != 0
+                    l2_scope_pop()
+                    return: 1
+                ---
+            nxt: l2_next_active(nxt\next)
+            nxt: l2_next_active(nxt\next)
+            nxt: l2_next_active(nxt\next)
+            nxt: l2_next_active(nxt\next)
+            if: nxt != 0 && nxt\value != 0 && nxt\value\kind = c.LM_P0_NODE_STRUCTURE && nxt\value\as != 0 && l2_collect_decls(nxt\value\as\structure, mi, path, depth + 1, sn) != 0
+                l2_scope_pop()
+                return: 1
+            l2_scope_pop()
+            field: l2_next_active(field\next)
+            continue
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && depth > 0 && l2_scope_n = 0
             return: l2_error(path, stmt, "unsupported own declaration")
         if: l2_frame_head(stmt, "if") = 0 && l2_slot_decl_ty(stmt) != 0 && depth > 0
             return: l2_error(path, stmt, "unsupported body")
-        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && depth = 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && (depth = 0 || l2_scope_n != 0)
             ty: l2_own_decl_ty(stmt)
             fa: l2_next_active(stmt\as\frame\body\first_field)\value\as\atom
-            j: l2_own_add(mi, fa, ty, path, stmt, 0)
+            j: l2_own_add(mi, fa, l2_own_store_ty(ty), path, stmt, 0)
             if: j < 0
                 return: 1
             if: l2_own_off(mi, j) = (cast: (size_t) -1)
@@ -2482,11 +2581,13 @@ fn: l2_scan_ident (int: mi; const: @(LmP0Text t); @: int seen) int
     if: t\length >= 2U && t\data[0] = 99 && t\data[1] = 46
         return: 0
     oi: l2_own_find(mi, t)
-    if: oi >= 0 && l2_m_uses[l2_own_off(mi, oi)] != 0 && (seen = 0 || seen[oi] = 0)
+    if: oi >= 0 && l2_m_uses[l2_own_off(mi, oi)] != 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2) && (seen = 0 || seen[oi] = 0)
         l2_m_pre[l2_own_off(mi, oi)]: 1
         ty: l2_own_ty[oi]
         return: l2_dyn_add(mi, t, ty)
     if: oi >= 0 && l2_m_uses[l2_own_off(mi, oi)] != 0
+        return: 0
+    if: l2_own_any(mi, t) >= 0
         return: 0
     if: l2_dyn_add(mi, t, 0) != 0
         return: 1
@@ -2572,22 +2673,48 @@ fn: l2_scan_body (const: @(LmP0Structure body); int: mi; @: int seen) int
             if: n >= 2 && last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE && l2_scan_body(last\value\as\structure, mi, seen) != 0
                 return: 1
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_asgn(stmt)
+        if: l2_frame_head(stmt, "for")
+            if: l2_for_cstyle(stmt) = 0
+                field: l2_next_active(field\next)
+                continue
+            if: l2_scope_push(stmt) != 0
+                return: 1
+            last: l2_next_active(stmt\as\frame\body\first_field)
+            if: last != 0 && last\value != 0 && last\value\as != 0 && last\value\as\frame != 0 && last\value\as\frame\body != 0 && l2_scan_fields(last\value\as\frame\body\first_field, l2_count_active(last\value\as\frame\body), mi, seen) != 0
+                l2_scope_pop()
+                return: 1
+            last: l2_next_active(last\next)
+            if: last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE && l2_scan_fields(last\value\as\structure\first_field, l2_count_active(last\value\as\structure), mi, seen) != 0
+                l2_scope_pop()
+                return: 1
+            last: l2_next_active(last\next)
+            if: last != 0 && l2_scan_node(last\value, mi, seen) != 0
+                l2_scope_pop()
+                return: 1
+            last: l2_next_active(last\next)
+            last: l2_next_active(last\next)
+            if: last != 0 && last\value != 0 && last\value\kind = c.LM_P0_NODE_STRUCTURE && l2_scan_body(last\value\as\structure, mi, seen) != 0
+                l2_scope_pop()
+                return: 1
+            l2_scope_pop()
+            field: l2_next_active(field\next)
+            continue
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_frame_head(stmt, "for") = 0 && l2_is_asgn(stmt)
             if: stmt\as\frame\body != 0 && l2_scan_fields(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), mi, seen) != 0
                 return: 1
             oi: l2_own_find(mi, stmt\as\frame\head)
             if: oi >= 0 && seen != 0
                 seen[oi]: 1
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_asgn(stmt) = 0 && l2_own_decl_ty(stmt) != 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_frame_head(stmt, "for") = 0 && l2_is_asgn(stmt) = 0 && l2_own_decl_ty(stmt) != 0
             fa: l2_next_active(stmt\as\frame\body\first_field)\value\as\atom
             oi: l2_own_find(mi, fa)
             if: oi >= 0 && seen != 0
                 seen[oi]: 1
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_asgn(stmt) = 0 && l2_own_decl_ty(stmt) = 0 && l2_is_char_decl(stmt)
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_frame_head(stmt, "for") = 0 && l2_is_asgn(stmt) = 0 && l2_own_decl_ty(stmt) = 0 && l2_is_char_decl(stmt)
             field: l2_next_active(field\next)
-        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_is_asgn(stmt) = 0 && l2_is_char_decl(stmt) = 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_frame_head(stmt, "while") = 0 && l2_frame_head(stmt, "for") = 0 && l2_is_asgn(stmt) = 0 && l2_is_char_decl(stmt) = 0
             if: stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && l2_scan_ident(mi, stmt\as\frame\head, seen) != 0
                 return: 1
             if: stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\body != 0 && l2_scan_fields(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), mi, seen) != 0
@@ -2820,15 +2947,21 @@ return: -1
 fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
     @: LmP0Field f
     int: ty 0
+    int: n
     if: l2_frame_head(stmt, "char")
         ty: 1
     if: l2_frame_head(stmt, "size_t")
         ty: 2
+    if: l2_frame_head(stmt, "int")
+        ty: 3
     if: ty = 0
         return: 0
     if: stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\body = 0
         return: 0
-    if: l2_count_active(stmt\as\frame\body) != 1
+    n: l2_count_active(stmt\as\frame\body)
+    if: (ty = 1 || ty = 2) && n != 1
+        return: 0
+    if: ty = 3 && n != 1 && n != 2
         return: 0
     f: l2_next_active(stmt\as\frame\body\first_field)
     if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM
@@ -2836,6 +2969,97 @@ fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
     if: l2_ident(f\value\as\atom) = 0
         return: 0
 return: ty
+
+fn: l2_own_store_ty (int: dty) int
+    if: dty = 3
+        return: 0
+return: dty
+
+fn: l2_scope_push (const: @(LmP0Node node)) int
+    if: node = 0 || l2_scope_n >= 8
+        return: 1
+    l2_scope_at[l2_scope_n]: (cast: (@: LmP0Node) node)
+    l2_scope_n: l2_scope_n + 1
+return: 0
+
+fn: l2_scope_pop () int
+    if: l2_scope_n <= 0
+        return: 1
+    l2_scope_n: l2_scope_n - 1
+    l2_scope_at[l2_scope_n]: 0
+return: 0
+
+fn: l2_scope_has (const: @(LmP0Node node)) int
+    int: i 0
+    if: node = 0
+        return: 0
+    while: i < l2_scope_n
+        if: l2_scope_at[i] = node
+            return: 1
+        i: i + 1
+return: 0
+
+fn: l2_scope_host () @: LmP0Node
+    if: l2_scope_n <= 0
+        return: 0
+return: l2_scope_at[l2_scope_n - 1]
+
+fn: l2_for_cstyle (const: @(LmP0Node stmt)) int
+    @: LmP0Field f0
+    @: LmP0Field f1
+    @: LmP0Field f2
+    @: LmP0Field f3
+    @: LmP0Field f4
+    if: l2_frame_head(stmt, "for") = 0
+        return: 0
+    if: stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\body = 0
+        return: 0
+    if: l2_count_active(stmt\as\frame\body) != 5
+        return: 0
+    f0: l2_next_active(stmt\as\frame\body\first_field)
+    if: f0 = 0
+        return: 0
+    f1: l2_next_active(f0\next)
+    if: f1 = 0
+        return: 0
+    f2: l2_next_active(f1\next)
+    if: f2 = 0
+        return: 0
+    f3: l2_next_active(f2\next)
+    if: f3 = 0
+        return: 0
+    f4: l2_next_active(f3\next)
+    if: f4 = 0
+        return: 0
+    if: l2_own_decl_ty(f0\value) != 3
+        return: 0
+    if: f1\value = 0 || f1\value\kind != c.LM_P0_NODE_STRUCTURE || f1\value\as = 0
+        return: 0
+    if: f2\value = 0 || f2\value\kind != c.LM_P0_NODE_ATOM || l2_ident(f2\value\as\atom) = 0
+        return: 0
+    if: f3\value = 0 || f3\value\kind != c.LM_P0_NODE_ATOM
+        return: 0
+    if: l2_text_eq(f3\value\as\atom, "++") = 0 && l2_text_eq(f3\value\as\atom, "--") = 0
+        return: 0
+    if: f4\value = 0 || f4\value\kind != c.LM_P0_NODE_STRUCTURE || f4\value\as = 0
+        return: 0
+return: 1
+
+fn: l2_path_own (int: mi; const: @(LmP0Text left); const: @(LmP0Text right)) int
+    int: i 0
+    int: hit
+    hit: -1
+    if: mi < 0 || left = 0 || right = 0
+        return: -1
+    if: l2_text_eq(left, "for") = 0
+        return: -1
+    while: i < l2_own_n
+        if: l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], right) && l2_own_host[i] != 0 && l2_frame_head(l2_own_host[i], "for") && hit >= 0
+            return: -1
+        if: l2_own_mi[i] = mi && l2_text_same(l2_own_name[i], right) && l2_own_host[i] != 0 && l2_frame_head(l2_own_host[i], "for")
+            hit: i
+        i: i + 1
+return: hit
 
 fn: l2_slot_decl_ty (const: @(LmP0Node stmt)) int
     @: LmP0Field f
@@ -2908,6 +3132,8 @@ fn: l2_is_known (const: @(LmP0Text t)) int
     if: l2_text_eq(t, "c.strlen") || l2_text_eq(t, "c.memcmp") || l2_text_eq(t, "l2_immut_query_fill") || l2_text_eq(t, "l2_hash_compare_q")
         return: 1
     if: l2_text_eq(t, "c.sizeof") || l2_text_eq(t, "lm_own_new_zero") || l2_text_eq(t, "lm_own_copy_bytes") || l2_text_eq(t, "lm_own_delete")
+        return: 1
+    if: l2_text_eq(t, "c.printf")
         return: 1
 return: 0
 
@@ -3347,11 +3573,9 @@ fn: l2_check_primary (const: @(LmP0Node node); int: mi; const: @(char path)) int
         if: mi >= 0 && l2_param_find(mi, node\as\atom) >= 0
             return: 0
         if: mi >= 0
-            idx: 0
-            while: idx < l2_own_n
-                if: l2_m_uses[l2_own_off(mi, idx)] != 0 && l2_text_same(node\as\atom, l2_own_name[idx])
-                    return: 0
-                idx: idx + 1
+            idx: l2_own_find(mi, node\as\atom)
+            if: idx >= 0 && l2_m_uses[l2_own_off(mi, idx)] != 0
+                return: 0
             ---
         if: mi >= 0 && l2_slot_find(mi, node\as\atom) >= 0
             return: 0
@@ -3407,9 +3631,12 @@ return: l2_check_primary(node, mi, path)
 
 fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); const: @(LmP0Node at)) int
     @: LmP0Field f
+    @: LmP0Field p1
+    @: LmP0Field p2
     int: i
     int: skip
     int: after 0
+    int: po
     if: n <= 0
         return: l2_error(path, at, "unsupported body")
     f: l2_next_active(field)
@@ -3418,6 +3645,21 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
         if: f = 0 || f\value = 0
             return: l2_error(path, at, "unsupported body")
         skip: 0
+        p1: 0
+        p2: 0
+        po: -1
+        if: f\value\kind = c.LM_P0_NODE_ATOM
+            p1: l2_next_active(f\next)
+        if: p1 != 0 && p1\value != 0 && p1\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(p1\value\as\atom)
+            p2: l2_next_active(p1\next)
+        if: p2 != 0 && p2\value != 0 && p2\value\kind = c.LM_P0_NODE_ATOM
+            po: l2_path_own(mi, f\value\as\atom, p2\value\as\atom)
+        if: p2 != 0 && p2\value != 0 && p2\value\kind = c.LM_P0_NODE_ATOM && po < 0 && l2_text_eq(f\value\as\atom, "for")
+            return: l2_error(path, p2\value, "unresolved name")
+        if: po >= 0
+            i: i + 3
+            f: l2_next_active(p2\next)
+            continue
         if: f\value\kind = c.LM_P0_NODE_ATOM && (l2_is_binop(f\value\as\atom) || l2_is_brack(f\value\as\atom) || l2_is_slash(f\value\as\atom) || l2_num(f\value\as\atom))
             skip: 1
         if: f\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(f\value\as\atom)
@@ -3468,7 +3710,7 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "return")
             field: l2_next_active(field\next)
             continue
-        if: l2_frame_head(stmt, "for") || l2_frame_head(stmt, "break") || l2_frame_head(stmt, "continue")
+        if: l2_frame_head(stmt, "break") || l2_frame_head(stmt, "continue")
             return: l2_error(path, stmt, "unsupported loop")
         if: l2_frame_head(stmt, "if")
             fr: stmt\as\frame
@@ -3527,8 +3769,47 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             l2_loop_depth: l2_loop_depth - 1
             field: l2_next_active(field\next)
             continue
-        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && depth > 0
+        if: l2_frame_head(stmt, "for")
+            fr: stmt\as\frame
+            if: l2_for_cstyle(stmt) = 0
+                return: l2_error(path, stmt, "unsupported loop")
+            if: fr\trailer != 0 && l2_end_named(fr, "for") = 0
+                return: l2_error(path, stmt, "unsupported trailer")
+            last: l2_next_active(fr\body\first_field)
+            if: l2_scope_push(stmt) != 0
+                return: l2_error(path, stmt, "too deeply nested")
+            if: l2_own_decl_ty(last\value) != 0 && l2_count_active(last\value\as\frame\body) = 2 && l2_check_expr(l2_next_active(l2_next_active(last\value\as\frame\body\first_field)\next)\value, mi, path) != 0
+                l2_scope_pop()
+                return: 1
+            last: l2_next_active(last\next)
+            if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
+                l2_scope_pop()
+                return: l2_error(path, stmt, "unsupported body")
+            if: l2_check_fields(last\value\as\structure\first_field, l2_count_active(last\value\as\structure), mi, path, stmt) != 0
+                l2_scope_pop()
+                return: 1
+            last: l2_next_active(last\next)
+            if: last = 0 || last\value = 0 || l2_check_primary(last\value, mi, path) != 0
+                l2_scope_pop()
+                return: 1
+            last: l2_next_active(last\next)
+            last: l2_next_active(last\next)
+            if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
+                l2_scope_pop()
+                return: l2_error(path, stmt, "unsupported body")
+            l2_loop_depth: l2_loop_depth + 1
+            if: l2_check_body(last\value\as\structure, mi, path, depth + 1) != 0
+                l2_loop_depth: l2_loop_depth - 1
+                l2_scope_pop()
+                return: 1
+            l2_loop_depth: l2_loop_depth - 1
+            l2_scope_pop()
+            field: l2_next_active(field\next)
+            continue
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && depth > 0 && l2_scope_n = 0
             return: l2_error(path, stmt, "unsupported own declaration")
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && l2_count_active(stmt\as\frame\body) = 2 && l2_check_expr(l2_next_active(l2_next_active(stmt\as\frame\body\first_field)\next)\value, mi, path) != 0
+            return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt)
             field: l2_next_active(field\next)
         raw: 1
@@ -3867,13 +4148,11 @@ fn: l2_prep (const: @(LmP0Node node); int: mi; const: @(char ind); @: char dest)
                 return: l2_tok_formal(mi, idx, dest)
             ---
         if: mi >= 0
-            idx: 0
-            while: idx < l2_own_n
-                if: l2_m_uses[l2_own_off(mi, idx)] != 0 && l2_text_same(node\as\atom, l2_own_name[idx])
-                    if: c.sprintf(dest, "l2_q%d", idx) < 0
-                        return: 1
-                    return: 0
-                idx: idx + 1
+            idx: l2_own_find(mi, node\as\atom)
+            if: idx >= 0 && l2_m_uses[l2_own_off(mi, idx)] != 0
+                if: c.sprintf(dest, "l2_q%d", idx) < 0
+                    return: 1
+                return: 0
             ---
         if: mi >= 0
             idx: l2_slot_find(mi, node\as\atom)
@@ -4158,11 +4437,14 @@ return: l2_tok_temp(t, dest)
 
 fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: char dest) int
     @: LmP0Field f
+    @: LmP0Field p1
+    @: LmP0Field p2
     @: LmP0Node at 0
     int: i
     int: ao
     int: after 0
     int: fld
+    int: po
     c.array: [256]: char buf
     c.array: [256]: char piece
     if: dest = 0
@@ -4177,6 +4459,25 @@ fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
         at: f\value
         fld: 0
         piece[0]: 0
+        p1: 0
+        p2: 0
+        po: -1
+        if: f\value\kind = c.LM_P0_NODE_ATOM
+            p1: l2_next_active(f\next)
+        if: p1 != 0 && p1\value != 0 && p1\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(p1\value\as\atom)
+            p2: l2_next_active(p1\next)
+        if: p2 != 0 && p2\value != 0 && p2\value\kind = c.LM_P0_NODE_ATOM
+            po: l2_path_own(mi, f\value\as\atom, p2\value\as\atom)
+        if: po >= 0
+            if: c.sprintf(piece, "l2_q%d", po) < 0
+                return: 1
+            if: l2_cat(buf, piece) != 0
+                return: l2_error(l2_src, at, "expression too long")
+            ao: 0
+            after: 0
+            i: i + 3
+            f: l2_next_active(p2\next)
+            continue
         if: after != 0 && f\value\kind = c.LM_P0_NODE_ATOM && (l2_text_eq(f\value\as\atom, "data") || l2_text_eq(f\value\as\atom, "length"))
             fld: 1
         if: f\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(f\value\as\atom)
@@ -4388,6 +4689,57 @@ fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
         i: i + 1
 return: 0
 
+fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
+    @: LmP0Field f
+    @: LmP0Field p1
+    @: LmP0Field p2
+    int: n
+    int: i
+    int: po
+    int: first 1
+    c.array: [256]: char buf
+    c.array: [256]: char piece
+    if: stmt = 0 || stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || stmt\as\frame\body = 0
+        return: 1
+    buf[0]: 0
+    if: l2_tok_text(stmt\as\frame\head, buf, 256U) != 0
+        return: 1
+    if: l2_cat(buf, "(") != 0
+        return: 1
+    n: l2_count_active(stmt\as\frame\body)
+    f: l2_next_active(stmt\as\frame\body\first_field)
+    i: 0
+    while: i < n && f != 0 && f\value != 0
+        piece[0]: 0
+        p1: 0
+        p2: 0
+        po: -1
+        if: f\value\kind = c.LM_P0_NODE_ATOM
+            p1: l2_next_active(f\next)
+        if: p1 != 0 && p1\value != 0 && p1\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(p1\value\as\atom)
+            p2: l2_next_active(p1\next)
+        if: p2 != 0 && p2\value != 0 && p2\value\kind = c.LM_P0_NODE_ATOM
+            po: l2_path_own(mi, f\value\as\atom, p2\value\as\atom)
+        if: po >= 0
+            if: c.sprintf(piece, "l2_q%d", po) < 0
+                return: 1
+            i: i + 2
+            f: p2
+        if: po < 0 && l2_prep(f\value, mi, ind, piece) != 0
+            return: 1
+        if: first = 0 && l2_cat(buf, ", ") != 0
+            return: 1
+        if: l2_cat(buf, piece) != 0
+            return: 1
+        first: 0
+        i: i + 1
+        f: l2_next_active(f\next)
+    if: l2_cat(buf, ")") != 0
+        return: 1
+    if: c.fprintf(l2_out, "%s%s\n", ind, buf) < 0
+        return: 1
+return: 0
+
 fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     @: LmP0Field field
     @: LmP0Field nxt
@@ -4410,6 +4762,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
     c.array: [64]: char wdeep
     c.array: [64]: char wcond
     c.array: [64]: char wkeep
+    c.array: [64]: char wfirst
     if: body = 0
         return: 0
     ln: c.strlen(ind)
@@ -4497,6 +4850,102 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 return: 1
             field: l2_next_active(field\next)
             continue
+        if: l2_frame_head(stmt, "for")
+            fr: stmt\as\frame
+            if: l2_for_cstyle(stmt) = 0
+                return: 1
+            last: l2_next_active(fr\body\first_field)
+            if: l2_scope_push(stmt) != 0
+                return: 1
+            wkeep[0]: 0
+            wcond[0]: 0
+            wdeep[0]: 0
+            wfirst[0]: 0
+            if: l2_bump_ind(deep, wdeep) != 0
+                l2_scope_pop()
+                return: 1
+            oi: l2_own_find(mi, l2_next_active(last\value\as\frame\body\first_field)\value\as\atom)
+            if: oi < 0
+                l2_scope_pop()
+                return: 1
+            if: l2_eval_fields(l2_next_active(l2_next_active(last\value\as\frame\body\first_field)\next), 1, mi, ind, l2_tok) != 0
+                l2_scope_pop()
+                return: 1
+            if: c.fprintf(l2_out, "%sl2_q%d: %s\n%sl2_q%d_dirty: 1\n", ind, oi, l2_tok, ind, oi) < 0
+                l2_scope_pop()
+                return: 1
+            last: l2_next_active(last\next)
+            if: l2_new_temp(ind, wkeep) != 0
+                l2_scope_pop()
+                return: 1
+            if: c.fprintf(l2_out, "%s%s: 1\n", ind, wkeep) < 0
+                l2_scope_pop()
+                return: 1
+            if: l2_new_temp(ind, wfirst) != 0
+                l2_scope_pop()
+                return: 1
+            if: c.fprintf(l2_out, "%s%s: 1\n", ind, wfirst) < 0
+                l2_scope_pop()
+                return: 1
+            if: l2_new_temp(ind, wcond) != 0
+                l2_scope_pop()
+                return: 1
+            if: c.fprintf(l2_out, "%swhile: %s\n", ind, wkeep) < 0
+                l2_scope_pop()
+                return: 1
+            if: c.fprintf(l2_out, "%sif: %s = 0\n", deep, wfirst) < 0
+                l2_scope_pop()
+                return: 1
+            nxt: l2_next_active(last\next)
+            if: nxt = 0 || nxt\value = 0 || nxt\value\kind != c.LM_P0_NODE_ATOM
+                l2_scope_pop()
+                return: 1
+            si: l2_own_find(mi, nxt\value\as\atom)
+            if: si < 0
+                l2_scope_pop()
+                return: 1
+            nxt: l2_next_active(nxt\next)
+            if: nxt != 0 && nxt\value != 0 && l2_text_eq(nxt\value\as\atom, "--") && c.fprintf(l2_out, "%s    l2_q%d: l2_q%d - 1\n%s    l2_q%d_dirty: 1\n", deep, si, si, deep, si) < 0
+                l2_scope_pop()
+                return: 1
+            if: nxt != 0 && nxt\value != 0 && l2_text_eq(nxt\value\as\atom, "--") = 0 && c.fprintf(l2_out, "%s    l2_q%d: l2_q%d + 1\n%s    l2_q%d_dirty: 1\n", deep, si, si, deep, si) < 0
+                l2_scope_pop()
+                return: 1
+            if: c.fprintf(l2_out, "%s%s: 0\n", deep, wfirst) < 0
+                l2_scope_pop()
+                return: 1
+            if: last\value = 0 || last\value\kind != c.LM_P0_NODE_STRUCTURE || last\value\as = 0
+                l2_scope_pop()
+                return: 1
+            if: l2_eval_cond(last\value\as\structure\first_field, l2_count_active(last\value\as\structure), mi, deep, wcond) != 0
+                l2_scope_pop()
+                return: 1
+            if: c.fprintf(l2_out, "%sif: %s = 0\n", deep, wcond) < 0
+                l2_scope_pop()
+                return: 1
+            if: c.fprintf(l2_out, "%s    %s: 0\n", deep, wkeep) < 0
+                l2_scope_pop()
+                return: 1
+            if: c.fprintf(l2_out, "%sif: %s\n", deep, wkeep) < 0
+                l2_scope_pop()
+                return: 1
+            last: l2_next_active(fr\body\first_field)
+            k: 1
+            while: k < 5
+                last: l2_next_active(last\next)
+                k: k + 1
+            l2_loop_depth: l2_loop_depth + 1
+            if: last = 0 || last\value = 0 || last\value\as = 0 || l2_emit_body(last\value\as\structure, mi, wdeep) != 0
+                l2_loop_depth: l2_loop_depth - 1
+                l2_scope_pop()
+                return: 1
+            l2_loop_depth: l2_loop_depth - 1
+            if: c.fprintf(l2_out, "%send: while\n", ind) < 0
+                l2_scope_pop()
+                return: 1
+            l2_scope_pop()
+            field: l2_next_active(field\next)
+            continue
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "continue")
             if: c.fprintf(l2_out, "%scontinue\n", ind) < 0
                 return: 1
@@ -4525,13 +4974,22 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
         if: ix = 0
             field: l2_next_active(field\next)
             continue
-        if: l2_frame_head(stmt, "continue") || l2_frame_head(stmt, "break") || l2_frame_head(stmt, "for")
+        if: l2_frame_head(stmt, "continue") || l2_frame_head(stmt, "break")
             return: 1
+        if: l2_frame_head(stmt, "c.printf")
+            if: l2_emit_ccall(stmt, mi, ind) != 0
+                return: 1
+            field: l2_next_active(field\next)
+            continue
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0
             oi: l2_own_find(mi, l2_next_active(stmt\as\frame\body\first_field)\value\as\atom)
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0
             l2_own_live[oi]: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[l2_own_off(mi, oi)] >= 0 && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_child(node, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, (cast: (unsigned) oi), ind, oi, ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[l2_own_off(mi, oi)] >= 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2) && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_child(node, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, (cast: (unsigned) oi), ind, oi, ind) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && l2_count_active(stmt\as\frame\body) = 2 && l2_eval_fields(l2_next_active(l2_next_active(stmt\as\frame\body\first_field)\next), 1, mi, ind, l2_tok) != 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && l2_count_active(stmt\as\frame\body) = 2 && c.fprintf(l2_out, "%sl2_q%d: %s\n%sl2_q%d_dirty: 1\n", ind, oi, l2_tok, ind, oi) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt)
             field: l2_next_active(field\next)
@@ -4770,7 +5228,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 2 && c.fprintf(l2_out, "    size_t: l2_q%d\n    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child(node, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, (cast: (unsigned) k), k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 0 && c.fprintf(l2_out, "    int: l2_q%d 0\n    int: l2_q%d_dirty 0\n", k, k) < 0
+                c.fclose(l2_out)
+                return: 1
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && (l2_own_ty[k] = 1 || l2_own_ty[k] = 2) && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child(node, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, (cast: (unsigned) k), k) < 0
                 c.fclose(l2_out)
                 return: 1
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 1 && c.fprintf(l2_out, "    l2_q%d: (cast: (char) lmx_char_value(l2_q%d_from\\data))\n", k, k) < 0

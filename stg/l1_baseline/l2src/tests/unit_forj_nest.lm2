@@ -1,11 +1,14 @@
-# Body may assign parent field acc directly; last assigned 9. Not an L1 C-block claim.
+# Nested ordinary if inside for; parent acc and path for\j persist. Last assigned 9.
 fn: test () int
     int: acc 0
     for: int(i, 0) (i < 10) i++
         int: j i
-        acc: j
+        if: j > 0
+            acc: j
+        ---
     end: for
     c.printf: "%d\n" acc
+    c.printf: "%d\n" for\j
     return: 0
 end: test
 fn: main () int

@@ -997,7 +997,8 @@ it re-enters eval_cond; it is not a C continue of a cond-temp
 header and not a checkpoint. Nested continue is innermost (two
 whiles in one body, not a callee while). Frame `continue:` with
 or without payload is `unsupported loop`, not a silent skip.
-Continue outside while / `break` / `for` stay `unsupported loop`.
+Continue outside while / `break` / non-cstyle `for` stay `unsupported loop`.
+Established `for: int(i, 0) (i < 10) i++` is Unit 13b.
 Keep/cond temps are backend locals, not LMX fields.
 
 `count_line_breaks` plus a closed-unit copy of
@@ -1018,6 +1019,38 @@ Array, `break`. find_python_string_end moved to Unit 14.
 visual_column moved to Unit 15.
 
 Oracle: frozen parser.lm1 vs L2 drive.
+
+Unit 13b - ordinary for Structure and int fields
+------------------------------------------------
+Files: l2trans.lm1, run_l2trans.ps1, tests/unit_forj_path.lm2,
+tests/unit_forj_bare.lm2, tests/unit_forj_parent.lm2,
+tests/unit_forj_nest.lm2, tests/unit_forj_again.lm2
+
+SPEC  ordinary nested Structure fields / explicit path
+    DECIDED by 044514/045200/060900 tickets. The P0 tree of
+    `for: int(i, 0) (i < 10) i++` is a 5-field frame; `int: j i`
+    is `frame int(j, i)` inside the anonymous body; `for\j` is
+    atoms for, \, j. Receiver interpretation: the for occurrence
+    is a same-method Structure; header/body `int:` decls are
+    fields of that occurrence (host = the for node). Parent reads
+    child j only as path `for\j`. Bare parent `j` is
+    `unresolved name` (not flattened). Body may update a parent
+    `int` field (inward). No new method activation, no per-iteration
+    history, no C `for->j`.
+
+L1  compact `for(...)` header
+    AVOIDED. Compact-header grammar is a separate unproved
+    spelling (unit_forj_compact.lmx). This unit only lowers the
+    established `for: int(i, 0)...` form. `for: a < b` stays
+    `unsupported loop`.
+
+ABI  LMX_TYPE_INT primitive pool
+    AVOIDED. lmx.h names LMX_TYPE_INT but has no take/value/store
+    API. int OwnUsed in this unit is a same-method typed cache
+    (formal ty=0), last-assigned across iterations. Graph children
+    and dirty checkpoint stores stay char/size_t. Arises when an
+    int field must publish through `node` like char/size_t. Then:
+    ASK, do not invent lmx_int here.
 
 Unit 14 - size_t* out-param and python string end
 -------------------------------------------------

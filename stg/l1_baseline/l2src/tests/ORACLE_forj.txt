@@ -15,7 +15,9 @@ build/l1trans/gen2/printTree.exe, not printTree.lm0.exe.
 Keep separate:
   1. old 620db86 reference trees
   2. current P0 dumps (these *.lm0.tree)
-  3. semantic receiver (for\j as L2 field) — intended, currently unsupported
+  3. semantic receiver (for\j as L2 field) — 060900: last assigned 9 via path;
+     bare parent j is unresolved name; parent acc last assigned 9. Compact
+     header remains unproved.
 
 Compact-header sketches (not the established for: int(i, 0)... probe):
   unit_forj_compact.lmx       historical dotted-invalid for.j
