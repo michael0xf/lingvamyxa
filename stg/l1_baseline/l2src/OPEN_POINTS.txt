@@ -1618,6 +1618,38 @@ invalid_eq_unclosed (20), invalid_triple_unclosed (4).
 DECIDED: empty-colon rejection is the agreed current-vs-620 delta.
 AVOIDED: live gen2 / frozen parser.lm1 rewrite.
 
-Next bounded removal: candidate strip of lm_p0_scan_layout_prefix,
-wired to an L2 port (parser_scan_indent already has
-scan_indent_column). parse_bytes / parse_file / dump stay L1.
+Next bounded removal after 082500 was scan_layout_prefix (090841).
+
+Unit candidate parse_bytes uses L2 scan_layout_prefix (090841)
+--------------------------------------------------------------
+Files: parser_scan_layout_prefix.lm2, layout_prefix_abi.c,
+run_candidate_indent.ps1, run_l2trans.ps1, indent_parse_probe.c,
+OPEN_POINTS.txt
+Frozen REF and installed gen2 untouched.
+
+L2 port of lm_p0_scan_layout_prefix on top of parser_scan_indent
+helpers (byte-identical helper bodies). Differential slp_l2_drive
+matches parser.lm1. Address actuals of own size_t caches are not
+used: the callee writes through the existing @: size_t out formals,
+then the caller reads out_offset[0] / out_indent_column[0] into
+locals. Dot is numeric 46 (L2 has no '.' literal here). Inner space
+skip uses a more-flag because L2 rejects break and a call inside &&.
+
+Candidate strip adds lm_p0_scan_layout_prefix. Second L2 object
+redefines l2_m3 -> l2_layout_m3 and keep-globals only
+l2_layout_boot / l2_layout_unit / l2_layout_m3 so it does not collide
+with indent_stack's l2_m*. Probe: parse=0 indent_hits>=1 layout_hits>=1.
+
+Corpus (separated, not overlapping counts):
+  total 38 = p0_tree_contract 36 + extra arr/tail_cutters 2
+  accept 32 (match620 30 + extra_no_golden 2)
+  expected_reject 6 = empty_colon_delta 3 + same_as_620_reject 3
+  known_tree_delta_vs_620 0
+Pinned 620 printTree hash unchanged. Live l1trans 65D5A5ED.
+
+DECIDED: empty-colon 32 remains the only current-vs-620 parse delta.
+AVOIDED: live gen2 / frozen parser.lm1 rewrite; two L2 units sharing
+global l2_m*.
+
+Next L1 on the candidate path: parse_bytes / parse_file,
+document_init/destroy, field parse loop, empty-colon 32, dump.

@@ -31,7 +31,8 @@ $replaced = @(
     "lm_p0_indent_stack_delete",
     "lm_p0_indent_stack_copy",
     "lm_p0_indent_stack_clone",
-    "lm_p0_indent_level_from_column"
+    "lm_p0_indent_level_from_column",
+    "lm_p0_scan_layout_prefix"
 )
 
 $frozenParser = Join-Path (Get-Location) "l1src\parser.lm1"
@@ -146,7 +147,46 @@ if ($LASTEXITCODE -ne 0) { Get-Content $ptLog; throw "gcc failed candidate_print
 
 $candExe = Join-Path $out "candidate_printTree.exe"
 $linkLog = Join-Path $log "candidate_printTree.link.log"
-cmd /c "gcc $flagStr `"$ptO`" `"$bootKeep`" `"$abiO`" -o `"$candExe`" > `"$linkLog`" 2>&1"
+$layLm1 = Join-Path $out "parser_scan_layout_prefix.lm1"
+if (-not (Test-Path -LiteralPath $layLm1)) { throw "missing $layLm1 (run Invoke-ScanLayoutPrefix first)" }
+$llm1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $layLm1)).Replace("`r`n", "`n")
+if ($llm1 -notmatch '(?m)^external:') { throw "layout lm1 missing external" }
+if ($llm1 -notmatch '@: Lmx unit 0') { throw "layout lm1 missing unit local" }
+$llm1 = $llm1.Replace("external:`n    fn: main () int`n        @: Lmx unit 0`n", "@: Lmx l2_layout_unit 0`n`nexternal:`n    fn: main () int`n")
+$leidx = $llm1.LastIndexOf("`nexternal:")
+if ($leidx -lt 0) { throw "layout lm1 hoist: external not found" }
+$lhead = $llm1.Substring(0, $leidx)
+$ltail = $llm1.Substring($leidx)
+$ltail = [regex]::Replace($ltail, '(?<![A-Za-z0-9_])unit(?![A-Za-z0-9_])', 'l2_layout_unit')
+$layBootLm1 = Join-Path $out "layout_prefix_boot.lm1"
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $layBootLm1), ($lhead + $ltail))
+$layBootC = Join-Path $out "layout_prefix_boot.c"
+& $l1trans $layBootLm1 $layBootC
+if ($LASTEXITCODE -ne 0) { throw "l1trans failed layout_prefix_boot" }
+$layBootO = Join-Path $out "layout_prefix_boot.o"
+$layBootLog = Join-Path $log "layout_prefix_boot.gcc.log"
+cmd /c "gcc $flagStr -Dmain=l2_layout_boot -c `"$layBootC`" -o `"$layBootO`" > `"$layBootLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $layBootLog; throw "gcc failed layout_prefix_boot.o" }
+$layRen = Join-Path $out "layout_prefix_boot.ren.o"
+cmd /c "objcopy --redefine-sym l2_m3=l2_layout_m3 `"$layBootO`" `"$layRen`" > `"$(Join-Path $log 'layout_prefix_redef.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "objcopy --redefine-sym l2_m3 failed" }
+$layKeepList = @("l2_layout_boot", "l2_layout_unit", "l2_layout_m3")
+$layExp = Join-Path $out "layout_prefix_exports.txt"
+[System.IO.File]::WriteAllLines((Join-Path (Get-Location) $layExp), $layKeepList)
+$layKeep = Join-Path $out "layout_prefix_boot.keep.o"
+cmd /c "objcopy --keep-global-symbols=`"$layExp`" `"$layRen`" `"$layKeep`" > `"$(Join-Path $log 'layout_prefix_objcopy.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "objcopy layout keep-global failed" }
+$layNm = & $nm --defined-only $layKeep 2>&1 | Out-String
+if ($layNm -notmatch 'l2_layout_m3') { throw "layout keep.o missing l2_layout_m3" }
+if ($layNm -cmatch '(?m)\sT\s+l2_m\d+\s*$') { throw "layout keep.o still exports raw l2_m*" }
+
+$layAbiC = "l2src\layout_prefix_abi.c"
+$layAbiO = Join-Path $out "layout_prefix_abi.o"
+$layAbiLog = Join-Path $log "layout_prefix_abi.gcc.log"
+cmd /c "gcc $flagStr -c `"$layAbiC`" -o `"$layAbiO`" > `"$layAbiLog`" 2>&1"
+if ($LASTEXITCODE -ne 0) { Get-Content $layAbiLog; throw "gcc failed layout_prefix_abi.o" }
+
+cmd /c "gcc $flagStr `"$ptO`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" -o `"$candExe`" > `"$linkLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $linkLog; throw "link failed candidate_printTree" }
 
 $ptNoMain = Join-Path $out "candidate_parser_nomain.o"
@@ -156,13 +196,13 @@ if ($LASTEXITCODE -ne 0) { Get-Content $ptNoLog; throw "gcc failed candidate_par
 $probeC = "l2src\indent_parse_probe.c"
 $probeExe = Join-Path $out "indent_parse_probe.exe"
 $probeLog = Join-Path $log "indent_parse_probe.gcc.log"
-cmd /c "gcc $flagStr `"$probeC`" `"$ptNoMain`" `"$bootKeep`" `"$abiO`" -o `"$probeExe`" > `"$probeLog`" 2>&1"
+cmd /c "gcc $flagStr `"$probeC`" `"$ptNoMain`" `"$bootKeep`" `"$abiO`" `"$layKeep`" `"$layAbiO`" -o `"$probeExe`" > `"$probeLog`" 2>&1"
 if ($LASTEXITCODE -ne 0) { Get-Content $probeLog; throw "link failed indent_parse_probe" }
 $probeOut = Join-Path $out "indent_parse_probe.stdout"
 cmd /c "`"$probeExe`" > `"$probeOut`" 2> `"$(Join-Path $out 'indent_parse_probe.err')`""
 if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out "indent_parse_probe.err"); throw "indent_parse_probe failed" }
 $probeText = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $probeOut)).Replace("`r`n", "`n").Trim()
-if ($probeText -notmatch '^parse=0 hits=[1-9]') { throw "parse_bytes did not reach L2 indent_level: $probeText" }
+if ($probeText -notmatch '^parse=0 indent_hits=[1-9][0-9]* layout_hits=[1-9]') { throw "parse_bytes did not reach L2 indent/layout: $probeText" }
 
 $candHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $candExe)).Hash
 $stgPt = "build\l1trans\gen2\printTree.exe"
@@ -290,7 +330,7 @@ $id = Join-Path $out "candidate_indent_id.txt"
     "frozen_parser_git=$workParser"
     "probe=$probeText"
     "replaced=$($replaced -join ',')"
-    "sources=l2src/parser_indent_stack.lm2; l2src/indent_stack_abi.c; l2src/indent_parse_probe.c; build/l2trans/parser_candidate.lm1 (stripped copy of l1src/parser.lm1); l1src/printTree.lm1"
-    "next_l1=lm_p0_parse_bytes/parse_file still L1 in the candidate TU; next unit scan_layout_prefix"
-    "trees=$n reject=$nReject match620=$nMatch620 empty_colon_delta=$nDeltaColon known_tree_delta_vs_620=$nKnownTreeDelta"
+    "sources=l2src/parser_indent_stack.lm2; l2src/parser_scan_layout_prefix.lm2; l2src/indent_stack_abi.c; l2src/layout_prefix_abi.c; l2src/indent_parse_probe.c; build/l2trans/parser_candidate.lm1 (stripped copy of l1src/parser.lm1); l1src/printTree.lm1"
+    "next_l1=lm_p0_parse_bytes/parse_file still L1 in the candidate TU; next unit document_init/scan remaining field-loop helpers"
+    "corpus_total=$n accept=$($n - $nReject) expected_reject=$nReject empty_colon_delta=$nDeltaColon same_as_620_reject=$($nReject - $nDeltaColon) match620_accept=$nMatch620 known_tree_delta_vs_620=$nKnownTreeDelta extra_no_golden=$($n - $nReject - $nMatch620)"
 ) | Set-Content -LiteralPath (Join-Path (Get-Location) $id) -Encoding utf8

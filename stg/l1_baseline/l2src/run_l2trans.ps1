@@ -2927,6 +2927,134 @@ end: external
 
 Invoke-ScanIndent
 
+function Invoke-ScanLayoutPrefix {
+    $sind = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_scan_indent.lm2")).Replace("`r`n", "`n")
+    $pref = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_scan_layout_prefix.lm2")).Replace("`r`n", "`n")
+    $h = ($sind -split "fn: lm_p0_is_horizontal_space")[1]
+    $h = "fn: lm_p0_is_horizontal_space" + ($h -split "fn: main")[0]
+    $ph = ($pref -split "fn: lm_p0_is_horizontal_space")[1]
+    $ph = "fn: lm_p0_is_horizontal_space" + ($ph -split "sub: lm_p0_scan_layout_prefix")[0]
+    if ($h.Trim() -ne $ph.Trim()) { throw "scan_layout_prefix helpers must match parser_scan_indent.lm2" }
+
+    $cases = @'
+        size_t: off
+        size_t: col
+        size_t: dots
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("", 0U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("abc", 3U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("  x", 3U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("\tx", 2U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix(".x", 2U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("  .x", 4U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("  . .x", 6U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("..\tx", 4U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("ab  .c", 6U, 2U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix("   ", 3U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+        off: 99U
+        col: 99U
+        dots: 99U
+        lm_p0_scan_layout_prefix(".", 1U, 0U, @ off, @ col, @ dots)
+        c.printf("%zu %zu %zu\n", off, col, dots)
+'@
+
+    $refLm1 = Join-Path $out "slp_ref.lm1"
+    $refC = Join-Path $out "slp_ref.c"
+    $refExe = Join-Path $out "slp_ref.exe"
+    $refOut = Join-Path $out "slp_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed slp_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "slp_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'slp_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "slp_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_scan_layout_prefix.lm2" "parser_scan_layout_prefix" 0 "lm_p0_scan_layout_prefix"
+    $lm1 = Join-Path $out "parser_scan_layout_prefix.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_' -or $text -match 'sub: lm_p0_') { throw "scan_layout_prefix must mangle method symbols" }
+    if ($text -notmatch 'sub: l2_m3') { throw "scan_layout_prefix missing mangled sub" }
+    if ($text -notmatch '@: size_t l2_p3_3') { throw "scan_layout_prefix missing size_t* out_offset" }
+    if ($text -notmatch '@: size_t l2_p3_4') { throw "scan_layout_prefix missing size_t* out_indent" }
+    if ($text -notmatch '@: size_t l2_p3_5') { throw "scan_layout_prefix missing size_t* out_dot" }
+    if ($text -notmatch 'l2_m2\(') { throw "scan_layout_prefix must call scan_indent_column" }
+
+    $l2cases = $cases.Replace("lm_p0_scan_layout_prefix(", "l2_m3(unit, ")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "scan_layout_prefix L1 missing generated main return" }
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "slp_l2_drive.lm1"
+    $drvC = Join-Path $out "slp_l2_drive.c"
+    $drvExe = Join-Path $out "slp_l2_drive.exe"
+    $drvOut = Join-Path $out "slp_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed slp_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "slp_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'slp_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "slp_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $b) { throw "scan_layout_prefix mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-ScanLayoutPrefix
+
 function Invoke-AdvanceLayout {
     $cases = @'
         size_t: off

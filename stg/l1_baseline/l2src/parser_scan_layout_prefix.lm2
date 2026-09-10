@@ -1,0 +1,57 @@
+# L2 scan_layout_prefix. Helpers must match parser_scan_indent.lm2.
+# Frozen REF: l1src/parser.lm1 lm_p0_scan_layout_prefix.
+fn: lm_p0_is_horizontal_space (char: value) int
+    return: value = 32 || value = 9
+end: lm_p0_is_horizontal_space
+fn: lm_p0_indent_tab_column (size_t: column) size_t
+    return: ((column / 8U) + 1U) * 8U
+end: lm_p0_indent_tab_column
+sub: lm_p0_scan_indent_column (const: @(char source); size_t: start; size_t: end; @: size_t out_offset; @: size_t out_column)
+    size_t: p
+    size_t: column
+    char: ch
+    p: start
+    column: 0U
+    while: p < end
+        ch: source[p]
+        if: lm_p0_is_horizontal_space(ch) = 0
+            out_offset[0]: p
+            out_column[0]: column
+            return
+        if: ch = 9
+            column: lm_p0_indent_tab_column(column)
+            p: p + 1U
+            continue
+        column: column + 1U
+        p: p + 1U
+    out_offset[0]: p
+    out_column[0]: column
+end: lm_p0_scan_indent_column
+sub: lm_p0_scan_layout_prefix (const: @(char source); size_t: length; size_t: start; @: size_t out_offset; @: size_t out_indent_column; @: size_t out_dot_level)
+    size_t: p
+    size_t: indent_column
+    size_t: dot_level
+    char: ch
+    int: more
+    lm_p0_scan_indent_column(source, start, length, out_offset, out_indent_column)
+    p: out_offset[0]
+    indent_column: out_indent_column[0]
+    dot_level: 0U
+    while: p < length && source[p] = 46
+        dot_level: dot_level + 1U
+        p: p + 1U
+        more: 1
+        while: p < length && more != 0
+            ch: source[p]
+            if: lm_p0_is_horizontal_space(ch) = 0
+                more: 0
+                continue
+            p: p + 1U
+        ---
+    out_offset[0]: p
+    out_indent_column[0]: indent_column
+    out_dot_level[0]: dot_level
+end: lm_p0_scan_layout_prefix
+fn: main () int
+    return: 0
+end: main
