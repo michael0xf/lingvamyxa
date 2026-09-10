@@ -17,11 +17,13 @@ host_post remains callable from foreign callbacks.
 
 What a turn may call
 --------------------
-While a thread holds Message M's turn latch it may recv/send/end_turn
-for M only. create/stop/admit take a narrow runtime mutex and must
-not be held across user work. Workers never call APIs for a Message
-whose latch they do not hold. Owner checks on turn APIs become
-"creator thread OR current-turn M", not a global free-for-all.
+recv/send/end_turn for Message M require M's turn latch, including
+the UI/creator thread. The creator must not touch a worker Message's
+inbox/outbox/arena without that latch. UI runs its own affinity lane
+concurrently; it does not bypass another Message's latch.
+
+create/stop/admit/ready-queue use a narrow runtime mutex, never
+held across user work. That mutex is not a global handler lock.
 
 Not this
 --------
@@ -38,12 +40,24 @@ turn function, publish outbox via end_turn, enqueue destinations.
 UI thread: host_drain + UI-affine turns. A busy ANY worker must
 not block UI_step or another Message's worker.
 
+Stable storage
+--------------
+Message objects are individually allocated. Growing the runtime
+table reallocates a pointer array only; live LmxMsg addresses stay
+valid. Handlers must not cache table slots across create/growth.
+Lookup is by LmxMsgAddr under the runtime mutex.
+
 Lifetime
 --------
-Do not delete/free a Message arena while its turn latch is held.
-Stop: set closing; current turn finishes; next turn sees close and
-end_turn STOPPED. Join workers before runtime_delete. Ingress
-quiescence (join posters, then shutdown) still applies.
+Do not free a Message arena while its turn latch is held.
+Phase order (no deadlock with posters that wait on shutdown):
+  1. stop admitting new callbacks
+  2. runtime_shutdown (host_post -> STOPPED)
+  3. join/quiesce posters (they observe STOPPED; they must not
+     wait for a later exec_stop)
+  4. exec_stop: stop workers, wait latches clear, join workers
+  5. runtime_delete
+exec_stop is before delete and after poster quiescence.
 
 Bind
 ----
