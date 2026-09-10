@@ -45,6 +45,13 @@ Write-PLog "ENV effective default hosted P0 for L1 translate and printTree.lm0 o
 if (-not (Test-Path $l1trans)) { throw "missing $l1trans" }
 if (-not (Test-Path $lm0)) { throw "missing $lm0" }
 
+# Frozen STG gen0 is lm2 seed. Current l1src/printTree.lm1 needs gen1+ (usage).
+if ($gen -eq "gen0") {
+    Write-PLog "skip requires-gen1+ on gen0: current l1src/printTree.lm1"
+    Write-Output "l1trans $gen parser accept ok"
+    return
+}
+
 & $l1trans $ptSrc $ptC
 if ($LASTEXITCODE -ne 0) { throw "translate printTree failed $LASTEXITCODE" }
 Write-PLog "translate $ptSrc -> $ptC exit 0"

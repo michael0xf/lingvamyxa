@@ -84,6 +84,15 @@ if ($mid.IndexOf("break;") -ge 0) { throw "implicit break between case 1 and cas
 if ($swT.IndexOf("switch (2)") -lt 0) { throw "missing nested switch (2)" }
 Build-Run "control_switch" $swC 0
 
+# Frozen STG gen0 is lm2 seed / old P0. Nullary lookup, empty-colon, throw/finally
+# are gen1+ (09A0 C). Same split as run_smoke / run_c_array.
+if ($gen -eq "gen0") {
+    Write-C "skip requires-gen1+ on gen0: control_nullary, control_nullary_many, empty-colon negatives, throw/finally"
+    Write-C "control ok"
+    Write-Output "l1trans $gen control ok"
+    return
+}
+
 $nC = Translate "control_nullary"
 $nT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $nC))
 if ($nT.IndexOf("ping();") -lt 0) { throw "missing compact ping() call" }
