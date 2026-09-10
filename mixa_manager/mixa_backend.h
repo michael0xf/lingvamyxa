@@ -7,15 +7,19 @@
  * this file is the whole porting cost. Keep it small.
  *
  * Written as a hand-written C header for now. Converting it to a .h.lm1 header
- * unit is H2, and it is blocked on two separate things rather than one:
+ * unit is H2, and ONE of the two things it was blocked on has gone away.
  *
- *   1. the header-unit L1 lives in l1src and has not been promoted into
- *      stg/l1_baseline, which is the translator mixa_manager builds against on
- *      purpose. Probed 2026-09-09: the baseline rejects "struct:" outright,
- *      while the l1src build emits a correct .lm1.h for the same fixture.
- *   2. after that promotion, run_mixa.ps1 still has to translate .h.lm1 into
- *      .lm1.h before compiling the units that include it. Promotion alone does
- *      not implement the conversion - they are separate gaps.
+ *   1. WAS: "the header-unit L1 lives in l1src and has not been promoted into
+ *      stg/l1_baseline; probed 2026-09-09, the baseline rejects struct:
+ *      outright." NO LONGER TRUE. Codex corrected it on 2026-09-10 and it
+ *      checks out: the STG source carries l1_emit_hdr_fnptr, p0.h.lm1 is there,
+ *      and the promoted 65D5A5ED translator accepts BOTH forms - fnptr: emits
+ *      `typedef int (*OpenFn)(int a);` and struct: emits a complete struct
+ *      definition with its forward typedef. Re-probed here before writing this.
+ *      Whether the old probe was wrong or the promotion of 01:37 fixed it, the
+ *      claim above was stale and it was discouraging work that is now possible.
+ *   2. STILL TRUE: run_mixa.ps1 has to translate .h.lm1 into .lm1.h before
+ *      compiling the units that include it. That conversion is not written.
  *
  * Codex confirmed on 2026-09-09 that the promotion is intended, in a scoped
  * integration window once the root L1 settles, and that the timing is
@@ -354,6 +358,24 @@ struct MixaBackendVTable {
     MixaBackendCloseFn close;
 };
 
+/* The registry's element type, named so that a qualifier can reach the POINTER.
+ *
+ * L1 has no spelling for a const-qualified pointer - every const: form reaches
+ * the referent, none reaches the slot (L1_spec open point 10.13). Naming the
+ * inner pointer type sidesteps it: qualifying a typedef'd pointer type
+ * qualifies the POINTER, so `const: @(MixaBackendTableRef)` in L1 generates
+ * `const MixaBackendTableRef *`, which IS `const MixaBackendVTable *const *`.
+ *
+ * Verified on the stable translator and on Grok's iso_033430 candidate:
+ * compatible with the prototype below under -Werror, writes to a slot and
+ * writes through a slot both rejected, reads unaffected. Fixtures in
+ * mixa_manager/tests/l1_gaps.
+ *
+ * This is a WORKAROUND with a name, not a design choice. Proposed by Codex,
+ * 2026-09-10. It exists so the registry can be ordinary L1 instead of a
+ * hand-written C source; when 10.13 is settled it should go. */
+typedef const MixaBackendVTable *MixaBackendTableRef;
+
 /* All-or-nothing. Non-zero when name is present and non-empty AND every slot is
  * filled; zero otherwise, with no attempt to say WHICH slot is missing.
  *
@@ -371,6 +393,9 @@ int mixa_backend_table_valid(const MixaBackendVTable *vt);
 /* The tables compiled into THIS build, in the order the build listed them.
  * count is required; the array is static and outlives every caller. */
 const MixaBackendVTable *const *mixa_backend_tables(size_t *count);
+/* Equivalently, and this is what the L1 definition spells:
+ *     const MixaBackendTableRef *mixa_backend_tables(size_t *count);
+ * The two declarations are the same type. */
 
 /* Selection at startup. Both return NULL rather than a partial or unknown
  * table, and neither ever returns one that mixa_backend_table_valid rejects.

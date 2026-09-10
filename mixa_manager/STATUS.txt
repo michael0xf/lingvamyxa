@@ -204,8 +204,22 @@ fixtures at mixa_manager/tests/l1_gaps.
        `static:` and `external:` were probed; `prototype:` and header units
        were not.
     D  no struct-typed LOCAL, so anything value-shaped becomes calloc + free.
-    E  fnptr: exists only in header units, which are not promoted to STG, so
-       the vtable's types live in a handwritten C header.
+    E  WITHDRAWN, and it was wrong when I sent it. Header units ARE in the
+       promoted STG compiler - Codex corrected me and I re-probed: 65D5A5ED
+       accepts a header unit with fnptr: (emits a function-pointer typedef) AND
+       with struct: (emits a full definition), and the STG source carries
+       l1_emit_hdr_fnptr with p0.h.lm1 beside it.
+
+       The real gap is narrower and is L1_spec 10.16: a function-pointer
+       spelling in an ORDINARY unit. Header units have one; ordinary units do
+       not.
+
+       Consequence worth acting on: mixa_backend.h could become a .h.lm1 header
+       unit. The comment at the top of it claimed the baseline rejects struct:
+       outright, dated 2026-09-09 - that is now false and was discouraging work
+       that is possible. Corrected in the header. One blocker remains and it is
+       ours, not the language's: run_mixa.ps1 does not translate .h.lm1 into
+       .lm1.h before compiling units that include it.
 
 `external:` is NOT L1's static - checked, not assumed. It is a grouping receiver
 for PROTOTYPES: `external: fn: h (int: a) int` emits `int h(int a);` and
