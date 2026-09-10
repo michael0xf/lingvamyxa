@@ -28,10 +28,10 @@ are drawn as cell attributes:
                 FRAME over the element, monochrome, leaving the element's own
                 background intact - DRAWING.txt 5.4.
 
-    POINTER     the mouse. UPPER layer, one cell, four diagonal arrows chosen
-                by the last direction of travel. A different thing from the
-                CURSOR above and not a counter-example to the rule below - see
-                section 6.
+    POINTER     the mouse. UPPER layer, one cell, EIGHT arrows chosen by the
+                angle of the last displacement, so it spins as the mouse turns.
+                A different thing from the CURSOR above and not a
+                counter-example to the rule below - see section 6.
 
 THERE IS NO CURSOR IN THE UPPER LAYER. Not "not yet" - it is not wanted. Panels
 are navigated by moving the highlight, not by placing a caret, and adding one
@@ -425,22 +425,68 @@ separate scrolls and the order they are applied in is visible to the user.
 Not settled here; noted so it is not discovered late.
 
 
-6. The mouse pointer: one cell, four arrows, no animation
+6. The mouse pointer: one cell, eight arrows, and it spins
 
-Mikhail, 2026-09-10: since the upper screen is transparent, the mouse should be
-drawn. Take U+2B09 U+2B08 U+2B0A U+2B0B, draw one on its own cell, and change
-which one by the last direction of travel on x and y - exactly four values. No
-animation: jerk it discretely and see how that looks. "Smooth I dislike on
-purely logical grounds."
+Mikhail, 2026-09-10: "let us make the mouse FUNNY - let it spin, by a simple
+algorithm. Divide the circle into 8, compute the angle of the last displacement
+(at low precision) and pick one of the 8."
 
-    U+2B09  NORTH WEST BLACK ARROW    last travel  left  + up
-    U+2B08  NORTH EAST BLACK ARROW                 right + up
-    U+2B0B  SOUTH WEST BLACK ARROW                 left  + down
-    U+2B0A  SOUTH EAST BLACK ARROW                 right + down
+    U+2B06  UPWARDS BLACK ARROW           up
+    U+2B08  NORTH EAST BLACK ARROW        up-right
+    U+2B95  RIGHTWARDS BLACK ARROW        right
+    U+2B0A  SOUTH EAST BLACK ARROW        down-right
+    U+2B07  DOWNWARDS BLACK ARROW         down
+    U+2B0B  SOUTH WEST BLACK ARROW        down-left
+    U+2B05  LEFTWARDS BLACK ARROW         left
+    U+2B09  NORTH WEST BLACK ARROW        up-left
 
 The arrow points WHERE THE MOUSE IS GOING, not back at its own hotspot the way a
-desktop pointer does. That is a consequence of the rule rather than a separate
-decision: if the picture is chosen by direction of travel, it points along it.
+desktop pointer does. That follows from choosing the picture by direction of
+travel rather than being a separate decision.
+
+Still no animation. The pointer jumps between the eight; it does not ease
+between them. "Smooth I dislike on purely logical grounds."
+
+6.0. The angle, at low precision, with no trigonometry
+
+An octant boundary sits at 22.5 degrees, where |dy| = tan(22.5) * |dx| and
+tan(22.5) = sqrt(2) - 1 = 0.41421. Approximate it as 5/12 = 0.41667 and the
+boundary lands at 22.62 degrees - 0.12 off, which is far inside "low precision"
+and costs two multiplications:
+
+    horizontal sector   12 * |dy| < 5 * |dx|      ->  left or right by sign of dx
+    vertical sector     12 * |dx| < 5 * |dy|      ->  up or down by sign of dy
+    otherwise           a diagonal, by both signs
+
+No atan2, no floating point, no table, and the eight sectors come out equal to
+within a fifth of a degree - which matters here, because unequal sectors would
+make the spin stutter at four points of the circle and the spin is the feature.
+
+A displacement of zero changes nothing: the pointer keeps the arrow it had.
+
+6.0.1. What replaced what, and why the old shape could not grow
+
+An earlier revision had FOUR arrows chosen by two latched per-axis signs - last
+non-zero dx sign, last non-zero dy sign. The latch existed because with only
+four diagonal pictures there was no way to draw "moving purely sideways", so
+each axis had to keep its last answer and pretend.
+
+With eight there is a picture for every direction, so the latch is gone: the
+angle of the last non-zero displacement is the whole state. One value instead of
+two, and no pretending.
+
+6.0.2. The artefact this will have, stated in advance
+
+Mouse events arrive in HALF-CELLS (section 7), which is a coarse unit. A slow
+diagonal drag therefore arrives as (1,0) then (0,1) then (1,0), and the arrow
+will flip between right and down rather than settling on down-right.
+
+Kept, not fixed. It is honest to the input we actually get, the alternative is
+accumulating displacement over a time window - which is state, tuning, and the
+first step towards the smoothing that was explicitly not wanted - and a pointer
+that twitches while you drag it slowly is arguably the funny part. Recorded so
+that when it shows up it is recognised as this decision rather than reported as
+a bug.
 
 6.1. Why this is not a contradiction of "no cursor in the upper layer"
 
@@ -463,16 +509,15 @@ word "cursor", and the upper layer has the second, not the first.
       that moves in cells would be the one thing in the interface not on the
       grid.
 
-State is two latched signs and a cell, all of it in the application: last
-non-zero dx sign, last non-zero dy sign, current cell. A purely horizontal move
-leaves the y sign as it was - that is what "last direction on each axis"
-means, and it is why there are four pictures and not nine.
+State is one octant and a cell, both in the application. The octant is
+recomputed from each non-zero displacement and needs no history; a zero
+displacement leaves it alone.
 
 6.3. Decided rather than read
 
     START DIRECTION. Before the first move there is no travel and so no answer.
-      South-east, arbitrarily but not randomly: it is the direction of travel
-      from a pointer parked at the top left, which is where one starts.
+      South-east (U+2B0A), arbitrarily but not randomly: it is the direction of
+      travel from a pointer parked at the top left, which is where one starts.
     COLOUR. The cell's fg, fully opaque, white by default - foreground elements
       here never vary alpha (section 3). "BLACK ARROW" is only the Unicode name
       of the shape; the colour is ours.
@@ -481,10 +526,19 @@ means, and it is why there are four pictures and not nine.
       desktop pointer solves it with a black keyline. Left unsolved rather than
       guessed - it needs to be looked at once something is on screen, which is
       exactly what "let us see how it looks" is for.
-    MISSING GLYPH. The seam reports a codepoint the platform cannot render
-      (MixaGlyph.missing) instead of substituting. If a font lacks these, the
-      pointer must not silently vanish - fall back to something present and say
-      so. Not designed here; noted so it is not discovered as a blank screen.
+    MISSING GLYPH, and one of the eight is a known risk. The seam reports a
+      codepoint the platform cannot render (MixaGlyph.missing) rather than
+      substituting, so the pointer must not silently vanish - fall back to
+      something present and say so. Not designed here; noted so it is not
+      discovered as a blank screen.
+
+      The one to check first is U+2B95, rightwards. Its three siblings - left,
+      up and down at U+2B05..U+2B07 - are long-established, while the rightwards
+      arrow was added to Unicode later to fill that exact gap, so it is the one
+      most likely to be absent from a given system font. A hole at precisely one
+      of the eight would read as a bug in the spin rather than as a missing
+      glyph, which is why it is worth testing for by name on each platform
+      rather than testing "the arrows" as a set.
 
 
 7. The three grids: text, UI, and the mouse's half step
