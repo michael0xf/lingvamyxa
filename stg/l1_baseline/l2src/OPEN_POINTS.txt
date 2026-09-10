@@ -1057,8 +1057,11 @@ ABI  LMX_TYPE_INT primitive pool
     own-int publication: unique mutable cells, stable addresses,
     no relocation. lmx_int_init/take/value/store. No new user
     semantic choice. Dirty-only store on checkpoint; prologue
-    loads the graph payload. Foreign c.printf checkpoints before
-    the call, same as LMX calls.
+    loads the graph payload. Foreign c.printf follows 21.7:
+    declared actuals into typed temps, then dirty-only checkpoint,
+    then the call. Explicit path reads observe previously published
+    graph state; they are not a publish boundary. `end: for` is not
+    a checkpoint.
 
 Unit 14 - size_t* out-param and python string end
 -------------------------------------------------

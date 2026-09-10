@@ -384,11 +384,19 @@ function Invoke-LeafOut([string]$src, [string]$stem, [int]$expect, [string]$name
     $got = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $stdout)).Replace("`r`n", "`n")
     if ($got -ne $wantOut) { throw "$stem stdout got '$got' want '$wantOut'" }
 }
-Invoke-LeafOut "l2src\tests\unit_forj_path.lm2" "unit_forj_path" 0 "test" "9`n"
+Invoke-LeafOut "l2src\tests\unit_forj_path.lm2" "unit_forj_path" 0 "test" "0`n"
 Invoke-Negative "l2src\tests\unit_forj_bare.lm2" "unit_forj_bare" "unresolved name"
 Invoke-LeafOut "l2src\tests\unit_forj_parent.lm2" "unit_forj_parent" 0 "test" "9`n"
 Invoke-LeafOut "l2src\tests\unit_forj_nest.lm2" "unit_forj_nest" 0 "test" "9`n9`n"
-Invoke-LeafOut "l2src\tests\unit_forj_again.lm2" "unit_forj_again" 0 "test" "9`n9`n"
+Invoke-LeafOut "l2src\tests\unit_forj_again.lm2" "unit_forj_again" 0 "test" "0`n9`n"
+Invoke-LeafOut "l2src\tests\unit_forj_order.lm2" "unit_forj_order" 0 "test" "9 0`n"
+$ord = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_forj_order.lm1")))
+$op = $ord.LastIndexOf("c.printf")
+$ov = $ord.LastIndexOf("lmx_int_value", $op)
+$os = $ord.LastIndexOf("lmx_int_store", $op)
+if ($op -lt 0 -or $ov -lt 0 -or $os -lt 0) { throw "unit_forj_order missing printf/value/store" }
+if (-not ($ov -lt $os -and $os -lt $op)) { throw "unit_forj_order want actuals then checkpoint then call; value=$ov store=$os printf=$op" }
+Invoke-LeafOut "l2src\tests\unit_forj_stale.lm2" "unit_forj_stale" 0 "test" "9`n9 42`n"
 Invoke-Leaf "l2src\tests\unit_forj_graph.lm2" "unit_forj_graph" 0 "test"
 $gpath = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_forj_graph.lm1")))
 if ($gpath.IndexOf("for->") -ge 0) { throw "unit_forj_graph must not emit C for->" }
@@ -397,8 +405,11 @@ if ($gpath -notmatch 'lmx_int_store') { throw "unit_forj_graph must store dirty 
 if ($gpath -notmatch 'lmx_branch_open') { throw "unit_forj_graph must open for Structure" }
 $gprintf = $gpath.LastIndexOf("c.printf")
 if ($gprintf -lt 0) { throw "unit_forj_graph missing c.printf" }
-$gbefore = $gpath.Substring(0, $gprintf)
-if ($gbefore -notmatch 'l2_q\d+_dirty') { throw "unit_forj_graph c.printf must follow dirty checkpoint" }
+$gval = $gpath.LastIndexOf("lmx_int_value", $gprintf)
+$gstore = $gpath.LastIndexOf("lmx_int_store", $gprintf)
+if ($gval -lt 0) { throw "unit_forj_graph printf actual missing graph load" }
+if ($gstore -lt 0) { throw "unit_forj_graph printf missing checkpoint store" }
+if (-not ($gval -lt $gstore -and $gstore -lt $gprintf)) { throw "unit_forj_graph want actuals then checkpoint then call; value=$gval store=$gstore printf=$gprintf" }
 $gg = Invoke-SpliceDrive "unit_forj_graph" @"
         l2_m0(unit, 10)
         leaf: lmx_branch_child(unit, 0U)
@@ -416,7 +427,7 @@ $gg = Invoke-SpliceDrive "unit_forj_graph" @"
     end: main
 end: external
 "@
-if ($gg -ne "9`n9`n42`n42`n") { throw "unit_forj_graph persist/write: $gg" }
+if ($gg -ne "0`n9`n42`n42`n") { throw "unit_forj_graph persist/write: $gg" }
 Invoke-Leaf "l2src\tests\unit_forj_sib.lm2" "unit_forj_sib" 0 "test"
 $sib = Invoke-SpliceDrive "unit_forj_sib" @"
         l2_m0(unit)

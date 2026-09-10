@@ -1,0 +1,15 @@
+# 21.7: actuals into temps, then dirty-only checkpoint, then call.
+# Cache acc is 9; explicit for\j reads previously published graph (0) before
+# that checkpoint. Do not publish on end:for or on path read.
+fn: test () int
+    int: acc 0
+    for: int(i, 0) (i < 10) i++
+        int: j i
+        acc: j
+    end: for
+    c.printf: "%d %d\n" acc for\j
+    return: 0
+end: test
+fn: main () int
+    return: test()
+end: main

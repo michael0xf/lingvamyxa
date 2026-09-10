@@ -1,0 +1,16 @@
+# Same activation: cache j vs explicit graph write for\j, then one call
+# whose actuals are captured before checkpoint.
+fn: test () int
+    for: int(i, 0) (i < 10) i++
+        int: j i
+        if: i = 9
+            c.printf: "%d\n" j
+            for\j: 42
+            c.printf: "%d %d\n" j for\j
+        ---
+    end: for
+    return: 0
+end: test
+fn: main () int
+    return: test()
+end: main

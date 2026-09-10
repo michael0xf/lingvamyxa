@@ -145,6 +145,7 @@ prototype:
     fn: l2_dyn_add (int: mi; const: @(LmP0Text t); int: ty) int
     fn: l2_collect_decls (const: @(LmP0Structure body); int: mi; const: @(char path); int: depth; @: int sn) int
     fn: l2_slash_own (const: @(LmP0Text t)) int
+    fn: l2_slash_for (int: mi; const: @(LmP0Text t)) int
     fn: l2_is_char_decl (const: @(LmP0Node stmt)) int
     fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
     fn: l2_own_store_ty (int: dty) int
@@ -3003,6 +3004,24 @@ fn: l2_slash_own (const: @(LmP0Text t)) int
         i: i + 1
 return: -1
 
+fn: l2_slash_for (int: mi; const: @(LmP0Text t)) int
+    int: i 0
+    int: hit
+    size_t: n
+    hit: -1
+    if: mi < 0 || t = 0 || t\data = 0 || t\length < 5U
+        return: -1
+    if: t\data[0] != 102 || t\data[1] != 111 || t\data[2] != 114 || t\data[3] != 92
+        return: -1
+    n: t\length - 4U
+    while: i < l2_own_n
+        if: l2_own_mi[i] = mi && l2_own_host[i] != 0 && l2_frame_head(l2_own_host[i], "for") && l2_own_name[i] != 0 && l2_own_name[i]\length = n && c.memcmp(l2_own_name[i]\data, t\data + 4, n) = 0 && hit >= 0
+            return: -1
+        if: l2_own_mi[i] = mi && l2_own_host[i] != 0 && l2_frame_head(l2_own_host[i], "for") && l2_own_name[i] != 0 && l2_own_name[i]\length = n && c.memcmp(l2_own_name[i]\data, t\data + 4, n) = 0
+            hit: i
+        i: i + 1
+return: hit
+
 fn: l2_own_decl_ty (const: @(LmP0Node stmt)) int
     @: LmP0Field f
     int: ty 0
@@ -4081,7 +4100,7 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
             return: l2_error(path, stmt, "unsupported body")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && raw = 0 && mi >= 0 && rj >= 8 && l2_st[l2_slot_off(mi, rj - 8)] != 5
             return: l2_error(path, stmt, "unknown foreign field")
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && ix != 0 && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || (l2_own_find(mi, stmt\as\frame\head) < 0 && l2_slot_find(mi, stmt\as\frame\head) < 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_find_method(stmt\as\frame\head) < 0 && l2_param_find(mi, stmt\as\frame\head) < 0 && raw != 0 && l2_is_known(stmt\as\frame\head) = 0))
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && ix != 0 && (stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\head = 0 || (l2_own_find(mi, stmt\as\frame\head) < 0 && l2_slot_find(mi, stmt\as\frame\head) < 0 && l2_slash_own(stmt\as\frame\head) < 0 && l2_slash_for(mi, stmt\as\frame\head) < 0 && l2_find_method(stmt\as\frame\head) < 0 && l2_param_find(mi, stmt\as\frame\head) < 0 && raw != 0 && l2_is_known(stmt\as\frame\head) = 0))
             return: l2_error(path, stmt, "unsupported body")
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             fr: stmt\as\frame
@@ -4722,8 +4741,6 @@ fn: l2_emit_fields (@: LmP0Field field; int: n; int: mi; const: @(char ind); @: 
         if: p2 != 0 && p2\value != 0 && p2\value\kind = c.LM_P0_NODE_ATOM
             po: l2_path_own(mi, f\value\as\atom, p2\value\as\atom)
         if: po >= 0
-            if: l2_emit_checkpoint(mi, ind) != 0
-                return: 1
             if: l2_emit_path_load(mi, po, ind, piece) != 0
                 return: 1
             if: l2_cat(buf, piece) != 0
@@ -5003,8 +5020,6 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     if: l2_cat(buf, "(") != 0
         return: 1
     n: l2_count_active(stmt\as\frame\body)
-    if: l2_emit_checkpoint(mi, ind) != 0
-        return: 1
     f: l2_next_active(stmt\as\frame\body\first_field)
     i: 0
     while: i < n && f != 0 && f\value != 0
@@ -5025,6 +5040,12 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             f: p2
         if: po < 0 && l2_prep(f\value, mi, ind, piece) != 0
             return: 1
+        if: po < 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_quoted(f\value\as\atom) = 0 && l2_new_temp(ind, l2_tok) != 0
+            return: 1
+        if: po < 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_quoted(f\value\as\atom) = 0 && c.fprintf(l2_out, "%s%s: %s\n", ind, l2_tok, piece) < 0
+            return: 1
+        if: po < 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_quoted(f\value\as\atom) = 0
+            c.memcpy(piece, l2_tok, 256U)
         if: first = 0 && l2_cat(buf, ", ") != 0
             return: 1
         if: l2_cat(buf, piece) != 0
@@ -5033,6 +5054,8 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         i: i + 1
         f: l2_next_active(f\next)
     if: l2_cat(buf, ")") != 0
+        return: 1
+    if: l2_emit_checkpoint(mi, ind) != 0
         return: 1
     if: c.fprintf(l2_out, "%s%s\n", ind, buf) < 0
         return: 1
@@ -5373,12 +5396,16 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0
             sl: l2_slash_own(fr\head)
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0 && sl < 0
+            sl: l2_slash_for(mi, fr\head)
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi < 0 && si < 0 && fi < 0 && l2_find_method(fr\head) < 0 && l2_is_known(fr\head) = 0 && raw != 0 && sl < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_uchild[sl] < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] < 0 && l2_own_uchild[sl] < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(node, %uU)\n", ind, (cast: (unsigned) l2_own_uchild[sl])) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(l2_h%d, %uU)\n", ind, l2_own_fid[sl], (cast: (unsigned) l2_own_fchild[sl])) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] < 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(node, %uU)\n", ind, (cast: (unsigned) l2_own_uchild[sl])) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && c.fprintf(l2_out, "%sif: l2_xp = 0\n", ind) < 0
             return: 1
@@ -5388,7 +5415,13 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_m_ret[mi] != 2 && c.fprintf(l2_out, "%s    return: 0\n", ind) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && c.fprintf(l2_out, "%sl2_xp\\data: lmx_char_cell((cast: (int) %s))\n", ind, l2_tok) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 1 && c.fprintf(l2_out, "%sl2_xp\\data: lmx_char_cell((cast: (int) %s))\n", ind, l2_tok) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 2 && c.fprintf(l2_out, "%sif: lmx_size_store(l2_xp\\data, %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_ty[sl] = 0 && c.fprintf(l2_out, "%sif: lmx_int_store(l2_xp\\data, %s) != 0\n%s    return: 0\n", ind, l2_tok, ind) < 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] >= 0 && mi >= 0 && l2_m_uses[l2_own_off(mi, sl)] != 0 && c.fprintf(l2_out, "%sl2_q%d_dirty: 0\n", ind, sl) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0
             field: l2_next_active(field\next)
