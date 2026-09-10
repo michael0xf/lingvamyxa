@@ -8,6 +8,10 @@ THE SPECIFICATION. Not a summary of it, not a ticket about it - the decision
 itself, written down where the work will look for it, and committed as soon as
 it is written rather than held back for the code it describes.
 
+    STATUS.txt          READ FIRST. Where the work stands, what is in the
+                        working tree and whose it is, the ticket queue, and what
+                        is deliberately left open. Not design - handoff.
+
 The specification is this directory. Which file follows the subject:
 
     UI_MODEL.txt        what the interface IS - layers, grids, lists, panels,
