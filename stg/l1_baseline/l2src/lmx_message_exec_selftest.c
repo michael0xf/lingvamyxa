@@ -101,6 +101,12 @@ static int turn_ui(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return lmx_msg_end_turn(rt, who, 1);
 }
 
+static int turn_just_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    TurnCtx *c = (TurnCtx *)ctx;
+    InterlockedIncrement(&c->done);
+    return lmx_msg_end_turn(rt, who, 1);
+}
+
 static int turn_busy(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     TurnCtx *c = (TurnCtx *)ctx;
     LmxMsgEnv got;
@@ -667,6 +673,72 @@ int main(void) {
         }
         lmx_msg_runtime_delete(rtb);
         CloseHandle(busy.started);
+    }
+    {
+        LmxMsgRuntime *rtc;
+        LmxMsgAddr pc = 0, uc = 0, cc = 0, bc = 0;
+        LmxMsgEnv ec;
+        uchar ini = 1;
+        TurnCtx uictx;
+        DWORD dl;
+        rtc = lmx_msg_runtime_new();
+        memset(&uictx, 0, sizeof(uictx));
+        lmx_msg_create(rtc, 0, 1, &ini, 1, &pc);
+        lmx_msg_create(rtc, pc, 2, &ini, 1, &uc);
+        lmx_msg_create(rtc, pc, 3, &ini, 1, &cc);
+        lmx_msg_end_turn(rtc, pc, 1);
+        if (lmx_msg_path_n(rtc, uc) < 1 || lmx_msg_init_copy(rtc, uc, &ec) != LMX_MSG_OK) {
+            fprintf(stderr, "path/init_copy owner serial failed\n");
+            return 1;
+        }
+        lmx_msg_env_release(&ec);
+        lmx_msg_stop(rtc, pc, uc);
+        lmx_msg_stop(rtc, pc, cc);
+        lmx_msg_end_turn(rtc, pc, 1);
+        lmx_msg_pump(rtc);
+        lmx_msg_exec_bind(rtc, uc, turn_just_end, &uictx, LMX_MSG_AFFINITY_UI);
+        if (lmx_msg_exec_start(rtc, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_fail(rtc, uc) != LMX_MSG_INVALID) {
+            fprintf(stderr, "owner fail of worker-bound msg should be INVALID\n");
+            return 1;
+        }
+        lmx_msg_drive(rtc, 0, 0);
+        dl = GetTickCount() + 2000;
+        while (InterlockedCompareExchange(&uictx.done, 0, 0) == 0 && GetTickCount() < dl) {
+            lmx_msg_exec_ui_step(rtc);
+            Sleep(5);
+        }
+        if (InterlockedCompareExchange(&uictx.done, 0, 0) != 1 || lmx_msg_state(rtc, uc) != LMX_MSG_STATE_STOPPED) {
+            fprintf(stderr, "UI closer done=%ld state=%d\n",
+                (long)InterlockedCompareExchange(&uictx.done, 0, 0), lmx_msg_state(rtc, uc));
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        lmx_msg_drive(rtc, 0, 0);
+        if (lmx_msg_state(rtc, cc) != LMX_MSG_STATE_STOPPED) {
+            fprintf(stderr, "unbound child state=%d\n", lmx_msg_state(rtc, cc));
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        lmx_msg_exec_stop(rtc);
+        /* parent-loss: fail parent (workers stopped so owner turn fallback), poll descendants */
+        lmx_msg_create(rtc, pc, 4, &ini, 1, &bc);
+        lmx_msg_end_turn(rtc, pc, 1);
+        if (lmx_msg_fail(rtc, pc) != LMX_MSG_OK) {
+            fprintf(stderr, "fail parent after exec_stop\n");
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        lmx_msg_poll(rtc, 0, 0, 0, 0, 0);
+        lmx_msg_drive(rtc, 0, 0);
+        if (lmx_msg_state(rtc, bc) != LMX_MSG_STATE_STOPPED && lmx_msg_state(rtc, bc) != LMX_MSG_STATE_DEAD) {
+            fprintf(stderr, "parent-loss child state=%d\n", lmx_msg_state(rtc, bc));
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        lmx_msg_runtime_delete(rtc);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {

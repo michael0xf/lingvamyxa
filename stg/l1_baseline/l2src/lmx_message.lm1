@@ -609,10 +609,12 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsgCopy n
     unsigned: parent
     unsigned: req
-    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+    if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_lock(rt)
     m: lmx_msg_find(rt, who)
     if: m = 0
+        c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
     m\state: c.LMX_MSG_STATE_DEAD
     lmx_msg_copy_free(m\outbox)
@@ -622,6 +624,7 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     req: m\exec_id
     if: m\exec_live != 0 && m\exec_reply != 0U && m\exec_reply != parent
         if: lmx_msg_post_dead(rt, who, m\exec_reply, req) = c.LMX_MSG_NOMEM
+            c.lmx_msg_exec_unlock(rt)
             return: c.LMX_MSG_NOMEM
         ---
     ---
@@ -630,6 +633,7 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         if: n\reply_to != 0U && n\reply_to != parent && (m\exec_live = 0 || n\reply_to != m\exec_reply)
             req: n\id
             if: lmx_msg_post_dead(rt, who, n\reply_to, req) = c.LMX_MSG_NOMEM
+                c.lmx_msg_exec_unlock(rt)
                 return: c.LMX_MSG_NOMEM
             ---
         ---
@@ -640,9 +644,11 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     m\exec_live: 0
     if: parent != 0U
         if: lmx_msg_post_dead(rt, who, parent, m\exec_id) = c.LMX_MSG_NOMEM
+            c.lmx_msg_exec_unlock(rt)
             return: c.LMX_MSG_NOMEM
         ---
     ---
+    c.lmx_msg_exec_unlock(rt)
 return: lmx_msg_pump(rt)
 
 fn: lmx_msg_parent_gone (@: LmxMsgRuntime rt; @: LmxMsg child; unsigned: now; unsigned: threshold) int
@@ -796,29 +802,52 @@ return: cnt
 
 fn: lmx_msg_path_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
+    int: pn
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
-        return: -1
+        if: c.lmx_msg_exec_holding_turn(rt, who) = 0
+            return: -1
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
     m: lmx_msg_find(rt, who)
     if: m = 0
+        c.lmx_msg_exec_unlock(rt)
         return: -1
-return: m\path_n
+    pn: m\path_n
+    c.lmx_msg_exec_unlock(rt)
+return: pn
 
 fn: lmx_msg_path_seg (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i; @: unsigned out) int
     @: LmxMsg m
-    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK || out = 0 || i < 0
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        if: c.lmx_msg_exec_holding_turn(rt, who) = 0 || out = 0 || i < 0
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    if: out = 0 || i < 0
         return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_lock(rt)
     m: lmx_msg_find(rt, who)
     if: m = 0 || i >= m\path_n
+        c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
     out[0]: m\path[i]
+    c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK
 
 fn: lmx_msg_init_copy (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     @: LmxMsg m
-    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK || out = 0
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        if: c.lmx_msg_exec_holding_turn(rt, who) = 0 || out = 0
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
+    if: out = 0
         return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_lock(rt)
     m: lmx_msg_find(rt, who)
     if: m = 0
+        c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
     out\id: 0U
     out\correlation: 0U
@@ -828,5 +857,7 @@ fn: lmx_msg_init_copy (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) i
     out\n: m\init_n
     out\bytes: lmx_msg_copy_bytes(m\init, m\init_n)
     if: m\init_n != 0U && out\bytes = 0
+        c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_NOMEM
+    c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK
