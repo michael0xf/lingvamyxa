@@ -1,8 +1,24 @@
-LMX_MSG_EXEC_HOST_V0
-====================
+LMX_MSG_EXEC_HOST_V0 (experimental)
+===================================
 
-Not host-ingress. V0 ingress (host_post / drain) stays.
-This slice: overlapping execution of DIFFERENT Messages.
+Not the accepted ingress pin. V0 host_post/drain remains the
+bot-isolated ingress harness. This slice is overlapping execution
+of DIFFERENT Messages and is experimental until the lock matrix
+and tests below stay green.
+
+Lock / ownership matrix
+-----------------------
+host_post          any thread     host mutex (ingress queue only)
+host_drain steal   owner          host mutex then exec mutex for transport
+create/grow/find   turn(parent)   exec mutex (tab/n); serial owner if nworkers=0
+send               turn(from)     exec mutex (outbox)
+recv               turn(who)      exec mutex (inbox pop)
+end_turn           turn(who)      exec mutex (transport, children, close)
+pump/admit         owner or any   exec mutex (transport + dest inbox)
+                   in-turn
+ready/bind         exec mutex
+turn_fn            holding latch  NO exec mutex
+UI must not touch a worker Message without that Message's latch.
 
 Choice
 ------
