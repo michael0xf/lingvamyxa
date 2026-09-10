@@ -5934,12 +5934,14 @@ The receiver `sub` consumes its child Structures by receiver-defined semantic ro
 7.3.1. Own Names, Dynamic Visibility and Exact Callable Replacement
 
 Revision 2 has dynamic call visibility but no reified runtime Namespace object.
-A name explicitly declared by the current method is its own local/formal and
-takes precedence. An unqualified free name is a compiler-generated dynamic
-input. At a call site the immediate caller supplies its current localized value
-for that name; if the caller received the same name dynamically and has not
-declared its own, it forwards its current copy. This gives transitive dynamic
-visibility through actual calls without a runtime Name-to-Binding map.
+A name explicitly declared by the current method — a typed own/formal
+declaration or an assignment-as-declaration bind (11.3.1) — is its own
+local/formal and takes precedence. An unqualified free name is a
+compiler-generated dynamic input. At a call site the immediate caller supplies
+its current localized value for that name; if the caller received the same name
+dynamically and has not established its own bind, it forwards its current copy.
+This gives transitive dynamic visibility through actual calls without a runtime
+Name-to-Binding map.
 
 When no caller activation supplies the name, the selected callable's immediate
 containing node supplies the fallback:
@@ -5949,8 +5951,11 @@ containing node supplies the fallback:
 The fallback is a value initialization, not an implicit structural write. A
 Primitive is copied by semantic value. A Structure or Array copies its reference
 value. Assigning the resulting C local affects only the current activation and
-may be passed farther down to another callee, but it is discarded on return
-unless the program explicitly stores or passes it. An explicit `node\x`,
+may be passed farther down to another callee, but an unbound imported copy is
+discarded on return unless the program explicitly stores or passes it. That
+discard is not a ban on assignment-as-declaration: if this method establishes
+its own-field bind of that name, dirty-only publication writes this method's
+field (11.3.1 / 21.6), never the 21.3 source binding. An explicit `node\x`,
 `reference\x` or `array[index]` operation bypasses the dynamic copy and mutates
 the selected graph/storage location.
 
@@ -7474,15 +7479,19 @@ backing, never the imported caller/source field. Ordinary nested blocks in
 the same method do not manufacture a shadow field; they update the enclosing
 method's already-resolved binding. Parent fields are visible inward and may
 be modified directly; child fields are visible to the parent only by explicit
-path. Resolve the source binding and the method boundary first, then apply
-the graph-backed or parameter rule.
+path. They are not flattened into the parent's unqualified names. `end: for`
+names a close target; it is not a field-access binding. Resolve the source
+binding and the method boundary first, then apply the graph-backed or
+parameter rule.
 
-Same-name argument and own field: one C variable from the declaration line
+Same-name argument and own field: one C variable from the declaration/bind line
 
 This is a precise exception, not a Namespace and not a withdrawal of cases 2
 and 3. An argument without an own-field declaration/bind of this method remains
-a private C parameter: assignments stay in this activation, there is no
-automatic write-back, and `@` is C `&` of that parameter.
+a private C parameter: there is no automatic write-back, and unbound `@`
+is C `&` of that parameter. An assignment of the name can be the bind
+(assignment-as-declaration); until that bind, stores stay in this
+activation.
 
 Ordinary own-only fields remain 21.3 / 21.5: the name is satisfied by M's
 own binding, is excluded from `DynRequired(M)`, and entry loads the
@@ -7558,36 +7567,40 @@ own-field `@` is forbidden from naming the cache:
 
     fn: ask (char: quote) int
         @: char p
-        p: @quote            # before bind: C & of the parameter
-        char: quote
+        p: @quote            # unbound: C & of the parameter
+        char: quote          # typed own bind (quote: 65 would also bind)
         p: @quote            # after bind: graph payload, or still &quote?
         return: 0
     end: ask
 
 This subsection does not pick. Do not silently change `@` or lifetime to
-paper over that collision.
+paper over that collision. After that bind the name is graph-backed; do not
+label the post-bind `@` a dangling C-parameter address.
 
-Declared parameter (no graph backing required):
+Unbound declared parameter (no own bind yet, so no graph backing required):
 
     # schematic callee with declared int x, caller had x = 5
-    x: 7               # local parameter is 7; caller x unchanged
+    # Unbound means no binding assignment before address-taking.
+    # x: 7 would be assignment-as-declaration and is not this case.
     @: int p
-    p: @x              # & of this C parameter
+    p: @x              # unbound: C & of this C parameter
     \p: 9              # local parameter is 9; caller x still 5
 
-Hidden through parameter (same C operations; source binding unchanged):
+Unbound hidden through parameter (same C operations; source binding unchanged):
 
     # schematic callee using bare x supplied as a hidden parameter
-    x: 7
-    p: @x
+    # again no x: N before address-taking
+    @: int p
+    p: @x              # unbound: C & of this hidden parameter
     \p: 9              # this activation's x is 9
                        # the source binding (caller or 21.3 fallback) is not written
                        # explicit node\x or reference\field is the graph path
 
 Returning an address: graph field versus activation-local parameter
 
-The placement of a declaration, not the spelling `int`, determines its storage.
-These are schematic L2 method-body examples with an address-valued result:
+The placement of a declaration or assignment-as-declaration bind, not the
+spelling `int`, determines its storage. These are schematic L2 method-body
+examples with an address-valued result:
 
     # a is declared in the method body: an own graph-backed field (21.5)
     int: a 5
@@ -7599,17 +7612,21 @@ while its actual graph payload remains alive and access is permitted; taking
 or returning it does not extend lifetime. Non-moving storage is not immortal
 storage. This example is not a way to expose the hidden working-local cache.
 
-    # a is instead a declared int formal of this method
-    a: 7
-    p: @a              # C &a of this activation's parameter
+    # a is instead a declared int formal of this method, still unbound
+    # (no typed own decl and no assignment-as-declaration before @)
+    @: int p
+    p: @a              # unbound: C &a of this activation's parameter
     \p: 9              # direct C store; a is now 9, source binding unchanged
     return: @a         # escapes this activation's C parameter: unsafe to use
 
 In the second example the addressed parameter ceases to exist when the method
 returns. A caller cannot dereference the returned address. The same rule
-applies to a hidden through parameter, even if its source was a long-lived
-graph field: `@a` names this activation's parameter, not that source. No
-implicit boxing, heap promotion or substitution of the source address occurs.
+applies to an unbound hidden through parameter, even if its source was a
+long-lived graph field: unbound `@a` names this activation's parameter, not
+that source. No implicit boxing, heap promotion or substitution of the source
+address occurs. `a: 7` before `@a` would be assignment-as-declaration and
+would not be this dangling-C-parameter case; post-bind `@` is the unpicked
+collision above, not a C-parameter lifetime warning.
 
 Prefix `\p` on an already typed parameter address is ordinary C dereference;
 it does not resolve `node` or require the stack address to belong to an Lmx
@@ -7625,7 +7642,8 @@ Caller-first / fallback / no writeback:
     # 21.3 order: caller activation-local x, else inherited dynamic x,
     # else immediate node\[0]x, else admission failure.
     # Fallback is the immediate supplied node, not a walk of node->node.
-    # Bare x: 9 in the callee does not write the source; node\x: 9 would.
+    # Bare x: 9 does not write the source; node\x: 9 would.
+    # If x: 9 is this method's own bind, it publishes this method's field.
 
 Reference binding rebind versus explicit target mutation:
 
@@ -7648,10 +7666,11 @@ L1 contrast (tested L1, not L2), from `tests/l1/expr_deref_read.lm1`:
     \p
 
 L1 `@ value` is C `&value` of that L1 binding. L1 has no Lmx graph payload
-and no own-field cache. L2 declared/through `@` matches that C-parameter
-rule. L2 own-field `@` does not: it names the classified graph payload, not
-the cache. Do not import either direction as a universal law. Matching L1
-writes: `tests/l1/expr_deref_assign.lm1`.
+and no own-field cache. Unbound L2 declared/through `@` matches that
+C-parameter rule. L2 own-field `@` does not: it names the classified graph
+payload, not the cache. After a same-name bind the two readings collide
+(11.3.1 does not pick). Do not import either direction as a universal law.
+Matching L1 writes: `tests/l1/expr_deref_assign.lm1`.
 
 Explicit raw L2 address slots (`@: int p`) remain machine slots that store a
 typed address. `@p` is address-of that slot. That slot is not an `Lmx.data`
@@ -13887,12 +13906,15 @@ An imported dynamic value is private to the receiving C activation. Rebinding or
 assigning bare `x` changes only that activation's C working value and the value
 it may pass farther down. It never writes back to the caller and never
 automatically writes `node\x`, except the 11.3.1 same-name bind: from the
-own-field declaration line that same variable is this method's own cache, and
-dirty-only publication writes this method's field, never the caller and never
-the 21.3 source binding. Writes executed before that line do not publish.
-`@x` of an unbound hidden parameter is C `&x` of it (11.3.1); a store through
-that address is the same local rebind. To change external graph state without
-that bind the method must use an explicit path or explicit Message operation.
+own-field declaration/bind line (typed own decl or assignment-as-declaration)
+that same variable is this method's own cache, and dirty-only publication writes
+this method's field, never the caller and never the 21.3 source binding. Writes
+executed before that bind line do not publish. Bare assignment is not forbidden
+from being that bind. `@x` of an unbound hidden parameter is C `&x` of it
+(11.3.1); a store through that address is the same local rebind. Unbound means
+no binding assignment before address-taking. To change external graph state
+without that bind the method must use an explicit path or explicit Message
+operation.
 
 21.4. Value and Reference Passing
 
@@ -13901,8 +13923,9 @@ callee receives an independent C value even when the source Lmx primitive is
 physically represented by a pointer into a registered address range such as
 `all_chars_array`. Sharing an immutable primitive atom is an implementation
 detail; assignment in the callee never changes the caller's variable.
-`@x` of that C parameter is `&x`; it is not a second copy of the argument
-and not a graph-materialization (11.3.1).
+Unbound `@x` of that C parameter is `&x`; it is not a second copy of the
+argument and not a graph-materialization (11.3.1). After a same-name own bind,
+`@x` is the unpicked 11.3.1 collision.
 
 Structure and Array arguments are Java-style reference values. The reference is
 copied into the callee's C activation; the referenced graph/storage is not
@@ -13939,20 +13962,24 @@ An own working local has graph backing in a directly selected field of
 `callable->node`. Declared arguments and dynamic imported values are
 activation-local inputs and have no automatic write-back target. Their
 assignment/rebinding never mutates the caller. To publish one as method state the
-program must assign an own field or use an explicit graph path. The 11.3.1
-same-name exception is the one way an argument becomes that own working local:
-from the own-field declaration/bind line, the parameter variable itself is the
+program must assign an own field or use an explicit graph path. Assignment of
+the same name can be that own-field bind (11.3.1); a separate typed declaration
+is not required. The 11.3.1 same-name exception is the one way an argument
+becomes that own working local: from the own-field declaration/bind line (typed
+own decl or assignment-as-declaration), the parameter variable itself is the
 cache of this method's field. That does not load the old graph value over the
-incoming argument, does not publish writes that executed before that line, and
-does not mutate the caller. Arguments without that bind stay private inputs.
+incoming argument, does not publish writes that executed before that bind line,
+and does not mutate the caller. Arguments without that bind stay private inputs.
 Generated C may
 use further service temporaries for address
 classification, child lookup, dirty state, bounds checks and outcome
 propagation; those temporaries are not additional source entities.
 Prefix `@` of an own graph field names the classified payload, not the C
 working local (11.3.1). It does not dirty that local and does not extend
-lifetime. Prefix `@` of a declared or hidden through parameter is C `&` of
-that parameter; it has no own cache and no automatic writeback.
+lifetime. Prefix `@` of an unbound declared or hidden through parameter is
+C `&` of that parameter; it has no own cache and no automatic writeback.
+After a same-name own bind, `@` of that name is the unpicked 11.3.1
+collision, not a second C-parameter address rule.
 
 Const qualification of that backing, including a successful `RuntimeImmutable`
 while this activation is suspended in a call, remains binding on the cache.
@@ -14019,9 +14046,11 @@ including fallthrough, `return`, `throw`, failing `assert`, `stop` and
 cancellation, and before `yield` suspension. After a successful write that local
 becomes clean. Declared and dynamic input values are never included in this
 automatic publication unless the 11.3.1 same-name exception has already bound
-that variable as this method's own cache. Then dirty-only publication writes
-this method's own node field, never the caller's argument or the 21.3 source
-binding. Writes executed before that bind line do not set dirty.
+that variable as this method's own cache. The bind line is a typed own decl or
+assignment-as-declaration; a separate prior typed declaration is not required.
+Then dirty-only publication writes this method's own node field, never the
+caller's argument or the 21.3 source binding. Writes executed before that bind
+line do not set dirty.
 
 Dirty fields are considered in the forward source/child-occurrence order of
 their backing fields in the selected containing Structure. The intended
