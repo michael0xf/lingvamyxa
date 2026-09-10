@@ -1,0 +1,57 @@
+LMX_MSG_EXEC_HOST_V0
+====================
+
+Not host-ingress. V0 ingress (host_post / drain) stays.
+This slice: overlapping execution of DIFFERENT Messages.
+
+Choice
+------
+Each Message has one arena and one serial turn lane. Different
+Messages may run turns at the same time on different OS threads.
+There is no source-language worker-count or depth cap; the host
+starts a small worker pool (test uses 2).
+
+UI/OS-affine Messages run only on the UI/owner thread (the thread
+that called runtime_new). ANY-affinity Messages run on workers.
+host_post remains callable from foreign callbacks.
+
+What a turn may call
+--------------------
+While a thread holds Message M's turn latch it may recv/send/end_turn
+for M only. create/stop/admit take a narrow runtime mutex and must
+not be held across user work. Workers never call APIs for a Message
+whose latch they do not hold. Owner checks on turn APIs become
+"creator thread OR current-turn M", not a global free-for-all.
+
+Not this
+--------
+A global mutex around whole handlers (that serializes all Messages).
+Removing owner checks. App C locks. One dispatcher thread for all
+handlers. Concurrent turns of the SAME Message. Graph-copy 19.29.7.2.
+
+Scheduling / transport
+----------------------
+Runtime mutex: ready queue, admit, create, state, stop flags.
+Per-Message turn latch: at most one turn.
+Workers wait on the ready queue, take one Message, run one bound
+turn function, publish outbox via end_turn, enqueue destinations.
+UI thread: host_drain + UI-affine turns. A busy ANY worker must
+not block UI_step or another Message's worker.
+
+Lifetime
+--------
+Do not delete/free a Message arena while its turn latch is held.
+Stop: set closing; current turn finishes; next turn sees close and
+end_turn STOPPED. Join workers before runtime_delete. Ingress
+quiescence (join posters, then shutdown) still applies.
+
+Bind
+----
+lmx_msg_exec_bind(rt, addr, turn, ctx, affinity)
+  affinity 0 = ANY (worker), 1 = UI (owner thread)
+lmx_msg_exec_start(rt, nworkers)
+lmx_msg_exec_ui_step(rt)
+lmx_msg_exec_stop(rt)
+
+App fragments stay isolated: they implement turn() and host_post
+adapters only.
