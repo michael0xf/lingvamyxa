@@ -691,7 +691,9 @@ return: n
 fn: lmx_msg_set_now (@: LmxMsgRuntime rt; unsigned: now) int
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_lock(rt)
     rt\clock: now
+    c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK
 
 fn: lmx_msg_drive_should_close (@: LmxMsg m) int
@@ -727,11 +729,17 @@ fn: lmx_msg_drive (@: LmxMsgRuntime rt; unsigned: now; unsigned: threshold) int
         while: i < rt\n
             m: rt\tab[i]
             if: lmx_msg_drive_should_close(m) != 0
-                st: lmx_msg_end_turn(rt, m\addr, 1)
-                if: st != c.LMX_MSG_OK
-                    return: st
+                if: c.lmx_msg_exec_workers(rt) != 0
+                    c.lmx_msg_exec_ready(rt, m\addr)
+                    more: 1
                 ---
-                more: 1
+                if: c.lmx_msg_exec_workers(rt) = 0
+                    st: lmx_msg_end_turn(rt, m\addr, 1)
+                    if: st != c.LMX_MSG_OK
+                        return: st
+                    ---
+                    more: 1
+                ---
             ---
             i: i + 1
         st: lmx_msg_pump(rt)
@@ -750,26 +758,40 @@ return: c.LMX_MSG_OK
 
 fn: lmx_msg_state (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
+    int: s
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
-        return: -1
+        if: c.lmx_msg_exec_holding_turn(rt, who) = 0
+            return: -1
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
     m: lmx_msg_find(rt, who)
     if: m = 0
+        c.lmx_msg_exec_unlock(rt)
         return: -1
-return: m\state
+    s: m\state
+    c.lmx_msg_exec_unlock(rt)
+return: s
 
 fn: lmx_msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     @: LmxMsgCopy n
     int: cnt 0
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
-        return: -1
+        if: c.lmx_msg_exec_holding_turn(rt, who) = 0
+            return: -1
+        ---
+    ---
+    c.lmx_msg_exec_lock(rt)
     m: lmx_msg_find(rt, who)
     if: m = 0
+        c.lmx_msg_exec_unlock(rt)
         return: -1
     n: m\inbox
     while: n != 0
         cnt: cnt + 1
         n: n\next
+    c.lmx_msg_exec_unlock(rt)
 return: cnt
 
 fn: lmx_msg_path_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int

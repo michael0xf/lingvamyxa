@@ -129,8 +129,23 @@ int main(void) {
     env.id = 0;
     lmx_msg_send(rt, parent, w1, &env);
     lmx_msg_send(rt, parent, w2, &env);
+    env.bytes = init;
+    lmx_msg_send(rt, parent, w2, &env);
     lmx_msg_end_turn(rt, parent, 1);
     lmx_msg_pump(rt);
+    {
+        int k;
+        LmxMsgAddr extra = 0;
+        for (k = 0; k < 70; k++) {
+            extra = 0;
+            if (lmx_msg_create(rt, parent, (unsigned)(100 + k), init, 1, &extra) != LMX_MSG_OK) {
+                return 1;
+            }
+            if (lmx_msg_exec_bind(rt, extra, turn_fast, &fast, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                return 1;
+            }
+        }
+    }
     if (lmx_msg_exec_start(rt, 2) != LMX_MSG_OK) {
         return 1;
     }
@@ -163,8 +178,16 @@ int main(void) {
         fprintf(stderr, "ui_step blocked on slow worker ms=%lu\n", (unsigned long)tui);
         return 1;
     }
-    while (slow.done == 0 || fast.done == 0) {
-        Sleep(10);
+    {
+        DWORD deadline = GetTickCount() + 3000;
+        while ((slow.done == 0 || fast.done < 2) && GetTickCount() < deadline) {
+            Sleep(10);
+        }
+        if (slow.done == 0 || fast.done < 2) {
+            fprintf(stderr, "timeout waiting turns slow=%ld fast=%ld\n",
+                (long)slow.done, (long)fast.done);
+            return 1;
+        }
     }
     lmx_msg_exec_stop(rt);
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
@@ -187,8 +210,8 @@ int main(void) {
         lmx_msg_runtime_delete(rt);
         return 1;
     }
-    if (slow.recvd != 1 || fast.recvd != 1) {
-        fprintf(stderr, "payload recv mismatch\n");
+    if (slow.recvd != 1 || fast.recvd != 2) {
+        fprintf(stderr, "payload recv mismatch slow=%u fast=%u\n", slow.recvd, fast.recvd);
         lmx_msg_runtime_delete(rt);
         return 1;
     }

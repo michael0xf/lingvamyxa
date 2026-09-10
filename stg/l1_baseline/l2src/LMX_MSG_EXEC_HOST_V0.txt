@@ -18,7 +18,15 @@ pump/admit         owner or any   exec mutex (transport + dest inbox)
                    in-turn
 ready/bind         exec mutex
 turn_fn            holding latch  NO exec mutex
+state/inbox_n      owner or latch exec mutex
+set_now/poll/drive owner          exec mutex; drive readies bound
+                                  closing msgs instead of out-of-turn
+                                  end_turn when workers>0
 UI must not touch a worker Message without that Message's latch.
+
+end_turn from a turn also pumps (admits published outbox in the
+same scheduling phase). Serial tests still pump explicitly; a
+second empty pump is a no-op. Ingress host_drain still pumps.
 
 Choice
 ------

@@ -52,6 +52,7 @@ typedef struct LmxMsgExec {
     LmxMsgAddr *ready;
     int nready;
     int ready_cap;
+    int scan;
 } LmxMsgExec;
 
 static LmxMsgExec *exof(LmxMsgRuntime *rt) {
@@ -257,6 +258,7 @@ void lmx_msg_exec_ready(LmxMsgRuntime *rt, LmxMsgAddr addr) {
         }
     }
     if (ready_grow(e) != 0) {
+        e->scan = 1;
         lmx_msg_exec_unlock(rt);
         return;
     }
@@ -307,10 +309,36 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
     return LMX_MSG_OK;
 }
 
+static void scan_runnable(LmxMsgRuntime *rt, LmxMsgExec *e) {
+    int i;
+    LmxMsg *m;
+    if (e->scan == 0) {
+        return;
+    }
+    e->scan = 0;
+    for (i = 0; i < rt->n; i++) {
+        m = rt->tab[i];
+        if (m == 0) {
+            continue;
+        }
+        if (m->state == LMX_MSG_STATE_STOPPED || m->state == LMX_MSG_STATE_DEAD || m->state == LMX_MSG_STATE_RELEASED) {
+            continue;
+        }
+        if (m->inbox != 0 || m->closing != 0) {
+            if (ready_grow(e) != 0) {
+                e->scan = 1;
+                return;
+            }
+            e->ready[e->nready++] = m->addr;
+        }
+    }
+}
+
 static int take_ready(LmxMsgExec *e, int want_ui, LmxMsgExecBind *snap) {
     int i;
     int j;
     LmxMsgAddr addr;
+    scan_runnable(e->rt, e);
     for (i = 0; i < e->nready; i++) {
         addr = e->ready[i];
         for (j = 0; j < e->nbind; j++) {
@@ -343,7 +371,7 @@ static void requeue_if_runnable(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     lmx_msg_exec_lock(rt);
     for (i = 0; i < rt->n; i++) {
         m = rt->tab[i];
-        if (m != 0 && m->addr == addr && (m->inbox != 0 || m->closing != 0)) {
+        if (m != 0 && m->addr == addr && m->state != LMX_MSG_STATE_STOPPED && m->state != LMX_MSG_STATE_DEAD && m->state != LMX_MSG_STATE_RELEASED && (m->inbox != 0 || m->closing != 0)) {
             lmx_msg_exec_unlock(rt);
             lmx_msg_exec_ready(rt, addr);
             return;
@@ -381,15 +409,13 @@ static void *worker(void *arg)
     LmxMsgExec *e = exof(rt);
     LmxMsgExecBind snap;
     for (;;) {
+        lmx_msg_exec_lock(rt);
         if (e->stopping != 0) {
+            lmx_msg_exec_unlock(rt);
             break;
         }
-        lmx_msg_exec_lock(rt);
         if (take_ready(e, 0, &snap) == 0) {
             lmx_msg_exec_unlock(rt);
-            if (e->stopping != 0) {
-                break;
-            }
 #if defined(_WIN32)
             WaitForSingleObject(e->ready_ev, 20);
 #else
@@ -443,21 +469,30 @@ int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers) {
     }
     e->workers_cap = nworkers;
     e->stopping = 0;
-    e->nworkers = nworkers;
+    e->nworkers = 0;
     lmx_msg_exec_unlock(rt);
     for (i = 0; i < nworkers; i++) {
 #if defined(_WIN32)
         e->wh[i] = CreateThread(0, 0, worker, rt, 0, 0);
         if (e->wh[i] == 0) {
+            lmx_msg_exec_lock(rt);
+            e->nworkers = i;
+            lmx_msg_exec_unlock(rt);
             lmx_msg_exec_stop(rt);
             return LMX_MSG_NOMEM;
         }
 #else
         if (pthread_create(&e->wh[i], 0, worker, rt) != 0) {
+            lmx_msg_exec_lock(rt);
+            e->nworkers = i;
+            lmx_msg_exec_unlock(rt);
             lmx_msg_exec_stop(rt);
             return LMX_MSG_NOMEM;
         }
 #endif
+        lmx_msg_exec_lock(rt);
+        e->nworkers = i + 1;
+        lmx_msg_exec_unlock(rt);
     }
     return LMX_MSG_OK;
 }
@@ -491,7 +526,9 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     if (lmx_msg_host_is_owner(rt) == 0) {
         return LMX_MSG_INVALID;
     }
+    lmx_msg_exec_lock(rt);
     e->stopping = 1;
+    lmx_msg_exec_unlock(rt);
 #if defined(_WIN32)
     SetEvent(e->stop_ev);
     SetEvent(e->ready_ev);
