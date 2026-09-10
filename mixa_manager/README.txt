@@ -3,6 +3,32 @@ Mixa Manager - implementation on the stable L1
 
 Source model: Mixa_Manager_model.txt (draft 0.4) at the repository root.
 
+Standing instruction from Mikhail, 2026-09-10: EVERYTHING WE DISCUSS GOES INTO
+THE SPECIFICATION. Not a summary of it, not a ticket about it - the decision
+itself, written down where the work will look for it, and committed as soon as
+it is written rather than held back for the code it describes.
+
+The specification is this directory. Which file follows the subject:
+
+    UI_MODEL.txt        what the interface IS - layers, grids, lists, panels,
+                        the highlight, the pointer
+    DRAWING.txt         how a cell gets its content - tiles, frames, glyphs
+    BACKEND_SEAM.txt    what a platform must provide, and why each thing is in
+                        the seam rather than above it
+    FILE_SEAM.txt       files
+    PROCESS_SEAM.txt    child processes
+    SELECTION_MODEL.txt selected sets and their exceptions
+    CODING_RULES.txt    how to write the L1, including what the language
+                        actually accepts
+    FIRST_VERSION.txt   mode 0.1.2 - the scope of the first runnable thing
+    PORT_OF_CLEARSHELL.txt
+                        the delta list: where we differ from the source and why.
+                        Anything decided here that ClearShell does otherwise
+                        belongs in section 2 as a two-column entry.
+
+A decision that spans two of them goes in the one that owns the subject, with a
+one-line cross-reference from the other. It is not duplicated.
+
 The one architectural decision, and why
 ---------------------------------------
 The model is written in Qt/C++ terms: classes, signals, QProcess, a Qt
