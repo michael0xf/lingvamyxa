@@ -7462,9 +7462,20 @@ of a canonical immutable primitive cell.
 The working cache is implementation storage, not another source declaration.
 Method activations delimit this caching and hidden through-argument mechanism;
 ordinary nested Structures or an `if` body do not by their nesting alone
-create another method activation. Do not infer a switch from parameter
-storage to own-field storage merely from assignment or block nesting. Resolve
-the source binding first, then apply its graph-backed or parameter rule.
+create another method activation, hidden-argument copies, or a separate cache
+frame. Nested method calls do.
+
+In LMX, assignment is also a field declaration. `quote: 65` can establish this
+method's own-field bind of `quote` without a prior separate `char: quote` /
+`size_t: quote` statement. Type comes from an explicit formal, a hidden
+through of this method, or the assignment's established type — not from C
+block-scope rules. That bind publishes to this receiving Structure's own
+backing, never the imported caller/source field. Ordinary nested blocks in
+the same method do not manufacture a shadow field; they update the enclosing
+method's already-resolved binding. Parent fields are visible inward and may
+be modified directly; child fields are visible to the parent only by explicit
+path. Resolve the source binding and the method boundary first, then apply
+the graph-backed or parameter rule.
 
 Same-name argument and own field: one C variable from the declaration line
 
@@ -7483,24 +7494,29 @@ When an explicit argument, or a hidden typed C parameter of the same method
 has no field), has the same source name as an own graph-backed field of this
 method, generated C uses one working variable: that parameter, not a second
 independent cache local. A hidden parameter exists only when 21.3 actually
-requires it — in particular a bare use or assignment of the name before this
-method's own-field declaration, with no explicit formal. It is not created
-merely because an own field of that name exists. The through-boundary is method nesting / activation,
-not Structure or `if` nesting. Do not invent a history table of names.
+requires it — in particular a bare use of the name before this method has
+established its own-field bind, with no explicit formal. Assignment of the
+name in this method can be that bind (assignment-as-declaration) and is not
+by itself a hidden parameter. A hidden parameter is not created merely
+because an own field of that name exists. The through-boundary is method
+nesting / activation, not Structure or `if` nesting. Do not invent a history
+table of names. Do not invent a shadow field for an assignment in an
+ordinary nested block that already sees the enclosing binding.
 
-Until the own-field declaration/bind line in this body, that variable is an
-ordinary activation-local argument. Writes to it are not published. The old
-graph field is not loaded over the incoming value merely because the names
-coincide.
+A bare use of the name before this method has established its own-field bind
+(typed decl or assignment-as-declaration), with no explicit formal, is the
+21.3 hidden-parameter case. It is not created merely because an own field of
+that name exists on some other Structure.
 
-From that declaration line onward, the same variable is this method's own
-cache. An assignment to the field dirties, including an assignment of an
+Once this method's own-field bind exists — including when the first
+assignment of the name is that bind — the same C variable is this method's
+own cache. An assignment to the field dirties, including an assignment of an
 equal value. Subsequent bare reads and writes share that variable. Dirty-only
 publication writes this method's own node field before call/exit; dirty
 clears after a successful publish; there is no reload; the caller's argument
 and the 21.3 source binding are not mutated. A copied reference copies the
 reference, not the graph (21.4); explicit paths and indexing may change the
-referent by the ordinary rules. Without the own-field declaration/bind, do
+referent by the ordinary rules. Without an own-field bind of this method, do
 not publish the argument automatically and do not treat every argument or
 through-value as a field.
 
@@ -7522,9 +7538,10 @@ claim that the translator already lowers `@` after bind, runtime-selected
 callees, or a per-method graph:
 
     fn: m (char: quote) int
-        quote: 65            # before bind: local argument, not published
-        char: quote          # from here: same C variable is this method's own cache
-        quote: 66            # dirty, including when the graph already holds 66
+        quote: 65            # assignment is also own-field declaration/bind
+                             # of this method; dirties this method's quote;
+                             # caller/source quote is not written
+        quote: 66            # same own cache, dirty again
         return: 0            # publishes 66 to this method's quote field;
                              # caller quote is unchanged
     end: m
