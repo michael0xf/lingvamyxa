@@ -140,14 +140,37 @@ type transposed). None is refused.
 No rebuild, gate run or promotion asked for. Not verified against l1src,
 deliberately: the observation was handed over rather than a diagnosis.
 
-Two things follow and neither is done:
-    the workaround is hand-written C inside mixa_manager, where until now only
-      HEADERS were hand-written. That is a real exception to the hermeticity the
-      distribution model asks for and it should be either accepted in writing or
-      removed once L1 can express the type.
-    it may be an L1 defect worth reporting - but verify against l1src before
-      reporting anything, because a "defect" the self-hosted translator relies on
-      is load-bearing.
+RESOLVED for the application, 03:34, by a bridge Codex proposed and I verified.
+Name the inner pointer type in the ABI header and qualify the ALIAS:
+
+    typedef const MixaBackendVTable *MixaBackendTableRef;
+    fn: mixa_backend_tables (@: size_t count) const: @(MixaBackendTableRef)
+
+generates `const MixaBackendTableRef *`, which by C typedef qualification IS
+`const MixaBackendVTable *const *` - qualifying a typedef'd pointer type
+qualifies the POINTER. Ran on 65D5A5ED: compatible with the exact prototype
+under -Werror, writes to the slot AND to the pointee both rejected, reads clean.
+
+So the hand-written C registry goes away and the registry becomes ordinary L1;
+only the typedef stays in the already-permitted ABI header. Ticketed to
+grok_bot, to land before his Task 25 report.
+
+The language gap is NOT closed by this and must not be recorded as closed. The
+bridge NAMES a type to get a qualifier onto a pointer; L1 still cannot SAY
+"const pointer", and every future case needs another alias in a handwritten
+header. Codex has passed both reports to Grok for a priority bounded L1 source
+review. Full matrix with complete input files sent to both at 033409.
+
+Still open from the same probing:
+    a module-level `@: T x` emits without STATIC and indented, so a registry
+      slot leaks a name out of its unit. Asked grok_bot whether L1 can spell
+      static at all; if not, that is a separate report.
+    the three silent-output spellings in section B of the matrix - const const
+      VT **, const ** on implicit int, and const * VT with name and type
+      transposed. Codex agrees these are a diagnostic issue independent of
+      10.13. Not ours to fix.
+    10.13 itself. Urgent by Mikhail's instruction: "L1 has to be finished, in
+      priority."
 
 
 7. Standing constraints, unchanged
