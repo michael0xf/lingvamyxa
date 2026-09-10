@@ -439,6 +439,7 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     int i;
     int st;
     int live = 0;
+    int clean;
     old = get_tls(e);
     set_tls(e, snap->addr);
     st = snap->turn(rt, snap->addr, snap->ctx);
@@ -447,6 +448,14 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     if (m != 0) {
         live = m->exec_live;
     }
+    lmx_msg_exec_unlock(rt);
+    if (live != 0) {
+        clean = lmx_msg_end_turn(rt, snap->addr, 0);
+        if (st == 0) {
+            st = clean == LMX_MSG_OK ? 1 : clean;
+        }
+    }
+    lmx_msg_exec_lock(rt);
     for (i = 0; i < e->nbind; i++) {
         if (e->bind[i].addr == snap->addr) {
             e->bind[i].held = 0;
@@ -454,9 +463,6 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         }
     }
     lmx_msg_exec_unlock(rt);
-    if (live != 0) {
-        st = lmx_msg_end_turn(rt, snap->addr, 0);
-    }
     set_tls(e, old);
     requeue_if_runnable(rt, snap->addr);
     return st;

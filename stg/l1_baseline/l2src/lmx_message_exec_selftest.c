@@ -26,6 +26,9 @@ typedef struct MassRec {
     int recv_st;
     int end_st;
     unsigned got;
+    unsigned fifo_a;
+    unsigned fifo_b;
+    int overlap;
 } MassRec;
 
 static MassRec g_mass[70];
@@ -88,6 +91,28 @@ static int turn_fast(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     lmx_msg_env_release(&got);
     InterlockedIncrement(&c->done);
     return lmx_msg_end_turn(rt, who, 1);
+}
+
+static int turn_fail_no_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    MassRec *m = (MassRec *)ctx;
+    LmxMsgEnv got;
+    memset(&got, 0, sizeof(got));
+    if (InterlockedIncrement(&m->in_turn) != 1) {
+        m->overlap = 1;
+        return 1;
+    }
+    m->recv_st = lmx_msg_recv(rt, who, &got);
+    if (m->recv_st == LMX_MSG_OK && got.n == 1 && got.bytes != 0) {
+        if (InterlockedCompareExchange(&m->done, 0, 0) == 0) {
+            m->fifo_a = got.bytes[0];
+        } else {
+            m->fifo_b = got.bytes[0];
+        }
+    }
+    lmx_msg_env_release(&got);
+    InterlockedDecrement(&m->in_turn);
+    InterlockedIncrement(&m->done);
+    return 1;
 }
 
 static int turn_mass(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
@@ -232,14 +257,14 @@ int main(void) {
     }
     {
         DWORD deadline = GetTickCount() + 3000;
-        while ((slow.done == 0 || fast.done < 2) && GetTickCount() < deadline) {
+        while ((InterlockedCompareExchange(&slow.done, 0, 0) == 0 || InterlockedCompareExchange(&fast.done, 0, 0) < 2) && GetTickCount() < deadline) {
             Sleep(10);
         }
         {
             int k;
             int mass_done = 0;
             for (k = 0; k < 70; k++) {
-                if (g_mass[k].done != 0) {
+                if (InterlockedCompareExchange(&g_mass[k].done, 0, 0) != 0) {
                     mass_done += 1;
                 }
             }
@@ -247,12 +272,12 @@ int main(void) {
                 Sleep(10);
                 mass_done = 0;
                 for (k = 0; k < 70; k++) {
-                    if (g_mass[k].done != 0) {
+                    if (InterlockedCompareExchange(&g_mass[k].done, 0, 0) != 0) {
                         mass_done += 1;
                     }
                 }
             }
-            if (slow.done == 0 || fast.done < 2 || mass_done < 70) {
+            if (InterlockedCompareExchange(&slow.done, 0, 0) == 0 || InterlockedCompareExchange(&fast.done, 0, 0) < 2 || mass_done < 70) {
                 fprintf(stderr, "timeout slow=%ld fast=%ld mass_done=%d\n",
                     (long)slow.done, (long)fast.done, mass_done);
                 return 1;
@@ -279,7 +304,7 @@ int main(void) {
     {
         int k;
         for (k = 0; k < 70; k++) {
-            if (g_mass[k].done != 1 || g_mass[k].recv_st != LMX_MSG_OK || g_mass[k].end_st != LMX_MSG_OK || g_mass[k].got != g_mass[k].expect || g_mass[k].in_turn != 0) {
+            if (InterlockedCompareExchange(&g_mass[k].done, 0, 0) != 1 || g_mass[k].recv_st != LMX_MSG_OK || g_mass[k].end_st != LMX_MSG_OK || g_mass[k].got != g_mass[k].expect || InterlockedCompareExchange(&g_mass[k].in_turn, 0, 0) != 0) {
                 fprintf(stderr, "mass[%d] done=%ld recv=%d end=%d got=%u expect=%u in_turn=%ld\n",
                     k, (long)g_mass[k].done, g_mass[k].recv_st, g_mass[k].end_st,
                     g_mass[k].got, g_mass[k].expect, (long)g_mass[k].in_turn);
@@ -302,5 +327,58 @@ int main(void) {
     CloseHandle(slow.unblock);
     CloseHandle(slow.started);
     CloseHandle(fast.started);
+
+    /* Failing handler + queued second item: latch held through cleanup. */
+    {
+        LmxMsgRuntime *rtf;
+        LmxMsgAddr pf = 0, wf = 0;
+        LmxMsgEnv e2;
+        uchar p31 = 31, p32 = 32, ini = 1;
+        DWORD dl;
+        static MassRec failrec;
+        memset(&failrec, 0, sizeof(failrec));
+        failrec.expect = 31;
+        rtf = lmx_msg_runtime_new();
+        if (rtf == 0) {
+            return 1;
+        }
+        if (lmx_msg_create(rtf, 0, 1, &ini, 1, &pf) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_create(rtf, pf, 2, &ini, 1, &wf) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_end_turn(rtf, pf, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        memset(&e2, 0, sizeof(e2));
+        e2.kind = LMX_MSG_KIND_BYTES;
+        e2.n = 1;
+        e2.bytes = &p31;
+        lmx_msg_send(rtf, pf, wf, &e2);
+        e2.bytes = &p32;
+        lmx_msg_send(rtf, pf, wf, &e2);
+        lmx_msg_end_turn(rtf, pf, 1);
+        lmx_msg_pump(rtf);
+        if (lmx_msg_exec_bind(rtf, wf, turn_fail_no_end, &failrec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_exec_start(rtf, 2) != LMX_MSG_OK) {
+            return 1;
+        }
+        dl = GetTickCount() + 3000;
+        while (InterlockedCompareExchange(&failrec.done, 0, 0) < 2 && GetTickCount() < dl) {
+            Sleep(10);
+        }
+        lmx_msg_exec_stop(rtf);
+        if (InterlockedCompareExchange(&failrec.done, 0, 0) != 2 || failrec.fifo_a != 31 || failrec.fifo_b != 32 || InterlockedCompareExchange(&failrec.in_turn, 0, 0) != 0 || failrec.overlap != 0) {
+            fprintf(stderr, "fail-handler race done=%ld got=%u,%u overlap=%d in_turn=%ld\n",
+                (long)InterlockedCompareExchange(&failrec.done, 0, 0), failrec.fifo_a, failrec.fifo_b,
+                failrec.overlap, (long)InterlockedCompareExchange(&failrec.in_turn, 0, 0));
+            lmx_msg_runtime_delete(rtf);
+            return 1;
+        }
+        lmx_msg_runtime_delete(rtf);
+    }
     return 0;
 }
