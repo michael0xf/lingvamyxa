@@ -1,0 +1,11 @@
+include: "<stdlib.h>"
+include: "mixa_manager/tests/l1_gaps/vt.h"
+
+@: VTRef g_tables
+
+fn: reg_tables (@: size_t count) const: @(VTRef)
+    if: count = 0
+        return: 0
+    ---
+    count[0]: 0U
+return: g_tables
