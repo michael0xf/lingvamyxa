@@ -101,6 +101,15 @@ converts once and every consumer agrees.
   unchanged     the per-list panel is that list's header, and the header is
                 STICKY - scrolling the list does not carry it away
 
+2.4.1. What drives the panel's horizontal scroll
+
+  ClearShell    a touch gesture, independent of anything - there is no highlight
+                to be independent of, a finger lands on the button it wants
+  here          moving the HIGHLIGHT. No separate scroll action on the keyboard:
+                the highlight moves to the next button and the panel scrolls to
+                bring it in. The mouse may move the view alone, and then any
+                highlight movement brings the view back - UI_MODEL 5.7
+
 2.5. Vertical scrolling
 
   ClearShell    the whole panel moves vertically - a concession to a narrow
