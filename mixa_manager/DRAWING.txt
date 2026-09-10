@@ -146,52 +146,31 @@ headers and dividers do - and those are ClearShell's own borders around
 containers, not around buttons. Section 3.1 stands unchanged.
 
 
-5.4. The highlight border is the DOUBLE box frame, and it already exists
+5.4. The highlight border: the double box set
 
-Mikhail, 2026-09-10, settling this in one line:
-
-    corners  U+2554 U+2557 U+255A U+255D      double-line box drawing
+    corners  U+2554 U+2557 U+255A U+255D
     lines    U+2550 U+2551
 
-So the highlight is drawn with ORDINARY box-drawing characters, in the double
-set. "No micro-gap and thicker" was never about a new material: a box character
-runs edge to edge in its cell with no gap, and the double set is two strokes
-where the single set is one. Both properties are the glyphs', not something to
-derive.
+That is the whole specification. Mikhail named the set and, when an earlier
+revision of this section built an argument on top of an earlier phrasing of his,
+withdrew the phrasing: "I was wrong, use this set and that is all."
 
-It costs nothing at all, which is worth stating precisely because a previous
-revision of this section cost a great deal:
-
-    mixa_draw_frame already takes a style and already emits exactly these six
-      codepoints - checked in mixa_draw.lm1, the DOUBLE branch of
-      mixa_draw_mask_to_cp
-    junction merging already covers them. Two highlighted things sharing an edge
-      already produce the right character.
-    the drawer places them like any other glyph, so section 3.1 carries the
-      whole feature. There is no new painter and no new codepoint range.
-
-Colour is the cell's fg, white to begin with. Foreground elements here are
+Nothing new is drawn. mixa_draw_frame already takes a style, the DOUBLE branch
+of mixa_draw_mask_to_cp already returns exactly these six codepoints, and
+junction merging already covers them - so section 3.1 carries the feature whole.
+Colour is the cell's fg, white to begin with; foreground elements here are
 always fully opaque (UI_MODEL 3).
 
-5.4.1. What the previous revision got wrong, and what it cost
+5.4.1. A deleted design, kept as a warning not to rebuild it
 
-It read the border as a second procedural TILE family at U+E010..U+E01F, with a
-thickness derived as cell_h >> 4 floored at 2, painted by an extension of
-mixa_tile_paint_cell. All of that is deleted. None of it was needed.
+An earlier revision specified a second procedural TILE family at
+U+E010..U+E01F with a thickness derived as cell_h >> 4, painted by an extension
+of mixa_tile_paint_cell. All deleted. It was designed to satisfy a description
+that the existing pseudographics already satisfied, one section above, in this
+same file.
 
-The mistake: I was told the highlight has "no micro-gap and is thicker" while
-looking at the tile code that owns the micro-gap, so I read the sentence as a
-variation on tiles. It was a description of the pseudographic border - the other
-material, already implemented, one section above. A picture of a double-ruled
-frame was attached and I recorded my reading of it as "one solid line", flagging
-that it might be two concentric lines. It was two concentric lines: that is what
-a double box frame IS.
-
-Flagging the alternative reading is what made this cost one sentence to correct
-instead of a shipped tile family. That is the practice working, not a
-consolation - but the flag would not have been needed if I had checked whether
-the drawing code could already do what was described BEFORE designing something
-that could.
+The general lesson, and it is not about this feature: before designing a
+capability to meet a description, check whether the code already has one.
 
 5.4.2. The frame goes OVER the element, and takes only the foreground
 
@@ -213,9 +192,7 @@ colour that is supposed to stay. Drawing the highlight needs a way to say KEEP
 THE CELL'S BACKGROUND and write the glyph only. That is the one piece of work
 this feature actually has.
 
-It also disposes of the cost objection the previous revision raised against
-overlaying - that a frame eats two rows and two columns of content. It eats
-none: nothing is displaced, the glyph replaces whatever character occupied those
-edge cells, and on a button those are the border cells of the nine-slice rather
-than label. A square button is the case to look at, and looking is the method -
-first version, then judge.
+Nothing is displaced by the overlay: the glyph replaces whatever character
+occupied those edge cells, and on a button those are the nine-slice border cells
+rather than label. A square button is the case to look at, and looking is the
+method - first version, then judge.

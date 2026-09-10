@@ -154,10 +154,10 @@ So we build:
       lists, items, buttons and panels
     a highlighted rendering for ANY element, not only list rows
 
-What it looks like was settled on 2026-09-10 by the language owner: the
-highlight is its OWN BORDER - no micro-gap, thicker than one, white to begin
-with. A button's edge is normally a gap; highlighted, that same edge is a drawn
-line. See DRAWING.txt 5.4.
+What it looks like was settled on 2026-09-10 by the language owner: a
+double-line box frame - U+2554 U+2557 U+255A U+255D and U+2550 U+2551 - drawn
+OVER the highlighted element in white, leaving the element's own coloured fill
+untouched beneath it. One frame, moving with focus. See DRAWING.txt 5.4.
 
 It needs NO new drawing capability, which this paragraph said originally, then
 retracted, and now says again. The retraction was mine and it was wrong: I had
