@@ -1,0 +1,65 @@
+fn: lm_p0_is_horizontal_space (char: value) int
+    return: value = 32 || value = 9
+end: lm_p0_is_horizontal_space
+fn: lm_p0_is_line_break (char: value) int
+    return: value = 10 || value = 13
+end: lm_p0_is_line_break
+fn: lm_p0_scan_brace_mark_unchecked (const: @(char text); size_t: length; size_t: start) size_t
+    size_t: i
+    size_t: depth
+    i: start
+    depth: 0U
+    while: i < length
+        if: text[i] = 35
+            while: i < length && text[i] != 10 && text[i] != 13
+                i: i + 1U
+            continue
+        if: text[i] = 123
+            depth: depth + 1U
+            i: i + 1U
+            continue
+        if: text[i] = 125
+            i: i + 1U
+            if: depth = 0U
+                continue
+            depth: depth - 1U
+            if: depth = 0U
+                return: i
+            continue
+        i: i + 1U
+    return: 0U
+end: lm_p0_scan_brace_mark_unchecked
+fn: lm_p0_dash_fence_status (const: @(char text); size_t: length; @: size_t out_dash_count) int
+    size_t: dash_count
+    size_t: i
+    size_t: brace_end
+    char: ch
+    dash_count: 0U
+    while: dash_count < length && text[dash_count] = 45
+        dash_count: dash_count + 1U
+    if: out_dash_count != 0
+        out_dash_count[0]: dash_count
+    if: dash_count < 3U
+        return: 0
+    if: dash_count > 80U
+        return: 2
+    i: dash_count
+    while: i < length
+        ch: text[i]
+        if: lm_p0_is_horizontal_space(ch) != 0
+            i: i + 1U
+            continue
+        if: ch = 35
+            return: 1
+        if: ch = 123
+            brace_end: lm_p0_scan_brace_mark_unchecked(text, length, i)
+            if: brace_end = 0U
+                return: 3
+            i: brace_end
+            continue
+        return: 3
+    return: 1
+end: lm_p0_dash_fence_status
+fn: main () int
+    return: 0
+end: main

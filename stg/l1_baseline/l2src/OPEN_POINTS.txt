@@ -1497,3 +1497,20 @@ Promotion completion (181210)
     inbox id in the Grok completion reply. Do not call rootC244 the
     default before that replacement. Do not require Claude to rebuild
     or wait on his ACK.
+
+Unit dash-fence status (011330, after da77016)
+----------------------------------------------
+Files: parser_dash_fence.lm2, run_l2trans.ps1
+
+SPEC 3.4 dash delimiter line / P0 fence length 80.
+    DECIDED for the classifier: NONE=0 VALID=1 TOO_LONG=2
+    TRAILING_TEXT=3, max 80 dashes. Whitespace and `#` comment after
+    the dashes are VALID. Copied is_horizontal_space / is_line_break
+    must match parser_text_predicates.lm2.
+
+ABI / remaining brace-mark scanner
+    AVOIDED / ACTIVE next: string/fence/quote-aware brace marks are NOT
+    in this slice. Depth + `#`-to-EOL only; unclosed returns 0U.
+    Do not call this old-P0 brace parity. Next unit replaces this helper.
+    L2 cannot pass `@ local` as an actual (incompatible entry signature);
+    `@: int` address formals are rejected (unit_sz_intp).

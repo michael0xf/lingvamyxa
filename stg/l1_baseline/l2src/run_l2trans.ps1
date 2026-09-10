@@ -3211,6 +3211,140 @@ end: external
 
 Invoke-LayoutDeeper
 
+function Invoke-DashFence {
+    $pred = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_text_predicates.lm2")).Replace("`r`n", "`n")
+    $df = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "l2src\parser_dash_fence.lm2")).Replace("`r`n", "`n")
+    $h = ($pred -split "fn: lm_p0_is_horizontal_space")[1]
+    $h = "fn: lm_p0_is_horizontal_space" + ($h -split "fn: lm_p0_is_line_break")[0]
+    $dh = ($df -split "fn: lm_p0_is_horizontal_space")[1]
+    $dh = "fn: lm_p0_is_horizontal_space" + ($dh -split "fn: lm_p0_is_line_break")[0]
+    if ($h.Trim() -ne $dh.Trim()) { throw "dash_fence is_horizontal_space must match parser_text_predicates.lm2" }
+    $lb = ($pred -split "fn: lm_p0_is_line_break")[1]
+    $lb = "fn: lm_p0_is_line_break" + ($lb -split "fn: lm_p0_is_field_space")[0]
+    $dlb = ($df -split "fn: lm_p0_is_line_break")[1]
+    $dlb = "fn: lm_p0_is_line_break" + ($dlb -split "fn: lm_p0_scan_brace_mark_unchecked")[0]
+    if ($lb.Trim() -ne $dlb.Trim()) { throw "dash_fence is_line_break must match parser_text_predicates.lm2" }
+
+    $d80 = "-" * 80
+    $d81 = "-" * 81
+    # Status first, then print. Count is 0..81 so cast to int is the safe conversion.
+    $cases = @"
+        size_t: n
+        int: st
+        n: 0U
+        st: lm_p0_dash_fence_status("---", 3U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("----", 4U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("--", 2U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("-", 1U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("", 0U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("$d80", 80U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("$d81", 81U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("---   ", 6U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("---`t", 4U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("---#", 4U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("--- # x", 7U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("---x", 4U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("--- x", 5U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {x}", 7U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {x} y", 9U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {x", 6U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {}", 6U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+        n: 0U
+        st: lm_p0_dash_fence_status("--- {a {b}}", 11U, @ n)
+        c.printf("%d %d\n", st, (cast: int (n)))
+"@
+    # NONE=0 VALID=1 TOO_LONG=2 TRAILING=3 ; count is dash run length
+    $want = "1 3`n1 4`n0 2`n0 1`n0 0`n1 80`n2 81`n1 3`n1 3`n1 3`n1 3`n3 3`n3 3`n1 3`n3 3`n3 3`n1 3`n1 3`n"
+
+    $refLm1 = Join-Path $out "dash_ref.lm1"
+    $refC = Join-Path $out "dash_ref.c"
+    $refExe = Join-Path $out "dash_ref.exe"
+    $refOut = Join-Path $out "dash_ref.stdout"
+    $refSrc = @"
+predef: "l1src/parser.lm1"
+include: "<stdio.h>"
+external:
+    fn: main () int
+$cases
+        return: 0
+    end: main
+end: external
+"@
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $refLm1), $refSrc.Replace("`r`n","`n"))
+    & $l1trans $refLm1 $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed dash_ref" }
+    Invoke-Gcc $refC $refExe (Join-Path $log "dash_ref.gcc.log")
+    cmd /c "`"$refExe`" > `"$refOut`" 2> `"$(Join-Path $out 'dash_ref.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "dash_ref exe failed" }
+
+    Invoke-Leaf "l2src\parser_dash_fence.lm2" "parser_dash_fence" 0 "lm_p0_is_horizontal_space"
+    $lm1 = Join-Path $out "parser_dash_fence.lm1"
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
+    if ($text -match 'fn: lm_p0_') { throw "dash_fence must mangle method symbols" }
+    if ($text -notmatch 'fn: l2_m3') { throw "dash_fence missing mangled dash_fence_status" }
+
+    $l2cases = $cases.Replace("lm_p0_dash_fence_status(", "l2_m3(unit, ")
+    $tail = "        return: 0`n    end: main`nend: external"
+    $pos = $text.LastIndexOf($tail)
+    if ($pos -lt 0) { throw "dash_fence L1 missing generated main return" }
+    $drive = @"
+$l2cases
+        return: 0
+    end: main
+end: external
+"@
+    $drvLm1 = Join-Path $out "dash_l2_drive.lm1"
+    $drvC = Join-Path $out "dash_l2_drive.c"
+    $drvExe = Join-Path $out "dash_l2_drive.exe"
+    $drvOut = Join-Path $out "dash_l2_drive.stdout"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $drive.Replace("`r`n","`n")))
+    & $l1trans $drvLm1 $drvC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed dash_l2_drive" }
+    Invoke-Gcc $drvC $drvExe (Join-Path $log "dash_l2_drive.gcc.log")
+    cmd /c "`"$drvExe`" > `"$drvOut`" 2> `"$(Join-Path $out 'dash_l2_drive.err')`""
+    if ($LASTEXITCODE -ne 0) { throw "dash_l2_drive exe failed" }
+    $a = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $refOut)).Replace("`r`n","`n")
+    $b = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $drvOut)).Replace("`r`n","`n")
+    if ($a -ne $want) { throw "dash_fence REF unexpected`nREF:`n$a`nWANT:`n$want" }
+    if ($b -ne $want) { throw "dash_fence L2 unexpected`nL2:`n$b`nWANT:`n$want" }
+    if ($a -ne $b) { throw "dash_fence mismatch vs parser.lm1`nREF:`n$a`nL2:`n$b" }
+}
+
+Invoke-DashFence
+
 "l2trans $gen ok"
 $suiteLog = Join-Path $log "l2trans_suite.log"
 $toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $l1trans)).Hash
