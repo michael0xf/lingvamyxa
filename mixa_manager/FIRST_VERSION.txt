@@ -79,9 +79,24 @@ bugs and is none of them.
       so x is 0 and it lands bottom left. No algorithm moves it, and none should
       be added to.
 
-    THE CURSOR UNDER THE PANEL. The lower layer is a full text screen and the
-      panel floats over it on the upper layer - UI_MODEL 1.1. The cursor
-      travelling beneath the button is the model working, not a collision.
+    THE CURSOR AT THE TOP, THE BUTTON AT THE BOTTOM, AND NOTHING BETWEEN THEM.
+      Mikhail, correcting himself a minute later: the file is empty, so the
+      cursor is at the TOP of the screen and the button is at the bottom - they
+      do not meet at all on the first run.
+
+      Which settles a question the documents had been carrying loosely. The
+      console is FILE-ANCHORED, not bottom-anchored: line one is drawn at the
+      top, the cursor sits at the end of the file, and the view follows the
+      cursor. "Input on the bottom line, output scrolling upward" describes the
+      STEADY state, once the file is longer than the screen - it is not the
+      initial one, and a real Norton session behaves the same way, filling from
+      the top before it ever scrolls. Nothing pins the input line to the bottom
+      row.
+
+      The cursor meets the panel only later, when the file has grown past the
+      screen, and then it simply passes beneath it - the lower layer is a full
+      text screen and the panel floats over it (UI_MODEL 1.1). That is the model
+      working, not a collision.
 
     A NEARLY EMPTY SCREEN. One button and a file is the whole of 0.1.2. The
       lists, the second panel kind and the horizontal scroll all exist in the
