@@ -3691,6 +3691,70 @@ int main(void) {
         lmx_msg_runtime_delete(rtr);
         free(cr);
     }
+    {
+        LmxMsgRuntime *rta;
+        LmxMsgAddr dummy = 0, p = 0, c = 0;
+        uchar ini = 9;
+        uchar store[8];
+        LmxOwnedRange *cr;
+        LmxMsg *pm;
+        LmxMsg *cm;
+        void *init_keep;
+        LmxOwnedRange *range_keep;
+        rta = lmx_msg_runtime_new();
+        if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rta, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+            || lmx_msg_end_turn(rta, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rta, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_end_turn(rta, p, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "adopt nomem create\n");
+            return 1;
+        }
+        cr = (LmxOwnedRange *)calloc(1U, sizeof(LmxOwnedRange));
+        if (cr == 0) {
+            return 1;
+        }
+        cr->lo = store;
+        cr->hi = store + 8;
+        cr->stride = 1U;
+        cr->kind = 1;
+        cr->type = 1;
+        pm = lmx_msg_find(rta, p);
+        cm = lmx_msg_find(rta, c);
+        if (pm == 0 || cm == 0 || lmx_owned_ranges_add(&cm->ranges, cr) != LMX_OWNED_RANGES_OK) {
+            fprintf(stderr, "adopt nomem add range\n");
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        init_keep = cm->init;
+        range_keep = cm->ranges;
+        if (lmx_msg_exec_bind(rta, c, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_emergency_cancel(rta, c) != LMX_MSG_OK) {
+            fprintf(stderr, "adopt nomem bind\n");
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        (void)lmx_msg_run_child_turn(rta, c);
+        lmx_msg_exec_test_set_fail_adopt_block(rta, 1);
+        if (lmx_msg_adopt_failed(rta, p, c) != LMX_MSG_NOMEM
+            || cm->init != init_keep || cm->ranges != range_keep
+            || pm->blocks != 0 || pm->ranges != 0 || cm->disposed != 0) {
+            fprintf(stderr, "adopt nomem must leave both owners unchanged\n");
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        lmx_msg_exec_test_set_fail_adopt_block(rta, 0);
+        if (lmx_msg_adopt_failed(rta, p, c) != LMX_MSG_OK
+            || cm->init != 0 || cm->ranges != 0 || pm->ranges != range_keep
+            || lmx_msg_adopted_n(rta, p) != 1 || lmx_msg_adopted_base(rta, p, 0) != init_keep) {
+            fprintf(stderr, "adopt after nomem retry n=%d\n", lmx_msg_adopted_n(rta, p));
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        fprintf(stderr, "adopt nomem leaves both owners; retry moves range+init\n");
+        lmx_msg_runtime_delete(rta);
+        free(cr);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);

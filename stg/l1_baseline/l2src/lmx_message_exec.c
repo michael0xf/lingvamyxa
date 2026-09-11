@@ -78,6 +78,7 @@ typedef struct LmxMsgExec {
     int test_fail_hits;
 #if defined(LMX_MSG_EXEC_TEST)
     int test_fail_ctx;
+    int test_fail_adopt_block;
 #endif
 } LmxMsgExec;
 
@@ -437,18 +438,13 @@ static int handoff_move_locked(LmxMsg *dst, LmxMsg *src) {
     if (dst == 0 || src == 0 || dst == src) {
         return LMX_MSG_INVALID;
     }
-    if (lmx_owned_ranges_can_move(&dst->ranges, &src->ranges) != LMX_OWNED_RANGES_OK) {
+    if (lmx_msg_storage_can_move(&dst->blocks, &dst->ranges, &src->blocks, &src->ranges)
+        != LMX_MSG_STORAGE_OK) {
         return LMX_MSG_INVALID;
     }
-    if (src->blocks != 0) {
-        if (lmx_msg_blocks_move_all(&dst->blocks, &src->blocks) != LMX_MSG_BLOCKS_OK) {
-            return LMX_MSG_INVALID;
-        }
-    }
-    if (src->ranges != 0) {
-        if (lmx_owned_ranges_move_all(&dst->ranges, &src->ranges) != LMX_OWNED_RANGES_OK) {
-            return LMX_MSG_INVALID;
-        }
+    if (lmx_msg_storage_move_all(&dst->blocks, &dst->ranges, &src->blocks, &src->ranges)
+        != LMX_MSG_STORAGE_OK) {
+        return LMX_MSG_INVALID;
     }
     return LMX_MSG_OK;
 }
@@ -885,6 +881,16 @@ void lmx_msg_exec_test_set_fail_ctx(LmxMsgRuntime *rt, int v) {
     }
     lmx_msg_exec_lock(rt);
     e->test_fail_ctx = v;
+    lmx_msg_exec_unlock(rt);
+}
+
+void lmx_msg_exec_test_set_fail_adopt_block(LmxMsgRuntime *rt, int v) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0) {
+        return;
+    }
+    lmx_msg_exec_lock(rt);
+    e->test_fail_adopt_block = v;
     lmx_msg_exec_unlock(rt);
 }
 
@@ -2113,28 +2119,42 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
         }
         ch = ch->next_sibling;
     }
-    if (lmx_owned_ranges_can_move(&p->ranges, &c->ranges) != LMX_OWNED_RANGES_OK) {
+    if (lmx_msg_storage_can_move(&p->blocks, &p->ranges, &c->blocks, &c->ranges)
+        != LMX_MSG_STORAGE_OK) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    if (c->blocks != 0) {
-        if (lmx_msg_blocks_move_all(&p->blocks, &c->blocks) != LMX_MSG_BLOCKS_OK) {
+    {
+        LmxMsgBlock *prepared = 0;
+        if (c->init != 0) {
+#if defined(LMX_MSG_EXEC_TEST)
+            if (exof(rt) != 0 && exof(rt)->test_fail_adopt_block != 0) {
+                lmx_msg_exec_unlock(rt);
+                return LMX_MSG_NOMEM;
+            }
+#endif
+            prepared = (LmxMsgBlock *)calloc(1U, sizeof(LmxMsgBlock));
+            if (prepared == 0) {
+                lmx_msg_exec_unlock(rt);
+                return LMX_MSG_NOMEM;
+            }
+            prepared->base = c->init;
+            prepared->n = c->init_n;
+        }
+        if (lmx_msg_storage_move_all(&p->blocks, &p->ranges, &c->blocks, &c->ranges)
+            != LMX_MSG_STORAGE_OK) {
+            free(prepared);
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_INVALID;
         }
-    }
-    if (c->init != 0) {
-        if (adopt_push(p, c->init, c->init_n) != 0) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_NOMEM;
-        }
-        c->init = 0;
-        c->init_n = 0U;
-    }
-    if (c->ranges != 0) {
-        if (lmx_owned_ranges_move_all(&p->ranges, &c->ranges) != LMX_OWNED_RANGES_OK) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_INVALID;
+        if (prepared != 0) {
+            if (lmx_msg_blocks_push(&p->blocks, prepared) != LMX_MSG_BLOCKS_OK) {
+                free(prepared);
+                lmx_msg_exec_unlock(rt);
+                return LMX_MSG_INVALID;
+            }
+            c->init = 0;
+            c->init_n = 0U;
         }
     }
     c->disposed = 1;
