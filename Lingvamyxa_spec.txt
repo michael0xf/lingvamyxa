@@ -11164,13 +11164,23 @@ an implementation mapping of the parent's scheduler; the OS still schedules
 its threads. Native thread, wait/wake and per-mailbox synchronization primitives
 support Message and do not own its scheduling policy or family tree.
 
+Execution mapping is not inherited transitively: a child executed on its
+parent's thread may itself start threads for its own children through its own
+scheduler. For example, P executes A's turns sequentially on P's thread, while
+A starts parallel execution for A1 and A2. A does not need a dedicated thread
+of its own to manage those children.
+
 When a parent chooses sequential iteration on one execution thread, it gives
 the selected child control until that child's turn completes before selecting
 another child. This mode does not switch siblings inside an unfinished turn
 and does not require capture of the child's active call chain. It does not
 forbid physical parallelism under another parent-owned mapping or redefine
-the explicit activation-level `yield` contract (21.10). The default order for
-selecting ready children is not fixed here.
+the explicit activation-level `yield` contract (21.10). Selection order, batch
+size and resource allocation are replaceable scheduling policies, not additional
+language-wide rules. The initial implementation may choose a simple policy;
+round-robin fairness or draining a child's inbox is not a required contract.
+Resource requests between child and parent may be ordinary Message protocols;
+no new fixed resource-negotiation API is imposed here.
 
 For example, P's direct children A and B are siblings. Each has its own inbox:
 100 pending inputs in A and one in B are not 101 inputs in P's inbox. P's
