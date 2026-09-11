@@ -54,6 +54,7 @@ void lmx_msg_exec_ready_remove_locked(LmxMsgRuntime *rt, int i);
 int lmx_msg_exec_bind_n_locked(LmxMsgRuntime *rt);
 LmxMsgAddr lmx_msg_exec_bind_addr_locked(LmxMsgRuntime *rt, int i);
 int lmx_msg_exec_bind_aff_locked(LmxMsgRuntime *rt, int i);
+int lmx_msg_exec_bind_has_worker_locked(LmxMsgRuntime *rt, int i);
 int lmx_msg_exec_bind_held_locked(LmxMsgRuntime *rt, int i);
 void lmx_msg_exec_bind_set_held_locked(LmxMsgRuntime *rt, int i, int held);
 void lmx_msg_exec_drop_stale_ready(LmxMsgRuntime *rt);
