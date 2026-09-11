@@ -30,9 +30,10 @@ const: @: char l2_src 0
 @: LmP0Structure l2_main_body 0
 const: @: LmP0Node l2_main_node 0
 int: l2_entry_n 0
+int: l2_entry_cap 0
 int: l2_entry_full 0
-c.array: [8]: @: LmP0Text l2_entry_nm
-c.array: [8]: int l2_entry_ty
+@@: LmP0Text l2_entry_nm 0
+@: int l2_entry_ty 0
 
 @@: LmP0Text l2_m_name 0
 @@: LmP0Text l2_m_f0 0
@@ -175,8 +176,11 @@ prototype:
     fn: l2_slot_find (int: mi; const: @(LmP0Text t)) int
     fn: l2_is_known (const: @(LmP0Text t)) int
     fn: l2_entry_find (const: @(LmP0Text t)) int
+    fn: l2_entry_free () int
+    fn: l2_entry_reserve (int: need) int
     fn: l2_parse_entry_formals (const: @(LmP0Node params); const: @(char path)) int
     fn: l2_write_entry_sig (@: FILE out) int
+    fn: l2_ccall_box_int (const: @(LmP0Node node); int: mi) int
     fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text out_name; @: int out_ty) int
     fn: l2_simple_puts_main (const: @(LmP0Node body_node)) int
     fn: l2_is_slash (const: @(LmP0Text t)) int
@@ -312,6 +316,7 @@ fn: l2_release () int
         s: s + 1U
     l2_intern_n: 0U
     l2_own_free()
+    l2_entry_free()
 return: 0
 
 fn: l2_mul_ok (size_t: n; size_t: sz) int
@@ -1776,7 +1781,7 @@ fn: l2_take_main_lit (const: @(LmP0Node fn_node); const: @(char path); @@: LmP0T
         return: l2_error(path, fn_node, "end target does not match close target")
     field: l2_next_active(field\next)
     params: field\value
-    l2_entry_n: 0
+    l2_entry_free()
     l2_entry_full: 0
     if: l2_empty_struct(params) = 0 && l2_parse_entry_formals(params, path) != 0
         return: 1
@@ -1861,7 +1866,7 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
     l2_intern_n: 0U
     l2_src: path
     l2_main_node: 0
-    l2_entry_n: 0
+    l2_entry_free()
     l2_entry_full: 0
     i: 0
     while: i < l2_m_cap
@@ -2372,9 +2377,71 @@ fn: l2_own_add (int: mi; const: @(LmP0Text t); int: ty; const: @(char path); con
     l2_own_n: l2_own_n + 1
 return: l2_own_n - 1
 
+fn: l2_entry_free () int
+    if: l2_entry_nm != 0
+        l2_xfree((cast: (@: void) l2_entry_nm))
+    if: l2_entry_ty != 0
+        l2_xfree((cast: (@: void) l2_entry_ty))
+    ---
+    l2_entry_nm: 0
+    l2_entry_ty: 0
+    l2_entry_n: 0
+    l2_entry_cap: 0
+return: 0
+
+fn: l2_entry_reserve (int: need) int
+    size_t: nb
+    size_t: ni
+    size_t: psz
+    @@: LmP0Text nn 0
+    @: int nt 0
+    if: need < 0
+        return: 1
+    if: need <= l2_entry_cap
+        return: 0
+    psz: c.sizeof(l2_ptr_probe)
+    if: l2_mul_ok((cast: (size_t) need), psz) = 0
+        l2_alloc_err: 2
+        return: 1
+    if: l2_mul_ok((cast: (size_t) need), c.sizeof(c.int)) = 0
+        l2_alloc_err: 2
+        return: 1
+    nb: (cast: (size_t) need) * psz
+    ni: (cast: (size_t) need) * c.sizeof(c.int)
+    l2_alloc_kind: 1
+    nn: (cast: (@@: LmP0Text) l2_xmalloc(nb))
+    nt: (cast: (@: int) l2_xmalloc(ni))
+    if: nn = 0 || nt = 0
+        if: nn != 0
+            l2_xfree((cast: (@: void) nn))
+        ---
+        if: nt != 0
+            l2_xfree((cast: (@: void) nt))
+        ---
+        l2_entry_free()
+        return: 1
+    c.memset((cast: (@: void) nn), 0, nb)
+    c.memset((cast: (@: void) nt), 0, ni)
+    if: l2_entry_nm != 0 && l2_entry_n > 0
+        c.memcpy((cast: (@: void) nn), (cast: (@: void) l2_entry_nm), (cast: (size_t) l2_entry_n) * psz)
+    ---
+    if: l2_entry_ty != 0 && l2_entry_n > 0
+        c.memcpy((cast: (@: void) nt), (cast: (@: void) l2_entry_ty), (cast: (size_t) l2_entry_n) * c.sizeof(c.int))
+    ---
+    if: l2_entry_nm != 0
+        l2_xfree((cast: (@: void) l2_entry_nm))
+    ---
+    if: l2_entry_ty != 0
+        l2_xfree((cast: (@: void) l2_entry_ty))
+    ---
+    l2_entry_nm: nn
+    l2_entry_ty: nt
+    l2_entry_cap: need
+return: 0
+
 fn: l2_entry_find (const: @(LmP0Text t)) int
     int: i 0
-    if: t = 0
+    if: t = 0 || l2_entry_nm = 0
         return: -1
     while: i < l2_entry_n
         if: l2_text_same(l2_entry_nm[i], t)
@@ -2390,29 +2457,33 @@ fn: l2_parse_entry_formals (const: @(LmP0Node params); const: @(char path)) int
     int: j
     int: k
     int: ty
-    l2_entry_n: 0
+    l2_entry_free()
     if: params = 0 || params\kind != c.LM_P0_NODE_STRUCTURE || params\as = 0
         return: l2_error(path, params, "incompatible entry signature")
     if: params\as\structure\trailer != 0
         return: l2_error(path, params, "unsupported trailer")
     ar: l2_count_active(params\as\structure)
-    if: ar < 1 || ar > 8
+    if: ar < 1
         return: l2_error(path, params, "incompatible entry signature")
+    if: l2_entry_reserve(ar) != 0
+        if: l2_alloc_err = 2
+            return: l2_error(path, params, "size overflow")
+        return: l2_error(path, params, "out of memory")
     p: l2_next_active(params\as\structure\first_field)
     j: 0
     while: j < ar
         ty: 0
         fa: 0
         if: p = 0 || l2_typed_formal(p\value, path, @ fa, @ ty) != 0
-            l2_entry_n: 0
+            l2_entry_free()
             return: 1
         if: fa = 0 || fa\length >= 63U
-            l2_entry_n: 0
+            l2_entry_free()
             return: l2_error(path, params, "name too long")
         k: 0
         while: k < j
             if: l2_text_same(fa, l2_entry_nm[k])
-                l2_entry_n: 0
+                l2_entry_free()
                 return: l2_error(path, p\value, "duplicate formal")
             ---
             k: k + 1
@@ -2421,6 +2492,10 @@ fn: l2_parse_entry_formals (const: @(LmP0Node params); const: @(char path)) int
         p: l2_next_active(p\next)
         j: j + 1
     l2_entry_n: ar
+    if: ar != 2 || l2_entry_ty[0] != 0 || l2_entry_ty[1] != 17
+        l2_entry_free()
+        return: l2_error(path, params, "incompatible entry signature")
+    ---
 return: 0
 
 fn: l2_write_entry_sig (@: FILE out) int
@@ -5397,6 +5472,47 @@ fn: l2_emit_path_load (int: mi; int: oi; const: @(char ind); @: char dest) int
         return: 1
 return: 0
 
+fn: l2_ccall_box_int (const: @(LmP0Node node); int: mi) int
+    int: ei
+    int: fi
+    int: oi
+    int: si
+    int: ty
+    if: node = 0 || node\kind != c.LM_P0_NODE_ATOM || node\as = 0 || node\as\atom = 0
+        return: 0
+    if: l2_quoted(node\as\atom) != 0
+        return: 0
+    if: node\as\atom\length >= 2U && node\as\atom\data[0] = 99 && node\as\atom\data[1] = 46
+        return: 0
+    ei: l2_entry_find(node\as\atom)
+    if: ei >= 0 && l2_entry_ty != 0
+        ty: l2_entry_ty[ei]
+        if: ty = 0 || ty = 1
+            return: 1
+        return: 0
+    if: mi >= 0
+        fi: l2_param_find(mi, node\as\atom)
+        if: fi >= 0
+            ty: l2_param_ty(mi, node\as\atom)
+            if: ty = 0 || ty = 1
+                return: 1
+            return: 0
+        oi: l2_own_find(mi, node\as\atom)
+        if: oi >= 0
+            ty: l2_own_ty[oi]
+            if: ty = 0 || ty = 1
+                return: 1
+            return: 0
+        si: l2_slot_find(mi, node\as\atom)
+        if: si >= 0
+            ty: l2_st[l2_slot_off(mi, si)]
+            if: ty = 0 || ty = 1
+                return: 1
+            return: 0
+        ---
+    ---
+return: 1
+
 fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     @: LmP0Field f
     @: LmP0Field p1
@@ -5435,11 +5551,11 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
             f: p2
         if: po < 0 && l2_prep(f\value, mi, ind, piece) != 0
             return: 1
-        if: po < 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_quoted(f\value\as\atom) = 0 && (f\value\as\atom\length < 2U || f\value\as\atom\data[0] != 99 || f\value\as\atom\data[1] != 46) && l2_new_temp(ind, l2_tok) != 0
+        if: po < 0 && l2_ccall_box_int(f\value, mi) != 0 && l2_new_temp(ind, l2_tok) != 0
             return: 1
-        if: po < 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_quoted(f\value\as\atom) = 0 && (f\value\as\atom\length < 2U || f\value\as\atom\data[0] != 99 || f\value\as\atom\data[1] != 46) && c.fprintf(l2_out, "%s%s: %s\n", ind, l2_tok, piece) < 0
+        if: po < 0 && l2_ccall_box_int(f\value, mi) != 0 && c.fprintf(l2_out, "%s%s: %s\n", ind, l2_tok, piece) < 0
             return: 1
-        if: po < 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_quoted(f\value\as\atom) = 0 && (f\value\as\atom\length < 2U || f\value\as\atom\data[0] != 99 || f\value\as\atom\data[1] != 46)
+        if: po < 0 && l2_ccall_box_int(f\value, mi) != 0
             c.memcpy(piece, l2_tok, 256U)
         if: first = 0 && l2_cat(buf, ", ") != 0
             return: 1

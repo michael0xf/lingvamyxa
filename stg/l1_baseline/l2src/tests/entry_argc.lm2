@@ -1,5 +1,6 @@
 L2:
-    fn: main (int: argc; @@: char argv) int
+    fn: main (int: count; @@: char values) int
         return: 0
     end: main
 end: L2
+

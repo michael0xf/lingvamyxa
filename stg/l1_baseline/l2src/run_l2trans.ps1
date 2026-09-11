@@ -245,11 +245,20 @@ function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$need
     }
 }
 
-Invoke-Entry "l2src\tests\entry_argc.lm2" "entry_argc" 0 @("fn: main (int: argc; @@: char argv) int", "return: 0") $null
-Invoke-Entry "l2src\tests\entry_int_formal.lm2" "entry_int_formal" 0 @("fn: main (int: n) int") $null
+Invoke-Entry "l2src\tests\entry_argc.lm2" "entry_argc" 0 @("fn: main (int: count; @@: char values) int", "return: 0") $null
+$argcGcc = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $log "entry_argc.gcc.log")))
+if ($argcGcc -match '\[-Wmain\]' -or $argcGcc -match "takes only zero or two arguments") {
+    throw "entry_argc gcc -Wmain; hosted C main must be () or (int, char **)"
+}
+$argcC = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "entry_argc.c")))
+if ($argcC.IndexOf("int main(int count, char ** values)") -lt 0 -and $argcC.IndexOf("int main(int count, char **values)") -lt 0) {
+    throw "entry_argc C missing hosted main(int count, char **values)"
+}
+Invoke-Negative "l2src\tests\entry_int_formal.lm2" "entry_int_formal" "incompatible entry signature"
+Invoke-Negative "l2src\tests\entry_nine.lm2" "entry_nine" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_argc_dup.lm2" "entry_argc_dup" "duplicate formal"
 Invoke-Negative "l2src\tests\entry_argc_bad.lm2" "entry_argc_bad" "unknown foreign type"
-Invoke-Entry "l2src\tests\entry_argc_if.lm2" "entry_argc_if" 0 @("fn: main (int: argc; @@: char argv) int", "if:") $null
+Invoke-Entry "l2src\tests\entry_argc_if.lm2" "entry_argc_if" 0 @("fn: main (int: count; @@: char values) int", "if:") $null
 Invoke-Entry "l2src\tests\entry_fputs.lm2" "entry_fputs" 0 @("c.fputs(") "hi`n"
 Invoke-Negative "l2src\tests\entry_overflow.lm2" "entry_overflow" "return literal not representable as int"
 Invoke-AdmitEmit "l2src\tests\entry_int_max.lm2" "entry_int_max" "2147483647"
@@ -342,6 +351,36 @@ function Invoke-SpliceDrive([string]$stem, [string]$driveBody) {
 }
 
 Invoke-Leaf "l2src\tests\add.lm2" "add" 0 "add"
+Invoke-Leaf "l2src\tests\unit_nine_formals.lm2" "unit_nine_formals" 0 "add9"
+$nineL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_nine_formals.lm1")))
+if ($nineL1 -notmatch 'fn: l2_m0 \(@: Lmx node; int: l2_p0_0; int: l2_p0_1; int: l2_p0_2; int: l2_p0_3; int: l2_p0_4; int: l2_p0_5; int: l2_p0_6; int: l2_p0_7; int: l2_p0_8\)') {
+    throw "unit_nine_formals L1 missing 9 int formals"
+}
+$n9 = Invoke-SpliceDrive "unit_nine_formals" @"
+        c.printf("%d\n", l2_m0(unit, 1, 1, 1, 1, 1, 1, 1, 1, 1))
+        return: 0
+    end: main
+end: external
+"@
+if ($n9 -ne "9`n") { throw "unit_nine_formals sum: $n9" }
+Invoke-Leaf "l2src\tests\unit_ptr_pass.lm2" "unit_ptr_pass" 0 "inner"
+$ptrL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_ptr_pass.lm1")))
+if ($ptrL1.IndexOf("@@: char l2_p0_0") -lt 0) { throw "unit_ptr_pass L1 missing @@: char formal" }
+if ($ptrL1.IndexOf("const: @(char l2_p1_0)") -lt 0) { throw "unit_ptr_pass L1 missing const char* formal" }
+if ($ptrL1.IndexOf("@: void l2_p2_0") -lt 0) { throw "unit_ptr_pass L1 missing @: void stream formal" }
+if ($ptrL1 -match 'int: l2_t\d+\s*\n\s*l2_t\d+: l2_p1_0') { throw "unit_ptr_pass boxed const char* formal as int temp" }
+if ($ptrL1 -match 'int: l2_t\d+\s*\n\s*l2_t\d+: l2_p2_0') { throw "unit_ptr_pass boxed void* stream formal as int temp" }
+if ($ptrL1.IndexOf('c.printf("%s\n", l2_p1_0)') -lt 0) { throw "unit_ptr_pass L1 missing typed c.printf of const char* formal" }
+if ($ptrL1.IndexOf('c.fputs("ok\n", l2_p2_0)') -lt 0) { throw "unit_ptr_pass L1 missing typed c.fputs of stream formal" }
+if ($ptrL1 -notmatch 'l2_m0\((?:leaf|unit|node), l2_p3_0\)') { throw "unit_ptr_pass L1 missing @@: char roundtrip actual" }
+$pp = Invoke-SpliceDrive "unit_ptr_pass" @"
+        l2_m1(unit, "hi")
+        c.printf("%d\n", l2_m2(unit, c.stdout))
+        return: 0
+    end: main
+end: external
+"@
+if ($pp -ne "hi`nok`n0`n") { throw "unit_ptr_pass stream/printf: $pp" }
 Invoke-Leaf "l2src\tests\entry_sum.lm2" "entry_sum" 0 "sum"
 Invoke-Leaf "l2src\tests\entry_add_ret.lm2" "entry_add_ret" 5 "add"
 Invoke-Leaf "l2src\tests\entry_plus.lm2" "entry_plus" 0 "plus"

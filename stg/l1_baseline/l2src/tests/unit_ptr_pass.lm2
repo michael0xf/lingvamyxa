@@ -1,0 +1,21 @@
+fn: inner (@@: char values) int
+    if: values = 0
+        return: 1
+    return: 0
+end: inner
+fn: say (const: @(char msg)) int
+    c.printf: "%s\n" msg
+    return: 0
+end: say
+fn: write_hi (@: void stream) int
+    if: stream = 0
+        return: 1
+    c.fputs: "ok\n" stream
+    return: 0
+end: write_hi
+fn: outer (@@: char values) int
+    return: inner(values)
+end: outer
+fn: main () int
+    return: 0
+end: main
