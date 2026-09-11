@@ -535,7 +535,7 @@ fn: lmx_msg_assign_path (@: LmxMsgRuntime rt; @: LmxMsg slot; @: LmxMsg p) int
     if: p = 0
         if: rt\root_seq + 1U = 0U
             return: c.LMX_MSG_NOMEM
-        st: c.lmx_msg_path_grow(slot, 1)
+        st: c.lmx_msg_path_grow(@ slot\path, @ slot\path_cap, 1)
         if: st != c.LMX_MSG_OK
             return: st
         rt\root_seq: rt\root_seq + 1U
@@ -546,7 +546,7 @@ fn: lmx_msg_assign_path (@: LmxMsgRuntime rt; @: LmxMsg slot; @: LmxMsg p) int
         return: c.LMX_MSG_NOMEM
     if: p\child_seq + 1U = 0U
         return: c.LMX_MSG_NOMEM
-    st: c.lmx_msg_path_grow(slot, p\path_n + 1)
+    st: c.lmx_msg_path_grow(@ slot\path, @ slot\path_cap, p\path_n + 1)
     if: st != c.LMX_MSG_OK
         return: st
     p\child_seq: p\child_seq + 1U

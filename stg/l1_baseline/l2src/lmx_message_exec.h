@@ -16,7 +16,6 @@ int lmx_msg_exec_holding_turn(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_exec_workers(LmxMsgRuntime *rt);
 int lmx_msg_exec_holding_any(LmxMsgRuntime *rt);
 int lmx_msg_tab_grow(LmxMsgRuntime *rt);
-int lmx_msg_path_grow(LmxMsg *slot, int need);
 LmxMsg *lmx_msg_slot_new(void);
 int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child);
 int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);

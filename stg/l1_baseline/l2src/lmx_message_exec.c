@@ -260,34 +260,6 @@ unsigned lmx_msg_now(LmxMsgRuntime *rt) {
 #endif
 }
 
-int lmx_msg_path_grow(LmxMsg *slot, int need) {
-    int cap;
-    unsigned *p;
-    if (slot == 0 || need < 1) {
-        return LMX_MSG_INVALID;
-    }
-    if (slot->path_cap >= need) {
-        return LMX_MSG_OK;
-    }
-    cap = slot->path_cap < 1 ? LMX_MSG_PATH_CHUNK : slot->path_cap;
-    while (cap < need) {
-        if (cap > 2147483647 / 2) {
-            return LMX_MSG_NOMEM;
-        }
-        cap *= 2;
-    }
-    if ((size_t)cap > ((size_t)-1) / sizeof(unsigned)) {
-        return LMX_MSG_NOMEM;
-    }
-    p = (unsigned *)realloc(slot->path, (size_t)cap * sizeof(unsigned));
-    if (p == 0) {
-        return LMX_MSG_NOMEM;
-    }
-    slot->path = p;
-    slot->path_cap = cap;
-    return LMX_MSG_OK;
-}
-
 int lmx_msg_tab_grow(LmxMsgRuntime *rt) {
     int cap;
     LmxMsg **tab;
