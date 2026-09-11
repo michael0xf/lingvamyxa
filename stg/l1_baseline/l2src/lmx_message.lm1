@@ -647,8 +647,11 @@ fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: 
     if: env\n != 0U && node\bytes = 0
         c.free((cast: (@: void) node))
         return: c.LMX_MSG_NOMEM
+    src: c.lmx_msg_turn_self(rt)
     c.lmx_msg_exec_lock(rt)
-    src: lmx_msg_find(rt, from)
+    if: src = 0 || src\addr != from
+        src: lmx_msg_find(rt, from)
+    ---
     if: src = 0
         c.lmx_msg_exec_unlock(rt)
         lmx_msg_copy_free(node)
@@ -699,8 +702,11 @@ fn: lmx_msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @
     node\owned: 1
     env\bytes: 0
     env\n: 0U
+    src: c.lmx_msg_turn_self(rt)
     c.lmx_msg_exec_lock(rt)
-    src: lmx_msg_find(rt, from)
+    if: src = 0 || src\addr != from
+        src: lmx_msg_find(rt, from)
+    ---
     if: src = 0
         env\bytes: node\bytes
         env\n: node\n
@@ -1674,8 +1680,11 @@ fn: lmx_msg_send_cap (@: LmxMsgRuntime rt; LmxMsgAddr: from; @: LmxMsg dest; con
     if: env\n != 0U && node\bytes = 0
         c.free((cast: (@: void) node))
         return: c.LMX_MSG_NOMEM
+    src: c.lmx_msg_turn_self(rt)
     c.lmx_msg_exec_lock(rt)
-    src: lmx_msg_find(rt, from)
+    if: src = 0 || src\addr != from
+        src: lmx_msg_find(rt, from)
+    ---
     if: src = 0
         c.lmx_msg_exec_unlock(rt)
         lmx_msg_copy_free(node)
