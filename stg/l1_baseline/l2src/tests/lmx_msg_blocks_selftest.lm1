@@ -156,6 +156,52 @@ fn: main () int
     check(lmx_msg_blocks_move_all(@ dst, @ src) = LMX_MSG_BLOCKS_OK, "move 65 blocks")
     check(lmx_msg_blocks_dispose_all(@ dst) = LMX_MSG_BLOCKS_OK, "dispose 65 blocks")
     check(src = 0 && dst = 0 && frees = before + 130, "65 payloads and nodes exactly once")
+
+    # Selective removal: the owner keeps live allocations and their graph links.
+    # Removing metadata does not itself collect anything or call a disposer.
+    a: make_block(c.sizeof(c.Lmx), 31U, 0)
+    b: make_block(c.sizeof(c.Lmx), 32U, 0)
+    d: make_block(c.sizeof(c.Lmx), 33U, 0)
+    node: make_block(1U, 34U, 0)
+    first: (cast: (@: Lmx) a\base)
+    second: (cast: (@: Lmx) d\base)
+    first\data: second
+    second\node: first
+    second\data: first
+    before: frees
+    check(lmx_msg_blocks_remove(@ src, a) = LMX_MSG_BLOCKS_INVALID && src = 0 && a\next = 0, "remove from empty owner")
+    check(lmx_msg_blocks_remove(0, a) = LMX_MSG_BLOCKS_INVALID, "remove null owner slot")
+    check(lmx_msg_blocks_remove(@ src, 0) = LMX_MSG_BLOCKS_INVALID, "remove null member")
+    check(lmx_msg_blocks_push(@ src, d) = LMX_MSG_BLOCKS_OK, "remove fixture tail")
+    check(lmx_msg_blocks_push(@ src, b) = LMX_MSG_BLOCKS_OK, "remove fixture middle")
+    check(lmx_msg_blocks_push(@ src, a) = LMX_MSG_BLOCKS_OK, "remove fixture head")
+    node\next: b
+    check(lmx_msg_blocks_remove(@ src, node) = LMX_MSG_BLOCKS_INVALID, "remove absent linked member")
+    check(src = a && a\next = b && b\next = d && d\next = 0 && node\next = b, "absent rejection changes neither chain")
+    node\next: 0
+    d\next: a
+    check(lmx_msg_blocks_remove(@ src, a) = LMX_MSG_BLOCKS_INVALID, "remove rejects cyclic list before mutation")
+    check(src = a && a\next = b && b\next = d && d\next = a && frees = before, "cyclic rejection leaves ownership untouched")
+    d\next: 0
+    check(lmx_msg_blocks_remove(@ src, b) = LMX_MSG_BLOCKS_OK, "remove exact middle member")
+    check(src = a && a\next = d && d\next = 0 && b\next = 0, "middle detached and survivors ordered")
+    check(frees = before && callbacks = 2, "remove has no disposal or callback")
+    check(a\base = (cast: (@: void) first) && d\base = (cast: (@: void) second) && first\data = (cast: (@: void) second) && second\node = first && second\data = (cast: (@: void) first), "survivor addresses and graph links unchanged")
+    alias: b
+    check(lmx_msg_blocks_dispose_all(@ alias) = LMX_MSG_BLOCKS_OK && alias = 0, "existing disposer releases detached block only")
+    check(frees = before + 2 && src = a && a\next = d && first\data = (cast: (@: void) second), "selective disposal preserves live owner")
+    check(lmx_msg_blocks_remove(@ src, d) = LMX_MSG_BLOCKS_OK && src = a && a\next = 0 && d\next = 0, "remove exact tail")
+    check(a\base = (cast: (@: void) first) && first\data = (cast: (@: void) second) && second\node = first, "detaching tail does not change graph payload")
+    check(lmx_msg_blocks_push(@ src, d) = LMX_MSG_BLOCKS_OK && src = d && d\next = a, "reinsert detached block")
+    check(lmx_msg_blocks_remove(@ src, d) = LMX_MSG_BLOCKS_OK, "remove exact head")
+    check(src = a && a\next = 0 && d\next = 0, "head removal preserves remaining member")
+    check(lmx_msg_blocks_remove(@ src, a) = LMX_MSG_BLOCKS_OK && src = 0 && a\next = 0, "remove only member")
+    check(lmx_msg_blocks_remove(@ src, a) = LMX_MSG_BLOCKS_INVALID && src = 0 && a\next = 0, "repeat remove is a non-mutating miss")
+    check(frees = before + 2 && callbacks = 2, "all removes retain payload ownership with caller")
+    check(lmx_msg_blocks_dispose_all(@ d) = LMX_MSG_BLOCKS_OK && d = 0, "dispose detached tail fixture")
+    check(lmx_msg_blocks_dispose_all(@ a) = LMX_MSG_BLOCKS_OK && a = 0, "dispose detached head fixture")
+    check(lmx_msg_blocks_dispose_all(@ node) = LMX_MSG_BLOCKS_OK && node = 0, "dispose absent fixture")
+    check(frees = before + 8 && src = 0 && dst = 0, "four fixture blocks released exactly once")
     c.printf("blocks checks=%d failures=%d frees=%d callbacks=%d\n", checks, failures, frees, callbacks)
     if: failures != 0
         return: 1

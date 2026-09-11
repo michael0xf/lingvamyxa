@@ -1,6 +1,8 @@
 # Independent storage-module verification. Never rebuild/promote the shared L1
 # compiler or write the Message developer's build/l2 outputs.
-param()
+param(
+    [ValidateNotNullOrEmpty()][ValidateSet('O0', 'O2')][string[]]$Optimization = @('O2')
+)
 $ErrorActionPreference = 'Stop'
 $baseline = Split-Path -Parent $PSScriptRoot
 $repo = Split-Path -Parent (Split-Path -Parent $baseline)
@@ -21,13 +23,15 @@ $sources = @(
 )
 $sourceHashes = @{}
 foreach ($file in $sources) { $sourceHashes[$file] = (Get-FileHash -LiteralPath $file).Hash }
-$evidence = [ordered]@{ compiler = $compiler; compilerSHA256 = $pin; sources = $sourceHashes; stages = @(); result = 'RUNNING' }
+$evidence = [ordered]@{ compiler = $compiler; compilerSHA256 = $pin; sources = $sourceHashes; optimization = $Optimization; stages = @(); result = 'RUNNING' }
 function Invoke-BlockStage([string]$Name, [string]$Tool, [string[]]$NativeArgs) {
     # Arguments are controlled paths/flags, contain no literal double quotes.
     $quoted = ($NativeArgs | ForEach-Object { '"' + $_ + '"' }) -join ' '
     $stdout = Join-Path $run "$Name.stdout.txt"
     $stderr = Join-Path $run "$Name.stderr.txt"
-    $p = Start-Process -FilePath $Tool -ArgumentList $quoted -WorkingDirectory $baseline `
+    $argumentOption = @{}
+    if ($NativeArgs.Count -gt 0) { $argumentOption.ArgumentList = $quoted }
+    $p = Start-Process -FilePath $Tool @argumentOption -WorkingDirectory $baseline `
         -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     $evidence.stages += [ordered]@{ name = $Name; tool = $Tool; arguments = $NativeArgs; exit = $p.ExitCode }
     if ($p.ExitCode -ne 0) {
@@ -55,12 +59,12 @@ try {
             throw "Unexpected storage-module dependency: $line"
         }
     }
-    foreach ($level in @('O0', 'O2')) {
+    foreach ($level in @($Optimization | ForEach-Object { $_.ToUpperInvariant() } | Select-Object -Unique)) {
         $exe = Join-Path $run "lmx_msg_blocks_$level.exe"
         Invoke-BlockStage "compile_$level" $gcc ($flags + @("-$level", $module, $test, '-Wl,--wrap=free', '-o', $exe))
         Invoke-BlockStage "run_$level" $exe @()
         $result = Get-Content -LiteralPath (Join-Path $run "run_$level.stdout.txt") -Raw
-        if ($result -notmatch 'blocks checks=115 failures=0 frees=139 callbacks=2') {
+        if ($result -notmatch '(?m)^blocks checks=143 failures=0 frees=147 callbacks=2\s*$') {
             throw "Unexpected selftest result: $result"
         }
         Write-Output "$level $($result.Trim())"

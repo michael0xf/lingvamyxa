@@ -42,6 +42,28 @@ fn: lmx_msg_blocks_push (@@: LmxMsgBlock head; @: LmxMsgBlock node) int
     head[0]: node
     return: LMX_MSG_BLOCKS_OK
 
+# Detach one exact member; keep its allocation and graph payload untouched.
+# The caller decides reachability and retires range metadata before disposal.
+fn: lmx_msg_blocks_remove (@@: LmxMsgBlock head; @: LmxMsgBlock node) int
+    @: LmxMsgBlock tail
+    @: LmxMsgBlock entry
+    @@: LmxMsgBlock slot head
+    if: head = 0 || node = 0
+        return: LMX_MSG_BLOCKS_INVALID
+    if: lmx_msg_blocks_tail(head[0], @ tail) != LMX_MSG_BLOCKS_OK
+        return: LMX_MSG_BLOCKS_INVALID
+    entry: slot[0]
+    while: entry != 0
+        if: entry = node
+            slot[0]: entry\next
+            entry\next: 0
+            return: LMX_MSG_BLOCKS_OK
+        ---
+        slot: @ entry\next
+        entry: slot[0]
+    ---
+    return: LMX_MSG_BLOCKS_INVALID
+
 # Read-only preflight, also usable before attaching a separately prepared block.
 # Valid acyclic lists intersect iff their non-null tails are identical.
 fn: lmx_msg_blocks_can_move (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int

@@ -37,6 +37,16 @@ can_move(&dst,&src): read-only preflight for move_all; no writes or callbacks.
 It validates head slots, cycles and intersections, not payload alias safety.
 The caller must retain exclusive ownership from preflight through the move.
 
+remove(&head,node): unlink one exact member of an acyclic owner list and clear
+that member's next link. Null arguments, an absent member or a cyclic list return
+INVALID without mutation. The caller retains ownership of the detached node and
+its payload. No allocation, disposal, callback, range access or graph write occurs.
+The remaining list keeps its order and addresses. This is the ordinary bookkeeping
+primitive requested for selective sweeping, not a collector or a reachability
+decision. The collector must retire covering ranges before freeing a dead block;
+the existing disposer can consume the detached one-member list. A failed remove
+must not be followed by freeing the still-owned allocation.
+
 move_all(&dst,&src): preserve order inside each list; prepend src's entire chain
 to dst; clear src. No allocation, payload copy, free or callback. Empty source
 is a no-op. Null/same head slots, cycles and intersecting metadata chains fail
@@ -59,9 +69,22 @@ checks an independent production object. Its only direct external dependency
 must be free: no allocator, registry, thread or mutex calls.
 
 Checked-in L1 selftests use real Lmx graph payloads and a test-only GNU linker
-free wrapper (also L1). O0 and O2 check source invalidation, graph pointer/alias
+free wrapper (also L1). The default runs O2 once; -Optimization O0 or @('O0','O2')
+selects extra configurations explicitly. Invalid/empty selections are rejected;
+duplicates are removed. Existing cases check source invalidation, graph pointer/alias
 identity, metadata preservation, invalid operations without mutation, callback
 reentry, mixed custom/default cleanup, and 65 blocks without a fixed cap.
+The selective-removal cases additionally cover head/middle/tail/only member,
+null/empty/absent/cyclic rejection, no frees/callbacks during removal, unchanged
+survivor graph links, and explicit disposal of only the detached allocation.
+Historical evidence was 115 checks at O0/O2. The extended fixture passed at O2:
+143 checks, 147 frees and 2 callbacks; strict C99 warnings and the production
+object import check passed (free remains its only external dependency).
+Evidence: build/codex/msg_blocks/20260911_180637_285_d7a54d58/evidence.json.
+Runner syntax/default/normalization/invalid-option checks also passed without
+another compilation. Only O2 was executed for this checkpoint; no nativeExec,
+family test or stable self-build was repeated. This is a selective-removal helper
+result, NOT a pass of the still-RED unrooted-adoption collector acceptance probe.
 Generated sources, executables, logs and SHA256 evidence stay in build/codex.
 The runner does not rebuild/promote gen2 or touch Grok's shared build/l2 outputs.
 
