@@ -865,6 +865,14 @@ and complete standard distribution, low-level synchronization is confined to
 the Message mechanism itself. Other components coordinate through Messages
 (19.28.R2.2). L2 synchronization remains available to explicitly low-level code.
 
+Lingvamyxa provides composable tools, not a mandatory application framework.
+A program selects the receivers, modules and execution mechanisms it needs;
+an L1 program may run native C code without using the Message runtime. Supplied
+scheduling policies, including the entire direct-child selection order, are
+replaceable. A selected mechanism still obeys its explicit contract. This
+freedom does not change the core and standard-distribution implementation
+policy above or authorize hidden global management inside Message.
+
 Compilation, interpretation and mixed execution are backend/profile choices,
 not the distinction between L2 and L3. An L2 implementation that uses the
 machine surface must lower those operations against an explicit memory/layout
