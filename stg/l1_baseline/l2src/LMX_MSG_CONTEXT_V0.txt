@@ -143,7 +143,9 @@ Do not claim the previous global-table runtime complied.
       outbox q_push/take take dest mail_lock nested under exec
       (exec then mail; never the reverse). state/inbox_n/path_n/
       path_seg/child_n/child_at skip exec when turn_self already
-      is that Message. Not yet a replacement of exec lock.
+      is that Message. take_addr holds exec across scan/consume;
+      is_runnable_locked is used when the lock is already held.
+      Not yet a replacement of exec lock.
   D8. Independent child-arena reclaim inside one family is
       prototype-only: RELEASED frees copy slices; the LmxMsg
       object stays until runtime_delete. Not proven across
