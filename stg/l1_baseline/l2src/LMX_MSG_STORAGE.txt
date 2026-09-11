@@ -50,10 +50,32 @@ only, no self-build or duplicate family/nativeExec suite was run.
 Limits: this probes storage-handoff -> end_turn, not complete ordinary LMX-text
 delivery, which this prototype does not yet expose. It deliberately does not use
 adopt_failed, whose explicit failed-root retention is a different policy (19.29.8).
-End_turn presently has no graph collector call. Full acceptance additionally
+At the tested 5c8929a checkpoint end_turn has no graph collector call. Full acceptance additionally
 needs the paired retained-root/unroot/drop-root case through the eventual graph
 root integration. Do not make this test green by freeing every block on exit.
 Source tests and ownership-list helpers introduce no new collector or root ABI.
+
+Subsequent integration status (read-only audit, 2026-09-11)
+--------------------------------------------------------
+b08083b added an empty collector hook on both success/failure end-turn paths.
+c0b5d8b moved that still-empty hook to native exec. Neither implements tracing
+or changes the measured acceptance gap; no redundant probe rebuild was done.
+20a9c03 supplies the L1 blocks_remove primitive for an eventual selective sweep.
+
+The missing input is concrete graph-root plumbing, not another owner lookup:
+  - LmxMsg contains blocks/ranges and byte init data, but no typed Lmx graph root.
+  - LmxMsgRuntime.root is LmxMsg*, a participant-tree root, not an Lmx graph root.
+  - l2trans.lm1's generated external main creates the actual Lmx* unit with
+    malloc/cell_init/branch_open and uses it for callable/own-field construction.
+    That generated unit root is not connected to the Message collector here.
+  - Own-field cache helpers retain exact Lmx occurrences in C working state;
+    those pointers are not inferred merely from the allocation range list.
+Do not interpret init bytes or an arbitrary native turn_ctx as an Lmx root.
+Real roots required by19.29.4 must be connected before a collector can distinguish
+retained graphs from dead storage. Node traversal traces known graph relationships;
+it cannot discover which allocations are roots just because they have node=0.
+The empty-hook/nativeExec pass proves no collection behaviour. The retained-root
+counterpart must exercise actual graph integration, not an artificial test root.
 
 API (0 = OK, 1 = INVALID)
 ------------------------
