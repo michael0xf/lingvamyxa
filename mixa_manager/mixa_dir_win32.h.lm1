@@ -1,0 +1,8 @@
+include: "<windows.h>" "<stdint.h>"
+
+struct: MixaDir
+    @: void hfind
+    @: WIN32_FIND_DATAW ffd
+    int: is_open
+    int: first_done
+end: MixaDir

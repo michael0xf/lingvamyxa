@@ -1,0 +1,378 @@
+predef: "mixa_manager/mixa_dir_win32.h.lm1"
+predef: "mixa_manager/mixa_dir.h.lm1"
+include: "<stdlib.h>" "<string.h>"
+
+# Win32 directory seam (FILE_SEAM section 4).  UTF-8 paths via
+# MultiByteToWideChar; FindFirstFileW / FindNextFileW / FindClose for
+# listing; GetFileAttributesW for remove target; CreateDirectoryW for
+# mkdir; MoveFileW for rename; DeleteFileW / RemoveDirectoryW for remove.
+
+fn: mixa_dir_utf8_to_wide (const: @(char path_utf8); @@: wchar_t out_w) int
+    int: nwide
+    @: wchar_t wbuf
+    if: path_utf8 = 0
+        return: MIXA_DIR_ERR_ARG
+    if: out_w = 0
+        return: MIXA_DIR_ERR_ARG
+    out_w[0]: 0
+    nwide: c.MultiByteToWideChar(65001, 0U, path_utf8, -1, 0, 0)
+    if: nwide <= 0
+        return: MIXA_DIR_ERR_IO
+    wbuf: (cast: (@: wchar_t) c.calloc((cast: (size_t) nwide), c.sizeof(c.wchar_t)))
+    if: wbuf = 0
+        return: MIXA_DIR_ERR_NOMEM
+    if: c.MultiByteToWideChar(65001, 0U, path_utf8, -1, wbuf, nwide) = 0
+        c.free(wbuf)
+        return: MIXA_DIR_ERR_IO
+    ---
+    out_w[0]: wbuf
+return: MIXA_DIR_OK
+
+# Allocate a wide pattern = path + L"\\*" for FindFirstFileW.
+fn: mixa_dir_utf8_to_wide_pattern (const: @(char path_utf8); @@: wchar_t out_p) int
+    int: nwide
+    @: wchar_t wbuf
+    if: path_utf8 = 0 || out_p = 0
+        return: MIXA_DIR_ERR_ARG
+    out_p[0]: 0
+    nwide: c.MultiByteToWideChar(65001, 0U, path_utf8, -1, 0, 0)
+    if: nwide <= 0
+        return: MIXA_DIR_ERR_IO
+    wbuf: (cast: (@: wchar_t) c.calloc((cast: (size_t) (nwide + 2)), c.sizeof(c.wchar_t)))
+    if: wbuf = 0
+        return: MIXA_DIR_ERR_NOMEM
+    if: c.MultiByteToWideChar(65001, 0U, path_utf8, -1, wbuf, nwide + 2) = 0
+        c.free(wbuf)
+        return: MIXA_DIR_ERR_IO
+    wbuf[nwide - 1]: (cast: (wchar_t) 92)
+    wbuf[nwide]:     (cast: (wchar_t) 42)
+    wbuf[nwide + 1]: (cast: (wchar_t) 0)
+    ---
+    out_p[0]: wbuf
+return: MIXA_DIR_OK
+
+# Convert the wide name from WIN32_FIND_DATAW into entry's UTF-8 name.
+fn: mixa_dir_wide_name_to_entry (const: @(WIN32_FIND_DATAW ffd); @: MixaDirEntry out) int
+    if: c.WideCharToMultiByte(65001, 0U, ffd\cFileName, -1, out\name, MIXA_DIR_ENTRY_NAME, 0, 0) = 0
+        return: MIXA_DIR_ERR_IO
+    out\is_dir: 0
+    if: (ffd\dwFileAttributes & 16U) != 0U
+        out\is_dir: 1
+    out\size: (cast: (size_t) ffd\nFileSizeHigh)
+    out\size: (out\size << 32U) | (cast: (size_t) ffd\nFileSizeLow)
+return: MIXA_DIR_OK
+
+# Compute mtime from the current ffd.  Copies FILETIME via memcpy to
+# avoid direct embedded-struct field access.
+fn: mixa_dir_mtime_from_ffd (const: @(WIN32_FIND_DATAW ffd); @: MixaDirEntry out) void
+    []: ulong ft_lo 1
+    []: ulong ft_hi 1
+    []: u64 ft 1
+    []: u64 secs 1
+    []: u64 epoch 1
+    []: u64 unix 1
+    c.memcpy(ft_lo, (cast: (@: void) (@ ffd\ftLastWriteTime)), 4U)
+    c.memcpy(ft_hi, (cast: (@: void) ((cast: (@: char) (cast: (@: void) (@ ffd\ftLastWriteTime))) + 4)), 4U)
+    ft[0]: (cast: (u64) ft_hi[0])
+    ft[0]: (ft[0] << 32U) | (cast: (u64) ft_lo[0])
+    secs[0]: ft[0] / 10000000U
+    epoch[0]: 90972450U
+    epoch[0]: epoch[0] * 128U
+    unix[0]: secs[0] - epoch[0]
+    out\mtime: (cast: (size_t) unix[0])
+
+# Fill entry from an already-populated WIN32_FIND_DATAW.
+fn: mixa_dir_fill_entry (const: @(WIN32_FIND_DATAW ffd); @: MixaDirEntry out) int
+    int: rc
+    rc: mixa_dir_wide_name_to_entry(ffd, out)
+    if: rc != MIXA_DIR_OK
+        return: rc
+    mixa_dir_mtime_from_ffd(ffd, out)
+return: MIXA_DIR_OK
+
+# Extract basename from a UTF-8 path into out->name.
+fn: mixa_dir_copy_basename (const: @(char path_utf8); @: MixaDirEntry out) int
+    size_t: last
+    size_t: i
+    size_t: n
+    if: path_utf8 = 0
+        return: MIXA_DIR_ERR_ARG
+    i: 0
+    last: 0
+    while: path_utf8[i] != 0
+        if: path_utf8[i] = 47 || path_utf8[i] = 92
+            last: i + 1
+        i: i + 1
+    n: i - last
+    if: n = 0 || n >= MIXA_DIR_ENTRY_NAME
+        return: MIXA_DIR_ERR_IO
+    c.memcpy(out\name, path_utf8 + last, n)
+    out\name[n]: 0
+return: MIXA_DIR_OK
+
+fn: mixa_dir_list_open (@@: MixaDir out; const: @(char path_utf8)) int
+    @: MixaDir d
+    @: WIN32_FIND_DATAW ffd
+    @: wchar_t wpat
+    []: (@: wchar_t) wslot 1
+    int: st
+    ulong: gle
+    if: out = 0
+        return: MIXA_DIR_ERR_ARG
+    out[0]: 0
+    if: path_utf8 = 0
+        return: MIXA_DIR_ERR_ARG
+    d: (cast: (@: MixaDir) c.calloc(1U, c.sizeof(c.MixaDir)))
+    if: d = 0
+        return: MIXA_DIR_ERR_NOMEM
+    ffd: (cast: (@: WIN32_FIND_DATAW) c.calloc(1U, c.sizeof(c.WIN32_FIND_DATAW)))
+    if: ffd = 0
+        c.free(d)
+        return: MIXA_DIR_ERR_NOMEM
+    d\ffd: ffd
+    wslot[0]: 0
+    st: mixa_dir_utf8_to_wide_pattern(path_utf8, wslot)
+    if: st != MIXA_DIR_OK
+        c.free(ffd)
+        c.free(d)
+        return: st
+    wpat: wslot[0]
+    d\hfind: c.FindFirstFileW(wpat, ffd)
+    c.free(wpat)
+    if: d\hfind = (cast: (@: void) (cast: (size_t) -1))
+        gle: c.GetLastError()
+        c.free(ffd)
+        c.free(d)
+        if: gle = 2U || gle = 3U || gle = 267U
+            return: MIXA_DIR_ERR_MISSING
+        return: MIXA_DIR_ERR_IO
+    ---
+    d\is_open: 1
+    out[0]: d
+return: MIXA_DIR_OK
+
+# Internal: return 1 when the wide name in ffd is "." or "..".
+fn: mixa_dir_cname_is_dot (const: @(WIN32_FIND_DATAW ffd)) int
+    if: ffd\cFileName[0] != 46
+        return: 0
+    if: ffd\cFileName[1] = 0
+        return: 1
+    if: ffd\cFileName[1] != 46
+        return: 0
+    if: ffd\cFileName[2] = 0
+        return: 1
+return: 0
+
+# Internal: return 1 when the UTF-8 name in entry is "." or "..".
+fn: mixa_dir_name_is_dot_entry (@: MixaDirEntry e) int
+    if: e\name[0] != 46
+        return: 0
+    if: e\name[1] = 0
+        return: 1
+    if: e\name[1] != 46
+        return: 0
+    if: e\name[2] = 0
+        return: 1
+return: 0
+
+# Internal: advance FindNextFileW, filtering "." and ".." (Java semantics).
+fn: mixa_dir_find_advance (@: MixaDir d) int
+    int: more
+    more: 1
+    while: more = 1
+        if: c.FindNextFileW(d\hfind, d\ffd) = 0
+            return: MIXA_DIR_END
+        more: 0
+        if: mixa_dir_cname_is_dot(d\ffd) = 1
+            more: 1
+        ---
+    return: MIXA_DIR_OK
+
+fn: mixa_dir_list_next (@: MixaDir d; @: MixaDirEntry out) int
+    int: rc
+    int: more
+    if: d = 0 || out = 0
+        return: MIXA_DIR_ERR_ARG
+    if: d\is_open = 0
+        return: MIXA_DIR_ERR_ARG
+    more: 1
+    while: more = 1
+        if: d\first_done != 0
+            rc: mixa_dir_find_advance(d)
+            if: rc != MIXA_DIR_OK
+                return: MIXA_DIR_END
+        ---
+        d\first_done: 1
+        rc: mixa_dir_fill_entry(d\ffd, out)
+        if: rc != MIXA_DIR_OK
+            return: rc
+        if: mixa_dir_name_is_dot_entry(out) = 0
+            return: MIXA_DIR_OK
+    ---
+    return: MIXA_DIR_END
+
+fn: mixa_dir_list_close (@: MixaDir d) void
+    if: d != 0
+        if: d\is_open != 0
+            if: d\hfind != (cast: (@: void) (cast: (size_t) -1))
+                c.FindClose(d\hfind)
+            d\hfind: (cast: (@: void) (cast: (size_t) -1))
+            d\is_open: 0
+        ---
+        c.free(d\ffd)
+        c.free(d)
+    ---
+end: mixa_dir_list_close
+
+fn: mixa_dir_stat (const: @(char path_utf8); @: MixaDirEntry out) int
+    @: WIN32_FIND_DATAW ffd
+    @: wchar_t wpath
+    []: (@: wchar_t) wslot 1
+    @: void hfind
+    int: st
+    ulong: gle
+    if: path_utf8 = 0 || out = 0
+        return: MIXA_DIR_ERR_ARG
+    c.memset(out, 0, c.sizeof(c.MixaDirEntry))
+    ffd: (cast: (@: WIN32_FIND_DATAW) c.calloc(1U, c.sizeof(c.WIN32_FIND_DATAW)))
+    if: ffd = 0
+        return: MIXA_DIR_ERR_NOMEM
+    wslot[0]: 0
+    st: mixa_dir_utf8_to_wide(path_utf8, wslot)
+    if: st != MIXA_DIR_OK
+        c.free(ffd)
+        return: st
+    wpath: wslot[0]
+    hfind: c.FindFirstFileW(wpath, ffd)
+    c.free(wpath)
+    if: hfind = (cast: (@: void) (cast: (size_t) -1))
+        gle: c.GetLastError()
+        c.free(ffd)
+        if: gle = 2U || gle = 3U || gle = 267U
+            return: MIXA_DIR_ERR_MISSING
+        return: MIXA_DIR_ERR_IO
+    st: mixa_dir_fill_entry(ffd, out)
+    c.FindClose(hfind)
+    c.free(ffd)
+    if: st != MIXA_DIR_OK
+        return: st
+    st: mixa_dir_copy_basename(path_utf8, out)
+    if: st != MIXA_DIR_OK
+        return: st
+return: MIXA_DIR_OK
+
+fn: mixa_dir_mkdir (const: @(char path_utf8)) int
+    @: wchar_t wpath
+    []: (@: wchar_t) wslot 1
+    int: st
+    ulong: gle
+    if: path_utf8 = 0
+        return: MIXA_DIR_ERR_ARG
+    wslot[0]: 0
+    st: mixa_dir_utf8_to_wide(path_utf8, wslot)
+    if: st != MIXA_DIR_OK
+        return: st
+    wpath: wslot[0]
+    if: c.CreateDirectoryW(wpath, 0) = 0
+        gle: c.GetLastError()
+        c.free(wpath)
+        if: gle = 183U
+            return: MIXA_DIR_ERR_EXISTS
+        if: gle = 2U || gle = 3U
+            return: MIXA_DIR_ERR_MISSING
+        return: MIXA_DIR_ERR_IO
+    ---
+    c.free(wpath)
+return: MIXA_DIR_OK
+
+fn: mixa_dir_remove (const: @(char path_utf8)) int
+    @: MixaDirEntry st_e
+    @: wchar_t wpath
+    []: (@: wchar_t) wslot 1
+    int: st
+    if: path_utf8 = 0
+        return: MIXA_DIR_ERR_ARG
+    st_e: (cast: (@: MixaDirEntry) c.calloc(1U, c.sizeof(c.MixaDirEntry)))
+    if: st_e = 0
+        return: MIXA_DIR_ERR_NOMEM
+    st: mixa_dir_stat(path_utf8, st_e)
+    if: st != MIXA_DIR_OK
+        c.free(st_e)
+        return: st
+    wslot[0]: 0
+    st: mixa_dir_utf8_to_wide(path_utf8, wslot)
+    if: st != MIXA_DIR_OK
+        c.free(st_e)
+        return: st
+    wpath: wslot[0]
+    if: st_e\is_dir != 0
+        if: c.RemoveDirectoryW(wpath) = 0
+            c.free(wpath)
+            c.free(st_e)
+            return: MIXA_DIR_ERR_IO
+        ---
+    ---
+    if: st_e\is_dir = 0
+        if: c.DeleteFileW(wpath) = 0
+            c.free(wpath)
+            c.free(st_e)
+            return: MIXA_DIR_ERR_IO
+        ---
+    ---
+    c.free(wpath)
+    c.free(st_e)
+return: MIXA_DIR_OK
+
+fn: mixa_dir_rename (const: @(char path_utf8); const: @(char new_path_utf8)) int
+    @: wchar_t wold
+    @: wchar_t wnew
+    []: (@: wchar_t) wslot_old 1
+    []: (@: wchar_t) wslot_new 1
+    int: st
+    ulong: gle
+    if: path_utf8 = 0 || new_path_utf8 = 0
+        return: MIXA_DIR_ERR_ARG
+    wslot_old[0]: 0
+    st: mixa_dir_utf8_to_wide(path_utf8, wslot_old)
+    if: st != MIXA_DIR_OK
+        return: st
+    wslot_new[0]: 0
+    st: mixa_dir_utf8_to_wide(new_path_utf8, wslot_new)
+    if: st != MIXA_DIR_OK
+        c.free(wslot_old[0])
+        return: st
+    wold: wslot_old[0]
+    wnew: wslot_new[0]
+    if: c.MoveFileW(wold, wnew) = 0
+        gle: c.GetLastError()
+        c.free(wold)
+        c.free(wnew)
+        if: gle = 183U
+            return: MIXA_DIR_ERR_EXISTS
+        return: MIXA_DIR_ERR_IO
+    ---
+    c.free(wold)
+    c.free(wnew)
+return: MIXA_DIR_OK
+
+# Entry accessors (L1-safe: pointer arg, no indexed-struct VALUE access).
+
+fn: mixa_dir_entry_name (const: @(MixaDirEntry e)) const: @(char)
+    if: e = 0
+        return: 0
+    return: e\name
+
+fn: mixa_dir_entry_is_dir (const: @(MixaDirEntry e)) int
+    if: e = 0
+        return: 0
+    return: e\is_dir
+
+fn: mixa_dir_entry_size (const: @(MixaDirEntry e)) size_t
+    if: e = 0
+        return: 0U
+    return: e\size
+
+fn: mixa_dir_entry_mtime (const: @(MixaDirEntry e)) size_t
+    if: e = 0
+        return: 0U
+    return: e\mtime

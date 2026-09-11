@@ -1,0 +1,35 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_dir_win32.h.lm1"
+
+define: MIXA_DIR_ENTRY_NAME 1040
+
+struct: MixaDirEntry
+    []: char name MIXA_DIR_ENTRY_NAME
+    int: is_dir
+    size_t: size
+    size_t: mtime
+end: MixaDirEntry
+
+enum: MixaDirStatus
+    MIXA_DIR_OK 0
+    MIXA_DIR_ERR_ARG 1
+    MIXA_DIR_ERR_MISSING 2
+    MIXA_DIR_ERR_IO 3
+    MIXA_DIR_ERR_NOMEM 4
+    MIXA_DIR_ERR_EXISTS 5
+    MIXA_DIR_END 6
+end: MixaDirStatus
+
+prototype:
+    fn: mixa_dir_list_open (@@: MixaDir out; const: @(char path_utf8)) int
+    fn: mixa_dir_list_next (@: MixaDir d; @: MixaDirEntry out) int
+    fn: mixa_dir_list_close (@: MixaDir d) void
+    fn: mixa_dir_stat (const: @(char path_utf8); @: MixaDirEntry out) int
+    fn: mixa_dir_mkdir (const: @(char path_utf8)) int
+    fn: mixa_dir_remove (const: @(char path_utf8)) int
+    fn: mixa_dir_rename (const: @(char path_utf8); const: @(char new_path_utf8)) int
+    fn: mixa_dir_entry_name (const: @(MixaDirEntry e)) const: @(char)
+    fn: mixa_dir_entry_is_dir (const: @(MixaDirEntry e)) int
+    fn: mixa_dir_entry_size (const: @(MixaDirEntry e)) size_t
+    fn: mixa_dir_entry_mtime (const: @(MixaDirEntry e)) size_t
+end: prototype
