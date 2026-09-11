@@ -46,8 +46,13 @@ directives. Simple main may declare `int`, `char`, `size_t`, and
 `l2src/printTree.lm2` is the L2 port of `l1src/printTree.lm1`.
 Runner compares L2 printTree vs frozen-compiler `l1src/printTree.lm1`
 on no-args, valid tree, malformed syntax, and missing file (stdout/
-stderr/exit; CRLF only). `os: win:/default:` and `c.array: []: char
-NAME N` with `NAME[i]:` stores are L2 input toward make.lm1.
+stderr/exit; CRLF only). `os: win:/default:` is a bounded helper: zero parameters, `@: char`
+return, no extra body, one quoted return literal. Other shapes are
+rejected. `c.array: []: char NAME N` with `NAME[i]:` stores are L2
+input toward make.lm1. `strcmp`/`getenv`/`strlen` and `'\0'` are
+admitted libc calls/literals; `memcpy` stays on the existing path
+so `c.memcmp` field access is not stolen. PrintTree parity is
+ordinal after CRLF->LF only; fixtures default to LF.
 
 That is the SPEC 1.7 bootstrap `main` adapter. String atoms are copied as
 P0 source spelling into L1 (quotes and escapes kept; not decoded then
