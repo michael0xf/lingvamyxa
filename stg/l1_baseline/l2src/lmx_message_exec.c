@@ -1037,12 +1037,30 @@ static void join_bind_worker(LmxMsgRuntime *rt, int i) {
 #endif
 }
 
+static int bind_kick_needed_locked(LmxMsg *m) {
+    if (m == 0) {
+        return 0;
+    }
+    if (m->state == LMX_MSG_STATE_STOPPED || m->state == LMX_MSG_STATE_DEAD
+        || m->state == LMX_MSG_STATE_RELEASED) {
+        return 0;
+    }
+    if (lmx_msg_mail_inbox_empty(m) == 0) {
+        return 1;
+    }
+    if (m->closing != 0) {
+        return 1;
+    }
+    return 0;
+}
+
 int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity) {
     LmxMsgExec *e = exof(rt);
     LmxMsg *m;
     int i;
     int owner;
     int live;
+    int kick = 0;
     if (e == 0 || addr == 0U || turn == 0) {
         return LMX_MSG_INVALID;
     }
@@ -1096,11 +1114,15 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
             }
             m->turn = turn;
             m->turn_ctx = ctx;
+            kick = bind_kick_needed_locked(m);
             if (old_aff != affinity) {
                 if (affinity == LMX_MSG_AFFINITY_UI) {
                     e->bind[i].affinity = LMX_MSG_AFFINITY_UI;
                     join_bind_worker(rt, i);
                     lmx_msg_exec_unlock(rt);
+                    if (kick != 0) {
+                        lmx_msg_exec_ready(rt, addr);
+                    }
                     return LMX_MSG_OK;
                 }
                 e->bind[i].affinity = affinity;
@@ -1118,12 +1140,21 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
                         return st;
                     }
                 }
+                if (kick != 0) {
+                    lmx_msg_exec_ready(rt, addr);
+                }
                 return LMX_MSG_OK;
             }
             need = e->contexts_live != 0 && affinity != LMX_MSG_AFFINITY_UI && bind_has_worker(&e->bind[i]) == 0;
             lmx_msg_exec_unlock(rt);
             if (need != 0) {
-                return launch_ctx_thread(rt, addr);
+                st = launch_ctx_thread(rt, addr);
+                if (st != LMX_MSG_OK) {
+                    return st;
+                }
+            }
+            if (kick != 0) {
+                lmx_msg_exec_ready(rt, addr);
             }
             return LMX_MSG_OK;
         }
@@ -1155,6 +1186,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
 #endif
     e->nbind += 1;
     live = e->contexts_live;
+    kick = bind_kick_needed_locked(m);
     lmx_msg_exec_unlock(rt);
 #if defined(LMX_MSG_EXEC_TEST)
     if (lmx_msg_exec_test_after_bind_add != 0) {
@@ -1172,6 +1204,9 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
             lmx_msg_exec_unlock(rt);
             return st;
         }
+    }
+    if (kick != 0) {
+        lmx_msg_exec_ready(rt, addr);
     }
     return LMX_MSG_OK;
 }
