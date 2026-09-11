@@ -36,6 +36,34 @@ Sources
   NOTES Lingvamyxa_handoff_notes.txt
 
 
+Unit - Message-owned block storage (2026-09-11)
+----------------------------------------------
+Files: lmx_msg_blocks.h.lm1, lmx_msg_blocks.lm1,
+       tests/lmx_msg_blocks_selftest.lm1, run_msg_blocks.ps1, LMX_MSG_BLOCKS.txt
+
+ABI 14.9 / SPEC 2, 19.29  Nonmoving blocks, transfer and arena lifecycle
+    DECIDED storage-only split: LMX_MSG_ARENA_SPLIT.txt records Grok/Codex
+    ownership and the three operations. Transfer preserves native pointers and
+    clears the former owner's list. No copying, scheduler, flags or global lock.
+    AVOIDED eligibility policy: caller must establish authority, quiescence and
+    child settlement; the module does not infer safety from running/success.
+
+ABI 14.2-14.3  Lmx len interpretation and empty language value
+    AVOIDED. Metadata n counts allocation bytes, not Lmx.len. Tests use raw
+    Lmx pointer links without reading len. Empty block list is storage ownership
+    bookkeeping, not a representation of an empty language Structure.
+
+ABI 14.8-14.9  Registered range ownership and full graph integration
+    AVOIDED. class is opaque allocation metadata carried unchanged, not a
+    classifying registry or a tag on a source node. Full range/failure-root
+    integration remains separate work; arbitrary escaped aliases are not proven
+    absent by list validation. No shared mutable classification table is added.
+
+L1 1.1 / 10.16  Header units and typed disposer callback
+    DECIDED .h.lm1 / fnptr spelling; verified header emission and separately
+    linked consumer in O0/O2 tests. No hand-written C wrapper or semantic shim.
+
+
 Unit 1 - Lmx core and classification by registered address range
 ----------------------------------------------------------------
 Files: lmx.h, lmx_range.lm1, lmx_selftest.lm1, run_lmx.ps1
