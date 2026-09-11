@@ -476,10 +476,10 @@ return: lmx_msg_pump(rt)
 
 sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     @: LmxMsg m
+    @: LmxMsg nxt
     @: LmxMsgCopy leftover
     @: LmxMsgCopy inb 0
     @: LmxMsgCopy outb 0
-    int: i 0
     if: rt = 0
         return
     if: c.lmx_msg_host_is_owner(rt) = 0
@@ -495,38 +495,33 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     c.lmx_msg_exec_lock(rt)
     c.lmx_msg_exec_set_no_retire(rt, 1)
     lmx_msg_copy_free(leftover)
-    i: 0
-    while: i < rt\n
-        m: rt\tab[i]
-        if: m != 0
-            c.lmx_msg_mail_inbox_take(m, @ inb)
-            lmx_msg_copy_free(inb)
-            c.lmx_msg_mail_outbox_take(m, @ outb)
-            lmx_msg_copy_free(outb)
-        ---
-        i: i + 1
+    m: rt\slots
+    while: m != 0
+        c.lmx_msg_mail_inbox_take(m, @ inb)
+        lmx_msg_copy_free(inb)
+        c.lmx_msg_mail_outbox_take(m, @ outb)
+        lmx_msg_copy_free(outb)
+        m: m\alloc_next
+    ---
     lmx_msg_copy_free(rt\transport)
     rt\transport: 0
     rt\transport_tail: 0
-    i: 0
-    while: i < rt\n
-        m: rt\tab[i]
-        if: m != 0
-            if: m\init != 0
-                c.free((cast: (@: void) m\init))
-            ---
-            if: m\path != 0
-                c.free((cast: (@: void) m\path))
-            ---
-            c.lmx_msg_slot_free(m)
-            rt\tab[i]: 0
+    m: rt\slots
+    while: m != 0
+        nxt: m\alloc_next
+        if: m\init != 0
+            c.free((cast: (@: void) m\init))
         ---
-        i: i + 1
+        if: m\path != 0
+            c.free((cast: (@: void) m\path))
+        ---
+        c.lmx_msg_slot_free(m)
+        m: nxt
+    ---
+    rt\slots: 0
+    rt\n: 0
     c.lmx_msg_exec_set_no_retire(rt, 0)
     c.lmx_msg_exec_unlock(rt)
-    if: rt\tab != 0
-        c.free((cast: (@: void) rt\tab))
-    ---
     c.lmx_msg_exec_detach(rt)
     c.lmx_msg_host_detach(rt)
     c.free((cast: (@: void) rt))
@@ -603,12 +598,6 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
     if: n != 0U && initp = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_NOMEM
-    if: lmx_msg_grow(rt) != 0
-        if: initp != 0
-            c.free((cast: (@: void) initp))
-        ---
-        c.lmx_msg_exec_unlock(rt)
-        return: c.LMX_MSG_NOMEM
     slot: c.lmx_msg_slot_new()
     if: slot = 0
         if: initp != 0
@@ -617,12 +606,9 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_NOMEM
     slot\owner_rt: rt
-    rt\tab[rt\n]: slot
-    slot\tab_i: rt\n
     st: lmx_msg_assign_path(rt, slot, p)
     if: st != c.LMX_MSG_OK
         c.lmx_msg_slot_free(slot)
-        rt\tab[rt\n]: 0
         if: initp != 0
             c.free((cast: (@: void) initp))
         ---
@@ -641,6 +627,8 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
     ---
     slot\init_n: n
     slot\init: initp
+    slot\alloc_next: rt\slots
+    rt\slots: slot
     rt\n: rt\n + 1
     if: parent = 0U
         if: rt\root = 0

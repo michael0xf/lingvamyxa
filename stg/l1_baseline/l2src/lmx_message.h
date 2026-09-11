@@ -136,16 +136,15 @@ typedef struct LmxMsg {
     int native_users;
     unsigned orphan_until;
     int disposed;
-    int tab_i;
+    struct LmxMsg *alloc_next;
     LmxMsgBlock *blocks;
     LmxOwnedRange *ranges;
 } LmxMsg;
 
 struct LmxMsgRuntime {
     LmxMsg *root;
-    LmxMsg **tab;
+    LmxMsg *slots;
     int n;
-    int cap;
     LmxMsgCopy *transport;
     LmxMsgCopy *transport_tail;
     LmxMsgCopy *host_head;

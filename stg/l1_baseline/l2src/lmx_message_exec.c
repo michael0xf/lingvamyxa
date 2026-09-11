@@ -261,21 +261,7 @@ unsigned lmx_msg_now(LmxMsgRuntime *rt) {
 }
 
 int lmx_msg_tab_grow(LmxMsgRuntime *rt) {
-    int cap;
-    LmxMsg **tab;
-    if (rt == 0) {
-        return 1;
-    }
-    if (rt->n < rt->cap) {
-        return 0;
-    }
-    cap = rt->cap == 0 ? 8 : rt->cap * 2;
-    tab = (LmxMsg **)realloc(rt->tab, (size_t)cap * sizeof(LmxMsg *));
-    if (tab == 0) {
-        return 1;
-    }
-    rt->tab = tab;
-    rt->cap = cap;
+    (void)rt;
     return 0;
 }
 
@@ -288,7 +274,6 @@ LmxMsg *lmx_msg_slot_new(void) {
     m->running = 1;
     m->success = 0;
     m->tracked = 1;
-    m->tab_i = -1;
 #if defined(_WIN32)
     m->mail = calloc(1U, sizeof(CRITICAL_SECTION));
     if (m->mail == 0) {
@@ -440,7 +425,8 @@ void lmx_msg_slot_free(LmxMsg *m) {
 
 int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m) {
     LmxMsgExec *e;
-    int i;
+    LmxMsg *prev;
+    LmxMsg *cur;
     if (rt == 0 || m == 0) {
         return 0;
     }
@@ -461,16 +447,24 @@ int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m) {
         lmx_msg_exec_unlock(rt);
         return 0;
     }
-    i = m->tab_i;
-    if (i >= 0 && i < rt->n && rt->tab != 0 && rt->tab[i] == m) {
-        rt->tab[i] = rt->tab[rt->n - 1];
-        if (rt->tab[i] != 0 && rt->tab[i] != m) {
-            rt->tab[i]->tab_i = i;
+    prev = 0;
+    cur = rt->slots;
+    while (cur != 0) {
+        if (cur == m) {
+            if (prev != 0) {
+                prev->alloc_next = m->alloc_next;
+            } else {
+                rt->slots = m->alloc_next;
+            }
+            m->alloc_next = 0;
+            if (rt->n > 0) {
+                rt->n -= 1;
+            }
+            break;
         }
-        rt->tab[rt->n - 1] = 0;
-        rt->n -= 1;
+        prev = cur;
+        cur = cur->alloc_next;
     }
-    m->tab_i = -1;
     if (m->path != 0) {
         free(m->path);
         m->path = 0;
@@ -832,10 +826,19 @@ int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt) {
 }
 
 LmxMsgAddr lmx_msg_exec_tab_addr_locked(LmxMsgRuntime *rt, int i) {
-    if (rt == 0 || i < 0 || i >= rt->n || rt->tab == 0 || rt->tab[i] == 0) {
+    LmxMsg *m;
+    if (rt == 0 || i < 0) {
         return 0;
     }
-    return rt->tab[i]->addr;
+    m = rt->slots;
+    while (m != 0 && i > 0) {
+        m = m->alloc_next;
+        i -= 1;
+    }
+    if (m == 0) {
+        return 0;
+    }
+    return m->addr;
 }
 
 #if defined(LMX_MSG_EXEC_TEST)

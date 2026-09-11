@@ -113,12 +113,12 @@ Current deviations (EXEC / mailbox prototype)
 ---------------------------------------------
 Do not claim the previous global-table runtime complied.
 
-  D1. LmxMsgRuntime.tab[] still allocation/sweep. try_retire
-      uses LmxMsg.tab_i (O(1)), not a tab scan. Integer find
-      remains for send into another family. send dest prefers
-      the sender subtree and parent_msg before forest find.
-      Integer lookup uses turn_self when it already is that
-      Message (lmx_msg_self_or_find), else forest find.
+  D1. Allocation is LmxMsgRuntime.slots (linked list), not a
+      growable pointer table. Integer find remains for send
+      into another family. send dest prefers the sender subtree
+      and parent_msg before forest find. Integer lookup uses
+      turn_self when it already is that Message
+      (lmx_msg_self_or_find), else forest find.
       recv still pops mail via turn_self without exec first.
       See LMX_MSG_ARENA_SPLIT.txt for Codex block-list module
       and LMX_OWNED_RANGES.txt for the owner-local classifier.
@@ -154,8 +154,9 @@ list order, one turn, not drain-to-empty and not language-wide
 fairness. `lmx_msg_map_child` is a parent-owned mapping of one
 direct child onto a native wait-thread. Mix placement path is
 growable (PATH_CHUNK), not depth 16. Send stores dest_msg on the
-staged copy; admit prefers that capability. tab/find remain D1
-for integer APIs. EXEC pool / start_contexts remain prototype.
+staged copy; admit prefers that capability. Integer find remains
+D1 for other-family send. EXEC pool / start_contexts remain
+prototype.
 Child query/parent-reply is experimental, not a language KIND.
 KIND_PROGRESS numbers 0x4C560001/0x4C560002 plus correlation
 (implementation profile). Ordinary PROGRESS 1/2 does not ack.
