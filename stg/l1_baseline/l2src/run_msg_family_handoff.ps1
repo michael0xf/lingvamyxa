@@ -53,6 +53,20 @@ try {
         'lmx_msg_slots.h.lm1', 'lmx_msg_slots.lm1',
         'lmx_msg_mail_chain.h.lm1', 'lmx_msg_mail_chain.lm1',
         'lmx_msg_sched_ready.h.lm1', 'lmx_msg_sched_ready.lm1')
+    $moduleNames = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready')
+    # Inspect the selected immutable revision, never the live checkout. Older
+    # collector checkpoints predate this extraction and must remain replayable.
+    $visitPaths = @('stg/l1_baseline/l2src/lmx_msg_visit.h.lm1', 'stg/l1_baseline/l2src/lmx_msg_visit.lm1')
+    Invoke-FamilyStage 'resolve_visit_dependency' $git (@('ls-tree', '--name-only', $revision, '--') + $visitPaths)
+    $visitPresent = @(Get-Content -LiteralPath (Join-Path $run 'resolve_visit_dependency.stdout.txt') | Where-Object { $_ })
+    if ($visitPresent.Count -ne 0 -and ($visitPresent.Count -ne 2 -or @(Compare-Object $visitPaths $visitPresent).Count -ne 0)) {
+        throw 'Selected core has an incomplete visit-helper source pair.'
+    }
+    $evidence.visitHelper = ($visitPresent.Count -eq 2)
+    if ($evidence.visitHelper) {
+        $files += @('lmx_msg_visit.h.lm1', 'lmx_msg_visit.lm1')
+        $moduleNames += 'lmx_msg_visit'
+    }
     $paths = @($files | ForEach-Object { "stg/l1_baseline/l2src/$_" })
     $archive = Join-Path $run 'core.zip'
     Invoke-FamilyStage 'archive_core' $git (@('archive', '--format=zip', "--output=$archive", $revision, '--') + $paths)
@@ -65,7 +79,7 @@ try {
     }
     $evidence.coreSources = $coreHashes
     $modules = @()
-    foreach ($name in @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready')) {
+    foreach ($name in $moduleNames) {
         Invoke-FamilyStage "header_$name" $compiler @("l2src/$name.h.lm1", (Join-Path $headers "l2src/$name.lm1.h"))
         $module = Join-Path $run "$name.c"
         Invoke-FamilyStage "module_$name" $compiler @("l2src/$name.lm1", $module)

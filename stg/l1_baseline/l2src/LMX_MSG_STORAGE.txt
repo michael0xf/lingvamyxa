@@ -172,7 +172,7 @@ build: build/codex/runtime_runner_options/options_ps*.json. The O0/O2 results
 below are historical evidence, not a mandatory double compile after each edit.
 It does not compile Grok's actively changing checkout or use its build outputs.
 An explicit -CoreCommit selects another agreed checkpoint; there is no automatic
-tracking of HEAD or promotion. Evidence records the resolved commit, 21 archived
+tracking of HEAD or promotion. Evidence records the resolved commit, archived
 source hashes, test/runner/compiler hashes, generated artifacts and stage exits.
 The snapshot links the L1 slots and mail-chain helpers required by native exec;
 no stale native enumeration/list body substitutes. Historical593a64b O0/O2 evidence:
@@ -189,6 +189,21 @@ header and module. Only public-send was executed (145checks atO2); the family
 source and its last53-check result remain unchanged. This manifest/pin update
 is NOT a new family-handoff runtime result. Integration evidence:
 build/codex/msg_send_local/20260911_172704_636_dcce1503/evidence.json.
+
+At b5dba51 native collection also calls the L1 lmx_msg_visit helper. The family
+runner checks the selected commit's tree for its header/module pair and includes
+both when present (23 archived sources, versus 21 before the extraction). A
+partial pair is rejected. This is revision-local dependency selection, not a
+fallback to live files; old RED/GREEN collector checkpoints remain replayable.
+The unchanged Family default pin and fixture are not advanced implicitly.
+Verified the integrated collector once with -Scenario UnrootedAdopt -CoreCommit
+b5dba5156ef89c33f7424ee0c22888684e6cde99 at O2: 36 checks, 0 failures,
+owned_frees=2, retained_interior=PASS. Both real end_turns retained the interior
+root; clearing it permitted collection. All stages passed, source/runner/compiler
+hashes were checked, and generated visit header/module were inspected.
+  build/codex/msg_family_handoff/20260911_184648_355_cdfaeba1/evidence.json
+No repeated Exec, Family or compiler self-build was needed. Earlier a2a0066 has
+no visit pair, as checked from its git tree; this is not a rerun of that revision.
 
 Those53 checks at O0/O2 cover G->C->P failed storage retention, unchanged payload
 and range-record addresses, a live unrelated
