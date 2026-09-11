@@ -106,14 +106,20 @@ Port ClearShell's behaviour, algorithms, wording, colours and layout subject to
 the application deltas. Replace Android widgets and platform-specific plumbing
 with the application's own components, not a second UI framework.
 
-Owner clarification, 2026-09-11: the calculator may be ported directly, including
-its current computation logic, and tested now. Keep that logic behind a callable
+Owner clarification, 2026-09-11: ClearShell's calculator is fully its own
+implementation. Port it directly, including its current computation logic, and
+test it now. Keep that logic behind a callable
 module boundary so the L3 interpreter can later replace the computation core
 without replacing the calculator interface. This supersedes the earlier blanket
 instruction not to port its internals; L3 readiness must not block this module.
 
-The editor needs our own implementation because the reference delegates editing
-to an Android library. Short-message windows and menus should be nested windows
+Only the editing-window implementation is missing from the reusable reference:
+it delegates editing to an Android library. The required replacement is simple
+file editing with a cursor, not a new full-featured editor framework. Reuse the
+file-backed text/cursor work; FIRST_VERSION specifies character wrapping, not
+word wrapping. The owner's recollection about wrapping in the Android editor
+is tentative, not a new rule cancelling that documented desktop behaviour.
+Short-message windows and menus should be nested windows
 of this same application, built from its existing buttons and lists, rather
 than separate native dialogs/menu systems. See UI_MODEL section 1. Their event
 routing and state use the same application model and eventual Message ownership.
