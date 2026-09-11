@@ -11151,12 +11151,40 @@ capability the sender already holds. Incoming payload is not a new L3 Thread;
 only an explicit launch creates a child with its own arena.
 
 Different Messages may execute concurrently. FIFO order and same-Message turn
-serialization are fixed. A language-level scheduler or router, if one exists,
-is itself an ordinary Message with private state and a message protocol; it is
-not a process-wide shared Message table and not a hidden C worker-pool policy.
-OS threads and narrow wait/wake/mutex around mailbox admission and a
-per-Message turn latch are substrate, not that coordinator. The same L3 Thread
-does not migrate between anonymous host workers as a source-model operation.
+serialization are fixed. Each parent Message contains the scheduler for its
+direct children: its policy and management state are ordinary private Structure
+data. Each child may choose a different scheduling implementation for its own
+children. There is no separate language scheduler above Messages, no shared
+global Message registry, and no shared global management lock. An optional
+router is itself a Message, not a substitute for parent-owned scheduling.
+
+A Message need not be executing. A running L3 Thread is a logical serial
+execution lane, not a promise of a dedicated OS thread. Physical workers are
+an implementation mapping of the parent's scheduler; the OS still schedules
+its threads. Native thread, wait/wake and per-mailbox synchronization primitives
+support Message and do not own its scheduling policy or family tree.
+
+When a parent chooses sequential iteration on one execution thread, it gives
+the selected child control until that child's turn completes before selecting
+another child. This mode does not switch siblings inside an unfinished turn
+and does not require capture of the child's active call chain. It does not
+forbid physical parallelism under another parent-owned mapping or redefine
+the explicit activation-level `yield` contract (21.10). The default order for
+selecting ready children is not fixed here.
+
+For example, P's direct children A and B are siblings. Each has its own inbox:
+100 pending inputs in A and one in B are not 101 inputs in P's inbox. P's
+scheduler chooses whose turn to execute; FIFO applies within each child's
+inbox. A may independently schedule its own children using another policy.
+
+Interpreter outlook: saving execution state for suspension and resumption is
+expected to be practical in most ordinary interpreted cases, but is not
+guaranteed at every execution point or across every native operation. This is
+not a bootstrap requirement for sequential child scheduling. Where supported,
+resumption must preserve the required activation state; the absence of a
+universal suspension guarantee is not permission to resume with incorrect
+values. Published method fields alone are not the complete call history
+(21.7, 21.10).
 
 Throughout the language core and complete standard distribution, low-level
 synchronization is used only inside the Message mechanism, for example to
@@ -11319,8 +11347,11 @@ Message mailbox prototype records a Mix placement path by parent
 counter and append (19.29.7.1). It does not implement prefix locks,
 mirrors, routing, or packed mixed-radix ints. A placement path is
 not a language-level depth or byte-width limit; the prototype stores
-a bounded segment array and refuses rather than wrap. This does not
-make every Mix cell a running Message.
+a bounded segment array and refuses rather than wrap. Its current depth cap
+of 16 is an implementation limitation to remove, not an accepted bound on the
+replacement. Path storage must accommodate the required depth subject to
+checked resource/representation limits, without relocating published storage.
+This does not make every Mix cell a running Message.
 
 The `implements` examples below describe a known Consumer's requirements, not
 an automatic runtime walk or retained reader body. RuntimeImplements currently
@@ -11961,13 +11992,15 @@ Historical text and examples: `Lingvamyxa_spec_history.txt`, section 19.29.5.H.
 A running Message is a Message/Lmx execution graph admitted as an L3 Thread.
 It owns exactly one logical arena, a FIFO inbox/outbox, one serial execution
 lane, a parent capability (except the root) and the list of its direct children. No
-more than one turn of that L3 Thread executes at a time. Turns may wait on
-that mailbox using OS threads and narrow admission synchronization. They must
-not be scheduled by a process-wide shared Message table or by a non-Message C
-worker-pool policy. If a language-level coordinator is required, it is an
-ordinary Message. The L3 Thread does not migrate between anonymous host
-workers as a source-model operation; its arena does not move. Conceptual
-components include:
+more than one turn of that L3 Thread executes at a time. It contains scheduling
+policy/state for its own direct children; except at the root, its parent
+contains the scheduler responsible for it. Parent-owned implementations may
+differ between branches.
+No dedicated OS thread per Message is required. Physical execution resources
+and narrow mailbox wait/wake primitives implement that choice, not an external
+L1/C scheduler, shared global Message table or global management lock.
+Sequential child iteration runs a whole child turn before selecting another
+child (19.28.R2.2). Its arena does not move. Conceptual components include:
 
     the Message's Lmx graph and its one arena;
     FIFO incoming and staged outgoing message queues;
@@ -11976,7 +12009,7 @@ components include:
         private yield continuations;
     optional immutable-payload pool;
     optional application Registry/cache references;
-    scheduler state.
+    parent-owned scheduler policy/state for direct children.
 
 There is no Message-Thread Namespace object. A native Message entry adapter may
 carry invocation handles, but entry into source code resolves one
@@ -12073,8 +12106,9 @@ Overlapping execution of different Messages was prototyped in
 addr lookup). That file is evidence, not the accepted architecture.
 The required per-context model is defined by 19.28.R2.2 and 19.29.6: each
 live Message owns mailbox, parent and direct-child list; send uses
-a held capability; no shared process-wide Message registry;
-a language-level scheduler, if any, is a Message.
+a held capability; no shared process-wide Message registry or management lock;
+each parent Message contains the scheduler for its direct children, and each
+child may choose a different implementation for its own children.
 The prototype must not be promoted to the application as-is.
 
 Language-facing operations (names follow existing thread/send/stop
@@ -12170,9 +12204,11 @@ reserved child, or start of a constructed inactive Message) is this
 slice. Reactivating an already-running Message is not; that remains
 deferred with live-graph activation.
 
-A Message may create further Messages from any tree position. No OS
-thread per Message; physical workers are a mapping, not lexical
-nesting.
+A Message may create further Messages from any tree position. A dedicated OS
+thread per Message is not required: physical workers are a mapping of the
+parent-owned scheduler, not lexical nesting. The parent manages its direct
+children; each child may use another scheduler for its own children. A chosen
+sequential mapping finishes one child turn before selecting another (19.28.R2.2).
 
 Reliability profile for this in-memory slice (selected from
 historical 19.28.7.1; not Namespace/descriptor policy-merge):
@@ -14242,7 +14278,7 @@ the published 9. The checkpoint cannot retroactively change actuals already
 selected for this call. A same-activation write `for\j: 42` writes the graph
 cell, not the cache.
 
-One serial execution thread per Message makes this safe without locks or
+One logical serial execution lane per Message makes this safe without locks or
 memory barriers. A suspended caller’s C locals cannot be raced, and other 
 Messages operate on disjoint arenas.
 
