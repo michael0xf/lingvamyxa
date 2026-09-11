@@ -23,13 +23,18 @@ function Invoke-OomStage([string]$Name, [string]$Tool, [string[]]$NativeArgs, [i
     $stderr = Join-Path $run "$Name.stderr.txt"
     $p = Start-Process -FilePath $Tool -ArgumentList $quoted -WorkingDirectory $stageWorkingDir `
         -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    # Windows PowerShell5.1 must retain the native handle before a short-lived
+    # process exits, otherwise ExitCode may disappear after WaitForExit/Refresh.
+    $null = $p.Handle
     # The process handle belongs to this invocation in a unique private directory.
     # Only this newly launched process is terminated if its bounded stage hangs.
     $timedOut = -not $p.WaitForExit(30000)
     if ($timedOut) { $p.Kill(); $p.WaitForExit() }
+    $p.WaitForExit()
     $p.Refresh()
     $evidence.stages += [ordered]@{ name = $Name; tool = $Tool; arguments = $NativeArgs; exit = $p.ExitCode; expectedExit = $ExpectedExit; timedOut = $timedOut }
     if ($timedOut) { throw "$Name exceeded its 30-second stage timeout." }
+    if ($null -eq $p.ExitCode) { throw "$Name exited without an observable exit code." }
     if ($p.ExitCode -ne $ExpectedExit) {
         Get-Content -LiteralPath $stdout, $stderr
         throw "$Name failed with exit $($p.ExitCode)"

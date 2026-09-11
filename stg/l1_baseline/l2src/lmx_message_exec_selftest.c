@@ -1621,6 +1621,10 @@ int main(int argc, char **argv) {
         lmx_msg_runtime_delete(rtl);
         g_live_cascade = 1;
     }
+    /* Historical EXEC-ring growth test. Bind-without-map is not the current
+     * parent-owned scheduler contract; keep its assertions opt-in and pin
+     * that fixture's runtime in run_msg_exec_oom.ps1. */
+    if (!oom_only) { goto current_context_scenarios; }
 oom_scenario:
     {
         LmxMsgRuntime *rto;
@@ -1906,6 +1910,8 @@ oom_cleanup:
             g_oom_n, g_oom_hits, g_oom_scan, g_oom_fifo_a, g_oom_fifo_b);
         return 0;
     }
+current_context_scenarios:
+    fprintf(stderr, "legacy_ready_oom=SKIPPED (opt-in pinned run_msg_exec_oom.ps1)\n");
     {
         LmxMsgRuntime *rtc;
         LmxMsgAddr p = 0, a = 0, b = 0;

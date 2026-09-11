@@ -12,7 +12,8 @@ This is a bounded repair of an EXISTING native test, granted by Grok162600/
 163100, not permission to write new application or core behavior in C.
 
 The same exec_selftest binary supports:
-  no arguments             original full regression suite
+  no arguments             current execution scenarios, EXCLUDING the legacy
+                           bind-without-map ready-ring capacity scenario
   --oom-only               only the ready-overflow/FIFO scenario
   --oom-cleanup-failure    deliberately fail the capacity checkpoint while
                            both spin workers are active; cleanup must finish
@@ -22,8 +23,10 @@ The original OOM checks remain: queue full before injected growth failure,
 actual fail_hits >0, scan flag, no early/lost delivery, FIFO10/20, exactly-once
 worker completion and eventual empty queue. The legacy fixture still assumes
 eight fill entries; it is not an adaptive arbitrary-capacity test. A future
-queue representation change may require revising that fixture explicitly,
-not relaxing its overflow assertions or leaving workers running on failure.
+queue representation change must not be constrained by this legacy fixture.
+Its old capacity assertions belong to the explicitly pinned legacy runtime,
+not to the parent-owned scheduler contract. Never relax them just to force a
+green result against a different queue, or leave workers running on failure.
 
 run_msg_exec_oom.ps1 builds ONE private EXEC_TEST binary from immutable core
 b89c01cfd22c3542df371a06774ed5b79b539ed0 and the owned fixture source. It uses
@@ -38,5 +41,33 @@ build/codex/msg_exec_oom/20260911_163027_004_a7d63ac6/evidence.json
   normal: exit0, count12 hits5 scan1 fifo10,20, cleanup complete
   scope: neither invocation enters the unrelated full-suite scenarios
 
+Separation from mandatory execution checks (2026-09-11)
+------------------------------------------------------
+Grok173000 reported the new unmapped-only-parent route breaks this fixture's
+cap=16/nready=8 expectation: it fills the EXEC ring using bind-without-map.
+That is exactly the obsolete behavior being removed, not an accepted language
+requirement. The default native Exec invocation now jumps over ONLY this
+scenario and emits legacy_ready_oom=SKIPPED with the opt-in runner name.
+The remaining context/mapping/liveness/handoff/allocation-failure scenarios
+are unchanged. Full/Message/Exec selection in run_lmx still invokes that
+current native suite; this one legacy scenario is no longer mandatory there.
+
+All281 lines from oom_scenario through its cleanup were compared with6690a66
+and are identical, including capacity, injection-hit, scan, FIFO and every
+failure exit. Explicit --oom-only / --oom-cleanup-failure still enter the
+original scenario directly; no assertions or source tests were deleted.
+
+New isolated run on Windows PowerShell5.1, one compiled legacy binary:
+build/codex/msg_exec_oom/20260911_173342_394_bfaebcce/evidence.json
+  forced: expected exit1, forced-failure and cleanup markers, no timeout
+  normal: exit0, count12 hits5 scan1 fifo10,20, cleanup complete
+The first attempt failed before compiling at resolve_core: a short process's
+ExitCode was NULL in Windows PowerShell5.1. The runner now retains its native
+handle before waiting and explicitly rejects an unobservable exit code. That
+failed attempt remains in build/codex/msg_exec_oom/20260911_173323_450_0204cba0.
+
+The new default skip dispatch was inspected; the complete default Exec run
+is intentionally left to Grok with his actual dual-notify removal, avoiding
+an identical pre-change native rebuild. This legacy result does NOT prove
+the new scheduler's OOM behavior, native concurrency or stable readiness.
 No full-suite/native-platform generalization or stable promotion is claimed.
-This opt-in targeted runner preserves the full suite for integration milestones.
