@@ -425,9 +425,30 @@ static void mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen) {
         }
     }
     if (rg != 0 && rg->kind == LMX_KIND_ARRAY) {
+        LmxArrayDesc *desc;
+        LmxOwnedRange *er;
+        void **elts;
+        size_t ei;
+        desc = (LmxArrayDesc *)x->data;
         lmx_msg_visit_add_ptr(seen, x->data);
-        if (seen->oom == 0) {
-            lmx_msg_visit_add_ptr(seen, ((LmxArrayDesc *)x->data)->data);
+        if (seen->oom == 0 && desc != 0) {
+            lmx_msg_visit_add_ptr(seen, desc->data);
+        }
+        if (seen->oom == 0 && desc != 0 && desc->data != 0
+            && rg->stride == sizeof(void *)) {
+            elts = (void **)desc->data;
+            ei = 0U;
+            while (ei < desc->len && seen->oom == 0) {
+                if (elts[ei] != 0) {
+                    er = lmx_owned_ranges_find(m->ranges, elts[ei]);
+                    if (er != 0 && er->kind == LMX_KIND_CHILDREN) {
+                        mark_from(m, (Lmx *)elts[ei], seen);
+                    } else {
+                        lmx_msg_visit_add_ptr(seen, elts[ei]);
+                    }
+                }
+                ei += 1U;
+            }
         }
     }
     if (rg != 0 && rg->kind == LMX_KIND_METHOD) {
