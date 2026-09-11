@@ -158,9 +158,16 @@ A1. DECIDED 034300 / 19.29.7.1: drop staged copies if dest
     disappears before admission; no reply_to bounce. Closed
     handle = live object in DEAD/STOPPED/RELEASED until
     runtime_delete; addr not reused.
-A2. Whether ANY-affinity contexts get one OS wait-thread each,
-    or a Scheduler Message that only sends "run" decisions.
-    Not importing a C worker pool to avoid answering this.
+A2. DECIDED 035400: ANY-affinity uses one OS wait-thread per
+    bound context (`lmx_msg_exec_start_contexts`). UI-affine stays
+    on the owner thread (`exec_ui_step`). Not a worker pool. A
+    Scheduler Message is not added for this prototype.
+Arena vs control block: RELEASED frees init/inbox/outbox (the
+copy-slice arena). The LmxMsg object remains closed-handle
+control state until runtime_delete so send/admit never deref a
+freed block. That retention is control state, not global arena
+ownership. Independent families reclaim independently at
+runtime_delete of their runtime.
 
 Windows measured first. POSIX primitives in EXEC/ingress were
 written earlier and are not claimed run here.
