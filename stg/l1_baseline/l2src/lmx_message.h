@@ -217,6 +217,7 @@ LmxMsg *lmx_msg_turn_self(LmxMsgRuntime *rt);
 void lmx_msg_slot_free(LmxMsg *m);
 /* Integer resolver for remaining addr APIs. Runtime-owned endpoint list, not a directory. */
 LmxMsg *lmx_msg_find(LmxMsgRuntime *rt, LmxMsgAddr addr);
+LmxMsg *lmx_msg_self_or_find(LmxMsgRuntime *rt, LmxMsgAddr addr);
 uint_fast8_t lmx_msg_running_load(const LmxMsg *m);
 void lmx_msg_running_store(LmxMsg *m, uint_fast8_t v);
 uint_fast8_t lmx_msg_success_load(const LmxMsg *m);

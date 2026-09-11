@@ -1205,7 +1205,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
 }
 
 static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr) {
-    return lmx_msg_find(rt, addr);
+    return lmx_msg_self_or_find(rt, addr);
 }
 
 static int take_ready(LmxMsgExec *e, int want_ui, LmxMsgExecBind *snap) {
@@ -1240,7 +1240,7 @@ static void native_leave_addr(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 static void requeue_if_runnable(LmxMsgRuntime *rt, LmxMsgAddr addr) {
     LmxMsg *m;
     lmx_msg_exec_lock(rt);
-    m = lmx_msg_find(rt, addr);
+    m = lmx_msg_self_or_find(rt, addr);
     if (m != 0 && lmx_msg_exec_is_runnable(rt, addr) != 0) {
         lmx_msg_exec_unlock(rt);
         lmx_msg_exec_ready(rt, addr);
@@ -2048,12 +2048,12 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
 }
 
 int lmx_msg_handoff_ready(LmxMsgRuntime *rt, LmxMsgAddr who) {
-    LmxMsg *m = lmx_msg_find(rt, who);
+    LmxMsg *m = lmx_msg_self_or_find(rt, who);
     return m != 0 && m->handoff_ready != 0;
 }
 
 int lmx_msg_native_users(LmxMsgRuntime *rt, LmxMsgAddr who) {
-    LmxMsg *m = lmx_msg_find(rt, who);
+    LmxMsg *m = lmx_msg_self_or_find(rt, who);
     return m != 0 ? m->native_users : -1;
 }
 
@@ -2093,8 +2093,8 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
-    p = lmx_msg_find(rt, parent);
-    c = lmx_msg_find(rt, child);
+    p = lmx_msg_self_or_find(rt, parent);
+    c = lmx_msg_self_or_find(rt, child);
     if (p == 0 || c == 0 || c->parent_msg != p || p->disposed != 0 || c->disposed != 0
         || c->native_users != 0 || lmx_msg_success_load(c) != 0
         || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0) {
@@ -2139,7 +2139,7 @@ int lmx_msg_adopted_n(LmxMsgRuntime *rt, LmxMsgAddr who) {
     LmxMsgBlock *a;
     int n = 0;
     lmx_msg_exec_lock(rt);
-    m = lmx_msg_find(rt, who);
+    m = lmx_msg_self_or_find(rt, who);
     if (m == 0) {
         lmx_msg_exec_unlock(rt);
         return -1;
@@ -2157,7 +2157,7 @@ void *lmx_msg_adopted_base(LmxMsgRuntime *rt, LmxMsgAddr who, int i) {
     int k = 0;
     void *base = 0;
     lmx_msg_exec_lock(rt);
-    m = lmx_msg_find(rt, who);
+    m = lmx_msg_self_or_find(rt, who);
     if (m == 0 || i < 0) {
         lmx_msg_exec_unlock(rt);
         return 0;
@@ -2187,8 +2187,8 @@ int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to) 
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
-    src = lmx_msg_find(rt, from);
-    dst = lmx_msg_find(rt, to);
+    src = lmx_msg_self_or_find(rt, from);
+    dst = lmx_msg_self_or_find(rt, to);
     if (src == 0 || dst == 0 || src == dst
         || (src->blocks == 0 && src->ranges == 0)
         || src->parent_msg != dst || src->native_users != 0
@@ -2224,8 +2224,8 @@ int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
-    p = lmx_msg_find(rt, parent);
-    c = lmx_msg_find(rt, child);
+    p = lmx_msg_self_or_find(rt, parent);
+    c = lmx_msg_self_or_find(rt, child);
     if (p == 0 || c == 0 || c->parent_msg != p || p->disposed != 0 || c->native_users != 0
         || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0 || c->disposed != 0) {
         lmx_msg_exec_unlock(rt);
@@ -2270,7 +2270,7 @@ int lmx_msg_parent_settle(LmxMsgRuntime *rt, LmxMsgAddr parent) {
         return LMX_MSG_NOMEM;
     }
     lmx_msg_exec_lock(rt);
-    p = lmx_msg_find(rt, parent);
+    p = lmx_msg_self_or_find(rt, parent);
     if (p == 0 || p->disposed != 0) {
         lmx_msg_exec_unlock(rt);
         free(buf);
@@ -2304,7 +2304,7 @@ int lmx_msg_parent_settle(LmxMsgRuntime *rt, LmxMsgAddr parent) {
 int lmx_msg_set_orphan_until(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned until) {
     LmxMsg *m;
     lmx_msg_exec_lock(rt);
-    m = lmx_msg_find(rt, who);
+    m = lmx_msg_self_or_find(rt, who);
     if (m == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
@@ -2319,7 +2319,7 @@ int lmx_msg_orphan_expired(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now) {
     LmxMsg *p;
     int exp = 0;
     lmx_msg_exec_lock(rt);
-    m = lmx_msg_find(rt, who);
+    m = lmx_msg_self_or_find(rt, who);
     if (m != 0 && m->orphan_until != 0U && now >= m->orphan_until
         && m->native_users == 0 && lmx_msg_success_load(m) == 0 && m->handoff_ready != 0) {
         p = m->parent_msg;

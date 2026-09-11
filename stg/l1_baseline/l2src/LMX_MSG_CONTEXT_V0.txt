@@ -230,6 +230,14 @@ written earlier and are not claimed run here.
 
 100200 local lifecycle (invariants, not accepted yet)
 -----------------------------------------------------
+Supervision vs delivery (133800 / 67f1ec2)
+  parent_msg is the supervisor. Adopt/transfer move handoff-safe
+  non-executing storage into the receiver arena. They do not
+  reparent a running Message, rewrite containment node, or
+  migrate a live worker. Delivery-only assignment ends active
+  parent tracking; historical identity and control LmxMsg remain
+  until runtime_delete. Byte-envelope send is not arena delivery.
+
 Who may move payload
   Only the parent of a handoff-ready child, via adopt_failed
   (child success==0) or transfer_adopted (explicit result to
