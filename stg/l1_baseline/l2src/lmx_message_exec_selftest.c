@@ -3697,6 +3697,10 @@ int main(void) {
         uchar ini = 9;
         uchar store[8];
         LmxOwnedRange *cr;
+        LmxMsgBlock *pb;
+        LmxMsgBlock *cb;
+        void *pbase;
+        void *cbase;
         LmxMsg *pm;
         LmxMsg *cm;
         void *init_keep;
@@ -3711,7 +3715,11 @@ int main(void) {
             return 1;
         }
         cr = (LmxOwnedRange *)calloc(1U, sizeof(LmxOwnedRange));
-        if (cr == 0) {
+        pb = (LmxMsgBlock *)calloc(1U, sizeof(LmxMsgBlock));
+        cb = (LmxMsgBlock *)calloc(1U, sizeof(LmxMsgBlock));
+        pbase = malloc(8U);
+        cbase = malloc(8U);
+        if (cr == 0 || pb == 0 || cb == 0 || pbase == 0 || cbase == 0) {
             return 1;
         }
         cr->lo = store;
@@ -3719,10 +3727,17 @@ int main(void) {
         cr->stride = 1U;
         cr->kind = 1;
         cr->type = 1;
+        pb->base = pbase;
+        pb->n = 8U;
+        cb->base = cbase;
+        cb->n = 8U;
         pm = lmx_msg_find(rta, p);
         cm = lmx_msg_find(rta, c);
-        if (pm == 0 || cm == 0 || lmx_owned_ranges_add(&cm->ranges, cr) != LMX_OWNED_RANGES_OK) {
-            fprintf(stderr, "adopt nomem add range\n");
+        if (pm == 0 || cm == 0
+            || lmx_owned_ranges_add(&cm->ranges, cr) != LMX_OWNED_RANGES_OK
+            || lmx_msg_blocks_push(&pm->blocks, pb) != LMX_MSG_BLOCKS_OK
+            || lmx_msg_blocks_push(&cm->blocks, cb) != LMX_MSG_BLOCKS_OK) {
+            fprintf(stderr, "adopt nomem add range/blocks\n");
             lmx_msg_runtime_delete(rta);
             return 1;
         }
@@ -3737,21 +3752,26 @@ int main(void) {
         (void)lmx_msg_run_child_turn(rta, c);
         lmx_msg_exec_test_set_fail_adopt_block(rta, 1);
         if (lmx_msg_adopt_failed(rta, p, c) != LMX_MSG_NOMEM
-            || cm->init != init_keep || cm->ranges != range_keep
-            || pm->blocks != 0 || pm->ranges != 0 || cm->disposed != 0) {
-            fprintf(stderr, "adopt nomem must leave both owners unchanged\n");
+            || cm->init != init_keep || cm->ranges != range_keep || cm->disposed != 0
+            || pm->ranges != 0 || pm->blocks != pb || pb->next != 0 || pb->base != pbase
+            || cm->blocks != cb || cb->next != 0 || cb->base != cbase) {
+            fprintf(stderr, "adopt nomem must leave both owners' blocks/ranges/init\n");
             lmx_msg_runtime_delete(rta);
             return 1;
         }
         lmx_msg_exec_test_set_fail_adopt_block(rta, 0);
         if (lmx_msg_adopt_failed(rta, p, c) != LMX_MSG_OK
-            || cm->init != 0 || cm->ranges != 0 || pm->ranges != range_keep
-            || lmx_msg_adopted_n(rta, p) != 1 || lmx_msg_adopted_base(rta, p, 0) != init_keep) {
+            || cm->init != 0 || cm->ranges != 0 || cm->blocks != 0
+            || pm->ranges != range_keep || pm->blocks == 0
+            || pm->blocks->base != init_keep || pm->blocks->next != cb
+            || cb->next != pb || pb->next != 0 || cb->base != cbase || pb->base != pbase
+            || lmx_msg_adopted_n(rta, p) != 3 || lmx_msg_adopted_base(rta, p, 0) != init_keep
+            || lmx_msg_adopted_base(rta, p, 1) != cbase || lmx_msg_adopted_base(rta, p, 2) != pbase) {
             fprintf(stderr, "adopt after nomem retry n=%d\n", lmx_msg_adopted_n(rta, p));
             lmx_msg_runtime_delete(rta);
             return 1;
         }
-        fprintf(stderr, "adopt nomem leaves both owners; retry moves range+init\n");
+        fprintf(stderr, "adopt nomem leaves both owners' existing blocks; retry moves all\n");
         lmx_msg_runtime_delete(rta);
         free(cr);
     }

@@ -238,6 +238,12 @@ Supervision vs delivery (133800 / 67f1ec2)
   parent tracking; historical identity and control LmxMsg remain
   until runtime_delete. Byte-envelope send is not arena delivery.
 
+Template / immutable (135500 / fd8683d)
+  No separate immutable Message as a core prerequisite. No
+  cross-Message immutable sharing. Create merges the chosen
+  template settings plus explicit additions; it does not copy
+  the parent's live program/context or look up parent settings.
+
 Who may move payload
   Only the parent of a handoff-ready child, via adopt_failed
   (child success==0) or transfer_adopted (explicit result to
