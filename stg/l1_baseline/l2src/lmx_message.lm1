@@ -21,6 +21,8 @@ fn: lmx_msg_copy_bytes (const: @(uchar src); size_t: n) @: uchar
         return: 0
     if: src = 0
         return: 0
+    if: c.lmx_msg_test_copy_should_fail() != 0
+        return: 0
     p: (cast: (@: uchar) c.malloc(n))
     if: p = 0
         return: 0
@@ -542,6 +544,7 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
     @: LmxMsg m
     @: LmxMsg slot
     @: LmxMsg ch
+    @: uchar initp 0
     int: st
     if: out = 0 || create_id = 0U
         return: c.LMX_MSG_INVALID
@@ -564,11 +567,21 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
     if: parent != 0U && lmx_msg_find(rt, parent) = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
+    initp: lmx_msg_copy_bytes(init, n)
+    if: n != 0U && initp = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_NOMEM
     if: lmx_msg_grow(rt) != 0
+        if: initp != 0
+            c.free((cast: (@: void) initp))
+        ---
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_NOMEM
     slot: c.lmx_msg_slot_new()
     if: slot = 0
+        if: initp != 0
+            c.free((cast: (@: void) initp))
+        ---
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_NOMEM
     slot\owner_rt: rt
@@ -577,6 +590,9 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
     if: st != c.LMX_MSG_OK
         c.lmx_msg_slot_free(slot)
         rt\tab[rt\n]: 0
+        if: initp != 0
+            c.free((cast: (@: void) initp))
+        ---
         c.lmx_msg_exec_unlock(rt)
         return: st
     slot\addr: rt\next_addr
@@ -589,6 +605,11 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
         slot\committed: 1
         slot\state: c.LMX_MSG_STATE_RUNNING
         slot\next_sibling: 0
+    ---
+    slot\init_n: n
+    slot\init: initp
+    rt\n: rt\n + 1
+    if: parent = 0U
         if: rt\root = 0
             rt\root: slot
         else:
@@ -598,14 +619,6 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
             ch\next_sibling: slot
         ---
     ---
-    slot\init_n: n
-    slot\init: lmx_msg_copy_bytes(init, n)
-    if: n != 0U && slot\init = 0
-        c.lmx_msg_slot_free(slot)
-        rt\tab[rt\n]: 0
-        c.lmx_msg_exec_unlock(rt)
-        return: c.LMX_MSG_NOMEM
-    rt\n: rt\n + 1
     if: parent != 0U
         lmx_msg_child_link(lmx_msg_find(rt, parent), slot)
     ---
@@ -1019,28 +1032,50 @@ fn: lmx_msg_parent_gone (@: LmxMsgRuntime rt; @: LmxMsg child; unsigned: now; un
     ---
 return: 0
 
-fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap) int
+fn: lmx_msg_poll_mark (@: LmxMsgRuntime rt; @: LmxMsg m; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap; int: n) int
+    if: m = 0
+        return: n
+    if: m\parent != 0U && (m\state = c.LMX_MSG_STATE_RUNNING || (m\state = c.LMX_MSG_STATE_INACTIVE && m\committed != 0))
+        if: lmx_msg_parent_gone(rt, m, now, threshold) != 0
+            m\closing: 1
+            c.lmx_msg_exec_ready(rt, m\addr)
+            if: out != 0 && n < cap
+                out[n]: m\addr
+            ---
+            n: n + 1
+        ---
+    ---
+return: n
+
+fn: lmx_msg_poll_kids (@: LmxMsgRuntime rt; @: LmxMsg m; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap; int: n) int
     @: LmxMsg ch
-    int: i 0
+    if: m = 0
+        return: n
+    ch: m\first_child
+    while: ch != 0
+        n: lmx_msg_poll_mark(rt, ch, now, threshold, out, cap, n)
+        n: lmx_msg_poll_kids(rt, ch, now, threshold, out, cap, n)
+        ch: ch\next_sibling
+    ---
+return: n
+
+fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned: threshold; @: LmxMsgAddr out; int: cap) int
+    @: LmxMsg m
+    @: LmxMsg fam
     int: n 0
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
         return: -1
     c.lmx_msg_exec_lock(rt)
-    while: i < rt\n
-        ch: rt\tab[i]
-        if: ch\parent != 0U && (ch\state = c.LMX_MSG_STATE_RUNNING || (ch\state = c.LMX_MSG_STATE_INACTIVE && ch\committed != 0))
-            if: who = 0U || ch\addr = who
-                if: lmx_msg_parent_gone(rt, ch, now, threshold) != 0
-                    ch\closing: 1
-                    c.lmx_msg_exec_ready(rt, ch\addr)
-                    if: out != 0 && n < cap
-                        out[n]: ch\addr
-                    ---
-                    n: n + 1
-                ---
-            ---
+    if: who != 0U
+        m: lmx_msg_find(rt, who)
+        n: lmx_msg_poll_mark(rt, m, now, threshold, out, cap, n)
+    else:
+        fam: rt\root
+        while: fam != 0
+            n: lmx_msg_poll_kids(rt, fam, now, threshold, out, cap, n)
+            fam: fam\next_sibling
         ---
-        i: i + 1
+    ---
     c.lmx_msg_exec_unlock(rt)
 return: n
 

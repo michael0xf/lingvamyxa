@@ -209,5 +209,12 @@ int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_poll_abort(void);
 int lmx_msg_complete(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_tracked(LmxMsgRuntime *rt, LmxMsgAddr who);
+#if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)
+extern int lmx_msg_test_copy_fail;
+int lmx_msg_test_copy_should_fail(void);
+void lmx_msg_test_set_copy_fail(int n);
+#else
+#define lmx_msg_test_copy_should_fail() 0
+#endif
 
 #endif

@@ -105,6 +105,20 @@ static __thread LmxTurnRoot *lmx_turn_root;
 __thread uint_fast8_t *lmx_turn_running;
 #endif
 
+#if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)
+int lmx_msg_test_copy_fail;
+int lmx_msg_test_copy_should_fail(void) {
+    if (lmx_msg_test_copy_fail > 0) {
+        lmx_msg_test_copy_fail -= 1;
+        return 1;
+    }
+    return 0;
+}
+void lmx_msg_test_set_copy_fail(int n) {
+    lmx_msg_test_copy_fail = n;
+}
+#endif
+
 int lmx_msg_poll_abort(void) {
     LmxTurnRoot *r = lmx_turn_root;
     if (r != 0 && r->ready != 0) {
@@ -1102,16 +1116,13 @@ static int take_ready(LmxMsgExec *e, int want_ui, LmxMsgExecBind *snap) {
 }
 
 static void requeue_if_runnable(LmxMsgRuntime *rt, LmxMsgAddr addr) {
-    int i;
     LmxMsg *m;
     lmx_msg_exec_lock(rt);
-    for (i = 0; i < rt->n; i++) {
-        m = rt->tab[i];
-        if (m != 0 && m->addr == addr && lmx_msg_exec_is_runnable(rt, addr) != 0) {
-            lmx_msg_exec_unlock(rt);
-            lmx_msg_exec_ready(rt, addr);
-            return;
-        }
+    m = lmx_msg_find(rt, addr);
+    if (m != 0 && lmx_msg_exec_is_runnable(rt, addr) != 0) {
+        lmx_msg_exec_unlock(rt);
+        lmx_msg_exec_ready(rt, addr);
+        return;
     }
     lmx_msg_exec_unlock(rt);
 }
