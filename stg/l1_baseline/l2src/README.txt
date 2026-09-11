@@ -44,6 +44,10 @@ directives. Simple main may declare `int`, `char`, `size_t`, and
 `c.setvbuf` with numeric 0 (not boxed as int temps), and
 `NAME\code|line|column|message` on a diagnostic local are supported.
 `l2src/printTree.lm2` is the L2 port of `l1src/printTree.lm1`.
+Runner compares L2 printTree vs frozen-compiler `l1src/printTree.lm1`
+on no-args, valid tree, malformed syntax, and missing file (stdout/
+stderr/exit; CRLF only). `os: win:/default:` and `c.array: []: char
+NAME N` with `NAME[i]:` stores are L2 input toward make.lm1.
 
 That is the SPEC 1.7 bootstrap `main` adapter. String atoms are copied as
 P0 source spelling into L1 (quotes and escapes kept; not decoded then
