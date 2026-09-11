@@ -257,9 +257,24 @@ sub: lmx_msg_exec_scan_ready (@: LmxMsgRuntime rt)
 end: lmx_msg_exec_scan_ready
 
 sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
+    int: i 0
+    int: n
+    int: bound 0
     if: rt = 0 || addr = 0U
         return
     c.lmx_msg_exec_lock(rt)
+    n: c.lmx_msg_exec_bind_n_locked(rt)
+    while: i < n
+        if: c.lmx_msg_exec_bind_addr_locked(rt, i) = addr
+            bound: 1
+            i: n
+        ---
+        i: i + 1
+    ---
+    if: bound = 0
+        c.lmx_msg_exec_unlock(rt)
+        return
+    ---
     if: c.lmx_msg_exec_ready_has_locked(rt, addr) != 0
         c.lmx_msg_exec_unlock(rt)
         return
