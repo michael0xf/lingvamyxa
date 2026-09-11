@@ -14,11 +14,13 @@ Choosing Message does, however, select its ownership and execution contract. A b
 
 Our implementation policy is also explicit: the language core and complete standard distribution coordinate through Message. Low-level synchronization within that package is confined to implementing Message itself. Low-level synchronization remains available as an L2 language capability; it is not removed from the language.
 
-## 2. The scheduler belongs to the parent Message
+## 2. Every running Message has its own scheduling mechanism
 
 **A parent Message contains the scheduler for its direct children. Each child can choose another scheduling implementation for its own children.**
 
 The scheduler's policy and management state belong to the parent's ordinary Structure data. There is no separate language scheduler above the Messages, no shared global Message registry, and no shared global management lock.
+
+This mechanism is not limited to Messages that already have children. Every running Message has its own local scheduling/lifecycle state: even a childless non-root Message periodically queries its parent and requests its own orderly closure after prolonged absence of a response. Managing direct children is an additional responsibility of that same mechanism. The initial implementation may reuse one implementation for every running Message, with separate state for each instance; it need not generate different scheduler code for each Message. Local ownership does not imply a dedicated OS thread or preemption of an unfinished turn.
 
 Consider this family:
 

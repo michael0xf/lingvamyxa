@@ -11166,6 +11166,13 @@ children. There is no separate language scheduler above Messages, no shared
 global Message registry, and no shared global management lock. An optional
 router is itself a Message, not a substitute for parent-owned scheduling.
 
+Every running Message has its own scheduling/lifecycle mechanism, including
+a Message with no children: a non-root Message schedules its parent-liveness
+queries and requests its own orderly close after sustained lack of response.
+Scheduling direct children is an additional responsibility of that mechanism.
+One implementation may be reused by all running Messages with separate local
+state; neither distinct scheduler code nor a dedicated OS thread is required.
+
 A Message need not be executing. A running L3 Thread is a logical serial
 execution lane, not a promise of a dedicated OS thread. Physical workers are
 an implementation mapping of the parent's scheduler; the OS still schedules
@@ -12300,18 +12307,17 @@ STOPPED, RELEASED, or sustained-nonresponsive while in a handler,
 the child requests its own orderly close (same end_turn path as
 stop). A live idle parent keeps children alive. Host/system parent
 anchors roots. Cadence and timeout are host settings, not language
-constants and not the mail-watcher interval. The host calls
-`lmx_msg_poll(rt, who, now, threshold, out, cap)` (`who` is the
-child to inspect, or 0 to walk all non-roots) on its clock
-(`lmx_msg_set_now`). Child observation of parent liveness is not
-access to the parent's protected data.
+constants and not the mail-watcher interval. The child's own scheduling/lifecycle
+mechanism owns the cadence, pending query and timeout decision. Platform clock
+and wake primitives support it; no global scan owns this responsibility.
+Child observation of parent liveness is not access to the parent's protected data.
 
 Normal parent close already requests children close at the parent's
 end_turn. Poll is only the fallback when the parent died abruptly
 and could not run that request. A child then closes at its own
 end_turn without waiting for the poll timeout.
 
-Host-driven loop: `lmx_msg_drive(rt, now, threshold)` is set_now +
+Historical prototype only, not the target architecture: `lmx_msg_drive(rt, now, threshold)` is set_now +
 poll(who=0) + successful end_turn of idle closing Messages (not
 exec_live, empty inbox, RUNNING or committed INACTIVE), then pump.
 It is one host loop with configurable cadence, not a thread per
@@ -12319,7 +12325,9 @@ Message. Automatic: applying an already-requested close to idle
 empty-inbox participants, and poll-fallback close when a parent is
 gone. Not automatic: starting a timer, interrupting exec_live,
 inventing work after STOPPED, or treating KIND_CANCELLED as stop.
-A Message with remaining inbox is not idle; the host still recvs.
+The replacement must distribute this lifecycle work to each Message's own
+mechanism, not retain the all-context poll/drive loop as a global manager.
+A Message with remaining inbox is not idle; its local mechanism still receives.
 A root is not closed by parent-poll (it has no parent); a root
 with an explicit closing flag and empty inbox is driven to exit
 like any other idle closer.
