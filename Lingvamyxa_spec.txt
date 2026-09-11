@@ -4812,6 +4812,14 @@ The special mathematical types are not primitive C values:
     decimal:
         decimal arithmetic backed by decNumber and a decimal context.
 
+The native decimal backend uses the C decNumber sources supplied in
+`third_party/decNumber.zip` (extracted under `third_party/decNumber/`). This is
+an intentional third-party native dependency, not code to rewrite in L1/L2.
+Preserve its bundled license notices. Parse decimal text directly with the
+decimal backend; conversion through binary `float`/`double` is not an implicit
+decimal construction step. Decimal arithmetic and formatting retain the chosen
+decimal context; any explicit binary conversion has its own precision contract.
+
 `bigint`, `real` and `decimal` are ordinary source names resolved to constructors,
 operations or description Structures when the selected profile explicitly
 installs them. Their physical

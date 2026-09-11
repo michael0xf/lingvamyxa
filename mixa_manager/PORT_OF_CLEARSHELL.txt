@@ -113,6 +113,16 @@ module boundary so the L3 interpreter can later replace the computation core
 without replacing the calculator interface. This supersedes the earlier blanket
 instruction not to port its internals; L3 readiness must not block this module.
 
+Owner correction, 2026-09-11: the reference's conversion of decimal literals
+through Double.parseDouble is a BUG, not behaviour to preserve. Use the core's
+C decNumber backend from third_party/decNumber.zip for calculator decimal
+values, direct text conversion and arithmetic. Do not implement a second
+decimal library or replace decimal operations with double/fixed epsilon.
+Keep the reference arithmetic precision/rounding policy unless separately
+changed; test 0.1+0.2=0.3 and 9007199254740993+1=9007199254740994. Functions that
+currently use binary Math need an explicit numeric contract; this correction
+does not silently make a binary implementation decimal-accurate.
+
 Only the editing-window implementation is missing from the reusable reference:
 it delegates editing to an Android library. The required replacement is simple
 file editing with a cursor, not a new full-featured editor framework. Reuse the
