@@ -60,6 +60,7 @@ typedef struct LmxMsgExec {
     int scan;
     LmxMsgAddr unbound_held;
     int test_fail_grow;
+    int test_fail_hits;
 } LmxMsgExec;
 
 static LmxMsgExec *exof(LmxMsgRuntime *rt) {
@@ -230,11 +231,12 @@ static void set_tls(LmxMsgExec *e, LmxMsgAddr who) {
 static int ready_grow(LmxMsgExec *e) {
     int cap;
     LmxMsgAddr *p;
-    if (e->test_fail_grow != 0) {
-        return 1;
-    }
     if (e->nready < e->ready_cap) {
         return 0;
+    }
+    if (e->test_fail_grow != 0) {
+        e->test_fail_hits += 1;
+        return 1;
     }
     cap = e->ready_cap == 0 ? 8 : e->ready_cap * 2;
     p = (LmxMsgAddr *)realloc(e->ready, (size_t)cap * sizeof(LmxMsgAddr));
@@ -316,6 +318,76 @@ void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt) {
 #endif
 }
 
+int lmx_msg_exec_nready_locked(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0) {
+        return 0;
+    }
+    return e->nready;
+}
+
+LmxMsgAddr lmx_msg_exec_ready_at_locked(LmxMsgRuntime *rt, int i) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0 || i < 0 || i >= e->nready) {
+        return 0;
+    }
+    return e->ready[i];
+}
+
+void lmx_msg_exec_ready_remove_locked(LmxMsgRuntime *rt, int i) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0 || i < 0 || i >= e->nready) {
+        return;
+    }
+    e->nready -= 1;
+    memmove(&e->ready[i], &e->ready[i + 1], (size_t)(e->nready - i) * sizeof(LmxMsgAddr));
+}
+
+int lmx_msg_exec_bind_n_locked(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0) {
+        return 0;
+    }
+    return e->nbind;
+}
+
+LmxMsgAddr lmx_msg_exec_bind_addr_locked(LmxMsgRuntime *rt, int i) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0 || i < 0 || i >= e->nbind) {
+        return 0;
+    }
+    return e->bind[i].addr;
+}
+
+int lmx_msg_exec_bind_aff_locked(LmxMsgRuntime *rt, int i) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0 || i < 0 || i >= e->nbind) {
+        return 0;
+    }
+    return e->bind[i].affinity;
+}
+
+int lmx_msg_exec_bind_held_locked(LmxMsgRuntime *rt, int i) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0 || i < 0 || i >= e->nbind) {
+        return 1;
+    }
+    return e->bind[i].held;
+}
+
+void lmx_msg_exec_bind_set_held_locked(LmxMsgRuntime *rt, int i, int held) {
+    LmxMsgExec *e = exof(rt);
+    if (e == 0 || i < 0 || i >= e->nbind) {
+        return;
+    }
+    e->bind[i].held = held;
+    if (held != 0) {
+        e->bind[i].held_by = lmx_tid();
+    } else {
+        e->bind[i].held_by = 0;
+    }
+}
+
 int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt) {
     if (rt == 0) {
         return 0;
@@ -363,6 +435,41 @@ int lmx_msg_exec_nready(LmxMsgRuntime *rt) {
     n = e->nready;
     lmx_msg_exec_unlock(rt);
     return n;
+}
+
+int lmx_msg_exec_test_fail_hits(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    int n = 0;
+    if (e == 0) {
+        return 0;
+    }
+    lmx_msg_exec_lock(rt);
+    n = e->test_fail_hits;
+    lmx_msg_exec_unlock(rt);
+    return n;
+}
+
+int lmx_msg_exec_get_scan(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    int s = 0;
+    if (e == 0) {
+        return 0;
+    }
+    lmx_msg_exec_lock(rt);
+    s = e->scan;
+    lmx_msg_exec_unlock(rt);
+    return s;
+}
+
+int lmx_msg_exec_ready_has(LmxMsgRuntime *rt, LmxMsgAddr addr) {
+    int h = 0;
+    if (rt == 0 || addr == 0U) {
+        return 0;
+    }
+    lmx_msg_exec_lock(rt);
+    h = lmx_msg_exec_ready_has_locked(rt, addr);
+    lmx_msg_exec_unlock(rt);
+    return h;
 }
 #endif
 
@@ -420,35 +527,14 @@ static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr) {
 }
 
 static int take_ready(LmxMsgExec *e, int want_ui, LmxMsgExecBind *snap) {
-    int i;
     int j;
     LmxMsgAddr addr;
-    lmx_msg_exec_scan_ready(e->rt);
-    for (i = 0; i < e->nready; i++) {
-        addr = e->ready[i];
-        for (j = 0; j < e->nbind; j++) {
-            if (e->bind[j].addr != addr) {
-                continue;
-            }
-            if (want_ui && e->bind[j].affinity != LMX_MSG_AFFINITY_UI) {
-                continue;
-            }
-            if (!want_ui && e->bind[j].affinity == LMX_MSG_AFFINITY_UI) {
-                continue;
-            }
-            if (e->bind[j].held != 0) {
-                continue;
-            }
-            if (lmx_msg_exec_is_runnable(e->rt, addr) == 0) {
-                e->nready -= 1;
-                memmove(&e->ready[i], &e->ready[i + 1], (size_t)(e->nready - i) * sizeof(LmxMsgAddr));
-                i -= 1;
-                break;
-            }
-            e->nready -= 1;
-            memmove(&e->ready[i], &e->ready[i + 1], (size_t)(e->nready - i) * sizeof(LmxMsgAddr));
-            e->bind[j].held = 1;
-            e->bind[j].held_by = lmx_tid();
+    addr = lmx_msg_exec_take_addr(e->rt, want_ui);
+    if (addr == 0U) {
+        return 0;
+    }
+    for (j = 0; j < e->nbind; j++) {
+        if (e->bind[j].addr == addr) {
             *snap = e->bind[j];
             return 1;
         }

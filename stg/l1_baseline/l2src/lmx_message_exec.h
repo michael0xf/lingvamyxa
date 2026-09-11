@@ -31,8 +31,21 @@ void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt);
 int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt);
 LmxMsgAddr lmx_msg_exec_tab_addr_locked(LmxMsgRuntime *rt, int i);
 void lmx_msg_exec_scan_ready(LmxMsgRuntime *rt);
+unsigned lmx_msg_exec_take_addr(LmxMsgRuntime *rt, int want_ui);
+int lmx_msg_exec_nready_locked(LmxMsgRuntime *rt);
+LmxMsgAddr lmx_msg_exec_ready_at_locked(LmxMsgRuntime *rt, int i);
+void lmx_msg_exec_ready_remove_locked(LmxMsgRuntime *rt, int i);
+int lmx_msg_exec_bind_n_locked(LmxMsgRuntime *rt);
+LmxMsgAddr lmx_msg_exec_bind_addr_locked(LmxMsgRuntime *rt, int i);
+int lmx_msg_exec_bind_aff_locked(LmxMsgRuntime *rt, int i);
+int lmx_msg_exec_bind_held_locked(LmxMsgRuntime *rt, int i);
+void lmx_msg_exec_bind_set_held_locked(LmxMsgRuntime *rt, int i, int held);
+void lmx_msg_exec_drop_stale_ready(LmxMsgRuntime *rt);
 #if defined(LMX_MSG_EXEC_TEST)
 void lmx_msg_exec_test_set_fail_grow(LmxMsgRuntime *rt, int v);
+int lmx_msg_exec_test_fail_hits(LmxMsgRuntime *rt);
+int lmx_msg_exec_get_scan(LmxMsgRuntime *rt);
+int lmx_msg_exec_ready_has(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_ready_cap(LmxMsgRuntime *rt);
 int lmx_msg_exec_nready(LmxMsgRuntime *rt);
 #endif

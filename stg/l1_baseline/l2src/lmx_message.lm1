@@ -154,6 +154,75 @@ sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
     c.lmx_msg_exec_unlock(rt)
 end: lmx_msg_exec_ready
 
+fn: lmx_msg_exec_take_addr (@: LmxMsgRuntime rt; int: want_ui) unsigned
+    int: i 0
+    int: j
+    int: n
+    int: nb
+    int: drop 0
+    unsigned: a
+    unsigned: ba
+    if: rt = 0
+        return: 0U
+    lmx_msg_exec_scan_ready(rt)
+    n: c.lmx_msg_exec_nready_locked(rt)
+    while: i < n
+        a: c.lmx_msg_exec_ready_at_locked(rt, i)
+        j: 0
+        drop: 0
+        nb: c.lmx_msg_exec_bind_n_locked(rt)
+        while: j < nb
+            ba: c.lmx_msg_exec_bind_addr_locked(rt, j)
+            if: ba = a
+                if: want_ui != 0 && c.lmx_msg_exec_bind_aff_locked(rt, j) != c.LMX_MSG_AFFINITY_UI
+                    j: j + 1
+                    continue
+                ---
+                if: want_ui = 0 && c.lmx_msg_exec_bind_aff_locked(rt, j) = c.LMX_MSG_AFFINITY_UI
+                    j: j + 1
+                    continue
+                ---
+                if: c.lmx_msg_exec_bind_held_locked(rt, j) != 0
+                    j: j + 1
+                    continue
+                ---
+                if: lmx_msg_exec_is_runnable(rt, a) = 0
+                    c.lmx_msg_exec_ready_remove_locked(rt, i)
+                    n: n - 1
+                    drop: 1
+                    j: nb
+                    continue
+                ---
+                c.lmx_msg_exec_bind_set_held_locked(rt, j, 1)
+                c.lmx_msg_exec_ready_remove_locked(rt, i)
+                return: a
+            ---
+            j: j + 1
+        if: drop = 0
+            i: i + 1
+        ---
+return: 0U
+
+sub: lmx_msg_exec_drop_stale_ready (@: LmxMsgRuntime rt)
+    int: i 0
+    int: n
+    unsigned: a
+    if: rt = 0
+        return
+    c.lmx_msg_exec_lock(rt)
+    n: c.lmx_msg_exec_nready_locked(rt)
+    while: i < n
+        a: c.lmx_msg_exec_ready_at_locked(rt, i)
+        if: lmx_msg_exec_is_runnable(rt, a) = 0
+            c.lmx_msg_exec_ready_remove_locked(rt, i)
+            n: n - 1
+        ---
+        if: lmx_msg_exec_is_runnable(rt, a) != 0
+            i: i + 1
+        ---
+    c.lmx_msg_exec_unlock(rt)
+end: lmx_msg_exec_drop_stale_ready
+
 fn: lmx_msg_find_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id) @: LmxMsg
     @: LmxMsg m
     int: i 0
@@ -537,7 +606,9 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         ch: rt\tab[i]
         if: ch\parent = who && ch\state = c.LMX_MSG_STATE_INACTIVE
             ch\committed: 1
-            c.lmx_msg_exec_ready(rt, ch\addr)
+            if: lmx_msg_exec_is_runnable(rt, ch\addr) != 0
+                c.lmx_msg_exec_ready(rt, ch\addr)
+            ---
         ---
         i: i + 1
     while: m\outbox != 0
