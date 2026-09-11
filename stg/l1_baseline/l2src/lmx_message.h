@@ -96,6 +96,11 @@ typedef struct LmxMsg {
     unsigned path[LMX_MSG_PATH_CAP];
     int path_n;
     unsigned child_seq;
+    /* Direct-child list (CONTEXT_V0). Not a process-wide registry. */
+    struct LmxMsg *parent_msg;
+    struct LmxMsg *first_child;
+    struct LmxMsg *last_child;
+    struct LmxMsg *next_sibling;
 } LmxMsg;
 
 typedef struct LmxMsgRuntime {
@@ -132,6 +137,8 @@ int lmx_msg_poll(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now, unsigned thres
 int lmx_msg_drive(LmxMsgRuntime *rt, unsigned now, unsigned threshold);
 int lmx_msg_path_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_path_seg(LmxMsgRuntime *rt, LmxMsgAddr who, int i, unsigned *out);
+int lmx_msg_child_n(LmxMsgRuntime *rt, LmxMsgAddr who);
+LmxMsgAddr lmx_msg_child_at(LmxMsgRuntime *rt, LmxMsgAddr who, int i);
 
 int lmx_msg_runtime_shutdown(LmxMsgRuntime *rt);
 int lmx_msg_host_post(LmxMsgRuntime *rt, LmxMsgAddr dest, const LmxMsgEnv *env);
