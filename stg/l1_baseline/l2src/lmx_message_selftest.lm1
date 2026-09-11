@@ -721,8 +721,8 @@ fn: main () int
     lrt3: lmx_msg_runtime_new()
     st: lmx_msg_create(lrt3, 0U, 1U, payload, 4U, @ lp3)
     st: lmx_msg_create(lrt3, lp3, 1U, payload, 4U, @ lc3)
-    st: lmx_msg_end_turn(lrt3, lp3, 1)
     st: lmx_msg_set_now(lrt3, 10U)
+    st: lmx_msg_end_turn(lrt3, lp3, 1)
     st: lmx_msg_set_now(lrt3, 40U)
     if: lmx_msg_live_check(lrt3, lp3, 40U, 5U) < 1
         c.printf("parent missing child query did not request close\n")
@@ -769,6 +769,7 @@ fn: main () int
     st: lmx_msg_create(lrt5, 0U, 1U, payload, 4U, @ lp5)
     st: lmx_msg_create(lrt5, lp5, 1U, payload, 4U, @ lc5)
     st: lmx_msg_end_turn(lrt5, lp5, 1)
+    st: lmx_msg_set_now(lrt5, 10U)
     st: lmx_msg_live_query(lrt5, lc5)
     st: lmx_msg_end_turn(lrt5, lc5, 1)
     st: lmx_msg_pump(lrt5)
@@ -792,8 +793,8 @@ fn: main () int
     lrt6: lmx_msg_runtime_new()
     st: lmx_msg_create(lrt6, 0U, 1U, payload, 4U, @ lp6)
     st: lmx_msg_create(lrt6, lp6, 1U, payload, 4U, @ lc6)
-    st: lmx_msg_end_turn(lrt6, lp6, 1)
     st: lmx_msg_set_now(lrt6, 10U)
+    st: lmx_msg_end_turn(lrt6, lp6, 1)
     st: lmx_msg_live_query(lrt6, lc6)
     st: lmx_msg_end_turn(lrt6, lc6, 1)
     st: lmx_msg_pump(lrt6)
@@ -819,8 +820,8 @@ fn: main () int
     st: lmx_msg_create(lrt7, 0U, 1U, payload, 4U, @ lp7)
     st: lmx_msg_create(lrt7, lp7, 1U, payload, 4U, @ lc7)
     st: lmx_msg_create(lrt7, lp7, 2U, payload, 4U, @ sib7)
-    st: lmx_msg_end_turn(lrt7, lp7, 1)
     st: lmx_msg_set_now(lrt7, 10U)
+    st: lmx_msg_end_turn(lrt7, lp7, 1)
     st: lmx_msg_live_query(lrt7, lc7)
     st: lmx_msg_end_turn(lrt7, lc7, 1)
     st: lmx_msg_pump(lrt7)
@@ -852,7 +853,25 @@ fn: main () int
     env\n: 4U
     env\bytes: payload
     st: lmx_msg_send(trt, ta, tb, env)
+    if: st != c.LMX_MSG_STAGED
+        c.printf("teardown send a->b\n")
+        fail: fail + 1
+    ---
     st: lmx_msg_send(trt, tb, ta, env)
+    if: st != c.LMX_MSG_STAGED
+        c.printf("teardown send b->a\n")
+        fail: fail + 1
+    ---
+    st: lmx_msg_end_turn(trt, ta, 1)
+    if: st != c.LMX_MSG_OK
+        c.printf("teardown publish a\n")
+        fail: fail + 1
+    ---
+    st: lmx_msg_host_post(trt, ta, env)
+    if: st != c.LMX_MSG_STAGED
+        c.printf("teardown host_post\n")
+        fail: fail + 1
+    ---
     lmx_msg_runtime_delete(trt)
     lmx_msg_runtime_delete(lrt4)
     lmx_msg_runtime_delete(lrt5)

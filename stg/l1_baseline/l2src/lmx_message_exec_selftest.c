@@ -63,6 +63,7 @@ static int g_ctx_spawn_race;
 static int g_ctx_mix_map;
 static int g_ctx_map_fail;
 static int g_ctx_child_timer;
+static int g_ctx_real_clock;
 static LmxMsgAddr g_hook_extra;
 static TurnCtx g_hook_ctx;
 
@@ -2528,7 +2529,13 @@ int main(void) {
         DWORD dl;
         memset(&rec, 0, sizeof(rec));
         rtl = lmx_msg_runtime_new();
-        if (rtl == 0 || lmx_msg_create(rtl, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+        if (rtl == 0) {
+            return 1;
+        }
+        if (lmx_msg_set_now(rtl, 1000U) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_create(rtl, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
             return 1;
         }
         if (lmx_msg_create(rtl, p, 2, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rtl, p, 1) != LMX_MSG_OK) {
@@ -2556,7 +2563,13 @@ int main(void) {
         while (InterlockedCompareExchange(&rec.done, 0, 0) == 0 && GetTickCount() < dl) {
             Sleep(10);
         }
-        lmx_msg_set_now(rtl, 40);
+        if (lmx_msg_state(rtl, c) == LMX_MSG_STATE_STOPPED) {
+            fprintf(stderr, "test-clock expired before deadline\n");
+            lmx_msg_exec_stop(rtl);
+            lmx_msg_runtime_delete(rtl);
+            return 1;
+        }
+        lmx_msg_set_now(rtl, 1008U);
         dl = GetTickCount() + 3000;
         while (lmx_msg_state(rtl, c) != LMX_MSG_STATE_STOPPED && GetTickCount() < dl) {
             Sleep(10);
@@ -2574,6 +2587,63 @@ int main(void) {
         fprintf(stderr, "ctx_child_timer\n");
         fflush(stderr);
     }
+    {
+        LmxMsgRuntime *rtr;
+        LmxMsgAddr p = 0, c = 0;
+        LmxMsgEnv e;
+        uchar ini = 1;
+        TurnCtx rec;
+        DWORD dl;
+        memset(&rec, 0, sizeof(rec));
+        rtr = lmx_msg_runtime_new();
+        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_create(rtr, p, 2, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_exec_bind(rtr, c, turn_live_wait, &rec, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            return 1;
+        }
+        memset(&e, 0, sizeof(e));
+        e.kind = LMX_MSG_KIND_BYTES;
+        e.n = 1;
+        e.bytes = &ini;
+        if (lmx_msg_send(rtr, p, c, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        lmx_msg_pump(rtr);
+        if (lmx_msg_live_test_set_wait_th(rtr, c, 80U) != LMX_MSG_OK || lmx_msg_map_child(rtr, p, c) != LMX_MSG_OK) {
+            fprintf(stderr, "real-clock map\n");
+            return 1;
+        }
+        dl = GetTickCount() + 3000;
+        while (InterlockedCompareExchange(&rec.done, 0, 0) == 0 && GetTickCount() < dl) {
+            Sleep(5);
+        }
+        Sleep(20);
+        if (lmx_msg_state(rtr, c) == LMX_MSG_STATE_STOPPED) {
+            fprintf(stderr, "real-clock expired before deadline\n");
+            lmx_msg_exec_stop(rtr);
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        dl = GetTickCount() + 3000;
+        while (lmx_msg_state(rtr, c) != LMX_MSG_STATE_STOPPED && GetTickCount() < dl) {
+            Sleep(20);
+        }
+        if (lmx_msg_state(rtr, c) != LMX_MSG_STATE_STOPPED) {
+            fprintf(stderr, "real-clock did not expire state=%d\n", lmx_msg_state(rtr, c));
+            lmx_msg_exec_stop(rtr);
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        g_ctx_real_clock = 1;
+        lmx_msg_exec_stop(rtr);
+        lmx_msg_runtime_delete(rtr);
+        fprintf(stderr, "ctx_real_clock\n");
+        fflush(stderr);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);
@@ -2582,17 +2652,17 @@ int main(void) {
             fast.send_ui_st, fast.send_peer_st, peerrec.got);
         fprintf(ev, "ui_step_ms=%lu cpu_busy_ui_ms=%lu mass_complete=70 fail_fifo=31,32 err_after=1 omit_end=1 ui_from_worker=%u peer=42\n",
             (unsigned long)tui, (unsigned long)tbusy_ui, slow.ui_recvd);
-        fprintf(ev, "live_cascade=%d factory_n=%d factory_create_phase_n=%d held_child_meta=1 oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_overlap=%d ctx_restart=%d ctx_child=%d ctx_rebind_ui=%d ctx_fail_retry=%d ctx_busy_ui=%d ctx_rebind_auth=%d ctx_ui_any_rb=%d ctx_mid_unroll=%d ctx_spawn_race=%d ctx_mix_map=%d ctx_map_fail=%d ctx_child_timer=%d\n",
+        fprintf(ev, "live_cascade=%d factory_n=%d factory_create_phase_n=%d held_child_meta=1 oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_overlap=%d ctx_restart=%d ctx_child=%d ctx_rebind_ui=%d ctx_fail_retry=%d ctx_busy_ui=%d ctx_rebind_auth=%d ctx_ui_any_rb=%d ctx_mid_unroll=%d ctx_spawn_race=%d ctx_mix_map=%d ctx_map_fail=%d ctx_child_timer=%d ctx_real_clock=%d\n",
             g_live_cascade, g_factory_n, g_factory_n_at_meta, g_oom_n, g_oom_hits, g_oom_scan, g_oom_fifo_a, g_oom_fifo_b,
             g_ctx_overlap, g_ctx_restart, g_ctx_child, g_ctx_rebind_ui, g_ctx_fail_retry, g_ctx_busy_ui,
-            g_ctx_rebind_auth, g_ctx_ui_any_rb, g_ctx_mid_unroll, g_ctx_spawn_race, g_ctx_mix_map, g_ctx_map_fail, g_ctx_child_timer);
+            g_ctx_rebind_auth, g_ctx_ui_any_rb, g_ctx_mid_unroll, g_ctx_spawn_race, g_ctx_mix_map, g_ctx_map_fail, g_ctx_child_timer, g_ctx_real_clock);
         fclose(ev);
     }
-    printf("lmx_message_exec ok fifo=%u,%u mass=70 fail=31,32 err_after=1 omit_end=1 xsend_ui=%d xsend_peer=%d peer=%u ui_from_worker=%u ui_ms=%lu cpu_busy_ui_ms=%lu live_cascade=%d factory_n=%d factory_create_phase_n=%d oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_overlap=%d restart=%d child=%d rebind_ui=%d fail_retry=%d busy_ui=%d rebind_auth=%d ui_any_rb=%d mid_unroll=%d spawn_race=%d mix_map=%d map_fail=%d child_timer=%d\n",
+    printf("lmx_message_exec ok fifo=%u,%u mass=70 fail=31,32 err_after=1 omit_end=1 xsend_ui=%d xsend_peer=%d peer=%u ui_from_worker=%u ui_ms=%lu cpu_busy_ui_ms=%lu live_cascade=%d factory_n=%d factory_create_phase_n=%d oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_overlap=%d restart=%d child=%d rebind_ui=%d fail_retry=%d busy_ui=%d rebind_auth=%d ui_any_rb=%d mid_unroll=%d spawn_race=%d mix_map=%d map_fail=%d child_timer=%d real_clock=%d\n",
         fast.fifo[0], fast.fifo[1], fast.send_ui_st, fast.send_peer_st, peerrec.got,
         slow.ui_recvd, (unsigned long)tui, (unsigned long)tbusy_ui, g_live_cascade, g_factory_n,
         g_factory_n_at_meta, g_oom_n, g_oom_hits, g_oom_scan, g_oom_fifo_a, g_oom_fifo_b,
         g_ctx_overlap, g_ctx_restart, g_ctx_child, g_ctx_rebind_ui, g_ctx_fail_retry, g_ctx_busy_ui,
-        g_ctx_rebind_auth, g_ctx_ui_any_rb, g_ctx_mid_unroll, g_ctx_spawn_race, g_ctx_mix_map, g_ctx_map_fail, g_ctx_child_timer);
+        g_ctx_rebind_auth, g_ctx_ui_any_rb, g_ctx_mid_unroll, g_ctx_spawn_race, g_ctx_mix_map, g_ctx_map_fail, g_ctx_child_timer, g_ctx_real_clock);
     return 0;
 }

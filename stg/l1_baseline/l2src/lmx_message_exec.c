@@ -91,34 +91,54 @@ static LmxMsgExec *exof(LmxMsgRuntime *rt) {
     return (LmxMsgExec *)rt->exec;
 }
 
-void lmx_msg_endp_retain(LmxMsg *m) {
-    long r;
-    if (m == 0) {
-        return;
-    }
-    r = m->refs;
-    if (r < 1 || r >= 2147483647) {
-        return;
-    }
+int lmx_msg_endp_retain(LmxMsg *m) {
 #if defined(_WIN32)
-    InterlockedIncrement((LONG *)&m->refs);
+    LONG old;
+    LONG neu;
+    if (m == 0) {
+        return 0;
+    }
+    for (;;) {
+        old = (LONG)m->refs;
+        if (old < 1 || old == 2147483647) {
+            return 0;
+        }
+        neu = old + 1;
+        if (InterlockedCompareExchange((LONG *)&m->refs, neu, old) == old) {
+            return 1;
+        }
+    }
 #else
-    m->refs = r + 1;
+    if (m == 0 || m->refs < 1 || m->refs == 2147483647) {
+        return 0;
+    }
+    m->refs = m->refs + 1;
+    return 1;
 #endif
 }
 
 void lmx_msg_endp_release(LmxMsg *m) {
+#if defined(_WIN32)
+    LONG old;
+    LONG neu;
     if (m == 0) {
         return;
     }
-#if defined(_WIN32)
-    if (m->refs > 0) {
-        InterlockedDecrement((LONG *)&m->refs);
+    for (;;) {
+        old = (LONG)m->refs;
+        if (old < 1) {
+            return;
+        }
+        neu = old - 1;
+        if (InterlockedCompareExchange((LONG *)&m->refs, neu, old) == old) {
+            return;
+        }
     }
 #else
-    if (m->refs > 0) {
-        m->refs = m->refs - 1;
+    if (m == 0 || m->refs < 1) {
+        return;
     }
+    m->refs = m->refs - 1;
 #endif
 }
 
