@@ -65,5 +65,10 @@ O2 PASS,26 checks,0 failures; imports/mutable-global checks PASS.
 Evidence: build/codex/msg_mail_chain/20260911_165707_380_51c18984/evidence.json.
 Built L1 SHA25665D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936.
 No O0/native concurrency/integrated scheduler claim in this checkpoint.
-Integration into exec.c/run_lmx remains Grok's stage after this handoff;
-helper completion is not completion of Message or final L2 self-hosting.
+Integrated by Grok in896ad97: native wrappers retain null-Message handling
+and mailbox locks, while list bodies call this L1 helper. run_lmx generates
+the header/module and links the matching object. Grok's Exec PASS evidence
+and source hashes were reviewed; no duplicate Exec run by Codex. Independent
+public-send fixture passed136 checks atO2 against a private896ad97 snapshot:
+build/codex/msg_send_local/20260911_170343_599_e960747f/evidence.json.
+Helper integration is not completion of Message or final L2 self-hosting.

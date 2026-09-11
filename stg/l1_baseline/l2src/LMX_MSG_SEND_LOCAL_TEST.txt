@@ -3,8 +3,8 @@ L1 Message local-send regression
 
 run_msg_send_local.ps1 builds tests/lmx_msg_send_local_selftest.lm1 with pinned
 stable gen2 against a private git archive of core checkpoint
-593a64baa2ca6f7e25094620dda4927243bd5c3c. Optional -CoreCommit selects another
-explicitly agreed compatible revision, never the changing working tree. Seventeen
+896ad97f17a3131b952fbc55a7baf963a32b1f05. Optional -CoreCommit selects another
+explicitly agreed compatible revision, never the changing working tree. Nineteen
 core source files are archived; all build outputs/logs/hashes stay in the unique
 build/codex/msg_send_local run directory. No shared gate or app pin changes.
 The snapshot includes the L1 path-storage helper integrated at 6880ea5; the
@@ -18,7 +18,7 @@ The selection logic was checked on PowerShell5.1/7.6 without recompiling the
 already verified runtime (build/codex/runtime_runner_options/options_ps*.json).
 The O0/O2 results below remain historical evidence, not a mandatory double run.
 
-136 checks at O0/O2, test object compiled with -Werror:
+Baseline593a64b verified136 checks at O0/O2, test object compiled with -Werror:
 - send to self, direct child, parent, and a recipient in another branch;
 - staged dest_msg is the exact recipient object, no early inbox admission;
 - commit empties the outbox and admits exactly one binary envelope;
@@ -45,6 +45,13 @@ own allocated copy solely to probe independence, not the original init data.
 Allocation-failure injection and concurrent races are not covered here.
 Verified run: build/codex/msg_send_local/20260911_161340_490_6c7b6e74/evidence.json.
 The snapshot now compiles/links lmx_msg_slots as required by593a64b exec.
+
+Current896ad97 pin also translates/links lmx_msg_mail_chain, now used by the
+native inbox/outbox wrappers; no old native list body silently substitutes.
+Targeted O2 run:136 checks,0 failures,owned_frees=1. Evidence:
+build/codex/msg_send_local/20260911_170343_599_e960747f/evidence.json.
+This checks integrated public send/receive/ownership behavior, not only the
+standalone chain helper. No O0/Family/full gate rerun for this extraction.
 
 Targeted follow-up for2b567e8 (unbound exec_ready exclusion): O0,136checks,
 zero failures. Reused the already compiled private binary; no translator
