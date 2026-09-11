@@ -1,0 +1,120 @@
+predef: "l2src/lmx_msg_mail_chain.h.lm1"
+include: "<stdio.h>"
+include: "<stdlib.h>"
+include: "<string.h>"
+
+# Test process counters only; the production helper has no mutable globals.
+int: checks 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        c.printf("mail_chain FAIL: %s\n", label)
+        c.exit(1)
+    ---
+end: check
+
+fn: main () int
+    @: LmxMsgCopy nodes
+    @: LmxMsgCopy item
+    @: LmxMsgCopy head
+    @: LmxMsgCopy tail
+    @: LmxMsgCopy out
+    @: LmxMsgCopy peer
+    @: LmxMsgCopy peer_tail
+    @: LmxMsgCopy second
+    @: uchar saved
+    @: uchar payload
+    size_t: bytes c.sizeof(c.LmxMsgCopy) * 256U
+    int: i 0
+    nodes: (cast: (@: LmxMsgCopy) c.calloc(256U, c.sizeof(c.LmxMsgCopy)))
+    saved: (cast: (@: uchar) c.malloc(bytes))
+    payload: (cast: (@: uchar) c.malloc(2U))
+    if: nodes = 0 || saved = 0 || payload = 0
+        c.free(payload)
+        c.free(saved)
+        c.free(nodes)
+        return: 2
+    ---
+    payload[0]: 37
+    payload[1]: 91
+    while: i < 256
+        item: nodes + i
+        item\id: (cast: (unsigned) (256 - i))
+        item\number: i
+        item\kind: i % 4
+        item\bytes: payload
+        item\n: 2U
+        item\owned: i % 2
+        if: i < 255
+            item\next: item + 1
+        ---
+        i: i + 1
+    ---
+    c.memcpy(saved, nodes, bytes)
+    check(lmx_msg_mail_chain_empty(0) = 1, "null empty")
+    check(lmx_msg_mail_chain_n(0) = 0, "null count")
+    check(lmx_msg_mail_chain_empty(nodes) = 0, "nonempty")
+    check(lmx_msg_mail_chain_n(nodes) = 256, "full chain count")
+    check(lmx_msg_mail_chain_n(nodes + 128) = 128, "interior chain count")
+    check(lmx_msg_mail_chain_n(nodes + 255) = 1, "singleton count")
+    check(c.memcmp(saved, nodes, bytes) = 0, "queries never write nodes")
+
+    head: nodes
+    tail: nodes + 255
+    out: nodes + 7
+    lmx_msg_mail_chain_take(@head, @tail, 0)
+    check(head = nodes && tail = nodes + 255, "null output is complete no-op")
+    lmx_msg_mail_chain_take(0, @tail, @out)
+    check(tail = nodes + 255 && out = nodes + 7, "missing head cell no-op")
+    lmx_msg_mail_chain_take(@head, 0, @out)
+    check(head = nodes && out = nodes + 7, "missing tail cell no-op")
+    lmx_msg_mail_chain_take(0, 0, 0)
+    check(c.memcmp(saved, nodes, bytes) = 0, "invalid cells leave nodes untouched")
+
+    lmx_msg_mail_chain_take(@head, @tail, @out)
+    check(head = 0 && tail = 0, "source cells cleared")
+    check(out = nodes, "original head transferred")
+    check(lmx_msg_mail_chain_n(out) = 256, "entire chain transferred")
+    check(c.memcmp(saved, nodes, bytes) = 0, "take preserves every node and next link")
+    check(payload[0] = 37 && payload[1] = 91, "payload preserved")
+    second: nodes + 4
+    lmx_msg_mail_chain_take(@head, @tail, @second)
+    check(second = 0 && head = 0 && tail = 0, "repeated take from empty")
+    check(out = nodes, "previous recipient remains rooted")
+    peer: out
+    peer_tail: nodes + 255
+    second: 0
+    lmx_msg_mail_chain_take(@peer, @peer_tail, @second)
+    check(peer = 0 && peer_tail = 0 && second = nodes, "chain can move to another cell pair")
+    check(c.memcmp(saved, nodes, bytes) = 0, "second take still zero-copy")
+
+    # Empty head still clears a stale tail value, matching the old wrappers.
+    tail: nodes + 13
+    out: nodes + 4
+    lmx_msg_mail_chain_take(@head, @tail, @out)
+    check(head = 0 && tail = 0 && out = 0, "empty head clears stale tail/output")
+    head: nodes + 255
+    tail: head
+    lmx_msg_mail_chain_take(@head, @tail, @out)
+    check(head = 0 && tail = 0 && out = nodes + 255, "singleton take")
+    check(lmx_msg_mail_chain_n(out) = 1, "singleton still terminates")
+
+    # Following links, not allocation order, defines the chain.
+    item: nodes + 255
+    item\next: nodes + 7
+    item: nodes + 7
+    item\next: 0
+    nodes\next: nodes + 255
+    head: nodes
+    tail: nodes + 7
+    c.memcpy(saved, nodes, bytes)
+    check(lmx_msg_mail_chain_n(head) = 3, "non-contiguous chain")
+    lmx_msg_mail_chain_take(@head, @tail, @out)
+    check(out = nodes && lmx_msg_mail_chain_n(out) = 3, "non-contiguous transfer")
+    check(c.memcmp(saved, nodes, bytes) = 0, "non-contiguous links preserved")
+    c.free(payload)
+    c.free(saved)
+    c.free(nodes)
+    c.printf("mail_chain checks=%d failures=0\n", checks)
+    return: 0

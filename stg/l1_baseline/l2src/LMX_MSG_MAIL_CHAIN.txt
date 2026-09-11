@@ -1,0 +1,65 @@
+L1 copy-chain operations for Message mailboxes
+=============================================
+
+Implementation: lmx_msg_mail_chain.h.lm1 / lmx_msg_mail_chain.lm1.
+This is a pure data helper, not a scheduler, router, Message registry or new
+ownership model. It sees LmxMsgCopy chains only; no LmxMsg or runtime pointer.
+Grok owns the native mailbox lock/unlock and Message wrappers in exec.c.
+Including lmx_message.h supplies the existing record type, like slots does.
+Consume this helper header after that type is available (for example from
+exec.c); do not add it before LmxMsgCopy's definition in lmx_message.h.
+
+API and caller obligations
+--------------------------
+  int lmx_msg_mail_chain_empty(const LmxMsgCopy *head)
+      NULL ->1; any non-NULL head ->0. No traversal or writes.
+  int lmx_msg_mail_chain_n(const LmxMsgCopy *head)
+      NULL ->0; follows next to count the finite acyclic chain.
+      Preserves the existing int count interface: count must be representable
+      by int. This helper does not introduce a language queue-length cap or
+      change a public count API. Cycles/invalid node pointers are not accepted
+      inputs; no extra cycle-detection pass is added to this existing operation.
+  void lmx_msg_mail_chain_take(LmxMsgCopy **head, LmxMsgCopy **tail,
+                               LmxMsgCopy **out)
+      Stores the original *head in *out, then zeros *head and *tail, in O(1).
+      Does not visit, allocate, free or copy nodes/payload; next links and all
+      addresses are preserved. Empty head also clears a stale tail and output.
+      NULL out is a COMPLETE no-op, matching existing mail_*_take wrappers.
+      NULL head/tail pointer cells are defensive no-ops; out is not overwritten.
+
+The caller supplies live nodes and exclusive access: normally its existing
+Message mailbox lock. No lock or native call is hidden inside the helper.
+For take, head/tail/out must be distinct writable pointer cells and out must
+not alias any node storage. Any old output reference is the caller's concern;
+take overwrites the output just as the existing wrappers do, without freeing it.
+The returned chain stays rooted by the caller until consumed or released.
+
+Keep null-Message handling in native wrappers: current take(NULL Message,out)
+sets *out=NULL, whereas the low-level helper's missing-cell guard is a no-op.
+Do not drop that wrapper branch when integrating. Inbox and outbox use the
+same chain operation but remain distinct Message-owned queues. Arena adoption,
+delivery completion, running/success and lifetime policy are NOT changed here.
+
+Verification
+------------
+  powershell -NoProfile -File l2src/run_msg_mail_chain.ps1
+Default O2 only. Optional -Optimization O0 (or @('O0','O2') from PowerShell).
+The runner snapshots a5643e4 headers and the owned helper/test files, uses
+built gen2 L1 read-only, translates once, and compiles only this module/test.
+No native host/exec runtime, threads, full gate, L1 rebuild or stable writes.
+Each explicitly selected compiler configuration is built once.
+
+26 checks: null/empty/singleton/256-node/interior/non-contiguous counts,
+byte-for-byte query immutability, missing-cell no-ops, whole-chain transfer,
+source clearing, unchanged payload and links, repeated take, recipient
+retention, transfer between cell pairs and stale-tail clearing. Test-only
+process counter/allocation does not introduce mutable production globals.
+Strict C99 warnings-as-errors. nm checks the helper object has NO imports and
+NO mutable globals: no allocator, mutex, hidden runtime or registry dependency.
+
+O2 PASS,26 checks,0 failures; imports/mutable-global checks PASS.
+Evidence: build/codex/msg_mail_chain/20260911_165707_380_51c18984/evidence.json.
+Built L1 SHA25665D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936.
+No O0/native concurrency/integrated scheduler claim in this checkpoint.
+Integration into exec.c/run_lmx remains Grok's stage after this handoff;
+helper completion is not completion of Message or final L2 self-hosting.

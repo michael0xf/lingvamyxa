@@ -1,0 +1,9 @@
+include: "l2src/lmx_message.h"
+
+# Pure copy-chain operations. Caller supplies exclusive access/lifetime.
+# take moves pointer cells, never payload, nodes or graph arenas.
+prototype:
+    fn: lmx_msg_mail_chain_empty (const: @(LmxMsgCopy head)) int
+    fn: lmx_msg_mail_chain_n (const: @(LmxMsgCopy head)) int
+    sub: lmx_msg_mail_chain_take (@@: LmxMsgCopy head; @@: LmxMsgCopy tail; @@: LmxMsgCopy out)
+end: prototype
