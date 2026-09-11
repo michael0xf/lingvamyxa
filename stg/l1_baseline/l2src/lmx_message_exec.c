@@ -733,7 +733,18 @@ typedef struct LmxMsgCtxPack {
 
 static int take_this(LmxMsgExec *e, LmxMsgAddr addr, LmxMsgExecBind *snap) {
     int j;
+    LmxMsg *m;
     if (e == 0 || addr == 0U || snap == 0) {
+        return 0;
+    }
+    m = msg_at_addr(e->rt, addr);
+    if (m == 0) {
+        return 0;
+    }
+    if (m->state == LMX_MSG_STATE_STOPPED || m->state == LMX_MSG_STATE_DEAD || m->state == LMX_MSG_STATE_RELEASED) {
+        return 0;
+    }
+    if (m->inbox == 0 && m->closing == 0) {
         return 0;
     }
     for (j = 0; j < e->nbind; j++) {
@@ -741,9 +752,6 @@ static int take_this(LmxMsgExec *e, LmxMsgAddr addr, LmxMsgExecBind *snap) {
             continue;
         }
         if (e->bind[j].held != 0) {
-            return 0;
-        }
-        if (lmx_msg_exec_is_runnable(e->rt, addr) == 0) {
             return 0;
         }
         e->bind[j].held = 1;
@@ -832,11 +840,11 @@ int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-#if defined(_WIN32)
-    e->wh = (HANDLE *)calloc((size_t)n, sizeof(HANDLE));
+#if !defined(_WIN32)
+    lmx_msg_exec_unlock(rt);
+    return LMX_MSG_INVALID;
 #else
-    e->wh = 0;
-#endif
+    e->wh = (HANDLE *)calloc((size_t)n, sizeof(HANDLE));
     if (e->wh == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_NOMEM;
@@ -877,6 +885,7 @@ int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt) {
         k += 1;
     }
     return LMX_MSG_OK;
+#endif
 }
 
 int lmx_msg_exec_ui_step(LmxMsgRuntime *rt) {

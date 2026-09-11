@@ -67,6 +67,24 @@ fn: main () int
     if: lmx_msg_child_n(rt, parent_b) != 1 || lmx_msg_child_at(rt, parent_b, 0) != child_b
         c.printf("uncommitted sibling unlink\n")
         fail: fail + 1
+    st: lmx_msg_create(rt, parent_b, 5U, payload, 4U, @ sib_a)
+    st: lmx_msg_create(rt, parent_b, 6U, payload, 4U, @ sib_b)
+    st: lmx_msg_create(rt, parent_b, 7U, payload, 4U, @ sib_c)
+    if: lmx_msg_child_n(rt, parent_b) != 4
+        c.printf("committed sibling count\n")
+        fail: fail + 1
+    st: lmx_msg_end_turn(rt, parent_b, 1)
+    st: lmx_msg_stop(rt, parent_b, parent_b)
+    st: lmx_msg_end_turn(rt, parent_b, 1)
+    st: lmx_msg_pump(rt)
+    st: lmx_msg_end_turn(rt, parent_b, 1)
+    st: lmx_msg_end_turn(rt, sib_a, 1)
+    st: lmx_msg_end_turn(rt, sib_b, 1)
+    st: lmx_msg_end_turn(rt, sib_c, 1)
+    st: lmx_msg_end_turn(rt, child_b, 1)
+    if: lmx_msg_state(rt, sib_a) != c.LMX_MSG_STATE_STOPPED || lmx_msg_state(rt, sib_b) != c.LMX_MSG_STATE_STOPPED || lmx_msg_state(rt, sib_c) != c.LMX_MSG_STATE_STOPPED || lmx_msg_state(rt, child_b) != c.LMX_MSG_STATE_STOPPED
+        c.printf("sibling close cascade\n")
+        fail: fail + 1
     unsigned: seg 0U
     if: lmx_msg_path_n(rt, parent) != 1
         c.printf("root path depth\n")

@@ -1518,6 +1518,10 @@ int main(void) {
             return 1;
         }
         lmx_msg_runtime_delete(rtc);
+        fprintf(stderr, "ctx_parallel a=%ld b=%ld\n",
+            (long)InterlockedCompareExchange(&ra.done, 0, 0),
+            (long)InterlockedCompareExchange(&rb.done, 0, 0));
+        fflush(stderr);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
@@ -1527,7 +1531,7 @@ int main(void) {
             fast.send_ui_st, fast.send_peer_st, peerrec.got);
         fprintf(ev, "ui_step_ms=%lu cpu_busy_ui_ms=%lu mass_complete=70 fail_fifo=31,32 err_after=1 omit_end=1 ui_from_worker=%u peer=42\n",
             (unsigned long)tui, (unsigned long)tbusy_ui, slow.ui_recvd);
-        fprintf(ev, "live_cascade=%d factory_n=%d factory_create_phase_n=%d held_child_meta=1 oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u\n",
+        fprintf(ev, "live_cascade=%d factory_n=%d factory_create_phase_n=%d held_child_meta=1 oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_parallel=1\n",
             g_live_cascade, g_factory_n, g_factory_n_at_meta, g_oom_n, g_oom_hits, g_oom_scan, g_oom_fifo_a, g_oom_fifo_b);
         fclose(ev);
     }

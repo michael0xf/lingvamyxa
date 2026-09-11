@@ -150,6 +150,7 @@ int lmx_msg_host_wait(LmxMsgRuntime *rt, unsigned timeout_ms);
 typedef int (*LmxMsgTurn)(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx);
 int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity);
 int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers);
+int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt);
 int lmx_msg_exec_ui_step(LmxMsgRuntime *rt);
 int lmx_msg_exec_stop(LmxMsgRuntime *rt);
 
