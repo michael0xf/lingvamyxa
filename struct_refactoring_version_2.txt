@@ -592,6 +592,11 @@ corresponding copied original parent. Listing a copied child in the merge
 result does not make that result its lexical parent. Preserve the required
 original environment and its dependencies (spec 2.3), without foreign-arena
 links. Ordered result membership and lexical ancestry are different edges.
+Copying a needed ancestor does not recursively copy all of its children:
+only used ancestor fields and their dependencies belong to the added lexical
+environment. Unused sibling subtrees stay out; preserve the meaning of compiled
+field/occurrence selections. Alternative code branches count as uses, not only
+the current execution trace (spec 2.3).
 
 A reference edge to an already existing Lmx node does not change that
 referent's node. One node has one containment parent even when several graph
@@ -620,6 +625,11 @@ Merge, adopt и включение в результат не меняют су�
 результат лексическим родителем. Сохраняется нужное исходное окружение с
 зависимостями (спека 2.3), без ссылок в чужую арену. Порядок элементов
 результата и лексическая вложенность — разные отношения.
+Нужный предок не требует рекурсивной копии всех своих детей: во внешнее
+окружение копии входят только используемые поля предков с зависимостями.
+Неиспользуемые соседние поддеревья не включаются; смысл скомпилированных
+индексов/путей сохраняется. Учитываются альтернативные ветки кода, не только
+текущая трасса исполнения (спека 2.3).
 
 Ребро-ссылка на уже существующий Lmx-узел не меняет node этого референта. У
 одного узла один родитель вложенности, даже когда к нему ведёт несколько

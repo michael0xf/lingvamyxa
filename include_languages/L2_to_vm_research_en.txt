@@ -124,6 +124,9 @@ Every Structure occurrence is one header (spec 2, l2src/lmx.h):
       lexical state; new node links identify copied original parents, not the
       composition root. Existing node links never change. Compiled entries
       are reused through Message-local method records.
+      Retaining an ancestor does not copy every sibling subtree: only used
+      ancestor fields/dependencies and the required lexical path are included,
+      preserving field/occurrence selection (2.3).
       Not descriptor composition and not Message delivery.
 
   independent (9.1.3)

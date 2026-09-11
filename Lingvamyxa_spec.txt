@@ -1712,10 +1712,27 @@ A callable copy uses the same compiled body with its copied lexical state.
 This lexical-preservation rule also applies when copying a template into a new
 Message. Preserve the used lexical branch and the dependencies needed by the
 copied code/data; it is not a copy of an active C frame or a hidden closure
-chain. Unused surroundings may be omitted when their absence cannot affect an
-admitted use. Computed paths and unknown implementations remain legal: lack of
+chain. For the surrounding ancestor environment, copy only fields reached by
+the copied code/data's uses and their required dependencies, retaining the
+lexical path needed to those fields. Reaching an ancestor through `node` does
+not by itself request all of that ancestor's children or its other descendants.
+Unreferenced siblings and their subtrees are not copied merely because they
+share an ancestor. This restriction concerns added lexical surroundings, not
+the operand's explicitly requested result sequence.
+
+For example, if copied code uses only ancestor field `a`, sibling fields `b`
+and `c` and their subtrees are not included solely by retaining that ancestor.
+If `a` itself refers to needed data, those dependencies must still be preserved.
+Uses include relevant alternative branches of the copied code, not just a
+trace of the branch executing at the merge site. Keep field/path/occurrence
+selection meaningful when representing this partial environment; pruning must
+not silently change a compiled selection to a different sibling.
+
+Computed paths and unknown implementations remain legal: lack of
 proof that data is unused is not permission to discard it. Copying may therefore
-need more data than a statically known small branch. `independent` cuts the
+need more data than a statically known small branch. A computed path or explicit
+whole-Structure consumption can expose additional requirements; this is not a
+blanket instruction to traverse every ancestor's complete subtree. `independent` cuts the
 external lexical dependency at construction (9.1.3), without banning dynamic
 inputs or promising that explicit data dependencies are small.
 
