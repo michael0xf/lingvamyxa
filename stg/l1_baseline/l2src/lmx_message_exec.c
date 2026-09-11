@@ -8,13 +8,6 @@
 #include <setjmp.h>
 #include <time.h>
 
-#if !defined(LMX_MSG_EXEC_TEST)
-void lmx_msg_test_on_admit(LmxMsgAddr dest, uchar b) {
-    (void)dest;
-    (void)b;
-}
-#endif
-
 /* Growable. Not product caps. */
 
 #if defined(_WIN32)
@@ -1089,15 +1082,7 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
 }
 
 static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr) {
-    int i;
-    LmxMsg *m;
-    for (i = 0; i < rt->n; i++) {
-        m = rt->tab[i];
-        if (m != 0 && m->addr == addr) {
-            return m;
-        }
-    }
-    return 0;
+    return lmx_msg_find(rt, addr);
 }
 
 static int take_ready(LmxMsgExec *e, int want_ui, LmxMsgExecBind *snap) {

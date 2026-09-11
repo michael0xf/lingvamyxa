@@ -78,14 +78,14 @@ static LmxMsgAddr g_admit_dest;
 static unsigned g_admit_log[8];
 static volatile LONG g_admit_n;
 
-void lmx_msg_test_on_admit(LmxMsgAddr dest, uchar b) {
+void lmx_msg_test_on_admit(LmxMsgAddr dest, const LmxMsgCopy *fresh) {
     LONG n;
-    if (g_admit_dest == 0U || dest != g_admit_dest) {
+    if (g_admit_dest == 0U || dest != g_admit_dest || fresh == 0 || fresh->n == 0U || fresh->bytes == 0) {
         return;
     }
     n = InterlockedIncrement(&g_admit_n) - 1;
     if (n >= 0 && n < 8) {
-        g_admit_log[n] = b;
+        g_admit_log[n] = fresh->bytes[0];
     }
 }
 static int g_ctx_bind_held;

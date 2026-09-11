@@ -3,7 +3,11 @@
 
 #include "l2src/lmx_message.h"
 
-void lmx_msg_test_on_admit(LmxMsgAddr dest, uchar b);
+#if defined(LMX_MSG_EXEC_TEST)
+void lmx_msg_test_on_admit(LmxMsgAddr dest, const LmxMsgCopy *fresh);
+#else
+#define lmx_msg_test_on_admit(d, f) ((void)0)
+#endif
 int lmx_msg_exec_attach(LmxMsgRuntime *rt);
 void lmx_msg_exec_detach(LmxMsgRuntime *rt);
 int lmx_msg_exec_lock(LmxMsgRuntime *rt);

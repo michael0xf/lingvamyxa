@@ -129,6 +129,7 @@ typedef struct LmxMsg {
 } LmxMsg;
 
 struct LmxMsgRuntime {
+    LmxMsg *root;
     LmxMsg **tab;
     int n;
     int cap;

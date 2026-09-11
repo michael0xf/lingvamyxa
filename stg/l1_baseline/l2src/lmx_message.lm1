@@ -99,16 +99,34 @@ fn: lmx_msg_q_pop (@@: LmxMsgCopy head; @@: LmxMsgCopy tail) @: LmxMsgCopy
     n\next: 0
 return: n
 
+fn: lmx_msg_find_tree (@: LmxMsg m; LmxMsgAddr: addr) @: LmxMsg
+    @: LmxMsg ch
+    @: LmxMsg f
+    if: m = 0 || addr = 0U
+        return: 0
+    if: m\addr = addr && m\state != c.LMX_MSG_STATE_RELEASED
+        return: m
+    ch: m\first_child
+    while: ch != 0
+        f: lmx_msg_find_tree(ch, addr)
+        if: f != 0
+            return: f
+        ch: ch\next_sibling
+    ---
+return: 0
+
 fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
-    @: LmxMsg m
-    int: i 0
+    @: LmxMsg fam
+    @: LmxMsg f
     if: rt = 0 || addr = 0U
         return: 0
-    while: i < rt\n
-        m: rt\tab[i]
-        if: m\addr = addr && m\state != c.LMX_MSG_STATE_RELEASED
-            return: m
-        i: i + 1
+    fam: rt\root
+    while: fam != 0
+        f: lmx_msg_find_tree(fam, addr)
+        if: f != 0
+            return: f
+        fam: fam\next_sibling
+    ---
 return: 0
 
 sub: lmx_msg_child_link (@: LmxMsg parent; @: LmxMsg child)
@@ -283,15 +301,27 @@ sub: lmx_msg_exec_drop_stale_ready (@: LmxMsgRuntime rt)
 end: lmx_msg_exec_drop_stale_ready
 
 fn: lmx_msg_find_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id) @: LmxMsg
-    @: LmxMsg m
-    int: i 0
+    @: LmxMsg p
+    @: LmxMsg ch
     if: rt = 0 || create_id = 0U
         return: 0
-    while: i < rt\n
-        m: rt\tab[i]
-        if: m\parent = parent && m\create_id = create_id && m\state != c.LMX_MSG_STATE_RELEASED
-            return: m
-        i: i + 1
+    if: parent = 0U
+        ch: rt\root
+        while: ch != 0
+            if: ch\create_id = create_id && ch\state != c.LMX_MSG_STATE_RELEASED
+                return: ch
+            ch: ch\next_sibling
+        ---
+        return: 0
+    p: lmx_msg_find(rt, parent)
+    if: p = 0
+        return: 0
+    ch: p\first_child
+    while: ch != 0
+        if: ch\create_id = create_id && ch\state != c.LMX_MSG_STATE_RELEASED
+            return: ch
+        ch: ch\next_sibling
+    ---
 return: 0
 
 fn: lmx_msg_done_has (@: LmxMsg m; LmxMsgAddr: from; unsigned: id) int
@@ -511,6 +541,7 @@ return: c.LMX_MSG_OK
 fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
     @: LmxMsg m
     @: LmxMsg slot
+    @: LmxMsg ch
     int: st
     if: out = 0 || create_id = 0U
         return: c.LMX_MSG_INVALID
@@ -557,6 +588,15 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
     if: parent = 0U
         slot\committed: 1
         slot\state: c.LMX_MSG_STATE_RUNNING
+        slot\next_sibling: 0
+        if: rt\root = 0
+            rt\root: slot
+        else:
+            ch: rt\root
+            while: ch\next_sibling != 0
+                ch: ch\next_sibling
+            ch\next_sibling: slot
+        ---
     ---
     slot\init_n: n
     slot\init: lmx_msg_copy_bytes(init, n)
@@ -636,10 +676,27 @@ fn: lmx_msg_stop (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to) int
 return: st
 
 sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
+    @: LmxMsg ch
     if: m = 0
         return
     if: m\parent_msg != 0
         lmx_msg_child_unlink(m\parent_msg, m)
+    ---
+    if: rt != 0 && m\parent = 0U
+        if: rt\root = m
+            rt\root: m\next_sibling
+        else:
+            ch: rt\root
+            while: ch != 0
+                if: ch\next_sibling = m
+                    ch\next_sibling: m\next_sibling
+                    ch: 0
+                else:
+                    ch: ch\next_sibling
+                ---
+            ---
+        ---
+        m\next_sibling: 0
     ---
     lmx_msg_copy_free(m\inbox)
     lmx_msg_copy_free(m\outbox)
@@ -810,9 +867,7 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
         lmx_msg_copy_free(fresh)
         return: c.LMX_MSG_NOMEM
     lmx_msg_q_push(@ dest\inbox, @ dest\inbox_tail, fresh)
-    if: fresh\n != 0U && fresh\bytes != 0
-        c.lmx_msg_test_on_admit(dest\addr, fresh\bytes[0])
-    ---
+    c.lmx_msg_test_on_admit(dest\addr, fresh)
     c.lmx_msg_exec_ready(rt, dest\addr)
 return: c.LMX_MSG_OK
 
