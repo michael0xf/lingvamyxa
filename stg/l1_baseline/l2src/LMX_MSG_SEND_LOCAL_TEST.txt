@@ -1,0 +1,37 @@
+L1 Message local-send regression
+===============================
+
+run_msg_send_local.ps1 builds tests/lmx_msg_send_local_selftest.lm1 with pinned
+stable gen2 against a private git archive of core checkpoint
+1585f70b86fb64e5704533378a9aa31f0d0557ea. Optional -CoreCommit selects another
+explicitly agreed revision, never the changing working tree implicitly. Thirteen
+core source files are archived; all build outputs/logs/hashes stay in the unique
+build/codex/msg_send_local run directory. No shared gate or app pin changes.
+
+89 checks at O0/O2, test object compiled with -Werror:
+- send to self, direct child, parent, and a recipient in another branch;
+- staged dest_msg is the exact recipient object, no early inbox admission;
+- commit empties the outbox and admits exactly one binary envelope;
+- normal send copies data: caller modification after staging cannot affect it;
+- id/correlation/kind/number, embedded zero and high-byte payload values survive;
+- an unrelated sibling's queues, init pointer and state remain unchanged;
+- send_owned clears the sender envelope's bytes/n and preserves the allocation
+  address through staging, admission and recv;
+- receiver release frees that allocation once; repeated release is empty.
+
+The fixture uses ONE root, with P's children C/S and a separate Q/T branch.
+P->T exercises the prototype's fallback lookup outside P's subtree/parent.
+The existing unsigned LmxMsgAddr and fallback lookup are prototype details, not
+an endorsement of a global directory/capability model. This test deliberately
+does not remove them or claim they are the final language architecture.
+
+Only test logic is new, authored in L1. The free wrapper and its observation
+variables belong to a single-thread test driver, not shared LMX runtime state.
+No handwritten C test shim, private locks, threads or production hooks. Existing
+native substrate is built from the archived checkpoint; it currently reports
+one unused adopt_push warning under the established strict pointer guards.
+
+This is delivery/ownership regression, NOT proof of concurrent fairness, native
+turn-local lookup, lock/table removal, current graph-owner lookup or full arena
+handoff. Owned byte-envelope transfer and Message arena transfer are distinct;
+the latter has separate storage and family-handoff regressions.

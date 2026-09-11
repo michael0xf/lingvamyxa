@@ -1,0 +1,156 @@
+include: "l2src/lmx_message.h" "<stdio.h>" "<stdlib.h>"
+
+# Single-thread test-driver observation only, not shared Message runtime state.
+prototype:
+    fn: __real_free (@: void p) void
+end: prototype
+int: send_checks 0
+int: owned_frees 0
+@: void watched_owned 0
+
+sub: send_check (int: ok; const: @(char label))
+    send_checks: send_checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(1)
+    ---
+end: send_check
+
+sub: __wrap_free (@: void p)
+    if: p != 0 && p = watched_owned
+        owned_frees: owned_frees + 1
+        watched_owned: 0
+    ---
+    c.__real_free(p)
+end: __wrap_free
+
+sub: send_copy_case (@: LmxMsgRuntime rt; unsigned: from; unsigned: to; unsigned: untouched; unsigned: id)
+    @: LmxMsgEnv env
+    @: LmxMsgEnv got
+    @: LmxMsg src
+    @: LmxMsg dst
+    @: LmxMsg other
+    @: void other_init
+    int: other_state
+    []: uchar bytes 4
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    send_check(env != 0 && got != 0, "allocate envelope fixture")
+    src: lmx_msg_find(rt, from)
+    dst: lmx_msg_find(rt, to)
+    other: lmx_msg_find(rt, untouched)
+    send_check(src != 0 && dst != 0 && other != 0, "find fixture endpoints")
+    other_init: other\init
+    other_state: other\state
+    bytes[0]: 17
+    bytes[1]: 0
+    bytes[2]: 255
+    bytes[3]: 41
+    env\id: id
+    env\correlation: id + 100U
+    env\kind: LMX_MSG_KIND_BYTES
+    env\number: 37
+    env\bytes: bytes
+    env\n: 4U
+    send_check(src\outbox = 0 && dst\inbox = 0 && other\inbox = 0, "clean endpoint queues")
+    send_check(lmx_msg_send(rt, from, to, env) = LMX_MSG_STAGED, "send staged")
+    send_check(src\outbox != 0 && src\outbox = src\outbox_tail && src\outbox\dest_msg = dst, "staged destination is exact endpoint")
+    send_check(dst\inbox = 0 && other\inbox = 0, "staging is not admission")
+    send_check(env\bytes = bytes && env\n = 4U && src\outbox\bytes != bytes, "copy send retains caller buffer")
+    bytes[0]: 99
+    send_check(src\outbox\bytes[0] = 17, "caller mutation does not change staged copy")
+    send_check(lmx_msg_end_turn(rt, from, 1) = LMX_MSG_OK, "commit sender turn")
+    send_check(src\outbox = 0 && src\outbox_tail = 0 && dst\inbox != 0 && dst\inbox = dst\inbox_tail, "one admitted envelope and empty sender outbox")
+    send_check(lmx_msg_recv(rt, to, got) = LMX_MSG_OK, "receive at intended destination")
+    send_check(got\id = id && got\correlation = id + 100U && got\reply_to = 0U && got\kind = LMX_MSG_KIND_BYTES && got\number = 37, "envelope fields unchanged")
+    send_check(got\n = 4U && got\bytes != 0 && got\bytes != bytes && got\bytes[0] = 17 && got\bytes[1] = 0 && got\bytes[2] = 255 && got\bytes[3] = 41, "binary payload delivered without caller alias")
+    lmx_msg_env_release(got)
+    send_check(got\bytes = 0 && got\n = 0U, "receive payload released")
+    send_check(lmx_msg_end_turn(rt, to, 1) = LMX_MSG_OK, "finish receiver turn")
+    send_check(lmx_msg_recv(rt, to, got) = LMX_MSG_EMPTY, "no duplicate envelope")
+    send_check(other\inbox = 0 && other\inbox_tail = 0 && other\outbox = 0 && other\init = other_init && other\state = other_state, "unrelated sibling untouched")
+    c.free(got)
+    c.free(env)
+end: send_copy_case
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    unsigned: root 0U
+    unsigned: parent 0U
+    unsigned: child 0U
+    unsigned: sibling 0U
+    unsigned: cousin_parent 0U
+    unsigned: cousin 0U
+    uchar: initial 7
+    @: LmxMsg p
+    @: LmxMsg d
+    @: LmxMsg s
+    @: LmxMsg q
+    @: LmxMsg t
+    @: LmxMsgEnv env
+    @: LmxMsgEnv got
+    @: uchar payload
+    @: void sibling_init
+    int: sibling_state
+
+    # The pinned prototype typedefs LmxMsgAddr as unsigned. One root, two
+    # branches; the unrelated Q/T branch exercises the fallback lookup without
+    # asserting a new global registry or a multi-root language model.
+    rt: lmx_msg_runtime_new()
+    send_check(rt != 0, "allocate runtime fixture")
+    send_check(lmx_msg_create(rt, 0U, 1U, @ initial, 1U, @ root) = LMX_MSG_OK, "create root")
+    send_check(lmx_msg_create(rt, root, 2U, @ initial, 1U, @ parent) = LMX_MSG_OK && lmx_msg_create(rt, root, 3U, @ initial, 1U, @ cousin_parent) = LMX_MSG_OK, "create two branches")
+    send_check(lmx_msg_end_turn(rt, root, 1) = LMX_MSG_OK, "commit branches")
+    send_check(lmx_msg_create(rt, parent, 4U, @ initial, 1U, @ child) = LMX_MSG_OK && lmx_msg_create(rt, parent, 5U, @ initial, 1U, @ sibling) = LMX_MSG_OK && lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "create direct child and sibling")
+    send_check(lmx_msg_create(rt, cousin_parent, 6U, @ initial, 1U, @ cousin) = LMX_MSG_OK && lmx_msg_end_turn(rt, cousin_parent, 1) = LMX_MSG_OK, "create unrelated branch recipient")
+    p: lmx_msg_find(rt, parent)
+    d: lmx_msg_find(rt, child)
+    s: lmx_msg_find(rt, sibling)
+    q: lmx_msg_find(rt, cousin_parent)
+    t: lmx_msg_find(rt, cousin)
+    send_check(p != 0 && d != 0 && s != 0 && q != 0 && t != 0, "resolve participants")
+    send_check(d\parent_msg = p && s\parent_msg = p && t\parent_msg = q && q != p && p\parent_msg = q\parent_msg, "fixture family relations")
+    send_copy_case(rt, parent, parent, sibling, 11U)
+    send_copy_case(rt, parent, child, sibling, 12U)
+    send_copy_case(rt, child, parent, sibling, 13U)
+    send_copy_case(rt, parent, cousin, sibling, 14U)
+
+    # Ownership transfer of a byte envelope is distinct from arena handoff.
+    # After send_owned succeeds, payload is only an identity observation here;
+    # the sender no longer reads, writes or frees its relinquished buffer.
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    payload: (cast: (@: uchar) c.calloc(4U, 1U))
+    send_check(env != 0 && got != 0 && payload != 0, "allocate owned envelope fixture")
+    payload[0]: 23
+    payload[1]: 0
+    payload[2]: 255
+    payload[3]: 47
+    env\id: 15U
+    env\correlation: 115U
+    env\kind: LMX_MSG_KIND_BYTES
+    env\bytes: payload
+    env\n: 4U
+    watched_owned: payload
+    sibling_init: s\init
+    sibling_state: s\state
+    send_check(lmx_msg_send_owned(rt, parent, child, env) = LMX_MSG_STAGED, "owned send staged")
+    send_check(env\bytes = 0 && env\n = 0U && owned_frees = 0, "sender ownership consumed without freeing payload")
+    send_check(p\outbox != 0 && p\outbox\dest_msg = d && p\outbox\bytes = payload && p\outbox\owned != 0 && d\inbox = 0, "owned staged pointer identity")
+    send_check(lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "commit owned send")
+    send_check(p\outbox = 0 && d\inbox != 0 && d\inbox\bytes = payload && d\inbox\owned != 0 && owned_frees = 0, "admission retains original payload address")
+    send_check(lmx_msg_recv(rt, child, got) = LMX_MSG_OK && got\bytes = payload && got\n = 4U && got\id = 15U && got\correlation = 115U, "receiver obtains original buffer")
+    send_check(got\bytes[0] = 23 && got\bytes[1] = 0 && got\bytes[2] = 255 && got\bytes[3] = 47 && owned_frees = 0, "owned bytes intact")
+    payload: 0
+    lmx_msg_env_release(got)
+    send_check(owned_frees = 1 && watched_owned = 0 && got\bytes = 0 && got\n = 0U, "receiver frees original allocation once")
+    lmx_msg_env_release(got)
+    send_check(owned_frees = 1, "repeat release is empty")
+    send_check(lmx_msg_end_turn(rt, child, 1) = LMX_MSG_OK && lmx_msg_recv(rt, child, got) = LMX_MSG_EMPTY, "owned delivery occurs once")
+    send_check(s\inbox = 0 && s\outbox = 0 && s\init = sibling_init && s\state = sibling_state, "owned send also leaves sibling untouched")
+    c.free(got)
+    c.free(env)
+    lmx_msg_runtime_delete(rt)
+    send_check(owned_frees = 1, "runtime teardown does not free released envelope again")
+    c.printf("send local checks=%d failures=0 owned_frees=%d\n", send_checks, owned_frees)
+    return: 0

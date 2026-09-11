@@ -36,6 +36,19 @@ Sources
   NOTES Lingvamyxa_handoff_notes.txt
 
 
+Unit - L1 local-send integration test (2026-09-11)
+-----------------------------------------------
+Files: tests/lmx_msg_send_local_selftest.lm1, run_msg_send_local.ps1,
+       LMX_MSG_SEND_LOCAL_TEST.txt.
+
+SPEC 19.29.7.1
+    DECIDED explicit send is not limited to parent/child; staging, admission
+    and execution are distinct. Test checks self/child/parent/other-branch sends,
+    sibling isolation and explicit send_owned envelope-buffer identity.
+    AVOIDED capability representation, global-table removal, native scheduling
+    and arena transfer policy. Uses public APIs of a pinned private core
+    snapshot; no production hook or application synchronization is added.
+
 Unit - L1 family-handoff integration test (2026-09-11)
 ----------------------------------------------------
 Files: tests/lmx_msg_family_handoff_selftest.lm1, run_msg_family_handoff.ps1.
