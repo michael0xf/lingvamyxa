@@ -9,6 +9,17 @@ allocating, copying payloads, relocating addresses or changing graph parents.
 This is a storage helper, not an additional manager or a Message implementation.
 No mutable globals, TLS, scheduler, flags, locks or lifecycle policy are added.
 
+Arena ownership is not lexical containment (user clarification, 2026-09-11).
+Moving A's blocks/ranges to B leaves every Lmx.node and internal graph reference
+unchanged. A's lexical tree and B's lexical tree can coexist in B's one logical
+arena; neither tree is reparented to make an owner lookup work. Application code
+chooses graph attachments and retained references. Arena block membership alone
+is not a collection root: unreachable received objects are subject to the normal
+end-turn collection rule in specification 19.29.4. This helper does not implement
+that collector or create application roots; it moves storage bookkeeping only.
+Lexical and caller-supplied nodes in the resulting arena remain valid without an
+owner-link, a fourth Lmx word, or another hidden source-method argument.
+
 API (0 = OK, 1 = INVALID)
 ------------------------
 can_move(&dst_blocks,&dst_ranges,&src_blocks,&src_ranges) checks both component

@@ -11938,6 +11938,10 @@ Runtime helpers derive the arena from a supplied address/root or allocation-
 domain metadata. Ownership is neither a fourth Lmx word nor an extra hidden
 source-method parameter.
 
+Lexical binding selection and caller-supplied dynamic values are not arena-owner
+searches (21.3). In particular, helpers must not climb `node` to discover the
+current Message: `node` describes lexical containment, not arena ownership.
+
 Explicit L2 machine storage remains outside ordinary Structure semantics.
 Its C layout/duration cannot replace the identity or lifetime of an Lmx value.
 
@@ -11953,6 +11957,21 @@ and registered domains to this same logical arena (19.29.7--8). It creates no
 new source arena kind, relocates no native node and clones no graph. Ownership
 and auxiliary domain metadata move together; the former owner cannot free the
 adopted storage.
+
+Arena adoption is not lexical reparenting. Every adopted Lmx `node` value stays
+unchanged, as do the existing lexical trees and internal graph references. One
+Message arena may therefore contain several lexical trees. Adoption changes
+storage ownership, not the lexical parent of an adopted root; it inserts no
+implicit containment edge or application reference from the recipient's root.
+Application code chooses whether and where to retain references to the received
+graph. Reachability, not membership in the arena's block list, determines what
+survives end-turn collection (19.29.4).
+
+For example, after adopt A -> B, a lexical node in A's former storage and a
+dynamic caller node in B's original storage are both in B's one logical arena.
+Both remain valid inputs to the existing call machinery. Their different
+lexical trees do not imply two arenas or require rewriting either `node`.
+This does not change the method receiver ABI or dynamic-over-lexical selection.
 
 Its mutable storage includes Lmx nodes, child payloads, persistent own fields,
 non-interned primitives, Array descriptors/backing and runtime merge results.
@@ -12048,6 +12067,12 @@ store the descriptor reference, but that field is not the Array.
 
 Arena membership is not liveness. A node, descriptor or backing allocation is
 live while reachable from roots through edges defined by its address domain.
+
+Adoption alone does not make every transferred allocation a permanent root.
+Once temporary delivery/turn roots are released, adopted objects not retained
+through any live root are garbage at the end-turn boundary, even if application
+code attached them nowhere. Explicitly retained failed-operation history follows
+the same reachability rule and the retention policy in 19.29.8.
 
 Roots include the Message root, active `node` arguments, exact own-field
 occurrences retained by C frames, declared/dynamic Structure or Array references,
@@ -12881,6 +12906,11 @@ arena allocator remain ABI items. L3 has no constructor argument that selects
 an arena, hidden descriptor, named C layout or owner object. Runtime helpers
 derive the arena from the supplied containing Lmx pointer/root or allocation
 range, so generated source methods receive no hidden arena parameter.
+
+After adoption, this is the recipient's single logical arena for both preserved
+lexical nodes and caller-supplied nodes (19.29.2). A lexical node from the former
+Message does not select a second, old arena; its storage has already transferred.
+No change to lexical containment is needed to allocate in the current arena.
 
 L3 receivers:
 
