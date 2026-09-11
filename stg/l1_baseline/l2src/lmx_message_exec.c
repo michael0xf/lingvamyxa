@@ -27,6 +27,11 @@ typedef struct LmxMsgExecBind {
     LmxTid held_by;
     int held;
     int last_st;
+#if defined(_WIN32)
+    HANDLE wait_ev;
+#else
+    int wait_sig;
+#endif
 } LmxMsgExecBind;
 
 #if defined(LMX_MSG_EXEC_TEST)
@@ -135,6 +140,17 @@ void lmx_msg_exec_detach(LmxMsgRuntime *rt) {
         return;
     }
     lmx_msg_exec_stop(rt);
+#if defined(_WIN32)
+    if (e->bind != 0) {
+        int bi;
+        for (bi = 0; bi < e->nbind; bi++) {
+            if (e->bind[bi].wait_ev != 0) {
+                CloseHandle(e->bind[bi].wait_ev);
+                e->bind[bi].wait_ev = 0;
+            }
+        }
+    }
+#endif
     free(e->bind);
     free(e->ready);
 #if defined(_WIN32)
@@ -307,11 +323,17 @@ int lmx_msg_exec_get_scan_locked(LmxMsgRuntime *rt) {
 
 void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
+    int i;
     if (e == 0) {
         return;
     }
 #if defined(_WIN32)
     SetEvent(e->ready_ev);
+    for (i = 0; i < e->nbind; i++) {
+        if (e->bind[i].wait_ev != 0 && e->bind[i].affinity != LMX_MSG_AFFINITY_UI) {
+            SetEvent(e->bind[i].wait_ev);
+        }
+    }
 #else
     e->ready_sig = 1;
     pthread_cond_signal(&e->ready_cv);
@@ -509,6 +531,13 @@ int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void 
     e->bind[e->nbind].turn = turn;
     e->bind[e->nbind].ctx = ctx;
     e->bind[e->nbind].affinity = affinity;
+#if defined(_WIN32)
+    e->bind[e->nbind].wait_ev = CreateEventA(0, 0, 0, 0);
+    if (e->bind[e->nbind].wait_ev == 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_NOMEM;
+    }
+#endif
     e->nbind += 1;
     lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
@@ -697,6 +726,159 @@ int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers) {
     return LMX_MSG_OK;
 }
 
+typedef struct LmxMsgCtxPack {
+    LmxMsgRuntime *rt;
+    LmxMsgAddr addr;
+} LmxMsgCtxPack;
+
+static int take_this(LmxMsgExec *e, LmxMsgAddr addr, LmxMsgExecBind *snap) {
+    int j;
+    if (e == 0 || addr == 0U || snap == 0) {
+        return 0;
+    }
+    for (j = 0; j < e->nbind; j++) {
+        if (e->bind[j].addr != addr) {
+            continue;
+        }
+        if (e->bind[j].held != 0) {
+            return 0;
+        }
+        if (lmx_msg_exec_is_runnable(e->rt, addr) == 0) {
+            return 0;
+        }
+        e->bind[j].held = 1;
+        e->bind[j].held_by = lmx_tid();
+        *snap = e->bind[j];
+        return 1;
+    }
+    return 0;
+}
+
+#if defined(_WIN32)
+static DWORD WINAPI context_worker(void *arg) {
+    LmxMsgCtxPack *p = (LmxMsgCtxPack *)arg;
+    LmxMsgRuntime *rt;
+    LmxMsgAddr addr;
+    LmxMsgExec *e;
+    LmxMsgExecBind snap;
+    HANDLE ev;
+    HANDLE wh[2];
+    int i;
+    if (p == 0) {
+        return 1;
+    }
+    rt = p->rt;
+    addr = p->addr;
+    free(p);
+    e = exof(rt);
+    if (e == 0) {
+        return 1;
+    }
+    for (;;) {
+        ev = 0;
+        lmx_msg_exec_lock(rt);
+        if (e->stopping != 0) {
+            lmx_msg_exec_unlock(rt);
+            return 0;
+        }
+        for (i = 0; i < e->nbind; i++) {
+            if (e->bind[i].addr == addr) {
+                ev = e->bind[i].wait_ev;
+                break;
+            }
+        }
+        if (take_this(e, addr, &snap) != 0) {
+            lmx_msg_exec_unlock(rt);
+            run_one(rt, &snap);
+            continue;
+        }
+        lmx_msg_exec_unlock(rt);
+        if (ev == 0) {
+            return 0;
+        }
+        wh[0] = e->stop_ev;
+        wh[1] = ev;
+        if (WaitForMultipleObjects(2, wh, 0, INFINITE) == WAIT_OBJECT_0) {
+            return 0;
+        }
+    }
+}
+#endif
+
+int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt) {
+    LmxMsgExec *e = exof(rt);
+    int i;
+    int n;
+    int k;
+    LmxMsgCtxPack *pack;
+    if (e == 0) {
+        return LMX_MSG_INVALID;
+    }
+    if (lmx_msg_host_is_owner(rt) == 0) {
+        return LMX_MSG_INVALID;
+    }
+    lmx_msg_exec_lock(rt);
+    if (e->nworkers != 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    n = 0;
+    for (i = 0; i < e->nbind; i++) {
+        if (e->bind[i].affinity != LMX_MSG_AFFINITY_UI) {
+            n += 1;
+        }
+    }
+    if (n < 1) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+#if defined(_WIN32)
+    e->wh = (HANDLE *)calloc((size_t)n, sizeof(HANDLE));
+#else
+    e->wh = 0;
+#endif
+    if (e->wh == 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_NOMEM;
+    }
+    e->workers_cap = n;
+    e->stopping = 0;
+    e->nworkers = 0;
+    lmx_msg_exec_unlock(rt);
+    k = 0;
+    for (i = 0; i < e->nbind; i++) {
+        if (e->bind[i].affinity == LMX_MSG_AFFINITY_UI) {
+            continue;
+        }
+        pack = (LmxMsgCtxPack *)malloc(sizeof(LmxMsgCtxPack));
+        if (pack == 0) {
+            lmx_msg_exec_lock(rt);
+            e->nworkers = k;
+            lmx_msg_exec_unlock(rt);
+            lmx_msg_exec_stop(rt);
+            return LMX_MSG_NOMEM;
+        }
+        pack->rt = rt;
+        pack->addr = e->bind[i].addr;
+#if defined(_WIN32)
+        e->wh[k] = CreateThread(0, 0, context_worker, pack, 0, 0);
+        if (e->wh[k] == 0) {
+            free(pack);
+            lmx_msg_exec_lock(rt);
+            e->nworkers = k;
+            lmx_msg_exec_unlock(rt);
+            lmx_msg_exec_stop(rt);
+            return LMX_MSG_NOMEM;
+        }
+#endif
+        lmx_msg_exec_lock(rt);
+        e->nworkers = k + 1;
+        lmx_msg_exec_unlock(rt);
+        k += 1;
+    }
+    return LMX_MSG_OK;
+}
+
 int lmx_msg_exec_ui_step(LmxMsgRuntime *rt) {
     LmxMsgExec *e = exof(rt);
     LmxMsgExecBind snap;
@@ -799,6 +981,13 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     }
     lmx_msg_exec_lock(rt);
     e->stopping = 1;
+#if defined(_WIN32)
+    for (i = 0; i < e->nbind; i++) {
+        if (e->bind[i].wait_ev != 0) {
+            SetEvent(e->bind[i].wait_ev);
+        }
+    }
+#endif
     lmx_msg_exec_unlock(rt);
 #if defined(_WIN32)
     SetEvent(e->stop_ev);

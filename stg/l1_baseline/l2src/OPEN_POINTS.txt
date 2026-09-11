@@ -1717,8 +1717,9 @@ Direct-child list
 ASK A1  DECIDED 034300 / 19.29.7.1: staged copies drop at admit if
     dest is gone; no reply_to bounce. Closed handle is the still-
     allocated DEAD/STOPPED/RELEASED object; addr is not reused.
-ASK A2  OS wait-thread per context vs Scheduler Message for
-    ANY-affinity. Not answered by importing a C pool.
+ASK A2  DECIDED 035400: lmx_msg_exec_start_contexts is one OS
+    wait-thread per ANY-affine bound context; UI stays on owner
+    ui_step. Not a worker pool and not a Scheduler Message.
 
 AVOIDED: mixa_manager/vendor overwrite; frozen l1trans rebuild;
 app pin of EXEC. Ingress V0 remains the host_post pin.

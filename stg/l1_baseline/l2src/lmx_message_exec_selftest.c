@@ -1454,6 +1454,71 @@ int main(void) {
         CloseHandle(spin1.started);
         lmx_msg_runtime_delete(rto);
     }
+    {
+        LmxMsgRuntime *rtc;
+        LmxMsgAddr p = 0, a = 0, b = 0;
+        LmxMsgEnv e;
+        uchar ini = 1, pa = 2, pb = 3;
+        static MassRec ra;
+        static MassRec rb;
+        DWORD dl;
+        memset(&ra, 0, sizeof(ra));
+        memset(&rb, 0, sizeof(rb));
+        rtc = lmx_msg_runtime_new();
+        if (rtc == 0 || lmx_msg_create(rtc, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+            fprintf(stderr, "ctx family setup\n");
+            return 1;
+        }
+        if (lmx_msg_create(rtc, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_create(rtc, p, 3, &ini, 1, &b) != LMX_MSG_OK) {
+            fprintf(stderr, "ctx children\n");
+            return 1;
+        }
+        if (lmx_msg_exec_bind(rtc, a, turn_mass, &ra, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK || lmx_msg_exec_bind(rtc, b, turn_mass, &rb, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            fprintf(stderr, "ctx bind\n");
+            return 1;
+        }
+        if (lmx_msg_end_turn(rtc, p, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "ctx commit\n");
+            return 1;
+        }
+        memset(&e, 0, sizeof(e));
+        e.kind = LMX_MSG_KIND_BYTES;
+        e.n = 1;
+        e.bytes = &pa;
+        ra.expect = 2;
+        if (lmx_msg_send(rtc, p, a, &e) != LMX_MSG_STAGED) {
+            fprintf(stderr, "ctx send a\n");
+            return 1;
+        }
+        e.bytes = &pb;
+        rb.expect = 3;
+        if (lmx_msg_send(rtc, p, b, &e) != LMX_MSG_STAGED) {
+            fprintf(stderr, "ctx send b\n");
+            return 1;
+        }
+        if (lmx_msg_end_turn(rtc, p, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "ctx publish\n");
+            return 1;
+        }
+        lmx_msg_pump(rtc);
+        if (lmx_msg_exec_start_contexts(rtc) != LMX_MSG_OK) {
+            fprintf(stderr, "ctx start\n");
+            return 1;
+        }
+        dl = GetTickCount() + 3000;
+        while ((InterlockedCompareExchange(&ra.done, 0, 0) == 0 || InterlockedCompareExchange(&rb.done, 0, 0) == 0) && GetTickCount() < dl) {
+            Sleep(10);
+        }
+        lmx_msg_exec_stop(rtc);
+        if (InterlockedCompareExchange(&ra.done, 0, 0) != 1 || InterlockedCompareExchange(&rb.done, 0, 0) != 1) {
+            fprintf(stderr, "ctx parallel done a=%ld b=%ld\n",
+                (long)InterlockedCompareExchange(&ra.done, 0, 0),
+                (long)InterlockedCompareExchange(&rb.done, 0, 0));
+            lmx_msg_runtime_delete(rtc);
+            return 1;
+        }
+        lmx_msg_runtime_delete(rtc);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);

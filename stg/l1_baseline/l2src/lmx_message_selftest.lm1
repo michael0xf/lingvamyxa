@@ -50,8 +50,22 @@ fn: main () int
     if: lmx_msg_child_n(rt, parent_b) != 1 || lmx_msg_child_at(rt, parent_b, 0) != child_b
         c.printf("second family child list\n")
         fail: fail + 1
+    st: lmx_msg_end_turn(rt, parent_b, 1)
     if: lmx_msg_child_n(rt, parent) != 1 || lmx_msg_child_at(rt, parent, 0) = child_b
         c.printf("families must not share child lists\n")
+        fail: fail + 1
+    unsigned: sib_a 0U
+    unsigned: sib_b 0U
+    unsigned: sib_c 0U
+    st: lmx_msg_create(rt, parent_b, 2U, payload, 4U, @ sib_a)
+    st: lmx_msg_create(rt, parent_b, 3U, payload, 4U, @ sib_b)
+    st: lmx_msg_create(rt, parent_b, 4U, payload, 4U, @ sib_c)
+    if: lmx_msg_child_n(rt, parent_b) != 4
+        c.printf("three extra siblings\n")
+        fail: fail + 1
+    st: lmx_msg_end_turn(rt, parent_b, 0)
+    if: lmx_msg_child_n(rt, parent_b) != 1 || lmx_msg_child_at(rt, parent_b, 0) != child_b
+        c.printf("uncommitted sibling unlink\n")
         fail: fail + 1
     unsigned: seg 0U
     if: lmx_msg_path_n(rt, parent) != 1

@@ -14,6 +14,7 @@ int lmx_msg_tab_grow(LmxMsgRuntime *rt);
 LmxMsg *lmx_msg_slot_new(void);
 int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity);
 int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers);
+int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt);
 int lmx_msg_exec_ui_step(LmxMsgRuntime *rt);
 int lmx_msg_exec_stop(LmxMsgRuntime *rt);
 void lmx_msg_exec_ready(LmxMsgRuntime *rt, LmxMsgAddr addr);
