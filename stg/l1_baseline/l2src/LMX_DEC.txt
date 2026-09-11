@@ -1,0 +1,22 @@
+lmx_dec: narrow L1-facing decimal backend over vendored C decNumber.
+
+Sources (unchanged ICU 3.68): third_party/decNumber/decNumber-icu-368/
+  compile decNumber.c + decContext.c only, with -DDECNUMDIGITS=34.
+  Do not compile decBasic.c / decCommon.c as separate TUs.
+
+Wrapper: l2src/lmx_dec.h + lmx_dec.c
+  lmx_dec_ctx_init / from_text / add / sub / mul / to_text
+  Owner-local LmxDecCtx (no process-global context).
+  Direct decNumberFromString; no strtod/double.
+
+Profile (explicit, not invented IEEE-128 storage):
+  digits = 34
+  round  = DEC_ROUND_HALF_EVEN
+  traps  = 0; status on the caller context
+  exponent range = decNumber DEC_INIT_BASE (±999999999)
+  Fork vs IEEE decimal128: same coefficient length (34), wider exponents
+  than decimal128's ±6143. Not DECIMAL128 encoding.
+
+Endian: ctx_init fails if DECLITEND does not match the host.
+
+Calculator should call this same C API; do not add a second decimal impl.

@@ -1,0 +1,78 @@
+include: "l2src/lmx_dec.h" "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+fn: main () int
+    @: LmxDecCtx ctx
+    @: LmxDec a
+    @: LmxDec b
+    @: LmxDec r
+    []: char out 64
+    int: fail 0
+    ctx: (cast: (@: LmxDecCtx) c.malloc(c.sizeof(c.LmxDecCtx)))
+    a: (cast: (@: LmxDec) c.malloc(c.sizeof(c.LmxDec)))
+    b: (cast: (@: LmxDec) c.malloc(c.sizeof(c.LmxDec)))
+    r: (cast: (@: LmxDec) c.malloc(c.sizeof(c.LmxDec)))
+    if: ctx = 0 || a = 0 || b = 0 || r = 0
+        return: 1
+    if: c.lmx_dec_digits() != 34
+        c.printf("dec digits\n")
+        fail: fail + 1
+    if: c.lmx_dec_ctx_init(ctx) != 0
+        c.printf("dec ctx init\n")
+        return: 1
+    if: c.lmx_dec_from_text(a, "0.1", ctx) != 0 || c.lmx_dec_from_text(b, "0.2", ctx) != 0
+        c.printf("dec parse 0.1 0.2\n")
+        return: 1
+    if: c.lmx_dec_add(r, a, b, ctx) != 0 || c.lmx_dec_to_text(r, out, 64U) != 0
+        c.printf("dec add 0.1\n")
+        return: 1
+    if: c.strcmp(out, "0.3") != 0
+        c.printf("dec fail 0.1+0.2 got=%s\n", out)
+        fail: fail + 1
+    if: c.lmx_dec_from_text(a, "9007199254740993", ctx) != 0 || c.lmx_dec_from_text(b, "1", ctx) != 0
+        c.printf("dec parse 2^53\n")
+        return: 1
+    if: c.lmx_dec_add(r, a, b, ctx) != 0 || c.lmx_dec_to_text(r, out, 64U) != 0
+        c.printf("dec add 2^53\n")
+        return: 1
+    if: c.strcmp(out, "9007199254740994") != 0
+        c.printf("dec fail 2^53+1 got=%s\n", out)
+        fail: fail + 1
+    if: c.lmx_dec_from_text(a, "1.000000000000000000000000000000001", ctx) != 0
+        c.printf("dec parse 34a\n")
+        return: 1
+    if: c.lmx_dec_from_text(b, "0.000000000000000000000000000000001", ctx) != 0
+        c.printf("dec parse 34b\n")
+        return: 1
+    if: c.lmx_dec_add(r, a, b, ctx) != 0 || c.lmx_dec_to_text(r, out, 64U) != 0
+        c.printf("dec add 34\n")
+        return: 1
+    if: c.strcmp(out, "1.000000000000000000000000000000002") != 0
+        c.printf("dec fail 34-digit add got=%s\n", out)
+        fail: fail + 1
+    if: c.lmx_dec_from_text(a, "6", ctx) != 0 || c.lmx_dec_from_text(b, "7", ctx) != 0
+        c.printf("dec parse mul\n")
+        return: 1
+    if: c.lmx_dec_mul(r, a, b, ctx) != 0 || c.lmx_dec_to_text(r, out, 64U) != 0
+        c.printf("dec mul\n")
+        return: 1
+    if: c.strcmp(out, "42") != 0
+        c.printf("dec fail 6*7 got=%s\n", out)
+        fail: fail + 1
+    if: c.lmx_dec_from_text(a, "not-a-number", ctx) = 0
+        c.printf("dec bad text must fail\n")
+        fail: fail + 1
+    if: c.lmx_dec_ctx_status(ctx) = 0U
+        c.printf("dec bad text status\n")
+        fail: fail + 1
+    c.lmx_dec_ctx_clear(ctx)
+    if: c.lmx_dec_ctx_status(ctx) != 0U
+        c.printf("dec clear status\n")
+        fail: fail + 1
+    c.free((cast: (@: void) ctx))
+    c.free((cast: (@: void) a))
+    c.free((cast: (@: void) b))
+    c.free((cast: (@: void) r))
+    if: fail != 0
+        return: 1
+    c.printf("lmx_dec ok digits=34 round=half-even emax=BASE\n")
+return: 0

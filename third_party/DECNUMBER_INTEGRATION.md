@@ -8,8 +8,9 @@ redistribution. Bundled patches/build scripts were not applied or executed.
 
 The owner explicitly permits this third-party implementation to remain C.
 The core and calculator should share it, not duplicate it or rewrite it in L1.
-Core linkage and calculator integration are pending their respective agent tasks;
-extraction alone is not integration acceptance.
+Core L1-facing wrapper is `stg/l1_baseline/l2src/lmx_dec.{h,c}` (`LMX_DEC.txt`).
+Calculator should call that same C API. Extraction alone is not integration
+acceptance.
 
 For decNumber arithmetic, compile `decNumber.c` and `decContext.c`. Do not compile
 `decBasic.c`/`decCommon.c` independently: other upstream units include them.

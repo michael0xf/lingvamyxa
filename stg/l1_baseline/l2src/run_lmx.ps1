@@ -20,7 +20,7 @@ $guards = @(
     "-Werror=implicit-function-declaration", "-Werror=implicit-int"
 )
 
-foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "lmx_ref_selftest", "lmx_branch_selftest", "lmx_own_selftest", "lmx_size_selftest", "lmx_message_selftest")) {
+foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "lmx_ref_selftest", "lmx_branch_selftest", "lmx_own_selftest", "lmx_size_selftest", "lmx_dec_selftest", "lmx_message_selftest")) {
     $src = "l2src\$unit.lm1"
     $c = Join-Path $out "$unit.c"
     $exe = Join-Path $out "$unit.exe"
@@ -30,25 +30,43 @@ foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "
 
     $extra = @()
     $defs = @()
+    $opt = @()
+    $inc = @("-I", ".", "-I", "lm1/build")
     if ($unit -eq "lmx_message_selftest") {
         $extra = @("l2src\lmx_message_host.c", "l2src\lmx_message_exec.c")
         $defs = @("-DLMX_MSG_HOST_TEST")
     }
-    & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build @defs $c @extra -o $exe 2>&1 |
-        Tee-Object -FilePath (Join-Path $log "$unit.gcc.log") | Out-Null
+    if ($unit -eq "lmx_dec_selftest") {
+        $decSrc = Join-Path (Get-Location) "..\..\third_party\decNumber\decNumber-icu-368"
+        $defs = @("-DDECNUMDIGITS=34")
+        $opt = @("-O2")
+        $inc += @("-I", $decSrc)
+        $extra = @(
+            (Join-Path $decSrc "decNumber.c"),
+            (Join-Path $decSrc "decContext.c"),
+            "l2src\lmx_dec.c"
+        )
+    }
+    $glog = Join-Path $log "$unit.gcc.log"
+    $incStr = ($inc -join " ")
+    $defStr = ($defs -join " ")
+    $gstr = ($guards -join " ")
+    $extraStr = ($extra | ForEach-Object { '"' + $_ + '"' }) -join " "
+    $optStr = ($opt -join " ")
+    cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr $optStr $incStr $defStr `"$c`" $extraStr -o `"$exe`" > `"$glog`" 2>&1"
     if ($LASTEXITCODE -ne 0) {
-        Get-Content (Join-Path $log "$unit.gcc.log")
+        Get-Content $glog
         throw "$gen gcc failed: $c"
     }
 
-    if ($unit -eq "lmx_message_selftest") {
-        $msOut = Join-Path $log "lmx_message_selftest.stdout.txt"
-        $msErr = Join-Path $log "lmx_message_selftest.stderr.txt"
-        $p = Start-Process -FilePath (Join-Path (Get-Location) $exe) -WorkingDirectory (Get-Location) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $msOut -RedirectStandardError $msErr
-        $p.ExitCode.ToString() | Set-Content -LiteralPath (Join-Path $log "lmx_message_selftest.exit.txt") -Encoding ascii
+    if ($unit -eq "lmx_dec_selftest" -or $unit -eq "lmx_message_selftest") {
+        $capOut = Join-Path $log "$unit.stdout.txt"
+        $capErr = Join-Path $log "$unit.stderr.txt"
+        $p = Start-Process -FilePath (Join-Path (Get-Location) $exe) -WorkingDirectory (Get-Location) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $capOut -RedirectStandardError $capErr
+        $p.ExitCode.ToString() | Set-Content -LiteralPath (Join-Path $log "$unit.exit.txt") -Encoding ascii
         if ($p.ExitCode -ne 0) {
-            Get-Content -LiteralPath $msOut -ErrorAction SilentlyContinue
-            Get-Content -LiteralPath $msErr -ErrorAction SilentlyContinue
+            Get-Content -LiteralPath $capOut -ErrorAction SilentlyContinue
+            Get-Content -LiteralPath $capErr -ErrorAction SilentlyContinue
             throw "$gen $unit failed exit=$($p.ExitCode)"
         }
     } else {
