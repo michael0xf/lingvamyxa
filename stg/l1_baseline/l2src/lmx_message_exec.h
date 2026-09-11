@@ -28,6 +28,7 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt);
 void lmx_msg_exec_drop_binds(LmxMsgRuntime *rt);
 void lmx_msg_exec_set_no_retire(LmxMsgRuntime *rt, int v);
 void lmx_msg_exec_ready(LmxMsgRuntime *rt, LmxMsgAddr addr);
+void lmx_msg_arena_collect(LmxMsg *m);
 void lmx_msg_sched_enqueue_child(LmxMsg *parent, LmxMsg *child);
 LmxMsg *lmx_msg_sched_dequeue_child(LmxMsg *parent);
 void lmx_msg_sched_unlink_child(LmxMsg *parent, LmxMsg *child);

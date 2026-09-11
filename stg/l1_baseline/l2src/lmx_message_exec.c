@@ -381,6 +381,13 @@ LmxMsg *lmx_msg_sched_dequeue_child(LmxMsg *parent) {
     return child;
 }
 
+void lmx_msg_arena_collect(LmxMsg *m) {
+    if (m == 0) {
+        return;
+    }
+    (void)m;
+}
+
 void lmx_msg_sched_unlink_child(LmxMsg *parent, LmxMsg *child) {
     if (parent == 0 || child == 0) {
         return;

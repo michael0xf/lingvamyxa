@@ -880,11 +880,6 @@ sub: lmx_msg_request_children_close (@: LmxMsgRuntime rt; LmxMsgAddr: who)
     ---
 end: lmx_msg_request_children_close
 
-sub: lmx_msg_arena_collect (@: LmxMsg m)
-    if: m = 0
-        return
-end: lmx_msg_arena_collect
-
 fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     @: LmxMsg m
     @: LmxMsg ch
@@ -935,7 +930,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
             ---
             lmx_msg_request_children_close(rt, who)
         ---
-        lmx_msg_arena_collect(m)
+        c.lmx_msg_arena_collect(m)
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_OK
     ch: m\first_child
@@ -974,7 +969,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         ---
         lmx_msg_request_children_close(rt, who)
     ---
-    lmx_msg_arena_collect(m)
+    c.lmx_msg_arena_collect(m)
     c.lmx_msg_exec_unlock(rt)
 return: lmx_msg_pump(rt)
 
