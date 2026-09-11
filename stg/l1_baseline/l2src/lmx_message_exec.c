@@ -1,5 +1,6 @@
 /* Overlapping Message turns. Mutex not held during turn_fn. */
 #include "l2src/lmx_message_exec.h"
+#include "l2src/lmx_msg_slots.lm1.h"
 #include "l2src/lmx_message_host.h"
 #include "l2src/lmx.h"
 #include <stdlib.h>
@@ -818,29 +819,14 @@ void lmx_msg_exec_bind_set_held_locked(LmxMsgRuntime *rt, int i, int held) {
     }
 }
 
-/* D1 allocation enumeration of rt->slots. Not the scheduler.
- * scan_ready walks bind[] (D3 prototype), not this. */
+/* D1 allocation enumeration. Not the scheduler. Delegates to
+ * Codex lmx_msg_slots; scan_ready must not use these. */
 int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt) {
-    if (rt == 0) {
-        return 0;
-    }
-    return rt->n;
+    return lmx_msg_slots_n(rt);
 }
 
 LmxMsgAddr lmx_msg_exec_tab_addr_locked(LmxMsgRuntime *rt, int i) {
-    LmxMsg *m;
-    if (rt == 0 || i < 0) {
-        return 0;
-    }
-    m = rt->slots;
-    while (m != 0 && i > 0) {
-        m = m->alloc_next;
-        i -= 1;
-    }
-    if (m == 0) {
-        return 0;
-    }
-    return m->addr;
+    return lmx_msg_slots_at(rt, i);
 }
 
 #if defined(LMX_MSG_EXEC_TEST)
