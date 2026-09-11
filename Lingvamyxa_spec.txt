@@ -12355,6 +12355,14 @@ the child requests its own orderly close. The parent may still
 explicitly stop a child, honored at that child's end_turn. A stuck
 child is exceptional `fail()`.
 
+Observation and timeout handling are symmetric, even though the default probe
+originates at the child. A parent may track expected communication from a direct
+child (including its periodic query) and request that child's orderly close after
+prolonged silence under its chosen timeout policy. This needs no second automatic
+probe stream and no global monitor. Both sides keep their own expectation and
+deadline state. Timeout means lack of the expected communication, not proof of
+death or successful completion; cooperative close remains an end_turn action.
+
 Completion is a separate ordinary Message from a liveness query.
 When the child finishes its assigned operation, it sends completed
 (выполнено) to the parent, correlated to that assignment.

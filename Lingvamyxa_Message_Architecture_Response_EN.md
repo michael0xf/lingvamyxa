@@ -109,6 +109,8 @@ A handler must also respect the existing staging/publication rules: merely stagi
 
 Parents manage direct children; children manage their descendants. Normal closure propagates through that responsibility. Automatic child-to-parent liveness polling and cooperative end-turn closure retain their agreed roles. They do not require a process-wide scan.
 
+The default probe originates at the child, but timeout supervision is symmetric. The child waits for its parent's response and requests its own orderly close after prolonged silence. The parent may track expected communication from the child, including its periodic queries, and request that child's orderly close if those cease. No second automatic probe stream is necessary. Each side owns its expectation and deadline state; lack of a response is not proof of death or completion. An unresponsive handler that cannot reach end-turn still requires the exceptional failure path, not a claim that cooperative closure has already finished.
+
 A finished child's arena must be reclaimable independently of unrelated live family members. In-flight sends and retained recipient capabilities still require safe control-state lifetime handling. Keeping all contexts until a global runtime is destroyed is not the target solution.
 
 The prototype's path-depth limit of 16 has no foundation in the language model and must be removed from the replacement. The path appends one parent-local child counter segment:
