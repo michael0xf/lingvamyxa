@@ -42,9 +42,9 @@ Storage API (no policy, no Message flags, no scheduler)
 Who may call (Grok policy, in lmx_message*)
   Only adopt_failed / transfer_adopted / dispose_child after
   lifecycle_authority, handoff-ready, native_users==0, running==0,
-  and every direct child disposed. Grok keeps LmxAdopted as a
-  transitional adapter until those three sites switch to this API.
-  Grok will not add a second arena module.
+  and every direct child disposed. Grok now calls this API from
+  those sites and slot_free. LmxAdopted is gone. Grok will not
+  add a second arena module.
 
 Must not
   Global lock, process-wide range table as Message ownership,
