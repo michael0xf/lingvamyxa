@@ -1,10 +1,19 @@
-LMX_MSG_EXEC_HOST_V0 (experimental)
-===================================
+LMX_MSG_EXEC_HOST_V0 (experimental PROTOTYPE EVIDENCE)
+======================================================
+
+NOT accepted architecture and NOT an app pin. Root spec 73d715f:
+each live Message owns its mailbox, parent, and direct-child list.
+No shared global Message table. No non-Message language scheduler.
+Low-level sync in the standard package is Message-internal only.
+
+This file records the measured overlapping-turn prototype
+(rt->tab, ready queue, C worker pool). Keep the numbers. Do not
+promote this dispatcher into mixa_manager. Ingress pin remains
+LMX_MSG_HOST_INGRESS_V0 until a Message-first pin exists.
 
 Not the accepted ingress pin. V0 host_post/drain remains the
-bot-isolated ingress harness. This slice is overlapping execution
-of DIFFERENT Messages and is experimental until the lock matrix
-and tests below stay green.
+bot-isolated ingress harness. The overlapping-execution tests
+below stay as prototype evidence.
 
 Lock / ownership matrix
 -----------------------
