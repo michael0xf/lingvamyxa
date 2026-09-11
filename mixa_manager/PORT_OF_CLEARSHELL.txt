@@ -63,7 +63,8 @@ is already complete or tested.
 
 Design the eventual Message boundary now: each module has an explicit owner,
 inputs/results and ordinary callable operations. Mutable module state belongs
-to that owner; cross-owner payloads must be copyable or explicitly transferable.
+to that owner. Ordinary local Message delivery transfers independently owned
+payload storage without cloning it; copying requires an explicit operation.
 Keep native OS handles with their owner and isolate platform calls. A module is
 not automatically a Message or a thread; several modules may share one owner.
 Single-owner tests may call operations directly. Later Message handlers invoke
@@ -79,6 +80,18 @@ module/API and behaviour tests. Missing Message transport is an integration gap,
 not a reason to stop unrelated modules or add a temporary C concurrency scheme.
 Do not claim concurrent app acceptance from direct-call tests; that requires the
 verified runtime and responsive UI/parallel-job checks in PROCESS_SEAM.
+
+Next port priority (owner, 2026-09-11): after the current bounded calculator
+syntax module, implement the file manager's original file operations and all
+button/panel behaviour. Preserve ClearShell algorithms and ordering where no
+current app delta overrides them. Inventory and reuse existing modules rather
+than overwrite them; test each bounded operation and then wire its action.
+
+An action whose function is not yet implemented opens a nested instance of the
+same reduced application interface: text "нет функции" and one dismiss button
+are enough. Appearance may be minimal; nesting and self-reproduction must work.
+Do not substitute an OS dialog, unrelated popup framework, console-only warning
+or silent no-op. This also applies while the full panels are being connected.
 
 
 2. The deltas established so far

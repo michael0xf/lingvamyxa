@@ -70,6 +70,20 @@ copies into a new root (19.17, 21.11); ordinary assignment changes
 the reference a field holds, never `len`; identity is the
 occurrence, not a Java class or Lua table.
 
+Managed route: L3 -> target bytecode + target Lmx runtime, not through an L2
+machine tree. Reject L2-only source before managed lowering. An L3 callable
+contract needs a provider for this target; native-only availability is a target
+build/link error, not permission to compile its L2 implementation into JVM.
+Native `{addr, sig}` is one representation of semantic `{entry, sig}`.
+
+Managed references preserve observable identity even if GC moves objects.
+Native pointers/pools remain non-moving. Both preserve one logical ownership
+arena per Message, no concurrent mutable cross-owner graph aliases, and local
+delivery by ownership transfer without cloning. Failed-arena adoption requires
+quiescence, cleanup and retained roots (spec 19.29.8); managed GC changes physical
+reclamation, not this contract. These are target requirements, not implemented
+JVM support or an instruction to postpone the native Message/self-host work.
+
 Mix is not a Java ISA. com.mtk.map is a template of overlapping
 trees, not Mix. Target rewrite: cooperating Messages in a
 Smalltalk-style model (spec 19.29.2.1, WorldWideMix.txt). Mix is

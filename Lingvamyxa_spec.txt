@@ -848,6 +848,14 @@ JVM classfiles, preserving L3 semantics with its target runtime. That is not
 an alternative low-level L2 route. See `include_languages/vm_porting_plan_en.txt`
 section 0 and items 1--4; these backend plans are not claims of implementation.
 
+A managed L3 backend resolves high-level callable contracts to target providers;
+it does not compile or emulate an L2 machine tree. L2-only operations in L3
+source are rejected before bytecode lowering. A missing managed provider is a
+target build/link error, not permission to import the native implementation.
+`callableFrom: L2 L3` admits the contract at those levels, not every backend's
+implementation. Native callable `{addr, sig}` represents semantic `{entry, sig}`;
+a managed entry may be a target method identity rather than a machine address.
+
 `C:` is an isolated last-resort raw-C escape, not the ordinary way to implement
 the translator, runtime or bootstrap. See `L1_language_and_translator_spec.txt`
 for the L1 contract and self-build gates. Historical raw `L1:` examples are
@@ -910,6 +918,12 @@ bounds automatically. Code that needs unchecked access or another machine
 operation belongs to L2; a high-level wrapper Structure or handle operation may
 hide the raw representation for both L2 and L3. The Array descriptor and address-derived type are fixed in 6.5; remaining
 machine/view details are not selected here.
+
+L3 observes reference identity, not physical addresses. A managed backend may
+move objects while preserving that identity, reference aliases within one
+Message, ownership and lifetime. This does not weaken native non-moving node,
+descriptor and typed-pool rules. Ordinary reference passing does not copy the
+referent or admit mutable aliases into another executing Message's arena.
 
 `receiver.l3.exclude` admits `predef` and excludes physical `c.struct` /
 `c.union` / `c.enum` / `c.array` plus L2 machine receivers `include`,
@@ -1760,8 +1774,8 @@ state boundary: no raw mutable link into another Message's arena is admitted,
 and local collection does not scan that arena (19.29). A failing `assert`
 terminates the executing Message (19.13): required cleanups run, the failed
 turn's staged outbox is discarded, and no further turn of that Message may run.
-This is mandatory, not an optional recovery policy. Message destruction reclaims
-its arena under 19.29.8; logical termination does not forcibly terminate the OS
+This is mandatory, not an optional recovery policy. Arena reclamation or failed
+arena handoff follows 19.29.8; logical termination does not forcibly terminate the OS
 worker, which may serve other Messages.
 
 This is not a promise that every defect affects only one Message. Explicitly
@@ -5853,8 +5867,9 @@ the callable occurrence and dynamic values from its then-current caller.
 Within one Message, returning, passing or rebinding a callable copies only its
 ordinary Lmx reference value and retains/roots that exact callable occurrence;
 it does not copy its containing subtree. Only an explicit graph-copy/merge
-operation may create another occurrence. Crossing a Message boundary instead
-uses the explicit copy/serialize/adopt rules of the Message transport. The exact
+operation may create another occurrence. Ordinary local Message delivery adopts
+the independently owned graph without cloning; copy/serialization requires an
+explicit operation/codec contract (19.29.7). The exact
 physical result/root carrier remains an unresolved ABI detail, but it may not
 change this reference semantics or the occurrence's real `node` relationship.
 If the program wants lexical/captured state, it must construct and link that
@@ -11923,6 +11938,12 @@ Every Message, inactive or running, owns one logical arena throughout its
 turns and worker migration. L3 source does not select it, and Lmx has no arena
 field. The arena may contain multiple non-overlapping blocks/address domains.
 
+Adopting a non-executing Message or a handoff-safe failed child adds its blocks
+and registered domains to this same logical arena (19.29.7--8). It creates no
+new source arena kind, relocates no native node and clones no graph. Ownership
+and auxiliary domain metadata move together; the former owner cannot free the
+adopted storage.
+
 Its mutable storage includes Lmx nodes, child payloads, persistent own fields,
 non-interned primitives, Array descriptors/backing and runtime merge results.
 Immutable primitive pools, linked method code/records and explicitly foreign
@@ -12191,8 +12212,11 @@ to be an explicit operation whose lifetime policy covers all Lmx pointers and
 address-domain payloads involved. A raw mutable pointer into reclaimable storage
 must not silently cross the boundary. Ordinary incoming LMX text is
 added to the receiver's one logical arena with ownership transfer.
-Copy/deserialize of a graph fragment still allocates fresh mutable
-state in the destination or new Message arena. Activation preserves
+Ordinary local delivery does not deep-copy a graph, replace its identities or
+rewrite its internal pointers. The delivered storage must be independently
+transferable: a running sender cannot also keep using it through mutable aliases.
+An explicit copy, merge, materialization or transport/codec contract may allocate
+fresh state; this is not a runtime choice to clone ordinary delivery. Activation preserves
 the activated Message's existing arena. Explicit launch of received
 text as a separate L3 child gives that child its own arena. Joining
 an already-running Message's live arena is legal only when it leaves
@@ -12202,6 +12226,12 @@ A delivery address/capability is not a graph reference into another Message's
 mutable arena. Adoption of a non-executing Message at the consuming end-turn
 transfers ownership into the receiver's one logical arena, with stable block
 addresses; it does not establish concurrent cross-arena graph access.
+
+Remote transport moves bytes under its selected codec contract, not physical
+RAM between computers. Received storage acquires one local owner without a
+second implicit clone into the recipient. A local proxy controls remote work;
+exporting a remote failure graph requires an explicit diagnostic/transport
+contract and is not automatic local arena adoption.
 
 19.29.7.1. First copy-only participant slice (numbers and exact bytes)
 
@@ -12519,8 +12549,8 @@ a more expensive operation or claiming a portable volatile threading guarantee.
 No immediate observation or fixed cancellation latency is promised.
 
 On closing, the Message's execution root first sets running=0 on its direct
-children, then cleans up its own arena after discarding its activations and
-settling native operations that still use that memory. Each child applies the
+children, then settles its activations, native resources and direct children
+before reclaiming or handing off its arena under 19.29.8. Each child applies the
 same rule to its own children; no ancestor traversal of grandchildren is needed.
 The root does not wait for an acknowledgement from itself. Independently executing children
 must reach their own exit before their arenas are reclaimed. A foreign observer
@@ -12530,6 +12560,13 @@ For a nonexecuting Message, its owning executor applies the close/cleanup path
 without starting a new user turn or allocating a dedicated OS thread. Closing
 the original Message does not free payload blocks already transferred to a
 recipient's arena under the ordinary ownership-transfer rules.
+
+Neither running=0 nor running=0 together with success=0 proves quiescence or
+final failure. A runtime-only handoff boundary must establish no remaining
+execution/native users of the arena, completed required cleanup, settled direct
+children and a final outcome. That outcome, not a transient pair of flag loads,
+selects successful reclamation versus failed-arena handoff. No third source flag
+or extra fence on every cancellation poll is implied by this lifecycle boundary.
 
 A sleeping executor needs an existing wake or bounded wait that reaches the
 check. Polling does not interrupt a stuck uninstrumented native call. It also
@@ -12609,19 +12646,51 @@ Historical text and examples: `Lingvamyxa_spec_history.txt`, section 19.29.7.H.
 The physical collector algorithm, region/block layout and Message-destruction
 mechanics are open Revision-2 runtime choices. The local collection schedule is
 not open: it runs at the common end-turn boundary fixed by section 19.29.4. A
-profile must keep live nodes and service-pool entries at stable addresses.
+native profile must keep live nodes and service-pool entries at stable addresses.
 Compaction by relocating them is forbidden, not an optional first-profile choice.
 Pool growth adds blocks in the Message's one arena, registering each new range.
 
 Objects with a live L2 raw address or foreign view must remain reachable and
-stationary for the admitted view's lifetime. Destroying a Message releases/reclaims
-its one arena after preserving
-any explicitly transferred result and completing required resource cleanup;
-external/raw resources follow their own contracts. The operation must also
-remove affected auxiliary reverse-name entries. Allocation/OS resource failure
-may terminate the affected Message and reclaim its arena; a supervisor may
-start a fresh Message afterwards. This is not transparent resumption, rollback
-of external effects or a promise to recover from every OS/process failure.
+stationary for the admitted view's lifetime. Message termination, arena disposal
+and control retirement are distinct. Transfer or reclamation requires the
+handoff-safe boundary in 19.29.7.1, not merely a stop request or elapsed timeout.
+Previously transferred result blocks belong to their recipient and are excluded.
+
+After final successful completion, reclaim the Message's own execution history
+by default; retaining successful history requires explicit program data/results.
+After final non-successful completion, transfer its logical arena to its direct
+parent's available lifecycle endpoint without copying. The parent adopts the
+blocks/ranges and retains the failed root at its own end-turn or equivalent
+serialized owner-only lifecycle boundary. Root attachment and ownership transfer
+must not expose an unrooted graph to collection. Auxiliary range/reverse-name
+metadata follows the new owner; only reclaimed entries are removed.
+
+Each closing Message settles only its direct children: successful own histories
+can be reclaimed; failed arenas are adopted before its own failed arena moves
+upward. A stopped parent may still accept handoffs while settling its children;
+running=0 does not mean that its lifecycle endpoint has disappeared. For example,
+in P -> C -> G, with C and G failed, G's blocks first join C, then C's blocks join
+P. Native addresses stay unchanged and P retains the failure root. There is no
+ancestor scan of grandchildren, global crash manager or graph clone.
+
+If that parent endpoint is unavailable, retain the handoff-safe failed arena
+under a separate parent-loss/orphan-retention timeout before self-reclamation.
+This is not the parent's operation deadline for its child. Timeout never grants
+permission to free memory still used by native code. Settling is lifecycle work,
+not a busy wait or a promise of bounded cleanup for an uninterruptible foreign
+call. Such an unresolved branch stays unreclaimed.
+
+Required external-resource cleanup precedes handoff. Retaining a failed graph
+does not retain live file/socket/device handles without their explicit contract.
+It preserves available published graph state, not discarded C activations or
+a complete execution trace. A supervisor may start a fresh Message; adoption is
+not transparent resumption, rollback or recovery from arbitrary process failure.
+
+Open policy: when a parent completes successfully after adopting failed child
+history, disposition of that inherited history needs an explicit decision; it
+must not be silently conflated with the parent's disposable successful history.
+Retention budgets and remote full-graph diagnostic transfer also remain open.
+These do not reopen local no-copy delivery or the handoff-safety requirement.
 
 Compaction and destruction cannot manufacture an alternative Structure value
 merely to preserve an old generated C layout. Return identity, result roots and
@@ -12918,7 +12987,8 @@ that the wrapped service has no effects or concurrency.
 The default distinction is:
 
     Message Thread message boundary
-        copy, serialization or whole-branch ownership transfer;
+        ordinary local delivery transfers ownership without a graph clone;
+        copy/serialization only under an explicit operation/codec contract;
 
     shared read
         immutable/read-only or externally published resource with typed
@@ -12981,7 +13051,7 @@ An uncaught failure that ends the turn follows point 3. A failing `assert`
 requires termination of the executing Message (19.13); no policy may resume its
 turns. Other failures follow their declared control/profile rules. If those
 rules retain the Message, its published own/graph state survives. Logical
-termination forbids further turns; destruction reclaims the arena under
+termination forbids further turns; arena reclamation or failed-arena handoff follows
 19.29.8. Neither requires forcibly terminating the host OS worker or undoes
 previously published messages or external effects. No failure path authorizes
 raw sharing of mutable arenas; a caught `throw` alone does not invoke Message
@@ -14265,9 +14335,10 @@ other Array operations follow the same distinction: mutation through the
 reference affects the referent; assigning the local reference to another Array
 does not rebind the caller.
 
-No raw Structure/Array pointer is passed `as is` between Messages. Message
-delivery must use the specified clone, serialization or ownership-transfer
-boundary so that distinct Messages do not share mutable arenas.
+No raw Structure/Array pointer grants access to another Message's mutable arena.
+Ordinary local delivery transfers ownership while preserving native addresses;
+it does not clone the graph. Explicit copy/codec operations follow 19.29.7.
+The sender cannot keep mutable access after transfer.
 
 21.5. Own Fields as C Working Locals
 
