@@ -60,6 +60,7 @@ static int g_ctx_rebind_auth;
 static int g_ctx_ui_any_rb;
 static int g_ctx_mid_unroll;
 static int g_ctx_spawn_race;
+static int g_ctx_mix_map;
 static LmxMsgAddr g_hook_extra;
 static TurnCtx g_hook_ctx;
 
@@ -89,6 +90,14 @@ typedef struct TryUiRec {
     int aff_after;
     volatile LONG done;
 } TryUiRec;
+
+typedef struct MixRec {
+    RendezRec *a1;
+    RendezRec *a2;
+    DWORD tid;
+    volatile LONG done;
+    int st;
+} MixRec;
 static HANDLE g_cleanup_seen;
 static HANDLE g_cleanup_go;
 static volatile LONG g_cleanup_hits;
@@ -375,6 +384,42 @@ static int turn_mass(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     InterlockedDecrement(&m->in_turn);
     InterlockedIncrement(&m->done);
     return m->end_st == LMX_MSG_OK ? 0 : 1;
+}
+
+static int turn_rendez(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx);
+
+static int turn_mix_parent(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    MixRec *m = (MixRec *)ctx;
+    LmxMsgEnv got;
+    LmxMsgEnv env;
+    uchar ini = 1;
+    LmxMsgAddr c1 = 0, c2 = 0;
+    memset(&got, 0, sizeof(got));
+    memset(&env, 0, sizeof(env));
+    m->tid = GetCurrentThreadId();
+    if (lmx_msg_recv(rt, who, &got) != LMX_MSG_OK) {
+        lmx_msg_env_release(&got);
+        return 1;
+    }
+    lmx_msg_env_release(&got);
+    if (lmx_msg_create(rt, who, 11, &ini, 1, &c1) != LMX_MSG_OK || lmx_msg_create(rt, who, 12, &ini, 1, &c2) != LMX_MSG_OK) {
+        return 1;
+    }
+    if (lmx_msg_exec_bind(rt, c1, turn_rendez, m->a1, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK || lmx_msg_exec_bind(rt, c2, turn_rendez, m->a2, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+        return 1;
+    }
+    m->st = lmx_msg_map_child(rt, who, c1);
+    if (m->st != LMX_MSG_OK || lmx_msg_map_child(rt, who, c2) != LMX_MSG_OK) {
+        return 1;
+    }
+    env.kind = LMX_MSG_KIND_BYTES;
+    env.n = 1;
+    env.bytes = &ini;
+    if (lmx_msg_send(rt, who, c1, &env) != LMX_MSG_STAGED || lmx_msg_send(rt, who, c2, &env) != LMX_MSG_STAGED) {
+        return 1;
+    }
+    InterlockedIncrement(&m->done);
+    return lmx_msg_end_turn(rt, who, 1);
 }
 
 static int turn_rendez(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
@@ -2306,6 +2351,75 @@ int main(void) {
         fprintf(stderr, "ctx_busy_ui ms=%lu\n", (unsigned long)tctx_ui);
         fflush(stderr);
     }
+    {
+        LmxMsgRuntime *rtp;
+        LmxMsgAddr p = 0, a = 0;
+        LmxMsgEnv e;
+        uchar ini = 1, b1 = 2, b2 = 3;
+        static MixRec mix;
+        static RendezRec a1;
+        static RendezRec a2;
+        DWORD dl;
+        DWORD owner = GetCurrentThreadId();
+        memset(&mix, 0, sizeof(mix));
+        memset(&a1, 0, sizeof(a1));
+        memset(&a2, 0, sizeof(a2));
+        a1.entered = CreateEventA(0, 1, 0, 0);
+        a2.entered = CreateEventA(0, 1, 0, 0);
+        a1.peer = a2.entered;
+        a2.peer = a1.entered;
+        mix.a1 = &a1;
+        mix.a2 = &a2;
+        rtp = lmx_msg_runtime_new();
+        if (rtp == 0 || a1.entered == 0 || lmx_msg_create(rtp, 0, 1, &ini, 1, &p) != LMX_MSG_OK) {
+            fprintf(stderr, "mix family\n");
+            return 1;
+        }
+        if (lmx_msg_create(rtp, p, 2, &ini, 1, &a) != LMX_MSG_OK || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_exec_bind(rtp, a, turn_mix_parent, &mix, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            fprintf(stderr, "mix bind A\n");
+            return 1;
+        }
+        memset(&e, 0, sizeof(e));
+        e.kind = LMX_MSG_KIND_BYTES;
+        e.n = 1;
+        e.bytes = &ini;
+        if (lmx_msg_send(rtp, p, a, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rtp, p, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        lmx_msg_pump(rtp);
+        dl = GetTickCount() + 3000;
+        while (InterlockedCompareExchange(&mix.done, 0, 0) == 0 && GetTickCount() < dl) {
+            if (lmx_msg_sched_step(rtp, p) == LMX_MSG_INVALID) {
+                Sleep(1);
+            }
+        }
+        dl = GetTickCount() + 3000;
+        while ((InterlockedCompareExchange(&a1.done, 0, 0) == 0 || InterlockedCompareExchange(&a2.done, 0, 0) == 0) && GetTickCount() < dl) {
+            Sleep(10);
+        }
+        lmx_msg_exec_stop(rtp);
+        if (InterlockedCompareExchange(&mix.done, 0, 0) != 1 || InterlockedCompareExchange(&a1.done, 0, 0) != 1 || InterlockedCompareExchange(&a2.done, 0, 0) != 1 || a1.tid == 0 || a2.tid == 0 || a1.tid == a2.tid || mix.tid == 0 || mix.tid != owner) {
+            fprintf(stderr, "mix map done A=%ld a1=%ld a2=%ld ta1=%lu ta2=%lu tA=%lu owner=%lu st=%d\n",
+                (long)InterlockedCompareExchange(&mix.done, 0, 0),
+                (long)InterlockedCompareExchange(&a1.done, 0, 0),
+                (long)InterlockedCompareExchange(&a2.done, 0, 0),
+                (unsigned long)a1.tid, (unsigned long)a2.tid,
+                (unsigned long)mix.tid, (unsigned long)owner, mix.st);
+            lmx_msg_runtime_delete(rtp);
+            return 1;
+        }
+        g_ctx_mix_map = 1;
+        CloseHandle(a1.entered);
+        CloseHandle(a2.entered);
+        lmx_msg_runtime_delete(rtp);
+        fprintf(stderr, "ctx_mix_map\n");
+        fflush(stderr);
+        (void)b1;
+        (void)b2;
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);
@@ -2314,17 +2428,17 @@ int main(void) {
             fast.send_ui_st, fast.send_peer_st, peerrec.got);
         fprintf(ev, "ui_step_ms=%lu cpu_busy_ui_ms=%lu mass_complete=70 fail_fifo=31,32 err_after=1 omit_end=1 ui_from_worker=%u peer=42\n",
             (unsigned long)tui, (unsigned long)tbusy_ui, slow.ui_recvd);
-        fprintf(ev, "live_cascade=%d factory_n=%d factory_create_phase_n=%d held_child_meta=1 oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_overlap=%d ctx_restart=%d ctx_child=%d ctx_rebind_ui=%d ctx_fail_retry=%d ctx_busy_ui=%d ctx_rebind_auth=%d ctx_ui_any_rb=%d ctx_mid_unroll=%d ctx_spawn_race=%d\n",
+        fprintf(ev, "live_cascade=%d factory_n=%d factory_create_phase_n=%d held_child_meta=1 oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_overlap=%d ctx_restart=%d ctx_child=%d ctx_rebind_ui=%d ctx_fail_retry=%d ctx_busy_ui=%d ctx_rebind_auth=%d ctx_ui_any_rb=%d ctx_mid_unroll=%d ctx_spawn_race=%d ctx_mix_map=%d\n",
             g_live_cascade, g_factory_n, g_factory_n_at_meta, g_oom_n, g_oom_hits, g_oom_scan, g_oom_fifo_a, g_oom_fifo_b,
             g_ctx_overlap, g_ctx_restart, g_ctx_child, g_ctx_rebind_ui, g_ctx_fail_retry, g_ctx_busy_ui,
-            g_ctx_rebind_auth, g_ctx_ui_any_rb, g_ctx_mid_unroll, g_ctx_spawn_race);
+            g_ctx_rebind_auth, g_ctx_ui_any_rb, g_ctx_mid_unroll, g_ctx_spawn_race, g_ctx_mix_map);
         fclose(ev);
     }
-    printf("lmx_message_exec ok fifo=%u,%u mass=70 fail=31,32 err_after=1 omit_end=1 xsend_ui=%d xsend_peer=%d peer=%u ui_from_worker=%u ui_ms=%lu cpu_busy_ui_ms=%lu live_cascade=%d factory_n=%d factory_create_phase_n=%d oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_overlap=%d restart=%d child=%d rebind_ui=%d fail_retry=%d busy_ui=%d rebind_auth=%d ui_any_rb=%d mid_unroll=%d spawn_race=%d\n",
+    printf("lmx_message_exec ok fifo=%u,%u mass=70 fail=31,32 err_after=1 omit_end=1 xsend_ui=%d xsend_peer=%d peer=%u ui_from_worker=%u ui_ms=%lu cpu_busy_ui_ms=%lu live_cascade=%d factory_n=%d factory_create_phase_n=%d oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_overlap=%d restart=%d child=%d rebind_ui=%d fail_retry=%d busy_ui=%d rebind_auth=%d ui_any_rb=%d mid_unroll=%d spawn_race=%d mix_map=%d\n",
         fast.fifo[0], fast.fifo[1], fast.send_ui_st, fast.send_peer_st, peerrec.got,
         slow.ui_recvd, (unsigned long)tui, (unsigned long)tbusy_ui, g_live_cascade, g_factory_n,
         g_factory_n_at_meta, g_oom_n, g_oom_hits, g_oom_scan, g_oom_fifo_a, g_oom_fifo_b,
         g_ctx_overlap, g_ctx_restart, g_ctx_child, g_ctx_rebind_ui, g_ctx_fail_retry, g_ctx_busy_ui,
-        g_ctx_rebind_auth, g_ctx_ui_any_rb, g_ctx_mid_unroll, g_ctx_spawn_race);
+        g_ctx_rebind_auth, g_ctx_ui_any_rb, g_ctx_mid_unroll, g_ctx_spawn_race, g_ctx_mix_map);
     return 0;
 }

@@ -634,6 +634,106 @@ fn: main () int
         c.printf("host_post after shutdown\n")
         fail: fail + 1
     lmx_msg_runtime_delete(hrt)
+    @: LmxMsgRuntime prt
+    unsigned: deep 0U
+    unsigned: nxt 0U
+    int: di 0
+    prt: lmx_msg_runtime_new()
+    if: prt = 0
+        fail: fail + 1
+    st: lmx_msg_create(prt, 0U, 1U, payload, 4U, @ deep)
+    while: di < 20
+        nxt: 0U
+        st: lmx_msg_create(prt, deep, (cast: (unsigned) (100 + di)), payload, 4U, @ nxt)
+        if: st != c.LMX_MSG_OK || nxt = 0U
+            c.printf("deep path create\n")
+            fail: fail + 1
+            di: 20
+        ---
+        st: lmx_msg_end_turn(prt, deep, 1)
+        deep: nxt
+        di: di + 1
+    ---
+    if: lmx_msg_path_n(prt, deep) != 21
+        c.printf("deep path n\n")
+        fail: fail + 1
+    lmx_msg_runtime_delete(prt)
+    @: LmxMsgRuntime lrt
+    unsigned: lp 0U
+    unsigned: lc 0U
+    lrt: lmx_msg_runtime_new()
+    if: lrt = 0
+        fail: fail + 1
+    st: lmx_msg_create(lrt, 0U, 1U, payload, 4U, @ lp)
+    st: lmx_msg_create(lrt, lp, 1U, payload, 4U, @ lc)
+    st: lmx_msg_end_turn(lrt, lp, 1)
+    st: lmx_msg_set_now(lrt, 10U)
+    st: lmx_msg_live_query(lrt, lc)
+    if: st != c.LMX_MSG_STAGED
+        c.printf("live query stage\n")
+        fail: fail + 1
+    st: lmx_msg_end_turn(lrt, lc, 1)
+    st: lmx_msg_pump(lrt)
+    st: lmx_msg_recv(lrt, lp, got)
+    if: st != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_PROGRESS || got\number != c.LMX_MSG_LIVE_QUERY
+        c.printf("parent missed child live query\n")
+        fail: fail + 1
+    st: lmx_msg_live_handle(lrt, lp, got)
+    lmx_msg_env_release(got)
+    st: lmx_msg_end_turn(lrt, lp, 1)
+    st: lmx_msg_pump(lrt)
+    st: lmx_msg_recv(lrt, lc, got)
+    if: st != c.LMX_MSG_OK || got\number != c.LMX_MSG_LIVE_REPLY
+        c.printf("child missed live reply\n")
+        fail: fail + 1
+    st: lmx_msg_live_handle(lrt, lc, got)
+    lmx_msg_env_release(got)
+    st: lmx_msg_set_now(lrt, 50U)
+    if: lmx_msg_live_check(lrt, lc, 50U, 5U) != 0
+        c.printf("answered child still timed out\n")
+        fail: fail + 1
+    st: lmx_msg_end_turn(lrt, lc, 1)
+    if: lmx_msg_state(lrt, lc) = c.LMX_MSG_STATE_STOPPED
+        c.printf("live reply still closed child\n")
+        fail: fail + 1
+    @: LmxMsgRuntime lrt2
+    unsigned: lp2 0U
+    unsigned: lc2 0U
+    lrt2: lmx_msg_runtime_new()
+    st: lmx_msg_create(lrt2, 0U, 1U, payload, 4U, @ lp2)
+    st: lmx_msg_create(lrt2, lp2, 1U, payload, 4U, @ lc2)
+    st: lmx_msg_end_turn(lrt2, lp2, 1)
+    st: lmx_msg_set_now(lrt2, 10U)
+    st: lmx_msg_live_query(lrt2, lc2)
+    st: lmx_msg_end_turn(lrt2, lc2, 1)
+    st: lmx_msg_pump(lrt2)
+    st: lmx_msg_set_now(lrt2, 40U)
+    if: lmx_msg_live_check(lrt2, lc2, 40U, 5U) < 1
+        c.printf("missing parent reply did not request child close\n")
+        fail: fail + 1
+    st: lmx_msg_end_turn(lrt2, lc2, 1)
+    if: lmx_msg_state(lrt2, lc2) != c.LMX_MSG_STATE_STOPPED
+        c.printf("child did not close after missing reply\n")
+        fail: fail + 1
+    @: LmxMsgRuntime lrt3
+    unsigned: lp3 0U
+    unsigned: lc3 0U
+    lrt3: lmx_msg_runtime_new()
+    st: lmx_msg_create(lrt3, 0U, 1U, payload, 4U, @ lp3)
+    st: lmx_msg_create(lrt3, lp3, 1U, payload, 4U, @ lc3)
+    st: lmx_msg_end_turn(lrt3, lp3, 1)
+    st: lmx_msg_set_now(lrt3, 10U)
+    st: lmx_msg_set_now(lrt3, 40U)
+    if: lmx_msg_live_check(lrt3, lp3, 40U, 5U) < 1
+        c.printf("parent missing child query did not request close\n")
+        fail: fail + 1
+    st: lmx_msg_end_turn(lrt3, lc3, 1)
+    if: lmx_msg_state(lrt3, lc3) != c.LMX_MSG_STATE_STOPPED
+        c.printf("silent child not closed by parent check\n")
+        fail: fail + 1
+    lmx_msg_runtime_delete(lrt)
+    lmx_msg_runtime_delete(lrt2)
+    lmx_msg_runtime_delete(lrt3)
     c.free((cast: (@: void) payload))
     c.free((cast: (@: void) env))
     c.free((cast: (@: void) got))

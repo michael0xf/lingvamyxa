@@ -31,6 +31,8 @@ typedef unsigned char uchar;
 #define LMX_MSG_KIND_REJECTED 7
 #define LMX_MSG_KIND_STOP 8
 /* KIND_STOP is internal close control. KIND_CANCELLED is ordinary result data. */
+#define LMX_MSG_LIVE_QUERY 1001
+#define LMX_MSG_LIVE_REPLY 1002
 
 #define LMX_MSG_STATE_INACTIVE 0
 #define LMX_MSG_STATE_RUNNING 1
@@ -38,8 +40,8 @@ typedef unsigned char uchar;
 #define LMX_MSG_STATE_DEAD 3
 #define LMX_MSG_STATE_RELEASED 4
 
-/* Prototype path storage. Not a language-level depth or width limit. */
-#define LMX_MSG_PATH_CAP 16
+/* Initial Mix-path chunk. Growable; not a language-level depth limit. */
+#define LMX_MSG_PATH_CHUNK 4
 
 /* Versioned host-ingress seam. Not a promise that create/send/pump/recv
  * are multi-thread safe. Only lmx_msg_host_post may run off the owner thread. */
@@ -47,6 +49,8 @@ typedef unsigned char uchar;
 #define LMX_MSG_HOST_FROM 0U
 
 typedef unsigned LmxMsgAddr;
+typedef struct LmxMsgRuntime LmxMsgRuntime;
+typedef int (*LmxMsgTurn)(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx);
 
 typedef struct LmxMsgEnv {
     unsigned id;
@@ -68,6 +72,7 @@ typedef struct LmxMsgCopy {
     int number;
     uchar *bytes;
     size_t n;
+    struct LmxMsg *dest_msg;
     struct LmxMsgCopy *next;
 } LmxMsgCopy;
 
@@ -93,17 +98,23 @@ typedef struct LmxMsg {
     LmxMsgAddr exec_reply;
     int exec_live;
     unsigned last_beat;
-    unsigned path[LMX_MSG_PATH_CAP];
+    unsigned *path;
     int path_n;
+    int path_cap;
     unsigned child_seq;
     /* Direct-child list (CONTEXT_V0). Not a process-wide registry. */
     struct LmxMsg *parent_msg;
     struct LmxMsg *first_child;
     struct LmxMsg *last_child;
     struct LmxMsg *next_sibling;
+    LmxMsgTurn turn;
+    void *turn_ctx;
+    int mapped;
+    unsigned live_at;
+    int live_waiting;
 } LmxMsg;
 
-typedef struct LmxMsgRuntime {
+struct LmxMsgRuntime {
     LmxMsg **tab;
     int n;
     int cap;
@@ -116,7 +127,7 @@ typedef struct LmxMsgRuntime {
     unsigned next_addr;
     unsigned clock;
     unsigned root_seq;
-} LmxMsgRuntime;
+};
 
 LmxMsgRuntime *lmx_msg_runtime_new(void);
 void lmx_msg_runtime_delete(LmxMsgRuntime *rt);
@@ -147,11 +158,16 @@ int lmx_msg_host_wait(LmxMsgRuntime *rt, unsigned timeout_ms);
 
 #define LMX_MSG_AFFINITY_ANY 0
 #define LMX_MSG_AFFINITY_UI 1
-typedef int (*LmxMsgTurn)(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx);
 int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity);
 int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers);
 int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt);
 int lmx_msg_exec_ui_step(LmxMsgRuntime *rt);
 int lmx_msg_exec_stop(LmxMsgRuntime *rt);
+int lmx_msg_sched_step(LmxMsgRuntime *rt, LmxMsgAddr parent);
+int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
+int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child);
+int lmx_msg_live_query(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_live_handle(LmxMsgRuntime *rt, LmxMsgAddr who, const LmxMsgEnv *env);
+int lmx_msg_live_check(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now, unsigned threshold);
 
 #endif
