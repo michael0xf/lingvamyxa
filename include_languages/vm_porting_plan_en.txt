@@ -10,7 +10,7 @@ Huge game industry:
     6    Lua 5.4        L3        lopcodes / manual        L3 #5
 Many VMs, but where EXE and JVM already exist; Lua covers more
 engines than Unity:
-    7    .NET CIL       L3        ECMA-335 III             L1 #6 / L3 #3
+    7    .NET CIL       L3        ECMA-335 III             L3 #3
 
 Struck:
 More a multi-platform language than a platform for languages;
