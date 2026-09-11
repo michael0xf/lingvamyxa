@@ -260,6 +260,10 @@ Invoke-Negative "l2src\tests\entry_argc_dup.lm2" "entry_argc_dup" "duplicate for
 Invoke-Negative "l2src\tests\entry_argc_bad.lm2" "entry_argc_bad" "unknown foreign type"
 Invoke-Entry "l2src\tests\entry_argc_if.lm2" "entry_argc_if" 0 @("fn: main (int: count; @@: char values) int", "if:") $null
 Invoke-Entry "l2src\tests\entry_fputs.lm2" "entry_fputs" 0 @("c.fputs(") "hi`n"
+Invoke-Entry "l2src\tests\entry_setvbuf.lm2" "entry_setvbuf" 0 @("c.setvbuf(c.stdout, 0, c._IONBF, 0)") $null
+$svbL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "entry_setvbuf.lm1")))
+if ($svbL1 -match 'int: l2_t\d+') { throw "entry_setvbuf boxed numeric 0 as int temp" }
+Invoke-Entry "l2src\tests\entry_immut.lm2" "entry_immut" 0 @("immutable:", "@: char usage") "usage: printTree <source>`n"
 Invoke-Entry "l2src\tests\entry_predef.lm2" "entry_predef" 0 @("predef: `"l1src/parser.lm1`"", "include: `"<stdio.h>`"") $null
 Invoke-Entry "l2src\tests\entry_local_types.lm2" "entry_local_types" 0 @("char: ch", "size_t: n", "int: i") $null
 $locL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "entry_local_types.lm1")))
@@ -280,6 +284,17 @@ cmd /c "`"$idxExe`" hello > `"$idxOut`" 2> `"$(Join-Path $out 'entry_index.arg.e
 if ($LASTEXITCODE -ne 0) { throw "entry_index hello exit $LASTEXITCODE" }
 $idxGot = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $idxOut)).Replace("`r`n", "`n")
 if ($idxGot -ne "hello") { throw "entry_index hello stdout '$idxGot'" }
+Invoke-Entry "l2src\printTree.lm2" "printTree" 0 @("immutable:", "@: char usage", "c.setvbuf(c.stdout, 0, c._IONBF, 0)", "lm_p0_dump_alloc") "usage: printTree <source>`n"
+$ptL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "printTree.lm1")))
+if ($ptL1.IndexOf("diagnostic" + [char]92 + "code") -lt 0) { throw "printTree L1 missing diagnostic\code field" }
+$ptExe = Join-Path $out "printTree.exe"
+$ptSrc = Join-Path $out "printTree_input.lm1"
+$ptOut = Join-Path $out "printTree.dump.stdout"
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $ptSrc), "fn: main () int`n    return: 0`nend: main`n")
+cmd /c "`"$ptExe`" `"$ptSrc`" > `"$ptOut`" 2> `"$(Join-Path $out 'printTree.dump.err')`""
+if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'printTree.dump.err') -ErrorAction SilentlyContinue; throw "printTree dump exit $LASTEXITCODE" }
+$ptGot = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $ptOut))
+if ($ptGot.IndexOf("main") -lt 0) { throw "printTree dump missing main" }
 Invoke-Negative "l2src\tests\entry_overflow.lm2" "entry_overflow" "return literal not representable as int"
 Invoke-AdmitEmit "l2src\tests\entry_int_max.lm2" "entry_int_max" "2147483647"
 

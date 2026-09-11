@@ -1,0 +1,6 @@
+L2:
+    fn: main () int
+        c.setvbuf: c.stdout 0 c._IONBF 0
+        return: 0
+    end: main
+end: L2

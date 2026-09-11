@@ -199,6 +199,8 @@ prototype:
     fn: l2_take_predef (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_take_include (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_ptr_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_ty) int
+    fn: l2_const_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_ty) int
+    fn: l2_diag_field (const: @(LmP0Text t)) int
     fn: l2_loc_add (const: @(LmP0Text t); int: ty; const: @(char path); const: @(LmP0Node at)) int
     fn: l2_write_dirs (@: FILE out) int
     fn: l2_index_tail (@: LmP0Field f; @@: LmP0Field out_idx; @@: LmP0Field out_after) int
@@ -2655,6 +2657,54 @@ fn: l2_ptr_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_
         return: 0
 return: 1
 
+fn: l2_diag_field (const: @(LmP0Text t)) int
+    if: t = 0
+        return: 0
+    if: l2_text_eq(t, "code") || l2_text_eq(t, "line") || l2_text_eq(t, "column") || l2_text_eq(t, "message")
+        return: 1
+return: 0
+
+fn: l2_const_local_ty (const: @(LmP0Node stmt); @@: LmP0Text out_name; @: int out_ty) int
+    @: LmP0Field f
+    const: @: LmP0Node inner
+    @: LmP0Field g
+    @: LmP0Field h
+    if: out_name = 0 || out_ty = 0
+        return: 1
+    out_name[0]: 0
+    out_ty[0]: 0
+    if: l2_frame_head(stmt, "const") = 0
+        return: 1
+    if: stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\body = 0
+        return: 1
+    if: l2_count_active(stmt\as\frame\body) != 1
+        return: 1
+    f: l2_next_active(stmt\as\frame\body\first_field)
+    if: f = 0 || f\value = 0
+        return: 1
+    inner: f\value
+    if: l2_frame_head(inner, "@") = 0
+        return: 1
+    if: inner\as = 0 || inner\as\frame = 0 || inner\as\frame\body = 0
+        return: 1
+    if: l2_count_active(inner\as\frame\body) != 2
+        return: 1
+    g: l2_next_active(inner\as\frame\body\first_field)
+    h: l2_next_active(g\next)
+    if: g = 0 || g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM
+        return: 1
+    if: h = 0 || h\value = 0 || h\value\kind != c.LM_P0_NODE_ATOM || l2_ident(h\value\as\atom) = 0
+        return: 1
+    out_name[0]: h\value\as\atom
+    if: l2_text_eq(g\value\as\atom, "char")
+        out_ty[0]: 3
+        return: 0
+    if: l2_text_eq(g\value\as\atom, "LmP0Diagnostic")
+        l2_need_p0: 1
+        out_ty[0]: 21
+        return: 0
+return: 1
+
 fn: l2_write_dirs (@: FILE out) int
     int: j 0
     if: out = 0
@@ -4573,7 +4623,7 @@ fn: l2_check_fields (@: LmP0Field field; int: n; int: mi; const: @(char path); c
         if: f\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(f\value\as\atom)
             after: 1
         if: after != 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(f\value\as\atom) = 0 && l2_ident(f\value\as\atom)
-            if: l2_text_eq(f\value\as\atom, "data") = 0 && l2_text_eq(f\value\as\atom, "length") = 0 && l2_text_eq(f\value\as\atom, "columns") = 0 && l2_text_eq(f\value\as\atom, "count") = 0 && l2_text_eq(f\value\as\atom, "capacity") = 0
+            if: l2_text_eq(f\value\as\atom, "data") = 0 && l2_text_eq(f\value\as\atom, "length") = 0 && l2_text_eq(f\value\as\atom, "columns") = 0 && l2_text_eq(f\value\as\atom, "count") = 0 && l2_text_eq(f\value\as\atom, "capacity") = 0 && l2_diag_field(f\value\as\atom) = 0
                 return: l2_error(path, f\value, "unknown foreign field")
             skip: 1
             after: 0
@@ -4714,6 +4764,30 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
                 return: 1
             l2_loop_depth: l2_loop_depth - 1
             l2_scope_pop()
+            field: l2_next_active(field\next)
+            continue
+        if: l2_frame_head(stmt, "immutable") && mi < 0
+            if: stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\body = 0
+                return: l2_error(path, stmt, "unsupported body")
+            nxt: l2_next_active(stmt\as\frame\body\first_field)
+            if: nxt = 0
+                return: l2_error(path, stmt, "unsupported body")
+            while: nxt != 0
+                if: l2_ptr_local_ty(nxt\value, @ lnm, @ lty) != 0 || lty != 12 || l2_count_active(nxt\value\as\frame\body) != 3
+                    return: l2_error(path, nxt\value, "unsupported body")
+                last: l2_next_active(nxt\value\as\frame\body\first_field)
+                last: l2_next_active(last\next)
+                last: l2_next_active(last\next)
+                if: last = 0 || last\value = 0 || last\value\kind != c.LM_P0_NODE_ATOM || l2_quoted(last\value\as\atom) = 0
+                    return: l2_error(path, nxt\value, "unsupported argument")
+                if: l2_loc_add(lnm, 3, path, nxt\value) != 0
+                    return: 1
+                nxt: l2_next_active(nxt\next)
+            field: l2_next_active(field\next)
+            continue
+        if: l2_frame_head(stmt, "if") = 0 && mi < 0 && l2_const_local_ty(stmt, @ lnm, @ lty) = 0
+            if: l2_loc_add(lnm, lty, path, stmt) != 0
+                return: 1
             field: l2_next_active(field\next)
             continue
         if: l2_frame_head(stmt, "if") = 0 && mi < 0 && l2_ptr_local_ty(stmt, @ lnm, @ lty) = 0
@@ -5859,6 +5933,8 @@ fn: l2_ccall_box_int (const: @(LmP0Node node); int: mi) int
         return: 0
     if: l2_quoted(node\as\atom) != 0
         return: 0
+    if: l2_num(node\as\atom)
+        return: 0
     if: node\as\atom\length >= 2U && node\as\atom\data[0] = 99 && node\as\atom\data[1] = 46
         return: 0
     ei: l2_entry_find(node\as\atom)
@@ -5932,6 +6008,28 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
                 return: 1
             i: i + 2
             f: p2
+        if: po < 0 && f\value\kind = c.LM_P0_NODE_ATOM && l2_loc_find(f\value\as\atom) >= 0 && p1 != 0 && p1\value != 0 && p1\value\kind = c.LM_P0_NODE_ATOM && l2_is_slash(p1\value\as\atom)
+            p2: l2_next_active(p1\next)
+            if: p2 = 0 || p2\value = 0 || p2\value\kind != c.LM_P0_NODE_ATOM || l2_diag_field(p2\value\as\atom) = 0
+                return: 1
+            if: first = 0 && l2_cat(buf, ", ") != 0
+                return: 1
+            if: l2_prep(f\value, mi, ind, piece) != 0
+                return: 1
+            if: l2_cat(buf, piece) != 0
+                return: 1
+            if: l2_cat(buf, "\\") != 0
+                return: 1
+            piece[0]: 0
+            if: l2_tok_text(p2\value\as\atom, piece, 256U) != 0
+                return: 1
+            if: l2_cat(buf, piece) != 0
+                return: 1
+            first: 0
+            i: i + 3
+            f: l2_next_active(p2\next)
+            continue
+        ---
         if: po < 0 && l2_index_tail(f, @ p1, @ p2) = 0
             if: first = 0 && l2_cat(buf, ", ") != 0
                 return: 1
@@ -6000,9 +6098,44 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     @: LmP0Text lnm 0
     int: lty 0
     @: LmP0Field initf
+    @: LmP0Field last
     const: @: LmP0Frame fr
     if: stmt = 0 || mi >= 0
         return: 1
+    if: l2_frame_head(stmt, "immutable")
+        if: stmt\as = 0 || stmt\as\frame = 0 || stmt\as\frame\body = 0
+            return: 2
+        if: c.fprintf(l2_out, "%simmutable:\n", ind) < 0
+            return: 2
+        initf: l2_next_active(stmt\as\frame\body\first_field)
+        while: initf != 0
+            if: l2_ptr_local_ty(initf\value, @ lnm, @ lty) != 0
+                return: 2
+            if: c.fprintf(l2_out, "%s    @: char ", ind) < 0
+                return: 2
+            if: l2_write_text(l2_out, lnm) != 0
+                return: 2
+            last: l2_next_active(initf\value\as\frame\body\first_field)
+            last: l2_next_active(last\next)
+            last: l2_next_active(last\next)
+            if: last = 0 || last\value = 0 || l2_prep(last\value, mi, ind, l2_tok) != 0
+                return: 2
+            if: c.fprintf(l2_out, " %s\n", l2_tok) < 0
+                return: 2
+            initf: l2_next_active(initf\next)
+        return: 0
+    if: l2_const_local_ty(stmt, @ lnm, @ lty) = 0
+        if: lty = 3 && c.fprintf(l2_out, "%sconst: @(char ", ind) < 0
+            return: 2
+        if: lty = 21 && c.fprintf(l2_out, "%sconst: @(LmP0Diagnostic ", ind) < 0
+            return: 2
+        if: lty != 3 && lty != 21
+            return: 2
+        if: l2_write_text(l2_out, lnm) != 0
+            return: 2
+        if: c.fputs(")\n", l2_out) < 0
+            return: 2
+        return: 0
     if: l2_ptr_local_ty(stmt, @ lnm, @ lty) = 0
         if: lty = 12 && c.fprintf(l2_out, "%s@: char ", ind) < 0
             return: 2

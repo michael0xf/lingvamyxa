@@ -1,0 +1,8 @@
+L2:
+    fn: main () int
+        immutable:
+            @: char usage "usage: printTree <source>\n"
+        c.fputs: usage c.stdout
+        return: 0
+    end: main
+end: L2
