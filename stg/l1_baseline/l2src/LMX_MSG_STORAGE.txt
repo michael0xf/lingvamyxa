@@ -20,6 +20,41 @@ that collector or create application roots; it moves storage bookkeeping only.
 Lexical and caller-supplied nodes in the resulting arena remain valid without an
 owner-link, a fourth Lmx word, or another hidden source-method argument.
 
+End-turn unrooted-adoption acceptance (currently RED)
+---------------------------------------------------
+tests/lmx_msg_adopt_unrooted_selftest.lm1 constructs one block containing its
+range record and a two-node Lmx subtree. It transfers the block/range chains
+through the existing paired handoff into a real recipient Message, verifies
+unchanged lexical links, and returns from the construction frame. No application
+graph link or language root retains the subtree. Test-driver address observations
+are not language roots. The recipient then runs its actual bound turn, calling
+lmx_msg_end_turn. A free wrapper checks the original payload, not an envelope.
+No explicit disposal, Message deletion or test-side collection precedes the
+assertion. The required owned_frees count is 1; later turns/teardown must not free
+it again, and its range metadata must already be detached at deallocation.
+
+Run this targeted acceptance probe with the existing private-snapshot runner:
+  ./run_msg_family_handoff.ps1 -Scenario UnrootedAdopt -CoreCommit 5c8929ac0dd5426e3e64f7b9be256870344efe49
+Default Scenario Family retains the established 53-check family test and its pin.
+The new scenario is a separate explicit acceptance run, not a redundant rebuild
+in the mandatory helper edit loop. Its failure is a failure, not expected-PASS.
+
+Measured O2 result on 5c8929a: compilation succeeded, actual receiver end_turn
+returned OK, owned_frees remained 0, and the acceptance assertion exited 1.
+  build/codex/msg_family_handoff/20260911_175839_577_c088be2c/evidence.json
+Thus this checkpoint records an implementation gap, NOT completed collection.
+The first probe attempt failed to compile because of fixture syntax/API spelling;
+only the corrected run above is evidence of the runtime gap. Stable L1 was read
+only, no self-build or duplicate family/nativeExec suite was run.
+
+Limits: this probes storage-handoff -> end_turn, not complete ordinary LMX-text
+delivery, which this prototype does not yet expose. It deliberately does not use
+adopt_failed, whose explicit failed-root retention is a different policy (19.29.8).
+End_turn presently has no graph collector call. Full acceptance additionally
+needs the paired retained-root/unroot/drop-root case through the eventual graph
+root integration. Do not make this test green by freeing every block on exit.
+Source tests and ownership-list helpers introduce no new collector or root ABI.
+
 API (0 = OK, 1 = INVALID)
 ------------------------
 can_move(&dst_blocks,&dst_ranges,&src_blocks,&src_ranges) checks both component

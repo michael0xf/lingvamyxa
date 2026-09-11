@@ -2,7 +2,8 @@
 # It never compiles Grok's active working files or writes shared build outputs.
 param(
     [string]$CoreCommit = '57b590f4f30636fc49ddc0f44afdd2a2ebcab186',
-    [ValidateNotNullOrEmpty()][ValidateSet('O0', 'O2')][string[]]$Optimization = @('O2')
+    [ValidateNotNullOrEmpty()][ValidateSet('O0', 'O2')][string[]]$Optimization = @('O2'),
+    [ValidateSet('Family', 'UnrootedAdopt')][string]$Scenario = 'Family'
 )
 $ErrorActionPreference = 'Stop'
 $baseline = Split-Path -Parent $PSScriptRoot
@@ -11,6 +12,9 @@ $compiler = Join-Path $baseline 'build/l1trans/gen2/l1trans.exe'
 $pin = '65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936'
 if ((Get-FileHash -LiteralPath $compiler).Hash -ne $pin) { throw 'Stable compiler pin changed.' }
 $testSource = Join-Path $PSScriptRoot 'tests/lmx_msg_family_handoff_selftest.lm1'
+if ($Scenario -eq 'UnrootedAdopt') {
+    $testSource = Join-Path $PSScriptRoot 'tests/lmx_msg_adopt_unrooted_selftest.lm1'
+}
 $testHash = (Get-FileHash -LiteralPath $testSource).Hash
 $runnerHash = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $runId = (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8)
@@ -19,7 +23,7 @@ $snapshot = Join-Path $run 'source'
 $headers = Join-Path $run 'headers'
 New-Item -ItemType Directory -Path $snapshot, (Join-Path $headers 'l2src') -Force | Out-Null
 $stageWorkingDir = $repo
-$evidence = [ordered]@{ compiler = $compiler; compilerSHA256 = $pin; requestedCore = $CoreCommit; optimization = $Optimization; testSHA256 = $testHash; runnerSHA256 = $runnerHash; stages = @(); result = 'RUNNING' }
+$evidence = [ordered]@{ compiler = $compiler; compilerSHA256 = $pin; requestedCore = $CoreCommit; optimization = $Optimization; scenario = $Scenario; testSource = $testSource; testSHA256 = $testHash; runnerSHA256 = $runnerHash; stages = @(); result = 'RUNNING' }
 function Invoke-FamilyStage([string]$Name, [string]$Tool, [string[]]$NativeArgs) {
     $quoted = ($NativeArgs | ForEach-Object { '"' + $_ + '"' }) -join ' '
     $stdout = Join-Path $run "$Name.stdout.txt"
@@ -84,7 +88,11 @@ try {
         Invoke-FamilyStage "compile_$level" $gcc ($flags + @("-$level", $testObj, $messageC) + $modules + $native + @('-Wl,--wrap=free', '-o', $exe))
         Invoke-FamilyStage "run_$level" $exe @()
         $result = Get-Content -LiteralPath (Join-Path $run "run_$level.stdout.txt") -Raw
-        if ($result -notmatch '(?m)^family handoff checks=53 failures=0 watched_frees=3\s*$') { throw "Unexpected test result: $result" }
+        $expected = '(?m)^family handoff checks=53 failures=0 watched_frees=3\s*$'
+        if ($Scenario -eq 'UnrootedAdopt') {
+            $expected = '(?m)^adopt unrooted checks=\d+ failures=0 owned_frees=1\s*$'
+        }
+        if ($result -notmatch $expected) { throw "Unexpected test result: $result" }
         Write-Output "$level $($result.Trim())"
     }
     foreach ($path in $coreHashes.Keys) {

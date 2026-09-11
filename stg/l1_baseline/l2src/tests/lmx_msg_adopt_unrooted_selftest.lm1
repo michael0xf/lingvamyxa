@@ -1,0 +1,97 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>"
+
+# Acceptance probe for the storage-handoff -> actual end_turn seam.
+# Not ordinary LMX-text delivery or adopt_failed's explicit history-retention
+# policy. All instrumentation below is test-driver state, not graph roots.
+prototype:
+    fn: __real_free (@: void p) void
+end: prototype
+int: probe_checks 0
+int: owned_frees 0
+@: void watched_owned 0
+@: LmxMsg watched_owner 0
+
+sub: probe_check (int: ok; const: @(char label))
+    probe_checks: probe_checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(1)
+    ---
+end: probe_check
+
+sub: __wrap_free (@: void p)
+    if: p != 0 && p = watched_owned
+        probe_check(watched_owner != 0 && watched_owner\ranges = 0, "range metadata detached before payload is freed")
+        owned_frees: owned_frees + 1
+        watched_owned: 0
+    ---
+    c.__real_free(p)
+end: __wrap_free
+
+# The incoming subtree has its own lexical root and no receiver graph edge.
+# Its only persistent receiver entries are allocation-bookkeeping lists.
+# This frame returns before collection, retaining no language activation root.
+sub: probe_adopt_unrooted (@: LmxMsg recipient)
+    @: LmxMsgBlock incoming_blocks 0
+    @: LmxOwnedRange incoming_ranges 0
+    @: LmxMsgBlock b
+    @: LmxOwnedRange r
+    @: char payload
+    @: Lmx nodes
+    @: Lmx child
+    size_t: offset c.sizeof(c.LmxOwnedRange)
+    size_t: total offset + 2U * c.sizeof(c.Lmx)
+    b: (cast: (@: LmxMsgBlock) c.calloc(1U, c.sizeof(c.LmxMsgBlock)))
+    payload: (cast: (@: char) c.calloc(1U, total))
+    probe_check(b != 0 && payload != 0, "allocate incoming graph block")
+    r: (cast: (@: LmxOwnedRange) payload)
+    nodes: (cast: (@: Lmx) (payload + offset))
+    child: nodes + 1U
+    nodes\len: 1U
+    nodes\data: child
+    child\node: nodes
+    r\lo: nodes
+    r\hi: nodes + 2U
+    r\stride: c.sizeof(c.Lmx)
+    r\kind: c.LMX_KIND_CHILDREN
+    r\type: c.LMX_TYPE_BRANCH
+    b\base: payload
+    b\n: total
+    b\class: c.LMX_TYPE_BRANCH
+    probe_check(lmx_msg_blocks_push(@ incoming_blocks, b) = LMX_MSG_BLOCKS_OK, "own incoming allocation")
+    probe_check(lmx_owned_ranges_add(@ incoming_ranges, r) = LMX_OWNED_RANGES_OK, "register incoming graph domain")
+    probe_check(recipient\blocks = 0 && recipient\ranges = 0, "recipient starts without extra graph storage")
+    watched_owned: payload
+    watched_owner: recipient
+    probe_check(lmx_msg_storage_move_all(@ recipient\blocks, @ recipient\ranges, @ incoming_blocks, @ incoming_ranges) = LMX_MSG_STORAGE_OK, "adopt through existing paired storage handoff")
+    probe_check(incoming_blocks = 0 && incoming_ranges = 0 && recipient\blocks = b && recipient\ranges = r, "ownership moved without graph attachment")
+    probe_check(nodes\node = 0 && nodes\data = child && child\node = nodes, "lexical links and graph addresses unchanged")
+    probe_check(owned_frees = 0, "adoption does not free the payload")
+end: probe_adopt_unrooted
+
+fn: probe_end (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: LMX_MSG_INVALID
+    return: lmx_msg_end_turn(rt, who, 1)
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    unsigned: receiver 0U
+    uchar: initial 7
+    @: LmxMsg recipient
+    rt: lmx_msg_runtime_new()
+    probe_check(rt != 0, "create host fixture")
+    probe_check(lmx_msg_create(rt, 0U, 1U, @ initial, 1U, @ receiver) = LMX_MSG_OK, "create receiver Message")
+    recipient: lmx_msg_find(rt, receiver)
+    probe_check(recipient != 0, "resolve receiver fixture")
+    probe_adopt_unrooted(recipient)
+    probe_check(lmx_msg_exec_bind(rt, receiver, probe_end, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind real receiver turn")
+    probe_check(lmx_msg_run_child_turn(rt, receiver) = LMX_MSG_OK, "run receiver through real end_turn")
+    c.printf("adopt unrooted observed owned_frees=%d before_runtime_delete\n", owned_frees)
+    probe_check(owned_frees = 1 && watched_owned = 0, "unrooted adopted graph freed by end_turn, not teardown")
+    probe_check(recipient\blocks = 0 && recipient\ranges = 0, "dead storage and classification metadata removed")
+    probe_check(lmx_msg_run_child_turn(rt, receiver) = LMX_MSG_OK && owned_frees = 1, "next end_turn does not free twice")
+    lmx_msg_runtime_delete(rt)
+    probe_check(owned_frees = 1, "runtime deletion does not double free")
+    c.printf("adopt unrooted checks=%d failures=0 owned_frees=%d\n", probe_checks, owned_frees)
+    return: 0

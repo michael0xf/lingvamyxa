@@ -12074,6 +12074,15 @@ through any live root are garbage at the end-turn boundary, even if application
 code attached them nowhere. Explicitly retained failed-operation history follows
 the same reachability rule and the retention policy in 19.29.8.
 
+Acceptance case: transfer a handoff-safe incoming graph into B without retaining
+any reference to it, release temporary delivery roots, and execute B's end-turn.
+For an otherwise empty transferred block, its tracked deallocation must occur
+exactly once at that boundary, before B is destroyed, with its dead range/index
+entries removed. An explicit disposer call in the test is not evidence of this
+collection. A further end-turn must not free it twice. The paired retained-root
+case must keep the graph and its addresses alive until that root is released.
+An explicitly retained failed-history root is not the unrooted case.
+
 Roots include the Message root, active `node` arguments, exact own-field
 occurrences retained by C frames, declared/dynamic Structure or Array references,
 results, continuations, scheduler handles and explicit application handles.
