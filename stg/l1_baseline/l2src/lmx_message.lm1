@@ -1542,26 +1542,46 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
             return: c.LMX_MSG_INVALID
         ---
     ---
-    c.lmx_msg_exec_lock(rt)
-    p: lmx_msg_self_or_find(rt, parent)
+    p: lmx_msg_turn_slot(rt, parent)
     if: p = 0
-        c.lmx_msg_exec_unlock(rt)
-        return: c.LMX_MSG_INVALID
-    ch: p\first_child
-    while: ch != 0
-        if: ch\mapped = 0 && ch\turn != 0
-            if: ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED
-                if: c.lmx_msg_mail_inbox_empty(ch) = 0 || ch\closing != 0
-                    addr: ch\addr
-                    ch: 0
+        c.lmx_msg_exec_lock(rt)
+        p: lmx_msg_self_or_find(rt, parent)
+        if: p = 0
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_INVALID
+        ---
+        ch: p\first_child
+        while: ch != 0
+            if: ch\mapped = 0 && ch\turn != 0
+                if: ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED
+                    if: c.lmx_msg_mail_inbox_empty(ch) = 0 || ch\closing != 0
+                        addr: ch\addr
+                        ch: 0
+                    ---
                 ---
             ---
+            if: ch != 0
+                ch: ch\next_sibling
+            ---
         ---
-        if: ch != 0
-            ch: ch\next_sibling
+        c.lmx_msg_exec_unlock(rt)
+    ---
+    if: p != 0 && addr = 0U && c.lmx_msg_exec_holding_turn(rt, parent) != 0
+        ch: p\first_child
+        while: ch != 0
+            if: ch\mapped = 0 && ch\turn != 0
+                if: ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED
+                    if: c.lmx_msg_mail_inbox_empty(ch) = 0 || ch\closing != 0
+                        addr: ch\addr
+                        ch: 0
+                    ---
+                ---
+            ---
+            if: ch != 0
+                ch: ch\next_sibling
+            ---
         ---
     ---
-    c.lmx_msg_exec_unlock(rt)
     if: addr = 0U
         return: c.LMX_MSG_EMPTY
 return: c.lmx_msg_run_child_turn(rt, addr)
