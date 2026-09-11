@@ -178,10 +178,14 @@ return: 0
 # Internal: advance FindNextFileW, filtering "." and ".." (Java semantics).
 fn: mixa_dir_find_advance (@: MixaDir d) int
     int: more
+    ulong: gle
     more: 1
     while: more = 1
         if: c.FindNextFileW(d\hfind, d\ffd) = 0
-            return: MIXA_DIR_END
+            gle: c.GetLastError()
+            if: gle = 18U
+                return: MIXA_DIR_END
+            return: MIXA_DIR_ERR_IO
         more: 0
         if: mixa_dir_cname_is_dot(d\ffd) = 1
             more: 1
@@ -200,7 +204,7 @@ fn: mixa_dir_list_next (@: MixaDir d; @: MixaDirEntry out) int
         if: d\first_done != 0
             rc: mixa_dir_find_advance(d)
             if: rc != MIXA_DIR_OK
-                return: MIXA_DIR_END
+                return: rc
         ---
         d\first_done: 1
         rc: mixa_dir_fill_entry(d\ffd, out)
@@ -349,6 +353,8 @@ fn: mixa_dir_rename (const: @(char path_utf8); const: @(char new_path_utf8)) int
         c.free(wnew)
         if: gle = 183U
             return: MIXA_DIR_ERR_EXISTS
+        if: gle = 2U || gle = 3U || gle = 267U
+            return: MIXA_DIR_ERR_MISSING
         return: MIXA_DIR_ERR_IO
     ---
     c.free(wold)

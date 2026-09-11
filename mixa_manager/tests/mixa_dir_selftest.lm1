@@ -53,7 +53,7 @@ fn: mixa_dir_test_write_file (const: @(char path_utf8); const: @(char data); siz
     c.free(wpath)
 return: 0
 
-fn: main () int
+fn: main (int: argc; @: @(char) argv) int
     []: char base 256
     []: char sub 256
     []: char f_a 256
@@ -68,22 +68,28 @@ fn: main () int
     []: MixaDirEntry e1 1
     []: MixaDirEntry stats 1
     []: (@: MixaDir) h 1
+    []: (@: MixaDir) bad 1
     int: failures
     int: st
     int: n
     failures: 0
 
-    c.snprintf(base, 256U, "build/mixa/tmp_dir_seam")
-    c.snprintf(sub, 256U, "build/mixa/tmp_dir_seam/sub")
-    c.snprintf(f_a, 256U, "build/mixa/tmp_dir_seam/a.txt")
-    c.snprintf(f_b, 256U, "build/mixa/tmp_dir_seam/b.bin")
-    c.snprintf(mv_from, 256U, "build/mixa/tmp_dir_seam/mv_from.txt")
-    c.snprintf(mv_to, 256U, "build/mixa/tmp_dir_seam/mv_to.txt")
-    c.snprintf(mv_dup, 256U, "build/mixa/tmp_dir_seam/a.txt")
-    c.snprintf(missing, 256U, "build/mixa/tmp_dir_seam/no_such_xyz")
-    c.snprintf(empty_dir, 256U, "build/mixa/tmp_dir_seam/empty")
-    c.snprintf(nonempty_dir, 256U, "build/mixa/tmp_dir_seam/nonempty")
-    c.snprintf(sub_child, 256U, "build/mixa/tmp_dir_seam/nonempty/keep.txt")
+    if: argc >= 2
+        c.snprintf(base, 256U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 256U, "build/mixa/tmp_dir_seam")
+    ---
+    c.snprintf(sub, 256U, "%s/sub", base)
+    c.snprintf(f_a, 256U, "%s/a.txt", base)
+    c.snprintf(f_b, 256U, "%s/b.bin", base)
+    c.snprintf(mv_from, 256U, "%s/mv_from.txt", base)
+    c.snprintf(mv_to, 256U, "%s/mv_to.txt", base)
+    c.snprintf(mv_dup, 256U, "%s/a.txt", base)
+    c.snprintf(missing, 256U, "%s/no_such_xyz", base)
+    c.snprintf(empty_dir, 256U, "%s/empty", base)
+    c.snprintf(nonempty_dir, 256U, "%s/nonempty", base)
+    c.snprintf(sub_child, 256U, "%s/nonempty/keep.txt", base)
 
     if: mixa_dir_test_mkdir_utf8(base) != 0
         c.printf("dir: mkdir base failed\n")
@@ -196,6 +202,10 @@ fn: main () int
         if: st != MIXA_DIR_END
             c.printf("T8 list next empty st=%d want 6\n", st)
             failures: failures + 1
+        st: mixa_dir_list_next(h[0], @ e1[0])
+        if: st != MIXA_DIR_END
+            c.printf("T8b repeat EOF st=%d want 6\n", st)
+            failures: failures + 1
         mixa_dir_list_close(h[0])
     ---
     # T9: list fixture dir -> 4 entries (a.txt, b.bin, sub, nonempty), no dots
@@ -221,6 +231,10 @@ fn: main () int
         ---
         if: n != 6
             c.printf("T9 list count=%d want 6\n", n)
+            failures: failures + 1
+        st: mixa_dir_list_next(h[0], @ e1[0])
+        if: st != MIXA_DIR_END
+            c.printf("T9b repeat after EOF st=%d want 6\n", st)
             failures: failures + 1
         mixa_dir_list_close(h[0])
     ---
@@ -271,11 +285,28 @@ fn: main () int
     if: st != MIXA_DIR_ERR_EXISTS
         c.printf("T13 rename onto existing st=%d want 5\n", st)
         failures: failures + 1
-    # T14: rename missing src -> ERR_IO (MoveFileW FILE_NOT_FOUND mapping)
+    # T14: rename missing src -> ERR_MISSING; dest mv_to untouched
     st: mixa_dir_rename(missing, mv_to)
-    if: st != MIXA_DIR_ERR_IO
-        c.printf("T14 rename missing st=%d want 3\n", st)
+    if: st != MIXA_DIR_ERR_MISSING
+        c.printf("T14 rename missing st=%d want 2\n", st)
         failures: failures + 1
+    ---
+    if: st = MIXA_DIR_ERR_MISSING
+        st: mixa_dir_stat(mv_to, @ e1[0])
+        if: st != MIXA_DIR_OK
+            c.printf("T14 dest mv_to lost st=%d\n", st)
+            failures: failures + 1
+        ---
+        if: st = MIXA_DIR_OK
+            if: mixa_dir_entry_size(@ e1[0]) != 4U
+                c.printf("T14 dest mv_to size=%u want 4\n", (cast: (unsigned) mixa_dir_entry_size(@ e1[0])))
+                failures: failures + 1
+        ---
+        st: mixa_dir_stat(missing, @ e1[0])
+        if: st != MIXA_DIR_ERR_MISSING
+            c.printf("T14 missing src changed st=%d\n", st)
+            failures: failures + 1
+    ---
     # T15: rename null args -> ERR_ARG
     st: mixa_dir_rename(0, mv_to)
     if: st != MIXA_DIR_ERR_ARG
@@ -324,6 +355,20 @@ fn: main () int
     if: st != MIXA_DIR_ERR_ARG
         c.printf("T20 remove null st=%d want 1\n", st)
         failures: failures + 1
+
+    # T21: test-owned invalid enumeration handle -> list_next ERR_IO (not END)
+    bad[0]: (cast: (@: MixaDir) c.calloc(1U, c.sizeof(c.MixaDir)))
+    if: bad[0] != 0
+        bad[0]\hfind: (cast: (@: void) (cast: (size_t) -1))
+        bad[0]\ffd: (cast: (@: WIN32_FIND_DATAW) c.calloc(1U, c.sizeof(c.WIN32_FIND_DATAW)))
+        bad[0]\is_open: 1
+        bad[0]\first_done: 1
+        st: mixa_dir_list_next(bad[0], @ e1[0])
+        if: st != MIXA_DIR_ERR_IO
+            c.printf("T21 invalid handle st=%d want 3\n", st)
+            failures: failures + 1
+        mixa_dir_list_close(bad[0])
+    ---
 
     if: failures != 0
         c.printf("mixa_dir_selftest FAIL failures=%d\n", failures)

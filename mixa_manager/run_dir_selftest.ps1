@@ -93,7 +93,10 @@ if ($Result.ExitCode -ne 0) {
     exit 1
 }
 
-# Stage 1b: translate portable header (prototypes; references MixaDir opaquely)
+# Stage 1b: translate portable header (prototypes for the status/entry accessors;
+# NOTE: NOT yet an opaque portable ABI - it predefs the Windows concrete header,
+# so the generated proto header still pulls in windows.h. Forward decl of struct
+# MixaDir without a body is not expressible in L1 yet.)
 $PortableHeaderOut = Join-Path $HeaderDir "mixa_dir.lm1.h"
 Set-Content -LiteralPath $StatusFile -Value "stage portable_header_trans: launching"
 $Result = Invoke-Stage "portable_header_trans" $Compiler @("mixa_manager\mixa_dir.h.lm1", $PortableHeaderOut) $RepoRoot
@@ -167,17 +170,20 @@ if ($CompileRc -ne 0) {
 $ExeHash = (Get-FileHash -LiteralPath $Exe -Algorithm SHA256).Hash
 Add-Content -LiteralPath $HashReport -Value "exe: $ExeHash $Exe"
 
-# Stage 4: run (clean fixture dir first so reruns are deterministic)
-$FixtureDir = Join-Path $RepoRoot "build\mixa\tmp_dir_seam"
-if (Test-Path -LiteralPath $FixtureDir) {
-    Remove-Item -LiteralPath $FixtureDir -Recurse -Force -ErrorAction Stop
-}
+# Stage 4: run. Fixtures live under this run's private dir (unique per run), so
+# no shared path is deleted and parallel runs/other agents' fixtures are never
+# touched. The test receives the fixture root as argv[1].
+$FixtureDir = Join-Path $RunDir "fixtures"
+New-Item -ItemType Directory -Path $FixtureDir -Force | Out-Null
+Add-Content -LiteralPath $HashReport -Value "fixture_dir: $FixtureDir"
+$RunCmdFile = Join-Path $LogDir "run_command.txt"
+Set-Content -LiteralPath $RunCmdFile -Value "exe: $Exe`nfixture_root: $FixtureDir`ncwd: $RepoRoot"
 $RunStdout = Join-Path $LogDir "run_stdout.log"
 $RunStderr = Join-Path $LogDir "run_stderr.log"
 $RunExitFile = Join-Path $LogDir "run_exit.txt"
 Set-Content -LiteralPath $StatusFile -Value "stage run: launching"
 try {
-    $RunProc = Start-Process -FilePath $Exe -Wait -PassThru -NoNewWindow -RedirectStandardOutput $RunStdout -RedirectStandardError $RunStderr -ErrorAction Stop
+    $RunProc = Start-Process -FilePath $Exe -ArgumentList @($FixtureDir) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $RunStdout -RedirectStandardError $RunStderr -ErrorAction Stop
     $RunRc = $RunProc.ExitCode
     Set-Content -LiteralPath $RunExitFile -Value $RunRc
 } catch {
