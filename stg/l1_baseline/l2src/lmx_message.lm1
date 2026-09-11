@@ -192,7 +192,7 @@ sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
         c.lmx_msg_exec_unlock(rt)
         return
     ---
-    c.lmx_msg_exec_wake_locked(rt)
+    c.lmx_msg_exec_wake_addr_locked(rt, addr)
     c.lmx_msg_exec_unlock(rt)
 end: lmx_msg_exec_ready
 
