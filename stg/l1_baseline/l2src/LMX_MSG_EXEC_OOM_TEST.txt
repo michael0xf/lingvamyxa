@@ -1,0 +1,42 @@
+Targeted legacy EXEC OOM fixture
+===============================
+
+The observed failure was not a slow build: the OOM capacity assertion called
+runtime_delete while two test spin workers still waited for g_cpu_stop. Cleanup
+then waited for those workers indefinitely. All32 failure exits in this OOM
+scenario now converge on one cleanup path: release g_cpu_stop, disable the
+test's allocation-failure injection, stop/join the executor, close fixture
+events, then delete the fixture runtime. Production Message semantics unchanged.
+
+This is a bounded repair of an EXISTING native test, granted by Grok162600/
+163100, not permission to write new application or core behavior in C.
+
+The same exec_selftest binary supports:
+  no arguments             original full regression suite
+  --oom-only               only the ready-overflow/FIFO scenario
+  --oom-cleanup-failure    deliberately fail the capacity checkpoint while
+                           both spin workers are active; cleanup must finish
+                           and the process must return1, not hang or pass
+
+The original OOM checks remain: queue full before injected growth failure,
+actual fail_hits >0, scan flag, no early/lost delivery, FIFO10/20, exactly-once
+worker completion and eventual empty queue. The legacy fixture still assumes
+eight fill entries; it is not an adaptive arbitrary-capacity test. A future
+queue representation change may require revising that fixture explicitly,
+not relaxing its overflow assertions or leaving workers running on failure.
+
+run_msg_exec_oom.ps1 builds ONE private EXEC_TEST binary from immutable core
+b89c01cfd22c3542df371a06774ed5b79b539ed0 and the owned fixture source. It uses
+stable65D5 read-only. It does not run gate/run_gen/run_lmx, unrelated tests,
+or rebuild the translator. The same binary runs the forced failure and normal
+OOM cases. Every command has a30second timeout; only its own newly launched
+process can be stopped on timeout, never a colleague's active process.
+
+Verified evidence:
+build/codex/msg_exec_oom/20260911_163027_004_a7d63ac6/evidence.json
+  forced: expected exit1, explicit failure marker, cleanup complete, no timeout
+  normal: exit0, count12 hits5 scan1 fifo10,20, cleanup complete
+  scope: neither invocation enters the unrelated full-suite scenarios
+
+No full-suite/native-platform generalization or stable promotion is claimed.
+This opt-in targeted runner preserves the full suite for integration milestones.

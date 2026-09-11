@@ -773,7 +773,9 @@ static void hook_bind_extra(LmxMsgRuntime *rt) {
     }
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    int force_oom_cleanup = argc == 2 && strcmp(argv[1], "--oom-cleanup-failure") == 0;
+    int oom_only = force_oom_cleanup || (argc == 2 && strcmp(argv[1], "--oom-only") == 0);
     LmxMsgRuntime *rt;
     LmxMsgAddr parent = 0, w1 = 0, w2 = 0, ui = 0, w3 = 0;
     LmxMsgEnv env;
@@ -784,6 +786,12 @@ int main(void) {
     DWORD tui;
     DWORD tbusy_ui = 0;
     FILE *ev;
+
+    if (argc != 1 && !oom_only) {
+        fprintf(stderr, "usage: exec_selftest [--oom-only|--oom-cleanup-failure]\n");
+        return 2;
+    }
+    if (oom_only) { goto oom_scenario; }
 
     fprintf(stderr, "boot\n");
     fflush(stderr);
@@ -1613,6 +1621,7 @@ int main(void) {
         lmx_msg_runtime_delete(rtl);
         g_live_cascade = 1;
     }
+oom_scenario:
     {
         LmxMsgRuntime *rto;
         LmxMsgAddr po = 0, bs0 = 0, bs1 = 0, wo[11], wf = 0;
@@ -1624,6 +1633,7 @@ int main(void) {
         static MassRec oomfifo;
         TurnCtx spin0, spin1;
         int k;
+        int oom_failed = 1;
         int cap;
         int nrd;
         int hits;
@@ -1642,60 +1652,60 @@ int main(void) {
         rto = lmx_msg_runtime_new();
         if (rto == 0 || spin0.started == 0 || spin1.started == 0) {
             fprintf(stderr, "oom rt\n");
-            return 1;
+            goto oom_cleanup;
         }
         if (lmx_msg_create(rto, 0, 1, &ini, 1, &po) != LMX_MSG_OK) {
             fprintf(stderr, "oom create po\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         if (lmx_msg_create(rto, po, 2, &ini, 1, &bs0) != LMX_MSG_OK) {
             fprintf(stderr, "oom create bs0\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         if (lmx_msg_create(rto, po, 3, &ini, 1, &bs1) != LMX_MSG_OK) {
             fprintf(stderr, "oom create bs1\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         for (k = 0; k < 11; k++) {
             payload[k] = (uchar)(50 + k);
             oom[k].expect = payload[k];
             if (lmx_msg_create(rto, po, (unsigned)(k + 10), &ini, 1, &wo[k]) != LMX_MSG_OK || wo[k] == 0) {
                 fprintf(stderr, "oom create %d\n", k);
-                return 1;
+                goto oom_cleanup;
             }
             if (lmx_msg_exec_bind(rto, wo[k], turn_mass, &oom[k], LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
                 fprintf(stderr, "oom bind %d\n", k);
                 fflush(stderr);
-                return 1;
+                goto oom_cleanup;
             }
         }
         if (lmx_msg_create(rto, po, 40, &ini, 1, &wf) != LMX_MSG_OK || wf == 0) {
             fprintf(stderr, "oom create wf\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         if (lmx_msg_exec_bind(rto, wf, turn_two_ok, &oomfifo, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
             fprintf(stderr, "oom bind wf\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         if (lmx_msg_exec_bind(rto, bs0, turn_busy, &spin0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
             fprintf(stderr, "oom bind bs0\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         if (lmx_msg_exec_bind(rto, bs1, turn_busy, &spin1, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
             fprintf(stderr, "oom bind bs1\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         if (lmx_msg_end_turn(rto, po, 1) != LMX_MSG_OK) {
             fprintf(stderr, "oom end_turn commit\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         lmx_msg_exec_drop_stale_ready(rto);
         memset(&eo, 0, sizeof(eo));
@@ -1705,23 +1715,23 @@ int main(void) {
         if (lmx_msg_send(rto, po, bs0, &eo) != LMX_MSG_STAGED || lmx_msg_send(rto, po, bs1, &eo) != LMX_MSG_STAGED) {
             fprintf(stderr, "oom send busy\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         if (lmx_msg_end_turn(rto, po, 1) != LMX_MSG_OK) {
             fprintf(stderr, "oom end_turn busy\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         lmx_msg_pump(rto);
         if (lmx_msg_exec_start(rto, 2) != LMX_MSG_OK) {
             fprintf(stderr, "oom exec_start\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         if (WaitForSingleObject(spin0.started, 2000) != WAIT_OBJECT_0 || WaitForSingleObject(spin1.started, 2000) != WAIT_OBJECT_0) {
             fprintf(stderr, "oom busy workers not started\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         fprintf(stderr, "oom busy running nready=%d cap=%d\n",
             lmx_msg_exec_nready(rto), lmx_msg_exec_ready_cap(rto));
@@ -1731,37 +1741,37 @@ int main(void) {
             if (lmx_msg_host_post(rto, wo[k], &eo) != LMX_MSG_STAGED) {
                 fprintf(stderr, "oom host_post fill %d\n", k);
                 fflush(stderr);
-                return 1;
+                goto oom_cleanup;
             }
         }
         if (lmx_msg_host_drain(rto) != LMX_MSG_OK) {
             fprintf(stderr, "oom drain fill\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         cap = lmx_msg_exec_ready_cap(rto);
         nrd = lmx_msg_exec_nready(rto);
         fprintf(stderr, "oom filled cap=%d nready=%d\n", cap, nrd);
         fflush(stderr);
-        if (cap != nrd || nrd < 8) {
+        if (force_oom_cleanup || cap != nrd || nrd < 8) {
+            if (force_oom_cleanup) {
+                fprintf(stderr, "forced oom cleanup failure\n");
+            }
             fprintf(stderr, "oom not at capacity cap=%d nready=%d\n", cap, nrd);
             fflush(stderr);
-            lmx_msg_runtime_delete(rto);
-            return 1;
+            goto oom_cleanup;
         }
         for (k = 8; k < 11; k++) {
             if (lmx_msg_exec_ready_has(rto, wo[k]) != 0) {
                 fprintf(stderr, "oom wo[%d] already in ready before overflow\n", k);
                 fflush(stderr);
-                lmx_msg_runtime_delete(rto);
-                return 1;
+                goto oom_cleanup;
             }
         }
         if (lmx_msg_exec_ready_has(rto, wf) != 0) {
             fprintf(stderr, "oom fifo addr already in ready before overflow\n");
             fflush(stderr);
-            lmx_msg_runtime_delete(rto);
-            return 1;
+            goto oom_cleanup;
         }
         lmx_msg_exec_test_set_fail_grow(rto, 1);
         for (k = 8; k < 11; k++) {
@@ -1769,25 +1779,25 @@ int main(void) {
             if (lmx_msg_host_post(rto, wo[k], &eo) != LMX_MSG_STAGED) {
                 fprintf(stderr, "oom host_post overflow %d\n", k);
                 fflush(stderr);
-                return 1;
+                goto oom_cleanup;
             }
         }
         eo.bytes = &f10;
         if (lmx_msg_host_post(rto, wf, &eo) != LMX_MSG_STAGED) {
             fprintf(stderr, "oom host_post fifo 10\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         eo.bytes = &f20;
         if (lmx_msg_host_post(rto, wf, &eo) != LMX_MSG_STAGED) {
             fprintf(stderr, "oom host_post fifo 20\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         if (lmx_msg_host_drain(rto) != LMX_MSG_OK) {
             fprintf(stderr, "oom drain overflow\n");
             fflush(stderr);
-            return 1;
+            goto oom_cleanup;
         }
         hits = lmx_msg_exec_test_fail_hits(rto);
         sc = lmx_msg_exec_get_scan(rto);
@@ -1798,22 +1808,19 @@ int main(void) {
             fprintf(stderr, "oom inject not real hits=%d scan=%d nready=%d was=%d\n",
                 hits, sc, lmx_msg_exec_nready(rto), nrd);
             fflush(stderr);
-            lmx_msg_runtime_delete(rto);
-            return 1;
+            goto oom_cleanup;
         }
         for (k = 8; k < 11; k++) {
             if (lmx_msg_exec_ready_has(rto, wo[k]) != 0 || InterlockedCompareExchange(&oom[k].done, 0, 0) != 0) {
                 fprintf(stderr, "oom overflow delivered under fail_grow k=%d ready=%d done=%ld\n",
                     k, lmx_msg_exec_ready_has(rto, wo[k]), (long)oom[k].done);
-                lmx_msg_runtime_delete(rto);
-                return 1;
+                goto oom_cleanup;
             }
         }
         if (lmx_msg_exec_ready_has(rto, wf) != 0 || InterlockedCompareExchange(&oomfifo.done, 0, 0) != 0) {
             fprintf(stderr, "oom fifo delivered under fail_grow ready=%d done=%ld\n",
                 lmx_msg_exec_ready_has(rto, wf), (long)oomfifo.done);
-            lmx_msg_runtime_delete(rto);
-            return 1;
+            goto oom_cleanup;
         }
         lmx_msg_exec_test_set_fail_grow(rto, 0);
         InterlockedExchange(&g_cpu_stop, 1);
@@ -1840,8 +1847,7 @@ int main(void) {
                 fflush(stderr);
                 InterlockedExchange(&g_cpu_stop, 1);
                 lmx_msg_exec_stop(rto);
-                lmx_msg_runtime_delete(rto);
-                return 1;
+                goto oom_cleanup;
             }
         }
         lmx_msg_exec_stop(rto);
@@ -1851,16 +1857,14 @@ int main(void) {
                     k, oom[k].got, oom[k].expect, (long)oom[k].done, oom[k].recv_st, oom[k].end_st,
                     (long)InterlockedCompareExchange(&oom[k].in_turn, 0, 0));
                 fflush(stderr);
-                lmx_msg_runtime_delete(rto);
-                return 1;
+                goto oom_cleanup;
             }
             if (lmx_msg_exec_ready_has(rto, wo[k]) != 0 || lmx_msg_inbox_n(rto, wo[k]) != 0 || lmx_msg_exec_is_runnable(rto, wo[k]) != 0) {
                 fprintf(stderr, "oom[%d] not drained ready=%d inbox=%d runnable=%d\n",
                     k, lmx_msg_exec_ready_has(rto, wo[k]), lmx_msg_inbox_n(rto, wo[k]),
                     lmx_msg_exec_is_runnable(rto, wo[k]));
                 fflush(stderr);
-                lmx_msg_runtime_delete(rto);
-                return 1;
+                goto oom_cleanup;
             }
         }
         if (oomfifo.fifo_a != 10 || oomfifo.fifo_b != 20 || oomfifo.recv_st != LMX_MSG_OK || oomfifo.end_st != LMX_MSG_OK || InterlockedCompareExchange(&oomfifo.done, 0, 0) != 2 || InterlockedCompareExchange(&oomfifo.in_turn, 0, 0) != 0 || oomfifo.overlap != 0) {
@@ -1869,25 +1873,38 @@ int main(void) {
                 oomfifo.recv_st, oomfifo.end_st, oomfifo.overlap,
                 (long)InterlockedCompareExchange(&oomfifo.in_turn, 0, 0), hits, sc);
             fflush(stderr);
-            lmx_msg_runtime_delete(rto);
-            return 1;
+            goto oom_cleanup;
         }
         if (lmx_msg_exec_ready_has(rto, wf) != 0 || lmx_msg_inbox_n(rto, wf) != 0 || lmx_msg_exec_is_runnable(rto, wf) != 0 || lmx_msg_exec_nready(rto) != 0) {
             fprintf(stderr, "oom fifo not drained ready=%d inbox=%d runnable=%d nready=%d\n",
                 lmx_msg_exec_ready_has(rto, wf), lmx_msg_inbox_n(rto, wf),
                 lmx_msg_exec_is_runnable(rto, wf), lmx_msg_exec_nready(rto));
             fflush(stderr);
-            lmx_msg_runtime_delete(rto);
-            return 1;
+            goto oom_cleanup;
         }
         g_oom_n = 12;
         g_oom_hits = hits;
         g_oom_scan = sc;
         g_oom_fifo_a = oomfifo.fifo_a;
         g_oom_fifo_b = oomfifo.fifo_b;
-        CloseHandle(spin0.started);
-        CloseHandle(spin1.started);
+        oom_failed = 0;
+oom_cleanup:
+        /* Release spin workers before any join, on EVERY scenario exit. */
+        InterlockedExchange(&g_cpu_stop, 1);
+        if (rto != 0) {
+            lmx_msg_exec_test_set_fail_grow(rto, 0);
+            lmx_msg_exec_stop(rto);
+        }
+        if (spin0.started != 0) { CloseHandle(spin0.started); }
+        if (spin1.started != 0) { CloseHandle(spin1.started); }
         lmx_msg_runtime_delete(rto);
+        fprintf(stderr, "oom cleanup complete failed=%d\n", oom_failed);
+        if (oom_failed) { return 1; }
+    }
+    if (oom_only) {
+        printf("exec oom-only ok count=%d hits=%d scan=%d fifo=%u,%u\n",
+            g_oom_n, g_oom_hits, g_oom_scan, g_oom_fifo_a, g_oom_fifo_b);
+        return 0;
     }
     {
         LmxMsgRuntime *rtc;
