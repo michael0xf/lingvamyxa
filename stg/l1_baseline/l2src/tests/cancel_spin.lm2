@@ -1,0 +1,10 @@
+fn: spin () int
+    int: n
+    n: 0
+    while: 1
+        n: n + 1
+    return: n
+end: spin
+fn: main () int
+    return: 0
+end: main

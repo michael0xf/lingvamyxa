@@ -87,6 +87,19 @@ static int bind_index(LmxMsgExec *e, LmxMsgAddr addr);
 static int bind_has_worker(const LmxMsgExecBind *b);
 static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr);
 
+#if defined(_MSC_VER)
+static __declspec(thread) LmxMsg *lmx_turn_msg;
+#else
+static __thread LmxMsg *lmx_turn_msg;
+#endif
+
+int lmx_msg_poll_escape(void) {
+    if (lmx_turn_msg == 0) {
+        return 0;
+    }
+    return lmx_msg_running_load(lmx_turn_msg) == 0;
+}
+
 static LmxMsgExec *exof(LmxMsgRuntime *rt) {
     if (rt == 0) {
         return 0;
@@ -502,6 +515,11 @@ static void set_tls(LmxMsgExec *e, LmxMsgAddr who) {
 #else
     pthread_setspecific(e->tls, (void *)(uintptr_t)who);
 #endif
+    if (e != 0 && e->rt != 0 && who != 0U) {
+        lmx_turn_msg = msg_at_addr(e->rt, who);
+    } else {
+        lmx_turn_msg = 0;
+    }
 }
 
 static int ready_grow(LmxMsgExec *e) {

@@ -128,6 +128,7 @@ prototype:
     fn: l2_advance (@: LmP0Field f; int: k) @: LmP0Field
     fn: l2_emit_expr (const: @(LmP0Node node); int: mi; const: @(char ind)) int
     fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
+    fn: l2_emit_poll (int: mi; const: @(char ind)) int
     fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
     fn: l2_fn_close (const: @(LmP0Frame frame); const: @(LmP0Text name); const: @(char head)) int
     fn: l2_ret_tr (const: @(LmP0Frame frame)) @: LmP0Structure
@@ -6036,6 +6037,15 @@ fn: l2_has_own_ty (int: ty) int
         i: i + 1
 return: 0
 
+fn: l2_emit_poll (int: mi; const: @(char ind)) int
+    if: ind = 0
+        return: 0
+    if: mi >= 0 && l2_m_ret[mi] = 8 && c.fprintf(l2_out, "%sif: c.lmx_msg_poll_escape() != 0\n%s    return\n", ind, ind) < 0
+        return: 1
+    if: (mi < 0 || l2_m_ret[mi] != 8) && c.fprintf(l2_out, "%sif: c.lmx_msg_poll_escape() != 0\n%s    return: 0\n", ind, ind) < 0
+        return: 1
+return: 0
+
 fn: l2_emit_checkpoint (int: mi; const: @(char ind)) int
     int: i 0
     int: fi
@@ -6576,6 +6586,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
                 return: 1
             if: c.fprintf(l2_out, "%sif: %s\n", deep, wkeep) < 0
                 return: 1
+            if: l2_emit_poll(mi, wdeep) != 0
+                return: 1
             l2_loop_depth: l2_loop_depth + 1
             if: l2_emit_body(last\value\as\structure, mi, wdeep) != 0
                 l2_loop_depth: l2_loop_depth - 1
@@ -6738,6 +6750,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0
             fr: stmt\as\frame
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8 && l2_emit_poll(mi, ind) != 0
+            return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8 && l2_emit_checkpoint(mi, ind) != 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8 && c.fprintf(l2_out, "%sreturn\n", ind) < 0
@@ -6745,6 +6759,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && mi >= 0 && l2_m_ret[mi] = 8
             field: l2_next_active(field\next)
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && (mi < 0 || l2_m_ret[mi] != 8) && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+            return: 1
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && (mi < 0 || l2_m_ret[mi] != 8) && l2_emit_poll(mi, ind) != 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") && (mi < 0 || l2_m_ret[mi] != 8) && l2_emit_checkpoint(mi, ind) != 0
             return: 1
@@ -6990,6 +7006,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         if: l2_m_ret[i] != 2 && l2_m_ret[i] != 8 && c.fputs("\n    if: node = 0\n        return: 0\n", l2_out) < 0
+            c.fclose(l2_out)
+            return: 1
+        if: l2_emit_poll(i, "    ") != 0
             c.fclose(l2_out)
             return: 1
         k: 0

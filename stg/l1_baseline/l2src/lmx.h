@@ -12,6 +12,8 @@
 
 #include <stddef.h>
 
+int lmx_msg_poll_escape(void);
+
 typedef struct Lmx Lmx;
 
 /* 2: the only universal node representation. node is the containment parent,

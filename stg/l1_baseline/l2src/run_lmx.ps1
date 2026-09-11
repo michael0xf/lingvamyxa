@@ -107,6 +107,75 @@ if ($p.ExitCode -ne 0) {
     Get-Content -LiteralPath $execErr -ErrorAction SilentlyContinue
     throw "$gen lmx_message_exec_selftest failed exit=$($p.ExitCode)"
 }
+
+# L2 loop cancelled through Message control: own-thread map_child and parent-thread sched_step.
+$l2exe = "build\l2trans\l2trans.exe"
+$l2c = "build\l2trans\l2trans.c"
+$needL2 = -not (Test-Path -LiteralPath $l2exe)
+if (-not $needL2) {
+    if ((Get-Item -LiteralPath "l2src\l2trans.lm1").LastWriteTime -gt (Get-Item -LiteralPath $l2exe).LastWriteTime) {
+        $needL2 = $true
+    }
+}
+if ($needL2) {
+    New-Item -ItemType Directory -Force -Path "build\l2trans" | Out-Null
+    & $trans "l2src\l2trans.lm1" $l2c
+    if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: l2src\l2trans.lm1" }
+    & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build $l2c -o $l2exe 2>&1 |
+        Tee-Object -FilePath (Join-Path $log "l2trans.gcc.log") | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content (Join-Path $log "l2trans.gcc.log")
+        throw "$gen gcc failed: l2trans"
+    }
+}
+$spinLm2 = "l2src\tests\cancel_spin.lm2"
+$spinLm1 = "build\l2trans\cancel_spin.lm1"
+$spinC = "build\l2trans\cancel_spin.c"
+$spinObj = "build\l2trans\cancel_spin_nomain.o"
+$spinExe = "build\l2trans\cancel_spin_host.exe"
+$spinS = Join-Path $log "cancel_spin_m0.s"
+& $l2exe $spinLm2 $spinLm1
+if ($LASTEXITCODE -ne 0) { throw "$gen l2trans failed: $spinLm2" }
+& $trans $spinLm1 $spinC
+if ($LASTEXITCODE -ne 0) { throw "$gen l1trans failed: $spinLm1" }
+$gstr = ($guards -join " ")
+$spinSlog = Join-Path $log "cancel_spin_m0.s.log"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -S `"$spinC`" -o `"$spinS`" > `"$spinSlog`" 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    Get-Content $spinSlog
+    throw "$gen gcc -S failed: $spinC"
+}
+$spinText = [IO.File]::ReadAllText((Join-Path (Get-Location) $spinS))
+if ($spinText -notmatch '(?s)l2_m0:.*?call\s+lmx_msg_poll_escape.*?call\s+lmx_msg_poll_escape.*?call\s+lmx_msg_poll_escape') {
+    throw "$gen cancel_spin assembly missing three l2_m0 poll sites"
+}
+@(
+    "generated C: $spinC"
+    "gcc -S (not host wrappers): $spinS"
+    "l2_m0 poll sites: entry (before lmx_branch_child), while backedge, after while"
+) | Set-Content -LiteralPath (Join-Path $log "cancel_spin_m0.evidence.txt") -Encoding utf8
+$spinOlog = Join-Path $log "cancel_spin_nomain.gcc.log"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -Dmain=cancel_spin_l2_main -c `"$spinC`" -o `"$spinObj`" > `"$spinOlog`" 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    Get-Content $spinOlog
+    throw "$gen gcc failed: $spinC nomain"
+}
+$spinGlog = Join-Path $log "cancel_spin_host.gcc.log"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build `"$spinObj`" l2src\tests\cancel_spin_host.c `"$msgC`" l2src\lmx_message_host.c l2src\lmx_message_exec.c -o `"$spinExe`" > `"$spinGlog`" 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    Get-Content $spinGlog
+    throw "$gen gcc failed: cancel_spin_host"
+}
+$spinOut = Join-Path $log "cancel_spin_host.stdout.txt"
+$spinErr = Join-Path $log "cancel_spin_host.stderr.txt"
+$sp = Start-Process -FilePath (Join-Path (Get-Location) $spinExe) -WorkingDirectory (Get-Location) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $spinOut -RedirectStandardError $spinErr
+$sp.ExitCode.ToString() | Set-Content -LiteralPath (Join-Path $log "cancel_spin_host.exit.txt") -Encoding ascii
+if ($sp.ExitCode -ne 0) {
+    Get-Content -LiteralPath $spinOut -ErrorAction SilentlyContinue
+    Get-Content -LiteralPath $spinErr -ErrorAction SilentlyContinue
+    throw "$gen cancel_spin_host failed exit=$($sp.ExitCode)"
+}
+
 "l2 lmx $gen ok"
 $suiteLog = Join-Path $log "lmx_suite.log"
 $toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $trans)).Hash
@@ -137,4 +206,34 @@ if (Test-Path -LiteralPath $ev2Path) { $ev = $ev + (Get-Content -LiteralPath $ev
     "exit=0"
     "host_selftest_stdout=lmx_message_host ok (see evidence)"
     "exec_selftest_stdout=lmx_message_exec ok (see evidence)"
+    "cancel_spin_stdout=$((Get-Content -LiteralPath $spinOut -Raw).Trim())"
+    "cancel_spin_stderr=$((Get-Content -LiteralPath $spinErr -Raw).Trim())"
+    "cancel_spin_exit=$($sp.ExitCode)"
 ) + $ev | Set-Content -LiteralPath $suiteLog -Encoding utf8
+$hashLines = @(
+    "fresh hashes $(Get-Date -Format o)"
+)
+foreach ($hp in @(
+    "l2src\lmx_message.lm1",
+    "l2src\lmx_message.h",
+    "l2src\lmx_message_exec.c",
+    "l2src\lmx_message_exec_selftest.c",
+    "l2src\lmx_message_selftest.lm1",
+    "l2src\l2trans.lm1",
+    "l2src\tests\cancel_spin.lm2",
+    "l2src\tests\cancel_spin_host.c",
+    "l2src\run_lmx.ps1",
+    "build\l2trans\cancel_spin.lm1",
+    "build\l2trans\cancel_spin.c",
+    "build\l2\lmx_message_selftest.exe",
+    "build\l2\lmx_message_exec_selftest.exe",
+    "build\l2trans\cancel_spin_host.exe"
+)) {
+    if (Test-Path -LiteralPath $hp) {
+        $hashLines += "$((Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $hp)).Hash.ToLower())  $hp"
+    }
+}
+$hashLines += "exit_message=0"
+$hashLines += "exit_exec=0"
+$hashLines += "exit_cancel_spin=$($sp.ExitCode)"
+$hashLines | Set-Content -LiteralPath (Join-Path $log "lmx_message_ctx.hashes.txt") -Encoding ascii
