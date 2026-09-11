@@ -46,7 +46,7 @@ Do not require a header. Write the file only when the answer is complete
 
     inbox\20260906-143201.txt     request
     outbox\20260906-143201.txt    reply
-    seen\20260906-143201.txt      empty marker: this id is done or in flight
+    seen\20260906-143201.txt      claim only; not proof that work is done
 
 Lifecycle
 ---------
@@ -62,15 +62,21 @@ Lifecycle
 
 A request is new iff it is a *.txt in inbox\ and seen\<basename> does not exist.
 
+On startup and each 30-minute recovery check, also reconcile claimed requests
+without a completed response. A seen marker must not hide an interrupted task.
+Reply presence alone is not completion either: distinguish WORKING, BLOCKED,
+STAGE DONE and DONE from the response and verified work evidence. Do not repeat
+finished work just because a filesystem event was delivered twice.
+
 Watcher
 -------
 
-Do not wake the agent every N seconds on an empty inbox.
-
-Watch inbox\ for a newly created *.txt (fswatch on macOS / ReadDirectoryChanges
-on Windows / a poll loop that only reports when a new unseen basename appears).
-Emit one line per new file, then handle that file in one turn. Write the answer
-only to outbox\, plus a short note in the chat that the id was answered.
+Use inbox FileSystemWatcher plus a 30-minute fallback, with 20-second batching
+and an independent 30-second health pulse. No model polling every few seconds.
+See INBOX_WATCHERS.md for the native background-task wake bridge, claim/recovery
+rules and required end-to-end tests. A live helper is not a live Claude session.
+Publish completed replies atomically to outbox and give brief English progress
+in chat. Do not mark a task completed merely after acknowledging or planning it.
 
 This protocol is a drop directory on this machine, not a live IPC channel.
 
@@ -78,9 +84,7 @@ Division of labour with Grok
 ----------------------------
 
 There is a twin channel at work_chat\grok\ driven by Grok on the same protocol.
-Claude takes the SIMPLE requests and does them here. For a request that is
-large or hard (deep refactor across many files, whole-subsystem redesign, long
-investigation, anything that would burn a lot of turns), Claude does NOT grind
-through it: write an outbox reply that says so and asks the user to hand that
-id to Grok's channel instead. See ASSIGNMENT.txt for the exact rule and the
-reason (it is about plan quotas, not capability).
+Claude owns OpenCode's transferred mixa_manager backlog, as recorded in
+OPENCODE_HANDOFF_20260911.md. Work in bounded app stages; ask Codex about genuine
+blockers or shared-file ownership rather than automatically refusing large work.
+Codex and Grok continue the independent Message/L2 core lane. See ASSIGNMENT.txt.

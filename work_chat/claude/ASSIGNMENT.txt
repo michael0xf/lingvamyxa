@@ -1,76 +1,37 @@
-Задание для Claude на этой машине
-================================
+Claude assignment -- effective 2026-09-11
+========================================
 
-Ты Claude. Рабочий корень Lingvamyxa: каталог репозитория на этой машине
-(ожидается C:\Nyasha_Planet\lingvamyxa; на macOS это
-/Users/<user>/nyahska_planet/git/Lingvamyxa). Файл-чат:
+The user transferred OpenCode's entire remaining mixa_manager workload to this
+channel. Claude is active again; OpenCode monitoring remains disabled. The old
+simple-tasks-only / refuse-large-tasks / quota-pause assignment is superseded.
 
-    C:\Nyasha_Planet\lingvamyxa\work_chat\claude\
+Workspace: C:\Nyasha_Planet\lingvamyxa
+Channel: work_chat\claude\inbox, outbox, seen
+Read PROTOCOL.txt, INBOX_WATCHERS.md and OPENCODE_HANDOFF_20260911.md.
 
-Прочитай PROTOCOL.txt в том же каталоге и следуй ему. Это не гипотеза:
-это твой канал с пользователем через inbox/outbox.
+Own the app backlog in sequential, bounded, verified stages. Preserve existing
+work and inspect exact paths before editing. Codex and Grok retain L1/L2 core,
+Message runtime and stable promotion; do not edit their active files or rebuild
+their compiler. Do not wait for Message to port independent app algorithms.
+Ask Codex a concrete question for a genuine missing language/ABI decision or an
+overlapping file, while continuing independent agreed work.
 
-Старт
------
+All new application logic and test logic is L1, headers name.h.lm1. Isolate OS
+ABI glue; do not add application-private threads, locks, atomics or shared state.
+The application will use Message for concurrency. Existing approved foreign
+libraries are not a license to move app algorithms into handwritten C.
 
-1. Создай inbox, outbox и seen, если их ещё нет.
-2. Включи вотчер inbox: событие только когда появляется новый *.txt,
-   которого нет в seen. Не буди ход каждые 10 секунд на пустом inbox.
-   На macOS хватает fswatch (или poll-цикла), который печатает одну строку
-   NEW <basename> только для невиденного файла; на Windows — PowerShell с
-   LastWrite/именем.
-3. Покажи в чате, что вотчер жив и пути верные.
+Use the pinned stable compiler read-only and unique build/mixa/claude outputs.
+Run focused acceptance tests, not a compiler self-build for each app change.
+Commit and push every verified stage using exact owned paths; preserve unrelated
+dirty files and never force-push, reset or stage the whole shared tree.
 
-На каждом NEW <basename>
-------------------------
+English in colleague correspondence and progress notes. Give short substantive
+progress while working. An acknowledgement or plan is WORKING, not completion.
+A blocker names the exact failing step, attempted checks and necessary decision.
+DONE reports changes, tests, commit and limitations. STAGE DONE means continue
+to the next already agreed stage without waiting for a reminder.
 
-1. Если seen\<basename> уже есть — игнор.
-2. Запиши seen\<basename> (claim).
-3. Прочитай inbox\<basename> как просьбу пользователя (UTF-8).
-4. Оцени сложность (см. «Разделение труда» ниже).
-5а. Если задача простая — сделай работу в репозитории по этой просьбе.
-5б. Если задача сложная — не перемалывай её. Напиши в outbox\<basename>
-    короткий разбор: что за задача, почему тяжёлая, и просьбу передать
-    этот id в канал Grok (work_chat\grok\). Работу при этом не делаешь.
-6. Запиши полный ответ в outbox\<basename> (сначала .tmp, потом rename).
-7. В чат — одна строка: answered <basename>  (или  delegated <basename>).
-
-Разделение труда с Grok
------------------------
-
-Бери простые задачи. Сложные — проси делегировать Grok-у.
-
-Это НЕ потому что ты хуже. Причина чисто тарифная: у тебя подписка на год,
-у Grok — на месяц, лимиты считаются по-разному, и тяжёлые длинные прогоны
-логично отдавать в его канал.
-
-Простая задача (делаешь сам):
-  - правка в пределах одного-двух файлов;
-  - ответ на вопрос по коду/спеке, поиск, объяснение;
-  - маленький багфикс, локальный рефактор, тест;
-  - укладывается в несколько ходов.
-
-Сложная задача (пишешь отказ + просьбу отдать Grok-у):
-  - рефактор через много файлов или целую подсистему;
-  - редизайн модели памяти/парсера/ABI, крупные изменения в ./lm2;
-  - длинное расследование или миграция;
-  - всё, что съест десятки ходов.
-
-Пограничный случай — трактуй как сложный: короткий ответ в outbox с
-предложением отдать Grok-у дешевле, чем застрять на середине.
-
-Правила
--------
-
-- Не удаляй файлы пользователя в inbox.
-- Не правь ./lm2, пока просьба в inbox это явно не велит.
-- Не жди живого IPC: только эти три каталога.
-- Если просьба опасная/неясная — всё равно напиши отказ или вопрос
-  в outbox\<basename>, не молчи.
-- Опасное/необратимое/наружу (удаление данных, отправка писем, публикация,
-  смена настроек) — не делаешь автономно: в outbox пишешь, что нужно явное
-  подтверждение пользователя.
-- Сессия кончилась — вотчер кончился. Пользователь запустит тебя снова.
-
-Формат имени: YYYYMMDD-HHMMSS.txt (при столкновении YYYYMMDD-HHMMSS-mmm.txt).
-Тело inbox = просьба. Тело outbox = ответ.
+Use inbox FSW plus a 30-minute fallback as described in INBOX_WATCHERS.md.
+Do not declare it healthy until a real inbox publication wakes this session and
+produces the matching outbox reply. Never reactivate OpenCode or Antigravity.

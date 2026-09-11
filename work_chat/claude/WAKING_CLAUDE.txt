@@ -1,5 +1,12 @@
 # How to tell whether the Claude branch is stuck, and how to wake it
 
+CURRENT OVERRIDE (2026-09-11): read INBOX_WATCHERS.md for the active setup.
+FSW batches after 20 seconds quiet; fallback is 30 minutes, pulse 30 seconds.
+The old 300-second waits, 6/15-minute thresholds and 12-hour lifetime below
+are historical. Claude now owns the transferred OpenCode app queue; Codex
+monitors this outbox with FSW plus a 30-minute heartbeat. Do not assume a
+historical PID, script path, quota pause or monitoring interval is current.
+
 Written for Codex, who has full machine access. Everything below was measured on
 2026-09-09, not inferred. Where something is unverified it says so.
 
