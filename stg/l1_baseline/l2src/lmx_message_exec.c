@@ -394,30 +394,129 @@ struct Lmx *lmx_msg_graph(LmxMsg *m) {
     return m->graph;
 }
 
-static int graph_holds(LmxMsg *ow, Lmx *x, const unsigned char *p, int depth) {
+typedef struct LmxVisit {
+    Lmx **v;
+    size_t n;
+    size_t cap;
+    int oom;
+} LmxVisit;
+
+static int visit_has(LmxVisit *s, Lmx *x) {
     size_t i;
-    Lmx *kids;
-    LmxOwnedRange *rg;
-    const unsigned char *q;
-    if (ow == 0 || x == 0 || p == 0 || depth > 64) {
+    if (s == 0 || x == 0) {
         return 0;
     }
-    q = (const unsigned char *)x;
-    if (p >= q && p < q + sizeof(Lmx)) {
-        return 1;
-    }
-    if (x->data != 0) {
-        if ((const unsigned char *)x->data == p) {
+    for (i = 0; i < s->n; i++) {
+        if (s->v[i] == x) {
             return 1;
         }
-        rg = lmx_owned_ranges_find(ow->ranges, x->data);
-        if (rg != 0 && rg->kind == LMX_KIND_CHILDREN && x->len > 0U && x->len < 1000000U) {
-            kids = (Lmx *)x->data;
-            for (i = 0; i < x->len; i++) {
-                if (graph_holds(ow, &kids[i], p, depth + 1) != 0) {
-                    return 1;
-                }
-            }
+    }
+    return 0;
+}
+
+static void visit_add(LmxVisit *s, Lmx *x) {
+    Lmx **nv;
+    size_t cap;
+    if (s == 0 || x == 0 || s->oom != 0) {
+        return;
+    }
+    if (s->n == s->cap) {
+        cap = s->cap == 0U ? 16U : s->cap * 2U;
+        nv = (Lmx **)realloc(s->v, cap * sizeof(Lmx *));
+        if (nv == 0) {
+            s->oom = 1;
+            return;
+        }
+        s->v = nv;
+        s->cap = cap;
+    }
+    s->v[s->n] = x;
+    s->n += 1U;
+}
+
+static void mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen) {
+    LmxOwnedRange *rg;
+    size_t i;
+    Lmx *kids;
+    if (m == 0 || x == 0 || seen == 0 || seen->oom != 0) {
+        return;
+    }
+    if (visit_has(seen, x) != 0) {
+        return;
+    }
+    visit_add(seen, x);
+    if (seen->oom != 0) {
+        return;
+    }
+    if (x->node != 0 && lmx_owned_ranges_find(m->ranges, x->node) != 0) {
+        mark_from(m, x->node, seen);
+    }
+    if (x->data == 0) {
+        return;
+    }
+    rg = lmx_owned_ranges_find(m->ranges, x->data);
+    if (rg != 0 && rg->kind == LMX_KIND_CHILDREN) {
+        kids = (Lmx *)x->data;
+        i = 0U;
+        while (i < x->len) {
+            mark_from(m, &kids[i], seen);
+            i += 1U;
+        }
+    }
+}
+
+static int ptr_in_block(const unsigned char *p, LmxMsgBlock *b) {
+    unsigned char *lo;
+    unsigned char *hi;
+    if (p == 0 || b == 0 || b->base == 0) {
+        return 0;
+    }
+    lo = (unsigned char *)b->base;
+    hi = (b->n == 0) ? lo : lo + b->n;
+    if (p >= lo && p < hi) {
+        return 1;
+    }
+    return 0;
+}
+
+static int block_has_range(LmxMsg *m, LmxMsgBlock *b) {
+    LmxOwnedRange *r;
+    if (m == 0 || b == 0) {
+        return 0;
+    }
+    r = m->ranges;
+    while (r != 0) {
+        if (ptr_in_block((const unsigned char *)r->lo, b) != 0
+            || ptr_in_block((const unsigned char *)r->hi, b) != 0) {
+            return 1;
+        }
+        r = r->next;
+    }
+    return 0;
+}
+
+static int block_is_live(LmxMsg *m, LmxMsgBlock *b, LmxVisit *seen) {
+    size_t i;
+    Lmx *x;
+    if (block_has_range(m, b) == 0) {
+        return 1;
+    }
+    if (m == 0 || m->graph == 0) {
+        return 0;
+    }
+    if (seen == 0) {
+        return 1;
+    }
+    for (i = 0; i < seen->n; i++) {
+        x = seen->v[i];
+        if (ptr_in_block((const unsigned char *)x, b) != 0) {
+            return 1;
+        }
+        if (x->data != 0 && ptr_in_block((const unsigned char *)x->data, b) != 0) {
+            return 1;
+        }
+        if (x->node != 0 && ptr_in_block((const unsigned char *)x->node, b) != 0) {
+            return 1;
         }
     }
     return 0;
@@ -453,40 +552,32 @@ static void collect_block(LmxMsg *m, LmxMsgBlock *b) {
 }
 
 void lmx_msg_arena_collect(LmxMsg *m) {
-    LmxOwnedRange *r;
-    LmxOwnedRange *rn;
+    LmxVisit seen;
     LmxMsgBlock *b;
     LmxMsgBlock *nxt;
-    unsigned char *lo;
-    unsigned char *hi;
-    int held;
     if (m == 0) {
         return;
     }
-    r = m->ranges;
-    while (r != 0) {
-        rn = r->next;
-        held = 0;
-        if (m->graph != 0 && r->lo != 0) {
-            held = graph_holds(m, m->graph, (const unsigned char *)r->lo, 0);
+    seen.v = 0;
+    seen.n = 0U;
+    seen.cap = 0U;
+    seen.oom = 0;
+    if (m->graph != 0) {
+        mark_from(m, m->graph, &seen);
+        if (seen.oom != 0) {
+            free(seen.v);
+            return;
         }
-        if (held == 0 && r->lo != 0) {
-            b = m->blocks;
-            while (b != 0) {
-                nxt = b->next;
-                lo = (unsigned char *)b->base;
-                hi = (lo == 0 || b->n == 0) ? lo : lo + b->n;
-                if (lo != 0 && hi != 0
-                    && (unsigned char *)r->lo >= lo
-                    && (unsigned char *)r->lo < hi) {
-                    collect_block(m, b);
-                    break;
-                }
-                b = nxt;
-            }
-        }
-        r = rn;
     }
+    b = m->blocks;
+    while (b != 0) {
+        nxt = b->next;
+        if (block_is_live(m, b, &seen) == 0) {
+            collect_block(m, b);
+        }
+        b = nxt;
+    }
+    free(seen.v);
 }
 
 void lmx_msg_sched_unlink_child(LmxMsg *parent, LmxMsg *child) {
