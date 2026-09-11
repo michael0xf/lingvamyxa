@@ -291,6 +291,16 @@ static int turn_parent_nested(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return 0;
 }
 
+static int turn_complete_self(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    NestUsers *n = (NestUsers *)ctx;
+    n->p_during = lmx_msg_native_users(rt, who);
+    if (lmx_msg_complete(rt, who) != LMX_MSG_OK) {
+        return 1;
+    }
+    n->p_after = lmx_msg_adopted_n(rt, who);
+    return 0;
+}
+
 static int turn_bind_then_omit(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     SpawnRec *s = (SpawnRec *)ctx;
     LmxMsgEnv got;
@@ -3363,6 +3373,8 @@ int main(void) {
         {
             LmxMsgAddr live = 0;
             void *live_init;
+            LmxMsgEnv e;
+            int pst;
             if (lmx_msg_create(rth, p, 9, &ini, 1, &live) != LMX_MSG_OK || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {
                 fprintf(stderr, "live create\n");
                 lmx_msg_runtime_delete(rth);
@@ -3374,12 +3386,51 @@ int main(void) {
                 lmx_msg_runtime_delete(rth);
                 return 1;
             }
-        }
-        if (lmx_msg_complete(rth, p) != LMX_MSG_OK || lmx_msg_adopted_n(rth, p) != 0 || lmx_msg_success_load(lmx_msg_find(rth, p)) == 0) {
-            fprintf(stderr, "P complete must drop inherited n=%d success=%d\n",
-                lmx_msg_adopted_n(rth, p), (int)lmx_msg_success_load(lmx_msg_find(rth, p)));
-            lmx_msg_runtime_delete(rth);
-            return 1;
+            if (lmx_msg_exec_bind(rth, p, turn_complete_self, &nu, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "complete bind\n");
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
+            memset(&e, 0, sizeof(e));
+            e.kind = LMX_MSG_KIND_BYTES;
+            e.n = 1;
+            e.bytes = &ini;
+            if (lmx_msg_host_post(rth, p, &e) != LMX_MSG_STAGED) {
+                fprintf(stderr, "complete post\n");
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
+            (void)lmx_msg_host_drain(rth);
+            pst = lmx_msg_run_child_turn(rth, p);
+            if ((pst != LMX_MSG_OK && pst != 1) || nu.p_during < 1 || nu.p_after != 3
+                || lmx_msg_adopted_n(rth, p) != 3 || lmx_msg_success_load(lmx_msg_find(rth, p)) == 0) {
+                fprintf(stderr, "complete during turn users=%d n=%d after=%d\n",
+                    nu.p_during, lmx_msg_adopted_n(rth, p), nu.p_after);
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
+            if (lmx_msg_dispose_child(rth, dummy, p) != LMX_MSG_INVALID) {
+                fprintf(stderr, "dispose while live child\n");
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
+            if (lmx_msg_transfer_adopted(rth, p, dummy) != LMX_MSG_OK || lmx_msg_adopted_n(rth, dummy) != 3 || lmx_msg_adopted_n(rth, p) != 0) {
+                fprintf(stderr, "transfer result n dummy=%d p=%d\n", lmx_msg_adopted_n(rth, dummy), lmx_msg_adopted_n(rth, p));
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
+            if (lmx_msg_exec_bind(rth, live, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_emergency_cancel(rth, live) != LMX_MSG_OK) {
+                fprintf(stderr, "live settle\n");
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
+            (void)lmx_msg_run_child_turn(rth, live);
+            if (lmx_msg_dispose_child(rth, dummy, p) != LMX_MSG_OK || lmx_msg_adopted_n(rth, dummy) != 3) {
+                fprintf(stderr, "dispose after settle dummy=%d\n", lmx_msg_adopted_n(rth, dummy));
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
         }
         (void)gbase;
         (void)cbase;
@@ -3389,7 +3440,7 @@ int main(void) {
             lmx_msg_runtime_delete(rth);
             return 1;
         }
-        fprintf(stderr, "handoff nest users G-C-P n=3 complete-drop live-reject\n");
+        fprintf(stderr, "handoff nest users G-C-P n=3 complete-keeps transfer-survives dispose\n");
         lmx_msg_runtime_delete(rth);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");

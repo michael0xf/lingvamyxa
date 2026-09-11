@@ -2056,34 +2056,64 @@ void *lmx_msg_adopted_base(LmxMsgRuntime *rt, LmxMsgAddr who, int i) {
     return base;
 }
 
-int lmx_msg_drop_adopted(LmxMsgRuntime *rt, LmxMsgAddr who) {
-    LmxMsg *m;
+static void drop_adopted_locked(LmxMsg *m) {
     LmxAdopted *a;
-    lmx_msg_exec_lock(rt);
-    m = lmx_msg_find(rt, who);
-    if (m == 0) {
-        lmx_msg_exec_unlock(rt);
-        return LMX_MSG_INVALID;
-    }
-    while (m->adopted != 0) {
+    while (m != 0 && m->adopted != 0) {
         a = m->adopted;
         m->adopted = a->next;
         free(a->base);
         free(a);
     }
+}
+
+int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to) {
+    LmxMsg *src;
+    LmxMsg *dst;
+    LmxAdopted *tail;
+    lmx_msg_exec_lock(rt);
+    src = lmx_msg_find(rt, from);
+    dst = lmx_msg_find(rt, to);
+    if (src == 0 || dst == 0 || src == dst || src->adopted == 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    tail = src->adopted;
+    while (tail->next != 0) {
+        tail = tail->next;
+    }
+    tail->next = dst->adopted;
+    dst->adopted = src->adopted;
+    src->adopted = 0;
     lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
 }
 
-int lmx_msg_retain_history(LmxMsgRuntime *rt, LmxMsgAddr who) {
-    LmxMsg *m;
+int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
+    LmxMsg *p;
+    LmxMsg *c;
+    LmxMsg *ch;
     lmx_msg_exec_lock(rt);
-    m = lmx_msg_find(rt, who);
-    if (m == 0) {
+    p = lmx_msg_find(rt, parent);
+    c = lmx_msg_find(rt, child);
+    if (p == 0 || c == 0 || c->parent_msg != p || c->native_users != 0
+        || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    m->retain_history = 1;
+    ch = c->first_child;
+    while (ch != 0) {
+        if (ch->native_users != 0 || lmx_msg_running_load(ch) != 0 || ch->handoff_ready == 0) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_INVALID;
+        }
+        ch = ch->next_sibling;
+    }
+    if (c->init != 0) {
+        free(c->init);
+        c->init = 0;
+        c->init_n = 0U;
+    }
+    drop_adopted_locked(c);
     lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
 }
