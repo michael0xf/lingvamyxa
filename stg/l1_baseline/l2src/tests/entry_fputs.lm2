@@ -1,0 +1,6 @@
+L2:
+    fn: main () int
+        c.fputs: "hi\n" c.stdout
+        return: 0
+    end: main
+end: L2

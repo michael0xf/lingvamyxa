@@ -215,6 +215,42 @@ if ($c0 -eq $c7) { throw "return 0 and return 7 produced identical C" }
 Invoke-Negative "l2src\tests\entry_bad_body.lm2" "entry_bad_body" "unsupported body"
 Invoke-Negative "l2src\tests\entry_bad_sig.lm2" "entry_bad_sig" "incompatible entry signature"
 Invoke-Negative "l2src\tests\entry_two_main.lm2" "entry_two_main" "several main"
+
+function Invoke-Entry([string]$src, [string]$stem, [int]$expect, [string[]]$needles, [string]$wantOut) {
+    Clear-Case $stem
+    $lm1 = Join-Path $out ($stem + ".lm1")
+    $cpath = Join-Path $out ($stem + ".c")
+    $exe = Join-Path $out ($stem + ".exe")
+    $err = Join-Path $out ($stem + ".err")
+    $captured = Join-Path $out ($stem + ".stdout")
+    cmd /c "`"$l2exe`" `"$src`" `"$lm1`" 2> `"$err`""
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content $err
+        throw "l2trans failed: $src"
+    }
+    $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1))
+    foreach ($n in $needles) {
+        if ($text.IndexOf($n) -lt 0) { throw "$stem L1 missing '$n'" }
+    }
+    & $l1trans $lm1 $cpath
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: $lm1" }
+    Invoke-Gcc $cpath $exe (Join-Path $log "$stem.gcc.log")
+    cmd /c "`"$exe`" > `"$captured`" 2> `"$(Join-Path $out ($stem + '.run.err'))`""
+    if ($LASTEXITCODE -ne $expect) {
+        throw "$stem exe exit $($LASTEXITCODE) expected $expect"
+    }
+    if ($null -ne $wantOut) {
+        $got = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $captured)).Replace("`r`n", "`n")
+        if ($got -ne $wantOut) { throw "$stem stdout '$got' expected '$wantOut'" }
+    }
+}
+
+Invoke-Entry "l2src\tests\entry_argc.lm2" "entry_argc" 0 @("fn: main (int: argc; @@: char argv) int", "return: 0") $null
+Invoke-Entry "l2src\tests\entry_int_formal.lm2" "entry_int_formal" 0 @("fn: main (int: n) int") $null
+Invoke-Negative "l2src\tests\entry_argc_dup.lm2" "entry_argc_dup" "duplicate formal"
+Invoke-Negative "l2src\tests\entry_argc_bad.lm2" "entry_argc_bad" "unknown foreign type"
+Invoke-Entry "l2src\tests\entry_argc_if.lm2" "entry_argc_if" 0 @("fn: main (int: argc; @@: char argv) int", "if:") $null
+Invoke-Entry "l2src\tests\entry_fputs.lm2" "entry_fputs" 0 @("c.fputs(") "hi`n"
 Invoke-Negative "l2src\tests\entry_overflow.lm2" "entry_overflow" "return literal not representable as int"
 Invoke-AdmitEmit "l2src\tests\entry_int_max.lm2" "entry_int_max" "2147483647"
 
