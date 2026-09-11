@@ -402,27 +402,10 @@ static void mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen) {
     (void)lmx_msg_mark_from(m, x, seen);
 }
 
+int lmx_msg_collect_block(LmxMsg *m, LmxMsgBlock *b);
+
 static void collect_block(LmxMsg *m, LmxMsgBlock *b) {
-    LmxOwnedRange *r;
-    LmxOwnedRange *rn;
-    LmxMsgBlock *tmp;
-    if (m == 0 || b == 0) {
-        return;
-    }
-    r = m->ranges;
-    while (r != 0) {
-        rn = r->next;
-        if (lmx_msg_ptr_in_block(r->lo, b) != 0) {
-            (void)lmx_owned_ranges_remove(&m->ranges, r);
-        }
-        r = rn;
-    }
-    if (lmx_msg_blocks_remove(&m->blocks, b) == LMX_MSG_BLOCKS_OK) {
-        tmp = 0;
-        if (lmx_msg_blocks_push(&tmp, b) == LMX_MSG_BLOCKS_OK) {
-            (void)lmx_msg_blocks_dispose_all(&tmp);
-        }
-    }
+    (void)lmx_msg_collect_block(m, b);
 }
 
 void lmx_msg_arena_collect(LmxMsg *m) {

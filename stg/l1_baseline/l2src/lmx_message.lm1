@@ -1,7 +1,8 @@
-include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exec.h" "l2src/lmx.h" "l2src/lmx_msg_visit.lm1.h" "<stdlib.h>" "<string.h>"
+include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exec.h" "l2src/lmx.h" "l2src/lmx_msg_visit.lm1.h" "l2src/lmx_msg_liveness.lm1.h" "<stdlib.h>" "<string.h>"
 
 prototype:
     fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
+    fn: lmx_msg_collect_block (@: LmxMsg m; @: LmxMsgBlock b) int
     fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
     fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
     fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
@@ -51,6 +52,28 @@ fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
     ---
     if: rg != 0 && rg\kind = c.LMX_KIND_METHOD
         c.lmx_msg_visit_add_ptr(seen, x\data)
+    ---
+return: 0
+
+fn: lmx_msg_collect_block (@: LmxMsg m; @: LmxMsgBlock b) int
+    @: LmxOwnedRange r
+    @: LmxOwnedRange rn
+    @: LmxMsgBlock tmp 0
+    if: m = 0 || b = 0
+        return: 0
+    r: m\ranges
+    while: r != 0
+        rn: r\next
+        if: c.lmx_msg_ptr_in_block(r\lo, b) != 0
+            c.lmx_owned_ranges_remove(@ m\ranges, r)
+        ---
+        r: rn
+    ---
+    if: c.lmx_msg_blocks_remove(@ m\blocks, b) = c.LMX_MSG_BLOCKS_OK
+        tmp: 0
+        if: c.lmx_msg_blocks_push(@ tmp, b) = c.LMX_MSG_BLOCKS_OK
+            c.lmx_msg_blocks_dispose_all(@ tmp)
+        ---
     ---
 return: 0
 
