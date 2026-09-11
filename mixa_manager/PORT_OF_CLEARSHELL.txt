@@ -91,9 +91,11 @@ Button fidelity clarification (owner, 2026-09-11): port the ClearShell buttons
 literally: inventory, labels, ordering and actions, including App and MP3.
 The established app-specific rendering, layering and scrolling deltas still
 apply; literal port does not restore Android system-widget layout. F1 Help
-is the explicitly recalled added control. Do not invent additional controls
-or treat unexplained additions in implementation notes as owner decisions;
-verify any other claimed additions against the recorded requirements.
+is the explicitly recalled added control, not an exhaustive whitelist.
+The point is to reuse the already implemented reference behavior, rather than
+spend time designing it again. Extra buttons are not important enough to block
+the port or require a separate approval/provenance audit. Keep implementing
+the existing functionality, subject to the established app-specific deltas.
 
 Current queued OpenCode sequence: nested same-app short-message window,
 then App/shortcut adapters, then MP3/audio adapters. These bounded slices
