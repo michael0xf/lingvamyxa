@@ -514,6 +514,66 @@ Worth running before anyone relies on nesting a loop inside a branch. Note the
 simple case hides it: an `if` containing no declarations behaves identically
 under all three passes, which is why this has not shown up.
 
+6.1.3.0. OUTCOME: ADOPTED AS SPEC 21.5.1 - and one of my arguments was rejected
+
+Read 6.1.3.2 and 6.1.3.3 below as HISTORY, not as a pending proposal. The rule
+is normative as of 5c6a02f, 2026-09-11: spec 21.5.1 "Executable Bodies and
+Receiver Arguments", plus a sharpened paragraph at 3141 and a decision entry in
+stg/l1_baseline/l2src/OPEN_POINTS.txt. Implementation is deferred until the
+current Message work lands; the handoff notes cite 6.1.3.1 below as the record
+of the three-pass divergence.
+
+WHAT THE SPEC TOOK, that this file argued for:
+
+    nested bodies form a CONTAINMENT HIERARCHY, not a flat list under the method
+    the host is the INDIVIDUAL BODY, not the whole control statement, so `if`
+      and `else` bodies are hosts on the same footing as `for` and `while`
+    "Declaration collection, validation and emission must agree on these roles.
+      A `for` inside an `if` must not be validated and emitted while omitted
+      from graph layout." - 6.1.3.1, written in as a requirement
+    "it must not depend on a special case for the C-style `for` header" -
+      6.1.0.2, written in as a requirement; OPEN_POINTS calls the current
+      for-only hosting an implementation gap
+
+WHAT THE SPEC REJECTED, and it was my main supporting argument:
+
+    "It is a semantic consumption rule, NOT a test of whether a Frame's last
+    syntactic field happens to be a Structure."
+
+6.1.3.2 below builds its case on exactly that syntactic test - last field, must
+be a STRUCTURE - and calls the rule "already half-implemented" because if, while
+and for all use it. That evidence is weaker than I made it. The new text at 3141
+explains why: an `fn` frame's fields are function name, formal parameter
+Structure, return type and executable body, and "Runtime graph hosting follows
+those consumption roles, not the parser's generic argument container." Last-field
+happens to be right for three control receivers whose spellings put the block
+last. It is a coincidence of those spellings, not the principle, and building on
+it would have produced a rule that breaks on the first receiver spelled
+differently.
+
+The conclusion survived; the argument for it did not. Worth separating, because
+a right answer reached through a wrong argument is the kind that fails later in
+a case the argument did not cover.
+
+WHAT THE SPEC ANSWERED that I had left open:
+
+    TRAILER BODIES - 6.1.3.2 asked, since a trailer is not a field and the
+      last-field test cannot reach it. Answered by consumption role, both ways:
+      in `return:` with a nested expression the expression stays an ARGUMENT,
+      while "any receiver, including a trailer, that consumes a Structure as a
+      statement-by-statement body gives that body the ordinary graph-hosting
+      semantics."
+    CONDITIONAL EXISTENCE - 6.1.3 listed this as the expensive part. Dissolved:
+      "Graph presence does not mean both branches run: only an executed
+      assignment dirties a cache. An untaken branch performs none of its
+      assignments." The node exists; nothing happens in it.
+
+AND ONE GUARD I DID NOT RAISE, which matters more than either: making a body a
+graph host "does not introduce a method activation or a new through-parameter
+boundary at each body. Through visibility crosses nested methods, not ordinary
+nested Structures (21.3)." A host is a place for fields, not a frame. I had
+treated hosting and activation as separable without saying so; the spec says it.
+
 6.1.3.2. The owner's proposed rule, and why it is already half-implemented
 
 Mikhail, 2026-09-11: leave arguments "flying" - structures and other receiver
