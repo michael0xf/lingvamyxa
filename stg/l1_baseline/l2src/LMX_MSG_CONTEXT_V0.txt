@@ -183,7 +183,13 @@ A2. DECIDED 035400 / 040530: ANY-affinity uses one OS wait-thread
     Restart after stop is valid. Child ANY bind after start
     launches that context's thread. Rebind ANY->UI (owner, not
     held) retires the wait-thread; UI work then runs on ui_step.
-    Topology is not frozen at start_contexts.
+    Topology is not frozen at start_contexts. Failed bind does
+    not publish: non-owner ANY->UI is rejected with the binding
+    unchanged; UI->ANY launch failure restores the previous
+    affinity; a failed new bind unbinds that slot even if it is
+    no longer last. POSIX compilation of bind does not mention
+    Win32 worker handles. Slang/green-thread notes are not an
+    architecture change.
 Arena vs control block: RELEASED frees init/inbox/outbox (the
 copy-slice arena). The LmxMsg object remains closed-handle
 control state until runtime_delete so send/admit never deref a
