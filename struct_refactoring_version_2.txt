@@ -3631,6 +3631,11 @@ per-row allocation trees or clone ordinary reference arguments. Old hosted
 Arena ownership is not open: every Message owns exactly one logical arena, and
 all dynamic mutable ordinary Lmx storage of that Message is allocated there.
 That arena remains with the Message across L3 turns and host-worker migration.
+OS process startup is already the root Message (SPEC 19.29.6). Range metadata
+and shared immutable domains also have Message owners; nothing is an ownerless
+runtime service outside this model. Each owner keeps its storage-range metadata;
+arena transfer carries that metadata without relocating the payloads. Shared
+immutable domains retain their owner and explicit lifetime requirements.
 Open details are its block/slab/bump implementation, physical subdivision into
 registered ranges, non-moving collector/tracer algorithm, bulk-destruction
 mechanics, side-table cleanup, out-of-memory behavior and address reuse. Memory
@@ -3877,7 +3882,12 @@ layouts `ArrayReference` и `LmSlice` не отменяют этот контр�
 Arena ownership не открыт: каждый Message владеет ровно одной логической
 arena, и всё dynamic mutable обычное Lmx-хранилище этого Message выделяется в
 ней. Эта arena остаётся с Message между L3 turns и при миграции между host
-workers. Открыты block/slab/bump реализация arena, физическое разбиение на
+workers. Запуск процесса ОС — уже корневой Message (SPEC 19.29.6). Метаданные
+диапазонов и общие неизменяемые данные также имеют владельца Message; внешнего
+runtime без владельца нет. Описания диапазонов хранятся у владельца и переходят
+вместе с ареной без перемещения данных. Совместное чтение неизменяемых данных
+не отменяет их владельца и требований к времени жизни.
+Открыты block/slab/bump реализация arena, физическое разбиение на
 зарегистрированные диапазоны, алгоритм non-moving collector/tracer, механика
 bulk destruction, cleanup side table, out-of-memory и повторное использование
 адресов. Memory pressure может запросить failure/termination либо повлиять на

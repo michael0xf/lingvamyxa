@@ -4326,6 +4326,10 @@ source-name lookup mechanism. Pool storage and actual application-array
 backing must not be confused. Mutable descriptors and backing belong to the
 owning Message's one arena; globally available range classification does not
 share those mutable cells between Messages.
+Range metadata belongs to a Message too: each owner keeps the descriptions of
+its storage ranges. Arena ownership transfer carries those descriptions without
+moving payloads. Shared immutable domains still have a Message owner; they are
+not an ownerless global registry. See 19.29.6.
 
 Each typed service pool may contain several non-moving blocks. Growth allocates
 another block and registers its own address range with the same type; addresses
@@ -12199,8 +12203,14 @@ fixed race winner, fabricate success from staging, or add application locks or
 a shared global manager to pass these checks. A sorted wrapper is tested against
 its explicitly chosen policy, separately from the base FIFO.
 
-The current hosted standalone bootstrap begins as one root Message and runs its
-external process entry in that Message's turn loop. This includes `parser`,
+OS process startup is already the root Message, not a runtime outside Message
+ownership that creates its first Message later. All language/runtime state,
+including range metadata and shared immutable domains, has a Message owner.
+OS startup, allocation and thread primitives implement this model; they do not
+introduce a separate ownerless manager, scheduler or registry. Sharing immutable
+data does not remove its owner or its lifetime requirements.
+The hosted standalone bootstrap runs its external process entry in the root
+Message's turn loop. This includes `parser`,
 `trans`, `make`, `finalize` and `buildCore`. Older centralized runtime/pool ABIs
 are prototype history, not permission to bypass 19.28.R2.2. One arena, FIFO
 order and non-overlapping own turns remain required.

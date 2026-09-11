@@ -36,6 +36,20 @@ Sources
   NOTES Lingvamyxa_handoff_notes.txt
 
 
+Unit - Message-owned range metadata (2026-09-11)
+-----------------------------------------------
+Files: lmx_owned_ranges.h.lm1, lmx_owned_ranges.lm1, dedicated tests/runner/doc.
+
+ABI14.9 / SPEC6.5, 19.29.6
+    DECIDED by user: OS process startup is already the root Message. All state,
+    including range metadata and immutable shared domains, has a Message owner.
+    Range metadata follows arena ownership, without payload relocation. This
+    resolves Unit1's per-owner subdivision ASK; its flat mutable global table
+    remains prototype debt, not an accepted concurrent implementation.
+    AVOIDED: lifecycle eligibility, shared-domain discovery/publication, tracing
+    and allocator policy. Storage API receives the owner's set explicitly;
+    it does not create an external registry, global lock or scheduler.
+
 Unit - Message-owned block storage (2026-09-11)
 ----------------------------------------------
 Files: lmx_msg_blocks.h.lm1, lmx_msg_blocks.lm1,
