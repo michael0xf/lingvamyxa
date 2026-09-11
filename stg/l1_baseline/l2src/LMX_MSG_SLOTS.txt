@@ -1,0 +1,53 @@
+Message allocation enumeration helper (L1)
+=========================================
+
+Scope: the bounded storage split agreed with Grok in160100/160700. This ports
+the two old lmx_msg_exec_tab_*_locked bodies out of native exec code. It does
+NOT turn the prototype's runtime-wide allocation list into a language registry,
+address resolver, live-child list or scheduler. Parent scheduling is separate
+and must inspect that parent's direct children under the Message contract.
+
+API in lmx_msg_slots.h.lm1 / lmx_msg_slots.lm1:
+  int lmx_msg_slots_n(const LmxMsgRuntime *rt)
+    NULL -> 0; otherwise the existing cached rt->n, O(1).
+  LmxMsgAddr lmx_msg_slots_at(const LmxMsgRuntime *rt, int i)
+    NULL, negative index or past list end -> 0; otherwise the address of the
+    i-th allocation via slots/alloc_next. O(min(i+1, list length)). It does
+    not consult state, committed, root, first_child or address ordering.
+
+The const signatures express read-only intent. There are no writes, heap
+operations, callbacks, locks, external imports or mutable globals. Caller must
+hold exclusive access or otherwise ensure a stable acyclic list and valid
+record lifetimes for the whole call; these functions supply no synchronization
+or corruption recovery. This preserves the old _locked caller obligation.
+Normal ownership code maintains n consistently with the list; n() intentionally
+does not recalculate it. The compatibility test includes a synthetic stale
+count to make that behavior explicit, not to endorse inconsistent runtime data.
+
+This module is adjacent to the other storage modules, not imported into their
+independent block/range APIs. Its native Message record header is a transitional
+dependency. Include the generated slots header only AFTER the Message types
+have been defined, or from exec/client code that already includes message.h.
+Do not insert a circular header include ahead of those type definitions.
+
+Integration handoff: Grok owns the native exec headers/definitions and build
+integration. Replace the two old wrapper bodies/call sites with this API and
+link the translated module; do not compile duplicate function definitions.
+The helper is not to be reintroduced into scan_ready as an indexed global
+scheduler refill. No stable toolchain or application runtime pin is changed
+by this helper-only checkpoint.
+
+Verification: run_msg_slots.ps1 uses pinned stable65D5 read-only and archives
+only the Message/dependency headers from aef8f767c314b63e48ae42bf209734078da825ab.
+Authored helper and L1 test are copied into that private snapshot. All outputs
+are under a unique build/codex/msg_slots directory, not the active checkout.
+Only the new helper and test are compiled/linked; no Message host/exec code.
+
+278 checks at both O0 and O2, strict C99 -Wall -Wextra -Wpedantic -Werror:
+null/empty, negative/INT_MAX/exact-end indexes, 256-record allocation order
+independent of address/state/graph links, bytewise read-only behavior, head/
+middle/tail/last removal, singleton and unrelated owner preservation.
+Object symbol checks require zero external imports and no mutable data symbols.
+The driver is single-threaded; this is not concurrency/lifetime race proof.
+
+Evidence: build/codex/msg_slots/20260911_160757_558_9ffb53ae/evidence.json.

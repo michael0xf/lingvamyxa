@@ -1,0 +1,110 @@
+predef: "l2src/lmx_msg_slots.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>" "<limits.h>"
+
+# Single-thread fixture counters only. Production has no mutable globals.
+int: slot_checks 0
+sub: slot_check (int: ok; const: @(char label))
+    slot_checks: slot_checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(1)
+    ---
+end: slot_check
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    @: LmxMsgRuntime other
+    @: LmxMsg nodes
+    @: LmxMsg item
+    @: LmxMsg prev
+    @: LmxMsg next
+    @: void saved_nodes
+    @: void saved_rt
+    @: void saved_other
+    size_t: bytes
+    int: i
+    unsigned: expected
+
+    slot_check(lmx_msg_slots_n(0) = 0, "null count")
+    slot_check(lmx_msg_slots_at(0, 0) = 0U, "null at")
+    slot_check(lmx_msg_slots_at(0, -1) = 0U, "null negative at")
+    bytes: 256U * c.sizeof(c.LmxMsg)
+    rt: (cast: (@: LmxMsgRuntime) c.calloc(1U, c.sizeof(c.LmxMsgRuntime)))
+    other: (cast: (@: LmxMsgRuntime) c.calloc(1U, c.sizeof(c.LmxMsgRuntime)))
+    nodes: (cast: (@: LmxMsg) c.calloc(256U, c.sizeof(c.LmxMsg)))
+    saved_nodes: c.malloc(bytes)
+    saved_rt: c.malloc(c.sizeof(c.LmxMsgRuntime))
+    saved_other: c.malloc(c.sizeof(c.LmxMsgRuntime))
+    slot_check(rt != 0 && other != 0 && nodes != 0 && saved_nodes != 0 && saved_rt != 0 && saved_other != 0, "allocate private fixtures")
+    slot_check(lmx_msg_slots_n(rt) = 0, "empty count")
+    slot_check(lmx_msg_slots_at(rt, 0) = 0U && lmx_msg_slots_at(rt, c.INT_MAX) = 0U, "empty bounds")
+    i: 0
+    while: i < 256
+        item: nodes + i
+        item\addr: 1000U + (cast: (unsigned) (256 - i)) * 3U
+        item\state: i % 5
+        item\committed: i % 2
+        if: i < 255
+            item\alloc_next: item + 1
+        ---
+        i: i + 1
+    ---
+    rt\slots: nodes
+    rt\n: 256
+    # Deliberately unrelated graph links: these must not drive enumeration.
+    rt\root: nodes + 255
+    nodes\first_child: nodes + 128
+    nodes\next_sibling: nodes + 64
+    other\n: 23
+    other\clock: 97U
+    c.memcpy(saved_nodes, nodes, bytes)
+    c.memcpy(saved_rt, rt, c.sizeof(c.LmxMsgRuntime))
+    c.memcpy(saved_other, other, c.sizeof(c.LmxMsgRuntime))
+    slot_check(lmx_msg_slots_n(rt) = 256, "cached allocation count")
+    slot_check(lmx_msg_slots_n(other) = 23, "count does not traverse or recalculate")
+    slot_check(lmx_msg_slots_at(rt, -1) = 0U, "negative index")
+    slot_check(lmx_msg_slots_at(rt, 256) = 0U, "exact past end")
+    slot_check(lmx_msg_slots_at(rt, c.INT_MAX) = 0U, "large index stops at list end")
+    i: 0
+    while: i < 256
+        expected: 1000U + (cast: (unsigned) (256 - i)) * 3U
+        slot_check(lmx_msg_slots_at(rt, i) = expected, "allocation order independent of address, state and graph")
+        i: i + 1
+    ---
+    slot_check(c.memcmp(saved_nodes, nodes, bytes) = 0, "enumeration does not write Message records")
+    slot_check(c.memcmp(saved_rt, rt, c.sizeof(c.LmxMsgRuntime)) = 0, "enumeration does not write runtime")
+    slot_check(c.memcmp(saved_other, other, c.sizeof(c.LmxMsgRuntime)) = 0, "unrelated owner unchanged")
+
+    # Simulate owner-side unlinking without freeing any fixture while read.
+    prev: nodes + 126
+    next: nodes + 128
+    prev\alloc_next: next
+    rt\n: 255
+    slot_check(lmx_msg_slots_n(rt) = 255, "count after middle removal")
+    slot_check(lmx_msg_slots_at(rt, 127) = next\addr, "middle removal advances to next record")
+    slot_check(lmx_msg_slots_at(rt, 255) = 0U, "new middle-removal bound")
+    rt\slots: nodes + 1
+    rt\n: 254
+    item: nodes + 1
+    slot_check(lmx_msg_slots_at(rt, 0) = item\addr && lmx_msg_slots_n(rt) = 254, "head removal")
+    prev: nodes + 254
+    prev\alloc_next: 0
+    rt\n: 253
+    slot_check(lmx_msg_slots_at(rt, 252) = prev\addr && lmx_msg_slots_at(rt, 253) = 0U, "tail removal")
+    item: nodes + 200
+    item\alloc_next: 0
+    rt\slots: item
+    rt\n: 1
+    slot_check(lmx_msg_slots_n(rt) = 1 && lmx_msg_slots_at(rt, 0) = item\addr && lmx_msg_slots_at(rt, 1) = 0U, "singleton")
+    rt\slots: 0
+    rt\n: 0
+    slot_check(lmx_msg_slots_n(rt) = 0 && lmx_msg_slots_at(rt, 0) = 0U, "last removal")
+    slot_check(c.memcmp(saved_other, other, c.sizeof(c.LmxMsgRuntime)) = 0, "other owner unchanged after fixture edits")
+    c.free(saved_other)
+    c.free(saved_rt)
+    c.free(saved_nodes)
+    c.free(nodes)
+    c.free(other)
+    c.free(rt)
+    c.printf("slots checks=%d failures=0\n", slot_checks)
+    return: 0

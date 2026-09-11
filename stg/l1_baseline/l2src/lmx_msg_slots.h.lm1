@@ -1,0 +1,9 @@
+include: "l2src/lmx_message.h"
+
+# Transitional allocation bookkeeping, NOT Message scheduling or address
+# resolution. Caller owns a stable acyclic list and all referenced records.
+# No internal locking: preserve the old _locked functions' caller obligation.
+prototype:
+    fn: lmx_msg_slots_n (const: @(LmxMsgRuntime rt)) int
+    fn: lmx_msg_slots_at (const: @(LmxMsgRuntime rt); int: i) LmxMsgAddr
+end: prototype

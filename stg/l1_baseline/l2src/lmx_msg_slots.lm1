@@ -1,0 +1,19 @@
+predef: "l2src/lmx_msg_slots.h.lm1"
+
+fn: lmx_msg_slots_n (const: @(LmxMsgRuntime rt)) int
+    if: rt = 0
+        return: 0
+    return: rt\n
+
+fn: lmx_msg_slots_at (const: @(LmxMsgRuntime rt); int: i) LmxMsgAddr
+    const: @(LmxMsg m)
+    if: rt = 0 || i < 0
+        return: 0U
+    m: rt\slots
+    while: m != 0 && i > 0
+        m: m\alloc_next
+        i: i - 1
+    ---
+    if: m = 0
+        return: 0U
+    return: m\addr
