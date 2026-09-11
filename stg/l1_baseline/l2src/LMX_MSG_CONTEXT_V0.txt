@@ -132,8 +132,11 @@ Do not claim the previous global-table runtime complied.
       the replacement path. scan_ready walks bind[] (held skipped),
       not rt->slots. take_addr already only consumes bound addrs.
       bind kicks exec_ready only if already runnable (inbox or
-      closing). exec_ready ignores unbound addrs; those stay on
-      lmx_msg_sched_step (first_child).
+      closing). Unbound direct children enqueue on the PARENT
+      sched_ready list (mail_lock of that parent). sched_step
+      dequeues that list. Mapped children stay on the EXEC
+      ready ring. live_check parent-turn does not write mapped
+      child control fields.
   D4. LmxMsgAddr is a process-wide unsigned, not a capability.
   D5. host_drain dest lookup on owner (ingress V0 still copies
       under host mutex; dest table walk is later).

@@ -360,6 +360,78 @@ int lmx_msg_mail_outbox_empty(LmxMsg *m) {
     return empty;
 }
 
+void lmx_msg_sched_enqueue_child(LmxMsg *parent, LmxMsg *child) {
+    if (parent == 0 || child == 0) {
+        return;
+    }
+    lmx_msg_mail_lock(parent);
+    if (child->sched_queued != 0) {
+        lmx_msg_mail_unlock(parent);
+        return;
+    }
+    child->sched_queued = 1;
+    child->sched_next = 0;
+    if (parent->sched_ready_tail != 0) {
+        parent->sched_ready_tail->sched_next = child;
+    } else {
+        parent->sched_ready = child;
+    }
+    parent->sched_ready_tail = child;
+    lmx_msg_mail_unlock(parent);
+}
+
+LmxMsg *lmx_msg_sched_dequeue_child(LmxMsg *parent) {
+    LmxMsg *child;
+    if (parent == 0) {
+        return 0;
+    }
+    lmx_msg_mail_lock(parent);
+    child = parent->sched_ready;
+    if (child != 0) {
+        parent->sched_ready = child->sched_next;
+        if (parent->sched_ready == 0) {
+            parent->sched_ready_tail = 0;
+        }
+        child->sched_next = 0;
+        child->sched_queued = 0;
+    }
+    lmx_msg_mail_unlock(parent);
+    return child;
+}
+
+void lmx_msg_sched_unlink_child(LmxMsg *parent, LmxMsg *child) {
+    LmxMsg *p;
+    LmxMsg *n;
+    if (parent == 0 || child == 0) {
+        return;
+    }
+    lmx_msg_mail_lock(parent);
+    if (child->sched_queued == 0) {
+        lmx_msg_mail_unlock(parent);
+        return;
+    }
+    p = 0;
+    n = parent->sched_ready;
+    while (n != 0) {
+        if (n == child) {
+            if (p == 0) {
+                parent->sched_ready = child->sched_next;
+            } else {
+                p->sched_next = child->sched_next;
+            }
+            if (parent->sched_ready_tail == child) {
+                parent->sched_ready_tail = p;
+            }
+            child->sched_next = 0;
+            child->sched_queued = 0;
+            break;
+        }
+        p = n;
+        n = n->sched_next;
+    }
+    lmx_msg_mail_unlock(parent);
+}
+
 void lmx_msg_mail_outbox_take(LmxMsg *m, LmxMsgCopy **out) {
     if (out == 0) {
         return;

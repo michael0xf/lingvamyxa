@@ -116,6 +116,10 @@ typedef struct LmxMsg {
     struct LmxMsg *first_child;
     struct LmxMsg *last_child;
     struct LmxMsg *next_sibling;
+    struct LmxMsg *sched_ready;
+    struct LmxMsg *sched_ready_tail;
+    struct LmxMsg *sched_next;
+    int sched_queued;
     LmxMsgTurn turn;
     void *turn_ctx;
     int mapped;

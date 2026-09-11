@@ -199,6 +199,7 @@ sub: lmx_msg_child_unlink (@: LmxMsg parent; @: LmxMsg child)
                 parent\last_child: p
             ---
             child\next_sibling: 0
+            c.lmx_msg_sched_unlink_child(parent, child)
             child\parent_msg: 0
             return
         ---
@@ -262,6 +263,7 @@ sub: lmx_msg_exec_scan_ready (@: LmxMsgRuntime rt)
 end: lmx_msg_exec_scan_ready
 
 sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
+    @: LmxMsg m
     int: i 0
     int: n
     int: bound 0
@@ -277,6 +279,10 @@ sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
         i: i + 1
     ---
     if: bound = 0
+        m: lmx_msg_self_or_find(rt, addr)
+        if: m != 0 && m\mapped = 0 && m\parent_msg != 0
+            c.lmx_msg_sched_enqueue_child(m\parent_msg, m)
+        ---
         c.lmx_msg_exec_unlock(rt)
         return
     ---
@@ -1567,7 +1573,7 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
         c.lmx_msg_exec_unlock(rt)
     ---
     if: p != 0 && addr = 0U && c.lmx_msg_exec_holding_turn(rt, parent) != 0
-        ch: p\first_child
+        ch: c.lmx_msg_sched_dequeue_child(p)
         while: ch != 0
             if: ch\mapped = 0 && ch\turn != 0
                 if: ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED
@@ -1578,7 +1584,7 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
                 ---
             ---
             if: ch != 0
-                ch: ch\next_sibling
+                ch: c.lmx_msg_sched_dequeue_child(p)
             ---
         ---
     ---
@@ -1765,7 +1771,7 @@ fn: lmx_msg_live_check (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; uns
         while: ch != 0
             wake: 0U
             nxt: ch\next_sibling
-            if: ch\tracked != 0 && ch\committed != 0 && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_RELEASED
+            if: ch\mapped = 0 && ch\tracked != 0 && ch\committed != 0 && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_RELEASED
                 if: threshold != 0U && now > ch\child_heard_at && (now - ch\child_heard_at) > threshold
                     ch\closing: 1
                     n: n + 1
