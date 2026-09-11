@@ -395,46 +395,10 @@ struct Lmx *lmx_msg_graph(LmxMsg *m) {
     return m->graph;
 }
 
+void lmx_msg_mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen);
+
 static void mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen) {
-    LmxOwnedRange *rg;
-    size_t i;
-    Lmx *kids;
-    if (m == 0 || x == 0 || seen == 0 || seen->oom != 0) {
-        return;
-    }
-    if (lmx_msg_visit_has(seen, x) != 0) {
-        return;
-    }
-    lmx_msg_visit_add(seen, x);
-    if (seen->oom != 0) {
-        return;
-    }
-    if (x->node != 0 && lmx_owned_ranges_find(m->ranges, x->node) != 0) {
-        mark_from(m, x->node, seen);
-    }
-    if (x->data == 0) {
-        return;
-    }
-    rg = lmx_owned_ranges_find(m->ranges, x->data);
-    if (rg != 0 && rg->kind == LMX_KIND_CHILDREN) {
-        kids = (Lmx *)x->data;
-        i = 0U;
-        while (i < x->len) {
-            mark_from(m, &kids[i], seen);
-            i += 1U;
-        }
-    }
-    if (rg != 0 && rg->kind == LMX_KIND_ARRAY) {
-        LmxArrayDesc *desc;
-        desc = (LmxArrayDesc *)x->data;
-        lmx_msg_visit_add_ptr(seen, x->data);
-        if (seen->oom == 0 && desc != 0) {
-            lmx_msg_visit_add_ptr(seen, desc->data);
-        }
-    }
-    if (rg != 0 && rg->kind == LMX_KIND_METHOD) {
-        lmx_msg_visit_add_ptr(seen, x->data);
-    }
+    lmx_msg_mark_from(m, x, seen);
 }
 
 static int ptr_in_block(const unsigned char *p, LmxMsgBlock *b) {

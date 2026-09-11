@@ -1,6 +1,7 @@
-include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exec.h" "<stdlib.h>" "<string.h>"
+include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exec.h" "l2src/lmx.h" "l2src/lmx_msg_visit.lm1.h" "<stdlib.h>" "<string.h>"
 
 prototype:
+    fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
     fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
     fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
     fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
@@ -13,6 +14,45 @@ prototype:
     fn: lmx_msg_drive_tree (@: LmxMsgRuntime rt; @: LmxMsg m) int
     fn: lmx_msg_exec_is_runnable_locked (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
 end: prototype
+
+fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
+    @: LmxOwnedRange rg
+    @: Lmx kids
+    @: LmxArrayDesc desc
+    size_t: i 0U
+    if: m = 0 || x = 0 || seen = 0 || seen\oom != 0
+        return: 0
+    if: c.lmx_msg_visit_has(seen, x) != 0
+        return: 0
+    c.lmx_msg_visit_add(seen, x)
+    if: seen\oom != 0
+        return: 0
+    if: x\node != 0
+        if: c.lmx_owned_ranges_find(m\ranges, x\node) != 0
+            lmx_msg_mark_from(m, x\node, seen)
+        ---
+    ---
+    if: x\data = 0
+        return: 0
+    rg: c.lmx_owned_ranges_find(m\ranges, x\data)
+    if: rg != 0 && rg\kind = c.LMX_KIND_CHILDREN
+        kids: (cast: (@: Lmx) x\data)
+        while: i < x\len
+            lmx_msg_mark_from(m, @ kids[i], seen)
+            i: i + 1U
+        ---
+    ---
+    if: rg != 0 && rg\kind = c.LMX_KIND_ARRAY
+        desc: (cast: (@: LmxArrayDesc) x\data)
+        c.lmx_msg_visit_add_ptr(seen, x\data)
+        if: seen\oom = 0 && desc != 0
+            c.lmx_msg_visit_add_ptr(seen, desc\data)
+        ---
+    ---
+    if: rg != 0 && rg\kind = c.LMX_KIND_METHOD
+        c.lmx_msg_visit_add_ptr(seen, x\data)
+    ---
+return: 0
 
 # Copy-only Message mailbox. Spec 19.29.7.1.
 # Send stages a transport-owned copy. Admission enqueues a fresh copy on the
