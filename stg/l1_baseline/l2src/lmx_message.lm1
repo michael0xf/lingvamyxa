@@ -674,6 +674,61 @@ fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: 
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_STAGED
 
+fn: lmx_msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @: LmxMsgEnv env) int
+    @: LmxMsg src
+    @: LmxMsg destn
+    @: LmxMsgCopy node
+    if: lmx_msg_require_turn(rt, from) != c.LMX_MSG_OK || env = 0 || from = 0U || to = 0U
+        return: c.LMX_MSG_INVALID
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        return: c.LMX_MSG_NOMEM
+    node\id: env\id
+    node\correlation: env\correlation
+    node\reply_to: env\reply_to
+    node\from: from
+    node\to: to
+    node\kind: env\kind
+    node\number: env\number
+    node\n: env\n
+    node\bytes: (cast: (@: uchar) env\bytes)
+    node\owned: 1
+    env\bytes: 0
+    env\n: 0U
+    c.lmx_msg_exec_lock(rt)
+    src: lmx_msg_find(rt, from)
+    if: src = 0
+        env\bytes: node\bytes
+        env\n: node\n
+        node\bytes: 0
+        c.lmx_msg_exec_unlock(rt)
+        c.free((cast: (@: void) node))
+        return: c.LMX_MSG_INVALID
+    if: src\state = c.LMX_MSG_STATE_DEAD || src\state = c.LMX_MSG_STATE_STOPPED
+        env\bytes: node\bytes
+        env\n: node\n
+        node\bytes: 0
+        c.lmx_msg_exec_unlock(rt)
+        c.free((cast: (@: void) node))
+        if: src\state = c.LMX_MSG_STATE_DEAD
+            return: c.LMX_MSG_DEAD
+        return: c.LMX_MSG_STOPPED
+    destn: lmx_msg_find(rt, to)
+    if: destn != 0
+        if: c.lmx_msg_endp_retain(destn) = 0
+            env\bytes: node\bytes
+            env\n: node\n
+            node\bytes: 0
+            c.lmx_msg_exec_unlock(rt)
+            c.free((cast: (@: void) node))
+            return: c.LMX_MSG_NOMEM
+        ---
+        node\dest_msg: destn
+    ---
+    lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
+    c.lmx_msg_exec_unlock(rt)
+return: c.LMX_MSG_STAGED
+
 fn: lmx_msg_stop (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to) int
     @: LmxMsgEnv env
     int: st
@@ -870,6 +925,16 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
     if: node\kind = c.LMX_MSG_KIND_STOP
         dest\closing: 1
         lmx_msg_copy_free(node)
+        return: c.LMX_MSG_OK
+    ---
+    if: node\owned != 0
+        if: node\id != 0U && lmx_msg_done_add(dest, node\from, node\id) != 0
+            lmx_msg_copy_free(node)
+            return: c.LMX_MSG_NOMEM
+        ---
+        lmx_msg_q_push(@ dest\inbox, @ dest\inbox_tail, node)
+        c.lmx_msg_test_on_admit(dest\addr, node)
+        c.lmx_msg_exec_ready(rt, dest\addr)
         return: c.LMX_MSG_OK
     ---
     fresh: lmx_msg_copy_dup(node)

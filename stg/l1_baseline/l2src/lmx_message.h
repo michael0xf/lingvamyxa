@@ -75,6 +75,7 @@ typedef struct LmxMsgCopy {
     int number;
     uchar *bytes;
     size_t n;
+    int owned;
     struct LmxMsg *dest_msg;
     struct LmxMsgCopy *next;
 } LmxMsgCopy;
@@ -227,6 +228,8 @@ int lmx_msg_adopted_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 void *lmx_msg_adopted_base(LmxMsgRuntime *rt, LmxMsgAddr who, int i);
 int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to);
 int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
+int lmx_msg_parent_settle(LmxMsgRuntime *rt, LmxMsgAddr parent);
+int lmx_msg_send_owned(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, LmxMsgEnv *env);
 int lmx_msg_set_orphan_until(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned until);
 int lmx_msg_orphan_expired(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now);
 #if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)

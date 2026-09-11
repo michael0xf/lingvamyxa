@@ -263,5 +263,8 @@ Exactly-once
   disposed or empty failed payload already moved.
 
 Open (not this slice)
-  Zero-copy envelope; per-mailbox lock; no tab/find; no
-  global exec lock; registered range blocks; mixa pin.
+  Per-mailbox lock; no tab/find; no global exec lock;
+  registered range blocks; mixa pin. send_owned is local
+  envelope ownership transfer (same pointer); copy send remains
+  for borrowed env. parent_settle runs only while the parent
+  holds its turn.

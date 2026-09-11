@@ -1895,6 +1895,9 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
     snap.ctx = m->turn_ctx;
     lmx_msg_exec_unlock(rt);
     st = run_one(rt, &snap);
+    if (par != 0U && lmx_msg_exec_holding_turn(rt, par) != 0) {
+        (void)lmx_msg_parent_settle(rt, par);
+    }
     return st == 0 ? LMX_MSG_OK : st;
 }
 
@@ -2096,6 +2099,16 @@ int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to) 
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
+    {
+        LmxMsg *ch = src->first_child;
+        while (ch != 0) {
+            if (ch->disposed == 0) {
+                lmx_msg_exec_unlock(rt);
+                return LMX_MSG_INVALID;
+            }
+            ch = ch->next_sibling;
+        }
+    }
     tail = src->adopted;
     while (tail->next != 0) {
         tail = tail->next;
@@ -2142,6 +2155,35 @@ int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child
     drop_adopted_locked(c);
     c->disposed = 1;
     lmx_msg_exec_unlock(rt);
+    return LMX_MSG_OK;
+}
+
+int lmx_msg_parent_settle(LmxMsgRuntime *rt, LmxMsgAddr parent) {
+    LmxMsg *p;
+    LmxMsg *ch;
+    LmxMsgAddr buf[32];
+    int n = 0;
+    int i;
+    if (lifecycle_authority(rt, parent) == 0) {
+        return LMX_MSG_INVALID;
+    }
+    lmx_msg_exec_lock(rt);
+    p = lmx_msg_find(rt, parent);
+    if (p == 0 || p->disposed != 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    ch = p->first_child;
+    while (ch != 0 && n < 32) {
+        buf[n] = ch->addr;
+        n += 1;
+        ch = ch->next_sibling;
+    }
+    lmx_msg_exec_unlock(rt);
+    for (i = 0; i < n; i++) {
+        (void)lmx_msg_adopt_failed(rt, parent, buf[i]);
+        (void)lmx_msg_dispose_child(rt, parent, buf[i]);
+    }
     return LMX_MSG_OK;
 }
 

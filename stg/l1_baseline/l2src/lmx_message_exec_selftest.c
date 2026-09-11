@@ -291,6 +291,48 @@ static int turn_parent_nested(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return 0;
 }
 
+typedef struct OwnSend {
+    LmxMsgAddr dest;
+    void *orig;
+    void *got;
+} OwnSend;
+
+static int turn_owned_send(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    OwnSend *o = (OwnSend *)ctx;
+    LmxMsgEnv env;
+    uchar *b = (uchar *)malloc(4U);
+    if (b == 0) {
+        return 1;
+    }
+    b[0] = 1;
+    b[1] = 2;
+    b[2] = 3;
+    b[3] = 4;
+    o->orig = b;
+    memset(&env, 0, sizeof(env));
+    env.kind = LMX_MSG_KIND_BYTES;
+    env.n = 4;
+    env.bytes = b;
+    if (lmx_msg_send_owned(rt, who, o->dest, &env) != LMX_MSG_STAGED || env.bytes != 0) {
+        return 1;
+    }
+    return lmx_msg_end_turn(rt, who, 1) == LMX_MSG_OK ? 0 : 1;
+}
+
+static int turn_owned_recv(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    OwnSend *o = (OwnSend *)ctx;
+    LmxMsgEnv got;
+    memset(&got, 0, sizeof(got));
+    if (lmx_msg_recv(rt, who, &got) != LMX_MSG_OK) {
+        return 1;
+    }
+    o->got = (void *)got.bytes;
+    got.bytes = 0;
+    got.n = 0U;
+    lmx_msg_env_release(&got);
+    return 0;
+}
+
 static int turn_complete_self(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     NestUsers *n = (NestUsers *)ctx;
     n->p_during = lmx_msg_native_users(rt, who);
@@ -3351,6 +3393,16 @@ int main(void) {
             lmx_msg_runtime_delete(rth);
             return 1;
         }
+        if (lmx_msg_adopt_failed(rth, c2, g) != LMX_MSG_INVALID || lmx_msg_find(rth, g)->init != gbase) {
+            fprintf(stderr, "sibling must not adopt G\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        if (lmx_msg_transfer_adopted(rth, c, p) != LMX_MSG_INVALID) {
+            fprintf(stderr, "transfer C while G undisposed\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
         if (lmx_msg_adopt_failed(rth, c, g) != LMX_MSG_OK || lmx_msg_adopted_n(rth, c) != 1 || lmx_msg_adopted_base(rth, c, 0) != gbase) {
             fprintf(stderr, "G->C n=%d\n", lmx_msg_adopted_n(rth, c));
             lmx_msg_runtime_delete(rth);
@@ -3458,6 +3510,49 @@ int main(void) {
         }
         fprintf(stderr, "handoff nest users G-C-P n=3 complete-keeps fail-dispose-reject transfer-survives\n");
         lmx_msg_runtime_delete(rth);
+    }
+    {
+        LmxMsgRuntime *rto;
+        LmxMsgAddr dummy = 0, src = 0, dst = 0;
+        uchar ini = 1;
+        OwnSend os;
+        LmxMsgEnv e;
+        memset(&os, 0, sizeof(os));
+        rto = lmx_msg_runtime_new();
+        if (rto == 0 || lmx_msg_create(rto, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_create(rto, dummy, 2, &ini, 1, &src) != LMX_MSG_OK || lmx_msg_create(rto, dummy, 3, &ini, 1, &dst) != LMX_MSG_OK
+            || lmx_msg_end_turn(rto, dummy, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        os.dest = dst;
+        if (lmx_msg_exec_bind(rto, src, turn_owned_send, &os, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rto, dst, turn_owned_recv, &os, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            fprintf(stderr, "owned bind\n");
+            return 1;
+        }
+        memset(&e, 0, sizeof(e));
+        e.kind = LMX_MSG_KIND_BYTES;
+        e.n = 1;
+        e.bytes = &ini;
+        if (lmx_msg_host_post(rto, src, &e) != LMX_MSG_STAGED) {
+            fprintf(stderr, "owned post\n");
+            lmx_msg_runtime_delete(rto);
+            return 1;
+        }
+        (void)lmx_msg_host_drain(rto);
+        (void)lmx_msg_run_child_turn(rto, src);
+        lmx_msg_pump(rto);
+        (void)lmx_msg_run_child_turn(rto, dst);
+        if (os.orig == 0 || os.got != os.orig) {
+            fprintf(stderr, "owned move orig=%p got=%p\n", os.orig, os.got);
+            lmx_msg_runtime_delete(rto);
+            return 1;
+        }
+        free(os.got);
+        fprintf(stderr, "send_owned same-ptr\n");
+        lmx_msg_runtime_delete(rto);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
