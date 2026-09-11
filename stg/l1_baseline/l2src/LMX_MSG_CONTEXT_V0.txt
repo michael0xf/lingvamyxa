@@ -136,15 +136,17 @@ Do not claim the previous global-table runtime complied.
 This slice (preparation, not a facade)
 --------------------------------------
 Direct-child list on LmxMsg; create links; close/rollback walk
-the list. Per-context OS wait-thread on ANY bind
-(`lmx_msg_exec_start_contexts`). Bind after start launches a
-thread for a new ANY child. Rebind ANY->UI is owner-only and
-retires that wait-thread. Restart after stop is valid
-(ResetEvent on the manual-reset stop event). Partial
-thread-start failure calls stop; retry start_contexts is the
-recovery. Ready wake is per-addr for the context path.
-tab/find remain D1 until capability send is the only path.
-EXEC pool is not promoted.
+the list. Parent-owned sequential step (`lmx_msg_sched_step`)
+walks that parent's first_child only (never grandchildren) and
+runs one ready unmapped child's whole turn on the caller's
+thread. Initial selection policy: first ready direct child in
+list order, one turn, not drain-to-empty and not language-wide
+fairness. `lmx_msg_map_child` is a parent-owned mapping of one
+direct child onto a native wait-thread. Mix placement path is
+growable (PATH_CHUNK), not depth 16. Send stores dest_msg on the
+staged copy; admit prefers that capability. tab/find remain D1
+for integer APIs. EXEC pool / start_contexts remain prototype.
+Child query/parent-reply liveness is not this slice.
 
 Not yet
 -------
