@@ -1,0 +1,55 @@
+include: "<stddef.h>"
+include: "mixa_manager/mixa_core.h"
+include: "mixa_manager/mixa_buttons.h"
+
+# Nested same-app missing-function window (ticket 20260911-153700).
+# An unimplemented action opens a nested, reduced instance of this app:
+# a framed region on the shared cell surface showing the literal message
+# ("нет функции") and one dismiss button. Events route to the TOP window's
+# button panel only; dismissing restores the saved parent cells verbatim.
+# Windows stack dynamically (no depth cap); each level owns its saved cells
+# and one MixaButtonPanel (single dismiss button).
+
+define: MIXA_APP_WINDOW_OK 0
+define: MIXA_APP_WINDOW_ERR 1
+
+# Render policy: text glyphs opaque; alpha on backgrounds only.
+define: MIXA_APP_WINDOW_WIN_BG 9
+define: MIXA_APP_WINDOW_WIN_ALPHA 200
+define: MIXA_APP_WINDOW_FRAME_FG 0
+define: MIXA_APP_WINDOW_MSG_FG 15
+define: MIXA_APP_WINDOW_BTN_FG 15
+define: MIXA_APP_WINDOW_BTN_BG 10
+define: MIXA_APP_WINDOW_BTN_ALPHA 96
+define: MIXA_APP_WINDOW_BTN_LABEL "OK"
+
+struct: MixaAppWindow
+    @: MixaCell saved
+    size_t: saved_count
+    @: MixaButtonPanel panel
+    size_t: msg_row
+    size_t: msg_col
+    size_t: origin_row
+    size_t: origin_col
+    size_t: nrows
+    size_t: ncols
+    size_t: hb
+    int: is_open
+end: MixaAppWindow
+
+struct: MixaAppWindowStack
+    @: MixaAppWindow windows
+    size_t: count
+    size_t: cap
+    int: is_open
+end: MixaAppWindowStack
+
+prototype:
+    fn: mixa_app_window_stack_init (@: MixaAppWindowStack stack) int
+    fn: mixa_app_window_stack_release (@: MixaAppWindowStack stack) void
+    fn: mixa_app_window_open (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char message)) int
+    fn: mixa_app_window_dismiss (@: MixaAppWindowStack stack; @: MixaTextRect rect) int
+    fn: mixa_app_window_hit (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: cell_row; size_t: cell_col) int
+    fn: mixa_app_window_top (@: MixaAppWindowStack stack) @: MixaAppWindow
+    fn: mixa_app_window_count (const: @(MixaAppWindowStack stack)) size_t
+end: prototype

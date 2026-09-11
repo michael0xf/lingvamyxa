@@ -1,0 +1,100 @@
+mixa_app_window — nested same-app missing-function window (ticket 20260911-153700)
+=================================================================================
+
+Purpose
+-------
+One bounded UI slice: an unimplemented action opens a nested, reduced instance
+of the same app showing the literal message "нет функции" and one dismiss
+button. It reuses the existing components only: mixa_draw (fill/frame/text),
+mixa_button_panel (layout/draw/hit-test), and the MixaTextRect cell surface.
+There is no native dialog framework, no console log, and no mock. Real nesting
+is mandatory and a child can open a grandchild through the same API.
+
+No equivalent reusable module existed before this slice. mixa_console_window is
+a byte-window file reader (FILE_SEAM 3.5), not a UI window; it is unrelated.
+
+Files (owned slice)
+-------------------
+  mixa_manager/mixa_app_window.h.lm1        header unit (types + prototypes)
+  mixa_manager/mixa_app_window.lm1          implementation
+  mixa_manager/tests/mixa_app_window_selftest.lm1   headless selftest
+  mixa_manager/run_app_window_selftest.ps1  isolated runner (stable compiler hash)
+  mixa_manager/mixa_app_window.txt          this note
+
+Public API
+----------
+  int  mixa_app_window_stack_init(MixaAppWindowStack *stack);
+  void mixa_app_window_stack_release(MixaAppWindowStack *stack);
+  int  mixa_app_window_open(MixaAppWindowStack *stack, MixaTextRect *rect,
+                            size_t window_row, size_t window_col,
+                            size_t nrows, size_t ncols, size_t hb,
+                            const char *message);
+  int  mixa_app_window_dismiss(MixaAppWindowStack *stack, MixaTextRect *rect);
+  int  mixa_app_window_hit(MixaAppWindowStack *stack, MixaTextRect *rect,
+                           size_t cell_row, size_t cell_col);
+  MixaAppWindow *mixa_app_window_top(MixaAppWindowStack *stack);
+  size_t        mixa_app_window_count(const MixaAppWindowStack *stack);
+
+open() is the single "missing-function action". It:
+  1. pushes a slot on a dynamically grown window stack (no depth cap),
+  2. snapshots the covered parent cells into that slot's own saved buffer,
+  3. draws a translucent background, a single frame, the centered message,
+     and one dismiss button panel ("OK") using existing app layout rules,
+  4. pushes the button panel's own origin so the top window owns event target.
+
+dismiss() restores the saved cells verbatim, then pops. This preserves the
+immediate parent, its rendered content and its button geometry, so a
+grandchild dismiss returns to the exact parent state.
+
+hit() routes to the TOP window only, via mixa_button_panel_hit. A hit on that
+window's dismiss button performs dismiss() and returns 1; everything else
+(including lower windows) returns 0. Cell coordinates are surface cells.
+
+Rules honoured
+--------------
+* Text glyphs stay opaque; alpha is applied to backgrounds only
+  (MIXA_APP_WINDOW_WIN_ALPHA on fill/frame/message bg; the message fg is a
+  full-opacity glyph).
+* Button-panel layout follows existing mixa_buttons rules (hb, label-driven
+  width, margin, private-use tiles).
+* No handwritten C business logic: all code is authored in L1; no threads,
+  locks, atomics, or replacement Message scheduler.
+* stack_release() frees each window's saved buffer + button panel + the array.
+  Like mixa_highlight_release, it does NOT restore cells (use dismiss() for
+  that); call it at teardown/reset.
+
+Renderer note
+-------------
+The message is centered by counting UTF-8 scalar starts (not bytes), so the
+Cyrillic literal occupies 11 cells. The default text is caller-supplied;
+the ticket literal is "нет функции" (U+043D U+0435 U+0442 U+0020 U+0444
+U+0443 U+043D U+043A U+0446 U+0438 U+0438).
+
+Testing
+-------
+Run from mixa_manager:
+
+    ./run_app_window_selftest.ps1
+
+The runner translates the header separately to
+headers/mixa_manager/mixa_app_window.lm1.h, translates the selftest, compiles
+with -std=c99 -Wall -Wextra -Wpedantic, and runs it under a unique
+build/mixa/opencode/app_window/run_<timestamp>_<guid>/ directory. It verifies
+the compiler SHA256 65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936.
+
+The selftest exercises the real draw + button panel hit-test (no counting
+mock): frame corners/edges, the 11 message codepoints, button tile range,
+background alpha vs. opaque text, hit-outside vs. dismiss hit, nested
+focus/event targeting (child then parent), parent-state preservation, 40
+open/close cycles, a 9-deep stack (forces growth past the initial cap 4), and
+negative/edge cases.
+
+Integration point still pending (honest status)
+-----------------------------------------------
+The main executable (run_mixa.ps1 / the interactive pump loop) is NOT wired to
+this module yet. The remaining integration is a single call site: wherever an
+action is dispatched and currently has no implementation, call
+mixa_app_window_open() with the app's surface rect and the missing action's
+message; feed surface key/mouse cell coordinates to mixa_app_window_hit() in
+the normal event-routing path and repaint when it returns 1. This slice was
+verified in isolation as required and does not claim main-executable wiring.
