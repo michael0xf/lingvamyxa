@@ -2117,6 +2117,12 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
+    if (c->blocks != 0) {
+        if (lmx_msg_blocks_move_all(&p->blocks, &c->blocks) != LMX_MSG_BLOCKS_OK) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_INVALID;
+        }
+    }
     if (c->init != 0) {
         if (adopt_push(p, c->init, c->init_n) != 0) {
             lmx_msg_exec_unlock(rt);
@@ -2125,9 +2131,11 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
         c->init = 0;
         c->init_n = 0U;
     }
-    if (handoff_move_locked(p, c) != LMX_MSG_OK) {
-        lmx_msg_exec_unlock(rt);
-        return LMX_MSG_INVALID;
+    if (c->ranges != 0) {
+        if (lmx_owned_ranges_move_all(&p->ranges, &c->ranges) != LMX_OWNED_RANGES_OK) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_INVALID;
+        }
     }
     c->disposed = 1;
     lmx_msg_exec_unlock(rt);
