@@ -1,0 +1,21 @@
+include: "l2src/lmx.h" "<stddef.h>"
+
+# Temporary, exclusively owned collector bookkeeping. Never graph storage.
+# These buffers may move on growth; the addresses stored IN them never move.
+struct: LmxVisit
+    @@: Lmx v
+    size_t: n
+    size_t: cap
+    @@: void p
+    size_t: pn
+    size_t: pcap
+    int: oom
+end: LmxVisit
+
+prototype:
+    fn: lmx_msg_visit_init (@: LmxVisit s) void
+    fn: lmx_msg_visit_has (const: @(LmxVisit s); @: Lmx x) int
+    fn: lmx_msg_visit_add (@: LmxVisit s; @: Lmx x) void
+    fn: lmx_msg_visit_add_ptr (@: LmxVisit s; @: void p) void
+    fn: lmx_msg_visit_dispose (@: LmxVisit s) void
+end: prototype

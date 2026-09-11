@@ -1,0 +1,66 @@
+Temporary collector visit bookkeeping, authored in L1
+====================================================
+
+Ownership: Codex module/header/test/runner; Grok graph traversal and integration.
+This extracts LmxVisit from native exec, not the collector policy. It adds no
+roots, arena owner links, scheduler, Message registry, graph walk or sweep.
+
+LmxVisit holds two independent temporary buffers:
+  v/n/cap: visited Lmx pointers, with exact-pointer lookup by visit_has;
+  p/pn/pcap: retained raw addresses for domain payloads;
+  oom: sticky failure shared by both streams.
+
+API (prefix lmx_msg_visit_)
+--------------------------
+init(s) initializes a fresh or disposed state. Do not reinitialize live buffers.
+has(s,x) checks the visited-node stream only. It reads no Lmx fields and remains
+usable after OOM. Null state/address returns false.
+add(s,x) and add_ptr(s,p) append, preserving the existing native collector's
+semantics: duplicates are allowed. The graph walker calls has before following
+a node to prevent cycles; this helper does not implement graph traversal.
+Null state/address is a no-op. Once oom is set, both append operations stop.
+dispose(s) frees the two temporary buffers, not any pointed-to node/payload,
+and resets all fields including oom. Null/repeated disposal is harmless.
+
+Growth begins at 16 elements, doubles, and saturates at the largest representable
+element capacity. Capacity exhaustion and failed realloc set oom without
+changing either existing buffer, its capacity, count or values. A failed mark
+must not justify reclaiming graph storage: the integrating collector must retain
+storage on oom, as in the current mark-then-sweep contract.
+
+Caller contract: one exclusive owner, valid initialized state, count <= capacity,
+realloc-compatible distinct buffers, no aliases held across growth. Only private
+bookkeeping can relocate; graph addresses stored in it are stable. No global or
+static mutable module state, locks, callbacks or foreign graph accesses exist.
+The linear has lookup preserves the current algorithm; this extraction makes
+no new claim about traversal complexity or complete collection correctness.
+
+Integration
+-----------
+Generate lmx_msg_visit.h.lm1 to l2src/lmx_msg_visit.lm1.h in the private generated
+header tree, translate/link lmx_msg_visit.lm1, remove the old native LmxVisit
+definition/helpers and call the five APIs. Keep the existing mark/sweep domain
+logic and root admission separate. Shared stable compiler is read-only.
+
+Verification
+------------
+run_msg_visit.ps1 defaults to one strict-C99 O2 build, with O0 opt-in. It checks
+null/empty state, both streams' growth and preserved addresses, duplicate and
+cycle lookup behavior, injected first/growth allocation failures, sticky OOM,
+capacity arithmetic guards, cleanup and unchanged referenced nodes. Synthetic
+full-capacity states test guaranteed arithmetic-failure paths without huge
+allocations. The production object may import only realloc/free and contain
+no mutable global/static data. Generated code, hashes, logs and stage exits go
+only to private build/codex/msg_visit output. No compiler self-build or whole
+Message integration run is part of this module's edit-loop verification.
+
+Verified O2 result: 101 checks, 0 failures, 3 bookkeeping frees, 10 realloc calls.
+All final translation/compile/symbol/run stages succeeded; generated header and
+module were read. Only free/realloc are imported, and no mutable variables are
+defined. PE/COFF .bss/.data section markers are ignored by the symbol check;
+actual data symbols are not. Stable compiler remained unchanged.
+  build/codex/msg_visit/20260911_183835_181_ce04558b/evidence.json
+Earlier attempts exposed fixture spelling issues and the empty-section symbol
+false positive; they failed before test execution and are not runtime failures.
+No full Message or compiler self-build was run. Grok still owns integration;
+this helper result does not claim complete collection or domain traversal.

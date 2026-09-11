@@ -1,0 +1,139 @@
+predef: "l2src/lmx_msg_visit.h.lm1"
+include: "<stdio.h>" "<stdlib.h>"
+
+prototype:
+    fn: __real_realloc (@: void p; size_t: n) @: void
+    fn: __real_free (@: void p) void
+end: prototype
+
+# Test-only allocator instrumentation, never production Message/global state.
+int: checks 0
+int: realloc_calls 0
+int: frees 0
+int: fail_realloc 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(1)
+    ---
+end: check
+
+fn: __wrap_realloc (@: void p; size_t: n) @: void
+    realloc_calls: realloc_calls + 1
+    if: fail_realloc != 0
+        return: 0
+    return: c.__real_realloc(p, n)
+
+sub: __wrap_free (@: void p)
+    if: p != 0
+        frees: frees + 1
+    ---
+    c.__real_free(p)
+end: __wrap_free
+
+fn: main () int
+    LmxVisit: state
+    @: LmxVisit s (@ state)
+    @: Lmx cells
+    @: Lmx outside
+    size_t: i
+    size_t: limit
+    int: calls_before
+    int: frees_before
+    @@: Lmx saved_v
+    @@: void saved_p
+    cells: (cast: (@: Lmx) c.calloc(41U, c.sizeof(c.Lmx)))
+    check(cells != 0, "allocate test-owned node storage")
+    outside: cells + 40U
+    lmx_msg_visit_init(0)
+    lmx_msg_visit_dispose(0)
+    lmx_msg_visit_add(0, cells)
+    lmx_msg_visit_add_ptr(0, cells)
+    check(lmx_msg_visit_has(0, cells) = 0 && realloc_calls = 0 && frees = 0, "null state is harmless")
+    lmx_msg_visit_init(s)
+    check(s\v = 0 && s\n = 0U && s\cap = 0U && s\p = 0 && s\pn = 0U && s\pcap = 0U && s\oom = 0, "empty state")
+    lmx_msg_visit_add(s, 0)
+    lmx_msg_visit_add_ptr(s, 0)
+    check(s\n = 0U && s\pn = 0U && realloc_calls = 0, "null address is not inserted")
+    check(lmx_msg_visit_has(s, cells) = 0 && lmx_msg_visit_has(s, 0) = 0, "empty lookup")
+    # Nodes themselves are not read by the module. Their separate test-owned
+    # allocation must never be disposed by bookkeeping cleanup.
+    cells\len: 123U
+    i: 0U
+    while: i < 40U
+        lmx_msg_visit_add(s, cells + i)
+        lmx_msg_visit_add_ptr(s, cells + i)
+        check(s\oom = 0 && s\n = i + 1U && s\pn = i + 1U, "both streams grow")
+        i: i + 1U
+    ---
+    check(s\cap = 64U && s\pcap = 64U && realloc_calls = 6, "independent geometric growth")
+    i: 0U
+    while: i < 40U
+        check(s\v[i] = cells + i && s\p[i] = cells + i && lmx_msg_visit_has(s, cells + i) = 1, "growth preserves addresses and lookup")
+        i: i + 1U
+    ---
+    check(lmx_msg_visit_has(s, outside) = 0, "unknown address absent")
+    lmx_msg_visit_add(s, cells)
+    lmx_msg_visit_add_ptr(s, cells)
+    check(s\n = 41U && s\pn = 41U && s\v[40] = cells && s\p[40] = cells, "append semantics preserve duplicate addresses")
+    while: s\n < s\cap
+        lmx_msg_visit_add(s, cells)
+    ---
+    saved_v: s\v
+    saved_p: s\p
+    calls_before: realloc_calls
+    fail_realloc: 1
+    lmx_msg_visit_add(s, outside)
+    check(s\oom = 1 && s\v = saved_v && s\p = saved_p && s\n = 64U && s\cap = 64U && s\pn = 41U, "failed node growth preserves both streams")
+    check(realloc_calls = calls_before + 1 && lmx_msg_visit_has(s, cells) = 1, "OOM remains searchable")
+    fail_realloc: 0
+    calls_before: realloc_calls
+    lmx_msg_visit_add(s, cells)
+    lmx_msg_visit_add_ptr(s, outside)
+    check(s\n = 64U && s\pn = 41U && realloc_calls = calls_before, "OOM is sticky across both streams")
+    lmx_msg_visit_dispose(s)
+    check(frees = 2 && s\v = 0 && s\p = 0 && s\oom = 0 && s\n = 0U && s\pn = 0U && s\cap = 0U && s\pcap = 0U, "dispose frees only bookkeeping and resets")
+    check(cells\len = 123U, "referenced node untouched")
+    lmx_msg_visit_dispose(s)
+    check(frees = 2, "repeated dispose does not free twice")
+    fail_realloc: 1
+    lmx_msg_visit_add_ptr(s, cells)
+    check(s\oom = 1 && s\p = 0 && s\pn = 0U && s\pcap = 0U, "first raw allocation failure retains empty stream")
+    lmx_msg_visit_dispose(s)
+    fail_realloc: 0
+    i: 0U
+    while: i < 16U
+        lmx_msg_visit_add_ptr(s, cells + i)
+        i: i + 1U
+    ---
+    saved_p: s\p
+    calls_before: realloc_calls
+    fail_realloc: 1
+    lmx_msg_visit_add_ptr(s, outside)
+    check(s\oom = 1 && s\p = saved_p && s\pn = 16U && s\pcap = 16U && s\p[0] = cells, "failed raw growth preserves buffer and values")
+    check(realloc_calls = calls_before + 1, "one failed raw growth attempt")
+    lmx_msg_visit_dispose(s)
+    fail_realloc: 0
+    check(frees = 3 && s\oom = 0, "raw stream disposed after failure")
+    # Synthetic full-capacity states exercise arithmetic guards without huge
+    # allocations. No backing is accessed on these guaranteed-failure paths.
+    calls_before: realloc_calls
+    frees_before: frees
+    limit: (cast: (size_t) -1) / c.sizeof(s\v[0])
+    s\cap: limit
+    s\n: limit
+    lmx_msg_visit_add(s, cells)
+    check(s\oom = 1 && s\n = limit && s\cap = limit && s\v = 0 && realloc_calls = calls_before, "node capacity overflow fails before realloc or indexing")
+    lmx_msg_visit_init(s)
+    limit: (cast: (size_t) -1) / c.sizeof(s\p[0])
+    s\pcap: limit
+    s\pn: limit
+    lmx_msg_visit_add_ptr(s, cells)
+    check(s\oom = 1 && s\pn = limit && s\pcap = limit && s\p = 0 && realloc_calls = calls_before, "raw capacity overflow fails before realloc or indexing")
+    lmx_msg_visit_dispose(s)
+    check(frees = frees_before, "overflow state allocates and frees no payload")
+    c.__real_free(cells)
+    c.printf("visit checks=%d failures=0 frees=%d realloc_calls=%d\n", checks, frees, realloc_calls)
+    return: 0

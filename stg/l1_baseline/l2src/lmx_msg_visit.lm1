@@ -1,0 +1,89 @@
+predef: "l2src/lmx_msg_visit.h.lm1"
+include: "<stdlib.h>"
+
+sub: lmx_msg_visit_init (@: LmxVisit s)
+    if: s != 0
+        s\v: 0
+        s\n: 0U
+        s\cap: 0U
+        s\p: 0
+        s\pn: 0U
+        s\pcap: 0U
+        s\oom: 0
+    ---
+end: lmx_msg_visit_init
+
+fn: lmx_msg_visit_has (const: @(LmxVisit s); @: Lmx x) int
+    size_t: i 0U
+    if: s = 0 || x = 0
+        return: 0
+    while: i < s\n
+        if: s\v[i] = x
+            return: 1
+        i: i + 1U
+    ---
+    return: 0
+
+# Zero means that another element cannot be represented. Saturating the
+# doubling at the element limit avoids rejecting the last usable capacity.
+fn: lmx_msg_visit_capacity (size_t: cap; size_t: element_size) size_t
+    size_t: limit (cast: (size_t) -1) / element_size
+    if: cap >= limit
+        return: 0U
+    if: cap = 0U
+        if: limit < 16U
+            return: limit
+        return: 16U
+    if: cap > limit / 2U
+        return: limit
+    return: cap * 2U
+
+sub: lmx_msg_visit_add (@: LmxVisit s; @: Lmx x)
+    @@: Lmx grown
+    size_t: cap
+    if: s = 0 || x = 0 || s\oom != 0
+        return
+    if: s\n = s\cap
+        cap: lmx_msg_visit_capacity(s\cap, c.sizeof(s\v[0]))
+        if: cap = 0U
+            s\oom: 1
+            return
+        grown: (cast: (@@: Lmx) c.realloc(s\v, cap * c.sizeof(s\v[0])))
+        if: grown = 0
+            s\oom: 1
+            return
+        s\v: grown
+        s\cap: cap
+    ---
+    s\v[s\n]: x
+    s\n: s\n + 1U
+end: lmx_msg_visit_add
+
+sub: lmx_msg_visit_add_ptr (@: LmxVisit s; @: void p)
+    @@: void grown
+    size_t: cap
+    if: s = 0 || p = 0 || s\oom != 0
+        return
+    if: s\pn = s\pcap
+        cap: lmx_msg_visit_capacity(s\pcap, c.sizeof(s\p[0]))
+        if: cap = 0U
+            s\oom: 1
+            return
+        grown: (cast: (@@: void) c.realloc(s\p, cap * c.sizeof(s\p[0])))
+        if: grown = 0
+            s\oom: 1
+            return
+        s\p: grown
+        s\pcap: cap
+    ---
+    s\p[s\pn]: p
+    s\pn: s\pn + 1U
+end: lmx_msg_visit_add_ptr
+
+sub: lmx_msg_visit_dispose (@: LmxVisit s)
+    if: s != 0
+        c.free(s\v)
+        c.free(s\p)
+        lmx_msg_visit_init(s)
+    ---
+end: lmx_msg_visit_dispose
