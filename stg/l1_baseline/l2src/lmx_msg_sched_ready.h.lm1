@@ -1,0 +1,9 @@
+include: "l2src/lmx_message.h"
+
+# Pure parent-local readiness list operations. Caller owns synchronization and
+# endpoint lifetime. head/tail are distinct writable cells of ONE parent.
+prototype:
+    sub: lmx_msg_sched_ready_enqueue (@@: LmxMsg head; @@: LmxMsg tail; @: LmxMsg child)
+    fn: lmx_msg_sched_ready_dequeue (@@: LmxMsg head; @@: LmxMsg tail) @: LmxMsg
+    sub: lmx_msg_sched_ready_unlink (@@: LmxMsg head; @@: LmxMsg tail; @: LmxMsg child)
+end: prototype

@@ -1,0 +1,92 @@
+predef: "l2src/lmx_msg_sched_ready.h.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Counters belong to this single-thread test driver, not the runtime.
+int: ready_checks 0
+sub: ready_check (int: ok; const: @(char label))
+    ready_checks: ready_checks + 1
+    if: ok = 0
+        c.printf("sched_ready FAIL: %s\n", label)
+        c.exit(1)
+    ---
+end: ready_check
+
+fn: main () int
+    @: LmxMsg nodes
+    @: LmxMsg a
+    @: LmxMsg b
+    @: LmxMsg cnode
+    @: LmxMsg d
+    @: LmxMsg item
+    @: LmxMsg head 0
+    @: LmxMsg tail 0
+    @: LmxMsg other 0
+    @: LmxMsg other_tail 0
+    @: uchar saved
+    size_t: bytes 4U * c.sizeof(c.LmxMsg)
+    int: i 0
+    nodes: (cast: (@: LmxMsg) c.calloc(4U, c.sizeof(c.LmxMsg)))
+    saved: (cast: (@: uchar) c.malloc(bytes))
+    if: nodes = 0 || saved = 0
+        c.free(saved)
+        c.free(nodes)
+        return: 2
+    ---
+    a: nodes
+    b: nodes + 1
+    cnode: nodes + 2
+    d: nodes + 3
+    while: i < 4
+        item: nodes + i
+        item\addr: (cast: (unsigned) (100 + i))
+        item\state: i
+        i: i + 1
+    ---
+    c.memcpy(saved, nodes, bytes)
+    ready_check(lmx_msg_sched_ready_dequeue(0, @tail) = 0 && lmx_msg_sched_ready_dequeue(@head, 0) = 0, "missing cells return null")
+    ready_check(lmx_msg_sched_ready_dequeue(@head, @tail) = 0 && head = 0 && tail = 0, "empty queue")
+    lmx_msg_sched_ready_enqueue(0, @tail, a)
+    lmx_msg_sched_ready_enqueue(@head, 0, a)
+    lmx_msg_sched_ready_enqueue(@head, @tail, 0)
+    lmx_msg_sched_ready_unlink(0, @tail, a)
+    lmx_msg_sched_ready_unlink(@head, 0, a)
+    lmx_msg_sched_ready_unlink(@head, @tail, 0)
+    ready_check(head = 0 && tail = 0 && c.memcmp(saved, nodes, bytes) = 0, "invalid cells do not mutate")
+    lmx_msg_sched_ready_enqueue(@head, @tail, a)
+    ready_check(head = a && tail = a && a\sched_queued = 1 && a\sched_next = 0, "enqueue first")
+    lmx_msg_sched_ready_enqueue(@head, @tail, a)
+    ready_check(head = a && tail = a && a\sched_next = 0, "duplicate singleton")
+    lmx_msg_sched_ready_enqueue(@head, @tail, b)
+    lmx_msg_sched_ready_enqueue(@head, @tail, cnode)
+    ready_check(head = a && tail = cnode && a\sched_next = b && b\sched_next = cnode && cnode\sched_next = 0, "append in FIFO order")
+    lmx_msg_sched_ready_enqueue(@head, @tail, b)
+    ready_check(tail = cnode && a\sched_next = b && b\sched_next = cnode && cnode\sched_queued = 1, "duplicate interior preserves links")
+    lmx_msg_sched_ready_enqueue(@other, @other_tail, d)
+    lmx_msg_sched_ready_unlink(@other, @other_tail, b)
+    ready_check(other = d && other_tail = d && d\sched_next = 0 && b\sched_next = cnode && b\sched_queued = 1, "unlink absent child leaves both lists")
+    ready_check(lmx_msg_sched_ready_dequeue(@head, @tail) = a && head = b && tail = cnode && a\sched_next = 0 && a\sched_queued = 0, "dequeue resets membership")
+    lmx_msg_sched_ready_enqueue(@head, @tail, a)
+    ready_check(head = b && tail = a && b\sched_next = cnode && cnode\sched_next = a, "dequeued child can be rescheduled")
+    lmx_msg_sched_ready_unlink(@head, @tail, cnode)
+    ready_check(head = b && tail = a && b\sched_next = a && cnode\sched_next = 0 && cnode\sched_queued = 0, "unlink middle")
+    lmx_msg_sched_ready_unlink(@head, @tail, a)
+    ready_check(head = b && tail = b && b\sched_next = 0 && a\sched_queued = 0, "unlink tail")
+    lmx_msg_sched_ready_enqueue(@head, @tail, cnode)
+    lmx_msg_sched_ready_unlink(@head, @tail, b)
+    ready_check(head = cnode && tail = cnode && b\sched_next = 0 && b\sched_queued = 0, "unlink head")
+    lmx_msg_sched_ready_unlink(@head, @tail, cnode)
+    ready_check(head = 0 && tail = 0 && cnode\sched_queued = 0, "unlink singleton")
+    lmx_msg_sched_ready_unlink(@head, @tail, cnode)
+    ready_check(head = 0 && tail = 0 && cnode\sched_next = 0, "repeat unlink is empty")
+    lmx_msg_sched_ready_enqueue(@head, @tail, a)
+    lmx_msg_sched_ready_enqueue(@head, @tail, b)
+    lmx_msg_sched_ready_unlink(@head, @tail, d)
+    ready_check(head = a && tail = b && a\sched_next = b && other = d && d\sched_queued = 1, "independent parent queues")
+    ready_check(lmx_msg_sched_ready_dequeue(@head, @tail) = a && lmx_msg_sched_ready_dequeue(@head, @tail) = b, "final FIFO drain")
+    ready_check(head = 0 && tail = 0 && a\sched_queued = 0 && b\sched_queued = 0, "drain clears tail and flags")
+    ready_check(lmx_msg_sched_ready_dequeue(@other, @other_tail) = d && other = 0 && other_tail = 0, "other parent drains independently")
+    ready_check(c.memcmp(saved, nodes, bytes) = 0, "all nonqueue state and addresses preserved")
+    c.free(saved)
+    c.free(nodes)
+    c.printf("sched_ready checks=%d failures=0\n", ready_checks)
+    return: 0

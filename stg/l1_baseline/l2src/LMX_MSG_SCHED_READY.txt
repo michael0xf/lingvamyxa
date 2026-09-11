@@ -1,0 +1,68 @@
+Parent-local ready-list bodies in L1
+===================================
+
+Scope agreed with Grok in work_chat/grok/outbox/20260911-171700.txt.
+These functions extract the list bodies added at4a54542; the Message/native
+wrappers keep synchronization, lifetime, wake-up and scheduling decisions.
+This helper neither creates a scheduler nor selects an execution model.
+
+API (lmx_msg_sched_ready.h.lm1)
+--------------------------------
+enqueue(LmxMsg **head, LmxMsg **tail, LmxMsg *child)
+dequeue(LmxMsg **head, LmxMsg **tail) -> LmxMsg*
+unlink(LmxMsg **head, LmxMsg **tail, LmxMsg *child)
+Exported names have the prefix lmx_msg_sched_ready_.
+
+The caller supplies distinct writable head/tail cells for ONE parent's
+finite acyclic ready list, with a consistent tail, and exclusive access to
+that list and its membership fields. Endpoints stay alive throughout the
+operation and while queued. The caller, not this helper, enforces direct-child
+ownership and single membership; these are not global registry operations.
+
+enqueue appends a previously unqueued child, sets sched_queued=1 and clears
+sched_next before linking it. A duplicate enqueue is a no-op, not a reorder.
+dequeue removes the head, clears tail on the last element, and clears the
+removed child's sched_next/sched_queued so later readiness can requeue it.
+unlink removes by identity, repairing head/tail/previous link and clearing
+the removed membership. A nonmember is unchanged, even if queued elsewhere.
+Missing pointer cells/child are no-ops; dequeue with missing cells returns
+NULL. Valid empty queues stay empty. Malformed/cyclic/aliased cell layouts
+are outside the contract, not silently repaired or assigned new semantics.
+
+No allocation/free, OS calls, locks, runtime lookup, mutable global data,
+Message execution, callbacks, native thread mapping, graph copy or relocation.
+Only the queue cells and sched_next/sched_queued are changed. Running/success,
+arenas, parent-child identity, bindings and payloads are not modified.
+
+Native integration handoff
+-------------------------
+Grok owns lmx_msg_sched_enqueue_child/dequeue_child/unlink_child wrappers.
+Keep their parent/null validation and existing parent mail_lock boundary;
+inside that boundary call this helper on &parent->sched_ready and
+&parent->sched_ready_tail. Do not acquire a second lock inside the helper.
+The header includes lmx_message.h for LmxMsg; include the generated helper
+header from the wrapper translation unit, not before defining LmxMsg itself.
+Add generated header/module to the selected runtime build once per exact
+configuration. This standalone checkpoint does NOT claim native integration,
+removal of transitional EXEC ring/bind storage, or stable promotion.
+
+Verification
+------------
+run_msg_sched_ready.ps1 defaults to O2, using the pinned already-built gen2
+compiler read-only and core headers from04989ba. It copies the three owned
+L1 sources into a unique private snapshot, records source/toolchain/artifact
+hashes and checks source immutability. Optional O0/both are explicit choices,
+not repeated mandatory builds. It does not link/build the native runtime or
+rebuild any compiler generation.
+
+20 checks: missing/empty cells, first/duplicate/interior enqueue, FIFO,
+dequeue-and-requeue, unlink head/middle/tail/singleton/missing/repeated,
+independent parent lists, and byte-for-byte preservation of all other
+endpoint state after draining both queues. Strict C99 -Wall -Wextra
+-Wpedantic -Werror succeeds for translated module and L1 test. nm shows no
+imports and no mutable production data symbols. No handwritten C test shim.
+
+O2 PASS:20checks,0failures. Evidence:
+build/codex/msg_sched_ready/20260911_172230_214_aa8d01ba/evidence.json.
+This proves the extracted list operations in a single-thread driver, not
+the native lock/wakeup protocol or any concurrency guarantee on its own.
