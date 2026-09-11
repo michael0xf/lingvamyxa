@@ -12218,10 +12218,15 @@ The OS and connected non-LMX libraries are outside LMX; this exception does not
 authorize shared LMX pools or catalogs disguised as runtime substrate.
 The first execution thread raises the initial settings/configuration as its
 Message, with user input already supplied by the system at entry. Subsequent
-communication uses Messages only. Creation from a template copies the settings
-into the new Message through `merge`; it does not retain a shared configuration
-object or implicitly consult the parent's live settings. This construction-time
+communication uses Messages only. Creation through `merge` copies the chosen
+template's settings and explicit additions, not the parent's entire context.
+It does not retain shared configuration or implicitly consult the parent's live
+settings. This construction-time
 copy is distinct from delivering an existing Message by arena ownership transfer.
+A separate immutable-Message kind or cross-Message immutable-sharing mechanism
+is deferred to future optimization, not part of the current model or a prerequisite
+for the core. Existing field/tree `const` and `immutable` rules are unchanged;
+any future optimization must explicitly preserve or revise ownership contracts.
 The hosted standalone bootstrap runs its external process entry in the root
 Message's turn loop. This includes `parser`,
 `trans`, `make`, `finalize` and `buildCore`. Older centralized runtime/pool ABIs
