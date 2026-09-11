@@ -36,6 +36,18 @@ Sources
   NOTES Lingvamyxa_handoff_notes.txt
 
 
+Unit - Private Message placement-path storage in L1 (2026-09-11)
+-------------------------------------------------------------
+Files: lmx_msg_path_storage.h.lm1 / .lm1, its test/runner and
+       LMX_MSG_PATH_STORAGE.txt.
+
+SPEC 19.29.7.1; LMX_MSG_CONTEXT_V0 placement-path representation
+    DECIDED retain existing private CHUNK=4 doubling/overflow behaviour,
+    status ABI 0/2/3 and failure-preserving realloc, now authored in L1.
+    AVOIDED child-address assignment, root/owner ABI, registry/scheduling
+    policy and graph/arena relocation. Only private path/capacity slots
+    enter the helper. Grok retains Message call-site/build integration.
+
 Unit - L1 local-send integration test (2026-09-11)
 -----------------------------------------------
 Files: tests/lmx_msg_send_local_selftest.lm1, run_msg_send_local.ps1,

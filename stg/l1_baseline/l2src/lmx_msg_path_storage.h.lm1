@@ -1,0 +1,15 @@
+include: "<stddef.h>"
+
+# Preserve the existing Message status ABI without importing Message state.
+define: LMX_MSG_PATH_OK 0
+define: LMX_MSG_PATH_INVALID 2
+define: LMX_MSG_PATH_NOMEM 3
+define: LMX_MSG_PATH_STORAGE_CHUNK 4
+
+# Private placement-path buffer only, never graph/arena storage. The owner
+# supplies distinct writable slots and exclusive access. Existing buffer must
+# be realloc-compatible and sized for path_cap unsigned elements. Success may
+# move this private buffer; callers must not retain aliases across growth.
+prototype:
+    fn: lmx_msg_path_grow (@@: unsigned path; @: int path_cap; int: need) int
+end: prototype

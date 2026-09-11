@@ -1,0 +1,26 @@
+predef: "l2src/lmx_msg_path_storage.h.lm1"
+include: "<stdlib.h>"
+
+fn: lmx_msg_path_grow (@@: unsigned path; @: int path_cap; int: need) int
+    int: cap
+    @: unsigned grown
+    if: path = 0 || path_cap = 0 || need < 1
+        return: LMX_MSG_PATH_INVALID
+    if: \path_cap >= need
+        return: LMX_MSG_PATH_OK
+    cap: \path_cap
+    if: cap < 1
+        cap: LMX_MSG_PATH_STORAGE_CHUNK
+    while: cap < need
+        if: cap > 2147483647 / 2
+            return: LMX_MSG_PATH_NOMEM
+        cap: cap * 2
+    ---
+    if: (cast: (size_t) cap) > ((cast: (size_t) -1) / c.sizeof(unsigned))
+        return: LMX_MSG_PATH_NOMEM
+    grown: (cast: (@: unsigned) c.realloc(\path, (cast: (size_t) cap) * c.sizeof(unsigned)))
+    if: grown = 0
+        return: LMX_MSG_PATH_NOMEM
+    \path: grown
+    \path_cap: cap
+    return: LMX_MSG_PATH_OK

@@ -1,0 +1,48 @@
+Private Message placement-path storage helper
+============================================
+
+lmx_msg_path_storage.h.lm1 / .lm1 ports the existing native path-growth
+algorithm to L1. Independent of lmx_message.h and root/owner lookup ABI:
+
+  lmx_msg_path_grow(unsigned **path, int *path_cap, int need)
+
+Return codes retain Message ABI: OK=0, INVALID=2, NOMEM=3 (1 is STAGED,
+not INVALID). Header constants use LMX_MSG_PATH_* names to avoid importing
+Message state. CHUNK=4; double until capacity >= need. Reject integer or
+byte-size overflow before realloc. Publish pointer/capacity only on success;
+allocation failure leaves pointer, capacity and prior elements unchanged.
+Within capacity: no allocation, no shrinking. Null slots or need<1: INVALID.
+
+Caller owns distinct writable slots, exclusive access, and any existing
+realloc-compatible buffer sized for path_cap unsigned elements. The helper
+does not validate arbitrary forged capacity/pointer pairs. It neither assigns
+child counters nor interprets path segments. Native integration passes
+&slot->path, &slot->path_cap, need; Grok owns deletion of the old native
+definition, call-site changes and addition of this generated unit to run_lmx.
+Do not link both same-named definitions. Standalone verification is not proof
+that the Message integration or stable promotion has happened.
+
+This is PRIVATE placement metadata. Growth can move that buffer, as before;
+no retained pointer into it may cross growth. It does not relocate graph
+payloads, arena blocks, Lmx nodes or published language references. No new
+language limit, address representation, scheduler, shared registry or lock.
+
+Verification
+------------
+run_msg_path_storage.ps1 uses pinned stable gen2 read-only; all generated
+headers/C/objects/executables/logs/hashes go to a unique private directory
+under build/codex/msg_path_storage. Only the new helper and L1 test are built.
+O0/O2 use -std=c99 -Wall -Wextra -Wpedantic -Werror. Object audit permits
+only realloc as an import and rejects mutable globals/static data.
+
+64-bit run: 541 checks, 11 realloc calls, zero failures at both levels.
+Tests cover null/invalid input, initial and populated allocation failures,
+successful retries, capacity no-ops, every retained element through growth
+to 512 segments, multi-doubling from empty, and integer overflow without an
+allocator call. GNU --wrap=realloc fault injection is authored in L1 and
+belongs only to the single-thread test driver, not the production interface.
+
+The size_t byte-overflow guard is unreachable with int capacity on the tested
+64-bit target. Two conditional checks exercise it on 32-bit size_t/unsigned
+targets if this runner/toolchain is ported there; they are explicitly NOT
+reported as executed on 64-bit. No multi-GB allocation is used as a test.

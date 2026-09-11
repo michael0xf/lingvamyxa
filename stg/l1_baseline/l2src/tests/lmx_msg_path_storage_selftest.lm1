@@ -1,0 +1,119 @@
+predef: "l2src/lmx_msg_path_storage.h.lm1"
+include: "<stdio.h>" "<stdlib.h>"
+
+# Single-thread driver instrumentation. No test hook or mutable global is
+# added to the production helper. Failed realloc never consumes the buffer.
+prototype:
+    fn: __real_realloc (@: void p; size_t: n) @: void
+end: prototype
+int: checks 0
+int: allocations 0
+int: fail_next 0
+size_t: requested_bytes 0U
+
+fn: __wrap_realloc (@: void p; size_t: n) @: void
+    allocations: allocations + 1
+    requested_bytes: n
+    if: fail_next != 0
+        fail_next: 0
+        return: 0
+    return: c.__real_realloc(p, n)
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(1)
+    ---
+end: check
+
+fn: main () int
+    @: unsigned path 0
+    @: unsigned saved
+    int: capacity 0
+    int: before
+    int: previous
+    int: i
+    int: need
+    int: synthetic_cap
+    int: size_guard_checks 0
+
+    check(LMX_MSG_PATH_OK = 0 && LMX_MSG_PATH_INVALID = 2 && LMX_MSG_PATH_NOMEM = 3, "existing status ABI")
+    check(lmx_msg_path_grow(0, @ capacity, 1) = LMX_MSG_PATH_INVALID, "null path slot")
+    check(lmx_msg_path_grow(@ path, 0, 1) = LMX_MSG_PATH_INVALID, "null capacity slot")
+    check(lmx_msg_path_grow(@ path, @ capacity, 0) = LMX_MSG_PATH_INVALID, "zero need")
+    check(lmx_msg_path_grow(@ path, @ capacity, -1) = LMX_MSG_PATH_INVALID, "negative need")
+    check(path = 0 && capacity = 0 && allocations = 0, "invalid requests leave owner unchanged")
+
+    fail_next: 1
+    check(lmx_msg_path_grow(@ path, @ capacity, 1) = LMX_MSG_PATH_NOMEM, "initial allocation failure")
+    check(path = 0 && capacity = 0 && allocations = 1 && fail_next = 0, "failed initial allocation leaves empty owner")
+    check(lmx_msg_path_grow(@ path, @ capacity, 1) = LMX_MSG_PATH_OK, "retry initial allocation")
+    check(path != 0 && capacity = 4 && requested_bytes = 4U * c.sizeof(unsigned), "initial chunk four")
+    i: 0
+    while: i < capacity
+        path[i]: (cast: (unsigned) (i + 100))
+        i: i + 1
+    ---
+    saved: path
+    before: allocations
+    check(lmx_msg_path_grow(@ path, @ capacity, 4) = LMX_MSG_PATH_OK, "exact capacity no-op")
+    check(lmx_msg_path_grow(@ path, @ capacity, 2) = LMX_MSG_PATH_OK, "smaller need no-op")
+    check(path = saved && capacity = 4 && allocations = before, "no allocation or shrinking within capacity")
+
+    fail_next: 1
+    check(lmx_msg_path_grow(@ path, @ capacity, 5) = LMX_MSG_PATH_NOMEM, "growth allocation failure")
+    check(path = saved && capacity = 4 && allocations = before + 1 && requested_bytes = 8U * c.sizeof(unsigned), "growth failure preserves pointer and capacity")
+    check(path[0] = 100U && path[3] = 103U, "growth failure preserves contents")
+    check(lmx_msg_path_grow(@ path, @ capacity, 5) = LMX_MSG_PATH_OK, "retry growth")
+    check(capacity = 8 && path[0] = 100U && path[3] = 103U, "retry preserves original segments")
+    i: 4
+    while: i < capacity
+        path[i]: (cast: (unsigned) (i + 100))
+        i: i + 1
+    ---
+
+    # Exercise arbitrary depth, not the old 16-segment ceiling.
+    need: 9
+    while: need <= 257
+        previous: capacity
+        before: allocations
+        check(lmx_msg_path_grow(@ path, @ capacity, need) = LMX_MSG_PATH_OK, "multi-chunk growth")
+        check(capacity = previous * 2 && capacity >= need && allocations = before + 1, "double capacity once at boundary")
+        i: 0
+        while: i < previous
+            check(path[i] = (cast: (unsigned) (i + 100)), "old path segment survives growth")
+            i: i + 1
+        ---
+        while: i < capacity
+            path[i]: (cast: (unsigned) (i + 100))
+            i: i + 1
+        ---
+        need: capacity + 1
+    ---
+    check(capacity = 512 && path[511] = 611U, "path exceeds depth sixteen")
+
+    saved: path
+    before: allocations
+    check(lmx_msg_path_grow(@ path, @ capacity, 2147483647) = LMX_MSG_PATH_NOMEM, "doubling integer overflow rejected before allocation")
+    check(path = saved && capacity = 512 && allocations = before && path[511] = 611U, "overflow leaves all owner state unchanged")
+    check(lmx_msg_path_grow(@ path, @ capacity, -7) = LMX_MSG_PATH_INVALID, "invalid request on populated buffer")
+    check(path = saved && capacity = 512 && allocations = before, "invalid populated request is inert")
+
+    # The byte-size guard is reachable before int overflow on 32-bit size_t.
+    # On 64-bit it is unreachable with this int capacity: do not allocate GiB
+    # or pretend that a 64-bit run covers the 32-bit branch.
+    if: c.sizeof(size_t) = 4U && c.sizeof(unsigned) = 4U
+        synthetic_cap: 0
+        check(lmx_msg_path_grow(@ path, @ synthetic_cap, 1073741824) = LMX_MSG_PATH_NOMEM, "32-bit byte-size overflow")
+        check(path = saved && synthetic_cap = 0 && allocations = before, "byte-size overflow does not reach allocator")
+        size_guard_checks: 2
+    ---
+    c.free(path)
+    path: 0
+    capacity: 0
+    check(lmx_msg_path_grow(@ path, @ capacity, 17) = LMX_MSG_PATH_OK, "empty buffer grows across multiple chunks")
+    check(capacity = 32 && requested_bytes = 32U * c.sizeof(unsigned), "multi-doubling reaches exact next capacity")
+    c.free(path)
+    c.printf("path storage checks=%d failures=0 allocations=%d size_guard_checks=%d\n", checks, allocations, size_guard_checks)
+    return: 0
