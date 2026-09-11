@@ -113,7 +113,8 @@ Current deviations (EXEC / mailbox prototype)
 ---------------------------------------------
 Do not claim the previous global-table runtime complied.
 
-  D1. LmxMsgRuntime.tab[] still allocation/sweep. Integer find
+  D1. LmxMsgRuntime.tab[] still allocation/sweep. try_retire
+      uses LmxMsg.tab_i (O(1)), not a tab scan. Integer find
       remains for send into another family. send dest prefers
       the sender subtree and parent_msg before forest find.
       Integer lookup uses turn_self when it already is that

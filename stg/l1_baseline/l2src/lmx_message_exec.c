@@ -316,6 +316,7 @@ LmxMsg *lmx_msg_slot_new(void) {
     m->running = 1;
     m->success = 0;
     m->tracked = 1;
+    m->tab_i = -1;
 #if defined(_WIN32)
     m->mail = calloc(1U, sizeof(CRITICAL_SECTION));
     if (m->mail == 0) {
@@ -488,14 +489,16 @@ int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m) {
         lmx_msg_exec_unlock(rt);
         return 0;
     }
-    for (i = 0; i < rt->n; i++) {
-        if (rt->tab[i] == m) {
-            rt->tab[i] = rt->tab[rt->n - 1];
-            rt->tab[rt->n - 1] = 0;
-            rt->n -= 1;
-            break;
+    i = m->tab_i;
+    if (i >= 0 && i < rt->n && rt->tab != 0 && rt->tab[i] == m) {
+        rt->tab[i] = rt->tab[rt->n - 1];
+        if (rt->tab[i] != 0 && rt->tab[i] != m) {
+            rt->tab[i]->tab_i = i;
         }
+        rt->tab[rt->n - 1] = 0;
+        rt->n -= 1;
     }
+    m->tab_i = -1;
     if (m->path != 0) {
         free(m->path);
         m->path = 0;

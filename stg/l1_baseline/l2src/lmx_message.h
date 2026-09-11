@@ -135,6 +135,7 @@ typedef struct LmxMsg {
     int native_users;
     unsigned orphan_until;
     int disposed;
+    int tab_i;
     LmxMsgBlock *blocks;
     LmxOwnedRange *ranges;
 } LmxMsg;

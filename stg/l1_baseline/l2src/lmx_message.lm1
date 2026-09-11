@@ -608,6 +608,7 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
         return: c.LMX_MSG_NOMEM
     slot\owner_rt: rt
     rt\tab[rt\n]: slot
+    slot\tab_i: rt\n
     st: lmx_msg_assign_path(rt, slot, p)
     if: st != c.LMX_MSG_OK
         c.lmx_msg_slot_free(slot)
