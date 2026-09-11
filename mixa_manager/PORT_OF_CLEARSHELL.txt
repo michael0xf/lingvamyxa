@@ -15,16 +15,62 @@ documents should be read. They are not an independent design that happens to
 cite ClearShell; they are a DELTA against it. Where they are silent, ClearShell's
 behaviour is the answer - not "undefined", not "our choice later".
 
+Priority: the owner's latest decisions and the current mixa_manager specification
+take precedence over ClearShell. They define what is different in this port.
+The reference fills unspecified, unchanged details; its code, colours or layout
+must never override an explicit application requirement. Ask about a genuine
+ambiguity rather than silently reverting a documented delta to the original.
+
     reference used for this port (read-only, in this repository):
     mixa_manager/clearshell_reference/
 
     upstream origin of that snapshot:
     C:\Nyasha_Planet\git\clear_shell\ClearShell\app\src\main\
 
+    owner-confirmed reference location, 2026-09-11:
+    C:\Nyasha_Planet\git\gitlab_lmx\mixa_manager\clearshell_reference\
+
+On that date all 90 files at this location matched the repository snapshot
+byte-for-byte. Use the local read-only snapshot; compare again if it is refreshed.
+
 The practical rule that follows: before designing anything, look at how
 ClearShell does it. Reinventing something it already solves is the error mode
 here, and inventing a DIFFERENT solution to a problem it solved is worse than
 copying the solution badly.
+
+1.1. Develop modules now; integrate Message execution when ready
+
+Owner clarification, 2026-09-11: the mixa_manager specification is primary and
+defines the changes. ClearShell supplies the baseline for unchanged business
+logic, user algorithms, button colours and placement rules. The port uses LMX
+and its own documented desktop interface. Preserve the recorded deltas below;
+neither invent a replacement product nor copy Android widgets/Java shared-heap
+mechanics as the implementation.
+
+Most functionality can be ported and tested as independent L1 modules before
+Grok delivers the concurrent Message runtime. Do not make that runtime a blanket
+dependency for selection/navigation, filesystem algorithms, layout/colour
+calculation, command preparation or console processing. FIRST_VERSION remains
+a delivery milestone, not the limit of the functionality to port.
+
+Design the eventual Message boundary now: each module has an explicit owner,
+inputs/results and ordinary callable operations. Mutable module state belongs
+to that owner; cross-owner payloads must be copyable or explicitly transferable.
+Keep native OS handles with their owner and isolate platform calls. A module is
+not automatically a Message or a thread; several modules may share one owner.
+Single-owner tests may call operations directly. Later Message handlers invoke
+those same operations after delivery, without rewriting the business logic.
+
+For M1...Mn writing M0, send the complete operation to M0's FIFO; M0 executes it
+serially. No application locks, extra parent grants or shared foreign pointers.
+Special order uses an explicit sorter/handler, not a changed base FIFO. See
+Lingvamyxa_spec.txt 19.29.6 and PROCESS_SEAM.txt sections 6-7.
+
+Track each bounded port task by reference source/method, applicable owner delta,
+module/API and behaviour tests. Missing Message transport is an integration gap,
+not a reason to stop unrelated modules or add a temporary C concurrency scheme.
+Do not claim concurrent app acceptance from direct-call tests; that requires the
+verified runtime and responsive UI/parallel-job checks in PROCESS_SEAM.
 
 
 2. The deltas established so far

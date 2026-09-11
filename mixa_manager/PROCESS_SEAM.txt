@@ -108,6 +108,13 @@ so there is nothing to drop; see FILE_SEAM section 2.
 
 6. Background jobs become MESSAGES, and ClearShell already has the right shape
 
+Module development does not wait for Message runtime delivery. Implement and
+test explicit owner-local operations with inputs/results now; attach their
+cross-owner delivery/execution boundary when the verified runtime is available.
+Do not create a temporary shared-memory model that will need rewriting. Several
+modules can live in one Message. See PORT_OF_CLEARSHELL.txt 1.1 for the reference-
+driven workflow and the distinction between module and concurrency acceptance.
+
 Mandatory application architecture, reconfirmed2026-09-10: concurrent work and
 cross-thread coordination use Message, not private synchronization inside C
 fragments. Each live Message owns its arena and executes its turns serially;
@@ -125,8 +132,9 @@ Acceptance must show two independently executing job Messages and responsive
 UI event handling while work is still active, ordered turns without simultaneous
 entry of one Message, copied/owned cross-Message data, and parent/child close
 and late-event handling. A long CPU task or blocked job must not monopolize a
-global dispatcher lock. Cancellation takes effect at the specified safe turn
-boundaries; parallelism is not permission to forcibly free an active arena.
+global dispatcher lock. Normal closure and emergency cancellation follow the
+current specification's end-turn and instrumented safe-escape rules; neither
+permits a foreign observer to forcibly free an active arena.
 
 No application mutexes, atomics, shared cancellation flags or custom synchronized
 queues hidden in C headers/adapters. The Message runtime/host boundary owns
@@ -147,12 +155,10 @@ architecture. A serialized prototype is useful for tests but is not evidence
 that concurrent ingress is implemented safely. Missing Message host operations
 are explicit integration tasks, not permission to add a temporary C lock scheme.
 
-Instruction from the language owner: shape ClearShell's threads as separate
-Messages with inbox and outbox. Worth knowing why that is a first: the
-translator - parser, trans, make, finalize, buildCore - is ONE root Message, so
-the concurrent half of 19.29.6 has never been exercised by anything. This is the
-first place two Messages exist at once, the same way mixa_manager was the first
-application code in L1.
+Instruction from the language owner: shape ClearShell's concurrent activities
+as Message-owned jobs with inbox and outbox. This supplies application coverage
+beyond the translator's historically single-root execution; core concurrency
+tests do not by themselves establish working application integration.
 
 6.1. The mapping, and it is NOT one to one
 
@@ -288,7 +294,17 @@ id (19.31.4).
 Completion means the assigned operation finished: a copy worker completed the
 file copy, a delivery worker completed delivery. Admission is not completion,
 and a liveness response is not completion. Failure/cancellation remain distinct.
-The parent tracks correlated results rather than polling until 'completed'.
+For local child completion alone, the parent observes the child's Message-owned
+running/success control state under the current specification; no redundant
+completion-only reply is required. Result data still uses ordinary correlated
+Messages. Control flags are not application locks or permission to read a
+foreign mutable arena.
+
+Concurrent modules sending operations to one owner require only its normal
+Message FIFO and serial own turns, not another permission/locking protocol.
+Arrival order is unspecified until admission, then fixed. Send a complete
+read-modify-write operation; separate read and write requests can lose updates.
+Application-specific sorting/batching is an explicit handler, not base FIFO.
 
 7.4. YIELD IS NOT PUBLICATION - this corrects what I assumed
 

@@ -29,6 +29,10 @@ visual requirements only where not superseded; its Qt/PTY implementation plan
 is not the current architecture. Ask about a genuine conflict before changing
 behaviour. An unfamiliar algorithm is not itself a defect.
 
+The current mixa_manager specification takes priority over the ClearShell
+reference: it describes the intended differences. Reference code supplies only
+unchanged/unspecified behaviour, never grounds for undoing a documented delta.
+
     UI_MODEL.txt          layers, grids, lists, panels, focus and pointer
     DRAWING.txt           cells, glyphs, tiles and double-line frames
     BACKEND_SEAM.txt      current platform dispatch/glyph/input contract
@@ -48,6 +52,13 @@ and commit/push documentation separately from implementation.
 
 Architecture and first runnable scope
 ------------------------------------
+Develop independent modules against ClearShell now; only their concurrent
+Message wiring waits for the verified core runtime. PORT_OF_CLEARSHELL.txt 1.1
+defines this workflow and records the owner-confirmed reference location.
+Explicit state ownership and copyable/transferable inputs/results are designed
+up front. A module is not necessarily a Message or a thread. Direct-call module
+tests are useful, but do not prove the final parallel application works.
+
 App logic is authored in L1 now and will move to L2. The chain is L2 -> L1 -> C.
 L1 is the lasting intermediate language, not permission to move application
 logic into hand-written C. Narrow platform ABI headers/adapters are identified
@@ -71,7 +82,10 @@ prints binary and generated-source identities; neither identity alone proves
 they correspond. Do not confuse this tool with build/l1trans/gen2 in the root.
 Never run the shared STG gate for app-only changes or replace its compiler.
 
-Codex coordinates grok_bot's app work; Grok develops core L2 independently.
+Codex currently coordinates OpenCode's bounded app work; Grok develops core L2
+independently. Preserve Claude/grok_bot's earlier unfinished work; their current
+quota pause is not permission to overwrite it. Live inbox/outbox assignments
+take precedence over dated ownership snapshots in STATUS.txt.
 No waiting on the core lane for app work that can use the installed compiler.
 Compiler defects go to Codex/Grok with a reproducer. File ownership and current
 tickets are in STATUS.txt and work_chat; do not overwrite another active task.
