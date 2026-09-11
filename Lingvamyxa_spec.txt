@@ -860,6 +860,11 @@ for shared-memory arrays or other implementation-facing data, but ordinary
 interactive, concurrent, UI and service programming may use the Message Thread
 model defined by the receiver families in section 19.
 
+Language capability is not implementation policy: throughout the language core
+and complete standard distribution, low-level synchronization is confined to
+the Message mechanism itself. Other components coordinate through Messages
+(19.28.R2.2). L2 synchronization remains available to explicitly low-level code.
+
 Compilation, interpretation and mixed execution are backend/profile choices,
 not the distinction between L2 and L3. An L2 implementation that uses the
 machine surface must lower those operations against an explicit memory/layout
@@ -11129,19 +11134,43 @@ Section 19.29.2.1 defines the target and its open role-to-Message grouping.
 
 19.28.R2.2. Message Thread
 
-An inactive Message becomes an L3 Thread when launched by a scheduler. Its
-actor state is a runtime role. Queue, worker, transport, diagnostic and cache
-infrastructure may live outside the graph; source-visible Message, scheduler,
-route or policy values require explicit graph links. Name resolution and
-dynamic C arguments follow section 21, independently of that infrastructure.
+An inactive Message becomes an L3 Thread when explicitly launched. Its
+management state is ordinary Structure data, to be implemented in L2, not an
+external C control model. Native handles may back the Message mechanism;
+they do not replace its ownership and protocols. Name resolution and dynamic
+arguments follow section 21 independently of Message management.
 
 Every L3 Thread has a FIFO inbox/outbox. It executes at most one turn at a
 time, consuming at most one admitted input per turn. Serial turns make ordinary
 mutation of its arena safe without a source-visible lock.
 
-Different Messages may execute concurrently. Cooperative loops, worker counts,
-worker migration between turns and fairness are runtime choices; FIFO order
-and same-Message turn serialization are fixed.
+Each live Message context owns that mailbox, a parent capability (except the root),
+and the list of its direct children. Supervision is local to that list.
+Parent/child are not the only send recipients: explicit addressed send uses a
+capability the sender already holds. Incoming payload is not a new L3 Thread;
+only an explicit launch creates a child with its own arena.
+
+Different Messages may execute concurrently. FIFO order and same-Message turn
+serialization are fixed. A language-level scheduler or router, if one exists,
+is itself an ordinary Message with private state and a message protocol; it is
+not a process-wide shared Message table and not a hidden C worker-pool policy.
+OS threads and narrow wait/wake/mutex around mailbox admission and a
+per-Message turn latch are substrate, not that coordinator. The same L3 Thread
+does not migrate between anonymous host workers as a source-model operation.
+
+Throughout the language core and complete standard distribution, low-level
+synchronization is used only inside the Message mechanism, for example to
+admit concurrent sends to a recipient's FIFO safely. Other components,
+including Mix, builders and bundled applications, coordinate through Messages,
+not their own locks, atomics, shared mutable management tables or private worker
+schedulers. L2 still offers synchronization as a language capability (20.5.7);
+this does not authorize a second concurrency mechanism in the standard package.
+
+Necessary thread, wait/wake and synchronized-mailbox primitives belong to the
+Message implementation in L2 (temporarily L1/native bootstrap). The operating
+system still schedules its threads. This does not permit a hidden C Message
+registry or dispatcher. A coordinator Message owns its state exclusively:
+other Messages send requests, not read or mutate its private tables directly.
 
 19.28.R2.3. Calls, turns and handler state
 
@@ -11157,7 +11186,7 @@ method entry and canonical signature through
 The first supplied pointer is the Structure containing that callable occurrence
 and is source `node`. Declared and dynamic primitive values are copied by value;
 Structure/Array references are copied reference values. Used own node fields
-become dirty-tracked C working locals. A host scheduler callback may receive
+become dirty-tracked C working locals. A native Message entry adapter may receive
 infrastructure parameters and then adapt them at the boundary by finding the
 callable and forming this typed source call.
 
@@ -11267,8 +11296,10 @@ merge-policy/open item, never descriptor composition.
 
 19.28.R2.6. C/runtime boundary
 
-Worker pools, OS threads, transports, codecs, collectors and foreign resources
-may expose ordinary infrastructure C ABIs. Their persistent or cross-boundary
+OS threads, transports, codecs, collectors and foreign resources
+may expose ordinary infrastructure C ABIs. A C worker pool owning a shared
+process-wide Message registry is forbidden, not an alternative implementation
+of the language scheduler (19.28.R2.2). Their persistent or cross-boundary
 source state remains reachable from Lmx nodes, with the reverse-name index
 maintained under section 2. Every call into a source method uses the exact
 typed `{addr,sig}` boundary of 21.8. Active arguments, snapshots and dirty flags
@@ -11585,10 +11616,11 @@ an ordinary Lmx field of the Message; it grants authority and does not expose a
 shared mutable pointer or become a mutex.
 
 An operation spanning several Message owners requires an explicit Message
-protocol with stated failure/retry/commit rules. A particular L2/storage
-profile may implement native locks, atomics or prefix-lock ordering, and an
-application may model a distributed lock as Messages. Neither is an implicit
-common-LMX/Mix synchronization primitive.
+protocol with stated failure/retry/commit rules. A separately selected low-level
+L2 profile may define locks or atomics; this language capability is not the
+implementation model of bundled Mix/storage modules (19.28.R2.2). An application
+may model a distributed lock as Messages: that is an explicit protocol, not an
+implicit common-LMX/Mix synchronization primitive.
 
 The older Java/profile design in which writers lock prefixes, readers proceed
 under a reader/writer policy, nested locks follow ancestor order and listener
@@ -11665,8 +11697,8 @@ a second document kind.
     cursor = path plus offset inside a buffer cell;
     down/up walks a branch; next/prev walks a bunch;
     insert/delete at a level shifts only sibling indices in that bunch;
-    coordination = explicit Messages/capabilities; a native/prefix lock is an
-        optional L2/storage protocol, not common Mix semantics;
+    coordination = explicit Messages/capabilities, not native/prefix locks in
+        the bundled Mix implementation (19.28.R2.2);
     mirror = another prefix plus a catch-up listener, not a second kind;
     Mix attributes hang on a cursor or interval, not on a byte range;
     `implements(varA varB Consumer)` types the LMX value in the cell, not
@@ -11685,8 +11717,8 @@ neighbour slot of a Mix path.
 One arena per Message, FIFO order and one active turn per L3 Thread are common
 semantics. The carrier and host execution mapping are not: the same Message may
 travel through an in-process queue, HTTP, wire, radio, flash or physical mail,
-and its turns may run cooperatively or on a worker pool without changing that
-boundary.
+without changing that boundary. Execution follows Message-owned management
+(19.28.R2.2); carrier choice does not authorize a hidden worker scheduler.
 
 This section places *cells*: a path of integers, cursors, coordination and
 mirrors. The unit is a document node. A message may *name* a Mix path instead
@@ -11927,12 +11959,15 @@ Historical text and examples: `Lingvamyxa_spec_history.txt`, section 19.29.5.H.
 19.29.6. Running Message (L3 Thread)
 
 A running Message is a Message/Lmx execution graph admitted as an L3 Thread.
-It owns exactly one logical arena, a FIFO inbox/outbox and one serial execution
-lane. No more than one turn of that L3 Thread executes at a time. Whether turns
-run on a dedicated OS thread, an actor in a worker pool, a cooperative host loop
-or another host scheduling mechanism is an implementation choice (section
-19.28), and the same L3 Thread may migrate between host workers without moving
-or sharing its arena. Conceptual components include:
+It owns exactly one logical arena, a FIFO inbox/outbox, one serial execution
+lane, a parent capability (except the root) and the list of its direct children. No
+more than one turn of that L3 Thread executes at a time. Turns may wait on
+that mailbox using OS threads and narrow admission synchronization. They must
+not be scheduled by a process-wide shared Message table or by a non-Message C
+worker-pool policy. If a language-level coordinator is required, it is an
+ordinary Message. The L3 Thread does not migrate between anonymous host
+workers as a source-model operation; its arena does not move. Conceptual
+components include:
 
     the Message's Lmx graph and its one arena;
     FIFO incoming and staged outgoing message queues;
@@ -11943,8 +11978,8 @@ or sharing its arena. Conceptual components include:
     optional application Registry/cache references;
     scheduler state.
 
-There is no Message-Thread Namespace object. A handler wrapper supplied by a
-scheduler may own infrastructure state, but entry into source code resolves one
+There is no Message-Thread Namespace object. A native Message entry adapter may
+carry invocation handles, but entry into source code resolves one
 callable occurrence and its exact `{addr,sig}` record, materializes declared
 actuals and the ordered dynamic values required by that signature, and invokes
 the typed entry beginning with `callable->node`. When the wrapper has no source
@@ -11969,17 +12004,19 @@ lifetime.
 
 Releasing one Message does not require stopping or scanning every Message in
 the process. Different Messages may execute concurrently on different workers
-because their mutable arenas are isolated. The scheduler must never overlap two
-turns of the same Message; ordinary L3 code therefore requires no portable
-shared-memory lock for its own graph. Concurrent senders are linearized at FIFO
-admission. L1 may synchronize that runtime substrate internally, while explicit
-L2 shared-memory/thread profiles define their own low-level contracts.
+because their mutable arenas are isolated. Each Message serializes its own
+turns; ordinary L3 code therefore requires no shared-memory lock for its own
+graph. Concurrent senders are linearized at the recipient's FIFO admission by
+the Message mechanism. Its necessary synchronization may be implemented in L2
+(temporarily L1/native bootstrap); no other core or standard-package component
+uses private low-level synchronization. Parent supervision uses its own child
+list, not a scan of a shared process-wide Message table.
 
 The current hosted standalone bootstrap begins as one root Message and runs its
 external process entry in that Message's turn loop. This includes `parser`,
-`trans`, `make`, `finalize` and `buildCore`. Its concrete actor/pool ABI is
-implementation status; its one arena, FIFO order and non-overlapping turns
-implement the fixed Revision-2 semantics.
+`trans`, `make`, `finalize` and `buildCore`. Older centralized runtime/pool ABIs
+are prototype history, not permission to bypass 19.28.R2.2. One arena, FIFO
+order and non-overlapping own turns remain required.
 
 
 19.29.7. Message Boundary
@@ -12017,8 +12054,9 @@ materialization into the handler. That is not full LMX-text/arena
 delivery and not a replacement of the one-arena model. Do not
 generalize those malloc copies into the source ontology.
 
-Host ingress V0 (`LMX_MSG_HOST_INGRESS_VERSION` 0): a foreign
-callback may `host_post` a number/bytes envelope. The runtime owner
+Historical prototype, not the normative management architecture:
+Host ingress V0 (`LMX_MSG_HOST_INGRESS_VERSION` 0) lets a foreign
+callback `host_post` a number/bytes envelope. The runtime owner
 is the thread that created the runtime. `host_post` (L1) copies once
 under a host-queue mutex and returns staging status (acceptance).
 It does not look up the destination table, run a turn, or mutate
@@ -12030,13 +12068,14 @@ been joined; the runtime stays valid until that barrier.
 is not concurrent Message execution. Contract file:
 `stg/l1_baseline/l2src/LMX_MSG_HOST_INGRESS_V0.txt`.
 
-Overlapping execution of different Messages is a separate host
-slice (`LMX_MSG_EXEC_HOST_V0.txt`): one serial turn lane per
-Message, worker pool for ANY affinity, UI affinity on the owner
-thread, a narrow runtime mutex never held across user work, and
-stable per-Message heap storage. The creator thread does not bypass
-another Message's turn latch. This is not a source-language
-thread-count or depth cap.
+Overlapping execution of different Messages was prototyped in
+`LMX_MSG_EXEC_HOST_V0.txt` (worker pool, runtime table, integer
+addr lookup). That file is evidence, not the accepted architecture.
+The required per-context model is defined by 19.28.R2.2 and 19.29.6: each
+live Message owns mailbox, parent and direct-child list; send uses
+a held capability; no shared process-wide Message registry;
+a language-level scheduler, if any, is a Message.
+The prototype must not be promoted to the application as-is.
 
 Language-facing operations (names follow existing thread/send/stop
 contracts; `spawn` here is English, not a new parser intrinsic):
@@ -12393,6 +12432,10 @@ unchecked indexing, raw foreign calls, raw allocation, explicit release,
 atomics, locks and other machine operations when the selected L2 profile
 defines them.
 
+These are language capabilities. In the language core and complete standard
+distribution, synchronization is used only to implement the Message mechanism,
+not for independent shared-memory coordination elsewhere (19.28.R2.2).
+
 An L2 thread/shared-memory profile is deliberately a custom low-level contract,
 not a general concurrency solution. It must define its own memory ordering,
 aliasing, synchronization, cancellation and lifetime rules. Native mutexes,
@@ -12701,8 +12744,9 @@ This structural memory model does not yet define the complete source API for:
     low-level cancellation and join;
     complete atomic/memory-order operations.
 
-Portable host-thread, mutex and condition operations now exist as an
-implementation/runtime ABI. This subsection remains future work for a generic
+Portable host-thread, mutex and condition operations exist as a Message
+implementation ABI. Within the core and standard distribution they are confined
+to that mechanism (19.28.R2.2). This subsection remains future work for a generic
 source-facing L2 machine-thread and shared-memory API. The host ABI is not
 currently a `machine.thread:` or another public source receiver.
 
@@ -13718,6 +13762,10 @@ For `for`, `continue` transfers control to the iteration-step Structure, then to
 `synchronized` consumes an object/address expression and a statement Structure
 owned by the `synchronized` receiver. It is a structured synchronization
 receiver, not a raw lock/unlock pair in source syntax.
+
+This L2 capability remains available. The core and standard distribution use
+it, or other low-level synchronization, only inside the Message mechanism;
+their other components coordinate through Messages (19.28.R2.2).
 
 In the minimal L2 profile, `synchronized` has an object-expression plus
 statement-tail receiver signature. The source after `synchronized:` is still the
