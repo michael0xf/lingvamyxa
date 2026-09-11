@@ -936,7 +936,9 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
             lmx_msg_copy_free(node)
             return: c.LMX_MSG_NOMEM
         ---
+        c.lmx_msg_mail_lock(dest)
         lmx_msg_q_push(@ dest\inbox, @ dest\inbox_tail, node)
+        c.lmx_msg_mail_unlock(dest)
         c.lmx_msg_test_on_admit(dest\addr, node)
         c.lmx_msg_exec_ready(rt, dest\addr)
         return: c.LMX_MSG_OK
@@ -948,7 +950,9 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
     if: fresh\id != 0U && lmx_msg_done_add(dest, fresh\from, fresh\id) != 0
         lmx_msg_copy_free(fresh)
         return: c.LMX_MSG_NOMEM
+    c.lmx_msg_mail_lock(dest)
     lmx_msg_q_push(@ dest\inbox, @ dest\inbox_tail, fresh)
+    c.lmx_msg_mail_unlock(dest)
     c.lmx_msg_test_on_admit(dest\addr, fresh)
     c.lmx_msg_exec_ready(rt, dest\addr)
 return: c.LMX_MSG_OK
@@ -983,7 +987,9 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
+    c.lmx_msg_mail_lock(m)
     n: lmx_msg_q_pop(@ m\inbox, @ m\inbox_tail)
+    c.lmx_msg_mail_unlock(m)
     if: n = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_EMPTY

@@ -126,8 +126,10 @@ Do not claim the previous global-table runtime complied.
       under host mutex; dest table walk is later).
   D6. 19.29.6 / 19.28.R2.2 text that permitted worker-pool
       actors and migration between host workers.
-  D7. Shared exec mutex around admission/bind/ready. Not a
-      per-mailbox lock.
+  D7. Shared exec mutex still around find/bind/ready. Inbox
+      q_push/q_pop now take dest mail_lock nested under exec
+      (exec then mail; never the reverse). Not yet a replacement
+      of exec lock.
   D8. Independent child-arena reclaim inside one family is
       prototype-only: RELEASED frees copy slices; the LmxMsg
       object stays until runtime_delete. Not proven across
