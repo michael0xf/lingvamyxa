@@ -338,6 +338,46 @@ Note the whole prologue path is guarded by l2_m_alias[...] < 0 - aliased fields
 (a same-named argument sharing the own declaration) are not restored here. Those
 are the lazy 6746/6788 sites.
 
+6.1.2. `if` substructures are VIRTUAL - they get no runtime graph identity
+
+Mikhail asked: an `if` has at least two substructures, so are they virtual? In
+the current implementation, yes. The child-index layout function (4036-4064)
+builds the runtime graph under a method node like this:
+
+    node
+      +-- own field 0          uchild 0      direct fields first,
+      +-- own field 1          uchild 1        consecutive
+      +-- for#0                uchild 2      the `for` IS a node
+      |     +-- hosted field   fchild 0        its fields are ITS children
+      |     +-- hosted field   fchild 1
+      +-- for#1                uchild 3
+    l2_unit_base = next free index
+
+An own field with host 0 gets a uchild under node; one with a host gets an
+fchild under that host's `for`. Then every `for` in the table takes a uchild of
+its own. `if` appears NOWHERE in this: there is no l2_if_* table anywhere in
+l2trans.lm1, no index, no handle, no entry in the layout.
+
+So the two bodies of an `if` exist in the parse tree as LM_P0_NODE_STRUCTURE and
+become nested L1 control flow in the output, and that is all they are. They have
+no runtime node to hold anything.
+
+What reifies a structure is HOSTING A FIELD, and only `for` can host one -
+l2_scope_host() returns the innermost pushed scope, and only `for` pushes. The
+prologue goes further and emits a `for` handle only when some used field
+actually belongs to it (the `hu` test at 7020-7029), so even a `for` is reified
+at runtime only when it has something to hold.
+
+6.1.3. Open question worth putting to Codex
+
+Is this a decision or a limitation? The wording in the generated notes is
+"Nested if own-decl is UNSUPPORTED own declaration", and "unsupported" reads
+like the latter. In the language model a Structure is a Structure; if an `if`
+body is one, a field declared inside it must eventually have somewhere to live,
+and the layout function above has no slot to give it. Either the layout grows a
+host kind, or the refusal is principled and should say why rather than
+"unsupported". Not ours to answer.
+
 
 
 THE ONE THING A LOOP DOES GET is the cancellation poll, and it is not activation
