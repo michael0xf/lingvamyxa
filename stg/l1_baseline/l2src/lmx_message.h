@@ -30,9 +30,9 @@ typedef unsigned char uchar;
 #define LMX_MSG_KIND_DONE 6
 #define LMX_MSG_KIND_REJECTED 7
 #define LMX_MSG_KIND_STOP 8
-/* KIND_STOP is internal close control. KIND_CANCELLED is ordinary result data. */
-#define LMX_MSG_LIVE_QUERY 1001
-#define LMX_MSG_LIVE_REPLY 1002
+/* KIND_STOP is internal close control. KIND_CANCELLED is ordinary result data.
+ * Experimental liveness uses KIND_PROGRESS with a family-local number
+ * (1=query, 2=reply) and correlation; those numbers are not language KINDs. */
 
 #define LMX_MSG_STATE_INACTIVE 0
 #define LMX_MSG_STATE_RUNNING 1
@@ -110,8 +110,10 @@ typedef struct LmxMsg {
     LmxMsgTurn turn;
     void *turn_ctx;
     int mapped;
-    unsigned live_at;
-    int live_waiting;
+    unsigned live_query_id;
+    unsigned live_query_at;
+    unsigned live_seq;
+    unsigned child_heard_at;
 } LmxMsg;
 
 struct LmxMsgRuntime {

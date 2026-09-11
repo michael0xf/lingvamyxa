@@ -41,8 +41,20 @@ foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "
         throw "$gen gcc failed: $c"
     }
 
-    & $exe
-    if ($LASTEXITCODE -ne 0) { throw "$gen $unit failed" }
+    if ($unit -eq "lmx_message_selftest") {
+        $msOut = Join-Path $log "lmx_message_selftest.stdout.txt"
+        $msErr = Join-Path $log "lmx_message_selftest.stderr.txt"
+        $p = Start-Process -FilePath (Join-Path (Get-Location) $exe) -WorkingDirectory (Get-Location) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $msOut -RedirectStandardError $msErr
+        if ($p.ExitCode -ne 0) {
+            Get-Content -LiteralPath $msOut -ErrorAction SilentlyContinue
+            Get-Content -LiteralPath $msErr -ErrorAction SilentlyContinue
+            throw "$gen $unit failed exit=$($p.ExitCode)"
+        }
+        $p.ExitCode.ToString() | Set-Content -LiteralPath (Join-Path $log "lmx_message_selftest.exit.txt") -Encoding ascii
+    } else {
+        & $exe
+        if ($LASTEXITCODE -ne 0) { throw "$gen $unit failed" }
+    }
 }
 $msgC = Join-Path $out "lmx_message.c"
 & $trans "l2src\lmx_message.lm1" $msgC

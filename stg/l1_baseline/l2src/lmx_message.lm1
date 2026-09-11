@@ -459,7 +459,7 @@ fn: lmx_msg_assign_path (@: LmxMsgRuntime rt; @: LmxMsg slot; LmxMsgAddr: parent
     p: lmx_msg_find(rt, parent)
     if: p = 0
         return: c.LMX_MSG_INVALID
-    if: p\path_n < 1
+    if: p\path_n < 1 || p\path_n = 2147483647
         return: c.LMX_MSG_NOMEM
     if: p\child_seq + 1U = 0U
         return: c.LMX_MSG_NOMEM
@@ -679,7 +679,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     while: ch != 0
         if: ch\state = c.LMX_MSG_STATE_INACTIVE
             ch\committed: 1
-            ch\live_at: rt\clock
+            ch\child_heard_at: rt\clock
             if: lmx_msg_exec_is_runnable(rt, ch\addr) != 0
                 c.lmx_msg_exec_ready(rt, ch\addr)
             ---
@@ -1164,6 +1164,8 @@ return: c.lmx_msg_run_child_turn(rt, addr)
 fn: lmx_msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     @: LmxMsgEnv env
+    unsigned: parent 0U
+    unsigned: qid 0U
     int: st
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
@@ -1172,23 +1174,47 @@ fn: lmx_msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: m = 0 || m\parent = 0U
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
-    m\live_waiting: 1
-    m\live_at: rt\clock
+    if: m\live_query_id != 0U
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_OK
+    m\live_seq: m\live_seq + 1U
+    qid: m\live_seq
+    m\live_query_id: qid
+    m\live_query_at: rt\clock
+    parent: m\parent
     c.lmx_msg_exec_unlock(rt)
     env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: env = 0
+        c.lmx_msg_exec_lock(rt)
+        m: lmx_msg_find(rt, who)
+        if: m != 0 && m\live_query_id = qid
+            m\live_query_id: 0U
+        ---
+        c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_NOMEM
     env\kind: c.LMX_MSG_KIND_PROGRESS
-    env\number: c.LMX_MSG_LIVE_QUERY
+    env\number: 1
+    env\correlation: qid
     env\reply_to: who
-    st: lmx_msg_send(rt, who, m\parent, env)
+    st: lmx_msg_send(rt, who, parent, env)
     c.free((cast: (@: void) env))
+    if: st != c.LMX_MSG_STAGED
+        c.lmx_msg_exec_lock(rt)
+        m: lmx_msg_find(rt, who)
+        if: m != 0 && m\live_query_id = qid
+            m\live_query_id: 0U
+        ---
+        c.lmx_msg_exec_unlock(rt)
+    ---
 return: st
 
 fn: lmx_msg_live_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; const: @(LmxMsgEnv env)) int
     @: LmxMsg m
     @: LmxMsg ch
     @: LmxMsgEnv out
+    unsigned: from 0U
+    unsigned: dest 0U
+    unsigned: qid 0U
     int: st
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK || env = 0
         return: c.LMX_MSG_INVALID
@@ -1196,24 +1222,27 @@ fn: lmx_msg_live_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; const: @(LmxMsgEn
         return: c.LMX_MSG_OK
     c.lmx_msg_exec_lock(rt)
     m: lmx_msg_find(rt, who)
-    if: m = 0
+    if: m = 0 || m\exec_live = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
-    if: env\number = c.LMX_MSG_LIVE_REPLY
-        if: env\reply_to = m\parent
-            m\live_waiting: 0
-            m\live_at: rt\clock
+    from: m\exec_from
+    if: env\number = 2
+        if: from = m\parent && env\correlation != 0U && env\correlation = m\live_query_id
+            m\live_query_id: 0U
         ---
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_OK
     ---
-    if: env\number != c.LMX_MSG_LIVE_QUERY
+    if: env\number != 1
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_OK
     ch: m\first_child
+    dest: 0U
     while: ch != 0
-        if: ch\addr = env\reply_to
-            ch\live_at: rt\clock
+        if: ch\addr = from
+            ch\child_heard_at: rt\clock
+            dest: from
+            qid: env\correlation
             ch: 0
         ---
         if: ch != 0
@@ -1221,13 +1250,16 @@ fn: lmx_msg_live_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; const: @(LmxMsgEn
         ---
     ---
     c.lmx_msg_exec_unlock(rt)
+    if: dest = 0U
+        return: c.LMX_MSG_OK
     out: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: out = 0
         return: c.LMX_MSG_NOMEM
     out\kind: c.LMX_MSG_KIND_PROGRESS
-    out\number: c.LMX_MSG_LIVE_REPLY
+    out\number: 2
+    out\correlation: qid
     out\reply_to: who
-    st: lmx_msg_send(rt, who, env\reply_to, out)
+    st: lmx_msg_send(rt, who, dest, out)
     c.free((cast: (@: void) out))
 return: st
 
@@ -1242,14 +1274,14 @@ fn: lmx_msg_live_check (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; uns
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: -1
-    if: m\live_waiting != 0 && threshold != 0U && now > m\live_at && (now - m\live_at) > threshold
+    if: m\live_query_id != 0U && threshold != 0U && now > m\live_query_at && (now - m\live_query_at) > threshold
         m\closing: 1
         n: n + 1
     ---
     ch: m\first_child
     while: ch != 0
         if: ch\committed != 0 && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_RELEASED
-            if: threshold != 0U && now > ch\live_at && (now - ch\live_at) > threshold
+            if: threshold != 0U && now > ch\child_heard_at && (now - ch\child_heard_at) > threshold
                 ch\closing: 1
                 n: n + 1
             ---

@@ -102,10 +102,13 @@ int lmx_msg_path_grow(LmxMsg *slot, int need) {
     }
     cap = slot->path_cap < 1 ? LMX_MSG_PATH_CHUNK : slot->path_cap;
     while (cap < need) {
-        if (cap > 1000000000) {
+        if (cap > 2147483647 / 2) {
             return LMX_MSG_NOMEM;
         }
         cap *= 2;
+    }
+    if ((size_t)cap > ((size_t)-1) / sizeof(unsigned)) {
+        return LMX_MSG_NOMEM;
     }
     p = (unsigned *)realloc(slot->path, (size_t)cap * sizeof(unsigned));
     if (p == 0) {
@@ -1359,18 +1362,20 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
 }
 
 int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
+    LmxMsgExec *e = exof(rt);
     LmxMsg *m;
     LmxMsgExecBind snap;
     LmxMsgAddr par;
     int owner;
     int st;
-    if (rt == 0 || child == 0U) {
+    int i;
+    if (e == 0 || child == 0U) {
         return LMX_MSG_INVALID;
     }
     owner = lmx_msg_host_is_owner(rt);
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, child);
-    if (m == 0 || m->turn == 0) {
+    if (m == 0 || m->turn == 0 || m->mapped != 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
@@ -1383,6 +1388,15 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
     } else if (owner == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
+    }
+    i = bind_index(e, child);
+    if (i >= 0) {
+        if (e->bind[i].held != 0) {
+            lmx_msg_exec_unlock(rt);
+            return LMX_MSG_INVALID;
+        }
+        e->bind[i].held = 1;
+        e->bind[i].held_by = lmx_tid();
     }
     memset(&snap, 0, sizeof(snap));
     snap.addr = child;
@@ -1397,11 +1411,14 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
     LmxMsgExec *e = exof(rt);
     LmxMsg *p;
     LmxMsg *c;
+    int st;
     if (e == 0 || parent == 0U || child == 0U) {
         return LMX_MSG_INVALID;
     }
-    if (lmx_msg_host_is_owner(rt) == 0 && lmx_msg_exec_holding_turn(rt, parent) == 0) {
-        return LMX_MSG_INVALID;
+    if (lmx_msg_exec_holding_turn(rt, parent) == 0) {
+        if (lmx_msg_host_is_owner(rt) == 0 || lmx_msg_exec_holding_any(rt) != 0) {
+            return LMX_MSG_INVALID;
+        }
     }
     lmx_msg_exec_lock(rt);
     p = msg_at_addr(rt, parent);
@@ -1414,7 +1431,22 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
+    if (c->mapped != 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_OK;
+    }
     c->mapped = 1;
     lmx_msg_exec_unlock(rt);
-    return launch_ctx_thread(rt, child);
+    st = launch_ctx_thread(rt, child);
+    if (st != LMX_MSG_OK) {
+        int i;
+        lmx_msg_exec_lock(rt);
+        c = msg_at_addr(rt, child);
+        i = bind_index(e, child);
+        if (c != 0 && (i < 0 || bind_has_worker(&e->bind[i]) == 0)) {
+            c->mapped = 0;
+        }
+        lmx_msg_exec_unlock(rt);
+    }
+    return st;
 }

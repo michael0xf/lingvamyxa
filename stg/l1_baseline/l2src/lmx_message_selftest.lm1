@@ -675,7 +675,7 @@ fn: main () int
     st: lmx_msg_end_turn(lrt, lc, 1)
     st: lmx_msg_pump(lrt)
     st: lmx_msg_recv(lrt, lp, got)
-    if: st != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_PROGRESS || got\number != c.LMX_MSG_LIVE_QUERY
+    if: st != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_PROGRESS || got\number != 1
         c.printf("parent missed child live query\n")
         fail: fail + 1
     st: lmx_msg_live_handle(lrt, lp, got)
@@ -683,7 +683,7 @@ fn: main () int
     st: lmx_msg_end_turn(lrt, lp, 1)
     st: lmx_msg_pump(lrt)
     st: lmx_msg_recv(lrt, lc, got)
-    if: st != c.LMX_MSG_OK || got\number != c.LMX_MSG_LIVE_REPLY
+    if: st != c.LMX_MSG_OK || got\number != 2
         c.printf("child missed live reply\n")
         fail: fail + 1
     st: lmx_msg_live_handle(lrt, lc, got)
