@@ -11672,12 +11672,13 @@ The same holds for cell descriptions: `u32` is merge(cell, count/integer) plus
 range `0..2^32-1` plus spelling. `FILE` is merge(cell, opaque). On disk both
 may occupy one slot in a sector-sized page; the contracts differ.
 
-19.28.10.11. Message Coordination; Historical Prefix-Lock Profile
+19.28.10.11. Message Coordination and Logical Prefix Locks
 
-Common Mix does not define a portable mutex, reader/writer lock, byte-range
-lock, prefix-lock algorithm or nested-lock acquisition order. Such algorithms
-depend on shared memory, host scheduling and a concrete carrier; they cannot be
-ported unchanged across RAM, HTTP, radio, disk and physical mail.
+World Wide Mix retains logical prefix locking: a lock on P excludes conflicting
+changes throughout subtree(P), including deeper bunches (19.28.10.6). It is a
+selectable Message protocol, not a mandatory lock on every operation or a native
+mutex shared across machines. The scope is common; the carrier-specific
+acquisition/release and failure algorithm is not fixed here.
 
 Mutable Mix state belongs to a Message arena. Its L3 Thread receives commands
 through FIFO delivery and executes at most one turn at a time. Parallelism is
@@ -11686,12 +11687,57 @@ Message to the owner of that mutable state. A capability for the prefix may be
 an ordinary Lmx field of the Message; it grants authority and does not expose a
 shared mutable pointer or become a mutex.
 
-An operation spanning several Message owners requires an explicit Message
-protocol with stated failure/retry/commit rules. A separately selected low-level
-L2 profile may define locks or atomics; this language capability is not the
-implementation model of bundled Mix/storage modules (19.28.R2.2). An application
-may model a distributed lock as Messages: that is an explicit protocol, not an
-implicit common-LMX/Mix synchronization primitive.
+Ordinary concurrent writes to one owner need none of the reservation machinery
+below: its FIFO and serial execution suffice (19.29.6). Message admission still
+performs the ordinary validation/authority checks; no extra acquire/grant step
+is added merely because senders are concurrent.
+
+When an application requires exclusion spanning several owners, coordinate at
+their common managing prefix. The smallest common prefix is the narrowest such
+subtree; selecting a
+wider prefix deliberately excludes more conflicting work. Its owner Message
+serializes reservation requests and manages the right to change that subtree.
+Each affected owner still performs its own mutations. Coordination across levels
+is delegated through owner Messages, not an ancestor directly accessing foreign
+arenas, scheduling grandchildren or acquiring a global management lock.
+
+Explanatory scope example, not new receiver declarations:
+
+    P = 34.3, owner MP; M0 = 34.3.1, M7 = 34.3.7
+    lock(34.3)       covers both branches and their descendants
+    lock(34.3.7)     leaves independent work at 34.3.1 alone
+
+The acquire/grant/token/release exchange proposed in the discussion is only a
+possible protocol, not a selected API or a prerequisite for the Message runtime.
+
+Locking 34.3.7 alone does not exclude unrelated work at 34.3.1. A lock on 34.3
+must also coordinate conflicting reservations under 34.3.7; independent FIFO
+queues alone do not reconcile ancestor and descendant grants.
+
+Recording a reservation at MP does not automatically enforce it at M0 or M7.
+The selected protocol must define when exclusion takes effect, how previously
+admitted/in-flight changes are settled, and how every conflicting write path
+honours the grant. It must also prevent a delayed command from an expired or
+revoked grant being accepted after a conflicting replacement grant. Grant
+identities/generations checked by the actual owner are one possible mechanism,
+not a newly mandatory wire format. Read/snapshot policy is specified separately.
+Authority to request a change and a currently valid reservation are distinct;
+carrying a capability alone does not prove that exclusion has been established.
+
+Prefix exclusion is not an all-or-nothing distributed commit, rollback, or
+physically simultaneous mutation. A command may carry an execution/effective
+time T, but the profile must state its meaning, clock uncertainty, late/missing
+command handling and partial-failure policy. Synchronized clocks do not replace
+delivery, enforcement or completion evidence. A timeout is not evidence that
+an old holder or remote operation has stopped. Concrete retry/deduplication,
+recovery and commit rules remain explicit protocol choices, not an implicit
+distributed transaction added to every Message.
+
+A separately selected low-level L2 profile may define locks or atomics; this
+language capability is not the implementation model of bundled Mix/storage
+modules (19.28.R2.2). An application may use the logical prefix-lock protocol
+above: its state and coordination are
+ordinary Messages, not an implicit native synchronization primitive.
 
 The older Java/profile design in which writers lock prefixes, readers proceed
 under a reader/writer policy, nested locks follow ancestor order and listener
@@ -11768,8 +11814,8 @@ a second document kind.
     cursor = path plus offset inside a buffer cell;
     down/up walks a branch; next/prev walks a bunch;
     insert/delete at a level shifts only sibling indices in that bunch;
-    coordination = explicit Messages/capabilities, not native/prefix locks in
-        the bundled Mix implementation (19.28.R2.2);
+    coordination = owner Messages/capabilities; logical prefix exclusion uses
+        their protocol, not native shared locks in bundled Mix (19.28.10.11);
     mirror = another prefix plus a catch-up listener, not a second kind;
     Mix attributes hang on a cursor or interval, not on a byte range;
     `implements(varA varB Consumer)` types the LMX value in the cell, not
@@ -12084,6 +12130,44 @@ the Message mechanism. Its necessary synchronization may be implemented in L2
 (temporarily L1/native bootstrap); no other core or standard-package component
 uses private low-level synchronization. Parent supervision uses its own child
 list, not a scan of a shared process-wide Message table.
+
+For concurrent writers M1...Mn, send the complete operation to the state owner
+M0. M0 performs read-modify-write in its own serial turn; senders never acquire
+a lock and then mutate M0's foreign graph. No additional parent permission,
+reservation or second admission route is required for this concurrent writing.
+The necessary native synchronization stays inside Message's mailbox/wakeup
+mechanism; M0's ordinary handler needs no additional lock.
+
+Concurrent arrivals have no predetermined relative order. FIFO admission fixes
+their actual order, and M0 consumes them in that order without overlapping own
+turns. This is unspecified arrival order, not a required random shuffle or a
+promise to follow sender timestamps. Explanatory notation:
+
+    M1 -> M0: add(2)       M0 turn: value := value + 2
+    M2 -> M0: add(5)       M0 turn: value := value + 5
+
+Starting at 0, either arrival order yields 7. For order-sensitive operations,
+the admitted order determines the result. If another order is required, use an
+explicit sorting/batching handler or Message wrapper. That handler defines when
+its batch is complete and how late inputs are handled; it does not silently
+change the base FIFO or impose one total order on independent Messages.
+
+Separate read and write requests are not one protected operation: two senders
+can both read 10 and later both write 11. Serial turns prevent overlapping
+execution, not lost updates across such a split protocol, nor automatic rollback
+on failure. running/success are lifecycle flags, not locks. Deliver(write, M0)
+completes on delivery; ApplyWrite(M0, delta) completes only when M0 applies the
+specified operation. All children reporting delivery success is not an
+application-result barrier. Result correlation still follows ordinary Message
+publication rules; a completion-only local reply is not newly required.
+For coordination across owners, see logical prefix locking in 19.28.10.11.
+
+Implementation/integration checks: concurrent add requests produce the expected
+total; an execution trace follows the recorded admission order; own turns never
+overlap; independently mapped Messages can execute in parallel. Do not assert a
+fixed race winner, fabricate success from staging, or add application locks or
+a shared global manager to pass these checks. A sorted wrapper is tested against
+its explicitly chosen policy, separately from the base FIFO.
 
 The current hosted standalone bootstrap begins as one root Message and runs its
 external process entry in that Message's turn loop. This includes `parser`,

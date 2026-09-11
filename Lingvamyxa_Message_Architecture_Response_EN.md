@@ -127,7 +127,52 @@ The prototype's path-depth limit of 16 has no foundation in the language model a
 
 Storage sized for the required path is one straightforward implementation option. Checked resource and representation failures are real limits; an arbitrary depth constant must not define the language's topology. Published addresses must remain stable.
 
-## 9. Current work and remaining questions
+## 9. Shared writes and World Wide Mix prefix coordination
+
+Concurrent senders ask the state owner M0 to perform the complete operation,
+such as add(delta), in M0's own serial turn. They do not lock and mutate a foreign
+arena. Splitting read and write into separate requests can still lose updates.
+Serial execution is not automatic rollback. running/success are lifecycle flags;
+delivery success is not proof that M0 has applied the requested change.
+
+For this single-owner case there is no extra parent grant, reservation or second
+admission route. Ordinary incoming validation remains. Concurrent arrivals have
+no predetermined relative order; FIFO admission fixes their actual order, then
+M0 consumes them serially. This is not random shuffling or implicit timestamp
+sorting. Special ordering belongs in an explicit sorter/batch handler with its
+own batch-completion and late-input policy, not in every Message's queue.
+
+For Grok's runtime and OpenCode's later application integration, check concurrent
+updates against their expected total and recorded admission order, non-overlap
+of own turns and genuine parallel execution of independent mapped Messages.
+Do not demand a fixed concurrent sender order or use application locks/global
+management state as a workaround. Application UI state belongs to its owner;
+worker Messages send complete update operations/results, not mutable graph
+pointers. Integration waits for a verified runtime delivery, not a prototype
+that merely reports the intended architecture.
+
+World Wide Mix retains logical prefix exclusion. For owners 34.3.1 and 34.3.7,
+when such cross-owner exclusion is required, coordinate at their common managing
+prefix 34.3; a narrower lock on 34.3.7 leaves
+the sibling branch independent. The prefix owner serializes reservations using
+ordinary Messages. Affected owners keep their own arenas and perform their own
+mutations; this does not introduce a global scheduler or native distributed lock.
+
+A recorded reservation is not yet enforced exclusion. The selected protocol must
+settle in-flight conflicts, coordinate ancestor/descendant grants, enforce the
+grant on actual writes and reject stale authority after replacement. It also
+specifies read visibility, retry/deduplication, release and failure handling.
+This records the contract, not a decision to implement one particular protocol.
+In particular, the discussion's acquire/grant/token/release exchange is not an
+approved API or a dependency of ordinary single-owner concurrent writes.
+
+Prefix exclusion, all-or-nothing commit and execution at a physical time T are
+different requirements. Synchronized clocks do not guarantee timely delivery or
+simultaneous execution. A timed profile must state uncertainty and late/missing
+command handling; a timeout does not prove a remote operation has stopped.
+See Lingvamyxa_spec.txt 19.28.10.11 and WorldWideMix.txt section 10.
+
+## 10. Current work and remaining questions
 
 The reviewed prototype has Windows tests for overlapping execution, whole-context serialization, restart, dynamic child launch and UI activity during worker execution. It still contains central table/lookup/lock structures. Those remain deviations to remove, not an accepted Message-first implementation or an application delivery.
 
