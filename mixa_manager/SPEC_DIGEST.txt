@@ -729,6 +729,62 @@ a METHOD x FIELD matrix. More hostable places means more distinct own fields per
 unit, and that matrix grows as the product. Small at current sizes, but it is
 the one cost that is not proportional to what a program uses.
 
+6.1.3.5. Does GOOD style cost or save under this model? Mostly save - and one free win
+
+Mikhail's point: many branches is bad style anyway, so what does GOOD style do
+here? It turns out the model rewards it on the axes that matter and charges a
+small fee on two, and there is one improvement available for free.
+
+WHERE GOOD STYLE IS FASTER
+
+    SHALLOW NESTING IS LITERALLY CHEAPER. A host at depth D costs D branch_child
+      hops per call under the new hierarchy. Flat, shallow code costs one. The
+      cost is visible and proportional to the thing style already discourages.
+
+    SMALL METHODS ARE THE LAZY MECHANISM THIS LANGUAGE HAS. 6.1.3.4 asked the
+      spec when a host handle resolves and noted they all resolve eagerly in the
+      prologue. But a METHOD resolves its fields only when it is called. So
+      extracting a branch into its own method makes that field loading follow
+      the executed path - which is exactly the laziness I was asking for.
+      METHOD EXTRACTION IS LAZY HOSTING. Good style obtains the property without
+      the language needing to grow one.
+
+    FINER METHODS CANCEL FASTER. The poll sits at method entry, loop backedges
+      and method exit (6.1.0.4). More method boundaries means more places a
+      running=0 request is observed, so small methods improve cancellation
+      latency. That is a responsiveness property, not a speed one, and in a
+      system where cancellation is cooperative it is worth more than either.
+
+WHERE GOOD STYLE PAYS A SMALL FEE - worth knowing, not worth changing style for
+
+    NARROW SCOPING COSTS A HOST HANDLE. Declaring a variable in the tightest
+      body it belongs to is good style; under this rule that body becomes a host
+      and costs one branch_child per call. Declaring it at method level costs
+      none. The model charges slightly for narrow scope - one resolution per
+      hosting body per call, which is small, but it is a fee in the wrong
+      direction and should be known rather than discovered.
+
+    EARLY RETURN COSTS CHECKPOINT SITES. A checkpoint precedes every return and
+      every call. Early-return style multiplies those sites, and each one tests
+      every used field.
+
+THE FREE WIN, and this is the actionable part
+
+There is only l2_m_uses. Grepped for an assigned/written flag beside it: none
+exists. So a field a method only READS still gets its l2_q{k}_dirty local, its
+initialisation, and a dirty test in EVERY checkpoint - a test that can never
+fire.
+
+A second static flag, set where uses is already set, would let the emitter drop
+the dirty local and every checkpoint entry for fields the method never assigns.
+Pure win, no semantics touched, computable in the pass that already does the
+work.
+
+Its real value is not the cycles. Today the dirty machinery is NEUTRAL to
+immutability: writing a method that only reads its state buys nothing. With that
+flag it would be rewarded - the style the language already prefers would become
+the cheaper one, which is the right direction for a fee to point.
+
 6.1.4. But "persist every structure" is a different question, not a bigger one
 
 Mikhail's own observation is the strongest argument here: ARGUMENT structures
