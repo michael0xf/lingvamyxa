@@ -42,11 +42,12 @@ Files: lmx_owned_ranges.h.lm1, lmx_owned_ranges.lm1, dedicated tests/runner/doc.
 
 ABI14.9 / SPEC6.5, 19.29.6
     DECIDED by user: OS process startup is already the root Message. All state,
-    including range metadata and immutable shared domains, has a Message owner.
+    including range metadata and immutable domains, is Message-local. NO shared
+    LMX data, even immutable; only OS/non-LMX libraries are external.
     Range metadata follows arena ownership, without payload relocation. This
     resolves Unit1's per-owner subdivision ASK; its flat mutable global table
     remains prototype debt, not an accepted concurrent implementation.
-    AVOIDED: lifecycle eligibility, shared-domain discovery/publication, tracing
+    AVOIDED: lifecycle eligibility, external-library resource access, tracing
     and allocator policy. Storage API receives the owner's set explicitly;
     it does not create an external registry, global lock or scheduler.
 

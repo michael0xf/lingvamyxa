@@ -1066,7 +1066,7 @@ For example, a primitive field
     char: '!'
 
 may hold `data == &all_chars_array['!']`. Assigning this field changes its
-reference; it does not mutate the shared immutable character cell. Mutable
+reference; it does not mutate the Message-local interned character cell. Mutable
 primitive storage needs its own registered allocation domain.
 
 An Array reference addresses a descriptor directly:
@@ -4324,12 +4324,12 @@ algorithm as the primitive service arrays and `all_methods_array {addr,sig}`.
 Names of these pools are illustrative substrate identifiers, not a runtime
 source-name lookup mechanism. Pool storage and actual application-array
 backing must not be confused. Mutable descriptors and backing belong to the
-owning Message's one arena; globally available range classification does not
-share those mutable cells between Messages.
+owning Message's one arena. Range classification is available within every
+Message; this does not imply a shared registry or shared payload cells.
 Range metadata belongs to a Message too: each owner keeps the descriptions of
 its storage ranges. Arena ownership transfer carries those descriptions without
-moving payloads. Shared immutable domains still have a Message owner; they are
-not an ownerless global registry. See 19.29.6.
+moving payloads. Immutable domains are Message-local too; there is no shared
+LMX domain outside or across Messages. See 19.29.6.
 
 Each typed service pool may contain several non-moving blocks. Growth allocates
 another block and registers its own address range with the same type; addresses
@@ -11927,8 +11927,8 @@ entries have stable addresses and must not relocate. Typed pools grow by adding
 separately registered non-moving blocks of the same type (2, 6.5). A direct
 reference is used directly, not resolved again by name.
 
-Every Message owns one arena (19.29.2). Mutable graph data cannot be raw-shared
-between Messages; immutable primitive atoms and method records may be shared.
+Every Message owns one arena (19.29.2). LMX graph data, primitive atoms and
+method records are not shared between Messages, even when immutable.
 Runtime helpers derive the arena from a supplied address/root or allocation-
 domain metadata. Ownership is neither a fourth Lmx word nor an extra hidden
 source-method parameter.
@@ -12149,11 +12149,11 @@ Any Registry, cache or Table of a Message is ordinary Lmx data reachable from
 explicit Message roots in that Message's one arena. It is
 optional application state, not an allocator.
 
-Raw mutable Lmx references inside one Message may point only into storage whose
-lifetime is valid for that Message or into explicitly shared immutable/address-
-domain storage. A raw reference into another Message's reclaimable graph is
-invalid until an explicit boundary operation has established its ownership and
-lifetime.
+Lmx references inside one Message address its own LMX storage. A boundary
+operation may transfer storage and its range metadata to a new owner without
+relocation; it does not grant simultaneous cross-Message aliases, even to
+immutable LMX data. Non-LMX OS/library resources follow their explicit external
+contracts; their Lmx wrappers and descriptors remain Message-local.
 
 Releasing one Message does not require stopping or scanning every Message in
 the process. Different Messages may execute concurrently on different workers
@@ -12205,10 +12205,12 @@ its explicitly chosen policy, separately from the base FIFO.
 
 OS process startup is already the root Message, not a runtime outside Message
 ownership that creates its first Message later. All language/runtime state,
-including range metadata and shared immutable domains, has a Message owner.
+including range metadata and immutable domains, belongs inside its Message.
 OS startup, allocation and thread primitives implement this model; they do not
-introduce a separate ownerless manager, scheduler or registry. Sharing immutable
-data does not remove its owner or its lifetime requirements.
+introduce a separate ownerless manager, scheduler or registry. There are no
+shared LMX data between Messages, even immutable characters or method records.
+The OS and connected non-LMX libraries are outside LMX; this exception does not
+authorize shared LMX pools or catalogs disguised as runtime substrate.
 The hosted standalone bootstrap runs its external process entry in the root
 Message's turn loop. This includes `parser`,
 `trans`, `make`, `finalize` and `buildCore`. Older centralized runtime/pool ABIs
@@ -12730,8 +12732,8 @@ An implementation may maintain an immutable value store or intern table:
 
     hash(value) -> canonical immutable object
 
-Equal immutable values may share storage. Since no alias can mutate the shared
-object, such sharing does not create mutable-aliasing behavior.
+Equal immutable values within one Message may share storage. Since no alias
+can mutate the interned object, this does not create mutable-aliasing behavior.
 
 Values which may be suitable for immutable storage include:
 
@@ -12755,14 +12757,13 @@ to merge two Lmx node identities.
 
 The high-level mutation rule for an immutable value is that an update produces
 a new value or new branch; it does not mutate canonical storage through an
-alias. A copy operation may therefore return shared immutable storage when its
-contract defines value independence rather than distinct object identity.
+alias. Within one Message, a copy may therefore return the same immutable
+storage when its contract requires value independence, not distinct identity.
 
-Immutable sharing across Message Threads is permitted only when publication,
-lifetime and thread safety are guaranteed. Intern tables reside in storage
-selected by the explicit runtime/address-domain profile and must be rooted for
-their declared lifetime. The chosen profile must state which roots keep the
-canonical Lmx nodes or payload cells alive.
+Immutable LMX storage is not shared across Messages. Intern tables and their
+canonical nodes/cells belong to the containing Message and live under its roots.
+Cross-Message delivery transfers ownership or uses an explicit copy/codec;
+immutability alone grants no cross-Message alias.
 
 Interning does not decide the still-open C result ABI. A result operation that
 already selects an interned Lmx node must preserve its canonical identity unless
@@ -12953,8 +12954,9 @@ profile.
 
 No generic source storage receiver is defined here. An explicit L2 provider
 binding or typed primitive handle may expose such a resource. The resource is not an
-ordinary mutable Message Thread branch: it is explicitly immutable/shared or
-externally managed, with a declared lifetime and publication contract.
+ordinary Message Thread branch: it is a non-LMX OS/library resource with a
+declared external lifetime and publication contract. Merely labeling an LMX
+object immutable or provider-managed does not make it such a resource.
 
 An application may pass a Table of provider configuration such as:
 
@@ -12972,8 +12974,8 @@ lookups or linked provider entry points. A checked Structure wrapper, when used,
 is an ordinary Lmx graph; only the operation that exposes raw storage or
 unchecked machine access is L2-only.
 
-Shared immutable data may be read from several Message Threads when the active
-provider guarantees:
+Read-only non-LMX OS/library resources may serve several Message Threads when
+the external provider guarantees:
 
     immutable contents after publication;
     stable lifetime while handles exist;
@@ -12981,8 +12983,8 @@ provider guarantees:
     suitable alignment and representation for the selected backend;
     checked bounds in high-level L3-facing accessors.
 
-Because no thread can mutate the shared object through an alias, this does not
-violate the no-shared-mutable-reference rule.
+This is external resource access, not shared LMX storage. Each Message keeps
+its own wrapper nodes, descriptors and range metadata.
 
 Shared mutable data is different. If multiple host or low-level threads must
 write or coordinate over one resource, it must use an explicit L2 profile with
@@ -13008,8 +13010,7 @@ The default distinction is:
         copy/serialization only under an explicit operation/codec contract;
 
     shared read
-        immutable/read-only or externally published resource with typed
-        handle;
+        non-LMX OS/library resource with a Message-local typed handle;
 
     explicit shared mutation
         L2 raw/shared buffer plus synchronization and lifetime contract;
@@ -13024,7 +13025,7 @@ Tables may configure those operations; L1 remains the external substrate used
 to lower them to C99 and platform APIs. No Table or provider creates a runtime
 namespace.
 
-Neither shared immutable storage nor an external provider changes ordinary
+Neither same-Message immutable interning nor an external provider changes ordinary
 aggregate semantics. A source-visible handle is an Lmx leaf in an explicit
 machine-handle domain or an Lmx wrapper Structure. A
 provider-specific retain operation, if required, must be explicit in the
@@ -13190,8 +13191,8 @@ Future profile work must define at least:
 Until such a profile is specified and implemented, raw shared blocks and
 standalone low-level threads remain L2/L1 implementation mechanisms, while
 ordinary L2/L3 Message code communicates through Messages and Lmx nodes owned
-by their one Message arena or shared only through explicitly immutable/foreign
-domains under the selected explicit runtime policy.
+by their one Message arena. Access to OS/non-LMX library resources uses explicit
+external contracts, not shared LMX nodes, pools or domains.
 
 
 19.29.16. Contract and Implementation Status
