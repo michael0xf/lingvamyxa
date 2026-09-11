@@ -40,6 +40,10 @@ directives. Simple main may declare `int`, `char`, `size_t`, and
 `lm_p0_parse_file` / `lm_p0_document_destroy` / `lm_p0_dump_alloc` /
 `lm_p0_free`. Assignment `name: known-call` captures the result.
 `@ NAME` in a call is one address actual.
+`immutable: @: char NAME "..."`, `const: @(LmP0Diagnostic NAME)`,
+`c.setvbuf` with numeric 0 (not boxed as int temps), and
+`NAME\code|line|column|message` on a diagnostic local are supported.
+`l2src/printTree.lm2` is the L2 port of `l1src/printTree.lm1`.
 
 That is the SPEC 1.7 bootstrap `main` adapter. String atoms are copied as
 P0 source spelling into L1 (quotes and escapes kept; not decoded then
