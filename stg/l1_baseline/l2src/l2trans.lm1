@@ -6918,7 +6918,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_need_own != 0 && c.fputs("predef: \"l1src/own.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: c.fputs("include: \"l2src/lmx.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"", l2_out) < 0
+    if: c.fputs("include: \"l2src/lmx.h\" \"l2src/lmx_message.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_need_p0 != 0 && c.fputs(" \"l1src/p0.lm1.h\"", l2_out) < 0
@@ -7118,7 +7118,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
         cap: cap + 1U
     cap: cap + (cast: (unsigned) l2_for_n)
     kids: n + (cast: (unsigned) l2_unit_base)
-    if: c.fprintf(l2_out, "external:\n    fn: main () int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @: Lmx kid 0\n        @: LmxMethod rec 0\n        if: lmx_ranges_init(%uU) != 0\n            return: 1\n", cap) < 0
+    if: c.fprintf(l2_out, "external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message) int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @: Lmx kid 0\n        @: LmxMethod rec 0\n        if: lmx_ranges_init(%uU) != 0\n            return: 1\n", cap) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_has_own_ty(1) != 0 && c.fputs("        if: lmx_chars_init() != 0\n            return: 1\n", l2_out) < 0
@@ -7131,6 +7131,9 @@ fn: l2_emit_unit (const: @(char out_path)) int
         c.fclose(l2_out)
         return: 1
     if: c.fprintf(l2_out, "        unit: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))\n        if: unit = 0\n            return: 1\n        lmx_cell_init(unit, 0, 0)\n        if: lmx_branch_open(unit, %uU) != 0\n            return: 1\n", kids) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: c.fputs("        # Root binding only; legacy pool/range ownership migration is separate.\n        c.lmx_msg_set_graph(process_message, unit)\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     k: 0
@@ -7207,7 +7210,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_main_node != 0 && l2_main_node\as != 0 && l2_emit_ret_tr(-1, "        ", l2_ret_tr(l2_main_node\as\frame)) != 0
         c.fclose(l2_out)
         return: 1
-    if: c.fputs("    end: main\nend: external\n", l2_out) < 0
+    if: c.fputs("    end: l2_program_entry\nend: external\nexternal:\n    fn: main () int\n        @: LmxMsgRuntime process_runtime c.lmx_msg_runtime_new()\n        @: LmxMsg process_message 0\n        unsigned: process_addr 0U\n        int: process_result 1\n        if: process_runtime = 0\n            return: 1\n        if: c.lmx_msg_create(process_runtime, 0U, 1U, 0, 0U, @ process_addr) = c.LMX_MSG_OK\n            process_message: c.lmx_msg_find(process_runtime, process_addr)\n            if: process_message != 0\n                process_result: l2_program_entry(process_message)\n            ---\n        ---\n        c.lmx_msg_runtime_delete(process_runtime)\n        return: process_result\n    end: main\nend: external\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: c.fclose(l2_out) != 0

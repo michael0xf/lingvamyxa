@@ -1,17 +1,20 @@
 # Narrow L2 -> L1 -> C -> exe smoke. Build root is this file's parent.
 # Artifacts stay under build\l2trans. Does not run native finalize, gate, or run_lmx.
+param([switch]$BuildOnly, [string]$OutputDirectory, [string]$TranslatorPath)
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
 $gen = "gen2"
 if ($env:L1_GEN -and $env:L1_GEN.Trim().Length -gt 0) { $gen = $env:L1_GEN.Trim() }
 $l1trans = "build\l1trans\$gen\l1trans.exe"
+if ($TranslatorPath) { $l1trans = $TranslatorPath }
 if (-not (Test-Path -LiteralPath $l1trans)) {
     throw "missing L1 translator: $l1trans (run tests\l1\run_gen.ps1 first)"
 }
 
 $out = "build\l2trans"
 $log = "build\l1trans\logs\$gen"
+if ($OutputDirectory) { $out = $OutputDirectory; $log = Join-Path $out 'logs' }
 New-Item -ItemType Directory -Force -Path $out, $log | Out-Null
 
 $guards = @(
@@ -20,18 +23,73 @@ $guards = @(
 )
 $cflags = @("-std=c99", "-Wall", "-Wextra", "-Wpedantic", "-I", ".") + $guards
 
-function Invoke-Gcc([string]$cpath, [string]$exe, [string]$glog) {
+$script:l2MessageObjects = $null
+function Get-L2MessageObjects {
+    if ($null -ne $script:l2MessageObjects) { return $script:l2MessageObjects }
+    $supportDir = Join-Path $out 'message_support'
+    $supportHeaders = Join-Path $supportDir 'headers'
+    New-Item -ItemType Directory -Force -Path (Join-Path $supportHeaders 'l2src') | Out-Null
+    $names = @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots', 'lmx_msg_mail_chain', 'lmx_msg_sched_ready', 'lmx_msg_visit')
+    $sources = @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c')
+    foreach ($name in $names) {
+        & $l1trans "l2src/$name.h.lm1" (Join-Path $supportHeaders "l2src/$name.lm1.h")
+        if ($LASTEXITCODE -ne 0) { throw "Message header translation failed: $name" }
+        $source = Join-Path $supportDir "$name.c"
+        & $l1trans "l2src/$name.lm1" $source
+        if ($LASTEXITCODE -ne 0) { throw "Message translation failed: $name" }
+        $sources += $source
+    }
+    $messageSource = Join-Path $supportDir 'lmx_message.c'
+    & $l1trans 'l2src/lmx_message.lm1' $messageSource
+    if ($LASTEXITCODE -ne 0) { throw 'Message translation failed' }
+    $sources += $messageSource
+    $objects = @()
+    foreach ($source in $sources) {
+        $obj = Join-Path $supportDir ([IO.Path]::GetFileNameWithoutExtension($source) + '.o')
+        & gcc @cflags -I $supportHeaders -c $source -o $obj *> "$obj.log"
+        if ($LASTEXITCODE -ne 0) { Get-Content -LiteralPath "$obj.log"; throw "Message compile failed: $source" }
+        $objects += $obj
+    }
+    # One build per invocation and flags/source snapshot; no reuse across runs.
+    $script:l2MessageObjects = $objects
+    return $objects
+}
+
+function New-L2DriveText([string]$text, [string]$driveBody) {
+    $text = $text.Replace("`r`n", "`n")
+    $body = $driveBody.Replace("`r`n", "`n")
+    $tail = "`n    end: l2_program_entry`nend: external"
+    $endPos = $text.LastIndexOf($tail)
+    $suffix = ''
+    if ($endPos -ge 0) {
+        # Drive the graph-owning adapter, retaining the outer Message lifecycle.
+        $body = [regex]::Replace($body, '(?m)^    end: main$', '    end: l2_program_entry')
+        $suffix = $text.Substring($endPos + $tail.Length)
+    } else {
+        $tail = "`n    end: main`nend: external"
+        $endPos = $text.LastIndexOf($tail)
+    }
+    if ($endPos -lt 0) { throw 'Missing generated entry closer' }
+    $pos = $text.LastIndexOf("`n        return:", $endPos)
+    if ($pos -lt 0) { throw 'Missing generated entry return' }
+    return $text.Substring(0, $pos + 1) + $body + $suffix
+}
+
+function Invoke-Gcc([string]$cpath, [string]$exe, [string]$glog, [string[]]$ExtraFlags = @()) {
     $flags = [System.Collections.Generic.List[string]]::new()
     foreach ($f in $cflags) { [void]$flags.Add($f) }
     $src = ""
     if (Test-Path -LiteralPath $cpath) {
-        $src = [IO.File]::ReadAllText((Join-Path (Get-Location) $cpath))
+        $src = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $cpath).ProviderPath)
     }
     $wantGen = $src.IndexOf("l1src/p0.lm1.h") -ge 0
     if ($wantGen) { [void]$flags.Add("-I"); [void]$flags.Add("lm1/build") }
-    $flagStr = ($flags -join " ")
-    $stub = "l2src\lmx_poll_stub.c"
-    cmd /c "gcc $flagStr `"$cpath`" `"$stub`" -o `"$exe`" > `"$glog`" 2>&1"
+    $support = @('l2src/lmx_poll_stub.c')
+    if ($src.Contains('"l2src/lmx_message.h"')) {
+        $support = @(Get-L2MessageObjects)
+        [void]$flags.Add('-I'); [void]$flags.Add((Join-Path $out 'message_support/headers'))
+    }
+    & gcc @flags $cpath @support @ExtraFlags -o $exe *> $glog
     if ($LASTEXITCODE -ne 0) {
         Get-Content $glog
         throw "gcc failed: $cpath"
@@ -43,6 +101,7 @@ $l2exe = Join-Path $out "l2trans.exe"
 & $l1trans "l2src\l2trans.lm1" $l2c
 if ($LASTEXITCODE -ne 0) { throw "l1trans failed: l2src\l2trans.lm1" }
 Invoke-Gcc $l2c $l2exe (Join-Path $log "l2trans.gcc.log")
+if ($BuildOnly) { return }
 
 function Invoke-FmtBuf {
     $obj = Join-Path $out "l2trans_nomain.o"
@@ -453,16 +512,11 @@ function Get-L2Call([string]$text, [int]$mi, [string[]]$vals) {
 function Invoke-SpliceDrive([string]$stem, [string]$driveBody) {
     $lm1 = Join-Path $out ($stem + ".lm1")
     $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
-    $tail = "`n    end: main`nend: external"
-    $endPos = $text.LastIndexOf($tail)
-    if ($endPos -lt 0) { throw "$stem L1 missing generated main closer" }
-    $pos = $text.LastIndexOf("`n        return:", $endPos)
-    if ($pos -lt 0) { throw "$stem L1 missing generated main return" }
     $drvLm1 = Join-Path $out ($stem + "_drive.lm1")
     $drvC = Join-Path $out ($stem + "_drive.c")
     $drvExe = Join-Path $out ($stem + "_drive.exe")
     $drvOut = Join-Path $out ($stem + "_drive.stdout")
-    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos + 1) + $driveBody.Replace("`r`n", "`n")))
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), (New-L2DriveText $text $driveBody))
     & $l1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed $stem drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "$stem.drive.gcc.log")

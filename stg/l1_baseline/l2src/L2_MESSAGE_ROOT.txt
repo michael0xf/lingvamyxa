@@ -1,0 +1,57 @@
+Generated unit root binding: bounded integration checkpoint
+=========================================================
+
+l2trans's graph-unit path emits a synthetic l2_program_entry adapter and an
+outer native main. Before constructing the unit, main creates one local Message
+runtime and its process root using existing runtime_new/create/find APIs. Once
+the unit's initial child block is constructed, set_graph records its exact
+address in that Message. No node is rewritten and source-method signatures are
+unchanged. The synthetic adapter is not an LMX method or a new implicit owner
+parameter. On each ordinary adapter return, including construction failure,
+main deletes the runtime and returns the original program status. Runtime/create/
+lookup failure paths also release any successfully created runtime once.
+
+run_l2trans links generated Message-using programs against real Message support,
+never lmx_poll_stub. The translator and unrelated old harness programs keep the
+stub where needed. Headers/modules are translated once and eleven support
+objects compiled once per runner invocation/source snapshot/flags. The same
+objects serve compatible subsequent programs. No cross-run stale object cache.
+BuildOnly exposes the existing translator build and functions without executing
+the large historical suite; OutputDirectory and TranslatorPath allow a private
+snapshot runner with the stable compiler kept read-only.
+
+run_l2_message_root uses an immutable core git archive with the three current
+owned implementation/driver files overlaid and hashed. It builds one translator,
+translates unit_bool_and through L2 -> L1 -> C, links the real Message once, and
+uses a test-only L1 driver for runtime-new/create/lookup failures, allocation
+failure before and after graph binding, and successful execution with preserved
+nonzero return value. Normal program and instrumented driver share support
+objects; no compiler self-build or repeated Exec suite is needed.
+The historical splice driver now inserts its body inside the synthetic adapter
+and preserves the outer main/Message teardown. A focused spliced method call
+checks this route and a zero exit using the same already-built support objects.
+
+Verified 2026-09-11 against core be4bbddda51f4abc29e4fbc6da1b28f87f5e4f7e:
+  build/codex/l2_message_root/20260911_185802_951_f9d34937/evidence.json
+Six modes passed 58 assertions (13/5/9/9/9/13), normal program exit=1 and splice
+exit=0/output=7. Strict C99 with the existing pointer/implicit-declaration guards;
+the driver adds -Werror. No optimization flag was added to this existing runner.
+All 17 recorded stages matched expected exits. Compiler/source/runner hashes,
+archive hash and private artifact hashes are recorded; generated program/driver
+C were inspected. Eleven cached support-object hashes stayed unchanged across
+normal and splice links. Earlier setup attempts failed on a relative-path read,
+unsupported multiple fn entries in one external block, and a missing generated
+header include path; these were fixed before the final complete run. No full
+historical suite, stable promotion, Message Exec rerun or self-build is claimed.
+
+Remaining limitations (not fixed or blessed by root binding)
+-----------------------------------------------------------
+The generated predefs still use the legacy lmx_range_table and primitive pools.
+branch_open registers there, not in processMessage->ranges/blocks. set_graph
+records the root but DOES NOT transfer ownership of those legacy allocations,
+make them collectible, or complete their cleanup. Moving construction/pools to
+the Message-owned arena is a subsequent integration task. This checkpoint adds
+no owner-link, TLS owner lookup, global registry, arena relocation or scheduler.
+It does not make the generated main a scheduled/bound turn, implement full
+delivery/merge, or establish completed L2 self-hosting. The older leaf-adapter
+translation path is also separate from graph-unit emission.

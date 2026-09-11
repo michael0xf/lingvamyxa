@@ -1,0 +1,102 @@
+include: "l2src/lmx.h" "l2src/lmx_message.h" "<stdio.h>" "<stdlib.h>"
+
+# Test-only linker wrapping. The generated program links the real Message core.
+prototype:
+    fn: l2_generated_main () int
+    fn: __real_lmx_msg_runtime_new () @: LmxMsgRuntime
+    fn: __real_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+    fn: __real_lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: who) @: LmxMsg
+    fn: __real_lmx_msg_set_graph (@: LmxMsg msg; @: Lmx unit) void
+    fn: __real_lmx_msg_runtime_delete (@: LmxMsgRuntime rt) void
+    fn: __real_malloc (size_t: n) @: void
+end: prototype
+
+int: test_mode 0
+int: checks 0
+int: news 0
+int: creates 0
+int: binds 0
+int: deletes 0
+int: alloc_failed 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(2)
+    ---
+end: check
+
+fn: __wrap_lmx_msg_runtime_new () @: LmxMsgRuntime
+    news: news + 1
+    if: test_mode = 1
+        return: 0
+    return: c.__real_lmx_msg_runtime_new()
+
+fn: __wrap_lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: id; const: @(uchar init); size_t: n; @: LmxMsgAddr out) int
+    check(news = 1 && creates = 0 && binds = 0, "one process runtime before create")
+    check(rt != 0 && parent = 0U && id = 1U && init = 0 && n = 0U && out != 0, "root uses existing creation contract")
+    if: test_mode = 2
+        creates: creates + 1
+        return: LMX_MSG_NOMEM
+    int: result c.__real_lmx_msg_create(rt, parent, id, init, n, out)
+    creates: creates + 1
+    return: result
+
+fn: __wrap_lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: who) @: LmxMsg
+    if: test_mode = 3
+        return: 0
+    return: c.__real_lmx_msg_find(rt, who)
+
+sub: __wrap_lmx_msg_set_graph (@: LmxMsg msg; @: Lmx unit)
+    check(news = 1 && creates = 1 && binds = 0 && deletes = 0, "binding occurs during live process entry")
+    check(msg != 0 && unit != 0 && unit\node = 0 && unit\data != 0 && unit\len != 0U, "constructed lexical root retained unchanged")
+    c.__real_lmx_msg_set_graph(msg, unit)
+    check(msg\graph = unit, "real Message stores exact graph root")
+    binds: binds + 1
+end: __wrap_lmx_msg_set_graph
+
+sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
+    check(news = 1 && creates = 1 && deletes = 0 && rt != 0, "runtime deleted once after helper or create failure")
+    if: binds != 0
+        check(rt\root != 0 && rt\root\graph != 0, "bound graph still recorded at teardown")
+    ---
+    deletes: deletes + 1
+    c.__real_lmx_msg_runtime_delete(rt)
+end: __wrap_lmx_msg_runtime_delete
+
+fn: __wrap_malloc (size_t: n) @: void
+    if: alloc_failed = 0 && creates != 0
+        if: (test_mode = 4 && binds = 0) || (test_mode = 5 && binds = 1)
+            alloc_failed: 1
+            return: 0
+        ---
+    ---
+    return: c.__real_malloc(n)
+
+fn: main (int: argc; @@: char argv) int
+    int: result
+    check(argc = 2, "one mode argument")
+    test_mode: c.atoi(argv[1])
+    check(test_mode >= 0 && test_mode <= 5, "valid mode")
+    result: c.l2_generated_main()
+    # unit_bool_and returns 1 after its method call. Failures also return 1;
+    # counters distinguish actual entry and each failure boundary.
+    check(result = 1 && news = 1, "program exit value preserved")
+    if: test_mode = 1
+        check(creates = 0 && binds = 0 && deletes = 0, "new failure has nothing to delete")
+    else:
+        check(creates = 1 && deletes = 1, "all other paths delete the runtime")
+        if: test_mode = 0 || test_mode = 5
+            check(binds = 1, "expected graph binding")
+        else:
+            check(binds = 0, "failure precedes graph binding")
+        ---
+    ---
+    if: test_mode = 4 || test_mode = 5
+        check(alloc_failed = 1, "allocation failure actually injected")
+    else:
+        check(alloc_failed = 0, "no allocation failure injected")
+    ---
+    c.printf("root entry mode=%d checks=%d PASS\n", test_mode, checks)
+    return: 0
