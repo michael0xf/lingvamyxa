@@ -249,13 +249,16 @@ written earlier and are not claimed run here.
 
 100200 local lifecycle (invariants, not accepted yet)
 -----------------------------------------------------
-Supervision vs delivery (133800 / 67f1ec2)
+Supervision vs delivery (133800 / 67f1ec2 / 175700)
   parent_msg is the supervisor. Adopt/transfer move handoff-safe
-  non-executing storage into the receiver arena. They do not
-  reparent a running Message, rewrite containment node, or
-  migrate a live worker. Delivery-only assignment ends active
-  parent tracking; historical identity and control LmxMsg remain
-  until runtime_delete. Byte-envelope send is not arena delivery.
+  non-executing storage (blocks/ranges) into the receiver arena.
+  They do not reparent a running Message, rewrite Lmx.node, merge
+  lexical trees, or create an implicit link from B's root.
+  After adopt A->B both trees can live in B's one arena; arena
+  membership is not a GC root. Application retains graph refs.
+  Delivery-only assignment ends active parent tracking;
+  historical identity and control LmxMsg remain until
+  runtime_delete. Byte-envelope send is not arena delivery.
 
 Template / immutable (135500 / fd8683d)
   No separate immutable Message as a core prerequisite. No
