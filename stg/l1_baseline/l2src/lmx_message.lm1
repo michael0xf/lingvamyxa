@@ -184,7 +184,7 @@ fn: lmx_msg_exec_is_runnable (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
     if: m\state = c.LMX_MSG_STATE_STOPPED || m\state = c.LMX_MSG_STATE_DEAD || m\state = c.LMX_MSG_STATE_RELEASED
         c.lmx_msg_exec_unlock(rt)
         return: 0
-    if: m\inbox != 0
+    if: c.lmx_msg_mail_inbox_empty(m) = 0
         r: 1
     ---
     if: m\closing != 0 && m\state != c.LMX_MSG_STATE_STOPPED
@@ -446,6 +446,7 @@ return: lmx_msg_pump(rt)
 sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     @: LmxMsg m
     @: LmxMsgCopy leftover
+    @: LmxMsgCopy inb 0
     int: i 0
     if: rt = 0
         return
@@ -466,10 +467,9 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     while: i < rt\n
         m: rt\tab[i]
         if: m != 0
-            lmx_msg_copy_free(m\inbox)
+            c.lmx_msg_mail_inbox_take(m, @ inb)
+            lmx_msg_copy_free(inb)
             lmx_msg_copy_free(m\outbox)
-            m\inbox: 0
-            m\inbox_tail: 0
             m\outbox: 0
             m\outbox_tail: 0
         ---
@@ -749,6 +749,7 @@ return: st
 
 sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     @: LmxMsg ch
+    @: LmxMsgCopy inb 0
     if: m = 0
         return
     if: m\parent_msg != 0
@@ -770,10 +771,9 @@ sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
         ---
         m\next_sibling: 0
     ---
-    lmx_msg_copy_free(m\inbox)
+    c.lmx_msg_mail_inbox_take(m, @ inb)
+    lmx_msg_copy_free(inb)
     lmx_msg_copy_free(m\outbox)
-    m\inbox: 0
-    m\inbox_tail: 0
     m\outbox: 0
     m\outbox_tail: 0
     if: m\init != 0
@@ -1069,6 +1069,7 @@ return: c.LMX_MSG_OK
 fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     @: LmxMsgCopy n
+    @: LmxMsgCopy inb 0
     unsigned: parent
     unsigned: req
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
@@ -1090,19 +1091,21 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
             return: c.LMX_MSG_NOMEM
         ---
     ---
+    c.lmx_msg_mail_lock(m)
     n: m\inbox
     while: n != 0
         if: n\reply_to != 0U && n\reply_to != parent && (m\exec_live = 0 || n\reply_to != m\exec_reply)
             req: n\id
             if: lmx_msg_post_dead(rt, who, n\reply_to, req) = c.LMX_MSG_NOMEM
+                c.lmx_msg_mail_unlock(m)
                 c.lmx_msg_exec_unlock(rt)
                 return: c.LMX_MSG_NOMEM
             ---
         ---
         n: n\next
-    lmx_msg_copy_free(m\inbox)
-    m\inbox: 0
-    m\inbox_tail: 0
+    c.lmx_msg_mail_unlock(m)
+    c.lmx_msg_mail_inbox_take(m, @ inb)
+    lmx_msg_copy_free(inb)
     m\exec_live: 0
     if: parent != 0U
         if: lmx_msg_post_dead(rt, who, parent, m\exec_id) = c.LMX_MSG_NOMEM
@@ -1193,7 +1196,7 @@ return: c.LMX_MSG_OK
 fn: lmx_msg_drive_should_close (@: LmxMsg m) int
     if: m = 0
         return: 0
-    if: m\closing = 0 || m\exec_live != 0 || m\inbox != 0
+    if: m\closing = 0 || m\exec_live != 0 || c.lmx_msg_mail_inbox_empty(m) = 0
         return: 0
     if: m\state = c.LMX_MSG_STATE_RUNNING
         return: 1
@@ -1266,7 +1269,6 @@ return: s
 
 fn: lmx_msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
-    @: LmxMsgCopy n
     int: cnt 0
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
         if: c.lmx_msg_exec_holding_turn(rt, who) = 0
@@ -1278,10 +1280,7 @@ fn: lmx_msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: -1
-    n: m\inbox
-    while: n != 0
-        cnt: cnt + 1
-        n: n\next
+    cnt: c.lmx_msg_mail_inbox_n(m)
     c.lmx_msg_exec_unlock(rt)
 return: cnt
 
@@ -1419,7 +1418,7 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     while: ch != 0
         if: ch\mapped = 0 && ch\turn != 0
             if: ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED
-                if: ch\inbox != 0 || ch\closing != 0
+                if: c.lmx_msg_mail_inbox_empty(ch) = 0 || ch\closing != 0
                     addr: ch\addr
                     ch: 0
                 ---

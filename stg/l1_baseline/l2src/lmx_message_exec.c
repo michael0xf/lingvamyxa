@@ -353,6 +353,48 @@ void lmx_msg_mail_unlock(LmxMsg *m) {
 #endif
 }
 
+int lmx_msg_mail_inbox_empty(LmxMsg *m) {
+    int empty;
+    if (m == 0) {
+        return 1;
+    }
+    lmx_msg_mail_lock(m);
+    empty = m->inbox == 0;
+    lmx_msg_mail_unlock(m);
+    return empty;
+}
+
+int lmx_msg_mail_inbox_n(LmxMsg *m) {
+    int n = 0;
+    LmxMsgCopy *p;
+    if (m == 0) {
+        return 0;
+    }
+    lmx_msg_mail_lock(m);
+    p = m->inbox;
+    while (p != 0) {
+        n += 1;
+        p = p->next;
+    }
+    lmx_msg_mail_unlock(m);
+    return n;
+}
+
+void lmx_msg_mail_inbox_take(LmxMsg *m, LmxMsgCopy **out) {
+    if (out == 0) {
+        return;
+    }
+    if (m == 0) {
+        *out = 0;
+        return;
+    }
+    lmx_msg_mail_lock(m);
+    *out = m->inbox;
+    m->inbox = 0;
+    m->inbox_tail = 0;
+    lmx_msg_mail_unlock(m);
+}
+
 void lmx_msg_slot_free(LmxMsg *m) {
     LmxAdopted *a;
     if (m == 0) {
@@ -393,7 +435,7 @@ int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m) {
         lmx_msg_exec_unlock(rt);
         return 0;
     }
-    if (m->inbox != 0 || m->outbox != 0 || m->parent_msg != 0) {
+    if (lmx_msg_mail_inbox_empty(m) == 0 || m->outbox != 0 || m->parent_msg != 0) {
         lmx_msg_exec_unlock(rt);
         return 0;
     }
@@ -1466,7 +1508,7 @@ static int take_this(LmxMsgExec *e, LmxMsgAddr addr, LmxMsgExecBind *snap) {
         if (m->state == LMX_MSG_STATE_STOPPED || m->state == LMX_MSG_STATE_DEAD || m->state == LMX_MSG_STATE_RELEASED) {
             return 0;
         }
-        if (m->inbox == 0 && m->closing == 0 && lmx_msg_running_load(m) != 0) {
+        if (lmx_msg_mail_inbox_empty(m) != 0 && m->closing == 0 && lmx_msg_running_load(m) != 0) {
             return 0;
         }
         e->bind[j].held = 1;
