@@ -147,11 +147,16 @@ growable (PATH_CHUNK), not depth 16. Send stores dest_msg on the
 staged copy; admit prefers that capability. tab/find remain D1
 for integer APIs. EXEC pool / start_contexts remain prototype.
 Child query/parent-reply is experimental, not a language KIND.
-KIND_PROGRESS with family-local number 1=query / 2=reply plus
-correlation and exec_from authentication. Independent clocks:
-live_query_id/at (child waiting for parent) vs child_heard_at
-(parent last heard that child). Outstanding probe is published
-only after STAGED. Not poll(0)/drive. Timeout is not death.
+KIND_PROGRESS numbers 0x4C560001/0x4C560002 plus correlation
+(implementation profile). Ordinary PROGRESS 1/2 does not ack.
+live_query_id/at is the child's own published wait (clock taken
+at successful end_turn, not STAGED). child_heard_at is the
+parent's own record of that child, set on first commit and on
+authenticated child query only. Parent live_check does not
+inspect the child's live_query_id. A mapped child applies its
+own wait on its wait-thread timeout. dest_msg holds a refcounted
+control object, not a graph pointer into another arena. tab/find
+and the shared exec lock remain D1/D7. Not poll(0)/drive.
 
 Not yet
 -------

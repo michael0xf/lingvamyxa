@@ -112,6 +112,8 @@ typedef struct LmxMsg {
     LmxMsgTurn turn;
     void *turn_ctx;
     int mapped;
+    int refs;
+    unsigned live_wait_th;
     unsigned live_query_id;
     unsigned live_query_at;
     unsigned live_query_pend_id;

@@ -34,6 +34,9 @@ sub: lmx_msg_copy_free (@: LmxMsgCopy node)
         if: node\bytes != 0
             c.free((cast: (@: void) node\bytes))
         ---
+        if: node\dest_msg != 0 && node\dest_msg\refs > 0
+            node\dest_msg\refs: node\dest_msg\refs - 1
+        ---
         c.free((cast: (@: void) node))
         node: next
     ---
@@ -52,6 +55,9 @@ fn: lmx_msg_copy_dup (const: @(LmxMsgCopy src)) @: LmxMsgCopy
     n\from: src\from
     n\to: src\to
     n\dest_msg: src\dest_msg
+    if: n\dest_msg != 0
+        n\dest_msg\refs: n\dest_msg\refs + 1
+    ---
     n\kind: src\kind
     n\number: src\number
     n\n: src\n
@@ -573,6 +579,9 @@ fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: 
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_STOPPED
     node\dest_msg: lmx_msg_find(rt, to)
+    if: node\dest_msg != 0
+        node\dest_msg\refs: node\dest_msg\refs + 1
+    ---
     lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_STAGED
@@ -691,7 +700,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     ---
     if: m\live_query_pend_id != 0U
         m\live_query_id: m\live_query_pend_id
-        m\live_query_at: m\live_query_pend_at
+        m\live_query_at: rt\clock
         m\live_query_pend_id: 0U
     ---
     while: m\outbox != 0
@@ -918,7 +927,7 @@ fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned:
 return: n
 
 fn: lmx_msg_set_now (@: LmxMsgRuntime rt; unsigned: now) int
-    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+    if: c.lmx_msg_host_is_owner(rt) = 0
         return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_lock(rt)
     rt\clock: now
@@ -1154,7 +1163,7 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     while: ch != 0
         if: ch\mapped = 0 && ch\turn != 0
             if: ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED
-                if: ch\inbox != 0 || ch\closing != 0
+                if: ch\inbox != 0 || ch\closing != 0 || ch\live_query_id != 0U
                     addr: ch\addr
                     ch: 0
                 ---
@@ -1209,6 +1218,9 @@ fn: lmx_msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: m != 0
         m\live_query_pend_id: qid
         m\live_query_pend_at: rt\clock
+        if: m\live_wait_th = 0U
+            m\live_wait_th: 5U
+        ---
     ---
     c.lmx_msg_exec_unlock(rt)
 return: st
@@ -1302,11 +1314,6 @@ fn: lmx_msg_live_check (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; uns
         nxt: ch\next_sibling
         if: ch\committed != 0 && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_RELEASED
             if: threshold != 0U && now > ch\child_heard_at && (now - ch\child_heard_at) > threshold
-                ch\closing: 1
-                n: n + 1
-                wake: ch\addr
-            ---
-            if: ch\live_query_id != 0U && threshold != 0U && now > ch\live_query_at && (now - ch\live_query_at) > threshold
                 ch\closing: 1
                 n: n + 1
                 wake: ch\addr

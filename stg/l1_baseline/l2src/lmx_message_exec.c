@@ -139,7 +139,11 @@ int lmx_msg_tab_grow(LmxMsgRuntime *rt) {
 }
 
 LmxMsg *lmx_msg_slot_new(void) {
-    return (LmxMsg *)calloc(1U, sizeof(LmxMsg));
+    LmxMsg *m = (LmxMsg *)calloc(1U, sizeof(LmxMsg));
+    if (m != 0) {
+        m->refs = 1;
+    }
+    return m;
 }
 
 int lmx_msg_exec_attach(LmxMsgRuntime *rt) {
@@ -1151,8 +1155,30 @@ static DWORD WINAPI context_worker(void *arg) {
         }
         wh[0] = e->stop_ev;
         wh[1] = ev;
-        if (WaitForMultipleObjects(2, wh, 0, INFINITE) == WAIT_OBJECT_0) {
-            return 0;
+        {
+            DWORD wr = WaitForMultipleObjects(2, wh, 0, 20);
+            LmxMsg *self;
+            unsigned th = 0;
+            unsigned now = 0;
+            if (wr == WAIT_OBJECT_0) {
+                return 0;
+            }
+            lmx_msg_exec_lock(rt);
+            self = msg_at_addr(rt, addr);
+            if (self != 0) {
+                th = self->live_wait_th;
+                now = rt->clock;
+            }
+            lmx_msg_exec_unlock(rt);
+            if (th != 0U && wr == WAIT_TIMEOUT) {
+                lmx_msg_exec_lock(rt);
+                set_tls(e, addr);
+                lmx_msg_exec_unlock(rt);
+                lmx_msg_live_check(rt, addr, now, th);
+                lmx_msg_exec_lock(rt);
+                set_tls(e, 0);
+                lmx_msg_exec_unlock(rt);
+            }
         }
     }
 }
