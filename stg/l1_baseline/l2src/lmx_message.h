@@ -113,6 +113,8 @@ typedef struct LmxMsg {
     void *turn_ctx;
     int mapped;
     int refs;
+    struct LmxMsgRuntime *owner_rt;
+    void *mail;
     unsigned live_wait_th;
     unsigned live_query_id;
     unsigned live_query_at;
@@ -184,7 +186,11 @@ unsigned lmx_msg_now(LmxMsgRuntime *rt);
 int lmx_msg_endp_retain(LmxMsg *m);
 void lmx_msg_endp_release(LmxMsg *m);
 int lmx_msg_endp_refs(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m);
 int lmx_msg_send_cap(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsg *dest, const LmxMsgEnv *env);
+void lmx_msg_mail_lock(LmxMsg *m);
+void lmx_msg_mail_unlock(LmxMsg *m);
+void lmx_msg_slot_free(LmxMsg *m);
 /* Integer resolver for remaining addr APIs. Runtime-owned endpoint list, not a directory. */
 LmxMsg *lmx_msg_find(LmxMsgRuntime *rt, LmxMsgAddr addr);
 

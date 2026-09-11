@@ -453,7 +453,7 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
             if: m\path != 0
                 c.free((cast: (@: void) m\path))
             ---
-            c.free((cast: (@: void) m))
+            c.lmx_msg_slot_free(m)
             rt\tab[i]: 0
         ---
         i: i + 1
@@ -537,10 +537,11 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
     if: slot = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_NOMEM
+    slot\owner_rt: rt
     rt\tab[rt\n]: slot
     st: lmx_msg_assign_path(rt, slot, parent)
     if: st != c.LMX_MSG_OK
-        c.free((cast: (@: void) slot))
+        c.lmx_msg_slot_free(slot)
         rt\tab[rt\n]: 0
         c.lmx_msg_exec_unlock(rt)
         return: st
@@ -557,7 +558,7 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
     slot\init_n: n
     slot\init: lmx_msg_copy_bytes(init, n)
     if: n != 0U && slot\init = 0
-        c.free((cast: (@: void) slot))
+        c.lmx_msg_slot_free(slot)
         rt\tab[rt\n]: 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_NOMEM
@@ -631,7 +632,7 @@ fn: lmx_msg_stop (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to) int
     c.free((cast: (@: void) env))
 return: st
 
-sub: lmx_msg_release_slot (@: LmxMsg m)
+sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     if: m = 0
         return
     if: m\parent_msg != 0
@@ -656,6 +657,8 @@ sub: lmx_msg_release_slot (@: LmxMsg m)
     m\path_cap: 0
     m\state: c.LMX_MSG_STATE_RELEASED
     m\committed: 0
+    c.lmx_msg_endp_release(m)
+    c.lmx_msg_endp_try_retire(rt, m)
 end: lmx_msg_release_slot
 
 sub: lmx_msg_request_children_close (@: LmxMsgRuntime rt; LmxMsgAddr: who)
@@ -705,7 +708,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         while: ch != 0
             nxt: ch\next_sibling
             if: ch\committed = 0 && ch\state = c.LMX_MSG_STATE_INACTIVE
-                lmx_msg_release_slot(ch)
+                lmx_msg_release_slot(rt, ch)
             ---
             ch: nxt
         ---
@@ -755,6 +758,10 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
     dest: node\dest_msg
     if: dest = 0
         dest: lmx_msg_find(rt, node\to)
+    ---
+    if: dest != 0 && dest\owner_rt != rt
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_GONE
     ---
     if: dest = 0 || dest\state = c.LMX_MSG_STATE_DEAD || dest\state = c.LMX_MSG_STATE_STOPPED || dest\state = c.LMX_MSG_STATE_RELEASED
         lmx_msg_copy_free(node)
@@ -806,6 +813,7 @@ return: c.LMX_MSG_OK
 
 fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     @: LmxMsg m
+    @: LmxMsg dret
     @: LmxMsgCopy n
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK || out = 0
         return: c.LMX_MSG_INVALID
@@ -832,7 +840,11 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     m\exec_reply: n\reply_to
     m\exec_live: 1
     m\last_beat: c.lmx_msg_now(rt)
+    dret: n\dest_msg
     lmx_msg_copy_free(n)
+    if: dret != 0
+        c.lmx_msg_endp_try_retire(rt, dret)
+    ---
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK
 
@@ -1432,6 +1444,11 @@ fn: lmx_msg_send_cap (@: LmxMsgRuntime rt; LmxMsgAddr: from; @: LmxMsg dest; con
         c.lmx_msg_exec_unlock(rt)
         lmx_msg_copy_free(node)
         return: c.LMX_MSG_STOPPED
+    if: dest\owner_rt != rt
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_INVALID
+    ---
     if: c.lmx_msg_endp_retain(dest) = 0
         c.lmx_msg_exec_unlock(rt)
         lmx_msg_copy_free(node)

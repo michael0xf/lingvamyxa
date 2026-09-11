@@ -154,12 +154,14 @@ at successful end_turn, not STAGED). child_heard_at is the
 parent's own record of that child, set on first commit and on
 authenticated child query only. Parent live_check does not
 inspect the child's live_query_id. A mapped child applies its
-own wait on its wait-thread timeout. dest_msg retains a control object (CAS refs). Recv uses copy_free
-so consumed envelopes release dest. send_cap delivers to a held
-endpoint without dest find. Integer send still finds once (prototype
-compat). runtime_delete drains envelopes then frees endpoints.
-Refs do not yet retire a RELEASED endpoint independently (D8).
-tab/find and the shared exec lock remain D1/D7. Not poll(0)/drive.
+own wait on its wait-thread timeout. send_cap requires dest->owner_rt == sender runtime; foreign
+runtime dest is INVALID (no unprotected cross-owner mailbox).
+Each endpoint has a mail CS. Recv copy_free + try_retire: a
+RELEASED endpoint with refs==0 and empty queues is unlinked and
+freed without waiting for runtime_delete. Integer find still uses
+the runtime endpoint list (D1 prototype compat). Shared exec lock
+still wraps most paths (D7 remaining). Held capability: retain
+before send_cap; tests do that. Not poll(0)/drive.
 
 Not yet
 -------

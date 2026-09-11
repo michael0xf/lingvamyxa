@@ -205,10 +205,87 @@ int lmx_msg_tab_grow(LmxMsgRuntime *rt) {
 
 LmxMsg *lmx_msg_slot_new(void) {
     LmxMsg *m = (LmxMsg *)calloc(1U, sizeof(LmxMsg));
-    if (m != 0) {
-        m->refs = 1;
+    if (m == 0) {
+        return 0;
     }
+    m->refs = 1;
+#if defined(_WIN32)
+    m->mail = calloc(1U, sizeof(CRITICAL_SECTION));
+    if (m->mail == 0) {
+        free(m);
+        return 0;
+    }
+    InitializeCriticalSection((CRITICAL_SECTION *)m->mail);
+#endif
     return m;
+}
+
+void lmx_msg_mail_lock(LmxMsg *m) {
+#if defined(_WIN32)
+    if (m != 0 && m->mail != 0) {
+        EnterCriticalSection((CRITICAL_SECTION *)m->mail);
+    }
+#else
+    (void)m;
+#endif
+}
+
+void lmx_msg_mail_unlock(LmxMsg *m) {
+#if defined(_WIN32)
+    if (m != 0 && m->mail != 0) {
+        LeaveCriticalSection((CRITICAL_SECTION *)m->mail);
+    }
+#else
+    (void)m;
+#endif
+}
+
+void lmx_msg_slot_free(LmxMsg *m) {
+    if (m == 0) {
+        return;
+    }
+#if defined(_WIN32)
+    if (m->mail != 0) {
+        DeleteCriticalSection((CRITICAL_SECTION *)m->mail);
+        free(m->mail);
+        m->mail = 0;
+    }
+#endif
+    free(m);
+}
+
+int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m) {
+    int i;
+    if (rt == 0 || m == 0 || m->owner_rt != rt) {
+        return 0;
+    }
+    if (m->refs != 0 || m->state != LMX_MSG_STATE_RELEASED) {
+        return 0;
+    }
+    if (m->inbox != 0 || m->outbox != 0) {
+        return 0;
+    }
+    if (m->parent_msg != 0) {
+        return 0;
+    }
+    for (i = 0; i < rt->n; i++) {
+        if (rt->tab[i] == m) {
+            rt->tab[i] = rt->tab[rt->n - 1];
+            rt->tab[rt->n - 1] = 0;
+            rt->n -= 1;
+            break;
+        }
+    }
+    if (m->path != 0) {
+        free(m->path);
+        m->path = 0;
+    }
+    if (m->init != 0) {
+        free(m->init);
+        m->init = 0;
+    }
+    lmx_msg_slot_free(m);
+    return 1;
 }
 
 int lmx_msg_exec_attach(LmxMsgRuntime *rt) {
