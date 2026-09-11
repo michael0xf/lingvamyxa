@@ -3,6 +3,7 @@
 #include "l2src/lmx_msg_slots.lm1.h"
 #include "l2src/lmx_msg_mail_chain.lm1.h"
 #include "l2src/lmx_msg_sched_ready.lm1.h"
+#include "l2src/lmx_msg_visit.lm1.h"
 #include "l2src/lmx_message_host.h"
 #include "l2src/lmx.h"
 #include <stdlib.h>
@@ -394,69 +395,6 @@ struct Lmx *lmx_msg_graph(LmxMsg *m) {
     return m->graph;
 }
 
-typedef struct LmxVisit {
-    Lmx **v;
-    size_t n;
-    size_t cap;
-    void **p;
-    size_t pn;
-    size_t pcap;
-    int oom;
-} LmxVisit;
-
-static int visit_has(LmxVisit *s, Lmx *x) {
-    size_t i;
-    if (s == 0 || x == 0) {
-        return 0;
-    }
-    for (i = 0; i < s->n; i++) {
-        if (s->v[i] == x) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static void visit_add(LmxVisit *s, Lmx *x) {
-    Lmx **nv;
-    size_t cap;
-    if (s == 0 || x == 0 || s->oom != 0) {
-        return;
-    }
-    if (s->n == s->cap) {
-        cap = s->cap == 0U ? 16U : s->cap * 2U;
-        nv = (Lmx **)realloc(s->v, cap * sizeof(Lmx *));
-        if (nv == 0) {
-            s->oom = 1;
-            return;
-        }
-        s->v = nv;
-        s->cap = cap;
-    }
-    s->v[s->n] = x;
-    s->n += 1U;
-}
-
-static void visit_add_ptr(LmxVisit *s, void *p) {
-    void **nv;
-    size_t cap;
-    if (s == 0 || p == 0 || s->oom != 0) {
-        return;
-    }
-    if (s->pn == s->pcap) {
-        cap = s->pcap == 0U ? 16U : s->pcap * 2U;
-        nv = (void **)realloc(s->p, cap * sizeof(void *));
-        if (nv == 0) {
-            s->oom = 1;
-            return;
-        }
-        s->p = nv;
-        s->pcap = cap;
-    }
-    s->p[s->pn] = p;
-    s->pn += 1U;
-}
-
 static void mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen) {
     LmxOwnedRange *rg;
     size_t i;
@@ -464,10 +402,10 @@ static void mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen) {
     if (m == 0 || x == 0 || seen == 0 || seen->oom != 0) {
         return;
     }
-    if (visit_has(seen, x) != 0) {
+    if (lmx_msg_visit_has(seen, x) != 0) {
         return;
     }
-    visit_add(seen, x);
+    lmx_msg_visit_add(seen, x);
     if (seen->oom != 0) {
         return;
     }
@@ -487,13 +425,13 @@ static void mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen) {
         }
     }
     if (rg != 0 && rg->kind == LMX_KIND_ARRAY) {
-        visit_add_ptr(seen, x->data);
+        lmx_msg_visit_add_ptr(seen, x->data);
         if (seen->oom == 0) {
-            visit_add_ptr(seen, ((LmxArrayDesc *)x->data)->data);
+            lmx_msg_visit_add_ptr(seen, ((LmxArrayDesc *)x->data)->data);
         }
     }
     if (rg != 0 && rg->kind == LMX_KIND_METHOD) {
-        visit_add_ptr(seen, x->data);
+        lmx_msg_visit_add_ptr(seen, x->data);
     }
 }
 
@@ -595,18 +533,11 @@ void lmx_msg_arena_collect(LmxMsg *m) {
     if (m == 0) {
         return;
     }
-    seen.v = 0;
-    seen.n = 0U;
-    seen.cap = 0U;
-    seen.p = 0;
-    seen.pn = 0U;
-    seen.pcap = 0U;
-    seen.oom = 0;
+    lmx_msg_visit_init(&seen);
     if (m->graph != 0) {
         mark_from(m, m->graph, &seen);
         if (seen.oom != 0) {
-            free(seen.v);
-            free(seen.p);
+            lmx_msg_visit_dispose(&seen);
             return;
         }
     }
@@ -618,8 +549,7 @@ void lmx_msg_arena_collect(LmxMsg *m) {
         }
         b = nxt;
     }
-    free(seen.v);
-    free(seen.p);
+    lmx_msg_visit_dispose(&seen);
 }
 
 void lmx_msg_sched_unlink_child(LmxMsg *parent, LmxMsg *child) {
