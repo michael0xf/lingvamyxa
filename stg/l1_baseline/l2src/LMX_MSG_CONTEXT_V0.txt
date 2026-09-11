@@ -154,10 +154,11 @@ at successful end_turn, not STAGED). child_heard_at is the
 parent's own record of that child, set on first commit and on
 authenticated child query only. Parent live_check does not
 inspect the child's live_query_id. A mapped child applies its
-own wait on its wait-thread timeout. exec_bind retains the endpoint; unbind/stop/release_slot drop that
-retain. Failed parent end_turn unbinds then releases so a bound
-uncommitted child can retire. Final endp_release at refs==0 on a
-RELEASED endpoint try_retires (not only recv/release_slot).
+own wait on its wait-thread timeout. exec_bind retains the endpoint.
+exec_stop does not drop that retain (restart/last_status).
+runtime_delete: stop, drop_binds, drain with no_retire, free slots;
+detach does not stop again. Nested unbind of a live worker sets gone
+and wakes; it does not join while the exec lock is nested.
 mail_lock helpers exist; most paths still use the shared exec lock
 (D7). send_cap same-runtime check is a prototype boundary, not a
 language ban. Integer find still uses the runtime list (D1).
@@ -207,12 +208,13 @@ A2. DECIDED 035400 / 040530: ANY-affinity uses one OS wait-thread
     Win32 worker handles. Slang/green-thread notes are not an
     architecture change.
 Arena vs control block: RELEASED frees init/inbox/outbox (the
-copy-slice arena). The LmxMsg object remains closed-handle
-control state until runtime_delete so send/admit never deref a
-freed block. That retention is control state, not global arena
-ownership. Independent families reclaim independently at
-runtime_delete of their runtime. Independent child reclaim
-inside one family is D8 (prototype-only until tested).
+copy-slice arena). STOPPED/DEAD stay closed-handle control state
+until runtime_delete (not auto-RELEASED). D8 prototype: a
+RELEASED endpoint with refs==0, empty queues and no parent link
+may unlink via try_retire (called from final endp_release, not
+only recv/release_slot). That C predicate/list scan is not the
+permanent retirement policy; lifecycle stays in LMX (L1).
+Independent families still reclaim at runtime_delete.
 
 Windows measured first. POSIX primitives in EXEC/ingress were
 written earlier and are not claimed run here.

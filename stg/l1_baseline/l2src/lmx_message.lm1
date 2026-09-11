@@ -426,7 +426,9 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     rt\host_tail: 0
     c.lmx_msg_host_unlock(rt)
     c.lmx_msg_exec_stop(rt)
+    c.lmx_msg_exec_drop_binds(rt)
     c.lmx_msg_exec_lock(rt)
+    c.lmx_msg_exec_set_no_retire(rt, 1)
     lmx_msg_copy_free(leftover)
     i: 0
     while: i < rt\n
@@ -457,6 +459,7 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
             rt\tab[i]: 0
         ---
         i: i + 1
+    c.lmx_msg_exec_set_no_retire(rt, 0)
     c.lmx_msg_exec_unlock(rt)
     if: rt\tab != 0
         c.free((cast: (@: void) rt\tab))

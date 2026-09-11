@@ -8,6 +8,7 @@
 #define LMX_MESSAGE_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 typedef unsigned char uchar;
 
@@ -113,6 +114,7 @@ typedef struct LmxMsg {
     void *turn_ctx;
     int mapped;
     int refs;
+    uint_fast8_t running;
     struct LmxMsgRuntime *owner_rt;
     void *mail;
     unsigned live_wait_th;
@@ -175,6 +177,8 @@ int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers);
 int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt);
 int lmx_msg_exec_ui_step(LmxMsgRuntime *rt);
 int lmx_msg_exec_stop(LmxMsgRuntime *rt);
+void lmx_msg_exec_drop_binds(LmxMsgRuntime *rt);
+void lmx_msg_exec_set_no_retire(LmxMsgRuntime *rt, int v);
 int lmx_msg_sched_step(LmxMsgRuntime *rt, LmxMsgAddr parent);
 int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
 int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child);
@@ -194,5 +198,8 @@ void lmx_msg_mail_unlock(LmxMsg *m);
 void lmx_msg_slot_free(LmxMsg *m);
 /* Integer resolver for remaining addr APIs. Runtime-owned endpoint list, not a directory. */
 LmxMsg *lmx_msg_find(LmxMsgRuntime *rt, LmxMsgAddr addr);
+uint_fast8_t lmx_msg_running_load(const LmxMsg *m);
+void lmx_msg_running_store(LmxMsg *m, uint_fast8_t v);
+int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who);
 
 #endif
