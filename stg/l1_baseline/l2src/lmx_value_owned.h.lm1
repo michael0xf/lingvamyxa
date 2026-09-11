@@ -6,4 +6,12 @@ predef: "l2src/lmx_msg_storage.h.lm1"
 prototype:
     fn: lmx_node_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: Lmx
     fn: lmx_method_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxMethod
+    fn: lmx_int_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    fn: lmx_size_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    # Known accessors require a compiler-proven live cell of this exact type.
+    # They guard null, not arbitrary untyped/raw addresses or owner membership.
+    fn: lmx_int_value_known (@: void cell) int
+    fn: lmx_int_store_known (@: void cell; int: value) int
+    fn: lmx_size_value_known (@: void cell) size_t
+    fn: lmx_size_store_known (@: void cell; size_t: value) int
 end: prototype

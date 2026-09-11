@@ -1,4 +1,4 @@
-include: "l2src/lmx.h" "l2src/lmx_message.h" "<stdio.h>" "<stdlib.h>"
+include: "l2src/lmx.h" "l2src/lmx_message.h" "<stdio.h>" "<stdlib.h>" "<limits.h>"
 predef: "l2src/lmx_branch_owned.h.lm1" "l2src/lmx_value_owned.h.lm1"
 
 # Test-only linker wrapping. The generated program links the real Message core.
@@ -14,6 +14,8 @@ prototype:
     fn: __real_lmx_branch_open_owned (@: Lmx parent; size_t: children; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) int
     fn: __real_lmx_node_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: Lmx
     fn: __real_lmx_method_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxMethod
+    fn: __real_lmx_int_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    fn: __real_lmx_size_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
 end: prototype
 
 int: test_mode 0
@@ -97,6 +99,10 @@ fn: __wrap_malloc (size_t: n) @: void
     int: index 0
     if: inside_value != 0
         value_attempts: value_attempts + 1
+        if: alloc_failed = 0 && ((inside_value = 3 && test_mode >= 14 && test_mode <= 15 && value_attempts = test_mode - 13) || (inside_value = 4 && test_mode >= 16 && test_mode <= 17 && value_attempts = test_mode - 15))
+            alloc_failed: 1
+            return: 0
+        ---
         if: (inside_value = 1 && ((test_mode = 9 && value_attempts = 1) || (test_mode = 10 && value_attempts = 2))) || (inside_value = 2 && ((test_mode = 5 && value_attempts = 1) || (test_mode = 11 && value_attempts = 2)))
             alloc_failed: 1
             return: 0
@@ -246,6 +252,87 @@ sub: value_contract ()
     c.free(invalid)
 end: value_contract
 
+fn: __wrap_lmx_int_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    @: LmxMsgBlock old_blocks blocks[0]
+    @: LmxOwnedRange old_ranges ranges[0]
+    @: void value
+    int: zero 0
+    inside_value: 3
+    value_attempts: 0
+    value: c.__real_lmx_int_new_owned(blocks, ranges)
+    inside_value: 0
+    value_admission_check(value, c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_INT, blocks, ranges, old_blocks, old_ranges)
+    if: value != 0
+        check(c.lmx_int_value_known(value) = 0, "fresh int is zero")
+    ---
+    return: value
+
+fn: __wrap_lmx_size_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    @: LmxMsgBlock old_blocks blocks[0]
+    @: LmxOwnedRange old_ranges ranges[0]
+    @: void value
+    size_t: zero 0U
+    inside_value: 4
+    value_attempts: 0
+    value: c.__real_lmx_size_new_owned(blocks, ranges)
+    inside_value: 0
+    value_admission_check(value, c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_SIZE_T, blocks, ranges, old_blocks, old_ranges)
+    if: value != 0
+        check(c.lmx_size_value_known(value) = 0U, "fresh size_t is zero")
+    ---
+    return: value
+
+sub: primitive_contract ()
+    @: LmxMsgBlock blocks 0
+    @: LmxOwnedRange ranges 0
+    @: LmxMsgBlock target_blocks 0
+    @: LmxOwnedRange target_ranges 0
+    @: void a
+    @: void b
+    @: void count
+    @: void saved
+    @: int raw_int
+    @: size_t raw_size
+    check(c.__real_lmx_int_new_owned(0, @ ranges) = 0 && c.__real_lmx_size_new_owned(@ blocks, 0) = 0, "null primitive owner slots rejected")
+    check(c.lmx_int_value_known(0) = 0 && c.lmx_size_value_known(0) = 0U, "null primitive reads keep existing zero result")
+    check(c.lmx_int_store_known(0, 3) != 0 && c.lmx_size_store_known(0, 3U) != 0, "null primitive stores rejected")
+    a: c.lmx_int_new_owned(@ blocks, @ ranges)
+    if: test_mode = 14 || test_mode = 15
+        check(a = 0 && alloc_failed = 1 && blocks = 0 && ranges = 0 && value_allocs = value_frees, "int OOM keeps owner empty and frees temporary storage")
+        a: c.lmx_int_new_owned(@ blocks, @ ranges)
+    ---
+    check(a != 0, "int construction succeeds or retries")
+    b: c.lmx_int_new_owned(@ blocks, @ ranges)
+    check(b != 0 && b != a, "mutable int cells do not alias")
+    count: c.lmx_size_new_owned(@ blocks, @ ranges)
+    if: test_mode = 16 || test_mode = 17
+        check(count = 0 && alloc_failed = 1 && value_allocs - value_frees = 4, "size_t OOM preserves two existing int cells")
+        check(c.lmx_owned_ranges_find(ranges, a) != 0 && c.lmx_owned_ranges_find(ranges, b) != 0, "size_t OOM preserves prior ranges")
+        count: c.lmx_size_new_owned(@ blocks, @ ranges)
+    ---
+    check(count != 0, "size_t construction succeeds or retries")
+    saved: a
+    check(c.lmx_int_store_known(a, c.INT_MIN) = 0 && c.lmx_int_value_known(a) = c.INT_MIN, "int lower bound retained")
+    check(c.lmx_int_store_known(a, c.INT_MAX) = 0 && c.lmx_int_value_known(a) = c.INT_MAX, "int upper bound retained")
+    check(a = saved && c.lmx_int_value_known(b) = 0, "stores retain address and independent second cell")
+    raw_int: (cast: (@: int) a)
+    raw_int[0]: -7
+    check(c.lmx_int_value_known(a) = -7, "ordinary typed address sees actual int payload")
+    check(c.lmx_size_store_known(count, (cast: (size_t) -1)) = 0 && c.lmx_size_value_known(count) = (cast: (size_t) -1), "size_t full width retained")
+    raw_size: (cast: (@: size_t) count)
+    raw_size[0]: 2147483648U
+    check(c.lmx_size_value_known(count) = 2147483648U, "typed size_t address retains value above INT_MAX")
+    check(c.lmx_msg_storage_move_all(@ target_blocks, @ target_ranges, @ blocks, @ ranges) = c.LMX_MSG_STORAGE_OK, "primitive storage uses existing transfer")
+    check(blocks = 0 && ranges = 0 && c.lmx_owned_ranges_find(target_ranges, a) != 0 && c.lmx_owned_ranges_find(target_ranges, count) != 0, "new owner receives primitive ranges")
+    check(c.lmx_int_value_known(a) = -7 && c.lmx_size_value_known(count) = 2147483648U, "transfer retains payloads and addresses")
+    check(c.lmx_int_store_known(a, 9) = 0 && c.lmx_size_store_known(count, 11U) = 0, "transferred typed payloads stay writable without owner lookup")
+    while: target_ranges != 0
+        check(c.lmx_owned_ranges_remove(@ target_ranges, target_ranges) = c.LMX_OWNED_RANGES_OK, "primitive range retired before payload")
+    ---
+    check(c.lmx_msg_blocks_dispose_all(@ target_blocks) = c.LMX_MSG_BLOCKS_OK && value_allocs = value_frees, "all primitive allocations released exactly once")
+    check(alloc_failed = (test_mode != 13), "expected primitive fault actually occurred")
+end: primitive_contract
+
 fn: __wrap_lmx_branch_open_owned (@: Lmx parent; size_t: children; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) int
     int: result
     @: LmxMsgBlock old_blocks blocks[0]
@@ -335,7 +422,12 @@ fn: main (int: argc; @@: char argv) int
     int: result
     check(argc = 2, "one mode argument")
     test_mode: c.atoi(argv[1])
-    check(test_mode >= 0 && test_mode <= 12, "valid mode")
+    check(test_mode >= 0 && test_mode <= 17, "valid mode")
+    if: test_mode >= 13
+        primitive_contract()
+        c.printf("root entry mode=%d checks=%d PASS\n", test_mode, checks)
+        return: 0
+    ---
     if: test_mode = 12
         value_contract()
         c.printf("root entry mode=%d checks=%d PASS\n", test_mode, checks)

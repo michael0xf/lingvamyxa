@@ -64,6 +64,11 @@ function New-L2DriveText([string]$text, [string]$driveBody) {
     if ($endPos -ge 0) {
         # Drive the graph-owning adapter, retaining the outer Message lifecycle.
         $body = [regex]::Replace($body, '(?m)^    end: main$', '    end: l2_program_entry')
+        # Historical test bodies know this generated layout too. Do not ask a
+        # process-global classifier to interpret newly Message-owned cells.
+        $body = [regex]::Replace($body, '\blmx_branch_child\(', 'lmx_branch_child_known(')
+        $body = [regex]::Replace($body, '\blmx_(int|size)_(value|store)\(', 'lmx_$1_$2_known(')
+        $body = [regex]::Replace($body, '\blmx_(int|size)_take\(\)', 'lmx_$1_new_owned(@ process_message\blocks, @ process_message\ranges)')
         $suffix = $text.Substring($endPos + $tail.Length)
     } else {
         $tail = "`n    end: main`nend: external"
@@ -478,7 +483,10 @@ function Invoke-Leaf([string]$src, [string]$stem, [int]$expect, [string]$name) {
     if ($text -notmatch 'fn: l2_m\d+') { throw "$stem L1 missing mangled method symbol" }
     if ($text.IndexOf("@: Lmx") -lt 0) { throw "$stem L1 missing Lmx node" }
     if ($text.IndexOf("LmxMethod") -lt 0) { throw "$stem L1 missing method record" }
-    if ($text.IndexOf("lmx_classify") -lt 0) { throw "$stem L1 missing classify" }
+    if ($text -match 'fn: l2_program_entry') {
+        if ($text -notmatch 'lmx_node_new_owned\(' -or $text -notmatch 'lmx_method_new_owned\(') { throw "$stem L1 missing owner-local typed construction" }
+        if ($text -match 'lmx_classify\(leaf\\data\)|lmx_range_register\(\(cast: \(@: void\) rec\)') { throw "$stem METHOD still depends on global classification" }
+    } elseif ($text.IndexOf("lmx_classify") -lt 0) { throw "$stem legacy leaf L1 missing classify" }
     if ($text -notmatch 'fn: l2_m\d+ \(@: Lmx node' -and $text -notmatch 'l2_m\d+\((leaf|unit|node)') {
         throw "$stem L1 missing typed entry"
     }
@@ -1855,7 +1863,7 @@ end: external
     if ($text.IndexOf("const: @(LmP0Text") -lt 0) { throw "views missing const LmP0Text* formal" }
     if ($text.IndexOf("@: LmP0Text") -lt 0) { throw "views missing mutable LmP0Text* formal" }
     if ($text.IndexOf("size_t: l2_q0") -lt 0) { throw "views missing own size_t cache" }
-    if ($text.IndexOf("lmx_size_take") -lt 0) { throw "views missing size_t pool take" }
+    if ($text.IndexOf("lmx_size_new_owned") -lt 0) { throw "views missing Message-owned size_t construction" }
     if ($text.IndexOf("l2_hash_eq_forced") -ge 0) { throw "views must not ship l2_hash_eq_forced in production helper" }
     if ($text.IndexOf("l2_immut_query_fill") -lt 0) { throw "views missing L2 make helper fill" }
     if ($text.IndexOf("l2_hash_compare_q") -lt 0) { throw "views missing production compare seam" }

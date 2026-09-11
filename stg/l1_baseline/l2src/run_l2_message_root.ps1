@@ -1,5 +1,5 @@
 # One private translator build, one Message object set, one generated program.
-param([string]$CoreCommit = '0642421')
+param([string]$CoreCommit = 'c557908')
 $ErrorActionPreference = 'Stop'
 $rootBaseline = Split-Path -Parent $PSScriptRoot
 $rootRepo = Split-Path -Parent (Split-Path -Parent $rootBaseline)
@@ -50,7 +50,7 @@ try {
     Assert-RootExit 'program_object'
     & $l1trans 'l2src/tests/l2_message_root_driver.lm1' "$out/driver.c" *> "$out/driver.translate.log"
     Assert-RootExit 'driver_translate'
-    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
+    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','lmx_int_new_owned','lmx_size_new_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
     Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", '-Werror') + $rootWrap)
     $rootEvidence.stages += @{name='driver_link_real_message'; exit=0}
     $rootObjects = @(Get-L2MessageObjects)
@@ -66,7 +66,7 @@ try {
     foreach ($obj in $rootObjects) {
         if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "Cached object changed: $obj" }
     }
-    foreach ($mode in 0..12) {
+    foreach ($mode in 0..17) {
         & "$out/driver.exe" $mode *> "$out/mode_$mode.log"
         Assert-RootExit "mode_$mode"
         $line = Get-Content -LiteralPath "$out/mode_$mode.log" -Raw
@@ -108,6 +108,65 @@ end: external
         if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "Nested case rebuilt cached object: $obj" }
     }
     Write-Output 'root entry nested branch PASS (same Message object cache)'
+    # Existing regressions share this translator and the same support objects.
+    function Invoke-RootPrimitiveCase([string]$stem, [string]$body, [string]$expected) {
+        & $l2exe "l2src/tests/$stem.lm2" "$out/$stem.lm1" *> "$out/$stem.translate.log"
+        Assert-RootExit "${stem}_L2_to_L1"
+        $text = Get-Content -LiteralPath "$out/$stem.lm1" -Raw
+        if ($text -match '\blmx_(int|size)_(init|take|value|store)\(') { throw "$stem retains legacy primitive operations" }
+        if ($body) {
+            $tail = "`n        return: 0`n    end: main`nend: external`n"
+            $text = New-L2DriveText $text ($body + $tail)
+            [IO.File]::WriteAllText((Join-Path (Get-Location) "$out/$stem.lm1"), $text)
+        }
+        & $l1trans "$out/$stem.lm1" "$out/$stem.c" *> "$out/$stem.c.log"
+        Assert-RootExit "${stem}_L1_to_C"
+        $cText = Get-Content -LiteralPath "$out/$stem.c" -Raw
+        if ($cText -match '\blmx_(int|size)_pool\b') { throw "$stem includes an unnecessary legacy primitive pool" }
+        Invoke-Gcc "$out/$stem.c" "$out/$stem.exe" "$out/$stem.gcc.log"
+        & "$out/$stem.exe" *> "$out/$stem.run.log"
+        Assert-RootExit "${stem}_run"
+        $actual = (Get-Content -LiteralPath "$out/$stem.run.log" -Raw).Replace("`r`n", "`n").Trim()
+        if ($actual -ne $expected) { throw "$stem output '$actual' expected '$expected'" }
+        foreach ($obj in $rootObjects) {
+            if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "$stem rebuilt support object: $obj" }
+        }
+        Write-Output "$stem PASS (same translator and Message object cache)"
+    }
+    Invoke-RootPrimitiveCase 'unit_forj_stale' '' "9`n9 42"
+    Invoke-RootPrimitiveCase 'unit_node_path' '' '0 1'
+    Invoke-RootPrimitiveCase 'unit_addr_take' @'
+        c.printf("%d\n", l2_m1(unit))
+        leaf: lmx_branch_child(unit, 0U)
+        c.printf("%zu\n", lmx_size_value(leaf\data))
+'@ "0`n1"
+    Invoke-RootPrimitiveCase 'unit_bind_sz' @'
+        c.printf("%zu\n", l2_m0(unit, 9U))
+        leaf: lmx_branch_child(unit, 0U)
+        c.printf("%zu\n", lmx_size_value(leaf\data))
+'@ "3`n3"
+    Invoke-RootPrimitiveCase 'unit_asgn_bind_sz' @'
+        @: void source lmx_size_take()
+        if: source = 0
+            return: 2
+        if: lmx_size_store(source, 9U) != 0
+            return: 3
+        l2_m0(unit, lmx_size_value(source))
+        leaf: lmx_branch_child(unit, 0U)
+        c.printf("%zu %zu\n", lmx_size_value(source), lmx_size_value(leaf\data))
+'@ '9 10'
+    Invoke-RootPrimitiveCase 'unit_own_same_name' @'
+        l2_m0(unit)
+        l2_m1(unit)
+        leaf: lmx_branch_child(unit, 0U)
+        kid: lmx_branch_child(unit, 1U)
+        if: leaf\data = kid\data
+            return: 2
+        c.printf("%zu %zu\n", lmx_size_value(leaf\data), lmx_size_value(kid\data))
+        if: lmx_size_store(leaf\data, 2147483648U) != 0
+            return: 3
+        c.printf("%zu %zu\n", lmx_size_value(leaf\data), lmx_size_value(kid\data))
+'@ "1 2`n2147483648 2"
     foreach ($path in $rootEvidence.owned.Keys) {
         if ((Get-FileHash -LiteralPath $path).Hash -ne $rootEvidence.owned[$path]) { throw "Owned source changed: $path" }
     }

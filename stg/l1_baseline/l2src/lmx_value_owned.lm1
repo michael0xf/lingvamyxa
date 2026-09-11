@@ -1,7 +1,7 @@
 predef: "l2src/lmx_value_owned.h.lm1"
 include: "<stdlib.h>"
 
-# Internal allocation for the two concrete layouts below, not source-level
+# Internal allocation for the concrete layouts below, not source-level
 # arbitrary type admission. sizeof(T) preserves T's alignment at this offset.
 # The embedded range is removed before Message cleanup frees its allocation.
 fn: lmx_value_allocate_owned (size_t: stride; int: kind; int: type; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
@@ -66,3 +66,51 @@ fn: lmx_method_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: L
         value\sig: 0U
     ---
     return: value
+
+fn: lmx_int_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    int: zero 0
+    @: int value (cast: (@: int) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_INT, blocks, ranges))
+    if: value != 0
+        value[0]: 0
+    ---
+    return: (cast: (@: void) value)
+
+fn: lmx_size_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    size_t: zero 0U
+    @: size_t value (cast: (@: size_t) lmx_value_allocate_owned(c.sizeof(zero), c.LMX_KIND_PRIMITIVE, c.LMX_TYPE_SIZE_T, blocks, ranges))
+    if: value != 0
+        value[0]: 0U
+    ---
+    return: (cast: (@: void) value)
+
+# Closed-unit type proof supplies the type, not a process-global catalog.
+# Explicit raw/unknown addresses are outside these helper preconditions.
+fn: lmx_int_value_known (@: void cell) int
+    @: int p
+    if: cell = 0
+        return: 0
+    p: (cast: (@: int) cell)
+    return: p[0]
+
+fn: lmx_int_store_known (@: void cell; int: value) int
+    @: int p
+    if: cell = 0
+        return: 1
+    p: (cast: (@: int) cell)
+    p[0]: value
+    return: 0
+
+fn: lmx_size_value_known (@: void cell) size_t
+    @: size_t p
+    if: cell = 0
+        return: 0U
+    p: (cast: (@: size_t) cell)
+    return: p[0]
+
+fn: lmx_size_store_known (@: void cell; size_t: value) int
+    @: size_t p
+    if: cell = 0
+        return: 1
+    p: (cast: (@: size_t) cell)
+    p[0]: value
+    return: 0

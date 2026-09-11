@@ -122,14 +122,53 @@ Strict C99/default flags, driver -Werror; no extra optimization flag. Generated
 new helper/header, entry adapter and wrapping code were inspected. No full
 historical suite, stable replacement or completed self-hosting is claimed.
 
+Owned int and size_t checkpoint, 2026-09-11
+-----------------------------------------
+The same value module now constructs zero-initialized, unique int and size_t
+cells in Message storage with existing PRIMITIVE/INT/SIZE_T tags. Updates retain
+the cell address. Known typed read/store helpers guard null and operate on the
+compiler-proven live cell type, not on an arbitrary raw address and not through
+a global type/owner lookup. These preconditions are explicit in the header.
+
+Both generated field-construction sites, own-cache loads, dirty-only publication
+and explicit graph paths use the new primitives. No int/size_t pool initialization
+is emitted; ordinary units no longer import the legacy int/size_t pool modules.
+Source-method signatures, same-name argument binding, actuals-before-checkpoint,
+no-reload and graph-address semantics are unchanged. Interned characters remain
+on the legacy intern-by-value path; this is NOT a change to character semantics.
+
+Historical splice bodies are adapted only in the synthetic graph-entry route:
+known child/primitive accessors and requested int/size_t construction use owned
+storage there. Ordinary legacy standalone routes are not globally rewritten.
+The old mandatory global METHOD-classifier assertion and views pool-take assertion
+now check owner-local construction. No whole historical suite was rerun here.
+
+Final evidence against core c557908e424b0bb00945fa407ae232729df09502:
+  build/codex/l2_message_root/20260911_193855_967_bfc5afc5/evidence.json
+Five current overlays, 50 stages, 18 driver modes / 572 assertions. The five new
+primitive modes contribute 47/49/50/50/51 checks: both allocation failure sites
+for each primitive, retry without lost prior cells/ranges, zero initialization,
+distinct mutable cells, signed-int bounds, full size_t width, direct typed-address
+reads/writes, transfer with stable payload/address, null guards and complete
+release of tracked allocations. Earlier root/METHOD/branch checks remain.
+
+Six existing source regressions share the one private translator and thirteen
+unchanged support objects: forj_stale -> 9 then '9 42'; node_path -> '0 1';
+addr_take -> 0 then1; bind_sz -> 3 then3; asgn_bind_sz -> '9 10' (source cell
+unchanged); own_same_name -> '1 2' then '2147483648 2', with distinct addresses.
+No legacy int/size_t calls in emitted L1 or pool globals in these generated C
+units. Normal/splice/nested entry checks also pass. Strict C99/default flags,
+driver -Werror; helper and graph-address emission inspected. An earlier passing
+run preceded the historical-adapter/runner assertion updates; this final run
+records the complete current source hashes. Stable compiler stayed read-only.
+
 Remaining limitations (not fixed or blessed by these checkpoints)
 ---------------------------------------------------------------
-The generated predefs still use the legacy lmx_range_table and primitive pools
-for primitive payloads, and the adapter still initializes that legacy range
-catalog. Primitive storage/read/write migration is the next constructor slice;
-there is no claim that all remaining generated global state or allocations are
-gone. Root/METHOD/CHILDREN owner admission is NOT evidence of complete graph
-collectibility, reference-ARRAY admission or full allocation cleanup. These
+Interned characters and the legacy range catalog still remain; the adapter still
+initializes that catalog. P0/foreign predefs can still bring in old definitions.
+There is no claim that all remaining generated global state or allocations are
+gone. Root/METHOD/CHILDREN/int/size_t owner admission is NOT evidence of complete
+graph collectibility, reference-ARRAY admission or full allocation cleanup. These
 checkpoints add no owner-link, TLS owner lookup, global registry, arena relocation
 or scheduler.
 It does not make the generated main a scheduled/bound turn, implement full
