@@ -832,7 +832,7 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     m\exec_reply: n\reply_to
     m\exec_live: 1
     m\last_beat: c.lmx_msg_now(rt)
-    c.free((cast: (@: void) n))
+    lmx_msg_copy_free(n)
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK
 
@@ -1383,3 +1383,61 @@ fn: lmx_msg_live_test_set_wait_th (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigne
     m\live_wait_th: th
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK
+
+fn: lmx_msg_endp_refs (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    int: r 0
+    if: rt = 0 || who = 0U
+        return: -1
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: -1
+    r: m\refs
+    c.lmx_msg_exec_unlock(rt)
+return: r
+
+fn: lmx_msg_send_cap (@: LmxMsgRuntime rt; LmxMsgAddr: from; @: LmxMsg dest; const: @(LmxMsgEnv env)) int
+    @: LmxMsg src
+    @: LmxMsgCopy node
+    if: lmx_msg_require_turn(rt, from) != c.LMX_MSG_OK || env = 0 || from = 0U || dest = 0
+        return: c.LMX_MSG_INVALID
+    node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
+    if: node = 0
+        return: c.LMX_MSG_NOMEM
+    node\id: env\id
+    node\correlation: env\correlation
+    node\reply_to: env\reply_to
+    node\from: from
+    node\to: dest\addr
+    node\kind: env\kind
+    node\number: env\number
+    node\n: env\n
+    node\bytes: lmx_msg_copy_bytes(env\bytes, env\n)
+    if: env\n != 0U && node\bytes = 0
+        c.free((cast: (@: void) node))
+        return: c.LMX_MSG_NOMEM
+    c.lmx_msg_exec_lock(rt)
+    src: lmx_msg_find(rt, from)
+    if: src = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_INVALID
+    if: src\state = c.LMX_MSG_STATE_DEAD
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_DEAD
+    if: src\state = c.LMX_MSG_STATE_STOPPED
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_STOPPED
+    if: c.lmx_msg_endp_retain(dest) = 0
+        c.lmx_msg_exec_unlock(rt)
+        lmx_msg_copy_free(node)
+        return: c.LMX_MSG_NOMEM
+    ---
+    node\dest_msg: dest
+    lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
+    c.lmx_msg_exec_unlock(rt)
+return: c.LMX_MSG_STAGED

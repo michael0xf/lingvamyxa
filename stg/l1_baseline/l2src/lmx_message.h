@@ -183,5 +183,9 @@ int lmx_msg_live_test_set_wait_th(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned th
 unsigned lmx_msg_now(LmxMsgRuntime *rt);
 int lmx_msg_endp_retain(LmxMsg *m);
 void lmx_msg_endp_release(LmxMsg *m);
+int lmx_msg_endp_refs(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_send_cap(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsg *dest, const LmxMsgEnv *env);
+/* Integer resolver for remaining addr APIs. Runtime-owned endpoint list, not a directory. */
+LmxMsg *lmx_msg_find(LmxMsgRuntime *rt, LmxMsgAddr addr);
 
 #endif
