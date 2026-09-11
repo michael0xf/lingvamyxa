@@ -138,6 +138,10 @@ Do not claim the previous global-table runtime complied.
       ready ring. live_check parent-turn does not write mapped
       child control fields.
   D4. LmxMsgAddr is a process-wide unsigned, not a capability.
+      Visibility is not arena ownership (174300): lexical names
+      stay with the translator; dynamic values come from the
+      caller. Adoption does not walk node into the recipient
+      tree and does not add an owner-link / fourth Lmx word.
   D5. host_drain dest lookup on owner (ingress V0 still copies
       under host mutex; dest table walk is later).
   D6. 19.29.6 / 19.28.R2.2 text that permitted worker-pool
