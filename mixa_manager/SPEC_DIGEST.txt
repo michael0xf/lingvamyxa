@@ -156,29 +156,64 @@ grants copy jobs an exemption.
 Both are legitimate. Which one to use is an application choice about what the
 job is FOR, not a rule the language imposes.
 
-5.2. The mechanical constraint on handing off later
+5.2. Handing off later: the spec has no operation for it
 
-Mikhail's path - the window decides mid-flight to move the copy elsewhere and
-then close - works, with one constraint worth knowing before designing around
-it: you cannot move the EXISTING running child to a new parent.
+Mikhail asked whether the spec really says that, and how the author intends a
+Message to be forwarded at all when its whole control surface is two flags. The
+honest answer, after re-reading the text rather than my note about it:
 
-    "join/splice of already-running" live arenas is DEFERRED - 19.29.7.2, 12627
-    "Every ordinary running Message has an accountable parent" - 12313, and
-      parentage is recorded at create
+THE SPEC DOES NOT SAY RE-PARENTING IS DEFERRED. It does not mention re-parenting
+at all. An earlier revision of this section claimed the deferred list covered
+it; that was wrong. The deferred list (19.29.7.2, verbatim) is ARENA and GRAPH
+work:
 
-So the handoff is a RE-ISSUE, not a re-parent: the window sends the remaining
-work to the longer-lived owner, that owner creates its OWN child to continue,
-and the window's original child closes with the window. The spec makes room for
-exactly this in the same paragraph:
+    graph-copy and graph-reference retargeting; join/splice of already-running
+    live arenas; codec/wire serialization; multi-owner split/link as addressed
+    request/result; activation of an already-running Message; full incoming
+    LMX-text/arena ownership transfer
 
-    "Recorded progress may survive separately and a valid envelope staged before
-    close is published under ordinary end_turn rules"
+Those are about MEMORY. A parent-child link is a different thing entirely - by
+12315 it is two authorities: "the child's authority to observe parent liveness
+and the parent's authority to request stop". Merging arenas and reassigning
+supervision are not the same operation, and I treated one as evidence about the
+other.
 
-so the progress already recorded travels in that request and the new worker
-resumes from it rather than restarting. Two consequences to design for: the job
-needs a resumable progress record from the start, since it may become the
-payload of a handoff request, and "partial external effects are not rolled
-back" - a half-copied file stays half-copied across the seam.
+What IS true is narrower and, for our purposes, the same in effect: no operation
+exists that moves a RUNNING Message anywhere.
+
+    create      makes a new child under the creator
+    send        moves an ENVELOPE, not a Message
+    stop        closes; it does not relocate
+    adoption    exists only for a NON-EXECUTING Message (19.29.7) and for a
+                FAILED arena going to its parent (19.29.8)
+    lmx_message.h has no transfer, adopt-running or reparent entry point
+
+And "activation of an already-running Message" is explicitly deferred, which
+closes the one route that might have been read as a transfer.
+
+So a running job today can be closed or left alone. Moving it means re-issuing
+the remaining work to another owner, which the spec supports through "Recorded
+progress may survive separately" - the new owner creates its OWN child and
+resumes from the carried progress.
+
+5.2.1. The open question, which is the owner's to put to Codex
+
+This is stated here as a QUESTION, not as a defect, and it is not ours to
+answer. If a Message is meant to be forwarded - handed to another supervisor
+while it continues - then the current surface does not express it, because
+running and success are lifecycle flags and every other operation either creates
+a new child, moves bytes, or closes. Either:
+
+    forwarding is not intended, and re-issue plus carried progress is the whole
+      answer - in which case saying so would stop each application inventing it
+      again; or
+    forwarding is intended, and an operation for it is missing from both the
+      spec and lmx_message.h.
+
+Note in passing that a Message DOES migrate physically: 11943 says it "owns one
+logical arena throughout its turns and worker migration". That is execution
+mapping, not supervision, and it is a reminder that the two axes are separate -
+which is exactly the distinction my earlier note collapsed.
 
 5.3. Staging is not completion - this part stands
 
