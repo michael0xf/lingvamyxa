@@ -818,6 +818,8 @@ void lmx_msg_exec_bind_set_held_locked(LmxMsgRuntime *rt, int i, int held) {
     }
 }
 
+/* D1 allocation enumeration of rt->slots. Not the scheduler.
+ * scan_ready walks bind[] (D3 prototype), not this. */
 int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt) {
     if (rt == 0) {
         return 0;

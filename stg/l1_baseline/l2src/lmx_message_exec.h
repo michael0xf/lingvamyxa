@@ -40,6 +40,7 @@ void lmx_msg_exec_set_scan_locked(LmxMsgRuntime *rt, int v);
 int lmx_msg_exec_get_scan_locked(LmxMsgRuntime *rt);
 void lmx_msg_exec_wake_locked(LmxMsgRuntime *rt);
 void lmx_msg_exec_wake_addr_locked(LmxMsgRuntime *rt, LmxMsgAddr addr);
+/* D1 allocation walk of rt->slots. Not used by scan_ready. */
 int lmx_msg_exec_tab_n_locked(LmxMsgRuntime *rt);
 LmxMsgAddr lmx_msg_exec_tab_addr_locked(LmxMsgRuntime *rt, int i);
 void lmx_msg_exec_scan_ready(LmxMsgRuntime *rt);

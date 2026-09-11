@@ -237,14 +237,19 @@ sub: lmx_msg_exec_scan_ready (@: LmxMsgRuntime rt)
     if: c.lmx_msg_exec_get_scan_locked(rt) = 0
         return
     c.lmx_msg_exec_set_scan_locked(rt, 0)
-    n: c.lmx_msg_exec_tab_n_locked(rt)
+    # Prototype EXEC pool (D3). Walk bind[], not rt->slots.
+    # Allocation list is not the scheduler. Unbound children stay
+    # on the parent's first_child path (lmx_msg_sched_step).
+    n: c.lmx_msg_exec_bind_n_locked(rt)
     while: i < n
-        a: c.lmx_msg_exec_tab_addr_locked(rt, i)
-        if: a != 0U && lmx_msg_exec_is_runnable(rt, a) != 0
-            if: c.lmx_msg_exec_ready_has_locked(rt, a) = 0
-                if: c.lmx_msg_exec_ready_try_push_locked(rt, a) != 0
-                    c.lmx_msg_exec_set_scan_locked(rt, 1)
-                    return
+        a: c.lmx_msg_exec_bind_addr_locked(rt, i)
+        if: a != 0U && c.lmx_msg_exec_bind_held_locked(rt, i) = 0
+            if: lmx_msg_exec_is_runnable(rt, a) != 0
+                if: c.lmx_msg_exec_ready_has_locked(rt, a) = 0
+                    if: c.lmx_msg_exec_ready_try_push_locked(rt, a) != 0
+                        c.lmx_msg_exec_set_scan_locked(rt, 1)
+                        return
+                    ---
                 ---
             ---
         ---

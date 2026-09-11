@@ -114,7 +114,9 @@ Current deviations (EXEC / mailbox prototype)
 Do not claim the previous global-table runtime complied.
 
   D1. Allocation is LmxMsgRuntime.slots (linked list), not a
-      growable pointer table. Integer find remains for send
+      growable pointer table. slots is storage, not the scheduler.
+      tab_n_locked / tab_addr_locked still enumerate that list by
+      index (transitional D1 helper). Integer find remains for send
       into another family. send dest prefers the sender subtree
       and parent_msg before forest find. Integer lookup uses
       turn_self when it already is that Message
@@ -124,10 +126,12 @@ Do not claim the previous global-table runtime complied.
       and LMX_OWNED_RANGES.txt for the owner-local classifier.
       Mailbox/init bytes are not auto-registered as graph domains.
   D2. request_children_close walks the direct-child list.
-      poll(0) and drive walk the forest, not tab.
+      poll(0) and drive walk the forest, not slots.
   D3. EXEC ready queue + nworkers pool (`lmx_msg_exec_start`)
       remains prototype evidence (LMX_MSG_EXEC_HOST_V0). Not
-      the replacement path.
+      the replacement path. scan_ready walks bind[] (held skipped),
+      not rt->slots. take_addr already only consumes bound addrs.
+      Unbound children stay on lmx_msg_sched_step (first_child).
   D4. LmxMsgAddr is a process-wide unsigned, not a capability.
   D5. host_drain dest lookup on owner (ingress V0 still copies
       under host mutex; dest table walk is later).
@@ -173,11 +177,12 @@ and wakes; it does not join while the exec lock is nested.
 mail_lock helpers cover inbox and outbox; find/bind/ready still use
 the shared exec lock (D7). send_cap same-runtime check is a prototype
 boundary, not a language ban. Integer find still uses the runtime list
-(D1).
+(D1). scan_ready does not treat slots as a process-wide ready set.
 
 Not yet
 -------
-Capability LmxMsgAddr; removal of tab; Scheduler Message;
+Capability LmxMsgAddr; slots remaining as an allocation list (not a
+Scheduler Message); per-Message child scheduling replacing bind[] scan;
 per-mailbox native lock replacing exec mutex for send/recv;
 independent child arena reclaim (D8); mixa_manager pin.
 `lmx_msg_exec_start` (pool) remains prototype evidence;
