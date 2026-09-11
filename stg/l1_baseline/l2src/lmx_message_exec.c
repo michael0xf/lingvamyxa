@@ -398,6 +398,9 @@ typedef struct LmxVisit {
     Lmx **v;
     size_t n;
     size_t cap;
+    void **p;
+    size_t pn;
+    size_t pcap;
     int oom;
 } LmxVisit;
 
@@ -434,6 +437,26 @@ static void visit_add(LmxVisit *s, Lmx *x) {
     s->n += 1U;
 }
 
+static void visit_add_ptr(LmxVisit *s, void *p) {
+    void **nv;
+    size_t cap;
+    if (s == 0 || p == 0 || s->oom != 0) {
+        return;
+    }
+    if (s->pn == s->pcap) {
+        cap = s->pcap == 0U ? 16U : s->pcap * 2U;
+        nv = (void **)realloc(s->p, cap * sizeof(void *));
+        if (nv == 0) {
+            s->oom = 1;
+            return;
+        }
+        s->p = nv;
+        s->pcap = cap;
+    }
+    s->p[s->pn] = p;
+    s->pn += 1U;
+}
+
 static void mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen) {
     LmxOwnedRange *rg;
     size_t i;
@@ -462,6 +485,15 @@ static void mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen) {
             mark_from(m, &kids[i], seen);
             i += 1U;
         }
+    }
+    if (rg != 0 && rg->kind == LMX_KIND_ARRAY) {
+        visit_add_ptr(seen, x->data);
+        if (seen->oom == 0) {
+            visit_add_ptr(seen, ((LmxArrayDesc *)x->data)->data);
+        }
+    }
+    if (rg != 0 && rg->kind == LMX_KIND_METHOD) {
+        visit_add_ptr(seen, x->data);
     }
 }
 
@@ -519,6 +551,11 @@ static int block_is_live(LmxMsg *m, LmxMsgBlock *b, LmxVisit *seen) {
             return 1;
         }
     }
+    for (i = 0; i < seen->pn; i++) {
+        if (ptr_in_block((const unsigned char *)seen->p[i], b) != 0) {
+            return 1;
+        }
+    }
     return 0;
 }
 
@@ -561,11 +598,15 @@ void lmx_msg_arena_collect(LmxMsg *m) {
     seen.v = 0;
     seen.n = 0U;
     seen.cap = 0U;
+    seen.p = 0;
+    seen.pn = 0U;
+    seen.pcap = 0U;
     seen.oom = 0;
     if (m->graph != 0) {
         mark_from(m, m->graph, &seen);
         if (seen.oom != 0) {
             free(seen.v);
+            free(seen.p);
             return;
         }
     }
@@ -578,6 +619,7 @@ void lmx_msg_arena_collect(LmxMsg *m) {
         b = nxt;
     }
     free(seen.v);
+    free(seen.p);
 }
 
 void lmx_msg_sched_unlink_child(LmxMsg *parent, LmxMsg *child) {
