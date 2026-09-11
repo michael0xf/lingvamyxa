@@ -12211,6 +12211,12 @@ introduce a separate ownerless manager, scheduler or registry. There are no
 shared LMX data between Messages, even immutable characters or method records.
 The OS and connected non-LMX libraries are outside LMX; this exception does not
 authorize shared LMX pools or catalogs disguised as runtime substrate.
+The first execution thread raises the initial settings/configuration as its
+Message, with user input already supplied by the system at entry. Subsequent
+communication uses Messages only. Creation from a template copies the settings
+into the new Message through `merge`; it does not retain a shared configuration
+object or implicitly consult the parent's live settings. This construction-time
+copy is distinct from delivering an existing Message by arena ownership transfer.
 The hosted standalone bootstrap runs its external process entry in the root
 Message's turn loop. This includes `parser`,
 `trans`, `make`, `finalize` and `buildCore`. Older centralized runtime/pool ABIs

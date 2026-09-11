@@ -3639,6 +3639,10 @@ immutable, or ownerless runtime service. Only OS/non-LMX libraries are external.
 Each owner keeps its storage-range metadata;
 arena transfer carries that metadata without relocating the payloads. Shared
 LMX domains are not permitted; const/immutable does not grant cross-Message aliases.
+The first thread raises the initial configuration Message with system-supplied
+user input. Further communication is Message-only. A template-based Message
+receives copied settings through merge, not a shared configuration reference
+(SPEC19.29.6). Template construction and zero-copy arena delivery are distinct.
 Open details are its block/slab/bump implementation, physical subdivision into
 registered ranges, non-moving collector/tracer algorithm, bulk-destruction
 mechanics, side-table cleanup, out-of-memory behavior and address reuse. Memory
@@ -3891,6 +3895,10 @@ workers. Запуск процесса ОС — уже корневой Message 
 Описания диапазонов хранятся у владельца и переходят
 вместе с ареной без перемещения данных. Const/immutable не разрешает общие
 ссылки на LMX-данные между Messages.
+Первый поток поднимает Message настроек с уже переданным системой вводом
+пользователя. Далее общение только через Message. Создание Message по шаблону
+копирует настройки через merge, а не оставляет ссылку на общую конфигурацию
+(SPEC19.29.6). Это построение, а не доставка готовой арены без копирования.
 Открыты block/slab/bump реализация arena, физическое разбиение на
 зарегистрированные диапазоны, алгоритм non-moving collector/tracer, механика
 bulk destruction, cleanup side table, out-of-memory и повторное использование
