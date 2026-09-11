@@ -135,12 +135,6 @@ fn: __wrap_malloc (size_t: n) @: void
         ---
         return: p
     ---
-    if: alloc_failed = 0 && creates != 0
-        if: test_mode = 4 && binds = 0
-            alloc_failed: 1
-            return: 0
-        ---
-    ---
     return: c.__real_malloc(n)
 
 sub: __wrap_free (@: void p)
@@ -449,16 +443,27 @@ fn: main (int: argc; @@: char argv) int
         check(creates = 0 && binds = 0 && deletes = 0, "new failure has nothing to delete")
     else:
         check(creates = 1 && deletes = 1, "all other paths delete the runtime")
-        if: test_mode = 0 || test_mode = 5 || test_mode = 11
+        if: test_mode = 0 || test_mode = 4 || test_mode = 5 || test_mode = 11
             check(binds = 1, "expected graph binding")
         else:
             check(binds = 0, "failure precedes graph binding")
         ---
     ---
-    if: test_mode = 4 || test_mode = 5 || test_mode = 6 || test_mode = 7 || test_mode = 9 || test_mode = 10 || test_mode = 11
+    if: test_mode = 5 || test_mode = 6 || test_mode = 7 || test_mode = 9 || test_mode = 10 || test_mode = 11
         check(alloc_failed = 1, "allocation failure actually injected")
     else:
         check(alloc_failed = 0, "no allocation failure injected")
+    ---
+    if: test_mode = 4
+        # Replaces the retired legacy-catalog OOM case: a second generated
+        # entry gets a fresh Message with no process-global range init state.
+        news: 0
+        creates: 0
+        binds: 0
+        deletes: 0
+        result: c.l2_generated_main()
+        check(result = 1 && news = 1 && creates = 1 && binds = 1 && deletes = 1, "second process Message constructs executes and releases its own graph")
+        check(branch_allocs = branch_frees && value_allocs = value_frees && alloc_failed = 0, "both entries release all tracked ownership without a singleton")
     ---
     c.printf("root entry mode=%d checks=%d PASS\n", test_mode, checks)
     return: 0

@@ -162,10 +162,40 @@ driver -Werror; helper and graph-address emission inspected. An earlier passing
 run preceded the historical-adapter/runner assertion updates; this final run
 records the complete current source hashes. Stable compiler stayed read-only.
 
+Closed-unit legacy catalog removal, 2026-09-11
+-------------------------------------------
+Units with no char/P0/query dependency no longer emit the legacy branch/pool
+predef or initialize the old range catalog. Their root, child, METHOD, int and
+size_t operations already use owner-local storage and compiler-proven access.
+Char/P0/query units retain the still-required legacy dependency; this is not an
+implicit change to character interning or foreign adapter semantics.
+
+Mode4's old legacy-range allocation fault no longer has an allocation to target.
+It is replaced, not faked: the generated program runs twice sequentially, creating
+and releasing a fresh process Message each time. Both passes must actually bind
+and execute; the return code alone could otherwise disguise an early failure.
+All tracked graph allocations are released on both runs. Existing owned-allocation
+failure cases remain. The size_t caller-graph historical driver now constructs
+its extra source graph with owned helpers rather than reimporting the old catalog.
+
+Verified against core eaac7c56f8df36faadaae329f66d505b3280c486:
+  build/codex/l2_message_root/20260911_194421_469_5fd01176/evidence.json
+53 stages, eighteen modes / 649 assertions (new mode4:88 checks). Source/emitted-C
+checks reject legacy range initialization/pool imports and catalog/pool symbols
+in the closed fixtures. All previous numeric, graph-address, binding, dirty-only,
+splice and nested tests retain their expected outputs. One additional existing
+unit_printf_char fixture still initializes its legacy char dependencies and prints
+65; this checks the conditional boundary without claiming char migration.
+One private translator/thirteen unchanged cached support objects, strict C99/
+default flags, driver -Werror. Generated closed-unit C was inspected. No full
+historical suite or stable promotion was run.
+
 Remaining limitations (not fixed or blessed by these checkpoints)
 ---------------------------------------------------------------
-Interned characters and the legacy range catalog still remain; the adapter still
-initializes that catalog. P0/foreign predefs can still bring in old definitions.
+Interned characters and their legacy range catalog remain in dependent units.
+P0/foreign/query predefs can still bring in old definitions. Generated signature
+diagnostic variables (l2_sig_f0/f1 and l2_intern_*) also remain at file scope;
+removing the range/pool dependency is NOT proof that all global state is gone.
 There is no claim that all remaining generated global state or allocations are
 gone. Root/METHOD/CHILDREN/int/size_t owner admission is NOT evidence of complete
 graph collectibility, reference-ARRAY admission or full allocation cleanup. These

@@ -1481,11 +1481,10 @@ $dAsz = Invoke-SpliceDrive "unit_asgn_bind_sz" @"
         @: Lmx src 0
         @: Lmx fs 0
         @: Lmx fr 0
-        src: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))
+        src: lmx_node_new_owned(@ process_message\blocks, @ process_message\ranges)
         if: src = 0
             return: 1
-        lmx_cell_init(src, 0, 0)
-        if: lmx_branch_open(src, 1U) != 0
+        if: lmx_branch_open_owned(src, 1U, @ process_message\blocks, @ process_message\ranges) != 0
             return: 1
         fs: lmx_branch_child(src, 0U)
         fr: lmx_branch_child(unit, 0U)

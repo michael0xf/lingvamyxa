@@ -1,5 +1,5 @@
 # One private translator build, one Message object set, one generated program.
-param([string]$CoreCommit = 'c557908')
+param([string]$CoreCommit = 'eaac7c5')
 $ErrorActionPreference = 'Stop'
 $rootBaseline = Split-Path -Parent $PSScriptRoot
 $rootRepo = Split-Path -Parent (Split-Path -Parent $rootBaseline)
@@ -43,8 +43,11 @@ try {
     if ($rootL1 -notmatch 'fn: l2_program_entry' -or $rootL1 -notmatch 'lmx_msg_set_graph\(process_message, unit\)' -or $rootL1 -notmatch 'lmx_msg_runtime_delete\(process_runtime\)') { throw 'Missing generated entry lifecycle' }
     if ($rootL1 -notmatch 'lmx_branch_open_owned' -or $rootL1 -match 'lmx_branch_open\(|lmx_branch_child\(') { throw 'Generated unit still uses legacy branch admission/access' }
     if ($rootL1 -notmatch 'lmx_node_new_owned' -or $rootL1 -notmatch 'lmx_method_new_owned' -or $rootL1 -match 'c\.malloc\(c\.sizeof\(c\.Lmx(Method)?\)\)|lmx_range_register\(|lmx_classify\(leaf') { throw 'Root/METHOD storage still uses raw or global admission' }
+    if ($rootL1 -match 'lmx_ranges_init|predef: "l2src/lmx_(branch|pool|chars|size|int)\.lm1"') { throw 'Closed unit retains unused legacy dependency' }
     & $l1trans "$out/program.lm1" "$out/program.c" *> "$out/program.c.log"
     Assert-RootExit 'L1_to_C'
+    $rootC = Get-Content -LiteralPath "$out/program.c" -Raw
+    if ($rootC -match '\blmx_(range_table|ranges_init|chars_pool|int_pool|size_pool)\b') { throw 'Closed unit still defines or calls the legacy range/pool catalog' }
     $rootObjects = @(Get-L2MessageObjects)
     & gcc @cflags -I "$out/message_support/headers" -Dmain=l2_generated_main -c "$out/program.c" -o "$out/program.o" *> "$out/program.o.log"
     Assert-RootExit 'program_object'
@@ -109,11 +112,14 @@ end: external
     }
     Write-Output 'root entry nested branch PASS (same Message object cache)'
     # Existing regressions share this translator and the same support objects.
-    function Invoke-RootPrimitiveCase([string]$stem, [string]$body, [string]$expected) {
+    function Invoke-RootPrimitiveCase([string]$stem, [string]$body, [string]$expected, [bool]$legacyChar = $false) {
         & $l2exe "l2src/tests/$stem.lm2" "$out/$stem.lm1" *> "$out/$stem.translate.log"
         Assert-RootExit "${stem}_L2_to_L1"
         $text = Get-Content -LiteralPath "$out/$stem.lm1" -Raw
         if ($text -match '\blmx_(int|size)_(init|take|value|store)\(') { throw "$stem retains legacy primitive operations" }
+        if ($legacyChar) {
+            if ($text -notmatch 'lmx_chars_init\(' -or $text -notmatch 'lmx_ranges_init\(') { throw "$stem lost its still-required char dependency" }
+        } elseif ($text -match 'lmx_ranges_init|predef: "l2src/lmx_(branch|pool|chars|size|int)\.lm1"') { throw "$stem retains unused legacy imports/init" }
         if ($body) {
             $tail = "`n        return: 0`n    end: main`nend: external`n"
             $text = New-L2DriveText $text ($body + $tail)
@@ -123,6 +129,7 @@ end: external
         Assert-RootExit "${stem}_L1_to_C"
         $cText = Get-Content -LiteralPath "$out/$stem.c" -Raw
         if ($cText -match '\blmx_(int|size)_pool\b') { throw "$stem includes an unnecessary legacy primitive pool" }
+        if (-not $legacyChar -and $cText -match '\blmx_(range_table|ranges_init|chars_pool)\b') { throw "$stem retains a legacy catalog or char pool" }
         Invoke-Gcc "$out/$stem.c" "$out/$stem.exe" "$out/$stem.gcc.log"
         & "$out/$stem.exe" *> "$out/$stem.run.log"
         Assert-RootExit "${stem}_run"
@@ -146,14 +153,19 @@ end: external
         c.printf("%zu\n", lmx_size_value(leaf\data))
 '@ "3`n3"
     Invoke-RootPrimitiveCase 'unit_asgn_bind_sz' @'
-        @: void source lmx_size_take()
+        @: Lmx source lmx_node_new_owned(@ process_message\blocks, @ process_message\ranges)
+        @: Lmx source_field 0
         if: source = 0
             return: 2
-        if: lmx_size_store(source, 9U) != 0
+        if: lmx_branch_open_owned(source, 1U, @ process_message\blocks, @ process_message\ranges) != 0
             return: 3
-        l2_m0(unit, lmx_size_value(source))
+        source_field: lmx_branch_child(source, 0U)
+        source_field\data: lmx_size_take()
+        if: lmx_size_store(source_field\data, 9U) != 0
+            return: 4
+        l2_m0(unit, lmx_size_value(source_field\data))
         leaf: lmx_branch_child(unit, 0U)
-        c.printf("%zu %zu\n", lmx_size_value(source), lmx_size_value(leaf\data))
+        c.printf("%zu %zu\n", lmx_size_value(source_field\data), lmx_size_value(leaf\data))
 '@ '9 10'
     Invoke-RootPrimitiveCase 'unit_own_same_name' @'
         l2_m0(unit)
@@ -167,6 +179,7 @@ end: external
             return: 3
         c.printf("%zu %zu\n", lmx_size_value(leaf\data), lmx_size_value(kid\data))
 '@ "1 2`n2147483648 2"
+    Invoke-RootPrimitiveCase 'unit_printf_char' '        l2_m0(unit)' '65' $true
     foreach ($path in $rootEvidence.owned.Keys) {
         if ((Get-FileHash -LiteralPath $path).Hash -ne $rootEvidence.owned[$path]) { throw "Owned source changed: $path" }
     }

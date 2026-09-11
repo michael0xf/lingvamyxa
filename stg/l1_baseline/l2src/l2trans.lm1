@@ -6909,7 +6909,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: (l2_need_p0 != 0 || l2_need_query != 0) && c.fputs("predef: \"l2src/l2_text_hash.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: l2_need_p0 = 0 && l2_need_query = 0 && c.fputs("predef: \"l2src/lmx_branch.lm1\"\n", l2_out) < 0
+    if: l2_need_p0 = 0 && l2_need_query = 0 && l2_has_own_ty(1) != 0 && c.fputs("predef: \"l2src/lmx_branch.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_need_own != 0 && c.fputs("predef: \"l1src/own.lm1\"\n", l2_out) < 0
@@ -7115,7 +7115,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
         cap: cap + 1U
     cap: cap + (cast: (unsigned) l2_for_n)
     kids: n + (cast: (unsigned) l2_unit_base)
-    if: c.fprintf(l2_out, "external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message) int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @: Lmx kid 0\n        @: LmxMethod rec 0\n        if: lmx_ranges_init(%uU) != 0\n            return: 1\n", cap) < 0
+    if: c.fputs("external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message) int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @: Lmx kid 0\n        @: LmxMethod rec 0\n", l2_out) < 0
+        c.fclose(l2_out)
+        return: 1
+    if: (l2_has_own_ty(1) != 0 || l2_need_p0 != 0 || l2_need_query != 0) && c.fprintf(l2_out, "        if: lmx_ranges_init(%uU) != 0\n            return: 1\n", cap) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_has_own_ty(1) != 0 && c.fputs("        if: lmx_chars_init() != 0\n            return: 1\n", l2_out) < 0
