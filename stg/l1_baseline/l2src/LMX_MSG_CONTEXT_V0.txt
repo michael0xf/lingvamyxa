@@ -93,10 +93,15 @@ Lifetime
   parent end_turn sets closing on direct children; they close
   at their end-turn; cascade is child-local. Child polls
   parent_msg for liveness (timer); it does not scan a table.
-  Dead capability: send returns DEAD/GONE; do not reuse the
-  object. In-flight posts that already copied bytes still admit
-  if the mailbox has not been destroyed; after STOPPED, post
-  returns STOPPED.
+  Dead capability: the endpoint object remains as closed-handle
+  control state (DEAD/STOPPED/RELEASED) until runtime_delete.
+  Addr is monotonic; it is not recycled. Send/admit that find
+  DEAD/STOPPED/RELEASED drop the copy (GONE). No bounce to
+  reply_to. host_post still STAGED (no dest lookup); drain/admit
+  is the linearization that drops. Do not free-then-deref, do
+  not use a generation field as the only UAF guard, and do not
+  treat "join known posters" as proof every held capability is
+  gone — the closed object is the control state.
 
 Send to non-child
   Legal. The sender must hold the dest capability. There is no
@@ -133,13 +138,26 @@ mixa_manager pin. Old ingress pin LMX_MSG_HOST_INGRESS_V0
 stays until consumers switch. Do not overwrite a pin under a
 build.
 
+Linearization (19.29.7.1)
+-------------------------
+create: parent turn; returns child handle + path (counter append).
+  No directory. Never-introduced dests are not looked up.
+send: copies into the sender outbox (STAGED). Not admission.
+end_turn success: publishes outbox onto transport.
+pump/admit: if dest is missing, DEAD, STOPPED, RELEASED, or
+  uncommitted INACTIVE, drop the transport copy (GONE). No
+  automatic bounce to reply_to. host_post STAGED is not admit;
+  host_drain then pump is admit. host_post to a live dest that
+  dies before drain is the same drop at admit.
+fail of dest: DEAD notice to parent is a separate message, not
+  a bounce of dropped payload.
+
 Unresolved (ASK, not guessed)
 -----------------------------
-A1. When dest is a capability and the object is released, is a
-    generation/epoch required so a stale handle is GONE rather
-    than use-after-free, or is shutdown-join the only barrier?
-    Not decided here; until then objects stay allocated until
-    posters are joined (same as ingress V0).
+A1. DECIDED 034300 / 19.29.7.1: drop staged copies if dest
+    disappears before admission; no reply_to bounce. Closed
+    handle = live object in DEAD/STOPPED/RELEASED until
+    runtime_delete; addr not reused.
 A2. Whether ANY-affinity contexts get one OS wait-thread each,
     or a Scheduler Message that only sends "run" decisions.
     Not importing a C worker pool to avoid answering this.
