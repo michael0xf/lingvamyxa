@@ -18,6 +18,7 @@ not a selected route.
 | Method definitions, return and explicit field access | 7–14 |
 | Control, exceptions and receiver families | 19.1–19.27 |
 | Message/Thread, memory and end-turn collection | 19.28–19.29 |
+| Authentication, authorization and Crypto Provider | 19.32 |
 | L2 machine surface | 20 |
 | L2 `@` of graph payload, declared parameter, hidden through | 11.3.1 |
 | Dynamic arguments, typed calls, dirty-only checkpoints and recursion | 21 |
@@ -13299,7 +13300,9 @@ A verifier is a protected Structure/value that can validate a primary
 credential without storing the credential itself.
 
 The default password verifier may use libsodium password hashing in the C99
-runtime profile.
+runtime profile, as one implementation of the Crypto Provider contract in
+19.32.10–19.32.21. The verifier declares its algorithm/profile and parameters
+(19.32.11.4, 19.32.13.5); libsodium is not the portable L3 API.
 
 19.32.3. Default Installation Credential
 
@@ -13388,6 +13391,405 @@ Authorization is an explicit operation over that evidence and policy. The
 operation may query a supplied Table; it is not a global role hierarchy.
 
 
+19.32.10. Crypto Provider: Scope and Architecture
+
+Authentication, key management, signing, key agreement, password verification
+and authenticated encryption use high-level L2/L3 operation contracts. L3 owns
+cryptographic intent, key relationships, policy, verifier/authentication
+semantics, algorithm/profile identity and protocol state. The provider owns
+primitive implementation, secret-key physical representation, target-specific
+secure storage and target API/library calls.
+
+These are normative semantic requirements for a conforming crypto provider,
+not a claim that the receivers or backends are already implemented. Operation
+and value names below are explanatory contract names, not new parser intrinsics,
+final receiver spellings or a separate crypto type hierarchy.
+
+The C99 runtime may implement these contracts with libsodium. Managed/hosted
+targets may bind the same contracts to target-native providers. L3 does not
+expose library function names, C pointers/buffer ownership, native key structs,
+JVM object layouts, JavaScript CryptoKey objects, Lua userdata representations
+or .NET object layouts as source semantics. Such objects may implement an opaque
+handle behind the selected provider boundary.
+
+Provider resolution follows 19.25.R2: build/target profile, an explicit provider
+or capability value, a supplied Table/Registry/configuration value, or an
+explicit service adapter. No hidden process-wide Namespace, ambient source
+bindings, automatic registration or second type system is introduced. An
+ExecutionPlan retains its selected callable/provider link. Changing a provider
+does not extend the core ontology.
+
+
+19.32.11. Crypto Values
+
+19.32.11.1. AlgorithmId
+
+Algorithm identity is ordinary explicit Lmx data, conceptually containing
+family, name, version/profile and parameters. The exact Structure is
+profile-defined. Requested algorithms are explicit; a provider must not silently
+substitute another algorithm. Parameters affecting protocol/output compatibility
+must be explicit or fixed by a named interoperability profile, never determined
+by provider-local defaults.
+
+Illustrative identities include SHA-256, HMAC-SHA-256, HKDF-SHA-256, Ed25519,
+X25519, AES-256-GCM, ChaCha20-Poly1305-IETF, XChaCha20-Poly1305, Argon2id and
+PBKDF2-HMAC-SHA-256. This is not a mandatory core algorithm set.
+
+19.32.11.2. PublicKey
+
+A public key is ordinary non-secret Lmx data: algorithm, encoding/profile and
+key bytes, with optional key id and metadata. It may be stored, explicitly
+copied, serialized, sent in Messages, placed in Tables/Registries and exported
+across processes or machines. An interoperable encoding must be explicit, for
+example raw, SPKI, JWK or a profile-defined canonical encoding. A provider's
+private object representation is not the public-key wire format.
+
+19.32.11.3. KeyRef and KeyPair
+
+Secret/private/symmetric keys should normally be represented by an opaque
+provider-handle-domain value, KeyRef, under an explicit lifetime contract.
+Conceptually it denotes provider identity/capability, key identity, algorithm,
+allowed operations, lifetime and exportability/transfer policy; these need not
+be fields stored in every reference. It is an admitted handle-domain value or
+checked wrapper under sections 2 and 19.29.10, not a raw machine/L2 typed address,
+a byte array by definition, a containment subtree holding the secret, or
+permission to inspect provider memory.
+
+A KeyPair conceptually contains publicKey and privateKeyRef. Generation returns
+public data and a provider-owned private capability; it must not implicitly
+publish private bytes into the Lmx graph. Provider-generated non-extractable
+keys are valid implementations. Checked operations enforce the handle's usage
+and lifetime contract without exposing its physical representation to L3.
+
+19.32.11.4. Verifier and KeyPolicy
+
+A Verifier remains an ordinary protected Lmx value under 19.32.2, not a stored
+password. It must identify its algorithm, format/version and parameters, salt
+or encoded verifier data, and verification output/data. A provider-specific
+encoded string/blob is permitted when the format and algorithm are explicit.
+Password-verifier exchange records the applicable memory cost, time/iteration
+cost, parallelism, salt and derived/verifier value or canonical encoded string.
+Resetting an access verifier does not recover content encrypted with a key
+dependent on the old credential (19.32.4).
+
+KeyPolicy is ordinary Structure/Table data consumed by policy/validation
+operations. It may describe allowed uses, creation/expiry, rotation/revocation,
+key version, object/service association, authority constraints, export permission
+and recipient/peer relationships. No single KeyPolicy Structure is mandated.
+
+
+19.32.12. Capability Resolution
+
+A provider advertises or satisfies explicit operation/algorithm/profile
+contracts, conceptually supports(operation, algorithm/profile). A runtime query
+is unnecessary when a build profile resolves the capability statically.
+
+If a statically required operation/profile has no provider for the target,
+target build/link fails. An intentionally dynamic algorithm selection that is
+unsupported fails explicitly through the ordinary result/throw contract.
+Neither path permits silent fallback, algorithm substitution or downgrade.
+Native-only availability does not authorize compiling L2 machine operations
+into a direct L3 VM backend.
+
+
+19.32.13. Operation Families
+
+The following signatures describe semantic inputs/results only. They do not
+register source names or fix source/result ABI. Ordinary byte results follow
+Lmx/Array rules (2, 6.5); a selected profile defines the admitted representation.
+
+19.32.13.1. Secure Random
+
+    Random.bytes(length) -> bytes
+
+Output must be suitable for cryptographic key/nonce/ticket generation. Failure
+to obtain secure randomness is explicit; no weak PRNG fallback is allowed.
+Returned bytes are ordinary data unless the operation consumes them directly
+into provider-owned secret storage. Direct Key.generate-style provider key
+generation is preferred over materializing a source-visible private seed.
+
+19.32.13.2. Constant-Time Equality
+
+    Crypto.equalConstantTime(a, b) -> boolean
+
+For equal-length admitted inputs, runtime behavior must not depend on differing
+byte values in a way forbidden by the selected constant-time provider contract.
+Length may be public unless a stricter profile says otherwise. This is a
+provider/security operation, not ordinary equality. A target unable to provide
+the selected timing guarantee must not advertise that capability.
+
+19.32.13.3. Hash and MAC
+
+    Hash.digest(algorithm, data) -> digest
+    Mac.compute(algorithm, keyRef, data) -> tag
+    Mac.verify(algorithm, keyRef, data, tag) -> boolean/failure
+
+Hash algorithm identity is explicit. Digests are ordinary non-secret bytes
+unless application policy treats them otherwise. Provider-local hash defaults
+must not determine interoperable output. Optional streaming state belongs to
+an explicit provider contract without exposing raw mutable storage to L3.
+MAC operations prefer KeyRef over source-visible secret bytes; verification
+must not expose intermediate state.
+
+19.32.13.4. Key Derivation
+
+    Kdf.deriveKey(profile, inputKeyRef, salt, info, outputKeyProfile) -> KeyRef
+    Kdf.deriveBytes(profile, inputKeyRef, salt, info, length) -> bytes
+
+Use deriveKey when the result remains secret. deriveBytes explicitly exposes
+secret-derived material into ordinary L3 storage. When the provider can retain
+the derived secret internally, deriveKey must not unnecessarily export it into
+L3 and import it again.
+
+19.32.13.5. Password Verifier
+
+    PasswordVerifier.create(password, policy/profile) -> Verifier
+    PasswordVerifier.verify(password, verifier) -> boolean/failure
+
+The password is an input credential, not persistent verifier state. Verification
+uses the verifier's declared algorithm/profile and parameters. A provider may
+reject an unsupported verifier. Migration is an explicit application/profile
+operation; there is no automatic downgrade. The C99/libsodium profile may use
+Argon2id/libsodium password hashing. Other targets must implement the declared
+format/profile to consume that verifier.
+
+19.32.13.6. Key Generation, Import and Export
+
+    KeyPair.generate(algorithm/profile, policy) -> KeyPair
+    PublicKey.import(algorithm, format, bytes) -> PublicKey
+    PrivateKey.import(algorithm, format, secretBytes, policy) -> KeyRef
+    SecretKey.import(algorithm, format, secretBytes, policy) -> KeyRef
+    PublicKey.export(publicKey, format) -> bytes
+    PrivateKey.export(keyRef, format) -> secretBytes
+    SecretKey.export(keyRef, format) -> secretBytes
+
+Key-pair generation returns public data and a private KeyRef with the requested
+usage restrictions. Private/secret import explicitly moves source-visible
+secret material into provider-owned storage. The provider should minimize input
+buffer lifetime and apply target secure erasure where it owns the buffer.
+Erasure of uncontrolled UI/host/VM copies is not a language guarantee.
+
+Private/secret export is always explicit and may be prohibited by key policy or
+provider capability. A non-extractable key causes export failure, never a silent
+representation change. Export creates source-visible secret material and changes
+its lifetime/security responsibility. Function calls, returns, Message sends,
+provider changes and serialization of an enclosing Structure do not implicitly
+export a key.
+
+19.32.13.7. Signature and Key Agreement
+
+    Signature.sign(algorithm/profile, privateKeyRef, message) -> signature
+    Signature.verify(algorithm/profile, publicKey, message, signature)
+        -> boolean/failure
+    KeyAgreement.derive(profile, privateKeyRef, peerPublicKey, outputKeyProfile)
+        -> KeyRef
+
+Signing never exports private bytes. Verification consumes public data; the
+profile fixes signature format and forbids algorithm substitution. Key agreement
+preferably returns KeyRef. Raw shared-secret output requires a distinct explicit
+operation/profile. The provider should derive the final session key internally
+when it can avoid exposing the raw shared secret.
+
+19.32.13.8. Authenticated Encryption (AEAD)
+
+    Aead.seal(profile, keyRef, nonce, plaintext, associatedData)
+        -> ciphertextAndTag
+    Aead.open(profile, keyRef, nonce, ciphertextAndTag, associatedData)
+        -> plaintext/failure
+
+The algorithm/profile fixes nonce rules and interoperable ciphertext/tag layout.
+Caller/application/provider policy must not silently reuse a nonce where the
+profile forbids it. Associated data is authenticated but not encrypted.
+Authentication failure must not expose unauthenticated plaintext; no partial
+plaintext is published before authentication succeeds. A higher-level helper
+may generate the nonce with Random, but the nonce remains explicit protocol
+data.
+
+19.32.13.9. Key Release
+
+    Key.release(keyRef)
+
+Release may instead be automatic under an explicit provider-handle lifetime
+contract. It invalidates the KeyRef according to that contract and clears/releases
+provider-owned secret storage according to provider capability. It cannot promise
+erasure of copies outside controlled provider/runtime memory. Finalizer/GC cleanup
+may be a fallback; a selected profile may require deterministic release. The
+exact receiver spelling and retain/release ABI remain open.
+
+
+19.32.14. Secret Memory and Handle Lifetime
+
+Secure memory is a provider capability, not universal L3 physical-memory
+semantics. Distinct advertised properties may include provider-owned secret
+storage, explicit zeroization, page locking, guard pages, non-extractable keys
+and hardware-backed keys. One property does not imply the others. L3 reasons
+about KeyRef lifetime and authority; the target determines where secret bytes
+physically reside and what storage guarantees it can supply.
+
+The handle contract must state whether a KeyRef can be used by multiple Messages
+in the same runtime, transferred to another local Message, explicitly
+retained/shared as an external immutable/provider capability, exported,
+serialized, or kept valid across process restart or machines. The portable
+default is local to its provider/runtime and not wire-serializable. Such a
+capability does not create mutable aliases into another Message's arena.
+
+
+19.32.15. Message Boundaries and No Implicit Secret Materialization
+
+PublicKey, signature, nonce, ciphertext, tag, Verifier, algorithm/profile data,
+key id, rotation/revocation metadata and AuthEvidence may be ordinary Message
+payloads subject to their explicit protection/authority policy. Crypto values
+follow the ordinary delivery/ownership rules of 19.28.R2.5 and 19.29.7, including
+ownership transfer for ordinary local delivery; this contract does not introduce
+an automatic graph-copy rule or solve the separately open wire/graph-copy ABI.
+
+Passing/returning KeyRef, storing it in a Structure field, Message-local reference
+rebinding, provider dispatch and result handling pass/reference the handle under
+its lifetime contract. They do not implicitly copy, deep-clone or export the
+provider-owned secret. Section 21.4 reference-value passing still applies.
+Creating/copying an enclosing Structure does not implicitly export secret bytes;
+handle retention/transfer must follow the explicit domain policy.
+
+Distinct secret bytes appear only through an explicit operation such as private
+or secret export, deriveBytes, an explicit copy of already source-visible bytes,
+or serialization of an explicitly exportable secret envelope. Sending secret
+material to another machine requires an explicit encrypted key envelope or
+policy-approved export/import. A raw mutable provider pointer must never cross
+a Message boundary as though it were an ordinary Lmx graph reference.
+
+
+19.32.16. Synchronous and Asynchronous Providers
+
+The semantic contract does not require physically synchronous calls. An adapter
+may use a direct call, service call, Message request/result, or an awaitable
+provider operation once its receiver is specified. All preserve the same
+semantic result and ordinary Message isolation/lifetime rules. A WebCrypto
+Promise, Java Future, OS completion object or C callback is provider machinery,
+not language-wide crypto ontology; this section does not introduce an await
+receiver or a second scheduler.
+
+
+19.32.17. Algorithm and Interoperability Profiles
+
+An operation capability (AEAD, Signature, KeyAgreement, PasswordVerifier) defines
+meaning; a concrete interoperability profile fixes algorithm, parameters, key
+encoding, output encoding and protocol bytes. Provider choice must not change
+those bytes. For example, an Ed25519 signature profile may fix raw-32 public
+keys and raw-64 signatures; a ChaCha20-Poly1305-IETF AEAD profile may fix a
+12-byte nonce, 16-byte tag and ciphertext || tag output layout.
+
+Suggested initial conformance profiles are SHA-256, HMAC-SHA-256,
+HKDF-SHA-256, Ed25519, X25519 and Argon2id. These are recommendations for provider
+testing, not mandated algorithms for every target or the first distribution.
+AEAD remains a family: target/application profiles may select AES-GCM,
+ChaCha20-Poly1305-IETF or XChaCha20-Poly1305. Participants requiring the same
+ciphertext format must select the same concrete profile and supply a conforming
+provider on every participating target. No implicit algorithm translation is
+permitted.
+
+An Argon2id verifier requires an Argon2id provider. A target lacking one may add
+an explicit provider or reject the verifier; it must not reinterpret it as
+PBKDF2. A separate application/profile may explicitly select
+PBKDF2-HMAC-SHA-256. Any algorithm migration is explicit.
+
+
+19.32.18. Authentication Integration and Failures
+
+The flow of 19.32.9 remains:
+
+    credential/verifier -> validator -> AuthEvidence
+        -> message validation / authority policy
+
+A provider performs the primitive. L3 policy determines authority. A password
+match does not create global roles or arbitrary rights; signature verification
+establishes a cryptographic relation to a public key, and application policy
+decides what that key may authorize.
+
+Providers must distinguish at least these semantic failure classes:
+
+    UnsupportedAlgorithm/Profile
+    InvalidKey/Encoding
+    KeyNotExportable
+    AuthenticationFailed
+    InvalidSignature
+    InvalidNonce/Parameters
+    SecureRandomUnavailable
+    ProviderUnavailable
+    ProviderInternalFailure
+    ResourceFailure
+
+These labels do not fix the still-open generic result ABI or exact error
+subtree. Failure uses the ordinary Revision-2 result/throw contract. A selected
+verification contract may represent an invalid signature as false. Failed AEAD
+authentication must remain distinguishable from successful decryption yielding
+empty plaintext. No provider failure authorizes a weaker fallback without an
+explicit application policy operation.
+
+
+19.32.19. Provider Conformance
+
+A provider claiming a concrete profile must preserve algorithm identity, key
+and output encodings, authentication/failure semantics, nonce/parameter rules,
+required key-use restrictions, no implicit secret export, no silent algorithm
+substitution, handle lifetime, Message isolation and explicit unavailability
+failure. It may claim constant-time/security properties only when its target
+can actually provide them.
+
+Every concrete interoperability profile should have cross-provider vectors for
+its admitted key import/export, signatures, agreement, KDF, AEAD, password
+verifier and hash/MAC operations. Compare the profile's semantic bytes/results,
+not provider object layout. Randomized operations use fixed admitted test
+randomness/vectors or check the deterministic relation required by the algorithm.
+Negative cases include invalid signature/tag, unsupported profile, non-exportable
+key, unavailable provider and invalid/released KeyRef. Functional vectors alone
+do not prove timing, erasure, non-extractability or entropy claims; verify those
+properties separately for each target/provider.
+
+
+19.32.20. Target Provider Mapping (Informative)
+
+The 19.32.8 C99/libsodium sketch is one provider. Its private adapter may map
+Random to randombytes_*, PasswordVerifier to crypto_pwhash_*/crypto_pwhash_str_*,
+constant-time equality to sodium_memcmp, signatures to the selected crypto_sign_*
+profile, agreement to crypto_kx_* or the selected curve25519 primitive, AEAD to
+the selected crypto_aead_* profile, MAC/hash to matching crypto_auth_*/HMAC/hash
+profiles, and secure memory to sodium_malloc/sodium_mlock/sodium_memzero where
+supported. Each mapping must implement the exact selected profile; C symbol
+families are not interchangeable algorithms or L3 receiver spellings.
+
+MIR, Wasm linear memory and RISC-V may reuse that provider through the existing
+L2 -> Translator-L2 -> L1 -> Translator-L1 -> C99 -> target toolchain route.
+Direct L3 JVM, Wasm-GC, Lua and .NET CIL targets bind the high-level contract to
+selected target providers, for example JCA, a WebCrypto/host capability, a Lua
+host/engine/C module, or System.Security.Cryptography/another selected provider.
+A native runtime handle, managed key object, externref/host capability, Lua
+full userdata or .NET wrapper/SafeHandle may implement the same opaque KeyRef.
+These are possible physical mappings, not required object layouts or promises
+that a target's default libraries implement every algorithm/security property.
+
+Target planning details are in
+`include_languages/Lingvamyxa_Crypto_Provider_Seven_Targets_Implementation_EN.md`.
+That note is informative; this section defines the language contract.
+
+
+19.32.21. Open Profile and ABI Items
+
+The initial semantic scope covers secure random, constant-time equality, hash,
+MAC, password verifiers, key generation/import/export, signatures, agreement,
+KDF, AEAD, KeyRef lifetime/release and capability resolution. It is intentionally
+smaller than the complete libsodium API and does not require every target to
+implement every family.
+
+Still open: final receiver spellings; normalized AlgorithmId, verifier and policy
+Structures; mandatory first-distribution algorithms, if any; target-provider
+registration/build configuration; C99 KeyRef handle-domain ABI; exact error/result
+subtree under the generic Revision-2 result ABI; streaming hash/MAC/AEAD and
+secret streams; HSM/TPM/secure-enclave/certificate-store profiles; KEM/PQC profiles;
+remote-key-service profiles; protocol helpers; and any standard encrypted
+key-envelope format. These open details do not weaken the semantic requirements
+above or introduce a new runtime Namespace/type system.
+
+
 19.33. Operator and Runtime Map
 
 | Contract | Section |
@@ -13398,6 +13800,7 @@ operation may query a supplied Table; it is not a global role hierarchy.
 | Message arena, roots, end-turn outbox and collection | 19.29 |
 | Mix document addressing / cooperating-Message runtime | 19.28.10 / 19.29.2.1 |
 | Reactive queries, HTTP, authentication | 19.30–19.32 |
+| Crypto values, operations, capabilities and profiles | 19.32.10–19.32.21 |
 | L2-only machine forms | 20 |
 | Dynamic visibility and exact typed invocation | 21 |
 
