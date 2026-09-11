@@ -1641,6 +1641,10 @@ fn: lmx_msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: st != c.LMX_MSG_STAGED
         return: st
     m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        m\live_query_pend_id: qid
+        m\live_query_pend_at: c.lmx_msg_now(rt)
+    ---
     if: m = 0
         c.lmx_msg_exec_lock(rt)
         m: lmx_msg_self_or_find(rt, who)
@@ -1649,10 +1653,6 @@ fn: lmx_msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
             m\live_query_pend_at: c.lmx_msg_now(rt)
         ---
         c.lmx_msg_exec_unlock(rt)
-    ---
-    if: m != 0
-        m\live_query_pend_id: qid
-        m\live_query_pend_at: c.lmx_msg_now(rt)
     ---
 return: st
 
