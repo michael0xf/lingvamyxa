@@ -134,9 +134,10 @@ Not yet
 -------
 Capability LmxMsgAddr; removal of tab; Scheduler Message;
 per-mailbox native lock replacing exec mutex for send/recv;
-mixa_manager pin. Old ingress pin LMX_MSG_HOST_INGRESS_V0
-stays until consumers switch. Do not overwrite a pin under a
-build.
+mixa_manager pin. `lmx_msg_exec_start` (pool) remains prototype
+evidence; replacement entry is `lmx_msg_exec_start_contexts`.
+Old ingress pin LMX_MSG_HOST_INGRESS_V0 stays until consumers
+switch. Do not overwrite a pin under a build.
 
 Linearization (19.29.7.1)
 -------------------------
