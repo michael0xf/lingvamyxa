@@ -12465,8 +12465,15 @@ visibility of both flags, nor infer arena reclamation from either value. Result
 payloads still follow ordinary publication/ownership rules; these flags are not
 permission to read another Message's graph. Ordinary result/progress Messages
 remain available when they carry data; a redundant local completion-only reply
-is not required. Remote delivery must transport the corresponding outcome; local
-control flags do not imply shared memory across machines.
+is not required. A nonlocal Message is represented by a local Message that
+controls/observes the corresponding remote-child state through an explicit
+transport, for example HTTP REST requests. The parent uses the same local
+control flags; the local representative owns the transport interaction rather
+than adding a remote special case to a global scheduler. Remote outcomes update
+the corresponding local success state; cancellation requests are conveyed by
+that representative. Transport silence is not success or confirmed remote exit.
+Local control flags do not imply shared memory across machines. Concrete wire
+operations, retry timing and authentication belong to the selected protocol.
 
 Liveness/progress protocol Messages remain ordinary LMX text, not new parser
 intrinsics. The number/bytes prototype's `lmx_msg_poll` / `lmx_msg_drive` helpers

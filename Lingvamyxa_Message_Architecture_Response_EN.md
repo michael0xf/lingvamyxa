@@ -117,6 +117,8 @@ Checks occur at method entry, loop backedges and method exit, at safe escape poi
 
 A finished child's arena must be reclaimable independently of unrelated live family members. In-flight sends and retained recipient capabilities still require safe control-state lifetime handling. Keeping all contexts until a global runtime is destroyed is not the target solution.
 
+A nonlocal Message has a local Message representative which observes its remote state and conveys cancellation through an explicit transport, such as HTTP REST. The parent still checks local running/success control state; the representative owns the network work. A timeout or lost connection is not successful completion or proof of remote termination. No shared foreign arena or global network scheduler is introduced.
+
 The prototype's path-depth limit of 16 has no foundation in the language model and must be removed from the replacement. The path appends one parent-local child counter segment:
 
 ```text
