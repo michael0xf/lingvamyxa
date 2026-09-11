@@ -7,6 +7,9 @@ end: prototype
 int: send_checks 0
 int: owned_frees 0
 @: void watched_owned 0
+int: parent_step_status 0
+int: scheduled_child_calls 0
+int: scheduled_child_number 0
 
 sub: send_check (int: ok; const: @(char label))
     send_checks: send_checks + 1
@@ -23,6 +26,49 @@ sub: __wrap_free (@: void p)
     ---
     c.__real_free(p)
 end: __wrap_free
+
+fn: send_scheduled_child_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
+    @: LmxMsgEnv got
+    int: st
+    got: (cast: (@: LmxMsgEnv) ctx)
+    st: lmx_msg_recv(rt, who, got)
+    if: st != LMX_MSG_OK
+        return: st
+    scheduled_child_calls: scheduled_child_calls + 1
+    scheduled_child_number: got\number
+    lmx_msg_env_release(got)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+fn: send_scheduling_parent_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
+    if: ctx != 0
+        return: LMX_MSG_INVALID
+    parent_step_status: lmx_msg_sched_step(rt, who)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+sub: send_parent_schedule_case (@: LmxMsgRuntime rt; unsigned: parent; unsigned: child)
+    @: LmxMsgEnv env
+    @: LmxMsgEnv got
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    send_check(env != 0 && got != 0, "allocate parent scheduling envelopes")
+    send_check(lmx_msg_exec_bind(rt, child, send_scheduled_child_turn, got, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind parent-scheduled child without mapping")
+    send_check(lmx_msg_exec_bind(rt, parent, send_scheduling_parent_turn, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind scheduling parent")
+    # Drain stale creation/pre-bind readiness BEFORE sending new work. A
+    # binding supplies a handler, not an independently mapped native thread.
+    send_check(lmx_msg_run_child_turn(rt, parent) = LMX_MSG_OK && parent_step_status = LMX_MSG_EMPTY && scheduled_child_calls = 0, "drain empty initial parent readiness")
+    env\kind: LMX_MSG_KIND_NUMBER
+    env\id: 101U
+    env\number: 61
+    send_check(lmx_msg_send(rt, parent, child, env) = LMX_MSG_STAGED, "stage first mail after child binding")
+    env\id: 102U
+    env\number: 62
+    send_check(lmx_msg_send(rt, parent, child, env) = LMX_MSG_STAGED && lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "admit two messages after child binding")
+    send_check(lmx_msg_run_child_turn(rt, parent) = LMX_MSG_OK && parent_step_status = LMX_MSG_OK && scheduled_child_calls = 1 && scheduled_child_number = 61, "parent schedules first post-bind envelope")
+    send_check(lmx_msg_run_child_turn(rt, parent) = LMX_MSG_OK && parent_step_status = LMX_MSG_OK && scheduled_child_calls = 2 && scheduled_child_number = 62, "parent reschedules remaining envelope in FIFO")
+    send_check(lmx_msg_run_child_turn(rt, parent) = LMX_MSG_OK && parent_step_status = LMX_MSG_EMPTY && scheduled_child_calls = 2, "no duplicate parent scheduling")
+    c.free(got)
+    c.free(env)
+end: send_parent_schedule_case
 
 sub: send_init_case (@: LmxMsgRuntime rt; unsigned: who; @: LmxMsg source)
     @: LmxMsgEnv got
@@ -236,6 +282,7 @@ fn: main () int
     send_check(lmx_msg_run_child_turn(rt, child) = LMX_MSG_OK, "execute query callback")
     send_check(lmx_msg_turn_self(rt) = 0, "self context restored after callback")
     send_prebind_case(rt, cousin_parent, cousin)
+    send_parent_schedule_case(rt, cousin_parent, cousin)
     lmx_msg_runtime_delete(rt)
     send_check(owned_frees = 1, "runtime teardown does not free released envelope again")
     c.printf("send local checks=%d failures=0 owned_frees=%d\n", send_checks, owned_frees)

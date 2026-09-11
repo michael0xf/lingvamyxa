@@ -3,7 +3,7 @@ L1 Message local-send regression
 
 run_msg_send_local.ps1 builds tests/lmx_msg_send_local_selftest.lm1 with pinned
 stable gen2 against a private git archive of core checkpoint
-896ad97f17a3131b952fbc55a7baf963a32b1f05. Optional -CoreCommit selects another
+04989ba2c3138a05237895ab5d682a8124b0f7fd. Optional -CoreCommit selects another
 explicitly agreed compatible revision, never the changing working tree. Nineteen
 core source files are archived; all build outputs/logs/hashes stay in the unique
 build/codex/msg_send_local run directory. No shared gate or app pin changes.
@@ -46,12 +46,29 @@ Allocation-failure injection and concurrent races are not covered here.
 Verified run: build/codex/msg_send_local/20260911_161340_490_6c7b6e74/evidence.json.
 The snapshot now compiles/links lmx_msg_slots as required by593a64b exec.
 
-Current896ad97 pin also translates/links lmx_msg_mail_chain, now used by the
+The896ad97 checkpoint also translates/links lmx_msg_mail_chain, now used by the
 native inbox/outbox wrappers; no old native list body silently substitutes.
 Targeted O2 run:136 checks,0 failures,owned_frees=1. Evidence:
 build/codex/msg_send_local/20260911_170343_599_e960747f/evidence.json.
 This checks integrated public send/receive/ownership behavior, not only the
 standalone chain helper. No O0/Family/full gate rerun for this extraction.
+
+Current04989ba pin adds a real held-parent scheduling regression (9 checks,
+145 total). A child with a bound handler but NO mapped native thread must
+still receive readiness on its parent's queue. The fixture first drains
+empty creation/pre-bind readiness, then admits two messages AFTER binding.
+Two parent turns consume them FIFO; a third returns EMPTY, without manual
+exec_ready or direct invocation of the child callback.
+
+This case failed on4a54542 at "parent schedules first post-bind envelope":
+build/codex/msg_send_local/20260911_171743_355_22b4ac84/evidence.json.
+After the bound-versus-mapped routing fix in04989ba, targeted O2 passes:
+145checks,0failures,owned_frees=1. Evidence:
+build/codex/msg_send_local/20260911_172137_148_0e42d8b4/evidence.json.
+No translator self-build, O0, family or full gate rerun. This is a single
+parent-turn consumer test; the transitional bound/EXEC ring remains and is
+not exercised concurrently with that parent's queue. It is not proof of
+final global-lock/ring removal or stable-promotion readiness.
 
 Targeted follow-up for2b567e8 (unbound exec_ready exclusion): O0,136checks,
 zero failures. Reused the already compiled private binary; no translator
