@@ -156,6 +156,16 @@ fn: lmx_msg_self_or_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     ---
 return: lmx_msg_find(rt, addr)
 
+fn: lmx_msg_turn_slot (@: LmxMsgRuntime rt; LmxMsgAddr: who) @: LmxMsg
+    @: LmxMsg m
+    if: rt = 0 || who = 0U
+        return: 0
+    m: c.lmx_msg_turn_self(rt)
+    if: m != 0 && m\addr = who && m\state != c.LMX_MSG_STATE_RELEASED
+        return: m
+    ---
+return: 0
+
 sub: lmx_msg_child_link (@: LmxMsg parent; @: LmxMsg child)
     if: parent = 0 || child = 0
         return
@@ -1310,10 +1320,12 @@ return: c.LMX_MSG_OK
 fn: lmx_msg_state (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     int: s
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        return: m\state
+    ---
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
-        if: c.lmx_msg_exec_holding_turn(rt, who) = 0
-            return: -1
-        ---
+        return: -1
     ---
     c.lmx_msg_exec_lock(rt)
     m: lmx_msg_self_or_find(rt, who)
@@ -1327,10 +1339,12 @@ return: s
 fn: lmx_msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     int: cnt 0
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        return: c.lmx_msg_mail_inbox_n(m)
+    ---
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
-        if: c.lmx_msg_exec_holding_turn(rt, who) = 0
-            return: -1
-        ---
+        return: -1
     ---
     c.lmx_msg_exec_lock(rt)
     m: lmx_msg_self_or_find(rt, who)
@@ -1344,10 +1358,12 @@ return: cnt
 fn: lmx_msg_path_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     int: pn
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        return: m\path_n
+    ---
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
-        if: c.lmx_msg_exec_holding_turn(rt, who) = 0
-            return: -1
-        ---
+        return: -1
     ---
     c.lmx_msg_exec_lock(rt)
     m: lmx_msg_self_or_find(rt, who)
@@ -1360,13 +1376,19 @@ return: pn
 
 fn: lmx_msg_path_seg (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i; @: unsigned out) int
     @: LmxMsg m
-    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
-        if: c.lmx_msg_exec_holding_turn(rt, who) = 0 || out = 0 || i < 0
-            return: c.LMX_MSG_INVALID
-        ---
-    ---
     if: out = 0 || i < 0
         return: c.LMX_MSG_INVALID
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        if: m\path = 0 || i >= m\path_n
+            return: c.LMX_MSG_INVALID
+        ---
+        out[0]: m\path[i]
+        return: c.LMX_MSG_OK
+    ---
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    ---
     c.lmx_msg_exec_lock(rt)
     m: lmx_msg_self_or_find(rt, who)
     if: m = 0 || m\path = 0 || i >= m\path_n
@@ -1380,10 +1402,17 @@ fn: lmx_msg_child_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     @: LmxMsg ch
     int: n 0
-    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
-        if: c.lmx_msg_exec_holding_turn(rt, who) = 0
-            return: -1
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        ch: m\first_child
+        while: ch != 0
+            n: n + 1
+            ch: ch\next_sibling
         ---
+        return: n
+    ---
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: -1
     ---
     c.lmx_msg_exec_lock(rt)
     m: lmx_msg_self_or_find(rt, who)
@@ -1403,13 +1432,23 @@ fn: lmx_msg_child_at (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i) unsigned
     @: LmxMsg ch
     int: k 0
     unsigned: a 0U
-    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
-        if: c.lmx_msg_exec_holding_turn(rt, who) = 0 || i < 0
-            return: 0U
-        ---
-    ---
     if: i < 0
         return: 0U
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        ch: m\first_child
+        while: ch != 0
+            if: k = i
+                return: ch\addr
+            ---
+            k: k + 1
+            ch: ch\next_sibling
+        ---
+        return: 0U
+    ---
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: 0U
+    ---
     c.lmx_msg_exec_lock(rt)
     m: lmx_msg_self_or_find(rt, who)
     if: m = 0

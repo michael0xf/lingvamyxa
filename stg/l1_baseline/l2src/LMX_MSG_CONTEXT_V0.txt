@@ -134,9 +134,10 @@ Do not claim the previous global-table runtime complied.
   D6. 19.29.6 / 19.28.R2.2 text that permitted worker-pool
       actors and migration between host workers.
   D7. Shared exec mutex still around find/bind/ready. Inbox and
-      outbox q_push/take now take dest mail_lock nested under exec
-      (exec then mail; never the reverse). Not yet a replacement
-      of exec lock.
+      outbox q_push/take take dest mail_lock nested under exec
+      (exec then mail; never the reverse). state/inbox_n/path_n/
+      path_seg/child_n/child_at skip exec when turn_self already
+      is that Message. Not yet a replacement of exec lock.
   D8. Independent child-arena reclaim inside one family is
       prototype-only: RELEASED frees copy slices; the LmxMsg
       object stays until runtime_delete. Not proven across
