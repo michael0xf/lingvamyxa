@@ -1469,29 +1469,50 @@ return: 0U
 
 fn: lmx_msg_init_copy (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     @: LmxMsg m
-    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
-        if: c.lmx_msg_exec_holding_turn(rt, who) = 0 || out = 0
-            return: c.LMX_MSG_INVALID
-        ---
-    ---
+    @: uchar initp
+    size_t: n
+    unsigned: parent
     if: out = 0
         return: c.LMX_MSG_INVALID
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        parent: m\parent
+        n: m\init_n
+        initp: lmx_msg_copy_bytes(m\init, n)
+        if: n != 0U && initp = 0
+            return: c.LMX_MSG_NOMEM
+        ---
+        out\id: 0U
+        out\correlation: 0U
+        out\reply_to: parent
+        out\kind: c.LMX_MSG_KIND_BYTES
+        out\number: 0
+        out\n: n
+        out\bytes: initp
+        return: c.LMX_MSG_OK
+    ---
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    ---
     c.lmx_msg_exec_lock(rt)
     m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
-    out\id: 0U
-    out\correlation: 0U
-    out\reply_to: m\parent
-    out\kind: c.LMX_MSG_KIND_BYTES
-    out\number: 0
-    out\n: m\init_n
-    out\bytes: lmx_msg_copy_bytes(m\init, m\init_n)
-    if: m\init_n != 0U && out\bytes = 0
+    parent: m\parent
+    n: m\init_n
+    initp: lmx_msg_copy_bytes(m\init, n)
+    if: n != 0U && initp = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_NOMEM
     c.lmx_msg_exec_unlock(rt)
+    out\id: 0U
+    out\correlation: 0U
+    out\reply_to: parent
+    out\kind: c.LMX_MSG_KIND_BYTES
+    out\number: 0
+    out\n: n
+    out\bytes: initp
 return: c.LMX_MSG_OK
 
 fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
