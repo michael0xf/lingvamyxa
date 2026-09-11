@@ -278,14 +278,16 @@ Who may move payload
   source aliases into moved blocks. exec lock here is
   transitional D7, not the mailbox.
 
-End-turn collection (19.29.4 / 180000)
+End-turn collection (19.29.4 / 180000 / 181500)
   lmx_msg_end_turn calls lmx_msg_arena_collect after outbox
-  publish/discard on both success and failure. The tracer is not
-  implemented: no walk of Lmx.node / own-fields / array cells.
-  Collect must not dispose_all; rooted graphs survive; ranges
-  detach before free; no double-free. Unrooted adopted storage
-  is an acceptance gap until that walk exists. Failed-history
-  roots (19.29.8) are not this case.
+  publish/discard. LmxMsg.graph is the Message graph unit
+  (l2trans main's malloc/cell_init/branch_open unit, not yet
+  assigned from generated main). Collect traces from graph
+  through Lmx and CHILDREN ranges. Unrooted ranged blocks are
+  detached (ranges then blocks_remove + dispose). Opaque blocks
+  with no range are not scanned as Lmx. graph==0 means no live
+  graph root: ranged adopted storage is unrooted. Own-field C
+  frames are gone at this boundary. Walk should move to L1.
 
 Who may free
   Parent dispose_child of a SUCCESSFUL handoff-ready child

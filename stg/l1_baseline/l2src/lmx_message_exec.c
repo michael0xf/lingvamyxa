@@ -381,11 +381,112 @@ LmxMsg *lmx_msg_sched_dequeue_child(LmxMsg *parent) {
     return child;
 }
 
+void lmx_msg_set_graph(LmxMsg *m, struct Lmx *unit) {
+    if (m != 0) {
+        m->graph = unit;
+    }
+}
+
+struct Lmx *lmx_msg_graph(LmxMsg *m) {
+    if (m == 0) {
+        return 0;
+    }
+    return m->graph;
+}
+
+static int graph_holds(LmxMsg *ow, Lmx *x, const unsigned char *p, int depth) {
+    size_t i;
+    Lmx *kids;
+    LmxOwnedRange *rg;
+    const unsigned char *q;
+    if (ow == 0 || x == 0 || p == 0 || depth > 64) {
+        return 0;
+    }
+    q = (const unsigned char *)x;
+    if (p >= q && p < q + sizeof(Lmx)) {
+        return 1;
+    }
+    if (x->data != 0) {
+        if ((const unsigned char *)x->data == p) {
+            return 1;
+        }
+        rg = lmx_owned_ranges_find(ow->ranges, x->data);
+        if (rg != 0 && rg->kind == LMX_KIND_CHILDREN && x->len > 0U && x->len < 1000000U) {
+            kids = (Lmx *)x->data;
+            for (i = 0; i < x->len; i++) {
+                if (graph_holds(ow, &kids[i], p, depth + 1) != 0) {
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+static void collect_block(LmxMsg *m, LmxMsgBlock *b) {
+    LmxOwnedRange *r;
+    LmxOwnedRange *rn;
+    LmxMsgBlock *tmp;
+    unsigned char *lo;
+    unsigned char *hi;
+    if (m == 0 || b == 0) {
+        return;
+    }
+    lo = (unsigned char *)b->base;
+    hi = (lo == 0 || b->n == 0) ? lo : lo + b->n;
+    r = m->ranges;
+    while (r != 0) {
+        rn = r->next;
+        if (lo != 0 && hi != 0 && r->lo != 0
+            && (unsigned char *)r->lo >= lo
+            && (unsigned char *)r->lo < hi) {
+            (void)lmx_owned_ranges_remove(&m->ranges, r);
+        }
+        r = rn;
+    }
+    if (lmx_msg_blocks_remove(&m->blocks, b) == LMX_MSG_BLOCKS_OK) {
+        tmp = 0;
+        if (lmx_msg_blocks_push(&tmp, b) == LMX_MSG_BLOCKS_OK) {
+            (void)lmx_msg_blocks_dispose_all(&tmp);
+        }
+    }
+}
+
 void lmx_msg_arena_collect(LmxMsg *m) {
+    LmxOwnedRange *r;
+    LmxOwnedRange *rn;
+    LmxMsgBlock *b;
+    LmxMsgBlock *nxt;
+    unsigned char *lo;
+    unsigned char *hi;
+    int held;
     if (m == 0) {
         return;
     }
-    (void)m;
+    r = m->ranges;
+    while (r != 0) {
+        rn = r->next;
+        held = 0;
+        if (m->graph != 0 && r->lo != 0) {
+            held = graph_holds(m, m->graph, (const unsigned char *)r->lo, 0);
+        }
+        if (held == 0 && r->lo != 0) {
+            b = m->blocks;
+            while (b != 0) {
+                nxt = b->next;
+                lo = (unsigned char *)b->base;
+                hi = (lo == 0 || b->n == 0) ? lo : lo + b->n;
+                if (lo != 0 && hi != 0
+                    && (unsigned char *)r->lo >= lo
+                    && (unsigned char *)r->lo < hi) {
+                    collect_block(m, b);
+                    break;
+                }
+                b = nxt;
+            }
+        }
+        r = rn;
+    }
 }
 
 void lmx_msg_sched_unlink_child(LmxMsg *parent, LmxMsg *child) {
