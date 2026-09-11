@@ -31,6 +31,8 @@ signatures are `incompatible entry signature`. Ordinary methods keep
 source-sized growing typed formals, including more than eight; that
 is not inferred from C main. Pointer/const-pointer formals passed to
 stdio calls keep their declared types (not boxed as `int`).
+`NAME[index]` on an ident `@@: char` formal is one stdio actual
+(`values[1]`), not separate `[` `1` `]` arguments.
 
 That is the SPEC 1.7 bootstrap `main` adapter. String atoms are copied as
 P0 source spelling into L1 (quotes and escapes kept; not decoded then
