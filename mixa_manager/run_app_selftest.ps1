@@ -23,7 +23,7 @@ $RunDir = ""
 $LogDir = ""
 $FixtureDir = ""
 $TestSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_app_selftest.lm1"
-$FixtureSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_app_fixture_invoke.c"
+$FixtureSource = Join-Path $RepoRoot "mixa_manager\tests\mixa_app_fixture_invoke.lm1"
 $TransOut = ""
 $ExeOut = ""
 $TransStdout = ""
@@ -71,14 +71,28 @@ try {
 
     $Stage = "ready"
 
-    # Compile the launch fixture exe first (needed by .lnk fixtures).
+    # Translate and compile the L1 fixture exe (needed by .lnk fixtures).
     $FixtureDir = Join-Path $RunDir "fixtures"
     New-Item -ItemType Directory -Path $FixtureDir -Force | Out-Null
     $FixtureExe = Join-Path $FixtureDir "mixa_app_fixture_invoke.exe"
+    $FixtureTransC = Join-Path $FixtureDir "mixa_app_fixture_invoke.c"
+    $FixtureTransStdout = Join-Path $LogDir "fixture_trans_stdout.log"
+    $FixtureTransStderr = Join-Path $LogDir "fixture_trans_stderr.log"
+    $FixtureTransExitFile = Join-Path $LogDir "fixture_trans_exit.txt"
+    $Stage = "fixture-translation"
+
+    $FixtureTransProc = Start-Process -FilePath $Compiler -ArgumentList $FixtureSource, $FixtureTransC -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $FixtureTransStdout -RedirectStandardError $FixtureTransStderr
+    $FixtureTransRc = $FixtureTransProc.ExitCode
+    Set-Content -LiteralPath $FixtureTransExitFile -Value $FixtureTransRc
+    if ($FixtureTransRc -ne 0) {
+        $Reason = "Fixture translation failed with exit $FixtureTransRc"
+        throw $Reason
+    }
+
     $FixtureCompileStdout = Join-Path $LogDir "fixture_compile.log"
     $FixtureCompileStderr = Join-Path $LogDir "fixture_compile_stderr.log"
     $FixtureGcc = "gcc.exe"
-    $FixtureGccArgs = @("-std=c99","-Wall","-Wextra","-O2",$FixtureSource,"-o",$FixtureExe)
+    $FixtureGccArgs = @("-std=c99","-Wall","-Wextra","-O2",$FixtureTransC,"-o",$FixtureExe)
     $FixtureCompileProc = Start-Process -FilePath $FixtureGcc -ArgumentList $FixtureGccArgs -Wait -PassThru -NoNewWindow -WorkingDirectory $RepoRoot -RedirectStandardOutput $FixtureCompileStdout -RedirectStandardError $FixtureCompileStderr
     $FixtureCompileRc = $FixtureCompileProc.ExitCode
     if ($FixtureCompileRc -ne 0) {
@@ -205,6 +219,13 @@ try {
     $CorruptDir = Join-Path $FixtureDir "corruptdir"
     New-Item -ItemType Directory -Path $CorruptDir -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $CorruptDir "bad.link") -Value "this is not a mixa-app-link-v1 entry"
+
+    # Tiny test files for T19 (entry_parse truncated-header guard).
+    $TinyDir = Join-Path $FixtureDir "tinyfiles"
+    New-Item -ItemType Directory -Path $TinyDir -Force | Out-Null
+    [IO.File]::WriteAllBytes((Join-Path $TinyDir "empty.link"), [byte[]]@())
+    [IO.File]::WriteAllBytes((Join-Path $TinyDir "onebyte.link"), [System.Text.Encoding]::ASCII.GetBytes("m"))
+    [IO.File]::WriteAllBytes((Join-Path $TinyDir "sixteen.link"), [System.Text.Encoding]::ASCII.GetBytes("mixa-app-link-v1"))
 
     $Stage = "execution"
     $TestStdout = Join-Path $LogDir "test_stdout.log"

@@ -1,0 +1,27 @@
+include: "<stdio.h>" "<string.h>"
+
+# Harmless fixture executable for app seam invocation tests.
+# Accepts -marker <path> and writes "invoked\n" to that file.
+# Only used by run_app_selftest.ps1 as a .lnk target; never launched by hand.
+
+fn: main (int: argc; @: @(char) argv) int
+    @: char marker
+    @: void fout
+    int: i
+    marker: 0
+    fout: 0
+    i: 1
+    while: i + 1 < argc
+        if: c.strcmp(argv[i], "-marker") = 0
+            marker: argv[i + 1]
+        i: i + 1
+    if: marker = 0
+        return: 2
+    if: c.strlen(marker) > 2000U
+        return: 3
+    fout: c.fopen(marker, "w")
+    if: fout = 0
+        return: 4
+    c.fprintf(fout, "invoked\n")
+    c.fclose(fout)
+return: 0

@@ -213,6 +213,13 @@ sub: mixa_app_append_char (@: char buf; size_t: cap; @: size_t off; char: ch)
     off[0]: off[0] + 1
 end: mixa_app_append_char
 
+sub: mixa_app_append_kv (@: char buf; size_t: cap; @: size_t off; const: @(char key); const: @(char val))
+    mixa_app_append_bytes(buf, cap, off, key, c.strlen(key))
+    mixa_app_append_char(buf, cap, off, (cast: (char) 61))
+    mixa_app_append_bytes(buf, cap, off, val, c.strlen(val))
+    mixa_app_append_char(buf, cap, off, (cast: (char) 10))
+end: mixa_app_append_kv
+
 # Reject values that would break the one-value-per-line entry format.
 fn: mixa_app_needs_escape (const: @(MixaAppEntry e)) int
     size_t: i
@@ -241,7 +248,7 @@ fn: mixa_app_entry_to_text (const: @(MixaAppEntry e); @@: char text_out) int
     size_t: need
     []: size_t off 1
     @: char buf
-    []: char line 128
+    []: char num_buf 32
     int: st
     if: e = 0 || text_out = 0
         return: MIXA_APP_ERR_ARG
@@ -257,24 +264,17 @@ fn: mixa_app_entry_to_text (const: @(MixaAppEntry e); @@: char text_out) int
     if: buf = 0
         return: MIXA_APP_ERR_NOMEM
     off[0]: 0
-    c.snprintf(line, 128U, "mixa-app-link-v1")
-    mixa_app_append_bytes(buf, need, off, line, c.strlen(line))
+    mixa_app_append_bytes(buf, need, off, "mixa-app-link-v1", 16U)
     mixa_app_append_char(buf, need, off, (cast: (char) 10))
-    c.snprintf(line, 128U, "kind=%d", e\kind)
-    mixa_app_append_bytes(buf, need, off, line, c.strlen(line))
+    c.snprintf(num_buf, 32U, "kind=%d", e\kind)
+    mixa_app_append_bytes(buf, need, off, num_buf, c.strlen(num_buf))
     mixa_app_append_char(buf, need, off, (cast: (char) 10))
-    c.snprintf(line, 128U, "label=%s", e\label)
-    mixa_app_append_bytes(buf, need, off, line, c.strlen(line))
+    mixa_app_append_kv(buf, need, off, "label", e\label)
+    c.snprintf(num_buf, 32U, "has_icon=%d", e\has_icon)
+    mixa_app_append_bytes(buf, need, off, num_buf, c.strlen(num_buf))
     mixa_app_append_char(buf, need, off, (cast: (char) 10))
-    c.snprintf(line, 128U, "has_icon=%d", e\has_icon)
-    mixa_app_append_bytes(buf, need, off, line, c.strlen(line))
-    mixa_app_append_char(buf, need, off, (cast: (char) 10))
-    c.snprintf(line, 128U, "icon=%s", e\icon_ref)
-    mixa_app_append_bytes(buf, need, off, line, c.strlen(line))
-    mixa_app_append_char(buf, need, off, (cast: (char) 10))
-    c.snprintf(line, 128U, "launch=%s", e\launch_ref)
-    mixa_app_append_bytes(buf, need, off, line, c.strlen(line))
-    mixa_app_append_char(buf, need, off, (cast: (char) 10))
+    mixa_app_append_kv(buf, need, off, "icon", e\icon_ref)
+    mixa_app_append_kv(buf, need, off, "launch", e\launch_ref)
     buf[off[0]]: 0
     text_out[0]: buf
 return: MIXA_APP_OK
@@ -423,6 +423,8 @@ fn: mixa_app_entry_parse (const: @(char data); const: @(char entry_path_utf8); @
     chdr[15]: 49
     chdr[16]: 10
     chdr[17]: 0
+    if: c.strlen(data) < 17U
+        return: MIXA_APP_ERR_IO
     if: c.memcmp(data, chdr, 17U) != 0
         return: MIXA_APP_ERR_IO
     if: mixa_app_line_get(data, "kind", kindbuf, 48U) = 0
@@ -682,7 +684,10 @@ fn: mixa_app_list_next (@: MixaAppList l; @: MixaAppEntry out) int
     while: 1
         if: l\first_done != 0
             if: c.FindNextFileW(l\hfind, l\ffd) = 0
-                return: MIXA_APP_END
+                if: c.GetLastError() = 18U
+                    return: MIXA_APP_END
+                ---
+                return: MIXA_APP_ERR_IO
             ---
         ---
         l\first_done: 1

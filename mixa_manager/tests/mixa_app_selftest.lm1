@@ -41,6 +41,13 @@ fn: main (int: argc; @: @(char) argv) int
     int: n
     int: count
     int: matched
+    []: char long_ref 1040
+    []: char e_long 1040
+    []: (@: char) tslot 1
+    []: char p_tiny_empty 1040
+    []: char p_tiny_one 1040
+    []: char p_tiny_short 1040
+    @: MixaAppEntry ep
     failures: 0
     checks: 0
     seen[0]: 0
@@ -507,6 +514,87 @@ fn: main (int: argc; @: @(char) argv) int
     if: st != MIXA_APP_ERR_ARG
         failures: failures + 1
         c.printf("app: remove(NULL) rc=%d\n", st)
+    ---
+
+    c.snprintf(e_long, 1040U, "%s\\e_long.link", base)
+    c.snprintf(p_tiny_empty, 1040U, "%s\\tinyfiles\\empty.link", base)
+    c.snprintf(p_tiny_one, 1040U, "%s\\tinyfiles\\onebyte.link", base)
+    c.snprintf(p_tiny_short, 1040U, "%s\\tinyfiles\\sixteen.link", base)
+
+    # T17: entry_to_text preserves launch_ref > 127 bytes without truncation.
+    ep: @ e1[0]
+    c.memset(ep, 0, c.sizeof(c.MixaAppEntry))
+    ep\kind: MIXA_APP_KIND_SHELL_LINK
+    c.snprintf(ep\label, MIXA_APP_LABEL_LEN, "longtest")
+    c.memset(long_ref, (cast: (int) 65), 139U)
+    long_ref[139]: 0
+    c.snprintf(ep\launch_ref, MIXA_APP_REF_LEN, "%s", long_ref)
+    tslot[0]: 0
+    st: mixa_app_entry_to_text(ep, @ tslot[0])
+    checks: checks + 1
+    if: st != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app: long_ref to_text rc=%d\n", st)
+    ---
+    if: tslot[0] != 0
+        st: mixa_app_write_text_utf8(e_long, tslot[0])
+        c.free(tslot[0])
+        tslot[0]: 0
+        if: st = MIXA_APP_OK
+            st: mixa_app_entry_read(e_long, @ e2[0])
+            checks: checks + 1
+            if: st != MIXA_APP_OK
+                failures: failures + 1
+                c.printf("app: long_ref entry_read rc=%d\n", st)
+            ---
+            if: st = MIXA_APP_OK
+                checks: checks + 1
+                if: c.strcmp(mixa_app_entry_launch_ref(@ e2[0]), long_ref) != 0
+                    failures: failures + 1
+                    c.printf("app: long_ref not preserved after round-trip\n")
+                ---
+            ---
+        ---
+    ---
+
+    # T18: list_next with a corrupted (invalid) handle returns ERR_IO, not END.
+    h[0]: 0
+    st: mixa_app_list_open(@ h[0], appdir)
+    if: st = MIXA_APP_OK
+        if: h[0] != 0
+            st: mixa_app_list_next(h[0], @ e1[0])
+            if: st = MIXA_APP_OK
+                h[0]\hfind: (cast: (@: void) (cast: (size_t) -1))
+                st: mixa_app_list_next(h[0], @ e1[0])
+                checks: checks + 1
+                if: st != MIXA_APP_ERR_IO
+                    failures: failures + 1
+                    c.printf("app: invalid handle list_next rc=%d want ERR_IO\n", st)
+                ---
+            ---
+            mixa_app_list_close(h[0])
+            h[0]: 0
+        ---
+    ---
+
+    # T19: entry_read on empty, 1-byte, and 16-byte (truncated header) inputs returns ERR_IO.
+    st: mixa_app_entry_read(p_tiny_empty, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_IO
+        failures: failures + 1
+        c.printf("app: empty entry_read rc=%d want ERR_IO\n", st)
+    ---
+    st: mixa_app_entry_read(p_tiny_one, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_IO
+        failures: failures + 1
+        c.printf("app: 1-byte entry_read rc=%d want ERR_IO\n", st)
+    ---
+    st: mixa_app_entry_read(p_tiny_short, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_IO
+        failures: failures + 1
+        c.printf("app: 16-byte entry_read rc=%d want ERR_IO\n", st)
     ---
 
     c.printf("app seam selftest: %d checks, %d failures\n", checks, failures)
