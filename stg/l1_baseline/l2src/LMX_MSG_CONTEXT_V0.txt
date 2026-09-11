@@ -218,3 +218,46 @@ Independent families still reclaim at runtime_delete.
 
 Windows measured first. POSIX primitives in EXEC/ingress were
 written earlier and are not claimed run here.
+
+100200 local lifecycle (invariants, not accepted yet)
+-----------------------------------------------------
+Who may move payload
+  Only the parent of a handoff-ready child, via adopt_failed
+  (child success==0) or transfer_adopted (explicit result to
+  that parent). Source must have native_users==0, running==0,
+  handoff_ready. Destination is the parent endpoint (still
+  DEAD/RELEASED-not). No remaining source aliases into moved
+  blocks. exec lock here is transitional D7, not the mailbox.
+
+Who may free
+  Parent dispose_child of a SUCCESSFUL handoff-ready child
+  after every direct child's arena is already adopted or
+  disposed (child.disposed). Failed payload must not be
+  freed here: adopt_failed first, or dispose_child INVALID.
+  complete() never frees. slot_free frees only what that
+  slot still owns.
+
+What stays rooted
+  Control LmxMsg until runtime_delete. Transferred adopted
+  blocks are rooted on the destination Message. Failure
+  history lives on the adopting parent until that parent is
+  itself adopted or successfully disposed.
+
+When children are disposed
+  Direct children only. A child is settled iff disposed==1
+  (successful dispose_child) or its failed payload was
+  adopt_failed (also sets disposed). Stopped/exited is not
+  settled.
+
+When native resources are settled
+  native_users==0 and running==0 and handoff_ready after the
+  last run_one leave. External OS resources are not yet
+  tracked; do not claim full handoff-safe.
+
+Exactly-once
+  adopt_failed / dispose_child no-op INVALID if already
+  disposed or empty failed payload already moved.
+
+Open (not this slice)
+  Zero-copy envelope; per-mailbox lock; no tab/find; no
+  global exec lock; registered range blocks; mixa pin.

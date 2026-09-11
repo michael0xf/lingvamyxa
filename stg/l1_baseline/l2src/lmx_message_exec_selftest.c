@@ -3410,12 +3410,7 @@ int main(void) {
                 return 1;
             }
             if (lmx_msg_dispose_child(rth, dummy, p) != LMX_MSG_INVALID) {
-                fprintf(stderr, "dispose while live child\n");
-                lmx_msg_runtime_delete(rth);
-                return 1;
-            }
-            if (lmx_msg_transfer_adopted(rth, p, dummy) != LMX_MSG_OK || lmx_msg_adopted_n(rth, dummy) != 3 || lmx_msg_adopted_n(rth, p) != 0) {
-                fprintf(stderr, "transfer result n dummy=%d p=%d\n", lmx_msg_adopted_n(rth, dummy), lmx_msg_adopted_n(rth, p));
+                fprintf(stderr, "dispose while live child unsettled\n");
                 lmx_msg_runtime_delete(rth);
                 return 1;
             }
@@ -3426,7 +3421,22 @@ int main(void) {
                 return 1;
             }
             (void)lmx_msg_run_child_turn(rth, live);
-            if (lmx_msg_dispose_child(rth, dummy, p) != LMX_MSG_OK || lmx_msg_adopted_n(rth, dummy) != 3) {
+            if (lmx_msg_dispose_child(rth, p, live) != LMX_MSG_INVALID || lmx_msg_find(rth, live)->init != live_init) {
+                fprintf(stderr, "failure dispose must not drop history\n");
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
+            if (lmx_msg_adopt_failed(rth, p, live) != LMX_MSG_OK) {
+                fprintf(stderr, "adopt live fail\n");
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
+            if (lmx_msg_transfer_adopted(rth, p, dummy) != LMX_MSG_OK || lmx_msg_adopted_n(rth, dummy) != 4 || lmx_msg_adopted_n(rth, p) != 0) {
+                fprintf(stderr, "transfer result n dummy=%d p=%d\n", lmx_msg_adopted_n(rth, dummy), lmx_msg_adopted_n(rth, p));
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
+            if (lmx_msg_dispose_child(rth, dummy, p) != LMX_MSG_OK || lmx_msg_adopted_n(rth, dummy) != 4) {
                 fprintf(stderr, "dispose after settle dummy=%d\n", lmx_msg_adopted_n(rth, dummy));
                 lmx_msg_runtime_delete(rth);
                 return 1;
@@ -3440,7 +3450,7 @@ int main(void) {
             lmx_msg_runtime_delete(rth);
             return 1;
         }
-        fprintf(stderr, "handoff nest users G-C-P n=3 complete-keeps transfer-survives dispose\n");
+        fprintf(stderr, "handoff nest users G-C-P n=3 complete-keeps fail-dispose-reject transfer-survives\n");
         lmx_msg_runtime_delete(rth);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");

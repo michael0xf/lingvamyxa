@@ -1980,7 +1980,8 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
     p = lmx_msg_find(rt, parent);
     c = lmx_msg_find(rt, child);
     if (p == 0 || c == 0 || c->parent_msg != p || c->native_users != 0
-        || lmx_msg_success_load(c) != 0 || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0) {
+        || lmx_msg_success_load(c) != 0 || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0
+        || c->disposed != 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
@@ -2013,6 +2014,7 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
         p->adopted = c->adopted;
         c->adopted = 0;
     }
+    c->disposed = 1;
     lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
 }
@@ -2073,7 +2075,10 @@ int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to) 
     lmx_msg_exec_lock(rt);
     src = lmx_msg_find(rt, from);
     dst = lmx_msg_find(rt, to);
-    if (src == 0 || dst == 0 || src == dst || src->adopted == 0) {
+    if (src == 0 || dst == 0 || src == dst || src->adopted == 0
+        || src->parent_msg != dst || src->native_users != 0
+        || lmx_msg_running_load(src) != 0 || src->handoff_ready == 0
+        || dst->state == LMX_MSG_STATE_DEAD || dst->state == LMX_MSG_STATE_RELEASED) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
@@ -2096,13 +2101,17 @@ int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child
     p = lmx_msg_find(rt, parent);
     c = lmx_msg_find(rt, child);
     if (p == 0 || c == 0 || c->parent_msg != p || c->native_users != 0
-        || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0) {
+        || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0 || c->disposed != 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    if (lmx_msg_success_load(c) == 0 && (c->init != 0 || c->adopted != 0)) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
     ch = c->first_child;
     while (ch != 0) {
-        if (ch->native_users != 0 || lmx_msg_running_load(ch) != 0 || ch->handoff_ready == 0) {
+        if (ch->disposed == 0) {
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_INVALID;
         }
@@ -2114,6 +2123,7 @@ int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child
         c->init_n = 0U;
     }
     drop_adopted_locked(c);
+    c->disposed = 1;
     lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
 }

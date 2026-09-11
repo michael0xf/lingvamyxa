@@ -135,6 +135,7 @@ typedef struct LmxMsg {
     int handoff_ready;
     int native_users;
     unsigned orphan_until;
+    int disposed;
     struct LmxAdopted *adopted;
 } LmxMsg;
 
