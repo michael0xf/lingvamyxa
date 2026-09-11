@@ -12360,10 +12360,11 @@ like any other idle closer.
 Parent abrupt death does not run parent cleanup and does not
 instantaneously mark executing descendants STOPPED. Children
 converge by drive/poll/self-close, recursively, so no permanently
-orphaned running descendants remain. A child stuck before a turn
-boundary cannot poll or honor stop; that is the exceptional
-supervisor/host `fail()` path, not the normal loop-exit model, and
-must not be reported as a completed safe reclaim.
+orphaned running descendants remain when their execution can progress.
+A child stuck before a turn boundary cannot perform its ordinary liveness
+poll or end_turn close. The emergency cancellation polls below can abort
+instrumented execution before that boundary; a native hang that cannot reach
+such a poll remains exceptional and is not a completed safe reclaim.
 
 Automatic parent-liveness polling has one direction: child to
 parent. The child's end_turn is the check/send opportunity; a host
@@ -12377,8 +12378,8 @@ interpretation and execution. Do not add a second mandatory
 automatic parent-to-child liveness probe at the parent's end_turn.
 If the parent is absent or unresponsive past the configured policy,
 the child requests its own orderly close. The parent may still
-explicitly stop a child, honored at that child's end_turn. A stuck
-child is exceptional `fail()`.
+explicitly stop a child, honored at that child's end_turn. Emergency cancellation
+is separate from this normal stop protocol.
 
 Observation and timeout handling are symmetric, even though the default probe
 originates at the child. A parent may track expected communication from a direct
@@ -12387,6 +12388,41 @@ prolonged silence under its chosen timeout policy. This needs no second automati
 probe stream and no global monitor. Both sides keep their own expectation and
 deadline state. Timeout means lack of the expected communication, not proof of
 death or successful completion; cooperative close remains an end_turn action.
+
+Emergency cancellation polls (native execution profile)
+------------------------------------------------------
+Each executing Message has one control flag, initially running=1. An emergency
+cancellation request changes it to 0 for that incarnation; it does not reset the
+same flag to revive cancelled execution. This is not successful completion and
+does not require the executing turn to reach its ordinary end_turn.
+
+Generated code checks the flag on method entry before loading used own fields,
+on loop backedges, and on method exit. On observing 0 it aborts to the execution
+root of that L3 Thread, rather than terminating an OS thread that may also run
+the parent or siblings. Polls must be placed where this escape leaves no held
+mailbox/native lock or unfinished protected operation. The aborted native
+activations are discarded, not captured for resumption.
+
+The fast path is an ordinary flag load and test. A backend may use relaxed atomic
+load/store for uint_fast8_t ONLY when its target/compiler/options produce the
+same executable instructions as ordinary volatile load/store of that type; no
+additional lock, read-modify-write, fence or helper call is permitted for this
+flag access. Verify this equivalence for the selected target, not by assumption.
+If it fails, report the unsupported fast path instead of silently substituting
+a more expensive operation or claiming a portable volatile threading guarantee.
+No immediate observation or fixed cancellation latency is promised.
+
+The execution root may clean up and free its own arena after discarding its
+activations and settling native operations that still use that memory. It does
+not wait for an acknowledgement from itself. Independently executing children
+must reach their own exit before their arenas are reclaimed. A foreign observer
+must not infer that exit from writing running=0. The flag/control storage must
+outlive possible observers/writers even when the Message's arena is freed.
+
+A sleeping executor needs an existing wake or bounded wait that reaches the
+check. Polling does not interrupt a stuck uninstrumented native call. It also
+does not let a parent timer execute while that same physical thread is trapped
+inside its child's call. Arbitrary OS-thread termination is not this mechanism.
 
 Completion is a separate ordinary Message from a liveness query.
 When the child finishes its assigned operation, it sends completed
@@ -12401,6 +12437,11 @@ is not completion and does not end the parent's result tracking.
 Failure and cancellation remain distinct outcomes, not fabricated
 success. The parent tracks results; it does not automatically poll
 its children and there is no parent-polls-until-completed protocol.
+Receiving completed settles the correlated assignment's result tracking; it is
+not by itself proof that the child's native activations and arena are gone.
+Removing result tracking and retiring the child's delivery/lifecycle control
+are distinct operations. A result notification alone does not authorize the
+parent to free memory still used by the child.
 
 Those protocol Messages are ordinary LMX text, not a new parser
 intrinsic. The number/bytes prototype implements child-side parent
