@@ -1,0 +1,271 @@
+What the Lingvamyxa spec requires of Mixa Manager
+==================================================
+Read 2026-09-11 against Lingvamyxa_spec.txt at 82a1901 (15320 lines).
+
+This is a DIGEST FOR THIS APPLICATION, not a summary of the language. It records
+what the Message model obliges us to do and what it forbids, with line numbers,
+so the app does not have to re-derive it. The spec is the authority; where this
+file and the spec disagree, the spec wins and this file is stale.
+
+SCOPE OF THE READING, stated so nobody over-trusts it. Read closely: 19.28.R2.1
+through R2.6 (11157-11400), 19.29.6 Running Message (12106), 19.29.7 Boundary
+(12209), 19.29.7.1 the implementable slice (12237-12623) in full, 19.29.7.2
+(12623), 19.29.8 handoff through today's diff, and 19.32.10-21 crypto by
+heading. NOT read: the language core 0-19.27, 19.28.10 World Wide Mix, and
+sections 20 and 21 beyond what the Message text cites.
+
+
+1. THE ONE THING THAT BINDS US MOST
+
+19.28.R2.2, near line 11225:
+
+    "Throughout the language core and complete standard distribution, low-level
+    synchronization is used only inside the Message mechanism... Other
+    components, including Mix, builders and bundled applications, coordinate
+    through Messages, not their own locks, atomics, shared mutable management
+    tables or private worker schedulers."
+
+mixa_manager is a bundled application. So we get no mutex, no atomic, no shared
+management table, no private worker pool of our own - ever, not merely for now.
+Everything concurrent we want must be Messages.
+
+Reinforced at 19.28.R2.6: "A C worker pool owning a shared process-wide Message
+registry is forbidden", and in 19.29.7.1 the exec-host prototype
+(LMX_MSG_EXEC_HOST_V0.txt) is called "evidence, not the accepted architecture"
+and "must not be promoted to the application as-is."
+
+
+2. THE MESSAGE API IS NOW REAL
+
+It was not callable when PROCESS_SEAM was written. It is now:
+
+    stg/l1_baseline/l2src/lmx_message.h        245 lines
+    stg/l1_baseline/l2src/lmx_message.lm1      implementation
+    lmx_message_selftest.lm1                   selftest
+
+    lmx_msg_runtime_new / _delete
+    lmx_msg_create(rt, parent, create_id, init, n, out)
+    lmx_msg_send(rt, from, to, env)
+    lmx_msg_stop(rt, from, to)
+    lmx_msg_end_turn(rt, who, success)
+    lmx_msg_pump(rt) / _recv(rt, who, out) / _env_release
+    lmx_msg_fail / _state / _inbox_n / _init_copy
+    lmx_msg_set_now / _poll / _drive
+    lmx_msg_path_n / _path_seg / _child_n / _child_at
+    lmx_msg_runtime_shutdown
+    lmx_msg_host_post / _host_drain / _host_wait     host ingress V0
+    lmx_msg_exec_bind                                exec prototype - avoid
+
+The spec names us directly at 19.29.7.1: "mixa must not rebuild default gen2."
+
+Two of these are prototypes the spec disowns as architecture. lmx_msg_drive is
+"historical prototype only", a single host loop that must be replaced by
+per-Message lifecycle mechanisms, and lmx_msg_exec_bind belongs to the rejected
+worker-pool sketch. Use create/send/stop/end_turn/pump/recv.
+
+
+3. THE SHAPE OF A TURN
+
+19.28.R2.3 (11302) and 19.29.6 (12106):
+
+    one turn dequeues AT MOST ONE admitted input from the FIFO
+    -> policy combination -> execute an admitted callable
+    -> stage results and outgoing Messages in FIFO order
+    -> common cleanup / publication / scheduling boundary
+
+    no more than one turn of a Message executes at a time
+    serial turns make arena mutation safe with no source-visible lock
+    the C stack is the sole implicit activation history and is NEVER copied
+      into the Message graph automatically
+
+21.10 yield is an activation dirty-only checkpoint. 19.29.7.1: "Staging then
+yield in one turn does not commit." Publication happens at end_turn.
+
+A failed turn discards its staged outbox and does NOT undo external effects
+already performed.
+
+
+4. CREATE, SEND, STOP - the contract we will actually call
+
+create (19.29.7.1, from 12280)
+    reserves a child identity and a DISTINCT INACTIVE ARENA during the parent's
+      turn, and copies initialData into it
+    Mix path = parent path with one integer APPENDED from the parent's child
+      counter. Concatenation, not arithmetic: 34.3 gives 34.3.1 then 34.3.2,
+      and that child's first child is 34.3.1.1. First allocated child is 1.
+    retry of the same (parent, create_id) returns the SAME child and path and
+      consumes no counter value
+    an ABORTED reservation is not reused - a later retry of that create_id gets
+      a new slot and a NEW path segment
+    the child DOES NOT RUN before the creator's successful end-turn publication
+    a failed parent turn releases uncommitted children
+    LmxMsgAddr, the mailbox slot, is NOT the Mix path
+
+send (from 12330)
+    stages a transport-owned COPY of the envelope. No raw pointer, no caller
+      closure, NO UI OBJECT crosses.
+    staging status means only that the sending turn accepted it for its outbox.
+      It is not admission and it is not execution.
+    dedup key is (recipient, sender, id), so two senders' local id=1 do not
+      collide
+    sender staging is invisible to the receiver
+
+stop (from 12363)
+    KIND_STOP is internal close control, NOT KIND_CANCELLED outcome data
+    admission sets a CLOSING FLAG. It does not enqueue handler-visible work,
+      does not mark STOPPED, does not free an executing arena.
+    the target finishes its current turn, then at end_turn exits its loop and
+      requests the same orderly close of its children
+    ordinary end_turn WITHOUT a close request does not terminate the Message
+
+envelope fields: id, correlation (19.31.4 - the result or failure is an ordinary
+Message whose correlation equals the request id), replyTo.
+
+
+5. THE RULE THAT WILL BITE A FILE MANAGER
+
+19.29.7.1, near 12376:
+
+    "Jobs meant to outlive a UI are created under an explicitly longer-lived
+    controller; the UI is only a reply target. A worker may send KIND_CANCELLED
+    to a UI without shutting the UI down. Explicit stop(worker) closes that
+    worker only."
+
+So a long copy is NOT a child of the window. It is a child of something that
+outlives the window, and the window is its replyTo. Closing the window must not
+kill the copy, and cancelling the copy must not kill the window.
+
+Also at 12500: "Deliver(Message, target) completes when that delivery finishes;
+CopyFile(source, target) completes when that file copy finishes. Enqueueing or
+staging a copy request is not completion of CopyFile." A progress bar that
+advances on staging is reporting something that has not happened.
+
+Per-item progress and failure are KIND_PROGRESS / KIND_ITEM payload data;
+continue-versus-stop is APPLICATION POLICY carried in the request, not a core
+intrinsic. That is ours to decide and to write down.
+
+
+6. CONTROL FLAGS - the supervision mechanism, and what it does not prove
+
+19.29.7.1, from 12525:
+
+    every Message starts running=1, success=0, including one with no executing
+      thread
+    uint_fast8_t, belonging to the MESSAGE, not to its arena
+    running means PERMISSION TO CONTINUE, not that an OS thread exists. Zero
+      requests closure for that incarnation and is never reset to revive it.
+    only ACTUAL COMPLETION of the assigned operation sets success=1; on finish
+      the child sets success=1 and THEN running=0
+    the parent's scheduler READS its direct children's flags on each of its own
+      turns - no Message needed for that - and may set a child's running=0 on an
+      emergency deadline without waiting or freeing the child's arena
+    generated code checks the flag on method entry before loading used own
+      fields, on loop backedges, and on method exit. On 0 it aborts to the
+      execution root of that L3 Thread, never terminating an OS thread that may
+      also run the parent or siblings.
+
+What the flags DO NOT mean, spelled out in the spec because it is the obvious
+wrong reading:
+
+    success=0 means success has NOT BEEN OBSERVED, not proof of failure, even
+      when running=0
+    neither running=0 nor running=0 with success=0 proves quiescence or final
+      failure
+    observers must not rely on an indivisible snapshot of both flags, nor infer
+      arena reclamation from either
+    a liveness response (alive) is NOT completion
+    all children reporting DELIVERY success is not an application-result barrier
+
+Fast path: an ordinary load and test. Relaxed atomics are permitted ONLY where
+they compile to the same instructions as a volatile load or store of that type;
+no lock, no read-modify-write, no fence, no helper call. Verify per target, and
+if it does not hold, REPORT the unsupported fast path rather than substituting
+something more expensive.
+
+
+7. LIVENESS - who watches whom
+
+Automatic polling has ONE direction: CHILD TO PARENT (12466). The child's
+end_turn is the check and send opportunity. If the parent is absent, DEAD,
+STOPPED, RELEASED or sustained-nonresponsive, the child requests its OWN orderly
+close. A live idle parent keeps children alive.
+
+Do NOT add a second mandatory automatic parent-to-child probe. But observation
+is SYMMETRIC in effect: a parent may track expected communication from a direct
+child and request its close after prolonged silence under its own policy, and
+the parent reads the child's control flags directly during its own turns.
+
+Timeout means LACK OF EXPECTED COMMUNICATION. Not proof of death, not proof of
+completion.
+
+Normal parent close already asks children to close at the parent's end_turn; the
+poll is only the fallback for a parent that died abruptly.
+
+Cadence and timeout are host settings - explicitly "not language constants and
+not the mail-watcher interval."
+
+
+8. ARENAS, AND THE HANDOFF RULE ADDED TODAY
+
+Every Message owns exactly ONE logical arena. Ordinary local delivery TRANSFERS
+OWNERSHIP WITHOUT CLONING; the delivered storage must be independently
+transferable, and the sender cannot keep using it through mutable aliases.
+Native addresses of transferred blocks stay stable. Copy and serialization
+require an explicit operation or codec contract.
+
+19.29.8, changed 2026-09-11:
+
+    after final SUCCESSFUL completion, reclaim the Message's own execution
+      history by default; keeping it requires explicit program data
+    after final NON-SUCCESSFUL completion, TRANSFER its logical arena to its
+      direct parent's lifecycle endpoint WITHOUT COPYING. The parent adopts the
+      blocks and retains the failed root.
+    each closing Message settles only its DIRECT children. In P -> C -> G with C
+      and G failed: G's blocks join C, then C's blocks join P. No ancestor scan
+      of grandchildren, no global crash manager, no graph clone.
+    required external-resource cleanup precedes handoff; retaining a failed
+      graph does not retain live file, socket or device handles
+
+So failure evidence travels UP and survives in the parent, while success is
+discarded. Consistent with worker death, where the KIND_DEAD diagnostic "lives
+in the survivor, not in the dying arena."
+
+
+9. WHAT THE OWNER ASKED FOR NEXT (PORT_OF_CLEARSHELL, 2026-09-11)
+
+After the bounded calculator syntax module: the file manager's ORIGINAL FILE
+OPERATIONS and ALL BUTTON AND PANEL BEHAVIOUR. Preserve ClearShell algorithms
+and ordering where no app delta overrides them. INVENTORY AND REUSE existing
+modules rather than overwrite them. Test each bounded operation, then wire its
+action.
+
+And one unusual requirement worth not losing:
+
+    an action whose function is not yet implemented OPENS A NESTED INSTANCE OF
+    THE SAME REDUCED APPLICATION INTERFACE - the text for "no such function" and
+    one dismiss button. Appearance may be minimal; NESTING AND SELF-REPRODUCTION
+    MUST WORK. Not an OS dialog, not a popup framework, not a console-only
+    warning, not a silent no-op.
+
+The application is its own dialog. That is an architectural requirement wearing
+the clothes of a placeholder, and building it the easy way once makes the hard
+way impossible later.
+
+
+10. ALSO NEW, FOR AWARENESS ONLY
+
+19.32.10-21 defines a Crypto Provider contract. L3 owns intent, key
+relationships, policy and algorithm identity; the provider owns primitives,
+secret representation and target storage. KeyRef is an opaque handle, never a
+byte array by definition, and generation must not publish private bytes into the
+Lmx graph. Targets: C99 with libsodium as one provider - also serving MIR, Wasm
+linear memory and RISC-V through the L2 to L1 to C99 route - plus direct L3 JVM,
+Wasm-GC, Lua and .NET CIL binding the same contract to JCA, a WebCrypto or host
+capability, a Lua host module and System.Security.Cryptography. Detail in
+include_languages/Lingvamyxa_Crypto_Provider_Seven_Targets_Implementation_EN.md.
+Nothing here touches mixa_manager yet.
+
+A managed L3 backend may MOVE objects while preserving reference identity; the
+native profile must not - live nodes and service-pool entries stay at stable
+addresses, and compaction by relocation is forbidden rather than merely
+deferred. Our backend is native.
