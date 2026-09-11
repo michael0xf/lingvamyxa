@@ -147,6 +147,42 @@ fn: main () int
     if: lmx_msg_inbox_n(rt, child) != 0
         c.printf("dead child admitted late send\n")
         fail: fail + 1
+    unsigned: dropc 0U
+    unsigned: drop_addr 0U
+    st: lmx_msg_create(rt, parent, 90U, payload, 4U, @ dropc)
+    drop_addr: dropc
+    env\id: 90U
+    env\kind: c.LMX_MSG_KIND_BYTES
+    env\bytes: payload
+    env\n: 4U
+    env\reply_to: parent
+    st: lmx_msg_send(rt, parent, dropc, env)
+    if: st != c.LMX_MSG_STAGED
+        c.printf("drop-race send not staged\n")
+        fail: fail + 1
+    st: lmx_msg_fail(rt, dropc)
+    st: lmx_msg_end_turn(rt, parent, 1)
+    st: lmx_msg_pump(rt)
+    if: lmx_msg_inbox_n(rt, dropc) != 0
+        c.printf("staged copy admitted after dest death\n")
+        fail: fail + 1
+    st: lmx_msg_recv(rt, parent, got)
+    if: st != c.LMX_MSG_OK || got\kind != c.LMX_MSG_KIND_DEAD
+        c.printf("drop-race parent DEAD notice\n")
+        fail: fail + 1
+    lmx_msg_env_release(got)
+    st: lmx_msg_recv(rt, parent, got)
+    if: st != c.LMX_MSG_EMPTY
+        c.printf("dropped stage bounced to reply_to\n")
+        fail: fail + 1
+    if: lmx_msg_state(rt, drop_addr) != c.LMX_MSG_STATE_DEAD && lmx_msg_state(rt, drop_addr) != c.LMX_MSG_STATE_RELEASED
+        c.printf("closed handle lost control state\n")
+        fail: fail + 1
+    unsigned: later 0U
+    st: lmx_msg_create(rt, parent, 41U, payload, 4U, @ later)
+    if: later = 0U || later = drop_addr
+        c.printf("new create reused closed handle\n")
+        fail: fail + 1
     child2: 0U
     st: lmx_msg_create(rt, parent, 8U, payload, 4U, @ child2)
     env\id: 9U

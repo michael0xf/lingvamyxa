@@ -1714,7 +1714,9 @@ Direct-child list
     not share lists. tab[] / integer find remain deviation D1 until
     send is capability-only.
 
-ASK A1  stale capability vs join barrier (generation/epoch).
+ASK A1  DECIDED 034300 / 19.29.7.1: staged copies drop at admit if
+    dest is gone; no reply_to bounce. Closed handle is the still-
+    allocated DEAD/STOPPED/RELEASED object; addr is not reused.
 ASK A2  OS wait-thread per context vs Scheduler Message for
     ANY-affinity. Not answered by importing a C pool.
 
