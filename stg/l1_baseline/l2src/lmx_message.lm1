@@ -1754,6 +1754,31 @@ fn: lmx_msg_live_check (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; uns
             return: -1
         ---
     ---
+    m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        if: m\live_query_id != 0U && threshold != 0U && now > m\live_query_at && (now - m\live_query_at) > threshold
+            m\closing: 1
+            n: n + 1
+            c.lmx_msg_exec_ready(rt, who)
+        ---
+        ch: m\first_child
+        while: ch != 0
+            wake: 0U
+            nxt: ch\next_sibling
+            if: ch\tracked != 0 && ch\committed != 0 && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_RELEASED
+                if: threshold != 0U && now > ch\child_heard_at && (now - ch\child_heard_at) > threshold
+                    ch\closing: 1
+                    n: n + 1
+                    wake: ch\addr
+                ---
+            ---
+            if: wake != 0U
+                c.lmx_msg_exec_ready(rt, wake)
+            ---
+            ch: nxt
+        ---
+        return: n
+    ---
     c.lmx_msg_exec_lock(rt)
     m: lmx_msg_self_or_find(rt, who)
     if: m = 0
