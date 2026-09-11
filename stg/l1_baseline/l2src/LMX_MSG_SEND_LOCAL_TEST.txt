@@ -3,7 +3,7 @@ L1 Message local-send regression
 
 run_msg_send_local.ps1 builds tests/lmx_msg_send_local_selftest.lm1 with pinned
 stable gen2 against a private git archive of core checkpoint
-57b590f4f30636fc49ddc0f44afdd2a2ebcab186. Optional -CoreCommit selects another
+5c8929ac0dd5426e3e64f7b9be256870344efe49. Optional -CoreCommit selects another
 explicitly agreed compatible revision, never the changing working tree. Twenty-one
 core source files are archived; all build outputs/logs/hashes stay in the unique
 build/codex/msg_send_local run directory. No shared gate or app pin changes.
@@ -70,13 +70,32 @@ parent-turn consumer test; the transitional bound/EXEC ring remains and is
 not exercised concurrently with that parent's queue. It is not proof of
 final global-lock/ring removal or stable-promotion readiness.
 
-Current57b590f pin additionally archives/translates/links lmx_msg_sched_ready.
+The57b590f checkpoint additionally archives/translates/links lmx_msg_sched_ready.
 The native parent's three locked wrappers now call these L1 list bodies.
 The same145-check O2 public API fixture passes after integration, including
 post-bind wakeup, FIFO and rescheduling. Evidence:
 build/codex/msg_send_local/20260911_172704_636_dcce1503/evidence.json.
 Native Exec acceptance was performed by Grok and reviewed from saved hashes;
 it was not duplicated here. No standalone-helper, O0 or full gate rerun.
+
+Current5c8929a: both pre-bind and post-bind delivery now exercise parent-owned
+scheduling. send_prebind_case admits two byte envelopes before a handler is
+bound, binds the child AND parent, then runs the parent's real held turn and
+sched_step three times: two FIFO deliveries, then EMPTY. The extra explicit
+parent binding assertion makes146 checks. The child has no native worker or
+UI affinity. No manual exec_ready call or direct child callback substitutes.
+The old UI-ring case is preserved as send_prebind_ui_legacy_case source,
+but main does not call it. Its earlier136-check results above are historical.
+
+Targeted O2 PASS146checks,0failures,owned_frees=1:
+build/codex/msg_send_local/20260911_173957_371_803b7d69/evidence.json.
+This verifies parent-only delivery after dual notification is removed for
+unmapped non-UI children without an EXEC worker. UI/native mapped and legacy
+pool dispatch still use the prototype EXEC ring; those are NOT claimed gone.
+Grok verified default Exec on5c8929a with legacy_ready_oom=SKIPPED; that run
+was reviewed, not duplicated. The legacy native ready-ring OOM scenario keeps
+its own pinned opt-in runner (LMX_MSG_EXEC_OOM_TEST.txt). Family/helper/full
+gate and the translator itself were not rebuilt for this fixture update.
 
 Targeted follow-up for2b567e8 (unbound exec_ready exclusion): O0,136checks,
 zero failures. Reused the already compiled private binary; no translator

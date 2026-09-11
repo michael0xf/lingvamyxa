@@ -123,7 +123,9 @@ fn: send_prebind_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
     c.free(got)
     return: lmx_msg_end_turn(rt, who, 1)
 
-sub: send_prebind_case (@: LmxMsgRuntime rt; unsigned: from; unsigned: to)
+# Legacy UI-ring consumer retained as source, excluded from the current
+# parent-owned scheduler fixture in main.
+sub: send_prebind_ui_legacy_case (@: LmxMsgRuntime rt; unsigned: from; unsigned: to)
     @: LmxMsgEnv env
     @: LmxMsg dst
     []: unsigned totals 2
@@ -148,6 +150,35 @@ sub: send_prebind_case (@: LmxMsgRuntime rt; unsigned: from; unsigned: to)
     send_check(lmx_msg_exec_ui_step(rt) = LMX_MSG_OK, "second prebind work scheduled without manual ready")
     send_check(totals[0] = 2U && totals[1] = 43U, "prebind work executed twice in FIFO")
     send_check(lmx_msg_inbox_n(rt, to) = 0 && lmx_msg_exec_ui_step(rt) = LMX_MSG_EMPTY && totals[0] = 2U, "no duplicate or stranded prebind work")
+    c.free(env)
+end: send_prebind_ui_legacy_case
+
+sub: send_prebind_case (@: LmxMsgRuntime rt; unsigned: from; unsigned: to)
+    @: LmxMsgEnv env
+    @: LmxMsg dst
+    []: unsigned totals 2
+    uchar: byte 21
+    totals[0]: 0U
+    totals[1]: 0U
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    send_check(env != 0, "allocate prebind sender envelope")
+    env\id: 41U
+    env\kind: LMX_MSG_KIND_BYTES
+    env\bytes: @ byte
+    env\n: 1U
+    send_check(lmx_msg_send(rt, from, to, env) = LMX_MSG_STAGED, "first mail before bind")
+    byte: 22
+    env\id: 42U
+    send_check(lmx_msg_send(rt, from, to, env) = LMX_MSG_STAGED, "second mail before bind")
+    send_check(lmx_msg_end_turn(rt, from, 1) = LMX_MSG_OK, "commit prebind mail")
+    dst: lmx_msg_find(rt, to)
+    send_check(dst != 0 && dst\turn = 0 && lmx_msg_inbox_n(rt, to) = 2 && totals[0] = 0U, "mail exists before any binding or execution")
+    send_check(lmx_msg_exec_bind(rt, to, send_prebind_turn, totals, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind already-runnable child without mapping")
+    send_check(lmx_msg_exec_bind(rt, from, send_scheduling_parent_turn, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind prebind scheduling parent")
+    send_check(lmx_msg_run_child_turn(rt, from) = LMX_MSG_OK && parent_step_status = LMX_MSG_OK, "parent schedules first prebind envelope without manual ready")
+    send_check(lmx_msg_run_child_turn(rt, from) = LMX_MSG_OK && parent_step_status = LMX_MSG_OK, "parent reschedules second prebind envelope")
+    send_check(totals[0] = 2U && totals[1] = 43U, "prebind work executed twice in FIFO")
+    send_check(lmx_msg_inbox_n(rt, to) = 0 && lmx_msg_run_child_turn(rt, from) = LMX_MSG_OK && parent_step_status = LMX_MSG_EMPTY && totals[0] = 2U, "no duplicate or stranded prebind work")
     c.free(env)
 end: send_prebind_case
 

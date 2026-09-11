@@ -71,3 +71,11 @@ is intentionally left to Grok with his actual dual-notify removal, avoiding
 an identical pre-change native rebuild. This legacy result does NOT prove
 the new scheduler's OOM behavior, native concurrency or stable readiness.
 No full-suite/native-platform generalization or stable promotion is claimed.
+
+Integration follow-up: Grok's5c8929a routing update passed the default Exec
+run with legacy_ready_oom=SKIPPED. Saved source hashes and exit0 were reviewed
+without rebuilding it here (exec.c f81e78fb09657524, Message dddb7c8a6b5d8062).
+UI-rebind and the remaining native cases were kept; the initial UI-rebind
+failure was fixed in production routing, not reclassified as a legacy test.
+The zero OOM counters in the default summary mean SKIPPED, not a successful
+execution of this legacy capacity fixture.

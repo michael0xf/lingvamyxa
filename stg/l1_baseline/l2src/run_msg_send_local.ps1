@@ -1,7 +1,7 @@
 # Public-API L1 integration test against an immutable private source snapshot.
 # It never compiles Grok's active working files or writes shared build outputs.
 param(
-    [string]$CoreCommit = '57b590f4f30636fc49ddc0f44afdd2a2ebcab186',
+    [string]$CoreCommit = '5c8929ac0dd5426e3e64f7b9be256870344efe49',
     [ValidateNotNullOrEmpty()][ValidateSet('O0', 'O2')][string[]]$Optimization = @('O2')
 )
 $ErrorActionPreference = 'Stop'
@@ -84,7 +84,7 @@ try {
         Invoke-SendStage "compile_$level" $gcc ($flags + @("-$level", $testObj, $messageC) + $modules + $native + @('-Wl,--wrap=free', '-o', $exe))
         Invoke-SendStage "run_$level" $exe @()
         $result = Get-Content -LiteralPath (Join-Path $run "run_$level.stdout.txt") -Raw
-        if ($result -notmatch '(?m)^send local checks=145 failures=0 owned_frees=1\s*$') { throw "Unexpected test result: $result" }
+        if ($result -notmatch '(?m)^send local checks=146 failures=0 owned_frees=1\s*$') { throw "Unexpected test result: $result" }
         Write-Output "$level $($result.Trim())"
     }
     foreach ($path in $coreHashes.Keys) {
