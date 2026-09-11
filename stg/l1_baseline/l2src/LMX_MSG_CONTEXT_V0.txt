@@ -114,28 +114,45 @@ Current deviations (EXEC / mailbox prototype)
 Do not claim the previous global-table runtime complied.
 
   D1. LmxMsgRuntime.tab[] + lmx_msg_find by integer addr.
-  D2. request_children_close / end_turn / poll(0) scan tab.
-  D3. EXEC ready queue + nworkers pool + bind table as C
-      scheduler (LMX_MSG_EXEC_HOST_V0).
+      Bind stores LmxMsg* for take_this; send/recv/create still
+      find. Capability send is not the only path.
+  D2. request_children_close walks the direct-child list.
+      end_turn / poll(0) may still scan tab.
+  D3. EXEC ready queue + nworkers pool (`lmx_msg_exec_start`)
+      remains prototype evidence (LMX_MSG_EXEC_HOST_V0). Not
+      the replacement path.
   D4. LmxMsgAddr is a process-wide unsigned, not a capability.
   D5. host_drain dest lookup on owner (ingress V0 still copies
       under host mutex; dest table walk is later).
   D6. 19.29.6 / 19.28.R2.2 text that permitted worker-pool
       actors and migration between host workers.
+  D7. Shared exec mutex around admission/bind/ready. Not a
+      per-mailbox lock.
+  D8. Independent child-arena reclaim inside one family is
+      prototype-only: RELEASED frees copy slices; the LmxMsg
+      object stays until runtime_delete. Not proven across
+      family lifetimes.
 
 This slice (preparation, not a facade)
 --------------------------------------
 Direct-child list on LmxMsg; create links; close/rollback walk
-the list. Tests: independent parent families; list does not
-contain another family's children. tab/find remain D1 until
-capability send is the only path. EXEC is not promoted.
+the list. Per-context OS wait-thread on ANY bind
+(`lmx_msg_exec_start_contexts`). Bind after start launches a
+thread for a new ANY child. Rebind ANY->UI is owner-only and
+retires that wait-thread. Restart after stop is valid
+(ResetEvent on the manual-reset stop event). Partial
+thread-start failure calls stop; retry start_contexts is the
+recovery. Ready wake is per-addr for the context path.
+tab/find remain D1 until capability send is the only path.
+EXEC pool is not promoted.
 
 Not yet
 -------
 Capability LmxMsgAddr; removal of tab; Scheduler Message;
 per-mailbox native lock replacing exec mutex for send/recv;
-mixa_manager pin. `lmx_msg_exec_start` (pool) remains prototype
-evidence; replacement entry is `lmx_msg_exec_start_contexts`.
+independent child arena reclaim (D8); mixa_manager pin.
+`lmx_msg_exec_start` (pool) remains prototype evidence;
+replacement entry is `lmx_msg_exec_start_contexts`.
 Old ingress pin LMX_MSG_HOST_INGRESS_V0 stays until consumers
 switch. Do not overwrite a pin under a build.
 
@@ -159,16 +176,21 @@ A1. DECIDED 034300 / 19.29.7.1: drop staged copies if dest
     disappears before admission; no reply_to bounce. Closed
     handle = live object in DEAD/STOPPED/RELEASED until
     runtime_delete; addr not reused.
-A2. DECIDED 035400: ANY-affinity uses one OS wait-thread per
-    bound context (`lmx_msg_exec_start_contexts`). UI-affine stays
-    on the owner thread (`exec_ui_step`). Not a worker pool. A
-    Scheduler Message is not added for this prototype.
+A2. DECIDED 035400 / 040530: ANY-affinity uses one OS wait-thread
+    per bound context (`lmx_msg_exec_start_contexts`). UI-affine
+    stays on the owner thread (`exec_ui_step`). Not a worker pool.
+    A Scheduler Message is not added for this prototype.
+    Restart after stop is valid. Child ANY bind after start
+    launches that context's thread. Rebind ANY->UI (owner, not
+    held) retires the wait-thread; UI work then runs on ui_step.
+    Topology is not frozen at start_contexts.
 Arena vs control block: RELEASED frees init/inbox/outbox (the
 copy-slice arena). The LmxMsg object remains closed-handle
 control state until runtime_delete so send/admit never deref a
 freed block. That retention is control state, not global arena
 ownership. Independent families reclaim independently at
-runtime_delete of their runtime.
+runtime_delete of their runtime. Independent child reclaim
+inside one family is D8 (prototype-only until tested).
 
 Windows measured first. POSIX primitives in EXEC/ingress were
 written earlier and are not claimed run here.
