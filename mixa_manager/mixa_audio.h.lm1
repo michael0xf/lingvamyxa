@@ -1,0 +1,135 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_audio_win32.h.lm1"
+
+#   PORTABLE AUDIO SEAM - ClearShell MP3 button, desktop port (ticket 154950).
+#
+#   Model: a portable CONTROLLER (this seam) drives an interchangeable DEVICE
+#   backend through a vtable, exactly like the terminal backend table. The
+#   controller is the playback AND playlist state machine from
+#   ClearShell's AudioServiceBinder (next/prev +-1s, nextFile/prevFile with
+#   wrap and deterministic-LCG random, stop-remembers-position, lazy media
+#   load, end-of-track advance). All L1, self-contained, deterministic.
+#
+#   Backends:
+#     * mixa_audio_win32  - real playback on Windows via MCI (winmm).
+#     * test fake         - scriptable device used by the selftests below.
+#
+#   Why polling, not a listener: the reference uses a MediaPlayer listener
+#   driven by a Message Looper. This seam has no event loop yet; pushing MCINOTIFY
+#   would need a Message ingress path that does not exist in this slice.
+#   mixa_audio_poll is the standing integration point: the owning loop calls it
+#   and end-of-track auto-advance happens there (see mixa_audio.txt).
+
+define: MIXA_AUDIO_MAX_LIST 64
+
+enum: MixaAudioStatus
+    MIXA_AUDIO_OK 0
+    MIXA_AUDIO_ERR_ARG 1
+    MIXA_AUDIO_ERR_NOMEM 2
+    MIXA_AUDIO_ERR_BACKEND 3
+    MIXA_AUDIO_ERR_UNSUPPORTED 4
+    MIXA_AUDIO_ERR_MISSING 5
+    MIXA_AUDIO_ERR_IO 6
+    MIXA_AUDIO_ERR_STATE 7
+    MIXA_AUDIO_END 8
+end: MixaAudioStatus
+
+enum: MixaAudioMode
+    MIXA_AUDIO_MODE_IDLE 0
+    MIXA_AUDIO_MODE_LOADED 1
+    MIXA_AUDIO_MODE_PLAYING 2
+    MIXA_AUDIO_MODE_ENDED 3
+end: MixaAudioMode
+
+enum: MixaAudioDeviceMode
+    MIXA_AUDIO_DEV_STOPPED 0
+    MIXA_AUDIO_DEV_PLAYING 1
+    MIXA_AUDIO_DEV_PAUSED 2
+end: MixaAudioDeviceMode
+
+fnptr: MixaAudioOpenFn (@@: MixaAudioDevice out) int
+fnptr: MixaAudioCloseFn (@: MixaAudioDevice dev) void
+fnptr: MixaAudioProbeFn (@: MixaAudioDevice dev; const: @(char path_utf8)) int
+fnptr: MixaAudioLoadFn (@: MixaAudioDevice dev; const: @(char path_utf8)) int
+fnptr: MixaAudioUnloadFn (@: MixaAudioDevice dev) int
+fnptr: MixaAudioPlayFn (@: MixaAudioDevice dev) int
+fnptr: MixaAudioSeekFn (@: MixaAudioDevice dev; ulong: ms) int
+fnptr: MixaAudioPositionFn (@: MixaAudioDevice dev; @: ulong out_ms) int
+fnptr: MixaAudioDurationFn (@: MixaAudioDevice dev; @: ulong out_ms) int
+fnptr: MixaAudioModeFn (@: MixaAudioDevice dev; @: int out_mode) int
+
+# Device instance. Portable fields hold whatever every backend can maintain
+# cheaply; backend-private state goes in impl (win32 keeps its MCI alias and
+# wide path there). The fake backend stores its entire deterministic state in
+# the portable fields and leaves impl null.
+struct: MixaAudioDevice
+    int: is_open
+    int: playing
+    ulong: pos
+    ulong: duration
+    @: void impl
+end: MixaAudioDevice
+
+struct: MixaAudioVTable
+    const: @: char name
+    const: @: char audio_exts
+    int: caps_position
+    int: caps_duration
+    int: caps_seek
+    int: caps_mode
+    MixaAudioOpenFn: open
+    MixaAudioCloseFn: close
+    MixaAudioProbeFn: probe
+    MixaAudioLoadFn: load
+    MixaAudioUnloadFn: unload
+    MixaAudioPlayFn: play
+    MixaAudioSeekFn: seek
+    MixaAudioPositionFn: position
+    MixaAudioDurationFn: duration
+    MixaAudioModeFn: mode
+end: MixaAudioVTable
+
+struct: MixaAudio
+    const: @: MixaAudioVTable vt
+    @: MixaAudioDevice dev
+    @@: char items
+    size_t: item_count
+    size_t: item_cap
+    size_t: pos
+    int: mode
+    ulong: old_pos
+    ulong: duration
+    int: is_random
+    int: is_loop
+    int: has_list
+end: MixaAudio
+
+prototype:
+    fn: mixa_audio_create (@@: MixaAudio out; const: @(MixaAudioVTable vt)) int
+    fn: mixa_audio_destroy (@: MixaAudio a) void
+    fn: mixa_audio_set_list (@: MixaAudio a; @@: char items; size_t: count; size_t: pos) int
+    fn: mixa_audio_ini (@: MixaAudio a; size_t: pos; ulong: seek_ms) int
+    fn: mixa_audio_start (@: MixaAudio a; size_t: pos; ulong: seek_ms) int
+    fn: mixa_audio_play (@: MixaAudio a) int
+    fn: mixa_audio_stop (@: MixaAudio a) int
+    fn: mixa_audio_next_file (@: MixaAudio a) int
+    fn: mixa_audio_prev_file (@: MixaAudio a) int
+    fn: mixa_audio_next (@: MixaAudio a) int
+    fn: mixa_audio_prev (@: MixaAudio a) int
+    fn: mixa_audio_seek_to (@: MixaAudio a; ulong: ms) int
+    fn: mixa_audio_position (@: MixaAudio a; @: ulong out_ms) int
+    fn: mixa_audio_duration (@: MixaAudio a; @: ulong out_ms) int
+    fn: mixa_audio_progress (@: MixaAudio a; ulong: max) ulong
+    fn: mixa_audio_is_playing (@: MixaAudio a) int
+    fn: mixa_audio_cur_file (@: MixaAudio a) const: @(char)
+    fn: mixa_audio_cur_state (@: MixaAudio a) int
+    fn: mixa_audio_pos (@: MixaAudio a) size_t
+    fn: mixa_audio_count (@: MixaAudio a) size_t
+    fn: mixa_audio_set_random (@: MixaAudio a; int: on) void
+    fn: mixa_audio_set_loop (@: MixaAudio a; int: on) void
+    fn: mixa_audio_poll (@: MixaAudio a) int
+    fn: mixa_audio_is_audio_path (@: MixaAudio a; const: @(char path_utf8)) int
+    # The win32 backend exports its vtable here (it must live in a header that
+    # already knows MixaAudioVTable, so it cannot be in the concrete header).
+    fn: mixa_audio_win32_table () const: @(MixaAudioVTable)
+end: prototype

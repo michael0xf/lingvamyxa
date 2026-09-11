@@ -1,0 +1,134 @@
+mixa_audio — audio playback seam (ClearShell "MP3" button, ticket 20260911-154950)
+==================================================================================
+
+Purpose
+-------
+One bounded slice: portable playback API for the desktop ClearShell port, backed
+on Windows by the system MCI layer. The main executable is NOT wired to it yet
+(same honest status as the app seam): this slice delivers the self-contained
+playback core, its deterministic headless selftest, and a real win32/MCI smoke
+test.
+
+Design
+------
+A PORTABLE controller (mixa_audio.lm1) owns all playlist/state-machine logic and
+talks to a DEVICE through a function-pointer vtable (MixaAudioVTable in
+mixa_audio.h.lm1). Two devices exist:
+
+  * mixa_audio_win32.lm1    real backend: MCI (winmm), links -lwinmm
+  * fake (test-only)        deterministic backend embedded in the selftest
+
+The win32 device is an MCI alias owned by one MixaAudio instance:
+  open "<path>" type <waveaudio|mpegvideo> alias mixa<N>
+  set mixa<N> time format milliseconds
+  status mixa<N> length|position|mode
+  play / seek / stop / close
+
+WAV is guaranteed via the waveaudio MCI driver. MP3 rides the mpegvideo MCI type
+and therefore depends on a system MP3 renderer (declared honestly: on machines
+without one, MP3 probe succeeds but load fails with MIXA_AUDIO_ERR_BACKEND).
+
+End of track is NOT signalled to us (no MCINOTIFY in this slice): the caller (or
+a future loop) calls mixa_audio_poll(), which queries 'status mode' and advances
+to the next item when the device reports stopped. Documented, not hidden.
+
+Files (owned slice)
+-------------------
+  mixa_manager/mixa_audio_win32.h.lm1       concrete unit (MixaAudioWin32Ctx)
+  mixa_manager/mixa_audio.h.lm1             portable contract (types + prototypes)
+  mixa_manager/mixa_audio_win32.lm1         Windows/MCI implementation
+  mixa_manager/mixa_audio.lm1               portable controller (state machine)
+  mixa_manager/tests/mixa_audio_selftest.lm1        headless fake-device selftest
+  mixa_manager/tests/mixa_audio_native_selftest.lm1 real MCI smoke test (fixture WAV)
+  mixa_manager/run_audio_selftest.ps1       fake selftest runner (no audio libs)
+  mixa_manager/run_audio_native_selftest.ps1 native runner (-lwinmm, writes WAV fixture)
+  mixa_manager/mixa_audio.txt               this note
+
+Public API (portable; works with any device)
+--------------------------------------------
+  int  mixa_audio_create(MixaAudio **out, const MixaAudioVTable *vt);
+  int  mixa_audio_set_list(MixaAudio *a, char *const *items, size_t count, size_t pos);
+  int  mixa_audio_ini(MixaAudio *a, size_t pos, unsigned long seek_ms);   // internal-ish
+  int  mixa_audio_start(MixaAudio *a, size_t pos, unsigned long seek_ms);
+  int  mixa_audio_play(MixaAudio *a);
+  int  mixa_audio_stop(MixaAudio *a);
+  int  mixa_audio_seek_to(MixaAudio *a, unsigned long ms);
+  int  mixa_audio_position(MixaAudio *a, unsigned long *out_ms);
+  int  mixa_audio_duration(MixaAudio *a, unsigned long *out_ms);
+  unsigned long mixa_audio_progress(MixaAudio *a, unsigned long max);
+  int  mixa_audio_is_playing(MixaAudio *a);
+  int  mixa_audio_poll(MixaAudio *a);                 // advances on end-of-track
+  const char *mixa_audio_cur_file(MixaAudio *a);
+  int  mixa_audio_cur_state(MixaAudio *a);
+  unsigned long mixa_audio_pos(MixaAudio *a);         // playlist INDEX, not ms
+  unsigned long mixa_audio_count(MixaAudio *a);
+  int  mixa_audio_next_file(MixaAudio *a);
+  int  mixa_audio_prev_file(MixaAudio *a);
+  int  mixa_audio_play_next(MixaAudio *a);            // resets to track start
+  int  mixa_audio_play_prev(MixaAudio *a);
+  int  mixa_audio_is_audio_path(MixaAudio *a, const char *path_utf8);
+  void mixa_audio_destroy(MixaAudio *a);
+
+Semantics (reference parity: AudioServiceBinder)
+------------------------------------------------
+* next/prev move the playlist position by ONE and reset to the start of that
+  file (the binder's "bump one second" behavior is not carried over; the
+  ClearShell UI buttons mean skip).
+* next/prev on the last/first item wrap ONLY when is_loop is set; otherwise the
+  mode machine just ends (MIXA_AUDIO_MODE_ENDED) / rewinds.
+* next_file/prev_file probe candidates and skip files that fail probe
+  (missing, dir, unsupported ext); play_* also re-ini so stop() remembers the
+  exact seek point of the OLD track in set_list order.
+* Classify is purely extension-based, case-insensitive: "mp3" and "wav" from
+  the device's audio_exts. Only Probe (which checks existence) wraps missing
+  files as MIXA_AUDIO_ERR_MISSING, dirs/unknown ext as ERR_UNSUPPORTED.
+
+Modes: IDLE -> LOADED -> PLAYING <-> PAUSED(future) -> LOADED -> ENDED
+----------------------------------------------------------------------
+
+Testing
+-------
+Run from mixa_manager:
+
+    ./run_audio_selftest.ps1         # fake device, deterministic, 67 checks
+    ./run_audio_native_selftest.ps1  # real MCI, 23 checks (plays ~8 s silence)
+
+Both runners pin the compiler SHA256 (65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC
+1985EAC52EDEF28EFEB261C936), translate the concrete header first (the portable
+header predefs it), use strict gcc flags, and run in isolated
+build/mixa/opencode/<seam>/run_<timestamp>_<guid>/ dirs.
+
+The fake selftest covers: create with per-table name/exts, classification,
+probe of every device error class, full start/stop/resume/seek/progress/
+duration/position/poll cycles in both loop modes, next/prev wrap + play_next/
+play_prev rewind, skip-on-failed-probe, END handling, destroy, and null-argument
+negatives (67 checks, 0 failures).
+
+The native selftest drives the REAL win32 backend: it generates an 8 kHz /
+8-bit / 8 s digital-silence WAV named "My Sound 8s.wav" (space in the path to
+exercise MCI quoting) and asserts create/cur_file-empty, classification,
+missing-file start returns ERR_MISSING, play reports playing, poll does NOT
+advance a playing track, duration ~8000 ms, seek-to-3000 while playing, stop
+remembers the position, and resume (23 checks, 0 failures).
+
+Known L1 findings while porting (see also PORT_OF_CLEARSHELL.txt)
+-----------------------------------------------------------------
+* Const pointers are spelled `const: @(char name)` (name INSIDE the parens) for
+  BOTH parameters and locals; `const: @(char) name` fails to translate.
+* Casting a subscript/array element or casting inside an if:/while: condition
+  is miscompiled by l1trans; use the double-cast form
+  `(cast: (int) (cast: (unsigned char) expr))` or hoist into an int local.
+* `(cast: unsigned) expr` always miscompiles; declare `unsigned: v` and compare
+  directly against literals (GetFileAttributesW attribute checks).
+* The common header predefs the concrete header, so cross-header types
+  (MixaAudioVTable) must live in the COMMON header; the concrete header alone
+  cannot reference them. The win32 table prototype therefore sits in
+  mixa_audio.h.lm1, and the fake-only selftest simply never calls it.
+* In wide string formatting `%s` is the NARROW-string specifier and `%ls` the
+  wide one; passing a char* to %ls silently mangles MCI commands (status
+  length/position came back 0 until the %s fix).
+
+No part of this slice runs at startup or touches the main executable. The next
+wiring step (separate ticket) attaches the "MP3" button to a MixaAudio instance
+built from mixa_audio_win32_table(), feeding it a directory listing and calling
+mixa_audio_start/poll/play_next/play_prev/stop/progress.

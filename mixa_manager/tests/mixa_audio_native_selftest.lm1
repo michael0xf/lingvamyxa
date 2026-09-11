@@ -1,0 +1,184 @@
+predef: "mixa_manager/mixa_audio.h.lm1"
+predef: "mixa_manager/mixa_audio.lm1"
+predef: "mixa_manager/mixa_audio_win32.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# AUDIO_SEAM native smoke test (ClearShell MP3 button, 154950): drives the real
+# win32/MCI backend with a fixture WAV the runner writes next to this test
+# ("My Sound 8s.wav": 8000 Hz, 8-bit mono, ~8 s of digital silence). The WAV
+# path deliberately contains spaces to exercise MCI command quoting. Only the
+# portable seam API is used; nothing else is touched on the machine.
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char p_wav 1040
+    []: char p_missing 1040
+    []: @(char) src 2
+    []: (@: MixaAudio) h 1
+    ulong: ms
+    ulong: durs
+    int: failures
+    int: checks
+    int: st
+    failures: 0
+    checks: 0
+    h[0]: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/opencode/audio_native_seam/tmp")
+    ---
+    c.snprintf(p_wav, 1040U, "%s\\My Sound 8s.wav", base)
+    c.snprintf(p_missing, 1040U, "%s\\no_such_track.mp3", base)
+    src[0]: p_wav
+    src[1]: p_missing
+
+    # T1: create through the real backend table.
+    st: mixa_audio_create(@ h[0], mixa_audio_win32_table())
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: native create rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: h[0] = 0
+        failures: failures + 1
+        c.printf("audio: native create returned NULL\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_cur_file(h[0]) != 0
+        failures: failures + 1
+        c.printf("audio: native cur_file not empty before list\n")
+    ---
+
+    # T2: portable classification consults the real backend's ext list.
+    checks: checks + 1
+    if: mixa_audio_is_audio_path(h[0], "A 01 - Track.WAV") != 1
+        failures: failures + 1
+        c.printf("audio: native is_audio_path wav\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_is_audio_path(h[0], "track.mP3") != 1
+        failures: failures + 1
+        c.printf("audio: native is_audio_path mp3\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_is_audio_path(h[0], "notes.txt") != 0
+        failures: failures + 1
+        c.printf("audio: native is_audio_path txt\n")
+    ---
+
+    # T3: probing a real WAV succeeds; a missing file is reported MISSING.
+    st: mixa_audio_set_list(h[0], src, 2U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: native set_list rc=%d\n", st)
+    ---
+    st: mixa_audio_start(h[0], 1U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_ERR_MISSING
+        failures: failures + 1
+        c.printf("audio: native start missing rc=%d want MISSING\n", st)
+    ---
+
+    # T4: play the fixture; the device must report playing and a believable
+    # duration, and poll must not advance a playing track.
+    st: mixa_audio_set_list(h[0], src, 2U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: native set_list rc=%d\n", st)
+    ---
+    st: mixa_audio_start(h[0], 0U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: native start wav rc=%d\n", st)
+    ---
+    c.Sleep(150U)
+    st: mixa_audio_poll(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: native poll rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(h[0]) != 0U
+        failures: failures + 1
+        c.printf("audio: native poll advanced\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_is_playing(h[0]) != 1
+        failures: failures + 1
+        c.printf("audio: native not playing\n")
+    ---
+    st: mixa_audio_duration(h[0], @ durs)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: native duration rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: durs < 7950U
+        failures: failures + 1
+        c.printf("audio: native duration too short %lu\n", durs)
+    ---
+    checks: checks + 1
+    if: durs > 8100U
+        failures: failures + 1
+        c.printf("audio: native duration too long %lu\n", durs)
+    ---
+    st: mixa_audio_position(h[0], @ ms)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: native position rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: ms >= durs
+        failures: failures + 1
+        c.printf("audio: native position out of range %lu\n", ms)
+    ---
+
+    # T5: seek while playing, then stop (remembers position) and resume.
+    st: mixa_audio_seek_to(h[0], 3000U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: native seek rc=%d\n", st)
+    ---
+    st: mixa_audio_stop(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: native stop rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_cur_state(h[0]) != MIXA_AUDIO_MODE_LOADED
+        failures: failures + 1
+        c.printf("audio: native state after stop=%d\n", mixa_audio_cur_state(h[0]))
+    ---
+    st: mixa_audio_play(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: native resume rc=%d\n", st)
+    ---
+    mixa_audio_stop(h[0])
+
+    # T6: destroy frees the MCI device.
+    mixa_audio_destroy(h[0])
+    h[0]: 0
+    checks: checks + 1
+    if: h[0] != 0
+        failures: failures + 1
+        c.printf("audio: native destroy left handle\n")
+    ---
+
+    c.printf("audio native selftest: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+return: 0

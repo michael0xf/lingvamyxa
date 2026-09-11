@@ -459,3 +459,37 @@ independently in Java.
 Documented separately and at length in SELECTION_MODEL.txt, including the
 consolidation loop that I twice suspected of being a defect and which testing
 showed to be correct and load-bearing.
+
+5.9. Audio playback and the "MP3" button
+    com/mtk/shell/ClearShell.java (~198-280, ~7634-8120)
+    com/mtk/shell/AudioServiceBinder.java
+
+The MP3 button is a distinct subsystem; it is not part of the directory/console
+user experience. It owns its own audio device, its own playlist, and its own
+poll loop. Ported slice: mixa_audio (see mixa_audio.txt; ticket 20260911-154950).
+
+What maps directly:
+* Playlist state machine (positions, old position, mode, loop flag, next/prev
+  with wrap when looping) -> the portable controller's MixaAudio state machine
+  in mixa_audio.lm1. next/prev move one position and the play_* helpers reset
+  to the start of the file, matching the button-intent even though the binder's
+  internals bump the track by one second.
+* End-of-track behaviour: the binder listens for onCompletion; we have no
+  message loop in this slice, so the controller exposes mixa_audio_poll(),
+  which queries the device's 'status mode' and advances when playback stopped.
+* Codecs: ClearShell rides the Android MediaPlayer; the desktop port rides the
+  Windows MCI layer (mixa_audio_win32.lm1, linked -lwinmm). WAV is guaranteed
+  via the waveaudio MCI driver; MP3 requires the mpegvideo MCI type and thus a
+  system MP3 renderer. Any machine lacking one will fail at load time with
+  MIXA_AUDIO_ERR_BACKEND (honest, not silently silent).
+
+Dropped / deferred (deliberate):
+* System-level audio (MediaSessionManager, audio focus, media buttons, the
+  Android service lifecycle) has no desktop equivalent and is not ported.
+* Notifications / lockscreen / NowPlaying surface: out of scope for the slice;
+  a UI hook-up ticket is pending (main executable still has no audio wiring).
+* The binder's one-second pre-roll when resuming from stop is not carried into
+  the controller; stop()/resume semantics are exact-position instead, which is
+  what the desktop "MP3" button actually shows.
+
+L1 port notes are recorded in mixa_audio.txt under "Known L1 findings".

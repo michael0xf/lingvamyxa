@@ -1,0 +1,681 @@
+predef: "mixa_manager/mixa_audio_win32.h.lm1"
+predef: "mixa_manager/mixa_audio.h.lm1"
+include: "<stdlib.h>" "<string.h>"
+
+#   PORTABLE AUDIO CONTROLLER (ClearShell MP3 button, desktop port, 154950).
+#
+#   This unit is the playback + playlist state machine of the reference
+#   AudioServiceBinder, written to run identically on every device backend:
+#     * ini / start     - set list position and remembered seek offset
+#     * play            - lazy-load the current file, seek to old_pos, play
+#     * stop            - remember the position, unload the device
+#     * next / prev     - +-1000 ms, crossing a track boundary advances the file
+#     * nextFile/prevFile - linear scan with is_loop wrap and is_random pick
+#     * poll            - the standing integration point: the owning loop calls
+#                         this so end-of-track auto-advance has somewhere to run
+#                         (no Message listener in this slice yet - see header).
+#
+#   The device vtable is the ONLY platform code; everything below is L1 working
+#   on the MixaAudio fields only. Determinism note: random playback uses a fixed
+#   LCG over (pos, count) instead of java.util.Random so the suite is
+#   reproducible on every machine; documented in mixa_audio.txt.
+#
+#   L1 note: single-level member chains only (a\vt, a\dev), helpers before
+#   users, and the diameter of the playlist is bounded by MIXA_AUDIO_MAX_LIST.
+
+# Owned copy of a C string, or null on failure.
+fn: mixa_audio_strdup (const: @(char s)) @: char
+    @: char d
+    size_t: n
+    if: s = 0
+        return: 0
+    n: c.strlen(s)
+    if: n > ((cast: (size_t) -1) - 1U)
+        return: 0
+    d: (cast: (@: char) c.malloc(n + 1U))
+    if: d = 0
+        return: 0
+    c.memcpy(d, s, n + 1U)
+return: d
+
+# A vtable must be COMPLETE before it may drive a device. Partial tables are a
+# porting-time mistake, caught once at create like mixa_backend_table_valid.
+fn: mixa_audio_tbl_ok (const: @(MixaAudioVTable vt)) int
+    if: vt = 0
+        return: 0
+    if: vt\name = 0 || vt\audio_exts = 0
+        return: 0
+    if: vt\open = 0 || vt\close = 0 || vt\probe = 0 || vt\load = 0 || vt\unload = 0
+        return: 0
+    if: vt\play = 0 || vt\seek = 0 || vt\position = 0 || vt\duration = 0 || vt\mode = 0
+        return: 0
+return: 1
+
+# Lower-cased extension of a path ("wav", "mp3"); empty when none. dst holds 8.
+fn: mixa_audio_ctrl_ext_lower (const: @(char path_utf8); @: char dst) int
+    size_t: len
+    size_t: cut
+    size_t: i
+    int: ch
+    dst[0]: 0
+    if: path_utf8 = 0
+        return: 1
+    len: c.strlen(path_utf8)
+    if: len = 0U
+        return: 1
+    cut: len
+    while: cut > 0U
+        if: path_utf8[cut - 1U] = (cast: (char) 46)
+            break
+        ---
+        cut: cut - 1U
+    ---
+    if: cut = 0U || cut = len
+        return: 1
+    i: 0U
+    while: cut + i < len && i < 7U
+        ch: (cast: (int) (cast: (unsigned char) path_utf8[cut + i]))
+        if: ch >= 65 && ch <= 90
+            ch: ch + 32
+        ---
+        dst[i]: (cast: (char) ch)
+        i: i + 1U
+    dst[i]: 0
+return: 0
+
+# Is the extension present in the vtable's space-separated audio_exts list?
+fn: mixa_audio_ctrl_ext_known (const: @(char exts); const: @(char ext)) int
+    size_t: i
+    size_t: j
+    int: c1
+    int: c2
+    int: matched
+    if: exts = 0 || ext = 0
+        return: 0
+    i: 0U
+    while: 1
+        j: 0U
+        matched: 1
+        while: 1
+            if: exts[i + j] = 0 || exts[i + j] = (cast: (char) 32)
+                break
+            ---
+            c1: (cast: (int) (cast: (unsigned char) exts[i + j]))
+            c2: (cast: (int) (cast: (unsigned char) ext[j]))
+            if: c1 >= 65 && c1 <= 90
+                c1: c1 + 32
+            ---
+            if: c2 >= 65 && c2 <= 90
+                c2: c2 + 32
+            ---
+            if: c1 != c2
+                matched: 0
+                break
+            ---
+            j: j + 1U
+        ---
+        if: matched != 0
+            if: ext[j] = 0
+                return: 1
+            ---
+        ---
+        while: exts[i] != 0 && exts[i] != (cast: (char) 32)
+            i: i + 1U
+        ---
+        if: exts[i] = 0
+            return: 0
+        ---
+        i: i + 1U
+    ---
+return: 0
+
+# Load (if needed), apply remembered position, start playback of a\pos.
+fn: mixa_audio_local_play (@: MixaAudio a) int
+    const: @(char file)
+    int: st
+    if: a\has_list = 0
+        return: MIXA_AUDIO_ERR_STATE
+    if: a\pos >= a\item_count
+        a\mode: MIXA_AUDIO_MODE_ENDED
+        return: MIXA_AUDIO_END
+    file: a\items[a\pos]
+    if: file = 0
+        return: MIXA_AUDIO_ERR_STATE
+    st: a\vt\probe(a\dev, file)
+    if: st != MIXA_AUDIO_OK
+        return: st
+    if: a\dev\is_open = 0
+        st: a\vt\load(a\dev, file)
+        if: st != MIXA_AUDIO_OK
+            return: st
+    ---
+    if: a\old_pos > 0U
+        st: a\vt\seek(a\dev, a\old_pos)
+        if: st != MIXA_AUDIO_OK
+            return: st
+    ---
+    st: a\vt\play(a\dev)
+    if: st != MIXA_AUDIO_OK
+        return: st
+    a\mode: MIXA_AUDIO_MODE_PLAYING
+return: MIXA_AUDIO_OK
+
+# Reference checkFile(pos): 1 when pos became the playing track, 0 when the
+# track must be skipped (missing/unsupported/directory), else an error code.
+fn: mixa_audio_check_file (@: MixaAudio a; size_t: pos) int
+    const: @(char file)
+    int: st
+    if: pos >= a\item_count
+        return: 0
+    file: a\items[pos]
+    if: file = 0
+        return: 0
+    st: a\vt\probe(a\dev, file)
+    if: st != MIXA_AUDIO_OK
+        return: 0
+    a\pos: pos
+    a\old_pos: 0U
+    st: mixa_audio_local_play(a)
+    if: st = MIXA_AUDIO_OK
+        return: 1
+return: st
+
+# Deterministic index for is_random: an LCG over (count, pos) that never picks
+# the current track. Reference uses java.util.Random; this keeps the suite
+# reproducible across machines (documented divergence).
+fn: mixa_audio_random_pos (@: MixaAudio a) size_t
+    size_t: r
+    if: a\item_count <= 1U
+        return: 0U
+    r: (a\pos * 7U + a\item_count * 13U + 1U) % a\item_count
+    if: r = a\pos
+        r: (r + 1U) % a\item_count
+    ---
+return: r
+
+fn: mixa_audio_ini (@: MixaAudio a; size_t: pos; ulong: seek_ms) int
+    if: a = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: a\has_list = 0
+        return: MIXA_AUDIO_ERR_STATE
+    if: a\item_count = 0U
+        return: MIXA_AUDIO_ERR_STATE
+    if: pos >= a\item_count
+        return: MIXA_AUDIO_ERR_ARG
+    a\pos: pos
+    a\old_pos: seek_ms
+    a\mode: MIXA_AUDIO_MODE_LOADED
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_start (@: MixaAudio a; size_t: pos; ulong: seek_ms) int
+    int: st
+    st: mixa_audio_ini(a, pos, seek_ms)
+    if: st != MIXA_AUDIO_OK
+        return: st
+return: mixa_audio_play(a)
+
+fn: mixa_audio_play (@: MixaAudio a) int
+    if: a = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: a\has_list = 0
+        return: MIXA_AUDIO_ERR_STATE
+    if: a\item_count = 0U
+        return: MIXA_AUDIO_ERR_STATE
+    if: a\pos >= a\item_count
+        a\mode: MIXA_AUDIO_MODE_ENDED
+        return: MIXA_AUDIO_END
+    if: a\duration > 0U && a\old_pos >= a\duration
+        a\old_pos: 0U
+    ---
+return: mixa_audio_local_play(a)
+
+fn: mixa_audio_stop (@: MixaAudio a) int
+    ulong: dv
+    int: st
+    if: a = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: a\has_list = 0
+        return: MIXA_AUDIO_OK
+    if: a\dev\is_open != 0
+        st: a\vt\position(a\dev, @ dv)
+        if: st = MIXA_AUDIO_OK
+            a\old_pos: dv
+        ---
+        st: a\vt\unload(a\dev)
+        if: st != MIXA_AUDIO_OK
+            return: st
+    ---
+    a\mode: MIXA_AUDIO_MODE_LOADED
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_seek_to (@: MixaAudio a; ulong: ms) int
+    if: a = 0
+        return: MIXA_AUDIO_ERR_ARG
+    a\old_pos: ms
+    if: a\dev\is_open != 0
+        return: a\vt\seek(a\dev, ms)
+    ---
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_position (@: MixaAudio a; @: ulong out_ms) int
+    ulong: dv
+    int: st
+    if: a = 0 || out_ms = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: a\dev\is_open != 0
+        st: a\vt\position(a\dev, @ dv)
+        if: st = MIXA_AUDIO_OK
+            a\old_pos: dv
+            out_ms[0]: dv
+            return: MIXA_AUDIO_OK
+        ---
+        return: st
+    ---
+    out_ms[0]: a\old_pos
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_duration (@: MixaAudio a; @: ulong out_ms) int
+    ulong: dv
+    int: st
+    if: a = 0 || out_ms = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: a\dev\is_open != 0 && a\vt\caps_duration != 0
+        st: a\vt\duration(a\dev, @ dv)
+        if: st = MIXA_AUDIO_OK
+            a\duration: dv
+            out_ms[0]: dv
+            return: MIXA_AUDIO_OK
+        ---
+        return: st
+    ---
+    out_ms[0]: a\duration
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_progress (@: MixaAudio a; ulong: max) ulong
+    ulong: pos
+    ulong: dur
+    int: st
+    if: a = 0 || max = 0U
+        return: 0U
+    st: mixa_audio_position(a, @ pos)
+    if: st != MIXA_AUDIO_OK
+        return: 0U
+    dur: a\duration
+    if: dur = 0U
+        return: 0U
+    if: pos >= dur
+        return: max
+    if: pos > ((cast: (ulong) -1) / max)
+        return: max
+return: (pos * max) / dur
+
+fn: mixa_audio_is_playing (@: MixaAudio a) int
+    if: a = 0
+        return: 0
+    if: a\mode = MIXA_AUDIO_MODE_PLAYING
+        return: 1
+return: 0
+
+fn: mixa_audio_cur_file (@: MixaAudio a) const: @(char)
+    if: a = 0
+        return: 0
+    if: a\has_list = 0
+        return: 0
+    if: a\pos >= a\item_count
+        return: 0
+return: a\items[a\pos]
+
+fn: mixa_audio_cur_state (@: MixaAudio a) int
+    if: a = 0
+        return: MIXA_AUDIO_MODE_IDLE
+return: a\mode
+
+fn: mixa_audio_pos (@: MixaAudio a) size_t
+    if: a = 0
+        return: 0U
+return: a\pos
+
+fn: mixa_audio_count (@: MixaAudio a) size_t
+    if: a = 0
+        return: 0U
+return: a\item_count
+
+fn: mixa_audio_next_file (@: MixaAudio a) int
+    size_t: p
+    size_t: size
+    int: st
+    if: a = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: a\dev\is_open != 0
+        st: a\vt\position(a\dev, @ a\old_pos)
+        st: a\vt\unload(a\dev)
+    ---
+    size: a\item_count
+    if: a\pos < size && a\pos + 1U < size
+        p: a\pos + 1U
+        while: p < size
+            st: mixa_audio_check_file(a, p)
+            if: st = 1
+                a\mode: MIXA_AUDIO_MODE_PLAYING
+                return: MIXA_AUDIO_OK
+            ---
+            if: st > 1
+                return: st
+            ---
+            p: p + 1U
+        ---
+    ---
+    if: a\is_random != 0
+        p: mixa_audio_random_pos(a)
+        st: mixa_audio_check_file(a, p)
+        if: st = 1
+            a\mode: MIXA_AUDIO_MODE_PLAYING
+            return: MIXA_AUDIO_OK
+        ---
+        if: st > 1
+            return: st
+        ---
+    ---
+    if: a\is_loop != 0
+        if: a\pos > 0U
+            p: 0U
+            while: p < a\pos
+                st: mixa_audio_check_file(a, p)
+                if: st = 1
+                    a\mode: MIXA_AUDIO_MODE_PLAYING
+                    return: MIXA_AUDIO_OK
+                ---
+                if: st > 1
+                    return: st
+                ---
+                p: p + 1U
+            ---
+        ---
+    ---
+    a\mode: MIXA_AUDIO_MODE_ENDED
+return: MIXA_AUDIO_END
+
+fn: mixa_audio_prev_file (@: MixaAudio a) int
+    size_t: p
+    int: st
+    if: a = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: a\dev\is_open != 0
+        st: a\vt\position(a\dev, @ a\old_pos)
+        st: a\vt\unload(a\dev)
+    ---
+    if: a\pos > 0U
+        p: a\pos - 1U
+        while: 1
+            st: mixa_audio_check_file(a, p)
+            if: st = 1
+                a\mode: MIXA_AUDIO_MODE_PLAYING
+                return: MIXA_AUDIO_OK
+            ---
+            if: st > 1
+                return: st
+            ---
+            if: p = 0U
+                break
+            ---
+            p: p - 1U
+        ---
+    ---
+    if: a\is_random != 0
+        p: mixa_audio_random_pos(a)
+        st: mixa_audio_check_file(a, p)
+        if: st = 1
+            a\mode: MIXA_AUDIO_MODE_PLAYING
+            return: MIXA_AUDIO_OK
+        ---
+        if: st > 1
+            return: st
+        ---
+    ---
+    if: a\is_loop != 0
+        if: a\item_count > 0U && a\pos < a\item_count - 1U
+            p: a\item_count - 1U
+            while: p > a\pos
+                st: mixa_audio_check_file(a, p)
+                if: st = 1
+                    a\mode: MIXA_AUDIO_MODE_PLAYING
+                    return: MIXA_AUDIO_OK
+                ---
+                if: st > 1
+                    return: st
+                ---
+                if: p = 0U
+                    break
+                ---
+                p: p - 1U
+            ---
+        ---
+    ---
+    a\mode: MIXA_AUDIO_MODE_ENDED
+return: MIXA_AUDIO_END
+
+fn: mixa_audio_next (@: MixaAudio a) int
+    ulong: pos
+    ulong: dur
+    ulong: np
+    int: st
+    if: a = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: a\has_list = 0
+        return: MIXA_AUDIO_ERR_STATE
+    st: mixa_audio_position(a, @ pos)
+    if: st != MIXA_AUDIO_OK
+        return: st
+    st: mixa_audio_duration(a, @ dur)
+    if: st != MIXA_AUDIO_OK
+        return: st
+    if: dur != 0U && pos >= ((cast: (ulong) -1) - 1000U)
+        return: MIXA_AUDIO_END
+    if: dur != 0U && pos + 1000U > dur
+        if: pos = dur
+            return: MIXA_AUDIO_END
+        ---
+        return: mixa_audio_next_file(a)
+    ---
+    np: pos + 1000U
+    a\old_pos: np
+return: mixa_audio_seek_to(a, np)
+
+fn: mixa_audio_prev (@: MixaAudio a) int
+    ulong: pos
+    ulong: np
+    int: st
+    if: a = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: a\has_list = 0
+        return: MIXA_AUDIO_ERR_STATE
+    st: mixa_audio_position(a, @ pos)
+    if: st != MIXA_AUDIO_OK
+        return: st
+    if: pos < 1000U
+        return: mixa_audio_prev_file(a)
+    ---
+    np: pos - 1000U
+    a\old_pos: np
+return: mixa_audio_seek_to(a, np)
+
+fn: mixa_audio_poll (@: MixaAudio a) int
+    int: dm
+    int: st
+    ulong: dv
+    if: a = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: a\mode != MIXA_AUDIO_MODE_PLAYING
+        return: MIXA_AUDIO_OK
+    if: a\dev\is_open = 0
+        return: MIXA_AUDIO_OK
+    if: a\vt\caps_mode = 0
+        return: MIXA_AUDIO_OK
+    st: a\vt\mode(a\dev, @ dm)
+    if: st != MIXA_AUDIO_OK
+        return: st
+    if: dm = MIXA_AUDIO_DEV_PLAYING
+        return: MIXA_AUDIO_OK
+    ---
+    if: dm = MIXA_AUDIO_DEV_PAUSED
+        return: MIXA_AUDIO_OK
+    ---
+    st: a\vt\position(a\dev, @ dv)
+    if: st = MIXA_AUDIO_OK
+        a\old_pos: dv
+        a\duration: dv
+    ---
+return: mixa_audio_next_file(a)
+
+fn: mixa_audio_set_list (@: MixaAudio a; @@: char items; size_t: count; size_t: pos) int
+    @@: char fresh
+    size_t: i
+    if: a = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: count > MIXA_AUDIO_MAX_LIST
+        return: MIXA_AUDIO_ERR_ARG
+    if: count = 0U
+        if: a\items != 0
+            i: 0U
+            while: i < a\item_count
+                if: a\items[i] != 0
+                    c.free(a\items[i])
+                ---
+                i: i + 1U
+            ---
+            c.free(a\items)
+        ---
+        a\items: 0
+        a\item_count: 0U
+        a\item_cap: 0U
+        a\has_list: 0
+        a\mode: MIXA_AUDIO_MODE_IDLE
+        a\pos: 0U
+        a\old_pos: 0U
+        a\duration: 0U
+        return: MIXA_AUDIO_OK
+    ---
+    fresh: (cast: (@@: char) c.calloc(count, c.sizeof(@: char)))
+    if: fresh = 0
+        return: MIXA_AUDIO_ERR_NOMEM
+    i: 0U
+    while: i < count
+        if: items = 0 || items[i] = 0
+            while: i > 0U
+                i: i - 1U
+                c.free(fresh[i])
+            ---
+            c.free(fresh)
+            return: MIXA_AUDIO_ERR_ARG
+        ---
+        fresh[i]: mixa_audio_strdup(items[i])
+        if: fresh[i] = 0
+            while: i > 0U
+                i: i - 1U
+                c.free(fresh[i])
+            ---
+            c.free(fresh)
+            return: MIXA_AUDIO_ERR_NOMEM
+        ---
+        i: i + 1U
+    ---
+    if: a\items != 0
+        i: 0U
+        while: i < a\item_count
+            if: a\items[i] != 0
+                c.free(a\items[i])
+            ---
+            i: i + 1U
+        ---
+        c.free(a\items)
+    ---
+    a\items: fresh
+    a\item_count: count
+    a\item_cap: count
+    a\has_list: 1
+    a\mode: MIXA_AUDIO_MODE_IDLE
+    a\old_pos: 0U
+    a\duration: 0U
+    if: pos >= count
+        a\pos: count - 1U
+    else:
+        a\pos: pos
+    ---
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_set_random (@: MixaAudio a; int: on) void
+    if: a != 0
+        if: on != 0
+            a\is_random: 1
+        else:
+            a\is_random: 0
+        ---
+    ---
+end: mixa_audio_set_random
+
+fn: mixa_audio_set_loop (@: MixaAudio a; int: on) void
+    if: a != 0
+        if: on != 0
+            a\is_loop: 1
+        else:
+            a\is_loop: 0
+        ---
+    ---
+end: mixa_audio_set_loop
+
+fn: mixa_audio_is_audio_path (@: MixaAudio a; const: @(char path_utf8)) int
+    []: char ext 8
+    if: a = 0 || path_utf8 = 0
+        return: 0
+    if: mixa_audio_ctrl_ext_lower(path_utf8, ext) != 0
+        return: 0
+    if: mixa_audio_ctrl_ext_known(a\vt\audio_exts, ext) = 1
+        return: 1
+return: 0
+
+fn: mixa_audio_create (@@: MixaAudio out; const: @(MixaAudioVTable vt)) int
+    @: MixaAudio a
+    int: st
+    if: out = 0
+        return: MIXA_AUDIO_ERR_ARG
+    out[0]: 0
+    if: vt = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: mixa_audio_tbl_ok(vt) = 0
+        return: MIXA_AUDIO_ERR_BACKEND
+    a: (cast: (@: MixaAudio) c.calloc(1U, c.sizeof(c.MixaAudio)))
+    if: a = 0
+        return: MIXA_AUDIO_ERR_NOMEM
+    a\vt: vt
+    a\mode: MIXA_AUDIO_MODE_IDLE
+    st: vt\open(@ a\dev)
+    if: st != MIXA_AUDIO_OK
+        c.free(a)
+        return: st
+    out[0]: a
+return: MIXA_AUDIO_OK
+
+sub: mixa_audio_destroy (@: MixaAudio a)
+    size_t: i
+    if: a != 0
+        if: a\dev != 0
+            if: a\vt != 0
+                if: a\dev\is_open != 0
+                    a\vt\unload(a\dev)
+                ---
+                a\vt\close(a\dev)
+            ---
+        ---
+        if: a\items != 0
+            i: 0U
+            while: i < a\item_count
+                if: a\items[i] != 0
+                    c.free(a\items[i])
+                ---
+                i: i + 1U
+            ---
+            c.free(a\items)
+        ---
+        c.free(a)
+    ---
+end: mixa_audio_destroy

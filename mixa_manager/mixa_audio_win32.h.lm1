@@ -1,0 +1,13 @@
+include: "<windows.h>" "<mmsystem.h>"
+
+# Windows concrete unit for the audio seam.
+# The win32 backend's per-device private state lives here. The portable header
+# predefs this one so that MixaAudioDevice stays a portable struct while the
+# native alias/path slots (which only win32 understands) are hidden in impl.
+
+struct: MixaAudioWin32Ctx
+    int: alias
+    int: device_open
+    int: ext_kind
+    @: wchar_t wpath
+end: MixaAudioWin32Ctx

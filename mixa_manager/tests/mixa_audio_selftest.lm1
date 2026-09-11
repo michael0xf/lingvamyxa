@@ -1,0 +1,639 @@
+predef: "mixa_manager/mixa_audio.h.lm1"
+predef: "mixa_manager/mixa_audio.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# AUDIO_SEAM selftest (ClearShell MP3 button, 154950): drives the PORTABLE
+# controller only, through a scriptable FAKE device backend. Every fake fudge
+# knob is a global the test sets before a scenario:
+#   g_fake_pos/dur/mode  -> what position()/duration()/mode() report.
+#   g_fake_probe_skip    -> probe() rejects paths containing "skip" (MISSING),
+#                           which makes next/prev_file SKIP that track.
+#   g_fake_load_fail/play_fail/seek_fail -> force backend error codes.
+#   g_fake_n_*           -> call counters for lazy-load/seek assertions.
+# The fake keeps its behaviour in globals and only touches the device struct
+# through the direct slots the controller hands it, like the win32 backend.
+
+int: g_fake_mode
+ulong: g_fake_pos
+ulong: g_fake_dur
+int: g_fake_probe_skip
+int: g_fake_load_fail
+int: g_fake_play_fail
+int: g_fake_seek_fail
+int: g_fake_n_probes
+int: g_fake_n_loads
+int: g_fake_n_plays
+int: g_fake_n_seeks
+int: g_fake_n_unloads
+int: g_fake_n_closes
+
+fn: mixa_audio_fake_dev_open (@@: MixaAudioDevice out) int
+    @: MixaAudioDevice dev
+    if: out = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev: (cast: (@: MixaAudioDevice) c.calloc(1U, c.sizeof(c.MixaAudioDevice)))
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_NOMEM
+    dev\is_open: 0
+    out[0]: dev
+return: MIXA_AUDIO_OK
+
+sub: mixa_audio_fake_dev_close (@: MixaAudioDevice dev)
+    if: dev != 0
+        g_fake_n_closes: g_fake_n_closes + 1
+        dev\is_open: 0
+        dev\playing: 0
+    ---
+end: mixa_audio_fake_dev_close
+
+fn: mixa_audio_fake_dev_probe (@: MixaAudioDevice dev; const: @(char path_utf8)) int
+    g_fake_n_probes: g_fake_n_probes + 1
+    if: dev = 0 || path_utf8 = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: g_fake_probe_skip != 0
+        if: c.strstr(path_utf8, "skip") != 0
+            return: MIXA_AUDIO_ERR_MISSING
+        ---
+    ---
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_fake_dev_load (@: MixaAudioDevice dev; const: @(char path_utf8)) int
+    g_fake_n_loads: g_fake_n_loads + 1
+    if: dev = 0 || path_utf8 = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: g_fake_load_fail != 0
+        dev\is_open: 0
+        return: MIXA_AUDIO_ERR_IO
+    ---
+    dev\is_open: 1
+    dev\playing: 0
+    g_fake_pos: 0U
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_fake_dev_unload (@: MixaAudioDevice dev) int
+    g_fake_n_unloads: g_fake_n_unloads + 1
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev\is_open: 0
+    dev\playing: 0
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_fake_dev_play (@: MixaAudioDevice dev) int
+    g_fake_n_plays: g_fake_n_plays + 1
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: g_fake_play_fail != 0
+        return: MIXA_AUDIO_ERR_BACKEND
+    dev\playing: 1
+    g_fake_mode: MIXA_AUDIO_DEV_PLAYING
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_fake_dev_seek (@: MixaAudioDevice dev; ulong: ms) int
+    g_fake_n_seeks: g_fake_n_seeks + 1
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: g_fake_seek_fail != 0
+        return: MIXA_AUDIO_ERR_IO
+    ---
+    g_fake_pos: ms
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_fake_dev_position (@: MixaAudioDevice dev; @: ulong out_ms) int
+    if: dev = 0 || out_ms = 0
+        return: MIXA_AUDIO_ERR_ARG
+    out_ms[0]: g_fake_pos
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_fake_dev_duration (@: MixaAudioDevice dev; @: ulong out_ms) int
+    if: dev = 0 || out_ms = 0
+        return: MIXA_AUDIO_ERR_ARG
+    out_ms[0]: g_fake_dur
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_fake_dev_mode (@: MixaAudioDevice dev; @: int out_mode) int
+    if: dev = 0 || out_mode = 0
+        return: MIXA_AUDIO_ERR_ARG
+    out_mode[0]: g_fake_mode
+return: MIXA_AUDIO_OK
+
+@: MixaAudioVTable g_mixa_audio_fake_vtable
+int: g_mixa_audio_fake_vtable_ready
+
+fn: mixa_audio_fake_table () const: @(MixaAudioVTable)
+    if: g_mixa_audio_fake_vtable_ready = 0
+        g_mixa_audio_fake_vtable: (cast: (@: MixaAudioVTable) c.calloc(1U, c.sizeof(c.MixaAudioVTable)))
+        if: g_mixa_audio_fake_vtable = 0
+            return: 0
+        g_mixa_audio_fake_vtable\name: "fake"
+        g_mixa_audio_fake_vtable\audio_exts: "mp3 wav"
+        g_mixa_audio_fake_vtable\caps_position: 1
+        g_mixa_audio_fake_vtable\caps_duration: 1
+        g_mixa_audio_fake_vtable\caps_seek: 1
+        g_mixa_audio_fake_vtable\caps_mode: 1
+        g_mixa_audio_fake_vtable\open: mixa_audio_fake_dev_open
+        g_mixa_audio_fake_vtable\close: mixa_audio_fake_dev_close
+        g_mixa_audio_fake_vtable\probe: mixa_audio_fake_dev_probe
+        g_mixa_audio_fake_vtable\load: mixa_audio_fake_dev_load
+        g_mixa_audio_fake_vtable\unload: mixa_audio_fake_dev_unload
+        g_mixa_audio_fake_vtable\play: mixa_audio_fake_dev_play
+        g_mixa_audio_fake_vtable\seek: mixa_audio_fake_dev_seek
+        g_mixa_audio_fake_vtable\position: mixa_audio_fake_dev_position
+        g_mixa_audio_fake_vtable\duration: mixa_audio_fake_dev_duration
+        g_mixa_audio_fake_vtable\mode: mixa_audio_fake_dev_mode
+        g_mixa_audio_fake_vtable_ready: 1
+    ---
+return: g_mixa_audio_fake_vtable
+
+fn: main () int
+    []: char sf0 32
+    []: char sf1 32
+    []: char sf2 32
+    []: @(char) src 3
+    []: (@: MixaAudio) h 1
+    []: (@: MixaAudioVTable) pvt 1
+    ulong: ms
+    ulong: pr
+    int: failures
+    int: checks
+    int: st
+    failures: 0
+    checks: 0
+    h[0]: 0
+    g_fake_mode: MIXA_AUDIO_DEV_STOPPED
+    g_fake_pos: 0U
+    g_fake_dur: 1000U
+    g_fake_probe_skip: 0
+    g_fake_load_fail: 0
+    g_fake_play_fail: 0
+    g_fake_seek_fail: 0
+    g_fake_n_probes: 0
+    g_fake_n_loads: 0
+    g_fake_n_plays: 0
+    g_fake_n_seeks: 0
+    g_fake_n_unloads: 0
+    g_fake_n_closes: 0
+
+    c.snprintf(sf0, 32U, "a.mp3")
+    c.snprintf(sf1, 32U, "skip_b.mp3")
+    c.snprintf(sf2, 32U, "c.mp3")
+    src[0]: sf0
+    src[1]: sf1
+    src[2]: sf2
+
+    # T1: create must validate the table (complete vs partial).
+    st: mixa_audio_create(0, mixa_audio_fake_table())
+    checks: checks + 1
+    if: st != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio: create(NULL) rc=%d\n", st)
+    ---
+    st: mixa_audio_create(@ h[0], 0)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio: create(vt=NULL) rc=%d\n", st)
+    ---
+    pvt[0]: (cast: (@: MixaAudioVTable) c.calloc(1U, c.sizeof(c.MixaAudioVTable)))
+    pvt[0]\name: "partial"
+    st: mixa_audio_create(@ h[0], pvt[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_ERR_BACKEND
+        failures: failures + 1
+        c.printf("audio: create(partial vt) rc=%d want BACKEND\n", st)
+    ---
+    c.free(pvt[0])
+
+    # The partial table must NOT have displaced the earlier state; create the
+    # real handle now (all T1 calls above failed and zeroed h[0] by contract).
+    st: mixa_audio_create(@ h[0], mixa_audio_fake_table())
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: create real rc=%d\n", st)
+    ---
+
+    # T2: set_list negative paths.
+    st: mixa_audio_set_list(0, src, 3U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio: set_list(NULL) rc=%d\n", st)
+    ---
+    st: mixa_audio_set_list(h[0], 0, 3U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio: set_list(items=NULL) rc=%d\n", st)
+    ---
+    st: mixa_audio_set_list(h[0], src, 2U, 5U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: set_list pos clamped rc=%d\n", st)
+    ---
+    st: mixa_audio_set_list(h[0], src, 65U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("audio: set_list 65 rc=%d\n", st)
+    ---
+
+    # T3: out-of-range pos clamps to the last item; set_list copies strings.
+    checks: checks + 1
+    if: mixa_audio_count(h[0]) != 2U
+        failures: failures + 1
+        c.printf("audio: count rc=%llu\n", mixa_audio_count(h[0]))
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(h[0]) != 1U
+        failures: failures + 1
+        c.printf("audio: pos after clamp want 1 got %llu\n", mixa_audio_pos(h[0]))
+    ---
+    st: mixa_audio_set_list(h[0], src, 3U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: set_list rc=%d\n", st)
+    ---
+    c.snprintf(sf0, 32U, "z.mp3")
+    checks: checks + 1
+    if: c.strcmp(mixa_audio_cur_file(h[0]), "a.mp3") != 0
+        failures: failures + 1
+        c.printf("audio: list not copied, cur=%s\n", mixa_audio_cur_file(h[0]))
+    ---
+    checks: checks + 1
+    if: mixa_audio_count(h[0]) != 3U
+        failures: failures + 1
+        c.printf("audio: count want 3 got %llu\n", mixa_audio_count(h[0]))
+    ---
+
+    # T4: start loads lazily, applies the ini seek, flips to playing, and poll
+    # leaves a playing track alone.
+    g_fake_pos: 0U
+    g_fake_dur: 100000U
+    g_fake_n_probes: 0
+    g_fake_n_loads: 0
+    g_fake_n_plays: 0
+    g_fake_n_seeks: 0
+    st: mixa_audio_start(h[0], 0U, 7000U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: start rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_is_playing(h[0]) != 1
+        failures: failures + 1
+        c.printf("audio: not playing after start\n")
+    ---
+    checks: checks + 1
+    if: g_fake_n_loads != 1
+        failures: failures + 1
+        c.printf("audio: loads=%d want 1\n", g_fake_n_loads)
+    ---
+    checks: checks + 1
+    if: g_fake_n_seeks != 1
+        failures: failures + 1
+        c.printf("audio: seeks=%d want 1 (ini seek)\n", g_fake_n_seeks)
+    ---
+    checks: checks + 1
+    if: g_fake_n_plays != 1
+        failures: failures + 1
+        c.printf("audio: plays=%d want 1\n", g_fake_n_plays)
+    ---
+    checks: checks + 1
+    if: g_fake_pos != 7000U
+        failures: failures + 1
+        c.printf("audio: pos=%lu want 7000\n", g_fake_pos)
+    ---
+    st: mixa_audio_poll(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: poll while playing rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(h[0]) != 0U
+        failures: failures + 1
+        c.printf("audio: poll advanced a playing track\n")
+    ---
+
+    # T5: stop remembers position; resume reloads and re-seeks to it.
+    st: mixa_audio_stop(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: stop rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_cur_state(h[0]) != MIXA_AUDIO_MODE_LOADED
+        failures: failures + 1
+        c.printf("audio: state after stop=%d\n", mixa_audio_cur_state(h[0]))
+    ---
+    checks: checks + 1
+    if: g_fake_pos != 7000U
+        failures: failures + 1
+        c.printf("audio: stop lost position\n")
+    ---
+    g_fake_n_loads: 0
+    g_fake_n_seeks: 0
+    st: mixa_audio_play(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: resume rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: g_fake_n_loads != 1
+        failures: failures + 1
+        c.printf("audio: resume loads=%d want 1\n", g_fake_n_loads)
+    ---
+    checks: checks + 1
+    if: g_fake_n_seeks != 1
+        failures: failures + 1
+        c.printf("audio: resume seeks=%d want 1 (remembered pos)\n", g_fake_n_seeks)
+    ---
+    checks: checks + 1
+    if: g_fake_pos != 7000U
+        failures: failures + 1
+        c.printf("audio: resume ignored remembered pos\n")
+    ---
+
+    # T6: seek_to forwards to the device while open; next() stays in-track as
+    # long as there is room for another full second.
+    g_fake_pos: 2000U
+    st: mixa_audio_seek_to(h[0], 9000U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: seek_to rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: g_fake_pos != 9000U
+        failures: failures + 1
+        c.printf("audio: seek_to not forwarded\n")
+    ---
+    mixa_audio_position(h[0], @ ms)
+    checks: checks + 1
+    if: ms != 9000U
+        failures: failures + 1
+        c.printf("audio: position rc=%lu\n", ms)
+    ---
+    g_fake_pos: 8000U
+    st: mixa_audio_next(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: next in-track rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: g_fake_pos != 9000U
+        failures: failures + 1
+        c.printf("audio: next +1s got %lu want 9000\n", g_fake_pos)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(h[0]) != 0U
+        failures: failures + 1
+        c.printf("audio: next advanced to another track\n")
+    ---
+
+    # T7: next() near the end crosses to the next file; at the very end it
+    # reports MIXA_AUDIO_END when there is nowhere to go.
+    g_fake_pos: 99500U
+    st: mixa_audio_next(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: next near-end rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(h[0]) != 1U
+        failures: failures + 1
+        c.printf("audio: next near-end pos=%llu want 1\n", mixa_audio_pos(h[0]))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_audio_cur_file(h[0]), "skip_b.mp3") != 0
+        failures: failures + 1
+        c.printf("audio: next near-end track=%s\n", mixa_audio_cur_file(h[0]))
+    ---
+    checks: checks + 1
+    if: g_fake_pos != 0U
+        failures: failures + 1
+        c.printf("audio: new track did not reset position\n")
+    ---
+    g_fake_pos: 100000U
+    st: mixa_audio_next(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_END
+        failures: failures + 1
+        c.printf("audio: next at very end rc=%d want END\n", st)
+    ---
+
+    # T8: prev() while <1s into a track moves to the previous file; otherwise
+    # it seeks back one second.
+    g_fake_pos: 100U
+    st: mixa_audio_prev(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: prev cross rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(h[0]) != 0U
+        failures: failures + 1
+        c.printf("audio: prev cross pos=%llu want 0\n", mixa_audio_pos(h[0]))
+    ---
+    g_fake_pos: 5000U
+    st: mixa_audio_prev(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: prev in-track rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: g_fake_pos != 4000U
+        failures: failures + 1
+        c.printf("audio: prev -1s got %lu want 4000\n", g_fake_pos)
+    ---
+
+    # T9: probe() skips a track while linear-scanning forward.
+    g_fake_probe_skip: 1
+    g_fake_pos: 0U
+    st: mixa_audio_next_file(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: next_file over skip rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(h[0]) != 2U
+        failures: failures + 1
+        c.printf("audio: next_file skip pos=%llu want 2\n", mixa_audio_pos(h[0]))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_audio_cur_file(h[0]), "c.mp3") != 0
+        failures: failures + 1
+        c.printf("audio: next_file skip track=%s\n", mixa_audio_cur_file(h[0]))
+    ---
+    g_fake_probe_skip: 0
+
+    # T10: loop wrap forward from the last item returns to the first.
+    mixa_audio_set_loop(h[0], 1)
+    g_fake_pos: 0U
+    st: mixa_audio_next_file(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: next_file loop wrap rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(h[0]) != 0U
+        failures: failures + 1
+        c.printf("audio: loop wrap pos=%llu want 0\n", mixa_audio_pos(h[0]))
+    ---
+    mixa_audio_set_loop(h[0], 0)
+
+    # T11: loop wrap backward from the first item goes to the last.
+    mixa_audio_set_loop(h[0], 1)
+    g_fake_pos: 0U
+    st: mixa_audio_prev_file(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: prev_file loop wrap rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(h[0]) != 2U
+        failures: failures + 1
+        c.printf("audio: prev loop wrap pos=%llu want 2\n", mixa_audio_pos(h[0]))
+    ---
+    mixa_audio_set_loop(h[0], 0)
+
+    # T12: random picks the deterministic LCG jump from the last item (the
+    # linear next scan has no candidates at the tail): pos=2,count=3 leaks
+    # (2*7+3*13+1)%%3 == 0 -> plays item 0 "a.mp3".
+    mixa_audio_set_random(h[0], 1)
+    g_fake_pos: 0U
+    st: mixa_audio_next_file(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: next_file random rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(h[0]) != 0U
+        failures: failures + 1
+        c.printf("audio: random jump pos=%llu want 0\n", mixa_audio_pos(h[0]))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_audio_cur_file(h[0]), "a.mp3") != 0
+        failures: failures + 1
+        c.printf("audio: random jump track=%s\n", mixa_audio_cur_file(h[0]))
+    ---
+    mixa_audio_set_random(h[0], 0)
+
+    # T13: backend failures surface as typed status codes.
+    mixa_audio_stop(h[0])
+    g_fake_load_fail: 1
+    st: mixa_audio_start(h[0], 0U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_ERR_IO
+        failures: failures + 1
+        c.printf("audio: load fail rc=%d want IO\n", st)
+    ---
+    g_fake_load_fail: 0
+    g_fake_play_fail: 1
+    st: mixa_audio_start(h[0], 0U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_ERR_BACKEND
+        failures: failures + 1
+        c.printf("audio: play fail rc=%d want BACKEND\n", st)
+    ---
+    g_fake_play_fail: 0
+    g_fake_seek_fail: 1
+    st: mixa_audio_start(h[0], 0U, 500U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_ERR_IO
+        failures: failures + 1
+        c.printf("audio: seek fail rc=%d want IO\n", st)
+    ---
+    g_fake_seek_fail: 0
+
+    # T14: poll auto-advances when the device leaves playing/paused.
+    g_fake_pos: 0U
+    g_fake_dur: 100000U
+    st: mixa_audio_start(h[0], 0U, 0U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: poll scenario start rc=%d\n", st)
+    ---
+    g_fake_mode: MIXA_AUDIO_DEV_STOPPED
+    g_fake_pos: 100000U
+    st: mixa_audio_poll(h[0])
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("audio: poll end rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(h[0]) != 1U
+        failures: failures + 1
+        c.printf("audio: poll advance pos=%llu want 1\n", mixa_audio_pos(h[0]))
+    ---
+    checks: checks + 1
+    if: mixa_audio_is_playing(h[0]) != 1
+        failures: failures + 1
+        c.printf("audio: poll advance not playing\n")
+    ---
+
+    # T15: is_audio_path consults the backend's ext list, case-insensitively.
+    checks: checks + 1
+    if: mixa_audio_is_audio_path(h[0], "song.Mp3") != 1
+        failures: failures + 1
+        c.printf("audio: is_audio_path Mp3\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_is_audio_path(h[0], "clip.wav") != 1
+        failures: failures + 1
+        c.printf("audio: is_audio_path wav\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_is_audio_path(h[0], "readme.txt") != 0
+        failures: failures + 1
+        c.printf("audio: is_audio_path txt\n")
+    ---
+    checks: checks + 1
+    if: mixa_audio_is_audio_path(h[0], "no_ext") != 0
+        failures: failures + 1
+        c.printf("audio: is_audio_path no_ext\n")
+    ---
+
+    # T16: progress maps position/duration into [0,max].
+    g_fake_pos: 25000U
+    pr: mixa_audio_progress(h[0], 1000U)
+    checks: checks + 1
+    if: pr != 250U
+        failures: failures + 1
+        c.printf("audio: progress %lu want 250\n", pr)
+    ---
+    pr: mixa_audio_progress(h[0], 0U)
+    checks: checks + 1
+    if: pr != 0U
+        failures: failures + 1
+        c.printf("audio: progress max0=%lu\n", pr)
+    ---
+
+    # T17: destroy tears everything down.
+    mixa_audio_destroy(h[0])
+    h[0]: 0
+    checks: checks + 1
+    if: g_fake_n_closes != 1
+        failures: failures + 1
+        c.printf("audio: closes=%d want 1\n", g_fake_n_closes)
+    ---
+
+    c.printf("audio seam selftest: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+return: 0

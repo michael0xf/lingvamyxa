@@ -1,0 +1,332 @@
+predef: "mixa_manager/mixa_audio_win32.h.lm1"
+predef: "mixa_manager/mixa_audio.h.lm1"
+include: "<stdlib.h>" "<string.h>" "<wchar.h>" "<stdio.h>"
+
+# Windows audio-seam backend (ClearShell MP3 button, desktop port, 154950).
+# Plays through the system MCI layer (winmm) so MP3 and WAV ride the codecs
+# the Windows install already has, with no bundled decoder. WAV is guaranteed
+# via the waveaudio MCI driver; MP3 uses the mpegvideo MCI type and therefore
+# depends on a system MP3 renderer (declared honestly in mixa_audio.txt).
+#
+# The device is an MCI alias owned by one MixaAudio instance:
+#   open "<path>" type <waveaudio|mpegvideo> alias mixa<N>
+#   set mixa<N> time format milliseconds
+#   status mixa<N> length|position|mode
+#   play / seek / stop / close
+# End-of-track is NOT signalled to us (no MCINOTIFY callback in this slice);
+# the controller's mixa_audio_poll queries 'status mode' and advances.
+
+int: g_mixa_audio_alias_seq
+
+# UTF-8 path -> allocated wide string. Caller frees the returned pointer.
+fn: mixa_audio_utf8_to_wide_alloc (const: @(char path_utf8)) @: wchar_t
+    int: nwide
+    @: wchar_t wbuf
+    if: path_utf8 = 0
+        return: 0
+    nwide: c.MultiByteToWideChar(65001, 0U, path_utf8, -1, 0, 0)
+    if: nwide <= 0
+        return: 0
+    wbuf: (cast: (@: wchar_t) c.calloc((cast: (size_t) nwide), c.sizeof(c.wchar_t)))
+    if: wbuf = 0
+        return: 0
+    if: c.MultiByteToWideChar(65001, 0U, path_utf8, -1, wbuf, nwide) = 0
+        c.free(wbuf)
+        return: 0
+return: wbuf
+
+# Lower-cased last extension ("mp3", "wav"), or empty string. dst holds 8.
+fn: mixa_audio_ext_lower (const: @(char path_utf8); @: char dst) int
+    size_t: len
+    size_t: cut
+    size_t: i
+    int: ch
+    dst[0]: 0
+    if: path_utf8 = 0
+        return: 1
+    len: c.strlen(path_utf8)
+    if: len = 0U
+        return: 1
+    cut: len
+    while: cut > 0U
+        if: path_utf8[cut - 1U] = (cast: (char) 46)
+            break
+        ---
+        cut: cut - 1U
+    ---
+    if: cut = 0U
+        return: 1
+    i: 0U
+    while: cut + i < len && i < 7U
+        ch: (cast: (int) (cast: (unsigned char) path_utf8[cut + i]))
+        if: ch >= 65 && ch <= 90
+            ch: ch + 32
+        ---
+        dst[i]: (cast: (char) ch)
+        i: i + 1U
+    dst[i]: 0
+return: 0
+
+# Render the per-instance MCI alias into a wide buffer ("mixa7").
+fn: mixa_audio_alias_buf (int: alias; @: wchar_t buf; size_t: cap) int
+    c.snwprintf(buf, cap, L"mixa%d", alias)
+return: 0
+
+# 'status <alias> <kind>' and parse the numeric reply.
+fn: mixa_audio_status_long (int: alias; const: @(char kind)) ulong
+    []: wchar_t cmd 64
+    []: wchar_t resp 128
+    c.snwprintf(cmd, 64U, L"status mixa%d %s", alias, kind)
+    resp[0]: 0
+    if: c.mciSendStringW(cmd, resp, 128U, 0) != 0U
+        return: 0U
+    ---
+return: c.wcstoul(resp, 0, 10)
+
+fn: mixa_audio_ctx_get (const: @(MixaAudioDevice dev)) @: MixaAudioWin32Ctx
+    if: dev = 0
+        return: 0
+    if: dev\impl = 0
+        return: 0
+return: (cast: (@: MixaAudioWin32Ctx) dev\impl)
+
+# The extensions this backend can hand to MCI: mp3 (mpegvideo), wav (auto).
+fn: mixa_audio_ext_known (const: @(char ext)) int
+    if: c.strcmp(ext, "wav") = 0
+        return: 1
+    if: c.strcmp(ext, "mp3") = 0
+        return: 1
+return: 0
+
+fn: mixa_audio_win32_dev_open (@@: MixaAudioDevice out) int
+    @: MixaAudioDevice dev
+    @: MixaAudioWin32Ctx ctx
+    if: out = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev: (cast: (@: MixaAudioDevice) c.calloc(1U, c.sizeof(c.MixaAudioDevice)))
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_NOMEM
+    ctx: (cast: (@: MixaAudioWin32Ctx) c.calloc(1U, c.sizeof(c.MixaAudioWin32Ctx)))
+    if: ctx = 0
+        c.free(dev)
+        return: MIXA_AUDIO_ERR_NOMEM
+    g_mixa_audio_alias_seq: g_mixa_audio_alias_seq + 1
+    ctx\alias: g_mixa_audio_alias_seq
+    dev\impl: (cast: (@: void) ctx)
+    out[0]: dev
+return: MIXA_AUDIO_OK
+
+sub: mixa_audio_win32_dev_close (@: MixaAudioDevice dev)
+    @: MixaAudioWin32Ctx ctx
+    []: wchar_t alias 16
+    []: wchar_t cmd 32
+    if: dev != 0
+        ctx: (cast: (@: MixaAudioWin32Ctx) dev\impl)
+        if: ctx != 0
+            if: ctx\device_open != 0
+                c.snwprintf(alias, 16U, L"mixa%d", ctx\alias)
+                c.snwprintf(cmd, 32U, L"close %ls", alias)
+                c.mciSendStringW(cmd, 0, 0U, 0)
+            ---
+            if: ctx\wpath != 0
+                c.free(ctx\wpath)
+            ---
+            c.free(ctx)
+        ---
+        c.free(dev)
+    ---
+end: mixa_audio_win32_dev_close
+
+# Exists + not a directory + supported MCI extension.
+fn: mixa_audio_win32_dev_probe (@: MixaAudioDevice dev; const: @(char path_utf8)) int
+    @: wchar_t wpath
+    unsigned: attr
+    []: char ext 8
+    if: dev = 0 || path_utf8 = 0
+        return: MIXA_AUDIO_ERR_ARG
+    wpath: mixa_audio_utf8_to_wide_alloc(path_utf8)
+    if: wpath = 0
+        return: MIXA_AUDIO_ERR_IO
+    attr: c.GetFileAttributesW(wpath)
+    c.free(wpath)
+    if: attr = 0xFFFFFFFF
+        return: MIXA_AUDIO_ERR_MISSING
+    if: (attr & 0x10) != 0U
+        return: MIXA_AUDIO_ERR_UNSUPPORTED
+    mixa_audio_ext_lower(path_utf8, ext)
+    if: mixa_audio_ext_known(ext) = 0
+        return: MIXA_AUDIO_ERR_UNSUPPORTED
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_win32_dev_load (@: MixaAudioDevice dev; const: @(char path_utf8)) int
+    @: MixaAudioWin32Ctx ctx
+    @: wchar_t wpath
+    []: wchar_t alias 16
+    []: wchar_t cmd 2060
+    []: char ext 8
+    @: wchar_t wtype
+    ctx: mixa_audio_ctx_get(dev)
+    if: ctx = 0
+        return: MIXA_AUDIO_ERR_ARG
+    wpath: mixa_audio_utf8_to_wide_alloc(path_utf8)
+    if: wpath = 0
+        return: MIXA_AUDIO_ERR_IO
+    mixa_audio_ext_lower(path_utf8, ext)
+    wtype: (cast: (@: wchar_t) L"waveaudio")
+    if: c.strcmp(ext, "mp3") = 0
+        wtype: L"mpegvideo"
+    ---
+    c.snwprintf(alias, 16U, L"mixa%d", ctx\alias)
+    c.snwprintf(cmd, 2060U, L"open %c%ls%c type %ls alias %ls", (cast: (wchar_t) 0x22), wpath, (cast: (wchar_t) 0x22), wtype, alias)
+    if: c.mciSendStringW(cmd, 0, 0U, 0) != 0U
+        c.free(wpath)
+        return: MIXA_AUDIO_ERR_BACKEND
+    c.snwprintf(cmd, 2060U, L"set %ls time format milliseconds", alias)
+    if: c.mciSendStringW(cmd, 0, 0U, 0) != 0U
+        c.free(wpath)
+        return: MIXA_AUDIO_ERR_BACKEND
+    dev\duration: mixa_audio_status_long(ctx\alias, "length")
+    if: ctx\wpath != 0
+        c.free(ctx\wpath)
+    ---
+    ctx\wpath: wpath
+    ctx\ext_kind: 1
+    ctx\device_open: 1
+    dev\is_open: 1
+    dev\playing: 0
+    dev\pos: 0U
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_win32_dev_unload (@: MixaAudioDevice dev) int
+    @: MixaAudioWin32Ctx ctx
+    []: wchar_t alias 16
+    []: wchar_t cmd 32
+    ctx: mixa_audio_ctx_get(dev)
+    if: ctx = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: ctx\device_open = 0
+        return: MIXA_AUDIO_OK
+    c.snwprintf(alias, 16U, L"mixa%d", ctx\alias)
+    c.snwprintf(cmd, 32U, L"close %ls", alias)
+    c.mciSendStringW(cmd, 0, 0U, 0)
+    ctx\device_open: 0
+    dev\is_open: 0
+    dev\playing: 0
+    dev\pos: 0U
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_win32_dev_play (@: MixaAudioDevice dev) int
+    @: MixaAudioWin32Ctx ctx
+    []: wchar_t alias 16
+    []: wchar_t cmd 32
+    ctx: mixa_audio_ctx_get(dev)
+    if: ctx = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: ctx\device_open = 0
+        return: MIXA_AUDIO_ERR_STATE
+    c.snwprintf(alias, 16U, L"mixa%d", ctx\alias)
+    c.snwprintf(cmd, 32U, L"play %ls", alias)
+    if: c.mciSendStringW(cmd, 0, 0U, 0) != 0U
+        return: MIXA_AUDIO_ERR_BACKEND
+    dev\playing: 1
+return: MIXA_AUDIO_OK
+
+# Seek. While playing, 'play <alias> from N' repositions AND continues, which
+# is the exact MCI spelling of a mid-track jump. Paused/stopped uses plain seek.
+fn: mixa_audio_win32_dev_seek (@: MixaAudioDevice dev; ulong: ms) int
+    @: MixaAudioWin32Ctx ctx
+    []: wchar_t alias 16
+    []: wchar_t cmd 64
+    ctx: mixa_audio_ctx_get(dev)
+    if: ctx = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: ctx\device_open = 0
+        return: MIXA_AUDIO_ERR_STATE
+    c.snwprintf(alias, 16U, L"mixa%d", ctx\alias)
+    if: dev\playing != 0
+        c.snwprintf(cmd, 64U, L"play %ls from %lu", alias, ms)
+        if: c.mciSendStringW(cmd, 0, 0U, 0) != 0U
+            return: MIXA_AUDIO_ERR_BACKEND
+        ---
+    else:
+        c.snwprintf(cmd, 64U, L"seek %ls to %lu", alias, ms)
+        if: c.mciSendStringW(cmd, 0, 0U, 0) != 0U
+            return: MIXA_AUDIO_ERR_BACKEND
+    ---
+    dev\pos: ms
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_win32_dev_position (@: MixaAudioDevice dev; @: ulong out_ms) int
+    @: MixaAudioWin32Ctx ctx
+    if: dev = 0 || out_ms = 0
+        return: MIXA_AUDIO_ERR_ARG
+    ctx: mixa_audio_ctx_get(dev)
+    if: ctx = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: ctx\device_open = 0
+        out_ms[0]: dev\pos
+        return: MIXA_AUDIO_OK
+    out_ms[0]: mixa_audio_status_long(ctx\alias, "position")
+    dev\pos: out_ms[0]
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_win32_dev_duration (@: MixaAudioDevice dev; @: ulong out_ms) int
+    if: dev = 0 || out_ms = 0
+        return: MIXA_AUDIO_ERR_ARG
+    out_ms[0]: dev\duration
+return: MIXA_AUDIO_OK
+
+fn: mixa_audio_win32_dev_mode (@: MixaAudioDevice dev; @: int out_mode) int
+    @: MixaAudioWin32Ctx ctx
+    []: wchar_t cmd 40
+    []: wchar_t resp 64
+    if: dev = 0 || out_mode = 0
+        return: MIXA_AUDIO_ERR_ARG
+    ctx: mixa_audio_ctx_get(dev)
+    if: ctx = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: ctx\device_open = 0
+        out_mode[0]: MIXA_AUDIO_DEV_STOPPED
+        return: MIXA_AUDIO_OK
+    c.snwprintf(cmd, 40U, L"status mixa%d mode", ctx\alias)
+    resp[0]: 0
+    if: c.mciSendStringW(cmd, resp, 64U, 0) != 0U
+        return: MIXA_AUDIO_ERR_BACKEND
+    if: c.wcscmp(resp, L"playing") = 0
+        out_mode[0]: MIXA_AUDIO_DEV_PLAYING
+    else:
+        if: c.wcscmp(resp, L"paused") = 0
+            out_mode[0]: MIXA_AUDIO_DEV_PAUSED
+        else:
+            out_mode[0]: MIXA_AUDIO_DEV_STOPPED
+        ---
+    ---
+return: MIXA_AUDIO_OK
+
+@: MixaAudioVTable g_mixa_audio_win32_vtable
+int: g_mixa_audio_win32_vtable_ready
+
+fn: mixa_audio_win32_table () const: @(MixaAudioVTable)
+    if: g_mixa_audio_win32_vtable_ready = 0
+        g_mixa_audio_win32_vtable: (cast: (@: MixaAudioVTable) c.calloc(1U, c.sizeof(c.MixaAudioVTable)))
+        if: g_mixa_audio_win32_vtable = 0
+            return: 0
+        g_mixa_audio_win32_vtable\name: "win32"
+        g_mixa_audio_win32_vtable\audio_exts: "mp3 wav"
+        g_mixa_audio_win32_vtable\caps_position: 1
+        g_mixa_audio_win32_vtable\caps_duration: 1
+        g_mixa_audio_win32_vtable\caps_seek: 1
+        g_mixa_audio_win32_vtable\caps_mode: 1
+        g_mixa_audio_win32_vtable\open: mixa_audio_win32_dev_open
+        g_mixa_audio_win32_vtable\close: mixa_audio_win32_dev_close
+        g_mixa_audio_win32_vtable\probe: mixa_audio_win32_dev_probe
+        g_mixa_audio_win32_vtable\load: mixa_audio_win32_dev_load
+        g_mixa_audio_win32_vtable\unload: mixa_audio_win32_dev_unload
+        g_mixa_audio_win32_vtable\play: mixa_audio_win32_dev_play
+        g_mixa_audio_win32_vtable\seek: mixa_audio_win32_dev_seek
+        g_mixa_audio_win32_vtable\position: mixa_audio_win32_dev_position
+        g_mixa_audio_win32_vtable\duration: mixa_audio_win32_dev_duration
+        g_mixa_audio_win32_vtable\mode: mixa_audio_win32_dev_mode
+        g_mixa_audio_win32_vtable_ready: 1
+    ---
+return: g_mixa_audio_win32_vtable
