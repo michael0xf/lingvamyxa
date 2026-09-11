@@ -11,9 +11,10 @@ Wrapper: l2src/lmx_dec.h + lmx_dec.c
   Owner-local LmxDecCtx. ctx.set.digits must stay in 1..34 or ops fail.
 
 Status
-  Sticky on ctx (diagnostic history). Return 0 iff THIS call added no
-  DEC_Errors bits (lmx_dec_ctx_new_errors). Inexact is not an error.
-  Do not auto-clear history; ctx_clear is explicit.
+  Each call uses an operation-local context with status=0, then ORs that
+  result into the owner ctx (sticky history). Return 0 iff THIS operation's
+  DEC_Errors is empty. A second 1/0 or second bad parse still returns 1.
+  Inexact is not an error. ctx_clear is explicit; ops never clear history.
 
 Profile (explicit, not IEEE-128 storage)
   digits=34, default round HALF_EVEN, traps=0

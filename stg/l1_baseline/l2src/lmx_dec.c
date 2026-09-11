@@ -6,12 +6,22 @@ static int digits_ok(const LmxDecCtx *ctx) {
     return ctx != 0 && ctx->set.digits >= 1 && ctx->set.digits <= LMX_DEC_DIGITS;
 }
 
-unsigned lmx_dec_ctx_new_errors(unsigned before, unsigned after) {
-    return (after & ~before) & DEC_Errors;
+static void op_ctx(const LmxDecCtx *owner, decContext *op) {
+    *op = owner->set;
+    op->status = 0;
 }
 
-static int finish(LmxDecCtx *ctx, unsigned before) {
-    return lmx_dec_ctx_new_errors(before, ctx->set.status) != 0U ? 1 : 0;
+static int finish_op(LmxDecCtx *owner, const decContext *op) {
+    owner->set.status |= op->status;
+    return (op->status & DEC_Errors) != 0U ? 1 : 0;
+}
+
+int lmx_dec_ctx_set_digits(LmxDecCtx *ctx, int digits) {
+    if (ctx == 0) {
+        return 1;
+    }
+    ctx->set.digits = digits;
+    return 0;
 }
 
 int lmx_dec_digits(void) {
@@ -47,84 +57,84 @@ void lmx_dec_ctx_clear(LmxDecCtx *ctx) {
 }
 
 int lmx_dec_from_text(LmxDec *out, const char *text, LmxDecCtx *ctx) {
-    unsigned before;
+    decContext op;
     if (out == 0 || text == 0 || !digits_ok(ctx)) {
         return 1;
     }
-    before = ctx->set.status;
-    decNumberFromString(&out->n, text, &ctx->set);
-    return finish(ctx, before);
+    op_ctx(ctx, &op);
+    decNumberFromString(&out->n, text, &op);
+    return finish_op(ctx, &op);
 }
 
 int lmx_dec_add(LmxDec *out, const LmxDec *a, const LmxDec *b, LmxDecCtx *ctx) {
-    unsigned before;
+    decContext op;
     if (out == 0 || a == 0 || b == 0 || !digits_ok(ctx)) {
         return 1;
     }
-    before = ctx->set.status;
-    decNumberAdd(&out->n, &a->n, &b->n, &ctx->set);
-    return finish(ctx, before);
+    op_ctx(ctx, &op);
+    decNumberAdd(&out->n, &a->n, &b->n, &op);
+    return finish_op(ctx, &op);
 }
 
 int lmx_dec_sub(LmxDec *out, const LmxDec *a, const LmxDec *b, LmxDecCtx *ctx) {
-    unsigned before;
+    decContext op;
     if (out == 0 || a == 0 || b == 0 || !digits_ok(ctx)) {
         return 1;
     }
-    before = ctx->set.status;
-    decNumberSubtract(&out->n, &a->n, &b->n, &ctx->set);
-    return finish(ctx, before);
+    op_ctx(ctx, &op);
+    decNumberSubtract(&out->n, &a->n, &b->n, &op);
+    return finish_op(ctx, &op);
 }
 
 int lmx_dec_mul(LmxDec *out, const LmxDec *a, const LmxDec *b, LmxDecCtx *ctx) {
-    unsigned before;
+    decContext op;
     if (out == 0 || a == 0 || b == 0 || !digits_ok(ctx)) {
         return 1;
     }
-    before = ctx->set.status;
-    decNumberMultiply(&out->n, &a->n, &b->n, &ctx->set);
-    return finish(ctx, before);
+    op_ctx(ctx, &op);
+    decNumberMultiply(&out->n, &a->n, &b->n, &op);
+    return finish_op(ctx, &op);
 }
 
 int lmx_dec_div(LmxDec *out, const LmxDec *a, const LmxDec *b, LmxDecCtx *ctx) {
-    unsigned before;
+    decContext op;
     if (out == 0 || a == 0 || b == 0 || !digits_ok(ctx)) {
         return 1;
     }
-    before = ctx->set.status;
-    decNumberDivide(&out->n, &a->n, &b->n, &ctx->set);
-    return finish(ctx, before);
+    op_ctx(ctx, &op);
+    decNumberDivide(&out->n, &a->n, &b->n, &op);
+    return finish_op(ctx, &op);
 }
 
 int lmx_dec_neg(LmxDec *out, const LmxDec *a, LmxDecCtx *ctx) {
-    unsigned before;
+    decContext op;
     if (out == 0 || a == 0 || !digits_ok(ctx)) {
         return 1;
     }
-    before = ctx->set.status;
-    decNumberMinus(&out->n, &a->n, &ctx->set);
-    return finish(ctx, before);
+    op_ctx(ctx, &op);
+    decNumberMinus(&out->n, &a->n, &op);
+    return finish_op(ctx, &op);
 }
 
 int lmx_dec_pow(LmxDec *out, const LmxDec *a, const LmxDec *b, LmxDecCtx *ctx) {
-    unsigned before;
+    decContext op;
     if (out == 0 || a == 0 || b == 0 || !digits_ok(ctx)) {
         return 1;
     }
-    before = ctx->set.status;
-    decNumberPower(&out->n, &a->n, &b->n, &ctx->set);
-    return finish(ctx, before);
+    op_ctx(ctx, &op);
+    decNumberPower(&out->n, &a->n, &b->n, &op);
+    return finish_op(ctx, &op);
 }
 
 int lmx_dec_compare(const LmxDec *a, const LmxDec *b, LmxDecCtx *ctx, int *rel) {
-    unsigned before;
+    decContext op;
     decNumber cmp;
     if (a == 0 || b == 0 || rel == 0 || !digits_ok(ctx)) {
         return 1;
     }
-    before = ctx->set.status;
-    decNumberCompare(&cmp, &a->n, &b->n, &ctx->set);
-    if (finish(ctx, before) != 0 || decNumberIsNaN(&cmp)) {
+    op_ctx(ctx, &op);
+    decNumberCompare(&cmp, &a->n, &b->n, &op);
+    if (finish_op(ctx, &op) != 0 || decNumberIsNaN(&cmp)) {
         return 1;
     }
     if (decNumberIsZero(&cmp)) {
@@ -138,8 +148,7 @@ int lmx_dec_compare(const LmxDec *a, const LmxDec *b, LmxDecCtx *ctx, int *rel) 
 }
 
 int lmx_dec_quantize_places(LmxDec *out, const LmxDec *a, int places, enum rounding round, LmxDecCtx *ctx) {
-    unsigned before;
-    decContext tmp;
+    decContext op;
     LmxDec exp;
     char exptext[24];
     if (out == 0 || a == 0 || !digits_ok(ctx) || places < 0 || places > LMX_DEC_DIGITS || round >= DEC_ROUND_MAX) {
@@ -150,13 +159,11 @@ int lmx_dec_quantize_places(LmxDec *out, const LmxDec *a, int places, enum round
     } else if (sprintf(exptext, "1E-%d", places) < 0) {
         return 1;
     }
-    tmp = ctx->set;
-    tmp.round = round;
-    before = ctx->set.status;
-    decNumberFromString(&exp.n, exptext, &tmp);
-    decNumberQuantize(&out->n, &a->n, &exp.n, &tmp);
-    ctx->set.status = tmp.status;
-    return finish(ctx, before);
+    op_ctx(ctx, &op);
+    op.round = round;
+    decNumberFromString(&exp.n, exptext, &op);
+    decNumberQuantize(&out->n, &a->n, &exp.n, &op);
+    return finish_op(ctx, &op);
 }
 
 int lmx_dec_to_text(const LmxDec *a, char *buf, size_t n) {

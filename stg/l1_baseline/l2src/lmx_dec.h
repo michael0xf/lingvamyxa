@@ -30,8 +30,8 @@ typedef struct LmxDec {
 int lmx_dec_digits(void);
 int lmx_dec_ctx_init(LmxDecCtx *ctx);
 unsigned lmx_dec_ctx_status(const LmxDecCtx *ctx);
-unsigned lmx_dec_ctx_new_errors(unsigned before, unsigned after);
 void lmx_dec_ctx_clear(LmxDecCtx *ctx);
+int lmx_dec_ctx_set_digits(LmxDecCtx *ctx, int digits);
 int lmx_dec_from_text(LmxDec *out, const char *text, LmxDecCtx *ctx);
 int lmx_dec_add(LmxDec *out, const LmxDec *a, const LmxDec *b, LmxDecCtx *ctx);
 int lmx_dec_sub(LmxDec *out, const LmxDec *a, const LmxDec *b, LmxDecCtx *ctx);
