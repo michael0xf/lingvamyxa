@@ -680,6 +680,10 @@ fn: lmx_msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @
     @: LmxMsgCopy node
     if: lmx_msg_require_turn(rt, from) != c.LMX_MSG_OK || env = 0 || from = 0U || to = 0U
         return: c.LMX_MSG_INVALID
+    if: env\kind != c.LMX_MSG_KIND_BYTES && env\kind != c.LMX_MSG_KIND_NUMBER
+        return: c.LMX_MSG_INVALID
+    if: env\n != 0U && env\bytes = 0
+        return: c.LMX_MSG_INVALID
     node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
     if: node = 0
         return: c.LMX_MSG_NOMEM

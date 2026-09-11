@@ -2161,20 +2161,37 @@ int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child
 int lmx_msg_parent_settle(LmxMsgRuntime *rt, LmxMsgAddr parent) {
     LmxMsg *p;
     LmxMsg *ch;
-    LmxMsgAddr buf[32];
+    LmxMsgAddr *buf;
+    LmxMsgAddr *tmp;
     int n = 0;
+    int cap = 8;
     int i;
     if (lifecycle_authority(rt, parent) == 0) {
         return LMX_MSG_INVALID;
+    }
+    buf = (LmxMsgAddr *)malloc((size_t)cap * sizeof(LmxMsgAddr));
+    if (buf == 0) {
+        return LMX_MSG_NOMEM;
     }
     lmx_msg_exec_lock(rt);
     p = lmx_msg_find(rt, parent);
     if (p == 0 || p->disposed != 0) {
         lmx_msg_exec_unlock(rt);
+        free(buf);
         return LMX_MSG_INVALID;
     }
     ch = p->first_child;
-    while (ch != 0 && n < 32) {
+    while (ch != 0) {
+        if (n == cap) {
+            cap *= 2;
+            tmp = (LmxMsgAddr *)realloc(buf, (size_t)cap * sizeof(LmxMsgAddr));
+            if (tmp == 0) {
+                lmx_msg_exec_unlock(rt);
+                free(buf);
+                return LMX_MSG_NOMEM;
+            }
+            buf = tmp;
+        }
         buf[n] = ch->addr;
         n += 1;
         ch = ch->next_sibling;
@@ -2184,6 +2201,7 @@ int lmx_msg_parent_settle(LmxMsgRuntime *rt, LmxMsgAddr parent) {
         (void)lmx_msg_adopt_failed(rt, parent, buf[i]);
         (void)lmx_msg_dispose_child(rt, parent, buf[i]);
     }
+    free(buf);
     return LMX_MSG_OK;
 }
 

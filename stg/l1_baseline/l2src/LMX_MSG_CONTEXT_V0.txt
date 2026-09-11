@@ -264,7 +264,11 @@ Exactly-once
 
 Open (not this slice)
   Per-mailbox lock; no tab/find; no global exec lock;
-  registered range blocks; mixa pin. send_owned is local
-  envelope ownership transfer (same pointer); copy send remains
-  for borrowed env. parent_settle runs only while the parent
-  holds its turn.
+  registered range blocks; mixa pin. send_owned transfers a
+  free()-compatible independent allocation (not an interior
+  arena pointer). Invalid kind / n>0 with NULL bytes reject
+  before steal. Staging failure restores caller ownership.
+  Recv hands the same pointer to env; env_release frees once.
+  parent_settle walks the full direct-child list (growable,
+  no 32 cap). Final graph delivery still needs block
+  metadata/deleters, not raw free.

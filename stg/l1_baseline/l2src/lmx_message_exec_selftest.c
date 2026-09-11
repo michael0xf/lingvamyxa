@@ -312,6 +312,17 @@ static int turn_owned_send(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     memset(&env, 0, sizeof(env));
     env.kind = LMX_MSG_KIND_BYTES;
     env.n = 4;
+    env.bytes = 0;
+    if (lmx_msg_send_owned(rt, who, o->dest, &env) != LMX_MSG_INVALID || env.n != 4 || env.bytes != 0) {
+        return 1;
+    }
+    env.kind = 99;
+    env.n = 0;
+    if (lmx_msg_send_owned(rt, who, o->dest, &env) != LMX_MSG_INVALID) {
+        return 1;
+    }
+    env.kind = LMX_MSG_KIND_BYTES;
+    env.n = 4;
     env.bytes = b;
     if (lmx_msg_send_owned(rt, who, o->dest, &env) != LMX_MSG_STAGED || env.bytes != 0) {
         return 1;
@@ -327,8 +338,10 @@ static int turn_owned_recv(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
         return 1;
     }
     o->got = (void *)got.bytes;
-    got.bytes = 0;
-    got.n = 0U;
+    if (o->got != o->orig) {
+        lmx_msg_env_release(&got);
+        return 1;
+    }
     lmx_msg_env_release(&got);
     return 0;
 }
@@ -3550,9 +3563,55 @@ int main(void) {
             lmx_msg_runtime_delete(rto);
             return 1;
         }
-        free(os.got);
-        fprintf(stderr, "send_owned same-ptr\n");
+        fprintf(stderr, "send_owned same-ptr env_release-once\n");
         lmx_msg_runtime_delete(rto);
+    }
+    {
+        LmxMsgRuntime *rts;
+        LmxMsgAddr dummy = 0, p = 0, kids[33];
+        uchar ini = 1;
+        int i;
+        rts = lmx_msg_runtime_new();
+        if (rts == 0 || lmx_msg_create(rts, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_create(rts, dummy, 2, &ini, 1, &p) != LMX_MSG_OK || lmx_msg_end_turn(rts, dummy, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        memset(kids, 0, sizeof(kids));
+        for (i = 0; i < 33; i++) {
+            if (lmx_msg_create(rts, p, (unsigned)(3 + i), &ini, 1, &kids[i]) != LMX_MSG_OK) {
+                fprintf(stderr, "settle33 create %d\n", i);
+                lmx_msg_runtime_delete(rts);
+                return 1;
+            }
+        }
+        if (lmx_msg_end_turn(rts, p, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        for (i = 0; i < 33; i++) {
+            if (lmx_msg_exec_bind(rts, kids[i], turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_emergency_cancel(rts, kids[i]) != LMX_MSG_OK) {
+                fprintf(stderr, "settle33 bind %d\n", i);
+                lmx_msg_runtime_delete(rts);
+                return 1;
+            }
+            (void)lmx_msg_run_child_turn(rts, kids[i]);
+        }
+        for (i = 0; i < 32; i++) {
+            if (lmx_msg_adopt_failed(rts, p, kids[i]) != LMX_MSG_OK) {
+                fprintf(stderr, "settle33 adopt %d\n", i);
+                lmx_msg_runtime_delete(rts);
+                return 1;
+            }
+        }
+        if (lmx_msg_parent_settle(rts, p) != LMX_MSG_OK || lmx_msg_adopted_n(rts, p) != 33) {
+            fprintf(stderr, "settle33 n=%d\n", lmx_msg_adopted_n(rts, p));
+            lmx_msg_runtime_delete(rts);
+            return 1;
+        }
+        fprintf(stderr, "parent_settle 33 kids\n");
+        lmx_msg_runtime_delete(rts);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
