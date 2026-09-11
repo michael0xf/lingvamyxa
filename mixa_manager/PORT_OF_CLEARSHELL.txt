@@ -87,6 +87,18 @@ button/panel behaviour. Preserve ClearShell algorithms and ordering where no
 current app delta overrides them. Inventory and reuse existing modules rather
 than overwrite them; test each bounded operation and then wire its action.
 
+Button fidelity clarification (owner, 2026-09-11): port the ClearShell buttons
+literally: inventory, labels, ordering and actions, including App and MP3.
+The established app-specific rendering, layering and scrolling deltas still
+apply; literal port does not restore Android system-widget layout. F1 Help
+is the explicitly recalled added control. Do not invent additional controls
+or treat unexplained additions in implementation notes as owner decisions;
+verify any other claimed additions against the recorded requirements.
+
+Current queued OpenCode sequence: nested same-app short-message window,
+then App/shortcut adapters, then MP3/audio adapters. These bounded slices
+continue the file-manager/button port; they do not replace its remaining work.
+
 An action whose function is not yet implemented opens a nested instance of the
 same reduced application interface: text "нет функции" and one dismiss button
 are enough. Appearance may be minimal; nesting and self-reproduction must work.
