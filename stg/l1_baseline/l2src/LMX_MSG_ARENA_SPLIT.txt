@@ -45,6 +45,11 @@ Who may call (Grok policy, in lmx_message*)
   and every direct child disposed. Grok now calls this API from
   those sites and slot_free. LmxAdopted is gone. Grok will not
   add a second arena module.
+  Owned-range metadata (Codex lmx_owned_ranges) is a separate
+  owner-held classifier on LmxMsg.ranges. Handoff preflights
+  can_move then moves blocks then ranges under the same exec
+  lock. Range nodes are owner-supplied; dispose/slot_free
+  detach them without treating mailbox/init as a typed domain.
 
 Must not
   Global lock, process-wide range table as Message ownership,

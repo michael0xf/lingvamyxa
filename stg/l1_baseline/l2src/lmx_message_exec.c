@@ -421,10 +421,43 @@ void lmx_msg_mail_outbox_take(LmxMsg *m, LmxMsgCopy **out) {
     lmx_msg_mail_unlock(m);
 }
 
+static void drop_ranges_locked(LmxMsg *m) {
+    if (m == 0) {
+        return;
+    }
+    while (m->ranges != 0) {
+        if (lmx_owned_ranges_remove(&m->ranges, m->ranges) != LMX_OWNED_RANGES_OK) {
+            m->ranges = 0;
+            return;
+        }
+    }
+}
+
+static int handoff_move_locked(LmxMsg *dst, LmxMsg *src) {
+    if (dst == 0 || src == 0 || dst == src) {
+        return LMX_MSG_INVALID;
+    }
+    if (lmx_owned_ranges_can_move(&dst->ranges, &src->ranges) != LMX_OWNED_RANGES_OK) {
+        return LMX_MSG_INVALID;
+    }
+    if (src->blocks != 0) {
+        if (lmx_msg_blocks_move_all(&dst->blocks, &src->blocks) != LMX_MSG_BLOCKS_OK) {
+            return LMX_MSG_INVALID;
+        }
+    }
+    if (src->ranges != 0) {
+        if (lmx_owned_ranges_move_all(&dst->ranges, &src->ranges) != LMX_OWNED_RANGES_OK) {
+            return LMX_MSG_INVALID;
+        }
+    }
+    return LMX_MSG_OK;
+}
+
 void lmx_msg_slot_free(LmxMsg *m) {
     if (m == 0) {
         return;
     }
+    drop_ranges_locked(m);
     (void)lmx_msg_blocks_dispose_all(&m->blocks);
 #if defined(_WIN32)
     if (m->mail != 0) {
@@ -2068,7 +2101,7 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    if (c->init == 0 && c->blocks == 0) {
+    if (c->init == 0 && c->blocks == 0 && c->ranges == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
@@ -2080,6 +2113,10 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
         }
         ch = ch->next_sibling;
     }
+    if (lmx_owned_ranges_can_move(&p->ranges, &c->ranges) != LMX_OWNED_RANGES_OK) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
     if (c->init != 0) {
         if (adopt_push(p, c->init, c->init_n) != 0) {
             lmx_msg_exec_unlock(rt);
@@ -2088,11 +2125,9 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
         c->init = 0;
         c->init_n = 0U;
     }
-    if (c->blocks != 0) {
-        if (lmx_msg_blocks_move_all(&p->blocks, &c->blocks) != LMX_MSG_BLOCKS_OK) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_INVALID;
-        }
+    if (handoff_move_locked(p, c) != LMX_MSG_OK) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
     }
     c->disposed = 1;
     lmx_msg_exec_unlock(rt);
@@ -2140,6 +2175,7 @@ void *lmx_msg_adopted_base(LmxMsgRuntime *rt, LmxMsgAddr who, int i) {
 
 static void drop_adopted_locked(LmxMsg *m) {
     if (m != 0) {
+        drop_ranges_locked(m);
         (void)lmx_msg_blocks_dispose_all(&m->blocks);
     }
 }
@@ -2153,7 +2189,8 @@ int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to) 
     lmx_msg_exec_lock(rt);
     src = lmx_msg_find(rt, from);
     dst = lmx_msg_find(rt, to);
-    if (src == 0 || dst == 0 || src == dst || src->blocks == 0
+    if (src == 0 || dst == 0 || src == dst
+        || (src->blocks == 0 && src->ranges == 0)
         || src->parent_msg != dst || src->native_users != 0
         || lmx_msg_running_load(src) != 0 || src->handoff_ready == 0
         || dst->disposed != 0
@@ -2171,7 +2208,7 @@ int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to) 
             ch = ch->next_sibling;
         }
     }
-    if (lmx_msg_blocks_move_all(&dst->blocks, &src->blocks) != LMX_MSG_BLOCKS_OK) {
+    if (handoff_move_locked(dst, src) != LMX_MSG_OK) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
@@ -2194,7 +2231,7 @@ int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
-    if (lmx_msg_success_load(c) == 0 && (c->init != 0 || c->blocks != 0)) {
+    if (lmx_msg_success_load(c) == 0 && (c->init != 0 || c->blocks != 0 || c->ranges != 0)) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }

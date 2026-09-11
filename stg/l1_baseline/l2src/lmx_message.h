@@ -8,6 +8,7 @@
 #define LMX_MESSAGE_H
 
 #include "l2src/lmx_msg_blocks.lm1.h"
+#include "l2src/lmx_owned_ranges.lm1.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -134,6 +135,7 @@ typedef struct LmxMsg {
     unsigned orphan_until;
     int disposed;
     LmxMsgBlock *blocks;
+    LmxOwnedRange *ranges;
 } LmxMsg;
 
 struct LmxMsgRuntime {

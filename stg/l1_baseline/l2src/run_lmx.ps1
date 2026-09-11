@@ -16,11 +16,17 @@ $log = "build\l1trans\logs\$gen"
 New-Item -ItemType Directory -Force -Path $out, $log, (Join-Path $out "headers\l2src") | Out-Null
 $blkHdr = Join-Path $out "headers\l2src\lmx_msg_blocks.lm1.h"
 $blkC = Join-Path $out "lmx_msg_blocks.c"
+$rngHdr = Join-Path $out "headers\l2src\lmx_owned_ranges.lm1.h"
+$rngC = Join-Path $out "lmx_owned_ranges.c"
 $blkInc = Join-Path $out "headers"
 & $trans "l2src\lmx_msg_blocks.h.lm1" $blkHdr
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_blocks.h.lm1" }
 & $trans "l2src\lmx_msg_blocks.lm1" $blkC
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_blocks.lm1" }
+& $trans "l2src\lmx_owned_ranges.h.lm1" $rngHdr
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_owned_ranges.h.lm1" }
+& $trans "l2src\lmx_owned_ranges.lm1" $rngC
+if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_owned_ranges.lm1" }
 
 $guards = @(
     "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",
@@ -40,7 +46,7 @@ foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "
     $opt = @()
     $inc = @("-I", ".", "-I", "lm1/build")
     if ($unit -eq "lmx_message_selftest") {
-        $extra = @("l2src\lmx_message_host.c", "l2src\lmx_message_exec.c", $blkC)
+        $extra = @("l2src\lmx_message_host.c", "l2src\lmx_message_exec.c", $blkC, $rngC)
         $defs = @("-DLMX_MSG_HOST_TEST")
         $inc += @("-I", $blkInc)
     }
@@ -114,7 +120,7 @@ if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_bind_has_worker\s*$') { thro
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_fail_hits\s*$') { throw "production exec.o exports test fail_hits" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_get_scan\s*$') { throw "production exec.o exports test get_scan" }
 $hostExe = Join-Path $out "lmx_message_host_selftest.exe"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -DLMX_MSG_HOST_TEST l2src\lmx_message_host_selftest.c `"$msgC`" l2src\lmx_message_host.c l2src\lmx_message_exec.c `"$blkC`" -o `"$hostExe`" > `"$(Join-Path $log 'lmx_message_host_selftest.gcc.log')`" 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -DLMX_MSG_HOST_TEST l2src\lmx_message_host_selftest.c `"$msgC`" l2src\lmx_message_host.c l2src\lmx_message_exec.c `"$blkC`" `"$rngC`" -o `"$hostExe`" > `"$(Join-Path $log 'lmx_message_host_selftest.gcc.log')`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content (Join-Path $log "lmx_message_host_selftest.gcc.log")
     throw "$gen gcc failed: lmx_message_host_selftest"
@@ -122,7 +128,7 @@ if ($LASTEXITCODE -ne 0) {
 & $hostExe
 if ($LASTEXITCODE -ne 0) { throw "$gen lmx_message_host_selftest failed" }
 $execExe = Join-Path $out "lmx_message_exec_selftest.exe"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -DLMX_MSG_EXEC_TEST l2src\lmx_message_exec_selftest.c `"$msgC`" l2src\lmx_message_host.c l2src\lmx_message_exec.c `"$blkC`" -o `"$execExe`" > `"$(Join-Path $log 'lmx_message_exec_selftest.gcc.log')`" 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -DLMX_MSG_EXEC_TEST l2src\lmx_message_exec_selftest.c `"$msgC`" l2src\lmx_message_host.c l2src\lmx_message_exec.c `"$blkC`" `"$rngC`" -o `"$execExe`" > `"$(Join-Path $log 'lmx_message_exec_selftest.gcc.log')`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content (Join-Path $log "lmx_message_exec_selftest.gcc.log")
     throw "$gen gcc failed: lmx_message_exec_selftest"
@@ -196,7 +202,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "$gen gcc failed: $spinC nomain"
 }
 $spinGlog = Join-Path $log "cancel_spin_host.gcc.log"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" `"$spinObj`" l2src\tests\cancel_spin_host.c `"$msgC`" l2src\lmx_message_host.c l2src\lmx_message_exec.c `"$blkC`" -o `"$spinExe`" > `"$spinGlog`" 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" `"$spinObj`" l2src\tests\cancel_spin_host.c `"$msgC`" l2src\lmx_message_host.c l2src\lmx_message_exec.c `"$blkC`" `"$rngC`" -o `"$spinExe`" > `"$spinGlog`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content $spinGlog
     throw "$gen gcc failed: cancel_spin_host"

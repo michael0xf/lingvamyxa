@@ -120,7 +120,8 @@ Do not claim the previous global-table runtime complied.
       Message (lmx_msg_self_or_find), else forest find.
       recv still pops mail via turn_self without exec first.
       See LMX_MSG_ARENA_SPLIT.txt for Codex block-list module
-      (Grok does not implement a second one).
+      and LMX_OWNED_RANGES.txt for the owner-local classifier.
+      Mailbox/init bytes are not auto-registered as graph domains.
   D2. request_children_close walks the direct-child list.
       poll(0) and drive walk the forest, not tab.
   D3. EXEC ready queue + nworkers pool (`lmx_msg_exec_start`)
