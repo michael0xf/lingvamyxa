@@ -56,3 +56,26 @@ Keep unfinished scope explicit. Commit/push each verified stage using only
 owned paths; never include unrelated shared changes. New architecture, unsafe
 cleanup, paid services, or changes outside the agreed task need their own
 authority. Do not create extra tests or refactors merely to appear busy.
+
+## Proportional verification, without repeated self-builds
+
+For each change, name the smallest relevant verification set. Targeted checks
+belong in the edit/test loop; broad regression, cross-generation checks and
+full self-hosting/bootstrap validation belong at their justified integration
+or release milestones, not after every unrelated module change. Remove
+redundant tests from the per-change mandatory list but KEEP their sources and
+an explicit way to run them. Document which checks moved and why. A relevant
+failure remains unresolved until diagnosed; changing tiers is not a fix.
+
+Use the pinned built translator read-only for app/runtime-only changes. Do
+not invoke a bootstrap/generation rebuild for each test. Build shared outputs
+once per source revision AND compiler/target/options/defines combination, then
+reuse those exact artifacts for compatible tests. Different instrumentation
+defines are different configurations; do not incorrectly share their objects.
+Keep source/toolchain/configuration hashes so reuse cannot hide stale output.
+
+Do not ask another agent to repeat an identical verified run without a reason.
+Separate build time, test execution and failed-cleanup waits when diagnosing
+slowness. A stalled test needs a bounded diagnostic/fix, not another complete
+compiler rebuild. Preserve mandatory self-build/next/check/bootstrap evidence
+for stable promotion; the goal is less duplicate work, not weaker acceptance.
