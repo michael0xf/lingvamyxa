@@ -1,0 +1,148 @@
+LMX_MSG_CONTEXT_V0
+==================
+
+Accepted per-context Message ownership. Not an app pin.
+LMX_MSG_EXEC_HOST_V0 remains prototype evidence of overlapping
+turns; it is not the language-level architecture and must not be
+copied over mixa_manager/vendor as the design.
+
+User constraint (032700 / 033000)
+---------------------------------
+Each L3 Thread / live Message context owns:
+
+  - its mailbox (FIFO inbox; staging outbox)
+  - its parent capability (or none, if a root)
+  - its direct-child list
+
+Supervision is local: a parent knows only its direct children.
+Grandchildren are the child's problem. Incoming payload is not a
+new execution thread. Explicit launch creates a child with its own
+arena. Arbitrary explicit send is allowed: parent/child are
+supervision relations, not the only recipients.
+
+What is forbidden
+-----------------
+- Process-wide shared mutable Message registry used as the
+  ownership/supervision/lookup model (rt->tab scans for children,
+  global find-by-integer, workers mutating a shared table as the
+  family tree).
+- A non-Message C scheduler/router/worker-pool policy as a
+  language-level coordinator (including hiding the same table
+  behind a Message facade while workers keep direct shared access).
+- One global lock around handler execution.
+- Private application C concurrency frameworks.
+- Promoting EXEC_HOST_V0 to the app.
+
+What remains native (not a language scheduler)
+----------------------------------------------
+OS thread start/join, and narrow wait/wake/mutex around mailbox
+admission and a per-Message turn latch. Those are substrate, like
+malloc. They are not "an actor in a worker pool" and not a
+process-wide registry.
+
+Erlang/OTP, Akka, Pony (orientation only)
+-----------------------------------------
+Borrow: isolated process/actor state; mailbox; parent manages a
+local child list; supervision is itself a process; one-at-a-time
+behavior per actor; concurrent independent actors.
+Do not import: BEAM global process lookup, selective receive,
+link/exit, automatic restart, Akka dispatchers/executors, Pony
+scheduler threads as LMX rules.
+Child->parent timer polling and cooperative end-turn close stay
+as previously agreed. "A scheduler must itself be a Message" is
+an LMX user constraint, not something those languages prove.
+
+Ownership / protocol
+--------------------
+Identity
+  A live Message is a capability: the object itself (stable heap
+  address for this prototype). Mix placement path remains
+  parent-counter+append (19.29.7.1) and is not the mailbox slot
+  and not a global lookup key. Guessing an integer must not grant
+  access. Send uses a capability the sender already holds
+  (argument, reply_to, stored handle). No table scan to resolve
+  dest.
+
+Mailbox
+  Per-context FIFO. Concurrent posters linearized at that
+  mailbox's admission lock (native mutex+wake). host_post of a
+  number/bytes envelope copies under the destination mailbox lock
+  (or a UI host-queue that then admits into the UI Message's
+  mailbox). It does not look up dest in a process table.
+
+Parent / children
+  parent_msg points to the parent object (0 for a root).
+  first_child / next_sibling are the direct-child list, mutated
+  only in the parent's turn or at create/rollback under the
+  parent's latch. request_children_close walks that list only.
+  Failed-create / failed-turn rollback unlinks uncommitted
+  direct children from that list; no process scan.
+
+Turns
+  At most one turn per context. Different contexts may run at
+  the same time. UI-affine context: owner thread. Other
+  contexts: OS wait on that mailbox, or a Scheduler Message
+  (ordinary Message, private state, message protocol) if a
+  language-level coordinator is actually needed. No C worker
+  pool picking from a global ready array of all Messages.
+
+Lifetime
+  One arena per live context. Do not release the arena while the
+  turn latch is held or while the mailbox may still accept a
+  copy from an in-flight host_post. Close is cooperative:
+  parent end_turn sets closing on direct children; they close
+  at their end-turn; cascade is child-local. Child polls
+  parent_msg for liveness (timer); it does not scan a table.
+  Dead capability: send returns DEAD/GONE; do not reuse the
+  object. In-flight posts that already copied bytes still admit
+  if the mailbox has not been destroyed; after STOPPED, post
+  returns STOPPED.
+
+Send to non-child
+  Legal. The sender must hold the dest capability. There is no
+  directory. If dest is dead, send fails. Routing, if any, is
+  another Message you send to; it does not inspect others'
+  private data.
+
+Current deviations (EXEC / mailbox prototype)
+---------------------------------------------
+Do not claim the previous global-table runtime complied.
+
+  D1. LmxMsgRuntime.tab[] + lmx_msg_find by integer addr.
+  D2. request_children_close / end_turn / poll(0) scan tab.
+  D3. EXEC ready queue + nworkers pool + bind table as C
+      scheduler (LMX_MSG_EXEC_HOST_V0).
+  D4. LmxMsgAddr is a process-wide unsigned, not a capability.
+  D5. host_drain dest lookup on owner (ingress V0 still copies
+      under host mutex; dest table walk is later).
+  D6. 19.29.6 / 19.28.R2.2 text that permitted worker-pool
+      actors and migration between host workers.
+
+This slice (preparation, not a facade)
+--------------------------------------
+Direct-child list on LmxMsg; create links; close/rollback walk
+the list. Tests: independent parent families; list does not
+contain another family's children. tab/find remain D1 until
+capability send is the only path. EXEC is not promoted.
+
+Not yet
+-------
+Capability LmxMsgAddr; removal of tab; Scheduler Message;
+per-mailbox native lock replacing exec mutex for send/recv;
+mixa_manager pin. Old ingress pin LMX_MSG_HOST_INGRESS_V0
+stays until consumers switch. Do not overwrite a pin under a
+build.
+
+Unresolved (ASK, not guessed)
+-----------------------------
+A1. When dest is a capability and the object is released, is a
+    generation/epoch required so a stale handle is GONE rather
+    than use-after-free, or is shutdown-join the only barrier?
+    Not decided here; until then objects stay allocated until
+    posters are joined (same as ingress V0).
+A2. Whether ANY-affinity contexts get one OS wait-thread each,
+    or a Scheduler Message that only sends "run" decisions.
+    Not importing a C worker pool to avoid answering this.
+
+Windows measured first. POSIX primitives in EXEC/ingress were
+written earlier and are not claimed run here.

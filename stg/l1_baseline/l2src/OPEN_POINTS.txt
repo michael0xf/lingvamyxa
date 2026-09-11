@@ -1692,3 +1692,31 @@ global l2_m*.
 
 Next L1 on the candidate path: parse_bytes / parse_file,
 document_init/destroy, field parse loop, empty-colon 32, dump.
+
+Unit 28d - per-context Message ownership (032700 / 033000)
+----------------------------------------------------------
+Files: LMX_MSG_CONTEXT_V0.txt, lmx_message.h, lmx_message.lm1,
+lmx_message_selftest.lm1, Lingvamyxa_spec.txt 19.28.R2.2 / 19.28.R2.6 /
+19.29.6 / 19.29.7.1, OPEN_POINTS.txt
+
+SPEC 19.29.6 worker-pool / migration
+    DECIDED by user: each live Message owns mailbox, parent, and
+    direct-child list. A language-level scheduler/router, if needed,
+    is itself a Message. OS wait/wake/mutex and OS threads are
+    substrate. A C worker pool plus process-wide Message table is
+    not the architecture. EXEC_HOST_V0 is prototype evidence, not a
+    pin. Erlang/OTP/Akka/Pony are orientation only (no BEAM lookup,
+    no Akka dispatcher, no Pony scheduler as LMX rules).
+
+Direct-child list
+    DECIDED: first_child / next_sibling / parent_msg. create links;
+    close/rollback walk that list. Independent parent families do
+    not share lists. tab[] / integer find remain deviation D1 until
+    send is capability-only.
+
+ASK A1  stale capability vs join barrier (generation/epoch).
+ASK A2  OS wait-thread per context vs Scheduler Message for
+    ANY-affinity. Not answered by importing a C pool.
+
+AVOIDED: mixa_manager/vendor overwrite; frozen l1trans rebuild;
+app pin of EXEC. Ingress V0 remains the host_post pin.
