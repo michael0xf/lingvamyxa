@@ -1,6 +1,6 @@
 # Public-API L1 integration test against an immutable private source snapshot.
 # It never compiles Grok's active working files or writes shared build outputs.
-param([string]$CoreCommit = 'b8754d23a358306550e1e4a8e4a604218addea0d')
+param([string]$CoreCommit = '593a64baa2ca6f7e25094620dda4927243bd5c3c')
 $ErrorActionPreference = 'Stop'
 $baseline = Split-Path -Parent $PSScriptRoot
 $repo = Split-Path -Parent (Split-Path -Parent $baseline)
@@ -39,7 +39,8 @@ try {
         'lmx_message_host.c', 'lmx_message_exec.h', 'lmx_message_exec.c',
         'lmx_msg_blocks.h.lm1', 'lmx_msg_blocks.lm1', 'lmx_owned_ranges.h.lm1',
         'lmx_owned_ranges.lm1', 'lmx_msg_storage.h.lm1', 'lmx_msg_storage.lm1',
-        'lmx_msg_path_storage.h.lm1', 'lmx_msg_path_storage.lm1')
+        'lmx_msg_path_storage.h.lm1', 'lmx_msg_path_storage.lm1',
+        'lmx_msg_slots.h.lm1', 'lmx_msg_slots.lm1')
     $paths = @($files | ForEach-Object { "stg/l1_baseline/l2src/$_" })
     $archive = Join-Path $run 'core.zip'
     Invoke-SendStage 'archive_core' $git (@('archive', '--format=zip', "--output=$archive", $revision, '--') + $paths)
@@ -52,7 +53,7 @@ try {
     }
     $evidence.coreSources = $coreHashes
     $modules = @()
-    foreach ($name in @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage')) {
+    foreach ($name in @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage', 'lmx_msg_slots')) {
         Invoke-SendStage "header_$name" $compiler @("l2src/$name.h.lm1", (Join-Path $headers "l2src/$name.lm1.h"))
         $module = Join-Path $run "$name.c"
         Invoke-SendStage "module_$name" $compiler @("l2src/$name.lm1", $module)
@@ -75,7 +76,7 @@ try {
         Invoke-SendStage "compile_$level" $gcc ($flags + @("-$level", $testObj, $messageC) + $modules + $native + @('-Wl,--wrap=free', '-o', $exe))
         Invoke-SendStage "run_$level" $exe @()
         $result = Get-Content -LiteralPath (Join-Path $run "run_$level.stdout.txt") -Raw
-        if ($result -notmatch '(?m)^send local checks=118 failures=0 owned_frees=1\s*$') { throw "Unexpected test result: $result" }
+        if ($result -notmatch '(?m)^send local checks=136 failures=0 owned_frees=1\s*$') { throw "Unexpected test result: $result" }
         Write-Output "$level $($result.Trim())"
     }
     foreach ($path in $coreHashes.Keys) {

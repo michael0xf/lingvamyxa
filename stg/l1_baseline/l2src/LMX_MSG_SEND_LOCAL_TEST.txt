@@ -3,14 +3,14 @@ L1 Message local-send regression
 
 run_msg_send_local.ps1 builds tests/lmx_msg_send_local_selftest.lm1 with pinned
 stable gen2 against a private git archive of core checkpoint
-b8754d23a358306550e1e4a8e4a604218addea0d. Optional -CoreCommit selects another
-explicitly agreed compatible revision, never the changing working tree. Fifteen
+593a64baa2ca6f7e25094620dda4927243bd5c3c. Optional -CoreCommit selects another
+explicitly agreed compatible revision, never the changing working tree. Seventeen
 core source files are archived; all build outputs/logs/hashes stay in the unique
 build/codex/msg_send_local run directory. No shared gate or app pin changes.
 The snapshot includes the L1 path-storage helper integrated at 6880ea5; the
 removed native path-growth definition is not silently used by this test.
 
-118 checks at O0/O2, test object compiled with -Werror:
+136 checks at O0/O2, test object compiled with -Werror:
 - send to self, direct child, parent, and a recipient in another branch;
 - staged dest_msg is the exact recipient object, no early inbox admission;
 - commit empties the outbox and admits exactly one binary envelope;
@@ -26,11 +26,17 @@ removed native path-growth definition is not silently used by this test.
 - real turn_self context, state/inbox/path/child queries and restoration of
   the caller's empty turn context after the callback returns. Exact check count
   prevents an unexecuted callback from silently passing.
+- two envelopes admitted BEFORE the recipient is bound: binding the UI turn
+  followed by two bounded ui_step calls (no manual ready or direct callback
+  invocation) consumes them in FIFO order exactly once, then returns EMPTY.
+  This is the small deterministic L1 scheduler-boundary regression, not the
+  native worker cleanup-gate test or a claim that the final scheduler is done.
 
 The returned init buffer has a const API view; the test explicitly casts its
 own allocated copy solely to probe independence, not the original init data.
 Allocation-failure injection and concurrent races are not covered here.
-Verified run: build/codex/msg_send_local/20260911_154453_888_349b22f7/evidence.json.
+Verified run: build/codex/msg_send_local/20260911_161340_490_6c7b6e74/evidence.json.
+The snapshot now compiles/links lmx_msg_slots as required by593a64b exec.
 
 The fixture uses ONE root, with P's children C/S and a separate Q/T branch.
 P->T exercises the prototype's fallback lookup outside P's subtree/parent.

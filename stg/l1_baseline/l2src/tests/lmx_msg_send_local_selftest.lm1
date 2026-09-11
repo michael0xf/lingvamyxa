@@ -62,6 +62,49 @@ fn: send_query_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
     send_init_case(rt, who, source)
     return: lmx_msg_end_turn(rt, who, 1)
 
+fn: send_prebind_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
+    @: unsigned totals
+    @: LmxMsgEnv got
+    totals: (cast: (@: unsigned) ctx)
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    send_check(got != 0, "allocate prebind receiver envelope")
+    send_check(lmx_msg_recv(rt, who, got) = LMX_MSG_OK, "receive prebind work in scheduled turn")
+    send_check(got\id = 41U + totals[0] && got\n = 1U && got\bytes[0] = 21U + totals[0], "prebind FIFO identity")
+    totals[0]: totals[0] + 1U
+    totals[1]: totals[1] + got\bytes[0]
+    lmx_msg_env_release(got)
+    send_check(got\bytes = 0 && got\n = 0U, "release prebind receive")
+    c.free(got)
+    return: lmx_msg_end_turn(rt, who, 1)
+
+sub: send_prebind_case (@: LmxMsgRuntime rt; unsigned: from; unsigned: to)
+    @: LmxMsgEnv env
+    @: LmxMsg dst
+    []: unsigned totals 2
+    uchar: byte 21
+    totals[0]: 0U
+    totals[1]: 0U
+    env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    send_check(env != 0, "allocate prebind sender envelope")
+    env\id: 41U
+    env\kind: LMX_MSG_KIND_BYTES
+    env\bytes: @ byte
+    env\n: 1U
+    send_check(lmx_msg_send(rt, from, to, env) = LMX_MSG_STAGED, "first mail before bind")
+    byte: 22
+    env\id: 42U
+    send_check(lmx_msg_send(rt, from, to, env) = LMX_MSG_STAGED, "second mail before bind")
+    send_check(lmx_msg_end_turn(rt, from, 1) = LMX_MSG_OK, "commit prebind mail")
+    dst: lmx_msg_find(rt, to)
+    send_check(dst != 0 && dst\turn = 0 && lmx_msg_inbox_n(rt, to) = 2 && totals[0] = 0U, "mail exists before any binding or execution")
+    send_check(lmx_msg_exec_bind(rt, to, send_prebind_turn, totals, LMX_MSG_AFFINITY_UI) = LMX_MSG_OK, "bind already-runnable child")
+    send_check(lmx_msg_exec_ui_step(rt) = LMX_MSG_OK, "first prebind work scheduled without manual ready")
+    send_check(lmx_msg_exec_ui_step(rt) = LMX_MSG_OK, "second prebind work scheduled without manual ready")
+    send_check(totals[0] = 2U && totals[1] = 43U, "prebind work executed twice in FIFO")
+    send_check(lmx_msg_inbox_n(rt, to) = 0 && lmx_msg_exec_ui_step(rt) = LMX_MSG_EMPTY && totals[0] = 2U, "no duplicate or stranded prebind work")
+    c.free(env)
+end: send_prebind_case
+
 sub: send_copy_case (@: LmxMsgRuntime rt; unsigned: from; unsigned: to; unsigned: untouched; unsigned: id)
     @: LmxMsgEnv env
     @: LmxMsgEnv got
@@ -192,6 +235,7 @@ fn: main () int
     send_check(lmx_msg_exec_bind(rt, child, send_query_turn, d, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind real query callback")
     send_check(lmx_msg_run_child_turn(rt, child) = LMX_MSG_OK, "execute query callback")
     send_check(lmx_msg_turn_self(rt) = 0, "self context restored after callback")
+    send_prebind_case(rt, cousin_parent, cousin)
     lmx_msg_runtime_delete(rt)
     send_check(owned_frees = 1, "runtime teardown does not free released envelope again")
     c.printf("send local checks=%d failures=0 owned_frees=%d\n", send_checks, owned_frees)

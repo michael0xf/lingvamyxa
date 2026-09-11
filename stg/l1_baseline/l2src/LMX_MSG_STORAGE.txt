@@ -70,11 +70,14 @@ artifacts, not new source files or a claim of complete Message integration.
 Family integration regression (public APIs, authored in L1)
 ----------------------------------------------------------
 run_msg_family_handoff.ps1 builds tests/lmx_msg_family_handoff_selftest.lm1
-against a PRIVATE git archive of core commit 6880ea5db32c7e54afbf4d8062376684c34f194f.
+against a PRIVATE git archive of core commit 593a64baa2ca6f7e25094620dda4927243bd5c3c.
 It does not compile Grok's actively changing checkout or use its build outputs.
 An explicit -CoreCommit selects another agreed checkpoint; there is no automatic
-tracking of HEAD or promotion. Evidence records the resolved commit, 15 archived
+tracking of HEAD or promotion. Evidence records the resolved commit, 17 archived
 source hashes, test/runner/compiler hashes, generated artifacts and stage exits.
+The snapshot links the L1 slots helper now required by native exec; no stale
+native enumeration definition substitutes for it. Verified O0/O2 evidence:
+build/codex/msg_family_handoff/20260911_161340_780_a33a04da/evidence.json.
 
 The 53 checks at O0/O2 cover G->C->P failed storage retention, unchanged payload
 and range-record addresses, a live unrelated
