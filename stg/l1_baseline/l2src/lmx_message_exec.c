@@ -4,6 +4,7 @@
 #include "l2src/lmx_msg_mail_chain.lm1.h"
 #include "l2src/lmx_msg_sched_ready.lm1.h"
 #include "l2src/lmx_msg_visit.lm1.h"
+#include "l2src/lmx_msg_liveness.lm1.h"
 #include "l2src/lmx_message_host.h"
 #include "l2src/lmx.h"
 #include <stdlib.h>
@@ -401,85 +402,17 @@ static void mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen) {
     (void)lmx_msg_mark_from(m, x, seen);
 }
 
-static int ptr_in_block(const unsigned char *p, LmxMsgBlock *b) {
-    unsigned char *lo;
-    unsigned char *hi;
-    if (p == 0 || b == 0 || b->base == 0) {
-        return 0;
-    }
-    lo = (unsigned char *)b->base;
-    hi = (b->n == 0) ? lo : lo + b->n;
-    if (p >= lo && p < hi) {
-        return 1;
-    }
-    return 0;
-}
-
-static int block_has_range(LmxMsg *m, LmxMsgBlock *b) {
-    LmxOwnedRange *r;
-    if (m == 0 || b == 0) {
-        return 0;
-    }
-    r = m->ranges;
-    while (r != 0) {
-        if (ptr_in_block((const unsigned char *)r->lo, b) != 0
-            || ptr_in_block((const unsigned char *)r->hi, b) != 0) {
-            return 1;
-        }
-        r = r->next;
-    }
-    return 0;
-}
-
-static int block_is_live(LmxMsg *m, LmxMsgBlock *b, LmxVisit *seen) {
-    size_t i;
-    Lmx *x;
-    if (block_has_range(m, b) == 0) {
-        return 1;
-    }
-    if (m == 0 || m->graph == 0) {
-        return 0;
-    }
-    if (seen == 0) {
-        return 1;
-    }
-    for (i = 0; i < seen->n; i++) {
-        x = seen->v[i];
-        if (ptr_in_block((const unsigned char *)x, b) != 0) {
-            return 1;
-        }
-        if (x->data != 0 && ptr_in_block((const unsigned char *)x->data, b) != 0) {
-            return 1;
-        }
-        if (x->node != 0 && ptr_in_block((const unsigned char *)x->node, b) != 0) {
-            return 1;
-        }
-    }
-    for (i = 0; i < seen->pn; i++) {
-        if (ptr_in_block((const unsigned char *)seen->p[i], b) != 0) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
 static void collect_block(LmxMsg *m, LmxMsgBlock *b) {
     LmxOwnedRange *r;
     LmxOwnedRange *rn;
     LmxMsgBlock *tmp;
-    unsigned char *lo;
-    unsigned char *hi;
     if (m == 0 || b == 0) {
         return;
     }
-    lo = (unsigned char *)b->base;
-    hi = (lo == 0 || b->n == 0) ? lo : lo + b->n;
     r = m->ranges;
     while (r != 0) {
         rn = r->next;
-        if (lo != 0 && hi != 0 && r->lo != 0
-            && (unsigned char *)r->lo >= lo
-            && (unsigned char *)r->lo < hi) {
+        if (lmx_msg_ptr_in_block(r->lo, b) != 0) {
             (void)lmx_owned_ranges_remove(&m->ranges, r);
         }
         r = rn;
@@ -510,7 +443,7 @@ void lmx_msg_arena_collect(LmxMsg *m) {
     b = m->blocks;
     while (b != 0) {
         nxt = b->next;
-        if (block_is_live(m, b, &seen) == 0) {
+        if (lmx_msg_block_is_live(m->graph, m->ranges, b, &seen) == 0) {
             collect_block(m, b);
         }
         b = nxt;
