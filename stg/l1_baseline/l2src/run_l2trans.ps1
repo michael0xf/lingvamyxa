@@ -263,6 +263,8 @@ Invoke-Entry "l2src\tests\entry_fputs.lm2" "entry_fputs" 0 @("c.fputs(") "hi`n"
 Invoke-Entry "l2src\tests\entry_setvbuf.lm2" "entry_setvbuf" 0 @("c.setvbuf(c.stdout, 0, c._IONBF, 0)") $null
 $svbL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "entry_setvbuf.lm1")))
 if ($svbL1 -match 'int: l2_t\d+') { throw "entry_setvbuf boxed numeric 0 as int temp" }
+Invoke-Entry "l2src\tests\entry_os.lm2" "entry_os" 0 @("os:", "fn: pick () @: char", "return: `"win32`"", "return: `"pthread`"", "end: os") $null
+Invoke-Entry "l2src\tests\entry_array.lm2" "entry_array" 0 @("c.array: []: char command 32", "command[0]: 0") $null
 Invoke-Entry "l2src\tests\entry_immut.lm2" "entry_immut" 0 @("immutable:", "@: char usage") "usage: printTree <source>`n"
 Invoke-Entry "l2src\tests\entry_predef.lm2" "entry_predef" 0 @("predef: `"l1src/parser.lm1`"", "include: `"<stdio.h>`"") $null
 Invoke-Entry "l2src\tests\entry_local_types.lm2" "entry_local_types" 0 @("char: ch", "size_t: n", "int: i") $null
@@ -295,6 +297,73 @@ cmd /c "`"$ptExe`" `"$ptSrc`" > `"$ptOut`" 2> `"$(Join-Path $out 'printTree.dump
 if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'printTree.dump.err') -ErrorAction SilentlyContinue; throw "printTree dump exit $LASTEXITCODE" }
 $ptGot = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $ptOut))
 if ($ptGot.IndexOf("main") -lt 0) { throw "printTree dump missing main" }
+
+function Invoke-PrintTreeParity {
+    $par = Join-Path $out "pt_parity"
+    New-Item -ItemType Directory -Force -Path $par | Out-Null
+    $refC = Join-Path $par "printTree_ref.c"
+    $refExe = Join-Path $par "printTree_ref.exe"
+    $refLog = Join-Path $log "printTree_ref.gcc.log"
+    & $l1trans "l1src\printTree.lm1" $refC
+    if ($LASTEXITCODE -ne 0) { throw "l1trans failed: l1src\printTree.lm1 (reference, frozen compiler)" }
+    Invoke-Gcc $refC $refExe $refLog
+    $l2Exe = Join-Path $out "printTree.exe"
+    if (-not (Test-Path -LiteralPath $l2Exe)) { throw "missing L2 printTree.exe" }
+    $valid = Join-Path $par "valid.lm1"
+    $bad = Join-Path $par "bad.lm1"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $valid), @"
+fn: add (int: a; int: b) int
+    return: a + b
+end: add
+fn: main () int
+    return: add(1, 2)
+end: main
+"@.Replace("`n", "`r`n"))
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $bad), "fn: main () int`r`n    return:`r`n")
+    $missing = Join-Path $par "missing_no_such.lm1"
+    if (Test-Path -LiteralPath $missing) { Remove-Item -LiteralPath $missing -Force }
+    function Invoke-One([string]$exe, [string]$stem, [string[]]$argList) {
+        $so = Join-Path $par ($stem + ".stdout")
+        $se = Join-Path $par ($stem + ".stderr")
+        if (Test-Path -LiteralPath $so) { Remove-Item -LiteralPath $so -Force }
+        if (Test-Path -LiteralPath $se) { Remove-Item -LiteralPath $se -Force }
+        New-Item -ItemType File -Path $so -Force | Out-Null
+        New-Item -ItemType File -Path $se -Force | Out-Null
+        $absExe = (Resolve-Path -LiteralPath $exe).Path
+        if ($null -eq $argList -or $argList.Count -eq 0) {
+            $p = Start-Process -FilePath $absExe -WorkingDirectory (Get-Location) -RedirectStandardOutput $so -RedirectStandardError $se -Wait -PassThru -NoNewWindow
+        } else {
+            $p = Start-Process -FilePath $absExe -ArgumentList $argList -WorkingDirectory (Get-Location) -RedirectStandardOutput $so -RedirectStandardError $se -Wait -PassThru -NoNewWindow
+        }
+        $ex = $p.ExitCode
+        $outT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $so))
+        $errT = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $se))
+        return @{ Exit = $ex; Out = $outT.Replace("`r`n", "`n").Replace("`r", "`n"); Err = $errT.Replace("`r`n", "`n").Replace("`r", "`n") }
+    }
+    function Assert-Parity([string]$name, $ref, $l2) {
+        $ev = Join-Path $par ($name + ".compare.txt")
+        $msg = "case=$name ref_exit=$($ref.Exit) l2_exit=$($l2.Exit)`n"
+        [System.IO.File]::WriteAllText((Join-Path (Get-Location) $ev), $msg)
+        if ($ref.Exit -ne $l2.Exit) { throw "printTree parity $name exit ref=$($ref.Exit) l2=$($l2.Exit)" }
+        if ($ref.Out -ne $l2.Out) { throw "printTree parity $name stdout mismatch" }
+        if ($ref.Err -ne $l2.Err) { throw "printTree parity $name stderr mismatch" }
+    }
+    $naL2 = Invoke-One $l2Exe "l2_noargs" @()
+    Assert-Parity "noargs" (Invoke-One $refExe "ref_noargs" @()) $naL2
+    if ($naL2.Out.IndexOf("usage:") -lt 0) { throw "printTree noargs missing usage" }
+    $vL2 = Invoke-One $l2Exe "l2_valid" @((Join-Path (Get-Location) $valid))
+    Assert-Parity "valid" (Invoke-One $refExe "ref_valid" @((Join-Path (Get-Location) $valid))) $vL2
+    if ($vL2.Out.IndexOf("add") -lt 0 -or $vL2.Out.IndexOf("main") -lt 0) { throw "printTree valid dump too small" }
+    $bL2 = Invoke-One $l2Exe "l2_bad" @((Join-Path (Get-Location) $bad))
+    Assert-Parity "malformed" (Invoke-One $refExe "ref_bad" @((Join-Path (Get-Location) $bad))) $bL2
+    if ($bL2.Exit -eq 0) { throw "printTree malformed should fail" }
+    $mL2 = Invoke-One $l2Exe "l2_missing" @((Join-Path (Get-Location) $missing))
+    Assert-Parity "missing" (Invoke-One $refExe "ref_missing" @((Join-Path (Get-Location) $missing))) $mL2
+    if ($mL2.Exit -eq 0) { throw "printTree missing file should fail" }
+    $sum = Join-Path $par "SUMMARY.txt"
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $sum), "printTree parity ok: noargs valid malformed missing (stdout/stderr/exit; CRLF normalized)`n")
+}
+Invoke-PrintTreeParity
 Invoke-Negative "l2src\tests\entry_overflow.lm2" "entry_overflow" "return literal not representable as int"
 Invoke-AdmitEmit "l2src\tests\entry_int_max.lm2" "entry_int_max" "2147483647"
 
