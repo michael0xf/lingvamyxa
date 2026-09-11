@@ -1,0 +1,147 @@
+predef: "l2src/lmx_owned_ranges.h.lm1"
+include: "<stdio.h>" "<stdlib.h>"
+
+sub: range_check (@: int checks; int: ok; const: @(char label))
+    checks[0]: checks[0] + 1
+    if: ok = 0
+        checks[1]: checks[1] + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: range_check
+
+sub: range_init (@: LmxOwnedRange node; @: void lo; @: void hi; size_t: stride; int: type)
+    node\lo: lo
+    node\hi: hi
+    node\stride: stride
+    node\kind: 1
+    node\type: type
+    node\next: 0
+end: range_init
+
+fn: main () int
+    @: int checks (cast: (@: int) c.calloc(2U, c.sizeof(int)))
+    @: LmxOwnedRange nodes (cast: (@: LmxOwnedRange) c.calloc(132U, c.sizeof(c.LmxOwnedRange)))
+    @: int cells (cast: (@: int) c.calloc(256U, c.sizeof(int)))
+    @: LmxOwnedRange a
+    @: LmxOwnedRange b
+    @: LmxOwnedRange candidate
+    @: LmxOwnedRange spare
+    @: LmxOwnedRange src 0
+    @: LmxOwnedRange dst 0
+    @: LmxOwnedRange bad 0
+    @: LmxOwnedRange found
+    @: int retained
+    size_t: i
+    int: failures
+    if: checks = 0 || nodes = 0 || cells = 0
+        c.free(checks)
+        c.free(nodes)
+        c.free(cells)
+        return: 2
+    a: nodes
+    b: nodes + 1
+    candidate: nodes + 2
+    spare: nodes + 3
+    range_init(a, cells, cells + 4, c.sizeof(int), 11)
+    range_init(b, cells + 4, cells + 8, c.sizeof(int), 12)
+    range_init(candidate, cells + 2, cells + 6, c.sizeof(int), 13)
+    range_init(spare, cells + 8, cells + 12, c.sizeof(int), 14)
+    cells[1]: 73
+    retained: cells + 1
+    range_check(checks, lmx_owned_ranges_find(src, cells) = 0, "empty lookup")
+    range_check(checks, lmx_owned_ranges_add(@ src, a) = 0, "register first")
+    range_check(checks, lmx_owned_ranges_add(@ src, b) = 0, "adjacent domain allowed")
+    range_check(checks, src = b && b\next = a, "head and order")
+    range_check(checks, lmx_owned_ranges_find(src, cells + 3) = a, "last entry")
+    range_check(checks, lmx_owned_ranges_find(src, cells + 4) = b, "half-open shared boundary")
+    range_check(checks, lmx_owned_ranges_find(src, cells + 8) = 0, "exclusive high bound")
+    range_check(checks, lmx_owned_ranges_find(src, 0) = 0, "null address")
+    range_check(checks, lmx_owned_ranges_find(src, (cast: (@: char) cells) + 1) = 0, "misaligned interior byte")
+    range_check(checks, lmx_owned_ranges_add(@ src, candidate) != 0, "overlap rejected")
+    range_check(checks, src = b && b\next = a && candidate\next = 0, "overlap leaves state unchanged")
+    range_check(checks, lmx_owned_ranges_add(@ src, a) != 0, "duplicate tail rejected")
+    range_check(checks, lmx_owned_ranges_add(@ src, b) != 0, "attached node rejected")
+    range_check(checks, lmx_owned_ranges_add(0, spare) != 0, "null owner")
+    range_check(checks, lmx_owned_ranges_add(@ src, 0) != 0, "null node")
+    range_check(checks, lmx_owned_ranges_add(@ spare\next, spare) != 0, "owner slot cannot be node link")
+    candidate\stride: 0U
+    range_check(checks, lmx_owned_ranges_add(@ dst, candidate) != 0, "zero stride")
+    candidate\stride: c.sizeof(int)
+    candidate\hi: (cast: (@: char) candidate\lo) + 1
+    range_check(checks, lmx_owned_ranges_add(@ dst, candidate) != 0, "partial entry range")
+    candidate\hi: candidate\lo
+    range_check(checks, lmx_owned_ranges_add(@ dst, candidate) != 0, "empty range")
+    candidate\hi: cells
+    range_check(checks, lmx_owned_ranges_add(@ dst, candidate) != 0, "reversed range")
+    range_init(candidate, 0, cells + 2, c.sizeof(int), 13)
+    range_check(checks, lmx_owned_ranges_add(@ dst, candidate) != 0, "null low bound")
+    range_init(candidate, cells + 2, cells + 6, c.sizeof(int), 0)
+    range_check(checks, lmx_owned_ranges_add(@ dst, candidate) != 0, "none type")
+    candidate\type: 13
+    candidate\kind: 0
+    range_check(checks, lmx_owned_ranges_add(@ dst, candidate) != 0, "none kind")
+    candidate\kind: 1
+
+    # Independent owners cannot see one another's ranges; explicit move changes
+    # ownership, not addresses. A rejected move must not partially splice lists.
+    range_check(checks, lmx_owned_ranges_add(@ dst, candidate) = 0, "separate overlapping test catalog")
+    range_check(checks, lmx_owned_ranges_can_move(@ dst, @ src) != 0, "overlap preflight")
+    range_check(checks, lmx_owned_ranges_move_all(@ dst, @ src) != 0, "cross-owner overlap rejected")
+    range_check(checks, src = b && dst = candidate && candidate\next = 0, "move rejection unchanged")
+    range_check(checks, lmx_owned_ranges_remove(@ dst, candidate) = 0, "remove collision")
+    range_check(checks, lmx_owned_ranges_add(@ dst, spare) = 0, "destination own range")
+    range_check(checks, lmx_owned_ranges_find(dst, retained) = 0, "foreign range is not visible")
+    range_check(checks, lmx_owned_ranges_move_all(@ src, @ src) != 0, "self move rejected")
+    range_check(checks, lmx_owned_ranges_move_all(0, @ src) != 0, "null destination")
+    range_check(checks, lmx_owned_ranges_move_all(@ dst, 0) != 0, "null source")
+    range_check(checks, lmx_owned_ranges_can_move(@ dst, @ src) = 0, "valid preflight")
+    range_check(checks, src = b && dst = spare && a\next = 0, "preflight is read only")
+    range_check(checks, lmx_owned_ranges_move_all(@ dst, @ src) = 0, "ownership move")
+    range_check(checks, src = 0 && dst = b && a\next = spare, "source cleared destination joined")
+    range_check(checks, lmx_owned_ranges_find(src, retained) = 0, "former owner no longer classifies")
+    found: lmx_owned_ranges_find(dst, retained)
+    range_check(checks, found = a && found\type = 11 && \retained = 73, "identity type and value preserved")
+    range_check(checks, lmx_owned_ranges_move_all(@ dst, @ src) = 0, "empty source no-op")
+    range_check(checks, lmx_owned_ranges_remove(@ dst, a) = 0, "middle removal")
+    range_check(checks, b\next = spare && a\next = 0, "removed node detached")
+    range_check(checks, lmx_owned_ranges_find(dst, retained) = 0 && \retained = 73, "unregister does not free payload")
+    range_check(checks, lmx_owned_ranges_remove(@ dst, a) != 0, "repeat removal")
+    range_check(checks, lmx_owned_ranges_remove(0, b) != 0, "remove null owner")
+    range_check(checks, lmx_owned_ranges_remove(@ dst, 0) != 0, "remove null node")
+    range_check(checks, lmx_owned_ranges_remove(@ dst, b) = 0, "head removal")
+    range_check(checks, lmx_owned_ranges_remove(@ dst, spare) = 0 && dst = 0, "tail removal")
+
+    # Malformed externally edited list fails mutation instead of looping.
+    a\next: b
+    b\next: a
+    bad: a
+    range_check(checks, lmx_owned_ranges_add(@ bad, spare) != 0, "cyclic owner add")
+    range_check(checks, lmx_owned_ranges_remove(@ bad, a) != 0, "cyclic owner remove")
+    range_check(checks, lmx_owned_ranges_move_all(@ dst, @ bad) != 0, "cyclic source move")
+    range_check(checks, lmx_owned_ranges_move_all(@ bad, @ dst) != 0, "cyclic destination move")
+    range_check(checks, bad = a && a\next = b && b\next = a && dst = 0, "cycle rejected without mutation")
+    a\next: 0
+    b\next: 0
+    bad: 0
+
+    # More than common fixed caps: node storage is supplied by the owner.
+    i: 0U
+    while: i < 128U
+        range_init(nodes + 4U + i, cells + i, cells + i + 1U, c.sizeof(int), 15)
+        range_check(checks, lmx_owned_ranges_add(@ src, nodes + 4U + i) = 0, "bulk register")
+        i: i + 1U
+    ---
+    range_check(checks, lmx_owned_ranges_move_all(@ dst, @ src) = 0 && src = 0, "128 ranges transferred")
+    i: 0U
+    while: i < 128U
+        range_check(checks, lmx_owned_ranges_find(dst, cells + i) = nodes + 4U + i, "bulk classify")
+        range_check(checks, lmx_owned_ranges_remove(@ dst, nodes + 4U + i) = 0, "bulk unregister")
+        i: i + 1U
+    ---
+    range_check(checks, dst = 0 && \retained = 73, "final empty and payload unchanged")
+    failures: checks[1]
+    c.printf("owned ranges checks=%d failures=%d\n", checks[0], failures)
+    c.free(cells)
+    c.free(nodes)
+    c.free(checks)
+return: failures != 0

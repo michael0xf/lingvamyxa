@@ -1,0 +1,66 @@
+Message-owned address ranges
+============================
+
+Contract: SPEC2.2.1, 6.5, 19.29.6; ABI14.9. The process starts as root
+Message. ALL LMX state is Message-local, including immutable pools and method
+records. Only OS/non-LMX libraries are outside. No shared immutable catalog.
+Template settings are copied through merge, not borrowed from shared state.
+
+This L1 module is the owner's physical classifier, not an allocator, Message
+scheduler, graph collector, or replacement for lmx_msg_blocks. It has no global
+state, TLS or lock and calls no external functions. Header source is .h.lm1.
+
+API
+---
+LmxOwnedRange holds lo, hi, stride, kind, type, next. The owner supplies a head
+slot and separately live metadata records. kind/type describe the registered
+physical domain; no source node gets a new tag. Known-none is 0; registered
+labels are positive. Ranges are half-open [lo,hi), nonempty, whole entries.
+The caller supplies actual correctly aligned typed storage and live bounds.
+
+add(&head, node): attach a detached valid record; overlapping domains, duplicate
+nodes and invalid entries fail without mutation. Adjacent domains are allowed.
+remove(&head, node): detach that exact record, clear next. No free; repeated
+removal fails without mutation. Payload disposal is a separate owner action.
+move_all(&dst, &src): preflight both valid lists and all cross-owner overlaps,
+then splice src before dst and clear src. No allocation, copy, free or pointer
+relocation. Self-move fails; empty source succeeds. No semantic scheduling order
+is implied by metadata order.
+can_move(&dst, &src): the same read-only preflight without mutation, for owner
+integration with block transfer. Exclusive access must hold until both moves
+finish; a successful check is not a reservation or cross-thread permission.
+find(head, address): return the range record only at an entry boundary; outside,
+null and interior misaligned addresses return null. It does not read payloads.
+All mutators return 0 OK / 1 INVALID. Lookup has no process/global fallback.
+
+Caller requirements
+-------------------
+Operations run under the owning Message's exclusive execution. Head slots are
+separate owner fields, not next links inside range records. Metadata fields are
+not mutated while registered; valid sets are built with this API. Mutation
+validates cycles/entry shape, but does not repair arbitrary externally corrupted
+metadata. Lookup assumes a valid acyclic set. Metadata/payload remain live for
+every operation and any retained result; remove before freeing storage.
+Disjoint range registration is not itself proof of allocation ownership.
+
+Message integration must establish authority, quiescence and all existing
+handoff prerequisites BEFORE moving range metadata and corresponding blocks.
+Validate both operations before a combined ownership change; if allocation or
+validation can fail, do not leave a half-moved arena. This module does not infer
+eligibility from running/success, register byte-mailboxes as graph domains,
+consult a parent's live data or discover shared domains. Former owner aliases
+must not remain usable. Immutable data has no special sharing exception.
+
+Status / verification
+---------------------
+Independent owner-local classifier is implemented. Legacy lmx_range/pool APIs
+and Message integration are NOT migrated by this commit; their global-table
+prototype is still debt, not claimed compliant. Grok owns Message integration.
+
+Run l2src/run_owned_ranges.ps1: pinned stable gen2 is read-only, all generated
+files go to a unique build/codex/owned_ranges directory. Header-only consumer
+links the separately generated module. 439 checks at O0 and O2 cover ownership
+isolation, rejection without mutation, stride/bounds, unregister without free,
+identity-preserving handoff, malformed cycles and 128 distinct ranges. The
+runner checks no production imports or mutable global symbols, records source
+and artifact hashes and stage exits. It does not rebuild shared build/l2.

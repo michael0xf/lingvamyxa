@@ -1,0 +1,24 @@
+include: "<stddef.h>" "<stdint.h>"
+
+define: LMX_OWNED_RANGES_OK 0
+define: LMX_OWNED_RANGES_INVALID 1
+
+# Intrusive metadata held by one Message, separate from the payload storage.
+# Nodes and owner head slots must remain live and head slots are not next links.
+# No allocator, global catalog, TLS owner, scheduler or lifecycle policy here.
+struct: LmxOwnedRange
+    @: void lo
+    @: void hi
+    size_t: stride
+    int: kind
+    int: type
+    @: LmxOwnedRange next
+end: LmxOwnedRange
+
+prototype:
+    fn: lmx_owned_ranges_add (@@: LmxOwnedRange head; @: LmxOwnedRange node) int
+    fn: lmx_owned_ranges_remove (@@: LmxOwnedRange head; @: LmxOwnedRange node) int
+    fn: lmx_owned_ranges_can_move (@@: LmxOwnedRange dst; @@: LmxOwnedRange src) int
+    fn: lmx_owned_ranges_move_all (@@: LmxOwnedRange dst; @@: LmxOwnedRange src) int
+    fn: lmx_owned_ranges_find (@: LmxOwnedRange head; @: void address) @: LmxOwnedRange
+end: prototype

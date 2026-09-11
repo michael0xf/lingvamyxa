@@ -1,0 +1,118 @@
+predef: "l2src/lmx_owned_ranges.h.lm1"
+
+# Address-domain ABI explicitly permits target pointer-to-integer ordering.
+# Arithmetic never subtracts unrelated C pointers or dereferences a payload.
+fn: lmx_owned_range_valid (@: LmxOwnedRange node) int
+    if: node = 0 || node\stride = 0U || node\kind <= 0 || node\type <= 0
+        return: 0
+    if: node\lo = 0 || (cast: (uintptr_t) node\hi) <= (cast: (uintptr_t) node\lo)
+        return: 0
+    if: ((cast: (uintptr_t) node\hi) - (cast: (uintptr_t) node\lo)) % node\stride != 0U
+        return: 0
+return: 1
+
+fn: lmx_owned_ranges_valid (@: LmxOwnedRange head) int
+    @: LmxOwnedRange slow head
+    @: LmxOwnedRange fast head
+    while: fast != 0 && fast\next != 0
+        slow: slow\next
+        fast: fast\next\next
+        if: slow = fast
+            return: 0
+    ---
+    while: head != 0
+        if: lmx_owned_range_valid(head) = 0
+            return: 0
+        head: head\next
+    ---
+return: 1
+
+fn: lmx_owned_ranges_overlap (@: LmxOwnedRange a; @: LmxOwnedRange b) int
+return: (cast: (uintptr_t) a\lo) < (cast: (uintptr_t) b\hi) && (cast: (uintptr_t) b\lo) < (cast: (uintptr_t) a\hi)
+
+fn: lmx_owned_ranges_add (@@: LmxOwnedRange head; @: LmxOwnedRange node) int
+    @: LmxOwnedRange entry
+    if: head = 0 || lmx_owned_range_valid(node) = 0
+        return: c.LMX_OWNED_RANGES_INVALID
+    if: node\next != 0 || head = @ node\next
+        return: c.LMX_OWNED_RANGES_INVALID
+    if: lmx_owned_ranges_valid(\head) = 0
+        return: c.LMX_OWNED_RANGES_INVALID
+    entry: \head
+    while: entry != 0
+        if: entry = node || lmx_owned_ranges_overlap(entry, node) != 0
+            return: c.LMX_OWNED_RANGES_INVALID
+        entry: entry\next
+    ---
+    node\next: \head
+    \head: node
+return: c.LMX_OWNED_RANGES_OK
+
+# Detach metadata only; freeing metadata/payload remains the owner's operation.
+fn: lmx_owned_ranges_remove (@@: LmxOwnedRange head; @: LmxOwnedRange node) int
+    @@: LmxOwnedRange slot head
+    @: LmxOwnedRange entry
+    if: head = 0 || node = 0
+        return: c.LMX_OWNED_RANGES_INVALID
+    if: lmx_owned_ranges_valid(\head) = 0
+        return: c.LMX_OWNED_RANGES_INVALID
+    entry: \slot
+    while: entry != 0
+        if: entry = node
+            \slot: entry\next
+            entry\next: 0
+            return: c.LMX_OWNED_RANGES_OK
+        slot: @ entry\next
+        entry: \slot
+    ---
+return: c.LMX_OWNED_RANGES_INVALID
+
+# Caller settles Message handoff eligibility and exclusive access first.
+# All checks precede mutation; failure leaves both owners unchanged.
+fn: lmx_owned_ranges_can_move (@@: LmxOwnedRange dst; @@: LmxOwnedRange src) int
+    @: LmxOwnedRange a
+    @: LmxOwnedRange b
+    if: dst = 0 || src = 0 || dst = src
+        return: c.LMX_OWNED_RANGES_INVALID
+    if: lmx_owned_ranges_valid(\dst) = 0 || lmx_owned_ranges_valid(\src) = 0
+        return: c.LMX_OWNED_RANGES_INVALID
+    a: \src
+    while: a != 0
+        b: \dst
+        while: b != 0
+            if: a = b || lmx_owned_ranges_overlap(a, b) != 0
+                return: c.LMX_OWNED_RANGES_INVALID
+            b: b\next
+        ---
+        a: a\next
+    ---
+return: c.LMX_OWNED_RANGES_OK
+
+fn: lmx_owned_ranges_move_all (@@: LmxOwnedRange dst; @@: LmxOwnedRange src) int
+    @: LmxOwnedRange tail
+    if: lmx_owned_ranges_can_move(dst, src) != c.LMX_OWNED_RANGES_OK
+        return: c.LMX_OWNED_RANGES_INVALID
+    tail: \src
+    if: tail != 0
+        while: tail\next != 0
+            tail: tail\next
+        ---
+        tail\next: \dst
+        \dst: \src
+        \src: 0
+    ---
+return: c.LMX_OWNED_RANGES_OK
+
+# Lists are valid API-built owner state. A candidate address must identify an
+# entry boundary, not merely some byte inside a registered interval (SPEC2.2.1).
+fn: lmx_owned_ranges_find (@: LmxOwnedRange head; @: void address) @: LmxOwnedRange
+    if: address = 0
+        return: 0
+    while: head != 0
+        if: (cast: (uintptr_t) address) >= (cast: (uintptr_t) head\lo) && (cast: (uintptr_t) address) < (cast: (uintptr_t) head\hi)
+            if: ((cast: (uintptr_t) address) - (cast: (uintptr_t) head\lo)) % head\stride = 0U
+                return: head
+            return: 0
+        head: head\next
+    ---
+return: 0
