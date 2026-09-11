@@ -38,6 +38,18 @@ Allocation-failure injection and concurrent races are not covered here.
 Verified run: build/codex/msg_send_local/20260911_161340_490_6c7b6e74/evidence.json.
 The snapshot now compiles/links lmx_msg_slots as required by593a64b exec.
 
+Targeted follow-up for2b567e8 (unbound exec_ready exclusion): O0,136checks,
+zero failures. Reused the already compiled private binary; no translator
+rebuild, O2 rebuild, family suite, OOM suite or full gate was needed here.
+The first Windows PowerShell5.1 run exposed a runner failure before test
+execution: Start-Process rejects an explicitly empty ArgumentList. Both owned
+send-local/family stage helpers now omit that option when there are no args.
+Validated those exact helpers in PowerShell5.1 and7.6: no-argument launch,
+argument-bearing launch and nonzero-exit rejection. This is runner validation,
+not a new family/runtime result. Original failure evidence remains unchanged;
+supplemental reports are runner_compat_ps5.json / runner_compat_ps7.json under
+build/codex/msg_send_local/20260911_163600_204_276e870f/.
+
 The fixture uses ONE root, with P's children C/S and a separate Q/T branch.
 P->T exercises the prototype's fallback lookup outside P's subtree/parent.
 The existing unsigned LmxMsgAddr and fallback lookup are prototype details, not

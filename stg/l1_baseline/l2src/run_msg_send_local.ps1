@@ -21,7 +21,10 @@ function Invoke-SendStage([string]$Name, [string]$Tool, [string[]]$NativeArgs) {
     $quoted = ($NativeArgs | ForEach-Object { '"' + $_ + '"' }) -join ' '
     $stdout = Join-Path $run "$Name.stdout.txt"
     $stderr = Join-Path $run "$Name.stderr.txt"
-    $p = Start-Process -FilePath $Tool -ArgumentList $quoted -WorkingDirectory $stageWorkingDir `
+    # Windows PowerShell rejects an explicitly empty ArgumentList.
+    $argumentOption = @{}
+    if ($NativeArgs.Count -gt 0) { $argumentOption.ArgumentList = $quoted }
+    $p = Start-Process -FilePath $Tool @argumentOption -WorkingDirectory $stageWorkingDir `
         -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     $evidence.stages += [ordered]@{ name = $Name; tool = $Tool; arguments = $NativeArgs; exit = $p.ExitCode }
     if ($p.ExitCode -ne 0) {
