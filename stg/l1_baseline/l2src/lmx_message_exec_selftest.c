@@ -2,6 +2,7 @@
 #include "l2src/lmx_message.h"
 #include "l2src/lmx_message_exec.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -3612,6 +3613,83 @@ int main(void) {
         }
         fprintf(stderr, "parent_settle 33 kids\n");
         lmx_msg_runtime_delete(rts);
+    }
+    {
+        LmxMsgRuntime *rtr;
+        LmxMsgAddr dummy = 0, p = 0, c = 0;
+        uchar ini = 7;
+        uchar store[32];
+        LmxOwnedRange *pr;
+        LmxOwnedRange *cr;
+        LmxMsg *pm;
+        LmxMsg *cm;
+        void *init_keep;
+        rtr = lmx_msg_runtime_new();
+        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtr, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtr, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtr, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "range lifecycle create\n");
+            return 1;
+        }
+        pr = (LmxOwnedRange *)calloc(1U, sizeof(LmxOwnedRange));
+        cr = (LmxOwnedRange *)calloc(1U, sizeof(LmxOwnedRange));
+        if (pr == 0 || cr == 0) {
+            return 1;
+        }
+        pr->lo = store;
+        pr->hi = store + 16;
+        pr->stride = 1U;
+        pr->kind = 1;
+        pr->type = 1;
+        cr->lo = store + 8;
+        cr->hi = store + 24;
+        cr->stride = 1U;
+        cr->kind = 1;
+        cr->type = 1;
+        pm = lmx_msg_find(rtr, p);
+        cm = lmx_msg_find(rtr, c);
+        if (pm == 0 || cm == 0
+            || lmx_owned_ranges_add(&pm->ranges, pr) != LMX_OWNED_RANGES_OK
+            || lmx_owned_ranges_add(&cm->ranges, cr) != LMX_OWNED_RANGES_OK) {
+            fprintf(stderr, "range lifecycle add\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        init_keep = cm->init;
+        if (lmx_msg_exec_bind(rtr, c, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_emergency_cancel(rtr, c) != LMX_MSG_OK) {
+            fprintf(stderr, "range overlap bind\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        (void)lmx_msg_run_child_turn(rtr, c);
+        if (lmx_msg_adopt_failed(rtr, p, c) != LMX_MSG_INVALID
+            || cm->init != init_keep || cm->ranges != cr || pm->ranges != pr
+            || pm->blocks != 0) {
+            fprintf(stderr, "overlap must reject without moving blocks/ranges\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        if (lmx_owned_ranges_remove(&pm->ranges, pr) != LMX_OWNED_RANGES_OK) {
+            fprintf(stderr, "range overlap remove parent\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        free(pr);
+        if (lmx_msg_adopt_failed(rtr, p, c) != LMX_MSG_OK
+            || cm->init != 0 || cm->ranges != 0 || pm->ranges != cr
+            || cr->lo != store + 8 || cr->hi != store + 24 || cr->stride != 1U
+            || lmx_owned_ranges_find(pm->ranges, store + 8) != cr
+            || lmx_msg_adopted_n(rtr, p) != 1 || lmx_msg_adopted_base(rtr, p, 0) != init_keep) {
+            fprintf(stderr, "typed range handoff identity n=%d\n", lmx_msg_adopted_n(rtr, p));
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        fprintf(stderr, "range overlap reject + typed handoff identity\n");
+        lmx_msg_runtime_delete(rtr);
+        free(cr);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
