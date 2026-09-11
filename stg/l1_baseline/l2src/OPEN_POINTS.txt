@@ -36,6 +36,18 @@ Sources
   NOTES Lingvamyxa_handoff_notes.txt
 
 
+Decision - Executable body hosting vs receiver arguments (2026-09-11)
+-------------------------------------------------------------------
+SPEC 21.5.1, 11.3.1; source implementation deferred until current Message done.
+    DECIDED every statement-by-statement executable body is in the graph;
+    arguments of every receiver, including trailers, acquire no automatic
+    graph fields. Consumption role, not last-field syntax, distinguishes them.
+    Same-name argument->own bind remains. Hosts are individual bodies with
+    actual nesting; no new method/through boundary. All three translator
+    passes must agree; current for-only hosting is an implementation gap.
+    AVOIDED changing Message architecture, argument referent identity or
+    checkpoint semantics. No emitter changes in this documentation checkpoint.
+
 Unit - Integration regressions follow L1 path-helper integration (2026-09-11)
 --------------------------------------------------------------------------
 Files: run_msg_family_handoff.ps1, run_msg_send_local.ps1 and their docs.

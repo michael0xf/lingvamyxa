@@ -3141,7 +3141,7 @@ The inline tail contributes initial fields. The vertical child lines at level N 
 
 A physical newline ends the physical source line, but it is not a short-form trailer. If the following source item is at level N + 1, it continues the open frame's logical argument Structure. If the following source item is at level N or smaller, the open frame is complete and ordinary sibling/close rules apply.
 
-Do not confuse the logical argument Structure of a Frame with semantic arguments declared by a receiver. For example, the fields of an `fn` frame are fields consumed by the `fn` receiver; they are not automatically formal parameters of the function being defined. The `fn` receiver later classifies its fields as function name, formal parameter Structure, single-value return type and executable body fields. The related `fm` receiver uses a return-description Structure for multiple return.
+Do not confuse the logical argument Structure of a Frame with semantic arguments declared by a receiver. For example, the fields of an `fn` frame are fields consumed by the `fn` receiver; they are not automatically formal parameters of the function being defined. The `fn` receiver later classifies its fields as function name, formal parameter Structure, single-value return type and executable body fields. The related `fm` receiver uses a return-description Structure for multiple return. Runtime graph hosting follows those consumption roles, not the parser's generic argument container: executable bodies belong to the graph; receiver arguments do not acquire graph fields merely by being arguments (21.5.1).
 
 4.4. Parenthesized Bounded Structure
 
@@ -14815,8 +14815,9 @@ the no-reload own-field cache. It also receives or constructs the dynamic values
 required by 21.3.
 These C values are the active method state between observable boundaries.
 
-An own working local has graph backing in a directly selected field of
-`callable->node`. Declared arguments and dynamic imported values are
+An own working local has graph backing in a directly selected field of its
+owning Structure: `callable->node` or a nested executable body (21.5.1).
+Declared arguments and dynamic imported values are
 activation-local inputs and have no automatic write-back target. Their
 assignment/rebinding never mutates the caller. To publish one as method state the
 program must assign an own field or use an explicit graph path. Assignment of
@@ -14863,19 +14864,86 @@ optimization; it does not erase the corresponding fields from the graph.
 
 Every binding classified as an own graph-backed field must resolve to its
 declared direct occurrence before entry. A normal builder materializes that
-field in the containing Structure before its callable can be invoked, and
+field in its owning Structure, including nested executable bodies, before
+the containing callable can be invoked, and
 runtime merge copies it with that Structure. If later structural mutation has
 removed a required own field, invocation/admission fails; the translator or
 runtime must not silently reclassify the missing own declaration as a dynamic
 input or `node` fallback.
 
 Materialization of that occurrence is independent of when a working alias
-starts. The field exists on `callable->node` before invocation. The 11.3.1
+starts. The field exists in its owning Structure before invocation. The 11.3.1
 bind line is only when an incoming explicit or hidden parameter of the same
 name becomes that field's dirty cache. It does not delay or skip
 materialization. Own-only names (no such parameter) still load the
 materialized field at entry. A parameter until the bind line is not loaded
 from the field over the incoming value.
+
+21.5.1. Executable Bodies and Receiver Arguments
+
+Executable code is part of the graph; its arguments are not. This distinction
+applies to every receiver, regardless of its name, control role or trailer
+position. It is a semantic consumption rule, not a test of whether a Frame's
+last syntactic field happens to be a Structure.
+
+A Structure consumed as a body executed statement by statement is a graph
+Structure and owns the fields declared or bound directly in it. Nested bodies
+form a containment hierarchy, not a flat list under the method. The bodies of
+`if` and `else` follow the same rule as those of `for` and `while`; the host is
+the individual body, not the whole control statement. This does not introduce
+a method activation or a new through-parameter boundary at each body. Through
+visibility crosses nested methods, not ordinary nested Structures (21.3).
+
+Arguments, including Structure-valued arguments, conditions and trailer
+arguments, are consumed as values without automatically materializing their
+argument occurrences as own fields. A reference argument may already refer to
+graph data; that graph is neither erased nor cloned by this rule. An argument
+expression may call executable code whose body is in the graph: evaluation
+does not turn the enclosing argument itself into an executable-body host.
+
+The same-name bind of 11.3.1 is unchanged. An incoming declared or hidden
+argument stays activation-local until an executed own-field declaration/bind,
+including assignment-as-declaration, makes that same working value the cache
+of the body's own field. Publication goes to that field, never to the argument's
+source. The field's prior materialization and dirty-only checkpoints still
+follow 21.5--21.6; this is not automatic storage of the incoming argument.
+
+Examples (normative semantics; not a claim of current translator coverage):
+
+    fn: remember (int: x) int
+        x: 7
+        return: x
+    end: remember
+
+The formal `x` is an input. The executed `x: 7` binds the body's own field and
+marks its cache dirty; it does not overwrite the caller's `x`.
+
+    fn: choose (int: x) int
+        if: x > 0
+            int: positive 1
+        else:
+            int: negative 0
+        return: x
+    end: choose
+
+The condition is an argument. `positive` and `negative` belong to their
+respective executable bodies. Graph presence does not mean both branches run:
+only an executed assignment dirties a cache. An untaken branch performs none
+of its assignments. Nested loops and branches use this same hosting rule.
+
+    fn: ten () int
+    return:
+        5 + 5
+
+Here the nested expression supplies the `return` argument; indentation and
+trailer position do not make it a separate executable-body host. Conversely,
+any receiver, including a trailer, that consumes a Structure as a statement-
+by-statement body gives that body the ordinary graph-hosting semantics.
+
+Declaration collection, validation and emission must agree on these roles.
+A `for` inside an `if` must not be validated and emitted while omitted from
+graph layout. Body hosting is uniform across admitted receiver spellings;
+it must not depend on a special case for the C-style `for` header.
 
 21.6. Dirty-Only Checkpoints
 
