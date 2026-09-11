@@ -908,6 +908,30 @@ So failure evidence travels UP and survives in the parent, while success is
 discarded. Consistent with worker death, where the KIND_DEAD diagnostic "lives
 in the survivor, not in the dying arena."
 
+8.1. And the sediment does not accumulate - resolved in the spec, 12740-12750
+
+The obvious worry about a rule that pushes failed arenas upward is that they
+pile up. They do not, and the resolution is one sentence:
+
+    "The outcome belongs to the Message itself, not to the errors recorded
+    inside it."
+
+So if P adopts a failed child's history and then completes SUCCESSFULLY, P is
+successful. Its parent controls disposal of P's whole handoff-safe arena,
+inherited history included, and there is no automatic upward forwarding of the
+failed descendants separately from successful P. If P wants that history it
+must explicitly retain or transfer it AS PROGRAM DATA before disposal - because
+"the runtime cannot infer why P handled the error". If P itself fails, its
+aggregated failed arena moves up under the same rule as any other.
+
+Which gives the shape: failure ascends only as far as someone who succeeds, and
+stops there. A caught and handled failure leaves nothing behind unless the
+program asked for it; an unhandled one keeps climbing.
+
+Retention budgets and remote full-graph diagnostic transfer remain open. The
+successful-parent case does not - an earlier revision of this file listed it as
+open, which it no longer is.
+
 
 9. WHAT THE OWNER ASKED FOR NEXT (PORT_OF_CLEARSHELL, 2026-09-11)
 
