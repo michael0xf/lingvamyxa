@@ -24,6 +24,44 @@ sub: __wrap_free (@: void p)
     c.__real_free(p)
 end: __wrap_free
 
+sub: send_init_case (@: LmxMsgRuntime rt; unsigned: who; @: LmxMsg source)
+    @: LmxMsgEnv got
+    @: uchar owned_copy
+    got: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
+    send_check(got != 0, "allocate init result")
+    got\id: 91U
+    got\number: 92
+    send_check(lmx_msg_init_copy(rt, who, 0) = LMX_MSG_INVALID, "null init output refused")
+    send_check(lmx_msg_init_copy(rt, 0U, got) = LMX_MSG_INVALID, "invalid init address refused")
+    send_check(got\id = 91U && got\number = 92 && got\bytes = 0 && got\n = 0U, "invalid init leaves output unchanged")
+    send_check(lmx_msg_init_copy(rt, who, got) = LMX_MSG_OK, "copy initial data")
+    send_check(got\id = 0U && got\correlation = 0U && got\reply_to = source\parent && got\kind = LMX_MSG_KIND_BYTES && got\number = 0, "init metadata contract")
+    send_check(got\n = 1U && got\bytes != 0 && got\bytes != source\init && got\bytes[0] = 7, "init copy has independent allocation")
+    # This returned allocation belongs to this test; the API exposes a const
+    # view, so make the deliberate alias-independence probe explicit.
+    owned_copy: (cast: (@: uchar) got\bytes)
+    owned_copy[0]: 99
+    send_check(source\init[0] = 7, "editing init copy preserves source")
+    lmx_msg_env_release(got)
+    send_check(got\bytes = 0 && got\n = 0U, "release init copy")
+    send_check(lmx_msg_init_copy(rt, who, got) = LMX_MSG_OK && got\bytes[0] = 7, "repeat copy sees original data")
+    lmx_msg_env_release(got)
+    c.free(got)
+end: send_init_case
+
+fn: send_query_turn (@: LmxMsgRuntime rt; unsigned: who; @: void ctx) int
+    @: LmxMsg source
+    unsigned: segment 0U
+    source: (cast: (@: LmxMsg) ctx)
+    send_check(lmx_msg_turn_self(rt) = source, "real self-turn callback context")
+    send_check(lmx_msg_state(rt, who) = source\state, "self state query")
+    send_check(lmx_msg_inbox_n(rt, who) = 0, "self empty inbox query")
+    send_check(lmx_msg_path_n(rt, who) = source\path_n, "self path length query")
+    send_check(lmx_msg_path_seg(rt, who, 0, @ segment) = LMX_MSG_OK && segment = source\path[0], "self path segment query")
+    send_check(lmx_msg_child_n(rt, who) = 0 && lmx_msg_child_at(rt, who, 0) = 0U, "self empty child queries")
+    send_init_case(rt, who, source)
+    return: lmx_msg_end_turn(rt, who, 1)
+
 sub: send_copy_case (@: LmxMsgRuntime rt; unsigned: from; unsigned: to; unsigned: untouched; unsigned: id)
     @: LmxMsgEnv env
     @: LmxMsgEnv got
@@ -150,6 +188,10 @@ fn: main () int
     send_check(s\inbox = 0 && s\outbox = 0 && s\init = sibling_init && s\state = sibling_state, "owned send also leaves sibling untouched")
     c.free(got)
     c.free(env)
+    send_init_case(rt, child, d)
+    send_check(lmx_msg_exec_bind(rt, child, send_query_turn, d, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind real query callback")
+    send_check(lmx_msg_run_child_turn(rt, child) = LMX_MSG_OK, "execute query callback")
+    send_check(lmx_msg_turn_self(rt) = 0, "self context restored after callback")
     lmx_msg_runtime_delete(rt)
     send_check(owned_frees = 1, "runtime teardown does not free released envelope again")
     c.printf("send local checks=%d failures=0 owned_frees=%d\n", send_checks, owned_frees)

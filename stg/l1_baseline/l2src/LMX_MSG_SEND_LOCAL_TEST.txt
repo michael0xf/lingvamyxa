@@ -3,14 +3,14 @@ L1 Message local-send regression
 
 run_msg_send_local.ps1 builds tests/lmx_msg_send_local_selftest.lm1 with pinned
 stable gen2 against a private git archive of core checkpoint
-6880ea5db32c7e54afbf4d8062376684c34f194f. Optional -CoreCommit selects another
+b8754d23a358306550e1e4a8e4a604218addea0d. Optional -CoreCommit selects another
 explicitly agreed compatible revision, never the changing working tree. Fifteen
 core source files are archived; all build outputs/logs/hashes stay in the unique
 build/codex/msg_send_local run directory. No shared gate or app pin changes.
 The snapshot includes the L1 path-storage helper integrated at 6880ea5; the
 removed native path-growth definition is not silently used by this test.
 
-89 checks at O0/O2, test object compiled with -Werror:
+118 checks at O0/O2, test object compiled with -Werror:
 - send to self, direct child, parent, and a recipient in another branch;
 - staged dest_msg is the exact recipient object, no early inbox admission;
 - commit empties the outbox and admits exactly one binary envelope;
@@ -19,7 +19,18 @@ removed native path-growth definition is not silently used by this test.
 - an unrelated sibling's queues, init pointer and state remain unchanged;
 - send_owned clears the sender envelope's bytes/n and preserves the allocation
   address through staging, admission and recv;
-- receiver release frees that allocation once; repeated release is empty.
+- receiver release frees that allocation once; repeated release is empty;
+- init_copy on the owner fallback and inside a real bound Message turn:
+  metadata, invalid address/null output, unchanged output on invalid input,
+  independent returned allocation, mutation independence and repeated release;
+- real turn_self context, state/inbox/path/child queries and restoration of
+  the caller's empty turn context after the callback returns. Exact check count
+  prevents an unexecuted callback from silently passing.
+
+The returned init buffer has a const API view; the test explicitly casts its
+own allocated copy solely to probe independence, not the original init data.
+Allocation-failure injection and concurrent races are not covered here.
+Verified run: build/codex/msg_send_local/20260911_154453_888_349b22f7/evidence.json.
 
 The fixture uses ONE root, with P's children C/S and a separate Q/T branch.
 P->T exercises the prototype's fallback lookup outside P's subtree/parent.
@@ -33,7 +44,7 @@ No handwritten C test shim, private locks, threads or production hooks. Existing
 native substrate is built from the archived checkpoint; it currently reports
 one unused adopt_push warning under the established strict pointer guards.
 
-This is delivery/ownership regression, NOT proof of concurrent fairness, native
-turn-local lookup, lock/table removal, current graph-owner lookup or full arena
+This is delivery/ownership and self-turn behavior regression, NOT proof of
+concurrent fairness, lock/table removal, current graph-owner lookup or full arena
 handoff. Owned byte-envelope transfer and Message arena transfer are distinct;
 the latter has separate storage and family-handoff regressions.
