@@ -12686,11 +12686,17 @@ It preserves available published graph state, not discarded C activations or
 a complete execution trace. A supervisor may start a fresh Message; adoption is
 not transparent resumption, rollback or recovery from arbitrary process failure.
 
-Open policy: when a parent completes successfully after adopting failed child
-history, disposition of that inherited history needs an explicit decision; it
-must not be silently conflated with the parent's disposable successful history.
-Retention budgets and remote full-graph diagnostic transfer also remain open.
-These do not reopen local no-copy delivery or the handoff-safety requirement.
+The outcome belongs to the Message itself, not to the errors recorded inside it.
+If P adopts failed child history and later completes successfully, P's parent
+controls disposal of P's handoff-safe arena, including that inherited history.
+There is no automatic upward forwarding of the failed descendants separately
+from successful P. If P needs to preserve that history, it explicitly retains or
+transfers it as program data before disposal; the runtime cannot infer why P
+handled the error. If P itself fails, its aggregated failed arena moves upward
+under the same rule as any other failed Message.
+Retention budgets and remote full-graph diagnostic transfer remain open; the
+successful-parent case above does not. Local no-copy delivery and handoff safety
+apply in both cases.
 
 Compaction and destruction cannot manufacture an alternative Structure value
 merely to preserve an old generated C layout. Return identity, result roots and
