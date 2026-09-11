@@ -70,7 +70,7 @@ artifacts, not new source files or a claim of complete Message integration.
 Family integration regression (public APIs, authored in L1)
 ----------------------------------------------------------
 run_msg_family_handoff.ps1 builds tests/lmx_msg_family_handoff_selftest.lm1
-against a PRIVATE git archive of core commit 896ad97f17a3131b952fbc55a7baf963a32b1f05.
+against a PRIVATE git archive of core commit 57b590f4f30636fc49ddc0f44afdd2a2ebcab186.
 Its edit-loop default is O2 only; -Optimization O0 or @('O0','O2') explicitly
 selects other needed configurations. Case is normalized, duplicates removed,
 and empty/NULL/unsupported selections rejected before work. Actual parameter
@@ -79,7 +79,7 @@ build: build/codex/runtime_runner_options/options_ps*.json. The O0/O2 results
 below are historical evidence, not a mandatory double compile after each edit.
 It does not compile Grok's actively changing checkout or use its build outputs.
 An explicit -CoreCommit selects another agreed checkpoint; there is no automatic
-tracking of HEAD or promotion. Evidence records the resolved commit, 19 archived
+tracking of HEAD or promotion. Evidence records the resolved commit, 21 archived
 source hashes, test/runner/compiler hashes, generated artifacts and stage exits.
 The snapshot links the L1 slots and mail-chain helpers required by native exec;
 no stale native enumeration/list body substitutes. Historical593a64b O0/O2 evidence:
@@ -88,6 +88,14 @@ At896ad97 only this runner's identical archive/module-list update was checked;
 the family fixture was not rerun for the mailbox-only extraction. Its53-check
 source is unchanged. The public send fixture exercised the new integration at
 O2 (136checks); that does not constitute new family-handoff evidence.
+
+At57b590f the same archive/module-list update adds lmx_msg_sched_ready, now
+called by native parent queue wrappers. Both send/family runner manifests
+were parsed and compared: the same21 core sources including the helper's
+header and module. Only public-send was executed (145checks atO2); the family
+source and its last53-check result remain unchanged. This manifest/pin update
+is NOT a new family-handoff runtime result. Integration evidence:
+build/codex/msg_send_local/20260911_172704_636_dcce1503/evidence.json.
 
 Those53 checks at O0/O2 cover G->C->P failed storage retention, unchanged payload
 and range-record addresses, a live unrelated

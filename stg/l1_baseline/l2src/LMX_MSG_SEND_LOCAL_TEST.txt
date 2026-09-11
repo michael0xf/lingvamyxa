@@ -3,8 +3,8 @@ L1 Message local-send regression
 
 run_msg_send_local.ps1 builds tests/lmx_msg_send_local_selftest.lm1 with pinned
 stable gen2 against a private git archive of core checkpoint
-04989ba2c3138a05237895ab5d682a8124b0f7fd. Optional -CoreCommit selects another
-explicitly agreed compatible revision, never the changing working tree. Nineteen
+57b590f4f30636fc49ddc0f44afdd2a2ebcab186. Optional -CoreCommit selects another
+explicitly agreed compatible revision, never the changing working tree. Twenty-one
 core source files are archived; all build outputs/logs/hashes stay in the unique
 build/codex/msg_send_local run directory. No shared gate or app pin changes.
 The snapshot includes the L1 path-storage helper integrated at 6880ea5; the
@@ -53,7 +53,7 @@ build/codex/msg_send_local/20260911_170343_599_e960747f/evidence.json.
 This checks integrated public send/receive/ownership behavior, not only the
 standalone chain helper. No O0/Family/full gate rerun for this extraction.
 
-Current04989ba pin adds a real held-parent scheduling regression (9 checks,
+The04989ba checkpoint adds a real held-parent scheduling regression (9 checks,
 145 total). A child with a bound handler but NO mapped native thread must
 still receive readiness on its parent's queue. The fixture first drains
 empty creation/pre-bind readiness, then admits two messages AFTER binding.
@@ -69,6 +69,14 @@ No translator self-build, O0, family or full gate rerun. This is a single
 parent-turn consumer test; the transitional bound/EXEC ring remains and is
 not exercised concurrently with that parent's queue. It is not proof of
 final global-lock/ring removal or stable-promotion readiness.
+
+Current57b590f pin additionally archives/translates/links lmx_msg_sched_ready.
+The native parent's three locked wrappers now call these L1 list bodies.
+The same145-check O2 public API fixture passes after integration, including
+post-bind wakeup, FIFO and rescheduling. Evidence:
+build/codex/msg_send_local/20260911_172704_636_dcce1503/evidence.json.
+Native Exec acceptance was performed by Grok and reviewed from saved hashes;
+it was not duplicated here. No standalone-helper, O0 or full gate rerun.
 
 Targeted follow-up for2b567e8 (unbound exec_ready exclusion): O0,136checks,
 zero failures. Reused the already compiled private binary; no translator

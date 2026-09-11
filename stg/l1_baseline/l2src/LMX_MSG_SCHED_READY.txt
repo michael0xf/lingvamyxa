@@ -43,8 +43,18 @@ inside that boundary call this helper on &parent->sched_ready and
 The header includes lmx_message.h for LmxMsg; include the generated helper
 header from the wrapper translation unit, not before defining LmxMsg itself.
 Add generated header/module to the selected runtime build once per exact
-configuration. This standalone checkpoint does NOT claim native integration,
+configuration. The initial standalone checkpoint did NOT claim native integration,
 removal of transitional EXEC ring/bind storage, or stable promotion.
+
+Integrated by Grok in57b590f: the three wrappers now call this L1 helper
+inside their unchanged parent mail_lock boundary; run_lmx translates/links
+it once per configuration. Saved native Exec PASS reviewed against matching
+source hashes (exec.c d3585d1240b63502, runner6158277fd7aeacff).
+The independent public-send fixture also passes145 checks atO2, including
+post-bind parent readiness and repeat scheduling, against that private pin:
+build/codex/msg_send_local/20260911_172704_636_dcce1503/evidence.json.
+No duplicate Exec or standalone-helper run; the remaining prototype binding/
+EXEC ring and its global mutex are not removed by this extraction.
 
 Verification
 ------------
