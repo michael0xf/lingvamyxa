@@ -34,8 +34,13 @@ nworkers==0: owner is the single lane (recv/fail/drive). UI closer
 and post-stop parent-fail tests are owner-serial.
 Concurrent: owner fail of a bound live Message is INVALID. Timer
 parent-loss is poll+threshold while parent exec_live and the child
-turn is held. path/init_copy from that held child concurrent with
-factory create. Runnable policy: L1 lmx_msg_exec_is_runnable.
+turn is held. path/init_copy from that held child is measured
+while factory is inside its create phase (synchronized handshake:
+first extra created, extra_n=1, factory waits; metadata; then
+release to finish extras 2..8). That is held-child metadata during
+factory create phase, not extra_n>=1 or factory_n=8 as overlap,
+and not simultaneous work inside one mutex. Runnable policy: L1
+lmx_msg_exec_is_runnable. Ready take is L1 lmx_msg_exec_take_addr.
 
 Choice
 ------
@@ -70,8 +75,13 @@ Runtime mutex: ready queue, admit, create, state, stop flags.
 Per-Message turn latch: at most one turn.
 Workers wait on the ready queue, take one Message, run one bound
 turn function, publish outbox via end_turn, enqueue destinations.
-UI thread: host_drain + UI-affine turns. A busy ANY worker must
-not block UI_step or another Message's worker.
+Selection/bind/held is L1 lmx_msg_exec_take_addr (C take_ready
+calls it under the exec mutex). Function-pointer/TLS invoke stays
+a thin native primitive. UI thread: host_drain + UI-affine turns.
+A busy ANY worker must not block UI_step or another Message's
+worker. Owner send/end_turn while nworkers>0 still requires that
+sender's turn latch; host_post+host_drain is the owner inject
+path (host_post remains any-thread).
 
 Stable storage
 --------------
@@ -101,7 +111,10 @@ lmx_msg_exec_ui_step(rt)
 lmx_msg_exec_stop(rt)
 
 App fragments stay isolated: they implement turn() and host_post
-adapters only.
+adapters only. This slice is experimental; it is not an app pin.
+Do not copy these sources over mixa_manager/vendor while app
+agents are compiling. Promotion is a coordinated copy of the
+accepted experimental files after review, not a live overwrite.
 
 last_status
 -----------
@@ -114,5 +127,23 @@ as ordinary result data).
 Test injectors
 --------------
 -DLMX_MSG_EXEC_TEST enables lmx_msg_exec_test_after_cleanup
-(declaration, storage, invocation). Production exec.o must not
-export that symbol. Same split as -DLMX_MSG_HOST_TEST.
+(declaration, storage, invocation) and per-runtime fail_grow /
+fail_hits / get_scan / nready / ready_has / ready_cap. Production
+exec.o must not export those symbols. Same split as
+-DLMX_MSG_HOST_TEST.
+
+Coherent files (experimental, not an app pin)
+---------------------------------------------
+  l2src/lmx_message.lm1
+  l2src/lmx_message.h
+  l2src/lmx_message_host.c
+  l2src/lmx_message_host.h
+  l2src/lmx_message_exec.c
+  l2src/lmx_message_exec.h
+  l2src/lmx_message_exec_selftest.c
+  l2src/run_lmx.ps1
+  l2src/LMX_MSG_HOST_INGRESS_V0.txt
+  l2src/LMX_MSG_EXEC_HOST_V0.txt
+Do not copy over mixa_manager/vendor while app agents compile.
+Ingress pin remains LMX_MSG_HOST_INGRESS_V0. Exec host is this
+slice until a later promotion commit.
