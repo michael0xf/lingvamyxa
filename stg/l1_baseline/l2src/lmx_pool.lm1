@@ -80,6 +80,7 @@ sub: lmx_pool_release (@: LmxPool pool)
         while: chunk != 0
             next: chunk\next
             if: chunk\base != 0
+                lmx_range_unregister(chunk\base, (cast: (@: void) ((cast: (@: char) chunk\base) + chunk\capacity * pool\stride)))
                 c.free(chunk\base)
             ---
             c.free(chunk)

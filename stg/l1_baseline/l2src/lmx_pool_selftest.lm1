@@ -29,6 +29,7 @@ fn: main () int
     @: LmxArrayDesc desc
     @: Lmx cell
     int: failures
+    size_t: cycle
     failures: 0
 
     if: lmx_ranges_init(8U) != 0
@@ -162,8 +163,60 @@ fn: main () int
 
     c.free(cell)
     lmx_pool_release(methods)
+    # Two method chunks removed, while both descriptor pools and static chars
+    # remain registered. Never inspect or dereference a freed entry pointer.
+    if: lmx_range_count != 3U
+        c.printf("lmx: released method chunks remain registered\n")
+        failures: failures + 1
+    if: lmx_type_of(cast: (@: void) desc) != c.LMX_TYPE_ARRAY_OF_INT
+        c.printf("lmx: unregister disturbed live int descriptors\n")
+        failures: failures + 1
+    if: lmx_type_of(cast: (@: void) char_desc) != c.LMX_TYPE_ARRAY_OF_CHAR
+        c.printf("lmx: unregister disturbed live char descriptors\n")
+        failures: failures + 1
     lmx_pool_release(arrays)
     lmx_pool_release(chars_of)
+    c.free(chars_of)
+    if: lmx_range_count != 1U
+        c.printf("lmx: only static character range should remain\n")
+        failures: failures + 1
+    lmx_pool_release(methods)
+    if: lmx_range_count != 1U
+        c.printf("lmx: repeated release changed registry\n")
+        failures: failures + 1
+
+    # Repeated sequential allocations must not consume permanent range slots.
+    cycle: 0U
+    while: cycle < 32U
+        if: lmx_pool_open(methods, c.sizeof(c.LmxMethod), 1U, c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0
+            c.printf("lmx: registry exhausted after released pools cycle=%zu\n", cycle)
+            failures: failures + 1
+            break
+        record: lmx_method_intern(methods, sample_entry, 9U)
+        if: record = 0 || lmx_type_of(cast: (@: void) record) != c.LMX_TYPE_METHOD
+            c.printf("lmx: reopened pool misclassified\n")
+            failures: failures + 1
+        lmx_pool_release(methods)
+        cycle: cycle + 1U
+    ---
+    if: lmx_range_count != 1U
+        c.printf("lmx: reopen cycles leaked registered ranges\n")
+        failures: failures + 1
+    if: lmx_range_unregister((cast: (@: void) chars_pool), (cast: (@: void) (chars_pool + 3))) = 0
+        c.printf("lmx: partial range unregister should fail\n")
+        failures: failures + 1
+    if: lmx_type_of(cast: (@: void) (chars_pool + 1)) != c.LMX_TYPE_CHAR
+        c.printf("lmx: failed unregister disturbed static range\n")
+        failures: failures + 1
+    if: lmx_range_unregister((cast: (@: void) chars_pool), (cast: (@: void) (chars_pool + 4))) != 0
+        c.printf("lmx: exact range unregister failed\n")
+        failures: failures + 1
+    if: lmx_type_of(cast: (@: void) chars_pool) != c.LMX_TYPE_NONE || lmx_range_count != 0U
+        c.printf("lmx: removed live storage still classified\n")
+        failures: failures + 1
+    if: lmx_range_unregister((cast: (@: void) chars_pool), (cast: (@: void) (chars_pool + 4))) = 0
+        c.printf("lmx: duplicate unregister should fail\n")
+        failures: failures + 1
     c.free(methods)
     c.free(arrays)
     lmx_ranges_release()

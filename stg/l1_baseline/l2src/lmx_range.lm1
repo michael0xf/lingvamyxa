@@ -60,6 +60,40 @@ fn: lmx_range_register (@: void lo; @: void hi; size_t: stride; int: kind; int: 
     lmx_range_count: lmx_range_count + 1U
 return: 0
 
+# Remove exactly one registered allocation before its storage is released.
+# This prototype registry is owner-serialized, like registration; this adds no
+# synchronization or cross-Message access. Preserve the order of other ranges.
+fn: lmx_range_unregister (@: void lo; @: void hi) int
+    @: LmxRange entry
+    @: LmxRange next
+    size_t: index
+    if: lmx_range_table = 0 || lo = 0 || hi = 0
+        return: 1
+    index: 0U
+    while: index < lmx_range_count
+        entry: lmx_range_table + index
+        if: entry\lo = lo && entry\hi = hi
+            while: index + 1U < lmx_range_count
+                next: entry + 1
+                entry\lo: next\lo
+                entry\hi: next\hi
+                entry\stride: next\stride
+                entry\kind: next\kind
+                entry\type: next\type
+                index: index + 1U
+                entry: next
+            ---
+            entry\lo: 0
+            entry\hi: 0
+            entry\stride: 0U
+            entry\kind: c.LMX_KIND_NONE
+            entry\type: c.LMX_TYPE_NONE
+            lmx_range_count: lmx_range_count - 1U
+            return: 0
+        index: index + 1U
+    ---
+return: 1
+
 # The whole mechanism: no tag is read, only membership is tested. Two calls,
 # because 2's table has two columns - how to read an entry, and which typed
 # service array it came from. Both are answered by the address alone.
