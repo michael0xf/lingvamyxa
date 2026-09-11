@@ -1,0 +1,125 @@
+mixa_app — app/shortcut launcher seam (ClearShell "App" button, ticket 20260911-154200)
+=========================================================================================
+
+Purpose
+-------
+One bounded slice: read the real desktop app list (Windows shortcuts and URL
+shortcuts) as opaque launchers, and expose the minimal UI-callable surface the
+ClearShell "App" button needs: classify, inspect, create/read/remove our own
+shell list entries, invoke one entry, and enumerate. No equivalent module
+existed in this codebase before this slice.
+
+The key design decision is OPAQUE references: a stored launch reference is the
+ORIGINAL .lnk/.url file itself, never a flattening to target+arguments. The
+native launcher contract (invocation via ShellExecuteExW with the "open" verb)
+preserves the original target, arguments, working directory and verb semantics
+for free, and shortcuts never get silently re-targeted on other machines.
+
+Files (owned slice)
+-------------------
+  mixa_manager/mixa_app_win32.h.lm1            concrete unit (struct + sizes)
+  mixa_manager/mixa_app.h.lm1                  portable contract (types + prototypes)
+  mixa_manager/mixa_app_win32.lm1              Windows implementation
+  mixa_manager/tests/mixa_app_selftest.lm1     headless selftest (+ fixture exe)
+  mixa_manager/tests/mixa_app_fixture_invoke.c harmless launch target (writes a marker
+  mixa_manager/run_app_selftest.ps1            isolated runner (stable compiler hash)
+  mixa_manager/mixa_app.txt                    this note
+
+Public API
+----------
+  int  mixa_app_inspect(const char *src_utf8, MixaAppEntry *out);        // read-only
+  int  mixa_app_entry_create(const char *src_utf8, const char *entry_path_utf8,
+                             MixaAppEntry *out);                          // from .lnk/.url only
+  int  mixa_app_entry_read(const char *entry_path_utf8, MixaAppEntry *out);
+  int  mixa_app_entry_remove(const char *entry_path_utf8);               // our entry file only
+  int  mixa_app_invoke(const char *entry_path_utf8);                     // shell open verb
+  int  mixa_app_list_open(MixaAppList **out, const char *dir_utf8);     // enumerates *.link
+  int  mixa_app_list_next(MixaAppList *l, MixaAppEntry *out);
+  void mixa_app_list_close(MixaAppList *l);
+  int mixa_app_entry_kind(const MixaAppEntry *e);
+  int mixa_app_entry_has_icon(const MixaAppEntry *e);
+  const char *mixa_app_entry_label(const MixaAppEntry *e);
+  const char *mixa_app_entry_icon_ref(const MixaAppEntry *e);
+  const char *mixa_app_entry_launch_ref(const MixaAppEntry *e);
+
+Classification (case-insensitive extension; attributes are checked first)
+------------------------------------------------------------------------
+  reparse point (FILE_ATTRIBUTE_REPARSE_POINT)  -> MIXA_APP_KIND_FS_LINK
+                                                  (recognized; NOT a launcher)
+  directory                                      -> MIXA_APP_KIND_UNSUPPORTED
+  "*.lnk"                                        -> MIXA_APP_KIND_SHELL_LINK
+  "*.url"                                        -> MIXA_APP_KIND_URL_LINK
+  anything else                                  -> MIXA_APP_KIND_UNSUPPORTED
+  MIXA_APP_KIND_REGISTERED (reserved)            -> documented Windows gap; not implemented
+
+Semantic guarantees
+-------------------
+* Inspection NEVER executes a target: it only reads attributes, derives the
+  label (basename minus .lnk/.url), records the source path as the opaque
+  reference, and optionally resolves a shell icon tag ("path,index") via
+  SHGetFileInfoW with SHGFI_ICONLOCATION. That call returns a string and never
+  triggers the target.
+* Invocation goes through ShellExecuteExW (fMask SEE_MASK_FLAG_NO_UI = 1024,
+  nShow SW_SHOWNORMAL). The stored reference is the ORIGINAL launcher file, so
+  a dropped-in replacement .lnk with the same name updates behavior without a
+  code/entry change. Url links are invokable but the test suite deliberately
+  does not invoke them (would open a browser).
+* Filesystem links are recognized but never interchanged with launcher
+  shortcuts; a caller cannot create our own entry from an FS link
+  (ERR_UNSUPPORTED).
+* Corrupt but readable ".link" entry files surface as MIXA_APP_ERR_IO during
+  enumeration (never silently skipped). Missing entries, files and dirs are
+  MIXA_APP_ERR_MISSING (ERROR_FILE_NOT_FOUND / ERROR_PATH_NOT_FOUND only).
+
+Our own entry format (file suffix ".link")
+------------------------------------------
+  header line "mixa-app-link-v1" then one value per line:
+      kind=N        label=...    has_icon=0/1    icon=...    launch=...
+  Values must not contain a newline (checked at creation). The icon and launch
+  references are opaque strings; launch must be an absolute path to the
+  original .lnk/.url.
+
+L1 findings recorded while porting (see also PORT_OF_CLEARSHELL.txt)
+-------------------------------------------------------------------
+* COM (IShellLinkW) is not expressible in L1, so shortcut metadata is never
+  flattened; the concrete seam is OS-shipped data formats only. The "hard"
+  COM-based target resolution the reference uses is deliberately dropped:
+  the opaque-reference design replaces it.
+* No two-level member chains (a\b\c) anywhere in the codebase; the enumerator
+  passes its internal WIN32_FIND_DATAW to helpers (mixa_app_ffd_is_dir /
+  mixa_app_list_build_path) instead.
+* Helpers must be defined before use; sub:/fn: mixing with the prototype
+  block works (app_window precedent).
+* Native wide-string pattern is built byte-by-byte (no L"\\*.link" literal);
+  Unicode fixture names are covered via explicit UTF-8 byte arrays.
+
+Testing
+-------
+Run from mixa_manager:
+
+    ./run_app_selftest.ps1
+
+The runner is patterned on run_app_window_selftest.ps1 (compiler SHA256
+65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936) and runs in
+an isolated build/mixa/opencode/app_seam/run_<timestamp>_<guid>/ dir. It also:
+  * compiles the harmless fixture exe (mixa_app_fixture_invoke.c) that only
+    writes a marker file and exits;
+  * builds REAL .lnk fixtures via WScript.Shell COM (including the unicode +
+    space name "sp ace-файл.lnk"), a .url INI file, a broken-target .lnk and a
+    junction (mklink /J);
+  * links the test with -lshell32 and passes the fixture dir as argv[1].
+
+The selftest asserts: inspect-only-never-launches (marker absent before invoke),
+classification of every fixture kind, label/ref/icon invariants (unicode names
+as exact UTF-8 bytes), create/read/remove round trips, enumerate + skip + END of
+*.link entries, empty and corrupt directories, ERR_LAUNCH on a broken target
+(no UI), a real launch that produces the marker file (bounded poll), and
+null-argument negatives throughout.
+
+Integration point still pending (honest status)
+-----------------------------------------------
+The main executable is NOT wired to this module yet. The remaining integration
+is: collect and inspect launcher paths for the "App" viewer, keep our own
+"*.link" entries in a managed directory, present them through the existing UI
+modules, and route a selection to mixa_app_invoke(). This slice was verified in
+isolation as required and does not claim main-executable wiring.

@@ -1,0 +1,515 @@
+predef: "mixa_manager/mixa_app_win32.h.lm1"
+predef: "mixa_manager/mixa_app.h.lm1"
+predef: "mixa_manager/mixa_app_win32.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# FILE_SEAM section 4 app/shortcut seam selftest (ClearShell "App" button).
+# Uses the seam under test only; the runner prepares fixtures (real .lnk via
+# WScript.Shell, .url INI, junction) plus a harmless invoke-target exe that
+# writes a marker file. Launch is only ever tested against that fixture exe.
+# The reserved REGISTERED kind is untestable on Windows in this slice.
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char p_valid 1040
+    []: char p_space 1040
+    []: char p_broken 1040
+    []: char p_url 1040
+    []: char p_plain 1040
+    []: char p_dir 1040
+    []: char p_junc 1040
+    []: char p_missing 1040
+    []: char appdir 1040
+    []: char e_valid 1040
+    []: char e_space 1040
+    []: char e_url 1040
+    []: char e_broken 1040
+    []: char e_missing 1040
+    []: char corruptdir 1040
+    []: char emptydir 1040
+    []: char missing_dir 1040
+    []: char marker 1040
+    []: char nm_sp 16
+    []: MixaAppEntry e1 1
+    []: MixaAppEntry e2 1
+    []: (@: MixaAppList) h 1
+    []: int seen 4
+    []: (@: void) mf 1
+    int: failures
+    int: checks
+    int: st
+    int: n
+    int: count
+    int: matched
+    failures: 0
+    checks: 0
+    seen[0]: 0
+    seen[1]: 0
+    seen[2]: 0
+    seen[3]: 0
+
+    nm_sp[0]: (cast: (char) 0x73)
+    nm_sp[1]: (cast: (char) 0x70)
+    nm_sp[2]: (cast: (char) 0x20)
+    nm_sp[3]: (cast: (char) 0x61)
+    nm_sp[4]: (cast: (char) 0x63)
+    nm_sp[5]: (cast: (char) 0x65)
+    nm_sp[6]: (cast: (char) 0x2D)
+    nm_sp[7]: (cast: (char) 0xD1)
+    nm_sp[8]: (cast: (char) 0x84)
+    nm_sp[9]: (cast: (char) 0xD0)
+    nm_sp[10]: (cast: (char) 0xB0)
+    nm_sp[11]: (cast: (char) 0xD0)
+    nm_sp[12]: (cast: (char) 0xB9)
+    nm_sp[13]: (cast: (char) 0xD0)
+    nm_sp[14]: (cast: (char) 0xBB)
+    nm_sp[15]: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/opencode/app_seam/tmp")
+    ---
+    c.snprintf(p_valid, 1040U, "%s\\valid.lnk", base)
+    c.snprintf(p_space, 1040U, "%s\\%s.lnk", base, nm_sp)
+    c.snprintf(p_broken, 1040U, "%s\\broken.lnk", base)
+    c.snprintf(p_url, 1040U, "%s\\web.url", base)
+    c.snprintf(p_plain, 1040U, "%s\\plain.txt", base)
+    c.snprintf(p_dir, 1040U, "%s\\dir.lnk", base)
+    c.snprintf(p_junc, 1040U, "%s\\js_link", base)
+    c.snprintf(p_missing, 1040U, "%s\\no_such.lnk", base)
+    c.snprintf(appdir, 1040U, "%s\\appdir", base)
+    c.snprintf(corruptdir, 1040U, "%s\\corruptdir", base)
+    c.snprintf(emptydir, 1040U, "%s\\emptydir", base)
+    c.snprintf(missing_dir, 1040U, "%s\\no_such_dir", base)
+    c.snprintf(marker, 1040U, "%s\\mixa_app_invoked.marker", base)
+    c.snprintf(e_valid, 1040U, "%s\\a_valid.link", appdir)
+    c.snprintf(e_space, 1040U, "%s\\b_unicode.link", appdir)
+    c.snprintf(e_url, 1040U, "%s\\c_url.link", appdir)
+    c.snprintf(e_broken, 1040U, "%s\\d_broken.link", appdir)
+    c.snprintf(e_missing, 1040U, "%s\\no_entry.link", appdir)
+
+    # T1: inspect does not launch and never executes anything.
+    mf[0]: c.fopen(marker, "rb")
+    checks: checks + 1
+    if: mf[0] != 0
+        failures: failures + 1
+        c.printf("app: marker present before any invoke\n")
+    ---
+    if: mf[0] != 0
+        c.fclose(mf[0])
+    ---
+
+    # T2: inspect negatives.
+    st: mixa_app_inspect(0, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_ARG
+        failures: failures + 1
+        c.printf("app: inspect(NULL) rc=%d\n", st)
+    ---
+    st: mixa_app_inspect(p_valid, 0)
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_ARG
+        failures: failures + 1
+        c.printf("app: inspect(out=NULL) rc=%d\n", st)
+    ---
+    st: mixa_app_inspect(p_missing, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_MISSING
+        failures: failures + 1
+        c.printf("app: inspect missing rc=%d\n", st)
+    ---
+
+    # T3: real .lnk (WScript.Shell fixture) is a SHELL_LINK launcher.
+    st: mixa_app_inspect(p_valid, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app: inspect valid rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_app_entry_kind(@ e1[0]) != MIXA_APP_KIND_SHELL_LINK
+        failures: failures + 1
+        c.printf("app: valid kind=%d\n", mixa_app_entry_kind(@ e1[0]))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_app_entry_label(@ e1[0]), "valid") != 0
+        failures: failures + 1
+        c.printf("app: valid label=%s\n", mixa_app_entry_label(@ e1[0]))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_app_entry_launch_ref(@ e1[0]), p_valid) != 0
+        failures: failures + 1
+        c.printf("app: valid ref=%s\n", mixa_app_entry_launch_ref(@ e1[0]))
+    ---
+    checks: checks + 1
+    if: mixa_app_entry_has_icon(@ e1[0]) != 0
+        if: mixa_app_entry_has_icon(@ e1[0]) != 1
+            failures: failures + 1
+            c.printf("app: valid has_icon=%d\n", mixa_app_entry_has_icon(@ e1[0]))
+        ---
+    ---
+    checks: checks + 1
+    if: mixa_app_entry_has_icon(@ e1[0]) = 1
+        if: mixa_app_entry_icon_ref(@ e1[0])[0] = 0
+            failures: failures + 1
+            c.printf("app: valid icon flag with empty ref\n")
+        ---
+    ---
+
+    # T4: unicode + space .lnk name round trip (UTF-8 bytes).
+    st: mixa_app_inspect(p_space, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app: inspect space rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_app_entry_kind(@ e1[0]) != MIXA_APP_KIND_SHELL_LINK
+        failures: failures + 1
+        c.printf("app: space kind=%d\n", mixa_app_entry_kind(@ e1[0]))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_app_entry_label(@ e1[0]), nm_sp) != 0
+        failures: failures + 1
+        c.printf("app: space label mismatch\n")
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_app_entry_launch_ref(@ e1[0]), p_space) != 0
+        failures: failures + 1
+        c.printf("app: space ref mismatch\n")
+    ---
+
+    # T5: .url is a URL_LINK launcher (never invoked in tests -> no browser).
+    st: mixa_app_inspect(p_url, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_OK || mixa_app_entry_kind(@ e1[0]) != MIXA_APP_KIND_URL_LINK
+        failures: failures + 1
+        c.printf("app: url kind=%d rc=%d\n", mixa_app_entry_kind(@ e1[0]), st)
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_app_entry_label(@ e1[0]), "web") != 0
+        failures: failures + 1
+        c.printf("app: url label=%s\n", mixa_app_entry_label(@ e1[0]))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_app_entry_launch_ref(@ e1[0]), p_url) != 0
+        failures: failures + 1
+        c.printf("app: url ref mismatch\n")
+    ---
+
+    # T6: unrelated files and directories are UNSUPPORTED.
+    st: mixa_app_inspect(p_plain, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_OK || mixa_app_entry_kind(@ e1[0]) != MIXA_APP_KIND_UNSUPPORTED
+        failures: failures + 1
+        c.printf("app: plain kind=%d rc=%d\n", mixa_app_entry_kind(@ e1[0]), st)
+    ---
+    st: mixa_app_inspect(p_dir, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_OK || mixa_app_entry_kind(@ e1[0]) != MIXA_APP_KIND_UNSUPPORTED
+        failures: failures + 1
+        c.printf("app: dir kind=%d rc=%d\n", mixa_app_entry_kind(@ e1[0]), st)
+    ---
+    st: mixa_app_inspect(p_junc, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_OK || mixa_app_entry_kind(@ e1[0]) != MIXA_APP_KIND_FS_LINK
+        failures: failures + 1
+        c.printf("app: junc kind=%d rc=%d\n", mixa_app_entry_kind(@ e1[0]), st)
+    ---
+
+    # T7: create only accepts real launcher kinds.
+    st: mixa_app_entry_create(p_plain, e_valid, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_UNSUPPORTED
+        failures: failures + 1
+        c.printf("app: create plain rc=%d\n", st)
+    ---
+    st: mixa_app_entry_create(p_junc, e_valid, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_UNSUPPORTED
+        failures: failures + 1
+        c.printf("app: create junc rc=%d\n", st)
+    ---
+    st: mixa_app_entry_create(p_missing, e_valid, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_MISSING
+        failures: failures + 1
+        c.printf("app: create missing rc=%d\n", st)
+    ---
+    st: mixa_app_entry_create(p_valid, 0, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_ARG
+        failures: failures + 1
+        c.printf("app: create out=NULL rc=%d\n", st)
+    ---
+
+    # T8: create + read-back round trip for all launcher kinds.
+    st: mixa_app_entry_create(p_valid, e_valid, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app: create valid rc=%d\n", st)
+    ---
+    st: mixa_app_entry_read(e_valid, @ e2[0])
+    checks: checks + 1
+    if: st != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app: read valid rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: mixa_app_entry_kind(@ e2[0]) != MIXA_APP_KIND_SHELL_LINK
+        failures: failures + 1
+        c.printf("app: read valid kind=%d\n", mixa_app_entry_kind(@ e2[0]))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_app_entry_label(@ e2[0]), "valid") != 0
+        failures: failures + 1
+        c.printf("app: read valid label=%s\n", mixa_app_entry_label(@ e2[0]))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_app_entry_launch_ref(@ e2[0]), p_valid) != 0
+        failures: failures + 1
+        c.printf("app: read valid ref=%s\n", mixa_app_entry_launch_ref(@ e2[0]))
+    ---
+    st: mixa_app_entry_create(p_space, e_space, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app: create space rc=%d\n", st)
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_app_entry_label(@ e1[0]), nm_sp) != 0
+        failures: failures + 1
+        c.printf("app: create space label mismatch\n")
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_app_entry_launch_ref(@ e1[0]), p_space) != 0
+        failures: failures + 1
+        c.printf("app: create space ref mismatch\n")
+    ---
+    st: mixa_app_entry_create(p_url, e_url, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_OK || mixa_app_entry_kind(@ e1[0]) != MIXA_APP_KIND_URL_LINK
+        failures: failures + 1
+        c.printf("app: create url rc=%d kind=%d\n", st, mixa_app_entry_kind(@ e1[0]))
+    ---
+    st: mixa_app_entry_create(p_broken, e_broken, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app: create broken rc=%d\n", st)
+    ---
+    st: mixa_app_entry_read(e_missing, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_MISSING
+        failures: failures + 1
+        c.printf("app: read missing rc=%d\n", st)
+    ---
+
+    # T9: list our own *.link entries in appdir (4 expected).
+    st: mixa_app_list_open(@ h[0], appdir)
+    checks: checks + 1
+    if: st != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app: list_open appdir rc=%d\n", st)
+    ---
+    count: 0
+    while: 1
+        st: mixa_app_list_next(h[0], @ e1[0])
+        if: st = MIXA_APP_END
+            break
+        if: st != MIXA_APP_OK
+            failures: failures + 1
+            c.printf("app: list_next rc=%d\n", st)
+            break
+        count: count + 1
+        matched: 0
+        if: c.strcmp(mixa_app_entry_label(@ e1[0]), "valid") = 0
+            if: mixa_app_entry_kind(@ e1[0]) = MIXA_APP_KIND_SHELL_LINK
+                seen[0]: 1
+            matched: 1
+        if: c.strcmp(mixa_app_entry_label(@ e1[0]), "broken") = 0
+            if: mixa_app_entry_kind(@ e1[0]) = MIXA_APP_KIND_SHELL_LINK
+                seen[1]: 1
+            matched: 1
+        if: c.strcmp(mixa_app_entry_label(@ e1[0]), "web") = 0
+            if: mixa_app_entry_kind(@ e1[0]) = MIXA_APP_KIND_URL_LINK
+                seen[2]: 1
+            matched: 1
+        if: c.strcmp(mixa_app_entry_label(@ e1[0]), nm_sp) = 0
+            if: mixa_app_entry_kind(@ e1[0]) = MIXA_APP_KIND_SHELL_LINK
+                seen[3]: 1
+            matched: 1
+        checks: checks + 1
+        if: matched = 0
+            failures: failures + 1
+            c.printf("app: unexpected entry label=%s\n", mixa_app_entry_label(@ e1[0]))
+        ---
+    checks: checks + 1
+    if: count != 4
+        failures: failures + 1
+        c.printf("app: list count=%d want 4\n", count)
+    ---
+    checks: checks + 1
+    if: seen[0] != 1
+        failures: failures + 1
+        c.printf("app: valid not listed\n")
+    ---
+    checks: checks + 1
+    if: seen[1] != 1
+        failures: failures + 1
+        c.printf("app: broken not listed\n")
+    ---
+    checks: checks + 1
+    if: seen[2] != 1
+        failures: failures + 1
+        c.printf("app: web not listed\n")
+    ---
+    checks: checks + 1
+    if: seen[3] != 1
+        failures: failures + 1
+        c.printf("app: unicode not listed\n")
+    ---
+    st: mixa_app_list_next(h[0], @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_END
+        failures: failures + 1
+        c.printf("app: list next-after-end rc=%d\n", st)
+    ---
+    mixa_app_list_close(h[0])
+
+    # T10: empty dir list.
+    st: mixa_app_list_open(@ h[0], emptydir)
+    checks: checks + 1
+    if: st != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app: list_open empty rc=%d\n", st)
+    ---
+    st: mixa_app_list_next(h[0], @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_END
+        failures: failures + 1
+        c.printf("app: empty next rc=%d\n", st)
+    ---
+    mixa_app_list_close(h[0])
+
+    # T11: corrupt entry file -> ERR_IO.
+    st: mixa_app_list_open(@ h[0], corruptdir)
+    checks: checks + 1
+    if: st != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app: list_open corrupt rc=%d\n", st)
+    ---
+    st: mixa_app_list_next(h[0], @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_IO
+        failures: failures + 1
+        c.printf("app: corrupt rc=%d want ERR_IO\n", st)
+    ---
+    mixa_app_list_close(h[0])
+
+    # T12: list negatives.
+    st: mixa_app_list_open(0, appdir)
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_ARG
+        failures: failures + 1
+        c.printf("app: list_open(NULL) rc=%d\n", st)
+    ---
+    st: mixa_app_list_open(@ h[0], missing_dir)
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_MISSING
+        failures: failures + 1
+        c.printf("app: list_open missing rc=%d\n", st)
+    ---
+    st: mixa_app_list_next(0, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_ARG
+        failures: failures + 1
+        c.printf("app: list_next(NULL) rc=%d\n", st)
+    ---
+    st: mixa_app_list_next(h[0], 0)
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_ARG
+        failures: failures + 1
+        c.printf("app: list_next(out=NULL) rc=%d\n", st)
+    ---
+    mixa_app_list_close(0)
+
+    # T13: invoke negatives.
+    st: mixa_app_invoke(0)
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_ARG
+        failures: failures + 1
+        c.printf("app: invoke(NULL) rc=%d\n", st)
+    ---
+    st: mixa_app_invoke(e_missing)
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_MISSING
+        failures: failures + 1
+        c.printf("app: invoke missing rc=%d\n", st)
+    ---
+
+    # T14: invoke broken .lnk target -> ERR_LAUNCH (no UI shown).
+    st: mixa_app_invoke(e_broken)
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_LAUNCH
+        failures: failures + 1
+        c.printf("app: invoke broken rc=%d want ERR_LAUNCH\n", st)
+    ---
+
+    # T15: real invoke launches the fixture exe and it writes the marker.
+    st: mixa_app_invoke(e_valid)
+    checks: checks + 1
+    if: st != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app: invoke valid rc=%d\n", st)
+    ---
+    n: 0
+    mf[0]: 0
+    while: 1
+        mf[0]: c.fopen(marker, "rb")
+        if: mf[0] != 0
+            c.fclose(mf[0])
+            break
+        if: n >= 60
+            break
+        c.Sleep(100U)
+        n: n + 1
+    checks: checks + 1
+    if: mf[0] = 0
+        failures: failures + 1
+        c.printf("app: marker never appeared after invoke\n")
+    ---
+
+    # T16: remove + re-remove.
+    st: mixa_app_entry_remove(e_valid)
+    checks: checks + 1
+    if: st != MIXA_APP_OK
+        failures: failures + 1
+        c.printf("app: remove valid rc=%d\n", st)
+    ---
+    st: mixa_app_entry_read(e_valid, @ e1[0])
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_MISSING
+        failures: failures + 1
+        c.printf("app: read after remove rc=%d\n", st)
+    ---
+    st: mixa_app_entry_remove(e_valid)
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_MISSING
+        failures: failures + 1
+        c.printf("app: remove again rc=%d\n", st)
+    ---
+    st: mixa_app_entry_remove(0)
+    checks: checks + 1
+    if: st != MIXA_APP_ERR_ARG
+        failures: failures + 1
+        c.printf("app: remove(NULL) rc=%d\n", st)
+    ---
+
+    c.printf("app seam selftest: %d checks, %d failures\n", checks, failures)
+    if: failures != 0
+        return: 1
+return: 0

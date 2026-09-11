@@ -1,0 +1,54 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_app_win32.h.lm1"
+
+# Portable app/shortcut seam (ClearShell "App" button, desktop port).
+# Opaque launch references preserve the ORIGINAL shortcut semantics: a stored
+# reference string is never flattened to target+args, and invocation goes
+# through the native launcher contract of each platform.
+#
+# Windows only in this slice; see mixa_app.txt for the support matrix and for
+# the L1 limitation that keeps the common C header coupled to the concrete
+# unit (a forward declaration of struct MixaAppList is not expressible yet).
+
+struct: MixaAppEntry
+    int: kind
+    int: has_icon
+    []: char label MIXA_APP_LABEL_LEN
+    []: char icon_ref MIXA_APP_ICON_LEN
+    []: char launch_ref MIXA_APP_REF_LEN
+end: MixaAppEntry
+
+enum: MixaAppKind
+    MIXA_APP_KIND_UNSUPPORTED 0
+    MIXA_APP_KIND_SHELL_LINK 1
+    MIXA_APP_KIND_URL_LINK 2
+    MIXA_APP_KIND_REGISTERED 3
+    MIXA_APP_KIND_FS_LINK 4
+end: MixaAppKind
+
+enum: MixaAppStatus
+    MIXA_APP_OK 0
+    MIXA_APP_ERR_ARG 1
+    MIXA_APP_ERR_MISSING 2
+    MIXA_APP_ERR_IO 3
+    MIXA_APP_ERR_NOMEM 4
+    MIXA_APP_ERR_UNSUPPORTED 5
+    MIXA_APP_ERR_LAUNCH 6
+    MIXA_APP_END 7
+end: MixaAppStatus
+
+prototype:
+    fn: mixa_app_inspect (const: @(char src_utf8); @: MixaAppEntry out) int
+    fn: mixa_app_entry_create (const: @(char src_utf8); const: @(char entry_path_utf8); @: MixaAppEntry out) int
+    fn: mixa_app_entry_read (const: @(char entry_path_utf8); @: MixaAppEntry out) int
+    fn: mixa_app_entry_remove (const: @(char entry_path_utf8)) int
+    fn: mixa_app_invoke (const: @(char entry_path_utf8)) int
+    fn: mixa_app_list_open (@@: MixaAppList out; const: @(char dir_utf8)) int
+    fn: mixa_app_list_next (@: MixaAppList l; @: MixaAppEntry out) int
+    fn: mixa_app_list_close (@: MixaAppList l) void
+    fn: mixa_app_entry_kind (const: @(MixaAppEntry e)) int
+    fn: mixa_app_entry_has_icon (const: @(MixaAppEntry e)) int
+    fn: mixa_app_entry_label (const: @(MixaAppEntry e)) const: @(char)
+    fn: mixa_app_entry_icon_ref (const: @(MixaAppEntry e)) const: @(char)
+    fn: mixa_app_entry_launch_ref (const: @(MixaAppEntry e)) const: @(char)
+end: prototype

@@ -1,0 +1,23 @@
+include: "<windows.h>" "<wchar.h>"
+
+# Windows concrete unit for the app/shortcut seam.
+# Defines the concrete list-enumerator struct and the buffer sizes shared by
+# the portable contract. The portable header predefs this one, so the size
+# constants live here to avoid a circular dependency.
+
+define: MIXA_APP_LABEL_LEN 512
+define: MIXA_APP_ICON_LEN 1040
+define: MIXA_APP_REF_LEN 1040
+define: MIXA_APP_DIR_LEN 1040
+define: MIXA_APP_PATH_LEN 2048
+
+struct: MixaAppList
+    @: void hfind
+    @: WIN32_FIND_DATAW ffd
+    @: wchar_t wdir
+    []: char utf8_dir MIXA_APP_DIR_LEN
+    []: char utf8_path MIXA_APP_PATH_LEN
+    int: is_open
+    int: first_done
+    int: is_empty
+end: MixaAppList
