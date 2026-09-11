@@ -1,0 +1,13 @@
+L2:
+    os:
+        win:
+            fn: pick () int
+            return: 0
+        default:
+            fn: pick () int
+            return: 0
+    end: os
+    fn: main () int
+        return: 0
+    end: main
+end: L2

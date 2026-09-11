@@ -1,0 +1,15 @@
+L2:
+    os:
+        win:
+            fn: pick () @: char
+                int: x
+            return: "win32"
+        default:
+            fn: pick () @: char
+                int: x
+            return: "pthread"
+    end: os
+    fn: main () int
+        return: 0
+    end: main
+end: L2

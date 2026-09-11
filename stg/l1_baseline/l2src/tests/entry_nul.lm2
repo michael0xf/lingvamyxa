@@ -1,0 +1,7 @@
+L2:
+    fn: main () int
+        c.array: []: char command 8
+        command[0]: '\0'
+        return: 0
+    end: main
+end: L2
