@@ -86,17 +86,22 @@ $msgC = Join-Path $out "lmx_message.c"
 & $trans "l2src\lmx_message.lm1" $msgC
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: l2src\lmx_message.lm1" }
 $prodHostO = Join-Path $out "lmx_message_host_prod.o"
-& gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build -c "l2src\lmx_message_host.c" -o $prodHostO 2>&1 |
-    Tee-Object -FilePath (Join-Path $log "lmx_message_host_prod.gcc.log") | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "$gen gcc failed: production host.o" }
+$gstr = ($guards -join " ")
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -c l2src\lmx_message_host.c -o `"$prodHostO`" > `"$(Join-Path $log 'lmx_message_host_prod.gcc.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    Get-Content (Join-Path $log "lmx_message_host_prod.gcc.log")
+    throw "$gen gcc failed: production host.o"
+}
 $prodNm = & nm --defined-only $prodHostO 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { throw "nm failed on production host.o" }
 if ($prodNm -match 'lmx_msg_host_test_set_') { throw "production host.o exports test setters" }
 if ($prodNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_host_test_nomem\s*$') { throw "production host.o has mutable test_nomem" }
 $prodExecO = Join-Path $out "lmx_message_exec_prod.o"
-& gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build -I $blkInc -c "l2src\lmx_message_exec.c" -o $prodExecO 2>&1 |
-    Tee-Object -FilePath (Join-Path $log "lmx_message_exec_prod.gcc.log") | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "$gen gcc failed: production exec.o" }
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -c l2src\lmx_message_exec.c -o `"$prodExecO`" > `"$(Join-Path $log 'lmx_message_exec_prod.gcc.log')`" 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    Get-Content (Join-Path $log "lmx_message_exec_prod.gcc.log")
+    throw "$gen gcc failed: production exec.o"
+}
 $prodExecNm = & nm --defined-only $prodExecO 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { throw "nm failed on production exec.o" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_after_cleanup\s*$') { throw "production exec.o exports test cleanup hook" }
@@ -109,8 +114,7 @@ if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_bind_has_worker\s*$') { thro
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_fail_hits\s*$') { throw "production exec.o exports test fail_hits" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_get_scan\s*$') { throw "production exec.o exports test get_scan" }
 $hostExe = Join-Path $out "lmx_message_host_selftest.exe"
-& gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build -I $blkInc -DLMX_MSG_HOST_TEST "l2src\lmx_message_host_selftest.c" $msgC "l2src\lmx_message_host.c" "l2src\lmx_message_exec.c" $blkC -o $hostExe 2>&1 |
-    Tee-Object -FilePath (Join-Path $log "lmx_message_host_selftest.gcc.log") | Out-Null
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -DLMX_MSG_HOST_TEST l2src\lmx_message_host_selftest.c `"$msgC`" l2src\lmx_message_host.c l2src\lmx_message_exec.c `"$blkC`" -o `"$hostExe`" > `"$(Join-Path $log 'lmx_message_host_selftest.gcc.log')`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content (Join-Path $log "lmx_message_host_selftest.gcc.log")
     throw "$gen gcc failed: lmx_message_host_selftest"
@@ -118,8 +122,7 @@ if ($LASTEXITCODE -ne 0) {
 & $hostExe
 if ($LASTEXITCODE -ne 0) { throw "$gen lmx_message_host_selftest failed" }
 $execExe = Join-Path $out "lmx_message_exec_selftest.exe"
-& gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build -I $blkInc -DLMX_MSG_EXEC_TEST "l2src\lmx_message_exec_selftest.c" $msgC "l2src\lmx_message_host.c" "l2src\lmx_message_exec.c" $blkC -o $execExe 2>&1 |
-    Tee-Object -FilePath (Join-Path $log "lmx_message_exec_selftest.gcc.log") | Out-Null
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -DLMX_MSG_EXEC_TEST l2src\lmx_message_exec_selftest.c `"$msgC`" l2src\lmx_message_host.c l2src\lmx_message_exec.c `"$blkC`" -o `"$execExe`" > `"$(Join-Path $log 'lmx_message_exec_selftest.gcc.log')`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content (Join-Path $log "lmx_message_exec_selftest.gcc.log")
     throw "$gen gcc failed: lmx_message_exec_selftest"

@@ -128,8 +128,8 @@ Do not claim the previous global-table runtime complied.
       under host mutex; dest table walk is later).
   D6. 19.29.6 / 19.28.R2.2 text that permitted worker-pool
       actors and migration between host workers.
-  D7. Shared exec mutex still around find/bind/ready. Inbox
-      q_push/q_pop now take dest mail_lock nested under exec
+  D7. Shared exec mutex still around find/bind/ready. Inbox and
+      outbox q_push/take now take dest mail_lock nested under exec
       (exec then mail; never the reverse). Not yet a replacement
       of exec lock.
   D8. Independent child-arena reclaim inside one family is
@@ -163,9 +163,10 @@ exec_stop does not drop that retain (restart/last_status).
 runtime_delete: stop, drop_binds, drain with no_retire, free slots;
 detach does not stop again. Nested unbind of a live worker sets gone
 and wakes; it does not join while the exec lock is nested.
-mail_lock helpers exist; most paths still use the shared exec lock
-(D7). send_cap same-runtime check is a prototype boundary, not a
-language ban. Integer find still uses the runtime list (D1).
+mail_lock helpers cover inbox and outbox; find/bind/ready still use
+the shared exec lock (D7). send_cap same-runtime check is a prototype
+boundary, not a language ban. Integer find still uses the runtime list
+(D1).
 
 Not yet
 -------

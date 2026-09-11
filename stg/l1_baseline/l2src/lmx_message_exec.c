@@ -395,6 +395,32 @@ void lmx_msg_mail_inbox_take(LmxMsg *m, LmxMsgCopy **out) {
     lmx_msg_mail_unlock(m);
 }
 
+int lmx_msg_mail_outbox_empty(LmxMsg *m) {
+    int empty;
+    if (m == 0) {
+        return 1;
+    }
+    lmx_msg_mail_lock(m);
+    empty = m->outbox == 0;
+    lmx_msg_mail_unlock(m);
+    return empty;
+}
+
+void lmx_msg_mail_outbox_take(LmxMsg *m, LmxMsgCopy **out) {
+    if (out == 0) {
+        return;
+    }
+    if (m == 0) {
+        *out = 0;
+        return;
+    }
+    lmx_msg_mail_lock(m);
+    *out = m->outbox;
+    m->outbox = 0;
+    m->outbox_tail = 0;
+    lmx_msg_mail_unlock(m);
+}
+
 void lmx_msg_slot_free(LmxMsg *m) {
     if (m == 0) {
         return;
@@ -429,7 +455,7 @@ int lmx_msg_endp_try_retire(LmxMsgRuntime *rt, LmxMsg *m) {
         lmx_msg_exec_unlock(rt);
         return 0;
     }
-    if (lmx_msg_mail_inbox_empty(m) == 0 || m->outbox != 0 || m->parent_msg != 0) {
+    if (lmx_msg_mail_inbox_empty(m) == 0 || lmx_msg_mail_outbox_empty(m) == 0 || m->parent_msg != 0) {
         lmx_msg_exec_unlock(rt);
         return 0;
     }

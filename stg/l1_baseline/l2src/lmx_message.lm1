@@ -447,6 +447,7 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     @: LmxMsg m
     @: LmxMsgCopy leftover
     @: LmxMsgCopy inb 0
+    @: LmxMsgCopy outb 0
     int: i 0
     if: rt = 0
         return
@@ -469,9 +470,8 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
         if: m != 0
             c.lmx_msg_mail_inbox_take(m, @ inb)
             lmx_msg_copy_free(inb)
-            lmx_msg_copy_free(m\outbox)
-            m\outbox: 0
-            m\outbox_tail: 0
+            c.lmx_msg_mail_outbox_take(m, @ outb)
+            lmx_msg_copy_free(outb)
         ---
         i: i + 1
     lmx_msg_copy_free(rt\transport)
@@ -673,7 +673,9 @@ fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: 
         ---
         node\dest_msg: destn
     ---
+    c.lmx_msg_mail_lock(src)
     lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
+    c.lmx_msg_mail_unlock(src)
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_STAGED
 
@@ -735,7 +737,9 @@ fn: lmx_msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @
         ---
         node\dest_msg: destn
     ---
+    c.lmx_msg_mail_lock(src)
     lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
+    c.lmx_msg_mail_unlock(src)
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_STAGED
 
@@ -756,6 +760,7 @@ return: st
 sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     @: LmxMsg ch
     @: LmxMsgCopy inb 0
+    @: LmxMsgCopy outb 0
     if: m = 0
         return
     if: m\parent_msg != 0
@@ -779,9 +784,8 @@ sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     ---
     c.lmx_msg_mail_inbox_take(m, @ inb)
     lmx_msg_copy_free(inb)
-    lmx_msg_copy_free(m\outbox)
-    m\outbox: 0
-    m\outbox_tail: 0
+    c.lmx_msg_mail_outbox_take(m, @ outb)
+    lmx_msg_copy_free(outb)
     if: m\init != 0
         c.free((cast: (@: void) m\init))
     ---
@@ -822,6 +826,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     @: LmxMsg ch
     @: LmxMsg nxt
     @: LmxMsgCopy n
+    @: LmxMsgCopy outb 0
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_lock(rt)
@@ -830,9 +835,8 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
     if: m\state = c.LMX_MSG_STATE_DEAD
-        lmx_msg_copy_free(m\outbox)
-        m\outbox: 0
-        m\outbox_tail: 0
+        c.lmx_msg_mail_outbox_take(m, @ outb)
+        lmx_msg_copy_free(outb)
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_DEAD
     m\exec_live: 0
@@ -846,9 +850,8 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     ---
     if: success = 0
         m\live_query_pend_id: 0U
-        lmx_msg_copy_free(m\outbox)
-        m\outbox: 0
-        m\outbox_tail: 0
+        c.lmx_msg_mail_outbox_take(m, @ outb)
+        lmx_msg_copy_free(outb)
         ch: m\first_child
         while: ch != 0
             nxt: ch\next_sibling
@@ -888,8 +891,11 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         m\live_query_at: c.lmx_msg_now(rt)
         m\live_query_pend_id: 0U
     ---
-    while: m\outbox != 0
-        n: lmx_msg_q_pop(@ m\outbox, @ m\outbox_tail)
+    c.lmx_msg_mail_outbox_take(m, @ outb)
+    while: outb != 0
+        n: outb
+        outb: n\next
+        n\next: 0
         lmx_msg_q_push(@ rt\transport, @ rt\transport_tail, n)
     ---
     if: m\closing != 0
@@ -1076,6 +1082,7 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
     @: LmxMsgCopy n
     @: LmxMsgCopy inb 0
+    @: LmxMsgCopy outb 0
     unsigned: parent
     unsigned: req
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
@@ -1086,9 +1093,8 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
     m\state: c.LMX_MSG_STATE_DEAD
-    lmx_msg_copy_free(m\outbox)
-    m\outbox: 0
-    m\outbox_tail: 0
+    c.lmx_msg_mail_outbox_take(m, @ outb)
+    lmx_msg_copy_free(outb)
     parent: m\parent
     req: m\exec_id
     if: m\exec_live != 0 && m\exec_reply != 0U && m\exec_reply != parent
@@ -1708,6 +1714,8 @@ fn: lmx_msg_send_cap (@: LmxMsgRuntime rt; LmxMsgAddr: from; @: LmxMsg dest; con
         return: c.LMX_MSG_NOMEM
     ---
     node\dest_msg: dest
+    c.lmx_msg_mail_lock(src)
     lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
+    c.lmx_msg_mail_unlock(src)
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_STAGED
