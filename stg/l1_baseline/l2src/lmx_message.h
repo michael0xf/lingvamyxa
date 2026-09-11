@@ -126,6 +126,11 @@ typedef struct LmxMsg {
     unsigned live_query_pend_at;
     unsigned live_seq;
     unsigned child_heard_at;
+    int handoff_ready;
+    int native_users;
+    unsigned orphan_until;
+    void *adopted;
+    size_t adopted_n;
 } LmxMsg;
 
 struct LmxMsgRuntime {
@@ -209,6 +214,12 @@ int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_poll_abort(void);
 int lmx_msg_complete(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_tracked(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_handoff_ready(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_native_users(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child, void **kept, size_t *kept_n);
+int lmx_msg_send_move(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, LmxMsgEnv *env);
+int lmx_msg_set_orphan_until(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned until);
+int lmx_msg_orphan_expired(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now);
 #if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)
 extern int lmx_msg_test_copy_fail;
 int lmx_msg_test_copy_should_fail(void);

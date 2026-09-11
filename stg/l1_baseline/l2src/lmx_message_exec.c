@@ -553,7 +553,13 @@ static void set_tls(LmxMsgExec *e, LmxMsgAddr who) {
     if (e != 0 && e->rt != 0 && who != 0U) {
         lmx_turn_msg = msg_at_addr(e->rt, who);
         lmx_turn_running = lmx_turn_msg != 0 ? &lmx_turn_msg->running : 0;
+        if (lmx_turn_msg != 0) {
+            lmx_turn_msg->native_users += 1;
+        }
     } else {
+        if (lmx_turn_msg != 0 && lmx_turn_msg->native_users > 0) {
+            lmx_turn_msg->native_users -= 1;
+        }
         lmx_turn_msg = 0;
         lmx_turn_running = 0;
     }
@@ -1165,6 +1171,12 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         lmx_msg_exec_unlock(rt);
         turn_root_pop(&root, saved);
         set_tls(e, old);
+        lmx_msg_exec_lock(rt);
+        m = msg_at_addr(rt, snap->addr);
+        if (m != 0 && lmx_msg_running_load(m) == 0 && m->native_users == 0) {
+            m->handoff_ready = 1;
+        }
+        lmx_msg_exec_unlock(rt);
         requeue_if_runnable(rt, snap->addr);
         return st;
     }
@@ -1187,6 +1199,12 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         lmx_msg_exec_unlock(rt);
         turn_root_pop(&root, saved);
         set_tls(e, old);
+        lmx_msg_exec_lock(rt);
+        m = msg_at_addr(rt, snap->addr);
+        if (m != 0 && lmx_msg_running_load(m) == 0 && m->native_users == 0) {
+            m->handoff_ready = 1;
+        }
+        lmx_msg_exec_unlock(rt);
         return st;
     }
     lmx_msg_exec_unlock(rt);
@@ -1219,6 +1237,12 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     lmx_msg_exec_unlock(rt);
     turn_root_pop(&root, saved);
     set_tls(e, old);
+    lmx_msg_exec_lock(rt);
+    m = msg_at_addr(rt, snap->addr);
+    if (m != 0 && lmx_msg_running_load(m) == 0 && m->native_users == 0) {
+        m->handoff_ready = 1;
+    }
+    lmx_msg_exec_unlock(rt);
     requeue_if_runnable(rt, snap->addr);
     return st;
 }
@@ -1911,4 +1935,69 @@ int lmx_msg_map_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
         lmx_msg_exec_unlock(rt);
     }
     return st;
+}
+
+int lmx_msg_handoff_ready(LmxMsgRuntime *rt, LmxMsgAddr who) {
+    LmxMsg *m = lmx_msg_find(rt, who);
+    return m != 0 && m->handoff_ready != 0;
+}
+
+int lmx_msg_native_users(LmxMsgRuntime *rt, LmxMsgAddr who) {
+    LmxMsg *m = lmx_msg_find(rt, who);
+    return m != 0 ? m->native_users : -1;
+}
+
+int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child, void **kept, size_t *kept_n) {
+    LmxMsg *p;
+    LmxMsg *c;
+    if (rt == 0 || kept == 0 || kept_n == 0) {
+        return LMX_MSG_INVALID;
+    }
+    lmx_msg_exec_lock(rt);
+    p = lmx_msg_find(rt, parent);
+    c = lmx_msg_find(rt, child);
+    if (p == 0 || c == 0 || c->parent_msg != p || c->handoff_ready == 0 || c->native_users != 0 || lmx_msg_success_load(c) != 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    *kept = c->init;
+    *kept_n = c->init_n;
+    p->adopted = c->init;
+    p->adopted_n = c->init_n;
+    c->init = 0;
+    c->init_n = 0U;
+    lmx_msg_exec_unlock(rt);
+    return LMX_MSG_OK;
+}
+
+int lmx_msg_send_move(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, LmxMsgEnv *env) {
+    LmxMsgEnv steal;
+    int st;
+    if (env == 0) {
+        return LMX_MSG_INVALID;
+    }
+    steal = *env;
+    st = lmx_msg_send(rt, from, to, &steal);
+    if (st == LMX_MSG_STAGED) {
+        env->bytes = 0;
+        env->n = 0U;
+    }
+    return st;
+}
+
+int lmx_msg_set_orphan_until(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned until) {
+    LmxMsg *m = lmx_msg_find(rt, who);
+    if (m == 0) {
+        return LMX_MSG_INVALID;
+    }
+    m->orphan_until = until;
+    return LMX_MSG_OK;
+}
+
+int lmx_msg_orphan_expired(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now) {
+    LmxMsg *m = lmx_msg_find(rt, who);
+    if (m == 0 || m->orphan_until == 0U) {
+        return 0;
+    }
+    return now >= m->orphan_until && m->native_users == 0 ? 1 : 0;
 }

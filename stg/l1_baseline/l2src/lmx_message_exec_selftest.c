@@ -3233,6 +3233,60 @@ int main(void) {
             g_m0_admit0, g_m0_admit1, g_m0_apply0, g_m0_apply1);
         fflush(stderr);
     }
+    {
+        LmxMsgRuntime *rth;
+        LmxMsgAddr dummy = 0, p = 0, c = 0;
+        uchar ini = 7;
+        void *kept = (void *)1;
+        size_t kn = 99;
+        LmxMsg *cm;
+        void *orig;
+        rth = lmx_msg_runtime_new();
+        if (rth == 0 || lmx_msg_create(rth, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_create(rth, dummy, 2, &ini, 1, &p) != LMX_MSG_OK || lmx_msg_end_turn(rth, dummy, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_create(rth, p, 3, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        cm = lmx_msg_find(rth, c);
+        orig = cm != 0 ? cm->init : 0;
+        if (orig == 0 || lmx_msg_exec_bind(rth, c, turn_just_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            fprintf(stderr, "handoff bind\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        if (lmx_msg_emergency_cancel(rth, c) != LMX_MSG_OK) {
+            fprintf(stderr, "handoff cancel\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        (void)lmx_msg_run_child_turn(rth, c);
+        if (lmx_msg_handoff_ready(rth, c) == 0 || lmx_msg_native_users(rth, c) != 0) {
+            fprintf(stderr, "handoff ready users=%d\n", lmx_msg_native_users(rth, c));
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        if (lmx_msg_adopt_failed(rth, p, c, &kept, &kn) != LMX_MSG_OK || kept != orig || kn != 1) {
+            fprintf(stderr, "adopt kept=%p orig=%p n=%u\n", kept, orig, (unsigned)kn);
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        if (lmx_msg_success_load(lmx_msg_find(rth, p)) != 0) {
+            fprintf(stderr, "parent success not auto from child fail\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        if (lmx_msg_set_orphan_until(rth, c, 1U) != LMX_MSG_OK || lmx_msg_orphan_expired(rth, c, 0U) != 0 || lmx_msg_orphan_expired(rth, c, 1U) == 0) {
+            fprintf(stderr, "orphan timeout\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        fprintf(stderr, "handoff_adopt ptr=%p\n", kept);
+        lmx_msg_runtime_delete(rth);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);
