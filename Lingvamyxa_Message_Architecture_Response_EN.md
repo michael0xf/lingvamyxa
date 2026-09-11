@@ -2,8 +2,6 @@
 
 **Discussion response · 11 September 2026**
 
-Follow-up: [Response to version 0.2](Lingvamyxa_Message_Response_to_v0_2_EN.md) clarifies synchronized mailbox waiting, arena ownership transfer, outgoing timeout policies and the L3 managed-VM route. Read it together with this response.
-
 This is an updated response to *Message-Preserving Synchronization Lowering*, version 0.1. It supersedes the earlier response's overly restrictive treatment of scheduling and physical threads. Read it alongside the current `Lingvamyxa_spec.txt`, especially sections 1.3, 19.28.R2.2, 19.29.6 and 21.10.
 
 The architectural decisions below are agreed. Implementation alternatives and unfinished work are identified separately; this is not a claim that the prototype already implements the target.
