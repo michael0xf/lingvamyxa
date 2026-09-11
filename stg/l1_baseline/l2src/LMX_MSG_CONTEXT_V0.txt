@@ -278,6 +278,15 @@ Who may move payload
   source aliases into moved blocks. exec lock here is
   transitional D7, not the mailbox.
 
+End-turn collection (19.29.4 / 180000)
+  lmx_msg_end_turn calls lmx_msg_arena_collect after outbox
+  publish/discard on both success and failure. The tracer is not
+  implemented: no walk of Lmx.node / own-fields / array cells.
+  Collect must not dispose_all; rooted graphs survive; ranges
+  detach before free; no double-free. Unrooted adopted storage
+  is an acceptance gap until that walk exists. Failed-history
+  roots (19.29.8) are not this case.
+
 Who may free
   Parent dispose_child of a SUCCESSFUL handoff-ready child
   after every direct child's arena is already adopted or
