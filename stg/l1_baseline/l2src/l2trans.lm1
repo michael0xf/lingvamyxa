@@ -99,6 +99,7 @@ c.array: [16]: @: char l2_it_hn
 c.array: [16]: @: size_t l2_it_hnl
 c.array: [16]: @: int l2_it_hty
 c.array: [256]: char l2_tok
+@: char l2_ccall_into 0
 
 prototype:
     fn: l2_collect_method (const: @(LmP0Node fn_node); const: @(char path)) int
@@ -4726,6 +4727,11 @@ fn: l2_check_body (const: @(LmP0Structure body); int: mi; const: @(char path); i
                 return: 1
             field: l2_next_active(field\next)
             continue
+        if: l2_frame_head(stmt, "if") = 0 && mi < 0 && stmt != 0 && stmt\as != 0 && stmt\as\frame != 0 && stmt\as\frame\head != 0 && l2_loc_find(stmt\as\frame\head) >= 0
+            if: stmt\as\frame\body = 0 || l2_check_fields(stmt\as\frame\body\first_field, l2_count_active(stmt\as\frame\body), mi, path, stmt) != 0
+                return: 1
+            field: l2_next_active(field\next)
+            continue
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && depth > 0 && l2_scope_n = 0
             return: l2_error(path, stmt, "unsupported own declaration")
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && l2_count_active(stmt\as\frame\body) = 2 && l2_check_expr(l2_next_active(l2_next_active(stmt\as\frame\body\first_field)\next)\value, mi, path) != 0
@@ -5981,6 +5987,11 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         return: 1
     if: l2_emit_checkpoint(mi, ind) != 0
         return: 1
+    if: l2_ccall_into != 0
+        c.memcpy(l2_ccall_into, buf, 256U)
+        l2_ccall_into: 0
+        return: 0
+    ---
     if: c.fprintf(l2_out, "%s%s\n", ind, buf) < 0
         return: 1
 return: 0
@@ -6017,7 +6028,14 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
         return: 0
     if: l2_own_decl_ty(stmt) != 0
         lnm: l2_next_active(stmt\as\frame\body\first_field)\value\as\atom
-        if: c.fprintf(l2_out, "%sint: ", ind) < 0
+        lty: l2_own_store_ty(l2_own_decl_ty(stmt))
+        if: lty = 0 && c.fprintf(l2_out, "%sint: ", ind) < 0
+            return: 2
+        if: lty = 1 && c.fprintf(l2_out, "%schar: ", ind) < 0
+            return: 2
+        if: lty = 2 && c.fprintf(l2_out, "%ssize_t: ", ind) < 0
+            return: 2
+        if: lty != 0 && lty != 1 && lty != 2
             return: 2
         if: l2_write_text(l2_out, lnm) != 0
             return: 2
@@ -6037,8 +6055,20 @@ fn: l2_emit_loc_stmt (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
     fr: stmt\as\frame
     if: l2_loc_find(fr\head) < 0
         return: 1
-    if: fr\body = 0 || l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+    if: fr\body = 0
         return: 2
+    initf: l2_next_active(fr\body\first_field)
+    if: l2_count_active(fr\body) = 1 && initf != 0 && initf\value != 0 && initf\value\kind = c.LM_P0_NODE_FRAME && initf\value\as != 0 && initf\value\as\frame != 0 && l2_is_known(initf\value\as\frame\head)
+        l2_ccall_into: l2_tok
+        if: l2_emit_ccall(initf\value, mi, ind) != 0
+            l2_ccall_into: 0
+            return: 2
+        ---
+    if: l2_count_active(fr\body) != 1 || initf = 0 || initf\value = 0 || initf\value\kind != c.LM_P0_NODE_FRAME || l2_is_known(initf\value\as\frame\head) = 0
+        if: l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
+            return: 2
+        ---
+    ---
     if: c.fprintf(l2_out, "%s", ind) < 0
         return: 2
     if: l2_write_text(l2_out, fr\head) != 0

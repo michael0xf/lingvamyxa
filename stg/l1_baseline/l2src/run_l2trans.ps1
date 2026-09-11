@@ -261,12 +261,18 @@ Invoke-Negative "l2src\tests\entry_argc_bad.lm2" "entry_argc_bad" "unknown forei
 Invoke-Entry "l2src\tests\entry_argc_if.lm2" "entry_argc_if" 0 @("fn: main (int: count; @@: char values) int", "if:") $null
 Invoke-Entry "l2src\tests\entry_fputs.lm2" "entry_fputs" 0 @("c.fputs(") "hi`n"
 Invoke-Entry "l2src\tests\entry_predef.lm2" "entry_predef" 0 @("predef: `"l1src/parser.lm1`"", "include: `"<stdio.h>`"") $null
-Invoke-Entry "l2src\tests\entry_parse_min.lm2" "entry_parse_min" 1 @("predef: `"l1src/parser.lm1`"", "@: LmP0Document document 0", "lm_p0_parse_file(values[1], @ document)", "lm_p0_document_destroy(document)") $null
+Invoke-Entry "l2src\tests\entry_local_types.lm2" "entry_local_types" 0 @("char: ch", "size_t: n", "int: i") $null
+$locL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "entry_local_types.lm1")))
+if ($locL1 -match '(?m)^\s*int: ch\b') { throw "entry_local_types mistranslated char as int" }
+if ($locL1 -match '(?m)^\s*int: n\b') { throw "entry_local_types mistranslated size_t as int" }
+Invoke-Entry "l2src\tests\entry_parse_min.lm2" "entry_parse_min" 1 @("predef: `"l1src/parser.lm1`"", "@: LmP0Document document 0", "int: status", "status: lm_p0_parse_file(values[1], @ document)", "if: document = 0") $null
 $pminExe = Join-Path $out "entry_parse_min.exe"
 $pminSrc = Join-Path $out "entry_parse_min_input.lm1"
 [System.IO.File]::WriteAllText((Join-Path (Get-Location) $pminSrc), "fn: main () int`n    return: 0`nend: main`n")
 cmd /c "`"$pminExe`" `"$pminSrc`" > `"$(Join-Path $out 'entry_parse_min.run.out')`" 2> `"$(Join-Path $out 'entry_parse_min.run.err')`""
-if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'entry_parse_min.run.err') -ErrorAction SilentlyContinue; throw "entry_parse_min parse input exit $LASTEXITCODE" }
+if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'entry_parse_min.run.err') -ErrorAction SilentlyContinue; throw "entry_parse_min parse success exit $LASTEXITCODE" }
+cmd /c "`"$pminExe`" `"$(Join-Path $out 'entry_parse_min_missing.lm1')`" > `"$(Join-Path $out 'entry_parse_min.neg.out')`" 2> `"$(Join-Path $out 'entry_parse_min.neg.err')`""
+if ($LASTEXITCODE -eq 0) { throw "entry_parse_min missing input should fail parse" }
 Invoke-Entry "l2src\tests\entry_index.lm2" "entry_index" 1 @("values[1]", "c.fputs(values[1], c.stdout)") $null
 $idxExe = Join-Path $out "entry_index.exe"
 $idxOut = Join-Path $out "entry_index.arg.stdout"
@@ -348,14 +354,16 @@ function Get-L2Call([string]$text, [int]$mi, [string[]]$vals) {
 function Invoke-SpliceDrive([string]$stem, [string]$driveBody) {
     $lm1 = Join-Path $out ($stem + ".lm1")
     $text = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $lm1)).Replace("`r`n", "`n")
-    $tail = "        return: 0`n    end: main`nend: external"
-    $pos = $text.LastIndexOf($tail)
+    $tail = "`n    end: main`nend: external"
+    $endPos = $text.LastIndexOf($tail)
+    if ($endPos -lt 0) { throw "$stem L1 missing generated main closer" }
+    $pos = $text.LastIndexOf("`n        return:", $endPos)
     if ($pos -lt 0) { throw "$stem L1 missing generated main return" }
     $drvLm1 = Join-Path $out ($stem + "_drive.lm1")
     $drvC = Join-Path $out ($stem + "_drive.c")
     $drvExe = Join-Path $out ($stem + "_drive.exe")
     $drvOut = Join-Path $out ($stem + "_drive.stdout")
-    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos) + $driveBody.Replace("`r`n", "`n")))
+    [System.IO.File]::WriteAllText((Join-Path (Get-Location) $drvLm1), ($text.Substring(0, $pos + 1) + $driveBody.Replace("`r`n", "`n")))
     & $l1trans $drvLm1 $drvC
     if ($LASTEXITCODE -ne 0) { throw "l1trans failed $stem drive" }
     Invoke-Gcc $drvC $drvExe (Join-Path $log "$stem.drive.gcc.log")
@@ -369,6 +377,9 @@ Invoke-Leaf "l2src\tests\unit_nine_formals.lm2" "unit_nine_formals" 0 "add9"
 $nineL1 = [System.IO.File]::ReadAllText((Join-Path (Get-Location) (Join-Path $out "unit_nine_formals.lm1")))
 if ($nineL1 -notmatch 'fn: l2_m0 \(@: Lmx node; int: l2_p0_0; int: l2_p0_1; int: l2_p0_2; int: l2_p0_3; int: l2_p0_4; int: l2_p0_5; int: l2_p0_6; int: l2_p0_7; int: l2_p0_8\)') {
     throw "unit_nine_formals L1 missing 9 int formals"
+}
+if ($nineL1 -notmatch 'l2_m0\((?:unit|leaf|node), 1, 1, 1, 1, 1, 1, 1, 1, 1\)') {
+    throw "unit_nine_formals L1 missing source nine-actual call"
 }
 $n9 = Invoke-SpliceDrive "unit_nine_formals" @"
         c.printf("%d\n", l2_m0(unit, 1, 1, 1, 1, 1, 1, 1, 1, 1))
