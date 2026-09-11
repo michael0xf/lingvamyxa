@@ -279,6 +279,43 @@ wrong reading:
     a liveness response (alive) is NOT completion
     all children reporting DELIVERY success is not an application-result barrier
 
+6.1. How the L2 translator actually places these - read-only check, 2026-09-11
+
+Checked in stg/l1_baseline/l2src/l2trans.lm1 because it decides what our wrapped
+modules will contain. It matches 19.29.7.1 exactly.
+
+STANDARD RECEIVERS ARE NOT METHODS. `if`, `while` and `for` carry no method
+identity, no own-state loading, no dirty flags and no checkpoint:
+
+    methods exist only from fn:/sub:  - l2_fn_close(fr, nm, "fn") / "sub" at
+      4591/4593; everything method-scoped is indexed by a method index into the
+      l2_m_* tables
+    if/while emit straight through   - 6543 and 6579 write the L1 `if:` /
+      `while:` with the condition token and nothing else
+    the checkpoint is method-keyed   - l2_emit_checkpoint opens with
+      "if: mi < 0 || ind = 0 -> return: 0" and then iterates
+      l2_m_uses[l2_own_off(mi, i)], the per-method used-own table. No method,
+      no checkpoint. It is emitted after actuals, immediately before a call and
+      before return - never on entering a block.
+    own-field loading EXCLUDES if    - the two load sites, 6746 and 6788, are
+      both guarded by l2_frame_head(stmt, "if") = 0. An `if` frame is explicitly
+      not a loading site, and the generated notes add that a nested-if own
+      declaration is unsupported.
+
+THE ONE THING A LOOP DOES GET is the cancellation poll, and it is not activation
+state - one flag load and test, c.lmx_msg_poll_escape(). l2_emit_poll is called
+at exactly three kinds of site:
+
+    6589, 6679   inside the loop body after the condition is retested - backedge
+    7016         the method prologue - entry
+    6705/6758/6768   before return - exit
+
+which is 19.29.7.1's "method entry before loading used own fields, on loop
+backedges, and on method exit", implemented literally.
+
+Note the poll is NOT method-bound the way the checkpoint is: l2_emit_poll uses
+mi only to choose the return form, and with mi < 0 it still emits a poll.
+
 Fast path: an ordinary load and test. Relaxed atomics are permitted ONLY where
 they compile to the same instructions as a volatile load or store of that type;
 no lock, no read-modify-write, no fence, no helper call. Verify per target, and
