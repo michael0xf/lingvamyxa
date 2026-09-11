@@ -53,6 +53,14 @@ dependency for selection/navigation, filesystem algorithms, layout/colour
 calculation, command preparation or console processing. FIRST_VERSION remains
 a delivery milestone, not the limit of the functionality to port.
 
+ClearShell is already modular: classes, interfaces and wrappers define the
+boundaries even when collected in one large source file. Port and test those
+logical modules; file size is not evidence of a monolithic design. The owner
+identifies the editor (provided there by an Android library), short-message
+windows and system menus as the main gaps without reusable application-owned
+implementations. This is a reference inventory, not a claim that the L1 port
+is already complete or tested.
+
 Design the eventual Message boundary now: each module has an explicit owner,
 inputs/results and ordinary callable operations. Mutable module state belongs
 to that owner; cross-owner payloads must be copyable or explicitly transferable.
@@ -92,23 +100,23 @@ Current cross-element map (details have one owner, not duplicate definitions):
     Java closures; current parent/child close and completion rules follow the
     current Lingvamyxa specification, not the superseded initial API ticket.
 
-2.0. The general rule: port the PRESENTATION, not the IMPLEMENTATION
+2.0. Reuse behaviour and algorithms; replace platform-specific presentation
 
-Stated by the language owner with the calculator as the worked example.
+Port ClearShell's behaviour, algorithms, wording, colours and layout subject to
+the application deltas. Replace Android widgets and platform-specific plumbing
+with the application's own components, not a second UI framework.
 
-The calculator's INSIDES are not worth porting: we will have a whole language of
-our own, and it is what will do the calculating. Its APPEARANCE is ported in
-full.
+Owner clarification, 2026-09-11: the calculator may be ported directly, including
+its current computation logic, and tested now. Keep that logic behind a callable
+module boundary so the L3 interpreter can later replace the computation core
+without replacing the calculator interface. This supersedes the earlier blanket
+instruction not to port its internals; L3 readiness must not block this module.
 
-So the split runs through every feature, not around them:
-
-    presentation, layout, behaviour, wording, colours   ported, in full
-    internals that our own language or platform supersedes   not ported;
-                                                             reimplemented
-
-The trap this avoids is porting an implementation because it came attached to a
-look we wanted, and then being stuck maintaining a second-rate copy of something
-our own language does better.
+The editor needs our own implementation because the reference delegates editing
+to an Android library. Short-message windows and menus should be nested windows
+of this same application, built from its existing buttons and lists, rather
+than separate native dialogs/menu systems. See UI_MODEL section 1. Their event
+routing and state use the same application model and eventual Message ownership.
 
 2.0.1. Everything visible becomes pseudographics - "pseudo-pseudographics"
 

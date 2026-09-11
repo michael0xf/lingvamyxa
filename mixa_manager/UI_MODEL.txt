@@ -160,6 +160,11 @@ Lists are the universal element. Panels are lists, menus are lists. There is no
 second mechanism for "a menu" - if it looks like a menu it is a list drawn in
 the upper layer.
 
+Short-message windows and menus are nested application windows composed from
+the same buttons and lists, not separate native dialog/menu implementations
+(owner clarification, 2026-09-11). Reuse the existing drawing, focus and event
+routing model; do not introduce another UI toolkit for these surfaces.
+
 1.0. The row of lists IS THE PATH
 
 This is the navigation model, and it explains why there is any number of lists

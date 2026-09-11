@@ -1,6 +1,10 @@
 Mixa Manager - the first runnable version
 Mode 0.1.2. Scope, and what is deliberately outside it.
 
+This is a runnable milestone, not the full application scope or a prohibition
+on parallel module development. Port and test other modules independently under
+PORT_OF_CLEARSHELL section 1.1; exclusions below apply only to this milestone.
+
 
 1. The mode is chosen, not defaulted
 
