@@ -261,6 +261,36 @@ static int turn_just_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return lmx_msg_end_turn(rt, who, 1);
 }
 
+typedef struct NestUsers {
+    LmxMsgAddr p;
+    LmxMsgAddr c;
+    int p_during;
+    int c_during;
+    int p_after;
+    int c_after;
+} NestUsers;
+
+static int turn_fail_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    (void)ctx;
+    return lmx_msg_end_turn(rt, who, 0);
+}
+
+static int turn_child_users(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    NestUsers *n = (NestUsers *)ctx;
+    n->p_during = lmx_msg_native_users(rt, n->p);
+    n->c_during = lmx_msg_native_users(rt, who);
+    return 0;
+}
+
+static int turn_parent_nested(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    NestUsers *n = (NestUsers *)ctx;
+    (void)who;
+    (void)lmx_msg_run_child_turn(rt, n->c);
+    n->p_after = lmx_msg_native_users(rt, n->p);
+    n->c_after = lmx_msg_native_users(rt, n->c);
+    return 0;
+}
+
 static int turn_bind_then_omit(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     SpawnRec *s = (SpawnRec *)ctx;
     LmxMsgEnv got;
@@ -3235,56 +3265,115 @@ int main(void) {
     }
     {
         LmxMsgRuntime *rth;
-        LmxMsgAddr dummy = 0, p = 0, c = 0;
-        uchar ini = 7;
-        void *kept = (void *)1;
-        size_t kn = 99;
-        LmxMsg *cm;
-        void *orig;
+        LmxMsgAddr dummy = 0, p = 0, c = 0, c2 = 0, g = 0;
+        uchar ini = 7, ini2 = 8, ini3 = 9;
+        NestUsers nu;
+        void *gbase;
+        void *cbase;
+        void *c2base;
         rth = lmx_msg_runtime_new();
+        memset(&nu, 0, sizeof(nu));
         if (rth == 0 || lmx_msg_create(rth, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
             return 1;
         }
         if (lmx_msg_create(rth, dummy, 2, &ini, 1, &p) != LMX_MSG_OK || lmx_msg_end_turn(rth, dummy, 1) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rth, p, 3, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rth, p, 3, &ini, 1, &c) != LMX_MSG_OK || lmx_msg_create(rth, p, 4, &ini2, 1, &c2) != LMX_MSG_OK || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {
             return 1;
         }
-        cm = lmx_msg_find(rth, c);
-        orig = cm != 0 ? cm->init : 0;
-        if (orig == 0 || lmx_msg_exec_bind(rth, c, turn_just_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
-            fprintf(stderr, "handoff bind\n");
+        if (lmx_msg_create(rth, c, 5, &ini3, 1, &g) != LMX_MSG_OK || lmx_msg_end_turn(rth, c, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        gbase = lmx_msg_find(rth, g)->init;
+        cbase = lmx_msg_find(rth, c)->init;
+        c2base = lmx_msg_find(rth, c2)->init;
+        nu.p = p;
+        nu.c = c;
+        if (lmx_msg_exec_bind(rth, c, turn_child_users, &nu, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rth, p, turn_parent_nested, &nu, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            fprintf(stderr, "nest bind\n");
+            return 1;
+        }
+        {
+            LmxMsgEnv e;
+            int pst;
+            memset(&e, 0, sizeof(e));
+            e.kind = LMX_MSG_KIND_BYTES;
+            e.n = 1;
+            e.bytes = &ini;
+            if (lmx_msg_host_post(rth, p, &e) != LMX_MSG_STAGED || lmx_msg_host_post(rth, c, &e) != LMX_MSG_STAGED) {
+                fprintf(stderr, "nest post\n");
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
+            (void)lmx_msg_host_drain(rth);
+            pst = lmx_msg_run_child_turn(rth, p);
+            if (pst != LMX_MSG_OK && pst != 1) {
+                fprintf(stderr, "nest P turn st=%d\n", pst);
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
+        }
+        if (nu.p_during != 1 || nu.c_during != 1 || nu.p_after != 1 || nu.c_after != 0) {
+            fprintf(stderr, "nest users p_d=%d c_d=%d p_a=%d c_a=%d\n", nu.p_during, nu.c_during, nu.p_after, nu.c_after);
             lmx_msg_runtime_delete(rth);
             return 1;
         }
-        if (lmx_msg_emergency_cancel(rth, c) != LMX_MSG_OK) {
-            fprintf(stderr, "handoff cancel\n");
+        if (lmx_msg_exec_bind(rth, g, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rth, c, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rth, c2, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            fprintf(stderr, "fail bind\n");
             lmx_msg_runtime_delete(rth);
             return 1;
         }
+        if (lmx_msg_emergency_cancel(rth, g) != LMX_MSG_OK || lmx_msg_emergency_cancel(rth, c) != LMX_MSG_OK || lmx_msg_emergency_cancel(rth, c2) != LMX_MSG_OK) {
+            fprintf(stderr, "fail cancel\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        (void)lmx_msg_run_child_turn(rth, g);
         (void)lmx_msg_run_child_turn(rth, c);
-        if (lmx_msg_handoff_ready(rth, c) == 0 || lmx_msg_native_users(rth, c) != 0) {
-            fprintf(stderr, "handoff ready users=%d\n", lmx_msg_native_users(rth, c));
+        (void)lmx_msg_run_child_turn(rth, c2);
+        if (lmx_msg_adopt_failed(rth, c, g) != LMX_MSG_OK || lmx_msg_adopted_n(rth, c) != 1 || lmx_msg_adopted_base(rth, c, 0) != gbase) {
+            fprintf(stderr, "G->C n=%d\n", lmx_msg_adopted_n(rth, c));
             lmx_msg_runtime_delete(rth);
             return 1;
         }
-        if (lmx_msg_adopt_failed(rth, p, c, &kept, &kn) != LMX_MSG_OK || kept != orig || kn != 1) {
-            fprintf(stderr, "adopt kept=%p orig=%p n=%u\n", kept, orig, (unsigned)kn);
+        if (lmx_msg_adopt_failed(rth, p, c) != LMX_MSG_OK || lmx_msg_adopt_failed(rth, p, c2) != LMX_MSG_OK) {
+            fprintf(stderr, "C->P\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        if (lmx_msg_adopted_n(rth, p) != 3) {
+            fprintf(stderr, "P adopted n=%d\n", lmx_msg_adopted_n(rth, p));
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        if (lmx_msg_adopt_failed(rth, p, c) != LMX_MSG_INVALID) {
+            fprintf(stderr, "repeat adopt\n");
             lmx_msg_runtime_delete(rth);
             return 1;
         }
         if (lmx_msg_success_load(lmx_msg_find(rth, p)) != 0) {
-            fprintf(stderr, "parent success not auto from child fail\n");
+            fprintf(stderr, "P success from children\n");
             lmx_msg_runtime_delete(rth);
             return 1;
         }
-        if (lmx_msg_set_orphan_until(rth, c, 1U) != LMX_MSG_OK || lmx_msg_orphan_expired(rth, c, 0U) != 0 || lmx_msg_orphan_expired(rth, c, 1U) == 0) {
-            fprintf(stderr, "orphan timeout\n");
+        if (lmx_msg_drop_adopted(rth, p) != LMX_MSG_OK || lmx_msg_adopted_n(rth, p) != 0) {
+            fprintf(stderr, "P success drop inherited\n");
             lmx_msg_runtime_delete(rth);
             return 1;
         }
-        fprintf(stderr, "handoff_adopt ptr=%p\n", kept);
+        (void)gbase;
+        (void)cbase;
+        (void)c2base;
+        if (lmx_msg_set_orphan_until(rth, dummy, 1U) != LMX_MSG_OK || lmx_msg_orphan_expired(rth, dummy, 99U) != 0) {
+            fprintf(stderr, "idle orphan must not expire\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
+        fprintf(stderr, "handoff nest users G-C-P n=3 drop=0\n");
         lmx_msg_runtime_delete(rth);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");

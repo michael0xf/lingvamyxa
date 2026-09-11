@@ -79,6 +79,12 @@ typedef struct LmxMsgCopy {
     struct LmxMsgCopy *next;
 } LmxMsgCopy;
 
+typedef struct LmxAdopted {
+    void *base;
+    size_t n;
+    struct LmxAdopted *next;
+} LmxAdopted;
+
 typedef struct LmxMsg {
     LmxMsgAddr addr;
     LmxMsgAddr parent;
@@ -129,8 +135,7 @@ typedef struct LmxMsg {
     int handoff_ready;
     int native_users;
     unsigned orphan_until;
-    void *adopted;
-    size_t adopted_n;
+    struct LmxAdopted *adopted;
 } LmxMsg;
 
 struct LmxMsgRuntime {
@@ -216,8 +221,10 @@ int lmx_msg_complete(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_tracked(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_handoff_ready(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_native_users(LmxMsgRuntime *rt, LmxMsgAddr who);
-int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child, void **kept, size_t *kept_n);
-int lmx_msg_send_move(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to, LmxMsgEnv *env);
+int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child);
+int lmx_msg_adopted_n(LmxMsgRuntime *rt, LmxMsgAddr who);
+void *lmx_msg_adopted_base(LmxMsgRuntime *rt, LmxMsgAddr who, int i);
+int lmx_msg_drop_adopted(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_set_orphan_until(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned until);
 int lmx_msg_orphan_expired(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now);
 #if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)
