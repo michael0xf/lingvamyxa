@@ -6676,6 +6676,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             if: c.fprintf(l2_out, "%sif: %s\n", deep, wkeep) < 0
                 l2_scope_pop()
                 return: 1
+            if: l2_emit_poll(mi, wdeep) != 0
+                l2_scope_pop()
+                return: 1
             last: l2_next_active(fr\body\first_field)
             k: 1
             while: k < 5
@@ -6699,6 +6702,8 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             field: l2_next_active(field\next)
             continue
         if: stmt != 0 && stmt\kind = c.LM_P0_NODE_ATOM && l2_text_eq(stmt\as\atom, "return") && mi >= 0 && l2_m_ret[mi] = 8
+            if: l2_emit_poll(mi, ind) != 0
+                return: 1
             if: l2_emit_checkpoint(mi, ind) != 0
                 return: 1
             if: c.fprintf(l2_out, "%sreturn\n", ind) < 0

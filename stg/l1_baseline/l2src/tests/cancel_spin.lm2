@@ -1,10 +1,15 @@
-fn: spin () int
-    int: n
-    n: 0
+fn: inner () int
     while: 1
-        n: n + 1
-    return: n
-end: spin
+        continue
+    return: 0
+end: inner
+fn: outer () int
+    int: after
+    after: 0
+    inner()
+    after: 1
+    return: after
+end: outer
 fn: main () int
     return: 0
 end: main

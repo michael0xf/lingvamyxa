@@ -30,7 +30,8 @@ function Invoke-Gcc([string]$cpath, [string]$exe, [string]$glog) {
     $wantGen = $src.IndexOf("l1src/p0.lm1.h") -ge 0
     if ($wantGen) { [void]$flags.Add("-I"); [void]$flags.Add("lm1/build") }
     $flagStr = ($flags -join " ")
-    cmd /c "gcc $flagStr `"$cpath`" -o `"$exe`" > `"$glog`" 2>&1"
+    $stub = "l2src\lmx_poll_stub.c"
+    cmd /c "gcc $flagStr `"$cpath`" `"$stub`" -o `"$exe`" > `"$glog`" 2>&1"
     if ($LASTEXITCODE -ne 0) {
         Get-Content $glog
         throw "gcc failed: $cpath"

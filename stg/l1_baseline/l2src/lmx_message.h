@@ -205,7 +205,7 @@ void lmx_msg_running_store(LmxMsg *m, uint_fast8_t v);
 uint_fast8_t lmx_msg_success_load(const LmxMsg *m);
 void lmx_msg_success_store(LmxMsg *m, uint_fast8_t v);
 int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who);
-int lmx_msg_poll_escape(void);
+int lmx_msg_poll_abort(void);
 int lmx_msg_complete(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_tracked(LmxMsgRuntime *rt, LmxMsgAddr who);
 

@@ -140,19 +140,25 @@ if ($LASTEXITCODE -ne 0) { throw "$gen l2trans failed: $spinLm2" }
 if ($LASTEXITCODE -ne 0) { throw "$gen l1trans failed: $spinLm1" }
 $gstr = ($guards -join " ")
 $spinSlog = Join-Path $log "cancel_spin_m0.s.log"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -S `"$spinC`" -o `"$spinS`" > `"$spinSlog`" 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -O2 -S `"$spinC`" -o `"$spinS`" > `"$spinSlog`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content $spinSlog
     throw "$gen gcc -S failed: $spinC"
 }
 $spinText = [IO.File]::ReadAllText((Join-Path (Get-Location) $spinS))
-if ($spinText -notmatch '(?s)l2_m0:.*?call\s+lmx_msg_poll_escape.*?call\s+lmx_msg_poll_escape.*?call\s+lmx_msg_poll_escape') {
-    throw "$gen cancel_spin assembly missing three l2_m0 poll sites"
+if ($spinText -notmatch 'l2_m0:') {
+    throw "$gen cancel_spin assembly missing l2_m0"
+}
+if ($spinText -notmatch 'movzbl') {
+    throw "$gen cancel_spin -O2 site missing movzbl running load"
+}
+if ($spinText -match '(?s)l2_m0:.*?call\s+lmx_msg_poll_escape') {
+    throw "$gen cancel_spin -O2 still calls poll_escape on the generated hot path"
 }
 @(
     "generated C: $spinC"
-    "gcc -S (not host wrappers): $spinS"
-    "l2_m0 poll sites: entry (before lmx_branch_child), while backedge, after while"
+    "gcc -O2 -S (not host wrappers): $spinS"
+    "hot site: movzbl of running; cold abort is lmx_msg_poll_abort, not a hot helper call"
 ) | Set-Content -LiteralPath (Join-Path $log "cancel_spin_m0.evidence.txt") -Encoding utf8
 $spinOlog = Join-Path $log "cancel_spin_nomain.gcc.log"
 cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -Dmain=cancel_spin_l2_main -c `"$spinC`" -o `"$spinObj`" > `"$spinOlog`" 2>&1"

@@ -1,9 +1,11 @@
 /* Overlapping Message turns. Mutex not held during turn_fn. */
 #include "l2src/lmx_message_exec.h"
 #include "l2src/lmx_message_host.h"
+#include "l2src/lmx.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <setjmp.h>
 #include <time.h>
 
 /* Growable. Not product caps. */
@@ -89,15 +91,22 @@ static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr);
 
 #if defined(_MSC_VER)
 static __declspec(thread) LmxMsg *lmx_turn_msg;
+static __declspec(thread) jmp_buf lmx_turn_jmp;
+static __declspec(thread) int lmx_turn_jmp_ready;
+__declspec(thread) uint_fast8_t *lmx_turn_running;
 #else
 static __thread LmxMsg *lmx_turn_msg;
+static __thread jmp_buf lmx_turn_jmp;
+static __thread int lmx_turn_jmp_ready;
+__thread uint_fast8_t *lmx_turn_running;
 #endif
 
-int lmx_msg_poll_escape(void) {
-    if (lmx_turn_msg == 0) {
-        return 0;
+int lmx_msg_poll_abort(void) {
+    if (lmx_turn_jmp_ready != 0) {
+        lmx_turn_jmp_ready = 0;
+        longjmp(lmx_turn_jmp, 1);
     }
-    return lmx_msg_running_load(lmx_turn_msg) == 0;
+    return 1;
 }
 
 static LmxMsgExec *exof(LmxMsgRuntime *rt) {
@@ -517,8 +526,10 @@ static void set_tls(LmxMsgExec *e, LmxMsgAddr who) {
 #endif
     if (e != 0 && e->rt != 0 && who != 0U) {
         lmx_turn_msg = msg_at_addr(e->rt, who);
+        lmx_turn_running = lmx_turn_msg != 0 ? &lmx_turn_msg->running : 0;
     } else {
         lmx_turn_msg = 0;
+        lmx_turn_running = 0;
     }
 }
 
@@ -1111,11 +1122,37 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     int clean;
     old = get_tls(e);
     set_tls(e, snap->addr);
+    if (setjmp(lmx_turn_jmp) != 0) {
+        lmx_turn_jmp_ready = 0;
+        st = 0;
+        lmx_msg_exec_lock(rt);
+        m = msg_at_addr(rt, snap->addr);
+        if (m != 0) {
+            m->closing = 1;
+            live = m->exec_live;
+        }
+        lmx_msg_exec_unlock(rt);
+        (void)lmx_msg_end_turn(rt, snap->addr, 0);
+        lmx_msg_exec_lock(rt);
+        for (i = 0; i < e->nbind; i++) {
+            if (e->bind[i].addr == snap->addr) {
+                e->bind[i].held = 0;
+                e->bind[i].held_by = 0;
+                e->bind[i].last_st = st;
+            }
+        }
+        lmx_msg_exec_unlock(rt);
+        set_tls(e, old);
+        requeue_if_runnable(rt, snap->addr);
+        return st;
+    }
+    lmx_turn_jmp_ready = 1;
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, snap->addr);
     if (m != 0 && lmx_msg_running_load(m) == 0) {
         m->closing = 1;
         lmx_msg_exec_unlock(rt);
+        lmx_turn_jmp_ready = 0;
         st = 0;
         lmx_msg_end_turn(rt, snap->addr, 0);
         lmx_msg_exec_lock(rt);
@@ -1132,6 +1169,7 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     }
     lmx_msg_exec_unlock(rt);
     st = snap->turn(rt, snap->addr, snap->ctx);
+    lmx_turn_jmp_ready = 0;
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, snap->addr);
     if (m != 0) {

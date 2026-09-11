@@ -11,8 +11,24 @@
 #define LMX_H
 
 #include <stddef.h>
+#include <stdint.h>
 
-int lmx_msg_poll_escape(void);
+#if defined(_MSC_VER)
+extern __declspec(thread) uint_fast8_t *lmx_turn_running;
+#else
+extern __thread uint_fast8_t *lmx_turn_running;
+#endif
+int lmx_msg_poll_abort(void);
+static inline int lmx_msg_poll_escape(void) {
+    uint_fast8_t *p = lmx_turn_running;
+    if (p == 0) {
+        return 0;
+    }
+    if (__atomic_load_n(p, __ATOMIC_RELAXED) != 0) {
+        return 0;
+    }
+    return lmx_msg_poll_abort();
+}
 
 typedef struct Lmx Lmx;
 

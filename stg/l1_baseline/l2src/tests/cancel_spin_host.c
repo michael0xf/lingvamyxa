@@ -7,13 +7,14 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-int l2_m0(Lmx *node);
+int l2_m1(Lmx *node);
 int lmx_ranges_init(size_t capacity);
 int lmx_int_init(void);
 void lmx_cell_init(Lmx *cell, Lmx *parent, void *data);
 int lmx_branch_open(Lmx *parent, size_t children);
 Lmx *lmx_branch_child(Lmx *parent, size_t index);
 void *lmx_int_take(void);
+int lmx_int_value(void *cell);
 
 typedef struct SpinCtx {
     Lmx *node;
@@ -55,9 +56,17 @@ static int turn_spin(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     out.bytes = &marker;
     c->send_st = lmx_msg_send(rt, who, c->sib, &out);
     InterlockedIncrement(&c->hits);
-    (void)l2_m0(c->node);
+    (void)l2_m1(c->node);
     InterlockedIncrement(&c->done);
     return 0;
+}
+
+static int outer_after(Lmx *node) {
+    Lmx *leaf = lmx_branch_child(node, 0U);
+    if (leaf == 0 || leaf->data == 0) {
+        return -1;
+    }
+    return lmx_int_value(leaf->data);
 }
 
 static DWORD WINAPI cancel_after_hit(void *arg) {
@@ -146,7 +155,7 @@ static int spin_boot(LmxMsgRuntime **rt_out, LmxMsgAddr *p_out, LmxMsgAddr *c_ou
 }
 
 static int check_aftermath(LmxMsgRuntime *rt, LmxMsgAddr p, LmxMsgAddr c, LmxMsgAddr sib,
-    LmxMsgAddr g, SpinCtx *ctx, const char *tag) {
+    LmxMsgAddr g, SpinCtx *ctx, Lmx *node, const char *tag) {
     LmxMsg *gm;
     LmxMsgEnv e;
     uchar ini = 1;
@@ -162,6 +171,16 @@ static int check_aftermath(LmxMsgRuntime *rt, LmxMsgAddr p, LmxMsgAddr c, LmxMsg
     }
     if (InterlockedCompareExchange(&ctx->hits, 0, 0) < 1) {
         fprintf(stderr, "%s no hits\n", tag);
+        return 1;
+    }
+    if (outer_after(node) != 0) {
+        fprintf(stderr, "%s nested L2 continuation ran after=%d done=%ld\n", tag,
+            outer_after(node), (long)InterlockedCompareExchange(&ctx->done, 0, 0));
+        return 1;
+    }
+    if (InterlockedCompareExchange(&ctx->done, 0, 0) != 0) {
+        fprintf(stderr, "%s host wrapper after L2 ran done=%ld\n", tag,
+            (long)InterlockedCompareExchange(&ctx->done, 0, 0));
         return 1;
     }
     if (gm == 0 || lmx_msg_running_load(gm) != 0) {
@@ -211,14 +230,14 @@ static int run_map(Lmx *node) {
         Sleep(10);
     }
     Sleep(50);
-    if (check_aftermath(rt, p, c, sib, g, &ctx, "spin-map") != 0) {
+    if (check_aftermath(rt, p, c, sib, g, &ctx, node, "spin-map") != 0) {
         return fail_rt(rt, "spin-map aftermath");
     }
     lmx_msg_exec_stop(rt);
     lmx_msg_runtime_delete(rt);
-    fprintf(stderr, "cancel_spin_map ok hits=%ld done=%ld send_st=%d\n",
+    fprintf(stderr, "cancel_spin_map ok hits=%ld done=%ld send_st=%d after=%d\n",
         (long)InterlockedCompareExchange(&ctx.hits, 0, 0),
-        (long)InterlockedCompareExchange(&ctx.done, 0, 0), ctx.send_st);
+        (long)InterlockedCompareExchange(&ctx.done, 0, 0), ctx.send_st, outer_after(node));
     return 0;
 }
 
@@ -254,14 +273,14 @@ static int run_step(Lmx *node) {
     if (InterlockedCompareExchange(&carg.fired, 0, 0) < 1) {
         return fail_rt(rt, "spin-step cancel not fired");
     }
-    if (check_aftermath(rt, p, c, sib, g, &ctx, "spin-step") != 0) {
+    if (check_aftermath(rt, p, c, sib, g, &ctx, node, "spin-step") != 0) {
         return fail_rt(rt, "spin-step aftermath");
     }
     lmx_msg_exec_stop(rt);
     lmx_msg_runtime_delete(rt);
-    fprintf(stderr, "cancel_spin_step ok hits=%ld done=%ld send_st=%d parent_continued=1\n",
+    fprintf(stderr, "cancel_spin_step ok hits=%ld done=%ld send_st=%d after=%d parent_continued=1\n",
         (long)InterlockedCompareExchange(&ctx.hits, 0, 0),
-        (long)InterlockedCompareExchange(&ctx.done, 0, 0), ctx.send_st);
+        (long)InterlockedCompareExchange(&ctx.done, 0, 0), ctx.send_st, outer_after(node));
     return 0;
 }
 
