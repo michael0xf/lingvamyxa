@@ -74,6 +74,20 @@ static unsigned g_m0_admit0;
 static unsigned g_m0_admit1;
 static unsigned g_m0_apply0;
 static unsigned g_m0_apply1;
+static LmxMsgAddr g_admit_dest;
+static unsigned g_admit_log[8];
+static volatile LONG g_admit_n;
+
+void lmx_msg_test_on_admit(LmxMsgAddr dest, uchar b) {
+    LONG n;
+    if (g_admit_dest == 0U || dest != g_admit_dest) {
+        return;
+    }
+    n = InterlockedIncrement(&g_admit_n) - 1;
+    if (n >= 0 && n < 8) {
+        g_admit_log[n] = b;
+    }
+}
 static int g_ctx_bind_held;
 static int g_ctx_bind_ctx;
 static LmxMsgAddr g_hook_extra;
@@ -404,11 +418,12 @@ static int turn_two_ok(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
 }
 
 typedef struct AccRec {
-    volatile LONG value;
-    unsigned admit[2];
-    unsigned apply[2];
-    volatile LONG n_admit;
-    volatile LONG n_apply;
+    int value;
+    unsigned apply[8];
+    int n_apply;
+    LmxMsgAddr m0;
+    uchar delta;
+    volatile LONG done;
     LONG in_turn;
     volatile LONG overlap;
 } AccRec;
@@ -429,22 +444,37 @@ static int turn_m0_add(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     }
     d = got.bytes[0];
     lmx_msg_env_release(&got);
-    {
-        LONG n = InterlockedCompareExchange(&a->n_admit, 0, 0);
-        if (n < 2) {
-            a->admit[n] = d;
-        }
-        InterlockedIncrement(&a->n_admit);
+    a->value = a->value + (int)d;
+    if (a->n_apply < 8) {
+        a->apply[a->n_apply] = d;
     }
-    InterlockedExchangeAdd(&a->value, (LONG)d);
-    {
-        LONG n = InterlockedCompareExchange(&a->n_apply, 0, 0);
-        if (n < 2) {
-            a->apply[n] = d;
-        }
-        InterlockedIncrement(&a->n_apply);
-    }
+    a->n_apply = a->n_apply + 1;
     InterlockedDecrement(&a->in_turn);
+    if (lmx_msg_end_turn(rt, who, 1) != LMX_MSG_OK) {
+        return 1;
+    }
+    InterlockedIncrement(&a->done);
+    return 0;
+}
+
+static int turn_send_delta(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    AccRec *a = (AccRec *)ctx;
+    LmxMsgEnv got;
+    LmxMsgEnv out;
+    memset(&got, 0, sizeof(got));
+    lmx_msg_recv(rt, who, &got);
+    lmx_msg_env_release(&got);
+    memset(&out, 0, sizeof(out));
+    out.kind = LMX_MSG_KIND_BYTES;
+    out.n = 1;
+    out.bytes = &a->delta;
+    if (lmx_msg_send(rt, who, a->m0, &out) != LMX_MSG_STAGED) {
+        return 1;
+    }
+    if (lmx_msg_end_turn(rt, who, 1) != LMX_MSG_OK) {
+        return 1;
+    }
+    InterlockedIncrement(&a->done);
     return 0;
 }
 
@@ -3098,85 +3128,109 @@ int main(void) {
     }
     {
         LmxMsgRuntime *rta;
-        LmxMsgAddr m0 = 0, dummy = 0;
+        LmxMsgAddr dummy = 0, m0 = 0, m1 = 0, m2 = 0;
         LmxMsgEnv e;
-        uchar d2 = 2, d5 = 5, ini = 1;
-        AccRec acc;
+        uchar ini = 1;
+        AccRec acc, s1, s2;
+        DWORD dl;
         memset(&acc, 0, sizeof(acc));
+        memset(&s1, 0, sizeof(s1));
+        memset(&s2, 0, sizeof(s2));
+        g_admit_dest = 0;
+        g_admit_n = 0;
+        memset(g_admit_log, 0, sizeof(g_admit_log));
         rta = lmx_msg_runtime_new();
         if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_create(rta, dummy, 2, &ini, 1, &m0) != LMX_MSG_OK || lmx_msg_end_turn(rta, dummy, 1) != LMX_MSG_OK) {
+        if (lmx_msg_create(rta, dummy, 2, &ini, 1, &m0) != LMX_MSG_OK
+            || lmx_msg_create(rta, dummy, 3, &ini, 1, &m1) != LMX_MSG_OK
+            || lmx_msg_create(rta, dummy, 4, &ini, 1, &m2) != LMX_MSG_OK
+            || lmx_msg_end_turn(rta, dummy, 1) != LMX_MSG_OK) {
             return 1;
         }
-        if (lmx_msg_exec_bind(rta, m0, turn_m0_add, &acc, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+        acc.m0 = m0;
+        s1.m0 = m0;
+        s1.delta = 2;
+        s2.m0 = m0;
+        s2.delta = 5;
+        g_admit_dest = m0;
+        if (lmx_msg_exec_bind(rta, m0, turn_m0_add, &acc, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rta, m1, turn_send_delta, &s1, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_exec_bind(rta, m2, turn_send_delta, &s2, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_map_child(rta, dummy, m1) != LMX_MSG_OK
+            || lmx_msg_map_child(rta, dummy, m2) != LMX_MSG_OK) {
+            fprintf(stderr, "m0 map senders\n");
+            lmx_msg_runtime_delete(rta);
             return 1;
         }
         memset(&e, 0, sizeof(e));
         e.kind = LMX_MSG_KIND_BYTES;
         e.n = 1;
-        e.bytes = &d2;
-        if (lmx_msg_host_post(rta, m0, &e) != LMX_MSG_STAGED) {
-            fprintf(stderr, "m0 post 2\n");
-            return 1;
-        }
-        e.bytes = &d5;
-        if (lmx_msg_host_post(rta, m0, &e) != LMX_MSG_STAGED) {
-            fprintf(stderr, "m0 post 5\n");
-            return 1;
-        }
-        if (InterlockedCompareExchange(&acc.value, 0, 0) != 0 || InterlockedCompareExchange(&acc.n_apply, 0, 0) != 0) {
-            fprintf(stderr, "m0 applied before turn value=%ld n=%ld\n",
-                (long)InterlockedCompareExchange(&acc.value, 0, 0),
-                (long)InterlockedCompareExchange(&acc.n_apply, 0, 0));
+        e.bytes = &ini;
+        if (lmx_msg_host_post(rta, m1, &e) != LMX_MSG_STAGED || lmx_msg_host_post(rta, m2, &e) != LMX_MSG_STAGED) {
+            fprintf(stderr, "m0 sender post\n");
+            lmx_msg_exec_stop(rta);
             lmx_msg_runtime_delete(rta);
             return 1;
         }
         if (lmx_msg_host_drain(rta) != LMX_MSG_OK) {
-            fprintf(stderr, "m0 drain\n");
+            fprintf(stderr, "m0 drain senders\n");
+            lmx_msg_exec_stop(rta);
             lmx_msg_runtime_delete(rta);
             return 1;
         }
-        if (lmx_msg_inbox_n(rta, m0) != 2 || InterlockedCompareExchange(&acc.value, 0, 0) != 0) {
-            fprintf(stderr, "m0 admitted but not applied inbox=%d value=%ld\n",
-                lmx_msg_inbox_n(rta, m0), (long)InterlockedCompareExchange(&acc.value, 0, 0));
+        dl = GetTickCount() + 3000;
+        while ((InterlockedCompareExchange(&s1.done, 0, 0) == 0 || InterlockedCompareExchange(&s2.done, 0, 0) == 0) && GetTickCount() < dl) {
+            lmx_msg_pump(rta);
+            Sleep(5);
+        }
+        lmx_msg_pump(rta);
+        if (InterlockedCompareExchange(&s1.done, 0, 0) == 0 || InterlockedCompareExchange(&s2.done, 0, 0) == 0
+            || lmx_msg_inbox_n(rta, m0) != 2 || acc.value != 0 || acc.n_apply != 0) {
+            fprintf(stderr, "m0 senders done=%ld,%ld inbox=%d value=%d\n",
+                (long)InterlockedCompareExchange(&s1.done, 0, 0),
+                (long)InterlockedCompareExchange(&s2.done, 0, 0),
+                lmx_msg_inbox_n(rta, m0), acc.value);
+            lmx_msg_exec_stop(rta);
             lmx_msg_runtime_delete(rta);
             return 1;
         }
         {
             int t1 = lmx_msg_run_child_turn(rta, m0);
             int t2 = lmx_msg_run_child_turn(rta, m0);
-            if (t1 != LMX_MSG_OK && t1 != 1) {
-                fprintf(stderr, "m0 turn1 st=%d\n", t1);
-                lmx_msg_runtime_delete(rta);
-                return 1;
-            }
-            if (t2 != LMX_MSG_OK && t2 != 1) {
-                fprintf(stderr, "m0 turn2 st=%d\n", t2);
+            if ((t1 != LMX_MSG_OK && t1 != 1) || (t2 != LMX_MSG_OK && t2 != 1)) {
+                fprintf(stderr, "m0 turns st=%d,%d\n", t1, t2);
+                lmx_msg_exec_stop(rta);
                 lmx_msg_runtime_delete(rta);
                 return 1;
             }
         }
-        if (InterlockedCompareExchange(&acc.n_apply, 0, 0) != 2 || InterlockedCompareExchange(&acc.value, 0, 0) != 7 || InterlockedCompareExchange(&acc.overlap, 0, 0) != 0 || acc.admit[0] != 2 || acc.admit[1] != 5 || acc.apply[0] != 2 || acc.apply[1] != 5) {
-            fprintf(stderr, "m0 acc value=%ld n=%ld ov=%ld inbox=%d admit=%u,%u apply=%u,%u\n",
-                (long)InterlockedCompareExchange(&acc.value, 0, 0),
-                (long)InterlockedCompareExchange(&acc.n_apply, 0, 0),
-                (long)InterlockedCompareExchange(&acc.overlap, 0, 0),
-                lmx_msg_inbox_n(rta, m0), acc.admit[0], acc.admit[1], acc.apply[0], acc.apply[1]);
-            lmx_msg_exec_stop(rta);
+        lmx_msg_exec_stop(rta);
+        if (acc.value != 7 || InterlockedCompareExchange(&acc.overlap, 0, 0) != 0
+            || InterlockedCompareExchange(&g_admit_n, 0, 0) != 2 || acc.n_apply != 2
+            || g_admit_log[0] != acc.apply[0] || g_admit_log[1] != acc.apply[1]
+            || !((acc.apply[0] == 2 && acc.apply[1] == 5) || (acc.apply[0] == 5 && acc.apply[1] == 2))) {
+            fprintf(stderr, "m0 conc value=%d n=%d ov=%ld admit_n=%ld admit=%u,%u apply=%u,%u s1=%ld s2=%ld\n",
+                acc.value, acc.n_apply, (long)InterlockedCompareExchange(&acc.overlap, 0, 0),
+                (long)InterlockedCompareExchange(&g_admit_n, 0, 0), g_admit_log[0], g_admit_log[1],
+                acc.apply[0], acc.apply[1],
+                (long)InterlockedCompareExchange(&s1.done, 0, 0),
+                (long)InterlockedCompareExchange(&s2.done, 0, 0));
             lmx_msg_runtime_delete(rta);
             return 1;
         }
-        g_m0_acc = (int)InterlockedCompareExchange(&acc.value, 0, 0);
+        g_m0_acc = acc.value;
         g_m0_overlap = (int)InterlockedCompareExchange(&acc.overlap, 0, 0);
-        g_m0_admit0 = acc.admit[0];
-        g_m0_admit1 = acc.admit[1];
+        g_m0_admit0 = g_admit_log[0];
+        g_m0_admit1 = g_admit_log[1];
         g_m0_apply0 = acc.apply[0];
         g_m0_apply1 = acc.apply[1];
-        lmx_msg_exec_stop(rta);
         lmx_msg_runtime_delete(rta);
-        fprintf(stderr, "m0_acc=7 admit=2,5 apply=2,5 overlap=0\n");
+        fprintf(stderr, "m0_acc=7 admit=%u,%u apply=%u,%u overlap=0 concurrent=1\n",
+            g_m0_admit0, g_m0_admit1, g_m0_apply0, g_m0_apply1);
         fflush(stderr);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");

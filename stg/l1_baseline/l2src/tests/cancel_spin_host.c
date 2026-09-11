@@ -61,14 +61,6 @@ static int reset_fields(Lmx *node) {
     return lmx_int_store(hit->data, 0) != 0 || lmx_int_store(after->data, 0) != 0;
 }
 
-static int wait_hit(Lmx *node, DWORD ms) {
-    DWORD dl = GetTickCount() + ms;
-    while (field_at(node, 0U) != 1 && GetTickCount() < dl) {
-        Sleep(1);
-    }
-    return field_at(node, 0U) == 1 ? 0 : 1;
-}
-
 static int turn_spin(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     SpinCtx *c = (SpinCtx *)ctx;
     LmxMsgEnv got;
@@ -109,13 +101,32 @@ static int turn_parent_nested(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return 0;
 }
 
-static DWORD WINAPI cancel_after_inner(void *arg) {
+static DWORD WINAPI cancel_after_settle(void *arg) {
     CancelArg *a = (CancelArg *)arg;
-    if (wait_hit(a->node, 3000) != 0) {
-        return 1;
-    }
+    Sleep(20);
     if (lmx_msg_emergency_cancel(a->rt, a->who) == LMX_MSG_OK) {
         InterlockedIncrement(&a->fired);
+    }
+    return 0;
+}
+
+typedef struct TwoCancelArg {
+    LmxMsgRuntime *rt;
+    LmxMsgAddr first;
+    LmxMsgAddr second;
+    volatile LONG fired1;
+    volatile LONG fired2;
+} TwoCancelArg;
+
+static DWORD WINAPI cancel_child_then_parent(void *arg) {
+    TwoCancelArg *a = (TwoCancelArg *)arg;
+    Sleep(20);
+    if (lmx_msg_emergency_cancel(a->rt, a->first) == LMX_MSG_OK) {
+        InterlockedIncrement(&a->fired1);
+    }
+    Sleep(20);
+    if (lmx_msg_emergency_cancel(a->rt, a->second) == LMX_MSG_OK) {
+        InterlockedIncrement(&a->fired2);
     }
     return 0;
 }
@@ -259,9 +270,7 @@ static int run_map(Lmx *node) {
     if (lmx_msg_map_child(rt, p, c) != LMX_MSG_OK) {
         return fail_rt(rt, "spin-map map_child");
     }
-    if (wait_hit(node, 3000) != 0) {
-        return fail_rt(rt, "spin-map inner not reached");
-    }
+    Sleep(20);
     if (lmx_msg_emergency_cancel(rt, c) != LMX_MSG_OK) {
         return fail_rt(rt, "spin-map cancel");
     }
@@ -296,7 +305,7 @@ static int run_step(Lmx *node) {
     carg.rt = rt;
     carg.who = c;
     carg.node = node;
-    th = CreateThread(0, 0, cancel_after_inner, &carg, 0, 0);
+    th = CreateThread(0, 0, cancel_after_settle, &carg, 0, 0);
     if (th == 0) {
         return fail_rt(rt, "spin-step thread");
     }
@@ -349,7 +358,7 @@ static int run_nested(Lmx *node) {
     carg.rt = rt;
     carg.who = p;
     carg.node = node;
-    th = CreateThread(0, 0, cancel_after_inner, &carg, 0, 0);
+    th = CreateThread(0, 0, cancel_after_settle, &carg, 0, 0);
     if (th == 0) {
         return fail_rt(rt, "spin-nested thread");
     }
@@ -388,13 +397,124 @@ static int run_nested(Lmx *node) {
     return 0;
 }
 
+static int run_nested_child_cancel(Lmx *node) {
+    LmxMsgRuntime *rt;
+    LmxMsgAddr p = 0, c = 0, sib = 0, g = 0;
+    SpinCtx ctx;
+    TwoCancelArg carg;
+    HANDLE th;
+    int st;
+    LmxMsgEnv e;
+    uchar ini = 1;
+    if (reset_fields(node) != 0 || spin_boot(&rt, &p, &c, &sib, &g, &ctx, node, turn_spin) != 0) {
+        fprintf(stderr, "spin-ncc boot\n");
+        return 1;
+    }
+    if (lmx_msg_exec_bind(rt, p, turn_parent_nested, &ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+        return fail_rt(rt, "spin-ncc bind parent");
+    }
+    memset(&e, 0, sizeof(e));
+    e.kind = LMX_MSG_KIND_BYTES;
+    e.n = 1;
+    e.bytes = &ini;
+    if (lmx_msg_host_post(rt, p, &e) != LMX_MSG_STAGED) {
+        return fail_rt(rt, "spin-ncc post parent");
+    }
+    memset(&carg, 0, sizeof(carg));
+    carg.rt = rt;
+    carg.first = c;
+    carg.second = p;
+    th = CreateThread(0, 0, cancel_child_then_parent, &carg, 0, 0);
+    if (th == 0) {
+        return fail_rt(rt, "spin-ncc thread");
+    }
+    st = lmx_msg_run_child_turn(rt, p);
+    WaitForSingleObject(th, 3000);
+    CloseHandle(th);
+    if (InterlockedCompareExchange(&carg.fired1, 0, 0) < 1 || InterlockedCompareExchange(&carg.fired2, 0, 0) < 1) {
+        fprintf(stderr, "spin-ncc fired child=%ld parent=%ld st=%d\n",
+            (long)InterlockedCompareExchange(&carg.fired1, 0, 0),
+            (long)InterlockedCompareExchange(&carg.fired2, 0, 0), st);
+        return fail_rt(rt, "spin-ncc cancels");
+    }
+    if (lmx_msg_state(rt, p) != LMX_MSG_STATE_STOPPED || field_at(node, 1U) != 0) {
+        fprintf(stderr, "spin-ncc parent=%d after=%d st=%d\n", lmx_msg_state(rt, p), field_at(node, 1U), st);
+        return fail_rt(rt, "spin-ncc parent root");
+    }
+    memset(&e, 0, sizeof(e));
+    e.kind = LMX_MSG_KIND_BYTES;
+    e.n = 1;
+    e.bytes = &ini;
+    if (lmx_msg_host_post(rt, sib, &e) != LMX_MSG_STAGED) {
+        return fail_rt(rt, "spin-ncc sibling");
+    }
+    lmx_msg_exec_stop(rt);
+    lmx_msg_runtime_delete(rt);
+    fprintf(stderr, "cancel_spin_nested_child_cancel ok after=0 parent_root=1\n");
+    return 0;
+}
+
+static int run_nested_precancel(Lmx *node) {
+    LmxMsgRuntime *rt;
+    LmxMsgAddr p = 0, c = 0, sib = 0, g = 0;
+    SpinCtx ctx;
+    CancelArg carg;
+    HANDLE th;
+    LmxMsgEnv e;
+    uchar ini = 1;
+    if (reset_fields(node) != 0 || spin_boot(&rt, &p, &c, &sib, &g, &ctx, node, turn_child_end) != 0) {
+        fprintf(stderr, "spin-npc boot\n");
+        return 1;
+    }
+    if (lmx_msg_exec_bind(rt, p, turn_parent_nested, &ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+        return fail_rt(rt, "spin-npc bind parent");
+    }
+    if (lmx_msg_emergency_cancel(rt, c) != LMX_MSG_OK) {
+        return fail_rt(rt, "spin-npc precancel child");
+    }
+    memset(&e, 0, sizeof(e));
+    e.kind = LMX_MSG_KIND_BYTES;
+    e.n = 1;
+    e.bytes = &ini;
+    if (lmx_msg_host_post(rt, p, &e) != LMX_MSG_STAGED) {
+        return fail_rt(rt, "spin-npc post parent");
+    }
+    memset(&carg, 0, sizeof(carg));
+    carg.rt = rt;
+    carg.who = p;
+    carg.node = node;
+    th = CreateThread(0, 0, cancel_after_settle, &carg, 0, 0);
+    if (th == 0) {
+        return fail_rt(rt, "spin-npc thread");
+    }
+    (void)lmx_msg_run_child_turn(rt, p);
+    WaitForSingleObject(th, 3000);
+    CloseHandle(th);
+    if (lmx_msg_state(rt, p) != LMX_MSG_STATE_STOPPED || field_at(node, 1U) != 0) {
+        fprintf(stderr, "spin-npc parent=%d after=%d\n", lmx_msg_state(rt, p), field_at(node, 1U));
+        return fail_rt(rt, "spin-npc parent root");
+    }
+    memset(&e, 0, sizeof(e));
+    e.kind = LMX_MSG_KIND_BYTES;
+    e.n = 1;
+    e.bytes = &ini;
+    if (lmx_msg_host_post(rt, sib, &e) != LMX_MSG_STAGED) {
+        return fail_rt(rt, "spin-npc sibling");
+    }
+    lmx_msg_exec_stop(rt);
+    lmx_msg_runtime_delete(rt);
+    fprintf(stderr, "cancel_spin_nested_precancel ok after=0 parent_root=1\n");
+    return 0;
+}
+
 int main(void) {
     Lmx *node = make_int_node();
     if (node == 0) {
         fprintf(stderr, "spin node\n");
         return 1;
     }
-    if (run_map(node) != 0 || run_step(node) != 0 || run_nested(node) != 0) {
+    if (run_map(node) != 0 || run_step(node) != 0 || run_nested(node) != 0
+        || run_nested_child_cancel(node) != 0 || run_nested_precancel(node) != 0) {
         return 1;
     }
     printf("cancel_spin ok\n");

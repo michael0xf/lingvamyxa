@@ -810,6 +810,9 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
         lmx_msg_copy_free(fresh)
         return: c.LMX_MSG_NOMEM
     lmx_msg_q_push(@ dest\inbox, @ dest\inbox_tail, fresh)
+    if: fresh\n != 0U && fresh\bytes != 0
+        c.lmx_msg_test_on_admit(dest\addr, fresh\bytes[0])
+    ---
     c.lmx_msg_exec_ready(rt, dest\addr)
 return: c.LMX_MSG_OK
 

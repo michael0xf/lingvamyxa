@@ -8,6 +8,13 @@
 #include <setjmp.h>
 #include <time.h>
 
+#if !defined(LMX_MSG_EXEC_TEST)
+void lmx_msg_test_on_admit(LmxMsgAddr dest, uchar b) {
+    (void)dest;
+    (void)b;
+}
+#endif
+
 /* Growable. Not product caps. */
 
 #if defined(_WIN32)
