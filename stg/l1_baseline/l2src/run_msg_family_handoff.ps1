@@ -90,7 +90,7 @@ try {
         $result = Get-Content -LiteralPath (Join-Path $run "run_$level.stdout.txt") -Raw
         $expected = '(?m)^family handoff checks=53 failures=0 watched_frees=3\s*$'
         if ($Scenario -eq 'UnrootedAdopt') {
-            $expected = '(?m)^adopt unrooted checks=\d+ failures=0 owned_frees=1\s*$'
+            $expected = '(?m)^adopt unrooted checks=\d+ failures=0 owned_frees=2 retained_interior=PASS\s*$'
         }
         if ($result -notmatch $expected) { throw "Unexpected test result: $result" }
         Write-Output "$level $($result.Trim())"

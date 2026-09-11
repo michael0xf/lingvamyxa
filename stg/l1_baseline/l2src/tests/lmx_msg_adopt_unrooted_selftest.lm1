@@ -28,10 +28,10 @@ sub: __wrap_free (@: void p)
     c.__real_free(p)
 end: __wrap_free
 
-# The incoming subtree has its own lexical root and no receiver graph edge.
-# Its only persistent receiver entries are allocation-bookkeeping lists.
-# This frame returns before collection, retaining no language activation root.
-sub: probe_adopt_unrooted (@: LmxMsg recipient)
+# The incoming subtree has its own lexical root. The retained case explicitly
+# attaches its SECOND node to the recipient's real graph root; the unrooted
+# case leaves only allocation bookkeeping. This frame returns before end_turn.
+sub: probe_adopt_unrooted (@: LmxMsg recipient; int: retain)
     @: LmxMsgBlock incoming_blocks 0
     @: LmxOwnedRange incoming_ranges 0
     @: LmxMsgBlock b
@@ -39,6 +39,7 @@ sub: probe_adopt_unrooted (@: LmxMsg recipient)
     @: char payload
     @: Lmx nodes
     @: Lmx child
+    int: frees_before owned_frees
     size_t: offset c.sizeof(c.LmxOwnedRange)
     size_t: total offset + 2U * c.sizeof(c.Lmx)
     b: (cast: (@: LmxMsgBlock) c.calloc(1U, c.sizeof(c.LmxMsgBlock)))
@@ -66,7 +67,11 @@ sub: probe_adopt_unrooted (@: LmxMsg recipient)
     probe_check(lmx_msg_storage_move_all(@ recipient\blocks, @ recipient\ranges, @ incoming_blocks, @ incoming_ranges) = LMX_MSG_STORAGE_OK, "adopt through existing paired storage handoff")
     probe_check(incoming_blocks = 0 && incoming_ranges = 0 && recipient\blocks = b && recipient\ranges = r, "ownership moved without graph attachment")
     probe_check(nodes\node = 0 && nodes\data = child && child\node = nodes, "lexical links and graph addresses unchanged")
-    probe_check(owned_frees = 0, "adoption does not free the payload")
+    probe_check(owned_frees = frees_before, "adoption does not free the payload")
+    if: retain != 0
+        lmx_msg_set_graph(recipient, child)
+        probe_check(lmx_msg_graph(recipient) = child && child != nodes, "retain interior node, not the range start")
+    ---
 end: probe_adopt_unrooted
 
 fn: probe_end (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
@@ -79,19 +84,38 @@ fn: main () int
     unsigned: receiver 0U
     uchar: initial 7
     @: LmxMsg recipient
+    @: Lmx kept
+    @: Lmx lexical
     rt: lmx_msg_runtime_new()
     probe_check(rt != 0, "create host fixture")
     probe_check(lmx_msg_create(rt, 0U, 1U, @ initial, 1U, @ receiver) = LMX_MSG_OK, "create receiver Message")
     recipient: lmx_msg_find(rt, receiver)
     probe_check(recipient != 0, "resolve receiver fixture")
-    probe_adopt_unrooted(recipient)
     probe_check(lmx_msg_exec_bind(rt, receiver, probe_end, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind real receiver turn")
+    probe_adopt_unrooted(recipient, 1)
+    probe_check(lmx_msg_run_child_turn(rt, receiver) = LMX_MSG_OK, "run real end_turn with interior graph root")
+    c.printf("adopt retained interior observed owned_frees=%d\n", owned_frees)
+    # Check free evidence BEFORE dereferencing the retained node. A bad sweep
+    # must fail deterministically here, not turn this regression into a UAF.
+    probe_check(owned_frees = 0 && watched_owned != 0, "live interior graph root keeps its entire block")
+    kept: lmx_msg_graph(recipient)
+    probe_check(kept != 0 && recipient\ranges != 0 && recipient\blocks != 0, "live storage and classification remain attached")
+    lexical: (cast: (@: Lmx) recipient\ranges\lo)
+    probe_check(kept = lexical + 1U && kept\node = lexical && lexical\data = kept && lexical\node = 0, "retained lexical cycle and addresses are unchanged")
+    probe_check(lmx_msg_run_child_turn(rt, receiver) = LMX_MSG_OK && owned_frees = 0, "another turn still retains the graph")
+    lmx_msg_set_graph(recipient, 0)
+    kept: 0
+    lexical: 0
+    probe_check(lmx_msg_graph(recipient) = 0 && owned_frees = 0, "dropping root alone does not dispose storage")
+    probe_check(lmx_msg_run_child_turn(rt, receiver) = LMX_MSG_OK, "collect after dropping the last graph root")
+    probe_check(owned_frees = 1 && watched_owned = 0 && recipient\blocks = 0 && recipient\ranges = 0, "formerly retained graph collected exactly once")
+    probe_adopt_unrooted(recipient, 0)
     probe_check(lmx_msg_run_child_turn(rt, receiver) = LMX_MSG_OK, "run receiver through real end_turn")
     c.printf("adopt unrooted observed owned_frees=%d before_runtime_delete\n", owned_frees)
-    probe_check(owned_frees = 1 && watched_owned = 0, "unrooted adopted graph freed by end_turn, not teardown")
+    probe_check(owned_frees = 2 && watched_owned = 0, "unrooted adopted graph freed by end_turn, not teardown")
     probe_check(recipient\blocks = 0 && recipient\ranges = 0, "dead storage and classification metadata removed")
-    probe_check(lmx_msg_run_child_turn(rt, receiver) = LMX_MSG_OK && owned_frees = 1, "next end_turn does not free twice")
+    probe_check(lmx_msg_run_child_turn(rt, receiver) = LMX_MSG_OK && owned_frees = 2, "next end_turn does not free twice")
     lmx_msg_runtime_delete(rt)
-    probe_check(owned_frees = 1, "runtime deletion does not double free")
-    c.printf("adopt unrooted checks=%d failures=0 owned_frees=%d\n", probe_checks, owned_frees)
+    probe_check(owned_frees = 2, "runtime deletion does not double free")
+    c.printf("adopt unrooted checks=%d failures=0 owned_frees=%d retained_interior=PASS\n", probe_checks, owned_frees)
     return: 0

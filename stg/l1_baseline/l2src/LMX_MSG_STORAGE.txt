@@ -20,49 +20,73 @@ that collector or create application roots; it moves storage bookkeeping only.
 Lexical and caller-supplied nodes in the resulting arena remain valid without an
 owner-link, a fourth Lmx word, or another hidden source-method argument.
 
-End-turn unrooted-adoption acceptance (currently RED)
----------------------------------------------------
+End-turn adoption lifetime acceptance (bounded PASS at a2a0066)
+-------------------------------------------------------------
 tests/lmx_msg_adopt_unrooted_selftest.lm1 constructs one block containing its
 range record and a two-node Lmx subtree. It transfers the block/range chains
 through the existing paired handoff into a real recipient Message, verifies
-unchanged lexical links, and returns from the construction frame. No application
-graph link or language root retains the subtree. Test-driver address observations
-are not language roots. The recipient then runs its actual bound turn, calling
-lmx_msg_end_turn. A free wrapper checks the original payload, not an envelope.
-No explicit disposal, Message deletion or test-side collection precedes the
-assertion. The required owned_frees count is 1; later turns/teardown must not free
-it again, and its range metadata must already be detached at deallocation.
+unchanged lexical links, and returns from the construction frame. It now runs
+two cases in ONE binary:
+
+  1. Retain the SECOND Lmx in the range using the actual LmxMsg.graph/set_graph
+     API. Two actual bound end_turn calls preserve the block (owned_frees=0).
+     Check the free counter BEFORE dereferencing that node, so a bad collector
+     fails the assertion rather than causing a test-side use-after-free.
+     Verify its original lexical parent/child links. Clear the root; the next
+     actual end_turn frees this block once (owned_frees=1).
+  2. Adopt a fresh subtree without any application graph root. The real bound
+     end_turn frees it (total owned_frees=2); later turns and runtime deletion
+     do not free it again.
+
+Test-driver address observations are not language roots. A free wrapper checks
+the original payload, not an envelope, and requires range metadata detached at
+deallocation. No explicit disposal, runtime deletion or test-side collector call
+precedes either collection assertion. The fixture adds no new runtime root API.
 
 Run this targeted acceptance probe with the existing private-snapshot runner:
-  ./run_msg_family_handoff.ps1 -Scenario UnrootedAdopt -CoreCommit 5c8929ac0dd5426e3e64f7b9be256870344efe49
+  ./run_msg_family_handoff.ps1 -Scenario UnrootedAdopt -CoreCommit a2a006615f65c464c2cd744b770614e44676dfb5
 Default Scenario Family retains the established 53-check family test and its pin.
 The new scenario is a separate explicit acceptance run, not a redundant rebuild
 in the mandatory helper edit loop. Its failure is a failure, not expected-PASS.
 
-Measured O2 result on 5c8929a: compilation succeeded, actual receiver end_turn
+Historical initial probe (source at 47aea15) on 5c8929a: compilation succeeded, actual receiver end_turn
 returned OK, owned_frees remained 0, and the acceptance assertion exited 1.
   build/codex/msg_family_handoff/20260911_175839_577_c088be2c/evidence.json
-Thus this checkpoint records an implementation gap, NOT completed collection.
+That checkpoint recorded an implementation gap, NOT completed collection.
 The first probe attempt failed to compile because of fixture syntax/API spelling;
 only the corrected run above is evidence of the runtime gap. Stable L1 was read
 only, no self-build or duplicate family/nativeExec suite was run.
 
+The extended test was run at O2 against two private immutable snapshots:
+  8ab7387: RED, retained interior root freed (owned_frees=1), run exit1.
+    build/codex/msg_family_handoff/20260911_182946_831_5f87cdbc/evidence.json
+  a2a0066: PASS, 36 checks, 2 owned_frees, retained_interior=PASS, all stages exit 0.
+    build/codex/msg_family_handoff/20260911_182955_976_fba8e357/evidence.json
+The same test/runner hashes were used for the RED/GREEN comparison. Generated
+C was inspected: the free-count assertion precedes all post-turn graph reads.
+Stable compiler pin stayed unchanged; no family/nativeExec suite or self-build
+was repeated. This remains an explicit targeted scenario, not a new mandatory
+suite for every helper change.
+
 Limits: this probes storage-handoff -> end_turn, not complete ordinary LMX-text
 delivery, which this prototype does not yet expose. It deliberately does not use
 adopt_failed, whose explicit failed-root retention is a different policy (19.29.8).
-At the tested 5c8929a checkpoint end_turn has no graph collector call. Full acceptance additionally
-needs the paired retained-root/unroot/drop-root case through the eventual graph
-root integration. Do not make this test green by freeing every block on exit.
-Source tests and ownership-list helpers introduce no new collector or root ABI.
+At 5c8929a end_turn had no collector call. At 8ab7387/a2a0066 the explicit graph
+root API exists, but generated l2trans unit -> live Message plumbing is still
+missing. The retained/unrooted cases now cover that API, not generated L2
+execution. Arrays/reference domains, retained native roots, multi-range blocks,
+mark-allocation failure and full delivery are NOT certified by these 36 checks.
+The collector walk is still C and must be ported to L1. No stable promotion or
+claim of complete Message/collector conformance follows from this bounded PASS.
 
-Subsequent integration status (read-only audit, 2026-09-11)
---------------------------------------------------------
+Historical integration audit before 8ab7387 (2026-09-11)
+----------------------------------------------------
 b08083b added an empty collector hook on both success/failure end-turn paths.
 c0b5d8b moved that still-empty hook to native exec. Neither implements tracing
 or changes the measured acceptance gap; no redundant probe rebuild was done.
 20a9c03 supplies the L1 blocks_remove primitive for an eventual selective sweep.
 
-The missing input is concrete graph-root plumbing, not another owner lookup:
+At c0b5d8b the missing input was graph-root plumbing, not another owner lookup:
   - LmxMsg contains blocks/ranges and byte init data, but no typed Lmx graph root.
   - LmxMsgRuntime.root is LmxMsg*, a participant-tree root, not an Lmx graph root.
   - l2trans.lm1's generated external main creates the actual Lmx* unit with
@@ -74,8 +98,9 @@ Do not interpret init bytes or an arbitrary native turn_ctx as an Lmx root.
 Real roots required by19.29.4 must be connected before a collector can distinguish
 retained graphs from dead storage. Node traversal traces known graph relationships;
 it cannot discover which allocations are roots just because they have node=0.
-The empty-hook/nativeExec pass proves no collection behaviour. The retained-root
-counterpart must exercise actual graph integration, not an artificial test root.
+The empty-hook/nativeExec pass proved no collection behaviour. The current
+paired test above uses the subsequently added actual LmxMsg.graph API, not an
+invented test-only root. Generated unit and other live roots still need wiring.
 
 API (0 = OK, 1 = INVALID)
 ------------------------
