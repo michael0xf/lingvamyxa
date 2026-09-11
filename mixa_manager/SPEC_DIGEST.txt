@@ -297,10 +297,48 @@ identity, no own-state loading, no dirty flags and no checkpoint:
       l2_m_uses[l2_own_off(mi, i)], the per-method used-own table. No method,
       no checkpoint. It is emitted after actuals, immediately before a call and
       before return - never on entering a block.
-    own-field loading EXCLUDES if    - the two load sites, 6746 and 6788, are
-      both guarded by l2_frame_head(stmt, "if") = 0. An `if` frame is explicitly
-      not a loading site, and the generated notes add that a nested-if own
-      declaration is unsupported.
+    own-field loading EXCLUDES if    - the two lazy load sites, 6746 and 6788,
+      are both guarded by l2_frame_head(stmt, "if") = 0, and a nested-if own
+      declaration is refused outright (3306, "unsupported own declaration").
+
+6.1.1. But a `for` DOES have fields, and they ARE restored at method entry
+
+This is the part that surprised me, so it is written out. A non-method nested
+structure is not uniformly stateless - `for` and `if` differ, and the difference
+is `l2_scope_push`.
+
+    only `for` pushes a scope. All five l2_scope_push sites (3183, 3274, 3509,
+      4938, 6605) are guarded by l2_for_cstyle or an end-named `for`. `if` never
+      pushes one.
+    so an own declaration nested in a `for` is ACCEPTED (l2_scope_n != 0), and
+      one nested in an `if` is REFUSED. Depth alone decides nothing; the scope
+      stack does.
+
+And the prologue restores them, in two passes after the entry poll (7019-7060):
+
+    pass 1, per `for` structure: if any used own field belongs to it
+      (l2_own_fid[oi] = k), emit a handle for the STRUCTURE ITSELF -
+          l2_h{k}: lmx_branch_child(node, {l2_for_uchild[k]}U)
+      so the `for` is a real Lmx child of the method node with a fixed child
+      index, not a syntactic bracket.
+
+    pass 2, per used own field: declare the working local, its graph handle and
+      its dirty flag, then resolve the handle THROUGH ITS OWNER -
+          fid >= 0   l2_q{k}_from: lmx_branch_child(l2_h{fid}, {fchild}U)
+          fid <  0   l2_q{k}_from: lmx_branch_child(node, {uchild}U)
+      and load the value: lmx_int_value / lmx_size_value / lmx_char_value of
+      l2_q{k}_from\data.
+
+So the answer to "are the fields of nested non-method structures restored on
+method entry" is: for a `for`, YES - in bulk, in the prologue, through the
+`for`'s own graph node. For an `if`, the question does not arise, because it
+cannot own a field.
+
+Note the whole prologue path is guarded by l2_m_alias[...] < 0 - aliased fields
+(a same-named argument sharing the own declaration) are not restored here. Those
+are the lazy 6746/6788 sites.
+
+
 
 THE ONE THING A LOOP DOES GET is the cancellation poll, and it is not activation
 state - one flag load and test, c.lmx_msg_poll_escape(). l2_emit_poll is called
