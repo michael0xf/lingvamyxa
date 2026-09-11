@@ -2468,8 +2468,31 @@ int main(void) {
             lmx_msg_runtime_delete(rtm);
             return 1;
         }
-        if (lmx_msg_map_child(rtm, p, c) != LMX_MSG_OK) {
-            fprintf(stderr, "map retry\n");
+        InterlockedExchange(&rec.done, 0);
+        rec.t0 = 0;
+        if (lmx_msg_send(rtm, p, c, &e) != LMX_MSG_STAGED || lmx_msg_end_turn(rtm, p, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "map retry send/end_turn\n");
+            fflush(stderr);
+            return 1;
+        }
+        lmx_msg_pump(rtm);
+        {
+            int rst = lmx_msg_map_child(rtm, p, c);
+            if (rst != LMX_MSG_OK) {
+                fprintf(stderr, "map retry\n");
+                lmx_msg_exec_stop(rtm);
+                lmx_msg_runtime_delete(rtm);
+                return 1;
+            }
+        }
+        dl = GetTickCount() + 3000;
+        while (InterlockedCompareExchange(&rec.done, 0, 0) == 0 && GetTickCount() < dl) {
+            Sleep(10);
+        }
+        if (InterlockedCompareExchange(&rec.done, 0, 0) != 1 || rec.t0 == 0 || rec.t0 == owner) {
+            fprintf(stderr, "map retry delivery tid=%lu owner=%lu done=%ld\n",
+                (unsigned long)rec.t0, (unsigned long)owner,
+                (long)InterlockedCompareExchange(&rec.done, 0, 0));
             lmx_msg_exec_stop(rtm);
             lmx_msg_runtime_delete(rtm);
             return 1;

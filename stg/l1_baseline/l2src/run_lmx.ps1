@@ -45,12 +45,12 @@ foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "
         $msOut = Join-Path $log "lmx_message_selftest.stdout.txt"
         $msErr = Join-Path $log "lmx_message_selftest.stderr.txt"
         $p = Start-Process -FilePath (Join-Path (Get-Location) $exe) -WorkingDirectory (Get-Location) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $msOut -RedirectStandardError $msErr
+        $p.ExitCode.ToString() | Set-Content -LiteralPath (Join-Path $log "lmx_message_selftest.exit.txt") -Encoding ascii
         if ($p.ExitCode -ne 0) {
             Get-Content -LiteralPath $msOut -ErrorAction SilentlyContinue
             Get-Content -LiteralPath $msErr -ErrorAction SilentlyContinue
             throw "$gen $unit failed exit=$($p.ExitCode)"
         }
-        $p.ExitCode.ToString() | Set-Content -LiteralPath (Join-Path $log "lmx_message_selftest.exit.txt") -Encoding ascii
     } else {
         & $exe
         if ($LASTEXITCODE -ne 0) { throw "$gen $unit failed" }
@@ -101,6 +101,7 @@ if ($LASTEXITCODE -ne 0) {
 $execOut = Join-Path $log "lmx_message_exec_selftest.stdout.txt"
 $execErr = Join-Path $log "lmx_message_exec_selftest.stderr.txt"
 $p = Start-Process -FilePath (Join-Path (Get-Location) $execExe) -WorkingDirectory (Get-Location) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $execOut -RedirectStandardError $execErr
+$p.ExitCode.ToString() | Set-Content -LiteralPath (Join-Path $log "lmx_message_exec_selftest.exit.txt") -Encoding ascii
 if ($p.ExitCode -ne 0) {
     Get-Content -LiteralPath $execOut -ErrorAction SilentlyContinue
     Get-Content -LiteralPath $execErr -ErrorAction SilentlyContinue

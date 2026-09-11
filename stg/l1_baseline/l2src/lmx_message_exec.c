@@ -1311,6 +1311,11 @@ int lmx_msg_exec_stop(LmxMsgRuntime *rt) {
     lmx_msg_exec_lock(rt);
     e->stopping = 1;
     e->contexts_live = 0;
+    for (i = 0; i < e->nbind; i++) {
+        if (e->bind[i].msg != 0) {
+            e->bind[i].msg->mapped = 0;
+        }
+    }
 #if defined(_WIN32)
     for (i = 0; i < e->nbind; i++) {
         if (e->bind[i].wait_ev != 0) {
@@ -1390,14 +1395,16 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child) {
         return LMX_MSG_INVALID;
     }
     i = bind_index(e, child);
-    if (i >= 0) {
-        if (e->bind[i].held != 0) {
-            lmx_msg_exec_unlock(rt);
-            return LMX_MSG_INVALID;
-        }
-        e->bind[i].held = 1;
-        e->bind[i].held_by = lmx_tid();
+    if (i < 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
     }
+    if (e->bind[i].held != 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    e->bind[i].held = 1;
+    e->bind[i].held_by = lmx_tid();
     memset(&snap, 0, sizeof(snap));
     snap.addr = child;
     snap.turn = m->turn;

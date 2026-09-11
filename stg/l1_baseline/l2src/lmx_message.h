@@ -31,8 +31,10 @@ typedef unsigned char uchar;
 #define LMX_MSG_KIND_REJECTED 7
 #define LMX_MSG_KIND_STOP 8
 /* KIND_STOP is internal close control. KIND_CANCELLED is ordinary result data.
- * Experimental liveness uses KIND_PROGRESS with a family-local number
- * (1=query, 2=reply) and correlation; those numbers are not language KINDs. */
+ * Implementation-only liveness profile on KIND_PROGRESS. Not language KINDs.
+ * Ordinary progress number 1/2 must not match these. */
+#define LMX_MSG_PROF_LIVE_Q 0x4C560001
+#define LMX_MSG_PROF_LIVE_R 0x4C560002
 
 #define LMX_MSG_STATE_INACTIVE 0
 #define LMX_MSG_STATE_RUNNING 1
@@ -112,6 +114,8 @@ typedef struct LmxMsg {
     int mapped;
     unsigned live_query_id;
     unsigned live_query_at;
+    unsigned live_query_pend_id;
+    unsigned live_query_pend_at;
     unsigned live_seq;
     unsigned child_heard_at;
 } LmxMsg;
@@ -171,5 +175,6 @@ int lmx_msg_run_child_turn(LmxMsgRuntime *rt, LmxMsgAddr child);
 int lmx_msg_live_query(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_live_handle(LmxMsgRuntime *rt, LmxMsgAddr who, const LmxMsgEnv *env);
 int lmx_msg_live_check(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now, unsigned threshold);
+int lmx_msg_live_test_set_seq(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned v);
 
 #endif
