@@ -155,14 +155,28 @@ uint_fast8_t lmx_msg_running_load(const LmxMsg *m) {
     if (m == 0) {
         return 0;
     }
-    return *(const volatile uint_fast8_t *)&m->running;
+    return __atomic_load_n(&m->running, __ATOMIC_RELAXED);
 }
 
 void lmx_msg_running_store(LmxMsg *m, uint_fast8_t v) {
     if (m == 0) {
         return;
     }
-    *(volatile uint_fast8_t *)&m->running = v;
+    __atomic_store_n(&m->running, v, __ATOMIC_RELAXED);
+}
+
+uint_fast8_t lmx_msg_success_load(const LmxMsg *m) {
+    if (m == 0) {
+        return 0;
+    }
+    return __atomic_load_n(&m->success, __ATOMIC_RELAXED);
+}
+
+void lmx_msg_success_store(LmxMsg *m, uint_fast8_t v) {
+    if (m == 0) {
+        return;
+    }
+    __atomic_store_n(&m->success, v, __ATOMIC_RELAXED);
 }
 
 int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who) {
@@ -250,6 +264,8 @@ LmxMsg *lmx_msg_slot_new(void) {
     }
     m->refs = 1;
     m->running = 1;
+    m->success = 0;
+    m->tracked = 1;
 #if defined(_WIN32)
     m->mail = calloc(1U, sizeof(CRITICAL_SECTION));
     if (m->mail == 0) {

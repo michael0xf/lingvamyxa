@@ -702,6 +702,13 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         return: c.LMX_MSG_DEAD
     m\exec_live: 0
     m\last_beat: c.lmx_msg_now(rt)
+    ch: m\first_child
+    while: ch != 0
+        if: c.lmx_msg_success_load(ch) != 0
+            ch\tracked: 0
+        ---
+        ch: ch\next_sibling
+    ---
     if: success = 0
         m\live_query_pend_id: 0U
         lmx_msg_copy_free(m\outbox)
@@ -718,6 +725,12 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
         if: m\closing != 0
             m\state: c.LMX_MSG_STATE_STOPPED
             m\exec_live: 0
+            ch: m\first_child
+            while: ch != 0
+                c.lmx_msg_running_store(ch, 0)
+                c.lmx_msg_exec_ready(rt, ch\addr)
+                ch: ch\next_sibling
+            ---
             lmx_msg_request_children_close(rt, who)
         ---
         c.lmx_msg_exec_unlock(rt)
@@ -747,6 +760,12 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     if: m\closing != 0
         m\state: c.LMX_MSG_STATE_STOPPED
         m\exec_live: 0
+        ch: m\first_child
+        while: ch != 0
+            c.lmx_msg_running_store(ch, 0)
+            c.lmx_msg_exec_ready(rt, ch\addr)
+            ch: ch\next_sibling
+        ---
         lmx_msg_request_children_close(rt, who)
     ---
     c.lmx_msg_exec_unlock(rt)
@@ -1393,6 +1412,35 @@ fn: lmx_msg_live_test_set_wait_th (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigne
     m\live_wait_th: th
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK
+
+fn: lmx_msg_complete (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    c.lmx_msg_success_store(m, 1)
+    c.lmx_msg_running_store(m, 0)
+    c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_exec_ready(rt, who)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_tracked (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
+    @: LmxMsg m
+    int: t 0
+    if: rt = 0 || who = 0U
+        return: -1
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: -1
+    t: m\tracked
+    c.lmx_msg_exec_unlock(rt)
+return: t
 
 fn: lmx_msg_endp_refs (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m

@@ -115,6 +115,8 @@ typedef struct LmxMsg {
     int mapped;
     int refs;
     uint_fast8_t running;
+    uint_fast8_t success;
+    int tracked;
     struct LmxMsgRuntime *owner_rt;
     void *mail;
     unsigned live_wait_th;
@@ -200,6 +202,10 @@ void lmx_msg_slot_free(LmxMsg *m);
 LmxMsg *lmx_msg_find(LmxMsgRuntime *rt, LmxMsgAddr addr);
 uint_fast8_t lmx_msg_running_load(const LmxMsg *m);
 void lmx_msg_running_store(LmxMsg *m, uint_fast8_t v);
+uint_fast8_t lmx_msg_success_load(const LmxMsg *m);
+void lmx_msg_success_store(LmxMsg *m, uint_fast8_t v);
 int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_complete(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_tracked(LmxMsgRuntime *rt, LmxMsgAddr who);
 
 #endif
