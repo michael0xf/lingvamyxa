@@ -36,6 +36,19 @@ Sources
   NOTES Lingvamyxa_handoff_notes.txt
 
 
+Unit - Paired Message storage handoff (2026-09-11)
+------------------------------------------------
+Files: lmx_msg_storage.h.lm1/.lm1, dedicated tests/runner/doc;
+       lmx_msg_blocks can_move extension.
+
+SPEC 6.5, 19.29.6-7 / ABI 14.9
+    DECIDED nonmoving ownership transfer includes owner-local range metadata.
+    Both lists are preflighted before changing either. No allocator, graph copy,
+    hidden state, new owner field, scheduler or lock is introduced.
+    AVOIDED current-owner lookup from a method node, live reparenting, eligibility
+    and native cleanup: the lifecycle caller supplies exclusive access to both
+    already eligible owners. This is not a concurrent/distributed transaction.
+
 Unit - Message-owned range metadata (2026-09-11)
 -----------------------------------------------
 Files: lmx_owned_ranges.h.lm1, lmx_owned_ranges.lm1, dedicated tests/runner/doc.

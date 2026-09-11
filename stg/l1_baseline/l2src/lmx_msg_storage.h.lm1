@@ -1,0 +1,11 @@
+predef: "l2src/lmx_msg_blocks.h.lm1" "l2src/lmx_owned_ranges.h.lm1"
+
+define: LMX_MSG_STORAGE_OK 0
+define: LMX_MSG_STORAGE_INVALID 1
+
+# Exclusive-owner storage operation, not a concurrent transaction or lifecycle
+# check. The four head slots and two metadata representations must not alias.
+prototype:
+    fn: lmx_msg_storage_can_move (@@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: LmxMsgBlock src_blocks; @@: LmxOwnedRange src_ranges) int
+    fn: lmx_msg_storage_move_all (@@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: LmxMsgBlock src_blocks; @@: LmxOwnedRange src_ranges) int
+end: prototype

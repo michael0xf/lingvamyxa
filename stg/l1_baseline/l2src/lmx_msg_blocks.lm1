@@ -42,10 +42,9 @@ fn: lmx_msg_blocks_push (@@: LmxMsgBlock head; @: LmxMsgBlock node) int
     head[0]: node
     return: LMX_MSG_BLOCKS_OK
 
-# Preserve each list's order, put src before dst, and clear the source owner.
+# Read-only preflight, also usable before attaching a separately prepared block.
 # Valid acyclic lists intersect iff their non-null tails are identical.
-# Checking metadata is linear; transfer itself changes three pointers only.
-fn: lmx_msg_blocks_move_all (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
+fn: lmx_msg_blocks_can_move (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
     @: LmxMsgBlock src_tail
     @: LmxMsgBlock dst_tail
     if: dst = 0 || src = 0 || dst = src
@@ -58,6 +57,17 @@ fn: lmx_msg_blocks_move_all (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
         return: LMX_MSG_BLOCKS_OK
     if: src_tail = dst_tail
         return: LMX_MSG_BLOCKS_INVALID
+    return: LMX_MSG_BLOCKS_OK
+
+# Preserve each list's order, put src before dst, and clear the source owner.
+# Checking metadata is linear; transfer itself changes three pointers only.
+fn: lmx_msg_blocks_move_all (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
+    @: LmxMsgBlock src_tail
+    if: lmx_msg_blocks_can_move(dst, src) != LMX_MSG_BLOCKS_OK
+        return: LMX_MSG_BLOCKS_INVALID
+    lmx_msg_blocks_tail(src[0], @ src_tail)
+    if: src_tail = 0
+        return: LMX_MSG_BLOCKS_OK
     src_tail\next: dst[0]
     dst[0]: src[0]
     src[0]: 0

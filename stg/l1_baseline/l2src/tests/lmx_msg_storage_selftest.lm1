@@ -1,0 +1,168 @@
+predef: "l2src/lmx_msg_storage.h.lm1"
+include: "<stdio.h>" "<stdlib.h>"
+
+sub: storage_check (@: int counts; int: ok; const: @(char label))
+    counts[0]: counts[0] + 1
+    if: ok = 0
+        counts[1]: counts[1] + 1
+        c.printf("FAIL %s\n", label)
+    ---
+end: storage_check
+
+sub: storage_range_init (@: LmxOwnedRange r; @: int data; int: type)
+    r\lo: data
+    r\hi: data + 4
+    r\stride: c.sizeof(int)
+    r\kind: 1
+    r\type: type
+    r\next: 0
+end: storage_range_init
+
+fn: main () int
+    @: int counts (cast: (@: int) c.calloc(2U, c.sizeof(int)))
+    @: LmxMsgBlock a
+    @: LmxMsgBlock b
+    @: LmxOwnedRange ra
+    @: LmxOwnedRange rb
+    @: int pa
+    @: int pb
+    @: LmxMsgBlock dst 0
+    @: LmxMsgBlock src 0
+    @: LmxOwnedRange dr 0
+    @: LmxOwnedRange sr 0
+    @: LmxMsgBlock saved_src
+    @: LmxOwnedRange saved_sr
+    @: LmxMsgBlock an
+    @: LmxMsgBlock bn
+    @: LmxOwnedRange ran
+    @: LmxOwnedRange rbn
+    int: mode
+    int: i
+    if: counts = 0
+        return: 2
+    a: (cast: (@: LmxMsgBlock) c.calloc(1U, c.sizeof(c.LmxMsgBlock)))
+    b: (cast: (@: LmxMsgBlock) c.calloc(1U, c.sizeof(c.LmxMsgBlock)))
+    ra: (cast: (@: LmxOwnedRange) c.calloc(1U, c.sizeof(c.LmxOwnedRange)))
+    rb: (cast: (@: LmxOwnedRange) c.calloc(1U, c.sizeof(c.LmxOwnedRange)))
+    pa: (cast: (@: int) c.calloc(4U, c.sizeof(int)))
+    pb: (cast: (@: int) c.calloc(4U, c.sizeof(int)))
+    if: a = 0 || b = 0 || ra = 0 || rb = 0 || pa = 0 || pb = 0
+        return: 2
+    i: 0
+    while: i < 4
+        pa[i]: 100 + i
+        pb[i]: 200 + i
+        i: i + 1
+    ---
+    a\base: pa
+    a\n: 4U * c.sizeof(int)
+    a\class: 11U
+    b\base: pb
+    b\n: 4U * c.sizeof(int)
+    b\class: 12U
+    storage_range_init(ra, pa, 11)
+    storage_range_init(rb, pb, 12)
+
+    storage_check(counts, lmx_msg_blocks_can_move(0, @ src) = LMX_MSG_BLOCKS_INVALID, "block null destination")
+    storage_check(counts, lmx_msg_blocks_can_move(@ dst, 0) = LMX_MSG_BLOCKS_INVALID, "block null source")
+    storage_check(counts, lmx_msg_blocks_can_move(@ src, @ src) = LMX_MSG_BLOCKS_INVALID, "block self preflight")
+    storage_check(counts, lmx_msg_blocks_can_move(@ dst, @ src) = LMX_MSG_BLOCKS_OK, "block empty preflight")
+    storage_check(counts, lmx_msg_storage_can_move(@ dst, @ dr, @ src, @ sr) = LMX_MSG_STORAGE_OK, "empty paired preflight")
+    storage_check(counts, lmx_msg_storage_move_all(@ dst, @ dr, @ src, @ sr) = LMX_MSG_STORAGE_OK, "empty paired move")
+    storage_check(counts, dst = 0 && src = 0 && dr = 0 && sr = 0, "empty unchanged")
+    dst: a
+    src: b
+    dr: ra
+    sr: rb
+    storage_check(counts, lmx_msg_storage_move_all(0, @ dr, @ src, @ sr) = LMX_MSG_STORAGE_INVALID, "null block destination")
+    storage_check(counts, lmx_msg_storage_move_all(@ dst, 0, @ src, @ sr) = LMX_MSG_STORAGE_INVALID, "null range destination")
+    storage_check(counts, lmx_msg_storage_move_all(@ dst, @ dr, 0, @ sr) = LMX_MSG_STORAGE_INVALID, "null block source")
+    storage_check(counts, lmx_msg_storage_move_all(@ dst, @ dr, @ src, 0) = LMX_MSG_STORAGE_INVALID, "null range source")
+    storage_check(counts, lmx_msg_storage_move_all(@ dst, @ dr, @ dst, @ sr) = LMX_MSG_STORAGE_INVALID, "same block slot")
+    storage_check(counts, lmx_msg_storage_move_all(@ dst, @ dr, @ src, @ dr) = LMX_MSG_STORAGE_INVALID, "same range slot")
+    storage_check(counts, dst = a && src = b && dr = ra && sr = rb && a\next = 0 && b\next = 0 && ra\next = 0 && rb\next = 0, "invalid arguments leave both lists untouched")
+
+    # Deliberately corrupt one list; reject before moving the other. Repair is
+    # test-only. API callers must not concurrently mutate any list or head slot.
+    mode: 0
+    while: mode < 8
+        src: b
+        sr: rb
+        a\next: 0
+        b\next: 0
+        storage_range_init(ra, pa, 11)
+        storage_range_init(rb, pb, 12)
+        if: mode = 0
+            rb\lo: pa
+            rb\hi: pa + 4
+        ---
+        if: mode = 1
+            rb\stride: 0U
+        ---
+        if: mode = 2
+            rb\next: rb
+        ---
+        if: mode = 3
+            ra\next: ra
+        ---
+        if: mode = 4
+            b\next: b
+        ---
+        if: mode = 5
+            a\next: a
+        ---
+        if: mode = 6
+            src: a
+        ---
+        if: mode = 7
+            sr: ra
+        ---
+        saved_src: src
+        saved_sr: sr
+        an: a\next
+        bn: b\next
+        ran: ra\next
+        rbn: rb\next
+        storage_check(counts, lmx_msg_storage_can_move(@ dst, @ dr, @ src, @ sr) = LMX_MSG_STORAGE_INVALID, "invalid metadata preflight")
+        storage_check(counts, dst = a && src = saved_src && dr = ra && sr = saved_sr && a\next = an && b\next = bn && ra\next = ran && rb\next = rbn, "preflight has no writes")
+        storage_check(counts, lmx_msg_storage_move_all(@ dst, @ dr, @ src, @ sr) = LMX_MSG_STORAGE_INVALID, "invalid metadata move rejected")
+        storage_check(counts, dst = a && src = saved_src && dr = ra && sr = saved_sr && a\next = an && b\next = bn && ra\next = ran && rb\next = rbn, "rejection preserves both ownership lists")
+        storage_check(counts, a\base = pa && b\base = pb && pa[0] = 100 && pb[3] = 203, "rejected move preserves storage")
+        mode: mode + 1
+    ---
+
+    src: b
+    sr: rb
+    a\next: 0
+    b\next: 0
+    storage_range_init(ra, pa, 11)
+    storage_range_init(rb, pb, 12)
+    storage_check(counts, lmx_msg_storage_can_move(@ dst, @ dr, @ src, @ sr) = LMX_MSG_STORAGE_OK, "valid paired preflight")
+    storage_check(counts, dst = a && src = b && dr = ra && sr = rb && a\next = 0 && b\next = 0 && ra\next = 0 && rb\next = 0, "successful preflight is read only")
+    storage_check(counts, lmx_msg_storage_move_all(@ dst, @ dr, @ src, @ sr) = LMX_MSG_STORAGE_OK, "paired transfer")
+    storage_check(counts, dst = b && b\next = a && a\next = 0 && src = 0 && dr = rb && rb\next = ra && ra\next = 0 && sr = 0, "both source heads cleared and orders retained")
+    storage_check(counts, a\base = pa && b\base = pb && a\class = 11U && b\class = 12U && ra\type = 11 && rb\type = 12, "payload identities and descriptors retained")
+    storage_check(counts, lmx_owned_ranges_find(sr, pb) = 0 && lmx_owned_ranges_find(dr, pb) = rb && lmx_owned_ranges_find(dr, pa) = ra, "classification follows owner")
+    storage_check(counts, lmx_msg_storage_move_all(@ dst, @ dr, @ src, @ sr) = LMX_MSG_STORAGE_OK && dst = b && dr = rb, "repeat empty source")
+    storage_check(counts, lmx_msg_storage_move_all(@ src, @ sr, @ dst, @ dr) = LMX_MSG_STORAGE_OK && dst = 0 && dr = 0 && src = b && sr = rb, "move into empty owner")
+    i: 0
+    while: i < 4
+        storage_check(counts, pa[i] = 100 + i && pb[i] = 200 + i, "payload bytes unchanged")
+        i: i + 1
+    ---
+    # Metadata may accompany separately owned storage, or a block may have no
+    # classifier entry. Paired handoff must also handle one empty source list.
+    storage_check(counts, lmx_msg_blocks_move_all(@ dst, @ src) = LMX_MSG_BLOCKS_OK, "prepare range only source")
+    storage_check(counts, lmx_msg_storage_move_all(@ dst, @ dr, @ src, @ sr) = LMX_MSG_STORAGE_OK && src = 0 && sr = 0 && dst = b && dr = rb, "range only move")
+    storage_check(counts, lmx_owned_ranges_move_all(@ sr, @ dr) = LMX_OWNED_RANGES_OK, "prepare block only source")
+    storage_check(counts, lmx_msg_storage_move_all(@ src, @ sr, @ dst, @ dr) = LMX_MSG_STORAGE_OK && dst = 0 && dr = 0 && src = b && sr = rb, "block only move")
+    storage_check(counts, lmx_owned_ranges_remove(@ sr, rb) = LMX_OWNED_RANGES_OK && lmx_owned_ranges_remove(@ sr, ra) = LMX_OWNED_RANGES_OK, "detach ranges before payload cleanup")
+    storage_check(counts, lmx_msg_blocks_dispose_all(@ src) = LMX_MSG_BLOCKS_OK && src = 0 && sr = 0, "cleanup transferred blocks")
+    c.free(rb)
+    c.free(ra)
+    c.printf("storage checks=%d failures=%d\n", counts[0], counts[1])
+    i: counts[1]
+    c.free(counts)
+    if: i != 0
+        return: 1
+    return: 0

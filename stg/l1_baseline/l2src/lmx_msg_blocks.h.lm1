@@ -20,6 +20,7 @@ end: LmxMsgBlock
 
 prototype:
     fn: lmx_msg_blocks_push (@@: LmxMsgBlock head; @: LmxMsgBlock node) int
+    fn: lmx_msg_blocks_can_move (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
     fn: lmx_msg_blocks_move_all (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
     fn: lmx_msg_blocks_dispose_all (@@: LmxMsgBlock head) int
 end: prototype

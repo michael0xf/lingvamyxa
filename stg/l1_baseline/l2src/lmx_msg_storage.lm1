@@ -1,0 +1,19 @@
+predef: "l2src/lmx_msg_storage.h.lm1"
+
+fn: lmx_msg_storage_can_move (@@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: LmxMsgBlock src_blocks; @@: LmxOwnedRange src_ranges) int
+    if: lmx_msg_blocks_can_move(dst_blocks, src_blocks) != LMX_MSG_BLOCKS_OK
+        return: LMX_MSG_STORAGE_INVALID
+    if: lmx_owned_ranges_can_move(dst_ranges, src_ranges) != LMX_OWNED_RANGES_OK
+        return: LMX_MSG_STORAGE_INVALID
+    return: LMX_MSG_STORAGE_OK
+
+# No allocator, disposer or external user can run between preflight and moves.
+# With exclusive ownership, moving block links cannot invalidate range links.
+fn: lmx_msg_storage_move_all (@@: LmxMsgBlock dst_blocks; @@: LmxOwnedRange dst_ranges; @@: LmxMsgBlock src_blocks; @@: LmxOwnedRange src_ranges) int
+    if: lmx_msg_storage_can_move(dst_blocks, dst_ranges, src_blocks, src_ranges) != LMX_MSG_STORAGE_OK
+        return: LMX_MSG_STORAGE_INVALID
+    if: lmx_msg_blocks_move_all(dst_blocks, src_blocks) != LMX_MSG_BLOCKS_OK
+        return: LMX_MSG_STORAGE_INVALID
+    if: lmx_owned_ranges_move_all(dst_ranges, src_ranges) != LMX_OWNED_RANGES_OK
+        return: LMX_MSG_STORAGE_INVALID
+    return: LMX_MSG_STORAGE_OK

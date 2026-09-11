@@ -33,6 +33,10 @@ push(&head,node): prepend a detached caller-allocated node. No allocation.
 Reject null arguments, linked/already-present nodes, cycles in the destination,
 and nonzero n with null base. Failure leaves ownership unchanged.
 
+can_move(&dst,&src): read-only preflight for move_all; no writes or callbacks.
+It validates head slots, cycles and intersections, not payload alias safety.
+The caller must retain exclusive ownership from preflight through the move.
+
 move_all(&dst,&src): preserve order inside each list; prepend src's entire chain
 to dst; clear src. No allocation, payload copy, free or callback. Empty source
 is a no-op. Null/same head slots, cycles and intersecting metadata chains fail

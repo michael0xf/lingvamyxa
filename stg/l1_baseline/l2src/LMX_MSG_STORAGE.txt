@@ -1,0 +1,64 @@
+Paired Message storage handoff (L1)
+==================================
+
+Scope
+-----
+lmx_msg_storage composes lmx_msg_blocks and lmx_owned_ranges. It moves the
+storage block list and its owner-local classification metadata together, without
+allocating, copying payloads, relocating addresses or changing graph parents.
+This is a storage helper, not an additional manager or a Message implementation.
+No mutable globals, TLS, scheduler, flags, locks or lifecycle policy are added.
+
+API (0 = OK, 1 = INVALID)
+------------------------
+can_move(&dst_blocks,&dst_ranges,&src_blocks,&src_ranges) checks both component
+lists without mutation. Block cycles/intersections and invalid/overlapping range
+metadata are rejected before either ownership list changes. Source/destination
+head slots cannot be null or identical. Empty lists are permitted.
+
+move_all(same arguments) first performs this paired preflight, then prepends the
+source chains to the destination chains and clears both source head slots.
+Each chain's internal order and all payload addresses remain unchanged. Either
+source chain can be empty, including ranges for storage managed separately.
+The helper does not assert that every block requires exactly one range record.
+
+Required caller contract
+------------------------
+Keep exclusive access to both owners throughout preflight and move. The four
+head slots are distinct owner fields, not intrusive next links. The two metadata
+representations cannot overlap in memory. Component contracts still apply:
+valid API-built sets, live metadata, disjoint ownership, no old-owner escaped
+mutable aliases/native users. List checks cannot prove arbitrary pointer safety.
+
+Lifecycle integration first establishes authority, quiescence, native-resource
+cleanup, outcome and direct-child settlement. running=0 alone is insufficient.
+This helper does not decide whether the source is eligible for arena adoption,
+change a running Message's parent, resolve a graph root's current owner, or free
+anything. It is NOT a lock-free or distributed atomic operation. There is no
+callback/allocation between paired validation and moves; with exclusive ownership
+and distinct metadata, the second move cannot become invalid after the first.
+
+When adoption also needs a new block node for an init payload, preflight BOTH
+lists before touching ownership. Prepare any fallible allocation before moving
+existing blocks; allocation failure must not strand a partial handoff. A prepared,
+detached block can then be attached using the block API. The lifecycle caller
+owns this preparation; this helper does not allocate or know an init payload.
+
+Integration and verification
+----------------------------
+Predef l2src/lmx_msg_storage.h.lm1. Generate the three .h.lm1 headers into a
+private header tree; translate/link lmx_msg_blocks, lmx_owned_ranges and this
+module. Existing native substrate can include the generated header directly.
+Do not add a handwritten C wrapper or rebuild the shared stable compiler.
+
+run_msg_storage.ps1 uses pinned stable gen2 read-only and private build/codex
+outputs. The L1-only selftest has 72 checks at O0/O2 with strict C99 warnings:
+null/self slots, read-only success/failure preflight, cycles in either chain,
+intersection/overlap, invalid stride, rejection preserving BOTH lists, unchanged
+payloads and metadata, owner-relative lookup, empty/repeated/one-chain moves and
+cleanup. Production object checks reject mutable static/global symbols and
+unexpected imports: this module may call only the four component transfer APIs,
+ranges have no external calls, blocks only free for its separate disposer API.
+The existing run_msg_blocks.ps1 regression suite remains 115 checks at O0/O2.
+Generated code, pinned/source hashes, logs and stage exits remain private build
+artifacts, not new source files or a claim of complete Message integration.
