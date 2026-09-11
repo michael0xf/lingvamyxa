@@ -1017,6 +1017,40 @@ fn: main () int
         fail: fail + 1
     ---
     lmx_msg_runtime_delete(crt)
+    @: LmxMsgRuntime lct
+    unsigned: lcp 0U
+    unsigned: lcd 0U
+    unsigned: lcu 0U
+    lct: lmx_msg_runtime_new()
+    st: lmx_msg_create(lct, 0U, 1U, payload, 4U, @ lcp)
+    st: lmx_msg_create(lct, lcp, 1U, payload, 4U, @ lcd)
+    st: lmx_msg_create(lct, lcp, 2U, payload, 4U, @ lcu)
+    st: lmx_msg_set_now(lct, 10U)
+    st: lmx_msg_end_turn(lct, lcp, 1)
+    st: lmx_msg_complete(lct, lcd)
+    st: lmx_msg_end_turn(lct, lcp, 1)
+    st: lmx_msg_set_now(lct, 40U)
+    st: lmx_msg_live_check(lct, lcp, 40U, 5U)
+    if: lmx_msg_tracked(lct, lcd) != 0
+        c.printf("completed child still tracked\n")
+        fail: fail + 1
+    ---
+    if: st != 1
+        c.printf("unfinished sibling not supervised\n")
+        fail: fail + 1
+    ---
+    env\kind: c.LMX_MSG_KIND_BYTES
+    env\n: 4U
+    env\bytes: payload
+    st: lmx_msg_send(lct, lcp, lcu, env)
+    st: lmx_msg_end_turn(lct, lcp, 1)
+    st: lmx_msg_stop(lct, lcp, lcp)
+    st: lmx_msg_end_turn(lct, lcp, 1)
+    if: lmx_msg_inbox_n(lct, lcu) < 1
+        c.printf("transferred payload lost on source close\n")
+        fail: fail + 1
+    ---
+    lmx_msg_runtime_delete(lct)
     lmx_msg_runtime_delete(lrt4)
     lmx_msg_runtime_delete(lrt5)
     lmx_msg_runtime_delete(lrt6)

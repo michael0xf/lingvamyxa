@@ -1370,7 +1370,7 @@ fn: lmx_msg_live_check (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; uns
     while: ch != 0
         wake: 0U
         nxt: ch\next_sibling
-        if: ch\committed != 0 && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_RELEASED
+        if: ch\tracked != 0 && ch\committed != 0 && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_RELEASED
             if: threshold != 0U && now > ch\child_heard_at && (now - ch\child_heard_at) > threshold
                 ch\closing: 1
                 n: n + 1

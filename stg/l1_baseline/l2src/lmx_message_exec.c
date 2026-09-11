@@ -1092,6 +1092,25 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     int clean;
     old = get_tls(e);
     set_tls(e, snap->addr);
+    lmx_msg_exec_lock(rt);
+    m = msg_at_addr(rt, snap->addr);
+    if (m != 0 && lmx_msg_running_load(m) == 0) {
+        lmx_msg_exec_unlock(rt);
+        st = 0;
+        lmx_msg_end_turn(rt, snap->addr, 0);
+        lmx_msg_exec_lock(rt);
+        for (i = 0; i < e->nbind; i++) {
+            if (e->bind[i].addr == snap->addr) {
+                e->bind[i].held = 0;
+                e->bind[i].held_by = 0;
+                e->bind[i].last_st = st;
+            }
+        }
+        lmx_msg_exec_unlock(rt);
+        set_tls(e, old);
+        return st;
+    }
+    lmx_msg_exec_unlock(rt);
     st = snap->turn(rt, snap->addr, snap->ctx);
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, snap->addr);
@@ -1331,7 +1350,7 @@ static int take_this(LmxMsgExec *e, LmxMsgAddr addr, LmxMsgExecBind *snap) {
         if (m->state == LMX_MSG_STATE_STOPPED || m->state == LMX_MSG_STATE_DEAD || m->state == LMX_MSG_STATE_RELEASED) {
             return 0;
         }
-        if (m->inbox == 0 && m->closing == 0) {
+        if (m->inbox == 0 && m->closing == 0 && lmx_msg_running_load(m) != 0) {
             return 0;
         }
         e->bind[j].held = 1;
