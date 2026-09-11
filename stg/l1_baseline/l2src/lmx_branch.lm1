@@ -51,8 +51,13 @@ fn: lmx_branch_open (@: Lmx parent; size_t: children) int
 return: 0
 
 sub: lmx_branch_release (@: Lmx parent)
+    @: Lmx block
     if: parent != 0
         if: parent\data != 0
+            # Retire this direct block before freeing it; payload references
+            # are not owned recursively by this operation.
+            block: (cast: (@: Lmx) parent\data)
+            lmx_range_unregister(parent\data, (cast: (@: void) (block + parent\len)))
             c.free(parent\data)
         ---
         parent\data: 0

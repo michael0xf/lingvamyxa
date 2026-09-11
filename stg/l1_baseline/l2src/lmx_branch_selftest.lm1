@@ -14,6 +14,7 @@ fn: main () int
     @: Lmx again
     @: Lmx copied
     int: failures
+    size_t: cycle
     failures: 0
 
     if: lmx_ranges_init(8U) != 0
@@ -121,10 +122,46 @@ fn: main () int
         failures: failures + 1
 
     lmx_branch_release(root)
+    if: lmx_range_count != 2U || root\data != 0 || root\len != 0U
+        c.printf("lmx: released source retained its range or storage\n")
+        failures: failures + 1
+    if: lmx_branch_child(copy, 1U) != copied || lmx_type_of(copied\data) != c.LMX_TYPE_CHAR
+        c.printf("lmx: source release disturbed live copy or char payload\n")
+        failures: failures + 1
+    lmx_branch_release(root)
+    lmx_branch_release(0)
+    if: lmx_range_count != 2U
+        c.printf("lmx: repeated or null release disturbed live ranges\n")
+        failures: failures + 1
+
+    # More lifetimes than registry slots: freed blocks must not accumulate.
+    # Keep the copy and character pool live throughout; no dangling-pointer
+    # classification is needed to check that their ranges survive retirement.
+    cycle: 0U
+    while: cycle < 32U
+        if: lmx_branch_open(root, 1U + cycle % 4U) != 0
+            c.printf("lmx: repeated branch lifetime exhausted range slots\n")
+            failures: failures + 1
+            break
+        if: lmx_range_count != 3U || lmx_type_of(root\data) != c.LMX_TYPE_BRANCH
+            c.printf("lmx: reopened branch range was not registered\n")
+            failures: failures + 1
+        lmx_branch_release(root)
+        if: lmx_range_count != 2U || lmx_branch_child(copy, 1U) != copied || lmx_char_value(copied\data) != 66
+            c.printf("lmx: branch retirement damaged surviving ranges\n")
+            failures: failures + 1
+        cycle: cycle + 1U
+    ---
     lmx_branch_release(copy)
+    if: lmx_range_count != 1U
+        c.printf("lmx: copy release did not retire exactly its own range\n")
+        failures: failures + 1
     c.free(root)
     c.free(copy)
     lmx_chars_release()
+    if: lmx_range_count != 0U
+        c.printf("lmx: final release left registered storage\n")
+        failures: failures + 1
     lmx_ranges_release()
 
     if: failures != 0
