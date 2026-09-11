@@ -462,6 +462,72 @@ Worth running before anyone relies on nesting a loop inside a branch. Note the
 simple case hides it: an `if` containing no declarations behaves identically
 under all three passes, which is why this has not shown up.
 
+6.1.3.2. The owner's proposed rule, and why it is already half-implemented
+
+Mikhail, 2026-09-11: leave arguments "flying" - structures and other receiver
+ARGUMENTS are not written to the graph - and give `if` the same mechanism as
+`for`, under one general rule: EXECUTABLE BODIES, the ones run line by line, are
+all written. His reason: arguments come from somewhere and are therefore already
+tracked as data, so the rule that needs to be uniform is the one for executable
+code.
+
+I think the line is right, and the strongest evidence is that l2trans ALREADY
+DRAWS IT - three times, independently, without naming it:
+
+    if      4885-4892   walk to the LAST field; require LM_P0_NODE_STRUCTURE
+    while   4918-4925   walk to the LAST field; require LM_P0_NODE_STRUCTURE
+    for     4952-4960   walk to the LAST field; require LM_P0_NODE_STRUCTURE
+
+So the mechanical test the rule needs already exists in practice: THE BLOCK OF A
+FRAME IS ITS LAST FIELD WHEN THAT FIELD IS A STRUCTURE; EVERYTHING BEFORE IT IS
+ARGUMENTS. The parser gives no kind of its own - LmP0Structure carries only
+fields and a trailer - but it does not need to: the position plus the node kind
+is the test, and the code trusts it already.
+
+That matters because naming the rule converts three coincidences into one
+invariant, and an invariant is checkable.
+
+WHAT IT FIXES, rather than patches. The three-pass divergence of 6.1.3.1 exists
+because collect_decls alone does not apply that test to `if`. If every block is
+a host, collect_decls must descend into every block, and check/emit/collect
+agree BY CONSTRUCTION. The bug stops being possible instead of being fixed.
+
+WHAT IT COSTS, which is less than it looks. The obvious objection is that every
+body becoming a host makes the prologue O(bodies) instead of O(fields). It does
+not: the prologue already emits a host handle only when a USED field belongs to
+it - the `hu` test at 7019-7029. A block that declares nothing gets nothing
+emitted. So the prologue stays proportional to blocks that actually hold state,
+which is what it is proportional to today.
+
+WHAT IT ACTUALLY COSTS is the flat layout. Every host currently takes a uchild
+from one counter under node (4058-4063), so a `for` inside a `for` is its
+SIBLING in the graph rather than its child. Under a uniform rule that is already
+wrong, and nesting blocks makes it visibly wrong. The layout needs a real parent
+chain, and the prologue must then resolve hosts in depth order before the fields
+that hang off them. That is the work, and it is work the uniform rule makes
+necessary AND makes correct.
+
+TWO THINGS TO DECIDE EXPLICITLY
+
+    HOST THE BLOCK, NOT THE STATEMENT. The scope stack currently pushes the
+      `for` STATEMENT (l2_scope_push(stmt)). An `if` is one statement with two
+      blocks, and `else` is a sibling field. Push blocks instead and `else`
+      stops being a special case at all - it is simply another block. This also
+      removes the two-body wrinkle I listed earlier as a cost; under the
+      block-hosting reading it is not one.
+
+    TRAILER BODIES. LmP0Trailer carries a `body` of its own, and l2_ret_tr
+      already reads one. Is a trailer body an executable block for this purpose?
+      The last-field test does not answer it, because a trailer is not a field.
+      This is the one place the rule needs a stated answer rather than an
+      inherited one.
+
+MY VERDICT: adopt it. The argument/body line is the right line, it is the line
+the parser's shape already supports and the translator already uses, and it
+replaces a per-receiver list with a property. The cost is the layout rework,
+which is owed anyway - a `for` nested in a `for` being its own sibling is a
+defect waiting for someone to depend on it.
+
 6.1.4. But "persist every structure" is a different question, not a bigger one
 
 Mikhail's own observation is the strongest argument here: ARGUMENT structures
