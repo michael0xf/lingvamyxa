@@ -89,24 +89,36 @@ static int bind_index(LmxMsgExec *e, LmxMsgAddr addr);
 static int bind_has_worker(const LmxMsgExecBind *b);
 static LmxMsg *msg_at_addr(LmxMsgRuntime *rt, LmxMsgAddr addr);
 
+typedef struct LmxTurnRoot {
+    jmp_buf jmp;
+    int ready;
+    struct LmxTurnRoot *prev;
+} LmxTurnRoot;
+
 #if defined(_MSC_VER)
 static __declspec(thread) LmxMsg *lmx_turn_msg;
-static __declspec(thread) jmp_buf lmx_turn_jmp;
-static __declspec(thread) int lmx_turn_jmp_ready;
+static __declspec(thread) LmxTurnRoot *lmx_turn_root;
 __declspec(thread) uint_fast8_t *lmx_turn_running;
 #else
 static __thread LmxMsg *lmx_turn_msg;
-static __thread jmp_buf lmx_turn_jmp;
-static __thread int lmx_turn_jmp_ready;
+static __thread LmxTurnRoot *lmx_turn_root;
 __thread uint_fast8_t *lmx_turn_running;
 #endif
 
 int lmx_msg_poll_abort(void) {
-    if (lmx_turn_jmp_ready != 0) {
-        lmx_turn_jmp_ready = 0;
-        longjmp(lmx_turn_jmp, 1);
+    LmxTurnRoot *r = lmx_turn_root;
+    if (r != 0 && r->ready != 0) {
+        r->ready = 0;
+        longjmp(r->jmp, 1);
     }
     return 1;
+}
+
+static void turn_root_pop(LmxTurnRoot *self, LmxTurnRoot *saved) {
+    if (self != 0) {
+        self->ready = 0;
+    }
+    lmx_turn_root = saved;
 }
 
 static LmxMsgExec *exof(LmxMsgRuntime *rt) {
@@ -1120,11 +1132,17 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     int st;
     int live = 0;
     int clean;
+    LmxTurnRoot root;
+    LmxTurnRoot *saved;
+    memset(&root, 0, sizeof(root));
+    saved = lmx_turn_root;
+    root.prev = saved;
     old = get_tls(e);
     set_tls(e, snap->addr);
-    if (setjmp(lmx_turn_jmp) != 0) {
-        lmx_turn_jmp_ready = 0;
+    lmx_turn_root = &root;
+    if (setjmp(root.jmp) != 0) {
         st = 0;
+        live = 0;
         lmx_msg_exec_lock(rt);
         m = msg_at_addr(rt, snap->addr);
         if (m != 0) {
@@ -1142,17 +1160,17 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
             }
         }
         lmx_msg_exec_unlock(rt);
+        turn_root_pop(&root, saved);
         set_tls(e, old);
         requeue_if_runnable(rt, snap->addr);
         return st;
     }
-    lmx_turn_jmp_ready = 1;
+    root.ready = 1;
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, snap->addr);
     if (m != 0 && lmx_msg_running_load(m) == 0) {
         m->closing = 1;
         lmx_msg_exec_unlock(rt);
-        lmx_turn_jmp_ready = 0;
         st = 0;
         lmx_msg_end_turn(rt, snap->addr, 0);
         lmx_msg_exec_lock(rt);
@@ -1164,12 +1182,12 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
             }
         }
         lmx_msg_exec_unlock(rt);
+        turn_root_pop(&root, saved);
         set_tls(e, old);
         return st;
     }
     lmx_msg_exec_unlock(rt);
     st = snap->turn(rt, snap->addr, snap->ctx);
-    lmx_turn_jmp_ready = 0;
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, snap->addr);
     if (m != 0) {
@@ -1196,6 +1214,7 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
         }
     }
     lmx_msg_exec_unlock(rt);
+    turn_root_pop(&root, saved);
     set_tls(e, old);
     requeue_if_runnable(rt, snap->addr);
     return st;

@@ -68,6 +68,12 @@ static int g_ctx_bind_rollback;
 static int g_ctx_idle_rollback;
 static int g_ctx_cancel_idle;
 static int g_ctx_complete_idle;
+static int g_m0_acc;
+static int g_m0_overlap;
+static unsigned g_m0_admit0;
+static unsigned g_m0_admit1;
+static unsigned g_m0_apply0;
+static unsigned g_m0_apply1;
 static int g_ctx_bind_held;
 static int g_ctx_bind_ctx;
 static LmxMsgAddr g_hook_extra;
@@ -395,6 +401,51 @@ static int turn_two_ok(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     InterlockedDecrement(&m->in_turn);
     InterlockedIncrement(&m->done);
     return m->end_st == LMX_MSG_OK ? 0 : 1;
+}
+
+typedef struct AccRec {
+    volatile LONG value;
+    unsigned admit[2];
+    unsigned apply[2];
+    volatile LONG n_admit;
+    volatile LONG n_apply;
+    LONG in_turn;
+    volatile LONG overlap;
+} AccRec;
+
+static int turn_m0_add(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
+    AccRec *a = (AccRec *)ctx;
+    LmxMsgEnv got;
+    unsigned d;
+    memset(&got, 0, sizeof(got));
+    if (InterlockedIncrement(&a->in_turn) != 1) {
+        InterlockedExchange(&a->overlap, 1);
+        return 1;
+    }
+    if (lmx_msg_recv(rt, who, &got) != LMX_MSG_OK || got.n != 1 || got.bytes == 0) {
+        InterlockedDecrement(&a->in_turn);
+        lmx_msg_env_release(&got);
+        return 1;
+    }
+    d = got.bytes[0];
+    lmx_msg_env_release(&got);
+    {
+        LONG n = InterlockedCompareExchange(&a->n_admit, 0, 0);
+        if (n < 2) {
+            a->admit[n] = d;
+        }
+        InterlockedIncrement(&a->n_admit);
+    }
+    InterlockedExchangeAdd(&a->value, (LONG)d);
+    {
+        LONG n = InterlockedCompareExchange(&a->n_apply, 0, 0);
+        if (n < 2) {
+            a->apply[n] = d;
+        }
+        InterlockedIncrement(&a->n_apply);
+    }
+    InterlockedDecrement(&a->in_turn);
+    return 0;
 }
 
 static int turn_mass(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
@@ -3045,6 +3096,89 @@ int main(void) {
         fprintf(stderr, "ctx_complete_idle\n");
         fflush(stderr);
     }
+    {
+        LmxMsgRuntime *rta;
+        LmxMsgAddr m0 = 0, dummy = 0;
+        LmxMsgEnv e;
+        uchar d2 = 2, d5 = 5, ini = 1;
+        AccRec acc;
+        memset(&acc, 0, sizeof(acc));
+        rta = lmx_msg_runtime_new();
+        if (rta == 0 || lmx_msg_create(rta, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_create(rta, dummy, 2, &ini, 1, &m0) != LMX_MSG_OK || lmx_msg_end_turn(rta, dummy, 1) != LMX_MSG_OK) {
+            return 1;
+        }
+        if (lmx_msg_exec_bind(rta, m0, turn_m0_add, &acc, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+            return 1;
+        }
+        memset(&e, 0, sizeof(e));
+        e.kind = LMX_MSG_KIND_BYTES;
+        e.n = 1;
+        e.bytes = &d2;
+        if (lmx_msg_host_post(rta, m0, &e) != LMX_MSG_STAGED) {
+            fprintf(stderr, "m0 post 2\n");
+            return 1;
+        }
+        e.bytes = &d5;
+        if (lmx_msg_host_post(rta, m0, &e) != LMX_MSG_STAGED) {
+            fprintf(stderr, "m0 post 5\n");
+            return 1;
+        }
+        if (InterlockedCompareExchange(&acc.value, 0, 0) != 0 || InterlockedCompareExchange(&acc.n_apply, 0, 0) != 0) {
+            fprintf(stderr, "m0 applied before turn value=%ld n=%ld\n",
+                (long)InterlockedCompareExchange(&acc.value, 0, 0),
+                (long)InterlockedCompareExchange(&acc.n_apply, 0, 0));
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        if (lmx_msg_host_drain(rta) != LMX_MSG_OK) {
+            fprintf(stderr, "m0 drain\n");
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        if (lmx_msg_inbox_n(rta, m0) != 2 || InterlockedCompareExchange(&acc.value, 0, 0) != 0) {
+            fprintf(stderr, "m0 admitted but not applied inbox=%d value=%ld\n",
+                lmx_msg_inbox_n(rta, m0), (long)InterlockedCompareExchange(&acc.value, 0, 0));
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        {
+            int t1 = lmx_msg_run_child_turn(rta, m0);
+            int t2 = lmx_msg_run_child_turn(rta, m0);
+            if (t1 != LMX_MSG_OK && t1 != 1) {
+                fprintf(stderr, "m0 turn1 st=%d\n", t1);
+                lmx_msg_runtime_delete(rta);
+                return 1;
+            }
+            if (t2 != LMX_MSG_OK && t2 != 1) {
+                fprintf(stderr, "m0 turn2 st=%d\n", t2);
+                lmx_msg_runtime_delete(rta);
+                return 1;
+            }
+        }
+        if (InterlockedCompareExchange(&acc.n_apply, 0, 0) != 2 || InterlockedCompareExchange(&acc.value, 0, 0) != 7 || InterlockedCompareExchange(&acc.overlap, 0, 0) != 0 || acc.admit[0] != 2 || acc.admit[1] != 5 || acc.apply[0] != 2 || acc.apply[1] != 5) {
+            fprintf(stderr, "m0 acc value=%ld n=%ld ov=%ld inbox=%d admit=%u,%u apply=%u,%u\n",
+                (long)InterlockedCompareExchange(&acc.value, 0, 0),
+                (long)InterlockedCompareExchange(&acc.n_apply, 0, 0),
+                (long)InterlockedCompareExchange(&acc.overlap, 0, 0),
+                lmx_msg_inbox_n(rta, m0), acc.admit[0], acc.admit[1], acc.apply[0], acc.apply[1]);
+            lmx_msg_exec_stop(rta);
+            lmx_msg_runtime_delete(rta);
+            return 1;
+        }
+        g_m0_acc = (int)InterlockedCompareExchange(&acc.value, 0, 0);
+        g_m0_overlap = (int)InterlockedCompareExchange(&acc.overlap, 0, 0);
+        g_m0_admit0 = acc.admit[0];
+        g_m0_admit1 = acc.admit[1];
+        g_m0_apply0 = acc.apply[0];
+        g_m0_apply1 = acc.apply[1];
+        lmx_msg_exec_stop(rta);
+        lmx_msg_runtime_delete(rta);
+        fprintf(stderr, "m0_acc=7 admit=2,5 apply=2,5 overlap=0\n");
+        fflush(stderr);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);
@@ -3053,10 +3187,11 @@ int main(void) {
             fast.send_ui_st, fast.send_peer_st, peerrec.got);
         fprintf(ev, "ui_step_ms=%lu cpu_busy_ui_ms=%lu mass_complete=70 fail_fifo=31,32 err_after=1 omit_end=1 ui_from_worker=%u peer=42\n",
             (unsigned long)tui, (unsigned long)tbusy_ui, slow.ui_recvd);
-        fprintf(ev, "live_cascade=%d factory_n=%d factory_create_phase_n=%d held_child_meta=1 oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_overlap=%d ctx_restart=%d ctx_child=%d ctx_rebind_ui=%d ctx_fail_retry=%d ctx_busy_ui=%d ctx_rebind_auth=%d ctx_ui_any_rb=%d ctx_mid_unroll=%d ctx_spawn_race=%d ctx_mix_map=%d ctx_map_fail=%d ctx_child_timer=%d ctx_real_clock=%d ctx_bind_rollback=%d ctx_bind_held=%d ctx_bind_ctx=%d ctx_idle_rollback=%d ctx_cancel_idle=%d ctx_complete_idle=%d\n",
+        fprintf(ev, "live_cascade=%d factory_n=%d factory_create_phase_n=%d held_child_meta=1 oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_overlap=%d ctx_restart=%d ctx_child=%d ctx_rebind_ui=%d ctx_fail_retry=%d ctx_busy_ui=%d ctx_rebind_auth=%d ctx_ui_any_rb=%d ctx_mid_unroll=%d ctx_spawn_race=%d ctx_mix_map=%d ctx_map_fail=%d ctx_child_timer=%d ctx_real_clock=%d ctx_bind_rollback=%d ctx_bind_held=%d ctx_bind_ctx=%d ctx_idle_rollback=%d ctx_cancel_idle=%d ctx_complete_idle=%d m0_acc=%d m0_overlap=%d m0_admit=%u,%u m0_apply=%u,%u\n",
             g_live_cascade, g_factory_n, g_factory_n_at_meta, g_oom_n, g_oom_hits, g_oom_scan, g_oom_fifo_a, g_oom_fifo_b,
             g_ctx_overlap, g_ctx_restart, g_ctx_child, g_ctx_rebind_ui, g_ctx_fail_retry, g_ctx_busy_ui,
-            g_ctx_rebind_auth, g_ctx_ui_any_rb, g_ctx_mid_unroll, g_ctx_spawn_race, g_ctx_mix_map, g_ctx_map_fail, g_ctx_child_timer, g_ctx_real_clock, g_ctx_bind_rollback, g_ctx_bind_held, g_ctx_bind_ctx, g_ctx_idle_rollback, g_ctx_cancel_idle, g_ctx_complete_idle);
+            g_ctx_rebind_auth, g_ctx_ui_any_rb, g_ctx_mid_unroll, g_ctx_spawn_race, g_ctx_mix_map, g_ctx_map_fail, g_ctx_child_timer, g_ctx_real_clock, g_ctx_bind_rollback, g_ctx_bind_held, g_ctx_bind_ctx, g_ctx_idle_rollback, g_ctx_cancel_idle, g_ctx_complete_idle,
+            g_m0_acc, g_m0_overlap, g_m0_admit0, g_m0_admit1, g_m0_apply0, g_m0_apply1);
         fclose(ev);
     }
     printf("lmx_message_exec ok fifo=%u,%u mass=70 fail=31,32 err_after=1 omit_end=1 xsend_ui=%d xsend_peer=%d peer=%u ui_from_worker=%u ui_ms=%lu cpu_busy_ui_ms=%lu live_cascade=%d factory_n=%d factory_create_phase_n=%d oom_n=%d oom_hits=%d oom_scan=%d oom_fifo=%u,%u ctx_overlap=%d restart=%d child=%d rebind_ui=%d fail_retry=%d busy_ui=%d rebind_auth=%d ui_any_rb=%d mid_unroll=%d spawn_race=%d mix_map=%d map_fail=%d child_timer=%d real_clock=%d bind_rollback=%d bind_held=%d bind_ctx=%d idle_rollback=%d cancel_idle=%d complete_idle=%d\n",

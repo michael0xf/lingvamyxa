@@ -1,14 +1,15 @@
 fn: inner () int
+    int: hit
     while: 1
+        node\hit: 1
         continue
     return: 0
 end: inner
 fn: outer () int
     int: after
-    after: 0
     inner()
-    after: 1
-    return: after
+    node\after: 1
+    return: 0
 end: outer
 fn: main () int
     return: 0

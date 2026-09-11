@@ -161,7 +161,7 @@ if ($spinText -match '(?s)l2_m0:.*?call\s+lmx_msg_poll_escape') {
     "hot site: movzbl of running; cold abort is lmx_msg_poll_abort, not a hot helper call"
 ) | Set-Content -LiteralPath (Join-Path $log "cancel_spin_m0.evidence.txt") -Encoding utf8
 $spinOlog = Join-Path $log "cancel_spin_nomain.gcc.log"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -Dmain=cancel_spin_l2_main -c `"$spinC`" -o `"$spinObj`" > `"$spinOlog`" 2>&1"
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -O2 -Dmain=cancel_spin_l2_main -c `"$spinC`" -o `"$spinObj`" > `"$spinOlog`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content $spinOlog
     throw "$gen gcc failed: $spinC nomain"
@@ -220,6 +220,8 @@ $hashLines = @(
     "fresh hashes $(Get-Date -Format o)"
 )
 foreach ($hp in @(
+    "l2src\lmx.h",
+    "l2src\lmx_poll_stub.c",
     "l2src\lmx_message.lm1",
     "l2src\lmx_message.h",
     "l2src\lmx_message_exec.c",
