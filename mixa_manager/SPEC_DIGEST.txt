@@ -669,6 +669,66 @@ rather than the statement, which retires `else` as a special case; and say
 whether a trailer body is an executable block, which the last-field test cannot
 answer because a trailer is not a field.
 
+6.1.3.4. How much slower? Almost certainly not at all, and here is the shape
+
+Asked how much the new implementation will cost. Working from what the current
+emitter actually produces.
+
+PER CALL, TODAY, a method pays:
+
+    1 flag load + test            entry poll
+    1 branch_child + null test    per HOSTING body that has used fields (the
+                                  `hu` guard at 7019-7029 - a body that declares
+                                  nothing emits nothing)
+    1 branch_child + null test    per used own field, from its host or from node
+    1 value load                  per used own field (lmx_int_value / size /
+                                  char of from\data)
+    1 dirty test                  per used own field, at EVERY checkpoint - and
+                                  a checkpoint sits after actuals, immediately
+                                  before each call, and before return
+    1 flag load + test            per loop iteration, backedge poll
+
+FOR CODE THAT COMPILES TODAY, the new rule changes ONE of those lines. Same
+fields, same hosts, same resolutions - except that a host nested inside another
+host now resolves through its parent instead of from node. So a field two levels
+deep costs 2 branch_child instead of 1. That is per CALL, not per iteration, and
+it is bounded by nesting depth. Today a `for` inside a `for` is flat, which is
+cheaper and wrong; the hierarchy is the correctness fix and the extra hop is its
+price.
+
+Everything else is unchanged, because the fields and hosts are the same ones.
+
+WHAT GROWS IS WHAT BECOMES EXPRESSIBLE. A program that now declares fields in an
+`if` body pays exactly the unit costs above for them - nothing new per unit.
+That is the feature being used, not the same program running slower.
+
+THE ONE PLACE IT COULD ACTUALLY BITE is not in the rule but in a pattern the
+rule makes reachable, and it is worth naming before someone hits it: a field
+declared in a cold branch still gets its dirty test in EVERY checkpoint of that
+method, and there are checkpoints before every call and every return. Ten
+branches each declaring a field means ten dirty tests at each of those points,
+whichever branch ran. The prologue cost is once per call; the checkpoint cost is
+once per call SITE.
+
+WHICH RAISES A DESIGN QUESTION the spec does not settle. 21.5.1 says graph
+presence is not execution - an untaken branch performs none of its assignments -
+but it says nothing about WHEN a host handle resolves. Today all handles resolve
+eagerly in the prologue. With ten branches that is ten branch_child calls per
+invocation even though one branch runs.
+
+Lazy resolution already exists in this emitter: the aliased-field path at 6746
+and 6788 does exactly "if: l2_q{k}_from = 0 -> load it". Widening that to host
+handles would make the cost proportional to the path actually taken rather than
+to the static branch count. It costs the single-restore-point property (6.1.3),
+which is worth something for reasoning about a turn - so it is a trade, not an
+obvious win. Raising it because the rule is what makes it worth asking; under
+for-only hosting the static branch count was never large enough to matter.
+
+A SECOND-ORDER NOTE, translator-side rather than runtime: l2_own_off(mi, oi) is
+a METHOD x FIELD matrix. More hostable places means more distinct own fields per
+unit, and that matrix grows as the product. Small at current sizes, but it is
+the one cost that is not proportional to what a program uses.
+
 6.1.4. But "persist every structure" is a different question, not a bigger one
 
 Mikhail's own observation is the strongest argument here: ARGUMENT structures
