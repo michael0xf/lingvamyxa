@@ -1,0 +1,460 @@
+predef: "mixa_manager/mixa_calculator_syntax.h.lm1"
+predef: "mixa_manager/mixa_calculator_syntax.lm1"
+include: "<stdio.h>" "<string.h>"
+
+# Verifies operation STREAMS (kind sequence + number lexeme spellings), not
+# numeric results: this module performs no evaluation.
+#
+# Reference-preserved oddity under test (see case: unmatched paren):
+# eval2's parseFactor calls eat(')') after a parenthesized sub-expression but
+# does NOT check its boolean result. An unmatched '(' therefore does NOT
+# produce a syntax error at the paren site; if the remaining input is fully
+# consumed by the inner expression, top-level parsing reports OK even though
+# the ')' was never actually present. This is intentionally preserved, not a
+# bug introduced here.
+
+# Byte-for-byte comparison of slots [skip_n, skip_n+n) between two op arrays.
+fn: string_remain_check (@: MixaCalcOp p; @: MixaCalcOp r; size_t: skip_n; size_t: n) int
+    if: c.memcmp((cast: (@: void) (p + skip_n)), (cast: (@: void) (r + skip_n)), (n * c.sizeof(c.MixaCalcOp))) != 0
+        return: 1
+    return: 0
+
+fn: main () int
+    []: MixaCalcOp ops 32
+    []: MixaCalcOp ops_ref 32
+    @: MixaCalcOp pslot
+    @: MixaCalcOp rslot
+    size_t: count
+    size_t: err_pos
+    size_t: remain
+    int: rc
+    int: failures
+    int: checks
+    const: @(char e)
+
+    failures: 0
+    checks: 0
+
+    # ---- Case: NULL arg checks ----
+    rc: mixa_calc_syntax_parse(0, 3U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_ARG
+        failures: failures + 1
+        c.printf("FAIL null-expr rc=%d\n", rc)
+
+    e: "2+3"
+    rc: mixa_calc_syntax_parse(e, 3U, 0, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_ARG
+        failures: failures + 1
+        c.printf("FAIL null-out rc=%d\n", rc)
+
+    # ---- Case: NULL out_count / err_pos arguments are rejected ----
+    rc: mixa_calc_syntax_parse(e, 3U, ops, 32U, 0, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_ARG
+        failures: failures + 1
+        c.printf("FAIL null-out_count rc=%d\n", rc)
+    rc: mixa_calc_syntax_parse(e, 3U, ops, 32U, @ count, 0)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_ARG
+        failures: failures + 1
+        c.printf("FAIL null-err_pos rc=%d\n", rc)
+
+    # ---- Case: "2+3*4" -> 2 3 4 * + (term binds tighter than expression) ----
+    e: "2+3*4"
+    rc: mixa_calc_syntax_parse(e, 5U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_OK
+        failures: failures + 1
+        c.printf("FAIL case1 rc=%d\n", rc)
+    checks: checks + 1
+    if: count != 5U
+        failures: failures + 1
+        c.printf("FAIL case1 count=%zu\n", count)
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 0U) != MIXA_CALC_OP_NUMBER
+        failures: failures + 1
+        c.printf("FAIL case1 tok0 kind\n")
+    checks: checks + 1
+    if: mixa_calc_op_lexeme_eq(e, ops, 0U, "2") = 0
+        failures: failures + 1
+        c.printf("FAIL case1 tok0 lexeme\n")
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 4U) != MIXA_CALC_OP_ADD
+        failures: failures + 1
+        c.printf("FAIL case1 tok4 should be ADD\n")
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 3U) != MIXA_CALC_OP_MUL
+        failures: failures + 1
+        c.printf("FAIL case1 tok3 should be MUL\n")
+
+    # ---- Case: "2^3^2" -> 2 3 ^ 2 ^ (left-associative, ^ at */ precedence) ----
+    e: "2^3^2"
+    rc: mixa_calc_syntax_parse(e, 5U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_OK
+        failures: failures + 1
+        c.printf("FAIL case2 rc=%d\n", rc)
+    checks: checks + 1
+    if: count != 5U
+        failures: failures + 1
+        c.printf("FAIL case2 count=%zu expected 5\n", count)
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 0U) != MIXA_CALC_OP_NUMBER
+        failures: failures + 1
+        c.printf("FAIL case2 tok0\n")
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 1U) != MIXA_CALC_OP_NUMBER
+        failures: failures + 1
+        c.printf("FAIL case2 tok1\n")
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 2U) != MIXA_CALC_OP_POW
+        failures: failures + 1
+        c.printf("FAIL case2 tok2 should be POW\n")
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 3U) != MIXA_CALC_OP_NUMBER
+        failures: failures + 1
+        c.printf("FAIL case2 tok3\n")
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 4U) != MIXA_CALC_OP_POW
+        failures: failures + 1
+        c.printf("FAIL case2 tok4 should be POW\n")
+
+    # ---- Case: "2*3^2" -> 2 3 * 2 ^ (same-precedence left-to-right chain) ----
+    e: "2*3^2"
+    rc: mixa_calc_syntax_parse(e, 5U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_OK
+        failures: failures + 1
+        c.printf("FAIL case3 rc=%d\n", rc)
+    checks: checks + 1
+    if: count != 5U
+        failures: failures + 1
+        c.printf("FAIL case3 count=%zu expected 5\n", count)
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 2U) != MIXA_CALC_OP_MUL
+        failures: failures + 1
+        c.printf("FAIL case3 tok2 should be MUL\n")
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 4U) != MIXA_CALC_OP_POW
+        failures: failures + 1
+        c.printf("FAIL case3 tok4 should be POW\n")
+
+    # ---- Case: "-2^2" -> 2 NEG 2 ^ (unary binds in factor, before term-level ^) ----
+    e: "-2^2"
+    rc: mixa_calc_syntax_parse(e, 4U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_OK
+        failures: failures + 1
+        c.printf("FAIL case4 rc=%d\n", rc)
+    checks: checks + 1
+    if: count != 4U
+        failures: failures + 1
+        c.printf("FAIL case4 count=%zu expected 4\n", count)
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 0U) != MIXA_CALC_OP_NUMBER
+        failures: failures + 1
+        c.printf("FAIL case4 tok0\n")
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 1U) != MIXA_CALC_OP_NEG
+        failures: failures + 1
+        c.printf("FAIL case4 tok1 should be NEG\n")
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 2U) != MIXA_CALC_OP_NUMBER
+        failures: failures + 1
+        c.printf("FAIL case4 tok2\n")
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 3U) != MIXA_CALC_OP_POW
+        failures: failures + 1
+        c.printf("FAIL case4 tok3 should be POW\n")
+
+    # ---- Case: nested parens "(2+3)*4" -> 2 3 + 4 * ----
+    e: "(2+3)*4"
+    rc: mixa_calc_syntax_parse(e, 7U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_OK
+        failures: failures + 1
+        c.printf("FAIL case5 rc=%d\n", rc)
+    checks: checks + 1
+    if: count != 5U
+        failures: failures + 1
+        c.printf("FAIL case5 count=%zu expected 5\n", count)
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 2U) != MIXA_CALC_OP_ADD
+        failures: failures + 1
+        c.printf("FAIL case5 tok2 should be ADD\n")
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 4U) != MIXA_CALC_OP_MUL
+        failures: failures + 1
+        c.printf("FAIL case5 tok4 should be MUL\n")
+
+    # ---- Case: "0.1+0.2" -> lexemes preserved EXACTLY as source spellings ----
+    e: "0.1+0.2"
+    rc: mixa_calc_syntax_parse(e, 7U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_OK
+        failures: failures + 1
+        c.printf("FAIL case6 rc=%d\n", rc)
+    checks: checks + 1
+    if: mixa_calc_op_lexeme_eq(e, ops, 0U, "0.1") = 0
+        failures: failures + 1
+        c.printf("FAIL case6 tok0 lexeme not '0.1'\n")
+    checks: checks + 1
+    if: mixa_calc_op_lexeme_eq(e, ops, 1U, "0.2") = 0
+        failures: failures + 1
+        c.printf("FAIL case6 tok1 lexeme not '0.2'\n")
+
+    # ---- Case: acceptance - bare decimal point requires a digit ----
+    e: "."
+    rc: mixa_calc_syntax_parse(e, 1U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_SYNTAX
+        failures: failures + 1
+        c.printf("FAIL dot '.' rc=%d expected ERR_SYNTAX\n", rc)
+    checks: checks + 1
+    if: err_pos != 0U
+        failures: failures + 1
+        c.printf("FAIL dot '.' err_pos=%zu expected 0\n", err_pos)
+
+    e: "-."
+    rc: mixa_calc_syntax_parse(e, 2U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_SYNTAX
+        failures: failures + 1
+        c.printf("FAIL dot '-.' rc=%d expected ERR_SYNTAX\n", rc)
+    checks: checks + 1
+    if: err_pos != 1U
+        failures: failures + 1
+        c.printf("FAIL dot '-.' err_pos=%zu expected 1\n", err_pos)
+
+    e: "+."
+    rc: mixa_calc_syntax_parse(e, 2U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_SYNTAX
+        failures: failures + 1
+        c.printf("FAIL dot '+.' rc=%d expected ERR_SYNTAX\n", rc)
+
+    # ---- Case: acceptance - whitespace between tokens ----
+    e: " 2 + 3 "
+    rc: mixa_calc_syntax_parse(e, 7U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_OK || count != 3U
+        failures: failures + 1
+        c.printf("FAIL ws rc=%d count=%zu expected OK/3\n", rc, count)
+    checks: checks + 1
+    if: mixa_calc_op_lexeme_eq(e, ops, 0U, "2") = 0
+        failures: failures + 1
+        c.printf("FAIL ws tok0 lexeme not '2'\n")
+    checks: checks + 1
+    if: mixa_calc_op_lexeme_eq(e, ops, 1U, "3") = 0
+        failures: failures + 1
+        c.printf("FAIL ws tok1 lexeme not '3'\n")
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 2U) != MIXA_CALC_OP_ADD
+        failures: failures + 1
+        c.printf("FAIL ws tok2 not ADD\n")
+
+    # ---- Case: acceptance - unary plus (reference eval2 line ~813) ----
+    e: "+2"
+    rc: mixa_calc_syntax_parse(e, 2U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_OK || count != 1U
+        failures: failures + 1
+        c.printf("FAIL unary+ '+2' rc=%d count=%zu expected OK/1\n", rc, count)
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 0U) != MIXA_CALC_OP_NUMBER
+        failures: failures + 1
+        c.printf("FAIL unary+ '+2' tok0 not NUMBER\n")
+
+    e: "+.5"
+    rc: mixa_calc_syntax_parse(e, 3U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_OK || count != 1U
+        failures: failures + 1
+        c.printf("FAIL unary+ '+.5' rc=%d count=%zu expected OK/1\n", rc, count)
+    checks: checks + 1
+    if: mixa_calc_op_lexeme_eq(e, ops, 0U, ".5") = 0
+        failures: failures + 1
+        c.printf("FAIL unary+ '+.5' lexeme not '.5'\n")
+
+    # ---- Case: acceptance - "-.5" -> ".5" NUMBER then NEG (digit after '.') ----
+    e: "-.5"
+    rc: mixa_calc_syntax_parse(e, 3U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_OK || count != 2U
+        failures: failures + 1
+        c.printf("FAIL um '-.5' rc=%d count=%zu expected OK/2\n", rc, count)
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 0U) != MIXA_CALC_OP_NUMBER
+        failures: failures + 1
+        c.printf("FAIL um '-.5' tok0 not NUMBER\n")
+    checks: checks + 1
+    if: mixa_calc_op_kind(ops, 1U) != MIXA_CALC_OP_NEG
+        failures: failures + 1
+        c.printf("FAIL um '-.5' tok1 not NEG\n")
+    checks: checks + 1
+    if: mixa_calc_op_lexeme_eq(e, ops, 0U, ".5") = 0
+        failures: failures + 1
+        c.printf("FAIL um '-.5' lexeme not '.5'\n")
+
+    # ---- Case: acceptance - trailing dot "5." (still a number lexeme) ----
+    e: "5."
+    rc: mixa_calc_syntax_parse(e, 2U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_OK || count != 1U
+        failures: failures + 1
+        c.printf("FAIL tdot '5.' rc=%d count=%zu expected OK/1\n", rc, count)
+    checks: checks + 1
+    if: mixa_calc_op_lexeme_eq(e, ops, 0U, "5.") = 0
+        failures: failures + 1
+        c.printf("FAIL tdot '5.' lexeme not '5.'\n")
+
+    # ---- Case: malformed - trailing garbage "2 3" (no operator between) ----
+    e: "2 3";
+    rc: mixa_calc_syntax_parse(e, 3U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_SYNTAX
+        failures: failures + 1
+        c.printf("FAIL case7 (trailing garbage) rc=%d expected ERR_SYNTAX\n", rc)
+    checks: checks + 1
+    if: err_pos != 2U
+        failures: failures + 1
+        c.printf("FAIL case7 err_pos=%zu expected 2\n", err_pos)
+
+    # ---- Case: malformed - dangling operator "2+" (factor hits end of input) ----
+    e: "2+"
+    rc: mixa_calc_syntax_parse(e, 2U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_SYNTAX
+        failures: failures + 1
+        c.printf("FAIL case8 (dangling op) rc=%d expected ERR_SYNTAX\n", rc)
+
+    # ---- Case: capacity guard + sentinel - "2+3" needs 3 tokens ----
+    # Storage beyond capacity must stay byte-for-byte unchanged (0xAA sentinel).
+    # On failure out retains the valid partial prefix of the successfully
+    # parsed input and err_pos is the source offset of the first excess token.
+    pslot: (cast: (@: MixaCalcOp) ops)
+    rslot: (cast: (@: MixaCalcOp) ops_ref)
+    c.memset(pslot, 170, (32U * c.sizeof(c.MixaCalcOp)))
+    c.memset(rslot, 170, (32U * c.sizeof(c.MixaCalcOp)))
+    e: "2+3"
+    # capacity=1: second NUMBER (offset 2) is the first token that cannot fit.
+    rc: mixa_calc_syntax_parse(e, 3U, ops, 1U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_CAPACITY
+        failures: failures + 1
+        c.printf("FAIL cap1 rc=%d expected ERR_CAPACITY\n", rc)
+    checks: checks + 1
+    if: count != 1U
+        failures: failures + 1
+        c.printf("FAIL cap1 count=%zu expected 1 (only first NUMBER fit)\n", count)
+    checks: checks + 1
+    if: err_pos != 2U
+        failures: failures + 1
+        c.printf("FAIL cap1 err_pos=%zu expected 2 (offset of '3')\n", err_pos)
+    checks: checks + 1
+    if: string_remain_check(pslot, rslot, 1U, 31U) != 0
+        failures: failures + 1
+        c.printf("FAIL cap1 sentinel changed beyond slot 0\n")
+    checks: checks + 1
+    if: mixa_calc_op_lexeme_eq(e, ops, 0U, "2") = 0
+        failures: failures + 1
+        c.printf("FAIL cap1 partial prefix token lost\n")
+    # capacity=2: ADD (offset 1) is the first token that cannot fit.
+    c.memset(pslot, 170, (32U * c.sizeof(c.MixaCalcOp)))
+    rc: mixa_calc_syntax_parse(e, 3U, ops, 2U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_CAPACITY
+        failures: failures + 1
+        c.printf("FAIL cap2 rc=%d expected ERR_CAPACITY\n", rc)
+    checks: checks + 1
+    if: count != 2U
+        failures: failures + 1
+        c.printf("FAIL cap2 count=%zu expected 2 (both numbers fit)\n", count)
+    checks: checks + 1
+    if: err_pos != 1U
+        failures: failures + 1
+        c.printf("FAIL cap2 err_pos=%zu expected 1 (offset of '+')\n", err_pos)
+    checks: checks + 1
+    if: string_remain_check(pslot, rslot, 2U, 30U) != 0
+        failures: failures + 1
+        c.printf("FAIL cap2 sentinel changed beyond slot 1\n")
+    checks: checks + 1
+    if: mixa_calc_op_lexeme_eq(e, ops, 0U, "2") = 0
+        failures: failures + 1
+        c.printf("FAIL cap2 partial prefix tok0 lost\n")
+    checks: checks + 1
+    if: mixa_calc_op_lexeme_eq(e, ops, 1U, "3") = 0
+        failures: failures + 1
+        c.printf("FAIL cap2 partial prefix tok1 lost\n")
+    # capacity=0: nothing may be stored; the whole array stays untouched.
+    c.memset(pslot, 170, (32U * c.sizeof(c.MixaCalcOp)))
+    rc: mixa_calc_syntax_parse(e, 3U, ops, 0U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_CAPACITY
+        failures: failures + 1
+        c.printf("FAIL cap0 rc=%d expected ERR_CAPACITY\n", rc)
+    checks: checks + 1
+    if: count != 0U
+        failures: failures + 1
+        c.printf("FAIL cap0 count=%zu expected 0\n", count)
+    checks: checks + 1
+    if: err_pos != 0U
+        failures: failures + 1
+        c.printf("FAIL cap0 err_pos=%zu expected 0 (offset of '2')\n", err_pos)
+    checks: checks + 1
+    if: string_remain_check(pslot, rslot, 0U, 32U) != 0
+        failures: failures + 1
+        c.printf("FAIL cap0 sentinel changed across whole array\n")
+
+    # ---- Case: unsupported - variable/letter "x+2" ----
+    e: "x+2"
+    rc: mixa_calc_syntax_parse(e, 3U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_UNSUPPORTED
+        failures: failures + 1
+        c.printf("FAIL case10 (variable) rc=%d expected ERR_UNSUPPORTED\n", rc)
+    checks: checks + 1
+    if: err_pos != 0U
+        failures: failures + 1
+        c.printf("FAIL case10 err_pos=%zu expected 0\n", err_pos)
+
+    # ---- Case: unsupported - function name "sin(2)" ----
+    e: "sin(2)"
+    rc: mixa_calc_syntax_parse(e, 6U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_UNSUPPORTED
+        failures: failures + 1
+        c.printf("FAIL case11 (function) rc=%d expected ERR_UNSUPPORTED\n", rc)
+
+    # ---- Case: unsupported - degree postfix "90\xC2\xB0" (high-byte UTF8) ----
+    e: "90\xC2\xB0"
+    rc: mixa_calc_syntax_parse(e, 4U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_ERR_UNSUPPORTED
+        failures: failures + 1
+        c.printf("FAIL case12 (degree) rc=%d expected ERR_UNSUPPORTED\n", rc)
+
+    # ---- Case: REFERENCE-PRESERVED oddity - unmatched paren "(2+3" ----
+    # parseFactor calls eat(')') but ignores its boolean result (per eval2
+    # source). Since the inner expression consumes the entire remaining
+    # input, top-level parsing reports OK even though ')' was never present.
+    # This intentionally mirrors the reference, not a bug in this port.
+    e: "(2+3"
+    rc: mixa_calc_syntax_parse(e, 4U, ops, 32U, @ count, @ err_pos)
+    checks: checks + 1
+    if: rc != MIXA_CALC_OK
+        failures: failures + 1
+        c.printf("FAIL case13 (unmatched paren, reference-preserved) rc=%d expected OK\n", rc)
+    checks: checks + 1
+    if: count != 3U
+        failures: failures + 1
+        c.printf("FAIL case13 count=%zu expected 3 (2 3 +)\n", count)
+
+    if: failures > 0
+        c.printf("RESULT: %d failures out of %d checks\n", failures, checks)
+        return: 1
+
+    c.printf("PASS: 13 cases + acceptance, %d checks, 0 failures\n", checks)
+    return: 0

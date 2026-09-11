@@ -1,0 +1,291 @@
+predef: "mixa_manager/mixa_calculator_syntax.h.lm1"
+include: "<string.h>"
+
+# --- internal cursor helpers (no global state; all state threaded by pointer) ---
+
+fn: mc_is_space (int: c) int
+    if: c = 32
+        return: 1
+    return: 0
+
+fn: mc_is_digit (int: c) int
+    if: c < 48
+        return: 0
+    if: c > 57
+        return: 0
+    return: 1
+
+fn: mc_is_upper (int: c) int
+    if: c < 65
+        return: 0
+    if: c > 90
+        return: 0
+    return: 1
+
+fn: mc_is_lower (int: c) int
+    if: c < 97
+        return: 0
+    if: c > 122
+        return: 0
+    return: 1
+
+fn: mc_is_alpha (int: c) int
+    if: mc_is_upper(c) != 0
+        return: 1
+    if: mc_is_lower(c) != 0
+        return: 1
+    return: 0
+
+fn: mc_cur (const: @(char expr); size_t: expr_len; size_t: pos) int
+    if: pos >= expr_len
+        return: -1
+    return: (cast: (int) (cast: (unsigned char) expr[pos]))
+
+fn: mc_skip_ws (const: @(char expr); size_t: expr_len; @: size_t pos) void
+    while: mc_is_space(mc_cur(expr, expr_len, pos[0])) != 0
+        pos[0]: pos[0] + 1
+    expr_len: expr_len
+
+fn: mc_consume_digits (const: @(char expr); size_t: expr_len; @: size_t pos) void
+    while: mc_is_digit(mc_cur(expr, expr_len, pos[0])) != 0
+        pos[0]: pos[0] + 1
+    expr_len: expr_len
+
+fn: mc_eat (const: @(char expr); size_t: expr_len; @: size_t pos; int: target) int
+    mc_skip_ws(expr, expr_len, pos)
+    if: mc_cur(expr, expr_len, pos[0]) = target
+        pos[0]: pos[0] + 1
+        return: 1
+    return: 0
+
+fn: mc_emit (int: kind; size_t: offset; size_t: length; @(MixaCalcOp out); size_t: capacity; @: size_t out_count; @: size_t err_pos) int
+    @: MixaCalcOp slot
+    if: out_count[0] >= capacity
+        err_pos[0]: offset
+        return: 0
+    slot: out + out_count[0]
+    slot\kind: kind
+    slot\offset: offset
+    slot\length: length
+    out_count[0]: out_count[0] + 1
+    return: 1
+
+# Accessor helpers so callers never need pointer/backslash field access on
+# array elements directly (out[idx] is a value, not a pointer).
+fn: mixa_calc_op_kind (@(MixaCalcOp ops); size_t: idx) int
+    @: MixaCalcOp p
+    p: ops + idx
+    return: p\kind
+
+fn: mixa_calc_op_lexeme_eq (const: @(char expr); @(MixaCalcOp ops); size_t: idx; const: @(char expected)) int
+    @: MixaCalcOp p
+    size_t: n
+    p: ops + idx
+    n: c.strlen(expected)
+    if: p\length != n
+        return: 0
+    return: (cast: (int) (c.memcmp(expr + p\offset, expected, n) = 0))
+
+prototype:
+    fn: mc_parse_expression (const: @(char expr); size_t: expr_len; @: size_t pos; @(MixaCalcOp out); size_t: capacity; @: size_t out_count; @: size_t err_pos) int
+end: prototype
+
+fn: mc_parse_factor (const: @(char expr); size_t: expr_len; @: size_t pos; @(MixaCalcOp out); size_t: capacity; @: size_t out_count; @: size_t err_pos) int
+    int: c
+    size_t: start_pos
+    int: rc
+    int: emitted
+
+    mc_skip_ws(expr, expr_len, pos)
+    c: mc_cur(expr, expr_len, pos[0])
+
+    if: c = 40
+        pos[0]: pos[0] + 1
+        rc: mc_parse_expression(expr, expr_len, pos, out, capacity, out_count, err_pos)
+        if: rc != MIXA_CALC_OK
+            return: rc
+        emitted: mc_eat(expr, expr_len, pos, 41)
+        return: MIXA_CALC_OK
+
+    if: c = 45
+        start_pos: pos[0]
+        pos[0]: pos[0] + 1
+        rc: mc_parse_factor(expr, expr_len, pos, out, capacity, out_count, err_pos)
+        if: rc != MIXA_CALC_OK
+            return: rc
+        emitted: mc_emit(MIXA_CALC_OP_NEG, start_pos, 0U, out, capacity, out_count, err_pos)
+        if: emitted = 0
+            return: MIXA_CALC_ERR_CAPACITY
+        return: MIXA_CALC_OK
+
+    if: c = 43
+        pos[0]: pos[0] + 1
+        return: mc_parse_factor(expr, expr_len, pos, out, capacity, out_count, err_pos)
+
+    if: mc_is_digit(c) != 0
+        start_pos: pos[0]
+        mc_consume_digits(expr, expr_len, pos)
+        if: mc_cur(expr, expr_len, pos[0]) = 46
+            pos[0]: pos[0] + 1
+            mc_consume_digits(expr, expr_len, pos)
+        emitted: mc_emit(MIXA_CALC_OP_NUMBER, start_pos, pos[0] - start_pos, out, capacity, out_count, err_pos)
+        if: emitted = 0
+            return: MIXA_CALC_ERR_CAPACITY
+        return: MIXA_CALC_OK
+
+    # A decimal point is only a number when it starts a digit run; a bare '.'
+    # (also after unary +/-) has no digits and is rejected here. '.5' and '5.'
+    # keep at least one digit and remain valid, exact lexeme ranges preserved.
+    if: c = 46
+        start_pos: pos[0]
+        pos[0]: pos[0] + 1
+        if: mc_is_digit(mc_cur(expr, expr_len, pos[0])) = 0
+            err_pos[0]: start_pos
+            return: MIXA_CALC_ERR_SYNTAX
+        mc_consume_digits(expr, expr_len, pos)
+        emitted: mc_emit(MIXA_CALC_OP_NUMBER, start_pos, pos[0] - start_pos, out, capacity, out_count, err_pos)
+        if: emitted = 0
+            return: MIXA_CALC_ERR_CAPACITY
+        return: MIXA_CALC_OK
+
+    if: c < 0
+        err_pos[0]: pos[0]
+        return: MIXA_CALC_ERR_SYNTAX
+
+    if: mc_is_alpha(c) != 0
+        err_pos[0]: pos[0]
+        return: MIXA_CALC_ERR_UNSUPPORTED
+
+    if: c >= 128
+        err_pos[0]: pos[0]
+        return: MIXA_CALC_ERR_UNSUPPORTED
+
+    err_pos[0]: pos[0]
+    return: MIXA_CALC_ERR_SYNTAX
+
+fn: mc_try_term_binop (const: @(char expr); size_t: expr_len; @: size_t pos; @(MixaCalcOp out); size_t: capacity; @: size_t out_count; @: size_t err_pos; int: op; size_t: op_pos) int
+    int: rc
+    int: emitted
+    pos[0]: pos[0] + 1
+    rc: mc_parse_factor(expr, expr_len, pos, out, capacity, out_count, err_pos)
+    if: rc != MIXA_CALC_OK
+        return: rc
+    emitted: mc_emit(op, op_pos, 0U, out, capacity, out_count, err_pos)
+    if: emitted = 0
+        return: MIXA_CALC_ERR_CAPACITY
+    return: MIXA_CALC_OK
+
+fn: mc_parse_term (const: @(char expr); size_t: expr_len; @: size_t pos; @(MixaCalcOp out); size_t: capacity; @: size_t out_count; @: size_t err_pos) int
+    int: rc
+    int: c
+    int: op
+    int: more
+    int: failed
+    size_t: op_pos
+
+    rc: mc_parse_factor(expr, expr_len, pos, out, capacity, out_count, err_pos)
+    if: rc != MIXA_CALC_OK
+        return: rc
+
+    more: 1
+    failed: MIXA_CALC_OK
+    while: more = 1
+        mc_skip_ws(expr, expr_len, pos)
+        c: mc_cur(expr, expr_len, pos[0])
+        op: -1
+        if: c = 42
+            op: MIXA_CALC_OP_MUL
+        if: c = 47
+            op: MIXA_CALC_OP_DIV
+        if: c = 94
+            op: MIXA_CALC_OP_POW
+        if: op < 0
+            more: 0
+        rc: op
+        if: op >= 0
+            op_pos: pos[0]
+            rc: mc_try_term_binop(expr, expr_len, pos, out, capacity, out_count, err_pos, op, op_pos)
+        if: op >= 0
+            failed: rc
+        if: rc != MIXA_CALC_OK
+            more: 0
+        c: c
+    return: failed
+
+fn: mc_try_expr_binop (const: @(char expr); size_t: expr_len; @: size_t pos; @(MixaCalcOp out); size_t: capacity; @: size_t out_count; @: size_t err_pos; int: op; size_t: op_pos) int
+    int: rc
+    int: emitted
+    pos[0]: pos[0] + 1
+    rc: mc_parse_term(expr, expr_len, pos, out, capacity, out_count, err_pos)
+    if: rc != MIXA_CALC_OK
+        return: rc
+    emitted: mc_emit(op, op_pos, 0U, out, capacity, out_count, err_pos)
+    if: emitted = 0
+        return: MIXA_CALC_ERR_CAPACITY
+    return: MIXA_CALC_OK
+
+fn: mc_parse_expression (const: @(char expr); size_t: expr_len; @: size_t pos; @(MixaCalcOp out); size_t: capacity; @: size_t out_count; @: size_t err_pos) int
+    int: rc
+    int: c
+    int: op
+    int: more
+    int: failed
+    size_t: op_pos
+
+    rc: mc_parse_term(expr, expr_len, pos, out, capacity, out_count, err_pos)
+    if: rc != MIXA_CALC_OK
+        return: rc
+
+    more: 1
+    failed: MIXA_CALC_OK
+    while: more = 1
+        mc_skip_ws(expr, expr_len, pos)
+        c: mc_cur(expr, expr_len, pos[0])
+        op: -1
+        if: c = 43
+            op: MIXA_CALC_OP_ADD
+        if: c = 45
+            op: MIXA_CALC_OP_SUB
+        if: op < 0
+            more: 0
+        rc: op
+        if: op >= 0
+            op_pos: pos[0]
+            rc: mc_try_expr_binop(expr, expr_len, pos, out, capacity, out_count, err_pos, op, op_pos)
+        if: op >= 0
+            failed: rc
+        if: rc != MIXA_CALC_OK
+            more: 0
+        c: c
+    return: failed
+
+fn: mixa_calc_syntax_parse (const: @(char expr); size_t: expr_len; @(MixaCalcOp out); size_t: capacity; @: size_t out_count; @: size_t err_pos) int
+    size_t: pos
+    int: rc
+
+    if: expr = 0
+        return: MIXA_CALC_ERR_ARG
+    if: out = 0
+        return: MIXA_CALC_ERR_ARG
+    if: out_count = 0
+        return: MIXA_CALC_ERR_ARG
+    if: err_pos = 0
+        return: MIXA_CALC_ERR_ARG
+
+    out_count[0]: 0
+    err_pos[0]: 0
+    pos: 0
+
+    rc: mc_parse_expression(expr, expr_len, @ pos, out, capacity, out_count, err_pos)
+    if: rc != MIXA_CALC_OK
+        return: rc
+
+    mc_skip_ws(expr, expr_len, @ pos)
+    if: pos = expr_len
+        return: MIXA_CALC_OK
+    err_pos[0]: pos
+    if: mc_is_alpha(mc_cur(expr, expr_len, pos)) != 0
+        return: MIXA_CALC_ERR_UNSUPPORTED
+    if: mc_cur(expr, expr_len, pos) >= 128
+        return: MIXA_CALC_ERR_UNSUPPORTED
+    return: MIXA_CALC_ERR_SYNTAX

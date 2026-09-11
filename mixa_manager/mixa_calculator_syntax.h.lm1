@@ -1,0 +1,47 @@
+include: "<stddef.h>"
+
+# Numeric arithmetic SYNTAX module (no numerical evaluation).
+# Ports ClearShell.java eval2()'s expression/term/factor grammar to L1,
+# producing a bounded postfix operation stream in caller-provided storage.
+# Number tokens retain source offset/length (no atof/strtod/decimal conversion).
+# A decimal point is only a number when a digit follows ('.', '-.', '+.' are
+# rejected); '.5' and '5.' are valid and keep their exact lexeme ranges, as do
+# the reference's accepted unclosed parentheses.
+# Reference oddity preserved intentionally: parseFactor does not check the
+# result of eat(')') after a parenthesized sub-expression (see test comments).
+#
+# Output contract on every return: out[0..out_count) holds the valid partial
+# RPN prefix produced by the successfully parsed prefix of the input; out_count
+# reports how many ops are stored; slots at and beyond out_count are never
+# touched. On ERR_CAPACITY, err_pos holds the source offset of the token that
+# could not be stored (first excess emit).
+
+enum: MixaCalcSyntaxStatus
+    MIXA_CALC_OK 0
+    MIXA_CALC_ERR_ARG 1
+    MIXA_CALC_ERR_CAPACITY 2
+    MIXA_CALC_ERR_SYNTAX 3
+    MIXA_CALC_ERR_UNSUPPORTED 4
+end: MixaCalcSyntaxStatus
+
+enum: MixaCalcOpKind
+    MIXA_CALC_OP_NUMBER 0
+    MIXA_CALC_OP_ADD 1
+    MIXA_CALC_OP_SUB 2
+    MIXA_CALC_OP_MUL 3
+    MIXA_CALC_OP_DIV 4
+    MIXA_CALC_OP_POW 5
+    MIXA_CALC_OP_NEG 6
+end: MixaCalcOpKind
+
+struct: MixaCalcOp
+    int: kind
+    size_t: offset
+    size_t: length
+end: MixaCalcOp
+
+prototype:
+    fn: mixa_calc_syntax_parse (const: @(char expr); size_t: expr_len; @(MixaCalcOp out); size_t: capacity; @: size_t out_count; @: size_t err_pos) int
+    fn: mixa_calc_op_kind (@(MixaCalcOp ops); size_t: idx) int
+    fn: mixa_calc_op_lexeme_eq (const: @(char expr); @(MixaCalcOp ops); size_t: idx; const: @(char expected)) int
+end: prototype
