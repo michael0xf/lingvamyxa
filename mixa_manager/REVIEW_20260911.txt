@@ -45,6 +45,12 @@ inspect poster fields. The FAIL line is the injected condition being verified.
 
 1. THE PIN HAS NO STALENESS POLICY - the one that bites at wrapping
 
+Codex agrees, with a correction to the remedy: what is needed is an explicit
+RE-PIN STAGE before full Message is wired - a verified core version, an agreed
+contract, integration tests. A commit counter is useful as a warning and nothing
+more: it does not prove incompatibility and must never auto-update the
+dependency. Recorded that way rather than as "add a counter".
+
 The pin is correct and it is already far behind. Since the pinned code commit
 ee4b2d9, 48 commits have landed on stg/l1_baseline/l2src/lmx_message.*, and at
 least eight touch lmx_message.h - the CONTRACT, not the implementation:
@@ -93,36 +99,64 @@ while run_mixa.ps1 reports green. So "the suite is green" currently means "the
 saying so. That is not a prediction of decay; it is decay already measured.
 
 The fix is not one more runner. It is run_mixa.ps1 invoking the others, or the
-new units joining its list, so one command still answers the question.
+new units joining its list, so one command still answers the question. Codex
+adds the shape it should have: one full run reporting each suite as PASS, FAIL
+or a JUSTIFIED SKIP - a skip that has to state its reason cannot quietly become
+a hole.
 
 
-3. mixa_file_selftest IS BLOCKED ON AN OPEN LANGUAGE POINT, NOT A TYPO
+3. WRONG - mixa_file_selftest IS NOT BLOCKED. Corrected by Codex.
 
-    mixa_manager/tests/mixa_file_selftest.lm1:8:9: array missing name
+I reported that array-of-pointer has no correct spelling and that the module was
+waiting on L1 open point 10.15. Both halves were wrong, and the answer was one
+file away.
 
-Line 8 declares an array of pointers. Probed the neighbouring spellings on the
-stable translator, and there is no correct one:
+    []: (@: wchar_t) wslot 1   ->   wchar_t * wslot[1];      WORKS
 
-    []: @: wchar_t wslot 1   REFUSED - "array missing name"
-    []: @ wchar_t wslot 1    ACCEPTED, emits   @ wchar_t[wslot] = {1};
-    []: wchar_t wslot 1      emits  wchar_t wslot[1];     plain array, fine
-    @@: wchar_t wslot        emits  wchar_t ** wslot;     pointer-to-pointer
+Verified here after Codex pointed at it. And it is already in use at
+mixa_file_win32.lm1:34 - the very module whose selftest I declared blocked
+declares its array that way on line 34.
 
-Array-of-pointer is L1_spec OPEN POINT 10.15, "multi-dim declaration spelling /
-array-of-pointer". So this module waits on a language decision, and should say so
-rather than sitting red as if someone forgot it.
+I probed four spellings and stopped at four. The parenthesised form is the same
+convention I had written into my own digest the day before - const: @(VT p) puts
+the name inside the parens, cast: (@: MixaU8) parenthesises the pointer type -
+and I did not try it. Worse, the cheapest check was not a probe at all: GREP THE
+NEIGHBOURS. One look at how the module itself spells an array of pointers would
+have answered it in a second and without a single probe.
+
+Codex also notes the array is unnecessary for this particular out-parameter: the
+address of an ordinary pointer variable, @wpath, will do. So there are two fixes
+and neither needs the language to change.
+
+The general open point 10.15 is untouched by this - it stays open. What is
+withdrawn is the claim that THIS test is blocked by it.
+
+3.1. The second red test, cause found by Codex
+
+    []: unsigned(char) buf 16   ->   unsigned buf[16];       WRONG, silently
+    []: unsigned char buf 16    ->   unsigned char buf[16];  correct
+
+Verified both. The first drops "char" without a word and the caller expects
+unsigned char *, so the saved C fails on pointer incompatibility. Same family as
+section 4: a spelling adjacent to a correct one, accepted, producing a type the
+source does not say.
+
+After either fix, a FULL re-run is needed - neither red test having a known cause
+is evidence that nothing else is wrong.
 
 
-4. A NEW SILENT-OUTPUT L1 DEFECT, SAME FAMILY AS THE ONES FIXED YESTERDAY
+4. TWO SILENT-OUTPUT L1 DEFECTS, SAME FAMILY AS THE ONES FIXED YESTERDAY
 
-The second line above is the finding worth forwarding:
+    []: @ wchar_t wslot 1       ->   @ wchar_t[wslot] = {1};
+    []: unsigned(char) buf 16   ->   unsigned buf[16];
 
-    []: @ wchar_t wslot 1    ->    @ wchar_t[wslot] = {1};
+Neither is refused; both return 0. In the first the stray @ survives into the
+output, the NAME becomes the array SIZE and the size becomes an initializer. In
+the second the element type quietly loses half of itself.
 
-Not refused. The stray @ survives into the output, the NAME becomes the array
-SIZE, and the size becomes an initializer. Same shape as the three const cases
-Grok fixed in 5f03a70 - a spelling adjacent to a correct one producing output
-the source does not say, with no diagnostic.
+Same shape as the three const cases Grok fixed in 5f03a70: a spelling adjacent
+to a correct one, accepted, emitting C the source does not say. Codex confirms
+both and agrees an unsupported form should be rejected.
 
 Recorded here rather than reported: verifying against l1src before calling
 something a defect is the standing rule.
@@ -141,6 +175,10 @@ mixa_manager, so nothing stops them being staged, and test.c reads as a
 hand-written test to anyone glancing at the directory. We spent 2026-09-10
 removing the last hand-written C source from here; two files that merely LOOK
 like one are worth a gitignore line.
+
+Codex agrees and adds the constraint: TARGETED rules, not a blanket *.c ban -
+that would hide the permitted foreign seams and third-party sources, which are
+legitimately C.
 
 
 WHAT I DID NOT CHECK
