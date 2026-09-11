@@ -1,0 +1,11 @@
+include: "<stdint.h>"
+predef: "l2src/lmx_msg_blocks.h.lm1" "l2src/lmx_owned_ranges.h.lm1" "l2src/lmx_msg_visit.h.lm1"
+
+# Read-only predicates over exclusively held, live owner storage and a completed
+# visit. Ranges must be acyclic; positive block lengths describe real allocations.
+# No allocator, Message lookup, global state, scheduler, locking or disposal.
+prototype:
+    fn: lmx_msg_ptr_in_block (const: @(void p); const: @(LmxMsgBlock block)) int
+    fn: lmx_msg_block_has_range (const: @(LmxOwnedRange ranges); const: @(LmxMsgBlock block)) int
+    fn: lmx_msg_block_is_live (const: @(Lmx graph); const: @(LmxOwnedRange ranges); const: @(LmxMsgBlock block); const: @(LmxVisit seen)) int
+end: prototype

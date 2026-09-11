@@ -1,0 +1,102 @@
+Message block-liveness predicates in L1
+======================================
+
+Checkpoint 2026-09-11. Standalone helper extraction; runtime integration belongs
+to Grok. This is not completion of Message, the collector, or L2 self-hosting.
+
+Sources
+-------
+lmx_msg_liveness.h.lm1: public declarations and borrowed layout dependencies.
+lmx_msg_liveness.lm1: three read-only predicates, entirely authored in L1.
+tests/lmx_msg_liveness_selftest.lm1: focused L1 test, no Message build required.
+run_msg_liveness.ps1: isolated translation/strict-C99 build and saved evidence.
+
+API (all return int: 0 false, 1 true)
+----------------------------------
+lmx_msg_ptr_in_block(const void *p, const LmxMsgBlock *block)
+lmx_msg_block_has_range(const LmxOwnedRange *ranges, const LmxMsgBlock *block)
+lmx_msg_block_is_live(const Lmx *graph, const LmxOwnedRange *ranges,
+                      const LmxMsgBlock *block, const LmxVisit *seen)
+
+The helper borrows the current owner's graph root, range list, block metadata
+and completed mark state. It does not discover an owner, follow node to find an
+arena, or store an owner link. No Message lookup, global data, allocator, lock,
+scheduler, graph mutation, release, or ownership transfer is introduced.
+
+The caller must keep all borrowed storage alive and stable for the call, and
+must provide valid acyclic range links and accessible visit buffers/occurrences.
+Positive block lengths describe actual allocations, not wrapping address ranges.
+Input consistency checks are not a general validator for dangling pointers or
+arbitrarily corrupt memory. Sweep/lifecycle synchronization remains the caller's
+existing responsibility; these predicates neither acquire nor replace it.
+
+Preserved rules
+---------------
+Containment is half-open. Null pointer/block/base and zero length return false.
+The implementation uses uintptr_t address order and subtraction, not relational
+comparisons between unrelated C object pointers and not a potentially wrapping
+base+length expression. This follows the existing flat-address native range
+profile; it is not a new portable claim for capability/segmented machines.
+
+A block is associated with a registered range when either range endpoint lies
+inside it. This preserves the existing collector's endpoint rule. It does not
+silently replace it with general interval overlap: a range enclosing the entire
+block with both endpoints outside is unassociated and hence retained below.
+
+Unassociated/opaque blocks are conservatively live, including with no graph.
+An associated block with no graph is unreachable. With a graph but no mark
+state, it is conservatively live. For a completed mark, any visited occurrence,
+its data pointer, its lexical node pointer, or any marked raw backing pointer
+inside the block retains that block. Otherwise an associated block is dead.
+Reading the lexical node for reachability does not rewrite it or make it an
+arena-owner pointer. The helper does not perform graph traversal itself.
+
+For a graph with failed/incomplete mark state, explicit oom, counts beyond
+capacity, missing nonempty buffers, or a null visited occurrence conservatively
+retain the block. The normal collector already skips sweep on mark failure;
+these checks additionally prevent this standalone helper from approving release
+for those malformed states. They do not turn partial marking into valid sweep.
+
+Integration boundary
+--------------------
+Translate the header to l2src/lmx_msg_liveness.lm1.h and compile the translated
+module once per compiler/configuration. Include that generated header, not the
+source .h.lm1, from C adapters. Dependencies are layout headers only: blocks,
+owned ranges and visit. No helper object has undefined external symbols.
+
+The runtime adapter may pass its local graph/ranges/block/visit directly and
+retain existing null-Message behaviour by passing null graph and range values.
+Grok retains mark_from, collect_block, arena_collect and native integration.
+No runtime source or shared build output was edited for this checkpoint.
+
+Verification
+------------
+Run from the workspace with the already-built stable compiler:
+  & stg/l1_baseline/l2src/run_msg_liveness.ps1 -Optimization O0,O2
+Default is O2 for ordinary focused reruns. Do not rebuild the translator.
+
+Compiler SHA256:
+65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936
+
+Saved PASS:
+build/codex/msg_liveness/20260911_200502_445_54a94a87/evidence.json
+17 successful stages; O0 and O2 each report 97 checks, zero failures.
+Strict C99 with Wall/Wextra/Wpedantic/Werror. Headers, module and test translate
+once and are reused across the two explicitly different optimizer builds.
+Object inspection checks no undefined imports and no mutable module symbols.
+Evidence records source/tool pin and generated artifact hashes; inputs and the
+compiler are checked again at completion. Generated header/module were reviewed.
+
+Cases include all offsets around a real sub-block and one-past allocation,
+separate allocations, zero/null containment, both range endpoints, conservative
+enclosing/opaque storage, no graph, empty/missing/failed mark, primitive payload,
+raw METHOD/ARRAY backing marks, lexical links, occurrence identity, malformed
+counts/buffers, and preservation of input graph/metadata/payload.
+
+An initial isolated run failed because uintptr_t was used as an unregistered
+L1 declaration receiver. The corrected source uses the already-supported cast
+form, as the owned-range module does. No compiler/specification was changed.
+
+Not claimed: live runtime integration, full collector/ARRAY-reference admission,
+concurrent lifecycle correctness beyond the caller contract, stable promotion,
+or complete L2->L1->C self-build/next/check/bootstrap verification.

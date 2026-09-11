@@ -1,0 +1,134 @@
+predef: "l2src/lmx_msg_liveness.h.lm1"
+include: "<stdlib.h>" "<stdio.h>"
+
+int: checks 0
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(1)
+    ---
+end: check
+
+fn: main () int
+    LmxMsgBlock: block_state
+    LmxOwnedRange: range_state
+    LmxVisit: visit_state
+    @: LmxMsgBlock block (@ block_state)
+    @: LmxOwnedRange range (@ range_state)
+    @: LmxVisit seen (@ visit_state)
+    @: char bytes (cast: (@: char) c.calloc(64U, 1U))
+    @: Lmx nodes (cast: (@: Lmx) c.calloc(2U, c.sizeof(c.Lmx)))
+    @@: Lmx visits (cast: (@@: Lmx) c.calloc(2U, c.sizeof(nodes)))
+    @@: void raw (cast: (@@: void) c.calloc(2U, c.sizeof(bytes)))
+    size_t: i 0U
+    int: expected
+    check(bytes != 0 && nodes != 0 && visits != 0 && raw != 0, "test-only storage allocated")
+    block\base: (cast: (@: void) (bytes + 8U))
+    block\n: 16U
+    block\class: 0U
+    block\dispose: 0
+    block\next: 0
+    range\lo: (cast: (@: void) (bytes + 8U))
+    range\hi: (cast: (@: void) (bytes + 24U))
+    range\stride: 1U
+    range\kind: c.LMX_KIND_PRIMITIVE
+    range\type: c.LMX_TYPE_CHAR
+    range\next: 0
+    seen\v: visits
+    seen\n: 0U
+    seen\cap: 2U
+    seen\p: raw
+    seen\pn: 0U
+    seen\pcap: 2U
+    seen\oom: 0
+    check(lmx_msg_ptr_in_block(0, block) = 0 && lmx_msg_ptr_in_block(bytes, 0) = 0, "null containment inputs")
+    while: i <= 64U
+        expected: i >= 8U && i < 24U
+        check(lmx_msg_ptr_in_block(bytes + i, block) = expected, "half-open containment for every offset and one-past")
+        i: i + 1U
+    ---
+    check(lmx_msg_ptr_in_block(nodes, block) = 0, "distinct allocation address is not in block")
+    block\n: 0U
+    check(lmx_msg_ptr_in_block(bytes + 8U, block) = 0, "empty block excludes its base")
+    block\n: 16U
+    block\base: 0
+    check(lmx_msg_ptr_in_block(bytes + 8U, block) = 0, "null base is not a range")
+    block\base: (cast: (@: void) (bytes + 8U))
+    check(lmx_msg_block_has_range(0, block) = 0 && lmx_msg_block_has_range(range, 0) = 0, "null range inputs")
+    check(lmx_msg_block_has_range(range, block) = 1, "range lower endpoint belongs to block")
+    range\lo: (cast: (@: void) (bytes + 24U))
+    range\hi: (cast: (@: void) (bytes + 32U))
+    check(lmx_msg_block_has_range(range, block) = 0, "block upper boundary is excluded")
+    range\lo: (cast: (@: void) (bytes + 7U))
+    range\hi: (cast: (@: void) (bytes + 9U))
+    check(lmx_msg_block_has_range(range, block) = 1, "range upper endpoint inside block preserves association")
+    range\lo: (cast: (@: void) bytes)
+    range\hi: (cast: (@: void) (bytes + 64U))
+    check(lmx_msg_block_has_range(range, block) = 0, "enclosing range does not invent a new overlap rule")
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 1, "unassociated block remains conservatively live")
+    range\lo: (cast: (@: void) (bytes + 8U))
+    range\hi: (cast: (@: void) (bytes + 24U))
+    check(lmx_msg_block_is_live(0, 0, block, seen) = 1, "opaque block lives even without graph")
+    check(lmx_msg_block_is_live(0, range, block, seen) = 0, "registered block with no graph is unreachable")
+    check(lmx_msg_block_is_live(nodes, range, block, 0) = 1, "missing mark is conservative")
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 0, "completed empty mark releases registered block")
+    seen\n: 1U
+    visits[0]: nodes
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 0, "unrelated visited node does not retain block")
+    nodes\data: (cast: (@: void) (bytes + 10U))
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 1, "visited primitive payload retains block")
+    nodes\data: (cast: (@: void) (bytes + 24U))
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 0, "one-past payload does not retain block")
+    nodes\data: 0
+    seen\n: 0U
+    seen\pn: 2U
+    raw[0]: (cast: (@: void) nodes)
+    raw[1]: (cast: (@: void) (bytes + 12U))
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 1, "raw METHOD or ARRAY backing mark retains block")
+    raw[1]: (cast: (@: void) (bytes + 24U))
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 0, "raw one-past is excluded")
+    seen\pn: 0U
+    seen\oom: 1
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 1, "OOM mark does not authorize release")
+    seen\oom: 0
+    seen\n: 3U
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 1, "invalid node count is conservative")
+    seen\n: 1U
+    seen\v: 0
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 1, "missing node buffer is conservative")
+    seen\v: visits
+    visits[0]: 0
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 1, "invalid visited node is conservative")
+    visits[0]: nodes
+    seen\n: 0U
+    seen\pn: 3U
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 1, "invalid raw count is conservative")
+    seen\pn: 1U
+    seen\p: 0
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 1, "missing raw buffer is conservative")
+    seen\p: raw
+    seen\pn: 0U
+    block\base: (cast: (@: void) (nodes + 1U))
+    block\n: c.sizeof(c.Lmx)
+    range\lo: block\base
+    range\hi: (cast: (@: void) (nodes + 2U))
+    range\stride: c.sizeof(c.Lmx)
+    range\kind: c.LMX_KIND_CHILDREN
+    range\type: c.LMX_TYPE_BRANCH
+    seen\n: 1U
+    nodes\node: nodes + 1U
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 1, "lexical node link retains its block")
+    nodes\node: 0
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 0, "cleared lexical link no longer retains it")
+    visits[0]: nodes + 1U
+    check(lmx_msg_block_is_live(nodes, range, block, seen) = 1, "visited occurrence itself retains its block")
+    check(block\base = (cast: (@: void) (nodes + 1U)) && block\n = c.sizeof(c.Lmx) && block\next = 0, "predicates do not mutate block metadata")
+    check(range\lo = block\base && range\next = 0 && seen\v = visits && seen\n = 1U && seen\p = raw && seen\pn = 0U && seen\oom = 0, "predicates do not mutate ranges or mark state")
+    check(nodes\node = 0 && nodes\data = 0 && nodes\len = 0U && bytes[8] = 0, "predicates do not mutate graph or payload")
+    c.free(raw)
+    c.free(visits)
+    c.free(nodes)
+    c.free(bytes)
+    c.printf("liveness checks=%d failures=0\n", checks)
+    return: 0
