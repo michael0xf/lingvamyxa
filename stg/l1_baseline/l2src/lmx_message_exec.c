@@ -1,6 +1,7 @@
 /* Overlapping Message turns. Mutex not held during turn_fn. */
 #include "l2src/lmx_message_exec.h"
 #include "l2src/lmx_msg_slots.lm1.h"
+#include "l2src/lmx_msg_mail_chain.lm1.h"
 #include "l2src/lmx_message_host.h"
 #include "l2src/lmx.h"
 #include <stdlib.h>
@@ -319,23 +320,18 @@ int lmx_msg_mail_inbox_empty(LmxMsg *m) {
         return 1;
     }
     lmx_msg_mail_lock(m);
-    empty = m->inbox == 0;
+    empty = lmx_msg_mail_chain_empty(m->inbox);
     lmx_msg_mail_unlock(m);
     return empty;
 }
 
 int lmx_msg_mail_inbox_n(LmxMsg *m) {
-    int n = 0;
-    LmxMsgCopy *p;
+    int n;
     if (m == 0) {
         return 0;
     }
     lmx_msg_mail_lock(m);
-    p = m->inbox;
-    while (p != 0) {
-        n += 1;
-        p = p->next;
-    }
+    n = lmx_msg_mail_chain_n(m->inbox);
     lmx_msg_mail_unlock(m);
     return n;
 }
@@ -349,9 +345,7 @@ void lmx_msg_mail_inbox_take(LmxMsg *m, LmxMsgCopy **out) {
         return;
     }
     lmx_msg_mail_lock(m);
-    *out = m->inbox;
-    m->inbox = 0;
-    m->inbox_tail = 0;
+    lmx_msg_mail_chain_take(&m->inbox, &m->inbox_tail, out);
     lmx_msg_mail_unlock(m);
 }
 
@@ -361,7 +355,7 @@ int lmx_msg_mail_outbox_empty(LmxMsg *m) {
         return 1;
     }
     lmx_msg_mail_lock(m);
-    empty = m->outbox == 0;
+    empty = lmx_msg_mail_chain_empty(m->outbox);
     lmx_msg_mail_unlock(m);
     return empty;
 }
@@ -375,9 +369,7 @@ void lmx_msg_mail_outbox_take(LmxMsg *m, LmxMsgCopy **out) {
         return;
     }
     lmx_msg_mail_lock(m);
-    *out = m->outbox;
-    m->outbox = 0;
-    m->outbox_tail = 0;
+    lmx_msg_mail_chain_take(&m->outbox, &m->outbox_tail, out);
     lmx_msg_mail_unlock(m);
 }
 

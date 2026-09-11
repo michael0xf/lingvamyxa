@@ -1669,6 +1669,33 @@ fn: lmx_msg_live_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; const: @(LmxMsgEn
     if: env\kind != c.LMX_MSG_KIND_PROGRESS
         return: c.LMX_MSG_OK
     m: lmx_msg_turn_slot(rt, who)
+    if: m != 0
+        if: m\exec_live = 0
+            return: c.LMX_MSG_INVALID
+        ---
+        from: m\exec_from
+        if: env\number = c.LMX_MSG_PROF_LIVE_R
+            if: from = m\parent && env\correlation != 0U && env\correlation = m\live_query_id
+                m\live_query_id: 0U
+            ---
+            return: c.LMX_MSG_OK
+        ---
+        if: env\number != c.LMX_MSG_PROF_LIVE_Q
+            return: c.LMX_MSG_OK
+        ---
+        ch: m\first_child
+        while: ch != 0
+            if: ch\addr = from
+                ch\child_heard_at: c.lmx_msg_now(rt)
+                dest: from
+                qid: env\correlation
+                ch: 0
+            ---
+            if: ch != 0
+                ch: ch\next_sibling
+            ---
+        ---
+    ---
     if: m = 0
         c.lmx_msg_exec_lock(rt)
         m: lmx_msg_self_or_find(rt, who)
@@ -1702,33 +1729,6 @@ fn: lmx_msg_live_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; const: @(LmxMsgEn
             ---
         ---
         c.lmx_msg_exec_unlock(rt)
-    ---
-    if: m != 0 && dest = 0U && from = 0U
-        if: m\exec_live = 0
-            return: c.LMX_MSG_INVALID
-        ---
-        from: m\exec_from
-        if: env\number = c.LMX_MSG_PROF_LIVE_R
-            if: from = m\parent && env\correlation != 0U && env\correlation = m\live_query_id
-                m\live_query_id: 0U
-            ---
-            return: c.LMX_MSG_OK
-        ---
-        if: env\number != c.LMX_MSG_PROF_LIVE_Q
-            return: c.LMX_MSG_OK
-        ---
-        ch: m\first_child
-        while: ch != 0
-            if: ch\addr = from
-                ch\child_heard_at: c.lmx_msg_now(rt)
-                dest: from
-                qid: env\correlation
-                ch: 0
-            ---
-            if: ch != 0
-                ch: ch\next_sibling
-            ---
-        ---
     ---
     if: dest = 0U
         return: c.LMX_MSG_OK
