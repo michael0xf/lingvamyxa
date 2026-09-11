@@ -1,5 +1,5 @@
 # One private translator build, one Message object set, one generated program.
-param([string]$CoreCommit = '872e333')
+param([string]$CoreCommit = '0642421')
 $ErrorActionPreference = 'Stop'
 $rootBaseline = Split-Path -Parent $PSScriptRoot
 $rootRepo = Split-Path -Parent (Split-Path -Parent $rootBaseline)
@@ -9,7 +9,7 @@ if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
 New-Item -ItemType Directory -Path $rootSnapshot -Force | Out-Null
-$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_branch_owned.h.lm1', 'lmx_branch_owned.lm1')
+$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1')
 $rootEvidence = [ordered]@{result='RUNNING'; compiler=$rootCompiler; compilerSHA256=$rootPin; owned=@{}; stages=@()}
 $rootEvidence.runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $rootOldLocation = Get-Location
@@ -42,6 +42,7 @@ try {
     $rootL1 = Get-Content -LiteralPath "$out/program.lm1" -Raw
     if ($rootL1 -notmatch 'fn: l2_program_entry' -or $rootL1 -notmatch 'lmx_msg_set_graph\(process_message, unit\)' -or $rootL1 -notmatch 'lmx_msg_runtime_delete\(process_runtime\)') { throw 'Missing generated entry lifecycle' }
     if ($rootL1 -notmatch 'lmx_branch_open_owned' -or $rootL1 -match 'lmx_branch_open\(|lmx_branch_child\(') { throw 'Generated unit still uses legacy branch admission/access' }
+    if ($rootL1 -notmatch 'lmx_node_new_owned' -or $rootL1 -notmatch 'lmx_method_new_owned' -or $rootL1 -match 'c\.malloc\(c\.sizeof\(c\.Lmx(Method)?\)\)|lmx_range_register\(|lmx_classify\(leaf') { throw 'Root/METHOD storage still uses raw or global admission' }
     & $l1trans "$out/program.lm1" "$out/program.c" *> "$out/program.c.log"
     Assert-RootExit 'L1_to_C'
     $rootObjects = @(Get-L2MessageObjects)
@@ -49,11 +50,11 @@ try {
     Assert-RootExit 'program_object'
     & $l1trans 'l2src/tests/l2_message_root_driver.lm1' "$out/driver.c" *> "$out/driver.translate.log"
     Assert-RootExit 'driver_translate'
-    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
+    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','lmx_node_new_owned','lmx_method_new_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
     Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", '-Werror') + $rootWrap)
     $rootEvidence.stages += @{name='driver_link_real_message'; exit=0}
     $rootObjects = @(Get-L2MessageObjects)
-    if ($rootObjects.Count -ne 12) { throw 'Unexpected Message object set' }
+    if ($rootObjects.Count -ne 13) { throw 'Unexpected Message object set' }
     $rootBefore = @{}
     foreach ($obj in $rootObjects) { $rootBefore[$obj] = (Get-FileHash -LiteralPath $obj).Hash }
     # Ordinary generated-program linking exercises Invoke-Gcc's same cached
@@ -65,7 +66,7 @@ try {
     foreach ($obj in $rootObjects) {
         if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "Cached object changed: $obj" }
     }
-    foreach ($mode in 0..8) {
+    foreach ($mode in 0..12) {
         & "$out/driver.exe" $mode *> "$out/mode_$mode.log"
         Assert-RootExit "mode_$mode"
         $line = Get-Content -LiteralPath "$out/mode_$mode.log" -Raw

@@ -1,0 +1,68 @@
+predef: "l2src/lmx_value_owned.h.lm1"
+include: "<stdlib.h>"
+
+# Internal allocation for the two concrete layouts below, not source-level
+# arbitrary type admission. sizeof(T) preserves T's alignment at this offset.
+# The embedded range is removed before Message cleanup frees its allocation.
+fn: lmx_value_allocate_owned (size_t: stride; int: kind; int: type; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: void
+    size_t: offset c.sizeof(c.LmxOwnedRange)
+    size_t: padding
+    size_t: bytes
+    @: char allocation
+    @: void value
+    @: LmxMsgBlock prepared_blocks
+    @: LmxOwnedRange prepared_ranges
+    if: blocks = 0 || ranges = 0 || stride = 0U
+        return: 0
+    padding: (stride - (offset % stride)) % stride
+    if: offset > ((cast: (size_t) -1) - padding)
+        return: 0
+    offset: offset + padding
+    if: stride > ((cast: (size_t) -1) - offset)
+        return: 0
+    bytes: offset + stride
+    prepared_blocks: (cast: (@: LmxMsgBlock) c.malloc(c.sizeof(c.LmxMsgBlock)))
+    if: prepared_blocks = 0
+        return: 0
+    allocation: (cast: (@: char) c.malloc(bytes))
+    if: allocation = 0
+        c.free(prepared_blocks)
+        return: 0
+    value: (cast: (@: void) (allocation + offset))
+    prepared_ranges: (cast: (@: LmxOwnedRange) allocation)
+    prepared_ranges\lo: value
+    prepared_ranges\hi: (cast: (@: void) (allocation + bytes))
+    prepared_ranges\stride: stride
+    prepared_ranges\kind: kind
+    prepared_ranges\type: type
+    prepared_ranges\next: 0
+    prepared_blocks\base: (cast: (@: void) allocation)
+    prepared_blocks\n: bytes
+    prepared_blocks\class: (cast: (unsigned) type)
+    prepared_blocks\dispose: 0
+    prepared_blocks\next: 0
+    if: lmx_msg_storage_move_all(blocks, ranges, @ prepared_blocks, @ prepared_ranges) != c.LMX_MSG_STORAGE_OK
+        c.free(allocation)
+        c.free(prepared_blocks)
+        return: 0
+    return: value
+
+# Initial root construction, not reparenting of an existing occurrence.
+fn: lmx_node_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: Lmx
+    @: Lmx value (cast: (@: Lmx) lmx_value_allocate_owned(c.sizeof(c.Lmx), c.LMX_KIND_CHILDREN, c.LMX_TYPE_BRANCH, blocks, ranges))
+    if: value != 0
+        value\node: 0
+        value\len: 0U
+        value\data: 0
+    ---
+    return: value
+
+# The caller fills addr/sig before publishing this fresh entry into the graph.
+# Existing callable records are not mutable through this construction API.
+fn: lmx_method_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxMethod
+    @: LmxMethod value (cast: (@: LmxMethod) lmx_value_allocate_owned(c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD, blocks, ranges))
+    if: value != 0
+        value\addr: 0
+        value\sig: 0U
+    ---
+    return: value

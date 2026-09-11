@@ -1,5 +1,5 @@
-Generated unit root binding and owned branch construction
-========================================================
+Generated unit root binding and owned graph construction
+=======================================================
 
 l2trans's graph-unit path emits a synthetic l2_program_entry adapter and an
 outer native main. Before constructing the unit, main creates one local Message
@@ -13,7 +13,7 @@ lookup failure paths also release any successfully created runtime once.
 
 run_l2trans links generated Message-using programs against real Message support,
 never lmx_poll_stub. The translator and unrelated old harness programs keep the
-stub where needed. Headers/modules are translated once and twelve support
+stub where needed. Headers/modules are translated once and thirteen support
 objects compiled once per runner invocation/source snapshot/flags. The same
 objects serve compatible subsequent programs. No cross-run stale object cache.
 BuildOnly exposes the existing translator build and functions without executing
@@ -82,16 +82,56 @@ output were inspected. The first setup compile exposed an undeclared uchar alias
 in the new helper; it now uses standard char byte arithmetic. A direct L1 syntax
 check also corrected test aggregate declarations before the complete run.
 
+Owned root and METHOD checkpoint, 2026-09-11
+------------------------------------------
+lmx_value_owned.h.lm1/.lm1 adds fresh typed construction with existing Lmx and
+LmxMethod layouts. lmx_node_new_owned admits a zero-initialized root occurrence;
+lmx_method_new_owned admits an initially empty METHOD record, which its caller
+fills before publishing into the graph. These are construction APIs under
+exclusive owner access, not ways to mutate existing callable records.
+
+Like branch construction, each prepares a nonmoving payload with embedded range
+metadata plus a separately free-compatible block node. The payload offset is a
+multiple of the concrete type's size. Null owner slots and size overflow reject
+before allocation. Allocation/admission failure releases temporary allocations
+and preserves both owner list heads. The public header exposes only the two
+concrete constructors, not arbitrary runtime type admission.
+
+Generated unit and METHOD construction now use these owner-head APIs instead
+of raw malloc/global registration. METHOD publication no longer consults the
+global classifier. After an initial branch failure, the outer Message cleanup
+releases the already-owned root; no raw free(unit) remains. Ordinary completion
+also releases root/METHOD allocations through Message storage. Lexical node and
+source-method ABI are unchanged. Stable typed addresses/range metadata travel
+together through existing storage_move_all; no owner lookup is introduced.
+
+Verified against core 06424214eab3a15608802acd9b1304b671cf3bea:
+  build/codex/l2_message_root/20260911_193110_073_49a8d116/evidence.json
+One private build with five current overlays, thirteen cached support objects,
+27 stages and 325 assertions across thirteen modes:
+46/5/11/11/11/38/21/22/58/12/13/39/38. Both malloc sites of both new constructors
+were fault-injected, including root failure before binding and METHOD failure
+after binding. Owner-local classification, null input, malformed destination,
+temporary cleanup, retry, storage transfer with unchanged node/address/payload,
+and one-time release of every tracked root/METHOD/branch allocation were checked.
+Mode4 still covers the remaining legacy range initialization failure; mode5 now
+explicitly targets first METHOD allocation. Earlier branch contract tests remain.
+Normal exit=1; splice output7/exit0; nested for-body output0 then9/exit0. One
+translator and unchanged support-object hashes served all compatible programs.
+Strict C99/default flags, driver -Werror; no extra optimization flag. Generated
+new helper/header, entry adapter and wrapping code were inspected. No full
+historical suite, stable replacement or completed self-hosting is claimed.
+
 Remaining limitations (not fixed or blessed by these checkpoints)
 ---------------------------------------------------------------
 The generated predefs still use the legacy lmx_range_table and primitive pools
-for primitive/METHOD payloads. The separately malloc'ed unit occurrence itself
-also still needs owner admission and complete normal-path release; construction
-failure before binding now frees that occurrence. Only the CHILDREN blocks have
-been migrated here. Binding the root is NOT evidence of full graph collectibility
-or complete allocation cleanup. Root occurrence, primitive and METHOD storage
-are the next constructor slice. This checkpoint adds no owner-link, TLS owner
-lookup, global registry, arena relocation or scheduler.
+for primitive payloads, and the adapter still initializes that legacy range
+catalog. Primitive storage/read/write migration is the next constructor slice;
+there is no claim that all remaining generated global state or allocations are
+gone. Root/METHOD/CHILDREN owner admission is NOT evidence of complete graph
+collectibility, reference-ARRAY admission or full allocation cleanup. These
+checkpoints add no owner-link, TLS owner lookup, global registry, arena relocation
+or scheduler.
 It does not make the generated main a scheduled/bound turn, implement full
 delivery/merge, or establish completed L2 self-hosting. The older leaf-adapter
 translation path is also separate from graph-unit emission.

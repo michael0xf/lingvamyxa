@@ -1,0 +1,9 @@
+include: "l2src/lmx.h"
+predef: "l2src/lmx_msg_storage.h.lm1"
+
+# Fresh, unexposed entries in one exclusively held Message's storage.
+# Owner head slots obey storage_move_all's distinct/live-slot preconditions.
+prototype:
+    fn: lmx_node_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: Lmx
+    fn: lmx_method_new_owned (@@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) @: LmxMethod
+end: prototype

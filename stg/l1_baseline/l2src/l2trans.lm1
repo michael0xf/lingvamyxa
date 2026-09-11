@@ -6918,7 +6918,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_need_own != 0 && c.fputs("predef: \"l1src/own.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: c.fputs("predef: \"l2src/lmx_branch_owned.h.lm1\"\ninclude: \"l2src/lmx.h\" \"l2src/lmx_message.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"", l2_out) < 0
+    if: c.fputs("predef: \"l2src/lmx_branch_owned.h.lm1\" \"l2src/lmx_value_owned.h.lm1\"\ninclude: \"l2src/lmx.h\" \"l2src/lmx_message.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_need_p0 != 0 && c.fputs(" \"l1src/p0.lm1.h\"", l2_out) < 0
@@ -7130,10 +7130,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_has_own_ty(0) != 0 && c.fputs("        if: lmx_int_init() != 0\n            return: 1\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: c.fprintf(l2_out, "        unit: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))\n        if: unit = 0\n            return: 1\n        lmx_cell_init(unit, 0, 0)\n        if: lmx_branch_open_owned(unit, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            c.free(unit)\n            return: 1\n", kids) < 0
+    if: c.fprintf(l2_out, "        unit: lmx_node_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: unit = 0\n            return: 1\n        if: lmx_branch_open_owned(unit, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n", kids) < 0
         c.fclose(l2_out)
         return: 1
-    if: c.fputs("        # Children are Message-owned; primitive/METHOD pool migration is separate.\n        c.lmx_msg_set_graph(process_message, unit)\n", l2_out) < 0
+    if: c.fputs("        # Root/children/METHOD storage is Message-owned; primitive pools follow.\n        c.lmx_msg_set_graph(process_message, unit)\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     k: 0
@@ -7180,13 +7180,13 @@ fn: l2_emit_unit (const: @(char out_path)) int
     ---
     i: 0
     while: i < l2_m_n
-        if: c.fputs("        rec: (cast: (@: LmxMethod) c.malloc(c.sizeof(c.LmxMethod)))\n        if: rec = 0\n            return: 1\n        rec\\addr: (cast: (LmxEntry) ", l2_out) < 0
+        if: c.fputs("        rec: lmx_method_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: rec = 0\n            return: 1\n        rec\\addr: (cast: (LmxEntry) ", l2_out) < 0
             c.fclose(l2_out)
             return: 1
         if: l2_write_sym(l2_out, i) != 0
             c.fclose(l2_out)
             return: 1
-        if: c.fprintf(l2_out, ")\n        rec\\sig: %uU\n        if: lmx_range_register((cast: (@: void) rec), (cast: (@: void) (rec + 1)), c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0\n            return: 1\n        leaf: lmx_branch_child_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n        leaf\\data: (cast: (@: void) rec)\n        if: lmx_classify(leaf\\data) != c.LMX_KIND_METHOD\n            return: 1\n        if: rec\\sig != %uU\n            return: 1\n        if: leaf\\node != unit\n            return: 1\n", l2_m_sig[i], (cast: (unsigned) (l2_unit_base + i)), l2_m_sig[i]) < 0
+        if: c.fprintf(l2_out, ")\n        rec\\sig: %uU\n        leaf: lmx_branch_child_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n        leaf\\data: (cast: (@: void) rec)\n        if: rec\\sig != %uU\n            return: 1\n        if: leaf\\node != unit\n            return: 1\n", l2_m_sig[i], (cast: (unsigned) (l2_unit_base + i)), l2_m_sig[i]) < 0
             c.fclose(l2_out)
             return: 1
         i: i + 1
