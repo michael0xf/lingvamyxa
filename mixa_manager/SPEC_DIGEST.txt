@@ -368,7 +368,68 @@ prologue goes further and emits a `for` handle only when some used field
 actually belongs to it (the `hu` test at 7020-7029), so even a `for` is reified
 at runtime only when it has something to hold.
 
-6.1.3. Open question worth putting to Codex
+6.1.3. Cost of generalising the host mechanism - measured, not guessed
+
+Asked how hard a later extension would be, given the mechanism already exists
+for methods and loops.
+
+CHEAP, and more so than it looks. The host table is ALREADY GENERIC:
+
+    l2_for_find(node) compares a plain LmP0Node pointer - nothing in the table
+      is for-specific, only its name
+    8 of 72 l2_for_* references are actual for-SYNTAX guards (l2_for_cstyle,
+      end-named "for"). The other ~89% is generic host machinery.
+    l2_scope_has walks the WHOLE scope stack, so arbitrary lexical nesting is
+      already resolved correctly for name lookup
+
+So "let another frame kind host fields" is: relax eight guards, push a scope for
+that kind, rename the table. Small.
+
+EXPENSIVE, and none of it is about naming:
+
+    CONDITIONAL EXISTENCE. A `for` handle is materialised in the prologue
+      unconditionally. An `if` body may never execute. Either nodes appear for
+      branches that never ran, or handle resolution becomes lazy - and the lazy
+      path today (6746/6788) exists only for aliased fields. Generalising it
+      costs the property that makes this model easy to reason about: one restore
+      point, at entry.
+
+    THE LAYOUT IS FLAT AND POSITIONAL. Every host takes an index from one
+      counter under node (4058-4063), so a `for` inside a `for` is its SIBLING
+      in the graph, not its child. A real parent chain is a small table change.
+      The indices are the problem: they are positional integers baked into the
+      emitted lmx_branch_child(node, 7U). Any new host kind renumbers
+      everything. Irrelevant while graphs are rebuilt each run - and not
+      irrelevant once a graph outlives the code that wrote it, which is the
+      Message world of transferred blocks with stable addresses and adopted
+      failed arenas (section 8). Positional layout plus persisted graphs is a
+      combination to settle before, not after.
+
+    `if` IS NOT ONE STRUCTURE. One construct, two or more bodies, with `else` a
+      SIBLING field in the parse tree. The scope stack holds one node per push,
+      so hosting would have to push bodies rather than statements - changing
+      what l2_own_host means, across its 24 references.
+
+6.1.4. But "persist every structure" is a different question, not a bigger one
+
+Mikhail's own observation is the strongest argument here: ARGUMENT structures
+are not in the graph either. That is not an oversight, it is the line the spec
+draws - 21.5 puts own fields in C working locals and declared/dynamic values in
+the activation. The graph holds what must SURVIVE A TURN; the activation holds
+what must not.
+
+By that rule the current behaviour is already coherent: a structure gets a node
+when it hosts state that outlives the turn, and `for` qualifies only because a
+field can be declared in it. An `if` body has no such state - unless someone
+declares a field there, and whether that should mean anything is the actual
+question.
+
+So the decision worth making is not "can if be supported" but "what belongs in
+the graph". If the rule above is the rule, writing it down turns "unsupported
+own declaration" from a limitation into a statement of the model - and the
+extension cost above stops being a roadmap item at all.
+
+6.1.5. Open question worth putting to Codex
 
 Is this a decision or a limitation? The wording in the generated notes is
 "Nested if own-decl is UNSUPPORTED own declaration", and "unsupported" reads
