@@ -99,17 +99,21 @@ Similarly, a native wake and a semantic Message are not mutually exclusive alter
 
 A UI-associated parent can delegate work to a child Message. That child can manage its own worker children using another scheduling implementation, even if the child's own turns are executed by its parent.
 
-For example, a copy-job Message owns job state and worker relationships. Workers report progress and results through messages; the job owner updates its own records. The UI processes its own turns independently of workers mapped onto other execution threads.
+For example, a copy-job Message owns job state and worker relationships. Workers can report progress and result data through messages; the job owner updates its own records. For local completion alone, the parent observes the child's Message-owned success flag instead of requiring a redundant reply. The UI processes its own turns independently of workers mapped onto other execution threads.
 
 The scheduler does not invent the application's completion meaning. For a copy request, completion means the copy completed; for a delivery request, it means the specified delivery completed. Enqueuing a request is not that semantic result.
 
-A handler must also respect the existing staging/publication rules: merely staging a request and then blocking for a reply does not make the request visible. Protocols must allow their completion messages to be admitted and processed. This is not a reason to require a new global scheduler or an implicit `await` transformation.
+A handler must also respect the existing staging/publication rules: merely staging a request and then blocking does not make the request visible. Protocols must allow result delivery and local completion observation to progress. This is not a reason to require a new global scheduler or an implicit `await` transformation.
 
 ## 8. Local lifetime and address depth
 
 Parents manage direct children; children manage their descendants. Normal closure propagates through that responsibility. Automatic child-to-parent liveness polling and cooperative end-turn closure retain their agreed roles. They do not require a process-wide scan.
 
-The default probe originates at the child, but timeout supervision is symmetric. The child waits for its parent's response and requests its own orderly close after prolonged silence. The parent may track expected communication from the child, including its periodic queries, and request that child's orderly close if those cease. No second automatic probe stream is necessary. Each side owns its expectation and deadline state; lack of a response is not proof of death or completion. An unresponsive handler that cannot reach end-turn still requires the exceptional failure path, not a claim that cooperative closure has already finished.
+The default liveness probe originates at the child. The parent checks direct-child control state during each own turn and maintains a deadline for each child; this is not a second stream of polling Messages. Lack of communication is not proof of death or completion.
+
+Every Message, including one with no executing thread, owns running=1 and success=0 control flags independently of its arena. Completing its assigned operation sets success=1 then running=0; the parent removes the completed child from active assignment tracking without needing a separate local completion reply. An emergency timeout only clears running. On observing zero, instrumented execution escapes to its own L3 execution root, which first clears running for its direct children and then cleans up its own arena. Each child does likewise; no ancestor scans grandchildren. A nonexecuting Message is cleaned up by its owning executor without launching a user turn.
+
+Checks occur at method entry, loop backedges and method exit, at safe escape points. Relaxed atomic flag accesses are permitted only with verified identical instructions to the same uint_fast8_t volatile accesses on the selected target/compiler/options; no extra lock, fence, read-modify-write or helper call. This does not interrupt an uninstrumented native hang. Neither running=0 nor success=1 proves that foreign execution or cleanup has finished; success=0 is not proof of failure. Control lifetime remains separate from arena lifetime, and the executor cleaning its own arena needs no acknowledgement from itself. See the current specification for the authoritative contract.
 
 A finished child's arena must be reclaimable independently of unrelated live family members. In-flight sends and retained recipient capabilities still require safe control-state lifetime handling. Keeping all contexts until a global runtime is destroyed is not the target solution.
 

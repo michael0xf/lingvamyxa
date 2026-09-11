@@ -11161,7 +11161,9 @@ time, consuming at most one admitted input per turn. Serial turns make ordinary
 mutation of its arena safe without a source-visible lock.
 
 Each live Message context owns that mailbox, a parent capability (except the root),
-and the list of its direct children. Supervision is local to that list.
+and the list of its direct children. Supervision is local to that list. Message
+control flags (running, success; 19.29.7.1) belong to the Message independently of
+its arena and physical execution mapping; they do not expose foreign graph data.
 Parent/child are not the only send recipients: explicit addressed send uses a
 capability the sender already holds. Incoming payload is not a new L3 Thread;
 only an explicit launch creates a child with its own arena.
@@ -12369,7 +12371,9 @@ such a poll remains exceptional and is not a completed safe reclaim.
 Automatic parent-liveness polling has one direction: child to
 parent. The child's end_turn is the check/send opportunity; a host
 timer/cadence may throttle it to less often. A parent does not
-automatically poll its children. This is only the automatic
+automatically send polling Messages to its children; inspecting their local
+Message control flags during its own turns is permitted and required by the
+completion mechanism below. This is only the automatic
 lifecycle/liveness mechanism. It does not restrict ordinary
 Messages: any participant may send to any recipient, including an
 explicit parent-to-child status query or peer-to-peer traffic, with
@@ -12389,12 +12393,21 @@ probe stream and no global monitor. Both sides keep their own expectation and
 deadline state. Timeout means lack of the expected communication, not proof of
 death or successful completion; cooperative close remains an end_turn action.
 
-Emergency cancellation polls (native execution profile)
-------------------------------------------------------
-Each executing Message has one control flag, initially running=1. An emergency
-cancellation request changes it to 0 for that incarnation; it does not reset the
-same flag to revive cancelled execution. This is not successful completion and
-does not require the executing turn to reach its ordinary end_turn.
+Message control flags and cancellation polls
+-------------------------------------------
+Every Message has running=1 and success=0 initially, including a Message without
+an executing thread. These uint_fast8_t control flags belong to the Message, not
+to its payload arena. running means permission to continue, not that an OS thread
+currently exists. Zero requests closure for that incarnation; it is not reset to
+revive it. Both normal completion and emergency cancellation use running=0.
+Only actual completion of the assigned operation sets success=1. A cancellation
+request does not manufacture success and need not wait for ordinary end_turn.
+
+The parent's scheduler checks its direct children's control state on each own
+turn and maintains their individual liveness deadlines. It need not send a
+separate Message to read that state. On an emergency deadline it sets the child's
+running=0 without synchronously waiting or freeing the child's arena. Existing
+wait/wake support must ensure an idle executor can observe the request.
 
 Generated code checks the flag on method entry before loading used own fields,
 on loop backedges, and on method exit. On observing 0 it aborts to the execution
@@ -12407,26 +12420,37 @@ The fast path is an ordinary flag load and test. A backend may use relaxed atomi
 load/store for uint_fast8_t ONLY when its target/compiler/options produce the
 same executable instructions as ordinary volatile load/store of that type; no
 additional lock, read-modify-write, fence or helper call is permitted for this
-flag access. Verify this equivalence for the selected target, not by assumption.
+flag access, including success. Verify this equivalence for the selected target,
+not by assumption.
 If it fails, report the unsupported fast path instead of silently substituting
 a more expensive operation or claiming a portable volatile threading guarantee.
 No immediate observation or fixed cancellation latency is promised.
 
-The execution root may clean up and free its own arena after discarding its
-activations and settling native operations that still use that memory. It does
-not wait for an acknowledgement from itself. Independently executing children
+On closing, the Message's execution root first sets running=0 on its direct
+children, then cleans up its own arena after discarding its activations and
+settling native operations that still use that memory. Each child applies the
+same rule to its own children; no ancestor traversal of grandchildren is needed.
+The root does not wait for an acknowledgement from itself. Independently executing children
 must reach their own exit before their arenas are reclaimed. A foreign observer
 must not infer that exit from writing running=0. The flag/control storage must
 outlive possible observers/writers even when the Message's arena is freed.
+For a nonexecuting Message, its owning executor applies the close/cleanup path
+without starting a new user turn or allocating a dedicated OS thread. Closing
+the original Message does not free payload blocks already transferred to a
+recipient's arena under the ordinary ownership-transfer rules.
 
 A sleeping executor needs an existing wake or bounded wait that reaches the
 check. Polling does not interrupt a stuck uninstrumented native call. It also
 does not let a parent timer execute while that same physical thread is trapped
 inside its child's call. Arbitrary OS-thread termination is not this mechanism.
 
-Completion is a separate ordinary Message from a liveness query.
-When the child finishes its assigned operation, it sends completed
-(выполнено) to the parent, correlated to that assignment.
+Completion (success / выполнено) is distinct from liveness. When the child
+finishes its assigned operation, it sets success=1 and then running=0. This also
+applies to a delivery-only Message with no executing thread; its executor marks
+the completed delivery. The parent's control-state check observes success and
+removes the child from active assignment/liveness tracking. No separate local
+completed reply Message is required. Child closure and independent control-block
+retirement continue normally; removing active tracking must not free live state.
 Explanatory notation, not invented source syntax:
 Deliver(Message, target) completes when that delivery finishes;
 CopyFile(source, target) completes when that file copy finishes.
@@ -12434,19 +12458,19 @@ Enqueueing or staging a copy request is not completion of CopyFile.
 A delivery-only child is not required to finish unrelated downstream
 execution that was not its assignment. A liveness response (alive)
 is not completion and does not end the parent's result tracking.
-Failure and cancellation remain distinct outcomes, not fabricated
-success. The parent tracks results; it does not automatically poll
-its children and there is no parent-polls-until-completed protocol.
-Receiving completed settles the correlated assignment's result tracking; it is
-not by itself proof that the child's native activations and arena are gone.
-Removing result tracking and retiring the child's delivery/lifecycle control
-are distinct operations. A result notification alone does not authorize the
-parent to free memory still used by the child.
+Failure and cancellation remain distinct outcomes, not fabricated success.
+success=0 means that success has not been observed, not proof of failure, even
+when running=0. Observers must not rely on an indivisible snapshot or immediate
+visibility of both flags, nor infer arena reclamation from either value. Result
+payloads still follow ordinary publication/ownership rules; these flags are not
+permission to read another Message's graph. Ordinary result/progress Messages
+remain available when they carry data; a redundant local completion-only reply
+is not required. Remote delivery must transport the corresponding outcome; local
+control flags do not imply shared memory across machines.
 
-Those protocol Messages are ordinary LMX text, not a new parser
-intrinsic. The number/bytes prototype implements child-side parent
-poll as a helper (`lmx_msg_poll` / `lmx_msg_drive`); it does not
-yet emit short liveness or completed Messages.
+Liveness/progress protocol Messages remain ordinary LMX text, not new parser
+intrinsics. The number/bytes prototype's `lmx_msg_poll` / `lmx_msg_drive` helpers
+are not evidence that this Message-owned control/closure replacement is complete.
 
 This is a trusted serialized in-process prototype, not the completed
 language security/supervision boundary. Header:
