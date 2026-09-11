@@ -1415,8 +1415,11 @@ return: c.LMX_MSG_OK
 
 fn: lmx_msg_complete (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     @: LmxMsg m
-    if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
-        return: c.LMX_MSG_INVALID
+    if: c.lmx_msg_exec_holding_turn(rt, who) = 0
+        if: c.lmx_msg_host_is_owner(rt) = 0 || c.lmx_msg_exec_holding_any(rt) != 0
+            return: c.LMX_MSG_INVALID
+        ---
+    ---
     c.lmx_msg_exec_lock(rt)
     m: lmx_msg_find(rt, who)
     if: m = 0
@@ -1424,6 +1427,7 @@ fn: lmx_msg_complete (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         return: c.LMX_MSG_INVALID
     c.lmx_msg_success_store(m, 1)
     c.lmx_msg_running_store(m, 0)
+    m\closing: 1
     c.lmx_msg_exec_unlock(rt)
     c.lmx_msg_exec_ready(rt, who)
 return: c.LMX_MSG_OK

@@ -1046,10 +1046,16 @@ fn: main () int
     st: lmx_msg_end_turn(lct, lcp, 1)
     st: lmx_msg_stop(lct, lcp, lcp)
     st: lmx_msg_end_turn(lct, lcp, 1)
-    if: lmx_msg_inbox_n(lct, lcu) < 1
+    if: lmx_msg_inbox_n(lct, lcu) != 1
         c.printf("transferred payload lost on source close\n")
         fail: fail + 1
     ---
+    st: lmx_msg_recv(lct, lcu, got)
+    if: st != c.LMX_MSG_OK || got\n != 4U || got\bytes = 0 || got\bytes[0] != payload[0] || got\bytes[1] != payload[1] || got\bytes[2] != payload[2] || got\bytes[3] != payload[3]
+        c.printf("transferred payload bytes\n")
+        fail: fail + 1
+    ---
+    lmx_msg_env_release(got)
     lmx_msg_runtime_delete(lct)
     lmx_msg_runtime_delete(lrt4)
     lmx_msg_runtime_delete(lrt5)

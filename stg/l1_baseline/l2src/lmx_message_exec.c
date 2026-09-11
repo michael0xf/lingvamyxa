@@ -191,6 +191,7 @@ int lmx_msg_emergency_cancel(LmxMsgRuntime *rt, LmxMsgAddr who) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_running_store(m, 0);
+    m->closing = 1;
     lmx_msg_exec_unlock(rt);
     lmx_msg_exec_ready(rt, who);
     return LMX_MSG_OK;
@@ -1095,6 +1096,7 @@ static int run_one(LmxMsgRuntime *rt, LmxMsgExecBind *snap) {
     lmx_msg_exec_lock(rt);
     m = msg_at_addr(rt, snap->addr);
     if (m != 0 && lmx_msg_running_load(m) == 0) {
+        m->closing = 1;
         lmx_msg_exec_unlock(rt);
         st = 0;
         lmx_msg_end_turn(rt, snap->addr, 0);
