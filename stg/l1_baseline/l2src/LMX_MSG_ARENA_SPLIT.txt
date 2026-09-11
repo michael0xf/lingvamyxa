@@ -12,11 +12,14 @@ Codex 122000 (until Codex completion notice)
   lmx_range.lm1  lmx_pool.lm1  lmx_pool_selftest.lm1
   Grok will not edit these.
 
-Codex proposed arena module (NEW files only; wait for this agreement)
-  l2src/lmx_msg_blocks.h
+Codex proposed arena module (NEW files only)
+  l2src/lmx_msg_blocks.h.lm1   /* authored L1 header; generated .lm1.h */
   l2src/lmx_msg_blocks.lm1
-  isolated tests under build/codex/ (not build/l2)
+  l2src/tests/lmx_msg_blocks_selftest.lm1  /* checked in with the stage */
+  generated C/exe/logs stay in build/codex/ (not build/l2, not authored .h)
   Do not edit lmx_message* or lmx.h.
+  Not yet graph-range registration or failure-root integration.
+  Helper cannot prove no escaped aliases or native users.
 
 Storage API (no policy, no Message flags, no scheduler)
   LmxMsgBlock:

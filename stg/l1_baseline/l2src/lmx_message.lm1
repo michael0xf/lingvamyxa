@@ -982,11 +982,35 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     @: LmxMsgCopy n
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK || out = 0
         return: c.LMX_MSG_INVALID
-    c.lmx_msg_exec_lock(rt)
     m: c.lmx_msg_turn_self(rt)
-    if: m = 0 || m\addr != who
-        m: lmx_msg_find(rt, who)
+    if: m != 0 && m\addr = who
+        c.lmx_msg_mail_lock(m)
+        n: lmx_msg_q_pop(@ m\inbox, @ m\inbox_tail)
+        c.lmx_msg_mail_unlock(m)
+        if: n = 0
+            return: c.LMX_MSG_EMPTY
+        ---
+        c.lmx_msg_exec_lock(rt)
+        out\id: n\id
+        out\correlation: n\correlation
+        out\reply_to: n\reply_to
+        out\kind: n\kind
+        out\number: n\number
+        out\n: n\n
+        out\bytes: n\bytes
+        n\bytes: 0
+        m\exec_id: n\id
+        m\exec_corr: n\correlation
+        m\exec_from: n\from
+        m\exec_reply: n\reply_to
+        m\exec_live: 1
+        m\last_beat: c.lmx_msg_now(rt)
+        lmx_msg_copy_free(n)
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_OK
     ---
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
