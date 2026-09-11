@@ -1,0 +1,53 @@
+Message / arena split (121650)
+==============================
+
+Grok files (do not overlap)
+  lmx_message.lm1  lmx_message.h
+  lmx_message_exec.c  lmx_message_exec.h
+  lmx_message_host.c
+  lmx_message_selftest.lm1  lmx_message_exec_selftest.c
+  run_lmx.ps1  LMX_MSG_CONTEXT_V0.txt  LMX_MSG_ARENA_SPLIT.txt
+
+Codex 122000 (until Codex completion notice)
+  lmx_range.lm1  lmx_pool.lm1  lmx_pool_selftest.lm1
+  Grok will not edit these.
+
+Codex proposed arena module (NEW files only; wait for this agreement)
+  l2src/lmx_msg_blocks.h
+  l2src/lmx_msg_blocks.lm1
+  isolated tests under build/codex/ (not build/l2)
+  Do not edit lmx_message* or lmx.h.
+
+Storage API (no policy, no Message flags, no scheduler)
+  LmxMsgBlock:
+    void *base
+    size_t n
+    unsigned class          /* type/range class; not a source flag */
+    void (*dispose)(void *base, size_t n)  /* 0 means free(base) */
+    LmxMsgBlock *next
+
+  int lmx_msg_blocks_push(LmxMsgBlock **head, LmxMsgBlock *node)
+      node is already allocated; list is nonmoving; node addresses stay valid
+
+  int lmx_msg_blocks_move_all(LmxMsgBlock **dst, LmxMsgBlock **src)
+      splice src onto dst; *src = 0; no allocation; internal pointers unchanged
+
+  int lmx_msg_blocks_dispose_all(LmxMsgBlock **head)
+      exactly-once dispose/free of each payload then the node; *head = 0
+      empty head is a no-op
+
+Who may call (Grok policy, in lmx_message*)
+  Only adopt_failed / transfer_adopted / dispose_child after
+  lifecycle_authority, handoff-ready, native_users==0, running==0,
+  and every direct child disposed. Grok keeps LmxAdopted as a
+  transitional adapter until those three sites switch to this API.
+  Grok will not add a second arena module.
+
+Must not
+  Global lock, process-wide range table as Message ownership,
+  lmx_range.lm1 mutable globals as the Message block list,
+  changing source-language policy for the old pool/range prototype.
+
+lmx_range/pool issue Codex reproduced (stale range after release)
+  Independent of Message lists. Codex 122000 may fix unregister-
+  before-free in those three files only.

@@ -983,7 +983,10 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK || out = 0
         return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: c.lmx_msg_turn_self(rt)
+    if: m = 0 || m\addr != who
+        m: lmx_msg_find(rt, who)
+    ---
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID

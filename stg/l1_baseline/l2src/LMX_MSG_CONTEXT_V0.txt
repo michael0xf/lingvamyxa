@@ -114,8 +114,10 @@ Current deviations (EXEC / mailbox prototype)
 Do not claim the previous global-table runtime complied.
 
   D1. LmxMsgRuntime.tab[] + lmx_msg_find by integer addr.
-      Bind stores LmxMsg* for take_this; send/recv/create still
-      find. Capability send is not the only path.
+      Bind stores LmxMsg* for take_this; send/create still find.
+      recv uses lmx_msg_turn_self when the turn Message matches
+      who, else find. See LMX_MSG_ARENA_SPLIT.txt for Codex
+      block-list module (Grok does not implement a second one).
   D2. request_children_close walks the direct-child list.
       end_turn / poll(0) may still scan tab.
   D3. EXEC ready queue + nworkers pool (`lmx_msg_exec_start`)

@@ -326,6 +326,13 @@ LmxMsg *lmx_msg_slot_new(void) {
     return m;
 }
 
+LmxMsg *lmx_msg_turn_self(LmxMsgRuntime *rt) {
+    if (rt == 0 || lmx_turn_msg == 0 || lmx_turn_msg->owner_rt != rt) {
+        return 0;
+    }
+    return lmx_turn_msg;
+}
+
 void lmx_msg_mail_lock(LmxMsg *m) {
 #if defined(_WIN32)
     if (m != 0 && m->mail != 0) {
