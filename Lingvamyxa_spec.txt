@@ -11210,6 +11210,11 @@ queries and requests its own orderly close after sustained lack of response.
 Scheduling direct children is an additional responsibility of that mechanism.
 One implementation may be reused by all running Messages with separate local
 state; neither distinct scheduler code nor a dedicated OS thread is required.
+Terminology: child-turn scheduling selects execution of direct children's turns;
+self-maintenance handles a Message's own timers, liveness and orderly shutdown.
+These are roles of its local mechanism, not two required services. "A Message
+schedules itself" refers to self-maintenance; it does not bypass the parent's
+execution mapping or give a parent control over grandchildren.
 
 A Message need not be executing. A running L3 Thread is a logical serial
 execution lane, not a promise of a dedicated OS thread. Physical workers are
@@ -12226,7 +12231,7 @@ order and non-overlapping own turns remain required.
 
 19.29.7. Message Boundary
 
-Revision 2 requires every cross-Message graph transfer, sharing or serialization
+Revision 2 requires every cross-Message graph transfer or serialization
 to be an explicit operation whose lifetime policy covers all Lmx pointers and
 address-domain payloads involved. A raw mutable pointer into reclaimable storage
 must not silently cross the boundary. Ordinary incoming LMX text is
@@ -12237,14 +12242,17 @@ transferable: a running sender cannot also keep using it through mutable aliases
 An explicit copy, merge, materialization or transport/codec contract may allocate
 fresh state; this is not a runtime choice to clone ordinary delivery. Activation preserves
 the activated Message's existing arena. Explicit launch of received
-text as a separate L3 child gives that child its own arena. Joining
-an already-running Message's live arena is legal only when it leaves
-one logical owning arena and no concurrently active source owner.
+text as a separate L3 child gives that child its own arena. Storage from a
+formerly running Message may be adopted only after it is non-executing and
+handoff-safe. A running Message is not transferred to another parent/supervisor.
 
 A delivery address/capability is not a graph reference into another Message's
 mutable arena. Adoption of a non-executing Message at the consuming end-turn
 transfers ownership into the receiver's one logical arena, with stable block
 addresses; it does not establish concurrent cross-arena graph access.
+This is transfer of delivered storage, not reparenting of an executing worker.
+For a delivery-only assignment, completion and removal from the former parent's
+active tracking follow 19.29.7.1 (Completion).
 
 Remote transport moves bytes under its selected codec contract, not physical
 RAM between computers. Received storage acquires one local owner without a
@@ -12257,6 +12265,16 @@ contract and is not automatic local arena adoption.
 This slice is the first explicit operation set for 19.29.7. It does not
 close graph-copy, adoption, join/splice, live-graph activation, or
 wire serialization; those remain individually deferred.
+
+A running Message keeps its parent/supervisor. Work moves through delivered
+Messages and newly issued assignments, not by reparenting a running Message.
+Reissuing an assignment is not transparent migration of its old activation.
+
+Distinguish two descriptions used below: envelope transport is the number/byte
+mailbox operation of this prototype; Message/arena delivery transfers the
+non-executing Message's storage to the receiver under 19.29.7. Envelope staging
+does not itself perform arena adoption or complete a delivery-only assignment.
+They are not two interchangeable implementations of ordinary arena delivery.
 
 Normative ordinary delivery (selected, not this prototype): incoming
 LMX text is added to the receiver's one logical arena with ownership
@@ -12356,6 +12374,9 @@ contracts; `spawn` here is English, not a new parser intrinsic):
         collide. Sender staging is not visible to the receiver;
         unpublished staged requests cannot be deduped by the
         destination.
+        This describes envelope transport, not a running Message moving to
+        this recipient. For Message/arena delivery and delivery-only assignment
+        completion, see 19.29.7 and Completion below (success/running).
 
     stop(destination) -> staging status
         Cooperative close request, transported as KIND_STOP. That
@@ -12599,6 +12620,12 @@ the completed delivery. The parent's control-state check observes success and
 removes the child from active assignment/liveness tracking. No separate local
 completed reply Message is required. Child closure and independent control-block
 retirement continue normally; removing active tracking must not free live state.
+A delivered Message, once its delivery-only assignment has completed and that
+tracking is removed, has no active supervising parent. Its delivered storage
+belongs to the receiver; the receiver does not become the old worker's new
+parent. Historical origin/path information may remain, but is not a live
+supervision relationship. An explicit later launch creates a child under the
+launching Message, with its own arena and assignment.
 Explanatory notation, not invented source syntax:
 Deliver(Message, target) completes when that delivery finishes;
 CopyFile(source, target) completes when that file copy finishes.
@@ -12642,8 +12669,8 @@ KIND_REJECTED is not an emitted API. The done[32] table is a cap
 provide
 
 Deferred operations (later slices, not implied by finishing 19.29.7.1):
-graph-copy and graph-reference retargeting; join/splice of already-running
-live arenas; codec/wire serialization; multi-owner split/link as
+graph-copy and graph-reference retargeting; join/splice of handoff-safe,
+non-executing storage; codec/wire serialization; multi-owner split/link as
 addressed request/result (not as FIFO atomicity); activation of an
 already-running Message; full incoming LMX-text/arena ownership
 transfer (selected in 19.28.R2.4/5 and 19.29.7, not implemented by
