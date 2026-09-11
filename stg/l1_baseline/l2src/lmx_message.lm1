@@ -4,6 +4,7 @@ prototype:
     fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
     fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
     fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
+    fn: lmx_msg_self_or_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
     fn: lmx_msg_child_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     fn: lmx_msg_child_at (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i) unsigned
     fn: lmx_msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
@@ -147,6 +148,14 @@ fn: lmx_msg_dest_from_src (@: LmxMsg src; LmxMsgAddr: to; @: LmxMsgRuntime rt) @
     ---
 return: lmx_msg_find(rt, to)
 
+fn: lmx_msg_self_or_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
+    @: LmxMsg m
+    m: c.lmx_msg_turn_self(rt)
+    if: m != 0 && m\addr = addr && m\state != c.LMX_MSG_STATE_RELEASED
+        return: m
+    ---
+return: lmx_msg_find(rt, addr)
+
 sub: lmx_msg_child_link (@: LmxMsg parent; @: LmxMsg child)
     if: parent = 0 || child = 0
         return
@@ -193,7 +202,7 @@ fn: lmx_msg_exec_is_runnable (@: LmxMsgRuntime rt; LmxMsgAddr: addr) int
     if: rt = 0 || addr = 0U
         return: 0
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, addr)
+    m: lmx_msg_self_or_find(rt, addr)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: 0
@@ -569,10 +578,7 @@ fn: lmx_msg_create (@: LmxMsgRuntime rt; LmxMsgAddr: parent; unsigned: create_id
     ---
     c.lmx_msg_exec_lock(rt)
     if: parent != 0U
-        p: c.lmx_msg_turn_self(rt)
-        if: p = 0 || p\addr != parent
-            p: lmx_msg_find(rt, parent)
-        ---
+        p: lmx_msg_self_or_find(rt, parent)
         if: p = 0
             c.lmx_msg_exec_unlock(rt)
             return: c.LMX_MSG_INVALID
@@ -663,11 +669,8 @@ fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: 
     if: env\n != 0U && node\bytes = 0
         c.free((cast: (@: void) node))
         return: c.LMX_MSG_NOMEM
-    src: c.lmx_msg_turn_self(rt)
     c.lmx_msg_exec_lock(rt)
-    if: src = 0 || src\addr != from
-        src: lmx_msg_find(rt, from)
-    ---
+    src: lmx_msg_self_or_find(rt, from)
     if: src = 0
         c.lmx_msg_exec_unlock(rt)
         lmx_msg_copy_free(node)
@@ -720,11 +723,8 @@ fn: lmx_msg_send_owned (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; @
     node\owned: 1
     env\bytes: 0
     env\n: 0U
-    src: c.lmx_msg_turn_self(rt)
     c.lmx_msg_exec_lock(rt)
-    if: src = 0 || src\addr != from
-        src: lmx_msg_find(rt, from)
-    ---
+    src: lmx_msg_self_or_find(rt, from)
     if: src = 0
         env\bytes: node\bytes
         env\n: node\n
@@ -824,7 +824,7 @@ sub: lmx_msg_request_children_close (@: LmxMsgRuntime rt; LmxMsgAddr: who)
     @: LmxMsg ch
     if: rt = 0
         return
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         return
     ch: m\first_child
@@ -846,7 +846,7 @@ fn: lmx_msg_end_turn (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: success) int
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
@@ -936,7 +936,7 @@ fn: lmx_msg_admit_one (@: LmxMsgRuntime rt; @: LmxMsgCopy node) int
         return: c.LMX_MSG_INVALID
     dest: node\dest_msg
     if: dest = 0
-        dest: lmx_msg_find(rt, node\to)
+        dest: lmx_msg_self_or_find(rt, node\to)
     ---
     if: dest != 0 && dest\owner_rt != rt
         lmx_msg_copy_free(node)
@@ -1038,7 +1038,7 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
         return: c.LMX_MSG_OK
     ---
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
@@ -1080,7 +1080,7 @@ fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; un
     @: LmxMsgCopy node
     if: rt = 0 || to = 0U || to = from
         return: c.LMX_MSG_OK
-    if: lmx_msg_find(rt, to) = 0
+    if: lmx_msg_self_or_find(rt, to) = 0
         return: c.LMX_MSG_GONE
     node: (cast: (@: LmxMsgCopy) c.calloc(1U, c.sizeof(c.LmxMsgCopy)))
     if: node = 0
@@ -1104,7 +1104,7 @@ fn: lmx_msg_fail (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
@@ -1149,7 +1149,7 @@ fn: lmx_msg_parent_gone (@: LmxMsgRuntime rt; @: LmxMsg child; unsigned: now; un
     unsigned: idle
     if: child = 0 || child\parent = 0U
         return: 0
-    p: lmx_msg_find(rt, child\parent)
+    p: lmx_msg_self_or_find(rt, child\parent)
     if: p = 0
         return: 1
     if: p\state = c.LMX_MSG_STATE_DEAD || p\state = c.LMX_MSG_STATE_STOPPED || p\state = c.LMX_MSG_STATE_RELEASED
@@ -1200,7 +1200,7 @@ fn: lmx_msg_poll (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; unsigned:
         return: -1
     c.lmx_msg_exec_lock(rt)
     if: who != 0U
-        m: lmx_msg_find(rt, who)
+        m: lmx_msg_self_or_find(rt, who)
         n: lmx_msg_poll_mark(rt, m, now, threshold, out, cap, n)
     else:
         fam: rt\root
@@ -1315,7 +1315,7 @@ fn: lmx_msg_state (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         ---
     ---
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: -1
@@ -1332,7 +1332,7 @@ fn: lmx_msg_inbox_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         ---
     ---
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: -1
@@ -1349,7 +1349,7 @@ fn: lmx_msg_path_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         ---
     ---
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: -1
@@ -1367,7 +1367,7 @@ fn: lmx_msg_path_seg (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i; @: unsigned 
     if: out = 0 || i < 0
         return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0 || m\path = 0 || i >= m\path_n
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
@@ -1385,7 +1385,7 @@ fn: lmx_msg_child_n (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         ---
     ---
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: -1
@@ -1410,7 +1410,7 @@ fn: lmx_msg_child_at (@: LmxMsgRuntime rt; LmxMsgAddr: who; int: i) unsigned
     if: i < 0
         return: 0U
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: 0U
@@ -1437,7 +1437,7 @@ fn: lmx_msg_init_copy (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) i
     if: out = 0
         return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
@@ -1466,7 +1466,7 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
         ---
     ---
     c.lmx_msg_exec_lock(rt)
-    p: lmx_msg_find(rt, parent)
+    p: lmx_msg_self_or_find(rt, parent)
     if: p = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
@@ -1498,7 +1498,7 @@ fn: lmx_msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0 || m\parent = 0U
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
@@ -1525,7 +1525,7 @@ fn: lmx_msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: st != c.LMX_MSG_STAGED
         return: st
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m != 0
         m\live_query_pend_id: qid
         m\live_query_pend_at: c.lmx_msg_now(rt)
@@ -1546,7 +1546,7 @@ fn: lmx_msg_live_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; const: @(LmxMsgEn
     if: env\kind != c.LMX_MSG_KIND_PROGRESS
         return: c.LMX_MSG_OK
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0 || m\exec_live = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
@@ -1600,7 +1600,7 @@ fn: lmx_msg_live_check (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; uns
         ---
     ---
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: -1
@@ -1610,7 +1610,7 @@ fn: lmx_msg_live_check (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: now; uns
         c.lmx_msg_exec_unlock(rt)
         c.lmx_msg_exec_ready(rt, who)
         c.lmx_msg_exec_lock(rt)
-        m: lmx_msg_find(rt, who)
+        m: lmx_msg_self_or_find(rt, who)
         if: m = 0
             c.lmx_msg_exec_unlock(rt)
             return: n
@@ -1642,7 +1642,7 @@ fn: lmx_msg_live_test_set_seq (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: v
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
@@ -1655,7 +1655,7 @@ fn: lmx_msg_live_test_set_wait_th (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigne
     if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
@@ -1671,7 +1671,7 @@ fn: lmx_msg_complete (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
         ---
     ---
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
@@ -1688,7 +1688,7 @@ fn: lmx_msg_tracked (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: rt = 0 || who = 0U
         return: -1
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: -1
@@ -1702,7 +1702,7 @@ fn: lmx_msg_endp_refs (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: rt = 0 || who = 0U
         return: -1
     c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_find(rt, who)
+    m: lmx_msg_self_or_find(rt, who)
     if: m = 0
         c.lmx_msg_exec_unlock(rt)
         return: -1
@@ -1730,11 +1730,8 @@ fn: lmx_msg_send_cap (@: LmxMsgRuntime rt; LmxMsgAddr: from; @: LmxMsg dest; con
     if: env\n != 0U && node\bytes = 0
         c.free((cast: (@: void) node))
         return: c.LMX_MSG_NOMEM
-    src: c.lmx_msg_turn_self(rt)
     c.lmx_msg_exec_lock(rt)
-    if: src = 0 || src\addr != from
-        src: lmx_msg_find(rt, from)
-    ---
+    src: lmx_msg_self_or_find(rt, from)
     if: src = 0
         c.lmx_msg_exec_unlock(rt)
         lmx_msg_copy_free(node)

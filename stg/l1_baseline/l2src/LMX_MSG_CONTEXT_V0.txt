@@ -116,8 +116,9 @@ Do not claim the previous global-table runtime complied.
   D1. LmxMsgRuntime.tab[] still allocation/sweep. Integer find
       remains for send into another family. send dest prefers
       the sender subtree and parent_msg before forest find.
-      create resolves the parent once (turn_self, else find).
-      recv uses turn_self when the turn Message matches who.
+      Integer lookup uses turn_self when it already is that
+      Message (lmx_msg_self_or_find), else forest find.
+      recv still pops mail via turn_self without exec first.
       See LMX_MSG_ARENA_SPLIT.txt for Codex block-list module
       (Grok does not implement a second one).
   D2. request_children_close walks the direct-child list.
