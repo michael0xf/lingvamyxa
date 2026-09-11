@@ -170,6 +170,7 @@ int lmx_msg_host_wait(LmxMsgRuntime *rt, unsigned timeout_ms);
 #define LMX_MSG_AFFINITY_ANY 0
 #define LMX_MSG_AFFINITY_UI 1
 int lmx_msg_exec_bind(LmxMsgRuntime *rt, LmxMsgAddr addr, LmxMsgTurn turn, void *ctx, int affinity);
+int lmx_msg_exec_unbind(LmxMsgRuntime *rt, LmxMsgAddr addr);
 int lmx_msg_exec_start(LmxMsgRuntime *rt, int nworkers);
 int lmx_msg_exec_start_contexts(LmxMsgRuntime *rt);
 int lmx_msg_exec_ui_step(LmxMsgRuntime *rt);

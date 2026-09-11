@@ -154,14 +154,13 @@ at successful end_turn, not STAGED). child_heard_at is the
 parent's own record of that child, set on first commit and on
 authenticated child query only. Parent live_check does not
 inspect the child's live_query_id. A mapped child applies its
-own wait on its wait-thread timeout. send_cap requires dest->owner_rt == sender runtime; foreign
-runtime dest is INVALID (no unprotected cross-owner mailbox).
-Each endpoint has a mail CS. Recv copy_free + try_retire: a
-RELEASED endpoint with refs==0 and empty queues is unlinked and
-freed without waiting for runtime_delete. Integer find still uses
-the runtime endpoint list (D1 prototype compat). Shared exec lock
-still wraps most paths (D7 remaining). Held capability: retain
-before send_cap; tests do that. Not poll(0)/drive.
+own wait on its wait-thread timeout. exec_bind retains the endpoint; unbind/stop/release_slot drop that
+retain. Failed parent end_turn unbinds then releases so a bound
+uncommitted child can retire. Final endp_release at refs==0 on a
+RELEASED endpoint try_retires (not only recv/release_slot).
+mail_lock helpers exist; most paths still use the shared exec lock
+(D7). send_cap same-runtime check is a prototype boundary, not a
+language ban. Integer find still uses the runtime list (D1).
 
 Not yet
 -------

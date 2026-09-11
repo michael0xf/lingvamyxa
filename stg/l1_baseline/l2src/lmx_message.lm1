@@ -657,8 +657,8 @@ sub: lmx_msg_release_slot (@: LmxMsgRuntime rt; @: LmxMsg m)
     m\path_cap: 0
     m\state: c.LMX_MSG_STATE_RELEASED
     m\committed: 0
+    c.lmx_msg_exec_unbind(rt, m\addr)
     c.lmx_msg_endp_release(m)
-    c.lmx_msg_endp_try_retire(rt, m)
 end: lmx_msg_release_slot
 
 sub: lmx_msg_request_children_close (@: LmxMsgRuntime rt; LmxMsgAddr: who)
@@ -813,7 +813,6 @@ return: c.LMX_MSG_OK
 
 fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     @: LmxMsg m
-    @: LmxMsg dret
     @: LmxMsgCopy n
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK || out = 0
         return: c.LMX_MSG_INVALID
@@ -840,11 +839,7 @@ fn: lmx_msg_recv (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: LmxMsgEnv out) int
     m\exec_reply: n\reply_to
     m\exec_live: 1
     m\last_beat: c.lmx_msg_now(rt)
-    dret: n\dest_msg
     lmx_msg_copy_free(n)
-    if: dret != 0
-        c.lmx_msg_endp_try_retire(rt, dret)
-    ---
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK
 
