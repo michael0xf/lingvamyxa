@@ -1,0 +1,91 @@
+predef: "l2src/lmx_msg_blocks.h.lm1"
+include: "<stdlib.h>"
+
+# All list access requires exclusive ownership supplied by the caller. Detect
+# cycles before mutation; no allocator, global registry or synchronization here.
+fn: lmx_msg_blocks_tail (@: LmxMsgBlock head; @@: LmxMsgBlock tail) int
+    @: LmxMsgBlock slow
+    @: LmxMsgBlock fast
+    slow: head
+    fast: head
+    tail[0]: 0
+    while: fast != 0
+        fast: fast\next
+        if: fast = 0
+            break
+        fast: fast\next
+        slow: slow\next
+        if: fast = slow
+            return: LMX_MSG_BLOCKS_INVALID
+    ---
+    while: head != 0
+        tail[0]: head
+        head: head\next
+    ---
+    return: LMX_MSG_BLOCKS_OK
+
+# Prepend one already allocated, detached node. Reject malformed/duplicate
+# attachment without changing either the list or the caller's node.
+fn: lmx_msg_blocks_push (@@: LmxMsgBlock head; @: LmxMsgBlock node) int
+    @: LmxMsgBlock tail
+    if: head = 0 || node = 0
+        return: LMX_MSG_BLOCKS_INVALID
+    if: node\next != 0 || head = @ node\next
+        return: LMX_MSG_BLOCKS_INVALID
+    if: node\base = 0 && node\n != 0U
+        return: LMX_MSG_BLOCKS_INVALID
+    if: lmx_msg_blocks_tail(head[0], @ tail) != LMX_MSG_BLOCKS_OK
+        return: LMX_MSG_BLOCKS_INVALID
+    if: tail = node
+        return: LMX_MSG_BLOCKS_INVALID
+    node\next: head[0]
+    head[0]: node
+    return: LMX_MSG_BLOCKS_OK
+
+# Preserve each list's order, put src before dst, and clear the source owner.
+# Valid acyclic lists intersect iff their non-null tails are identical.
+# Checking metadata is linear; transfer itself changes three pointers only.
+fn: lmx_msg_blocks_move_all (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
+    @: LmxMsgBlock src_tail
+    @: LmxMsgBlock dst_tail
+    if: dst = 0 || src = 0 || dst = src
+        return: LMX_MSG_BLOCKS_INVALID
+    if: lmx_msg_blocks_tail(src[0], @ src_tail) != LMX_MSG_BLOCKS_OK
+        return: LMX_MSG_BLOCKS_INVALID
+    if: lmx_msg_blocks_tail(dst[0], @ dst_tail) != LMX_MSG_BLOCKS_OK
+        return: LMX_MSG_BLOCKS_INVALID
+    if: src_tail = 0
+        return: LMX_MSG_BLOCKS_OK
+    if: src_tail = dst_tail
+        return: LMX_MSG_BLOCKS_INVALID
+    src_tail\next: dst[0]
+    dst[0]: src[0]
+    src[0]: 0
+    return: LMX_MSG_BLOCKS_OK
+
+# Detach the owner's whole list before invoking any disposer. Repeating cleanup
+# (including reentry using this same head) sees an empty list, never freed nodes.
+# Payload aliases/OS users must already be settled by the Message lifecycle.
+fn: lmx_msg_blocks_dispose_all (@@: LmxMsgBlock head) int
+    @: LmxMsgBlock node
+    @: LmxMsgBlock next
+    @: LmxMsgBlock tail
+    LmxMsgBlockDisposer: disposer
+    if: head = 0
+        return: LMX_MSG_BLOCKS_INVALID
+    if: lmx_msg_blocks_tail(head[0], @ tail) != LMX_MSG_BLOCKS_OK
+        return: LMX_MSG_BLOCKS_INVALID
+    node: head[0]
+    head[0]: 0
+    while: node != 0
+        next: node\next
+        disposer: node\dispose
+        if: disposer != 0
+            disposer(node\base, node\n)
+        else:
+            c.free(node\base)
+        ---
+        c.free(node)
+        node: next
+    ---
+    return: LMX_MSG_BLOCKS_OK

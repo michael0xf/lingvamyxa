@@ -1,0 +1,25 @@
+include: "<stddef.h>"
+
+define: LMX_MSG_BLOCKS_OK 0
+define: LMX_MSG_BLOCKS_INVALID 1
+
+fnptr: LmxMsgBlockDisposer (@: void base; size_t: n) void
+
+# Owner-local storage bookkeeping, not Message lifecycle policy. Node and payload
+# ownership are exclusive. Metadata nodes must be separate free()-compatible
+# allocations. A null disposer means free(base); a custom disposer owns cleanup
+# of base, must return normally and must not mutate/traverse this block list.
+# class is opaque range/type metadata: it is not a per-Lmx field tag.
+struct: LmxMsgBlock
+    @: void base
+    size_t: n
+    unsigned: class
+    LmxMsgBlockDisposer: dispose
+    @: LmxMsgBlock next
+end: LmxMsgBlock
+
+prototype:
+    fn: lmx_msg_blocks_push (@@: LmxMsgBlock head; @: LmxMsgBlock node) int
+    fn: lmx_msg_blocks_move_all (@@: LmxMsgBlock dst; @@: LmxMsgBlock src) int
+    fn: lmx_msg_blocks_dispose_all (@@: LmxMsgBlock head) int
+end: prototype

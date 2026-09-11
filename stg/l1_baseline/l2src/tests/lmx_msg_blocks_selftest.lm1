@@ -1,0 +1,162 @@
+predef: "l2src/lmx_msg_blocks.h.lm1"
+include: "l2src/lmx.h" "<stdio.h>" "<stdlib.h>"
+
+# All test logic is authored in L1. GNU ld --wrap=free counts both default
+# payload disposal and metadata release, without adding hooks to the module.
+prototype:
+    fn: __real_free (@: void p) void
+end: prototype
+
+int: failures 0
+int: checks 0
+int: frees 0
+int: callbacks 0
+size_t: disposed_bytes 0U
+@@: LmxMsgBlock reenter_head 0
+
+sub: __wrap_free (@: void p)
+    if: p != 0
+        frees: frees + 1
+    c.__real_free(p)
+end: __wrap_free
+
+sub: check (int: condition; const: @(char label))
+    checks: checks + 1
+    if: condition = 0
+        failures: failures + 1
+        c.printf("FAIL %s\n", label)
+end: check
+
+sub: custom_dispose (@: void base; size_t: n)
+    callbacks: callbacks + 1
+    disposed_bytes: disposed_bytes + n
+    if: reenter_head != 0
+        check(reenter_head[0] = 0, "owner cleared before callback")
+        check(lmx_msg_blocks_dispose_all(reenter_head) = LMX_MSG_BLOCKS_OK, "reentrant disposal is empty")
+    c.free(base)
+end: custom_dispose
+
+fn: make_block (size_t: n; unsigned: cls; LmxMsgBlockDisposer: disposer) @: LmxMsgBlock
+    @: LmxMsgBlock b
+    b: (cast: (@: LmxMsgBlock) c.calloc(1U, c.sizeof(c.LmxMsgBlock)))
+    if: b = 0
+        c.exit(2)
+    if: n != 0U
+        b\base: c.calloc(1U, n)
+        if: b\base = 0
+            c.free(b)
+            c.exit(2)
+    ---
+    b\n: n
+    b\class: cls
+    b\dispose: disposer
+    return: b
+
+fn: main () int
+    @: LmxMsgBlock src 0
+    @: LmxMsgBlock dst 0
+    @: LmxMsgBlock alias 0
+    @: LmxMsgBlock a
+    @: LmxMsgBlock b
+    @: LmxMsgBlock d
+    @: LmxMsgBlock node
+    @: Lmx first
+    @: Lmx second
+    int: before
+    int: i
+
+    check(lmx_msg_blocks_push(0, 0) = LMX_MSG_BLOCKS_INVALID, "push null head/node")
+    check(lmx_msg_blocks_push(@ src, 0) = LMX_MSG_BLOCKS_INVALID, "push null node")
+    check(lmx_msg_blocks_move_all(0, @ src) = LMX_MSG_BLOCKS_INVALID, "move null destination")
+    check(lmx_msg_blocks_move_all(@ dst, 0) = LMX_MSG_BLOCKS_INVALID, "move null source")
+    check(lmx_msg_blocks_move_all(@ src, @ src) = LMX_MSG_BLOCKS_INVALID, "self move empty rejected")
+    check(lmx_msg_blocks_dispose_all(0) = LMX_MSG_BLOCKS_INVALID, "dispose null head")
+    check(lmx_msg_blocks_dispose_all(@ src) = LMX_MSG_BLOCKS_OK, "dispose empty")
+    check(lmx_msg_blocks_move_all(@ dst, @ src) = LMX_MSG_BLOCKS_OK, "move two empty owners")
+
+    # Real Lmx payloads with forward/back links: moving metadata must not copy
+    # or reparent the graph. A separate destination block already exists.
+    a: make_block(c.sizeof(c.Lmx), 11U, custom_dispose)
+    b: make_block(c.sizeof(c.Lmx), 12U, 0)
+    d: make_block(3U, 13U, custom_dispose)
+    first: (cast: (@: Lmx) a\base)
+    second: (cast: (@: Lmx) b\base)
+    first\data: (cast: (@: void) second)
+    second\node: first
+    second\data: (cast: (@: void) first)
+    check(lmx_msg_blocks_push(@ src, b) = LMX_MSG_BLOCKS_OK, "push first node")
+    check(lmx_msg_blocks_push(@ src, a) = LMX_MSG_BLOCKS_OK, "push second node")
+    check(lmx_msg_blocks_push(@ dst, d) = LMX_MSG_BLOCKS_OK, "push destination")
+    check(src = a && a\next = b && b\next = 0, "push preserves detached chain")
+    check(lmx_msg_blocks_push(@ src, a) = LMX_MSG_BLOCKS_INVALID, "linked node rejected")
+    check(lmx_msg_blocks_push(@ src, b) = LMX_MSG_BLOCKS_INVALID, "duplicate tail rejected")
+    check(src = a && a\next = b && b\next = 0, "rejected pushes unchanged")
+    alias: b
+    check(lmx_msg_blocks_move_all(@ src, @ alias) = LMX_MSG_BLOCKS_INVALID, "overlapping lists rejected")
+    check(alias = b && src = a && a\next = b, "overlap rejection unchanged")
+    alias: 0
+    check(lmx_msg_blocks_move_all(@ src, @ src) = LMX_MSG_BLOCKS_INVALID, "self move nonempty rejected")
+    before: frees
+    check(lmx_msg_blocks_move_all(@ dst, @ src) = LMX_MSG_BLOCKS_OK, "move graph blocks")
+    check(src = 0 && dst = a && a\next = b && b\next = d, "move source cleared and order retained")
+    check(frees = before && callbacks = 0, "move performs no disposal")
+    check(a\base = (cast: (@: void) first) && b\base = (cast: (@: void) second), "payload pointer identity")
+    check(first\data = (cast: (@: void) second) && second\node = first && second\data = (cast: (@: void) first), "internal graph aliases unchanged")
+    check(a\class = 11U && b\class = 12U && d\class = 13U, "metadata classes retained")
+    check(a\n = c.sizeof(c.Lmx) && a\dispose = custom_dispose, "length and disposer retained")
+    check(lmx_msg_blocks_dispose_all(@ src) = LMX_MSG_BLOCKS_OK, "source cleanup after transfer")
+    check(frees = before, "source no longer owns moved storage")
+    check(lmx_msg_blocks_move_all(@ dst, @ src) = LMX_MSG_BLOCKS_OK && dst = a, "repeat move empty source")
+    check(lmx_msg_blocks_move_all(@ src, @ dst) = LMX_MSG_BLOCKS_OK && dst = 0 && src = a, "move into empty owner")
+    reenter_head: @ src
+    check(lmx_msg_blocks_dispose_all(@ src) = LMX_MSG_BLOCKS_OK, "dispose mixed default/custom blocks")
+    reenter_head: 0
+    check(src = 0, "disposed owner empty")
+    check(frees = before + 6, "three payloads and three nodes freed exactly once")
+    check(callbacks = 2 && disposed_bytes = c.sizeof(c.Lmx) + 3U, "callback count and sizes exact")
+    before: frees
+    check(lmx_msg_blocks_dispose_all(@ src) = LMX_MSG_BLOCKS_OK && frees = before, "repeat dispose frees nothing")
+
+    # Failure cases leave metadata/ownership untouched. Repair test corruption
+    # explicitly before final disposal; module must not try to free a cycle.
+    a: make_block(0U, 21U, 0)
+    a\n: 1U
+    check(lmx_msg_blocks_push(@ src, a) = LMX_MSG_BLOCKS_INVALID && src = 0, "missing nonempty payload rejected")
+    a\n: 0U
+    check(lmx_msg_blocks_push(@ src, a) = LMX_MSG_BLOCKS_OK, "zero byte empty block")
+    a\next: a
+    before: frees
+    check(lmx_msg_blocks_move_all(@ dst, @ src) = LMX_MSG_BLOCKS_INVALID, "cyclic source rejected")
+    check(lmx_msg_blocks_dispose_all(@ src) = LMX_MSG_BLOCKS_INVALID, "cyclic disposal rejected")
+    b: make_block(1U, 22U, 0)
+    check(lmx_msg_blocks_push(@ src, b) = LMX_MSG_BLOCKS_INVALID, "push into cycle rejected")
+    check(src = a && a\next = a && b\next = 0 && frees = before, "cycle failures unchanged")
+    a\next: 0
+    check(lmx_msg_blocks_push(@ dst, b) = LMX_MSG_BLOCKS_OK, "second list for cycle test")
+    b\next: b
+    check(lmx_msg_blocks_move_all(@ dst, @ src) = LMX_MSG_BLOCKS_INVALID && src = a, "cyclic destination rejected")
+    b\next: 0
+    lmx_msg_blocks_dispose_all(@ src)
+    lmx_msg_blocks_dispose_all(@ dst)
+    check(frees = before + 3, "zero payload block frees only metadata")
+
+    # No arbitrary child/block count cap: mix 65 blocks, two groups and repeated
+    # transfers. Metadata is allocated only by this caller, never by helpers.
+    before: frees
+    i: 0
+    while: i < 65
+        node: make_block(1U, (cast: (unsigned) i), 0)
+        if: i < 32
+            check(lmx_msg_blocks_push(@ src, node) = LMX_MSG_BLOCKS_OK, "push source many")
+        else:
+            check(lmx_msg_blocks_push(@ dst, node) = LMX_MSG_BLOCKS_OK, "push destination many")
+        ---
+        i: i + 1
+    ---
+    check(lmx_msg_blocks_move_all(@ dst, @ src) = LMX_MSG_BLOCKS_OK, "move 65 blocks")
+    check(lmx_msg_blocks_dispose_all(@ dst) = LMX_MSG_BLOCKS_OK, "dispose 65 blocks")
+    check(src = 0 && dst = 0 && frees = before + 130, "65 payloads and nodes exactly once")
+    c.printf("blocks checks=%d failures=%d frees=%d callbacks=%d\n", checks, failures, frees, callbacks)
+    if: failures != 0
+        return: 1
+    return: 0
