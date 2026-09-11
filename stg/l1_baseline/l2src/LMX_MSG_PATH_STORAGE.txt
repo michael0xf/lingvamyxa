@@ -19,8 +19,9 @@ does not validate arbitrary forged capacity/pointer pairs. It neither assigns
 child counters nor interprets path segments. Native integration passes
 &slot->path, &slot->path_cap, need; Grok owns deletion of the old native
 definition, call-site changes and addition of this generated unit to run_lmx.
-Do not link both same-named definitions. Standalone verification is not proof
-that the Message integration or stable promotion has happened.
+That integration landed in 6880ea5: native definition/prototype removed, both
+assign_path call sites adapted, generated unit linked by run_lmx. Do not link
+both same-named definitions. This is not a stable compiler promotion.
 
 This is PRIVATE placement metadata. Growth can move that buffer, as before;
 no retained pointer into it may cross growth. It does not relocate graph

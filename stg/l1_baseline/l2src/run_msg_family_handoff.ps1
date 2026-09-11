@@ -1,6 +1,6 @@
 # Public-API L1 integration test against an immutable private source snapshot.
 # It never compiles Grok's active working files or writes shared build outputs.
-param([string]$CoreCommit = '1585f70b86fb64e5704533378a9aa31f0d0557ea')
+param([string]$CoreCommit = '6880ea5db32c7e54afbf4d8062376684c34f194f')
 $ErrorActionPreference = 'Stop'
 $baseline = Split-Path -Parent $PSScriptRoot
 $repo = Split-Path -Parent (Split-Path -Parent $baseline)
@@ -38,7 +38,8 @@ try {
     $files = @('lmx.h', 'lmx_message.h', 'lmx_message.lm1', 'lmx_message_host.h',
         'lmx_message_host.c', 'lmx_message_exec.h', 'lmx_message_exec.c',
         'lmx_msg_blocks.h.lm1', 'lmx_msg_blocks.lm1', 'lmx_owned_ranges.h.lm1',
-        'lmx_owned_ranges.lm1', 'lmx_msg_storage.h.lm1', 'lmx_msg_storage.lm1')
+        'lmx_owned_ranges.lm1', 'lmx_msg_storage.h.lm1', 'lmx_msg_storage.lm1',
+        'lmx_msg_path_storage.h.lm1', 'lmx_msg_path_storage.lm1')
     $paths = @($files | ForEach-Object { "stg/l1_baseline/l2src/$_" })
     $archive = Join-Path $run 'core.zip'
     Invoke-FamilyStage 'archive_core' $git (@('archive', '--format=zip', "--output=$archive", $revision, '--') + $paths)
@@ -51,7 +52,7 @@ try {
     }
     $evidence.coreSources = $coreHashes
     $modules = @()
-    foreach ($name in @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage')) {
+    foreach ($name in @('lmx_msg_blocks', 'lmx_owned_ranges', 'lmx_msg_storage', 'lmx_msg_path_storage')) {
         Invoke-FamilyStage "header_$name" $compiler @("l2src/$name.h.lm1", (Join-Path $headers "l2src/$name.lm1.h"))
         $module = Join-Path $run "$name.c"
         Invoke-FamilyStage "module_$name" $compiler @("l2src/$name.lm1", $module)

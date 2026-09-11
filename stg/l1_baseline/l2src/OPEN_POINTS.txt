@@ -36,6 +36,15 @@ Sources
   NOTES Lingvamyxa_handoff_notes.txt
 
 
+Unit - Integration regressions follow L1 path-helper integration (2026-09-11)
+--------------------------------------------------------------------------
+Files: run_msg_family_handoff.ps1, run_msg_send_local.ps1 and their docs.
+
+SPEC 19.29.7.1
+    DECIDED private test snapshot advances to 6880ea5, including path storage
+    authored in L1. Existing public test assertions/semantics unchanged.
+    AVOIDED shared working-tree builds, stable/app promotion or new API.
+
 Unit - Private Message placement-path storage in L1 (2026-09-11)
 -------------------------------------------------------------
 Files: lmx_msg_path_storage.h.lm1 / .lm1, its test/runner and
