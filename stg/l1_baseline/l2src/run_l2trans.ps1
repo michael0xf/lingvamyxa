@@ -260,6 +260,13 @@ Invoke-Negative "l2src\tests\entry_argc_dup.lm2" "entry_argc_dup" "duplicate for
 Invoke-Negative "l2src\tests\entry_argc_bad.lm2" "entry_argc_bad" "unknown foreign type"
 Invoke-Entry "l2src\tests\entry_argc_if.lm2" "entry_argc_if" 0 @("fn: main (int: count; @@: char values) int", "if:") $null
 Invoke-Entry "l2src\tests\entry_fputs.lm2" "entry_fputs" 0 @("c.fputs(") "hi`n"
+Invoke-Entry "l2src\tests\entry_predef.lm2" "entry_predef" 0 @("predef: `"l1src/parser.lm1`"", "include: `"<stdio.h>`"") $null
+Invoke-Entry "l2src\tests\entry_parse_min.lm2" "entry_parse_min" 1 @("predef: `"l1src/parser.lm1`"", "@: LmP0Document document 0", "lm_p0_parse_file(values[1], @ document)", "lm_p0_document_destroy(document)") $null
+$pminExe = Join-Path $out "entry_parse_min.exe"
+$pminSrc = Join-Path $out "entry_parse_min_input.lm1"
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) $pminSrc), "fn: main () int`n    return: 0`nend: main`n")
+cmd /c "`"$pminExe`" `"$pminSrc`" > `"$(Join-Path $out 'entry_parse_min.run.out')`" 2> `"$(Join-Path $out 'entry_parse_min.run.err')`""
+if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $out 'entry_parse_min.run.err') -ErrorAction SilentlyContinue; throw "entry_parse_min parse input exit $LASTEXITCODE" }
 Invoke-Entry "l2src\tests\entry_index.lm2" "entry_index" 1 @("values[1]", "c.fputs(values[1], c.stdout)") $null
 $idxExe = Join-Path $out "entry_index.exe"
 $idxOut = Join-Path $out "entry_index.arg.stdout"
