@@ -68,6 +68,9 @@ fn: mixa_app_window_stack_grow (@: MixaAppWindowStack stack; size_t: need) int
     if: ncap = 0U
         ncap: 4U
     else:
+        if: ncap > ((cast: (size_t) -1) / 2U)
+            return: MIXA_APP_WINDOW_ERR
+        ---
         ncap: ncap * 2U
     ---
     while: ncap < need
@@ -166,6 +169,21 @@ sub: mixa_app_window_close_partial (@: MixaAppWindowStack stack; size_t: idx)
     win\is_open: 0
 end: mixa_app_window_close_partial
 
+# Failure AFTER open() started painting: put the saved parent cells back over
+# the partially drawn window (the backup is only freed afterwards). Without
+# this, a mid-draw error would leave the parent permanently painted.
+sub: mixa_app_window_open_fail (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: idx)
+    @: MixaAppWindow win
+    if: stack = 0 || rect = 0
+        return
+    ---
+    win: stack\windows + idx
+    if: win\saved != 0
+        mixa_app_window_restore_region(rect, win\saved, win\origin_row, win\origin_col, win\nrows, win\ncols)
+    ---
+    mixa_app_window_close_partial(stack, idx)
+end: mixa_app_window_open_fail
+
 fn: mixa_app_window_open (@: MixaAppWindowStack stack; @: MixaTextRect rect; size_t: window_row; size_t: window_col; size_t: nrows; size_t: ncols; size_t: hb; const: @(char message)) int
     size_t: top_idx
     @: MixaAppWindow win
@@ -183,6 +201,9 @@ fn: mixa_app_window_open (@: MixaAppWindowStack stack; @: MixaTextRect rect; siz
         return: MIXA_APP_WINDOW_ERR
     if: hb = 0U
         return: MIXA_APP_WINDOW_ERR
+    if: hb > ((cast: (size_t) -1) - 3U)
+        return: MIXA_APP_WINDOW_ERR
+    ---
     if: nrows < (hb + 3U) || ncols < (hb + 2U)
         return: MIXA_APP_WINDOW_ERR
     if: window_row >= rect\rows || window_col >= rect\cols
@@ -197,6 +218,9 @@ fn: mixa_app_window_open (@: MixaAppWindowStack stack; @: MixaTextRect rect; siz
             return: MIXA_APP_WINDOW_ERR
         ---
     if: stack\count >= stack\cap
+        if: stack\count = ((cast: (size_t) -1))
+            return: MIXA_APP_WINDOW_ERR
+        ---
         if: mixa_app_window_stack_grow(stack, stack\count + 1U) != MIXA_APP_WINDOW_OK
             return: MIXA_APP_WINDOW_ERR
         ---
@@ -250,40 +274,50 @@ fn: mixa_app_window_open (@: MixaAppWindowStack stack; @: MixaTextRect rect; siz
     win\ncols: ncols
     win\hb: hb
 
+    # Preflight: the message and the single dismiss button must physically fit
+    # in the window's interior (ncols - 2U). mixa_draw_text walks the WHOLE
+    # message across the parent rect and mixa_button_panel_draw clips only to
+    # the parent rect, so an overlong message or a wider-than-window button
+    # would paint cells OUTSIDE this window's saved region (dismiss could not
+    # restore them). Reject BEFORE any pixel is painted: opening either renders
+    # the complete window or changes nothing.
+    text_w: mixa_app_window_text_width(message)
+    if: text_w > (ncols - 2U)
+        mixa_app_window_close_partial(stack, top_idx)
+        return: MIXA_APP_WINDOW_ERR
+    ---
+    if: panel\panel_w > (ncols - 2U)
+        mixa_app_window_close_partial(stack, top_idx)
+        return: MIXA_APP_WINDOW_ERR
+    ---
+
     # background: translucent fill (alpha on backgrounds only)
     if: mixa_draw_fill(rect, window_row, window_col, nrows, ncols, 0U, MIXA_APP_WINDOW_FRAME_FG, MIXA_APP_WINDOW_WIN_BG, 0U, MIXA_APP_WINDOW_WIN_ALPHA) != MIXA_DRAW_OK
-        mixa_app_window_close_partial(stack, top_idx)
+        mixa_app_window_open_fail(stack, rect, top_idx)
         return: MIXA_APP_WINDOW_ERR
     ---
     # frame (single): text glyphs stay opaque; bg keeps translucent alpha
     if: mixa_draw_frame(rect, window_row, window_col, nrows, ncols, MIXA_DRAW_SINGLE, MIXA_APP_WINDOW_FRAME_FG, MIXA_APP_WINDOW_WIN_BG, 0U, MIXA_APP_WINDOW_WIN_ALPHA) != MIXA_DRAW_OK
-        mixa_app_window_close_partial(stack, top_idx)
+        mixa_app_window_open_fail(stack, rect, top_idx)
         return: MIXA_APP_WINDOW_ERR
     ---
     # message text, centered in the top padding row
-    text_w: mixa_app_window_text_width(message)
-    if: text_w > (ncols - 2U)
-        text_w: ncols - 2U
-    ---
     msg_col: window_col + ((ncols - text_w) / 2U)
     win\msg_row: window_row + 1U
     win\msg_col: msg_col
     if: mixa_draw_text(rect, window_row + 1U, msg_col, message, MIXA_APP_WINDOW_MSG_FG, MIXA_APP_WINDOW_WIN_BG, 0U, MIXA_APP_WINDOW_WIN_ALPHA) != MIXA_DRAW_OK
-        mixa_app_window_close_partial(stack, top_idx)
+        mixa_app_window_open_fail(stack, rect, top_idx)
         return: MIXA_APP_WINDOW_ERR
     ---
     # one dismiss button, centered in the bottom padding row
     btn_row: window_row + (nrows - hb - 1U)
-    if: panel\panel_w > (ncols - 2U)
-        panel\panel_w: ncols - 2U
-    ---
     btn_col: window_col + ((ncols - panel\panel_w) / 2U)
     panel\origin_row: btn_row
     panel\origin_col: btn_col
     panel\view_w: panel\panel_w
     panel\scroll_x: 0U
     if: mixa_button_panel_draw(panel, rect) != MIXA_BUTTONS_OK
-        mixa_app_window_close_partial(stack, top_idx)
+        mixa_app_window_open_fail(stack, rect, top_idx)
         return: MIXA_APP_WINDOW_ERR
     ---
     win\is_open: 1

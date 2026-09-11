@@ -38,9 +38,28 @@ Public API
 open() is the single "missing-function action". It:
   1. pushes a slot on a dynamically grown window stack (no depth cap),
   2. snapshots the covered parent cells into that slot's own saved buffer,
-  3. draws a translucent background, a single frame, the centered message,
+  3. PREFLIGHT-CHECKS that the content can physically fit: both the message
+     (UTF-8 scalar width) and the dismiss panel's layout width must be no
+     wider than ncols - 2 (the interior). mixa_draw_text walks the whole
+     message across the parent surface and mixa_button_panel_draw clips only
+     to the parent rect, so an overlong message or an oversized panel would
+     paint cells OUTSIDE the saved region (dismiss could never restore them).
+     An open() that cannot fit is rejected with ERR BEFORE any pixel is
+     painted: opening either renders the complete window or changes nothing.
+  4. draws a translucent background, a single frame, the centered message,
      and one dismiss button panel ("OK") using existing app layout rules,
-  4. pushes the button panel's own origin so the top window owns event target.
+  5. pushes the button panel's own origin so the top window owns event target.
+
+If a draw call fails AFTER painting started, open() restores the snapshotted
+parent cells over the partial paint (mixa_app_window_open_fail) so a
+mid-draw error never leaves the surface permanently painted, then releases
+the abandoned slot.
+
+Overflow notes: hb is rejected pre-arithmetic when hb > SIZE_MAX-3 (so the
+hb+3/hb+2 minimum-size checks cannot wrap), the window stack's initial
+capacity doubling is rejected when ncap > SIZE_MAX/2, and a push is rejected
+when count == SIZE_MAX before computing count+1. nrows*ncols is guarded by
+the nrows!=0 && total/nrows!=ncols division check.
 
 dismiss() restores the saved cells verbatim, then pops. This preserves the
 immediate parent, its rendered content and its button geometry, so a
@@ -86,8 +105,15 @@ The selftest exercises the real draw + button panel hit-test (no counting
 mock): frame corners/edges, the 11 message codepoints, button tile range,
 background alpha vs. opaque text, hit-outside vs. dismiss hit, nested
 focus/event targeting (child then parent), parent-state preservation, 40
-open/close cycles, a 9-deep stack (forces growth past the initial cap 4), and
-negative/edge cases.
+open/close cycles, a 9-deep stack (forces growth past the initial cap 4),
+and negative/edge cases.
+
+The review 20260911-163600 sentinel-parent cases seed a deterministic pattern
+first and assert it is untouched: a 24-glyph message on a 13-wide window and a
+two-glyph message on a 3-wide window are rejected before drawing; a
+single-glyph message on the same minimal window admits, dismisses, and
+restores the region exactly; and an hb near SIZE_MAX is rejected by the
+pre-arithmetic overflow guard.
 
 Integration point still pending (honest status)
 -----------------------------------------------

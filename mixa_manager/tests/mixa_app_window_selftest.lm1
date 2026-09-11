@@ -213,6 +213,81 @@ fn: main () int
         c.printf("n-open-too-small: not ERR\n")
         failures: failures + 1
 
+    # --- sentinel-parent preflight (review 163600): content that cannot fit
+    # is rejected BEFORE drawing; the parent surface stays untouched. ---
+    # Long message: 24 'A' (display width 24 > 13-2=11) on window (0,0).
+    seed_pattern(rect)
+    c.array: []: char long_msg 25
+    c.array: []: char two_msg 3
+    c.array: []: char one_msg 2
+    i: 0U
+    while: i < 24U
+        long_msg[i]: (cast: (char) 65)
+        i: i + 1U
+    ---
+    long_msg[24]: (cast: (char) 0)
+    two_msg[0]: (cast: (char) 79)
+    two_msg[1]: (cast: (char) 75)
+    two_msg[2]: (cast: (char) 0)
+    one_msg[0]: (cast: (char) 88)
+    one_msg[1]: (cast: (char) 0)
+    checks: checks + 1
+    if: mixa_app_window_open(stack, rect, 0U, 0U, 4U, 13U, 1U, @ long_msg[0]) != MIXA_APP_WINDOW_ERR
+        c.printf("n-open-long-msg: not ERR\n")
+        failures: failures + 1
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 0U
+        c.printf("n-open-long-msg-count: got %zu want 0\n", mixa_app_window_count(stack))
+        failures: failures + 1
+    # the abandoned paint must not leak across the window edge to parent cells
+    checks: checks + 1
+    if: pattern_region_ok(rect, 0U, 0U, 4U, 13U, 20U) = 0
+        c.printf("n-open-long-msg-sentinel: parent painted\n")
+        failures: failures + 1
+    checks: checks + 1
+    cq: mixa_cell_at_const(rect, 1U, 13U)
+    if: cq\codepoint != pattern_cp(1U, 13U, 20U)
+        c.printf("n-open-long-msg-right: got %x want %x\n", cq\codepoint, pattern_cp(1U, 13U, 20U))
+        failures: failures + 1
+    # minimal window 4x3 hb=1 at (0,14): interior is only 1 column wide. A
+    # two-glyph "OK" message (width 2) is rejected without drawing.
+    checks: checks + 1
+    if: mixa_app_window_open(stack, rect, 0U, 14U, 4U, 3U, 1U, @ two_msg[0]) != MIXA_APP_WINDOW_ERR
+        c.printf("n-open-min-msg2: not ERR\n")
+        failures: failures + 1
+    checks: checks + 1
+    if: pattern_region_ok(rect, 0U, 14U, 4U, 3U, 20U) = 0
+        c.printf("n-open-min-sentinel: parent painted\n")
+        failures: failures + 1
+    # same minimal window with a single-glyph message admits and is fully
+    # self-contained: open then dismiss restores the sentinel region exactly.
+    checks: checks + 1
+    if: mixa_app_window_open(stack, rect, 0U, 14U, 4U, 3U, 1U, @ one_msg[0]) != MIXA_APP_WINDOW_OK
+        c.printf("t-open-min: not OK\n")
+        failures: failures + 1
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 1U
+        c.printf("t-open-min-count: got %zu want 1\n", mixa_app_window_count(stack))
+        failures: failures + 1
+    checks: checks + 1
+    if: mixa_app_window_dismiss(stack, rect) != MIXA_APP_WINDOW_OK
+        c.printf("t-open-min-dismiss: not OK\n")
+        failures: failures + 1
+    checks: checks + 1
+    if: pattern_region_ok(rect, 0U, 14U, 4U, 3U, 20U) = 0
+        c.printf("t-open-min-restore: pattern mismatch\n")
+        failures: failures + 1
+    # overflow-guard negative: an hb near SIZE_MAX must be rejected by the
+    # pre-arithmetic guard, not wrap (hb + 3U would overflow otherwise).
+    checks: checks + 1
+    if: mixa_app_window_open(stack, rect, 0U, 0U, 4U, 13U, ((cast: (size_t) -1) - 1U), @ msg[0]) != MIXA_APP_WINDOW_ERR
+        c.printf("n-open-hb-huge: not ERR\n")
+        failures: failures + 1
+    checks: checks + 1
+    if: pattern_region_ok(rect, 0U, 0U, 4U, 13U, 20U) = 0
+        c.printf("n-open-hb-huge-sentinel: parent painted\n")
+        failures: failures + 1
+
     # --- clear surface, open window A at (0,0) 4x13 hb=1 ---
     seed_pattern(rect)
     checks: checks + 1
