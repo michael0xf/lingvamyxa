@@ -196,24 +196,40 @@ the remaining work to another owner, which the spec supports through "Recorded
 progress may survive separately" - the new owner creates its OWN child and
 resumes from the carried progress.
 
-5.2.1. The open question, which is the owner's to put to Codex
+5.2.1. RESOLVED - the question was mine and it was malformed
 
-This is stated here as a QUESTION, not as a defect, and it is not ours to
-answer. If a Message is meant to be forwarded - handed to another supervisor
-while it continues - then the current surface does not express it, because
-running and success are lifecycle flags and every other operation either creates
-a new child, moves bytes, or closes. Either:
+Mikhail answered it, and the answer is already in the spec; I had assembled the
+pieces wrongly rather than found a gap.
 
-    forwarding is not intended, and re-issue plus carried progress is the whole
-      answer - in which case saying so would stop each application inventing it
-      again; or
-    forwarding is intended, and an operation for it is missing from both the
-      spec and lmx_message.h.
+    A DELIVERED MESSAGE HAS NO PARENT. It writes success=1 and running=0 and
+    joins the receiver's arena. From that moment the parent treats it as
+    delivered and removes it from its list. In normal operation a Message
+    schedules itself; shutting it down on a timeout is force majeure. And a
+    Message closes ITSELF when the parent stops answering its periodic polls.
 
-Note in passing that a Message DOES migrate physically: 11943 says it "owns one
-logical arena throughout its turns and worker migration". That is execution
-mapping, not supervision, and it is a reminder that the two axes are separate -
-which is exactly the distinction my earlier note collapsed.
+Verified in the text, 12595-12601:
+
+    "When the child finishes its assigned operation, it sets success=1 and then
+    running=0. This also applies to a DELIVERY-ONLY MESSAGE with no executing
+    thread; its executor marks the completed delivery. The parent's
+    control-state check observes success and removes the child from active
+    assignment/liveness tracking."
+
+with 19.29.7: adoption of a NON-EXECUTING Message at the consuming end-turn
+transfers ownership into the receiver's one logical arena, with stable block
+addresses.
+
+So a running Message is never moved, because nothing needs moving. What travels
+is DELIVERY AS AN ASSIGNMENT: a Message whose job is its own delivery completes
+by arriving, leaves its parent's list, and its storage joins the receiver. No
+parent changes, so the Mix-path objection I raised dissolves with it - there is
+no path to reassign.
+
+Why I got it wrong, since the shape is worth recognising: I was looking for an
+operation that moves a running worker between supervisors. The model has no such
+operation and needs none, and its absence read to me as a missing feature rather
+than as a different design. Absence of an operation is evidence about the model
+before it is evidence about a gap.
 
 5.3. Staging is not completion - this part stands
 
