@@ -29,8 +29,9 @@ Hosted C entry for simple programs is only `fn: main () int` or
 as C `int main(void)` or `int main(int, char **)`). Other main
 signatures are `incompatible entry signature`. Ordinary methods keep
 source-sized growing typed formals, including more than eight; that
-is not inferred from C main. Pointer/const-pointer formals passed to
-stdio calls keep their declared types (not boxed as `int`).
+is not inferred from C main. Pointer/const-pointer formals, OwnUsed
+fields, and address slots passed to stdio calls keep their declared
+types (not boxed as `int`).
 `NAME[index]` on an ident `@@: char` formal is one stdio actual
 (`values[1]`), not separate `[` `1` `]` arguments.
 
