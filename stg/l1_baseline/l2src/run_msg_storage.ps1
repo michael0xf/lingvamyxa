@@ -74,7 +74,7 @@ try {
         Invoke-StorageStage "compile_$level" $gcc ($flags + @("-$level") + $modules + @($test, '-o', $exe))
         Invoke-StorageStage "run_$level" $exe @()
         $result = Get-Content -LiteralPath (Join-Path $run "run_$level.stdout.txt") -Raw
-        if ($result -notmatch 'storage checks=72 failures=0') { throw "Unexpected selftest result: $result" }
+        if ($result -notmatch 'storage checks=77 failures=0') { throw "Unexpected selftest result: $result" }
         Write-Output "$level $($result.Trim())"
     }
     foreach ($file in $sources) {

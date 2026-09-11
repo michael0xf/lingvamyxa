@@ -26,6 +26,8 @@ fn: main () int
     @: LmxOwnedRange rb
     @: int pa
     @: int pb
+    @: char packed
+    size_t: packed_offset
     @: LmxMsgBlock dst 0
     @: LmxMsgBlock src 0
     @: LmxOwnedRange dr 0
@@ -160,6 +162,27 @@ fn: main () int
     storage_check(counts, lmx_msg_blocks_dispose_all(@ src) = LMX_MSG_BLOCKS_OK && src = 0 && sr = 0, "cleanup transferred blocks")
     c.free(rb)
     c.free(ra)
+    # Range metadata itself can live in transferred arena storage. It must not
+    # need an external owner or a second free after its containing block dies.
+    b: (cast: (@: LmxMsgBlock) c.calloc(1U, c.sizeof(c.LmxMsgBlock)))
+    packed: (cast: (@: char) c.calloc(1U, c.sizeof(c.LmxOwnedRange) + 8U))
+    if: b = 0 || packed = 0
+        return: 2
+    packed_offset: c.sizeof(c.LmxOwnedRange)
+    rb: (cast: (@: LmxOwnedRange) packed)
+    rb\lo: packed + c.sizeof(c.LmxOwnedRange)
+    rb\hi: packed + c.sizeof(c.LmxOwnedRange) + 8U
+    rb\stride: 1U
+    rb\kind: 1
+    rb\type: 1
+    packed[packed_offset]: 73
+    b\base: packed
+    b\n: c.sizeof(c.LmxOwnedRange) + 8U
+    storage_check(counts, lmx_msg_blocks_push(@ src, b) = LMX_MSG_BLOCKS_OK && lmx_owned_ranges_add(@ sr, rb) = LMX_OWNED_RANGES_OK, "range metadata inside source arena block")
+    storage_check(counts, lmx_msg_storage_move_all(@ dst, @ dr, @ src, @ sr) = LMX_MSG_STORAGE_OK && src = 0 && sr = 0 && dst = b && dr = rb, "embedded metadata handoff")
+    storage_check(counts, dst\base = packed && (cast: (@: void) dr) = (cast: (@: void) packed) && lmx_owned_ranges_find(dr, packed + packed_offset) = rb && packed[packed_offset] = 73, "embedded metadata and payload addresses retained")
+    storage_check(counts, lmx_owned_ranges_remove(@ dr, rb) = LMX_OWNED_RANGES_OK && dr = 0, "detach embedded metadata before arena disposal")
+    storage_check(counts, lmx_msg_blocks_dispose_all(@ dst) = LMX_MSG_BLOCKS_OK && dst = 0, "embedded metadata released only with its block")
     c.printf("storage checks=%d failures=%d\n", counts[0], counts[1])
     i: counts[1]
     c.free(counts)

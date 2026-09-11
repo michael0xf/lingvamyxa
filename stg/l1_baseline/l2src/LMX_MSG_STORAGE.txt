@@ -26,7 +26,10 @@ Required caller contract
 ------------------------
 Keep exclusive access to both owners throughout preflight and move. The four
 head slots are distinct owner fields, not intrusive next links. The two metadata
-representations cannot overlap in memory. Component contracts still apply:
+representations cannot overlap in memory. Range records may reside inside a
+block's payload allocation (not its intrusive block-node fields); detach their
+range list before disposing that allocation, with no separate free of the records.
+Component contracts still apply:
 valid API-built sets, live metadata, disjoint ownership, no old-owner escaped
 mutable aliases/native users. List checks cannot prove arbitrary pointer safety.
 
@@ -52,11 +55,12 @@ module. Existing native substrate can include the generated header directly.
 Do not add a handwritten C wrapper or rebuild the shared stable compiler.
 
 run_msg_storage.ps1 uses pinned stable gen2 read-only and private build/codex
-outputs. The L1-only selftest has 72 checks at O0/O2 with strict C99 warnings:
+outputs. The L1-only selftest has 77 checks at O0/O2 with strict C99 warnings:
 null/self slots, read-only success/failure preflight, cycles in either chain,
 intersection/overlap, invalid stride, rejection preserving BOTH lists, unchanged
 payloads and metadata, owner-relative lookup, empty/repeated/one-chain moves and
-cleanup. Production object checks reject mutable static/global symbols and
+cleanup, including range metadata embedded in the transferred block itself.
+Production object checks reject mutable static/global symbols and
 unexpected imports: this module may call only the four component transfer APIs,
 ranges have no external calls, blocks only free for its separate disposer API.
 The existing run_msg_blocks.ps1 regression suite remains 115 checks at O0/O2.
