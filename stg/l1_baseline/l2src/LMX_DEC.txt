@@ -3,20 +3,23 @@ lmx_dec: narrow L1-facing decimal backend over vendored C decNumber.
 Sources (unchanged ICU 3.68): third_party/decNumber/decNumber-icu-368/
   compile decNumber.c + decContext.c only, with -DDECNUMDIGITS=34.
   Do not compile decBasic.c / decCommon.c as separate TUs.
+  Incompatible DECNUMDIGITS is a compile error (fixed 34-digit ABI).
 
 Wrapper: l2src/lmx_dec.h + lmx_dec.c
-  lmx_dec_ctx_init / from_text / add / sub / mul / to_text
-  Owner-local LmxDecCtx (no process-global context).
-  Direct decNumberFromString; no strtod/double.
+  ctx_init / from_text / add / sub / mul / div / neg / pow / compare
+  / quantize_places / to_text
+  Owner-local LmxDecCtx. ctx.set.digits must stay in 1..34 or ops fail.
 
-Profile (explicit, not invented IEEE-128 storage):
-  digits = 34
-  round  = DEC_ROUND_HALF_EVEN
-  traps  = 0; status on the caller context
-  exponent range = decNumber DEC_INIT_BASE (±999999999)
-  Fork vs IEEE decimal128: same coefficient length (34), wider exponents
-  than decimal128's ±6143. Not DECIMAL128 encoding.
+Status
+  Sticky on ctx (diagnostic history). Return 0 iff THIS call added no
+  DEC_Errors bits (lmx_dec_ctx_new_errors). Inexact is not an error.
+  Do not auto-clear history; ctx_clear is explicit.
 
-Endian: ctx_init fails if DECLITEND does not match the host.
+Profile (explicit, not IEEE-128 storage)
+  digits=34, default round HALF_EVEN, traps=0
+  exponent range DEC_INIT_BASE (±999999999), not decimal128 ±6143
+  quantize_places may use HALF_UP for calculator divisor-zero scale
+  without changing the default HALF_EVEN context round.
 
-Calculator should call this same C API; do not add a second decimal impl.
+Calculator should call this C API; do not add a second decimal impl.
+Consumer wiring and portable bootstrap-source closure are still pending.

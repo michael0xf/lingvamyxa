@@ -68,6 +68,65 @@ fn: main () int
     if: c.lmx_dec_ctx_status(ctx) != 0U
         c.printf("dec clear status\n")
         fail: fail + 1
+    if: c.lmx_dec_from_text(a, "not-a-number", ctx) = 0
+        c.printf("dec sticky setup\n")
+        fail: fail + 1
+    if: c.lmx_dec_from_text(a, "0.1", ctx) != 0
+        c.printf("dec valid after bad must be per-op ok\n")
+        fail: fail + 1
+    if: c.lmx_dec_ctx_status(ctx) = 0U
+        c.printf("dec sticky history cleared\n")
+        fail: fail + 1
+    if: c.lmx_dec_from_text(b, "0.2", ctx) != 0 || c.lmx_dec_add(r, a, b, ctx) != 0
+        c.printf("dec add after sticky\n")
+        fail: fail + 1
+    c.lmx_dec_ctx_clear(ctx)
+    if: c.lmx_dec_from_text(a, "1", ctx) != 0 || c.lmx_dec_from_text(b, "0", ctx) != 0
+        c.printf("dec parse 1/0\n")
+        return: 1
+    if: c.lmx_dec_div(r, a, b, ctx) = 0
+        c.printf("dec 1/0 must fail this op\n")
+        fail: fail + 1
+    if: (c.lmx_dec_ctx_status(ctx) & c.DEC_Division_by_zero) = 0U
+        c.printf("dec 1/0 status\n")
+        fail: fail + 1
+    c.lmx_dec_ctx_clear(ctx)
+    if: c.lmx_dec_from_text(a, "6", ctx) != 0 || c.lmx_dec_neg(r, a, ctx) != 0 || c.lmx_dec_to_text(r, out, 64U) != 0
+        c.printf("dec neg\n")
+        return: 1
+    if: c.strcmp(out, "-6") != 0
+        c.printf("dec fail neg got=%s\n", out)
+        fail: fail + 1
+    if: c.lmx_dec_from_text(a, "2", ctx) != 0 || c.lmx_dec_from_text(b, "3", ctx) != 0
+        c.printf("dec parse pow\n")
+        return: 1
+    if: c.lmx_dec_pow(r, a, b, ctx) != 0 || c.lmx_dec_to_text(r, out, 64U) != 0
+        c.printf("dec pow\n")
+        return: 1
+    if: c.strcmp(out, "8") != 0
+        c.printf("dec fail 2^3 got=%s\n", out)
+        fail: fail + 1
+    []: int rel 1
+    rel[0]: 99
+    if: c.lmx_dec_from_text(a, "2", ctx) != 0 || c.lmx_dec_from_text(b, "3", ctx) != 0
+        c.printf("dec parse cmp\n")
+        return: 1
+    if: c.lmx_dec_compare(a, b, ctx, rel) != 0 || rel[0] != -1
+        c.printf("dec cmp 2 3 rel=%d\n", rel[0])
+        fail: fail + 1
+    c.lmx_dec_ctx_clear(ctx)
+    if: c.lmx_dec_from_text(a, "0.004", ctx) != 0
+        c.printf("dec parse scale\n")
+        return: 1
+    if: c.lmx_dec_quantize_places(r, a, 2, c.DEC_ROUND_HALF_UP, ctx) != 0 || c.lmx_dec_to_text(r, out, 64U) != 0
+        c.printf("dec quantize\n")
+        return: 1
+    if: c.strcmp(out, "0.00") != 0
+        c.printf("dec fail HALF_UP 0.004@2 got=%s\n", out)
+        fail: fail + 1
+    if: c.lmx_dec_from_text(b, "0", ctx) != 0 || c.lmx_dec_compare(r, b, ctx, rel) != 0 || rel[0] != 0
+        c.printf("dec scaled zero rel=%d\n", rel[0])
+        fail: fail + 1
     c.free((cast: (@: void) ctx))
     c.free((cast: (@: void) a))
     c.free((cast: (@: void) b))
