@@ -35,10 +35,11 @@ types (not boxed as `int`).
 `NAME[index]` on an ident `@@: char` formal is one stdio actual
 (`values[1]`), not separate `[` `1` `]` arguments.
 Unit-level `predef:` / `include:` quoted paths are emitted as L1
-directives. Simple main may declare `int` and `@: T` locals (optional
-`0` init) and call `lm_p0_parse_file` / `lm_p0_document_destroy` /
-`lm_p0_dump_alloc` / `lm_p0_free`. `@ NAME` in a call is one
-address actual.
+directives. Simple main may declare `int`, `char`, `size_t`, and
+`@: T` locals (optional `0` init on pointer/`int`) and call
+`lm_p0_parse_file` / `lm_p0_document_destroy` / `lm_p0_dump_alloc` /
+`lm_p0_free`. Assignment `name: known-call` captures the result.
+`@ NAME` in a call is one address actual.
 
 That is the SPEC 1.7 bootstrap `main` adapter. String atoms are copied as
 P0 source spelling into L1 (quotes and escapes kept; not decoded then
