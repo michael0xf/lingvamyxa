@@ -7,6 +7,8 @@
 #ifndef LMX_MESSAGE_H
 #define LMX_MESSAGE_H
 
+#include "l2src/lmx_msg_blocks.lm1.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -80,12 +82,6 @@ typedef struct LmxMsgCopy {
     struct LmxMsgCopy *next;
 } LmxMsgCopy;
 
-typedef struct LmxAdopted {
-    void *base;
-    size_t n;
-    struct LmxAdopted *next;
-} LmxAdopted;
-
 typedef struct LmxMsg {
     LmxMsgAddr addr;
     LmxMsgAddr parent;
@@ -137,7 +133,7 @@ typedef struct LmxMsg {
     int native_users;
     unsigned orphan_until;
     int disposed;
-    struct LmxAdopted *adopted;
+    LmxMsgBlock *blocks;
 } LmxMsg;
 
 struct LmxMsgRuntime {
