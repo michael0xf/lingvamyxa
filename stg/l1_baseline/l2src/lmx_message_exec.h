@@ -54,6 +54,10 @@ int lmx_msg_exec_nready(LmxMsgRuntime *rt);
 #endif
 #if defined(LMX_MSG_EXEC_TEST)
 extern void (*lmx_msg_exec_test_after_cleanup)(LmxMsgAddr who, int live, int st);
+extern void (*lmx_msg_exec_test_after_bind_add)(LmxMsgRuntime *rt);
+int lmx_msg_exec_bind_n(LmxMsgRuntime *rt);
+int lmx_msg_exec_bind_aff(LmxMsgRuntime *rt, LmxMsgAddr addr);
+int lmx_msg_exec_bind_has_worker(LmxMsgRuntime *rt, LmxMsgAddr addr);
 #endif
 
 #endif
