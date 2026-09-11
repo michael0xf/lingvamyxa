@@ -6930,19 +6930,19 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_emit_os(l2_out) != 0
         c.fclose(l2_out)
         return: 1
-    if: c.fputs("# interned contract: rec.sig is translator intern id of the full canonical contract.\n# L2_SIG_V0 schema plus arity and exact ordered source formal names/types (int, char, size_t, const char*, const LmP0Text* const-pointee, LmP0Text* mutable pointee, const L2ImmutQuery* const-pointee, L2ImmutQuery* mutable pointee, size_t* mutable out-param). Throws-none, no dyn/varargs. Method name is not interned.\n# Hidden DynRequired names, when present, are interned after declared formals, sorted by source-name bytes then type; declared arity is unchanged. Empty DynRequired keeps the declared-only intern.\n# Mapping: id 1 := first interned contract of this unit. l2_sig_f0/f1 are method 0's first two source names (empty if arity is below that).\n# Linked-program intern only, not inter-module canonicalization. One intern table for the unit, not reset per method.\n# Runtime: no memcmp; closed-unit devirtualization. Formal names are the intern entry for rec.sig. const pointee forbids stores through the pointee; mutable pointee stores address the referent fields, not a cache.\nconst: @(char l2_sig_f0) \"", l2_out) < 0
+    if: c.fputs("# interned contract: rec.sig is translator intern id of the full canonical contract.\n# L2_SIG_V0 schema plus arity and exact ordered source formal names/types (int, char, size_t, const char*, const LmP0Text* const-pointee, LmP0Text* mutable pointee, const L2ImmutQuery* const-pointee, L2ImmutQuery* mutable pointee, size_t* mutable out-param). Throws-none, no dyn/varargs. Method name is not interned.\n# Hidden DynRequired names, when present, are interned after declared formals, sorted by source-name bytes then type; declared arity is unchanged. Empty DynRequired keeps the declared-only intern.\n# Mapping: id 1 := first interned contract of this unit. The comment-only l2_sig_f0/f1 diagnostics are method 0's first two source names (empty if arity is below that).\n# Linked-program intern only, not inter-module canonicalization. One intern table for the unit, not reset per method.\n# Runtime: no memcmp; closed-unit devirtualization. Formal names are the intern entry for rec.sig. const pointee forbids stores through the pointee; mutable pointee stores address the referent fields, not a cache.\n# Diagnostic evidence only; no runtime storage or global table.\n# const: @(char l2_sig_f0) \"", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_m_f0[0] != 0 && l2_write_text(l2_out, l2_m_f0[0]) != 0
         c.fclose(l2_out)
         return: 1
-    if: c.fputs("\"\nconst: @(char l2_sig_f1) \"", l2_out) < 0
+    if: c.fputs("\"\n# const: @(char l2_sig_f1) \"", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_m_f1[0] != 0 && l2_write_text(l2_out, l2_m_f1[0]) != 0
         c.fclose(l2_out)
         return: 1
-    if: c.fprintf(l2_out, "\"\nunsigned: l2_intern_id %uU\nunsigned: l2_intern_again %uU\nunsigned: l2_intern_swap %uU\nunsigned: l2_intern_probe %uU\n", l2_sigv, l2_intern_again, l2_intern_swap, l2_intern_probe) < 0
+    if: c.fprintf(l2_out, "\"\n# unsigned: l2_intern_id %uU\n# unsigned: l2_intern_again %uU\n# unsigned: l2_intern_swap %uU\n# unsigned: l2_intern_probe %uU\n", l2_sigv, l2_intern_again, l2_intern_swap, l2_intern_probe) < 0
         c.fclose(l2_out)
         return: 1
     k: 0
@@ -7184,10 +7184,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         i: i + 1
-    if: c.fputs("        if: l2_intern_again != l2_intern_id\n            return: 1\n", l2_out) < 0
+    if: c.fprintf(l2_out, "        if: %uU != %uU\n            return: 1\n", l2_intern_again, l2_sigv) < 0
         c.fclose(l2_out)
         return: 1
-    if: l2_m_arity[0] != 0 && c.fputs("        if: l2_sig_f0[0] = 0\n            return: 1\n", l2_out) < 0
+    if: l2_m_arity[0] != 0 && c.fprintf(l2_out, "        if: %zuU = 0U\n            return: 1\n", l2_m_f0[0]\length) < 0
         c.fclose(l2_out)
         return: 1
     if: c.fputs("        # Closed-unit devirtualization: translator-bound child indices, no graph mutations after construction. rec.addr is METHOD-domain storage, not the call. Runtime does not memcmp formals. Evaluation order of actuals is materialized into temps before each call boundary. Hidden through-args, when present, follow declared formals in intern name order.\n", l2_out) < 0

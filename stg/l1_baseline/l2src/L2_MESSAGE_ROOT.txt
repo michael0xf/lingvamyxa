@@ -190,12 +190,45 @@ One private translator/thirteen unchanged cached support objects, strict C99/
 default flags, driver -Werror. Generated closed-unit C was inspected. No full
 historical suite or stable promotion was run.
 
+Signature diagnostics without runtime state, 2026-09-11
+-----------------------------------------------------
+The emitted l2_sig_f0/f1 and l2_intern_id/again/swap/probe values are now
+comment-only translation evidence, not file-scope C variables. Existing textual
+contract inspections retain the same names/values. No hidden shared table,
+Message field or extra allocation replaces these diagnostics.
+
+Canonical signature equality is still proved by l2_intern_prove during
+translation. Actual METHOD records keep the same sig and callable ABI. The
+generated entry's repeated-intern comparison uses the known emitted integers;
+its nonempty-first-formal guard uses that validated identifier's known length.
+Neither guard reads mutable diagnostic state or performs runtime name lookup.
+The source argument names are validated identifiers, so the length-zero test
+preserves the previous empty-first-character check. No character interning,
+dynamic-through binding, lexical node or dirty-only rule changes here.
+
+Saved PASS against the same isolated core eaac7c5 and five current overlays:
+  build/codex/l2_message_root/20260911_201312_056_28f84f69/evidence.json
+57 successful stages; existing eighteen modes / 649 assertions, including two
+fresh process Messages. All prior primitive/binding/graph-address/nested/spliced
+outputs remain unchanged. New assertions require all six diagnostic entries to
+be comments in generated L1 and absent from generated C, including char units.
+Four existing add/renamed-method/different-formals/swapped-formals fixtures verify
+preserved comment evidence, canonical identity/reintern/probe relationships and
+METHOD sig. These four need translation only; no additional support-object build.
+
+One private translator and thirteen unchanged support objects were reused,
+stable L1 read-only, strict C99/default flags and driver Werror as before.
+The saved source hashes were rechecked after the run. This checkpoint deliberately
+does not claim the latest collector integration was rebuilt: Grok's separate
+0ce7957 runtime integration and saved Exec PASS were reviewed read-only.
+
 Remaining limitations (not fixed or blessed by these checkpoints)
 ---------------------------------------------------------------
 Interned characters and their legacy range catalog remain in dependent units.
-P0/foreign/query predefs can still bring in old definitions. Generated signature
-diagnostic variables (l2_sig_f0/f1 and l2_intern_*) also remain at file scope;
-removing the range/pool dependency is NOT proof that all global state is gone.
+P0/foreign/query predefs can still bring in old definitions. Signature diagnostics
+no longer create runtime state, but other emitted diagnostic names (l2_ownN)
+still exist at file scope, and the L1 translator itself has compiler state.
+Removing range/pool and signature diagnostics is NOT proof all globals are gone.
 There is no claim that all remaining generated global state or allocations are
 gone. Root/METHOD/CHILDREN/int/size_t owner admission is NOT evidence of complete
 graph collectibility, reference-ARRAY admission or full allocation cleanup. These
