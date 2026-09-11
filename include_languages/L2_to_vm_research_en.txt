@@ -120,9 +120,16 @@ Every Structure occurrence is one header (spec 2, l2src/lmx.h):
       MessageThread / Namespace / descriptor argument.
 
   merge
-      lazy execution-time containment-tree copy: fresh Lmx
-      occurrences, rebased `node`, reused global method records.
+      lazy execution-time copy: fresh Lmx occurrences and required original
+      lexical state; new node links identify copied original parents, not the
+      composition root. Existing node links never change. Compiled entries
+      are reused through Message-local method records.
       Not descriptor composition and not Message delivery.
+
+  independent (9.1.3)
+      a lexical root with node=0, not a ban on dynamic/through inputs.
+      Expression-selected paths/implementations remain legal through their
+      expected call signature; implements checks exposed Consumer uses.
 
   implements(varA varB Consumer) / RuntimeImplements(...)
       consumer-relative compatibility, not a nominal class lattice

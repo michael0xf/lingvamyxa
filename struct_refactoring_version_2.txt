@@ -162,28 +162,27 @@ Structure не является объектом, экземпляром кла�
 
 EN
 
-A live execution graph has a root Lmx node. Starting from any node in its
-containment tree, root is obtained by following node until the parent is
-absent. Arbitrary textual absolute runtime path lookup begins at an explicitly
+A live execution graph may contain several lexical trees. Following node
+reaches the lexical root of that occurrence, not necessarily the Message graph
+root or a composition root through which it was reached. Arbitrary textual
+absolute runtime path lookup begins at an explicitly
 supplied root, never at a mutable runtime namespace. Direct resolved pointers
 and relative paths keep their own starting node.
 
-The exact representation of the absent parent is an ABI detail to be fixed;
-the normal candidate is a null node pointer. Whatever representation is
-selected must be unique and must make root discovery deterministic.
+An absent lexical parent is node=0, including an independent root (spec 9.1.3).
+There is no owner lookup or lexical reparenting hidden in root discovery.
 
 RU
 
-У живого графа исполнения есть корневой узел Lmx. Из любого узла его дерева
-вложенности корень получается последовательным переходом по node до
-отсутствующего родителя. Поиск произвольного текстового абсолютного
+В живом графе исполнения может быть несколько лексических деревьев. Переход
+по node приводит к лексическому корню occurrence, не обязательно к корню
+Message или композиции, через которую найден узел. Поиск текстового абсолютного
 runtime-пути начинается с явно переданного корня, а не с изменяемого runtime
 namespace. Уже разрешённые указатели и относительные пути сохраняют собственный
 начальный узел.
 
-Точное представление отсутствующего родителя является деталью ABI, которую
-ещё нужно закрепить; обычный кандидат — null в node. Выбранное представление
-обязано быть единственным и делать нахождение корня детерминированным.
+Отсутствующий лексический родитель — node=0, в том числе у independent
+(спека 9.1.3). Поиск корня не скрывает поиск владельца или смену лексики.
 
 
 1.3. Physical class versus source meaning
@@ -581,15 +580,18 @@ arena/диапазонов.
 
 EN
 
-node is the parent in the source containment tree as materialized by this
-particular runtime tree.
+node is the lexical parent, initialized once when an occurrence is created.
+No existing node link changes on merge, adoption or result composition.
 
-For every contained child c of parent p:
+For every lexically contained child c of parent p:
 
     c->node == p
 
-For a copied tree, node points into the copy. A merge MUST NOT leave a copied
-child's node pointing to the corresponding parent in the source tree.
+For a copied lexical environment, each new node link is initialized to the
+corresponding copied original parent. Listing a copied child in the merge
+result does not make that result its lexical parent. Preserve the required
+original environment and its dependencies (spec 2.3), without foreign-arena
+links. Ordered result membership and lexical ancestry are different edges.
 
 A reference edge to an already existing Lmx node does not change that
 referent's node. One node has one containment parent even when several graph
@@ -606,16 +608,18 @@ this reserved value with a dynamically visible binding.
 
 RU
 
-node является родителем в дереве вложенности исходника, материализованном
-именно этим runtime-деревом.
+node — лексический родитель, заданный один раз при создании occurrence.
+Merge, adopt и включение в результат не меняют существующий node.
 
-Для каждого вложенного ребёнка c родителя p:
+Для каждого лексически вложенного ребёнка c родителя p:
 
     c->node == p
 
-В скопированном дереве node указывает внутрь копии. Merge не имеет права
-оставлять node скопированного ребёнка указывающим на соответствующего
-родителя исходного дерева.
+В копии лексического окружения новый node инициализируется ссылкой на копию
+исходного родителя. Включение ребёнка в результат merge не делает этот
+результат лексическим родителем. Сохраняется нужное исходное окружение с
+зависимостями (спека 2.3), без ссылок в чужую арену. Порядок элементов
+результата и лексическая вложенность — разные отношения.
 
 Ребро-ссылка на уже существующий Lmx-узел не меняет node этого референта. У
 одного узла один родитель вложенности, даже когда к нему ведёт несколько
@@ -629,6 +633,31 @@ owner object, class link или ссылкой C-наследования.
 `node\field` в исходнике начинается от уже выбранного родителя и ищет его
 непосредственного ребёнка `field`; второй `->node` не выполняется.
 Caller не может заменить это reserved-значение dynamic-binding-ом.
+
+
+3.2.1. independent and unresolved calls / independent и неизвестные вызовы
+
+EN
+
+Spec 9.1.3: independent constructs a lexical root with node=0. Its own state
+and internal lexical links remain. It does NOT reject dynamic/through inputs
+from the current caller. Expressions may select unknown implementations or
+paths through an expected signature; implements checks exposed Consumer uses,
+not all hidden implementation bodies. Normal exact-signature and input
+admission still apply. Omit only surroundings shown to be unused: an unknown
+route is not evidence that a lexical dependency is unused. independent removes
+the external lexical dependency, not explicit data or dynamic call contracts.
+
+RU
+
+Спека 9.1.3: independent создаёт лексический корень с node=0, сохраняя собственное
+состояние и внутренние лексические связи. Сквозные входы от текущего caller НЕ
+запрещены. Expression может выбирать неизвестную реализацию или путь за
+ожидаемой сигнатурой; implements проверяет видимые использования Consumer, а
+не все скрытые тела реализаций. Обычный допуск точной сигнатуры и её аргументов
+сохраняется. Убирать при копировании можно лишь доказанно ненужное окружение:
+неизвестный путь не доказывает отсутствие зависимости. independent отсекает
+внешнюю лексику, а не явные данные или динамический контракт вызова.
 
 
 3.3. Meaning of len and data
@@ -1221,9 +1250,9 @@ from the callable and bypasses dynamic caller visibility.
 
 Further structural traversal may continue only when written explicitly. No
 unqualified name performs a transitive walk through source parents. The
-implementation MUST preserve the concrete parent selected by a runtime copy;
-after merge, the copied callable's rewritten `node` supplies the new immediate
-parent. It must not restart at root unless the source explicitly requests an
+implementation MUST preserve the original lexical relationship in a runtime
+copy; after merge, the new callable's node identifies the copied original
+parent, not the composition root. It must not restart at root unless the source explicitly requests an
 absolute root-based path.
 
 RU
@@ -1236,8 +1265,8 @@ callable, обходящий dynamic-видимость caller-а.
 
 Дальнейший структурный traversal продолжается только когда он написан явно.
 Никакое неквалифицированное имя не идёт транзитивно по родителям исходника.
-Реализация сохраняет конкретного родителя runtime-копии: после merge
-переписанный `node` скопированного callable даёт нового immediate-parent.
+Реализация сохраняет исходную лексическую связь в runtime-копии: после merge
+node нового callable указывает на копию исходного родителя, не на root результата.
 К root перехода нет, если исходник явно не запросил абсолютный root-based путь.
 
 
@@ -1378,7 +1407,8 @@ entry and immutable method record. The graph may contain many callable Lmx leaf
 occurrences whose `data` identifies that record. Every selected callable
 occurrence has one persistent containing Structure, `callable->node`, whose own
 fields are the published working state used for that selected call. Runtime
-merge may copy/rebase an occurrence while retaining the same method record.
+merge may copy an occurrence and its lexical environment while reusing the
+compiled entry through the destination Message's method record.
 Throughout this document, "method Structure" is shorthand for this selected
 containing Structure; it never means the callable leaf and never means a fresh
 per-invocation graph object.
@@ -1398,7 +1428,7 @@ the reserved value:
 The caller evaluates this field but does not choose, shadow or replace its
 value. Source `node` is reserved under every spelling, including an exact quoted
 identifier, and cannot be declared, dynamically supplied or rebound. After
-runtime merge, the copied callable's rebased parent supplies the value.
+runtime merge, the copy of the original lexical parent supplies the value.
 
 The remaining signature contains the declared call ABI and exactly the hidden
 dynamic-caller values the translated body requires. Here a hidden argument is
@@ -1421,8 +1451,9 @@ C-entry и immutable method record. Граф может содержать мн�
 Lmx-листьев, `data` которых идентифицирует эту запись. У каждого выбранного
 callable-occurrence есть одна постоянная containing Structure,
 `callable->node`; её own fields являются опубликованным рабочим состоянием
-выбранного вызова. Runtime merge может скопировать/rebase occurrence, сохранив
-тот же method record. Во всём документе «Structure метода» является сокращением
+выбранного вызова. Runtime merge копирует occurrence с исходным лексическим
+окружением и использует тот же compiled entry через локальную запись Message.
+Во всём документе «Structure метода» является сокращением
 для этой выбранной containing Structure; это никогда не callable-лист и не
 свежий per-invocation graph-object.
 
@@ -1440,7 +1471,7 @@ object либо per-Structure запись type/layout.
 вычисляет это поле, но не выбирает, не shadow-ит и не заменяет его значение.
 `node` в исходнике зарезервирован при любом spelling, включая exact quoted
 identifier: его нельзя объявить, динамически передать или rebind-ить. После
-runtime merge значение даёт rebased-родитель скопированного callable.
+runtime merge значение даёт копия исходного лексического родителя callable.
 
 Остальная сигнатура содержит явный ABI вызова и ровно те скрытые
 dynamic-caller значения, которые нужны транслированному телу. Здесь
@@ -1809,7 +1840,7 @@ methods as a single one-pointer C function type is non-conforming.
 
 The physical domain may use linker sections or an equivalent generated array
 on PE/COFF, ELF, Mach-O or another target. A merge copy retains the same method
-record while rebasing the callable occurrence's `node`; it does not compile or
+entry while preserving copied lexical ancestry in `node`; it does not compile or
 duplicate the method.
 
 Code received later through a Message or module mechanism MUST NOT be invoked
@@ -1858,7 +1889,7 @@ varargs, стирание prototype до `void (*)(void)` или трактов�
 
 Физический домен может использовать linker sections либо эквивалентный generated-
 массив на PE/COFF, ELF, Mach-O или другой цели. Копия merge сохраняет ту же
-запись метода, rebasing `node` callable-occurrence; она не компилирует и не
+скомпилированную функцию, сохраняя копию лексической связи `node`; она не компилирует и не
 дублирует метод.
 
 Код, позднее полученный через Message- либо module-механизм, нельзя вызывать как
@@ -2076,7 +2107,8 @@ checkpoint не может задним числом изменить выбра
 C activation record, созданный этим точным вызовом, является реализацией
 dynamic namespace caller-а. Отдельный namespace-object не устанавливается и не
 восстанавливается. Метод, скопированный merge, сохраняет тот же `{ addr, sig }`;
-его переписанный `node` даёт новый структурный fallback/context. Поэтому Array.resize
+его новый `node` задаётся копией исходного лексического родителя, не root результата.
+Это даёт сохранённый в копии structural fallback/context. Поэтому Array.resize
 может быть живым методом runtime-копии HashArray без ещё одной C-компиляции.
 
 
@@ -2498,7 +2530,7 @@ HashArray или имени любой другой Structure исходника
 EN
 
 merge creates a new result root. For every operand from left to right it copies
-the operand root's direct children, in order, beneath the new result root; it
+the operand root's direct children, in order, into the result's child sequence; it
 does not insert the operand root itself as an extra named child. It then copies
 the explicit vertical merge body according to the same ordered rule. Thus
 merging Array into HashArray produces `HashArray\resize`, not
@@ -2512,7 +2544,8 @@ copied nodes are required. For each copied containment node:
 3. register the new Lmx address with the source node's ShortNameId when that
    occurrence participates in named lookup (or apply the selected positional
    convention);
-4. set node to the corresponding parent in the new tree;
+4. copy the required original lexical environment and initialize the new node
+   link to the corresponding copied lexical parent, not the composition root;
 5. recursively copy its contained children;
 6. preserve the ordered field sequence and repeated names.
 
@@ -2520,14 +2553,15 @@ The source tree remains valid and unchanged. Mutation of structural fields in
 the result must not mutate the corresponding source tree merely because merge
 was implemented with links.
 
-What to do with explicit non-node reference edges whose target lies inside or
-outside the copied subtree is UNRESOLVED in section 14. This question does not
-permit replacing the required containment copy with a link.
+Spec 2.3 fixes lexical preservation and consistent references inside the copied
+environment. Section 14.6 records remaining physical/domain-specific work.
+Neither permits replacing the required copy with a foreign-arena link or
+changing the source lexical relationship.
 
 RU
 
 merge создаёт новый root результата. Для каждого operand слева направо он
-копирует прямых детей root-а operand-а, по порядку, под новый root результата;
+копирует прямых детей root-а operand-а, по порядку, в список детей результата;
 сам root operand-а не вставляется дополнительным именованным ребёнком. Затем
 по тому же упорядоченному правилу копируется явное вертикальное тело merge.
 Поэтому merge Array в HashArray даёт `HashArray\resize`, а не
@@ -2542,7 +2576,8 @@ merge создаёт новый root результата. Для каждого
 3. зарегистрировать новый адрес Lmx с ShortNameId исходного узла, если
    occurrence участвует в именованном lookup (либо применить выбранное
    positional-соглашение);
-4. установить node в соответствующего родителя нового дерева;
+4. скопировать нужное исходное лексическое окружение и задать новому node
+   копию исходного лексического родителя, не root композиции;
 5. рекурсивно скопировать вложенных детей;
 6. сохранить упорядоченную последовательность полей и повторяющиеся имена.
 
@@ -2550,9 +2585,10 @@ merge создаёт новый root результата. Для каждого
 результата не должно менять соответствующее исходное дерево только потому,
 что merge был реализован ссылками.
 
-Поведение явных не-node рёбер-ссылок, цель которых находится внутри или вне
-копируемого поддерева, остаётся UNRESOLVED в разделе 14. Этот вопрос не
-разрешает заменять требуемую копию дерева вложенности ссылкой.
+Спека 2.3 закрепляет сохранение лексики и согласованные ссылки внутри копии
+окружения. Раздел 14.6 описывает оставшуюся физическую/domain-specific работу.
+Она не разрешает заменять копию ссылкой в чужую арену или менять исходную
+лексическую связь.
 
 
 8.3. Ordered composition
@@ -2790,7 +2826,8 @@ equivalent of these operations:
 4. Derive the owning Message and its one arena from the reserved `node` address
    or equivalent allocation-range metadata, without an ambient generated-method
    argument.
-5. Find a root by following `node`.
+5. Find the occurrence's lexical root by following `node`, not an arena owner
+   or a composition root through which the occurrence was reached.
 6. Classify `data` by address range.
 7. Enumerate structural children using `data` and `len`.
 8. Access a child by its resolved address/block index, including computed
@@ -2813,7 +2850,8 @@ equivalent of these operations:
     `return`/`throw`, store only dirty own fields and clear each flag after its
     store succeeds.
 15. Resume after a call without automatically reloading working locals.
-16. Copy a containment tree while rebasing `node` and copying name IDs.
+16. Copy required lexical state, initialize new node links to corresponding
+    original-parent copies, and copy name IDs. Never reparent existing nodes.
 17. Merge ordered runtime trees and a runtime body into a fresh result in the
     current Message arena.
 18. Admit incoming Messages into a per-L3-Thread FIFO, execute no more than one
@@ -2839,7 +2877,8 @@ RU
 4. Определить Message-владельца и его единственную arena по адресу
    зарезервированного `node` либо эквивалентным metadata диапазона allocation,
    не добавляя ambient-аргумент сгенерированного метода.
-5. Найти root последовательным переходом `node`.
+5. Найти лексический root occurrence переходом по node, не владельца arena
+   и не root композиции, через которую найден occurrence.
 6. Классифицировать `data` по диапазону адреса.
 7. Перечислить структурных детей с помощью `data` и `len`.
 8. Обратиться к ребёнку по разрешённому адресу/индексу блока, включая
@@ -2864,7 +2903,8 @@ RU
     flag после успешной записи.
 15. После вызова продолжать исполнение без автоматической перезагрузки рабочих
     locals.
-16. Скопировать дерево вложенности с rebasing `node` и копированием name ID.
+16. Скопировать нужное лексическое состояние, задать новым node копии исходных
+    родителей и скопировать name ID. Не менять node существующих occurrences.
 17. Смержить упорядоченные runtime-деревья и runtime-тело в новый результат в
     текущей arena Message.
 18. Принимать входящие Messages в FIFO каждого L3 Thread, не исполнять
@@ -3210,13 +3250,14 @@ A conformance test must demonstrate:
 3. Reaching merge allocates a new tree.
 4. Array's direct children are copied directly under the HashArray result root;
    no additional Array root child is inserted.
-5. Every copied child's node points into the new tree.
+5. Every copied child's node points to the copy of its original lexical parent,
+   not to the composition root merely because the result lists that child.
 6. Every named copied node has the correct ShortNameId side-table entry, with
    the selected positional convention applied to unnamed occurrences.
 7. Array method nodes in the result retain callable payloads resolving to the
    original immutable `{addr, sig}` method records.
 8. Invoking a copied Array method validates the exact expected `sig`, supplies
-   `copied_callable->node` as reserved `node` (the new HashArray containing
+   `copied_callable->node` as reserved `node` (the copied original lexical
    Structure), and supplies every declared and hidden operand required by that
    signature.
 9. The source Array tree remains structurally unchanged.
@@ -3231,14 +3272,15 @@ RU
 3. Достижение merge выделяет новое дерево.
 4. Прямые дети Array копируются непосредственно под root результата
    HashArray; дополнительный ребёнок-root Array не вставляется.
-5. node каждого скопированного ребёнка указывает внутрь нового дерева.
+5. node нового ребёнка указывает на копию исходного лексического родителя,
+   а не на root композиции только из-за включения ребёнка в её результат.
 6. Каждый именованный скопированный узел имеет правильную запись ShortNameId
    в side table; к безымянным применяется выбранное positional-соглашение.
 7. Узлы методов Array в результате сохраняют callable payloads, разрешаемые в
    исходные неизменяемые записи методов `{addr, sig}`.
 8. Вызов скопированного метода проверяет точный ожидаемый `sig`, предоставляет
-   `copied_callable->node` как зарезервированный `node` (новую содержащую
-   Structure HashArray) и предоставляет все объявленные и скрытые operands,
+   `copied_callable->node` как зарезервированный `node` (копию исходной
+   лексической Structure) и предоставляет все объявленные и скрытые operands,
    требуемые этой сигнатурой.
 9. Исходное дерево Array структурно не меняется.
 10. Получившийся HashArray сам может быть входом следующего merge.
@@ -3255,8 +3297,8 @@ root and arbitrary textual absolute path from method contexts at different
 depths, and obtain the same root-selected node. A separate test must prove that
 reserved `node` equals the concrete `callable->node` occurrence parent and that
 `node\field` selects its immediate child without another parent hop and without
-resetting to root. Both must continue to pass after runtime merge rebases the
-callable and adds repeated short names.
+resetting to root. Both must continue to pass after runtime merge copies the
+callable with its original lexical environment and adds repeated short names.
 
 Structural path resolution must be independent of C working locals and hidden
 through-value slots. Conversely, unqualified dynamic caller visibility must be
@@ -3271,8 +3313,8 @@ RU
 Отдельный тест обязан доказать, что зарезервированный `node` равен конкретному
 родителю occurrence `callable->node`, а `node\field` выбирает его
 непосредственного ребёнка без второго подъёма к родителю и без сброса к root.
-Оба обязаны продолжать работать после runtime merge, который rebases callable
-и добавляет повторные короткие имена.
+Оба обязаны продолжать работать после runtime merge, копирующего callable с
+исходным лексическим окружением и добавляющего повторные короткие имена.
 
 Разрешение структурного пути обязано быть независимо от рабочих C locals и
 слотов скрытых сквозных значений. И наоборот, неквалифицированная динамическая
@@ -3594,16 +3636,17 @@ metadata table is introduced.
 
 14.6. Explicit graph references during merge
 
-Containment descendants are copied and node is rebased. For a non-containment
-reference stored in the copied tree, it remains to decide whether:
+Spec 2.3 now fixes lexical preservation: copy the required original environment
+and consistently map links within that copied environment to corresponding
+copies, preserving aliases. New node fields are initialized once; result
+membership does not reparent them. No implicit foreign-Message arena references
+may survive a copy. Unknown expression routes stay legal and are not proof that
+potentially needed state can be omitted. independent (9.1.3) cuts external
+lexical fallback, not dynamic inputs.
 
-* every such reference preserves its original target; or
-* a reference to a node inside the copied subtree is remapped to the
-  corresponding copy while an external reference preserves its target.
-
-If remapping is selected, merge needs a temporary old-address-to-new-address
-work map. That temporary algorithmic map is not persistent node metadata and
-must disappear after the copy.
+The physical representation of ordered result edges, dependency discovery and
+domain-specific copying of other payloads remains work. A temporary copy map,
+if used, is algorithmic state, not a permanent per-node owner/namespace field.
 
 14.7. Primitive copy and mutation policies
 
@@ -3750,7 +3793,7 @@ must not introduce a shared mutable runtime namespace.
 
 It remains to define whether a failed merge leaves no result, a partial
 inaccessible allocation reclaimed with an arena, or an explicit failure
-Structure. Published results must never expose half-rebased node links or
+Structure. Published results must never expose incomplete lexical-copy links or
 missing ShortNameId mappings.
 
 14.20. Optimization policy
@@ -3850,16 +3893,16 @@ Lmx-pointer-to-ShortNameId. Использование ShortNameId в lookup и�
 
 14.6. Явные ссылки графа при merge
 
-Потомки вложенности копируются, а node rebased. Для не-containment ссылки,
-лежащей в копируемом дереве, нужно выбрать:
+Спека 2.3 закрепляет сохранение лексики: копируется нужное исходное окружение,
+ссылки внутри него согласованно ведут на соответствующие копии с сохранением
+алиасов. Новые node инициализируются один раз; включение в результат не меняет
+лексического родителя. Неявных ссылок в чужую арену Message не остаётся.
+Неизвестные expression-пути разрешены и не доказывают ненужность состояния.
+independent (9.1.3) отсекает внешнюю лексику, но не сквозные входы.
 
-* каждая такая ссылка сохраняет исходную цель; либо
-* ссылка на узел внутри копируемого поддерева перенаправляется на
-  соответствующую копию, а внешняя ссылка сохраняет цель.
-
-Если выбрано перенаправление, merge требуется временный work map
-old-address-to-new-address. Эта временная алгоритмическая map не является
-постоянными metadata узла и обязана исчезнуть после копирования.
+Открыта физическая реализация рёбер результата, поиска зависимостей и
+domain-specific копирования прочих payloads. Временная copy map, если нужна,
+является состоянием алгоритма, а не постоянным полем owner/namespace у узла.
 
 14.7. Политики копирования и изменения примитивов
 
@@ -4009,8 +4052,8 @@ Mix и не должен вводить общий mutable runtime namespace.
 
 Нужно решить, оставляет ли неудачный merge отсутствие результата, частичный
 недоступный allocation, освобождаемый arena, либо явную failure Structure.
-Опубликованный результат никогда не должен показывать наполовину rebased
-node или отсутствующие отображения ShortNameId.
+Опубликованный результат не должен показывать незавершённые связи копии
+лексического окружения или отсутствующие отображения ShortNameId.
 
 14.20. Политика оптимизаций
 

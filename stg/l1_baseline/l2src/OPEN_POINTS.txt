@@ -441,8 +441,11 @@ correctly:
           existing structure.
   ~11089  merge appends copied children in operand/body order - into that fresh
           root
-  ~11728  the result appends body children, rewrites all copied node pointers
-          and re-registers - again the result being built
+  19.29.12 the result appends body children and initializes new node links to
+           copies of the ORIGINAL lexical parents (2.3); it does not reparent
+           them to the result root. Older "rewrites node" wording was corrected
+           by the user's 2026-09-11 decision. independent cuts external lexical
+           fallback, not typed dynamic inputs or expression-selected calls.
   21.11   an explicit operation may append, replace, remove or move occurrences
           only when its receiver defines that mutation, and it never reorders
   ~6063   an ordinary assignment neither updates node\[0]i nor appends a child
@@ -459,6 +462,12 @@ because nothing relocates, order is the index, containment copying is a block
 copy plus a node rewrite, and the block registers as one range. The candidate
 14.1 lists first is therefore viable, and the segmentation the earlier version
 of this entry argued for is not needed.
+
+2026-09-11 correction: the preceding "copy plus a node rewrite" argument is
+historical. The user fixed node as lexical ancestry, not result membership;
+spec 2.3 now requires copying the needed original lexical environment. Do not
+use this old cost argument to reparent copied children to a composition root.
+The existing contiguous storage does not by itself prove that merge conforms.
 
 Not a decision - 14.1 remains the user's. Recorded so the contiguous candidate
 is not passed over for a cost it does not have.
@@ -641,6 +650,13 @@ C. The related case: values from the enclosing scope
 Unit 6 - branch storage
 -----------------------
 Files: lmx_branch.lm1, lmx_branch_selftest.lm1
+
+2026-09-11 semantic correction: the implementation/test description below
+records the OLD copy-to-new-parent behavior, not conformance to current spec
+2.3. Merge must preserve original lexical ancestry in the copy; its result's
+ordered children need not have that result as node. Audit construction versus
+copy separately before changing this unit. independent (9.1.3) keeps typed
+dynamic inputs and expression-selected implementations available.
 
 ABI 14.1  Exact structural layout behind data
     RESOLVED, and implemented as resolved. A non-leaf's data addresses one
