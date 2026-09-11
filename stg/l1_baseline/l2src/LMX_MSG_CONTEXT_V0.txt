@@ -224,10 +224,14 @@ written earlier and are not claimed run here.
 Who may move payload
   Only the parent of a handoff-ready child, via adopt_failed
   (child success==0) or transfer_adopted (explicit result to
-  that parent). Source must have native_users==0, running==0,
-  handoff_ready. Destination is the parent endpoint (still
-  DEAD/RELEASED-not). No remaining source aliases into moved
-  blocks. exec lock here is transitional D7, not the mailbox.
+  that parent), and only while that parent is not disposed.
+  Caller must hold the parent's turn, or be the host owner
+  with no turn held. Source must have native_users==0,
+  running==0, handoff_ready. Every direct child of the source
+  must already be disposed. Destination is the parent
+  endpoint (not DEAD/RELEASED, not disposed). No remaining
+  source aliases into moved blocks. exec lock here is
+  transitional D7, not the mailbox.
 
 Who may free
   Parent dispose_child of a SUCCESSFUL handoff-ready child

@@ -3345,6 +3345,12 @@ int main(void) {
         (void)lmx_msg_run_child_turn(rth, g);
         (void)lmx_msg_run_child_turn(rth, c);
         (void)lmx_msg_run_child_turn(rth, c2);
+        if (lmx_msg_adopt_failed(rth, p, c) != LMX_MSG_INVALID
+            || lmx_msg_find(rth, g)->init != gbase || lmx_msg_find(rth, c)->init != cbase) {
+            fprintf(stderr, "C adopt must reject while G undisposed\n");
+            lmx_msg_runtime_delete(rth);
+            return 1;
+        }
         if (lmx_msg_adopt_failed(rth, c, g) != LMX_MSG_OK || lmx_msg_adopted_n(rth, c) != 1 || lmx_msg_adopted_base(rth, c, 0) != gbase) {
             fprintf(stderr, "G->C n=%d\n", lmx_msg_adopted_n(rth, c));
             lmx_msg_runtime_delete(rth);

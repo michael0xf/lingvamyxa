@@ -1968,20 +1968,30 @@ static int adopt_push(LmxMsg *p, void *base, size_t n) {
     return 0;
 }
 
+static int lifecycle_authority(LmxMsgRuntime *rt, LmxMsgAddr who) {
+    if (lmx_msg_exec_holding_turn(rt, who) != 0) {
+        return 1;
+    }
+    if (lmx_msg_host_is_owner(rt) != 0 && lmx_msg_exec_holding_any(rt) == 0) {
+        return 1;
+    }
+    return 0;
+}
+
 int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child) {
     LmxMsg *p;
     LmxMsg *c;
     LmxMsg *ch;
     LmxAdopted *tail;
-    if (rt == 0) {
+    if (rt == 0 || lifecycle_authority(rt, parent) == 0) {
         return LMX_MSG_INVALID;
     }
     lmx_msg_exec_lock(rt);
     p = lmx_msg_find(rt, parent);
     c = lmx_msg_find(rt, child);
-    if (p == 0 || c == 0 || c->parent_msg != p || c->native_users != 0
-        || lmx_msg_success_load(c) != 0 || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0
-        || c->disposed != 0) {
+    if (p == 0 || c == 0 || c->parent_msg != p || p->disposed != 0 || c->disposed != 0
+        || c->native_users != 0 || lmx_msg_success_load(c) != 0
+        || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
@@ -1991,7 +2001,7 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
     }
     ch = c->first_child;
     while (ch != 0) {
-        if (ch->native_users != 0 || lmx_msg_running_load(ch) != 0 || ch->handoff_ready == 0) {
+        if (ch->disposed == 0) {
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_INVALID;
         }
@@ -2072,12 +2082,16 @@ int lmx_msg_transfer_adopted(LmxMsgRuntime *rt, LmxMsgAddr from, LmxMsgAddr to) 
     LmxMsg *src;
     LmxMsg *dst;
     LmxAdopted *tail;
+    if (lifecycle_authority(rt, to) == 0) {
+        return LMX_MSG_INVALID;
+    }
     lmx_msg_exec_lock(rt);
     src = lmx_msg_find(rt, from);
     dst = lmx_msg_find(rt, to);
     if (src == 0 || dst == 0 || src == dst || src->adopted == 0
         || src->parent_msg != dst || src->native_users != 0
         || lmx_msg_running_load(src) != 0 || src->handoff_ready == 0
+        || dst->disposed != 0
         || dst->state == LMX_MSG_STATE_DEAD || dst->state == LMX_MSG_STATE_RELEASED) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
@@ -2097,10 +2111,13 @@ int lmx_msg_dispose_child(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child
     LmxMsg *p;
     LmxMsg *c;
     LmxMsg *ch;
+    if (lifecycle_authority(rt, parent) == 0) {
+        return LMX_MSG_INVALID;
+    }
     lmx_msg_exec_lock(rt);
     p = lmx_msg_find(rt, parent);
     c = lmx_msg_find(rt, child);
-    if (p == 0 || c == 0 || c->parent_msg != p || c->native_users != 0
+    if (p == 0 || c == 0 || c->parent_msg != p || p->disposed != 0 || c->native_users != 0
         || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0 || c->disposed != 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
