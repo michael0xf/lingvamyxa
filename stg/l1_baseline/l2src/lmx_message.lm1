@@ -270,6 +270,10 @@ sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
     if: rt = 0 || addr = 0U
         return
     c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_self_or_find(rt, addr)
+    if: m != 0 && m\mapped = 0 && m\parent_msg != 0
+        c.lmx_msg_sched_enqueue_child(m\parent_msg, m)
+    ---
     n: c.lmx_msg_exec_bind_n_locked(rt)
     while: i < n
         if: c.lmx_msg_exec_bind_addr_locked(rt, i) = addr
@@ -279,10 +283,6 @@ sub: lmx_msg_exec_ready (@: LmxMsgRuntime rt; LmxMsgAddr: addr)
         i: i + 1
     ---
     if: bound = 0
-        m: lmx_msg_self_or_find(rt, addr)
-        if: m != 0 && m\mapped = 0 && m\parent_msg != 0
-            c.lmx_msg_sched_enqueue_child(m\parent_msg, m)
-        ---
         c.lmx_msg_exec_unlock(rt)
         return
     ---
