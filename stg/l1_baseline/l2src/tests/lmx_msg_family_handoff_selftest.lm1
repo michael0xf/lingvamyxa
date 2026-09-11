@@ -1,0 +1,170 @@
+include: "l2src/lmx_message.h" "l2src/lmx_message_exec.h" "<stdio.h>" "<stdlib.h>"
+
+# Test-driver instrumentation only, not Message runtime state or application
+# synchronization. The GNU free wrapper observes the owner BEFORE payload free.
+prototype:
+    fn: __real_free (@: void p) void
+end: prototype
+int: family_checks 0
+int: family_watched_frees 0
+@: LmxMsg family_watch_owner 0
+@: void family_watch_a 0
+@: void family_watch_b 0
+
+sub: family_check (int: ok; const: @(char label))
+    family_checks: family_checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(1)
+    ---
+end: family_check
+
+sub: __wrap_free (@: void p)
+    if: p != 0 && (p = family_watch_a || p = family_watch_b)
+        family_check(family_watch_owner != 0 && family_watch_owner\ranges = 0, "range list detached before embedded record is freed")
+        family_watched_frees: family_watched_frees + 1
+        if: p = family_watch_a
+            family_watch_a: 0
+        ---
+        if: p = family_watch_b
+            family_watch_b: 0
+        ---
+    ---
+    c.__real_free(p)
+end: __wrap_free
+
+fn: family_end (@: LmxMsgRuntime rt; LmxMsgAddr: who; @: void ctx) int
+    if: ctx != 0
+        return: 1
+    return: lmx_msg_end_turn(rt, who, 0)
+
+# One arena block contains its range record and one byte of test data. Metadata
+# ownership follows the same allocation; records are not separately freed.
+fn: family_block (@: LmxMsg m; int: tag) @: LmxMsgBlock
+    @: LmxMsgBlock b
+    @: LmxOwnedRange r
+    @: char payload
+    size_t: offset c.sizeof(c.LmxOwnedRange)
+    b: (cast: (@: LmxMsgBlock) c.calloc(1U, c.sizeof(c.LmxMsgBlock)))
+    payload: (cast: (@: char) c.calloc(1U, offset + 1U))
+    family_check(b != 0 && payload != 0, "allocate test block")
+    r: (cast: (@: LmxOwnedRange) payload)
+    r\lo: payload + offset
+    r\hi: payload + offset + 1U
+    r\stride: 1U
+    r\kind: 1
+    r\type: tag
+    payload[offset]: (cast: (char) tag)
+    b\base: payload
+    b\n: offset + 1U
+    b\class: (cast: (unsigned) tag)
+    family_check(lmx_msg_blocks_push(@ m\blocks, b) = LMX_MSG_BLOCKS_OK, "attach test arena block")
+    family_check(lmx_owned_ranges_add(@ m\ranges, r) = LMX_OWNED_RANGES_OK, "register embedded range")
+    return: b
+
+fn: main () int
+    @: LmxMsgRuntime rt
+    # This pinned prototype typedefs LmxMsgAddr as unsigned. This test does not
+    # make that integer lookup a language-level capability representation.
+    unsigned: root 0U
+    unsigned: parent 0U
+    unsigned: child 0U
+    unsigned: grandchild 0U
+    unsigned: sibling 0U
+    unsigned: successful 0U
+    uchar: initial 7
+    @: LmxMsg p
+    @: LmxMsg m
+    @: LmxMsg g
+    @: LmxMsg s
+    @: LmxMsg k
+    @: LmxMsgBlock bp
+    @: LmxMsgBlock bc
+    @: LmxMsgBlock bg
+    @: LmxMsgBlock bs
+    @: LmxMsgBlock bk
+    @: LmxOwnedRange rp
+    @: LmxOwnedRange rc
+    @: LmxOwnedRange rg
+    @: LmxOwnedRange rs
+    @: void child_init
+    @: void grand_init
+    @: void sibling_init
+    @: char child_data
+    @: char grand_data
+    int: status
+
+    rt: lmx_msg_runtime_new()
+    family_check(rt != 0, "create root host fixture")
+    family_check(lmx_msg_create(rt, 0U, 1U, @ initial, 1U, @ root) = LMX_MSG_OK, "create fixture root")
+    family_check(lmx_msg_create(rt, root, 2U, @ initial, 1U, @ parent) = LMX_MSG_OK && lmx_msg_end_turn(rt, root, 1) = LMX_MSG_OK, "create P and commit")
+    family_check(lmx_msg_create(rt, parent, 3U, @ initial, 1U, @ child) = LMX_MSG_OK, "create C")
+    family_check(lmx_msg_create(rt, parent, 4U, @ initial, 1U, @ sibling) = LMX_MSG_OK, "create unrelated S")
+    family_check(lmx_msg_create(rt, parent, 5U, @ initial, 1U, @ successful) = LMX_MSG_OK && lmx_msg_end_turn(rt, parent, 1) = LMX_MSG_OK, "create K and commit siblings")
+    family_check(lmx_msg_create(rt, child, 6U, @ initial, 1U, @ grandchild) = LMX_MSG_OK && lmx_msg_end_turn(rt, child, 1) = LMX_MSG_OK, "create G and commit")
+    p: lmx_msg_find(rt, parent)
+    m: lmx_msg_find(rt, child)
+    g: lmx_msg_find(rt, grandchild)
+    s: lmx_msg_find(rt, sibling)
+    k: lmx_msg_find(rt, successful)
+    family_check(p != 0 && m != 0 && g != 0 && s != 0 && k != 0, "resolve fixture participants")
+    bp: family_block(p, 11)
+    bc: family_block(m, 12)
+    bg: family_block(g, 13)
+    bs: family_block(s, 14)
+    bk: family_block(k, 15)
+    rp: p\ranges
+    rc: m\ranges
+    rg: g\ranges
+    rs: s\ranges
+    child_init: m\init
+    grand_init: g\init
+    sibling_init: s\init
+    child_data: (cast: (@: char) rc\lo)
+    grand_data: (cast: (@: char) rg\lo)
+    family_check(lmx_msg_exec_bind(rt, child, family_end, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK && lmx_msg_exec_bind(rt, grandchild, family_end, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind failed branch")
+    family_check(lmx_msg_exec_bind(rt, successful, family_end, 0, LMX_MSG_AFFINITY_ANY) = LMX_MSG_OK, "bind success branch")
+
+    # Completion does not add the successful branch to P's failure history.
+    family_check(lmx_msg_complete(rt, successful) = LMX_MSG_OK, "K marks success")
+    status: lmx_msg_run_child_turn(rt, successful)
+    family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, successful) != 0 && lmx_msg_success_load(k) != 0, "K settled successfully")
+    family_watch_owner: k
+    family_watch_a: bk\base
+    family_check(lmx_msg_dispose_child(rt, parent, successful) = LMX_MSG_OK, "dispose K after success")
+    family_check(family_watched_frees = 1 && family_watch_a = 0 && k\ranges = 0 && k\blocks = 0 && k\init = 0, "successful arena freed once")
+    family_check(p\blocks = bp && bp\next = 0 && p\ranges = rp && rp\next = 0 && lmx_msg_adopted_n(rt, parent) = 1, "K absent from P retained storage")
+
+    family_check(lmx_msg_emergency_cancel(rt, grandchild) = LMX_MSG_OK && lmx_msg_emergency_cancel(rt, child) = LMX_MSG_OK, "stop failed branch")
+    status: lmx_msg_run_child_turn(rt, grandchild)
+    family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, grandchild) != 0, "G native activation left")
+    status: lmx_msg_run_child_turn(rt, child)
+    family_check((status = LMX_MSG_OK || status = 1) && lmx_msg_handoff_ready(rt, child) != 0, "C native activation left")
+    family_check(lmx_msg_adopt_failed(rt, parent, child) = LMX_MSG_INVALID && p\blocks = bp && m\blocks = bc && g\blocks = bg, "cannot skip unsettled grandchild")
+    family_check(lmx_msg_adopt_failed(rt, sibling, grandchild) = LMX_MSG_INVALID && g\init = grand_init && g\ranges = rg && s\blocks = bs, "sibling cannot adopt G")
+
+    family_check(lmx_msg_adopt_failed(rt, child, grandchild) = LMX_MSG_OK, "G to C")
+    family_check(g\blocks = 0 && g\ranges = 0 && g\init = 0 && g\disposed != 0, "G ownership emptied")
+    family_check(m\ranges = rg && rg\next = rc && rc\next = 0 && lmx_owned_ranges_find(m\ranges, grand_data) = rg && lmx_owned_ranges_find(m\ranges, child_data) = rc, "G range identity and classification follow C")
+    family_check(lmx_msg_adopted_n(rt, child) = 3 && lmx_msg_adopted_base(rt, child, 0) = grand_init && lmx_msg_adopted_base(rt, child, 1) = bg\base && lmx_msg_adopted_base(rt, child, 2) = bc\base, "C owns its block and G block/init")
+    family_check(lmx_msg_adopt_failed(rt, parent, child) = LMX_MSG_OK, "C to P")
+    family_check(m\blocks = 0 && m\ranges = 0 && m\init = 0 && m\disposed != 0, "C ownership emptied")
+    family_check(p\ranges = rg && rg\next = rc && rc\next = rp && rp\next = 0 && lmx_owned_ranges_find(p\ranges, grand_data) = rg && lmx_owned_ranges_find(p\ranges, child_data) = rc, "both range addresses survive second handoff")
+    family_check(lmx_msg_adopted_n(rt, parent) = 5 && lmx_msg_adopted_base(rt, parent, 0) = child_init && lmx_msg_adopted_base(rt, parent, 1) = grand_init && lmx_msg_adopted_base(rt, parent, 2) = bg\base && lmx_msg_adopted_base(rt, parent, 3) = bc\base && lmx_msg_adopted_base(rt, parent, 4) = bp\base, "P retains only failed branch plus own storage")
+    family_check(child_data[0] = 12 && grand_data[0] = 13, "failed graph payload unchanged")
+    family_check(s\blocks = bs && bs\next = 0 && s\ranges = rs && rs\next = 0 && s\init = sibling_init && lmx_msg_running_load(s) != 0 && s\disposed = 0, "unrelated S storage and liveness untouched")
+    family_check(g\parent_msg = m && m\parent_msg = p && s\parent_msg = p, "handoff is not live reparenting")
+
+    # Parent retained data is disposed explicitly here for the test; this does
+    # not choose a language policy for retention duration or forwarding history.
+    family_watch_owner: p
+    family_watch_a: bg\base
+    family_watch_b: bc\base
+    family_check(lmx_owned_ranges_remove(@ p\ranges, rg) = LMX_OWNED_RANGES_OK && lmx_owned_ranges_remove(@ p\ranges, rc) = LMX_OWNED_RANGES_OK && lmx_owned_ranges_remove(@ p\ranges, rp) = LMX_OWNED_RANGES_OK, "detach P classification metadata before test cleanup")
+    family_check(lmx_msg_blocks_dispose_all(@ p\blocks) = LMX_MSG_BLOCKS_OK && p\blocks = 0, "release retained test storage")
+    family_check(family_watched_frees = 3 && family_watch_a = 0 && family_watch_b = 0, "G and C arena blocks freed exactly once")
+    family_watch_owner: 0
+    family_check(s\blocks = bs && s\ranges = rs && s\init = sibling_init, "P cleanup still leaves S owned")
+    lmx_msg_runtime_delete(rt)
+    c.printf("family handoff checks=%d failures=0 watched_frees=%d\n", family_checks, family_watched_frees)
+    return: 0

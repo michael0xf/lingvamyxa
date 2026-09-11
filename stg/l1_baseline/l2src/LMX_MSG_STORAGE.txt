@@ -66,3 +66,28 @@ ranges have no external calls, blocks only free for its separate disposer API.
 The existing run_msg_blocks.ps1 regression suite remains 115 checks at O0/O2.
 Generated code, pinned/source hashes, logs and stage exits remain private build
 artifacts, not new source files or a claim of complete Message integration.
+
+Family integration regression (public APIs, authored in L1)
+----------------------------------------------------------
+run_msg_family_handoff.ps1 builds tests/lmx_msg_family_handoff_selftest.lm1
+against a PRIVATE git archive of core commit 1585f70b86fb64e5704533378a9aa31f0d0557ea.
+It does not compile Grok's actively changing checkout or use its build outputs.
+An explicit -CoreCommit selects another agreed checkpoint; there is no automatic
+tracking of HEAD or promotion. Evidence records the resolved commit, 13 archived
+source hashes, test/runner/compiler hashes, generated artifacts and stage exits.
+
+The 53 checks at O0/O2 cover G->C->P failed storage retention, unchanged payload
+and range-record addresses, a live unrelated
+sibling S whose storage is untouched, and successful sibling K whose arena is
+disposed rather than retained by P. Every range record lives in its own block's
+payload allocation. Test-only GNU free wrapping, also L1, verifies that the
+owning range list is already detached at actual deallocation. P's retained
+fixture storage is explicitly discarded after assertions; this does not select
+a language retention duration or forward histories automatically.
+
+The test object uses -Werror. The pinned native substrate uses the established
+pointer/implicit-declaration guards; it currently emits one unused adopt_push
+warning. No new C source, production hooks, scheduler or locks are introduced.
+This is sequential lifecycle/storage integration, NOT a parallel scheduling,
+race-freedom, current-owner ABI or global-table-removal proof. The old prototype
+still has its documented deviations; passing this test does not bless them.

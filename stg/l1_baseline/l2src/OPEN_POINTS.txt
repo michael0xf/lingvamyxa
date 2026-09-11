@@ -36,6 +36,19 @@ Sources
   NOTES Lingvamyxa_handoff_notes.txt
 
 
+Unit - L1 family-handoff integration test (2026-09-11)
+----------------------------------------------------
+Files: tests/lmx_msg_family_handoff_selftest.lm1, run_msg_family_handoff.ps1.
+
+SPEC 19.29.8 / 19.29.7.1
+    DECIDED bottom-up failed arena retention, separate successful cleanup and
+    unchanged native addresses. Exercises embedded owner-local range records,
+    sibling isolation and detach-before-free through existing public APIs.
+    AVOIDED root/current-owner lookup, capability ABI migration, scheduling and
+    concurrency policy: test uses a private snapshot of the agreed prototype
+    checkpoint, not a new implementation or proof of complete Message semantics.
+    Native free instrumentation belongs to this single-thread test driver only.
+
 Unit - Paired Message storage handoff (2026-09-11)
 ------------------------------------------------
 Files: lmx_msg_storage.h.lm1/.lm1, dedicated tests/runner/doc;
