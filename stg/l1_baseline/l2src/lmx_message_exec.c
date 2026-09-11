@@ -91,6 +91,51 @@ static LmxMsgExec *exof(LmxMsgRuntime *rt) {
     return (LmxMsgExec *)rt->exec;
 }
 
+void lmx_msg_endp_retain(LmxMsg *m) {
+    long r;
+    if (m == 0) {
+        return;
+    }
+    r = m->refs;
+    if (r < 1 || r >= 2147483647) {
+        return;
+    }
+#if defined(_WIN32)
+    InterlockedIncrement((LONG *)&m->refs);
+#else
+    m->refs = r + 1;
+#endif
+}
+
+void lmx_msg_endp_release(LmxMsg *m) {
+    if (m == 0) {
+        return;
+    }
+#if defined(_WIN32)
+    if (m->refs > 0) {
+        InterlockedDecrement((LONG *)&m->refs);
+    }
+#else
+    if (m->refs > 0) {
+        m->refs = m->refs - 1;
+    }
+#endif
+}
+
+unsigned lmx_msg_now(LmxMsgRuntime *rt) {
+    if (rt == 0) {
+        return 0U;
+    }
+    if (rt->clock_test != 0) {
+        return rt->clock;
+    }
+#if defined(_WIN32)
+    return GetTickCount();
+#else
+    return rt->clock;
+#endif
+}
+
 int lmx_msg_path_grow(LmxMsg *slot, int need) {
     int cap;
     unsigned *p;
@@ -1156,21 +1201,26 @@ static DWORD WINAPI context_worker(void *arg) {
         wh[0] = e->stop_ev;
         wh[1] = ev;
         {
-            DWORD wr = WaitForMultipleObjects(2, wh, 0, 20);
             LmxMsg *self;
             unsigned th = 0;
             unsigned now = 0;
-            if (wr == WAIT_OBJECT_0) {
-                return 0;
-            }
+            DWORD to = INFINITE;
+            DWORD wr;
             lmx_msg_exec_lock(rt);
             self = msg_at_addr(rt, addr);
             if (self != 0) {
                 th = self->live_wait_th;
-                now = rt->clock;
             }
             lmx_msg_exec_unlock(rt);
-            if (th != 0U && wr == WAIT_TIMEOUT) {
+            if (th != 0U) {
+                to = 20;
+            }
+            wr = WaitForMultipleObjects(2, wh, 0, to);
+            if (wr == WAIT_OBJECT_0) {
+                return 0;
+            }
+            if (th != 0U && wr != WAIT_FAILED) {
+                now = lmx_msg_now(rt);
                 lmx_msg_exec_lock(rt);
                 set_tls(e, addr);
                 lmx_msg_exec_unlock(rt);

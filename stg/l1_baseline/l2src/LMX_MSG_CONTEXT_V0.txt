@@ -154,9 +154,12 @@ at successful end_turn, not STAGED). child_heard_at is the
 parent's own record of that child, set on first commit and on
 authenticated child query only. Parent live_check does not
 inspect the child's live_query_id. A mapped child applies its
-own wait on its wait-thread timeout. dest_msg holds a refcounted
-control object, not a graph pointer into another arena. tab/find
-and the shared exec lock remain D1/D7. Not poll(0)/drive.
+own wait on its wait-thread timeout. dest_msg retains a control object (atomic refs). runtime_delete
+drains all envelopes while endpoints still live, then frees
+endpoints. Not a graph pointer. Test clock is explicit (set_now);
+mapped wait uses lmx_msg_now. live_wait_th is test/profile
+setting, not a language default. tab/find and the shared exec lock
+remain D1/D7. Not poll(0)/drive.
 
 Not yet
 -------

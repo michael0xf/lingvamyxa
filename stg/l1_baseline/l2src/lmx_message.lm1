@@ -34,8 +34,9 @@ sub: lmx_msg_copy_free (@: LmxMsgCopy node)
         if: node\bytes != 0
             c.free((cast: (@: void) node\bytes))
         ---
-        if: node\dest_msg != 0 && node\dest_msg\refs > 0
-            node\dest_msg\refs: node\dest_msg\refs - 1
+        if: node\dest_msg != 0
+            c.lmx_msg_endp_release(node\dest_msg)
+            node\dest_msg: 0
         ---
         c.free((cast: (@: void) node))
         node: next
@@ -54,10 +55,6 @@ fn: lmx_msg_copy_dup (const: @(LmxMsgCopy src)) @: LmxMsgCopy
     n\reply_to: src\reply_to
     n\from: src\from
     n\to: src\to
-    n\dest_msg: src\dest_msg
-    if: n\dest_msg != 0
-        n\dest_msg\refs: n\dest_msg\refs + 1
-    ---
     n\kind: src\kind
     n\number: src\number
     n\n: src\n
@@ -66,6 +63,15 @@ fn: lmx_msg_copy_dup (const: @(LmxMsgCopy src)) @: LmxMsgCopy
     if: src\n != 0U && n\bytes = 0
         c.free((cast: (@: void) n))
         return: 0
+    n\dest_msg: src\dest_msg
+    if: n\dest_msg != 0
+        if: n\dest_msg\refs < 1 || n\dest_msg\refs = 2147483647
+            n\dest_msg: 0
+        ---
+        if: n\dest_msg != 0
+            c.lmx_msg_endp_retain(n\dest_msg)
+        ---
+    ---
 return: n
 
 sub: lmx_msg_q_push (@@: LmxMsgCopy head; @@: LmxMsgCopy tail; @: LmxMsgCopy node)
@@ -418,21 +424,39 @@ sub: lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     rt\host_head: 0
     rt\host_tail: 0
     c.lmx_msg_host_unlock(rt)
-    lmx_msg_copy_free(leftover)
     c.lmx_msg_exec_stop(rt)
+    c.lmx_msg_exec_lock(rt)
+    lmx_msg_copy_free(leftover)
+    i: 0
     while: i < rt\n
         m: rt\tab[i]
-        lmx_msg_copy_free(m\inbox)
-        lmx_msg_copy_free(m\outbox)
-        if: m\init != 0
-            c.free((cast: (@: void) m\init))
+        if: m != 0
+            lmx_msg_copy_free(m\inbox)
+            lmx_msg_copy_free(m\outbox)
+            m\inbox: 0
+            m\inbox_tail: 0
+            m\outbox: 0
+            m\outbox_tail: 0
         ---
-        if: m\path != 0
-            c.free((cast: (@: void) m\path))
-        ---
-        c.free((cast: (@: void) m))
         i: i + 1
     lmx_msg_copy_free(rt\transport)
+    rt\transport: 0
+    rt\transport_tail: 0
+    i: 0
+    while: i < rt\n
+        m: rt\tab[i]
+        if: m != 0
+            if: m\init != 0
+                c.free((cast: (@: void) m\init))
+            ---
+            if: m\path != 0
+                c.free((cast: (@: void) m\path))
+            ---
+            c.free((cast: (@: void) m))
+            rt\tab[i]: 0
+        ---
+        i: i + 1
+    c.lmx_msg_exec_unlock(rt)
     if: rt\tab != 0
         c.free((cast: (@: void) rt\tab))
     ---
@@ -580,7 +604,12 @@ fn: lmx_msg_send (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; const: 
         return: c.LMX_MSG_STOPPED
     node\dest_msg: lmx_msg_find(rt, to)
     if: node\dest_msg != 0
-        node\dest_msg\refs: node\dest_msg\refs + 1
+        if: node\dest_msg\refs < 1 || node\dest_msg\refs = 2147483647
+            c.lmx_msg_exec_unlock(rt)
+            lmx_msg_copy_free(node)
+            return: c.LMX_MSG_NOMEM
+        ---
+        c.lmx_msg_endp_retain(node\dest_msg)
     ---
     lmx_msg_q_push(@ src\outbox, @ src\outbox_tail, node)
     c.lmx_msg_exec_unlock(rt)
@@ -931,6 +960,7 @@ fn: lmx_msg_set_now (@: LmxMsgRuntime rt; unsigned: now) int
         return: c.LMX_MSG_INVALID
     c.lmx_msg_exec_lock(rt)
     rt\clock: now
+    rt\clock_test: 1
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK
 
@@ -1163,7 +1193,7 @@ fn: lmx_msg_sched_step (@: LmxMsgRuntime rt; LmxMsgAddr: parent) int
     while: ch != 0
         if: ch\mapped = 0 && ch\turn != 0
             if: ch\state != c.LMX_MSG_STATE_STOPPED && ch\state != c.LMX_MSG_STATE_DEAD && ch\state != c.LMX_MSG_STATE_RELEASED
-                if: ch\inbox != 0 || ch\closing != 0 || ch\live_query_id != 0U
+                if: ch\inbox != 0 || ch\closing != 0
                     addr: ch\addr
                     ch: 0
                 ---
@@ -1218,9 +1248,6 @@ fn: lmx_msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     if: m != 0
         m\live_query_pend_id: qid
         m\live_query_pend_at: rt\clock
-        if: m\live_wait_th = 0U
-            m\live_wait_th: 5U
-        ---
     ---
     c.lmx_msg_exec_unlock(rt)
 return: st
@@ -1339,5 +1366,18 @@ fn: lmx_msg_live_test_set_seq (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: v
         c.lmx_msg_exec_unlock(rt)
         return: c.LMX_MSG_INVALID
     m\live_seq: v
+    c.lmx_msg_exec_unlock(rt)
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_live_test_set_wait_th (@: LmxMsgRuntime rt; LmxMsgAddr: who; unsigned: th) int
+    @: LmxMsg m
+    if: lmx_msg_require_owner(rt) != c.LMX_MSG_OK
+        return: c.LMX_MSG_INVALID
+    c.lmx_msg_exec_lock(rt)
+    m: lmx_msg_find(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_unlock(rt)
+        return: c.LMX_MSG_INVALID
+    m\live_wait_th: th
     c.lmx_msg_exec_unlock(rt)
 return: c.LMX_MSG_OK

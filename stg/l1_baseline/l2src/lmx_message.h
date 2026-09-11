@@ -134,6 +134,7 @@ struct LmxMsgRuntime {
     void *exec;
     unsigned next_addr;
     unsigned clock;
+    int clock_test;
     unsigned root_seq;
 };
 
@@ -178,5 +179,9 @@ int lmx_msg_live_query(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_live_handle(LmxMsgRuntime *rt, LmxMsgAddr who, const LmxMsgEnv *env);
 int lmx_msg_live_check(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now, unsigned threshold);
 int lmx_msg_live_test_set_seq(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned v);
+int lmx_msg_live_test_set_wait_th(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned th);
+unsigned lmx_msg_now(LmxMsgRuntime *rt);
+void lmx_msg_endp_retain(LmxMsg *m);
+void lmx_msg_endp_release(LmxMsg *m);
 
 #endif

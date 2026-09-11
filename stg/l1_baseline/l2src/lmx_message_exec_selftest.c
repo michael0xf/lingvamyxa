@@ -2545,6 +2545,9 @@ int main(void) {
             return 1;
         }
         lmx_msg_pump(rtl);
+        if (lmx_msg_live_test_set_wait_th(rtl, c, 5U) != LMX_MSG_OK) {
+            return 1;
+        }
         if (lmx_msg_map_child(rtl, p, c) != LMX_MSG_OK) {
             fprintf(stderr, "child-timer map\n");
             return 1;
