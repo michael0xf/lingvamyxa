@@ -1979,7 +1979,8 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
     lmx_msg_exec_lock(rt);
     p = lmx_msg_find(rt, parent);
     c = lmx_msg_find(rt, child);
-    if (p == 0 || c == 0 || c->parent_msg != p || c->native_users != 0 || lmx_msg_success_load(c) != 0) {
+    if (p == 0 || c == 0 || c->parent_msg != p || c->native_users != 0
+        || lmx_msg_success_load(c) != 0 || lmx_msg_running_load(c) != 0 || c->handoff_ready == 0) {
         lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
@@ -1989,7 +1990,7 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
     }
     ch = c->first_child;
     while (ch != 0) {
-        if (ch->native_users != 0 || (lmx_msg_running_load(ch) != 0 && ch->handoff_ready == 0)) {
+        if (ch->native_users != 0 || lmx_msg_running_load(ch) != 0 || ch->handoff_ready == 0) {
             lmx_msg_exec_unlock(rt);
             return LMX_MSG_INVALID;
         }
@@ -2020,13 +2021,16 @@ int lmx_msg_adopted_n(LmxMsgRuntime *rt, LmxMsgAddr who) {
     LmxMsg *m;
     LmxAdopted *a;
     int n = 0;
+    lmx_msg_exec_lock(rt);
     m = lmx_msg_find(rt, who);
     if (m == 0) {
+        lmx_msg_exec_unlock(rt);
         return -1;
     }
     for (a = m->adopted; a != 0; a = a->next) {
         n += 1;
     }
+    lmx_msg_exec_unlock(rt);
     return n;
 }
 
@@ -2034,24 +2038,31 @@ void *lmx_msg_adopted_base(LmxMsgRuntime *rt, LmxMsgAddr who, int i) {
     LmxMsg *m;
     LmxAdopted *a;
     int k = 0;
+    void *base = 0;
+    lmx_msg_exec_lock(rt);
     m = lmx_msg_find(rt, who);
     if (m == 0 || i < 0) {
+        lmx_msg_exec_unlock(rt);
         return 0;
     }
     for (a = m->adopted; a != 0; a = a->next) {
         if (k == i) {
-            return a->base;
+            base = a->base;
+            break;
         }
         k += 1;
     }
-    return 0;
+    lmx_msg_exec_unlock(rt);
+    return base;
 }
 
 int lmx_msg_drop_adopted(LmxMsgRuntime *rt, LmxMsgAddr who) {
     LmxMsg *m;
     LmxAdopted *a;
+    lmx_msg_exec_lock(rt);
     m = lmx_msg_find(rt, who);
     if (m == 0) {
+        lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
     while (m->adopted != 0) {
@@ -2060,31 +2071,49 @@ int lmx_msg_drop_adopted(LmxMsgRuntime *rt, LmxMsgAddr who) {
         free(a->base);
         free(a);
     }
+    lmx_msg_exec_unlock(rt);
+    return LMX_MSG_OK;
+}
+
+int lmx_msg_retain_history(LmxMsgRuntime *rt, LmxMsgAddr who) {
+    LmxMsg *m;
+    lmx_msg_exec_lock(rt);
+    m = lmx_msg_find(rt, who);
+    if (m == 0) {
+        lmx_msg_exec_unlock(rt);
+        return LMX_MSG_INVALID;
+    }
+    m->retain_history = 1;
+    lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
 }
 
 int lmx_msg_set_orphan_until(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned until) {
-    LmxMsg *m = lmx_msg_find(rt, who);
+    LmxMsg *m;
+    lmx_msg_exec_lock(rt);
+    m = lmx_msg_find(rt, who);
     if (m == 0) {
+        lmx_msg_exec_unlock(rt);
         return LMX_MSG_INVALID;
     }
     m->orphan_until = until;
+    lmx_msg_exec_unlock(rt);
     return LMX_MSG_OK;
 }
 
 int lmx_msg_orphan_expired(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now) {
     LmxMsg *m;
     LmxMsg *p;
+    int exp = 0;
+    lmx_msg_exec_lock(rt);
     m = lmx_msg_find(rt, who);
-    if (m == 0 || m->orphan_until == 0U || now < m->orphan_until) {
-        return 0;
+    if (m != 0 && m->orphan_until != 0U && now >= m->orphan_until
+        && m->native_users == 0 && lmx_msg_success_load(m) == 0 && m->handoff_ready != 0) {
+        p = m->parent_msg;
+        if (p == 0 || p->state == LMX_MSG_STATE_DEAD || p->state == LMX_MSG_STATE_RELEASED) {
+            exp = 1;
+        }
     }
-    if (m->native_users != 0 || lmx_msg_success_load(m) != 0 || m->handoff_ready == 0) {
-        return 0;
-    }
-    p = m->parent_msg;
-    if (p != 0 && p->state != LMX_MSG_STATE_DEAD && p->state != LMX_MSG_STATE_RELEASED && p->state != LMX_MSG_STATE_STOPPED) {
-        return 0;
-    }
-    return 1;
+    lmx_msg_exec_unlock(rt);
+    return exp;
 }

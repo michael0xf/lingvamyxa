@@ -135,6 +135,7 @@ typedef struct LmxMsg {
     int handoff_ready;
     int native_users;
     unsigned orphan_until;
+    int retain_history;
     struct LmxAdopted *adopted;
 } LmxMsg;
 
@@ -225,6 +226,7 @@ int lmx_msg_adopt_failed(LmxMsgRuntime *rt, LmxMsgAddr parent, LmxMsgAddr child)
 int lmx_msg_adopted_n(LmxMsgRuntime *rt, LmxMsgAddr who);
 void *lmx_msg_adopted_base(LmxMsgRuntime *rt, LmxMsgAddr who, int i);
 int lmx_msg_drop_adopted(LmxMsgRuntime *rt, LmxMsgAddr who);
+int lmx_msg_retain_history(LmxMsgRuntime *rt, LmxMsgAddr who);
 int lmx_msg_set_orphan_until(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned until);
 int lmx_msg_orphan_expired(LmxMsgRuntime *rt, LmxMsgAddr who, unsigned now);
 #if defined(LMX_MSG_HOST_TEST) || defined(LMX_MSG_EXEC_TEST)

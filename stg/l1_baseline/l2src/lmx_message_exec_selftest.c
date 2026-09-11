@@ -3360,8 +3360,24 @@ int main(void) {
             lmx_msg_runtime_delete(rth);
             return 1;
         }
-        if (lmx_msg_drop_adopted(rth, p) != LMX_MSG_OK || lmx_msg_adopted_n(rth, p) != 0) {
-            fprintf(stderr, "P success drop inherited\n");
+        {
+            LmxMsgAddr live = 0;
+            void *live_init;
+            if (lmx_msg_create(rth, p, 9, &ini, 1, &live) != LMX_MSG_OK || lmx_msg_end_turn(rth, p, 1) != LMX_MSG_OK) {
+                fprintf(stderr, "live create\n");
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
+            live_init = lmx_msg_find(rth, live)->init;
+            if (lmx_msg_adopt_failed(rth, p, live) != LMX_MSG_INVALID || lmx_msg_find(rth, live)->init != live_init) {
+                fprintf(stderr, "live idle adopt must reject and keep init\n");
+                lmx_msg_runtime_delete(rth);
+                return 1;
+            }
+        }
+        if (lmx_msg_complete(rth, p) != LMX_MSG_OK || lmx_msg_adopted_n(rth, p) != 0 || lmx_msg_success_load(lmx_msg_find(rth, p)) == 0) {
+            fprintf(stderr, "P complete must drop inherited n=%d success=%d\n",
+                lmx_msg_adopted_n(rth, p), (int)lmx_msg_success_load(lmx_msg_find(rth, p)));
             lmx_msg_runtime_delete(rth);
             return 1;
         }
@@ -3373,7 +3389,7 @@ int main(void) {
             lmx_msg_runtime_delete(rth);
             return 1;
         }
-        fprintf(stderr, "handoff nest users G-C-P n=3 drop=0\n");
+        fprintf(stderr, "handoff nest users G-C-P n=3 complete-drop live-reject\n");
         lmx_msg_runtime_delete(rth);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
