@@ -395,10 +395,10 @@ struct Lmx *lmx_msg_graph(LmxMsg *m) {
     return m->graph;
 }
 
-void lmx_msg_mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen);
+int lmx_msg_mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen);
 
 static void mark_from(LmxMsg *m, Lmx *x, LmxVisit *seen) {
-    lmx_msg_mark_from(m, x, seen);
+    (void)lmx_msg_mark_from(m, x, seen);
 }
 
 static int ptr_in_block(const unsigned char *p, LmxMsgBlock *b) {
