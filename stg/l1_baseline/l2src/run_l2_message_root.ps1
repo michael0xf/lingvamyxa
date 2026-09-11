@@ -18,7 +18,7 @@ function Assert-RootExit([string]$Stage) {
     if ($LASTEXITCODE -ne 0) { throw "$Stage exit $LASTEXITCODE" }
 }
 function Assert-RootSignatureDiagnostics([string]$Text, [string]$Stage, [switch]$GeneratedC) {
-    $symbols = '\bl2_(sig_f[01]|intern_(id|again|swap|probe))\b'
+    $symbols = '\bl2_(sig_f[01]|intern_(id|again|swap|probe)|own\d+)\b'
     if ($GeneratedC) {
         if ($Text -match $symbols) { throw "$Stage retains runtime signature diagnostics" }
     } else {
@@ -154,7 +154,9 @@ end: external
         Invoke-Gcc "$out/$stem.c" "$out/$stem.exe" "$out/$stem.gcc.log"
         & "$out/$stem.exe" *> "$out/$stem.run.log"
         Assert-RootExit "${stem}_run"
-        $actual = (Get-Content -LiteralPath "$out/$stem.run.log" -Raw).Replace("`r`n", "`n").Trim()
+        $rawOutput = Get-Content -LiteralPath "$out/$stem.run.log" -Raw
+        $actual = ''
+        if ($null -ne $rawOutput) { $actual = $rawOutput.Replace("`r`n", "`n").Trim() }
         if ($actual -ne $expected) { throw "$stem output '$actual' expected '$expected'" }
         foreach ($obj in $rootObjects) {
             if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "$stem rebuilt support object: $obj" }
@@ -201,6 +203,16 @@ end: external
         c.printf("%zu %zu\n", lmx_size_value(leaf\data), lmx_size_value(kid\data))
 '@ "1 2`n2147483648 2"
     Invoke-RootPrimitiveCase 'unit_printf_char' '        l2_m0(unit)' '65' $true
+    Invoke-RootPrimitiveCase 'unit_own5' '        l2_m0(unit)' ''
+    Invoke-RootPrimitiveCase 'unit_own6' '        l2_m0(unit)' '' $true
+    foreach ($case in @(@{stem='unit_own5'; names=@('a','b','c','d','e')}, @{stem='unit_own6'; names=@('i','ch','count','width','line','column')})) {
+        $text = Get-Content -LiteralPath "$out/$($case.stem).lm1" -Raw
+        $ownNames = [regex]::Matches($text, '(?m)^# const: @\(char l2_own(\d+)\) "([^"]*)"\r?$')
+        if ($ownNames.Count -ne $case.names.Count) { throw "$($case.stem) own-name evidence count changed" }
+        for ($i = 0; $i -lt $case.names.Count; $i++) {
+            if ([int]$ownNames[$i].Groups[1].Value -ne $i -or $ownNames[$i].Groups[2].Value -ne $case.names[$i]) { throw "$($case.stem) own-name evidence/order changed at $i" }
+        }
+    }
     # Reuse existing formal-order/name fixtures. Translation itself runs the
     # canonical intern proof; no extra compiler build or runtime object set.
     $contracts = @{}

@@ -222,13 +222,35 @@ The saved source hashes were rechecked after the run. This checkpoint deliberate
 does not claim the latest collector integration was rebuilt: Grok's separate
 0ce7957 runtime integration and saved Exec PASS were reviewed read-only.
 
+Own-name diagnostics without runtime state, 2026-09-11
+----------------------------------------------------
+The emitted l2_ownN names are also comment-only translation evidence. Their
+source spelling and index order remain available to existing textual OwnUsed
+checks. This removes their file-scope pointer definitions, not actual fields,
+typed caches, dirty flags, graph storage or source visibility.
+
+Saved PASS:
+  build/codex/l2_message_root/20260911_202123_402_9ec9fbcb/evidence.json
+Same isolated eaac7c5 base/five overlays and stable compiler pin. 63 successful
+stages; previous eighteen driver modes / 649 assertions and all outputs pass.
+Generated C is checked for absence of own-name as well as signature-diagnostic
+symbols. Existing unit_own5 and unit_own6 run their actual method bodies through
+the synthetic Message entry; metadata is checked for all five/six original names
+in order. The mixed char/size_t fixture keeps its existing char intern path.
+One private translator/thirteen unchanged support objects, no self-build rerun.
+
+The added silent-output fixtures exposed an empty-file handling bug in the
+focused PowerShell runner. Explicit null handling now accepts genuinely empty
+stdout; it does not hide a failed exit or a mismatch against nonempty expected
+output. Two earlier runs failed in that harness check, not in the translated
+method. Only the final path above is accepted evidence.
+
 Remaining limitations (not fixed or blessed by these checkpoints)
 ---------------------------------------------------------------
 Interned characters and their legacy range catalog remain in dependent units.
-P0/foreign/query predefs can still bring in old definitions. Signature diagnostics
-no longer create runtime state, but other emitted diagnostic names (l2_ownN)
-still exist at file scope, and the L1 translator itself has compiler state.
-Removing range/pool and signature diagnostics is NOT proof all globals are gone.
+P0/foreign/query predefs can still bring in old definitions. Signature and own-name
+diagnostics no longer create runtime state; the L1 translator itself still has
+compiler state. This is NOT proof that all globals in the full toolchain are gone.
 There is no claim that all remaining generated global state or allocations are
 gone. Root/METHOD/CHILDREN/int/size_t owner admission is NOT evidence of complete
 graph collectibility, reference-ARRAY admission or full allocation cleanup. These

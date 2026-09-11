@@ -6947,7 +6947,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
         return: 1
     k: 0
     while: k < l2_own_n
-        if: c.fprintf(l2_out, "const: @(char l2_own%d) \"", k) < 0
+        if: c.fprintf(l2_out, "# const: @(char l2_own%d) \"", k) < 0
             c.fclose(l2_out)
             return: 1
         if: l2_write_text(l2_out, l2_own_name[k]) != 0
