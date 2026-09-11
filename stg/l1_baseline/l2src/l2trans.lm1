@@ -181,6 +181,7 @@ prototype:
     fn: l2_parse_entry_formals (const: @(LmP0Node params); const: @(char path)) int
     fn: l2_write_entry_sig (@: FILE out) int
     fn: l2_ccall_box_int (const: @(LmP0Node node); int: mi) int
+    fn: l2_index_tail (@: LmP0Field f; @@: LmP0Field out_idx; @@: LmP0Field out_after) int
     fn: l2_typed_formal (const: @(LmP0Node node); const: @(char path); @@: LmP0Text out_name; @: int out_ty) int
     fn: l2_simple_puts_main (const: @(LmP0Node body_node)) int
     fn: l2_is_slash (const: @(LmP0Text t)) int
@@ -5472,6 +5473,35 @@ fn: l2_emit_path_load (int: mi; int: oi; const: @(char ind); @: char dest) int
         return: 1
 return: 0
 
+fn: l2_index_tail (@: LmP0Field f; @@: LmP0Field out_idx; @@: LmP0Field out_after) int
+    @: LmP0Field p1
+    @: LmP0Field p2
+    @: LmP0Field p3
+    if: out_idx = 0 || out_after = 0
+        return: 1
+    out_idx[0]: 0
+    out_after[0]: 0
+    if: f = 0 || f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || f\value\as = 0
+        return: 1
+    if: l2_ident(f\value\as\atom) = 0
+        return: 1
+    p1: l2_next_active(f\next)
+    if: p1 = 0 || p1\value = 0 || p1\value\kind != c.LM_P0_NODE_ATOM || p1\value\as = 0
+        return: 1
+    if: l2_text_eq(p1\value\as\atom, "[") = 0
+        return: 1
+    p2: l2_next_active(p1\next)
+    if: p2 = 0 || p2\value = 0
+        return: 1
+    p3: l2_next_active(p2\next)
+    if: p3 = 0 || p3\value = 0 || p3\value\kind != c.LM_P0_NODE_ATOM || p3\value\as = 0
+        return: 1
+    if: l2_text_eq(p3\value\as\atom, "]") = 0
+        return: 1
+    out_idx[0]: p2
+    out_after[0]: l2_next_active(p3\next)
+return: 0
+
 fn: l2_ccall_box_int (const: @(LmP0Node node); int: mi) int
     int: ei
     int: fi
@@ -5549,6 +5579,27 @@ fn: l2_emit_ccall (const: @(LmP0Node stmt); int: mi; const: @(char ind)) int
                 return: 1
             i: i + 2
             f: p2
+        if: po < 0 && l2_index_tail(f, @ p1, @ p2) = 0
+            if: first = 0 && l2_cat(buf, ", ") != 0
+                return: 1
+            if: l2_prep(f\value, mi, ind, piece) != 0
+                return: 1
+            if: l2_cat(buf, piece) != 0
+                return: 1
+            if: l2_cat(buf, "[") != 0
+                return: 1
+            piece[0]: 0
+            if: l2_prep(p1\value, mi, ind, piece) != 0
+                return: 1
+            if: l2_cat(buf, piece) != 0
+                return: 1
+            if: l2_cat(buf, "]") != 0
+                return: 1
+            first: 0
+            i: i + 4
+            f: p2
+            continue
+        ---
         if: po < 0 && l2_prep(f\value, mi, ind, piece) != 0
             return: 1
         if: po < 0 && l2_ccall_box_int(f\value, mi) != 0 && l2_new_temp(ind, l2_tok) != 0

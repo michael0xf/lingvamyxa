@@ -260,6 +260,13 @@ Invoke-Negative "l2src\tests\entry_argc_dup.lm2" "entry_argc_dup" "duplicate for
 Invoke-Negative "l2src\tests\entry_argc_bad.lm2" "entry_argc_bad" "unknown foreign type"
 Invoke-Entry "l2src\tests\entry_argc_if.lm2" "entry_argc_if" 0 @("fn: main (int: count; @@: char values) int", "if:") $null
 Invoke-Entry "l2src\tests\entry_fputs.lm2" "entry_fputs" 0 @("c.fputs(") "hi`n"
+Invoke-Entry "l2src\tests\entry_index.lm2" "entry_index" 1 @("values[1]", "c.fputs(values[1], c.stdout)") $null
+$idxExe = Join-Path $out "entry_index.exe"
+$idxOut = Join-Path $out "entry_index.arg.stdout"
+cmd /c "`"$idxExe`" hello > `"$idxOut`" 2> `"$(Join-Path $out 'entry_index.arg.err')`""
+if ($LASTEXITCODE -ne 0) { throw "entry_index hello exit $LASTEXITCODE" }
+$idxGot = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $idxOut)).Replace("`r`n", "`n")
+if ($idxGot -ne "hello") { throw "entry_index hello stdout '$idxGot'" }
 Invoke-Negative "l2src\tests\entry_overflow.lm2" "entry_overflow" "return literal not representable as int"
 Invoke-AdmitEmit "l2src\tests\entry_int_max.lm2" "entry_int_max" "2147483647"
 

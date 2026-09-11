@@ -1,0 +1,8 @@
+L2:
+    fn: main (int: count; @@: char values) int
+        if: count != 2
+            return: 1
+        c.fputs: values[1] c.stdout
+        return: 0
+    end: main
+end: L2
