@@ -1594,22 +1594,41 @@ fn: lmx_msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     int: st
     if: lmx_msg_require_turn(rt, who) != c.LMX_MSG_OK
         return: c.LMX_MSG_INVALID
-    c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_self_or_find(rt, who)
-    if: m = 0 || m\parent = 0U
+    m: lmx_msg_turn_slot(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_lock(rt)
+        m: lmx_msg_self_or_find(rt, who)
+        if: m = 0 || m\parent = 0U
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_INVALID
+        ---
+        if: m\live_query_id != 0U || m\live_query_pend_id != 0U
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_OK
+        ---
+        if: m\live_seq = 4294967295U
+            c.lmx_msg_exec_unlock(rt)
+            return: c.LMX_MSG_NOMEM
+        ---
+        m\live_seq: m\live_seq + 1U
+        qid: m\live_seq
+        parent: m\parent
         c.lmx_msg_exec_unlock(rt)
-        return: c.LMX_MSG_INVALID
-    if: m\live_query_id != 0U || m\live_query_pend_id != 0U
-        c.lmx_msg_exec_unlock(rt)
-        return: c.LMX_MSG_OK
-    if: m\live_seq = 4294967295U
-        c.lmx_msg_exec_unlock(rt)
-        return: c.LMX_MSG_NOMEM
     ---
-    m\live_seq: m\live_seq + 1U
-    qid: m\live_seq
-    parent: m\parent
-    c.lmx_msg_exec_unlock(rt)
+    if: m != 0 && qid = 0U
+        if: m\parent = 0U
+            return: c.LMX_MSG_INVALID
+        ---
+        if: m\live_query_id != 0U || m\live_query_pend_id != 0U
+            return: c.LMX_MSG_OK
+        ---
+        if: m\live_seq = 4294967295U
+            return: c.LMX_MSG_NOMEM
+        ---
+        m\live_seq: m\live_seq + 1U
+        qid: m\live_seq
+        parent: m\parent
+    ---
     env: (cast: (@: LmxMsgEnv) c.calloc(1U, c.sizeof(c.LmxMsgEnv)))
     if: env = 0
         return: c.LMX_MSG_NOMEM
@@ -1621,13 +1640,20 @@ fn: lmx_msg_live_query (@: LmxMsgRuntime rt; LmxMsgAddr: who) int
     c.free((cast: (@: void) env))
     if: st != c.LMX_MSG_STAGED
         return: st
-    c.lmx_msg_exec_lock(rt)
-    m: lmx_msg_self_or_find(rt, who)
+    m: lmx_msg_turn_slot(rt, who)
+    if: m = 0
+        c.lmx_msg_exec_lock(rt)
+        m: lmx_msg_self_or_find(rt, who)
+        if: m != 0
+            m\live_query_pend_id: qid
+            m\live_query_pend_at: c.lmx_msg_now(rt)
+        ---
+        c.lmx_msg_exec_unlock(rt)
+    ---
     if: m != 0
         m\live_query_pend_id: qid
         m\live_query_pend_at: c.lmx_msg_now(rt)
     ---
-    c.lmx_msg_exec_unlock(rt)
 return: st
 
 fn: lmx_msg_live_handle (@: LmxMsgRuntime rt; LmxMsgAddr: who; const: @(LmxMsgEnv env)) int
