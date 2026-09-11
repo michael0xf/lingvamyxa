@@ -122,27 +122,79 @@ envelope fields: id, correlation (19.31.4 - the result or failure is an ordinary
 Message whose correlation equals the request id), replyTo.
 
 
-5. THE RULE THAT WILL BITE A FILE MANAGER
+5. WHO OWNS A COPY JOB - and what the spec actually says
 
-19.29.7.1, near 12376:
+An earlier revision of this section said flatly that a long copy is NOT a child
+of the window. Mikhail corrected it: copying IS a child of the window, and if
+the window wants to hand the job to some task owner it does that through a
+Message and closes. He is right, and the spec is narrower than I made it.
 
-    "Jobs meant to outlive a UI are created under an explicitly longer-lived
-    controller; the UI is only a reply target. A worker may send KIND_CANCELLED
-    to a UI without shutting the UI down. Explicit stop(worker) closes that
-    worker only."
+19.29.7.1, near 12376, is CONDITIONAL on intent:
 
-So a long copy is NOT a child of the window. It is a child of something that
-outlives the window, and the window is its replyTo. Closing the window must not
-kill the copy, and cancelling the copy must not kill the window.
+    "Jobs MEANT TO OUTLIVE A UI are created under an explicitly longer-lived
+    controller; the UI is only a reply target."
 
-Also at 12500: "Deliver(Message, target) completes when that delivery finishes;
-CopyFile(source, target) completes when that file copy finishes. Enqueueing or
-staging a copy request is not completion of CopyFile." A progress bar that
-advances on staging is reporting something that has not happened.
+It says nothing against a copy being the window's own child. That is the
+ordinary case, and the natural one: the copy is the window's business, it
+reports to the window, and it goes when the window goes.
 
-Per-item progress and failure are KIND_PROGRESS / KIND_ITEM payload data;
-continue-versus-stop is APPLICATION POLICY carried in the request, not a core
-intrinsic. That is ours to decide and to write down.
+What the spec does refuse is the OTHER thing - expecting a child to keep running
+after its parent closed. In the same stop() paragraph:
+
+    "there is no orphan-continuation exception for copy jobs"
+
+A closing parent asks its direct children to close at its end_turn, and a child
+whose parent vanished requests its own close through the liveness poll. So
+"child of the window" and "survives the window" are simply incompatible; nothing
+grants copy jobs an exemption.
+
+5.1. So the decision is made AT CREATE TIME, by whoever creates
+
+    window creates the worker        the copy is the window's, and closes with it
+    controller creates the worker    it outlives the window; window is replyTo
+
+Both are legitimate. Which one to use is an application choice about what the
+job is FOR, not a rule the language imposes.
+
+5.2. The mechanical constraint on handing off later
+
+Mikhail's path - the window decides mid-flight to move the copy elsewhere and
+then close - works, with one constraint worth knowing before designing around
+it: you cannot move the EXISTING running child to a new parent.
+
+    "join/splice of already-running" live arenas is DEFERRED - 19.29.7.2, 12627
+    "Every ordinary running Message has an accountable parent" - 12313, and
+      parentage is recorded at create
+
+So the handoff is a RE-ISSUE, not a re-parent: the window sends the remaining
+work to the longer-lived owner, that owner creates its OWN child to continue,
+and the window's original child closes with the window. The spec makes room for
+exactly this in the same paragraph:
+
+    "Recorded progress may survive separately and a valid envelope staged before
+    close is published under ordinary end_turn rules"
+
+so the progress already recorded travels in that request and the new worker
+resumes from it rather than restarting. Two consequences to design for: the job
+needs a resumable progress record from the start, since it may become the
+payload of a handoff request, and "partial external effects are not rolled
+back" - a half-copied file stays half-copied across the seam.
+
+5.3. Staging is not completion - this part stands
+
+At 12500:
+
+    "Deliver(Message, target) completes when that delivery finishes; CopyFile
+    (source, target) completes when that file copy finishes. Enqueueing or
+    staging a copy request is not completion of CopyFile."
+
+A progress bar that advances when the request is staged is reporting something
+that has not happened. Per-item progress and failure are KIND_PROGRESS /
+KIND_ITEM payload data, and continue-versus-stop is APPLICATION POLICY carried
+in the request, not a core intrinsic - ours to decide and to write down.
+
+A worker may send KIND_CANCELLED to a UI without shutting the UI down, and
+explicit stop(worker) closes that worker only.
 
 
 6. CONTROL FLAGS - the supervision mechanism, and what it does not prove
