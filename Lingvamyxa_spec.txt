@@ -836,9 +836,17 @@ receivers/modules remain part of the language. The first
 translator reuses P0 and supports the parser/builder/self-hosting sources with
 minimal changes from the existing C-like code.
 
-The second translator implements this document's L2/L3 semantics. It may emit
-L1 or C99 directly; the route does not change those semantics. It must not
-inherit the old hosted descriptor/Namespace semantic core.
+The second translator implements this document's L2/L3 semantics. The
+C-machine compilation route is L2 -> L1 -> C99; direct L2 -> C99 generation
+is not permitted by this route. It must not inherit the old hosted
+descriptor/Namespace semantic core.
+
+L2's machine surface is C-bound. MIR, WASM linear memory and RISC-V targets
+reuse the generated C99 through their target toolchains; they do not bypass
+L1. A separate L3 backend may instead emit a managed VM's bytecode, such as
+JVM classfiles, preserving L3 semantics with its target runtime. That is not
+an alternative low-level L2 route. See `include_languages/vm_porting_plan_en.txt`
+section 0 and items 1--4; these backend plans are not claims of implementation.
 
 `C:` is an isolated last-resort raw-C escape, not the ordinary way to implement
 the translator, runtime or bootstrap. See `L1_language_and_translator_spec.txt`
@@ -11318,6 +11326,11 @@ follow the resulting FIFO order. Capacity, backpressure, failure and retry
 policies remain explicit profile decisions. Queue ordering is unrelated to
 Structure name lookup or occurrence order.
 
+The destination's synchronized mailbox also coordinates empty-check and wait
+with concurrent admission: an accepted input must remain observable when the
+receiver enters waiting. This is an obligation of the same Message mechanism,
+not an additional scheduler or application-level synchronization layer.
+
 19.28.R2.5. Construction and delivery
 
 Message templates and declared handler state are construction recipes. They
@@ -12091,6 +12104,11 @@ text as a separate L3 child gives that child its own arena. Joining
 an already-running Message's live arena is legal only when it leaves
 one logical owning arena and no concurrently active source owner.
 
+A delivery address/capability is not a graph reference into another Message's
+mutable arena. Adoption of a non-executing Message at the consuming end-turn
+transfers ownership into the receiver's one logical arena, with stable block
+addresses; it does not establish concurrent cross-arena graph access.
+
 19.29.7.1. First copy-only participant slice (numbers and exact bytes)
 
 This slice is the first explicit operation set for 19.29.7. It does not
@@ -12258,6 +12276,13 @@ historical 19.28.7.1; not Namespace/descriptor policy-merge):
     expiry / attempt budget / backoff: explicit on the envelope or
         the profile; exhausted budget fails the attempt without
         further local retry. Backoff is sender/transport policy.
+        An outgoing Message carries its timeout and what-to-do-next policy,
+        directly or through an explicit policy link. The policy identifies
+        the timed phase and when timing begins (for example, publication,
+        admission or waiting for the operation result), so an unpublished
+        request is not mistaken for one awaiting a recipient response.
+        Expiry selects the stated next action; it is not proof of completion,
+        implicit rollback, or permission to execute before publication.
     queue pressure: admission may refuse; that is a staging/admission
         failure, not a semantic application failure unless the
         sender encodes it as one.
