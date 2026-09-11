@@ -1,6 +1,9 @@
 # Public-API L1 integration test against an immutable private source snapshot.
 # It never compiles Grok's active working files or writes shared build outputs.
-param([string]$CoreCommit = '593a64baa2ca6f7e25094620dda4927243bd5c3c')
+param(
+    [string]$CoreCommit = '593a64baa2ca6f7e25094620dda4927243bd5c3c',
+    [ValidateNotNullOrEmpty()][ValidateSet('O0', 'O2')][string[]]$Optimization = @('O2')
+)
 $ErrorActionPreference = 'Stop'
 $baseline = Split-Path -Parent $PSScriptRoot
 $repo = Split-Path -Parent (Split-Path -Parent $baseline)
@@ -16,7 +19,7 @@ $snapshot = Join-Path $run 'source'
 $headers = Join-Path $run 'headers'
 New-Item -ItemType Directory -Path $snapshot, (Join-Path $headers 'l2src') -Force | Out-Null
 $stageWorkingDir = $repo
-$evidence = [ordered]@{ compiler = $compiler; compilerSHA256 = $pin; requestedCore = $CoreCommit; testSHA256 = $testHash; runnerSHA256 = $runnerHash; stages = @(); result = 'RUNNING' }
+$evidence = [ordered]@{ compiler = $compiler; compilerSHA256 = $pin; requestedCore = $CoreCommit; optimization = $Optimization; testSHA256 = $testHash; runnerSHA256 = $runnerHash; stages = @(); result = 'RUNNING' }
 function Invoke-FamilyStage([string]$Name, [string]$Tool, [string[]]$NativeArgs) {
     $quoted = ($NativeArgs | ForEach-Object { '"' + $_ + '"' }) -join ' '
     $stdout = Join-Path $run "$Name.stdout.txt"
@@ -72,7 +75,7 @@ try {
         '-Werror=discarded-qualifiers', '-Werror=implicit-function-declaration', '-Werror=implicit-int',
         '-I', $headers, '-I', $stageWorkingDir)
     $native = @((Join-Path $stageWorkingDir 'l2src/lmx_message_host.c'), (Join-Path $stageWorkingDir 'l2src/lmx_message_exec.c'))
-    foreach ($level in @('O0', 'O2')) {
+    foreach ($level in @($Optimization | ForEach-Object { $_.ToUpperInvariant() } | Select-Object -Unique)) {
         $exe = Join-Path $run "family_handoff_$level.exe"
         $testObj = Join-Path $run "family_handoff_$level.o"
         Invoke-FamilyStage "compile_test_$level" $gcc ($flags + @('-Werror', "-$level", '-c', $testC, '-o', $testObj))

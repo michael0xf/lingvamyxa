@@ -10,6 +10,14 @@ build/codex/msg_send_local run directory. No shared gate or app pin changes.
 The snapshot includes the L1 path-storage helper integrated at 6880ea5; the
 removed native path-growth definition is not silently used by this test.
 
+Edit-loop default is now O2 only. Use -Optimization O0 for a debug build,
+or -Optimization @('O0','O2') when both configurations are relevant. Repeated
+and mixed-case entries are normalized/deduplicated; NULL/empty/unsupported
+selections fail before work rather than producing a PASS with no tests.
+The selection logic was checked on PowerShell5.1/7.6 without recompiling the
+already verified runtime (build/codex/runtime_runner_options/options_ps*.json).
+The O0/O2 results below remain historical evidence, not a mandatory double run.
+
 136 checks at O0/O2, test object compiled with -Werror:
 - send to self, direct child, parent, and a recipient in another branch;
 - staged dest_msg is the exact recipient object, no early inbox admission;

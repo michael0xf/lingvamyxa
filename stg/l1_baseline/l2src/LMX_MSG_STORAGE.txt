@@ -71,6 +71,12 @@ Family integration regression (public APIs, authored in L1)
 ----------------------------------------------------------
 run_msg_family_handoff.ps1 builds tests/lmx_msg_family_handoff_selftest.lm1
 against a PRIVATE git archive of core commit 593a64baa2ca6f7e25094620dda4927243bd5c3c.
+Its edit-loop default is O2 only; -Optimization O0 or @('O0','O2') explicitly
+selects other needed configurations. Case is normalized, duplicates removed,
+and empty/NULL/unsupported selections rejected before work. Actual parameter
+and loop-selection code checked on PowerShell5.1/7.6 without another runtime
+build: build/codex/runtime_runner_options/options_ps*.json. The O0/O2 results
+below are historical evidence, not a mandatory double compile after each edit.
 It does not compile Grok's actively changing checkout or use its build outputs.
 An explicit -CoreCommit selects another agreed checkpoint; there is no automatic
 tracking of HEAD or promotion. Evidence records the resolved commit, 17 archived

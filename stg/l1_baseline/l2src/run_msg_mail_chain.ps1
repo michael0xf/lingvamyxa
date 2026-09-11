@@ -1,7 +1,7 @@
 # Pure L1 mailbox chain helper. No native runtime or translator self-build.
 param(
     [string]$CoreCommit = 'a5643e4d46a89479862944ba4a20a5621be65f94',
-    [ValidateSet('O0', 'O2')][string[]]$Optimization = @('O2')
+    [ValidateNotNullOrEmpty()][ValidateSet('O0', 'O2')][string[]]$Optimization = @('O2')
 )
 $ErrorActionPreference = 'Stop'
 $baseline = Split-Path -Parent $PSScriptRoot
@@ -67,7 +67,7 @@ try {
     $nm = (Get-Command nm -ErrorAction Stop).Source
     $flags = @('-std=c99', '-Wall', '-Wextra', '-Wpedantic', '-Werror', '-I', $headers, '-I', $stageWorkingDir)
     Invoke-ChainStage 'gcc_version' $gcc @('--version')
-    foreach ($level in @($Optimization | Select-Object -Unique)) {
+    foreach ($level in @($Optimization | ForEach-Object { $_.ToUpperInvariant() } | Select-Object -Unique)) {
         $obj = Join-Path $run "mail_chain_$level.o"
         $exe = Join-Path $run "mail_chain_$level.exe"
         Invoke-ChainStage "object_$level" $gcc ($flags + @("-$level", '-c', $module, '-o', $obj))

@@ -44,6 +44,10 @@ Verification
 ------------
   powershell -NoProfile -File l2src/run_msg_mail_chain.ps1
 Default O2 only. Optional -Optimization O0 (or @('O0','O2') from PowerShell).
+Case is normalized before forming GCC options (o2 must never become -o2),
+duplicates removed, and NULL/empty/unsupported selections rejected. Exact
+parameter/loop-selection logic was checked on PowerShell5.1/7.6 separately
+without rebuilding: build/codex/runtime_runner_options/options_ps*.json.
 The runner snapshots a5643e4 headers and the owned helper/test files, uses
 built gen2 L1 read-only, translates once, and compiles only this module/test.
 No native host/exec runtime, threads, full gate, L1 rebuild or stable writes.
