@@ -1,0 +1,69 @@
+predef: "l2src/lmx_branch_owned.h.lm1"
+include: "<stdlib.h>"
+
+# The range record lives in its payload allocation; the block-list node must
+# remain a separate free-compatible allocation. Message cleanup removes ranges
+# before releasing blocks, so there is no detached range allocation to leak.
+fn: lmx_branch_open_owned (@: Lmx parent; size_t: children; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) int
+    size_t: offset c.sizeof(c.LmxOwnedRange)
+    size_t: padding (c.sizeof(c.Lmx) - (offset % c.sizeof(c.Lmx))) % c.sizeof(c.Lmx)
+    size_t: bytes
+    size_t: index 0U
+    @: char allocation
+    @: Lmx child
+    @: Lmx entries
+    @: LmxMsgBlock prepared_blocks
+    @: LmxOwnedRange prepared_ranges
+    if: parent = 0 || blocks = 0 || ranges = 0 || children = 0U
+        return: 1
+    if: parent\data != 0 || parent\len != 0U
+        return: 1
+    if: offset > ((cast: (size_t) -1) - padding)
+        return: 1
+    offset: offset + padding
+    if: children > (((cast: (size_t) -1) - offset) / c.sizeof(c.Lmx))
+        return: 1
+    bytes: offset + children * c.sizeof(c.Lmx)
+    prepared_blocks: (cast: (@: LmxMsgBlock) c.malloc(c.sizeof(c.LmxMsgBlock)))
+    if: prepared_blocks = 0
+        return: 1
+    allocation: (cast: (@: char) c.malloc(bytes))
+    if: allocation = 0
+        c.free(prepared_blocks)
+        return: 1
+    # malloc alignment plus a multiple of sizeof(Lmx) aligns the child array
+    # without C11 alignof, flexible-array extensions or moving live addresses.
+    entries: (cast: (@: Lmx) (allocation + offset))
+    while: index < children
+        child: entries + index
+        child\node: parent
+        child\len: 0U
+        child\data: 0
+        index: index + 1U
+    ---
+    prepared_ranges: (cast: (@: LmxOwnedRange) allocation)
+    prepared_ranges\lo: (cast: (@: void) entries)
+    prepared_ranges\hi: (cast: (@: void) (entries + children))
+    prepared_ranges\stride: c.sizeof(c.Lmx)
+    prepared_ranges\kind: c.LMX_KIND_CHILDREN
+    prepared_ranges\type: c.LMX_TYPE_BRANCH
+    prepared_ranges\next: 0
+    prepared_blocks\base: (cast: (@: void) allocation)
+    prepared_blocks\n: bytes
+    prepared_blocks\class: c.LMX_TYPE_BRANCH
+    prepared_blocks\dispose: 0
+    prepared_blocks\next: 0
+    if: lmx_msg_storage_move_all(blocks, ranges, @ prepared_blocks, @ prepared_ranges) != c.LMX_MSG_STORAGE_OK
+        c.free(allocation)
+        c.free(prepared_blocks)
+        return: 1
+    parent\data: (cast: (@: void) entries)
+    parent\len: children
+    return: 0
+
+# Only for closed-unit paths whose Structure layout is proven by the emitter.
+# This is not dynamic type discovery and is not a generic raw-pointer accessor.
+fn: lmx_branch_child_known (@: Lmx parent; size_t: index) @: Lmx
+    if: parent = 0 || parent\data = 0 || index >= parent\len
+        return: 0
+    return: (cast: (@: Lmx) parent\data) + index

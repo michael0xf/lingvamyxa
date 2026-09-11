@@ -1,5 +1,5 @@
-Generated unit root binding: bounded integration checkpoint
-=========================================================
+Generated unit root binding and owned branch construction
+========================================================
 
 l2trans's graph-unit path emits a synthetic l2_program_entry adapter and an
 outer native main. Before constructing the unit, main creates one local Message
@@ -13,14 +13,14 @@ lookup failure paths also release any successfully created runtime once.
 
 run_l2trans links generated Message-using programs against real Message support,
 never lmx_poll_stub. The translator and unrelated old harness programs keep the
-stub where needed. Headers/modules are translated once and eleven support
+stub where needed. Headers/modules are translated once and twelve support
 objects compiled once per runner invocation/source snapshot/flags. The same
 objects serve compatible subsequent programs. No cross-run stale object cache.
 BuildOnly exposes the existing translator build and functions without executing
 the large historical suite; OutputDirectory and TranslatorPath allow a private
 snapshot runner with the stable compiler kept read-only.
 
-run_l2_message_root uses an immutable core git archive with the three current
+run_l2_message_root uses an immutable core git archive with the five current
 owned implementation/driver files overlaid and hashed. It builds one translator,
 translates unit_bool_and through L2 -> L1 -> C, links the real Message once, and
 uses a test-only L1 driver for runtime-new/create/lookup failures, allocation
@@ -44,14 +44,54 @@ unsupported multiple fn entries in one external block, and a missing generated
 header include path; these were fixed before the final complete run. No full
 historical suite, stable promotion, Message Exec rerun or self-build is claimed.
 
-Remaining limitations (not fixed or blessed by root binding)
------------------------------------------------------------
-The generated predefs still use the legacy lmx_range_table and primitive pools.
-branch_open registers there, not in processMessage->ranges/blocks. set_graph
-records the root but DOES NOT transfer ownership of those legacy allocations,
-make them collectible, or complete their cleanup. Moving construction/pools to
-the Message-owned arena is a subsequent integration task. This checkpoint adds
-no owner-link, TLS owner lookup, global registry, arena relocation or scheduler.
+Owned branch checkpoint, 2026-09-11
+---------------------------------
+lmx_branch_owned.h.lm1/.lm1 is a separate header/module, leaving the legacy
+lmx_branch predef and its standalone link dependencies untouched. Both generated
+construction sites (unit children and supported nested for-body children) call
+lmx_branch_open_owned(parent, children, &msg->blocks, &msg->ranges). All emitted
+closed-unit child accesses use lmx_branch_child_known: null/bounds checks over
+the compiler-proven Structure layout, not a global classifier or runtime owner
+search. Source-method signatures and dirty-only publication are unchanged.
+
+The constructor requires an empty parent and exclusive owner access. It checks
+zero/overflow/null inputs, prepares one nonmoving child allocation containing its
+range record, and a separate free-compatible block-list node. The child array
+offset is a multiple of sizeof(Lmx), preserving malloc alignment without C11
+alignof or flexible-array extensions. Paired storage_move_all admission precedes
+publication of parent.data/len. Allocation or admission failure frees temporary
+storage and leaves both destination lists and the parent unchanged. New children
+are initialized with their actual lexical parent; no existing node is rewritten.
+These child blocks have no global registration or dual-registration. Message
+cleanup retires their embedded ranges before releasing payloads and block nodes.
+Do not pass this storage to the legacy branch_release function.
+
+Verified against core 872e33348cda8d312efd4b2c000246413de98f1d:
+  build/codex/l2_message_root/20260911_191031_976_408f2939/evidence.json
+Nine modes passed 170 assertions (26/5/10/10/10/26/12/13/58), including both
+constructor allocation failures, rejection of malformed destination metadata,
+unchanged prior ownership, successful retry, stable child addresses/node links,
+empty/nonempty/overflow/null/bounds guards, and one-time release of all tracked
+branch allocations. Runtime failure/early-return checks remain in the same driver.
+Normal program exit=1; splice exit=0/output=7; existing unit_forj_again preserves
+output 0 then 9 and exit=0 through two owned construction sites. All 23 stages
+matched expected exits. Twelve support objects were built once and their hashes
+stayed unchanged for all compatible links. Strict C99, existing guards, driver
+-Werror; no explicit optimization flag. Generated helper/header, driver and unit
+output were inspected. The first setup compile exposed an undeclared uchar alias
+in the new helper; it now uses standard char byte arithmetic. A direct L1 syntax
+check also corrected test aggregate declarations before the complete run.
+
+Remaining limitations (not fixed or blessed by these checkpoints)
+---------------------------------------------------------------
+The generated predefs still use the legacy lmx_range_table and primitive pools
+for primitive/METHOD payloads. The separately malloc'ed unit occurrence itself
+also still needs owner admission and complete normal-path release; construction
+failure before binding now frees that occurrence. Only the CHILDREN blocks have
+been migrated here. Binding the root is NOT evidence of full graph collectibility
+or complete allocation cleanup. Root occurrence, primitive and METHOD storage
+are the next constructor slice. This checkpoint adds no owner-link, TLS owner
+lookup, global registry, arena relocation or scheduler.
 It does not make the generated main a scheduled/bound turn, implement full
 delivery/merge, or establish completed L2 self-hosting. The older leaf-adapter
 translation path is also separate from graph-unit emission.

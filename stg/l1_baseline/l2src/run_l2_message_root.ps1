@@ -1,5 +1,5 @@
 # One private translator build, one Message object set, one generated program.
-param([string]$CoreCommit = 'be4bbdd')
+param([string]$CoreCommit = '872e333')
 $ErrorActionPreference = 'Stop'
 $rootBaseline = Split-Path -Parent $PSScriptRoot
 $rootRepo = Split-Path -Parent (Split-Path -Parent $rootBaseline)
@@ -9,7 +9,7 @@ if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
 New-Item -ItemType Directory -Path $rootSnapshot -Force | Out-Null
-$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1')
+$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_branch_owned.h.lm1', 'lmx_branch_owned.lm1')
 $rootEvidence = [ordered]@{result='RUNNING'; compiler=$rootCompiler; compilerSHA256=$rootPin; owned=@{}; stages=@()}
 $rootEvidence.runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $rootOldLocation = Get-Location
@@ -41,6 +41,7 @@ try {
     Assert-RootExit 'L2_to_L1'
     $rootL1 = Get-Content -LiteralPath "$out/program.lm1" -Raw
     if ($rootL1 -notmatch 'fn: l2_program_entry' -or $rootL1 -notmatch 'lmx_msg_set_graph\(process_message, unit\)' -or $rootL1 -notmatch 'lmx_msg_runtime_delete\(process_runtime\)') { throw 'Missing generated entry lifecycle' }
+    if ($rootL1 -notmatch 'lmx_branch_open_owned' -or $rootL1 -match 'lmx_branch_open\(|lmx_branch_child\(') { throw 'Generated unit still uses legacy branch admission/access' }
     & $l1trans "$out/program.lm1" "$out/program.c" *> "$out/program.c.log"
     Assert-RootExit 'L1_to_C'
     $rootObjects = @(Get-L2MessageObjects)
@@ -48,11 +49,11 @@ try {
     Assert-RootExit 'program_object'
     & $l1trans 'l2src/tests/l2_message_root_driver.lm1' "$out/driver.c" *> "$out/driver.translate.log"
     Assert-RootExit 'driver_translate'
-    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','malloc') | ForEach-Object { "-Wl,--wrap=$_" }
+    $rootWrap = @('lmx_msg_runtime_new','lmx_msg_create','lmx_msg_find','lmx_msg_set_graph','lmx_msg_runtime_delete','lmx_branch_open_owned','malloc','free') | ForEach-Object { "-Wl,--wrap=$_" }
     Invoke-Gcc "$out/driver.c" "$out/driver.exe" "$out/driver.gcc.log" (@("$out/program.o", '-Werror') + $rootWrap)
     $rootEvidence.stages += @{name='driver_link_real_message'; exit=0}
     $rootObjects = @(Get-L2MessageObjects)
-    if ($rootObjects.Count -ne 11) { throw 'Unexpected Message object set' }
+    if ($rootObjects.Count -ne 12) { throw 'Unexpected Message object set' }
     $rootBefore = @{}
     foreach ($obj in $rootObjects) { $rootBefore[$obj] = (Get-FileHash -LiteralPath $obj).Hash }
     # Ordinary generated-program linking exercises Invoke-Gcc's same cached
@@ -64,7 +65,7 @@ try {
     foreach ($obj in $rootObjects) {
         if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "Cached object changed: $obj" }
     }
-    foreach ($mode in 0..5) {
+    foreach ($mode in 0..8) {
         & "$out/driver.exe" $mode *> "$out/mode_$mode.log"
         Assert-RootExit "mode_$mode"
         $line = Get-Content -LiteralPath "$out/mode_$mode.log" -Raw
@@ -90,6 +91,22 @@ end: external
         if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "Splice rebuilt cached object: $obj" }
     }
     Write-Output 'root entry splice PASS (same Message object cache)'
+    # Exercise the other owned-open emitter site and cached field paths with
+    # an existing nested-body regression; reuse this translator/object set.
+    & $l2exe 'l2src/tests/unit_forj_again.lm2' "$out/nested.lm1" *> "$out/nested.translate.log"
+    Assert-RootExit 'nested_L2_to_L1'
+    $rootNested = Get-Content -LiteralPath "$out/nested.lm1" -Raw
+    if ([regex]::Matches($rootNested, 'lmx_branch_open_owned\(').Count -ne 2 -or $rootNested -match 'lmx_branch_child\(') { throw 'Nested branches not on owned/proven-layout path' }
+    & $l1trans "$out/nested.lm1" "$out/nested.c" *> "$out/nested.c.log"
+    Assert-RootExit 'nested_L1_to_C'
+    Invoke-Gcc "$out/nested.c" "$out/nested.exe" "$out/nested.gcc.log"
+    & "$out/nested.exe" *> "$out/nested.run.log"
+    Assert-RootExit 'nested_run'
+    if ((Get-Content -LiteralPath "$out/nested.run.log" -Raw).Replace("`r`n", "`n").Trim() -ne "0`n9") { throw 'Nested dirty-only field history changed' }
+    foreach ($obj in $rootObjects) {
+        if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "Nested case rebuilt cached object: $obj" }
+    }
+    Write-Output 'root entry nested branch PASS (same Message object cache)'
     foreach ($path in $rootEvidence.owned.Keys) {
         if ((Get-FileHash -LiteralPath $path).Hash -ne $rootEvidence.owned[$path]) { throw "Owned source changed: $path" }
     }

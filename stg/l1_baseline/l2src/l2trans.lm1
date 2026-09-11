@@ -5244,7 +5244,7 @@ fn: l2_hidden_from (int: mi; int: callee; int: k; const: @(char ind); @: char de
         return: 1
     if: l2_bump_ind(ind, deep) != 0
         return: 1
-    if: c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(%s, %uU)\n%sif: l2_xp = 0\n", ind, l2_call_node, (cast: (unsigned) l2_own_uchild[child]), ind) < 0
+    if: c.fprintf(l2_out, "%sl2_xp: lmx_branch_child_known(%s, %uU)\n%sif: l2_xp = 0\n", ind, l2_call_node, (cast: (unsigned) l2_own_uchild[child]), ind) < 0
         return: 1
     if: l2_emit_checkpoint(mi, deep) != 0
         return: 1
@@ -6081,11 +6081,11 @@ fn: l2_emit_path_load (int: mi; int: oi; const: @(char ind); @: char dest) int
     if: l2_bump_ind(ind, deep) != 0
         return: 1
     fid: l2_own_fid[oi]
-    if: fid >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(l2_h%d, %uU)\n", ind, fid, (cast: (unsigned) l2_own_fchild[oi])) < 0
+    if: fid >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child_known(l2_h%d, %uU)\n", ind, fid, (cast: (unsigned) l2_own_fchild[oi])) < 0
         return: 1
     if: fid < 0 && l2_own_uchild[oi] < 0
         return: 1
-    if: fid < 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(node, %uU)\n", ind, (cast: (unsigned) l2_own_uchild[oi])) < 0
+    if: fid < 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child_known(node, %uU)\n", ind, (cast: (unsigned) l2_own_uchild[oi])) < 0
         return: 1
     if: c.fprintf(l2_out, "%sif: l2_xp = 0\n", ind) < 0
         return: 1
@@ -6743,7 +6743,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             oi: l2_own_find(mi, l2_next_active(stmt\as\frame\body\first_field)\value\as\atom)
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0
             l2_own_live[oi]: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[l2_own_off(mi, oi)] >= 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2) && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_child(node, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, (cast: (unsigned) oi), ind, oi, ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && mi >= 0 && l2_m_alias[l2_own_off(mi, oi)] >= 0 && (l2_own_ty[oi] = 1 || l2_own_ty[oi] = 2) && c.fprintf(l2_out, "%sl2_q%d_from: lmx_branch_child_known(node, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, (cast: (unsigned) oi), ind, oi, ind) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_own_decl_ty(stmt) != 0 && oi >= 0 && l2_count_active(stmt\as\frame\body) = 2 && l2_eval_fields(l2_next_active(l2_next_active(stmt\as\frame\body\first_field)\next), 1, mi, ind, l2_tok) != 0
             return: 1
@@ -6785,7 +6785,7 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             fi: l2_m_alias[l2_own_off(mi, oi)]
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && l2_eval_fields(fr\body\first_field, l2_count_active(fr\body), mi, ind, l2_tok) != 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && c.fprintf(l2_out, "%sif: l2_q%d_from = 0\n%s    l2_q%d_from: lmx_branch_child(node, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, ind, oi, (cast: (unsigned) oi), ind, oi, ind) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0 && c.fprintf(l2_out, "%sif: l2_q%d_from = 0\n%s    l2_q%d_from: lmx_branch_child_known(node, %uU)\n%sif: l2_q%d_from = 0\n%s    return: 0\n", ind, oi, ind, oi, (cast: (unsigned) oi), ind, oi, ind) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && oi >= 0 && fi >= 0
             l2_own_live[oi]: 1
@@ -6850,9 +6850,9 @@ fn: l2_emit_body (const: @(LmP0Structure body); int: mi; const: @(char ind)) int
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] < 0 && l2_own_uchild[sl] < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(l2_h%d, %uU)\n", ind, l2_own_fid[sl], (cast: (unsigned) l2_own_fchild[sl])) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] >= 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child_known(l2_h%d, %uU)\n", ind, l2_own_fid[sl], (cast: (unsigned) l2_own_fchild[sl])) < 0
             return: 1
-        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] < 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child(node, %uU)\n", ind, (cast: (unsigned) l2_own_uchild[sl])) < 0
+        if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && l2_own_fid[sl] < 0 && c.fprintf(l2_out, "%sl2_xp: lmx_branch_child_known(node, %uU)\n", ind, (cast: (unsigned) l2_own_uchild[sl])) < 0
             return: 1
         if: l2_frame_head(stmt, "if") = 0 && l2_is_char_decl(stmt) = 0 && l2_frame_head(stmt, "return") = 0 && sl >= 0 && c.fprintf(l2_out, "%sif: l2_xp = 0\n", ind) < 0
             return: 1
@@ -6918,7 +6918,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_need_own != 0 && c.fputs("predef: \"l1src/own.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: c.fputs("include: \"l2src/lmx.h\" \"l2src/lmx_message.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"", l2_out) < 0
+    if: c.fputs("predef: \"l2src/lmx_branch_owned.h.lm1\"\ninclude: \"l2src/lmx.h\" \"l2src/lmx_message.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_need_p0 != 0 && c.fputs(" \"l1src/p0.lm1.h\"", l2_out) < 0
@@ -7025,7 +7025,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
                     hu: 1
                 oi: oi + 1
             ---
-            if: hu != 0 && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_child(node, %uU)\n    if: l2_h%d = 0\n        return: 0\n", k, k, (cast: (unsigned) l2_for_uchild[k]), k) < 0
+            if: hu != 0 && c.fprintf(l2_out, "    @: Lmx l2_h%d 0\n    l2_h%d: lmx_branch_child_known(node, %uU)\n    if: l2_h%d = 0\n        return: 0\n", k, k, (cast: (unsigned) l2_for_uchild[k]), k) < 0
                 c.fclose(l2_out)
                 return: 1
             k: k + 1
@@ -7044,10 +7044,10 @@ fn: l2_emit_unit (const: @(char out_path)) int
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 0 && c.fprintf(l2_out, "    int: l2_q%d\n    @: Lmx l2_q%d_from 0\n    int: l2_q%d_dirty 0\n", k, k, k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_fid[k] >= 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child(l2_h%d, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, l2_own_fid[k], (cast: (unsigned) l2_own_fchild[k]), k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_fid[k] >= 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child_known(l2_h%d, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, l2_own_fid[k], (cast: (unsigned) l2_own_fchild[k]), k) < 0
                 c.fclose(l2_out)
                 return: 1
-            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child(node, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, (cast: (unsigned) l2_own_uchild[k]), k) < 0
+            if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && c.fprintf(l2_out, "    l2_q%d_from: lmx_branch_child_known(node, %uU)\n    if: l2_q%d_from = 0\n        return: 0\n", k, (cast: (unsigned) l2_own_uchild[k]), k) < 0
                 c.fclose(l2_out)
                 return: 1
             if: l2_m_uses[l2_own_off(i, k)] != 0 && l2_m_alias[l2_own_off(i, k)] < 0 && l2_own_ty[k] = 1 && c.fprintf(l2_out, "    l2_q%d: (cast: (char) lmx_char_value(l2_q%d_from\\data))\n", k, k) < 0
@@ -7130,15 +7130,15 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_has_own_ty(0) != 0 && c.fputs("        if: lmx_int_init() != 0\n            return: 1\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: c.fprintf(l2_out, "        unit: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))\n        if: unit = 0\n            return: 1\n        lmx_cell_init(unit, 0, 0)\n        if: lmx_branch_open(unit, %uU) != 0\n            return: 1\n", kids) < 0
+    if: c.fprintf(l2_out, "        unit: (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))\n        if: unit = 0\n            return: 1\n        lmx_cell_init(unit, 0, 0)\n        if: lmx_branch_open_owned(unit, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            c.free(unit)\n            return: 1\n", kids) < 0
         c.fclose(l2_out)
         return: 1
-    if: c.fputs("        # Root binding only; legacy pool/range ownership migration is separate.\n        c.lmx_msg_set_graph(process_message, unit)\n", l2_out) < 0
+    if: c.fputs("        # Children are Message-owned; primitive/METHOD pool migration is separate.\n        c.lmx_msg_set_graph(process_message, unit)\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     k: 0
     while: k < l2_own_n
-        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && c.fprintf(l2_out, "        leaf: lmx_branch_child(unit, %uU)\n        if: leaf = 0\n            return: 1\n", (cast: (unsigned) l2_own_uchild[k])) < 0
+        if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && c.fprintf(l2_out, "        leaf: lmx_branch_child_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n", (cast: (unsigned) l2_own_uchild[k])) < 0
             c.fclose(l2_out)
             return: 1
         if: l2_own_fid[k] < 0 && l2_own_uchild[k] >= 0 && l2_own_ty[k] = 1 && c.fputs("        leaf\\data: lmx_char_cell(0)\n        if: lmx_type_of(leaf\\data) != c.LMX_TYPE_CHAR\n            return: 1\n", l2_out) < 0
@@ -7157,12 +7157,12 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: l2_for_nkid[k] = 0
             k: k + 1
             continue
-        if: c.fprintf(l2_out, "        leaf: lmx_branch_child(unit, %uU)\n        if: leaf = 0\n            return: 1\n        if: lmx_branch_open(leaf, %uU) != 0\n            return: 1\n", (cast: (unsigned) l2_for_uchild[k]), (cast: (unsigned) l2_for_nkid[k])) < 0
+        if: c.fprintf(l2_out, "        leaf: lmx_branch_child_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n        if: lmx_branch_open_owned(leaf, %uU, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n", (cast: (unsigned) l2_for_uchild[k]), (cast: (unsigned) l2_for_nkid[k])) < 0
             c.fclose(l2_out)
             return: 1
         oi: 0
         while: oi < l2_own_n
-            if: l2_own_fid[oi] = k && c.fprintf(l2_out, "        kid: lmx_branch_child(leaf, %uU)\n        if: kid = 0\n            return: 1\n", (cast: (unsigned) l2_own_fchild[oi])) < 0
+            if: l2_own_fid[oi] = k && c.fprintf(l2_out, "        kid: lmx_branch_child_known(leaf, %uU)\n        if: kid = 0\n            return: 1\n", (cast: (unsigned) l2_own_fchild[oi])) < 0
                 c.fclose(l2_out)
                 return: 1
             if: l2_own_fid[oi] = k && l2_own_ty[oi] = 1 && c.fputs("        kid\\data: lmx_char_cell(0)\n        if: lmx_type_of(kid\\data) != c.LMX_TYPE_CHAR\n            return: 1\n", l2_out) < 0
@@ -7186,7 +7186,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
         if: l2_write_sym(l2_out, i) != 0
             c.fclose(l2_out)
             return: 1
-        if: c.fprintf(l2_out, ")\n        rec\\sig: %uU\n        if: lmx_range_register((cast: (@: void) rec), (cast: (@: void) (rec + 1)), c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0\n            return: 1\n        leaf: lmx_branch_child(unit, %uU)\n        if: leaf = 0\n            return: 1\n        leaf\\data: (cast: (@: void) rec)\n        if: lmx_classify(leaf\\data) != c.LMX_KIND_METHOD\n            return: 1\n        if: rec\\sig != %uU\n            return: 1\n        if: leaf\\node != unit\n            return: 1\n", l2_m_sig[i], (cast: (unsigned) (l2_unit_base + i)), l2_m_sig[i]) < 0
+        if: c.fprintf(l2_out, ")\n        rec\\sig: %uU\n        if: lmx_range_register((cast: (@: void) rec), (cast: (@: void) (rec + 1)), c.sizeof(c.LmxMethod), c.LMX_KIND_METHOD, c.LMX_TYPE_METHOD) != 0\n            return: 1\n        leaf: lmx_branch_child_known(unit, %uU)\n        if: leaf = 0\n            return: 1\n        leaf\\data: (cast: (@: void) rec)\n        if: lmx_classify(leaf\\data) != c.LMX_KIND_METHOD\n            return: 1\n        if: rec\\sig != %uU\n            return: 1\n        if: leaf\\node != unit\n            return: 1\n", l2_m_sig[i], (cast: (unsigned) (l2_unit_base + i)), l2_m_sig[i]) < 0
             c.fclose(l2_out)
             return: 1
         i: i + 1

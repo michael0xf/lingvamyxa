@@ -1,4 +1,5 @@
 include: "l2src/lmx.h" "l2src/lmx_message.h" "<stdio.h>" "<stdlib.h>"
+predef: "l2src/lmx_branch_owned.h.lm1"
 
 # Test-only linker wrapping. The generated program links the real Message core.
 prototype:
@@ -9,6 +10,8 @@ prototype:
     fn: __real_lmx_msg_set_graph (@: LmxMsg msg; @: Lmx unit) void
     fn: __real_lmx_msg_runtime_delete (@: LmxMsgRuntime rt) void
     fn: __real_malloc (size_t: n) @: void
+    fn: __real_free (@: void p) void
+    fn: __real_lmx_branch_open_owned (@: Lmx parent; size_t: children; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) int
 end: prototype
 
 int: test_mode 0
@@ -18,6 +21,12 @@ int: creates 0
 int: binds 0
 int: deletes 0
 int: alloc_failed 0
+int: inside_branch 0
+int: branch_fail_at 0
+int: branch_alloc_attempts 0
+int: branch_allocs 0
+int: branch_frees 0
+[]: uintptr_t branch_tracked 32
 
 sub: check (int: ok; const: @(char label))
     checks: checks + 1
@@ -51,6 +60,8 @@ fn: __wrap_lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: who) @: LmxMsg
 sub: __wrap_lmx_msg_set_graph (@: LmxMsg msg; @: Lmx unit)
     check(news = 1 && creates = 1 && binds = 0 && deletes = 0, "binding occurs during live process entry")
     check(msg != 0 && unit != 0 && unit\node = 0 && unit\data != 0 && unit\len != 0U, "constructed lexical root retained unchanged")
+    check(msg\blocks != 0 && msg\ranges != 0, "initial children admitted to Message storage")
+    check(c.lmx_owned_ranges_find(msg\ranges, unit\data) != 0, "Message classifies its child block")
     c.__real_lmx_msg_set_graph(msg, unit)
     check(msg\graph = unit, "real Message stores exact graph root")
     binds: binds + 1
@@ -63,9 +74,29 @@ sub: __wrap_lmx_msg_runtime_delete (@: LmxMsgRuntime rt)
     ---
     deletes: deletes + 1
     c.__real_lmx_msg_runtime_delete(rt)
+    check(branch_allocs = branch_frees, "teardown releases all owned branch allocations once")
 end: __wrap_lmx_msg_runtime_delete
 
 fn: __wrap_malloc (size_t: n) @: void
+    @: void p
+    int: index 0
+    if: inside_branch != 0
+        branch_alloc_attempts: branch_alloc_attempts + 1
+        if: branch_fail_at != 0 && branch_alloc_attempts = branch_fail_at
+            alloc_failed: 1
+            return: 0
+        ---
+        p: c.__real_malloc(n)
+        if: p != 0
+            while: index < 32 && branch_tracked[index] != 0U
+                index: index + 1
+            ---
+            check(index < 32, "test allocation tracking capacity")
+            branch_tracked[index]: (cast: (uintptr_t) p)
+            branch_allocs: branch_allocs + 1
+        ---
+        return: p
+    ---
     if: alloc_failed = 0 && creates != 0
         if: (test_mode = 4 && binds = 0) || (test_mode = 5 && binds = 1)
             alloc_failed: 1
@@ -74,11 +105,119 @@ fn: __wrap_malloc (size_t: n) @: void
     ---
     return: c.__real_malloc(n)
 
+sub: __wrap_free (@: void p)
+    int: index 0
+    if: p != 0
+        while: index < 32
+            if: branch_tracked[index] = (cast: (uintptr_t) p)
+                branch_tracked[index]: 0U
+                branch_frees: branch_frees + 1
+                break
+            ---
+            index: index + 1
+        ---
+    ---
+    c.__real_free(p)
+end: __wrap_free
+
+fn: __wrap_lmx_branch_open_owned (@: Lmx parent; size_t: children; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) int
+    int: result
+    @: LmxMsgBlock old_blocks blocks[0]
+    @: LmxOwnedRange old_ranges ranges[0]
+    @: void old_data parent\data
+    size_t: old_len parent\len
+    @: Lmx old_node parent\node
+    size_t: index 0U
+    @: Lmx child
+    inside_branch: 1
+    result: c.__real_lmx_branch_open_owned(parent, children, blocks, ranges)
+    inside_branch: 0
+    if: result != 0
+        check(blocks[0] = old_blocks && ranges[0] = old_ranges, "failed admission preserves both destination heads")
+        check(parent\node = old_node && parent\data = old_data && parent\len = old_len, "failed construction preserves parent")
+        return: result
+    ---
+    check(blocks[0] != old_blocks && blocks[0]\next = old_blocks, "one block admitted without replacing old storage")
+    check(ranges[0] != old_ranges && ranges[0]\next = old_ranges, "one range admitted without replacing old metadata")
+    check(ranges[0]\lo = parent\data && ranges[0]\stride = c.sizeof(c.Lmx), "range describes exact typed child array")
+    check(ranges[0]\kind = c.LMX_KIND_CHILDREN && ranges[0]\type = c.LMX_TYPE_BRANCH, "owned range has children domain")
+    check((cast: (uintptr_t) parent\data) % c.sizeof(c.Lmx) = (cast: (uintptr_t) blocks[0]\base) % c.sizeof(c.Lmx), "child offset is a multiple of Lmx size")
+    check(parent\node = old_node && parent\len = children, "success retains lexical parent and publishes length")
+    while: index < children
+        child: c.lmx_branch_child_known(parent, index)
+        check(child != 0 && child\node = parent && child\len = 0U && child\data = 0, "new children initialized with actual lexical parent")
+        check(c.lmx_owned_ranges_find(ranges[0], (cast: (@: void) child)) = ranges[0], "each child is classified inside owner")
+        index: index + 1U
+    ---
+    return: 0
+
+sub: branch_contract ()
+    @: Lmx parent (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))
+    @: Lmx second (cast: (@: Lmx) c.malloc(c.sizeof(c.Lmx)))
+    @: LmxOwnedRange invalid (cast: (@: LmxOwnedRange) c.malloc(c.sizeof(c.LmxOwnedRange)))
+    @: LmxMsgBlock blocks 0
+    @: LmxOwnedRange ranges 0
+    @: Lmx first
+    @: LmxMsgBlock saved_block
+    @: LmxOwnedRange saved_range
+    int: result
+    check(parent != 0 && second != 0 && invalid != 0, "test setup allocated")
+    parent\node: 0
+    parent\len: 0U
+    parent\data: 0
+    second\node: parent
+    second\len: 0U
+    second\data: 0
+    check(c.__real_lmx_branch_open_owned(0, 2U, @ blocks, @ ranges) != 0, "null parent rejected")
+    check(c.__real_lmx_branch_open_owned(parent, 2U, 0, @ ranges) != 0, "null owner rejected")
+    check(c.lmx_branch_open_owned(parent, 0U, @ blocks, @ ranges) != 0, "zero children rejected")
+    check(c.lmx_branch_open_owned(parent, (cast: (size_t) -1), @ blocks, @ ranges) != 0, "overflow rejected before allocation")
+    check(branch_alloc_attempts = 0, "invalid shapes allocate nothing")
+    check(c.lmx_branch_child_known(0, 0U) = 0 && c.lmx_branch_child_known(parent, 0U) = 0, "known accessor guards null and empty")
+    check(c.lmx_branch_open_owned(parent, 2U, @ blocks, @ ranges) = 0, "first branch opened")
+    first: c.lmx_branch_child_known(parent, 0U)
+    check(c.lmx_branch_child_known(parent, 2U) = 0, "known accessor bounds checked")
+    check(c.lmx_branch_open_owned(parent, 2U, @ blocks, @ ranges) != 0, "nonempty parent not overwritten")
+    saved_block: blocks
+    saved_range: ranges
+    invalid\lo: 0
+    invalid\hi: 0
+    invalid\stride: 0U
+    invalid\kind: c.LMX_KIND_CHILDREN
+    invalid\type: c.LMX_TYPE_BRANCH
+    invalid\next: ranges
+    ranges: invalid
+    result: c.lmx_branch_open_owned(second, 3U, @ blocks, @ ranges)
+    check(result != 0 && blocks = saved_block && ranges = invalid && invalid\next = saved_range, "malformed destination rejects paired admission without mutation")
+    check(branch_allocs - branch_frees = 2, "rejected prepared storage freed; first branch remains owned")
+    ranges: saved_range
+    check(c.lmx_branch_open_owned(second, 3U, @ blocks, @ ranges) = 0, "retry admits after invalid metadata removed")
+    check(first = c.lmx_branch_child_known(parent, 0U) && first\node = parent, "growth never moves old child or rewrites node")
+    check(second\node = parent, "independent branch creation preserves lexical hierarchy")
+    while: ranges != 0
+        check(c.lmx_owned_ranges_remove(@ ranges, ranges) = c.LMX_OWNED_RANGES_OK, "range retired before payload")
+    ---
+    check(c.lmx_msg_blocks_dispose_all(@ blocks) = c.LMX_MSG_BLOCKS_OK, "all owned blocks released")
+    check(blocks = 0 && branch_allocs = branch_frees, "all successful and rejected allocations freed once")
+    check(c.lmx_msg_blocks_dispose_all(@ blocks) = c.LMX_MSG_BLOCKS_OK, "repeat release sees empty owner")
+    c.free(invalid)
+    c.free(second)
+    c.free(parent)
+end: branch_contract
+
 fn: main (int: argc; @@: char argv) int
     int: result
     check(argc = 2, "one mode argument")
     test_mode: c.atoi(argv[1])
-    check(test_mode >= 0 && test_mode <= 5, "valid mode")
+    check(test_mode >= 0 && test_mode <= 8, "valid mode")
+    if: test_mode = 8
+        branch_contract()
+        c.printf("root entry mode=%d checks=%d PASS\n", test_mode, checks)
+        return: 0
+    ---
+    if: test_mode = 6 || test_mode = 7
+        branch_fail_at: test_mode - 5
+    ---
     result: c.l2_generated_main()
     # unit_bool_and returns 1 after its method call. Failures also return 1;
     # counters distinguish actual entry and each failure boundary.
@@ -93,7 +232,7 @@ fn: main (int: argc; @@: char argv) int
             check(binds = 0, "failure precedes graph binding")
         ---
     ---
-    if: test_mode = 4 || test_mode = 5
+    if: test_mode = 4 || test_mode = 5 || test_mode = 6 || test_mode = 7
         check(alloc_failed = 1, "allocation failure actually injected")
     else:
         check(alloc_failed = 0, "no allocation failure injected")

@@ -1,0 +1,9 @@
+include: "l2src/lmx.h"
+predef: "l2src/lmx_msg_storage.h.lm1"
+
+# Exclusive Message-owner construction. Only an empty parent may be opened.
+# No global registration, owner lookup, relocation, or lexical reparenting.
+prototype:
+    fn: lmx_branch_open_owned (@: Lmx parent; size_t: children; @@: LmxMsgBlock blocks; @@: LmxOwnedRange ranges) int
+    fn: lmx_branch_child_known (@: Lmx parent; size_t: index) @: Lmx
+end: prototype
