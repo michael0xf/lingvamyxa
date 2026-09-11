@@ -410,6 +410,58 @@ EXPENSIVE, and none of it is about naming:
       so hosting would have to push bodies rather than statements - changing
       what l2_own_host means, across its 24 references.
 
+6.1.3.1. A `for` INSIDE an `if`: the three passes disagree
+
+Asked what happens in that case. The answer is not "it works" or "it is
+refused" - the passes do different things, and the divergence is invisible until
+exactly this nesting appears.
+
+    l2_check_body   DESCENDS into an if body (4892) and an else body (4899),
+                    depth + 1
+    l2_emit_body    DESCENDS into both (6545, 6552)
+    l2_collect_decls DOES NOT. Its if-branch advances `field` past the if and
+                    its else and returns - no recursion at all. Its only
+                    body recursion (3297) is into a `for`.
+
+collect_decls is the pass that calls l2_for_add, assigns hosts and lays out
+child indices. So for a `for` nested in an `if`:
+
+    collect  never sees it. Not added to the for table, no uchild, no prologue
+             handle, no place in the layout.
+    check    walks into the if, meets the for, PUSHES A SCOPE (4938) and walks
+             its body - so a field declared there sees depth > 0 and
+             l2_scope_n != 0 and PASSES the 5030 guard.
+    emit     walks into the if, meets the for, pushes a scope, emits the loop
+             and the declaration.
+
+So a field declared in a `for` inside an `if` is validated as legal and reaches
+emission, while never having been registered by the pass that gives it a graph
+slot. The own-field emission sites are guarded by oi >= 0, and a lookup that
+was never registered returns -1.
+
+WHAT I HAVE NOT ESTABLISHED: what actually comes out. l2trans.exe is not built
+here and building it would compile their WIP l2src, which is not mine to do. So
+the three line numbers above are proven and the failure mode is not. It could be
+a clean diagnostic, a silently plain local, or a bad emission - and which it is
+matters.
+
+The fixture that settles it, in the shape of unit_forj_bare.lm2:
+
+    fn: test (int: a) int
+        if: a > 0
+            for: int(i, 0) (i < 10) i++
+                int: j i
+            end: for
+        return: 0
+    end: test
+    fn: main () int
+        return: test(1)
+    end: main
+
+Worth running before anyone relies on nesting a loop inside a branch. Note the
+simple case hides it: an `if` containing no declarations behaves identically
+under all three passes, which is why this has not shown up.
+
 6.1.4. But "persist every structure" is a different question, not a bigger one
 
 Mikhail's own observation is the strongest argument here: ARGUMENT structures
