@@ -1,0 +1,115 @@
+run_lmx.ps1: proportional verification
+======================================
+
+This runner uses an ALREADY BUILT L1 translator selected by L1_GEN (gen2 by
+default). It does not bootstrap or rebuild L1. Production promotion still
+requires the existing full gate/self-build/next/check/bootstrap evidence;
+a targeted PASS is not permission to promote a stable compiler or runtime.
+All existing test sources and the full default test sequence are retained.
+
+Choose the smallest relevant set while editing
+---------------------------------------------
+  powershell -NoProfile -File l2src/run_lmx.ps1 -Suite Exec
+  powershell -NoProfile -File l2src/run_lmx.ps1 -Suite Host
+  powershell -NoProfile -File l2src/run_lmx.ps1 -Suite Message
+  powershell -NoProfile -File l2src/run_lmx.ps1 -Suite Full
+  powershell -NoProfile -File l2src/run_lmx.ps1 -Suite Full -Plan
+
+Suite       Checks
+Full        All rows below, in the previous full-suite order. DEFAULT.
+Core        Eight Lmx/range/pool/chars/ref/branch/own/size/decimal selftests
+            (lmx_selftest through lmx_dec_selftest; Message excluded).
+MessageApi  L1-authored lmx_message_selftest, HOST_TEST configuration.
+Host        Native ingress fixture, HOST_TEST configuration.
+Exec        Native executor fixture, EXEC_TEST configuration.
+Production  Production host/exec symbol checks: no exported test controls.
+Cancel      L2 -> L1 -> C cancellation fixture, assembly checks, both mappings.
+Message     MessageApi + Production + Host + Exec; no Core or Cancel.
+
+Full/Core still include the decimal test and require its existing decNumber
+sources. Only Cancel/Full may build the L2 translator when the existing
+cancellation path needs it; they never rebuild L1. For a cancellation lowering
+change select Cancel. For a queue/ready change select its relevant Message
+test(s), not unrelated decimal/pool checks or a compiler bootstrap. The
+special two-mode OOM fixture also remains available via run_msg_exec_oom.ps1.
+Do not replace a relevant failing check with a smaller passing selection.
+
+-Plan resolves the exact selection without invoking a compiler, building,
+running tests, checking tool availability or changing the working directory.
+Invalid suite names fail parameter validation. No-argument invocation still
+means Full, so existing promotion callers do not silently lose coverage.
+
+Build reuse
+-----------
+Message support sources compile once per matching configuration WITHIN the
+current invocation. The cache begins empty every invocation; an old .o file
+on disk is never accepted just because it exists. Keys include the absolute
+source and SHA256, GCC executable/path/hash, exact options/defines, and the
+local headers under l2src, lm1/build and this run's generated-header tree.
+The installed compiler/SDK must remain unchanged during a run. There is no
+cross-revision or cross-toolchain persistent cache.
+
+HOST_TEST, EXEC_TEST and production object sets are separate, including the
+support modules. HOST_TEST support can be shared by MessageApi and Host;
+production host/exec objects can serve the symbol check and Cancel linkage.
+Different macros are not equivalent configurations. Runtime header changes
+invalidate reuse just as source or option changes do.
+
+The L1 fixture that embeds lmx_message.lm1 still compiles as its own test unit;
+it must not additionally link the separately translated Message object.
+The separate host/exec fixtures do link that object with their own defines.
+
+Outputs and bounded execution
+-----------------------------
+Full keeps build/l2 and build/l1trans/logs/<gen> for existing consumers.
+Targeted sets use build/l2/targeted/<gen>/<Suite> and
+build/l1trans/logs/<gen>/lmx_<Suite>. Their native host/exec working directory
+is also private to the selection, because the legacy fixtures write relative
+build/l1trans/logs/gen2 evidence. They do not overwrite Full's evidence.
+Do not concurrently run the SAME selection/generation in one checkout;
+parallel verification should use separate pinned source snapshots.
+
+Host/Exec test processes have a 120-second deadline, adjustable with
+-TestTimeoutSeconds (1..3600). Timeout stops only the process launched by this
+invocation, records TIMEOUT and fails the suite; it is not a runtime result.
+Other legacy test stages retain their existing behavior. No broad process
+lookup/termination and no changes to compiler/backend safety settings.
+
+lmx_suite.log records RUNNING, PASS or FAILED and the selected checks.
+A targeted success explicitly says '(not a full suite)'. It does not emit the
+old full-suite success banner or claim skipped Message/Exec/Cancel exits.
+lmx_objects.json records actual compilations and within-run cache hits,
+including their keys/input identities. lmx_message_ctx.hashes.txt records
+selected inputs/executables, not stale outputs belonging to skipped sets.
+Native streams and exit codes remain separate; PS5.1 retains the process
+handle before waiting so a fast completion cannot lose its exit code.
+
+Validation checkpoint
+---------------------
+Selection plans preserve every previous Full component. Runtime validation
+uses a private ede30dccc417920efc5a0738cc3a73d9c91986f0 source snapshot and
+built gen2 L1 SHA25665D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936.
+Evidence directory: build/codex/lmx_selected/20260911_164600/.
+The first integration attempt stopped in the new PS5.1 process launcher
+(missing exit code); this was a runner failure, not a passing suite. The
+launcher fix was checked separately on PS5.1 and7.6 before retrying.
+Final verification: Message PASS (MessageApi, Host, Exec and production
+symbol checks),18 object compilations and7 verified cache hits. The host/exec
+sources each have THREE distinct keys for prod/HOST_TEST/EXEC_TEST. Executor
+evidence includes oom_n=12, oom_hits=5, oom_scan=1, fifo=10,20. Cancel PASS
+separately, with the generated-code assembly check and both execution mappings.
+Its first attempt exposed an inherited PS5.1 problem: piping native GCC
+warnings through PowerShell with ErrorAction Stop could abort compilation.
+Native stderr capture now preserves warnings and uses GCC's actual exit code.
+
+All8 selection plans, default Full, invalid-suite rejection, unchanged Plan
+working directory and cache-record consistency passed onPS5.1 and7.6. The
+test-launch helper's zero/nonzero exit handling passed on both shells. No
+timeout was fault-injected in this checkpoint. The Message check preceded
+the final Cancel-only capture/path adjustments; Cancel and plan/helper checks
+used those final adjustments. No second Message compile for unrelated changes.
+
+Runtime logs: source/stg/l1_baseline/build/l1trans/logs/gen2/lmx_Message/ and
+lmx_Cancel/ under the evidence directory. Selection reports: selection_ps5.json
+and selection_ps7.json. Full/Core were not executed here, and no L1 self-build,
+gen0 validation, stable promotion or performance-multiplier claim is made.

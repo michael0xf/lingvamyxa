@@ -1,7 +1,25 @@
 # L2 units: Lmx core, registered-range classification, typed service pools.
 # Build root is this file's parent, matching tests\l1\*.ps1 convention.
 # Picks the L1 generation with L1_GEN (default gen2).
+param(
+    [ValidateSet('Full', 'Core', 'Message', 'MessageApi', 'Host', 'Exec', 'Cancel', 'Production')]
+    [string]$Suite = 'Full',
+    [switch]$Plan,
+    [ValidateRange(1, 3600)][int]$TestTimeoutSeconds = 120
+)
 $ErrorActionPreference = "Stop"
+$selected = [ordered]@{
+    Core = $Suite -in @('Full', 'Core')
+    MessageApi = $Suite -in @('Full', 'Message', 'MessageApi')
+    Host = $Suite -in @('Full', 'Message', 'Host')
+    Exec = $Suite -in @('Full', 'Message', 'Exec')
+    Production = $Suite -in @('Full', 'Message', 'Production')
+    Cancel = $Suite -in @('Full', 'Cancel')
+}
+if ($Plan) {
+    [ordered]@{ suite = $Suite; checks = @($selected.Keys | Where-Object { $selected[$_] }); rebuildL1 = $false } | ConvertTo-Json
+    return
+}
 Set-Location (Join-Path $PSScriptRoot "..")
 
 $gen = "gen2"
@@ -13,7 +31,45 @@ if (-not (Test-Path -LiteralPath $trans)) {
 
 $out = "build\l2"
 $log = "build\l1trans\logs\$gen"
+if ($Suite -ne 'Full') {
+    $out = Join-Path $out "targeted\$gen\$Suite"
+    $log = Join-Path $log "lmx_$Suite"
+}
 New-Item -ItemType Directory -Force -Path $out, $log, (Join-Path $out "headers\l2src") | Out-Null
+$suiteLog = Join-Path $log 'lmx_suite.log'
+@("suite=$Suite", "status=RUNNING", "L1_GEN=$gen") | Set-Content -LiteralPath $suiteLog -Encoding utf8
+try {
+$needsMessage = $selected.MessageApi -or $selected.Host -or $selected.Exec -or $selected.Production -or $selected.Cancel
+$nativeCwd = (Get-Location).Path
+if ($Suite -ne 'Full') { $nativeCwd = Join-Path (Get-Location) (Join-Path $out 'native_work') }
+if ($selected.Host -or $selected.Exec) {
+    # Legacy native fixtures write relative gen2 evidence; isolate it as well.
+    New-Item -ItemType Directory -Force -Path (Join-Path $nativeCwd 'build/l1trans/logs/gen2') | Out-Null
+}
+function Invoke-LmxTest([string]$Exe, [string]$Name, [string]$WorkingDirectory) {
+    $stdout = Join-Path $log "$Name.stdout.txt"
+    $stderr = Join-Path $log "$Name.stderr.txt"
+    $proc = Start-Process -FilePath (Resolve-Path -LiteralPath $Exe).Path -WorkingDirectory $WorkingDirectory `
+        -WindowStyle Hidden -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    # PS5.1 must retain the native handle before a quick process exits.
+    $null = $proc.Handle
+    if (-not $proc.WaitForExit($TestTimeoutSeconds * 1000)) {
+        # Only the process this invocation started; no PID lookup or broad kill.
+        $proc.Kill()
+        $proc.WaitForExit()
+        'TIMEOUT' | Set-Content -LiteralPath (Join-Path $log "$Name.exit.txt") -Encoding ascii
+        throw "$gen $Name timed out after $TestTimeoutSeconds seconds; see $stdout / $stderr"
+    }
+    $proc.WaitForExit()
+    $proc.Refresh()
+    if ($null -eq $proc.ExitCode) { throw "$Name exited without an observable exit code" }
+    $proc.ExitCode.ToString() | Set-Content -LiteralPath (Join-Path $log "$Name.exit.txt") -Encoding ascii
+    if ($proc.ExitCode -ne 0) {
+        Get-Content -LiteralPath $stdout, $stderr
+        throw "$gen $Name failed exit=$($proc.ExitCode)"
+    }
+    return $proc.ExitCode
+}
 $blkHdr = Join-Path $out "headers\l2src\lmx_msg_blocks.lm1.h"
 $blkC = Join-Path $out "lmx_msg_blocks.c"
 $rngHdr = Join-Path $out "headers\l2src\lmx_owned_ranges.lm1.h"
@@ -25,6 +81,7 @@ $pathC = Join-Path $out "lmx_msg_path_storage.c"
 $slotsHdr = Join-Path $out "headers\l2src\lmx_msg_slots.lm1.h"
 $slotsC = Join-Path $out "lmx_msg_slots.c"
 $blkInc = Join-Path $out "headers"
+if ($needsMessage) {
 & $trans "l2src\lmx_msg_blocks.h.lm1" $blkHdr
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_blocks.h.lm1" }
 & $trans "l2src\lmx_msg_blocks.lm1" $blkC
@@ -45,13 +102,66 @@ if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_path_storage.lm
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_slots.h.lm1" }
 & $trans "l2src\lmx_msg_slots.lm1" $slotsC
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: lmx_msg_slots.lm1" }
+}
 
 $guards = @(
     "-Werror=incompatible-pointer-types", "-Werror=discarded-qualifiers",
     "-Werror=implicit-function-declaration", "-Werror=implicit-int"
 )
 
-foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "lmx_ref_selftest", "lmx_branch_selftest", "lmx_own_selftest", "lmx_size_selftest", "lmx_dec_selftest", "lmx_message_selftest")) {
+# Invocation-local cache only: no prior object is accepted from disk.
+# Local headers are part of the key, so matching flags alone never suffice.
+$objectCache = @{}
+$objectEvidence = [System.Collections.Generic.List[object]]::new()
+$gccPath = (Get-Command gcc -ErrorAction Stop).Source
+$gccHash = (Get-FileHash -LiteralPath $gccPath).Hash
+function Get-LmxObject([string]$Source, [string[]]$Defines = @()) {
+    $options = @('-std=c99', '-Wall', '-Wextra', '-Wpedantic') + $guards + @('-I', '.', '-I', 'lm1/build', '-I', $blkInc) + $Defines
+    $headerHashes = @()
+    foreach ($dir in @('l2src', 'lm1/build', $blkInc)) {
+        if (Test-Path -LiteralPath $dir) {
+            $headerHashes += @(Get-ChildItem -LiteralPath $dir -Recurse -File -Filter '*.h' | Sort-Object FullName | ForEach-Object {
+                $_.FullName + ':' + (Get-FileHash -LiteralPath $_.FullName).Hash
+            })
+        }
+    }
+    $identity = [ordered]@{
+        source = (Resolve-Path -LiteralPath $Source).Path
+        sha256 = (Get-FileHash -LiteralPath $Source).Hash
+        compiler = $gccPath
+        compilerSHA256 = $gccHash
+        options = $options
+        headers = $headerHashes
+    }
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $key = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes(($identity | ConvertTo-Json -Depth 5 -Compress))))).Replace('-', '').ToLowerInvariant() }
+    finally { $sha.Dispose() }
+    if ($objectCache.ContainsKey($key)) {
+        $objectEvidence.Add([ordered]@{ key = $key; source = $Source; reused = $true; object = $objectCache[$key] })
+        return $objectCache[$key]
+    }
+    $obj = Join-Path $out (([IO.Path]::GetFileNameWithoutExtension($Source)) + '_' + $key + '.o')
+    $compileLog = Join-Path $log (([IO.Path]::GetFileNameWithoutExtension($Source)) + '_' + $key + '.gcc.log')
+    $arguments = $options + @('-c', $Source, '-o', $obj)
+    $quoted = ($arguments | ForEach-Object { '"' + $_ + '"' }) -join ' '
+    cmd /c "`"$gccPath`" $quoted > `"$compileLog`" 2>&1"
+    if ($LASTEXITCODE -ne 0) {
+        Get-Content -LiteralPath $compileLog
+        throw "$gen gcc failed: $Source"
+    }
+    $objectCache[$key] = $obj
+    $objectEvidence.Add([ordered]@{ key = $key; source = $Source; reused = $false; object = $obj; identity = $identity })
+    return $obj
+}
+function Get-LmxSupportObjects([string[]]$Defines = @()) {
+    foreach ($source in @('l2src/lmx_message_host.c', 'l2src/lmx_message_exec.c', $blkC, $rngC, $stgC, $pathC, $slotsC)) {
+        Get-LmxObject $source $Defines
+    }
+}
+$units = @()
+if ($selected.Core) { $units += @('lmx_selftest', 'lmx_pool_selftest', 'lmx_chars_selftest', 'lmx_ref_selftest', 'lmx_branch_selftest', 'lmx_own_selftest', 'lmx_size_selftest', 'lmx_dec_selftest') }
+if ($selected.MessageApi) { $units += 'lmx_message_selftest' }
+foreach ($unit in $units) {
     $src = "l2src\$unit.lm1"
     $c = Join-Path $out "$unit.c"
     $exe = Join-Path $out "$unit.exe"
@@ -64,8 +174,8 @@ foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "
     $opt = @()
     $inc = @("-I", ".", "-I", "lm1/build")
     if ($unit -eq "lmx_message_selftest") {
-        $extra = @("l2src\lmx_message_host.c", "l2src\lmx_message_exec.c", $blkC, $rngC, $stgC, $pathC, $slotsC)
         $defs = @("-DLMX_MSG_HOST_TEST")
+        $extra = @(Get-LmxSupportObjects $defs)
         $inc += @("-I", $blkInc)
     }
     if ($unit -eq "lmx_dec_selftest") {
@@ -107,25 +217,18 @@ foreach ($unit in @("lmx_selftest", "lmx_pool_selftest", "lmx_chars_selftest", "
     }
 }
 $msgC = Join-Path $out "lmx_message.c"
+if ($selected.Host -or $selected.Exec -or $selected.Cancel) {
 & $trans "l2src\lmx_message.lm1" $msgC
 if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: l2src\lmx_message.lm1" }
-$prodHostO = Join-Path $out "lmx_message_host_prod.o"
-$gstr = ($guards -join " ")
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -c l2src\lmx_message_host.c -o `"$prodHostO`" > `"$(Join-Path $log 'lmx_message_host_prod.gcc.log')`" 2>&1"
-if ($LASTEXITCODE -ne 0) {
-    Get-Content (Join-Path $log "lmx_message_host_prod.gcc.log")
-    throw "$gen gcc failed: production host.o"
 }
+$gstr = ($guards -join " ")
+if ($selected.Production) {
+$prodHostO = Get-LmxObject 'l2src/lmx_message_host.c'
 $prodNm = & nm --defined-only $prodHostO 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { throw "nm failed on production host.o" }
 if ($prodNm -match 'lmx_msg_host_test_set_') { throw "production host.o exports test setters" }
 if ($prodNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_host_test_nomem\s*$') { throw "production host.o has mutable test_nomem" }
-$prodExecO = Join-Path $out "lmx_message_exec_prod.o"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -c l2src\lmx_message_exec.c -o `"$prodExecO`" > `"$(Join-Path $log 'lmx_message_exec_prod.gcc.log')`" 2>&1"
-if ($LASTEXITCODE -ne 0) {
-    Get-Content (Join-Path $log "lmx_message_exec_prod.gcc.log")
-    throw "$gen gcc failed: production exec.o"
-}
+$prodExecO = Get-LmxObject 'l2src/lmx_message_exec.c'
 $prodExecNm = & nm --defined-only $prodExecO 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { throw "nm failed on production exec.o" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_after_cleanup\s*$') { throw "production exec.o exports test cleanup hook" }
@@ -137,33 +240,38 @@ if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_bind_aff\s*$') { throw "prod
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_bind_has_worker\s*$') { throw "production exec.o exports test bind_has_worker" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_test_fail_hits\s*$') { throw "production exec.o exports test fail_hits" }
 if ($prodExecNm -cmatch '(?m)\s[A-Z]\s+lmx_msg_exec_get_scan\s*$') { throw "production exec.o exports test get_scan" }
+}
+if ($selected.Host) {
 $hostExe = Join-Path $out "lmx_message_host_selftest.exe"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -DLMX_MSG_HOST_TEST l2src\lmx_message_host_selftest.c `"$msgC`" l2src\lmx_message_host.c l2src\lmx_message_exec.c `"$blkC`" `"$rngC`" `"$stgC`" `"$pathC`" `"$slotsC`" -o `"$hostExe`" > `"$(Join-Path $log 'lmx_message_host_selftest.gcc.log')`" 2>&1"
+$hostObjects = @((Get-LmxObject $msgC @('-DLMX_MSG_HOST_TEST'))) + @(Get-LmxSupportObjects @('-DLMX_MSG_HOST_TEST'))
+$hostObjectStr = ($hostObjects | ForEach-Object { '"' + $_ + '"' }) -join ' '
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -DLMX_MSG_HOST_TEST l2src\lmx_message_host_selftest.c $hostObjectStr -o `"$hostExe`" > `"$(Join-Path $log 'lmx_message_host_selftest.gcc.log')`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content (Join-Path $log "lmx_message_host_selftest.gcc.log")
     throw "$gen gcc failed: lmx_message_host_selftest"
 }
-& $hostExe
-if ($LASTEXITCODE -ne 0) { throw "$gen lmx_message_host_selftest failed" }
+$hostExit = Invoke-LmxTest $hostExe 'lmx_message_host_selftest' $nativeCwd
+}
+if ($selected.Exec) {
 $execExe = Join-Path $out "lmx_message_exec_selftest.exe"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -DLMX_MSG_EXEC_TEST l2src\lmx_message_exec_selftest.c `"$msgC`" l2src\lmx_message_host.c l2src\lmx_message_exec.c `"$blkC`" `"$rngC`" `"$stgC`" `"$pathC`" `"$slotsC`" -o `"$execExe`" > `"$(Join-Path $log 'lmx_message_exec_selftest.gcc.log')`" 2>&1"
+$execObjects = @((Get-LmxObject $msgC @('-DLMX_MSG_EXEC_TEST'))) + @(Get-LmxSupportObjects @('-DLMX_MSG_EXEC_TEST'))
+$execObjectStr = ($execObjects | ForEach-Object { '"' + $_ + '"' }) -join ' '
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" -DLMX_MSG_EXEC_TEST l2src\lmx_message_exec_selftest.c $execObjectStr -o `"$execExe`" > `"$(Join-Path $log 'lmx_message_exec_selftest.gcc.log')`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content (Join-Path $log "lmx_message_exec_selftest.gcc.log")
     throw "$gen gcc failed: lmx_message_exec_selftest"
 }
 $execOut = Join-Path $log "lmx_message_exec_selftest.stdout.txt"
 $execErr = Join-Path $log "lmx_message_exec_selftest.stderr.txt"
-$p = Start-Process -FilePath (Join-Path (Get-Location) $execExe) -WorkingDirectory (Get-Location) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $execOut -RedirectStandardError $execErr
-$p.ExitCode.ToString() | Set-Content -LiteralPath (Join-Path $log "lmx_message_exec_selftest.exit.txt") -Encoding ascii
-if ($p.ExitCode -ne 0) {
-    Get-Content -LiteralPath $execOut -ErrorAction SilentlyContinue
-    Get-Content -LiteralPath $execErr -ErrorAction SilentlyContinue
-    throw "$gen lmx_message_exec_selftest failed exit=$($p.ExitCode)"
+$execExit = Invoke-LmxTest $execExe 'lmx_message_exec_selftest' $nativeCwd
 }
 
 # L2 loop cancelled through Message control: own-thread map_child and parent-thread sched_step.
-$l2exe = "build\l2trans\l2trans.exe"
-$l2c = "build\l2trans\l2trans.c"
+if ($selected.Cancel) {
+$l2out = 'build\l2trans'
+if ($Suite -ne 'Full') { $l2out = Join-Path $out 'l2trans' }
+$l2exe = Join-Path $l2out 'l2trans.exe'
+$l2c = Join-Path $l2out 'l2trans.c'
 $needL2 = -not (Test-Path -LiteralPath $l2exe)
 if (-not $needL2) {
     if ((Get-Item -LiteralPath "l2src\l2trans.lm1").LastWriteTime -gt (Get-Item -LiteralPath $l2exe).LastWriteTime) {
@@ -171,21 +279,22 @@ if (-not $needL2) {
     }
 }
 if ($needL2) {
-    New-Item -ItemType Directory -Force -Path "build\l2trans" | Out-Null
+    New-Item -ItemType Directory -Force -Path $l2out | Out-Null
     & $trans "l2src\l2trans.lm1" $l2c
     if ($LASTEXITCODE -ne 0) { throw "$gen translate failed: l2src\l2trans.lm1" }
-    & gcc -std=c99 -Wall -Wextra -Wpedantic @guards -I . -I lm1/build $l2c -o $l2exe 2>&1 |
-        Tee-Object -FilePath (Join-Path $log "l2trans.gcc.log") | Out-Null
+    # Capture stderr natively: PS5.1 otherwise promotes GCC warnings to errors.
+    $l2CompileLog = Join-Path $log 'l2trans.gcc.log'
+    cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build `"$l2c`" -o `"$l2exe`" > `"$l2CompileLog`" 2>&1"
     if ($LASTEXITCODE -ne 0) {
         Get-Content (Join-Path $log "l2trans.gcc.log")
         throw "$gen gcc failed: l2trans"
     }
 }
 $spinLm2 = "l2src\tests\cancel_spin.lm2"
-$spinLm1 = "build\l2trans\cancel_spin.lm1"
-$spinC = "build\l2trans\cancel_spin.c"
-$spinObj = "build\l2trans\cancel_spin_nomain.o"
-$spinExe = "build\l2trans\cancel_spin_host.exe"
+$spinLm1 = Join-Path $l2out 'cancel_spin.lm1'
+$spinC = Join-Path $l2out 'cancel_spin.c'
+$spinObj = Join-Path $l2out 'cancel_spin_nomain.o'
+$spinExe = Join-Path $l2out 'cancel_spin_host.exe'
 $spinS = Join-Path $log "cancel_spin_m0.s"
 & $l2exe $spinLm2 $spinLm1
 if ($LASTEXITCODE -ne 0) { throw "$gen l2trans failed: $spinLm2" }
@@ -220,7 +329,9 @@ if ($LASTEXITCODE -ne 0) {
     throw "$gen gcc failed: $spinC nomain"
 }
 $spinGlog = Join-Path $log "cancel_spin_host.gcc.log"
-cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" `"$spinObj`" l2src\tests\cancel_spin_host.c `"$msgC`" l2src\lmx_message_host.c l2src\lmx_message_exec.c `"$blkC`" `"$rngC`" `"$stgC`" `"$pathC`" `"$slotsC`" -o `"$spinExe`" > `"$spinGlog`" 2>&1"
+$cancelObjects = @((Get-LmxObject $msgC)) + @(Get-LmxSupportObjects)
+$cancelObjectStr = ($cancelObjects | ForEach-Object { '"' + $_ + '"' }) -join ' '
+cmd /c "gcc -std=c99 -Wall -Wextra -Wpedantic $gstr -I . -I lm1/build -I `"$blkInc`" `"$spinObj`" l2src\tests\cancel_spin_host.c $cancelObjectStr -o `"$spinExe`" > `"$spinGlog`" 2>&1"
 if ($LASTEXITCODE -ne 0) {
     Get-Content $spinGlog
     throw "$gen gcc failed: cancel_spin_host"
@@ -234,13 +345,15 @@ if ($sp.ExitCode -ne 0) {
     Get-Content -LiteralPath $spinErr -ErrorAction SilentlyContinue
     throw "$gen cancel_spin_host failed exit=$($sp.ExitCode)"
 }
+}
 
-"l2 lmx $gen ok"
-$suiteLog = Join-Path $log "lmx_suite.log"
+if ($Suite -eq 'Full') { $banner = "l2 lmx $gen ok" }
+else { $banner = "l2 lmx $gen selected=$Suite ok (not a full suite)" }
 $toolHash = (Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $trans)).Hash
+if ($selected.Exec) {
 Copy-Item -LiteralPath $execOut -Destination (Join-Path $log "lmx_message_ctx.stdout.txt") -Force
 Copy-Item -LiteralPath $execErr -Destination (Join-Path $log "lmx_message_ctx.stderr.txt") -Force
-$p.ExitCode.ToString() | Set-Content -LiteralPath (Join-Path $log "lmx_message_ctx.exit.txt") -Encoding ascii
+$execExit.ToString() | Set-Content -LiteralPath (Join-Path $log "lmx_message_ctx.exit.txt") -Encoding ascii
 @(
     "cmd=l2src\run_lmx.ps1"
     "input=l2src\lmx_message_exec_selftest.c + translated lmx_message.lm1 + lmx_message_host.c + lmx_message_exec.c"
@@ -248,53 +361,59 @@ $p.ExitCode.ToString() | Set-Content -LiteralPath (Join-Path $log "lmx_message_c
     "l1trans=$trans"
     "l1trans_sha256=$toolHash"
     "exe=$execExe"
-    "cwd=$(Get-Location)"
+    "cwd=$nativeCwd"
     "streams=lmx_message_exec_selftest.stdout.txt / lmx_message_exec_selftest.stderr.txt (raw process, copied to lmx_message_ctx.*)"
 ) | Set-Content -LiteralPath (Join-Path $log "lmx_message_ctx.meta.txt") -Encoding utf8
-$evPath = Join-Path $log "lmx_message_host_selftest.evidence.txt"
+}
+$evPath = Join-Path $nativeCwd 'build/l1trans/logs/gen2/lmx_message_host_selftest.evidence.txt'
 $ev = @()
-if (Test-Path -LiteralPath $evPath) { $ev = Get-Content -LiteralPath $evPath }
-$ev2Path = Join-Path $log "lmx_message_exec_selftest.evidence.txt"
-if (Test-Path -LiteralPath $ev2Path) { $ev = $ev + (Get-Content -LiteralPath $ev2Path) }
-@(
+if ($selected.Host -and (Test-Path -LiteralPath $evPath)) { $ev = Get-Content -LiteralPath $evPath }
+$ev2Path = Join-Path $nativeCwd 'build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt'
+if ($selected.Exec -and (Test-Path -LiteralPath $ev2Path)) { $ev = $ev + (Get-Content -LiteralPath $ev2Path) }
+$suiteEvidence = @(
     "cmd=l2src\run_lmx.ps1"
     "L1_GEN=$gen"
     "l1trans=$trans"
     "l1trans_sha256=$toolHash"
-    "banner=l2 lmx $gen ok"
+    "suite=$Suite"
+    "checks=$(@($selected.Keys | Where-Object { $selected[$_] }) -join ',')"
+    "banner=$banner"
+    "status=PASS"
     "exit=0"
-    "host_selftest_stdout=lmx_message_host ok (see evidence)"
-    "exec_selftest_stdout=lmx_message_exec ok (see evidence)"
+)
+if ($selected.Host) { $suiteEvidence += 'host_selftest_exit=0' }
+if ($selected.Exec) { $suiteEvidence += "exec_selftest_exit=$execExit" }
+if ($selected.Cancel) { $suiteEvidence += @(
     "cancel_spin_stdout=$((Get-Content -LiteralPath $spinOut -Raw).Trim())"
     "cancel_spin_stderr=$((Get-Content -LiteralPath $spinErr -Raw).Trim())"
     "cancel_spin_exit=$($sp.ExitCode)"
-) + $ev | Set-Content -LiteralPath $suiteLog -Encoding utf8
+) }
+$suiteEvidence + $ev | Set-Content -LiteralPath $suiteLog -Encoding utf8
+ConvertTo-Json -InputObject @($objectEvidence.ToArray()) -Depth 8 | Set-Content -LiteralPath (Join-Path $log 'lmx_objects.json') -Encoding utf8
 $hashLines = @(
     "fresh hashes $(Get-Date -Format o)"
 )
-foreach ($hp in @(
-    "l2src\lmx.h",
-    "l2src\lmx_poll_stub.c",
-    "l2src\lmx_message.lm1",
-    "l2src\lmx_message.h",
-    "l2src\lmx_message_exec.c",
-    "l2src\lmx_message_exec_selftest.c",
-    "l2src\lmx_message_selftest.lm1",
-    "l2src\l2trans.lm1",
-    "l2src\tests\cancel_spin.lm2",
-    "l2src\tests\cancel_spin_host.c",
-    "l2src\run_lmx.ps1",
-    "build\l2trans\cancel_spin.lm1",
-    "build\l2trans\cancel_spin.c",
-    "build\l2\lmx_message_selftest.exe",
-    "build\l2\lmx_message_exec_selftest.exe",
-    "build\l2trans\cancel_spin_host.exe"
-)) {
+$hashPaths = @('l2src/lmx.h', 'l2src/run_lmx.ps1', $trans, $gccPath)
+if ($needsMessage) { $hashPaths += @('l2src/lmx_message.lm1', 'l2src/lmx_message.h', 'l2src/lmx_message_exec.c', 'l2src/lmx_message_host.c') }
+foreach ($unit in $units) { $hashPaths += @("l2src/$unit.lm1", (Join-Path $out "$unit.c"), (Join-Path $out "$unit.exe")) }
+if ($selected.Host) { $hashPaths += @('l2src/lmx_message_host_selftest.c', $hostExe) }
+if ($selected.Exec) { $hashPaths += @('l2src/lmx_message_exec_selftest.c', $execExe) }
+if ($selected.Cancel) { $hashPaths += @('l2src/l2trans.lm1', 'l2src/tests/cancel_spin.lm2', 'l2src/tests/cancel_spin_host.c', $spinLm1, $spinC, $spinExe) }
+foreach ($hp in $hashPaths) {
     if (Test-Path -LiteralPath $hp) {
-        $hashLines += "$((Get-FileHash -Algorithm SHA256 (Join-Path (Get-Location) $hp)).Hash.ToLower())  $hp"
+        $hashLines += "$((Get-FileHash -Algorithm SHA256 -LiteralPath $hp).Hash.ToLower())  $hp"
     }
 }
-$hashLines += "exit_message=0"
-$hashLines += "exit_exec=0"
-$hashLines += "exit_cancel_spin=$($sp.ExitCode)"
+if ($selected.MessageApi) { $hashLines += "exit_message=0" }
+if ($selected.Exec) { $hashLines += "exit_exec=$execExit" }
+if ($selected.Cancel) { $hashLines += "exit_cancel_spin=$($sp.ExitCode)" }
+$hashLines += "selected_suite=$Suite"
 $hashLines | Set-Content -LiteralPath (Join-Path $log "lmx_message_ctx.hashes.txt") -Encoding ascii
+$banner
+} catch {
+    @("suite=$Suite", "status=FAILED", "L1_GEN=$gen", "error=$($_.Exception.Message)") | Set-Content -LiteralPath $suiteLog -Encoding utf8
+    if ($null -ne $objectEvidence) {
+        ConvertTo-Json -InputObject @($objectEvidence.ToArray()) -Depth 8 | Set-Content -LiteralPath (Join-Path $log 'lmx_objects.json') -Encoding utf8
+    }
+    throw
+}
