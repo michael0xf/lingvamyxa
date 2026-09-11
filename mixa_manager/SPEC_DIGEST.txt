@@ -279,10 +279,62 @@ wrong reading:
     a liveness response (alive) is NOT completion
     all children reporting DELIVERY success is not an application-result barrier
 
-6.1. How the L2 translator actually places these - read-only check, 2026-09-11
+6.1. L2 STRUCTURE HOSTING - full research record, 2026-09-11
 
-Checked in stg/l1_baseline/l2src/l2trans.lm1 because it decides what our wrapped
-modules will contain. It matches 19.29.7.1 exactly.
+Everything in 6.1.x was read directly out of
+stg/l1_baseline/l2src/l2trans.lm1 (7277 lines), read-only, on the stable
+translator's sources. Nothing here was built or modified; where a claim needed
+running and could not be run, that is said so at the point of the claim.
+
+Reading order for someone picking this up: 6.1.0 for the machinery inventory,
+6.1.1-6.1.2 for what is and is not reified, 6.1.3.1 for the defect, 6.1.3.2 for
+the proposed rule and the verdict.
+
+6.1.0. The machinery, by name
+
+    l2_own_*     the per-field table. name, mi (owning method), ty, host,
+                 fid/fchild (host and index within it), uchild (index under
+                 node when unhosted), live.
+    l2_for_*     the HOST table: node (an LmP0Node pointer), uchild, nkid.
+                 l2_for_find(node) compares that pointer - nothing in the table
+                 is `for`-specific except its name.
+    l2_m_*       per-method, indexed l2_own_off(mi, i): uses, alias, own, ret,
+                 body.
+    l2_scope_*   the lexical scope stack: at[], n, push, pop, host, has.
+    l2_unit_base the next free child index after the layout has run.
+
+    counts, to size any change: 72 references to l2_for_*, of which only 8 are
+    actual `for`-SYNTAX guards; 95 to l2_scope_*; 24 to l2_own_host.
+
+6.1.0.1. Three passes, three entry points
+
+    l2_check_body    validation      entered at 1837, 5135, 5140
+    l2_collect_decls layout/hosting  entered at 4692
+    l2_emit_body     emission        entered at 2013
+
+They are separate walks over the same tree, and 6.1.3.1 is what happens when
+they disagree about where to walk.
+
+6.1.0.2. Two `for` spellings, only one of which can host
+
+l2_for_cstyle requires the frame body to have EXACTLY FIVE active fields - the
+c-style `for: int(i, 0) (i < 10) i++` with its block as the fifth. The condition
+form `for: a < b` fails that test, so every scope push is skipped for it and it
+hosts nothing. Two spellings of one receiver, one of which is a host and one of
+which is not, with no diagnostic marking the difference.
+
+6.1.0.3. Aliased fields take a different path entirely
+
+Everything the prologue restores is guarded by l2_m_alias[...] < 0. A field
+whose name is shared with an argument (the same-name bind) is NOT restored at
+entry; it is loaded lazily at 6746 and 6788, guarded by
+"if: l2_q{k}_from = 0 -> load it". So there are already two restore paths, and
+the lazy one is the one a general conditional-host scheme would have to widen.
+
+6.1.0.4. Standard receivers are not methods, and the poll placement is literal
+
+This is the original question that started the investigation, and it matches
+19.29.7.1 exactly.
 
 STANDARD RECEIVERS ARE NOT METHODS. `if`, `while` and `for` carry no method
 identity, no own-state loading, no dirty flags and no checkpoint:
@@ -522,11 +574,40 @@ TWO THINGS TO DECIDE EXPLICITLY
       This is the one place the rule needs a stated answer rather than an
       inherited one.
 
-MY VERDICT: adopt it. The argument/body line is the right line, it is the line
-the parser's shape already supports and the translator already uses, and it
-replaces a per-receiver list with a property. The cost is the layout rework,
-which is owed anyway - a `for` nested in a `for` being its own sibling is a
-defect waiting for someone to depend on it.
+6.1.3.3. VERDICT: ADOPT THE RULE
+
+Adopt it. Stated for someone who reads only this subsection:
+
+    RULE. Receiver ARGUMENTS are never written to the graph. Every EXECUTABLE
+    BLOCK is. The block of a frame is its last field when that field is a
+    STRUCTURE; everything before it is arguments. A block hosts the own fields
+    declared directly in it, and a block nested in a block is that block's
+    child.
+
+Four reasons, in order of weight:
+
+    1. The translator already applies the test three times (if 4885-4892,
+       while 4918-4925, for 4952-4960) without naming it. The rule does not
+       introduce a convention; it names one that is load-bearing already.
+    2. It makes 6.1.3.1 impossible rather than fixed. The pass divergence exists
+       only because collect_decls alone skips `if`; a uniform rule forces all
+       three walks to agree by construction.
+    3. It replaces a per-receiver list with a PROPERTY. "Unsupported own
+       declaration" becomes either legal or a stated consequence of the rule,
+       and nobody has to maintain a set of blessed receivers.
+    4. The costed objection does not survive contact: the prologue already emits
+       a host handle only for hosts with used fields, so blocks that declare
+       nothing cost nothing.
+
+The bill: the flat layout has to become a real parent chain, and the prologue
+has to resolve hosts in depth order. That work is owed anyway - a `for` nested
+in a `for` is currently its own SIBLING in the graph, which is a defect waiting
+for someone to depend on it.
+
+Two decisions the rule does not make for you, from 6.1.3.2: host the BLOCK
+rather than the statement, which retires `else` as a special case; and say
+whether a trailer body is an executable block, which the last-field test cannot
+answer because a trailer is not a field.
 
 6.1.4. But "persist every structure" is a different question, not a bigger one
 
