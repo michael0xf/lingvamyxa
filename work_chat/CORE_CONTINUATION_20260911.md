@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 07:32
+## Current checkpoint — 2026-09-12 07:39
 
 ### Temporary core-owner rotation
 
@@ -16,6 +16,20 @@ L2/core implementation under `FABLE_5_1_CORE_HANDOFF_20260912.md`, SHA256
 Its first bounded stage is non-self recv plus fail/stop inbox walks. Claude keeps
 all `mixa_manager`; Codex remains planning/review-only. Do not send Grok further
 work until a later clean quota-rotation boundary.
+
+Grok completed that stopping boundary in `85f731e` and explicitly reported
+PAUSED/RELEASED. The corrected OOM test now uses nonzero id 7, proves the failed
+destination pin leaves no inbox/ref/done residue, retries the same id exactly
+once, then drains the sole admitted copy. Two actual OS producer threads stage
+11,12 and 21,22 into the same source outbox; the transfer observes all four
+exactly once, preserves each producer's order, empties the source and admits
+four destination entries. Evidence
+`build/grok/exec_mail_xfer_fix/20260912_072700/` reports Windows Exec PASS/exit
+0, stable65D5 and a 58688-byte POSIX object with empty `-pthread -Werror` log;
+POSIX runtime remains unverified. Git blobs exec.c `2263ef8` and selftest
+`e6a9763` match the commit. D7 phase 2 (`1e176de` + `508e22b` + `85f731e`) is
+accepted. No core paths are dirty and Grok started no later slice. Fable may now
+start from this exact pushed boundary using the handoff above.
 
 Claude's commits `5d72e2a` and `d065e7d` complete the real App/shortcut component
 stage. Accepted directory enumeration feeds a nested same-app window, buttons
