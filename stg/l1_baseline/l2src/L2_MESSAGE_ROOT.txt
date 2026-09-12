@@ -913,3 +913,43 @@ F9519D3A2191ADBCEDF26EE93423699107FDA823FB4FD7BAB9C29BF3A92701C2
 Final parser_candidate.lm1 SHA256:
 FB2F60BCB8515CC2A15E309B5A7B28085BF08CECBC8629BA2394219ABB7C728A
 Artifacts are under the final run's source/stg/l1_baseline/build/c_scanners.
+
+2026-09-12: Python-like triple-quote candidate integration
+
+Existing parser_python_string.lm2 start/end functions are incorporated as
+m17/m18. New parser_python_diagnostics.lm2 implements unchecked skip (m19)
+and scan/diagnostic (m20), preserving exactly-three closing quote runs,
+unchecked failure returning length, unchanged failing input index and the
+original diagnostic4/message/location. All four candidate bodies now call
+real L2;83transitive functions forward explicit unit context.
+
+Borrowed scratch adaptation now accepts named size_t slots: skip receives one
+automatic end cell, scan receives end/line/column cells. Their addresses remain
+call-local in the L1 migration adapter, never in graph ownership or global/TLS
+state. Existing C-quote wrappers use the same mechanism with two slots. Frozen
+parser/public API, compiler/runtime and existing authoritative ports unchanged.
+
+PASS build/codex/candidate_c_scanners/20260912_015923_374/evidence.json:
+10stages;88fullparse AST/status/diagnostic comparisons;301node spans;
+704direct Python cases each compare starts/end-status/out-end/unchecked-skip
+and diagnostic/index behavior. Bothquotecharacters, every truncated length/
+starting index through one past end for five inputs, runs0..8 with and without
+a later triple close, shifted pointers, CRLF/LF and mixed multiline input are
+covered. The rule for runs4+ is preserved rather than replaced by Python rules.
+First diagnostic preservation and cross-Message counter isolation also pass.
+1,752total direct diagnostic comparisons include the previous1,048Cquote cases;
+the existing3,548layout comparisons pass unchanged. No failed iteration here.
+
+All20L2entries reached by actual parsing. Four new entry hits A/B:
+2262/2240 starts,46/46 find,36/36 skip,10/10 diagnostic scanner.
+Two independentMessagecontexts and constructor root/METHOD failure+retry
+remain verified. Exactly700physical scanner graph/block/range allocations are
+freed once across4Messages. Frozen document arenas remain outside that audit.
+Saved e624e7e compiler,15hashed8b3ba5e runtime objects and verified015347oracle
+were reused; this is not a current-D3/fullgate/portablebootstrap/selfhost proof.
+
+Authentic scanners.lm1 SHA256:
+1AF3DCD0AF755E5A6EE78B208197837A0F6EECAA700DDF0C42B4D1FE95277EAC
+Candidate parser_candidate.lm1 SHA256:
+B6DDC9111C90F2FB02F801878F6DCE37660537D3BFC62F4278DD92F31159841E
+Artifacts are under the run's source/stg/l1_baseline/build/c_scanners.

@@ -747,3 +747,45 @@ scratch slots and position helper, preserve quote-run/end/index/diagnostic
 rules. Require real candidate AST/spans, both quote kinds, runs of 1/2/3/4+
 quotes, multiline/malformed/prefix cases, context/cleanup. No compiler/runtime
 or language-profile change. Both user carrier/u64 questions remain unanswered.
+
+2026-09-12 02:01: Grok015600 SHA
+884B6EC758BF37AD37B691DB627BA6240DF399BB142C5FC1052CB4A7578F4870
+(event7f453caed62b476584e87fd699fc4d47) acceptsf93a09e and confirms five-file
+Python-like string slice. IMPLEMENTED starts/find integration plus new L2
+skip/diagnostic wrappers, four actual adapters and83transitive contextcallers.
+Borrowed scratch slots generalized to named automatic size_t cells; no
+retained/global/TLS pointers, compiler/runtime/frozenparser/API changes.
+PASS candidate_c_scanners/20260912_015923_374/evidence.json:10stages,
+88parse AST/status/diagnostic comparisons,301spans,704directPython cases,
+1752totaldiagnosticchecks including1048Cquote and3548existinglayout checks.
+Bothquotes/runs0..8/truncatedprefixes/allindices/multiline/shiftedpointers/
+firsterrorpreservation matchfrozenrules. All20realL2entriesreached,2contexts,
+root/METHODfail+retry,700physicalscannerallocations eachfreedonce. FirstPASS.
+Reused saved e624e7ecompiler/15hashed8b3ba5eobjects/015347oracle; notfullgate.
+Authentic scanners.lm1 SHA
+1AF3DCD0AF755E5A6EE78B208197837A0F6EECAA700DDF0C42B4D1FE95277EAC;
+parser_candidate.lm1 SHA
+B6DDC9111C90F2FB02F801878F6DCE37660537D3BFC62F4278DD92F31159841E.
+
+Runtimeprogress probe015800 CLOSED by outbox SHA
+DCE3EF6294B48018EFB56ADA373EB3E395FFF8217E9473B19B6A2034F12E8A1B
+(event12b131d701fb473680aec78621a262b9), matched inbox/seen. Delivered pushed
+8bd427e: exec_stop clears nready/scan/unbound_held after joins. All25freshExec
+manifest hashes match, affectedexit0 and stop/restart marker verified. Source
+change and passing smoke supported; test does not establish nonempty queue
+before stop, so stale-ready regression coverage needs a controlled precondition
+at nextaffectedtest step. Do not request an identical rerun. Grok identifies
+remaining process-wide bind/ready prototype and20msready_ev poll; nextownedD3
+step wait/wake, not assignmentwait. No outstandingprogressprobe. CurrentFSW21772
+healthy04:57:21Z, eventdeliveredcurrenttask; onlyGrok/Claude. No newClaude
+completion; preserve activeSharefileadapter/test and fullappbacklog.
+Semanticquestions stillpending.
+
+Next Codex proposal (NOT owned): port lm_p0_scan_quoted and
+lm_p0_require_quoted_token_boundary to new parser_quoted_diagnostics.lm2,
+reuse quote/Python/position/predicate ports and route real candidate callers.
+Exactfivepaths: newport,candidaterunner/driver,L2_MESSAGE_ROOT,thiscontinuation.
+Acceptance: escaped newline handling, exact-backtick doubledquotes/NUL,
+diagnostics4/18/19/30 and firsterror/index/location parity, Pythondelegation,
+realAST/spans/context/cleanup. Existing semantics/compiler/runtime unchanged;
+wait for matched ownership confirmation before implementation edits.

@@ -1,0 +1,21 @@
+# The temporary candidate adapters supply automatic scratch size_t cells.
+# These borrowed pointers are used only during this synchronous L2 call.
+fn: lm_p0_skip_python_string_unchecked (const: @(char text); size_t: length; size_t: start; @: size_t end_index) size_t
+    if: lm_p0_find_python_string_end(text, length, start, end_index) = 0
+        return: length
+    return: end_index[0]
+end: lm_p0_skip_python_string_unchecked
+fn: lm_p0_scan_python_string (@: LmP0Document document; const: @(char text); size_t: length; @: size_t index; size_t: line; size_t: base_column; @: size_t end_index; @: size_t diagnostic_line; @: size_t diagnostic_column) int
+    size_t: start
+    size_t: error_line
+    size_t: error_column
+    start: index[0]
+    if: lm_p0_find_python_string_end(text, length, start, end_index) = 0
+        lm_p0_position_in_slice(text, length, start, line, base_column, diagnostic_line, diagnostic_column)
+        error_line: diagnostic_line[0]
+        error_column: diagnostic_column[0]
+        c.lm_p0_set_diagnostic(document, 4, error_line, error_column, "unterminated python-like string literal")
+        return: 0
+    index[0]: end_index[0]
+    return: 1
+end: lm_p0_scan_python_string

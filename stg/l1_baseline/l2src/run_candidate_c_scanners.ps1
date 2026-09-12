@@ -31,7 +31,7 @@ foreach($file in $compilerProof.sources.PSObject.Properties.Name){
 $out='build/c_scanners'
 New-Item -ItemType Directory -Path (Join-Path $work $out) -Force | Out-Null
 $evidence=[ordered]@{result='FAIL';stages=@();compiler=$l1trans;compilerSHA256=$pin;l2Compiler=$l2exe;compilerEvidence=(Join-Path $compilerRun 'evidence.json');snapshotOverlays=$compilerProof.sources;sources=@{};reusedObjects=$compilerProof.reusedObjects}
-$inputs=@('parser_c_quoted.lm2','parser_c_surface.lm2','parser_text_predicates.lm2','parser_position.lm2','parser_c_quote_diagnostics.lm2','tests/l2_c_scanners_parse_driver.lm1','run_candidate_c_scanners.ps1')
+$inputs=@('parser_c_quoted.lm2','parser_c_surface.lm2','parser_text_predicates.lm2','parser_position.lm2','parser_c_quote_diagnostics.lm2','parser_python_string.lm2','parser_python_diagnostics.lm2','tests/l2_c_scanners_parse_driver.lm1','run_candidate_c_scanners.ps1')
 foreach($file in $inputs){
     $src=Join-Path $PSScriptRoot $file
     Copy-Item -LiteralPath $src -Destination (Join-Path $work "l2src/$file")
@@ -66,13 +66,17 @@ try {
     $diagnostics=Get-Content 'l2src/parser_c_quote_diagnostics.lm2' -Raw
     $hitNames+=@('lm_p0_scan_c_char','lm_p0_scan_c_prefixed_quote')
     $hitNames+=@('lm_p0_is_line_break','lm_p0_line_break_width_at','lm_p0_is_horizontal_space','lm_p0_is_field_space','lm_p0_is_field_separator','lm_p0_position_in_slice')
+    $hitNames+=@('lm_p0_starts_python_string','lm_p0_find_python_string_end','lm_p0_skip_python_string_unchecked','lm_p0_scan_python_string')
     $hit="fn: scanner_hit (int: which) int"+[char]10
-    foreach($i in 0..15){$hit+="    int: hit$i"+[char]10}
-    foreach($i in 0..15){$hit+="    if: which = $i"+[char]10+"        hit"+$i+": hit$i + 1"+[char]10}
+    foreach($i in 0..19){$hit+="    int: hit$i"+[char]10}
+    foreach($i in 0..19){$hit+="    if: which = $i"+[char]10+"        hit"+$i+": hit$i + 1"+[char]10}
     $hit+="    return: 0"+[char]10+"end: scanner_hit"+[char]10
     $unit+=$hit+(Definition (Get-Content 'l2src/parser_position.lm2' -Raw) 'lm_p0_position_in_slice')
-    $unit+=$diagnostics+"fn: main () int"+[char]10+"    return: 0"+[char]10+"end: main"+[char]10
-    foreach($i in 0..15){
+    $unit+=$diagnostics
+    $python=Get-Content 'l2src/parser_python_string.lm2' -Raw
+    foreach($name in @('lm_p0_starts_python_string','lm_p0_find_python_string_end')){$unit+=Definition $python $name}
+    $unit+=(Get-Content 'l2src/parser_python_diagnostics.lm2' -Raw)+"fn: main () int"+[char]10+"    return: 0"+[char]10+"end: main"+[char]10
+    foreach($i in 0..19){
         $headersFound=[regex]::Matches($unit,'(?m)^(?:fn|sub): '+$hitNames[$i]+'\s*\([^\r\n]*\r?\n')
         if($headersFound.Count -ne 1){throw 'Missing/duplicate instrumented L2 entry'}
         $header=$headersFound[0]
@@ -82,7 +86,7 @@ try {
     & $l2exe "$out/scanners.lm2" "$out/scanners.lm1" *> "$out/scanners.translate.log"
     Check 'scanners_L2_to_L1'
     $generated=Get-Content "$out/scanners.lm1" -Raw
-    foreach($i in 0..15){
+    foreach($i in 0..19){
         $slot=16+$i
         if($generated -notmatch ('# const: @\(char l2_own'+$slot+'\) "hit'+$i+'"')){throw 'Hit-counter layout changed'}
     }
@@ -113,14 +117,18 @@ try {
         @{name='lm_p0_is_c_surface_top_boundary';method=10;ret='int';args='value'},
         @{name='lm_p0_scan_c_sizeof_surface_atom';method=11;ret='size_t';args='text, end_index, start'},
         @{name='lm_p0_scan_c_surface_atom';method=12;ret='size_t';args='text, end_index, start'},
-        @{name='lm_p0_scan_c_char';method=15;ret='int';args='document, text, length, index, line, base_column';scratch=$true},
-        @{name='lm_p0_scan_c_prefixed_quote';method=16;ret='int';args='document, text, length, index, line, base_column';scratch=$true},
+        @{name='lm_p0_scan_c_char';method=15;ret='int';args='document, text, length, index, line, base_column';scratch=@('diagnostic_line','diagnostic_column')},
+        @{name='lm_p0_scan_c_prefixed_quote';method=16;ret='int';args='document, text, length, index, line, base_column';scratch=@('diagnostic_line','diagnostic_column')},
         @{name='lm_p0_is_line_break';method=0;ret='int';args='value'},
         @{name='lm_p0_line_break_width_at';method=1;ret='size_t';args='source, length, index'},
         @{name='lm_p0_is_horizontal_space';method=6;ret='int';args='value'},
         @{name='lm_p0_is_field_space';method=7;ret='int';args='value'},
         @{name='lm_p0_is_field_separator';method=8;ret='int';args='value'},
-        @{name='lm_p0_position_in_slice';method=14;ret='void';args='text, length, index, base_line, base_column, out_line, out_column'}
+        @{name='lm_p0_position_in_slice';method=14;ret='void';args='text, length, index, base_line, base_column, out_line, out_column'},
+        @{name='lm_p0_starts_python_string';method=17;ret='int';args='text, length, index'},
+        @{name='lm_p0_find_python_string_end';method=18;ret='int';args='text, length, start, out_end'},
+        @{name='lm_p0_skip_python_string_unchecked';method=19;ret='size_t';args='text, length, start';scratch=@('end_index')},
+        @{name='lm_p0_scan_python_string';method=20;ret='int';args='document, text, length, index, line, base_column';scratch=@('end_index','diagnostic_line','diagnostic_column')}
     )
     $definitions=[regex]::Matches($parser.Substring($parser.IndexOf('end: prototype')+14),'(?ms)^(?:    )?(?:fn|sub): (\w+)\b.*?(?=^(?:    )?(?:fn|sub): |\z)')
     $routed=[Collections.Generic.HashSet[string]]::new()
@@ -169,9 +177,11 @@ try {
         $locals=''
         $actuals=$adapter.args
         if($adapter.scratch){
-            $prototype=$prototype.Replace(') int','; @: size_t diagnostic_line; @: size_t diagnostic_column) int')
-            $locals='    size_t: diagnostic_line'+[char]10+'    size_t: diagnostic_column'+[char]10
-            $actuals+=', @ diagnostic_line, @ diagnostic_column'
+            foreach($scratch in $adapter.scratch){
+                $prototype=$prototype.Insert($prototype.LastIndexOf(')'),'; @: size_t '+$scratch)
+                $locals+='    size_t: '+$scratch+[char]10
+                $actuals+=', @ '+$scratch
+            }
         }
         $extra+='    '+$prototype+[char]10
         $callPrefix='    return: '
