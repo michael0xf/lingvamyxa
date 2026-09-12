@@ -474,3 +474,103 @@ NOT done -- stated plainly
    closes the component/integration-test boundary, not a running
    application. No real native playback and no user media were touched;
    every fixture is an empty stub file the test creates itself.
+
+
+MP3 composition -- the blocked stage, unblocked
+------------------------------------------------
+Ticket 20260912-084943. Codex delivered a candidate compiler whose
+import storage grows instead of capping at 16, which is what the split
+recorded above was working around. The two halves are now joined.
+
+Files: mixa_audio_mp3.h.lm1, mixa_audio_mp3.lm1,
+tests/mixa_audio_mp3_selftest.lm1, run_mp3_selftest.ps1.
+
+Verified before use, not taken on report
+-----------------------------------------
+  candidate SHA256 24A1B57B...290B09 -- matches what Codex published
+  stable65D5 SHA256 65D5A5ED...61C936 -- unchanged, not modified
+  the seven-predef reproducer recorded above: still FAILS under
+      stable65D5 ("import path table full"), translates under the
+      candidate, exit 0
+  the composed unit itself: fails under stable65D5 at
+      mixa_buttons.lm1, builds and runs under the candidate
+
+So the blocker is genuinely gone rather than reported gone, and the
+before/after is on this stage's own code rather than a synthetic case.
+
+What was built
+--------------
+mixa_mp3_open_dir scans a directory through mixa_audio_scan and hands
+the snapshot to mixa_audio_launch_set_items, then runs the launch.
+mixa_mp3_hit is the real top-level button: a hit re-scans the directory
+it is pointed at and opens the panel over what is there NOW, which is
+what a user pressing MP3 expects; a miss takes no action, opens nothing
+and does not even scan.
+
+The scan runs to completion BEFORE any teardown, so a directory that has
+gone missing or refused enumeration leaves the context exactly as it
+was. A failed refresh cannot blank a working panel. The selftest asserts
+this by capturing the audio instance pointer before the failed hit and
+requiring it to be the same pointer afterwards -- proving nothing
+changed, rather than merely proving something is non-null.
+
+The split is KEPT even though it could now be folded back. Only this
+composition module and its test need the candidate; mixa_audio_scan (8
+imports) and mixa_audio_launch (15) each still build and test under
+stable65D5, so nothing already accepted starts depending on an
+unpromoted compiler.
+
+The scratch instance, stated rather than hidden: scanning filters
+through the accepted mixa_audio_is_audio_path, whose signature takes a
+MixaAudio even though it only reads the vtable's audio_exts. So
+mixa_mp3_open_dir creates one MixaAudio purely to ask that question and
+destroys it before the launch creates the instance that actually plays
+-- one extra device open and close per press. A vtable-level extension
+predicate on the accepted audio seam would remove it; that is a change
+to an accepted API and was not made unasked.
+
+Evidence
+--------
+run_mp3_selftest.ps1 -- 35 checks, 0 failures, two hash-identical runs.
+The runner pins the CANDIDATE hash and additionally verifies stable65D5
+is unchanged on every run, and the summary records both.
+
+Real fixtures under the run's own directory: dir1 with a subdirectory to
+skip, a non-audio file to filter out and two audio files (one ASCII, one
+UTF-8 Cyrillic); dir2 with one different track; an empty directory; a
+missing path. Enumeration order is matched against an INDEPENDENT
+raw-mixa_dir oracle, so nothing assumes filesystem sorting.
+
+Covered: ONE real top-level hit performing the whole composed path and
+opening the panel exactly once, with the playlist equal to the oracle's
+own sequence and playback started; the opened panel driven through its
+own real hits (nextFile landing on the oracle's second entry, random
+toggling) and dismissed through its real OK button; pressing again
+re-scanning and reopening from the top with no stale position or mode;
+a changed directory really re-scanned with no stale entry or count; a
+missing directory reporting the seam's own status while changing
+nothing, with its exact failure rendered in the existing nested error
+window; a directory with no supported audio refused at the playlist
+stage with its own distinct status; a toolbar miss that opens nothing
+and does not scan (asserted by a device-open counter); and argument
+negatives including a caller that does not want the scan status.
+
+Confirmed load-bearing by breaking the module: dropping the
+set_items hand-over so the scan result never reaches the playlist failed
+the hit, the window count, the statuses and the playlist contents.
+Restoring returned to green.
+
+Regressions under stable65D5, all green and unaffected: audio_scan 16/0,
+audio_launch 45/0, audio_panel 45/0, file_manager 144/0,
+selection_walk 95/0.
+
+Limitations, unchanged and stated plainly
+------------------------------------------
+1. Still no live Message pump: this closes the composed component
+   boundary, not a running application. A real hit is delivered by the
+   test, not by an event loop.
+2. Deterministic fake audio device only. No real native playback and no
+   user media; every fixture is an empty stub file the test creates.
+3. The candidate compiler is an isolated candidate, not a promotion.
+   Only this unit depends on it, deliberately.
+4. The scratch device open per press, above.

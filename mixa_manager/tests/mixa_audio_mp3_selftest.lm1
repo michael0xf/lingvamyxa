@@ -1,0 +1,509 @@
+predef: "mixa_manager/mixa_audio_mp3.h.lm1"
+predef: "mixa_manager/mixa_audio_mp3.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# MP3 composition selftest (ticket 20260912-084943): the end-to-end path
+# that stable65D5 could not compile at all -- a real top-level button hit
+# scans a REAL directory through the accepted mixa_dir seam, filters
+# through the accepted mixa_audio_is_audio_path, feeds the snapshot
+# through the accepted mixa_audio_set_list, starts playback and opens the
+# accepted MixaAudioPanel, with the panel's own controls then driven
+# through real hits.
+#
+# This unit needs 22 imports; it builds only with the candidate compiler
+# from ticket 20260912-084943. The two halves it composes each still
+# build and test under stable65D5 on their own, in
+# mixa_audio_scan_selftest.lm1 and mixa_audio_launch_selftest.lm1, which
+# is why they were left split.
+#
+# Enumeration order is proven against an INDEPENDENT mixa_dir oracle, so
+# nothing here assumes filesystem sorting. Deterministic fake audio
+# device only: no real native playback, no user media, and every fixture
+# is an empty stub file this test creates under its own run directory.
+
+int: g_fake_mode
+ulong: g_fake_pos
+ulong: g_fake_dur
+int: g_open_count
+
+fn: fake_dev_open (@@: MixaAudioDevice out) int
+    @: MixaAudioDevice dev
+    if: out = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev: (cast: (@: MixaAudioDevice) c.calloc(1U, c.sizeof(c.MixaAudioDevice)))
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_NOMEM
+    dev\is_open: 0
+    g_open_count: g_open_count + 1
+    out[0]: dev
+return: MIXA_AUDIO_OK
+
+sub: fake_dev_close (@: MixaAudioDevice dev)
+    if: dev != 0
+        dev\is_open: 0
+    ---
+end: fake_dev_close
+
+fn: fake_dev_probe (@: MixaAudioDevice dev; const: @(char path_utf8)) int
+    if: dev = 0 || path_utf8 = 0
+        return: MIXA_AUDIO_ERR_ARG
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_load (@: MixaAudioDevice dev; const: @(char path_utf8)) int
+    if: dev = 0 || path_utf8 = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev\is_open: 1
+    g_fake_pos: 0U
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_unload (@: MixaAudioDevice dev) int
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev\is_open: 0
+    g_fake_mode: MIXA_AUDIO_DEV_STOPPED
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_play (@: MixaAudioDevice dev) int
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_ARG
+    dev\playing: 1
+    g_fake_mode: MIXA_AUDIO_DEV_PLAYING
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_seek (@: MixaAudioDevice dev; ulong: ms) int
+    if: dev = 0
+        return: MIXA_AUDIO_ERR_ARG
+    g_fake_pos: ms
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_position (@: MixaAudioDevice dev; @: ulong out_ms) int
+    if: dev = 0 || out_ms = 0
+        return: MIXA_AUDIO_ERR_ARG
+    out_ms[0]: g_fake_pos
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_duration (@: MixaAudioDevice dev; @: ulong out_ms) int
+    if: dev = 0 || out_ms = 0
+        return: MIXA_AUDIO_ERR_ARG
+    out_ms[0]: g_fake_dur
+return: MIXA_AUDIO_OK
+
+fn: fake_dev_mode (@: MixaAudioDevice dev; @: int out_mode) int
+    if: dev = 0 || out_mode = 0
+        return: MIXA_AUDIO_ERR_ARG
+    out_mode[0]: g_fake_mode
+return: MIXA_AUDIO_OK
+
+@: MixaAudioVTable g_fake_vtable
+int: g_fake_vtable_ready
+
+fn: fake_table () const: @(MixaAudioVTable)
+    if: g_fake_vtable_ready = 0
+        g_fake_vtable: (cast: (@: MixaAudioVTable) c.calloc(1U, c.sizeof(c.MixaAudioVTable)))
+        g_fake_vtable\name: "fake-audio-mp3"
+        g_fake_vtable\audio_exts: "mp3 wav"
+        g_fake_vtable\caps_position: 1
+        g_fake_vtable\caps_duration: 1
+        g_fake_vtable\caps_seek: 1
+        g_fake_vtable\caps_mode: 1
+        g_fake_vtable\open: fake_dev_open
+        g_fake_vtable\close: fake_dev_close
+        g_fake_vtable\probe: fake_dev_probe
+        g_fake_vtable\load: fake_dev_load
+        g_fake_vtable\unload: fake_dev_unload
+        g_fake_vtable\play: fake_dev_play
+        g_fake_vtable\seek: fake_dev_seek
+        g_fake_vtable\position: fake_dev_position
+        g_fake_vtable\duration: fake_dev_duration
+        g_fake_vtable\mode: fake_dev_mode
+        g_fake_vtable_ready: 1
+    ---
+return: g_fake_vtable
+
+sub: t_touch (const: @(char path))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs("x", fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char dir1 1040
+    []: char dir2 1040
+    []: char emptydir 1040
+    []: char missing 1040
+    []: char p1 1200
+    []: char cmd 2400
+    []: char nm_uni 24
+    []: char oracle0 300
+    []: char oracle1 300
+    []: char err_msg 160
+    @: MixaAudioLaunchCtx ctx
+    @: MixaButtonPanel toolbar
+    MixaAppWindowStack: stack_storage
+    @: MixaAppWindowStack stack
+    @: MixaTextRect rect
+    @: MixaDir d
+    @: MixaDirEntry e
+    @: MixaAudio prev_a
+    size_t: oracle_count
+    int: st
+    int: rc
+    int: action_status
+    int: scan_status
+    int: failures
+    int: checks
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/claude/mp3/tmp")
+    ---
+    c.snprintf(dir1, 1040U, "%s\\dir1", base)
+    c.snprintf(dir2, 1040U, "%s\\dir2", base)
+    c.snprintf(emptydir, 1040U, "%s\\emptydir", base)
+    c.snprintf(missing, 1040U, "%s\\no_such_dir", base)
+
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dir1)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\\sub\" 2>nul", dir1)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", dir2)
+    c.system(cmd)
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", emptydir)
+    c.system(cmd)
+
+    nm_uni[0]: (cast: (char) 0xD0)
+    nm_uni[1]: (cast: (char) 0xBC)
+    nm_uni[2]: (cast: (char) 0xD1)
+    nm_uni[3]: (cast: (char) 0x83)
+    nm_uni[4]: (cast: (char) 0xD0)
+    nm_uni[5]: (cast: (char) 0xB7)
+    nm_uni[6]: (cast: (char) 0xD1)
+    nm_uni[7]: (cast: (char) 0x8B)
+    nm_uni[8]: (cast: (char) 0xD0)
+    nm_uni[9]: (cast: (char) 0xBA)
+    nm_uni[10]: (cast: (char) 0xD0)
+    nm_uni[11]: (cast: (char) 0xB0)
+    nm_uni[12]: 0
+
+    # dir1: a subdirectory to skip, a non-audio file to filter out, and
+    # two real audio files -- one ASCII, one UTF-8 named.
+    c.snprintf(p1, 1200U, "%s\\a_track.mp3", dir1)
+    t_touch(p1)
+    c.snprintf(p1, 1200U, "%s\\%s.mp3", dir1, nm_uni)
+    t_touch(p1)
+    c.snprintf(p1, 1200U, "%s\\readme.txt", dir1)
+    t_touch(p1)
+    c.snprintf(p1, 1200U, "%s\\other.mp3", dir2)
+    t_touch(p1)
+
+    rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    ctx: (cast: (@: MixaAudioLaunchCtx) c.calloc(1U, c.sizeof(c.MixaAudioLaunchCtx)))
+    toolbar: (cast: (@: MixaButtonPanel) c.calloc(1U, c.sizeof(c.MixaButtonPanel)))
+    e: (cast: (@: MixaDirEntry) c.calloc(1U, c.sizeof(c.MixaDirEntry)))
+    stack: @ stack_storage
+    if: rect = 0 || ctx = 0 || toolbar = 0 || e = 0
+        c.printf("mp3: alloc failed\n")
+        return: 1
+    ---
+    c.memset((cast: (@: void) stack), 0, c.sizeof(c.MixaAppWindowStack))
+
+    checks: checks + 1
+    if: mixa_rect_open(rect, 20U, 70U) != 0
+        failures: failures + 1
+        c.printf("mp3: rect open failed\n")
+    ---
+    checks: checks + 1
+    if: mixa_app_window_stack_init(stack) != MIXA_APP_WINDOW_OK
+        failures: failures + 1
+        c.printf("mp3: stack init failed\n")
+    ---
+    if: mixa_button_panel_init(toolbar, 3U) != MIXA_BUTTONS_OK
+        c.printf("mp3: toolbar init failed\n")
+        return: 1
+    ---
+    if: mixa_button_panel_add(toolbar, 0U, "MP3", 15U, 10U, 96U) != MIXA_BUTTONS_OK
+        c.printf("mp3: toolbar add failed\n")
+        return: 1
+    ---
+    if: mixa_button_panel_layout(toolbar) != MIXA_BUTTONS_OK
+        c.printf("mp3: toolbar layout failed\n")
+        return: 1
+    ---
+    toolbar\origin_row: 15U
+    toolbar\origin_col: 0U
+    toolbar\view_w: toolbar\panel_w
+    toolbar\scroll_x: 0U
+
+    st: mixa_audio_launch_init(ctx, fake_table(), stack, rect, 0U, 0U, 14U, 60U, 4U)
+    checks: checks + 1
+    if: st != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("mp3: launch_init rc=%d\n", st)
+        return: 1
+    ---
+
+    # --- Independent oracle over dir1: raw mixa_dir calls with this
+    # test's own filter, so the expected order comes from what the seam
+    # actually observed rather than an assumed sort.
+    st: mixa_dir_list_open(@ d, dir1)
+    checks: checks + 1
+    if: st != MIXA_DIR_OK
+        failures: failures + 1
+        c.printf("mp3: oracle open rc=%d\n", st)
+    ---
+    oracle_count: 0U
+    while: 1
+        st: mixa_dir_list_next(d, e)
+        if: st = MIXA_DIR_END
+            break
+        ---
+        if: st != MIXA_DIR_OK
+            failures: failures + 1
+            c.printf("mp3: oracle next rc=%d\n", st)
+            break
+        ---
+        if: mixa_dir_entry_is_dir(e) = 0
+            if: c.strstr(mixa_dir_entry_name(e), ".mp3") != 0
+                if: oracle_count = 0U
+                    c.snprintf(oracle0, 300U, "%s\\%s", dir1, mixa_dir_entry_name(e))
+                ---
+                if: oracle_count = 1U
+                    c.snprintf(oracle1, 300U, "%s\\%s", dir1, mixa_dir_entry_name(e))
+                ---
+                oracle_count: oracle_count + 1U
+            ---
+        ---
+    ---
+    mixa_dir_list_close(d)
+    checks: checks + 1
+    if: oracle_count != 2U
+        failures: failures + 1
+        c.printf("mp3: oracle count=%d want 2\n", (cast: (int) oracle_count))
+    ---
+
+    # --- Scenario 1: ONE real top-level hit does the whole composed
+    # path: scan dir1, feed the playlist, start, open the panel once.
+    rc: mixa_mp3_hit(ctx, toolbar, 15U, 0U, dir1, @ action_status, @ scan_status)
+    checks: checks + 1
+    if: rc != MIXA_AUDIO_LAUNCH_HIT_ACTION || action_status != MIXA_AUDIO_OK || scan_status != MIXA_DIR_OK
+        failures: failures + 1
+        c.printf("mp3: hit rc=%d action=%d scan=%d\n", rc, action_status, scan_status)
+    ---
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 1U
+        failures: failures + 1
+        c.printf("mp3: window count=%d want exactly 1\n", (cast: (int) mixa_app_window_count(stack)))
+    ---
+    checks: checks + 1
+    if: ctx\list_status != MIXA_AUDIO_OK || ctx\audio_status != MIXA_AUDIO_OK || ctx\panel_status != MIXA_AUDIO_PANEL_OK
+        failures: failures + 1
+        c.printf("mp3: statuses list=%d audio=%d panel=%d\n", ctx\list_status, ctx\audio_status, ctx\panel_status)
+    ---
+    # The playlist is exactly what the seam observed, in that order, with
+    # the subdirectory and the non-audio file left out.
+    checks: checks + 1
+    if: mixa_audio_count(ctx\a) != 2U
+        failures: failures + 1
+        c.printf("mp3: playlist count=%llu want 2\n", mixa_audio_count(ctx\a))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_audio_cur_file(ctx\a), oracle0) != 0
+        failures: failures + 1
+        c.printf("mp3: item0=%s want %s\n", mixa_audio_cur_file(ctx\a), oracle0)
+    ---
+    checks: checks + 1
+    if: mixa_audio_is_playing(ctx\a) != 1
+        failures: failures + 1
+        c.printf("mp3: not playing after the hit\n")
+    ---
+
+    # --- Scenario 2: the opened panel is real. Drive its own controls
+    # through real hits: nextFile lands on the oracle's second entry.
+    rc: mixa_audio_panel_hit(mixa_audio_launch_panel(ctx), stack, rect, 2U, 25U, @ action_status)
+    checks: checks + 1
+    if: rc != MIXA_AUDIO_PANEL_HIT_ACTION || mixa_audio_pos(ctx\a) != 1U
+        failures: failures + 1
+        c.printf("mp3: nextFile rc=%d pos=%llu\n", rc, mixa_audio_pos(ctx\a))
+    ---
+    checks: checks + 1
+    if: c.strcmp(mixa_audio_cur_file(ctx\a), oracle1) != 0
+        failures: failures + 1
+        c.printf("mp3: after nextFile=%s want %s\n", mixa_audio_cur_file(ctx\a), oracle1)
+    ---
+    rc: mixa_audio_panel_hit(mixa_audio_launch_panel(ctx), stack, rect, 2U, 31U, @ action_status)
+    checks: checks + 1
+    if: rc != MIXA_AUDIO_PANEL_HIT_ACTION || mixa_audio_is_random(ctx\a) != 1
+        failures: failures + 1
+        c.printf("mp3: random toggle rand=%d\n", mixa_audio_is_random(ctx\a))
+    ---
+    # Dismiss through the panel's own OK button.
+    rc: mixa_audio_panel_hit(mixa_audio_launch_panel(ctx), stack, rect, 9U, 28U, @ action_status)
+    checks: checks + 1
+    if: rc != MIXA_AUDIO_PANEL_HIT_DISMISSED || mixa_app_window_count(stack) != 0U
+        failures: failures + 1
+        c.printf("mp3: dismiss rc=%d count=%d\n", rc, (cast: (int) mixa_app_window_count(stack)))
+    ---
+
+    # --- Scenario 3: pressing the button again re-scans and reopens
+    # from the top, with none of the torn-down session's state.
+    rc: mixa_mp3_hit(ctx, toolbar, 15U, 0U, dir1, @ action_status, @ scan_status)
+    checks: checks + 1
+    if: rc != MIXA_AUDIO_LAUNCH_HIT_ACTION || action_status != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("mp3: reopen rc=%d action=%d\n", rc, action_status)
+    ---
+    checks: checks + 1
+    if: mixa_audio_pos(ctx\a) != 0U || mixa_audio_is_random(ctx\a) != 0
+        failures: failures + 1
+        c.printf("mp3: reopen kept stale state pos=%llu rand=%d\n", mixa_audio_pos(ctx\a), mixa_audio_is_random(ctx\a))
+    ---
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 1U
+        failures: failures + 1
+        c.printf("mp3: reopen window count=%d want 1\n", (cast: (int) mixa_app_window_count(stack)))
+    ---
+    mixa_audio_panel_hit(mixa_audio_launch_panel(ctx), stack, rect, 9U, 28U, @ action_status)
+
+    # --- Scenario 4: a changed directory is really re-scanned -- dir2's
+    # single different track only, no stale dir1 entry or count.
+    rc: mixa_mp3_hit(ctx, toolbar, 15U, 0U, dir2, @ action_status, @ scan_status)
+    checks: checks + 1
+    if: rc != MIXA_AUDIO_LAUNCH_HIT_ACTION || action_status != MIXA_AUDIO_OK
+        failures: failures + 1
+        c.printf("mp3: dir2 rc=%d action=%d\n", rc, action_status)
+    ---
+    checks: checks + 1
+    if: mixa_audio_count(ctx\a) != 1U
+        failures: failures + 1
+        c.printf("mp3: dir2 count=%llu want 1 (no stale dir1 entries)\n", mixa_audio_count(ctx\a))
+    ---
+    c.snprintf(p1, 1200U, "%s\\other.mp3", dir2)
+    checks: checks + 1
+    if: c.strcmp(mixa_audio_cur_file(ctx\a), p1) != 0
+        failures: failures + 1
+        c.printf("mp3: dir2 item0=%s want %s\n", mixa_audio_cur_file(ctx\a), p1)
+    ---
+    mixa_audio_panel_hit(mixa_audio_launch_panel(ctx), stack, rect, 9U, 28U, @ action_status)
+
+    # --- Scenario 5: a missing directory reports the seam's own scan
+    # status and changes NOTHING. The scan runs before any teardown, so
+    # a directory that has gone missing cannot blank what the context
+    # already had -- the previous session's audio instance is still the
+    # same one, and no new window appeared. That is the transactional
+    # promise, and asserting the pointer is unchanged is what proves it
+    # rather than merely proving something is non-null.
+    prev_a: ctx\a
+    rc: mixa_mp3_hit(ctx, toolbar, 15U, 0U, missing, @ action_status, @ scan_status)
+    checks: checks + 1
+    if: rc != MIXA_AUDIO_LAUNCH_HIT_ACTION || scan_status != MIXA_DIR_ERR_MISSING || action_status != MIXA_DIR_ERR_MISSING
+        failures: failures + 1
+        c.printf("mp3: missing dir action=%d scan=%d want ERR_MISSING\n", action_status, scan_status)
+    ---
+    checks: checks + 1
+    if: ctx\a != prev_a || mixa_app_window_count(stack) != 0U
+        failures: failures + 1
+        c.printf("mp3: missing dir disturbed state (a changed=%d windows=%d)\n", (cast: (int) (ctx\a != prev_a)), (cast: (int) mixa_app_window_count(stack)))
+    ---
+    # The scratch instance the scan needed was destroyed even though the
+    # scan failed: a refused directory must not leak a device.
+    checks: checks + 1
+    if: ctx\panel_status != MIXA_AUDIO_PANEL_OK
+        failures: failures + 1
+        c.printf("mp3: failed scan touched panel_status=%d\n", ctx\panel_status)
+    ---
+    c.snprintf(err_msg, 160U, "mp3 scan failed: status=%d", scan_status)
+    checks: checks + 1
+    if: mixa_app_window_open(stack, rect, 0U, 0U, 6U, 40U, 3U, err_msg) != MIXA_APP_WINDOW_OK
+        failures: failures + 1
+        c.printf("mp3: error window open failed\n")
+    ---
+    mixa_app_window_dismiss(stack, rect)
+
+    # --- Scenario 6: a directory with no supported audio scans cleanly
+    # and is refused at the playlist stage, with its own distinct status
+    # and nothing left behind.
+    rc: mixa_mp3_hit(ctx, toolbar, 15U, 0U, emptydir, @ action_status, @ scan_status)
+    checks: checks + 1
+    if: scan_status != MIXA_DIR_OK || action_status != MIXA_AUDIO_ERR_STATE
+        failures: failures + 1
+        c.printf("mp3: empty dir scan=%d action=%d want OK/ERR_STATE\n", scan_status, action_status)
+    ---
+    checks: checks + 1
+    if: ctx\list_status != MIXA_AUDIO_ERR_STATE || ctx\a != 0 || mixa_app_window_count(stack) != 0U
+        failures: failures + 1
+        c.printf("mp3: empty dir left list=%d a=%p windows=%d\n", ctx\list_status, (cast: (@: void) ctx\a), (cast: (int) mixa_app_window_count(stack)))
+    ---
+
+    # --- Scenario 7: a miss on the toolbar takes no action, opens
+    # nothing, and does not even scan.
+    g_open_count: 0
+    rc: mixa_mp3_hit(ctx, toolbar, 15U, 100U, dir1, @ action_status, @ scan_status)
+    checks: checks + 1
+    if: rc != MIXA_AUDIO_LAUNCH_HIT_NONE
+        failures: failures + 1
+        c.printf("mp3: toolbar miss rc=%d\n", rc)
+    ---
+    checks: checks + 1
+    if: mixa_app_window_count(stack) != 0U || g_open_count != 0
+        failures: failures + 1
+        c.printf("mp3: miss opened a window or scanned (devices=%d)\n", g_open_count)
+    ---
+
+    # --- Scenario 8: argument negatives.
+    checks: checks + 1
+    if: mixa_mp3_open_dir(0, dir1, @ scan_status) != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("mp3: null ctx open_dir not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_mp3_open_dir(ctx, 0, @ scan_status) != MIXA_AUDIO_ERR_ARG
+        failures: failures + 1
+        c.printf("mp3: null dir open_dir not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_mp3_hit(0, toolbar, 15U, 0U, dir1, @ action_status, @ scan_status) != MIXA_AUDIO_LAUNCH_HIT_NONE
+        failures: failures + 1
+        c.printf("mp3: null ctx hit not NONE\n")
+    ---
+    checks: checks + 1
+    if: mixa_mp3_hit(ctx, 0, 15U, 0U, dir1, @ action_status, @ scan_status) != MIXA_AUDIO_LAUNCH_HIT_NONE
+        failures: failures + 1
+        c.printf("mp3: null toolbar hit not NONE\n")
+    ---
+    checks: checks + 1
+    if: mixa_mp3_hit(ctx, toolbar, 15U, 0U, 0, @ action_status, @ scan_status) != MIXA_AUDIO_LAUNCH_HIT_NONE
+        failures: failures + 1
+        c.printf("mp3: null dir hit not NONE\n")
+    ---
+    # open_dir tolerates a caller that does not want the scan status.
+    rc: mixa_mp3_open_dir(ctx, dir1, 0)
+    checks: checks + 1
+    if: rc != MIXA_AUDIO_OK || mixa_app_window_count(stack) != 1U
+        failures: failures + 1
+        c.printf("mp3: open_dir without out_scan_status rc=%d\n", rc)
+    ---
+    mixa_audio_panel_hit(mixa_audio_launch_panel(ctx), stack, rect, 9U, 28U, @ action_status)
+
+    mixa_audio_launch_release(ctx)
+    mixa_button_panel_release(toolbar)
+    mixa_app_window_stack_release(stack)
+    c.free(toolbar)
+    c.free(rect)
+    c.free(ctx)
+    c.free(e)
+
+    if: failures = 0
+        c.printf("mp3 composition selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("mp3 composition selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures

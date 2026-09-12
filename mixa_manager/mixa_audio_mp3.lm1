@@ -1,0 +1,72 @@
+predef: "mixa_manager/mixa_audio_mp3.h.lm1"
+predef: "mixa_manager/mixa_audio_scan.lm1"
+predef: "mixa_manager/mixa_audio_launch.lm1"
+include: "<stdlib.h>" "<string.h>"
+
+# Scan then launch. The scan runs to completion first, and only a
+# successful scan is handed over -- so a directory that has gone missing
+# or refused enumeration leaves whatever the panel was already showing
+# exactly as it was, instead of tearing it down for a refresh that was
+# never going to arrive.
+fn: mixa_mp3_open_dir (@: MixaAudioLaunchCtx ctx; const: @(char dir_utf8); @: int out_scan_status) int
+    @: MixaAudio probe
+    @: MixaAudioScanResult res
+    int: st
+    int: rc
+    if: ctx = 0 || dir_utf8 = 0
+        return: MIXA_AUDIO_ERR_ARG
+    if: out_scan_status != 0
+        out_scan_status[0]: MIXA_DIR_OK
+    ---
+    res: (cast: (@: MixaAudioScanResult) c.calloc(1U, c.sizeof(c.MixaAudioScanResult)))
+    if: res = 0
+        return: MIXA_AUDIO_ERR_NOMEM
+    ---
+    # The scratch instance exists only so the accepted
+    # mixa_audio_is_audio_path can be asked about extensions; it never
+    # loads or plays anything. Destroyed before the launch creates the
+    # instance that actually plays.
+    probe: 0
+    st: mixa_audio_create(@ probe, ctx\vt)
+    if: st != MIXA_AUDIO_OK
+        c.free(res)
+        return: st
+    ---
+    st: mixa_audio_scan_directory(probe, dir_utf8, res)
+    mixa_audio_destroy(probe)
+    if: out_scan_status != 0
+        out_scan_status[0]: st
+    ---
+    if: st != MIXA_DIR_OK
+        c.free(res)
+        return: st
+    ---
+    rc: mixa_audio_launch_set_items(ctx, res\items, res\count)
+    if: rc != MIXA_AUDIO_OK
+        mixa_audio_scan_free_items(res\items, res\count)
+        c.free(res)
+        return: rc
+    ---
+    # set_items took the snapshot over wholesale; only the result holder
+    # itself is still ours to release.
+    c.free(res)
+return: mixa_audio_launch_action((cast: (@: void) ctx))
+
+# The real top-level MP3 button: a hit re-scans the directory it is
+# pointed at and opens the panel over what is there NOW, which is what a
+# user pressing it expects. A miss takes no action and opens nothing,
+# leaving the fallback decision to the caller.
+fn: mixa_mp3_hit (@: MixaAudioLaunchCtx ctx; const: @(MixaButtonPanel toolbar); size_t: cell_row; size_t: cell_col; const: @(char dir_utf8); @: int out_status; @: int out_scan_status) int
+    int: hit
+    int: rc
+    if: ctx = 0 || toolbar = 0 || dir_utf8 = 0
+        return: MIXA_AUDIO_LAUNCH_HIT_NONE
+    hit: mixa_button_panel_hit(toolbar, cell_row, cell_col)
+    if: hit != 0
+        return: MIXA_AUDIO_LAUNCH_HIT_NONE
+    ---
+    rc: mixa_mp3_open_dir(ctx, dir_utf8, out_scan_status)
+    if: out_status != 0
+        out_status[0]: rc
+    ---
+return: MIXA_AUDIO_LAUNCH_HIT_ACTION

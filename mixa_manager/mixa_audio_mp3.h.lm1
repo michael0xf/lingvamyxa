@@ -1,0 +1,36 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_audio_scan.h.lm1"
+predef: "mixa_manager/mixa_audio_launch.h.lm1"
+
+# The MP3 composition: scan a directory, then launch the panel over what
+# was found. This is the two-call glue that ticket 20260912-065230 asked
+# for and that stable65D5 could not compile at all -- it needs both the
+# mixa_dir chain and the mixa_audio_panel chain in one translation unit,
+# 22 imports against that compiler's 16-import table. Ticket
+# 20260912-084943 supplied the candidate compiler that removes the cap,
+# so the halves can finally be joined.
+#
+# Only THIS module and its test need the candidate. mixa_audio_scan (8
+# imports) and mixa_audio_launch (15) each still build and test under
+# stable65D5 exactly as before, which is why the split is kept rather
+# than folded back together now that it could be.
+#
+# Ownership: mixa_mp3_open_dir hands the scanned snapshot to
+# mixa_audio_launch_set_items, which takes it over wholesale; the caller
+# never sees it. On any scan failure nothing is handed over and the
+# launch context keeps whatever it was already showing, so a failed
+# refresh cannot blank a working panel.
+#
+# The scratch instance, stated rather than hidden: scanning filters
+# through the accepted mixa_audio_is_audio_path, whose signature takes a
+# MixaAudio even though it only reads the vtable's own audio_exts. So
+# this module creates one MixaAudio purely to ask that question and
+# destroys it before the launch creates its own for playback -- one
+# extra device open and close per press. Giving the accepted audio seam
+# a vtable-level extension predicate would remove it, but that is a
+# change to an accepted API and was not made unasked.
+
+prototype:
+    fn: mixa_mp3_open_dir (@: MixaAudioLaunchCtx ctx; const: @(char dir_utf8); @: int out_scan_status) int
+    fn: mixa_mp3_hit (@: MixaAudioLaunchCtx ctx; const: @(MixaButtonPanel toolbar); size_t: cell_row; size_t: cell_col; const: @(char dir_utf8); @: int out_status; @: int out_scan_status) int
+end: prototype
