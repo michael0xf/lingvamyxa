@@ -1,0 +1,202 @@
+predef: "mixa_manager/mixa_pointer.lm1"
+include: "mixa_manager/mixa_backend_win32.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Task27 review: diagnostic-only probe of current pointer font coverage.
+# No backend ABI change. Does not rewrite missing= handling. Win32 profile only.
+
+fn: mixa_backend_win32_table () const: @(MixaBackendVTable)
+
+fn: diag_one_cp (@: MixaWin32 w; unsigned: cp; const: @(char label)) int
+    @: void old
+    []: wchar_t wch 2
+    []: WORD gi 1
+    unsigned: gi_ret
+    unsigned: ggo_raw
+    unsigned: gdi_error
+    @: GLYPHMETRICS gm
+    @: MAT2 mat
+    @: FIXED fx
+    size_t: as_sz
+    size_t: neg1
+    int: eq_neg1
+    gdi_error: 0xffffffffU
+    if: w = 0 || w\hdc_glyph = 0 || w\hfont_pointer = 0
+        c.printf("TASK27_DIAG cp=%s U+%04X hard_fail=no_font_dc\n", label, cp)
+        return: 1
+    ---
+    old: (cast: (@: void) c.SelectObject(w\hdc_glyph, (cast: (HGDIOBJ) w\hfont_pointer)))
+    wch[0]: (cast: (wchar_t) cp)
+    wch[1]: (cast: (wchar_t) 0)
+    gi[0]: (cast: (WORD) 0)
+    # GGI_MARK_NONEXISTING_GLYPHS = 1
+    gi_ret: (cast: (unsigned) c.GetGlyphIndicesW(w\hdc_glyph, wch, 1, gi, 1U))
+    if: gi_ret = gdi_error
+        c.printf("TASK27_DIAG cp=%s U+%04X GetGlyphIndicesW=GDI_ERROR index=n/a\n", label, cp)
+        c.SelectObject(w\hdc_glyph, (cast: (HGDIOBJ) old))
+        return: 0
+    ---
+    if: gi_ret = 0U
+        c.printf("TASK27_DIAG cp=%s U+%04X GetGlyphIndicesW=0 index=0x%04X (backend zero-check would trip)\n", label, cp, (cast: (unsigned) gi[0]))
+        c.SelectObject(w\hdc_glyph, (cast: (HGDIOBJ) old))
+        return: 0
+    ---
+    c.printf("TASK27_DIAG cp=%s U+%04X GetGlyphIndicesW=%u index=0x%04X", label, cp, gi_ret, (cast: (unsigned) gi[0]))
+    if: gi[0] = 0xFFFF
+        c.printf(" absent_marked=1 (GGI_MARK_NONEXISTING)\n")
+        c.SelectObject(w\hdc_glyph, (cast: (HGDIOBJ) old))
+        return: 0
+    ---
+    c.printf(" absent_marked=0\n")
+    mat: (cast: (@: MAT2) c.calloc(1U, c.sizeof(c.MAT2)))
+    gm: (cast: (@: GLYPHMETRICS) c.calloc(1U, c.sizeof(c.GLYPHMETRICS)))
+    if: mat = 0 || gm = 0
+        c.free(mat)
+        c.free(gm)
+        c.printf("TASK27_DIAG cp=%s U+%04X raster=alloc_fail\n", label, cp)
+        c.SelectObject(w\hdc_glyph, (cast: (HGDIOBJ) old))
+        return: 1
+    ---
+    fx: (@ mat\eM11)
+    fx\value: (cast: (short) 1)
+    fx\fract: (cast: (unsigned short) 0)
+    fx: (@ mat\eM12)
+    fx\value: (cast: (short) 0)
+    fx\fract: (cast: (unsigned short) 0)
+    fx: (@ mat\eM21)
+    fx\value: (cast: (short) 0)
+    fx\fract: (cast: (unsigned short) 0)
+    fx: (@ mat\eM22)
+    fx\value: (cast: (short) 1)
+    fx\fract: (cast: (unsigned short) 0)
+    # GGO_GRAY8_BITMAP = 2; query size only
+    ggo_raw: (cast: (unsigned) c.GetGlyphOutlineW(w\hdc_glyph, (cast: (UINT) cp), 2U, gm, 0U, 0, mat))
+    if: ggo_raw = gdi_error
+        c.printf("TASK27_DIAG cp=%s U+%04X index=0x%04X raster=GetGlyphOutlineW_GDI_ERROR (NOT font-missing)\n", label, cp, (cast: (unsigned) gi[0]))
+    else:
+        c.printf("TASK27_DIAG cp=%s U+%04X index=0x%04X raster=GetGlyphOutlineW_ok bytes=%u black=%ux%u\n", label, cp, (cast: (unsigned) gi[0]), ggo_raw, (cast: (unsigned) gm\gmBlackBoxX), (cast: (unsigned) gm\gmBlackBoxY))
+    ---
+    as_sz: (cast: (size_t) ggo_raw)
+    neg1: (cast: (size_t) -1)
+    eq_neg1: 0
+    if: as_sz = neg1
+        eq_neg1: 1
+    ---
+    c.printf("TASK27_DIAG cp=%s sentinel size_t(ggo_raw)=0x%llx size_t(-1)=0x%llx equal=%d\n", label, (cast: (u64) as_sz), (cast: (u64) neg1), eq_neg1)
+    c.free(mat)
+    c.free(gm)
+    c.SelectObject(w\hdc_glyph, (cast: (HGDIOBJ) old))
+return: 0
+
+fn: main () int
+    const: @(MixaBackendVTable vt)
+    @: MixaBackend be
+    @: MixaWin32 w
+    @: MixaCellMetrics m
+    @: void old
+    @: TEXTMETRICW tm
+    []: char face 64
+    int: face_n
+    unsigned: gdi_error
+    size_t: cast_gdi
+    size_t: cast_neg1
+    int: eq_sent
+    int: zero_is_gdi
+    int: failures
+    failures: 0
+    gdi_error: 0xffffffffU
+    cast_gdi: (cast: (size_t) gdi_error)
+    cast_neg1: (cast: (size_t) -1)
+    eq_sent: 0
+    if: cast_gdi = cast_neg1
+        eq_sent: 1
+    ---
+    zero_is_gdi: 0
+    if: 0U = gdi_error
+        zero_is_gdi: 1
+    ---
+    c.printf("TASK27_DIAG begin\n")
+    c.printf("TASK27_DIAG sentinel GetGlyphIndicesW_zero_check_matches_GDI_ERROR=%d\n", zero_is_gdi)
+    c.printf("TASK27_DIAG sentinel size_t(GDI_ERROR)=0x%llx size_t(-1)=0x%llx equal=%d sizeof_size_t=%u sizeof_DWORD=%u\n", (cast: (u64) cast_gdi), (cast: (u64) cast_neg1), eq_sent, (cast: (unsigned) c.sizeof(c.size_t)), (cast: (unsigned) c.sizeof(c.DWORD)))
+
+    vt: mixa_backend_win32_table()
+    if: vt = 0 || mixa_backend_table_valid(vt) = 0
+        c.printf("TASK27_DIAG invalid win32 table\n")
+        return: 1
+    ---
+    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    if: m = 0
+        c.printf("TASK27_DIAG metrics alloc failed\n")
+        return: 1
+    m\text_cell_width: 4U
+    m\text_cell_height: 6U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    m\pointer_cell_width: 6U
+    m\pointer_cell_height: 8U
+    be: 0
+    if: mixa_backend_open(vt, @ be, 8U, 4U, m) != 0
+        c.printf("TASK27_DIAG open failed\n")
+        c.free(m)
+        return: 1
+    ---
+    w: (cast: (@: MixaWin32) be)
+    if: w\hfont_pointer = 0 || w\hdc_glyph = 0
+        c.printf("TASK27_DIAG no hfont_pointer/hdc_glyph after open\n")
+        failures: failures + 1
+    else:
+        old: (cast: (@: void) c.SelectObject(w\hdc_glyph, (cast: (HGDIOBJ) w\hfont_pointer)))
+        tm: (cast: (@: TEXTMETRICW) c.calloc(1U, c.sizeof(c.TEXTMETRICW)))
+        if: tm = 0
+            c.printf("TASK27_DIAG TEXTMETRICW alloc failed\n")
+            failures: failures + 1
+        else:
+            if: c.GetTextMetricsW(w\hdc_glyph, tm) = 0
+                c.printf("TASK27_DIAG GetTextMetricsW failed\n")
+                failures: failures + 1
+            else:
+                face[0]: (cast: (char) 0)
+                face_n: c.GetTextFaceA(w\hdc_glyph, 64, face)
+                if: face_n <= 0
+                    c.printf("TASK27_DIAG font face=? size_tmHeight=%d ascent=%d cell_ptr=%ux%u\n", (cast: (int) tm\tmHeight), w\pointer_ascent, (cast: (unsigned) w\pointer_cell_width), (cast: (unsigned) w\pointer_cell_height))
+                else:
+                    c.printf("TASK27_DIAG font face=%s size_tmHeight=%d ascent=%d cell_ptr=%ux%u\n", face, (cast: (int) tm\tmHeight), w\pointer_ascent, (cast: (unsigned) w\pointer_cell_width), (cast: (unsigned) w\pointer_cell_height))
+                ---
+            ---
+            c.free(tm)
+        ---
+        c.SelectObject(w\hdc_glyph, (cast: (HGDIOBJ) old))
+        if: diag_one_cp(w, MIXA_POINTER_CP_UP, "up") != 0
+            failures: failures + 1
+        ---
+        if: diag_one_cp(w, MIXA_POINTER_CP_UP_RIGHT, "up-right") != 0
+            failures: failures + 1
+        ---
+        if: diag_one_cp(w, MIXA_POINTER_CP_RIGHT, "right") != 0
+            failures: failures + 1
+        ---
+        if: diag_one_cp(w, MIXA_POINTER_CP_DOWN_RIGHT, "down-right") != 0
+            failures: failures + 1
+        ---
+        if: diag_one_cp(w, MIXA_POINTER_CP_DOWN, "down") != 0
+            failures: failures + 1
+        ---
+        if: diag_one_cp(w, MIXA_POINTER_CP_DOWN_LEFT, "down-left") != 0
+            failures: failures + 1
+        ---
+        if: diag_one_cp(w, MIXA_POINTER_CP_LEFT, "left") != 0
+            failures: failures + 1
+        ---
+        if: diag_one_cp(w, MIXA_POINTER_CP_UP_LEFT, "up-left") != 0
+            failures: failures + 1
+        ---
+        if: diag_one_cp(w, (cast: (unsigned) 65), "ascii-A") != 0
+            failures: failures + 1
+        ---
+    ---
+    mixa_backend_close(be)
+    c.free(m)
+    if: failures != 0
+        c.printf("TASK27_DIAG FAILED checks=%d\n", failures)
+        return: 1
+    c.printf("TASK27_DIAG ok\n")
+    return: 0

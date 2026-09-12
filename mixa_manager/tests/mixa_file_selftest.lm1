@@ -1,0 +1,231 @@
+predef: "mixa_manager/mixa_file_win32.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# FILE_SEAM section 3.5 app-only selftest.
+
+fn: mixa_file_test_mkdir_utf8 (const: @(char path_utf8)) int
+    @: wchar_t wpath
+    []: (@: wchar_t) wslot 1
+    int: st
+    wslot[0]: 0
+    st: mixa_file_utf8_to_wide(path_utf8, wslot)
+    if: st != MIXA_FILE_OK
+        return: 1
+    wpath: wslot[0]
+    if: c.CreateDirectoryW(wpath, 0) = 0
+        if: c.GetLastError() != 183U
+            c.free(wpath)
+            return: 1
+        ---
+    ---
+    c.free(wpath)
+return: 0
+
+fn: main () int
+    @: MixaFile f
+    @: MixaFile f2
+    []: (@: MixaFile) out 1
+    []: char path 512
+    []: char path_na 512
+    []: char missing 512
+    []: unsigned char chunk_a 8
+    []: unsigned char chunk_b 6
+    []: unsigned char chunk_c 4
+    []: unsigned char na_bytes 5
+    []: unsigned char rbuf 32
+    []: size_t wrote 1
+    []: size_t got 1
+    []: size_t sz 1
+    []: char eline 256
+    int: failures
+    int: st
+    failures: 0
+
+    if: mixa_file_test_mkdir_utf8("build") != 0
+        c.printf("mixa_file: mkdir build failed\n")
+        return: 1
+    if: mixa_file_test_mkdir_utf8("build/mixa") != 0
+        c.printf("mixa_file: mkdir build/mixa failed\n")
+        return: 1
+    if: mixa_file_test_mkdir_utf8("build/mixa/tmp_file_seam") != 0
+        c.printf("mixa_file: mkdir tmp_file_seam failed\n")
+        return: 1
+    if: mixa_file_test_mkdir_utf8("build/mixa/logs") != 0
+        c.printf("mixa_file: mkdir logs failed\n")
+        return: 1
+
+    # Non-ASCII dir: UTF-8 Cyrillic log = D0 BB D0 BE D0 B3
+    c.snprintf(path_na, 512U, "build/mixa/tmp_file_seam/")
+    path_na[25]: (cast: (char) 0xD0)
+    path_na[26]: (cast: (char) 0xBB)
+    path_na[27]: (cast: (char) 0xD0)
+    path_na[28]: (cast: (char) 0xBE)
+    path_na[29]: (cast: (char) 0xD0)
+    path_na[30]: (cast: (char) 0xB3)
+    path_na[31]: 0
+    if: mixa_file_test_mkdir_utf8(path_na) != 0
+        c.printf("mixa_file: mkdir non-ASCII fixture failed\n")
+        return: 1
+    c.snprintf(path_na + 31, (cast: (size_t) (512 - 31)), "/console.log")
+
+    c.snprintf(path, 512U, "build/mixa/tmp_file_seam/console_ascii.log")
+    c.snprintf(missing, 512U, "build/mixa/tmp_file_seam/no_such_file_xyz.log")
+
+    out[0]: 0
+    st: mixa_file_open(out, missing, MIXA_FILE_MODE_READ)
+    if: st != MIXA_FILE_ERR_MISSING
+        c.printf("mixa_file: missing read st=%d want MISSING\n", st)
+        failures: failures + 1
+    if: out[0] != 0
+        c.printf("mixa_file: missing open leaked handle\n")
+        failures: failures + 1
+        mixa_file_close(out[0])
+    ---
+
+    out[0]: 0
+    st: mixa_file_open(out, path, MIXA_FILE_MODE_APPEND)
+    if: st != MIXA_FILE_OK || out[0] = 0
+        c.printf("mixa_file: append open failed st=%d\n", st)
+        return: 1
+    f: out[0]
+    chunk_a[0]: 65
+    chunk_a[1]: 66
+    chunk_a[2]: 0
+    chunk_a[3]: 67
+    chunk_a[4]: 13
+    chunk_a[5]: 10
+    chunk_a[6]: 68
+    chunk_a[7]: 69
+    wrote[0]: 0U
+    st: mixa_file_append(f, chunk_a, 8U, wrote)
+    if: st != MIXA_FILE_OK || wrote[0] != 8U
+        c.printf("mixa_file: append chunk_a st=%d wrote=%u\n", st, (cast: (unsigned) wrote[0]))
+        failures: failures + 1
+    chunk_b[0]: 0
+    chunk_b[1]: 1
+    chunk_b[2]: 2
+    chunk_b[3]: 255
+    chunk_b[4]: 13
+    chunk_b[5]: 10
+    wrote[0]: 0U
+    st: mixa_file_append(f, chunk_b, 6U, wrote)
+    if: st != MIXA_FILE_OK || wrote[0] != 6U
+        c.printf("mixa_file: append chunk_b failed\n")
+        failures: failures + 1
+    chunk_c[0]: 90
+    chunk_c[1]: 0
+    chunk_c[2]: 91
+    chunk_c[3]: 92
+    wrote[0]: 0U
+    st: mixa_file_append(f, chunk_c, 4U, wrote)
+    if: st != MIXA_FILE_OK || wrote[0] != 4U
+        c.printf("mixa_file: append chunk_c failed\n")
+        failures: failures + 1
+
+    sz[0]: 0U
+    st: mixa_file_size(f, sz)
+    if: st != MIXA_FILE_OK || sz[0] != 18U
+        c.printf("mixa_file: size after append st=%d sz=%u\n", st, (cast: (unsigned) sz[0]))
+        failures: failures + 1
+
+    mixa_file_close(f)
+    f: 0
+    out[0]: 0
+    st: mixa_file_open(out, path, MIXA_FILE_MODE_READ)
+    if: st != MIXA_FILE_OK || out[0] = 0
+        c.printf("mixa_file: read open failed st=%d\n", st)
+        return: 1
+    f: out[0]
+
+    st: mixa_file_seek(f, 2U)
+    if: st != MIXA_FILE_OK
+        c.printf("mixa_file: seek 2 failed\n")
+        failures: failures + 1
+    got[0]: 0U
+    c.memset(rbuf, 0xEE, 32U)
+    st: mixa_file_read(f, rbuf, 4U, got)
+    if: st != MIXA_FILE_OK || got[0] != 4U
+        c.printf("mixa_file: offset read failed st=%d got=%u\n", st, (cast: (unsigned) got[0]))
+        failures: failures + 1
+    if: rbuf[0] != 0 || rbuf[1] != 67 || rbuf[2] != 13 || rbuf[3] != 10
+        c.printf("mixa_file: offset bytes wrong\n")
+        failures: failures + 1
+
+    st: mixa_file_seek(f, 0U)
+    got[0]: 0U
+    c.memset(rbuf, 0, 32U)
+    st: mixa_file_read(f, rbuf, 18U, got)
+    if: st != MIXA_FILE_OK || got[0] != 18U
+        c.printf("mixa_file: full read failed\n")
+        failures: failures + 1
+    if: rbuf[2] != 0 || rbuf[4] != 13 || rbuf[5] != 10 || rbuf[8] != 0
+        c.printf("mixa_file: NUL/CRLF not preserved\n")
+        failures: failures + 1
+    got[0]: 99U
+    st: mixa_file_read(f, rbuf, 4U, got)
+    if: st != MIXA_FILE_OK || got[0] != 0U
+        c.printf("mixa_file: EOF short read wrong st=%d got=%u\n", st, (cast: (unsigned) got[0]))
+        failures: failures + 1
+
+    mixa_file_close(f)
+    f: 0
+    mixa_file_close(0)
+
+    out[0]: 0
+    st: mixa_file_open(out, path_na, MIXA_FILE_MODE_APPEND)
+    if: st != MIXA_FILE_OK || out[0] = 0
+        c.printf("mixa_file: non-ASCII append open failed st=%d\n", st)
+        failures: failures + 1
+    else:
+        f2: out[0]
+        na_bytes[0]: 104
+        na_bytes[1]: 105
+        na_bytes[2]: 0
+        na_bytes[3]: 13
+        na_bytes[4]: 10
+        wrote[0]: 0U
+        st: mixa_file_append(f2, na_bytes, 5U, wrote)
+        if: st != MIXA_FILE_OK || wrote[0] != 5U
+            c.printf("mixa_file: non-ASCII append failed\n")
+            failures: failures + 1
+        sz[0]: 0U
+        st: mixa_file_size(f2, sz)
+        if: st != MIXA_FILE_OK || sz[0] != 5U
+            c.printf("mixa_file: non-ASCII size wrong\n")
+            failures: failures + 1
+        mixa_file_close(f2)
+        out[0]: 0
+        st: mixa_file_open(out, path_na, MIXA_FILE_MODE_READ)
+        if: st != MIXA_FILE_OK || out[0] = 0
+            c.printf("mixa_file: non-ASCII read open failed\n")
+            failures: failures + 1
+        else:
+            f2: out[0]
+            got[0]: 0U
+            c.memset(rbuf, 0, 32U)
+            st: mixa_file_read(f2, rbuf, 5U, got)
+            if: st != MIXA_FILE_OK || got[0] != 5U || rbuf[0] != 104 || rbuf[2] != 0 || rbuf[3] != 13
+                c.printf("mixa_file: non-ASCII read bytes wrong\n")
+                failures: failures + 1
+            mixa_file_close(f2)
+        ---
+    ---
+
+    # Evidence via the seam under test (append), not stdio FILE locals.
+    out[0]: 0
+    st: mixa_file_open(out, "build/mixa/logs/mixa_file_selftest.evidence.txt", MIXA_FILE_MODE_APPEND)
+    if: st = MIXA_FILE_OK && out[0] != 0
+        wrote[0]: 0U
+        c.snprintf(eline, 256U, "file_seam_3_5=1 failures=%d nul_crlf=1 ownership_close=1 missing_checked=1 nonascii=1\n", failures)
+        mixa_file_append(out[0], eline, c.strlen(eline), wrote)
+        c.snprintf(eline, 256U, "ops=open,close,append,read,seek,size translator_pin=stable65D5\n")
+        wrote[0]: 0U
+        mixa_file_append(out[0], eline, c.strlen(eline), wrote)
+        mixa_file_close(out[0])
+    ---
+
+    if: failures != 0
+        c.printf("mixa_file_selftest FAIL failures=%d\n", failures)
+        return: 1
+    c.printf("mixa_file_selftest ok\n")
+return: 0

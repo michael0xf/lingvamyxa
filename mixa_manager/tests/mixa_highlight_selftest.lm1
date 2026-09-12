@@ -1,0 +1,217 @@
+predef: "mixa_manager/mixa_highlight.lm1"
+include: "<stdio.h>" "<string.h>"
+
+# Moving double-box highlight: KEEP_BG + restore on move + target bind (Task 26).
+
+fn: cell_cp (const: @(MixaTextRect rect); size_t: row; size_t: col) unsigned
+    const: @(MixaCell p)
+    p: mixa_cell_at_const(rect, row, col)
+    if: p = 0
+        return: 0U
+return: p\codepoint
+
+fn: cell_fg (const: @(MixaTextRect rect); size_t: row; size_t: col) unsigned
+    const: @(MixaCell p)
+    p: mixa_cell_at_const(rect, row, col)
+    if: p = 0
+        return: 0U
+return: (cast: (unsigned) p\fg)
+
+fn: cell_bg (const: @(MixaTextRect rect); size_t: row; size_t: col) unsigned
+    const: @(MixaCell p)
+    p: mixa_cell_at_const(rect, row, col)
+    if: p = 0
+        return: 0U
+return: (cast: (unsigned) p\bg)
+
+fn: cell_alpha (const: @(MixaTextRect rect); size_t: row; size_t: col) unsigned
+    const: @(MixaCell p)
+    p: mixa_cell_at_const(rect, row, col)
+    if: p = 0
+        return: 0U
+return: (cast: (unsigned) p\alpha)
+
+fn: main () int
+    @: MixaTextRect rect
+    @: MixaTextRect rect_b
+    @: MixaHighlight hl
+    int: failures
+    int: rc
+    unsigned: bg_a
+    unsigned: bg_b
+    unsigned: bg_c
+    failures: 0
+
+    rect: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    rect_b: (cast: (@: MixaTextRect) c.calloc(1U, c.sizeof(c.MixaTextRect)))
+    hl: (cast: (@: MixaHighlight) c.calloc(1U, c.sizeof(c.MixaHighlight)))
+    if: rect = 0 || rect_b = 0 || hl = 0
+        c.printf("mixa highlight: alloc failed\n")
+        return: 1
+    if: mixa_rect_open(rect, 10U, 12U) != 0
+        c.printf("mixa highlight: open failed\n")
+        return: 1
+    if: mixa_rect_open(rect_b, 10U, 12U) != 0
+        c.printf("mixa highlight: open B failed\n")
+        return: 1
+    if: mixa_highlight_init(hl) != MIXA_HIGHLIGHT_OK
+        c.printf("mixa highlight: init failed\n")
+        return: 1
+
+    # two coloured fills (stand-ins for button bodies)
+    bg_a: 9U
+    bg_b: 6U
+    bg_c: 4U
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    mixa_draw_fill(rect, 1U, 1U, 4U, 4U, 0x2588U, 2U, bg_a, 0U, 180U)
+    mixa_draw_fill(rect, 1U, 6U, 4U, 4U, 0x2588U, 3U, bg_b, 0U, 160U)
+
+    rc: mixa_highlight_set(hl, rect, 1U, 1U, 4U, 4U, 15U)
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("mixa highlight: set A failed\n")
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 1U) != 0x2554U || cell_cp(rect, 1U, 4U) != 0x2557U
+        c.printf("mixa highlight: A top corners wrong\n")
+        failures: failures + 1
+    if: cell_cp(rect, 4U, 1U) != 0x255AU || cell_cp(rect, 4U, 4U) != 0x255DU
+        c.printf("mixa highlight: A bottom corners wrong\n")
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 2U) != 0x2550U || cell_cp(rect, 2U, 1U) != 0x2551U
+        c.printf("mixa highlight: A edges wrong\n")
+        failures: failures + 1
+    if: cell_bg(rect, 1U, 1U) != bg_a || cell_alpha(rect, 1U, 1U) != 180U
+        c.printf("mixa highlight: A bg not preserved\n")
+        failures: failures + 1
+    if: cell_cp(rect, 2U, 2U) != 0x2588U
+        c.printf("mixa highlight: A interior touched\n")
+        failures: failures + 1
+
+    # move to B — A perimeter must be fully restored (same target)
+    rc: mixa_highlight_set(hl, rect, 1U, 6U, 4U, 4U, 15U)
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("mixa highlight: set B failed\n")
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 1U) != 0x2588U || cell_cp(rect, 1U, 4U) != 0x2588U
+        c.printf("mixa highlight: A top not restored\n")
+        failures: failures + 1
+    if: cell_cp(rect, 4U, 1U) != 0x2588U || cell_cp(rect, 4U, 4U) != 0x2588U
+        c.printf("mixa highlight: A bottom not restored\n")
+        failures: failures + 1
+    if: cell_cp(rect, 2U, 1U) != 0x2588U || cell_cp(rect, 1U, 2U) != 0x2588U
+        c.printf("mixa highlight: A edges not restored\n")
+        failures: failures + 1
+    if: cell_fg(rect, 1U, 1U) != 2U || cell_bg(rect, 1U, 1U) != bg_a || cell_alpha(rect, 1U, 1U) != 180U
+        c.printf("mixa highlight: A attrs not restored\n")
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 6U) != 0x2554U || cell_cp(rect, 1U, 9U) != 0x2557U
+        c.printf("mixa highlight: B corners wrong\n")
+        failures: failures + 1
+    if: cell_bg(rect, 1U, 6U) != bg_b || cell_alpha(rect, 1U, 6U) != 160U
+        c.printf("mixa highlight: B bg not preserved\n")
+        failures: failures + 1
+
+    rc: mixa_highlight_clear(hl, rect)
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("mixa highlight: clear failed\n")
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 6U) != 0x2588U || cell_fg(rect, 1U, 6U) != 3U
+        c.printf("mixa highlight: B not restored on clear\n")
+        failures: failures + 1
+    if: cell_bg(rect, 1U, 9U) != bg_b || cell_alpha(rect, 1U, 9U) != 160U
+        c.printf("mixa highlight: B attrs lost on clear\n")
+        failures: failures + 1
+
+    # Overlapping A/B regions on the SAME rectangle (shared corner cells).
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    mixa_draw_fill(rect, 2U, 2U, 5U, 5U, 0x2588U, 2U, bg_a, 0U, 180U)
+    mixa_draw_fill(rect, 4U, 4U, 5U, 5U, 0x2588U, 3U, bg_b, 0U, 160U)
+    rc: mixa_highlight_set(hl, rect, 2U, 2U, 5U, 5U, 15U)
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("mixa highlight: overlap set A failed\n")
+        failures: failures + 1
+    rc: mixa_highlight_set(hl, rect, 4U, 4U, 5U, 5U, 14U)
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("mixa highlight: overlap move B failed\n")
+        failures: failures + 1
+    if: cell_cp(rect, 2U, 2U) != 0x2588U || cell_fg(rect, 2U, 2U) != 2U
+        c.printf("mixa highlight: overlap A corner not restored\n")
+        failures: failures + 1
+    if: cell_cp(rect, 4U, 4U) != 0x2554U
+        c.printf("mixa highlight: overlap B corner missing\n")
+        failures: failures + 1
+    # Shared cell (4,4) was B fill before move; after move it is B's top-left frame.
+    # Cell (4,6) on A's bottom edge must be restored to A's fill (then B may cover).
+    if: cell_cp(rect, 2U, 4U) != 0x2588U || cell_bg(rect, 2U, 4U) != bg_a
+        c.printf("mixa highlight: overlap A top edge not restored\n")
+        failures: failures + 1
+    rc: mixa_highlight_clear(hl, rect)
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("mixa highlight: overlap clear failed\n")
+        failures: failures + 1
+    if: cell_cp(rect, 4U, 4U) != 0x2588U || cell_fg(rect, 4U, 4U) != 3U
+        c.printf("mixa highlight: overlap B not restored\n")
+        failures: failures + 1
+
+    # Two differently filled rectangles: mismatched clear/move must leave B alone
+    # and keep the active snapshot on A intact.
+    mixa_rect_fill(rect, 32U, 0U, 0U, 0U)
+    mixa_rect_fill(rect_b, 32U, 0U, 0U, 0U)
+    mixa_draw_fill(rect, 1U, 1U, 4U, 4U, 0x2588U, 2U, bg_a, 0U, 180U)
+    mixa_draw_fill(rect_b, 1U, 1U, 4U, 4U, 0x2591U, 5U, bg_c, 0U, 200U)
+    rc: mixa_highlight_set(hl, rect, 1U, 1U, 4U, 4U, 15U)
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("mixa highlight: bind A failed\n")
+        failures: failures + 1
+    rc: mixa_highlight_clear(hl, rect_b)
+    if: rc == MIXA_HIGHLIGHT_OK
+        c.printf("mixa highlight: mismatched clear should fail\n")
+        failures: failures + 1
+    if: cell_cp(rect_b, 1U, 1U) != 0x2591U || cell_fg(rect_b, 1U, 1U) != 5U
+        c.printf("mixa highlight: B mutated by rejected clear\n")
+        failures: failures + 1
+    if: cell_bg(rect_b, 1U, 1U) != bg_c || cell_alpha(rect_b, 1U, 1U) != 200U
+        c.printf("mixa highlight: B attrs mutated by rejected clear\n")
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 1U) != 0x2554U
+        c.printf("mixa highlight: A overlay lost after rejected clear\n")
+        failures: failures + 1
+    if: hl\is_active = 0
+        c.printf("mixa highlight: active cleared after rejected clear\n")
+        failures: failures + 1
+    rc: mixa_highlight_set(hl, rect_b, 1U, 1U, 4U, 4U, 14U)
+    if: rc == MIXA_HIGHLIGHT_OK
+        c.printf("mixa highlight: mismatched move should fail\n")
+        failures: failures + 1
+    if: cell_cp(rect_b, 1U, 1U) != 0x2591U || cell_cp(rect_b, 1U, 4U) != 0x2591U
+        c.printf("mixa highlight: B mutated by rejected move\n")
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 1U) != 0x2554U || cell_cp(rect, 4U, 4U) != 0x255DU
+        c.printf("mixa highlight: A overlay lost after rejected move\n")
+        failures: failures + 1
+    if: hl\is_active = 0
+        c.printf("mixa highlight: active cleared after rejected move\n")
+        failures: failures + 1
+    # Proper clear on bound target still works.
+    rc: mixa_highlight_clear(hl, rect)
+    if: rc != MIXA_HIGHLIGHT_OK
+        c.printf("mixa highlight: bound clear after reject failed\n")
+        failures: failures + 1
+    if: cell_cp(rect, 1U, 1U) != 0x2588U || cell_fg(rect, 1U, 1U) != 2U
+        c.printf("mixa highlight: A not restored after bound clear\n")
+        failures: failures + 1
+    if: cell_cp(rect_b, 2U, 2U) != 0x2591U
+        c.printf("mixa highlight: B interior changed after A clear\n")
+        failures: failures + 1
+
+    mixa_highlight_release(hl)
+    mixa_rect_release(rect)
+    mixa_rect_release(rect_b)
+    c.free(hl)
+    c.free(rect)
+    c.free(rect_b)
+
+    if: failures != 0
+        c.printf("mixa highlight selftest FAILED checks=%d\n", failures)
+        return: 1
+    c.printf("mixa highlight selftest ok\n")
+    return: 0

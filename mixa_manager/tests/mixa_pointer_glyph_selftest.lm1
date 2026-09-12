@@ -1,0 +1,107 @@
+predef: "mixa_manager/mixa_pointer.lm1"
+include: "mixa_manager/mixa_backend.h" "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Task 27: per-codepoint MIXA_LAYER_POINTER missing flags on every available backend.
+# Headless has no font — missing=1 is expected and is NOT proof of a Windows font.
+
+fn: mixa_backend_ctors_count () size_t
+fn: mixa_backend_ctors_get (size_t: i) const: @(MixaBackendVTable)
+
+fn: report_one (@: MixaBackend be; const: @(char backend_name); unsigned: cp; const: @(char label)) int
+    @: MixaGlyph g
+    int: rc
+    g: (cast: (@: MixaGlyph) c.calloc(1U, c.sizeof(c.MixaGlyph)))
+    if: g = 0
+        c.printf("mixa pointer glyph: alloc failed\n")
+        return: 1
+    rc: mixa_backend_glyph(be, MIXA_LAYER_POINTER, cp, g)
+    if: rc != 0
+        c.printf("TASK27_GLYPH backend=%s cp=%s U+%04X hard_fail=%d\n", backend_name, label, cp, rc)
+        c.free(g)
+        return: 1
+    ---
+    c.printf("TASK27_GLYPH backend=%s cp=%s U+%04X missing=%d\n", backend_name, label, cp, g\missing)
+    c.free(g)
+return: 0
+
+fn: probe_backend (const: @(MixaBackendVTable vt); @: int failures) int
+    @: MixaBackend be
+    @: MixaCellMetrics m
+    const: @(char name)
+    be: 0
+    if: vt = 0 || mixa_backend_table_valid(vt) = 0
+        c.printf("mixa pointer glyph: invalid table\n")
+        failures[0]: failures[0] + 1
+        return: 1
+    ---
+    name: vt\name
+    if: name = 0
+        name: "?"
+    ---
+    m: (cast: (@: MixaCellMetrics) c.calloc(1U, c.sizeof(c.MixaCellMetrics)))
+    if: m = 0
+        c.printf("mixa pointer glyph: metrics alloc failed\n")
+        failures[0]: failures[0] + 1
+        return: 1
+    m\text_cell_width: 4U
+    m\text_cell_height: 6U
+    m\upper_cell_width: 8U
+    m\upper_cell_height: 10U
+    m\pointer_cell_width: 6U
+    m\pointer_cell_height: 8U
+    if: mixa_backend_open(vt, @ be, 8U, 4U, m) != 0
+        c.printf("mixa pointer glyph: open failed backend=%s\n", name)
+        failures[0]: failures[0] + 1
+        c.free(m)
+        return: 1
+    ---
+    if: report_one(be, name, MIXA_POINTER_CP_UP, "up") != 0
+        failures[0]: failures[0] + 1
+    ---
+    if: report_one(be, name, MIXA_POINTER_CP_UP_RIGHT, "up-right") != 0
+        failures[0]: failures[0] + 1
+    ---
+    if: report_one(be, name, MIXA_POINTER_CP_RIGHT, "right") != 0
+        failures[0]: failures[0] + 1
+    ---
+    if: report_one(be, name, MIXA_POINTER_CP_DOWN_RIGHT, "down-right") != 0
+        failures[0]: failures[0] + 1
+    ---
+    if: report_one(be, name, MIXA_POINTER_CP_DOWN, "down") != 0
+        failures[0]: failures[0] + 1
+    ---
+    if: report_one(be, name, MIXA_POINTER_CP_DOWN_LEFT, "down-left") != 0
+        failures[0]: failures[0] + 1
+    ---
+    if: report_one(be, name, MIXA_POINTER_CP_LEFT, "left") != 0
+        failures[0]: failures[0] + 1
+    ---
+    if: report_one(be, name, MIXA_POINTER_CP_UP_LEFT, "up-left") != 0
+        failures[0]: failures[0] + 1
+    ---
+    mixa_backend_close(be)
+    c.free(m)
+return: 0
+
+fn: main () int
+    size_t: n
+    size_t: i
+    const: @(MixaBackendVTable vt)
+    int: failures
+    failures: 0
+    n: mixa_backend_ctors_count()
+    if: n = 0U
+        c.printf("mixa pointer glyph: no backends registered\n")
+        return: 1
+    c.printf("TASK27_GLYPH begin backends=%u\n", (cast: (unsigned) n))
+    i: 0U
+    while: i < n
+        vt: mixa_backend_ctors_get(i)
+        probe_backend(vt, @ failures)
+        i: i + 1U
+    ---
+    if: failures != 0
+        c.printf("mixa pointer glyph selftest FAILED checks=%d\n", failures)
+        return: 1
+    c.printf("mixa pointer glyph selftest ok\n")
+    return: 0
