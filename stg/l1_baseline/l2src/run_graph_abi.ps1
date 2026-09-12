@@ -219,6 +219,9 @@ try {
         # only one edge per fixed-point pass. This rejects the retired guard<32
         # implementation without imposing a new depth cap.
         $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_dyn_chain65.lm2'; stem = 'unit_dyn_chain65'; expect = 0; stdout = $null }
+        # 19.17 merge lowered at its execution site, with a second merge in an
+        # untaken branch so the site is proved to be a site and not a preamble.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_merge_site.lm2'; stem = 'unit_merge_site'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -267,6 +270,17 @@ try {
                         if ([regex]::Matches($text, 'lmx_branch_store_known\(unit, \d+U, \(cast: \(@: void\) l2_ebr\)\)').Count -ne $roots) { throw 'an eternal branch has no declaration-site reference in the unit graph' }
                         if ($text -match 'l2_branch_refs\[\d+U\]: rec') { throw 'a METHOD descriptor was stored in the retention array' }
                         if ($case.stem -eq 'unit_eternal_many' -and $roots -ne 70) { throw "growth fixture produced $roots roots, not 70" }
+                    if ($case.stem -eq 'unit_merge_site') {
+                        # Both merges present, the second inside a branch that is
+                        # not taken, and every failure routed to the declared
+                        # throw carrier rather than abort or a null result.
+                        $merges = [regex]::Matches($text, 'c\.lmx_merge_owned\(l2_mops,').Count
+                        if ($merges -ne 2) { throw "merge fixture emitted $merges merge calls, not 2" }
+                        if ([regex]::Matches($text, 'l2_throw: ').Count -ne (2 * $merges)) { throw 'a merge failure is not carried by the declared throw' }
+                        if ($text -match 'l2_mresult = 0\s*
+\s*return: 0') { throw 'a failed merge returns a null normal result' }
+                        if ($text -notmatch 'c\.array: \[2\]: @: Lmx l2_mops') { throw 'the operand array is not sized to the widest merge' }
+                    }
                         if ($text -match 'l2_ebr: lmx_node_new_owned\(@ (?!process_message\\blocks)') { throw 'a qualified branch is not allocated from the first Message arena' }
                         if ($text -notmatch 'lmx_owned_ranges_find\(process_message\\ranges,') { throw 'no check that a qualified branch still classifies in the owner ranges' }
                         if ([regex]::Matches($text, 'c\.lmx_msg_bootstrap_eternal_admit\(process_message,').Count -ne (2 * $roots)) { throw 'each qualified root and child must be admitted through the Message classifier' }
