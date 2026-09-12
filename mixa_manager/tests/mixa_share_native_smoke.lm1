@@ -1334,6 +1334,11 @@ fn: main () int
             if: lt_rc != MIXA_SHARE_OK || iterable_lt = 0
                 failures: failures + 1
                 c.printf("mixa share native smoke: lifetime test: make_storage_item_iterable failed rc=%d\n", lt_rc)
+                # Test-only cleanup gap (ticket 20260912-032000): the
+                # iterable never took ownership of this reference on a
+                # construction failure, so the test's own local copy is
+                # still ours to release here.
+                c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) item_for_lifetime))
             else:
                 # Our own local reference to the resolved item is no
                 # longer needed -- the iterable took its OWN independent
@@ -1343,12 +1348,30 @@ fn: main () int
                 c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) item_for_lifetime))
                 iter1_lt: 0
                 iter2_lt: 0
-                c.__FIIterable_1_Windows__CStorage__CIStorageItem_First((cast: (@: __FIIterable_1_Windows__CStorage__CIStorageItem) iterable_lt), (cast: (@@: __FIIterator_1_Windows__CStorage__CIStorageItem) @ iter1_lt))
-                c.__FIIterable_1_Windows__CStorage__CIStorageItem_First((cast: (@: __FIIterable_1_Windows__CStorage__CIStorageItem) iterable_lt), (cast: (@@: __FIIterator_1_Windows__CStorage__CIStorageItem) @ iter2_lt))
+                hr: c.__FIIterable_1_Windows__CStorage__CIStorageItem_First((cast: (@: __FIIterable_1_Windows__CStorage__CIStorageItem) iterable_lt), (cast: (@@: __FIIterator_1_Windows__CStorage__CIStorageItem) @ iter1_lt))
+                if: hr != 0
+                    iter1_lt: 0
+                ---
+                hr: c.__FIIterable_1_Windows__CStorage__CIStorageItem_First((cast: (@: __FIIterable_1_Windows__CStorage__CIStorageItem) iterable_lt), (cast: (@@: __FIIterator_1_Windows__CStorage__CIStorageItem) @ iter2_lt))
+                if: hr != 0
+                    iter2_lt: 0
+                ---
                 checks: checks + 1
                 if: iter1_lt = 0 || iter2_lt = 0
                     failures: failures + 1
                     c.printf("mixa share native smoke: lifetime test: First() failed to produce two independent iterators\n")
+                    # Test-only cleanup gap (ticket 20260912-032000):
+                    # release whichever of the two DID succeed, plus the
+                    # creator's own reference to the iterable itself --
+                    # none of that is released on this failure path
+                    # otherwise.
+                    if: iter1_lt != 0
+                        c.__FIIterator_1_Windows__CStorage__CIStorageItem_Release((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter1_lt))
+                    ---
+                    if: iter2_lt != 0
+                        c.__FIIterator_1_Windows__CStorage__CIStorageItem_Release((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter2_lt))
+                    ---
+                    c.__FIIterable_1_Windows__CStorage__CIStorageItem_Release((cast: (@: __FIIterable_1_Windows__CStorage__CIStorageItem) iterable_lt))
                 else:
                     # Release the CREATOR's own reference to the iterable
                     # now, before touching either iterator -- each
@@ -1358,12 +1381,14 @@ fn: main () int
                     c.__FIIterable_1_Windows__CStorage__CIStorageItem_Release((cast: (@: __FIIterable_1_Windows__CStorage__CIStorageItem) iterable_lt))
                     checks: checks + 1
                     has_cur_lt[0]: (cast: (char) 0)
-                    c.__FIIterator_1_Windows__CStorage__CIStorageItem_get_HasCurrent((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter1_lt), (cast: (@: boolean) @ has_cur_lt[0]))
+                    hr: c.__FIIterator_1_Windows__CStorage__CIStorageItem_get_HasCurrent((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter1_lt), (cast: (@: boolean) @ has_cur_lt[0]))
                     cur_item_lt: 0
-                    c.__FIIterator_1_Windows__CStorage__CIStorageItem_get_Current((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter1_lt), (cast: (@@: __x_ABI_CWindows_CStorage_CIStorageItem) @ cur_item_lt))
-                    if: has_cur_lt[0] = (cast: (char) 0) || cur_item_lt = 0
+                    if: hr = 0
+                        hr: c.__FIIterator_1_Windows__CStorage__CIStorageItem_get_Current((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter1_lt), (cast: (@@: __x_ABI_CWindows_CStorage_CIStorageItem) @ cur_item_lt))
+                    ---
+                    if: hr != 0 || has_cur_lt[0] = (cast: (char) 0) || cur_item_lt = 0
                         failures: failures + 1
-                        c.printf("mixa share native smoke: lifetime test: iter1 unusable after the iterable's own creator-side reference was released (has_current=%d, current=%p)\n", (cast: (int) has_cur_lt[0]), cur_item_lt)
+                        c.printf("mixa share native smoke: lifetime test: iter1 unusable after the iterable's own creator-side reference was released (hr=%ld, has_current=%d, current=%p)\n", hr, (cast: (int) has_cur_lt[0]), cur_item_lt)
                     else:
                         c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) cur_item_lt))
                         c.printf("mixa share native smoke: lifetime test: iter1 still valid after the iterable's creator-side reference was released\n")
@@ -1371,12 +1396,14 @@ fn: main () int
                     c.__FIIterator_1_Windows__CStorage__CIStorageItem_Release((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter1_lt))
                     checks: checks + 1
                     has_cur_lt[0]: (cast: (char) 0)
-                    c.__FIIterator_1_Windows__CStorage__CIStorageItem_get_HasCurrent((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter2_lt), (cast: (@: boolean) @ has_cur_lt[0]))
+                    hr: c.__FIIterator_1_Windows__CStorage__CIStorageItem_get_HasCurrent((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter2_lt), (cast: (@: boolean) @ has_cur_lt[0]))
                     cur_item_lt: 0
-                    c.__FIIterator_1_Windows__CStorage__CIStorageItem_get_Current((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter2_lt), (cast: (@@: __x_ABI_CWindows_CStorage_CIStorageItem) @ cur_item_lt))
-                    if: has_cur_lt[0] = (cast: (char) 0) || cur_item_lt = 0
+                    if: hr = 0
+                        hr: c.__FIIterator_1_Windows__CStorage__CIStorageItem_get_Current((cast: (@: __FIIterator_1_Windows__CStorage__CIStorageItem) iter2_lt), (cast: (@@: __x_ABI_CWindows_CStorage_CIStorageItem) @ cur_item_lt))
+                    ---
+                    if: hr != 0 || has_cur_lt[0] = (cast: (char) 0) || cur_item_lt = 0
                         failures: failures + 1
-                        c.printf("mixa share native smoke: lifetime test: iter2 unusable after iter1 was released (has_current=%d, current=%p) -- independent iterators must not interfere\n", (cast: (int) has_cur_lt[0]), cur_item_lt)
+                        c.printf("mixa share native smoke: lifetime test: iter2 unusable after iter1 was released (hr=%ld, has_current=%d, current=%p) -- independent iterators must not interfere\n", hr, (cast: (int) has_cur_lt[0]), cur_item_lt)
                     else:
                         c.__x_ABI_CWindows_CStorage_CIStorageItem_Release((cast: (@: __x_ABI_CWindows_CStorage_CIStorageItem) cur_item_lt))
                         c.printf("mixa share native smoke: lifetime test: iter2 still independently valid after iter1 was released\n")
