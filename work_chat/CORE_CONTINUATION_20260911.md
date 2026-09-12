@@ -1,6 +1,6 @@
 # Current core continuation
 
-## Current checkpoint — 2026-09-12 06:31
+## Current checkpoint — 2026-09-12 06:34
 
 Claude's commits `5d72e2a` and `d065e7d` complete the real App/shortcut component
 stage. Accepted directory enumeration feeds a nested same-app window, buttons
@@ -29,14 +29,20 @@ forbids depending on the shared untracked legacy `mixa_file*` paths; the panel
 receives a test-owned playlist through accepted `mixa_audio_set_list`, while
 directory-to-playlist wiring waits for an accepted file-manager seam.
 
-Grok's commit `1183cf2` correctly adds per-exec launch serials, launch holds and
-generation-guarded outer rollback, but the lifecycle stage remains open.
-`bind_reap_join_all` clears `reaping` before a still-referenced joined wait is
-reattached from its local `kept` list. A concurrent last launch release can free
-the wait in that gap, leaving the reaper with a dangling pointer. Grok inbox
-`20260912-061652.txt` requires continuous reaper ownership, a deterministic
-two-launch/one-worker regression, and resolution of the `map_child` `wait==0`
-rollback case before any wider bind/topology work.
+Grok's `ca03089` closes the `1183cf2` reaper kept-gap defect: detached waits
+remain `reaping` until locked destroy/reattach, so a concurrent last launch
+release cannot free the raw pointer held by the reaper. The deterministic
+two-launch/one-worker test observes the old generation alive through the gap,
+then exactly one destroy and no worker/bind residue. UI-affinity `map_child` is
+now explicitly INVALID without setting mapped. Evidence
+`build/grok/exec_reap_kept/20260912_061652/` matches all three reported Git
+blobs, stable65D5, Windows Exec PASS/exit 0, and a clean POSIX `-Werror` object;
+POSIX runtime remains unverified. This lifecycle correction is accepted within
+that platform boundary. Grok inbox `20260912-063430.txt` activates the next D3
+slice: replace bind[] enumeration for mapped-ready owner selection with
+Message-owned intrusive ready-owner membership, while retaining bind[] only as
+the temporary binding/native-handle control table and adding no Scheduler
+Message.
 
 Grok owns all L2 coding. Parser matching-parenthesis implementation and its
 24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
