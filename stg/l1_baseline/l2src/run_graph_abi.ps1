@@ -193,6 +193,11 @@ try {
         })
         if ($cases.Count -lt 50) { throw "unexpectedly few historical cases parsed: $($cases.Count)" }
         $ev.historicalCaseCount = $cases.Count
+        # Focused fixtures for the independent: const: immutable branch stage.
+        # They are not historical, so they are appended rather than pinned in
+        # run_l2trans.ps1, which is not this lane's file.
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_eternal_branch.lm2'; stem = 'unit_eternal_branch'; expect = 0; stdout = $null }
+        $cases += [pscustomobject]@{ kind = 'Positive'; source = 'l2src/tests/unit_eternal_two.lm2'; stem = 'unit_eternal_two'; expect = 0; stdout = $null }
         foreach ($case in $cases) {
             $rec = [ordered]@{ stem = $case.stem; kind = $case.kind; source = $case.source; expectExit = $case.expect; status = 'RUNNING' }
             try {
@@ -224,6 +229,18 @@ try {
                     if ($text -notmatch 'lmx_array_ref_new_positive_owned\(c\.LMX_TYPE_ARRAY_OF_METHOD,') { throw 'generated entry lacks the root METHOD descriptor array' }
                     $rec.methodArrayRefs = [regex]::Matches($text, 'l2_method_refs\[\d+U\]: rec').Count
                     if ($rec.methodArrayRefs -ne $atZero) { throw "descriptor array filled $($rec.methodArrayRefs) times but $atZero records exist" }
+                    # The retention array is separate from the descriptor array,
+                    # holds only qualified branch roots, and each root is built
+                    # with node = 0, which is what independent means (9.1.4).
+                    $roots = [regex]::Matches($text, 'l2_ebr: lmx_node_new_owned\(').Count
+                    $stored = [regex]::Matches($text, 'l2_branch_refs\[\d+U\]: l2_ebr').Count
+                    $rec.eternalRoots = $roots
+                    if ($roots -ne $stored) { throw "$roots eternal roots but $stored retention entries" }
+                    if ($roots -gt 0) {
+                        if ($text -notmatch 'lmx_array_ref_new_positive_owned\(c\.LMX_TYPE_ARRAY_OF_LMX,') { throw 'eternal roots without the ARRAY_OF_LMX retention array' }
+                        if ([regex]::Matches($text, 'if: l2_ebr\\node != 0').Count -ne $roots) { throw 'an eternal root is not checked for a zero lexical root' }
+                        if ($text -match 'l2_branch_refs\[\d+U\]: rec') { throw 'a METHOD descriptor was stored in the retention array' }
+                    }
                 }
                 # Every checkpoint failure must reach the turn diagnostic root
                 # first; a bare abort would end the whole process instead of
@@ -266,6 +283,28 @@ try {
             $ev.fixtures += $rec
         }
         if ($ev.fixturesFailed -ne 0) { throw "$($ev.fixturesFailed) of $($cases.Count) historical fixtures failed" }
+        # 3. Negative qualifier cases. Only the full independent: const:
+        # immutable chain carries the eternal sharing contract, so a partial
+        # chain must be refused rather than quietly retained, and a bare
+        # const: immutable declaration at unit level stays unsupported.
+        $negatives = @(
+            @{ name = 'no_const';      body = "independent: size_t: e 7U`n";               expect = 'independent branch requires const' }
+            @{ name = 'no_immutable';  body = "independent: const: size_t: e 7U`n";        expect = 'independent branch requires immutable' }
+            @{ name = 'no_independent';body = "const: immutable: size_t: e 7U`n";          expect = 'unsupported body' }
+            @{ name = 'bad_leaf';      body = "independent: const: immutable: char: e 7U`n"; expect = 'unsupported eternal branch leaf' }
+        )
+        $ev.negatives = @()
+        foreach ($neg in $negatives) {
+            $src = Join-Path $out ("neg_" + $neg.name + ".lm2")
+            [IO.File]::WriteAllText($src, $neg.body + "fn: m () int`n    return: 0`nend: m`nfn: main () int`n    return: 0`nend: main`n")
+            $log = Join-Path $out ("neg_" + $neg.name + ".l2trans.log")
+            Invoke-Native ((Q $l2exe) + ' ' + (Q $src) + ' ' + (Q (Join-Path $out ("neg_" + $neg.name + ".lm1")))) $log | Out-Null
+            $text = Get-Content -LiteralPath $log -Raw
+            if ($text -notmatch [regex]::Escape($neg.expect)) { throw "negative case $($neg.name) did not report '$($neg.expect)'" }
+            if (Test-Path -LiteralPath (Join-Path $out ("neg_" + $neg.name + ".lm1"))) { throw "negative case $($neg.name) produced output" }
+            $ev.negatives += $neg.name
+            Write-Host "OK negative $($neg.name)"
+        }
     }
     Save-Evidence 'PASS'
     Write-Host "graph ABI runner PASS: selftest '$($ev.selftest.stdout)', copy selftest '$($ev.copySelftest.stdout)', fixtures $($ev.fixturesPassed)/$($ev.fixturesPassed + $ev.fixturesFailed), support warnings $supportWarnings; evidence $run"

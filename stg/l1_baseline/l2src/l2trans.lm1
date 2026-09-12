@@ -31,6 +31,12 @@ const: @: char l2_call_node 0
 # so the unit is reached as node\node. Shared own fields live in the unit; a
 # method's own fields live in M.
 const: @: char l2_unit_ref 0
+# Translation-known independent: const: immutable branch roots (SPEC 9.1.4,
+# 7173). Each is a Structure built with node = 0 and retained by the first
+# Message's fixed ARRAY_OF_LMX array. The set is closed at translation; nothing
+# appends at runtime. Only size_t leaves are admitted at this stage.
+int: l2_ebr_n 0
+c.array: [64]: size_t l2_ebr_val
 # Which method's body is being emitted, or -1 for the program entry. Only that
 # method reaches its own fields through the reserved argument; anyone else must
 # select the owning callable's Structure out of the unit first.
@@ -186,6 +192,7 @@ prototype:
     fn: l2_own_decl_name (const: @(LmP0Node stmt)) @: LmP0Text
     fn: l2_own_array_count (const: @(LmP0Node stmt)) @: LmP0Text
     fn: l2_positive_decimal (const: @(LmP0Text t)) size_t
+    fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
     fn: l2_own_store_ty (int: dty) int
     fn: l2_for_cstyle (const: @(LmP0Node stmt)) int
     fn: l2_scope_push (const: @(LmP0Node node)) int
@@ -1967,6 +1974,8 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
             main_node: item
         if: is_main = 0 && (l2_frame_head(item, "fn") != 0 || l2_frame_head(item, "sub") != 0) && l2_collect_method(item, path) != 0
             return: 1
+        if: l2_frame_head(item, "independent") != 0 && l2_take_eternal(item, path) != 0
+            return: 1
         if: l2_frame_head(item, "predef") != 0 && l2_take_predef(item, path) != 0
             return: 1
         if: l2_frame_head(item, "include") != 0 && l2_take_include(item, path) != 0
@@ -1978,7 +1987,7 @@ fn: l2_translate_unit (const: @(LmP0Structure unit); const: @(char path); @@: Lm
                 return: 1
             l2_os_node: item
         ---
-        if: is_main = 0 && l2_frame_head(item, "fn") = 0 && l2_frame_head(item, "sub") = 0 && l2_frame_head(item, "predef") = 0 && l2_frame_head(item, "include") = 0 && l2_frame_head(item, "os") = 0
+        if: is_main = 0 && l2_frame_head(item, "fn") = 0 && l2_frame_head(item, "sub") = 0 && l2_frame_head(item, "predef") = 0 && l2_frame_head(item, "include") = 0 && l2_frame_head(item, "os") = 0 && l2_frame_head(item, "independent") = 0
             extras: extras + 1
         field: l2_next_active(field\next)
     if: mains > 1
@@ -4675,6 +4684,46 @@ fn: l2_intern_prove (const: @(char path); const: @(LmP0Node node)) int
     if: two != 0 && (l2_text_eq(l2_m_f0[0], "a") = 0 || l2_text_eq(l2_m_f1[0], "b") = 0 || l2_ft(0, 0) != 0) && l2_intern_probe = id
         return: l2_error(path, node, "intern false-equal distinct contracts")
     l2_sigv: id
+return: 0
+
+# independent: const: immutable: size_t: <name> <literal>
+#
+# All three receivers are required and in that order. independent alone gives an
+# ordinary zero-rooted Structure with no retention, and const: immutable alone
+# freezes a value without making it eternal; neither is admitted here, because
+# only the full chain carries the eternal sharing contract (SPEC 7237). The
+# qualified branch never becomes a child of the unit: independent means node = 0,
+# and the retention array holds the only reference the translator emits.
+fn: l2_take_eternal (const: @(LmP0Node item); const: @(char path)) int
+    @: LmP0Node cur
+    @: LmP0Field f
+    @: LmP0Field g
+    cur: (cast: (@: LmP0Node) item)
+    if: l2_frame_head(cur, "independent") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0
+        return: l2_error(path, item, "unsupported body")
+    if: l2_count_active(cur\as\frame\body) != 1
+        return: l2_error(path, item, "independent takes one qualified declaration")
+    cur: l2_next_active(cur\as\frame\body\first_field)\value
+    if: l2_frame_head(cur, "const") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0 || l2_count_active(cur\as\frame\body) != 1
+        return: l2_error(path, item, "independent branch requires const")
+    cur: l2_next_active(cur\as\frame\body\first_field)\value
+    if: l2_frame_head(cur, "immutable") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0 || l2_count_active(cur\as\frame\body) != 1
+        return: l2_error(path, item, "independent branch requires immutable")
+    cur: l2_next_active(cur\as\frame\body\first_field)\value
+    if: l2_frame_head(cur, "size_t") = 0 || cur\as = 0 || cur\as\frame = 0 || cur\as\frame\body = 0
+        return: l2_error(path, item, "unsupported eternal branch leaf")
+    if: l2_count_active(cur\as\frame\body) != 2
+        return: l2_error(path, item, "eternal branch leaf needs a name and a literal")
+    f: l2_next_active(cur\as\frame\body\first_field)
+    g: l2_next_active(f\next)
+    if: f\value = 0 || f\value\kind != c.LM_P0_NODE_ATOM || l2_ident(f\value\as\atom) = 0
+        return: l2_error(path, item, "eternal branch leaf needs a name")
+    if: g\value = 0 || g\value\kind != c.LM_P0_NODE_ATOM || l2_num(g\value\as\atom) = 0
+        return: l2_error(path, item, "eternal branch leaf needs a literal")
+    if: l2_ebr_n >= 64
+        return: l2_error(path, item, "too many eternal branches")
+    l2_ebr_val[l2_ebr_n]: l2_positive_decimal(g\value\as\atom)
+    l2_ebr_n: l2_ebr_n + 1
 return: 0
 
 fn: l2_end_text (const: @(LmP0Frame frame); const: @(LmP0Text name)) int
@@ -7595,7 +7644,11 @@ fn: l2_emit_unit (const: @(char out_path)) int
     # array of references to every translation-known METHOD descriptor
     # (SPEC 9.1.4). It is built once, here, and never appended at runtime.
     kids: n + (cast: (unsigned) l2_unit_base) + 1U
-    if: c.fputs("external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message) int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @@: void slot 0\n        @: LmxMethod rec 0\n        @: LmxArrayDesc l2_methods 0\n        @@: LmxMethod l2_method_refs 0\n", l2_out) < 0
+    # A second unit child holds the separate fixed retention array of eternal
+    # branch roots, when the source declares any. It never holds descriptors.
+    if: l2_ebr_n != 0
+        kids: kids + 1U
+    if: c.fputs("external:\n    # Synthetic entry adapter, not a source method or an arena-owner argument.\n    fn: l2_program_entry (@: LmxMsg process_message) int\n        @: Lmx unit 0\n        @: Lmx leaf 0\n        @@: void slot 0\n        @: LmxMethod rec 0\n        @: LmxArrayDesc l2_methods 0\n        @@: LmxMethod l2_method_refs 0\n        @: LmxArrayDesc l2_branches 0\n        @@: Lmx l2_branch_refs 0\n        @: Lmx l2_ebr 0\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: l2_has_own_ty(1) != 0 && c.fputs("        @: char process_chars lmx_chars_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: process_chars = 0\n            return: 1\n", l2_out) < 0
@@ -7706,6 +7759,23 @@ fn: l2_emit_unit (const: @(char out_path)) int
             c.fclose(l2_out)
             return: 1
         i: i + 1
+    # The eternal branches. Each root is built with node = 0, which is what
+    # independent means, so none of them is a child of the unit; the retention
+    # array holds the only emitted reference. The array is separate from the
+    # descriptor array and never holds a descriptor.
+    if: l2_ebr_n != 0 && c.fprintf(l2_out, "        l2_branches: lmx_array_ref_new_positive_owned(c.LMX_TYPE_ARRAY_OF_LMX, %uU, @ process_message\\blocks, @ process_message\\ranges)\n        if: l2_branches = 0\n            return: 1\n        l2_branch_refs: (cast: (@@: Lmx) l2_branches\\data)\n", (cast: (unsigned) l2_ebr_n)) < 0
+        c.fclose(l2_out)
+        return: 1
+    k: 0
+    while: k < l2_ebr_n
+        if: c.fprintf(l2_out, "        l2_ebr: lmx_node_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: l2_ebr = 0\n            return: 1\n        if: l2_ebr\\node != 0\n            return: 1\n        if: lmx_branch_open_owned(l2_ebr, 1U, @ process_message\\blocks, @ process_message\\ranges) != 0\n            return: 1\n        slot: lmx_branch_slot_known(l2_ebr, 0U)\n        if: slot = 0\n            return: 1\n        slot[0]: lmx_size_new_owned(@ process_message\\blocks, @ process_message\\ranges)\n        if: slot[0] = 0\n            return: 1\n        if: lmx_size_store_known(slot[0], %zuU) != 0\n            return: 1\n        l2_branch_refs[%uU]: l2_ebr\n", l2_ebr_val[k], (cast: (unsigned) k)) < 0
+            c.fclose(l2_out)
+            return: 1
+        k: k + 1
+    ---
+    if: l2_ebr_n != 0 && c.fprintf(l2_out, "        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_branches)) != 0\n            return: 1\n        if: l2_branches\\len != %uU\n            return: 1\n", (cast: (unsigned) (l2_unit_base + l2_m_n + 1)), (cast: (unsigned) l2_ebr_n)) < 0
+        c.fclose(l2_out)
+        return: 1
     # Publish the finished descriptor array into the first Message's graph. The
     # set is complete here and nothing appends to it afterwards.
     if: c.fprintf(l2_out, "        if: lmx_branch_store_known(unit, %uU, (cast: (@: void) l2_methods)) != 0\n            return: 1\n        if: l2_methods\\len != %uU\n            return: 1\n", (cast: (unsigned) (l2_unit_base + l2_m_n)), (cast: (unsigned) l2_m_n)) < 0
