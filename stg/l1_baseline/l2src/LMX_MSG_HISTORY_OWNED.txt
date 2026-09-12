@@ -1,0 +1,64 @@
+L1 history-root bookkeeping extraction (2026-09-11)
+==================================================
+
+Matched ownership: Grok inbox/outbox 20260911-234500. This ports the existing
+bdd6a62 lmx_message_exec.c prepare_failed_history/history_push/history_free/
+commit_history_roots algorithm without changing policy. The Message, range and
+root C structs remain the ABI; no locks, storage movement, graph mutation,
+global registry, new role or physical result/throw carrier is introduced.
+
+Public functions (lmx_msg_history_owned.h.lm1):
+  lmx_msg_history_prepare(src,out) -> existing LMX_MSG status
+  lmx_msg_history_commit(dst,head) -> void, consumes prepared list
+  lmx_msg_history_dispose(head) -> void, consumes private list only
+
+The caller supplies exclusive ownership, valid acyclic lists and a distinct
+output slot that does not alias Message roots/next links. Dispose an earlier
+prepared list before reusing the output slot. prepare resets out, privately
+collects a classified ARRAY/CHILDREN graph and classified HISTORY roots,
+deduplicates addresses and creates HISTORY-only nodes. RETAIN-only roots are
+omitted. Existing behavior for unclassified/wrong-kind addresses is omission.
+Failure frees the private prefix, leaves out null and changes neither owner.
+The caller performs storage admission separately, then commits without further
+allocation. Commit merges HISTORY into an existing destination node, preserving
+its RETAIN bit, or inserts the private node; a null destination disposes it.
+Neither commit nor dispose frees payloads. Caller still owns all lifecycle and
+quiescence decisions. The helper does not make arbitrary output aliases safe.
+
+Focused verification
+--------------------
+Run from the repo:
+  powershell -NoProfile -File stg/l1_baseline/l2src/run_lmx_msg_history_owned.ps1
+
+PASS build/codex/msg_history_owned/20260911_235051_624_8c67c678/evidence.json
+51 checks; failures=0, live=0, malloc_calls=12, frees=9 (3 injected failures).
+Checks cover graph/history/both roles, duplicate graph and history pointers,
+RETAIN-only/wrong-kind/unclassified omission, null inputs, empty prepare,
+all 3 allocation failures including private-prefix rollback, retry, no owner/
+payload mutation, allocation-free merge, private discard and null destination.
+
+Frozen compiler SHA256:
+65D5A5ED127CA1BAEBDD1D500A5B74CEEA63EC1985EAC52EDEF28EFEB261C936
+Generated C99, GCC O2 -Wall -Wextra -Wpedantic -Werror. All outputs isolated.
+Production object imports only malloc/free/lmx_owned_ranges_find and has no
+mutable globals. Separate test object substitutes malloc/free at compile time
+only for this helper; production source/ABI has no test state. Test fixture
+and CRT allocation are excluded from failure counters. Source hashes, exact
+commands/exits, generated headers/C, objects/exe and logs saved in evidence.
+
+Initial test-harness failures retained in adjacent runs: C-defined structures
+require pointer locals in this L1 subset and backslash always emits ->; use
+pointer temporaries for indexed structures. Global linker malloc wrapping also
+captured MinGW CRT/setup allocation; fixed by object-local test substitution.
+No production helper behavior was changed to bypass these test failures.
+
+Integration handoff
+-------------------
+Grok retains lmx_message_exec.c, headers, runtime and run_lmx.ps1. Add generated
+header/object, replace calls with the three public functions, remove duplicate
+C algorithm. Preserve existing root-OOM coverage by adapting TEST-only helper
+allocation instrumentation; do not silently lose it or add production fault
+state. Run the affected Exec/history/role/transfer/generated-array cases once
+for that integration, with matching source/artifact manifest. This standalone
+check does not establish scheduler adoption, complete root lifetimes or full
+L2 selfhosting. Final L2 source migration is still required after this L1 step.

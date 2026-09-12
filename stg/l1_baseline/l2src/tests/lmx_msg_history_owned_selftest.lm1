@@ -1,0 +1,206 @@
+predef: "l2src/lmx_msg_history_owned.h.lm1"
+include: "l2src/lmx.h" "<stdlib.h>" "<stdio.h>" "<string.h>"
+
+# Test-only counters and fault schedule; the production helper has no globals.
+int: checks 0
+int: calls 0
+int: frees 0
+int: live 0
+int: fail_at 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(1)
+    ---
+end: check
+
+fn: lmx_history_test_malloc (size_t: n) @: void
+    @: void p
+    calls: calls + 1
+    if: fail_at != 0 && calls = fail_at
+        return: 0
+    p: c.malloc(n)
+    if: p != 0
+        live: live + 1
+    ---
+return: p
+
+sub: lmx_history_test_free (@: void p)
+    if: p != 0
+        live: live - 1
+        frees: frees + 1
+        check(live >= 0, "private free balance")
+    ---
+    c.free(p)
+end: lmx_history_test_free
+
+fn: count_roots (@: LmxMsgRoot head) int
+    int: n 0
+    while: head != 0
+        n: n + 1
+        check(n <= 10, "acyclic bounded root list")
+        head: head\next
+    ---
+return: n
+
+fn: find_root (@: LmxMsgRoot head; @: void p) @: LmxMsgRoot
+    while: head != 0
+        if: head\p = p
+            return: head
+        head: head\next
+    ---
+return: 0
+
+fn: main () int
+    @: LmxMsg src
+    @: LmxMsg dst
+    @: Lmx cells
+    @: LmxOwnedRange ranges
+    @: LmxMsgRoot roots
+    @: LmxMsgRoot retained
+    @: LmxMsgRoot prepared 0
+    @: LmxMsgRoot cur
+    @: LmxMsgRoot next
+    @: LmxMsgRoot rp
+    @: LmxMsgRoot r2
+    @: LmxOwnedRange rg
+    @: LmxOwnedRange rg4
+    int: i
+    int: before
+    int: before_free
+    src: (cast: (@: LmxMsg) c.calloc(1U, c.sizeof(c.LmxMsg)))
+    dst: (cast: (@: LmxMsg) c.calloc(1U, c.sizeof(c.LmxMsg)))
+    cells: (cast: (@: Lmx) c.calloc(7U, c.sizeof(c.Lmx)))
+    ranges: (cast: (@: LmxOwnedRange) c.calloc(6U, c.sizeof(c.LmxOwnedRange)))
+    roots: (cast: (@: LmxMsgRoot) c.calloc(8U, c.sizeof(c.LmxMsgRoot)))
+    retained: (cast: (@: LmxMsgRoot) c.calloc(1U, c.sizeof(c.LmxMsgRoot)))
+    check(src != 0 && dst != 0 && cells != 0 && ranges != 0 && roots != 0 && retained != 0, "test-owned storage allocated")
+    cells\len: 73U
+    r2: roots + 2
+    rg4: ranges + 4
+    i: 0
+    while: i < 6
+        rg: ranges + i
+        rg\lo: @ cells[i]
+        rg\hi: @ cells[i + 1]
+        rg\stride: c.sizeof(c.Lmx)
+        rg\kind: LMX_KIND_ARRAY
+        rg\type: 1
+        if: i < 5
+            rg\next: @ ranges[i + 1]
+        ---
+        i: i + 1
+    ---
+    ranges\kind: LMX_KIND_CHILDREN
+    rg4\kind: LMX_KIND_PRIMITIVE
+    src\ranges: @ ranges[0]
+    src\graph: @ cells[0]
+    src\roots: @ roots[0]
+    i: 0
+    while: i < 8
+        rp: roots + i
+        rp\roles: LMX_MSG_ROOT_HISTORY
+        if: i < 7
+            rp\next: @ roots[i + 1]
+        ---
+        i: i + 1
+    ---
+    rp: roots + 0
+    rp\p: @ cells[0]
+    rp: roots + 1
+    rp\p: @ cells[1]
+    rp: roots + 2
+    rp\p: @ cells[2]
+    rp: roots + 2
+    rp\roles: LMX_MSG_ROOT_HISTORY | LMX_MSG_ROOT_RETAIN
+    rp: roots + 3
+    rp\p: @ cells[3]
+    rp: roots + 3
+    rp\roles: LMX_MSG_ROOT_RETAIN
+    rp: roots + 4
+    rp\p: @ cells[4]
+    rp: roots + 5
+    rp\p: @ cells[6]
+    rp: roots + 6
+    rp\p: @ cells[1]
+    rp: roots + 7
+    rp\p: 0
+    retained\p: @ cells[1]
+    retained\roles: LMX_MSG_ROOT_RETAIN
+    dst\roots: retained
+
+    check(lmx_msg_history_prepare(src, 0) = LMX_MSG_INVALID, "null output rejected")
+    prepared: retained
+    check(lmx_msg_history_prepare(0, @ prepared) = LMX_MSG_INVALID && prepared = 0, "null source clears output")
+    check(calls = 0 && live = 0, "invalid inputs allocate nothing")
+    lmx_msg_history_dispose(0)
+    lmx_msg_history_commit(0, 0)
+    lmx_msg_history_commit(dst, 0)
+    check(dst\roots = retained && retained\roles = LMX_MSG_ROOT_RETAIN, "empty commit unchanged")
+
+    # Fail each allocation, including second/third after private nodes exist.
+    i: 1
+    while: i <= 3
+        before: calls
+        before_free: frees
+        fail_at: calls + i
+        prepared: retained
+        check(lmx_msg_history_prepare(src, @ prepared) = LMX_MSG_NOMEM, "each private allocation failure")
+        check(prepared = 0 && live = 0 && calls = before + i && frees = before_free + i - 1, "OOM discards complete private prefix")
+        check(src\graph = @ cells[0] && src\roots = @ roots[0] && src\ranges = @ ranges[0] && src\blocks = 0, "source ownership unchanged on OOM")
+        check(dst\roots = retained && retained\next = 0 && retained\roles = LMX_MSG_ROOT_RETAIN && dst\ranges = 0 && dst\blocks = 0, "destination unchanged on OOM")
+        check(r2\roles = (LMX_MSG_ROOT_HISTORY | LMX_MSG_ROOT_RETAIN) && roots\next = @ roots[1] && cells\len = 73U, "roles links and payload untouched")
+        i: i + 1
+    ---
+    fail_at: 0
+    before: calls
+    check(lmx_msg_history_prepare(src, @ prepared) = LMX_MSG_OK, "retry prepares history")
+    check(calls = before + 3 && live = 3 && count_roots(prepared) = 3, "graph and history addresses deduplicated")
+    check(find_root(prepared, @ cells[0]) != 0 && find_root(prepared, @ cells[1]) != 0 && find_root(prepared, @ cells[2]) != 0, "graph history and both-role roots included")
+    check(find_root(prepared, @ cells[3]) = 0 && find_root(prepared, @ cells[4]) = 0 && find_root(prepared, @ cells[6]) = 0, "retain-only wrong-kind and unknown omitted")
+    cur: prepared
+    while: cur != 0
+        check(cur\roles = LMX_MSG_ROOT_HISTORY, "prepared roles are history only")
+        cur: cur\next
+    ---
+    check(src\roots = @ roots[0] && dst\roots = retained, "prepare publishes to neither owner")
+    before: calls
+    fail_at: calls + 1
+    lmx_msg_history_commit(dst, prepared)
+    prepared: 0
+    check(calls = before && live = 2 && count_roots(dst\roots) = 3, "commit allocates nothing and frees duplicate")
+    check(find_root(dst\roots, @ cells[1]) = retained && retained\roles = (LMX_MSG_ROOT_HISTORY | LMX_MSG_ROOT_RETAIN), "merge preserves existing retain node")
+    check(src\roots = @ roots[0] && r2\roles = (LMX_MSG_ROOT_HISTORY | LMX_MSG_ROOT_RETAIN) && cells\len = 73U, "commit does not change source or payload")
+    # Detach the test's stack-owned RETAIN node before disposing heap nodes.
+    cur: dst\roots
+    dst\roots: 0
+    while: cur != 0
+        next: cur\next
+        if: cur != retained
+            cur\next: 0
+            lmx_msg_history_dispose(cur)
+        ---
+        cur: next
+    ---
+    check(live = 0, "merged bookkeeping cleanup")
+    fail_at: 0
+    check(lmx_msg_history_prepare(src, @ prepared) = LMX_MSG_OK, "prepare for abandoned admission")
+    before: calls
+    lmx_msg_history_commit(0, prepared)
+    prepared: 0
+    check(live = 0 && calls = before, "null destination consumes private list")
+    src\graph: 0
+    src\roots: 0
+    check(lmx_msg_history_prepare(src, @ prepared) = LMX_MSG_OK && prepared = 0 && calls = before, "empty source produces empty list")
+    src\graph: @ cells[6]
+    check(lmx_msg_history_prepare(src, @ prepared) = LMX_MSG_OK && prepared = 0 && calls = before, "unclassified graph omitted per existing policy")
+    c.printf("history checks=%d failures=0 live=%d malloc_calls=%d frees=%d\n", checks, live, calls, frees)
+    c.free(retained)
+    c.free(roots)
+    c.free(ranges)
+    c.free(cells)
+    c.free(dst)
+    c.free(src)
+return: 0

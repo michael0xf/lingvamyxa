@@ -1,0 +1,12 @@
+include: "l2src/lmx_message.h"
+
+# Exclusive-owner bookkeeping only. prepare produces a fresh private list;
+# its out slot must not alias Message roots or a next link. Caller disposes any
+# earlier prepared list before reusing that slot. Payload storage never moves
+# here. After the caller's successful storage admission, commit consumes the
+# private list without allocating. dispose consumes only private root nodes.
+prototype:
+    fn: lmx_msg_history_prepare (@: LmxMsg src; @@: LmxMsgRoot out) int
+    fn: lmx_msg_history_commit (@: LmxMsg dst; @: LmxMsgRoot head) void
+    fn: lmx_msg_history_dispose (@: LmxMsgRoot head) void
+end: prototype

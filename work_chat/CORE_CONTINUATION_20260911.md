@@ -353,6 +353,25 @@ policy; focused later-allocation OOM rollback, deduplication and role merge,
 test-only allocator wrapping. No helper edits until matched agreement. Physical
 result/throw carrier is still pending user choice; independent migration proceeds.
 
+234500 reply SHAA993C0C2A42289DBCA23CE2C7D0570F8809654F846ACEE87DBD55450D5009C0D
+confirms exact history-helper split and delivers7d05282. Tracked CHAR L1 hash
+617A8D311F9548EE5511F947A602B8102327F1A7EB7D8FE7246748A2DA6FE084 exactly
+matches Codex231614 capture. All20 Exec manifest hashes match, all3native exits0;
+harness checks actual generated65/0/62, retain through end_turn, dead neighbour
+and graph-drop reclamation. This completes that bounded generated-CHAR proof.
+
+Codex history L1 extraction IMPLEMENTED/PASS, exact five new files above:
+build/codex/msg_history_owned/20260911_235051_624_8c67c678/evidence.json,
+51checks/failures0/live0/malloc12/free9 (3 injected failures). Frozen compiler,
+C99/O2/Werror; no mutable production storage, onlymalloc/free/range-find imports.
+Every allocation position including partial-prefix failure rolls back privately;
+owner heads/roles/payload remain intact, retry/duplicate/role merge/null/empty
+and unclassified cases pass. Test-only per-object allocator substitution avoids
+MinGW CRT allocations contaminating global linker-wrap counters. Full details
+in l2src/LMX_MSG_HISTORY_OWNED.txt. Grok next integrates the3functions, removes
+duplicate C code, preserves root-OOM regressions and verifies affected Exec
+cases; no scheduler or result/throw semantics chosen by this extraction.
+
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see
 `work_chat/WATCHER_MIGRATION_20260911.md` for delivery evidence.
