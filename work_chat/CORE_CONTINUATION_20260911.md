@@ -1,5 +1,30 @@
 # Current core continuation
 
+## Current checkpoint — 2026-09-12 03:03
+
+Grok owns all L2 coding. Parser matching-parenthesis implementation and its
+24-entry reach proof are complete (`d38fae3`, `be4e13f`): saved candidate run
+`20260912_022635_715` passed 106 parse and 12 direct comparisons, 349 spans.
+Do not restart that port. Windows worker wait and UI FIFO recovery advanced
+through `56ed478`; immutable evidence is in
+`build/grok/exec_ui_fifo_recover/20260912_025200_56ed478/lmx_Exec/`.
+All 25 recorded source/tool/artifact hashes matched at review, with exit 0.
+POSIX scheduling remains untested; its wait protocol was reviewed in source.
+UI enqueue OOM, pending work across restart and failed UI-to-ANY transfer have
+focused recovery checks. Failed transfer currently appends the restored UI
+entry, changing FIFO order; preserve its original place and handle any failed
+restore before claiming complete rollback. Then move mapped ANY readiness off
+the host array into Message-owned links, preserving parent/child ownership,
+UI separation, fair dispatch, held release, restart and failure recovery.
+The host bind and UI-ready arrays remain transitional; D3 is not complete.
+
+Claude owns the full app. `c458a7d` has a verified one-file SetStorageItems
+checkpoint. Continue ticket `025800`: multi-file/Unicode/invalid-path readback,
+retained iterable/iterator backing lifetime and async cancellation/destruction,
+then queued App test cleanup, selection/button/error UI and the audio backlog.
+Codex maintains plans and reviews only; no project builds or implementation.
+Latest detailed acceptance and reply hashes are in the automation memory.
+
 ## Current role assignment — user override, 2026-09-12 02:12
 
 The user explicitly transferred ALL L2/core coding to Grok and ALL
