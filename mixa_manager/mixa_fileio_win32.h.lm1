@@ -1,0 +1,6 @@
+include: "<windows.h>" "<stdint.h>"
+
+struct: MixaFio
+    @: void handle
+    int: is_open
+end: MixaFio

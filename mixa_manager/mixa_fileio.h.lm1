@@ -1,0 +1,52 @@
+include: "<stddef.h>"
+predef: "mixa_manager/mixa_fileio_win32.h.lm1"
+
+# File content read/write seam (ticket 20260912-092435). Real file
+# content read/write/close, alongside mixa_dir for directory operations
+# and metadata -- neither duplicates the other. Tracked, separate name:
+# does not touch or promote the untracked legacy mixa_file*.
+#
+# Scoped to what the first copy-only implementation needs. Write-open is
+# CREATE_NEW only (mixa_fio_open_write_new) because the first copy stage
+# is explicitly without overwrite -- a destination that already exists
+# is refused by Windows itself (ERROR_FILE_EXISTS), not by a check this
+# module invents. Overwrite is a real future need, not scoped here.
+#
+# Deterministic failure seam: mixa_fio_read and mixa_fio_write each take
+# an optional MixaFioFaultVTable. When given, its on_read/on_write hook
+# is asked FIRST, before any real ReadFile/WriteFile call, with how many
+# bytes this handle has moved so far; returning a non-OK status makes
+# that call fail with exactly that status and skips the real I/O for it.
+# Every byte moved before the hook fires is real, on disk (for a write)
+# or genuinely read (for a read) -- only the point of failure is chosen
+# by the caller, not the data. This is what makes partial-write and
+# partial-read cleanup checks reproducible without needing rare, racy OS
+# conditions, and it is an explicit per-call argument rather than a
+# module-level flag: a test-only global here would repeat the always-on
+# production global that was removed from mixa_share_win32.lm1.
+
+enum: MixaFioStatus
+    MIXA_FIO_OK 0
+    MIXA_FIO_ERR_ARG 1
+    MIXA_FIO_ERR_MISSING 2
+    MIXA_FIO_ERR_EXISTS 3
+    MIXA_FIO_ERR_ACCESS 4
+    MIXA_FIO_ERR_IO 5
+    MIXA_FIO_ERR_NOMEM 6
+end: MixaFioStatus
+
+fnptr: MixaFioFaultFn (@: void ctx; size_t: bytes_done) int
+
+struct: MixaFioFaultVTable
+    MixaFioFaultFn: on_read
+    MixaFioFaultFn: on_write
+    @: void ctx
+end: MixaFioFaultVTable
+
+prototype:
+    fn: mixa_fio_open_read (@@: MixaFio out; const: @(char path_utf8)) int
+    fn: mixa_fio_open_write_new (@@: MixaFio out; const: @(char path_utf8)) int
+    fn: mixa_fio_read (@: MixaFio f; @: void buf; size_t: cap; @: size_t out_read; const: @(MixaFioFaultVTable fv); size_t: bytes_done) int
+    fn: mixa_fio_write (@: MixaFio f; const: @(void buf); size_t: len; const: @(MixaFioFaultVTable fv); size_t: bytes_done) int
+    fn: mixa_fio_close (@: MixaFio f) void
+end: prototype

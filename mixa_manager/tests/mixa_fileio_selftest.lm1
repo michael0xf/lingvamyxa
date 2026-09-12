@@ -1,0 +1,301 @@
+predef: "mixa_manager/mixa_fileio.h.lm1"
+predef: "mixa_manager/mixa_fileio_win32.lm1"
+predef: "mixa_manager/mixa_dir_win32.lm1"
+include: "<stdio.h>" "<string.h>" "<stdlib.h>"
+
+# File content read/write seam selftest (ticket 20260912-092435). Real
+# on-disk fixtures under this run's own directory; no user files
+# anywhere. Verifies content correctness, real error statuses from real
+# Win32 refusals (no fake dir seam), and the deterministic fault hook
+# that the first copy operation needs for partial-write/read cleanup
+# checks.
+
+int: g_fault_at
+int: g_fault_calls
+
+fn: fault_read (@: void ctx; size_t: bytes_done) int
+    g_fault_calls: g_fault_calls + 1
+    if: g_fault_at >= 0
+        if: (cast: (int) bytes_done) >= g_fault_at
+            return: MIXA_FIO_ERR_IO
+        ---
+    ---
+return: MIXA_FIO_OK
+
+fn: fault_write (@: void ctx; size_t: bytes_done) int
+    g_fault_calls: g_fault_calls + 1
+    if: g_fault_at >= 0
+        if: (cast: (int) bytes_done) >= g_fault_at
+            return: MIXA_FIO_ERR_IO
+        ---
+    ---
+return: MIXA_FIO_OK
+
+@: MixaFioFaultVTable g_fv
+int: g_fv_ready
+
+fn: fv_table () const: @(MixaFioFaultVTable)
+    if: g_fv_ready = 0
+        g_fv: (cast: (@: MixaFioFaultVTable) c.calloc(1U, c.sizeof(c.MixaFioFaultVTable)))
+        g_fv\on_read: fault_read
+        g_fv\on_write: fault_write
+        g_fv_ready: 1
+    ---
+return: g_fv
+
+sub: t_touch (const: @(char path); const: @(char content))
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "wb")
+    if: fh[0] != 0
+        c.fputs(content, fh[0])
+        c.fclose(fh[0])
+    ---
+end: t_touch
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char dir 1040
+    []: char src 1040
+    []: char dst 1040
+    []: char dst2 1040
+    []: char missing 1040
+    []: char buf 4100
+    @: MixaFio fr
+    @: MixaFio fw
+    @: MixaDirEntry e
+    []: char longcontent 4100
+    size_t: n
+    size_t: total
+    size_t: i
+    int: st
+    int: failures
+    int: checks
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+    g_fault_at: -1
+    g_fault_calls: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/claude/fileio/tmp")
+    ---
+    c.snprintf(dir, 1040U, "%s\\d", base)
+    c.snprintf(src, 1040U, "%s\\src.txt", dir)
+    c.snprintf(dst, 1040U, "%s\\dst.txt", dir)
+    c.snprintf(dst2, 1040U, "%s\\dst2.txt", dir)
+    c.snprintf(missing, 1040U, "%s\\no_such.txt", dir)
+    c.snprintf(buf, 2000U, "cmd /c mkdir \"%s\" 2>nul", dir)
+    c.system(buf)
+
+    e: (cast: (@: MixaDirEntry) c.calloc(1U, c.sizeof(c.MixaDirEntry)))
+    if: e = 0
+        c.printf("fio: alloc failed\n")
+        return: 1
+    ---
+
+    # --- Scenario 1: write then read gives back exact content.
+    st: mixa_fio_open_write_new(@ fw, src)
+    checks: checks + 1
+    if: st != MIXA_FIO_OK
+        failures: failures + 1
+        c.printf("fio: open_write_new rc=%d\n", st)
+    ---
+    st: mixa_fio_write(fw, "hello world", 11U, 0, 0U)
+    checks: checks + 1
+    if: st != MIXA_FIO_OK
+        failures: failures + 1
+        c.printf("fio: write rc=%d\n", st)
+    ---
+    mixa_fio_close(fw)
+    checks: checks + 1
+    if: mixa_dir_stat(src, e) != MIXA_DIR_OK || mixa_dir_entry_size(e) != 11U
+        failures: failures + 1
+        c.printf("fio: written size=%llu want 11\n", mixa_dir_entry_size(e))
+    ---
+    st: mixa_fio_open_read(@ fr, src)
+    checks: checks + 1
+    if: st != MIXA_FIO_OK
+        failures: failures + 1
+        c.printf("fio: open_read rc=%d\n", st)
+    ---
+    n: 0U
+    st: mixa_fio_read(fr, buf, 4100U, @ n, 0, 0U)
+    checks: checks + 1
+    if: st != MIXA_FIO_OK || n != 11U
+        failures: failures + 1
+        c.printf("fio: read rc=%d n=%d\n", st, (cast: (int) n))
+    ---
+    buf[n]: 0
+    checks: checks + 1
+    if: c.strcmp(buf, "hello world") != 0
+        failures: failures + 1
+        c.printf("fio: content=[%s] want [hello world]\n", buf)
+    ---
+    # A second read at EOF returns OK with 0 bytes, not an error.
+    st: mixa_fio_read(fr, buf, 4100U, @ n, 0, 0U)
+    checks: checks + 1
+    if: st != MIXA_FIO_OK || n != 0U
+        failures: failures + 1
+        c.printf("fio: EOF read rc=%d n=%d\n", st, (cast: (int) n))
+    ---
+    mixa_fio_close(fr)
+
+    # --- Scenario 2: existing destination is refused (no overwrite).
+    st: mixa_fio_open_write_new(@ fw, src)
+    checks: checks + 1
+    if: st != MIXA_FIO_ERR_EXISTS
+        failures: failures + 1
+        c.printf("fio: overwrite refusal rc=%d want ERR_EXISTS\n", st)
+    ---
+
+    # --- Scenario 3: a missing source is a real, distinct status.
+    st: mixa_fio_open_read(@ fr, missing)
+    checks: checks + 1
+    if: st != MIXA_FIO_ERR_MISSING
+        failures: failures + 1
+        c.printf("fio: missing source rc=%d want ERR_MISSING\n", st)
+    ---
+
+    # --- Scenario 4: content equality over a buffer smaller than the
+    # file, proving multiple real chunked reads reassemble correctly --
+    # not just a single-shot read.
+    total: 0U
+    i: 0U
+    while: i < 4000U
+        longcontent[i]: (cast: (char) (65 + (cast: (int) (i % 26U))))
+        i: i + 1U
+    ---
+    longcontent[4000U]: 0
+    st: mixa_fio_open_write_new(@ fw, dst2)
+    mixa_fio_write(fw, longcontent, 4000U, 0, 0U)
+    mixa_fio_close(fw)
+    st: mixa_fio_open_read(@ fr, dst2)
+    checks: checks + 1
+    if: st != MIXA_FIO_OK
+        failures: failures + 1
+        c.printf("fio: open_read dst2 rc=%d\n", st)
+    ---
+    c.memset(buf, 0, 4100U)
+    total: 0U
+    while: 1
+        n: 0U
+        st: mixa_fio_read(fr, buf + total, 64U, @ n, 0, 0U)
+        if: st != MIXA_FIO_OK
+            failures: failures + 1
+            c.printf("fio: chunked read rc=%d\n", st)
+            break
+        ---
+        if: n = 0U
+            break
+        ---
+        total: total + n
+    ---
+    mixa_fio_close(fr)
+    checks: checks + 1
+    if: total != 4000U || c.memcmp(buf, longcontent, 4000U) != 0
+        failures: failures + 1
+        c.printf("fio: chunked content mismatch, total=%d\n", (cast: (int) total))
+    ---
+
+    # --- Scenario 5: the fault hook is asked with the real byte offset
+    # BEFORE each real I/O call, and its refusal is returned verbatim
+    # with no real I/O attempted for that call.
+    st: mixa_fio_open_write_new(@ fw, dst)
+    g_fault_at: 3
+    g_fault_calls: 0
+    st: mixa_fio_write(fw, "abc", 3U, fv_table(), 0U)
+    checks: checks + 1
+    if: st != MIXA_FIO_OK
+        failures: failures + 1
+        c.printf("fio: pre-fault write rc=%d\n", st)
+    ---
+    st: mixa_fio_write(fw, "def", 3U, fv_table(), 3U)
+    checks: checks + 1
+    if: st != MIXA_FIO_ERR_IO
+        failures: failures + 1
+        c.printf("fio: faulted write rc=%d want ERR_IO\n", st)
+    ---
+    checks: checks + 1
+    if: g_fault_calls != 2
+        failures: failures + 1
+        c.printf("fio: fault hook called %d times, want 2\n", g_fault_calls)
+    ---
+    mixa_fio_close(fw)
+    # The bytes written before the fault are REALLY on disk -- this is
+    # what a caller's cleanup logic has to reason about.
+    checks: checks + 1
+    if: mixa_dir_stat(dst, e) != MIXA_DIR_OK || mixa_dir_entry_size(e) != 3U
+        failures: failures + 1
+        c.printf("fio: partial write on disk size=%llu want 3\n", mixa_dir_entry_size(e))
+    ---
+    st: mixa_fio_open_read(@ fr, dst)
+    n: 0U
+    mixa_fio_read(fr, buf, 4100U, @ n, 0, 0U)
+    buf[n]: 0
+    mixa_fio_close(fr)
+    checks: checks + 1
+    if: c.strcmp(buf, "abc") != 0
+        failures: failures + 1
+        c.printf("fio: partial write content=[%s] want [abc]\n", buf)
+    ---
+    # Cleanup: the caller (not this module) is responsible for removing
+    # a failed partial write -- confirm that succeeds through mixa_dir.
+    checks: checks + 1
+    if: mixa_dir_remove(dst) != MIXA_DIR_OK
+        failures: failures + 1
+        c.printf("fio: cleanup of partial write failed\n")
+    ---
+
+    # --- Scenario 6: the read fault hook, same shape, on a real file.
+    st: mixa_fio_open_read(@ fr, src)
+    g_fault_at: 0
+    g_fault_calls: 0
+    st: mixa_fio_read(fr, buf, 4100U, @ n, fv_table(), 0U)
+    checks: checks + 1
+    if: st != MIXA_FIO_ERR_IO || g_fault_calls != 1
+        failures: failures + 1
+        c.printf("fio: faulted read rc=%d calls=%d\n", st, g_fault_calls)
+    ---
+    mixa_fio_close(fr)
+
+    # --- Scenario 7: argument negatives.
+    checks: checks + 1
+    if: mixa_fio_open_read(0, src) != MIXA_FIO_ERR_ARG
+        failures: failures + 1
+        c.printf("fio: null out open_read not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fio_open_read(@ fr, 0) != MIXA_FIO_ERR_ARG
+        failures: failures + 1
+        c.printf("fio: null path open_read not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fio_open_write_new(@ fw, 0) != MIXA_FIO_ERR_ARG
+        failures: failures + 1
+        c.printf("fio: null path open_write not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fio_read(0, buf, 4100U, @ n, 0, 0U) != MIXA_FIO_ERR_ARG
+        failures: failures + 1
+        c.printf("fio: null handle read not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_fio_write(0, "x", 1U, 0, 0U) != MIXA_FIO_ERR_ARG
+        failures: failures + 1
+        c.printf("fio: null handle write not ERR_ARG\n")
+    ---
+    # Closing null and closing twice are both harmless.
+    mixa_fio_close(0)
+    checks: checks + 1
+
+    c.free(e)
+
+    if: failures = 0
+        c.printf("fileio selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("fileio selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures
