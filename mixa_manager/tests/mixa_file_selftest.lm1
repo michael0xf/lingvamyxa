@@ -41,6 +41,13 @@ fn: main () int
     int: st
     failures: 0
 
+    # Fixed fixture path (not an isolated per-run directory) -- cleaned
+    # first so a second run never inherits appended content from a
+    # previous one. Found as a real bug while re-running this test twice
+    # in a row (ticket 20260912-144000): a stale, larger file from the
+    # first run made the second run's own size checks fail.
+    c.system("cmd /c rd /s /q build\\mixa\\tmp_file_seam 2>nul")
+
     if: mixa_file_test_mkdir_utf8("build") != 0
         c.printf("mixa_file: mkdir build failed\n")
         return: 1

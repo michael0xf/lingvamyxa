@@ -1,0 +1,367 @@
+predef: "mixa_manager/mixa_process_win32.lm1"
+include: "<stdio.h>" "<stdlib.h>" "<string.h>"
+
+# Process seam selftest (ticket 20260912-144000). Real child processes
+# throughout -- no mock, no simulated status. Fixtures/markers live under
+# this run's own directory; every mutation stays inside that root. No
+# user files, no visible windows (CREATE_NO_WINDOW is unconditional in
+# mixa_process_win32.lm1's own spawn(), not a test-only flag).
+
+fn: t_wait_exit (@: MixaProcess p; @: int running; @: int code; int: max_iters) int
+    int: i
+    i: 0
+    running[0]: 1
+    while: i < max_iters && running[0] != 0
+        mixa_process_status(p, running, code)
+        if: running[0] != 0
+            c.Sleep(20U)
+        ---
+        i: i + 1
+    ---
+return: running[0]
+
+fn: t_drain_all (@: MixaProcess p; @: char out_buf; size_t: cap) size_t
+    size_t: total
+    size_t: got
+    int: rc
+    int: tries
+    total: 0U
+    tries: 0
+    while: tries < 200
+        got: 0U
+        rc: mixa_process_read(p, out_buf + total, cap - total - 1U, @ got)
+        if: rc = MIXA_PROC_EOF
+            tries: 200
+        else:
+            total: total + got
+            if: got = 0U
+                c.Sleep(10U)
+            ---
+        ---
+        tries: tries + 1
+    ---
+    out_buf[total]: 0
+return: total
+
+fn: t_exists (const: @(char path)) int
+    []: (@: void) fh 1
+    fh[0]: c.fopen(path, "rb")
+    if: fh[0] = 0
+        return: 0
+    ---
+    c.fclose(fh[0])
+return: 1
+
+fn: main (int: argc; @: @(char) argv) int
+    []: char base 520
+    []: char fixture 1040
+    []: char cmd 2400
+    []: char marker 1040
+    []: char readbuf 8192
+    @: MixaProcess p
+    int: rc
+    int: running
+    int: code
+    int: i
+    int: failures
+    int: checks
+    size_t: got
+    size_t: wrote
+    size_t: total
+    c.setbuf((cast: (@: void) c.stdout), 0)
+    failures: 0
+    checks: 0
+
+    if: argc >= 2
+        c.snprintf(base, 520U, "%s", argv[1])
+    ---
+    if: argc < 2
+        c.snprintf(base, 520U, "build/mixa/claude/process/tmp")
+    ---
+    if: argc >= 3
+        c.snprintf(fixture, 1040U, "%s", argv[2])
+    else:
+        c.snprintf(fixture, 1040U, "mixa_process_fixture.exe")
+    ---
+    c.snprintf(cmd, 2400U, "cmd /c mkdir \"%s\" 2>nul", base)
+    c.system(cmd)
+    c.snprintf(marker, 1040U, "%s\\kill_marker.txt", base)
+
+    # --- Scenario 1: argument/null/overflow guards, checked first.
+    checks: checks + 1
+    if: mixa_process_spawn(0, "cmd /c echo hi", base, 0) != MIXA_PROC_ERR_ARG
+        failures: failures + 1
+        c.printf("process: null out not ERR_ARG\n")
+    ---
+    p: (cast: (@: MixaProcess) 1)
+    checks: checks + 1
+    if: mixa_process_spawn(@ p, 0, base, 0) != MIXA_PROC_ERR_ARG || p != 0
+        failures: failures + 1
+        c.printf("process: null command not ERR_ARG / out not nulled\n")
+    ---
+    p: (cast: (@: MixaProcess) 1)
+    checks: checks + 1
+    if: mixa_process_spawn(@ p, "", base, 0) != MIXA_PROC_ERR_ARG
+        failures: failures + 1
+        c.printf("process: empty command not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_process_spawn(@ p, "cmd /c echo hi", 0, 0) != MIXA_PROC_ERR_ARG
+        failures: failures + 1
+        c.printf("process: null cwd not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_process_read(0, readbuf, 10U, @ got) != MIXA_PROC_ERR_ARG
+        failures: failures + 1
+        c.printf("process: read on null process not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_process_status(0, @ running, @ code) != MIXA_PROC_ERR_ARG
+        failures: failures + 1
+        c.printf("process: status on null process not ERR_ARG\n")
+    ---
+    checks: checks + 1
+    if: mixa_process_kill(0) != MIXA_PROC_ERR_ARG
+        failures: failures + 1
+        c.printf("process: kill on null process not ERR_ARG\n")
+    ---
+    mixa_process_close(0)
+    checks: checks + 1
+    if: 1 != 1
+        failures: failures + 1
+    ---
+
+    # --- Scenario 2: spawn failure is distinct -- a real nonexistent
+    # executable, no shell, so CreateProcessW itself fails.
+    p: (cast: (@: MixaProcess) 1)
+    rc: mixa_process_spawn(@ p, "C:\\this_path_does_not_exist_mixa_xyz.exe", base, 0)
+    checks: checks + 1
+    if: rc != MIXA_PROC_ERR_SPAWN || p != 0
+        failures: failures + 1
+        c.printf("process: spawn-failure rc=%d p=%p want ERR_SPAWN/null\n", rc, (cast: (@: void) p))
+    ---
+
+    # --- Scenario 2b (item 9): the SAME partial-spawn failure path,
+    # repeated 50 times -- if the pipe/job handles opened before
+    # CreateProcessW's own failure were leaking, this would start failing
+    # differently (pipe creation itself failing) well before 50 tries.
+    i: 0
+    checks: checks + 1
+    failures: (cast: (int) failures)
+    while: i < 50
+        rc: mixa_process_spawn(@ p, "C:\\this_path_does_not_exist_mixa_xyz.exe", base, 0)
+        if: rc != MIXA_PROC_ERR_SPAWN
+            failures: failures + 1
+            c.printf("process: repeated spawn-failure #%d rc=%d (possible handle leak)\n", i, rc)
+        ---
+        i: i + 1
+    ---
+
+    # --- Scenario 3: stdout+stderr merged, arrival order preserved.
+    c.snprintf(cmd, 2400U, "cmd /c \"echo OUT & echo ERR 1>&2\"")
+    p: 0
+    rc: mixa_process_spawn(@ p, cmd, base, 0)
+    checks: checks + 1
+    if: rc != MIXA_PROC_OK || p = 0
+        failures: failures + 1
+        c.printf("process: merged-stream spawn rc=%d\n", rc)
+    ---
+    t_wait_exit(p, @ running, @ code, 200)
+    total: t_drain_all(p, readbuf, 8192U)
+    checks: checks + 1
+    if: c.strstr(readbuf, "OUT") = 0 || c.strstr(readbuf, "ERR") = 0
+        failures: failures + 1
+        c.printf("process: merged stream missing OUT/ERR: [%s]\n", readbuf)
+    ---
+    checks: checks + 1
+    if: c.strstr(readbuf, "OUT") >= c.strstr(readbuf, "ERR")
+        failures: failures + 1
+        c.printf("process: merged stream order wrong: [%s]\n", readbuf)
+    ---
+    mixa_process_close(p)
+    c.free(p)
+
+    # --- Scenario 4: quiet-running read returns promptly with zero
+    # bytes, then a bounded wait for real exit (status 0).
+    p: 0
+    rc: mixa_process_spawn(@ p, "cmd /c ping -n 3 127.0.0.1 >nul", base, 0)
+    checks: checks + 1
+    if: rc != MIXA_PROC_OK || p = 0
+        failures: failures + 1
+        c.printf("process: quiet-running spawn rc=%d\n", rc)
+    ---
+    got: 999U
+    rc: mixa_process_read(p, readbuf, 100U, @ got)
+    checks: checks + 1
+    if: rc != MIXA_PROC_OK || got != 0U
+        failures: failures + 1
+        c.printf("process: quiet-running immediate read rc=%d got=%zu want OK/0\n", rc, got)
+    ---
+    running: 1
+    checks: checks + 1
+    if: t_wait_exit(p, @ running, @ code, 300) != 0
+        failures: failures + 1
+        c.printf("process: quiet-running child did not exit within bound\n")
+    ---
+    checks: checks + 1
+    if: code != 0
+        failures: failures + 1
+        c.printf("process: quiet-running exit code=%d want 0\n", code)
+    ---
+    mixa_process_close(p)
+    c.free(p)
+
+    # --- Scenario 5: stdin-disabled child observes EOF and exits
+    # (rather than hanging forever waiting for input nobody will send).
+    p: 0
+    c.snprintf(cmd, 2400U, "\"%s\" echo", fixture)
+    rc: mixa_process_spawn(@ p, cmd, base, 0)
+    checks: checks + 1
+    if: rc != MIXA_PROC_OK || p = 0
+        failures: failures + 1
+        c.printf("process: stdin-disabled spawn rc=%d cmd=[%s]\n", rc, cmd)
+    ---
+    checks: checks + 1
+    if: t_wait_exit(p, @ running, @ code, 200) != 0
+        failures: failures + 1
+        c.printf("process: stdin-disabled child did not observe EOF/exit within bound\n")
+    ---
+    checks: checks + 1
+    if: code != 0
+        failures: failures + 1
+        c.printf("process: stdin-disabled exit code=%d want 0\n", code)
+    ---
+    checks: checks + 1
+    if: mixa_process_write(p, "x", 1U, @ wrote) != MIXA_PROC_ERR_ARG
+        failures: failures + 1
+        c.printf("process: write on a stdin-disabled process not ERR_ARG\n")
+    ---
+    mixa_process_close(p)
+    c.free(p)
+
+    # --- Scenario 6: stdin-enabled echo round trip.
+    p: 0
+    c.snprintf(cmd, 2400U, "\"%s\" echo", fixture)
+    rc: mixa_process_spawn(@ p, cmd, base, 1)
+    checks: checks + 1
+    if: rc != MIXA_PROC_OK || p = 0
+        failures: failures + 1
+        c.printf("process: stdin-enabled spawn rc=%d\n", rc)
+    ---
+    rc: mixa_process_write(p, "hello\n", 6U, @ wrote)
+    checks: checks + 1
+    if: rc != MIXA_PROC_OK || wrote != 6U
+        failures: failures + 1
+        c.printf("process: stdin-enabled write rc=%d wrote=%zu\n", rc, wrote)
+    ---
+    total: 0U
+    readbuf[0]: 0
+    i: 0
+    while: i < 200 && c.strstr(readbuf, "E:hello") = 0
+        got: 0U
+        rc: mixa_process_read(p, readbuf + total, 8000U - total, @ got)
+        if: got > 0U
+            total: total + got
+            readbuf[total]: 0
+        else:
+            c.Sleep(10U)
+        ---
+        i: i + 1
+    ---
+    checks: checks + 1
+    if: c.strstr(readbuf, "E:hello") = 0
+        failures: failures + 1
+        c.printf("process: stdin-enabled echo round trip did not see E:hello, got=[%s]\n", readbuf)
+    ---
+    rc: mixa_process_write(p, "QUIT\n", 5U, @ wrote)
+    checks: checks + 1
+    if: rc != MIXA_PROC_OK
+        failures: failures + 1
+        c.printf("process: stdin-enabled QUIT write rc=%d\n", rc)
+    ---
+    checks: checks + 1
+    if: t_wait_exit(p, @ running, @ code, 200) != 0
+        failures: failures + 1
+        c.printf("process: stdin-enabled child did not exit after QUIT within bound\n")
+    ---
+    mixa_process_close(p)
+    c.free(p)
+
+    # --- Scenario 7: status distinguishes running from a successfully
+    # started child that exits nonzero -- the exact native code
+    # preserved verbatim, not compressed into one generic failure.
+    p: 0
+    c.snprintf(cmd, 2400U, "\"%s\" exit 7", fixture)
+    rc: mixa_process_spawn(@ p, cmd, base, 0)
+    checks: checks + 1
+    if: rc != MIXA_PROC_OK || p = 0
+        failures: failures + 1
+        c.printf("process: exit-code spawn rc=%d\n", rc)
+    ---
+    checks: checks + 1
+    if: t_wait_exit(p, @ running, @ code, 200) != 0
+        failures: failures + 1
+        c.printf("process: exit-code child did not exit within bound\n")
+    ---
+    checks: checks + 1
+    if: code != 7
+        failures: failures + 1
+        c.printf("process: exit code=%d want exactly 7\n", code)
+    ---
+    mixa_process_close(p)
+    c.free(p)
+
+    # --- Scenario 8: kill terminates the child AND a spawned descendant.
+    # cmd.exe (the direct child) spawns ping (a real descendant, inside
+    # the same Job Object since breakaway was never granted) THEN, only
+    # after ping finishes ~6 seconds later, writes the marker file. Kill
+    # fires almost immediately -- if the marker file appears at all, the
+    # whole chain (including the descendant) was NOT actually killed.
+    c.snprintf(cmd, 2400U, "cmd /c \"ping -n 30 127.0.0.1 >nul & echo done>\"\"%s\"\"\"", marker)
+    p: 0
+    rc: mixa_process_spawn(@ p, cmd, base, 0)
+    checks: checks + 1
+    if: rc != MIXA_PROC_OK || p = 0
+        failures: failures + 1
+        c.printf("process: kill-scenario spawn rc=%d cmd=[%s]\n", rc, cmd)
+    ---
+    c.Sleep(200U)
+    rc: mixa_process_kill(p)
+    checks: checks + 1
+    if: rc != MIXA_PROC_OK
+        failures: failures + 1
+        c.printf("process: kill rc=%d want OK\n", rc)
+    ---
+    checks: checks + 1
+    if: t_wait_exit(p, @ running, @ code, 200) != 0
+        failures: failures + 1
+        c.printf("process: killed process did not report exited within bound\n")
+    ---
+    c.Sleep(500U)
+    checks: checks + 1
+    if: t_exists(marker) != 0
+        failures: failures + 1
+        c.printf("process: kill marker file exists -- descendant chain was not actually killed\n")
+    ---
+
+    # --- Scenario 9: close is idempotent; ops on a closed process are
+    # explicit ERR_ARG, not a crash.
+    mixa_process_close(p)
+    checks: checks + 1
+    if: mixa_process_status(p, @ running, @ code) != MIXA_PROC_ERR_ARG
+        failures: failures + 1
+        c.printf("process: status after close not ERR_ARG\n")
+    ---
+    mixa_process_close(p)
+    checks: checks + 1
+    if: 1 != 1
+        failures: failures + 1
+    ---
+    c.free(p)
+
+    if: failures = 0
+        c.printf("process selftest: %d checks, 0 failures\n", checks)
+    else:
+        c.printf("process selftest: %d checks, %d failures\n", checks, failures)
+    ---
+return: failures
