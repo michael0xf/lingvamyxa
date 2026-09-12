@@ -4,8 +4,12 @@ include: "l2src/lmx_message.h" "l2src/lmx_message_host.h" "l2src/lmx_message_exe
 prototype:
     fn: lmx_msg_mark_array (@: LmxMsg m; @: LmxArrayDesc desc; @: LmxVisit seen) int
     fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
+    fn: lmx_msg_mark_roots (@: LmxMsg m; @: LmxVisit seen) int
+    fn: lmx_msg_seen_holds_block (@: LmxVisit seen; @: LmxMsgBlock b) int
     fn: lmx_msg_collect_block (@: LmxMsg m; @: LmxMsgBlock b) int
     fn: lmx_msg_arena_collect (@: LmxMsg m) int
+    fn: lmx_msg_root_attach (@: LmxMsg m; @: void p) int
+    fn: lmx_msg_root_release (@: LmxMsg m; @: void p) int
     fn: lmx_msg_post_dead (@: LmxMsgRuntime rt; LmxMsgAddr: from; LmxMsgAddr: to; unsigned: correlation) int
     fn: lmx_msg_pump (@: LmxMsgRuntime rt) int
     fn: lmx_msg_find (@: LmxMsgRuntime rt; LmxMsgAddr: addr) @: LmxMsg
@@ -112,6 +116,99 @@ fn: lmx_msg_mark_from (@: LmxMsg m; @: Lmx x; @: LmxVisit seen) int
     ---
 return: 0
 
+fn: lmx_msg_mark_roots (@: LmxMsg m; @: LmxVisit seen) int
+    @: LmxMsgRoot r
+    @: LmxOwnedRange rg
+    if: m = 0 || seen = 0 || seen\oom != 0
+        return: 0
+    r: m\roots
+    while: r != 0
+        if: r\p != 0
+            rg: c.lmx_owned_ranges_find(m\ranges, r\p)
+            if: rg != 0 && rg\kind = c.LMX_KIND_ARRAY
+                lmx_msg_mark_array(m, (cast: (@: LmxArrayDesc) r\p), seen)
+            ---
+            if: rg != 0 && rg\kind = c.LMX_KIND_CHILDREN
+                lmx_msg_mark_from(m, (cast: (@: Lmx) r\p), seen)
+            ---
+        ---
+        r: r\next
+    ---
+return: 0
+
+fn: lmx_msg_seen_holds_block (@: LmxVisit seen; @: LmxMsgBlock b) int
+    size_t: i 0U
+    @: Lmx x
+    if: seen = 0 || b = 0 || seen\oom != 0 || seen\n > seen\cap || seen\pn > seen\pcap
+        return: 1
+    if: (seen\n != 0U && seen\v = 0) || (seen\pn != 0U && seen\p = 0)
+        return: 1
+    while: i < seen\n
+        x: seen\v[i]
+        if: x = 0
+            return: 1
+        if: c.lmx_msg_ptr_in_block(x, b) != 0
+            return: 1
+        if: c.lmx_msg_ptr_in_block(x\data, b) != 0
+            return: 1
+        if: c.lmx_msg_ptr_in_block(x\node, b) != 0
+            return: 1
+        i: i + 1U
+    ---
+    i: 0U
+    while: i < seen\pn
+        if: c.lmx_msg_ptr_in_block(seen\p[i], b) != 0
+            return: 1
+        i: i + 1U
+    ---
+return: 0
+
+fn: lmx_msg_root_attach (@: LmxMsg m; @: void p) int
+    @: LmxOwnedRange rg
+    @: LmxMsgRoot n
+    @: LmxMsgRoot cur
+    if: m = 0 || p = 0
+        return: c.LMX_MSG_INVALID
+    rg: c.lmx_owned_ranges_find(m\ranges, p)
+    if: rg = 0 || (rg\kind != c.LMX_KIND_ARRAY && rg\kind != c.LMX_KIND_CHILDREN)
+        return: c.LMX_MSG_INVALID
+    cur: m\roots
+    while: cur != 0
+        if: cur\p = p
+            return: c.LMX_MSG_DUPLICATE
+        ---
+        cur: cur\next
+    ---
+    n: (cast: (@: LmxMsgRoot) c.malloc(c.sizeof(c.LmxMsgRoot)))
+    if: n = 0
+        return: c.LMX_MSG_NOMEM
+    n\p: p
+    n\next: m\roots
+    m\roots: n
+return: c.LMX_MSG_OK
+
+fn: lmx_msg_root_release (@: LmxMsg m; @: void p) int
+    @: LmxMsgRoot cur
+    @: LmxMsgRoot prev 0
+    if: m = 0 || p = 0
+        return: c.LMX_MSG_INVALID
+    cur: m\roots
+    while: cur != 0
+        if: cur\p = p
+            if: prev != 0
+                prev\next: cur\next
+            ---
+            if: prev = 0
+                m\roots: cur\next
+            ---
+            c.free((cast: (@: void) cur))
+            return: c.LMX_MSG_OK
+        ---
+        prev: cur
+        cur: cur\next
+    ---
+return: c.LMX_MSG_INVALID
+
 fn: lmx_msg_collect_block (@: LmxMsg m; @: LmxMsgBlock b) int
     @: LmxOwnedRange r
     @: LmxOwnedRange rn
@@ -149,11 +246,28 @@ fn: lmx_msg_arena_collect (@: LmxMsg m) int
             return: 0
         ---
     ---
+    lmx_msg_mark_roots(m, sp)
+    if: sp\oom != 0
+        c.lmx_msg_visit_dispose(sp)
+        return: 0
+    ---
     b: m\blocks
     while: b != 0
         nxt: b\next
-        if: c.lmx_msg_block_is_live(m\graph, m\ranges, b, sp) = 0
-            lmx_msg_collect_block(m, b)
+        if: c.lmx_msg_block_has_range(m\ranges, b) != 0
+            if: m\graph = 0 && m\roots = 0
+                lmx_msg_collect_block(m, b)
+            ---
+            if: m\graph != 0
+                if: c.lmx_msg_block_is_live(m\graph, m\ranges, b, sp) = 0
+                    lmx_msg_collect_block(m, b)
+                ---
+            ---
+            if: m\graph = 0 && m\roots != 0
+                if: lmx_msg_seen_holds_block(sp, b) = 0
+                    lmx_msg_collect_block(m, b)
+                ---
+            ---
         ---
         b: nxt
     ---

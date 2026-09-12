@@ -5,6 +5,8 @@
 #include "l2src/lmx_chars_owned.lm1.h"
 #include "l2src/lmx_array_owned.lm1.h"
 #include "l2src/lmx_array_ref_owned.lm1.h"
+#include "l2src/lmx_branch_owned.lm1.h"
+#include "l2src/lmx_value_owned.lm1.h"
 #include "l2src/lmx_msg_storage.lm1.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -4225,6 +4227,180 @@ current_context_scenarios:
         }
         fprintf(stderr, "end_turn collect: rooted CHAR lives; unrooted INT dies; unroot reclaims\n");
         lmx_msg_runtime_delete(rte);
+    }
+    {
+        LmxMsgRuntime *rtg;
+        LmxMsgAddr a = 0;
+        uchar ini = 7;
+        LmxMsg *ma;
+        Lmx *unit;
+        Lmx *leaf0;
+        Lmx *leaf1;
+        LmxArrayDesc *buf;
+        LmxArrayDesc *letters;
+        LmxArrayDesc *dead;
+        LmxOwnedRange *rg;
+        void *buf_back;
+        void *letters_back;
+        void *dead_back;
+        rtg = lmx_msg_runtime_new();
+        if (rtg == 0 || lmx_msg_create(rtg, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+            fprintf(stderr, "emit array create\n");
+            return 1;
+        }
+        ma = lmx_msg_find(rtg, a);
+        if (ma == 0) {
+            fprintf(stderr, "emit array find\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        unit = lmx_node_new_owned(&ma->blocks, &ma->ranges);
+        if (unit == 0 || lmx_branch_open_owned(unit, 2U, &ma->blocks, &ma->ranges) != 0) {
+            fprintf(stderr, "emit array unit\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        leaf0 = lmx_branch_child_known(unit, 0U);
+        leaf1 = lmx_branch_child_known(unit, 1U);
+        buf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 3U, &ma->blocks, &ma->ranges);
+        letters = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_CHAR, 4U, &ma->blocks, &ma->ranges);
+        dead = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &ma->blocks, &ma->ranges);
+        if (leaf0 == 0 || leaf1 == 0 || buf == 0 || letters == 0 || dead == 0
+            || buf->data == 0 || letters->data == 0 || dead->data == 0) {
+            fprintf(stderr, "emit array fields\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        leaf0->data = buf;
+        leaf1->data = letters;
+        buf_back = buf->data;
+        letters_back = letters->data;
+        dead_back = dead->data;
+        lmx_msg_set_graph(ma, unit);
+        if (lmx_msg_end_turn(rtg, a, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "emit array end_turn\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        rg = lmx_owned_ranges_find(ma->ranges, buf);
+        if (rg == 0 || rg->kind != LMX_KIND_ARRAY || rg->type != LMX_TYPE_ARRAY_OF_INT
+            || buf->len != 3U || ((int *)buf_back)[0] != 0) {
+            fprintf(stderr, "emit INT field dropped\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        rg = lmx_owned_ranges_find(ma->ranges, letters);
+        if (rg == 0 || rg->type != LMX_TYPE_ARRAY_OF_CHAR || letters->len != 4U
+            || lmx_owned_ranges_find(ma->ranges, letters_back) == 0) {
+            fprintf(stderr, "emit CHAR field dropped\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(ma->ranges, dead) != 0
+            || lmx_owned_ranges_find(ma->ranges, dead_back) != 0) {
+            fprintf(stderr, "emit unrooted neighbour immortal\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        lmx_msg_set_graph(ma, 0);
+        if (lmx_msg_end_turn(rtg, a, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "emit array unroot end_turn\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(ma->ranges, buf) != 0
+            || lmx_owned_ranges_find(ma->ranges, letters) != 0) {
+            fprintf(stderr, "emit unroot left fields\n");
+            lmx_msg_runtime_delete(rtg);
+            return 1;
+        }
+        fprintf(stderr, "emit own-array fields: INT3/CHAR4 live through end_turn; unroot reclaims\n");
+        lmx_msg_runtime_delete(rtg);
+    }
+    {
+        LmxMsgRuntime *rtr;
+        LmxMsgAddr a = 0;
+        uchar ini = 8;
+        LmxMsg *ma;
+        LmxArrayDesc *keep;
+        LmxArrayDesc *drop;
+        void *keep_back;
+        void *drop_back;
+        void *foreign;
+        rtr = lmx_msg_runtime_new();
+        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &a) != LMX_MSG_OK) {
+            fprintf(stderr, "explicit root create\n");
+            return 1;
+        }
+        ma = lmx_msg_find(rtr, a);
+        keep = (ma == 0) ? 0 : lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 3U, &ma->blocks, &ma->ranges);
+        drop = (ma == 0) ? 0 : lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_CHAR, 4U, &ma->blocks, &ma->ranges);
+        foreign = malloc(8U);
+        if (ma == 0 || keep == 0 || drop == 0 || keep->data == 0 || drop->data == 0 || foreign == 0) {
+            fprintf(stderr, "explicit root new\n");
+            free(foreign);
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        keep_back = keep->data;
+        drop_back = drop->data;
+        lmx_msg_set_graph(ma, 0);
+        if (lmx_msg_root_attach(ma, 0) != LMX_MSG_INVALID
+            || lmx_msg_root_attach(ma, foreign) != LMX_MSG_INVALID
+            || ma->roots != 0
+            || lmx_owned_ranges_find(ma->ranges, keep) == 0) {
+            fprintf(stderr, "explicit root reject mutated storage\n");
+            free(foreign);
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        if (lmx_msg_root_attach(ma, keep) != LMX_MSG_OK
+            || lmx_msg_root_attach(ma, keep) != LMX_MSG_DUPLICATE) {
+            fprintf(stderr, "explicit root attach\n");
+            free(foreign);
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        if (lmx_msg_end_turn(rtr, a, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(ma->ranges, keep) == 0
+            || lmx_owned_ranges_find(ma->ranges, keep_back) == 0
+            || keep->len != 3U) {
+            fprintf(stderr, "explicit root dropped attached INT\n");
+            free(foreign);
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(ma->ranges, drop) != 0
+            || lmx_owned_ranges_find(ma->ranges, drop_back) != 0) {
+            fprintf(stderr, "explicit root kept unrooted CHAR\n");
+            free(foreign);
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        if (lmx_msg_root_release(ma, keep) != LMX_MSG_OK || ma->roots != 0) {
+            fprintf(stderr, "explicit root release\n");
+            free(foreign);
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        if (lmx_msg_end_turn(rtr, a, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(ma->ranges, keep) != 0
+            || lmx_owned_ranges_find(ma->ranges, keep_back) != 0
+            || ma->blocks != 0) {
+            fprintf(stderr, "explicit root release left payload\n");
+            free(foreign);
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        if (lmx_msg_end_turn(rtr, a, 1) != LMX_MSG_OK || ma->blocks != 0 || ma->roots != 0) {
+            fprintf(stderr, "explicit root second end_turn\n");
+            free(foreign);
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        free(foreign);
+        fprintf(stderr, "explicit root: graph unset keeps attached INT; release reclaims; no double-free\n");
+        lmx_msg_runtime_delete(rtr);
     }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {

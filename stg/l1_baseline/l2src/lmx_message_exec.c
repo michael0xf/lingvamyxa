@@ -446,8 +446,17 @@ static int handoff_move_locked(LmxMsg *dst, LmxMsg *src) {
 }
 
 void lmx_msg_slot_free(LmxMsg *m) {
+    LmxMsgRoot *r;
+    LmxMsgRoot *rn;
     if (m == 0) {
         return;
+    }
+    r = m->roots;
+    m->roots = 0;
+    while (r != 0) {
+        rn = r->next;
+        free(r);
+        r = rn;
     }
     drop_ranges_locked(m);
     (void)lmx_msg_blocks_dispose_all(&m->blocks);
