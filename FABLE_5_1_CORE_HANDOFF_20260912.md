@@ -114,35 +114,24 @@ to send back to the user.
   destination lifetime pin precedes done mutation. The stronger `072700`
   evidence correction in `85f731e` is accepted; Grok is paused.
 
-## L1 capacity stage — now owned by Codex
+## L1 import-storage stage — completed by Codex
 
-Before continuing D7, remove the concrete L1 import-set capacity blocker exposed
-by Claude's accepted MP3 components. The stable65D5 executable stays read-only;
-produce a candidate translator from the canonical source using the existing
-bootstrap workflow.
+Implemented and verified in b41af667: root and baseline L1 translators now store
+paths as existing LmP0Text array/string descriptors (data and length), with
+actual-length owned bytes and growing tables. Neither a sixteen-entry maximum
+nor a 1040-byte storage cell is a language rule. The former request to select
+a new fixed maximum was a coordinator mistake.
 
-`l1_imp_act` and `l1_imp_done` are currently fixed at 16640 bytes, and
-`l1_imp_push` rejects `n >= 16` while indexing 1040-byte paths. Do not merely
-raise one magic number or confuse distinct imported-file count with the separate
-maximum nesting-depth guard. Introduce one checked, coherent capacity contract
-for both active and completed path sets, update every allocation/bound/index
-site, preserve cycle detection and duplicate suppression, and fail cleanly on
-real exhaustion/oversized paths. Do not alter import resolution or header type
-registration semantics.
+24 command checks passed: candidate/self/next generated C equality; 17/65 import
+native runs; duplicate/cycle/header behavior; allocation failure preservation,
+retry and cleanup; exact MP3 reproducer. Stable65D5 remains read-only. See
+L1_IMPORT_CAPACITY_20260912.md for the candidate, hashes and evidence.
 
-Acceptance must include Claude's exact seven-predef reproducer from
-`mixa_manager/mixa_audio.txt`: the previous 17th-distinct-file failure must
-translate successfully with the candidate. Also prove duplicate imports remain
-deduplicated, a real cycle is still rejected, nesting beyond the documented
-depth is still rejected independently, and the new maximum distinct-file
-boundary succeeds at capacity and fails cleanly at capacity+1 without overwrite.
-Run the smallest appropriate translator/bootstrap regressions and record source,
-candidate and stable compiler hashes. Commit/push only owned core translator,
-test, runner and documentation paths. This stage must not modify `mixa_manager`.
-
-After the compiler checkpoint is verified, Claude may compose scan+launch
-against the new pinned candidate. Grok owns the D7 stage below; Fable owns
-graph ABI/frontend conformance under CORE_TEAM_PLAN_20260912.md.
+The separate old import-depth guard and temporary path-resolution/header-name
+buffers remain recorded implementation limitations, not accepted language
+limits. Codex's next continuation removes incidental path-buffer limits using
+actual-length array/string data. Claude can consume the verified private
+candidate for the blocked MP3 composition after his active app checkpoint.
 
 ## D7 stage — now owned by Grok
 

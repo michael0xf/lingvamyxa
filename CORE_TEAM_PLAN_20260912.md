@@ -19,7 +19,7 @@ work. Resolve documentation omissions from the user's recorded decisions.
 
 | Owner | Implementation boundary | Current deliverable |
 | --- | --- | --- |
-| Codex | l1src/l1trans.lm1 and its baseline mirror; new import-capacity tests/runner and stage notes | Coherent checked import-set capacity, exact MP3 reproducer, depth/cycle/dedup boundaries; private candidate, no stable promotion |
+| Codex | l1src/l1trans.lm1 and its baseline mirror; new import-capacity tests/runner and stage notes | Import descriptor storage completed in b41af667; next remove old temporary path-buffer limits; private candidate, no stable promotion |
 | Grok | stg/l1_baseline/l2src/lmx_message_exec.c/.h and exec selftest, related D7 runner/context notes | D7 non-self recv and fail/stop inbox traversal outside exec lock; pins, FIFO, exact cleanup; then remaining D7 lifecycle paths |
 | Fable 5.1 | L2 graph representation and frontend: lmx.h, branch/primitive/method/own/range graph APIs, l2trans.lm1, their direct fixtures and dedicated runner/notes | Coherent void * child-pointer representation through construction/access/ordinary merge/typed lookup and emitted code; isolated integration candidate with precise remaining migration inventory |
 | Claude | mixa_manager | Continue existing agreed app work, consume new candidate only after integration verification |
@@ -69,7 +69,12 @@ hashes, focused commit/push and honest limits. Review each other's integration
 interfaces and useful failure cases. A completed bounded stage is not a claim
 that the whole L2 core/self-hosting milestone is done.
 
-Codex reviews the two colleagues' artifacts while implementing L1 capacity.
+Codex completed import descriptor storage in b41af667 (24 checks; exact MP3
+reproducer translates). See L1_IMPORT_CAPACITY_20260912.md. Descriptor length
+is array/string length, distinct from Structure child count. The old 16-entry
+and 1040-byte storage-cell limits were bootstrap artifacts, not model rules.
+Codex reviews colleagues' artifacts and continues the remaining temporary
+path-buffer work.
 After that candidate is verified, Claude can use it for the blocked composed
 MP3 unit. Grok proceeds through D7's remaining sched_ready/release/delete paths;
 Fable completes graph ABI consumers and frontend semantics. Integrate only

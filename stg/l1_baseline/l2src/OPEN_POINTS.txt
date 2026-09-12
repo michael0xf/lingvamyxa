@@ -37,6 +37,15 @@ decision. When a decision changes documentation, update the source definition,
 its acceptance criteria and every active ledger/handoff in the same checkpoint;
 an appended override alone does not repair a contradictory requirement.
 
+L1 import-storage correction (2026-09-12)
+-----------------------------------------
+DECIDED by the user: arbitrary sixteen-entry and 1040-byte storage-cell caps
+are not language rules. A path is stored through the array/string descriptor
+length/data, distinct from Structure.len. Codex implemented the existing
+LmP0Text representation with growing tables in b41af667; 24 checks passed.
+See L1_IMPORT_CAPACITY_20260912.md. Old independent path-buffer/depth limits
+remain implementation work; do not present them as model decisions.
+
 Rules
 -----
 R1. Before a unit is committed, every open point it touches gets a row here.

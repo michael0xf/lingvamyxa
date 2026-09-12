@@ -11,8 +11,16 @@ boundaries, settled model and integration sequence. Ask the user only about a
 concrete logical contradiction in the model, not an already answered rule or an
 ordinary implementation choice.
 
-Active tickets: Grok and Fable inbox 20260912-084004.txt. Codex is implementing
-L1 import capacity. Documentation answers are pushed in 7ed53b03.
+Active tickets: Grok and Fable inbox 20260912-084004.txt, both claimed.
+Codex implemented and pushed b41af667: growing arrays of existing LmP0Text
+string descriptors, actual-length path allocation, no 16-entry/1040-byte storage
+cell cap, exact cleanup and failure preservation. Descriptor length is array/
+string length, not Structure.len. 24 command checks passed, including self/next
+C equality, 17/65 import native runs, 20 headers, cycles/dedup, OOM and the exact
+MP3 reproducer. Candidate/evidence are in L1_IMPORT_CAPACITY_20260912.md.
+Grok, Fable and Claude received the candidate via inbox 20260912-084943.txt.
+Codex continues old temporary path-buffer limits; stable65D5 stays read-only.
+Documentation answers are pushed in 7ed53b03; active ownership in 9e717ee6.
 
 L2 is a low-level language; do not add L3 ownership/lifetime/mutation rules to
 ordinary pointer operations. Grok, Fable and Codex now implement together;
