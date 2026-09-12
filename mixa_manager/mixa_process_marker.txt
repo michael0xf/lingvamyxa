@@ -1,0 +1,175 @@
+mixa_process_marker -- PROCESS_SEAM 4.1 in-band marker (ticket 20260912-145000)
+================================================================================
+
+Scope
+-----
+A PURE, owner-local module, separate from the six process operations:
+identity generation, the shell command wrapper, and an INCREMENTAL
+streaming parser. No Message queues, threads, mutexes, or application
+shared state -- the identity generator's own counter is a caller-owned
+struct field (MixaProcessMarkerGen), never a module-global.
+
+Recovery material inspected first, per the ticket: the untracked
+mixa_process_marker.h.lm1/.lm1 implemented a WHOLE-PAYLOAD (non-
+incremental) parser using i32/i64 typedefs and bitwise `|`/`&` in place
+of `||`/`&&`, neither of which are established forms elsewhere in this
+codebase, and it had no shell-wrapper or identity-generation code at
+all. Reused only the CONCEPT (marker TAB status TAB cwd); rewritten from
+scratch to match the incremental, byte-stream contract this ticket
+actually asks for.
+
+Identity generation
+--------------------
+mixa_process_marker_generate(gen, out) formats "MIXA_MARK_<counter:hex>_
+<QueryPerformanceCounter HighPart:hex><LowPart:hex>" and advances gen's
+own owner-held counter. Sized exactly via snprintf's own two-pass
+length-then-format idiom (no fixed capacity for the OUTPUT beyond a
+small fixed-shape numeric format, never user-controlled length).
+
+The shell command wrapper -- a real cmd.exe pitfall found and fixed live
+----------------------------------------------------------------------
+PROCESS_SEAM 4.1 wants the child's own exit status and final working
+directory printed in-band after the user's command. The first design
+attempt used cmd.exe's %errorlevel%/!errorlevel! pseudo-variables inline
+within the ALREADY-ACCEPTED mixa_process_spawn's own fixed `cmd.exe /c
+"..."` wrapping (so as not to touch that already-reviewed code). This
+was MEASURED, not assumed, to be broken: a direct probe of `cmd /c "cmd
+/c exit /b 5 & echo %errorlevel%"` prints the STALE pre-command value
+(0), because cmd.exe substitutes %VAR% at PARSE TIME of the whole `/c`
+argument, before any part of it executes. Enabling delayed expansion
+INLINE via `setlocal enabledelayedexpansion` on the SAME line, tried
+next, was independently measured NOT to fix it either (the `!var!`
+tokens are apparently not even recognized as delayed-expansion syntax if
+delayed expansion was OFF at the moment cmd.exe first parsed that whole
+line, which is before the inline setlocal statement itself runs) --
+`!errorlevel!` came back completely literal. The textbook fix (a nested
+`cmd /V:ON /c "..."` invocation) was tried third and found fragile: it
+requires nested double-quotes inside spawn()'s own single already-fixed
+quote pair, and a direct probe of that nesting broke immediately
+("... is not recognized").
+
+The actually working, measured-live design: a real temporary BATCH FILE
+(GetTempFileNameW -- collision-proof by construction, not a guessed
+name -- then renamed in place from its default ".tmp" extension to
+".bat", since cmd.exe only recognizes a real script extension when given
+a bare path; the original .tmp reservation is deleted). Batch files
+process one line at a time, so %errorlevel% after the user's own command
+line is genuinely that line's own real value -- no delayed expansion, no
+nested-quote fragility, confirmed working with the SAME direct probe
+technique (`cmd /c exit /b 5` then `echo %errorlevel%` as two REAL batch
+lines correctly printed 5). The batch content: `@echo off` (suppressing
+cmd's own command-echo noise, which would otherwise duplicate the marker
+text once per line as a command trace before it even runs), the user's
+own command verbatim, the marker echo line (marker TAB %errorlevel% TAB
+%cd%), then a self-delete (`del "%~f0"`) so nothing is left behind.
+Written with a UTF-8 BOM so a non-ASCII user command is read correctly
+by modern cmd.exe. Sized from the caller's own command length via
+checked arithmetic -- no fixed command cap.
+
+The incremental streaming parser
+----------------------------------
+MixaProcessMarkerScanner holds only the bytes since the CURRENT tentative
+match attempt began (`pending`, grown via checked doubling, never a
+fixed cap) plus a small state machine: SCAN (looking for the marker) ->
+STATUS_SEP (the ONE byte that must be the marker/status separator TAB,
+a genuinely separate one-shot state -- see "a real bug found live"
+below) -> STATUS (digit collection) -> CWD (byte collection until line
+end) -> DONE.
+
+Ordinary output bytes are reported via a sink callback (the same "sink
+with a function pointer" idiom mixa_copy.h.lm1 already established for
+this codebase) THE MOMENT they are confirmed not part of a marker
+record -- never buffered past that point, and always in stream order.
+A byte that starts matching the marker but then diverges triggers a
+NAIVE RESTART SEARCH within the buffered `pending` bytes (find the
+smallest offset whose suffix is itself a valid marker prefix, emit
+everything before that offset as ordinary, keep the rest tentative) --
+correct for any marker text, including one that happens to self-overlap,
+not just the specific format this module generates.
+
+A REAL BUG FOUND LIVE, not merely by inspection: the very first
+implementation transitioned SCAN straight to a single STATUS state on a
+full marker match, and treated ANY tab seen in STATUS as the STATUS/CWD
+terminator. This meant the marker's OWN immediately-following tab (the
+marker/status separator) was mistaken for the terminator on the very
+first byte processed in STATUS, leaving an EMPTY digit field every
+single time -- confirmed by a dedicated isolated scanner-only test
+harness (not the full spawn+parse path, to isolate the bug fast) which
+showed every real marker record being rejected as malformed and flushed
+as ordinary output instead of recognized. Fixed by splitting STATUS into
+two genuinely distinct states: STATUS_SEP (consumes exactly the one
+separator tab, advances status_start past it, transitions to STATUS) and
+STATUS (digit collection, terminated by the SECOND tab). Re-verified via
+the same isolated harness before touching the full test suite.
+
+Item 6's embedded-NUL rule ("if text paths exclude NUL, reject it
+explicitly rather than truncating"): a NUL byte encountered in STATUS or
+CWD state is treated as malformed (the whole tentative record flushed as
+ordinary, including the NUL byte itself) -- explicit rejection, not a
+silent truncation at the NUL. NUL bytes in genuinely ORDINARY output
+(outside any marker match attempt) pass through unchanged, byte-oriented,
+matching FILE_SEAM's own "preserves NUL" philosophy elsewhere in this
+codebase.
+
+Testing
+-------
+tests/mixa_process_marker_selftest.lm1 (43/0, two hash-identical runs,
+marker-impl hash 2F4E2DA3ADC374901507E822637B7CD50DED2583150AD470D37ACFC
+FB840ABF8 both times). "Every split position" is covered by feeding the
+scanner ONE BYTE AT A TIME by default in every scenario (the algorithm's
+own logic has no chunk-size-dependent branch anywhere, so if byte-at-a-
+time is correct, any coarser real read() fragmentation is too) -- the
+first scenario additionally proves whole-buffer feeding agrees exactly.
+Covered: multiple ordinary lines before the marker; zero, positive, and
+negative exit status; spaces, non-ASCII (UTF-8 Cyrillic), and quotes in
+the final directory; a DECEPTIVE marker-like string with the right
+prefix but WRONG identity (never matched, emitted as ordinary,
+surrounding text intact); a genuinely INCOMPLETE partial match that
+breaks mid-way, proving the restart logic recovers and still finds the
+real marker afterward; the marker text EMBEDDED but not at a real record
+boundary (no tab immediately after); malformed integer (a letter where a
+digit belongs); integer overflow (14 digits, far past i32); a CRLF line
+ending (CR correctly stripped from the recovered cwd); EOF with no
+marker ever (everything flushed as ordinary, done stays false -- PROCESS
+_SEAM's own "no status" case); EOF exactly mid-marker-match (a genuine
+partial prefix, flushed verbatim); eof() called AFTER an already-
+complete record (a documented no-op, does not re-flush or corrupt the
+result); embedded NUL inside the cwd field (explicitly rejected, no
+completed record); two generated markers proven unique; argument
+negatives across every entry point; and TWO real end-to-end scenarios
+(a real spawned shell-wrapper child with real merged ordinary output
+plus a real recovered exit code and cwd; a real nonzero exit code via a
+NESTED `cmd /c exit /b 9` -- a bare `exit /b` was tried first and found
+to legitimately terminate the whole wrapper batch before its own marker
+line could ever run, which is correct behavior, not a bug, and is why
+the nested form is used for this scenario specifically).
+
+Regressions, all green, re-run fresh: process (six-operation) selftest
+122/0, mixa_file_selftest ok, console_window 37/0, app_loop 28/0 (native
+entrypoint still built, not executed). Full run_mixa.ps1 pass (once):
+every unit/test "ok", including the ingress host harness's own already-
+known expected-failure diagnostic.
+
+Known gaps, stated honestly
+----------------------------
+- Allocation-failure testing (ticket item 7's own explicit ask) is NOT
+  implemented: mixa_marker_buf_ensure calls c.realloc/c.malloc directly,
+  with no injectable allocator seam the way mixa_fileio's own
+  MixaFioFaultVTable lets a test force a failure at an exact byte
+  offset. Building that seam for this module was judged out of the
+  remaining scope for this stage; the growth path itself IS written to
+  fail safely on a real allocation failure (flushes whatever is already
+  buffered as ordinary output via mixa_marker_flush_pending, returns
+  MIXA_PROCESS_MARKER_ERR_NOMEM, leaks nothing already-allocated), but
+  this claim is not backed by a deterministic forced-failure test the
+  way every other module's own NOMEM path in this codebase has been.
+- The self-delete batch line (`del "%~f0"`) occasionally raced with
+  cmd.exe's own read-ahead during earlier development (observed once as
+  a harmless "The batch file cannot be found." stderr line AFTER the
+  marker was already correctly printed and parsed) -- not reproducing
+  after the `@echo off` fix, not specifically hardened against further
+  (e.g. via the `(goto) 2>nul & del` idiom), and not blocking correctness
+  of the marker record itself since it always arrives before the
+  self-delete line runs.
+- Not folded in, per the ticket's own instruction: the later Message/
+  inbox/outbox attachment (PROCESS_SEAM section 6).
