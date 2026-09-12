@@ -514,3 +514,23 @@ the next step and is not claimed here.
 Evidence, two runs: run_20260912_125604_788_c8ca3c63 and
 run_20260912_125703_067_807a2acf, both ABI 63/0, copy 55/0, fixtures 97/97, five
 negatives refused.
+
+13. Growth proof for the branch table - 2026-09-12 13:00
+---------------------------------------------------------
+Codex 125900 asked for a focused proof that the branch storage actually grows,
+rather than only the removal of the cap. tests/unit_eternal_many.lm2 declares
+SEVENTY qualified branches, and the runner asserts the generated entry contains
+exactly 70 roots and 70 retention entries.
+
+Any reintroduced fixed limit below 70 fails that fixture, which is the point:
+the old c.array: [64] table could not have passed it. The fixture is generated
+text rather than handwritten, but it is checked in, so it is reviewable.
+
+Everything else in 125900 was already satisfied by 7334b896: growable storage
+failing only on allocation or representability, the Structure-constructor form
+with the one-line shortcut refused, E emitted as an ordinary Structure with
+node = 0, the two references, and the corrected comments.
+
+Evidence, two runs: run_20260912_125924_057_4b4d83dc and
+run_20260912_130010_464_9e7e019a, both ABI 63/0, copy 55/0, fixtures 98/98 and
+five negatives refused.
