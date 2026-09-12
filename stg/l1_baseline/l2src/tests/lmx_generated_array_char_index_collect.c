@@ -20,7 +20,6 @@ int main(void)
     LmxMsgAddr a = 0;
     LmxMsg *ma;
     Lmx *unit;
-    Lmx *leaf;
     LmxArrayDesc *buf;
     LmxArrayDesc *dead;
     LmxOwnedRange *rg;
@@ -47,9 +46,8 @@ int main(void)
         return 1;
     }
     unit = lmx_msg_graph(ma);
-    leaf = (unit == 0) ? 0 : lmx_branch_child_known(unit, 0U);
-    buf = (leaf == 0) ? 0 : (LmxArrayDesc *)leaf->data;
-    if (unit == 0 || leaf == 0 || buf == 0 || buf->data == 0 || buf->len != 3U) {
+    buf = (unit == 0) ? 0 : (LmxArrayDesc *)lmx_branch_child_known(unit, 0U);
+    if (unit == 0 || buf == 0 || buf->data == 0 || buf->len != 3U) {
         fprintf(stderr, "generated char_index graph field\n");
         lmx_msg_runtime_delete(rt);
         return 1;

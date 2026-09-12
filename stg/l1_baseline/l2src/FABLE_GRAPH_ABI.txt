@@ -67,10 +67,9 @@ Required integration work (not a completed core)
 2. The handwritten splice bodies and assertions in run_l2trans.ps1 still
    spell leaf->data / inline children. The 95 positive fixtures exclude
    those splice drivers and the negative suite. Migrate their representation
-   assumptions without weakening their expected behavior. Also migrate
-   tests/lmx_generated_{array_index,array_char_index,for_arrays}_collect.c,
-   tests/generated/unit_own_{array_index,array_char_index}.lm1,
-   tests/generated/unit_for_own_arrays.lm1, tests/cancel_spin_host.c,
+   assumptions without weakening their expected behavior. The three external
+   generated-array collection drivers and L1 snapshots are now migrated and
+   verified (checkpoint below). Still migrate tests/cancel_spin_host.c,
    tests/l2_message_root_driver.lm1 and tests/l2_c_scanners_parse_driver.lm1.
 3. Legacy lmx_branch.lm1 and its shallow inline-header copy, plus other old
    Core-suite fixtures, are not conformance implementations. Inventory and
@@ -88,3 +87,29 @@ Required integration work (not a completed core)
 The private stage is reviewable and recoverable while Fable is unavailable.
 It must not replace the main graph ABI before its runtime consumers are
 migrated and the relevant integration checks pass. Stable L1 is unchanged.
+
+
+Generated-array collection checkpoint — 2026-09-12 09:49
+-------------------------------------------------------
+Codex regenerated unit_own_array_index, unit_own_array_char_index and
+unit_for_own_arrays L1 from their unchanged L2 fixtures using Fable's pinned
+successful translator. The three corresponding C collection drivers now
+read Array targets directly from child pointers; a nested Structure is
+accessed with lmx_branch_struct_known. No runtime source/header changed.
+
+All three native tests passed against Grok's 54b5802c collector support
+objects (copied and hash-checked before use). They retain the original
+value, Array type, end_turn retention, unreachable-neighbor collection and
+unroot/reclamation assertions. INT writes 7/0/9; CHAR writes 65/0/62;
+for-host arrays contain INT10/0/1 and CHAR65/0/0/62. Source, translator,
+compiler, generated L1/C, object and executable hashes plus exits are in:
+build/codex/graph_array_migration/20260912_094912/evidence.json
+under the main checkout. Reproduction script in that checkout:
+build/codex/run_graph_array_migration.py.
+
+These three checks do not require rerunning the 95 positive fixtures or
+rebuilding L1/L2. Grok still owns the failed legacy wrappers in Exec-selftest
+(the first reported failure was rooted array collected, before emit-array
+cases), runtime root registration and the remaining collection integration.
+Main D7 through 040af5d2 is not yet included in these older ABI runtime
+objects. This checkpoint is not complete Exec or main-ABI acceptance.
