@@ -294,14 +294,21 @@ End-turn collection (19.29.4 / 180000 / 181500)
   Storage handoff moves blocks/ranges only; source roots whose
   addresses no longer classify are dropped (not transferred).
   Dest does not inherit them. adopt_failed is the one wired history
-  site (19.29.8): required roots (child graph plus the child's own
-  failure-history roots) are allocated before any storage move, then
-  committed with the move. OOM returns NOMEM with both owners'
-  blocks/ranges/roots/init/disposed unchanged. Nested P<-C<-G keeps
-  both graphs when they are not one lexical tree. transfer_adopted
-  still does not attach. complete() never frees and does not attach.
-  Ordinary graph-owned fields and the adopted arena as a whole are
-  not blanket-rooted.
+  site (19.29.8): required HISTORY roots (child graph plus src roots
+  that already carry LMX_MSG_ROOT_HISTORY) are allocated before any
+  storage move, then committed with the move. Ordinary RETAIN roots
+  are not copied. One address may hold both roles; release drops only
+  RETAIN. OOM returns NOMEM with both owners unchanged. Nested
+  P<-C<-G keeps both graphs when they are not one lexical tree.
+  transfer_adopted still does not attach. complete() never frees and
+  does not attach. Ordinary graph-owned fields and the adopted arena
+  as a whole are not blanket-rooted.
+
+  adopt_failed init-block push after a successful move_all is not a
+  live recoverable partial-failure: can_move already proved distinct
+  live acyclic lists; prepared is a fresh detached calloc node with
+  non-null init base; exclusive ownership is held; blocks_push does
+  not allocate. Failure there is not constructed from admitted state.
 
 Who may free
   Parent dispose_child of a SUCCESSFUL handoff-ready child

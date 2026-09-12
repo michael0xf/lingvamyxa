@@ -65,8 +65,12 @@ typedef int (*LmxMsgTurn)(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx);
 /* Owner-local explicit root bookkeeping. Not an Lmx header field and not a
  * global/TLS registry. Nodes retain a native referent across end_turn;
  * release drops retention only and never disposes the referent. */
+#define LMX_MSG_ROOT_RETAIN 1u
+#define LMX_MSG_ROOT_HISTORY 2u
+
 typedef struct LmxMsgRoot {
     void *p;
+    unsigned roles;
     struct LmxMsgRoot *next;
 } LmxMsgRoot;
 

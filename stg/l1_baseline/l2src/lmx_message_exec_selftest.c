@@ -4889,6 +4889,121 @@ current_context_scenarios:
         fprintf(stderr, "adopt_failed nested: P keeps C=9 and G=7; neighbour dies\n");
         lmx_msg_runtime_delete(rtn);
     }
+    {
+        LmxMsgRuntime *rtr;
+        LmxMsgAddr dummy = 0, p = 0, c = 0, g = 0;
+        uchar ini = 16;
+        LmxMsg *pm;
+        LmxMsg *cm;
+        LmxMsg *gm;
+        Lmx *cunit;
+        Lmx *gunit;
+        Lmx *cleaf;
+        Lmx *gleaf;
+        LmxArrayDesc *cbuf;
+        LmxArrayDesc *gbuf;
+        LmxArrayDesc *temp;
+        LmxMsgRoot *rg;
+        void *temp_back;
+        int *ccells;
+        int *gcells;
+        rtr = lmx_msg_runtime_new();
+        if (rtr == 0 || lmx_msg_create(rtr, 0, 1, &ini, 1, &dummy) != LMX_MSG_OK
+            || lmx_msg_create(rtr, dummy, 2, &ini, 1, &p) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtr, dummy, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtr, p, 3, &ini, 1, &c) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK
+            || lmx_msg_create(rtr, c, 4, &ini, 1, &g) != LMX_MSG_OK
+            || lmx_msg_end_turn(rtr, c, 1) != LMX_MSG_OK) {
+            fprintf(stderr, "role history create\n");
+            if (rtr != 0) {
+                lmx_msg_runtime_delete(rtr);
+            }
+            return 1;
+        }
+        pm = lmx_msg_find(rtr, p);
+        cm = lmx_msg_find(rtr, c);
+        gm = lmx_msg_find(rtr, g);
+        cunit = (cm == 0) ? 0 : lmx_node_new_owned(&cm->blocks, &cm->ranges);
+        gunit = (gm == 0) ? 0 : lmx_node_new_owned(&gm->blocks, &gm->ranges);
+        if (pm == 0 || cm == 0 || gm == 0 || cunit == 0 || gunit == 0
+            || lmx_branch_open_owned(cunit, 1U, &cm->blocks, &cm->ranges) != 0
+            || lmx_branch_open_owned(gunit, 1U, &gm->blocks, &gm->ranges) != 0) {
+            fprintf(stderr, "role history unit\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        cleaf = lmx_branch_child_known(cunit, 0U);
+        gleaf = lmx_branch_child_known(gunit, 0U);
+        cbuf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &cm->blocks, &cm->ranges);
+        gbuf = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 1U, &gm->blocks, &gm->ranges);
+        temp = lmx_array_new_positive_owned(LMX_TYPE_ARRAY_OF_INT, 2U, &cm->blocks, &cm->ranges);
+        if (cleaf == 0 || gleaf == 0 || cbuf == 0 || gbuf == 0 || temp == 0
+            || cbuf->data == 0 || gbuf->data == 0 || temp->data == 0) {
+            fprintf(stderr, "role history fields\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        cleaf->data = cbuf;
+        gleaf->data = gbuf;
+        ccells = (int *)cbuf->data;
+        gcells = (int *)gbuf->data;
+        temp_back = temp->data;
+        ccells[0] = 9;
+        gcells[0] = 7;
+        lmx_msg_set_graph(cm, cunit);
+        lmx_msg_set_graph(gm, gunit);
+        if (lmx_msg_exec_bind(rtr, g, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_emergency_cancel(rtr, g) != LMX_MSG_OK
+            || lmx_msg_run_child_turn(rtr, g) != LMX_MSG_OK
+            || lmx_msg_adopt_failed(rtr, c, g) != LMX_MSG_OK
+            || lmx_msg_root_attach(cm, temp) != LMX_MSG_OK
+            || lmx_msg_root_attach(cm, gunit) != LMX_MSG_OK) {
+            fprintf(stderr, "role history G->C attach\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        if (lmx_msg_root_release(cm, gunit) != LMX_MSG_OK) {
+            fprintf(stderr, "role history release retain\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        rg = cm->roots;
+        while (rg != 0 && rg->p != (void *)gunit) {
+            rg = rg->next;
+        }
+        if (rg == 0 || (rg->roles & LMX_MSG_ROOT_HISTORY) == 0
+            || (rg->roles & LMX_MSG_ROOT_RETAIN) != 0) {
+            fprintf(stderr, "role history G lost HISTORY after RETAIN release\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        if (lmx_msg_exec_bind(rtr, c, turn_fail_end, 0, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+            || lmx_msg_emergency_cancel(rtr, c) != LMX_MSG_OK
+            || lmx_msg_run_child_turn(rtr, c) != LMX_MSG_OK
+            || lmx_msg_adopt_failed(rtr, p, c) != LMX_MSG_OK) {
+            fprintf(stderr, "role history C->P\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        lmx_msg_set_graph(pm, 0);
+        if (lmx_msg_end_turn(rtr, p, 1) != LMX_MSG_OK
+            || lmx_owned_ranges_find(pm->ranges, cbuf) == 0
+            || lmx_owned_ranges_find(pm->ranges, gbuf) == 0
+            || ccells[0] != 9 || gcells[0] != 7) {
+            fprintf(stderr, "role history dropped C or G\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        if (lmx_owned_ranges_find(pm->ranges, temp) != 0
+            || lmx_owned_ranges_find(pm->ranges, temp_back) != 0) {
+            fprintf(stderr, "role history copied RETAIN temp\n");
+            lmx_msg_runtime_delete(rtr);
+            return 1;
+        }
+        fprintf(stderr, "root roles: HISTORY G/C travel; RETAIN temp dies; release one role keeps the other\n");
+        lmx_msg_runtime_delete(rtr);
+    }
     ev = fopen("build/l1trans/logs/gen2/lmx_message_exec_selftest.evidence.txt", "w");
     if (ev) {
         fprintf(ev, "slow t0=%lu t1=%lu recvd=%u\n", (unsigned long)slow.t0, (unsigned long)slow.t1, slow.recvd);

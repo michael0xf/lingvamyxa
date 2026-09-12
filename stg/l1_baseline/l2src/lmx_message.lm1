@@ -175,7 +175,11 @@ fn: lmx_msg_root_attach (@: LmxMsg m; @: void p) int
     cur: m\roots
     while: cur != 0
         if: cur\p = p
-            return: c.LMX_MSG_DUPLICATE
+            if: (cur\roles & c.LMX_MSG_ROOT_RETAIN) != 0U
+                return: c.LMX_MSG_DUPLICATE
+            ---
+            cur\roles: cur\roles | c.LMX_MSG_ROOT_RETAIN
+            return: c.LMX_MSG_OK
         ---
         cur: cur\next
     ---
@@ -186,6 +190,7 @@ fn: lmx_msg_root_attach (@: LmxMsg m; @: void p) int
     if: n = 0
         return: c.LMX_MSG_NOMEM
     n\p: p
+    n\roles: c.LMX_MSG_ROOT_RETAIN
     n\next: m\roots
     m\roots: n
 return: c.LMX_MSG_OK
@@ -198,13 +203,19 @@ fn: lmx_msg_root_release (@: LmxMsg m; @: void p) int
     cur: m\roots
     while: cur != 0
         if: cur\p = p
-            if: prev != 0
-                prev\next: cur\next
+            if: (cur\roles & c.LMX_MSG_ROOT_RETAIN) = 0U
+                return: c.LMX_MSG_INVALID
             ---
-            if: prev = 0
-                m\roots: cur\next
+            cur\roles: cur\roles - c.LMX_MSG_ROOT_RETAIN
+            if: cur\roles = 0U
+                if: prev != 0
+                    prev\next: cur\next
+                ---
+                if: prev = 0
+                    m\roots: cur\next
+                ---
+                c.free((cast: (@: void) cur))
             ---
-            c.free((cast: (@: void) cur))
             return: c.LMX_MSG_OK
         ---
         prev: cur
