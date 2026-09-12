@@ -269,6 +269,32 @@ static int turn_just_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     return lmx_msg_end_turn(rt, who, 1);
 }
 
+static void detach_child_keep_ready(LmxMsg *p, LmxMsg *c) {
+    LmxMsg *prev = 0;
+    LmxMsg *n;
+    if (p == 0 || c == 0) {
+        return;
+    }
+    n = p->first_child;
+    while (n != 0) {
+        if (n == c) {
+            if (prev != 0) {
+                prev->next_sibling = c->next_sibling;
+            } else {
+                p->first_child = c->next_sibling;
+            }
+            if (p->last_child == c) {
+                p->last_child = prev;
+            }
+            c->next_sibling = 0;
+            c->parent_msg = 0;
+            return;
+        }
+        prev = n;
+        n = n->next_sibling;
+    }
+}
+
 static int turn_recv_end(LmxMsgRuntime *rt, LmxMsgAddr who, void *ctx) {
     TurnCtx *c = (TurnCtx *)ctx;
     LmxMsgEnv got;
@@ -5449,7 +5475,7 @@ current_context_scenarios:
             return 1;
         }
         lmx_msg_exec_stop(rti);
-        fprintf(stderr, "exec wait: UI->ANY launch fail restores ui_ready; no worker residue\n");
+        fprintf(stderr, "exec wait: UI->ANY launch fail keeps ui_map_ready; no worker residue\n");
         lmx_msg_runtime_delete(rti);
         rti = lmx_msg_runtime_new();
         dummy = 0;
@@ -5962,6 +5988,192 @@ current_context_scenarios:
                 return 1;
             }
             fprintf(stderr, "exec wait: one owner on ANY+UI ready lists retires exactly once\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p1 = 0, p2 = 0, c1 = 0, c2 = 0;
+            LmxMsg *pm1, *pm2, *cm1, *cm2;
+            int n0;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p1) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p1, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p1, 2, &ini, 1, &c1) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p1, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, 0, 3, &ini, 1, &p2) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p2, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p2, 4, &ini, 1, &c2) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p2, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, c1, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, c2, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_send(rti, p1, c1, &env) != LMX_MSG_STAGED
+                || lmx_msg_send(rti, p2, c2, &env) != LMX_MSG_STAGED) {
+                fprintf(stderr, "exec stop-retire create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            lmx_msg_pump(rti);
+            (void)lmx_msg_end_turn(rti, p1, 1);
+            (void)lmx_msg_end_turn(rti, p2, 1);
+            pm1 = lmx_msg_find(rti, p1);
+            pm2 = lmx_msg_find(rti, p2);
+            cm1 = lmx_msg_find(rti, c1);
+            cm2 = lmx_msg_find(rti, c2);
+            if (pm1 == 0 || pm2 == 0 || cm1 == 0 || cm2 == 0) {
+                fprintf(stderr, "exec stop-retire find\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            cm1->mapped = 1;
+            cm2->mapped = 1;
+            lmx_msg_sched_unlink_child(pm1, cm1);
+            lmx_msg_sched_unlink_child(pm2, cm2);
+            lmx_msg_exec_ready(rti, c1);
+            lmx_msg_exec_ready(rti, c2);
+            detach_child_keep_ready(pm1, cm1);
+            detach_child_keep_ready(pm2, cm2);
+            n0 = rti->n;
+            pm1->state = LMX_MSG_STATE_RELEASED;
+            pm2->state = LMX_MSG_STATE_RELEASED;
+            lmx_msg_endp_release(pm1);
+            lmx_msg_endp_release(pm2);
+            if (rti->n != n0 || cm1->map_queued == 0 || cm2->map_queued == 0) {
+                fprintf(stderr, "exec stop-retire early n=%d q=%d,%d\n",
+                    rti->n, cm1->map_queued, cm2->map_queued);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            if (lmx_msg_exec_stop(rti) != LMX_MSG_OK
+                || rti->n != n0 - 2 || lmx_msg_exec_retire_n(rti) != 0) {
+                fprintf(stderr, "exec stop-retire n=%d want=%d pend=%d\n",
+                    rti->n, n0 - 2, lmx_msg_exec_retire_n(rti));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            dummy = 0;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            if (lmx_msg_exec_start(rti, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, 0, 9, &ini, 1, &dummy) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, dummy, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_host_post(rti, dummy, &env) != LMX_MSG_STAGED
+                || lmx_msg_host_drain(rti) != LMX_MSG_OK) {
+                fprintf(stderr, "exec stop-retire restart\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_ready(rti, dummy);
+            dl = GetTickCount() + 2000;
+            while (InterlockedCompareExchange(&ui_ctx.done, 0, 0) == 0 && GetTickCount() < dl) {
+                Sleep(10);
+            }
+            if (InterlockedCompareExchange(&ui_ctx.done, 0, 0) != 1
+                || lmx_msg_exec_retire_n(rti) != 0) {
+                fprintf(stderr, "exec stop-retire restart work done=%ld pend=%d\n",
+                    (long)InterlockedCompareExchange(&ui_ctx.done, 0, 0),
+                    lmx_msg_exec_retire_n(rti));
+                lmx_msg_exec_stop(rti);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            lmx_msg_exec_stop(rti);
+            fprintf(stderr, "exec wait: stop retires two ready owners; restart delivers new work\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p1 = 0, p2 = 0, c1 = 0, c2 = 0;
+            LmxMsg *pm1, *pm2, *cm1, *cm2;
+            int n0;
+            memset(&ui_ctx, 0, sizeof(ui_ctx));
+            memset(&any_ctx, 0, sizeof(any_ctx));
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p1) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p1, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p1, 2, &ini, 1, &c1) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p1, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, 0, 3, &ini, 1, &p2) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p2, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p2, 4, &ini, 1, &c2) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p2, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, c1, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, c2, turn_recv_end, &any_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec drop-binds-retire create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            pm1 = lmx_msg_find(rti, p1);
+            pm2 = lmx_msg_find(rti, p2);
+            cm1 = lmx_msg_find(rti, c1);
+            cm2 = lmx_msg_find(rti, c2);
+            if (pm1 == 0 || pm2 == 0 || cm1 == 0 || cm2 == 0) {
+                fprintf(stderr, "exec drop-binds-retire find\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            cm1->mapped = 1;
+            cm2->mapped = 1;
+            lmx_msg_exec_ready(rti, c1);
+            lmx_msg_exec_ready(rti, c2);
+            detach_child_keep_ready(pm1, cm1);
+            detach_child_keep_ready(pm2, cm2);
+            n0 = rti->n;
+            pm1->state = LMX_MSG_STATE_RELEASED;
+            pm2->state = LMX_MSG_STATE_RELEASED;
+            lmx_msg_endp_release(pm1);
+            lmx_msg_endp_release(pm2);
+            lmx_msg_exec_drop_binds(rti);
+            if (rti->n != n0 - 2 || lmx_msg_exec_retire_n(rti) != 0) {
+                fprintf(stderr, "exec drop-binds-retire n=%d want=%d pend=%d\n",
+                    rti->n, n0 - 2, lmx_msg_exec_retire_n(rti));
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: drop_binds retires two ready owners distinct from bound children\n");
+            lmx_msg_runtime_delete(rti);
+        }
+        rti = lmx_msg_runtime_new();
+        {
+            LmxMsgAddr p = 0, kid = 0;
+            LmxMsg *pm, *km;
+            int n0;
+            if (rti == 0 || lmx_msg_create(rti, 0, 1, &ini, 1, &p) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_create(rti, p, 2, &ini, 1, &kid) != LMX_MSG_OK
+                || lmx_msg_end_turn(rti, p, 1) != LMX_MSG_OK
+                || lmx_msg_exec_bind(rti, kid, turn_recv_end, &ui_ctx, LMX_MSG_AFFINITY_ANY) != LMX_MSG_OK) {
+                fprintf(stderr, "exec drop-stale-retire create\n");
+                if (rti != 0) {
+                    lmx_msg_runtime_delete(rti);
+                }
+                return 1;
+            }
+            pm = lmx_msg_find(rti, p);
+            km = lmx_msg_find(rti, kid);
+            if (pm == 0 || km == 0) {
+                fprintf(stderr, "exec drop-stale-retire find\n");
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            km->mapped = 1;
+            lmx_msg_exec_ready(rti, kid);
+            detach_child_keep_ready(pm, km);
+            km->next_sibling = pm->next_sibling;
+            pm->next_sibling = km;
+            n0 = rti->n;
+            pm->state = LMX_MSG_STATE_RELEASED;
+            lmx_msg_endp_release(pm);
+            lmx_msg_exec_drop_stale_ready(rti);
+            if (rti->n != n0 - 1 || lmx_msg_exec_retire_n(rti) != 0 || km->map_queued != 0) {
+                fprintf(stderr, "exec drop-stale-retire n=%d want=%d pend=%d q=%d\n",
+                    rti->n, n0 - 1, lmx_msg_exec_retire_n(rti), km->map_queued);
+                lmx_msg_runtime_delete(rti);
+                return 1;
+            }
+            fprintf(stderr, "exec wait: drop_stale_ready retires owner on return without extra flush\n");
             lmx_msg_runtime_delete(rti);
         }
         rti = lmx_msg_runtime_new();

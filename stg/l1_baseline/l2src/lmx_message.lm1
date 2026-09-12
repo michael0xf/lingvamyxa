@@ -625,6 +625,7 @@ sub: lmx_msg_exec_drop_stale_ready (@: LmxMsgRuntime rt)
         i: i + 1
     ---
     c.lmx_msg_exec_unlock(rt)
+    c.lmx_msg_exec_flush_retire(rt)
 end: lmx_msg_exec_drop_stale_ready
 
 fn: lmx_msg_find_create (@: LmxMsgRuntime rt; @: LmxMsg p; unsigned: create_id) @: LmxMsg
