@@ -1,0 +1,48 @@
+L2 foreign allocation adapter
+=============================
+
+Grok confirmed the exact helper/compiler/test paths in inbox/outbox213700.
+Graph-unit l2_need_own now imports l2_foreign_alloc.lm1 instead of all of
+l1src/own.lm1. It exports only the four already-admitted signatures:
+lm_own_new_zero, lm_own_resize, lm_own_copy_bytes, lm_own_delete.
+
+Default behavior is preserved: calloc(1,size), realloc for nonzero resize,
+free-and-null for resize-zero, overflow rejection before length+1, independent
+zero-filled copy with terminating NUL, null delete skipping the destructor,
+and destructor-before-free for a nonnull object. Zero-size new retains the
+underlying C allocator's behavior. Realloc failure leaves the old allocation
+owned by its caller. Callback and pointer lifetimes are unchanged.
+
+These are explicitly managed FOREIGN allocations. They are not admitted to
+Message blocks/ranges and cannot be treated as LMX-owned graph storage. This
+adapter introduces no owner ABI, registry or implicit garbage collection.
+L1 own/parser source and its three fault-injection globals remain untouched
+for the original L1 test path. Generated graph units no longer import those
+counters or the unused pointer-stack/absorb machinery.
+
+PASS build/codex/foreign_alloc/20260911_213847_839_dccb3ffe/evidence.json:
+44 assertions, zero live tracked allocations. C99/O2/Werror, stable compiler
+read-only, one module object. Linker-wrapped calloc/realloc/free exercise
+new/copy/resize OOM, grow/shrink preservation, null/zero resize, copy overflow,
+embedded NUL, source independence, null source, zero-length termination,
+zero-size new and destructor ordering. Wrapping is enabled only during the
+test body, excluding C-runtime startup/shutdown. nm accepts only the four
+exported functions and allocator/memcpy imports, with no module data globals.
+Source/compiler/GCC/options/artifact hashes are saved.
+
+PASS build/codex/l2_message_root/20260911_213949_720_0ffec604/evidence.json:
+111 stages, existing 24 driver modes/2135 assertions. One immutable eaac7c5
+snapshot with nine current overlays, one private translator/fourteen reused
+Message support objects. Real archived parser_text_heap is translated and run:
+independent copy bytes, borrowed view alias/mutation, null-text empty view and
+deletion pass. A resize fixture uses the archived parser_indent_stack typed
+store/load methods and verifies preserved value17 and resize-to-zero. All prior
+outputs remain unchanged. Generated C rejects the old counters/stack/absorb
+symbols and both allocation units select the new predef. No run_l2trans edit
+was needed for this slice.
+
+The initial 213923_298_16dee572 run passed text_heap but failed to translate a
+new fixture that indexed a local pointer slot, which the current frontend does
+not support. The final fixture uses the existing parser's supported typed
+parameter store/load methods. No language semantics were extended to fix a test.
+No full parser/fault-injection suite, Message allocation or self-build claim.

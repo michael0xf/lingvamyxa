@@ -9,7 +9,7 @@ if ((Get-FileHash -LiteralPath $rootCompiler).Hash -ne $rootPin) { throw 'Stable
 $rootRun = Join-Path $rootRepo ('build/codex/l2_message_root/' + (Get-Date -Format 'yyyyMMdd_HHmmss_fff') + '_' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $rootSnapshot = Join-Path $rootRun 'source'
 New-Item -ItemType Directory -Path $rootSnapshot -Force | Out-Null
-$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1')
+$rootOwned = @('l2trans.lm1', 'run_l2trans.ps1', 'tests/l2_message_root_driver.lm1', 'lmx_value_owned.h.lm1', 'lmx_value_owned.lm1', 'l2_text_hash.lm1', 'lmx_chars_owned.h.lm1', 'lmx_chars_owned.lm1', 'l2_foreign_alloc.lm1')
 $rootEvidence = [ordered]@{result='RUNNING'; compiler=$rootCompiler; compilerSHA256=$rootPin; owned=@{}; stages=@()}
 $rootEvidence.runnerSHA256 = (Get-FileHash -LiteralPath $PSCommandPath).Hash
 $rootOldLocation = Get-Location
@@ -168,6 +168,7 @@ end: external
         Assert-RootExit "${stem}_L1_to_C"
         $cText = Get-Content -LiteralPath "$out/$stem.c" -Raw
         Assert-RootSignatureDiagnostics $cText "$stem C" -GeneratedC
+        if ($cText -match '\blm_own_(alloc_fails|ok_left|absorb_fails|should_fail|ptr_stack_\w+|absorb\w*)\b') { throw "$stem retains unused L1 allocator state or machinery" }
         if ($hasChar) {
             $methods = [regex]::Matches($cText, '(?ms)^\w+ l2_m\d+\([^\r\n;]*\)\r?\n\{.*?^\}')
             if ($methods.Count -eq 0) { throw "$stem missing generated method definitions" }
@@ -188,6 +189,64 @@ end: external
             if ((Get-FileHash -LiteralPath $obj).Hash -ne $rootBefore[$obj]) { throw "$stem rebuilt support object: $obj" }
         }
         Write-Output "$stem PASS (same translator and Message object cache)"
+    }
+    Copy-Item -LiteralPath (Join-Path $rootWork 'l2src/parser_text_heap.lm2') -Destination (Join-Path $rootWork 'l2src/tests/unit_text_heap.lm2')
+    Invoke-RootPrimitiveCase 'unit_text_heap' @'
+        @: char copy l2_m0(unit, "abc", 3U)
+        @: LmP0Text text 0
+        c.array: [4]: char source
+        if: copy = 0
+            return: 2
+        c.printf("%d %d\n", c.memcmp(copy, "abc", 3U) = 0, copy[3] = 0)
+        lm_own_delete(copy, 0)
+        source[0]: 97
+        source[1]: 98
+        source[2]: 0
+        text: l2_m1(unit, source)
+        if: text = 0
+            return: 3
+        c.printf("%d %zu\n", text\data = source, text\length)
+        source[0]: 99
+        c.printf("%d\n", text\data[0] = 99)
+        l2_m2(unit, text)
+        text: l2_m3(unit, 0)
+        if: text = 0
+            return: 4
+        c.printf("%zu %d\n", text\length, text\data[0] = 0)
+        l2_m2(unit, text)
+        l2_m2(unit, 0)
+'@ "1 1`n1 2`n1`n0 1"
+    $resizeSource = @'
+fn: resize_probe () int
+    @: size_t p
+    @: size_t grown
+    p: lm_own_new_zero(c.sizeof(c.size_t))
+    if: p = 0
+        return: 1
+    lm_p0_indent_store(p, 17U)
+    grown: lm_own_resize(p, 2U * c.sizeof(c.size_t))
+    if: grown = 0
+        lm_own_delete(p, 0)
+        return: 2
+    c.printf: "%zu\n" lm_p0_indent_load(grown)
+    p: lm_own_resize(grown, 0U)
+    if: p != 0
+        return: 3
+    return: 0
+end: resize_probe
+fn: main () int
+    return: resize_probe()
+end: main
+'@
+    $indentSource = Get-Content -LiteralPath (Join-Path $rootWork 'l2src/parser_indent_stack.lm2') -Raw
+    $storeStart = $indentSource.IndexOf('fn: lm_p0_indent_store')
+    $pushStart = $indentSource.IndexOf('fn: lm_p0_indent_stack_push')
+    if ($storeStart -lt 0 -or $pushStart -le $storeStart) { throw 'Indent helper fixture boundaries changed' }
+    [IO.File]::WriteAllText((Join-Path $rootWork 'l2src/tests/unit_foreign_resize.lm2'), $indentSource.Substring($storeStart, $pushStart - $storeStart) + $resizeSource)
+    Invoke-RootPrimitiveCase 'unit_foreign_resize' '' '17'
+    foreach ($stem in @('unit_text_heap','unit_foreign_resize')) {
+        $text = Get-Content -LiteralPath "$out/$stem.lm1" -Raw
+        if ($text -notmatch 'predef: "l2src/l2_foreign_alloc.lm1"' -or $text -match 'predef: "l1src/own.lm1"') { throw "$stem did not select the narrow foreign adapter" }
     }
     # Derive bounded cases from the archived real text-view source. No new
     # translator or support build, and no full parser gate in this checkpoint.

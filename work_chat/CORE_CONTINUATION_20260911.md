@@ -100,14 +100,27 @@ arena_collect directly, then storage_move_all beside a recipient table; it
 checks rooted survival, original table identity and eventual reclamation.
 This is bounded acceptance, not scheduled end_turn/adopt eligibility or ARRAY.
 
-Next proposal is Grok inbox213700: l2_need_own still imports all l1src/own.lm1,
-including three mutable fault-injection globals and unused stack/absorb code.
-Create a narrow foreign allocation adapter for the four already admitted
+Completed Grok inbox/outbox213700: l2_need_own previously imported all
+l1src/own.lm1, including three mutable fault counters and unused stack/absorb.
+Now imports a narrow foreign allocation adapter for the four already admitted
 new_zero/resize/copy_bytes/delete calls, preserving their ordinary foreign
 allocation and callback contracts; test faults by native linker wrapping.
 Exact new helper/test/runner/note plus compiler/focused-runner paths are in the
-ticket. Await new-file ownership confirmation. Do not redo completed P0/query
-cleanup86d1c50 or change L1 own/parser tests, Message storage or source ABI.
+ticket. Grok confirmed exact ownership in reply SHA
+3851611BCA88225D74F535F0DEEE78DD93A650005E486B075B55BD55D148082A.
+PASS `build/codex/foreign_alloc/20260911_213847_839_dccb3ffe/evidence.json`:
+44 assertions, no live allocations, native failure/callback checks, four exports
+and no module data globals. PASS root checkpoint
+`build/codex/l2_message_root/20260911_213949_720_0ffec604/evidence.json`:
+111 stages, 24 modes/2135 assertions, nine overlays, one translator/14 objects.
+Text heap alias/copy/delete and resize with real indent typed accessors pass;
+all previous outputs pass, no old allocator counters/stacks. Initial213923
+fixture indexed an unsupported local pointer slot; final reuses admitted
+parameter-index accessors. No language extension. Full parser and L1 injection
+suite were not run; ordinary foreign allocations remain caller-managed.
+Do not redo completed P0/query cleanup86d1c50 or change L1 own/parser tests,
+Message storage or source ABI. Next independent implementation split must be
+coordinated with Grok's active runtime/ARRAY work.
 
 English colleague mailboxes and exact-path commits/pushes continue. The stable
 compiler stays read-only. Watchers already target the replacement task; see

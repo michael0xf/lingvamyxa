@@ -1,0 +1,34 @@
+include: "l1src/p0.lm1.h" "<stdlib.h>" "<string.h>"
+
+# The four admitted legacy foreign-allocation calls, with their default
+# behavior. These allocations are explicitly caller-managed, not LMX storage.
+# L1 own/parser fault-injection counters remain in their original test path.
+fn: lm_own_new_zero (size_t: size) @: void
+    return: c.calloc(1U, size)
+
+fn: lm_own_resize (@: void object; size_t: size) @: void
+    if: size = 0U
+        c.free(object)
+        return: 0
+    return: c.realloc(object, size)
+
+fn: lm_own_copy_bytes (const: @(char source); size_t: length) @: char
+    @: char copy
+    if: length = (cast: size_t -1)
+        return: 0
+    copy: lm_own_new_zero(length + 1U)
+    if: copy = 0
+        return: 0
+    if: source != 0 && length > 0U
+        c.memcpy(copy, source, length)
+    copy[length]: 0
+    return: copy
+
+sub: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields)
+    if: object != 0
+        if: destroy_fields != 0
+            destroy_fields(object)
+        ---
+        c.free(object)
+    ---
+end: lm_own_delete

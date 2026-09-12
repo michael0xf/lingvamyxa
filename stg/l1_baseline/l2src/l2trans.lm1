@@ -6911,7 +6911,7 @@ fn: l2_emit_unit (const: @(char out_path)) int
     if: l2_has_own_ty(1) != 0 && c.fputs("predef: \"l2src/lmx_chars_owned.h.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
-    if: l2_need_own != 0 && c.fputs("predef: \"l1src/own.lm1\"\n", l2_out) < 0
+    if: l2_need_own != 0 && c.fputs("predef: \"l2src/l2_foreign_alloc.lm1\"\n", l2_out) < 0
         c.fclose(l2_out)
         return: 1
     if: c.fputs("predef: \"l2src/lmx_branch_owned.h.lm1\" \"l2src/lmx_value_owned.h.lm1\"\ninclude: \"l2src/lmx.h\" \"l2src/lmx_message.h\" \"<stdio.h>\" \"<stdlib.h>\" \"<string.h>\"", l2_out) < 0

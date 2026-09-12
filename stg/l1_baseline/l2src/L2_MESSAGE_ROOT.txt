@@ -332,6 +332,24 @@ above additionally covers these historical drive compatibility changes and LF
 normalization. The helper's separate 67892-check PASS is in LMX_CHARS_OWNED.txt.
 Stable compiler unchanged. No newest-collector/end_turn/ARRAY/self-build claim.
 
+Narrow foreign allocation predef, 2026-09-11
+------------------------------------------
+l2_need_own imports only l2_foreign_alloc.lm1's four admitted allocation/copy/
+resize/delete calls. This removes unrelated L1 pointer-stack/absorb code and
+three mutable test counters from generated units. Ordinary caller-managed
+foreign allocation/default callback behavior is preserved; no Message ownership
+or lifetime is implied. L1 own/parser and their test globals remain unchanged.
+
+PASS build/codex/l2_message_root/20260911_213949_720_0ffec604/evidence.json:
+111 stages, 24 modes/2135 driver assertions, eaac7c5 plus nine hashed overlays,
+one translator/fourteen unchanged support objects. Real parser_text_heap and
+a resize fixture using archived parser_indent_stack typed accessors pass,
+including borrowed alias/mutation, copy termination, deletion, grow preserving17
+and zero-size free. All prior outputs pass. Generated C excludes the old
+allocator counters and unrelated helpers. The separate 44-assertion native
+failure/destructor test is documented in L2_FOREIGN_ALLOC.txt, along with the
+initial unsupported-index fixture failure and the final corrected evidence.
+
 Remaining limitations (not fixed or blessed by these checkpoints)
 ---------------------------------------------------------------
 Older leaf-adapter paths remain outside this checkpoint.

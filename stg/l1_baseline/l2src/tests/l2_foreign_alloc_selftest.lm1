@@ -1,0 +1,137 @@
+include: "l1src/p0.lm1.h" "<stdio.h>" "<stdlib.h>" "<stdint.h>"
+prototype:
+    fn: lm_own_new_zero (size_t: size) @: void
+    fn: lm_own_resize (@: void object; size_t: size) @: void
+    fn: lm_own_copy_bytes (const: @(char source); size_t: length) @: char
+    fn: lm_own_delete (@: void object; LmOwnDestroyFields: destroy_fields) void
+    fn: __real_calloc (size_t: count; size_t: size) @: void
+    fn: __real_realloc (@: void object; size_t: size) @: void
+    fn: __real_free (@: void object) void
+end: prototype
+
+int: checks 0
+int: tracking 0
+int: fail_calloc 0
+int: fail_realloc 0
+int: calloc_calls 0
+int: realloc_calls 0
+int: live 0
+int: destroyed 0
+@: void destruct_target 0
+
+sub: check (int: ok; const: @(char label))
+    checks: checks + 1
+    if: ok = 0
+        c.printf("FAIL %s\n", label)
+        c.exit(1)
+    ---
+end: check
+
+fn: __wrap_calloc (size_t: count; size_t: size) @: void
+    @: void result
+    if: tracking = 0
+        return: c.__real_calloc(count, size)
+    calloc_calls: calloc_calls + 1
+    if: fail_calloc != 0
+        fail_calloc: 0
+        return: 0
+    result: c.__real_calloc(count, size)
+    if: result != 0
+        live: live + 1
+    return: result
+
+fn: __wrap_realloc (@: void object; size_t: size) @: void
+    @: void result
+    int: new_object (object = 0)
+    if: tracking = 0
+        return: c.__real_realloc(object, size)
+    realloc_calls: realloc_calls + 1
+    if: fail_realloc != 0
+        fail_realloc: 0
+        return: 0
+    result: c.__real_realloc(object, size)
+    if: result != 0 && new_object != 0
+        live: live + 1
+    return: result
+
+sub: __wrap_free (@: void object)
+    if: tracking != 0 && object != 0
+        if: object = destruct_target
+            check(destroyed = 1, "destructor runs before object release")
+            destruct_target: 0
+        ---
+        live: live - 1
+        check(live >= 0, "release has a live allocation")
+    ---
+    c.__real_free(object)
+end: __wrap_free
+
+sub: destroy_fields (@: void object)
+    @: char bytes (cast: (@: char) object)
+    check(object = destruct_target && bytes[0] = 42, "callback receives original live object")
+    destroyed: destroyed + 1
+end: destroy_fields
+
+fn: main () int
+    @: char p
+    @: char q
+    int: i 0
+    int: saved
+    c.array: [3]: char source
+    tracking: 1
+    p: lm_own_new_zero(16U)
+    check(p != 0, "zero allocation succeeds")
+    while: i < 16
+        check(p[i] = 0, "new allocation zeroed")
+        i: i + 1
+    ---
+    p[0]: 42
+    fail_realloc: 1
+    check(lm_own_resize(p, 32U) = 0 && fail_realloc = 0 && p[0] = 42 && live = 1, "realloc OOM preserves caller allocation")
+    q: lm_own_resize(p, 32U)
+    check(q != 0 && q[0] = 42 && live = 1, "grow preserves old bytes")
+    p: lm_own_resize(q, 1U)
+    check(p != 0 && p[0] = 42 && live = 1, "shrink preserves retained byte")
+    saved: realloc_calls
+    check(lm_own_resize(p, 0U) = 0 && live = 0 && realloc_calls = saved, "resize zero frees without realloc")
+    check(lm_own_resize(0, 0U) = 0 && live = 0 && realloc_calls = saved, "null zero resize")
+    p: lm_own_resize(0, 4U)
+    check(p != 0 && live = 1, "null nonzero resize allocates")
+    lm_own_delete(p, 0)
+    fail_realloc: 1
+    check(lm_own_resize(0, 4U) = 0 && fail_realloc = 0 && live = 0, "null resize OOM")
+    fail_calloc: 1
+    check(lm_own_new_zero(4U) = 0 && fail_calloc = 0 && live = 0, "calloc OOM")
+    fail_calloc: 1
+    check(lm_own_copy_bytes("abc", 3U) = 0 && fail_calloc = 0 && live = 0, "copy allocation OOM")
+    source[0]: 65
+    source[1]: 0
+    source[2]: 66
+    p: lm_own_copy_bytes(source, 3U)
+    check(p != 0 && p != source && p[0] = 65 && p[1] = 0 && p[2] = 66 && p[3] = 0, "copy length includes embedded NUL, appends terminator")
+    source[0]: 67
+    check(p[0] = 65, "copy does not borrow source")
+    lm_own_delete(p, 0)
+    p: lm_own_copy_bytes(0, 3U)
+    check(p != 0 && p[0] = 0 && p[1] = 0 && p[2] = 0 && p[3] = 0, "null source yields zero-filled bytes")
+    lm_own_delete(p, 0)
+    p: lm_own_copy_bytes("abc", 0U)
+    check(p != 0 && p[0] = 0, "zero length makes terminated empty copy")
+    lm_own_delete(p, 0)
+    saved: calloc_calls
+    check(lm_own_copy_bytes(0, (cast: size_t -1)) = 0 && calloc_calls = saved, "length overflow rejected before allocation")
+    lm_own_delete(0, destroy_fields)
+    check(destroyed = 0, "null delete skips callback")
+    p: lm_own_new_zero(1U)
+    check(p != 0, "destructor fixture allocation")
+    p[0]: 42
+    destruct_target: p
+    lm_own_delete(p, destroy_fields)
+    check(destroyed = 1 && destruct_target = 0 && live = 0, "callback once and no live allocations")
+    # calloc(1,0) follows the C allocator's implementation-defined result.
+    p: lm_own_new_zero(0U)
+    lm_own_delete(p, 0)
+    check(live = 0, "zero-size new follows allocator and remains deletable")
+    tracking: 0
+    c.printf("foreign_alloc checks=%d failures=0 live=%d\n", checks, live)
+    return: 0
